@@ -10,7 +10,12 @@
 
 #include "tree_element.hh"
 
-namespace blender::ed::outliner {
+namespace blender {
+
+struct Scene;
+struct ViewLayer;
+
+namespace ed::outliner {
 
 class TreeElementViewLayerBase final : public AbstractTreeElement {
   Scene &scene_;
@@ -18,7 +23,12 @@ class TreeElementViewLayerBase final : public AbstractTreeElement {
  public:
   TreeElementViewLayerBase(TreeElement &legacy_te, Scene &scene);
 
-  void expand(SpaceOutliner &) const override;
+  void expand(SpaceOutliner & /*soops*/) const override;
+
+  std::optional<BIFIconID> get_icon() const override
+  {
+    return ICON_RENDERLAYERS;
+  }
 };
 
 class TreeElementViewLayer final : public AbstractTreeElement {
@@ -28,6 +38,12 @@ class TreeElementViewLayer final : public AbstractTreeElement {
 
  public:
   TreeElementViewLayer(TreeElement &legacy_te, Scene &scene, ViewLayer &view_layer);
+
+  std::optional<BIFIconID> get_icon() const override
+  {
+    return ICON_RENDER_RESULT;
+  }
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

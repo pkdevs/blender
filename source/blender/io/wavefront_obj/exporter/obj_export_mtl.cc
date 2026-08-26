@@ -8,23 +8,25 @@
 
 #include "BKE_image.hh"
 #include "BKE_node.hh"
+#include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 
-#include "BLI_math_vector.h"
-#include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
 
-#include "obj_export_mesh.hh"
 #include "obj_export_mtl.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.obj"};
 
-namespace blender::io::obj {
+namespace io::obj {
 
 const char *tex_map_type_to_socket_id[] = {
     "Base Color",
@@ -53,7 +55,7 @@ static void copy_property_from_node(const eNodeSocketDatatype property_type,
     return;
   }
   const bNodeSocket *socket = bke::node_find_socket(
-      const_cast<bNode *>(node), SOCK_IN, identifier);
+      *const_cast<bNode *>(node), SOCK_IN, UString(identifier));
   BLI_assert(socket && socket->type == property_type);
   if (!socket) {
     return;
@@ -100,7 +102,7 @@ static void linked_sockets_to_dest_id(const bNode *dest_node,
   if (!dest_node) {
     return;
   }
-  Span<const bNode *> object_dest_nodes = node_tree.nodes_by_type(dest_node->idname);
+  Span<const bNode *> object_dest_nodes = node_tree.nodes_by_type(UString(dest_node->idname));
   Span<const bNodeSocket *> dest_inputs = object_dest_nodes.first()->input_sockets();
   const bNodeSocket *dest_socket = nullptr;
   for (const bNodeSocket *curr_socket : dest_inputs) {
@@ -123,7 +125,7 @@ static const bNode *get_node_of_type(Span<const bNodeSocket *> sockets_list, con
 {
   for (const bNodeSocket *socket : sockets_list) {
     const bNode &parent_node = socket->owner_node();
-    if (parent_node.typeinfo->type == node_type) {
+    if (parent_node.typeinfo->type_legacy == node_type) {
       return &parent_node;
     }
   }
@@ -148,7 +150,6 @@ static std::string get_image_filepath(const bNode *tex_node)
     /* Put image in the same directory as the `.MTL` file. */
     const char *filename = BLI_path_basename(tex_image->filepath);
     CLOG_INFO(&LOG,
-              1,
               "Packed image found:'%s'. Unpack and place the image in the same "
               "directory as the .MTL file.",
               filename);
@@ -179,11 +180,11 @@ static const bNode *find_bsdf_node(const bNodeTree *nodetree)
   if (!nodetree) {
     return nullptr;
   }
-  for (const bNode *node : nodetree->nodes_by_type("ShaderNodeOutputMaterial")) {
+  for (const bNode *node : nodetree->nodes_by_type("ShaderNodeOutputMaterial"_ustr)) {
     const bNodeSocket &node_input_socket0 = node->input_socket(0);
     for (const bNodeSocket *out_sock : node_input_socket0.directly_linked_sockets()) {
       const bNode &in_node = out_sock->owner_node();
-      if (in_node.typeinfo->type == SH_NODE_BSDF_PRINCIPLED) {
+      if (in_node.typeinfo->type_legacy == SH_NODE_BSDF_PRINCIPLED) {
         return &in_node;
       }
     }
@@ -394,4 +395,5 @@ MTLMaterial mtlmaterial_for_material(const Material *material)
   return mtlmat;
 }
 
-}  // namespace blender::io::obj
+}  // namespace io::obj
+}  // namespace blender

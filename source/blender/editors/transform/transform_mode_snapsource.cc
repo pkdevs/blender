@@ -6,14 +6,16 @@
  * \ingroup edtransform
  */
 
+#include "DNA_space_types.h"
 #include "MEM_guardedalloc.h"
 
 #include "DNA_windowmanager_types.h"
 
+#include "WM_types.hh"
+
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
 
-#include "ED_screen.hh"
 #include "ED_transform_snap_object_context.hh"
 
 #include "transform.hh"
@@ -26,7 +28,7 @@
 #define RESET_TRANSFORMATION
 #define REMOVE_GIZMO
 
-using namespace blender;
+namespace blender::ed::transform {
 
 /* -------------------------------------------------------------------- */
 /** \name Transform Element
@@ -35,7 +37,7 @@ using namespace blender;
 /**
  * \note Small arrays / data-structures should be stored copied for faster memory access.
  */
-struct SnapSouceCustomData {
+struct SnapSourceCustomData {
   TransModeInfo *mode_info_prev;
   void *customdata_mode_prev;
 
@@ -54,7 +56,7 @@ static void snapsource_end(TransInfo *t)
   t->modifiers &= ~MOD_EDIT_SNAP_SOURCE;
 
   /* Restore. */
-  SnapSouceCustomData *customdata = static_cast<SnapSouceCustomData *>(t->custom.mode.data);
+  SnapSourceCustomData *customdata = static_cast<SnapSourceCustomData *>(t->custom.mode.data);
   t->mode_info = customdata->mode_info_prev;
   t->custom.mode.data = customdata->customdata_mode_prev;
 
@@ -64,7 +66,7 @@ static void snapsource_end(TransInfo *t)
   t->mouse.post = customdata->mouse_prev.post;
   t->mouse.use_virtual_mval = customdata->mouse_prev.use_virtual_mval;
 
-  MEM_freeN(customdata);
+  MEM_delete(customdata);
 
   transform_gizmo_3d_model_from_constraint_and_mode_set(t);
   tranform_snap_source_restore_context(t);
@@ -78,7 +80,7 @@ static void snapsource_confirm(TransInfo *t)
   t->tsnap.source_type = t->tsnap.target_type;
   t->tsnap.status |= SNAP_SOURCE_FOUND;
 
-  SnapSouceCustomData *customdata = static_cast<SnapSouceCustomData *>(t->custom.mode.data);
+  SnapSourceCustomData *customdata = static_cast<SnapSourceCustomData *>(t->custom.mode.data);
   t->tsnap.mode = customdata->snap_mode_confirm;
 
   float2 mval;
@@ -110,6 +112,8 @@ static void snapsource_confirm(TransInfo *t)
   snapsource_end(t);
   transform_input_reset(t, mval);
 
+  /* Avoid premature transform confirmation from snap source clicks. */
+  t->flag &= ~T_RELEASE_CONFIRM;
   /* Remote individual snap projection since this mode does not use the new `snap_source`. */
   t->tsnap.mode &= ~(SCE_SNAP_INDIVIDUAL_PROJECT | SCE_SNAP_INDIVIDUAL_NEAREST);
 }
@@ -179,8 +183,7 @@ void transform_mode_snap_source_init(TransInfo *t, wmOperator * /*op*/)
     transform_mode_init(t, nullptr, TFM_TRANSLATION);
   }
 
-  SnapSouceCustomData *customdata = static_cast<SnapSouceCustomData *>(
-      MEM_callocN(sizeof(*customdata), __func__));
+  SnapSourceCustomData *customdata = MEM_new_zeroed<SnapSourceCustomData>(__func__);
   customdata->mode_info_prev = t->mode_info;
 
   customdata->target_operation_prev = t->tsnap.target_operation;
@@ -219,7 +222,7 @@ void transform_mode_snap_source_init(TransInfo *t, wmOperator * /*op*/)
   }
 
   if (t->data_type == &TransConvertType_Mesh) {
-    ED_transform_snap_object_context_set_editmesh_callbacks(
+    ed::transform::snap_object_context_set_editmesh_callbacks(
         t->tsnap.object_context, nullptr, nullptr, nullptr, nullptr);
   }
 
@@ -240,7 +243,7 @@ void transform_mode_snap_source_init(TransInfo *t, wmOperator * /*op*/)
 #ifdef REMOVE_GIZMO
   wmGizmo *gz = WM_gizmomap_get_modal(t->region->runtime->gizmo_map);
   if (gz) {
-    const wmEvent *event = CTX_wm_window(t->context)->eventstate;
+    const wmEvent *event = CTX_wm_window(t->context)->runtime->eventstate;
 #  ifdef RESET_TRANSFORMATION
     wmGizmoFnModal modal_fn = gz->custom_modal ? gz->custom_modal : gz->type->modal;
     if (modal_fn) {
@@ -270,3 +273,5 @@ TransModeInfo TransMode_snapsource = {
     /*snap_apply_fn*/ nullptr,
     /*draw_fn*/ nullptr,
 };
+
+}  // namespace blender::ed::transform

@@ -3,33 +3,48 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "openimageio_support.hh"
+#include <OpenImageIO/image_span.h>
 #include <OpenImageIO/imagebuf.h>
 #include <OpenImageIO/imagebufalgo.h>
 
-#include "BLI_blenlib.h"
+#include <cmath>
+#include <cstddef>
+
+#include "BLI_listbase_iterator.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_idprop.hh"
-#include "DNA_ID.h" /* ID property definitions. */
 
-#include "IMB_allocimbuf.hh"
+#include "DNA_ID.h"
+
 #include "IMB_colormanagement.hh"
+#include "IMB_filetype.hh"
 #include "IMB_metadata.hh"
+
+#include "CLG_log.h"
+
+namespace blender {
+
+static CLG_LogRef LOG_READ = {"image.read"};
+static CLG_LogRef LOG_WRITE = {"image.write"};
 
 OIIO_NAMESPACE_USING
 
 using std::string;
 using std::unique_ptr;
 
-namespace blender::imbuf {
+namespace imbuf {
 
-/* An OIIO IOProxy used during file packing to write into an in-memory #ImBuf buffer. */
-class ImBufMemWriter : public Filesystem::IOProxy {
- public:
-  ImBufMemWriter(ImBuf *ibuf) : IOProxy("", Write), ibuf_(ibuf) {}
+/* An OIIO IOProxy to write into an in-memory buffer. */
+struct MemoryBufferWriter : public Filesystem::IOProxy {
+  MemoryBufferWriter() : IOProxy("", Write)
+  {
+    buffer.reserve(80 * 1024);
+  }
 
   const char *proxytype() const override
   {
-    return "ImBufMemWriter";
+    return "MemoryBufferWriter";
   }
 
   size_t write(const void *buf, size_t size) override
@@ -43,29 +58,19 @@ class ImBufMemWriter : public Filesystem::IOProxy {
   {
     /* If buffer is too small increase it. */
     size_t end = offset + size;
-    while (end > ibuf_->encoded_buffer_size) {
-      if (!imb_enlargeencodedbufferImBuf(ibuf_)) {
-        /* Out of memory. */
-        return 0;
-      }
+    if (end > buffer.size()) {
+      buffer.resize(end);
     }
-
-    memcpy(ibuf_->encoded_buffer.data + offset, buf, size);
-
-    if (end > ibuf_->encoded_size) {
-      ibuf_->encoded_size = end;
-    }
-
+    memcpy(buffer.data() + offset, buf, size);
     return size;
   }
 
   size_t size() const override
   {
-    return ibuf_->encoded_size;
+    return buffer.size();
   }
 
- private:
-  ImBuf *ibuf_;
+  Vector<uint8_t> buffer;
 };
 
 /* Utility to in-place expand an n-component pixel buffer into a 4-component buffer. */
@@ -96,20 +101,35 @@ static void fill_all_channels(T *pixels, int width, int height, int components, 
 
 template<typename T>
 static ImBuf *load_pixels(
-    ImageInput *in, int width, int height, int channels, int flags, bool use_all_planes)
+    ImageInput *in, int width, int height, int channels, ImBufFlags flags, bool use_all_planes)
 {
   /* Allocate the ImBuf for the image. */
   constexpr bool is_float = sizeof(T) > 1;
-  const uint format_flag = (is_float ? IB_rectfloat : IB_rect) | IB_uninitialized_pixels;
-  const uint ibuf_flags = (flags & IB_test) ? 0 : format_flag;
-  const int planes = use_all_planes ? 32 : 8 * channels;
-  ImBuf *ibuf = IMB_allocImBuf(width, height, planes, ibuf_flags);
+  const ImBufFlags format_flag = (is_float ? ImBufFlags::FloatData : ImBufFlags::ByteData) |
+                                 ImBufFlags::UninitializedPixels;
+  const ImBufFlags ibuf_flags = flag_is_set(flags, ImBufFlags::Test) ? ImBufFlags::Zero :
+                                                                       format_flag;
+
+  ImColorMode color_mode = ImColorMode::RGBA;
+  if (channels == 2) {
+    color_mode = ImColorMode::BW_A;
+  }
+  else if (!use_all_planes) {
+    if (channels == 1) {
+      color_mode = ImColorMode::BW;
+    }
+    else if (channels == 3) {
+      color_mode = ImColorMode::RGB;
+    }
+  }
+  ImBuf *ibuf = IMB_allocImBuf(width, height, ibuf_flags);
   if (!ibuf) {
     return nullptr;
   }
+  ibuf->color_mode = color_mode;
 
   /* No need to load actual pixel data during the test phase. */
-  if (flags & IB_test) {
+  if (flag_is_set(flags, ImBufFlags::Test)) {
     return ibuf;
   }
 
@@ -118,14 +138,14 @@ static ImBuf *load_pixels(
   const stride_t ibuf_xstride = sizeof(T) * 4;
   const stride_t ibuf_ystride = ibuf_xstride * width;
   const TypeDesc format = is_float ? TypeDesc::FLOAT : TypeDesc::UINT8;
-  uchar *rect = is_float ? reinterpret_cast<uchar *>(ibuf->float_buffer.data) :
-                           reinterpret_cast<uchar *>(ibuf->byte_buffer.data);
+  uchar *rect = is_float ? reinterpret_cast<uchar *>(ibuf->float_data_for_write()) :
+                           reinterpret_cast<uchar *>(ibuf->byte_data_for_write());
   void *ibuf_data = rect + ((stride_t(height) - 1) * ibuf_ystride);
 
   bool ok = in->read_image(
       0, 0, 0, channels, format, ibuf_data, ibuf_xstride, -ibuf_ystride, AutoStride);
   if (!ok) {
-    fprintf(stderr, "ImageInput::read_image() failed: %s\n", in->geterror().c_str());
+    CLOG_ERROR(&LOG_READ, "OpenImageIO read failed: %s", in->geterror().c_str());
 
     IMB_freeImBuf(ibuf);
     return nullptr;
@@ -138,36 +158,28 @@ static ImBuf *load_pixels(
   return ibuf;
 }
 
-static void set_colorspace_name(char colorspace[IM_MAX_SPACE],
+static void set_file_colorspace(ImFileColorSpace &r_colorspace,
                                 const ReadContext &ctx,
                                 const ImageSpec &spec,
                                 bool is_float)
 {
-  const bool is_colorspace_set = (colorspace[0] != '\0');
-  if (is_colorspace_set) {
-    return;
-  }
-
-  /* Use a default role unless otherwise specified. */
-  if (ctx.use_colorspace_role >= 0) {
-    colorspace_set_default_role(colorspace, IM_MAX_SPACE, ctx.use_colorspace_role);
-  }
-  else if (is_float) {
-    colorspace_set_default_role(colorspace, IM_MAX_SPACE, COLOR_ROLE_DEFAULT_FLOAT);
-  }
-  else {
-    colorspace_set_default_role(colorspace, IM_MAX_SPACE, COLOR_ROLE_DEFAULT_BYTE);
-  }
+  /* Guess float data types means HDR colors. File formats can override this later. */
+  r_colorspace.is_hdr_float = is_float;
 
   /* Override if necessary. */
-  if (ctx.use_embedded_colorspace) {
+  if (ctx.use_metadata_colorspace) {
     string ics = spec.get_string_attribute("oiio:ColorSpace");
-    char file_colorspace[IM_MAX_SPACE];
-    STRNCPY(file_colorspace, ics.c_str());
+    STRNCPY_UTF8(r_colorspace.metadata_colorspace, ics.c_str());
+  }
 
-    /* Only use color-spaces that exist. */
-    if (colormanage_colorspace_get_named(file_colorspace)) {
-      BLI_strncpy(colorspace, file_colorspace, IM_MAX_SPACE);
+  /* Get colorspace from CICP. */
+  int cicp[4] = {};
+  if (spec.getattribute("CICP", TypeDesc(TypeDesc::INT, 4), cicp, true)) {
+    const ColorSpace *colorspace = IMB_colormanagement_space_from_cicp(
+        cicp, ColorManagedFileOutput::Image);
+    if (colorspace) {
+      STRNCPY_UTF8(r_colorspace.metadata_colorspace,
+                   IMB_colormanagement_colorspace_get_name(colorspace));
     }
   }
 }
@@ -175,7 +187,7 @@ static void set_colorspace_name(char colorspace[IM_MAX_SPACE],
 /**
  * Get an #ImBuf filled in with pixel data and associated metadata using the provided ImageInput.
  */
-static ImBuf *get_oiio_ibuf(ImageInput *in, const ReadContext &ctx, char colorspace[IM_MAX_SPACE])
+static ImBuf *get_oiio_ibuf(ImageInput *in, const ReadContext &ctx, ImFileColorSpace &r_colorspace)
 {
   const ImageSpec &spec = in->spec();
   const int width = spec.width;
@@ -186,6 +198,11 @@ static ImBuf *get_oiio_ibuf(ImageInput *in, const ReadContext &ctx, char colorsp
   /* Only a maximum of 4 channels are supported by ImBuf. */
   const int channels = spec.nchannels <= 4 ? spec.nchannels : 4;
   if (channels < 1) {
+    return nullptr;
+  }
+
+  if (spec.depth > 1) {
+    CLOG_ERROR(&LOG_READ, "Image has unsupported depth of %d", spec.depth);
     return nullptr;
   }
 
@@ -202,12 +219,18 @@ static ImBuf *get_oiio_ibuf(ImageInput *in, const ReadContext &ctx, char colorsp
   /* Fill in common ibuf properties. */
   if (ibuf) {
     ibuf->ftype = ctx.file_type;
-    ibuf->flags |= (spec.format == TypeDesc::HALF) ? IB_halffloat : 0;
+    ibuf->foptions.flag |= (spec.format == TypeDesc::HALF) ? OPENEXR_HALF : 0;
 
-    set_colorspace_name(colorspace, ctx, spec, is_float);
+    set_file_colorspace(r_colorspace, ctx, spec, is_float);
 
-    float x_res = spec.get_float_attribute("XResolution", 0.0f);
-    float y_res = spec.get_float_attribute("YResolution", 0.0f);
+    double x_res = spec.get_float_attribute("XResolution", 0.0f);
+    double y_res = spec.get_float_attribute("YResolution", 0.0f);
+    /* Some formats store the resolution as integers. */
+    if (!(x_res > 0.0f && y_res > 0.0f)) {
+      x_res = spec.get_int_attribute("XResolution", 0);
+      y_res = spec.get_int_attribute("YResolution", 0);
+    }
+
     if (x_res > 0.0f && y_res > 0.0f) {
       double scale = 1.0;
       auto unit = spec.get_string_attribute("ResolutionUnit", "");
@@ -222,15 +245,15 @@ static ImBuf *get_oiio_ibuf(ImageInput *in, const ReadContext &ctx, char colorsp
     }
 
     /* Transfer metadata to the ibuf if necessary. */
-    if (ctx.flags & IB_metadata) {
-      IMB_metadata_ensure(&ibuf->metadata);
-      ibuf->flags |= spec.extra_attribs.empty() ? 0 : IB_metadata;
+    if (flag_is_set(ctx.flags, ImBufFlags::Metadata)) {
+      IDProperty *metadata = ibuf->metadata_for_write();
+      ibuf->flags |= spec.extra_attribs.empty() ? ImBufFlags::Zero : ImBufFlags::Metadata;
 
       for (const auto &attrib : spec.extra_attribs) {
         if (attrib.name().find("ICCProfile") != string::npos) {
           continue;
         }
-        IMB_metadata_set_field(ibuf->metadata, attrib.name().c_str(), attrib.get_string().c_str());
+        IMB_metadata_set_field(metadata, attrib.name().c_str(), attrib.get_string().c_str());
       }
     }
   }
@@ -276,7 +299,7 @@ bool imb_oiio_check(const uchar *mem, size_t mem_size, const char *file_format)
 
 ImBuf *imb_oiio_read(const ReadContext &ctx,
                      const ImageSpec &config,
-                     char colorspace[IM_MAX_SPACE],
+                     ImFileColorSpace &r_colorspace,
                      ImageSpec &r_newspec)
 {
   /* This memory proxy must remain alive for the full duration of the read. */
@@ -286,7 +309,69 @@ ImBuf *imb_oiio_read(const ReadContext &ctx,
     return nullptr;
   }
 
-  return get_oiio_ibuf(in.get(), ctx, colorspace);
+  return get_oiio_ibuf(in.get(), ctx, r_colorspace);
+}
+
+static void oiio_write_prepare(const ImageSpec &file_spec, ImageBuf &orig_buf, ImageBuf &final_buf)
+{
+#if OIIO_VERSION_MAJOR >= 3
+  const size_t original_channels_count = orig_buf.nchannels();
+#else
+  const int original_channels_count = orig_buf.nchannels();
+#endif
+
+  if (original_channels_count > 1 && file_spec.nchannels == 1) {
+    /* Convert to gray-scale image by computing the luminance. Make sure the weight of alpha
+     * channel is zero since it should not contribute to the luminance. */
+    float weights[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    IMB_colormanagement_get_luminance_coefficients(weights);
+    ImageBufAlgo::channel_sum(final_buf, orig_buf, {weights, original_channels_count});
+  }
+  else if (original_channels_count == 1 && file_spec.nchannels > 1) {
+    /* Broadcast the gray-scale channel to as many channels as needed, filling the alpha channel
+     * with ones if needed. 0 channel order mean we will be copying from the first channel, while
+     * -1 means we will be filling based on the corresponding value from the defined channel
+     * values. */
+    const int channel_order[] = {0, 0, 0, -1};
+    const float channel_values[] = {0.0f, 0.0f, 0.0f, 1.0f};
+    const std::string channel_names[] = {"R", "G", "B", "A"};
+    ImageBufAlgo::channels(final_buf,
+                           orig_buf,
+                           file_spec.nchannels,
+                           cspan<int>(channel_order, file_spec.nchannels),
+                           cspan<float>(channel_values, file_spec.nchannels),
+                           cspan<std::string>(channel_names, file_spec.nchannels));
+  }
+  else if (file_spec.nchannels == 2 && original_channels_count >= 2) {
+    /* Gray-scale + alpha output (#ImColorMode::BW_A). The #ImBuf source replicates gray into
+     * RGB and stores alpha at index 3, so extract {gray, alpha} = {0, 3}. */
+    const int channel_order[] = {0, 3};
+    const float channel_values[] = {0.0f, 1.0f};
+    const std::string channel_names[] = {"Y", "A"};
+    ImageBufAlgo::channels(final_buf, orig_buf, 2, channel_order, channel_values, channel_names);
+  }
+  else if (original_channels_count != file_spec.nchannels) {
+    /* Either trim or fill new channels based on the needed channels count. */
+    int channel_order[4];
+    for (int i = 0; i < 4; i++) {
+      /* If a channel exists in the original buffer, we copy it, if not, we fill it by supplying
+       * -1, which is a special value that means filling based on the value in the defined channels
+       * values. So alpha is filled with 1, and other channels are filled with zero. */
+      const bool channel_exists = i + 1 <= original_channels_count;
+      channel_order[i] = channel_exists ? i : -1;
+    }
+    const float channel_values[] = {0.0f, 0.0f, 0.0f, 1.0f};
+    const std::string channel_names[] = {"R", "G", "B", "A"};
+    ImageBufAlgo::channels(final_buf,
+                           orig_buf,
+                           file_spec.nchannels,
+                           cspan<int>(channel_order, file_spec.nchannels),
+                           cspan<float>(channel_values, file_spec.nchannels),
+                           cspan<std::string>(channel_names, file_spec.nchannels));
+  }
+  else {
+    final_buf = std::move(orig_buf);
+  }
 }
 
 bool imb_oiio_write(const WriteContext &ctx, const char *filepath, const ImageSpec &file_spec)
@@ -296,61 +381,61 @@ bool imb_oiio_write(const WriteContext &ctx, const char *filepath, const ImageSp
     return false;
   }
 
-  ImageBuf orig_buf(ctx.mem_spec, ctx.mem_start, ctx.mem_xstride, -ctx.mem_ystride, AutoStride);
+  ImageBuf orig_buf(ctx.mem_spec, ctx.mem_span);
   ImageBuf final_buf{};
 
-  /* Grayscale images need to be based on luminance weights rather than only
-   * using a single channel from the source. */
-  if (ctx.ibuf->channels > 1 && file_spec.nchannels == 1) {
-    float weights[4] = {};
-    IMB_colormanagement_get_luminance_coefficients(weights);
-    ImageBufAlgo::channel_sum(final_buf, orig_buf, {weights, orig_buf.nchannels()});
-  }
-  else {
-    /* If we are moving from an 1-channel format to n-channel we need to
-     * ensure the original data is copied into the higher channels. */
-    if (ctx.ibuf->channels == 1 && file_spec.nchannels > 1) {
-      final_buf = ImageBuf(file_spec, InitializePixels::No);
-      ImageBufAlgo::paste(final_buf, 0, 0, 0, 0, orig_buf);
-      ImageBufAlgo::paste(final_buf, 0, 0, 0, 1, orig_buf);
-      ImageBufAlgo::paste(final_buf, 0, 0, 0, 2, orig_buf);
-      if (file_spec.alpha_channel == 3) {
-        ROI alpha_roi = file_spec.roi();
-        alpha_roi.chbegin = file_spec.alpha_channel;
-        ImageBufAlgo::fill(final_buf, {0, 0, 0, 1.0f}, alpha_roi);
-      }
-    }
-    else {
-      final_buf = std::move(orig_buf);
-    }
-  }
+  oiio_write_prepare(file_spec, orig_buf, final_buf);
 
   bool write_ok = false;
   bool close_ok = false;
-  if (ctx.flags & IB_mem) {
-    /* This memory proxy must remain alive until the ImageOutput is finally closed. */
-    ImBufMemWriter writer(ctx.ibuf);
-
-    imb_addencodedbufferImBuf(ctx.ibuf);
-    out->set_ioproxy(&writer);
-    if (out->open("", file_spec)) {
-      write_ok = final_buf.write(out.get());
-      close_ok = out->close();
-    }
-  }
-  else {
-    if (out->open(filepath, file_spec)) {
-      write_ok = final_buf.write(out.get());
-      close_ok = out->close();
-    }
+  if (out->open(filepath, file_spec)) {
+    write_ok = final_buf.write(out.get());
+    close_ok = out->close();
   }
 
-  return write_ok && close_ok;
+  const bool all_ok = write_ok && close_ok;
+  if (!all_ok) {
+    CLOG_ERROR(&LOG_WRITE, "OpenImageIO write failed: %s", out->geterror().c_str());
+    errno = 0; /* Prevent higher level layers from calling `perror` unnecessarily. */
+  }
+
+  return all_ok;
+}
+
+Vector<uint8_t> imb_oiio_write_buffer(const WriteContext &ctx, const ImageSpec &file_spec)
+{
+  unique_ptr<ImageOutput> out = ImageOutput::create(ctx.file_format);
+  if (!out) {
+    return {};
+  }
+
+  ImageBuf orig_buf(ctx.mem_spec, ctx.mem_span);
+  ImageBuf final_buf{};
+
+  oiio_write_prepare(file_spec, orig_buf, final_buf);
+
+  MemoryBufferWriter writer;
+  out->set_ioproxy(&writer);
+
+  bool write_ok = false;
+  bool close_ok = false;
+  if (out->open("", file_spec)) {
+    write_ok = final_buf.write(out.get());
+    close_ok = out->close();
+  }
+  const bool all_ok = write_ok && close_ok;
+  if (!all_ok) {
+    CLOG_ERROR(&LOG_WRITE, "OpenImageIO write failed: %s", out->geterror().c_str());
+    errno = 0; /* Prevent higher level layers from calling `perror` unnecessarily. */
+    return {};
+  }
+
+  return std::move(writer.buffer);
 }
 
 WriteContext imb_create_write_context(const char *file_format,
-                                      ImBuf *ibuf,
-                                      int flags,
+                                      const ImBuf *ibuf,
+                                      ImBufFlags flags,
                                       bool prefer_float)
 {
   WriteContext ctx{};
@@ -360,24 +445,38 @@ WriteContext imb_create_write_context(const char *file_format,
 
   const int width = ibuf->x;
   const int height = ibuf->y;
-  const bool use_float = prefer_float && (ibuf->float_buffer.data != nullptr);
+  const bool use_float = prefer_float && (ibuf->float_data() != nullptr);
+
+  auto make_image_span =
+      [](const auto *buffer, int width, int height, int channels, size_t channel_size) {
+        const stride_t mem_xstride = channel_size * channels;
+        const stride_t mem_ystride = mem_xstride * width;
+        const std::byte *mem_start = reinterpret_cast<const std::byte *>(buffer);
+
+        /* We always write using a negative y-stride so ensure we start at the end. */
+        const stride_t y_flip_offset = (stride_t(height) - 1) * mem_ystride;
+        return image_span<const std::byte>(mem_start + y_flip_offset,
+                                           channels,
+                                           width,
+                                           height,
+                                           1,
+                                           AutoStride,
+                                           mem_xstride,
+                                           -mem_ystride,
+                                           AutoStride,
+                                           channel_size);
+      };
+
   if (use_float) {
     const int mem_channels = ibuf->channels ? ibuf->channels : 4;
-    ctx.mem_xstride = sizeof(float) * mem_channels;
-    ctx.mem_ystride = width * ctx.mem_xstride;
-    ctx.mem_start = reinterpret_cast<uchar *>(ibuf->float_buffer.data);
+    ctx.mem_span = make_image_span(ibuf->float_data(), width, height, mem_channels, sizeof(float));
     ctx.mem_spec = ImageSpec(width, height, mem_channels, TypeDesc::FLOAT);
   }
   else {
     const int mem_channels = 4;
-    ctx.mem_xstride = sizeof(uchar) * mem_channels;
-    ctx.mem_ystride = width * ctx.mem_xstride;
-    ctx.mem_start = ibuf->byte_buffer.data;
+    ctx.mem_span = make_image_span(ibuf->byte_data(), width, height, mem_channels, sizeof(uchar));
     ctx.mem_spec = ImageSpec(width, height, mem_channels, TypeDesc::UINT8);
   }
-
-  /* We always write using a negative y-stride so ensure we start at the end. */
-  ctx.mem_start = ctx.mem_start + ((stride_t(height) - 1) * ctx.mem_ystride);
 
   return ctx;
 }
@@ -397,13 +496,13 @@ ImageSpec imb_create_write_spec(const WriteContext &ctx, int file_channels, Type
    *   the current format being written (e.g. metadata for tiff being written to a `PNG`)
    */
 
-  if (ctx.ibuf->metadata) {
-    LISTBASE_FOREACH (IDProperty *, prop, &ctx.ibuf->metadata->data.group) {
-      if (prop->type == IDP_STRING) {
+  if (ctx.ibuf->metadata()) {
+    for (IDProperty &prop : ctx.ibuf->metadata()->data.group) {
+      if (prop.type == IDP_STRING) {
         /* If this property has a prefixed name (oiio:, tiff:, etc.) and it belongs to
          * oiio or a different format, then skip. */
-        if (char *colon = strchr(prop->name, ':')) {
-          std::string prefix(prop->name, colon);
+        if (char *colon = strchr(prop.name, ':')) {
+          std::string prefix(prop.name, colon);
           Strutil::to_lower(prefix);
           if (prefix == "oiio" ||
               (!STREQ(prefix.c_str(), ctx.file_format) && OIIO::is_imageio_format_name(prefix)))
@@ -413,19 +512,51 @@ ImageSpec imb_create_write_spec(const WriteContext &ctx, int file_channels, Type
           }
         }
 
-        file_spec.attribute(prop->name, IDP_String(prop));
+        file_spec.attribute(prop.name, IDP_string_get(&prop));
       }
     }
   }
 
   if (ctx.ibuf->ppm[0] > 0.0 && ctx.ibuf->ppm[1] > 0.0) {
-    /* More OIIO formats support inch than meter. */
-    file_spec.attribute("ResolutionUnit", "in");
-    file_spec.attribute("XResolution", float(ctx.ibuf->ppm[0] * 0.0254));
-    file_spec.attribute("YResolution", float(ctx.ibuf->ppm[1] * 0.0254));
+    if (STREQ(ctx.file_format, "bmp")) {
+      /* BMP only supports meters as integers. */
+      file_spec.attribute("ResolutionUnit", "m");
+      file_spec.attribute("XResolution", int(round(ctx.ibuf->ppm[0])));
+      file_spec.attribute("YResolution", int(round(ctx.ibuf->ppm[1])));
+    }
+    else {
+      /* More OIIO formats support inch than meter. */
+      file_spec.attribute("ResolutionUnit", "in");
+      file_spec.attribute("XResolution", float(ctx.ibuf->ppm[0] * 0.0254));
+      file_spec.attribute("YResolution", float(ctx.ibuf->ppm[1] * 0.0254));
+    }
+  }
+
+  /* Write ICC profile and/or CICP if there is one associated with the colorspace. */
+  const ColorSpace *colorspace = (ctx.mem_spec.format == TypeDesc::FLOAT) ?
+                                     ctx.ibuf->float_buffer.colorspace :
+                                     ctx.ibuf->byte_buffer.colorspace;
+  if (colorspace) {
+    Vector<char> icc_profile = IMB_colormanagement_space_to_icc_profile(colorspace);
+    if (!icc_profile.is_empty()) {
+      file_spec.attribute("ICCProfile",
+                          OIIO::TypeDesc(OIIO::TypeDesc::UINT8, icc_profile.size()),
+                          icc_profile.data());
+    }
+
+    /* PNG only supports RGB matrix. For AVIF and HEIF we want to use a YUV matrix
+     * as these are based on video codecs designed to use them. */
+    const bool rgb_matrix = STREQ(ctx.file_format, "png");
+    int cicp[4];
+    if (IMB_colormanagement_space_to_cicp(
+            colorspace, ColorManagedFileOutput::Image, rgb_matrix, cicp))
+    {
+      file_spec.attribute("CICP", TypeDesc(TypeDesc::INT, 4), cicp);
+    }
   }
 
   return file_spec;
 }
 
-}  // namespace blender::imbuf
+}  // namespace imbuf
+}  // namespace blender

@@ -20,12 +20,14 @@ namespace blender::bke {
  * gizmo node).
  */
 struct NodeGizmoID {
-  /** Storing only the hash of the compute context is enough here and is cheaper than making a deep
-   * copy of the actual compute context. */
+  /**
+   * Storing only the hash of the compute context is enough here and is cheaper than making a deep
+   * copy of the actual compute context.
+   */
   ComputeContextHash compute_context_hash;
   int node_id;
 
-  BLI_STRUCT_EQUALITY_OPERATORS_2(NodeGizmoID, compute_context_hash, node_id)
+  friend bool operator==(const NodeGizmoID &a, const NodeGizmoID &b) = default;
 
   uint64_t hash() const
   {

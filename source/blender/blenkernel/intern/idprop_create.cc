@@ -94,7 +94,7 @@ static void array_values_set(IDProperty *property,
 {
   BLI_assert(values);
   BLI_assert(property->len == values_len);
-  memcpy(IDP_Array(property), values, values_len * value_size);
+  memcpy(IDP_array_voidp_get(property), values, values_len * value_size);
 }
 
 /**
@@ -109,8 +109,7 @@ std::unique_ptr<IDProperty, IDPropertyDeleter> create_array(StringRef prop_name,
                                                             Span<PrimitiveType> values,
                                                             const eIDPropertyFlag flags)
 {
-  static_assert(std::is_same_v<PrimitiveType, int32_t> || std::is_same_v<PrimitiveType, float> ||
-                    std::is_same_v<PrimitiveType, double>,
+  static_assert(is_same_any_v<PrimitiveType, int32_t, float, double>,
                 "Allowed values for PrimitiveType are int32_t, float and double.");
   static_assert(!std::is_same_v<PrimitiveType, int32_t> || id_property_subtype == IDP_INT,
                 "PrimitiveType and id_property_type do not match (int32_t).");
@@ -157,6 +156,6 @@ std::unique_ptr<IDProperty, IDPropertyDeleter> create_group(const StringRef prop
   return std::unique_ptr<IDProperty, IDPropertyDeleter>(property);
 }
 
-/* \} */
+/** \} */
 
 }  // namespace blender::bke::idprop

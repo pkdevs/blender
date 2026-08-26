@@ -9,6 +9,7 @@
 #include "DNA_layer_types.h"
 
 #include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
 #include "intern/builder/deg_builder_nodes.h"
 #include "intern/builder/deg_builder_relations.h"
@@ -77,27 +78,29 @@ class DepsgraphFromCollectionIDsRelationBuilder : public DepsgraphRelationBuilde
 
 }  // namespace
 
-FromCollectionBuilderPipeline::FromCollectionBuilderPipeline(::Depsgraph *graph,
+FromCollectionBuilderPipeline::FromCollectionBuilderPipeline(blender::Depsgraph *graph,
                                                              Collection *collection)
     : AbstractBuilderPipeline(graph)
 {
-  Base *base = BKE_collection_or_layer_objects(scene_, view_layer_, collection);
+  Base *base = BKE_collection_or_layer_objects(
+      *DEG_get_bmain(graph), scene_, view_layer_, collection);
   const int base_flag = (deg_graph_->mode == DAG_EVAL_RENDER) ? BASE_ENABLED_RENDER :
                                                                 BASE_ENABLED_VIEWPORT;
   for (; base; base = base->next) {
-    if (base->flag & base_flag) {
+    if (!deg_graph_->use_visibility_optimization || (base->flag & base_flag)) {
       ids_.add(&base->object->id);
     }
   }
 }
 
-unique_ptr<DepsgraphNodeBuilder> FromCollectionBuilderPipeline::construct_node_builder()
+std::unique_ptr<DepsgraphNodeBuilder> FromCollectionBuilderPipeline::construct_node_builder()
 {
   return std::make_unique<DepsgraphFromCollectionIDsNodeBuilder>(
       bmain_, deg_graph_, &builder_cache_, ids_);
 }
 
-unique_ptr<DepsgraphRelationBuilder> FromCollectionBuilderPipeline::construct_relation_builder()
+std::unique_ptr<DepsgraphRelationBuilder> FromCollectionBuilderPipeline::
+    construct_relation_builder()
 {
   return std::make_unique<DepsgraphFromCollectionIDsRelationBuilder>(
       bmain_, deg_graph_, &builder_cache_, ids_);

@@ -15,7 +15,7 @@ namespace blender::gpu::render_graph {
  * Information stored inside the render graph node. See `VKRenderGraphNode`.
  */
 struct VKUpdateBufferData {
-  VkBuffer dst_buffer;
+  VKResourceWithHandle<VkBuffer> dst_buffer;
   VkDeviceSize dst_offset;
   VkDeviceSize data_size;
   void *data;
@@ -34,7 +34,8 @@ class VKUpdateBufferNode : public VKNodeInfo<VKNodeType::UPDATE_BUFFER,
    * (`VK*Data`/`VK*CreateInfo`) types can be included in the same header file as the logic. The
    * actual node data (`VKRenderGraphNode` includes all header files.)
    */
-  template<typename Node> static void set_node_data(Node &node, const CreateInfo &create_info)
+  template<typename Node, typename Storage>
+  static void set_node_data(Node &node, Storage & /* storage */, const CreateInfo &create_info)
   {
     node.update_buffer = create_info;
   }
@@ -43,12 +44,12 @@ class VKUpdateBufferNode : public VKNodeInfo<VKNodeType::UPDATE_BUFFER,
    * Extract read/write resource dependencies from `create_info` and add them to `node_links`.
    */
   void build_links(VKResourceStateTracker &resources,
-                   VKRenderGraphNodeLinks &node_links,
+                   VKRenderGraphLinks &links,
                    const CreateInfo &create_info) override
   {
     ResourceWithStamp dst_resource = resources.get_buffer_and_increase_stamp(
         create_info.dst_buffer);
-    node_links.outputs.append({dst_resource, VK_ACCESS_TRANSFER_WRITE_BIT});
+    links.buffers.append({dst_resource, VK_ACCESS_TRANSFER_WRITE_BIT});
   }
 
   /**
@@ -56,6 +57,7 @@ class VKUpdateBufferNode : public VKNodeInfo<VKNodeType::UPDATE_BUFFER,
    */
   void build_commands(VKCommandBufferInterface &command_buffer,
                       Data &data,
+                      Span<uint8_t> /*storage_push_constants*/,
                       VKBoundPipelines & /*r_bound_pipelines*/) override
   {
     command_buffer.update_buffer(data.dst_buffer, data.dst_offset, data.data_size, data.data);
@@ -63,7 +65,7 @@ class VKUpdateBufferNode : public VKNodeInfo<VKNodeType::UPDATE_BUFFER,
 
   void free_data(Data &data)
   {
-    MEM_freeN(data.data);
+    MEM_delete_void(data.data);
     data.data = nullptr;
   }
 };

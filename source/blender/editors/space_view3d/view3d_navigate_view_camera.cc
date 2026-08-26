@@ -6,12 +6,10 @@
  * \ingroup spview3d
  */
 
-#include "MEM_guardedalloc.h"
-
 #include "BKE_context.hh"
 #include "BKE_layer.hh"
 
-#include "DEG_depsgraph_query.hh"
+#include "DEG_depsgraph.hh"
 
 #include "WM_api.hh"
 
@@ -19,11 +17,13 @@
 
 #include "view3d_navigate.hh" /* own include */
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name View Camera Operator
  * \{ */
 
-static int view_camera_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus view_camera_exec(bContext *C, wmOperator *op)
 {
   View3D *v3d;
   ARegion *region;
@@ -37,11 +37,12 @@ static int view_camera_exec(bContext *C, wmOperator *op)
   ED_view3d_smooth_view_force_finish(C, v3d, region);
 
   if ((RV3D_LOCK_FLAGS(rv3d) & RV3D_LOCK_ANY_TRANSFORM) == 0) {
+    const Main *bmain = CTX_data_main(C);
     ViewLayer *view_layer = CTX_data_view_layer(C);
     Scene *scene = CTX_data_scene(C);
 
     if (rv3d->persp != RV3D_CAMOB) {
-      BKE_view_layer_synced_ensure(scene, view_layer);
+      BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
       Object *ob = BKE_view_layer_active_object_get(view_layer);
 
       if (!rv3d->smooth_timer) {
@@ -69,7 +70,7 @@ static int view_camera_exec(bContext *C, wmOperator *op)
       }
 
       if (v3d->camera == nullptr) {
-        v3d->camera = BKE_view_layer_camera_find(scene, view_layer);
+        v3d->camera = BKE_view_layer_camera_find(*bmain, scene, view_layer);
       }
 
       /* couldn't find any useful camera, bail out */
@@ -122,7 +123,7 @@ void VIEW3D_OT_view_camera(wmOperatorType *ot)
   ot->description = "Toggle the camera view";
   ot->idname = "VIEW3D_OT_view_camera";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = view_camera_exec;
   ot->poll = ED_operator_rv3d_user_region_poll;
 
@@ -131,3 +132,5 @@ void VIEW3D_OT_view_camera(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender

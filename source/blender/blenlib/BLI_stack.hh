@@ -7,7 +7,7 @@
 /** \file
  * \ingroup bli
  *
- * A `blender::Stack<T>` is a dynamically growing FILO (first-in, last-out) data structure. It is
+ * A `Stack<T>` is a dynamically growing FILO (first-in, last-out) data structure. It is
  * designed to be a more convenient and efficient replacement for `std::stack`.
  *
  * The improved efficiency is mainly achieved by supporting small buffer optimization. As long as
@@ -21,7 +21,7 @@
  * when it grows. This stack implementation does not have to copy all previously pushed elements
  * when it grows.
  *
- * blender::Stack is implemented using a double linked list of chunks. Each chunk contains an array
+ * Stack is implemented using a double linked list of chunks. Each chunk contains an array
  * of elements. The chunk size increases exponentially with every new chunk that is required. The
  * lowest chunk, i.e. the one that is used for the first few pushed elements, is embedded into the
  * stack.
@@ -33,6 +33,7 @@
 
 namespace blender {
 
+namespace detail {
 /**
  * A StackChunk references a contiguous memory buffer. Multiple StackChunk instances are linked in
  * a double linked list.
@@ -52,6 +53,7 @@ template<typename T> struct StackChunk {
     return capacity_end - begin;
   }
 };
+}  // namespace detail
 
 template<
     /** Type of the elements that are stored in the stack. */
@@ -77,7 +79,7 @@ class Stack {
   using size_type = int64_t;
 
  private:
-  using Chunk = StackChunk<T>;
+  using Chunk = ::blender::detail::StackChunk<T>;
 
   /**
    * Points to one element after top-most value in the stack.
@@ -412,4 +414,4 @@ class Stack {
 template<typename T, int64_t InlineBufferCapacity = default_inline_buffer_capacity(sizeof(T))>
 using RawStack = Stack<T, InlineBufferCapacity, RawAllocator>;
 
-} /* namespace blender */
+}  // namespace blender

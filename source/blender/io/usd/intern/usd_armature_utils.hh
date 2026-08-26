@@ -12,17 +12,31 @@
 #include <pxr/base/tf/token.h>
 #include <pxr/usd/usdSkel/animation.h>
 
-#include <string>
+namespace blender {
 
 struct Bone;
 struct Depsgraph;
+struct FCurve;
 struct ModifierData;
 struct Object;
 
-namespace blender::io::usd {
+namespace animrig {
+class Channelbag;
+struct FCurveDescriptor;
+}  // namespace animrig
+
+namespace io::usd {
 
 /* Custom Blender Primvar name used for storing armature bone lengths. */
 inline const pxr::TfToken BlenderBoneLengths("blender:bone_lengths", pxr::TfToken::Immortal);
+
+/* Utility: create new fcurve and add it as a channel to a group. */
+FCurve *create_fcurve(animrig::Channelbag &channelbag,
+                      const animrig::FCurveDescriptor &fcurve_descriptor,
+                      const int sample_count);
+
+/* Utility: fill in a single fcurve sample at the provided index. */
+void set_fcurve_sample(FCurve *fcu, int64_t sample_index, const float frame, const float value);
 
 /**
  * Recursively invoke the given function on the given armature object's bones.
@@ -41,7 +55,7 @@ void visit_bones(const Object *ob_arm, FunctionRef<void(const Bone *)> visitor);
  *                    armature export joint indices
  * \param r_names: The returned list of bone names
  */
-void get_armature_bone_names(const Object *ob_arm, bool use_deform, Vector<std::string> &r_names);
+void get_armature_bone_names(const Object *ob_arm, bool use_deform, Vector<StringRef> &r_names);
 
 /**
  * Return the USD joint path corresponding to the given bone. For example, for the bone
@@ -59,7 +73,7 @@ pxr::TfToken build_usd_joint_path(const Bone *bone, bool allow_unicode);
  * where the paths correspond to the bones of the given armature.
  *
  * \param skel_anim: The animation whose joints attribute will be set
- * \param ob_arm: The armature object
+ * \param obj: The armature object
  * \param deform_map: A pointer to a map associating bone names with
  *                    deform bones and their parents. If the pointer
  *                    is not null, assume only deform bones are to be
@@ -105,7 +119,7 @@ const Object *get_armature_modifier_obj(const Object &obj, const Depsgraph *deps
  *         bone name is found or if the object does not have an armature modifier
  */
 bool is_armature_modifier_bone_name(const Object &obj,
-                                    const StringRefNull name,
+                                    StringRefNull name,
                                     const Depsgraph *depsgraph);
 
 /**
@@ -130,4 +144,5 @@ bool can_export_skinned_mesh(const Object &obj, const Depsgraph *depsgraph);
  */
 void init_deform_bones_map(const Object *obj, Map<StringRef, const Bone *> *deform_map);
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

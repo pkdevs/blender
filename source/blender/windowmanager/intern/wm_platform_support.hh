@@ -7,6 +7,8 @@
  */
 #pragma once
 
-#include "BLI_sys_types.h"
+namespace blender {
 
 bool WM_platform_support_perform_checks();
+
+}  // namespace blender

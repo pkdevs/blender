@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <cstdio>
+
 #include "gpu_backend.hh"
 
 #ifdef WITH_RENDERDOC
@@ -31,7 +33,6 @@ class VKBackend : public GPUBackend {
 #endif
 
  public:
-  VKShaderCompiler shader_compiler;
   /* Global instance to device handles. */
   VKDevice device;
 
@@ -54,25 +55,36 @@ class VKBackend : public GPUBackend {
    */
   static bool is_supported();
 
+  /**
+   * Print one line per Vulkan device that meets minimum requirements, in the format used by
+   * `--gpu-device help`. Each line is `<vendor-hex>/<device-hex>/<index>  <name>`.
+   * Operates without an active backend (creates a temporary Vulkan instance).
+   */
+  static void supported_devices_print(FILE *fp);
+
+  void init_resources() override;
   void delete_resources() override;
 
-  void samplers_update() override;
   void compute_dispatch(int groups_x_len, int groups_y_len, int groups_z_len) override;
   void compute_dispatch_indirect(StorageBuf *indirect_buf) override;
 
-  Context *context_alloc(void *ghost_window, void *ghost_context) override;
+  Context *context_alloc(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context) override;
 
   Batch *batch_alloc() override;
   Fence *fence_alloc() override;
+  WorkInFlight *work_in_flight_alloc(unsigned int max_in_flight) override;
   FrameBuffer *framebuffer_alloc(const char *name) override;
   IndexBuf *indexbuf_alloc() override;
   PixelBuffer *pixelbuf_alloc(size_t size) override;
   QueryPool *querypool_alloc() override;
   Shader *shader_alloc(const char *name) override;
   Texture *texture_alloc(const char *name) override;
+  TexturePool *texturepool_alloc() override;
   UniformBuf *uniformbuf_alloc(size_t size, const char *name) override;
   StorageBuf *storagebuf_alloc(size_t size, GPUUsageType usage, const char *name) override;
   VertBuf *vertbuf_alloc() override;
+  TopLevelAS *tlas_alloc(const char *name) override;
+  BottomLevelAS *blas_alloc(const char *name) override;
 
   void shader_cache_dir_clear_old() override
   {
@@ -83,7 +95,7 @@ class VKBackend : public GPUBackend {
    * Used for performing per-frame actions globally */
   void render_begin() override;
   void render_end() override;
-  void render_step() override;
+  void render_step(bool /*force_resource_release*/) override;
 
   bool debug_capture_begin(const char *title);
   void debug_capture_end();

@@ -10,14 +10,16 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "eigen_capi.h"
 
 #include "bmesh.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
 
 // #define SMOOTH_LAPLACIAN_AREA_FACTOR 4.0f  /* UNUSED */
 // #define SMOOTH_LAPLACIAN_EDGE_FACTOR 2.0f  /* UNUSED */
@@ -43,7 +45,7 @@ struct BLaplacianSystem {
   /* Data. */
   float min_area;
 };
-typedef BLaplacianSystem LaplacianSystem;
+using LaplacianSystem = BLaplacianSystem;
 
 static bool vert_is_boundary(BMVert *v);
 static LaplacianSystem *init_laplacian_system(int a_numEdges, int a_numLoops, int a_numVerts);
@@ -60,7 +62,7 @@ static void volume_preservation(
 static void delete_void_pointer(void *data)
 {
   if (data) {
-    MEM_freeN(data);
+    MEM_delete_void(data);
   }
 }
 
@@ -77,7 +79,7 @@ static void delete_laplacian_system(LaplacianSystem *sys)
   }
   sys->bm = nullptr;
   sys->op = nullptr;
-  MEM_freeN(sys);
+  MEM_delete(sys);
 }
 
 static void memset_laplacian_system(LaplacianSystem *sys, int val)
@@ -93,49 +95,42 @@ static void memset_laplacian_system(LaplacianSystem *sys, int val)
 static LaplacianSystem *init_laplacian_system(int a_numEdges, int a_numLoops, int a_numVerts)
 {
   LaplacianSystem *sys;
-  sys = static_cast<LaplacianSystem *>(
-      MEM_callocN(sizeof(LaplacianSystem), "ModLaplSmoothSystem"));
+  sys = MEM_new_zeroed<LaplacianSystem>("ModLaplSmoothSystem");
   sys->numEdges = a_numEdges;
   sys->numLoops = a_numLoops;
   sys->numVerts = a_numVerts;
 
-  sys->eweights = static_cast<float *>(
-      MEM_callocN(sizeof(float) * sys->numEdges, "ModLaplSmoothEWeight"));
+  sys->eweights = MEM_new_array_zeroed<float>(sys->numEdges, "ModLaplSmoothEWeight");
   if (!sys->eweights) {
     delete_laplacian_system(sys);
     return nullptr;
   }
 
-  sys->fweights = static_cast<float(*)[3]>(
-      MEM_callocN(sizeof(float[3]) * sys->numLoops, "ModLaplSmoothFWeight"));
+  sys->fweights = MEM_new_array_zeroed<float[3]>(sys->numLoops, "ModLaplSmoothFWeight");
   if (!sys->fweights) {
     delete_laplacian_system(sys);
     return nullptr;
   }
 
-  sys->ring_areas = static_cast<float *>(
-      MEM_callocN(sizeof(float) * sys->numVerts, "ModLaplSmoothRingAreas"));
+  sys->ring_areas = MEM_new_array_zeroed<float>(sys->numVerts, "ModLaplSmoothRingAreas");
   if (!sys->ring_areas) {
     delete_laplacian_system(sys);
     return nullptr;
   }
 
-  sys->vlengths = static_cast<float *>(
-      MEM_callocN(sizeof(float) * sys->numVerts, "ModLaplSmoothVlengths"));
+  sys->vlengths = MEM_new_array_zeroed<float>(sys->numVerts, "ModLaplSmoothVlengths");
   if (!sys->vlengths) {
     delete_laplacian_system(sys);
     return nullptr;
   }
 
-  sys->vweights = static_cast<float *>(
-      MEM_callocN(sizeof(float) * sys->numVerts, "ModLaplSmoothVweights"));
+  sys->vweights = MEM_new_array_zeroed<float>(sys->numVerts, "ModLaplSmoothVweights");
   if (!sys->vweights) {
     delete_laplacian_system(sys);
     return nullptr;
   }
 
-  sys->zerola = static_cast<bool *>(
-      MEM_callocN(sizeof(bool) * sys->numVerts, "ModLaplSmoothZeloa"));
+  sys->zerola = MEM_new_array_zeroed<bool>(sys->numVerts, "ModLaplSmoothZeloa");
   if (!sys->zerola) {
     delete_laplacian_system(sys);
     return nullptr;
@@ -501,3 +496,5 @@ void bmo_smooth_laplacian_vert_exec(BMesh *bm, BMOperator *op)
 
   delete_laplacian_system(sys);
 }
+
+}  // namespace blender

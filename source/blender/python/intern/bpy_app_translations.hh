@@ -8,5 +8,11 @@
 
 #pragma once
 
-PyObject *BPY_app_translations_struct();
+#include <Python.h>
+
+namespace blender {
+
+[[nodiscard]] PyObject *BPY_app_translations_struct();
 void BPY_app_translations_end();
+
+}  // namespace blender

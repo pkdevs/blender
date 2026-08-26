@@ -10,7 +10,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
+#include "BLI_listbase.hh"
+#include "BLI_path_utils.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 
 #include "DNA_space_types.h"
@@ -19,6 +22,8 @@
 #include "ED_text.hh"
 
 #include "text_format.hh"
+
+namespace blender {
 
 /****************** flatten string **********************/
 
@@ -31,15 +36,15 @@ static void flatten_string_append(FlattenString *fs, const char *c, int accum, i
     int *naccum;
     fs->len *= 2;
 
-    nbuf = static_cast<char *>(MEM_callocN(sizeof(*fs->buf) * fs->len, "fs->buf"));
+    nbuf = MEM_new_array_zeroed<char>(fs->len, "fs->buf");
     memcpy(nbuf, fs->buf, sizeof(*fs->buf) * fs->pos);
 
-    naccum = static_cast<int *>(MEM_callocN(sizeof(*fs->accum) * fs->len, "fs->accum"));
+    naccum = MEM_new_array_zeroed<int>(fs->len, "fs->accum");
     memcpy(naccum, fs->accum, sizeof(*fs->accum) * fs->pos);
 
     if (fs->buf != fs->fixedbuf) {
-      MEM_freeN(fs->buf);
-      MEM_freeN(fs->accum);
+      MEM_delete(fs->buf);
+      MEM_delete(fs->accum);
     }
 
     fs->buf = nbuf;
@@ -90,10 +95,10 @@ int flatten_string(const SpaceText *st, FlattenString *fs, const char *in)
 void flatten_string_free(FlattenString *fs)
 {
   if (fs->buf != fs->fixedbuf) {
-    MEM_freeN(fs->buf);
+    MEM_delete(fs->buf);
   }
   if (fs->accum != fs->fixedaccum) {
-    MEM_freeN(fs->accum);
+    MEM_delete(fs->accum);
   }
 }
 
@@ -108,15 +113,15 @@ int text_check_format_len(TextLine *line, uint len)
 {
   if (line->format) {
     if (strlen(line->format) < len) {
-      MEM_freeN(line->format);
-      line->format = static_cast<char *>(MEM_mallocN(len + 2, "SyntaxFormat"));
+      MEM_delete(line->format);
+      line->format = MEM_new_array_uninitialized<char>(len + 2, "SyntaxFormat");
       if (!line->format) {
         return 0;
       }
     }
   }
   else {
-    line->format = static_cast<char *>(MEM_mallocN(len + 2, "SyntaxFormat"));
+    line->format = MEM_new_array_uninitialized<char>(len + 2, "SyntaxFormat");
     if (!line->format) {
       return 0;
     }
@@ -164,7 +169,7 @@ void text_format_fill_ascii(const char **str_p, char **fmt_p, const char type, c
 }
 
 /* *** Registration *** */
-static ListBase tft_lb = {nullptr, nullptr};
+static ListBaseT<TextFormatType> tft_lb = {nullptr, nullptr};
 void ED_text_format_register(TextFormatType *tft)
 {
   BLI_addtail(&tft_lb, tft);
@@ -175,26 +180,26 @@ TextFormatType *ED_text_format_get(Text *text)
   if (text) {
     const char *text_ext = strchr(text->id.name + 2, '.');
     if (text_ext) {
-      text_ext++; /* skip the '.' */
-      /* Check all text formats in the static list */
-      LISTBASE_FOREACH (TextFormatType *, tft, &tft_lb) {
-        /* All formats should have an ext, but just in case */
+      text_ext++; /* Skip the `.`. */
+      /* Check all text formats in the static list. */
+      for (TextFormatType &tft : tft_lb) {
+        /* All formats should have an ext, but just in case. */
         const char **ext;
-        for (ext = tft->ext; *ext; ext++) {
-          /* If extension matches text name, return the matching tft */
+        for (ext = tft.ext; *ext; ext++) {
+          /* If extension matches text name, return the matching tft. */
           if (BLI_strcasecmp(text_ext, *ext) == 0) {
-            return tft;
+            return &tft;
           }
         }
       }
     }
 
     /* If we make it here we never found an extension that worked - return
-     * the "default" text format */
+     * the "default" text format. */
     return static_cast<TextFormatType *>(tft_lb.first);
   }
 
-  /* Return the "default" text format */
+  /* Return the "default" text format. */
   return static_cast<TextFormatType *>(tft_lb.first);
 }
 
@@ -215,18 +220,18 @@ bool ED_text_is_syntax_highlight_supported(Text *text)
     /* Extensionless data-blocks are considered highlightable as Python. */
     return true;
   }
-  text_ext++; /* skip the '.' */
+  text_ext++; /* Skip the `.`. */
   if (BLI_string_is_decimal(text_ext)) {
-    /* "Text.001" is treated as extensionless, and thus highlightable. */
+    /* `Text.001` is treated as extensionless, and thus highlightable. */
     return true;
   }
 
-  /* Check all text formats in the static list */
-  LISTBASE_FOREACH (TextFormatType *, tft, &tft_lb) {
-    /* All formats should have an ext, but just in case */
+  /* Check all text formats in the static list. */
+  for (TextFormatType &tft : tft_lb) {
+    /* All formats should have an ext, but just in case. */
     const char **ext;
-    for (ext = tft->ext; *ext; ext++) {
-      /* If extension matches text name, return the matching tft */
+    for (ext = tft.ext; *ext; ext++) {
+      /* If extension matches text name, return the matching tft. */
       if (BLI_strcasecmp(text_ext, *ext) == 0) {
         return true;
       }
@@ -257,10 +262,12 @@ int text_format_string_literal_find(const Span<const char *> string_literals, co
 }
 
 #ifndef NDEBUG
-const bool text_format_string_literals_check_sorted_array(const Span<const char *> string_literals)
+bool text_format_string_literals_check_sorted_array(const Span<const char *> string_literals)
 {
   return std::is_sorted(string_literals.begin(),
                         string_literals.end(),
                         [](const char *a, const char *b) { return strcmp(a, b) < 0; });
 }
 #endif
+
+}  // namespace blender

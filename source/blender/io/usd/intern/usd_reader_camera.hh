@@ -12,7 +12,11 @@
 
 #include <pxr/usd/usdGeom/camera.h>
 
-namespace blender::io::usd {
+namespace blender {
+
+struct Main;
+
+namespace io::usd {
 
 class USDCameraReader : public USDXformReader {
  private:
@@ -31,8 +35,9 @@ class USDCameraReader : public USDXformReader {
     return bool(cam_prim_);
   }
 
-  void create_object(Main *bmain, double motionSampleTime) override;
-  void read_object_data(Main *bmain, double motionSampleTime) override;
+  void create_object(Main *bmain) override;
+  void read_object_data(Main *bmain, pxr::UsdTimeCode time) override;
 };
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

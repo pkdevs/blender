@@ -2,9 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bli
+ */
+
 #pragma once
 
-#include "BLI_assert.h"
 #include "BLI_math_vector_types.hh"
 
 namespace blender {
@@ -30,6 +33,11 @@ struct OrderedEdge {
   }
   OrderedEdge(const int2 edge) : OrderedEdge(edge[0], edge[1]) {}
   OrderedEdge(const uint v1, const uint v2) : OrderedEdge(int(v1), int(v2)) {}
+
+  operator int2() const
+  {
+    return int2(v_low, v_high);
+  }
 
   uint64_t hash() const
   {

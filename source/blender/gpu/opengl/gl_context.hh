@@ -12,6 +12,7 @@
 
 #include "GPU_framebuffer.hh"
 
+#include "BKE_global.hh"
 #include "BLI_set.hh"
 #include "BLI_vector.hh"
 
@@ -19,20 +20,29 @@
 
 #include <mutex>
 
-namespace blender {
-namespace gpu {
+namespace blender::gpu {
 
 class GLVaoCache;
 
 class GLSharedOrphanLists {
- public:
-  /** Mutex for the below structures. */
-  std::mutex lists_mutex;
-  /** Buffers and textures are shared across context. Any context can free them. */
-  Vector<GLuint> textures;
-  Vector<GLuint> buffers;
+  class OrphanList {
+    /** Mutex for the below structures. */
+    std::mutex mutex_;
+    /** Buffers and textures are shared across context. Any context can free them. */
+    Vector<GLuint> handles_;
+
+   public:
+    void clear(FunctionRef<void(GLuint, GLuint *)> free_fn);
+    void append(GLuint handle);
+  };
 
  public:
+  /** Shaders, Buffers and textures are shared across context. */
+  OrphanList textures;
+  OrphanList buffers;
+  OrphanList shaders;
+  OrphanList programs;
+
   void orphans_clear();
 };
 
@@ -41,37 +51,38 @@ class GLContext : public Context {
   /** Capabilities. */
 
   static GLint max_cubemap_size;
-  static GLint max_ubo_size;
   static GLint max_ubo_binds;
   static GLint max_ssbo_binds;
 
   /** Extensions. */
 
-  static bool clear_texture_support;
   static bool debug_layer_support;
   static bool direct_state_access_support;
-  static bool explicit_location_support;
   static bool framebuffer_fetch_support;
+  /* layered_rendering_support requires GL_ARB_shader_viewport_layer_array, which is a superset of
+   * GL_AMD_vertex_shader_viewport_index (vertex_shader_viewport_index_support) and
+   * GL_AMD_vertex_shader_layer (vertex_shader_layer_support) with additional support for
+   * tessellation evaluation shaders (which are not used by the GPU module). */
   static bool layered_rendering_support;
+  static bool vertex_shader_viewport_index_support;
+  static bool vertex_shader_layer_support;
   static bool native_barycentric_support;
   static bool multi_bind_support;
   static bool multi_bind_image_support;
-  static bool multi_draw_indirect_support;
-  static bool shader_draw_parameters_support;
   static bool stencil_texturing_support;
   static bool texture_barrier_support;
   static bool texture_filter_anisotropic_support;
+  static bool derivative_control_support;
 
   /** Workarounds. */
 
   static bool debug_layer_workaround;
   static bool unused_fb_slot_workaround;
-  static bool generate_mipmap_workaround;
 
   /** VBO for missing vertex attribute binding. Avoid undefined behavior on some implementation. */
   GLuint default_attr_vbo_;
 
-  /** Used for debugging purpose. Bitflags of all bound slots. */
+  /** Used for debugging purpose. Bit-flags of all bound slots. */
   uint16_t bound_ubo_slots;
   uint16_t bound_ssbo_slots;
 
@@ -81,7 +92,7 @@ class GLContext : public Context {
    * context is destroyed, we need to remove any reference to it.
    */
   Set<GLVaoCache *> vao_caches_;
-  Set<GPUFrameBuffer *> framebuffers_;
+  Set<gpu::FrameBuffer *> framebuffers_;
   /** Mutex for the below structures. */
   std::mutex lists_mutex_;
   /** VertexArrays and framebuffers are not shared across context. */
@@ -90,8 +101,31 @@ class GLContext : public Context {
   /** #GLBackend owns this data. */
   GLSharedOrphanLists &shared_orphan_list_;
 
+  struct TimeQuery {
+    std::string name;
+    union {
+      GLuint handles[2];
+      struct {
+        GLuint handle_start, handle_end;
+      };
+    };
+    bool finished;
+    int64_t cpu_start;
+    int64_t cpu_end;
+  };
+  struct FrameQueries {
+    Vector<TimeQuery> queries;
+  };
+  Vector<FrameQueries> frame_timings;
+
+  void process_frame_timings();
+
+  class GHOST_IContext *ghost_context_;
+
  public:
-  GLContext(void *ghost_window, GLSharedOrphanLists &shared_orphan_list);
+  GLContext(GHOST_IWindow *ghost_window,
+            GHOST_IContext *ghost_context,
+            GLSharedOrphanLists &shared_orphan_list);
   ~GLContext();
 
   static void check_error(const char *info);
@@ -121,8 +155,10 @@ class GLContext : public Context {
   void vao_free(GLuint vao_id);
   void fbo_free(GLuint fbo_id);
   /* These can be called by any threads even without OpenGL ctx. Deletion will be delayed. */
-  static void buf_free(GLuint buf_id);
-  static void tex_free(GLuint tex_id);
+  static void buffer_free(GLuint buf_id);
+  static void texture_free(GLuint tex_id);
+  static void shader_free(GLuint shader_id);
+  static void program_free(GLuint program_id);
 
   void vao_cache_register(GLVaoCache *cache);
   void vao_cache_unregister(GLVaoCache *cache);
@@ -145,5 +181,4 @@ class GLContext : public Context {
   MEM_CXX_CLASS_ALLOC_FUNCS("GLContext")
 };
 
-}  // namespace gpu
-}  // namespace blender
+}  // namespace blender::gpu

@@ -31,8 +31,12 @@ NODE_STORAGE_FUNCS(NodeGeometryCurveTrim)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Curves").supported_type(GeometryComponent::Type::Curve);
-  b.add_output<decl::Geometry>("Curves").propagate_all();
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
+  b.add_input<decl::Geometry>("Curves"_ustr)
+      .supported_type(GeometryComponent::Type::Curve)
+      .description("Curves to deform");
+  b.add_output<decl::Geometry>("Curves"_ustr).propagate_all_geometry().align_with_previous();
 }
 
 static void deform_curves(const CurvesGeometry &curves,
@@ -201,7 +205,7 @@ static void deform_curves(const CurvesGeometry &curves,
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet curves_geometry = params.extract_input<GeometrySet>("Curves");
+  GeometrySet curves_geometry = params.extract_input<GeometrySet>("Curves"_ustr);
 
   Mesh *surface_mesh_orig = nullptr;
   bool free_suface_mesh_orig = false;
@@ -211,7 +215,9 @@ static void node_geo_exec(GeoNodeExecParams params)
     }
   });
 
-  auto pass_through_input = [&]() { params.set_output("Curves", std::move(curves_geometry)); };
+  auto pass_through_input = [&]() {
+    params.set_output("Curves"_ustr, std::move(curves_geometry));
+  };
 
   const Object *self_ob_eval = params.self_object();
   if (self_ob_eval == nullptr || self_ob_eval->type != OB_CURVES) {
@@ -219,7 +225,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.error_message_add(NodeWarningType::Error, TIP_("Node only works for curves objects"));
     return;
   }
-  const Curves *self_curves_eval = static_cast<const Curves *>(self_ob_eval->data);
+  const Curves *self_curves_eval = id_cast<const Curves *>(self_ob_eval->data);
   if (self_curves_eval->surface_uv_map == nullptr || self_curves_eval->surface_uv_map[0] == '\0') {
     pass_through_input();
     params.error_message_add(NodeWarningType::Error, TIP_("Surface UV map not defined"));
@@ -239,8 +245,8 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.error_message_add(NodeWarningType::Error, TIP_("Curves not attached to a surface"));
     return;
   }
-  Object *surface_ob_orig = DEG_get_original_object(surface_ob_eval);
-  Mesh &surface_object_data = *static_cast<Mesh *>(surface_ob_orig->data);
+  Object *surface_ob_orig = DEG_get_original(surface_ob_eval);
+  Mesh &surface_object_data = *id_cast<Mesh *>(surface_ob_orig->data);
 
   if (BMEditMesh *em = surface_object_data.runtime->edit_mesh.get()) {
     surface_mesh_orig = BKE_mesh_from_bmesh_for_eval_nomain(em->bm, nullptr, &surface_object_data);
@@ -284,7 +290,7 @@ static void node_geo_exec(GeoNodeExecParams params)
                              TIP_("Evaluated surface missing attribute: \"rest_position\""));
     return;
   }
-  if (curves.surface_uv_coords().is_empty() && curves.curves_num() > 0) {
+  if (!curves.surface_uv_coords() && curves.curves_num() > 0) {
     pass_through_input();
     params.error_message_add(NodeWarningType::Error,
                              TIP_("Curves are not attached to any UV map"));
@@ -388,18 +394,24 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.error_message_add(NodeWarningType::Warning, message);
   }
 
-  params.set_output("Curves", curves_geometry);
+  params.set_output("Curves"_ustr, curves_geometry);
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
   geo_node_type_base(
-      &ntype, GEO_NODE_DEFORM_CURVES_ON_SURFACE, "Deform Curves on Surface", NODE_CLASS_GEOMETRY);
+      &ntype, "GeometryNodeDeformCurvesOnSurface"_ustr, GEO_NODE_DEFORM_CURVES_ON_SURFACE);
+  ntype.ui_name = "Deform Curves on Surface";
+  ntype.ui_description =
+      "Translate and rotate curves based on changes between the object's original and evaluated "
+      "surface mesh";
+  ntype.enum_name_legacy = "DEFORM_CURVES_ON_SURFACE";
+  ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  blender::bke::node_type_size(&ntype, 170, 120, 700);
-  blender::bke::node_register_type(&ntype);
+  ntype.default_width = bke::NodeWidth::_180;
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

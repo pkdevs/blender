@@ -6,19 +6,20 @@
 
 #include <atomic>
 
-#include "MEM_guardedalloc.h"
-
-#include "RNA_blender_cpp.hh"
-
 #include "session/display_driver.h"
 
 #include "util/thread.h"
 #include "util/unique_ptr.h"
-#include "util/vector.h"
 
-typedef struct GPUContext GPUContext;
-typedef struct GPUFence GPUFence;
-typedef struct GPUShader GPUShader;
+namespace blender {
+struct GPUContext;
+struct GPUFence;
+struct RenderEngine;
+struct Scene;
+namespace gpu {
+class Shader;
+}  // namespace gpu
+}  // namespace blender
 
 CCL_NAMESPACE_BEGIN
 
@@ -29,12 +30,13 @@ class BlenderDisplayShader {
   static constexpr const char *tex_coord_attribute_name = "texCoord";
 
   /* Create shader implementation suitable for the given render engine and scene configuration. */
-  static unique_ptr<BlenderDisplayShader> create(BL::RenderEngine &b_engine, BL::Scene &b_scene);
+  static unique_ptr<BlenderDisplayShader> create(blender::RenderEngine &b_engine,
+                                                 blender::Scene &b_scene);
 
   BlenderDisplayShader() = default;
   virtual ~BlenderDisplayShader() = default;
 
-  virtual GPUShader *bind(int width, int height) = 0;
+  virtual blender::gpu::Shader *bind(const int width, const int height) = 0;
   virtual void unbind() = 0;
 
   /* Get attribute location for position and texture coordinate respectively.
@@ -45,79 +47,63 @@ class BlenderDisplayShader {
  protected:
   /* Get program of this display shader.
    * NOTE: The shader needs to be bound to have access to this. */
-  virtual GPUShader *get_shader_program() = 0;
+  virtual blender::gpu::Shader *get_shader_program() = 0;
 
   /* Cached values of various OpenGL resources. */
   int position_attribute_location_ = -1;
   int tex_coord_attribute_location_ = -1;
 };
 
-/* Implementation of display rendering shader used in the case when render engine does not support
- * display space shader. */
-class BlenderFallbackDisplayShader : public BlenderDisplayShader {
- public:
-  virtual GPUShader *bind(int width, int height) override;
-  virtual void unbind() override;
-
- protected:
-  virtual GPUShader *get_shader_program() override;
-
-  void create_shader_if_needed();
-  void destroy_shader();
-
-  GPUShader *shader_program_ = 0;
-  int image_texture_location_ = -1;
-  int fullscreen_location_ = -1;
-
-  /* Shader compilation attempted. Which means, that if the shader program is 0 then compilation or
-   * linking has failed. Do not attempt to re-compile the shader. */
-  bool shader_compile_attempted_ = false;
-};
-
 class BlenderDisplaySpaceShader : public BlenderDisplayShader {
  public:
-  BlenderDisplaySpaceShader(BL::RenderEngine &b_engine, BL::Scene &b_scene);
+  BlenderDisplaySpaceShader(blender::RenderEngine &b_engine, blender::Scene &b_scene);
 
-  virtual GPUShader *bind(int width, int height) override;
-  virtual void unbind() override;
+  blender::gpu::Shader *bind(const int width, const int height) override;
+  void unbind() override;
 
  protected:
-  virtual GPUShader *get_shader_program() override;
+  blender::gpu::Shader *get_shader_program() override;
 
-  BL::RenderEngine b_engine_;
-  BL::Scene &b_scene_;
+  blender::RenderEngine &b_engine_;
+  blender::Scene &b_scene_;
 
   /* Cached values of various OpenGL resources. */
-  GPUShader *shader_program_ = nullptr;
+  blender::gpu::Shader *shader_program_ = nullptr;
 };
 
 /* Display driver implementation which is specific for Blender viewport integration. */
 class BlenderDisplayDriver : public DisplayDriver {
  public:
-  BlenderDisplayDriver(BL::RenderEngine &b_engine, BL::Scene &b_scene, const bool background);
-  ~BlenderDisplayDriver();
+  BlenderDisplayDriver(blender::RenderEngine &b_engine,
+                       blender::Scene &b_scene,
+                       blender::RegionView3D *b_rv3d,
+                       const bool background);
+  ~BlenderDisplayDriver() override;
 
-  virtual void graphics_interop_activate() override;
-  virtual void graphics_interop_deactivate() override;
+  void graphics_interop_activate() override;
+  void graphics_interop_deactivate() override;
 
-  virtual void clear() override;
+  void zero() override;
 
-  void set_zoom(float zoom_x, float zoom_y);
+  void set_zoom(const float zoom_x, const float zoom_y);
 
  protected:
-  virtual void next_tile_begin() override;
+  void next_tile_begin() override;
 
-  virtual bool update_begin(const Params &params, int texture_width, int texture_height) override;
-  virtual void update_end() override;
+  bool update_begin(const Params &params,
+                    const int texture_width,
+                    const int texture_height) override;
+  void update_end() override;
 
-  virtual half4 *map_texture_buffer() override;
-  virtual void unmap_texture_buffer() override;
+  half4 *map_texture_buffer() override;
+  void unmap_texture_buffer() override;
 
-  virtual GraphicsInterop graphics_interop_get() override;
+  GraphicsInteropDevice graphics_interop_get_device() override;
+  void graphics_interop_update_buffer() override;
 
-  virtual void draw(const Params &params) override;
+  void draw(const Params &params) override;
 
-  virtual void flush() override;
+  void flush() override;
 
   /* Helper function which allocates new GPU context. */
   void gpu_context_create();
@@ -133,11 +119,12 @@ class BlenderDisplayDriver : public DisplayDriver {
   /* Destroy all GPU resources which are being used by this object. */
   void gpu_resources_destroy();
 
-  BL::RenderEngine b_engine_;
+  blender::RenderEngine &b_engine_;
+  blender::RegionView3D *b_rv3d_;
   bool background_;
 
   /* Content of the display is to be filled with zeroes. */
-  std::atomic<bool> need_clear_ = true;
+  std::atomic<bool> need_zero_ = true;
 
   unique_ptr<BlenderDisplayShader> display_shader_;
 
@@ -145,10 +132,13 @@ class BlenderDisplayDriver : public DisplayDriver {
   struct Tiles;
   unique_ptr<Tiles> tiles_;
 
-  GPUFence *gpu_render_sync_ = nullptr;
-  GPUFence *gpu_upload_sync_ = nullptr;
+  blender::GPUFence *gpu_render_sync_ = nullptr;
+  blender::GPUFence *gpu_upload_sync_ = nullptr;
 
   float2 zoom_ = make_float2(1.0f, 1.0f);
+
+  thread_condition_variable has_update_cond_;
+  thread_mutex has_update_mutex_;
 };
 
 CCL_NAMESPACE_END

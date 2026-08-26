@@ -7,9 +7,8 @@
  */
 
 #include "BKE_attribute.hh"
-#include "BKE_material.h"
+#include "BKE_material.hh"
 #include "BLI_array_utils.hh"
-#include "BLI_enumerable_thread_specific.hh"
 #include "BLI_index_range.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
@@ -17,7 +16,6 @@
 #include "BLI_span.hh"
 #include "BLI_virtual_array.hh"
 
-#include "DNA_defaults.h"
 #include "DNA_modifier_types.h"
 #include "DNA_scene_types.h"
 
@@ -37,7 +35,7 @@
 
 #include "GEO_resample_curves.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "BLT_translation.hh"
@@ -56,10 +54,7 @@ namespace blender {
 static void init_data(ModifierData *md)
 {
   auto *omd = reinterpret_cast<GreasePencilOutlineModifierData *>(md);
-
-  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(omd, modifier));
-
-  MEMCPY_STRUCT_AFTER(omd, DNA_struct_default_get(GreasePencilOutlineModifierData), modifier);
+  INIT_DEFAULT_STRUCT_AFTER(omd, modifier);
   modifier::greasepencil::init_influence_data(&omd->influence, false);
 }
 
@@ -84,8 +79,8 @@ static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void 
 {
   auto *omd = reinterpret_cast<GreasePencilOutlineModifierData *>(md);
   modifier::greasepencil::foreach_influence_ID_link(&omd->influence, ob, walk, user_data);
-  walk(user_data, ob, (ID **)&omd->outline_material, IDWALK_CB_USER);
-  walk(user_data, ob, (ID **)&omd->object, IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&omd->outline_material), IDWALK_CB_USER);
+  walk(user_data, ob, reinterpret_cast<ID **>(&omd->object), IDWALK_CB_NOP);
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
@@ -120,30 +115,32 @@ static bke::CurvesGeometry reorder_cyclic_curve_points(const bke::CurvesGeometry
   bke::AttributeAccessor src_attributes = src_curves.attributes();
 
   Array<int> indices(src_curves.points_num());
-  curve_selection.foreach_index(GrainSize(512), [&](const int64_t curve_i) {
-    const IndexRange points = src_offsets[curve_i];
-    const int point_num = points.size();
-    const int point_start = points.start();
-    MutableSpan<int> point_indices = indices.as_mutable_span().slice(points);
-    if (points.size() < 2) {
-      array_utils::fill_index_range(point_indices, point_start);
-      return;
-    }
-    /* Offset can be negative or larger than the buffer. Use modulo to get an
-     * equivalent offset within buffer size to simplify copying. */
-    const int offset_raw = curve_offsets[curve_i];
-    const int offset = offset_raw >= 0 ? offset_raw % points.size() :
-                                         points.size() - ((-offset_raw) % points.size());
-    BLI_assert(0 <= offset && offset < points.size());
-    if (offset == 0) {
-      array_utils::fill_index_range(point_indices, point_start);
-      return;
-    }
+  curve_selection.foreach_index(
+      [&](const int64_t curve_i) {
+        const IndexRange points = src_offsets[curve_i];
+        const int point_num = points.size();
+        const int point_start = points.start();
+        MutableSpan<int> point_indices = indices.as_mutable_span().slice(points);
+        if (points.size() < 2) {
+          array_utils::fill_index_range(point_indices, point_start);
+          return;
+        }
+        /* Offset can be negative or larger than the buffer. Use modulo to get an
+         * equivalent offset within buffer size to simplify copying. */
+        const int offset_raw = curve_offsets[curve_i];
+        const int offset = offset_raw >= 0 ? offset_raw % points.size() :
+                                             points.size() - ((-offset_raw) % points.size());
+        BLI_assert(0 <= offset && offset < points.size());
+        if (offset == 0) {
+          array_utils::fill_index_range(point_indices, point_start);
+          return;
+        }
 
-    const int point_middle = point_start + offset;
-    array_utils::fill_index_range(point_indices.take_front(point_num - offset), point_middle);
-    array_utils::fill_index_range(point_indices.take_back(offset), point_start);
-  });
+        const int point_middle = point_start + offset;
+        array_utils::fill_index_range(point_indices.take_front(point_num - offset), point_middle);
+        array_utils::fill_index_range(point_indices.take_back(offset), point_start);
+      },
+      exec_mode::grain_size(512));
 
   /* Have to make a copy of the input geometry, gather_attributes does not work in-place when the
    * source indices are not ordered. */
@@ -222,8 +219,8 @@ static void modify_drawing(const GreasePencilOutlineModifierData &omd,
 
   /* Resampling feature. */
   if (omd.sample_length > 0.0f) {
-    VArray<float> sample_lengths = VArray<float>::ForSingle(omd.sample_length,
-                                                            curves.curves_num());
+    VArray<float> sample_lengths = VArray<float>::from_single(omd.sample_length,
+                                                              curves.curves_num());
     curves = geometry::resample_to_length(curves, curves.curves_range(), sample_lengths);
   }
 
@@ -268,33 +265,33 @@ static void modify_geometry_set(ModifierData *md,
 
 static void panel_draw(const bContext *C, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
-  uiItemR(layout, ptr, "thickness", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "use_keep_shape", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "subdivision", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "sample_length", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "outline_material", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "object", UI_ITEM_NONE, nullptr, ICON_NONE);
+  layout.prop(ptr, "thickness", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "use_keep_shape", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "subdivision", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "sample_length", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "outline_material", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "object", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   Scene *scene = CTX_data_scene(C);
   if (scene->camera == nullptr) {
-    uiItemL(layout, RPT_("Outline requires an active camera"), ICON_ERROR);
+    layout.label(RPT_("Outline requires an active camera"), ICON_STATUS_ERROR);
   }
 
-  if (uiLayout *influence_panel = uiLayoutPanelProp(
-          C, layout, ptr, "open_influence_panel", IFACE_("Influence")))
+  if (ui::Layout *influence_panel = layout.panel_prop(
+          C, ptr, "open_influence_panel", IFACE_("Influence")))
   {
-    modifier::greasepencil::draw_layer_filter_settings(C, influence_panel, ptr);
-    modifier::greasepencil::draw_material_filter_settings(C, influence_panel, ptr);
+    modifier::greasepencil::draw_layer_filter_settings(C, *influence_panel, ptr);
+    modifier::greasepencil::draw_material_filter_settings(C, *influence_panel, ptr);
   }
 
-  modifier_panel_end(layout, ptr);
+  modifier_error_message_draw(layout, ptr);
 }
 
 static void panel_register(ARegionType *region_type)
@@ -306,7 +303,7 @@ static void blend_write(BlendWriter *writer, const ID * /*id_owner*/, const Modi
 {
   const auto *omd = reinterpret_cast<const GreasePencilOutlineModifierData *>(md);
 
-  BLO_write_struct(writer, GreasePencilOutlineModifierData, omd);
+  writer->write_struct(omd);
   modifier::greasepencil::write_influence_data(writer, &omd->influence);
 }
 
@@ -316,8 +313,6 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
 
   modifier::greasepencil::read_influence_data(reader, &omd->influence);
 }
-
-}  // namespace blender
 
 ModifierTypeInfo modifierType_GreasePencilOutline = {
     /*idname*/ "GreasePencilOutline",
@@ -330,26 +325,28 @@ ModifierTypeInfo modifierType_GreasePencilOutline = {
         eModifierTypeFlag_EnableInEditmode | eModifierTypeFlag_SupportsMapping,
     /*icon*/ ICON_MOD_OUTLINE,
 
-    /*copy_data*/ blender::copy_data,
+    /*copy_data*/ copy_data,
 
     /*deform_verts*/ nullptr,
     /*deform_matrices*/ nullptr,
     /*deform_verts_EM*/ nullptr,
     /*deform_matrices_EM*/ nullptr,
     /*modify_mesh*/ nullptr,
-    /*modify_geometry_set*/ blender::modify_geometry_set,
+    /*modify_geometry_set*/ modify_geometry_set,
 
-    /*init_data*/ blender::init_data,
+    /*init_data*/ init_data,
     /*required_data_mask*/ nullptr,
-    /*free_data*/ blender::free_data,
+    /*free_data*/ free_data,
     /*is_disabled*/ nullptr,
-    /*update_depsgraph*/ blender::update_depsgraph,
+    /*update_depsgraph*/ update_depsgraph,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ blender::foreach_ID_link,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
-    /*panel_register*/ blender::panel_register,
-    /*blend_write*/ blender::blend_write,
-    /*blend_read*/ blender::blend_read,
+    /*panel_register*/ panel_register,
+    /*blend_write*/ blend_write,
+    /*blend_read*/ blend_read,
 };
+
+}  // namespace blender

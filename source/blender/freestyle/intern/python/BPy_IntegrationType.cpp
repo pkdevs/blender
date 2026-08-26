@@ -14,11 +14,7 @@
 #include "UnaryFunction0D/BPy_UnaryFunction0DFloat.h"
 #include "UnaryFunction0D/BPy_UnaryFunction0DUnsigned.h"
 
-#include "BLI_sys_types.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "BLI_sys_types.hh"
 
 using namespace Freestyle;
 
@@ -34,25 +30,24 @@ PyDoc_STRVAR(
     "   Returns a single value from a set of values evaluated at each 0D\n"
     "   element of this 1D element.\n"
     "\n"
-    "   :arg func: The UnaryFunction0D used to compute a value at each\n"
+    "   :param func: The UnaryFunction0D used to compute a value at each\n"
     "      Interface0D.\n"
     "   :type func: :class:`UnaryFunction0D`\n"
-    "   :arg it: The Interface0DIterator used to iterate over the 0D\n"
+    "   :param it: The Interface0DIterator used to iterate over the 0D\n"
     "      elements of this 1D element. The integration will occur over\n"
     "      the 0D elements starting from the one pointed by it.\n"
     "   :type it: :class:`Interface0DIterator`\n"
-    "   :arg it_end: The Interface0DIterator pointing the end of the 0D\n"
+    "   :param it_end: The Interface0DIterator pointing the end of the 0D\n"
     "      elements of the 1D element.\n"
     "   :type it_end: :class:`Interface0DIterator`\n"
-    "   :arg integration_type: The integration method used to compute a\n"
+    "   :param integration_type: The integration method used to compute a\n"
     "      single value from a set of values.\n"
     "   :type integration_type: :class:`IntegrationType`\n"
     "   :return: The single value obtained for the 1D element. The return\n"
     "      value type is float if func is of the :class:`UnaryFunction0DDouble`\n"
     "      or :class:`UnaryFunction0DFloat` type, and int if func is of the\n"
     "      :class:`UnaryFunction0DUnsigned` type.\n"
-    "   :rtype: int | float");
-
+    "   :rtype: int | float\n");
 static PyObject *Integrator_integrate(PyObject * /*self*/, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {"func", "it", "it_end", "integration_type", nullptr};
@@ -61,7 +56,12 @@ static PyObject *Integrator_integrate(PyObject * /*self*/, PyObject *args, PyObj
 
   if (!PyArg_ParseTupleAndKeywords(args,
                                    kwds,
-                                   "O!O!O!|O!",
+                                   "O!" /* `func` */
+                                   "O!" /* `it` */
+                                   "O!" /* `it_end` */
+                                   "|"  /* Optional arguments. */
+                                   "O!" /* `integration_type` */
+                                   ":integrate",
                                    (char **)kwlist,
                                    &UnaryFunction0D_Type,
                                    &obj1,
@@ -109,6 +109,16 @@ PyDoc_STRVAR(
 
 /*-----------------------Integrator module functions definitions---------------------------*/
 
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wcast-function-type"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#  endif
+#endif
+
 static PyMethodDef module_functions[] = {
     {"integrate",
      (PyCFunction)Integrator_integrate,
@@ -116,6 +126,14 @@ static PyMethodDef module_functions[] = {
      Integrator_integrate_doc},
     {nullptr, nullptr, 0, nullptr},
 };
+
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
+#endif
 
 /*-----------------------Integrator module definition--------------------------------------*/
 
@@ -140,19 +158,32 @@ PyDoc_STRVAR(
     "\n"
     "Different integration methods that can be invoked to integrate into a\n"
     "single value the set of values obtained from each 0D element of an 1D\n"
-    "element:\n"
+    "element.\n"
     "\n"
-    "* IntegrationType.MEAN: The value computed for the 1D element is the\n"
-    "  mean of the values obtained for the 0D elements.\n"
-    "* IntegrationType.MIN: The value computed for the 1D element is the\n"
-    "  minimum of the values obtained for the 0D elements.\n"
-    "* IntegrationType.MAX: The value computed for the 1D element is the\n"
-    "  maximum of the values obtained for the 0D elements.\n"
-    "* IntegrationType.FIRST: The value computed for the 1D element is the\n"
-    "  first of the values obtained for the 0D elements.\n"
-    "* IntegrationType.LAST: The value computed for the 1D element is the\n"
-    "  last of the values obtained for the 0D elements.");
-
+    ".. attribute:: MEAN\n"
+    "\n"
+    "   The value computed for the 1D element is the mean of the values\n"
+    "   obtained for the 0D elements.\n"
+    "\n"
+    ".. attribute:: MIN\n"
+    "\n"
+    "   The value computed for the 1D element is the minimum of the values\n"
+    "   obtained for the 0D elements.\n"
+    "\n"
+    ".. attribute:: MAX\n"
+    "\n"
+    "   The value computed for the 1D element is the maximum of the values\n"
+    "   obtained for the 0D elements.\n"
+    "\n"
+    ".. attribute:: FIRST\n"
+    "\n"
+    "   The value computed for the 1D element is the first of the values\n"
+    "   obtained for the 0D elements.\n"
+    "\n"
+    ".. attribute:: LAST\n"
+    "\n"
+    "   The value computed for the 1D element is the last of the values\n"
+    "   obtained for the 0D elements.\n");
 PyTypeObject IntegrationType_Type = {
     /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "IntegrationType",
@@ -239,7 +270,3 @@ int IntegrationType_Init(PyObject *module)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

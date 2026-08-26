@@ -2,28 +2,12 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# avoid noisy warnings
-if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
-  add_c_flag("-Wno-unused-result")
-  remove_cc_flag("-Wmissing-declarations")
-  # Would be nice to enable the warning once we support references.
-  add_cxx_flag("-Wno-uninitialized")
-  # Would be nice to enable the warning once we support nameless parameters.
-  add_cxx_flag("-Wno-unused-parameter")
-  # To compile libraries.
-  add_cxx_flag("-Wno-pragma-once-outside-header")
-elseif(MSVC)
-  # Equivalent to "-Wno-uninitialized"
-  add_cxx_flag("/wd4700")
-  # Equivalent to "-Wno-unused-parameter"
-  add_cxx_flag("/wd4100")
-  # Disable "potential divide by 0" warning
-  add_cxx_flag("/wd4723")
-endif()
-
 set(INC_GLSL
   .
   ..
+
+  # For variadic macros
+  ../../../blenlib
 
   ../../../gpu
   ../../../gpu/intern
@@ -36,6 +20,8 @@ set(INC_GLSL
 
 set(SRC_GLSL_VERT
   draw_debug_draw_display_vert.glsl
+
+  draw_curves_test.glsl
 )
 
 set(SRC_GLSL_FRAG
@@ -43,38 +29,39 @@ set(SRC_GLSL_FRAG
 )
 
 set(SRC_GLSL_COMP
-  common_hair_refine_comp.glsl
   draw_command_generate_comp.glsl
   # Failed because of mixed definition of ObjectInfos
   # draw_resource_finalize_comp.glsl
   draw_view_finalize_comp.glsl
   draw_visibility_comp.glsl
+
+  draw_curves_topology_comp.glsl
+  draw_curves_interpolation_comp.glsl
+  draw_curves_length_intercept_comp.glsl
+
+  subdiv_ibo_lines_comp.glsl
+  subdiv_ibo_tris_comp.glsl
+  subdiv_vbo_edge_fac_comp.glsl
+  subdiv_custom_data_interp_comp.glsl
+  subdiv_vbo_sculpt_data_comp.glsl
+  subdiv_vbo_edituv_stretch_angle_comp.glsl
+  subdiv_vbo_edituv_stretch_area_comp.glsl
+  subdiv_vbo_lnor_comp.glsl
+  subdiv_vbo_paint_overlay_flag_comp.glsl
+  subdiv_normals_accumulate_comp.glsl
 )
 
-add_definitions(-DGPU_SHADER)
-# TODO Remove
-add_definitions(-DUSE_GPU_SHADER_CREATE_INFO)
-
-function(compile_sources_as_cpp
-  executable
-  sources
-  define
-  )
-
-  foreach(glsl_file ${sources})
-    set_source_files_properties(${glsl_file} PROPERTIES LANGUAGE CXX)
-  endforeach()
-
-  add_library(${executable} OBJECT ${sources})
-  set_target_properties(${executable} PROPERTIES LINKER_LANGUAGE CXX)
-  target_include_directories(${executable} PUBLIC ${INC_GLSL})
-  target_compile_definitions(${executable} PRIVATE ${define})
-endfunction()
-
+set(SRC_BSL
+  bsl_shader_linting.cc
+)
 
 # Compile shaders with shader code.
-if (WITH_GPU_SHADER_CPP_COMPILATION)
+if(WITH_GPU_SHADER_CPP_COMPILATION)
+  # TODO Remove
+  add_definitions(-DUSE_GPU_SHADER_CREATE_INFO)
+
   compile_sources_as_cpp(draw_cpp_shaders_vert "${SRC_GLSL_VERT}" "GPU_VERTEX_SHADER")
   compile_sources_as_cpp(draw_cpp_shaders_frag "${SRC_GLSL_FRAG}" "GPU_FRAGMENT_SHADER")
   compile_sources_as_cpp(draw_cpp_shaders_comp "${SRC_GLSL_COMP}" "GPU_COMPUTE_SHADER")
+  compile_sources_as_cpp(draw_cpp_shaders_bsl  "${SRC_BSL}" "")
 endif()

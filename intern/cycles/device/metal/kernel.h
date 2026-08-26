@@ -7,6 +7,7 @@
 #ifdef WITH_METAL
 
 #  include "device/kernel.h"
+
 #  include <Metal/Metal.h>
 
 CCL_NAMESPACE_BEGIN
@@ -69,7 +70,7 @@ class MetalKernelPipeline {
 
   KernelData kernel_data_;
   bool use_metalrt;
-  uint32_t kernel_features = 0;
+  uint64_t kernel_features = 0;
 
   int threads_per_threadgroup;
 
@@ -103,6 +104,7 @@ class MetalDispatchPipeline {
 
   int pipeline_id = -1;
 
+  MetalDevice *metal_device = nullptr;
   MetalPipelineType pso_type;
   id<MTLComputePipelineState> pipeline = nil;
   int num_threads_per_block = 0;
@@ -115,8 +117,8 @@ class MetalDispatchPipeline {
 namespace MetalDeviceKernels {
 
 int num_incomplete_specialization_requests();
-int get_loaded_kernel_count(MetalDevice const *device, MetalPipelineType pso_type);
-bool should_load_kernels(MetalDevice const *device, MetalPipelineType pso_type);
+int get_loaded_kernel_count(const MetalDevice *device, MetalPipelineType pso_type);
+bool should_load_kernels(const MetalDevice *device, MetalPipelineType pso_type);
 bool load(MetalDevice *device, MetalPipelineType pso_type);
 const MetalKernelPipeline *get_best_pipeline(const MetalDevice *device, DeviceKernel kernel);
 void wait_for_all();

@@ -8,21 +8,24 @@
 
 #pragma once
 
-struct wmWindow;
+#include <optional>
+
+#include "BLI_compiler_attrs.hh"
+
+#include "BLI_math_vector_types.hh"
+
+#include "DNA_windowmanager_enums.h"
 
 #include "gizmo/wm_gizmo_wmapi.hh"
 
-struct wmPaintCursor {
-  wmPaintCursor *next, *prev;
+namespace blender {
 
-  void *customdata;
-
-  bool (*poll)(bContext *C);
-  void (*draw)(bContext *C, int, int, void *customdata);
-
-  short space_type;
-  short region_type;
-};
+struct wmDrag;
+struct wmOperator;
+struct wmTimer;
+struct wmWindow;
+struct wmWindowManager;
+struct Main;
 
 /**
  * Cause a delayed #WM_exit()
@@ -59,6 +62,13 @@ void wm_operatortype_free();
 void wm_window_keymap(wmKeyConfig *keyconf);
 void wm_operatortypes_register();
 
+/**
+ * Check if any of the dragged assets points to an existing file on disk.
+ *
+ * Checks the file system, so don't call too often.
+ */
+std::optional<bool> wm_drag_asset_path_exists(const wmDrag *drag);
+
 /* `wm_gesture.cc` */
 
 /* Called in `wm_draw.cc`. */
@@ -75,6 +85,10 @@ void wm_gesture_tag_redraw(wmWindow *win);
  * Hard-coded to event #TIMERJOBS.
  */
 void wm_jobs_timer(wmWindowManager *wm, wmTimer *wt);
+/**
+ * Handle jobs that are ready and finished.
+ */
+void wm_jobs_handle_finished(const bContext *C);
 /**
  * Kill job entirely, also removes timer itself.
  */
@@ -105,8 +119,8 @@ void wm_stereo3d_draw_topbottom(wmWindow *win, int view);
  * so that drawn cursor and handled mouse position are matching visually.
  */
 void wm_stereo3d_mouse_offset_apply(wmWindow *win, int r_mouse_xy[2]);
-int wm_stereo3d_set_exec(bContext *C, wmOperator *op);
-int wm_stereo3d_set_invoke(bContext *C, wmOperator *op, const wmEvent *event);
+wmOperatorStatus wm_stereo3d_set_exec(bContext *C, wmOperator *op);
+wmOperatorStatus wm_stereo3d_set_invoke(bContext *C, wmOperator *op, const wmEvent *event);
 void wm_stereo3d_set_draw(bContext *C, wmOperator *op);
 bool wm_stereo3d_set_check(bContext *C, wmOperator *op);
 void wm_stereo3d_set_cancel(bContext *C, wmOperator *op);
@@ -115,4 +129,9 @@ void wm_stereo3d_set_cancel(bContext *C, wmOperator *op);
  * Initialize operator properties.
  */
 void wm_open_init_load_ui(wmOperator *op, bool use_prefs);
-void wm_open_init_use_scripts(wmOperator *op, bool use_prefs);
+/**
+ * Return true if the script auto-execution should be cleared based on #WM_file_autoexec_init.
+ */
+bool wm_open_init_use_scripts(wmOperator *op, bool use_prefs) ATTR_WARN_UNUSED_RESULT;
+
+}  // namespace blender

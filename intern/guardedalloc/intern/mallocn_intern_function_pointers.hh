@@ -8,24 +8,66 @@
 
 #pragma once
 
+#include <cstddef>
+
 namespace mem_guarded::internal {
 
-enum class AllocationType {
-  /** Allocation is handled through 'C type' alloc/free calls. */
-  ALLOC_FREE,
-  /** Allocation is handled through 'C++ type' new/delete calls. */
-  NEW_DELETE,
+enum class DestructorType {
+  /** Allocation has a trivial destructor. */
+  Trivial,
+  /** Allocation has a non-trivial destructor that should be called when freeing. */
+  NonTrivial,
 };
 
-/** Internal implementation of #MEM_freeN, exposed because #MEM_delete needs access to it. */
-extern void (*mem_freeN_ex)(void *vmemh, AllocationType allocation_type);
+/** Internal implementation of #MEM_delete_void, exposed because #MEM_delete needs access to it. */
+extern void (*mem_freeN_ex)(void *vmemh, DestructorType destructor_type);
 
-/** Internal implementation of #MEM_mallocN_aligned, exposed because #MEM_new needs access to it.
+/**
+ * Internal implementation of #MEM_new_zeroed, exposed because public #MEM_new_zeroed cannot be a
+ * function pointer, to allow its overload by C++ template version.
+ */
+extern void *(*mem_callocN)(size_t len, const char *str) /* ATTR_MALLOC */ ATTR_WARN_UNUSED_RESULT
+    ATTR_ALLOC_SIZE(1) ATTR_NONNULL(2);
+
+/**
+ * Internal implementation of #MEM_new_array_zeroed, exposed because public #MEM_new_array_zeroed
+ * cannot be a function pointer, to allow its overload by C++ template version.
+ */
+extern void *(*mem_calloc_arrayN)(size_t len,
+                                  size_t size,
+                                  const char *str) /* ATTR_MALLOC */ ATTR_WARN_UNUSED_RESULT
+    ATTR_ALLOC_SIZE(1, 2) ATTR_NONNULL(3);
+
+/**
+ * Internal implementation of #MEM_new_uninitialized, exposed because public #MEM_new_uninitialized
+ * cannot be a function pointer, to allow its overload by C++ template version.
+ */
+extern void *(*mem_mallocN)(size_t len, const char *str) /* ATTR_MALLOC */ ATTR_WARN_UNUSED_RESULT
+    ATTR_ALLOC_SIZE(1) ATTR_NONNULL(2);
+
+/**
+ * Internal implementation of #MEM_new_array_uninitialized, exposed because public
+ * #MEM_new_array_uninitialized cannot be a function pointer, to allow its overload by C++ template
+ * version.
+ */
+extern void *(*mem_malloc_arrayN)(size_t len,
+                                  size_t size,
+                                  const char *str) /* ATTR_MALLOC */ ATTR_WARN_UNUSED_RESULT
+    ATTR_ALLOC_SIZE(1, 2) ATTR_NONNULL(3);
+
+/** Internal implementation of #MEM_new_uninitialized_aligned, exposed because #MEM_new needs
+ * access to it.
  */
 extern void *(*mem_mallocN_aligned_ex)(size_t len,
                                        size_t alignment,
                                        const char *str,
-                                       AllocationType allocation_type);
+                                       DestructorType destructor_type);
+
+/**
+ * Internal implementation of #MEM_dupalloc_void, exposed because public #MEM_dupalloc_void cannot
+ * be a function pointer, to allow its overload by C++ template version.
+ */
+extern void *(*mem_dupallocN)(const void *vmemh) /* ATTR_MALLOC */ ATTR_WARN_UNUSED_RESULT;
 
 /**
  * Store a std::any into a static opaque storage vector. The only purpose of this call is to

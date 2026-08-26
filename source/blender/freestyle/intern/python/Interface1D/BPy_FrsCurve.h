@@ -12,10 +12,6 @@
 
 #include "../../stroke/Curve.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject FrsCurve_Type;
@@ -23,13 +19,9 @@ extern PyTypeObject FrsCurve_Type;
 #define BPy_FrsCurve_Check(v) (PyObject_IsInstance((PyObject *)v, (PyObject *)&FrsCurve_Type))
 
 /*---------------------------Python BPy_FrsCurve structure definition----------*/
-typedef struct {
+struct BPy_FrsCurve {
   BPy_Interface1D py_if1D;
   Freestyle::Curve *c;
-} BPy_FrsCurve;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

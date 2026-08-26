@@ -8,12 +8,16 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "BLI_math_vector_types.hh"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 /* ******************* Registration Function ********************** */
 
 struct ARegion;
 struct bContext;
+struct Main;
 struct Scene;
 struct ReportList;
 struct TransformOrientation;
@@ -25,7 +29,9 @@ struct wmGizmoGroupType;
 struct wmKeyConfig;
 struct wmOperatorType;
 
-void ED_keymap_transform(wmKeyConfig *keyconf);
+namespace ed::transform {
+
+void keymap_transform(wmKeyConfig *keyconf);
 void transform_operatortypes();
 
 /* ******************** Macros & Prototypes *********************** */
@@ -91,7 +97,8 @@ bool BIF_createTransformOrientation(bContext *C,
                                     bool overwrite);
 void BIF_selectTransformOrientation(bContext *C, TransformOrientation *target);
 
-void ED_getTransformOrientationMatrix(const Scene *scene,
+void ED_getTransformOrientationMatrix(const Main &bmain,
+                                      const Scene *scene,
                                       ViewLayer *view_layer,
                                       const View3D *v3d,
                                       Object *ob,
@@ -123,11 +130,12 @@ int BIF_countTransformOrientation(const bContext *C);
 #define P_VIEW2D_EDGE_PAN (1 << 17)
 /* For properties performed when confirming the transformation. */
 #define P_POST_TRANSFORM (1 << 18)
+#define P_TRANSLATE_ORIGIN (1 << 19)
 
-void Transform_Properties(wmOperatorType *ot, int flags);
+void properties_register(wmOperatorType *ot, int flags);
 
 /* `transform_orientations.cc` */
-void ED_transform_calc_orientation_from_type(const bContext *C, float r_mat[3][3]);
+void calc_orientation_from_type(const bContext *C, float r_mat[3][3]);
 /**
  * \note The resulting matrix may not be orthogonal,
  * callers that depend on `r_mat` to be orthogonal should use #orthogonalize_m3.
@@ -137,17 +145,18 @@ void ED_transform_calc_orientation_from_type(const bContext *C, float r_mat[3][3
  * - #V3D_ORIENT_LOCAL may contain shear from non-uniform scale in parent/child relationships.
  * - #V3D_ORIENT_CUSTOM may have been created from #V3D_ORIENT_LOCAL.
  */
-short ED_transform_calc_orientation_from_type_ex(const Scene *scene,
-                                                 ViewLayer *view_layer,
-                                                 const View3D *v3d,
-                                                 const RegionView3D *rv3d,
-                                                 Object *ob,
-                                                 Object *obedit,
-                                                 short orientation_index,
-                                                 int pivot_point,
-                                                 float r_mat[3][3]);
+short calc_orientation_from_type_ex(const Main &bmain,
+                                    const Scene *scene,
+                                    ViewLayer *view_layer,
+                                    const View3D *v3d,
+                                    const RegionView3D *rv3d,
+                                    Object *ob,
+                                    Object *obedit,
+                                    short orientation_index,
+                                    int pivot_point,
+                                    float r_mat[3][3]);
 
-bool ED_transform_calc_pivot_pos(const bContext *C, const short pivot_type, float r_pivot_pos[3]);
+bool calc_pivot_pos(const bContext *C, const short pivot_type, float r_pivot_pos[3]);
 
 /* transform gizmos */
 
@@ -169,6 +178,7 @@ void ED_widgetgroup_gizmo2d_resize_callbacks_set(wmGizmoGroupType *gzgt);
 void ED_widgetgroup_gizmo2d_rotate_callbacks_set(wmGizmoGroupType *gzgt);
 
 #define SNAP_INCREMENTAL_ANGLE DEG2RAD(5.0)
+#define SNAP_INCREMENTAL_SNAP_STEP 1.0f
 
 struct TransformBounds {
   /** Center for transform widget. */
@@ -199,22 +209,27 @@ struct TransformCalcParams {
  *
  * Returns total items selected.
  */
-int ED_transform_calc_gizmo_stats(const bContext *C,
-                                  const TransformCalcParams *params,
-                                  TransformBounds *tbounds,
-                                  RegionView3D *rv3d);
+int calc_gizmo_stats(const bContext *C,
+                     const TransformCalcParams *params,
+                     TransformBounds *tbounds,
+                     RegionView3D *rv3d);
 
 /**
- * Iterates over all the strips and finds the closest snapping candidate of either \a frame_1 or \a
- * frame_2. The closest snapping candidate will be the closest start or end frame of an existing
+ * Iterates over all the strips and finds the closest snapping candidate of either \a left_frame
+ * or \a right_frame, which might only be searched for on the given \a channel depending on snap
+ * settings. The closest snapping candidate will be the closest start or end frame of an existing
  * strip.
  * \returns True if there was anything to snap to.
  */
-bool ED_transform_snap_sequencer_to_closest_strip_calc(Scene *scene,
-                                                       ARegion *region,
-                                                       int frame_1,
-                                                       int frame_2,
-                                                       int *r_snap_distance,
-                                                       float *r_snap_frame);
+bool snap_sequencer_calc_drag_drop(Scene *scene,
+                                   ARegion *region,
+                                   const int left_frame,
+                                   const int right_frame,
+                                   const int channel,
+                                   int *r_snap_distance,
+                                   float2 *r_snap_point);
 
-void ED_draw_sequencer_snap_point(ARegion *region, float snap_point);
+void snap_sequencer_draw_drag_drop(Scene *scene, ARegion *region, const float2 snap_point);
+
+}  // namespace ed::transform
+}  // namespace blender

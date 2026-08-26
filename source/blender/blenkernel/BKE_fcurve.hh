@@ -13,6 +13,11 @@
 #include "BLI_string_ref.hh"
 
 #include "DNA_curve_types.h"
+#include "DNA_listBase.h"
+
+#include "RNA_path.hh"
+
+namespace blender {
 
 struct ChannelDriver;
 struct FCM_EnvelopeData;
@@ -32,6 +37,18 @@ struct PropertyRNA;
 struct StructRNA;
 struct bAction;
 struct bContext;
+
+namespace bke {
+
+struct FCurveRuntime {
+  /** Value stored from last time curve was evaluated (not threadsafe, debug display only!). */
+  float curval = 0;
+
+  /** Cached parsed RNA path, computed eagerly when the string path is changed. */
+  std::optional<ParsedRNAPath<>> parsed_rna_path;
+};
+
+}  // namespace bke
 
 /* ************** F-Curve Modifiers *************** */
 
@@ -70,7 +87,7 @@ struct FModifierTypeInfo {
   void (*copy_data)(FModifier *fcm, const FModifier *src);
   /**
    * Set settings for data that will be used for FCuModifier.data
-   * (memory already allocated using #MEM_callocN). */
+   * (memory already allocated using #MEM_new_zeroed). */
   void (*new_data)(void *mdata);
   /** Verifies that the modifier settings are valid */
   void (*verify_data)(FModifier *fcm);
@@ -126,7 +143,7 @@ const FModifierTypeInfo *get_fmodifier_typeinfo(int type);
 /**
  * Add a new F-Curve Modifier to the given F-Curve of a certain type.
  */
-FModifier *add_fmodifier(ListBase *modifiers, int type, FCurve *owner_fcu);
+FModifier *add_fmodifier(ListBaseT<FModifier> *modifiers, int type, FCurve *owner_fcu);
 /**
  * Make a copy of the specified F-Modifier.
  */
@@ -134,24 +151,24 @@ FModifier *copy_fmodifier(const FModifier *src);
 /**
  * Duplicate all of the F-Modifiers in the Modifier stacks.
  */
-void copy_fmodifiers(ListBase *dst, const ListBase *src);
+void copy_fmodifiers(ListBaseT<FModifier> *dst, const ListBaseT<FModifier> *src);
 /**
  * Remove and free the given F-Modifier from the given stack.
  */
-bool remove_fmodifier(ListBase *modifiers, FModifier *fcm);
+bool remove_fmodifier(ListBaseT<FModifier> *modifiers, FModifier *fcm);
 /**
  * Remove all of a given F-Curve's modifiers.
  */
-void free_fmodifiers(ListBase *modifiers);
+void free_fmodifiers(ListBaseT<FModifier> *modifiers);
 
 /**
  * Find the active F-Modifier.
  */
-FModifier *find_active_fmodifier(ListBase *modifiers);
+FModifier *find_active_fmodifier(ListBaseT<FModifier> *modifiers);
 /**
  * Set the active F-Modifier.
  */
-void set_active_fmodifier(ListBase *modifiers, FModifier *fcm);
+void set_active_fmodifier(ListBaseT<FModifier> *modifiers, FModifier *fcm);
 
 /**
  * Do we have any modifiers which match certain criteria.
@@ -159,7 +176,7 @@ void set_active_fmodifier(ListBase *modifiers, FModifier *fcm);
  * \param mtype: Type of modifier (if 0, doesn't matter).
  * \param acttype: Type of action to perform (if -1, doesn't matter).
  */
-bool list_has_suitable_fmodifier(const ListBase *modifiers, int mtype, short acttype);
+bool list_has_suitable_fmodifier(const ListBaseT<FModifier> *modifiers, int mtype, short acttype);
 
 struct FModifiersStackStorage {
   uint modifier_count;
@@ -167,7 +184,7 @@ struct FModifiersStackStorage {
   void *buffer;
 };
 
-uint evaluate_fmodifiers_storage_size_per_modifier(const ListBase *modifiers);
+uint evaluate_fmodifiers_storage_size_per_modifier(const ListBaseT<FModifier> *modifiers);
 /**
  * Evaluate time modifications imposed by some F-Curve Modifiers.
  *
@@ -182,7 +199,7 @@ uint evaluate_fmodifiers_storage_size_per_modifier(const ListBase *modifiers);
  * \param fcu: Can be NULL.
  */
 float evaluate_time_fmodifiers(FModifiersStackStorage *storage,
-                               const ListBase *modifiers,
+                               const ListBaseT<FModifier> *modifiers,
                                const FCurve *fcu,
                                float cvalue,
                                float evaltime);
@@ -191,7 +208,7 @@ float evaluate_time_fmodifiers(FModifiersStackStorage *storage,
  * Should only be called after evaluate_time_fmodifiers() has been called.
  */
 void evaluate_value_fmodifiers(FModifiersStackStorage *storage,
-                               const ListBase *modifiers,
+                               const ListBaseT<FModifier> *modifiers,
                                const FCurve *fcu,
                                float *cvalue,
                                float evaltime);
@@ -214,7 +231,7 @@ int BKE_fcm_envelope_find_index(FCM_EnvelopeData *array,
 #define BEZT_BINARYSEARCH_THRESH 0.01f /* was 0.00001, but giving errors */
 
 /* -------- Data Management  -------- */
-FCurve *BKE_fcurve_create(void);
+FCurve *BKE_fcurve_create();
 /**
  * Frees the F-Curve itself too, so make sure #BLI_remlink is called before calling this.
  */
@@ -226,21 +243,20 @@ FCurve *BKE_fcurve_copy(const FCurve *fcu);
 /**
  * Frees a list of F-Curves.
  */
-void BKE_fcurves_free(ListBase *list);
+void BKE_fcurves_free(ListBaseT<FCurve> *list);
 /**
  * Duplicate a list of F-Curves.
  */
-void BKE_fcurves_copy(ListBase *dst, ListBase *src);
-
-/**
- * Set the RNA path of a F-Curve.
- */
-void BKE_fcurve_rnapath_set(FCurve &fcu, blender::StringRef rna_path);
+void BKE_fcurves_copy(ListBaseT<FCurve> *dst, ListBaseT<FCurve> *src);
 
 /* Set fcurve modifier name and ensure uniqueness.
  * Pass new name string when it's been edited otherwise pass empty string. */
 void BKE_fmodifier_name_set(FModifier *fcm, const char *name);
 
+/**
+ * Disable modifiers that requires original data and are not first in the stack.
+ */
+void BKE_fmodifier_ensure_flag(ListBaseT<FModifier> *modifiers);
 /**
  * Callback used by lib_query to walk over all ID usages
  * (mimics `foreach_id` callback of #IDTypeInfo structure).
@@ -257,10 +273,10 @@ void BKE_fcurve_foreach_id(FCurve *fcu, LibraryForeachIDData *data);
  * \note ONLY use this on a list of F-Curves that is NOT from an Action. Example
  * of a good use would be on `adt->drivers`, or `nlastrip->fcurves`.
  *
- * \see #blender::animrig::fcurve_find_in_action
- * \see #blender::animrig::fcurve_find_in_action_slot
+ * \see #animrig::fcurve_find_in_action
+ * \see #animrig::fcurve_find_in_action_slot
  */
-FCurve *BKE_fcurve_find(ListBase *list, const char rna_path[], int array_index);
+FCurve *BKE_fcurve_find(ListBaseT<FCurve> *list, const char rna_path[], int array_index);
 
 /**
  * Quick way to loop over all f-curves of a given 'path'.
@@ -289,7 +305,6 @@ FCurve *id_data_find_fcurve(
  * Find an F-Curve from its rna path and index.
  *
  * The search order is as follows. The first match will be returned:
- *   - Animation
  *   - Action
  *   - Drivers
  *
@@ -345,24 +360,6 @@ int BKE_fcurve_bezt_binarysearch_index(const BezTriple array[],
                                        int arraylen,
                                        bool *r_replace);
 
-/* `fcurve_cache.cc` */
-
-/**
- * Cached f-curve look-ups, use when this needs to be done many times.
- */
-FCurvePathCache *BKE_fcurve_pathcache_create(blender::Span<FCurve *> fcurves);
-void BKE_fcurve_pathcache_destroy(FCurvePathCache *fcache);
-FCurve *BKE_fcurve_pathcache_find(FCurvePathCache *fcache, const char rna_path[], int array_index);
-/**
- * Fill in an array of F-Curve, leave NULL when not found.
- *
- * \return The number of F-Curves found.
- */
-int BKE_fcurve_pathcache_find_array(FCurvePathCache *fcache,
-                                    const char *rna_path,
-                                    FCurve **fcurve_result,
-                                    int fcurve_result_len);
-
 /**
  * Calculate the x range of the given F-Curve's data.
  * \return true if a range has been found.
@@ -371,8 +368,13 @@ bool BKE_fcurve_calc_range(const FCurve *fcu, float *r_min, float *r_max, bool s
 
 /**
  * Calculate the x and y extents of F-Curve's data.
+ *
+ * \param selected_keys_only: if true, only selected keyframes are considered for the bounds.
+ * \param include_handles: if true, the handles are considered for the bounds, otherwise only the
+ * key point itself.
  * \param frame_range: Only calculate the bounds of the FCurve in the given range.
  * Does the full range if NULL.
+ *
  * \return true if the bounds have been found.
  */
 bool BKE_fcurve_calc_bounds(const FCurve *fcu,
@@ -389,13 +391,8 @@ bool BKE_fcurve_calc_bounds(const FCurve *fcu,
  * \note An interval of zero could be supported (this implies no rounding at all),
  * however this risks very small differences in float values being treated as separate keyframes.
  */
-float *BKE_fcurves_calc_keyed_frames_ex(FCurve **fcurve_array,
-                                        int fcurve_array_len,
-                                        float interval,
-                                        int *r_frames_len);
-float *BKE_fcurves_calc_keyed_frames(FCurve **fcurve_array,
-                                     int fcurve_array_len,
-                                     int *r_frames_len);
+Array<float> BKE_fcurves_calc_keyed_frames_ex(Span<FCurve *> fcurve_array, float interval);
+Array<float> BKE_fcurves_calc_keyed_frames(Span<FCurve *> fcurve_array);
 
 /**
  * Set the index that stores the FCurve's active keyframe, assuming that \a active_bezt
@@ -421,19 +418,19 @@ void BKE_fcurve_keyframe_move_value_with_handles(BezTriple *keyframe, float new_
  * Usability of keyframes refers to whether they should be displayed,
  * and also whether they will have any influence on the final result.
  */
-bool BKE_fcurve_are_keyframes_usable(const FCurve *fcu);
+bool BKE_fcurve_are_keyframes_usable(const FCurve &fcu);
 
 /**
  * Can keyframes be added to F-Curve?
  * Keyframes can only be added if they are already visible.
  */
-bool BKE_fcurve_is_keyframable(const FCurve *fcu);
-bool BKE_fcurve_is_protected(const FCurve *fcu);
+bool BKE_fcurve_is_keyframable(const FCurve &fcu);
+bool BKE_fcurve_is_protected(const FCurve &fcu);
 
 /**
  * Are any of the keyframe control points selected on the F-Curve?
  */
-bool BKE_fcurve_has_selected_control_points(const FCurve *fcu);
+bool BKE_fcurve_has_selected_control_points(const FCurve &fcu);
 
 /**
  * Deselect all keyframes within that FCurve.
@@ -444,21 +441,21 @@ void BKE_fcurve_deselect_all_keys(FCurve &fcu);
  * Checks if the F-Curve has a Cycles modifier with simple settings
  * that warrant transition smoothing.
  */
-bool BKE_fcurve_is_cyclic(const FCurve *fcu);
+bool BKE_fcurve_is_cyclic(const FCurve &fcu);
 
 /* Type of infinite cycle for a curve. */
-typedef enum eFCU_Cycle_Type {
+enum eFCU_Cycle_Type {
   FCU_CYCLE_NONE = 0,
   /* The cycle repeats identically to the base range. */
   FCU_CYCLE_PERFECT,
   /* The cycle accumulates the change between start and end keys. */
   FCU_CYCLE_OFFSET,
-} eFCU_Cycle_Type;
+};
 
 /**
  * Checks if the F-Curve has a Cycles modifier, and returns the type of the cycle behavior.
  */
-eFCU_Cycle_Type BKE_fcurve_get_cycle_type(const FCurve *fcu);
+eFCU_Cycle_Type BKE_fcurve_get_cycle_type(const FCurve &fcu);
 
 /**
  * Recompute bezier handles of all three given BezTriples, so that `bezt` can be inserted between
@@ -476,10 +473,15 @@ bool BKE_fcurve_bezt_subdivide_handles(BezTriple *bezt,
 /**
  * Resize the FCurve 'bezt' array to fit the given length.
  *
+ * This potentially moves the entire array, and thus pointers from before this call should be
+ * considered invalid / dangling.
+ *
  * \param new_totvert: new number of elements in the FCurve's `bezt` array.
- * Constraint: `0 <= new_totvert <= fcu->totvert`
+ *
+ * \note When increasing the size of the array, newly added elements (that is, in the
+ * [old_totvert..new_totvert] interval) are zero-initialized.
  */
-void BKE_fcurve_bezt_shrink(FCurve *fcu, int new_totvert);
+void BKE_fcurve_bezt_resize(FCurve &fcu, int new_totvert);
 
 /**
  * Merge the two given BezTriple arrays `a` and `b` into a newly allocated BezTriple array of size
@@ -498,23 +500,24 @@ BezTriple *BKE_bezier_array_merge(
  */
 void BKE_fcurve_delete_key(FCurve *fcu, int index);
 
-/** Delete an index range of keyframes from an F-curve. This is more performant than individually
+/**
+ * Delete an index range of keyframes from an F-curve. This is more performant than individually
  * removing keys.
  * Has a complexity of O(N) with respect to number of keys in `fcu`.
  *
  * \param index_range: is right exclusive.
  */
-void BKE_fcurve_delete_keys(FCurve *fcu, blender::uint2 index_range);
+void BKE_fcurve_delete_keys(FCurve &fcu, uint2 index_range);
 
 /**
  * Delete selected keyframes from an F-curve.
  */
-bool BKE_fcurve_delete_keys_selected(FCurve *fcu);
+bool BKE_fcurve_delete_keys_selected(FCurve &fcu);
 
 /**
  * Delete all keyframes from an F-curve.
  */
-void BKE_fcurve_delete_keys_all(FCurve *fcu);
+void BKE_fcurve_delete_keys_all(FCurve &fcu);
 
 /**
  * Called during transform/snapping to make sure selected keyframes replace
@@ -549,7 +552,7 @@ void BKE_fcurve_deduplicate_keys(FCurve *fcu);
  *
  * If the BezTriples have been rearranged, sort them first before using this.
  */
-void BKE_fcurve_handles_recalc(FCurve *fcu);
+void BKE_fcurve_handles_recalc(FCurve &fcu);
 /**
  * Variant of #BKE_fcurve_handles_recalc() that allows calculating based on a different select
  * flag.
@@ -558,7 +561,24 @@ void BKE_fcurve_handles_recalc(FCurve *fcu);
  * Usually `SELECT`, but may want to use a different one at times
  * (if caller does not operate on selection).
  */
-void BKE_fcurve_handles_recalc_ex(FCurve *fcu, eBezTriple_Flag handle_sel_flag);
+void BKE_fcurve_handles_recalc_ex(FCurve &fcu, eBezTriple_Flag handle_sel_flag);
+
+enum class HandleSide {
+  LEFT,
+  RIGHT,
+};
+
+/**
+ * For the given keyframe, update the handle mode of one side to be in a valid state based on the
+ * opposite side. For example if one side is set to "Aligned" the other has to copy that, otherwise
+ * it wouldn't be actually aligned. This is useful in cases where the user explicitly sets on
+ * handle type.
+ *
+ * \param source_side: The source side from which to update the handle flags. This side will not be
+ * affected.
+ */
+void BKE_fcurve_update_handle_flag_from_opposite(BezTriple &key, HandleSide source_side);
+
 /**
  * Update handles, making sure the handle-types are valid (e.g. correctly deduced from an "Auto"
  * type), and recalculating their position vectors.
@@ -574,27 +594,37 @@ void testhandles_fcurve(FCurve *fcu, eBezTriple_Flag sel_flag, bool use_handle);
  * This function sorts BezTriples so that they are arranged in chronological order,
  * as tools working on F-Curves expect that the BezTriples are in order.
  */
-void sort_time_fcurve(FCurve *fcu);
+void sort_time_fcurve(FCurve &fcu);
 /**
  * This function tests if any BezTriples are out of order, thus requiring a sort.
  */
-bool test_time_fcurve(FCurve *fcu);
+bool test_time_fcurve(FCurve &fcu);
 
 /**
  * The length of each handle is not allowed to be more
  * than the horizontal distance between (v1-v4).
  * This is to prevent curve loops.
  *
- * This function is very similar to BKE_curve_correct_bezpart(), but allows a steeper tangent for
+ * This function is very similar to #BKE_curve_correct_bezpart(), but allows a steeper tangent for
  * more snappy animations. This is not desired for other areas in which curves are used, though.
  */
 void BKE_fcurve_correct_bezpart(const float v1[2], float v2[2], float v3[2], const float v4[2]);
 
 /* -------- Evaluation -------- */
 
-/* evaluate fcurve */
+/**
+ * Evaluate a non-driver F-Curve.
+ */
 float evaluate_fcurve(const FCurve *fcu, float evaltime);
+/**
+ * Evaluate the F-Curve; if this is a driver, that aspect is ignored and only its F-Curve is
+ * evaluated.
+ */
 float evaluate_fcurve_only_curve(const FCurve *fcu, float evaltime);
+/**
+ * Evaluate a non-driver F-Curve, without applying its modifiers.
+ */
+float evaluate_fcurve_unmodified(const FCurve *fcu, float evaltime);
 float evaluate_fcurve_driver(PathResolvedRNA *anim_rna,
                              FCurve *fcu,
                              ChannelDriver *driver_orig,
@@ -646,15 +676,19 @@ void fcurve_samples_to_keyframes(FCurve *fcu, int start, int end);
 
 /* ************* F-Curve .blend file API ******************** */
 
-void BKE_fmodifiers_blend_write(BlendWriter *writer, ListBase *fmodifiers);
-void BKE_fmodifiers_blend_read_data(BlendDataReader *reader, ListBase *fmodifiers, FCurve *curve);
+void BKE_fmodifiers_blend_write(BlendWriter *writer, ListBaseT<FModifier> *fmodifiers);
+void BKE_fmodifiers_blend_read_data(BlendDataReader *reader,
+                                    ListBaseT<FModifier> *fmodifiers,
+                                    FCurve *curve);
 
 /**
  * Write the FCurve's data to the writer.
- * If this is used to write an FCurve, be sure to call `BLO_write_struct(writer, FCurve, fcurve);`
+ * If this is used to write an FCurve, be sure to call `writer->write_struct(fcurve);`
  * before calling this function.
  */
 void BKE_fcurve_blend_write_data(BlendWriter *writer, FCurve *fcu);
-void BKE_fcurve_blend_write_listbase(BlendWriter *writer, ListBase *fcurves);
+void BKE_fcurve_blend_write_listbase(BlendWriter *writer, ListBaseT<FCurve> *fcurves);
 void BKE_fcurve_blend_read_data(BlendDataReader *reader, FCurve *fcu);
-void BKE_fcurve_blend_read_data_listbase(BlendDataReader *reader, ListBase *fcurves);
+void BKE_fcurve_blend_read_data_listbase(BlendDataReader *reader, ListBaseT<FCurve> *fcurves);
+
+}  // namespace blender

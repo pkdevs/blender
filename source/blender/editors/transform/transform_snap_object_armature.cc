@@ -6,19 +6,20 @@
  * \ingroup edtransform
  */
 
-#include "BLI_math_matrix.hh"
-
-#include "BKE_armature.hh"
-#include "BKE_bvhutils.hh"
 #include "DNA_armature_types.h"
 
+#include "BLI_listbase.hh"
+
+#include "BKE_armature.hh"
+
+#include "ED_armature.hh"
 #include "ED_transform_snap_object_context.hh"
 
-#include "ANIM_bone_collections.hh"
+#include "ANIM_armature.hh"
 
 #include "transform_snap_object.hh"
 
-using blender::float4x4;
+namespace blender::ed::transform {
 
 eSnapMode snapArmature(SnapObjectContext *sctx,
                        const Object *ob_eval,
@@ -32,64 +33,50 @@ eSnapMode snapArmature(SnapObjectContext *sctx,
     return retval;
   }
 
-  bArmature *arm = static_cast<bArmature *>(ob_eval->data);
+  bArmature *arm = id_cast<bArmature *>(ob_eval->data);
 
   SnapData nearest2d(sctx, obmat);
-
-  const bool is_editmode = arm->edbo != nullptr;
-
-  if (is_editmode == false) {
-    const std::optional<blender::Bounds<blender::float3>> bounds = BKE_armature_min_max(ob_eval);
-    if (bounds && !nearest2d.snap_boundbox(bounds->min, bounds->max)) {
-      return retval;
-    }
-  }
 
   nearest2d.clip_planes_enable(sctx, ob_eval);
 
   const float *head_vec = nullptr, *tail_vec = nullptr;
 
+  const bool is_editmode = arm->edbo != nullptr;
   const bool is_posemode = is_object_active && (ob_eval->mode & OB_MODE_POSE);
   const bool skip_selected = (is_editmode || is_posemode) &&
                              (sctx->runtime.params.snap_target_select &
                               SCE_SNAP_TARGET_NOT_SELECTED);
 
   if (arm->edbo) {
-    LISTBASE_FOREACH (EditBone *, eBone, arm->edbo) {
-      if (ANIM_bonecoll_is_visible_editbone(arm, eBone)) {
-        if (eBone->flag & BONE_HIDDEN_A) {
-          /* Skip hidden bones. */
-          continue;
-        }
-
-        const bool is_selected = (eBone->flag & (BONE_ROOTSEL | BONE_TIPSEL)) != 0;
+    for (EditBone &eBone : *arm->edbo) {
+      if (animrig::bone_is_visible(arm, &eBone)) {
+        const bool is_selected = (eBone.flag & (BONE_ROOTSEL | BONE_TIPSEL)) != 0;
         if (is_selected && skip_selected) {
           continue;
         }
 
-        if (nearest2d.snap_edge(eBone->head, eBone->tail)) {
-          head_vec = eBone->head;
-          tail_vec = eBone->tail;
+        if (nearest2d.snap_edge(eBone.head, eBone.tail)) {
+          head_vec = eBone.head;
+          tail_vec = eBone.tail;
         }
       }
     }
   }
   else if (ob_eval->pose && ob_eval->pose->chanbase.first) {
-    LISTBASE_FOREACH (bPoseChannel *, pchan, &ob_eval->pose->chanbase) {
-      Bone *bone = pchan->bone;
-      if (!bone || (bone->flag & (BONE_HIDDEN_P | BONE_HIDDEN_PG))) {
+    for (bPoseChannel &pchan : ob_eval->pose->chanbase) {
+      if (!animrig::bone_is_visible(arm, {&pchan, pchan.bone_get(*ob_eval)})) {
         /* Skip hidden bones. */
         continue;
       }
 
-      const bool is_selected = (bone->flag & (BONE_SELECTED | BONE_ROOTSEL | BONE_TIPSEL)) != 0;
+      const bool is_selected = (pchan.flag & POSE_SELECTED) != 0;
       if (is_selected && skip_selected) {
         continue;
       }
 
-      if (nearest2d.snap_edge(pchan->pose_head, pchan->pose_tail)) {
-        head_vec = pchan->pose_head;
-        tail_vec = pchan->pose_tail;
+      if (nearest2d.snap_edge(pchan.pose_head, pchan.pose_tail)) {
+        head_vec = pchan.pose_head;
+        tail_vec = pchan.pose_tail;
       }
     }
   }
@@ -117,3 +104,5 @@ eSnapMode snapArmature(SnapObjectContext *sctx,
   }
   return retval;
 }
+
+}  // namespace blender::ed::transform

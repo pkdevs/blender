@@ -10,6 +10,15 @@ from bpy.app.translations import (
 )
 
 
+def has_selected_ids_in_context(context):
+    if getattr(context, "id", None) is not None:
+        return True
+    if len(context.selected_ids) > 0:
+        return True
+
+    return False
+
+
 class OUTLINER_HT_header(Header):
     bl_space_type = 'OUTLINER'
 
@@ -53,11 +62,11 @@ class OUTLINER_HT_header(Header):
             row.popover(
                 panel="OUTLINER_PT_filter",
                 text="",
-                icon='FILTER',
             )
 
         if display_mode in {'LIBRARIES', 'ORPHAN_DATA'}:
-            row.prop(space, "use_filter_id_type", text="", icon='FILTER')
+            row.prop(space, "use_filter_id_type", text="", icon=(
+                'FILTER_FILLED' if space.use_filter_id_type else 'FILTER'))
             sub = row.row(align=True)
             sub.active = space.use_filter_id_type
             sub.prop(space, "filter_id_type", text="", icon_only=True)
@@ -103,10 +112,20 @@ class OUTLINER_MT_context_menu(Menu):
     bl_label = "Outliner"
 
     @staticmethod
-    def draw_common_operators(layout):
-        layout.menu_contents("OUTLINER_MT_asset")
+    def draw_common_operators(space, layout):
+        # Mark/clear asset options does not belongs in certain outliner views.
+        if space.display_mode not in {'SEQUENCE', 'LIBRARY_OVERRIDES'}:
+            layout.menu_contents("OUTLINER_MT_asset")
 
-        layout.separator()
+            layout.separator()
+
+        if space.display_mode in {'LIBRARY_OVERRIDES'}:
+            layout.operator(
+                "outliner.liboverride_property_remove",
+                text="Remove",
+            )
+
+            layout.separator()
 
         layout.menu("OUTLINER_MT_liboverride", icon='LIBRARY_DATA_OVERRIDE')
 
@@ -127,7 +146,7 @@ class OUTLINER_MT_context_menu(Menu):
             OUTLINER_MT_collection_new.draw_without_context_menu(context, layout)
             layout.separator()
 
-        OUTLINER_MT_context_menu.draw_common_operators(layout)
+        OUTLINER_MT_context_menu.draw_common_operators(space, layout)
 
 
 class OUTLINER_MT_context_menu_view(Menu):
@@ -155,6 +174,24 @@ class OUTLINER_MT_view_pie(Menu):
         pie = layout.menu_pie()
         pie.operator("outliner.show_hierarchy")
         pie.operator("outliner.show_active", icon='ZOOM_SELECTED')
+
+
+class OUTLINER_MT_id_data(Menu):
+    bl_label = "Data-block"
+
+    @classmethod
+    def poll(cls, context):
+        return has_selected_ids_in_context(context)
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator_enum("outliner.id_operation", "type")
+
+        id_linked = getattr(context, "id", None)
+        if id_linked and id_linked.library:
+            layout.separator()
+            layout.operator("outliner.id_linked_relocate", text="Relocate")
 
 
 class OUTLINER_MT_edit_datablocks(Menu):
@@ -224,7 +261,7 @@ class OUTLINER_MT_collection(Menu):
         space = context.space_data
 
         layout.operator("outliner.collection_new", text="New", text_ctxt=i18n_contexts.id_collection).nested = True
-        layout.operator("outliner.collection_duplicate", text="Duplicate Collection")
+        layout.operator("outliner.collection_duplicate", text="Duplicate Collection", icon='DUPLICATE')
         layout.operator("outliner.collection_duplicate_linked", text="Duplicate Linked")
         layout.operator("outliner.id_copy", text="Copy", icon='COPYDOWN')
         layout.operator("outliner.id_paste", text="Paste", icon='PASTEDOWN')
@@ -261,11 +298,11 @@ class OUTLINER_MT_collection(Menu):
 
         layout.separator()
 
-        layout.operator_menu_enum("outliner.id_operation", "type", text="ID Data")
+        layout.menu("OUTLINER_MT_id_data")
 
         layout.separator()
 
-        OUTLINER_MT_context_menu.draw_common_operators(layout)
+        OUTLINER_MT_context_menu.draw_common_operators(space, layout)
 
 
 class OUTLINER_MT_collection_new(Menu):
@@ -283,7 +320,7 @@ class OUTLINER_MT_collection_new(Menu):
 
         layout.separator()
 
-        OUTLINER_MT_context_menu.draw_common_operators(layout)
+        OUTLINER_MT_context_menu.draw_common_operators(context.space_data, layout)
 
 
 class OUTLINER_MT_object(Menu):
@@ -318,20 +355,11 @@ class OUTLINER_MT_object(Menu):
 
         layout.separator()
 
-        layout.operator_menu_enum("outliner.id_operation", "type", text="ID Data")
+        layout.menu("OUTLINER_MT_id_data")
 
         layout.separator()
 
-        OUTLINER_MT_context_menu.draw_common_operators(layout)
-
-
-def has_selected_ids_in_context(context):
-    if hasattr(context, "id"):
-        return True
-    if len(context.selected_ids) > 0:
-        return True
-
-    return False
+        OUTLINER_MT_context_menu.draw_common_operators(space, layout)
 
 
 class OUTLINER_MT_asset(Menu):
@@ -366,7 +394,8 @@ class OUTLINER_MT_liboverride(Menu):
         layout.operator_menu_enum(
             "outliner.liboverride_operation",
             "selection_set",
-            text="Reset").type = 'OVERRIDE_LIBRARY_RESET'
+            text="Reset",
+        ).type = 'OVERRIDE_LIBRARY_RESET'
         layout.operator_menu_enum(
             "outliner.liboverride_operation", "selection_set",
             text="Clear",
@@ -383,7 +412,7 @@ class OUTLINER_MT_liboverride(Menu):
 class OUTLINER_PT_filter(Panel):
     bl_space_type = 'OUTLINER'
     bl_region_type = 'HEADER'
-    bl_label = "Filter"
+    bl_label = "Options"
 
     def draw(self, context):
         layout = self.layout
@@ -416,36 +445,68 @@ class OUTLINER_PT_filter(Panel):
             col.prop(space, "use_sort_alpha")
 
         if display_mode != 'LIBRARY_OVERRIDES':
-            row = layout.row(align=True)
+            col = layout.column(align=True)
+            row = col.row(align=True)
             row.prop(space, "use_sync_select", text="Sync Selection")
+            row = col.row(align=True)
+            row.active = space.use_sync_select
+            row.prop(space, "scroll_to_active", text="Scroll to Active")
+            row = col.row(align=True)
+            row.active = space.scroll_to_active and space.use_sync_select
+            row.prop(space, "expand_on_focus")
 
             row = layout.row(align=True)
             row.prop(space, "show_mode_column", text="Show Mode Column")
             layout.separator()
-
-        filter_text_supported = True
-        # Same exception for library overrides as in OUTLINER_HT_header.
-        if display_mode == 'LIBRARY_OVERRIDES' and space.lib_override_view_mode == 'HIERARCHIES':
-            filter_text_supported = False
-
-        if filter_text_supported:
-            col = layout.column(align=True)
-            col.label(text="Search")
-            col.prop(space, "use_filter_complete", text="Exact Match")
-            col.prop(space, "use_filter_case_sensitive", text="Case Sensitive")
 
         if display_mode == 'LIBRARY_OVERRIDES' and space.lib_override_view_mode == 'PROPERTIES' and bpy.data.libraries:
             row = layout.row()
             row.label(icon='LIBRARY_DATA_OVERRIDE')
             row.prop(space, "use_filter_lib_override_system", text="System Overrides")
 
-        if display_mode != 'VIEW_LAYER':
-            return
 
-        layout.separator()
+class OUTLINER_PT_options_search(Panel):
+    bl_space_type = 'OUTLINER'
+    bl_region_type = 'HEADER'
+    bl_label = "Search"
+    bl_parent_id = "OUTLINER_PT_filter"
 
-        layout.label(text="Filter")
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        display_mode = space.display_mode
 
+        filter_text_supported = True
+        # Same exception for library overrides as in OUTLINER_HT_header.
+        if display_mode == 'LIBRARY_OVERRIDES' and space.lib_override_view_mode == 'HIERARCHIES':
+            filter_text_supported = False
+
+        return filter_text_supported
+
+    def draw(self, context):
+        layout = self.layout
+        space = context.space_data
+
+        col = layout.column(align=True)
+        col.prop(space, "use_filter_complete", text="Exact Match")
+        col.prop(space, "use_filter_case_sensitive", text="Case Sensitive")
+
+
+class OUTLINER_PT_options_filter(Panel):
+    bl_space_type = 'OUTLINER'
+    bl_region_type = 'HEADER'
+    bl_label = "Filter"
+    bl_parent_id = "OUTLINER_PT_filter"
+
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        display_mode = space.display_mode
+        return display_mode == 'VIEW_LAYER'
+
+    def draw(self, context):
+        layout = self.layout
+        space = context.space_data
         col = layout.column(align=True)
 
         row = col.row()
@@ -453,7 +514,7 @@ class OUTLINER_PT_filter(Panel):
         row.prop(space, "use_filter_view_layers", text="All View Layers")
 
         row = col.row()
-        row.label(icon='OUTLINER_COLLECTION')
+        row.label(icon='GROUP')
         row.prop(space, "use_filter_collection", text="Collections")
 
         row = col.row()
@@ -492,7 +553,7 @@ class OUTLINER_PT_filter(Panel):
             row = sub.row()
             row.label(icon='CAMERA_DATA')
             row.prop(space, "use_filter_object_camera", text="Cameras")
-        if bpy.data.grease_pencils_v3:
+        if bpy.data.grease_pencils:
             row = sub.row()
             row.label(icon='STROKE')
             row.prop(space, "use_filter_object_grease_pencil", text="Grease Pencil")
@@ -524,6 +585,7 @@ classes = (
     OUTLINER_MT_collection_new,
     OUTLINER_MT_collection_visibility,
     OUTLINER_MT_collection_view_layer,
+    OUTLINER_MT_id_data,
     OUTLINER_MT_object,
     OUTLINER_MT_asset,
     OUTLINER_MT_liboverride,
@@ -531,6 +593,8 @@ classes = (
     OUTLINER_MT_context_menu_view,
     OUTLINER_MT_view_pie,
     OUTLINER_PT_filter,
+    OUTLINER_PT_options_search,
+    OUTLINER_PT_options_filter,
 )
 
 if __name__ == "__main__":  # only for live edit.

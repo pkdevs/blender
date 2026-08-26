@@ -2,8 +2,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
-#ifndef __CAMERA_H__
-#define __CAMERA_H__
+#pragma once
 
 #include "kernel/types.h"
 
@@ -20,6 +19,16 @@ CCL_NAMESPACE_BEGIN
 class Device;
 class DeviceScene;
 class Scene;
+
+class OSLCameraParamQuery {
+ public:
+  OSLCameraParamQuery() = default;
+  virtual ~OSLCameraParamQuery() = default;
+
+  virtual bool get_float(ustring name, vector<float> &data) = 0;
+  virtual bool get_int(ustring name, vector<int> &data) = 0;
+  virtual bool get_string(ustring name, std::string &data) = 0;
+};
 
 /* Camera
  *
@@ -147,6 +156,17 @@ class Camera : public Node {
   NODE_SOCKET_API(float, fov_pre)
   NODE_SOCKET_API(float, fov_post)
 
+  BoundBox2D viewplane_pre;
+  BoundBox2D viewplane_post;
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_pre, left)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_pre, right)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_pre, bottom)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_pre, top)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_post, left)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_post, right)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_post, bottom)
+  NODE_SOCKET_API_STRUCT_MEMBER(float, viewplane_post, top)
+
   /* computed camera parameters */
   ProjectionTransform screentoworld;
   ProjectionTransform rastertoworld;
@@ -182,18 +202,24 @@ class Camera : public Node {
   KernelCamera kernel_camera;
   array<DecomposedTransform> kernel_camera_motion;
 
+  /* Custom camera script. */
+  std::string script_name;
+  map<ustring, pair<vector<uint8_t>, TypeDesc>> script_params;
+
  private:
-  int width;
-  int height;
+  int width = 1024;
+  int height = 512;
 
  public:
   /* functions */
   Camera();
-  ~Camera();
+  ~Camera() override;
 
   void compute_auto_viewplane();
 
   void update(Scene *scene);
+
+  void update_interactive_motion();
 
   void device_update(Device *device, DeviceScene *dscene, Scene *scene);
   void device_update_volume(Device *device, DeviceScene *dscene, Scene *scene);
@@ -203,20 +229,27 @@ class Camera : public Node {
   BoundBox viewplane_bounds_get();
 
   /* Calculates the width of a pixel at point in world space. */
-  float world_to_raster_size(float3 P);
+  float world_to_raster_size(const float3 P);
 
   /* Motion blur. */
-  float motion_time(int step) const;
-  int motion_step(float time) const;
+  float motion_time(const int step) const;
+  int motion_step(const float time) const;
   bool use_motion() const;
 
-  void set_screen_size(int width_, int height_);
+  uint64_t get_kernel_features() const;
+
+  bool set_screen_size(int width, int height);
+
+  void set_osl_camera(Scene *scene,
+                      OSLCameraParamQuery &params,
+                      const std::string &filepath,
+                      const std::string &bytecode_hash = "",
+                      const std::string &bytecode = "");
+  void clear_osl_camera(Scene *scene);
 
  private:
   /* Private utility functions. */
-  float3 transform_raster_to_world(float raster_x, float raster_y);
+  float3 transform_full_raster_to_world(const float raster_x, const float raster_y);
 };
 
 CCL_NAMESPACE_END
-
-#endif /* __CAMERA_H__ */

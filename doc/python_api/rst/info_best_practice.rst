@@ -37,7 +37,7 @@ As well as pep8 we have additional conventions used for Blender Python scripts:
      bpy.context.scene.render.image_settings.file_format = 'PNG'
      bpy.context.scene.render.filepath = "//render_out"
 
-- pep8 also defines that lines should not exceed 79 characters,
+- pep8 also defines that lines should not exceed 79 characters;
   we have decided that this is too restrictive so it is optional per script.
 
 
@@ -48,7 +48,7 @@ Some notes to keep in mind when writing UI layouts:
 
 UI code is quite simple. Layout declarations are there to easily create a decent layout.
 The general rule here is: If you need more code for the layout declaration,
-than for the actual properties, then you are doing it wrong.
+than for the actual properties, then the approach should be reconsidered.
 
 
 .. rubric:: Example layouts:
@@ -149,13 +149,13 @@ Rather than:
 
 .. code-block:: python
 
-   polygons = mesh.polygons[:]  # make a list copy of the meshes polygons
-   p_idx = len(polygons)     # Loop backwards
-   while p_idx:           # while the value is not 0
+   polygons = mesh.polygons[:]  # Make a list copy of the meshes polygons.
+   p_idx = len(polygons)        # Loop backwards
+   while p_idx:                 # While the value is not 0.
        p_idx -= 1
 
        if len(polygons[p_idx].vertices) == 3:
-           polygons.pop(p_idx)  # remove the triangle
+           polygons.pop(p_idx)  # Remove the triangle.
 
 
 It's faster to build a new list with list comprehension:
@@ -227,10 +227,10 @@ This works by swapping two list items, so the item you remove is always last:
 
    pop_index = 5
 
-   # swap so the pop_index is last.
+   # Swap so the pop_index is last.
    my_list[-1], my_list[pop_index] = my_list[pop_index], my_list[-1]
 
-   # remove last item (pop_index)
+   # Remove last item (pop_index).
    my_list.pop()
 
 
@@ -341,8 +341,8 @@ Value Comparison
 ----------------
 
 Python has two ways to compare values ``a == b`` and ``a is b``,
-the difference is that ``==`` may run the objects comparison function ``__cmp__()`` whereas ``is`` compares identity,
-this is, that both variables reference the same item in memory.
+the difference is that ``==`` may run the object's comparison function ``__eq__()`` whereas ``is`` compares identity,
+that is, that both variables reference the same item in memory.
 
 In cases where you know you are checking for the same value which is referenced from multiple places, ``is`` is faster.
 
@@ -357,6 +357,6 @@ While developing a script it is good to time it to be aware of any changes in pe
    import time
    time_start = time.time()
 
-   # do something...
+   # Do something...
 
    print("My Script Finished: %.4f sec" % (time.time() - time_start))

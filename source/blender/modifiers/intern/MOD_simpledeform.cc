@@ -6,13 +6,14 @@
  * \ingroup modifiers
  */
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_task.h"
-#include "BLI_utildefines.h"
+#include <algorithm>
+
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_task_c.hh"
+#include "BLI_utildefines.hh"
 #include "BLT_translation.hh"
 
-#include "DNA_defaults.h"
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 
@@ -20,7 +21,7 @@
 #include "BKE_lib_query.hh"
 #include "BKE_modifier.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "RNA_access.hh"
@@ -28,6 +29,8 @@
 
 #include "MOD_ui_common.hh"
 #include "MOD_util.hh"
+
+namespace blender {
 
 #define BEND_EPS 0.000001f
 
@@ -76,12 +79,8 @@ BLI_INLINE void copy_v3_v3_unmap(float a[3], const float b[3], const uint map[3]
 static void axis_limit(const int axis, const float limits[2], float co[3], float dcut[3])
 {
   float val = co[axis];
-  if (limits[0] > val) {
-    val = limits[0];
-  }
-  if (limits[1] < val) {
-    val = limits[1];
-  }
+  val = std::max(limits[0], val);
+  val = std::min(limits[1], val);
 
   dcut[axis] = co[axis] - val;
   co[axis] = val;
@@ -201,15 +200,11 @@ static void simple_helper(void *__restrict userdata,
 {
   const DeformUserData *curr_deform_data = static_cast<const DeformUserData *>(userdata);
   float weight = BKE_defvert_array_find_weight_safe(
-      curr_deform_data->dvert, iter, curr_deform_data->vgroup);
+      curr_deform_data->dvert, iter, curr_deform_data->vgroup, curr_deform_data->invert_vgroup);
   const uint *axis_map = axis_map_table[(curr_deform_data->mode != MOD_SIMPLEDEFORM_MODE_BEND) ?
                                             curr_deform_data->deform_axis :
                                             2];
   const float base_limit[2] = {0.0f, 0.0f};
-
-  if (curr_deform_data->invert_vgroup) {
-    weight = 1.0f - weight;
-  }
 
   if (weight != 0.0f) {
     float co[3], dcut[3] = {0.0f, 0.0f, 0.0f};
@@ -312,12 +307,8 @@ static void SimpleDeformModifier_do(SimpleDeformModifierData *smd,
     smd->origin = nullptr; /* No self references */
   }
 
-  if (smd->limit[0] < 0.0f) {
-    smd->limit[0] = 0.0f;
-  }
-  if (smd->limit[0] > 1.0f) {
-    smd->limit[0] = 1.0f;
-  }
+  smd->limit[0] = std::max(smd->limit[0], 0.0f);
+  smd->limit[0] = std::min(smd->limit[0], 1.0f);
 
   smd->limit[0] = min_ff(smd->limit[0], smd->limit[1]); /* Upper limit >= than lower limit */
 
@@ -392,22 +383,20 @@ static void SimpleDeformModifier_do(SimpleDeformModifierData *smd,
   /* Do deformation. */
   TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
-  BLI_task_parallel_range(0, verts_num, (void *)&deform_pool_data, simple_helper, &settings);
+  BLI_task_parallel_range(
+      0, verts_num, static_cast<void *>(&deform_pool_data), simple_helper, &settings);
 }
 
 /* SimpleDeform */
 static void init_data(ModifierData *md)
 {
-  SimpleDeformModifierData *smd = (SimpleDeformModifierData *)md;
-
-  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(smd, modifier));
-
-  MEMCPY_STRUCT_AFTER(smd, DNA_struct_default_get(SimpleDeformModifierData), modifier);
+  SimpleDeformModifierData *smd = reinterpret_cast<SimpleDeformModifierData *>(md);
+  INIT_DEFAULT_STRUCT_AFTER(smd, modifier);
 }
 
 static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
 {
-  SimpleDeformModifierData *smd = (SimpleDeformModifierData *)md;
+  SimpleDeformModifierData *smd = reinterpret_cast<SimpleDeformModifierData *>(md);
 
   /* Ask for vertex-groups if we need them. */
   if (smd->vgroup_name[0] != '\0') {
@@ -417,13 +406,13 @@ static void required_data_mask(ModifierData *md, CustomData_MeshMasks *r_cddata_
 
 static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
 {
-  SimpleDeformModifierData *smd = (SimpleDeformModifierData *)md;
-  walk(user_data, ob, (ID **)&smd->origin, IDWALK_CB_NOP);
+  SimpleDeformModifierData *smd = reinterpret_cast<SimpleDeformModifierData *>(md);
+  walk(user_data, ob, reinterpret_cast<ID **>(&smd->origin), IDWALK_CB_NOP);
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
 {
-  SimpleDeformModifierData *smd = (SimpleDeformModifierData *)md;
+  SimpleDeformModifierData *smd = reinterpret_cast<SimpleDeformModifierData *>(md);
   if (smd->origin != nullptr) {
     DEG_add_object_relation(
         ctx->node, smd->origin, DEG_OB_COMP_TRANSFORM, "SimpleDeform Modifier");
@@ -434,59 +423,57 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
 static void deform_verts(ModifierData *md,
                          const ModifierEvalContext *ctx,
                          Mesh *mesh,
-                         blender::MutableSpan<blender::float3> positions)
+                         MutableSpan<float3> positions)
 {
-  SimpleDeformModifierData *sdmd = (SimpleDeformModifierData *)md;
+  SimpleDeformModifierData *sdmd = reinterpret_cast<SimpleDeformModifierData *>(md);
   SimpleDeformModifier_do(sdmd,
                           ctx,
                           ctx->object,
                           mesh,
-                          reinterpret_cast<float(*)[3]>(positions.data()),
+                          reinterpret_cast<float (*)[3]>(positions.data()),
                           positions.size());
 }
 
 static void panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *row;
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
   int deform_method = RNA_enum_get(ptr, "deform_method");
 
-  row = uiLayoutRow(layout, false);
-  uiItemR(row, ptr, "deform_method", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
+  ui::Layout &row = layout.row(false);
+  row.prop(ptr, "deform_method", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
   if (ELEM(deform_method, MOD_SIMPLEDEFORM_MODE_TAPER, MOD_SIMPLEDEFORM_MODE_STRETCH)) {
-    uiItemR(layout, ptr, "factor", UI_ITEM_NONE, nullptr, ICON_NONE);
+    layout.prop(ptr, "factor", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
   else {
-    uiItemR(layout, ptr, "angle", UI_ITEM_NONE, nullptr, ICON_NONE);
+    layout.prop(ptr, "angle", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  uiItemR(layout, ptr, "origin", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "deform_axis", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
+  layout.prop(ptr, "origin", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "deform_axis", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
 
-  modifier_panel_end(layout, ptr);
+  modifier_error_message_draw(layout, ptr);
 }
 
 static void restrictions_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *row;
-  uiLayout *layout = panel->layout;
-  const eUI_Item_Flag toggles_flag = UI_ITEM_R_TOGGLE | UI_ITEM_R_FORCE_BLANK_DECORATE;
+  ui::Layout &layout = *panel->layout;
+  const ui::eUI_Item_Flag toggles_flag = ui::ITEM_R_TOGGLE | ui::ITEM_R_FORCE_BLANK_DECORATE;
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
   int deform_method = RNA_enum_get(ptr, "deform_method");
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
-  uiItemR(layout, ptr, "limits", UI_ITEM_R_SLIDER, nullptr, ICON_NONE);
+  layout.prop(ptr, "limits", ui::ITEM_R_SLIDER, std::nullopt, ICON_NONE);
 
   if (ELEM(deform_method,
            MOD_SIMPLEDEFORM_MODE_TAPER,
@@ -495,19 +482,19 @@ static void restrictions_panel_draw(const bContext * /*C*/, Panel *panel)
   {
     int deform_axis = RNA_enum_get(ptr, "deform_axis");
 
-    row = uiLayoutRowWithHeading(layout, true, IFACE_("Lock"));
+    ui::Layout &row = layout.row(true, IFACE_("Lock"));
     if (deform_axis != 0) {
-      uiItemR(row, ptr, "lock_x", toggles_flag, nullptr, ICON_NONE);
+      row.prop(ptr, "lock_x", toggles_flag, std::nullopt, ICON_NONE);
     }
     if (deform_axis != 1) {
-      uiItemR(row, ptr, "lock_y", toggles_flag, nullptr, ICON_NONE);
+      row.prop(ptr, "lock_y", toggles_flag, std::nullopt, ICON_NONE);
     }
     if (deform_axis != 2) {
-      uiItemR(row, ptr, "lock_z", toggles_flag, nullptr, ICON_NONE);
+      row.prop(ptr, "lock_z", toggles_flag, std::nullopt, ICON_NONE);
     }
   }
 
-  modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", nullptr);
+  modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", std::nullopt);
 }
 
 static void panel_register(ARegionType *region_type)
@@ -554,4 +541,7 @@ ModifierTypeInfo modifierType_SimpleDeform = {
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
+    /*foreach_working_space_color*/ nullptr,
 };
+
+}  // namespace blender

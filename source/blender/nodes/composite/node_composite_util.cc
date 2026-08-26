@@ -6,13 +6,17 @@
  * \ingroup nodes
  */
 
+#include <optional>
+
 #include "BKE_node_runtime.hh"
 
 #include "NOD_socket_search_link.hh"
 
 #include "node_composite_util.hh"
 
-bool cmp_node_poll_default(const blender::bke::bNodeType * /*ntype*/,
+namespace blender {
+
+bool cmp_node_poll_default(const bke::bNodeType * /*ntype*/,
                            const bNodeTree *ntree,
                            const char **r_disabled_hint)
 {
@@ -23,17 +27,15 @@ bool cmp_node_poll_default(const blender::bke::bNodeType * /*ntype*/,
   return true;
 }
 
-void cmp_node_update_default(bNodeTree * /*ntree*/, bNode *node)
+void cmp_node_type_base(bke::bNodeType *ntype,
+                        UString idname,
+                        const std::optional<int16_t> legacy_type)
 {
-  node->runtime->need_exec = 1;
-}
-
-void cmp_node_type_base(blender::bke::bNodeType *ntype, int type, const char *name, short nclass)
-{
-  blender::bke::node_type_base(ntype, type, name, nclass);
+  bke::node_type_base(*ntype, idname, legacy_type);
 
   ntype->poll = cmp_node_poll_default;
-  ntype->updatefunc = cmp_node_update_default;
   ntype->insert_link = node_insert_link_default;
-  ntype->gather_link_search_ops = blender::nodes::search_link_ops_for_basic_node;
+  ntype->gather_link_search_ops = nodes::search_link_ops_for_basic_node;
 }
+
+}  // namespace blender

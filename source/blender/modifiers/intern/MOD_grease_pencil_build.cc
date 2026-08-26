@@ -7,19 +7,15 @@
  */
 
 #include "BLI_array.hh"
-#include "BLI_hash.h"
-#include "BLI_rand.h"
 #include "BLI_sort.hh"
-#include "BLI_task.h"
 
 #include "BLT_translation.hh"
 
 #include "BLO_read_write.hh"
 
-#include "DNA_defaults.h"
-#include "DNA_gpencil_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_screen_types.h"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -29,7 +25,7 @@
 #include "BKE_lib_query.hh"
 #include "BKE_modifier.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "MOD_grease_pencil_util.hh"
@@ -43,13 +39,13 @@
 
 namespace blender {
 
+/* The time in seconds strokes will take when the `delta_time` attribute does not exist. */
+constexpr float GP_BUILD_TIME_DEFAULT_STROKES = 1.0f;
+
 static void init_data(ModifierData *md)
 {
   auto *gpmd = reinterpret_cast<GreasePencilBuildModifierData *>(md);
-
-  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(gpmd, modifier));
-
-  MEMCPY_STRUCT_AFTER(gpmd, DNA_struct_default_get(GreasePencilBuildModifierData), modifier);
+  INIT_DEFAULT_STRUCT_AFTER(gpmd, modifier);
   modifier::greasepencil::init_influence_data(&gpmd->influence, false);
 }
 
@@ -74,7 +70,7 @@ static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void 
 {
   auto *omd = reinterpret_cast<GreasePencilBuildModifierData *>(md);
   modifier::greasepencil::foreach_influence_ID_link(&omd->influence, ob, walk, user_data);
-  walk(user_data, ob, (ID **)&omd->object, IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&omd->object), IDWALK_CB_NOP);
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
@@ -90,7 +86,7 @@ static void blend_write(BlendWriter *writer, const ID * /*id_owner*/, const Modi
 {
   const auto *mmd = reinterpret_cast<const GreasePencilBuildModifierData *>(md);
 
-  BLO_write_struct(writer, GreasePencilBuildModifierData, mmd);
+  writer->write_struct(mmd);
   modifier::greasepencil::write_influence_data(writer, &mmd->influence);
 }
 
@@ -101,14 +97,15 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   modifier::greasepencil::read_influence_data(reader, &mmd->influence);
 }
 
-static Array<int> point_counts_to_keep_concurrent(const bke::CurvesGeometry &curves,
-                                                  const IndexMask &selection,
-                                                  const int time_alignment,
-                                                  const int transition,
-                                                  const float factor,
-                                                  const bool clamp_points,
-                                                  int &r_curves_num,
-                                                  int &r_points_num)
+static Array<int> point_counts_to_keep_concurrent(
+    const bke::CurvesGeometry &curves,
+    const IndexMask &selection,
+    const GreasePencilBuildTimeAlignment time_alignment,
+    const GreasePencilBuildTransition transition,
+    const float factor,
+    const bool clamp_points,
+    int &r_curves_num,
+    int &r_points_num)
 {
   const int stroke_count = curves.curves_num();
   const OffsetIndices<int> points_by_curve = curves.points_by_curve();
@@ -131,8 +128,11 @@ static Array<int> point_counts_to_keep_concurrent(const bke::CurvesGeometry &cur
 
   auto get_stroke_factor = [&](const float factor, const int index) {
     const bool stroke_cyclic = cyclic[index];
-    const float max_factor = max_length /
-                             curves.evaluated_length_total_for_curve(index, stroke_cyclic);
+    const float total_length = curves.evaluated_length_total_for_curve(index, stroke_cyclic);
+    if (total_length == 0) {
+      return factor > 0.5f ? 1.0f : 0.0f;
+    }
+    const float max_factor = max_length / total_length;
     if (time_alignment == MOD_GREASE_PENCIL_BUILD_TIMEALIGN_START) {
       if (clamp_points) {
         return std::clamp(factor * max_factor, 0.0f, 1.0f);
@@ -170,8 +170,8 @@ static Array<int> point_counts_to_keep_concurrent(const bke::CurvesGeometry &cur
 static bke::CurvesGeometry build_concurrent(bke::greasepencil::Drawing &drawing,
                                             bke::CurvesGeometry &curves,
                                             const IndexMask &selection,
-                                            const int time_alignment,
-                                            const int transition,
+                                            const GreasePencilBuildTimeAlignment time_alignment,
+                                            const GreasePencilBuildTransition transition,
                                             const float factor,
                                             const float factor_start,
                                             const float factor_opacity,
@@ -283,7 +283,7 @@ static bke::CurvesGeometry build_concurrent(bke::greasepencil::Drawing &drawing,
 
 static void points_info_sequential(const bke::CurvesGeometry &curves,
                                    const IndexMask &selection,
-                                   const int transition,
+                                   const GreasePencilBuildTransition transition,
                                    const float factor,
                                    const bool clamp_points,
                                    int &r_curves_num,
@@ -326,7 +326,7 @@ static void points_info_sequential(const bke::CurvesGeometry &curves,
 static bke::CurvesGeometry build_sequential(bke::greasepencil::Drawing &drawing,
                                             bke::CurvesGeometry &curves,
                                             const IndexMask &selection,
-                                            const int transition,
+                                            const GreasePencilBuildTransition transition,
                                             const float factor,
                                             const float factor_start,
                                             const float factor_opacity,
@@ -490,19 +490,50 @@ static float get_factor_from_draw_speed(const bke::CurvesGeometry &curves,
   const bke::AttributeAccessor attributes = curves.attributes();
   const VArray<float> init_times = *attributes.lookup_or_default<float>(
       "init_time", bke::AttrDomain::Curve, 0.0f);
-  const VArray<float> delta_times = *attributes.lookup_or_default<float>(
+  const VArray<float> src_delta_times = *attributes.lookup_or_default<float>(
       "delta_time", bke::AttrDomain::Point, 0.0f);
+
+  Array<float> delta_times(curves.points_num());
+
+  if (const std::optional<float> src_delta_time = src_delta_times.get_if_single()) {
+    delta_times.fill(*src_delta_time);
+  }
+  else {
+    array_utils::copy(src_delta_times, delta_times.as_mutable_span());
+  }
+
+  /**
+   * Make any strokes that completes in zero seconds to instead take
+   * `GP_BUILD_TIME_DEFAULT_STROKES` seconds.
+   */
+  for (const int curve : curves.curves_range()) {
+    const IndexRange points = points_by_curve[curve];
+    if (delta_times[points.last()] == 0.0f && points.size() != 1) {
+      for (const int point_id : points.index_range()) {
+        const int point_i = points[point_id];
+        delta_times[point_i] = GP_BUILD_TIME_DEFAULT_STROKES * float(point_id) /
+                               float(points.size() - 1);
+      }
+    }
+  }
 
   Array<float> start_times(curves.curves_num());
   start_times[0] = 0;
   float accumulated_shift_delta_time = init_times[0];
   for (const int curve : curves.curves_range().drop_front(1)) {
     const float previous_start_time = start_times[curve - 1];
+    const float init_time = init_times[curve];
     const float previous_delta_time = delta_times[points_by_curve[curve - 1].last()];
     const float previous_end_time = previous_start_time + previous_delta_time;
+    float shifted_start_time = init_time - accumulated_shift_delta_time;
 
-    const float shifted_start_time = init_times[curve] - accumulated_shift_delta_time;
-    const float gap_delta_time = math::min(shifted_start_time - previous_end_time, max_gap);
+    /* Make each stroke have no gap, if the `init_time` is at the default. */
+    if (init_time == 0.0f) {
+      shifted_start_time = previous_end_time;
+    }
+
+    const float gap_delta_time = math::min(math::abs(shifted_start_time - previous_end_time),
+                                           max_gap);
 
     start_times[curve] = previous_end_time + gap_delta_time;
     accumulated_shift_delta_time += math::max(shifted_start_time - start_times[curve], 0.0f);
@@ -511,7 +542,7 @@ static float get_factor_from_draw_speed(const bke::CurvesGeometry &curves,
   /* Calculates the maximum time of this frame, which is the time between the beginning of the
    * first stroke and the end of the last stroke. `start_times.last()` gives the starting time of
    * the last stroke related to frame beginning, and `delta_time.last()` gives how long that stroke
-   * lasted.  */
+   * lasted. */
   const float max_time = start_times.last() + delta_times.last();
 
   /* If the time needed for building the frame is shorter than frame length, this gives the
@@ -546,8 +577,8 @@ static float get_build_factor(const GreasePencilBuildTimeMode time_mode,
                               const float max_gap,
                               const float fade)
 {
-  const float use_time = blender::math::round(
-      float(current_frame) / float(math::min(frame_duration, length)) * float(length));
+  const float use_time = math::round(float(current_frame) /
+                                     float(math::min(frame_duration, length)) * float(length));
   const float build_factor_frames = math::clamp(
                                         float(use_time - start_frame) / length, 0.0f, 1.0f) *
                                     (1.0f + fade);
@@ -557,11 +588,6 @@ static float get_build_factor(const GreasePencilBuildTimeMode time_mode,
     case MOD_GREASE_PENCIL_BUILD_TIMEMODE_PERCENTAGE:
       return percentage * (1.0f + fade);
     case MOD_GREASE_PENCIL_BUILD_TIMEMODE_DRAWSPEED:
-      /* The "drawing speed" is written as an attribute called 'delta_time' (for each point). If
-       * this attribute doesn't exist, we fallback to the "frames" mode. */
-      if (!curves.attributes().contains("delta_time")) {
-        return build_factor_frames;
-      }
       return get_factor_from_draw_speed(curves,
                                         float(current_frame) / scene_fps,
                                         speed_fac,
@@ -592,7 +618,7 @@ static void build_drawing(const GreasePencilBuildModifierData &mmd,
   IndexMask selection = modifier::greasepencil::get_filtered_stroke_mask(
       &ob, curves, mmd.influence, memory);
 
-  /* Remove a count of #prev_strokes.  */
+  /* Remove a count of #prev_strokes. */
   if (mmd.mode == MOD_GREASE_PENCIL_BUILD_MODE_ADDITIVE && previous_drawing != nullptr) {
     const bke::CurvesGeometry &prev_curves = previous_drawing->strokes();
     const int prev_strokes = prev_curves.curves_num();
@@ -632,9 +658,12 @@ static void build_drawing(const GreasePencilBuildModifierData &mmd,
     std::swap(factor, factor_start);
   }
 
-  const float use_time_alignment = mmd.transition != MOD_GREASE_PENCIL_BUILD_TRANSITION_GROW ?
-                                       !mmd.time_alignment :
-                                       mmd.time_alignment;
+  const GreasePencilBuildTimeAlignment use_time_alignment =
+      mmd.transition != MOD_GREASE_PENCIL_BUILD_TRANSITION_GROW ?
+          ((mmd.time_alignment == MOD_GREASE_PENCIL_BUILD_TIMEALIGN_START) ?
+               MOD_GREASE_PENCIL_BUILD_TIMEALIGN_END :
+               MOD_GREASE_PENCIL_BUILD_TIMEALIGN_START) :
+          mmd.time_alignment;
   switch (mmd.mode) {
     default:
     case MOD_GREASE_PENCIL_BUILD_MODE_SEQUENTIAL:
@@ -678,7 +707,7 @@ static void build_drawing(const GreasePencilBuildModifierData &mmd,
 
 static void modify_geometry_set(ModifierData *md,
                                 const ModifierEvalContext *ctx,
-                                blender::bke::GeometrySet *geometry_set)
+                                bke::GeometrySet *geometry_set)
 {
   const auto *mmd = reinterpret_cast<GreasePencilBuildModifierData *>(md);
 
@@ -740,7 +769,7 @@ static void modify_geometry_set(ModifierData *md,
 
 static void panel_draw(const bContext *C, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
@@ -748,12 +777,12 @@ static void panel_draw(const bContext *C, Panel *panel)
   const GreasePencilBuildMode mode = GreasePencilBuildMode(RNA_enum_get(ptr, "mode"));
   GreasePencilBuildTimeMode time_mode = GreasePencilBuildTimeMode(RNA_enum_get(ptr, "time_mode"));
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
   /* First: Build mode and build settings. */
-  uiItemR(layout, ptr, "mode", UI_ITEM_NONE, nullptr, ICON_NONE);
+  layout.prop(ptr, "mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   if (mode == MOD_GREASE_PENCIL_BUILD_MODE_SEQUENTIAL) {
-    uiItemR(layout, ptr, "transition", UI_ITEM_NONE, nullptr, ICON_NONE);
+    layout.prop(ptr, "transition", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
   if (mode == MOD_GREASE_PENCIL_BUILD_MODE_CONCURRENT) {
     /* Concurrent mode doesn't support MOD_GREASE_PENCIL_BUILD_TIMEMODE_DRAWSPEED, so unset it. */
@@ -761,89 +790,80 @@ static void panel_draw(const bContext *C, Panel *panel)
       RNA_enum_set(ptr, "time_mode", MOD_GREASE_PENCIL_BUILD_TIMEMODE_FRAMES);
       time_mode = MOD_GREASE_PENCIL_BUILD_TIMEMODE_FRAMES;
     }
-    uiItemR(layout, ptr, "transition", UI_ITEM_NONE, nullptr, ICON_NONE);
+    layout.prop(ptr, "transition", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
-  uiItemS(layout);
+  layout.separator();
 
   /* Second: Time mode and time settings. */
 
-  uiItemR(layout, ptr, "time_mode", UI_ITEM_NONE, nullptr, ICON_NONE);
+  layout.prop(ptr, "time_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   if (mode == MOD_GREASE_PENCIL_BUILD_MODE_CONCURRENT) {
-    uiItemR(layout, ptr, "concurrent_time_alignment", UI_ITEM_NONE, nullptr, ICON_NONE);
+    layout.prop(ptr, "concurrent_time_alignment", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
   switch (time_mode) {
     case MOD_GREASE_PENCIL_BUILD_TIMEMODE_DRAWSPEED:
-      uiItemR(layout, ptr, "speed_factor", UI_ITEM_NONE, nullptr, ICON_NONE);
-      uiItemR(layout, ptr, "speed_maxgap", UI_ITEM_NONE, nullptr, ICON_NONE);
+      layout.prop(ptr, "speed_factor", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      layout.prop(ptr, "speed_maxgap", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       break;
     case MOD_GREASE_PENCIL_BUILD_TIMEMODE_FRAMES:
-      uiItemR(layout, ptr, "length", UI_ITEM_NONE, IFACE_("Frames"), ICON_NONE);
+      layout.prop(ptr, "length", UI_ITEM_NONE, IFACE_("Frames"), ICON_NONE);
       if (mode != MOD_GREASE_PENCIL_BUILD_MODE_ADDITIVE) {
-        uiItemR(layout, ptr, "start_delay", UI_ITEM_NONE, nullptr, ICON_NONE);
+        layout.prop(ptr, "start_delay", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       }
       break;
     case MOD_GREASE_PENCIL_BUILD_TIMEMODE_PERCENTAGE:
-      uiItemR(layout, ptr, "percentage_factor", UI_ITEM_NONE, nullptr, ICON_NONE);
+      layout.prop(ptr, "percentage_factor", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       break;
     default:
       break;
   }
-  uiItemS(layout);
-  uiItemR(layout, ptr, "object", UI_ITEM_NONE, nullptr, ICON_NONE);
-
-  if (uiLayout *panel = uiLayoutPanelProp(
-          C, layout, ptr, "open_frame_range_panel", IFACE_("Effective Range")))
-  {
-    uiLayoutSetPropSep(panel, true);
-    uiItemR(
-        panel, ptr, "use_restrict_frame_range", UI_ITEM_NONE, IFACE_("Custom Range"), ICON_NONE);
-
+  layout.separator();
+  layout.prop(ptr, "object", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  ui::PanelLayout restrict_frame_range_layout = layout.panel_prop_with_bool_header(
+      C,
+      ptr,
+      "open_frame_range_panel",
+      ptr,
+      "use_restrict_frame_range",
+      IFACE_("Effective Range"));
+  if (ui::Layout *panel = restrict_frame_range_layout.body) {
     const bool active = RNA_boolean_get(ptr, "use_restrict_frame_range");
-    uiLayout *col = uiLayoutColumn(panel, false);
-    uiLayoutSetActive(col, active);
-    uiItemR(col, ptr, "frame_start", UI_ITEM_NONE, IFACE_("Start"), ICON_NONE);
-    uiItemR(col, ptr, "frame_end", UI_ITEM_NONE, IFACE_("End"), ICON_NONE);
+    ui::Layout &col = panel->column(false);
+    col.active_set(active);
+    col.prop(ptr, "frame_start", UI_ITEM_NONE, IFACE_("Start"), ICON_NONE);
+    col.prop(ptr, "frame_end", UI_ITEM_NONE, IFACE_("End"), ICON_NONE);
   }
-
-  if (uiLayout *panel = uiLayoutPanelProp(C, layout, ptr, "open_fading_panel", IFACE_("Fading"))) {
-    uiLayoutSetPropSep(panel, true);
-    uiItemR(panel, ptr, "use_fading", UI_ITEM_NONE, IFACE_("Fade"), ICON_NONE);
-
+  ui::PanelLayout fading_layout = layout.panel_prop_with_bool_header(
+      C, ptr, "open_fading_panel", ptr, "use_fading", IFACE_("Fading"));
+  if (ui::Layout *panel = fading_layout.body) {
     const bool active = RNA_boolean_get(ptr, "use_fading");
-    uiLayout *col = uiLayoutColumn(panel, false);
-    uiLayoutSetActive(col, active);
+    ui::Layout &col = panel->column(false);
+    col.active_set(active);
 
-    uiItemR(col, ptr, "fade_factor", UI_ITEM_NONE, IFACE_("Factor"), ICON_NONE);
+    col.prop(ptr, "fade_factor", UI_ITEM_NONE, IFACE_("Factor"), ICON_NONE);
 
-    uiLayout *subcol = uiLayoutColumn(col, true);
-    uiItemR(subcol, ptr, "fade_thickness_strength", UI_ITEM_NONE, IFACE_("Thickness"), ICON_NONE);
-    uiItemR(subcol, ptr, "fade_opacity_strength", UI_ITEM_NONE, IFACE_("Opacity"), ICON_NONE);
+    ui::Layout &subcol = col.column(true);
+    subcol.prop(ptr, "fade_thickness_strength", UI_ITEM_NONE, IFACE_("Thickness"), ICON_NONE);
+    subcol.prop(ptr, "fade_opacity_strength", UI_ITEM_NONE, IFACE_("Opacity"), ICON_NONE);
 
-    uiItemPointerR(col,
-                   ptr,
-                   "target_vertex_group",
-                   &ob_ptr,
-                   "vertex_groups",
-                   IFACE_("Weight Output"),
-                   ICON_NONE);
+    col.prop_search(
+        ptr, "target_vertex_group", &ob_ptr, "vertex_groups", IFACE_("Weight Output"), ICON_NONE);
   }
 
-  if (uiLayout *influence_panel = uiLayoutPanelProp(
-          C, layout, ptr, "open_influence_panel", IFACE_("Influence")))
+  if (ui::Layout *influence_panel = layout.panel_prop(
+          C, ptr, "open_influence_panel", IFACE_("Influence")))
   {
-    modifier::greasepencil::draw_layer_filter_settings(C, influence_panel, ptr);
-    modifier::greasepencil::draw_material_filter_settings(C, influence_panel, ptr);
+    modifier::greasepencil::draw_layer_filter_settings(C, *influence_panel, ptr);
+    modifier::greasepencil::draw_material_filter_settings(C, *influence_panel, ptr);
   }
 
-  modifier_panel_end(layout, ptr);
+  modifier_error_message_draw(layout, ptr);
 }
 
 static void panel_register(ARegionType *region_type)
 {
   modifier_panel_register(region_type, eModifierType_GreasePencilBuild, panel_draw);
 }
-
-}  // namespace blender
 
 ModifierTypeInfo modifierType_GreasePencilBuild = {
     /*idname*/ "GreasePencilBuildModifier",
@@ -857,26 +877,28 @@ ModifierTypeInfo modifierType_GreasePencilBuild = {
         eModifierTypeFlag_SupportsEditmode,
     /*icon*/ ICON_MOD_LENGTH,
 
-    /*copy_data*/ blender::copy_data,
+    /*copy_data*/ copy_data,
 
     /*deform_verts*/ nullptr,
     /*deform_matrices*/ nullptr,
     /*deform_verts_EM*/ nullptr,
     /*deform_matrices_EM*/ nullptr,
     /*modify_mesh*/ nullptr,
-    /*modify_geometry_set*/ blender::modify_geometry_set,
+    /*modify_geometry_set*/ modify_geometry_set,
 
-    /*init_data*/ blender::init_data,
+    /*init_data*/ init_data,
     /*required_data_mask*/ nullptr,
-    /*free_data*/ blender::free_data,
+    /*free_data*/ free_data,
     /*is_disabled*/ nullptr,
-    /*update_depsgraph*/ blender::update_depsgraph,
+    /*update_depsgraph*/ update_depsgraph,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ blender::foreach_ID_link,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
-    /*panel_register*/ blender::panel_register,
-    /*blend_write*/ blender::blend_write,
-    /*blend_read*/ blender::blend_read,
+    /*panel_register*/ panel_register,
+    /*blend_write*/ blend_write,
+    /*blend_read*/ blend_read,
 };
+
+}  // namespace blender

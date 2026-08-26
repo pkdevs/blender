@@ -5,36 +5,35 @@
 #include "testing/testing.h"
 #include "tests/blendfile_loading_base_test.h"
 
-#include <pxr/base/plug/registry.h>
 #include <pxr/base/tf/stringUtils.h>
 #include <pxr/base/vt/types.h>
 #include <pxr/base/vt/value.h>
 #include <pxr/usd/sdf/types.h>
+#include <pxr/usd/usd/common.h>
 #include <pxr/usd/usd/prim.h>
 #include <pxr/usd/usd/stage.h>
 #include <pxr/usd/usdGeom/mesh.h>
-#include <pxr/usd/usdGeom/subset.h>
-#include <pxr/usd/usdGeom/tokens.h>
 
 #include "DNA_image_types.h"
 #include "DNA_material_types.h"
+#include "DNA_mesh_types.h"
 #include "DNA_node_types.h"
 
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
-#include "BKE_mesh.hh"
-#include "BKE_node.hh"
-#include "BLI_fileops.h"
+#include "BKE_mesh_types.hh"
+
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_path_utils.hh"
+
 #include "BLO_readfile.hh"
 
 #include "BKE_node_runtime.hh"
 
 #include "DEG_depsgraph.hh"
-
-#include "WM_api.hh"
 
 #include "usd.hh"
 #include "usd_utils.hh"
@@ -47,7 +46,7 @@ const StringRefNull materials_filename = "usd/usd_materials_export.blend";
 const StringRefNull output_filename = "output.usd";
 
 static const bNode *find_node_for_type_in_graph(const bNodeTree *nodetree,
-                                                const blender::StringRefNull type_idname);
+                                                const UString type_idname);
 
 class UsdExportTest : public BlendfileLoadingBaseTest {
  protected:
@@ -69,12 +68,12 @@ class UsdExportTest : public BlendfileLoadingBaseTest {
     return true;
   }
 
-  virtual void SetUp() override
+  void SetUp() override
   {
     BlendfileLoadingBaseTest::SetUp();
   }
 
-  virtual void TearDown() override
+  void TearDown() override
   {
     BlendfileLoadingBaseTest::TearDown();
     CTX_free(context);
@@ -85,7 +84,7 @@ class UsdExportTest : public BlendfileLoadingBaseTest {
     }
   }
 
-  const pxr::UsdPrim get_first_child_mesh(const pxr::UsdPrim prim)
+  pxr::UsdPrim get_first_child_mesh(const pxr::UsdPrim prim)
   {
     for (auto child : prim.GetChildren()) {
       if (child.IsA<pxr::UsdGeomMesh>()) {
@@ -99,14 +98,13 @@ class UsdExportTest : public BlendfileLoadingBaseTest {
    * Loop the sockets on the Blender `bNode`, and fail if any of their values do
    * not match the equivalent Attribute values on the `UsdPrim`.
    */
-  const void compare_blender_node_to_usd_prim(const bNode *bsdf_node,
-                                              const pxr::UsdPrim &bsdf_prim)
+  void compare_blender_node_to_usd_prim(const bNode *bsdf_node, const pxr::UsdPrim &bsdf_prim)
   {
     ASSERT_NE(bsdf_node, nullptr);
     ASSERT_TRUE(bool(bsdf_prim));
 
-    for (auto socket : bsdf_node->input_sockets()) {
-      const pxr::TfToken attribute_token = blender::io::usd::token_for_input(socket->name);
+    for (const auto *socket : bsdf_node->input_sockets()) {
+      const pxr::TfToken attribute_token = io::usd::token_for_input(socket->name);
       if (attribute_token.IsEmpty()) {
         /* This socket is not translated between Blender and USD. */
         continue;
@@ -152,8 +150,8 @@ class UsdExportTest : public BlendfileLoadingBaseTest {
     }
   }
 
-  const void compare_blender_image_to_usd_image_shader(const bNode *image_node,
-                                                       const pxr::UsdPrim &image_prim)
+  void compare_blender_image_to_usd_image_shader(const bNode *image_node,
+                                                 const pxr::UsdPrim &image_prim)
   {
     const Image *image = reinterpret_cast<Image *>(image_node->id);
 
@@ -178,14 +176,14 @@ class UsdExportTest : public BlendfileLoadingBaseTest {
    * Determine if a Blender Mesh matches a UsdGeomMesh prim by checking counts
    * on vertices, faces, face indices, and normals.
    */
-  const void compare_blender_mesh_to_usd_prim(const Mesh *mesh, const pxr::UsdGeomMesh &mesh_prim)
+  void compare_blender_mesh_to_usd_prim(const Mesh *mesh, const pxr::UsdGeomMesh &mesh_prim)
   {
     pxr::VtIntArray face_indices;
     pxr::VtIntArray face_counts;
     pxr::VtVec3fArray positions;
     pxr::VtVec3fArray normals;
 
-    /* Our export doesn't use 'primvars:normals' so we're not
+    /* Our export doesn't use `primvars:normals` so we're not
      * looking for that to be written here. */
     mesh_prim.GetFaceVertexIndicesAttr().Get(&face_indices, 0.0);
     mesh_prim.GetFaceVertexCountsAttr().Get(&face_counts, 0.0);
@@ -195,7 +193,23 @@ class UsdExportTest : public BlendfileLoadingBaseTest {
     EXPECT_EQ(mesh->verts_num, positions.size());
     EXPECT_EQ(mesh->faces_num, face_counts.size());
     EXPECT_EQ(mesh->corners_num, face_indices.size());
-    EXPECT_EQ(mesh->corners_num, normals.size());
+    switch (mesh->normals_domain()) {
+      case bke::MeshNormalDomain::Point: {
+        EXPECT_EQ(mesh_prim.GetNormalsInterpolation(), pxr::UsdGeomTokens->vertex);
+        EXPECT_EQ(mesh->verts_num, normals.size());
+        break;
+      }
+      case bke::MeshNormalDomain::Face: {
+        EXPECT_EQ(mesh_prim.GetNormalsInterpolation(), pxr::UsdGeomTokens->uniform);
+        EXPECT_EQ(mesh->faces_num, normals.size());
+        break;
+      }
+      case bke::MeshNormalDomain::Corner: {
+        EXPECT_EQ(mesh_prim.GetNormalsInterpolation(), pxr::UsdGeomTokens->faceVarying);
+        EXPECT_EQ(mesh->corners_num, normals.size());
+        break;
+      }
+    }
   }
 };
 
@@ -207,13 +221,12 @@ TEST_F(UsdExportTest, usd_export_rain_mesh)
   }
 
   /* File sanity check. */
-  EXPECT_EQ(BLI_listbase_count(&bfile->main->objects), 3);
+  EXPECT_EQ(bfile->main->objects.count(), 3);
 
   USDExportParams params;
   params.export_materials = false;
   params.export_normals = true;
   params.export_uvmaps = false;
-  params.visible_objects_only = true;
 
   bool result = USD_export(context, output_filename.c_str(), &params, false, nullptr);
   ASSERT_TRUE(result) << "Writing to " << output_filename << " failed!";
@@ -224,9 +237,9 @@ TEST_F(UsdExportTest, usd_export_rain_mesh)
   /*
    * Run the mesh comparison for all Meshes in the original scene.
    */
-  LISTBASE_FOREACH (Object *, object, &bfile->main->objects) {
-    const Mesh *mesh = static_cast<Mesh *>(object->data);
-    const StringRefNull object_name(object->id.name + 2);
+  for (Object &object : bfile->main->objects) {
+    const Mesh *mesh = id_cast<Mesh *>(object.data);
+    const StringRefNull object_name(object.id.name + 2);
 
     const pxr::SdfPath sdf_path("/" + pxr::TfMakeValidIdentifier(object_name.c_str()));
     pxr::UsdPrim prim = stage->GetPrimAtPath(sdf_path);
@@ -240,7 +253,7 @@ TEST_F(UsdExportTest, usd_export_rain_mesh)
 }
 
 static const bNode *find_node_for_type_in_graph(const bNodeTree *nodetree,
-                                                const blender::StringRefNull type_idname)
+                                                const UString type_idname)
 {
   auto found_nodes = nodetree->nodes_by_type(type_idname);
   if (found_nodes.size() == 1) {
@@ -264,9 +277,9 @@ TEST_F(UsdExportTest, usd_export_material)
   }
 
   /* File sanity checks. */
-  EXPECT_EQ(BLI_listbase_count(&bfile->main->objects), 6);
+  EXPECT_EQ(bfile->main->objects.count(), 6);
   /* There is 1 additional material because of the "Dots Stroke". */
-  EXPECT_EQ(BLI_listbase_count(&bfile->main->materials), 7);
+  EXPECT_EQ(bfile->main->materials.count(), 7);
 
   Material *material = reinterpret_cast<Material *>(
       BKE_libblock_find_name(bfile->main, ID_MA, "Material"));
@@ -291,7 +304,7 @@ TEST_F(UsdExportTest, usd_export_material)
 
   material->nodetree->ensure_topology_cache();
   const bNode *bsdf_node = find_node_for_type_in_graph(material->nodetree,
-                                                       "ShaderNodeBsdfPrincipled");
+                                                       "ShaderNodeBsdfPrincipled"_ustr);
 
   const std::string prim_name = pxr::TfMakeValidIdentifier(bsdf_node->name);
   const pxr::UsdPrim bsdf_prim = stage->GetPrimAtPath(
@@ -299,7 +312,8 @@ TEST_F(UsdExportTest, usd_export_material)
 
   compare_blender_node_to_usd_prim(bsdf_node, bsdf_prim);
 
-  const bNode *image_node = find_node_for_type_in_graph(material->nodetree, "ShaderNodeTexImage");
+  const bNode *image_node = find_node_for_type_in_graph(material->nodetree,
+                                                        "ShaderNodeTexImage"_ustr);
   ASSERT_NE(image_node, nullptr);
   ASSERT_NE(image_node->storage, nullptr);
 
@@ -316,29 +330,74 @@ TEST_F(UsdExportTest, usd_export_material)
 
 TEST(utilities, make_safe_name)
 {
+  /* ASCII variations. */
   ASSERT_EQ(make_safe_name("", false), std::string("_"));
-  ASSERT_EQ(make_safe_name("1", false), std::string("_"));
-  ASSERT_EQ(make_safe_name("1Test", false), std::string("_Test"));
+  ASSERT_EQ(make_safe_name("|", false), std::string("_"));
+  ASSERT_EQ(make_safe_name("1", false), std::string("_1"));
+  ASSERT_EQ(make_safe_name("1Test", false), std::string("_1Test"));
+
+  ASSERT_EQ(make_safe_name(":", false), std::string("_"));
+  ASSERT_EQ(make_safe_name("test:", false), std::string("test_"));
+  ASSERT_EQ(make_safe_name(":test", false), std::string("_test"));
+  ASSERT_EQ(make_safe_name("test:test", false), std::string("test_test"));
 
   ASSERT_EQ(make_safe_name("Test", false), std::string("Test"));
-  ASSERT_EQ(make_safe_name("Test|$bézier @ world", false), std::string("Test__b__zier___world"));
-  ASSERT_EQ(make_safe_name("Test|ハローワールド", false),
-            std::string("Test______________________"));
-  ASSERT_EQ(make_safe_name("Test|Γεια σου κόσμε", false),
-            std::string("Test___________________________"));
-  ASSERT_EQ(make_safe_name("Test|∧hello ○ wórld", false), std::string("Test____hello_____w__rld"));
+  ASSERT_EQ(make_safe_name("Test|$bézier @ world", false), std::string("Test__b_zier___world"));
+  ASSERT_EQ(make_safe_name("Test|ハローワールド", false), std::string("Test________"));
+  ASSERT_EQ(make_safe_name("Test|Γεια σου κόσμε", false), std::string("Test_______________"));
+  ASSERT_EQ(make_safe_name("Test|∧hello ○ wórld", false), std::string("Test__hello___w_rld"));
 
-#if PXR_VERSION >= 2403
+  /* Unicode variations. */
   ASSERT_EQ(make_safe_name("", true), std::string("_"));
-  ASSERT_EQ(make_safe_name("1", true), std::string("_"));
-  ASSERT_EQ(make_safe_name("1Test", true), std::string("_Test"));
+  ASSERT_EQ(make_safe_name("|", true), std::string("_"));
+  ASSERT_EQ(make_safe_name("1", true), std::string("_1"));
+  ASSERT_EQ(make_safe_name("1Test", true), std::string("_1Test"));
+
+  ASSERT_EQ(make_safe_name(":", true), std::string("_"));
+  ASSERT_EQ(make_safe_name("test:", true), std::string("test_"));
+  ASSERT_EQ(make_safe_name(":test", true), std::string("_test"));
+  ASSERT_EQ(make_safe_name("test:test", true), std::string("test_test"));
 
   ASSERT_EQ(make_safe_name("Test", true), std::string("Test"));
   ASSERT_EQ(make_safe_name("Test|$bézier @ world", true), std::string("Test__bézier___world"));
   ASSERT_EQ(make_safe_name("Test|ハローワールド", true), std::string("Test_ハローワールド"));
   ASSERT_EQ(make_safe_name("Test|Γεια σου κόσμε", true), std::string("Test_Γεια_σου_κόσμε"));
   ASSERT_EQ(make_safe_name("Test|∧hello ○ wórld", true), std::string("Test__hello___wórld"));
-#endif
+}
+
+TEST(utilities, make_safe_primvar_name)
+{
+  /* ASCII variations. */
+  ASSERT_EQ(make_safe_primvar_name("", false), std::string("_"));
+  ASSERT_EQ(make_safe_primvar_name("|", false), std::string("_"));
+  ASSERT_EQ(make_safe_primvar_name("1", false), std::string("_1"));
+  ASSERT_EQ(make_safe_primvar_name("1Test", false), std::string("_1Test"));
+
+  ASSERT_EQ(make_safe_primvar_name(":", false), std::string("_:_"));
+  ASSERT_EQ(make_safe_primvar_name("test:", false), std::string("test:_"));
+  ASSERT_EQ(make_safe_primvar_name(":test", false), std::string("_:test"));
+  ASSERT_EQ(make_safe_primvar_name("test:test", false), std::string("test:test"));
+  ASSERT_EQ(make_safe_primvar_name("1test:2test", false), std::string("_1test:_2test"));
+
+  ASSERT_EQ(make_safe_primvar_name("tést", false), std::string("t_st"));
+  ASSERT_EQ(make_safe_primvar_name("tést:tést", false), std::string("t_st:t_st"));
+  ASSERT_EQ(make_safe_primvar_name("tést:tést:tést", false), std::string("t_st:t_st:t_st"));
+
+  /* Unicode variations. */
+  ASSERT_EQ(make_safe_primvar_name("", true), std::string("_"));
+  ASSERT_EQ(make_safe_primvar_name("|", true), std::string("_"));
+  ASSERT_EQ(make_safe_primvar_name("1", true), std::string("_1"));
+  ASSERT_EQ(make_safe_primvar_name("1Test", true), std::string("_1Test"));
+
+  ASSERT_EQ(make_safe_primvar_name(":", true), std::string("_:_"));
+  ASSERT_EQ(make_safe_primvar_name("test:", true), std::string("test:_"));
+  ASSERT_EQ(make_safe_primvar_name(":test", true), std::string("_:test"));
+  ASSERT_EQ(make_safe_primvar_name("test:test", true), std::string("test:test"));
+  ASSERT_EQ(make_safe_primvar_name("1test:2test", true), std::string("_1test:_2test"));
+
+  ASSERT_EQ(make_safe_primvar_name("tést", true), std::string("tést"));
+  ASSERT_EQ(make_safe_primvar_name("tést:tést", true), std::string("tést:tést"));
+  ASSERT_EQ(make_safe_primvar_name("tést:tést:tést", true), std::string("tést:tést:tést"));
 }
 
 }  // namespace blender::io::usd

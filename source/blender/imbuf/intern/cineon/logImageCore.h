@@ -15,19 +15,17 @@
 
 #pragma once
 
-#include <stdio.h>
+#include <cstdio>
 
-#include "BLI_sys_types.h"
-#include "BLI_utildefines.h"
+#include "BLI_compiler_compat.hh"
+#include "BLI_sys_types.hh"
+
+namespace blender {
 
 #ifdef _WIN32
 #  define PATHSEP_CHAR '\\'
 #else
 #  define PATHSEP_CHAR '/'
-#endif
-
-#ifdef __cplusplus
-extern "C" {
 #endif
 
 /*
@@ -41,7 +39,7 @@ enum format {
   format_Cineon,
 };
 
-typedef struct LogImageElement {
+struct LogImageElement {
   int depth;
   int bitsPerSample;
   int dataOffset;
@@ -53,9 +51,9 @@ typedef struct LogImageElement {
   float refLowQuantity;
   float refHighQuantity;
   float maxValue; /* = 2^bitsPerSample - 1 (used internally, doesn't come from the file header) */
-} LogImageElement;
+};
 
-typedef struct LogImageFile {
+struct LogImageFile {
   /* specified in header */
   int width;
   int height;
@@ -79,7 +77,7 @@ typedef struct LogImageFile {
 
   /* DPX or Cineon ? */
   int srcFormat;
-} LogImageFile;
+};
 
 /* The SMPTE defines this code:
  *  0 - User-defined
@@ -183,8 +181,8 @@ LogImageFile *logImageCreate(const char *filepath,
                              int width,
                              int height,
                              int bitsPerSample,
-                             int isLogarithmic,
                              int hasAlpha,
+                             int isLogarithmic,
                              int referenceWhite,
                              int referenceBlack,
                              float gamma,
@@ -207,9 +205,7 @@ BLI_INLINE unsigned short swap_ushort(unsigned short x, int swap)
   if (swap != 0) {
     return (x >> 8) | (x << 8);
   }
-  else {
-    return x;
-  }
+  return x;
 }
 
 BLI_INLINE unsigned int swap_uint(unsigned int x, int swap)
@@ -217,9 +213,7 @@ BLI_INLINE unsigned int swap_uint(unsigned int x, int swap)
   if (swap != 0) {
     return (x >> 24) | ((x << 8) & 0x00FF0000) | ((x >> 8) & 0x0000FF00) | (x << 24);
   }
-  else {
-    return x;
-  }
+  return x;
 }
 
 BLI_INLINE float swap_float(float x, int swap)
@@ -237,9 +231,7 @@ BLI_INLINE float swap_float(float x, int swap)
     dat2.b[3] = dat1.b[0];
     return dat2.f;
   }
-  else {
-    return x;
-  }
+  return x;
 }
 
 /* Other */
@@ -249,12 +241,10 @@ BLI_INLINE unsigned int clamp_uint(unsigned int x, unsigned int low, unsigned in
   if (x > high) {
     return high;
   }
-  else if (x < low) {
+  if (x < low) {
     return low;
   }
-  else {
-    return x;
-  }
+  return x;
 }
 
 BLI_INLINE float clamp_float(float x, float low, float high)
@@ -262,12 +252,10 @@ BLI_INLINE float clamp_float(float x, float low, float high)
   if (x > high) {
     return high;
   }
-  else if (x < low) {
+  if (x < low) {
     return low;
   }
-  else {
-    return x;
-  }
+  return x;
 }
 
 BLI_INLINE unsigned int float_uint(float value, unsigned int max)
@@ -275,14 +263,10 @@ BLI_INLINE unsigned int float_uint(float value, unsigned int max)
   if (value < 0.0f) {
     return 0;
   }
-  else if (value > (1.0f - 0.5f / (float)max)) {
+  if (value > (1.0f - 0.5f / float(max))) {
     return max;
   }
-  else {
-    return (unsigned int)(((float)max * value) + 0.5f);
-  }
+  return static_cast<unsigned int>((float(max) * value) + 0.5f);
 }
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

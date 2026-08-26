@@ -16,16 +16,16 @@ namespace blender::render::hydra {
 
 class DrawTexture {
  private:
-  GPUTexture *texture_ = nullptr;
+  gpu::Texture *texture_ = nullptr;
   gpu::Batch *batch_;
 
  public:
   DrawTexture();
   ~DrawTexture();
 
-  void write_data(int width, int height, const void *data);
-  void draw(GPUShader *shader, const pxr::GfVec4d &viewport, GPUTexture *tex = nullptr);
-  GPUTexture *texture() const;
+  void create_from_buffer(pxr::HdRenderBuffer *buffer);
+  void draw(gpu::Shader *shader, const pxr::GfVec4d &viewport, gpu::Texture *tex = nullptr);
+  gpu::Texture *texture() const;
 
  private:
 };
@@ -42,7 +42,7 @@ class ViewportEngine : public Engine {
   void render(bContext *context);
 
  protected:
-  void notify_status(float progress, const std::string &title, const std::string &info) override;
+  void notify_status(float progress, const std::string &info, const std::string &status) override;
 };
 
 }  // namespace blender::render::hydra

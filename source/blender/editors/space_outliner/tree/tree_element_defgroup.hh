@@ -10,17 +10,24 @@
 
 #include "tree_element.hh"
 
+namespace blender {
+
 struct Object;
 struct bDeformGroup;
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
 class TreeElementDeformGroupBase final : public AbstractTreeElement {
   Object &object_;
 
  public:
   TreeElementDeformGroupBase(TreeElement &legacy_te, Object &object);
-  void expand(SpaceOutliner &) const override;
+  void expand(SpaceOutliner & /*soops*/) const override;
+
+  std::optional<BIFIconID> get_icon() const override
+  {
+    return ICON_GROUP_VERTEX;
+  }
 };
 
 class TreeElementDeformGroup final : public AbstractTreeElement {
@@ -30,6 +37,12 @@ class TreeElementDeformGroup final : public AbstractTreeElement {
 
  public:
   TreeElementDeformGroup(TreeElement &legacy_te, Object &object, bDeformGroup &defgroup);
+
+  std::optional<BIFIconID> get_icon() const override
+  {
+    return ICON_GROUP_VERTEX;
+  }
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

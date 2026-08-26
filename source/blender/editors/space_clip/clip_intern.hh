@@ -8,12 +8,13 @@
 
 #pragma once
 
-#include "BLI_utildefines.h"
-
 #include "DNA_space_types.h"
 #include "DNA_tracking_types.h"
 
+namespace blender {
+
 struct ARegion;
+struct ARegionType;
 struct MovieClip;
 struct MovieTrackingMarker;
 struct MovieTrackingTrack;
@@ -180,8 +181,6 @@ bool clip_view_calculate_view_selection(
  */
 bool clip_view_has_locked_selection(const bContext *C);
 
-void clip_draw_sfra_efra(View2D *v2d, Scene *scene);
-
 /* tracking_ops.cc */
 
 /* Find track which can be slid in a proximity of the given event.
@@ -285,3 +284,5 @@ BLI_INLINE bool ED_space_clip_marker_is_visible(const SpaceClip *space_clip,
 }
 
 /** \} */
+
+}  // namespace blender

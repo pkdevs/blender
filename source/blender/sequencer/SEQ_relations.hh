@@ -8,61 +8,129 @@
  * \ingroup sequencer
  */
 
-struct ListBase;
+#include <cstddef>
+
+#include "DNA_listBase.h"
+
+#include "BLI_enum_flags.hh"
+
+namespace blender {
+
 struct Main;
 struct MovieClip;
 struct ReportList;
+struct bNodeTree;
 struct Scene;
-struct Sequence;
+struct Strip;
+
+namespace seq {
 
 /**
- * Check if one sequence is input to the other.
+ * Check if one strip is input to the other.
  */
-bool SEQ_relation_is_effect_of_strip(const Sequence *effect, const Sequence *input);
+bool relation_is_effect_of_strip(const Strip *effect, const Strip *input);
+bool relations_check_scene_recursion(Scene *scene, ReportList *reports);
 /**
- * Function to free imbuf and anim data on changes.
+ * Check if "strip_main" (indirectly) uses strip "strip".
  */
-void SEQ_relations_sequence_free_anim(Sequence *seq);
-bool SEQ_relations_check_scene_recursion(Scene *scene, ReportList *reports);
+bool relations_render_loop_check(Strip *strip_main, Strip *strip);
+void relations_free_imbuf(Scene *scene, ListBaseT<Strip> *seqbase, bool for_render);
+
 /**
- * Check if "seq_main" (indirectly) uses strip "seq".
+ * Free all cached sequencer data of \a scene, including media presence and all caches.
  */
-bool SEQ_relations_render_loop_check(Sequence *seq_main, Sequence *seq);
-void SEQ_relations_free_imbuf(Scene *scene, ListBase *seqbase, bool for_render);
-void SEQ_relations_invalidate_cache_raw(Scene *scene, Sequence *seq);
-void SEQ_relations_invalidate_cache_preprocessed(Scene *scene, Sequence *seq);
-void SEQ_relations_invalidate_cache_composite(Scene *scene, Sequence *seq);
-void SEQ_relations_invalidate_dependent(Scene *scene, Sequence *seq);
-void SEQ_relations_invalidate_scene_strips(Main *bmain, Scene *scene_target);
-void SEQ_relations_invalidate_movieclip_strips(Main *bmain, MovieClip *clip_target);
-void SEQ_relations_invalidate_cache_in_range(Scene *scene,
-                                             Sequence *seq,
-                                             Sequence *range_mask,
-                                             int invalidate_types);
+void relations_refresh_all(Scene *scene);
+
 /**
- * Release FFmpeg handles of strips that are not currently displayed to minimize memory usage.
+ * Invalidates various caches related to a given strip:
+ * - Final cached frames over the length of the strip,
+ * - Intra-frame caches of the current frame,
+ * - Source/raw caches of the meta strip that contains this strip, if any,
+ * - Media presence cache of the strip,
+ * - Rebuilds speed index map if this is a speed effect strip,
+ * - Tags DEG for strip recalculation,
+ * - Stops prefetching job, if any.
  */
-void SEQ_relations_free_all_anim_ibufs(Scene *scene, int timeline_frame);
+void relations_invalidate_cache(Scene *scene, Strip *strip);
+
 /**
- * A debug and development function which checks whether sequences have unique UIDs.
+ * Does everything #relations_invalidate_cache does, plus invalidates cached raw source
+ * images of the strip.
+ */
+void relations_invalidate_cache_raw(Scene *scene, Strip *strip);
+
+/** Mark the current frame as potentially cached with a temporary animated property value. */
+void relations_tag_temporary_animation_frame(Scene *scene);
+
+/** Invalidate the marked frame after animation evaluation discards the temporary value. */
+void relations_invalidate_temporary_animation_frame(Scene *scene);
+
+void relations_invalidate_scene_strips(const Main *bmain, const Scene *scene_target);
+
+/**
+ * Sync sequencer scene strips that reference a view layer by name.
+ * This updates `strip->scene_view_layer_name` from \a old_name to \a new_name for any matching
+ * strip across all sequencer scenes that use \a scene as input.
+ *
+ * NOTE: If a view layer is deleted, `new_name = nullptr` should be passed to clear the strips'
+ * `scene_view_layer_name` to the default view layer. In this case, the function will also clear
+ * the caches of these matching strips to evict stale frames.
+ */
+void relations_update_view_layer_scene_strips(Main *bmain,
+                                              Scene *scene,
+                                              const char *old_name,
+                                              const char *new_name);
+
+/**
+ * Invalidates the cache for all strips that uses the given compositor node tree.
+ */
+void relations_invalidate_compositor_users(const Main *bmain, const bNodeTree *node_tree);
+
+void relations_invalidate_movieclip_strips(Main *bmain, MovieClip *clip_target);
+/**
+ * A debug and development function which checks whether strips have unique UIDs.
  * Errors will be reported to the console.
  */
-void SEQ_relations_check_uids_unique_and_report(const Scene *scene);
+void relations_check_uids_unique_and_report(const Scene *scene);
 /**
- * Generate new UID for the given sequence.
+ * Generate new UID for the given strip.
  */
-void SEQ_relations_session_uid_generate(Sequence *sequence);
+void relations_session_uid_generate(Strip *strip);
 
-void SEQ_cache_cleanup(Scene *scene);
-void SEQ_cache_iterate(
-    Scene *scene,
-    void *userdata,
-    bool callback_init(void *userdata, size_t item_count),
-    bool callback_iter(void *userdata, Sequence *seq, int timeline_frame, int cache_type));
-/**
- * Return immediate parent meta of sequence.
- */
-Sequence *SEQ_find_metastrip_by_sequence(ListBase *seqbase /* = ed->seqbase */,
-                                         Sequence *meta /* = NULL */,
-                                         Sequence *seq);
-bool SEQ_exists_in_seqbase(const Sequence *seq, const ListBase *seqbase);
+enum class CacheCleanup {
+  FinalImage = (1 << 0),
+  SourceImage = (1 << 1),
+  Thumbnails = (1 << 2),
+  IntraFrame = (1 << 3),
+
+  /* All cache types. */
+  All = FinalImage | SourceImage | Thumbnails | IntraFrame,
+
+  /* Typical "what gets rendered" cache types: final frame
+   * cache, plus various intra-frame cached things. */
+  FinalAndIntra = FinalImage | IntraFrame,
+};
+ENUM_OPERATORS(CacheCleanup);
+
+void cache_cleanup(Scene *scene, CacheCleanup mode);
+
+void cache_settings_changed(Scene *scene);
+bool is_cache_full(const Scene *scene);
+bool evict_caches_if_full(Scene *scene);
+
+void source_image_cache_iterate(Scene *scene,
+                                void *userdata,
+                                void callback_iter(void *userdata,
+                                                   const Strip *strip,
+                                                   int timeline_frame));
+void final_image_cache_iterate(Scene *scene,
+                               void *userdata,
+                               void callback_iter(void *userdata, int timeline_frame));
+
+size_t source_image_cache_calc_memory_size(const Scene *scene);
+size_t final_image_cache_calc_memory_size(const Scene *scene);
+
+bool exists_in_seqbase(const Strip *strip, const ListBaseT<Strip> *seqbase);
+
+}  // namespace seq
+}  // namespace blender

@@ -6,10 +6,10 @@
  * \ingroup spview3d
  */
 
-#include "BLI_blenlib.h"
-#include "BLI_dial_2d.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_dial_2d.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 
@@ -22,6 +22,8 @@
 
 #include "view3d_intern.hh"
 #include "view3d_navigate.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name View Roll Operator
@@ -66,6 +68,14 @@ static void viewroll_apply(ViewOpsData *vod, int x, int y)
   if (angle != 0.0f) {
     view_roll_angle(
         vod->region, vod->rv3d->viewquat, vod->init.quat, vod->init.mousevec, angle, false);
+
+    if (vod->rv3d->persp == RV3D_CAMOB) {
+      const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
+      if (!is_camera_lock) {
+        /* Wrap to prevent poor precision at large values. */
+        vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll - angle);
+      }
+    }
   }
 
   if (vod->use_dyn_ofs) {
@@ -82,12 +92,12 @@ static void viewroll_apply(ViewOpsData *vod, int x, int y)
   ED_region_tag_redraw(vod->region);
 }
 
-static int viewroll_modal(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus viewroll_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   ViewOpsData *vod = static_cast<ViewOpsData *>(op->customdata);
   short event_code = VIEW_PASS;
   bool use_autokey = false;
-  int ret = OPERATOR_RUNNING_MODAL;
+  wmOperatorStatus ret = OPERATOR_RUNNING_MODAL;
 
   /* Execute the events. */
   if (event->type == EVT_MODAL_MAP) {
@@ -99,11 +109,13 @@ static int viewroll_modal(bContext *C, wmOperator *op, const wmEvent *event)
         event_code = VIEW_CANCEL;
         break;
       case VIEWROT_MODAL_SWITCH_MOVE:
-        WM_operator_name_call(C, "VIEW3D_OT_move", WM_OP_INVOKE_DEFAULT, nullptr, event);
+        WM_operator_name_call(
+            C, "VIEW3D_OT_move", wm::OpCallContext::InvokeDefault, nullptr, event);
         event_code = VIEW_CONFIRM;
         break;
       case VIEWROT_MODAL_SWITCH_ROTATE:
-        WM_operator_name_call(C, "VIEW3D_OT_rotate", WM_OP_INVOKE_DEFAULT, nullptr, event);
+        WM_operator_name_call(
+            C, "VIEW3D_OT_rotate", wm::OpCallContext::InvokeDefault, nullptr, event);
         event_code = VIEW_CONFIRM;
         break;
     }
@@ -170,7 +182,7 @@ static const EnumPropertyItem prop_view_roll_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static int viewroll_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus viewroll_exec(bContext *C, wmOperator *op)
 {
   ViewOpsData *vod;
   if (op->customdata) {
@@ -182,12 +194,7 @@ static int viewroll_exec(bContext *C, wmOperator *op)
     vod->rv3d = static_cast<RegionView3D *>(vod->region->regiondata);
   }
 
-  const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
-  if (vod->rv3d->persp == RV3D_CAMOB && !is_camera_lock) {
-    viewops_data_free(C, vod);
-    op->customdata = nullptr;
-    return OPERATOR_CANCELLED;
-  }
+  ED_view3d_smooth_view_force_finish(C, vod->v3d, vod->region);
 
   if (vod->depsgraph == nullptr) {
     vod->depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -209,6 +216,14 @@ static int viewroll_exec(bContext *C, wmOperator *op)
   negate_v3(mousevec);
   view_roll_angle(vod->region, quat_new, vod->rv3d->viewquat, mousevec, angle, true);
 
+  if (vod->rv3d->persp == RV3D_CAMOB) {
+    const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
+    if (!is_camera_lock) {
+      /* Wrap to prevent poor precision at large values. */
+      vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll - angle);
+    }
+  }
+
   V3D_SmoothParams sview_params = {};
   sview_params.quat = quat_new;
   /* Group as successive roll may run by holding a key. */
@@ -226,7 +241,7 @@ static int viewroll_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int viewroll_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus viewroll_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   ViewOpsData *vod;
 
@@ -236,8 +251,26 @@ static int viewroll_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     viewroll_exec(C, op);
   }
   else {
+    /* The equivalent functionality for orbiting the view: #VIEW3D_OT_orbit & #VIEW3D_OT_rotate are
+     * separate operators with different poll functions [which are only permissive for non-locked
+     * views]. This operator however mixes modal-interaction & instant-stepping into the same
+     * operator and its current poll function permissively finds the non-locked region in quad
+     * view. For instant-stepping into the operator via keyboard shortcuts, forwarding to the
+     * non-locked view (when in a locked view) makes sense, but modal-interaction with the locked
+     * view forwarding to a different view doesn't (hence the check). */
+    {
+      ARegion *region = CTX_wm_region(C);
+      if (region->regiontype == RGN_TYPE_WINDOW) {
+        const RegionView3D *rv3d = static_cast<const RegionView3D *>(region->regiondata);
+        if (rv3d->viewlock & RV3D_LOCK_ROTATION) {
+          return OPERATOR_PASS_THROUGH;
+        }
+      }
+    }
+
     /* makes op->customdata */
     vod = viewops_data_create(C, event, &ViewOpsType_roll, false);
+
     const float start_position[2] = {float(BLI_rcti_cent_x(&vod->region->winrct)),
                                      float(BLI_rcti_cent_y(&vod->region->winrct))};
     vod->init.dial = BLI_dial_init(start_position, FLT_EPSILON);
@@ -274,7 +307,7 @@ void VIEW3D_OT_view_roll(wmOperatorType *ot)
   ot->description = "Roll the view";
   ot->idname = ViewOpsType_roll.idname;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = viewroll_invoke;
   ot->exec = viewroll_exec;
   ot->modal = viewroll_modal;
@@ -306,3 +339,5 @@ const ViewOpsType ViewOpsType_roll = {
     /*init_fn*/ nullptr,
     /*apply_fn*/ nullptr,
 };
+
+}  // namespace blender

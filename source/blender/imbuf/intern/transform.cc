@@ -9,20 +9,20 @@
 
 #include <type_traits>
 
-#include "BLI_math_color_blend.h"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_interp.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_math_matrix_types.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 #include "BLI_task.hh"
 
 #include "IMB_imbuf.hh"
 #include "IMB_interp.hh"
 
-using blender::float4;
-using blender::uchar4;
+namespace blender {
 
-namespace blender::imbuf::transform {
+namespace imbuf::transform {
 
 struct TransformContext {
   const ImBuf *src;
@@ -47,7 +47,7 @@ struct TransformContext {
   /* Cropping region in source image pixel space. */
   rctf src_crop;
 
-  void init(const float4x4 &transform_matrix, const bool has_source_crop)
+  void init(const float3x3 &transform_matrix, const bool has_source_crop)
   {
     start_uv = transform_matrix.location().xy();
     add_x = transform_matrix.x_axis().xy();
@@ -56,7 +56,7 @@ struct TransformContext {
   }
 
  private:
-  void init_destination_region(const float4x4 &transform_matrix, const bool has_source_crop)
+  void init_destination_region(const float3x3 &transform_matrix, const bool has_source_crop)
   {
     if (!has_source_crop) {
       dst_region_x_range = IndexRange(dst->x);
@@ -68,14 +68,14 @@ struct TransformContext {
     const int2 margin(2);
     rcti rect;
     BLI_rcti_init_minmax(&rect);
-    float4x4 inverse = math::invert(transform_matrix);
+    float3x3 inverse = math::invert(transform_matrix);
     const int2 src_coords[4] = {int2(src_crop.xmin, src_crop.ymin),
                                 int2(src_crop.xmax, src_crop.ymin),
                                 int2(src_crop.xmax, src_crop.ymax),
                                 int2(src_crop.xmin, src_crop.ymax)};
     for (int i = 0; i < 4; i++) {
       int2 src_co = src_coords[i];
-      float3 dst_co = math::transform_point(inverse, float3(src_co.x, src_co.y, 0.0f));
+      float2 dst_co = math::transform_point(inverse, float2(src_co));
       src_corners[i] = float2(dst_co.x, dst_co.y);
 
       BLI_rcti_do_minmax_v(&rect, int2(dst_co) + margin);
@@ -98,20 +98,20 @@ static bool should_discard(const TransformContext &ctx, const float2 &uv)
          uv.y >= ctx.src_crop.ymax;
 }
 
-template<typename T> static T *init_pixel_pointer(const ImBuf *image, int x, int y);
-template<> uchar *init_pixel_pointer(const ImBuf *image, int x, int y)
+template<typename T> static T *init_pixel_pointer(ImBuf *image, int x, int y);
+template<> uchar *init_pixel_pointer(ImBuf *image, int x, int y)
 {
-  return image->byte_buffer.data + (size_t(y) * image->x + x) * image->channels;
+  return image->byte_data_for_write() + (size_t(y) * image->x + x) * image->channels;
 }
-template<> float *init_pixel_pointer(const ImBuf *image, int x, int y)
+template<> float *init_pixel_pointer(ImBuf *image, int x, int y)
 {
-  return image->float_buffer.data + (size_t(y) * image->x + x) * image->channels;
+  return image->float_data_for_write() + (size_t(y) * image->x + x) * image->channels;
 }
 
 static float wrap_uv(float value, int size)
 {
   int x = int(floorf(value));
-  if (UNLIKELY(x < 0 || x >= size)) {
+  if (x < 0 || x >= size) [[unlikely]] {
     x %= size;
     if (x < 0) {
       x += size;
@@ -148,7 +148,7 @@ static void sample_image(const ImBuf *source, float u, float v, T *r_sample)
   }
   else if constexpr (Filter == IMB_FILTER_BILINEAR && std::is_same_v<T, float>) {
     if constexpr (WrapUV) {
-      math::interpolate_bilinear_wrapmode_fl(source->float_buffer.data,
+      math::interpolate_bilinear_wrapmode_fl(source->float_data(),
                                              r_sample,
                                              source->x,
                                              source->y,
@@ -160,16 +160,16 @@ static void sample_image(const ImBuf *source, float u, float v, T *r_sample)
     }
     else {
       math::interpolate_bilinear_fl(
-          source->float_buffer.data, r_sample, source->x, source->y, NumChannels, u, v);
+          source->float_data(), r_sample, source->x, source->y, NumChannels, u, v);
     }
   }
   else if constexpr (Filter == IMB_FILTER_NEAREST && std::is_same_v<T, float>) {
     math::interpolate_nearest_border_fl(
-        source->float_buffer.data, r_sample, source->x, source->y, NumChannels, u, v);
+        source->float_data(), r_sample, source->x, source->y, NumChannels, u, v);
   }
   else if constexpr (Filter == IMB_FILTER_CUBIC_BSPLINE && std::is_same_v<T, float>) {
     math::interpolate_cubic_bspline_fl(
-        source->float_buffer.data, r_sample, source->x, source->y, NumChannels, u, v);
+        source->float_data(), r_sample, source->x, source->y, NumChannels, u, v);
   }
   else if constexpr (Filter == IMB_FILTER_CUBIC_BSPLINE && std::is_same_v<T, uchar> &&
                      NumChannels == 4)
@@ -178,7 +178,7 @@ static void sample_image(const ImBuf *source, float u, float v, T *r_sample)
   }
   else if constexpr (Filter == IMB_FILTER_CUBIC_MITCHELL && std::is_same_v<T, float>) {
     math::interpolate_cubic_mitchell_fl(
-        source->float_buffer.data, r_sample, source->x, source->y, NumChannels, u, v);
+        source->float_data(), r_sample, source->x, source->y, NumChannels, u, v);
   }
   else if constexpr (Filter == IMB_FILTER_CUBIC_MITCHELL && std::is_same_v<T, uchar> &&
                      NumChannels == 4)
@@ -340,7 +340,7 @@ static void transform_scanlines_filter(const TransformContext &ctx, IndexRange y
 {
   int channels = ctx.src->channels;
 
-  if (ctx.dst->float_buffer.data && ctx.src->float_buffer.data) {
+  if (ctx.dst->float_data() && ctx.src->float_data()) {
     /* Float pixels. */
     if (channels == 4) {
       transform_scanlines<Filter, float, 4>(ctx, y_range);
@@ -356,7 +356,7 @@ static void transform_scanlines_filter(const TransformContext &ctx, IndexRange y
     }
   }
 
-  if (ctx.dst->byte_buffer.data && ctx.src->byte_buffer.data) {
+  if (ctx.dst->byte_data() && ctx.src->byte_data()) {
     /* Byte pixels. */
     if (channels == 4) {
       transform_scanlines<Filter, uchar, 4>(ctx, y_range);
@@ -426,9 +426,7 @@ static void edge_aa(const TransformContext &ctx)
 
     /* DDA line raster: step one pixel along the longer direction. */
     delta /= length;
-    if (ctx.dst->float_buffer.data != nullptr) {
-      /* Float pixels. */
-      float *dst = ctx.dst->float_buffer.data;
+    if (float *dst = ctx.dst->float_data_for_write()) {
       for (int i = 0; i < length; i++) {
         float2 pos = ptA + i * delta;
         int2 ipos = int2(pos);
@@ -442,9 +440,7 @@ static void edge_aa(const TransformContext &ctx)
         }
       }
     }
-    if (ctx.dst->byte_buffer.data != nullptr) {
-      /* Byte pixels. */
-      uchar *dst = ctx.dst->byte_buffer.data;
+    if (uchar *dst = ctx.dst->byte_data_for_write()) {
       for (int i = 0; i < length; i++) {
         float2 pos = ptA + i * delta;
         int2 ipos = int2(pos);
@@ -458,16 +454,14 @@ static void edge_aa(const TransformContext &ctx)
   }
 }
 
-}  // namespace blender::imbuf::transform
+}  // namespace imbuf::transform
 
 using namespace blender::imbuf::transform;
-using namespace blender;
-
 void IMB_transform(const ImBuf *src,
                    ImBuf *dst,
                    const eIMBTransformMode mode,
                    const eIMBInterpolationFilterMode filter,
-                   const float transform_matrix[4][4],
+                   const float3x3 &transform_matrix,
                    const rctf *src_crop)
 {
   BLI_assert_msg(mode != IMB_TRANSFORM_MODE_CROP_SRC || src_crop != nullptr,
@@ -483,7 +477,7 @@ void IMB_transform(const ImBuf *src,
   if (crop) {
     ctx.src_crop = *src_crop;
   }
-  ctx.init(blender::float4x4(transform_matrix), crop);
+  ctx.init(transform_matrix, crop);
 
   threading::parallel_for(ctx.dst_region_y_range, 8, [&](IndexRange y_range) {
     if (filter == IMB_FILTER_NEAREST) {
@@ -507,3 +501,5 @@ void IMB_transform(const ImBuf *src,
     edge_aa(ctx);
   }
 }
+
+}  // namespace blender

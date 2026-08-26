@@ -2,8 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #pragma once
 
+#include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
 
 #include "DNA_modifier_types.h"
@@ -12,9 +17,11 @@
 #  include <openvdb/openvdb.h>
 #endif
 
+namespace blender {
+
 struct Mesh;
 
-namespace blender::bke {
+namespace bke {
 
 struct VolumeToMeshResolution {
   VolumeToMeshResolutionMode mode;
@@ -77,4 +84,5 @@ void fill_mesh_from_openvdb_data(Span<openvdb::Vec3s> vdb_verts,
 
 #endif
 
-}  // namespace blender::bke
+}  // namespace bke
+}  // namespace blender

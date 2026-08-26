@@ -16,8 +16,6 @@
 
 #include <Python.h>
 
-#include "BLI_utildefines.h"
-
 #include "WM_types.hh"
 
 #include "RNA_access.hh"
@@ -29,7 +27,9 @@
 #include "bpy_rna.hh"
 
 #include "../generic/py_capi_rna.hh"
-#include "../generic/python_compat.hh"
+#include "../generic/python_compat.hh" /* IWYU pragma: keep. */
+
+namespace blender {
 
 /* we may want to add, but not now */
 
@@ -54,8 +54,7 @@ static bool bpy_gizmotype_target_property_def(wmGizmoType *gzt, PyObject *item)
 
   static const char *const _keywords[] = {"id", "type", "array_length", nullptr};
   static _PyArg_Parser _parser = {
-    PY_ARG_PARSER_HEAD_COMPAT()
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "s"  /* `id` */
       "O&" /* `type` */
       "i"  /* `array_length` */
@@ -105,14 +104,13 @@ static void gizmo_properties_init(wmGizmoType *gzt)
 
   if (pyrna_deferred_register_class(gzt->srna, py_class) != 0) {
     PyErr_Print(); /* failed to register operator props */
-    PyErr_Clear();
   }
 
   /* Extract target property definitions from 'bl_target_properties' */
   {
-    /* Picky developers will notice that 'bl_targets' won't work with inheritance
-     * get direct from the dict to avoid raising a load of attribute errors
-     * (yes this isn't ideal) - campbell. */
+    /* NOTE(@ideasman42): Picky developers will notice that `bl_targets`
+     * won't work with inheritance get direct from the dict to avoid
+     * raising a load of attribute errors (yes this isn't ideal). */
     PyObject *py_class_dict = py_class->tp_dict;
     PyObject *bl_target_properties = PyDict_GetItem(py_class_dict,
                                                     bpy_intern_str_bl_target_properties);
@@ -125,7 +123,6 @@ static void gizmo_properties_init(wmGizmoType *gzt)
       {
         /* PySequence_Fast sets the error */
         PyErr_Print();
-        PyErr_Clear();
         return;
       }
 
@@ -135,7 +132,6 @@ static void gizmo_properties_init(wmGizmoType *gzt)
       for (uint i = 0; i < items_len; i++) {
         if (!bpy_gizmotype_target_property_def(gzt, items[i])) {
           PyErr_Print();
-          PyErr_Clear();
           break;
         }
       }
@@ -148,9 +144,9 @@ static void gizmo_properties_init(wmGizmoType *gzt)
 void BPY_RNA_gizmo_wrapper(wmGizmoType *gzt, void *userdata)
 {
   /* take care not to overwrite anything set in
-   * WM_gizmomaptype_group_link_ptr before opfunc() is called */
+   * #WM_gizmomaptype_group_link_ptr before `opfunc()` is called. */
   StructRNA *srna = gzt->srna;
-  *gzt = *((wmGizmoType *)userdata);
+  *gzt = *(static_cast<wmGizmoType *>(userdata));
   gzt->srna = srna; /* restore */
 
 /* don't do translations here yet */
@@ -184,7 +180,6 @@ static void gizmogroup_properties_init(wmGizmoGroupType *gzgt)
 
   if (pyrna_deferred_register_class(gzgt->srna, py_class) != 0) {
     PyErr_Print(); /* failed to register operator props */
-    PyErr_Clear();
   }
 }
 
@@ -193,7 +188,7 @@ void BPY_RNA_gizmogroup_wrapper(wmGizmoGroupType *gzgt, void *userdata)
   /* take care not to overwrite anything set in
    * WM_gizmomaptype_group_link_ptr before opfunc() is called */
   StructRNA *srna = gzgt->srna;
-  *gzgt = *((wmGizmoGroupType *)userdata);
+  *gzgt = *(static_cast<wmGizmoGroupType *>(userdata));
   gzgt->srna = srna; /* restore */
 
 /* don't do translations here yet */
@@ -209,3 +204,5 @@ void BPY_RNA_gizmogroup_wrapper(wmGizmoGroupType *gzgt, void *userdata)
 }
 
 /** \} */
+
+}  // namespace blender

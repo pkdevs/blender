@@ -8,12 +8,29 @@
 
 #pragma once
 
+#include "DNA_userdef_types.h"
+
 #include "gizmo_geometry.h"
 
+namespace blender {
+
+struct IDProperty;
 struct bContext;
+struct wmGizmo;
 struct wmGizmoProperty;
 
 #define DIAL_RESOLUTION 48
+
+/**
+ * This bias is to be applied on wire gizmos or any small gizmos which may
+ * be difficult to pick otherwise. The value is defined in logical pixels.
+ */
+#define WM_GIZMO_SELECT_BIAS 6.0f
+
+static inline float WM_gizmo_select_bias(bool select)
+{
+  return select ? WM_GIZMO_SELECT_BIAS * UI_SCALE_FAC : 0.0f;
+}
 
 /**
  * Data for common interactions. Used in `gizmo_library_utils.cc` functions.
@@ -90,3 +107,5 @@ wmGizmo *gizmo_find_from_properties(const IDProperty *properties,
 void wm_gizmo_geometryinfo_draw(const GizmoGeomInfo *info, bool select, const float color[4]);
 void wm_gizmo_vec_draw(
     const float color[4], const float (*verts)[3], uint vert_count, uint pos, uint primitive_type);
+
+}  // namespace blender

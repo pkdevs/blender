@@ -6,7 +6,6 @@
  * \ingroup spnla
  */
 
-#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -15,7 +14,7 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_anim_data.hh"
 #include "BKE_context.hh"
@@ -44,6 +43,8 @@
 
 #include "nla_intern.hh" /* own include */
 
+namespace blender {
+
 /* *********************************************** */
 /* Operators for NLA track-list which need to be different
  * from the standard Animation Editor ones */
@@ -59,7 +60,7 @@
 
 static int mouse_nla_tracks(bContext *C, bAnimContext *ac, int track_index, short selectmode)
 {
-  ListBase anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
 
   int notifierFlags = 0;
 
@@ -116,7 +117,7 @@ static int mouse_nla_tracks(bContext *C, bAnimContext *ac, int track_index, shor
         /* set selection status */
         if (selectmode == SELECT_INVERT) {
           /* swap select */
-          blender::ed::object::base_select(base, blender::ed::object::BA_INVERT);
+          ed::object::base_select(base, ed::object::BA_INVERT);
 
           if (adt) {
             adt->flag ^= ADT_UI_SELECTED;
@@ -125,23 +126,23 @@ static int mouse_nla_tracks(bContext *C, bAnimContext *ac, int track_index, shor
         else {
           /* deselect all */
           /* TODO: should this deselect all other types of tracks too? */
-          BKE_view_layer_synced_ensure(ac->scene, view_layer);
-          LISTBASE_FOREACH (Base *, b, BKE_view_layer_object_bases_get(view_layer)) {
-            blender::ed::object::base_select(b, blender::ed::object::BA_DESELECT);
-            if (b->object->adt) {
-              b->object->adt->flag &= ~(ADT_UI_SELECTED | ADT_UI_ACTIVE);
+          BKE_view_layer_synced_ensure(*ac->bmain, ac->scene, view_layer);
+          for (Base &b : *BKE_view_layer_object_bases_get(view_layer)) {
+            ed::object::base_select(&b, ed::object::BA_DESELECT);
+            if (b.object->adt) {
+              b.object->adt->flag &= ~(ADT_UI_SELECTED | ADT_UI_ACTIVE);
             }
           }
 
           /* select object now */
-          blender::ed::object::base_select(base, blender::ed::object::BA_SELECT);
+          ed::object::base_select(base, ed::object::BA_SELECT);
           if (adt) {
             adt->flag |= ADT_UI_SELECTED;
           }
         }
 
         /* change active object - regardless of whether it is now selected [#37883] */
-        blender::ed::object::base_activate_with_mode_exit_if_needed(C, base); /* adds notifier */
+        ed::object::base_activate_with_mode_exit_if_needed(C, base); /* adds notifier */
 
         if ((adt) && (adt->flag & ADT_UI_SELECTED)) {
           adt->flag |= ADT_UI_ACTIVE;
@@ -173,7 +174,8 @@ static int mouse_nla_tracks(bContext *C, bAnimContext *ac, int track_index, shor
     case ANIMTYPE_PALETTE:
     case ANIMTYPE_DSHAIR:
     case ANIMTYPE_DSPOINTCLOUD:
-    case ANIMTYPE_DSVOLUME: {
+    case ANIMTYPE_DSVOLUME:
+    case ANIMTYPE_DSLIGHTPROBE: {
       /* sanity checking... */
       if (ale->adt) {
         /* select/deselect */
@@ -285,7 +287,9 @@ static int mouse_nla_tracks(bContext *C, bAnimContext *ac, int track_index, shor
 /* ------------------- */
 
 /* handle clicking */
-static int nlatracks_mouseclick_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus nlatracks_mouseclick_invoke(bContext *C,
+                                                    wmOperator *op,
+                                                    const wmEvent *event)
 {
   bAnimContext ac;
   ARegion *region;
@@ -314,15 +318,15 @@ static int nlatracks_mouseclick_invoke(bContext *C, wmOperator *op, const wmEven
   }
 
   /* Figure out which track user clicked in. */
-  UI_view2d_region_to_view(v2d, event->mval[0], event->mval[1], &x, &y);
-  UI_view2d_listview_view_to_cell(NLATRACK_NAMEWIDTH,
-                                  NLATRACK_STEP(snla),
-                                  0,
-                                  NLATRACK_FIRST_TOP(&ac),
-                                  x,
-                                  y,
-                                  nullptr,
-                                  &track_index);
+  ui::view2d_region_to_view(v2d, event->mval[0], event->mval[1], &x, &y);
+  ui::view2d_listview_view_to_cell(NLATRACK_NAMEWIDTH,
+                                   NLATRACK_STEP(snla),
+                                   0,
+                                   NLATRACK_FIRST_TOP(&ac),
+                                   x,
+                                   y,
+                                   nullptr,
+                                   &track_index);
 
   /* handle mouse-click in the relevant track then */
   notifierFlags = mouse_nla_tracks(C, &ac, track_index, selectmode);
@@ -342,7 +346,7 @@ void NLA_OT_channels_click(wmOperatorType *ot)
   ot->idname = "NLA_OT_channels_click";
   ot->description = "Handle clicks to select NLA tracks";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = nlatracks_mouseclick_invoke;
   ot->poll = ED_operator_nla_active;
 
@@ -359,7 +363,7 @@ void NLA_OT_channels_click(wmOperatorType *ot)
 
 /* ******************** Action Push Down ******************************** */
 
-static int nlatracks_pushdown_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus nlatracks_pushdown_exec(bContext *C, wmOperator *op)
 {
   bAnimContext ac;
   ID *id = nullptr;
@@ -376,7 +380,7 @@ static int nlatracks_pushdown_exec(bContext *C, wmOperator *op)
     PointerRNA adt_ptr = {};
 
     /* active animdata block */
-    if (nla_panel_context(C, &adt_ptr, nullptr, nullptr) == 0 || (adt_ptr.data == nullptr)) {
+    if (nla_panel_context(C, &adt_ptr, nullptr, nullptr) == 0 || !adt_ptr) {
       BKE_report(op->reports,
                  RPT_ERROR,
                  "No active AnimData block to use "
@@ -390,7 +394,7 @@ static int nlatracks_pushdown_exec(bContext *C, wmOperator *op)
   }
   else {
     /* indexed track */
-    ListBase anim_data = {nullptr, nullptr};
+    ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
 
     /* filter tracks */
     eAnimFilter_Flags filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
@@ -487,14 +491,14 @@ static bool nla_action_unlink_poll(bContext *C)
 {
   if (ED_operator_nla_active(C)) {
     PointerRNA adt_ptr;
-    return (nla_panel_context(C, &adt_ptr, nullptr, nullptr) && (adt_ptr.data != nullptr));
+    return (nla_panel_context(C, &adt_ptr, nullptr, nullptr) && adt_ptr);
   }
 
   /* something failed... */
   return false;
 }
 
-static int nla_action_unlink_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus nla_action_unlink_exec(bContext *C, wmOperator *op)
 {
   PointerRNA adt_ptr;
 
@@ -518,7 +522,7 @@ static int nla_action_unlink_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int nla_action_unlink_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus nla_action_unlink_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   /* NOTE: this is hardcoded to match the behavior for the unlink button
    * (in `interface_templates.cc`). */
@@ -554,7 +558,7 @@ void NLA_OT_action_unlink(wmOperatorType *ot)
 
 bool nlaedit_add_tracks_existing(bAnimContext *ac, bool above_sel)
 {
-  ListBase anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
   AnimData *lastAdt = nullptr;
   bool added = false;
 
@@ -564,13 +568,13 @@ bool nlaedit_add_tracks_existing(bAnimContext *ac, bool above_sel)
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, eAnimCont_Types(ac->datatype));
 
   /* add tracks... */
-  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    if (ale->type == ANIMTYPE_NLATRACK) {
-      NlaTrack *nlt = static_cast<NlaTrack *>(ale->data);
-      AnimData *adt = ale->adt;
+  for (bAnimListElem &ale : anim_data) {
+    if (ale.type == ANIMTYPE_NLATRACK) {
+      NlaTrack *nlt = static_cast<NlaTrack *>(ale.data);
+      AnimData *adt = ale.adt;
       NlaTrack *new_track = nullptr;
 
-      const bool is_liboverride = ID_IS_OVERRIDE_LIBRARY(ale->id);
+      const bool is_liboverride = ID_IS_OVERRIDE_LIBRARY(ale.id);
 
       /* check if just adding a new track above this one,
        * or whether we're adding a new one to the top of the stack that this one belongs to
@@ -579,7 +583,7 @@ bool nlaedit_add_tracks_existing(bAnimContext *ac, bool above_sel)
         /* just add a new one above this one */
         new_track = BKE_nlatrack_new_after(&adt->nla_tracks, nlt, is_liboverride);
         BKE_nlatrack_set_active(&adt->nla_tracks, new_track);
-        ale->update = ANIM_UPDATE_DEPS;
+        ale.update = ANIM_UPDATE_DEPS;
         added = true;
       }
       else if ((lastAdt == nullptr) || (adt != lastAdt)) {
@@ -588,7 +592,7 @@ bool nlaedit_add_tracks_existing(bAnimContext *ac, bool above_sel)
         new_track = BKE_nlatrack_new_tail(&adt->nla_tracks, is_liboverride);
         BKE_nlatrack_set_active(&adt->nla_tracks, new_track);
         lastAdt = adt;
-        ale->update = ANIM_UPDATE_DEPS;
+        ale.update = ANIM_UPDATE_DEPS;
         added = true;
       }
     }
@@ -603,7 +607,7 @@ bool nlaedit_add_tracks_existing(bAnimContext *ac, bool above_sel)
 
 bool nlaedit_add_tracks_empty(bAnimContext *ac)
 {
-  ListBase anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
 
   bool added = false;
 
@@ -614,19 +618,19 @@ bool nlaedit_add_tracks_empty(bAnimContext *ac)
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, eAnimCont_Types(ac->datatype));
 
   /* check if selected AnimData blocks are empty, and add tracks if so... */
-  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    AnimData *adt = ale->adt;
+  for (bAnimListElem &ale : anim_data) {
+    AnimData *adt = ale.adt;
     NlaTrack *new_track;
 
     /* sanity check */
     BLI_assert(adt->flag & ADT_UI_SELECTED);
 
     /* ensure it is empty */
-    if (BLI_listbase_is_empty(&adt->nla_tracks)) {
+    if (adt->nla_tracks.is_empty()) {
       /* add new track to this AnimData block then */
-      new_track = BKE_nlatrack_new_tail(&adt->nla_tracks, ID_IS_OVERRIDE_LIBRARY(ale->id));
+      new_track = BKE_nlatrack_new_tail(&adt->nla_tracks, ID_IS_OVERRIDE_LIBRARY(ale.id));
       BKE_nlatrack_set_active(&adt->nla_tracks, new_track);
-      ale->update = ANIM_UPDATE_DEPS;
+      ale.update = ANIM_UPDATE_DEPS;
       added = true;
     }
   }
@@ -640,7 +644,7 @@ bool nlaedit_add_tracks_empty(bAnimContext *ac)
 
 /* ----- */
 
-static int nlaedit_add_tracks_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus nlaedit_add_tracks_exec(bContext *C, wmOperator *op)
 {
   bAnimContext ac;
   bool above_sel = RNA_boolean_get(op->ptr, "above_selected");
@@ -681,7 +685,7 @@ void NLA_OT_tracks_add(wmOperatorType *ot)
   ot->idname = "NLA_OT_tracks_add";
   ot->description = "Add NLA-Tracks above/after the selected tracks";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = nlaedit_add_tracks_exec;
   ot->poll = nlaop_poll_tweakmode_off;
 
@@ -699,11 +703,11 @@ void NLA_OT_tracks_add(wmOperatorType *ot)
 /* ******************** Delete Tracks Operator ***************************** */
 /* Delete selected NLA Tracks */
 
-static int nlaedit_delete_tracks_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus nlaedit_delete_tracks_exec(bContext *C, wmOperator * /*op*/)
 {
   bAnimContext ac;
 
-  ListBase anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
 
   /* get editor data */
   if (ANIM_animdata_get_context(C, &ac) == 0) {
@@ -716,12 +720,12 @@ static int nlaedit_delete_tracks_exec(bContext *C, wmOperator * /*op*/)
   ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
 
   /* delete tracks */
-  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    if (ale->type == ANIMTYPE_NLATRACK) {
-      NlaTrack *nlt = static_cast<NlaTrack *>(ale->data);
-      AnimData *adt = ale->adt;
+  for (bAnimListElem &ale : anim_data) {
+    if (ale.type == ANIMTYPE_NLATRACK) {
+      NlaTrack *nlt = static_cast<NlaTrack *>(ale.data);
+      AnimData *adt = ale.adt;
 
-      if (BKE_nlatrack_is_nonlocal_in_liboverride(ale->id, nlt)) {
+      if (BKE_nlatrack_is_nonlocal_in_liboverride(ale.id, nlt)) {
         /* No deletion of non-local tracks of override data. */
         continue;
       }
@@ -735,7 +739,7 @@ static int nlaedit_delete_tracks_exec(bContext *C, wmOperator * /*op*/)
 
       /* call delete on this track - deletes all strips too */
       BKE_nlatrack_remove_and_free(&adt->nla_tracks, nlt, true);
-      ale->update = ANIM_UPDATE_DEPS;
+      ale.update = ANIM_UPDATE_DEPS;
     }
   }
 
@@ -759,7 +763,7 @@ void NLA_OT_tracks_delete(wmOperatorType *ot)
   ot->idname = "NLA_OT_tracks_delete";
   ot->description = "Delete selected NLA-Tracks and the strips they contain";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = nlaedit_delete_tracks_exec;
   ot->poll = nlaop_poll_tweakmode_off;
 
@@ -778,7 +782,7 @@ void NLA_OT_tracks_delete(wmOperatorType *ot)
  *       common use case, we now have a nice shortcut again.
  */
 
-static int nlaedit_objects_add_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus nlaedit_objects_add_exec(bContext *C, wmOperator * /*op*/)
 {
   bAnimContext ac;
 
@@ -814,7 +818,7 @@ void NLA_OT_selected_objects_add(wmOperatorType *ot)
   ot->idname = "NLA_OT_selected_objects_add";
   ot->description = "Make selected objects appear in NLA Editor by adding Animation Data";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = nlaedit_objects_add_exec;
   ot->poll = nlaop_poll_tweakmode_off;
 
@@ -823,3 +827,5 @@ void NLA_OT_selected_objects_add(wmOperatorType *ot)
 }
 
 /* *********************************************** */
+
+}  // namespace blender

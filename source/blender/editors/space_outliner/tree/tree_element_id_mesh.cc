@@ -6,7 +6,6 @@
  * \ingroup spoutliner
  */
 
-#include "DNA_listBase.h"
 #include "DNA_mesh_types.h"
 #include "DNA_outliner_types.h"
 
@@ -35,7 +34,7 @@ void TreeElementIDMesh::expand_key() const
               reinterpret_cast<ID *>(mesh_.key),
               nullptr,
               &legacy_te_,
-              TSE_SOME_ID,
+              TSE_SHAPE_KEY_BASE,
               0);
 }
 

@@ -13,10 +13,6 @@
 #include "../../view_map/ViewMap.h"
 #include <vector>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject UnaryFunction1DVectorViewShape_Type;
@@ -26,17 +22,13 @@ extern PyTypeObject UnaryFunction1DVectorViewShape_Type;
 
 /*---------------------------Python BPy_UnaryFunction1DVectorViewShape structure
  * definition----------*/
-typedef struct {
+struct BPy_UnaryFunction1DVectorViewShape {
   BPy_UnaryFunction1D py_uf1D;
   Freestyle::UnaryFunction1D<std::vector<Freestyle::ViewShape *>> *uf1D_vectorviewshape;
-} BPy_UnaryFunction1DVectorViewShape;
+};
 
 /*---------------------------Python BPy_UnaryFunction1DVectorViewShape visible
  * prototypes-----------*/
 int UnaryFunction1DVectorViewShape_Init(PyObject *module);
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

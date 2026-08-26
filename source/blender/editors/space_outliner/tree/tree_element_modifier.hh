@@ -10,6 +10,8 @@
 
 #include "tree_element.hh"
 
+namespace blender {
+
 struct GpencilModifierData;
 struct ModifierData;
 struct Object;
@@ -27,14 +29,19 @@ struct ModifierDataStoreElem {
   ModifierDataStoreElem(GpencilModifierData *md_) : gp_md(md_), type(GPENCIL_MODIFIER_TYPE) {}
 };
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
 class TreeElementModifierBase final : public AbstractTreeElement {
   Object &object_;
 
  public:
   TreeElementModifierBase(TreeElement &legacy_te, Object &object);
-  void expand(SpaceOutliner &) const override;
+  void expand(SpaceOutliner & /*soops*/) const override;
+
+  std::optional<BIFIconID> get_icon() const override
+  {
+    return ICON_MODIFIER_DATA;
+  }
 };
 
 class TreeElementModifier final : public AbstractTreeElement {
@@ -44,7 +51,10 @@ class TreeElementModifier final : public AbstractTreeElement {
 
  public:
   TreeElementModifier(TreeElement &legacy_te, Object &object, ModifierDataStoreElem &md);
-  void expand(SpaceOutliner &) const override;
+  void expand(SpaceOutliner & /*soops*/) const override;
+
+  std::optional<BIFIconID> get_icon() const override;
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

@@ -8,4 +8,10 @@
 
 #pragma once
 
+#include <Python.h>
+
+namespace blender {
+
 PyMODINIT_FUNC PyInit_mathutils_noise();
+
+}  // namespace blender

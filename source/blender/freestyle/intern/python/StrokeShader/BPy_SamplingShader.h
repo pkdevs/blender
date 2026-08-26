@@ -10,10 +10,6 @@
 
 #include "../BPy_StrokeShader.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject SamplingShader_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject SamplingShader_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&SamplingShader_Type))
 
 /*---------------------------Python BPy_SamplingShader structure definition----------*/
-typedef struct {
+struct BPy_SamplingShader {
   BPy_StrokeShader py_ss;
-} BPy_SamplingShader;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

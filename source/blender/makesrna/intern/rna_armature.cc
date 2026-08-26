@@ -8,24 +8,23 @@
 
 #include <cstdlib>
 
-#include "BLI_math_base.h"
-#include "BLI_string_utf8_symbols.h"
+#include "BLI_math_constants.hh"
+#include "BLI_string_utf8_symbols.hh"
 
 #include "BLT_translation.hh"
 
-#include "RNA_access.hh"
 #include "RNA_define.hh"
 
 #include "rna_internal.hh"
 
 #include "DNA_armature_types.h"
-#include "DNA_object_types.h"
-#include "DNA_scene_types.h"
 
 #include "ED_anim_api.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
+
+namespace blender {
 
 /* Bone Collection Color Sets */
 const EnumPropertyItem rna_enum_color_palettes_items[] = {
@@ -57,17 +56,23 @@ const EnumPropertyItem rna_enum_color_palettes_items[] = {
 constexpr int COLOR_SETS_MAX_THEMED_INDEX = 20;
 #endif
 
+}  // namespace blender
+
 #ifdef RNA_RUNTIME
 
 #  include <fmt/format.h>
 
-#  include "BLI_math_vector.h"
+#  include "BLI_math_vector_c.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 #  include "BKE_action.hh"
 #  include "BKE_context.hh"
 #  include "BKE_global.hh"
 #  include "BKE_idprop.hh"
+#  include "BKE_lib_id.hh"
 #  include "BKE_main.hh"
+#  include "BKE_report.hh"
 
 #  include "BKE_armature.hh"
 #  include "ED_armature.hh"
@@ -80,6 +85,8 @@ constexpr int COLOR_SETS_MAX_THEMED_INDEX = 20;
 #  ifndef NDEBUG
 #    include "ANIM_armature_iter.hh"
 #  endif
+
+namespace blender {
 
 static void rna_Armature_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
@@ -109,17 +116,17 @@ static void rna_Armature_dependency_update(Main *bmain, Scene * /*scene*/, Point
 
 static void rna_Armature_act_bone_set(PointerRNA *ptr, PointerRNA value, ReportList * /*reports*/)
 {
-  bArmature *arm = (bArmature *)ptr->data;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
 
-  if (value.owner_id == nullptr && value.data == nullptr) {
+  if (!value) {
     arm->act_bone = nullptr;
   }
   else {
     if (value.owner_id != &arm->id) {
-      Object *ob = (Object *)value.owner_id;
+      Object *ob = id_cast<Object *>(value.owner_id);
 
-      if (GS(ob->id.name) != ID_OB || (ob->data != arm)) {
-        printf("ERROR: armature set active bone - new active doesn't come from this armature\n");
+      if (GS(ob->id.name) != ID_OB || (ob->data != id_cast<const ID *>(arm))) {
+        printf("ERROR: armature set active bone - new active does not come from this armature\n");
         return;
       }
     }
@@ -133,9 +140,9 @@ static void rna_Armature_act_edit_bone_set(PointerRNA *ptr,
                                            PointerRNA value,
                                            ReportList * /*reports*/)
 {
-  bArmature *arm = (bArmature *)ptr->data;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
 
-  if (value.owner_id == nullptr && value.data == nullptr) {
+  if (!value) {
     arm->act_edbone = nullptr;
   }
   else {
@@ -144,7 +151,7 @@ static void rna_Armature_act_edit_bone_set(PointerRNA *ptr,
     }
     else {
       arm->act_edbone = static_cast<EditBone *>(value.data);
-      ((EditBone *)arm->act_edbone)->flag |= BONE_SELECTED;
+      (static_cast<EditBone *>(arm->act_edbone))->flag |= BONE_SELECTED;
     }
   }
 }
@@ -184,14 +191,15 @@ static void rna_Armature_edit_bone_remove(bArmature *arm,
   }
 
   ED_armature_ebone_remove(arm, ebone);
-  RNA_POINTER_INVALIDATE(ebone_ptr);
+  ebone_ptr->invalidate();
 }
 
 static void rna_iterator_bone_collections_all_begin(CollectionPropertyIterator *iter,
                                                     PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->data;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
   rna_iterator_array_begin(iter,
+                           ptr,
                            arm->collection_array,
                            sizeof(BoneCollection *),
                            arm->collection_array_num,
@@ -200,15 +208,16 @@ static void rna_iterator_bone_collections_all_begin(CollectionPropertyIterator *
 }
 static int rna_iterator_bone_collections_all_length(PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->data;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
   return arm->collection_array_num;
 }
 
 static void rna_iterator_bone_collections_roots_begin(CollectionPropertyIterator *iter,
                                                       PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->data;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
   rna_iterator_array_begin(iter,
+                           ptr,
                            arm->collection_array,
                            sizeof(BoneCollection *),
                            arm->collection_root_count,
@@ -217,25 +226,35 @@ static void rna_iterator_bone_collections_roots_begin(CollectionPropertyIterator
 }
 static int rna_iterator_bone_collections_roots_length(PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->data;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
   return arm->collection_root_count;
 }
 
+static PointerRNA rna_BoneCollections_active_get(PointerRNA *ptr)
+{
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
+  BoneCollection *bcoll = arm->runtime->active_collection;
+  /* Work around an issue in the RNA code generator. Or my (Sybren) understanding of it. In any
+   * case, without this hand-written getter, the generated getter will actually use &bcoll instead
+   * of bcoll, resulting in the wrong pointer value. */
+  return RNA_pointer_create_with_parent(*ptr, RNA_BoneCollection, bcoll);
+}
 static void rna_BoneCollections_active_set(PointerRNA *ptr,
                                            PointerRNA value,
                                            struct ReportList * /*reports*/)
 {
-  bArmature *arm = (bArmature *)ptr->data;
-  BoneCollection *bcoll = (BoneCollection *)value.data;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
+  BoneCollection *bcoll = static_cast<BoneCollection *>(value.data);
   ANIM_armature_bonecoll_active_set(arm, bcoll);
 }
 
 static void rna_iterator_bone_collection_children_begin(CollectionPropertyIterator *iter,
                                                         PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->owner_id;
-  const BoneCollection *bcoll = (BoneCollection *)ptr->data;
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
+  const BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
   rna_iterator_array_begin(iter,
+                           ptr,
                            arm->collection_array + bcoll->child_index,
                            sizeof(BoneCollection *),
                            bcoll->child_count,
@@ -244,40 +263,40 @@ static void rna_iterator_bone_collection_children_begin(CollectionPropertyIterat
 }
 static int rna_iterator_bone_collection_children_length(PointerRNA *ptr)
 {
-  const BoneCollection *bcoll = (BoneCollection *)ptr->data;
+  const BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
   return bcoll->child_count;
 }
 
 static PointerRNA rna_BoneCollection_parent_get(PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->owner_id;
-  const BoneCollection *bcoll = (BoneCollection *)ptr->data;
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
+  const BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
 
   /* Note that this performs two scans of the array. This might look bad, but as
    * long as `Object.children` still loops in Python over all of
    * `bpy.data.objects`, this should also be acceptable. */
-  using namespace blender::animrig;
+  using namespace animrig;
   const int bcoll_index = armature_bonecoll_find_index(arm, bcoll);
   const int parent_index = armature_bonecoll_find_parent_index(arm, bcoll_index);
 
   if (parent_index < 0) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   BoneCollection *parent = arm->collection_array[parent_index];
-  return RNA_pointer_create(&arm->id, &RNA_BoneCollection, parent);
+  return RNA_pointer_create_discrete(&arm->id, RNA_BoneCollection, parent);
 }
 
 static void rna_BoneCollection_parent_set(PointerRNA *ptr,
                                           PointerRNA value,
                                           struct ReportList *reports)
 {
-  using namespace blender::animrig;
+  using namespace animrig;
 
-  BoneCollection *self = (BoneCollection *)ptr->data;
-  BoneCollection *to_parent = (BoneCollection *)value.data;
+  BoneCollection *self = static_cast<BoneCollection *>(ptr->data);
+  BoneCollection *to_parent = static_cast<BoneCollection *>(value.data);
 
-  bArmature *armature = (bArmature *)ptr->owner_id;
+  bArmature *armature = id_cast<bArmature *>(ptr->owner_id);
 
   const int from_bcoll_index = armature_bonecoll_find_index(armature, self);
   const int from_parent_index = armature_bonecoll_find_parent_index(armature, from_bcoll_index);
@@ -301,13 +320,13 @@ static void rna_BoneCollection_parent_set(PointerRNA *ptr,
 
 static int rna_BoneCollections_active_index_get(PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->data;
-  return arm->runtime.active_collection_index;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
+  return arm->runtime->active_collection_index;
 }
 
 static void rna_BoneCollections_active_index_set(PointerRNA *ptr, const int bone_collection_index)
 {
-  bArmature *arm = (bArmature *)ptr->data;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
   ANIM_armature_bonecoll_active_index_set(arm, bone_collection_index);
 
   WM_main_add_notifier(NC_OBJECT | ND_BONE_COLLECTION, ptr->data);
@@ -316,7 +335,7 @@ static void rna_BoneCollections_active_index_set(PointerRNA *ptr, const int bone
 static void rna_BoneCollections_active_index_range(
     PointerRNA *ptr, int *min, int *max, int * /*softmin*/, int * /*softmax*/)
 {
-  bArmature *arm = (bArmature *)ptr->data;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
 
   /* TODO: Figure out what this function actually is used for, as we may want to protect the first
    * collection (i.e. the default collection that should remain first). */
@@ -335,7 +354,7 @@ static BoneCollection *rna_BoneCollections_new(bArmature *armature,
     return bcoll;
   }
 
-  const int32_t parent_index = blender::animrig::armature_bonecoll_find_index(armature, parent);
+  const int32_t parent_index = animrig::armature_bonecoll_find_index(armature, parent);
   if (parent_index < 0) {
     BKE_reportf(reports,
                 RPT_ERROR,
@@ -352,7 +371,7 @@ static BoneCollection *rna_BoneCollections_new(bArmature *armature,
 
 static void rna_BoneCollections_active_name_set(PointerRNA *ptr, const char *name)
 {
-  bArmature *arm = (bArmature *)ptr->data;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
   ANIM_armature_bonecoll_active_name_set(arm, name);
 }
 
@@ -370,44 +389,44 @@ static void rna_BoneCollections_move(bArmature *arm, ReportList *reports, int fr
 
 static void rna_BoneCollection_name_set(PointerRNA *ptr, const char *name)
 {
-  bArmature *arm = (bArmature *)ptr->owner_id;
-  BoneCollection *bcoll = (BoneCollection *)ptr->data;
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
+  BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
 
-  ANIM_armature_bonecoll_name_set(arm, bcoll, name);
+  ANIM_armature_bonecoll_name_set(*G_MAIN, arm, bcoll, name);
 }
 
 static void rna_BoneCollection_is_visible_set(PointerRNA *ptr, const bool is_visible)
 {
-  bArmature *arm = (bArmature *)ptr->owner_id;
-  BoneCollection *bcoll = (BoneCollection *)ptr->data;
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
+  BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
 
   ANIM_armature_bonecoll_is_visible_set(arm, bcoll, is_visible);
 }
 
 static bool rna_BoneCollection_is_visible_effectively_get(PointerRNA *ptr)
 {
-  const bArmature *arm = (bArmature *)ptr->owner_id;
-  const BoneCollection *bcoll = (BoneCollection *)ptr->data;
+  const bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
+  const BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
   return ANIM_armature_bonecoll_is_visible_effectively(arm, bcoll);
 }
 
 static void rna_BoneCollection_is_solo_set(PointerRNA *ptr, const bool is_solo)
 {
-  bArmature *arm = (bArmature *)ptr->owner_id;
-  BoneCollection *bcoll = (BoneCollection *)ptr->data;
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
+  BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
 
   ANIM_armature_bonecoll_solo_set(arm, bcoll, is_solo);
 }
 
 static void rna_BoneCollection_is_expanded_set(PointerRNA *ptr, const bool is_expanded)
 {
-  BoneCollection *bcoll = (BoneCollection *)ptr->data;
+  BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
   ANIM_armature_bonecoll_is_expanded_set(bcoll, is_expanded);
 }
 
 static std::optional<std::string> rna_BoneCollection_path(const PointerRNA *ptr)
 {
-  const BoneCollection *bcoll = (const BoneCollection *)ptr->data;
+  const BoneCollection *bcoll = static_cast<const BoneCollection *>(ptr->data);
   char name_esc[sizeof(bcoll->name) * 2];
   BLI_str_escape(name_esc, bcoll->name, sizeof(name_esc));
   return fmt::format("collections_all[\"{}\"]", name_esc);
@@ -417,6 +436,12 @@ static IDProperty **rna_BoneCollection_idprops(PointerRNA *ptr)
 {
   BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
   return &bcoll->prop;
+}
+
+static IDProperty **rna_BoneCollection_system_idprops(PointerRNA *ptr)
+{
+  BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
+  return &bcoll->system_properties;
 }
 
 static void rna_BoneCollectionMemberships_clear(Bone *bone)
@@ -436,20 +461,20 @@ static int rna_BoneCollection_index_get(PointerRNA *ptr)
 {
   bArmature *arm = reinterpret_cast<bArmature *>(ptr->owner_id);
   BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
-  return blender::animrig::armature_bonecoll_find_index(arm, bcoll);
+  return animrig::armature_bonecoll_find_index(arm, bcoll);
 }
 
 static int rna_BoneCollection_child_number_get(PointerRNA *ptr)
 {
   bArmature *arm = reinterpret_cast<bArmature *>(ptr->owner_id);
   BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
-  return blender::animrig::armature_bonecoll_child_number_find(arm, bcoll);
+  return animrig::armature_bonecoll_child_number_find(arm, bcoll);
 }
 static void rna_BoneCollection_child_number_set(PointerRNA *ptr, const int new_child_number)
 {
   bArmature *arm = reinterpret_cast<bArmature *>(ptr->owner_id);
   BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
-  blender::animrig::armature_bonecoll_child_number_set(arm, bcoll, new_child_number);
+  animrig::armature_bonecoll_child_number_set(arm, bcoll, new_child_number);
   WM_main_add_notifier(NC_OBJECT | ND_BONE_COLLECTION, nullptr);
 }
 
@@ -457,47 +482,47 @@ static void rna_BoneCollection_child_number_set(PointerRNA *ptr, const int new_c
 
 static void rna_BoneCollection_bones_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->owner_id;
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
   if (arm->edbo) {
     iter->valid = false;
     BKE_reportf(nullptr, RPT_WARNING, "`Collection.bones` is not available in armature edit mode");
     return;
   }
 
-  BoneCollection *bcoll = (BoneCollection *)ptr->data;
-  rna_iterator_listbase_begin(iter, &bcoll->bones, nullptr);
+  BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
+  rna_iterator_listbase_begin(iter, ptr, &bcoll->bones, nullptr);
 }
 
 static PointerRNA rna_BoneCollection_bones_get(CollectionPropertyIterator *iter)
 {
   ListBaseIterator *lb_iter = &iter->internal.listbase;
-  BoneCollectionMember *member = (BoneCollectionMember *)lb_iter->link;
-  return rna_pointer_inherit_refine(&iter->parent, &RNA_Bone, member->bone);
+  BoneCollectionMember *member = reinterpret_cast<BoneCollectionMember *>(lb_iter->link);
+  return RNA_pointer_create_with_parent(iter->parent, RNA_Bone, member->bone);
 }
 
 /* Bone.collections iterator functions. */
 
 static void rna_Bone_collections_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
-  Bone *bone = (Bone *)ptr->data;
-  ListBase /*BoneCollectionReference*/ bone_collection_refs = bone->runtime.collections;
-  rna_iterator_listbase_begin(iter, &bone_collection_refs, nullptr);
+  Bone *bone = static_cast<Bone *>(ptr->data);
+  ListBaseT<BoneCollectionReference> bone_collection_refs = bone->runtime.collections;
+  rna_iterator_listbase_begin(iter, ptr, &bone_collection_refs, nullptr);
 }
 
 static PointerRNA rna_Bone_collections_get(CollectionPropertyIterator *iter)
 {
   ListBaseIterator *lb_iter = &iter->internal.listbase;
-  BoneCollectionReference *bcoll_ref = (BoneCollectionReference *)lb_iter->link;
-  return rna_pointer_inherit_refine(&iter->parent, &RNA_BoneCollection, bcoll_ref->bcoll);
+  BoneCollectionReference *bcoll_ref = reinterpret_cast<BoneCollectionReference *>(lb_iter->link);
+  return RNA_pointer_create_with_parent(iter->parent, RNA_BoneCollection, bcoll_ref->bcoll);
 }
 
 /* EditBone.collections iterator functions. */
 
 static void rna_EditBone_collections_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
-  EditBone *ebone = (EditBone *)ptr->data;
-  ListBase /*BoneCollectionReference*/ bone_collection_refs = ebone->bone_collections;
-  rna_iterator_listbase_begin(iter, &bone_collection_refs, nullptr);
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
+  ListBaseT<BoneCollectionReference> bone_collection_refs = ebone->bone_collections;
+  rna_iterator_listbase_begin(iter, ptr, &bone_collection_refs, nullptr);
 }
 
 /* Armature.collections library override support. */
@@ -529,8 +554,8 @@ static bool rna_Armature_collections_override_apply(Main *bmain,
       return false;
   }
 
-  const bArmature *arm_src = (bArmature *)ptr_src->owner_id;
-  bArmature *arm_dst = (bArmature *)ptr_dst->owner_id;
+  const bArmature *arm_src = id_cast<bArmature *>(ptr_src->owner_id);
+  bArmature *arm_dst = id_cast<bArmature *>(ptr_dst->owner_id);
   BoneCollection *bcoll_anchor = static_cast<BoneCollection *>(ptr_item_dst->data);
   BoneCollection *bcoll_src = static_cast<BoneCollection *>(ptr_item_src->data);
   BoneCollection *bcoll = ANIM_armature_bonecoll_insert_copy_after(
@@ -557,9 +582,9 @@ static std::optional<std::string> rna_BoneColor_path_posebone(const PointerRNA *
   BLI_assert(GS(ptr->owner_id->name) == ID_OB);
   const Object *ob = reinterpret_cast<const Object *>(ptr->owner_id);
   bool found = false;
-  LISTBASE_FOREACH (bPoseChannel *, checkBone, &ob->pose->chanbase) {
-    if (&checkBone->color == ptr->data) {
-      BLI_assert_msg(checkBone == bone,
+  for (bPoseChannel &checkBone : ob->pose->chanbase) {
+    if (&checkBone.color == ptr->data) {
+      BLI_assert_msg(&checkBone == bone,
                      "pointer magic to find the pose bone failed (found the wrong bone)");
       found = true;
       break;
@@ -586,7 +611,7 @@ static std::optional<std::string> rna_BoneColor_path_bone(const PointerRNA *ptr)
   const bArmature *arm = reinterpret_cast<const bArmature *>(ptr->owner_id);
 
   bool found = false;
-  blender::animrig::ANIM_armature_foreach_bone(&arm->bonebase, [&](const Bone *checkBone) {
+  animrig::ANIM_armature_foreach_bone(&arm->bonebase, [&](const Bone *checkBone) {
     if (&checkBone->color == ptr->data) {
       BLI_assert_msg(checkBone == bone,
                      "pointer magic to find the pose bone failed (found the wrong bone)");
@@ -614,9 +639,9 @@ static std::optional<std::string> rna_BoneColor_path_editbone(const PointerRNA *
   const bArmature *arm = reinterpret_cast<const bArmature *>(ptr->owner_id);
 
   bool found = false;
-  LISTBASE_FOREACH (const EditBone *, checkBone, arm->edbo) {
-    if (&checkBone->color == ptr->data) {
-      BLI_assert_msg(checkBone == bone,
+  for (const EditBone &checkBone : *arm->edbo) {
+    if (&checkBone.color == ptr->data) {
+      BLI_assert_msg(&checkBone == bone,
                      "pointer magic to find the pose bone failed (found the wrong bone)");
       found = true;
       break;
@@ -695,28 +720,27 @@ static void rna_Armature_redraw_data(Main * /*bmain*/, Scene * /*scene*/, Pointe
 /* Unselect bones when hidden or not selectable. */
 static void rna_EditBone_hide_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->owner_id;
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
   EditBone *ebone = static_cast<EditBone *>(ptr->data);
 
   if (ebone->flag & (BONE_HIDDEN_A | BONE_UNSELECTABLE)) {
     ebone->flag &= ~(BONE_SELECTED | BONE_TIPSEL | BONE_ROOTSEL);
   }
 
-  WM_main_add_notifier(NC_OBJECT | ND_POSE, arm);
+  WM_main_add_notifier(NC_OBJECT | ND_BONE_SELECT, arm);
   DEG_id_tag_update(&arm->id, ID_RECALC_SYNC_TO_EVAL);
 }
 
 /* Unselect bones when hidden or not selectable. */
 static void rna_Bone_hide_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->owner_id;
-  Bone *bone = (Bone *)ptr->data;
-
-  if (bone->flag & (BONE_HIDDEN_P | BONE_UNSELECTABLE)) {
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
+  Bone *bone = static_cast<Bone *>(ptr->data);
+  if (bone->flag & (BONE_HIDDEN_A | BONE_UNSELECTABLE)) {
     bone->flag &= ~(BONE_SELECTED | BONE_TIPSEL | BONE_ROOTSEL);
   }
 
-  WM_main_add_notifier(NC_OBJECT | ND_POSE, arm);
+  WM_main_add_notifier(NC_OBJECT | ND_BONE_SELECT, arm);
   DEG_id_tag_update(&arm->id, ID_RECALC_SYNC_TO_EVAL);
 }
 
@@ -725,54 +749,17 @@ static void rna_Bone_update_renamed(Main * /*bmain*/, Scene * /*scene*/, Pointer
 {
   ID *id = ptr->owner_id;
 
-  /* Redraw Outliner / Dopesheet. */
+  /* Redraw Outliner / Dope-sheet. */
   WM_main_add_notifier(NC_GEOM | ND_DATA | NA_RENAME, id);
 
   /* update animation channels */
   WM_main_add_notifier(NC_ANIMATION | ND_ANIMCHAN, id);
 }
 
-static void rna_Bone_select_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
-{
-  ID *id = ptr->owner_id;
-
-  /* 1) special updates for cases where rigs try to hook into armature drawing stuff
-   *    e.g. Mask Modifier - 'Armature' option
-   * 2) tag armature for copy-on-evaluation, so that selection status (set by addons)
-   *    will update properly, like standard tools do already
-   */
-  if (id) {
-    if (GS(id->name) == ID_AR) {
-      bArmature *arm = (bArmature *)id;
-
-      if (arm->flag & ARM_HAS_VIZ_DEPS) {
-        DEG_id_tag_update(id, ID_RECALC_GEOMETRY);
-      }
-
-      DEG_id_tag_update(id, ID_RECALC_SYNC_TO_EVAL);
-    }
-    else if (GS(id->name) == ID_OB) {
-      Object *ob = (Object *)id;
-      bArmature *arm = (bArmature *)ob->data;
-
-      if (arm->flag & ARM_HAS_VIZ_DEPS) {
-        DEG_id_tag_update(id, ID_RECALC_GEOMETRY);
-      }
-
-      DEG_id_tag_update(&arm->id, ID_RECALC_SYNC_TO_EVAL);
-    }
-  }
-
-  WM_main_add_notifier(NC_GEOM | ND_DATA, id);
-
-  /* spaces that show animation data of the selected bone need updating */
-  WM_main_add_notifier(NC_ANIMATION | ND_ANIMCHAN, id);
-}
-
 static std::optional<std::string> rna_Bone_path(const PointerRNA *ptr)
 {
   const ID *id = ptr->owner_id;
-  const Bone *bone = (const Bone *)ptr->data;
+  const Bone *bone = static_cast<const Bone *>(ptr->data);
   char name_esc[sizeof(bone->name) * 2];
 
   BLI_str_escape(name_esc, bone->name, sizeof(name_esc));
@@ -796,16 +783,37 @@ static IDProperty **rna_Bone_idprops(PointerRNA *ptr)
   return &bone->prop;
 }
 
+static IDProperty **rna_Bone_system_idprops(PointerRNA *ptr)
+{
+  Bone *bone = static_cast<Bone *>(ptr->data);
+  return &bone->system_properties;
+}
+
+static std::optional<std::string> rna_EditBone_path(const PointerRNA *ptr)
+{
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
+  char name_esc[sizeof(ebone->name) * 2];
+
+  BLI_str_escape(name_esc, ebone->name, sizeof(name_esc));
+  return fmt::format("edit_bones[\"{}\"]", name_esc);
+}
+
 static IDProperty **rna_EditBone_idprops(PointerRNA *ptr)
 {
   EditBone *ebone = static_cast<EditBone *>(ptr->data);
   return &ebone->prop;
 }
 
+static IDProperty **rna_EditBone_system_idprops(PointerRNA *ptr)
+{
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
+  return &ebone->system_properties;
+}
+
 static void rna_EditBone_name_set(PointerRNA *ptr, const char *value)
 {
-  bArmature *arm = (bArmature *)ptr->owner_id;
-  EditBone *ebone = (EditBone *)ptr->data;
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
   char oldname[sizeof(ebone->name)], newname[sizeof(ebone->name)];
 
   /* need to be on the stack */
@@ -818,8 +826,8 @@ static void rna_EditBone_name_set(PointerRNA *ptr, const char *value)
 
 static void rna_Bone_name_set(PointerRNA *ptr, const char *value)
 {
-  bArmature *arm = (bArmature *)ptr->owner_id;
-  Bone *bone = (Bone *)ptr->data;
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
+  Bone *bone = static_cast<Bone *>(ptr->data);
   char oldname[sizeof(bone->name)], newname[sizeof(bone->name)];
 
   /* need to be on the stack */
@@ -849,7 +857,7 @@ static void rna_EditBone_connected_check(EditBone *ebone)
 
 static void rna_EditBone_connected_set(PointerRNA *ptr, bool value)
 {
-  EditBone *ebone = (EditBone *)(ptr->data);
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
 
   if (value) {
     ebone->flag |= BONE_CONNECTED;
@@ -863,14 +871,14 @@ static void rna_EditBone_connected_set(PointerRNA *ptr, bool value)
 
 static PointerRNA rna_EditBone_parent_get(PointerRNA *ptr)
 {
-  EditBone *data = (EditBone *)(ptr->data);
-  return rna_pointer_inherit_refine(ptr, &RNA_EditBone, data->parent);
+  EditBone *data = static_cast<EditBone *>(ptr->data);
+  return RNA_pointer_create_with_parent(*ptr, RNA_EditBone, data->parent);
 }
 
 static void rna_EditBone_parent_set(PointerRNA *ptr, PointerRNA value, ReportList * /*reports*/)
 {
-  EditBone *ebone = (EditBone *)(ptr->data);
-  EditBone *pbone, *parbone = (EditBone *)value.data;
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
+  EditBone *pbone, *parbone = static_cast<EditBone *>(value.data);
 
   if (parbone == nullptr) {
     if (ebone->parent && !(ebone->parent->flag & BONE_ROOTSEL)) {
@@ -904,25 +912,25 @@ static void rna_EditBone_parent_set(PointerRNA *ptr, PointerRNA value, ReportLis
 
 static void rna_EditBone_matrix_get(PointerRNA *ptr, float *values)
 {
-  EditBone *ebone = (EditBone *)(ptr->data);
-  ED_armature_ebone_to_mat4(ebone, (float(*)[4])values);
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
+  ED_armature_ebone_to_mat4(ebone, reinterpret_cast<float (*)[4]>(values));
 }
 
 static void rna_EditBone_matrix_set(PointerRNA *ptr, const float *values)
 {
-  EditBone *ebone = (EditBone *)(ptr->data);
-  ED_armature_ebone_from_mat4(ebone, (float(*)[4])values);
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
+  ED_armature_ebone_from_mat4(ebone, reinterpret_cast<float (*)[4]>(const_cast<float *>(values)));
 }
 
 static float rna_EditBone_length_get(PointerRNA *ptr)
 {
-  EditBone *ebone = (EditBone *)(ptr->data);
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
   return len_v3v3(ebone->head, ebone->tail);
 }
 
 static void rna_EditBone_length_set(PointerRNA *ptr, float length)
 {
-  EditBone *ebone = (EditBone *)(ptr->data);
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
   float delta[3];
 
   sub_v3_v3v3(delta, ebone->tail, ebone->head);
@@ -937,18 +945,18 @@ static void rna_EditBone_length_set(PointerRNA *ptr, float length)
 
 static void rna_Bone_bbone_handle_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->owner_id;
-  Bone *bone = (Bone *)ptr->data;
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
+  Bone *bone = static_cast<Bone *>(ptr->data);
 
   /* Update all users of this armature after changing B-Bone handles. */
   for (Object *obt = static_cast<Object *>(bmain->objects.first); obt;
        obt = static_cast<Object *>(obt->id.next))
   {
-    if (obt->data == arm && obt->pose) {
+    if (obt->data == id_cast<ID *>(arm) && obt->pose) {
       bPoseChannel *pchan = BKE_pose_channel_find_name(obt->pose, bone->name);
 
-      if (pchan && pchan->bone == bone) {
-        BKE_pchan_rebuild_bbone_handles(obt->pose, pchan);
+      if (pchan && pchan->bone_get(*obt) == bone) {
+        BKE_pchan_rebuild_bbone_handles(obt->pose, {pchan, bone});
         DEG_id_tag_update(&obt->id, ID_RECALC_SYNC_TO_EVAL);
       }
     }
@@ -959,16 +967,16 @@ static void rna_Bone_bbone_handle_update(Main *bmain, Scene *scene, PointerRNA *
 
 static PointerRNA rna_EditBone_bbone_prev_get(PointerRNA *ptr)
 {
-  EditBone *data = (EditBone *)(ptr->data);
-  return rna_pointer_inherit_refine(ptr, &RNA_EditBone, data->bbone_prev);
+  EditBone *data = static_cast<EditBone *>(ptr->data);
+  return RNA_pointer_create_with_parent(*ptr, RNA_EditBone, data->bbone_prev);
 }
 
 static void rna_EditBone_bbone_prev_set(PointerRNA *ptr,
                                         PointerRNA value,
                                         ReportList * /*reports*/)
 {
-  EditBone *ebone = (EditBone *)(ptr->data);
-  EditBone *hbone = (EditBone *)value.data;
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
+  EditBone *hbone = static_cast<EditBone *>(value.data);
 
   /* Within the same armature? */
   if (hbone == nullptr || value.owner_id == ptr->owner_id) {
@@ -978,8 +986,8 @@ static void rna_EditBone_bbone_prev_set(PointerRNA *ptr,
 
 static void rna_Bone_bbone_prev_set(PointerRNA *ptr, PointerRNA value, ReportList * /*reports*/)
 {
-  Bone *bone = (Bone *)ptr->data;
-  Bone *hbone = (Bone *)value.data;
+  Bone *bone = static_cast<Bone *>(ptr->data);
+  Bone *hbone = static_cast<Bone *>(value.data);
 
   /* Within the same armature? */
   if (hbone == nullptr || value.owner_id == ptr->owner_id) {
@@ -989,16 +997,16 @@ static void rna_Bone_bbone_prev_set(PointerRNA *ptr, PointerRNA value, ReportLis
 
 static PointerRNA rna_EditBone_bbone_next_get(PointerRNA *ptr)
 {
-  EditBone *data = (EditBone *)(ptr->data);
-  return rna_pointer_inherit_refine(ptr, &RNA_EditBone, data->bbone_next);
+  EditBone *data = static_cast<EditBone *>(ptr->data);
+  return RNA_pointer_create_with_parent(*ptr, RNA_EditBone, data->bbone_next);
 }
 
 static void rna_EditBone_bbone_next_set(PointerRNA *ptr,
                                         PointerRNA value,
                                         ReportList * /*reports*/)
 {
-  EditBone *ebone = (EditBone *)(ptr->data);
-  EditBone *hbone = (EditBone *)value.data;
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
+  EditBone *hbone = static_cast<EditBone *>(value.data);
 
   /* Within the same armature? */
   if (hbone == nullptr || value.owner_id == ptr->owner_id) {
@@ -1008,8 +1016,8 @@ static void rna_EditBone_bbone_next_set(PointerRNA *ptr,
 
 static void rna_Bone_bbone_next_set(PointerRNA *ptr, PointerRNA value, ReportList * /*reports*/)
 {
-  Bone *bone = (Bone *)ptr->data;
-  Bone *hbone = (Bone *)value.data;
+  Bone *bone = static_cast<Bone *>(ptr->data);
+  Bone *hbone = static_cast<Bone *>(value.data);
 
   /* Within the same armature? */
   if (hbone == nullptr || value.owner_id == ptr->owner_id) {
@@ -1019,25 +1027,27 @@ static void rna_Bone_bbone_next_set(PointerRNA *ptr, PointerRNA value, ReportLis
 
 static PointerRNA rna_EditBone_color_get(PointerRNA *ptr)
 {
-  EditBone *data = (EditBone *)(ptr->data);
-  return rna_pointer_inherit_refine(ptr, &RNA_BoneColor, &data->color);
+  EditBone *data = static_cast<EditBone *>(ptr->data);
+  return RNA_pointer_create_with_parent(*ptr, RNA_BoneColor, &data->color);
 }
 
 static void rna_Armature_editbone_transform_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->owner_id;
-  EditBone *ebone = (EditBone *)ptr->data;
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
   EditBone *child;
 
   /* update our parent */
   if (ebone->parent && ebone->flag & BONE_CONNECTED) {
     copy_v3_v3(ebone->parent->tail, ebone->head);
+    ebone->parent->rad_tail = ebone->rad_head;
   }
 
   /* update our children if necessary */
   for (child = static_cast<EditBone *>(arm->edbo->first); child; child = child->next) {
     if (child->parent == ebone && (child->flag & BONE_CONNECTED)) {
       copy_v3_v3(child->head, ebone->tail);
+      child->rad_head = ebone->rad_tail;
     }
   }
 
@@ -1051,13 +1061,13 @@ static void rna_Armature_editbone_transform_update(Main *bmain, Scene *scene, Po
 static void rna_Armature_bones_next(CollectionPropertyIterator *iter)
 {
   ListBaseIterator *internal = &iter->internal.listbase;
-  Bone *bone = (Bone *)internal->link;
+  Bone *bone = reinterpret_cast<Bone *>(internal->link);
 
   if (bone->childbase.first) {
-    internal->link = (Link *)bone->childbase.first;
+    internal->link = static_cast<Link *>(bone->childbase.first);
   }
   else if (bone->next) {
-    internal->link = (Link *)bone->next;
+    internal->link = reinterpret_cast<Link *>(bone->next);
   }
   else {
     internal->link = nullptr;
@@ -1065,7 +1075,7 @@ static void rna_Armature_bones_next(CollectionPropertyIterator *iter)
     do {
       bone = bone->parent;
       if (bone && bone->next) {
-        internal->link = (Link *)bone->next;
+        internal->link = reinterpret_cast<Link *>(bone->next);
         break;
       }
     } while (bone);
@@ -1077,10 +1087,10 @@ static void rna_Armature_bones_next(CollectionPropertyIterator *iter)
 /* not essential, but much faster than the default lookup function */
 static bool rna_Armature_bones_lookup_string(PointerRNA *ptr, const char *key, PointerRNA *r_ptr)
 {
-  bArmature *arm = (bArmature *)ptr->data;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
   Bone *bone = BKE_armature_find_bone_name(arm, key);
   if (bone) {
-    *r_ptr = RNA_pointer_create(ptr->owner_id, &RNA_Bone, bone);
+    rna_pointer_create_with_ancestors(*ptr, RNA_Bone, bone, *r_ptr);
     return true;
   }
   else {
@@ -1090,25 +1100,25 @@ static bool rna_Armature_bones_lookup_string(PointerRNA *ptr, const char *key, P
 
 static bool rna_Armature_is_editmode_get(PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->owner_id;
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
   return (arm->edbo != nullptr);
 }
 
 static void rna_Armature_transform(bArmature *arm, const float mat[16])
 {
-  ED_armature_transform(arm, (const float(*)[4])mat, true);
+  ED_armature_transform(arm, reinterpret_cast<const float (*)[4]>(mat), true);
 }
 
 static int rna_Armature_relation_line_position_get(PointerRNA *ptr)
 {
-  bArmature *arm = (bArmature *)ptr->data;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
   /* Translate the bitflag to an EnumPropertyItem prop_relation_lines_items item ID. */
   return (arm->flag & ARM_DRAW_RELATION_FROM_HEAD) ? 1 : 0;
 }
 
 static void rna_Armature_relation_line_position_set(PointerRNA *ptr, const int value)
 {
-  bArmature *arm = (bArmature *)ptr->data;
+  bArmature *arm = static_cast<bArmature *>(ptr->data);
 
   /* Translate the EnumPropertyItem prop_relation_lines_items item ID to a bitflag */
   switch (value) {
@@ -1123,7 +1133,11 @@ static void rna_Armature_relation_line_position_set(PointerRNA *ptr, const int v
   }
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 static void rna_def_bonecolor(BlenderRNA *brna)
 {
@@ -1266,7 +1280,7 @@ void rna_def_bone_curved_common(StructRNA *srna, bool is_posebone, bool is_editb
   RNA_def_property_array(prop, 3);
   RNA_def_property_flag(prop, PROP_PROPORTIONAL);
   RNA_def_property_ui_range(prop, 0.0f, FLT_MAX, 1, 3);
-  RNA_def_property_float_array_default(prop, rna_default_scale_3d);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(
       prop,
       "Scale In",
@@ -1278,7 +1292,7 @@ void rna_def_bone_curved_common(StructRNA *srna, bool is_posebone, bool is_editb
   RNA_def_property_array(prop, 3);
   RNA_def_property_flag(prop, PROP_PROPORTIONAL);
   RNA_def_property_ui_range(prop, 0.0f, FLT_MAX, 1, 3);
-  RNA_def_property_float_array_default(prop, rna_default_scale_3d);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(
       prop,
       "Scale Out",
@@ -1358,6 +1372,32 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
+  static const EnumPropertyItem prop_drawtype_items[] = {
+      {ARM_DRAW_TYPE_ARMATURE_DEFINED,
+       "ARMATURE_DEFINED",
+       0,
+       "Armature Defined",
+       "Use display mode from armature (default)"},
+      {ARM_DRAW_TYPE_OCTA, "OCTAHEDRAL", 0, "Octahedral", "Display bones as octahedral shape"},
+      {ARM_DRAW_TYPE_STICK, "STICK", 0, "Stick", "Display bones as simple 2D lines with dots"},
+      {ARM_DRAW_TYPE_B_BONE,
+       "BBONE",
+       0,
+       "B-Bone",
+       "Display bones as boxes, showing subdivision and B-Splines"},
+      {ARM_DRAW_TYPE_ENVELOPE,
+       "ENVELOPE",
+       0,
+       "Envelope",
+       "Display bones as extruded spheres, showing deformation influence volume"},
+      {ARM_DRAW_TYPE_WIRE,
+       "WIRE",
+       0,
+       "Wire",
+       "Display bones as thin wires, showing subdivision and B-Splines"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
   PropertyRNA *prop;
 
   /* strings */
@@ -1382,6 +1422,13 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
     RNA_def_property_pointer_funcs(prop, "rna_EditBone_color_get", nullptr, nullptr, nullptr);
   }
 
+  prop = RNA_def_property(srna, "display_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "drawtype");
+  RNA_def_property_enum_items(prop, prop_drawtype_items);
+  RNA_def_property_ui_text(prop, "Display Type", "");
+  RNA_def_property_update(prop, 0, "rna_Armature_redraw_data");
+  RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
+
   /* flags */
   prop = RNA_def_property(srna, "use_connect", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", BONE_CONNECTED);
@@ -1396,6 +1443,7 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
   RNA_def_property_update(prop, 0, "rna_Armature_update_data");
 
   prop = RNA_def_property(srna, "use_inherit_rotation", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "flag", BONE_HINGE);
   RNA_def_property_ui_text(
       prop, "Inherit Rotation", "Bone inherits rotation or scale from parent bone");
@@ -1422,6 +1470,7 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
   RNA_def_property_update(prop, 0, "rna_Armature_update_data");
 
   prop = RNA_def_property(srna, "use_local_location", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Local Location", "Bone location is set in local space");
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "flag", BONE_NO_LOCAL_LOCATION);
   RNA_def_property_update(prop, 0, "rna_Armature_update_data");
@@ -1447,8 +1496,7 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
   RNA_def_property_ui_text(
       prop,
       "Cyclic Offset",
-      "When bone doesn't have a parent, it receives cyclic offset effects (Deprecated)");
-  //                         "When bone doesn't have a parent, it receives cyclic offset effects");
+      "When bone does not have a parent, it receives cyclic offset effects (Deprecated)");
   RNA_def_property_update(prop, 0, "rna_Armature_update_data");
 
   prop = RNA_def_property(srna, "hide_select", PROP_BOOLEAN, PROP_NONE);
@@ -1542,6 +1590,7 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
   }
   RNA_def_property_float_sdna(prop, nullptr, "xwidth");
   RNA_def_property_ui_range(prop, 0.0f, 1000.0f, 1, RNA_TRANSLATION_PREC_DEFAULT);
+  RNA_def_property_float_default(prop, 0.1f);
   RNA_def_property_ui_text(prop, "B-Bone Display X Width", "B-Bone X size");
 
   prop = RNA_def_property(srna, "bbone_z", PROP_FLOAT, PROP_NONE);
@@ -1553,6 +1602,7 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
   }
   RNA_def_property_float_sdna(prop, nullptr, "zwidth");
   RNA_def_property_ui_range(prop, 0.0f, 1000.0f, 1, RNA_TRANSLATION_PREC_DEFAULT);
+  RNA_def_property_float_default(prop, 0.1f);
   RNA_def_property_ui_text(prop, "B-Bone Display Z Width", "B-Bone Z size");
 
   /* B-Bone Start Handle settings. */
@@ -1587,8 +1637,8 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
       "Start Handle Scale",
       "Multiply B-Bone Scale In channels by the local scale values of the start handle. "
       "This is done after the Scale Easing option and isn't affected by it.");
-  RNA_def_property_boolean_sdna(prop, nullptr, "bbone_prev_flag", BBONE_HANDLE_SCALE_X);
-  RNA_def_property_array(prop, 3);
+  RNA_def_property_boolean_bitset_array_sdna(
+      prop, nullptr, "bbone_prev_flag", BBONE_HANDLE_SCALE_X, 3);
   RNA_def_property_update(prop, 0, "rna_Armature_update_data");
 
   prop = RNA_def_property(srna, "bbone_handle_use_ease_start", PROP_BOOLEAN, PROP_NONE);
@@ -1632,8 +1682,8 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
       "End Handle Scale",
       "Multiply B-Bone Scale Out channels by the local scale values of the end handle. "
       "This is done after the Scale Easing option and isn't affected by it.");
-  RNA_def_property_boolean_sdna(prop, nullptr, "bbone_next_flag", BBONE_HANDLE_SCALE_X);
-  RNA_def_property_array(prop, 3);
+  RNA_def_property_boolean_bitset_array_sdna(
+      prop, nullptr, "bbone_next_flag", BBONE_HANDLE_SCALE_X, 3);
   RNA_def_property_update(prop, 0, "rna_Armature_update_data");
 
   prop = RNA_def_property(srna, "bbone_handle_use_ease_end", PROP_BOOLEAN, PROP_NONE);
@@ -1676,6 +1726,7 @@ static void rna_def_bone(BlenderRNA *brna)
   RNA_def_struct_ui_icon(srna, ICON_BONE_DATA);
   RNA_def_struct_path_func(srna, "rna_Bone_path");
   RNA_def_struct_idprops_func(srna, "rna_Bone_idprops");
+  RNA_def_struct_system_idprops_func(srna, "rna_Bone_system_idprops");
 
   /* pointers/collections */
   /* parent (pointer) */
@@ -1713,36 +1764,11 @@ static void rna_def_bone(BlenderRNA *brna)
 
   RNA_define_lib_overridable(true);
 
-  /* XXX should we define this in PoseChannel wrapping code instead?
-   *     But PoseChannels directly get some of their flags from here... */
   prop = RNA_def_property(srna, "hide", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", BONE_HIDDEN_P);
-  RNA_def_property_ui_text(
-      prop,
-      "Hide",
-      "Bone is not visible when it is not in Edit Mode (i.e. in Object or Pose Modes)");
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", BONE_HIDDEN_A);
+  RNA_def_property_ui_text(prop, "Hide", "Bone is not visible when it is in Edit Mode");
   RNA_def_property_ui_icon(prop, ICON_RESTRICT_VIEW_OFF, -1);
   RNA_def_property_update(prop, 0, "rna_Bone_hide_update");
-
-  prop = RNA_def_property(srna, "select", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", BONE_SELECTED);
-  RNA_def_property_ui_text(prop, "Select", "");
-  RNA_def_property_clear_flag(
-      prop,
-      PROP_ANIMATABLE); /* XXX: review whether this could be used for interesting effects... */
-  RNA_def_property_update(prop, 0, "rna_Bone_select_update");
-
-  prop = RNA_def_property(srna, "select_head", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", BONE_ROOTSEL);
-  RNA_def_property_ui_text(prop, "Select Head", "");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_update(prop, 0, "rna_Armature_redraw_data");
-
-  prop = RNA_def_property(srna, "select_tail", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", BONE_TIPSEL);
-  RNA_def_property_ui_text(prop, "Select Tail", "");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_update(prop, 0, "rna_Armature_redraw_data");
 
   /* XXX better matrix descriptions possible (Arystan) */
   prop = RNA_def_property(srna, "matrix", PROP_FLOAT, PROP_MATRIX);
@@ -1810,7 +1836,9 @@ static void rna_def_edit_bone(BlenderRNA *brna)
 
   srna = RNA_def_struct(brna, "EditBone", nullptr);
   RNA_def_struct_sdna(srna, "EditBone");
+  RNA_def_struct_path_func(srna, "rna_EditBone_path");
   RNA_def_struct_idprops_func(srna, "rna_EditBone_idprops");
+  RNA_def_struct_system_idprops_func(srna, "rna_EditBone_system_idprops");
   RNA_def_struct_ui_text(srna, "Edit Bone", "Edit mode bone in an armature data-block");
   RNA_def_struct_ui_icon(srna, ICON_BONE_DATA);
 
@@ -1983,6 +2011,7 @@ static void rna_def_armature_edit_bones(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return type */
   parm = RNA_def_pointer(func, "bone", "EditBone", "", "Newly created edit bone");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   /* remove target */
@@ -2012,16 +2041,16 @@ static void rna_def_armature_collections(BlenderRNA *brna, PropertyRNA *cprop)
 
   prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "BoneCollection");
-  RNA_def_property_pointer_sdna(prop, nullptr, "runtime.active_collection");
+  RNA_def_property_pointer_sdna(prop, nullptr, "runtime->active_collection");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_IGNORE);
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_pointer_funcs(
-      prop, nullptr, "rna_BoneCollections_active_set", nullptr, nullptr);
+      prop, "rna_BoneCollections_active_get", "rna_BoneCollections_active_set", nullptr, nullptr);
   RNA_def_property_ui_text(prop, "Active Collection", "Armature's active bone collection");
   RNA_def_property_update(prop, NC_OBJECT | ND_BONE_COLLECTION, nullptr);
 
   prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_NONE);
-  RNA_def_property_int_sdna(prop, nullptr, "runtime.active_collection_index");
+  RNA_def_property_int_sdna(prop, nullptr, "runtime->active_collection_index");
   RNA_def_property_override_flag(prop, PROPOVERRIDE_IGNORE);
   RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
   RNA_def_property_ui_text(
@@ -2081,6 +2110,7 @@ static void rna_def_armature_collections(BlenderRNA *brna, PropertyRNA *cprop)
   /* Return value. */
   parm = RNA_def_pointer(
       func, "bonecollection", "BoneCollection", "", "Newly created bone collection");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   /* Armature.collections.remove(...) */
@@ -2120,25 +2150,30 @@ static void rna_def_armature(BlenderRNA *brna)
   PropertyRNA *parm;
 
   static const EnumPropertyItem prop_drawtype_items[] = {
-      {ARM_OCTA, "OCTAHEDRAL", 0, "Octahedral", "Display bones as octahedral shape (default)"},
-      {ARM_LINE, "STICK", 0, "Stick", "Display bones as simple 2D lines with dots"},
-      {ARM_B_BONE,
+      {ARM_DRAW_TYPE_OCTA,
+       "OCTAHEDRAL",
+       0,
+       "Octahedral",
+       "Display bones as octahedral shape (default)"},
+      {ARM_DRAW_TYPE_STICK, "STICK", 0, "Stick", "Display bones as simple 2D lines with dots"},
+      {ARM_DRAW_TYPE_B_BONE,
        "BBONE",
        0,
        "B-Bone",
        "Display bones as boxes, showing subdivision and B-Splines"},
-      {ARM_ENVELOPE,
+      {ARM_DRAW_TYPE_ENVELOPE,
        "ENVELOPE",
        0,
        "Envelope",
        "Display bones as extruded spheres, showing deformation influence volume"},
-      {ARM_WIRE,
+      {ARM_DRAW_TYPE_WIRE,
        "WIRE",
        0,
        "Wire",
        "Display bones as thin wires, showing subdivision and B-Splines"},
       {0, nullptr, 0, nullptr, nullptr},
   };
+
   static const EnumPropertyItem prop_pose_position_items[] = {
       {0, "POSE", 0, "Pose Position", "Show armature in posed state"},
       {ARM_RESTPOS,
@@ -2324,6 +2359,7 @@ static void rna_def_bonecollection(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "BoneCollection", "Bone collection in an Armature data-block");
   RNA_def_struct_path_func(srna, "rna_BoneCollection_path");
   RNA_def_struct_idprops_func(srna, "rna_BoneCollection_idprops");
+  RNA_def_struct_system_idprops_func(srna, "rna_BoneCollection_system_idprops");
 
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_string_sdna(prop, nullptr, "name");
@@ -2342,6 +2378,7 @@ static void rna_def_bonecollection(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_OBJECT | ND_BONE_COLLECTION, nullptr);
 
   prop = RNA_def_property(srna, "is_visible", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_boolean_sdna(prop, nullptr, "flags", BONE_COLLECTION_VISIBLE);
   RNA_def_property_ui_text(
       prop, "Visible", "Bones in this collection will be visible in pose/object mode");
@@ -2468,5 +2505,7 @@ void RNA_def_armature(BlenderRNA *brna)
   rna_def_bone(brna);
   rna_def_edit_bone(brna);
 }
+
+}  // namespace blender
 
 #endif

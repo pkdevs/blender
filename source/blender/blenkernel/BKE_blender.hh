@@ -8,7 +8,7 @@
  * \brief Blender util stuff
  */
 
-#include "BLI_compiler_attrs.h"
+namespace blender {
 
 struct Main;
 struct UserDef;
@@ -30,6 +30,8 @@ void BKE_blender_globals_main_replace(Main *bmain);
  * correctly non-G_MAIN data, use with (a lot of) care.
  */
 Main *BKE_blender_globals_main_swap(Main *new_gmain);
+
+void BKE_blender_globals_crash_path_get(char *filepath);
 
 void BKE_blender_userdef_data_swap(UserDef *userdef_a, UserDef *userdef_b);
 void BKE_blender_userdef_data_set(UserDef *userdef);
@@ -54,3 +56,5 @@ void BKE_blender_userdef_data_free(UserDef *userdef, bool clear_fonts);
 void BKE_blender_atexit_register(void (*func)(void *user_data), void *user_data);
 void BKE_blender_atexit_unregister(void (*func)(void *user_data), const void *user_data);
 void BKE_blender_atexit();
+
+}  // namespace blender

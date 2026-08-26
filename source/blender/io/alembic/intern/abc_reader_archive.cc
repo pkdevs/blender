@@ -8,13 +8,15 @@
 
 #include "abc_reader_archive.h"
 
+#include "Alembic/Abc/ArchiveInfo.h"
+#include "Alembic/AbcCoreAbstract/MetaData.h"
 #include "Alembic/AbcCoreLayer/Read.h"
 #include "Alembic/AbcCoreOgawa/ReadWrite.h"
 
 #include "BKE_main.hh"
 
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #ifdef WIN32
 #  include "utfconv.hh"
@@ -23,12 +25,16 @@
 #include <fstream>
 #include <vector>
 
+namespace blender {
+
+using Alembic::Abc::chrono_t;
 using Alembic::Abc::ErrorHandler;
 using Alembic::Abc::Exception;
 using Alembic::Abc::IArchive;
 using Alembic::Abc::kWrapExisting;
+using Alembic::Abc::MetaData;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 static IArchive open_archive(const std::string &filename,
                              const std::vector<std::istream *> &input_streams)
@@ -142,4 +148,27 @@ Alembic::Abc::IObject ArchiveReader::getTop()
   return m_archive.getTop();
 }
 
-}  // namespace blender::io::alembic
+bool ArchiveReader::is_blender_archive_version_prior_44()
+{
+  const MetaData &abc_metadata = m_archive.getPtr()->getMetaData();
+
+  /* Was the incoming Archive written by Blender? If so, make the version check. */
+  if (abc_metadata.get(Alembic::Abc::kApplicationNameKey) == "Blender") {
+    return abc_metadata.get("blender_version") < "v4.4";
+  }
+
+  return false;
+}
+
+TimeInfo ArchiveReader::getTimeInfo()
+{
+  chrono_t min_time = std::numeric_limits<chrono_t>::max();
+  chrono_t max_time = -std::numeric_limits<chrono_t>::max();
+
+  Alembic::Abc::GetArchiveStartAndEndTime(m_archive, min_time, max_time);
+
+  return {min_time, max_time};
+}
+
+}  // namespace io::alembic
+}  // namespace blender

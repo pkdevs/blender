@@ -12,40 +12,53 @@
 
 #include "tree_element.hh"
 
-struct Sequence;
+namespace blender {
+
 struct Strip;
+struct StripData;
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
-class TreeElementSequence : public AbstractTreeElement {
-  Sequence &sequence_;
+class TreeElementStrip : public AbstractTreeElement {
+  Strip &strip_;
 
  public:
-  TreeElementSequence(TreeElement &legacy_te, Sequence &sequence);
+  TreeElementStrip(TreeElement &legacy_te, Strip &strip);
 
-  bool expand_poll(const SpaceOutliner &) const override;
-  void expand(SpaceOutliner &) const override;
+  bool expand_poll(const SpaceOutliner & /*soops*/) const override;
+  void expand(SpaceOutliner & /*soops*/) const override;
 
-  Sequence &get_sequence() const;
-  SequenceType get_sequence_type() const;
+  Strip &get_strip() const;
+  std::optional<BIFIconID> get_icon() const override;
 };
 
 /* -------------------------------------------------------------------- */
 
-class TreeElementSequenceStrip : public AbstractTreeElement {
+class TreeElementStripData : public AbstractTreeElement {
  public:
-  TreeElementSequenceStrip(TreeElement &legacy_te, Strip &strip);
+  TreeElementStripData(TreeElement &legacy_te, StripData &strip);
+
+  std::optional<BIFIconID> get_icon() const override
+  {
+    return ICON_LIBRARY_DATA_DIRECT;
+  }
 };
 
 /* -------------------------------------------------------------------- */
 
-class TreeElementSequenceStripDuplicate : public AbstractTreeElement {
-  Sequence &sequence_;
+class TreeElementStripDuplicate : public AbstractTreeElement {
+  Strip &strip_;
 
  public:
-  TreeElementSequenceStripDuplicate(TreeElement &legacy_te, Sequence &sequence);
+  TreeElementStripDuplicate(TreeElement &legacy_te, Strip &strip);
 
-  Sequence &get_sequence() const;
+  Strip &get_strip() const;
+
+  std::optional<BIFIconID> get_icon() const override
+  {
+    return ICON_SEQ_STRIP_DUPLICATE;
+  }
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

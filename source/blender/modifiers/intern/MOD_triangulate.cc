@@ -8,27 +8,27 @@
 
 #include <cstring>
 
-#include "MEM_guardedalloc.h"
-
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
-#include "DNA_defaults.h"
 #include "DNA_screen_types.h"
 
 #include "BKE_mesh.hh"
 #include "BKE_modifier.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "RNA_prototypes.hh"
+#include "RNA_types.hh"
 
 #include "bmesh.hh"
 #include "bmesh_tools.hh"
 
 #include "MOD_ui_common.hh"
+
+namespace blender {
 
 static Mesh *triangulate_mesh(Mesh *mesh,
                               const int quad_method,
@@ -67,10 +67,12 @@ static Mesh *triangulate_mesh(Mesh *mesh,
   BM_mesh_free(bm);
 
   if (keep_clnors) {
-    float(*corner_normals)[3] = static_cast<float(*)[3]>(
-        CustomData_get_layer_for_write(&result->corner_data, CD_NORMAL, result->corners_num));
-    BKE_mesh_set_custom_normals_normalized(result, corner_normals);
-    CustomData_free_layers(&result->corner_data, CD_NORMAL, result->corners_num);
+    bke::mesh_set_custom_normals_normalized(
+        *result,
+        {static_cast<float3 *>(
+             CustomData_get_layer_for_write(&result->corner_data, CD_NORMAL, result->corners_num)),
+         result->corners_num});
+    CustomData_free_layers(&result->corner_data, CD_NORMAL);
   }
 
   return result;
@@ -78,11 +80,8 @@ static Mesh *triangulate_mesh(Mesh *mesh,
 
 static void init_data(ModifierData *md)
 {
-  TriangulateModifierData *tmd = (TriangulateModifierData *)md;
-
-  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(tmd, modifier));
-
-  MEMCPY_STRUCT_AFTER(tmd, DNA_struct_default_get(TriangulateModifierData), modifier);
+  TriangulateModifierData *tmd = reinterpret_cast<TriangulateModifierData *>(md);
+  INIT_DEFAULT_STRUCT_AFTER(tmd, modifier);
 
   /* Enable in editmode by default */
   md->mode |= eModifierMode_Editmode;
@@ -90,32 +89,27 @@ static void init_data(ModifierData *md)
 
 static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext * /*ctx*/, Mesh *mesh)
 {
-  TriangulateModifierData *tmd = (TriangulateModifierData *)md;
-  Mesh *result;
-  if (!(result = triangulate_mesh(
-            mesh, tmd->quad_method, tmd->ngon_method, tmd->min_vertices, tmd->flag)))
-  {
-    return mesh;
-  }
-
-  return result;
+  TriangulateModifierData *tmd = reinterpret_cast<TriangulateModifierData *>(md);
+  Mesh *result = triangulate_mesh(
+      mesh, tmd->quad_method, tmd->ngon_method, tmd->min_vertices, tmd->flag);
+  return (result) ? result : mesh;
 }
 
 static void panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
-  uiItemR(layout, ptr, "quad_method", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "ngon_method", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "min_vertices", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "keep_custom_normals", UI_ITEM_NONE, nullptr, ICON_NONE);
+  layout.prop(ptr, "quad_method", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "ngon_method", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "min_vertices", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "keep_custom_normals", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  modifier_panel_end(layout, ptr);
+  modifier_error_message_draw(layout, ptr);
 }
 
 static void panel_register(ARegionType *region_type)
@@ -158,4 +152,7 @@ ModifierTypeInfo modifierType_Triangulate = {
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
+    /*foreach_working_space_color*/ nullptr,
 };
+
+}  // namespace blender

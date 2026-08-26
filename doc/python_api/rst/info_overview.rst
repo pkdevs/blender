@@ -85,14 +85,13 @@ Add-ons
 -------
 
 Some of Blender's functionality is best kept optional,
-alongside scripts loaded at startup there are add-ons which are kept in their own directory ``scripts/addons``,
-They are only loaded on startup if selected from the user preferences.
+alongside scripts loaded at startup there are add-ons which are only loaded on startup
+if enabled from the user preferences. Add-ons are typically distributed as extensions.
 
-The only difference between add-ons and built-in Python modules is that add-ons must contain a ``bl_info`` variable
-which Blender uses to read metadata such as name, author, category and project link.
-The User Preferences add-on listing uses ``bl_info`` to display information about each add-on.
-`See Add-ons <https://developer.blender.org/docs/handbook/addons/guidelines/>`__
-for details on the ``bl_info`` dictionary.
+The only difference between add-on extensions and built-in Python modules is that add-ons must include a
+``blender_manifest.toml`` which Blender uses to read metadata such as name, author, tags and project link.
+The User Preferences add-on listing uses this to display information about each add-on.
+See :ref:`Creating Extensions <blender_manual:extensions-index>` for details.
 
 
 Integration through Classes
@@ -166,7 +165,7 @@ Class mix-in example:
    Modal operators are an exception, keeping their instance variable as Blender runs, see modal operator template.
 
 So once the class is registered with Blender, instancing the class and calling the functions is left up to Blender.
-In fact you cannot instance these classes from the script as you would expect with most Python API's.
+In fact you cannot instantiate these classes from the script as you would expect with most Python APIs.
 To run operators you can call them through the operator API, e.g:
 
 .. code-block:: python
@@ -192,9 +191,9 @@ have a new instance for every redraw.
 Some other types, like :class:`bpy.types.Operator`, have an even more complex internal handling,
 which can lead to several instantiations for a single operator execution.
 
-There are a few cases where defining ``__init__()`` and ``__del__()`` does make sense,
-e.g. when sub-classing a :class:`bpy.types.RenderEngine`. When doing so, the parent matching function
-must always be called, otherwise Blender's internal initialization won't happen properly:
+There are a few cases where defining ``__init__()`` does make sense, e.g., when sub-classing a
+:class:`bpy.types.RenderEngine`. When doing so, the parent matching function must always be called,
+otherwise Blender's internal initialization won't happen properly:
 
 .. code-block:: python
 
@@ -202,19 +201,46 @@ must always be called, otherwise Blender's internal initialization won't happen 
    class AwesomeRaytracer(bpy.types.RenderEngine):
       def __init__(self, *args, **kwargs):
          super().__init__(*args, **kwargs)
+         self.my_var = 42
          ...
 
-      def __del__(self):
-         ...
-         super.__del__()
+.. warning::
 
-.. note::
+   The Blender-defined parent constructor must be called before any data access to the object, including
+   from other potential parent types ``__init__()`` functions.
+
+.. warning::
 
    Calling the parent's ``__init__()`` function is a hard requirement since Blender 4.4.
    The 'generic' signature is the recommended one here, as Blender internal BPY code is typically
    the only caller of these functions. The actual arguments passed to the constructor are fully
    internal data, and may change depending on the implementation.
 
+   Unfortunately, the error message, generated in case the expected constructor is not called, can
+   be fairly cryptic and unhelpful. Generally they should be about failure to create a (python)
+   object:
+
+      MemoryError: couldn't create bpy_struct object
+
+   With Operators, it might be something like this:
+
+      RuntimeError: could not create instance of <OPERATOR_OT_identifier> to call callback function execute
+
+.. note::
+
+   In case you are using complex/multi-inheritance, ``super()`` may not work (as the Blender-defined parent
+   may not be the first type in the MRO). It is best then to first explicitly invoke the Blender-defined
+   parent class constructor, before any other. For example:
+
+   .. code-block:: python
+
+      import bpy
+      class FancyRaytracer(AwesomeRaytracer, bpy.types.RenderEngine):
+         def __init__(self, *args, **kwargs):
+            bpy.types.RenderEngine.__init__(self, *args, **kwargs)
+            AwesomeRaytracer.__init__(self, *args, **kwargs)
+            self.my_var = 42
+            ...
 
 .. note::
 
@@ -223,6 +249,21 @@ must always be called, otherwise Blender's internal initialization won't happen 
    Doing so presents a very high risk of crashes or otherwise corruption of Blender internal data.
    But if defined, it must take the same two generic positional and keyword arguments,
    and call the parent's ``__new__()`` with them if actually creating a new object.
+
+.. note::
+
+   Due to internal
+   `CPython implementation details <https://discuss.python.org/t/cpython-usage-of-tp-finalize/64100>`__,
+   C++-defined Blender types do not define or use a ``__del__()`` (aka ``tp_finalize()``) destructor
+   currently.
+   As this function
+   `does not exist if not explicitly defined <https://stackoverflow.com/questions/36722390/python-3-super-del>`__,
+   that means that calling ``super().__del__()`` in the ``__del__()`` function of a sub-class will
+   fail with the following error:
+   ``AttributeError: 'super' object has no attribute '__del__'``.
+   If a call to the MRO 'parent' destructor is needed for some reason, the caller code must ensure
+   that the destructor does exist, e.g., using something like this:
+   ``getattr(super(), "__del__", lambda self: None)(self)``
 
 
 .. _info_overview_registration:
@@ -254,7 +295,7 @@ A simple Blender Python module can look like this:
    if __name__ == "__main__":
        register()
 
-These functions usually appear at the bottom of the script containing class registration sometimes adding menu items.
+These functions usually appear at the bottom of the script containing class registration, sometimes adding menu items.
 You can also use them for internal purposes setting up data for your own tools but take care
 since register won't re-run when a new blend-file is loaded.
 
@@ -282,11 +323,11 @@ Class Registration
 Registering a class with Blender results in the class definition being loaded into Blender,
 where it becomes available alongside existing functionality.
 Once this class is loaded you can access it from :mod:`bpy.types`,
-using the ``bl_idname`` rather than the classes original name.
+using the ``bl_idname`` rather than the class's original name.
 
 .. note::
 
-   There are some exceptions to this for class names which aren't guarantee to be unique.
+   There are some exceptions to this for class names which aren't guaranteed to be unique.
    In this case use: :func:`bpy.types.Struct.bl_rna_get_subclass_py`.
 
 
@@ -320,7 +361,7 @@ For example, if you want to store material settings for a custom engine:
 
 .. code-block:: python
 
-   # Create new property
+   # Create new property:
    # bpy.data.materials[0].my_custom_props.my_float
    import bpy
 
@@ -329,7 +370,7 @@ For example, if you want to store material settings for a custom engine:
 
    def register():
        bpy.utils.register_class(MyMaterialProps)
-       bpy.types.Material.my_custom_props: bpy.props.PointerProperty(type=MyMaterialProps)
+       bpy.types.Material.my_custom_props = bpy.props.PointerProperty(type=MyMaterialProps)
 
    def unregister():
        del bpy.types.Material.my_custom_props
@@ -347,7 +388,7 @@ For example, if you want to store material settings for a custom engine:
 
 .. code-block:: python
 
-   # Create new property group with a sub property
+   # Create new property group with a sub property:
    # bpy.data.materials[0].my_custom_props.sub_group.my_float
    import bpy
 
@@ -360,7 +401,7 @@ For example, if you want to store material settings for a custom engine:
    def register():
        bpy.utils.register_class(MyMaterialSubProps)
        bpy.utils.register_class(MyMaterialGroupProps)
-       bpy.types.Material.my_custom_props: bpy.props.PointerProperty(type=MyMaterialGroupProps)
+       bpy.types.Material.my_custom_props = bpy.props.PointerProperty(type=MyMaterialGroupProps)
 
    def unregister():
        del bpy.types.Material.my_custom_props
@@ -372,7 +413,7 @@ For example, if you want to store material settings for a custom engine:
 
 .. important::
 
-   The lower most class needs to be registered first and that ``unregister()`` is a mirror of ``register()``.
+   The lowest class needs to be registered first and that ``unregister()`` is a mirror of ``register()``.
 
 
 Manipulating Classes
@@ -386,9 +427,9 @@ For example:
 
 .. code-block:: python
 
-   # add a new property to an existing type
+   # Add a new property to an existing type.
    bpy.types.Object.my_float: bpy.props.FloatProperty()
-   # remove
+   # Remove it.
    del bpy.types.Object.my_float
 
 This works just as well for ``PropertyGroup`` subclasses you define yourself.
@@ -410,23 +451,24 @@ This is equivalent to:
 Dynamic Class Definition (Advanced)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In some cases the specifier for data may not be in Blender, for example a external render engines shader definitions,
+In some cases the specifier for data may not be in Blender, for example an external render engine's shader definitions,
 and it may be useful to define them as types and remove them on the fly.
 
 .. code-block:: python
 
    for i in range(10):
-       idname = "object.operator_%d" % i
+       idname = "object.operator_{:d}".format(i)
 
        def func(self, context):
            print("Hello World", self.bl_idname)
            return {'FINISHED'}
 
-       opclass = type("DynOp%d" % i,
-                      (bpy.types.Operator, ),
-                      {"bl_idname": idname, "bl_label": "Test", "execute": func},
-                      )
-       bpy.utils.register_class(opclass)
+       op_class = type(
+           "DynOp{:d}".format(i),
+           (bpy.types.Operator, ),
+           {"bl_idname": idname, "bl_label": "Test", "execute": func},
+       )
+       bpy.utils.register_class(op_class)
 
 .. note::
 

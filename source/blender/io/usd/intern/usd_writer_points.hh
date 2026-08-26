@@ -7,14 +7,16 @@
 
 #include <pxr/usd/usdGeom/points.h>
 
+namespace blender {
+
 struct Main;
 struct PointCloud;
 
-namespace blender::bke {
+namespace bke {
 class AttributeIter;
-}  // namespace blender::bke
+}  // namespace bke
 
-namespace blender::io::usd {
+namespace io::usd {
 
 /* Writer for USD points. */
 class USDPointsWriter final : public USDAbstractWriter {
@@ -23,22 +25,24 @@ class USDPointsWriter final : public USDAbstractWriter {
   ~USDPointsWriter() final = default;
 
  protected:
-  virtual void do_write(HierarchyContext &context) override;
+  void do_write(HierarchyContext &context) override;
 
  private:
   void write_generic_data(const bke::AttributeIter &attr,
                           const pxr::UsdGeomPoints &usd_points,
-                          pxr::UsdTimeCode timecode);
+                          pxr::UsdTimeCode time);
 
   void write_custom_data(const PointCloud *points,
                          const pxr::UsdGeomPoints &usd_points,
-                         pxr::UsdTimeCode timecode);
+                         pxr::UsdTimeCode time);
 
+  void write_ids(const PointCloud *points,
+                 const pxr::UsdGeomPoints &usd_points,
+                 pxr::UsdTimeCode time);
   void write_velocities(const PointCloud *points,
                         const pxr::UsdGeomPoints &usd_points,
-                        pxr::UsdTimeCode timecode);
-
-  void set_extents(const pxr::UsdPrim &prim, pxr::UsdTimeCode timecode);
+                        pxr::UsdTimeCode time);
 };
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

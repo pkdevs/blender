@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 """
-This script generates the blender.1 man page, embedding the help text
+This script generates the ``blender.1`` man page, embedding the help text
 from the Blender executable itself. Invoke it as follows:
 
     blender.1.py --blender <path-to-blender> --output <output-filename>
@@ -20,6 +20,7 @@ import time
 
 from typing import (
     TextIO,
+    Dict,
 )
 
 
@@ -31,7 +32,7 @@ def man_format(data: str) -> str:
     return data
 
 
-def blender_extract_info(blender_bin: str) -> dict[str, str]:
+def blender_extract_info(blender_bin: str) -> Dict[str, str]:
     blender_env = {
         "ASAN_OPTIONS": (
             os.environ.get("ASAN_OPTIONS", "") +
@@ -198,7 +199,7 @@ def create_argparse() -> argparse.ArgumentParser:
     parser.add_argument(
         "--blender",
         required=True,
-        help="Path to the blender binary."
+        help="Path to the Blender binary."
     )
     parser.add_argument(
         "--verbose",

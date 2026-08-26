@@ -35,8 +35,8 @@
 #include <fcntl.h>
 
 #ifdef WIN32
-#  include "BLI_string_utf8.h"
-#  include "BLI_winstuff.h"
+#  include "BLI_string_utf8.hh"
+#  include "BLI_winstuff.hh"
 #  include "utfconv.hh"
 #  include <ShObjIdl.h>
 #  include <direct.h>
@@ -51,12 +51,14 @@
 /* lib includes */
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
-#include "BLI_linklist.h"
+#include "BLI_fileops.hh"
+#include "BLI_linklist.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
+
+namespace blender {
 
 /* NOTE: The implementation for Apple lives in storage_apple.mm. */
 #if !defined(__APPLE__)
@@ -74,11 +76,7 @@ bool BLI_change_working_dir(const char *dir)
   }
   return _wchdir(wdir) == 0;
 #  else
-  int result = chdir(dir);
-  if (result == 0) {
-    BLI_setenv("PWD", dir);
-  }
-  return result == 0;
+  return chdir(dir) == 0;
 #  endif
 }
 
@@ -91,17 +89,8 @@ char *BLI_current_working_dir(char *dir, const size_t maxncpy)
       return dir;
     }
   }
-  return NULL;
+  return nullptr;
 #  else
-  const char *pwd = BLI_getenv("PWD");
-  if (pwd) {
-    size_t srclen = BLI_strnlen(pwd, maxncpy);
-    if (srclen != maxncpy) {
-      memcpy(dir, pwd, srclen + 1);
-      return dir;
-    }
-    return nullptr;
-  }
   return getcwd(dir, maxncpy);
 #  endif
 }
@@ -114,6 +103,12 @@ const char *BLI_dir_home()
 #ifdef WIN32
   home_dir = BLI_getenv("userprofile");
 #else
+  /* Return the users home directory with a fallback when the environment variable isn't set.
+   * Failure to access `$HOME` is rare but possible, see: #2931.
+   *
+   * Any errors accessing home is likely caused by a broken/unsupported configuration,
+   * nevertheless, failing to null check would crash which makes the error difficult
+   * for users troubleshoot. */
   home_dir = BLI_getenv("HOME");
   if (home_dir == nullptr) {
     if (const passwd *pwuser = getpwuid(getuid())) {
@@ -309,27 +304,26 @@ eFileAttributes BLI_file_attributes(const char *path)
 }
 #endif
 
-/* Return alias/shortcut file target. Apple version is defined in storage_apple.mm */
-#ifndef __APPLE__
+#ifndef __APPLE__ /* Apple version is defined in `storage_apple.mm`. */
 bool BLI_file_alias_target(const char *filepath,
                            /* This parameter can only be `const` on Linux since
                             * redirection is not supported there.
                             * NOLINTNEXTLINE: readability-non-const-parameter. */
-                           char r_targetpath[/*FILE_MAXDIR*/])
+                           char r_targetpath[FILE_MAXDIR])
 {
 #  ifdef WIN32
   if (!BLI_path_extension_check(filepath, ".lnk")) {
     return false;
   }
 
-  HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+  HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   if (FAILED(hr)) {
     return false;
   }
 
-  IShellLinkW *Shortcut = NULL;
+  IShellLinkW *Shortcut = nullptr;
   hr = CoCreateInstance(
-      CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, IID_IShellLinkW, (LPVOID *)&Shortcut);
+      CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_IShellLinkW, (LPVOID *)&Shortcut);
 
   bool success = false;
   if (SUCCEEDED(hr)) {
@@ -343,7 +337,7 @@ bool BLI_file_alias_target(const char *filepath,
           hr = Shortcut->Resolve(0, SLR_NO_UI | SLR_UPDATE | SLR_NOSEARCH);
           if (SUCCEEDED(hr)) {
             wchar_t target_utf16[FILE_MAXDIR] = {0};
-            hr = Shortcut->GetPath(target_utf16, FILE_MAXDIR, NULL, 0);
+            hr = Shortcut->GetPath(target_utf16, FILE_MAXDIR, nullptr, 0);
             if (SUCCEEDED(hr)) {
               success = (conv_utf_16_to_8(target_utf16, r_targetpath, FILE_MAXDIR) == 0);
             }
@@ -365,7 +359,7 @@ bool BLI_file_alias_target(const char *filepath,
 }
 #endif
 
-int BLI_exists(const char *path)
+int BLI_file_stat_mode(const char *path)
 {
 #if defined(WIN32)
   BLI_stat_t st;
@@ -405,6 +399,18 @@ int BLI_exists(const char *path)
   }
 #endif
   return (st.st_mode);
+}
+
+bool BLI_exists(const char *path)
+{
+#ifdef WIN32
+  wchar_t *path_16 = alloc_utf16_from_8(path, 0);
+  const bool exists = (GetFileAttributesW(path_16) != INVALID_FILE_ATTRIBUTES);
+  free(path_16);
+  return exists;
+#else
+  return BLI_file_stat_mode(path) != 0;
+#endif
 }
 
 #ifdef WIN32
@@ -450,13 +456,27 @@ int BLI_stat(const char *path, struct stat *buffer)
 
 bool BLI_is_dir(const char *path)
 {
-  return S_ISDIR(BLI_exists(path));
+#ifdef WIN32
+  wchar_t *tmp_16 = alloc_utf16_from_8(path, 1);
+  const DWORD attr = GetFileAttributesW(tmp_16);
+  free(tmp_16);
+  return (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY));
+#else
+  return S_ISDIR(BLI_file_stat_mode(path));
+#endif
 }
 
 bool BLI_is_file(const char *path)
 {
-  const int mode = BLI_exists(path);
+#ifdef WIN32
+  wchar_t *tmp_16 = alloc_utf16_from_8(path, 1);
+  const DWORD attr = GetFileAttributesW(tmp_16);
+  free(tmp_16);
+  return (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY));
+#else
+  const int mode = BLI_file_stat_mode(path);
   return (mode && !S_ISDIR(mode));
+#endif
 }
 
 void *BLI_file_read_data_as_mem_from_handle(FILE *fp,
@@ -485,26 +505,26 @@ void *BLI_file_read_data_as_mem_from_handle(FILE *fp,
     return nullptr;
   }
 
-  void *mem = MEM_mallocN(filelen + pad_bytes, __func__);
+  void *mem = MEM_new_uninitialized(filelen + pad_bytes, __func__);
   if (mem == nullptr) {
     return nullptr;
   }
 
   const long int filelen_read = fread(mem, 1, filelen, fp);
   if ((filelen_read < 0) || ferror(fp)) {
-    MEM_freeN(mem);
+    MEM_delete_void(mem);
     return nullptr;
   }
 
   if (read_size_exact) {
     if (filelen_read != filelen) {
-      MEM_freeN(mem);
+      MEM_delete_void(mem);
       return nullptr;
     }
   }
   else {
     if (filelen_read < filelen) {
-      mem = MEM_reallocN(mem, filelen_read + pad_bytes);
+      mem = MEM_realloc_uninitialized(mem, filelen_read + pad_bytes);
       if (mem == nullptr) {
         return nullptr;
       }
@@ -516,12 +536,12 @@ void *BLI_file_read_data_as_mem_from_handle(FILE *fp,
   return mem;
 }
 
-void *BLI_file_read_text_as_mem(const char *filepath, size_t pad_bytes, size_t *r_size)
+char *BLI_file_read_text_as_mem(const char *filepath, size_t pad_bytes, size_t *r_size)
 {
   FILE *fp = BLI_fopen(filepath, "r");
-  void *mem = nullptr;
+  char *mem = nullptr;
   if (fp) {
-    mem = BLI_file_read_data_as_mem_from_handle(fp, false, pad_bytes, r_size);
+    mem = static_cast<char *>(BLI_file_read_data_as_mem_from_handle(fp, false, pad_bytes, r_size));
     fclose(fp);
   }
   return mem;
@@ -538,12 +558,12 @@ void *BLI_file_read_binary_as_mem(const char *filepath, size_t pad_bytes, size_t
   return mem;
 }
 
-void *BLI_file_read_text_as_mem_with_newline_as_nil(const char *filepath,
+char *BLI_file_read_text_as_mem_with_newline_as_nil(const char *filepath,
                                                     bool trim_trailing_space,
                                                     size_t pad_bytes,
                                                     size_t *r_size)
 {
-  char *mem = static_cast<char *>(BLI_file_read_text_as_mem(filepath, pad_bytes, r_size));
+  char *mem = BLI_file_read_text_as_mem(filepath, pad_bytes, r_size);
   if (mem != nullptr) {
     char *mem_end = mem + *r_size;
     if (pad_bytes != 0) {
@@ -583,12 +603,12 @@ LinkNode *BLI_file_read_as_lines(const char *filepath)
   size = size_t(BLI_ftell(fp));
   BLI_fseek(fp, 0, SEEK_SET);
 
-  if (UNLIKELY(size == size_t(-1))) {
+  if (size == size_t(-1)) [[unlikely]] {
     fclose(fp);
     return nullptr;
   }
 
-  buf = MEM_cnew_array<char>(size, "file_as_lines");
+  buf = MEM_new_array_zeroed<char>(size, "file_as_lines");
   if (buf) {
     size_t i, last = 0;
 
@@ -606,7 +626,7 @@ LinkNode *BLI_file_read_as_lines(const char *filepath)
       }
     }
 
-    MEM_freeN(buf);
+    MEM_delete(buf);
   }
 
   fclose(fp);
@@ -630,3 +650,5 @@ bool BLI_file_older(const char *file1, const char *file2)
   }
   return (st1.st_mtime < st2.st_mtime);
 }
+
+}  // namespace blender

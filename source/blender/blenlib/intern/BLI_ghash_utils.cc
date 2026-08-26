@@ -13,11 +13,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h" /* own include */
+#include "BLI_ghash.hh" /* own include */
 #include "BLI_hash_mm2a.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_strict_flags.h" /* Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Generic Key Hash & Comparison Functions
@@ -27,7 +29,7 @@
 /* works but slower */
 uint BLI_ghashutil_ptrhash(const void *key)
 {
-  return (uint)(intptr_t)key;
+  return uint(intptr_t(key));
 }
 #else
 uint BLI_ghashutil_ptrhash(const void *key)
@@ -63,7 +65,7 @@ uint BLI_ghashutil_uinthash_v4(const uint key[4])
 
 uint BLI_ghashutil_uinthash_v4_murmur(const uint key[4])
 {
-  return BLI_hash_mm2((const uchar *)key, sizeof(int[4]) /* sizeof(key) */, 0);
+  return BLI_hash_mm2(reinterpret_cast<const uchar *>(key), sizeof(int[4]) /* sizeof(key) */, 0);
 }
 
 bool BLI_ghashutil_uinthash_v4_cmp(const void *a, const void *b)
@@ -101,7 +103,7 @@ uint BLI_ghashutil_inthash_p_murmur(const void *ptr)
 {
   uintptr_t key = uintptr_t(ptr);
 
-  return BLI_hash_mm2((const uchar *)&key, sizeof(key), 0);
+  return BLI_hash_mm2(reinterpret_cast<const uchar *>(&key), sizeof(key), 0);
 }
 
 uint BLI_ghashutil_inthash_p_simple(const void *ptr)
@@ -124,8 +126,8 @@ uint BLI_ghashutil_strhash_n(const char *key, size_t n)
   const signed char *p;
   uint h = 5381;
 
-  for (p = (const signed char *)key; n-- && *p != '\0'; p++) {
-    h = uint((h << 5) + h) + uint(*p);
+  for (p = reinterpret_cast<const signed char *>(key); n-- && *p != '\0'; p++) {
+    h = ((h << 5) + h) + uint(*p);
   }
 
   return h;
@@ -136,7 +138,7 @@ uint BLI_ghashutil_strhash_p(const void *ptr)
   uint h = 5381;
 
   for (p = static_cast<const signed char *>(ptr); *p != '\0'; p++) {
-    h = uint((h << 5) + h) + uint(*p);
+    h = ((h << 5) + h) + uint(*p);
   }
 
   return h;
@@ -145,7 +147,7 @@ uint BLI_ghashutil_strhash_p_murmur(const void *ptr)
 {
   const uchar *key = static_cast<const uchar *>(ptr);
 
-  return BLI_hash_mm2(key, strlen((const char *)key) + 1, 0);
+  return BLI_hash_mm2(key, strlen(reinterpret_cast<const char *>(key)) + 1, 0);
 }
 bool BLI_ghashutil_strcmp(const void *a, const void *b)
 {
@@ -154,7 +156,7 @@ bool BLI_ghashutil_strcmp(const void *a, const void *b)
 
 GHashPair *BLI_ghashutil_pairalloc(const void *first, const void *second)
 {
-  GHashPair *pair = static_cast<GHashPair *>(MEM_mallocN(sizeof(GHashPair), "GHashPair"));
+  GHashPair *pair = MEM_new_uninitialized<GHashPair>("GHashPair");
   pair->first = first;
   pair->second = second;
   return pair;
@@ -177,7 +179,7 @@ bool BLI_ghashutil_paircmp(const void *a, const void *b)
 
 void BLI_ghashutil_pairfree(void *ptr)
 {
-  MEM_freeN(ptr);
+  MEM_delete(static_cast<const GHashPair *>(ptr));
 }
 
 /** \} */
@@ -265,3 +267,5 @@ GSet *BLI_gset_int_new(const char *info)
 }
 
 /** \} */
+
+}  // namespace blender

@@ -13,21 +13,24 @@
 #include "BKE_global.hh"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 
 #include "ED_grease_pencil.hh"
-#include "ED_image.hh"
 #include "ED_object.hh"
+#include "ED_paint.hh"
 
-#include "DEG_depsgraph_query.hh"
+#include "DEG_depsgraph.hh"
 
 #include "WM_api.hh"
 #include "WM_message.hh"
 #include "WM_toolsystem.hh"
 
-namespace blender::ed::greasepencil {
+namespace blender {
+
+namespace ed::greasepencil {
 
 /* -------------------------------------------------------------------- */
 /** \name Toggle Stroke Paint Mode Operator
@@ -50,7 +53,7 @@ static bool paintmode_toggle_poll(bContext *C)
   return false;
 }
 
-static int paintmode_toggle_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus paintmode_toggle_exec(bContext *C, wmOperator *op)
 {
   const bool back = RNA_boolean_get(op->ptr, "back");
 
@@ -58,14 +61,14 @@ static int paintmode_toggle_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   ToolSettings *ts = CTX_data_tool_settings(C);
 
-  short mode;
+  eObjectMode mode;
   Object *ob = CTX_data_active_object(C);
   BLI_assert(ob != nullptr);
 
   const bool is_mode_set = (ob->mode & OB_MODE_PAINT_GREASE_PENCIL) != 0;
   if (!is_mode_set) {
     Scene *scene = CTX_data_scene(C);
-    BKE_paint_init(bmain, scene, PaintMode::GPencil, PAINT_CURSOR_PAINT_GREASE_PENCIL);
+    BKE_paint_init(bmain, scene, PaintMode::GPencil);
     Paint *paint = BKE_paint_get_active_from_paintmode(scene, PaintMode::GPencil);
     ED_paint_cursor_start(paint, brush_cursor_poll);
     mode = OB_MODE_PAINT_GREASE_PENCIL;
@@ -83,9 +86,9 @@ static int paintmode_toggle_exec(bContext *C, wmOperator *op)
   if (mode == OB_MODE_PAINT_GREASE_PENCIL) {
     /* Be sure we have brushes and Paint settings.
      * Need Draw and Vertex (used for Tint). */
-    BKE_paint_ensure(ts, (Paint **)&ts->gp_paint);
+    BKE_paint_ensure(ts, reinterpret_cast<Paint **>(&ts->gp_paint));
     BKE_paint_brushes_ensure(bmain, &ts->gp_paint->paint);
-    BKE_paint_ensure(ts, (Paint **)&ts->gp_vertexpaint);
+    BKE_paint_ensure(ts, reinterpret_cast<Paint **>(&ts->gp_vertexpaint));
     BKE_paint_brushes_ensure(bmain, &ts->gp_vertexpaint->paint);
 
     /* Ensure Palette by default. */
@@ -99,7 +102,7 @@ static int paintmode_toggle_exec(bContext *C, wmOperator *op)
     BKE_paint_brushes_validate(bmain, &ts->gp_paint->paint);
   }
 
-  GreasePencil *grease_pencil = static_cast<GreasePencil *>(ob->data);
+  GreasePencil *grease_pencil = id_cast<GreasePencil *>(ob->data);
   DEG_id_tag_update(&grease_pencil->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
 
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | ND_GPENCIL_EDITMODE, nullptr);
@@ -107,9 +110,7 @@ static int paintmode_toggle_exec(bContext *C, wmOperator *op)
 
   WM_msg_publish_rna_prop(mbus, &ob->id, ob, Object, mode);
 
-  if (G.background == false) {
-    WM_toolsystem_update_from_context_view3d(C);
-  }
+  WM_toolsystem_update_from_context_view3d(C);
 
   return OPERATOR_FINISHED;
 }
@@ -162,7 +163,7 @@ static bool sculpt_poll_view3d(bContext *C)
   return true;
 }
 
-static int sculptmode_toggle_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus sculptmode_toggle_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   ToolSettings *ts = CTX_data_tool_settings(C);
@@ -170,7 +171,7 @@ static int sculptmode_toggle_exec(bContext *C, wmOperator *op)
   const bool back = RNA_boolean_get(op->ptr, "back");
 
   wmMsgBus *mbus = CTX_wm_message_bus(C);
-  short mode;
+  eObjectMode mode;
   Object *ob = CTX_data_active_object(C);
   BLI_assert(ob != nullptr);
   const bool is_mode_set = (ob->mode & OB_MODE_SCULPT_GREASE_PENCIL) != 0;
@@ -179,8 +180,8 @@ static int sculptmode_toggle_exec(bContext *C, wmOperator *op)
   }
   else {
     Scene *scene = CTX_data_scene(C);
-    BKE_paint_init(bmain, scene, PaintMode::SculptGreasePencil, PAINT_CURSOR_SCULPT_GREASE_PENCIL);
-    Paint *paint = BKE_paint_get_active_from_paintmode(scene, PaintMode::SculptGreasePencil);
+    BKE_paint_init(bmain, scene, PaintMode::SculptGPencil);
+    Paint *paint = BKE_paint_get_active_from_paintmode(scene, PaintMode::SculptGPencil);
     ED_paint_cursor_start(paint, sculpt_poll_view3d);
     mode = OB_MODE_SCULPT_GREASE_PENCIL;
   }
@@ -192,12 +193,12 @@ static int sculptmode_toggle_exec(bContext *C, wmOperator *op)
   ob->mode = mode;
 
   if (mode == OB_MODE_SCULPT_GREASE_PENCIL) {
-    BKE_paint_ensure(ts, (Paint **)&ts->gp_sculptpaint);
+    BKE_paint_ensure(ts, reinterpret_cast<Paint **>(&ts->gp_sculptpaint));
     BKE_paint_brushes_ensure(bmain, &ts->gp_sculptpaint->paint);
     BKE_paint_brushes_validate(bmain, &ts->gp_sculptpaint->paint);
   }
 
-  GreasePencil *grease_pencil = static_cast<GreasePencil *>(ob->data);
+  GreasePencil *grease_pencil = id_cast<GreasePencil *>(ob->data);
   DEG_id_tag_update(&grease_pencil->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
 
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | ND_GPENCIL_EDITMODE, nullptr);
@@ -205,9 +206,7 @@ static int sculptmode_toggle_exec(bContext *C, wmOperator *op)
 
   WM_msg_publish_rna_prop(mbus, &ob->id, ob, Object, mode);
 
-  if (G.background == false) {
-    WM_toolsystem_update_from_context_view3d(C);
-  }
+  WM_toolsystem_update_from_context_view3d(C);
 
   return OPERATOR_FINISHED;
 }
@@ -252,7 +251,7 @@ static bool weightmode_toggle_poll(bContext *C)
   return false;
 }
 
-static int weightmode_toggle_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus weightmode_toggle_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
@@ -261,7 +260,7 @@ static int weightmode_toggle_exec(bContext *C, wmOperator *op)
   const bool back = RNA_boolean_get(op->ptr, "back");
 
   wmMsgBus *mbus = CTX_wm_message_bus(C);
-  short mode;
+  eObjectMode mode;
   Object *ob = CTX_data_active_object(C);
   BLI_assert(ob != nullptr);
   const bool is_mode_set = (ob->mode & OB_MODE_WEIGHT_GREASE_PENCIL) != 0;
@@ -279,20 +278,20 @@ static int weightmode_toggle_exec(bContext *C, wmOperator *op)
   ob->mode = mode;
 
   /* Prepare armature posemode. */
-  blender::ed::object::posemode_set_for_weight_paint(C, bmain, ob, is_mode_set);
+  ed::object::posemode_set_for_weight_paint(C, bmain, ob, is_mode_set);
 
   if (mode == OB_MODE_WEIGHT_GREASE_PENCIL) {
     /* Be sure we have brushes. */
-    BKE_paint_ensure(ts, (Paint **)&ts->gp_weightpaint);
+    BKE_paint_ensure(ts, reinterpret_cast<Paint **>(&ts->gp_weightpaint));
     Paint *weight_paint = BKE_paint_get_active_from_paintmode(scene, PaintMode::WeightGPencil);
 
     ED_paint_cursor_start(weight_paint, grease_pencil_poll_weight_cursor);
 
-    BKE_paint_init(bmain, scene, PaintMode::WeightGPencil, PAINT_CURSOR_PAINT_GREASE_PENCIL);
+    BKE_paint_init(bmain, scene, PaintMode::WeightGPencil);
     BKE_paint_brushes_validate(bmain, weight_paint);
   }
 
-  GreasePencil *grease_pencil = static_cast<GreasePencil *>(ob->data);
+  GreasePencil *grease_pencil = id_cast<GreasePencil *>(ob->data);
   DEG_id_tag_update(&grease_pencil->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
 
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | ND_GPENCIL_EDITMODE, nullptr);
@@ -300,9 +299,7 @@ static int weightmode_toggle_exec(bContext *C, wmOperator *op)
 
   WM_msg_publish_rna_prop(mbus, &ob->id, ob, Object, mode);
 
-  if (G.background == false) {
-    WM_toolsystem_update_from_context_view3d(C);
-  }
+  WM_toolsystem_update_from_context_view3d(C);
 
   return OPERATOR_FINISHED;
 }
@@ -347,7 +344,7 @@ static bool vertexmode_toggle_poll(bContext *C)
   return false;
 }
 
-static int vertexmode_toggle_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus vertexmode_toggle_exec(bContext *C, wmOperator *op)
 {
   const bool back = RNA_boolean_get(op->ptr, "back");
 
@@ -356,7 +353,7 @@ static int vertexmode_toggle_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   ToolSettings *ts = CTX_data_tool_settings(C);
 
-  short mode;
+  eObjectMode mode;
   Object *ob = CTX_data_active_object(C);
   BLI_assert(ob != nullptr);
   const bool is_mode_set = (ob->mode & OB_MODE_VERTEX_GREASE_PENCIL) != 0;
@@ -376,8 +373,8 @@ static int vertexmode_toggle_exec(bContext *C, wmOperator *op)
   if (mode == OB_MODE_VERTEX_GREASE_PENCIL) {
     /* Be sure we have brushes.
      * Need Draw as well (used for Palettes). */
-    BKE_paint_ensure(ts, (Paint **)&ts->gp_paint);
-    BKE_paint_ensure(ts, (Paint **)&ts->gp_vertexpaint);
+    BKE_paint_ensure(ts, reinterpret_cast<Paint **>(&ts->gp_paint));
+    BKE_paint_ensure(ts, reinterpret_cast<Paint **>(&ts->gp_vertexpaint));
     Paint *gp_paint = BKE_paint_get_active_from_paintmode(scene, PaintMode::GPencil);
     Paint *vertex_paint = BKE_paint_get_active_from_paintmode(scene, PaintMode::VertexGPencil);
 
@@ -391,7 +388,7 @@ static int vertexmode_toggle_exec(bContext *C, wmOperator *op)
     BKE_gpencil_palette_ensure(bmain, scene);
   }
 
-  GreasePencil *grease_pencil = static_cast<GreasePencil *>(ob->data);
+  GreasePencil *grease_pencil = id_cast<GreasePencil *>(ob->data);
   DEG_id_tag_update(&grease_pencil->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
 
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | ND_GPENCIL_EDITMODE, nullptr);
@@ -399,9 +396,7 @@ static int vertexmode_toggle_exec(bContext *C, wmOperator *op)
 
   WM_msg_publish_rna_prop(mbus, &ob->id, ob, Object, mode);
 
-  if (G.background == false) {
-    WM_toolsystem_update_from_context_view3d(C);
-  }
+  WM_toolsystem_update_from_context_view3d(C);
 
   return OPERATOR_FINISHED;
 }
@@ -426,7 +421,7 @@ static void GREASE_PENCIL_OT_vertexmode_toggle(wmOperatorType *ot)
 
 /** \} */
 
-}  // namespace blender::ed::greasepencil
+}  // namespace ed::greasepencil
 
 void ED_operatortypes_grease_pencil_modes()
 {
@@ -436,3 +431,5 @@ void ED_operatortypes_grease_pencil_modes()
   WM_operatortype_append(GREASE_PENCIL_OT_weightmode_toggle);
   WM_operatortype_append(GREASE_PENCIL_OT_vertexmode_toggle);
 }
+
+}  // namespace blender

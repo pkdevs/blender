@@ -7,26 +7,29 @@
  */
 
 #include "ply_export_load_plydata.hh"
+#include "IO_mesh_utils.hh"
 #include "IO_ply.hh"
 #include "ply_data.hh"
 
+#include "BKE_anonymous_attribute_id.hh"
 #include "BKE_attribute.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_wrapper.hh"
-#include "BKE_object.hh"
+#include "BLI_array_utils.hh"
 #include "BLI_color.hh"
 #include "BLI_hash.hh"
-#include "BLI_math_matrix.h"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_quaternion_types.hh"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_vector.hh"
 
 #include "DEG_depsgraph_query.hh"
 
 #include "DNA_customdata_types.h"
 #include "DNA_layer_types.h"
+#include "DNA_object_types.h"
 
 #include "bmesh.hh"
 #include "tools/bmesh_triangulate.hh"
@@ -95,7 +98,7 @@ static void generate_vertex_map(const Mesh *mesh,
   bool export_uv = false;
   VArraySpan<float2> uv_map;
   if (export_params.export_uv) {
-    const StringRef uv_name = CustomData_get_active_layer_name(&mesh->corner_data, CD_PROP_FLOAT2);
+    const StringRef uv_name = mesh->active_uv_map_name();
     if (!uv_name.is_empty()) {
       const bke::AttributeAccessor attributes = mesh->attributes();
       uv_map = *attributes.lookup<float2>(uv_name, bke::AttrDomain::Corner);
@@ -110,10 +113,8 @@ static void generate_vertex_map(const Mesh *mesh,
   /* If we do not export or have UVs, then mapping of vertex indices is simple. */
   if (!export_uv) {
     r_ply_to_vertex.resize(mesh->verts_num);
-    for (int index = 0; index < mesh->verts_num; index++) {
-      r_vertex_to_ply[index] = index;
-      r_ply_to_vertex[index] = index;
-    }
+    array_utils::fill_index_range(r_vertex_to_ply.as_mutable_span());
+    array_utils::fill_index_range(r_ply_to_vertex.as_mutable_span());
     for (int index = 0; index < mesh->corners_num; index++) {
       r_loop_to_ply[index] = corner_verts[index];
     }
@@ -176,7 +177,7 @@ static void load_custom_attributes(const Mesh *mesh,
 {
   const bke::AttributeAccessor attributes = mesh->attributes();
   const StringRef color_name = mesh->active_color_attribute;
-  const StringRef uv_name = CustomData_get_active_layer_name(&mesh->corner_data, CD_PROP_FLOAT2);
+  const StringRef uv_name = mesh->active_uv_map_name();
   const int64_t size = ply_to_vertex.size();
 
   attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
@@ -193,7 +194,7 @@ static void load_custom_attributes(const Mesh *mesh,
       return;
     }
     switch (iter.data_type) {
-      case CD_PROP_FLOAT: {
+      case bke::AttrType::Float: {
         float *attr = find_or_add_attribute(iter.name, size, vertex_offset, r_attributes);
         auto typed = attribute.typed<float>();
         for (const int64_t i : ply_to_vertex.index_range()) {
@@ -201,7 +202,7 @@ static void load_custom_attributes(const Mesh *mesh,
         }
         break;
       }
-      case CD_PROP_INT8: {
+      case bke::AttrType::Int8: {
         float *attr = find_or_add_attribute(iter.name, size, vertex_offset, r_attributes);
         auto typed = attribute.typed<int8_t>();
         for (const int64_t i : ply_to_vertex.index_range()) {
@@ -209,7 +210,7 @@ static void load_custom_attributes(const Mesh *mesh,
         }
         break;
       }
-      case CD_PROP_INT32: {
+      case bke::AttrType::Int32: {
         float *attr = find_or_add_attribute(iter.name, size, vertex_offset, r_attributes);
         auto typed = attribute.typed<int32_t>();
         for (const int64_t i : ply_to_vertex.index_range()) {
@@ -217,7 +218,7 @@ static void load_custom_attributes(const Mesh *mesh,
         }
         break;
       }
-      case CD_PROP_INT16_2D: {
+      case bke::AttrType::Int16_2D: {
         float *attr_x = find_or_add_attribute(iter.name + "_x", size, vertex_offset, r_attributes);
         float *attr_y = find_or_add_attribute(iter.name + "_y", size, vertex_offset, r_attributes);
         auto typed = attribute.typed<short2>();
@@ -228,7 +229,7 @@ static void load_custom_attributes(const Mesh *mesh,
         }
         break;
       }
-      case CD_PROP_INT32_2D: {
+      case bke::AttrType::Int32_2D: {
         float *attr_x = find_or_add_attribute(iter.name + "_x", size, vertex_offset, r_attributes);
         float *attr_y = find_or_add_attribute(iter.name + "_y", size, vertex_offset, r_attributes);
         auto typed = attribute.typed<int2>();
@@ -239,7 +240,7 @@ static void load_custom_attributes(const Mesh *mesh,
         }
         break;
       }
-      case CD_PROP_FLOAT2: {
+      case bke::AttrType::Float2: {
         float *attr_x = find_or_add_attribute(iter.name + "_x", size, vertex_offset, r_attributes);
         float *attr_y = find_or_add_attribute(iter.name + "_y", size, vertex_offset, r_attributes);
         auto typed = attribute.typed<float2>();
@@ -250,7 +251,7 @@ static void load_custom_attributes(const Mesh *mesh,
         }
         break;
       }
-      case CD_PROP_FLOAT3: {
+      case bke::AttrType::Float3: {
         float *attr_x = find_or_add_attribute(iter.name + "_x", size, vertex_offset, r_attributes);
         float *attr_y = find_or_add_attribute(iter.name + "_y", size, vertex_offset, r_attributes);
         float *attr_z = find_or_add_attribute(iter.name + "_z", size, vertex_offset, r_attributes);
@@ -263,14 +264,14 @@ static void load_custom_attributes(const Mesh *mesh,
         }
         break;
       }
-      case CD_PROP_BYTE_COLOR: {
+      case bke::AttrType::ColorByte: {
         float *attr_r = find_or_add_attribute(iter.name + "_r", size, vertex_offset, r_attributes);
         float *attr_g = find_or_add_attribute(iter.name + "_g", size, vertex_offset, r_attributes);
         float *attr_b = find_or_add_attribute(iter.name + "_b", size, vertex_offset, r_attributes);
         float *attr_a = find_or_add_attribute(iter.name + "_a", size, vertex_offset, r_attributes);
         auto typed = attribute.typed<ColorGeometry4b>();
         for (const int64_t i : ply_to_vertex.index_range()) {
-          ColorGeometry4f col = typed[ply_to_vertex[i]].decode();
+          ColorGeometry4f col = color::decode(typed[ply_to_vertex[i]]);
           attr_r[i] = col.r;
           attr_g[i] = col.g;
           attr_b[i] = col.b;
@@ -278,7 +279,7 @@ static void load_custom_attributes(const Mesh *mesh,
         }
         break;
       }
-      case CD_PROP_COLOR: {
+      case bke::AttrType::ColorFloat: {
         float *attr_r = find_or_add_attribute(iter.name + "_r", size, vertex_offset, r_attributes);
         float *attr_g = find_or_add_attribute(iter.name + "_g", size, vertex_offset, r_attributes);
         float *attr_b = find_or_add_attribute(iter.name + "_b", size, vertex_offset, r_attributes);
@@ -293,7 +294,7 @@ static void load_custom_attributes(const Mesh *mesh,
         }
         break;
       }
-      case CD_PROP_BOOL: {
+      case bke::AttrType::Bool: {
         float *attr = find_or_add_attribute(iter.name, size, vertex_offset, r_attributes);
         auto typed = attribute.typed<bool>();
         for (const int64_t i : ply_to_vertex.index_range()) {
@@ -301,7 +302,7 @@ static void load_custom_attributes(const Mesh *mesh,
         }
         break;
       }
-      case CD_PROP_QUATERNION: {
+      case bke::AttrType::Quaternion: {
         float *attr_x = find_or_add_attribute(iter.name + "_x", size, vertex_offset, r_attributes);
         float *attr_y = find_or_add_attribute(iter.name + "_y", size, vertex_offset, r_attributes);
         float *attr_z = find_or_add_attribute(iter.name + "_z", size, vertex_offset, r_attributes);
@@ -342,9 +343,11 @@ void load_plydata(PlyData &plyData, Depsgraph *depsgraph, const PLYExportParams 
       continue;
     }
 
-    Object *obj_eval = DEG_get_evaluated_object(depsgraph, object);
-    const Mesh *mesh = export_params.apply_modifiers ? BKE_object_get_evaluated_mesh(obj_eval) :
-                                                       BKE_object_get_pre_modified_mesh(obj_eval);
+    Object *obj_eval = DEG_get_evaluated(depsgraph, object);
+
+    MeshCoerceForExport coerce;
+    const Mesh *mesh = mesh_coerce_for_export_setup(
+        coerce, depsgraph, obj_eval, export_params.apply_modifiers);
 
     /* Ensure data exists if currently in edit mode. */
     BKE_mesh_wrapper_ensure_mdata(const_cast<Mesh *>(mesh));
@@ -424,7 +427,7 @@ void load_plydata(PlyData &plyData, Depsgraph *depsgraph, const PLYExportParams 
     }
 
     /* Colors */
-    if (export_params.vertex_colors != PLY_VERTEX_COLOR_NONE) {
+    if (export_params.vertex_colors != ePLYVertexColorMode::None) {
       const StringRef name = mesh->active_color_attribute;
       if (!name.is_empty()) {
         const bke::AttributeAccessor attributes = mesh->attributes();
@@ -438,7 +441,7 @@ void load_plydata(PlyData &plyData, Depsgraph *depsgraph, const PLYExportParams 
           plyData.vertex_colors.reserve(vertex_offset + ply_to_vertex.size());
           for (int vertex_index : ply_to_vertex) {
             float4 color = float4(color_attribute[vertex_index]);
-            if (export_params.vertex_colors == PLY_VERTEX_COLOR_SRGB) {
+            if (export_params.vertex_colors == ePLYVertexColorMode::sRGB) {
               linearrgb_to_srgb_v4(color, color);
             }
             plyData.vertex_colors.append(color);
@@ -453,15 +456,10 @@ void load_plydata(PlyData &plyData, Depsgraph *depsgraph, const PLYExportParams 
     }
 
     /* Loose edges */
-    const bke::LooseEdgeCache &loose_edges = mesh->loose_edges();
-    if (loose_edges.count > 0) {
-      Span<int2> edges = mesh->edges();
-      for (int i = 0; i < edges.size(); ++i) {
-        if (loose_edges.is_loose_bits[i]) {
-          plyData.edges.append({vertex_to_ply[edges[i][0]], vertex_to_ply[edges[i][1]]});
-        }
-      }
-    }
+    Span<int2> edges = mesh->edges();
+    mesh->loose_edges().foreach_index([&](const int i) {
+      plyData.edges.append({vertex_to_ply[edges[i][0]], vertex_to_ply[edges[i][1]]});
+    });
 
     vertex_offset = int(plyData.vertices.size());
     if (manually_free_mesh) {

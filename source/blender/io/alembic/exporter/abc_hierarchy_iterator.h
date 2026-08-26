@@ -12,11 +12,13 @@
 
 #include <Alembic/Abc/OObject.h>
 
+namespace blender {
+
 struct Depsgraph;
 struct Main;
 struct Object;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 class ABCAbstractWriter;
 class ABCHierarchyIterator;
@@ -42,29 +44,26 @@ class ABCHierarchyIterator : public AbstractHierarchyIterator {
                        ABCArchive *abc_archive,
                        const AlembicExportParams &params);
 
-  virtual void iterate_and_write() override;
-  virtual std::string make_valid_name(const std::string &name) const override;
+  void iterate_and_write() override;
+  std::string make_valid_name(const std::string &name) const override;
 
   Alembic::Abc::OObject get_alembic_object(const std::string &export_path) const;
 
  protected:
-  virtual bool mark_as_weak_export(const Object *object) const override;
+  bool mark_as_weak_export(const Object *object) const override;
 
-  virtual ExportGraph::key_type determine_graph_index_object(
-      const HierarchyContext *context) override;
-  virtual AbstractHierarchyIterator::ExportGraph::key_type determine_graph_index_dupli(
+  ObjectIdentifier determine_graph_index_object(const HierarchyContext *context) override;
+  ObjectIdentifier determine_graph_index_dupli(
       const HierarchyContext *context,
       const DupliObject *dupli_object,
       const DupliParentFinder &dupli_parent_finder) override;
 
-  virtual AbstractHierarchyWriter *create_transform_writer(
-      const HierarchyContext *context) override;
-  virtual AbstractHierarchyWriter *create_data_writer(const HierarchyContext *context) override;
-  virtual AbstractHierarchyWriter *create_hair_writer(const HierarchyContext *context) override;
-  virtual AbstractHierarchyWriter *create_particle_writer(
-      const HierarchyContext *context) override;
+  AbstractHierarchyWriter *create_transform_writer(const HierarchyContext *context) override;
+  AbstractHierarchyWriter *create_data_writer(const HierarchyContext *context) override;
+  AbstractHierarchyWriter *create_hair_writer(const HierarchyContext *context) override;
+  AbstractHierarchyWriter *create_particle_writer(const HierarchyContext *context) override;
 
-  virtual void release_writer(AbstractHierarchyWriter *writer) override;
+  void release_writer(AbstractHierarchyWriter *writer) override;
 
  private:
   Alembic::Abc::OObject get_alembic_parent(const HierarchyContext *context) const;
@@ -76,4 +75,5 @@ class ABCHierarchyIterator : public AbstractHierarchyIterator {
       const HierarchyContext *context, const ABCWriterConstructorArgs &writer_args);
 };
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

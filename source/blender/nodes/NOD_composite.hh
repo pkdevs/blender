@@ -10,40 +10,17 @@
 
 #include "BKE_node.hh"
 
-namespace blender::realtime_compositor {
-class RenderContext;
-class Profiler;
-}  // namespace blender::realtime_compositor
-namespace blender::bke {
-struct bNodeTreeType;
-}  // namespace blender::bke
+namespace blender {
 
 struct CryptomatteSession;
 struct Scene;
-struct RenderData;
-struct Render;
-struct ViewLayer;
 
-extern blender::bke::bNodeTreeType *ntreeType_Composite;
+extern bke::bNodeTreeType *ntreeType_Composite;
+
+void register_node_tree_type_cmp();
+void register_node_type_cmp_custom_group(bke::bNodeType *ntype);
 
 void node_cmp_rlayers_outputs(bNodeTree *ntree, bNode *node);
-void node_cmp_rlayers_register_pass(bNodeTree *ntree,
-                                    bNode *node,
-                                    Scene *scene,
-                                    ViewLayer *view_layer,
-                                    const char *name,
-                                    eNodeSocketDatatype type);
-const char *node_cmp_rlayers_sock_to_pass(int sock_index);
-
-void register_node_type_cmp_custom_group(blender::bke::bNodeType *ntype);
-
-void ntreeCompositExecTree(Render *render,
-                           Scene *scene,
-                           bNodeTree *ntree,
-                           RenderData *rd,
-                           const char *view_name,
-                           blender::realtime_compositor::RenderContext *render_context,
-                           blender::realtime_compositor::Profiler *profiler);
 
 /**
  * Called from render pipeline, to tag render input and output.
@@ -51,46 +28,15 @@ void ntreeCompositExecTree(Render *render,
  */
 void ntreeCompositTagRender(Scene *scene);
 
-void ntreeCompositTagNeedExec(bNode *node);
-
 /**
- * Update the outputs of the render layer nodes.
- * Since the outputs depend on the render engine, this part is a bit complex:
- * - #ntreeCompositUpdateRLayers is called and loops over all render layer nodes.
- * - Each render layer node calls the update function of the
- *   render engine that's used for its scene.
- * - The render engine calls RE_engine_register_pass for each pass.
- * - #RE_engine_register_pass calls #node_cmp_rlayers_register_pass.
+ * \note: Requires that viewlayers are in sync (call `BKE_main_view_layers_synced_ensure` or
+ * similar before).
  */
-void ntreeCompositUpdateRLayers(bNodeTree *ntree);
-
-void ntreeCompositClearTags(bNodeTree *ntree);
-
-bNodeSocket *ntreeCompositOutputFileAddSocket(bNodeTree *ntree,
-                                              bNode *node,
-                                              const char *name,
-                                              const ImageFormatData *im_format);
-
-int ntreeCompositOutputFileRemoveActiveSocket(bNodeTree *ntree, bNode *node);
-void ntreeCompositOutputFileSetPath(bNode *node, bNodeSocket *sock, const char *name);
-void ntreeCompositOutputFileSetLayer(bNode *node, bNodeSocket *sock, const char *name);
-/* needed in do_versions */
-void ntreeCompositOutputFileUniquePath(ListBase *list,
-                                       bNodeSocket *sock,
-                                       const char defname[],
-                                       char delim);
-void ntreeCompositOutputFileUniqueLayer(ListBase *list,
-                                        bNodeSocket *sock,
-                                        const char defname[],
-                                        char delim);
-
-void ntreeCompositColorBalanceSyncFromLGG(bNodeTree *ntree, bNode *node);
-void ntreeCompositColorBalanceSyncFromCDL(bNodeTree *ntree, bNode *node);
-
 void ntreeCompositCryptomatteSyncFromAdd(bNode *node);
+
 void ntreeCompositCryptomatteSyncFromRemove(bNode *node);
-bNodeSocket *ntreeCompositCryptomatteAddSocket(bNodeTree *ntree, bNode *node);
-int ntreeCompositCryptomatteRemoveSocket(bNodeTree *ntree, bNode *node);
+void ntreeCompositCryptomatteAddSocket(bNode *node);
+bool ntreeCompositCryptomatteRemoveSocket(bNode *node);
 void ntreeCompositCryptomatteLayerPrefix(const bNode *node, char *r_prefix, size_t prefix_maxncpy);
 
 /**
@@ -98,4 +44,11 @@ void ntreeCompositCryptomatteLayerPrefix(const bNode *node, char *r_prefix, size
  * or image.
  */
 void ntreeCompositCryptomatteUpdateLayerNames(bNode *node);
+
+/**
+ * \note: Requires that viewlayers are in sync (call `BKE_main_view_layers_synced_ensure` or
+ * similar before).
+ */
 CryptomatteSession *ntreeCompositCryptomatteSession(bNode *node);
+
+}  // namespace blender

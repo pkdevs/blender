@@ -14,15 +14,18 @@ namespace blender::nodes {
  * Makes it possible to use various functions (e.g. the ones in `NOD_socket_items.hh`) for index
  * switch items.
  */
-struct IndexSwitchItemsAccessor {
+struct IndexSwitchItemsAccessor : public socket_items::SocketItemsAccessorDefaults {
   using ItemT = IndexSwitchItem;
-  static StructRNA *item_srna;
+  static StructRNA **item_srna;
   static int node_type;
-  static int item_dna_type;
-  static constexpr const char *node_idname = "GeometryNodeIndexSwitch";
+  static constexpr StringRefNull node_idname = "GeometryNodeIndexSwitch";
   static constexpr bool has_type = false;
   static constexpr bool has_name = false;
-  static constexpr bool has_single_identifier_str = true;
+  struct operator_idnames {
+    static constexpr StringRefNull add_item = "NODE_OT_index_switch_item_add";
+    static constexpr StringRefNull remove_item = "NODE_OT_index_switch_item_remove";
+    static constexpr StringRefNull move_item = "NODE_OT_index_switch_item_move";
+  };
 
   static socket_items::SocketItemsRef<IndexSwitchItem> get_items_from_node(bNode &node)
   {

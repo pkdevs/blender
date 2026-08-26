@@ -8,8 +8,10 @@
 
 #pragma once
 
-#include "BLI_utildefines.h"
+namespace blender {
 
 void GPU_init();
 void GPU_exit();
 bool GPU_is_init();
+
+}  // namespace blender

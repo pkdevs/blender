@@ -6,19 +6,16 @@
  * \ingroup modifiers
  */
 
-#include <cstdio>
+#include "BLI_utildefines.hh"
 
-#include "BLI_utildefines.h"
-
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLT_translation.hh"
 
-#include "DNA_defaults.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
@@ -26,11 +23,12 @@
 #include "DNA_screen_types.h"
 
 #include "BKE_deform.hh"
+#include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_mesh.hh"
 #include "BKE_scene.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "RNA_access.hh"
@@ -45,24 +43,23 @@
 #include "MOD_ui_common.hh"
 #include "MOD_util.hh"
 
+namespace blender {
+
 static void init_data(ModifierData *md)
 {
-  MeshCacheModifierData *mcmd = (MeshCacheModifierData *)md;
-
-  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(mcmd, modifier));
-
-  MEMCPY_STRUCT_AFTER(mcmd, DNA_struct_default_get(MeshCacheModifierData), modifier);
+  MeshCacheModifierData *mcmd = reinterpret_cast<MeshCacheModifierData *>(md);
+  INIT_DEFAULT_STRUCT_AFTER(mcmd, modifier);
 }
 
 static bool depends_on_time(Scene * /*scene*/, ModifierData *md)
 {
-  MeshCacheModifierData *mcmd = (MeshCacheModifierData *)md;
+  MeshCacheModifierData *mcmd = reinterpret_cast<MeshCacheModifierData *>(md);
   return (mcmd->play_mode == MOD_MESHCACHE_PLAY_CFEA);
 }
 
 static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_render_params*/)
 {
-  MeshCacheModifierData *mcmd = (MeshCacheModifierData *)md;
+  MeshCacheModifierData *mcmd = reinterpret_cast<MeshCacheModifierData *>(md);
 
   /* leave it up to the modifier to check the file is valid on calculation */
   return (mcmd->factor <= 0.0f) || (mcmd->filepath[0] == '\0');
@@ -80,14 +77,14 @@ static void meshcache_do(MeshCacheModifierData *mcmd,
   const MDeformVert *dvert;
   MOD_get_vgroup(ob, mesh, mcmd->defgrp_name, &dvert, &influence_group_index);
 
-  float(*vertexCos_Store)[3] = (use_factor || influence_group_index != -1 ||
-                                (mcmd->deform_mode == MOD_MESHCACHE_DEFORM_INTEGRATE)) ?
-                                   static_cast<float(*)[3]>(MEM_malloc_arrayN(
-                                       verts_num, sizeof(*vertexCos_Store), __func__)) :
-                                   nullptr;
-  float(*vertexCos)[3] = vertexCos_Store ? vertexCos_Store : vertexCos_Real;
+  float (*vertexCos_Store)[3] = (use_factor || influence_group_index != -1 ||
+                                 (mcmd->deform_mode == MOD_MESHCACHE_DEFORM_INTEGRATE)) ?
+                                    MEM_new_array_uninitialized<float[3]>(size_t(verts_num),
+                                                                          __func__) :
+                                    nullptr;
+  float (*vertexCos)[3] = vertexCos_Store ? vertexCos_Store : vertexCos_Real;
 
-  const float fps = FPS;
+  const float fps = scene->frames_per_second();
 
   char filepath[FILE_MAX];
   const char *err_str = nullptr;
@@ -119,7 +116,7 @@ static void meshcache_do(MeshCacheModifierData *mcmd,
     /* apply offset and scale */
     time = (mcmd->frame_scale * time) - mcmd->frame_start;
   }
-  else { /*  if (mcmd->play_mode == MOD_MESHCACHE_PLAY_EVAL) { */
+  else { /* `if (mcmd->play_mode == MOD_MESHCACHE_PLAY_EVAL) {`. */
     switch (mcmd->time_mode) {
       case MOD_MESHCACHE_TIME_FRAME: {
         time = mcmd->eval_frame;
@@ -161,21 +158,21 @@ static void meshcache_do(MeshCacheModifierData *mcmd,
   /* -------------------------------------------------------------------- */
   /* tricky shape key integration (slow!) */
   if (mcmd->deform_mode == MOD_MESHCACHE_DEFORM_INTEGRATE) {
-    Mesh *mesh = static_cast<Mesh *>(ob->data);
+    Mesh *mesh = id_cast<Mesh *>(ob->data);
 
     /* we could support any object type */
-    if (UNLIKELY(ob->type != OB_MESH)) {
+    if (ob->type != OB_MESH) [[unlikely]] {
       BKE_modifier_set_error(ob, &mcmd->modifier, "'Integrate' only valid for Mesh objects");
     }
-    else if (UNLIKELY(mesh->verts_num != verts_num)) {
+    else if (mesh->verts_num != verts_num) [[unlikely]] {
       BKE_modifier_set_error(ob, &mcmd->modifier, "'Integrate' original mesh vertex mismatch");
     }
-    else if (UNLIKELY(mesh->faces_num == 0)) {
+    else if (mesh->faces_num == 0) [[unlikely]] {
       BKE_modifier_set_error(ob, &mcmd->modifier, "'Integrate' requires faces");
     }
     else {
-      float(*vertexCos_New)[3] = static_cast<float(*)[3]>(
-          MEM_malloc_arrayN(verts_num, sizeof(*vertexCos_New), __func__));
+      float (*vertexCos_New)[3] = MEM_new_array_uninitialized<float[3]>(size_t(verts_num),
+                                                                        __func__);
 
       BKE_mesh_calc_relative_deform(
           mesh->face_offsets().data(),
@@ -183,24 +180,24 @@ static void meshcache_do(MeshCacheModifierData *mcmd,
           mesh->corner_verts().data(),
           mesh->verts_num,
           /* From the original Mesh. */
-          reinterpret_cast<const float(*)[3]>(mesh->vert_positions().data()),
+          reinterpret_cast<const float (*)[3]>(mesh->vert_positions().data()),
           /* the input we've been given (shape keys!) */
-          const_cast<const float(*)[3]>(vertexCos_Real),
+          const_cast<const float (*)[3]>(vertexCos_Real),
           /* The result of this modifier. */
-          const_cast<const float(*)[3]>(vertexCos),
+          const_cast<const float (*)[3]>(vertexCos),
           /* The result of this function. */
           vertexCos_New);
 
       /* write the corrected locations back into the result */
       memcpy(vertexCos, vertexCos_New, sizeof(*vertexCos) * verts_num);
 
-      MEM_freeN(vertexCos_New);
+      MEM_delete(vertexCos_New);
     }
   }
 
   /* -------------------------------------------------------------------- */
   /* Apply the transformation matrix (if needed) */
-  if (UNLIKELY(err_str)) {
+  if (err_str) [[unlikely]] {
     BKE_modifier_set_error(ob, &mcmd->modifier, "%s", err_str);
   }
   else if (ok) {
@@ -215,13 +212,13 @@ static void meshcache_do(MeshCacheModifierData *mcmd,
     if (mcmd->flip_axis) {
       float tmat[3][3];
       unit_m3(tmat);
-      if (mcmd->flip_axis & (1 << 0)) {
+      if (mcmd->flip_axis & MOD_MESHCACHE_FLIP_AXIS_X) {
         tmat[0][0] = -1.0f;
       }
-      if (mcmd->flip_axis & (1 << 1)) {
+      if (mcmd->flip_axis & MOD_MESHCACHE_FLIP_AXIS_Y) {
         tmat[1][1] = -1.0f;
       }
-      if (mcmd->flip_axis & (1 << 2)) {
+      if (mcmd->flip_axis & MOD_MESHCACHE_FLIP_AXIS_Z) {
         tmat[2][2] = -1.0f;
       }
       mul_m3_m3m3(mat, tmat, mat);
@@ -269,91 +266,95 @@ static void meshcache_do(MeshCacheModifierData *mcmd,
       }
     }
 
-    MEM_freeN(vertexCos_Store);
+    MEM_delete(vertexCos_Store);
   }
 }
 
 static void deform_verts(ModifierData *md,
                          const ModifierEvalContext *ctx,
                          Mesh *mesh,
-                         blender::MutableSpan<blender::float3> positions)
+                         MutableSpan<float3> positions)
 {
-  MeshCacheModifierData *mcmd = (MeshCacheModifierData *)md;
+  MeshCacheModifierData *mcmd = reinterpret_cast<MeshCacheModifierData *>(md);
   Scene *scene = DEG_get_evaluated_scene(ctx->depsgraph);
 
   meshcache_do(mcmd,
                scene,
                ctx->object,
                mesh,
-               reinterpret_cast<float(*)[3]>(positions.data()),
+               reinterpret_cast<float (*)[3]>(positions.data()),
                positions.size());
 }
 
 static void panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
-  uiItemR(layout, ptr, "cache_format", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "filepath", UI_ITEM_NONE, nullptr, ICON_NONE);
+  layout.prop(ptr, "cache_format", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "filepath", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  uiItemR(layout, ptr, "factor", UI_ITEM_R_SLIDER, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "deform_mode", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "interpolation", UI_ITEM_NONE, nullptr, ICON_NONE);
-  modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", nullptr);
+  layout.prop(ptr, "factor", ui::ITEM_R_SLIDER, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "deform_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "interpolation", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", std::nullopt);
 
-  modifier_panel_end(layout, ptr);
+  modifier_error_message_draw(layout, ptr);
 }
 
 static void time_remapping_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
-  uiItemR(layout, ptr, "time_mode", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
+  layout.prop(ptr, "time_mode", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
-  uiItemR(layout, ptr, "play_mode", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
+  layout.prop(ptr, "play_mode", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
 
   if (RNA_enum_get(ptr, "play_mode") == MOD_MESHCACHE_PLAY_CFEA) {
-    uiItemR(layout, ptr, "frame_start", UI_ITEM_NONE, nullptr, ICON_NONE);
-    uiItemR(layout, ptr, "frame_scale", UI_ITEM_NONE, nullptr, ICON_NONE);
+    layout.prop(ptr, "frame_start", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.prop(ptr, "frame_scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
   else { /* play_mode == MOD_MESHCACHE_PLAY_EVAL */
     int time_mode = RNA_enum_get(ptr, "time_mode");
     if (time_mode == MOD_MESHCACHE_TIME_FRAME) {
-      uiItemR(layout, ptr, "eval_frame", UI_ITEM_NONE, nullptr, ICON_NONE);
+      layout.prop(ptr, "eval_frame", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     }
     else if (time_mode == MOD_MESHCACHE_TIME_SECONDS) {
-      uiItemR(layout, ptr, "eval_time", UI_ITEM_NONE, nullptr, ICON_NONE);
+      layout.prop(ptr, "eval_time", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     }
     else { /* time_mode == MOD_MESHCACHE_TIME_FACTOR */
-      uiItemR(layout, ptr, "eval_factor", UI_ITEM_NONE, nullptr, ICON_NONE);
+      layout.prop(ptr, "eval_factor", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     }
   }
 }
 
 static void axis_mapping_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *col;
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
-  col = uiLayoutColumn(layout, true);
-  uiLayoutSetRedAlert(col, RNA_enum_get(ptr, "forward_axis") == RNA_enum_get(ptr, "up_axis"));
-  uiItemR(col, ptr, "forward_axis", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(col, ptr, "up_axis", UI_ITEM_NONE, nullptr, ICON_NONE);
+  ui::Layout &col = layout.column(true);
+  col.red_alert_set(RNA_enum_get(ptr, "forward_axis") == RNA_enum_get(ptr, "up_axis"));
+  col.prop(ptr, "forward_axis", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(ptr, "up_axis", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  uiItemR(layout, ptr, "flip_axis", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
+  const ui::eUI_Item_Flag toggles_flag = ui::ITEM_R_TOGGLE | ui::ITEM_R_FORCE_BLANK_DECORATE;
+  PropertyRNA *prop = RNA_struct_find_property(ptr, "flip_axis");
+  ui::Layout &row = col.row(true, IFACE_("Flip Axis"));
+  row.prop(ptr, prop, 0, 0, toggles_flag, IFACE_("X"), ICON_NONE);
+  row.prop(ptr, prop, 1, 0, toggles_flag, IFACE_("Y"), ICON_NONE);
+  row.prop(ptr, prop, 2, 0, toggles_flag, IFACE_("Z"), ICON_NONE);
 }
 
 static void panel_register(ARegionType *region_type)
@@ -404,4 +405,7 @@ ModifierTypeInfo modifierType_MeshCache = {
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
     /*foreach_cache*/ nullptr,
+    /*foreach_working_space_color*/ nullptr,
 };
+
+}  // namespace blender

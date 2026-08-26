@@ -10,6 +10,8 @@
 
 #include "BLI_hash.hh"
 
+#include "DNA_action_types.h"
+
 #include "UI_resources.hh"
 
 #include <cstring>
@@ -25,7 +27,7 @@ BoneColor::BoneColor(const BoneColor &other)
   this->palette_index = other.palette_index;
   std::memcpy(&this->custom, &other.custom, sizeof(this->custom));
 }
-BoneColor::~BoneColor() {}
+BoneColor::~BoneColor() = default;
 
 const ThemeWireColor *BoneColor::effective_color() const
 {
@@ -37,7 +39,7 @@ const ThemeWireColor *BoneColor::effective_color() const
     return &this->custom;
   }
 
-  const bTheme *btheme = UI_GetTheme();
+  const bTheme *btheme = ui::theme::theme_get();
   return &btheme->tarm[(color_index - 1)];
 }
 
@@ -85,12 +87,12 @@ uint64_t BoneColor::hash() const
   return get_default_hash(hash_solid, hash_select, hash_active, custom.flag);
 }
 
-const BoneColor &ANIM_bonecolor_posebone_get(const bPoseChannel *pose_bone)
+const BoneColor &ANIM_bonecolor_posebone_get(const bke::PChanBoneConst pchanbone)
 {
-  if (pose_bone->color.palette_index == 0) {
-    return pose_bone->bone->color.wrap();
+  if (pchanbone.pchan->color.palette_index == 0) {
+    return pchanbone.bone->color.wrap();
   }
-  return pose_bone->color.wrap();
+  return pchanbone.pchan->color.wrap();
 }
 
 };  // namespace blender::animrig

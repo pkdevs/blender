@@ -12,22 +12,19 @@
 
 #include "BKE_appdir.hh"
 #include "BKE_blender_version.h"
+#include "BKE_gtest_base.hh"
 #include "BKE_main.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_string.h"
-#include "BLI_vector.hh"
+#include "BLI_fileops.hh"
+#include "BLI_string.hh"
 
 #include "BLO_readfile.hh"
 
 #include "DEG_depsgraph.hh"
 
 #include "obj_export_file_writer.hh"
-#include "obj_export_mesh.hh"
 #include "obj_export_nurbs.hh"
 #include "obj_exporter.hh"
-
-#include "obj_exporter_tests.hh"
 
 namespace blender::io::obj {
 /* Set this true to keep comparison-failing test output in temp file directory. */
@@ -54,39 +51,39 @@ const std::string all_objects_file = "io_tests" SEP_STR "blend_scene" SEP_STR "a
 
 TEST_F(OBJExportTest, filter_objects_curves_as_mesh)
 {
-  OBJExportParamsDefault _export;
+  OBJExportParams params;
   if (!load_file_and_depsgraph(all_objects_file)) {
     ADD_FAILURE();
     return;
   }
-  auto [objmeshes, objcurves]{filter_supported_objects(depsgraph, _export.params)};
+  auto [objmeshes, objcurves]{filter_supported_objects(depsgraph, params)};
   EXPECT_EQ(objmeshes.size(), 21);
   EXPECT_EQ(objcurves.size(), 0);
 }
 
 TEST_F(OBJExportTest, filter_objects_curves_as_nurbs)
 {
-  OBJExportParamsDefault _export;
+  OBJExportParams params;
   if (!load_file_and_depsgraph(all_objects_file)) {
     ADD_FAILURE();
     return;
   }
-  _export.params.export_curves_as_nurbs = true;
-  auto [objmeshes, objcurves]{filter_supported_objects(depsgraph, _export.params)};
+  params.export_curves_as_nurbs = true;
+  auto [objmeshes, objcurves]{filter_supported_objects(depsgraph, params)};
   EXPECT_EQ(objmeshes.size(), 18);
   EXPECT_EQ(objcurves.size(), 3);
 }
 
 TEST_F(OBJExportTest, filter_objects_selected)
 {
-  OBJExportParamsDefault _export;
+  OBJExportParams params;
   if (!load_file_and_depsgraph(all_objects_file)) {
     ADD_FAILURE();
     return;
   }
-  _export.params.export_selected_objects = true;
-  _export.params.export_curves_as_nurbs = true;
-  auto [objmeshes, objcurves]{filter_supported_objects(depsgraph, _export.params)};
+  params.export_selected_objects = true;
+  params.export_curves_as_nurbs = true;
+  auto [objmeshes, objcurves]{filter_supported_objects(depsgraph, params)};
   EXPECT_EQ(objmeshes.size(), 1);
   EXPECT_EQ(objcurves.size(), 0);
 }
@@ -128,10 +125,10 @@ static std::string read_temp_file_in_string(const std::string &file_path)
 {
   std::string res;
   size_t buffer_len;
-  void *buffer = BLI_file_read_text_as_mem(file_path.c_str(), 0, &buffer_len);
+  char *buffer = BLI_file_read_text_as_mem(file_path.c_str(), 0, &buffer_len);
   if (buffer != nullptr) {
-    res.assign((const char *)buffer, buffer_len);
-    MEM_freeN(buffer);
+    res.assign(buffer, buffer_len);
+    MEM_delete(buffer);
   }
   return res;
 }
@@ -177,8 +174,8 @@ TEST_F(ObjExporterWriterTest, header)
   BKE_tempdir_init(nullptr);
   std::string out_file_path = get_temp_obj_filename();
   {
-    OBJExportParamsDefault _export;
-    std::unique_ptr<OBJWriter> writer = init_writer(_export.params, out_file_path);
+    OBJExportParams params;
+    std::unique_ptr<OBJWriter> writer = init_writer(params, out_file_path);
     if (!writer) {
       ADD_FAILURE();
       return;
@@ -194,8 +191,8 @@ TEST_F(ObjExporterWriterTest, mtllib)
 {
   std::string out_file_path = get_temp_obj_filename();
   {
-    OBJExportParamsDefault _export;
-    std::unique_ptr<OBJWriter> writer = init_writer(_export.params, out_file_path);
+    OBJExportParams params;
+    std::unique_ptr<OBJWriter> writer = init_writer(params, out_file_path);
     if (!writer) {
       ADD_FAILURE();
       return;
@@ -220,10 +217,11 @@ TEST(obj_exporter_writer, format_handler_buffer_chunking)
   h.write_obj_curve_begin();
   h.write_obj_newline();
   h.write_obj_nurbs_parm_begin();
+  h.write_obj_nurbs_parm(0.0f);
   h.write_obj_newline();
 
   size_t got_blocks = h.get_block_count();
-  ASSERT_EQ(got_blocks, 7);
+  ASSERT_EQ(got_blocks, 6);
 
   std::string got_string = h.get_as_string();
   using namespace std::string_literals;
@@ -233,8 +231,8 @@ o abcde
 o abcdef
 o 012345678901234567890123456789abcd
 o 123
-curv 0.0 1.0
-parm u 0.0
+curv
+parm u 0.000000
 )";
   ASSERT_EQ(got_string, expected);
 }
@@ -246,12 +244,23 @@ static bool strings_equal_after_first_lines(const std::string &a, const std::str
   const size_t b_len = b.size();
   const size_t a_next = a.find_first_of('\n');
   const size_t b_next = b.find_first_of('\n');
-  if (a_next == std::string::npos || b_next == std::string::npos) {
-    printf("Couldn't find newline in one of args\n");
+  if (a_next == std::string::npos) {
+    printf("No newline found in evaluated string\n");
     return false;
   }
-  if (a.compare(a_next, a_len - a_next, b, b_next, b_len - b_next) != 0) {
-    for (int i = 0; i < a_len - a_next && i < b_len - b_next; ++i) {
+  if (b_next == std::string::npos) {
+    printf("No newline found in the golden string\n");
+    return false;
+  }
+  const size_t a_sublen = a_len - a_next;
+  const size_t b_sublen = b_len - b_next;
+  if (a_sublen != b_sublen) {
+    printf("Mismatching string length, evaluated contains %zu chars, while golden has %zu\n",
+           a_sublen,
+           b_sublen);
+  }
+  if (a.compare(a_next, a_sublen, b, b_next, b_sublen) != 0) {
+    for (int i = 0; i < std::min(a_sublen, b_sublen); ++i) {
       if (a[a_next + i] != b[b_next + i]) {
         printf("Difference found at pos %zu of a\n", a_next + i);
         printf("a: %s ...\n", a.substr(a_next + i, 100).c_str());
@@ -288,7 +297,7 @@ class OBJExportRegressionTest : public OBJExportTest {
     std::string out_file_path = tempdir + BLI_path_basename(golden_obj.c_str());
     STRNCPY(params.filepath, out_file_path.c_str());
     params.blen_filepath = bfile->main->filepath;
-    std::string golden_file_path = blender::tests::flags_test_asset_dir() + SEP_STR + golden_obj;
+    std::string golden_file_path = tests::flags_test_asset_dir() + SEP_STR + golden_obj;
     BLI_path_split_dir_part(
         golden_file_path.c_str(), params.file_base_for_tests, sizeof(params.file_base_for_tests));
     export_frame(depsgraph, params, out_file_path.c_str());
@@ -296,8 +305,11 @@ class OBJExportRegressionTest : public OBJExportTest {
 
     std::string golden_str = read_temp_file_in_string(golden_file_path);
     bool are_equal = strings_equal_after_first_lines(output_str, golden_str);
-    if (save_failing_test_output && !are_equal) {
-      printf("failing test output in %s\n", out_file_path.c_str());
+    if (!are_equal) {
+      printf("failed test for file: %s\n", golden_file_path.c_str());
+      if (save_failing_test_output) {
+        printf("failing test output in %s\n", out_file_path.c_str());
+      }
     }
     ASSERT_TRUE(are_equal);
     if (!save_failing_test_output || are_equal) {
@@ -306,12 +318,14 @@ class OBJExportRegressionTest : public OBJExportTest {
     if (!golden_mtl.empty()) {
       std::string out_mtl_file_path = tempdir + BLI_path_basename(golden_mtl.c_str());
       std::string output_mtl_str = read_temp_file_in_string(out_mtl_file_path);
-      std::string golden_mtl_file_path = blender::tests::flags_test_asset_dir() + SEP_STR +
-                                         golden_mtl;
+      std::string golden_mtl_file_path = tests::flags_test_asset_dir() + SEP_STR + golden_mtl;
       std::string golden_mtl_str = read_temp_file_in_string(golden_mtl_file_path);
       are_equal = strings_equal_after_first_lines(output_mtl_str, golden_mtl_str);
-      if (save_failing_test_output && !are_equal) {
-        printf("failing test output in %s\n", out_mtl_file_path.c_str());
+      if (!are_equal) {
+        printf("failed test for mtl file: %s\n", golden_mtl_file_path.c_str());
+        if (save_failing_test_output) {
+          printf("failing test output in %s\n", out_mtl_file_path.c_str());
+        }
       }
       ASSERT_TRUE(are_equal);
       if (!save_failing_test_output || are_equal) {
@@ -323,293 +337,293 @@ class OBJExportRegressionTest : public OBJExportTest {
 
 TEST_F(OBJExportRegressionTest, all_tris)
 {
-  OBJExportParamsDefault _export;
+  OBJExportParams params;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR "all_tris.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "all_tris.obj",
                                "io_tests" SEP_STR "obj" SEP_STR "all_tris.mtl",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, all_quads)
 {
-  OBJExportParamsDefault _export;
-  _export.params.global_scale = 2.0f;
-  _export.params.export_materials = false;
+  OBJExportParams params;
+  params.global_scale = 2.0f;
+  params.export_materials = false;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR "all_quads.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "all_quads.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, fgons)
 {
-  OBJExportParamsDefault _export;
-  _export.params.forward_axis = IO_AXIS_Y;
-  _export.params.up_axis = IO_AXIS_Z;
-  _export.params.export_materials = false;
+  OBJExportParams params;
+  params.forward_axis = IO_AXIS_Y;
+  params.up_axis = IO_AXIS_Z;
+  params.export_materials = false;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR "fgons.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "fgons.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, edges)
 {
-  OBJExportParamsDefault _export;
-  _export.params.forward_axis = IO_AXIS_Y;
-  _export.params.up_axis = IO_AXIS_Z;
-  _export.params.export_materials = false;
+  OBJExportParams params;
+  params.forward_axis = IO_AXIS_Y;
+  params.up_axis = IO_AXIS_Z;
+  params.export_materials = false;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR "edges.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "edges.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, vertices)
 {
-  OBJExportParamsDefault _export;
-  _export.params.forward_axis = IO_AXIS_Y;
-  _export.params.up_axis = IO_AXIS_Z;
-  _export.params.export_materials = false;
+  OBJExportParams params;
+  params.forward_axis = IO_AXIS_Y;
+  params.up_axis = IO_AXIS_Z;
+  params.export_materials = false;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR
                                "cube_loose_edges_verts.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "cube_loose_edges_verts.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, cube_loose_edges)
 {
-  OBJExportParamsDefault _export;
-  _export.params.forward_axis = IO_AXIS_Y;
-  _export.params.up_axis = IO_AXIS_Z;
-  _export.params.export_materials = false;
+  OBJExportParams params;
+  params.forward_axis = IO_AXIS_Y;
+  params.up_axis = IO_AXIS_Z;
+  params.export_materials = false;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR "vertices.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "vertices.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, non_uniform_scale)
 {
-  OBJExportParamsDefault _export;
-  _export.params.export_materials = false;
+  OBJExportParams params;
+  params.export_materials = false;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR
                                "non_uniform_scale.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "non_uniform_scale.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, nurbs_as_nurbs)
 {
-  OBJExportParamsDefault _export;
-  _export.params.forward_axis = IO_AXIS_Y;
-  _export.params.up_axis = IO_AXIS_Z;
-  _export.params.export_materials = false;
-  _export.params.export_curves_as_nurbs = true;
+  OBJExportParams params;
+  params.forward_axis = IO_AXIS_Y;
+  params.up_axis = IO_AXIS_Z;
+  params.export_materials = false;
+  params.export_curves_as_nurbs = true;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR "nurbs.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "nurbs.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, nurbs_curves_as_nurbs)
 {
-  OBJExportParamsDefault _export;
-  _export.params.forward_axis = IO_AXIS_Y;
-  _export.params.up_axis = IO_AXIS_Z;
-  _export.params.export_materials = false;
-  _export.params.export_curves_as_nurbs = true;
+  OBJExportParams params;
+  params.forward_axis = IO_AXIS_Y;
+  params.up_axis = IO_AXIS_Z;
+  params.export_materials = false;
+  params.export_curves_as_nurbs = true;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR "nurbs_curves.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "nurbs_curves.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, nurbs_as_mesh)
 {
-  OBJExportParamsDefault _export;
-  _export.params.forward_axis = IO_AXIS_Y;
-  _export.params.up_axis = IO_AXIS_Z;
-  _export.params.export_materials = false;
-  _export.params.export_curves_as_nurbs = false;
+  OBJExportParams params;
+  params.forward_axis = IO_AXIS_Y;
+  params.up_axis = IO_AXIS_Z;
+  params.export_materials = false;
+  params.export_curves_as_nurbs = false;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR "nurbs.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "nurbs_mesh.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, cube_all_data_triangulated)
 {
-  OBJExportParamsDefault _export;
-  _export.params.forward_axis = IO_AXIS_Y;
-  _export.params.up_axis = IO_AXIS_Z;
-  _export.params.export_materials = false;
-  _export.params.export_triangulated_mesh = true;
+  OBJExportParams params;
+  params.forward_axis = IO_AXIS_Y;
+  params.up_axis = IO_AXIS_Z;
+  params.export_materials = false;
+  params.export_triangulated_mesh = true;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR "cube_all_data.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "cube_all_data_triangulated.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, cube_normal_edit)
 {
-  OBJExportParamsDefault _export;
-  _export.params.forward_axis = IO_AXIS_Y;
-  _export.params.up_axis = IO_AXIS_Z;
-  _export.params.export_materials = false;
+  OBJExportParams params;
+  params.forward_axis = IO_AXIS_Y;
+  params.up_axis = IO_AXIS_Z;
+  params.export_materials = false;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR
                                "cube_normal_edit.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "cube_normal_edit.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, cube_vertex_groups)
 {
-  OBJExportParamsDefault _export;
-  _export.params.export_materials = false;
-  _export.params.export_normals = false;
-  _export.params.export_uv = false;
-  _export.params.export_vertex_groups = true;
+  OBJExportParams params;
+  params.export_materials = false;
+  params.export_normals = false;
+  params.export_uv = false;
+  params.export_vertex_groups = true;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR
                                "cube_vertex_groups.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "cube_vertex_groups.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, cubes_positioned)
 {
-  OBJExportParamsDefault _export;
-  _export.params.export_materials = false;
-  _export.params.global_scale = 2.0f;
+  OBJExportParams params;
+  params.export_materials = false;
+  params.global_scale = 2.0f;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR
                                "cubes_positioned.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "cubes_positioned.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, cubes_vertex_colors)
 {
-  OBJExportParamsDefault _export;
-  _export.params.export_colors = true;
-  _export.params.export_normals = false;
-  _export.params.export_uv = false;
-  _export.params.export_materials = false;
+  OBJExportParams params;
+  params.export_colors = true;
+  params.export_normals = false;
+  params.export_uv = false;
+  params.export_materials = false;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR
                                "cubes_vertex_colors.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "cubes_vertex_colors.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, cubes_with_textures_strip)
 {
-  OBJExportParamsDefault _export;
-  _export.params.path_mode = PATH_REFERENCE_STRIP;
+  OBJExportParams params;
+  params.path_mode = PATH_REFERENCE_STRIP;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR
                                "cubes_with_textures.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "cubes_with_textures.obj",
                                "io_tests" SEP_STR "obj" SEP_STR "cubes_with_textures.mtl",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, cubes_with_textures_relative)
 {
-  OBJExportParamsDefault _export;
-  _export.params.path_mode = PATH_REFERENCE_RELATIVE;
+  OBJExportParams params;
+  params.path_mode = PATH_REFERENCE_RELATIVE;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR
                                "cubes_with_textures.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "cubes_with_textures_rel.obj",
                                "io_tests" SEP_STR "obj" SEP_STR "cubes_with_textures_rel.mtl",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, suzanne_all_data)
 {
-  OBJExportParamsDefault _export;
-  _export.params.forward_axis = IO_AXIS_Y;
-  _export.params.up_axis = IO_AXIS_Z;
-  _export.params.export_materials = false;
-  _export.params.export_smooth_groups = true;
+  OBJExportParams params;
+  params.forward_axis = IO_AXIS_Y;
+  params.up_axis = IO_AXIS_Z;
+  params.export_materials = false;
+  params.export_smooth_groups = true;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR
                                "suzanne_all_data.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "suzanne_all_data.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, all_curves)
 {
-  OBJExportParamsDefault _export;
-  _export.params.export_materials = false;
+  OBJExportParams params;
+  params.export_materials = false;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_scene" SEP_STR "all_curves.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "all_curves.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, all_curves_as_nurbs)
 {
-  OBJExportParamsDefault _export;
-  _export.params.export_materials = false;
-  _export.params.export_curves_as_nurbs = true;
+  OBJExportParams params;
+  params.export_materials = false;
+  params.export_curves_as_nurbs = true;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_scene" SEP_STR "all_curves.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "all_curves_as_nurbs.obj",
                                "",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, all_objects)
 {
-  OBJExportParamsDefault _export;
-  _export.params.forward_axis = IO_AXIS_Y;
-  _export.params.up_axis = IO_AXIS_Z;
-  _export.params.export_smooth_groups = true;
-  _export.params.export_colors = true;
+  OBJExportParams params;
+  params.forward_axis = IO_AXIS_Y;
+  params.up_axis = IO_AXIS_Z;
+  params.export_smooth_groups = true;
+  params.export_colors = true;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_scene" SEP_STR "all_objects.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "all_objects.obj",
                                "io_tests" SEP_STR "obj" SEP_STR "all_objects.mtl",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, all_objects_mat_groups)
 {
-  OBJExportParamsDefault _export;
-  _export.params.forward_axis = IO_AXIS_Y;
-  _export.params.up_axis = IO_AXIS_Z;
-  _export.params.export_smooth_groups = true;
-  _export.params.export_material_groups = true;
+  OBJExportParams params;
+  params.forward_axis = IO_AXIS_Y;
+  params.up_axis = IO_AXIS_Z;
+  params.export_smooth_groups = true;
+  params.export_material_groups = true;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_scene" SEP_STR "all_objects.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "all_objects_mat_groups.obj",
                                "io_tests" SEP_STR "obj" SEP_STR "all_objects_mat_groups.mtl",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, materials_without_pbr)
 {
-  OBJExportParamsDefault _export;
-  _export.params.export_normals = false;
-  _export.params.path_mode = PATH_REFERENCE_RELATIVE;
+  OBJExportParams params;
+  params.export_normals = false;
+  params.path_mode = PATH_REFERENCE_RELATIVE;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR "materials_pbr.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "materials_without_pbr.obj",
                                "io_tests" SEP_STR "obj" SEP_STR "materials_without_pbr.mtl",
-                               _export.params);
+                               params);
 }
 
 TEST_F(OBJExportRegressionTest, materials_pbr)
 {
-  OBJExportParamsDefault _export;
-  _export.params.export_normals = false;
-  _export.params.path_mode = PATH_REFERENCE_RELATIVE;
-  _export.params.export_pbr_extensions = true;
+  OBJExportParams params;
+  params.export_normals = false;
+  params.path_mode = PATH_REFERENCE_RELATIVE;
+  params.export_pbr_extensions = true;
   compare_obj_export_to_golden("io_tests" SEP_STR "blend_geometry" SEP_STR "materials_pbr.blend",
                                "io_tests" SEP_STR "obj" SEP_STR "materials_pbr.obj",
                                "io_tests" SEP_STR "obj" SEP_STR "materials_pbr.mtl",
-                               _export.params);
+                               params);
 }
 
 }  // namespace blender::io::obj

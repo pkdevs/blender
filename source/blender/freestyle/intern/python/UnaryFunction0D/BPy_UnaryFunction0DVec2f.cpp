@@ -14,10 +14,6 @@
 #include "UnaryFunction0D_Vec2f/BPy_Normal2DF0D.h"
 #include "UnaryFunction0D_Vec2f/BPy_VertexOrientation2DF0D.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 using namespace Freestyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -62,7 +58,6 @@ PyDoc_STRVAR(
     ".. method:: __init__()\n"
     "\n"
     "   Default constructor.\n");
-
 static int UnaryFunction0DVec2f___init__(BPy_UnaryFunction0DVec2f *self,
                                          PyObject *args,
                                          PyObject *kwds)
@@ -95,8 +90,13 @@ static PyObject *UnaryFunction0DVec2f___call__(BPy_UnaryFunction0DVec2f *self,
   static const char *kwlist[] = {"it", nullptr};
   PyObject *obj;
 
-  if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "O!", (char **)kwlist, &Interface0DIterator_Type, &obj))
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kwds,
+                                   "O!" /* `it` */
+                                   ":__call__",
+                                   (char **)kwlist,
+                                   &Interface0DIterator_Type,
+                                   &obj))
   {
     return nullptr;
   }
@@ -159,7 +159,3 @@ PyTypeObject UnaryFunction0DVec2f_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

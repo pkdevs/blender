@@ -7,9 +7,6 @@
  */
 
 #include "BKE_context.hh"
-#include "BKE_mask.h"
-
-#include "DNA_scene_types.h"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -23,6 +20,8 @@
 
 #include "mask_intern.hh" /* own include */
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Poll Functions
  * \{ */
@@ -35,7 +34,7 @@ bool ED_maskedit_poll(bContext *C)
       case SPACE_CLIP:
         return ED_space_clip_maskedit_poll(C);
       case SPACE_SEQ:
-        return ED_space_sequencer_maskedit_poll(C);
+        return ed::vse::maskedit_poll(C);
       case SPACE_IMAGE:
         return ED_space_image_maskedit_poll(C);
     }
@@ -51,7 +50,7 @@ bool ED_maskedit_visible_splines_poll(bContext *C)
       case SPACE_CLIP:
         return ED_space_clip_maskedit_visible_splines_poll(C);
       case SPACE_SEQ:
-        return ED_space_sequencer_maskedit_poll(C);
+        return ed::vse::maskedit_poll(C);
       case SPACE_IMAGE:
         return ED_space_image_maskedit_visible_splines_poll(C);
     }
@@ -67,7 +66,7 @@ bool ED_maskedit_mask_poll(bContext *C)
       case SPACE_CLIP:
         return ED_space_clip_maskedit_mask_poll(C);
       case SPACE_SEQ:
-        return ED_space_sequencer_maskedit_mask_poll(C);
+        return ed::vse::maskedit_mask_poll(C);
       case SPACE_IMAGE:
         return ED_space_image_maskedit_mask_poll(C);
     }
@@ -83,7 +82,7 @@ bool ED_maskedit_mask_visible_splines_poll(bContext *C)
       case SPACE_CLIP:
         return ED_space_clip_maskedit_mask_visible_splines_poll(C);
       case SPACE_SEQ:
-        return ED_space_sequencer_maskedit_mask_poll(C);
+        return ed::vse::maskedit_mask_poll(C);
       case SPACE_IMAGE:
         return ED_space_image_maskedit_mask_visible_splines_poll(C);
     }
@@ -152,6 +151,7 @@ void ED_operatortypes_mask()
 
   /* layers */
   WM_operatortype_append(MASK_OT_layer_move);
+  WM_operatortype_append(MASK_OT_move_to_layer);
 
   /* duplicate */
   WM_operatortype_append(MASK_OT_duplicate);
@@ -237,3 +237,5 @@ void ED_mask_view_lock_state_restore_no_jump(const bContext *C, const MaskViewLo
 }
 
 /** \} */
+
+}  // namespace blender

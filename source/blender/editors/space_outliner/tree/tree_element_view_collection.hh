@@ -10,7 +10,11 @@
 
 #include "tree_element.hh"
 
-namespace blender::ed::outliner {
+namespace blender {
+
+struct Scene;
+
+namespace ed::outliner {
 
 class TreeElementViewCollectionBase final : public AbstractTreeElement {
   /* Not needed right now, avoid unused member variable warning. */
@@ -20,4 +24,5 @@ class TreeElementViewCollectionBase final : public AbstractTreeElement {
   TreeElementViewCollectionBase(TreeElement &legacy_te, Scene &scene);
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <atomic>
+
 #include "BLI_array.hh"
 
 #include "gpu_shader_create_info.hh"
@@ -34,6 +36,7 @@ enum VKBindType {
   STORAGE_BUFFER,
   SAMPLER,
   IMAGE,
+  ACCELERATION_STRUCTURE,
   INPUT_ATTACHMENT,
 };
 
@@ -47,6 +50,15 @@ struct VKResourceBinding {
 };
 
 class VKShaderInterface : public ShaderInterface {
+ public:
+  using Key = uint64_t;
+
+  /**
+   * Unique id for identifying this shader interface. It is unique for the whole runtime of
+   * Blender.
+   */
+  Key id = 0;
+
  private:
   /** Binding information for each shader input. */
   Array<VKResourceBinding> resource_bindings_;
@@ -56,14 +68,16 @@ class VKShaderInterface : public ShaderInterface {
 
   shader::BuiltinBits shader_builtins_;
 
+  static std::atomic<Key> next_id_;
+
  public:
   VKShaderInterface() = default;
 
   void init(const shader::ShaderCreateInfo &info);
 
-  const VKDescriptorSet::Location descriptor_set_location(
+  VKDescriptorSet::Location descriptor_set_location(
       const shader::ShaderCreateInfo::Resource &resource) const;
-  const std::optional<VKDescriptorSet::Location> descriptor_set_location(
+  std::optional<VKDescriptorSet::Location> descriptor_set_location(
       const shader::ShaderCreateInfo::Resource::BindType &bind_type, int binding) const;
 
   /** Get the Layout of the shader. */
@@ -84,7 +98,7 @@ class VKShaderInterface : public ShaderInterface {
 
   bool is_point_shader() const
   {
-    return (shader_builtins_ & shader::BuiltinBits::POINT_SIZE) == shader::BuiltinBits::POINT_SIZE;
+    return flag_is_set(shader_builtins_, shader::BuiltinBits::POINT_SIZE);
   }
 
   const Span<VKResourceBinding> resource_bindings_get() const
@@ -93,6 +107,37 @@ class VKShaderInterface : public ShaderInterface {
   }
 
  private:
+  /**
+   * Temporary state used during the initialization of the shader interface.
+   */
+  struct InitContext {
+    const shader::ShaderCreateInfo &info;
+    ShaderInput *input_ptr = nullptr;
+    uint32_t name_buffer_offset = 0;
+    VKPushConstants::StorageType push_constants_storage_type;
+    bool supports_local_read = false;
+  };
+
+  /**
+   * Compute the total number of resources and allocate the input and name buffers.
+   */
+  void compute_resource_counts(InitContext &ctx);
+
+  /**
+   * Populate the input buffer with attributes, UBOs, samplers, images, push constants, and SSBOs.
+   */
+  void populate_shader_inputs(InitContext &ctx);
+
+  /**
+   * Map the built-in uniform and block locations.
+   */
+  void populate_builtins();
+
+  /**
+   * Initialize the descriptor set layout and update resource binding information.
+   */
+  void populate_resource_bindings(InitContext &ctx);
+
   void init_descriptor_set_layout_info(const shader::ShaderCreateInfo &info,
                                        int64_t resources_len,
                                        Span<shader::ShaderCreateInfo::Resource> resources,

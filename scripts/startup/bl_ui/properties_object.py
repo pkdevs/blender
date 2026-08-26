@@ -9,7 +9,7 @@ from bl_ui.properties_animviz import (
 import bpy
 from bpy.types import Panel, Menu
 from rna_prop_ui import PropertyPanel
-from .space_properties import PropertiesAnimationMixin
+from bl_ui.space_properties import PropertiesAnimationMixin
 
 
 class ObjectButtonsPanel:
@@ -108,6 +108,27 @@ class OBJECT_PT_delta_transform(ObjectButtonsPanel, Panel):
         col.prop(ob, "delta_scale", text="Scale")
 
 
+class OBJECT_PT_parent_inverse_transform(ObjectButtonsPanel, Panel):
+    bl_label = "Parent Inverse Transform"
+    bl_parent_id = "OBJECT_PT_transform"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        ob = context.object
+        return ob and ob.parent
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        ob = context.object
+        layout.template_matrix(ob, "matrix_parent_inverse")
+
+        props = layout.operator("object.parent_clear", text="Clear Parent Inverse Transform")
+        props.type = 'CLEAR_INVERSE'
+
+
 class OBJECT_PT_relations(ObjectButtonsPanel, Panel):
     bl_label = "Relations"
     bl_options = {'DEFAULT_CLOSED'}
@@ -126,6 +147,13 @@ class OBJECT_PT_relations(ObjectButtonsPanel, Panel):
         parent = ob.parent
         if parent and ob.parent_type == 'BONE' and parent.type == 'ARMATURE':
             sub.prop_search(ob, "parent_bone", parent.data, "bones")
+            sub.prop(ob, "parent_bone_head_tail_factor", text="Head/Tail")
+        elif ob.parent_type == 'VERTEX':
+            col.prop(ob, "parent_vertices", text="Parent Vertex", index=0)
+            sub.prop(ob, "use_parent_final_indices")
+        elif ob.parent_type == 'VERTEX_3':
+            col.prop(ob, "parent_vertices", text="Parent Vertices")
+            sub.prop(ob, "use_parent_final_indices")
         sub.active = (parent is not None)
         sub.prop(ob, "use_camera_lock_parent")
 
@@ -176,7 +204,10 @@ class OBJECT_PT_collections(ObjectButtonsPanel, Panel):
             col.context_pointer_set("collection", collection)
 
             row = col.box().row()
-            row.prop(collection, "name", text="")
+            icon = 'OUTLINER_COLLECTION'
+            if collection.color_tag != 'NONE':
+                icon = 'COLLECTION_' + collection.color_tag
+            row.prop(collection, "name", text="", icon=icon)
             row.operator("object.collection_remove", text="", icon='X', emboss=False)
             row.menu("COLLECTION_MT_context_menu", icon='DOWNARROW_HLT', text="")
 
@@ -195,12 +226,22 @@ class OBJECT_PT_display(ObjectButtonsPanel, Panel):
 
         obj = context.object
         obj_type = obj.type
-        is_geometry = (obj_type in {'MESH', 'CURVE', 'SURFACE', 'META', 'FONT', 'VOLUME', 'CURVES', 'POINTCLOUD'})
+        # Empties can have evaluated geometry
+        is_geometry = (
+            obj_type in {
+                'EMPTY',
+                'MESH',
+                'CURVE',
+                'SURFACE',
+                'META',
+                'FONT',
+                'VOLUME',
+                'CURVES',
+                'POINTCLOUD'})
         has_bounds = (is_geometry or obj_type in {'LATTICE', 'ARMATURE'})
-        is_wire = (obj_type in {'CAMERA', 'EMPTY'})
         is_empty_image = (obj_type == 'EMPTY' and obj.empty_display_type == 'IMAGE')
         is_dupli = (obj.instance_type != 'NONE')
-        is_gpencil = (obj_type == 'GPENCIL')
+        is_gpencil = (obj_type == 'GREASEPENCIL')
 
         col = layout.column(heading="Show")
         col.prop(obj, "show_name", text="Name")
@@ -219,9 +260,9 @@ class OBJECT_PT_display(ObjectButtonsPanel, Panel):
         # if obj_type == 'MESH' or is_empty_image:
         #    col.prop(obj, "show_transparent", text="Transparency")
         sub = layout.column()
-        if is_wire:
-            # wire objects only use the max. display type for duplis
-            sub.active = is_dupli
+        # wire objects only use the max. display type for duplis
+        # and empties with geometry nodes modifier
+        sub.active = obj_type != 'CAMERA'
         sub.prop(obj, "display_type", text="Display As")
 
         if is_geometry or is_dupli or is_empty_image or is_gpencil:
@@ -304,7 +345,7 @@ class OBJECT_PT_lineart(ObjectButtonsPanel, Panel):
     @classmethod
     def poll(cls, context):
         ob = context.object
-        return (ob.type in {'MESH', 'FONT', 'CURVE', 'SURFACE'})
+        return (ob.type in {'MESH', 'FONT', 'CURVE', 'SURFACE', 'CURVES'})
 
     def draw(self, context):
         layout = self.layout
@@ -373,7 +414,7 @@ class OBJECT_PT_visibility(ObjectButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -388,22 +429,27 @@ class OBJECT_PT_visibility(ObjectButtonsPanel, Panel):
         layout = self.layout
         ob = context.object
 
-        layout.prop(ob, "hide_select", text="Selectable", toggle=False, invert_checkbox=True)
+        col = layout.column()
+        col.prop(ob, "hide_select", text="Selectable", toggle=False, invert_checkbox=True)
+        col.prop(ob, "hide_surface_pick", text="Surface Picking", toggle=False, invert_checkbox=True)
+        layout.separator()
 
         col = layout.column(heading="Show In")
         col.prop(ob, "hide_viewport", text="Viewports", toggle=False, invert_checkbox=True)
         col.prop(ob, "hide_render", text="Renders", toggle=False, invert_checkbox=True)
 
-        if context.engine == 'BLENDER_EEVEE_NEXT':
+        if context.engine == 'BLENDER_EEVEE':
             if ob.type in {'MESH', 'CURVE', 'SURFACE', 'META', 'FONT', 'CURVES', 'POINTCLOUD', 'VOLUME'}:
                 layout.separator()
                 col = layout.column(heading="Ray Visibility")
                 col.prop(ob, "visible_camera", text="Camera", toggle=False)
                 col.prop(ob, "visible_shadow", text="Shadow", toggle=False)
+                col.prop(ob, "visible_raycast", text="Raycast", toggle=False)
 
             if ob.type in {'LIGHT'}:
                 layout.separator()
                 col = layout.column(heading="Ray Visibility")
+                col.prop(ob, "visible_camera", text="Camera", toggle=False)
                 col.prop(ob, "visible_diffuse", text="Diffuse", toggle=False)
                 col.prop(ob, "visible_glossy", text="Glossy", toggle=False)
                 col.prop(ob, "visible_transmission", text="Transmission", toggle=False)
@@ -416,7 +462,7 @@ class OBJECT_PT_visibility(ObjectButtonsPanel, Panel):
                 col.prop(ob, "hide_probe_sphere", text="Sphere", toggle=False, invert_checkbox=True)
                 col.prop(ob, "hide_probe_plane", text="Plane", toggle=False, invert_checkbox=True)
 
-        if ob.type in {'GPENCIL', 'GREASEPENCIL'}:
+        if ob.type == 'GREASEPENCIL':
             col = layout.column(heading="Grease Pencil")
             col.prop(ob, "use_grease_pencil_lights", toggle=False)
 
@@ -437,7 +483,8 @@ def has_geometry_visibility(ob):
             'VOLUME',
             'POINTCLOUD',
             'CURVES',
-        }) or (ob.instance_type == 'COLLECTION' and ob.instance_collection))
+        }) or (ob.instance_type == 'COLLECTION' and ob.instance_collection)
+    )
 
 
 class OBJECT_PT_shading(ObjectButtonsPanel, Panel):
@@ -447,7 +494,7 @@ class OBJECT_PT_shading(ObjectButtonsPanel, Panel):
 
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
     }
 
     @classmethod
@@ -487,7 +534,8 @@ class OBJECT_PT_light_linking(ObjectButtonsPanel, Panel):
         col.template_ID(
             light_linking,
             "receiver_collection",
-            new="object.light_linking_receiver_collection_new")
+            new="object.light_linking_receiver_collection_new",
+        )
 
         if not light_linking.receiver_collection:
             return
@@ -532,7 +580,8 @@ class OBJECT_PT_shadow_linking(ObjectButtonsPanel, Panel):
         col.template_ID(
             light_linking,
             "blocker_collection",
-            new="object.light_linking_blocker_collection_new")
+            new="object.light_linking_blocker_collection_new",
+        )
 
         if not light_linking.blocker_collection:
             return
@@ -548,6 +597,35 @@ class OBJECT_PT_shadow_linking(ObjectButtonsPanel, Panel):
         sub.operator("object.light_linking_unlink_from_collection", icon='REMOVE', text="")
         sub = col.column()
         sub.menu("OBJECT_MT_shadow_linking_context_menu", icon='DOWNARROW_HLT', text="")
+
+
+class OBJECT_PT_shadow_terminator(ObjectButtonsPanel, Panel):
+    bl_label = "Shadow Terminator"
+    bl_parent_id = "OBJECT_PT_shading"
+    bl_context = "object"
+    COMPAT_ENGINES = {
+        'BLENDER_EEVEE',
+        'CYCLES',
+    }
+
+    @classmethod
+    def poll(cls, context):
+        return (context.object) and (context.engine in cls.COMPAT_ENGINES) and (context.object.type != 'LIGHT')
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=True)
+
+        ob = context.object
+        if context.engine == 'BLENDER_EEVEE':
+            flow.prop(ob, "shadow_terminator_normal_offset", text="Normal Offset")
+
+        flow.prop(ob, "shadow_terminator_geometry_offset", text="Geometry Offset")
+
+        if context.engine != 'BLENDER_EEVEE':
+            flow.prop(ob, "shadow_terminator_shading_offset", text="Shading Offset")
 
 
 class OBJECT_PT_animation(ObjectButtonsPanel, PropertiesAnimationMixin, PropertyPanel, Panel):
@@ -567,6 +645,7 @@ classes = (
     OBJECT_PT_context_object,
     OBJECT_PT_transform,
     OBJECT_PT_delta_transform,
+    OBJECT_PT_parent_inverse_transform,
     OBJECT_PT_relations,
     COLLECTION_MT_context_menu,
     OBJECT_PT_collections,
@@ -580,6 +659,7 @@ classes = (
     OBJECT_PT_light_linking,
     OBJECT_MT_shadow_linking_context_menu,
     OBJECT_PT_shadow_linking,
+    OBJECT_PT_shadow_terminator,
     OBJECT_PT_visibility,
     OBJECT_PT_lineart,
     OBJECT_PT_animation,

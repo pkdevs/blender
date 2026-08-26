@@ -8,11 +8,26 @@
 
 #pragma once
 
+#include <optional>
+
+#include "BLI_math_vector_types.hh"
+
+namespace blender {
+
 /* internal exports only */
 
+struct ARegion;
 struct ConsoleLine;
+struct SpaceConsole;
 struct bContext;
 struct wmOperatorType;
+
+struct SpaceConsole_Runtime {
+  /** Character width in physical pixels. */
+  int char_width_px = 0;
+  /** Line height in physical pixels. */
+  int line_height_px = 0;
+};
 
 /* `console_draw.cc` */
 
@@ -20,6 +35,10 @@ void console_textview_main(SpaceConsole *sc, const ARegion *region);
 /* Needed to calculate the scroll-bar. */
 int console_textview_height(SpaceConsole *sc, const ARegion *region);
 int console_char_pick(SpaceConsole *sc, const ARegion *region, const int mval[2]);
+/** Get the region-coordinate position for a character \a offset in the input line. */
+std::optional<blender::int2> console_cursor_region_xy_get(const SpaceConsole *sc,
+                                                          const ARegion *region,
+                                                          int offset);
 
 void console_scrollback_prompt_begin(SpaceConsole *sc, ConsoleLine *cl_dummy);
 void console_scrollback_prompt_end(SpaceConsole *sc, ConsoleLine *cl_dummy);
@@ -65,3 +84,5 @@ enum {
   DEL_NEXT_SEL,
   DEL_PREV_SEL
 };
+
+}  // namespace blender

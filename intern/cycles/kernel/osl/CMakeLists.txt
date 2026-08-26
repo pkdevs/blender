@@ -23,15 +23,16 @@ set(HEADER_SRC
   globals.h
   osl.h
   services.h
+  services_shared.h
   types.h
 )
 
 set(LIB
-  cycles_scene
+  PUBLIC cycles_scene
 
-  ${OSL_LIBRARIES}
-  ${OPENIMAGEIO_LIBRARIES}
-  ${PUGIXML_LIBRARIES}
+  PUBLIC bf::dependencies::optional::osl
+  PRIVATE bf::dependencies::openimageio
+  PRIVATE bf::dependencies::optional::pugixml
 )
 
 if(APPLE)

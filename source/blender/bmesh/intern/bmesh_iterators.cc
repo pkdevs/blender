@@ -12,10 +12,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_utildefines.h"
-
 #include "bmesh.hh"
-#include "intern/bmesh_private.hh"
+#include "bmesh_iterators_parallel.hh"
+#include "intern/bmesh_structure.hh"
+
+namespace blender {
 
 const char bm_iter_itype_htype_map[BM_ITYPE_MAX] = {
     '\0',
@@ -156,7 +157,7 @@ void *BM_iter_as_arrayN(BMesh *bm,
   if (BM_iter_init(&iter, bm, itype, data) && iter.count > 0) {
     BMElem *ele;
     BMElem **array = iter.count > stack_array_size ?
-                         static_cast<BMElem **>(MEM_mallocN(sizeof(ele) * iter.count, __func__)) :
+                         MEM_new_array_uninitialized<BMElem *>(iter.count, __func__) :
                          reinterpret_cast<BMElem **>(stack_array);
     int i = 0;
 
@@ -190,7 +191,7 @@ void *BMO_iter_as_arrayN(BMOpSlot slot_args[BMO_OP_MAX_SLOTS],
       slot_len > 0)
   {
     BMElem **array = slot_len > stack_array_size ?
-                         static_cast<BMElem **>(MEM_mallocN(sizeof(ele) * slot_len, __func__)) :
+                         MEM_new_array_uninitialized<BMElem *>(slot_len, __func__) :
                          reinterpret_cast<BMElem **>(stack_array);
     int i = 0;
 
@@ -200,8 +201,8 @@ void *BMO_iter_as_arrayN(BMOpSlot slot_args[BMO_OP_MAX_SLOTS],
     BLI_assert(i <= slot_len);
 
     if (i != slot_len) {
-      if ((void **)array != stack_array) {
-        array = static_cast<BMElem **>(MEM_reallocN(array, sizeof(ele) * i));
+      if (reinterpret_cast<void **>(array) != stack_array) {
+        array = static_cast<BMElem **>(MEM_realloc_uninitialized(array, sizeof(ele) * i));
       }
     }
     *r_len = i;
@@ -214,7 +215,7 @@ void *BMO_iter_as_arrayN(BMOpSlot slot_args[BMO_OP_MAX_SLOTS],
 
 int BM_iter_mesh_bitmap_from_filter(const char itype,
                                     BMesh *bm,
-                                    blender::MutableBitSpan bitmap,
+                                    MutableBitSpan bitmap,
                                     bool (*test_fn)(BMElem *, void *user_data),
                                     void *user_data)
 {
@@ -237,7 +238,7 @@ int BM_iter_mesh_bitmap_from_filter(const char itype,
 }
 
 int BM_iter_mesh_bitmap_from_filter_tessface(BMesh *bm,
-                                             blender::MutableBitSpan bitmap,
+                                             MutableBitSpan bitmap,
                                              bool (*test_fn)(BMFace *, void *user_data),
                                              void *user_data)
 {
@@ -366,7 +367,7 @@ int BM_iter_mesh_count_flag(const char itype, BMesh *bm, const char hflag, const
 void bmiter__elem_of_mesh_begin(BMIter__elem_of_mesh *iter)
 {
 #ifdef USE_IMMUTABLE_ASSERT
-  ((BMIter *)iter)->count = BLI_mempool_len(iter->pooliter.pool);
+  (reinterpret_cast<BMIter *>(iter))->count = BLI_mempool_len(iter->pooliter.pool);
 #endif
   BLI_mempool_iternew(iter->pooliter.pool, &iter->pooliter);
 }
@@ -419,8 +420,8 @@ void *bmiter__edge_of_vert_step(BMIter__edge_of_vert *iter)
 
 void bmiter__face_of_vert_begin(BMIter__face_of_vert *iter)
 {
-  ((BMIter *)iter)->count = bmesh_disk_facevert_count(iter->vdata);
-  if (((BMIter *)iter)->count) {
+  (reinterpret_cast<BMIter *>(iter))->count = bmesh_disk_facevert_count(iter->vdata);
+  if ((reinterpret_cast<BMIter *>(iter))->count) {
     iter->l_first = bmesh_disk_faceloop_find_first(iter->vdata->e, iter->vdata);
     iter->e_first = iter->l_first->e;
     iter->e_next = iter->e_first;
@@ -435,8 +436,8 @@ void *bmiter__face_of_vert_step(BMIter__face_of_vert *iter)
 {
   BMLoop *l_curr = iter->l_next;
 
-  if (((BMIter *)iter)->count && iter->l_next) {
-    ((BMIter *)iter)->count--;
+  if ((reinterpret_cast<BMIter *>(iter))->count && iter->l_next) {
+    (reinterpret_cast<BMIter *>(iter))->count--;
     iter->l_next = bmesh_radial_faceloop_find_next(iter->l_next, iter->vdata);
     if (iter->l_next == iter->l_first) {
       iter->e_next = bmesh_disk_faceedge_find_next(iter->e_next, iter->vdata);
@@ -445,7 +446,7 @@ void *bmiter__face_of_vert_step(BMIter__face_of_vert *iter)
     }
   }
 
-  if (!((BMIter *)iter)->count) {
+  if (!(reinterpret_cast<BMIter *>(iter))->count) {
     iter->l_next = nullptr;
   }
 
@@ -458,8 +459,8 @@ void *bmiter__face_of_vert_step(BMIter__face_of_vert *iter)
 
 void bmiter__loop_of_vert_begin(BMIter__loop_of_vert *iter)
 {
-  ((BMIter *)iter)->count = bmesh_disk_facevert_count(iter->vdata);
-  if (((BMIter *)iter)->count) {
+  (reinterpret_cast<BMIter *>(iter))->count = bmesh_disk_facevert_count(iter->vdata);
+  if ((reinterpret_cast<BMIter *>(iter))->count) {
     iter->l_first = bmesh_disk_faceloop_find_first(iter->vdata->e, iter->vdata);
     iter->e_first = iter->l_first->e;
     iter->e_next = iter->e_first;
@@ -474,8 +475,8 @@ void *bmiter__loop_of_vert_step(BMIter__loop_of_vert *iter)
 {
   BMLoop *l_curr = iter->l_next;
 
-  if (((BMIter *)iter)->count) {
-    ((BMIter *)iter)->count--;
+  if ((reinterpret_cast<BMIter *>(iter))->count) {
+    (reinterpret_cast<BMIter *>(iter))->count--;
     iter->l_next = bmesh_radial_faceloop_find_next(iter->l_next, iter->vdata);
     if (iter->l_next == iter->l_first) {
       iter->e_next = bmesh_disk_faceedge_find_next(iter->e_next, iter->vdata);
@@ -484,7 +485,7 @@ void *bmiter__loop_of_vert_step(BMIter__loop_of_vert *iter)
     }
   }
 
-  if (!((BMIter *)iter)->count) {
+  if (!(reinterpret_cast<BMIter *>(iter))->count) {
     iter->l_next = nullptr;
   }
 
@@ -574,12 +575,12 @@ void *bmiter__face_of_edge_step(BMIter__face_of_edge *iter)
 
 void bmiter__vert_of_edge_begin(BMIter__vert_of_edge *iter)
 {
-  ((BMIter *)iter)->count = 0;
+  (reinterpret_cast<BMIter *>(iter))->count = 0;
 }
 
 void *bmiter__vert_of_edge_step(BMIter__vert_of_edge *iter)
 {
-  switch (((BMIter *)iter)->count++) {
+  switch ((reinterpret_cast<BMIter *>(iter))->count++) {
     case 0:
       return iter->edata->v1;
     case 1:
@@ -657,3 +658,28 @@ void *bmiter__loop_of_face_step(BMIter__loop_of_face *iter)
 
   return l_curr;
 }
+
+void BM_iter_parallel(BMesh *bm,
+                      const char itype,
+                      TaskParallelMempoolFunc func,
+                      void *userdata,
+                      const TaskParallelSettings *settings)
+{
+  switch (BMIterType(itype)) {
+    case BM_VERTS_OF_MESH:
+      BLI_task_parallel_mempool(bm->vpool, userdata, func, settings);
+      break;
+    case BM_EDGES_OF_MESH:
+      BLI_task_parallel_mempool(bm->epool, userdata, func, settings);
+      break;
+    case BM_FACES_OF_MESH:
+      BLI_task_parallel_mempool(bm->fpool, userdata, func, settings);
+      break;
+    default:
+      /* Should never happen. */
+      BLI_assert_unreachable();
+      break;
+  }
+}
+
+}  // namespace blender

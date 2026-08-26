@@ -6,13 +6,10 @@
  * \ingroup animrig
  */
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_scene.hh"
-
-#include "BLI_listbase.h"
-#include "BLI_string.h"
 
 #include "DNA_scene_types.h"
 
@@ -28,7 +25,7 @@
 
 namespace blender::animrig {
 
-static eInsertKeyFlags get_autokey_flags(Scene *scene)
+static eInsertKeyFlags get_autokey_flags(const Scene *scene)
 {
   eInsertKeyFlags flag = INSERTKEY_NOFLAGS;
 
@@ -102,7 +99,7 @@ bool autokeyframe_cfra_can_key(const Scene *scene, ID *id)
   return true;
 }
 
-void autokeyframe_object(bContext *C, Scene *scene, Object *ob, Span<RNAPath> rna_paths)
+void autokeyframe_object(bContext *C, const Scene *scene, Object *ob, Span<RNAPath> rna_paths)
 {
   BLI_assert(ob != nullptr);
   BLI_assert(scene != nullptr);
@@ -123,7 +120,7 @@ void autokeyframe_object(bContext *C, Scene *scene, Object *ob, Span<RNAPath> rn
   const eInsertKeyFlags flag = get_autokey_flags(scene);
 
   /* Add data-source override for the object. */
-  blender::Vector<PointerRNA> sources;
+  Vector<PointerRNA> sources;
   relative_keyingset_add_source(sources, id);
 
   if (is_keying_flag(scene, AUTOKEY_FLAG_ONLYKEYINGSET) && (active_ks)) {
@@ -168,7 +165,7 @@ bool autokeyframe_object(bContext *C, Scene *scene, Object *ob, KeyingSet *ks)
    * 2) Insert key-frames.
    * 3) Free the extra info.
    */
-  blender::Vector<PointerRNA> sources;
+  Vector<PointerRNA> sources;
   relative_keyingset_add_source(sources, &ob->id);
   apply_keyingset(C, &sources, ks, ModifyKeyMode::INSERT, BKE_scene_frame_get(scene));
 
@@ -186,8 +183,8 @@ bool autokeyframe_pchan(bContext *C, Scene *scene, Object *ob, bPoseChannel *pch
    * 2) Insert key-frames.
    * 3) Free the extra info.
    */
-  blender::Vector<PointerRNA> sources;
-  relative_keyingset_add_source(sources, &ob->id, &RNA_PoseBone, pchan);
+  Vector<PointerRNA> sources;
+  relative_keyingset_add_source(sources, &ob->id, RNA_PoseBone, pchan);
   apply_keyingset(C, &sources, ks, ModifyKeyMode::INSERT, BKE_scene_frame_get(scene));
 
   return true;
@@ -208,7 +205,7 @@ void autokeyframe_pose_channel(bContext *C,
   Main *bmain = CTX_data_main(C);
   ID *id = &ob->id;
 
-  if (!blender::animrig::autokeyframe_cfra_can_key(scene, id)) {
+  if (!animrig::autokeyframe_cfra_can_key(scene, id)) {
     return;
   }
 
@@ -232,7 +229,7 @@ void autokeyframe_pose_channel(bContext *C,
 
   Vector<PointerRNA> sources;
   /* Add data-source override for the camera object. */
-  relative_keyingset_add_source(sources, id, &RNA_PoseBone, pose_channel);
+  relative_keyingset_add_source(sources, id, RNA_PoseBone, pose_channel);
 
   /* only insert into active keyingset? */
   if (is_keying_flag(scene, AUTOKEY_FLAG_ONLYKEYINGSET) && (active_ks)) {
@@ -299,14 +296,17 @@ bool autokeyframe_property(bContext *C,
       ReportList *reports = CTX_wm_reports(C);
       ToolSettings *ts = scene->toolsettings;
 
-      changed = insert_keyframe_direct(reports,
-                                       *ptr,
-                                       prop,
-                                       fcu,
-                                       &anim_eval_context,
-                                       eBezTriple_KeyframeType(ts->keyframe_type),
-                                       nullptr,
-                                       eInsertKeyFlags(0));
+      const SingleKeyingResult result = insert_keyframe_direct(
+          *ptr,
+          *prop,
+          *fcu,
+          anim_eval_context.eval_time,
+          eBezTriple_KeyframeType(ts->keyframe_type),
+          eInsertKeyFlags(0));
+      changed = result == SingleKeyingResult::SUCCESS;
+      if (result != SingleKeyingResult::SUCCESS) {
+        generate_single_keying_result_report(result, reports);
+      }
       WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
     }
   }
@@ -328,7 +328,7 @@ bool autokeyframe_property(bContext *C,
 
       const std::optional<std::string> group = (fcu && fcu->grp) ? std::optional(fcu->grp->name) :
                                                                    std::nullopt;
-      const std::string path = fcu ? fcu->rna_path :
+      const std::string path = fcu ? std::string(fcu->rna_path()) :
                                      RNA_path_from_ID_to_property(ptr, prop).value_or("");
       /* NOTE: `rnaindex == -1` is a magic number, meaning either "operate on
        * all elements" or "not an array property". */

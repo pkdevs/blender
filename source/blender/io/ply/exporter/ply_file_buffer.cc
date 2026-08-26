@@ -13,9 +13,12 @@
 #include <system_error>
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.ply"};
 
-namespace blender::io::ply {
+namespace io::ply {
 
 FileBuffer::FileBuffer(const char *filepath, size_t buffer_chunk_size)
     : buffer_chunk_size_(buffer_chunk_size), filepath_(filepath)
@@ -37,11 +40,14 @@ void FileBuffer::write_to_file()
 
 void FileBuffer::close_file()
 {
+  if (!outfile_) {
+    return;
+  }
   int close_status = std::fclose(outfile_);
   if (close_status == EOF) {
     return;
   }
-  if (outfile_ && close_status) {
+  if (close_status) {
     CLOG_ERROR(&LOG, "Error: could not close file '%s' properly, it may be corrupted.", filepath_);
   }
 }
@@ -79,4 +85,5 @@ void FileBuffer::write_bytes(Span<char> bytes)
   bb.insert(bb.end(), bytes.begin(), bytes.end());
 }
 
-}  // namespace blender::io::ply
+}  // namespace io::ply
+}  // namespace blender

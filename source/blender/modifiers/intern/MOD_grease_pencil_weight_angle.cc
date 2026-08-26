@@ -7,15 +7,13 @@
  */
 
 #include "BLI_index_mask.hh"
-#include "BLI_math_rotation.hh"
-#include "BLI_string.h" /* For #STRNCPY. */
 
 #include "BLT_translation.hh"
 
 #include "BLO_read_write.hh"
 
-#include "DNA_defaults.h"
 #include "DNA_modifier_types.h"
+#include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 
 #include "RNA_access.hh"
@@ -24,10 +22,10 @@
 #include "BKE_deform.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_grease_pencil.hh"
-#include "BKE_lib_query.hh"
+#include "BKE_grease_pencil_vertex_groups.hh"
 #include "BKE_modifier.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "MOD_grease_pencil_util.hh"
@@ -42,10 +40,7 @@ static void init_data(ModifierData *md)
 {
   GreasePencilWeightAngleModifierData *gpmd =
       reinterpret_cast<GreasePencilWeightAngleModifierData *>(md);
-
-  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(gpmd, modifier));
-
-  MEMCPY_STRUCT_AFTER(gpmd, DNA_struct_default_get(GreasePencilWeightAngleModifierData), modifier);
+  INIT_DEFAULT_STRUCT_AFTER(gpmd, modifier);
   modifier::greasepencil::init_influence_data(&gpmd->influence, false);
 }
 
@@ -70,7 +65,8 @@ static void free_data(ModifierData *md)
 
 static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_render_params*/)
 {
-  GreasePencilWeightAngleModifierData *mmd = (GreasePencilWeightAngleModifierData *)md;
+  GreasePencilWeightAngleModifierData *mmd =
+      reinterpret_cast<GreasePencilWeightAngleModifierData *>(md);
 
   return (mmd->target_vgname[0] == '\0');
 }
@@ -88,7 +84,7 @@ static void blend_write(BlendWriter *writer, const ID * /*id_owner*/, const Modi
   const GreasePencilWeightAngleModifierData *mmd =
       reinterpret_cast<const GreasePencilWeightAngleModifierData *>(md);
 
-  BLO_write_struct(writer, GreasePencilWeightAngleModifierData, mmd);
+  writer->write_struct(mmd);
   modifier::greasepencil::write_influence_data(writer, &mmd->influence);
 }
 
@@ -99,21 +95,8 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
   modifier::greasepencil::read_influence_data(reader, &mmd->influence);
 }
 
-static int ensure_vertex_group(const StringRefNull name, ListBase &vertex_group_names)
-{
-  int def_nr = BKE_defgroup_name_index(&vertex_group_names, name);
-  if (def_nr < 0) {
-    bDeformGroup *defgroup = MEM_cnew<bDeformGroup>(__func__);
-    STRNCPY(defgroup->name, name.c_str());
-    BLI_addtail(&vertex_group_names, defgroup);
-    def_nr = BLI_listbase_count(&vertex_group_names) - 1;
-    BLI_assert(def_nr >= 0);
-  }
-  return def_nr;
-}
-
 static bool target_vertex_group_available(const StringRefNull name,
-                                          const ListBase &vertex_group_names)
+                                          const ListBaseT<bDeformGroup> &vertex_group_names)
 {
   const int def_nr = BKE_defgroup_name_index(&vertex_group_names, name);
   if (def_nr < 0) {
@@ -139,7 +122,7 @@ static void write_weights_for_drawing(const ModifierData &md,
   }
 
   /* Make sure that the target vertex group is added to this drawing so we can write to it. */
-  ensure_vertex_group(mmd.target_vgname, curves.vertex_group_names);
+  bke::greasepencil::ensure_vertex_group(mmd.target_vgname, curves.vertex_group_names);
 
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
   bke::SpanAttributeWriter<float> dst_weights = attributes.lookup_for_write_span<float>(
@@ -147,7 +130,7 @@ static void write_weights_for_drawing(const ModifierData &md,
 
   BLI_assert(!dst_weights.span.is_empty());
 
-  const VArray<float> input_weights = modifier::greasepencil::get_influence_vertex_weights(
+  const VArray<float> influence_weights = modifier::greasepencil::get_influence_vertex_weights(
       curves, mmd.influence);
 
   /* Use default Z up. */
@@ -169,31 +152,39 @@ static void write_weights_for_drawing(const ModifierData &md,
   const OffsetIndices points_by_curve = curves.points_by_curve();
   const Span<float3> positions = curves.positions();
 
-  strokes.foreach_index(GrainSize(512), [&](const int stroke) {
-    const IndexRange points = points_by_curve[stroke];
-    if (points.size() == 1) {
-      dst_weights.span[points.start()] = 1.0f;
-      return;
-    }
-    for (const int point : points.drop_front(1)) {
-      const float3 p1 = math::transform_point(obmat3x3, positions[point]);
-      const float3 p2 = math::transform_point(obmat3x3, positions[point - 1]);
-      const float3 vec = p2 - p1;
-      const float angle = angle_on_axis_v3v3_v3(vec_ref, vec, axis);
-      float weight = 1.0f - math::sin(angle);
+  strokes.foreach_index(
+      [&](const int stroke) {
+        const IndexRange points = points_by_curve[stroke];
+        if (points.size() == 1) {
+          dst_weights.span[points.start()] = 1.0f;
+          return;
+        }
+        for (const int point : points.drop_front(1)) {
+          const float influence_weight = influence_weights[point];
+          if (influence_weight <= 0.0f) {
+            continue;
+          }
 
-      if (mmd.flag & MOD_GREASE_PENCIL_WEIGHT_ANGLE_INVERT_OUTPUT) {
-        weight = 1.0f - weight;
-      }
+          const float3 p1 = math::transform_point(obmat3x3, positions[point]);
+          const float3 p2 = math::transform_point(obmat3x3, positions[point - 1]);
+          const float3 vec = p2 - p1;
+          const float angle = angle_on_axis_v3v3_v3(vec_ref, vec, axis);
+          float weight = 1.0f - math::sin(angle);
 
-      dst_weights.span[point] = (mmd.flag & MOD_GREASE_PENCIL_WEIGHT_ANGLE_MULTIPLY_DATA) ?
-                                    dst_weights.span[point] * weight :
-                                    weight;
-      dst_weights.span[point] = math::clamp(dst_weights.span[point], mmd.min_weight, 1.0f);
-    }
-    /* First point has the same weight as the second one. */
-    dst_weights.span[points[0]] = dst_weights.span[points[1]];
-  });
+          if (mmd.flag & MOD_GREASE_PENCIL_WEIGHT_ANGLE_INVERT_OUTPUT) {
+            weight = 1.0f - weight;
+          }
+
+          dst_weights.span[point] = (mmd.flag & MOD_GREASE_PENCIL_WEIGHT_ANGLE_MULTIPLY_DATA) ?
+                                        dst_weights.span[point] * weight :
+                                        weight;
+          dst_weights.span[point] *= influence_weight;
+          dst_weights.span[point] = math::clamp(dst_weights.span[point], mmd.min_weight, 1.0f);
+        }
+        /* First point has the same weight as the second one. */
+        dst_weights.span[points[0]] = dst_weights.span[points[1]];
+      },
+      exec_mode::grain_size(512));
 
   dst_weights.finish();
 }
@@ -230,47 +221,44 @@ static void modify_geometry_set(ModifierData *md,
 
 static void panel_draw(const bContext *C, Panel *panel)
 {
-  uiLayout *row, *sub;
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
-  row = uiLayoutRow(layout, true);
-  uiItemPointerR(row, ptr, "target_vertex_group", &ob_ptr, "vertex_groups", nullptr, ICON_NONE);
+  ui::Layout &row = layout.row(true);
+  row.prop_search(ptr, "target_vertex_group", &ob_ptr, "vertex_groups", std::nullopt, ICON_NONE);
 
-  sub = uiLayoutRow(row, true);
+  ui::Layout &sub = row.row(true);
   bool has_output = RNA_string_length(ptr, "target_vertex_group") != 0;
-  uiLayoutSetPropDecorate(sub, false);
-  uiLayoutSetActive(sub, has_output);
-  uiItemR(sub, ptr, "use_invert_output", UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
+  sub.use_property_decorate_set(false);
+  sub.active_set(has_output);
+  sub.prop(ptr, "use_invert_output", UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
 
-  uiItemR(layout, ptr, "angle", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "axis", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "space", UI_ITEM_NONE, nullptr, ICON_NONE);
+  layout.prop(ptr, "angle", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "axis", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "space", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  uiItemR(layout, ptr, "minimum_weight", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "use_multiply", UI_ITEM_NONE, nullptr, ICON_NONE);
+  layout.prop(ptr, "minimum_weight", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "use_multiply", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  if (uiLayout *influence_panel = uiLayoutPanelProp(
-          C, layout, ptr, "open_influence_panel", IFACE_("Influence")))
+  if (ui::Layout *influence_panel = layout.panel_prop(
+          C, ptr, "open_influence_panel", IFACE_("Influence")))
   {
-    modifier::greasepencil::draw_layer_filter_settings(C, influence_panel, ptr);
-    modifier::greasepencil::draw_material_filter_settings(C, influence_panel, ptr);
-    modifier::greasepencil::draw_vertex_group_settings(C, influence_panel, ptr);
+    modifier::greasepencil::draw_layer_filter_settings(C, *influence_panel, ptr);
+    modifier::greasepencil::draw_material_filter_settings(C, *influence_panel, ptr);
+    modifier::greasepencil::draw_vertex_group_settings(C, *influence_panel, ptr);
   }
 
-  modifier_panel_end(layout, ptr);
+  modifier_error_message_draw(layout, ptr);
 }
 
 static void panel_register(ARegionType *region_type)
 {
   modifier_panel_register(region_type, eModifierType_GreasePencilWeightAngle, panel_draw);
 }
-
-}  // namespace blender
 
 ModifierTypeInfo modifierType_GreasePencilWeightAngle = {
     /*idname*/ "GreasePencilWeightAngleModifier",
@@ -284,26 +272,28 @@ ModifierTypeInfo modifierType_GreasePencilWeightAngle = {
         eModifierTypeFlag_EnableInEditmode | eModifierTypeFlag_SupportsMapping,
     /*icon*/ ICON_MOD_VERTEX_WEIGHT,
 
-    /*copy_data*/ blender::copy_data,
+    /*copy_data*/ copy_data,
 
     /*deform_verts*/ nullptr,
     /*deform_matrices*/ nullptr,
     /*deform_verts_EM*/ nullptr,
     /*deform_matrices_EM*/ nullptr,
     /*modify_mesh*/ nullptr,
-    /*modify_geometry_set*/ blender::modify_geometry_set,
+    /*modify_geometry_set*/ modify_geometry_set,
 
-    /*init_data*/ blender::init_data,
+    /*init_data*/ init_data,
     /*required_data_mask*/ nullptr,
-    /*free_data*/ blender::free_data,
-    /*is_disabled*/ blender::is_disabled,
+    /*free_data*/ free_data,
+    /*is_disabled*/ is_disabled,
     /*update_depsgraph*/ nullptr,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ blender::foreach_ID_link,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
-    /*panel_register*/ blender::panel_register,
-    /*blend_write*/ blender::blend_write,
-    /*blend_read*/ blender::blend_read,
+    /*panel_register*/ panel_register,
+    /*blend_write*/ blend_write,
+    /*blend_read*/ blend_read,
 };
+
+}  // namespace blender

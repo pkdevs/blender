@@ -4,7 +4,12 @@
 
 #include "testing/testing.h"
 
-#include "BLI_math_color.h"
+#include "BLI_math_color_blend.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+
+namespace blender {
 
 TEST(math_color, RGBToHSVRoundtrip)
 {
@@ -138,3 +143,85 @@ TEST(math_color, srgb_to_linearrgb_v3_v3)
     EXPECT_NEAR(56.2383270264f, linear_color[2], kTolerance);
   }
 }
+
+TEST(math_color, linearrgb_to_srgb_uchar4_n)
+{
+  const float linear[8][4] = {
+      {0.0f, 0.5f, 1.0f, 1.0f},
+      {0.0023f, 0.0024f, 0.0025f, 0.5f},
+      {0.71f, 0.75f, 0.78f, 0.25f},
+      {0.1f, 0.2f, 0.3f, 1.0f},
+      {0.9f, 0.8f, 0.7f, 0.0f},
+      {0.04f, 0.5f, 0.95f, 0.75f},
+      {1.5f, 2.8f, 5.6f, 1.0f},
+      {0.33f, 0.66f, 0.99f, 0.33f},
+  };
+  const float matrix[3][3] = {{0.9f, 0.05f, 0.05f}, {0.1f, 0.8f, 0.1f}, {0.0f, 0.2f, 0.7f}};
+
+  /* Try different array lengths to ensure remainder is handled correctly. */
+  for (const int size : {1, 2, 3, 4, 5, 6, 7, 8}) {
+    for (const bool use_matrix : {false, true}) {
+      const float (*mat)[3] = use_matrix ? matrix : nullptr;
+      uchar srgb[8][4];
+      linearrgb_to_srgb_uchar4_n(srgb, linear, size, mat);
+
+      for (int i = 0; i < size; i++) {
+        float result[4];
+        if (use_matrix) {
+          mul_v3_m3v3(result, matrix, linear[i]);
+        }
+        else {
+          copy_v3_v3(result, linear[i]);
+        }
+        linearrgb_to_srgb_v3_v3(result, result);
+        result[3] = linear[i][3];
+        uchar expected[4];
+        rgba_float_to_uchar(expected, result);
+        for (int c = 0; c < 4; c++) {
+          EXPECT_NEAR(expected[c], srgb[i][c], 1)
+              << "size " << size << " matrix " << use_matrix << " pixel " << i << " channel " << c;
+        }
+      }
+    }
+  }
+}
+
+TEST(math_color, BlendModeConsistency_SoftLight)
+{
+  float fdst[4];
+  float fcolora[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+  float fcolorb[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+  float fcolorc[4] = {1.0f, 1.0f, 1.0f, 0.5f};
+  float fcolord[4] = {0.5f, 0.5f, 0.5f, 0.5f};
+  uchar bdst[4];
+  uchar bcolora[4] = {0, 0, 0, 255};
+  uchar bcolorb[4] = {255, 255, 255, 255};
+  uchar bcolorc[4] = {255, 255, 255, 128};
+  uchar bcolord[4] = {128, 128, 128, 128};
+
+  blend_color_softlight_float(fdst, fcolora, fcolorb);
+  blend_color_softlight_byte(bdst, bcolora, bcolorb);
+  EXPECT_NEAR(fdst[0] * 255.0f, bdst[0], 1.0f);
+  EXPECT_NEAR(fdst[1] * 255.0f, bdst[1], 1.0f);
+  EXPECT_NEAR(fdst[2] * 255.0f, bdst[2], 1.0f);
+
+  blend_color_softlight_float(fdst, fcolorb, fcolora);
+  blend_color_softlight_byte(bdst, bcolorb, bcolora);
+  EXPECT_NEAR(fdst[0] * 255.0f, bdst[0], 1.0f);
+  EXPECT_NEAR(fdst[1] * 255.0f, bdst[1], 1.0f);
+  EXPECT_NEAR(fdst[2] * 255.0f, bdst[2], 1.0f);
+
+  blend_color_softlight_float(fdst, fcolorc, fcolora);
+  blend_color_softlight_byte(bdst, bcolorc, bcolora);
+  EXPECT_NEAR(fdst[0] * 255.0f, bdst[0], 1.0f);
+  EXPECT_NEAR(fdst[1] * 255.0f, bdst[1], 1.0f);
+  EXPECT_NEAR(fdst[2] * 255.0f, bdst[2], 1.0f);
+
+  blend_color_softlight_float(fdst, fcolorc, fcolord);
+  blend_color_softlight_byte(bdst, bcolorc, bcolord);
+  EXPECT_NEAR(fdst[0] * 255.0f, bdst[0], 1.0f);
+  EXPECT_NEAR(fdst[1] * 255.0f, bdst[1], 1.0f);
+  EXPECT_NEAR(fdst[2] * 255.0f, bdst[2], 1.0f);
+}
+
+}  // namespace blender

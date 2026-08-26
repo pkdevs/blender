@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
-#include "BLI_utildefines.h"
+#include <stdbool.h>
+#include <stddef.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace blender {
 
 /** \file
  * \ingroup bke
@@ -21,7 +20,7 @@ extern "C" {
  */
 
 /** Blender major and minor version. */
-#define BLENDER_VERSION 404
+#define BLENDER_VERSION 503
 /** Blender patch version for bug-fix releases. */
 #define BLENDER_VERSION_PATCH 0
 /** Blender release cycle stage: alpha/beta/rc/release. */
@@ -31,7 +30,7 @@ extern "C" {
 
 /* Blender file format version. */
 #define BLENDER_FILE_VERSION BLENDER_VERSION
-#define BLENDER_FILE_SUBVERSION 9
+#define BLENDER_FILE_SUBVERSION 17
 
 /* Minimum Blender version that supports reading file written with the current
  * version. Older Blender versions will test this and cancel loading the file, showing a warning to
@@ -40,20 +39,20 @@ extern "C" {
  * See
  * https://developer.blender.org/docs/handbook/guidelines/compatibility_handling_for_blend_files/
  * for details. */
-#define BLENDER_FILE_MIN_VERSION 306
-#define BLENDER_FILE_MIN_SUBVERSION 13
+#define BLENDER_FILE_MIN_VERSION 405
+#define BLENDER_FILE_MIN_SUBVERSION 85
 
 /** User readable version string. */
-const char *BKE_blender_version_string(void);
+const char *BKE_blender_version_string();
 
 /** As above but does not show patch version. */
-const char *BKE_blender_version_string_compact(void);
+const char *BKE_blender_version_string_compact();
 
 /** Returns true when version cycle is alpha, otherwise (beta, rc) returns false. */
-bool BKE_blender_version_is_alpha(void);
+bool BKE_blender_version_is_alpha();
 
 /** Returns true when version suffix is LTS, otherwise returns false. */
-bool BKE_blender_version_is_lts(void);
+bool BKE_blender_version_is_lts();
 
 /**
  * Fill in given string buffer with user-readable formatted file version and subversion (if
@@ -70,6 +69,4 @@ void BKE_blender_version_blendfile_string_from_values(char *str_buff,
                                                       const short file_version,
                                                       const short file_subversion);
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

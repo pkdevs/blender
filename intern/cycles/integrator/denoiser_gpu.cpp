@@ -8,10 +8,12 @@
 #include "device/device.h"
 #include "device/memory.h"
 #include "device/queue.h"
+
 #include "integrator/pass_accessor_gpu.h"
+
 #include "session/buffers.h"
+
 #include "util/log.h"
-#include "util/progress.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -22,26 +24,22 @@ DenoiserGPU::DenoiserGPU(Device *denoiser_device, const DenoiseParams &params)
   DCHECK(denoiser_queue_);
 }
 
-DenoiserGPU::~DenoiserGPU()
+DenoiserGPU::~DenoiserGPU()  // NOLINT
 {
   /* Explicit implementation, to allow forward declaration of Device in the header. */
 }
 
 bool DenoiserGPU::denoise_buffer(const BufferParams &buffer_params,
+                                 const BufferParams &denoised_buffer_params,
                                  RenderBuffers *render_buffers,
                                  const int num_samples,
-                                 bool allow_inplace_modification)
+                                 const bool allow_inplace_modification,
+                                 const float2 pixel_jitter)
 {
   Device *denoiser_device = get_denoiser_device();
   if (!denoiser_device) {
     return false;
   }
-
-  DenoiseTask task;
-  task.params = params_;
-  task.num_samples = num_samples;
-  task.buffer_params = buffer_params;
-  task.allow_inplace_modification = allow_inplace_modification;
 
   RenderBuffers local_render_buffers(denoiser_device);
   bool local_buffer_used = false;
@@ -49,10 +47,9 @@ bool DenoiserGPU::denoise_buffer(const BufferParams &buffer_params,
   if (denoiser_device == render_buffers->buffer.device) {
     /* The device can access an existing buffer pointer. */
     local_buffer_used = false;
-    task.render_buffers = render_buffers;
   }
   else {
-    VLOG_WORK << "Creating temporary buffer on denoiser device.";
+    LOG_DEBUG << "Creating temporary buffer on denoiser device.";
 
     /* Create buffer which is available by the device used by denoiser. */
 
@@ -63,7 +60,7 @@ bool DenoiserGPU::denoise_buffer(const BufferParams &buffer_params,
 
     render_buffers->copy_from_device();
 
-    local_render_buffers.reset(buffer_params);
+    local_render_buffers.reset(denoised_buffer_params);
 
     /* NOTE: The local buffer is allocated for an exact size of the effective render size, while
      * the input render buffer is allocated for the lowest resolution divider possible. So it is
@@ -73,44 +70,51 @@ bool DenoiserGPU::denoise_buffer(const BufferParams &buffer_params,
            sizeof(float) * local_render_buffers.buffer.size());
 
     denoiser_queue_->copy_to_device(local_render_buffers.buffer);
-
-    task.render_buffers = &local_render_buffers;
-    task.allow_inplace_modification = true;
   }
 
-  const bool denoise_result = denoise_buffer(task);
+  {
+    DenoiseContext context(denoiser_device,
+                           params_,
+                           buffer_params,
+                           denoised_buffer_params,
+                           local_buffer_used ? &local_render_buffers : render_buffers,
+                           num_samples,
+                           local_buffer_used || allow_inplace_modification,
+                           pixel_jitter);
+
+    if (!denoise_ensure(context)) {
+      return false;
+    }
+
+    if (!denoise_filter_guiding_preprocess(context)) {
+      LOG_ERROR << "Error preprocessing guiding passes.";
+      return false;
+    }
+
+    /* Passes which will use real albedo when it is available. */
+    if (!denoise_pass(context, PASS_COMBINED)) {
+      return false;
+    }
+    if (!denoise_pass(context, PASS_SHADOW_CATCHER_MATTE)) {
+      return false;
+    }
+
+    /* Passes which do not need albedo and hence if real is present it needs to become fake. */
+    if (!denoise_pass(context, PASS_SHADOW_CATCHER)) {
+      return false;
+    }
+  }
 
   if (local_buffer_used) {
     local_render_buffers.copy_from_device();
 
-    render_buffers_host_copy_denoised(
-        render_buffers, buffer_params, &local_render_buffers, local_render_buffers.params);
+    render_buffers_host_copy_denoised(render_buffers,
+                                      denoised_buffer_params,
+                                      &local_render_buffers,
+                                      local_render_buffers.params);
 
     render_buffers->copy_to_device();
   }
-
-  return denoise_result;
-}
-
-bool DenoiserGPU::denoise_buffer(const DenoiseTask &task)
-{
-  DenoiseContext context(denoiser_device_, task);
-
-  if (!denoise_ensure(context)) {
-    return false;
-  }
-
-  if (!denoise_filter_guiding_preprocess(context)) {
-    LOG(ERROR) << "Error preprocessing guiding passes.";
-    return false;
-  }
-
-  /* Passes which will use real albedo when it is available. */
-  denoise_pass(context, PASS_COMBINED);
-  denoise_pass(context, PASS_SHADOW_CATCHER_MATTE);
-
-  /* Passes which do not need albedo and hence if real is present it needs to become fake. */
-  denoise_pass(context, PASS_SHADOW_CATCHER);
 
   return true;
 }
@@ -118,12 +122,12 @@ bool DenoiserGPU::denoise_buffer(const DenoiseTask &task)
 bool DenoiserGPU::denoise_ensure(DenoiseContext &context)
 {
   if (!denoise_create_if_needed(context)) {
-    LOG(ERROR) << "GPU denoiser creation has failed.";
+    LOG_ERROR << "GPU denoiser creation has failed.";
     return false;
   }
 
   if (!denoise_configure_if_needed(context)) {
-    LOG(ERROR) << "GPU denoiser configuration has failed.";
+    LOG_ERROR << "GPU denoiser configuration has failed.";
     return false;
   }
 
@@ -136,64 +140,67 @@ bool DenoiserGPU::denoise_filter_guiding_preprocess(const DenoiseContext &contex
 
   const int work_size = buffer_params.width * buffer_params.height;
 
-  DeviceKernelArguments args(&context.guiding_params.device_pointer,
-                             &context.guiding_params.pass_stride,
-                             &context.guiding_params.pass_albedo,
-                             &context.guiding_params.pass_normal,
-                             &context.guiding_params.pass_flow,
-                             &context.render_buffers->buffer.device_pointer,
-                             &buffer_params.offset,
-                             &buffer_params.stride,
-                             &buffer_params.pass_stride,
-                             &context.pass_sample_count,
-                             &context.pass_denoising_albedo,
-                             &context.pass_denoising_normal,
-                             &context.pass_motion,
-                             &buffer_params.full_x,
-                             &buffer_params.full_y,
-                             &buffer_params.width,
-                             &buffer_params.height,
-                             &context.num_samples);
+  const DeviceKernelArguments args(&context.guiding_params.device_pointer,
+                                   &context.guiding_params.pass_stride,
+                                   &context.guiding_params.pass_albedo,
+                                   &context.guiding_params.pass_normal,
+                                   &context.guiding_params.pass_flow,
+                                   &context.render_buffers->buffer.device_pointer,
+                                   &buffer_params.offset,
+                                   &buffer_params.stride,
+                                   &buffer_params.pass_stride,
+                                   &context.pass_sample_count,
+                                   &context.pass_denoising_albedo,
+                                   &context.pass_denoising_normal,
+                                   &context.pass_motion,
+                                   &buffer_params.full_x,
+                                   &buffer_params.full_y,
+                                   &buffer_params.width,
+                                   &buffer_params.height,
+                                   &context.num_samples);
 
-  return denoiser_queue_->enqueue(DEVICE_KERNEL_FILTER_GUIDING_PREPROCESS, work_size, args);
+  return denoiser_queue_->enqueue(DEVICE_KERNEL_FILTER_GUIDING_PREPROCESS, work_size, args) &&
+         denoise_filter_guiding_flip_y(context);
 }
 
-DenoiserGPU::DenoiseContext::DenoiseContext(Device *device, const DenoiseTask &task)
-    : denoise_params(task.params),
-      render_buffers(task.render_buffers),
-      buffer_params(task.buffer_params),
+DenoiserGPU::DenoiseContext::DenoiseContext(Device *device,
+                                            const DenoiseParams &params,
+                                            const BufferParams &buffer_params,
+                                            const BufferParams &denoised_buffer_params,
+                                            RenderBuffers *render_buffers,
+                                            const int num_samples,
+                                            const bool allow_inplace_modification,
+                                            const float2 pixel_jitter)
+    : denoise_params(params),
+      render_buffers(render_buffers),
+      buffer_params(buffer_params),
+      denoised_buffer_params(denoised_buffer_params),
       guiding_buffer(device, "denoiser guiding passes buffer", true),
-      num_samples(task.num_samples)
+      use_guiding_passes(params.passes != DENOISER_PASS_NONE),
+      num_samples(num_samples),
+      pixel_jitter(pixel_jitter)
 {
-  num_input_passes = 1;
-  if (denoise_params.use_pass_albedo) {
-    num_input_passes += 1;
-    use_pass_albedo = true;
+  pass_motion = buffer_params.get_pass_offset(PASS_MOTION);
+  pass_sample_count = buffer_params.get_pass_offset(PASS_SAMPLE_COUNT);
+
+  if (params.passes & DENOISER_PASS_ALBEDO) {
     pass_denoising_albedo = buffer_params.get_pass_offset(PASS_DENOISING_ALBEDO);
-    if (denoise_params.use_pass_normal) {
-      num_input_passes += 1;
-      use_pass_normal = true;
-      pass_denoising_normal = buffer_params.get_pass_offset(PASS_DENOISING_NORMAL);
-    }
+  }
+  if (params.passes & DENOISER_PASS_NORMAL) {
+    pass_denoising_normal = buffer_params.get_pass_offset(PASS_DENOISING_NORMAL);
   }
 
-  if (denoise_params.temporally_stable) {
+  if (params.temporally_stable) {
     prev_output.device_pointer = render_buffers->buffer.device_pointer;
 
     prev_output.offset = buffer_params.get_pass_offset(PASS_DENOISING_PREVIOUS);
 
     prev_output.stride = buffer_params.stride;
     prev_output.pass_stride = buffer_params.pass_stride;
-
-    num_input_passes += 1;
-    use_pass_motion = true;
-    pass_motion = buffer_params.get_pass_offset(PASS_MOTION);
   }
 
-  use_guiding_passes = (num_input_passes - 1) > 0;
-
   if (use_guiding_passes) {
-    if (task.allow_inplace_modification) {
+    if (allow_inplace_modification) {
       guiding_params.device_pointer = render_buffers->buffer.device_pointer;
 
       guiding_params.pass_albedo = pass_denoising_albedo;
@@ -205,15 +212,15 @@ DenoiserGPU::DenoiseContext::DenoiseContext(Device *device, const DenoiseTask &t
     }
     else {
       guiding_params.pass_stride = 0;
-      if (use_pass_albedo) {
+      if (params.passes & DENOISER_PASS_ALBEDO) {
         guiding_params.pass_albedo = guiding_params.pass_stride;
         guiding_params.pass_stride += 3;
       }
-      if (use_pass_normal) {
+      if (params.passes & DENOISER_PASS_NORMAL) {
         guiding_params.pass_normal = guiding_params.pass_stride;
         guiding_params.pass_stride += 3;
       }
-      if (use_pass_motion) {
+      if (params.passes & DENOISER_PASS_MOTION) {
         guiding_params.pass_flow = guiding_params.pass_stride;
         guiding_params.pass_stride += 2;
       }
@@ -225,31 +232,38 @@ DenoiserGPU::DenoiseContext::DenoiseContext(Device *device, const DenoiseTask &t
       guiding_params.device_pointer = guiding_buffer.device_pointer;
     }
   }
-
-  pass_sample_count = buffer_params.get_pass_offset(PASS_SAMPLE_COUNT);
 }
 
 bool DenoiserGPU::denoise_filter_color_postprocess(const DenoiseContext &context,
                                                    const DenoisePass &pass)
 {
-  const BufferParams &buffer_params = context.buffer_params;
+  if (!denoise_filter_color_flip_y(context, context.denoised_buffer_params, pass)) {
+    return false;
+  }
+
+  const BufferParams &buffer_params = context.denoised_buffer_params;
 
   const int work_size = buffer_params.width * buffer_params.height;
 
-  DeviceKernelArguments args(&context.render_buffers->buffer.device_pointer,
-                             &buffer_params.full_x,
-                             &buffer_params.full_y,
-                             &buffer_params.width,
-                             &buffer_params.height,
-                             &buffer_params.offset,
-                             &buffer_params.stride,
-                             &buffer_params.pass_stride,
-                             &context.num_samples,
-                             &pass.noisy_offset,
-                             &pass.denoised_offset,
-                             &context.pass_sample_count,
-                             &pass.num_components,
-                             &pass.use_compositing);
+  const DeviceKernelArguments args(&context.render_buffers->buffer.device_pointer,
+                                   &buffer_params.full_x,
+                                   &buffer_params.full_y,
+                                   &buffer_params.width,
+                                   &buffer_params.height,
+                                   &buffer_params.offset,
+                                   &buffer_params.stride,
+                                   &context.buffer_params.full_x,
+                                   &context.buffer_params.full_y,
+                                   &context.buffer_params.offset,
+                                   &context.buffer_params.stride,
+                                   &buffer_params.pass_stride,
+                                   &context.num_samples,
+                                   &pass.noisy_offset,
+                                   &pass.denoised_offset,
+                                   &context.pass_sample_count,
+                                   &pass.num_components,
+                                   &pass.use_compositing,
+                                   &params_.upscale_factor);
 
   return denoiser_queue_->enqueue(DEVICE_KERNEL_FILTER_COLOR_POSTPROCESS, work_size, args);
 }
@@ -257,21 +271,94 @@ bool DenoiserGPU::denoise_filter_color_postprocess(const DenoiseContext &context
 bool DenoiserGPU::denoise_filter_color_preprocess(const DenoiseContext &context,
                                                   const DenoisePass &pass)
 {
+  if (context.denoise_params.type != DENOISER_OPTIX) {
+    /* Pass preprocessing is used to clamp values for the OptiX denoiser.
+     * Clamping is not necessary for other denoisers, so just skip this preprocess step. */
+    return true;
+  }
+
+  if (!denoise_filter_color_flip_y(context, context.buffer_params, pass)) {
+    return false;
+  }
+
   const BufferParams &buffer_params = context.buffer_params;
 
   const int work_size = buffer_params.width * buffer_params.height;
 
-  DeviceKernelArguments args(&context.render_buffers->buffer.device_pointer,
-                             &buffer_params.full_x,
-                             &buffer_params.full_y,
-                             &buffer_params.width,
-                             &buffer_params.height,
-                             &buffer_params.offset,
-                             &buffer_params.stride,
-                             &buffer_params.pass_stride,
-                             &pass.denoised_offset);
+  const DeviceKernelArguments args(&context.render_buffers->buffer.device_pointer,
+                                   &buffer_params.full_x,
+                                   &buffer_params.full_y,
+                                   &buffer_params.width,
+                                   &buffer_params.height,
+                                   &buffer_params.offset,
+                                   &buffer_params.stride,
+                                   &buffer_params.pass_stride,
+                                   &pass.denoised_offset);
 
   return denoiser_queue_->enqueue(DEVICE_KERNEL_FILTER_COLOR_PREPROCESS, work_size, args);
+}
+
+bool DenoiserGPU::denoise_filter_color_flip_y(const DenoiseContext &context,
+                                              const BufferParams &buffer_params,
+                                              const DenoisePass &pass)
+{
+  if (context.denoise_params.type != DENOISER_OPTIX || context.denoise_params.temporally_stable) {
+    /* Flipping the image is used to improve result quality with the OptiX denoiser.
+     * It is not necessary for other denoisers, so just skip this preprocess step. */
+    return true;
+  }
+
+  const int work_size = buffer_params.width * buffer_params.height / 2;
+
+  const DeviceKernelArguments args(&context.render_buffers->buffer.device_pointer,
+                                   &buffer_params.full_x,
+                                   &buffer_params.full_y,
+                                   &buffer_params.width,
+                                   &buffer_params.height,
+                                   &buffer_params.offset,
+                                   &buffer_params.stride,
+                                   &buffer_params.pass_stride,
+                                   &pass.denoised_offset);
+
+  return denoiser_queue_->enqueue(DEVICE_KERNEL_FILTER_COLOR_FLIP_Y, work_size, args);
+}
+
+bool DenoiserGPU::denoise_filter_guiding_flip_y(const DenoiseContext &context)
+{
+  if (context.denoise_params.type != DENOISER_OPTIX || context.denoise_params.temporally_stable) {
+    /* Flipping the image is used to improve result quality with the OptiX denoiser.
+     * It is not necessary for other denoisers, so just skip this preprocess step. */
+    return true;
+  }
+
+  const BufferParams &buffer_params = context.buffer_params;
+
+  const int guiding_offset = 0;
+
+  const int work_size = buffer_params.width * buffer_params.height / 2;
+
+  const int guiding_passes[] = {context.guiding_params.pass_albedo,
+                                context.guiding_params.pass_normal};
+  for (const int guiding_pass : guiding_passes) {
+    if (guiding_pass == PASS_UNUSED) {
+      continue;
+    }
+
+    const DeviceKernelArguments args(&context.guiding_params.device_pointer,
+                                     &guiding_offset,
+                                     &guiding_offset,
+                                     &buffer_params.width,
+                                     &buffer_params.height,
+                                     &guiding_offset,
+                                     &context.guiding_params.stride,
+                                     &context.guiding_params.pass_stride,
+                                     &guiding_pass);
+
+    if (!denoiser_queue_->enqueue(DEVICE_KERNEL_FILTER_COLOR_FLIP_Y, work_size, args)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 bool DenoiserGPU::denoise_filter_guiding_set_fake_albedo(const DenoiseContext &context)
@@ -280,11 +367,11 @@ bool DenoiserGPU::denoise_filter_guiding_set_fake_albedo(const DenoiseContext &c
 
   const int work_size = buffer_params.width * buffer_params.height;
 
-  DeviceKernelArguments args(&context.guiding_params.device_pointer,
-                             &context.guiding_params.pass_stride,
-                             &context.guiding_params.pass_albedo,
-                             &buffer_params.width,
-                             &buffer_params.height);
+  const DeviceKernelArguments args(&context.guiding_params.device_pointer,
+                                   &context.guiding_params.pass_stride,
+                                   &context.guiding_params.pass_albedo,
+                                   &buffer_params.width,
+                                   &buffer_params.height);
 
   return denoiser_queue_->enqueue(DEVICE_KERNEL_FILTER_GUIDING_SET_FAKE_ALBEDO, work_size, args);
 }
@@ -308,7 +395,7 @@ void DenoiserGPU::denoise_color_read(const DenoiseContext &context, const Denois
   const PassAccessorGPU pass_accessor(
       denoiser_queue_.get(), pass_access_info, 1.0f, context.num_samples);
 
-  PassAccessor::Destination destination(pass_access_info.type);
+  PassAccessor::Destination destination(pass_access_info.type, pass_access_info.mode);
   destination.d_pixels = context.render_buffers->buffer.device_pointer;
   destination.num_components = 3;
   destination.pixel_offset = pass.denoised_offset;
@@ -323,55 +410,55 @@ void DenoiserGPU::denoise_color_read(const DenoiseContext &context, const Denois
   pass_accessor.get_render_tile_pixels(context.render_buffers, buffer_params, destination);
 }
 
-void DenoiserGPU::denoise_pass(DenoiseContext &context, PassType pass_type)
+bool DenoiserGPU::denoise_pass(DenoiseContext &context, PassType pass_type)
 {
   const BufferParams &buffer_params = context.buffer_params;
 
   const DenoisePass pass(pass_type, buffer_params);
 
   if (pass.noisy_offset == PASS_UNUSED) {
-    return;
+    return true;
   }
   if (pass.denoised_offset == PASS_UNUSED) {
-    LOG(DFATAL) << "Missing denoised pass " << pass_type_as_string(pass_type);
-    return;
+    LOG_DFATAL << "Missing denoised pass " << pass_type_as_string(pass_type);
+    return false;
   }
 
   if (pass.use_denoising_albedo) {
     if (context.albedo_replaced_with_fake) {
-      LOG(ERROR) << "Pass which requires albedo is denoised after fake albedo has been set.";
-      return;
+      LOG_ERROR << "Pass which requires albedo is denoised after fake albedo has been set.";
+      return false;
     }
   }
   else if (context.use_guiding_passes && !context.albedo_replaced_with_fake) {
     context.albedo_replaced_with_fake = true;
     if (!denoise_filter_guiding_set_fake_albedo(context)) {
-      LOG(ERROR) << "Error replacing real albedo with the fake one.";
-      return;
+      LOG_ERROR << "Error replacing real albedo with the fake one.";
+      return false;
     }
   }
 
   /* Read and preprocess noisy color input pass. */
   denoise_color_read(context, pass);
   if (!denoise_filter_color_preprocess(context, pass)) {
-    LOG(ERROR) << "Error converting denoising passes to RGB buffer.";
-    return;
+    LOG_ERROR << "Error converting denoising passes to RGB buffer.";
+    return false;
   }
 
   if (!denoise_run(context, pass)) {
-    LOG(ERROR) << "Error running denoiser.";
-    return;
+    LOG_ERROR << "Error running denoiser.";
+    return false;
   }
 
   /* Store result in the combined pass of the render buffer.
    *
    * This will scale the denoiser result up to match the number of, possibly per-pixel, samples. */
   if (!denoise_filter_color_postprocess(context, pass)) {
-    LOG(ERROR) << "Error copying denoiser result to the denoised pass.";
-    return;
+    LOG_ERROR << "Error copying denoiser result to the denoised pass.";
+    return false;
   }
 
-  denoiser_queue_->synchronize();
+  return denoiser_queue_->synchronize();
 }
 
 CCL_NAMESPACE_END

@@ -6,9 +6,10 @@
  * \ingroup spview3d
  */
 
-#include "MEM_guardedalloc.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_rotation_c.hh"
 
-#include "BLI_math_rotation.h"
+#include "DNA_userdef_types.h"
 
 #include "WM_api.hh"
 
@@ -18,6 +19,8 @@
 #include "view3d_intern.hh"
 
 #include "view3d_navigate.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name View Orbit Operator
@@ -40,7 +43,7 @@ static const EnumPropertyItem prop_view_orbit_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static int vieworbit_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus vieworbit_exec(bContext *C, wmOperator *op)
 {
   float angle;
   {
@@ -56,14 +59,16 @@ static int vieworbit_exec(bContext *C, wmOperator *op)
   ED_view3d_smooth_view_force_finish(C, vod.v3d, vod.region);
 
   /* support for switching to the opposite view (even when in locked views) */
-  char view_opposite = (fabsf(angle) == float(M_PI)) ?
-                           ED_view3d_axis_view_opposite(vod.rv3d->view) :
-                           char(RV3D_VIEW_USER);
+  eRegionView3D_View view_opposite = (fabsf(angle) == float(M_PI)) ?
+                                         ED_view3d_axis_view_opposite(vod.rv3d->view) :
+                                         RV3D_VIEW_USER;
 
   if ((RV3D_LOCK_FLAGS(vod.rv3d) & RV3D_LOCK_ROTATION) && (view_opposite == RV3D_VIEW_USER)) {
     /* no nullptr check is needed, poll checks */
     ED_view3d_context_user_region(C, &vod.v3d, &vod.region);
     vod.rv3d = static_cast<RegionView3D *>(vod.region->regiondata);
+
+    ED_view3d_smooth_view_force_finish(C, vod.v3d, vod.region);
   }
 
   if ((RV3D_LOCK_FLAGS(vod.rv3d) & RV3D_LOCK_ROTATION) && (view_opposite == RV3D_VIEW_USER)) {
@@ -140,7 +145,7 @@ void VIEW3D_OT_view_orbit(wmOperatorType *ot)
   ot->description = "Orbit the view";
   ot->idname = ViewOpsType_orbit.idname;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = vieworbit_exec;
   ot->poll = ED_operator_rv3d_user_region_poll;
 
@@ -164,3 +169,5 @@ const ViewOpsType ViewOpsType_orbit = {
     /*init_fn*/ nullptr,
     /*apply_fn*/ nullptr,
 };
+
+}  // namespace blender

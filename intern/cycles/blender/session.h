@@ -2,20 +2,29 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
-#ifndef __BLENDER_SESSION_H__
-#define __BLENDER_SESSION_H__
-
-#include "MEM_guardedalloc.h"
-
-#include "RNA_blender_cpp.hh"
+#pragma once
 
 #include "device/device.h"
 
-#include "scene/bake.h"
 #include "scene/scene.h"
 #include "session/session.h"
 
+#include "util/unique_ptr.h"
 #include "util/vector.h"
+
+namespace blender {
+struct bScreen;
+struct Depsgraph;
+struct Main;
+struct Object;
+struct RegionView3D;
+struct RenderData;
+struct RenderEngine;
+struct Scene;
+struct SpaceImage;
+struct UserDef;
+struct View3D;
+}  // namespace blender
 
 CCL_NAMESPACE_BEGIN
 
@@ -27,17 +36,18 @@ class Session;
 
 class BlenderSession {
  public:
-  BlenderSession(BL::RenderEngine &b_engine,
-                 BL::Preferences &b_userpref,
-                 BL::BlendData &b_data,
+  BlenderSession(blender::RenderEngine &b_engine,
+                 blender::UserDef &b_userpref,
+                 blender::Main &b_data,
                  bool preview_osl);
 
-  BlenderSession(BL::RenderEngine &b_engine,
-                 BL::Preferences &b_userpref,
-                 BL::BlendData &b_data,
-                 BL::SpaceView3D &b_v3d,
-                 BL::RegionView3D &b_rv3d,
-                 int width,
+  BlenderSession(blender::RenderEngine &b_engine,
+                 blender::UserDef &b_userpref,
+                 blender::Main &b_data,
+                 blender::bScreen *b_screen,
+                 blender::View3D *b_v3d,
+                 blender::RegionView3D *b_rv3d,
+                 const int width,
                  int height);
 
   ~BlenderSession();
@@ -46,27 +56,28 @@ class BlenderSession {
   void create_session();
   void free_session();
 
-  void reset_session(BL::BlendData &b_data, BL::Depsgraph &b_depsgraph);
+  void reset_session(blender::Main &b_data, blender::Depsgraph &b_depsgraph);
 
   /* offline render */
-  void render(BL::Depsgraph &b_depsgraph);
+  void render(blender::Depsgraph &b_depsgraph);
 
   void render_frame_finish();
 
-  void bake(BL::Depsgraph &b_depsgrah,
-            BL::Object &b_object,
-            const string &pass_type,
-            const int custom_flag,
+  void bake(blender::Depsgraph &b_depsgraph_,
+            blender::Object &b_object,
+            const string &bake_type,
+            const int bake_filter,
             const int bake_width,
             const int bake_height);
 
   void full_buffer_written(string_view filename);
   /* interactive updates */
-  void synchronize(BL::Depsgraph &b_depsgraph);
+  void synchronize(blender::Depsgraph &b_depsgraph);
 
   /* drawing */
-  void draw(BL::SpaceImageEditor &space_image);
-  void view_draw(int w, int h);
+  void draw(blender::bScreen &b_screen, blender::SpaceImage &space_image);
+  void view_draw(const int w, const int h);
+  void view_pause(const bool pause);
   void tag_redraw();
   void tag_update();
   void get_status(string &status, string &substatus);
@@ -76,21 +87,23 @@ class BlenderSession {
   void update_bake_progress();
 
   bool background;
-  Session *session;
+  bool view_paused = false;
+  unique_ptr<Session> session;
   Scene *scene;
-  BlenderSync *sync;
+  unique_ptr<BlenderSync> sync;
   double last_redraw_time;
 
-  BL::RenderEngine b_engine;
-  BL::Preferences b_userpref;
-  BL::BlendData b_data;
-  BL::RenderSettings b_render;
-  BL::Depsgraph b_depsgraph;
+  blender::RenderEngine &b_engine;
+  blender::UserDef &b_userpref;
+  blender::Main *b_data;
+  blender::RenderData *b_render;
+  blender::Depsgraph *b_depsgraph;
   /* NOTE: Blender's scene might become invalid after call
    * #free_blender_memory_if_possible(). */
-  BL::Scene b_scene;
-  BL::SpaceView3D b_v3d;
-  BL::RegionView3D b_rv3d;
+  blender::Scene *b_scene;
+  blender::bScreen *b_screen;
+  blender::View3D *b_v3d;
+  blender::RegionView3D *b_rv3d;
   string b_rlay_name;
   string b_rview_name;
 
@@ -100,6 +113,7 @@ class BlenderSession {
   double last_status_time;
 
   int width, height;
+  float pixelsize;
   bool preview_osl;
   double start_resize_time;
 
@@ -152,5 +166,3 @@ class BlenderSession {
 };
 
 CCL_NAMESPACE_END
-
-#endif /* __BLENDER_SESSION_H__ */

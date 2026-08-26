@@ -11,9 +11,9 @@
 #include "DNA_cachefile_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_cachefile.hh"
 #include "BKE_context.hh"
@@ -33,6 +33,8 @@
 
 #include "io_cache.hh"
 
+namespace blender {
+
 static void reload_cachefile(bContext *C, CacheFile *cache_file)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -44,10 +46,12 @@ static void cachefile_init(bContext *C, wmOperator *op)
   PropertyPointerRNA *pprop;
 
   op->customdata = pprop = MEM_new<PropertyPointerRNA>("OpenPropertyPointerRNA");
-  UI_context_active_but_prop_get_templateID(C, &pprop->ptr, &pprop->prop);
+  ui::context_active_but_prop_get_templateID(C, &pprop->ptr, &pprop->prop);
 }
 
-static int cachefile_open_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus cachefile_open_invoke(bContext *C,
+                                              wmOperator *op,
+                                              const wmEvent * /*event*/)
 {
   if (!RNA_struct_property_is_set(op->ptr, "filepath")) {
     char filepath[FILE_MAX];
@@ -74,7 +78,7 @@ static void open_cancel(bContext * /*C*/, wmOperator *op)
   }
 }
 
-static int cachefile_open_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus cachefile_open_exec(bContext *C, wmOperator *op)
 {
   if (!RNA_struct_property_is_set(op->ptr, "filepath")) {
     BKE_report(op->reports, RPT_ERROR, "No filepath given");
@@ -133,7 +137,7 @@ void CACHEFILE_OT_open(wmOperatorType *ot)
 
 /* ***************************** Reload Operator **************************** */
 
-static int cachefile_reload_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus cachefile_reload_exec(bContext *C, wmOperator * /*op*/)
 {
   CacheFile *cache_file = CTX_data_edit_cachefile(C);
 
@@ -152,7 +156,7 @@ void CACHEFILE_OT_reload(wmOperatorType *ot)
   ot->description = "Update objects paths list with new data from the archive";
   ot->idname = "CACHEFILE_OT_reload";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = cachefile_reload_exec;
 
   /* flags */
@@ -161,7 +165,9 @@ void CACHEFILE_OT_reload(wmOperatorType *ot)
 
 /* ***************************** Add Layer Operator **************************** */
 
-static int cachefile_layer_open_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus cachefile_layer_open_invoke(bContext *C,
+                                                    wmOperator *op,
+                                                    const wmEvent * /*event*/)
 {
   if (!RNA_struct_property_is_set(op->ptr, "filepath")) {
     char filepath[FILE_MAX];
@@ -180,7 +186,7 @@ static int cachefile_layer_open_invoke(bContext *C, wmOperator *op, const wmEven
   return OPERATOR_RUNNING_MODAL;
 }
 
-static int cachefile_layer_add_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus cachefile_layer_add_exec(bContext *C, wmOperator *op)
 {
   if (!RNA_struct_property_is_set(op->ptr, "filepath")) {
     BKE_report(op->reports, RPT_ERROR, "No filepath given");
@@ -199,7 +205,7 @@ static int cachefile_layer_add_exec(bContext *C, wmOperator *op)
   CacheFileLayer *layer = BKE_cachefile_add_layer(cache_file, filepath);
 
   if (layer == nullptr) {
-    WM_report(RPT_ERROR, "Could not add a layer to the cache file");
+    WM_global_report(RPT_ERROR, "Could not add a layer to the cache file");
     return OPERATOR_CANCELLED;
   }
 
@@ -214,7 +220,7 @@ void CACHEFILE_OT_layer_add(wmOperatorType *ot)
   ot->description = "Add an override layer to the archive";
   ot->idname = "CACHEFILE_OT_layer_add";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = cachefile_layer_open_invoke;
   ot->exec = cachefile_layer_add_exec;
 
@@ -229,7 +235,7 @@ void CACHEFILE_OT_layer_add(wmOperatorType *ot)
 
 /* ***************************** Remove Layer Operator **************************** */
 
-static int cachefile_layer_remove_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus cachefile_layer_remove_exec(bContext *C, wmOperator * /*op*/)
 {
   CacheFile *cache_file = CTX_data_edit_cachefile(C);
 
@@ -251,7 +257,7 @@ void CACHEFILE_OT_layer_remove(wmOperatorType *ot)
   ot->description = "Remove an override layer from the archive";
   ot->idname = "CACHEFILE_OT_layer_remove";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = cachefile_layer_remove_exec;
 
   /* flags */
@@ -260,7 +266,7 @@ void CACHEFILE_OT_layer_remove(wmOperatorType *ot)
 
 /* ***************************** Move Layer Operator **************************** */
 
-static int cachefile_layer_move_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus cachefile_layer_move_exec(bContext *C, wmOperator *op)
 {
   CacheFile *cache_file = CTX_data_edit_cachefile(C);
 
@@ -300,7 +306,7 @@ void CACHEFILE_OT_layer_move(wmOperatorType *ot)
       "higher up";
   ot->idname = "CACHEFILE_OT_layer_move";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = cachefile_layer_move_exec;
 
   /* flags */
@@ -311,5 +317,7 @@ void CACHEFILE_OT_layer_move(wmOperatorType *ot)
                layer_slot_move,
                0,
                "Direction",
-               "Direction to move the active vertex group towards");
+               "Direction to move the active layer towards");
 }
+
+}  // namespace blender

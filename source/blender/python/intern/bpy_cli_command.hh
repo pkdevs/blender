@@ -8,5 +8,11 @@
 
 #pragma once
 
+#include <Python.h>
+
+namespace blender {
+
 extern PyMethodDef BPY_cli_command_register_def;
 extern PyMethodDef BPY_cli_command_unregister_def;
+
+}  // namespace blender

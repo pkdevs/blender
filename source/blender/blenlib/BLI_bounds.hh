@@ -6,16 +6,19 @@
 
 /** \file
  * \ingroup bli
- *
- * Generic algorithms for finding the largest and smallest elements in a span.
  */
 
 #include <optional>
 
 #include "BLI_bounds_types.hh"
 #include "BLI_index_mask.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_span.hh"
 #include "BLI_task.hh"
+#include "BLI_virtual_array.hh"
+
+#include "PRF_profile.hh"
 
 namespace blender {
 
@@ -43,6 +46,13 @@ template<typename T>
 }
 
 template<typename T>
+[[nodiscard]] inline std::optional<Bounds<T>> merge(const std::optional<Bounds<T>> &a,
+                                                    const Bounds<T> &b)
+{
+  return merge(a, std::optional<Bounds<T>>(b));
+}
+
+template<typename T>
 [[nodiscard]] inline std::optional<Bounds<T>> min_max(const std::optional<Bounds<T>> &a,
                                                       const T &b)
 {
@@ -60,6 +70,7 @@ template<typename T> [[nodiscard]] inline std::optional<Bounds<T>> min_max(const
   if (values.is_empty()) {
     return std::nullopt;
   }
+  PRF_scope_with_name("bounds::min_max_with_radii", ProfileCategory::Default);
   const Bounds<T> init{values.first(), values.first()};
   return threading::parallel_reduce(
       values.index_range(),
@@ -85,9 +96,10 @@ template<typename T>
     /* To avoid mask slice/lookup. */
     return min_max(values);
   }
-  const Bounds<T> init{values.first(), values.first()};
+  PRF_scope_with_name("bounds::min_max_with_radii", ProfileCategory::Default);
+  const Bounds<T> init{values[mask.first()], values[mask.first()]};
   return threading::parallel_reduce(
-      mask.index_range(),
+      mask.index_range().drop_front(1),
       1024,
       init,
       [&](const IndexRange range, const Bounds<T> &init) {
@@ -111,6 +123,7 @@ template<typename T, typename RadiusT>
   if (values.is_empty()) {
     return std::nullopt;
   }
+  PRF_scope_with_name("bounds::min_max_with_radii", ProfileCategory::Default);
   const Bounds<T> init{values.first(), values.first()};
   return threading::parallel_reduce(
       values.index_range(),
@@ -132,27 +145,176 @@ template<typename T, typename RadiusT>
  * Returns no box if there are no overlap.
  */
 template<typename T>
+[[nodiscard]] inline std::optional<Bounds<T>> intersect(const Bounds<T> &a, const Bounds<T> &b)
+{
+  const Bounds<T> result{math::max(a.min, b.min), math::min(a.max, b.max)};
+  if (result.is_empty()) {
+    return std::nullopt;
+  }
+  return result;
+}
+template<typename T>
 [[nodiscard]] inline std::optional<Bounds<T>> intersect(const std::optional<Bounds<T>> &a,
                                                         const std::optional<Bounds<T>> &b)
 {
   if (!a.has_value() || !b.has_value()) {
     return std::nullopt;
   }
-  const Bounds<T> result{math::max(a.value().min, b.value().min),
-                         math::min(a.value().max, b.value().max)};
-  if (result.is_empty()) {
-    return std::nullopt;
-  }
-  return result;
+  return intersect(*a, *b);
 }
 
-}  // namespace bounds
+/**
+ * Finds the maximum value for elements in the array.
+ */
+template<typename T> inline std::optional<T> max(const VArray<T> &values)
+{
+  if (values.is_empty()) {
+    return std::nullopt;
+  }
+  PRF_scope_with_name("bounds::max", ProfileCategory::Default);
+  if (const std::optional<T> value = values.get_if_single()) {
+    return value;
+  }
+  const VArraySpan<int> values_span = values;
+  return threading::parallel_reduce(
+      values_span.index_range(),
+      2048,
+      std::numeric_limits<T>::min(),
+      [&](const IndexRange range, int current_max) {
+        for (const int value : values_span.slice(range)) {
+          current_max = std::max(current_max, value);
+        }
+        return current_max;
+      },
+      [](const int a, const int b) { return std::max(a, b); });
+}
+
+/**
+ * Return the eight corners of a 3D bounding box.
+ * <pre>
+ *
+ * Z  Y
+ * | /
+ * |/
+ * .-----X
+ *     2----------6
+ *    /|         /|
+ *   / |        / |
+ *  1----------5  |
+ *  |  |       |  |
+ *  |  3-------|--7
+ *  | /        | /
+ *  |/         |/
+ *  0----------4
+ * </pre>
+ */
+template<typename T>
+inline std::array<VecBase<T, 3>, 8> corners(const Bounds<VecBase<T, 3>> &bounds)
+{
+  return {
+      VecBase<T, 3>{bounds.min[0], bounds.min[1], bounds.min[2]},
+      VecBase<T, 3>{bounds.min[0], bounds.min[1], bounds.max[2]},
+      VecBase<T, 3>{bounds.min[0], bounds.max[1], bounds.max[2]},
+      VecBase<T, 3>{bounds.min[0], bounds.max[1], bounds.min[2]},
+      VecBase<T, 3>{bounds.max[0], bounds.min[1], bounds.min[2]},
+      VecBase<T, 3>{bounds.max[0], bounds.min[1], bounds.max[2]},
+      VecBase<T, 3>{bounds.max[0], bounds.max[1], bounds.max[2]},
+      VecBase<T, 3>{bounds.max[0], bounds.max[1], bounds.min[2]},
+  };
+}
+
+/**
+ * Return the four corners of a 2D bounding box.
+ * <pre>
+ *
+ * Y
+ * |
+ * |
+ * .-----X
+ *
+ *  3----------2
+ *  |          |
+ *  |          |
+ *  |          |
+ *  |          |
+ *  0----------1
+ * </pre>
+ */
+template<typename T>
+inline std::array<VecBase<T, 2>, 4> corners(const Bounds<VecBase<T, 2>> &bounds)
+{
+  return {
+      bounds.min,
+      VecBase<T, 2>{bounds.max.x, bounds.min.y},
+      bounds.max,
+      VecBase<T, 2>{bounds.min.x, bounds.max.y},
+  };
+}
+
+/**
+ * Transform a 3D bounding box.
+ *
+ * Note: this necessarily grows the bounding box, to ensure that the transformed
+ * bounding box fully contains the original. Therefore, calling this iteratively
+ * to transform from space A to space B, and then from space B to space C, etc.,
+ * will also iteratively grow the bounding box on each call. Try to avoid doing
+ * that, and instead first compose the transform matrices and then use that to
+ * transform the bounding box.
+ */
+template<typename T, int D>
+inline Bounds<VecBase<T, 3>> transform_bounds(const MatBase<T, D, D> &matrix,
+                                              const Bounds<VecBase<T, 3>> &bounds)
+{
+  std::array<VecBase<T, 3>, 8> points = corners(bounds);
+  for (VecBase<T, 3> &p : points) {
+    p = math::transform_point(matrix, p);
+  }
+  return {math::min(Span(points)), math::max(Span(points))};
+}
+
+/**
+ * Transform a 2D bounding box.
+ *
+ * See the note on the 3D variant.
+ */
+template<typename T, int D>
+inline Bounds<VecBase<T, 2>> transform_bounds(const MatBase<T, D, D> &matrix,
+                                              const Bounds<VecBase<T, 2>> &bounds)
+{
+  std::array<VecBase<T, 2>, 4> points = corners(bounds);
+  for (VecBase<T, 2> &p : points) {
+    p = math::transform_point(matrix, p);
+  }
+  return {math::min(Span(points)), math::max(Span(points))};
+}
 
 namespace detail {
 
 template<typename T, int Size>
-[[nodiscard]] inline bool any_less_or_equal_than(const VecBase<T, Size> &a,
-                                                 const VecBase<T, Size> &b)
+[[nodiscard]] inline bool any_less_than_v(const VecBase<T, Size> &a, const VecBase<T, Size> &b)
+{
+  for (int i = 0; i < Size; i++) {
+    if (a[i] < b[i]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+template<typename T, int Size>
+[[nodiscard]] inline bool any_greater_than_v(const VecBase<T, Size> &a, const VecBase<T, Size> &b)
+{
+  for (int i = 0; i < Size; i++) {
+    if (a[i] > b[i]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+template<typename T, int Size>
+[[nodiscard]] inline bool any_less_or_equal_than_v(const VecBase<T, Size> &a,
+                                                   const VecBase<T, Size> &b)
 {
   for (int i = 0; i < Size; i++) {
     if (a[i] <= b[i]) {
@@ -162,16 +324,116 @@ template<typename T, int Size>
   return false;
 }
 
+template<typename T> [[nodiscard]] inline bool any_less_than(const T &a, const T &b)
+{
+  if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
+    return a < b;
+  }
+  else {
+    return any_less_than_v(a, b);
+  }
+}
+
+template<typename T> [[nodiscard]] inline bool any_greater_than(const T &a, const T &b)
+{
+  if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
+    return a > b;
+  }
+  else {
+    return any_greater_than_v(a, b);
+  }
+}
+
+template<typename T> [[nodiscard]] inline bool any_less_or_equal_than(const T &a, const T &b)
+{
+  if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
+    return a <= b;
+  }
+  else {
+    return any_less_or_equal_than_v(a, b);
+  }
+}
+
+template<typename T> [[nodiscard]] inline Bounds<T> segment_bounds(const T &start, const T &end)
+{
+  Bounds<T> bounds{start, start};
+  math::min_max(end, bounds.min, bounds.max);
+  return bounds;
+}
+
+/** Returns true if (p1 / q1) > (p2 / q2). */
+template<typename T>
+[[nodiscard]] inline bool rational_greater_than(const T &p1, const T &q1, const T &p2, const T &q2)
+{
+  BLI_assert(q1 > T(0) && q2 > T(0));
+  return p1 * q2 > p2 * q1;
+}
+/** Returns true if (p1 / q1) < (p2 / q2). */
+template<typename T>
+[[nodiscard]] inline bool rational_less_than(const T &p1, const T &q1, const T &p2, const T &q2)
+{
+  BLI_assert(q1 > T(0) && q2 > T(0));
+  return p1 * q2 < p2 * q1;
+}
+
+/** Adaptation of Liang-Barsky for N dimensions. */
+template<typename T, int Size>
+[[nodiscard]] inline bool segment_enter_exit_bounds(const Bounds<VecBase<T, Size>> &bounds,
+                                                    const VecBase<T, Size> &start,
+                                                    const VecBase<T, Size> &end)
+{
+  T p_enter = T(0);
+  T q_enter = T(1);
+  T p_exit = T(1);
+  T q_exit = T(1);
+
+  /* t_enter = p_enter / q_enter */
+  /* t_exit = p_exit / q_exit */
+  for (int i = 0; i < Size; i++) {
+    const T di = end[i] - start[i];
+    if (di == T(0)) {
+      /* Segment is parallel to i-th axis. */
+      if (start[i] < bounds.min[i] || start[i] > bounds.max[i]) {
+        return false;
+      }
+      continue;
+    }
+
+    /* Note: We flip the sign here to ensure the denominator is positive. This doesn't change the
+     * value of the rational number. */
+    const T p_low = (di > T(0)) ? bounds.min[i] - start[i] : -(bounds.max[i] - start[i]);
+    const T p_high = (di > T(0)) ? bounds.max[i] - start[i] : -(bounds.min[i] - start[i]);
+    const T di_abs = (di > T(0)) ? di : -di;
+
+    /* t_low = p_low / di_abs */
+    /* t_high = p_high / di_abs */
+    if (rational_greater_than(p_low, di_abs, p_enter, q_enter)) {
+      /* t_low > t_enter */
+      p_enter = p_low;
+      q_enter = di_abs;
+    }
+    if (rational_less_than(p_high, di_abs, p_exit, q_exit)) {
+      /* t_high < t_exit */
+      p_exit = p_high;
+      q_exit = di_abs;
+    }
+
+    if (rational_greater_than(p_enter, q_enter, p_exit, q_exit)) {
+      /* t_enter > t_exit */
+      return false;
+    }
+  }
+
+  /* t_exit >= 0 and t_enter <= 1 */
+  return p_exit >= T(0) && p_enter <= q_enter;
+}
+
 }  // namespace detail
+}  // namespace bounds
 
 template<typename T> inline bool Bounds<T>::is_empty() const
 {
-  if constexpr (std::is_integral<T>::value || std::is_floating_point<T>::value) {
-    return this->max <= this->min;
-  }
-  else {
-    return detail::any_less_or_equal_than(this->max, this->min);
-  }
+  return bounds::detail::any_less_or_equal_than(this->max, this->min);
 }
 
 template<typename T> inline T Bounds<T>::center() const
@@ -216,6 +478,40 @@ inline void Bounds<T>::pad(const PaddingT &padding)
 {
   this->min = this->min - padding;
   this->max = this->max + padding;
+}
+
+template<typename T> inline bool Bounds<T>::contains(const T &point) const
+{
+  if (bounds::detail::any_less_than(point, this->min)) {
+    return false;
+  }
+  if (bounds::detail::any_greater_than(point, this->max)) {
+    return false;
+  }
+  return true;
+}
+
+template<typename T> inline bool Bounds<T>::intersects(const Bounds<T> &other) const
+{
+  if (bounds::intersect(*this, other)) {
+    return true;
+  }
+  return false;
+}
+
+template<typename T> inline bool Bounds<T>::intersects_segment(const T &start, const T &end) const
+{
+  /* Check end points first to properly handle degenerate case where the segment is a point. */
+  if (this->contains(start) || this->contains(end)) {
+    return true;
+  }
+  if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
+    return this->intersects(bounds::detail::segment_bounds(start, end));
+  }
+  else {
+    /* Check if the segment is entering and exiting the bounds. */
+    return bounds::detail::segment_enter_exit_bounds(*this, start, end);
+  }
 }
 
 }  // namespace blender

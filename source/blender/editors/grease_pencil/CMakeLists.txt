@@ -4,18 +4,11 @@
 
 set(INC
   ../include
-  ../../blenkernel
-  ../../blentranslation
-  ../../bmesh
-  ../../gpu
-  ../../imbuf
   ../../makesrna
-  ../../windowmanager
+  ../curves
   ../../../../extern/curve_fit_nd
-  ../../geometry
   ../sculpt_paint
   ../../modifiers/intern/lineart
-  ../../functions
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
@@ -37,7 +30,10 @@ set(SRC
   intern/grease_pencil_merge.cc
   intern/grease_pencil_modes.cc
   intern/grease_pencil_ops.cc
+  intern/grease_pencil_pen.cc
   intern/grease_pencil_primitive.cc
+  intern/grease_pencil_randomize.cc
+  intern/grease_pencil_segments_geom.cc
   intern/grease_pencil_select.cc
   intern/grease_pencil_trim.cc
   intern/grease_pencil_undo.cc
@@ -47,23 +43,30 @@ set(SRC
 )
 
 set(LIB
-  bf_blenkernel
+  PRIVATE bf::blenkernel
   PRIVATE bf::animrig
   PRIVATE bf::blenlib
+  PRIVATE bf::blentranslation
+  PRIVATE bf::bmesh
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
+  PRIVATE bf::functions
+  PRIVATE bf::geometry
+  PRIVATE bf::gpu
+  PRIVATE bf::imbuf
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::intern::clog
-  extern_curve_fit_nd
-  extern_fmtlib
+  PRIVATE bf::windowmanager
+  PRIVATE bf::extern::curve_fit_nd
 )
 
 blender_add_lib(bf_editor_grease_pencil "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
-add_dependencies(bf_editor_curves bf_rna)
+add_dependencies(bf_editor_grease_pencil bf_rna)
 
 if(WITH_GTESTS)
   set(TEST_SRC
     tests/grease_pencil_merge_test.cc
+    tests/grease_pencil_trim_test.cc
   )
   set(TEST_INC
   )

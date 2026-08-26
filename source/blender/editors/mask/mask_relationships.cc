@@ -6,13 +6,13 @@
  * \ingroup edmask
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_context.hh"
-#include "BKE_mask.h"
-#include "BKE_tracking.h"
+#include "BKE_mask.hh"
+#include "BKE_tracking.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -27,20 +27,22 @@
 
 #include "mask_intern.hh" /* own include */
 
-static int mask_parent_clear_exec(bContext *C, wmOperator * /*op*/)
+namespace blender {
+
+static wmOperatorStatus mask_parent_clear_exec(bContext *C, wmOperator * /*op*/)
 {
   Mask *mask = CTX_data_edit_mask(C);
 
-  LISTBASE_FOREACH (MaskLayer *, mask_layer, &mask->masklayers) {
-    if (mask_layer->visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
+  for (MaskLayer &mask_layer : mask->masklayers) {
+    if (mask_layer.visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
       continue;
     }
 
-    LISTBASE_FOREACH (MaskSpline *, spline, &mask_layer->splines) {
-      for (int i = 0; i < spline->tot_point; i++) {
-        MaskSplinePoint *point = &spline->points[i];
+    for (MaskSpline &spline : mask_layer.splines) {
+      for (int i = 0; i < spline.tot_point; i++) {
+        MaskSplinePoint *point = &spline.points[i];
 
-        if (MASKPOINT_ISSEL_ANY(point)) {
+        if (BKE_mask_point_selected(point)) {
           point->parent.id = nullptr;
         }
       }
@@ -60,7 +62,7 @@ void MASK_OT_parent_clear(wmOperatorType *ot)
   ot->description = "Clear the mask's parenting";
   ot->idname = "MASK_OT_parent_clear";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = mask_parent_clear_exec;
 
   ot->poll = ED_maskedit_mask_visible_splines_poll;
@@ -69,7 +71,7 @@ void MASK_OT_parent_clear(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-static int mask_parent_set_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus mask_parent_set_exec(bContext *C, wmOperator * /*op*/)
 {
   Mask *mask = CTX_data_edit_mask(C);
 
@@ -81,7 +83,8 @@ static int mask_parent_set_exec(bContext *C, wmOperator * /*op*/)
   MovieTrackingObject *tracking_object;
   /* done */
 
-  int framenr, parent_type;
+  MaskParentType parent_type;
+  int framenr;
   float parmask_pos[2], orig_corners[4][2];
   const char *sub_parent_name;
 
@@ -121,21 +124,21 @@ static int mask_parent_set_exec(bContext *C, wmOperator * /*op*/)
     return OPERATOR_CANCELLED;
   }
 
-  LISTBASE_FOREACH (MaskLayer *, mask_layer, &mask->masklayers) {
-    if (mask_layer->visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
+  for (MaskLayer &mask_layer : mask->masklayers) {
+    if (mask_layer.visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
       continue;
     }
 
-    LISTBASE_FOREACH (MaskSpline *, spline, &mask_layer->splines) {
-      for (int i = 0; i < spline->tot_point; i++) {
-        MaskSplinePoint *point = &spline->points[i];
+    for (MaskSpline &spline : mask_layer.splines) {
+      for (int i = 0; i < spline.tot_point; i++) {
+        MaskSplinePoint *point = &spline.points[i];
 
-        if (MASKPOINT_ISSEL_ANY(point)) {
+        if (BKE_mask_point_selected(point)) {
           point->parent.id_type = ID_MC;
           point->parent.id = &clip->id;
           point->parent.type = parent_type;
-          STRNCPY(point->parent.parent, tracking_object->name);
-          STRNCPY(point->parent.sub_parent, sub_parent_name);
+          STRNCPY_UTF8(point->parent.parent, tracking_object->name);
+          STRNCPY_UTF8(point->parent.sub_parent, sub_parent_name);
 
           copy_v2_v2(point->parent.parent_orig, parmask_pos);
           memcpy(point->parent.parent_corners_orig,
@@ -159,7 +162,7 @@ void MASK_OT_parent_set(wmOperatorType *ot)
   ot->description = "Set the mask's parenting";
   ot->idname = "MASK_OT_parent_set";
 
-  /* api callbacks */
+  /* API callbacks. */
   // ot->invoke = mask_parent_set_invoke;
   ot->exec = mask_parent_set_exec;
 
@@ -168,3 +171,5 @@ void MASK_OT_parent_set(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
+
+}  // namespace blender

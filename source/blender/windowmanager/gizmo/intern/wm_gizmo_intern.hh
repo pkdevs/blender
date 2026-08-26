@@ -8,9 +8,20 @@
 
 #pragma once
 
-struct BLI_Buffer;
+#include "DNA_listBase.h"
+
+#include "WM_gizmo_types.hh"
+
+#include "BLI_vector.hh"
+
+namespace blender {
+
 struct wmGizmoMap;
+struct wmGizmoGroupType;
+struct wmGizmoMapType;
+struct wmGizmoType;
 struct wmKeyConfig;
+struct wmWindowManager;
 
 #include "wm_gizmo_fn.hh"
 
@@ -69,9 +80,9 @@ wmGizmo *wm_gizmogroup_find_intersected_gizmo(wmWindowManager *wm,
  * Added items need freeing!
  */
 void wm_gizmogroup_intersectable_gizmos_to_list(wmWindowManager *wm,
-                                                const wmGizmoGroup *gzgroup,
+                                                wmGizmoGroup *gzgroup,
                                                 int event_modifier,
-                                                BLI_Buffer *visible_gizmos);
+                                                Vector<wmGizmo *, 128> *r_visible_gizmos);
 bool wm_gizmogroup_is_visible_in_drawstep(const wmGizmoGroup *gzgroup,
                                           eWM_GizmoFlagMapDrawStep drawstep);
 
@@ -89,7 +100,7 @@ struct wmGizmoMapSelectState {
 
 struct wmGizmoMap {
   wmGizmoMapType *type;
-  ListBase groups; /* #wmGizmoGroup. */
+  ListBaseT<wmGizmoGroup> groups;
 
   /* Private, update tagging (enum defined in C source). */
   char update_flag[WM_GIZMOMAP_DRAWSTEP_MAX];
@@ -99,6 +110,9 @@ struct wmGizmoMap {
 
   /** When set, one of the items in 'groups' has #wmGizmoGroup.tag_remove set. */
   bool tag_remove_group;
+
+  /** When set, the event system re-calculates highlight even without cursor motion. */
+  bool tag_highlight_pending;
 
   /**
    * \brief Gizmo map runtime context
@@ -131,7 +145,7 @@ struct wmGizmoMapType {
   wmGizmoMapType *next, *prev;
   short spaceid, regionid;
   /* Types of gizmo-groups for this gizmo-map type. */
-  ListBase grouptype_refs;
+  ListBaseT<wmGizmoGroupTypeRef> grouptype_refs;
 
   /* #eGizmoMapTypeUpdateFlags. */
   eWM_GizmoFlagMapTypeUpdateFlag type_update_flag;
@@ -146,3 +160,5 @@ bool wm_gizmomap_deselect_all(wmGizmoMap *gzmap);
 void wm_gizmomap_select_array_shrink(wmGizmoMap *gzmap, int len_subtract);
 void wm_gizmomap_select_array_push_back(wmGizmoMap *gzmap, wmGizmo *gz);
 void wm_gizmomap_select_array_remove(wmGizmoMap *gzmap, wmGizmo *gz);
+
+}  // namespace blender

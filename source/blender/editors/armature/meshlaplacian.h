@@ -9,9 +9,7 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace blender {
 
 // #define RIGID_DEFORM
 
@@ -26,7 +24,7 @@ struct EditMesh;
 /* Laplacian System */
 
 struct LaplacianSystem;
-typedef struct LaplacianSystem LaplacianSystem;
+struct LaplacianSystem;
 
 void laplacian_add_vertex(LaplacianSystem *sys, float *co, int pinned);
 void laplacian_add_triangle(LaplacianSystem *sys, int v1, int v2, int v3);
@@ -57,10 +55,8 @@ void rigid_deform_iteration(void);
 void rigid_deform_end(int cancel);
 #endif
 
-#ifdef __cplusplus
-}
-#endif
-
 /* Harmonic Coordinates */
 
 /* ED_mesh_deform_bind_callback(...) defined in ED_armature.hh */
+
+}  // namespace blender

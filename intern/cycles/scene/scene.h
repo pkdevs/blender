@@ -2,24 +2,24 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
-#ifndef __SCENE_H__
-#define __SCENE_H__
+#pragma once
 
 #include "bvh/params.h"
 
 #include "scene/devicescene.h"
 #include "scene/film.h"
 #include "scene/image.h"
+#include "scene/scene_attributes.h"
 #include "scene/shader.h"
 
 #include "util/param.h"
 #include "util/string.h"
-#include "util/texture.h"
 #include "util/thread.h"
+#include "util/unique_ptr.h"
+#include "util/unique_ptr_vector.h"
 
 CCL_NAMESPACE_BEGIN
 
-class AlembicProcedural;
 class AttributeRequestSet;
 class Background;
 class BVH;
@@ -28,6 +28,12 @@ class Device;
 class DeviceInfo;
 class Film;
 class Integrator;
+class SceneAttributes;
+class PointLight;
+class SpotLight;
+class AreaLight;
+class SunLight;
+class BackgroundLight;
 class Light;
 class LightManager;
 class LookupTables;
@@ -35,6 +41,7 @@ class Geometry;
 class GeometryManager;
 class Object;
 class ObjectManager;
+class OSLManager;
 class ParticleSystemManager;
 class ParticleSystem;
 class PointCloud;
@@ -49,6 +56,7 @@ class BakeData;
 class RenderStats;
 class SceneUpdateStats;
 class Volume;
+class VolumeManager;
 
 /* Scene Parameters */
 
@@ -70,7 +78,15 @@ class SceneParams {
   int num_bvh_time_steps;
   int hair_subdivisions;
   CurveShapeType hair_shape;
+  float texture_resolution;
   int texture_limit;
+
+  /* Use tx files if they exist. */
+  bool use_texture_cache = true;
+  /* Auto generate tx files. */
+  bool auto_texture_cache = false;
+  /* Relative (to the image file) or absolute directory for auto generating tx files. */
+  std::string texture_cache_path;
 
   bool background;
 
@@ -85,20 +101,24 @@ class SceneParams {
     num_bvh_time_steps = 0;
     hair_subdivisions = 3;
     hair_shape = CURVE_RIBBON;
+    texture_resolution = 1.0f;
     texture_limit = 0;
     background = true;
   }
 
   bool modified(const SceneParams &params) const
   {
-    return !(shadingsystem == params.shadingsystem && bvh_layout == params.bvh_layout &&
-             bvh_type == params.bvh_type &&
-             use_bvh_spatial_split == params.use_bvh_spatial_split &&
-             use_bvh_compact_structure == params.use_bvh_compact_structure &&
-             use_bvh_unaligned_nodes == params.use_bvh_unaligned_nodes &&
-             num_bvh_time_steps == params.num_bvh_time_steps &&
-             hair_subdivisions == params.hair_subdivisions && hair_shape == params.hair_shape &&
-             texture_limit == params.texture_limit);
+    return !(
+        shadingsystem == params.shadingsystem && bvh_layout == params.bvh_layout &&
+        bvh_type == params.bvh_type && use_bvh_spatial_split == params.use_bvh_spatial_split &&
+        use_bvh_compact_structure == params.use_bvh_compact_structure &&
+        use_bvh_unaligned_nodes == params.use_bvh_unaligned_nodes &&
+        num_bvh_time_steps == params.num_bvh_time_steps &&
+        hair_subdivisions == params.hair_subdivisions && hair_shape == params.hair_shape &&
+        texture_resolution == params.texture_resolution && texture_limit == params.texture_limit &&
+        use_texture_cache == params.use_texture_cache &&
+        auto_texture_cache == params.auto_texture_cache &&
+        texture_cache_path == params.texture_cache_path);
   }
 
   int curve_subdivisions()
@@ -119,32 +139,40 @@ class Scene : public NodeOwner {
   map<ustring, int> lightgroups;
 
   /* data */
-  BVH *bvh;
+  unique_ptr<BVH> bvh;
+  unique_ptr<LookupTables> lookup_tables;
+
   Camera *camera;
   Camera *dicing_camera;
-  LookupTables *lookup_tables;
   Film *film;
   Background *background;
   Integrator *integrator;
+  SceneAttributes *scene_attribute;
 
   /* data lists */
-  vector<Object *> objects;
-  vector<Geometry *> geometry;
-  vector<Shader *> shaders;
-  vector<Light *> lights;
-  vector<ParticleSystem *> particle_systems;
-  vector<Pass *> passes;
-  vector<Procedural *> procedurals;
+  unique_ptr_vector<Background> backgrounds;
+  unique_ptr_vector<Film> films;
+  unique_ptr_vector<Integrator> integrators;
+  unique_ptr_vector<SceneAttributes> scene_attributes;
+  unique_ptr_vector<Camera> cameras;
+  unique_ptr_vector<Shader> shaders;
+  unique_ptr_vector<Pass> passes;
+  unique_ptr_vector<ParticleSystem> particle_systems;
+  unique_ptr_vector<Geometry> geometry;
+  unique_ptr_vector<Object> objects;
+  unique_ptr_vector<Procedural> procedurals;
 
   /* data managers */
-  ImageManager *image_manager;
-  LightManager *light_manager;
-  ShaderManager *shader_manager;
-  GeometryManager *geometry_manager;
-  ObjectManager *object_manager;
-  ParticleSystemManager *particle_system_manager;
-  BakeManager *bake_manager;
-  ProceduralManager *procedural_manager;
+  unique_ptr<ImageManager> image_manager;
+  unique_ptr<LightManager> light_manager;
+  unique_ptr<OSLManager> osl_manager;
+  unique_ptr<ShaderManager> shader_manager;
+  unique_ptr<GeometryManager> geometry_manager;
+  unique_ptr<ObjectManager> object_manager;
+  unique_ptr<ParticleSystemManager> particle_system_manager;
+  unique_ptr<BakeManager> bake_manager;
+  unique_ptr<ProceduralManager> procedural_manager;
+  unique_ptr<VolumeManager> volume_manager;
 
   /* default shaders */
   Shader *default_surface;
@@ -162,19 +190,20 @@ class Scene : public NodeOwner {
 
   /* mutex must be locked manually by callers */
   thread_mutex mutex;
+  bool scene_updated_while_loading_kernels = false;
 
   /* scene update statistics */
-  SceneUpdateStats *update_stats;
+  unique_ptr<SceneUpdateStats> update_stats;
 
   Scene(const SceneParams &params, Device *device);
-  ~Scene();
+  ~Scene() override;
 
   void device_update(Device *device, Progress &progress);
 
-  bool need_global_attribute(AttributeStandard std);
+  bool need_global_attribute(AttributeStandard std) const;
   void need_global_attributes(AttributeRequestSet &attributes);
 
-  enum MotionType { MOTION_NONE = 0, MOTION_PASS, MOTION_BLUR };
+  enum MotionType { MOTION_NONE = 0, MOTION_PASS, MOTION_BLUR, MOTION_PASS_INTERACTIVE };
   MotionType need_motion() const;
   float motion_shutter_time();
 
@@ -188,11 +217,16 @@ class Scene : public NodeOwner {
 
   void enable_update_stats();
 
-  bool load_kernels(Progress &progress);
   bool update(Progress &progress);
+  bool update_camera_resolution(Progress &progress, int width, int height);
 
   bool has_shadow_catcher();
   void tag_shadow_catcher_modified();
+  bool has_volume();
+  bool has_volume_modified() const;
+  void tag_has_volume_modified();
+  /* Check if we use multiple importance sampling for any light in the scene. */
+  bool use_light_mis() const;
 
   /* This function is used to create a node of a specified type instead of
    * calling 'new', and sets the scene as the owner of the node.
@@ -200,12 +234,7 @@ class Scene : public NodeOwner {
    * node array (e.g. Scene::geometry for Geometry nodes) and tag the appropriate
    * manager for an update.
    */
-  template<typename T, typename... Args> T *create_node(Args &&...args)
-  {
-    T *node = new T(args...);
-    node->set_owner(this);
-    return node;
-  }
+  template<typename T, typename... Args> T *create_node(Args &&.../*args*/) = delete;
 
   /* This function is used to delete a node from the scene instead of calling 'delete'
    * and manually removing the node from the data array. It also tags the
@@ -213,20 +242,7 @@ class Scene : public NodeOwner {
    * the owner of the node. Calling this function on a node not owned by the scene
    * will likely cause a crash which we want in order to detect such cases.
    */
-  template<typename T> void delete_node(T *node)
-  {
-    assert(node->get_owner() == this);
-    delete_node_impl(node);
-  }
-
-  /* Same as above, but specify the actual owner.
-   */
-  template<typename T> void delete_node(T *node, const NodeOwner *owner)
-  {
-    assert(node->get_owner() == owner);
-    delete_node_impl(node);
-    (void)owner;
-  }
+  template<typename T> void delete_node(T *node) = delete;
 
   /* Remove all nodes in the set from the appropriate data arrays, and tag the
    * specific managers for an update. This assumes that the scene owns the nodes.
@@ -240,6 +256,8 @@ class Scene : public NodeOwner {
    */
   template<typename T> void delete_nodes(const set<T *> &nodes, const NodeOwner *owner);
 
+  template<class T> T *create_light_node();
+
  protected:
   /* Check if some heavy data worth logging was updated.
    * Mainly used to suppress extra annoying logging.
@@ -249,12 +267,13 @@ class Scene : public NodeOwner {
   void free_memory(bool final);
 
   bool kernels_loaded;
-  uint loaded_kernel_features;
+  uint64_t loaded_kernel_features;
 
   void update_kernel_features();
 
   bool has_shadow_catcher_ = false;
   bool shadow_catcher_modified_ = true;
+  bool has_volume_modified_ = true;
 
   /* Maximum number of closure during session lifetime. */
   int max_closure_global;
@@ -265,70 +284,45 @@ class Scene : public NodeOwner {
   /* Get size of a volume stack needed to render this scene. */
   int get_volume_stack_size() const;
 
-  template<typename T> void delete_node_impl(T *node)
-  {
-    delete node;
-  }
+  bool load_kernels(Progress &progress);
 };
 
-template<> Light *Scene::create_node<Light>();
-
+template<> PointLight *Scene::create_node<PointLight>();
+template<> SpotLight *Scene::create_node<SpotLight>();
+template<> AreaLight *Scene::create_node<AreaLight>();
+template<> SunLight *Scene::create_node<SunLight>();
+template<> BackgroundLight *Scene::create_node<BackgroundLight>();
 template<> Mesh *Scene::create_node<Mesh>();
-
 template<> Object *Scene::create_node<Object>();
-
 template<> Hair *Scene::create_node<Hair>();
-
 template<> Volume *Scene::create_node<Volume>();
-
 template<> PointCloud *Scene::create_node<PointCloud>();
-
 template<> ParticleSystem *Scene::create_node<ParticleSystem>();
-
 template<> Shader *Scene::create_node<Shader>();
-
-template<> AlembicProcedural *Scene::create_node<AlembicProcedural>();
-
 template<> Pass *Scene::create_node<Pass>();
+template<> Camera *Scene::create_node<Camera>();
+template<> Background *Scene::create_node<Background>();
+template<> Film *Scene::create_node<Film>();
+template<> Integrator *Scene::create_node<Integrator>();
+template<> SceneAttributes *Scene::create_node<SceneAttributes>();
 
-template<> void Scene::delete_node_impl(Light *node);
-
-template<> void Scene::delete_node_impl(Mesh *node);
-
-template<> void Scene::delete_node_impl(Volume *node);
-
-template<> void Scene::delete_node_impl(PointCloud *node);
-
-template<> void Scene::delete_node_impl(Hair *node);
-
-template<> void Scene::delete_node_impl(Geometry *node);
-
-template<> void Scene::delete_node_impl(Object *node);
-
-template<> void Scene::delete_node_impl(ParticleSystem *node);
-
-template<> void Scene::delete_node_impl(Shader *node);
-
-template<> void Scene::delete_node_impl(Procedural *node);
-
-template<> void Scene::delete_node_impl(AlembicProcedural *node);
-
-template<> void Scene::delete_node_impl(Pass *node);
-
-template<> void Scene::delete_nodes(const set<Light *> &nodes, const NodeOwner *owner);
+template<> void Scene::delete_node(Light *node);
+template<> void Scene::delete_node(Mesh *node);
+template<> void Scene::delete_node(Volume *node);
+template<> void Scene::delete_node(PointCloud *node);
+template<> void Scene::delete_node(Hair *node);
+template<> void Scene::delete_node(Geometry *node);
+template<> void Scene::delete_node(Object *node);
+template<> void Scene::delete_node(ParticleSystem *node);
+template<> void Scene::delete_node(Shader *node);
+template<> void Scene::delete_node(Procedural *node);
+template<> void Scene::delete_node(Pass *node);
 
 template<> void Scene::delete_nodes(const set<Geometry *> &nodes, const NodeOwner *owner);
-
 template<> void Scene::delete_nodes(const set<Object *> &nodes, const NodeOwner *owner);
-
 template<> void Scene::delete_nodes(const set<ParticleSystem *> &nodes, const NodeOwner *owner);
-
 template<> void Scene::delete_nodes(const set<Shader *> &nodes, const NodeOwner *owner);
-
 template<> void Scene::delete_nodes(const set<Procedural *> &nodes, const NodeOwner *owner);
-
 template<> void Scene::delete_nodes(const set<Pass *> &nodes, const NodeOwner *owner);
 
 CCL_NAMESPACE_END
-
-#endif /*  __SCENE_H__ */

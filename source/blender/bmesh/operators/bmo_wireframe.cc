@@ -10,14 +10,13 @@
 
 #include "DNA_material_types.h"
 
-#include "BLI_sys_types.h"
-#include "BLI_utildefines.h"
-
 #include "bmesh.hh"
 
 #include "tools/bmesh_wireframe.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
 
 void bmo_wireframe_exec(BMesh *bm, BMOperator *op)
 {
@@ -52,3 +51,5 @@ void bmo_wireframe_exec(BMesh *bm, BMOperator *op)
 
   BMO_slot_buffer_from_enabled_hflag(bm, op, op->slots_out, "faces.out", BM_FACE, BM_ELEM_TAG);
 }
+
+}  // namespace blender

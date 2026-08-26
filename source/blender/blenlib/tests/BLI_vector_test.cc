@@ -7,9 +7,10 @@
 #include "testing/testing.h"
 #include <forward_list>
 
-#include "BLI_strict_flags.h" /* Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender::tests {
+namespace {
 
 TEST(vector, DefaultConstructor)
 {
@@ -30,7 +31,7 @@ TEST(vector, SizeConstructor)
 TEST(vector, TrivialTypeSizeConstructor)
 {
   Vector<char, 1> *vec = new Vector<char, 1>(1);
-  char *ptr = &(*vec)[0];
+  char *ptr = vec->data();
   vec->~Vector();
 
   const char magic = 42;
@@ -86,7 +87,7 @@ struct TestListValue {
 //   TestListValue *value2 = new TestListValue{nullptr, nullptr, 5};
 //   TestListValue *value3 = new TestListValue{nullptr, nullptr, 6};
 
-//   ListBase list = {nullptr, nullptr};
+//   ListBaseT<TestListValue> list = {nullptr, nullptr};
 //   BLI_addtail(&list, value1);
 //   BLI_addtail(&list, value2);
 //   BLI_addtail(&list, value3);
@@ -299,7 +300,7 @@ TEST(vector, ExtendIterator)
   std::forward_list<int> list = {8, 9};
   vec.extend(list.begin(), list.end());
   EXPECT_EQ(vec.size(), 5);
-  EXPECT_EQ_ARRAY(vec.data(), Span({3, 4, 5, 8, 9}).data(), 5);
+  EXPECT_EQ_SPAN<int>(vec, Span({3, 4, 5, 8, 9}));
 }
 
 TEST(vector, Iterator)
@@ -429,7 +430,7 @@ TEST(vector, RemoveIf)
   EXPECT_EQ(vec.size() + removed, 8);
   const Vector<int> expected_vec = {1, 3, 5, 7};
   EXPECT_EQ(vec.size(), expected_vec.size());
-  EXPECT_EQ_ARRAY(vec.data(), expected_vec.data(), size_t(vec.size()));
+  EXPECT_EQ_SPAN<int>(vec, expected_vec);
 }
 
 TEST(vector, RemoveIfNonTrivialDestructible)
@@ -466,6 +467,69 @@ TEST(vector, ExtendArray)
   EXPECT_EQ(a.size(), 2);
   EXPECT_EQ(a[0], 3);
   EXPECT_EQ(a[1], 4);
+}
+
+TEST(vector, ExtendMoveFromSmallVector)
+{
+  Vector<Vector<uint64_t, 0>> a = {
+      {1, 2, 3, 4, 5},
+      {6, 7, 8},
+  };
+  Vector<Vector<uint64_t, 0>> b = {
+      {9, 10, 11, 12},
+      {13, 14, 15, 16},
+  };
+  const Vector<Vector<uint64_t, 0>> c = {
+      {1, 2, 3, 4, 5},
+      {6, 7, 8},
+      {9, 10, 11, 12},
+      {13, 14, 15, 16},
+  };
+
+  a.extend(std::move(b));
+
+  EXPECT_EQ(a, c);
+  EXPECT_TRUE(b.is_empty());
+}
+
+TEST(vector, ExtendMoveFromUniquePtrVector)
+{
+  Vector<int *> ptr_vec;
+
+  Vector<std::unique_ptr<int>> a;
+  a.append(std::make_unique<int>(0));
+  a.append(std::make_unique<int>(1));
+  a.append(std::make_unique<int>(2));
+
+  for (std::unique_ptr<int> &i : a) {
+    ptr_vec.append(i.get());
+  }
+
+  Vector<std::unique_ptr<int>> b;
+  b.append(std::make_unique<int>(7));
+  b.append(std::make_unique<int>(8));
+  b.append(std::make_unique<int>(9));
+  b.append(std::make_unique<int>(20));
+
+  for (std::unique_ptr<int> &i : b) {
+    ptr_vec.append(i.get());
+  }
+
+  ASSERT_EQ(a.size(), 3);
+  ASSERT_EQ(b.size(), 4);
+
+  a.extend(std::move(b));
+
+  std::array<int, 7> values = {0, 1, 2, 7, 8, 9, 20};
+
+  ASSERT_EQ(size_t(a.size()), values.size());
+  ASSERT_TRUE(b.is_empty());
+  ASSERT_EQ(a.size(), ptr_vec.size());
+
+  for (int64_t i = 0; i < a.size(); i++) {
+    ASSERT_EQ(*a[i], values[size_t(i)]);
+    ASSERT_EQ(a[i].get(), ptr_vec[i]);
+  }
 }
 
 TEST(vector, Last)
@@ -683,7 +747,7 @@ TEST(vector, InsertAtBeginning)
   Vector<int> vec = {1, 2, 3};
   vec.insert(0, {6, 7});
   EXPECT_EQ(vec.size(), 5);
-  EXPECT_EQ_ARRAY(vec.data(), Span({6, 7, 1, 2, 3}).data(), 5);
+  EXPECT_EQ_SPAN<int>(vec, Span({6, 7, 1, 2, 3}));
 }
 
 TEST(vector, InsertAtEnd)
@@ -691,7 +755,7 @@ TEST(vector, InsertAtEnd)
   Vector<int> vec = {1, 2, 3};
   vec.insert(3, {6, 7});
   EXPECT_EQ(vec.size(), 5);
-  EXPECT_EQ_ARRAY(vec.data(), Span({1, 2, 3, 6, 7}).data(), 5);
+  EXPECT_EQ_SPAN<int>(vec, Span({1, 2, 3, 6, 7}));
 }
 
 TEST(vector, InsertInMiddle)
@@ -699,7 +763,7 @@ TEST(vector, InsertInMiddle)
   Vector<int> vec = {1, 2, 3};
   vec.insert(1, {6, 7});
   EXPECT_EQ(vec.size(), 5);
-  EXPECT_EQ_ARRAY(vec.data(), Span({1, 6, 7, 2, 3}).data(), 5);
+  EXPECT_EQ_SPAN<int>(vec, Span({1, 6, 7, 2, 3}));
 }
 
 TEST(vector, InsertAtIterator)
@@ -708,7 +772,7 @@ TEST(vector, InsertAtIterator)
   Vector<std::string> other_vec = {"hello", "world"};
   vec.insert(vec.begin() + 1, other_vec.begin(), other_vec.end());
   EXPECT_EQ(vec.size(), 5);
-  EXPECT_EQ_ARRAY(vec.data(), Span<std::string>({"1", "hello", "world", "2", "3"}).data(), 5);
+  EXPECT_EQ_SPAN<std::string>(vec, Span<std::string>({"1", "hello", "world", "2", "3"}));
 }
 
 TEST(vector, InsertMoveOnlyType)
@@ -728,7 +792,7 @@ TEST(vector, Prepend)
   Vector<int> vec = {1, 2, 3};
   vec.prepend({7, 8});
   EXPECT_EQ(vec.size(), 5);
-  EXPECT_EQ_ARRAY(vec.data(), Span({7, 8, 1, 2, 3}).data(), 5);
+  EXPECT_EQ_SPAN<int>(vec, Span({7, 8, 1, 2, 3}));
 }
 
 TEST(vector, PrependString)
@@ -750,7 +814,7 @@ TEST(vector, ReverseIterator)
     reversed_vec.append(*it);
   }
   EXPECT_EQ(reversed_vec.size(), 4);
-  EXPECT_EQ_ARRAY(reversed_vec.data(), Span({7, 6, 5, 4}).data(), 4);
+  EXPECT_EQ_SPAN<int>(reversed_vec, Span({7, 6, 5, 4}));
 }
 
 TEST(vector, SizeValueConstructorExceptions)
@@ -881,7 +945,7 @@ TEST(vector, RecursiveStructure)
 TEST(vector, FromRaw)
 {
   VectorData<int, GuardedAllocator> data;
-  data.data = MEM_cnew_array<int>(30, __func__);
+  data.data = MEM_new_array_zeroed<int>(30, __func__);
   data.size = 10;
   data.capacity = 30;
 
@@ -921,7 +985,7 @@ TEST(vector, ReleaseEmptyAllocated)
   EXPECT_NE(data.data, nullptr);
   EXPECT_EQ(data.size, 0);
   EXPECT_EQ(data.capacity, 100);
-  MEM_freeN(data.data);
+  MEM_delete(data.data);
 }
 
 TEST(vector, ReleaseNonEmptyInline)
@@ -937,7 +1001,7 @@ TEST(vector, ReleaseNonEmptyInline)
 
   EXPECT_NE(data.data, inline_data_ptr);
   EXPECT_EQ(data.size, 2);
-  MEM_freeN(data.data);
+  MEM_delete(data.data);
 }
 
 TEST(vector, ReleaseAllocated)
@@ -954,7 +1018,8 @@ TEST(vector, ReleaseAllocated)
   EXPECT_EQ(data.data, data_ptr);
   EXPECT_EQ(data.size, 50);
   EXPECT_EQ(data.data[0], 3);
-  MEM_freeN(data.data);
+  MEM_delete(data.data);
 }
 
+}  // namespace
 }  // namespace blender::tests

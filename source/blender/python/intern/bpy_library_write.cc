@@ -12,11 +12,8 @@
 #include <Python.h>
 #include <cstddef>
 
-#include "MEM_guardedalloc.h"
-
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
 
 #include "BKE_blendfile.hh"
 #include "BKE_global.hh"
@@ -33,14 +30,17 @@
 #include "bpy_rna.hh"
 
 #include "../generic/py_capi_utils.hh"
-#include "../generic/python_compat.hh"
+#include "../generic/python_compat.hh" /* IWYU pragma: keep. */
+
+namespace blender {
 
 using namespace blender::bke::blendfile;
 
 PyDoc_STRVAR(
     /* Wrap. */
     bpy_lib_write_doc,
-    ".. method:: write(filepath, datablocks, path_remap=False, fake_user=False, compress=False)\n"
+    ".. method:: write(filepath, datablocks, *, "
+    "path_remap='NONE', fake_user=False, compress=False)\n"
     "\n"
     "   Write data-blocks into a blend file.\n"
     "\n"
@@ -48,11 +48,11 @@ PyDoc_STRVAR(
     "\n"
     "      Indirectly referenced data-blocks will be expanded and written too.\n"
     "\n"
-    "   :arg filepath: The path to write the blend-file.\n"
+    "   :param filepath: The path to write the blend-file.\n"
     "   :type filepath: str | bytes\n"
-    "   :arg datablocks: set of data-blocks.\n"
+    "   :param datablocks: set of data-blocks.\n"
     "   :type datablocks: set[:class:`bpy.types.ID`]\n"
-    "   :arg path_remap: Optionally remap paths when writing the file:\n"
+    "   :param path_remap: Optionally remap paths when writing the file:\n"
     "\n"
     "      - ``NONE`` No path manipulation (default).\n"
     "      - ``RELATIVE`` Remap paths that are already relative to the new location.\n"
@@ -60,9 +60,9 @@ PyDoc_STRVAR(
     "      - ``ABSOLUTE`` Make all paths absolute on writing.\n"
     "\n"
     "   :type path_remap: str\n"
-    "   :arg fake_user: When True, data-blocks will be written with fake-user flag enabled.\n"
+    "   :param fake_user: When True, data-blocks will be written with fake-user flag enabled.\n"
     "   :type fake_user: bool\n"
-    "   :arg compress: When True, write a compressed blend file.\n"
+    "   :param compress: When True, write a compressed blend file.\n"
     "   :type compress: bool\n");
 static PyObject *bpy_lib_write(BPy_PropertyRNA *self, PyObject *args, PyObject *kw)
 {
@@ -91,10 +91,9 @@ static PyObject *bpy_lib_write(BPy_PropertyRNA *self, PyObject *args, PyObject *
       nullptr,
   };
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
       "O&" /* `filepath` */
       "O!" /* `datablocks` */
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `path_remap` */
       "O&" /* `fake_user` */
       "O&" /* `compress` */
@@ -129,12 +128,18 @@ static PyObject *bpy_lib_write(BPy_PropertyRNA *self, PyObject *args, PyObject *
   STRNCPY(filepath_abs, filepath_data.value);
   Py_XDECREF(filepath_data.value_coerce);
 
-  BLI_path_abs(filepath_abs, BKE_main_blendfile_path_from_global());
+  const bool was_relative = BLI_path_abs(filepath_abs, BKE_main_blendfile_path_from_global());
+  if (!was_relative) {
+    /* If this was a blendfile-relative path, it's been made absolute now. However, BLI_path_abs()
+     * doesn't turn normal relative paths into absolute ones, so that still has to happen. */
+    BLI_path_abs_from_cwd(filepath_abs, sizeof(filepath_abs));
+  }
 
-  PartialWriteContext partial_write_ctx{bmain_src->filepath};
-  const PartialWriteContext::IDAddOptions add_options{PartialWriteContext::IDAddOperations(
-      PartialWriteContext::IDAddOperations::ADD_DEPENDENCIES |
-      (use_fake_user ? PartialWriteContext::IDAddOperations::SET_FAKE_USER : 0))};
+  PartialWriteContext partial_write_ctx{*bmain_src};
+  const PartialWriteContext::IDAddOptions add_options{
+      (PartialWriteContext::IDAddOperations::ADD_DEPENDENCIES |
+       PartialWriteContext::IDAddOperations(
+           use_fake_user ? PartialWriteContext::IDAddOperations::SET_FAKE_USER : 0))};
 
   if (PySet_GET_SIZE(datablocks) > 0) {
     PyObject *it = PyObject_GetIter(datablocks);
@@ -160,7 +165,7 @@ static PyObject *bpy_lib_write(BPy_PropertyRNA *self, PyObject *args, PyObject *
   /* write blend */
   ReportList reports;
 
-  BKE_reports_init(&reports, RPT_STORE);
+  BKE_reports_init(&reports, RPT_STORE | RPT_PRINT_HANDLED_BY_OWNER);
   bool success = partial_write_ctx.write(
       filepath_abs, write_flags, path_remap.value_found, reports);
 
@@ -182,18 +187,29 @@ static PyObject *bpy_lib_write(BPy_PropertyRNA *self, PyObject *args, PyObject *
   return py_return_value;
 }
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wcast-function-type"
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wcast-function-type"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#  endif
 #endif
 
 PyMethodDef BPY_library_write_method_def = {
     "write",
-    (PyCFunction)bpy_lib_write,
+    reinterpret_cast<PyCFunction>(bpy_lib_write),
     METH_VARARGS | METH_KEYWORDS,
     bpy_lib_write_doc,
 };
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic pop
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
 #endif
+
+}  // namespace blender

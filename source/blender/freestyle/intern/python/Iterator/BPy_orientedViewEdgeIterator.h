@@ -12,10 +12,6 @@
 
 #include "../../view_map/ViewMapIterators.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject orientedViewEdgeIterator_Type;
@@ -24,15 +20,11 @@ extern PyTypeObject orientedViewEdgeIterator_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&orientedViewEdgeIterator_Type))
 
 /*---------------------------Python BPy_orientedViewEdgeIterator structure definition----------*/
-typedef struct {
+struct BPy_orientedViewEdgeIterator {
   BPy_Iterator py_it;
   Freestyle::ViewVertexInternal::orientedViewEdgeIterator *ove_it;
   bool reversed;
   bool at_start;
-} BPy_orientedViewEdgeIterator;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

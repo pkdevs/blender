@@ -13,20 +13,23 @@
 
 #pragma once
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 #include "GPU_shader.hh"
 #include "GPU_storage_buffer.hh"
+
+namespace blender {
 
 /**
  * Dispatch a compute shader task.
  * The number of work groups (aka thread groups) is bounded by `GPU_max_work_group_count()` which
  * might be different in each of the 3 dimensions.
  */
-void GPU_compute_dispatch(GPUShader *shader,
+void GPU_compute_dispatch(gpu::Shader *shader,
                           uint groups_x_len,
                           uint groups_y_len,
-                          uint groups_z_len);
+                          uint groups_z_len,
+                          const gpu::shader::SpecializationConstants *constants_state = nullptr);
 
 /**
  * Dispatch a compute shader task. The size of the dispatch is sourced from a \a indirect_buf
@@ -45,4 +48,9 @@ void GPU_compute_dispatch(GPUShader *shader,
  * The number of work groups (aka thread groups) is bounded by `GPU_max_work_group_count()` which
  * might be different in each of the 3 dimensions.
  */
-void GPU_compute_dispatch_indirect(GPUShader *shader, GPUStorageBuf *indirect_buf);
+void GPU_compute_dispatch_indirect(
+    gpu::Shader *shader,
+    gpu::StorageBuf *indirect_buf,
+    const gpu::shader::SpecializationConstants *constants_state = nullptr);
+
+}  // namespace blender

@@ -8,6 +8,10 @@
 
 #ifndef WITH_PYTHON_MODULE
 
+#  include <cerrno>
+#  include <cstdlib>
+#  include <mutex>
+
 #  if defined(__linux__) && defined(__GNUC__)
 #    ifndef _GNU_SOURCE
 #      define _GNU_SOURCE
@@ -23,23 +27,20 @@
 #  ifdef WIN32
 #    include <float.h>
 #    include <windows.h>
+
+#    include "BLI_winstuff.hh"
+
+#    include "GPU_platform.hh"
 #  endif
 
-#  include <cerrno>
-#  include <cstdlib>
-#  include <cstring>
-
-#  ifdef WIN32
-#    include "BLI_winstuff.h"
-#  endif
-#  include "BLI_fileops.h"
+#  include "BLI_fileops.hh"
 #  include "BLI_path_utils.hh"
-#  include "BLI_string.h"
-#  include "BLI_system.h"
-#  include "BLI_utildefines.h"
+#  include "BLI_string.hh"
+#  include "BLI_system.hh"
 #  include BLI_SYSTEM_PID_H
 
-#  include "BKE_appdir.hh" /* #BKE_tempdir_base. */
+#  include "BKE_appdir.hh" /* #BKE_tempdir_session_purge. */
+#  include "BKE_blender.hh"
 #  include "BKE_blender_version.h"
 #  include "BKE_global.hh"
 #  include "BKE_main.hh"
@@ -53,6 +54,8 @@
 #  endif
 
 #  include "creator_intern.h" /* Own include. */
+
+namespace blender {
 
 #  if defined(__linux__) || defined(_WIN32) || defined(OSX_SSE_FPE)
 /**
@@ -81,7 +84,7 @@ static void sig_handle_blender_esc(int sig)
   }
 }
 
-static void sig_handle_crash_backtrace(int signum, const void *os_info)
+static void crashlog_file_generate(const char *filepath, const void *os_info)
 {
   /* Might be called after WM/Main exit, so needs to be careful about nullptr-checking before
    * de-referencing. */
@@ -90,19 +93,9 @@ static void sig_handle_crash_backtrace(int signum, const void *os_info)
 
   FILE *fp;
   char header[512];
-
-  char filepath[FILE_MAX];
-
-  if (!(G_MAIN && G_MAIN->filepath[0])) {
-    BLI_path_join(filepath, sizeof(filepath), BKE_tempdir_base(), "blender.crash.txt");
+  if (!app_state.signal.use_console_crash_handler) {
+    printf("Writing: %s\n", filepath);
   }
-  else {
-    BLI_path_join(
-        filepath, sizeof(filepath), BKE_tempdir_base(), BLI_path_basename(G_MAIN->filepath));
-    BLI_path_extension_replace(filepath, sizeof(filepath), ".crash.txt");
-  }
-
-  printf("Writing: %s\n", filepath);
   fflush(stdout);
 
 #  ifndef BUILD_DATE
@@ -118,29 +111,38 @@ static void sig_handle_crash_backtrace(int signum, const void *os_info)
 
   /* Open the crash log. */
   errno = 0;
-  fp = BLI_fopen(filepath, "wb");
-  if (fp == nullptr) {
-    fprintf(stderr,
-            "Unable to save '%s': %s\n",
-            filepath,
-            errno ? strerror(errno) : "Unknown error opening file");
+  if (app_state.signal.use_console_crash_handler) {
+    fp = stderr;
   }
   else {
-    if (wm) {
-      BKE_report_write_file_fp(fp, &wm->runtime->reports, header);
+    fp = BLI_fopen(filepath, "wb");
+    if (fp == nullptr) {
+      fprintf(stderr,
+              "Unable to save '%s': %s , falling back to console\n",
+              filepath,
+              errno ? strerror(errno) : "Unknown error opening file");
+      fp = stderr;
     }
-
-    fputs("\n# backtrace\n", fp);
-    BLI_system_backtrace_with_os_info(fp, os_info);
-
-#  ifdef WITH_PYTHON
-    /* Generate python back-trace if Python is currently active. */
-    BPY_python_backtrace(fp);
-#  endif
-
-    fclose(fp);
   }
 
+  if (wm) {
+    BKE_report_write_file_fp(fp, &wm->runtime->reports, header);
+  }
+
+  fputs("\n# backtrace\n", fp);
+  BLI_system_backtrace_with_os_info(fp, os_info);
+
+#  ifdef WITH_PYTHON
+  /* Generate python back-trace if Python is currently active. */
+  BPY_python_backtrace(fp);
+#  endif
+  if (fp != stderr) {
+    fclose(fp);
+  }
+}
+
+static void sig_cleanup_and_terminate(int signum)
+{
   /* Delete content of temp directory. */
   BKE_tempdir_session_purge();
 
@@ -152,13 +154,22 @@ static void sig_handle_crash_backtrace(int signum, const void *os_info)
   TerminateProcess(GetCurrentProcess(), signum);
 #  endif
 }
-
+#  if !defined(WIN32)
 static void sig_handle_crash_fn(int signum)
 {
-  sig_handle_crash_backtrace(signum, nullptr);
-}
+  auto crash_func = [&]() {
+    char filepath_crashlog[FILE_MAX];
+    BKE_blender_globals_crash_path_get(filepath_crashlog);
+    crashlog_file_generate(filepath_crashlog, nullptr);
+    sig_cleanup_and_terminate(signum);
+  };
 
-#  ifdef WIN32
+  /* The use of `std::call_once` ensures that the crash handling function is only executed once,
+   * even if multiple crashes occur simultaneously on different threads. */
+  static std::once_flag crash_func_once;
+  std::call_once(crash_func_once, crash_func);
+}
+#  else
 extern LONG WINAPI windows_exception_handler(EXCEPTION_POINTERS *ExceptionInfo)
 {
   /* If this is a stack overflow then we can't walk the stack, so just try to show
@@ -174,10 +185,40 @@ extern LONG WINAPI windows_exception_handler(EXCEPTION_POINTERS *ExceptionInfo)
         fprintf(stderr, "Module  : %s\n", modulename);
       }
     }
+
+    sig_cleanup_and_terminate(SIGSEGV);
   }
   else {
-    BLI_windows_handle_exception(ExceptionInfo);
-    sig_handle_crash_backtrace(SIGSEGV, ExceptionInfo);
+    auto crash_func = [&]() {
+      char filepath_crashlog[FILE_MAX];
+      BLI_windows_exception_print_message(ExceptionInfo);
+      BKE_blender_globals_crash_path_get(filepath_crashlog);
+      crashlog_file_generate(filepath_crashlog, ExceptionInfo);
+
+      /* Disable popup in background mode to avoid blocking automation.
+       * (e.g., when used by a render farm; see #142314). */
+      if ((!G.background) && (!app_state.signal.use_console_crash_handler)) {
+        std::string version;
+#    ifndef BUILD_DATE
+        const char *build_hash = G_MAIN ? G_MAIN->build_hash : "unknown";
+        version = std::string(BKE_blender_version_string()) + ", hash: `" + build_hash + "`";
+#    else
+        version = std::string(BKE_blender_version_string()) +
+                  ", Commit date: " + build_commit_date + " " + build_commit_time + ", hash: `" +
+                  build_hash + "`";
+#    endif
+
+        BLI_windows_exception_show_dialog(
+            filepath_crashlog, G.filepath_last_blend, GPU_platform_gpu_name(), version.c_str());
+
+        sig_cleanup_and_terminate(SIGSEGV);
+      }
+    };
+
+    /* The use of `std::call_once` ensures that the crash handling function is only executed once,
+     * even if multiple crashes occur simultaneously on different threads. */
+    static std::once_flag crash_func_once;
+    std::call_once(crash_func_once, crash_func);
   }
 
   return EXCEPTION_EXECUTE_HANDLER;
@@ -246,5 +287,7 @@ void main_signal_setup_fpe()
 #    endif /* _WIN32 && _MSC_VER */
 #  endif
 }
+
+}  // namespace blender
 
 #endif /* WITH_PYTHON_MODULE */

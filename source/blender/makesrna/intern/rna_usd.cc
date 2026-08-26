@@ -6,7 +6,6 @@
  * \ingroup RNA
  */
 
-#include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
@@ -14,19 +13,21 @@
 
 #include "WM_types.hh"
 
-#include "usd.hh"
-
 #ifdef RNA_RUNTIME
 
 #  include "DNA_object_types.h"
 #  include "WM_api.hh"
 
-using namespace blender::io::usd;
+#  include "usd_api_hook.hh"
+
+namespace blender {
+
+using namespace io::usd;
 
 static StructRNA *rna_USDHook_refine(PointerRNA *ptr)
 {
-  USDHook *hook = (USDHook *)ptr->data;
-  return (hook->rna_ext.srna) ? hook->rna_ext.srna : &RNA_USDHook;
+  USDHook *hook = static_cast<USDHook *>(ptr->data);
+  return (hook->rna_ext.srna) ? hook->rna_ext.srna : RNA_USDHook;
 }
 
 static bool rna_USDHook_unregister(Main * /*bmain*/, StructRNA *type)
@@ -39,7 +40,7 @@ static bool rna_USDHook_unregister(Main * /*bmain*/, StructRNA *type)
 
   /* free RNA data referencing this */
   RNA_struct_free_extension(type, &hook->rna_ext);
-  RNA_struct_free(&BLENDER_RNA, type);
+  RNA_struct_free(&RNA_blender_rna_get(), type);
 
   WM_main_add_notifier(NC_WINDOW, nullptr);
 
@@ -61,7 +62,7 @@ static StructRNA *rna_USDHook_register(Main *bmain,
   USDHook dummy_hook{};
 
   /* setup dummy type info to store static properties in */
-  PointerRNA dummy_hook_ptr = RNA_pointer_create(nullptr, &RNA_USDHook, &dummy_hook);
+  PointerRNA dummy_hook_ptr = RNA_pointer_create_discrete(nullptr, RNA_USDHook, &dummy_hook);
 
   /* validate the python class */
   if (validate(&dummy_hook_ptr, data, nullptr) != 0) {
@@ -74,7 +75,7 @@ static StructRNA *rna_USDHook_register(Main *bmain,
                 "%s '%s' is too long, maximum length is %d",
                 error_prefix,
                 identifier,
-                (int)sizeof(dummy_hook.idname));
+                int(sizeof(dummy_hook.idname)));
     return nullptr;
   }
 
@@ -105,7 +106,7 @@ static StructRNA *rna_USDHook_register(Main *bmain,
   *hook = dummy_hook;
 
   /* set RNA-extensions info */
-  hook->rna_ext.srna = RNA_def_struct_ptr(&BLENDER_RNA, hook->idname, &RNA_USDHook);
+  hook->rna_ext.srna = RNA_def_struct_ptr(&RNA_blender_rna_get(), hook->idname, RNA_USDHook);
   hook->rna_ext.data = data;
   hook->rna_ext.call = call;
   hook->rna_ext.free = free;
@@ -121,7 +122,11 @@ static StructRNA *rna_USDHook_register(Main *bmain,
   return srna;
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 static void rna_def_usd_hook(BlenderRNA *brna)
 {
@@ -162,5 +167,7 @@ void RNA_def_usd(BlenderRNA *brna)
 {
   rna_def_usd_hook(brna);
 }
+
+}  // namespace blender
 
 #endif

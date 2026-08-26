@@ -1,17 +1,25 @@
 /* SPDX-FileCopyrightText: 2020 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
-#include "abc_writer_abstract.h"
+
+#include "BLI_bounds.hh"
+
 #include "abc_hierarchy_iterator.h"
+#include "abc_writer_abstract.h"
 
 #include "BKE_object.hh"
+
+#include "DNA_object_types.h"
 
 #include <Alembic/AbcGeom/Visibility.h>
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.alembic"};
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 using Alembic::Abc::OObject;
 using Alembic::Abc::TimeSamplingPtr;
@@ -78,7 +86,7 @@ const IDProperty *ABCAbstractWriter::get_id_properties(const HierarchyContext &c
   }
 
   /* Most subclasses write object data, so default to the object data's ID properties. */
-  return static_cast<ID *>(object->data)->properties;
+  return object->data->properties;
 }
 
 uint32_t ABCAbstractWriter::timesample_index() const
@@ -103,17 +111,16 @@ void ABCAbstractWriter::update_bounding_box(Object *object)
     return;
   }
 
-  BoundBox bb;
-  BKE_boundbox_init_from_minmax(&bb, bounds->min, bounds->max);
+  const std::array<float3, 8> corners = bounds::corners(*bounds);
 
   /* Convert Z-up to Y-up. This also changes which vector goes into which min/max property. */
-  bounding_box_.min.x = bb.vec[0][0];
-  bounding_box_.min.y = bb.vec[0][2];
-  bounding_box_.min.z = -bb.vec[6][1];
+  bounding_box_.min.x = corners[0][0];
+  bounding_box_.min.y = corners[0][2];
+  bounding_box_.min.z = -corners[6][1];
 
-  bounding_box_.max.x = bb.vec[6][0];
-  bounding_box_.max.y = bb.vec[6][2];
-  bounding_box_.max.z = -bb.vec[0][1];
+  bounding_box_.max.x = corners[6][0];
+  bounding_box_.max.y = corners[6][2];
+  bounding_box_.max.z = -corners[0][1];
 }
 
 void ABCAbstractWriter::write_visibility(const HierarchyContext &context)
@@ -128,4 +135,5 @@ void ABCAbstractWriter::write_visibility(const HierarchyContext &context)
                                    Alembic::AbcGeom::kVisibilityHidden);
 }
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

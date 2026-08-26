@@ -11,9 +11,6 @@
 
 #include <Python.h>
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
-
 #include "bpy_capi_utils.hh"
 
 #include "MEM_guardedalloc.h"
@@ -21,6 +18,8 @@
 #include "BKE_report.hh"
 
 #include "../generic/py_capi_utils.hh"
+
+namespace blender {
 
 short BPy_reports_to_error(ReportList *reports, PyObject *exception, const bool clear)
 {
@@ -34,7 +33,7 @@ short BPy_reports_to_error(ReportList *reports, PyObject *exception, const bool 
 
   if (report_str) {
     PyErr_SetString(exception, report_str);
-    MEM_freeN(report_str);
+    MEM_delete(report_str);
   }
 
   return (report_str == nullptr) ? 0 : -1;
@@ -138,3 +137,5 @@ bool BPy_errors_to_report(ReportList *reports)
 {
   return BPy_errors_to_report_ex(reports, nullptr, true, true);
 }
+
+}  // namespace blender

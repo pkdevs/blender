@@ -7,15 +7,17 @@
 /* TODO(sergey): The integrator folder might not be the best. Is easy to move files around if the
  * better place is figured out. */
 
+#include <functional>
+
 #include "device/denoise.h"
 #include "device/device.h"
-#include "util/function.h"
 #include "util/unique_ptr.h"
 
 CCL_NAMESPACE_BEGIN
 
 class BufferParams;
 class Device;
+class GraphicsInteropDevice;
 class RenderBuffers;
 class Progress;
 
@@ -26,6 +28,7 @@ bool use_gpu_oidn_denoiser(Device *denoiser_device, const DenoiseParams &params)
 DenoiseParams get_effective_denoise_params(Device *denoiser_device,
                                            Device *cpu_fallback_device,
                                            const DenoiseParams &params,
+                                           const GraphicsInteropDevice &interop_device,
                                            Device *&single_denoiser_device);
 
 /* Implementation of a specific denoising algorithm.
@@ -43,10 +46,12 @@ class Denoiser {
    *   This is checked in debug builds.
    * - The device might be MultiDevice.
    * - If Denoiser from params is not supported by provided denoise device, then Blender will
-   *   fallback on the OIDN CPU denoising and use provided cpu_fallback_device. */
-  static unique_ptr<Denoiser> create(Device *denoise_device,
+   *   fallback on the OIDN CPU denoising and use provided cpu_fallback_device.
+   * - Specifying the graphics interop device helps pick a more efficient denoising device.*/
+  static unique_ptr<Denoiser> create(Device *denoiser_device,
                                      Device *cpu_fallback_device,
-                                     const DenoiseParams &params);
+                                     const DenoiseParams &params,
+                                     const GraphicsInteropDevice &interop_device);
 
   virtual ~Denoiser() = default;
 
@@ -85,9 +90,11 @@ class Denoiser {
    * Returns true when all passes are denoised. Will return false if there is a denoiser error (for
    * example, caused by misconfigured denoiser) or when user requested to cancel rendering. */
   virtual bool denoise_buffer(const BufferParams &buffer_params,
+                              const BufferParams &denoised_buffer_params,
                               RenderBuffers *render_buffers,
-                              const int num_samples,
-                              bool allow_inplace_modification) = 0;
+                              int num_samples,
+                              bool allow_inplace_modification,
+                              float2 pixel_jitter = {}) = 0;
 
   /* Get a device which is used to perform actual denoising.
    *
@@ -101,7 +108,7 @@ class Denoiser {
    *   and access to this device happen. */
   Device *get_denoiser_device() const;
 
-  function<bool(void)> is_cancelled_cb;
+  std::function<bool(void)> is_cancelled_cb;
 
   bool is_cancelled() const
   {
@@ -118,10 +125,6 @@ class Denoiser {
 
  protected:
   Denoiser(Device *denoiser_device, const DenoiseParams &params);
-
-  /* Get device type mask which is used to filter available devices when new device needs to be
-   * created. */
-  virtual uint get_device_type_mask() const = 0;
 
   Device *denoiser_device_;
   bool denoise_kernels_are_loaded_;

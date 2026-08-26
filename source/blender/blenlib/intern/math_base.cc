@@ -6,9 +6,11 @@
  * \ingroup bli
  */
 
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 
-#include "BLI_strict_flags.h" /* Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 int pow_i(int base, int exp)
 {
@@ -31,7 +33,7 @@ double double_round(double x, int ndigits)
 
   double pow1, pow2, y, z;
   if (ndigits >= 0) {
-    pow1 = pow(10.0, (double)ndigits);
+    pow1 = pow(10.0, double(ndigits));
     pow2 = 1.0;
     y = (x * pow1) * pow2;
     /* if y overflows, then rounded value is exactly x */
@@ -40,7 +42,7 @@ double double_round(double x, int ndigits)
     }
   }
   else {
-    pow1 = pow(10.0, (double)-ndigits);
+    pow1 = pow(10.0, double(-ndigits));
     pow2 = 1.0; /* unused; silences a gcc compiler warning */
     y = x / pow1;
   }
@@ -79,3 +81,5 @@ float ceil_power_of_10(float f)
   }
   return 0.0f;
 }
+
+}  // namespace blender

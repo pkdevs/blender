@@ -6,21 +6,26 @@
  * \ingroup draw
  */
 
-#include "BKE_global.hh"
+#include "DNA_userdef_types.h"
+
+#include "BKE_image.hh"
+#include "BKE_image_gpu.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_bvh.hh"
 
-#include "BLI_math_base.h"
-#include "GPU_compute.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_task.hh"
 
+#include "GPU_compute.hh"
+#include "GPU_shader.hh"
+#include "GPU_texture.hh"
+
+#include "draw_context_private.hh"
 #include "draw_debug.hh"
 #include "draw_defines.hh"
 #include "draw_manager.hh"
-#include "draw_manager_c.hh"
 #include "draw_pass.hh"
 #include "draw_shader.hh"
-#include <iostream>
-#include <string>
 
 namespace blender::draw {
 
@@ -28,13 +33,13 @@ std::atomic<uint32_t> Manager::global_sync_counter_ = 1;
 
 Manager::~Manager()
 {
-  for (GPUTexture *texture : acquired_textures) {
+  for (gpu::Texture *texture : acquired_textures) {
     /* Decrease refcount and free if 0. */
     GPU_texture_free(texture);
   }
 }
 
-void Manager::begin_sync()
+void Manager::begin_sync(Object *object_active)
 {
   /* Add 2 to always have a non-null number even in case of overflow. */
   sync_counter_ = (global_sync_counter_ += 2);
@@ -50,12 +55,13 @@ void Manager::begin_sync()
 
   /* TODO: This means the reference is kept until further redraw or manager tear-down. Instead,
    * they should be released after each draw loop. But for now, mimics old DRW behavior. */
-  for (GPUTexture *texture : acquired_textures) {
+  for (gpu::Texture *texture : acquired_textures) {
     /* Decrease refcount and free if 0. */
     GPU_texture_free(texture);
   }
 
   acquired_textures.clear();
+  deferred_textures_.clear();
   layer_attributes.clear();
 
 /* For some reason, if this uninitialized data pattern was enabled (ie release asserts enabled),
@@ -76,7 +82,7 @@ void Manager::begin_sync()
   attribute_len_ = 0;
   /* TODO(fclem): Resize buffers if too big, but with an hysteresis threshold. */
 
-  object_active = DST.draw_ctx.obact;
+  this->object_active = object_active;
 
   /* Init the 0 resource. */
   resource_handle(float4x4::identity());
@@ -93,14 +99,14 @@ void Manager::sync_layer_attributes()
     id_list.append(id);
   }
 
-  std::sort(id_list.begin(), id_list.end());
+  std::ranges::sort(id_list);
 
   /* Look up the attributes. */
   int count = 0, size = layer_attributes_buf.end() - layer_attributes_buf.begin();
 
   for (uint32_t id : id_list) {
     if (layer_attributes_buf[count].sync(
-            DST.draw_ctx.scene, DST.draw_ctx.view_layer, layer_attributes.lookup(id)))
+            drw_get().scene, drw_get().view_layer, layer_attributes.lookup(id)))
     {
       /* Check if the buffer is full. */
       if (++count == size) {
@@ -112,9 +118,49 @@ void Manager::sync_layer_attributes()
   layer_attributes_buf[0].buffer_length = count;
 }
 
+void Manager::load_deferred_textures()
+{
+  if (deferred_textures_.is_empty()) {
+    return;
+  }
+
+  GPU_debug_group_begin("Texture Loading");
+
+  /* Load files from disk in a multithreaded manner. Allow better parallelism. */
+  threading::parallel_for(deferred_textures_.index_range(), 1, [&](const IndexRange range) {
+    for (const int i : range) {
+      DeferredTexture &deferred = *deferred_textures_[i];
+      BKE_image_get_tile(deferred.image, 0);
+      threading::isolate_task([&]() {
+        ImBuf *imbuf = BKE_image_acquire_ibuf(deferred.image, deferred.image_user, nullptr);
+        BKE_image_release_ibuf(deferred.image, imbuf, nullptr);
+      });
+    }
+  });
+
+  /* Avoid any leftover bind before GPU texture creation which could cause assert
+   * about missing specialization constants. */
+  GPU_shader_unbind();
+
+  /* Upload to the GPU (create gpu::Texture). This part still requires a valid GPU context and
+   * is not easily parallelized. */
+  for (std::unique_ptr<DeferredTexture> &deferred : deferred_textures_) {
+    const ImageGPUTextures textures = BKE_image_acquire_gpu_material_texture(
+        deferred->image, deferred->image_user, deferred->use_tile_mapping, false);
+    deferred->texture = textures.texture;
+    deferred->tile_mapping = textures.tile_mapping;
+    hold_texture(textures.texture);
+    hold_texture(textures.tile_mapping);
+  }
+
+  GPU_debug_group_end();
+}
+
 void Manager::end_sync()
 {
   GPU_debug_group_begin("Manager.end_sync");
+
+  load_deferred_textures();
 
   sync_layer_attributes();
 
@@ -123,15 +169,16 @@ void Manager::end_sync()
   infos_buf.current().push_update();
   attributes_buf.push_update();
   layer_attributes_buf.push_update();
-  attributes_buf_legacy.push_update();
 
   /* Useful for debugging the following resource finalize. But will trigger the drawing of the GPU
    * debug draw/print buffers for every frame. Not nice for performance. */
   // debug_bind();
 
+  DRW_submission_start();
+
   /* Dispatch compute to finalize the resources on GPU. Save a bit of CPU time. */
   uint thread_groups = divide_ceil_u(resource_len_, DRW_FINALIZE_GROUP_SIZE);
-  GPUShader *shader = DRW_shader_draw_resource_finalize_get();
+  gpu::Shader *shader = DRW_shader_draw_resource_finalize_get();
   GPU_shader_bind(shader);
   GPU_shader_uniform_1i(shader, "resource_len", resource_len_);
   GPU_storagebuf_bind(matrix_buf.current(), GPU_shader_get_ssbo_binding(shader, "matrix_buf"));
@@ -140,20 +187,21 @@ void Manager::end_sync()
   GPU_compute_dispatch(shader, thread_groups, 1, 1);
   GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
 
+  DRW_submission_end();
+
   GPU_debug_group_end();
 }
 
 void Manager::debug_bind()
 {
-#ifdef _DEBUG
-  if (DST.debug == nullptr) {
+  gpu::StorageBuf *gpu_buf = DebugDraw::get().gpu_draw_buf_get();
+  if (gpu_buf == nullptr) {
     return;
   }
-  GPU_storagebuf_bind(drw_debug_gpu_draw_buf_get(), DRW_DEBUG_DRAW_SLOT);
-#  ifndef DISABLE_DEBUG_SHADER_PRINT_BARRIER
+  GPU_storagebuf_bind(gpu_buf, DRW_DEBUG_DRAW_SLOT);
+#ifndef DISABLE_DEBUG_SHADER_PRINT_BARRIER
   /* Add a barrier to allow multiple shader writing to the same buffer. */
   GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
-#  endif
 #endif
 }
 
@@ -163,9 +211,6 @@ void Manager::resource_bind()
   GPU_storagebuf_bind(infos_buf.current(), DRW_OBJ_INFOS_SLOT);
   GPU_storagebuf_bind(attributes_buf, DRW_OBJ_ATTR_SLOT);
   GPU_uniformbuf_bind(layer_attributes_buf, DRW_LAYER_ATTR_UBO_SLOT);
-  /* 2 is the hardcoded location of the uniform attr UBO. */
-  /* TODO(@fclem): Remove this workaround. */
-  GPU_uniformbuf_bind(attributes_buf_legacy, 2);
 }
 
 uint64_t Manager::fingerprint_get()
@@ -174,20 +219,25 @@ uint64_t Manager::fingerprint_get()
   return sync_counter_ | (uint64_t(resource_len_) << 32);
 }
 
-ResourceHandleRange Manager::resource_handle_for_sculpt(const ObjectRef &ref)
+ResourceHandleRange Manager::unique_handle_for_sculpt(const ObjectRef &ref)
 {
-  /* TODO(fclem): Deduplicate with other engine. */
+  if (ref.sculpt_handle_.is_valid()) {
+    return ref.sculpt_handle_;
+  }
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(*ref.object);
-  const blender::Bounds<float3> bounds = bke::pbvh::bounds_get(pbvh);
+  const Bounds<float3> bounds = bke::pbvh::bounds_get(pbvh);
   const float3 center = math::midpoint(bounds.min, bounds.max);
   const float3 half_extent = bounds.max - center;
-  return resource_handle(ref, nullptr, &center, &half_extent);
+  /* WORKAROUND: Instead of breaking const correctness everywhere, we only break it for this. */
+  const_cast<ObjectRef &>(ref).sculpt_handle_ = resource_handle(
+      ref, nullptr, &center, &half_extent);
+  return ref.sculpt_handle_;
 }
 
 void Manager::compute_visibility(View &view)
 {
-  bool freeze_culling = (U.experimental.use_viewport_debug && DST.draw_ctx.v3d &&
-                         (DST.draw_ctx.v3d->debug_flag & V3D_DEBUG_FREEZE_CULLING) != 0);
+  bool freeze_culling = (USER_DEVELOPER_TOOL_TEST(&U, use_viewport_debug) && drw_get().v3d &&
+                         (drw_get().v3d->debug_flag & V3D_DEBUG_FREEZE_CULLING) != 0);
 
   BLI_assert_msg(view.manager_fingerprint_ != this->fingerprint_get(),
                  "Resources did not changed, no need to update");
@@ -208,6 +258,10 @@ void Manager::ensure_visibility(View &view)
 
 void Manager::generate_commands(PassMain &pass, View &view)
 {
+  if (pass.is_empty()) {
+    return;
+  }
+
   BLI_assert_msg((pass.manager_fingerprint_ != this->fingerprint_get()) ||
                      (pass.view_fingerprint_ != view.fingerprint_get()),
                  "Resources and view did not changed no need to update");
@@ -228,12 +282,20 @@ void Manager::generate_commands(PassMain &pass, View &view)
 
 void Manager::generate_commands(PassSortable &pass, View &view)
 {
+  if (pass.is_empty()) {
+    return;
+  }
+
   pass.sort();
   generate_commands(static_cast<PassMain &>(pass), view);
 }
 
 void Manager::generate_commands(PassSimple &pass)
 {
+  if (pass.is_empty()) {
+    return;
+  }
+
   BLI_assert_msg(pass.manager_fingerprint_ != this->fingerprint_get(),
                  "Resources did not changed since last generate_command, no need to update");
   pass.manager_fingerprint_ = this->fingerprint_get();
@@ -241,8 +303,30 @@ void Manager::generate_commands(PassSimple &pass)
   pass.draw_commands_buf_.generate_commands(pass.headers_, pass.commands_, pass.sub_passes_);
 }
 
+void Manager::warm_shader_specialization(PassMain &pass)
+{
+  if (pass.is_empty()) {
+    return;
+  }
+  command::RecordingState state;
+  pass.warm_shader_specialization(state);
+}
+
+void Manager::warm_shader_specialization(PassSimple &pass)
+{
+  if (pass.is_empty()) {
+    return;
+  }
+  command::RecordingState state;
+  pass.warm_shader_specialization(state);
+}
+
 void Manager::submit_only(PassMain &pass, View &view)
 {
+  if (pass.is_empty()) {
+    return;
+  }
+
   BLI_assert_msg(view.manager_fingerprint_ != 0, "compute_visibility was not called on this view");
   BLI_assert_msg(view.manager_fingerprint_ == this->fingerprint_get(),
                  "Resources changed since last compute_visibility");
@@ -272,6 +356,10 @@ void Manager::submit_only(PassMain &pass, View &view)
 
 void Manager::submit(PassMain &pass, View &view)
 {
+  if (pass.is_empty()) {
+    return;
+  }
+
   if (view.manager_fingerprint_ != this->fingerprint_get()) {
     compute_visibility(view);
   }
@@ -287,6 +375,10 @@ void Manager::submit(PassMain &pass, View &view)
 
 void Manager::submit(PassSortable &pass, View &view)
 {
+  if (pass.is_empty()) {
+    return;
+  }
+
   pass.sort();
 
   this->submit(static_cast<PassMain &>(pass), view);
@@ -294,6 +386,10 @@ void Manager::submit(PassSortable &pass, View &view)
 
 void Manager::submit(PassSimple &pass, bool inverted_view)
 {
+  if (pass.is_empty()) {
+    return;
+  }
+
   if (!pass.has_generated_commands()) {
     generate_commands(pass);
   }
@@ -314,6 +410,10 @@ void Manager::submit(PassSimple &pass, bool inverted_view)
 
 void Manager::submit(PassSimple &pass, View &view)
 {
+  if (pass.is_empty()) {
+    return;
+  }
+
   debug_bind();
 
   view.bind();
@@ -331,7 +431,7 @@ Manager::SubmitDebugOutput Manager::submit_debug(PassSimple &pass, View &view)
   output.resource_id = {pass.draw_commands_buf_.resource_id_buf_.data(),
                         pass.draw_commands_buf_.resource_id_count_};
   /* There is no visibility data for PassSimple. */
-  output.visibility = {(uint *)view.get_visibility_buffer().data(), 0};
+  output.visibility = {static_cast<uint *>(view.get_visibility_buffer().data()), 0};
   return output;
 }
 
@@ -347,7 +447,7 @@ Manager::SubmitDebugOutput Manager::submit_debug(PassMain &pass, View &view)
   Manager::SubmitDebugOutput output;
   output.resource_id = {pass.draw_commands_buf_.resource_id_buf_.data(),
                         pass.draw_commands_buf_.resource_id_count_};
-  output.visibility = {(uint *)view.get_visibility_buffer().data(),
+  output.visibility = {static_cast<uint *>(view.get_visibility_buffer().data()),
                        divide_ceil_u(resource_len_, 32)};
   return output;
 }

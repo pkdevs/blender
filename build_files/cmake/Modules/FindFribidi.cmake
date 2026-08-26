@@ -5,7 +5,7 @@
 # - Find Fribidi library
 # Find the native fribidi includes and library
 # This module defines
-#  LIBFRIBIDI_INCLUDE_DIRS, where to find hb.h, Set when
+#  LIBFRIBIDI_INCLUDE_DIRS, where to find fribidi/fribidi.h, Set when
 #                         LIBFRIBIDI_INCLUDE_DIR is found.
 #  LIBFRIBIDI_LIBRARIES, libraries to link against to use fribidi.
 #  LIBFRIBIDI_ROOT_DIR, The base directory to search for Fribidi.
@@ -38,7 +38,7 @@ find_library(LIBFRIBIDI_LIBRARY
     ${_fribidi_SEARCH_DIRS}
   PATH_SUFFIXES
     lib64 lib
-  )
+)
 
 # handle the QUIETLY and REQUIRED arguments and set FRIBIDI_FOUND to TRUE if
 # all listed variables are TRUE

@@ -6,81 +6,50 @@
  * \ingroup bke
  */
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 
-#include "BLI_math_base.h"
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_task.hh"
 
 #include "BKE_image.hh"
 
+#include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
 #include "BLF_api.hh"
 
-struct FillColorThreadData {
-  uchar *rect;
-  float *rect_float;
-  int width;
-  float color[4];
-};
-
-static void image_buf_fill_color_slice(
-    uchar *rect, float *rect_float, int width, int height, const float color[4])
-{
-  int x, y;
-
-  /* blank image */
-  if (rect_float) {
-    for (y = 0; y < height; y++) {
-      for (x = 0; x < width; x++) {
-        copy_v4_v4(rect_float, color);
-        rect_float += 4;
-      }
-    }
-  }
-
-  if (rect) {
-    uchar ccol[4];
-    rgba_float_to_uchar(ccol, color);
-    for (y = 0; y < height; y++) {
-      for (x = 0; x < width; x++) {
-        rect[0] = ccol[0];
-        rect[1] = ccol[1];
-        rect[2] = ccol[2];
-        rect[3] = ccol[3];
-        rect += 4;
-      }
-    }
-  }
-}
-
-static void image_buf_fill_color_thread_do(void *data_v, int scanline)
-{
-  FillColorThreadData *data = (FillColorThreadData *)data_v;
-  const int num_scanlines = 1;
-  size_t offset = size_t(scanline) * data->width * 4;
-  uchar *rect = (data->rect != nullptr) ? (data->rect + offset) : nullptr;
-  float *rect_float = (data->rect_float != nullptr) ? (data->rect_float + offset) : nullptr;
-  image_buf_fill_color_slice(rect, rect_float, data->width, num_scanlines, data->color);
-}
+namespace blender {
 
 void BKE_image_buf_fill_color(
-    uchar *rect, float *rect_float, int width, int height, const float color[4])
+    uchar *rect_byte, float *rect_float, int width, int height, const float color[4])
 {
-  if (size_t(width) * height < 64 * 64) {
-    image_buf_fill_color_slice(rect, rect_float, width, height, color);
-  }
-  else {
-    FillColorThreadData data;
-    data.rect = rect;
-    data.rect_float = rect_float;
-    data.width = width;
-    copy_v4_v4(data.color, color);
-    IMB_processor_apply_threaded_scanlines(height, image_buf_fill_color_thread_do, &data);
-  }
+  threading::parallel_for(
+      IndexRange(int64_t(width) * height), 64 * 1024, [&](const IndexRange i_range) {
+        if (rect_float != nullptr) {
+          float *dst = rect_float + i_range.first() * 4;
+          for ([[maybe_unused]] const int64_t i : i_range) {
+            copy_v4_v4(dst, color);
+            dst += 4;
+          }
+        }
+        if (rect_byte != nullptr) {
+          uchar ccol[4];
+          rgba_float_to_uchar(ccol, color);
+          uchar *dst = rect_byte + i_range.first() * 4;
+          for ([[maybe_unused]] const int64_t i : i_range) {
+            dst[0] = ccol[0];
+            dst[1] = ccol[1];
+            dst[2] = ccol[2];
+            dst[3] = ccol[3];
+            dst += 4;
+          }
+        }
+      });
 }
 
 static void image_buf_fill_checker_slice(
@@ -88,9 +57,8 @@ static void image_buf_fill_checker_slice(
 {
   /* these two passes could be combined into one, but it's more readable and
    * easy to tweak like this, speed isn't really that much of an issue in this situation... */
-
-  int checkerwidth = 32;
-  int x, y;
+  const int checker_size = 32;
+  const int checker_size_half = checker_size / 2;
 
   uchar *rect_orig = rect;
   float *rect_float_orig = rect_float;
@@ -105,11 +73,11 @@ static void image_buf_fill_checker_slice(
   }
 
   /* checkers */
-  for (y = offset; y < height + offset; y++) {
-    int dark = powf(-1.0f, floorf(y / checkerwidth));
+  for (int y = offset; y < height + offset; y++) {
+    int dark = powf(-1.0f, floorf(y / checker_size));
 
-    for (x = 0; x < width; x++) {
-      if (x % checkerwidth == 0) {
+    for (int x = 0; x < width; x++) {
+      if (x % checker_size == 0) {
         dark = -dark;
       }
 
@@ -142,32 +110,32 @@ static void image_buf_fill_checker_slice(
   rect_float = rect_float_orig;
 
   /* 2nd pass, colored `+`. */
-  for (y = offset; y < height + offset; y++) {
-    float hoffs = 0.125f * floorf(y / checkerwidth);
+  for (int y = offset; y < height + offset; y++) {
+    float hoffs = 0.125f * floorf(y / checker_size);
 
-    for (x = 0; x < width; x++) {
-      float h = 0.125f * floorf(x / checkerwidth);
-
-      if ((abs((x % checkerwidth) - (checkerwidth / 2)) < 4) &&
-          (abs((y % checkerwidth) - (checkerwidth / 2)) < 4))
+    for (int x = 0; x < width; x++) {
+      float h = 0.125f * floorf(x / checker_size);
+      int test_x, test_y;
+      /* Note that this `+` is not exactly centered since it's a 1px wide line being
+       * drawn inside an even sized square, keep as-is since solving requires either
+       * using odd sized checkers or double-width lines, see #112653. */
+      if (((test_x = abs((x % checker_size) - checker_size_half)) < 4) &&
+          ((test_y = abs((y % checker_size) - checker_size_half)) < 4) &&
+          ((test_x < 1) || (test_y < 1)))
       {
-        if ((abs((x % checkerwidth) - (checkerwidth / 2)) < 1) ||
-            (abs((y % checkerwidth) - (checkerwidth / 2)) < 1))
-        {
-          hsv[0] = fmodf(fabsf(h - hoffs), 1.0f);
-          hsv_to_rgb_v(hsv, rgb);
+        hsv[0] = fmodf(fabsf(h - hoffs), 1.0f);
+        hsv_to_rgb_v(hsv, rgb);
 
-          if (rect) {
-            rect[0] = char(rgb[0] * 255.0f);
-            rect[1] = char(rgb[1] * 255.0f);
-            rect[2] = char(rgb[2] * 255.0f);
-            rect[3] = 255;
-          }
+        if (rect) {
+          rect[0] = char(rgb[0] * 255.0f);
+          rect[1] = char(rgb[1] * 255.0f);
+          rect[2] = char(rgb[2] * 255.0f);
+          rect[3] = 255;
+        }
 
-          if (rect_float) {
-            srgb_to_linearrgb_v3_v3(rect_float, rgb);
-            rect_float[3] = 1.0f;
-          }
+        if (rect_float) {
+          IMB_colormanagement_srgb_to_scene_linear_v3(rect_float, rgb);
+          rect_float[3] = 1.0f;
         }
       }
 
@@ -181,34 +149,14 @@ static void image_buf_fill_checker_slice(
   }
 }
 
-struct FillCheckerThreadData {
-  uchar *rect;
-  float *rect_float;
-  int width;
-};
-
-static void image_buf_fill_checker_thread_do(void *data_v, int scanline)
-{
-  FillCheckerThreadData *data = (FillCheckerThreadData *)data_v;
-  size_t offset = size_t(scanline) * data->width * 4;
-  const int num_scanlines = 1;
-  uchar *rect = (data->rect != nullptr) ? (data->rect + offset) : nullptr;
-  float *rect_float = (data->rect_float != nullptr) ? (data->rect_float + offset) : nullptr;
-  image_buf_fill_checker_slice(rect, rect_float, data->width, num_scanlines, scanline);
-}
-
 void BKE_image_buf_fill_checker(uchar *rect, float *rect_float, int width, int height)
 {
-  if (size_t(width) * height < 64 * 64) {
-    image_buf_fill_checker_slice(rect, rect_float, width, height, 0);
-  }
-  else {
-    FillCheckerThreadData data;
-    data.rect = rect;
-    data.rect_float = rect_float;
-    data.width = width;
-    IMB_processor_apply_threaded_scanlines(height, image_buf_fill_checker_thread_do, &data);
-  }
+  threading::parallel_for(IndexRange(height), 64, [&](const IndexRange y_range) {
+    int64_t offset = y_range.first() * width * 4;
+    uchar *dst_byte = (rect != nullptr) ? (rect + offset) : nullptr;
+    float *dst_float = (rect_float != nullptr) ? (rect_float + offset) : nullptr;
+    image_buf_fill_checker_slice(dst_byte, dst_float, width, y_range.size(), y_range.first());
+  });
 }
 
 /* Utility functions for BKE_image_buf_fill_checker_color */
@@ -226,9 +174,7 @@ static void checker_board_color_fill(
   hsv[1] = 1.0;
 
   hue_step = power_of_2_max_i(width / 8);
-  if (hue_step < 8) {
-    hue_step = 8;
-  }
+  hue_step = std::max(hue_step, 8);
 
   for (y = offset; y < height + offset; y++) {
     /* Use a number lower than 1.0 else its too bright. */
@@ -248,9 +194,7 @@ static void checker_board_color_fill(
       }
 
       if (rect_float) {
-        rect_float[0] = rgb[0];
-        rect_float[1] = rgb[1];
-        rect_float[2] = rgb[2];
+        IMB_colormanagement_rec709_to_scene_linear(rect_float, rgb);
         rect_float[3] = 1.0f;
 
         rect_float += 4;
@@ -357,11 +301,9 @@ static void checker_board_text(
 
   BLF_size(mono, 54.0f); /* hard coded size! */
 
-  /* OCIO_TODO: using nullptr as display will assume using sRGB display
-   *            this is correct since currently generated images are assumed to be in sRGB space,
-   *            but this would probably needed to be fixed in some way
-   */
-  BLF_buffer(mono, rect_float, rect, width, height, nullptr);
+  /* Using nullptr will assume the byte buffer has sRGB color-space, which currently
+   * matches the default color-space of new images. */
+  BLF_buffer(mono, rect_float, rect, width, height, 4, nullptr);
 
   const float text_color[4] = {0.0, 0.0, 0.0, 1.0};
   const float text_outline[4] = {1.0, 1.0, 1.0, 1.0};
@@ -413,7 +355,7 @@ static void checker_board_text(
   }
 
   /* cleanup the buffer. */
-  BLF_buffer(mono, nullptr, nullptr, 0, 0, nullptr);
+  BLF_buffer(mono, nullptr, nullptr, 0, 0, 4, nullptr);
 }
 
 static void checker_board_color_prepare_slice(
@@ -427,53 +369,23 @@ static void checker_board_color_prepare_slice(
   checker_board_grid_fill(rect, rect_float, width, height, 1.0f / 4.0f, offset);
 }
 
-struct FillCheckerColorThreadData {
-  uchar *rect;
-  float *rect_float;
-  int width, height;
-};
-
-static void checker_board_color_prepare_thread_do(void *data_v, int scanline)
-{
-  FillCheckerColorThreadData *data = (FillCheckerColorThreadData *)data_v;
-  const int num_scanlines = 1;
-  size_t offset = size_t(data->width) * scanline * 4;
-  uchar *rect = (data->rect != nullptr) ? (data->rect + offset) : nullptr;
-  float *rect_float = (data->rect_float != nullptr) ? (data->rect_float + offset) : nullptr;
-  checker_board_color_prepare_slice(
-      rect, rect_float, data->width, num_scanlines, scanline, data->height);
-}
-
 void BKE_image_buf_fill_checker_color(uchar *rect, float *rect_float, int width, int height)
 {
-  if (size_t(width) * height < 64 * 64) {
-    checker_board_color_prepare_slice(rect, rect_float, width, height, 0, height);
-  }
-  else {
-    FillCheckerColorThreadData data;
-    data.rect = rect;
-    data.rect_float = rect_float;
-    data.width = width;
-    data.height = height;
-    IMB_processor_apply_threaded_scanlines(height, checker_board_color_prepare_thread_do, &data);
-  }
+  threading::parallel_for(IndexRange(height), 64, [&](const IndexRange y_range) {
+    int64_t offset = y_range.first() * width * 4;
+    uchar *dst_byte = (rect != nullptr) ? (rect + offset) : nullptr;
+    float *dst_float = (rect_float != nullptr) ? (rect_float + offset) : nullptr;
+    checker_board_color_prepare_slice(
+        dst_byte, dst_float, width, y_range.size(), y_range.first(), height);
+  });
 
   checker_board_text(rect, rect_float, width, height, 128, 2);
 
   if (rect_float != nullptr) {
-    /* TODO(sergey): Currently it's easier to fill in form buffer and
-     * linearize it afterwards. This could be optimized with some smart
-     * trickery around blending factors and such.
-     */
-    IMB_buffer_float_from_float_threaded(rect_float,
-                                         rect_float,
-                                         4,
-                                         IB_PROFILE_LINEAR_RGB,
-                                         IB_PROFILE_SRGB,
-                                         true,
-                                         width,
-                                         height,
-                                         width,
-                                         width);
+    /* It is easier to fill the buffer in sRGB and linearize it afterwards.
+     * Maybe this could be optimized with some smart trickery around blending factors. */
+    IMB_buffer_float_rgba_srgb_to_linear(rect_float, width, height);
   }
 }
+
+}  // namespace blender

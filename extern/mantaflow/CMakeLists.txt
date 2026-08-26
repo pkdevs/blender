@@ -2,15 +2,14 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# Mantaflow triggers a clang-cl compiler error with versions before 9.0.1
-# Since mantaflow does not appear to be using OpenMP at this point in time,
-# disable the flag for now. See https://bugs.llvm.org/show_bug.cgi?id=43175 for details.
-
-if(MSVC_CLANG AND WITH_OPENMP AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0.1")
-  remove_cc_flag("-fopenmp")
-endif()
-
 set(MANTAVERSION "0.13")
+
+# avoid noisy warnings
+if((CMAKE_C_COMPILER_ID STREQUAL "GNU") OR (CMAKE_C_COMPILER_ID MATCHES "Clang"))
+  add_cxx_flag(
+    "-Wno-unused-result"
+  )
+endif()
 
 add_definitions(-DWITH_FLUID=1)
 
@@ -54,6 +53,8 @@ endif()
 
 if(WIN32)
   add_definitions(-D_USE_MATH_DEFINES)
+  remove_definitions(-DNOMINMAX)
+  remove_definitions(-DWIN32_LEAN_AND_MEAN)
 endif()
 
 if(WITH_MANTA_NUMPY AND WITH_PYTHON_NUMPY)
@@ -76,8 +77,6 @@ if(WITH_MANTA_DEPENDENCIES)
 endif()
 
 set(INC_SYS
-  ${PYTHON_INCLUDE_DIRS}
-  ${ZLIB_INCLUDE_DIRS}
 )
 
 if(WITH_MANTA_NUMPY AND WITH_PYTHON_NUMPY)
@@ -87,12 +86,6 @@ if(WITH_MANTA_NUMPY AND WITH_PYTHON_NUMPY)
 endif()
 
 if(WITH_OPENVDB)
-  list(APPEND INC_SYS
-    ${OPENVDB_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${OPENVDB_LIBRARIES}
-  )
   if(WIN32)
     # OpenVDB emits lots of these, they should be suppressed through other
     # means but MSVC 16.8/16.9 has broken this functionality, so C4251 is
@@ -241,18 +234,10 @@ if(WITH_MANTA_NUMPY AND WITH_PYTHON_NUMPY)
 endif()
 
 set(LIB
+  PRIVATE bf::dependencies::optional::openvdb
   PRIVATE bf::dependencies::optional::tbb
-  ${PYTHON_LINKFLAGS}
-  ${PYTHON_LIBRARIES}
+  PRIVATE bf::dependencies::optional::python
+  PRIVATE bf::dependencies::zlib
 )
 
 blender_add_lib(extern_mantaflow "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
-
-if(WITH_OPENVDB)
-  # The VDB libs above are only added to as INTERFACE libs by blender_add_lib,
-  # meaning extern_mantaflow itself actually does not have a dependency on the
-  # OpenVDB libraries, and CMAKE is free to link the VDB libraries before
-  # extern_mantaflow causing linker errors on linux. By explicitly declaring
-  # a dependency here, CMAKE will do the right thing.
-  target_link_libraries(extern_mantaflow PRIVATE ${OPENVDB_LIBRARIES})
-endif()

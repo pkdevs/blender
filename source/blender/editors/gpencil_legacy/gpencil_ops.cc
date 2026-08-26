@@ -6,30 +6,18 @@
  * \ingroup edgpencil
  */
 
-#include <cstddef>
-#include <cstdio>
 #include <cstdlib>
 
-#include "BLI_sys_types.h"
-
-#include "BKE_context.hh"
-#include "BKE_paint.hh"
-
-#include "DNA_brush_types.h"
-#include "DNA_gpencil_legacy_types.h"
-#include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
 #include "WM_api.hh"
-#include "WM_toolsystem.hh"
-#include "WM_types.hh"
-
-#include "RNA_access.hh"
 
 #include "ED_gpencil_legacy.hh"
 
 #include "gpencil_intern.hh"
+
+namespace blender {
 
 void ED_keymap_gpencil_legacy(wmKeyConfig *keyconf)
 {
@@ -50,3 +38,5 @@ void ED_operatortypes_gpencil_legacy()
 
   /* Editing (Time) --------------- */
 }
+
+}  // namespace blender

@@ -8,7 +8,12 @@
 
 #pragma once
 
-#include "BLI_span.hh"
+#include "BKE_lib_query.hh" /* For LibraryForeachIDCallbackFlag enum. */
+
+#include "BLI_set.hh"
+
+#include "DNA_armature_types.h"
+#include "DNA_listBase.h"
 
 #include "intern/builder/deg_builder.h"
 #include "intern/builder/deg_builder_key.h"
@@ -19,6 +24,9 @@
 
 #include "DEG_depsgraph.hh"
 
+namespace blender {
+
+struct BoneCollection;
 struct CacheFile;
 struct Camera;
 struct Collection;
@@ -32,11 +40,11 @@ struct Key;
 struct LayerCollection;
 struct Light;
 struct LightProbe;
-struct ListBase;
 struct Main;
 struct Mask;
 struct Material;
 struct MovieClip;
+struct NlaStrip;
 struct Object;
 struct ParticleSettings;
 struct Scene;
@@ -53,7 +61,7 @@ struct bPoseChannel;
 struct bSound;
 struct PointerRNA;
 
-namespace blender::deg {
+namespace deg {
 
 struct ComponentNode;
 struct Depsgraph;
@@ -66,7 +74,7 @@ struct TimeSourceNode;
 class DepsgraphNodeBuilder : public DepsgraphBuilder {
  public:
   DepsgraphNodeBuilder(Main *bmain, Depsgraph *graph, DepsgraphBuilderCache *cache);
-  ~DepsgraphNodeBuilder();
+  ~DepsgraphNodeBuilder() override;
 
   /* For given original ID get ID which is created by copy-on-evaluation system. */
   ID *get_cow_id(const ID *id_orig) const;
@@ -170,7 +178,9 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_scene_parameters(Scene *scene);
   virtual void build_scene_compositor(Scene *scene);
 
-  virtual void build_layer_collections(ListBase *lb);
+  virtual void build_empty_object(Object *object);
+
+  virtual void build_layer_collections(ListBaseT<LayerCollection> *lb);
   virtual void build_view_layer(Scene *scene,
                                 ViewLayer *view_layer,
                                 eDepsNode_LinkedState_Type linked_state);
@@ -212,13 +222,14 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
    * \param id: ID-Block which hosts the #AnimData
    */
   virtual void build_animdata(ID *id);
-  virtual void build_animdata_nlastrip_targets(ListBase *strips);
+  virtual void build_animdata_nlastrip_targets(ListBaseT<NlaStrip> *strips);
   /**
    * Build graph nodes to update the current frame in image users.
    */
   virtual void build_animation_images(ID *id);
   virtual void build_action(bAction *action);
 
+  virtual void build_animdata_drivers(ID *id, AnimData *adt);
   /**
    * Build graph node(s) for Driver
    * \param id: ID-Block that driver is attached to
@@ -252,8 +263,8 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   /** Pose/Armature Bones Graph. */
   virtual void build_rig(Object *object);
   virtual void build_armature(bArmature *armature);
-  virtual void build_armature_bones(ListBase *bones);
-  virtual void build_armature_bone_collections(blender::Span<BoneCollection *> collections);
+  virtual void build_armature_bones(ListBaseT<Bone> *bones);
+  virtual void build_armature_bone_collections(Span<BoneCollection *> collections);
   /** Shape-keys. */
   virtual void build_shapekeys(Key *key);
   virtual void build_camera(Camera *camera);
@@ -281,18 +292,20 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_scene_speakers(Scene *scene, ViewLayer *view_layer);
   virtual void build_vfont(VFont *vfont);
 
+  virtual Set<const ID *> get_built_ids() const;
+
   /* Per-ID information about what was already in the dependency graph.
    * Allows to re-use certain values, to speed up following evaluation. */
   struct IDInfo {
     /* Copy-on-written pointer of the corresponding ID. */
-    ID *id_cow;
+    ID *id_cow = nullptr;
     /* Mask of visible components from previous state of the
      * dependency graph. */
-    IDComponentsMask previously_visible_components_mask;
+    IDComponentsMask previously_visible_components_mask = 0;
     /* Special evaluation flag mask from the previous depsgraph. */
-    uint32_t previous_eval_flags;
+    uint32_t previous_eval_flags = 0;
     /* Mesh CustomData mask from the previous depsgraph. */
-    DEGCustomDataMeshMasks previous_customdata_masks;
+    DEGCustomDataMeshMasks previous_customdata_masks = {};
   };
 
  protected:
@@ -311,7 +324,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   static void modifier_walk(void *user_data,
                             struct Object *object,
                             struct ID **idpoin,
-                            int cb_flag);
+                            LibraryForeachIDCallbackFlag cb_flag);
   static void constraint_walk(bConstraint *constraint,
                               ID **idpoin,
                               bool is_reference,
@@ -336,11 +349,12 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   bool is_parent_collection_visible_;
 
   /* Indexed by original ID.session_uid, values are IDInfo. */
-  Map<uint, IDInfo *> id_info_hash_;
+  Map<uint, IDInfo> id_info_hash_;
 
   /* Set of IDs which were already build. Makes it easier to keep track of
    * what was already built and what was not. */
   BuilderMap built_map_;
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

@@ -12,70 +12,65 @@ set(INC
 )
 
 set(INC_SYS
-  ../../../extern/wcwidth
-  ../../../extern/json/include
-
-  ${EIGEN3_INCLUDE_DIRS}
-  ${ZLIB_INCLUDE_DIRS}
-  ${ZSTD_INCLUDE_DIRS}
 )
 
 set(SRC
-  intern/BLI_assert.c
+  intern/BLI_assert.cc
   intern/BLI_color.cc
-  intern/BLI_dial_2d.c
-  intern/BLI_dynstr.c
+  intern/BLI_colorspace.cc
+  intern/BLI_dial_2d.cc
+  intern/BLI_dynstr.cc
   intern/BLI_filelist.cc
-  intern/BLI_ghash.c
+  intern/BLI_ghash.cc
   intern/BLI_ghash_utils.cc
-  intern/BLI_heap.c
-  intern/BLI_heap_simple.c
-  intern/BLI_kdopbvh.c
-  intern/BLI_linklist.c
-  intern/BLI_linklist_lockfree.c
-  intern/BLI_memarena.c
-  intern/BLI_memblock.c
-  intern/BLI_memiter.c
-  intern/BLI_mempool.c
-  intern/BLI_mmap.c
+  intern/BLI_heap.cc
+  intern/BLI_heap_simple.cc
+  intern/BLI_kdopbvh.cc
+  intern/BLI_linklist.cc
+  intern/BLI_linklist_lockfree.cc
+  intern/BLI_memarena.cc
+  intern/BLI_memblock.cc
+  intern/BLI_mempool.cc
+  intern/BLI_mmap.cc
   intern/BLI_subprocess.cc
-  intern/BLI_timer.c
+  intern/BLI_timer.cc
   intern/array_store.cc
+  intern/array_store_rle.cc
   intern/array_store_utils.cc
-  intern/array_utils.c
   intern/array_utils.cc
-  intern/astar.c
+  intern/array_utils_c.cc
+  intern/astar.cc
   intern/atomic_disjoint_set.cc
   intern/bit_bool_conversion.cc
   intern/bit_ref.cc
   intern/bit_span.cc
-  intern/bitmap.c
+  intern/bitmap.cc
   intern/bitmap_draw_2d.cc
-  intern/boxpack_2d.c
-  intern/buffer.c
+  intern/boxpack_2d.cc
   intern/cache_mutex.cc
+  intern/compression.cc
   intern/compute_context.cc
   intern/convexhull_2d.cc
   intern/cpp_type.cc
   intern/cpp_types.cc
+  intern/csv_parse.cc
   intern/delaunay_2d.cc
   intern/dot_export.cc
-  intern/dynlib.cc
-  intern/easing.c
-  intern/endian_switch.c
-  intern/expr_pylike_eval.c
+  intern/easing.cc
+  intern/endian_switch.cc
+  intern/expr_pylike_eval.cc
   intern/fftw.cc
   intern/fileops.cc
   intern/fileops_c.cc
-  intern/filereader_file.c
-  intern/filereader_gzip.c
-  intern/filereader_memory.c
-  intern/filereader_zstd.c
-  intern/fnmatch.c
+  intern/filereader_file.cc
+  intern/filereader_gzip.cc
+  intern/filereader_memory.cc
+  intern/filereader_zstd.cc
+  intern/fnmatch.cc
   intern/generic_vector_array.cc
   intern/generic_virtual_array.cc
   intern/generic_virtual_vector_array.cc
-  intern/gsqueue.c
+  intern/gsqueue.cc
   intern/hash_md5.cc
   intern/hash_mm2a.cc
   intern/hash_mm3.cc
@@ -84,85 +79,83 @@ set(SRC
   intern/index_mask.cc
   intern/index_mask_expression.cc
   intern/index_range.cc
-  intern/jitter_2d.c
-  intern/kdtree_1d.c
-  intern/kdtree_2d.c
-  intern/kdtree_3d.c
-  intern/kdtree_4d.c
+  intern/jitter_2d.cc
   intern/lasso_2d.cc
   intern/lazy_threading.cc
   intern/length_parameterize.cc
   intern/listbase.cc
   intern/math_base.cc
-  intern/math_base_inline.c
-  intern/math_base_safe_inline.c
+  intern/math_base_inline.cc
+  intern/math_base_safe_inline.cc
   intern/math_basis_types.cc
-  intern/math_bits_inline.c
+  intern/math_bits_inline.cc
   intern/math_boolean.cc
   intern/math_color.cc
-  intern/math_color_blend_inline.c
-  intern/math_color_inline.c
+  intern/math_color_blend_inline.cc
+  intern/math_color_inline.cc
+  intern/math_filter.cc
   intern/math_geom.cc
-  intern/math_geom_inline.c
+  intern/math_geom_inline.cc
   intern/math_half.cc
   intern/math_interp.cc
   intern/math_matrix.cc
   intern/math_matrix_c.cc
-  intern/math_rotation_c.cc
   intern/math_rotation.cc
+  intern/math_rotation_c.cc
   intern/math_solvers.cc
   intern/math_statistics.cc
   intern/math_time.cc
   intern/math_vec.cc
   intern/math_vector.cc
-  intern/math_vector_inline.c
+  intern/math_vector_inline.cc
   intern/memory_cache.cc
+  intern/memory_cache_file_load.cc
   intern/memory_counter.cc
-  intern/memory_utils.cc
   intern/mesh_boolean.cc
   intern/mesh_intersect.cc
-  intern/noise_c.cc
   intern/noise.cc
+  intern/noise_c.cc
   intern/offset_indices.cc
   intern/ordered_edge.cc
   intern/path_utils.cc
   intern/polyfill_2d.cc
   intern/polyfill_2d_beautify.cc
   intern/quadric.cc
+  intern/radial_tiling_wrapper.cc
   intern/rand.cc
   intern/rct.cc
   intern/resource_scope.cc
-  intern/scanfill.c
-  intern/scanfill_utils.c
+  intern/scanfill.cc
+  intern/scanfill_utils.cc
   intern/serialize.cc
-  intern/session_uid.c
-  intern/smaa_textures.c
-  intern/sort.c
-  intern/sort_utils.c
-  intern/stack.c
+  intern/session_uid.cc
+  intern/smaa_textures.cc
+  intern/sort.cc
+  intern/sort_utils.cc
+  intern/stack.cc
   intern/storage.cc
-  intern/string.c
-  intern/string_cursor_utf8.c
+  intern/string.cc
+  intern/string_cursor_utf8.cc
   intern/string_ref.cc
   intern/string_search.cc
   intern/string_utf8.cc
   intern/string_utils.cc
-  intern/system.c
+  intern/system.cc
   intern/task_graph.cc
-  intern/task_iterator.c
+  intern/task_iterator.cc
   intern/task_pool.cc
   intern/task_range.cc
   intern/task_scheduler.cc
   intern/tempfile.cc
   intern/threads.cc
-  intern/time.c
-  intern/timecode.c
+  intern/time.cc
+  intern/timecode.cc
   intern/timeit.cc
+  intern/ustring.cc
   intern/uuid.cc
-  intern/uvproject.cc
   intern/vector.cc
   intern/virtual_array.cc
-  intern/voxel.c
+  intern/voxel.cc
   intern/winstuff.cc
   intern/winstuff_dir.cc
   intern/winstuff_registration.cc
@@ -170,21 +163,22 @@ set(SRC
   intern/BLI_mempool_private.h
 
   # Header as source (included in C files above).
-  intern/kdtree_impl.h
   intern/list_sort_impl.h
+  intern/radial_tiling_shared.hh
 
-
-  BLI_alloca.h
+  BLI_alloca.hh
   BLI_allocator.hh
   BLI_any.hh
+  BLI_any_derived.hh
   BLI_array.hh
-  BLI_array_store.h
-  BLI_array_store_utils.h
-  BLI_array_utils.h
+  BLI_array_state.hh
+  BLI_array_store.hh
+  BLI_array_store_utils.hh
   BLI_array_utils.hh
-  BLI_asan.h
-  BLI_assert.h
-  BLI_astar.h
+  BLI_array_utils_c.hh
+  BLI_asan.hh
+  BLI_assert.hh
+  BLI_astar.hh
   BLI_atomic_disjoint_set.hh
   BLI_binary_search.hh
   BLI_bit_bool_conversion.hh
@@ -194,70 +188,74 @@ set(SRC
   BLI_bit_span_ops.hh
   BLI_bit_span_to_index_ranges.hh
   BLI_bit_vector.hh
-  BLI_bitmap.h
-  BLI_bitmap_draw_2d.h
-  BLI_blenlib.h
+  BLI_bitmap.hh
+  BLI_bitmap_draw_2d.hh
   BLI_bounds.hh
   BLI_bounds_types.hh
-  BLI_boxpack_2d.h
-  BLI_buffer.h
-  BLI_build_config.h
+  BLI_boxpack_2d.hh
+  BLI_build_config.hh
   BLI_cache_mutex.hh
   BLI_color.hh
   BLI_color_mix.hh
-  BLI_compiler_attrs.h
-  BLI_compiler_compat.h
-  BLI_compiler_typecheck.h
+  BLI_color_types.hh
+  BLI_colorspace.hh
+  BLI_compiler_attrs.hh
+  BLI_compiler_compat.hh
+  BLI_compiler_typecheck.hh
+  BLI_compression.hh
   BLI_compute_context.hh
   BLI_concurrent_map.hh
-  BLI_console.h
-  BLI_convexhull_2d.h
+  BLI_console.hh
+  BLI_convexhull_2d.hh
   BLI_cpp_type.hh
   BLI_cpp_type_make.hh
-  BLI_cpp_types.hh
-  BLI_cpp_types_make.hh
+  BLI_csv_parse.hh
   BLI_delaunay_2d.hh
   BLI_devirtualize_parameters.hh
-  BLI_dial_2d.h
+  BLI_dial_2d.hh
   BLI_disjoint_set.hh
   BLI_dot_export.hh
   BLI_dot_export_attribute_enums.hh
-  BLI_dynlib.h
-  BLI_dynstr.h
-  BLI_easing.h
-  BLI_endian_defines.h
-  BLI_endian_switch.h
-  BLI_endian_switch_inline.h
+  BLI_dot_export_fwd.hh
+  BLI_dynamic_stack_buffer.hh
+  BLI_dynstr.hh
+  BLI_easing.hh
+  BLI_endian_defines.hh
+  BLI_endian_switch.hh
+  BLI_endian_switch_inline.hh
+  BLI_enum_flags.hh
   BLI_enumerable_thread_specific.hh
-  BLI_expr_pylike_eval.h
+  BLI_execution_mode.hh
+  BLI_expr_pylike_eval.hh
   BLI_fftw.hh
-  BLI_fileops.h
   BLI_fileops.hh
-  BLI_fileops_types.h
-  BLI_filereader.h
+  BLI_fileops_types.hh
+  BLI_filereader.hh
+  BLI_fixed_string.hh
   BLI_fixed_width_int.hh
   BLI_fixed_width_int_str.hh
-  BLI_fnmatch.h
+  BLI_fnmatch.hh
   BLI_function_ref.hh
   BLI_generic_array.hh
   BLI_generic_key.hh
+  BLI_generic_key_string.hh
   BLI_generic_pointer.hh
   BLI_generic_span.hh
   BLI_generic_value_map.hh
   BLI_generic_vector_array.hh
   BLI_generic_virtual_array.hh
   BLI_generic_virtual_vector_array.hh
-  BLI_ghash.h
-  BLI_gsqueue.h
-  BLI_hash.h
+  BLI_ghash.hh
+  BLI_gsqueue.hh
   BLI_hash.hh
+  BLI_hash_c.hh
+  BLI_hash_fwd.hh
   BLI_hash_md5.hh
   BLI_hash_mm2a.hh
   BLI_hash_mm3.hh
   BLI_hash_tables.hh
-  BLI_heap.h
-  BLI_heap_simple.h
-  BLI_implicit_sharing.h
+  BLI_heap.hh
+  BLI_heap_simple.hh
   BLI_implicit_sharing.hh
   BLI_implicit_sharing_ptr.hh
   BLI_index_mask.hh
@@ -267,147 +265,152 @@ set(SRC
   BLI_index_ranges_builder.hh
   BLI_index_ranges_builder_fwd.hh
   BLI_inplace_priority_queue.hh
-  BLI_iterator.h
-  BLI_jitter_2d.h
-  BLI_kdopbvh.h
-  BLI_kdtree.h
-  BLI_kdtree_impl.h
+  BLI_iterator.hh
+  BLI_jitter_2d.hh
+  BLI_kdopbvh.hh
+  BLI_kdtree.hh
+  BLI_kdtree_types.hh
   BLI_lasso_2d.hh
   BLI_lazy_threading.hh
   BLI_length_parameterize.hh
   BLI_linear_allocator.hh
   BLI_linear_allocator_chunked_list.hh
-  BLI_link_utils.h
-  BLI_linklist.h
-  BLI_linklist_lockfree.h
-  BLI_linklist_stack.h
-  BLI_listbase.h
+  BLI_link_utils.hh
+  BLI_linklist.hh
+  BLI_linklist_lockfree.hh
+  BLI_linklist_stack.hh
+  BLI_listbase.hh
+  BLI_listbase_iterator.hh
   BLI_listbase_wrapper.hh
   BLI_map.hh
   BLI_map_slots.hh
   BLI_math_angle_types.hh
   BLI_math_axis_angle.hh
   BLI_math_axis_angle_types.hh
-  BLI_math_base.h
   BLI_math_base.hh
-  BLI_math_base_safe.h
+  BLI_math_base_c.hh
+  BLI_math_base_safe.hh
   BLI_math_basis_types.hh
-  BLI_math_bits.h
+  BLI_math_bits.hh
   BLI_math_boolean.hh
-  BLI_math_color.h
   BLI_math_color.hh
-  BLI_math_color_blend.h
+  BLI_math_color_blend.hh
+  BLI_math_color_c.hh
+  BLI_math_constants.hh
   BLI_math_euler.hh
   BLI_math_euler_types.hh
-  BLI_math_geom.h
+  BLI_math_filter.hh
+  BLI_math_geom.hh
+  BLI_math_geom_c.hh
   BLI_math_half.hh
-  BLI_math_inline.h
+  BLI_math_inline.hh
   BLI_math_interp.hh
-  BLI_math_matrix.h
   BLI_math_matrix.hh
+  BLI_math_matrix_c.hh
   BLI_math_matrix_types.hh
   BLI_math_mpq.hh
-  BLI_math_numbers.hh
   BLI_math_quaternion.hh
   BLI_math_quaternion_types.hh
-  BLI_math_rotation.h
   BLI_math_rotation.hh
+  BLI_math_rotation_c.hh
   BLI_math_rotation_legacy.hh
   BLI_math_rotation_types.hh
-  BLI_math_solvers.h
-  BLI_math_statistics.h
-  BLI_math_time.h
-  BLI_math_vector.h
+  BLI_math_solvers.hh
+  BLI_math_statistics.hh
+  BLI_math_time.hh
   BLI_math_vector.hh
+  BLI_math_vector_c.hh
   BLI_math_vector_mpq_types.hh
+  BLI_math_vector_swizzle.hh
   BLI_math_vector_types.hh
   BLI_math_vector_unroll.hh
-  BLI_memarena.h
-  BLI_memblock.h
-  BLI_memiter.h
+  BLI_memarena.hh
+  BLI_memblock.hh
   BLI_memory_cache.hh
+  BLI_memory_cache_file_load.hh
   BLI_memory_counter.hh
   BLI_memory_counter_fwd.hh
-  BLI_memory_utils.h
   BLI_memory_utils.hh
-  BLI_mempool.h
+  BLI_mempool.hh
   BLI_mesh_boolean.hh
   BLI_mesh_intersect.hh
-  BLI_mmap.h
+  BLI_mmap.hh
   BLI_multi_value_map.hh
-  BLI_noise.h
+  BLI_mutex.hh
   BLI_noise.hh
+  BLI_noise_c.hh
+  BLI_normalized_int_types.hh
   BLI_offset_indices.hh
   BLI_offset_span.hh
   BLI_ordered_edge.hh
   BLI_parameter_pack_utils.hh
   BLI_path_utils.hh
-  BLI_polyfill_2d.h
-  BLI_polyfill_2d_beautify.h
+  BLI_polyfill_2d.hh
+  BLI_polyfill_2d_beautify.hh
   BLI_pool.hh
   BLI_probing_strategies.hh
-  BLI_quadric.h
-  BLI_rand.h
+  BLI_quadric.hh
+  BLI_radial_tiling.hh
   BLI_rand.hh
+  BLI_rand_c.hh
   BLI_random_access_iterator_mixin.hh
-  BLI_range.h
-  BLI_rect.h
+  BLI_rect.hh
   BLI_resource_scope.hh
-  BLI_scanfill.h
+  BLI_scanfill.hh
   BLI_serialize.hh
-  BLI_session_uid.h
+  BLI_session_uid.hh
   BLI_set.hh
   BLI_set_slots.hh
   BLI_shared_cache.hh
   BLI_simd.hh
-  BLI_smaa_textures.h
-  BLI_sort.h
+  BLI_smaa_textures.hh
   BLI_sort.hh
-  BLI_sort_utils.h
+  BLI_sort_utils.hh
   BLI_span.hh
-  BLI_stack.h
   BLI_stack.hh
-  BLI_strict_flags.h
-  BLI_string.h
-  BLI_string_cursor_utf8.h
+  BLI_stack_c.hh
+  BLI_strict_flags.hh
+  BLI_string.hh
+  BLI_string_cursor_utf8.hh
   BLI_string_ref.hh
   BLI_string_search.hh
-  BLI_string_utf8.h
-  BLI_string_utf8_symbols.h
+  BLI_string_utf8.hh
+  BLI_string_utf8_symbols.hh
   BLI_string_utils.hh
-  BLI_struct_equality_utils.hh
   BLI_sub_frame.hh
   BLI_subprocess.hh
-  BLI_sys_types.h
-  BLI_system.h
-  BLI_task.h
+  BLI_sys_types.hh
+  BLI_system.hh
   BLI_task.hh
+  BLI_task_c.hh
   BLI_task_size_hints.hh
-  BLI_tempfile.h
-  BLI_threads.h
-  BLI_time.h
-  BLI_time_utildefines.h
-  BLI_timecode.h
+  BLI_tempfile.hh
+  BLI_threads.hh
+  BLI_time.hh
+  BLI_time_utildefines.hh
+  BLI_timecode.hh
   BLI_timeit.hh
-  BLI_timer.h
+  BLI_timer.hh
+  BLI_unique_hash.hh
   BLI_unique_sorted_indices.hh
   BLI_unroll.hh
-  BLI_utildefines.h
-  BLI_utildefines_iter.h
-  BLI_utildefines_stack.h
-  BLI_utildefines_variadic.h
+  BLI_ustring.hh
+  BLI_utildefines.hh
+  BLI_utildefines_iter.hh
+  BLI_utildefines_stack.hh
+  BLI_utildefines_variadic.hh
   BLI_utility_mixins.hh
-  BLI_uuid.h
-  BLI_uvproject.h
+  BLI_uuid.hh
   BLI_vector.hh
   BLI_vector_list.hh
   BLI_vector_set.hh
   BLI_vector_set_slots.hh
   BLI_virtual_array.hh
   BLI_virtual_array_fwd.hh
+  BLI_virtual_array_range_spans.hh
   BLI_virtual_vector_array.hh
-  BLI_voxel.h
-  BLI_winstuff.h
+  BLI_voxel.hh
+  BLI_winstuff.hh
   BLI_winstuff_com.hh
 
   # Without these files listed, they aren't known to CMake.
@@ -416,53 +419,34 @@ set(SRC
 
 set(LIB
   PUBLIC bf::dna
-  PRIVATE bf::extern::fmtlib
+  PRIVATE bf::extern::json
   PRIVATE bf::extern::xxhash
   bf_intern_eigen
   PRIVATE bf::intern::guardedalloc
-  extern_wcwidth
+  PRIVATE bf::intern::clog
+  PRIVATE bf::extern::wcwidth
   PRIVATE bf::intern::atomic
-  PRIVATE extern_fmtlib
+  PUBLIC bf::intern::profile
+  PUBLIC bf::dependencies::fmt
+  PRIVATE bf::dependencies::eigen
   PUBLIC bf::dependencies::optional::tbb
-  ${ZLIB_LIBRARIES}
-  ${ZSTD_LIBRARIES}
+  PRIVATE bf::dependencies::zlib
+  PRIVATE bf::dependencies::zstd
+  PRIVATE bf::dependencies::optional::gmp
+  PRIVATE bf::dependencies::optional::fftw3
+  PUBLIC bf::dependencies::openimageio
 )
 
 if(NOT WITH_PYTHON_MODULE)
   list(APPEND SRC
-    intern/BLI_args.c
+    intern/BLI_args.cc
 
-    BLI_args.h
+    BLI_args.hh
   )
 endif()
 
 if(WITH_MEM_VALGRIND)
   add_definitions(-DWITH_MEM_VALGRIND)
-endif()
-
-if(WITH_GMP)
-  add_definitions(-DWITH_GMP)
-
-  list(APPEND INC_SYS
-    ${GMP_INCLUDE_DIRS}
-  )
-
-  list(APPEND LIB
-    ${GMP_LIBRARIES}
-  )
-endif()
-
-if(WITH_FFTW3)
-  list(APPEND INC_SYS
-    ${FFTW3_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${FFTW3_LIBRARIES}
-  )
-  add_definitions(-DWITH_FFTW3)
-  if(WITH_FFTW3_THREADS_F_SUPPORT)
-    add_definitions(-DWITH_FFTW3_THREADS_F_SUPPORT)
-  endif()
 endif()
 
 if(WIN32)
@@ -471,9 +455,11 @@ if(WIN32)
     add_definitions(-DWITH_BLENDER_THUMBNAILER)
   endif()
   list(APPEND INC
+    ../../../intern/uriconvert
     ../../../intern/utfconv
   )
   list(APPEND LIB
+    bf_intern_uriconvert
     bf_intern_utfconv
     dxgi
   )
@@ -496,15 +482,20 @@ if(UNIX AND NOT APPLE)
   )
 endif()
 
+# needed for BLI_subprocess.cc when using the mold linker.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND LIB rt)
+endif()
+
 # no need to compile object files for inline headers.
 set_source_files_properties(
-  intern/math_base_inline.c
-  intern/math_base_safe_inline.c
-  intern/math_bits_inline.c
-  intern/math_color_blend_inline.c
-  intern/math_color_inline.c
-  intern/math_geom_inline.c
-  intern/math_vector_inline.c
+  intern/math_base_inline.cc
+  intern/math_base_safe_inline.cc
+  intern/math_bits_inline.cc
+  intern/math_color_blend_inline.cc
+  intern/math_color_inline.cc
+  intern/math_geom_inline.cc
+  intern/math_vector_inline.cc
   PROPERTIES HEADER_FILE_ONLY TRUE
 )
 
@@ -513,7 +504,9 @@ add_library(bf::blenlib ALIAS bf_blenlib)
 
 if(WITH_GTESTS)
   set(TEST_SRC
+    tests/BLI_any_derived_test.cc
     tests/BLI_any_test.cc
+    tests/BLI_array_state_test.cc
     tests/BLI_array_store_test.cc
     tests/BLI_array_test.cc
     tests/BLI_array_utils_test.cc
@@ -526,8 +519,10 @@ if(WITH_GTESTS)
     tests/BLI_bounds_test.cc
     tests/BLI_build_config_test.cc
     tests/BLI_color_test.cc
+    tests/BLI_compression_test.cc
     tests/BLI_convexhull_2d_test.cc
     tests/BLI_cpp_type_test.cc
+    tests/BLI_csv_parse_test.cc
     tests/BLI_delaunay_2d_test.cc
     tests/BLI_disjoint_set_test.cc
     tests/BLI_expr_pylike_eval_test.cc
@@ -548,7 +543,6 @@ if(WITH_GTESTS)
     tests/BLI_index_ranges_builder_test.cc
     tests/BLI_inplace_priority_queue_test.cc
     tests/BLI_kdopbvh_test.cc
-    tests/BLI_kdtree_test.cc
     tests/BLI_length_parameterize_test.cc
     tests/BLI_linear_allocator_chunked_list_test.cc
     tests/BLI_linear_allocator_test.cc
@@ -559,6 +553,7 @@ if(WITH_GTESTS)
     tests/BLI_math_base_test.cc
     tests/BLI_math_bits_test.cc
     tests/BLI_math_color_test.cc
+    tests/BLI_math_geom_hh_test.cc
     tests/BLI_math_geom_test.cc
     tests/BLI_math_half_test.cc
     tests/BLI_math_interp_test.cc
@@ -570,19 +565,19 @@ if(WITH_GTESTS)
     tests/BLI_math_time_test.cc
     tests/BLI_math_vector_test.cc
     tests/BLI_math_vector_types_test.cc
-    tests/BLI_memiter_test.cc
     tests/BLI_memory_cache_test.cc
     tests/BLI_memory_counter_test.cc
     tests/BLI_memory_utils_test.cc
     tests/BLI_mesh_boolean_test.cc
     tests/BLI_mesh_intersect_test.cc
     tests/BLI_multi_value_map_test.cc
+    tests/BLI_normalized_int_test.cc
     tests/BLI_offset_indices_test.cc
     tests/BLI_path_utils_test.cc
     tests/BLI_polyfill_2d_test.cc
     tests/BLI_pool_test.cc
     tests/BLI_random_access_iterator_mixin_test.cc
-    tests/BLI_ressource_strings.h
+    tests/BLI_resource_strings.h
     tests/BLI_serialize_test.cc
     tests/BLI_session_uid_test.cc
     tests/BLI_set_test.cc
@@ -598,8 +593,10 @@ if(WITH_GTESTS)
     tests/BLI_task_test.cc
     tests/BLI_tempfile_test.cc
     tests/BLI_unique_sorted_indices_test.cc
+    tests/BLI_ustring_test.cc
     tests/BLI_utildefines_test.cc
     tests/BLI_uuid_test.cc
+    tests/BLI_vector_list_test.cc
     tests/BLI_vector_set_test.cc
     tests/BLI_vector_test.cc
     tests/BLI_virtual_array_test.cc

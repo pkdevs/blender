@@ -8,42 +8,86 @@
 
 #pragma once
 
+#include "BLI_enum_flags.hh"
+
 #include "gpu_context_private.hh"
 
-#include "GHOST_Types.h"
+#include "GHOST_Types.hh"
 
 #include "render_graph/vk_render_graph.hh"
+#include "vk_buffer_pool.hh"
 #include "vk_common.hh"
 #include "vk_debug.hh"
 #include "vk_descriptor_pools.hh"
 #include "vk_resource_pool.hh"
+#include "vk_streaming_buffer.hh"
 
 namespace blender::gpu {
 class VKFrameBuffer;
-class VKVertexAttributeObject;
 class VKBatch;
 class VKStateManager;
 class VKShader;
 class VKThreadData;
+class VKDevice;
+
+enum RenderGraphFlushFlags {
+  NONE = 0,
+  RENEW_RENDER_GRAPH = 1 << 0,
+  SUBMIT = 1 << 1,
+  WAIT_FOR_SUBMISSION = 1 << 2,
+  WAIT_FOR_COMPLETION = 1 << 3,
+};
+ENUM_OPERATORS(RenderGraphFlushFlags);
 
 class VKContext : public Context, NonCopyable {
+  friend class VKDevice;
+
  private:
   VkExtent2D vk_extent_ = {};
-  VkFormat swap_chain_format_ = {};
-  GPUTexture *surface_texture_ = nullptr;
-  void *ghost_context_;
+  VkSurfaceFormatKHR swap_chain_format_ = {};
+  gpu::Texture *surface_texture_ = nullptr;
+  GHOST_IContext *ghost_context_;
+
+  Vector<std::unique_ptr<VKStreamingBuffer>> streaming_buffers_;
 
   /* Reusable data. Stored inside context to limit reallocations. */
   render_graph::VKResourceAccessInfo access_info_ = {};
 
   std::optional<std::reference_wrapper<VKThreadData>> thread_data_;
+  std::optional<std::reference_wrapper<render_graph::VKRenderGraph>> render_graph_;
+
+  /* Active shader specialization constants state. */
+  shader::SpecializationConstants constants_state_;
+
+  /* Debug scope timings. Adapted form GLContext::TimeQuery.
+   * Only supports CPU timings for now. */
+  struct ScopeTimings {
+    using Clock = std::chrono::steady_clock;
+    using TimePoint = Clock::time_point;
+    using Nanoseconds = std::chrono::nanoseconds;
+
+    std::string name;
+    bool finished;
+    TimePoint cpu_start, cpu_end;
+  };
+  Vector<ScopeTimings> scope_timings;
+
+  void process_frame_timings();
 
  public:
-  render_graph::VKRenderGraph render_graph;
+  VKDiscardPool discard_pool;
+  VKBufferPool push_constants_pool;
 
-  VKContext(void *ghost_window,
-            void *ghost_context,
-            render_graph::VKResourceStateTracker &resources);
+  const render_graph::VKRenderGraph &render_graph() const
+  {
+    return render_graph_.value().get();
+  }
+  render_graph::VKRenderGraph &render_graph()
+  {
+    return render_graph_.value().get();
+  }
+
+  VKContext(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context);
   virtual ~VKContext();
 
   void activate() override;
@@ -52,12 +96,18 @@ class VKContext : public Context, NonCopyable {
   void end_frame() override;
 
   void flush() override;
-  void flush_render_graph();
+
+  TimelineValue flush_render_graph(
+      RenderGraphFlushFlags flags,
+      VkPipelineStageFlags wait_dst_stage_mask = VK_PIPELINE_STAGE_NONE,
+      VkSemaphore wait_semaphore = VK_NULL_HANDLE,
+      VkSemaphore signal_semaphore = VK_NULL_HANDLE,
+      VkFence signal_fence = VK_NULL_HANDLE);
   void finish() override;
 
   void memory_statistics_get(int *r_total_mem_kb, int *r_free_mem_kb) override;
 
-  void debug_group_begin(const char *, int) override;
+  void debug_group_begin(const char *name, int index) override;
   void debug_group_end() override;
   bool debug_capture_begin(const char *title) override;
   void debug_capture_end() override;
@@ -88,11 +138,12 @@ class VKContext : public Context, NonCopyable {
    * Update the give shader data with the current state of the context.
    */
   void update_pipeline_data(render_graph::VKPipelineData &r_pipeline_data);
-  void update_pipeline_data(GPUPrimType primitive,
-                            VKVertexAttributeObject &vao,
-                            render_graph::VKPipelineData &r_pipeline_data);
+  void update_pipeline_data(const VKFrameBuffer &framebuffer,
+                            GPUPrimType primitive,
+                            VKVertexInputDescriptionPool::Key vertex_input_key,
+                            render_graph::VKPipelineDataGraphics &r_pipeline_data);
 
-  void sync_backbuffer(bool cycle_resource_pool);
+  void sync_backbuffer();
 
   static VKContext *get()
   {
@@ -103,12 +154,23 @@ class VKContext : public Context, NonCopyable {
   VKDescriptorSetTracker &descriptor_set_get();
   VKStateManager &state_manager_get() const;
 
-  static void swap_buffers_pre_callback(const GHOST_VulkanSwapChainData *data);
-  static void swap_buffers_post_callback();
+  static void swap_buffer_draw_callback(const GHOST_VulkanSwapChainData *data,
+                                        bool wait_for_submission);
+  static void swap_buffer_acquired_callback();
+  static void openxr_acquire_framebuffer_image_callback(GHOST_VulkanOpenXRData *data);
+  static void openxr_release_framebuffer_image_callback(GHOST_VulkanOpenXRData *data);
+
+  void specialization_constants_set(const shader::SpecializationConstants *constants_state);
+
+  std::unique_ptr<VKStreamingBuffer> &get_or_create_streaming_buffer(
+      VKBuffer &buffer, VkDeviceSize min_offset_alignment);
 
  private:
-  void swap_buffers_pre_handler(const GHOST_VulkanSwapChainData &data);
-  void swap_buffers_post_handler();
+  void swap_buffer_draw_handler(const GHOST_VulkanSwapChainData &data, bool wait_for_submission);
+  void swap_buffer_acquired_handler();
+
+  void openxr_acquire_framebuffer_image_handler(GHOST_VulkanOpenXRData &data);
+  void openxr_release_framebuffer_image_handler(GHOST_VulkanOpenXRData &data);
 
   void update_pipeline_data(VKShader &shader,
                             VkPipeline vk_pipeline,

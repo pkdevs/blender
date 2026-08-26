@@ -8,17 +8,12 @@
 
 #include "intern/node/deg_node.hh"
 
-#include <cstdio>
-
-#include "BLI_utildefines.h"
-
 #include "intern/depsgraph.hh"
 #include "intern/depsgraph_relation.hh"
 #include "intern/eval/deg_eval_copy_on_write.h"
 #include "intern/node/deg_node_component.hh"
 #include "intern/node/deg_node_factory.hh"
 #include "intern/node/deg_node_id.hh"
-#include "intern/node/deg_node_operation.hh"
 #include "intern/node/deg_node_time.hh"
 
 namespace blender::deg {
@@ -60,6 +55,8 @@ const char *nodeTypeAsString(NodeType type)
       return "GEOMETRY";
     case NodeType::SEQUENCER:
       return "SEQUENCER";
+    case NodeType::COMPOSITOR:
+      return "COMPOSITOR";
     case NodeType::LAYER_COLLECTIONS:
       return "LAYER_COLLECTIONS";
     case NodeType::COPY_ON_EVAL:
@@ -123,6 +120,8 @@ NodeType nodeTypeFromSceneComponent(eDepsSceneComponentType component)
       return NodeType::ANIMATION;
     case DEG_SCENE_COMP_SEQUENCER:
       return NodeType::SEQUENCER;
+    case DEG_SCENE_COMP_COMPOSITOR:
+      return NodeType::COMPOSITOR;
   }
   return NodeType::UNDEFINED;
 }
@@ -136,6 +135,8 @@ eDepsSceneComponentType nodeTypeToSceneComponent(NodeType type)
       return DEG_SCENE_COMP_ANIMATION;
     case NodeType::SEQUENCER:
       return DEG_SCENE_COMP_SEQUENCER;
+    case NodeType::COMPOSITOR:
+      return DEG_SCENE_COMP_COMPOSITOR;
 
     case NodeType::OPERATION:
     case NodeType::TIMESOURCE:
@@ -224,6 +225,7 @@ eDepsObjectComponentType nodeTypeToObjectComponent(NodeType type)
     case NodeType::TIMESOURCE:
     case NodeType::ID_REF:
     case NodeType::SEQUENCER:
+    case NodeType::COMPOSITOR:
     case NodeType::LAYER_COLLECTIONS:
     case NodeType::COPY_ON_EVAL:
     case NodeType::OBJECT_FROM_LAYER:
@@ -249,7 +251,7 @@ eDepsObjectComponentType nodeTypeToObjectComponent(NodeType type)
       BLI_assert_msg(0, "Visibility component is supposed to be only used internally.");
       return DEG_OB_COMP_PARAMETERS;
   }
-  BLI_assert_msg(0, "Unhandled node type, not suppsed to happen.");
+  BLI_assert_msg(0, "Unhandled node type, not supposed to happen.");
   return DEG_OB_COMP_PARAMETERS;
 }
 
@@ -290,20 +292,11 @@ Node::Node()
   name = "";
 }
 
-Node::~Node()
-{
-  /* Free links. */
-  /* NOTE: We only free incoming links. This is to avoid double-free of links
-   * when we're trying to free same link from both its sides. We don't have
-   * dangling links so this is not a problem from memory leaks point of view. */
-  for (Relation *rel : inlinks) {
-    delete rel;
-  }
-}
+Node::~Node() = default;
 
-string Node::identifier() const
+std::string Node::identifier() const
 {
-  return string(nodeTypeAsString(type)) + " : " + name;
+  return std::string(nodeTypeAsString(type)) + " : " + name;
 }
 
 NodeClass Node::get_class() const

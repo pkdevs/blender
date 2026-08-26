@@ -6,16 +6,20 @@
  * \ingroup bli
  */
 
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 
-#include "BLI_math_base_safe.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_base_safe.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
-#include "BLI_strict_flags.h" /* Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
-/******************************** Quaternions ********************************/
+namespace blender {
+
+/* -------------------------------------------------------------------- */
+/** \name Quaternions
+ * \{ */
 
 /* used to test is a quat is not normalized (only used for debug prints) */
 #ifndef NDEBUG
@@ -195,10 +199,10 @@ static void quat_to_mat3_no_error(float m[3][3], const float q[4])
 {
   double q0, q1, q2, q3, qda, qdb, qdc, qaa, qab, qac, qbb, qbc, qcc;
 
-  q0 = M_SQRT2 * (double)q[0];
-  q1 = M_SQRT2 * (double)q[1];
-  q2 = M_SQRT2 * (double)q[2];
-  q3 = M_SQRT2 * (double)q[3];
+  q0 = M_SQRT2 * double(q[0]);
+  q1 = M_SQRT2 * double(q[1]);
+  q2 = M_SQRT2 * double(q[2]);
+  q3 = M_SQRT2 * double(q[3]);
 
   qda = q0 * q1;
   qdb = q0 * q2;
@@ -210,24 +214,24 @@ static void quat_to_mat3_no_error(float m[3][3], const float q[4])
   qbc = q2 * q3;
   qcc = q3 * q3;
 
-  m[0][0] = (float)(1.0 - qbb - qcc);
-  m[0][1] = (float)(qdc + qab);
-  m[0][2] = (float)(-qdb + qac);
+  m[0][0] = float(1.0 - qbb - qcc);
+  m[0][1] = float(qdc + qab);
+  m[0][2] = float(-qdb + qac);
 
-  m[1][0] = (float)(-qdc + qab);
-  m[1][1] = (float)(1.0 - qaa - qcc);
-  m[1][2] = (float)(qda + qbc);
+  m[1][0] = float(-qdc + qab);
+  m[1][1] = float(1.0 - qaa - qcc);
+  m[1][2] = float(qda + qbc);
 
-  m[2][0] = (float)(qdb + qac);
-  m[2][1] = (float)(-qda + qbc);
-  m[2][2] = (float)(1.0 - qaa - qbb);
+  m[2][0] = float(qdb + qac);
+  m[2][1] = float(-qda + qbc);
+  m[2][2] = float(1.0 - qaa - qbb);
 }
 
 void quat_to_mat3(float m[3][3], const float q[4])
 {
 #ifndef NDEBUG
   float f;
-  if (!((f = dot_qtqt(q, q)) == 0.0f || (fabsf(f - 1.0f) < (float)QUAT_EPSILON))) {
+  if (!((f = dot_qtqt(q, q)) == 0.0f || (fabsf(f - 1.0f) < float(QUAT_EPSILON)))) {
     fprintf(stderr,
             "Warning! quat_to_mat3() called with non-normalized: size %.8f *** report a bug ***\n",
             f);
@@ -245,14 +249,14 @@ void quat_to_mat4(float m[4][4], const float q[4])
   if (!((q0 = dot_qtqt(q, q)) == 0.0 || (fabs(q0 - 1.0) < QUAT_EPSILON))) {
     fprintf(stderr,
             "Warning! quat_to_mat4() called with non-normalized: size %.8f *** report a bug ***\n",
-            (float)q0);
+            float(q0));
   }
 #endif
 
-  q0 = M_SQRT2 * (double)q[0];
-  q1 = M_SQRT2 * (double)q[1];
-  q2 = M_SQRT2 * (double)q[2];
-  q3 = M_SQRT2 * (double)q[3];
+  q0 = M_SQRT2 * double(q[0]);
+  q1 = M_SQRT2 * double(q[1]);
+  q2 = M_SQRT2 * double(q[2]);
+  q3 = M_SQRT2 * double(q[3]);
 
   qda = q0 * q1;
   qdb = q0 * q2;
@@ -264,19 +268,19 @@ void quat_to_mat4(float m[4][4], const float q[4])
   qbc = q2 * q3;
   qcc = q3 * q3;
 
-  m[0][0] = (float)(1.0 - qbb - qcc);
-  m[0][1] = (float)(qdc + qab);
-  m[0][2] = (float)(-qdb + qac);
+  m[0][0] = float(1.0 - qbb - qcc);
+  m[0][1] = float(qdc + qab);
+  m[0][2] = float(-qdb + qac);
   m[0][3] = 0.0f;
 
-  m[1][0] = (float)(-qdc + qab);
-  m[1][1] = (float)(1.0 - qaa - qcc);
-  m[1][2] = (float)(qda + qbc);
+  m[1][0] = float(-qdc + qab);
+  m[1][1] = float(1.0 - qaa - qcc);
+  m[1][2] = float(qda + qbc);
   m[1][3] = 0.0f;
 
-  m[2][0] = (float)(qdb + qac);
-  m[2][1] = (float)(-qda + qbc);
-  m[2][2] = (float)(1.0 - qaa - qbb);
+  m[2][0] = float(qdb + qac);
+  m[2][1] = float(-qda + qbc);
+  m[2][2] = float(1.0 - qaa - qbb);
   m[2][3] = 0.0f;
 
   m[3][0] = m[3][1] = m[3][2] = 0.0f;
@@ -306,7 +310,7 @@ void mat3_normalized_to_quat_fast(float q[4], const float mat[3][3])
       q[0] = (mat[1][2] - mat[2][1]) * s;
       q[2] = (mat[0][1] + mat[1][0]) * s;
       q[3] = (mat[2][0] + mat[0][2]) * s;
-      if (UNLIKELY((trace == 1.0f) && (q[0] == 0.0f && q[2] == 0.0f && q[3] == 0.0f))) {
+      if ((trace == 1.0f) && (q[0] == 0.0f && q[2] == 0.0f && q[3] == 0.0f)) [[unlikely]] {
         /* Avoids the need to normalize the degenerate case. */
         q[1] = 1.0f;
       }
@@ -323,7 +327,7 @@ void mat3_normalized_to_quat_fast(float q[4], const float mat[3][3])
       q[0] = (mat[2][0] - mat[0][2]) * s;
       q[1] = (mat[0][1] + mat[1][0]) * s;
       q[3] = (mat[1][2] + mat[2][1]) * s;
-      if (UNLIKELY((trace == 1.0f) && (q[0] == 0.0f && q[1] == 0.0f && q[3] == 0.0f))) {
+      if ((trace == 1.0f) && (q[0] == 0.0f && q[1] == 0.0f && q[3] == 0.0f)) [[unlikely]] {
         /* Avoids the need to normalize the degenerate case. */
         q[2] = 1.0f;
       }
@@ -342,7 +346,7 @@ void mat3_normalized_to_quat_fast(float q[4], const float mat[3][3])
       q[0] = (mat[0][1] - mat[1][0]) * s;
       q[1] = (mat[2][0] + mat[0][2]) * s;
       q[2] = (mat[1][2] + mat[2][1]) * s;
-      if (UNLIKELY((trace == 1.0f) && (q[0] == 0.0f && q[1] == 0.0f && q[2] == 0.0f))) {
+      if ((trace == 1.0f) && (q[0] == 0.0f && q[1] == 0.0f && q[2] == 0.0f)) [[unlikely]] {
         /* Avoids the need to normalize the degenerate case. */
         q[3] = 1.0f;
       }
@@ -357,7 +361,7 @@ void mat3_normalized_to_quat_fast(float q[4], const float mat[3][3])
       q[1] = (mat[1][2] - mat[2][1]) * s;
       q[2] = (mat[2][0] - mat[0][2]) * s;
       q[3] = (mat[0][1] - mat[1][0]) * s;
-      if (UNLIKELY((trace == 1.0f) && (q[1] == 0.0f && q[2] == 0.0f && q[3] == 0.0f))) {
+      if ((trace == 1.0f) && (q[1] == 0.0f && q[2] == 0.0f && q[3] == 0.0f)) [[unlikely]] {
         /* Avoids the need to normalize the degenerate case. */
         q[0] = 1.0f;
       }
@@ -380,10 +384,10 @@ void mat3_normalized_to_quat_fast(float q[4], const float mat[3][3])
 static void mat3_normalized_to_quat_with_checks(float q[4], float mat[3][3])
 {
   const float det = determinant_m3_array(mat);
-  if (UNLIKELY(!isfinite(det))) {
+  if (!isfinite(det)) [[unlikely]] {
     unit_m3(mat);
   }
-  else if (UNLIKELY(det < 0.0f)) {
+  else if (det < 0.0f) [[unlikely]] {
     negate_m3(mat);
   }
   mat3_normalized_to_quat_fast(q, mat);
@@ -546,7 +550,7 @@ void rotation_between_vecs_to_quat(float q[4], const float v1[3], const float v2
     else {
       /* Colinear but opposed vectors, 180 rotation... */
       ortho_v3_v3(axis, v1);
-      axis_angle_to_quat(q, axis, (float)M_PI);
+      axis_angle_to_quat(q, axis, float(M_PI));
     }
   }
 }
@@ -608,6 +612,8 @@ float quat_split_swing_and_twist(const float q_in[4],
 
   return 2.0f * t;
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Quaternion Angle
@@ -709,6 +715,10 @@ float angle_signed_qtqt(const float q1[4], const float q2[4])
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Quaternion Vector
+ * \{ */
+
 void vec_to_quat(float q[4], const float vec[3], short axis, const short upflag)
 {
   const float eps = 1e-4f;
@@ -723,14 +733,14 @@ void vec_to_quat(float q[4], const float vec[3], short axis, const short upflag)
 
   len = len_v3(vec);
 
-  if (UNLIKELY(len == 0.0f)) {
+  if (len == 0.0f) [[unlikely]] {
     return;
   }
 
   /* rotate to axis */
   if (axis > 2) {
     copy_v3_v3(tvec, vec);
-    axis = (short)(axis - 3);
+    axis = short(axis - 3);
   }
   else {
     negate_v3_v3(tvec, vec);
@@ -834,7 +844,7 @@ void QuatInterpolW(float *result, float quat1[4], float quat2[4], float t)
   if ((1.0f + cosom) > 0.0001f) {
 
     if ((1.0f - cosom) > 0.0001f) {
-      omega = (float)acos(cosom);
+      omega = float(acos(cosom));
       sinom = sinf(omega);
       sc1 = sinf((1.0 - t) * omega) / sinom;
       sc2 = sinf(t * omega) / sinom;
@@ -872,7 +882,7 @@ void interp_dot_slerp(const float t, const float cosom, float r_w[2])
   BLI_assert(IN_RANGE_INCL(cosom, -1.0001f, 1.0001f));
 
   /* within [-1..1] range, avoid aligned axis */
-  if (LIKELY(fabsf(cosom) < (1.0f - eps))) {
+  if (fabsf(cosom) < (1.0f - eps)) [[likely]] {
     float omega, sinom;
 
     omega = acosf(cosom);
@@ -881,7 +891,7 @@ void interp_dot_slerp(const float t, const float cosom, float r_w[2])
     r_w[1] = sinf(t * omega) / sinom;
   }
   else {
-    /* fallback to lerp */
+    /* fall back to lerp */
     r_w[0] = 1.0f - t;
     r_w[1] = t;
   }
@@ -1036,7 +1046,7 @@ void sin_cos_from_fraction(int numerator, int denominator, float *r_sin, float *
   BLI_assert(numerator <= denominator / 4);
   BLI_assert(ELEM(cos_sign, -1.0f, 1.0f));
 
-  const float angle = (float)(2.0 * M_PI) * ((float)numerator / (float)denominator);
+  const float angle = float(2.0 * M_PI) * (float(numerator) / float(denominator));
   *r_sin = sinf(angle);
   *r_cos = cosf(angle) * cos_sign;
 }
@@ -1046,7 +1056,11 @@ void print_qt(const char *str, const float q[4])
   printf("%s: %.3f %.3f %.3f %.3f\n", str, q[0], q[1], q[2], q[3]);
 }
 
-/******************************** Axis Angle *********************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Axis Angle
+ * \{ */
 
 void axis_angle_normalized_to_quat(float r[4], const float axis[3], const float angle)
 {
@@ -1062,7 +1076,7 @@ void axis_angle_to_quat(float r[4], const float axis[3], const float angle)
 {
   float nor[3];
 
-  if (LIKELY(normalize_v3_v3(nor, axis) != 0.0f)) {
+  if (normalize_v3_v3(nor, axis) != 0.0f) [[likely]] {
     axis_angle_normalized_to_quat(r, nor, angle);
   }
   else {
@@ -1075,7 +1089,7 @@ void quat_to_axis_angle(float axis[3], float *angle, const float q[4])
   float ha, si;
 
 #ifndef NDEBUG
-  if (!((ha = dot_qtqt(q, q)) == 0.0f || (fabsf(ha - 1.0f) < (float)QUAT_EPSILON))) {
+  if (!((ha = dot_qtqt(q, q)) == 0.0f || (fabsf(ha - 1.0f) < float(QUAT_EPSILON)))) {
     fprintf(stderr,
             "Warning! quat_to_axis_angle() called with non-normalized: size %.8f *** report a bug "
             "***\n",
@@ -1300,7 +1314,11 @@ void axis_angle_to_quat_single(float q[4], const char axis, const float angle)
   q[axis_index + 1] = angle_sin;
 }
 
-/****************************** Exponential Map ******************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Exponential Map
+ * \{ */
 
 void quat_normalized_to_expmap(float expmap[3], const float q[4])
 {
@@ -1327,7 +1345,7 @@ void expmap_to_quat(float r[4], const float expmap[3])
   float angle;
 
   /* Obtain axis/angle representation. */
-  if (LIKELY((angle = normalize_v3_v3(axis, expmap)) != 0.0f)) {
+  if ((angle = normalize_v3_v3(axis, expmap)) != 0.0f) [[likely]] {
     axis_angle_normalized_to_quat(r, axis, angle_wrap_rad(angle));
   }
   else {
@@ -1335,7 +1353,11 @@ void expmap_to_quat(float r[4], const float expmap[3])
   }
 }
 
-/******************************** XYZ Eulers *********************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name XYZ Eulers
+ * \{ */
 
 void eul_to_mat3(float mat[3][3], const float eul[3])
 {
@@ -1352,15 +1374,15 @@ void eul_to_mat3(float mat[3][3], const float eul[3])
   sc = si * ch;
   ss = si * sh;
 
-  mat[0][0] = (float)(cj * ch);
-  mat[1][0] = (float)(sj * sc - cs);
-  mat[2][0] = (float)(sj * cc + ss);
-  mat[0][1] = (float)(cj * sh);
-  mat[1][1] = (float)(sj * ss + cc);
-  mat[2][1] = (float)(sj * cs - sc);
-  mat[0][2] = (float)-sj;
-  mat[1][2] = (float)(cj * si);
-  mat[2][2] = (float)(cj * ci);
+  mat[0][0] = float(cj * ch);
+  mat[1][0] = float(sj * sc - cs);
+  mat[2][0] = float(sj * cc + ss);
+  mat[0][1] = float(cj * sh);
+  mat[1][1] = float(sj * ss + cc);
+  mat[2][1] = float(sj * cs - sc);
+  mat[0][2] = float(-sj);
+  mat[1][2] = float(cj * si);
+  mat[2][2] = float(cj * ci);
 }
 
 void eul_to_mat4(float mat[4][4], const float eul[3])
@@ -1378,15 +1400,15 @@ void eul_to_mat4(float mat[4][4], const float eul[3])
   sc = si * ch;
   ss = si * sh;
 
-  mat[0][0] = (float)(cj * ch);
-  mat[1][0] = (float)(sj * sc - cs);
-  mat[2][0] = (float)(sj * cc + ss);
-  mat[0][1] = (float)(cj * sh);
-  mat[1][1] = (float)(sj * ss + cc);
-  mat[2][1] = (float)(sj * cs - sc);
-  mat[0][2] = (float)-sj;
-  mat[1][2] = (float)(cj * si);
-  mat[2][2] = (float)(cj * ci);
+  mat[0][0] = float(cj * ch);
+  mat[1][0] = float(sj * sc - cs);
+  mat[2][0] = float(sj * cc + ss);
+  mat[0][1] = float(cj * sh);
+  mat[1][1] = float(sj * ss + cc);
+  mat[2][1] = float(sj * cs - sc);
+  mat[0][2] = float(-sj);
+  mat[1][2] = float(cj * si);
+  mat[2][2] = float(cj * ci);
 
   mat[3][0] = mat[3][1] = mat[3][2] = mat[0][3] = mat[1][3] = mat[2][3] = 0.0f;
   mat[3][3] = 1.0f;
@@ -1401,7 +1423,7 @@ static void mat3_normalized_to_eul2(const float mat[3][3], float eul1[3], float 
 
   BLI_ASSERT_UNIT_M3(mat);
 
-  if (cy > (float)EULER_HYPOT_EPSILON) {
+  if (cy > float(EULER_HYPOT_EPSILON)) {
     eul1[0] = atan2f(mat[1][2], mat[2][2]);
     eul1[1] = atan2f(-mat[0][2], cy);
     eul1[2] = atan2f(mat[0][1], mat[0][0]);
@@ -1518,8 +1540,8 @@ void compatible_eul(float eul[3], const float oldrot[3])
    * NOTE: Values between `pi` & `2 * pi` work, where `pi` has the lowest number of
    * discontinuities and values approaching `2 * pi` center the resulting rotation around zero,
    * at the expense of the result being less compatible, see !104856. */
-  const float pi_thresh = (float)M_PI;
-  const float pi_x2 = (2.0f * (float)M_PI);
+  const float pi_thresh = float(M_PI);
+  const float pi_x2 = (2.0f * float(M_PI));
 
   float deul[3];
   uint i;
@@ -1589,7 +1611,11 @@ void quat_to_compatible_eul(float eul[3], const float oldrot[3], const float qua
   mat3_normalized_to_compatible_eul(eul, oldrot, unit_mat);
 }
 
-/************************** Arbitrary Order Eulers ***************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Arbitrary Order Eulers
+ * \{ */
 
 /* Euler Rotation Order Code:
  * was adapted from
@@ -1643,9 +1669,9 @@ void eulO_to_quat(float q[4], const float e[3], const short order)
   double ti, tj, th, ci, cj, ch, si, sj, sh, cc, cs, sc, ss;
   double a[3];
 
-  ti = (double)e[i] * 0.5;
-  tj = (double)e[j] * (R->parity ? -0.5 : 0.5);
-  th = (double)e[k] * 0.5;
+  ti = double(e[i]) * 0.5;
+  tj = double(e[j]) * (R->parity ? -0.5 : 0.5);
+  th = double(e[k]) * 0.5;
 
   ci = cos(ti);
   cj = cos(tj);
@@ -1663,10 +1689,10 @@ void eulO_to_quat(float q[4], const float e[3], const short order)
   a[j] = cj * ss + sj * cc;
   a[k] = cj * cs - sj * sc;
 
-  q[0] = (float)(cj * cc + sj * ss);
-  q[1] = (float)(a[0]);
-  q[2] = (float)(a[1]);
-  q[3] = (float)(a[2]);
+  q[0] = float(cj * cc + sj * ss);
+  q[1] = float(a[0]);
+  q[2] = float(a[1]);
+  q[3] = float(a[2]);
 
   if (R->parity) {
     q[j + 1] = -q[j + 1];
@@ -1710,15 +1736,15 @@ void eulO_to_mat3(float M[3][3], const float e[3], const short order)
   sc = si * ch;
   ss = si * sh;
 
-  M[i][i] = (float)(cj * ch);
-  M[j][i] = (float)(sj * sc - cs);
-  M[k][i] = (float)(sj * cc + ss);
-  M[i][j] = (float)(cj * sh);
-  M[j][j] = (float)(sj * ss + cc);
-  M[k][j] = (float)(sj * cs - sc);
-  M[i][k] = (float)(-sj);
-  M[j][k] = (float)(cj * si);
-  M[k][k] = (float)(cj * ci);
+  M[i][i] = float(cj * ch);
+  M[j][i] = float(sj * sc - cs);
+  M[k][i] = float(sj * cc + ss);
+  M[i][j] = float(cj * sh);
+  M[j][j] = float(sj * ss + cc);
+  M[k][j] = float(sj * cs - sc);
+  M[i][k] = float(-sj);
+  M[j][k] = float(cj * si);
+  M[k][k] = float(cj * ci);
 }
 
 /* returns two euler calculation methods, so we can pick the best */
@@ -1735,7 +1761,7 @@ static void mat3_normalized_to_eulo2(const float mat[3][3],
 
   cy = hypotf(mat[i][i], mat[i][j]);
 
-  if (cy > (float)EULER_HYPOT_EPSILON) {
+  if (cy > float(EULER_HYPOT_EPSILON)) {
     eul1[i] = atan2f(mat[j][k], mat[k][k]);
     eul1[j] = atan2f(-mat[i][k], cy);
     eul1[k] = atan2f(mat[i][j], mat[i][i]);
@@ -1955,7 +1981,11 @@ void sub_eul_euleul(float r_eul[3], float a[3], float b[3], const short order)
   quat_to_eulO(r_eul, order, quat);
 }
 
-/******************************* Dual Quaternions ****************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Dual Quaternions
+ * \{ */
 
 /* Conversion routines between (regular quaternion, translation) and dual quaternion.
  *
@@ -2090,27 +2120,23 @@ void add_weighted_dq_dq(DualQuat *dq_sum, const DualQuat *dq, float weight)
       weight = -weight;
     }
 
-    copy_m4_m4(wmat, (float(*)[4])dq->scale);
+    copy_m4_m4(wmat, const_cast<float (*)[4]>(dq->scale));
     mul_m4_fl(wmat, weight);
     add_m4_m4m4(dq_sum->scale, dq_sum->scale, wmat);
     dq_sum->scale_weight += weight;
   }
 }
 
-/**
- * Add the transformation defined by the given dual quaternion to the accumulator,
- * using the specified pivot point for combining scale transformations.
- *
- * If the resulting dual quaternion would only be used to transform the pivot point itself,
- * this function can avoid fully computing the combined scale matrix to get a performance
- * boost without affecting the result.
- */
 void add_weighted_dq_dq_pivot(DualQuat *dq_sum,
                               const DualQuat *dq,
                               const float pivot[3],
                               const float weight,
                               const bool compute_scale_matrix)
 {
+  /* NOTE: If the resulting dual quaternion would only be used to transform the pivot point itself,
+   * this function can avoid fully computing the combined scale matrix to get a performance
+   * boost without affecting the result. */
+
   /* FIX #32022, #43188, #100373 - bad deformation when combining scaling and rotation. */
   if (dq->scale_weight) {
     DualQuat mdq = *dq;
@@ -2230,7 +2256,7 @@ void copy_dq_dq(DualQuat *r, const DualQuat *dq)
 void quat_apply_track(float quat[4], short axis, short upflag)
 {
   /* rotations are hard coded to match vec_to_quat */
-  const float sqrt_1_2 = (float)M_SQRT1_2;
+  const float sqrt_1_2 = float(M_SQRT1_2);
   const float quat_track[][4] = {
       /* pos-y90 */
       {sqrt_1_2, 0.0, -sqrt_1_2, 0.0},
@@ -2252,7 +2278,7 @@ void quat_apply_track(float quat[4], short axis, short upflag)
   mul_qt_qtqt(quat, quat, quat_track[axis]);
 
   if (axis > 2) {
-    axis = (short)(axis - 3);
+    axis = short(axis - 3);
   }
 
   /* there are 2 possible up-axis for each axis used, the 'quat_track' applies so the first
@@ -2274,32 +2300,32 @@ void vec_apply_track(float vec[3], short axis)
   copy_v3_v3(tvec, vec);
 
   switch (axis) {
-    case 0: /* pos-x */
+    case 0: /* POS-X. */
       // vec[0] =  0.0;
       vec[1] = tvec[2];
       vec[2] = -tvec[1];
       break;
-    case 1: /* pos-y */
+    case 1: /* POS-Y. */
       // vec[0] = tvec[0];
       // vec[1] =  0.0;
       // vec[2] = tvec[2];
       break;
-    case 2: /* pos-z */
+    case 2: /* POS-Z. */
       // vec[0] = tvec[0];
       // vec[1] = tvec[1];
       // vec[2] =  0.0;
       break;
-    case 3: /* neg-x */
+    case 3: /* NEG-X. */
       // vec[0] =  0.0;
       vec[1] = tvec[2];
       vec[2] = -tvec[1];
       break;
-    case 4: /* neg-y */
+    case 4: /* NEG-Y. */
       vec[0] = -tvec[2];
       // vec[1] =  0.0;
       vec[2] = tvec[0];
       break;
-    case 5: /* neg-z */
+    case 5: /* NEG-Z. */
       vec[0] = -tvec[0];
       vec[1] = -tvec[1];
       // vec[2] =  0.0;
@@ -2317,7 +2343,7 @@ float fov_to_focallength(float hfov, float sensor)
   return (sensor / 2.0f) / tanf(hfov * 0.5f);
 }
 
-/* 'mod_inline(-3, 4)= 1', 'fmod(-3, 4)= -3' */
+/* `mod_inline(-3, 4)= 1`, `fmod(-3, 4)= -3` */
 static float mod_inline(float a, float b)
 {
   return a - (b * floorf(a / b));
@@ -2325,7 +2351,7 @@ static float mod_inline(float a, float b)
 
 float angle_wrap_rad(float angle)
 {
-  return mod_inline(angle + (float)M_PI, (float)M_PI * 2.0f) - (float)M_PI;
+  return mod_inline(angle + float(M_PI), float(M_PI) * 2.0f) - float(M_PI);
 }
 
 float angle_wrap_deg(float angle)
@@ -2472,3 +2498,7 @@ bool mat3_from_axis_conversion_single(int src_axis, int dst_axis, float r_mat[3]
 
   return mat3_from_axis_conversion(src_axis, src_axis_next, dst_axis, dst_axis_next, r_mat);
 }
+
+/** \} */
+
+}  // namespace blender

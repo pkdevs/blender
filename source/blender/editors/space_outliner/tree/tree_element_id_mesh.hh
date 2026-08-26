@@ -10,9 +10,11 @@
 
 #include "tree_element_id.hh"
 
+namespace blender {
+
 struct Mesh;
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
 class TreeElementIDMesh final : public TreeElementID {
   Mesh &mesh_;
@@ -20,11 +22,12 @@ class TreeElementIDMesh final : public TreeElementID {
  public:
   TreeElementIDMesh(TreeElement &legacy_te_, Mesh &mesh);
 
-  void expand(SpaceOutliner &) const override;
+  void expand(SpaceOutliner & /*soops*/) const override;
 
  private:
   void expand_key() const;
   void expand_materials() const;
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

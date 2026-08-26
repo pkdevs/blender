@@ -7,71 +7,65 @@ import bpy
 from ....io.com import gltf2_io
 from ....io.exp.user_extensions import export_user_extensions
 from ..cache import cached
-from .search_node_tree import get_vertex_color_info
 from .texture_info import gather_texture_info
 from .search_node_tree import \
-    get_socket_from_gltf_material_node, \
     has_image_node_from_socket, \
     get_const_from_default_value_socket, \
-    get_socket, \
     get_factor_from_socket, \
     gather_alpha_info, \
     gather_color_info
 
 
 @cached
-def gather_material_pbr_metallic_roughness(blender_material, orm_texture, export_settings):
-    if not __filter_pbr_material(blender_material, export_settings):
-        return None, {}, {'color': None, 'alpha': None, 'color_type': None, 'alpha_type': None, 'alpha_mode': "OPAQUE"}, {}
+def gather_material_pbr_metallic_roughness(bmat, orm_texture, export_settings):
+    if not __filter_pbr_material(bmat, export_settings):
+        return None, {}, {'color': None, 'alpha': None, 'color_type': None, 'alpha_type': None, 'alpha_mode': "OPAQUE"}, {}, {}, {}
 
     uvmap_infos = {}
     udim_infos = {}
 
-    base_color_texture, uvmap_info, udim_info_bc, _ = __gather_base_color_texture(blender_material, export_settings)
+    base_color_texture, uvmap_info, udim_info_bc, _ = __gather_base_color_texture(bmat, export_settings)
     uvmap_infos.update(uvmap_info)
     udim_infos.update(udim_info_bc)
     metallic_roughness_texture, uvmap_info, udim_info_mr, _ = __gather_metallic_roughness_texture(
-        blender_material, orm_texture, export_settings)
+        bmat, orm_texture, export_settings)
     uvmap_infos.update(uvmap_info)
     udim_infos.update(udim_info_mr)
 
-    base_color_factor, vc_info = __gather_base_color_factor(blender_material, export_settings)
+    base_color_factor, vc_info, alpha_info = __gather_base_color_factor(bmat, export_settings)
 
     material = gltf2_io.MaterialPBRMetallicRoughness(
         base_color_factor=base_color_factor,
         base_color_texture=base_color_texture,
-        extensions=__gather_extensions(blender_material, export_settings),
-        extras=__gather_extras(blender_material, export_settings),
-        metallic_factor=__gather_metallic_factor(blender_material, export_settings),
+        extensions=__gather_extensions(bmat, export_settings),
+        extras=__gather_extras(bmat, export_settings),
+        metallic_factor=__gather_metallic_factor(bmat, export_settings),
         metallic_roughness_texture=metallic_roughness_texture,
-        roughness_factor=__gather_roughness_factor(blender_material, export_settings)
+        roughness_factor=__gather_roughness_factor(bmat, export_settings)
     )
 
     export_user_extensions(
         'gather_material_pbr_metallic_roughness_hook',
         export_settings,
         material,
-        blender_material,
+        bmat,
         orm_texture)
 
-    return material, uvmap_infos, vc_info, udim_infos
+    return material, uvmap_infos, vc_info, udim_infos, alpha_info
 
 
-def __filter_pbr_material(blender_material, export_settings):
+def __filter_pbr_material(bmat, export_settings):
     return True
 
 
-def __gather_base_color_factor(blender_material, export_settings):
-    if not blender_material.use_nodes:
-        return [*blender_material.diffuse_color[:3],
-                1.0], {"color": None, "alpha": None, "color_type": None, "alpha_type": None, "alpha_mode": "OPAQUE"}
+def __gather_base_color_factor(bmat, export_settings):
 
     rgb, alpha = None, None
     vc_info = {"color": None, "alpha": None, "color_type": None, "alpha_type": None, "alpha_mode": "OPAQUE"}
 
     path_alpha = None
     path = None
-    alpha_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, "Alpha")
+    alpha_socket = bmat.get_socket("Alpha")
     if alpha_socket.socket is not None and isinstance(alpha_socket.socket, bpy.types.NodeSocket):
         alpha_info = gather_alpha_info(alpha_socket.to_node_nav())
         vc_info['alpha'] = alpha_info['alphaColorAttrib']
@@ -79,13 +73,14 @@ def __gather_base_color_factor(blender_material, export_settings):
         vc_info['alpha_mode'] = alpha_info['alphaMode']
         alpha = alpha_info['alphaFactor']
         path_alpha = alpha_info['alphaPath']
+    else:
+        alpha_info = gather_alpha_info(None)
 
-    base_color_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, "Base Color")
+    base_color_socket = bmat.get_socket("Base Color")
     if base_color_socket.socket is None:
-        base_color_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, "BaseColor")
+        base_color_socket = bmat.get_socket("BaseColor")
     if base_color_socket.socket is None:
-        base_color_socket = get_socket_from_gltf_material_node(
-            blender_material.node_tree, blender_material.use_nodes, "BaseColorFactor")
+        base_color_socket = bmat.get_socket_from_gltf_material_node("BaseColorFactor")
     if base_color_socket.socket is not None and isinstance(base_color_socket.socket, bpy.types.NodeSocket):
         if export_settings['gltf_image_format'] != "NONE":
             rgb_vc_info = gather_color_info(base_color_socket.to_node_nav())
@@ -123,19 +118,18 @@ def __gather_base_color_factor(blender_material, export_settings):
     rgba = [*rgb, alpha]
 
     if rgba == [1, 1, 1, 1]:
-        return None, vc_info
-    return rgba, vc_info
+        return None, vc_info, alpha_info
+    return rgba, vc_info, alpha_info
 
 
-def __gather_base_color_texture(blender_material, export_settings):
-    base_color_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, "Base Color")
+def __gather_base_color_texture(bmat, export_settings):
+    base_color_socket = bmat.get_socket("Base Color")
     if base_color_socket.socket is None:
-        base_color_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, "BaseColor")
+        base_color_socket = bmat.get_socket("BaseColor")
     if base_color_socket.socket is None:
-        base_color_socket = get_socket_from_gltf_material_node(
-            blender_material.node_tree, blender_material.use_nodes, "BaseColor")
+        base_color_socket = bmat.get_socket_from_gltf_material_node("BaseColor")
 
-    alpha_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, "Alpha")
+    alpha_socket = bmat.get_socket("Alpha")
 
     # keep sockets that have some texture : color and/or alpha
     inputs = tuple(
@@ -154,7 +148,13 @@ def __gather_base_color_texture(blender_material, export_settings):
             path_['path'] = export_settings['current_texture_transform'][k]['path'].replace(
                 "YYY", "pbrMetallicRoughness/baseColorTexture/extensions")
             path_['vector_type'] = export_settings['current_texture_transform'][k]['vector_type']
-            export_settings['current_paths'][k] = path_
+            if k in export_settings['current_paths']:
+                if 'additional' not in export_settings['current_paths'][k]:
+                    export_settings['current_paths'][k]['additional'] = []
+                if path_['path'] != export_settings['current_paths'][k]['path']:
+                    export_settings['current_paths'][k]['additional'].append(path_['path'])
+            else:
+                export_settings['current_paths'][k] = path_
 
     export_settings['current_texture_transform'] = {}
 
@@ -164,22 +164,19 @@ def __gather_base_color_texture(blender_material, export_settings):
             udim_info.keys()) > 0 else {}, factor
 
 
-def __gather_extensions(blender_material, export_settings):
+def __gather_extensions(bmat, export_settings):
     return None
 
 
-def __gather_extras(blender_material, export_settings):
+def __gather_extras(bmat, export_settings):
     return None
 
 
-def __gather_metallic_factor(blender_material, export_settings):
-    if not blender_material.use_nodes:
-        return blender_material.metallic
+def __gather_metallic_factor(bmat, export_settings):
 
-    metallic_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, "Metallic")
+    metallic_socket = bmat.get_socket("Metallic")
     if metallic_socket.socket is None:
-        metallic_socket = get_socket_from_gltf_material_node(
-            blender_material.node_tree, blender_material.use_nodes, "MetallicFactor")
+        metallic_socket = bmat.get_socket_from_gltf_material_node("MetallicFactor")
     if metallic_socket.socket is not None and isinstance(metallic_socket.socket, bpy.types.NodeSocket):
         fac, path = get_factor_from_socket(metallic_socket, kind='VALUE')
 
@@ -195,9 +192,9 @@ def __gather_metallic_factor(blender_material, export_settings):
     return None
 
 
-def __gather_metallic_roughness_texture(blender_material, orm_texture, export_settings):
-    metallic_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, "Metallic")
-    roughness_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, "Roughness")
+def __gather_metallic_roughness_texture(bmat, orm_texture, export_settings):
+    metallic_socket = bmat.get_socket("Metallic")
+    roughness_socket = bmat.get_socket("Roughness")
 
     hasMetal = metallic_socket.socket is not None and has_image_node_from_socket(metallic_socket, export_settings)
     hasRough = roughness_socket.socket is not None and has_image_node_from_socket(roughness_socket, export_settings)
@@ -205,8 +202,7 @@ def __gather_metallic_roughness_texture(blender_material, orm_texture, export_se
     # Warning: for default socket, do not use NodeSocket object, because it will break cache
     # Using directlty the Blender socket object
     if not hasMetal and not hasRough:
-        metallic_roughness = get_socket_from_gltf_material_node(
-            blender_material.node_tree, blender_material.use_nodes, "MetallicRoughness")
+        metallic_roughness = bmat.get_socket_from_gltf_material_node("MetallicRoughness")
         if metallic_roughness.socket is None or not has_image_node_from_socket(metallic_roughness, export_settings):
             return None, {}, {}, None
         else:
@@ -218,6 +214,7 @@ def __gather_metallic_roughness_texture(blender_material, orm_texture, export_se
     else:
         texture_input = (metallic_socket, roughness_socket)
 
+    export_settings['current_texture_transform'] = {}
     tex, uvmap_info, udim_info, factor = gather_texture_info(
 
         texture_input[0],
@@ -225,20 +222,32 @@ def __gather_metallic_roughness_texture(blender_material, orm_texture, export_se
         export_settings,
     )
 
+    if len(export_settings['current_texture_transform']) != 0:
+        for k in export_settings['current_texture_transform'].keys():
+            path_ = {}
+            path_['length'] = export_settings['current_texture_transform'][k]['length']
+            path_['path'] = export_settings['current_texture_transform'][k]['path'].replace(
+                "YYY", "pbrMetallicRoughness/metallicRoughnessTexture/extensions")
+            path_['vector_type'] = export_settings['current_texture_transform'][k]['vector_type']
+            if k in export_settings['current_paths']:
+                if 'additional' not in export_settings['current_paths'][k]:
+                    export_settings['current_paths'][k]['additional'] = []
+                if path_['path'] != export_settings['current_paths'][k]['path']:
+                    export_settings['current_paths'][k]['additional'].append(path_['path'])
+            else:
+                export_settings['current_paths'][k] = path_
+
     return tex, {
         'metallicRoughnessTexture': uvmap_info}, {
         'metallicRoughnessTexture': udim_info} if len(
             udim_info.keys()) > 0 else {}, factor
 
 
-def __gather_roughness_factor(blender_material, export_settings):
-    if not blender_material.use_nodes:
-        return blender_material.roughness
+def __gather_roughness_factor(bmat, export_settings):
 
-    roughness_socket = get_socket(blender_material.node_tree, blender_material.use_nodes, "Roughness")
-    if roughness_socket is None:
-        roughness_socket = get_socket_from_gltf_material_node(
-            blender_material.node_tree, blender_material.use_nodes, "RoughnessFactor")
+    roughness_socket = bmat.get_socket("Roughness")
+    if roughness_socket.socket is None:
+        roughness_socket = bmat.get_socket_from_gltf_material_node("RoughnessFactor")
     if roughness_socket.socket is not None and isinstance(roughness_socket.socket, bpy.types.NodeSocket):
         fac, path = get_factor_from_socket(roughness_socket, kind='VALUE')
 

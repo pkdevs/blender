@@ -13,8 +13,6 @@
 
 #include <Python.h>
 
-#include "BLI_utildefines.h"
-
 #include "WM_api.hh"
 #include "WM_types.hh"
 
@@ -25,6 +23,8 @@
 #include "bpy_intern_string.hh"
 #include "bpy_operator_wrap.hh" /* own include */
 #include "bpy_rna.hh"
+
+namespace blender {
 
 static void operator_properties_init(wmOperatorType *ot)
 {
@@ -41,14 +41,13 @@ static void operator_properties_init(wmOperatorType *ot)
 
   if (pyrna_deferred_register_class(ot->srna, py_class) != 0) {
     PyErr_Print(); /* failed to register operator props */
-    PyErr_Clear();
   }
 
   /* set the default property: ot->prop */
   {
-    /* Picky developers will notice that 'bl_property' won't work with inheritance
-     * get direct from the dict to avoid raising a load of attribute errors (yes this isn't ideal)
-     * - campbell. */
+    /* NOTE(@ideasman42): Picky developers will notice that `bl_property`
+     * won't work with inheritance get direct from the dict to avoid
+     * raising a load of attribute errors (yes this isn't ideal). */
     PyObject *py_class_dict = py_class->tp_dict;
     PyObject *bl_property = PyDict_GetItem(py_class_dict, bpy_intern_str_bl_property);
     if (bl_property) {
@@ -56,7 +55,7 @@ static void operator_properties_init(wmOperatorType *ot)
       if (prop_id != nullptr) {
         PropertyRNA *prop;
 
-        PointerRNA ptr = RNA_pointer_create(nullptr, ot->srna, nullptr);
+        PointerRNA ptr = RNA_pointer_create_discrete(nullptr, ot->srna, nullptr);
         prop = RNA_struct_find_property(&ptr, prop_id);
         if (prop) {
           ot->prop = prop;
@@ -67,7 +66,6 @@ static void operator_properties_init(wmOperatorType *ot)
 
           /* this could be done cleaner, for now its OK */
           PyErr_Print();
-          PyErr_Clear();
         }
       }
       else {
@@ -78,7 +76,6 @@ static void operator_properties_init(wmOperatorType *ot)
 
         /* this could be done cleaner, for now its OK */
         PyErr_Print();
-        PyErr_Clear();
       }
     }
   }
@@ -90,7 +87,7 @@ void BPY_RNA_operator_wrapper(wmOperatorType *ot, void *userdata)
   /* take care not to overwrite anything set in
    * WM_operatortype_append_ptr before opfunc() is called */
   StructRNA *srna = ot->srna;
-  *ot = *((wmOperatorType *)userdata);
+  *ot = std::move(*(static_cast<wmOperatorType *>(userdata)));
   ot->srna = srna; /* restore */
 
   /* Use i18n context from rna_ext.srna if possible (py operators). */
@@ -103,7 +100,7 @@ void BPY_RNA_operator_wrapper(wmOperatorType *ot, void *userdata)
 
 void BPY_RNA_operator_macro_wrapper(wmOperatorType *ot, void *userdata)
 {
-  wmOperatorType *data = (wmOperatorType *)userdata;
+  wmOperatorType *data = static_cast<wmOperatorType *>(userdata);
 
   /* only copy a couple of things, the rest is set by the macro registration */
   ot->name = data->name;
@@ -132,7 +129,13 @@ PyObject *PYOP_wrap_macro_define(PyObject * /*self*/, PyObject *args)
   const char *idname_py;
   char idname[OP_MAX_TYPENAME];
 
-  if (!PyArg_ParseTuple(args, "Os:_bpy.ops.macro_define", &macro, &idname_py)) {
+  if (!PyArg_ParseTuple(args,
+                        "O" /* `macro` */
+                        "s" /* `idname` */
+                        ":_bpy.ops.macro_define",
+                        &macro,
+                        &idname_py))
+  {
     return nullptr;
   }
 
@@ -144,7 +147,7 @@ PyObject *PYOP_wrap_macro_define(PyObject * /*self*/, PyObject *args)
   }
 
   /* identifiers */
-  srna = pyrna_struct_as_srna((PyObject *)macro, false, "Macro Define:");
+  srna = pyrna_struct_as_srna(macro, false, "Macro Define:");
   if (srna == nullptr) {
     return nullptr;
   }
@@ -159,6 +162,8 @@ PyObject *PYOP_wrap_macro_define(PyObject * /*self*/, PyObject *args)
 
   otmacro = WM_operatortype_macro_define(ot, idname);
 
-  PointerRNA ptr_otmacro = RNA_pointer_create(nullptr, &RNA_OperatorMacro, otmacro);
+  PointerRNA ptr_otmacro = RNA_pointer_create_discrete(nullptr, RNA_OperatorMacro, otmacro);
   return pyrna_struct_CreatePyObject(&ptr_otmacro);
 }
+
+}  // namespace blender

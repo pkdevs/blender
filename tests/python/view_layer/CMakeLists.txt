@@ -6,7 +6,7 @@
 
 # Use '--write-blend=/tmp/test.blend' to view output
 
-set(TEST_SRC_DIR ${CMAKE_SOURCE_DIR}/tests/data)
+set(TEST_SRC_DIR ${CMAKE_SOURCE_DIR}/tests/files)
 set(TEST_OUT_DIR ${CMAKE_BINARY_DIR}/tests)
 
 # ugh, any better way to do this on testing only?
@@ -16,13 +16,20 @@ execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory ${TEST_OUT_DIR})
 #   message(FATAL_ERROR "CMake test directory not found!")
 # endif()
 
-# for testing with valgrind prefix: valgrind --track-origins=yes --error-limit=no
-set(TEST_BLENDER_EXE $<TARGET_FILE:blender> --background --factory-startup --debug-memory --debug-exit-on-error --env-system-scripts ${CMAKE_SOURCE_DIR}/scripts)
-
+# For testing with VALGRIND prefix: `valgrind --track-origins=yes --error-limit=no`
+set(TEST_BLENDER_EXE
+  $<TARGET_FILE:blender>
+  --background
+  --console-crash-handler
+  --factory-startup
+  --debug-memory
+  --debug-exit-on-error
+  --env-system-scripts ${CMAKE_SOURCE_DIR}/scripts
+)
 
 # ------------------------------------------------------------------------------
 
-macro(view_layer_test test_name)
+function(view_layer_test test_name)
   # Adds ${CMAKE_CURRENT_LIST_DIR} to sys.path so that the tests can import
   # things from view_layer_common.py
   add_test(view_layer_${test_name} ${TEST_BLENDER_EXE}
@@ -31,7 +38,7 @@ macro(view_layer_test test_name)
     --python ${CMAKE_CURRENT_LIST_DIR}/test_${test_name}.py --
     --testdir="${TEST_SRC_DIR}/layers"
   )
-endmacro()
+endfunction()
 
 view_layer_test(active_collection)
 view_layer_test(background_set)

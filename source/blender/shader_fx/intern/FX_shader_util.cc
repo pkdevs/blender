@@ -6,16 +6,11 @@
  * \ingroup shader_fx
  */
 
-#include <cstdio>
+#include "BKE_shader_fx.hh"
 
-#include "MEM_guardedalloc.h"
+#include "FX_shader_types.hh"
 
-#include "BLI_utildefines.h"
-
-#include "BKE_shader_fx.h"
-
-#include "FX_shader_types.h"
-#include "FX_shader_util.h"
+namespace blender {
 
 void shaderfx_type_init(ShaderFxTypeInfo *types[])
 {
@@ -31,3 +26,5 @@ void shaderfx_type_init(ShaderFxTypeInfo *types[])
   INIT_FX_TYPE(Wave);
 #undef INIT_FX_TYPE
 }
+
+}  // namespace blender

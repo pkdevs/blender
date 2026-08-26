@@ -2,31 +2,29 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
 #include "COM_algorithm_parallel_reduction.hh"
 #include "COM_node_operation.hh"
 #include "COM_utilities.hh"
 
 #include "node_composite_util.hh"
 
-/* **************** NORMALIZE single channel, useful for Z buffer ******************** */
-
 namespace blender::nodes::node_composite_normalize_cc {
 
-static void cmp_node_normalize_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>("Value")
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
+  b.add_input<decl::Float>("Value"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
-      .compositor_domain_priority(0);
-  b.add_output<decl::Float>("Value");
+      .structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Value"_ustr)
+      .structure_type(StructureType::Dynamic)
+      .align_with_previous();
 }
 
-using namespace blender::realtime_compositor;
+using namespace blender::compositor;
 
 class NormalizeOperation : public NodeOperation {
  private:
@@ -42,10 +40,10 @@ class NormalizeOperation : public NodeOperation {
 
   void execute() override
   {
-    Result &input_image = this->get_input("Value");
-    Result &output_image = this->get_result("Value");
+    const Result &input_image = this->get_input("Value");
     if (input_image.is_single_value()) {
-      input_image.pass_through(output_image);
+      Result &output_image = this->get_result("Value");
+      output_image.share_data(input_image);
       return;
     }
 
@@ -63,7 +61,7 @@ class NormalizeOperation : public NodeOperation {
 
   void execute_gpu(const float minimum, const float scale)
   {
-    GPUShader *shader = this->context().get_shader("compositor_normalize");
+    gpu::Shader *shader = this->context().get_shader("compositor_normalize");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1f(shader, "minimum", minimum);
@@ -77,7 +75,7 @@ class NormalizeOperation : public NodeOperation {
     output_image.allocate_texture(domain);
     output_image.bind_as_image(shader, "output_img");
 
-    compute_dispatch_threads_at_least(shader, domain.size);
+    compute_dispatch_threads_at_least(shader, domain.data_size);
 
     GPU_shader_unbind();
     output_image.unbind_as_image();
@@ -92,7 +90,7 @@ class NormalizeOperation : public NodeOperation {
     Result &output = this->get_result("Value");
     output.allocate_texture(domain);
 
-    parallel_for(domain.size, [&](const int2 texel) {
+    parallel_for(domain.data_size, [&](const int2 texel) {
       const float value = image.load_pixel<float>(texel);
       const float normalized_value = (value - minimum) * scale;
       const float clamped_value = math::clamp(normalized_value, 0.0f, 1.0f);
@@ -101,22 +99,26 @@ class NormalizeOperation : public NodeOperation {
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new NormalizeOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_normalize_cc
-
-void register_node_type_cmp_normalize()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_normalize_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
+  cmp_node_type_base(&ntype, "CompositorNodeNormalize"_ustr, CMP_NODE_NORMALIZE);
+  ntype.ui_name = "Normalize";
+  ntype.ui_description =
+      "Map values to 0 to 1 range, based on the minimum and maximum pixel values";
+  ntype.enum_name_legacy = "NORMALIZE";
+  ntype.nclass = NODE_CLASS_OP_VECTOR;
+  ntype.declare = node_declare;
+  ntype.get_compositor_operation = get_compositor_operation;
 
-  cmp_node_type_base(&ntype, CMP_NODE_NORMALIZE, "Normalize", NODE_CLASS_OP_VECTOR);
-  ntype.declare = file_ns::cmp_node_normalize_declare;
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
-
-  blender::bke::node_register_type(&ntype);
+  bke::node_register_type(ntype);
 }
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_normalize_cc

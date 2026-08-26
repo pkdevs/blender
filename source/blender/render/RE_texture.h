@@ -9,17 +9,16 @@
 
 #pragma once
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 
 /* called by meshtools */
+
+namespace blender {
+
 struct Depsgraph;
 struct ImagePool;
 struct MTex;
 struct Tex;
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /* `texture_procedural.cc` */
 
@@ -39,7 +38,6 @@ bool RE_texture_evaluate(const struct MTex *mtex,
                          float r_rgba[4]) ATTR_NONNULL(1, 2, 7, 8);
 
 /**
- * \param in: Destination
  * \param tex: Texture.
  * \param out: Previous color.
  * \param fact: Texture strength.
@@ -47,48 +45,20 @@ bool RE_texture_evaluate(const struct MTex *mtex,
  */
 float texture_value_blend(float tex, float out, float fact, float facg, int blendtype);
 
-void RE_texture_rng_init(void);
-void RE_texture_rng_exit(void);
-
-/* `texture_image.cc` */
-
-void ibuf_sample(struct ImBuf *ibuf, float fx, float fy, float dx, float dy, float result[4]);
-
-/* `texture_pointdensity.cc` */
-
-struct PointDensity;
-
-void RE_point_density_cache(struct Depsgraph *depsgraph, struct PointDensity *pd);
-
-void RE_point_density_minmax(struct Depsgraph *depsgraph,
-                             struct PointDensity *pd,
-                             float r_min[3],
-                             float r_max[3]);
-
-/**
- * \note Requires #RE_point_density_cache() to be called first.
- * \note Frees point density structure after sampling.
- */
-void RE_point_density_sample(struct Depsgraph *depsgraph,
-                             struct PointDensity *pd,
-                             int resolution,
-                             float *values);
-
-void RE_point_density_free(struct PointDensity *pd);
-
-void RE_point_density_fix_linking(void);
+void RE_texture_rng_init();
+void RE_texture_rng_exit();
 
 /* `texture_procedural.cc` */
 
 /**
  * Texture evaluation result.
  */
-typedef struct TexResult {
+struct TexResult {
   float tin;
   float trgba[4];
   /* Is actually a boolean: When true -> use alpha, false -> set alpha to 1.0. */
   int talpha;
-} TexResult;
+};
 
 /* This one uses nodes. */
 
@@ -101,9 +71,6 @@ typedef struct TexResult {
  */
 int multitex_ext(struct Tex *tex,
                  const float texvec[3],
-                 float dxt[3],
-                 float dyt[3],
-                 int osatex,
                  struct TexResult *texres,
                  short thread,
                  struct ImagePool *pool,
@@ -131,15 +98,10 @@ int multitex_ext_safe(struct Tex *tex,
  */
 int multitex_nodes(struct Tex *tex,
                    const float texvec[3],
-                   float dxt[3],
-                   float dyt[3],
-                   int osatex,
                    struct TexResult *texres,
                    short thread,
                    short which_output,
                    const struct MTex *mtex,
                    struct ImagePool *pool);
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

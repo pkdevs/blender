@@ -6,13 +6,18 @@
  * \ingroup bli
  */
 
-#include "BLI_math_vector.h"
+#include <algorithm>
 
-#include "BLI_math_base_safe.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_vector_c.hh"
 
-#include "BLI_strict_flags.h" /* Keep last. */
+#include "BLI_math_base_safe.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_rotation_c.hh"
+
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Interpolation
@@ -62,7 +67,7 @@ bool interp_v3_v3v3_slerp(float target[3], const float a[3], const float b[3], c
   cosom = dot_v3v3(a, b);
 
   /* direct opposites */
-  if (UNLIKELY(cosom < (-1.0f + FLT_EPSILON))) {
+  if (cosom < (-1.0f + FLT_EPSILON)) [[unlikely]] {
     return false;
   }
 
@@ -74,43 +79,22 @@ bool interp_v3_v3v3_slerp(float target[3], const float a[3], const float b[3], c
 
   return true;
 }
-bool interp_v2_v2v2_slerp(float target[2], const float a[2], const float b[2], const float t)
-{
-  float cosom, w[2];
-
-  BLI_ASSERT_UNIT_V2(a);
-  BLI_ASSERT_UNIT_V2(b);
-
-  cosom = dot_v2v2(a, b);
-
-  /* direct opposites */
-  if (UNLIKELY(cosom < (1.0f + FLT_EPSILON))) {
-    return false;
-  }
-
-  interp_dot_slerp(t, cosom, w);
-
-  target[0] = w[0] * a[0] + w[1] * b[0];
-  target[1] = w[0] * a[1] + w[1] * b[1];
-
-  return true;
-}
 
 void interp_v3_v3v3_slerp_safe(float target[3], const float a[3], const float b[3], const float t)
 {
-  if (UNLIKELY(!interp_v3_v3v3_slerp(target, a, b, t))) {
+  if (!interp_v3_v3v3_slerp(target, a, b, t)) [[unlikely]] {
     /* Axis are aligned so any orthogonal vector is acceptable. */
     float ab_ortho[3];
     ortho_v3_v3(ab_ortho, a);
     normalize_v3(ab_ortho);
     if (t < 0.5f) {
-      if (UNLIKELY(!interp_v3_v3v3_slerp(target, a, ab_ortho, t * 2.0f))) {
+      if (!interp_v3_v3v3_slerp(target, a, ab_ortho, t * 2.0f)) [[unlikely]] {
         BLI_assert(0);
         copy_v3_v3(target, a);
       }
     }
     else {
-      if (UNLIKELY(!interp_v3_v3v3_slerp(target, ab_ortho, b, (t - 0.5f) * 2.0f))) {
+      if (!interp_v3_v3v3_slerp(target, ab_ortho, b, (t - 0.5f) * 2.0f)) [[unlikely]] {
         BLI_assert(0);
         copy_v3_v3(target, b);
       }
@@ -191,9 +175,9 @@ void interp_v3_v3v3_uchar(uchar target[3], const uchar a[3], const uchar b[3], c
 {
   const float s = 1.0f - t;
 
-  target[0] = (char)floorf(s * a[0] + t * b[0]);
-  target[1] = (char)floorf(s * a[1] + t * b[1]);
-  target[2] = (char)floorf(s * a[2] + t * b[2]);
+  target[0] = char(floorf(s * a[0] + t * b[0]));
+  target[1] = char(floorf(s * a[1] + t * b[1]));
+  target[2] = char(floorf(s * a[2] + t * b[2]));
 }
 
 void mid_v3_v3v3(float r[3], const float a[3], const float b[3])
@@ -232,7 +216,7 @@ void mid_v3_v3v3v3v3(
 
 void mid_v3_v3_array(float r[3], const float (*vec_arr)[3], const uint vec_arr_num)
 {
-  const float factor = 1.0f / (float)vec_arr_num;
+  const float factor = 1.0f / float(vec_arr_num);
   zero_v3(r);
 
   for (uint i = 0; i < vec_arr_num; i++) {
@@ -251,7 +235,7 @@ void mid_v3_v3v3_angle_weighted(float r[3], const float a[3], const float b[3])
   BLI_ASSERT_UNIT_V3(b);
 
   add_v3_v3v3(r, a, b);
-  angle = ((float)M_2_PI *
+  angle = (float(M_2_PI) *
            /* normally we would only multiply by 2,
             * but instead of an angle make this 0-1 factor */
            2.0f) *
@@ -362,7 +346,7 @@ float angle_normalized_v3v3(const float v1[3], const float v2[3])
 
   float v2_n[3];
   negate_v3_v3(v2_n, v2);
-  return (float)M_PI - 2.0f * safe_asinf(len_v3v3(v1, v2_n) / 2.0f);
+  return float(M_PI) - 2.0f * safe_asinf(len_v3v3(v1, v2_n) / 2.0f);
 }
 
 float angle_normalized_v2v2(const float a[2], const float b[2])
@@ -378,7 +362,7 @@ float angle_normalized_v2v2(const float a[2], const float b[2])
 
   float v2_n[2];
   negate_v2_v2(v2_n, b);
-  return (float)M_PI - 2.0f * safe_asinf(len_v2v2(a, v2_n) / 2.0f);
+  return float(M_PI) - 2.0f * safe_asinf(len_v2v2(a, v2_n) / 2.0f);
 }
 
 float angle_on_axis_v3v3_v3(const float v1[3], const float v2[3], const float axis[3])
@@ -406,7 +390,7 @@ float angle_signed_on_axis_v3v3_v3(const float v1[3], const float v2[3], const f
   /* calculate the sign (reuse 'tproj') */
   cross_v3_v3v3(tproj, v2_proj, v1_proj);
   if (dot_v3v3(tproj, axis) < 0.0f) {
-    angle = (float)(M_PI * 2.0) - angle;
+    angle = float(M_PI * 2.0) - angle;
   }
 
   return angle;
@@ -450,10 +434,10 @@ void angle_tri_v3(float angles[3], const float v1[3], const float v2[3], const f
   normalize_v3(ed2);
   normalize_v3(ed3);
 
-  angles[0] = (float)M_PI - angle_normalized_v3v3(ed1, ed2);
-  angles[1] = (float)M_PI - angle_normalized_v3v3(ed2, ed3);
+  angles[0] = float(M_PI) - angle_normalized_v3v3(ed1, ed2);
+  angles[1] = float(M_PI) - angle_normalized_v3v3(ed2, ed3);
   // face_angles[2] = M_PI - angle_normalized_v3v3(ed3, ed1);
-  angles[2] = (float)M_PI - (angles[0] + angles[1]);
+  angles[2] = float(M_PI) - (angles[0] + angles[1]);
 }
 
 void angle_quad_v3(
@@ -471,10 +455,10 @@ void angle_quad_v3(
   normalize_v3(ed3);
   normalize_v3(ed4);
 
-  angles[0] = (float)M_PI - angle_normalized_v3v3(ed1, ed2);
-  angles[1] = (float)M_PI - angle_normalized_v3v3(ed2, ed3);
-  angles[2] = (float)M_PI - angle_normalized_v3v3(ed3, ed4);
-  angles[3] = (float)M_PI - angle_normalized_v3v3(ed4, ed1);
+  angles[0] = float(M_PI) - angle_normalized_v3v3(ed1, ed2);
+  angles[1] = float(M_PI) - angle_normalized_v3v3(ed2, ed3);
+  angles[2] = float(M_PI) - angle_normalized_v3v3(ed3, ed4);
+  angles[3] = float(M_PI) - angle_normalized_v3v3(ed4, ed1);
 }
 
 void angle_poly_v3(float *angles, const float *verts[3], int len)
@@ -487,7 +471,7 @@ void angle_poly_v3(float *angles, const float *verts[3], int len)
   for (i = 0; i < len; i++) {
     sub_v3_v3v3(vec[i % 3], verts[i % len], verts[(i + 1) % len]);
     normalize_v3(vec[i % 3]);
-    angles[i] = (float)M_PI - angle_normalized_v3v3(vec[(i + 2) % 3], vec[i % 3]);
+    angles[i] = float(M_PI) - angle_normalized_v3v3(vec[(i + 2) % 3], vec[i % 3]);
   }
 }
 
@@ -499,7 +483,7 @@ void angle_poly_v3(float *angles, const float *verts[3], int len)
 
 void project_v2_v2v2(float out[2], const float p[2], const float v_proj[2])
 {
-  if (UNLIKELY(is_zero_v2(v_proj))) {
+  if (is_zero_v2(v_proj)) [[unlikely]] {
     zero_v2(out);
     return;
   }
@@ -510,7 +494,7 @@ void project_v2_v2v2(float out[2], const float p[2], const float v_proj[2])
 
 void project_v3_v3v3(float out[3], const float p[3], const float v_proj[3])
 {
-  if (UNLIKELY(is_zero_v3(v_proj))) {
+  if (is_zero_v3(v_proj)) [[unlikely]] {
     zero_v3(out);
     return;
   }
@@ -718,71 +702,35 @@ void print_vn(const char *str, const float v[], const int n)
 
 void minmax_v4v4_v4(float min[4], float max[4], const float vec[4])
 {
-  if (min[0] > vec[0]) {
-    min[0] = vec[0];
-  }
-  if (min[1] > vec[1]) {
-    min[1] = vec[1];
-  }
-  if (min[2] > vec[2]) {
-    min[2] = vec[2];
-  }
-  if (min[3] > vec[3]) {
-    min[3] = vec[3];
-  }
+  min[0] = std::min(min[0], vec[0]);
+  min[1] = std::min(min[1], vec[1]);
+  min[2] = std::min(min[2], vec[2]);
+  min[3] = std::min(min[3], vec[3]);
 
-  if (max[0] < vec[0]) {
-    max[0] = vec[0];
-  }
-  if (max[1] < vec[1]) {
-    max[1] = vec[1];
-  }
-  if (max[2] < vec[2]) {
-    max[2] = vec[2];
-  }
-  if (max[3] < vec[3]) {
-    max[3] = vec[3];
-  }
+  max[0] = std::max(max[0], vec[0]);
+  max[1] = std::max(max[1], vec[1]);
+  max[2] = std::max(max[2], vec[2]);
+  max[3] = std::max(max[3], vec[3]);
 }
 
 void minmax_v3v3_v3(float min[3], float max[3], const float vec[3])
 {
-  if (min[0] > vec[0]) {
-    min[0] = vec[0];
-  }
-  if (min[1] > vec[1]) {
-    min[1] = vec[1];
-  }
-  if (min[2] > vec[2]) {
-    min[2] = vec[2];
-  }
+  min[0] = std::min(min[0], vec[0]);
+  min[1] = std::min(min[1], vec[1]);
+  min[2] = std::min(min[2], vec[2]);
 
-  if (max[0] < vec[0]) {
-    max[0] = vec[0];
-  }
-  if (max[1] < vec[1]) {
-    max[1] = vec[1];
-  }
-  if (max[2] < vec[2]) {
-    max[2] = vec[2];
-  }
+  max[0] = std::max(max[0], vec[0]);
+  max[1] = std::max(max[1], vec[1]);
+  max[2] = std::max(max[2], vec[2]);
 }
 
 void minmax_v2v2_v2(float min[2], float max[2], const float vec[2])
 {
-  if (min[0] > vec[0]) {
-    min[0] = vec[0];
-  }
-  if (min[1] > vec[1]) {
-    min[1] = vec[1];
-  }
+  min[0] = std::min(min[0], vec[0]);
+  min[1] = std::min(min[1], vec[1]);
 
-  if (max[0] < vec[0]) {
-    max[0] = vec[0];
-  }
-  if (max[1] < vec[1]) {
-    max[1] = vec[1];
-  }
+  max[0] = std::max(max[0], vec[0]);
+  max[1] = std::max(max[1], vec[1]);
 }
 
 void dist_ensure_v3_v3fl(float v1[3], const float v2[3], const float dist)
@@ -857,7 +805,7 @@ double dot_vn_vn(const float *array_src_a, const float *array_src_b, const int s
   const float *array_pt_b = array_src_b + (size - 1);
   int i = size;
   while (i--) {
-    d += (double)(*(array_pt_a--) * *(array_pt_b--));
+    d += double(*(array_pt_a--) * *(array_pt_b--));
   }
   return d;
 }
@@ -868,7 +816,7 @@ double len_squared_vn(const float *array, const int size)
   const float *array_pt = array + (size - 1);
   int i = size;
   while (i--) {
-    d += sqr_db((double)*(array_pt--));
+    d += sqr_db(double(*(array_pt)--));
   }
   return d;
 }
@@ -878,11 +826,11 @@ float normalize_vn_vn(float *array_tar, const float *array_src, const int size)
   const double d = len_squared_vn(array_src, size);
   float d_sqrt;
   if (d > 1.0e-35) {
-    d_sqrt = (float)sqrt(d);
+    d_sqrt = float(sqrt(d));
     mul_vn_vn_fl(array_tar, array_src, size, 1.0f / d_sqrt);
   }
   else {
-    copy_vn_fl(array_tar, size, 0.0f);
+    std::fill_n(array_tar, size, 0.0f);
     d_sqrt = 0.0f;
   }
   return d_sqrt;
@@ -893,32 +841,12 @@ float normalize_vn(float *array_tar, const int size)
   return normalize_vn_vn(array_tar, array_tar, size);
 }
 
-void range_vn_i(int *array_tar, const int size, const int start)
-{
-  int *array_pt = array_tar + (size - 1);
-  int j = start + (size - 1);
-  int i = size;
-  while (i--) {
-    *(array_pt--) = j--;
-  }
-}
-
-void range_vn_u(uint *array_tar, const int size, const uint start)
-{
-  uint *array_pt = array_tar + (size - 1);
-  uint j = start + (uint)(size - 1);
-  int i = size;
-  while (i--) {
-    *(array_pt--) = j--;
-  }
-}
-
 void range_vn_fl(float *array_tar, const int size, const float start, const float step)
 {
   float *array_pt = array_tar + (size - 1);
   int i = size;
   while (i--) {
-    *(array_pt--) = start + step * (float)(i);
+    *(array_pt--) = start + step * float(i);
   }
 }
 
@@ -1045,33 +973,6 @@ void interp_vn_vn(float *array_tar, const float *array_src, const float t, const
   }
 }
 
-void copy_vn_i(int *array_tar, const int size, const int val)
-{
-  int *tar = array_tar + (size - 1);
-  int i = size;
-  while (i--) {
-    *(tar--) = val;
-  }
-}
-
-void copy_vn_short(short *array_tar, const int size, const short val)
-{
-  short *tar = array_tar + (size - 1);
-  int i = size;
-  while (i--) {
-    *(tar--) = val;
-  }
-}
-
-void copy_vn_fl(float *array_tar, const int size, const float val)
-{
-  float *tar = array_tar + (size - 1);
-  int i = size;
-  while (i--) {
-    *(tar--) = val;
-  }
-}
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1129,3 +1030,5 @@ void interp_v2_v2v2_db(double target[2], const double a[2], const double b[2], c
 }
 
 /** \} */
+
+}  // namespace blender

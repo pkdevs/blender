@@ -16,39 +16,14 @@
 
 namespace blender::gpu::render_graph {
 
-Span<NodeHandle> VKScheduler::select_nodes_for_image(const VKRenderGraph &render_graph,
-                                                     VkImage vk_image)
-{
-  UNUSED_VARS(vk_image);
-  select_all_nodes(render_graph);
-  reorder_nodes(render_graph);
-  return result_;
-}
-
-Span<NodeHandle> VKScheduler::select_nodes_for_buffer(const VKRenderGraph &render_graph,
-                                                      VkBuffer vk_buffer)
-{
-  UNUSED_VARS(vk_buffer);
-  select_all_nodes(render_graph);
-  reorder_nodes(render_graph);
-  return result_;
-}
-
 Span<NodeHandle> VKScheduler::select_nodes(const VKRenderGraph &render_graph)
 {
-  select_all_nodes(render_graph);
-  reorder_nodes(render_graph);
-  return result_;
-}
-
-void VKScheduler::select_all_nodes(const VKRenderGraph &render_graph)
-{
-  /* TODO: This will not work when we extract subgraphs. When subgraphs are removed the order in
-   * the render graph may not follow the order the nodes were added. */
   result_.clear();
   for (NodeHandle node_handle : render_graph.nodes_.index_range()) {
     result_.append(node_handle);
   }
+  reorder_nodes(render_graph);
+  return result_;
 }
 
 /* -------------------------------------------------------------------- */
@@ -57,6 +32,7 @@ void VKScheduler::select_all_nodes(const VKRenderGraph &render_graph)
 
 void VKScheduler::reorder_nodes(const VKRenderGraph &render_graph)
 {
+  move_initial_transfer_to_start(render_graph);
   move_transfer_and_dispatch_outside_rendering_scope(render_graph);
 }
 
@@ -75,9 +51,62 @@ std::optional<std::pair<int64_t, int64_t>> VKScheduler::find_rendering_scope(
       return std::pair(rendering_start, index);
     }
   }
-  BLI_assert(rendering_start == -1);
-
+  /* When using VK_EXT_dynamic_rendering_local_read, rendering scopes can be suspended and
+   * resumed without explicit END_RENDERING (see VKFrameBuffer::subpass_transition_impl).
+   * This can leave a BEGIN_RENDERING node without a matching END_RENDERING at the end of
+   * the search range. Orphaned nodes don't need reordering.
+   * When NOT using local read, an unmatched BEGIN_RENDERING is a bug. */
+  BLI_assert(rendering_start == -1 || render_graph.resources_.use_dynamic_rendering_local_read);
   return std::nullopt;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Reorder - Move initial data transfers to the start
+ * \{ */
+
+void VKScheduler::move_initial_transfer_to_start(const VKRenderGraph &render_graph)
+{
+  Vector<NodeHandle> data_transfers;
+  Vector<NodeHandle> other_nodes;
+
+  data_transfers.reserve(result_.size());
+  other_nodes.reserve(result_.size());
+
+  for (const int64_t index : result_.index_range()) {
+    NodeHandle node_handle = result_[index];
+    const VKRenderGraphNode &node = render_graph.nodes_[node_handle];
+    Span<VKRenderGraphBuffer> node_buffers = render_graph.linked_buffers(node);
+    Span<VKRenderGraphImage> node_images = render_graph.linked_images(node);
+    if (ELEM(node.type, VKNodeType::COPY_BUFFER)) {
+      if (node_buffers[0].resource.stamp == 0 && node_buffers[1].resource.stamp == 0) {
+        data_transfers.append(index);
+        continue;
+      }
+    }
+    else if (ELEM(node.type, VKNodeType::COPY_BUFFER_TO_IMAGE, VKNodeType::COPY_IMAGE_TO_BUFFER)) {
+      if (node_buffers[0].resource.stamp == 0 && node_images[0].resource.stamp == 0) {
+        data_transfers.append(index);
+        continue;
+      }
+    }
+    else if (ELEM(node.type, VKNodeType::FILL_BUFFER, VKNodeType::UPDATE_BUFFER)) {
+      if (node_buffers[0].resource.stamp == 0) {
+        data_transfers.append(index);
+        continue;
+      }
+    }
+
+    other_nodes.append(index);
+  }
+
+  MutableSpan<NodeHandle> store_data_transfers = result_.as_mutable_span().slice(
+      0, data_transfers.size());
+  MutableSpan<NodeHandle> store_other = result_.as_mutable_span().slice(data_transfers.size(),
+                                                                        other_nodes.size());
+  store_data_transfers.copy_from(data_transfers);
+  store_other.copy_from(other_nodes);
 }
 
 /** \} */
@@ -133,8 +162,9 @@ void VKScheduler::move_transfer_and_dispatch_outside_rendering_scope(
        * is done in the VKNodeType::UPDATE_BUFFER branch. */
       bool add_to_rendering_scope = !rendering_scope.is_empty();
       if (node.type == VKNodeType::UPDATE_BUFFER) {
+        /* Checking the node links to reduce potential locking the resource mutex. */
         if (!used_buffers.contains(
-                render_graph.resources_.buffer_resources_.lookup(node.update_buffer.dst_buffer)))
+                render_graph.links_.buffers[node.links.buffers.start()].resource.handle))
         {
           /* Buffer isn't used by this rendering scope so we can safely move it before the
            * rendering scope begins. */
@@ -156,20 +186,8 @@ void VKScheduler::move_transfer_and_dispatch_outside_rendering_scope(
 
       /* Any read/write to buffer resources should be added to used_buffers in order to detect if
        * it is safe to move a node before the rendering scope. */
-      const VKRenderGraphNodeLinks &links = render_graph.links_[node_handle];
-      for (const VKRenderGraphLink &input : links.inputs) {
-        if (render_graph.resources_.resource_type_get(input.resource.handle) ==
-            VKResourceType::BUFFER)
-        {
-          used_buffers.add(input.resource.handle);
-        }
-      }
-      for (const VKRenderGraphLink &output : links.outputs) {
-        if (render_graph.resources_.resource_type_get(output.resource.handle) ==
-            VKResourceType::BUFFER)
-        {
-          used_buffers.add(output.resource.handle);
-        }
+      for (const VKRenderGraphBuffer &link : render_graph.linked_buffers(node)) {
+        used_buffers.add(link.resource.handle);
       }
     }
 

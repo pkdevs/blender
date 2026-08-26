@@ -8,11 +8,16 @@
 
 #pragma once
 
+#include "DNA_listBase.h"
+struct Depsgraph;
+struct SnapObjectContext;
+namespace blender {
+
 struct ID;
-struct ListBase;
 struct PointerRNA;
 
 struct Brush;
+struct CfraElem;
 struct GP_SpaceConversion;
 struct bGPDframe;
 struct bGPDlayer;
@@ -22,13 +27,11 @@ struct bGPdata;
 struct tGPspoint;
 
 struct ARegion;
-struct Depsgraph;
 struct Main;
 struct RegionView3D;
 struct ReportList;
 struct Scene;
 struct ScrArea;
-struct SnapObjectContext;
 struct ToolSettings;
 struct View3D;
 struct bContext;
@@ -75,21 +78,6 @@ struct tGPspoint {
 /* Context-dependent */
 
 /**
- * Get pointer to active Grease Pencil data-block,
- * and an RNA-pointer to trace back to whatever owns it.
- */
-bGPdata **ED_gpencil_data_get_pointers(const bContext *C, PointerRNA *r_ptr);
-
-/**
- * Context independent (i.e. each required part is passed in instead).
- *
- * Get pointer to active Grease Pencil data-block,
- * and an RNA-pointer to trace back to whatever owns it,
- * when context info is not available.
- */
-bGPdata **ED_gpencil_data_get_pointers_direct(ScrArea *area, Object *ob, PointerRNA *r_ptr);
-
-/**
  * Get the active Grease Pencil data-block
  * \note This is the original (#G.main) copy of the data-block, stored in files.
  * Do not use for reading evaluated copies of GP Objects data.
@@ -126,13 +114,6 @@ void ED_keymap_gpencil_legacy(wmKeyConfig *keyconf);
 
 void ED_operatortypes_gpencil_legacy();
 
-/* ------------- Copy-Paste Buffers -------------------- */
-
-/**
- * Free copy/paste buffer data.
- */
-void ED_gpencil_strokes_copybuf_free();
-
 /* ------------ Grease-Pencil Drawing API ------------------ */
 /* `drawgpencil.cc` */
 
@@ -168,7 +149,7 @@ bool ED_gpencil_layer_frames_looper(bGPDlayer *gpl,
 /**
  * Make a listing all the gp-frames in a layer as cfraelems.
  */
-void ED_gpencil_layer_make_cfra_list(bGPDlayer *gpl, ListBase *elems, bool onlysel);
+void ED_gpencil_layer_make_cfra_list(bGPDlayer *gpl, ListBaseT<CfraElem> *elems, bool onlysel);
 
 /**
  * Check if one of the frames in this layer is selected.
@@ -230,7 +211,7 @@ void ED_gpencil_layer_snap_frames(bGPDlayer *gpl, Scene *scene, short mode);
 void ED_gpencil_layer_mirror_frames(bGPDlayer *gpl, Scene *scene, short mode);
 
 /**
- * This function frees any MEM_calloc'ed copy/paste buffer data.
+ * This function frees any allocated copy/paste buffer data.
  */
 void ED_gpencil_anim_copybuf_free();
 /**
@@ -245,33 +226,9 @@ bool ED_gpencil_anim_copybuf_copy(bAnimContext *ac);
  */
 bool ED_gpencil_anim_copybuf_paste(bAnimContext *ac, short offset_mode);
 
-/* ------------ Grease-Pencil Undo System ------------------ */
-int ED_gpencil_session_active();
-/**
- * \param step: eUndoStepDir.
- */
-int ED_undo_gpencil_step(bContext *C, int step); /* eUndoStepDir. */
-
 /* ----------- Add Primitive Utilities -------------- */
 
-/**
- * Get drawing reference point for conversion or projection of the stroke
- * \param r_vec: Reference point found
- */
-void ED_gpencil_drawing_reference_get(const Scene *scene,
-                                      const Object *ob,
-                                      char align_flag,
-                                      float r_vec[3]);
-
 /* texture coordinate utilities */
-
-/**
- * Convert 2d #tGPspoint to 3d #bGPDspoint.
- */
-void ED_gpencil_tpoint_to_point(ARegion *region,
-                                float origin[3],
-                                const tGPspoint *tpt,
-                                bGPDspoint *pt);
 
 /**
  * Ensure the #tGPspoint buffer (while drawing stroke)
@@ -281,3 +238,5 @@ tGPspoint *ED_gpencil_sbuffer_ensure(tGPspoint *buffer_array,
                                      int *buffer_size,
                                      int *buffer_used,
                                      bool clear);
+
+}  // namespace blender

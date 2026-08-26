@@ -8,18 +8,22 @@
 
 #pragma once
 
-#include "BKE_modifier.hh"
+#include "RNA_path.hh"
 
-#include "intern/depsgraph_type.hh"
+#include "BLI_vector.hh"
 
-namespace blender::deg {
+namespace blender {
+
+struct ID;
+
+namespace deg {
 
 struct Depsgraph;
 
 class AnimationValueBackup {
  public:
   AnimationValueBackup() = default;
-  AnimationValueBackup(const string &rna_path, int array_index, float value);
+  AnimationValueBackup(ParsedRNAPath<> rna_path, int array_index, float value);
 
   AnimationValueBackup(const AnimationValueBackup &other) = default;
   AnimationValueBackup(AnimationValueBackup &&other) noexcept = default;
@@ -27,7 +31,7 @@ class AnimationValueBackup {
   AnimationValueBackup &operator=(const AnimationValueBackup &other) = default;
   AnimationValueBackup &operator=(AnimationValueBackup &&other) = default;
 
-  string rna_path;
+  ParsedRNAPath<> rna_path;
   int array_index;
   float value;
 };
@@ -46,4 +50,5 @@ class AnimationBackup {
   Vector<AnimationValueBackup> values_backup;
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

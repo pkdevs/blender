@@ -15,7 +15,7 @@
 
 namespace blender::ed::outliner {
 
-static void outliner_context_selected_ids(const SpaceOutliner *space_outliner,
+static void outliner_context_selected_ids(SpaceOutliner *space_outliner,
                                           bContextDataResult *result)
 {
   tree_iterator::all(*space_outliner, [&](const TreeElement *te) {
@@ -24,7 +24,7 @@ static void outliner_context_selected_ids(const SpaceOutliner *space_outliner,
       CTX_data_id_list_add(result, tse->id);
     }
   });
-  CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
+  CTX_data_type_set(result, ContextDataType::Collection);
 }
 
 static const char *outliner_context_dir[] = {
@@ -45,8 +45,8 @@ int /*eContextResult*/ outliner_main_region_context(const bContext *C,
   }
 
   if (CTX_data_equals(member, "id")) {
-    const TreeElement *active_element = outliner_find_element_with_flag(&space_outliner->tree,
-                                                                        TSE_ACTIVE);
+    const TreeElement *active_element = outliner_find_element_with_flag(
+        &space_outliner->runtime->tree, TSE_ACTIVE);
     if (!active_element) {
       return CTX_RESULT_NO_DATA;
     }

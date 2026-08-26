@@ -22,11 +22,16 @@
 
 #include "IO_dupli_persistent_id.hh"
 
+#include "BLI_hash.hh"
+#include "BLI_map.hh"
+#include "BLI_math_matrix_types.hh"
+#include "BLI_set.hh"
+
 #include "DEG_depsgraph.hh"
 
-#include <map>
-#include <set>
 #include <string>
+
+namespace blender {
 
 struct Depsgraph;
 struct DupliObject;
@@ -35,7 +40,7 @@ struct Main;
 struct Object;
 struct ParticleSystem;
 
-namespace blender::io {
+namespace io {
 
 class AbstractHierarchyWriter;
 class DupliParentFinder;
@@ -48,7 +53,7 @@ struct HierarchyContext {
   Object *export_parent;
   Object *duplicator;
   PersistentID persistent_id;
-  float matrix_world[4][4];
+  float4x4 matrix_world;
   std::string export_name;
 
   /* When weak_export=true, the object will be exported only as transform, and only if is an
@@ -80,8 +85,23 @@ struct HierarchyContext {
    */
   bool is_parent;
 
+  /* When true this is duplisource object. This flag is used to identify instance prototypes. */
+  bool is_duplisource;
+
+  /* This flag tells whether an object is a valid point instance of other objects.
+   * If true, it means the object has a valid reference path and its value can be included
+   * in the instances data of UsdGeomPointInstancer. */
+  bool is_point_instance;
+
+  /* This flag tells if an object is a valid prototype of a point instancer. */
+  bool is_point_proto;
+
+  /* True if this context is a descendant of any context with is_point_instance set to true.
+   * This helps skip redundant instancing data during export. */
+  bool has_point_instance_ancestor;
+
   /*********** Determined during writer creation: ***************/
-  float parent_matrix_inv_world[4][4]; /* Inverse of the parent's world matrix. */
+  float4x4 parent_matrix_inv_world; /* Inverse of the parent's world matrix. */
   std::string export_path; /* Hierarchical path, such as "/grandparent/parent/object_name". */
   ParticleSystem *particle_system; /* Only set for particle/hair writers. */
 
@@ -98,8 +118,6 @@ struct HierarchyContext {
    * refers to a different object). */
   std::string higher_up_export_path;
 
-  bool operator<(const HierarchyContext &other) const;
-
   /* Return a HierarchyContext representing the root of the export hierarchy. */
   static const HierarchyContext *root();
 
@@ -107,6 +125,10 @@ struct HierarchyContext {
   bool is_instance() const;
   void mark_as_instance_of(const std::string &reference_export_path);
   void mark_as_not_instanced();
+  bool is_prototype() const;
+
+  /* For handling point instancing (Instance on Points geometry node). */
+  bool is_point_instancer() const;
 
   bool is_object_visible(enum eEvaluationMode evaluation_mode) const;
 };
@@ -190,9 +212,13 @@ class ObjectIdentifier {
                                                 Object *duplicated_by);
 
   bool is_root() const;
+
+  uint64_t hash() const
+  {
+    return get_default_hash(object, duplicated_by, persistent_id);
+  }
 };
 
-bool operator<(const ObjectIdentifier &obj_ident_a, const ObjectIdentifier &obj_ident_b);
 bool operator==(const ObjectIdentifier &obj_ident_a, const ObjectIdentifier &obj_ident_b);
 
 /* AbstractHierarchyIterator iterates over objects in a dependency graph, and constructs export
@@ -205,14 +231,19 @@ bool operator==(const ObjectIdentifier &obj_ident_a, const ObjectIdentifier &obj
 class AbstractHierarchyIterator {
  public:
   /* Mapping from export path to writer. */
-  typedef std::map<std::string, AbstractHierarchyWriter *> WriterMap;
+  using WriterMap = Map<std::string, AbstractHierarchyWriter *>;
   /* All the children of some object, as per the export hierarchy. */
-  typedef std::set<HierarchyContext *> ExportChildren;
+  using ExportChildren = Set<HierarchyContext *>;
   /* Mapping from an object and its duplicator to the object's export-children. */
-  typedef std::map<ObjectIdentifier, ExportChildren> ExportGraph;
+  using ExportGraph = Map<ObjectIdentifier, ExportChildren>;
   /* Mapping from ID to its export path. This is used for instancing; given an
    * instanced datablock, the export path of the original can be looked up. */
-  typedef std::map<ID *, std::string> ExportPathMap;
+  using ExportPathMap = Map<ID *, std::string>;
+  /* Mapping from ID name to a set of names logically residing "under" it. Used for unique
+   * name generation. */
+  using ExportUsedNameMap = Map<std::string, Set<std::string>>;
+  /* IDs of all duplisource objects, used to identify instance prototypes. */
+  using DupliSources = Set<ID *>;
 
  protected:
   ExportGraph export_graph_;
@@ -221,6 +252,8 @@ class AbstractHierarchyIterator {
   Depsgraph *depsgraph_;
   WriterMap writers_;
   ExportSubset export_subset_;
+  DupliSources duplisources_;
+  ExportUsedNameMap used_names_;
 
  public:
   explicit AbstractHierarchyIterator(Main *bmain, Depsgraph *depsgraph);
@@ -247,6 +280,9 @@ class AbstractHierarchyIterator {
    * This base implementation is a no-op; override in a concrete subclass. */
   virtual std::string make_valid_name(const std::string &name) const;
 
+  virtual std::string make_unique_name(const std::string &original_name,
+                                       Set<std::string> &used_names);
+
   /* Return the name of this ID datablock that is valid for the exported file format. Overriding is
    * only necessary if make_valid_name(id->name+2) is not suitable for the exported file format.
    * NULL-safe: when `id == nullptr` this returns an empty string. */
@@ -266,15 +302,15 @@ class AbstractHierarchyIterator {
   void export_graph_clear();
 
   void visit_object(Object *object, Object *export_parent, bool weak_export);
-  void visit_dupli_object(DupliObject *dupli_object,
+  void visit_dupli_object(const DupliObject *dupli_object,
                           Object *duplicator,
                           const DupliParentFinder &dupli_parent_finder);
 
   void context_update_for_graph_index(HierarchyContext *context,
-                                      const ExportGraph::key_type &graph_index) const;
+                                      const ObjectIdentifier &graph_index) const;
 
   void determine_export_paths(const HierarchyContext *parent_context);
-  void determine_duplication_references(const HierarchyContext *parent_context,
+  bool determine_duplication_references(const HierarchyContext *parent_context,
                                         const std::string &indent);
 
   /* These three functions create writers and call their write() method. */
@@ -288,15 +324,16 @@ class AbstractHierarchyIterator {
 
   /* Convenience wrappers around get_id_name(). */
   std::string get_object_name(const Object *object) const;
+  std::string get_object_name(const Object *object, const Object *parent);
   std::string get_object_data_name(const Object *object) const;
 
-  typedef AbstractHierarchyWriter *(AbstractHierarchyIterator::*create_writer_func)(
-      const HierarchyContext *);
+  using create_writer_func =
+      AbstractHierarchyWriter *(AbstractHierarchyIterator::*)(const HierarchyContext *);
   /* Ensure that a writer exists; if it doesn't, call create_func(context).
    *
    * The create_func function should be one of the create_XXXX_writer(context) functions declared
    * below. */
-  EnsuredWriter ensure_writer(HierarchyContext *context, create_writer_func create_func);
+  EnsuredWriter ensure_writer(const HierarchyContext *context, create_writer_func create_func);
 
  protected:
   /* Construct a valid path for the export file format. This class concatenates by using '/' as a
@@ -319,10 +356,11 @@ class AbstractHierarchyIterator {
    */
   virtual bool mark_as_weak_export(const Object *object) const;
 
-  virtual bool should_visit_dupli_object(const DupliObject *dupli_object) const;
+  virtual bool should_visit_dupli_object(const DupliObject *dupli_object,
+                                         const Object *duplicator) const;
 
-  virtual ExportGraph::key_type determine_graph_index_object(const HierarchyContext *context);
-  virtual ExportGraph::key_type determine_graph_index_dupli(
+  virtual ObjectIdentifier determine_graph_index_object(const HierarchyContext *context);
+  virtual ObjectIdentifier determine_graph_index_dupli(
       const HierarchyContext *context,
       const DupliObject *dupli_object,
       const DupliParentFinder &dupli_parent_finder);
@@ -344,8 +382,21 @@ class AbstractHierarchyIterator {
   /* Called by release_writers() to free what the create_XXX_writer() functions allocated. */
   virtual void release_writer(AbstractHierarchyWriter *writer) = 0;
 
+  /* Return true if data writers should be created for this context. */
+  virtual bool include_data_writers(const HierarchyContext *) const
+  {
+    return true;
+  }
+
+  /* Return true if children of the context should be converted to writers. */
+  virtual bool include_child_writers(const HierarchyContext *) const
+  {
+    return true;
+  }
+
   AbstractHierarchyWriter *get_writer(const std::string &export_path) const;
-  ExportChildren &graph_children(const HierarchyContext *context);
+  ExportChildren *graph_children(const HierarchyContext *context);
 };
 
-}  // namespace blender::io
+}  // namespace io
+}  // namespace blender

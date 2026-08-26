@@ -8,18 +8,22 @@
 
 #pragma once
 
+#include <string>
+
 #include "MEM_guardedalloc.h"
 
 #include "intern/depsgraph_type.hh"
 
-#include "BLI_utildefines.h"
-
 #include "DEG_depsgraph_build.hh"
+
+#include "BLI_vector.hh"
+
+namespace blender {
 
 struct ID;
 struct Scene;
 
-namespace blender::deg {
+namespace deg {
 
 struct Depsgraph;
 struct OperationNode;
@@ -69,6 +73,8 @@ enum class NodeType {
   GEOMETRY,
   /* Sequencer Component (Scene Only) */
   SEQUENCER,
+  /* Compositor Component (Scene Only) */
+  COMPOSITOR,
   /* Component which contains all operations needed for layer collections
    * evaluation. */
   LAYER_COLLECTIONS,
@@ -175,7 +181,7 @@ struct Node {
    * have relationships between these nodes. */
   using Relations = Vector<Relation *>;
 
-  string name;        /* Identifier - mainly for debugging purposes. */
+  std::string name;   /* Identifier - mainly for debugging purposes. */
   NodeType type;      /* Structural type of node. */
   Relations inlinks;  /* Nodes which this one depends on. */
   Relations outlinks; /* Nodes which depend on this one. */
@@ -192,7 +198,7 @@ struct Node {
   virtual ~Node();
 
   /** Generic identifier for Depsgraph Nodes. */
-  virtual string identifier() const;
+  virtual std::string identifier() const;
 
   virtual void init(const ID * /*id*/, const char * /*subdata*/) {}
 
@@ -219,4 +225,5 @@ struct Node {
 
 void deg_register_base_depsnodes();
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

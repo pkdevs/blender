@@ -8,13 +8,19 @@
 
 #pragma once
 
+#include <Python.h>
+
+namespace blender {
+
 struct IDProperty;
 
 extern PyTypeObject BPy_IDPropertyUIManager_Type;
 
 struct BPy_IDPropertyUIManager {
-  PyObject_VAR_HEAD
+  PyObject_HEAD
   IDProperty *property;
 };
 
 void IDPropertyUIData_Init_Types();
+
+}  // namespace blender

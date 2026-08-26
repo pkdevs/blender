@@ -9,12 +9,12 @@
 #include <cstdlib>
 
 #include "DNA_camera_types.h"
+#include "DNA_text_types.h"
 
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 
 #include "BLT_translation.hh"
 
-#include "RNA_access.hh"
 #include "RNA_define.hh"
 
 #include "rna_internal.hh"
@@ -26,64 +26,147 @@
 
 #  include <fmt/format.h>
 
+#  include "BLI_path_utils.hh"
+#  include "BLI_string.hh"
+
 #  include "BKE_camera.h"
+#  include "BKE_lib_id.hh"
+#  include "BKE_main.hh"
 #  include "BKE_object.hh"
+#  include "BKE_report.hh"
 
 #  include "DEG_depsgraph.hh"
 #  include "DEG_depsgraph_build.hh"
 
 #  include "SEQ_relations.hh"
 
+#  include "RE_engine.h"
+
+namespace blender {
+
 static float rna_Camera_angle_get(PointerRNA *ptr)
 {
-  const Camera *cam = (const Camera *)ptr->owner_id;
+  const Camera *cam = id_cast<const Camera *>(ptr->owner_id);
   float sensor = BKE_camera_sensor_size(cam->sensor_fit, cam->sensor_x, cam->sensor_y);
   return focallength_to_fov(cam->lens, sensor);
 }
 
 static void rna_Camera_angle_set(PointerRNA *ptr, float value)
 {
-  Camera *cam = (Camera *)ptr->owner_id;
+  Camera *cam = id_cast<Camera *>(ptr->owner_id);
   float sensor = BKE_camera_sensor_size(cam->sensor_fit, cam->sensor_x, cam->sensor_y);
   cam->lens = fov_to_focallength(value, sensor);
 }
 
 static float rna_Camera_angle_x_get(PointerRNA *ptr)
 {
-  const Camera *cam = (const Camera *)ptr->owner_id;
+  const Camera *cam = id_cast<const Camera *>(ptr->owner_id);
   return focallength_to_fov(cam->lens, cam->sensor_x);
 }
 
 static void rna_Camera_angle_x_set(PointerRNA *ptr, float value)
 {
-  Camera *cam = (Camera *)ptr->owner_id;
+  Camera *cam = id_cast<Camera *>(ptr->owner_id);
   cam->lens = fov_to_focallength(value, cam->sensor_x);
 }
 
 static float rna_Camera_angle_y_get(PointerRNA *ptr)
 {
-  const Camera *cam = (const Camera *)ptr->owner_id;
+  const Camera *cam = id_cast<const Camera *>(ptr->owner_id);
   return focallength_to_fov(cam->lens, cam->sensor_y);
 }
 
 static void rna_Camera_angle_y_set(PointerRNA *ptr, float value)
 {
-  Camera *cam = (Camera *)ptr->owner_id;
+  Camera *cam = id_cast<Camera *>(ptr->owner_id);
   cam->lens = fov_to_focallength(value, cam->sensor_y);
 }
 
 static void rna_Camera_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
-  Camera *camera = (Camera *)ptr->owner_id;
+  Camera *camera = id_cast<Camera *>(ptr->owner_id);
 
   DEG_id_tag_update(&camera->id, 0);
 }
 
 static void rna_Camera_dependency_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
 {
-  Camera *camera = (Camera *)ptr->owner_id;
+  Camera *camera = id_cast<Camera *>(ptr->owner_id);
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&camera->id, 0);
+}
+
+static void rna_Camera_custom_update(Main * /*bmain*/, Scene *scene, PointerRNA *ptr)
+{
+  Camera *camera = id_cast<Camera *>(ptr->owner_id);
+  RenderEngineType *engine_type = (scene != nullptr) ? RE_engines_find(scene->r.engine) : nullptr;
+
+  if (engine_type && engine_type->update_custom_camera) {
+    /* auto update camera */
+    RenderEngine *engine = RE_engine_create(engine_type);
+    engine_type->update_custom_camera(engine, camera);
+    RE_engine_free(engine);
+  }
+
+  DEG_id_tag_update(&camera->id, 0);
+}
+
+static void rna_Camera_custom_mode_set(PointerRNA *ptr, int value)
+{
+  Camera *camera = id_cast<Camera *>(ptr->owner_id);
+
+  if (camera->custom_mode != eCamera_CustomMode(value)) {
+    camera->custom_mode = eCamera_CustomMode(value);
+    camera->custom_filepath[0] = '\0';
+
+    /* replace text data-block by filepath */
+    if (camera->custom_shader) {
+      Text *text = reinterpret_cast<Text *>(camera->custom_shader);
+
+      if (value == CAM_CUSTOM_SHADER_EXTERNAL && text->filepath) {
+        STRNCPY(camera->custom_filepath, text->filepath);
+        BLI_path_abs(camera->custom_filepath, ID_BLEND_PATH_FROM_GLOBAL(&text->id));
+        BLI_path_rel(camera->custom_filepath, ID_BLEND_PATH_FROM_GLOBAL(&camera->id));
+      }
+
+      id_us_min(&camera->custom_shader->id);
+      camera->custom_shader = nullptr;
+    }
+
+    /* remove any bytecode */
+    if (camera->custom_bytecode) {
+      MEM_delete(camera->custom_bytecode);
+      camera->custom_bytecode = nullptr;
+    }
+    camera->custom_bytecode_hash[0] = '\0';
+  }
+}
+
+static void rna_Camera_custom_bytecode_get(PointerRNA *ptr, char *value)
+{
+  Camera *camera = id_cast<Camera *>(ptr->owner_id);
+  strcpy(value, (camera->custom_bytecode) ? camera->custom_bytecode : "");
+}
+
+static int rna_Camera_custom_bytecode_length(PointerRNA *ptr)
+{
+  Camera *camera = id_cast<Camera *>(ptr->owner_id);
+  return (camera->custom_bytecode) ? strlen(camera->custom_bytecode) : 0;
+}
+
+static void rna_Camera_custom_bytecode_set(PointerRNA *ptr, const char *value)
+{
+  Camera *camera = id_cast<Camera *>(ptr->owner_id);
+  if (camera->custom_bytecode) {
+    MEM_delete(camera->custom_bytecode);
+  }
+
+  if (value && value[0]) {
+    camera->custom_bytecode = BLI_strdup(value);
+  }
+  else {
+    camera->custom_bytecode = nullptr;
+  }
 }
 
 static CameraBGImage *rna_Camera_background_images_new(Camera *cam)
@@ -105,7 +188,7 @@ static void rna_Camera_background_images_remove(Camera *cam,
   }
 
   BKE_camera_background_image_remove(cam, bgpic);
-  RNA_POINTER_INVALIDATE(bgpic_ptr);
+  bgpic_ptr->invalidate();
 
   WM_main_add_notifier(NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, cam);
 }
@@ -120,7 +203,7 @@ static void rna_Camera_background_images_clear(Camera *cam)
 static std::optional<std::string> rna_Camera_background_image_path(const PointerRNA *ptr)
 {
   const CameraBGImage *bgpic = static_cast<const CameraBGImage *>(ptr->data);
-  const Camera *camera = (const Camera *)ptr->owner_id;
+  const Camera *camera = id_cast<const Camera *>(ptr->owner_id);
 
   const int bgpic_index = BLI_findindex(&camera->bg_images, bgpic);
 
@@ -135,7 +218,7 @@ std::optional<std::string> rna_CameraBackgroundImage_image_or_movieclip_user_pat
     const PointerRNA *ptr)
 {
   const char *user = static_cast<const char *>(ptr->data);
-  const Camera *camera = (const Camera *)ptr->owner_id;
+  const Camera *camera = id_cast<const Camera *>(ptr->owner_id);
 
   int bgpic_index = BLI_findindex(&camera->bg_images, user - offsetof(CameraBGImage, iuser));
   if (bgpic_index >= 0) {
@@ -161,8 +244,8 @@ static bool rna_Camera_background_images_override_apply(
   BLI_assert_msg(opop->operation == LIBOVERRIDE_OP_INSERT_AFTER,
                  "Unsupported RNA override operation on background images collection");
 
-  Camera *cam_dst = (Camera *)ptr_dst->owner_id;
-  const Camera *cam_src = (const Camera *)ptr_src->owner_id;
+  Camera *cam_dst = id_cast<Camera *>(ptr_dst->owner_id);
+  const Camera *cam_src = id_cast<const Camera *>(ptr_src->owner_id);
 
   /* Remember that insertion operations are defined and stored in correct order, which means that
    * even if we insert several items in a row, we always insert first one, then second one, etc.
@@ -190,7 +273,7 @@ static bool rna_Camera_background_images_override_apply(
 
 static void rna_Camera_dof_update(Main *bmain, Scene *scene, PointerRNA * /*ptr*/)
 {
-  SEQ_relations_invalidate_scene_strips(bmain, scene);
+  seq::relations_invalidate_scene_strips(bmain, scene);
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
 }
 
@@ -211,7 +294,7 @@ std::optional<std::string> rna_CameraDOFSettings_path(const PointerRNA *ptr)
 
 static void rna_CameraDOFSettings_aperture_blades_set(PointerRNA *ptr, const int value)
 {
-  CameraDOFSettings *dofsettings = (CameraDOFSettings *)ptr->data;
+  CameraDOFSettings *dofsettings = static_cast<CameraDOFSettings *>(ptr->data);
 
   if (ELEM(value, 1, 2)) {
     if (dofsettings->aperture_blades == 0) {
@@ -226,7 +309,11 @@ static void rna_CameraDOFSettings_aperture_blades_set(PointerRNA *ptr, const int
   }
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 static void rna_def_camera_background_image(BlenderRNA *brna)
 {
@@ -378,6 +465,7 @@ static void rna_def_camera_background_image(BlenderRNA *brna)
   prop = RNA_def_property(srna, "frame_method", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_bitflag_sdna(prop, nullptr, "flag");
   RNA_def_property_enum_items(prop, bgpic_camera_frame_items);
+  RNA_def_property_enum_default(prop, CAM_BGIMG_FLAG_CAMERA_ASPECT);
   RNA_def_property_ui_text(prop, "Frame Method", "How the image fits in the camera frame");
   RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
 
@@ -399,6 +487,7 @@ static void rna_def_camera_background_images(BlenderRNA *brna, PropertyRNA *cpro
   RNA_def_function_ui_description(func, "Add new background image");
   parm = RNA_def_pointer(
       func, "image", "CameraBackgroundImage", "", "Image displayed as viewport background");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Camera_background_images_remove");
@@ -578,6 +667,7 @@ void RNA_def_camera(BlenderRNA *brna)
       {CAM_PERSP, "PERSP", 0, "Perspective", ""},
       {CAM_ORTHO, "ORTHO", 0, "Orthographic", ""},
       {CAM_PANO, "PANO", 0, "Panoramic", ""},
+      {CAM_CUSTOM, "CUSTOM", 0, "Custom", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
   static const EnumPropertyItem prop_lens_unit_items[] = {
@@ -641,6 +731,12 @@ void RNA_def_camera(BlenderRNA *brna)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
+  static const EnumPropertyItem custom_mode_items[] = {
+      {CAM_CUSTOM_SHADER_INTERNAL, "INTERNAL", 0, "Internal", "Use internal text data-block"},
+      {CAM_CUSTOM_SHADER_EXTERNAL, "EXTERNAL", 0, "External", "Use external file"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
   srna = RNA_def_struct(brna, "Camera", "ID");
   RNA_def_struct_ui_text(srna, "Camera", "Camera data-block for storing camera settings");
   RNA_def_struct_ui_icon(srna, ICON_CAMERA_DATA);
@@ -687,6 +783,7 @@ void RNA_def_camera(BlenderRNA *brna)
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_ui_text(prop, "Field of View", "Camera lens field of view");
   RNA_def_property_float_funcs(prop, "rna_Camera_angle_get", "rna_Camera_angle_set", nullptr);
+  RNA_def_property_float_default(prop, 0.6911504f);
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
 
   prop = RNA_def_property(srna, "clip_start", PROP_FLOAT, PROP_DISTANCE);
@@ -814,53 +911,66 @@ void RNA_def_camera(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, prop_lens_unit_items);
   RNA_def_property_ui_text(prop, "Lens Unit", "Unit to edit lens in for the user interface");
 
-  /* dtx */
+  /* Composition Guides */
+  prop = RNA_def_property(srna, "composition_guide_color", PROP_FLOAT, PROP_COLOR);
+  RNA_def_property_ui_text(
+      prop, "Composition Guide Color", "Color and alpha for compositional guide overlays");
+  RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
+
   prop = RNA_def_property(srna, "show_composition_center", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "dtx", CAM_DTX_CENTER);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "composition_guide_flags", COMPOSITION_GUIDES_CENTER);
   RNA_def_property_ui_text(
       prop, "Center", "Display center composition guide inside the camera view");
   RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_center_diagonal", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "dtx", CAM_DTX_CENTER_DIAG);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "composition_guide_flags", COMPOSITION_GUIDES_CENTER_DIAG);
   RNA_def_property_ui_text(
       prop, "Center Diagonal", "Display diagonal center composition guide inside the camera view");
   RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_thirds", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "dtx", CAM_DTX_THIRDS);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "composition_guide_flags", COMPOSITION_GUIDES_THIRDS);
   RNA_def_property_ui_text(
       prop, "Thirds", "Display rule of thirds composition guide inside the camera view");
   RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_golden", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "dtx", CAM_DTX_GOLDEN);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "composition_guide_flags", COMPOSITION_GUIDES_GOLDEN);
   RNA_def_property_ui_text(
       prop, "Golden Ratio", "Display golden ratio composition guide inside the camera view");
   RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_golden_tria_a", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "dtx", CAM_DTX_GOLDEN_TRI_A);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "composition_guide_flags", COMPOSITION_GUIDES_GOLDEN_TRI_A);
   RNA_def_property_ui_text(prop,
                            "Golden Triangle A",
                            "Display golden triangle A composition guide inside the camera view");
   RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_golden_tria_b", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "dtx", CAM_DTX_GOLDEN_TRI_B);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "composition_guide_flags", COMPOSITION_GUIDES_GOLDEN_TRI_B);
   RNA_def_property_ui_text(prop,
                            "Golden Triangle B",
                            "Display golden triangle B composition guide inside the camera view");
   RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_harmony_tri_a", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "dtx", CAM_DTX_HARMONY_TRI_A);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "composition_guide_flags", COMPOSITION_GUIDES_HARMONY_TRI_A);
   RNA_def_property_ui_text(
       prop, "Harmonious Triangle A", "Display harmony A composition guide inside the camera view");
   RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
 
   prop = RNA_def_property(srna, "show_composition_harmony_tri_b", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "dtx", CAM_DTX_HARMONY_TRI_B);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "composition_guide_flags", COMPOSITION_GUIDES_HARMONY_TRI_B);
   RNA_def_property_ui_text(
       prop, "Harmonious Triangle B", "Display harmony B composition guide inside the camera view");
   RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
@@ -964,6 +1074,39 @@ void RNA_def_camera(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Cylinder Radius", "Radius of the virtual cylinder");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
 
+  /* Custom camera. */
+  prop = RNA_def_property(srna, "custom_filepath", PROP_STRING, PROP_FILEPATH);
+  RNA_def_property_ui_text(
+      prop, "Custom File Path", "Path to the shader defining the custom camera");
+  RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_custom_update");
+
+  prop = RNA_def_property(srna, "custom_shader", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "Text");
+  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
+  RNA_def_property_ui_text(prop, "Custom Shader", "Shader defining the custom camera");
+  RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_custom_update");
+
+  prop = RNA_def_property(srna, "custom_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_funcs(prop, nullptr, "rna_Camera_custom_mode_set", nullptr);
+  RNA_def_property_enum_items(prop, custom_mode_items);
+  RNA_def_property_ui_text(prop, "Custom shader source", "");
+  RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
+
+  prop = RNA_def_property(srna, "custom_bytecode", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_Camera_custom_bytecode_get",
+                                "rna_Camera_custom_bytecode_length",
+                                "rna_Camera_custom_bytecode_set");
+  RNA_def_property_ui_text(prop, "Custom Bytecode", "Compiled bytecode of the custom shader");
+  RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
+
+  prop = RNA_def_property(srna, "custom_bytecode_hash", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(
+      prop,
+      "Custom Bytecode Hash",
+      "Hash of the compiled bytecode of the custom shader, for quick equality checking");
+  RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
+
   /* pointers */
   prop = RNA_def_property(srna, "dof", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "CameraDOFSettings");
@@ -996,5 +1139,7 @@ void RNA_def_camera(BlenderRNA *brna)
   /* Camera API */
   RNA_api_camera(srna);
 }
+
+}  // namespace blender
 
 #endif

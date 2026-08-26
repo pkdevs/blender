@@ -6,10 +6,13 @@
  * \ingroup spview3d
  */
 
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_time.h"
+#include "BLI_math_matrix.hh"
+#include "BLI_math_rotation.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_time.hh"
 
+#include "BKE_camera.h"
 #include "BKE_context.hh"
 #include "BKE_screen.hh"
 
@@ -21,6 +24,8 @@
 
 #include "view3d_intern.hh"
 #include "view3d_navigate.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name View Zoom Operator
@@ -75,28 +80,55 @@ static void view_zoom_to_window_xy_camera(Scene *scene,
     rctf camera_frame_old;
     rctf camera_frame_new;
 
-    const float pt_src[2] = {float(zoom_xy[0]), float(zoom_xy[1])};
-    float pt_dst[2];
-    float delta_px[2];
+    const float2 pt_src(zoom_xy[0] - region->winrct.xmin, zoom_xy[1] - region->winrct.ymin);
+    float2 pt_dst;
+    float2 delta_px;
 
-    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, false, &camera_frame_old);
-    BLI_rctf_translate(&camera_frame_old, region->winrct.xmin, region->winrct.ymin);
+    /* Calculate the center of zoom with roll applied. */
+    if (rv3d->camroll != 0.0f) {
+      const float2 center(region->winx / 2, region->winy / 2);
 
-    rv3d->camzoom = camzoom_new;
-    CLAMP(rv3d->camzoom, RV3D_CAMZOOM_MIN, RV3D_CAMZOOM_MAX);
+      const float2 pt_src_rotated = rotate_around_point_2d(
+          pt_src, center, math::AngleRadian(-rv3d->camroll));
 
-    ED_view3d_calc_camera_border(scene, depsgraph, region, v3d, rv3d, false, &camera_frame_new);
-    BLI_rctf_translate(&camera_frame_new, region->winrct.xmin, region->winrct.ymin);
+      const float2x2 rot_invert = math::from_rotation<float2x2>(math::AngleRadian(-rv3d->camroll));
 
-    BLI_rctf_transform_pt_v(&camera_frame_new, &camera_frame_old, pt_dst, pt_src);
-    sub_v2_v2v2(delta_px, pt_dst, pt_src);
+      camera_frame_old = BKE_camera_view_border(
+          scene, depsgraph, v3d, rv3d, region->winx, region->winy, false, false, true);
+
+      rv3d->camzoom = camzoom_new;
+      CLAMP(rv3d->camzoom, RV3D_CAMZOOM_MIN, RV3D_CAMZOOM_MAX);
+
+      camera_frame_new = BKE_camera_view_border(
+          scene, depsgraph, v3d, rv3d, region->winx, region->winy, false, false, true);
+
+      BLI_rctf_transform_pt_v(&camera_frame_new, &camera_frame_old, pt_dst, pt_src_rotated);
+      pt_dst = rotate_around_point_2d(pt_dst, center, math::AngleRadian(rv3d->camroll));
+
+      delta_px = pt_dst - pt_src;
+      delta_px = rot_invert * delta_px;
+    }
+    else {
+      camera_frame_old = BKE_camera_view_border(
+          scene, depsgraph, v3d, rv3d, region->winx, region->winy, false, false, true);
+
+      rv3d->camzoom = camzoom_new;
+      CLAMP(rv3d->camzoom, RV3D_CAMZOOM_MIN, RV3D_CAMZOOM_MAX);
+
+      camera_frame_new = BKE_camera_view_border(
+          scene, depsgraph, v3d, rv3d, region->winx, region->winy, false, false, true);
+
+      BLI_rctf_transform_pt_v(&camera_frame_new, &camera_frame_old, pt_dst, pt_src);
+
+      delta_px = pt_dst - pt_src;
+    }
 
     /* translate the camera offset using pixel space delta
      * mapped back to the camera (same logic as panning in camera view) */
     zoomfac_px = BKE_screen_view3d_zoom_to_fac(rv3d->camzoom) * 2.0f;
 
-    rv3d->camdx += delta_px[0] / (region->winx * zoomfac_px);
-    rv3d->camdy += delta_px[1] / (region->winy * zoomfac_px);
+    rv3d->camdx += delta_px.x / (region->winx * zoomfac_px);
+    rv3d->camdy += delta_px.y / (region->winy * zoomfac_px);
     CLAMP(rv3d->camdx, -1.0f, 1.0f);
     CLAMP(rv3d->camdy, -1.0f, 1.0f);
   }
@@ -188,8 +220,8 @@ static float viewzoom_scale_value(const rcti *winrct,
         BLI_rcti_cent_x(winrct),
         BLI_rcti_cent_y(winrct),
     };
-    float len_new = (5 * UI_SCALE_FAC) + (float(len_v2v2_int(ctr, xy_curr)) / UI_SCALE_FAC);
-    float len_old = (5 * UI_SCALE_FAC) + (float(len_v2v2_int(ctr, xy_init)) / UI_SCALE_FAC);
+    float len_new = (5 * UI_SCALE_FAC) + (len_v2v2_int(ctr, xy_curr) / UI_SCALE_FAC);
+    float len_old = (5 * UI_SCALE_FAC) + (len_v2v2_int(ctr, xy_init) / UI_SCALE_FAC);
 
     /* intentionally ignore 'zoom_invert' for scale */
     if (zoom_invert_force) {
@@ -292,32 +324,28 @@ static void viewzoom_apply_3d(ViewOpsData *vod,
                               const bool zoom_invert,
                               const bool zoom_to_pos)
 {
-  float zfac;
-  float dist_range[2];
-
-  ED_view3d_dist_range_get(vod->v3d, dist_range);
-
-  zfac = viewzoom_scale_value_offset(&vod->region->winrct,
-                                     viewzoom,
-                                     zoom_invert,
-                                     false,
-                                     xy,
-                                     vod->init.event_xy,
-                                     vod->init.event_xy_offset,
-                                     vod->rv3d->dist,
-                                     vod->init.dist,
-                                     &vod->prev.time);
+  const Bounds<float> dist_range = ED_view3d_dist_soft_range_get(vod->v3d, false);
+  float zfac = viewzoom_scale_value_offset(&vod->region->winrct,
+                                           viewzoom,
+                                           zoom_invert,
+                                           false,
+                                           xy,
+                                           vod->init.event_xy,
+                                           vod->init.event_xy_offset,
+                                           vod->rv3d->dist,
+                                           vod->init.dist,
+                                           &vod->prev.time);
 
   if (zfac != 1.0f) {
-    const float zfac_min = dist_range[0] / vod->rv3d->dist;
-    const float zfac_max = dist_range[1] / vod->rv3d->dist;
+    const float zfac_min = dist_range.min / vod->rv3d->dist;
+    const float zfac_max = dist_range.max / vod->rv3d->dist;
     CLAMP(zfac, zfac_min, zfac_max);
 
     view_zoom_to_window_xy_3d(vod->region, zfac, zoom_to_pos ? vod->prev.event_xy : nullptr);
   }
 
   /* these limits were in old code too */
-  CLAMP(vod->rv3d->dist, dist_range[0], dist_range[1]);
+  CLAMP(vod->rv3d->dist, dist_range.min, dist_range.max);
 
   if (RV3D_LOCK_FLAGS(vod->rv3d) & RV3D_BOXVIEW) {
     view3d_boxview_sync(vod->area, vod->region);
@@ -345,17 +373,17 @@ static void viewzoom_apply(ViewOpsData *vod,
   }
 }
 
-static int viewzoom_modal_impl(bContext *C,
-                               ViewOpsData *vod,
-                               const eV3D_OpEvent event_code,
-                               const int xy[2])
+static wmOperatorStatus viewzoom_modal_impl(bContext *C,
+                                            ViewOpsData *vod,
+                                            const eV3D_OpEvent event_code,
+                                            const int xy[2])
 {
   bool use_autokey = false;
-  int ret = OPERATOR_RUNNING_MODAL;
+  wmOperatorStatus ret = OPERATOR_RUNNING_MODAL;
 
   switch (event_code) {
     case VIEW_APPLY: {
-      viewzoom_apply(vod, xy, (eViewZoom_Style)U.viewzoom, (U.uiflag & USER_ZOOM_INVERT) != 0);
+      viewzoom_apply(vod, xy, eViewZoom_Style(U.viewzoom), (U.uiflag & USER_ZOOM_INVERT) != 0);
       if (ED_screen_animation_playing(CTX_wm_manager(C))) {
         use_autokey = true;
       }
@@ -393,12 +421,11 @@ static void view_zoom_apply_step(bContext *C,
   View3D *v3d = static_cast<View3D *>(area->spacedata.first);
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
   bool use_cam_zoom;
-  float dist_range[2];
 
   use_cam_zoom = (rv3d->persp == RV3D_CAMOB) &&
                  !(rv3d->is_persp && ED_view3d_camera_lock_check(v3d, rv3d));
 
-  ED_view3d_dist_range_get(v3d, dist_range);
+  const Bounds<float> dist_range = ED_view3d_dist_soft_range_get(v3d, false);
 
   if (delta < 0) {
     const float step = 1.2f;
@@ -406,7 +433,7 @@ static void view_zoom_apply_step(bContext *C,
       view_zoom_to_window_xy_camera(scene, depsgraph, v3d, region, step, zoom_xy);
     }
     else {
-      if (rv3d->dist < dist_range[1]) {
+      if (rv3d->dist < dist_range.max) {
         view_zoom_to_window_xy_3d(region, step, zoom_xy);
       }
     }
@@ -417,7 +444,7 @@ static void view_zoom_apply_step(bContext *C,
       view_zoom_to_window_xy_camera(scene, depsgraph, v3d, region, step, zoom_xy);
     }
     else {
-      if (rv3d->dist > dist_range[0]) {
+      if (rv3d->dist > dist_range.min) {
         view_zoom_to_window_xy_3d(region, step, zoom_xy);
       }
     }
@@ -433,7 +460,7 @@ static void view_zoom_apply_step(bContext *C,
   ED_region_tag_redraw(region);
 }
 
-static int viewzoom_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus viewzoom_exec(bContext *C, wmOperator *op)
 {
   BLI_assert(op->customdata == nullptr);
 
@@ -464,10 +491,10 @@ static int viewzoom_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int viewzoom_invoke_impl(bContext *C,
-                                ViewOpsData *vod,
-                                const wmEvent *event,
-                                PointerRNA *ptr)
+static wmOperatorStatus viewzoom_invoke_impl(bContext *C,
+                                             ViewOpsData *vod,
+                                             const wmEvent *event,
+                                             PointerRNA *ptr)
 {
   int xy[2];
 
@@ -493,22 +520,21 @@ static int viewzoom_invoke_impl(bContext *C,
 
     return OPERATOR_FINISHED;
   }
-  else {
-    eV3D_OpEvent event_code = ELEM(event->type, MOUSEZOOM, MOUSEPAN) ? VIEW_CONFIRM : VIEW_PASS;
-    if (event_code == VIEW_CONFIRM) {
-      if (U.uiflag & USER_ZOOM_HORIZ) {
-        vod->init.event_xy[0] = vod->prev.event_xy[0] = xy[0];
-      }
-      else {
-        /* Set y move = x move as MOUSEZOOM uses only x axis to pass magnification value */
-        vod->init.event_xy[1] = vod->prev.event_xy[1] = vod->init.event_xy[1] + xy[0] -
-                                                        event->prev_xy[0];
-      }
-      viewzoom_apply(vod, event->prev_xy, USER_ZOOM_DOLLY, (U.uiflag & USER_ZOOM_INVERT) != 0);
-      ED_view3d_camera_lock_autokey(vod->v3d, vod->rv3d, C, false, true);
 
-      return OPERATOR_FINISHED;
+  eV3D_OpEvent event_code = ELEM(event->type, MOUSEZOOM, MOUSEPAN) ? VIEW_CONFIRM : VIEW_PASS;
+  if (event_code == VIEW_CONFIRM) {
+    if (U.uiflag & USER_ZOOM_HORIZ) {
+      vod->init.event_xy[0] = vod->prev.event_xy[0] = xy[0];
     }
+    else {
+      /* Set y move = x move as MOUSEZOOM uses only x axis to pass magnification value */
+      vod->init.event_xy[1] = vod->prev.event_xy[1] = vod->init.event_xy[1] + xy[0] -
+                                                      event->prev_xy[0];
+    }
+    viewzoom_apply(vod, event->prev_xy, USER_ZOOM_DOLLY, (U.uiflag & USER_ZOOM_INVERT) != 0);
+    ED_view3d_camera_lock_autokey(vod->v3d, vod->rv3d, C, false, true);
+
+    return OPERATOR_FINISHED;
   }
 
   if (U.viewzoom == USER_ZOOM_CONTINUE) {
@@ -520,9 +546,9 @@ static int viewzoom_invoke_impl(bContext *C,
   return OPERATOR_RUNNING_MODAL;
 }
 
-/* viewdolly_invoke() copied this function, changes here may apply there */
-static int viewzoom_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus viewzoom_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  /* Near duplicate logic in #viewdolly_invoke(), changes here may apply there too. */
   return view3d_navigate_invoke_impl(C, op, event, &ViewOpsType_zoom);
 }
 
@@ -533,7 +559,7 @@ void VIEW3D_OT_zoom(wmOperatorType *ot)
   ot->description = "Zoom in/out in the view";
   ot->idname = ViewOpsType_zoom.idname;
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = viewzoom_invoke;
   ot->exec = viewzoom_exec;
   ot->modal = view3d_navigate_modal_fn;
@@ -557,3 +583,5 @@ const ViewOpsType ViewOpsType_zoom = {
     /*init_fn*/ viewzoom_invoke_impl,
     /*apply_fn*/ viewzoom_modal_impl,
 };
+
+}  // namespace blender

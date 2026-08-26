@@ -8,7 +8,13 @@
 
 #pragma once
 
+#include <Python.h>
+
+namespace blender {
+
 int BPY_library_load_type_ready();
 
 extern PyMethodDef BPY_library_load_method_def;
 extern PyMethodDef BPY_library_write_method_def;
+
+}  // namespace blender

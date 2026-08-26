@@ -19,9 +19,9 @@
 #include "BKE_object.hh"
 #include "DNA_object_types.h"
 
-#include "BLI_assert.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase_iterator.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_set.hh"
 #include "BLI_vector.hh"
 
@@ -29,6 +29,9 @@
 #include <vector>
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.usd"};
 
 namespace usdtokens {
@@ -60,7 +63,7 @@ struct BlendShapeMergeInfo {
  * Attempt to add the given name to the 'names' set as a unique entry, modifying
  * the name with a numerical suffix if necessary, and return the unique name that
  * was added to the set. */
-std::string add_unique_name(blender::Set<std::string> &names, const std::string &name)
+std::string add_unique_name(Set<std::string> &names, const std::string &name)
 {
   std::string unique_name = name;
   int suffix = 2;
@@ -73,7 +76,7 @@ std::string add_unique_name(blender::Set<std::string> &names, const std::string 
 
 }  // namespace
 
-namespace blender::io::usd {
+namespace io::usd {
 
 pxr::TfToken TempBlendShapeWeightsPrimvarName("temp:weights", pxr::TfToken::Immortal);
 
@@ -178,7 +181,7 @@ const Key *get_mesh_shape_key(const Object *obj)
     return nullptr;
   }
 
-  const Mesh *mesh = static_cast<const Mesh *>(obj->data);
+  const Mesh *mesh = id_cast<const Mesh *>(obj->data);
 
   return mesh->key;
 }
@@ -221,17 +224,13 @@ void create_blend_shapes(pxr::UsdStageRefPtr stage,
 
   int basis_totelem = basis_key->totelem;
 
-  LISTBASE_FOREACH (KeyBlock *, kb, &key->block) {
-    if (!kb) {
-      continue;
-    }
-
-    if (kb == basis_key) {
+  for (KeyBlock &kb : key->block) {
+    if (&kb == basis_key) {
       /* Skip the basis. */
       continue;
     }
 
-    pxr::TfToken name(make_safe_name(kb->name, allow_unicode));
+    pxr::TfToken name(make_safe_name(kb.name, allow_unicode));
     blendshape_names.push_back(name);
 
     pxr::SdfPath path = mesh_prim.GetPath().AppendChild(name);
@@ -246,15 +245,15 @@ void create_blend_shapes(pxr::UsdStageRefPtr stage,
      * is included. */
     pxr::UsdAttribute point_indices_attr = blendshape.CreatePointIndicesAttr();
 
-    pxr::VtVec3fArray offsets(kb->totelem);
-    pxr::VtIntArray indices(kb->totelem);
+    pxr::VtVec3fArray offsets(kb.totelem);
+    pxr::VtIntArray indices(kb.totelem);
     std::iota(indices.begin(), indices.end(), 0);
 
-    const float(*fp)[3] = static_cast<float(*)[3]>(kb->data);
+    const float (*fp)[3] = static_cast<float (*)[3]>(kb.data);
 
-    const float(*basis_fp)[3] = static_cast<float(*)[3]>(basis_key->data);
+    const float (*basis_fp)[3] = static_cast<float (*)[3]>(basis_key->data);
 
-    for (int i = 0; i < kb->totelem; ++i) {
+    for (int i = 0; i < kb.totelem; ++i) {
       /* Subtract the key positions from the
        * basis positions to get the offsets. */
       sub_v3_v3v3(offsets[i].data(), fp[i], basis_fp[i]);
@@ -289,12 +288,12 @@ pxr::VtFloatArray get_blendshape_weights(const Key *key)
 
   pxr::VtFloatArray weights;
 
-  LISTBASE_FOREACH (KeyBlock *, kb, &key->block) {
-    if (kb == key->block.first) {
+  for (KeyBlock &kb : key->block) {
+    if (&kb == key->block.first) {
       /* Skip the first key, which is the basis. */
       continue;
     }
-    weights.push_back(kb->curval);
+    weights.push_back(kb.curval);
   }
 
   return weights;
@@ -341,8 +340,8 @@ void remap_blend_shape_anim(pxr::UsdStageRefPtr stage,
   for (const pxr::SdfPath &mesh_path : mesh_paths) {
 
     pxr::UsdPrim mesh_prim = stage->GetPrimAtPath(mesh_path);
-    pxr::UsdSkelBindingAPI skel_api = pxr::UsdSkelBindingAPI::Apply(mesh_prim);
-    if (!skel_api) {
+    pxr::UsdSkelBindingAPI mesh_skel_api = pxr::UsdSkelBindingAPI::Apply(mesh_prim);
+    if (!mesh_skel_api) {
       CLOG_WARN(&LOG,
                 "Couldn't apply UsdSkelBindingAPI to mesh prim %s",
                 mesh_path.GetAsString().c_str());
@@ -350,30 +349,30 @@ void remap_blend_shape_anim(pxr::UsdStageRefPtr stage,
     }
 
     /* Get the blend shape names for this mesh. */
-    pxr::UsdAttribute blend_shapes_attr = skel_api.GetBlendShapesAttr();
+    pxr::UsdAttribute blend_shapes_attr = mesh_skel_api.GetBlendShapesAttr();
 
     if (!blend_shapes_attr) {
       continue;
     }
 
     pxr::VtTokenArray names;
-    if (!skel_api.GetBlendShapesAttr().Get(&names)) {
+    if (!mesh_skel_api.GetBlendShapesAttr().Get(&names)) {
       continue;
     }
 
     /* Ensure the names are unique. */
     pxr::VtTokenArray unique_names;
 
-    for (pxr::TfToken &name : names) {
+    for (const pxr::TfToken &name : names.AsConst()) {
       std::string unique = add_unique_name(merged_names, name.GetString());
       unique_names.push_back(pxr::TfToken(unique));
     }
 
     /* Set the unique names back on the mesh. */
-    skel_api.GetBlendShapesAttr().Set(unique_names);
+    mesh_skel_api.GetBlendShapesAttr().Set(unique_names);
 
     /* Look up the temporary weights time sample we wrote to the mesh. */
-    pxr::UsdAttribute temp_weights_attr = pxr::UsdGeomPrimvarsAPI(mesh_prim).GetPrimvar(
+    const pxr::UsdAttribute temp_weights_attr = pxr::UsdGeomPrimvarsAPI(mesh_prim).GetPrimvar(
         TempBlendShapeWeightsPrimvarName);
 
     if (!temp_weights_attr) {
@@ -424,7 +423,7 @@ void remap_blend_shape_anim(pxr::UsdStageRefPtr stage,
     for (const BlendShapeMergeInfo &info : merge_info) {
       pxr::VtFloatArray src_weights;
       if (info.src_weights_attr.Get(&src_weights, time)) {
-        if (!info.anim_map.Remap(src_weights, &dst_weights)) {
+        if (!info.anim_map.Remap(src_weights.AsConst(), &dst_weights)) {
           CLOG_WARN(&LOG, "Failed remapping blend shape weights");
         }
       }
@@ -448,7 +447,7 @@ Mesh *get_shape_key_basis_mesh(Object *obj)
     return nullptr;
   }
 
-  KeyBlock *basis = reinterpret_cast<KeyBlock *>(mesh->key->block.first);
+  const KeyBlock *basis = reinterpret_cast<KeyBlock *>(mesh->key->block.first);
 
   if (mesh->verts_num != basis->totelem) {
     CLOG_WARN(&LOG, "Vertex and shape key element count mismatch for mesh %s", obj->id.name + 2);
@@ -459,12 +458,10 @@ Mesh *get_shape_key_basis_mesh(Object *obj)
   Mesh *temp_mesh = BKE_mesh_copy_for_eval(*mesh);
 
   /* Update the verts. */
-  BKE_keyblock_convert_to_mesh(
-      basis,
-      reinterpret_cast<float(*)[3]>(temp_mesh->vert_positions_for_write().data()),
-      temp_mesh->verts_num);
+  BKE_keyblock_convert_to_mesh(basis, temp_mesh->vert_positions_for_write());
 
   return temp_mesh;
 }
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

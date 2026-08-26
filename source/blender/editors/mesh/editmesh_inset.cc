@@ -8,11 +8,13 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_string_utils.hh"
 
 #include "BLT_translation.hh"
 
@@ -41,7 +43,7 @@
 
 #include "mesh_intern.hh" /* own include */
 
-using blender::Vector;
+namespace blender {
 
 struct InsetObjectStore {
   /** Must have a valid edit-mesh. */
@@ -80,32 +82,38 @@ static void edbm_inset_update_header(wmOperator *op, bContext *C)
     char msg[UI_MAX_DRAW_STR];
     char flts_str[NUM_STR_REP_LEN * 2];
     if (hasNumInput(&opdata->num_input)) {
-      outputNumInput(&opdata->num_input, flts_str, &sce->unit);
+      outputNumInput(&opdata->num_input, flts_str, sce->unit);
     }
     else {
+      const int precision = opdata->shift ? 6 : 4;
       BKE_unit_value_as_string(flts_str,
                                NUM_STR_REP_LEN,
                                RNA_float_get(op->ptr, "thickness"),
-                               4,
+                               precision * -1,
                                B_UNIT_LENGTH,
-                               &sce->unit,
+                               sce->unit,
+                               true,
                                true);
       BKE_unit_value_as_string(flts_str + NUM_STR_REP_LEN,
                                NUM_STR_REP_LEN,
                                RNA_float_get(op->ptr, "depth"),
-                               4,
+                               precision * -1,
                                B_UNIT_LENGTH,
-                               &sce->unit,
+                               sce->unit,
+                               true,
                                true);
     }
-    SNPRINTF(msg, IFACE_("Thickness: %s, Depth: %s"), flts_str, flts_str + NUM_STR_REP_LEN);
+    SNPRINTF_UTF8(msg,
+                  IFACE_("Thickness: %s, Depth: %s"),
+                  flts_str,
+                  BLI_string_pad_number_sign(flts_str + NUM_STR_REP_LEN).c_str());
     ED_area_status_text(area, msg);
   }
 
   WorkspaceStatus status(C);
   status.item(IFACE_("Confirm"), ICON_EVENT_RETURN, ICON_MOUSE_LMB);
   status.item(IFACE_("Cancel"), ICON_EVENT_ESC, ICON_MOUSE_RMB);
-  status.item_bool(IFACE_("Tweak"), opdata->modify_depth, ICON_EVENT_CTRL);
+  status.item_bool(IFACE_("Depth"), opdata->modify_depth, ICON_EVENT_CTRL);
   status.item_bool(IFACE_("Outset"), RNA_boolean_get(op->ptr, "use_outset"), ICON_EVENT_O);
   status.item_bool(IFACE_("Boundary"), RNA_boolean_get(op->ptr, "use_boundary"), ICON_EVENT_B);
   status.item_bool(IFACE_("Individual"), RNA_boolean_get(op->ptr, "use_individual"), ICON_EVENT_I);
@@ -114,6 +122,7 @@ static void edbm_inset_update_header(wmOperator *op, bContext *C)
 static bool edbm_inset_init(bContext *C, wmOperator *op, const bool is_modal)
 {
   InsetData *opdata;
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
@@ -122,8 +131,7 @@ static bool edbm_inset_init(bContext *C, wmOperator *op, const bool is_modal)
     RNA_float_set(op->ptr, "depth", 0.0f);
   }
 
-  op->customdata = opdata = static_cast<InsetData *>(
-      MEM_mallocN(sizeof(InsetData), "inset_operator_data"));
+  op->customdata = opdata = MEM_new_uninitialized<InsetData>("inset_operator_data");
 
   uint objects_used_len = 0;
 
@@ -131,9 +139,8 @@ static bool edbm_inset_init(bContext *C, wmOperator *op, const bool is_modal)
 
   {
     Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-        scene, view_layer, CTX_wm_view3d(C));
-    opdata->ob_store = static_cast<InsetObjectStore *>(
-        MEM_malloc_arrayN(objects.size(), sizeof(*opdata->ob_store), __func__));
+        *bmain, scene, view_layer, CTX_wm_view3d(C));
+    opdata->ob_store = MEM_new_array_uninitialized<InsetObjectStore>(objects.size(), __func__);
     for (uint ob_index = 0; ob_index < objects.size(); ob_index++) {
       Object *obedit = objects[ob_index];
       float scale = mat4_to_scale(obedit->object_to_world().ptr());
@@ -200,15 +207,14 @@ static void edbm_inset_exit(bContext *C, wmOperator *op)
   }
   ED_workspace_status_text(C, nullptr);
 
-  MEM_SAFE_FREE(opdata->ob_store);
-  MEM_SAFE_FREE(op->customdata);
+  MEM_SAFE_DELETE(opdata->ob_store);
+  MEM_delete(opdata);
+  op->customdata = nullptr;
 }
 
 static void edbm_inset_cancel(bContext *C, wmOperator *op)
 {
-  InsetData *opdata;
-
-  opdata = static_cast<InsetData *>(op->customdata);
+  InsetData *opdata = static_cast<InsetData *>(op->customdata);
   if (opdata->is_modal) {
     for (uint ob_index = 0; ob_index < opdata->ob_store_len; ob_index++) {
       Object *obedit = opdata->ob_store[ob_index].ob;
@@ -218,7 +224,7 @@ static void edbm_inset_cancel(bContext *C, wmOperator *op)
       params.calc_looptris = false;
       params.calc_normals = false;
       params.is_destructive = true;
-      EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+      EDBM_update(id_cast<Mesh *>(obedit->data), &params);
     }
   }
 
@@ -312,13 +318,13 @@ static bool edbm_inset_calc(wmOperator *op)
     params.calc_looptris = true;
     params.calc_normals = false;
     params.is_destructive = true;
-    EDBM_update(static_cast<Mesh *>(obedit->data), &params);
+    EDBM_update(id_cast<Mesh *>(obedit->data), &params);
     changed = true;
   }
   return changed;
 }
 
-static int edbm_inset_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus edbm_inset_exec(bContext *C, wmOperator *op)
 {
   if (!edbm_inset_init(C, op, false)) {
     return OPERATOR_CANCELLED;
@@ -333,7 +339,7 @@ static int edbm_inset_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int edbm_inset_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus edbm_inset_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   RegionView3D *rv3d = CTX_wm_region_view3d(C);
   InsetData *opdata;
@@ -349,7 +355,9 @@ static int edbm_inset_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   opdata->launch_event = WM_userdef_event_type_from_keymap_type(event->type);
 
   /* initialize mouse values */
-  if (!calculateTransformCenter(C, V3D_AROUND_CENTER_MEDIAN, center_3d, opdata->mcenter)) {
+  if (!ed::transform::calculateTransformCenter(
+          C, V3D_AROUND_CENTER_MEDIAN, center_3d, opdata->mcenter))
+  {
     /* in this case the tool will likely do nothing,
      * ideally this will never happen and should be checked for above */
     opdata->mcenter[0] = opdata->mcenter[1] = 0;
@@ -367,7 +375,7 @@ static int edbm_inset_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   return OPERATOR_RUNNING_MODAL;
 }
 
-static int edbm_inset_modal(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus edbm_inset_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   InsetData *opdata = static_cast<InsetData *>(op->customdata);
   const bool has_numinput = hasNumInput(&opdata->num_input);
@@ -545,6 +553,9 @@ static int edbm_inset_modal(bContext *C, wmOperator *op, const wmEvent *event)
         handled = true;
       }
       break;
+    default: {
+      break;
+    }
   }
 
   /* Modal numinput inactive, try to handle numeric inputs last... */
@@ -575,7 +586,7 @@ void MESH_OT_inset(wmOperatorType *ot)
   ot->idname = "MESH_OT_inset";
   ot->description = "Inset new faces into selected faces";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = edbm_inset_invoke;
   ot->modal = edbm_inset_modal;
   ot->exec = edbm_inset_exec;
@@ -619,3 +630,5 @@ void MESH_OT_inset(wmOperatorType *ot)
   prop = RNA_def_boolean(ot->srna, "release_confirm", false, "Confirm on Release", "");
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
+
+}  // namespace blender

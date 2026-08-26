@@ -6,19 +6,12 @@
  * \ingroup edmesh
  */
 
-#include "MEM_guardedalloc.h"
-
 #include "BLI_atomic_disjoint_set.hh"
-#include "BLI_bitmap.h"
-#include "BLI_blenlib.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
 #include "BLI_vector_set.hh"
-
-#include "IMB_imbuf.hh"
-#include "IMB_imbuf_types.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -27,11 +20,9 @@
 #include "BKE_attribute.hh"
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
-#include "BKE_global.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
 #include "BKE_object.hh"
-#include "BKE_object_types.hh"
 
 #include "ED_mesh.hh"
 #include "ED_screen.hh"
@@ -44,6 +35,8 @@
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
+namespace blender {
+
 /* own include */
 
 void paintface_flush_flags(bContext *C,
@@ -51,7 +44,6 @@ void paintface_flush_flags(bContext *C,
                            const bool flush_selection,
                            const bool flush_hidden)
 {
-  using namespace blender;
   Mesh *mesh = BKE_mesh_from_object(ob);
   const int *index_array = nullptr;
 
@@ -70,16 +62,16 @@ void paintface_flush_flags(bContext *C,
   }
 
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
+  Object *ob_eval = DEG_get_evaluated(depsgraph, ob);
 
   if (ob_eval == nullptr) {
     return;
   }
 
   bke::AttributeAccessor attributes_me = mesh->attributes();
-  Mesh *me_orig = (Mesh *)ob_eval->runtime->data_orig;
+  Mesh *me_orig = id_cast<Mesh *>(ob_eval->runtime->data_orig);
   bke::MutableAttributeAccessor attributes_orig = me_orig->attributes_for_write();
-  Mesh *mesh_eval = (Mesh *)ob_eval->runtime->data_eval;
+  Mesh *mesh_eval = id_cast<Mesh *>(ob_eval->runtime->data_eval);
   bke::MutableAttributeAccessor attributes_eval = mesh_eval->attributes_for_write();
   bool updated = false;
 
@@ -105,7 +97,9 @@ void paintface_flush_flags(bContext *C,
     }
 
     /* Mesh faces => Final derived faces */
-    if ((index_array = (const int *)CustomData_get_layer(&mesh_eval->face_data, CD_ORIGINDEX))) {
+    if ((index_array = static_cast<const int *>(
+             CustomData_get_layer(&mesh_eval->face_data, CD_ORIGINDEX))))
+    {
       if (flush_hidden) {
         const VArray<bool> hide_poly_orig = *attributes_orig.lookup_or_default<bool>(
             ".hide_poly", bke::AttrDomain::Face, false);
@@ -147,10 +141,10 @@ void paintface_flush_flags(bContext *C,
       BKE_mesh_batch_cache_dirty_tag(mesh_eval, BKE_MESH_BATCH_DIRTY_SELECT_PAINT);
     }
 
-    DEG_id_tag_update(static_cast<ID *>(ob->data), ID_RECALC_SELECT);
+    DEG_id_tag_update(ob->data, ID_RECALC_SELECT);
   }
   else {
-    DEG_id_tag_update(static_cast<ID *>(ob->data), ID_RECALC_SYNC_TO_EVAL | ID_RECALC_SELECT);
+    DEG_id_tag_update(ob->data, ID_RECALC_SYNC_TO_EVAL | ID_RECALC_SELECT);
   }
 
   WM_event_add_notifier(C, NC_GEOM | ND_SELECT, ob->data);
@@ -158,7 +152,6 @@ void paintface_flush_flags(bContext *C,
 
 void paintface_hide(bContext *C, Object *ob, const bool unselected)
 {
-  using namespace blender;
   Mesh *mesh = BKE_mesh_from_object(ob);
   if (mesh == nullptr || mesh->faces_num == 0) {
     return;
@@ -192,7 +185,6 @@ void paintface_hide(bContext *C, Object *ob, const bool unselected)
 
 void paintface_reveal(bContext *C, Object *ob, const bool select)
 {
-  using namespace blender;
   Mesh *mesh = BKE_mesh_from_object(ob);
   if (mesh == nullptr || mesh->faces_num == 0) {
     return;
@@ -226,17 +218,16 @@ void paintface_reveal(bContext *C, Object *ob, const bool select)
  * \param islands: Is expected to be of length `mesh->edges_num`.
  * \param skip_seams: Faces separated by a seam will be treated as not connected.
  */
-static void build_poly_connections(blender::AtomicDisjointSet &islands,
+static void build_poly_connections(AtomicDisjointSet &islands,
                                    Mesh &mesh,
                                    const bool skip_seams = true)
 {
-  using namespace blender;
   const OffsetIndices faces = mesh.faces();
   const Span<int> corner_edges = mesh.corner_edges();
 
   const bke::AttributeAccessor attributes = mesh.attributes();
   const VArray<bool> uv_seams = *attributes.lookup_or_default<bool>(
-      ".uv_seam", bke::AttrDomain::Edge, false);
+      "uv_seam", bke::AttrDomain::Edge, false);
   const VArray<bool> hide_poly = *attributes.lookup_or_default<bool>(
       ".hide_poly", bke::AttrDomain::Face, false);
 
@@ -273,11 +264,9 @@ static void build_poly_connections(blender::AtomicDisjointSet &islands,
 
 /* Select faces connected to the given face_indices. Seams are treated as separation. */
 static void paintface_select_linked_faces(Mesh &mesh,
-                                          const blender::Span<int> face_indices,
+                                          const Span<int> face_indices,
                                           const bool select)
 {
-  using namespace blender;
-
   AtomicDisjointSet islands(mesh.edges_num);
   build_poly_connections(islands, mesh);
 
@@ -286,7 +275,7 @@ static void paintface_select_linked_faces(Mesh &mesh,
 
   bke::MutableAttributeAccessor attributes = mesh.attributes_for_write();
   const VArray<bool> uv_seams = *attributes.lookup_or_default<bool>(
-      ".uv_seam", bke::AttrDomain::Edge, false);
+      "uv_seam", bke::AttrDomain::Edge, false);
   bke::SpanAttributeWriter<bool> select_poly = attributes.lookup_or_add_for_write_span<bool>(
       ".select_poly", bke::AttrDomain::Face);
 
@@ -318,7 +307,6 @@ static void paintface_select_linked_faces(Mesh &mesh,
 
 void paintface_select_linked(bContext *C, Object *ob, const int mval[2], const bool select)
 {
-  using namespace blender;
   Mesh *mesh = BKE_mesh_from_object(ob);
   if (mesh == nullptr || mesh->faces_num == 0) {
     return;
@@ -356,38 +344,8 @@ void paintface_select_linked(bContext *C, Object *ob, const int mval[2], const b
   paintface_flush_flags(C, ob, true, false);
 }
 
-static int find_closest_edge_in_poly(ARegion *region,
-                                     blender::Span<blender::int2> edges,
-                                     blender::Span<int> face_edges,
-                                     blender::Span<blender::float3> vert_positions,
-                                     const int mval[2])
-{
-  using namespace blender;
-  int closest_edge_index;
-
-  const float2 mval_f = {float(mval[0]), float(mval[1])};
-  float min_distance = FLT_MAX;
-  for (const int i : face_edges) {
-    float2 screen_coordinate;
-    const int2 edge = edges[i];
-    const float3 edge_vert_average = math::midpoint(vert_positions[edge[0]],
-                                                    vert_positions[edge[1]]);
-    eV3DProjStatus status = ED_view3d_project_float_object(
-        region, edge_vert_average, screen_coordinate, V3D_PROJ_TEST_CLIP_DEFAULT);
-    if (status != V3D_PROJ_RET_OK) {
-      continue;
-    }
-    const float distance = math::distance_squared(mval_f, screen_coordinate);
-    if (distance < min_distance) {
-      min_distance = distance;
-      closest_edge_index = i;
-    }
-  }
-  return closest_edge_index;
-}
-
-static int get_opposing_edge_index(const blender::IndexRange face,
-                                   const blender::Span<int> corner_edges,
+static int get_opposing_edge_index(const IndexRange face,
+                                   const Span<int> corner_edges,
                                    const int current_edge_index)
 {
   const int index_in_poly = corner_edges.slice(face).first_index(current_edge_index);
@@ -405,13 +363,12 @@ static int get_opposing_edge_index(const blender::IndexRange face,
  */
 static bool follow_face_loop(const int face_start_index,
                              const int edge_start_index,
-                             const blender::OffsetIndices<int> faces,
-                             const blender::VArray<bool> &hide_poly,
-                             const blender::Span<int> corner_edges,
-                             const blender::GroupedSpan<int> edge_to_face_map,
-                             blender::VectorSet<int> &r_loop_faces)
+                             const OffsetIndices<int> faces,
+                             const VArray<bool> &hide_poly,
+                             const Span<int> corner_edges,
+                             const GroupedSpan<int> edge_to_face_map,
+                             VectorSet<int> &r_loop_faces)
 {
-  using namespace blender;
   int current_face_index = face_start_index;
   int current_edge_index = edge_start_index;
 
@@ -456,19 +413,21 @@ static bool follow_face_loop(const int face_start_index,
 
 void paintface_select_loop(bContext *C, Object *ob, const int mval[2], const bool select)
 {
-  using namespace blender;
-
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
   ED_view3d_select_id_validate(&vc);
 
-  Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
+  Object *ob_eval = DEG_get_evaluated(depsgraph, ob);
   if (!ob_eval) {
     return;
   }
 
-  uint poly_pick_index = uint(-1);
-  if (!ED_mesh_pick_face(C, ob, mval, ED_MESH_PICK_DEFAULT_FACE_DIST, &poly_pick_index)) {
+  uint closest_edge_index = uint(-1);
+  if (!ED_mesh_pick_edge(C, ob, mval, ED_MESH_PICK_DEFAULT_VERT_DIST, &closest_edge_index)) {
+    return;
+  }
+
+  if (closest_edge_index == -1) {
     return;
   }
 
@@ -478,13 +437,7 @@ void paintface_select_loop(bContext *C, Object *ob, const int mval[2], const boo
 
   Mesh *mesh = BKE_mesh_from_object(ob);
   const Span<int> corner_edges = mesh->corner_edges();
-  const Span<float3> verts = mesh->vert_positions();
   const OffsetIndices faces = mesh->faces();
-  const Span<int2> edges = mesh->edges();
-
-  const IndexRange face = faces[poly_pick_index];
-  const int closest_edge_index = find_closest_edge_in_poly(
-      region, edges, corner_edges.slice(face), verts, mval);
 
   Array<int> edge_to_face_offsets;
   Array<int> edge_to_face_indices;
@@ -498,6 +451,12 @@ void paintface_select_loop(bContext *C, Object *ob, const int mval[2], const boo
       ".hide_poly", bke::AttrDomain::Face, false);
 
   const Span<int> faces_to_closest_edge = edge_to_face_map[closest_edge_index];
+
+  /* Picked edge may not be linked to a face (loose edge). */
+  if (faces_to_closest_edge.is_empty()) {
+    return;
+  }
+
   const bool traced_full_loop = follow_face_loop(faces_to_closest_edge[0],
                                                  closest_edge_index,
                                                  faces,
@@ -533,13 +492,13 @@ void paintface_select_loop(bContext *C, Object *ob, const int mval[2], const boo
   paintface_flush_flags(C, ob, true, false);
 }
 
-static bool poly_has_selected_neighbor(blender::Span<int> face_edges,
-                                       blender::Span<blender::int2> edges,
-                                       blender::Span<bool> select_vert,
+static bool poly_has_selected_neighbor(Span<int> face_edges,
+                                       Span<int2> edges,
+                                       Span<bool> select_vert,
                                        const bool face_step)
 {
   for (const int edge_index : face_edges) {
-    const blender::int2 &edge = edges[edge_index];
+    const int2 &edge = edges[edge_index];
     /* If a face is selected, all of its verts are selected too, meaning that neighboring faces
      * will have some vertices selected. */
     if (face_step) {
@@ -558,8 +517,6 @@ static bool poly_has_selected_neighbor(blender::Span<int> face_edges,
 
 void paintface_select_more(Mesh *mesh, const bool face_step)
 {
-  using namespace blender;
-
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
   bke::SpanAttributeWriter<bool> select_poly = attributes.lookup_or_add_for_write_span<bool>(
       ".select_poly", bke::AttrDomain::Face);
@@ -589,13 +546,13 @@ void paintface_select_more(Mesh *mesh, const bool face_step)
   select_vert.finish();
 }
 
-static bool poly_has_unselected_neighbor(blender::Span<int> face_edges,
-                                         blender::Span<blender::int2> edges,
-                                         blender::BitSpan verts_of_unselected_faces,
+static bool poly_has_unselected_neighbor(Span<int> face_edges,
+                                         Span<int2> edges,
+                                         BitSpan verts_of_unselected_faces,
                                          const bool face_step)
 {
   for (const int edge_index : face_edges) {
-    const blender::int2 &edge = edges[edge_index];
+    const int2 &edge = edges[edge_index];
     if (face_step) {
       if (verts_of_unselected_faces[edge[0]] || verts_of_unselected_faces[edge[1]]) {
         return true;
@@ -612,8 +569,6 @@ static bool poly_has_unselected_neighbor(blender::Span<int> face_edges,
 
 void paintface_select_less(Mesh *mesh, const bool face_step)
 {
-  using namespace blender;
-
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
   bke::SpanAttributeWriter<bool> select_poly = attributes.lookup_or_add_for_write_span<bool>(
       ".select_poly", bke::AttrDomain::Face);
@@ -657,7 +612,6 @@ void paintface_select_less(Mesh *mesh, const bool face_step)
 
 bool paintface_deselect_all_visible(bContext *C, Object *ob, int action, bool flush_flags)
 {
-  using namespace blender;
   Mesh *mesh = BKE_mesh_from_object(ob);
   if (mesh == nullptr) {
     return false;
@@ -716,12 +670,11 @@ bool paintface_deselect_all_visible(bContext *C, Object *ob, int action, bool fl
 
 bool paintface_minmax(Object *ob, float r_min[3], float r_max[3])
 {
-  using namespace blender;
   bool ok = false;
   float vec[3], bmat[3][3];
 
   const Mesh *mesh = BKE_mesh_from_object(ob);
-  if (!mesh || !CustomData_has_layer(&mesh->corner_data, CD_PROP_FLOAT2)) {
+  if (!mesh) {
     return ok;
   }
 
@@ -755,10 +708,9 @@ bool paintface_minmax(Object *ob, float r_min[3], float r_max[3])
 
 bool paintface_mouse_select(bContext *C,
                             const int mval[2],
-                            const SelectPick_Params *params,
+                            const SelectPick_Params &params,
                             Object *ob)
 {
-  using namespace blender;
   uint index;
   bool changed = false;
   bool found = false;
@@ -780,11 +732,11 @@ bool paintface_mouse_select(bContext *C,
     }
   }
 
-  if (params->sel_op == SEL_OP_SET) {
-    if ((found && params->select_passthrough) && select_poly.varray[index]) {
+  if (params.sel_op == SEL_OP_SET) {
+    if ((found && params.select_passthrough) && select_poly.varray[index]) {
       found = false;
     }
-    else if (found || params->deselect_all) {
+    else if (found || params.deselect_all) {
       /* Deselect everything. */
       changed |= paintface_deselect_all_visible(C, ob, SEL_DESELECT, false);
     }
@@ -793,7 +745,7 @@ bool paintface_mouse_select(bContext *C,
   if (found) {
     mesh->act_face = int(index);
 
-    switch (params->sel_op) {
+    switch (params.sel_op) {
       case SEL_OP_SET:
       case SEL_OP_ADD:
         select_poly.varray.set(index, true);
@@ -821,7 +773,6 @@ bool paintface_mouse_select(bContext *C,
 
 void paintvert_flush_flags(Object *ob)
 {
-  using namespace blender;
   Mesh *mesh = BKE_mesh_from_object(ob);
   Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob);
   if (mesh == nullptr) {
@@ -839,7 +790,8 @@ void paintvert_flush_flags(Object *ob)
   const bke::AttributeAccessor attributes_orig = mesh->attributes();
   bke::MutableAttributeAccessor attributes_eval = mesh_eval->attributes_for_write();
 
-  const int *orig_indices = (const int *)CustomData_get_layer(&mesh_eval->vert_data, CD_ORIGINDEX);
+  const int *orig_indices = static_cast<const int *>(
+      CustomData_get_layer(&mesh_eval->vert_data, CD_ORIGINDEX));
 
   const VArray<bool> hide_vert_orig = *attributes_orig.lookup_or_default<bool>(
       ".hide_vert", bke::AttrDomain::Point, false);
@@ -880,11 +832,9 @@ void paintvert_flush_flags(Object *ob)
 
 static void paintvert_select_linked_vertices(bContext *C,
                                              Object *ob,
-                                             const blender::Span<int> vertex_indices,
+                                             const Span<int> vertex_indices,
                                              const bool select)
 {
-  using namespace blender;
-
   Mesh *mesh = BKE_mesh_from_object(ob);
   if (mesh == nullptr || mesh->faces_num == 0) {
     return;
@@ -944,17 +894,16 @@ void paintvert_select_linked_pick(bContext *C,
 
 void paintvert_select_linked(bContext *C, Object *ob)
 {
-  using namespace blender;
   Mesh *mesh = BKE_mesh_from_object(ob);
   if (mesh == nullptr || mesh->faces_num == 0) {
     return;
   }
 
-  blender::bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
-  blender::bke::SpanAttributeWriter<bool> select_vert =
-      attributes.lookup_or_add_for_write_span<bool>(".select_vert", bke::AttrDomain::Point);
+  bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
+  bke::SpanAttributeWriter<bool> select_vert = attributes.lookup_or_add_for_write_span<bool>(
+      ".select_vert", bke::AttrDomain::Point);
 
-  blender::Vector<int> indices;
+  Vector<int> indices;
   for (const int i : select_vert.span.index_range()) {
     if (!select_vert.span[i]) {
       continue;
@@ -967,8 +916,6 @@ void paintvert_select_linked(bContext *C, Object *ob)
 
 void paintvert_select_more(Mesh *mesh, const bool face_step)
 {
-  using namespace blender;
-
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
   bke::SpanAttributeWriter<bool> select_vert = attributes.lookup_or_add_for_write_span<bool>(
       ".select_vert", bke::AttrDomain::Point);
@@ -1025,8 +972,6 @@ void paintvert_select_more(Mesh *mesh, const bool face_step)
 
 void paintvert_select_less(Mesh *mesh, const bool face_step)
 {
-  using namespace blender;
-
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
   bke::SpanAttributeWriter<bool> select_vert = attributes.lookup_or_add_for_write_span<bool>(
       ".select_vert", bke::AttrDomain::Point);
@@ -1080,13 +1025,12 @@ void paintvert_select_less(Mesh *mesh, const bool face_step)
 
 void paintvert_tag_select_update(bContext *C, Object *ob)
 {
-  DEG_id_tag_update(static_cast<ID *>(ob->data), ID_RECALC_SYNC_TO_EVAL | ID_RECALC_SELECT);
+  DEG_id_tag_update(ob->data, ID_RECALC_SYNC_TO_EVAL | ID_RECALC_SELECT);
   WM_event_add_notifier(C, NC_GEOM | ND_SELECT, ob->data);
 }
 
 bool paintvert_deselect_all_visible(Object *ob, int action, bool flush_flags)
 {
-  using namespace blender;
   Mesh *mesh = BKE_mesh_from_object(ob);
   if (mesh == nullptr) {
     return false;
@@ -1154,7 +1098,6 @@ bool paintvert_deselect_all_visible(Object *ob, int action, bool flush_flags)
 
 void paintvert_select_ungrouped(Object *ob, bool extend, bool flush_flags)
 {
-  using namespace blender;
   Mesh *mesh = BKE_mesh_from_object(ob);
   if (mesh == nullptr) {
     return;
@@ -1192,7 +1135,6 @@ void paintvert_select_ungrouped(Object *ob, bool extend, bool flush_flags)
 
 void paintvert_hide(bContext *C, Object *ob, const bool unselected)
 {
-  using namespace blender;
   Mesh *mesh = BKE_mesh_from_object(ob);
   if (mesh == nullptr || mesh->verts_num == 0) {
     return;
@@ -1226,7 +1168,6 @@ void paintvert_hide(bContext *C, Object *ob, const bool unselected)
 
 void paintvert_reveal(bContext *C, Object *ob, const bool select)
 {
-  using namespace blender;
   Mesh *mesh = BKE_mesh_from_object(ob);
   if (mesh == nullptr || mesh->verts_num == 0) {
     return;
@@ -1254,3 +1195,156 @@ void paintvert_reveal(bContext *C, Object *ob, const bool select)
   paintvert_flush_flags(ob);
   paintvert_tag_select_update(C, ob);
 }
+
+/* Walk along an edge loop (Vertex based).
+ * Return true if closed loop found. */
+static bool follow_edge_loop(const int edge_start_index,
+                             const int vert_start_index,
+                             const Span<int2> edges,
+                             const VArray<bool> &hide_vert,
+                             const GroupedSpan<int> vert_to_edge_map,
+                             const GroupedSpan<int> edge_to_face_map,
+                             VectorSet<int> &r_loop_edges)
+{
+  int current_edge_index = edge_start_index;
+  int current_vert_index = vert_start_index;
+
+  /* Loop runs until we hit a boundary or closed loop found. */
+  while (true) {
+
+    /* Stop if vertex is hidden. */
+    if (hide_vert[current_vert_index]) {
+      return false;
+    }
+
+    /* Stop at poles (Valence != 4). */
+    const Span<int> connected_edges = vert_to_edge_map[current_vert_index];
+    if (connected_edges.size() != 4) {
+      return false;
+    }
+
+    /* Find the opposite edge. */
+    int next_edge_index = -1;
+    const Span<int> current_edge_faces = edge_to_face_map[current_edge_index];
+
+    for (const int edge_index : connected_edges) {
+      if (edge_index == current_edge_index) {
+        continue;
+      }
+
+      /* Check if this candidate edge shares any face with the current edge. */
+      const Span<int> other_edge_faces = edge_to_face_map[edge_index];
+
+      /* If no faces overlap, it means the edge is on the opposite side. */
+      if (!current_edge_faces.intersects__linear_search(other_edge_faces)) {
+        next_edge_index = edge_index;
+        break;
+      }
+    }
+
+    if (next_edge_index == -1) {
+      return false;
+    }
+
+    /* Check for closed loop. */
+    if (r_loop_edges.contains(next_edge_index)) {
+      return true;
+    }
+
+    r_loop_edges.add(next_edge_index);
+
+    /* Advance to the next vertex. */
+    const int2 next_edge_verts = edges[next_edge_index];
+    current_vert_index = bke::mesh::edge_other_vert(next_edge_verts, current_vert_index);
+    current_edge_index = next_edge_index;
+  }
+  return false;
+}
+
+void paintvert_select_loop(bContext *C, Object *ob, const int mval[2], const bool select)
+{
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
+  ED_view3d_select_id_validate(&vc);
+
+  Object *ob_eval = DEG_get_evaluated(depsgraph, ob);
+  if (!ob_eval) {
+    return;
+  }
+
+  uint closest_edge_index = uint(-1);
+  if (!ED_mesh_pick_edge(C, ob, mval, ED_MESH_PICK_DEFAULT_VERT_DIST, &closest_edge_index)) {
+    return;
+  }
+  if (closest_edge_index == uint(-1)) {
+    return;
+  }
+
+  Mesh *mesh = BKE_mesh_from_object(ob);
+  const Span<int2> edges = mesh->edges();
+  const Span<int> corner_edges = mesh->corner_edges();
+  const OffsetIndices faces = mesh->faces();
+
+  /* Build Topology Maps. */
+  Array<int> edge_to_face_offsets;
+  Array<int> edge_to_face_indices;
+  const GroupedSpan<int> edge_to_face_map = bke::mesh::build_edge_to_face_map(
+      faces, corner_edges, mesh->edges_num, edge_to_face_offsets, edge_to_face_indices);
+
+  Array<int> vert_to_edge_offsets;
+  Array<int> vert_to_edge_indices;
+  const GroupedSpan<int> vert_to_edge_map = bke::mesh::build_vert_to_edge_map(
+      edges, mesh->verts_num, vert_to_edge_offsets, vert_to_edge_indices);
+
+  bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
+  const VArray<bool> hide_vert = *attributes.lookup_or_default<bool>(
+      ".hide_vert", bke::AttrDomain::Point, false);
+
+  VectorSet<int> edges_in_loop;
+
+  edges_in_loop.add(closest_edge_index);
+
+  /* Trace both directions. */
+  const int2 start_verts = edges[closest_edge_index];
+
+  const bool full_loop = follow_edge_loop(closest_edge_index,
+                                          start_verts[0],
+                                          edges,
+                                          hide_vert,
+                                          vert_to_edge_map,
+                                          edge_to_face_map,
+                                          edges_in_loop);
+
+  if (!full_loop) {
+    follow_edge_loop(closest_edge_index,
+                     start_verts[1],
+                     edges,
+                     hide_vert,
+                     vert_to_edge_map,
+                     edge_to_face_map,
+                     edges_in_loop);
+  }
+
+  bke::SpanAttributeWriter<bool> select_vert = attributes.lookup_or_add_for_write_span<bool>(
+      ".select_vert", bke::AttrDomain::Point);
+
+  VectorSet<int> verts_to_select;
+  for (int e_idx : edges_in_loop) {
+    verts_to_select.add(edges[e_idx][0]);
+    verts_to_select.add(edges[e_idx][1]);
+  }
+
+  const bool any_vert_selected = std::any_of(
+      verts_to_select.begin(), verts_to_select.end(), [&](const int vert) {
+        return select_vert.span[vert];
+      });
+  const bool select_toggle = select && !any_vert_selected;
+  select_vert.span.fill_indices(verts_to_select.as_span(), select_toggle);
+
+  select_vert.finish();
+
+  paintvert_flush_flags(ob);
+  paintvert_tag_select_update(C, ob);
+}
+
+}  // namespace blender

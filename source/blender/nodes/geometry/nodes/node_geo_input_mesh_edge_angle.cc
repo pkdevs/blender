@@ -2,7 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_vector.h"
+#include "BLI_math_quaternion.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_ordered_edge.hh"
 
 #include "BKE_mesh.hh"
 
@@ -12,42 +14,38 @@ namespace blender::nodes::node_geo_input_mesh_edge_angle_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Float>("Unsigned Angle")
-      .field_source()
+  b.add_output<decl::Float>("Unsigned Angle"_ustr)
+      .structure_type(StructureType::Field)
       .description(
           "The shortest angle in radians between two faces where they meet at an edge. Flat edges "
           "and Non-manifold edges have an angle of zero. Computing this value is faster than the "
           "signed angle");
-  b.add_output<decl::Float>("Signed Angle")
-      .field_source()
+  b.add_output<decl::Float>("Signed Angle"_ustr)
+      .structure_type(StructureType::Field)
       .description(
           "The signed angle in radians between two faces where they meet at an edge. Flat edges "
           "and Non-manifold edges have an angle of zero. Concave angles are positive and convex "
           "angles are negative. Computing this value is slower than the unsigned angle");
 }
 
-struct EdgeMapEntry {
-  int face_count;
-  int face_index_1;
-  int face_index_2;
-};
-
-static Array<EdgeMapEntry> create_edge_map(const OffsetIndices<int> faces,
-                                           const Span<int> corner_edges,
-                                           const int total_edges)
+static Array<int2> create_edge_map(const OffsetIndices<int> faces,
+                                   const Span<int> corner_edges,
+                                   const int total_edges)
 {
-  Array<EdgeMapEntry> edge_map(total_edges, {0, 0, 0});
+  Array<int2> edge_map(total_edges, int2(-1));
 
   for (const int i_face : faces.index_range()) {
     for (const int edge : corner_edges.slice(faces[i_face])) {
-      EdgeMapEntry &entry = edge_map[edge];
-      if (entry.face_count == 0) {
-        entry.face_index_1 = i_face;
+      int2 &entry = edge_map[edge];
+      if (entry[0] == -1) {
+        entry[0] = i_face;
       }
-      else if (entry.face_count == 1) {
-        entry.face_index_2 = i_face;
+      else if (entry[1] == -1) {
+        entry[1] = i_face;
       }
-      entry.face_count++;
+      else {
+        entry = int2(-2);
+      }
     }
   }
   return edge_map;
@@ -55,10 +53,7 @@ static Array<EdgeMapEntry> create_edge_map(const OffsetIndices<int> faces,
 
 class AngleFieldInput final : public bke::MeshFieldInput {
  public:
-  AngleFieldInput() : bke::MeshFieldInput(CPPType::get<float>(), "Unsigned Angle Field")
-  {
-    category_ = Category::Generated;
-  }
+  AngleFieldInput() : bke::MeshFieldInput(CPPType::get<float>(), "Unsigned Angle Field") {}
 
   GVArray get_varray_for_context(const Mesh &mesh,
                                  const AttrDomain domain,
@@ -68,33 +63,28 @@ class AngleFieldInput final : public bke::MeshFieldInput {
     const OffsetIndices faces = mesh.faces();
     const Span<int> corner_verts = mesh.corner_verts();
     const Span<int> corner_edges = mesh.corner_edges();
-    Array<EdgeMapEntry> edge_map = create_edge_map(faces, corner_edges, mesh.edges_num);
+    Array<int2> edge_map = create_edge_map(faces, corner_edges, mesh.edges_num);
 
     auto angle_fn =
         [edge_map = std::move(edge_map), positions, faces, corner_verts](const int i) -> float {
-      if (edge_map[i].face_count != 2) {
+      if (edge_map[i][0] < 0 || edge_map[i][1] < 0) {
         return 0.0f;
       }
-      const IndexRange face_1 = faces[edge_map[i].face_index_1];
-      const IndexRange face_2 = faces[edge_map[i].face_index_2];
+      const IndexRange face_1 = faces[edge_map[i][0]];
+      const IndexRange face_2 = faces[edge_map[i][1]];
       const float3 normal_1 = bke::mesh::face_normal_calc(positions, corner_verts.slice(face_1));
       const float3 normal_2 = bke::mesh::face_normal_calc(positions, corner_verts.slice(face_2));
       return angle_normalized_v3v3(normal_1, normal_2);
     };
 
-    VArray<float> angles = VArray<float>::ForFunc(mesh.edges_num, angle_fn);
+    VArray<float> angles = VArray<float>::from_func(mesh.edges_num, angle_fn);
     return mesh.attributes().adapt_domain<float>(std::move(angles), AttrDomain::Edge, domain);
   }
 
-  uint64_t hash() const override
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep & /*deep_hash_cache*/) const override
   {
-    /* Some random constant hash. */
-    return 32426725235;
-  }
-
-  bool is_equal_to(const fn::FieldNode &other) const override
-  {
-    return dynamic_cast<const AngleFieldInput *>(&other) != nullptr;
+    static constexpr int8_t id = 0;
+    hash.add(&id);
   }
 
   std::optional<AttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
@@ -103,12 +93,33 @@ class AngleFieldInput final : public bke::MeshFieldInput {
   }
 };
 
+static int find_other_vert_of_edge_triangle(const OffsetIndices<int> faces,
+                                            const Span<int> corner_verts,
+                                            const Span<int3> corner_tris,
+                                            const int face_index,
+                                            const int2 edge)
+{
+  const OrderedEdge ordered_edge(edge);
+  for (const int tri_index : bke::mesh::face_triangles_range(faces, face_index)) {
+    const int3 &tri = corner_tris[tri_index];
+    const int3 vert_tri(corner_verts[tri[0]], corner_verts[tri[1]], corner_verts[tri[2]]);
+    if (ordered_edge == OrderedEdge(vert_tri[0], vert_tri[1])) {
+      return vert_tri[2];
+    }
+    if (ordered_edge == OrderedEdge(vert_tri[1], vert_tri[2])) {
+      return vert_tri[0];
+    }
+    if (ordered_edge == OrderedEdge(vert_tri[2], vert_tri[0])) {
+      return vert_tri[1];
+    }
+  }
+  BLI_assert_unreachable();
+  return -1;
+}
+
 class SignedAngleFieldInput final : public bke::MeshFieldInput {
  public:
-  SignedAngleFieldInput() : bke::MeshFieldInput(CPPType::get<float>(), "Signed Angle Field")
-  {
-    category_ = Category::Generated;
-  }
+  SignedAngleFieldInput() : bke::MeshFieldInput(CPPType::get<float>(), "Signed Angle Field") {}
 
   GVArray get_varray_for_context(const Mesh &mesh,
                                  const AttrDomain domain,
@@ -119,15 +130,19 @@ class SignedAngleFieldInput final : public bke::MeshFieldInput {
     const OffsetIndices faces = mesh.faces();
     const Span<int> corner_verts = mesh.corner_verts();
     const Span<int> corner_edges = mesh.corner_edges();
-    Array<EdgeMapEntry> edge_map = create_edge_map(faces, corner_edges, mesh.edges_num);
+    const Span<int3> corner_tris = mesh.corner_tris();
+    Array<int2> edge_map = create_edge_map(faces, corner_edges, mesh.edges_num);
 
-    auto angle_fn = [edge_map = std::move(edge_map), positions, edges, faces, corner_verts](
-                        const int i) -> float {
-      if (edge_map[i].face_count != 2) {
+    auto angle_fn =
+        [edge_map = std::move(edge_map), positions, edges, faces, corner_verts, corner_tris](
+            const int i) -> float {
+      if (edge_map[i][0] < 0 || edge_map[i][1] < 0) {
         return 0.0f;
       }
-      const IndexRange face_1 = faces[edge_map[i].face_index_1];
-      const IndexRange face_2 = faces[edge_map[i].face_index_2];
+      const int face_index_1 = edge_map[i][0];
+      const int face_index_2 = edge_map[i][1];
+      const IndexRange face_1 = faces[face_index_1];
+      const IndexRange face_2 = faces[face_index_2];
 
       /* Find the normals of the 2 faces. */
       const float3 face_1_normal = bke::mesh::face_normal_calc(positions,
@@ -136,13 +151,14 @@ class SignedAngleFieldInput final : public bke::MeshFieldInput {
                                                                corner_verts.slice(face_2));
 
       /* Find the centerpoint of the axis edge */
-      const float3 edge_centerpoint = (positions[edges[i][0]] + positions[edges[i][1]]) * 0.5f;
+      const float3 edge_centerpoint = math::midpoint(positions[edges[i][0]],
+                                                     positions[edges[i][1]]);
 
-      /* Get the centerpoint of face 2 and subtract the edge centerpoint to get a tangent
-       * normal for face 2. */
-      const float3 face_center_2 = bke::mesh::face_center_calc(positions,
-                                                               corner_verts.slice(face_2));
-      const float3 face_2_tangent = math::normalize(face_center_2 - edge_centerpoint);
+      /* Use the third point of the triangle connected to the edge in face 2 to determine a
+       * reference point for the concavity test. */
+      const int tri_other_vert = find_other_vert_of_edge_triangle(
+          faces, corner_verts, corner_tris, face_index_2, edges[i]);
+      const float3 face_2_tangent = math::normalize(positions[tri_other_vert] - edge_centerpoint);
       const float concavity = math::dot(face_1_normal, face_2_tangent);
 
       /* Get the unsigned angle between the two faces */
@@ -154,19 +170,14 @@ class SignedAngleFieldInput final : public bke::MeshFieldInput {
       return -angle;
     };
 
-    VArray<float> angles = VArray<float>::ForFunc(mesh.edges_num, angle_fn);
+    VArray<float> angles = VArray<float>::from_func(mesh.edges_num, angle_fn);
     return mesh.attributes().adapt_domain<float>(std::move(angles), AttrDomain::Edge, domain);
   }
 
-  uint64_t hash() const override
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep & /*deep_hash_cache*/) const override
   {
-    /* Some random constant hash. */
-    return 68465416863;
-  }
-
-  bool is_equal_to(const fn::FieldNode &other) const override
-  {
-    return dynamic_cast<const SignedAngleFieldInput *>(&other) != nullptr;
+    static constexpr int8_t id = 0;
+    hash.add(&id);
   }
 
   std::optional<AttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
@@ -177,23 +188,26 @@ class SignedAngleFieldInput final : public bke::MeshFieldInput {
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  if (params.output_is_required("Unsigned Angle")) {
-    Field<float> angle_field{std::make_shared<AngleFieldInput>()};
-    params.set_output("Unsigned Angle", std::move(angle_field));
+  if (params.output_is_required("Unsigned Angle"_ustr)) {
+    params.set_output("Unsigned Angle"_ustr, Field<float>::from_input<AngleFieldInput>());
   }
-  if (params.output_is_required("Signed Angle")) {
-    Field<float> angle_field{std::make_shared<SignedAngleFieldInput>()};
-    params.set_output("Signed Angle", std::move(angle_field));
+  if (params.output_is_required("Signed Angle"_ustr)) {
+    params.set_output("Signed Angle"_ustr, Field<float>::from_input<SignedAngleFieldInput>());
   }
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
-  geo_node_type_base(&ntype, GEO_NODE_INPUT_MESH_EDGE_ANGLE, "Edge Angle", NODE_CLASS_INPUT);
+  static bke::bNodeType ntype;
+  geo_node_type_base(
+      &ntype, "GeometryNodeInputMeshEdgeAngle"_ustr, GEO_NODE_INPUT_MESH_EDGE_ANGLE);
+  ntype.ui_name = "Edge Angle";
+  ntype.ui_description = "The angle between the normals of connected manifold faces";
+  ntype.enum_name_legacy = "MESH_EDGE_ANGLE";
+  ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::node_register_type(&ntype);
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

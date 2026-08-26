@@ -12,10 +12,6 @@
 
 #include "../../../view_map/Silhouette.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject FEdgeSmooth_Type;
@@ -24,17 +20,13 @@ extern PyTypeObject FEdgeSmooth_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&FEdgeSmooth_Type))
 
 /*---------------------------Python BPy_FEdgeSmooth structure definition----------*/
-typedef struct {
+struct BPy_FEdgeSmooth {
   BPy_FEdge py_fe;
   Freestyle::FEdgeSmooth *fes;
-} BPy_FEdgeSmooth;
+};
 
 /*---------------------------Python BPy_FEdgeSmooth visible prototypes-----------*/
 
 void FEdgeSmooth_mathutils_register_callback();
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

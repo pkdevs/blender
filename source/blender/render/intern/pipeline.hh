@@ -8,10 +8,14 @@
 
 #pragma once
 
+namespace blender {
+
 struct Render;
 struct RenderData;
 struct RenderLayer;
 struct RenderResult;
 
 RenderLayer *render_get_single_layer(Render *re, RenderResult *rr);
-void render_copy_renderdata(RenderData *to, RenderData *from);
+void render_copy_renderdata(RenderData *to, const RenderData *from);
+
+}  // namespace blender

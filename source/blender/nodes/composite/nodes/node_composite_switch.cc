@@ -2,34 +2,28 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/** \file
- * \ingroup cmpnodes
- */
-
-#include "UI_interface.hh"
-#include "UI_resources.hh"
-
 #include "COM_node_operation.hh"
 
 #include "node_composite_util.hh"
 
-/* **************** Switch ******************** */
-
 namespace blender::nodes::node_composite_switch_cc {
 
-static void cmp_node_switch_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Off").default_value({0.8f, 0.8f, 0.8f, 1.0f});
-  b.add_input<decl::Color>("On").default_value({0.8f, 0.8f, 0.8f, 1.0f});
-  b.add_output<decl::Color>("Image");
+  b.add_input<decl::Bool>("Switch"_ustr).default_value(false);
+  b.add_input<decl::Color>("Off"_ustr)
+      .default_value({0.8f, 0.8f, 0.8f, 1.0f})
+      .compositor_realization_mode(CompositorInputRealizationMode::None)
+      .structure_type(StructureType::Dynamic);
+  b.add_input<decl::Color>("On"_ustr)
+      .default_value({0.8f, 0.8f, 0.8f, 1.0f})
+      .compositor_realization_mode(CompositorInputRealizationMode::None)
+      .structure_type(StructureType::Dynamic);
+
+  b.add_output<decl::Color>("Image"_ustr);
 }
 
-static void node_composit_buts_switch(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
-{
-  uiItemR(layout, ptr, "check", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
-}
-
-using namespace blender::realtime_compositor;
+using namespace blender::compositor;
 
 class SwitchOperation : public NodeOperation {
  public:
@@ -37,35 +31,37 @@ class SwitchOperation : public NodeOperation {
 
   void execute() override
   {
-    Result &input = get_input(get_condition() ? "On" : "Off");
-    Result &result = get_result("Image");
-    input.pass_through(result);
+    const Result &input = this->get_input(this->get_condition() ? "On" : "Off");
+    Result &output = this->get_result("Image");
+    output.share_data(input);
   }
 
   bool get_condition()
   {
-    return bnode().custom1;
+    return this->get_input("Switch").get_single_value_default<bool>();
   }
 };
 
-static NodeOperation *get_compositor_operation(Context &context, DNode node)
+static NodeOperation *get_compositor_operation(Context &context, const bNode &node)
 {
   return new SwitchOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_switch_cc
-
-void register_node_type_cmp_switch()
+static void node_register()
 {
-  namespace file_ns = blender::nodes::node_composite_switch_cc;
+  static bke::bNodeType ntype;
 
-  static blender::bke::bNodeType ntype;
+  cmp_node_type_base(&ntype, "CompositorNodeSwitch"_ustr, CMP_NODE_SWITCH);
+  ntype.ui_name = "Switch";
+  ntype.ui_description = "Switch between two images using a checkbox";
+  ntype.enum_name_legacy = "SWITCH";
+  ntype.nclass = NODE_CLASS_CONVERTER;
+  ntype.declare = node_declare;
+  ntype.get_compositor_operation = get_compositor_operation;
+  ntype.deprecation_notice = N_("Use Utilities \u25B8 Switch node instead");
 
-  cmp_node_type_base(&ntype, CMP_NODE_SWITCH, "Switch", NODE_CLASS_CONVERTER);
-  ntype.declare = file_ns::cmp_node_switch_declare;
-  ntype.draw_buttons = file_ns::node_composit_buts_switch;
-  blender::bke::node_type_size_preset(&ntype, blender::bke::eNodeSizePreset::Default);
-  ntype.get_compositor_operation = file_ns::get_compositor_operation;
-
-  blender::bke::node_register_type(&ntype);
+  bke::node_register_type(ntype);
 }
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_composite_switch_cc

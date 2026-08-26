@@ -2,80 +2,6 @@
 Troubleshooting Errors & Crashes
 ********************************
 
-
-Strange Errors when Using the 'Threading' Module
-================================================
-
-Python threading with Blender only works properly when the threads finish up before the script does,
-for example by using ``threading.join()``.
-
-Here is an example of threading supported by Blender:
-
-.. code-block:: python
-
-   import threading
-   import time
-
-   def prod():
-       print(threading.current_thread().name, "Starting")
-
-       # do something vaguely useful
-       import bpy
-       from mathutils import Vector
-       from random import random
-
-       prod_vec = Vector((random() - 0.5, random() - 0.5, random() - 0.5))
-       print("Prodding", prod_vec)
-       bpy.data.objects["Cube"].location += prod_vec
-       time.sleep(random() + 1.0)
-       # finish
-
-       print(threading.current_thread().name, "Exiting")
-
-   threads = [threading.Thread(name="Prod %d" % i, target=prod) for i in range(10)]
-
-
-   print("Starting threads...")
-
-   for t in threads:
-       t.start()
-
-   print("Waiting for threads to finish...")
-
-   for t in threads:
-       t.join()
-
-
-This an example of a timer which runs many times a second
-and moves the default cube continuously while Blender runs **(Unsupported)**.
-
-.. code-block:: python
-
-   def func():
-       print("Running...")
-       import bpy
-       bpy.data.objects['Cube'].location.x += 0.05
-
-   def my_timer():
-       from threading import Timer
-       t = Timer(0.1, my_timer)
-       t.start()
-       func()
-
-   my_timer()
-
-Use cases like the one above which leave the thread running once the script finishes
-may seem to work for a while but end up causing random crashes or errors in Blender's own drawing code.
-
-So far, no work has been done to make Blender's Python integration thread safe,
-so until it's properly supported, it's best not make use of this.
-
-.. note::
-
-   Python threads only allow concurrency and won't speed up your scripts on multiprocessor systems,
-   the ``subprocess`` and ``multiprocess`` modules can be used with Blender to make use of multiple CPUs too.
-
-
 .. _troubleshooting_crashes:
 
 Help! My script crashes Blender
@@ -214,7 +140,7 @@ This is especially true when modifying Blender data :ref:`in operators <operator
 Undo & Library Data
 ^^^^^^^^^^^^^^^^^^^
 
-One of the advantages with Blender's library linking system that undo
+One of the advantages with Blender's library linking system is that undo
 can skip checking changes in library data since it is assumed to be static.
 Tools in Blender are not allowed to modify library data.
 But Python does not enforce this restriction.
@@ -234,8 +160,8 @@ Abusing RNA property callbacks
 Python-defined RNA properties can have custom callbacks. Trying to perform complex operations
 from there, like calling an operator, may work, but is not officially recommended nor supported.
 
-Main reason is that those callback should be very fast, but additionally, it may for example
-create issues with undo/redo system (most operators store an history step, and editing an RNA
+Main reason is that those callbacks should be very fast, but additionally, it may for example
+create issues with undo/redo system (most operators store a history step, and editing an RNA
 property does so as well), trigger infinite update loops, and so on.
 
 
@@ -256,7 +182,7 @@ Only the reference to the data itself can be re-accessed, the following example 
    bpy.ops.object.mode_set(mode='EDIT')
    bpy.ops.object.mode_set(mode='OBJECT')
 
-   # this will crash
+   # This will crash!
    print(polygons)
 
 
@@ -270,7 +196,7 @@ the following example shows how to avoid the crash above.
    bpy.ops.object.mode_set(mode='EDIT')
    bpy.ops.object.mode_set(mode='OBJECT')
 
-   # polygons have been re-allocated
+   # Polygons have been re-allocated.
    polygons = mesh.polygons
    print(polygons)
 
@@ -291,7 +217,7 @@ internally the array which stores this data is re-allocated.
    point = bpy.context.object.data.splines[0].bezier_points[0]
    bpy.context.object.data.splines[0].bezier_points.add()
 
-   # this will crash!
+   # This will crash!
    point.co = 1.0, 2.0, 3.0
 
 This can be avoided by re-assigning the point variables after adding the new one or by storing
@@ -315,9 +241,9 @@ The following example shows how this precaution works:
 .. code-block:: python
 
    mesh = bpy.data.meshes.new(name="MyMesh")
-   # normally the script would use the mesh here...
+   # Normally the script would use the mesh here.
    bpy.data.meshes.remove(mesh)
-   print(mesh.name)  # <- give an exception rather than crashing:
+   print(mesh.name)  # <- Give an exception rather than crashing:
 
    # ReferenceError: StructRNA of type Mesh has been removed
 
@@ -330,7 +256,7 @@ the next example will still crash:
    mesh = bpy.data.meshes.new(name="MyMesh")
    vertices = mesh.vertices
    bpy.data.meshes.remove(mesh)
-   print(vertices)  # <- this may crash
+   print(vertices)  # <- This may crash.
 
 
 Unfortunate Corner Cases
@@ -370,7 +296,7 @@ Data-Blocks Renaming During Iteration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Data-blocks accessed from ``bpy.data`` are sorted when their name is set.
-Any loop that iterates of a data such as ``bpy.data.objects`` for example,
+Any loop that iterates over data such as ``bpy.data.objects`` for example,
 and sets the objects ``name`` must get all items from the iterator first (typically by converting to a list or tuple)
 to avoid missing some objects and iterating over others multiple times.
 
@@ -384,5 +310,5 @@ as if Blender is crashing since ``sys.exit()`` will close Blender immediately.
 
 For example, the ``argparse`` module will print an error and exit if the arguments are invalid.
 
-An dirty way of troubleshooting this is to set ``sys.exit = None`` and see what line of Python code is quitting,
+A dirty way of troubleshooting this is to set ``sys.exit = None`` and see what line of Python code is quitting,
 you could of course replace ``sys.exit`` with your own function but manipulating Python in this way is bad practice.

@@ -9,7 +9,12 @@
 #pragma once
 
 #include "DNA_space_types.h"
-#include "DNA_windowmanager_types.h"
+
+#include "BKE_report.hh"
+
+#include "ED_fileselect.hh"
+
+namespace blender {
 
 /* internal exports only */
 
@@ -18,13 +23,16 @@ struct ARegionType;
 struct bContextDataResult;
 struct FileAssetSelectParams;
 struct FileSelectParams;
+struct FolderList;
 struct Main;
 struct SpaceFile;
 struct View2D;
-struct uiLayout;
-namespace blender::asset_system {
+namespace asset_system {
 class AssetLibrary;
 }
+namespace ui {
+struct Layout;
+}  // namespace ui
 
 bool file_main_region_needs_refresh_before_draw(SpaceFile *sfile);
 
@@ -45,8 +53,9 @@ int /*eContextResult*/ file_context(const bContext *C,
 #define FILE_LAYOUT_HIDE_SIZE(_layout) \
   (_layout->flag & FILE_LAYOUT_VER && (_layout->width / UI_SCALE_FAC) < 350)
 
-void file_calc_previews(const bContext *C, ARegion *region);
 void file_draw_list(const bContext *C, ARegion *region);
+bool file_banner_poll(const SpaceFile *sfile);
+void file_draw_banner(const bContext *C, const SpaceFile *sfile, ARegion *region);
 /**
  * Draw a string hint if the file list is invalid.
  * \return true if the list is invalid and a hint was drawn.
@@ -56,7 +65,7 @@ bool file_draw_hint_if_invalid(const bContext *C, const SpaceFile *sfile, ARegio
 void file_draw_check_ex(bContext *C, ScrArea *area);
 void file_draw_check(bContext *C);
 /**
- * For use with; #UI_block_func_set.
+ * For use with; #block_func_set.
  */
 void file_draw_check_cb(bContext *C, void *arg1, void *arg2);
 bool file_draw_check_exists(SpaceFile *sfile);
@@ -104,6 +113,14 @@ void FILE_OT_start_filter(wmOperatorType *ot);
 void FILE_OT_edit_directory_path(wmOperatorType *ot);
 void FILE_OT_view_selected(wmOperatorType *ot);
 
+/**
+ * This callback runs when the user has entered a new path in the file selectors directory field.
+ *
+ * Expand & normalize the path then:
+ * - Change the path when it exists.
+ * - Prompt the user to create the path if it doesn't
+ *   (providing it passes basic sanity checks).
+ */
 void file_directory_enter_handle(bContext *C, void *arg_unused, void *arg_but);
 void file_filename_enter_handle(bContext *C, void *arg_unused, void *arg_but);
 
@@ -177,8 +194,15 @@ void file_params_rename_end(wmWindowManager *wm,
  */
 void file_params_renamefile_activate(SpaceFile *sfile, FileSelectParams *params);
 
-typedef void *onReloadFnData;
-typedef void (*onReloadFn)(SpaceFile *space_data, onReloadFnData custom_data);
+/**
+ * Information about the current state of banners that needs preserving over redraws.
+ */
+struct BannersState {
+  bool any_visible;
+};
+
+using onReloadFnData = void *;
+using onReloadFn = void (*)(SpaceFile *space_data, onReloadFnData custom_data);
 struct SpaceFile_Runtime {
   /* Called once after the file browser has reloaded. Reset to NULL after calling.
    * Use file_on_reload_callback_register() to register a callback. */
@@ -190,6 +214,8 @@ struct SpaceFile_Runtime {
   bool is_blendfile_status_set;
   bool is_blendfile_readable;
   ReportList is_blendfile_readable_reports;
+
+  BannersState banners_state;
 };
 
 /**
@@ -203,15 +229,15 @@ void file_on_reload_callback_register(SpaceFile *sfile,
 /* folder_history.cc */
 
 /* not listbase itself */
-void folderlist_free(ListBase *folderlist);
-void folderlist_popdir(ListBase *folderlist, char *dir);
-void folderlist_pushdir(ListBase *folderlist, const char *dir);
-const char *folderlist_peeklastdir(ListBase *folderlist);
+void folderlist_free(ListBaseT<FolderList> *folderlist);
+void folderlist_popdir(ListBaseT<FolderList> *folderlist, char *dir);
+void folderlist_pushdir(ListBaseT<FolderList> *folderlist, const char *dir);
+const char *folderlist_peeklastdir(ListBaseT<FolderList> *folderlist);
 bool folderlist_clear_next(SpaceFile *sfile);
 
 void folder_history_list_ensure_for_active_browse_mode(SpaceFile *sfile);
 void folder_history_list_free(SpaceFile *sfile);
-ListBase folder_history_list_duplicate(ListBase *listbase);
+ListBaseT<FileFolderHistory> folder_history_list_duplicate(ListBaseT<FileFolderHistory> *listbase);
 
 /* `file_panels.cc` */
 
@@ -230,11 +256,11 @@ void file_path_to_ui_path(const char *path, char *r_path, int r_path_maxncpy);
 
 /* asset_catalog_tree_view.cc */
 
-namespace blender::ed::asset_browser {
+namespace ed::asset_browser {
 
 void file_create_asset_catalog_tree_view_in_layout(const bContext *C,
                                                    asset_system::AssetLibrary *asset_library,
-                                                   uiLayout *layout,
+                                                   ui::Layout &layout,
                                                    SpaceFile *space_file,
                                                    FileAssetSelectParams *params);
 
@@ -249,10 +275,12 @@ void file_delete_asset_catalog_filter_settings(AssetCatalogFilterSettings **filt
 bool file_set_asset_catalog_filter_settings(
     AssetCatalogFilterSettings *filter_settings,
     eFileSel_Params_AssetCatalogVisibility catalog_visibility,
-    const ::bUUID &catalog_id);
+    const bUUID &catalog_id);
 void file_ensure_updated_catalog_filter_data(AssetCatalogFilterSettings *filter_settings,
                                              const asset_system::AssetLibrary *asset_library);
 bool file_is_asset_visible_in_catalog_filter_settings(
     const AssetCatalogFilterSettings *filter_settings, const AssetMetaData *asset_data);
 
-}  // namespace blender::ed::asset_browser
+}  // namespace ed::asset_browser
+
+}  // namespace blender

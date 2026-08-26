@@ -6,15 +6,15 @@
 
 #include "BKE_bake_geometry_nodes_modifier.hh"
 #include "BKE_collection.hh"
+#include "BKE_library.hh"
 #include "BKE_main.hh"
 
 #include "DNA_modifier_types.h"
 #include "DNA_node_types.h"
 
-#include "BLI_binary_search.hh"
-#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "MOD_nodes.hh"
 
@@ -84,11 +84,11 @@ void ModifierCache::reset_cache(const int id)
 void scene_simulation_states_reset(Scene &scene)
 {
   FOREACH_SCENE_OBJECT_BEGIN (&scene, ob) {
-    LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
-      if (md->type != eModifierType_Nodes) {
+    for (ModifierData &md : ob->modifiers) {
+      if (md.type != eModifierType_Nodes) {
         continue;
       }
-      NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+      NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(&md);
       if (!nmd->runtime->cache) {
         continue;
       }

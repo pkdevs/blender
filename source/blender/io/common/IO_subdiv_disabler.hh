@@ -5,14 +5,16 @@
 
 #include "DNA_modifier_types.h"
 
-#include <set>
+#include "BLI_vector.hh"
+
+namespace blender {
 
 struct Depsgraph;
 struct ModifierData;
 struct Object;
 struct Scene;
 
-namespace blender::io {
+namespace io {
 
 /**
  * This code is shared between the Alembic and USD exporters.
@@ -28,8 +30,10 @@ namespace blender::io {
 class SubdivModifierDisabler final {
  private:
   Depsgraph *depsgraph_;
-  std::set<ModifierData *> disabled_modifiers_;
-  std::set<Object *> modified_objects_;
+
+  /* TODO: Track the object and its disabled modifier in a single struct and use just 1 Vector. */
+  Vector<ModifierData *> disabled_modifiers_;
+  Vector<Object *> modified_objects_;
 
  public:
   explicit SubdivModifierDisabler(Depsgraph *depsgraph);
@@ -59,4 +63,5 @@ class SubdivModifierDisabler final {
   void disable_modifier(ModifierData *mod);
 };
 
-}  // namespace blender::io
+}  // namespace io
+}  // namespace blender

@@ -8,4 +8,10 @@
 
 #pragma once
 
-PyObject *BPY_utils_previews_module();
+#include <Python.h>
+
+namespace blender {
+
+[[nodiscard]] PyObject *BPY_utils_previews_module();
+
+}  // namespace blender

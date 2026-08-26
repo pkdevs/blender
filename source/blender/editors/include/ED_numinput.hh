@@ -8,9 +8,15 @@
 
 #pragma once
 
+namespace blender {
+
+/** Check if a double value is finite and exactly represents an integer. */
+bool ED_numinput_double_is_int(double value);
+
 #define NUM_STR_REP_LEN 64
 #define NUM_MAX_ELEMENTS 3
 
+struct bContext;
 struct wmEvent;
 struct UnitSettings;
 
@@ -28,6 +34,8 @@ struct NumInput {
   short val_flag[NUM_MAX_ELEMENTS];
   /** Direct value of the input */
   float val[NUM_MAX_ELEMENTS];
+  /** Evaluated value before unit scaling (e.g. degrees, not radians). */
+  double val_no_units[NUM_MAX_ELEMENTS];
   /** Original value of the input, for reset */
   float val_org[NUM_MAX_ELEMENTS];
   /** Increment steps */
@@ -55,6 +63,11 @@ enum {
   NUM_NO_NEGATIVE = (1 << 1),
   NUM_NO_ZERO = (1 << 2),
   NUM_NO_FRACTION = (1 << 3),
+  /**
+   * The input string (pre-unit-scale) evaluates to an integer value.
+   * Used for exact quadrant rotation detection, see `transform_mode_rotate_quadrants.cc`.
+   */
+  NUM_INT_INPUT_VALUE = (1 << 4),
   /* (1 << 9) and above are reserved for internal flags! */
 };
 
@@ -80,7 +93,7 @@ void initNumInput(NumInput *n);
 /**
  * \param str: Must be NUM_STR_REP_LEN * (idx_max + 1) length.
  */
-void outputNumInput(NumInput *n, char *str, const UnitSettings *unit_settings);
+void outputNumInput(NumInput *n, char *str, const UnitSettings &unit_settings);
 bool hasNumInput(const NumInput *n);
 /**
  * \warning \a vec must be set beforehand otherwise we risk uninitialized vars.
@@ -92,12 +105,20 @@ bool handleNumInput(bContext *C, NumInput *n, const wmEvent *event);
 #define NUM_MODAL_INCREMENT_UP 18
 #define NUM_MODAL_INCREMENT_DOWN 19
 
+/**
+ * \param r_value_no_units: Output for the evaluated value before unit scaling is applied
+ * (may be null). Useful when the caller needs the original input value for exact comparisons,
+ * e.g. detecting exact 90-degree multiples before radian conversion introduces imprecision.
+ */
 bool user_string_to_number(bContext *C,
                            const char *str,
-                           const UnitSettings *unit,
+                           const UnitSettings &unit,
                            int type,
                            double *r_value,
+                           double *r_value_no_units,
                            bool use_single_line_error,
                            char **r_error);
 
 /** \} */
+
+}  // namespace blender

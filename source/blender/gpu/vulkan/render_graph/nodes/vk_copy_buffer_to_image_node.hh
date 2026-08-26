@@ -15,7 +15,7 @@ namespace blender::gpu::render_graph {
  * Information stored inside the render graph node. See `VKRenderGraphNode`.
  */
 struct VKCopyBufferToImageData {
-  VkBuffer src_buffer;
+  VKResourceWithHandle<VkBuffer> src_buffer;
   VkImage dst_image;
   VkBufferImageCopy region;
 };
@@ -38,27 +38,26 @@ class VKCopyBufferToImageNode : public VKNodeInfo<VKNodeType::COPY_BUFFER_TO_IMA
    * (`VK*Data`/`VK*CreateInfo`) types can be included in the same header file as the logic. The
    * actual node data (`VKRenderGraphNode` includes all header files.)
    */
-  template<typename Node> static void set_node_data(Node &node, const CreateInfo &create_info)
+  template<typename Node, typename Storage>
+  static void set_node_data(Node &node, Storage &storage, const CreateInfo &create_info)
   {
-    node.copy_buffer_to_image = create_info.node_data;
+    node.storage_index = storage.copy_buffer_to_image.append_and_get_index(create_info.node_data);
   }
 
   /**
    * Extract read/write resource dependencies from `create_info` and add them to `node_links`.
    */
   void build_links(VKResourceStateTracker &resources,
-                   VKRenderGraphNodeLinks &node_links,
+                   VKRenderGraphLinks &links,
                    const CreateInfo &create_info) override
   {
     ResourceWithStamp src_resource = resources.get_buffer(create_info.node_data.src_buffer);
     ResourceWithStamp dst_resource = resources.get_image_and_increase_stamp(
         create_info.node_data.dst_image);
-    node_links.inputs.append(
-        {src_resource, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED});
-    node_links.outputs.append({dst_resource,
-                               VK_ACCESS_TRANSFER_WRITE_BIT,
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                               create_info.vk_image_aspects});
+    links.buffers.append({src_resource, VK_ACCESS_TRANSFER_READ_BIT});
+    links.images.append({{dst_resource, VK_ACCESS_TRANSFER_WRITE_BIT},
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         create_info.vk_image_aspects});
   }
 
   /**
@@ -66,6 +65,7 @@ class VKCopyBufferToImageNode : public VKNodeInfo<VKNodeType::COPY_BUFFER_TO_IMA
    */
   void build_commands(VKCommandBufferInterface &command_buffer,
                       Data &data,
+                      Span<uint8_t> /*storage_push_constants*/,
                       VKBoundPipelines & /*r_bound_pipelines*/) override
   {
     command_buffer.copy_buffer_to_image(

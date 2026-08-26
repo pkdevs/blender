@@ -4,86 +4,118 @@
 
 #pragma once
 
+#include "util/transform.h"
+#include "util/types.h"
+
 CCL_NAMESPACE_BEGIN
 
 /* Stack */
 
+/* Stack offset type. Stack offsets are in the range [0, SVM_STACK_SIZE]. */
+using SVMStackOffset = uint8_t;
+
+/* Store int value and stack offset. */
+struct SVMInputInt {
+  int value;
+  SVMStackOffset offset;
+  uint8_t _pad[3];
+};
+
+/* Encodes a node float input, as either float value or a stack offset
+ * encoded in a NaN bit pattern. */
+struct SVMInputFloat {
+  uint bits;
+};
+
+/* Encodes a node float input, as either float3 value or a stack offset
+ * encoded in a NaN bit pattern in the x component. */
+struct SVMInputFloat3 {
+  SVMInputFloat x, y, z;
+};
+
+/* Bit mask for encoding stack offset as NaN. */
+#define SVM_INPUT_STACK_OFFSET_MASK 0x7FC00000u
+
+// NOLINTBEGIN
 /* SVM stack has a fixed size */
 #define SVM_STACK_SIZE 255
 /* SVM stack offsets with this value indicate that it's not on the stack */
-#define SVM_STACK_INVALID 255
+#define SVM_STACK_INVALID SVMStackOffset(255)
 
 #define SVM_BUMP_EVAL_STATE_SIZE 10
+// NOLINTEND
 
 /* Nodes */
 
-typedef enum ShaderNodeType {
+enum ShaderNodeType : uint {
 #define SHADER_NODE_TYPE(name) name,
+#define SHADER_NODE_TYPE_DERIVATIVE(name) name, name##_DERIVATIVE,
 #include "node_types_template.h"
-  NODE_NUM
-} ShaderNodeType;
 
-typedef enum NodeAttributeOutputType {
+  NODE_NUM
+};
+
+enum NodeAttributeOutputType : uint8_t {
   NODE_ATTR_OUTPUT_FLOAT3 = 0,
   NODE_ATTR_OUTPUT_FLOAT,
   NODE_ATTR_OUTPUT_FLOAT_ALPHA,
-} NodeAttributeOutputType;
+};
 
-typedef enum NodeAttributeType {
+enum NodeAttributeType : uint8_t {
   NODE_ATTR_FLOAT = 0,
   NODE_ATTR_FLOAT2,
   NODE_ATTR_FLOAT3,
   NODE_ATTR_FLOAT4,
   NODE_ATTR_RGBA,
   NODE_ATTR_MATRIX
-} NodeAttributeType;
+};
 
-typedef enum NodeGeometry {
+enum NodeGeometry : uint8_t {
   NODE_GEOM_P = 0,
   NODE_GEOM_N,
   NODE_GEOM_T,
   NODE_GEOM_I,
   NODE_GEOM_Ng,
   NODE_GEOM_uv
-} NodeGeometry;
+};
 
-typedef enum NodeObjectInfo {
+enum NodeObjectInfo : uint {
   NODE_INFO_OB_LOCATION,
   NODE_INFO_OB_COLOR,
   NODE_INFO_OB_ALPHA,
   NODE_INFO_OB_INDEX,
   NODE_INFO_MAT_INDEX,
   NODE_INFO_OB_RANDOM
-} NodeObjectInfo;
+};
 
-typedef enum NodeParticleInfo {
+enum NodeParticleInfo : uint {
   NODE_INFO_PAR_INDEX,
   NODE_INFO_PAR_RANDOM,
   NODE_INFO_PAR_AGE,
   NODE_INFO_PAR_LIFETIME,
   NODE_INFO_PAR_LOCATION,
-  NODE_INFO_PAR_ROTATION,
+  // NODE_INFO_PAR_ROTATION,
   NODE_INFO_PAR_SIZE,
   NODE_INFO_PAR_VELOCITY,
   NODE_INFO_PAR_ANGULAR_VELOCITY
-} NodeParticleInfo;
+};
 
-typedef enum NodeHairInfo {
+enum NodeHairInfo : uint {
   NODE_INFO_CURVE_IS_STRAND,
   NODE_INFO_CURVE_INTERCEPT,
   NODE_INFO_CURVE_LENGTH,
   NODE_INFO_CURVE_THICKNESS,
   NODE_INFO_CURVE_TANGENT_NORMAL,
   NODE_INFO_CURVE_RANDOM,
-} NodeHairInfo;
+};
 
-typedef enum NodePointInfo {
+enum NodePointInfo : uint {
   NODE_INFO_POINT_POSITION,
   NODE_INFO_POINT_RADIUS,
   NODE_INFO_POINT_RANDOM,
-} NodePointInfo;
+};
 
-typedef enum NodeLightPath {
+enum NodeLightPath : uint {
   NODE_LP_camera = 0,
   NODE_LP_shadow,
   NODE_LP_diffuse,
@@ -99,26 +131,28 @@ typedef enum NodeLightPath {
   NODE_LP_ray_glossy,
   NODE_LP_ray_transparent,
   NODE_LP_ray_transmission,
-} NodeLightPath;
+  NODE_LP_ray_portal,
+};
 
-typedef enum NodeLightFalloff {
+enum NodeLightFalloff : uint {
   NODE_LIGHT_FALLOFF_QUADRATIC,
   NODE_LIGHT_FALLOFF_LINEAR,
   NODE_LIGHT_FALLOFF_CONSTANT
-} NodeLightFalloff;
+};
 
-typedef enum NodeTexCoord {
+enum NodeTexCoord : uint8_t {
   NODE_TEXCO_NORMAL,
   NODE_TEXCO_OBJECT,
+  NODE_TEXCO_OBJECT_WITH_TRANSFORM,
   NODE_TEXCO_CAMERA,
   NODE_TEXCO_WINDOW,
   NODE_TEXCO_REFLECTION,
   NODE_TEXCO_DUPLI_GENERATED,
   NODE_TEXCO_DUPLI_UV,
   NODE_TEXCO_VOLUME_GENERATED
-} NodeTexCoord;
+};
 
-typedef enum NodeMix {
+enum NodeMix : uint {
   NODE_MIX_BLEND = 0,
   NODE_MIX_ADD,
   NODE_MIX_MUL,
@@ -139,9 +173,9 @@ typedef enum NodeMix {
   NODE_MIX_LINEAR,
   NODE_MIX_EXCLUSION,
   NODE_MIX_CLAMP /* used for the clamp UI option */
-} NodeMix;
+};
 
-typedef enum NodeMathType {
+enum NodeMathType : uint {
   NODE_MATH_ADD,
   NODE_MATH_SUBTRACT,
   NODE_MATH_MULTIPLY,
@@ -183,9 +217,9 @@ typedef enum NodeMathType {
   NODE_MATH_SMOOTH_MIN,
   NODE_MATH_SMOOTH_MAX,
   NODE_MATH_FLOORED_MODULO,
-} NodeMathType;
+};
 
-typedef enum NodeVectorMathType {
+enum NodeVectorMathType : uint {
   NODE_VECTOR_MATH_ADD,
   NODE_VECTOR_MATH_SUBTRACT,
   NODE_VECTOR_MATH_MULTIPLY,
@@ -216,48 +250,51 @@ typedef enum NodeVectorMathType {
   NODE_VECTOR_MATH_REFRACT,
   NODE_VECTOR_MATH_FACEFORWARD,
   NODE_VECTOR_MATH_MULTIPLY_ADD,
-} NodeVectorMathType;
+  NODE_VECTOR_MATH_POWER,
+  NODE_VECTOR_MATH_SIGN,
+  NODE_VECTOR_MATH_ROUND,
+};
 
-typedef enum NodeClampType {
+enum NodeClampType : uint {
   NODE_CLAMP_MINMAX,
   NODE_CLAMP_RANGE,
-} NodeClampType;
+};
 
-typedef enum NodeMapRangeType {
+enum NodeMapRangeType : uint {
   NODE_MAP_RANGE_LINEAR,
   NODE_MAP_RANGE_STEPPED,
   NODE_MAP_RANGE_SMOOTHSTEP,
   NODE_MAP_RANGE_SMOOTHERSTEP,
-} NodeMapRangeType;
+};
 
-typedef enum NodeMappingType {
+enum NodeMappingType : uint {
   NODE_MAPPING_TYPE_POINT,
   NODE_MAPPING_TYPE_TEXTURE,
   NODE_MAPPING_TYPE_VECTOR,
   NODE_MAPPING_TYPE_NORMAL
-} NodeMappingType;
+};
 
-typedef enum NodeVectorRotateType {
+enum NodeVectorRotateType : uint {
   NODE_VECTOR_ROTATE_TYPE_AXIS,
   NODE_VECTOR_ROTATE_TYPE_AXIS_X,
   NODE_VECTOR_ROTATE_TYPE_AXIS_Y,
   NODE_VECTOR_ROTATE_TYPE_AXIS_Z,
   NODE_VECTOR_ROTATE_TYPE_EULER_XYZ,
-} NodeVectorRotateType;
+};
 
-typedef enum NodeVectorTransformType {
+enum NodeVectorTransformType : uint {
   NODE_VECTOR_TRANSFORM_TYPE_VECTOR,
   NODE_VECTOR_TRANSFORM_TYPE_POINT,
   NODE_VECTOR_TRANSFORM_TYPE_NORMAL
-} NodeVectorTransformType;
+};
 
-typedef enum NodeVectorTransformConvertSpace {
+enum NodeVectorTransformConvertSpace : uint {
   NODE_VECTOR_TRANSFORM_CONVERT_SPACE_WORLD,
   NODE_VECTOR_TRANSFORM_CONVERT_SPACE_OBJECT,
   NODE_VECTOR_TRANSFORM_CONVERT_SPACE_CAMERA
-} NodeVectorTransformConvertSpace;
+};
 
-typedef enum NodeConvert {
+enum NodeConvert : uint {
   NODE_CONVERT_FV,
   NODE_CONVERT_FI,
   NODE_CONVERT_CF,
@@ -265,47 +302,53 @@ typedef enum NodeConvert {
   NODE_CONVERT_VF,
   NODE_CONVERT_VI,
   NODE_CONVERT_IF,
-  NODE_CONVERT_IV
-} NodeConvert;
+  NODE_CONVERT_IV,
+  NODE_CONVERT_NONE,
+};
 
-typedef enum NodeNoiseType {
+enum NodeNoiseType : uint {
   NODE_NOISE_MULTIFRACTAL,
   NODE_NOISE_FBM,
   NODE_NOISE_HYBRID_MULTIFRACTAL,
   NODE_NOISE_RIDGED_MULTIFRACTAL,
   NODE_NOISE_HETERO_TERRAIN
-} NodeNoiseType;
+};
 
-typedef enum NodeGaborType {
+enum NodeGaborType : uint {
   NODE_GABOR_TYPE_2D,
   NODE_GABOR_TYPE_3D,
-} NodeGaborType;
+};
 
-typedef enum NodeWaveType { NODE_WAVE_BANDS, NODE_WAVE_RINGS } NodeWaveType;
+enum NodeWaveType : uint { NODE_WAVE_BANDS, NODE_WAVE_RINGS };
 
-typedef enum NodeWaveBandsDirection {
+enum NodeWaveBandsDirection : uint {
   NODE_WAVE_BANDS_DIRECTION_X,
   NODE_WAVE_BANDS_DIRECTION_Y,
   NODE_WAVE_BANDS_DIRECTION_Z,
   NODE_WAVE_BANDS_DIRECTION_DIAGONAL
-} NodeWaveBandsDirection;
+};
 
-typedef enum NodeWaveRingsDirection {
+enum NodeWaveRingsDirection : uint {
   NODE_WAVE_RINGS_DIRECTION_X,
   NODE_WAVE_RINGS_DIRECTION_Y,
   NODE_WAVE_RINGS_DIRECTION_Z,
   NODE_WAVE_RINGS_DIRECTION_SPHERICAL
-} NodeWaveRingsDirection;
+};
 
-typedef enum NodeWaveProfile {
+enum NodeWaveProfile : uint {
   NODE_WAVE_PROFILE_SIN,
   NODE_WAVE_PROFILE_SAW,
   NODE_WAVE_PROFILE_TRI,
-} NodeWaveProfile;
+};
 
-typedef enum NodeSkyType { NODE_SKY_PREETHAM, NODE_SKY_HOSEK, NODE_SKY_NISHITA } NodeSkyType;
+enum NodeSkyType : uint {
+  NODE_SKY_PREETHAM,
+  NODE_SKY_HOSEK,
+  NODE_SKY_SINGLE_SCATTERING,
+  NODE_SKY_MULTIPLE_SCATTERING
+};
 
-typedef enum NodeGradientType {
+enum NodeGradientType : uint {
   NODE_BLEND_LINEAR,
   NODE_BLEND_QUADRATIC,
   NODE_BLEND_EASING,
@@ -313,110 +356,112 @@ typedef enum NodeGradientType {
   NODE_BLEND_RADIAL,
   NODE_BLEND_QUADRATIC_SPHERE,
   NODE_BLEND_SPHERICAL
-} NodeGradientType;
+};
 
-typedef enum NodeVoronoiDistanceMetric {
+enum NodeVoronoiDistanceMetric : uint {
   NODE_VORONOI_EUCLIDEAN,
   NODE_VORONOI_MANHATTAN,
   NODE_VORONOI_CHEBYCHEV,
   NODE_VORONOI_MINKOWSKI,
-} NodeVoronoiDistanceMetric;
+};
 
-typedef enum NodeVoronoiFeature {
+enum NodeVoronoiFeature : uint {
   NODE_VORONOI_F1,
   NODE_VORONOI_F2,
   NODE_VORONOI_SMOOTH_F1,
   NODE_VORONOI_DISTANCE_TO_EDGE,
   NODE_VORONOI_N_SPHERE_RADIUS,
-} NodeVoronoiFeature;
+};
 
-typedef enum NodeBlendWeightType {
-  NODE_LAYER_WEIGHT_FRESNEL,
-  NODE_LAYER_WEIGHT_FACING
-} NodeBlendWeightType;
+enum NodeBlendWeightType : uint { NODE_LAYER_WEIGHT_FRESNEL, NODE_LAYER_WEIGHT_FACING };
 
-typedef enum NodeTangentDirectionType {
-  NODE_TANGENT_RADIAL,
-  NODE_TANGENT_UVMAP
-} NodeTangentDirectionType;
+enum NodeTangentDirectionType : uint { NODE_TANGENT_RADIAL, NODE_TANGENT_UVMAP };
 
-typedef enum NodeTangentAxis {
-  NODE_TANGENT_AXIS_X,
-  NODE_TANGENT_AXIS_Y,
-  NODE_TANGENT_AXIS_Z
-} NodeTangentAxis;
+enum NodeTangentAxis : uint { NODE_TANGENT_AXIS_X, NODE_TANGENT_AXIS_Y, NODE_TANGENT_AXIS_Z };
 
-typedef enum NodeNormalMapSpace {
+enum NodeNormalMapSpace : uint {
   NODE_NORMAL_MAP_TANGENT,
   NODE_NORMAL_MAP_OBJECT,
   NODE_NORMAL_MAP_WORLD,
   NODE_NORMAL_MAP_BLENDER_OBJECT,
   NODE_NORMAL_MAP_BLENDER_WORLD,
-} NodeNormalMapSpace;
+};
 
-typedef enum NodeImageProjection {
+enum NodeNormalMapConvention {
+  NODE_NORMAL_MAP_CONVENTION_OPENGL = 0,
+  NODE_NORMAL_MAP_CONVENTION_DIRECTX = 1,
+};
+
+enum NodeNormalMapBase {
+  NODE_NORMAL_MAP_BASE_ORIGINAL = 0,
+  NODE_NORMAL_MAP_BASE_DISPLACED = 1,
+};
+
+/* Flags for SVM node encoding, packing space/convention/base into one byte. */
+enum NodeNormalMapFlags {
+  NODE_NORMAL_MAP_FLAG_SPACE_MASK = 0x7,
+  NODE_NORMAL_MAP_FLAG_DIRECTX = (1 << 3),
+  NODE_NORMAL_MAP_FLAG_ORIGINAL = (1 << 4),
+};
+
+enum NodeImageProjection : uint {
   NODE_IMAGE_PROJ_FLAT = 0,
   NODE_IMAGE_PROJ_BOX = 1,
   NODE_IMAGE_PROJ_SPHERE = 2,
   NODE_IMAGE_PROJ_TUBE = 3,
-} NodeImageProjection;
+};
 
-typedef enum NodeImageFlags {
+enum NodeImageFlags {
   NODE_IMAGE_COMPRESS_AS_SRGB = 1,
   NODE_IMAGE_ALPHA_UNASSOCIATE = 2,
-} NodeImageFlags;
+};
 
-typedef enum NodeEnvironmentProjection {
+enum NodeEnvironmentProjection : uint {
   NODE_ENVIRONMENT_EQUIRECTANGULAR = 0,
   NODE_ENVIRONMENT_MIRROR_BALL = 1,
-} NodeEnvironmentProjection;
+};
 
-typedef enum NodeBumpOffset {
+enum NodeBumpOffset : uint8_t {
   NODE_BUMP_OFFSET_CENTER,
   NODE_BUMP_OFFSET_DX,
   NODE_BUMP_OFFSET_DY,
-} NodeBumpOffset;
+};
 
-typedef enum NodeTexVoxelSpace {
-  NODE_TEX_VOXEL_SPACE_OBJECT = 0,
-  NODE_TEX_VOXEL_SPACE_WORLD = 1,
-} NodeTexVoxelSpace;
-
-typedef enum NodeAO {
+enum NodeAO {
   NODE_AO_ONLY_LOCAL = (1 << 0),
   NODE_AO_INSIDE = (1 << 1),
   NODE_AO_GLOBAL_RADIUS = (1 << 2),
-} NodeAO;
+};
 
-typedef enum ShaderType {
+enum ShaderType {
   SHADER_TYPE_SURFACE,
   SHADER_TYPE_VOLUME,
   SHADER_TYPE_DISPLACEMENT,
   SHADER_TYPE_BUMP,
-} ShaderType;
+};
 
-typedef enum NodePrincipledHairModel {
+enum NodePrincipledHairModel : uint {
   NODE_PRINCIPLED_HAIR_CHIANG = 0,
   NODE_PRINCIPLED_HAIR_HUANG = 1,
   NODE_PRINCIPLED_HAIR_MODEL_NUM,
-} NodePrincipledHairModel;
+};
 
-typedef enum NodePrincipledHairParametrization {
+enum NodePrincipledHairParametrization : uint {
   NODE_PRINCIPLED_HAIR_REFLECTANCE = 0,
   NODE_PRINCIPLED_HAIR_PIGMENT_CONCENTRATION = 1,
   NODE_PRINCIPLED_HAIR_DIRECT_ABSORPTION = 2,
   NODE_PRINCIPLED_HAIR_PARAMETRIZATION_NUM,
-} NodePrincipledHairParametrization;
+};
 
-typedef enum NodeCombSepColorType {
+enum NodeCombSepColorType : uint {
   NODE_COMBSEP_COLOR_RGB,
   NODE_COMBSEP_COLOR_HSV,
   NODE_COMBSEP_COLOR_HSL,
-} NodeCombSepColorType;
+};
 
 /* Closure */
 
-typedef enum ClosureType {
+enum ClosureType : uint {
   /* Special type, flags generic node as a non-BSDF. */
   CLOSURE_NONE_ID,
 
@@ -425,6 +470,8 @@ typedef enum ClosureType {
   /* Diffuse */
   CLOSURE_BSDF_DIFFUSE_ID,
   CLOSURE_BSDF_OREN_NAYAR_ID,
+  CLOSURE_BSDF_ROUGH_TRANSLUCENT_ID,
+  CLOSURE_BSDF_BURLEY_ID,
   CLOSURE_BSDF_DIFFUSE_RAMP_ID,
   CLOSURE_BSDF_SHEEN_ID,
   CLOSURE_BSDF_DIFFUSE_TOON_ID,
@@ -445,6 +492,7 @@ typedef enum ClosureType {
   /* Transmission */
   CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID,
   CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID,
+  CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID,
   CLOSURE_BSDF_HAIR_TRANSMISSION_ID,
 
   /* Glass */
@@ -461,6 +509,7 @@ typedef enum ClosureType {
   /* BSSRDF */
   CLOSURE_BSSRDF_BURLEY_ID,
   CLOSURE_BSSRDF_RANDOM_WALK_ID,
+  CLOSURE_BSSRDF_RANDOM_WALK_LEGACY_ID,
   CLOSURE_BSSRDF_RANDOM_WALK_SKIN_ID,
 
   /* Other */
@@ -478,7 +527,9 @@ typedef enum ClosureType {
   CLOSURE_BSDF_PRINCIPLED_ID,
 
   NBUILTIN_CLOSURES
-} ClosureType;
+};
+
+static_assert(NBUILTIN_CLOSURES < 256, "Too many Closure types (need to change SVM packing)");
 
 /* watch this, being lazy with memory usage */
 #define CLOSURE_IS_BSDF(type) (type != CLOSURE_NONE_ID && type <= CLOSURE_BSDF_TRANSPARENT_ID)
@@ -499,7 +550,7 @@ typedef enum ClosureType {
 #define CLOSURE_IS_BSDF_MICROFACET(type) \
   ((type >= CLOSURE_BSDF_MICROFACET_GGX_ID && type <= CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID) || \
    (type >= CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID && \
-    type <= CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID) || \
+    type <= CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID) || \
    (type >= CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID && \
     type <= CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID))
 #define CLOSURE_IS_BSDF_OR_BSSRDF(type) \
@@ -523,7 +574,6 @@ typedef enum ClosureType {
 #define CLOSURE_IS_RAY_PORTAL(type) (type == CLOSURE_BSDF_RAY_PORTAL_ID)
 
 #define CLOSURE_WEIGHT_CUTOFF 1e-5f
-/* Treat closure as singular if the squared roughness is below this threshold. */
-#define BSDF_ROUGHNESS_SQ_THRESH 2e-10f
+#define THINFILM_THICKNESS_CUTOFF 0.1f
 
 CCL_NAMESPACE_END

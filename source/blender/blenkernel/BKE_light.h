@@ -9,20 +9,22 @@
  * \brief General operations, lookup, etc. for blender lights.
  */
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
+#include "BLI_math_matrix_types.hh"
+#include "BLI_math_vector_types.hh"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace blender {
 
 struct Depsgraph;
 struct Light;
 struct Main;
 
-struct Light *BKE_light_add(struct Main *bmain, const char *name) ATTR_WARN_UNUSED_RESULT;
+Light *BKE_light_add(Main *bmain, const char *name) ATTR_WARN_UNUSED_RESULT;
 
-void BKE_light_eval(struct Depsgraph *depsgraph, struct Light *la);
+void BKE_light_eval(Depsgraph *depsgraph, Light *la);
 
-#ifdef __cplusplus
-}
-#endif
+float BKE_light_power(const Light &light);
+float3 BKE_light_color(const Light &light);
+float BKE_light_area(const Light &light, const float4x4 &object_to_world);
+
+}  // namespace blender

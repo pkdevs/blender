@@ -6,7 +6,6 @@
  * \ingroup spnla
  */
 
-#include <cstdio>
 #include <cstring>
 
 #include "DNA_scene_types.h"
@@ -22,6 +21,8 @@
 #include "WM_types.hh"
 
 #include "nla_intern.hh" /* own include */
+
+namespace blender {
 
 /* ************************** poll callbacks for operators **********************************/
 
@@ -45,6 +46,14 @@ bool nlaop_poll_tweakmode_off(bContext *C)
   }
 
   return true;
+}
+bool nlaop_poll_tweakmode_off_with_main_region(bContext *C)
+{
+  const ARegion *region = CTX_wm_region(C);
+  if (!(region && region->regiontype == RGN_TYPE_WINDOW)) {
+    return false;
+  }
+  return nlaop_poll_tweakmode_off(C);
 }
 
 bool nlaop_poll_tweakmode_on(bContext *C)
@@ -186,3 +195,5 @@ void nla_keymap(wmKeyConfig *keyconf)
   /* data ------------------------------------------------------------- */
   WM_keymap_ensure(keyconf, "NLA Editor", SPACE_NLA, RGN_TYPE_WINDOW);
 }
+
+}  // namespace blender

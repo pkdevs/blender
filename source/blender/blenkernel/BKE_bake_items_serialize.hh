@@ -2,13 +2,19 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #pragma once
 
 #include "BLI_fileops.hh"
 #include "BLI_function_ref.hh"
+#include "BLI_implicit_sharing.hh"
+#include "BLI_mutex.hh"
 #include "BLI_serialize.hh"
 
-#include "BKE_bake_items.hh"
+#include "BKE_bake_values.hh"
 
 namespace blender::bke::bake {
 
@@ -137,7 +143,7 @@ class BlobReadSharing : NonCopyable, NonMovable {
   /**
    * Use a mutex so that #read_shared can be implemented in a thread-safe way.
    */
-  mutable std::mutex mutex_;
+  mutable Mutex mutex_;
   /**
    * Map used to detect when some data has been previously loaded. This keeps strong
    * references to #ImplicitSharingInfo.
@@ -162,7 +168,7 @@ class BlobReadSharing : NonCopyable, NonMovable {
 class DiskBlobReader : public BlobReader {
  private:
   const std::string blobs_dir_;
-  mutable std::mutex mutex_;
+  mutable Mutex mutex_;
   mutable Map<std::string, std::unique_ptr<fstream>> open_input_streams_;
 
  public:
@@ -231,7 +237,7 @@ class MemoryBlobWriter : public BlobWriter {
  */
 class MemoryBlobReader : public BlobReader {
  private:
-  Map<StringRef, Span<std::byte>> blob_by_name_;
+  Map<std::string, Span<std::byte>> blob_by_name_;
 
  public:
   void add(StringRef name, Span<std::byte> blob);
@@ -239,13 +245,13 @@ class MemoryBlobReader : public BlobReader {
   [[nodiscard]] bool read(const BlobSlice &slice, void *r_data) const override;
 };
 
-void serialize_bake(const BakeState &bake_state,
+void serialize_bake(const BakeValues &bake_values,
                     BlobWriter &blob_writer,
                     BlobWriteSharing &blob_sharing,
                     std::ostream &r_stream);
 
-std::optional<BakeState> deserialize_bake(std::istream &stream,
-                                          const BlobReader &blob_reader,
-                                          const BlobReadSharing &blob_sharing);
+std::optional<BakeValues> deserialize_bake(std::istream &stream,
+                                           const BlobReader &blob_reader,
+                                           const BlobReadSharing &blob_sharing);
 
 }  // namespace blender::bke::bake

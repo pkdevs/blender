@@ -22,7 +22,7 @@ with offscreen.bind():
     fb = gpu.state.active_framebuffer_get()
     fb.clear(color=(0.0, 0.0, 0.0, 0.0))
     with gpu.matrix.push_pop():
-        # reset matrices -> use normalized device coordinates [-1, 1]
+        # Reset matrices -> use normalized device coordinates [-1, 1].
         gpu.matrix.load_matrix(Matrix.Identity(4))
         gpu.matrix.load_projection_matrix(Matrix.Identity(4))
 
@@ -67,10 +67,10 @@ del vert_out
 del shader_info
 
 batch = batch_for_shader(
-    shader, 'TRI_FAN',
+    shader, 'TRI_STRIP',
     {
-        "position": ((-1, -1), (1, -1), (1, 1), (-1, 1)),
-        "uv": ((0, 0), (1, 0), (1, 1), (0, 1)),
+        "position": ((-1, -1), (1, -1), (-1, 1), (1, 1)),
+        "uv": ((0, 0), (1, 0), (0, 1), (1, 1)),
     },
 )
 

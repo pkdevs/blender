@@ -3,13 +3,13 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
-#ifndef __UTIL_SIMD_TYPES_H__
-#define __UTIL_SIMD_TYPES_H__
+#pragma once
 
+#include <cstdint>
 #include <limits>
-#include <stdint.h>
 
 #include "util/defines.h"
+#include "util/optimization.h"
 
 /* SSE Intrinsics includes
  *
@@ -48,7 +48,7 @@
 #    define SIMD_GET_FLUSH_TO_ZERO get_fz(_MM_FLUSH_ZERO_ON)
 #  else
 #    define _MM_FLUSH_ZERO_ON 24
-#    define __get_fpcr(__fpcr) _ReadStatusReg(__fpcr)
+#    define __get_fpcr(__fpcr) __fpcr = _ReadStatusReg(0x5A20)
 #    define __set_fpcr(__fpcr) _WriteStatusReg(0x5A20, __fpcr)
 #    define SIMD_SET_FLUSH_TO_ZERO set_fz(_MM_FLUSH_ZERO_ON);
 #    define SIMD_GET_FLUSH_TO_ZERO get_fz(_MM_FLUSH_ZERO_ON)
@@ -58,6 +58,32 @@
 #endif
 
 CCL_NAMESPACE_BEGIN
+
+/* Enable flush-to-zero and denormals-are-zero for the lifetime of the object, then restore the
+ * previous state. This is the mode threads that use Embree run in, so this is mainly useful to
+ * check that code behaves the same in both modes.
+ *
+ * Does nothing on platforms where the control register is not accessible this way. Those use the
+ * `set_fz` path above, which can not read back the original state. */
+class ScopedFlushToZero {
+/* Same platforms that use the `_mm_*` intrinsics for SIMD_SET_FLUSH_TO_ZERO above. */
+#if defined(__x86_64__) || defined(_M_X64) || \
+    ((defined(__aarch64__) || defined(_M_ARM64)) && defined(_MM_SET_FLUSH_ZERO_MODE))
+ public:
+  ScopedFlushToZero() : orig_csr_(_mm_getcsr())
+  {
+    SIMD_SET_FLUSH_TO_ZERO;
+  }
+
+  ~ScopedFlushToZero()
+  {
+    _mm_setcsr(orig_csr_);
+  }
+
+ private:
+  unsigned int orig_csr_;
+#endif
+};
 
 /* Data structures used by SSE classes. */
 #ifdef __KERNEL_SSE2__
@@ -127,26 +153,28 @@ static struct StepTy {
 
 #endif
 #if (defined(__aarch64__) || defined(_M_ARM64)) && !defined(_MM_SET_FLUSH_ZERO_MODE)
-__forceinline int set_fz(uint32_t flag)
+__forceinline int set_fz(const uint32_t flag)
 {
-  uint64_t old_fpcr, new_fpcr;
+  uint64_t old_fpcr;
+  uint64_t new_fpcr;
   __get_fpcr(old_fpcr);
-  new_fpcr = old_fpcr | (1ULL << flag);
+  new_fpcr = old_fpcr | (uint64_t(1) << flag);
   __set_fpcr(new_fpcr);
   __get_fpcr(old_fpcr);
   return old_fpcr == new_fpcr;
 }
-__forceinline int get_fz(uint32_t flag)
+__forceinline int get_fz(const uint32_t flag)
 {
   uint64_t cur_fpcr;
   __get_fpcr(cur_fpcr);
-  return (cur_fpcr & (1ULL << flag)) > 0 ? 1 : 0;
+  return (cur_fpcr & (uint64_t(1) << flag)) > 0 ? 1 : 0;
 }
 #endif
 
 /* Utilities used by Neon */
 #if defined(__KERNEL_NEON__)
-template<class type, int i0, int i1, int i2, int i3> type shuffle_neon(const type &a)
+template<class type, const int i0, const int i1, const int i2, const int i3>
+type shuffle_neon(const type &a)
 {
   if (i0 == i1 && i0 == i2 && i0 == i3) {
     return type(vdupq_laneq_s32(int32x4_t(a), i0));
@@ -171,7 +199,7 @@ template<class type, int i0, int i1, int i2, int i3> type shuffle_neon(const typ
   return type(vqtbl1q_s8(int8x16_t(a), *(uint8x16_t *)tbl));
 }
 
-template<class type, int i0, int i1, int i2, int i3>
+template<class type, const int i0, const int i1, const int i2, const int i3>
 type shuffle_neon(const type &a, const type &b)
 {
   if (&a == &b) {
@@ -242,7 +270,7 @@ type shuffle_neon(const type &a, const type &b)
 
 #if defined(_WIN32) && !defined(__MINGW32__) && !defined(__clang__)
 /* Intrinsic functions on Windows. */
-__forceinline uint32_t __bsf(uint32_t v)
+__forceinline uint32_t __bsf(const uint32_t v)
 {
 #  if defined(__KERNEL_AVX2__)
   return _tzcnt_u32(v);
@@ -253,21 +281,21 @@ __forceinline uint32_t __bsf(uint32_t v)
 #  endif
 }
 
-__forceinline uint32_t __bsr(uint32_t v)
+__forceinline uint32_t __bsr(const uint32_t v)
 {
   unsigned long r = 0;
   _BitScanReverse(&r, v);
   return r;
 }
 
-__forceinline uint32_t __btc(uint32_t v, uint32_t i)
+__forceinline uint32_t __btc(const uint32_t v, const uint32_t i)
 {
   long r = v;
   _bittestandcomplement(&r, i);
   return r;
 }
 
-__forceinline uint32_t bitscan(uint32_t v)
+__forceinline uint32_t bitscan(const uint32_t v)
 {
 #  if defined(__KERNEL_AVX2__)
   return _tzcnt_u32(v);
@@ -278,7 +306,7 @@ __forceinline uint32_t bitscan(uint32_t v)
 
 #  if defined(__KERNEL_64_BIT__)
 
-__forceinline uint64_t __bsf(uint64_t v)
+__forceinline uint64_t __bsf(const uint64_t v)
 {
 #    if defined(__KERNEL_AVX2__)
   return _tzcnt_u64(v);
@@ -289,21 +317,21 @@ __forceinline uint64_t __bsf(uint64_t v)
 #    endif
 }
 
-__forceinline uint64_t __bsr(uint64_t v)
+__forceinline uint64_t __bsr(const uint64_t v)
 {
   unsigned long r = 0;
   _BitScanReverse64(&r, v);
   return r;
 }
 
-__forceinline uint64_t __btc(uint64_t v, uint64_t i)
+__forceinline uint64_t __btc(const uint64_t v, const uint64_t i)
 {
   uint64_t r = v;
   _bittestandcomplement64((__int64 *)&r, i);
   return r;
 }
 
-__forceinline uint64_t bitscan(uint64_t v)
+__forceinline uint64_t bitscan(const uint64_t v)
 {
 #    if defined(__KERNEL_AVX2__)
 #      if defined(__KERNEL_64_BIT__)
@@ -335,7 +363,7 @@ __forceinline uint32_t __bsr(const uint32_t v)
   return r;
 }
 
-__forceinline uint32_t __btc(const uint32_t v, uint32_t i)
+__forceinline uint32_t __btc(const uint32_t v, const uint32_t i)
 {
   uint32_t r = 0;
   asm("btc %1,%0" : "=r"(r) : "r"(i), "0"(v) : "flags");
@@ -366,7 +394,7 @@ __forceinline uint64_t __btc(const uint64_t v, const uint64_t i)
   return r;
 }
 
-__forceinline uint32_t bitscan(uint32_t v)
+__forceinline uint32_t bitscan(const uint32_t v)
 {
 #  if defined(__KERNEL_AVX2__)
   return _tzcnt_u32(v);
@@ -377,7 +405,7 @@ __forceinline uint32_t bitscan(uint32_t v)
 
 #  if (defined(__KERNEL_64_BIT__) || defined(__APPLE__)) && \
       !(defined(__ILP32__) && defined(__x86_64__))
-__forceinline uint64_t bitscan(uint64_t v)
+__forceinline uint64_t bitscan(const uint64_t v)
 {
 #    if defined(__KERNEL_AVX2__)
 #      if defined(__KERNEL_64_BIT__)
@@ -395,8 +423,8 @@ __forceinline uint64_t bitscan(uint64_t v)
 /* Intrinsic functions fallback for arbitrary processor. */
 __forceinline uint32_t __bsf(const uint32_t x)
 {
-  for (int i = 0; i < 32; i++) {
-    if (x & (1U << i)) {
+  for (uint32_t i = 0; i < 32; i++) {
+    if (x & (uint32_t(1) << i)) {
       return i;
     }
   }
@@ -405,8 +433,8 @@ __forceinline uint32_t __bsf(const uint32_t x)
 
 __forceinline uint32_t __bsr(const uint32_t x)
 {
-  for (int i = 0; i < 32; i++) {
-    if (x & (1U << (31 - i))) {
+  for (uint32_t i = 0; i < 32; i++) {
+    if (x & (uint32_t(1) << (31 - i))) {
       return (31 - i);
     }
   }
@@ -415,14 +443,14 @@ __forceinline uint32_t __bsr(const uint32_t x)
 
 __forceinline uint32_t __btc(const uint32_t x, const uint32_t bit)
 {
-  uint32_t mask = 1U << bit;
-  return x & (~mask);
+  const uint32_t mask = uint32_t(1) << bit;
+  return x ^ mask;
 }
 
 __forceinline uint32_t __bsf(const uint64_t x)
 {
-  for (int i = 0; i < 64; i++) {
-    if (x & (1UL << i)) {
+  for (uint32_t i = 0; i < 64; i++) {
+    if (x & (uint64_t(1) << i)) {
       return i;
     }
   }
@@ -431,8 +459,8 @@ __forceinline uint32_t __bsf(const uint64_t x)
 
 __forceinline uint32_t __bsr(const uint64_t x)
 {
-  for (int i = 0; i < 64; i++) {
-    if (x & (1UL << (63 - i))) {
+  for (uint32_t i = 0; i < 64; i++) {
+    if (x & (uint64_t(1) << (63 - i))) {
       return (63 - i);
     }
   }
@@ -441,28 +469,20 @@ __forceinline uint32_t __bsr(const uint64_t x)
 
 __forceinline uint64_t __btc(const uint64_t x, const uint32_t bit)
 {
-  uint64_t mask = 1UL << bit;
-  return x & (~mask);
+  const uint64_t mask = uint64_t(1) << bit;
+  return x ^ mask;
 }
 
-__forceinline uint32_t bitscan(uint32_t value)
+__forceinline uint32_t bitscan(const uint32_t value)
 {
   assert(value != 0);
-  uint32_t bit = 0;
-  while ((value & (1 << bit)) == 0) {
-    ++bit;
-  }
-  return bit;
+  return __bsf(value);
 }
 
-__forceinline uint64_t bitscan(uint64_t value)
+__forceinline uint64_t bitscan(const uint64_t value)
 {
   assert(value != 0);
-  uint64_t bit = 0;
-  while ((value & (1 << bit)) == 0) {
-    ++bit;
-  }
-  return bit;
+  return __bsf(value);
 }
 
 #endif /* Intrinsics */
@@ -481,5 +501,3 @@ __forceinline uint64_t bitscan(uint64_t value)
 #endif
 
 CCL_NAMESPACE_END
-
-#endif /* __UTIL_SIMD_TYPES_H__ */

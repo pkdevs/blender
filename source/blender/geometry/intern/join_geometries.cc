@@ -15,30 +15,20 @@ using bke::AttributeDomainAndType;
 using bke::GeometryComponent;
 using bke::GeometrySet;
 
-static Map<StringRef, AttributeDomainAndType> get_final_attribute_info(
+static GeometrySet::GatheredAttributes get_final_attribute_info(
     const Span<const GeometryComponent *> components, const Span<StringRef> ignored_attributes)
 {
-  Map<StringRef, AttributeDomainAndType> info;
+  GeometrySet::GatheredAttributes info;
 
   for (const GeometryComponent *component : components) {
     component->attributes()->foreach_attribute([&](const bke::AttributeIter &iter) {
       if (ignored_attributes.contains(iter.name)) {
         return;
       }
-      if (iter.data_type == CD_PROP_STRING) {
+      if (iter.data_type == bke::AttrType::String) {
         return;
       }
-      info.add_or_modify(
-          iter.name,
-          [&](AttributeDomainAndType *meta_data_final) {
-            *meta_data_final = {iter.domain, iter.data_type};
-          },
-          [&](AttributeDomainAndType *meta_data_final) {
-            meta_data_final->data_type = bke::attribute_data_type_highest_complexity(
-                {meta_data_final->data_type, iter.data_type});
-            meta_data_final->domain = bke::attribute_domain_highest_priority(
-                {meta_data_final->domain, iter.domain});
-          });
+      info.add(iter.name, AttributeDomainAndType{iter.domain, iter.data_type});
     });
   }
 
@@ -46,13 +36,12 @@ static Map<StringRef, AttributeDomainAndType> get_final_attribute_info(
 }
 
 static void fill_new_attribute(const Span<const GeometryComponent *> src_components,
-                               const StringRef attribute_id,
-                               const eCustomDataType data_type,
+                               const StringRef name,
+                               const bke::AttrType data_type,
                                const bke::AttrDomain domain,
                                GMutableSpan dst_span)
 {
-  const CPPType *cpp_type = bke::custom_data_type_to_cpp_type(data_type);
-  BLI_assert(cpp_type != nullptr);
+  const CPPType &cpp_type = bke::attribute_type_to_cpp_type(data_type);
 
   int offset = 0;
   for (const GeometryComponent *component : src_components) {
@@ -61,41 +50,93 @@ static void fill_new_attribute(const Span<const GeometryComponent *> src_compone
       continue;
     }
     GVArray read_attribute = *component->attributes()->lookup_or_default(
-        attribute_id, domain, data_type, nullptr);
+        name, domain, data_type, nullptr);
 
     GVArraySpan src_span{read_attribute};
     const void *src_buffer = src_span.data();
     void *dst_buffer = dst_span[offset];
-    cpp_type->copy_assign_n(src_buffer, dst_buffer, domain_num);
+    cpp_type.copy_construct_n(src_buffer, dst_buffer, domain_num);
 
     offset += domain_num;
   }
 }
 
-void join_attributes(const Span<const GeometryComponent *> src_components,
-                     GeometryComponent &result,
-                     const Span<StringRef> ignored_attributes)
+static bool try_join_single_value_attribute(const Span<const GeometryComponent *> src_components,
+                                            const StringRef name,
+                                            const bke::AttrDomain domain,
+                                            const bke::AttrType data_type,
+                                            bke::MutableAttributeAccessor dst_attributes)
 {
-  const Map<StringRef, AttributeDomainAndType> info = get_final_attribute_info(src_components,
-                                                                               ignored_attributes);
+  const auto get_single_value = [&](const GeometryComponent &component) {
+    const bke::AttributeAccessor attributes = *component.attributes();
+    const GVArray src = *attributes.lookup_or_default(name, domain, data_type);
+    const CommonVArrayInfo info = src.common_info();
+    if (info.type != CommonVArrayInfo::Type::Single) {
+      return GPointer();
+    }
+    return GPointer(src.type(), info.data);
+  };
+  const GPointer first_value = get_single_value(*src_components.first());
+  if (!first_value) {
+    return false;
+  }
+  const bool all_equal = threading::parallel_reduce(
+      src_components.index_range().drop_front(1),
+      64,
+      true,
+      [&](const IndexRange range, bool value) {
+        if (!value) {
+          return false;
+        }
+        for (const int i : range) {
+          const GPointer value = get_single_value(*src_components[i]);
+          if (!value) {
+            return false;
+          }
+          if (!value.type()->is_equal(value.get(), first_value.get())) {
+            return false;
+          }
+        }
+        return true;
+      },
+      std::logical_and<bool>());
+  if (!all_equal) {
+    return false;
+  }
+  return dst_attributes.add(name, domain, data_type, bke::AttributeInitValue(first_value));
+}
 
-  for (const MapItem<StringRef, AttributeDomainAndType> item : info.items()) {
-    const StringRef attribute_id = item.key;
-    const AttributeDomainAndType &meta_data = item.value;
+static void join_attributes(const Span<const GeometryComponent *> src_components,
+                            GeometryComponent &result,
+                            const Span<StringRef> ignored_attributes)
+{
+  const GeometrySet::GatheredAttributes info = get_final_attribute_info(src_components,
+                                                                        ignored_attributes);
+  bke::MutableAttributeAccessor dst_attributes = *result.attributes_for_write();
 
-    bke::GSpanAttributeWriter write_attribute =
-        result.attributes_for_write()->lookup_or_add_for_write_only_span(
-            attribute_id, meta_data.domain, meta_data.data_type);
+  for (const int i : info.names.index_range()) {
+    const StringRef name = info.names[i];
+    const AttributeDomainAndType &meta_data = info.kinds[i];
+
+    if (try_join_single_value_attribute(
+            src_components, name, meta_data.domain, meta_data.data_type, dst_attributes))
+    {
+      continue;
+    }
+
+    bke::GSpanAttributeWriter write_attribute = dst_attributes.lookup_or_add_for_write_only_span(
+        name, meta_data.domain, meta_data.data_type);
     if (!write_attribute) {
       continue;
     }
     fill_new_attribute(
-        src_components, attribute_id, meta_data.data_type, meta_data.domain, write_attribute.span);
+        src_components, name, meta_data.data_type, meta_data.domain, write_attribute.span);
     write_attribute.finish();
   }
 }
 
 static void join_instances(const Span<const GeometryComponent *> src_components,
+                           const bool allow_merging_instance_references,
                            GeometrySet &result)
 {
   Array<int> offsets_data(src_components.size() + 1);
@@ -105,12 +146,11 @@ static void join_instances(const Span<const GeometryComponent *> src_components,
   }
   const OffsetIndices offsets = offset_indices::accumulate_counts_to_offsets(offsets_data);
 
-  std::unique_ptr<bke::Instances> dst_instances = std::make_unique<bke::Instances>();
-  dst_instances->resize(offsets.total_size());
+  auto dst_instances = std::make_unique<bke::Instances>(offsets.total_size());
 
   MutableSpan<int> all_handles = dst_instances->reference_handles_for_write();
 
-  Map<std::reference_wrapper<const bke::InstanceReference>, int> new_handle_by_src_reference;
+  Map<std::reference_wrapper<const bke::InstanceReference>, int> new_handle_by_src_reference_cache;
 
   for (const int i : src_components.index_range()) {
     const auto &src_component = static_cast<const bke::InstancesComponent &>(*src_components[i]);
@@ -120,8 +160,13 @@ static void join_instances(const Span<const GeometryComponent *> src_components,
     Array<int> handle_map(src_references.size());
     for (const int src_handle : src_references.index_range()) {
       const bke::InstanceReference &src_reference = src_references[src_handle];
-      handle_map[src_handle] = new_handle_by_src_reference.lookup_or_add_cb(
-          src_reference, [&]() { return dst_instances->add_new_reference(src_reference); });
+      if (allow_merging_instance_references) {
+        handle_map[src_handle] = new_handle_by_src_reference_cache.lookup_or_add_cb(
+            src_reference, [&]() { return dst_instances->add_new_reference(src_reference); });
+      }
+      else {
+        handle_map[src_handle] = dst_instances->add_new_reference(src_reference);
+      }
     }
 
     const IndexRange dst_range = offsets[i];
@@ -145,6 +190,7 @@ static void join_volumes(const Span<const GeometryComponent *> /*src_components*
 static void join_component_type(const bke::GeometryComponent::Type component_type,
                                 const Span<GeometrySet> src_geometry_sets,
                                 const bke::AttributeFilter &attribute_filter,
+                                const bool allow_merging_instance_references,
                                 GeometrySet &result)
 {
   Vector<const GeometryComponent *> components;
@@ -165,7 +211,7 @@ static void join_component_type(const bke::GeometryComponent::Type component_typ
 
   switch (component_type) {
     case bke::GeometryComponent::Type::Instance:
-      join_instances(components, result);
+      join_instances(components, allow_merging_instance_references, result);
       return;
     case bke::GeometryComponent::Type::Volume:
       join_volumes(components, result);
@@ -174,8 +220,7 @@ static void join_component_type(const bke::GeometryComponent::Type component_typ
       break;
   }
 
-  std::unique_ptr<bke::Instances> instances = std::make_unique<bke::Instances>();
-  instances->resize(components.size());
+  auto instances = std::make_unique<bke::Instances>(components.size());
   instances->transforms_for_write().fill(float4x4::identity());
   MutableSpan<int> handles = instances->reference_handles_for_write();
   Map<const GeometryComponent *, int> handle_by_component;
@@ -192,18 +237,22 @@ static void join_component_type(const bke::GeometryComponent::Type component_typ
   options.keep_original_ids = true;
   options.realize_instance_attributes = false;
   options.attribute_filter = attribute_filter;
-  GeometrySet joined_components = realize_instances(
-      GeometrySet::from_instances(instances.release()), options);
+  GeometrySet joined_components =
+      realize_instances(GeometrySet::from_instances(std::move(instances)), options).geometry;
   result.add(joined_components.get_component_for_write(component_type));
 }
 
 GeometrySet join_geometries(
     const Span<GeometrySet> geometries,
     const bke::AttributeFilter &attribute_filter,
-    const std::optional<Span<GeometryComponent::Type>> &component_types_to_join)
+    const std::optional<Span<GeometryComponent::Type>> &component_types_to_join,
+    const bool allow_merging_instance_references)
 {
   GeometrySet result;
-  result.name = geometries.is_empty() ? "" : geometries[0].name;
+  result.set_name(geometries.is_empty() ? "" : geometries[0].name());
+  for (const GeometrySet &geometry_set : geometries) {
+    result.merge_bundle_from(geometry_set);
+  }
   static const Array<GeometryComponent::Type> supported_types(
       {GeometryComponent::Type::Mesh,
        GeometryComponent::Type::PointCloud,
@@ -219,7 +268,8 @@ GeometrySet join_geometries(
                                                               supported_types);
 
   for (const GeometryComponent::Type type : types_to_join) {
-    join_component_type(type, geometries, attribute_filter, result);
+    join_component_type(
+        type, geometries, attribute_filter, allow_merging_instance_references, result);
   }
 
   return result;

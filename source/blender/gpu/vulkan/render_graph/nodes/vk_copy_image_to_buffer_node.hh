@@ -20,7 +20,7 @@ namespace blender::gpu::render_graph {
  */
 struct VKCopyImageToBufferData {
   VkImage src_image;
-  VkBuffer dst_buffer;
+  VKResourceWithHandle<VkBuffer> dst_buffer;
   VkBufferImageCopy region;
 };
 
@@ -42,27 +42,26 @@ class VKCopyImageToBufferNode : public VKNodeInfo<VKNodeType::COPY_IMAGE_TO_BUFF
    * (`VK*Data`/`VK*CreateInfo`) types can be included in the same header file as the logic. The
    * actual node data (`VKRenderGraphNode` includes all header files.)
    */
-  template<typename Node> static void set_node_data(Node &node, const CreateInfo &create_info)
+  template<typename Node, typename Storage>
+  static void set_node_data(Node &node, Storage &storage, const CreateInfo &create_info)
   {
-    node.copy_image_to_buffer = create_info.node_data;
+    node.storage_index = storage.copy_image_to_buffer.append_and_get_index(create_info.node_data);
   }
 
   /**
    * Extract read/write resource dependencies from `create_info` and add them to `node_links`.
    */
   void build_links(VKResourceStateTracker &resources,
-                   VKRenderGraphNodeLinks &node_links,
+                   VKRenderGraphLinks &links,
                    const CreateInfo &create_info) override
   {
     ResourceWithStamp src_resource = resources.get_image(create_info.node_data.src_image);
     ResourceWithStamp dst_resource = resources.get_buffer_and_increase_stamp(
         create_info.node_data.dst_buffer);
-    node_links.inputs.append({src_resource,
-                              VK_ACCESS_TRANSFER_READ_BIT,
-                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                              create_info.vk_image_aspects});
-    node_links.outputs.append(
-        {dst_resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED});
+    links.images.append({{src_resource, VK_ACCESS_TRANSFER_READ_BIT},
+                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                         create_info.vk_image_aspects});
+    links.buffers.append({dst_resource, VK_ACCESS_TRANSFER_WRITE_BIT});
   }
 
   /**
@@ -70,10 +69,14 @@ class VKCopyImageToBufferNode : public VKNodeInfo<VKNodeType::COPY_IMAGE_TO_BUFF
    */
   void build_commands(VKCommandBufferInterface &command_buffer,
                       Data &data,
+                      Span<uint8_t> /*storage_push_constants*/,
                       VKBoundPipelines & /*r_bound_pipelines*/) override
   {
-    command_buffer.copy_image_to_buffer(
-        data.src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, data.dst_buffer, 1, &data.region);
+    command_buffer.copy_image_to_buffer(data.src_image,
+                                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                        data.dst_buffer.vk_handle,
+                                        1,
+                                        &data.region);
   }
 };
 }  // namespace blender::gpu::render_graph

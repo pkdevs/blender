@@ -12,8 +12,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_dynstr.h"
-#include "BLI_utildefines.h"
+#include "BLI_dynstr.hh"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 
@@ -28,29 +29,31 @@
 
 #include "info_intern.hh"
 
+namespace blender {
+
 static void reports_select_all(ReportList *reports, int report_mask, int action)
 {
   if (action == SEL_TOGGLE) {
     action = SEL_SELECT;
-    LISTBASE_FOREACH_BACKWARD (const Report *, report, &reports->list) {
-      if ((report->type & report_mask) && (report->flag & SELECT)) {
+    for (const Report &report : reports->list.items_reversed()) {
+      if ((report.type & report_mask) && (report.flag & SELECT)) {
         action = SEL_DESELECT;
         break;
       }
     }
   }
 
-  LISTBASE_FOREACH_BACKWARD (Report *, report, &reports->list) {
-    if (report->type & report_mask) {
+  for (Report &report : reports->list.items_reversed()) {
+    if (report.type & report_mask) {
       switch (action) {
         case SEL_SELECT:
-          report->flag = SELECT;
+          report.flag = SELECT;
           break;
         case SEL_DESELECT:
-          report->flag = ~SELECT;
+          report.flag = ~SELECT;
           break;
         case SEL_INVERT:
-          report->flag ^= SELECT;
+          report.flag ^= SELECT;
           break;
         default:
           BLI_assert(0);
@@ -87,7 +90,7 @@ int info_report_mask(const SpaceInfo * /*sinfo*/)
          RPT_ERROR_ALL;
 }
 
-static int report_replay_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus report_replay_exec(bContext *C, wmOperator * /*op*/)
 {
   /* TODO: get this working again! */
 #if 0
@@ -103,7 +106,7 @@ static int report_replay_exec(bContext *C, wmOperator * /*op*/)
         (report->flag & SELECT))
     {
       console_history_add_str(sc, report->message, 0);
-      WM_operator_name_call(C, "CONSOLE_OT_execute", WM_OP_EXEC_DEFAULT, nullptr, nullptr);
+      WM_operator_name_call(C, "CONSOLE_OT_execute", wm::OpCallContext::ExecDefault, nullptr, nullptr);
 
       ED_area_tag_redraw(CTX_wm_area(C));
     }
@@ -123,7 +126,7 @@ void INFO_OT_report_replay(wmOperatorType *ot)
   ot->description = "Replay selected reports";
   ot->idname = "INFO_OT_report_replay";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->poll = ED_operator_info_active;
   ot->exec = report_replay_exec;
 
@@ -133,7 +136,7 @@ void INFO_OT_report_replay(wmOperatorType *ot)
   /* properties */
 }
 
-static int select_report_pick_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus select_report_pick_exec(bContext *C, wmOperator *op)
 {
   int report_index = RNA_int_get(op->ptr, "report_index");
   bool extend = RNA_boolean_get(op->ptr, "extend");
@@ -157,7 +160,9 @@ static int select_report_pick_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int select_report_pick_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus select_report_pick_invoke(bContext *C,
+                                                  wmOperator *op,
+                                                  const wmEvent *event)
 {
   SpaceInfo *sinfo = CTX_wm_space_info(C);
   ARegion *region = CTX_wm_region(C);
@@ -178,8 +183,8 @@ void INFO_OT_select_pick(wmOperatorType *ot)
   ot->description = "Select reports by index";
   ot->idname = "INFO_OT_select_pick";
 
-  /* api callbacks */
-  ot->poll = ED_operator_info_active;
+  /* API callbacks. */
+  ot->poll = ED_operator_region_info_active;
   ot->invoke = select_report_pick_invoke;
   ot->exec = select_report_pick_exec;
 
@@ -194,7 +199,7 @@ void INFO_OT_select_pick(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
-static int report_select_all_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus report_select_all_exec(bContext *C, wmOperator *op)
 {
   SpaceInfo *sinfo = CTX_wm_space_info(C);
   ReportList *reports = CTX_wm_reports(C);
@@ -215,7 +220,7 @@ void INFO_OT_select_all(wmOperatorType *ot)
   ot->description = "Change selection of all visible reports";
   ot->idname = "INFO_OT_select_all";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->poll = ED_operator_info_active;
   ot->exec = report_select_all_exec;
 
@@ -224,7 +229,7 @@ void INFO_OT_select_all(wmOperatorType *ot)
 }
 
 /* box_select operator */
-static int box_select_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus box_select_exec(bContext *C, wmOperator *op)
 {
   SpaceInfo *sinfo = CTX_wm_space_info(C);
   ARegion *region = CTX_wm_region(C);
@@ -238,11 +243,11 @@ static int box_select_exec(bContext *C, wmOperator *op)
   const eSelectOp sel_op = eSelectOp(RNA_enum_get(op->ptr, "mode"));
   const int select = (sel_op != SEL_OP_SUB);
   if (SEL_OP_USE_PRE_DESELECT(sel_op)) {
-    LISTBASE_FOREACH (Report *, report, &reports->list) {
-      if ((report->type & report_mask) == 0) {
+    for (Report &report : reports->list) {
+      if ((report.type & report_mask) == 0) {
         continue;
       }
-      report->flag &= ~SELECT;
+      report.flag &= ~SELECT;
     }
   }
 
@@ -252,9 +257,9 @@ static int box_select_exec(bContext *C, wmOperator *op)
   /* get the first report if none found */
   if (report_min == nullptr) {
     // printf("find_min\n");
-    LISTBASE_FOREACH (Report *, report, &reports->list) {
-      if (report->type & report_mask) {
-        report_min = report;
+    for (Report &report : reports->list) {
+      if (report.type & report_mask) {
+        report_min = &report;
         break;
       }
     }
@@ -262,9 +267,9 @@ static int box_select_exec(bContext *C, wmOperator *op)
 
   if (report_max == nullptr) {
     // printf("find_max\n");
-    LISTBASE_FOREACH_BACKWARD (Report *, report, &reports->list) {
-      if (report->type & report_mask) {
-        report_max = report;
+    for (Report &report : reports->list.items_reversed()) {
+      if (report.type & report_mask) {
+        report_max = &report;
         break;
       }
     }
@@ -295,13 +300,13 @@ void INFO_OT_select_box(wmOperatorType *ot)
   ot->description = "Toggle box selection";
   ot->idname = "INFO_OT_select_box";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->invoke = WM_gesture_box_invoke;
   ot->exec = box_select_exec;
   ot->modal = WM_gesture_box_modal;
   ot->cancel = WM_gesture_box_cancel;
 
-  ot->poll = ED_operator_info_active;
+  ot->poll = ED_operator_region_info_active;
 
   /* flags */
   // ot->flag = OPTYPE_REGISTER;
@@ -311,7 +316,7 @@ void INFO_OT_select_box(wmOperatorType *ot)
   WM_operator_properties_select_operation_simple(ot);
 }
 
-static int report_delete_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus report_delete_exec(bContext *C, wmOperator * /*op*/)
 {
   SpaceInfo *sinfo = CTX_wm_space_info(C);
   ReportList *reports = CTX_wm_reports(C);
@@ -324,8 +329,8 @@ static int report_delete_exec(bContext *C, wmOperator * /*op*/)
 
     if ((report->type & report_mask) && (report->flag & SELECT)) {
       BLI_remlink(&reports->list, report);
-      MEM_freeN((void *)report->message);
-      MEM_freeN(report);
+      MEM_delete(report->message);
+      MEM_delete(report);
     }
 
     report = report_next;
@@ -343,7 +348,7 @@ void INFO_OT_report_delete(wmOperatorType *ot)
   ot->description = "Delete selected reports";
   ot->idname = "INFO_OT_report_delete";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->poll = ED_operator_info_active;
   ot->exec = report_delete_exec;
 
@@ -353,7 +358,7 @@ void INFO_OT_report_delete(wmOperatorType *ot)
   /* properties */
 }
 
-static int report_copy_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus report_copy_exec(bContext *C, wmOperator * /*op*/)
 {
   SpaceInfo *sinfo = CTX_wm_space_info(C);
   ReportList *reports = CTX_wm_reports(C);
@@ -362,9 +367,9 @@ static int report_copy_exec(bContext *C, wmOperator * /*op*/)
   DynStr *buf_dyn = BLI_dynstr_new();
   char *buf_str;
 
-  LISTBASE_FOREACH (Report *, report, &reports->list) {
-    if ((report->type & report_mask) && (report->flag & SELECT)) {
-      BLI_dynstr_append(buf_dyn, report->message);
+  for (Report &report : reports->list) {
+    if ((report.type & report_mask) && (report.flag & SELECT)) {
+      BLI_dynstr_append(buf_dyn, report.message);
       BLI_dynstr_append(buf_dyn, "\n");
     }
   }
@@ -374,7 +379,7 @@ static int report_copy_exec(bContext *C, wmOperator * /*op*/)
 
   WM_clipboard_text_set(buf_str, false);
 
-  MEM_freeN(buf_str);
+  MEM_delete(buf_str);
   return OPERATOR_FINISHED;
 }
 
@@ -385,7 +390,7 @@ void INFO_OT_report_copy(wmOperatorType *ot)
   ot->description = "Copy selected reports to clipboard";
   ot->idname = "INFO_OT_report_copy";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->poll = ED_operator_info_active;
   ot->exec = report_copy_exec;
 
@@ -394,3 +399,5 @@ void INFO_OT_report_copy(wmOperatorType *ot)
 
   /* properties */
 }
+
+}  // namespace blender

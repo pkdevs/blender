@@ -13,24 +13,20 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string.h"
 
 #include "BLT_translation.hh"
 
 #include "DNA_brush_types.h"
 #include "DNA_material_types.h"
-#include "DNA_space_types.h"
 
 #include "BKE_brush.hh"
 #include "BKE_context.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_lib_id.hh"
-#include "BKE_material.h"
+#include "BKE_material.hh"
 #include "BKE_paint.hh"
-
-#include "UI_interface.hh"
 
 #include "IMB_colormanagement.hh"
 
@@ -48,7 +44,8 @@
 #include "eyedropper_intern.hh"
 #include "interface_intern.hh"
 
-namespace blender::ui::greasepencil {
+namespace blender::ui {
+namespace greasepencil {
 
 enum class EyeMode : int8_t {
   Material = 0,
@@ -63,17 +60,17 @@ enum class MaterialMode : int8_t {
 };
 
 struct EyedropperGreasePencil {
-  ColorManagedDisplay *display;
+  const ColorManagedDisplay *display = nullptr;
 
-  bool accum_start; /* has mouse been pressed */
-  float3 accum_col;
-  int accum_tot;
-  float3 color;
+  bool accum_start = false; /* has mouse been pressed */
+  float3 accum_col = {};
+  int accum_tot = 0;
+  float3 color = {};
 
   /** Mode */
-  EyeMode mode;
+  EyeMode mode = EyeMode::Material;
   /** Material Mode */
-  MaterialMode mat_mode;
+  MaterialMode mat_mode = MaterialMode::Stroke;
 };
 
 /* Helper: Draw status message while the user is running the operator */
@@ -110,7 +107,7 @@ static void eyedropper_grease_pencil_status_indicators(bContext *C,
       break;
     }
     case MaterialMode::Both: {
-      header += IFACE_("Both");
+      header += CTX_IFACE_(BLT_I18NCONTEXT_ID_GPENCIL, "Both");
       break;
     }
   }
@@ -149,9 +146,7 @@ static void eyedropper_grease_pencil_exit(bContext *C, wmOperator *op)
   op->customdata = nullptr;
 }
 
-static void eyedropper_add_material(bContext *C,
-                                    const float3 col_conv,
-                                    const MaterialMode mat_mode)
+static void eyedropper_add_material(bContext *C, const float3 color, const MaterialMode mat_mode)
 {
   Main *bmain = CTX_data_main(C);
   Object *ob = CTX_data_active_object(C);
@@ -170,20 +165,14 @@ static void eyedropper_add_material(bContext *C,
     MaterialGPencilStyle *gp_style = ma->gp_style;
     if (gp_style != nullptr) {
       /* Check stroke color. */
-      bool found_stroke = compare_v3v3(gp_style->stroke_rgba, col_conv, 0.01f) &&
-                          (gp_style->flag & GP_MATERIAL_STROKE_SHOW);
+      bool found_stroke = compare_v3v3(gp_style->stroke_rgba, color, 0.01f);
       /* Check fill color. */
-      bool found_fill = compare_v3v3(gp_style->fill_rgba, col_conv, 0.01f) &&
-                        (gp_style->flag & GP_MATERIAL_FILL_SHOW);
+      bool found_fill = compare_v3v3(gp_style->fill_rgba, color, 0.01f);
 
-      if ((mat_mode == MaterialMode::Stroke) && (found_stroke) &&
-          ((gp_style->flag & GP_MATERIAL_FILL_SHOW) == 0))
-      {
+      if ((mat_mode == MaterialMode::Stroke) && (found_stroke)) {
         found = true;
       }
-      else if ((mat_mode == MaterialMode::Fill) && found_fill &&
-               ((gp_style->flag & GP_MATERIAL_STROKE_SHOW) == 0))
-      {
+      else if ((mat_mode == MaterialMode::Fill) && found_fill) {
         found = true;
       }
       else if ((mat_mode == MaterialMode::Both) && found_stroke && found_fill) {
@@ -217,31 +206,26 @@ static void eyedropper_add_material(bContext *C,
   /* Only create Stroke (default option). */
   if (mat_mode == MaterialMode::Stroke) {
     /* Stroke color. */
-    gp_style_new->flag |= GP_MATERIAL_STROKE_SHOW;
-    gp_style_new->flag &= ~GP_MATERIAL_FILL_SHOW;
-    copy_v3_v3(gp_style_new->stroke_rgba, col_conv);
+    copy_v3_v3(gp_style_new->stroke_rgba, color);
     zero_v4(gp_style_new->fill_rgba);
   }
   /* Fill Only. */
   else if (mat_mode == MaterialMode::Fill) {
     /* Fill color. */
-    gp_style_new->flag &= ~GP_MATERIAL_STROKE_SHOW;
-    gp_style_new->flag |= GP_MATERIAL_FILL_SHOW;
     zero_v4(gp_style_new->stroke_rgba);
-    copy_v3_v3(gp_style_new->fill_rgba, col_conv);
+    copy_v3_v3(gp_style_new->fill_rgba, color);
   }
   /* Stroke and Fill. */
   else if (mat_mode == MaterialMode::Both) {
-    gp_style_new->flag |= GP_MATERIAL_STROKE_SHOW | GP_MATERIAL_FILL_SHOW;
-    copy_v3_v3(gp_style_new->stroke_rgba, col_conv);
-    copy_v3_v3(gp_style_new->fill_rgba, col_conv);
+    copy_v3_v3(gp_style_new->stroke_rgba, color);
+    copy_v3_v3(gp_style_new->fill_rgba, color);
   }
   /* Push undo for new created material. */
   ED_undo_push(C, "Add Grease Pencil Material");
 }
 
 /* Create a new palette color and palette if needed. */
-static void eyedropper_add_palette_color(bContext *C, const float3 col_conv)
+static void eyedropper_add_palette_color(bContext *C, const float3 color)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
@@ -265,9 +249,9 @@ static void eyedropper_add_palette_color(bContext *C, const float3 col_conv)
 
   /* Check if the color exist already. */
   Palette *palette = paint->palette;
-  int i;
-  LISTBASE_FOREACH_INDEX (PaletteColor *, palcolor, &palette->colors, i) {
-    if (compare_v3v3(palcolor->rgb, col_conv, 0.01f)) {
+
+  for (const auto [i, palcolor] : palette->colors.enumerate()) {
+    if (compare_v3v3(palcolor.color, color, 0.01f)) {
       palette->active_color = i;
       return;
     }
@@ -276,13 +260,13 @@ static void eyedropper_add_palette_color(bContext *C, const float3 col_conv)
   /* Create Colors. */
   PaletteColor *palcol = BKE_palette_color_add(palette);
   if (palcol) {
-    palette->active_color = BLI_listbase_count(&palette->colors) - 1;
-    copy_v3_v3(palcol->rgb, col_conv);
+    palette->active_color = palette->colors.count() - 1;
+    BKE_palette_color_set(palcol, color);
   }
 }
 
 /* Set the active brush's color. */
-static void eyedropper_set_brush_color(bContext *C, const float3 &col_conv)
+static void eyedropper_set_brush_color(bContext *C, const float3 &color)
 {
   Scene *scene = CTX_data_scene(C);
   ToolSettings *ts = scene->toolsettings;
@@ -292,7 +276,8 @@ static void eyedropper_set_brush_color(bContext *C, const float3 &col_conv)
     return;
   }
 
-  copy_v3_v3(brush->rgb, col_conv);
+  copy_v3_v3(brush->color, color);
+  BKE_brush_color_sync_legacy(brush);
   BKE_brush_tag_unsaved_changes(brush);
 }
 
@@ -315,24 +300,15 @@ static void eyedropper_grease_pencil_color_set(bContext *C,
     mat_mode = MaterialMode::Both;
   }
 
-  float3 col_conv = eye->color;
-
-  /* Convert from linear rgb space to display space because palette and brush colors are in display
-   *  space, and this conversion is needed to undo the conversion to linear performed by
-   *  eyedropper_color_sample_fl. */
-  if (eye->display && ELEM(eye->mode, EyeMode::Palette, EyeMode::Brush)) {
-    IMB_colormanagement_scene_linear_to_display_v3(col_conv, eye->display);
-  }
-
   switch (eye->mode) {
     case EyeMode::Material:
-      eyedropper_add_material(C, col_conv, mat_mode);
+      eyedropper_add_material(C, eye->color, mat_mode);
       break;
     case EyeMode::Palette:
-      eyedropper_add_palette_color(C, col_conv);
+      eyedropper_add_palette_color(C, eye->color);
       break;
     case EyeMode::Brush:
-      eyedropper_set_brush_color(C, col_conv);
+      eyedropper_set_brush_color(C, eye->color);
       break;
   }
 }
@@ -361,7 +337,9 @@ static void eyedropper_grease_pencil_cancel(bContext *C, wmOperator *op)
 }
 
 /* Main modal status check. */
-static int eyedropper_grease_pencil_modal(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus eyedropper_grease_pencil_modal(bContext *C,
+                                                       wmOperator *op,
+                                                       const wmEvent *event)
 {
   eyedropper_grease_pencil_status_indicators(C, op, event);
   EyedropperGreasePencil *eye = static_cast<EyedropperGreasePencil *>(op->customdata);
@@ -416,7 +394,9 @@ static int eyedropper_grease_pencil_modal(bContext *C, wmOperator *op, const wmE
   return OPERATOR_RUNNING_MODAL;
 }
 
-static int eyedropper_grease_pencil_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus eyedropper_grease_pencil_invoke(bContext *C,
+                                                        wmOperator *op,
+                                                        const wmEvent *event)
 {
   if (eyedropper_grease_pencil_init(C, op)) {
     /* Add modal temp handler. */
@@ -430,7 +410,7 @@ static int eyedropper_grease_pencil_invoke(bContext *C, wmOperator *op, const wm
 }
 
 /* Repeat operator */
-static int eyedropper_grease_pencil_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus eyedropper_grease_pencil_exec(bContext *C, wmOperator *op)
 {
   if (eyedropper_grease_pencil_init(C, op)) {
 
@@ -453,23 +433,21 @@ static bool eyedropper_grease_pencil_poll(bContext *C)
   /* Test we have a window below. */
   return (CTX_wm_window(C) != nullptr);
 }
-
-}  // namespace blender::ui::greasepencil
+}  // namespace greasepencil
 
 void UI_OT_eyedropper_grease_pencil_color(wmOperatorType *ot)
 {
-  using namespace blender::ui::greasepencil;
   static const EnumPropertyItem items_mode[] = {
-      {int(EyeMode::Material), "MATERIAL", 0, "Material", ""},
-      {int(EyeMode::Palette), "PALETTE", 0, "Palette", ""},
-      {int(EyeMode::Brush), "BRUSH", 0, "Brush", ""},
+      {int(greasepencil::EyeMode::Material), "MATERIAL", 0, "Material", ""},
+      {int(greasepencil::EyeMode::Palette), "PALETTE", 0, "Palette", ""},
+      {int(greasepencil::EyeMode::Brush), "BRUSH", 0, "Brush", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
   static const EnumPropertyItem items_material_mode[] = {
-      {int(MaterialMode::Stroke), "STROKE", 0, "Stroke", ""},
-      {int(MaterialMode::Fill), "FILL", 0, "Fill", ""},
-      {int(MaterialMode::Both), "BOTH", 0, "Both", ""},
+      {int(greasepencil::MaterialMode::Stroke), "STROKE", 0, "Stroke", ""},
+      {int(greasepencil::MaterialMode::Fill), "FILL", 0, "Fill", ""},
+      {int(greasepencil::MaterialMode::Both), "BOTH", 0, "Both", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -478,22 +456,26 @@ void UI_OT_eyedropper_grease_pencil_color(wmOperatorType *ot)
   ot->idname = "UI_OT_eyedropper_grease_pencil_color";
   ot->description = "Sample a color from the Blender Window and create Grease Pencil material";
 
-  /* Api callbacks. */
-  ot->invoke = eyedropper_grease_pencil_invoke;
-  ot->modal = eyedropper_grease_pencil_modal;
-  ot->cancel = eyedropper_grease_pencil_cancel;
-  ot->exec = eyedropper_grease_pencil_exec;
-  ot->poll = eyedropper_grease_pencil_poll;
+  /* API callbacks. */
+  ot->invoke = greasepencil::eyedropper_grease_pencil_invoke;
+  ot->modal = greasepencil::eyedropper_grease_pencil_modal;
+  ot->cancel = greasepencil::eyedropper_grease_pencil_cancel;
+  ot->exec = greasepencil::eyedropper_grease_pencil_exec;
+  ot->poll = greasepencil::eyedropper_grease_pencil_poll;
 
   /* Flags. */
   ot->flag = OPTYPE_UNDO | OPTYPE_BLOCKING;
 
   /* Properties. */
-  ot->prop = RNA_def_enum(ot->srna, "mode", items_mode, int(EyeMode::Material), "Mode", "");
+  ot->prop = RNA_def_enum(
+      ot->srna, "mode", items_mode, int(greasepencil::EyeMode::Material), "Mode", "");
   ot->prop = RNA_def_enum(ot->srna,
                           "material_mode",
                           items_material_mode,
-                          int(MaterialMode::Stroke),
+                          int(greasepencil::MaterialMode::Stroke),
                           "Material Mode",
                           "");
+  RNA_def_property_translation_context(ot->prop, BLT_I18NCONTEXT_ID_GPENCIL);
 }
+
+}  // namespace blender::ui

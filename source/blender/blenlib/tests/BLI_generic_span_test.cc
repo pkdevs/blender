@@ -8,7 +8,15 @@
 
 namespace blender::tests {
 
-TEST(generic_span, TypeConstructor)
+class GenericSpanTest : public testing::Test {
+ public:
+  static void SetUpTestSuite()
+  {
+    register_cpp_types();
+  }
+};
+
+TEST_F(GenericSpanTest, TypeConstructor)
 {
   GSpan span(CPPType::get<float>());
   EXPECT_EQ(span.size(), 0);
@@ -16,10 +24,10 @@ TEST(generic_span, TypeConstructor)
   EXPECT_TRUE(span.is_empty());
 }
 
-TEST(generic_span, BufferAndSizeConstructor)
+TEST_F(GenericSpanTest, BufferAndSizeConstructor)
 {
   int values[4] = {6, 7, 3, 2};
-  void *buffer = (void *)values;
+  void *buffer = static_cast<void *>(values);
   GSpan span(CPPType::get<int32_t>(), buffer, 4);
   EXPECT_EQ(span.size(), 4);
   EXPECT_FALSE(span.is_empty());
@@ -30,23 +38,23 @@ TEST(generic_span, BufferAndSizeConstructor)
   EXPECT_EQ(span[3], &values[3]);
 }
 
-TEST(generic_mutable_span, TypeConstructor)
+TEST_F(GenericSpanTest, MutableTypeConstructor)
 {
   GMutableSpan span(CPPType::get<int32_t>());
   EXPECT_EQ(span.size(), 0);
   EXPECT_TRUE(span.is_empty());
 }
 
-TEST(generic_mutable_span, BufferAndSizeConstructor)
+TEST_F(GenericSpanTest, MutableBufferAndSizeConstructor)
 {
   int values[4] = {4, 7, 3, 5};
-  void *buffer = (void *)values;
+  void *buffer = static_cast<void *>(values);
   GMutableSpan span(CPPType::get<int32_t>(), buffer, 4);
   EXPECT_EQ(span.size(), 4);
   EXPECT_FALSE(span.is_empty());
   EXPECT_EQ(span.typed<int>().size(), 4);
   EXPECT_EQ(values[2], 3);
-  *(int *)span[2] = 10;
+  *static_cast<int *>(span[2]) = 10;
   EXPECT_EQ(values[2], 10);
   span.typed<int>()[2] = 20;
   EXPECT_EQ(values[2], 20);

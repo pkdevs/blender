@@ -4,84 +4,111 @@
 
 #pragma once
 
-#include "BLI_utildefines.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "BLI_enum_flags.hh"
 
 /** \file
  * \ingroup imbuf
  */
 
-/* WARNING: Keep explicit value assignments here,
- * this file is included in areas where not all format defines are set
- * (e.g. intern/dds only get WITH_DDS, even if TIFF, HDR etc are also defined).
- * See #46524. */
+namespace blender {
 
-/** #ImBuf.ftype flag, main image types. */
-enum eImbFileType {
+#define IM_MAX_SPACE 64
+
+enum class ImBufFlags {
+  Zero = 0,
+
+  /**
+   * Flag for image creation & IO functions: create or prefer byte data
+   * (0..1 range in a byte, always 4 channels).
+   */
+  ByteData = 1 << 0,
+  Test = 1 << 1,
+  /**
+   * Flag for image creation & IO functions: create or prefer float data
+   * (usually 1..4 channels, 32-bit float per channel).
+   */
+  FloatData = 1 << 5,
+  /**
+   * Multi-layer EXR handling.
+   *
+   * As a load flag, this indicates the caller supports multi-layer EXR.
+   * For such files, the MultiLayer flag will be set on the ImBuf and no
+   * pixels will be loaded yet, only metadata. The caller can then load
+   * the layers as needed using the IMB_exr API.
+   */
+  MultiLayer = 1 << 7,
+  Metadata = 1 << 8,
+  Deinterlace = 1 << 9,
+  /** Do not clear image pixel buffer to zero. Without this flag, allocating
+   * a new ImBuf does clear the pixel data to zero (transparent black). If
+   * whole pixel data is overwritten after allocation, then this flag can be
+   * faster since it avoids a memory clear. */
+  UninitializedPixels = 1 << 10,
+
+  /** Indicates whether image on disk have pre-multiplied alpha. */
+  AlphaPremul = 1 << 12,
+  /** If this flag is set, alpha mode would be guessed from file. */
+  AlphaDetect = 1 << 13,
+  /** Alpha channel is unrelated to RGB and should not affect it. */
+  AlphaChannelPacked = 1 << 14,
+  /** Ignore alpha on load and substitute it with 1.0f. */
+  AlphaIgnore = 1 << 15,
+  Thumbnail = 1 << 16,
+  /**
+   * The image contains display window information. See ImbBuf.display_size and other members for
+   * more information. */
+  HasDisplayWindow = 1 << 17,
+
+  /** Perform no color space conversions when reading, leave the image in the file colorspace. */
+  NoColorspaceConvert = 1 << 18,
+};
+ENUM_OPERATORS(ImBufFlags);
+
+/** #ImBuf.ftype: main image types. */
+enum eImbFileType : int8_t {
   IMB_FTYPE_NONE = 0,
   IMB_FTYPE_PNG = 1,
   IMB_FTYPE_TGA = 2,
   IMB_FTYPE_JPG = 3,
   IMB_FTYPE_BMP = 4,
   IMB_FTYPE_OPENEXR = 5,
-  IMB_FTYPE_IMAGIC = 6,
+  IMB_FTYPE_IRIS = 6,
   IMB_FTYPE_PSD = 7,
-#ifdef WITH_OPENJPEG
+#ifdef WITH_IMAGE_OPENJPEG
   IMB_FTYPE_JP2 = 8,
 #endif
   IMB_FTYPE_RADHDR = 9,
   IMB_FTYPE_TIF = 10,
-#ifdef WITH_CINEON
+#ifdef WITH_IMAGE_CINEON
   IMB_FTYPE_CINEON = 11,
   IMB_FTYPE_DPX = 12,
 #endif
 
   IMB_FTYPE_DDS = 13,
-#ifdef WITH_WEBP
+#ifdef WITH_IMAGE_WEBP
   IMB_FTYPE_WEBP = 14,
 #endif
+  IMB_FTYPE_AVIF = 15,
 };
+#define IMB_FTYPE_LAST IMB_FTYPE_AVIF
 
-/**
- * Time-code files contain timestamps (PTS, DTS) and packet seek position.
- * These values are obtained by decoding each frame in movie stream. Time-code types define how
- * these map to frame index in Blender. This is used when seeking in movie stream. Note, that
- * meaning of terms time-code and record run here has little connection to their actual meaning.
- */
-typedef enum IMB_Timecode_Type {
-  /** Don't use time-code files at all. Use FFmpeg API to seek to PTS calculated on the fly. */
-  IMB_TC_NONE = 0,
-  /**
-   * TC entries (and therefore frames in movie stream) are mapped to frame index, such that
-   * timestamp in Blender matches timestamp in the movie stream. This assumes, that time starts at
-   * 0 in both cases.
-   *
-   * Simplified formula is `frame_index = movie_stream_timestamp * FPS`.
-   */
-  IMB_TC_RECORD_RUN = 1,
-  /**
-   * Each TC entry (and therefore frame in movie stream) is mapped to new frame index in Blender.
-   *
-   * For example: FFmpeg may say, that a frame should be displayed for 0.5 seconds, but this option
-   * ignores that and only displays it in one particular frame index in Blender.
-   */
-  IMB_TC_RECORD_RUN_NO_GAPS = 8,
-  IMB_TC_NUM_TYPES = 2,
-} IMB_Timecode_Type;
+/** Flags for #ImFileType.capability_read and #ImFileType.capability_write. */
+enum class eImFileTypeCapability : uint8_t {
+  Zero = 0,
+  File = (1 << 0),
+  Memory = (1 << 1),
+};
+ENUM_OPERATORS(eImFileTypeCapability);
 
-typedef enum IMB_Proxy_Size {
+/** NOTE: Keep in sync with #MovieClipProxy.build_size_flag */
+enum IMB_Proxy_Size {
   IMB_PROXY_NONE = 0,
   IMB_PROXY_25 = 1,
   IMB_PROXY_50 = 2,
   IMB_PROXY_75 = 4,
   IMB_PROXY_100 = 8,
   IMB_PROXY_MAX_SLOT = 4,
-} IMB_Proxy_Size;
-ENUM_OPERATORS(IMB_Proxy_Size, IMB_PROXY_100);
+};
+ENUM_OPERATORS(IMB_Proxy_Size);
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

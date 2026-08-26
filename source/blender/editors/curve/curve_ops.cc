@@ -6,10 +6,7 @@
  * \ingroup edcurve
  */
 
-#include <cmath>
 #include <cstdlib>
-
-#include "DNA_scene_types.h"
 
 #include "RNA_access.hh"
 
@@ -20,6 +17,8 @@
 #include "ED_screen.hh"
 
 #include "curve_intern.hh"
+
+namespace blender {
 
 /************************* registration ****************************/
 
@@ -158,3 +157,5 @@ void ED_keymap_curve(wmKeyConfig *keyconf)
 
   curve_pen_modal_keymap(keyconf);
 }
+
+}  // namespace blender

@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "node_item.h"
+#include "node_graph.h"
 #include "node_parser.h"
 
-#include "BLI_assert.h"
-#include "BLI_utildefines.h"
+#include "BLI_assert.hh"
+#include "BLI_utildefines.hh"
 
 namespace blender::nodes::materialx {
 
@@ -114,7 +115,7 @@ std::string NodeItem::type(Type type)
 
 bool NodeItem::is_arithmetic(Type type)
 {
-  return type >= Type::Float && type <= Type::Color4;
+  return type >= Type::Boolean && type <= Type::Color4;
 }
 
 NodeItem::operator bool() const
@@ -192,6 +193,12 @@ NodeItem NodeItem::operator[](int index) const
   if (value) {
     float v = 0.0f;
     switch (type()) {
+      case Type::Boolean:
+        v = value->asA<bool>() ? 1.0f : 0.0f;
+        break;
+      case Type::Integer:
+        v = value->asA<int>();
+        break;
       case Type::Float:
         v = value->asA<float>();
         break;
@@ -478,14 +485,82 @@ NodeItem NodeItem::exp() const
   return to_vector().arithmetic("exp", [](float a) { return std::exp(a); });
 }
 
+bool NodeItem::is_convertible(eNodeSocketDatatype from_type, Type to_type)
+{
+  switch (to_type) {
+    case Type::Any:
+      return true;
+    case Type::Empty:
+    case Type::Multioutput:
+      return false;
+    case Type::String:
+    case Type::Filename:
+      return from_type == SOCK_STRING;
+    case Type::Boolean:
+      return from_type == SOCK_BOOLEAN;
+    case Type::Integer:
+      return from_type == SOCK_INT;
+    case Type::Float:
+    case Type::Vector2:
+    case Type::Vector3:
+    case Type::Color3:
+    case Type::Vector4:
+    case Type::Color4:
+    case Type::DisplacementShader:
+      return ELEM(from_type, SOCK_FLOAT, SOCK_VECTOR, SOCK_RGBA);
+    case Type::EDF:
+      return ELEM(from_type, SOCK_FLOAT, SOCK_VECTOR, SOCK_RGBA, SOCK_SHADER);
+    case Type::BSDF:
+    case Type::SurfaceShader:
+    case Type::Material:
+    case Type::SurfaceOpacity:
+      return from_type == SOCK_SHADER;
+  }
+
+  return false;
+}
+
 NodeItem NodeItem::convert(Type to_type) const
 {
   Type from_type = type();
   if (from_type == Type::Empty || from_type == to_type || to_type == Type::Any) {
     return *this;
   }
+
+  switch (to_type) {
+    /* Link arithmetic types to shader as EDF. */
+    case Type::EDF:
+      if (is_arithmetic(from_type)) {
+        return create_node("uniform_edf", NodeItem::Type::EDF, {{"color", convert(Type::Color3)}});
+      }
+      return empty();
+    /* Displacement shader from arithmetic types, when not using (Vector) Displacement node. */
+    case Type::DisplacementShader:
+      if (is_arithmetic(from_type)) {
+        return create_node("displacement",
+                           NodeItem::Type::DisplacementShader,
+                           {{"displacement", convert(Type::Vector3)}});
+      }
+      return empty();
+    /* Surface opacity is just a float. */
+    case Type::SurfaceOpacity:
+      to_type = Type::Float;
+      if (from_type == to_type || to_type == Type::Any) {
+        return *this;
+      }
+      break;
+    /* Material output will evaluate graph multiple times for different components,
+     * when linking arithmetic types we want to leave those empty. */
+    case Type::BSDF:
+    case Type::SurfaceShader:
+    case Type::Material:
+      return empty();
+    default:
+      break;
+  }
+
   if (!is_arithmetic(from_type) || !is_arithmetic(to_type)) {
-    CLOG_WARN(LOG_MATERIALX_SHADER,
+    CLOG_WARN(LOG_IO_MATERIALX,
               "Cannot convert: %s -> %s",
               type(from_type).c_str(),
               type(to_type).c_str());
@@ -498,6 +573,23 @@ NodeItem NodeItem::convert(Type to_type) const
 
   /* Converting types which requires > 1 iteration */
   switch (from_type) {
+    case Type::Boolean:
+    case Type::Integer:
+      switch (to_type) {
+        case Type::Vector2:
+          return convert(Type::Float).convert(Type::Vector2);
+        case Type::Vector3:
+          return convert(Type::Float).convert(Type::Vector3);
+        case Type::Vector4:
+          return convert(Type::Float).convert(Type::Vector4);
+        case Type::Color3:
+          return convert(Type::Float).convert(Type::Color3);
+        case Type::Color4:
+          return convert(Type::Float).convert(Type::Color4);
+        default:
+          break;
+      }
+      break;
     case Type::Vector2:
       switch (to_type) {
         case Type::Vector4:
@@ -556,6 +648,13 @@ NodeItem NodeItem::convert(Type to_type) const
   NodeItem res = empty();
   if (value) {
     switch (from_type) {
+      case Type::Boolean: {
+        if (to_type == Type::Integer) {
+          int v = value->asA<bool>();
+          res.value = MaterialX::Value::createValue<int>(v);
+        }
+        break;
+      }
       case Type::Float: {
         float v = value->asA<float>();
         switch (to_type) {
@@ -761,16 +860,17 @@ NodeItem::Type NodeItem::type() const
 
 NodeItem NodeItem::create_node(const std::string &category, Type type) const
 {
-  std::string type_str = this->type(type);
-  CLOG_INFO(LOG_MATERIALX_SHADER, 2, "<%s type=%s>", category.c_str(), type_str.c_str());
+  const std::string name = NodeGraph::unique_anonymous_node_name(graph_);
+  const std::string type_str = NodeItem::type(type);
+  CLOG_DEBUG(LOG_IO_MATERIALX, "<%s type=%s>", category.c_str(), type_str.c_str());
   NodeItem res = empty();
   /* Surface-shader nodes and materials are added directly to the document,
    * otherwise to the node-graph. */
   if (ELEM(type, Type::SurfaceShader, Type::Material)) {
-    res.node = graph_->getDocument()->addNode(category, MaterialX::EMPTY_STRING, type_str);
+    res.node = graph_->getDocument()->addNode(category, name, type_str);
   }
   else {
-    res.node = graph_->addNode(category, MaterialX::EMPTY_STRING, type_str);
+    res.node = graph_->addNode(category, name, type_str);
   }
   return res;
 }
@@ -778,7 +878,7 @@ NodeItem NodeItem::create_node(const std::string &category, Type type) const
 NodeItem NodeItem::create_node(const std::string &category, Type type, const Inputs &inputs) const
 {
   NodeItem res = create_node(category, type);
-  for (auto &it : inputs) {
+  for (const auto &it : inputs) {
     if (it.second) {
       res.set_input(it.first, it.second);
     }
@@ -828,11 +928,7 @@ void NodeItem::set_input(const std::string &in_name, const NodeItem &item)
 
       auto output = graph_->getOutput(output_name);
       if (!output) {
-        auto output_type = MaterialX::DEFAULT_TYPE_STRING;
-        if (item.node->getType() == "BSDF") {
-          output_type = "BSDF";
-        }
-        output = graph_->addOutput(output_name, output_type);
+        output = graph_->addOutput(output_name, item.node->getType());
       }
 
       output->setConnectedNode(item.node);
@@ -849,7 +945,7 @@ void NodeItem::set_input(const std::string &in_name, const NodeItem &item)
     node->setConnectedOutput(in_name, item.output);
   }
   else {
-    CLOG_WARN(LOG_MATERIALX_SHADER, "Empty item to input: %s", in_name.c_str());
+    CLOG_WARN(LOG_IO_MATERIALX, "Empty item to input: %s", in_name.c_str());
   }
 }
 
@@ -906,17 +1002,15 @@ NodeItem::Type NodeItem::cast_types(NodeItem &item1, NodeItem &item2)
   }
   if (!is_arithmetic(t1) || !is_arithmetic(t2)) {
     CLOG_WARN(
-        LOG_MATERIALX_SHADER, "Can't adjust types: %s <-> %s", type(t1).c_str(), type(t2).c_str());
+        LOG_IO_MATERIALX, "Can't adjust types: %s <-> %s", type(t1).c_str(), type(t2).c_str());
     return Type::Empty;
   }
   if (t1 < t2) {
     item1 = item1.convert(t2);
     return t2;
   }
-  else {
-    item2 = item2.convert(t1);
-    return t1;
-  }
+  item2 = item2.convert(t1);
+  return t1;
 }
 
 bool NodeItem::is_arithmetic() const
@@ -932,6 +1026,16 @@ NodeItem NodeItem::arithmetic(const std::string &category, std::function<float(f
 
   if (value) {
     switch (type) {
+      case Type::Boolean: {
+        float v = value->asA<bool>() ? 1.0f : 0.0f;
+        res.value = MaterialX::Value::createValue<float>(func(v));
+        break;
+      }
+      case Type::Integer: {
+        float v = value->asA<int>();
+        res.value = MaterialX::Value::createValue<float>(func(v));
+        break;
+      }
       case Type::Float: {
         float v = value->asA<float>();
         res.value = MaterialX::Value::createValue<float>(func(v));
@@ -991,6 +1095,18 @@ NodeItem NodeItem::arithmetic(const NodeItem &other,
 
   if (value && other.value) {
     switch (to_type) {
+      case Type::Boolean: {
+        float v1 = item1.value->asA<bool>() ? 1.0f : 0.0f;
+        float v2 = item2.value->asA<bool>() ? 1.0f : 0.0f;
+        res.value = MaterialX::Value::createValue<float>(func(v1, v2));
+        break;
+      }
+      case Type::Integer: {
+        float v1 = item1.value->asA<int>();
+        float v2 = item2.value->asA<int>();
+        res.value = MaterialX::Value::createValue<float>(func(v1, v2));
+        break;
+      }
       case Type::Float: {
         float v1 = item1.value->asA<float>();
         float v2 = item2.value->asA<float>();
@@ -1037,7 +1153,15 @@ NodeItem NodeItem::arithmetic(const NodeItem &other,
     }
   }
   else {
-    res = create_node(category, to_type, {{"in1", item1}, {"in2", item2}});
+#if !(MATERIALX_MAJOR_VERSION <= 1 && MATERIALX_MINOR_VERSION <= 38)
+    if (category == "atan2") {
+      res = create_node(category, to_type, {{"iny", item1}, {"inx", item2}});
+    }
+    else
+#endif
+    {
+      res = create_node(category, to_type, {{"in1", item1}, {"in2", item2}});
+    }
   }
   return res;
 }

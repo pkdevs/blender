@@ -189,11 +189,12 @@ class ThicknessModifierMixIn:
         fe = sv.fedge
         nature = fe.nature
         if (nature & Nature.BORDER):
+            normal = fe.normal if fe.is_smooth else fe.normal_left
             if self.persp_camera:
                 point = -sv.point_3d.normalized()
-                dir = point.dot(fe.normal_left)
+                dir = point.dot(normal)
             else:
-                dir = fe.normal_left.z
+                dir = normal.z
             if dir < 0.0:  # the back side is visible
                 outer, inner = inner, outer
         elif (nature & Nature.SILHOUETTE):
@@ -379,7 +380,7 @@ class ColorDistanceFromObjectShader(ColorRampModifier):
     def __init__(self, blend, influence, ramp, target, range_min, range_max):
         ColorRampModifier.__init__(self, blend, influence, ramp)
         if target is None:
-            raise ValueError("ColorDistanceFromObjectShader: target can't be None ")
+            raise ValueError("ColorDistanceFromObjectShader: target cannot be None ")
         self.range = BoundedProperty(range_min, range_max)
         # construct a model-view matrix
         matrix = getCurrentScene().camera.matrix_world.inverted()
@@ -400,7 +401,7 @@ class AlphaDistanceFromObjectShader(CurveMappingModifier):
     def __init__(self, blend, influence, mapping, invert, curve, target, range_min, range_max):
         CurveMappingModifier.__init__(self, blend, influence, mapping, invert, curve)
         if target is None:
-            raise ValueError("AlphaDistanceFromObjectShader: target can't be None ")
+            raise ValueError("AlphaDistanceFromObjectShader: target cannot be None ")
         self.range = BoundedProperty(range_min, range_max)
         # construct a model-view matrix
         matrix = getCurrentScene().camera.matrix_world.inverted()
@@ -423,7 +424,7 @@ class ThicknessDistanceFromObjectShader(ThicknessBlenderMixIn, CurveMappingModif
         ThicknessBlenderMixIn.__init__(self, thickness_position, thickness_ratio)
         CurveMappingModifier.__init__(self, blend, influence, mapping, invert, curve)
         if target is None:
-            raise ValueError("ThicknessDistanceFromObjectShader: target can't be None ")
+            raise ValueError("ThicknessDistanceFromObjectShader: target cannot be None ")
         self.range = BoundedProperty(range_min, range_max)
         self.value = BoundedProperty(value_min, value_max)
         # construct a model-view matrix
@@ -1206,7 +1207,7 @@ def get_dashed_pattern(linestyle):
 
 
 def get_grouped_objects(group):
-    for ob in group.objects:
+    for ob in group.all_objects:
         if ob.instance_type == 'COLLECTION' and ob.instance_collection is not None:
             for dupli in get_grouped_objects(ob.instance_collection):
                 yield dupli
@@ -1228,6 +1229,9 @@ def process(layer_name, lineset_name):
     layer = scene.view_layers[layer_name]
     lineset = layer.freestyle_settings.linesets[lineset_name]
     linestyle = lineset.linestyle
+
+    if linestyle is None:
+        return
 
     # execute line set pre-processing callback functions
     for fn in callbacks_lineset_pre:
@@ -1346,9 +1350,11 @@ def process(layer_name, lineset_name):
         if len(pattern) > 0:
             sampling = 1.0
             controller = SplitPatternController(pattern, sampling)
-            Operators.sequential_split(SplitPatternStartingUP0D(controller),
-                                       SplitPatternStoppingUP0D(controller),
-                                       sampling)
+            Operators.sequential_split(
+                SplitPatternStartingUP0D(controller),
+                SplitPatternStoppingUP0D(controller),
+                sampling,
+            )
     # sort selected chains
     if linestyle.use_sorting:
         integration = integration_types.get(linestyle.integration_type, IntegrationType.MEAN)

@@ -10,6 +10,9 @@ Example usage:
 
     python ./issues_module_listing.py --severity High
 """
+__all__ = (
+    "main",
+)
 
 import argparse
 import dataclasses
@@ -39,7 +42,7 @@ modules = {
     "Module/Modeling": ModuleInfo(name="Modeling", labelid="274"),
     "Module/Nodes & Physics": ModuleInfo(name="Nodes & Physics", labelid="275"),
     "Module/Pipeline & IO": ModuleInfo(name="Pipeline & I/O", labelid="276"),
-    "Module/Platforms, Builds & Tests": ModuleInfo(name="Platforms, Builds, Test & Devices", labelid="278"),
+    "Module/Platforms & Builds": ModuleInfo(name="Platforms & Builds", labelid="278"),
     "Module/Python API": ModuleInfo(name="Python API", labelid="279"),
     "Module/Render & Cycles": ModuleInfo(name="Render & Cycles", labelid="280"),
     "Module/Sculpt, Paint & Texture": ModuleInfo(name="Sculpt, Paint & Texture", labelid="281"),
@@ -120,15 +123,15 @@ def compile_list(severity: str) -> None:
     for module in modules.values():
         buglist_str = (", ".join(module.buglist))
         buglist_len = len(module.buglist)
+        full_url = base_url + severity_labelid[severity] + "%2c" + module.labelid
         if buglist_len > 0:
             total += buglist_len
-            full_url = base_url + severity_labelid[severity] + "%2c" + module.labelid
             if not module.buglist or severity != "High":
                 print(f"- [{module.name}]({full_url}): *{buglist_len}*")
             else:
                 print(f"- [{module.name}]({full_url}): *{buglist_len}* _{buglist_str}_")
         else:
-            modules_with_no_bugs.append(module.name)
+            modules_with_no_bugs.append(f"[{module.name}]({full_url})")
 
     print(f"- {', '.join(modules_with_no_bugs)}: *0*")
     print()

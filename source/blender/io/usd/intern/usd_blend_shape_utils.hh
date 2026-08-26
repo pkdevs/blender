@@ -5,11 +5,13 @@
 
 #include <pxr/usd/usd/prim.h>
 
+namespace blender {
+
 struct Key;
 struct Mesh;
 struct Object;
 
-namespace blender::io::usd {
+namespace io::usd {
 
 /* Name of the temporary USD primvar for storing blend shape
  * weight time samples on the mesh before they are copied
@@ -84,7 +86,7 @@ void ensure_blend_shape_skeleton(pxr::UsdStageRefPtr stage, pxr::UsdPrim &mesh_p
  *
  * \param stage: The stage
  * \param skel_path: Path to the skeleton
- * \param mesh_paths: Paths to one or more mesh prims bound to the skeleton
+ * \param mesh_paths: Paths to one or more mesh primitives bound to the skeleton
  */
 void remap_blend_shape_anim(pxr::UsdStageRefPtr stage,
                             const pxr::SdfPath &skel_path,
@@ -100,4 +102,5 @@ void remap_blend_shape_anim(pxr::UsdStageRefPtr stage,
  */
 Mesh *get_shape_key_basis_mesh(Object *obj);
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

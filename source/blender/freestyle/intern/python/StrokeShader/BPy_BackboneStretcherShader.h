@@ -10,10 +10,6 @@
 
 #include "../BPy_StrokeShader.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject BackboneStretcherShader_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject BackboneStretcherShader_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&BackboneStretcherShader_Type))
 
 /*---------------------------Python BPy_BackboneStretcherShader structure definition----------*/
-typedef struct {
+struct BPy_BackboneStretcherShader {
   BPy_StrokeShader py_ss;
-} BPy_BackboneStretcherShader;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

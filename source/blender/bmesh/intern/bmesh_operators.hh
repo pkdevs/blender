@@ -8,11 +8,16 @@
  * \ingroup bmesh
  */
 
+#include "intern/bmesh_operator_api.hh"
+
+namespace blender {
+
 /* See comments in `intern/bmesh_opdefines.cc` for documentation of specific operators. */
 
 /*--------defines/enumerations for specific operators-------*/
 
 /* Quad `innervert` values. */
+
 enum {
   SUBD_CORNER_INNERVERT,
   SUBD_CORNER_PATH,
@@ -139,10 +144,32 @@ enum {
   FACE_STRENGTH_STRONG = 16384,
 };
 
+/** Interpolation method used for spacing vertices. */
+enum SpaceInterpolationMethod {
+  SPACE_EDGE_LOOPS_EVENLY_INTERP_CUBIC = 0,
+  SPACE_EDGE_LOOPS_EVENLY_INTERP_LINEAR = 1,
+};
+
+/** Interpolation method used for relaxing vertices. */
+enum RelaxInterpolationMethod {
+  RELAX_EDGE_LOOPS_INTERP_CUBIC = 0,
+  RELAX_EDGE_LOOPS_INTERP_LINEAR = 1,
+};
+
+/**
+ * Methods for determining the orientation of flattening the plane.
+ */
+enum FlattenMethod {
+  FLATTEN_BEST_FIT = 0,
+  FLATTEN_NORMAL = 1,
+  FLATTEN_VIEW = 2,
+};
+
 extern const BMOpDefine *bmo_opdefines[];
 extern const int bmo_opdefines_total;
 
 /*------specific operator helper functions-------*/
+
 void BM_mesh_esubdivide(BMesh *bm,
                         char edge_hflag,
                         float smooth,
@@ -215,4 +242,6 @@ void BM_mesh_calc_uvs_cone(BMesh *bm,
  */
 void BM_mesh_calc_uvs_cube(BMesh *bm, short oflag);
 
-#include "intern/bmesh_operator_api_inline.hh"
+}  // namespace blender
+
+#include "intern/bmesh_operator_api_inline.hh" /* IWYU pragma: export */

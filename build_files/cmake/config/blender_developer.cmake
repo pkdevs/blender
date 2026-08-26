@@ -20,9 +20,11 @@ endif()
 set(WITH_CYCLES_NATIVE_ONLY           ON  CACHE BOOL "" FORCE)
 set(WITH_DOC_MANPAGE                  OFF CACHE BOOL "" FORCE)
 set(WITH_GTESTS                       ON  CACHE BOOL "" FORCE)
-set(WITH_GPU_RENDER_TESTS_SILENT      OFF CACHE BOOL "" FORCE)
 set(WITH_LIBMV_SCHUR_SPECIALIZATIONS  OFF CACHE BOOL "" FORCE)
 set(WITH_PYTHON_SAFETY                ON  CACHE BOOL "" FORCE)
 if(WIN32)
   set(WITH_WINDOWS_BUNDLE_CRT         OFF CACHE BOOL "" FORCE)
 endif()
+# For Ninja & Makefile: Generate compile_commands.json. Used by Clang tools (that many common IDEs
+# rely on) to obtain include paths, compile flags, etc. from the build system.
+set(CMAKE_EXPORT_COMPILE_COMMANDS     ON  CACHE BOOL "" FORCE)

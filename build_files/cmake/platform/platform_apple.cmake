@@ -4,9 +4,9 @@
 
 # Libraries configuration for Apple.
 
-macro(find_package_wrapper)
-# do nothing, just satisfy the macro
-endmacro()
+function(find_package_wrapper)
+  # do nothing, just satisfy the function
+endfunction()
 
 function(print_found_status
   lib_name
@@ -25,7 +25,7 @@ endfunction()
 # ------------------------------------------------------------------------
 # Find system provided libraries.
 
-# Find system ZLIB, not the pre-compiled one supplied with OpenCollada.
+# Find system ZLIB
 set(ZLIB_ROOT /usr)
 find_package(ZLIB REQUIRED)
 find_package(BZip2 REQUIRED)
@@ -84,7 +84,7 @@ set(CMAKE_PREFIX_PATH ${LIB_SUBDIRS})
 # Find precompiled libraries, and avoid system or user-installed ones.
 
 if(EXISTS ${LIBDIR})
-  include(platform_old_libs_update)
+  include("${CMAKE_CURRENT_LIST_DIR}/platform_old_libs_update.cmake")
   without_system_libs_begin()
 endif()
 
@@ -107,12 +107,6 @@ if(WITH_OPENSUBDIV)
   find_package(OpenSubdiv)
 endif()
 add_bundled_libraries(opensubdiv/lib)
-
-if(WITH_VULKAN_BACKEND)
-  find_package(MoltenVK REQUIRED)
-  find_package(ShaderC REQUIRED)
-  find_package(Vulkan REQUIRED)
-endif()
 
 if(WITH_CODEC_SNDFILE)
   find_package(SndFile)
@@ -164,13 +158,22 @@ find_package(OpenEXR REQUIRED)
 add_bundled_libraries(openexr/lib)
 add_bundled_libraries(imath/lib)
 
+string(APPEND PLATFORM_CFLAGS " -pipe -funsigned-char -fno-strict-aliasing -ffp-contract=off")
+set(PLATFORM_LINKFLAGS "\
+-fexceptions -framework CoreServices -framework Foundation -framework IOKit -framework AppKit -framework Cocoa \
+-framework Carbon -framework AudioUnit -framework AudioToolbox -framework CoreAudio -framework Metal \
+-framework QuartzCore"
+)
+
 if(WITH_CODEC_FFMPEG)
   set(FFMPEG_ROOT_DIR ${LIBDIR}/ffmpeg)
   set(FFMPEG_FIND_COMPONENTS
-    avcodec avdevice avformat avutil
+    avcodec avdevice avfilter avformat avutil
     mp3lame ogg opus swresample swscale
     theora theoradec theoraenc vorbis vorbisenc
     vorbisfile vpx x264)
+  # Frameworks required by libavfilter, using legacy macOS CGL
+  string(APPEND PLATFORM_LINKFLAGS " -framework CoreImage -framework OpenGL")
   if(EXISTS ${LIBDIR}/ffmpeg/lib/libaom.a)
     list(APPEND FFMPEG_FIND_COMPONENTS aom)
   endif()
@@ -198,11 +201,6 @@ if(SYSTEMSTUBS_LIBRARY)
   list(APPEND PLATFORM_LINKLIBS SystemStubs)
 endif()
 
-string(APPEND PLATFORM_CFLAGS " -pipe -funsigned-char -fno-strict-aliasing -ffp-contract=off")
-set(PLATFORM_LINKFLAGS
-  "-fexceptions -framework CoreServices -framework Foundation -framework IOKit -framework AppKit -framework Cocoa -framework Carbon -framework AudioUnit -framework AudioToolbox -framework CoreAudio -framework Metal -framework QuartzCore"
-)
-
 if(WITH_OPENIMAGEDENOISE)
   if("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "arm64")
     # OpenImageDenoise uses BNNS from the Accelerate framework.
@@ -214,25 +212,15 @@ if(WITH_JACK)
   string(APPEND PLATFORM_LINKFLAGS " -F/Library/Frameworks -weak_framework jackmp")
 endif()
 
-if(WITH_OPENCOLLADA)
-  find_package(OpenCOLLADA)
-  find_library(PCRE_LIBRARIES NAMES pcre HINTS ${LIBDIR}/opencollada/lib)
-  find_library(XML2_LIBRARIES NAMES xml2 HINTS ${LIBDIR}/opencollada/lib)
-  print_found_status("PCRE" "${PCRE_LIBRARIES}")
-  print_found_status("XML2" "${XML2_LIBRARIES}")
+if(WITH_VULKAN_BACKEND)
+  find_package(ShaderC REQUIRED)
+  find_package(Vulkan REQUIRED)
 endif()
 
 if(WITH_SDL)
-  find_package(SDL2)
-  set(SDL_INCLUDE_DIR ${SDL2_INCLUDE_DIRS})
-  set(SDL_LIBRARY ${SDL2_LIBRARIES})
-  string(APPEND PLATFORM_LINKFLAGS " -framework ForceFeedback -framework GameController")
-  if("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "arm64")
-    # The minimum macOS version of the libraries makes it so this is included in SDL on arm64
-    # but not x86_64.
-    string(APPEND PLATFORM_LINKFLAGS " -framework CoreHaptics")
-  endif()
+  find_package(SDL3 REQUIRED CONFIG)
 endif()
+add_bundled_libraries(sdl/lib)
 
 set(EPOXY_ROOT_DIR ${LIBDIR}/epoxy)
 find_package(Epoxy REQUIRED)
@@ -243,48 +231,16 @@ find_package(PNG REQUIRED)
 set(JPEG_ROOT ${LIBDIR}/jpeg)
 find_package(JPEG REQUIRED)
 
-set(TIFF_ROOT ${LIBDIR}/tiff)
-find_package(TIFF REQUIRED)
+set(fmt_ROOT ${LIBDIR}/fmt)
+find_package(fmt REQUIRED)
 
 if(WITH_IMAGE_WEBP)
   set(WEBP_ROOT_DIR ${LIBDIR}/webp)
   find_package(WebP REQUIRED)
 endif()
 
-if(WITH_BOOST)
-  set(Boost_NO_BOOST_CMAKE ON)
-  set(Boost_ROOT ${LIBDIR}/boost)
-  set(Boost_NO_SYSTEM_PATHS ON)
-  set(_boost_FIND_COMPONENTS date_time filesystem regex system thread wave)
-  if(WITH_INTERNATIONAL)
-    list(APPEND _boost_FIND_COMPONENTS locale)
-  endif()
-  if(WITH_OPENVDB)
-    list(APPEND _boost_FIND_COMPONENTS iostreams)
-  endif()
-  if(WITH_USD AND USD_PYTHON_SUPPORT)
-    list(APPEND _boost_FIND_COMPONENTS python${PYTHON_VERSION_NO_DOTS})
-  endif()
-  set(Boost_NO_WARN_NEW_VERSIONS ON)
-  find_package(Boost COMPONENTS ${_boost_FIND_COMPONENTS})
-
-  # Boost Python is separate to avoid linking Python into tests that don't need it.
-  set(BOOST_LIBRARIES ${Boost_LIBRARIES})
-  if(WITH_USD AND USD_PYTHON_SUPPORT)
-    set(BOOST_PYTHON_LIBRARIES ${Boost_PYTHON${PYTHON_VERSION_NO_DOTS}_LIBRARY})
-    list(REMOVE_ITEM BOOST_LIBRARIES ${BOOST_PYTHON_LIBRARIES})
-  endif()
-  set(BOOST_INCLUDE_DIR ${Boost_INCLUDE_DIRS})
-  set(BOOST_DEFINITIONS)
-
-  mark_as_advanced(Boost_LIBRARIES)
-  mark_as_advanced(Boost_INCLUDE_DIRS)
-  unset(_boost_FIND_COMPONENTS)
-endif()
-add_bundled_libraries(boost/lib)
-
-if(WITH_INTERNATIONAL OR WITH_CODEC_FFMPEG)
-  string(APPEND PLATFORM_LINKFLAGS " -liconv") # boost_locale and ffmpeg needs it !
+if(WITH_CODEC_FFMPEG)
+  string(APPEND PLATFORM_LINKFLAGS " -liconv") # ffmpeg needs it !
 endif()
 
 if(WITH_PUGIXML)
@@ -294,9 +250,7 @@ endif()
 find_package(OpenImageIO REQUIRED)
 add_bundled_libraries(openimageio/lib)
 
-if(WITH_OPENCOLORIO)
-  find_package(OpenColorIO 2.0.0 REQUIRED)
-endif()
+find_package(OpenColorIO 2.0.0 REQUIRED CONFIG)
 add_bundled_libraries(opencolorio/lib)
 
 if(WITH_OPENVDB)
@@ -307,7 +261,9 @@ if(WITH_OPENVDB)
   else()
     unset(BLOSC_LIBRARIES CACHE)
   endif()
-  set(OPENVDB_DEFINITIONS)
+  if(OPENVDB_FOUND)
+    set(OPENVDB_DEFINITIONS "")
+  endif()
 endif()
 add_bundled_libraries(openvdb/lib)
 
@@ -315,8 +271,9 @@ if(WITH_NANOVDB)
   find_package(NanoVDB)
 endif()
 
-if(WITH_CPU_SIMD AND SUPPORT_NEON_BUILD)
-  find_package(sse2neon)
+test_neon_support()
+if(SUPPORTS_NEON_BUILD)
+  find_package(sse2neon REQUIRED)
 endif()
 
 if(WITH_LLVM)
@@ -334,12 +291,14 @@ if(WITH_LLVM)
 endif()
 
 if(WITH_CYCLES AND WITH_CYCLES_OSL)
-  find_package(OSL REQUIRED)
+  find_package(OSL 1.13.4 REQUIRED)
 endif()
 add_bundled_libraries(osl/lib)
+# OSL dependency
+add_bundled_libraries(openjph/lib)
 
-if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
-  find_package(Embree 3.8.0 REQUIRED)
+if(WITH_EMBREE)
+  find_package(Embree 4.0.0 REQUIRED)
 endif()
 add_bundled_libraries(embree/lib)
 
@@ -349,7 +308,12 @@ if(WITH_OPENIMAGEDENOISE)
 endif()
 
 if(WITH_TBB)
-  find_package(TBB REQUIRED)
+  find_package(TBB 2021.13.0 REQUIRED)
+  if(TBB_FOUND)
+    get_target_property(TBB_LIBRARIES TBB::tbb LOCATION)
+    get_target_property(TBB_INCLUDE_DIRS TBB::tbb INTERFACE_INCLUDE_DIRECTORIES)
+  endif()
+  set_and_warn_library_found("TBB" TBB_FOUND WITH_TBB)
 endif()
 add_bundled_libraries(tbb/lib)
 
@@ -357,25 +321,10 @@ if(WITH_POTRACE)
   find_package(Potrace REQUIRED)
 endif()
 
-# CMake FindOpenMP doesn't know about AppleClang before 3.12, so provide custom flags.
-if(WITH_OPENMP)
-  if(CMAKE_C_COMPILER_ID MATCHES "Clang")
-    # Use OpenMP from our precompiled libraries.
-    message(STATUS "Using ${LIBDIR}/openmp for OpenMP")
-    set(OPENMP_CUSTOM ON)
-    set(OPENMP_FOUND ON)
-    set(OpenMP_C_FLAGS "-Xclang -fopenmp -I'${LIBDIR}/openmp/include'")
-    set(OpenMP_CXX_FLAGS "-Xclang -fopenmp -I'${LIBDIR}/openmp/include'")
-    set(OpenMP_LIBRARY_DIR "${LIBDIR}/openmp/lib/")
-    set(OpenMP_LINKER_FLAGS "-L'${OpenMP_LIBRARY_DIR}' -lomp")
-    set(OpenMP_LIBRARY "${OpenMP_LIBRARY_DIR}/libomp.dylib")
-  endif()
-endif()
-add_bundled_libraries(openmp/lib)
-
 if(WITH_XR_OPENXR)
   find_package(XR_OpenXR_SDK REQUIRED)
 endif()
+add_bundled_libraries(xr_openxr_sdk/lib)
 
 if(WITH_GMP)
   find_package(GMP REQUIRED)
@@ -383,6 +332,14 @@ endif()
 
 if(WITH_HARU)
   find_package(Haru REQUIRED)
+endif()
+
+if(WITH_MANIFOLD)
+  find_package(manifold REQUIRED)
+endif()
+
+if(WITH_RUBBERBAND)
+  find_package(Rubberband REQUIRED)
 endif()
 
 if(WITH_CYCLES AND WITH_CYCLES_PATH_GUIDING)
@@ -397,8 +354,30 @@ if(WITH_CYCLES AND WITH_CYCLES_PATH_GUIDING)
   endif()
 endif()
 
+find_package(Eigen3 REQUIRED CONFIG)
+
+if(WITH_LIBMV)
+  find_package(Ceres REQUIRED CONFIG)
+endif()
+add_bundled_libraries(ceres/lib)
+
 set(ZSTD_ROOT_DIR ${LIBDIR}/zstd)
 find_package(Zstd REQUIRED)
+
+if(WITH_DRACO)
+  find_package(draco REQUIRED CONFIG)
+endif()
+add_bundled_libraries(draco/lib)
+
+if(WITH_MESHOPTIMIZER)
+  find_package(meshoptimizer REQUIRED CONFIG)
+endif()
+add_bundled_libraries(meshoptimizer/lib)
+
+if(WITH_TRACY)
+  set(Tracy_ROOT_DIR ${LIBDIR}/tracy)
+  find_package(Tracy REQUIRED CONFIG)
+endif()
 
 if(EXISTS ${LIBDIR})
   without_system_libs_end()
@@ -412,18 +391,16 @@ set(CMAKE_FIND_FRAMEWORK FIRST)
 
 set(EXETYPE MACOSX_BUNDLE)
 
-set(CMAKE_C_FLAGS_DEBUG "-g")
-set(CMAKE_CXX_FLAGS_DEBUG "-g")
-if(CMAKE_OSX_ARCHITECTURES MATCHES "x86_64" OR CMAKE_OSX_ARCHITECTURES MATCHES "i386")
-  set(CMAKE_CXX_FLAGS_RELEASE "-O2 -mdynamic-no-pic -msse -msse2 -msse3 -mssse3")
-  set(CMAKE_C_FLAGS_RELEASE "-O2 -mdynamic-no-pic  -msse -msse2 -msse3 -mssse3")
+string(APPEND CMAKE_C_FLAGS_RELEASE " -mdynamic-no-pic")
+string(APPEND CMAKE_CXX_FLAGS_RELEASE " -mdynamic-no-pic")
+
+if(CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
+  string(APPEND CMAKE_CXX_FLAGS_RELEASE " -msse -msse2 -msse3 -mssse3")
+  string(APPEND CMAKE_C_FLAGS_RELEASE " -msse -msse2 -msse3 -mssse3")
   if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
     string(APPEND CMAKE_C_FLAGS_RELEASE " -ftree-vectorize  -fvariable-expansion-in-unroller")
     string(APPEND CMAKE_CXX_FLAGS_RELEASE " -ftree-vectorize  -fvariable-expansion-in-unroller")
   endif()
-else()
-  set(CMAKE_C_FLAGS_RELEASE "-O2 -mdynamic-no-pic")
-  set(CMAKE_CXX_FLAGS_RELEASE "-O2 -mdynamic-no-pic")
 endif()
 
 # Clang has too low template depth of 128 for libmv.
@@ -432,25 +409,30 @@ string(APPEND CMAKE_CXX_FLAGS " -ftemplate-depth=1024")
 # Avoid conflicts with Luxrender, and other plug-ins that may use the same
 # libraries as Blender with a different version or build options.
 set(PLATFORM_SYMBOLS_MAP ${CMAKE_SOURCE_DIR}/source/creator/symbols_apple.map)
-string(APPEND PLATFORM_LINKFLAGS
-  " -Wl,-unexported_symbols_list,'${PLATFORM_SYMBOLS_MAP}'"
-)
+set(PLATFORM_LINKFLAGS_SYMBOL_HIDING "-Wl,-unexported_symbols_list,'${PLATFORM_SYMBOLS_MAP}'")
 
-if(${XCODE_VERSION} VERSION_GREATER_EQUAL 15.0)
-  if("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "x86_64")
-    # Silence "no platform load command found in <static library>, assuming: macOS".
-    string(APPEND PLATFORM_LINKFLAGS " -Wl,-ld_classic")
-  else()
-    # Silence "ld: warning: ignoring duplicate libraries".
-    #
-    # The warning is introduced with Xcode 15 and is triggered when the same library
-    # is passed to the linker ultiple times. This situation could happen with either
-    # cyclic libraries, or some transitive dependencies where CMake might decide to
-    # pass library to the linker multiple times to force it re-scan symbols. It is
-    # not neeed for Xcode linker to ensure all symbols from library are used and it
-    # is corrected in CMake 3.29:
-    #    https://gitlab.kitware.com/cmake/cmake/-/issues/25297
-    string(APPEND PLATFORM_LINKFLAGS " -Xlinker -no_warn_duplicate_libraries")
+if("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "x86_64" AND WITH_LEGACY_MACOS_X64_LINKER)
+  # Silence "no platform load command found in <static library>, assuming: macOS".
+  #
+  # NOTE: Using ld_classic costs minutes of extra linking time.
+  string(APPEND PLATFORM_LINKFLAGS " -Wl,-ld_classic")
+else()
+  # Silence "ld: warning: ignoring duplicate libraries".
+  #
+  # The warning is introduced with Xcode 15 and is triggered when the same library
+  # is passed to the linker multiple times. This situation could happen with either
+  # cyclic libraries, or some transitive dependencies where CMake might decide to
+  # pass library to the linker multiple times to force it re-scan symbols. It is
+  # not necessary for Xcode linker to ensure all symbols from library are used and
+  # it is corrected in CMake 3.29:
+  #    https://gitlab.kitware.com/cmake/cmake/-/issues/25297
+  string(APPEND PLATFORM_LINKFLAGS " -Xlinker -no_warn_duplicate_libraries")
+
+  # Silence: ld: warning: reducing alignment of section __DATA,__common from 0x8000
+  #          to 0x4000 because it exceeds segment maximum alignment
+  # The flag to silence this warning is only available on Xcode 26.4 and above.
+  if(${XCODE_VERSION} VERSION_GREATER_EQUAL 26.4)
+    string(APPEND PLATFORM_LINKFLAGS " -Xlinker -no_warn_reduced_section_align")
   endif()
 endif()
 
@@ -485,31 +467,6 @@ if(WITH_COMPILER_CCACHE)
   endif()
 endif()
 
-unset(_custom_LINKER_FUSE_FLAG)
-if(WITH_LINKER_LLD)
-  find_program(LLD_PROGRAM ld.lld)
-  if(LLD_PROGRAM)
-    set(_custom_LINKER_FUSE_FLAG "-fuse-ld=lld")
-  else()
-    message(WARNING "LLD linker NOT found, disabling WITH_LINKER_LLD")
-    set(WITH_LINKER_LLD OFF)
-  endif()
-endif()
-if(WITH_LINKER_MOLD)
-  find_program(MOLD_PROGRAM mold)
-  if(MOLD_PROGRAM)
-    set(_custom_LINKER_FUSE_FLAG "-fuse-ld=mold")
-  else()
-    message(WARNING "Mold linker NOT found, disabling WITH_LINKER_MOLD")
-    set(WITH_LINKER_MOLD OFF)
-  endif()
-endif()
-
-if(_custom_LINKER_FUSE_FLAG)
-  add_link_options(${_custom_LINKER_FUSE_FLAG})
-endif()
-
-
 if(WITH_COMPILER_ASAN)
   list(APPEND PLATFORM_BUNDLED_LIBRARIES ${COMPILER_ASAN_LIBRARY})
 endif()
@@ -524,7 +481,7 @@ if(PLATFORM_BUNDLED_LIBRARIES)
     list(APPEND CMAKE_INSTALL_RPATH "@loader_path/../Resources/lib")
   endif()
 
-  # For binaries that are built but not installed (like makesdan or tests), we add
+  # For binaries that are built but not installed (like makesdna or tests), we add
   # the original directory of all shared libraries to the rpath. This is needed because
   # these can be in different folders, and because the build and install folder may be
   # different.
@@ -534,8 +491,8 @@ if(PLATFORM_BUNDLED_LIBRARIES)
   # Environment variables to run precompiled executables that needed libraries.
   list(JOIN PLATFORM_BUNDLED_LIBRARY_DIRS ":" _library_paths)
   # Intentionally double "$$" which expands into "$" when instantiated.
-  set(PLATFORM_ENV_BUILD "DYLD_LIBRARY_PATH=\"${_library_paths};$$DYLD_LIBRARY_PATH\"")
-  set(PLATFORM_ENV_INSTALL "DYLD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/Blender.app/Contents/Resources/lib/;$$DYLD_LIBRARY_PATH")
+  set(PLATFORM_ENV_BUILD "DYLD_LIBRARY_PATH=\"${_library_paths}:$$DYLD_LIBRARY_PATH\"")
+  set(PLATFORM_ENV_INSTALL "DYLD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/Blender.app/Contents/Resources/lib/:$$DYLD_LIBRARY_PATH")
   unset(_library_paths)
 endif()
 

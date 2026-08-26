@@ -10,13 +10,15 @@
 #include "usd.hh"
 
 #include "BLI_map.hh"
-
-#include "WM_types.hh"
+#include "BLI_math_matrix_types.hh"
+#include "BLI_set.hh"
 
 #include <pxr/usd/sdf/path.h>
 #include <pxr/usd/usd/prim.h>
 
 #include <string>
+
+namespace blender {
 
 struct CacheFile;
 struct Main;
@@ -24,33 +26,47 @@ struct Material;
 struct Object;
 struct ReportList;
 
-namespace blender::io::usd {
+namespace io::usd {
 
 struct ImportSettings {
+  bool blender_stage_version_prior_44 = false;
   bool do_convert_mat = false;
-  float conversion_mat[4][4] = {};
+  float4x4 conversion_mat;
 
   /* From MeshSeqCacheModifierData.read_flag */
   int read_flag = 0;
 
   std::function<CacheFile *()> get_cache_file{};
 
-  /* Map a USD material prim path to a Blender material name.
-   * This map is updated by readers during stage traversal.
-   * This field is mutable because it is used to keep track
-   * of what the importer is doing. This is necessary even
-   * when all the other import settings are to remain const. */
-  mutable blender::Map<std::string, std::string> usd_path_to_mat_name{};
+  /*
+   * The fields below are mutable because they are used to keep track
+   * of what the importer is doing. This is necessary even when all
+   * the other import settings are to remain const.
+   */
+
+  /* Map a USD material prim path to a Blender material.
+   * This map is updated by readers during stage traversal. */
+  mutable Map<pxr::SdfPath, Material *> usd_path_to_mat{};
   /* Map a material name to Blender material.
-   * This map is updated by readers during stage traversal,
-   * and is mutable similar to the map above. */
-  mutable blender::Map<std::string, Material *> mat_name_to_mat{};
+   * This map is updated by readers during stage traversal. */
+  mutable Map<std::string, Material *> mat_name_to_mat{};
+  /* Map a USD material prim path to a Blender material to be
+   * converted by invoking the 'on_material_import' USD hook.
+   * This map is updated by readers during stage traversal. */
+  mutable Map<pxr::SdfPath, Material *> usd_path_to_mat_for_hook{};
+  /* Set of paths to USD material primitives that can be converted by the
+   * 'on_material_import' USD hook. For efficiency this set should
+   * be populated prior to stage traversal. */
+  mutable Set<pxr::SdfPath> mat_import_hook_sources{};
 
   /* We use the stage metersPerUnit to convert camera properties from USD scene units to the
    * correct millimeter scale that Blender uses for camera parameters. */
   double stage_meters_per_unit = 1.0;
 
   pxr::SdfPath skip_prefix{};
+
+  /* Combined user-specified and unit conversion scales. */
+  double scene_scale = 1.0;
 };
 
 /* Most generic USD Reader. */
@@ -58,12 +74,11 @@ struct ImportSettings {
 class USDPrimReader {
 
  protected:
-  std::string name_;
-  std::string prim_path_;
+  StringRefNull name_;
   Object *object_;
   pxr::UsdPrim prim_;
-  const USDImportParams &import_params_;
   USDPrimReader *parent_reader_;
+  const USDImportParams &import_params_;
   const ImportSettings *settings_;
   int refcount_;
   bool is_in_instancer_proto_;
@@ -78,8 +93,8 @@ class USDPrimReader {
 
   virtual bool valid() const;
 
-  virtual void create_object(Main *bmain, double motionSampleTime) = 0;
-  virtual void read_object_data(Main * /*bmain*/, double /*motionSampleTime*/){};
+  virtual void create_object(Main *bmain) = 0;
+  virtual void read_object_data(Main * /*bmain*/, pxr::UsdTimeCode /*time*/) {};
 
   Object *object() const;
   void object(Object *ob);
@@ -94,10 +109,7 @@ class USDPrimReader {
   }
 
   /** Get the wmJobWorkerStatus-provided `reports` list pointer, to use with the BKE_report API. */
-  ReportList *reports() const
-  {
-    return import_params_.worker_status ? import_params_.worker_status->reports : nullptr;
-  }
+  ReportList *reports() const;
 
   /* Since readers might be referenced through handles
    * maintained by modifiers and constraints, we provide
@@ -112,13 +124,23 @@ class USDPrimReader {
   void incref();
   void decref();
 
-  const std::string &name() const
+  StringRefNull name() const
   {
     return name_;
   }
-  const std::string &prim_path() const
+  pxr::SdfPath prim_path() const
   {
-    return prim_path_;
+    return prim_.GetPrimPath();
+  }
+
+  virtual pxr::SdfPath object_prim_path() const
+  {
+    return prim_path();
+  }
+
+  virtual pxr::SdfPath data_prim_path() const
+  {
+    return prim_path();
   }
 
   void set_is_in_instancer_proto(bool flag)
@@ -150,10 +172,11 @@ class USDPrimReader {
    *
    * \param merge_with_parent: If true, set the properties of the prim's parent
    *                           on the object ID
-   * \param motionSampleTime: The time code for sampling the USD attributes.
+   * \param time: The time code for sampling the USD attributes.
    */
   void set_props(bool merge_with_parent = false,
-                 pxr::UsdTimeCode motionSampleTime = pxr::UsdTimeCode::Default());
+                 pxr::UsdTimeCode time = pxr::UsdTimeCode::Default());
 };
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

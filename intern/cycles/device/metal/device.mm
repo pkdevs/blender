@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
+#include "device/device.h"
+
 #ifdef WITH_METAL
 
 #  include "device/metal/device.h"
@@ -18,12 +20,12 @@ CCL_NAMESPACE_BEGIN
 
 #ifdef WITH_METAL
 
-Device *device_metal_create(const DeviceInfo &info,
-                            Stats &stats,
-                            Profiler &profiler,
-                            bool headless)
+unique_ptr<Device> device_metal_create(const DeviceInfo &info,
+                                       Stats &stats,
+                                       Profiler &profiler,
+                                       bool headless)
 {
-  return new MetalDevice(info, stats, profiler, headless);
+  return make_unique<MetalDevice>(info, stats, profiler, headless);
 }
 
 bool device_metal_init()
@@ -49,7 +51,7 @@ void device_metal_info(vector<DeviceInfo> &devices)
     string id = string("METAL_") + device_name;
 
     /* Hardware ID might not be unique, add device number in that case. */
-    if (unique_ids.find(id) != unique_ids.end()) {
+    if (unique_ids.contains(id)) {
       id += string_printf("_ID_%d", device_index);
     }
     unique_ids.insert(id);
@@ -78,9 +80,9 @@ void device_metal_info(vector<DeviceInfo> &devices)
 
     /* MNEE caused "Compute function exceeds available temporary registers" in macOS < 13 due to a
      * bug in spill buffer allocation sizing. */
-    info.has_mnee = false;
+    info.has_mnee_ = false;
     if (@available(macos 13.0, *)) {
-      info.has_mnee = true;
+      info.has_mnee_ = true;
     }
 
     info.use_hardware_raytracing = false;
@@ -100,17 +102,18 @@ void device_metal_info(vector<DeviceInfo> &devices)
     devices.push_back(info);
     device_index++;
 
-    VLOG_INFO << "Added device \"" << info.description << "\" with id \"" << info.id << "\".";
+    LOG_INFO << "Added device \"" << info.description << "\" with id \"" << info.id << "\".";
 
-    if (info.denoisers & DENOISER_OPENIMAGEDENOISE)
-      VLOG_INFO << "Device with id \"" << info.id << "\" supports "
-                << denoiserTypeToHumanReadable(DENOISER_OPENIMAGEDENOISE) << ".";
+    if (info.denoisers & DENOISER_OPENIMAGEDENOISE) {
+      LOG_INFO << "Device with id \"" << info.id << "\" supports "
+               << denoiserTypeToHumanReadable(DENOISER_OPENIMAGEDENOISE) << ".";
+    }
   }
 }
 
 string device_metal_capabilities()
 {
-  string result = "";
+  string result;
   auto allDevices = MTLCopyAllDevices();
   uint32_t num_devices = (uint32_t)allDevices.count;
   if (num_devices == 0) {
@@ -128,7 +131,9 @@ string device_metal_capabilities()
 
 #else
 
-Device *device_metal_create(const DeviceInfo &info, Stats &stats, Profiler &profiler)
+unique_ptr<Device> device_metal_create(const DeviceInfo & /*info*/,
+                                       Stats & /*stats*/,
+                                       Profiler & /*profiler*/)
 {
   return nullptr;
 }
@@ -138,7 +143,7 @@ bool device_metal_init()
   return false;
 }
 
-void device_metal_info(vector<DeviceInfo> &devices) {}
+void device_metal_info(vector<DeviceInfo> & /*devices*/) {}
 
 string device_metal_capabilities()
 {

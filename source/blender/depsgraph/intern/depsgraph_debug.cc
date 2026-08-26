@@ -8,11 +8,9 @@
  * Implementation of tools for debugging the depsgraph
  */
 
-#include "BLI_utildefines.h"
-
 #include "DNA_scene_types.h"
 
-#include "DNA_object_types.h"
+#include "BKE_global.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -22,12 +20,13 @@
 #include "intern/debug/deg_debug.h"
 #include "intern/depsgraph.hh"
 #include "intern/depsgraph_relation.hh"
-#include "intern/depsgraph_type.hh"
 #include "intern/node/deg_node_component.hh"
 #include "intern/node/deg_node_id.hh"
 #include "intern/node/deg_node_time.hh"
 
-namespace deg = blender::deg;
+#include "BLI_math_bits.hh"
+
+namespace blender {
 
 void DEG_debug_flags_set(Depsgraph *depsgraph, int flags)
 {
@@ -152,7 +151,7 @@ bool DEG_debug_consistency_check(Depsgraph *graph)
     }
     for (deg::Relation *rel : node->outlinks) {
       if (rel->to->type == deg::NodeType::OPERATION) {
-        deg::OperationNode *to = (deg::OperationNode *)rel->to;
+        deg::OperationNode *to = static_cast<deg::OperationNode *>(rel->to);
         BLI_assert(to->num_links_pending < to->inlinks.size());
         ++to->num_links_pending;
       }
@@ -224,13 +223,13 @@ void DEG_stats_simple(const Depsgraph *graph,
   }
 }
 
-static deg::string depsgraph_name_for_logging(Depsgraph *depsgraph)
+static std::string depsgraph_name_for_logging(Depsgraph *depsgraph)
 {
   const char *name = DEG_debug_name_get(depsgraph);
   if (name[0] == '\0') {
     return "";
   }
-  return "[" + deg::string(name) + "]: ";
+  return "[" + std::string(name) + "]: ";
 }
 
 void DEG_debug_print_begin(Depsgraph *depsgraph)
@@ -360,3 +359,38 @@ void DEG_debug_print_eval_time(Depsgraph *depsgraph,
           time);
   fflush(stdout);
 }
+
+static std::string stringify_append_bit(const std::string &str, IDRecalcFlag tag)
+{
+  const char *tag_name = DEG_update_tag_as_string(tag);
+  if (tag_name == nullptr) {
+    return str;
+  }
+  std::string result = str;
+  if (!result.empty()) {
+    result += ", ";
+  }
+  result += tag_name;
+  return result;
+}
+
+std::string DEG_stringify_recalc_flags(uint flags)
+{
+  if (flags == 0) {
+    return "NONE";
+  }
+  std::string result;
+  uint current_flag = flags;
+  /* Special cases to avoid ALL flags from being split into individual bits. */
+  if ((current_flag & ID_RECALC_PSYS_ALL) == ID_RECALC_PSYS_ALL) {
+    result = stringify_append_bit(result, ID_RECALC_PSYS_ALL);
+  }
+  /* Handle all the rest of the flags. */
+  while (current_flag != 0) {
+    IDRecalcFlag tag = IDRecalcFlag(1 << bitscan_forward_clear_uint(&current_flag));
+    result = stringify_append_bit(result, tag);
+  }
+  return result;
+}
+
+}  // namespace blender

@@ -6,7 +6,7 @@
 
 #include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
 
 namespace blender::bke::bake {
@@ -22,7 +22,7 @@ std::string frame_to_file_name(const SubFrame &frame)
 std::optional<SubFrame> file_name_to_frame(const StringRef file_name)
 {
   char modified_file_name[FILE_MAX];
-  file_name.copy(modified_file_name);
+  file_name.copy_utf8_truncated(modified_file_name);
   BLI_string_replace_char(modified_file_name, '_', '.');
   try {
     const SubFrame frame = std::stof(modified_file_name);
@@ -57,9 +57,8 @@ Vector<MetaFile> find_sorted_meta_files(const StringRefNull meta_dir)
     meta_files.append({*frame, dir_entry_path});
   }
 
-  std::sort(meta_files.begin(), meta_files.end(), [](const MetaFile &a, const MetaFile &b) {
-    return a.frame < b.frame;
-  });
+  std::ranges::sort(meta_files,
+                    [](const MetaFile &a, const MetaFile &b) { return a.frame < b.frame; });
 
   return meta_files;
 }

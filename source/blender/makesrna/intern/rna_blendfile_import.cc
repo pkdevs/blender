@@ -10,11 +10,12 @@
 
 #include "BLO_readfile.hh"
 
+#include "BLT_translation.hh"
+
 #include "DNA_space_types.h"
 
 #include "BKE_blendfile_link_append.hh"
 
-#include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
@@ -23,7 +24,9 @@
 #ifdef RNA_RUNTIME
 
 #  include "BLI_bit_span.hh"
-#  include "BLI_string_utils.hh"
+#  include "BLI_string.hh"
+
+namespace blender {
 
 void rna_BlendImportContextLibrary_filepath_get(PointerRNA *ptr, char *value)
 {
@@ -64,7 +67,7 @@ int rna_BlendImportContextItem_id_type_get(PointerRNA *ptr)
 
 struct RNABlendImportContextItemLibrariesIterator {
   BlendfileLinkAppendContextItem *ctx_item;
-  blender::bits::BitIterator iter;
+  bits::BitIterator iter;
   int iter_index;
 };
 
@@ -73,7 +76,7 @@ void rna_BlendImportContextItem_libraries_begin(CollectionPropertyIterator *iter
   BlendfileLinkAppendContextItem *ctx_item = static_cast<BlendfileLinkAppendContextItem *>(
       ptr->data);
 
-  const blender::BitVector<> &libraries = ctx_item->libraries;
+  const BitVector<> &libraries = ctx_item->libraries;
   RNABlendImportContextItemLibrariesIterator *libs_iter =
       MEM_new<RNABlendImportContextItemLibrariesIterator>(
           __func__, RNABlendImportContextItemLibrariesIterator{ctx_item, libraries.begin(), 0});
@@ -113,7 +116,7 @@ PointerRNA rna_BlendImportContextItem_libraries_get(CollectionPropertyIterator *
 
   BlendfileLinkAppendContextLibrary &ctx_lib =
       libs_iter->ctx_item->lapp_context->libraries[libs_iter->iter_index];
-  return rna_pointer_inherit_refine(&iter->parent, &RNA_BlendImportContextLibrary, &ctx_lib);
+  return RNA_pointer_create_with_parent(iter->parent, RNA_BlendImportContextLibrary, &ctx_lib);
 }
 
 int rna_BlendImportContextItem_libraries_len(PointerRNA *ptr)
@@ -123,7 +126,7 @@ int rna_BlendImportContextItem_libraries_len(PointerRNA *ptr)
 
   /* Count amount of enabled libraries in the item's bitmask. */
   int count = 0;
-  for (const blender::BitRef &bit : ctx_item->libraries) {
+  for (const BitRef &bit : ctx_item->libraries) {
     if (bit) {
       count++;
     }
@@ -149,28 +152,28 @@ PointerRNA rna_BlendImportContextItem_id_get(PointerRNA *ptr)
 {
   BlendfileLinkAppendContextItem *ctx_item = static_cast<BlendfileLinkAppendContextItem *>(
       ptr->data);
-  return rna_pointer_inherit_refine(&PointerRNA_NULL, &RNA_ID, ctx_item->new_id);
+  return RNA_id_pointer_create(ctx_item->new_id);
 }
 
 PointerRNA rna_BlendImportContextItem_source_library_get(PointerRNA *ptr)
 {
   BlendfileLinkAppendContextItem *ctx_item = static_cast<BlendfileLinkAppendContextItem *>(
       ptr->data);
-  return rna_pointer_inherit_refine(&PointerRNA_NULL, &RNA_Library, ctx_item->source_library);
+  return RNA_id_pointer_create(&ctx_item->source_library->id);
 }
 
 PointerRNA rna_BlendImportContextItem_library_override_id_get(PointerRNA *ptr)
 {
   BlendfileLinkAppendContextItem *ctx_item = static_cast<BlendfileLinkAppendContextItem *>(
       ptr->data);
-  return rna_pointer_inherit_refine(&PointerRNA_NULL, &RNA_ID, ctx_item->liboverride_id);
+  return RNA_id_pointer_create(ctx_item->liboverride_id);
 }
 
 PointerRNA rna_BlendImportContextItem_reusable_local_id_get(PointerRNA *ptr)
 {
   BlendfileLinkAppendContextItem *ctx_item = static_cast<BlendfileLinkAppendContextItem *>(
       ptr->data);
-  return rna_pointer_inherit_refine(&PointerRNA_NULL, &RNA_ID, ctx_item->reusable_local_id);
+  return RNA_id_pointer_create(ctx_item->reusable_local_id);
 }
 
 struct RNABlendImportContextItemsIterator {
@@ -212,7 +215,7 @@ PointerRNA rna_BlendImportContext_import_items_get(CollectionPropertyIterator *i
       static_cast<RNABlendImportContextItemsIterator *>(iter->internal.custom);
 
   BlendfileLinkAppendContextItem &ctx_item = *items_iter->iter;
-  return rna_pointer_inherit_refine(&iter->parent, &RNA_BlendImportContextItem, &ctx_item);
+  return RNA_pointer_create_with_parent(iter->parent, RNA_BlendImportContextItem, &ctx_item);
 }
 
 int rna_BlendImportContext_import_items_len(PointerRNA *ptr)
@@ -224,7 +227,7 @@ int rna_BlendImportContext_import_items_len(PointerRNA *ptr)
 int rna_BlendImportContext_options_get(PointerRNA *ptr)
 {
   BlendfileLinkAppendContext *ctx = static_cast<BlendfileLinkAppendContext *>(ptr->data);
-  return int(ctx->params->flag);
+  return ctx->params->flag;
 }
 
 int rna_BlendImportContext_process_stage_get(PointerRNA *ptr)
@@ -233,7 +236,11 @@ int rna_BlendImportContext_process_stage_get(PointerRNA *ptr)
   return int(ctx->process_stage);
 }
 
+}  // namespace blender
+
 #else /* RNA_RUNTIME */
+
+namespace blender {
 
 static void rna_def_blendfile_import_library(BlenderRNA *brna)
 {
@@ -243,9 +250,9 @@ static void rna_def_blendfile_import_library(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "BlendImportContextLibrary", nullptr);
   RNA_def_struct_ui_text(
       srna,
-      "Blendfile Import Context Library",
-      "Library (blendfile) reference in a BlendImportContext data. Currently only "
-      "exposed as read-only data for the pre/post blendimport handlers");
+      "BlendFile Import Context Library",
+      "Library (blend-file) reference in a BlendImportContext data. Currently only "
+      "exposed as read-only data for the pre/post blend-import handlers");
 
   RNA_define_verify_sdna(false); /* not in sdna */
 
@@ -294,6 +301,7 @@ static void rna_def_blendfile_import_item(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, rna_enum_id_type_items);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_ui_text(prop, "ID Type", "ID type of the item");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_ID);
   RNA_def_property_enum_funcs(prop, "rna_BlendImportContextItem_id_type_get", nullptr, nullptr);
 
   prop = RNA_def_property(srna, "source_libraries", PROP_COLLECTION, PROP_NONE);
@@ -364,9 +372,9 @@ static void rna_def_blendfile_import_item(BlenderRNA *brna)
       {0, nullptr, 0, nullptr, nullptr},
   };
   prop = RNA_def_property(srna, "import_info", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_items(prop, blend_import_item_import_info_items);
   RNA_def_property_flag(prop, PROP_ENUM_FLAG);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_enum_items(prop, blend_import_item_import_info_items);
   RNA_def_property_ui_text(
       prop, "Import Info", "Various status info about an item after it has been imported");
   RNA_def_property_enum_funcs(
@@ -516,11 +524,11 @@ static void rna_def_blendfile_import_context(BlenderRNA *brna)
       {0, nullptr, 0, nullptr, nullptr},
   };
   prop = RNA_def_property(srna, "options", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_items(prop, blend_import_options_items);
   RNA_def_property_flag(prop, PROP_ENUM_FLAG);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  RNA_def_property_ui_text(prop, "", "Options for this blendfile import operation");
+  RNA_def_property_enum_items(prop, blend_import_options_items);
   RNA_def_property_enum_funcs(prop, "rna_BlendImportContext_options_get", nullptr, nullptr);
+  RNA_def_property_ui_text(prop, "", "Options for this blendfile import operation");
 
   /* NOTE: Only stages currently exposed to handlers are listed here. */
   static const EnumPropertyItem blend_import_process_stage_items[] = {
@@ -534,7 +542,7 @@ static void rna_def_blendfile_import_context(BlenderRNA *brna)
        "DONE",
        0,
        "",
-       "All data has been imported and is available in the list of ``import_items``"},
+       "All data has been imported and is available in the list of \"import_items\""},
       {0, nullptr, 0, nullptr, nullptr},
   };
   prop = RNA_def_property(srna, "process_stage", PROP_ENUM, PROP_NONE);
@@ -552,5 +560,7 @@ void RNA_def_blendfile_import(BlenderRNA *brna)
   rna_def_blendfile_import_item(brna);
   rna_def_blendfile_import_context(brna);
 }
+
+}  // namespace blender
 
 #endif /* RNA_RUNTIME */

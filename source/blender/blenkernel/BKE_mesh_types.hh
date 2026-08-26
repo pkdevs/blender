@@ -9,17 +9,27 @@
  */
 
 #include <memory>
-#include <mutex>
+#include <variant>
 
 #include "BLI_array.hh"
 #include "BLI_bit_vector.hh"
 #include "BLI_bounds_types.hh"
 #include "BLI_implicit_sharing.hh"
+#include "BLI_index_mask.hh"
+#include "BLI_kdopbvh.hh"
+#include "BLI_linear_allocator.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_mutex.hh"
 #include "BLI_shared_cache.hh"
 #include "BLI_vector.hh"
+#include "BLI_vector_set.hh"
+#include "BLI_virtual_array_fwd.hh"
+
+#include "BKE_bvh.hh"
 
 #include "DNA_customdata_types.h"
+
+namespace blender {
 
 struct BMEditMesh;
 struct BVHTree;
@@ -27,11 +37,14 @@ struct Mesh;
 class ShrinkwrapBoundaryData;
 struct SubdivCCG;
 struct SubsurfRuntimeData;
-namespace blender::bke {
+namespace bke {
 struct EditMeshData;
-}  // namespace blender::bke
-namespace blender::bke::bake {
+}  // namespace bke
+namespace bke::bake {
 struct BakeMaterialsList;
+}
+namespace draw {
+struct MeshBatchCache;
 }
 
 /** #MeshRuntime.wrapper_type */
@@ -44,7 +57,7 @@ enum eMeshWrapperType {
   ME_WRAPPER_TYPE_SUBD = 2,
 };
 
-namespace blender::bke {
+namespace bke {
 
 /**
  * The complexity requirement of attribute domains needed to process normals.
@@ -72,27 +85,27 @@ enum class MeshNormalDomain : int8_t {
 };
 
 struct LooseGeomCache {
-  /**
-   * A bitmap set to true for each "loose" element.
-   * Allocated only if there is at least one loose element.
-   */
-  blender::BitVector<> is_loose_bits;
-  /**
-   * The number of loose elements. If zero, the #is_loose_bits shouldn't be accessed.
-   * If less than zero, the cache has been accessed in an invalid way
-   * (i.e. directly instead of through a Mesh API function).
-   */
-  int count = -1;
+  LinearAllocator<> allocator;
+  IndexMask mask;
 };
 
-/**
- * Cache of a mesh's loose edges, accessed with #Mesh::loose_edges(). *
- */
-struct LooseEdgeCache : public LooseGeomCache {};
-/**
- * Cache of a mesh's loose vertices or vertices not used by faces.
- */
-struct LooseVertCache : public LooseGeomCache {};
+/** Similar to #VArraySpan but with the ability to be resized and updated. */
+class NormalsCache {
+ public:
+  /**
+   * Signals that the data from the corresponding "true normals" cache can be used instead. Used to
+   * avoid referencing the data from another shared cache while not still not fetching the custom
+   * normal attribute on every cache request.
+   */
+  struct UseTrueCache {};
+  std::variant<UseTrueCache, Vector<float3>, Span<float3>> data;
+
+  MutableSpan<float3> ensure_vector_size(const int size);
+  Span<float3> get_span() const;
+  /** \note The caller must ensure that the data is valid as long as the cache. */
+  void store_varray(const VArray<float3> &data);
+  void store_vector(Vector<float3> &&data);
+};
 
 struct TrianglesCache {
   SharedCache<Array<int3>> data;
@@ -107,10 +120,22 @@ struct TrianglesCache {
   void tag_dirty();
 };
 
-struct BVHCacheItem {
-  BVHTree *tree = nullptr;
-  BVHCacheItem();
-  ~BVHCacheItem();
+struct MeshGroup {
+  /** Range of unique vertices in reordered mesh. */
+  IndexRange unique_verts;
+  /** Range of all faces in reordered mesh. */
+  IndexRange faces;
+  /**
+   * Indices of vertices that are shared with other groups in reordered mesh.
+   * This is empty if all vertices in the group are unique.
+   */
+  Array<int> shared_verts;
+  /** Parent node index (-1 for root). */
+  int parent;
+  /** Children node offset (empty for leaf nodes). */
+  int children_offset;
+  /** Number of corners in each group, calculated from number of faces. */
+  int corners_count;
 };
 
 struct MeshRuntime {
@@ -121,10 +146,7 @@ struct MeshRuntime {
    * threads, access and use must be protected by the #eval_mutex lock.
    */
   Mesh *mesh_eval = nullptr;
-  std::mutex eval_mutex;
-
-  /** Needed to ensure some thread-safety during render data pre-processing. */
-  std::mutex render_mutex;
+  Mutex eval_mutex;
 
   /** Implicit sharing user count for #Mesh::face_offset_indices. */
   const ImplicitSharingInfo *face_offsets_sharing_info = nullptr;
@@ -157,29 +179,42 @@ struct MeshRuntime {
    * Data used to efficiently draw the mesh in the viewport, especially useful when
    * the same mesh is used in many objects or instances. See `draw_cache_impl_mesh.cc`.
    */
-  void *batch_cache = nullptr;
+  draw::MeshBatchCache *batch_cache = nullptr;
 
   /** Cache for derived triangulation of the mesh, accessed with #Mesh::corner_tris(). */
   TrianglesCache corner_tris_cache;
   /** Cache for triangle to original face index map, accessed with #Mesh::corner_tri_faces(). */
   SharedCache<Array<int>> corner_tri_faces_cache;
 
-  SharedCache<BVHCacheItem> bvh_cache_verts;
-  SharedCache<BVHCacheItem> bvh_cache_edges;
-  SharedCache<BVHCacheItem> bvh_cache_faces;
-  SharedCache<BVHCacheItem> bvh_cache_corner_tris;
-  SharedCache<BVHCacheItem> bvh_cache_corner_tris_no_hidden;
-  SharedCache<BVHCacheItem> bvh_cache_loose_verts;
-  SharedCache<BVHCacheItem> bvh_cache_loose_verts_no_hidden;
-  SharedCache<BVHCacheItem> bvh_cache_loose_edges;
-  SharedCache<BVHCacheItem> bvh_cache_loose_edges_no_hidden;
+  SharedCache<std::unique_ptr<BVHTree, BVHTreeDeleter>> bvh_cache_verts;
+  SharedCache<std::unique_ptr<BVHTree, BVHTreeDeleter>> bvh_cache_edges;
+  SharedCache<std::unique_ptr<BVHTree, BVHTreeDeleter>> bvh_cache_faces;
+  SharedCache<std::unique_ptr<BVHTree, BVHTreeDeleter>> bvh_cache_corner_tris;
+  SharedCache<std::unique_ptr<BVHTree, BVHTreeDeleter>> bvh_cache_corner_tris_no_hidden;
+  SharedCache<std::unique_ptr<BVHTree, BVHTreeDeleter>> bvh_cache_loose_verts;
+  SharedCache<std::unique_ptr<BVHTree, BVHTreeDeleter>> bvh_cache_loose_verts_no_hidden;
+  SharedCache<std::unique_ptr<BVHTree, BVHTreeDeleter>> bvh_cache_loose_edges;
+  SharedCache<std::unique_ptr<BVHTree, BVHTreeDeleter>> bvh_cache_loose_edges_no_hidden;
+
+  SharedCache<bke::bvh::Tree> bvh_embree_cache;
+
+  SharedCache<std::optional<int>> max_material_index;
+  SharedCache<VectorSet<int>> used_material_indices;
 
   /** Needed in case we need to lazily initialize the mesh. */
   CustomData_MeshMasks cd_mask_extra = {};
 
   /**
-   * Grids representation for multi-resolution sculpting. When this is set, the mesh will be empty,
-   * since it is conceptually replaced with the limited data stored in the grids.
+   * Pre-computed groups of vertices and faces for a mesh's BVH (Bounding Volume Hierarchy) nodes,
+   * used to quickly access the node data for the BVH. Used to avoid recomputing the offsets every
+   * time the BVH is built.
+   */
+  std::unique_ptr<Array<MeshGroup>> spatial_groups;
+
+  /**
+   * Grids representation for multi-resolution sculpting. When this is set, the mesh data
+   * corresponds to the unsubdivided base mesh; it is conceptually replaced with the limited
+   * data stored in the grids.
    */
   std::unique_ptr<SubdivCCG> subdiv_ccg;
   int subdiv_ccg_tot_level = 0;
@@ -200,17 +235,19 @@ struct MeshRuntime {
 
   /**
    * Settings for lazily evaluating the subdivision on the CPU if needed. These are
-   * set in the modifier when GPU subdivision can be performed, and owned by the by
-   * the modifier in the object.
+   * set in the modifier when GPU subdivision can be performed,
+   * and owned by the modifier in the object.
    */
   SubsurfRuntimeData *subsurf_runtime_data = nullptr;
 
   /** Lazily computed vertex normals (#Mesh::vert_normals()). */
-  SharedCache<Vector<float3>> vert_normals_cache;
+  SharedCache<NormalsCache> vert_normals_cache;
+  SharedCache<Vector<float3>> vert_normals_true_cache;
   /** Lazily computed face normals (#Mesh::face_normals()). */
-  SharedCache<Vector<float3>> face_normals_cache;
+  SharedCache<NormalsCache> face_normals_cache;
+  SharedCache<Vector<float3>> face_normals_true_cache;
   /** Lazily computed face corner normals (#Mesh::corner_normals()). */
-  SharedCache<Vector<float3>> corner_normals_cache;
+  SharedCache<NormalsCache> corner_normals_cache;
 
   /**
    * Cache of offsets for vert to face/corner maps. The same offsets array is used to group
@@ -224,11 +261,11 @@ struct MeshRuntime {
   /** Cache of face indices for each face corner. */
   SharedCache<Array<int>> corner_to_face_map_cache;
   /** Cache of data about edges not used by faces. See #Mesh::loose_edges(). */
-  SharedCache<LooseEdgeCache> loose_edges_cache;
+  SharedCache<LooseGeomCache> loose_edges_cache;
   /** Cache of data about vertices not used by edges. See #Mesh::loose_verts(). */
-  SharedCache<LooseVertCache> loose_verts_cache;
+  SharedCache<LooseGeomCache> loose_verts_cache;
   /** Cache of data about vertices not used by faces. See #Mesh::verts_no_face(). */
-  SharedCache<LooseVertCache> verts_no_face_cache;
+  SharedCache<LooseGeomCache> verts_no_face_cache;
 
   /** Cache of non-manifold boundary data for shrinkwrap target Project. */
   SharedCache<ShrinkwrapBoundaryData> shrinkwrap_boundary_cache;
@@ -254,4 +291,5 @@ struct MeshRuntime {
   ~MeshRuntime();
 };
 
-}  // namespace blender::bke
+}  // namespace bke
+}  // namespace blender

@@ -9,7 +9,6 @@
 #pragma once
 
 #include "gpu_backend.hh"
-#include "gpu_capabilities_private.hh"
 #include "gpu_platform_private.hh"
 
 #include "dummy_batch.hh"
@@ -33,13 +32,14 @@ class DummyBackend : public GPUBackend {
              "",
              GPU_ARCHITECTURE_IMR);
   }
+  void init_resources() override {}
   void delete_resources() override {}
-  void samplers_update() override {}
   void compute_dispatch(int /*groups_x_len*/, int /*groups_y_len*/, int /*groups_z_len*/) override
   {
   }
   void compute_dispatch_indirect(StorageBuf * /*indirect_buf*/) override {}
-  Context *context_alloc(void * /*ghost_window*/, void * /*ghost_context*/) override
+  Context *context_alloc(GHOST_IWindow * /*ghost_window*/,
+                         GHOST_IContext * /*ghost_context*/) override
   {
     return new DummyContext;
   }
@@ -48,6 +48,10 @@ class DummyBackend : public GPUBackend {
     return new DummyBatch;
   }
   Fence *fence_alloc() override
+  {
+    return nullptr;
+  }
+  WorkInFlight *work_in_flight_alloc(unsigned int /*max_in_flight*/) override
   {
     return nullptr;
   }
@@ -75,6 +79,10 @@ class DummyBackend : public GPUBackend {
   {
     return nullptr;
   }
+  TexturePool *texturepool_alloc() override
+  {
+    return nullptr;
+  }
   UniformBuf *uniformbuf_alloc(size_t /*size*/, const char * /*name*/) override
   {
     return nullptr;
@@ -89,10 +97,18 @@ class DummyBackend : public GPUBackend {
   {
     return new DummyVertexBuffer;
   }
+  TopLevelAS *tlas_alloc(const char * /*name*/) override
+  {
+    return nullptr;
+  }
+  BottomLevelAS *blas_alloc(const char * /*name*/) override
+  {
+    return nullptr;
+  }
   void shader_cache_dir_clear_old() override {}
   void render_begin() override {}
   void render_end() override {}
-  void render_step() override {}
+  void render_step(bool /*force_resource_release*/) override {}
 };
 
 }  // namespace blender::gpu

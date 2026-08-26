@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(OIDN_EXTRA_ARGS
+  -DCMAKE_BUILD_TYPE=Release
   -DOIDN_APPS=OFF
   -DTBB_ROOT=${LIBDIR}/tbb
   -DISPC_EXECUTABLE=${LIBDIR}/ispc/bin/ispc
@@ -34,6 +35,18 @@ else()
       ${OIDN_EXTRA_ARGS}
       -DOIDN_DEVICE_CUDA=ON)
   endif()
+
+
+  if(BLENDER_PLATFORM_ARM AND UNIX)
+    # Target ARMv8.2-A with dot product and half float.
+    # There is no -march=armv8.2-a+dotprod+fp16+lse flag for ISPC, so we target
+    # a CPU with the same features. Otherwise ISPC will do something similar to
+    # -march=native and results depend on the current processor.
+    set(OIDN_EXTRA_ARGS
+      ${OIDN_EXTRA_ARGS}
+      "-DISPC_FLAGS_RELEASE:STRING=-O3 --cpu=cortex-a78"
+    )
+  endif()
 endif()
 
 if(WIN32 AND NOT BLENDER_PLATFORM_ARM)
@@ -45,6 +58,15 @@ if(WIN32 AND NOT BLENDER_PLATFORM_ARM)
     -DCMAKE_C_COMPILER=${LIBDIR}/dpcpp/bin/clang.exe
     -DCMAKE_DEBUG_POSTFIX=_d
   )
+  if(DEFINED ENV{ROCM_PATH})
+    # Older ROCM shipped a /bin/hipconfig (no extension) and oidn
+    # uses it to validate a valid rocm folder, given this file
+    # is no longer shipped work around it for now by passing the
+    # path ourselves, so we don't have to rely on their find rocm
+    # functionality.
+    cmake_path(CONVERT $ENV{ROCM_PATH} TO_CMAKE_PATH_LIST ROCM_PATH NORMALIZE)
+    list(APPEND OIDN_EXTRA_ARGS -DROCM_PATH=${ROCM_PATH})
+  endif()
   set(OIDN_CMAKE_FLAGS ${DEFAULT_CLANG_CMAKE_FLAGS}
     -DCMAKE_CXX_COMPILER=${LIBDIR}/dpcpp/bin/clang++.exe
     -DCMAKE_C_COMPILER=${LIBDIR}/dpcpp/bin/clang.exe
@@ -52,7 +74,7 @@ if(WIN32 AND NOT BLENDER_PLATFORM_ARM)
     -DCMAKE_EXE_LINKER_FLAGS=-L"${LIBDIR}/dpcpp/lib"
   )
 else()
-  if(NOT (APPLE OR WIN32))
+  if(NOT (APPLE OR WIN32 OR BLENDER_PLATFORM_ARM))
     set(OIDN_EXTRA_ARGS
       ${OIDN_EXTRA_ARGS}
       -DCMAKE_CXX_COMPILER=${LIBDIR}/dpcpp/bin/clang++
@@ -63,7 +85,7 @@ else()
   set(OIDN_CMAKE_FLAGS ${DEFAULT_CMAKE_FLAGS})
 endif()
 
-set(ODIN_PATCH_COMMAND
+set(OIDN_PATCH_COMMAND
   ${PATCH_CMD} --verbose -p 1 -N -d
   ${BUILD_DIR}/openimagedenoise/src/external_openimagedenoise <
   ${PATCH_DIR}/oidn.diff
@@ -72,7 +94,7 @@ set(ODIN_PATCH_COMMAND
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   # Replace `attrib.memoryType` with `attrib.type`.
   # See: https://github.com/ROCm/HIP/pull/2164
-  set(ODIN_PATCH_COMMAND ${ODIN_PATCH_COMMAND} &&
+  set(OIDN_PATCH_COMMAND ${OIDN_PATCH_COMMAND} &&
     sed -i "s/(attrib\\.memoryType)/(attrib.type)/g"
     ${BUILD_DIR}/openimagedenoise/src/external_openimagedenoise/devices/hip/hip_device.cpp
   )
@@ -90,11 +112,11 @@ ExternalProject_Add(external_openimagedenoise
     ${OIDN_CMAKE_FLAGS}
     ${OIDN_EXTRA_ARGS}
 
-  PATCH_COMMAND ${ODIN_PATCH_COMMAND}
+  PATCH_COMMAND ${OIDN_PATCH_COMMAND}
   INSTALL_DIR ${LIBDIR}/openimagedenoise
 )
 
-unset(ODIN_PATCH_COMMAND)
+unset(OIDN_PATCH_COMMAND)
 
 add_dependencies(
   external_openimagedenoise
@@ -103,7 +125,7 @@ add_dependencies(
   external_python
 )
 
-if(NOT (APPLE OR WIN32))
+if(NOT (APPLE OR WIN32 OR BLENDER_PLATFORM_ARM))
   add_dependencies(
     external_openimagedenoise
     external_dpcpp
@@ -111,7 +133,7 @@ if(NOT (APPLE OR WIN32))
   )
 endif()
 
-if(NOT APPLE)
+if(NOT (APPLE OR BLENDER_PLATFORM_ARM))
   add_dependencies(
     external_openimagedenoise
     external_level-zero

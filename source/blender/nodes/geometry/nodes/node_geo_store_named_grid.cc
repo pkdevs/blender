@@ -13,81 +13,81 @@
 #include "NOD_rna_define.hh"
 #include "NOD_socket_search_link.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 namespace blender::nodes::node_geo_store_named_grid_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Volume");
-  b.add_input<decl::String>("Name").hide_label();
-  b.add_output<decl::Geometry>("Volume");
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
+  b.add_default_layout();
+  b.add_input<decl::Geometry>("Volume"_ustr).description("Volume geometry to add a grid to");
+  b.add_output<decl::Geometry>("Volume"_ustr).align_with_previous();
+  b.add_input<decl::String>("Name"_ustr).optional_label().is_volume_grid_name();
 
   const bNode *node = b.node_or_null();
   if (!node) {
     return;
   }
 
-  b.add_input(eCustomDataType(node->custom1), "Grid").hide_value();
+  b.add_input(*bke::grid_type_to_socket_type(VolumeGridType(node->custom1)), "Grid"_ustr)
+      .hide_value()
+      .structure_type(StructureType::Grid);
 }
 
 static void search_link_ops(GatherLinkSearchOpParams &params)
 {
-  if (!U.experimental.use_new_volume_nodes) {
-    return;
-  }
   if (params.other_socket().type == SOCK_GEOMETRY) {
     params.add_item(IFACE_("Volume"), [](LinkSearchOpParams &params) {
-      bNode &node = params.add_node("GeometryNodeStoreNamedGrid");
-      params.update_and_connect_available_socket(node, "Volume");
+      bNode &node = params.add_node("GeometryNodeStoreNamedGrid"_ustr);
+      params.update_and_connect_available_socket(node, "Volume"_ustr);
     });
   }
   if (params.in_out() == SOCK_IN) {
     if (params.other_socket().type == SOCK_STRING) {
       params.add_item(IFACE_("Name"), [](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("GeometryNodeStoreNamedGrid");
-        params.update_and_connect_available_socket(node, "Name");
+        bNode &node = params.add_node("GeometryNodeStoreNamedGrid"_ustr);
+        params.update_and_connect_available_socket(node, "Name"_ustr);
       });
     }
-    if (const std::optional<eCustomDataType> data_type = bke::socket_type_to_custom_data_type(
-            eNodeSocketDatatype(params.other_socket().type)))
+    if (const std::optional<VolumeGridType> data_type = bke::socket_type_to_grid_type(
+            params.other_socket().type))
     {
-      if (custom_data_type_supports_grids(*data_type)) {
-        params.add_item(IFACE_("Grid"), [data_type](LinkSearchOpParams &params) {
-          bNode &node = params.add_node("GeometryNodeStoreNamedGrid");
-          node.custom1 = *data_type;
-          params.update_and_connect_available_socket(node, "Grid");
-        });
-      }
+      params.add_item(IFACE_("Grid"), [data_type](LinkSearchOpParams &params) {
+        bNode &node = params.add_node("GeometryNodeStoreNamedGrid"_ustr);
+        node.custom1 = *data_type;
+        params.update_and_connect_available_socket(node, "Grid"_ustr);
+      });
     }
   }
 }
 
-static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
+static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetPropDecorate(layout, false);
-  uiItemR(layout, ptr, "data_type", UI_ITEM_NONE, "", ICON_NONE);
+  layout.use_property_split_set(true);
+  layout.use_property_decorate_set(false);
+  layout.prop(ptr, "data_type", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  node->custom1 = CD_PROP_FLOAT;
+  node->custom1 = VOLUME_GRID_FLOAT;
 }
 
 #ifdef WITH_OPENVDB
 
 static void try_store_grid(GeoNodeExecParams params, Volume &volume)
 {
-  const std::string grid_name = params.extract_input<std::string>("Name");
+  const std::string grid_name = params.extract_input<std::string>("Name"_ustr);
 
-  bke::GVolumeGrid grid = params.extract_input<bke::GVolumeGrid>("Grid");
+  bke::GVolumeGrid grid = params.extract_input<bke::GVolumeGrid>("Grid"_ustr);
   if (!grid) {
     return;
   }
 
-  if (const bke::VolumeGridData *existing_grid = BKE_volume_grid_find(&volume, grid_name.data())) {
+  if (const bke::VolumeGridData *existing_grid = BKE_volume_grid_find(&volume, grid_name)) {
     BKE_volume_grid_remove(&volume, existing_grid);
   }
   grid.get_for_write().set_name(grid_name);
@@ -97,16 +97,16 @@ static void try_store_grid(GeoNodeExecParams params, Volume &volume)
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Volume");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Volume"_ustr);
   Volume *volume = geometry_set.get_volume_for_write();
   if (!volume) {
-    volume = static_cast<Volume *>(BKE_id_new_nomain(ID_VO, "Store Named Grid Output"));
+    volume = BKE_id_new_nomain<Volume>("Store Named Grid Output");
     geometry_set.replace_volume(volume);
   }
 
   try_store_grid(params, *volume);
 
-  params.set_output("Volume", geometry_set);
+  params.set_output("Volume"_ustr, geometry_set);
 }
 
 #else /* WITH_OPENVDB */
@@ -124,24 +124,27 @@ static void node_rna(StructRNA *srna)
                     "data_type",
                     "Data Type",
                     "Type of grid data",
-                    rna_enum_attribute_type_items,
+                    rna_enum_volume_grid_data_type_items,
                     NOD_inline_enum_accessors(custom1),
-                    CD_PROP_FLOAT,
-                    grid_custom_data_type_items_filter_fn);
+                    VOLUME_GRID_FLOAT,
+                    grid_data_type_socket_items_filter_fn);
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, GEO_NODE_STORE_NAMED_GRID, "Store Named Grid", NODE_CLASS_GEOMETRY);
-
+  geo_node_type_base(&ntype, "GeometryNodeStoreNamedGrid"_ustr, GEO_NODE_STORE_NAMED_GRID);
+  ntype.ui_name = "Store Named Grid";
+  ntype.ui_description = "Store grid data in a volume geometry with the specified name";
+  ntype.enum_name_legacy = "STORE_NAMED_GRID";
+  ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
   ntype.gather_link_search_ops = search_link_ops;
   ntype.draw_buttons = node_layout;
   ntype.initfunc = node_init;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::node_register_type(&ntype);
+  bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

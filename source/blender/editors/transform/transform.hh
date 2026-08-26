@@ -8,17 +8,23 @@
 
 #pragma once
 
+#include "BLI_enum_flags.hh"
+#include "BLI_function_ref.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "ED_numinput.hh"
 #include "ED_transform.hh"
 #include "ED_view3d.hh"
 
+#include "DNA_curve_enums.h"
 #include "DNA_listBase.h"
-#include "DNA_object_enums.h"
-#include "DNA_scene_types.h"
+#include "DNA_windowmanager_enums.h"
 
 #include "DEG_depsgraph.hh"
+
+namespace blender {
+
+struct Depsgraph;
 
 /* -------------------------------------------------------------------- */
 /** \name Macros/
@@ -26,8 +32,6 @@
 
 #define T_ALL_RESTRICTIONS (T_NO_CONSTRAINT | T_NULL_ONE)
 #define T_PROP_EDIT_ALL (T_PROP_EDIT | T_PROP_CONNECTED | T_PROP_PROJECTED)
-
-#define TRANSDATA_THREAD_LIMIT 1024
 
 /* Hard min/max for proportional size. */
 #define T_PROP_SIZE_MIN 1e-6f
@@ -61,20 +65,12 @@
 
 struct ARegion;
 struct bConstraint;
-struct Depsgraph;
 struct NumInput;
 struct Object;
 struct RNG;
 struct ReportList;
 struct Scene;
 struct ScrArea;
-struct SnapObjectContext;
-struct TransConvertTypeInfo;
-struct TransDataContainer;
-struct TransInfo;
-struct TransModeInfo;
-struct TransSeqSnapData;
-struct TransSnap;
 struct ViewLayer;
 struct ViewOpsData;
 struct bContext;
@@ -90,6 +86,16 @@ struct wmTimer;
 /* -------------------------------------------------------------------- */
 /** \name Enums and Flags
  * \{ */
+
+namespace ed::transform {
+
+struct TransSnap;
+struct TransConvertTypeInfo;
+struct TransDataContainer;
+struct TransInfo;
+struct TransModeInfo;
+struct TransSeqSnapData;
+struct SnapObjectContext;
 
 /** #TransInfo.options */
 enum eTContext {
@@ -117,7 +123,7 @@ enum eTContext {
   /** Enable edge scrolling in 2D views. */
   CTX_VIEW2D_EDGE_PAN = (1 << 15),
 };
-ENUM_OPERATORS(eTContext, CTX_VIEW2D_EDGE_PAN)
+ENUM_OPERATORS(eTContext)
 
 /** #TransInfo.flag */
 enum eTFlag {
@@ -184,8 +190,11 @@ enum eTFlag {
 
   /** Special flag for when the transform code is called after keys have been duplicated. */
   T_DUPLICATED_KEYFRAMES = 1 << 26,
+
+  /** Transform origin. */
+  T_ORIGIN = 1 << 27,
 };
-ENUM_OPERATORS(eTFlag, T_DUPLICATED_KEYFRAMES);
+ENUM_OPERATORS(eTFlag);
 
 /** #TransInfo.modifiers */
 enum eTModifier {
@@ -197,8 +206,10 @@ enum eTModifier {
   MOD_NODE_ATTACH = 1 << 5,
   MOD_SNAP_FORCED = 1 << 6,
   MOD_EDIT_SNAP_SOURCE = 1 << 7,
+  MOD_NODE_FRAME = 1 << 8,
+  MOD_STRIP_CLAMP_HOLDS = 1 << 9,
 };
-ENUM_OPERATORS(eTModifier, MOD_EDIT_SNAP_SOURCE)
+ENUM_OPERATORS(eTModifier)
 
 /** #TransSnap.status */
 enum eTSnap {
@@ -208,7 +219,7 @@ enum eTSnap {
   SNAP_TARGET_FOUND = 1 << 1,
   SNAP_MULTI_POINTS = 1 << 2,
 };
-ENUM_OPERATORS(eTSnap, SNAP_MULTI_POINTS)
+ENUM_OPERATORS(eTSnap)
 
 /** #TransSnap.direction */
 enum eSnapDir {
@@ -216,7 +227,7 @@ enum eSnapDir {
   DIR_GLOBAL_Y = (1 << 1),
   DIR_GLOBAL_Z = (1 << 2),
 };
-ENUM_OPERATORS(eSnapDir, DIR_GLOBAL_Z)
+ENUM_OPERATORS(eSnapDir)
 
 /** #TransCon.mode, #TransInfo.con.mode */
 enum eTConstraint {
@@ -227,11 +238,9 @@ enum eTConstraint {
   CON_AXIS1 = 1 << 2,
   CON_AXIS2 = 1 << 3,
   CON_SELECT = 1 << 4,
-  /** Does not reorient vector to face viewport when on. */
-  CON_NOFLIP = 1 << 5,
-  CON_USER = 1 << 6,
+  CON_USER = 1 << 5,
 };
-ENUM_OPERATORS(eTConstraint, CON_USER)
+ENUM_OPERATORS(eTConstraint)
 
 /** #TransInfo.state */
 enum eTState {
@@ -247,7 +256,7 @@ enum eRedrawFlag {
   TREDRAW_SOFT = (1 << 0),
   TREDRAW_HARD = (1 << 1) | TREDRAW_SOFT,
 };
-ENUM_OPERATORS(eRedrawFlag, TREDRAW_HARD)
+ENUM_OPERATORS(eRedrawFlag)
 
 /** #TransInfo.helpline */
 enum eTHelpline {
@@ -258,6 +267,8 @@ enum eTHelpline {
   HLP_VARROW = 4,
   HLP_CARROW = 5,
   HLP_TRACKBALL = 6,
+  HLP_ERROR = 7,
+  HLP_ERROR_DASH = 8,
 };
 
 enum eTOType {
@@ -323,6 +334,10 @@ enum {
   TFM_MODAL_EDIT_SNAP_SOURCE_OFF = 35,
 
   TFM_MODAL_PASSTHROUGH_NAVIGATE = 36,
+
+  TFM_MODAL_NODE_FRAME = 37,
+
+  TFM_MODAL_STRIP_CLAMP = 38,
 };
 
 /** \} */
@@ -337,7 +352,7 @@ enum {
   TD_USEQUAT = 1 << 1,
   /* TD_NOTCONNECTED = 1 << 2, */
   /** Used for scaling of #MetaElem.rad. */
-  TD_SINGLESIZE = 1 << 3,
+  TD_SINGLE_SCALE = 1 << 3,
   /** Scale relative to individual element center. */
   TD_INDIVIDUAL_SCALE = 1 << 4,
   TD_NOCENTER = 1 << 5,
@@ -405,6 +420,7 @@ struct TransDataMirror : public TransDataBasic {
   float *loc_src;
 };
 
+/** For objects, poses. 1 single allocation per #TransInfo! */
 struct TransDataExtension {
   /** Initial object drot. */
   float drot[3];
@@ -434,10 +450,13 @@ struct TransDataExtension {
   float *rotAxis;
   /** Initial rotation axis. */
   float irotAxis[4];
-  /** Size of the data to transform. */
-  float *size;
-  /** Initial size. */
-  float isize[3];
+  /**
+   * Scale of the data to transform.
+   * Note that in some cases this is used for "size" (meta-balls & texture-space for example).
+   */
+  float *scale;
+  /** Initial scale / size. */
+  float iscale[3];
   /** Object matrix. */
   float obmat[4][4];
   /** Use for #V3D_ORIENT_GIMBAL orientation. */
@@ -457,6 +476,12 @@ struct TransDataExtension {
   int rotOrder;
   /** Original object transformation used for rigid bodies. */
   float oloc[3], orot[3], oquat[4], orotAxis[3], orotAngle;
+
+  /**
+   * Use when #TransDataBasic::center has been overridden but the real center is still needed
+   * for internal calculations.
+   */
+  float center_no_override[3];
 };
 
 struct TransData2D {
@@ -477,8 +502,8 @@ struct TransData2D {
  * Also to unset temporary flags.
  */
 struct TransDataCurveHandleFlags {
-  uint8_t ih1, ih2;
-  uint8_t *h1, *h2;
+  eBezTriple_Handle ih1, ih2;
+  eBezTriple_Handle *h1, *h2;
 };
 
 struct TransData : public TransDataBasic {
@@ -496,13 +521,13 @@ struct TransData : public TransDataBasic {
   float axismtx[3][3];
   /** For objects/bones, the first constraint in its constraint stack. */
   bConstraint *con;
-  /** For objects, poses. 1 single allocation per #TransInfo! */
-  TransDataExtension *ext;
   /** For curves, stores handle flags for modification/cancel. */
   TransDataCurveHandleFlags *hdata;
   /** If set, copy of Object or #bPoseChannel protection. */
   short protectflag;
 };
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Transform Types
@@ -534,7 +559,7 @@ struct TransSnap {
   /** To this point (in global-space). */
   float snap_target[3];
   float snapNormal[3];
-  ListBase points;
+  ListBaseT<TransSnapPoint> points;
   TransSnapPoint *selectedPoint;
   double last;
   void (*snap_target_fn)(TransInfo *, float *);
@@ -578,8 +603,7 @@ struct TransCon {
   void (*applyRot)(const TransInfo *t,
                    const TransDataContainer *tc,
                    const TransData *td,
-                   float r_axis[3],
-                   float *r_angle);
+                   float r_axis[3]);
 };
 
 struct MouseInput {
@@ -587,8 +611,8 @@ struct MouseInput {
   void (*post)(TransInfo *t, float values[3]);
 
   /** Initial mouse position. */
-  blender::float2 imval;
-  blender::float2 center;
+  float2 imval;
+  float2 center;
   float factor;
   float precision_factor;
   bool precision;
@@ -606,8 +630,8 @@ struct MouseInput {
    */
   bool use_virtual_mval;
   struct {
-    double prev[2];
-    double accum[2];
+    double2 prev;
+    double2 accum;
   } virtual_mval;
 };
 
@@ -694,6 +718,9 @@ struct TransDataContainer {
    */
   bool use_local_mat;
 
+  /* True if the mirror modifier's clipping boundary has been hit. */
+  bool has_mirror_clipping;
+
   /** Mirror option. */
   union {
     struct {
@@ -706,6 +733,79 @@ struct TransDataContainer {
   };
 
   TransCustomDataContainer custom;
+
+  /**
+   * Array of indices for the `data`, `data_ext`, and `data_2d` arrays.
+   *
+   * When using this index map to traverse the arrays, they will be sorted primarily by selection
+   * state (selected before unselected). Depending on the sort function used (see below),
+   * unselected items are then sorted by their "distance" for proportional editing.
+   *
+   * At the moment of writing, this map is only used in cases where `tc->data` has a mixture of
+   * selected and unselected items (as far as I, Sybren, know, just for proportial editing).
+   * Without `tc->sorted_index_map`, all items in `tc->data` are expected to be selected.
+   *
+   * NOTE: this is set to `nullptr` by default; use one of the sorting functions below to
+   * initialize the array.
+   *
+   * \see #sort_trans_data_selected_first Sorts only by selection state.
+   * \see #sort_trans_data_dist Sorts by selection state and distance.
+   */
+  int *sorted_index_map;
+
+  /**
+   * Call the given function for each index in the data. This index can then be
+   * used to access the `data`, `data_ext`, and `data_2d` arrays.
+   *
+   * If there is a `sorted_index_map` (see above), this will be used. Otherwise
+   * it is assumed that the arrays can be iterated in their natural array order.
+   *
+   * \param fn: function that's called for each index. The function should
+   * return whether to keep looping (true) or break out of the loop (false).
+   *
+   * \return whether the end of the loop was reached.
+   */
+  bool foreach_index(FunctionRef<bool(int)> fn) const
+  {
+    if (this->sorted_index_map) {
+      for (const int i : Span(this->sorted_index_map, this->data_len)) {
+        if (!fn(i)) {
+          return false;
+        }
+      }
+    }
+    else {
+      for (const int i : IndexRange(this->data_len)) {
+        if (!fn(i)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Call \a fn only for indices of selected items.
+   * Apart from that, this is the same as `index_map()` above.
+   *
+   * \param fn: function that's called for each index. Contrary to the `index_map()` function, it
+   * is assumed that all selected items should be visited, and so for simplicity there is no `bool`
+   * to return.
+   */
+  void foreach_index_selected(FunctionRef<void(int)> fn) const
+  {
+    this->foreach_index([&](const int i) {
+      const bool is_selected = (this->data[i].flag & TD_SELECTED);
+      if (!is_selected) {
+        /* Selected items are sorted first. Either this is trivially true
+         * (proportional editing off, so the only transformed data is the
+         * selected data) or it's handled by `sorted_index_map`. */
+        return false;
+      }
+      fn(i);
+      return true;
+    });
+  }
 };
 
 struct TransInfo {
@@ -730,7 +830,7 @@ struct TransInfo {
   eTFlag flag;
   /** Special modifiers, by function, not key. */
   eTModifier modifiers;
-  /** Current state (running, canceled. */
+  /** Current state (running, canceled, ...). */
   eTState state;
   /** Redraw flag. */
   eRedrawFlag redraw;
@@ -764,13 +864,14 @@ struct TransInfo {
   float center2d[2];
   /** Maximum index on the input vector. */
   short idx_max;
-  /** Snapping Gears. */
-  float snap[2];
+  /** Increment value for incremental snapping. */
+  float3 increment;
+  float increment_precision;
   /** Spatial snapping gears(even when rotating, scaling... etc). */
   float snap_spatial[3];
   /**
    * Precision factor that is multiplied to snap_spatial when precision
-   * modifier is enabled for snap to grid or incremental snap.
+   * modifier is enabled for snap to grid.
    */
   float snap_spatial_precision;
   /** Mouse side of the current frame, 'L', 'R' or 'B'. */
@@ -798,8 +899,8 @@ struct TransInfo {
   /** Orientation matrix of the current space. */
   float spacemtx[3][3];
   float spacemtx_inv[3][3];
-  /** Name of the current space, MAX_NAME. */
-  char spacename[64];
+  /** Name of the current space. */
+  char spacename[/*MAX_NAME*/ 64];
 
   /*************** NEW STUFF *********************/
   /** Event type used to launch transform. */
@@ -858,6 +959,7 @@ struct TransInfo {
   ScrArea *area;
   ARegion *region;
   Depsgraph *depsgraph;
+  Main *bmain;
   Scene *scene;
   ViewLayer *view_layer;
   ToolSettings *settings;
@@ -867,7 +969,7 @@ struct TransInfo {
   /** Assign from the operator, or can be NULL. */
   ReportList *reports;
   /** Current mouse position. */
-  blender::float2 mval;
+  float2 mval;
   /** Use for 3d view. */
   float zfac;
   void *draw_handle_view;
@@ -902,13 +1004,17 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
  * \see #initTransform which reads values from the operator.
  */
 void saveTransform(bContext *C, TransInfo *t, wmOperator *op);
-int transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event);
+wmOperatorStatus transformEvent(TransInfo *t, wmOperator *op, const wmEvent *event);
 void transformApply(bContext *C, TransInfo *t);
-int transformEnd(bContext *C, TransInfo *t);
+wmOperatorStatus transformEnd(bContext *C, TransInfo *t);
 
 void setTransformViewMatrices(TransInfo *t);
 void setTransformViewAspect(TransInfo *t, float r_aspect[3]);
 void convertViewVec(TransInfo *t, float r_vec[3], double dx, double dy);
+/**
+ * If viewport projection fails, calculate a usable fallback.
+ */
+void projectFloatViewCenterFallback(TransInfo *t, float adr[2]);
 void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], eV3DProjTest flag);
 void projectIntView(TransInfo *t, const float vec[3], int adr[2]);
 void projectFloatViewEx(TransInfo *t, const float vec[3], float adr[2], eV3DProjTest flag);
@@ -927,6 +1033,7 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf);
  */
 bool transform_apply_matrix(TransInfo *t, float mat[4][4]);
 void transform_final_value_get(const TransInfo *t, float *value, int value_num);
+void view_vector_calc(const TransInfo *t, const float focus[3], float r_vec[3]);
 
 /** \} */
 
@@ -959,21 +1066,20 @@ enum MouseInputMode {
   INPUT_VERTICAL_ABSOLUTE,
   INPUT_CUSTOM_RATIO,
   INPUT_CUSTOM_RATIO_FLIP,
+  INPUT_ERROR,
+  INPUT_ERROR_DASH,
 };
 
-void initMouseInput(TransInfo *t,
-                    MouseInput *mi,
-                    const blender::float2 &center,
-                    const blender::float2 &mval,
-                    bool precision);
+void initMouseInput(
+    TransInfo *t, MouseInput *mi, const float2 &center, const float2 &mval, bool precision);
 void initMouseInputMode(TransInfo *t, MouseInput *mi, MouseInputMode mode);
-void applyMouseInput(TransInfo *t, MouseInput *mi, const blender::float2 &mval, float output[3]);
+void applyMouseInput(TransInfo *t, MouseInput *mi, const float2 &mval, float output[3]);
 void transform_input_update(TransInfo *t, const float fac);
 void transform_input_virtual_mval_reset(TransInfo *t);
-void transform_input_reset(TransInfo *t, const blender::float2 &mval);
+void transform_input_reset(TransInfo *t, const float2 &mval);
 
 void setCustomPoints(TransInfo *t, MouseInput *mi, const int mval_start[2], const int mval_end[2]);
-void setCustomPointsFromDirection(TransInfo *t, MouseInput *mi, const blender::float2 &dir);
+void setCustomPointsFromDirection(TransInfo *t, MouseInput *mi, const float2 &dir);
 void setInputPostFct(MouseInput *mi, void (*post)(TransInfo *t, float values[3]));
 
 /** \} */
@@ -1005,7 +1111,6 @@ void postTrans(bContext *C, TransInfo *t);
 void resetTransModal(TransInfo *t);
 void resetTransRestrictions(TransInfo *t);
 
-void applyTransObjects(TransInfo *t);
 void restoreTransObjects(TransInfo *t);
 
 void calculateCenter2D(TransInfo *t);
@@ -1036,7 +1141,10 @@ void calculatePropRatio(TransInfo *t);
  * (use for objects or pose-bones)
  * Similar to #ElementRotation.
  */
-void transform_data_ext_rotate(TransData *td, float mat[3][3], bool use_drot);
+void transform_data_ext_rotate(TransData *td,
+                               TransDataExtension *td_ext,
+                               float mat[3][3],
+                               bool use_drot);
 
 Object *transform_object_deform_pose_armature_get(const TransInfo *t, Object *ob);
 
@@ -1045,4 +1153,10 @@ void freeCustomNormalArray(TransInfo *t, TransDataContainer *tc, TransCustomData
 /* TODO: move to: `transform_query.c`. */
 bool checkUseAxisMatrix(TransInfo *t);
 
+/** Converts 2D mouse movement to a normalized 3D direction in world space. */
+std::optional<float3> mouse_delta_to_world_dir(const TransInfo *t, const float2 &delta);
+
 /** \} */
+
+}  // namespace ed::transform
+}  // namespace blender

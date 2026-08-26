@@ -13,13 +13,14 @@
 #ifdef WITH_OPENVDB
 
 #  include <functional>
-#  include <mutex>
 #  include <optional>
 
 #  include "BKE_volume_enums.hh"
 #  include "BKE_volume_grid_type_traits.hh"
 
+#  include "BLI_cache_mutex.hh"
 #  include "BLI_implicit_sharing_ptr.hh"
+#  include "BLI_mutex.hh"
 #  include "BLI_string_ref.hh"
 
 #  include "openvdb_fwd.hh"
@@ -80,7 +81,7 @@ class VolumeGridData : public ImplicitSharingMixin {
   /**
    * A mutex that needs to be locked whenever working with the data members below.
    */
-  mutable std::mutex mutex_;
+  mutable Mutex mutex_;
   /**
    * The actual grid. Depending on the current state, is in one of multiple possible states:
    * - Empty: When the grid is lazy-loaded and no meta-data is provided.
@@ -117,6 +118,18 @@ class VolumeGridData : public ImplicitSharingMixin {
    * An error produced while trying to lazily load the grid.
    */
   mutable std::string error_message_;
+
+  mutable CacheMutex active_voxels_mutex_;
+  mutable int64_t active_voxels_ = 0;
+  mutable CacheMutex active_leaf_voxels_mutex_;
+  mutable int64_t active_leaf_voxels_ = 0;
+  mutable CacheMutex active_tiles_mutex_;
+  mutable int64_t active_tiles_ = 0;
+  mutable CacheMutex size_in_bytes_mutex_;
+  mutable int64_t size_in_bytes_ = 0;
+  mutable CacheMutex active_bounds_mutex_;
+  mutable openvdb::CoordBBox active_bounds_;
+
   /**
    * A token that allows detecting whether some code is currently accessing the tree (not grid) or
    * not. If this variable is the only owner of the `shared_ptr`, no one else has access to the
@@ -155,7 +168,7 @@ class VolumeGridData : public ImplicitSharingMixin {
   explicit VolumeGridData(std::function<LazyLoadedGrid()> lazy_load_grid,
                           std::shared_ptr<openvdb::GridBase> meta_data_and_transform_grid = {});
 
-  ~VolumeGridData();
+  ~VolumeGridData() override;
 
   /**
    * Create a copy of the volume grid. This should generally only be done when the current grid is
@@ -238,6 +251,14 @@ class VolumeGridData : public ImplicitSharingMixin {
    */
   bool is_reloadable() const;
 
+  void tag_tree_modified() const;
+
+  int64_t active_voxels() const;
+  int64_t active_leaf_voxels() const;
+  int64_t active_tiles() const;
+  int64_t size_in_bytes() const;
+  const openvdb::CoordBBox &active_bounds() const;
+
  private:
   /**
    * Unloads the tree data if it's reloadable and no one is using it right now.
@@ -245,7 +266,7 @@ class VolumeGridData : public ImplicitSharingMixin {
   void unload_tree_if_possible() const;
 
   void ensure_grid_loaded() const;
-  void delete_self();
+  void delete_self() override;
 };
 
 /**
@@ -343,31 +364,49 @@ class GVolumeGrid {
   operator bool() const;
 
   /** Converts to a typed VolumeGrid. This asserts if the type is wrong. */
-  template<typename T> VolumeGrid<T> typed() const;
+  template<typename T> const VolumeGrid<T> &typed() const;
+  template<typename T> VolumeGrid<T> &typed();
 };
 
 /**
  * Same as #GVolumeGrid but makes it easier to work with the grid if the type is known at compile
  * time.
  */
-template<typename T> class VolumeGrid : public GVolumeGrid {
+template<typename T> class VolumeGrid {
  public:
   using base_type = T;
+  using generic_type = GVolumeGrid;
 
+ private:
+  GVolumeGrid grid_;
+
+  friend GVolumeGrid;
+
+ public:
   VolumeGrid() = default;
   explicit VolumeGrid(const VolumeGridData *data);
   explicit VolumeGrid(std::shared_ptr<OpenvdbGridType<T>> grid);
+
+  operator const GVolumeGrid &() const;
+  operator GVolumeGrid &();
 
   /**
    * Wraps the same methods on #VolumeGridData but casts to the correct OpenVDB type.
    */
   const OpenvdbGridType<T> &grid(VolumeTreeAccessToken &r_token) const;
   OpenvdbGridType<T> &grid_for_write(VolumeTreeAccessToken &r_token);
+  operator bool() const;
+  const VolumeGridData *operator->() const;
+  const VolumeGridData &get() const;
 
  private:
   void assert_correct_type() const;
 };
 
+/**
+ * Get the volume grid type based on the tree's type.
+ */
+VolumeGridType get_type(const openvdb::tree::TreeBase &tree);
 /**
  * Get the volume grid type based on the tree type in the grid.
  */
@@ -382,7 +421,12 @@ inline GVolumeGrid::GVolumeGrid(const VolumeGridData *data) : data_(data) {}
 inline const VolumeGridData &GVolumeGrid::get() const
 {
   BLI_assert(*this);
-  return *data_.get();
+  return *data_;
+}
+
+template<typename T> inline const VolumeGridData &VolumeGrid<T>::get() const
+{
+  return grid_.get();
 }
 
 inline const VolumeGridData *GVolumeGrid::release()
@@ -395,12 +439,35 @@ inline GVolumeGrid::operator bool() const
   return bool(data_);
 }
 
-template<typename T> inline VolumeGrid<T> GVolumeGrid::typed() const
+template<typename T> inline VolumeGrid<T>::operator bool() const
 {
-  if (data_) {
-    data_->add_user();
-  }
-  return VolumeGrid<T>(data_.get());
+  return bool(grid_);
+}
+
+template<typename T> inline const VolumeGrid<T> &GVolumeGrid::typed() const
+{
+  static_assert(sizeof(GVolumeGrid) == sizeof(VolumeGrid<T>));
+  const auto &typed_grid = reinterpret_cast<const VolumeGrid<T> &>(*this);
+  typed_grid.assert_correct_type();
+  return typed_grid;
+}
+
+template<typename T> inline VolumeGrid<T> &GVolumeGrid::typed()
+{
+  static_assert(sizeof(GVolumeGrid) == sizeof(VolumeGrid<T>));
+  auto &typed_grid = reinterpret_cast<VolumeGrid<T> &>(*this);
+  typed_grid.assert_correct_type();
+  return typed_grid;
+}
+
+template<typename T> inline VolumeGrid<T>::operator const GVolumeGrid &() const
+{
+  return grid_;
+}
+
+template<typename T> inline VolumeGrid<T>::operator GVolumeGrid &()
+{
+  return grid_;
 }
 
 inline const VolumeGridData *GVolumeGrid::operator->() const
@@ -409,15 +476,19 @@ inline const VolumeGridData *GVolumeGrid::operator->() const
   return data_.get();
 }
 
-template<typename T>
-inline VolumeGrid<T>::VolumeGrid(const VolumeGridData *data) : GVolumeGrid(data)
+template<typename T> inline const VolumeGridData *VolumeGrid<T>::operator->() const
+{
+  BLI_assert(*this);
+  return grid_.GVolumeGrid::operator->();
+}
+
+template<typename T> inline VolumeGrid<T>::VolumeGrid(const VolumeGridData *data) : grid_(data)
 {
   this->assert_correct_type();
 }
 
 template<typename T>
-inline VolumeGrid<T>::VolumeGrid(std::shared_ptr<OpenvdbGridType<T>> grid)
-    : GVolumeGrid(std::move(grid))
+inline VolumeGrid<T>::VolumeGrid(std::shared_ptr<OpenvdbGridType<T>> grid) : grid_(std::move(grid))
 {
   this->assert_correct_type();
 }
@@ -425,21 +496,21 @@ inline VolumeGrid<T>::VolumeGrid(std::shared_ptr<OpenvdbGridType<T>> grid)
 template<typename T>
 inline const OpenvdbGridType<T> &VolumeGrid<T>::grid(VolumeTreeAccessToken &r_token) const
 {
-  return static_cast<const OpenvdbGridType<T> &>(data_->grid(r_token));
+  return static_cast<const OpenvdbGridType<T> &>(grid_->grid(r_token));
 }
 
 template<typename T>
 inline OpenvdbGridType<T> &VolumeGrid<T>::grid_for_write(VolumeTreeAccessToken &r_token)
 {
-  return static_cast<OpenvdbGridType<T> &>(this->get_for_write().grid_for_write(r_token));
+  return static_cast<OpenvdbGridType<T> &>(grid_.get_for_write().grid_for_write(r_token));
 }
 
 template<typename T> inline void VolumeGrid<T>::assert_correct_type() const
 {
 #  ifndef NDEBUG
-  if (data_) {
+  if (grid_) {
     const VolumeGridType expected_type = VolumeGridTraits<T>::EnumType;
-    if (const std::optional<VolumeGridType> actual_type = data_->grid_type_without_load()) {
+    if (const std::optional<VolumeGridType> actual_type = grid_->grid_type_without_load()) {
       BLI_assert(expected_type == *actual_type);
     }
   }

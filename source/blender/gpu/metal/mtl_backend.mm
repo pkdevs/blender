@@ -6,6 +6,10 @@
  * \ingroup gpu
  */
 
+#include <cstring>
+
+#include "BLI_threads.hh"
+
 #include "BKE_global.hh"
 
 #include "gpu_backend.hh"
@@ -16,10 +20,13 @@
 #include "mtl_immediate.hh"
 #include "mtl_index_buffer.hh"
 #include "mtl_query.hh"
+#include "mtl_ray_tracing.hh"
 #include "mtl_shader.hh"
 #include "mtl_storage_buffer.hh"
+#include "mtl_texture_pool.hh"
 #include "mtl_uniform_buffer.hh"
 #include "mtl_vertex_buffer.hh"
+#include "mtl_work_in_flight.hh"
 
 #include "gpu_capabilities_private.hh"
 #include "gpu_platform_private.hh"
@@ -39,11 +46,17 @@ thread_local int g_autoreleasepool_depth = 0;
 /** \name Metal Backend
  * \{ */
 
-void MTLBackend::samplers_update(){
-    /* Placeholder -- Handled in MTLContext. */
-};
+void MTLBackend::init_resources()
+{
+  compiler_ = MEM_new<MTLShaderCompiler>(__func__);
+}
 
-Context *MTLBackend::context_alloc(void *ghost_window, void *ghost_context)
+void MTLBackend::delete_resources()
+{
+  MEM_delete(compiler_);
+}
+
+Context *MTLBackend::context_alloc(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context)
 {
   return new MTLContext(ghost_window, ghost_context);
 };
@@ -56,6 +69,11 @@ Batch *MTLBackend::batch_alloc()
 Fence *MTLBackend::fence_alloc()
 {
   return new MTLFence();
+};
+
+WorkInFlight *MTLBackend::work_in_flight_alloc(unsigned int max_in_flight)
+{
+  return new MTLWorkInFlight(max_in_flight);
 };
 
 FrameBuffer *MTLBackend::framebuffer_alloc(const char *name)
@@ -88,6 +106,16 @@ Texture *MTLBackend::texture_alloc(const char *name)
   return new gpu::MTLTexture(name);
 }
 
+TexturePool *MTLBackend::texturepool_alloc()
+{
+  /* #162556: Temporarily disabled MTLTexturePool as metal texture views
+   * do not support `update_sub`, while other backends do. */
+  /* if (GCaps.texture_pool_workaround) { */
+  return new TexturePoolImpl();
+  /* }
+  return new MTLTexturePool(); */
+}
+
 UniformBuf *MTLBackend::uniformbuf_alloc(size_t size, const char *name)
 {
   return new MTLUniformBuf(size, name);
@@ -101,6 +129,16 @@ StorageBuf *MTLBackend::storagebuf_alloc(size_t size, GPUUsageType usage, const 
 VertBuf *MTLBackend::vertbuf_alloc()
 {
   return new MTLVertBuf();
+}
+
+TopLevelAS *MTLBackend::tlas_alloc(const char *name)
+{
+  return new MTLTopLevelAS(name);
+}
+
+BottomLevelAS *MTLBackend::blas_alloc(const char *name)
+{
+  return new MTLBottomLevelAS(name);
 }
 
 void MTLBackend::render_begin()
@@ -131,7 +169,7 @@ void MTLBackend::render_end()
   }
 }
 
-void MTLBackend::render_step()
+void MTLBackend::render_step(bool force_resource_release)
 {
   /* NOTE(Metal): Primarily called from main thread, but below data-structures
    * and operations are thread-safe, and GPUContext rendering coordination
@@ -148,6 +186,11 @@ void MTLBackend::render_step()
       MTLContext::get_global_memory_manager()->get_current_safe_list();
   if (cmd_free_buffer_list->should_flush()) {
     MTLContext::get_global_memory_manager()->begin_new_safe_list();
+  }
+
+  if (force_resource_release && g_autoreleasepool) {
+    [g_autoreleasepool drain];
+    g_autoreleasepool = [[NSAutoreleasePool alloc] init];
   }
 }
 
@@ -169,10 +212,10 @@ void MTLBackend::platform_init(MTLContext *ctx)
     return;
   }
 
-  eGPUDeviceType device = GPU_DEVICE_UNKNOWN;
-  eGPUOSType os = GPU_OS_MAC;
-  eGPUDriverType driver = GPU_DRIVER_ANY;
-  eGPUSupportLevel support_level = GPU_SUPPORT_LEVEL_SUPPORTED;
+  GPUDeviceType device = GPU_DEVICE_UNKNOWN;
+  GPUOSType os = GPU_OS_MAC;
+  GPUDriverType driver = GPU_DRIVER_ANY;
+  GPUSupportLevel support_level = GPU_SUPPORT_LEVEL_SUPPORTED;
 
   BLI_assert(ctx);
   id<MTLDevice> mtl_device = ctx->device;
@@ -238,6 +281,20 @@ void MTLBackend::platform_init(MTLContext *ctx)
            renderer,
            version,
            architecture_type);
+
+  GPG.devices.append(
+      {.identifier = "METAL", .index = 0, .vendor_id = 0, .device_id = 0, .name = renderer});
+
+  /* UUID is not supported on Metal. */
+  GPG.device_uuid.reinitialize(0);
+
+  /* LUID is registryID on Metal, or at least this is what libraries like OIDN expects. */
+  const uint64_t luid = mtl_device.registryID;
+  GPG.device_luid.reinitialize(sizeof(luid));
+  std::memcpy(GPG.device_luid.data(), &luid, sizeof(luid));
+
+  /* Metal only has one device per LUID, so only the first bit will always be active.. */
+  GPG.device_luid_node_mask = 1;
 }
 
 void MTLBackend::platform_exit()
@@ -443,6 +500,28 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
   }
 #endif
 
+  /* Ray queries require macOS 13. */
+  MTLBackend::capabilities.supports_ray_tracing = false;
+#if defined(MAC_OS_VERSION_13_0)
+  if (@available(macOS 13.0, *)) {
+    MTLBackend::capabilities.supports_ray_tracing = [device supportsRaytracing];
+  }
+#endif
+  GCaps.ray_query_support = MTLBackend::capabilities.supports_ray_tracing;
+
+  /* Vertex pipeline stores and atomics support. */
+  GCaps.vertex_pipeline_stores_and_atomics_support = true;
+
+  /** Identify support for tile inputs. */
+  const bool is_tile_based_arch = (GPU_platform_architecture() == GPU_ARCHITECTURE_TBDR);
+  if (is_tile_based_arch) {
+    MTLBackend::capabilities.supports_native_tile_inputs = true;
+  }
+  else {
+    /* NOTE: If emulating tile input reads, we must ensure we also expose position data. */
+    MTLBackend::capabilities.supports_native_tile_inputs = false;
+  }
+
   /* CPU Info */
   MTLBackend::capabilities.num_performance_cores = get_num_performance_cpu_cores(ctx->device);
   MTLBackend::capabilities.num_efficiency_cores = get_num_efficiency_cpu_cores(ctx->device);
@@ -453,18 +532,13 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
                                16384 :
                                8192;
   GCaps.max_texture_3d_size = 2048;
+  GCaps.max_buffer_texture_size = UINT_MAX;
   GCaps.max_texture_layers = 2048;
   GCaps.max_textures = (MTLBackend::capabilities.supports_family_mac1) ?
                            128 :
                            (([device supportsFamily:MTLGPUFamilyApple4]) ? 96 : 31);
-  if (GCaps.max_textures <= 32) {
-    BLI_assert(false);
-  }
-  GCaps.max_samplers = (MTLBackend::capabilities.supports_argument_buffers_tier2) ? 1024 : 16;
-
-  GCaps.max_textures_vert = GCaps.max_textures;
-  GCaps.max_textures_geom = 0; /* N/A geometry shaders not supported. */
-  GCaps.max_textures_frag = GCaps.max_textures;
+  /* Hardcoded limit due to ShaderInterface::enabled_tex_mask_. */
+  GCaps.max_textures = std::min(GCaps.max_textures, 64);
 
   GCaps.max_images = GCaps.max_textures;
 
@@ -480,18 +554,26 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
 
   /* Feature support */
   GCaps.mem_stats_support = false;
-  GCaps.shader_draw_parameters_support = true;
   GCaps.hdr_viewport_support = true;
 
   GCaps.geometry_shader_support = false;
 
-  /* Compile shaders on performance cores but leave one free so UI is still responsive */
-  GCaps.max_parallel_compilations = MTLBackend::capabilities.num_performance_cores - 1;
+  /* Apple GPUs can write to an sRGB texture as a storage image directly, with the hardware doing
+   * the sRGB conversion. Use this for sRGB mipmap generation instead of a temporary non-sRGB
+   * texture. */
+  GCaps.srgb_write_direct_support = true;
+
+  /* Compile shaders on performance cores but leave one free so UI is still responsive.
+   * Also respect command line option to reduce number of threads. */
+  GCaps.max_parallel_compilations = std::min(BLI_system_thread_count(),
+                                             MTLBackend::capabilities.num_performance_cores - 1);
 
   /* Maximum buffer bindings: 31. Consider required slot for uniforms/UBOs/Vertex attributes.
    * Can use argument buffers if a higher limit is required. */
   GCaps.max_shader_storage_buffer_bindings = 14;
+  GCaps.max_compute_shader_storage_blocks = 14;
   GCaps.max_storage_buffer_size = size_t(ctx->device.maxBufferLength);
+  GCaps.max_uniform_buffer_size = size_t(ctx->device.maxBufferLength);
   GCaps.storage_buffer_alignment = 256; /* TODO(fclem): But also unused. */
 
   GCaps.max_work_group_count[0] = 65535;
@@ -507,22 +589,35 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
   GCaps.max_work_group_size[1] = max_threads_per_threadgroup_per_dim;
   GCaps.max_work_group_size[2] = max_threads_per_threadgroup_per_dim;
 
-  GCaps.transform_feedback_support = true;
   GCaps.stencil_export_support = true;
 
   /* OPENGL Related workarounds -- none needed for Metal. */
   GCaps.extensions_len = 0;
   GCaps.extension_get = mtl_extensions_get_null;
-  GCaps.mip_render_workaround = false;
   GCaps.depth_blitting_workaround = false;
   GCaps.use_main_context_workaround = false;
-  GCaps.broken_amd_driver = false;
-  GCaps.clear_viewport_workaround = true;
 
   /* Metal related workarounds. */
   /* Minimum per-vertex stride is 4 bytes in Metal.
    * A bound vertex buffer must contribute at least 4 bytes per vertex. */
   GCaps.minimum_per_vertex_stride = 4;
+
+  /* Force workarounds when starting blender with `--debug-gpu-force-workarounds`.
+   *
+   * Not all workarounds are listed here as some capabilities are currently assumed to be present
+   * on all devices. */
+  if (G.debug & G_DEBUG_GPU_FORCE_WORKAROUNDS) {
+    /* Texture gather is supported on AMD, but results are non consistent with Apple Silicon GPUs
+     * and can be disabled. */
+    MTLBackend::capabilities.supports_texture_gather = false;
+    MTLBackend::capabilities.supports_texture_atomics = false;
+    MTLBackend::capabilities.supports_native_tile_inputs = false;
+    GCaps.texture_pool_workaround = true;
+  }
+
+  if (G.debug & G_DEBUG_GPU_NO_TEXTURE_POOL) {
+    GCaps.texture_pool_workaround = true;
+  }
 }
 
 /** \} */

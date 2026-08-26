@@ -8,18 +8,16 @@
 
 #pragma once
 
-#include <cstdio>
 #include <cstring>
 
 #include "intern/depsgraph_type.hh"
 
 #include "DNA_ID.h"
-
-#include "RNA_path.hh"
+#include "DNA_listBase.h"
 
 #include "BLI_span.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+
+#include "BKE_lib_query.hh" /* For LibraryForeachIDCallbackFlag enum. */
 
 #include "intern/builder/deg_builder.h"
 #include "intern/builder/deg_builder_key.h"
@@ -31,6 +29,8 @@
 #include "intern/node/deg_node_component.hh"
 #include "intern/node/deg_node_id.hh"
 #include "intern/node/deg_node_operation.hh"
+
+namespace blender {
 
 struct CacheFile;
 struct Camera;
@@ -46,11 +46,11 @@ struct Key;
 struct LayerCollection;
 struct Light;
 struct LightProbe;
-struct ListBase;
 struct Main;
 struct Mask;
 struct Material;
 struct MovieClip;
+struct NlaStrip;
 struct Object;
 struct ParticleSettings;
 struct ParticleSystem;
@@ -68,7 +68,7 @@ struct bNodeTree;
 struct bPoseChannel;
 struct bSound;
 
-namespace blender::deg {
+namespace deg {
 
 struct ComponentNode;
 struct DepsNodeHandle;
@@ -100,7 +100,13 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
                          int flags = 0);
 
   template<typename KeyType>
+    requires(!std::is_same_v<KeyType, TimeSourceKey>)
   Relation *add_node_handle_relation(const KeyType &key_from,
+                                     const DepsNodeHandle *handle,
+                                     const char *description,
+                                     int flags = 0);
+
+  Relation *add_node_handle_relation(const TimeSourceKey &key_from,
                                      const DepsNodeHandle *handle,
                                      const char *description,
                                      int flags = 0);
@@ -146,6 +152,7 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_object_data_camera(Object *object);
   virtual void build_object_data_geometry(Object *object);
   virtual void build_object_data_geometry_datablock(ID *obdata);
+  virtual void build_object_data_empty(Object *object);
   virtual void build_object_data_light(Object *object);
   virtual void build_object_data_lightprobe(Object *object);
   virtual void build_object_data_speaker(Object *object);
@@ -161,7 +168,7 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_constraints(ID *id,
                                  NodeType component_type,
                                  const char *component_subdata,
-                                 ListBase *constraints,
+                                 ListBaseT<bConstraint> *constraints,
                                  RootPChanMap *root_map);
   virtual void build_animdata(ID *id);
   virtual void build_animdata_curves(ID *id);
@@ -170,10 +177,6 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
                                             ComponentKey &adt_key,
                                             OperationNode *operation_from,
                                             FCurve *fcu);
-  virtual void build_animdata_curves_targets(ID *id,
-                                             ComponentKey &adt_key,
-                                             OperationNode *operation_from,
-                                             ListBase *curves);
   virtual void build_animdata_action_targets(ID *id,
                                              int32_t slot_handle,
                                              ComponentKey &adt_key,
@@ -182,7 +185,7 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_animdata_nlastrip_targets(ID *id,
                                                ComponentKey &adt_key,
                                                OperationNode *operation_from,
-                                               ListBase *strips);
+                                               ListBaseT<NlaStrip> *strips);
   virtual void build_animdata_drivers(ID *id);
   virtual void build_animdata_force(ID *id);
   virtual void build_animation_images(ID *id);
@@ -238,8 +241,8 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_rig(Object *object);
   virtual void build_shapekeys(Key *key);
   virtual void build_armature(bArmature *armature);
-  virtual void build_armature_bones(ListBase *bones);
-  virtual void build_armature_bone_collections(blender::Span<BoneCollection *> collections);
+  virtual void build_armature_bones(ListBaseT<Bone> *bones);
+  virtual void build_armature_bone_collections(Span<BoneCollection *> collections);
   virtual void build_camera(Camera *camera);
   virtual void build_light(Light *lamp);
   virtual void build_nodetree(bNodeTree *ntree);
@@ -284,6 +287,8 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   template<typename KeyType> OperationNode *find_operation_node(const KeyType &key);
 
   Depsgraph *getGraph();
+
+  virtual Set<const ID *> get_built_ids() const;
 
  protected:
   TimeSourceNode *get_node(const TimeSourceKey &key) const;
@@ -336,7 +341,7 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   static void modifier_walk(void *user_data,
                             struct Object *object,
                             struct ID **idpoin,
-                            int cb_flag);
+                            LibraryForeachIDCallbackFlag cb_flag);
 
   static void constraint_walk(bConstraint *con, ID **idpoin, bool is_reference, void *user_data);
 
@@ -362,6 +367,7 @@ struct DepsNodeHandle {
   const char *default_name;
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender
 
-#include "intern/builder/deg_builder_relations_impl.h"
+#include "intern/builder/deg_builder_relations_impl.h"  // IWYU pragma: export

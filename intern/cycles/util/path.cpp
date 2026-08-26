@@ -6,6 +6,7 @@
 #include "util/algorithm.h"
 #include "util/map.h"
 #include "util/md5.h"
+#include "util/set.h"
 #include "util/string.h"
 #include "util/vector.h"
 
@@ -13,9 +14,8 @@
 #include <OpenImageIO/strutil.h>
 #include <OpenImageIO/sysutil.h>
 
-OIIO_NAMESPACE_USING
-
-#include <stdio.h>
+#include <cstdio>
+#include <filesystem>
 
 #include <sys/stat.h>
 
@@ -37,8 +37,9 @@ OIIO_NAMESPACE_USING
 #  include <shlwapi.h>
 #endif
 
-#include "util/map.h"
-#include "util/windows.h"
+#ifdef _WIN32
+#  include "util/windows.h"
+#endif
 
 CCL_NAMESPACE_BEGIN
 
@@ -54,12 +55,12 @@ typedef struct _stat path_stat_t;
 #    define S_ISDIR(x) (((x) & _S_IFDIR) == _S_IFDIR)
 #  endif
 #else
-typedef struct stat path_stat_t;
+using path_stat_t = struct stat;
 #endif
 
-static string cached_path = "";
-static string cached_user_path = "";
-static string cached_xdg_cache_path = "";
+static string cached_path;
+static string cached_user_path;
+static string cached_xdg_cache_path;
 
 namespace {
 
@@ -164,7 +165,7 @@ class directory_iterator {
  public:
   class path_info {
    public:
-    explicit path_info(const string &path) : path_(path), entry_(NULL) {}
+    explicit path_info(const string &path) : path_(path) {}
 
     string path()
     {
@@ -178,14 +179,14 @@ class directory_iterator {
 
    protected:
     const string &path_;
-    const struct dirent *entry_;
+    const struct dirent *entry_ = nullptr;
   };
 
-  directory_iterator() : path_info_(""), name_list_(NULL), num_entries_(-1), cur_entry_(-1) {}
+  directory_iterator() : path_info_(""), name_list_(nullptr), num_entries_(-1), cur_entry_(-1) {}
 
   explicit directory_iterator(const string &path) : path_(path), path_info_(path_), cur_entry_(0)
   {
-    num_entries_ = scandir(path.c_str(), &name_list_, NULL, alphasort);
+    num_entries_ = scandir(path.c_str(), &name_list_, nullptr, alphasort);
     if (num_entries_ < 0) {
       perror("scandir");
     }
@@ -250,14 +251,14 @@ class directory_iterator {
 
   void destroy_name_list()
   {
-    if (name_list_ == NULL) {
+    if (name_list_ == nullptr) {
       return;
     }
     for (int i = 0; i < num_entries_; ++i) {
       free(name_list_[i]);
     }
-    free(name_list_);
-    name_list_ = NULL;
+    free((void *)name_list_);
+    name_list_ = nullptr;
   }
 
   string path_;
@@ -271,7 +272,7 @@ class directory_iterator {
 size_t find_last_slash(const string &path)
 {
   for (size_t i = 0; i < path.size(); ++i) {
-    size_t index = path.size() - 1 - i;
+    const size_t index = path.size() - 1 - i;
 #ifdef _WIN32
     if (path[index] == DIR_SEP || path[index] == DIR_SEP_ALT)
 #else
@@ -282,6 +283,24 @@ size_t find_last_slash(const string &path)
     }
   }
   return string::npos;
+}
+
+std::filesystem::path std_filesystem_path_from_string(const string &p)
+{
+#ifdef _WIN32
+  return std::filesystem::path(string_to_wstring(p));
+#else
+  return std::filesystem::path(p);
+#endif
+}
+
+string std_filesystem_path_to_string(const std::filesystem::path &p)
+{
+#ifdef _WIN32
+  return string_from_wstring(p.native());
+#else
+  return p.string();
+#endif
 }
 
 } /* namespace */
@@ -297,13 +316,13 @@ static char *path_specials(const string &sub)
     env_source_path = getenv("CYCLES_KERNEL_PATH");
     env_init = true;
   }
-  if (env_shader_path != NULL && sub == "shader") {
+  if (env_shader_path != nullptr && sub == "shader") {
     return env_shader_path;
   }
-  else if (env_source_path != NULL && sub == "source") {
+  if (env_source_path != nullptr && sub == "source") {
     return env_source_path;
   }
-  return NULL;
+  return nullptr;
 }
 
 #if defined(__linux__) || defined(__APPLE__)
@@ -313,13 +332,11 @@ static string path_xdg_cache_get()
   if (home) {
     return string(home);
   }
-  else {
-    home = getenv("HOME");
-    if (home == NULL) {
-      home = getpwuid(getuid())->pw_dir;
-    }
-    return path_join(string(home), ".cache");
+  home = getenv("HOME");
+  if (home == nullptr) {
+    home = getpwuid(getuid())->pw_dir;
   }
+  return path_join(string(home), ".cache");
 }
 #endif
 
@@ -339,12 +356,12 @@ void path_init(const string &path, const string &user_path)
 string path_get(const string &sub)
 {
   char *special = path_specials(sub);
-  if (special != NULL) {
+  if (special != nullptr) {
     return special;
   }
 
-  if (cached_path == "") {
-    cached_path = path_dirname(Sysutil::this_program_path());
+  if (cached_path.empty()) {
+    cached_path = path_dirname(OIIO::Sysutil::this_program_path());
   }
 
   return path_join(cached_path, sub);
@@ -352,8 +369,8 @@ string path_get(const string &sub)
 
 string path_user_get(const string &sub)
 {
-  if (cached_user_path == "") {
-    cached_user_path = path_dirname(Sysutil::this_program_path());
+  if (cached_user_path.empty()) {
+    cached_user_path = path_dirname(OIIO::Sysutil::this_program_path());
   }
 
   return path_join(cached_user_path, sub);
@@ -362,10 +379,10 @@ string path_user_get(const string &sub)
 string path_cache_get(const string &sub)
 {
 #if defined(__linux__) || defined(__APPLE__)
-  if (cached_xdg_cache_path == "") {
+  if (cached_xdg_cache_path.empty()) {
     cached_xdg_cache_path = path_xdg_cache_get();
   }
-  string result = path_join(cached_xdg_cache_path, "cycles");
+  const string result = path_join(cached_xdg_cache_path, "cycles");
   return path_join(result, sub);
 #else
   /* TODO(sergey): What that should be on Windows? */
@@ -379,7 +396,7 @@ string path_xdg_home_get(const string &sub = "");
 
 string path_filename(const string &path)
 {
-  size_t index = find_last_slash(path);
+  const size_t index = find_last_slash(path);
   if (index != string::npos) {
     /* Corner cases to match boost behavior. */
 #ifndef _WIN32
@@ -402,7 +419,7 @@ string path_filename(const string &path)
 
 string path_dirname(const string &path)
 {
-  size_t index = find_last_slash(path);
+  const size_t index = find_last_slash(path);
   if (index != string::npos) {
 #ifndef _WIN32
     if (index == 0 && path.size() > 1) {
@@ -416,10 +433,10 @@ string path_dirname(const string &path)
 
 string path_join(const string &dir, const string &file)
 {
-  if (dir.size() == 0) {
+  if (dir.empty()) {
     return file;
   }
-  if (file.size() == 0) {
+  if (file.empty()) {
     return dir;
   }
   string result = dir;
@@ -443,24 +460,43 @@ string path_escape(const string &path)
   return result;
 }
 
+string path_normalize(const string &path)
+{
+  std::string normpath = std_filesystem_path_to_string(
+      std_filesystem_path_from_string(path).lexically_normal().make_preferred());
+#ifdef _WIN32
+  string_replace(normpath, "\\", "/");
+#endif
+  return normpath;
+}
+
 bool path_is_relative(const string &path)
 {
-#ifdef _WIN32
-#  ifdef HAVE_SHLWAPI_H
-  return PathIsRelative(path.c_str());
-#  else  /* HAVE_SHLWAPI_H */
-  if (path.size() >= 3) {
-    return !(((path[0] >= 'a' && path[0] <= 'z') || (path[0] >= 'A' && path[0] <= 'Z')) &&
-             path[1] == ':' && path[2] == DIR_SEP);
+  return std_filesystem_path_from_string(path).is_relative();
+}
+
+string path_make_relative(const string &path_, const string &base_)
+{
+  const auto path = std_filesystem_path_from_string(path_);
+  const auto base = std_filesystem_path_from_string(base_);
+
+  if (!path.is_absolute() && base.is_absolute()) {
+    return path_;
   }
-  return true;
-#  endif /* HAVE_SHLWAPI_H */
-#else    /* _WIN32 */
-  if (path.size() == 0) {
-    return 1;
+
+  /* Don't make relative between different drives. */
+  const auto root_name = path.root_name();
+  if (root_name != base.root_name()) {
+    return path_;
   }
-  return path[0] != DIR_SEP;
-#endif   /* _WIN32 */
+
+  /* Also don't make relative if root directories are different. This prevents
+   * typical cases like making relative to /tmp. */
+  if (root_name.empty() && path.root_directory() != base.root_directory()) {
+    return path_;
+  }
+
+  return std_filesystem_path_to_string(path.lexically_relative(base));
 }
 
 #ifdef _WIN32
@@ -575,7 +611,7 @@ bool path_exists(const string &path)
 #else  /* _WIN32 */
   struct stat st;
   if (stat(path.c_str(), &st) != 0) {
-    return 0;
+    return false;
   }
   return st.st_mode != 0;
 #endif /* _WIN32 */
@@ -590,17 +626,27 @@ bool path_is_directory(const string &path)
   return S_ISDIR(st.st_mode);
 }
 
+bool path_is_file(const string &path)
+{
+  path_stat_t st;
+  if (path_stat(path, &st) != 0) {
+    return false;
+  }
+  return !S_ISDIR(st.st_mode);
+}
+
 static void path_files_md5_hash_recursive(MD5Hash &hash, const string &dir)
 {
   if (path_exists(dir)) {
-    directory_iterator it(dir), it_end;
+    directory_iterator it(dir);
+    const directory_iterator it_end;
 
     for (; it != it_end; ++it) {
       if (path_is_directory(it->path())) {
         path_files_md5_hash_recursive(hash, it->path());
       }
       else {
-        string filepath = it->path();
+        const string filepath = it->path();
 
         hash.append((const uint8_t *)filepath.c_str(), filepath.size());
         hash.append_file(filepath);
@@ -621,17 +667,13 @@ string path_files_md5_hash(const string &dir)
 
 static bool create_directories_recursivey(const string &path)
 {
-  if (path_is_directory(path)) {
-    /* Directory already exists, nothing to do. */
-    return true;
-  }
   if (path_exists(path)) {
-    /* File exists and it's not a directory. */
-    return false;
+    /* Either directory exists and there is nothing to do, or it's a file and we fail. */
+    return path_is_directory(path);
   }
 
-  string parent = path_dirname(path);
-  if (parent.size() > 0 && parent != path) {
+  const string parent = path_dirname(path);
+  if (!parent.empty() && parent != path) {
     if (!create_directories_recursivey(parent)) {
       return false;
     }
@@ -639,16 +681,20 @@ static bool create_directories_recursivey(const string &path)
 
 #ifdef _WIN32
   wstring path_wc = string_to_wstring(path);
-  return _wmkdir(path_wc.c_str()) == 0;
+  _wmkdir(path_wc.c_str());
 #else
-  return mkdir(path.c_str(), 0777) == 0;
+  mkdir(path.c_str(), 0777);
 #endif
+
+  /* If another thread creates this in the meantime mkdir will return an error,
+   * so instead check if the directory exists. */
+  return path_is_directory(path);
 }
 
-void path_create_directories(const string &filepath)
+bool path_create_directories(const string &filepath)
 {
-  string path = path_dirname(filepath);
-  create_directories_recursivey(path);
+  const string path = path_dirname(filepath);
+  return create_directories_recursivey(path);
 }
 
 bool path_write_binary(const string &path, const vector<uint8_t> &binary)
@@ -662,8 +708,8 @@ bool path_write_binary(const string &path, const vector<uint8_t> &binary)
     return false;
   }
 
-  if (binary.size() > 0) {
-    fwrite(&binary[0], sizeof(uint8_t), binary.size(), f);
+  if (!binary.empty()) {
+    fwrite(binary.data(), sizeof(uint8_t), binary.size(), f);
   }
 
   fclose(f);
@@ -671,7 +717,7 @@ bool path_write_binary(const string &path, const vector<uint8_t> &binary)
   return true;
 }
 
-bool path_write_text(const string &path, string &text)
+bool path_write_text(const string &path, const string &text)
 {
   vector<uint8_t> binary(text.length(), 0);
   std::copy(text.begin(), text.end(), binary.begin());
@@ -691,12 +737,12 @@ bool path_read_binary(const string &path, vector<uint8_t> &binary)
 
   binary.resize(path_file_size(path));
 
-  if (binary.size() == 0) {
+  if (binary.empty()) {
     fclose(f);
     return false;
   }
 
-  if (fread(&binary[0], sizeof(uint8_t), binary.size(), f) != binary.size()) {
+  if (fread(binary.data(), sizeof(uint8_t), binary.size(), f) != binary.size()) {
     fclose(f);
     return false;
   }
@@ -731,7 +777,8 @@ bool path_read_compressed_binary(const string &path, vector<uint8_t> &binary)
 
   binary.resize(full_size);
 
-  size_t err = ZSTD_decompress(binary.data(), binary.size(), compressed.data(), compressed.size());
+  const size_t err = ZSTD_decompress(
+      binary.data(), binary.size(), compressed.data(), compressed.size());
 
   return ZSTD_isError(err) == 0;
 }
@@ -744,8 +791,8 @@ bool path_read_text(const string &path, string &text)
     return false;
   }
 
-  const char *str = (const char *)&binary[0];
-  size_t size = binary.size();
+  const char *str = (const char *)binary.data();
+  const size_t size = binary.size();
   text = string(str, size);
 
   return true;
@@ -759,8 +806,8 @@ bool path_read_compressed_text(const string &path, string &text)
     return false;
   }
 
-  const char *str = (const char *)&binary[0];
-  size_t size = binary.size();
+  const char *str = (const char *)binary.data();
+  const size_t size = binary.size();
   text = string(str, size);
 
   return true;
@@ -781,7 +828,7 @@ bool path_remove(const string &path)
 }
 
 struct SourceReplaceState {
-  typedef map<string, string> ProcessedMapping;
+  using ProcessedMapping = map<string, string>;
   /* Base director for all relative include headers. */
   string base;
   /* Result of processed files. */
@@ -800,7 +847,7 @@ static string line_directive(const SourceReplaceState &state,
 {
   string unescaped_path = path;
   /* First we make path relative. */
-  if (string_startswith(unescaped_path, state.base.c_str())) {
+  if (string_startswith(unescaped_path, state.base)) {
     const string base_file = path_filename(state.base);
     const size_t base_len = state.base.length();
     unescaped_path = base_file +
@@ -808,7 +855,7 @@ static string line_directive(const SourceReplaceState &state,
   }
   /* Second, we replace all unsafe characters. */
   const size_t length = unescaped_path.length();
-  string escaped_path = "";
+  string escaped_path;
   for (size_t i = 0; i < length; ++i) {
     const char ch = unescaped_path[i];
     if (strchr("\"\'\?\\", ch) != nullptr) {
@@ -865,7 +912,7 @@ static string path_source_replace_includes_recursive(const string &_source,
 
   auto pragma_once = _source.find("#pragma once");
   if (pragma_once != string::npos) {
-    if (state->pragma_onced.find(source_filepath) != state->pragma_onced.end()) {
+    if (state->pragma_onced.contains(source_filepath)) {
       return "";
     }
     state->pragma_onced.insert(source_filepath);
@@ -880,7 +927,7 @@ static string path_source_replace_includes_recursive(const string &_source,
   /* Try to re-use processed file without spending time on replacing all
    * include directives again.
    */
-  SourceReplaceState::ProcessedMapping::iterator replaced_file = state->processed_files.find(
+  const SourceReplaceState::ProcessedMapping::iterator replaced_file = state->processed_files.find(
       source_filepath);
   if (replaced_file != state->processed_files.end()) {
     return replaced_file->second;
@@ -889,16 +936,18 @@ static string path_source_replace_includes_recursive(const string &_source,
   const string &source = *psource;
 
   /* Perform full file processing. */
-  string result = "";
+  string result;
   const size_t source_length = source.length();
   size_t index = 0;
   /* Information about where we are in the source. */
-  size_t line_number = 0, column_number = 1;
+  size_t line_number = 0;
+  size_t column_number = 1;
   /* Currently gathered non-preprocessor token.
    * Store as start/length rather than token itself to avoid overhead of
    * memory re-allocations on each character concatenation.
    */
-  size_t token_start = 0, token_length = 0;
+  size_t token_start = 0;
+  size_t token_length = 0;
   /* Denotes whether we're inside of preprocessor line, together with
    * preprocessor line itself.
    *
@@ -906,14 +955,14 @@ static string path_source_replace_includes_recursive(const string &_source,
    * gives measurable speedup.
    */
   bool inside_preprocessor = false;
-  string preprocessor_line = "";
+  string preprocessor_line;
   /* Actual loop over the whole source. */
   while (index < source_length) {
-    char ch = source[index];
+    const char ch = source[index];
 
     if (ch == '\n') {
       if (inside_preprocessor) {
-        string block = path_source_handle_preprocessor(
+        const string block = path_source_handle_preprocessor(
             preprocessor_line, source_filepath, line_number, state);
 
         if (!block.empty()) {
@@ -985,7 +1034,7 @@ FILE *path_fopen(const string &path, const string &mode)
 
 static void path_cache_kernel_mark_used(const string &path)
 {
-  std::time_t current_time = std::time(nullptr);
+  const std::time_t current_time = std::time(nullptr);
   OIIO::Filesystem::last_write_time(path, current_time);
 }
 
@@ -995,9 +1044,7 @@ bool path_cache_kernel_exists_and_mark_used(const string &path)
     path_cache_kernel_mark_used(path);
     return true;
   }
-  else {
-    return false;
-  }
+  return false;
 }
 
 void path_cache_kernel_mark_added_and_clear_old(const string &new_path,
@@ -1005,13 +1052,14 @@ void path_cache_kernel_mark_added_and_clear_old(const string &new_path,
 {
   path_cache_kernel_mark_used(new_path);
 
-  string dir = path_dirname(new_path);
+  const string dir = path_dirname(new_path);
   if (!path_exists(dir)) {
     return;
   }
 
   /* Remove older kernels within the same directory. */
-  directory_iterator it(dir), it_end;
+  directory_iterator it(dir);
+  const directory_iterator it_end;
   vector<pair<std::time_t, string>> same_kernel_types;
 
   for (; it != it_end; ++it) {
@@ -1020,7 +1068,7 @@ void path_cache_kernel_mark_added_and_clear_old(const string &new_path,
       continue;
     }
 
-    std::time_t last_time = OIIO::Filesystem::last_write_time(path);
+    const std::time_t last_time = OIIO::Filesystem::last_write_time(path);
     same_kernel_types.emplace_back(last_time, path);
   }
 

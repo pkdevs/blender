@@ -11,42 +11,39 @@
 #include "DNA_listBase.h"
 
 #include "ANIM_action.hh"
-#include "ANIM_action_legacy.hh"
-
-struct ListBase;
-struct Scene;
-struct Sequence;
 struct SeqAnimationBackup;
+namespace blender {
 
-bool SEQ_animation_keyframes_exist(Scene *scene);
-bool SEQ_animation_drivers_exist(Scene *scene);
-void SEQ_free_animdata(Scene *scene, Sequence *seq);
-void SEQ_offset_animdata(Scene *scene, Sequence *seq, int ofs);
+struct Scene;
+struct Strip;
+namespace seq {
+
+bool animation_keyframes_exist(const Scene *scene);
+bool animation_drivers_exist(Scene *scene);
+void free_animdata(Scene *scene, Strip *strip);
+void offset_animdata(const Scene *scene, Strip *strip, float ofs);
+
 /**
- * Return whether the fcurve targets the given sequence.
+ * Return whether the fcurve targets the given strip.
  */
-bool SEQ_fcurve_matches(const Sequence &seq, const FCurve &fcurve);
-struct SeqAnimationBackup {
-  /* `curves` and `channelbag` here represent effectively the same data (the
-   * fcurves that animate the Scene that the sequence belongs to), just for
-   * legacy and layered actions, respectively. Therefore only one or the other
-   * should ever have data stored in them, never both. */
-  ListBase curves;
-  blender::animrig::Channelbag channelbag;
+bool fcurve_matches(const Strip &strip, const FCurve &fcurve);
 
-  ListBase drivers;
+struct AnimationBackup {
+  animrig::Channelbag channelbag;
+  ListBaseT<FCurve> drivers;
 };
 /**
  * Move all F-Curves and drivers from `scene` to `backup`.
  */
-void SEQ_animation_backup_original(Scene *scene, SeqAnimationBackup *backup);
+void animation_backup_original(Scene *scene, AnimationBackup *backup);
 /**
  * Move all F-Curves and drivers from `backup` to `scene`.
  */
-void SEQ_animation_restore_original(Scene *scene, SeqAnimationBackup *backup);
+void animation_restore_original(Scene *scene, AnimationBackup *backup);
 /**
- * Duplicate F-Curves and drivers used by `seq` from `backup` to `scene`.
+ * Duplicate F-Curves and drivers used by `strip` from `backup` to `scene`.
  */
-void SEQ_animation_duplicate_backup_to_scene(Scene *scene,
-                                             Sequence *seq,
-                                             SeqAnimationBackup *backup);
+void animation_duplicate_backup_to_scene(Scene *scene, Strip *strip, AnimationBackup *backup);
+
+}  // namespace seq
+}  // namespace blender

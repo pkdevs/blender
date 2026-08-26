@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
@@ -10,9 +14,11 @@
 
 #include "RNA_types.hh"
 
+namespace blender {
+
 struct bContext;
 
-namespace blender::bke {
+namespace bke {
 
 #define FH_MAX_FILE_EXTENSIONS_STR 512
 
@@ -25,8 +31,10 @@ struct FileHandlerType {
   char import_operator[OP_MAX_TYPENAME];
   /** Export operator name. */
   char export_operator[OP_MAX_TYPENAME];
-  /** Formatted string of file extensions supported by the file handler, each extension should
-   * start with a `.` and be separated by `;`. For Example: `".blend;.ble"`. */
+  /**
+   * Formatted string of file extensions supported by the file handler, each extension should
+   * start with a `.` and be separated by `;`. For Example: `".blend;.ble"`.
+   */
   char file_extensions_str[FH_MAX_FILE_EXTENSIONS_STR];
 
   /** Check if file handler can be used on file drop. */
@@ -41,12 +49,12 @@ struct FileHandlerType {
   /**
    * Return a vector of indices in #paths of file paths supported by the file handler.
    */
-  blender::Vector<int64_t> filter_supported_paths(const blender::Span<std::string> paths) const;
+  Vector<int64_t> filter_supported_paths(const Span<std::string> paths) const;
 
   /**
    * Generate a default file name for use with this file handler.
    */
-  std::string get_default_filename(const StringRefNull name);
+  std::string get_default_filename(StringRefNull name);
 };
 
 /**
@@ -75,7 +83,8 @@ Span<std::unique_ptr<FileHandlerType>> file_handlers();
  * `poll_drop` returns #true. Caller must check if each file handler have a valid
  * `import_operator`.
  */
-blender::Vector<FileHandlerType *> file_handlers_poll_file_drop(
-    const bContext *C, const blender::Span<std::string> paths);
+Vector<FileHandlerType *> file_handlers_poll_file_drop(const bContext *C,
+                                                       const Span<std::string> paths);
 
-}  // namespace blender::bke
+}  // namespace bke
+}  // namespace blender

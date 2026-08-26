@@ -10,10 +10,6 @@
 
 #include "../../../view_map/Functions0D.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 using namespace Freestyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -37,12 +33,11 @@ PyDoc_STRVAR(
     "   by the Interface0DIterator belongs. The 2D oriented tangent is\n"
     "   evaluated at the pointed Interface0D.\n"
     "\n"
-    "   :arg it: An Interface0DIterator object.\n"
+    "   :param it: An Interface0DIterator object.\n"
     "   :type it: :class:`freestyle.types.Interface0DIterator`\n"
     "   :return: The 2D oriented tangent to the 1D element evaluated at the\n"
     "      pointed Interface0D.\n"
     "   :rtype: :class:`mathutils.Vector`\n");
-
 static int VertexOrientation2DF0D___init__(BPy_VertexOrientation2DF0D *self,
                                            PyObject *args,
                                            PyObject *kwds)
@@ -101,7 +96,3 @@ PyTypeObject VertexOrientation2DF0D_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

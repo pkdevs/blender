@@ -6,40 +6,37 @@
  * \ingroup bke
  */
 
-#include "MEM_guardedalloc.h"
-
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
-#include "DNA_scene_types.h"
+#include "DNA_object_types.h"
 
 #include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
 #include "BKE_multires.hh"
-#include "BKE_subsurf.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "multires_reshape.hh"
 
+namespace blender {
+
 static void multires_subdivide_create_object_space_linear_grids(Mesh *mesh)
 {
-  using namespace blender;
   using namespace blender::bke;
   const Span<float3> positions = mesh->vert_positions();
-  const blender::OffsetIndices faces = mesh->faces();
-  const blender::Span<int> corner_verts = mesh->corner_verts();
+  const OffsetIndices faces = mesh->faces();
+  const Span<int> corner_verts = mesh->corner_verts();
 
   MDisps *mdisps = static_cast<MDisps *>(
       CustomData_get_layer_for_write(&mesh->corner_data, CD_MDISPS, mesh->corners_num));
   for (const int p : faces.index_range()) {
-    const blender::IndexRange face = faces[p];
+    const IndexRange face = faces[p];
     const float3 face_center = mesh::face_center_calc(positions, corner_verts.slice(face));
     for (int l = 0; l < face.size(); l++) {
       const int loop_index = face[l];
 
-      float(*disps)[3] = mdisps[loop_index].disps;
+      float (*disps)[3] = mdisps[loop_index].disps;
       mdisps[loop_index].totdisp = 4;
-      mdisps[loop_index].level = 1;
 
       int prev_loop_index = l - 1 >= 0 ? loop_index - 1 : loop_index + face.size() - 1;
       int next_loop_index = l + 1 < face.size() ? loop_index + 1 : face.start();
@@ -59,7 +56,7 @@ static void multires_subdivide_create_object_space_linear_grids(Mesh *mesh)
 void multires_subdivide_create_tangent_displacement_linear_grids(Object *object,
                                                                  MultiresModifierData *mmd)
 {
-  Mesh *coarse_mesh = static_cast<Mesh *>(object->data);
+  Mesh *coarse_mesh = id_cast<Mesh *>(object->data);
   multires_force_sculpt_rebuild(object);
 
   MultiresReshapeContext reshape_context;
@@ -89,3 +86,5 @@ void multires_subdivide_create_tangent_displacement_linear_grids(Object *object,
   multires_reshape_object_grids_to_tangent_displacement(&reshape_context);
   multires_reshape_context_free(&reshape_context);
 }
+
+}  // namespace blender

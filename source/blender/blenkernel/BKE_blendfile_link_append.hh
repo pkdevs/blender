@@ -17,14 +17,21 @@
 #include "BLO_readfile.hh"
 
 struct BlendHandle;
+
+namespace blender {
+
+struct Collection;
 struct ID;
 struct Library;
 struct LibraryLink_Params;
+struct Main;
 struct MainLibraryWeakReferenceMap;
 struct ReportList;
+struct Scene;
+struct ViewLayer;
 
 /* TODO: Rename file to `BKE_blendfile_import.hh`. */
-/* TODO: Replace `BlendfileLinkAppend` prefix by `blender::bke::blendfile::import` namespace. */
+/* TODO: Replace `BlendfileLinkAppend` prefix by `bke::blendfile::import` namespace. */
 /* TODO: Move these enums to scoped enum classes. */
 
 /** Actions to apply to an item (i.e. linked ID). */
@@ -74,22 +81,28 @@ struct BlendfileLinkAppendContextItem {
   /** Name of the ID (without the heading two-chars IDcode). */
   std::string name;
   /** All libraries (from #BlendfileLinkAppendContext.libraries) to try to load this ID from. */
-  blender::BitVector<> libraries;
+  BitVector<> libraries;
   /** ID type. */
   short idcode;
 
-  /** Type of action to perform on this item, and general status tag information.
-   *  NOTE: Mostly used by append post-linking processing. */
+  /**
+   * Type of action to perform on this item, and general status tag information.
+   * NOTE: Mostly used by append post-linking processing.
+   */
   char action;
   char tag;
 
   /** Newly linked ID (nullptr until it has been successfully linked). */
   ID *new_id;
-  /** Library ID from which the #new_id has been linked (nullptr until it has been successfully
-   * linked). */
+  /**
+   * Library ID from which the #new_id has been linked
+   * (nullptr until it has been successfully linked).
+   */
   Library *source_library;
-  /** Liboverride of the linked ID (nullptr until it has been successfully created or an existing
-   * one has been found). */
+  /**
+   * Liboverride of the linked ID
+   * (nullptr until it has been successfully created or an existing one has been found).
+   */
   ID *liboverride_id;
   /**
    * Whether the item has a matching local ID that was already appended from the same source
@@ -102,12 +115,15 @@ struct BlendfileLinkAppendContextItem {
   void *userdata;
 };
 
-/** A blendfile library entry in the `libraries` vector from #BlendfileLinkAppendContext. */
+/** A blend-file library entry in the `libraries` vector from #BlendfileLinkAppendContext. */
 struct BlendfileLinkAppendContextLibrary {
-  std::string path;         /* Absolute .blend file path. */
-  BlendHandle *blo_handle;  /* Blend file handle, if any. */
-  bool blo_handle_is_owned; /* Whether the blend file handle is owned, or borrowed. */
-  /* The blendfile report associated with the `blo_handle`, if owned. */
+  /** Absolute .blend file path. */
+  std::string path;
+  /** Blend file handle, if any. */
+  BlendHandle *blo_handle;
+  /** Whether the blend file handle is owned, or borrowed. */
+  bool blo_handle_is_owned;
+  /** The blend-file report associated with the `blo_handle`, if owned. */
   BlendFileReadReport bf_reports;
 };
 
@@ -117,7 +133,7 @@ struct BlendfileLinkAppendContextLibrary {
  */
 struct BlendfileLinkAppendContext {
   /** List of library paths to search IDs in. */
-  blender::Vector<BlendfileLinkAppendContextLibrary> libraries;
+  Vector<BlendfileLinkAppendContextLibrary> libraries;
   /**
    * List of all ID to try to link from #libraries. This is a linked list because iterators must
    * not be invalidated when adding more items.
@@ -126,6 +142,12 @@ struct BlendfileLinkAppendContext {
   using items_iterator_t = std::list<BlendfileLinkAppendContextItem>::iterator;
   /** Linking/appending parameters. Including `bmain`, `scene`, `viewlayer` and `view3d`. */
   LibraryLink_Params *params = nullptr;
+
+  /**
+   * Target collection to link/append into. This is only used for instantiating collections, and is
+   * not mandatory for linking/appending objects or other data-blocks.
+   */
+  Collection *target_collection = nullptr;
 
   /**
    * What is the current stage of the link/append process. Used mainly by the RNA wrappers for the
@@ -161,7 +183,7 @@ struct BlendfileLinkAppendContext {
   ProcessStage process_stage;
 
   /** Allows to easily find an existing items from an ID pointer. */
-  blender::Map<ID *, BlendfileLinkAppendContextItem *> new_id_to_item;
+  Map<ID *, BlendfileLinkAppendContextItem *> new_id_to_item;
 
   /** Runtime info used by append code to manage re-use of already appended matching IDs. */
   MainLibraryWeakReferenceMap *library_weak_reference_mapping = nullptr;
@@ -224,7 +246,7 @@ void BKE_blendfile_link_append_context_library_add(BlendfileLinkAppendContext *l
  *
  * \param userdata: an opaque user-data pointer stored in generated link/append item.
  *
- * TODO: Add a more friendly version of this that combines it with the call to
+ * TODO: Add a more friendly version of this function that combines it with the call to
  * #BKE_blendfile_link_append_context_item_library_index_enable to enable the added item for all
  * added library sources.
  */
@@ -237,9 +259,9 @@ BlendfileLinkAppendContextItem *BKE_blendfile_link_append_context_item_add(
  * the list of items to process.
  *
  * \note #BKE_blendfile_link_append_context_library_add should never be called on the same
- *`lapp_context` after this function.
+ * `lapp_context` after this function.
  *
- * \param id_types_filter: A set of `FILTER_ID` bitflags, the types of IDs to add to the items
+ * \param id_types_filter: A set of `FILTER_ID` bit-flags, the types of IDs to add to the items
  *                         list.
  * \param library_index: The index of the library to look into, in given `lapp_context`.
  *
@@ -284,11 +306,13 @@ short BKE_blendfile_link_append_context_item_idcode_get(BlendfileLinkAppendConte
 enum eBlendfileLinkAppendForeachItemFlag {
   /** Loop over directly linked items (i.e. those explicitly defined by user code). */
   BKE_BLENDFILE_LINK_APPEND_FOREACH_ITEM_FLAG_DO_DIRECT = 1 << 0,
-  /** Loop over indirectly linked items (i.e. those defined by internal code, as dependencies of
+  /**
+   * Loop over indirectly linked items (i.e. those defined by internal code, as dependencies of
    * direct ones).
    *
    * IMPORTANT: Those 'indirect' items currently may not cover **all** indirectly linked data.
-   * See comments in #foreach_libblock_link_append_callback. */
+   * See comments in #foreach_libblock_link_append_callback.
+   */
   BKE_BLENDFILE_LINK_APPEND_FOREACH_ITEM_FLAG_DO_INDIRECT = 1 << 1,
 };
 
@@ -298,7 +322,6 @@ enum eBlendfileLinkAppendForeachItemFlag {
  *
  * \param flag: Control which type of items to process (see
  * #eBlendfileLinkAppendForeachItemFlag enum flags).
- * \param userdata: An opaque void pointer passed to the `callback_function`.
  */
 void BKE_blendfile_link_append_context_item_foreach(
     BlendfileLinkAppendContext *lapp_context,
@@ -307,8 +330,8 @@ void BKE_blendfile_link_append_context_item_foreach(
      *
      * \return `true` if iteration should continue, `false` otherwise.
      */
-    blender::FunctionRef<bool(BlendfileLinkAppendContext *lapp_context,
-                              BlendfileLinkAppendContextItem *item)> callback_function,
+    FunctionRef<bool(BlendfileLinkAppendContext *lapp_context,
+                     BlendfileLinkAppendContextItem *item)> callback_function,
     eBlendfileLinkAppendForeachItemFlag flag);
 
 /**
@@ -324,6 +347,14 @@ void BKE_blendfile_link_append_context_init_done(BlendfileLinkAppendContext *lap
 void BKE_blendfile_link(BlendfileLinkAppendContext *lapp_context, ReportList *reports);
 
 /**
+ * Perform packing operation.
+ *
+ * The IDs processed by this functions are the one that have been linked by a previous call to
+ * #BKE_blendfile_link on the same `lapp_context`.
+ */
+void BKE_blendfile_link_pack(BlendfileLinkAppendContext *lapp_context, ReportList *reports);
+
+/**
  * Perform append operation, using modern ID usage looper to detect which ID should be kept
  * linked, made local, duplicated as local, re-used from local etc.
  *
@@ -337,6 +368,24 @@ void BKE_blendfile_append(BlendfileLinkAppendContext *lapp_context, ReportList *
  */
 void BKE_blendfile_link_append_instantiate_loose(BlendfileLinkAppendContext *lapp_context,
                                                  ReportList *reports);
+
+/**
+ * Instantiate loose data from IDs already present in \a bmain into \a target_collection.
+ *
+ * This is the bmain-based counterpart of #BKE_blendfile_link_append_instantiate_loose.
+ * It operates on IDs that have already been merged into \a bmain, and only processes
+ * IDs that do **not** have the #ID_TAG_PRE_EXISTING flag set (i.e. newly added data).
+ *
+ * The function handles collections, objects, object-data, and rigid body post-processing
+ * in the same order and with the same logic as the lapp_context-based version.
+ *
+ * \note Uses #ID_TAG_DOIT as a scratch tag internally; it is cleared before returning.
+ */
+void BKE_blendfile_link_append_instantiate_loose_from_bmain(Main *bmain,
+                                                            Scene *scene,
+                                                            ViewLayer *view_layer,
+                                                            Collection *target_collection,
+                                                            ReportList *reports);
 
 /**
  * Finalize the link/append process.
@@ -410,3 +459,13 @@ void BKE_blendfile_library_relocate(BlendfileLinkAppendContext *lapp_context,
                                     ReportList *reports,
                                     Library *library,
                                     bool do_reload);
+
+/**
+ * Relocate a single linked ID.
+ *
+ * NOTE: content of `lapp_context` after execution of that function should not be assumed valid
+ * anymore, and should immediately be freed.
+ */
+void BKE_blendfile_id_relocate(BlendfileLinkAppendContext &lapp_context, ReportList *reports);
+
+}  // namespace blender

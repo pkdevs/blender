@@ -21,7 +21,7 @@
 
 #ifdef WIN32
 #  include "BLI_path_utils.hh"
-#  include "BLI_string.h"
+#  include "BLI_string.hh"
 
 #  include "utfconv.hh"
 #endif
@@ -163,7 +163,7 @@ ABCArchive::ABCArchive(const Main *bmain,
                        const std::string &filepath)
     : archive(nullptr)
 {
-  double scene_fps = FPS;
+  double scene_fps = scene->frames_per_second();
   MetaData abc_metadata = create_abc_metadata(bmain, scene_fps);
 
   /* Create the Archive. */
@@ -228,11 +228,11 @@ size_t ABCArchive::total_frame_count() const
 
 bool ABCArchive::is_xform_frame(double frame) const
 {
-  return xform_frames_.find(frame) != xform_frames_.end();
+  return xform_frames_.contains(frame);
 }
 bool ABCArchive::is_shape_frame(double frame) const
 {
-  return shape_frames_.find(frame) != shape_frames_.end();
+  return shape_frames_.contains(frame);
 }
 ExportSubset ABCArchive::export_subset_for_frame(double frame) const
 {

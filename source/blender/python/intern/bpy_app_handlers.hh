@@ -8,4 +8,10 @@
 
 #pragma once
 
-PyObject *BPY_app_handlers_struct();
+#include <Python.h>
+
+namespace blender {
+
+[[nodiscard]] PyObject *BPY_app_handlers_struct();
+
+}  // namespace blender

@@ -13,22 +13,21 @@
 
 #include "GPU_vertex_buffer.hh"
 
-#include "MEM_guardedalloc.h"
-
 #include "../generic/py_capi_utils.hh"
-#include "../generic/python_compat.hh"
-#include "../generic/python_utildefines.hh"
+#include "../generic/python_compat.hh" /* IWYU pragma: keep. */
 
 #include "gpu_py.hh"
 #include "gpu_py_vertex_buffer.hh" /* own include */
 #include "gpu_py_vertex_format.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Utility Functions
  * \{ */
 
 #define PYGPU_AS_NATIVE_SWITCH(attr) \
-  switch (attr->comp_type) { \
+  switch (attr->type.comp_type()) { \
     case GPU_COMP_I8: { \
       PY_AS_NATIVE(int8_t, PyC_Long_AsI8); \
       break; \
@@ -83,7 +82,7 @@ static void pygpu_fill_format_sequence(void *data_dst_void,
                                        PyObject *py_seq_fast,
                                        const GPUVertAttr *attr)
 {
-  const uint len = attr->comp_len;
+  const uint len = attr->type.comp_len();
   PyObject **value_fast_items = PySequence_Fast_ITEMS(py_seq_fast);
 
 /**
@@ -105,7 +104,7 @@ static void pygpu_fill_format_sequence(void *data_dst_void,
 #undef WARN_TYPE_LIMIT_PUSH
 #undef WARN_TYPE_LIMIT_POP
 
-static bool pygpu_vertbuf_fill_impl(blender::gpu::VertBuf *vbo,
+static bool pygpu_vertbuf_fill_impl(gpu::VertBuf *vbo,
                                     uint data_id,
                                     PyObject *seq,
                                     const char *error_prefix)
@@ -131,8 +130,9 @@ static bool pygpu_vertbuf_fill_impl(blender::gpu::VertBuf *vbo,
           PyExc_ValueError, exc_str_size_mismatch, "sequence", vert_len, pybuffer.shape[0]);
       ok = false;
     }
-    else if (comp_len != attr->comp_len) {
-      PyErr_Format(PyExc_ValueError, exc_str_size_mismatch, "component", attr->comp_len, comp_len);
+    else if (comp_len != attr->type.comp_len()) {
+      PyErr_Format(
+          PyExc_ValueError, exc_str_size_mismatch, "component", attr->type.comp_len(), comp_len);
       ok = false;
     }
     else {
@@ -158,27 +158,27 @@ static bool pygpu_vertbuf_fill_impl(blender::gpu::VertBuf *vbo,
 
     PyObject **seq_items = PySequence_Fast_ITEMS(seq_fast);
 
-    if (attr->comp_len == 1) {
+    if (attr->type.comp_len() == 1) {
       for (uint i = 0; i < seq_len; i++) {
-        uchar *data = (uchar *)GPU_vertbuf_raw_step(&data_step);
+        uchar *data = static_cast<uchar *>(GPU_vertbuf_raw_step(&data_step));
         PyObject *item = seq_items[i];
         pygpu_fill_format_elem(data, item, attr);
       }
     }
     else {
       for (uint i = 0; i < seq_len; i++) {
-        uchar *data = (uchar *)GPU_vertbuf_raw_step(&data_step);
+        uchar *data = static_cast<uchar *>(GPU_vertbuf_raw_step(&data_step));
         PyObject *seq_fast_item = PySequence_Fast(seq_items[i], error_prefix);
 
         if (seq_fast_item == nullptr) {
           ok = false;
           goto finally;
         }
-        if (PySequence_Fast_GET_SIZE(seq_fast_item) != attr->comp_len) {
+        if (PySequence_Fast_GET_SIZE(seq_fast_item) != attr->type.comp_len()) {
           PyErr_Format(PyExc_ValueError,
                        exc_str_size_mismatch,
                        "sequence",
-                       attr->comp_len,
+                       attr->type.comp_len(),
                        PySequence_Fast_GET_SIZE(seq_fast_item));
           ok = false;
           Py_DECREF(seq_fast_item);
@@ -202,7 +202,7 @@ static bool pygpu_vertbuf_fill_impl(blender::gpu::VertBuf *vbo,
   return ok;
 }
 
-static int pygpu_vertbuf_fill(blender::gpu::VertBuf *buf,
+static int pygpu_vertbuf_fill(gpu::VertBuf *buf,
                               int id,
                               PyObject *py_seq_data,
                               const char *error_prefix)
@@ -241,7 +241,6 @@ static PyObject *pygpu_vertbuf__tp_new(PyTypeObject * /*type*/, PyObject *args, 
 
   static const char *_keywords[] = {"format", "len", nullptr};
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
       "O!" /* `format` */
       "I"  /* `len` */
       ":GPUVertBuf.__new__",
@@ -254,8 +253,8 @@ static PyObject *pygpu_vertbuf__tp_new(PyTypeObject * /*type*/, PyObject *args, 
     return nullptr;
   }
 
-  const GPUVertFormat &fmt = ((BPyGPUVertFormat *)params.py_fmt)->fmt;
-  blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(fmt);
+  const GPUVertFormat &fmt = (reinterpret_cast<BPyGPUVertFormat *>(params.py_fmt))->fmt;
+  gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(fmt);
 
   GPU_vertbuf_data_alloc(*vbo, params.len);
 
@@ -269,9 +268,9 @@ PyDoc_STRVAR(
     "\n"
     "   Insert data into the buffer for a single attribute.\n"
     "\n"
-    "   :arg id: Either the name or the id of the attribute.\n"
+    "   :param id: Either the name or the id of the attribute.\n"
     "   :type id: int | str\n"
-    "   :arg data: Buffer or sequence of data that should be stored in the buffer\n"
+    "   :param data: Buffer or sequence of data that should be stored in the buffer\n"
     "   :type data: Buffer | "
     "Sequence[float] | Sequence[int] | Sequence[Sequence[float]] | Sequence[Sequence[int]]\n");
 static PyObject *pygpu_vertbuf_attr_fill(BPyGPUVertBuf *self, PyObject *args, PyObject *kwds)
@@ -281,7 +280,6 @@ static PyObject *pygpu_vertbuf_attr_fill(BPyGPUVertBuf *self, PyObject *args, Py
 
   static const char *_keywords[] = {"id", "data", nullptr};
   static _PyArg_Parser _parser = {
-      PY_ARG_PARSER_HEAD_COMPAT()
       "O" /* `id` */
       "O" /* `data` */
       ":attr_fill",
@@ -318,21 +316,30 @@ static PyObject *pygpu_vertbuf_attr_fill(BPyGPUVertBuf *self, PyObject *args, Py
   Py_RETURN_NONE;
 }
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wcast-function-type"
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wcast-function-type"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wcast-function-type"
+#  endif
 #endif
 
 static PyMethodDef pygpu_vertbuf__tp_methods[] = {
     {"attr_fill",
-     (PyCFunction)pygpu_vertbuf_attr_fill,
+     reinterpret_cast<PyCFunction>(pygpu_vertbuf_attr_fill),
      METH_VARARGS | METH_KEYWORDS,
      pygpu_vertbuf_attr_fill_doc},
     {nullptr, nullptr, 0, nullptr},
 };
 
-#if (defined(__GNUC__) && !defined(__clang__))
-#  pragma GCC diagnostic pop
+#ifdef __GNUC__
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
 #endif
 
 static void pygpu_vertbuf__tp_dealloc(BPyGPUVertBuf *self)
@@ -344,20 +351,22 @@ static void pygpu_vertbuf__tp_dealloc(BPyGPUVertBuf *self)
 PyDoc_STRVAR(
     /* Wrap. */
     pygpu_vertbuf__tp_doc,
-    ".. class:: GPUVertBuf(format, len)\n"
+    ".. class:: GPUVertBuf\n"
     "\n"
     "   Contains a VBO.\n"
     "\n"
-    "   :arg format: Vertex format.\n"
-    "   :type format: :class:`gpu.types.GPUVertFormat`\n"
-    "   :arg len: Amount of vertices that will fit into this buffer.\n"
-    "   :type len: int\n");
+    "   .. method:: __init__(format, len)\n"
+    "\n"
+    "      :param format: Vertex format.\n"
+    "      :type format: :class:`gpu.types.GPUVertFormat`\n"
+    "      :param len: Amount of vertices that will fit into this buffer.\n"
+    "      :type len: int\n");
 PyTypeObject BPyGPUVertBuf_Type = {
     /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "GPUVertBuf",
     /*tp_basicsize*/ sizeof(BPyGPUVertBuf),
     /*tp_itemsize*/ 0,
-    /*tp_dealloc*/ (destructor)pygpu_vertbuf__tp_dealloc,
+    /*tp_dealloc*/ reinterpret_cast<destructor>(pygpu_vertbuf__tp_dealloc),
     /*tp_vectorcall_offset*/ 0,
     /*tp_getattr*/ nullptr,
     /*tp_setattr*/ nullptr,
@@ -410,14 +419,16 @@ PyTypeObject BPyGPUVertBuf_Type = {
 /** \name Public API
  * \{ */
 
-PyObject *BPyGPUVertBuf_CreatePyObject(blender::gpu::VertBuf *buf)
+PyObject *BPyGPUVertBuf_CreatePyObject(gpu::VertBuf *buf)
 {
   BPyGPUVertBuf *self;
 
   self = PyObject_New(BPyGPUVertBuf, &BPyGPUVertBuf_Type);
   self->buf = buf;
 
-  return (PyObject *)self;
+  return reinterpret_cast<PyObject *>(self);
 }
 
 /** \} */
+
+}  // namespace blender

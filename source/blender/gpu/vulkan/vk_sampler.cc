@@ -32,7 +32,7 @@ void VKSampler::create(const GPUSamplerState &sampler_state)
   sampler_info.addressModeV = sampler_info.addressModeW = to_vk_sampler_address_mode(
       sampler_state.extend_yz);
   sampler_info.minLod = 0;
-  sampler_info.maxLod = 1000;
+  sampler_info.maxLod = 0;
 
   if (sampler_state.type == GPU_SAMPLER_STATE_TYPE_PARAMETERS) {
     /* Apply filtering. */
@@ -42,13 +42,18 @@ void VKSampler::create(const GPUSamplerState &sampler_state)
     }
     if (sampler_state.filtering & GPU_SAMPLER_FILTERING_MIPMAP) {
       sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+      sampler_info.minLod = 0;
+      sampler_info.maxLod = 1000;
     }
-    if ((sampler_state.filtering & GPU_SAMPLER_FILTERING_ANISOTROPIC) &&
-        (U.anisotropic_filter > 1) &&
-        (device.physical_device_features_get().samplerAnisotropy == VK_TRUE))
+    if ((sampler_state.filtering & GPU_SAMPLER_FILTERING_MIPMAP) &&
+        (sampler_state.filtering & GPU_SAMPLER_FILTERING_ANISOTROPIC_ENABLE) &&
+        device.physical_device_features_get().samplerAnisotropy == VK_TRUE)
     {
+      float anisotropic_samples = min_ff(
+          float(GPU_anisotropic_samples_get(sampler_state.filtering)),
+          device.physical_device_properties_get().limits.maxSamplerAnisotropy);
       sampler_info.anisotropyEnable = VK_TRUE;
-      sampler_info.maxAnisotropy = U.anisotropic_filter;
+      sampler_info.maxAnisotropy = anisotropic_samples;
     }
   }
   else if (sampler_state.type == GPU_SAMPLER_STATE_TYPE_CUSTOM) {
@@ -67,7 +72,7 @@ void VKSampler::create(const GPUSamplerState &sampler_state)
     }
   }
 
-  vkCreateSampler(device.vk_handle(), &sampler_info, nullptr, &vk_sampler_);
+  device.functions.vkCreateSampler(device.vk_handle(), &sampler_info, nullptr, &vk_sampler_);
   debug::object_label(vk_sampler_, sampler_state.to_string().c_str());
 }
 
@@ -77,7 +82,7 @@ void VKSampler::free()
   if (vk_sampler_ != VK_NULL_HANDLE) {
     const VKDevice &device = VKBackend::get().device;
     if (device.vk_handle() != VK_NULL_HANDLE) {
-      vkDestroySampler(device.vk_handle(), vk_sampler_, nullptr);
+      device.functions.vkDestroySampler(device.vk_handle(), vk_sampler_, nullptr);
     }
     vk_sampler_ = VK_NULL_HANDLE;
   }

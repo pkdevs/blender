@@ -7,14 +7,14 @@
  */
 
 #include "vk_data_conversion.hh"
-#include "vk_device.hh"
 
-#include "gpu_vertex_format_private.hh"
-
-#include "BLI_color.hh"
+#include "BLI_color_types.hh"
 #include "BLI_math_half.hh"
 
 namespace blender::gpu {
+
+/** FP16 value 1.0 */
+constexpr uint16_t HALF_VALUE_1 = 0x3c00;
 
 /* -------------------------------------------------------------------- */
 /** \name Conversion types
@@ -54,15 +54,13 @@ enum class ConversionType {
   I32_TO_I8,
   I8_TO_I32,
 
+  /** Convert device 16F to UINT */
+  HALF_TO_UI8,
+  UI8_TO_HALF,
+
   /** Convert device 16F to floats. */
   HALF_TO_FLOAT,
   FLOAT_TO_HALF,
-
-  FLOAT_TO_SRGBA8,
-  SRGBA8_TO_FLOAT,
-
-  FLOAT_TO_DEPTH_COMPONENT24,
-  DEPTH_COMPONENT24_TO_FLOAT,
 
   FLOAT_TO_B10F_G11F_R11F,
   B10F_G11F_R11F_TO_FLOAT,
@@ -73,12 +71,6 @@ enum class ConversionType {
   FLOAT3_TO_FLOAT4,
   FLOAT4_TO_FLOAT3,
 
-  UINT_TO_DEPTH_COMPONENT24,
-  DEPTH_COMPONENT24_TO_UINT,
-
-  UINT_TO_DEPTH24_STENCIL8,
-  DEPTH24_STENCIL8_TO_UINT,
-
   UINT_TO_DEPTH32F_STENCIL8,
   DEPTH32F_STENCIL8_TO_UINT,
   /**
@@ -87,531 +79,539 @@ enum class ConversionType {
   UNSUPPORTED,
 };
 
-static ConversionType type_of_conversion_float(const eGPUTextureFormat host_format,
-                                               const eGPUTextureFormat device_format)
+static ConversionType type_of_conversion_float(const TextureFormat host_format,
+                                               const TextureFormat device_format)
 {
   if (host_format != device_format) {
-    if (host_format == GPU_RGB16F && device_format == GPU_RGBA16F) {
+    if (host_format == TextureFormat::SFLOAT_16_16_16 &&
+        device_format == TextureFormat::SFLOAT_16_16_16_16)
+    {
       return ConversionType::FLOAT3_TO_HALF4;
     }
-    if (host_format == GPU_RGB32F && device_format == GPU_RGBA32F) {
+    if (host_format == TextureFormat::SFLOAT_32_32_32 &&
+        device_format == TextureFormat::SFLOAT_32_32_32_32)
+    {
       return ConversionType::FLOAT3_TO_FLOAT4;
-    }
-    if (host_format == GPU_DEPTH_COMPONENT24 && device_format == GPU_DEPTH_COMPONENT32F) {
-      return ConversionType::PASS_THROUGH;
-    }
-    if (host_format == GPU_DEPTH24_STENCIL8 && device_format == GPU_DEPTH32F_STENCIL8) {
-      return ConversionType::PASS_THROUGH_D32F_S8;
     }
 
     return ConversionType::UNSUPPORTED;
   }
 
   switch (device_format) {
-    case GPU_RGBA32F:
-    case GPU_RG32F:
-    case GPU_R32F:
-    case GPU_DEPTH_COMPONENT32F:
+    case TextureFormat::SFLOAT_32_32_32_32:
+    case TextureFormat::SFLOAT_32_32:
+    case TextureFormat::SFLOAT_32:
+    case TextureFormat::SFLOAT_32_DEPTH:
       return ConversionType::PASS_THROUGH;
 
-    case GPU_DEPTH32F_STENCIL8:
+    case TextureFormat::SFLOAT_32_DEPTH_UINT_8:
       return ConversionType::PASS_THROUGH_D32F_S8;
 
-    case GPU_RGBA16F:
-    case GPU_RG16F:
-    case GPU_R16F:
-    case GPU_RGB16F:
+    case TextureFormat::SFLOAT_16_16_16_16:
+    case TextureFormat::SFLOAT_16_16:
+    case TextureFormat::SFLOAT_16:
+    case TextureFormat::SFLOAT_16_16_16:
       return ConversionType::FLOAT_TO_HALF;
 
-    case GPU_RGBA8:
-    case GPU_RG8:
-    case GPU_R8:
+    case TextureFormat::SRGBA_8_8_8_8:
+    case TextureFormat::UNORM_8_8_8_8:
+    case TextureFormat::UNORM_8_8:
+    case TextureFormat::UNORM_8:
       return ConversionType::FLOAT_TO_UNORM8;
 
-    case GPU_RGBA8_SNORM:
-    case GPU_RGB8_SNORM:
-    case GPU_RG8_SNORM:
-    case GPU_R8_SNORM:
+    case TextureFormat::SNORM_8_8_8_8:
+    case TextureFormat::SNORM_8_8_8:
+    case TextureFormat::SNORM_8_8:
+    case TextureFormat::SNORM_8:
       return ConversionType::FLOAT_TO_SNORM8;
 
-    case GPU_RGBA16:
-    case GPU_RG16:
-    case GPU_R16:
+    case TextureFormat::UNORM_16_16_16_16:
+    case TextureFormat::UNORM_16_16:
+    case TextureFormat::UNORM_16:
       return ConversionType::FLOAT_TO_UNORM16;
 
-    case GPU_RGBA16_SNORM:
-    case GPU_RGB16_SNORM:
-    case GPU_RG16_SNORM:
-    case GPU_R16_SNORM:
+    case TextureFormat::SNORM_16_16_16_16:
+    case TextureFormat::SNORM_16_16_16:
+    case TextureFormat::SNORM_16_16:
+    case TextureFormat::SNORM_16:
       return ConversionType::FLOAT_TO_SNORM16;
 
-    case GPU_SRGB8_A8:
-      return ConversionType::FLOAT_TO_SRGBA8;
-
-    case GPU_DEPTH_COMPONENT24:
-    case GPU_DEPTH24_STENCIL8:
-      return ConversionType::FLOAT_TO_DEPTH_COMPONENT24;
-
-    case GPU_R11F_G11F_B10F:
+    case TextureFormat::UFLOAT_11_11_10:
       return ConversionType::FLOAT_TO_B10F_G11F_R11F;
 
-    case GPU_SRGB8_A8_DXT1:
-    case GPU_SRGB8_A8_DXT3:
-    case GPU_SRGB8_A8_DXT5:
-    case GPU_RGBA8_DXT1:
-    case GPU_RGBA8_DXT3:
-    case GPU_RGBA8_DXT5:
+    case TextureFormat::SRGB_DXT1:
+    case TextureFormat::SRGB_DXT3:
+    case TextureFormat::SRGB_DXT5:
+    case TextureFormat::SNORM_DXT1:
+    case TextureFormat::SNORM_DXT3:
+    case TextureFormat::SNORM_DXT5:
       /* Not an actual "conversion", but compressed texture upload code
        * pretends that host data is a float. It is actually raw BCn bits. */
       return ConversionType::PASS_THROUGH;
 
-    case GPU_RGB32F: /* GPU_RGB32F Not supported by vendors. */
-    case GPU_RGBA8UI:
-    case GPU_RGBA8I:
-    case GPU_RGBA16UI:
-    case GPU_RGBA16I:
-    case GPU_RGBA32UI:
-    case GPU_RGBA32I:
-    case GPU_RG8UI:
-    case GPU_RG8I:
-    case GPU_RG16UI:
-    case GPU_RG16I:
-    case GPU_RG32UI:
-    case GPU_RG32I:
-    case GPU_R8UI:
-    case GPU_R8I:
-    case GPU_R16UI:
-    case GPU_R16I:
-    case GPU_R32UI:
-    case GPU_R32I:
-    case GPU_RGB10_A2:
-    case GPU_RGB10_A2UI:
-    case GPU_RGB8UI:
-    case GPU_RGB8I:
-    case GPU_RGB8:
-    case GPU_RGB16UI:
-    case GPU_RGB16I:
-    case GPU_RGB16:
-    case GPU_RGB32UI:
-    case GPU_RGB32I:
-    case GPU_SRGB8:
-    case GPU_RGB9_E5:
-    case GPU_DEPTH_COMPONENT16:
+      /* #TextureFormat::SFLOAT_32_32_32 Not supported by vendors. */
+    case TextureFormat::SFLOAT_32_32_32:
+
+    case TextureFormat::UINT_8_8_8_8:
+    case TextureFormat::SINT_8_8_8_8:
+    case TextureFormat::UINT_16_16_16_16:
+    case TextureFormat::SINT_16_16_16_16:
+    case TextureFormat::UINT_32_32_32_32:
+    case TextureFormat::SINT_32_32_32_32:
+    case TextureFormat::UINT_8_8:
+    case TextureFormat::SINT_8_8:
+    case TextureFormat::UINT_16_16:
+    case TextureFormat::SINT_16_16:
+    case TextureFormat::UINT_32_32:
+    case TextureFormat::SINT_32_32:
+    case TextureFormat::UINT_8:
+    case TextureFormat::SINT_8:
+    case TextureFormat::UINT_16:
+    case TextureFormat::SINT_16:
+    case TextureFormat::UINT_32:
+    case TextureFormat::SINT_32:
+    case TextureFormat::UNORM_10_10_10_2:
+    case TextureFormat::UINT_10_10_10_2:
+    case TextureFormat::UINT_8_8_8:
+    case TextureFormat::SINT_8_8_8:
+    case TextureFormat::UNORM_8_8_8:
+    case TextureFormat::UINT_16_16_16:
+    case TextureFormat::SINT_16_16_16:
+    case TextureFormat::UNORM_16_16_16:
+    case TextureFormat::UINT_32_32_32:
+    case TextureFormat::SINT_32_32_32:
+    case TextureFormat::SRGBA_8_8_8:
+    case TextureFormat::UFLOAT_9_9_9_EXP_5:
+    case TextureFormat::UNORM_16_DEPTH:
       return ConversionType::UNSUPPORTED;
+
+    case TextureFormat::Invalid:
+      BLI_assert_unreachable();
+      break;
   }
   return ConversionType::UNSUPPORTED;
 }
 
-static ConversionType type_of_conversion_int(eGPUTextureFormat device_format)
+static ConversionType type_of_conversion_int(TextureFormat device_format)
 {
   switch (device_format) {
-    case GPU_RGBA32I:
-    case GPU_RG32I:
-    case GPU_R32I:
+    case TextureFormat::SINT_32_32_32_32:
+    case TextureFormat::SINT_32_32:
+    case TextureFormat::SINT_32:
       return ConversionType::PASS_THROUGH;
 
-    case GPU_RGBA16I:
-    case GPU_RG16I:
-    case GPU_R16I:
+    case TextureFormat::SINT_16_16_16_16:
+    case TextureFormat::SINT_16_16:
+    case TextureFormat::SINT_16:
       return ConversionType::I32_TO_I16;
 
-    case GPU_RGBA8I:
-    case GPU_RG8I:
-    case GPU_R8I:
+    case TextureFormat::SINT_8_8_8_8:
+    case TextureFormat::SINT_8_8:
+    case TextureFormat::SINT_8:
       return ConversionType::I32_TO_I8;
 
-    case GPU_RGBA8UI:
-    case GPU_RGBA8:
-    case GPU_RGBA16UI:
-    case GPU_RGBA16F:
-    case GPU_RGBA16:
-    case GPU_RGBA32UI:
-    case GPU_RGBA32F:
-    case GPU_RG8UI:
-    case GPU_RG8:
-    case GPU_RG16UI:
-    case GPU_RG16F:
-    case GPU_RG32UI:
-    case GPU_RG32F:
-    case GPU_RG16:
-    case GPU_R8UI:
-    case GPU_R8:
-    case GPU_R16UI:
-    case GPU_R16F:
-    case GPU_R16:
-    case GPU_R32UI:
-    case GPU_R32F:
-    case GPU_RGB10_A2:
-    case GPU_RGB10_A2UI:
-    case GPU_R11F_G11F_B10F:
-    case GPU_DEPTH32F_STENCIL8:
-    case GPU_DEPTH24_STENCIL8:
-    case GPU_SRGB8_A8:
-    case GPU_RGBA8_SNORM:
-    case GPU_RGBA16_SNORM:
-    case GPU_RGB8UI:
-    case GPU_RGB8I:
-    case GPU_RGB8:
-    case GPU_RGB8_SNORM:
-    case GPU_RGB16UI:
-    case GPU_RGB16I:
-    case GPU_RGB16F:
-    case GPU_RGB16:
-    case GPU_RGB16_SNORM:
-    case GPU_RGB32UI:
-    case GPU_RGB32I:
-    case GPU_RGB32F:
-    case GPU_RG8_SNORM:
-    case GPU_RG16_SNORM:
-    case GPU_R8_SNORM:
-    case GPU_R16_SNORM:
-    case GPU_SRGB8_A8_DXT1:
-    case GPU_SRGB8_A8_DXT3:
-    case GPU_SRGB8_A8_DXT5:
-    case GPU_RGBA8_DXT1:
-    case GPU_RGBA8_DXT3:
-    case GPU_RGBA8_DXT5:
-    case GPU_SRGB8:
-    case GPU_RGB9_E5:
-    case GPU_DEPTH_COMPONENT32F:
-    case GPU_DEPTH_COMPONENT24:
-    case GPU_DEPTH_COMPONENT16:
+    case TextureFormat::UINT_8_8_8_8:
+    case TextureFormat::UNORM_8_8_8_8:
+    case TextureFormat::UINT_16_16_16_16:
+    case TextureFormat::SFLOAT_16_16_16_16:
+    case TextureFormat::UNORM_16_16_16_16:
+    case TextureFormat::UINT_32_32_32_32:
+    case TextureFormat::SFLOAT_32_32_32_32:
+    case TextureFormat::UINT_8_8:
+    case TextureFormat::UNORM_8_8:
+    case TextureFormat::UINT_16_16:
+    case TextureFormat::SFLOAT_16_16:
+    case TextureFormat::UINT_32_32:
+    case TextureFormat::SFLOAT_32_32:
+    case TextureFormat::UNORM_16_16:
+    case TextureFormat::UINT_8:
+    case TextureFormat::UNORM_8:
+    case TextureFormat::UINT_16:
+    case TextureFormat::SFLOAT_16:
+    case TextureFormat::UNORM_16:
+    case TextureFormat::UINT_32:
+    case TextureFormat::SFLOAT_32:
+    case TextureFormat::UNORM_10_10_10_2:
+    case TextureFormat::UINT_10_10_10_2:
+    case TextureFormat::UFLOAT_11_11_10:
+    case TextureFormat::SFLOAT_32_DEPTH_UINT_8:
+    case TextureFormat::SRGBA_8_8_8_8:
+    case TextureFormat::SNORM_8_8_8_8:
+    case TextureFormat::SNORM_16_16_16_16:
+    case TextureFormat::UINT_8_8_8:
+    case TextureFormat::SINT_8_8_8:
+    case TextureFormat::UNORM_8_8_8:
+    case TextureFormat::SNORM_8_8_8:
+    case TextureFormat::UINT_16_16_16:
+    case TextureFormat::SINT_16_16_16:
+    case TextureFormat::SFLOAT_16_16_16:
+    case TextureFormat::UNORM_16_16_16:
+    case TextureFormat::SNORM_16_16_16:
+    case TextureFormat::UINT_32_32_32:
+    case TextureFormat::SINT_32_32_32:
+    case TextureFormat::SFLOAT_32_32_32:
+    case TextureFormat::SNORM_8_8:
+    case TextureFormat::SNORM_16_16:
+    case TextureFormat::SNORM_8:
+    case TextureFormat::SNORM_16:
+    case TextureFormat::SRGB_DXT1:
+    case TextureFormat::SRGB_DXT3:
+    case TextureFormat::SRGB_DXT5:
+    case TextureFormat::SNORM_DXT1:
+    case TextureFormat::SNORM_DXT3:
+    case TextureFormat::SNORM_DXT5:
+    case TextureFormat::SRGBA_8_8_8:
+    case TextureFormat::UFLOAT_9_9_9_EXP_5:
+    case TextureFormat::SFLOAT_32_DEPTH:
+    case TextureFormat::UNORM_16_DEPTH:
       return ConversionType::UNSUPPORTED;
+
+    case TextureFormat::Invalid:
+      BLI_assert_unreachable();
+      break;
   }
   return ConversionType::UNSUPPORTED;
 }
 
-static ConversionType type_of_conversion_uint(eGPUTextureFormat device_format)
+static ConversionType type_of_conversion_uint(TextureFormat device_format)
 {
   switch (device_format) {
-    case GPU_RGBA32UI:
-    case GPU_RG32UI:
-    case GPU_R32UI:
-    case GPU_DEPTH_COMPONENT24:
+    case TextureFormat::UINT_32_32_32_32:
+    case TextureFormat::UINT_32_32:
+    case TextureFormat::UINT_32:
       return ConversionType::PASS_THROUGH;
 
-    case GPU_RGBA16UI:
-    case GPU_RG16UI:
-    case GPU_R16UI:
-    case GPU_RGB16UI:
+    case TextureFormat::UINT_16_16_16_16:
+    case TextureFormat::UINT_16_16:
+    case TextureFormat::UINT_16:
+    case TextureFormat::UINT_16_16_16:
       return ConversionType::UI32_TO_UI16;
 
-    case GPU_RGBA8UI:
-    case GPU_RG8UI:
-    case GPU_R8UI:
+    case TextureFormat::UINT_8_8_8_8:
+    case TextureFormat::UINT_8_8:
+    case TextureFormat::UINT_8:
       return ConversionType::UI32_TO_UI8;
 
-    case GPU_DEPTH_COMPONENT32F:
-    case GPU_DEPTH32F_STENCIL8:
+    case TextureFormat::SFLOAT_32_DEPTH:
+    case TextureFormat::SFLOAT_32_DEPTH_UINT_8:
       return ConversionType::UNORM32_TO_FLOAT;
-    case GPU_DEPTH24_STENCIL8:
-      return ConversionType::UINT_TO_DEPTH_COMPONENT24;
-    case GPU_RGBA8I:
-    case GPU_RGBA8:
-    case GPU_RGBA16I:
-    case GPU_RGBA16F:
-    case GPU_RGBA16:
-    case GPU_RGBA32I:
-    case GPU_RGBA32F:
-    case GPU_RG8I:
-    case GPU_RG8:
-    case GPU_RG16I:
-    case GPU_RG16F:
-    case GPU_RG16:
-    case GPU_RG32I:
-    case GPU_RG32F:
-    case GPU_R8I:
-    case GPU_R8:
-    case GPU_R16I:
-    case GPU_R16F:
-    case GPU_R16:
-    case GPU_R32I:
-    case GPU_R32F:
-    case GPU_RGB10_A2:
-    case GPU_RGB10_A2UI:
-    case GPU_R11F_G11F_B10F:
-    case GPU_SRGB8_A8:
-    case GPU_RGBA8_SNORM:
-    case GPU_RGBA16_SNORM:
-    case GPU_RGB8UI:
-    case GPU_RGB8I:
-    case GPU_RGB8:
-    case GPU_RGB8_SNORM:
-    case GPU_RGB16I:
-    case GPU_RGB16F:
-    case GPU_RGB16:
-    case GPU_RGB16_SNORM:
-    case GPU_RGB32UI:
-    case GPU_RGB32I:
-    case GPU_RGB32F:
-    case GPU_RG8_SNORM:
-    case GPU_RG16_SNORM:
-    case GPU_R8_SNORM:
-    case GPU_R16_SNORM:
-    case GPU_SRGB8_A8_DXT1:
-    case GPU_SRGB8_A8_DXT3:
-    case GPU_SRGB8_A8_DXT5:
-    case GPU_RGBA8_DXT1:
-    case GPU_RGBA8_DXT3:
-    case GPU_RGBA8_DXT5:
-    case GPU_SRGB8:
-    case GPU_RGB9_E5:
-    case GPU_DEPTH_COMPONENT16:
+
+    case TextureFormat::SINT_8_8_8_8:
+    case TextureFormat::UNORM_8_8_8_8:
+    case TextureFormat::SINT_16_16_16_16:
+    case TextureFormat::SFLOAT_16_16_16_16:
+    case TextureFormat::UNORM_16_16_16_16:
+    case TextureFormat::SINT_32_32_32_32:
+    case TextureFormat::SFLOAT_32_32_32_32:
+    case TextureFormat::SINT_8_8:
+    case TextureFormat::UNORM_8_8:
+    case TextureFormat::SINT_16_16:
+    case TextureFormat::SFLOAT_16_16:
+    case TextureFormat::UNORM_16_16:
+    case TextureFormat::SINT_32_32:
+    case TextureFormat::SFLOAT_32_32:
+    case TextureFormat::SINT_8:
+    case TextureFormat::UNORM_8:
+    case TextureFormat::SINT_16:
+    case TextureFormat::SFLOAT_16:
+    case TextureFormat::UNORM_16:
+    case TextureFormat::SINT_32:
+    case TextureFormat::SFLOAT_32:
+    case TextureFormat::UNORM_10_10_10_2:
+    case TextureFormat::UINT_10_10_10_2:
+    case TextureFormat::UFLOAT_11_11_10:
+    case TextureFormat::SRGBA_8_8_8_8:
+    case TextureFormat::SNORM_8_8_8_8:
+    case TextureFormat::SNORM_16_16_16_16:
+    case TextureFormat::UINT_8_8_8:
+    case TextureFormat::SINT_8_8_8:
+    case TextureFormat::UNORM_8_8_8:
+    case TextureFormat::SNORM_8_8_8:
+    case TextureFormat::SINT_16_16_16:
+    case TextureFormat::SFLOAT_16_16_16:
+    case TextureFormat::UNORM_16_16_16:
+    case TextureFormat::SNORM_16_16_16:
+    case TextureFormat::UINT_32_32_32:
+    case TextureFormat::SINT_32_32_32:
+    case TextureFormat::SFLOAT_32_32_32:
+    case TextureFormat::SNORM_8_8:
+    case TextureFormat::SNORM_16_16:
+    case TextureFormat::SNORM_8:
+    case TextureFormat::SNORM_16:
+    case TextureFormat::SRGB_DXT1:
+    case TextureFormat::SRGB_DXT3:
+    case TextureFormat::SRGB_DXT5:
+    case TextureFormat::SNORM_DXT1:
+    case TextureFormat::SNORM_DXT3:
+    case TextureFormat::SNORM_DXT5:
+    case TextureFormat::SRGBA_8_8_8:
+    case TextureFormat::UFLOAT_9_9_9_EXP_5:
+    case TextureFormat::UNORM_16_DEPTH:
       return ConversionType::UNSUPPORTED;
+
+    case TextureFormat::Invalid:
+      BLI_assert_unreachable();
+      break;
   }
   return ConversionType::UNSUPPORTED;
 }
 
-static ConversionType type_of_conversion_half(eGPUTextureFormat device_format)
+static ConversionType type_of_conversion_half(TextureFormat device_format)
 {
   switch (device_format) {
-    case GPU_RGBA16F:
-    case GPU_RG16F:
-    case GPU_R16F:
+    case TextureFormat::SFLOAT_16_16_16_16:
+    case TextureFormat::SFLOAT_16_16:
+    case TextureFormat::SFLOAT_16:
       return ConversionType::PASS_THROUGH;
 
-    case GPU_RGBA8UI:
-    case GPU_RGBA8I:
-    case GPU_RGBA8:
-    case GPU_RGBA16UI:
-    case GPU_RGBA16I:
-    case GPU_RGBA16:
-    case GPU_RGBA32UI:
-    case GPU_RGBA32I:
-    case GPU_RGBA32F:
-    case GPU_RG8UI:
-    case GPU_RG8I:
-    case GPU_RG8:
-    case GPU_RG16UI:
-    case GPU_RG16I:
-    case GPU_RG16:
-    case GPU_RG32UI:
-    case GPU_RG32I:
-    case GPU_RG32F:
-    case GPU_R8UI:
-    case GPU_R8I:
-    case GPU_R8:
-    case GPU_R16UI:
-    case GPU_R16I:
-    case GPU_R16:
-    case GPU_R32UI:
-    case GPU_R32I:
-    case GPU_R32F:
-    case GPU_RGB10_A2:
-    case GPU_RGB10_A2UI:
-    case GPU_R11F_G11F_B10F:
-    case GPU_DEPTH32F_STENCIL8:
-    case GPU_DEPTH24_STENCIL8:
-    case GPU_SRGB8_A8:
-    case GPU_RGBA8_SNORM:
-    case GPU_RGBA16_SNORM:
-    case GPU_RGB8UI:
-    case GPU_RGB8I:
-    case GPU_RGB8:
-    case GPU_RGB8_SNORM:
-    case GPU_RGB16UI:
-    case GPU_RGB16I:
-    case GPU_RGB16F:
-    case GPU_RGB16:
-    case GPU_RGB16_SNORM:
-    case GPU_RGB32UI:
-    case GPU_RGB32I:
-    case GPU_RGB32F:
-    case GPU_RG8_SNORM:
-    case GPU_RG16_SNORM:
-    case GPU_R8_SNORM:
-    case GPU_R16_SNORM:
-    case GPU_SRGB8_A8_DXT1:
-    case GPU_SRGB8_A8_DXT3:
-    case GPU_SRGB8_A8_DXT5:
-    case GPU_RGBA8_DXT1:
-    case GPU_RGBA8_DXT3:
-    case GPU_RGBA8_DXT5:
-    case GPU_SRGB8:
-    case GPU_RGB9_E5:
-    case GPU_DEPTH_COMPONENT32F:
-    case GPU_DEPTH_COMPONENT24:
-    case GPU_DEPTH_COMPONENT16:
+    case TextureFormat::UINT_8_8_8_8:
+    case TextureFormat::SINT_8_8_8_8:
+    case TextureFormat::UNORM_8_8_8_8:
+    case TextureFormat::UINT_16_16_16_16:
+    case TextureFormat::SINT_16_16_16_16:
+    case TextureFormat::UNORM_16_16_16_16:
+    case TextureFormat::UINT_32_32_32_32:
+    case TextureFormat::SINT_32_32_32_32:
+    case TextureFormat::SFLOAT_32_32_32_32:
+    case TextureFormat::UINT_8_8:
+    case TextureFormat::SINT_8_8:
+    case TextureFormat::UNORM_8_8:
+    case TextureFormat::UINT_16_16:
+    case TextureFormat::SINT_16_16:
+    case TextureFormat::UNORM_16_16:
+    case TextureFormat::UINT_32_32:
+    case TextureFormat::SINT_32_32:
+    case TextureFormat::SFLOAT_32_32:
+    case TextureFormat::UINT_8:
+    case TextureFormat::SINT_8:
+    case TextureFormat::UNORM_8:
+    case TextureFormat::UINT_16:
+    case TextureFormat::SINT_16:
+    case TextureFormat::UNORM_16:
+    case TextureFormat::UINT_32:
+    case TextureFormat::SINT_32:
+    case TextureFormat::SFLOAT_32:
+    case TextureFormat::UNORM_10_10_10_2:
+    case TextureFormat::UINT_10_10_10_2:
+    case TextureFormat::UFLOAT_11_11_10:
+    case TextureFormat::SFLOAT_32_DEPTH_UINT_8:
+    case TextureFormat::SRGBA_8_8_8_8:
+    case TextureFormat::SNORM_8_8_8_8:
+    case TextureFormat::SNORM_16_16_16_16:
+    case TextureFormat::UINT_8_8_8:
+    case TextureFormat::SINT_8_8_8:
+    case TextureFormat::UNORM_8_8_8:
+    case TextureFormat::SNORM_8_8_8:
+    case TextureFormat::UINT_16_16_16:
+    case TextureFormat::SINT_16_16_16:
+    case TextureFormat::SFLOAT_16_16_16:
+    case TextureFormat::UNORM_16_16_16:
+    case TextureFormat::SNORM_16_16_16:
+    case TextureFormat::UINT_32_32_32:
+    case TextureFormat::SINT_32_32_32:
+    case TextureFormat::SFLOAT_32_32_32:
+    case TextureFormat::SNORM_8_8:
+    case TextureFormat::SNORM_16_16:
+    case TextureFormat::SNORM_8:
+    case TextureFormat::SNORM_16:
+    case TextureFormat::SRGB_DXT1:
+    case TextureFormat::SRGB_DXT3:
+    case TextureFormat::SRGB_DXT5:
+    case TextureFormat::SNORM_DXT1:
+    case TextureFormat::SNORM_DXT3:
+    case TextureFormat::SNORM_DXT5:
+    case TextureFormat::SRGBA_8_8_8:
+    case TextureFormat::UFLOAT_9_9_9_EXP_5:
+    case TextureFormat::SFLOAT_32_DEPTH:
+    case TextureFormat::UNORM_16_DEPTH:
       return ConversionType::UNSUPPORTED;
+
+    case TextureFormat::Invalid:
+      BLI_assert_unreachable();
+      break;
   }
   return ConversionType::UNSUPPORTED;
 }
 
-static ConversionType type_of_conversion_ubyte(eGPUTextureFormat device_format)
+static ConversionType type_of_conversion_ubyte(TextureFormat device_format)
 {
   switch (device_format) {
-    case GPU_RGBA8UI:
-    case GPU_RGBA8:
-    case GPU_RG8UI:
-    case GPU_RG8:
-    case GPU_R8UI:
-    case GPU_R8:
-    case GPU_SRGB8_A8:
+    case TextureFormat::UINT_8_8_8_8:
+    case TextureFormat::UNORM_8_8_8_8:
+    case TextureFormat::UINT_8_8:
+    case TextureFormat::UNORM_8_8:
+    case TextureFormat::UINT_8:
+    case TextureFormat::UNORM_8:
+    case TextureFormat::SRGBA_8_8_8_8:
       return ConversionType::PASS_THROUGH;
 
-    case GPU_RGBA8I:
-    case GPU_RGBA16UI:
-    case GPU_RGBA16I:
-    case GPU_RGBA16F:
-    case GPU_RGBA16:
-    case GPU_RGBA32UI:
-    case GPU_RGBA32I:
-    case GPU_RGBA32F:
-    case GPU_RG8I:
-    case GPU_RG16UI:
-    case GPU_RG16I:
-    case GPU_RG16F:
-    case GPU_RG16:
-    case GPU_RG32UI:
-    case GPU_RG32I:
-    case GPU_RG32F:
-    case GPU_R8I:
-    case GPU_R16UI:
-    case GPU_R16I:
-    case GPU_R16F:
-    case GPU_R16:
-    case GPU_R32UI:
-    case GPU_R32I:
-    case GPU_R32F:
-    case GPU_RGB10_A2:
-    case GPU_RGB10_A2UI:
-    case GPU_R11F_G11F_B10F:
-    case GPU_DEPTH32F_STENCIL8:
-    case GPU_DEPTH24_STENCIL8:
-    case GPU_RGBA8_SNORM:
-    case GPU_RGBA16_SNORM:
-    case GPU_RGB8UI:
-    case GPU_RGB8I:
-    case GPU_RGB8:
-    case GPU_RGB8_SNORM:
-    case GPU_RGB16UI:
-    case GPU_RGB16I:
-    case GPU_RGB16F:
-    case GPU_RGB16:
-    case GPU_RGB16_SNORM:
-    case GPU_RGB32UI:
-    case GPU_RGB32I:
-    case GPU_RGB32F:
-    case GPU_RG8_SNORM:
-    case GPU_RG16_SNORM:
-    case GPU_R8_SNORM:
-    case GPU_R16_SNORM:
-    case GPU_SRGB8_A8_DXT1:
-    case GPU_SRGB8_A8_DXT3:
-    case GPU_SRGB8_A8_DXT5:
-    case GPU_RGBA8_DXT1:
-    case GPU_RGBA8_DXT3:
-    case GPU_RGBA8_DXT5:
-    case GPU_SRGB8:
-    case GPU_RGB9_E5:
-    case GPU_DEPTH_COMPONENT32F:
-    case GPU_DEPTH_COMPONENT24:
-    case GPU_DEPTH_COMPONENT16:
+    case TextureFormat::SFLOAT_16_16_16_16:
+    case TextureFormat::SFLOAT_16_16:
+    case TextureFormat::SFLOAT_16:
+      return ConversionType::UI8_TO_HALF;
+
+    case TextureFormat::SINT_8_8_8_8:
+    case TextureFormat::UINT_16_16_16_16:
+    case TextureFormat::SINT_16_16_16_16:
+    case TextureFormat::UNORM_16_16_16_16:
+    case TextureFormat::UINT_32_32_32_32:
+    case TextureFormat::SINT_32_32_32_32:
+    case TextureFormat::SFLOAT_32_32_32_32:
+    case TextureFormat::SINT_8_8:
+    case TextureFormat::UINT_16_16:
+    case TextureFormat::SINT_16_16:
+    case TextureFormat::UNORM_16_16:
+    case TextureFormat::UINT_32_32:
+    case TextureFormat::SINT_32_32:
+    case TextureFormat::SFLOAT_32_32:
+    case TextureFormat::SINT_8:
+    case TextureFormat::UINT_16:
+    case TextureFormat::SINT_16:
+    case TextureFormat::UNORM_16:
+    case TextureFormat::UINT_32:
+    case TextureFormat::SINT_32:
+    case TextureFormat::SFLOAT_32:
+    case TextureFormat::UNORM_10_10_10_2:
+    case TextureFormat::UINT_10_10_10_2:
+    case TextureFormat::UFLOAT_11_11_10:
+    case TextureFormat::SFLOAT_32_DEPTH_UINT_8:
+    case TextureFormat::SNORM_8_8_8_8:
+    case TextureFormat::SNORM_16_16_16_16:
+    case TextureFormat::UINT_8_8_8:
+    case TextureFormat::SINT_8_8_8:
+    case TextureFormat::UNORM_8_8_8:
+    case TextureFormat::SNORM_8_8_8:
+    case TextureFormat::UINT_16_16_16:
+    case TextureFormat::SINT_16_16_16:
+    case TextureFormat::SFLOAT_16_16_16:
+    case TextureFormat::UNORM_16_16_16:
+    case TextureFormat::SNORM_16_16_16:
+    case TextureFormat::UINT_32_32_32:
+    case TextureFormat::SINT_32_32_32:
+    case TextureFormat::SFLOAT_32_32_32:
+    case TextureFormat::SNORM_8_8:
+    case TextureFormat::SNORM_16_16:
+    case TextureFormat::SNORM_8:
+    case TextureFormat::SNORM_16:
+    case TextureFormat::SRGB_DXT1:
+    case TextureFormat::SRGB_DXT3:
+    case TextureFormat::SRGB_DXT5:
+    case TextureFormat::SNORM_DXT1:
+    case TextureFormat::SNORM_DXT3:
+    case TextureFormat::SNORM_DXT5:
+    case TextureFormat::SRGBA_8_8_8:
+    case TextureFormat::UFLOAT_9_9_9_EXP_5:
+    case TextureFormat::SFLOAT_32_DEPTH:
+    case TextureFormat::UNORM_16_DEPTH:
       return ConversionType::UNSUPPORTED;
+
+    case TextureFormat::Invalid:
+      BLI_assert_unreachable();
+      break;
   }
   return ConversionType::UNSUPPORTED;
 }
 
-static ConversionType type_of_conversion_uint248(const eGPUTextureFormat device_format)
+static ConversionType type_of_conversion_uint248(const TextureFormat device_format)
 {
   switch (device_format) {
-    case GPU_DEPTH24_STENCIL8:
-      return ConversionType::UINT_TO_DEPTH24_STENCIL8;
-
-    case GPU_DEPTH32F_STENCIL8:
+    case TextureFormat::SFLOAT_32_DEPTH_UINT_8:
       return ConversionType::UINT_TO_DEPTH32F_STENCIL8;
 
-    case GPU_RGBA32F:
-    case GPU_RG32F:
-    case GPU_R32F:
-    case GPU_RGBA16F:
-    case GPU_RG16F:
-    case GPU_R16F:
-    case GPU_RGB16F:
-    case GPU_RGBA8:
-    case GPU_RG8:
-    case GPU_R8:
-    case GPU_RGBA8_SNORM:
-    case GPU_RGB8_SNORM:
-    case GPU_RG8_SNORM:
-    case GPU_R8_SNORM:
-    case GPU_RGBA16:
-    case GPU_RG16:
-    case GPU_R16:
-    case GPU_RGBA16_SNORM:
-    case GPU_RGB16_SNORM:
-    case GPU_RG16_SNORM:
-    case GPU_R16_SNORM:
-    case GPU_SRGB8_A8:
-    case GPU_DEPTH_COMPONENT24:
-    case GPU_DEPTH_COMPONENT32F:
-    case GPU_R11F_G11F_B10F:
-    case GPU_SRGB8_A8_DXT1:
-    case GPU_SRGB8_A8_DXT3:
-    case GPU_SRGB8_A8_DXT5:
-    case GPU_RGBA8_DXT1:
-    case GPU_RGBA8_DXT3:
-    case GPU_RGBA8_DXT5:
+    case TextureFormat::SFLOAT_32_32_32_32:
+    case TextureFormat::SFLOAT_32_32:
+    case TextureFormat::SFLOAT_32:
+    case TextureFormat::SFLOAT_16_16_16_16:
+    case TextureFormat::SFLOAT_16_16:
+    case TextureFormat::SFLOAT_16:
+    case TextureFormat::SFLOAT_16_16_16:
+    case TextureFormat::UNORM_8_8_8_8:
+    case TextureFormat::UNORM_8_8:
+    case TextureFormat::UNORM_8:
+    case TextureFormat::SNORM_8_8_8_8:
+    case TextureFormat::SNORM_8_8_8:
+    case TextureFormat::SNORM_8_8:
+    case TextureFormat::SNORM_8:
+    case TextureFormat::UNORM_16_16_16_16:
+    case TextureFormat::UNORM_16_16:
+    case TextureFormat::UNORM_16:
+    case TextureFormat::SNORM_16_16_16_16:
+    case TextureFormat::SNORM_16_16_16:
+    case TextureFormat::SNORM_16_16:
+    case TextureFormat::SNORM_16:
+    case TextureFormat::SRGBA_8_8_8_8:
+    case TextureFormat::SFLOAT_32_DEPTH:
+    case TextureFormat::UFLOAT_11_11_10:
+    case TextureFormat::SRGB_DXT1:
+    case TextureFormat::SRGB_DXT3:
+    case TextureFormat::SRGB_DXT5:
+    case TextureFormat::SNORM_DXT1:
+    case TextureFormat::SNORM_DXT3:
+    case TextureFormat::SNORM_DXT5:
 
-    case GPU_RGB32F: /* GPU_RGB32F Not supported by vendors. */
-    case GPU_RGBA8UI:
-    case GPU_RGBA8I:
-    case GPU_RGBA16UI:
-    case GPU_RGBA16I:
-    case GPU_RGBA32UI:
-    case GPU_RGBA32I:
-    case GPU_RG8UI:
-    case GPU_RG8I:
-    case GPU_RG16UI:
-    case GPU_RG16I:
-    case GPU_RG32UI:
-    case GPU_RG32I:
-    case GPU_R8UI:
-    case GPU_R8I:
-    case GPU_R16UI:
-    case GPU_R16I:
-    case GPU_R32UI:
-    case GPU_R32I:
-    case GPU_RGB10_A2:
-    case GPU_RGB10_A2UI:
-    case GPU_RGB8UI:
-    case GPU_RGB8I:
-    case GPU_RGB8:
-    case GPU_RGB16UI:
-    case GPU_RGB16I:
-    case GPU_RGB16:
-    case GPU_RGB32UI:
-    case GPU_RGB32I:
-    case GPU_SRGB8:
-    case GPU_RGB9_E5:
-    case GPU_DEPTH_COMPONENT16:
+      /* #TextureFormat::SFLOAT_32_32_32 Not supported by vendors. */
+    case TextureFormat::SFLOAT_32_32_32:
+
+    case TextureFormat::UINT_8_8_8_8:
+    case TextureFormat::SINT_8_8_8_8:
+    case TextureFormat::UINT_16_16_16_16:
+    case TextureFormat::SINT_16_16_16_16:
+    case TextureFormat::UINT_32_32_32_32:
+    case TextureFormat::SINT_32_32_32_32:
+    case TextureFormat::UINT_8_8:
+    case TextureFormat::SINT_8_8:
+    case TextureFormat::UINT_16_16:
+    case TextureFormat::SINT_16_16:
+    case TextureFormat::UINT_32_32:
+    case TextureFormat::SINT_32_32:
+    case TextureFormat::UINT_8:
+    case TextureFormat::SINT_8:
+    case TextureFormat::UINT_16:
+    case TextureFormat::SINT_16:
+    case TextureFormat::UINT_32:
+    case TextureFormat::SINT_32:
+    case TextureFormat::UNORM_10_10_10_2:
+    case TextureFormat::UINT_10_10_10_2:
+    case TextureFormat::UINT_8_8_8:
+    case TextureFormat::SINT_8_8_8:
+    case TextureFormat::UNORM_8_8_8:
+    case TextureFormat::UINT_16_16_16:
+    case TextureFormat::SINT_16_16_16:
+    case TextureFormat::UNORM_16_16_16:
+    case TextureFormat::UINT_32_32_32:
+    case TextureFormat::SINT_32_32_32:
+    case TextureFormat::SRGBA_8_8_8:
+    case TextureFormat::UFLOAT_9_9_9_EXP_5:
+    case TextureFormat::UNORM_16_DEPTH:
       return ConversionType::UNSUPPORTED;
+
+    case TextureFormat::Invalid:
+      BLI_assert_unreachable();
+      break;
   }
   return ConversionType::UNSUPPORTED;
 }
 
-static ConversionType type_of_conversion_r11g11b10(eGPUTextureFormat device_format)
+static ConversionType type_of_conversion_r11g11b10(TextureFormat device_format)
 {
-  if (device_format == GPU_R11F_G11F_B10F) {
+  if (device_format == TextureFormat::UFLOAT_11_11_10) {
     return ConversionType::PASS_THROUGH;
   }
   return ConversionType::UNSUPPORTED;
 }
 
-static ConversionType type_of_conversion_r10g10b10a2(eGPUTextureFormat device_format)
+static ConversionType type_of_conversion_r10g10b10a2(TextureFormat device_format)
 {
-  if (ELEM(device_format, GPU_RGB10_A2, GPU_RGB10_A2UI)) {
+  if (ELEM(device_format, TextureFormat::UNORM_10_10_10_2, TextureFormat::UINT_10_10_10_2)) {
     return ConversionType::PASS_THROUGH;
   }
   return ConversionType::UNSUPPORTED;
 }
 
 static ConversionType host_to_device(const eGPUDataFormat host_format,
-                                     const eGPUTextureFormat host_texture_format,
-                                     const eGPUTextureFormat device_format)
+                                     const TextureFormat host_texture_format,
+                                     const TextureFormat device_format)
 {
-  BLI_assert(validate_data_format(device_format, host_format));
-
   switch (host_format) {
     case GPU_DATA_FLOAT:
       return type_of_conversion_float(host_texture_format, device_format);
@@ -627,7 +627,7 @@ static ConversionType host_to_device(const eGPUDataFormat host_format,
       return type_of_conversion_r11g11b10(device_format);
     case GPU_DATA_2_10_10_10_REV:
       return type_of_conversion_r10g10b10a2(device_format);
-    case GPU_DATA_UINT_24_8:
+    case GPU_DATA_UINT_24_8_DEPRECATED:
       return type_of_conversion_uint248(device_format);
   }
 
@@ -660,14 +660,11 @@ static ConversionType reversed(ConversionType type)
       CASE_PAIR(UI32, UI8)
       CASE_PAIR(I32, I8)
       CASE_PAIR(FLOAT, HALF)
-      CASE_PAIR(FLOAT, SRGBA8)
-      CASE_PAIR(FLOAT, DEPTH_COMPONENT24)
-      CASE_PAIR(UINT, DEPTH_COMPONENT24)
       CASE_PAIR(FLOAT, B10F_G11F_R11F)
       CASE_PAIR(FLOAT3, HALF4)
       CASE_PAIR(FLOAT3, FLOAT4)
-      CASE_PAIR(UINT, DEPTH24_STENCIL8)
       CASE_PAIR(UINT, DEPTH32F_STENCIL8)
+      CASE_PAIR(UI8, HALF)
 
     case ConversionType::UNSUPPORTED:
       return ConversionType::UNSUPPORTED;
@@ -679,7 +676,7 @@ static ConversionType reversed(ConversionType type)
   return ConversionType::UNSUPPORTED;
 }
 
-/* \} */
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Data Conversion
@@ -718,8 +715,8 @@ using UI32 = ComponentValue<uint32_t>;
 using I8 = ComponentValue<int8_t>;
 using I16 = ComponentValue<int16_t>;
 using I32 = ComponentValue<int32_t>;
+using F16 = ComponentValue<uint16_t>;
 using F32 = ComponentValue<float>;
-using SRGBA8 = PixelValue<ColorSceneLinearByteEncoded4b<eAlpha::Premultiplied>>;
 using FLOAT3 = PixelValue<float3>;
 using FLOAT4 = PixelValue<ColorSceneLinear4f<eAlpha::Premultiplied>>;
 /* NOTE: Vulkan stores R11_G11_B10 in reverse component order. */
@@ -761,27 +758,6 @@ class HALF4 : public PixelValue<uint64_t> {
   }
 };
 
-class DepthComponent24 : public ComponentValue<uint32_t> {
- public:
-  operator uint32_t() const
-  {
-    return value;
-  }
-
-  DepthComponent24 &operator=(uint32_t new_value)
-  {
-    value = new_value;
-    return *this;
-  }
-
-  /* Depth component24 are 4 bytes, but 1 isn't used. */
-  static constexpr size_t used_byte_size()
-  {
-    return 3;
-  }
-};
-
-struct Depth24Stencil8 : ComponentValue<uint32_t> {};
 /* Use a float as we only have the depth aspect in the staging buffers. */
 struct Depth32fStencil8 : ComponentValue<float> {};
 
@@ -807,38 +783,22 @@ template<typename InnerType> struct SignedNormalized {
 
 template<typename InnerType> struct UnsignedNormalized {
   static_assert(std::is_same<InnerType, uint8_t>() || std::is_same<InnerType, uint16_t>() ||
-                std::is_same<InnerType, uint32_t>() ||
-                std::is_same<InnerType, DepthComponent24>());
+                std::is_same<InnerType, uint32_t>());
   InnerType value;
 
   static constexpr size_t used_byte_size()
   {
-    if constexpr (std::is_same<InnerType, DepthComponent24>()) {
-      return InnerType::used_byte_size();
-    }
-    else {
-      return sizeof(InnerType);
-    }
+    return sizeof(InnerType);
   }
 
   static constexpr uint32_t scalar()
   {
-    if constexpr (std::is_same<InnerType, DepthComponent24>()) {
-      return (1 << (used_byte_size() * 8)) - 1;
-    }
-    else {
-      return std::numeric_limits<InnerType>::max();
-    }
+    return std::numeric_limits<InnerType>::max();
   }
 
   static constexpr uint32_t max()
   {
-    if constexpr (std::is_same<InnerType, DepthComponent24>()) {
-      return (1 << (used_byte_size() * 8)) - 1;
-    }
-    else {
-      return std::numeric_limits<InnerType>::max();
-    }
+    return std::numeric_limits<InnerType>::max();
   }
 };
 
@@ -870,7 +830,7 @@ template<typename StorageType> void convert(UnsignedNormalized<StorageType> &dst
 template<typename StorageType> void convert(F32 &dst, const UnsignedNormalized<StorageType> &src)
 {
   static constexpr uint32_t scalar = UnsignedNormalized<StorageType>::scalar();
-  dst.value = float(uint32_t(src.value)) / float(scalar);
+  dst.value = float(uint32_t(src.value & scalar)) / float(scalar);
 }
 
 template<typename StorageType>
@@ -899,29 +859,11 @@ void convert(DestinationType &dst, const SourceType &src)
   dst.value = src.value;
 }
 
-static void convert(SRGBA8 &dst, const FLOAT4 &src)
-{
-  dst.value = src.value.encode();
-}
-
-static void convert(FLOAT4 &dst, const SRGBA8 &src)
-{
-  dst.value = src.value.decode();
-}
-
 static void convert(FLOAT3 &dst, const HALF4 &src)
 {
   dst.value.x = math::half_to_float(src.get_r());
   dst.value.y = math::half_to_float(src.get_g());
   dst.value.z = math::half_to_float(src.get_b());
-}
-
-static void convert(HALF4 &dst, const FLOAT3 &src)
-{
-  dst.set_r(math::float_to_half(src.value.x));
-  dst.set_g(math::float_to_half(src.value.y));
-  dst.set_b(math::float_to_half(src.value.z));
-  dst.set_a(0x3c00); /* FP16 1.0 */
 }
 
 static void convert(FLOAT3 &dst, const FLOAT4 &src)
@@ -937,6 +879,24 @@ static void convert(FLOAT4 &dst, const FLOAT3 &src)
   dst.value.g = src.value.y;
   dst.value.b = src.value.z;
   dst.value.a = 1.0f;
+}
+
+static void convert(F16 &dst, const UI8 &src)
+{
+  UnsignedNormalized<uint8_t> un8;
+  un8.value = src.value;
+  F32 f32;
+  convert(f32, un8);
+  dst.value = math::float_to_half(f32.value);
+}
+
+static void convert(UI8 &dst, const F16 &src)
+{
+  F32 f32;
+  f32.value = math::half_to_float(src.value);
+  UnsignedNormalized<uint8_t> un8;
+  convert(un8, f32);
+  dst.value = un8.value;
 }
 
 constexpr uint32_t MASK_10_BITS = 0b1111111111;
@@ -963,23 +923,7 @@ static void convert(B10F_G11G_R11F &dst, const FLOAT3 &src)
   dst.value = r << SHIFT_R | g << SHIFT_G | b << SHIFT_B;
 }
 
-/* \} */
-
-/* Convert vulkan depth stencil to OpenGL depth stencil */
-static void convert(UI32 &dst, const Depth24Stencil8 &src)
-{
-  uint32_t stencil = (src.value & 0xFF000000) >> 24;
-  uint32_t depth = (src.value & 0xFFFFFF);
-  dst.value = (depth << 8) + stencil;
-}
-
-/* Convert OpenGL depth stencil to Vulkan depth stencil */
-static void convert(Depth24Stencil8 &dst, const UI32 &src)
-{
-  uint32_t stencil = (src.value & 0xFF);
-  uint32_t depth = (src.value >> 8) & 0xFFFFFF;
-  dst.value = depth + (stencil << 24);
-}
+/** \} */
 
 static void convert(UI32 &dst, const Depth32fStencil8 &src)
 {
@@ -1006,7 +950,7 @@ template<typename DestinationType, typename SourceType>
 void convert_per_component(void *dst_memory,
                            const void *src_memory,
                            size_t buffer_size,
-                           eGPUTextureFormat device_format)
+                           TextureFormat device_format)
 {
   size_t total_components = to_component_len(device_format) * buffer_size;
   Span<SourceType> src = Span<SourceType>(static_cast<const SourceType *>(src_memory),
@@ -1026,10 +970,29 @@ void convert_per_pixel(void *dst_memory, const void *src_memory, size_t buffer_s
   convert<DestinationType, SourceType>(dst, src);
 }
 
+/**
+ * \brief Inline remapping from 3 components to 4 components where the data is stored at the end of
+ * the buffer.
+ */
+template<typename ComponentType>
+void remap_components_3to4_front_to_back(MutableSpan<ComponentType> components,
+                                         int64_t size,
+                                         ComponentType component_4_value)
+{
+  for (int index : IndexRange(size)) {
+    const int src_index = index * 3 + size;
+    const int dst_index = index * 4;
+    components[dst_index] = components[src_index];
+    components[dst_index + 1] = components[src_index + 1];
+    components[dst_index + 2] = components[src_index + 2];
+    components[dst_index + 3] = component_4_value;
+  }
+}
+
 static void convert_buffer(void *dst_memory,
                            const void *src_memory,
                            size_t buffer_size,
-                           eGPUTextureFormat device_format,
+                           TextureFormat device_format,
                            ConversionType type)
 {
   switch (type) {
@@ -1037,12 +1000,11 @@ static void convert_buffer(void *dst_memory,
       return;
 
     case ConversionType::PASS_THROUGH:
-    case ConversionType::UINT_TO_DEPTH_COMPONENT24:
       memcpy(dst_memory, src_memory, buffer_size * to_bytesize(device_format));
       return;
 
     case ConversionType::PASS_THROUGH_D32F_S8:
-      memcpy(dst_memory, src_memory, buffer_size * to_bytesize(GPU_DEPTH_COMPONENT32F));
+      memcpy(dst_memory, src_memory, buffer_size * to_bytesize(TextureFormat::SFLOAT_32_DEPTH));
       return;
 
     case ConversionType::UI32_TO_UI16:
@@ -1122,46 +1084,40 @@ static void convert_buffer(void *dst_memory,
           dst_memory, src_memory, buffer_size, device_format);
       break;
 
-    case ConversionType::FLOAT_TO_HALF:
-      blender::math::float_to_half_array(static_cast<const float *>(src_memory),
-                                         static_cast<uint16_t *>(dst_memory),
-                                         to_component_len(device_format) * buffer_size);
+    case ConversionType::UI8_TO_HALF:
+      convert_per_component<F16, UI8>(dst_memory, src_memory, buffer_size, device_format);
       break;
+    case ConversionType::HALF_TO_UI8:
+      convert_per_component<UI8, F16>(dst_memory, src_memory, buffer_size, device_format);
+      break;
+
+    case ConversionType::FLOAT_TO_HALF: {
+      size_t element_len = to_component_len(device_format) * buffer_size;
+      Span<float> src(static_cast<const float *>(src_memory), element_len);
+      MutableSpan<uint16_t> dst(static_cast<uint16_t *>(dst_memory), element_len);
+
+      constexpr int64_t chunk_size = 4 * 1024 * 1024;
+
+      threading::parallel_for(IndexRange(element_len), chunk_size, [&](const IndexRange range) {
+        /* Doing float to half conversion manually to avoid implementation specific behavior
+         * regarding Inf and NaNs. Use make finite version to avoid unexpected black pixels on
+         * certain implementation. For platform parity we clamp these infinite values to finite
+         * values. */
+        math::float_to_half_make_finite_array(
+            src.slice(range).data(), dst.slice(range).data(), range.size());
+      });
+      break;
+    }
     case ConversionType::HALF_TO_FLOAT:
-      blender::math::half_to_float_array(static_cast<const uint16_t *>(src_memory),
-                                         static_cast<float *>(dst_memory),
-                                         to_component_len(device_format) * buffer_size);
+      math::half_to_float_array(static_cast<const uint16_t *>(src_memory),
+                                static_cast<float *>(dst_memory),
+                                to_component_len(device_format) * buffer_size);
       break;
 
-    case ConversionType::FLOAT_TO_SRGBA8:
-      convert_per_pixel<SRGBA8, FLOAT4>(dst_memory, src_memory, buffer_size);
-      break;
-    case ConversionType::SRGBA8_TO_FLOAT:
-      convert_per_pixel<FLOAT4, SRGBA8>(dst_memory, src_memory, buffer_size);
-      break;
-
-    case ConversionType::FLOAT_TO_DEPTH_COMPONENT24:
-      convert_per_component<UnsignedNormalized<DepthComponent24>, F32>(
-          dst_memory, src_memory, buffer_size, device_format);
-      break;
-    case ConversionType::DEPTH_COMPONENT24_TO_FLOAT:
-      convert_per_component<F32, UnsignedNormalized<DepthComponent24>>(
-          dst_memory, src_memory, buffer_size, device_format);
-      break;
-    case ConversionType::DEPTH_COMPONENT24_TO_UINT:
-      convert_per_component<UI32, UnsignedNormalized<DepthComponent24>>(
-          dst_memory, src_memory, buffer_size, device_format);
-      break;
     case ConversionType::FLOAT_TO_B10F_G11F_R11F:
       convert_per_pixel<B10F_G11G_R11F, FLOAT3>(dst_memory, src_memory, buffer_size);
       break;
 
-    case ConversionType::DEPTH24_STENCIL8_TO_UINT:
-      convert_per_pixel<UI32, Depth24Stencil8>(dst_memory, src_memory, buffer_size);
-      break;
-    case ConversionType::UINT_TO_DEPTH24_STENCIL8:
-      convert_per_pixel<Depth24Stencil8, UI32>(dst_memory, src_memory, buffer_size);
-      break;
     case ConversionType::DEPTH32F_STENCIL8_TO_UINT:
       convert_per_pixel<UI32, Depth32fStencil8>(dst_memory, src_memory, buffer_size);
       break;
@@ -1173,9 +1129,37 @@ static void convert_buffer(void *dst_memory,
       convert_per_pixel<FLOAT3, B10F_G11G_R11F>(dst_memory, src_memory, buffer_size);
       break;
 
-    case ConversionType::FLOAT3_TO_HALF4:
-      convert_per_pixel<HALF4, FLOAT3>(dst_memory, src_memory, buffer_size);
+    case ConversionType::FLOAT3_TO_HALF4: {
+      size_t element_len = buffer_size;
+      constexpr int64_t src_component_len = 3;
+      constexpr int64_t dst_component_len = 4;
+      Span<float> src(static_cast<const float *>(src_memory), element_len * src_component_len);
+      MutableSpan<uint16_t> dst(static_cast<uint16_t *>(dst_memory),
+                                element_len * dst_component_len);
+
+      /* Number of pixels to process in a single chunk. */
+      constexpr int64_t chunk_size = 16 * 1024;
+
+      threading::parallel_for(IndexRange(element_len), chunk_size, [&](const IndexRange range) {
+        IndexRange src_range = IndexRange(range.start() * src_component_len,
+                                          range.size() * src_component_len);
+        IndexRange dst_range = IndexRange(range.start() * dst_component_len,
+                                          range.size() * dst_component_len);
+        IndexRange dst_range_offset = IndexRange(range.start() * dst_component_len + range.size(),
+                                                 range.size() * src_component_len);
+        /* Doing float to half conversion manually to avoid implementation specific behavior
+         * regarding Inf and NaNs. Use make finite version to avoid unexpected black pixels on
+         * certain implementation. For platform parity we clamp these infinite values to finite
+         * values. */
+        math::float_to_half_make_finite_array(
+            src.slice(src_range).data(), dst.slice(dst_range_offset).data(), src_range.size());
+        /* Conversion are stored at the end of the dst_memory, so remapping works with sequential
+         * access. */
+        remap_components_3to4_front_to_back(dst.slice(dst_range), range.size(), HALF_VALUE_1);
+      });
+
       break;
+    }
     case ConversionType::HALF4_TO_FLOAT3:
       convert_per_pixel<FLOAT3, HALF4>(dst_memory, src_memory, buffer_size);
       break;
@@ -1193,12 +1177,20 @@ static void convert_buffer(void *dst_memory,
 /** \name API
  * \{ */
 
+bool needs_conversion(eGPUDataFormat host_format,
+                      TextureFormat host_texture_format,
+                      TextureFormat device_format)
+{
+  ConversionType conversion_type = host_to_device(host_format, host_texture_format, device_format);
+  return conversion_type != ConversionType::PASS_THROUGH;
+}
+
 void convert_host_to_device(void *dst_buffer,
                             const void *src_buffer,
                             size_t buffer_size,
                             eGPUDataFormat host_format,
-                            eGPUTextureFormat host_texture_format,
-                            eGPUTextureFormat device_format)
+                            TextureFormat host_texture_format,
+                            TextureFormat device_format)
 {
   ConversionType conversion_type = host_to_device(host_format, host_texture_format, device_format);
   BLI_assert(conversion_type != ConversionType::UNSUPPORTED);
@@ -1209,8 +1201,8 @@ void convert_device_to_host(void *dst_buffer,
                             const void *src_buffer,
                             size_t buffer_size,
                             eGPUDataFormat host_format,
-                            eGPUTextureFormat host_texture_format,
-                            eGPUTextureFormat device_format)
+                            TextureFormat host_texture_format,
+                            TextureFormat device_format)
 {
   ConversionType conversion_type = reversed(
       host_to_device(host_format, host_texture_format, device_format));
@@ -1219,196 +1211,6 @@ void convert_device_to_host(void *dst_buffer,
   convert_buffer(dst_buffer, src_buffer, buffer_size, device_format, conversion_type);
 }
 
-/* \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Vertex Attributes
- * \{ */
-
-static bool attribute_check(const GPUVertAttr attribute,
-                            GPUVertCompType comp_type,
-                            GPUVertFetchMode fetch_mode)
-{
-  return attribute.comp_type == comp_type && attribute.fetch_mode == fetch_mode;
-}
-
-static bool attribute_check(const GPUVertAttr attribute, GPUVertCompType comp_type, uint comp_len)
-{
-  return attribute.comp_type == comp_type && attribute.comp_len == comp_len;
-}
-
-void VertexFormatConverter::reset()
-{
-  source_format_ = nullptr;
-  device_format_ = nullptr;
-  GPU_vertformat_clear(&converted_format_);
-
-  needs_conversion_ = false;
-}
-
-bool VertexFormatConverter::is_initialized() const
-{
-  return device_format_ != nullptr;
-}
-
-void VertexFormatConverter::init(const GPUVertFormat *vertex_format,
-                                 const VKWorkarounds &workarounds)
-{
-  source_format_ = vertex_format;
-  device_format_ = vertex_format;
-
-  update_conversion_flags(*source_format_, workarounds);
-  if (needs_conversion_) {
-    init_device_format(workarounds);
-  }
-}
-
-const GPUVertFormat &VertexFormatConverter::device_format_get() const
-{
-  BLI_assert(is_initialized());
-  return *device_format_;
-}
-
-bool VertexFormatConverter::needs_conversion() const
-{
-  BLI_assert(is_initialized());
-  return needs_conversion_;
-}
-
-void VertexFormatConverter::update_conversion_flags(const GPUVertFormat &vertex_format,
-                                                    const VKWorkarounds &workarounds)
-{
-  needs_conversion_ = false;
-
-  for (int attr_index : IndexRange(vertex_format.attr_len)) {
-    const GPUVertAttr &vert_attr = vertex_format.attrs[attr_index];
-    update_conversion_flags(vert_attr, workarounds);
-  }
-}
-
-void VertexFormatConverter::update_conversion_flags(const GPUVertAttr &vertex_attribute,
-                                                    const VKWorkarounds &workarounds)
-{
-  /* I32/U32 to F32 conversion doesn't exist in vulkan. */
-  if (vertex_attribute.fetch_mode == GPU_FETCH_INT_TO_FLOAT &&
-      ELEM(vertex_attribute.comp_type, GPU_COMP_I32, GPU_COMP_U32))
-  {
-    needs_conversion_ = true;
-  }
-  /* r8g8b8 formats will be stored as r8g8b8a8. */
-  else if (workarounds.vertex_formats.r8g8b8 && attribute_check(vertex_attribute, GPU_COMP_U8, 3))
-  {
-    needs_conversion_ = true;
-  }
-}
-
-void VertexFormatConverter::init_device_format(const VKWorkarounds &workarounds)
-{
-  BLI_assert(needs_conversion_);
-  GPU_vertformat_copy(&converted_format_, *source_format_);
-  bool needs_repack = false;
-
-  for (int attr_index : IndexRange(converted_format_.attr_len)) {
-    GPUVertAttr &vert_attr = converted_format_.attrs[attr_index];
-    make_device_compatible(vert_attr, workarounds, needs_repack);
-  }
-
-  if (needs_repack) {
-    VertexFormat_pack(&converted_format_);
-  }
-  device_format_ = &converted_format_;
-}
-
-void VertexFormatConverter::make_device_compatible(GPUVertAttr &vertex_attribute,
-                                                   const VKWorkarounds &workarounds,
-                                                   bool &r_needs_repack) const
-{
-  if (vertex_attribute.fetch_mode == GPU_FETCH_INT_TO_FLOAT &&
-      ELEM(vertex_attribute.comp_type, GPU_COMP_I32, GPU_COMP_U32))
-  {
-    vertex_attribute.fetch_mode = GPU_FETCH_FLOAT;
-    vertex_attribute.comp_type = GPU_COMP_F32;
-  }
-  else if (workarounds.vertex_formats.r8g8b8 && attribute_check(vertex_attribute, GPU_COMP_U8, 3))
-  {
-    vertex_attribute.comp_len = 4;
-    vertex_attribute.size = 4;
-    r_needs_repack = true;
-  }
-}
-
-void VertexFormatConverter::convert(void *device_data,
-                                    const void *source_data,
-                                    const uint vertex_len) const
-{
-  BLI_assert(needs_conversion_);
-  if (source_data != device_data) {
-    memcpy(device_data, source_data, device_format_->stride * vertex_len);
-  }
-
-  const void *source_row_data = static_cast<const uint8_t *>(source_data);
-  void *device_row_data = static_cast<uint8_t *>(device_data);
-  for (int vertex_index : IndexRange(vertex_len)) {
-    UNUSED_VARS(vertex_index);
-    convert_row(device_row_data, source_row_data);
-    source_row_data = static_cast<const uint8_t *>(source_row_data) + source_format_->stride;
-    device_row_data = static_cast<uint8_t *>(device_row_data) + device_format_->stride;
-  }
-}
-
-void VertexFormatConverter::convert_row(void *device_row_data, const void *source_row_data) const
-{
-  for (int attr_index : IndexRange(source_format_->attr_len)) {
-    const GPUVertAttr &device_attribute = device_format_->attrs[attr_index];
-    const GPUVertAttr &source_attribute = source_format_->attrs[attr_index];
-    convert_attribute(device_row_data, source_row_data, device_attribute, source_attribute);
-  }
-}
-
-void VertexFormatConverter::convert_attribute(void *device_row_data,
-                                              const void *source_row_data,
-                                              const GPUVertAttr &device_attribute,
-                                              const GPUVertAttr &source_attribute) const
-{
-  const void *source_attr_data = static_cast<const uint8_t *>(source_row_data) +
-                                 source_attribute.offset;
-  void *device_attr_data = static_cast<uint8_t *>(device_row_data) + device_attribute.offset;
-  if (source_attribute.comp_len == device_attribute.comp_len &&
-      source_attribute.comp_type == device_attribute.comp_type &&
-      source_attribute.fetch_mode == device_attribute.fetch_mode)
-  {
-    /* This check is done first to improve possible branch prediction. */
-  }
-  else if (attribute_check(source_attribute, GPU_COMP_I32, GPU_FETCH_INT_TO_FLOAT) &&
-           attribute_check(device_attribute, GPU_COMP_F32, GPU_FETCH_FLOAT))
-  {
-    for (int component : IndexRange(source_attribute.comp_len)) {
-      const int32_t *component_in = static_cast<const int32_t *>(source_attr_data) + component;
-      float *component_out = static_cast<float *>(device_attr_data) + component;
-      *component_out = float(*component_in);
-    }
-  }
-  else if (attribute_check(source_attribute, GPU_COMP_U32, GPU_FETCH_INT_TO_FLOAT) &&
-           attribute_check(device_attribute, GPU_COMP_F32, GPU_FETCH_FLOAT))
-  {
-    for (int component : IndexRange(source_attribute.comp_len)) {
-      const uint32_t *component_in = static_cast<const uint32_t *>(source_attr_data) + component;
-      float *component_out = static_cast<float *>(device_attr_data) + component;
-      *component_out = float(*component_in);
-    }
-  }
-  else if (attribute_check(source_attribute, GPU_COMP_U8, 3) &&
-           attribute_check(device_attribute, GPU_COMP_U8, 4))
-  {
-    const uchar3 *attr_in = static_cast<const uchar3 *>(source_attr_data);
-    uchar4 *attr_out = static_cast<uchar4 *>(device_attr_data);
-    *attr_out = uchar4(attr_in->x, attr_in->y, attr_in->z, 255);
-  }
-  else {
-    BLI_assert_unreachable();
-  }
-}
-
-/* \} */
+/** \} */
 
 }  // namespace blender::gpu

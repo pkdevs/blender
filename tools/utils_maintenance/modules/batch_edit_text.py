@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+__all__ = (
+    "run",
+)
+
 from collections.abc import (
     Callable,
     Iterator,
@@ -35,8 +39,6 @@ def run(
         text_operation: TextOpFn,
         use_multiprocess: bool,
 ) -> None:
-    print(directories)
-
     import os
 
     def source_files(path: str) -> Iterator[str]:

@@ -10,7 +10,7 @@
 #include "DNA_outliner_types.h"
 #include "DNA_shader_fx_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BLT_translation.hh"
 
@@ -29,9 +29,9 @@ TreeElementGPencilEffectBase::TreeElementGPencilEffectBase(TreeElement &legacy_t
 
 void TreeElementGPencilEffectBase::expand(SpaceOutliner & /*space_outliner*/) const
 {
-  int index;
-  LISTBASE_FOREACH_INDEX (ShaderFxData *, fx, &object_.shader_fx, index) {
-    add_element(&legacy_te_.subtree, &object_.id, fx, &legacy_te_, TSE_GPENCIL_EFFECT, index);
+
+  for (const auto [index, fx] : object_.shader_fx.enumerate()) {
+    add_element(&legacy_te_.subtree, &object_.id, &fx, &legacy_te_, TSE_GPENCIL_EFFECT, index);
   }
 }
 
@@ -49,7 +49,7 @@ void TreeElementGPencilEffect::expand(SpaceOutliner & /*space_outliner*/) const
 {
   if (fx_.type == eShaderFxType_Swirl) {
     add_element(&legacy_te_.subtree,
-                reinterpret_cast<ID *>(((SwirlShaderFxData *)(&fx_))->object),
+                reinterpret_cast<ID *>((reinterpret_cast<SwirlShaderFxData *>(&fx_))->object),
                 nullptr,
                 &legacy_te_,
                 TSE_LINKED_OB,

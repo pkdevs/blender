@@ -12,13 +12,14 @@
 #include "DNA_userdef_types.h"
 
 #include "BKE_attribute.hh"
-#include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
 #include "BKE_modifier.hh"
 #include "BKE_subdiv.hh"
 
 #include "GPU_capabilities.hh"
 #include "GPU_context.hh"
+
+namespace blender {
 
 using namespace blender::bke;
 
@@ -44,7 +45,7 @@ bool BKE_subsurf_modifier_runtime_init(SubsurfModifierData *smd, const bool use_
 {
   subdiv::Settings settings = BKE_subsurf_modifier_settings_init(smd, use_render_params);
 
-  SubsurfRuntimeData *runtime_data = (SubsurfRuntimeData *)smd->modifier.runtime;
+  SubsurfRuntimeData *runtime_data = static_cast<SubsurfRuntimeData *>(smd->modifier.runtime);
   if (settings.level == 0) {
     /* Modifier is effectively disabled, but still update settings if runtime data
      * was already allocated. */
@@ -59,28 +60,11 @@ bool BKE_subsurf_modifier_runtime_init(SubsurfModifierData *smd, const bool use_
 
   /* Allocate runtime data if it did not exist yet. */
   if (runtime_data == nullptr) {
-    runtime_data = MEM_cnew<SubsurfRuntimeData>(__func__);
+    runtime_data = MEM_new_zeroed<SubsurfRuntimeData>(__func__);
     smd->modifier.runtime = runtime_data;
   }
   runtime_data->settings = settings;
   return true;
-}
-
-static ModifierData *modifier_get_last_enabled_for_mode(const Scene *scene,
-                                                        const Object *ob,
-                                                        int required_mode)
-{
-  ModifierData *md = static_cast<ModifierData *>(ob->modifiers.last);
-
-  while (md) {
-    if (BKE_modifier_is_enabled(scene, md, required_mode)) {
-      break;
-    }
-
-    md = md->prev;
-  }
-
-  return md;
 }
 
 bool BKE_subsurf_modifier_use_custom_loop_normals(const SubsurfModifierData *smd, const Mesh *mesh)
@@ -91,7 +75,7 @@ bool BKE_subsurf_modifier_use_custom_loop_normals(const SubsurfModifierData *smd
   const std::optional<AttributeMetaData> meta_data = mesh->attributes().lookup_meta_data(
       "custom_normal");
   return meta_data && meta_data->domain == AttrDomain::Corner &&
-         meta_data->data_type == CD_PROP_INT16_2D;
+         meta_data->data_type == AttrType::Int16_2D;
 }
 
 bool BKE_subsurf_modifier_has_split_normals(const SubsurfModifierData *smd, const Mesh *mesh)
@@ -102,14 +86,7 @@ bool BKE_subsurf_modifier_has_split_normals(const SubsurfModifierData *smd, cons
 
 static bool is_subdivision_evaluation_possible_on_gpu()
 {
-  /* Only OpenGL is supported for OpenSubdiv evaluation for now. */
-  if (GPU_backend_get_type() != GPU_BACKEND_OPENGL) {
-    return false;
-  }
-
-  /* Now that we know it is OpenGL, check for Qualcomm GPUs,
-   * which GPU subdiv is broken on some of (#124515) */
-  if (GPU_type_matches(GPU_DEVICE_QUALCOMM, GPU_OS_WIN, GPU_DRIVER_ANY)) {
+  if (GPU_backend_get_type() == GPU_BACKEND_NONE) {
     return false;
   }
 
@@ -133,37 +110,16 @@ bool BKE_subsurf_modifier_force_disable_gpu_evaluation_for_mesh(const SubsurfMod
     return false;
   }
 
+  /* Deactivate GPU subdivision if sharp edges or custom normals are used as those are
+   * complicated to support on GPU, and should really be separate workflows. */
   return BKE_subsurf_modifier_has_split_normals(smd, mesh);
 }
 
-bool BKE_subsurf_modifier_can_do_gpu_subdiv(const Scene *scene,
-                                            const Object *ob,
-                                            const Mesh *mesh,
-                                            const SubsurfModifierData *smd,
-                                            int required_mode)
+bool BKE_subsurf_modifier_can_do_gpu_subdiv(const SubsurfModifierData *smd, const Mesh *mesh)
 {
-  if ((U.gpu_flag & USER_GPU_FLAG_SUBDIVISION_EVALUATION) == 0) {
-    return false;
-  }
-
-  /* Deactivate GPU subdivision if sharp edges or custom normals are used as those are
-   * complicated to support on GPU, and should really be separate workflows. */
-  if (BKE_subsurf_modifier_has_split_normals(smd, mesh)) {
-    return false;
-  }
-
-  ModifierData *md = modifier_get_last_enabled_for_mode(scene, ob, required_mode);
-  if (md != (const ModifierData *)smd) {
-    return false;
-  }
-
-  return is_subdivision_evaluation_possible_on_gpu();
-}
-
-bool BKE_subsurf_modifier_has_gpu_subdiv(const Mesh *mesh)
-{
-  SubsurfRuntimeData *runtime_data = mesh->runtime->subsurf_runtime_data;
-  return runtime_data && runtime_data->has_gpu_subdiv;
+  return (U.gpu_flag & USER_GPU_FLAG_SUBDIVISION_EVALUATION) &&
+         is_subdivision_evaluation_possible_on_gpu() &&
+         !BKE_subsurf_modifier_has_split_normals(smd, mesh);
 }
 
 void (*BKE_subsurf_modifier_free_gpu_cache_cb)(subdiv::Subdiv *subdiv) = nullptr;
@@ -191,3 +147,5 @@ int BKE_subsurf_modifier_eval_required_mode(bool is_final_render, bool is_edit_m
 
   return eModifierMode_Realtime | (is_edit_mode ? int(eModifierMode_Editmode) : 0);
 }
+
+}  // namespace blender

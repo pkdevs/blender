@@ -12,9 +12,12 @@
 
 #include "BLI_vector.hh"
 
-struct ID;
+namespace blender {
 
-namespace blender::animrig {
+struct ID;
+struct Main;
+
+namespace animrig {
 
 /**
  * Not placed in the 'internal' namespace, as this type is forward-declared in
@@ -53,4 +56,5 @@ void rebuild_slot_user_cache(Main &bmain);
 
 }  // namespace internal
 
-}  // namespace blender::animrig
+}  // namespace animrig
+}  // namespace blender

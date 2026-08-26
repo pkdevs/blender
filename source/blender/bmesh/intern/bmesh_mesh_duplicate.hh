@@ -8,6 +8,10 @@
  * \ingroup bmesh
  */
 
+#include "bmesh_class.hh"
+
+namespace blender {
+
 /**
  * Geometry must be completely isolated.
  */
@@ -19,3 +23,5 @@ void BM_mesh_copy_arrays(BMesh *bm_src,
                          uint edges_src_len,
                          BMFace **faces_src,
                          uint faces_src_len);
+
+}  // namespace blender

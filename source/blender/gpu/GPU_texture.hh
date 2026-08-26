@@ -5,7 +5,7 @@
 /** \file
  * \ingroup gpu
  *
- * A `GPUTexture` is a wrapper around backend specific texture objects.
+ * A `gpu::Texture` is a wrapper around backend specific texture objects.
  * It allows, creation of diverse texture format and types, update, read, reference counting,
  * internal sampler state tracking and texture binding.
  */
@@ -14,14 +14,265 @@
 
 #include <string>
 
-#include "BLI_assert.h"
-#include "BLI_utildefines.h"
+#include "BLI_assert.hh"
+#include "BLI_bit_span.hh"
+#include "BLI_enum_flags.hh"
+#include "BLI_index_range.hh"
 
-#include "GPU_state.hh"
+#include "GPU_format.hh"
 
-namespace blender::gpu {
+namespace blender {
+
+struct GPUPixelBuffer;
+
+namespace gpu {
 class VertBuf;
 }
+
+namespace gpu {
+
+/* -------------------------------------------------------------------- */
+/** \name Texture Formats
+ * \{ */
+
+/**
+ * Formats compatible with read-only texture.
+ */
+enum class TextureFormat : uint8_t {
+  Invalid = 0,
+
+#define DECLARE(a, b, c, blender_enum, d, e, f, g, h) blender_enum = int(DataFormat::blender_enum),
+
+#define GPU_TEXTURE_FORMAT_EXPAND(impl) \
+  SNORM_8_(impl) \
+  SNORM_8_8_(impl) \
+  SNORM_8_8_8_(impl) /* TODO(fclem): Incompatible with metal, to remove. */ \
+  SNORM_8_8_8_8_(impl) \
+\
+  SNORM_16_(impl) \
+  SNORM_16_16_(impl) \
+  SNORM_16_16_16_(impl) /* TODO(fclem): Incompatible with metal, to remove. */ \
+  SNORM_16_16_16_16_(impl) \
+\
+  UNORM_8_(impl) \
+  UNORM_8_8_(impl) \
+  UNORM_8_8_8_(impl) /* TODO(fclem): Incompatible with metal, to remove. */ \
+  UNORM_8_8_8_8_(impl) \
+\
+  UNORM_16_(impl) \
+  UNORM_16_16_(impl) \
+  UNORM_16_16_16_(impl) /* TODO(fclem): Incompatible with metal, to remove. */ \
+  UNORM_16_16_16_16_(impl) \
+\
+  SINT_8_(impl) \
+  SINT_8_8_(impl) \
+  SINT_8_8_8_(impl) /* TODO(fclem): Incompatible with metal, to remove. */ \
+  SINT_8_8_8_8_(impl) \
+\
+  SINT_16_(impl) \
+  SINT_16_16_(impl) \
+  SINT_16_16_16_(impl) /* TODO(fclem): Incompatible with metal, to remove. */ \
+  SINT_16_16_16_16_(impl) \
+\
+  SINT_32_(impl) \
+  SINT_32_32_(impl) \
+  SINT_32_32_32_(impl) /* TODO(fclem): Incompatible with metal, to remove. */ \
+  SINT_32_32_32_32_(impl) \
+\
+  UINT_8_(impl) \
+  UINT_8_8_(impl) \
+  UINT_8_8_8_(impl) /* TODO(fclem): Incompatible with metal, to remove. */ \
+  UINT_8_8_8_8_(impl) \
+\
+  UINT_16_(impl) \
+  UINT_16_16_(impl) \
+  UINT_16_16_16_(impl) /* TODO(fclem): Incompatible with metal, to remove. */ \
+  UINT_16_16_16_16_(impl) \
+\
+  UINT_32_(impl) \
+  UINT_32_32_(impl) \
+  UINT_32_32_32_(impl) /* TODO(fclem): Incompatible with metal, to remove. */ \
+  UINT_32_32_32_32_(impl) \
+\
+  SFLOAT_16_(impl) \
+  SFLOAT_16_16_(impl) \
+  SFLOAT_16_16_16_(impl) /* TODO(fclem): Incompatible with metal, to remove. */ \
+  SFLOAT_16_16_16_16_(impl) \
+\
+  SFLOAT_32_(impl) \
+  SFLOAT_32_32_(impl) \
+  SFLOAT_32_32_32_(impl) /* TODO(fclem): Incompatible with metal, to remove. */ \
+  SFLOAT_32_32_32_32_(impl) \
+\
+  UNORM_10_10_10_2_(impl) \
+  UINT_10_10_10_2_(impl) \
+\
+  UFLOAT_11_11_10_(impl) \
+  UFLOAT_9_9_9_EXP_5_(impl) \
+\
+  UNORM_16_DEPTH_(impl) \
+  SFLOAT_32_DEPTH_(impl) \
+  SFLOAT_32_DEPTH_UINT_8_(impl) \
+\
+  SRGBA_8_8_8_(impl) /* TODO(fclem): Incompatible with metal, to remove. */ \
+  SRGBA_8_8_8_8_(impl) \
+\
+  SNORM_DXT1_(impl) \
+  SNORM_DXT3_(impl) \
+  SNORM_DXT5_(impl) \
+  SRGB_DXT1_(impl) \
+  SRGB_DXT3_(impl) \
+  SRGB_DXT5_(impl)
+
+  GPU_TEXTURE_FORMAT_EXPAND(DECLARE)
+
+#undef DECLARE
+};
+
+constexpr DataFormat to_data_format(TextureFormat format)
+{
+  return DataFormat(int(format));
+}
+
+/**
+ * Formats compatible with frame-buffer attachments.
+ */
+enum class TextureTargetFormat : uint8_t {
+  Invalid = 0,
+
+#define DECLARE(a, b, c, blender_enum, d, e, f, g, h) \
+  blender_enum = int(TextureFormat::blender_enum),
+
+#define GPU_TEXTURE_TARGET_FORMAT_EXPAND(impl) \
+  UNORM_8_(impl) \
+  UNORM_8_8_(impl) \
+  UNORM_8_8_8_8_(impl) \
+\
+  UNORM_16_(impl) \
+  UNORM_16_16_(impl) \
+  UNORM_16_16_16_16_(impl) \
+\
+  SINT_8_(impl) \
+  SINT_8_8_(impl) \
+  SINT_8_8_8_8_(impl) \
+\
+  SINT_16_(impl) \
+  SINT_16_16_(impl) \
+  SINT_16_16_16_16_(impl) \
+\
+  SINT_32_(impl) \
+  SINT_32_32_(impl) \
+  SINT_32_32_32_32_(impl) \
+\
+  UINT_8_(impl) \
+  UINT_8_8_(impl) \
+  UINT_8_8_8_8_(impl) \
+\
+  UINT_16_(impl) \
+  UINT_16_16_(impl) \
+  UINT_16_16_16_16_(impl) \
+\
+  UINT_32_(impl) \
+  UINT_32_32_(impl) \
+  UINT_32_32_32_32_(impl) \
+\
+  SFLOAT_16_(impl) \
+  SFLOAT_16_16_(impl) \
+  SFLOAT_16_16_16_16_(impl) \
+\
+  SFLOAT_32_(impl) \
+  SFLOAT_32_32_(impl) \
+  SFLOAT_32_32_32_32_(impl) \
+\
+  UNORM_10_10_10_2_(impl) \
+  UINT_10_10_10_2_(impl) \
+\
+  UFLOAT_11_11_10_(impl) \
+\
+  UNORM_16_DEPTH_(impl) \
+  SFLOAT_32_DEPTH_(impl) \
+  SFLOAT_32_DEPTH_UINT_8_(impl) \
+\
+  SRGBA_8_8_8_8_(impl)
+
+  GPU_TEXTURE_TARGET_FORMAT_EXPAND(DECLARE)
+
+#undef DECLARE
+};
+
+constexpr TextureFormat to_texture_format(TextureTargetFormat format)
+{
+  return TextureFormat(int(format));
+}
+
+/**
+ * Formats compatible with shader load/store.
+ */
+enum class TextureWriteFormat : uint8_t {
+  Invalid = 0,
+
+#define DECLARE(a, b, c, blender_enum, d, e, f, g, h) \
+  blender_enum = int(TextureFormat::blender_enum),
+
+#define GPU_TEXTURE_WRITE_FORMAT_EXPAND(impl) \
+  UNORM_8_(impl) \
+  UNORM_8_8_(impl) \
+  UNORM_8_8_8_8_(impl) \
+\
+  UNORM_16_(impl) \
+  UNORM_16_16_(impl) \
+  UNORM_16_16_16_16_(impl) \
+\
+  SINT_8_(impl) \
+  SINT_8_8_(impl) \
+  SINT_8_8_8_8_(impl) \
+\
+  SINT_16_(impl) \
+  SINT_16_16_(impl) \
+  SINT_16_16_16_16_(impl) \
+\
+  SINT_32_(impl) \
+  SINT_32_32_(impl) \
+  SINT_32_32_32_32_(impl) \
+\
+  UINT_8_(impl) \
+  UINT_8_8_(impl) \
+  UINT_8_8_8_8_(impl) \
+\
+  UINT_16_(impl) \
+  UINT_16_16_(impl) \
+  UINT_16_16_16_16_(impl) \
+\
+  UINT_32_(impl) \
+  UINT_32_32_(impl) \
+  UINT_32_32_32_32_(impl) \
+\
+  SFLOAT_16_(impl) \
+  SFLOAT_16_16_(impl) \
+  SFLOAT_16_16_16_16_(impl) \
+\
+  SFLOAT_32_(impl) \
+  SFLOAT_32_32_(impl) \
+  SFLOAT_32_32_32_32_(impl) \
+\
+  UNORM_10_10_10_2_(impl) \
+  UINT_10_10_10_2_(impl) \
+\
+  UFLOAT_11_11_10_(impl)
+
+  GPU_TEXTURE_WRITE_FORMAT_EXPAND(DECLARE)
+
+#undef DECLARE
+};
+
+constexpr TextureFormat to_texture_format(TextureWriteFormat format)
+{
+  return TextureFormat(int(format));
+}
+
+/** \} */
+
+}  // namespace gpu
 
 /* -------------------------------------------------------------------- */
 /** \name Sampler State
@@ -57,19 +308,72 @@ enum GPUSamplerFiltering {
    * Enable Anisotropic filtering. This only has effect if `GPU_SAMPLER_FILTERING_MIPMAP` is set.
    * The filtered result is implementation dependent.
    *
-   * The maximum amount of samples is always set to its maximum possible value and can't be
-   * changed, except by the user through the user preferences, see the use of U.anisotropic_filter.
+   * 3 bits are reserved to store the anisotropic option. When all bits are 0 it means that
+   * anisotropic filtering is off.
    */
-  GPU_SAMPLER_FILTERING_ANISOTROPIC = (1 << 2),
+  GPU_SAMPLER_FILTERING_ANISOTROPIC_2 = (2 << 2),
+  GPU_SAMPLER_FILTERING_ANISOTROPIC_4 = (3 << 2),
+  GPU_SAMPLER_FILTERING_ANISOTROPIC_8 = (4 << 2),
+  GPU_SAMPLER_FILTERING_ANISOTROPIC_16 = (5 << 2),
 };
 
-ENUM_OPERATORS(GPUSamplerFiltering, GPU_SAMPLER_FILTERING_ANISOTROPIC)
+ENUM_OPERATORS(GPUSamplerFiltering)
 
 /** The number of every possible filtering configuration. */
 static const int GPU_SAMPLER_FILTERING_TYPES_COUNT = (GPU_SAMPLER_FILTERING_LINEAR |
                                                       GPU_SAMPLER_FILTERING_MIPMAP |
-                                                      GPU_SAMPLER_FILTERING_ANISOTROPIC) +
+                                                      GPU_SAMPLER_FILTERING_ANISOTROPIC_16) +
                                                      1;
+/** Bit mask for selecting the GPU_SAMPLER_FILTERING_ANISOTROPIC_* bits. */
+static constexpr GPUSamplerFiltering GPU_SAMPLER_FILTERING_ANISOTROPIC_MASK =
+    (GPU_SAMPLER_FILTERING_ANISOTROPIC_2 | GPU_SAMPLER_FILTERING_ANISOTROPIC_4 |
+     GPU_SAMPLER_FILTERING_ANISOTROPIC_8 | GPU_SAMPLER_FILTERING_ANISOTROPIC_16);
+/** Special flag where materials can request the desire to turn on/off anisotropic filtering. */
+static constexpr GPUSamplerFiltering GPU_SAMPLER_FILTERING_ANISOTROPIC_ENABLE =
+    (GPU_SAMPLER_FILTERING_ANISOTROPIC_2 | GPU_SAMPLER_FILTERING_ANISOTROPIC_4 |
+     GPU_SAMPLER_FILTERING_ANISOTROPIC_8 | GPU_SAMPLER_FILTERING_ANISOTROPIC_16);
+
+/**
+ * Convenience function to create a GPUSamplerFiltering with only the anisotropic filtering flags
+ * set that represents the given samples.
+ */
+static inline GPUSamplerFiltering GPU_anisotropic_filtering_flags(int anisotropic_samples)
+{
+  if (anisotropic_samples <= 1) {
+    return GPU_SAMPLER_FILTERING_DEFAULT;
+  }
+
+  if (IndexRange::from_begin_end_inclusive(2, 3).contains(anisotropic_samples)) {
+    return GPU_SAMPLER_FILTERING_ANISOTROPIC_2;
+  }
+  else if (IndexRange::from_begin_end_inclusive(4, 7).contains(anisotropic_samples)) {
+    return GPU_SAMPLER_FILTERING_ANISOTROPIC_4;
+  }
+  else if (IndexRange::from_begin_end_inclusive(8, 15).contains(anisotropic_samples)) {
+    return GPU_SAMPLER_FILTERING_ANISOTROPIC_8;
+  }
+
+  /* 16 or higher. */
+  return GPU_SAMPLER_FILTERING_ANISOTROPIC_16;
+}
+
+static inline int GPU_anisotropic_samples_get(GPUSamplerFiltering filtering_flags)
+{
+  switch (filtering_flags & GPU_SAMPLER_FILTERING_ANISOTROPIC_MASK) {
+    case GPU_SAMPLER_FILTERING_ANISOTROPIC_2:
+      return 2;
+    case GPU_SAMPLER_FILTERING_ANISOTROPIC_4:
+      return 4;
+    case GPU_SAMPLER_FILTERING_ANISOTROPIC_8:
+      return 8;
+    case GPU_SAMPLER_FILTERING_ANISOTROPIC_16:
+      return 16;
+    default:
+      return 1;
+  }
+  BLI_assert_unreachable();
+  return 1;
+}
 
 /**
  * The `GPUSamplerExtendMode` specifies how the texture will be extrapolated for out-of-bound
@@ -320,8 +624,25 @@ struct GPUSamplerState {
       serialized_parameters += "mipmap_";
     }
 
-    if (this->filtering & GPU_SAMPLER_FILTERING_ANISOTROPIC) {
-      serialized_parameters += "anisotropic_";
+    if ((this->filtering & GPU_SAMPLER_FILTERING_ANISOTROPIC_MASK) ==
+        GPU_SAMPLER_FILTERING_ANISOTROPIC_2)
+    {
+      serialized_parameters += "anisotropic2x_";
+    }
+    else if ((this->filtering & GPU_SAMPLER_FILTERING_ANISOTROPIC_MASK) ==
+             GPU_SAMPLER_FILTERING_ANISOTROPIC_4)
+    {
+      serialized_parameters += "anisotropic4x_";
+    }
+    else if ((this->filtering & GPU_SAMPLER_FILTERING_ANISOTROPIC_MASK) ==
+             GPU_SAMPLER_FILTERING_ANISOTROPIC_8)
+    {
+      serialized_parameters += "anisotropic8x_";
+    }
+    else if ((this->filtering & GPU_SAMPLER_FILTERING_ANISOTROPIC_MASK) ==
+             GPU_SAMPLER_FILTERING_ANISOTROPIC_16)
+    {
+      serialized_parameters += "anisotropic16x_";
     }
 
     switch (this->extend_x) {
@@ -378,6 +699,16 @@ struct GPUSamplerState {
     return serialized_parameters;
   }
 
+  uint32_t as_uint() const
+  {
+    uint32_t value = filtering;
+    value = (value << 4) | extend_x;
+    value = (value << 4) | extend_yz;
+    value = (value << 8) | custom_type;
+    value = (value << 8) | type;
+    return value;
+  }
+
   bool operator==(GPUSamplerState const &rhs) const
   {
     return this->filtering == rhs.filtering && this->extend_x == rhs.extend_x &&
@@ -393,106 +724,12 @@ struct GPUSamplerState {
  * \{ */
 
 /**
- * Types of texture internal storage. Defines how the data is stored inside the video memory.
- * Be aware that some formats are not supported by render-buffers.
- */
-enum eGPUTextureFormat {
-  /* Formats texture & render-buffer. */
-
-  GPU_RGBA8UI,
-  GPU_RGBA8I,
-  GPU_RGBA8,
-  GPU_RGBA16UI,
-  GPU_RGBA16I,
-  GPU_RGBA16F,
-  GPU_RGBA16,
-  GPU_RGBA32UI,
-  GPU_RGBA32I,
-  GPU_RGBA32F,
-
-  GPU_RG8UI,
-  GPU_RG8I,
-  GPU_RG8,
-  GPU_RG16UI,
-  GPU_RG16I,
-  GPU_RG16F,
-  GPU_RG16,
-  GPU_RG32UI,
-  GPU_RG32I,
-  GPU_RG32F,
-
-  GPU_R8UI,
-  GPU_R8I,
-  GPU_R8,
-  GPU_R16UI,
-  GPU_R16I,
-  GPU_R16F,
-  GPU_R16,
-  GPU_R32UI,
-  GPU_R32I,
-  GPU_R32F,
-
-  /* Special formats texture & render-buffer. */
-
-  GPU_RGB10_A2,
-  GPU_RGB10_A2UI,
-  GPU_R11F_G11F_B10F,
-  GPU_DEPTH32F_STENCIL8,
-  GPU_DEPTH24_STENCIL8,
-  GPU_SRGB8_A8,
-
-  /* Texture only formats. */
-
-  GPU_RGBA8_SNORM,
-  GPU_RGBA16_SNORM,
-
-  GPU_RGB8UI,
-  GPU_RGB8I,
-  GPU_RGB8,
-  GPU_RGB8_SNORM,
-  GPU_RGB16UI,
-  GPU_RGB16I,
-  GPU_RGB16F,
-  GPU_RGB16,
-  GPU_RGB16_SNORM,
-  GPU_RGB32UI,
-  GPU_RGB32I,
-  GPU_RGB32F,
-
-  GPU_RG8_SNORM,
-  GPU_RG16_SNORM,
-
-  GPU_R8_SNORM,
-  GPU_R16_SNORM,
-
-  /* Special formats, texture only. */
-  GPU_SRGB8_A8_DXT1, /* BC1 */
-  GPU_SRGB8_A8_DXT3, /* BC2 */
-  GPU_SRGB8_A8_DXT5, /* BC3 */
-  GPU_RGBA8_DXT1,    /* BC1 */
-  GPU_RGBA8_DXT3,    /* BC2 */
-  GPU_RGBA8_DXT5,    /* BC3 */
-  GPU_SRGB8,
-  GPU_RGB9_E5,
-#if 0 /* TODO: Add support for them. */
-  GPU_COMPRESSED_RG_RGTC2,
-  GPU_COMPRESSED_SIGNED_RG_RGTC2,
-  GPU_COMPRESSED_RED_RGTC1,
-  GPU_COMPRESSED_SIGNED_RED_RGTC1,
-#endif
-
-  /* Depth Formats. */
-  GPU_DEPTH_COMPONENT32F,
-  GPU_DEPTH_COMPONENT24,
-  GPU_DEPTH_COMPONENT16,
-};
-
-/**
  * Types of data for data specification.
  * Used for formatting upload and download of data.
- * When used with textures, they need to match or be compatible with the `eGPUTextureFormat` used.
- * Check `validate_data_format` for compatibility list.
+ * When used with textures, they need to match or be compatible with the
+ * `gpu::TextureFormat` used. Check `validate_data_format` for compatibility list.
  */
+/* TODO(fclem): Replace by gpu::DataFormat. */
 enum eGPUDataFormat {
   GPU_DATA_FLOAT,
   GPU_DATA_HALF_FLOAT,
@@ -500,7 +737,9 @@ enum eGPUDataFormat {
   GPU_DATA_UINT,
   GPU_DATA_UBYTE,
   /** Special type used for depth-stencil textures. */
-  GPU_DATA_UINT_24_8,
+  /* GPU_DATA_UINT_24_8_DEPRECATED is deprecated since Blender 5.0. It is still here as python
+   * add-ons can still use it. */
+  GPU_DATA_UINT_24_8_DEPRECATED,
   /** Special type used for packed 32bit per pixel textures. Data is stored in reverse order. */
   GPU_DATA_10_11_11_REV,
   GPU_DATA_2_10_10_10_REV,
@@ -534,13 +773,15 @@ enum eGPUTextureUsage {
   GPU_TEXTURE_USAGE_MEMORYLESS = (1 << 5),
   /* Whether a texture can support atomic operations. */
   GPU_TEXTURE_USAGE_ATOMIC = (1 << 6),
+  /* Whether a texture can be exported to other instances/processes. */
+  GPU_TEXTURE_USAGE_MEMORY_EXPORT = (1 << 7),
   /* Create a texture whose usage cannot be defined prematurely.
    * This is unoptimized and should not be used. */
-  GPU_TEXTURE_USAGE_GENERAL = (0xFF &
-                               (~(GPU_TEXTURE_USAGE_MEMORYLESS | GPU_TEXTURE_USAGE_ATOMIC))),
+  GPU_TEXTURE_USAGE_GENERAL = (0xFF & (~(GPU_TEXTURE_USAGE_MEMORYLESS | GPU_TEXTURE_USAGE_ATOMIC |
+                                         GPU_TEXTURE_USAGE_MEMORY_EXPORT))),
 };
 
-ENUM_OPERATORS(eGPUTextureUsage, GPU_TEXTURE_USAGE_GENERAL);
+ENUM_OPERATORS(eGPUTextureUsage);
 
 /** \} */
 
@@ -548,8 +789,9 @@ ENUM_OPERATORS(eGPUTextureUsage, GPU_TEXTURE_USAGE_GENERAL);
 /** \name Creation
  * \{ */
 
-/** Opaque type hiding blender::gpu::Texture. */
-struct GPUTexture;
+namespace gpu {
+class Texture;
+}  // namespace gpu
 
 /**
  * \note \a data is expected to be float. If the \a format is not compatible with float data or if
@@ -561,80 +803,80 @@ struct GPUTexture;
  *
  * flag. \a mips is the number of mip level to allocate. It must be >= 1.
  */
-GPUTexture *GPU_texture_create_1d(const char *name,
-                                  int width,
-                                  int mip_len,
-                                  eGPUTextureFormat format,
-                                  eGPUTextureUsage usage,
-                                  const float *data);
-GPUTexture *GPU_texture_create_1d_array(const char *name,
-                                        int width,
-                                        int layer_len,
-                                        int mip_len,
-                                        eGPUTextureFormat format,
-                                        eGPUTextureUsage usage,
-                                        const float *data);
-GPUTexture *GPU_texture_create_2d(const char *name,
-                                  int width,
-                                  int height,
-                                  int mip_len,
-                                  eGPUTextureFormat format,
-                                  eGPUTextureUsage usage,
-                                  const float *data);
-GPUTexture *GPU_texture_create_2d_array(const char *name,
-                                        int width,
-                                        int height,
-                                        int layer_len,
-                                        int mip_len,
-                                        eGPUTextureFormat format,
-                                        eGPUTextureUsage usage,
-                                        const float *data);
-GPUTexture *GPU_texture_create_3d(const char *name,
-                                  int width,
-                                  int height,
-                                  int depth,
-                                  int mip_len,
-                                  eGPUTextureFormat format,
-                                  eGPUTextureUsage usage,
-                                  const void *data);
-GPUTexture *GPU_texture_create_cube(const char *name,
+gpu::Texture *GPU_texture_create_1d(const char *name,
                                     int width,
                                     int mip_len,
-                                    eGPUTextureFormat format,
+                                    gpu::TextureFormat format,
                                     eGPUTextureUsage usage,
                                     const float *data);
-GPUTexture *GPU_texture_create_cube_array(const char *name,
+gpu::Texture *GPU_texture_create_1d_array(const char *name,
                                           int width,
                                           int layer_len,
                                           int mip_len,
-                                          eGPUTextureFormat format,
+                                          gpu::TextureFormat format,
                                           eGPUTextureUsage usage,
                                           const float *data);
+gpu::Texture *GPU_texture_create_2d(const char *name,
+                                    int width,
+                                    int height,
+                                    int mip_len,
+                                    gpu::TextureFormat format,
+                                    eGPUTextureUsage usage,
+                                    const float *data);
+gpu::Texture *GPU_texture_create_2d_array(const char *name,
+                                          int width,
+                                          int height,
+                                          int layer_len,
+                                          int mip_len,
+                                          gpu::TextureFormat format,
+                                          eGPUTextureUsage usage,
+                                          const float *data);
+gpu::Texture *GPU_texture_create_3d(const char *name,
+                                    int width,
+                                    int height,
+                                    int depth,
+                                    int mip_len,
+                                    gpu::TextureFormat format,
+                                    eGPUTextureUsage usage,
+                                    const void *data);
+gpu::Texture *GPU_texture_create_cube(const char *name,
+                                      int width,
+                                      int mip_len,
+                                      gpu::TextureFormat format,
+                                      eGPUTextureUsage usage,
+                                      const float *data);
+gpu::Texture *GPU_texture_create_cube_array(const char *name,
+                                            int width,
+                                            int layer_len,
+                                            int mip_len,
+                                            gpu::TextureFormat format,
+                                            eGPUTextureUsage usage,
+                                            const float *data);
 /**
  * DDS texture loading. Return nullptr if compressed texture support is not available.
  * \a data should hold all the data for \a mip_len mipmaps.
  * The data is expected to be in compressed form. This isn't going to compress un-compress data.
  */
-GPUTexture *GPU_texture_create_compressed_2d(const char *name,
-                                             int width,
-                                             int height,
-                                             int mip_len,
-                                             eGPUTextureFormat format,
-                                             eGPUTextureUsage usage,
-                                             const void *data);
+gpu::Texture *GPU_texture_create_compressed_2d(const char *name,
+                                               int width,
+                                               int height,
+                                               int mip_len,
+                                               gpu::TextureFormat format,
+                                               eGPUTextureUsage usage,
+                                               const void *data);
 
 /**
  * Create a buffer texture that allow access to a buffer \a vertex_buf through a sampler of type
  * `(FLOAT/INT/UINT)_BUFFER`.
  */
-GPUTexture *GPU_texture_create_from_vertbuf(const char *name, blender::gpu::VertBuf *vertex_buf);
+gpu::Texture *GPU_texture_create_from_vertbuf(const char *name, gpu::VertBuf *vertex_buf);
 
 /**
  * Create an error texture that will bind an pink texture at draw time.
  * \a dimension is the number of number of dimension of the texture (1, 2, or 3).
  * \a array if set to true, will make the texture be an array (layered).
  */
-GPUTexture *GPU_texture_create_error(int dimension, bool array);
+gpu::Texture *GPU_texture_create_error(int dimension, bool array);
 
 /** \} */
 
@@ -648,18 +890,19 @@ GPUTexture *GPU_texture_create_error(int dimension, bool array);
  * This avoids the texture being free between the time it is referenced by the drawing logic and
  * the time it is actually dereferenced.
  */
-void GPU_texture_ref(GPUTexture *texture);
+void GPU_texture_ref(gpu::Texture *texture);
 
 /**
  * This internally decrement the reference counter.
- * If the reference counter is 1 when calling this function the #GPUTexture will be freed.
+ * If the reference counter is 1 when calling this function the #gpu::Texture will be
+ * freed.
  */
-void GPU_texture_free(GPUTexture *texture);
+void GPU_texture_free(gpu::Texture *texture);
 
 #define GPU_TEXTURE_FREE_SAFE(texture) \
   do { \
     if (texture != nullptr) { \
-      GPU_texture_free(texture); \
+      blender::GPU_texture_free(texture); \
       texture = nullptr; \
     } \
   } while (0)
@@ -694,30 +937,21 @@ void GPU_texture_free(GPUTexture *texture);
  *
  * TODO(fclem): Target conversion (ex: Texture 2D as Texture 2D Array) is not implemented yet.
  */
-GPUTexture *GPU_texture_create_view(const char *name,
-                                    GPUTexture *source_texture,
-                                    eGPUTextureFormat view_format,
-                                    int mip_start,
-                                    int mip_len,
-                                    int layer_start,
-                                    int layer_len,
-                                    bool cube_as_array,
-                                    bool use_stencil);
+gpu::Texture *GPU_texture_create_view(const char *name,
+                                      gpu::Texture *source_texture,
+                                      gpu::TextureFormat view_format,
+                                      int mip_start,
+                                      int mip_len,
+                                      int layer_start,
+                                      int layer_len,
+                                      bool cube_as_array,
+                                      bool use_stencil);
 
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Modify & Update
  * \{ */
-
-/**
- * Makes data interpretation aware of the source layout.
- * Skipping pixels correctly when changing rows when doing partial update.
- * This affects `GPU_texture_update`, `GPU_texture_update_sub`, `GPU_texture_update_mipmap`.
- * TODO(fclem): replace this by pixel buffer updates using a custom utility to do the line shifting
- * like Cycles does.
- */
-void GPU_unpack_row_length_set(uint len);
 
 /**
  * Update the content of a texture's base mip-map level (mip 0).
@@ -727,7 +961,7 @@ void GPU_unpack_row_length_set(uint len);
  * \note This function only update the content of mip 0. Either specify other mips or use
  * `GPU_texture_update_mipmap_chain` to generate them if needed.
  */
-void GPU_texture_update(GPUTexture *texture, eGPUDataFormat data_format, const void *data);
+void GPU_texture_update(gpu::Texture *texture, eGPUDataFormat data_format, const void *data);
 
 /**
  * Update the content of a region of a texture's base mip-map level (mip 0).
@@ -740,7 +974,7 @@ void GPU_texture_update(GPUTexture *texture, eGPUDataFormat data_format, const v
  * \a offset_x , \a offset_y , \a offset_z specify the bottom left corner of the updated region.
  * \a width , \a height , \a depth specify the extent of the updated region.
  */
-void GPU_texture_update_sub(GPUTexture *texture,
+void GPU_texture_update_sub(gpu::Texture *texture,
                             eGPUDataFormat data_format,
                             const void *pixels,
                             int offset_x,
@@ -748,7 +982,8 @@ void GPU_texture_update_sub(GPUTexture *texture,
                             int offset_z,
                             int width,
                             int height,
-                            int depth);
+                            int depth,
+                            uint unpack_row_length = 0);
 
 /**
  * Update the content of a texture's specific mip-map level.
@@ -756,10 +991,11 @@ void GPU_texture_update_sub(GPUTexture *texture,
  * texture storage.
  * The \a data should be the size of the entire \a mip_level.
  */
-void GPU_texture_update_mipmap(GPUTexture *texture,
+void GPU_texture_update_mipmap(gpu::Texture *texture,
                                int mip_level,
                                eGPUDataFormat data_format,
-                               const void *pixels);
+                               const void *pixels,
+                               uint unpack_row_length = 0);
 
 /**
  * Fills the whole texture with the same data for all pixels.
@@ -769,27 +1005,62 @@ void GPU_texture_update_mipmap(GPUTexture *texture,
  * \note The format is float for UNORM textures.
  * \param data: 1 pixel worth of data to fill the texture with.
  */
-void GPU_texture_clear(GPUTexture *texture, eGPUDataFormat data_format, const void *data);
+void GPU_texture_clear(gpu::Texture *texture, eGPUDataFormat data_format, const void *data);
 
 /**
  * Copy a \a src texture content to a similar \a dst texture. Only MIP 0 is copied.
  * Textures needs to match in size and format.
  */
-void GPU_texture_copy(GPUTexture *dst, GPUTexture *src);
+void GPU_texture_copy(gpu::Texture *dst, gpu::Texture *src);
+
+/**
+ * Returns the texture usage flags needed for generating a mipmap.
+ */
+eGPUTextureUsage GPU_texture_mipmap_usage(gpu::TextureFormat format);
 
 /**
  * Update the mip-map levels using the mip 0 data.
+ *
  * \note this doesn't work on depth or compressed textures.
+ * \note post-condition: All bound images could be unbound.
  */
-void GPU_texture_update_mipmap_chain(GPUTexture *texture);
+void GPU_texture_update_mipmap_chain(gpu::Texture *texture);
+
+/** Chunk size for partial updates of the mipmaps, must match #MIPMAP_UPDATE_CHUNK_SIZE in
+ * GPU_shader_shared.hh. */
+constexpr int GPU_TEXTURE_MIPMAP_UPDATE_CHUNK_SIZE = 256;
 
 /**
- * Read the content of a \a mip_level from a \a tex and returns a copy of its data.
+ * Like #GPU_texture_update_mipmap_chain, but regenerate only modified chunks.
+ *
+ * \a modified_chunks is a bit mask that covers the texture split into
+ * MIPMAP_UPDATE_CHUNK_SIZE x MIPMAP_UPDATE_CHUNK_SIZE chunks.
+ */
+void GPU_texture_update_mipmap_chain_partial(gpu::Texture *texture,
+                                             int layer,
+                                             BitSpan modified_chunks);
+
+/**
+ * Read the content of a \a mip_level from a \a texture and returns a copy of its data.
+ * Use #MEM_delete to free the data.
+ *
  * \warning the texture must have been created using GPU_TEXTURE_USAGE_HOST_READ.
  * \note synchronization of shader writes via `imageStore()` needs to be explicitly done using
  * `GPU_memory_barrier(GPU_BARRIER_TEXTURE_FETCH)`.
  */
-void *GPU_texture_read(GPUTexture *texture, eGPUDataFormat data_format, int mip_level);
+void *GPU_texture_read(gpu::Texture *texture, eGPUDataFormat data_format, int mip_level);
+
+/**
+ * Read the content of a \a mip_level from a \a texture into user-provided memory buffer \a dst.
+ */
+void GPU_texture_read(gpu::Texture *texture, eGPUDataFormat data_format, int mip_level, void *dst);
+
+/**
+ * Calculate memory size in bytes needed to read a \a mip_level from a \a texture.
+ */
+size_t GPU_texture_read_size_get(const gpu::Texture *texture,
+                                 eGPUDataFormat data_format,
+                                 int mip_level);
 
 /** \} */
 
@@ -800,16 +1071,16 @@ void *GPU_texture_read(GPUTexture *texture, eGPUDataFormat data_format, int mip_
 /**
  * Bind a texture to a texture sampling image units using the texture internal sampler state.
  */
-void GPU_texture_bind(GPUTexture *texture, int unit);
+void GPU_texture_bind(gpu::Texture *texture, int unit);
 /**
  * Bind a texture to a texture sampling image units using the explicit sampler state.
  */
-void GPU_texture_bind_ex(GPUTexture *texture, GPUSamplerState state, int unit);
+void GPU_texture_bind_ex(gpu::Texture *texture, GPUSamplerState state, int unit);
 /**
  * Unbind \a tex from a texture sampling image unit.
  * \note this isn't strictly required but it is better for debugging purpose.
  */
-void GPU_texture_unbind(GPUTexture *texture);
+void GPU_texture_unbind(gpu::Texture *texture);
 /**
  * Unbind all texture from all texture sampling image units.
  */
@@ -820,12 +1091,12 @@ void GPU_texture_unbind_all();
  * It correspond to a `gpu::shader::ShaderCreateInfo::image()` declaration.
  * \note this overrides any previous bind on the same unit.
  */
-void GPU_texture_image_bind(GPUTexture *texture, int unit);
+void GPU_texture_image_bind(gpu::Texture *texture, int unit);
 /**
  * Unbind \a tex from an arbitrary load/store image unit.
  * \note this isn't strictly required but it is better for debugging purpose.
  */
-void GPU_texture_image_unbind(GPUTexture *texture);
+void GPU_texture_image_unbind(gpu::Texture *texture);
 /**
  * Unbind all texture from all arbitrary load/store image units.
  */
@@ -840,7 +1111,7 @@ void GPU_texture_image_unbind_all();
 /**
  * Set \a tex texture depth comparison mode. Only works on depth format.
  */
-void GPU_texture_compare_mode(GPUTexture *texture, bool use_compare);
+void GPU_texture_compare_mode(gpu::Texture *texture, bool use_compare);
 
 /**
  * Set \a tex texture filter usage.
@@ -848,7 +1119,7 @@ void GPU_texture_compare_mode(GPUTexture *texture, bool use_compare);
  * \note Does not work on non-normalized integer textures.
  * \note Does not modify the mip-map usage state.
  */
-void GPU_texture_filter_mode(GPUTexture *texture, bool use_filter);
+void GPU_texture_filter_mode(gpu::Texture *texture, bool use_filter);
 
 /**
  * Set \a tex texture filter and mip-map usage.
@@ -857,31 +1128,31 @@ void GPU_texture_filter_mode(GPUTexture *texture, bool use_filter);
  * If both are set to true, the texture will use linear interpolation between mip-map levels.
  * \note Does not work on non-normalized integer textures.
  */
-void GPU_texture_mipmap_mode(GPUTexture *texture, bool use_mipmap, bool use_filter);
+void GPU_texture_mipmap_mode(gpu::Texture *texture, bool use_mipmap, bool use_filter);
 
 /**
  * Set anisotropic filter usage. Filter sample count is determined globally by
- * `U.anisotropic_filter` and updated when `GPU_samplers_update` is called.
+ * `U.anisotropic_filter`.
  */
-void GPU_texture_anisotropic_filter(GPUTexture *texture, bool use_aniso);
+void GPU_texture_anisotropic_filter(gpu::Texture *texture, bool use_aniso);
 
 /**
  * Set \a tex texture sampling method for coordinates outside of the [0..1] uv range along the x
  * axis. See GPUSamplerExtendMode for the available and meaning of different extend modes.
  */
-void GPU_texture_extend_mode_x(GPUTexture *texture, GPUSamplerExtendMode extend_mode);
+void GPU_texture_extend_mode_x(gpu::Texture *texture, GPUSamplerExtendMode extend_mode);
 
 /**
  * Set \a tex texture sampling method for coordinates outside of the [0..1] uv range along the y
  * axis. See GPUSamplerExtendMode for the available and meaning of different extend modes.
  */
-void GPU_texture_extend_mode_y(GPUTexture *texture, GPUSamplerExtendMode extend_mode);
+void GPU_texture_extend_mode_y(gpu::Texture *texture, GPUSamplerExtendMode extend_mode);
 
 /**
  * Set \a tex texture sampling method for coordinates outside of the [0..1] uv range along both the
  * x and y axis. See GPUSamplerExtendMode for the available and meaning of different extend modes.
  */
-void GPU_texture_extend_mode(GPUTexture *texture, GPUSamplerExtendMode extend_mode);
+void GPU_texture_extend_mode(gpu::Texture *texture, GPUSamplerExtendMode extend_mode);
 
 /**
  * Set \a tex texture swizzle state for swizzling sample components.
@@ -899,7 +1170,7 @@ void GPU_texture_extend_mode(GPUTexture *texture, GPUSamplerExtendMode extend_mo
  * - '0': will make the component value to always return 0.
  * - '1': will make the component value to always return 1.
  */
-void GPU_texture_swizzle_set(GPUTexture *texture, const char swizzle[4]);
+void GPU_texture_swizzle_set(gpu::Texture *texture, const char swizzle[4]);
 
 /** \} */
 
@@ -911,90 +1182,100 @@ void GPU_texture_swizzle_set(GPUTexture *texture, const char swizzle[4]);
  * Return the number of dimensions of the texture ignoring dimension of layers (1, 2 or 3).
  * Cube textures are considered 2D.
  */
-int GPU_texture_dimensions(const GPUTexture *texture);
+int GPU_texture_dimensions(const gpu::Texture *texture);
 
 /**
  * Return the width of \a tex.
  */
-int GPU_texture_width(const GPUTexture *texture);
+int GPU_texture_width(const gpu::Texture *texture);
 
 /**
  * Return the height of \a tex. Correspond to number of layers for 1D array texture.
  */
-int GPU_texture_height(const GPUTexture *texture);
+int GPU_texture_height(const gpu::Texture *texture);
 
 /**
  * Return the depth of \a tex . Correspond to number of layers for 2D array texture.
  * NOTE: return 0 for 1D & 2D textures.
  */
-int GPU_texture_depth(const GPUTexture *texture);
+int GPU_texture_depth(const gpu::Texture *texture);
 
 /**
  * Return the number of layers of \a tex. Return 1 if the texture is not layered.
  */
-int GPU_texture_layer_count(const GPUTexture *texture);
+int GPU_texture_layer_count(const gpu::Texture *texture);
 
 /**
  * Return the number of mip-map level inside this texture.
  */
-int GPU_texture_mip_count(const GPUTexture *texture);
+int GPU_texture_mip_count(const gpu::Texture *texture);
 
 /**
  * Return the texture format of \a tex.
  */
-eGPUTextureFormat GPU_texture_format(const GPUTexture *texture);
+gpu::TextureFormat GPU_texture_format(const gpu::Texture *texture);
 
 /**
  * Return the usage flags of \a tex.
  */
-eGPUTextureUsage GPU_texture_usage(const GPUTexture *texture);
+eGPUTextureUsage GPU_texture_usage(const gpu::Texture *texture);
 
 /**
  * Return true if the texture is an array texture type (has layers).
  */
-bool GPU_texture_is_array(const GPUTexture *texture);
+bool GPU_texture_is_array(const gpu::Texture *texture);
 
 /**
  * Return true if the texture is an cube-map texture type.
  */
-bool GPU_texture_is_cube(const GPUTexture *texture);
+bool GPU_texture_is_cube(const gpu::Texture *texture);
+
+/**
+ * Return true if the texture was created with GPU_texture_create_view.
+ */
+bool GPU_texture_is_view(const gpu::Texture *texture);
 
 /**
  * Return true if the texture format has a depth component.
  */
-bool GPU_texture_has_depth_format(const GPUTexture *texture);
+bool GPU_texture_has_depth_format(const gpu::Texture *texture);
 
 /**
  * Return true if the texture format has a stencil component.
  */
-bool GPU_texture_has_stencil_format(const GPUTexture *texture);
+bool GPU_texture_has_stencil_format(const gpu::Texture *texture);
 
 /**
  * Return true if the texture format is an integer type (non-normalized integers).
  */
-bool GPU_texture_has_integer_format(const GPUTexture *texture);
+bool GPU_texture_has_integer_format(const gpu::Texture *texture);
 
 /**
  * Return true if the texture format is a float type.
  */
-bool GPU_texture_has_float_format(const GPUTexture *texture);
+bool GPU_texture_has_float_format(const gpu::Texture *texture);
 
 /**
  * Return true if the texture format is an integer normalized type.
  */
-bool GPU_texture_has_normalized_format(const GPUTexture *texture);
+bool GPU_texture_has_normalized_format(const gpu::Texture *texture);
 
 /**
  * Return true if the texture format is a signed type.
  */
-bool GPU_texture_has_signed_format(const GPUTexture *texture);
+bool GPU_texture_has_signed_format(const gpu::Texture *texture);
+
+/**
+ * Return true if the texture format is a compressed type.
+ */
+bool GPU_texture_has_compressed_format(const gpu::Texture *texture);
 
 /**
  * Returns the pixel dimensions of a texture's mip-map level.
  * \a size is expected to be a pointer to a vector of dimension matching the texture's dimension
  * (including the array dimension).
  */
-void GPU_texture_get_mipmap_size(GPUTexture *texture, int mip_level, int *r_size);
+void GPU_texture_get_mipmap_size(gpu::Texture *texture, int mip_level, int *r_size);
 
 /** \} */
 
@@ -1007,28 +1288,22 @@ void GPU_texture_get_mipmap_size(GPUTexture *texture, int mip_level, int *r_size
 
 /**
  * Width & Height (of source data), optional.
- * WORKAROUND: Calling 'BKE_image_get_size' may free the texture. Store the source image size
- * (before down-scaling) inside the #GPUTexture to retrieve the original size later (Ref #59347).
+ * WORKAROUND: Calling #BKE_image_get_size may free the texture. Store the source image size
+ * (before down-scaling) inside the #gpu::Texture to retrieve the original size later (Ref
+ * #59347).
  */
-int GPU_texture_original_width(const GPUTexture *texture);
-int GPU_texture_original_height(const GPUTexture *texture);
-void GPU_texture_original_size_set(GPUTexture *texture, int width, int height);
+int GPU_texture_original_width(const gpu::Texture *texture);
+int GPU_texture_original_height(const gpu::Texture *texture);
+void GPU_texture_original_size_set(gpu::Texture *texture, int width, int height);
 
 /**
  * Reference of a pointer that needs to be cleaned when deallocating the texture.
  * Points to #BPyGPUTexture.tex
  */
 #ifndef GPU_NO_USE_PY_REFERENCES
-void **GPU_texture_py_reference_get(GPUTexture *texture);
-void GPU_texture_py_reference_set(GPUTexture *texture, void **py_ref);
+void **GPU_texture_py_reference_get(gpu::Texture *texture);
+void GPU_texture_py_reference_set(gpu::Texture *texture, void **py_ref);
 #endif
-
-/**
- * Return the backend handle of the texture.
- * \note This is a legacy feature only working on OpenGL backend. It will be removed once we remove
- * the python BGL module.
- */
-int GPU_texture_opengl_bindcode(const GPUTexture *texture);
 
 /** \} */
 
@@ -1039,7 +1314,7 @@ int GPU_texture_opengl_bindcode(const GPUTexture *texture);
 /**
  * Returns the number of components in a texture format.
  */
-size_t GPU_texture_component_len(eGPUTextureFormat format);
+size_t GPU_texture_component_len(gpu::TextureFormat format);
 
 /**
  * Return the expected number of bytes for one pixel of \a data_format data.
@@ -1048,9 +1323,9 @@ size_t GPU_texture_dataformat_size(eGPUDataFormat data_format);
 
 /**
  * Return the texture format as a string for display purpose.
- * Example: `GPU_RGBA8` returns as `"RGBA8"`.
+ * Example: `gpu::TextureFormat::UNORM_8_8_8_8` returns as `"RGBA8"`.
  */
-const char *GPU_texture_format_name(eGPUTextureFormat format);
+const char *GPU_texture_format_name(gpu::TextureFormat format);
 
 /**
  * Returns the memory usage of all currently allocated textures in bytes.
@@ -1058,11 +1333,6 @@ const char *GPU_texture_format_name(eGPUTextureFormat format);
  * memory back and forth depending on usage.
  */
 unsigned int GPU_texture_memory_usage_get();
-
-/**
- * Update sampler states depending on user settings.
- */
-void GPU_samplers_update();
 
 /** \} */
 
@@ -1073,9 +1343,7 @@ void GPU_samplers_update();
  * It can also be used for more efficient partial update from CPU side.
  * \{ */
 
-/** Opaque type hiding blender::gpu::PixelBuffer. */
-struct GPUPixelBuffer;
-
+/** Opaque type hiding gpu::PixelBuffer. */
 /**
  * Creates a #GPUPixelBuffer object with \a byte_size worth of storage.
  */
@@ -1108,15 +1376,27 @@ size_t GPU_pixel_buffer_size(GPUPixelBuffer *pixel_buf);
 
 /**
  * Return the native handle of the \a pix_buf to use for graphic interoperability registration.
+ *
+ * - OpenGL: pixel buffer object ID.
+ * - Vulkan on Windows: opaque handle for VkBuffer.
+ * - Vulkan on Unix: opaque file descriptor for VkBuffer.
+ * - Metal: MTLBuffer with unified memory.
+ *
+ * For Vulkan, the caller is responsible for closing the handle.
  */
-int64_t GPU_pixel_buffer_get_native_handle(GPUPixelBuffer *pixel_buf);
+struct GPUPixelBufferNativeHandle {
+  int64_t handle = 0;
+  size_t size = 0;
+};
+
+GPUPixelBufferNativeHandle GPU_pixel_buffer_get_native_handle(GPUPixelBuffer *pixel_buf);
 
 /**
  * Update a sub-region of a texture using the data from a #GPUPixelBuffer as source data.
  * The \a pix_buf data is expected to be contiguous and big enough to fill the described
  * sub-region.
  */
-void GPU_texture_update_sub_from_pixel_buffer(GPUTexture *texture,
+void GPU_texture_update_sub_from_pixel_buffer(gpu::Texture *texture,
                                               eGPUDataFormat data_format,
                                               GPUPixelBuffer *pixel_buf,
                                               int offset_x,
@@ -1126,3 +1406,5 @@ void GPU_texture_update_sub_from_pixel_buffer(GPUTexture *texture,
                                               int height,
                                               int depth);
 /** \} */
+
+}  // namespace blender

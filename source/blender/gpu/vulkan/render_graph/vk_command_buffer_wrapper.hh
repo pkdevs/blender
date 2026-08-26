@@ -10,22 +10,23 @@
 
 #include "vk_common.hh"
 
-namespace blender::gpu {
-struct VKWorkarounds;
+namespace blender {
+
+namespace gpu {
+struct VKExtensions;
 }
 
-namespace blender::gpu::render_graph {
+namespace gpu::render_graph {
 class VKCommandBufferInterface {
  public:
-  bool use_dynamic_rendering = true;
+  bool use_dynamic_rendering_local_read = true;
+  bool use_multi_draw_indirect = true;
 
   VKCommandBufferInterface() {}
   virtual ~VKCommandBufferInterface() = default;
 
   virtual void begin_recording() = 0;
   virtual void end_recording() = 0;
-  virtual void submit_with_cpu_synchronization(VkFence vk_fence = VK_NULL_HANDLE) = 0;
-  virtual void wait_for_cpu_synchronization(VkFence vk_fence = VK_NULL_HANDLE) = 0;
 
   virtual void bind_pipeline(VkPipelineBindPoint pipeline_bind_point, VkPipeline pipeline) = 0;
   virtual void bind_descriptor_sets(VkPipelineBindPoint pipeline_bind_point,
@@ -131,37 +132,45 @@ class VKCommandBufferInterface {
   virtual void reset_query_pool(VkQueryPool vk_query_pool,
                                 uint32_t first_query,
                                 uint32_t query_count) = 0;
+  /* Dynamic states. */
 
-  virtual void begin_render_pass(const VkRenderPassBeginInfo *render_pass_begin_info) = 0;
-  virtual void end_render_pass() = 0;
+  virtual void set_viewport(const Vector<VkViewport> viewports) = 0;
+  virtual void set_scissor(const Vector<VkRect2D> scissors) = 0;
+  virtual void set_line_width(const float line_width) = 0;
+  virtual void set_stencil_compare_mask(const uint32_t compare_mask) = 0;
+  virtual void set_stencil_write_mask(const uint32_t write_mask) = 0;
+  virtual void set_stencil_reference(const uint32_t reference) = 0;
+  /* VK_EXT_extended_dynamic_state */
+  virtual void set_front_face(const VkFrontFace front_face) = 0;
+  /* VK_EXT_vertex_input_dynamic_state */
+  virtual void set_vertex_input(
+      Span<VkVertexInputBindingDescription2EXT> vertex_binding_descriptions,
+      Span<VkVertexInputAttributeDescription2EXT> vertex_attribute_descriptions) = 0;
   /* VK_KHR_dynamic_rendering */
   virtual void begin_rendering(const VkRenderingInfo *p_rendering_info) = 0;
   virtual void end_rendering() = 0;
   /* VK_EXT_debug_utils */
   virtual void begin_debug_utils_label(const VkDebugUtilsLabelEXT *vk_debug_utils_label) = 0;
   virtual void end_debug_utils_label() = 0;
+
+  /* VK_KHR_ray_tracing */
+  virtual void build_acceleration_structure(
+      const VkAccelerationStructureBuildGeometryInfoKHR *p_infos,
+      const VkAccelerationStructureBuildRangeInfoKHR *p_build_range_infos) = 0;
 };
 
 class VKCommandBufferWrapper : public VKCommandBufferInterface {
  private:
-  VkCommandPoolCreateInfo vk_command_pool_create_info_;
-  VkCommandBufferAllocateInfo vk_command_buffer_allocate_info_;
-  VkCommandBufferBeginInfo vk_command_buffer_begin_info_;
-  VkFenceCreateInfo vk_fence_create_info_;
-  VkSubmitInfo vk_submit_info_;
-
-  VkCommandPool vk_command_pool_ = VK_NULL_HANDLE;
   VkCommandBuffer vk_command_buffer_ = VK_NULL_HANDLE;
-  VkFence vk_fence_ = VK_NULL_HANDLE;
+  const VolkDeviceTable *functions = nullptr;
 
  public:
-  VKCommandBufferWrapper(const VKWorkarounds &workarounds);
-  virtual ~VKCommandBufferWrapper();
+  VKCommandBufferWrapper(VkCommandBuffer vk_command_buffer,
+                         const VolkDeviceTable &functions,
+                         const VKExtensions &extensions);
 
   void begin_recording() override;
   void end_recording() override;
-  void submit_with_cpu_synchronization(VkFence vk_fence) override;
-  void wait_for_cpu_synchronization(VkFence vk_fence) override;
 
   void bind_pipeline(VkPipelineBindPoint pipeline_bind_point, VkPipeline pipeline) override;
   void bind_descriptor_sets(VkPipelineBindPoint pipeline_bind_point,
@@ -258,17 +267,32 @@ class VKCommandBufferWrapper : public VKCommandBufferInterface {
                       uint32_t offset,
                       uint32_t size,
                       const void *p_values) override;
+  void set_viewport(const Vector<VkViewport> viewports) override;
+  void set_scissor(const Vector<VkRect2D> scissors) override;
+  void set_line_width(const float line_width) override;
+  void set_front_face(const VkFrontFace front_face) override;
+  void set_vertex_input(
+      Span<VkVertexInputBindingDescription2EXT> vertex_binding_descriptions,
+      Span<VkVertexInputAttributeDescription2EXT> vertex_attribute_descriptions) override;
+
+  void set_stencil_compare_mask(const uint32_t compare_mask) override;
+  void set_stencil_write_mask(const uint32_t write_mask) override;
+  void set_stencil_reference(const uint32_t reference) override;
   void begin_query(VkQueryPool vk_query_pool,
                    uint32_t query_index,
                    VkQueryControlFlags vk_query_control_flags) override;
   void end_query(VkQueryPool vk_query_pool, uint32_t query_index) override;
   void reset_query_pool(VkQueryPool, uint32_t first_query, uint32_t query_count) override;
-  void begin_render_pass(const VkRenderPassBeginInfo *vk_render_pass) override;
-  void end_render_pass() override;
   void begin_rendering(const VkRenderingInfo *p_rendering_info) override;
   void end_rendering() override;
   void begin_debug_utils_label(const VkDebugUtilsLabelEXT *vk_debug_utils_label) override;
   void end_debug_utils_label() override;
-};
 
-}  // namespace blender::gpu::render_graph
+  /* VK_KHR_ray_tracing */
+  void build_acceleration_structure(
+      const VkAccelerationStructureBuildGeometryInfoKHR *p_infos,
+      const VkAccelerationStructureBuildRangeInfoKHR *p_build_range_infos) override;
+};
+}  // namespace gpu::render_graph
+
+}  // namespace blender

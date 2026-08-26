@@ -10,10 +10,6 @@
 
 #include "../BPy_StrokeShader.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject GuidingLinesShader_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject GuidingLinesShader_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&GuidingLinesShader_Type))
 
 /*---------------------------Python BPy_GuidingLinesShader structure definition----------*/
-typedef struct {
+struct BPy_GuidingLinesShader {
   BPy_StrokeShader py_ss;
-} BPy_GuidingLinesShader;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

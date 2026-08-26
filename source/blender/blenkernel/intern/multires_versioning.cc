@@ -6,8 +6,6 @@
  * \ingroup bke
  */
 
-#include "MEM_guardedalloc.h"
-
 #include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
@@ -18,6 +16,8 @@
 #include "multires_reshape.hh"
 #include "opensubdiv_converter_capi.hh"
 #include "subdiv_converter.hh"
+
+namespace blender {
 
 #ifdef WITH_OPENSUBDIV
 
@@ -33,14 +33,14 @@ static bool simple_to_catmull_clark_is_infinite_sharp_vertex(
   return true;
 }
 
-static blender::bke::subdiv::Subdiv *subdiv_for_simple_to_catmull_clark(Object *object,
-                                                                        MultiresModifierData *mmd)
+static bke::subdiv::Subdiv *subdiv_for_simple_to_catmull_clark(Object *object,
+                                                               MultiresModifierData *mmd)
 {
   using namespace blender::bke;
   subdiv::Settings subdiv_settings;
   BKE_multires_subdiv_settings_init(&subdiv_settings, mmd);
 
-  const Mesh *base_mesh = static_cast<const Mesh *>(object->data);
+  const Mesh *base_mesh = id_cast<const Mesh *>(object->data);
 
   OpenSubdiv_Converter converter;
   subdiv::converter_init_for_mesh(&converter, &subdiv_settings, base_mesh);
@@ -50,9 +50,7 @@ static blender::bke::subdiv::Subdiv *subdiv_for_simple_to_catmull_clark(Object *
   subdiv::Subdiv *subdiv = subdiv::new_from_converter(&subdiv_settings, &converter);
   subdiv::converter_free(&converter);
 
-  if (!subdiv::eval_begin_from_mesh(
-          subdiv, base_mesh, {}, subdiv::SUBDIV_EVALUATOR_TYPE_CPU, nullptr))
-  {
+  if (!subdiv::eval_begin_from_mesh(subdiv, base_mesh, subdiv::SUBDIV_EVALUATOR_TYPE_CPU)) {
     subdiv::free(subdiv);
     return nullptr;
   }
@@ -65,19 +63,19 @@ static blender::bke::subdiv::Subdiv *subdiv_for_simple_to_catmull_clark(Object *
 void multires_do_versions_simple_to_catmull_clark(Object *object, MultiresModifierData *mmd)
 {
 #ifdef WITH_OPENSUBDIV
-  const Mesh *base_mesh = static_cast<const Mesh *>(object->data);
+  const Mesh *base_mesh = id_cast<const Mesh *>(object->data);
   if (base_mesh->corners_num == 0) {
     return;
   }
 
   /* Store the grids displacement in object space against the simple limit surface. */
   {
-    blender::bke::subdiv::Subdiv *subdiv = subdiv_for_simple_to_catmull_clark(object, mmd);
+    bke::subdiv::Subdiv *subdiv = subdiv_for_simple_to_catmull_clark(object, mmd);
     MultiresReshapeContext reshape_context;
     if (!multires_reshape_context_create_from_subdiv(
             &reshape_context, object, mmd, subdiv, mmd->totlvl))
     {
-      blender::bke::subdiv::free(subdiv);
+      bke::subdiv::free(subdiv);
       return;
     }
 
@@ -85,7 +83,7 @@ void multires_do_versions_simple_to_catmull_clark(Object *object, MultiresModifi
     multires_reshape_assign_final_coords_from_mdisps(&reshape_context);
     multires_reshape_context_free(&reshape_context);
 
-    blender::bke::subdiv::free(subdiv);
+    bke::subdiv::free(subdiv);
   }
 
   /* Calculate the new tangent displacement against the new Catmull-Clark limit surface. */
@@ -102,3 +100,5 @@ void multires_do_versions_simple_to_catmull_clark(Object *object, MultiresModifi
   UNUSED_VARS(object, mmd);
 #endif
 }
+
+}  // namespace blender

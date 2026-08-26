@@ -15,6 +15,7 @@ def gather_bone_sampled_keyframes(
         bone: str,
         channel: str,
         action_name: str,
+        slot_identifier: str,
         node_channel_is_animated: bool,
         export_settings
 ) -> typing.List[Keyframe]:
@@ -29,6 +30,7 @@ def gather_bone_sampled_keyframes(
 
     while frame <= end_frame:
         key = Keyframe(None, frame, channel)
+        key.set_id_type("OBJECT")
 
         mat = get_cache_data(
             'bone',
@@ -37,6 +39,7 @@ def gather_bone_sampled_keyframes(
             action_name,
             frame,
             step,
+            slot_identifier,
             export_settings)
 
         trans, rot, scale = mat.decompose()

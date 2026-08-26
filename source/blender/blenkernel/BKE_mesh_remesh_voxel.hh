@@ -2,16 +2,28 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma once
-
 /** \file
  * \ingroup bke
  */
 
+#pragma once
+
+namespace blender {
+
 struct Mesh;
+struct ModifierData;
+struct Object;
+struct ReportList;
 
 Mesh *BKE_mesh_remesh_voxel_fix_poles(const Mesh *mesh);
-Mesh *BKE_mesh_remesh_voxel(const Mesh *mesh, float voxel_size, float adaptivity, float isovalue);
+Mesh *BKE_mesh_remesh_voxel(const Mesh *mesh,
+                            float voxel_size,
+                            float adaptivity,
+                            float isovalue,
+                            const Object *object,
+                            ModifierData *modifier_data);
+Mesh *BKE_mesh_remesh_voxel(
+    const Mesh *mesh, float voxel_size, float adaptivity, float isovalue, ReportList *reports);
 Mesh *BKE_mesh_remesh_quadriflow(const Mesh *mesh,
                                  int target_faces,
                                  int seed,
@@ -21,6 +33,8 @@ Mesh *BKE_mesh_remesh_quadriflow(const Mesh *mesh,
                                  void (*update_cb)(void *, float progress, int *cancel),
                                  void *update_cb_data);
 
-namespace blender::bke {
+namespace bke {
 void mesh_remesh_reproject_attributes(const Mesh &src, Mesh &dst);
 }
+
+}  // namespace blender

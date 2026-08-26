@@ -10,15 +10,16 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
-#include "BLI_utildefines_stack.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines_stack.hh"
 
 #include "bmesh.hh"
 #include "bmesh_tools.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
 
 #define ELE_NEW 1
 #define ELE_CUT 2
@@ -58,8 +59,7 @@ void bmo_bisect_plane_exec(BMesh *bm, BMOperator *op)
      * Removing a vert may remove and edge which is later checked by #BMO_ITER.
      * over-allocate the total possible vert count. */
     const int vert_arr_max = min_ii(bm->totvert, BMO_slot_buffer_len(op->slots_in, "geom"));
-    BMVert **vert_arr = static_cast<BMVert **>(
-        MEM_mallocN(sizeof(*vert_arr) * size_t(vert_arr_max), __func__));
+    BMVert **vert_arr = MEM_new_array_uninitialized<BMVert *>(vert_arr_max, __func__);
     BMOIter siter;
     BMVert *v;
     float plane_inner[4];
@@ -86,7 +86,7 @@ void bmo_bisect_plane_exec(BMesh *bm, BMOperator *op)
       BM_vert_kill(bm, v);
     }
 
-    MEM_freeN(vert_arr);
+    MEM_delete(vert_arr);
   }
 
   BMO_slot_buffer_from_enabled_flag(
@@ -94,3 +94,5 @@ void bmo_bisect_plane_exec(BMesh *bm, BMOperator *op)
   BMO_slot_buffer_from_enabled_flag(
       bm, op, op->slots_out, "geom_cut.out", BM_VERT | BM_EDGE, ELE_CUT);
 }
+
+}  // namespace blender

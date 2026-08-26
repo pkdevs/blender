@@ -9,7 +9,7 @@
 
 #include "GeomUtils.h"
 
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 namespace Freestyle::GeomUtils {
 
@@ -720,7 +720,7 @@ void fromRetinaToCamera(const Vec3r &p, Vec3r &q, real focal, const real project
 
 void fromCameraToWorld(const Vec3r &p, Vec3r &q, const real model_view_matrix[4][4])
 {
-  real translation[3] = {
+  const real translation[3] = {
       model_view_matrix[0][3],
       model_view_matrix[1][3],
       model_view_matrix[2][3],

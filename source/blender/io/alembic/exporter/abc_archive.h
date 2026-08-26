@@ -18,10 +18,12 @@
 #include <set>
 #include <string>
 
+namespace blender {
+
 struct Main;
 struct Scene;
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 /* Container for an Alembic archive and time sampling info.
  *
@@ -29,7 +31,7 @@ namespace blender::io::alembic {
  * metadata. */
 class ABCArchive {
  public:
-  typedef std::set<double> Frames;
+  using Frames = std::set<double>;
 
   Alembic::Abc::OArchive *archive;
 
@@ -65,4 +67,5 @@ class ABCArchive {
   Alembic::Abc::OBox3dProperty abc_archive_bbox_;
 };
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

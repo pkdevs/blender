@@ -7,13 +7,13 @@
 /** \file
  * \ingroup bli
  *
- * A `blender::StringRef` references a const char array owned by someone else. It is just a pointer
+ * A `StringRef` references a const char array owned by someone else. It is just a pointer
  * and a size. Since the memory is not owned, StringRef should not be used to transfer ownership of
  * the string. The data referenced by a StringRef cannot be mutated through it.
  *
  * A StringRef is NOT null-terminated. This makes it much more powerful within C++, because we can
  * also cut off parts of the end without creating a copy. When interfacing with C code that expects
- * null-terminated strings, `blender::StringRefNull` can be used. It is essentially the same as
+ * null-terminated strings, `StringRefNull` can be used. It is essentially the same as
  * StringRef, but with the restriction that the string has to be null-terminated.
  *
  * Whenever possible, string parameters should be of type StringRef and the string return type
@@ -21,22 +21,22 @@
  * return it when the string exists only in the scope of the function. This convention makes
  * functions usable in the most contexts.
  *
- * blender::StringRef vs. std::string_view:
+ * StringRef vs. std::string_view:
  *   Both types are certainly very similar. The main benefit of using StringRef in Blender is that
  *   this allows us to add convenience methods at any time. Especially, when doing a lot of string
  *   manipulation, this helps to keep the code clean. Furthermore, we need StringRefNull anyway,
  *   because there is a lot of C code that expects null-terminated strings. Conversion between
- *   StringRef and string_view is very cheap and can be done at api boundaries at essentially no
+ *   StringRef and string_view is very cheap and can be done at API boundaries at essentially no
  *   cost. Another benefit of using StringRef is that it uses signed integers, thus developers
  *   have to deal less with issues resulting from unsigned integers.
  */
 
 #include <cstring>
+#include <fmt/ranges.h>
 #include <string>
 #include <string_view>
 
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
 
 namespace blender {
 
@@ -54,7 +54,7 @@ class StringRefBase {
   constexpr StringRefBase(const char *data, int64_t size);
 
  public:
-  /* Similar to string_view::npos, but signed. */
+  /** Similar to #string_view::npos, but signed. */
   static constexpr int64_t not_found = -1;
 
   constexpr int64_t size() const;
@@ -70,9 +70,31 @@ class StringRefBase {
 
   constexpr IndexRange index_range() const;
 
-  void unsafe_copy(char *dst) const;
-  void copy(char *dst, int64_t dst_size) const;
-  template<size_t N> void copy(char (&dst)[N]) const;
+  /**
+   * Copy the string into a char array. The copied string will be null-terminated. If it does not
+   * fit, it will be truncated while keeping it valid UTF8 (assuming the #StringRef itself is
+   * valid UTF8).
+   */
+  void copy_utf8_truncated(char *dst, int64_t dst_size) const;
+  template<size_t N> void copy_utf8_truncated(char (&dst)[N]) const;
+
+  /**
+   * Copy the string into a char array. The copied string will be null-terminated. If it does not
+   * fit, it will be truncated.
+   *
+   * \note #copy_utf8_truncated should be used UTF8 strings,
+   * this should be used for strings which are allowed to contain arbitrary
+   * byte sequences without a known encoding such as file-paths.
+   */
+  void copy_bytes_truncated(char *dst, int64_t dst_size) const;
+  template<size_t N> void copy_bytes_truncated(char (&dst)[N]) const;
+
+  /**
+   * Copy the string into a buffer. The buffer has to be one byte larger than the size of the
+   * string, because the copied string will be null-terminated. Only use this when you are
+   * absolutely sure that the buffer is large enough.
+   */
+  void copy_unsafe(char *dst) const;
 
   constexpr bool startswith(StringRef prefix) const;
   constexpr bool endswith(StringRef suffix) const;
@@ -84,6 +106,9 @@ class StringRefBase {
   /**
    * The behavior of those functions matches the standard library implementation of
    * std::string_view.
+   *
+   * \return the offset at which the char/string was found, or StringRefBase::not_found when
+   * nothing was found.
    */
   constexpr int64_t find(char c, int64_t pos = 0) const;
   constexpr int64_t find(StringRef str, int64_t pos = 0) const;
@@ -101,6 +126,10 @@ class StringRefBase {
   constexpr StringRef trim() const;
   constexpr StringRef trim(StringRef characters_to_remove) const;
   constexpr StringRef trim(char character_to_remove) const;
+  constexpr StringRef trim_left() const;
+  constexpr StringRef trim_left(StringRef characters_to_remove) const;
+  constexpr StringRef trim_right() const;
+  constexpr StringRef trim_right(StringRef characters_to_remove) const;
 };
 
 /**
@@ -114,7 +143,7 @@ class StringRefNull : public StringRefBase {
   constexpr StringRefNull();
   constexpr StringRefNull(const char *str, int64_t size);
   StringRefNull(std::nullptr_t) = delete;
-  StringRefNull(const char *str);
+  constexpr StringRefNull(const char *str);
   StringRefNull(const std::string &str);
 
   constexpr char operator[](int64_t index) const;
@@ -134,11 +163,13 @@ class StringRef : public StringRefBase {
   constexpr StringRef(const char *str, int64_t length);
   constexpr StringRef(const char *begin, const char *one_after_end);
   constexpr StringRef(std::string_view view);
+  constexpr StringRef(Span<char> span);
   StringRef(const std::string &str);
 
   constexpr StringRef drop_prefix(int64_t n) const;
   constexpr StringRef drop_known_prefix(StringRef prefix) const;
   constexpr StringRef drop_suffix(int64_t n) const;
+  constexpr StringRef drop_known_suffix(StringRef suffix) const;
 
   constexpr char operator[](int64_t index) const;
 };
@@ -207,12 +238,7 @@ constexpr IndexRange StringRefBase::index_range() const
   return IndexRange(size_);
 }
 
-/**
- * Copy the string into a buffer. The buffer has to be one byte larger than the size of the
- * string, because the copied string will be null-terminated. Only use this when you are
- * absolutely sure that the buffer is large enough.
- */
-inline void StringRefBase::unsafe_copy(char *dst) const
+inline void StringRefBase::copy_unsafe(char *dst) const
 {
   if (size_ > 0) {
     memcpy(dst, data_, size_t(size_));
@@ -220,28 +246,14 @@ inline void StringRefBase::unsafe_copy(char *dst) const
   dst[size_] = '\0';
 }
 
-/**
- * Copy the string into a buffer. The copied string will be null-terminated. This invokes
- * undefined behavior when dst_size is too small. (Should we define the behavior?)
- */
-inline void StringRefBase::copy(char *dst, const int64_t dst_size) const
+template<size_t N> inline void StringRefBase::copy_utf8_truncated(char (&dst)[N]) const
 {
-  if (size_ < dst_size) {
-    this->unsafe_copy(dst);
-  }
-  else {
-    BLI_assert(false);
-    dst[0] = '\0';
-  }
+  this->copy_utf8_truncated(dst, N);
 }
 
-/**
- * Copy the string into a char array. The copied string will be null-terminated. This invokes
- * undefined behavior when dst is too small.
- */
-template<size_t N> inline void StringRefBase::copy(char (&dst)[N]) const
+template<size_t N> inline void StringRefBase::copy_bytes_truncated(char (&dst)[N]) const
 {
-  this->copy(dst, N);
+  this->copy_bytes_truncated(dst, N);
 }
 
 /**
@@ -389,13 +401,17 @@ constexpr int64_t StringRefBase::find_last_not_of(char c, int64_t pos) const
   return index_or_npos_to_int64(std::string_view(*this).find_last_not_of(c, size_t(pos)));
 }
 
+/**
+ * Return a new StringRef that does not contain leading and trailing white-space.
+ */
 constexpr StringRef StringRefBase::trim() const
 {
   return this->trim(" \t\r\n");
 }
 
 /**
- * Return a new StringRef that does not contain leading and trailing white-space.
+ * Return a new StringRef that does not contain leading and trailing `character_to_remove`
+ * characters.
  */
 constexpr StringRef StringRefBase::trim(const char character_to_remove) const
 {
@@ -422,6 +438,48 @@ constexpr StringRef StringRefBase::trim(StringRef characters_to_remove) const
   return this->substr(find_front, substr_len);
 }
 
+/**
+ * Return a new StringRef that does not contain leading white-space.
+ */
+constexpr StringRef StringRefBase::trim_left() const
+{
+  return this->trim_left(" \t\r\n");
+}
+
+/**
+ * Return a new StringRef that removes all the leading characters that occur in
+ * `characters_to_remove`.
+ */
+constexpr StringRef StringRefBase::trim_left(StringRef characters_to_remove) const
+{
+  const int64_t find_front = this->find_first_not_of(characters_to_remove);
+  if (find_front == not_found) {
+    return StringRef();
+  }
+  return this->substr(find_front);
+}
+
+/**
+ * Return a new StringRef that does not contain trailing white-space.
+ */
+constexpr StringRef StringRefBase::trim_right() const
+{
+  return this->trim_right(" \t\r\n");
+}
+
+/**
+ * Return a new StringRef that removes all the trailing characters that occur in
+ * `characters_to_remove`.
+ */
+constexpr StringRef StringRefBase::trim_right(StringRef characters_to_remove) const
+{
+  const int64_t find_end = this->find_last_not_of(characters_to_remove);
+  if (find_end == not_found) {
+    return StringRef();
+  }
+  return this->substr(0, find_end + 1);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -444,7 +502,8 @@ constexpr StringRefNull::StringRefNull(const char *str, const int64_t size)
  * Construct a StringRefNull from a null terminated c-string. The pointer must not point to
  * NULL.
  */
-inline StringRefNull::StringRefNull(const char *str) : StringRefBase(str, int64_t(strlen(str)))
+constexpr StringRefNull::StringRefNull(const char *str)
+    : StringRefBase(str, int64_t(std::char_traits<char>::length(str)))
 {
   BLI_assert(str != nullptr);
   BLI_assert(data_[size_] == '\0');
@@ -539,6 +598,16 @@ constexpr StringRef StringRef::drop_suffix(const int64_t n) const
 }
 
 /**
+ * Return a new StringRef with the given suffix being skipped. This invokes undefined behavior if
+ * the string does not begin with the given suffix.
+ */
+constexpr StringRef StringRef::drop_known_suffix(StringRef suffix) const
+{
+  BLI_assert(this->endswith(suffix));
+  return this->drop_suffix(suffix.size());
+}
+
+/**
  * Get the char at the given index.
  */
 constexpr char StringRef::operator[](int64_t index) const
@@ -572,6 +641,8 @@ constexpr StringRef::StringRef(std::string_view view)
 {
 }
 
+constexpr StringRef::StringRef(Span<char> span) : StringRefBase(span.data(), span.size()) {}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -590,13 +661,16 @@ inline std::string operator+(StringRef a, StringRef b)
   return std::string(a) + std::string(b);
 }
 
-/* This does not compare StringRef and std::string_view, because of ambiguous overloads. This is
- * not a problem when std::string_view is only used at api boundaries. To compare a StringRef and a
- * std::string_view, one should convert the std::string_view to StringRef (which is very cheap).
+/**
+ * This does not compare #StringRef and std::string_view, because of ambiguous overloads.
+ * This is not a problem when #std::string_view is only used at API boundaries.
+ * To compare a #StringRef and a #std::string_view, one should convert the #std::string_view
+ * to #StringRef (which is very cheap).
  * Ideally, we only use StringRef in our code to avoid this problem altogether.
  *
- * NOTE: these functions are also suitable for StringRefNull comparisons, as these are
- * implicitly converted to StringRef by the compiler. */
+ * NOTE: these functions are also suitable for #StringRefNull comparisons,
+ * as these are implicitly converted to StringRef by the compiler.
+ */
 constexpr bool operator==(StringRef a, StringRef b)
 {
   return std::string_view(a) == std::string_view(b);
@@ -644,3 +718,14 @@ inline std::string_view format_as(StringRef str)
 /** \} */
 
 }  // namespace blender
+
+/**
+ * Disable conflicting range formatter in fmtlib. Otherwise we will get compile errors
+ * where fmtlib doesn't know if it should use the formatter from format.h or ranges.h.
+ */
+namespace fmt {
+
+template<> struct is_range<blender::StringRef, char> : std::false_type {};
+template<> struct is_range<blender::StringRefNull, char> : std::false_type {};
+
+}  // namespace fmt

@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BKE_asset.hh"
+#include "BKE_gtest_base.hh"
 
-#include "BLI_uuid.h"
+#include "BLI_uuid.hh"
 
 #include "DNA_asset_types.h"
 
@@ -12,7 +13,9 @@
 
 namespace blender::bke::tests {
 
-TEST(AssetMetadataTest, set_catalog_id)
+class AssetMetadataTest : public bke::BlenderGTestBase {};
+
+TEST_F(AssetMetadataTest, set_catalog_id)
 {
   AssetMetaData meta{};
   const bUUID uuid = BLI_uuid_generate_random();
@@ -44,7 +47,7 @@ TEST(AssetMetadataTest, set_catalog_id)
   BKE_asset_metadata_catalog_id_set(&meta, uuid, len68);
   EXPECT_STREQ(len63, meta.catalog_simple_name);
 
-  /* Test length trimming to 63 bytes, and not 63 characters. ✓ in UTF-8 is three bytes long. */
+  /* Test length trimming to 63 bytes, and not 63 characters. ✓ in UTF8 is three bytes long. */
   constexpr char with_utf8[] =
       "00010203040506✓0708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
   BKE_asset_metadata_catalog_id_set(&meta, uuid, with_utf8);

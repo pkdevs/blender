@@ -18,9 +18,9 @@ struct NodeEnum {
   {
     return left.empty();
   }
-  void insert(const char *x, int y)
+  void insert(const char *x, const int y)
   {
-    ustring ustr_x(x);
+    const ustring ustr_x(x);
 
     left[ustr_x] = y;
     right[y] = ustr_x;
@@ -28,11 +28,11 @@ struct NodeEnum {
 
   bool exists(ustring x) const
   {
-    return left.find(x) != left.end();
+    return left.contains(x);
   }
-  bool exists(int y) const
+  bool exists(const int y) const
   {
-    return right.find(y) != right.end();
+    return right.contains(y);
   }
 
   int operator[](const char *x) const

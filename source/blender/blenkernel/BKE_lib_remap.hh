@@ -20,17 +20,19 @@
  * - `BKE_lib_remap_callback_` should be used for functions managing remapping callbacks.
  */
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
+#include "BLI_enum_flags.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_map.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
+
+namespace blender {
 
 struct ID;
 struct Main;
 
-namespace blender::bke::id {
+namespace bke::id {
 class IDRemapper;
 }
 
@@ -79,12 +81,14 @@ enum {
    * the 'separate' mesh operator.
    */
   ID_REMAP_FORCE_OBDATA_IN_EDITMODE = 1 << 7,
-  /** Do remapping of `lib` Library pointers of IDs (by default these are completely ignored).
+  /**
+   * Do remapping of `lib` Library pointers of IDs (by default these are completely ignored).
    *
    * WARNING: Use with caution. This is currently a 'raw' remapping, with no further processing. In
    * particular, DO NOT use this to make IDs local (i.e. remap a library pointer to NULL), unless
-   * the calling code takes care of the rest of the required changes (ID tags & flags updates,
-   * etc.). */
+   * the calling code takes care of the rest of the required changes
+   * (ID tags & flags updates, etc.).
+   */
   ID_REMAP_DO_LIBRARY_POINTERS = 1 << 8,
 
   /**
@@ -139,11 +143,11 @@ enum eIDRemapType {
  * \note Is preferred over BKE_libblock_remap_locked due to performance.
  */
 void BKE_libblock_remap_multiple_locked(Main *bmain,
-                                        blender::bke::id::IDRemapper &mappings,
+                                        bke::id::IDRemapper &mappings,
                                         const int remap_flags);
 
 void BKE_libblock_remap_multiple(Main *bmain,
-                                 blender::bke::id::IDRemapper &mappings,
+                                 bke::id::IDRemapper &mappings,
                                  const int remap_flags);
 
 /**
@@ -156,7 +160,7 @@ void BKE_libblock_remap_multiple(Main *bmain,
  *
  * WARNING: This call will likely leave the given BMain in invalid state in many aspects. */
 void BKE_libblock_remap_multiple_raw(Main *bmain,
-                                     blender::bke::id::IDRemapper &mappings,
+                                     bke::id::IDRemapper &mappings,
                                      const int remap_flags);
 /**
  * Replace all references in given Main to \a old_id by \a new_id
@@ -179,11 +183,11 @@ void BKE_libblock_unlink(Main *bmain, void *idv, bool do_skip_indirect) ATTR_NON
 /**
  * Similar to libblock_remap, but only affects IDs used by given \a idv ID.
  *
- * \param old_idv: Unlike BKE_libblock_remap, can be NULL,
- * in which case all ID usages by given \a idv will be cleared.
- *
  * \param bmain: May be NULL, in which case there won't be depsgraph updates nor post-processing on
  * some ID types (like collections or objects) to ensure their runtime data is valid.
+ *
+ * \param old_idv: Unlike BKE_libblock_remap, can be NULL,
+ * in which case all ID usages by given \a idv will be cleared.
  */
 void BKE_libblock_relink_ex(Main *bmain, void *idv, void *old_idv, void *new_idv, int remap_flags)
     ATTR_NONNULL(2);
@@ -192,9 +196,9 @@ void BKE_libblock_relink_ex(Main *bmain, void *idv, void *old_idv, void *new_idv
  * does cleanup if `ID_REMAP_TYPE_CLEANUP` is specified as \a remap_type).
  */
 void BKE_libblock_relink_multiple(Main *bmain,
-                                  const blender::Span<ID *> ids,
+                                  const Span<ID *> ids,
                                   eIDRemapType remap_type,
-                                  blender::bke::id::IDRemapper &id_remapper,
+                                  bke::id::IDRemapper &id_remapper,
                                   int remap_flags);
 
 /**
@@ -204,13 +208,12 @@ void BKE_libblock_relink_multiple(Main *bmain,
  * \note `ID_TAG_NEW` is cleared.
  *
  * Very specific usage, not sure we'll keep it on the long run,
- * currently only used in Object/Collection duplication code.
+ * currently only used in Scene/Object/Collection duplication code.
  */
 void BKE_libblock_relink_to_newid(Main *bmain, ID *id, int remap_flag) ATTR_NONNULL();
 
 using BKE_library_free_notifier_reference_cb = void (*)(const void *);
-using BKE_library_remap_editor_id_reference_cb =
-    void (*)(const blender::bke::id::IDRemapper &mappings);
+using BKE_library_remap_editor_id_reference_cb = void (*)(const bke::id::IDRemapper &mappings);
 
 void BKE_library_callback_free_notifier_reference_set(BKE_library_free_notifier_reference_cb func);
 void BKE_library_callback_remap_editor_id_reference_set(
@@ -258,12 +261,12 @@ enum IDRemapperApplyOptions {
 
   ID_REMAP_APPLY_DEFAULT = 0,
 };
-ENUM_OPERATORS(IDRemapperApplyOptions, ID_REMAP_APPLY_UNMAP_WHEN_REMAPPING_TO_SELF)
+ENUM_OPERATORS(IDRemapperApplyOptions)
 
 using IDRemapperIterFunction = void (*)(ID *old_id, ID *new_id, void *user_data);
 using IDTypeFilter = uint64_t;
 
-namespace blender::bke::id {
+namespace bke::id {
 
 class IDRemapper {
   Map<ID *, ID *> mappings_;
@@ -282,7 +285,6 @@ class IDRemapper {
    */
   bool allow_idtype_mismatch = false;
 
- public:
   void clear()
   {
     mappings_.clear();
@@ -341,10 +343,11 @@ class IDRemapper {
   }
 
   /** Return a readable string for the given result. Can be used for debugging purposes. */
-  static const StringRefNull result_to_string(const IDRemapperApplyResult result);
+  static StringRefNull result_to_string(const IDRemapperApplyResult result);
 
   /** Print out the rules inside the given id_remapper. Can be used for debugging purposes. */
   void print() const;
 };
 
-}  // namespace blender::bke::id
+}  // namespace bke::id
+}  // namespace blender

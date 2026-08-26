@@ -6,14 +6,20 @@
  * \ingroup shdnodes
  */
 
+#include "GPU_material.hh"
+
+#include "IMB_colormanagement.hh"
+
 #include "node_shader_util.hh"
 
-namespace blender::nodes::node_shader_rgb_to_bw_cc {
+namespace blender {
+
+namespace nodes::node_shader_rgb_to_bw_cc {
 
 static void sh_node_rgbtobw_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Color").default_value({0.5f, 0.5f, 0.5f, 1.0f});
-  b.add_output<decl::Float>("Val");
+  b.add_input<decl::Color>("Color"_ustr).default_value({0.5f, 0.5f, 0.5f, 1.0f});
+  b.add_output<decl::Float>("Val"_ustr);
 }
 
 static int gpu_shader_rgbtobw(GPUMaterial *mat,
@@ -22,30 +28,38 @@ static int gpu_shader_rgbtobw(GPUMaterial *mat,
                               GPUNodeStack *in,
                               GPUNodeStack *out)
 {
-  return GPU_stack_link(mat, node, "rgbtobw", in, out);
+  float coefficients[3];
+  IMB_colormanagement_get_luminance_coefficients(coefficients);
+  return GPU_stack_link(mat, node, "rgbtobw", in, out, GPU_constant(coefficients));
 }
 
 NODE_SHADER_MATERIALX_BEGIN
 #ifdef WITH_MATERIALX
 {
-  NodeItem color = get_input_value("Color", NodeItem::Type::Color4);
-  return create_node("luminance", NodeItem::Type::Color4, {{"in", color}});
+  NodeItem color = get_input_value("Color", NodeItem::Type::Color3);
+  return create_node("luminance", NodeItem::Type::Color3, {{"in", color}});
 }
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_rgb_to_bw_cc
+}  // namespace nodes::node_shader_rgb_to_bw_cc
 
 void register_node_type_sh_rgbtobw()
 {
-  namespace file_ns = blender::nodes::node_shader_rgb_to_bw_cc;
+  namespace file_ns = nodes::node_shader_rgb_to_bw_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, SH_NODE_RGBTOBW, "RGB to BW", NODE_CLASS_CONVERTER);
+  sh_node_type_base(&ntype, "ShaderNodeRGBToBW"_ustr, SH_NODE_RGBTOBW);
+  ntype.ui_name = "RGB to BW";
+  ntype.ui_description = "Convert a color's luminance to a grayscale value";
+  ntype.enum_name_legacy = "RGBTOBW";
+  ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.declare = file_ns::sh_node_rgbtobw_declare;
   ntype.gpu_fn = file_ns::gpu_shader_rgbtobw;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(&ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

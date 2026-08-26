@@ -28,18 +28,18 @@ class CompositorDepsgraphRelationBuilder : public DepsgraphRelationBuilder {
 
 }  // namespace
 
-CompositorBuilderPipeline::CompositorBuilderPipeline(::Depsgraph *graph, bNodeTree *nodetree)
-    : AbstractBuilderPipeline(graph), nodetree_(nodetree)
+CompositorBuilderPipeline::CompositorBuilderPipeline(blender::Depsgraph *graph)
+    : AbstractBuilderPipeline(graph)
 {
   deg_graph_->is_render_pipeline_depsgraph = true;
 }
 
-unique_ptr<DepsgraphNodeBuilder> CompositorBuilderPipeline::construct_node_builder()
+std::unique_ptr<DepsgraphNodeBuilder> CompositorBuilderPipeline::construct_node_builder()
 {
   return std::make_unique<CompositorDepsgraphNodeBuilder>(bmain_, deg_graph_, &builder_cache_);
 }
 
-unique_ptr<DepsgraphRelationBuilder> CompositorBuilderPipeline::construct_relation_builder()
+std::unique_ptr<DepsgraphRelationBuilder> CompositorBuilderPipeline::construct_relation_builder()
 {
   return std::make_unique<CompositorDepsgraphRelationBuilder>(bmain_, deg_graph_, &builder_cache_);
 }
@@ -47,13 +47,13 @@ unique_ptr<DepsgraphRelationBuilder> CompositorBuilderPipeline::construct_relati
 void CompositorBuilderPipeline::build_nodes(DepsgraphNodeBuilder &node_builder)
 {
   node_builder.build_scene_render(scene_, view_layer_);
-  node_builder.build_nodetree(nodetree_);
+  node_builder.build_scene_compositor(scene_);
 }
 
 void CompositorBuilderPipeline::build_relations(DepsgraphRelationBuilder &relation_builder)
 {
   relation_builder.build_scene_render(scene_, view_layer_);
-  relation_builder.build_nodetree(nodetree_);
+  relation_builder.build_scene_compositor(scene_);
 }
 
 }  // namespace blender::deg

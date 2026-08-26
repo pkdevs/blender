@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # To run all tests, use
-# BLENDER_VERBOSE=1 ./bin/blender ../blender/tests/data/modeling/object_conversion.blend --python ../blender/tests/python/object_conversion.py -- --run-all-tests
+# BLENDER_VERBOSE=1 ./bin/blender ../blender/tests/files/modeling/object_conversion.blend --python ../blender/tests/python/object_conversion.py -- --run-all-tests
 # (that assumes the test is run from a build directory in the same directory as the source code)
 import bpy
 import os
@@ -11,7 +11,7 @@ import sys
 import inspect
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
-from modules.mesh_test import SpecMeshTest, OperatorSpecObjectMode, RunTest
+from modules.mesh_test import SpecMeshTest, OperatorSpec, RunTest
 
 
 class ConversionTypeTestHelper:
@@ -49,7 +49,7 @@ class ConversionTypeTestHelper:
         """
         Run a single test from self.tests list.
 
-        :arg test_name: int - name of test
+        :param test_name: int - name of test
         :return: bool - True if test passed, False otherwise.
         """
         case = None
@@ -102,21 +102,21 @@ class ConversionPair:
 def main():
     tests = [
         SpecMeshTest('Mesh 1', 'Cube', 'Cube_Mesh',
-                     [OperatorSpecObjectMode('convert', {'target': 'MESH'})]),
+                     [OperatorSpec('OBJECT', 'object.convert', {'target': 'MESH'})]),
         SpecMeshTest('Mesh 2', 'CubeWithEdges', 'CubeWithEdges_Mesh',
-                     [OperatorSpecObjectMode('convert', {'target': 'MESH'})]),
+                     [OperatorSpec('OBJECT', 'object.convert', {'target': 'MESH'})]),
         SpecMeshTest('Mesh 3', 'Plane', 'Plane_Mesh',
-                     [OperatorSpecObjectMode('convert', {'target': 'MESH'})]),
+                     [OperatorSpec('OBJECT', 'object.convert', {'target': 'MESH'})]),
         SpecMeshTest('Mesh 4', 'HollowPlane', 'HollowPlane_Mesh',
-                     [OperatorSpecObjectMode('convert', {'target': 'MESH'})]),
+                     [OperatorSpec('OBJECT', 'object.convert', {'target': 'MESH'})]),
         SpecMeshTest('Mesh 5', 'Suzanne', 'Suzanne_Mesh',
-                     [OperatorSpecObjectMode('convert', {'target': 'MESH'})]),
+                     [OperatorSpec('OBJECT', 'object.convert', {'target': 'MESH'})]),
         SpecMeshTest('Mesh 6', 'BezierCircle', 'BezierCircle_Mesh',
-                     [OperatorSpecObjectMode('convert', {'target': 'MESH'})]),
+                     [OperatorSpec('OBJECT', 'object.convert', {'target': 'MESH'})]),
         SpecMeshTest('Mesh 7', 'BezierCurve', 'BezierCurve_Mesh',
-                     [OperatorSpecObjectMode('convert', {'target': 'MESH'})]),
+                     [OperatorSpec('OBJECT', 'object.convert', {'target': 'MESH'})]),
         SpecMeshTest('Mesh 8', 'Text', 'Text_Mesh',
-                     [OperatorSpecObjectMode('convert', {'target': 'MESH'})]),
+                     [OperatorSpec('OBJECT', 'object.convert', {'target': 'MESH'})]),
     ]
 
     type_tests = [
@@ -135,15 +135,15 @@ def main():
         ConversionPair('Curves 5', 'Suzanne', 'CURVES', 'CURVES'),
         ConversionPair('Curves 6', 'BezierCircle', 'CURVES', 'CURVES'),
         ConversionPair('Curves 7', 'BezierCurve', 'CURVES', 'CURVES'),
-        ConversionPair('Curves 8', 'Text', 'CURVES', 'FONT'),
-        ConversionPair('GreasePencil 1', 'Cube', 'GREASEPENCIL', 'MESH'),
-        ConversionPair('GreasePencil 2', 'CubeWithEdges', 'GREASEPENCIL', 'MESH'),
-        ConversionPair('GreasePencil 3', 'Plane', 'GREASEPENCIL', 'MESH'),
-        ConversionPair('GreasePencil 4', 'HollowPlane', 'GREASEPENCIL', 'MESH'),
+        ConversionPair('Curves 8', 'Text', 'CURVES', 'CURVES'),
+        ConversionPair('GreasePencil 1', 'Cube', 'GREASEPENCIL', 'GREASEPENCIL'),
+        ConversionPair('GreasePencil 2', 'CubeWithEdges', 'GREASEPENCIL', 'GREASEPENCIL'),
+        ConversionPair('GreasePencil 3', 'Plane', 'GREASEPENCIL', 'GREASEPENCIL'),
+        ConversionPair('GreasePencil 4', 'HollowPlane', 'GREASEPENCIL', 'GREASEPENCIL'),
         ConversionPair('GreasePencil 5', 'Suzanne', 'GREASEPENCIL', 'GREASEPENCIL'),
-        ConversionPair('GreasePencil 6', 'BezierCircle', 'GREASEPENCIL', 'CURVE'),
-        ConversionPair('GreasePencil 7', 'BezierCurve', 'GREASEPENCIL', 'CURVE'),
-        ConversionPair('GreasePencil 8', 'Text', 'GREASEPENCIL', 'CURVE'),
+        ConversionPair('GreasePencil 6', 'BezierCircle', 'GREASEPENCIL', 'GREASEPENCIL'),
+        ConversionPair('GreasePencil 7', 'BezierCurve', 'GREASEPENCIL', 'GREASEPENCIL'),
+        ConversionPair('GreasePencil 8', 'Text', 'GREASEPENCIL', 'GREASEPENCIL'),
         ConversionPair('GreasePencil 9', 'Suzanne_Curves', 'GREASEPENCIL', 'GREASEPENCIL'),
         ConversionPair('GreasePencil 10', 'BezierCircle_Curves', 'GREASEPENCIL', 'GREASEPENCIL'),
         ConversionPair('GreasePencil 11', 'BezierCurve_Curves', 'GREASEPENCIL', 'GREASEPENCIL'),

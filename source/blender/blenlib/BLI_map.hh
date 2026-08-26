@@ -7,14 +7,14 @@
 /** \file
  * \ingroup bli
  *
- * A `blender::Map<Key, Value>` is an unordered associative container that stores key-value pairs.
+ * A `Map<Key, Value>` is an unordered associative container that stores key-value pairs.
  * The keys have to be unique. It is designed to be a more convenient and efficient replacement for
  * `std::unordered_map`. All core operations (add, lookup, remove and contains) can be done in O(1)
  * amortized expected time.
  *
- * Your default choice for a hash map in Blender should be `blender::Map`.
+ * Your default choice for a hash map in Blender should be `Map`.
  *
- * blender::Map is implemented using open addressing in a slot array with a power-of-two size.
+ * Map is implemented using open addressing in a slot array with a power-of-two size.
  * Every slot is in one of three states: empty, occupied or removed. If a slot is occupied, it
  * contains a Key and Value instance.
  *
@@ -25,7 +25,7 @@
  * that allow it to be optimized for a specific use case.
  *
  * A rudimentary benchmark can be found in BLI_map_test.cc. The results of that benchmark are there
- * as well. The numbers show that in this specific case blender::Map outperforms std::unordered_map
+ * as well. The numbers show that in this specific case Map outperforms std::unordered_map
  * consistently by a good amount.
  *
  * Some noteworthy information:
@@ -160,7 +160,7 @@ class Map {
 
   /** The max load factor is 1/2 = 50% by default. */
 #define LOAD_FACTOR 1, 2
-  LoadFactor max_load_factor_ = LoadFactor(LOAD_FACTOR);
+  static constexpr LoadFactor max_load_factor_ = LoadFactor(LOAD_FACTOR);
   using SlotArray =
       Array<Slot, LoadFactor::compute_total_slots(InlineBufferCapacity, LOAD_FACTOR), Allocator>;
 #undef LOAD_FACTOR
@@ -524,6 +524,21 @@ class Map {
   }
 
   /**
+   * Returns a copy of the value that corresponds to the given key, or std::nullopt if the key is
+   * not in the map. In some cases, one may not want a copy but an actual reference to the value.
+   * In that case it's better to use #lookup_ptr instead.
+   */
+  std::optional<Value> lookup_try(const Key &key) const
+  {
+    return this->lookup_try_as(key);
+  }
+  template<typename ForwardKey> std::optional<Value> lookup_try_as(const ForwardKey &key) const
+  {
+    const Slot *slot = this->lookup_slot_ptr(key, hash_(key));
+    return (slot != nullptr) ? std::optional<Value>(*slot->value()) : std::nullopt;
+  }
+
+  /**
    * Returns a reference to the value that corresponds to the given key. This invokes undefined
    * behavior when the key is not in the map.
    */
@@ -563,9 +578,7 @@ class Map {
     if (ptr != nullptr) {
       return *ptr;
     }
-    else {
-      return Value(std::forward<ForwardValue>(default_value)...);
-    }
+    return Value(std::forward<ForwardValue>(default_value)...);
   }
 
   /**
@@ -600,7 +613,8 @@ class Map {
    * the map, it will be newly added.
    *
    * The create_value callback is only called when the key did not exist yet. It is expected to
-   * take no parameters and return the value to be inserted.
+   * take no parameters and return the value to be inserted. The callback is called before the key
+   * is copied/moved into the map.
    */
   template<typename CreateValueF>
   Value &lookup_or_add_cb(const Key &key, const CreateValueF &create_value)
@@ -1019,9 +1033,22 @@ class Map {
   }
 
   /**
-   * Removes all key-value-pairs from the map.
+   * Remove all elements. Under some circumstances #clear_and_keep_capacity may be more efficient.
    */
   void clear()
+  {
+    std::destroy_at(this);
+    new (this) Map(NoExceptConstructor{});
+  }
+
+  /**
+   * Remove all elements, but don't free the underlying memory.
+   *
+   * This can be more efficient than using #clear if approximately the same or more elements are
+   * added again afterwards. If way fewer elements are added instead, the cost of maintaining a
+   * large hash table can lead to very bad worst-case performance.
+   */
+  void clear_and_keep_capacity()
   {
     for (Slot &slot : slots_) {
       slot.~Slot();
@@ -1030,15 +1057,6 @@ class Map {
 
     removed_slots_ = 0;
     occupied_and_removed_slots_ = 0;
-  }
-
-  /**
-   * Removes all key-value-pairs from the map and frees any allocated memory.
-   */
-  void clear_and_shrink()
-  {
-    std::destroy_at(this);
-    new (this) Map(NoExceptConstructor{});
   }
 
   /**
@@ -1080,6 +1098,10 @@ class Map {
  private:
   BLI_NOINLINE void realloc_and_reinsert(int64_t min_usable_slots)
   {
+    /* Avoid rebuilding the hash table just to get rid of a few removed slots. In this case, also
+     * increase the map size to avoid a bad edge case. */
+    min_usable_slots = std::max(min_usable_slots, this->size() * 2);
+
     int64_t total_slots, usable_slots;
     max_load_factor_.compute_total_and_usable_slots(
         SlotArray::inline_buffer_capacity(), min_usable_slots, &total_slots, &usable_slots);
@@ -1157,6 +1179,7 @@ class Map {
       if (slot.is_empty()) {
         slot.occupy(std::forward<ForwardKey>(key), hash, std::forward<ForwardValue>(value)...);
         BLI_assert(hash_(*slot.key()) == hash);
+        BLI_assert(is_equal_(*slot.key(), *slot.key()));
         occupied_and_removed_slots_++;
         return;
       }
@@ -1173,12 +1196,17 @@ class Map {
       if (slot.is_empty()) {
         slot.occupy(std::forward<ForwardKey>(key), hash, std::forward<ForwardValue>(value)...);
         BLI_assert(hash_(*slot.key()) == hash);
+        BLI_assert(is_equal_(*slot.key(), *slot.key()));
         occupied_and_removed_slots_++;
         return true;
       }
       if (slot.contains(key, is_equal_, hash)) {
         return false;
       }
+      /* This intentionally does not check if the slot is in removed state because that would cause
+       * additional overhead in the common case when nothing is ever removed from the map. These
+       * slots will be cleaned up when the map is rebuilt. There could be alternative methods or
+       * template arguments in the future to enable overriding removed slots here. */
     }
     MAP_SLOT_PROBING_END();
   }
@@ -1229,6 +1257,7 @@ class Map {
       if (slot.is_empty()) {
         slot.occupy(std::forward<ForwardKey>(key), hash, create_value());
         BLI_assert(hash_(*slot.key()) == hash);
+        BLI_assert(is_equal_(*slot.key(), *slot.key()));
         occupied_and_removed_slots_++;
         return *slot.value();
       }
@@ -1248,6 +1277,7 @@ class Map {
       if (slot.is_empty()) {
         slot.occupy(std::forward<ForwardKey>(key), hash, std::forward<ForwardValue>(value)...);
         BLI_assert(hash_(*slot.key()) == hash);
+        BLI_assert(is_equal_(*slot.key(), *slot.key()));
         occupied_and_removed_slots_++;
         return *slot.value();
       }

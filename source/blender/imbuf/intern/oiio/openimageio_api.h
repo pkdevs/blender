@@ -8,21 +8,16 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace blender {
 
 /*
  * Initialize OpenImageIO on startup.
  */
-void OIIO_init(void);
+void OIIO_init();
 
 /*
  * Get OpenImageIO version.
  */
-int OIIO_getVersionHex(void);
+int OIIO_getVersionHex();
 
-#ifdef __cplusplus
-}
-
-#endif
+}  // namespace blender

@@ -6,26 +6,28 @@
  * \ingroup bke
  */
 
-#include <memory>
-#include <utility>
-
-#include "BLI_fileops.h"
+#include "BLI_assert.hh"
+#include "BLI_fileops.hh"
+#include "BLI_ghash.hh"
+#include "BLI_memory_utils.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_vector.hh"
+#include "BLI_string.hh"
 
+#include "DNA_ID.h"
 #include "DNA_asset_types.h"
-#include "DNA_space_types.h"
+#include "DNA_space_enums.h"
+#include "DNA_userdef_types.h"
 
 #include "AS_asset_library.hh"
+#include "AS_essentials_library.hh"
 
-#include "BKE_asset.hh"
 #include "BKE_asset_edit.hh"
 #include "BKE_blendfile.hh"
 #include "BKE_blendfile_link_append.hh"
 #include "BKE_global.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_lib_remap.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
@@ -39,8 +41,6 @@
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
-
-#include "MEM_guardedalloc.h"
 
 namespace blender::bke {
 
@@ -72,19 +72,19 @@ static ID *asset_link_id(Main &global_main,
 
   BKE_blendfile_link_append_context_free(lapp_context);
 
-  /* Verify that the name matches. It must for referencing the same asset again to work.  */
+  /* Verify that the name matches. It must for referencing the same asset again to work. */
   BLI_assert(local_asset == nullptr || STREQ(local_asset->name + 2, asset_name));
 
   /* Tag library as being editable. */
   if (local_asset && local_asset->lib) {
-    local_asset->lib->runtime.tag |= LIBRARY_ASSET_EDITABLE;
+    local_asset->lib->runtime->tag |= LIBRARY_ASSET_EDITABLE;
 
-    if ((local_asset->lib->runtime.tag & LIBRARY_IS_ASSET_EDIT_FILE) &&
+    if ((local_asset->lib->runtime->tag & LIBRARY_IS_ASSET_EDIT_FILE) &&
         StringRef(filepath).endswith(BLENDER_ASSET_FILE_SUFFIX) &&
         BKE_preferences_asset_library_containing_path(&U, filepath) &&
         BLI_file_is_writable(filepath))
     {
-      local_asset->lib->runtime.tag |= LIBRARY_ASSET_FILE_WRITABLE;
+      local_asset->lib->runtime->tag |= LIBRARY_ASSET_FILE_WRITABLE;
     }
   }
 
@@ -130,6 +130,11 @@ static std::string asset_blendfile_path_for_save(const bUserAssetLibrary &user_l
               std::min(sizeof(base_name_filesafe), size_t(base_name.size() + 1)));
   BLI_path_make_safe_filename(base_name_filesafe);
 
+  /* FIXME: MAX_ID_NAME & FILE_MAXFILE
+   *
+   * This already does not respect the FILE_MAXFILE max length of filenames for the final filepath
+   * it seems?
+   */
   {
     const std::string filepath = root_path + SEP + base_name_filesafe + BLENDER_ASSET_FILE_SUFFIX;
     if (!BLI_is_file(filepath.c_str())) {
@@ -149,71 +154,6 @@ static std::string asset_blendfile_path_for_save(const bUserAssetLibrary &user_l
   return "";
 }
 
-static void asset_main_create_expander(void * /*handle*/, Main * /*bmain*/, void *vid)
-{
-  ID *id = static_cast<ID *>(vid);
-
-  if (id && (id->tag & ID_TAG_DOIT) == 0) {
-    id->tag |= ID_TAG_NEED_EXPAND | ID_TAG_DOIT;
-  }
-}
-
-static Main *asset_main_create_from_ID(Main &bmain_src, ID &id_asset, ID **id_asset_new)
-{
-  /* Tag asset ID and its dependencies. */
-  ID *id_src;
-  FOREACH_MAIN_ID_BEGIN (&bmain_src, id_src) {
-    id_src->tag &= ~(ID_TAG_NEED_EXPAND | ID_TAG_DOIT);
-  }
-  FOREACH_MAIN_ID_END;
-
-  id_asset.tag |= ID_TAG_NEED_EXPAND | ID_TAG_DOIT;
-
-  BLO_expand_main(nullptr, &bmain_src, asset_main_create_expander);
-
-  /* Create main and copy all tagged datablocks. */
-  Main *bmain_dst = BKE_main_new();
-  STRNCPY(bmain_dst->filepath, bmain_src.filepath);
-  bmain_dst->is_asset_edit_file = true;
-
-  blender::bke::id::IDRemapper id_remapper;
-
-  FOREACH_MAIN_ID_BEGIN (&bmain_src, id_src) {
-    if (id_src->tag & ID_TAG_DOIT) {
-      /* Note that this will not copy Library datablocks, and all copied
-       * datablocks will become local as a result. */
-      ID *id_dst = BKE_id_copy_ex(bmain_dst,
-                                  id_src,
-                                  nullptr,
-                                  LIB_ID_CREATE_NO_USER_REFCOUNT | LIB_ID_CREATE_NO_DEG_TAG |
-                                      ((id_src == &id_asset) ? LIB_ID_COPY_ASSET_METADATA : 0));
-      id_remapper.add(id_src, id_dst);
-      if (id_src == &id_asset) {
-        *id_asset_new = id_dst;
-      }
-    }
-    else {
-      id_remapper.add(id_src, nullptr);
-    }
-
-    id_src->tag &= ~(ID_TAG_NEED_EXPAND | ID_TAG_DOIT);
-  }
-  FOREACH_MAIN_ID_END;
-
-  /* Remap datablock pointers. */
-  BKE_libblock_remap_multiple_raw(bmain_dst, id_remapper, ID_REMAP_SKIP_USER_CLEAR);
-
-  /* Compute reference counts. */
-  ID *id_dst;
-  FOREACH_MAIN_ID_BEGIN (bmain_dst, id_dst) {
-    id_dst->tag &= ~ID_TAG_NO_USER_REFCOUNT;
-  }
-  FOREACH_MAIN_ID_END;
-  BKE_main_id_refcount_recompute(bmain_dst, false);
-
-  return bmain_dst;
-}
-
 static bool asset_write_in_library(Main &bmain,
                                    const ID &id_const,
                                    const StringRef name,
@@ -221,30 +161,40 @@ static bool asset_write_in_library(Main &bmain,
                                    std::string &final_full_file_path,
                                    ReportList &reports)
 {
+  using namespace blender::bke::blendfile;
+
   ID &id = const_cast<ID &>(id_const);
 
-  ID *new_id = nullptr;
-  Main *new_main = asset_main_create_from_ID(bmain, id, &new_id);
+  /* This is not expected to ever happen currently from this code-path. */
+  BLI_assert(!ID_IS_PACKED(&id));
+
+  PartialWriteContext lib_write_ctx{bmain};
+  ID *new_id = lib_write_ctx.id_add(&id,
+                                    {(PartialWriteContext::IDAddOperations::MAKE_LOCAL |
+                                      PartialWriteContext::IDAddOperations::SET_FAKE_USER |
+                                      PartialWriteContext::IDAddOperations::ADD_DEPENDENCIES)});
+  if (!new_id) {
+    BKE_reportf(&reports,
+                RPT_ERROR,
+                "Could not create a copy of ID '%s' to write it in the library",
+                id.name);
+    return false;
+  }
 
   std::string new_name = name;
-  BKE_libblock_rename(*new_main, *new_id, new_name);
-  id_fake_user_set(new_id);
+  BKE_libblock_rename(lib_write_ctx.bmain, *new_id, new_name);
 
-  BlendFileWriteParams blend_file_write_params{};
-  blend_file_write_params.remap_mode = BLO_WRITE_PATH_REMAP_RELATIVE;
-
-  BKE_packedfile_pack_all(new_main, nullptr, false);
+  BKE_packedfile_pack_all(&lib_write_ctx.bmain, nullptr, false);
+  lib_write_ctx.bmain.is_asset_edit_file = true;
 
   const int write_flags = G_FILE_COMPRESS | G_FILE_ASSET_EDIT_FILE;
-  const bool success = BLO_write_file(
-      new_main, filepath.c_str(), write_flags, &blend_file_write_params, &reports);
+  const int remap_mode = BLO_WRITE_PATH_REMAP_RELATIVE;
+  const bool success = lib_write_ctx.write(filepath.c_str(), write_flags, remap_mode, reports);
 
   if (success) {
     const IDTypeInfo *idtype = BKE_idtype_get_info_from_id(&id);
     final_full_file_path = std::string(filepath) + SEP + std::string(idtype->name) + SEP + name;
   }
-
-  BKE_main_free(new_main);
 
   return success;
 }
@@ -254,7 +204,7 @@ static ID *asset_reload(Main &global_main, ID &id, ReportList *reports)
   BLI_assert(ID_IS_LINKED(&id));
 
   const std::string name = BKE_id_name(id);
-  const std::string filepath = id.lib->runtime.filepath_abs;
+  const std::string filepath = id.lib->runtime->filepath_abs;
   const ID_Type id_type = GS(id.name);
 
   /* TODO: There's no API to reload a single data block (and its dependencies) yet. For now
@@ -294,10 +244,40 @@ static AssetWeakReference asset_weak_reference_for_user_library(
   return weak_ref;
 }
 
+static AssetWeakReference asset_weak_reference_for_online_essentials(const short idcode,
+                                                                     const char *idname,
+                                                                     const char *filepath)
+{
+  BLI_assert(!BLI_path_is_rel(filepath));
+  BLI_assert(BLI_path_is_abs_from_cwd(filepath));
+  BLI_assert(
+      BLI_path_contains(asset_system::online_essentials_cache_directory_path().c_str(), filepath));
+
+  char relative_filepath[FILE_MAX];
+  STRNCPY(relative_filepath, filepath);
+  char online_essentials_path[FILE_MAXDIR];
+  STRNCPY(online_essentials_path, asset_system::online_essentials_cache_directory_path().c_str());
+  BLI_path_slash_ensure(online_essentials_path, sizeof(online_essentials_path));
+  BLI_path_rel(relative_filepath, online_essentials_path);
+  const char *asset_blend_path = relative_filepath + 2; /* Strip out // prefix. */
+
+  AssetWeakReference weak_ref;
+  weak_ref.asset_library_type = ASSET_LIBRARY_ONLINE_ESSENTIALS;
+  weak_ref.relative_asset_identifier = BLI_sprintfN(
+      "%s/%s/%s", asset_blend_path, BKE_idtype_idcode_to_name(idcode), idname);
+
+  return weak_ref;
+}
+
 static AssetWeakReference asset_weak_reference_for_essentials(const short idcode,
                                                               const char *idname,
                                                               const char *filepath)
 {
+  BLI_assert(!BLI_path_is_rel(filepath));
+  BLI_assert(BLI_path_is_abs_from_cwd(filepath));
+  BLI_assert(!BLI_path_contains(asset_system::online_essentials_cache_directory_path().c_str(),
+                                filepath));
+
   AssetWeakReference weak_ref;
   weak_ref.asset_library_type = ASSET_LIBRARY_ESSENTIALS;
   weak_ref.relative_asset_identifier = BLI_sprintfN("%s/%s/%s/%s",
@@ -337,7 +317,7 @@ std::optional<std::string> asset_edit_id_save_as(Main &global_main,
 
 bool asset_edit_id_save(Main &global_main, const ID &id, ReportList &reports)
 {
-  if (!asset_edit_id_is_editable(id)) {
+  if (!asset_edit_id_is_writable(id)) {
     return false;
   }
 
@@ -345,7 +325,7 @@ bool asset_edit_id_save(Main &global_main, const ID &id, ReportList &reports)
   const bool success = asset_write_in_library(global_main,
                                               id,
                                               id.name + 2,
-                                              id.lib->runtime.filepath_abs,
+                                              id.lib->runtime->filepath_abs,
                                               final_full_asset_filepath,
                                               reports);
 
@@ -368,8 +348,8 @@ ID *asset_edit_id_revert(Main &global_main, ID &id, ReportList &reports)
 
 bool asset_edit_id_delete(Main &global_main, ID &id, ReportList &reports)
 {
-  if (asset_edit_id_is_editable(id)) {
-    if (BLI_delete(id.lib->runtime.filepath_abs, false, false) != 0) {
+  if (asset_edit_id_is_writable(id)) {
+    if (BLI_delete(id.lib->runtime->filepath_abs, false, false) != 0) {
       BKE_report(&reports, RPT_ERROR, "Failed to delete asset library file");
       return false;
     }
@@ -436,26 +416,128 @@ std::optional<AssetWeakReference> asset_edit_weak_reference_from_id(const ID &id
   }
 
   const bUserAssetLibrary *user_library = BKE_preferences_asset_library_containing_path(
-      &U, id.lib->runtime.filepath_abs);
+      &U, id.lib->runtime->filepath_abs);
 
   const short idcode = GS(id.name);
 
   if (user_library && user_library->dirpath[0]) {
     return asset_weak_reference_for_user_library(
-        *user_library, idcode, id.name + 2, id.lib->runtime.filepath_abs);
+        *user_library, idcode, id.name + 2, id.lib->runtime->filepath_abs);
   }
 
-  return asset_weak_reference_for_essentials(idcode, id.name + 2, id.lib->runtime.filepath_abs);
+  const bool is_online_essential = BLI_path_contains(
+      asset_system::online_essentials_cache_directory_path().c_str(),
+      id.lib->runtime->filepath_abs);
+  if (is_online_essential) {
+    return asset_weak_reference_for_online_essentials(
+        idcode, id.name + 2, id.lib->runtime->filepath_abs);
+  }
+
+  return asset_weak_reference_for_essentials(idcode, id.name + 2, id.lib->runtime->filepath_abs);
 }
 
 bool asset_edit_id_is_editable(const ID &id)
 {
-  return (id.lib && (id.lib->runtime.tag & LIBRARY_ASSET_EDITABLE));
+  return (id.lib && (id.lib->runtime->tag & LIBRARY_ASSET_EDITABLE));
 }
 
 bool asset_edit_id_is_writable(const ID &id)
 {
-  return asset_edit_id_is_editable(id) && (id.lib->runtime.tag & LIBRARY_ASSET_FILE_WRITABLE);
+  return asset_edit_id_is_editable(id) && (id.lib->runtime->tag & LIBRARY_ASSET_FILE_WRITABLE);
+}
+
+ID *asset_edit_id_find_local(Main &global_main, ID &id)
+{
+  if (!asset_edit_id_is_editable(id)) {
+    return &id;
+  }
+
+  return BKE_main_library_weak_reference_find(&global_main, id.lib->filepath, id.name);
+}
+
+ID *asset_edit_id_ensure_local(Main &global_main, ID &id)
+{
+  ID *local_id = asset_edit_id_find_local(global_main, id);
+  if (local_id) {
+    return local_id;
+  }
+
+  /* Keep a copy in case the ID gets made local in-place and the library data cleared. */
+  std::string filepath = id.lib->filepath;
+
+  /* Recursively make local (creating copies of the given ID and its dependencies) and create weak
+   * library reference for reuse. */
+
+  {
+    /* Recurse to collect IDs to make local. */
+
+    /* #BKE_library_make_local() only processes IDs not tagged with #ID_TAG_PRE_EXISTING (for
+     * historic reasons). */
+    BKE_main_id_tag_all(&global_main, ID_TAG_PRE_EXISTING, true);
+
+    /* Mark this ID for processing. */
+    id.tag &= ~ID_TAG_PRE_EXISTING;
+    BKE_library_foreach_ID_link(
+        &global_main,
+        &id,
+        [&](const LibraryIDLinkCallbackData *cb_data) {
+          /* A direct or indirect dependency of #id. */
+          ID *dependency_id = *cb_data->id_pointer;
+          if (!dependency_id || !ID_TYPE_SUPPORTS_ASSET_EDITABLE(GS(dependency_id->name))) {
+            return IDWALK_RET_STOP_RECURSION;
+          }
+          /* Mark this ID for processing. */
+          dependency_id->tag &= ~ID_TAG_PRE_EXISTING;
+          return IDWALK_RET_NOP;
+        },
+        nullptr,
+        IDWALK_RECURSE);
+  }
+
+  GHash *old_to_new_id = BLI_ghash_ptr_new_ex(__func__, 4);
+  BLI_SCOPED_DEFER([&] { BLI_ghash_free(old_to_new_id, nullptr, nullptr); });
+
+  BKE_library_make_local(&global_main, nullptr, old_to_new_id, true, false, true);
+
+  /* #ID_TAG_PRE_EXISTING should be reset after use. */
+  BKE_main_id_tag_all(&global_main, ID_TAG_PRE_EXISTING, false);
+
+  /* #BKE_library_foreach_ID_link() may modify IDs in-place and doesn't add it to the hash
+   * table then. Can be recognized by the fact that the library pointer is null now. */
+  if (id.lib == nullptr) {
+    BLI_ghash_insert(old_to_new_id, &id, &id);
+  }
+
+  /* If any of the processed IDs are still using linked IDs (probably because they are not covered
+   * by #ID_TYPE_SUPPORTS_ASSET_EDITABLE()), clear that usage so the IDs are definitely only using
+   * local data. */
+  {
+    GHashIterator gh_iter;
+    GHASH_ITER (gh_iter, old_to_new_id) {
+      ID *now_local_id = static_cast<ID *>(BLI_ghashIterator_getValue(&gh_iter));
+      BKE_library_foreach_ID_link(
+          &global_main,
+          now_local_id,
+          [&](const LibraryIDLinkCallbackData *cb_data) {
+            if (*cb_data->id_pointer && ID_IS_LINKED(*cb_data->id_pointer)) {
+              *cb_data->id_pointer = nullptr;
+            }
+            return IDWALK_RET_NOP;
+          },
+          nullptr,
+          IDWALK_NOP);
+    }
+  }
+
+  ID *newid = reinterpret_cast<ID *>(BLI_ghash_lookup(old_to_new_id, &id));
+  if (!newid) {
+    BLI_assert_unreachable();
+    return nullptr;
+  }
+
+  BKE_main_library_weak_reference_add(newid, filepath.c_str(), id.name);
+
+  return newid;
 }
 
 }  // namespace blender::bke

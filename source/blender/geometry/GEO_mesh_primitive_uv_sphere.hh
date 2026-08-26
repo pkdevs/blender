@@ -10,9 +10,11 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
 
+namespace blender {
+
 struct Mesh;
 
-namespace blender::geometry {
+namespace geometry {
 
 /**
  * Calculates the bounds of a radial primitive.
@@ -26,6 +28,7 @@ Bounds<float3> calculate_bounds_radial_primitive(float radius_top,
 Mesh *create_uv_sphere_mesh(float radius,
                             int segments,
                             int rings,
-                            const std::optional<StringRef> &uv_map_id);
+                            std::optional<StringRef> uv_map_id);
 
-}  // namespace blender::geometry
+}  // namespace geometry
+}  // namespace blender

@@ -8,9 +8,8 @@
 
 #include "tile_highlight.h"
 
-#include "MEM_guardedalloc.h"
-
 #include "BLI_hash.hh"
+#include "BLI_rect.hh"
 
 #include "RE_pipeline.h"
 

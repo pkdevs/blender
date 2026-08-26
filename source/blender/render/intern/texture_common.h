@@ -8,9 +8,9 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "BLI_math_color_c.hh" /* IWYU pragma: keep. Used in macros. */
+
+namespace blender {
 
 #define BRICONT \
   texres->tin = (texres->tin - 0.5f) * tex->contrast + tex->bright - 0.5f; \
@@ -70,15 +70,6 @@ struct TexResult;
 
 /* `texture_image.cc` */
 
-int imagewraposa(struct Tex *tex,
-                 struct Image *ima,
-                 struct ImBuf *ibuf,
-                 const float texvec[3],
-                 const float DXT[2],
-                 const float DYT[2],
-                 struct TexResult *texres,
-                 struct ImagePool *pool,
-                 bool skip_load_image);
 int imagewrap(struct Tex *tex,
               struct Image *ima,
               const float texvec[3],
@@ -93,6 +84,4 @@ void image_sample(struct Image *ima,
                   float result[4],
                   struct ImagePool *pool);
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

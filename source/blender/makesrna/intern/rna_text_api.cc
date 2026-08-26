@@ -6,12 +6,7 @@
  * \ingroup RNA
  */
 
-#include <cstdio>
 #include <cstdlib>
-
-#include "BLI_utildefines.h"
-
-#include "ED_text.hh"
 
 #include "RNA_define.hh"
 
@@ -19,8 +14,14 @@
 
 #ifdef RNA_RUNTIME
 
+#  include "DNA_text_types.h"
+
+#  include "BKE_text.h"
+
 #  include "WM_api.hh"
 #  include "WM_types.hh"
+
+namespace blender {
 
 static void rna_Text_clear(Text *text)
 {
@@ -59,7 +60,11 @@ static void rna_Text_cursor_set(Text *text, int line, int ch, bool select)
   WM_main_add_notifier(NC_TEXT | NA_EDITED, text);
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 void RNA_api_text(StructRNA *srna)
 {
@@ -91,7 +96,7 @@ void RNA_api_text(StructRNA *srna)
                           RNA_def_boolean(func, "is_syntax_highlight_supported", false, "", ""));
   RNA_def_function_ui_description(func,
                                   "Returns True if the editor supports syntax highlighting "
-                                  "for the current text datablock");
+                                  "for the current text data-block");
 
   func = RNA_def_function(srna, "select_set", "rna_Text_select_set");
   RNA_def_function_ui_description(func, "Set selection range by line and character index");
@@ -112,5 +117,7 @@ void RNA_api_text(StructRNA *srna)
   parm = RNA_def_int(func, "character", 0, 0, INT_MAX, "Character", "", 0, INT_MAX);
   RNA_def_boolean(func, "select", false, "", "Select when moving the cursor");
 }
+
+}  // namespace blender
 
 #endif

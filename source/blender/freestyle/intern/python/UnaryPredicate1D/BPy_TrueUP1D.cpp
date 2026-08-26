@@ -8,10 +8,6 @@
 
 #include "BPy_TrueUP1D.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 using namespace Freestyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -27,11 +23,10 @@ PyDoc_STRVAR(
     "\n"
     "   Always returns true.\n"
     "\n"
-    "   :arg inter: An Interface1D object.\n"
+    "   :param inter: An Interface1D object.\n"
     "   :type inter: :class:`freestyle.types.Interface1D`\n"
     "   :return: True.\n"
     "   :rtype: bool\n");
-
 static int TrueUP1D___init__(BPy_TrueUP1D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};
@@ -87,7 +82,3 @@ PyTypeObject TrueUP1D_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

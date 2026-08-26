@@ -11,9 +11,14 @@
 #include <optional>
 #include <string>
 
-#include "BLI_utildefines.h"
 #include "DNA_windowmanager_types.h"
 #include "WM_types.hh"
+
+namespace blender {
+
+#ifdef hyper /* MSVC defines. */
+#  undef hyper
+#endif
 
 struct EnumPropertyItem;
 
@@ -37,8 +42,9 @@ void WM_keyconfig_set_active(wmWindowManager *wm, const char *idname);
  */
 void WM_keyconfig_update_ex(wmWindowManager *wm, bool keep_properties);
 void WM_keyconfig_update(wmWindowManager *wm);
+void WM_keyconfig_update_on_startup(wmWindowManager *wm);
 void WM_keyconfig_update_tag(wmKeyMap *keymap, wmKeyMapItem *kmi);
-void WM_keyconfig_update_operatortype();
+void WM_keyconfig_update_operatortype_tag();
 
 void WM_keyconfig_update_suppress_begin();
 void WM_keyconfig_update_suppress_end();
@@ -54,13 +60,35 @@ struct KeyMapItem_Params {
   int16_t type;
   /** #wmKeyMapItem.val. */
   int8_t value;
-  /** #wmKeyMapItem `ctrl, shift, alt, oskey`. */
-  int8_t modifier;
+  /**
+   * This value is used to initialize #wmKeyMapItem `ctrl, shift, alt, oskey, hyper`.
+   *
+   * Valid values:
+   *
+   * - Combinations of: #KM_SHIFT, #KM_CTRL, #KM_ALT, #KM_OSKEY, #KM_HYPER.
+   *   Are mapped to #KM_MOD_HELD.
+   * - Combinations of the modifier flags bit-shifted using #KMI_PARAMS_MOD_TO_ANY.
+   *   Are mapped to #KM_ANY.
+   * - The value #KM_ANY is represents all modifiers being set to #KM_ANY.
+   */
+  int16_t modifier;
+
   /** #wmKeyMapItem.keymodifier. */
   int16_t keymodifier;
   /** #wmKeyMapItem.direction. */
   int8_t direction;
 };
+
+/**
+ * Use to assign modifiers to #KeyMapItem_Params::modifier
+ * which can have any state (held or released).
+ */
+#define KMI_PARAMS_MOD_TO_ANY(mod) ((mod) << 8)
+/**
+ * Use to read modifiers from #KeyMapItem_Params::modifier
+ * which can have any state (held or released).
+ */
+#define KMI_PARAMS_MOD_FROM_ANY(mod) ((mod) >> 8)
 
 void WM_keymap_clear(wmKeyMap *keymap);
 
@@ -70,13 +98,16 @@ void WM_keymap_clear(wmKeyMap *keymap);
 wmKeyMapItem *WM_keymap_add_item(wmKeyMap *keymap,
                                  const char *idname,
                                  const KeyMapItem_Params *params);
-wmKeyMapItem *WM_keymap_add_item_copy(wmKeyMap *keymap, wmKeyMapItem *kmi_src);
+wmKeyMapItem *WM_keymap_add_item_copy(wmKeyMap *keymap, const wmKeyMapItem *kmi_src);
 
 void WM_keymap_remove_item(wmKeyMap *keymap, wmKeyMapItem *kmi);
 std::optional<std::string> WM_keymap_item_to_string(const wmKeyMapItem *kmi, bool compact);
 
-wmKeyMap *WM_keymap_list_find(ListBase *lb, const char *idname, int spaceid, int regionid);
-wmKeyMap *WM_keymap_list_find_spaceid_or_empty(ListBase *lb,
+wmKeyMap *WM_keymap_list_find(ListBaseT<wmKeyMap> *lb,
+                              const char *idname,
+                              int spaceid,
+                              int regionid);
+wmKeyMap *WM_keymap_list_find_spaceid_or_empty(ListBaseT<wmKeyMap> *lb,
                                                const char *idname,
                                                int spaceid,
                                                int regionid);
@@ -92,6 +123,16 @@ bool WM_keymap_poll(bContext *C, wmKeyMap *keymap);
 
 wmKeyMapItem *WM_keymap_item_find_id(wmKeyMap *keymap, int id);
 bool WM_keymap_item_compare(const wmKeyMapItem *k1, const wmKeyMapItem *k2);
+
+/**
+ * Return the user key-map item from `km_base` based on `km_match` & `kmi_match`,
+ * currently the supported use case is looking up "User" key-map items from "Add-on" key-maps.
+ * Other lookups may be supported.
+ */
+wmKeyMapItem *WM_keymap_item_find_match(wmKeyMap *km_base,
+                                        wmKeyMap *km_match,
+                                        const wmKeyMapItem *kmi_match,
+                                        ReportList *reports);
 
 /* `wm_keymap_utils.cc`. */
 
@@ -168,28 +209,29 @@ int WM_keymap_item_map_type_get(const wmKeyMapItem *kmi);
 /* Key Event. */
 
 const char *WM_key_event_string(short type, bool compact);
-std::optional<std::string> WM_keymap_item_raw_to_string(short shift,
-                                                        short ctrl,
-                                                        short alt,
-                                                        short oskey,
+std::optional<std::string> WM_keymap_item_raw_to_string(int8_t shift,
+                                                        int8_t ctrl,
+                                                        int8_t alt,
+                                                        int8_t oskey,
+                                                        int8_t hyper,
                                                         short keymodifier,
                                                         short val,
                                                         short type,
                                                         bool compact);
 /**
- * \param include_mask, exclude_mask:
- * Event types to include/exclude when looking up keys (#eEventType_Mask).
+ * \param include_mask: Event types to include when looking up keys (#eEventType_Mask).
+ * \param exclude_mask: Event types to exclude when looking up keys (#eEventType_Mask).
  */
 wmKeyMapItem *WM_key_event_operator(const bContext *C,
                                     const char *opname,
-                                    wmOperatorCallContext opcontext,
+                                    wm::OpCallContext opcontext,
                                     IDProperty *properties,
                                     short include_mask,
                                     short exclude_mask,
                                     wmKeyMap **r_keymap);
 std::optional<std::string> WM_key_event_operator_string(const bContext *C,
                                                         const char *opname,
-                                                        wmOperatorCallContext opcontext,
+                                                        wm::OpCallContext opcontext,
                                                         IDProperty *properties,
                                                         bool is_strict);
 
@@ -200,3 +242,5 @@ wmKeyMapItem *WM_key_event_operator_from_keymap(wmKeyMap *keymap,
                                                 short exclude_mask);
 
 const char *WM_bool_as_string(bool test);
+
+}  // namespace blender

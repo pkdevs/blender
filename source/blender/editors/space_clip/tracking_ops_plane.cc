@@ -11,13 +11,13 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_report.hh"
-#include "BKE_tracking.h"
+#include "BKE_tracking.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -29,9 +29,11 @@
 #include "clip_intern.hh"
 #include "tracking_ops_intern.hh"
 
+namespace blender {
+
 /********************** Create plane track operator *********************/
 
-static int create_plane_track_tracks_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus create_plane_track_tracks_exec(bContext *C, wmOperator *op)
 {
   SpaceClip *sc = CTX_wm_space_clip(C);
   MovieClip *clip = ED_space_clip_get_clip(sc);
@@ -50,11 +52,11 @@ static int create_plane_track_tracks_exec(bContext *C, wmOperator *op)
 
   BKE_tracking_tracks_deselect_all(&tracking_object->tracks);
 
-  plane_track->flag |= SELECT;
+  plane_track->flag |= PLANE_TRACK_SELECT;
   tracking_object->active_track = nullptr;
   tracking_object->active_plane_track = plane_track;
 
-  /* Compute homoraphies and apply them on marker's corner, so we've got
+  /* Compute homographies and apply them on marker's corner, so we've got
    * quite nice motion from the very beginning.
    */
   BKE_tracking_track_plane_from_existing_motion(plane_track, framenr);
@@ -72,7 +74,7 @@ void CLIP_OT_create_plane_track(wmOperatorType *ot)
   ot->description = "Create new plane track out of selected point tracks";
   ot->idname = "CLIP_OT_create_plane_track";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->exec = create_plane_track_tracks_exec;
   ot->poll = ED_space_clip_tracking_poll;
 
@@ -146,7 +148,7 @@ static SlidePlaneMarkerData *slide_plane_marker_customdata(bContext *C, const wm
   if (plane_track) {
     MovieTrackingPlaneMarker *plane_marker;
 
-    customdata = MEM_cnew<SlidePlaneMarkerData>("slide plane marker data");
+    customdata = MEM_new_zeroed<SlidePlaneMarkerData>("slide plane marker data");
 
     customdata->launch_event = WM_userdef_event_type_from_keymap_type(event->type);
 
@@ -170,7 +172,9 @@ static SlidePlaneMarkerData *slide_plane_marker_customdata(bContext *C, const wm
   return customdata;
 }
 
-static int slide_plane_marker_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus slide_plane_marker_invoke(bContext *C,
+                                                  wmOperator *op,
+                                                  const wmEvent *event)
 {
   SlidePlaneMarkerData *slidedata = slide_plane_marker_customdata(C, event);
 
@@ -203,7 +207,7 @@ static void cancel_mouse_slide_plane_marker(SlidePlaneMarkerData *data)
 
 static void free_slide_plane_marker_data(SlidePlaneMarkerData *data)
 {
-  MEM_freeN(data);
+  MEM_delete(data);
 }
 
 static void slide_plane_marker_update_homographies(SpaceClip *sc, SlidePlaneMarkerData *data)
@@ -213,11 +217,11 @@ static void slide_plane_marker_update_homographies(SpaceClip *sc, SlidePlaneMark
   BKE_tracking_track_plane_from_existing_motion(data->plane_track, framenr);
 }
 
-static int slide_plane_marker_modal(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus slide_plane_marker_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   SpaceClip *sc = CTX_wm_space_clip(C);
   MovieClip *clip = ED_space_clip_get_clip(sc);
-  SlidePlaneMarkerData *data = (SlidePlaneMarkerData *)op->customdata;
+  SlidePlaneMarkerData *data = static_cast<SlidePlaneMarkerData *>(op->customdata);
   float dx, dy, mdelta[2];
   int next_corner_index, prev_corner_index, diag_corner_index;
   const float *next_corner, *prev_corner, *diag_corner;
@@ -327,6 +331,9 @@ static int slide_plane_marker_modal(bContext *C, wmOperator *op, const wmEvent *
       WM_event_add_notifier(C, NC_MOVIECLIP | NA_EDITED, clip);
 
       return OPERATOR_CANCELLED;
+    default: {
+      break;
+    }
   }
 
   return OPERATOR_RUNNING_MODAL;
@@ -339,7 +346,7 @@ void CLIP_OT_slide_plane_marker(wmOperatorType *ot)
   ot->description = "Slide plane marker areas";
   ot->idname = "CLIP_OT_slide_plane_marker";
 
-  /* api callbacks */
+  /* API callbacks. */
   ot->poll = ED_space_clip_tracking_poll;
   ot->invoke = slide_plane_marker_invoke;
   ot->modal = slide_plane_marker_modal;
@@ -347,3 +354,5 @@ void CLIP_OT_slide_plane_marker(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_GRAB_CURSOR_XY | OPTYPE_BLOCKING;
 }
+
+}  // namespace blender

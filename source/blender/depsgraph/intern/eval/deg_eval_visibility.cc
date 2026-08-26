@@ -12,9 +12,9 @@
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_assert.h"
-#include "BLI_listbase.h"
-#include "BLI_stack.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase.hh"
+#include "BLI_stack.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -27,7 +27,7 @@
 
 namespace blender::deg {
 
-void deg_evaluate_object_node_visibility(::Depsgraph *depsgraph, IDNode *id_node)
+void deg_evaluate_object_node_visibility(blender::Depsgraph *depsgraph, IDNode *id_node)
 {
   BLI_assert(GS(id_node->id_cow->name) == ID_OB);
 
@@ -51,7 +51,8 @@ void deg_evaluate_object_node_visibility(::Depsgraph *depsgraph, IDNode *id_node
   }
 }
 
-void deg_evaluate_object_modifiers_mode_node_visibility(::Depsgraph *depsgraph, IDNode *id_node)
+void deg_evaluate_object_modifiers_mode_node_visibility(blender::Depsgraph *depsgraph,
+                                                        IDNode *id_node)
 {
   BLI_assert(GS(id_node->id_cow->name) == ID_OB);
 
@@ -60,7 +61,7 @@ void deg_evaluate_object_modifiers_mode_node_visibility(::Depsgraph *depsgraph, 
 
   DEG_debug_print_eval(depsgraph, __func__, object->id.name, &object->id);
 
-  if (BLI_listbase_is_empty(&object->modifiers)) {
+  if (object->modifiers.is_empty()) {
     return;
   }
 
@@ -68,16 +69,16 @@ void deg_evaluate_object_modifiers_mode_node_visibility(::Depsgraph *depsgraph, 
                                                                           eModifierMode_Render;
 
   const ComponentNode *geometry_component = id_node->find_component(NodeType::GEOMETRY);
-  LISTBASE_FOREACH (ModifierData *, modifier, &object->modifiers) {
+  for (ModifierData &modifier : object->modifiers) {
     OperationNode *modifier_node = geometry_component->find_operation(OperationCode::MODIFIER,
-                                                                      modifier->name);
+                                                                      modifier.name);
 
     BLI_assert_msg(modifier_node != nullptr,
                    "Modifier node in depsgraph is not found. Likely due to missing "
                    "DEG_relations_tag_update().");
 
     const bool modifier_enabled = !graph->use_visibility_optimization ||
-                                  (modifier->mode & modifier_mode);
+                                  (modifier.mode & modifier_mode);
     const int mute_flag = modifier_enabled ? 0 : DEPSOP_FLAG_MUTE;
     if ((modifier_node->flag & DEPSOP_FLAG_MUTE) != mute_flag) {
       modifier_node->flag &= ~DEPSOP_FLAG_MUTE;
@@ -122,7 +123,7 @@ void deg_graph_flush_visibility_flags(Depsgraph *graph)
     }
   }
 
-  BLI_Stack *stack = BLI_stack_new(sizeof(OperationNode *), "DEG flush layers stack");
+  Stack<OperationNode *> stack;
 
   for (OperationNode *op_node : graph->operations) {
     op_node->custom_flags = 0;
@@ -133,14 +134,13 @@ void deg_graph_flush_visibility_flags(Depsgraph *graph)
       }
     }
     if (op_node->num_links_pending == 0) {
-      BLI_stack_push(stack, &op_node);
+      stack.push(op_node);
       op_node->custom_flags |= DEG_NODE_VISITED;
     }
   }
 
-  while (!BLI_stack_is_empty(stack)) {
-    OperationNode *op_node;
-    BLI_stack_pop(stack, &op_node);
+  while (!stack.is_empty()) {
+    OperationNode *op_node = stack.pop();
 
     /* Flush flags to parents. */
     for (Relation *rel : op_node->inlinks) {
@@ -207,19 +207,18 @@ void deg_graph_flush_visibility_flags(Depsgraph *graph)
     /* Schedule parent nodes. */
     for (Relation *rel : op_node->inlinks) {
       if (rel->from->type == NodeType::OPERATION) {
-        OperationNode *op_from = (OperationNode *)rel->from;
+        OperationNode *op_from = static_cast<OperationNode *>(rel->from);
         if ((rel->flag & RELATION_FLAG_CYCLIC) == 0) {
           BLI_assert(op_from->num_links_pending > 0);
           --op_from->num_links_pending;
         }
         if ((op_from->num_links_pending == 0) && (op_from->custom_flags & DEG_NODE_VISITED) == 0) {
-          BLI_stack_push(stack, &op_from);
+          stack.push(op_from);
           op_from->custom_flags |= DEG_NODE_VISITED;
         }
       }
     }
   }
-  BLI_stack_free(stack);
 
   graph->need_update_nodes_visibility = false;
 }

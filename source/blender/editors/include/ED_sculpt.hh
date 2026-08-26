@@ -8,14 +8,24 @@
 
 #pragma once
 
-struct Object;
-struct ReportList;
-struct UndoType;
-struct bContext;
-struct wmOperator;
-struct wmKeyConfig;
+#include <cstddef>
 
-namespace blender::ed::sculpt_paint {
+namespace blender {
+
+struct Depsgraph;
+struct Main;
+struct Mesh;
+struct Object;
+struct RegionView3D;
+struct ReportList;
+struct Scene;
+struct UndoType;
+struct UndoStep;
+struct bContext;
+struct wmKeyConfig;
+struct wmOperator;
+
+namespace ed::sculpt_paint {
 
 void object_sculpt_mode_enter(Main &bmain,
                               Depsgraph &depsgraph,
@@ -30,11 +40,14 @@ void object_sculpt_mode_exit(bContext *C, Depsgraph &depsgraph);
 /* `sculpt.cc` */
 
 /**
- * Checks if the currently active Sculpt Mode on the object is targeting a locked shape key,
- * and produces an error message if so (unless \a reports is null).
- * \return true if the shape key was locked.
+ * Checks if the currently active shape key is able to be sculpted on.
+ *
+ * If the active shape key is either muted or locked, an error message will be reported, unless
+ * \a reports is null.
+ *
+ * \return false if the shape key cannot be modified.
  */
-bool report_if_shape_key_is_locked(const Object &ob, ReportList *reports);
+bool shape_key_check(const Object &ob, ReportList *reports);
 
 void operatortypes_sculpt();
 
@@ -43,6 +56,7 @@ void keymap_sculpt(wmKeyConfig *keyconf);
 /* `sculpt_transform.cc` */
 
 void update_modal_transform(bContext *C, Object &ob);
+void cancel_modal_transform(bContext *C, Object &ob);
 void init_transform(bContext *C, Object &ob, const float mval_fl[2], const char *undo_name);
 void end_transform(bContext *C, Object &ob);
 
@@ -68,10 +82,13 @@ void geometry_end(Object &ob);
 void push_multires_mesh_begin(bContext *C, const char *str);
 void push_multires_mesh_end(bContext *C, const char *str);
 
+size_t step_memory_size_get(UndoStep *step);
+
 }  // namespace undo
 
 namespace face_set {
 
+int find_next_available_id(const Mesh &mesh);
 int find_next_available_id(Object &object);
 void initialize_none_to_id(Mesh *mesh, int new_id);
 int active_update_and_get(bContext *C, Object &ob, const float mval_fl[2]);
@@ -79,12 +96,27 @@ int active_update_and_get(bContext *C, Object &ob, const float mval_fl[2]);
 }  // namespace face_set
 
 /**
- * Fills the object's active color attribute layer with the fill color.
- *
- * \param only_selected: Limit the fill to selected faces or vertices.
+ * Fills the entire object's active color attribute layer with the fill color.
  *
  * \return #true if successful.
  */
-bool object_active_color_fill(Object &ob, const float fill_color[4], bool only_selected);
+bool object_active_color_init(Object &ob, const float fill_color[4]);
 
-}  // namespace blender::ed::sculpt_paint
+/**
+ * Fully replace the sculpt mesh with a mesh outside of #Main. This implements various checks to
+ * avoid pushing full geometry-type undo steps when possible, allowing for better performance.
+ *
+ * \warning To avoid false negatives when detecting mesh changes, it is critical that the caller
+ * adds an owner to the attribute data arrays before modifying the original object's mesh. This
+ * allows constant time checks for whether the mesh has changed.
+ */
+void store_mesh_from_eval(const wmOperator &op,
+                          const Scene &scene,
+                          const Depsgraph &depsgraph,
+                          const RegionView3D *rv3d,
+                          Object &object,
+                          Mesh *new_mesh);
+
+}  // namespace ed::sculpt_paint
+
+}  // namespace blender

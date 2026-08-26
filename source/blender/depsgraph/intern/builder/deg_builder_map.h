@@ -8,11 +8,14 @@
 
 #pragma once
 
-#include "intern/depsgraph_type.hh"
+#include "BLI_map.hh"
+#include "BLI_set.hh"
+
+namespace blender {
 
 struct ID;
 
-namespace blender::deg {
+namespace deg {
 
 class BuilderMap {
  public:
@@ -26,38 +29,51 @@ class BuilderMap {
     TAG_SCENE_SEQUENCER = (1 << 5),
     TAG_SCENE_AUDIO = (1 << 6),
 
+    /**
+     * Specific tag for whether the collection -> children object relations have been built.
+     * Purposefully not included in TAG_COMPLETE so it doesn't influence other decisions about
+     * whether the collection is considered complete.
+     */
+    TAG_COLLECTION_CHILDREN_HIERARCHY = (1 << 7),
+
+    TAG_COLLECTION_PROPERTIES = (1 << 8),
+
     /* All ID components has been built. */
     TAG_COMPLETE = (TAG_ANIMATION | TAG_PARAMETERS | TAG_TRANSFORM | TAG_GEOMETRY |
-                    TAG_SCENE_COMPOSITOR | TAG_SCENE_SEQUENCER | TAG_SCENE_AUDIO),
+                    TAG_SCENE_COMPOSITOR | TAG_SCENE_SEQUENCER | TAG_SCENE_AUDIO |
+                    TAG_COLLECTION_PROPERTIES),
   };
 
   /* Check whether given ID is already handled by builder (or if it's being handled). */
-  bool checkIsBuilt(ID *id, int tag = TAG_COMPLETE) const;
+  bool check_is_built(ID *id, int tag = TAG_COMPLETE) const;
 
   /* Tag given ID as handled/built. */
-  void tagBuild(ID *id, int tag = TAG_COMPLETE);
+  void tag_built(ID *id, int tag = TAG_COMPLETE);
 
   /* Combination of previous two functions, returns truth if ID was already handled, or tags is
    * handled otherwise and return false. */
-  bool checkIsBuiltAndTag(ID *id, int tag = TAG_COMPLETE);
+  bool check_is_built_and_tag(ID *id, int tag = TAG_COMPLETE);
 
-  template<typename T> bool checkIsBuilt(T *datablock, int tag = TAG_COMPLETE) const
+  template<typename T> bool check_is_built(T *datablock, int tag = TAG_COMPLETE) const
   {
-    return checkIsBuilt(&datablock->id, tag);
+    return this->check_is_built(&datablock->id, tag);
   }
-  template<typename T> void tagBuild(T *datablock, int tag = TAG_COMPLETE)
+  template<typename T> void tag_built(T *datablock, int tag = TAG_COMPLETE)
   {
-    tagBuild(&datablock->id, tag);
+    this->tag_built(&datablock->id, tag);
   }
-  template<typename T> bool checkIsBuiltAndTag(T *datablock, int tag = TAG_COMPLETE)
+  template<typename T> bool check_is_built_and_tag(T *datablock, int tag = TAG_COMPLETE)
   {
-    return checkIsBuiltAndTag(&datablock->id, tag);
+    return this->check_is_built_and_tag(&datablock->id, tag);
   }
+
+  Set<const ID *> get_ids() const;
 
  protected:
-  int getIDTag(ID *id) const;
+  int get_ID_tag(ID *id) const;
 
   Map<ID *, int> id_tags_;
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

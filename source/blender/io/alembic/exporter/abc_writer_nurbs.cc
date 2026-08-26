@@ -12,15 +12,18 @@
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_curve.hh"
 #include "BKE_object_types.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.alembic"};
 
-namespace blender::io::alembic {
+namespace io::alembic {
 
 using Alembic::Abc::OObject;
 using Alembic::AbcGeom::FloatArraySample;
@@ -33,8 +36,8 @@ ABCNurbsWriter::ABCNurbsWriter(const ABCWriterConstructorArgs &args) : ABCAbstra
 
 void ABCNurbsWriter::create_alembic_objects(const HierarchyContext *context)
 {
-  Curve *curve = static_cast<Curve *>(context->object->data);
-  size_t num_nurbs = BLI_listbase_count(&curve->nurb);
+  Curve *curve = id_cast<Curve *>(context->object->data);
+  size_t num_nurbs = curve->nurb.count();
   OObject abc_parent = args_.abc_parent;
   const char *abc_parent_path = abc_parent.getFullName().c_str();
 
@@ -47,7 +50,7 @@ void ABCNurbsWriter::create_alembic_objects(const HierarchyContext *context)
     }
 
     std::string patch_name = patch_name_stream.str();
-    CLOG_INFO(&LOG, 2, "exporting %s/%s", abc_parent_path, patch_name.c_str());
+    CLOG_DEBUG(&LOG, "exporting %s/%s", abc_parent_path, patch_name.c_str());
 
     ONuPatch nurbs(abc_parent, patch_name, timesample_index_);
     abc_nurbs_.push_back(nurbs);
@@ -79,7 +82,7 @@ Alembic::Abc::OCompoundProperty ABCNurbsWriter::abc_prop_for_custom_props()
 bool ABCNurbsWriter::check_is_animated(const HierarchyContext &context) const
 {
   /* Check if object has shape keys. */
-  Curve *cu = static_cast<Curve *>(context.object->data);
+  Curve *cu = id_cast<Curve *>(context.object->data);
   return (cu->key != nullptr);
 }
 
@@ -110,8 +113,8 @@ static void get_knots(std::vector<float> &knots, const int num_knots, float *nu_
 
 void ABCNurbsWriter::do_write(HierarchyContext &context)
 {
-  Curve *curve = static_cast<Curve *>(context.object->data);
-  ListBase *nulb;
+  Curve *curve = id_cast<Curve *>(context.object->data);
+  ListBaseT<Nurb> *nulb;
 
   if (context.object->runtime->curve_cache->deformed_nurbs.first != nullptr) {
     nulb = &context.object->runtime->curve_cache->deformed_nurbs;
@@ -177,4 +180,5 @@ void ABCNurbsWriter::do_write(HierarchyContext &context)
   }
 }
 
-}  // namespace blender::io::alembic
+}  // namespace io::alembic
+}  // namespace blender

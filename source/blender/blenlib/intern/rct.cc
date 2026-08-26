@@ -15,14 +15,16 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include "BLI_math_base.h"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector.hh"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_vec_types.h"
 
-/* avoid including BLI_math */
-static void unit_m4(float m[4][4]);
+namespace blender {
 
 bool BLI_rcti_is_empty(const rcti *rect)
 {
@@ -205,17 +207,15 @@ bool BLI_rcti_inside_rcti(const rcti *rct_a, const rcti *rct_b)
  * but in modified so corner cases are treated as intersections */
 static int isect_segments_i(const int v1[2], const int v2[2], const int v3[2], const int v4[2])
 {
-  const double div = (double)((v2[0] - v1[0]) * (v4[1] - v3[1]) -
-                              (v2[1] - v1[1]) * (v4[0] - v3[0]));
+  const double div = double((v2[0] - v1[0]) * (v4[1] - v3[1]) - (v2[1] - v1[1]) * (v4[0] - v3[0]));
   if (div == 0.0) {
     return 1; /* co-linear */
   }
 
-  const double lambda = (double)((v1[1] - v3[1]) * (v4[0] - v3[0]) -
-                                 (v1[0] - v3[0]) * (v4[1] - v3[1])) /
+  const double lambda = double((v1[1] - v3[1]) * (v4[0] - v3[0]) -
+                               (v1[0] - v3[0]) * (v4[1] - v3[1])) /
                         div;
-  const double mu = (double)((v1[1] - v3[1]) * (v2[0] - v1[0]) -
-                             (v1[0] - v3[0]) * (v2[1] - v1[1])) /
+  const double mu = double((v1[1] - v3[1]) * (v2[0] - v1[0]) - (v1[0] - v3[0]) * (v2[1] - v1[1])) /
                     div;
   return (lambda >= 0.0 && lambda <= 1.0 && mu >= 0.0 && mu <= 1.0);
 }
@@ -224,17 +224,15 @@ static int isect_segments_fl(const float v1[2],
                              const float v3[2],
                              const float v4[2])
 {
-  const double div = (double)((v2[0] - v1[0]) * (v4[1] - v3[1]) -
-                              (v2[1] - v1[1]) * (v4[0] - v3[0]));
+  const double div = double((v2[0] - v1[0]) * (v4[1] - v3[1]) - (v2[1] - v1[1]) * (v4[0] - v3[0]));
   if (div == 0.0) {
     return 1; /* co-linear */
   }
 
-  const double lambda = (double)((v1[1] - v3[1]) * (v4[0] - v3[0]) -
-                                 (v1[0] - v3[0]) * (v4[1] - v3[1])) /
+  const double lambda = double((v1[1] - v3[1]) * (v4[0] - v3[0]) -
+                               (v1[0] - v3[0]) * (v4[1] - v3[1])) /
                         div;
-  const double mu = (double)((v1[1] - v3[1]) * (v2[0] - v1[0]) -
-                             (v1[0] - v3[0]) * (v2[1] - v1[1])) /
+  const double mu = double((v1[1] - v3[1]) * (v2[0] - v1[0]) - (v1[0] - v3[0]) * (v2[1] - v1[1])) /
                     div;
   return (lambda >= 0.0 && lambda <= 1.0 && mu >= 0.0 && mu <= 1.0);
 }
@@ -309,7 +307,7 @@ bool BLI_rctf_isect_segment(const rctf *rect, const float s1[2], const float s2[
   /* both points are outside but may intersect the rect */
   float tvec1[2];
   float tvec2[2];
-  /* diagonal: [/] */
+  /* diagonal: `[/]` */
   tvec1[0] = rect->xmin;
   tvec1[1] = rect->ymin;
   tvec2[0] = rect->xmax;
@@ -318,7 +316,7 @@ bool BLI_rctf_isect_segment(const rctf *rect, const float s1[2], const float s2[
     return true;
   }
 
-  /* diagonal: [\] */
+  /* diagonal: `[\]` */
   tvec1[0] = rect->xmin;
   tvec1[1] = rect->ymax;
   tvec2[0] = rect->xmax;
@@ -387,6 +385,18 @@ void BLI_rctf_union(rctf *rct_a, const rctf *rct_b)
   if (rct_a->ymax < rct_b->ymax) {
     rct_a->ymax = rct_b->ymax;
   }
+}
+
+void BLI_rctf_union_x(rctf *rct, const float x)
+{
+  rct->xmin = min_ff(rct->xmin, x);
+  rct->xmax = max_ff(rct->xmax, x);
+}
+
+void BLI_rctf_union_y(rctf *rct, const float y)
+{
+  rct->ymin = min_ff(rct->ymin, y);
+  rct->ymax = max_ff(rct->ymax, y);
 }
 
 void BLI_rcti_union(rcti *rct_a, const rcti *rct_b)
@@ -555,6 +565,16 @@ void BLI_rctf_transform_calc_m4_pivot_min_ex(
 void BLI_rctf_transform_calc_m4_pivot_min(const rctf *dst, const rctf *src, float matrix[4][4])
 {
   BLI_rctf_transform_calc_m4_pivot_min_ex(dst, src, matrix, 0, 1);
+}
+
+void BLI_rctf_transform_calc_m3_pivot_min(const rctf *dst, const rctf *src, float matrix[3][3])
+{
+  unit_m3(matrix);
+
+  matrix[0][0] = BLI_rctf_size_x(src) / BLI_rctf_size_x(dst);
+  matrix[1][1] = BLI_rctf_size_y(src) / BLI_rctf_size_y(dst);
+  matrix[2][0] = (src->xmin - dst->xmin) * matrix[0][0];
+  matrix[2][1] = (src->ymin - dst->ymin) * matrix[1][1];
 }
 
 void BLI_rcti_translate(rcti *rect, int x, int y)
@@ -1122,13 +1142,80 @@ void BLI_rctf_rotate_expand(rctf *dst, const rctf *src, const float angle)
 
 #undef ROTATE_SINCOS
 
+void BLI_rctf_rotate_expand_around(rctf *dst,
+                                   const rctf *src,
+                                   const float pivot[2],
+                                   const float angle)
+{
+  const float cent[2] = {BLI_rctf_cent_x(src) - pivot[0], BLI_rctf_cent_y(src) - pivot[1]};
+  const float sin_a = sinf(angle);
+  const float cos_a = cosf(angle);
+  const float cent_rot[2] = {cent[0] * cos_a - cent[1] * sin_a, cent[0] * sin_a + cent[1] * cos_a};
+
+  BLI_rctf_rotate_expand(dst, src, angle);
+  BLI_rctf_translate(dst, cent_rot[0] - cent[0], cent_rot[1] - cent[1]);
+}
+
+bool BLI_rctf_clamp_segment(const rctf *rect, float s1[2], float s2[2])
+{
+  const bool p1_inside = BLI_rctf_isect_pt_v(rect, s1);
+  const bool p2_inside = BLI_rctf_isect_pt_v(rect, s2);
+  if (p1_inside && p2_inside) {
+    return true;
+  }
+
+  const std::array<float2, 2> top_line = {float2{rect->xmin, rect->ymax},
+                                          float2{rect->xmax, rect->ymax}};
+  const std::array<float2, 2> bottom_line = {float2{rect->xmin, rect->ymin},
+                                             float2{rect->xmax, rect->ymin}};
+  const std::array<float2, 2> left_line = {float2{rect->xmin, rect->ymin},
+                                           float2{rect->xmin, rect->ymax}};
+  const std::array<float2, 2> right_line = {float2{rect->xmax, rect->ymin},
+                                            float2{rect->xmax, rect->ymax}};
+  const std::array<std::array<float2, 2>, 4> lines = {
+      top_line, bottom_line, left_line, right_line};
+
+  if (p1_inside && !p2_inside) {
+    for (const std::array<float2, 2> &line : lines) {
+      float2 intersection;
+      if (isect_seg_seg_v2_point(s1, s2, line[0], line[1], intersection) == 1) {
+        copy_v2_v2(s2, intersection);
+      }
+    }
+    return true;
+  }
+  if (!p1_inside && p2_inside) {
+    for (const std::array<float2, 2> &line : lines) {
+      float2 intersection;
+      if (isect_seg_seg_v2_point(s1, s2, line[0], line[1], intersection) == 1) {
+        copy_v2_v2(s1, intersection);
+      }
+    }
+    return true;
+  }
+
+  for (const std::array<float2, 2> &line : lines) {
+    float2 intersection;
+    if (isect_seg_seg_v2_point(s1, s2, line[0], line[1], intersection) == 1) {
+      copy_v2_v2(s1, intersection);
+    }
+    else {
+      return false;
+    }
+  }
+  for (const std::array<float2, 2> &line : lines) {
+    float2 intersection;
+    if (isect_seg_seg_v2_point(s2, s1, line[0], line[1], intersection) == 1) {
+      copy_v2_v2(s2, intersection);
+    }
+    else {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 /** \} */
 
-static void unit_m4(float m[4][4])
-{
-  m[0][0] = m[1][1] = m[2][2] = m[3][3] = 1.0f;
-  m[0][1] = m[0][2] = m[0][3] = 0.0f;
-  m[1][0] = m[1][2] = m[1][3] = 0.0f;
-  m[2][0] = m[2][1] = m[2][3] = 0.0f;
-  m[3][0] = m[3][1] = m[3][2] = 0.0f;
-}
+}  // namespace blender

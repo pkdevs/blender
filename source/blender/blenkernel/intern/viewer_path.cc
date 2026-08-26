@@ -7,35 +7,34 @@
 #include "BKE_viewer_path.hh"
 
 #include "BLI_index_range.hh"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 
 #include "MEM_guardedalloc.h"
 
 #include "BLO_read_write.hh"
 
-using blender::IndexRange;
-using blender::StringRef;
+namespace blender {
 
 void BKE_viewer_path_init(ViewerPath *viewer_path)
 {
-  BLI_listbase_clear(&viewer_path->path);
+  viewer_path->path.clear_no_delete();
 }
 
 void BKE_viewer_path_clear(ViewerPath *viewer_path)
 {
-  LISTBASE_FOREACH_MUTABLE (ViewerPathElem *, elem, &viewer_path->path) {
-    BKE_viewer_path_elem_free(elem);
+  for (ViewerPathElem &elem : viewer_path->path.items_mutable()) {
+    BKE_viewer_path_elem_free(&elem);
   }
-  BLI_listbase_clear(&viewer_path->path);
+  viewer_path->path.clear_no_delete();
 }
 
 void BKE_viewer_path_copy(ViewerPath *dst, const ViewerPath *src)
 {
   BKE_viewer_path_init(dst);
-  LISTBASE_FOREACH (const ViewerPathElem *, src_elem, &src->path) {
-    ViewerPathElem *new_elem = BKE_viewer_path_elem_copy(src_elem);
+  for (const ViewerPathElem &src_elem : src->path) {
+    ViewerPathElem *new_elem = BKE_viewer_path_elem_copy(&src_elem);
     BLI_addtail(&dst->path, new_elem);
   }
 }
@@ -60,69 +59,80 @@ bool BKE_viewer_path_equal(const ViewerPath *a,
   return false;
 }
 
+uint64_t BKE_viewer_path_hash(const ViewerPath &viewer_path)
+{
+  uint64_t hash = 0;
+  for (ViewerPathElem &elem : viewer_path.path) {
+    const uint64_t elem_hash = BKE_viewer_path_elem_hash(elem);
+    hash = get_default_hash(hash, elem_hash);
+  }
+  return hash;
+}
+
 void BKE_viewer_path_blend_write(BlendWriter *writer, const ViewerPath *viewer_path)
 {
-  LISTBASE_FOREACH (ViewerPathElem *, elem, &viewer_path->path) {
-    switch (ViewerPathElemType(elem->type)) {
+  for (ViewerPathElem &elem : viewer_path->path) {
+    switch (ViewerPathElemType(elem.type)) {
       case VIEWER_PATH_ELEM_TYPE_ID: {
-        const auto *typed_elem = reinterpret_cast<IDViewerPathElem *>(elem);
-        BLO_write_struct(writer, IDViewerPathElem, typed_elem);
+        const auto *typed_elem = reinterpret_cast<IDViewerPathElem *>(&elem);
+        writer->write_struct(typed_elem);
         break;
       }
       case VIEWER_PATH_ELEM_TYPE_MODIFIER: {
-        const auto *typed_elem = reinterpret_cast<ModifierViewerPathElem *>(elem);
-        BLO_write_struct(writer, ModifierViewerPathElem, typed_elem);
-        BLO_write_string(writer, typed_elem->modifier_name);
+        const auto *typed_elem = reinterpret_cast<ModifierViewerPathElem *>(&elem);
+        writer->write_struct(typed_elem);
         break;
       }
       case VIEWER_PATH_ELEM_TYPE_GROUP_NODE: {
-        const auto *typed_elem = reinterpret_cast<GroupNodeViewerPathElem *>(elem);
-        BLO_write_struct(writer, GroupNodeViewerPathElem, typed_elem);
+        const auto *typed_elem = reinterpret_cast<GroupNodeViewerPathElem *>(&elem);
+        writer->write_struct(typed_elem);
         break;
       }
       case VIEWER_PATH_ELEM_TYPE_SIMULATION_ZONE: {
-        const auto *typed_elem = reinterpret_cast<SimulationZoneViewerPathElem *>(elem);
-        BLO_write_struct(writer, SimulationZoneViewerPathElem, typed_elem);
+        const auto *typed_elem = reinterpret_cast<SimulationZoneViewerPathElem *>(&elem);
+        writer->write_struct(typed_elem);
         break;
       }
       case VIEWER_PATH_ELEM_TYPE_VIEWER_NODE: {
-        const auto *typed_elem = reinterpret_cast<ViewerNodeViewerPathElem *>(elem);
-        BLO_write_struct(writer, ViewerNodeViewerPathElem, typed_elem);
+        const auto *typed_elem = reinterpret_cast<ViewerNodeViewerPathElem *>(&elem);
+        writer->write_struct(typed_elem);
         break;
       }
       case VIEWER_PATH_ELEM_TYPE_REPEAT_ZONE: {
-        const auto *typed_elem = reinterpret_cast<RepeatZoneViewerPathElem *>(elem);
-        BLO_write_struct(writer, RepeatZoneViewerPathElem, typed_elem);
+        const auto *typed_elem = reinterpret_cast<RepeatZoneViewerPathElem *>(&elem);
+        writer->write_struct(typed_elem);
         break;
       }
       case VIEWER_PATH_ELEM_TYPE_FOREACH_GEOMETRY_ELEMENT_ZONE: {
         const auto *typed_elem = reinterpret_cast<ForeachGeometryElementZoneViewerPathElem *>(
-            elem);
-        BLO_write_struct(writer, ForeachGeometryElementZoneViewerPathElem, typed_elem);
+            &elem);
+        writer->write_struct(typed_elem);
+        break;
+      }
+      case VIEWER_PATH_ELEM_TYPE_EVALUATE_CLOSURE: {
+        const auto *typed_elem = reinterpret_cast<EvaluateClosureNodeViewerPathElem *>(&elem);
+        writer->write_struct(typed_elem);
         break;
       }
     }
-    BLO_write_string(writer, elem->ui_name);
+    writer->write_string(elem.ui_name);
   }
 }
 
 void BKE_viewer_path_blend_read_data(BlendDataReader *reader, ViewerPath *viewer_path)
 {
   BLO_read_struct_list(reader, ViewerPathElem, &viewer_path->path);
-  LISTBASE_FOREACH (ViewerPathElem *, elem, &viewer_path->path) {
-    BLO_read_string(reader, &elem->ui_name);
-    switch (ViewerPathElemType(elem->type)) {
+  for (ViewerPathElem &elem : viewer_path->path) {
+    BLO_read_string(reader, &elem.ui_name);
+    switch (ViewerPathElemType(elem.type)) {
       case VIEWER_PATH_ELEM_TYPE_GROUP_NODE:
       case VIEWER_PATH_ELEM_TYPE_SIMULATION_ZONE:
       case VIEWER_PATH_ELEM_TYPE_VIEWER_NODE:
       case VIEWER_PATH_ELEM_TYPE_REPEAT_ZONE:
       case VIEWER_PATH_ELEM_TYPE_FOREACH_GEOMETRY_ELEMENT_ZONE:
+      case VIEWER_PATH_ELEM_TYPE_EVALUATE_CLOSURE:
+      case VIEWER_PATH_ELEM_TYPE_MODIFIER:
       case VIEWER_PATH_ELEM_TYPE_ID: {
-        break;
-      }
-      case VIEWER_PATH_ELEM_TYPE_MODIFIER: {
-        auto *typed_elem = reinterpret_cast<ModifierViewerPathElem *>(elem);
-        BLO_read_string(reader, &typed_elem->modifier_name);
         break;
       }
     }
@@ -131,11 +141,17 @@ void BKE_viewer_path_blend_read_data(BlendDataReader *reader, ViewerPath *viewer
 
 void BKE_viewer_path_foreach_id(LibraryForeachIDData *data, ViewerPath *viewer_path)
 {
-  LISTBASE_FOREACH (ViewerPathElem *, elem, &viewer_path->path) {
-    switch (ViewerPathElemType(elem->type)) {
+  for (ViewerPathElem &elem : viewer_path->path) {
+    switch (ViewerPathElemType(elem.type)) {
       case VIEWER_PATH_ELEM_TYPE_ID: {
-        auto *typed_elem = reinterpret_cast<IDViewerPathElem *>(elem);
+        auto *typed_elem = reinterpret_cast<IDViewerPathElem *>(&elem);
         BKE_LIB_FOREACHID_PROCESS_ID(data, typed_elem->id, IDWALK_CB_DIRECT_WEAK_LINK);
+        break;
+      }
+      case VIEWER_PATH_ELEM_TYPE_EVALUATE_CLOSURE: {
+        auto *typed_elem = reinterpret_cast<EvaluateClosureNodeViewerPathElem *>(&elem);
+        BKE_LIB_FOREACHID_PROCESS_ID(
+            data, typed_elem->source_node_tree, IDWALK_CB_DIRECT_WEAK_LINK);
         break;
       }
       case VIEWER_PATH_ELEM_TYPE_MODIFIER:
@@ -150,13 +166,12 @@ void BKE_viewer_path_foreach_id(LibraryForeachIDData *data, ViewerPath *viewer_p
   }
 }
 
-void BKE_viewer_path_id_remap(ViewerPath *viewer_path,
-                              const blender::bke::id::IDRemapper &mappings)
+void BKE_viewer_path_id_remap(ViewerPath *viewer_path, const bke::id::IDRemapper &mappings)
 {
-  LISTBASE_FOREACH (ViewerPathElem *, elem, &viewer_path->path) {
-    switch (ViewerPathElemType(elem->type)) {
+  for (ViewerPathElem &elem : viewer_path->path) {
+    switch (ViewerPathElemType(elem.type)) {
       case VIEWER_PATH_ELEM_TYPE_ID: {
-        auto *typed_elem = reinterpret_cast<IDViewerPathElem *>(elem);
+        auto *typed_elem = reinterpret_cast<IDViewerPathElem *>(&elem);
         mappings.apply(&typed_elem->id, ID_REMAP_APPLY_DEFAULT);
         break;
       }
@@ -165,7 +180,8 @@ void BKE_viewer_path_id_remap(ViewerPath *viewer_path,
       case VIEWER_PATH_ELEM_TYPE_SIMULATION_ZONE:
       case VIEWER_PATH_ELEM_TYPE_VIEWER_NODE:
       case VIEWER_PATH_ELEM_TYPE_REPEAT_ZONE:
-      case VIEWER_PATH_ELEM_TYPE_FOREACH_GEOMETRY_ELEMENT_ZONE: {
+      case VIEWER_PATH_ELEM_TYPE_FOREACH_GEOMETRY_ELEMENT_ZONE:
+      case VIEWER_PATH_ELEM_TYPE_EVALUATE_CLOSURE: {
         break;
       }
     }
@@ -174,7 +190,7 @@ void BKE_viewer_path_id_remap(ViewerPath *viewer_path,
 
 template<typename T> static T *make_elem(const ViewerPathElemType type)
 {
-  T *elem = MEM_cnew<T>(__func__);
+  T *elem = MEM_new<T>(__func__);
   elem->base.type = type;
   return elem;
 }
@@ -202,6 +218,9 @@ ViewerPathElem *BKE_viewer_path_elem_new(const ViewerPathElemType type)
     }
     case VIEWER_PATH_ELEM_TYPE_FOREACH_GEOMETRY_ELEMENT_ZONE: {
       return &make_elem<ForeachGeometryElementZoneViewerPathElem>(type)->base;
+    }
+    case VIEWER_PATH_ELEM_TYPE_EVALUATE_CLOSURE: {
+      return &make_elem<EvaluateClosureNodeViewerPathElem>(type)->base;
     }
   }
   BLI_assert_unreachable();
@@ -249,6 +268,12 @@ ForeachGeometryElementZoneViewerPathElem *BKE_viewer_path_elem_new_foreach_geome
       BKE_viewer_path_elem_new(VIEWER_PATH_ELEM_TYPE_FOREACH_GEOMETRY_ELEMENT_ZONE));
 }
 
+EvaluateClosureNodeViewerPathElem *BKE_viewer_path_elem_new_evaluate_closure()
+{
+  return reinterpret_cast<EvaluateClosureNodeViewerPathElem *>(
+      BKE_viewer_path_elem_new(VIEWER_PATH_ELEM_TYPE_EVALUATE_CLOSURE));
+}
+
 ViewerPathElem *BKE_viewer_path_elem_copy(const ViewerPathElem *src)
 {
   ViewerPathElem *dst = BKE_viewer_path_elem_new(ViewerPathElemType(src->type));
@@ -265,9 +290,7 @@ ViewerPathElem *BKE_viewer_path_elem_copy(const ViewerPathElem *src)
     case VIEWER_PATH_ELEM_TYPE_MODIFIER: {
       const auto *old_elem = reinterpret_cast<const ModifierViewerPathElem *>(src);
       auto *new_elem = reinterpret_cast<ModifierViewerPathElem *>(dst);
-      if (old_elem->modifier_name != nullptr) {
-        new_elem->modifier_name = BLI_strdup(old_elem->modifier_name);
-      }
+      new_elem->modifier_uid = old_elem->modifier_uid;
       break;
     }
     case VIEWER_PATH_ELEM_TYPE_GROUP_NODE: {
@@ -303,6 +326,14 @@ ViewerPathElem *BKE_viewer_path_elem_copy(const ViewerPathElem *src)
       new_elem->index = old_elem->index;
       break;
     }
+    case VIEWER_PATH_ELEM_TYPE_EVALUATE_CLOSURE: {
+      const auto *old_elem = reinterpret_cast<const EvaluateClosureNodeViewerPathElem *>(src);
+      auto *new_elem = reinterpret_cast<EvaluateClosureNodeViewerPathElem *>(dst);
+      new_elem->source_output_node_id = old_elem->source_output_node_id;
+      new_elem->evaluate_node_id = old_elem->evaluate_node_id;
+      new_elem->source_node_tree = old_elem->source_node_tree;
+      break;
+    }
   }
   return dst;
 }
@@ -314,6 +345,11 @@ bool BKE_viewer_path_elem_equal(const ViewerPathElem *a,
   if (a->type != b->type) {
     return false;
   }
+  if (flag & VIEWER_PATH_EQUAL_FLAG_CONSIDER_UI_NAME) {
+    if (StringRef(a->ui_name) != StringRef(b->ui_name)) {
+      return false;
+    }
+  }
   switch (ViewerPathElemType(a->type)) {
     case VIEWER_PATH_ELEM_TYPE_ID: {
       const auto *a_elem = reinterpret_cast<const IDViewerPathElem *>(a);
@@ -323,7 +359,7 @@ bool BKE_viewer_path_elem_equal(const ViewerPathElem *a,
     case VIEWER_PATH_ELEM_TYPE_MODIFIER: {
       const auto *a_elem = reinterpret_cast<const ModifierViewerPathElem *>(a);
       const auto *b_elem = reinterpret_cast<const ModifierViewerPathElem *>(b);
-      return StringRef(a_elem->modifier_name) == StringRef(b_elem->modifier_name);
+      return a_elem->modifier_uid == b_elem->modifier_uid;
     }
     case VIEWER_PATH_ELEM_TYPE_GROUP_NODE: {
       const auto *a_elem = reinterpret_cast<const GroupNodeViewerPathElem *>(a);
@@ -354,8 +390,61 @@ bool BKE_viewer_path_elem_equal(const ViewerPathElem *a,
              ((flag & VIEWER_PATH_EQUAL_FLAG_IGNORE_ITERATION) != 0 ||
               a_elem->index == b_elem->index);
     }
+    case VIEWER_PATH_ELEM_TYPE_EVALUATE_CLOSURE: {
+      const auto *a_elem = reinterpret_cast<const EvaluateClosureNodeViewerPathElem *>(a);
+      const auto *b_elem = reinterpret_cast<const EvaluateClosureNodeViewerPathElem *>(b);
+      return a_elem->source_output_node_id == b_elem->source_output_node_id &&
+             a_elem->evaluate_node_id == b_elem->evaluate_node_id &&
+             a_elem->source_node_tree == b_elem->source_node_tree;
+    }
   }
   return false;
+}
+
+uint64_t BKE_viewer_path_elem_hash(const ViewerPathElem &elem)
+{
+  switch (ViewerPathElemType(elem.type)) {
+    case VIEWER_PATH_ELEM_TYPE_ID: {
+      const auto &typed_elem = reinterpret_cast<const IDViewerPathElem &>(elem);
+      return get_default_hash(elem.type, typed_elem.id ? typed_elem.id->session_uid : 0);
+    }
+    case VIEWER_PATH_ELEM_TYPE_MODIFIER: {
+      const auto &typed_elem = reinterpret_cast<const ModifierViewerPathElem &>(elem);
+      return get_default_hash(elem.type, typed_elem.modifier_uid);
+    }
+    case VIEWER_PATH_ELEM_TYPE_GROUP_NODE: {
+      const auto &typed_elem = reinterpret_cast<const GroupNodeViewerPathElem &>(elem);
+      return get_default_hash(elem.type, typed_elem.node_id);
+    }
+    case VIEWER_PATH_ELEM_TYPE_SIMULATION_ZONE: {
+      const auto &typed_elem = reinterpret_cast<const SimulationZoneViewerPathElem &>(elem);
+      return get_default_hash(elem.type, typed_elem.sim_output_node_id);
+    }
+    case VIEWER_PATH_ELEM_TYPE_VIEWER_NODE: {
+      const auto &typed_elem = reinterpret_cast<const ViewerNodeViewerPathElem &>(elem);
+      return get_default_hash(elem.type, typed_elem.node_id);
+    }
+    case VIEWER_PATH_ELEM_TYPE_REPEAT_ZONE: {
+      const auto &typed_elem = reinterpret_cast<const RepeatZoneViewerPathElem &>(elem);
+      return get_default_hash(elem.type, typed_elem.repeat_output_node_id, typed_elem.iteration);
+    }
+    case VIEWER_PATH_ELEM_TYPE_FOREACH_GEOMETRY_ELEMENT_ZONE: {
+      const auto &typed_elem = reinterpret_cast<const ForeachGeometryElementZoneViewerPathElem &>(
+          elem);
+      return get_default_hash(elem.type, typed_elem.zone_output_node_id, typed_elem.index);
+    }
+    case VIEWER_PATH_ELEM_TYPE_EVALUATE_CLOSURE: {
+      const auto &typed_elem = reinterpret_cast<const EvaluateClosureNodeViewerPathElem &>(elem);
+      return get_default_hash(
+          elem.type,
+          typed_elem.evaluate_node_id,
+          typed_elem.source_output_node_id,
+          typed_elem.source_node_tree ?
+              reinterpret_cast<const ID *>(typed_elem.source_node_tree)->session_uid :
+              0);
+    }
+  }
+  return 0;
 }
 
 void BKE_viewer_path_elem_free(ViewerPathElem *elem)
@@ -366,17 +455,16 @@ void BKE_viewer_path_elem_free(ViewerPathElem *elem)
     case VIEWER_PATH_ELEM_TYPE_SIMULATION_ZONE:
     case VIEWER_PATH_ELEM_TYPE_VIEWER_NODE:
     case VIEWER_PATH_ELEM_TYPE_REPEAT_ZONE:
-    case VIEWER_PATH_ELEM_TYPE_FOREACH_GEOMETRY_ELEMENT_ZONE: {
-      break;
-    }
-    case VIEWER_PATH_ELEM_TYPE_MODIFIER: {
-      auto *typed_elem = reinterpret_cast<ModifierViewerPathElem *>(elem);
-      MEM_SAFE_FREE(typed_elem->modifier_name);
-      break;
+    case VIEWER_PATH_ELEM_TYPE_FOREACH_GEOMETRY_ELEMENT_ZONE:
+    case VIEWER_PATH_ELEM_TYPE_EVALUATE_CLOSURE: {
+      case VIEWER_PATH_ELEM_TYPE_MODIFIER:
+        break;
     }
   }
   if (elem->ui_name) {
-    MEM_freeN(elem->ui_name);
+    MEM_delete(elem->ui_name);
   }
-  MEM_freeN(elem);
+  MEM_delete(elem);
 }
+
+}  // namespace blender

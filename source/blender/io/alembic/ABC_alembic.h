@@ -12,17 +12,19 @@
 
 #include "DEG_depsgraph.hh"
 
+namespace blender {
+
 struct CacheArchiveHandle;
 struct CacheFileLayer;
+struct CacheObjectPath;
 struct CacheReader;
-struct ListBase;
 struct Main;
 struct Mesh;
 struct Object;
 struct Scene;
 struct bContext;
 
-int ABC_get_version(void);
+int ABC_get_version();
 
 struct AlembicExportParams {
   double frame_start;
@@ -42,7 +44,6 @@ struct AlembicExportParams {
   bool apply_subdiv;
   bool curves_as_mesh;
   bool flatten_hierarchy;
-  bool visible_objects_only;
   bool face_sets;
   bool use_subdiv_schema;
   bool packuv;
@@ -60,7 +61,7 @@ struct AlembicExportParams {
 
   float global_scale;
 
-  char collection[MAX_IDPROP_NAME] = "";
+  char collection[MAX_ID_NAME - 2] = "";
 };
 
 struct AlembicImportParams {
@@ -68,7 +69,7 @@ struct AlembicImportParams {
    * as what Blender expects (e.g. centimeters instead of meters). */
   float global_scale;
 
-  blender::Vector<std::string> paths;
+  Vector<std::string> paths;
 
   /* Last frame number of consecutive files to expect if the cached animation is split in a
    * sequence. */
@@ -111,7 +112,7 @@ bool ABC_import(struct bContext *C,
 struct CacheArchiveHandle *ABC_create_handle(const struct Main *bmain,
                                              const char *filepath,
                                              const struct CacheFileLayer *layers,
-                                             struct ListBase *object_paths);
+                                             ListBaseT<CacheObjectPath> *object_paths);
 
 void ABC_free_handle(struct CacheArchiveHandle *handle);
 
@@ -120,25 +121,23 @@ void ABC_get_transform(struct CacheReader *reader,
                        double time,
                        float scale);
 
-typedef struct ABCReadParams {
+struct ABCReadParams {
   double time;
   int read_flags;
   const char *velocity_name;
   float velocity_scale;
-} ABCReadParams;
+};
 
-#ifdef __cplusplus
-namespace blender::bke {
+namespace bke {
 struct GeometrySet;
 }
 
 /* Either modifies the existing geometry component, or create a new one. */
 void ABC_read_geometry(CacheReader *reader,
                        Object *ob,
-                       blender::bke::GeometrySet &geometry_set,
+                       bke::GeometrySet &geometry_set,
                        const ABCReadParams *params,
                        const char **r_err_str);
-#endif
 
 bool ABC_mesh_topology_changed(struct CacheReader *reader,
                                struct Object *ob,
@@ -153,3 +152,5 @@ struct CacheReader *CacheReader_open_alembic_object(struct CacheArchiveHandle *h
                                                     struct Object *object,
                                                     const char *object_path,
                                                     bool is_sequence);
+
+}  // namespace blender

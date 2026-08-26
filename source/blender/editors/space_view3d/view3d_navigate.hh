@@ -8,7 +8,17 @@
 
 #pragma once
 
-#include "BLI_utildefines.h"
+#include <optional>
+
+#include "MEM_guardedalloc.h"
+
+#include "BLI_bounds_types.hh"
+#include "BLI_enum_flags.hh"
+#include "BLI_math_vector_types.hh"
+
+#include "DNA_windowmanager_enums.h"
+
+namespace blender {
 
 /**
  * Size of the sphere being dragged for trackball rotation within the view bounds.
@@ -23,6 +33,7 @@ struct RegionView3D;
 struct Scene;
 struct ScrArea;
 struct View3D;
+struct ViewOpsData;
 struct bContext;
 struct Object;
 struct PointerRNA;
@@ -34,6 +45,11 @@ struct wmOperatorType;
 struct wmTimer;
 struct wmWindow;
 struct wmWindowManager;
+struct ViewLayer;
+
+enum eRegionView3D_View : char;
+enum eRegionView3D_ViewAxisRoll : char;
+enum eRegionView3D_Persp : char;
 
 enum eV3D_OpPropFlag {
   V3D_OP_PROP_MOUSE_CO = (1 << 0),
@@ -41,7 +57,7 @@ enum eV3D_OpPropFlag {
   V3D_OP_PROP_USE_ALL_REGIONS = (1 << 2),
   V3D_OP_PROP_USE_MOUSE_INIT = (1 << 3),
 };
-ENUM_OPERATORS(eV3D_OpPropFlag, V3D_OP_PROP_USE_MOUSE_INIT);
+ENUM_OPERATORS(eV3D_OpPropFlag);
 
 enum eV3D_OpEvent {
   VIEW_PASS = 0,
@@ -79,14 +95,20 @@ enum eViewOpsFlag {
 
   VIEWOPS_FLAG_INIT_ZFAC = (1 << 4),
 };
-ENUM_OPERATORS(eViewOpsFlag, VIEWOPS_FLAG_INIT_ZFAC);
+ENUM_OPERATORS(eViewOpsFlag);
 
 struct ViewOpsType {
   eViewOpsFlag flag;
   const char *idname;
   bool (*poll_fn)(bContext *C);
-  int (*init_fn)(bContext *C, ViewOpsData *vod, const wmEvent *event, PointerRNA *ptr);
-  int (*apply_fn)(bContext *C, ViewOpsData *vod, const eV3D_OpEvent event_code, const int xy[2]);
+  wmOperatorStatus (*init_fn)(bContext *C,
+                              ViewOpsData *vod,
+                              const wmEvent *event,
+                              PointerRNA *ptr);
+  wmOperatorStatus (*apply_fn)(bContext *C,
+                               ViewOpsData *vod,
+                               const eV3D_OpEvent event_code,
+                               const int xy[2]);
 };
 
 /** Generic View Operator Custom-Data */
@@ -107,29 +129,30 @@ struct ViewOpsData {
 
     /** These variables reflect the same in #RegionView3D. */
 
-    float ofs[3];        /* DOLLY, MOVE, ROTATE and ZOOM. */
-    float ofs_lock[2];   /* MOVE. */
-    float camdx, camdy;  /* MOVE and ZOOM. */
-    float camzoom;       /* ZOOM. */
-    float dist;          /* ROTATE and ZOOM. */
-    float quat[4];       /* ROLL and ROTATE. */
-    char persp;          /* ROTATE. */
-    char view;           /* ROTATE. */
-    char view_axis_roll; /* ROTATE. */
+    float ofs[3];                              /* DOLLY, MOVE, ROTATE and ZOOM. */
+    float ofs_lock[2];                         /* MOVE. */
+    float camdx, camdy;                        /* MOVE and ZOOM. */
+    float camzoom;                             /* ZOOM. */
+    float camroll;                             /* ROLL. */
+    float dist;                                /* ROTATE and ZOOM. */
+    float quat[4];                             /* ROLL and ROTATE. */
+    eRegionView3D_Persp persp;                 /* ROTATE. */
+    eRegionView3D_View view;                   /* ROTATE. */
+    eRegionView3D_ViewAxisRoll view_axis_roll; /* ROTATE. */
 
     /**
      * #RegionView3D.persp set after auto-perspective is applied.
      * If we want the value before running the operator, add a separate member.
      */
-    char persp_with_auto_persp_applied;
+    eRegionView3D_Persp persp_with_auto_persp_applied;
 
     /** The ones below are unrelated to the state of the 3D view. */
 
     /** #wmEvent.xy. */
-    int event_xy[2];
+    int2 event_xy;
     /* Offset used when "use_cursor_init" is false to simulate pressing in the middle of the
      * region. */
-    int event_xy_offset[2];
+    int2 event_xy_offset;
     /** #wmEvent.type that triggered the operator. */
     int event_type;
 
@@ -197,12 +220,13 @@ struct ViewOpsData {
 bool view3d_location_poll(bContext *C);
 bool view3d_rotation_poll(bContext *C);
 bool view3d_zoom_or_dolly_poll(bContext *C);
+bool view3d_zoom_or_dolly_or_rotation_poll(bContext *C);
 
-int view3d_navigate_invoke_impl(bContext *C,
-                                wmOperator *op,
-                                const wmEvent *event,
-                                const ViewOpsType *nav_type);
-int view3d_navigate_modal_fn(bContext *C, wmOperator *op, const wmEvent *event);
+wmOperatorStatus view3d_navigate_invoke_impl(bContext *C,
+                                             wmOperator *op,
+                                             const wmEvent *event,
+                                             const ViewOpsType *nav_type);
+wmOperatorStatus view3d_navigate_modal_fn(bContext *C, wmOperator *op, const wmEvent *event);
 void view3d_navigate_cancel_fn(bContext *C, wmOperator *op);
 
 void calctrackballvec(const rcti *rect, const int event_xy[2], float r_dir[3]);
@@ -214,6 +238,44 @@ void view3d_orbit_apply_dyn_ofs(float r_ofs[3],
                                 const float dyn_ofs[3]);
 void viewrotate_apply_dyn_ofs(ViewOpsData *vod, const float viewquat_new[4]);
 bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3]);
+
+/**
+ * Roll `quat` about the view Z axis, aligning the views X axis to the horizon.
+ *
+ * \param quat: The view rotation to correct, typically #RegionView3D.viewquat.
+ * \param horizon_plane: Normal of the horizon plane, typically the global Z axis (normalized).
+ * \param horizon_plane_no_flip: When upside down, align to the flipped horizon
+ * instead of rotating the view more than 90 degrees.
+ * \param axis_fallback: The horizon X axis, used when the view looks along `horizon_plane`
+ * and it can't be calculated (normalized). When null or parallel to `horizon_plane`,
+ * `quat` is left unchanged. Its sign sets which way is zero roll,
+ * when `horizon_plane_no_flip` is enabled the sign doesn't matter.
+ * \param angle_target: The roll to rotate to, zero levels the view.
+ * \param factor: The amount to correct, 0.0 for no change, 1.0 to align exactly.
+ * \return the angle needed to fully level the view, zero when it's already level.
+ */
+float view3d_horizon_correct_quat(float quat[4],
+                                  const float horizon_plane[3],
+                                  bool horizon_plane_no_flip,
+                                  const float axis_fallback[3],
+                                  float angle_target,
+                                  float factor);
+
+/**
+ * A version of #view3d_horizon_correct_quat, used to implement view roll alignment that eases-out.
+ *
+ * Useful for interactive operations that correct the roll each update (continuously),
+ * slowing as the view comes level.
+ *
+ * \note A view rolled exactly 180 degrees never rotates, in practice input passes through this.
+ *
+ * \return the angle rotated by before being scaled by `factor`.
+ * Zero when no correction was applied.
+ */
+float view3d_horizon_correct_quat_ease_out(float quat[4],
+                                           const float horizon_plane[3],
+                                           bool horizon_plane_no_flip,
+                                           float factor);
 
 void view3d_operator_properties_common(wmOperatorType *ot, const eV3D_OpPropFlag flag);
 
@@ -229,13 +291,16 @@ ViewOpsData *viewops_data_create(bContext *C,
                                  const wmEvent *event,
                                  const ViewOpsType *nav_type,
                                  const bool use_cursor_init);
+/**
+ * \param align_to_quat: When not nullptr, set the axis relative to this rotation.
+ */
 void axis_set_view(bContext *C,
                    View3D *v3d,
                    ARegion *region,
                    const float quat_[4],
-                   char view,
-                   char view_axis_roll,
-                   int perspo,
+                   eRegionView3D_View view,
+                   eRegionView3D_ViewAxisRoll view_axis_roll,
+                   eRegionView3D_Persp perspo,
                    const float *align_to_quat,
                    const int smooth_viewtx);
 
@@ -266,7 +331,7 @@ struct wmNDOFMotionData;
 /**
  * Called from both fly mode and walk mode,
  */
-void view3d_ndof_fly(const wmNDOFMotionData *ndof,
+void view3d_ndof_fly(const wmNDOFMotionData &ndof,
                      View3D *v3d,
                      RegionView3D *rv3d,
                      bool use_precision,
@@ -374,6 +439,37 @@ void VIEW3D_OT_smoothview(wmOperatorType *ot);
 
 /* view3d_navigate_view_all.cc */
 
+/**
+ * Return the bounds of visible contents of the 3D viewport.
+ *
+ * \param depsgraph: The evaluated depsgraph.
+ * \param clip_bounds: Clip the bounds by the viewport clipping.
+ */
+std::optional<Bounds<float3>> view3d_calc_minmax_visible(
+    Depsgraph *depsgraph, ScrArea *area, ARegion *region, bool use_all_regions, bool clip_bounds);
+/**
+ * Return the bounds of selected contents of the 3D viewport.
+ * \param depsgraph: The evaluated depsgraph.
+ * \param clip_bounds: Clip the bounds by the viewport clipping.
+ * \param r_do_zoom: When false, the bounds should be treated as a point
+ * (don't zoom to view the point).
+ */
+std::optional<Bounds<float3>> view3d_calc_minmax_selected(Depsgraph *depsgraph,
+                                                          ScrArea *area,
+                                                          ARegion *region,
+                                                          bool use_all_regions,
+                                                          bool clip_bounds,
+                                                          bool *r_do_zoom);
+
+/**
+ * Iterate over objects and check if `point` might is inside any of them.
+ */
+bool view3d_calc_point_in_selected_bounds(Depsgraph *depsgraph,
+                                          struct ViewLayer *view_layer_eval,
+                                          const View3D *v3d,
+                                          const float3 &point,
+                                          const float scale_margin);
+
 void VIEW3D_OT_view_all(wmOperatorType *ot);
 void VIEW3D_OT_view_selected(wmOperatorType *ot);
 
@@ -420,3 +516,5 @@ extern const ViewOpsType ViewOpsType_zoom;
 /* view3d_navigate_zoom_border.cc */
 
 void VIEW3D_OT_zoom_border(wmOperatorType *ot);
+
+}  // namespace blender

@@ -9,531 +9,414 @@
 #include <cstddef>
 #include <cstdlib>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "DNA_scene_types.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_vector.hh"
+
 #include "MEM_guardedalloc.h"
 
+#include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_sequence_types.h"
+#include "DNA_space_types.h"
+
+#include "BKE_scene.hh"
 
 #include "ED_transform.hh"
 
-#include "SEQ_retiming.hh"
 #include "UI_view2d.hh"
 
 #include "SEQ_channels.hh"
-#include "SEQ_effects.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_render.hh"
 #include "SEQ_retiming.hh"
 #include "SEQ_sequencer.hh"
-#include "SEQ_time.hh"
 #include "SEQ_transform.hh"
 
 #include "transform.hh"
 #include "transform_convert.hh"
 #include "transform_snap.hh"
 
+namespace blender::ed::transform {
+
 struct TransSeqSnapData {
-  blender::Array<blender::float2> source_snap_points;
-  blender::Array<blender::float2> target_snap_points;
+  Vector<float2> sources;
+  Vector<float2> targets;
 
   MEM_CXX_CLASS_ALLOC_FUNCS("TransSeqSnapData")
 };
 
+/* In timeline snap data, a channel of 0 indicates "this snap type always applies to all channels",
+ * e.g. for snapping to frame ranges or markers, rather than individual strips.  */
+static constexpr int all_channels = 0;
+
 /* -------------------------------------------------------------------- */
-/** \name Snap sources
+/** \name Snap Utilities
  * \{ */
 
-static blender::VectorSet<Sequence *> query_snap_sources_timeline(
-    const Scene *scene, blender::Map<SeqRetimingKey *, Sequence *> &retiming_selection)
+static float snap_distance_view_threshold_get(const TransInfo *t)
 {
-  blender::VectorSet<Sequence *> snap_sources;
-
-  ListBase *seqbase = SEQ_active_seqbase_get(SEQ_editing_get(scene));
-  snap_sources = SEQ_query_selected_strips(seqbase);
-
-  /* Add strips owned by retiming keys to exclude these from targets */
-  for (Sequence *seq : retiming_selection.values()) {
-    snap_sources.add(seq);
-  }
-
-  return snap_sources;
+  const int snap_distance = seq::tool_settings_snap_distance_get(t->scene);
+  const View2D *v2d = &t->region->v2d;
+  return ui::view2d_region_to_view_x(v2d, snap_distance) - ui::view2d_region_to_view_x(v2d, 0);
 }
 
-static blender::VectorSet<Sequence *> query_snap_sources_preview(const Scene *scene)
+static int snap_distance_frame_threshold_get(const TransInfo *t)
 {
-  blender::VectorSet<Sequence *> snap_sources;
-
-  Editing *ed = SEQ_editing_get(scene);
-  ListBase *channels = SEQ_channels_displayed_get(ed);
-
-  snap_sources = SEQ_query_rendered_strips(scene, channels, ed->seqbasep, scene->r.cfra, 0);
-  snap_sources.remove_if([&](Sequence *seq) { return (seq->flag & SELECT) == 0; });
-
-  return snap_sources;
-}
-
-static int seq_get_snap_source_points_count_timeline(const blender::Span<Sequence *> snap_sources)
-{
-  return snap_sources.size() * 2;
-}
-
-static int seq_get_snap_source_points_count_preview(const blender::Span<Sequence *> snap_sources)
-{
-  /* Source points are four corners and the center of an image quad. */
-  return snap_sources.size() * 5;
-}
-
-static int cmp_fn(const void *a, const void *b)
-{
-  return round_fl_to_int((*(blender::float2 *)a)[0] - (*(blender::float2 *)b)[0]);
-}
-
-static void seq_snap_source_points_build_timeline_strips(
-    const Scene *scene, TransSeqSnapData *snap_data, const blender::Span<Sequence *> snap_sources)
-{
-
-  const size_t point_count_source = seq_get_snap_source_points_count_timeline(snap_sources);
-  if (point_count_source == 0) {
-    return;
-  }
-
-  snap_data->source_snap_points.reinitialize(point_count_source);
-  int i = 0;
-  for (Sequence *seq : snap_sources) {
-    int left = 0, right = 0;
-    if (seq->flag & SEQ_LEFTSEL && !(seq->flag & SEQ_RIGHTSEL)) {
-      left = right = SEQ_time_left_handle_frame_get(scene, seq);
-    }
-    else if (seq->flag & SEQ_RIGHTSEL && !(seq->flag & SEQ_LEFTSEL)) {
-      left = right = SEQ_time_right_handle_frame_get(scene, seq);
-    }
-    else {
-      left = SEQ_time_left_handle_frame_get(scene, seq);
-      right = SEQ_time_right_handle_frame_get(scene, seq);
-    }
-
-    /* Set only the x-positions when snapping in the timeline. */
-    snap_data->source_snap_points[i][0] = left;
-    snap_data->source_snap_points[i + 1][0] = right;
-    i += 2;
-    BLI_assert(i <= snap_data->source_snap_points.size());
-  }
-
-  qsort(snap_data->source_snap_points.data(),
-        snap_data->source_snap_points.size(),
-        sizeof(blender::float2),
-        cmp_fn);
-}
-
-static void seq_snap_source_points_build_timeline_retiming(
-    const Scene *scene,
-    TransSeqSnapData *snap_data,
-    const blender::Map<SeqRetimingKey *, Sequence *> &retiming_selection)
-{
-
-  const size_t point_count_source = retiming_selection.size();
-  if (point_count_source == 0) {
-    return;
-  }
-
-  snap_data->source_snap_points.reinitialize(point_count_source);
-  int i = 0;
-  for (auto item : retiming_selection.items()) {
-    const int key_frame = SEQ_retiming_key_timeline_frame_get(scene, item.value, item.key);
-    snap_data->source_snap_points[i][0] = key_frame;
-    i++;
-  }
-
-  qsort(snap_data->source_snap_points.data(),
-        snap_data->source_snap_points.size(),
-        sizeof(blender::float2),
-        cmp_fn);
-}
-
-static bool seq_snap_source_points_build_preview(const Scene *scene,
-                                                 TransSeqSnapData *snap_data,
-                                                 const blender::Span<Sequence *> snap_sources)
-{
-
-  const size_t point_count_source = seq_get_snap_source_points_count_preview(snap_sources);
-  if (point_count_source == 0) {
-    return false;
-  }
-
-  snap_data->source_snap_points.reinitialize(point_count_source);
-  int i = 0;
-  for (Sequence *seq : snap_sources) {
-    float seq_image_quad[4][2];
-    SEQ_image_transform_final_quad_get(scene, seq, seq_image_quad);
-
-    for (int j = 0; j < 4; j++) {
-      snap_data->source_snap_points[i][0] = seq_image_quad[j][0];
-      snap_data->source_snap_points[i][1] = seq_image_quad[j][1];
-      i++;
-    }
-
-    /* Add origins last */
-    float image_origin[2];
-    SEQ_image_transform_origin_offset_pixelspace_get(scene, seq, image_origin);
-    snap_data->source_snap_points[i][0] = image_origin[0];
-    snap_data->source_snap_points[i][1] = image_origin[1];
-    i++;
-
-    BLI_assert(i <= snap_data->source_snap_points.size());
-  }
-
-  return true;
+  return round_fl_to_int(snap_distance_view_threshold_get(t));
 }
 
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Snap targets
+/** \name Strip Sources
  * \{ */
 
-/* Add effect strips directly or indirectly connected to `seq_reference` to `collection`. */
-static void query_strip_effects_fn(const Scene *scene,
-                                   Sequence *seq_reference,
-                                   ListBase *seqbase,
-                                   blender::VectorSet<Sequence *> &strips)
+static VectorSet<Strip *> query_strip_sources_timeline(const Scene *scene)
 {
-  if (strips.contains(seq_reference)) {
-    return; /* Strip is already in set, so all effects connected to it are as well. */
-  }
-  strips.add(seq_reference);
+  const Editing *ed = seq::editing_get(scene);
+  const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
+  ListBaseT<Strip> *seqbase = seq::active_seqbase_get(ed);
 
-  /* Find all strips connected to `seq_reference`. */
-  LISTBASE_FOREACH (Sequence *, seq_test, seqbase) {
-    if (SEQ_relation_is_effect_of_strip(seq_test, seq_reference)) {
-      query_strip_effects_fn(scene, seq_test, seqbase, strips);
-    }
+  VectorSet<Strip *> strip_sources = seq::query_selected_strips(seqbase);
+  strip_sources.remove_if([&](Strip *strip) { return seq::transform_is_locked(channels, strip); });
+
+  const Map retiming_selection = seq::retiming_selection_get(ed);
+  /* Strips owned by retiming keys are technically not selected,
+   * but adding them to strip sources ensures they will be properly excluded from targets. */
+  for (Strip *strip : retiming_selection.values()) {
+    strip_sources.add(strip);
   }
+
+  return strip_sources;
 }
 
-static blender::VectorSet<Sequence *> query_snap_targets_timeline(
-    Scene *scene, const blender::Span<Sequence *> snap_sources, const bool exclude_selected)
+static VectorSet<Strip *> query_strip_sources_preview(const Scene *scene)
 {
-  Editing *ed = SEQ_editing_get(scene);
-  ListBase *seqbase = SEQ_active_seqbase_get(ed);
-  ListBase *channels = SEQ_channels_displayed_get(ed);
-  const short snap_flag = SEQ_tool_settings_snap_flag_get(scene);
+  VectorSet<Strip *> strip_sources;
+
+  Editing *ed = seq::editing_get(scene);
+  ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
+
+  strip_sources = seq::query_rendered_strips(
+      scene, channels, ed->current_strips(), scene->r.cfra, 0);
+  strip_sources.remove_if([&](Strip *strip) { return (strip->flag & SEQ_SELECT) == 0; });
+
+  return strip_sources;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Strip Targets
+ * \{ */
+
+static VectorSet<Strip *> query_strip_targets_timeline(Scene *scene,
+                                                       const Span<Strip *> strip_sources,
+                                                       const bool drag_and_drop)
+{
+  Editing *ed = seq::editing_ensure(scene);
+  ListBaseT<Strip> *seqbase = seq::active_seqbase_get(ed);
+  ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
+  const short snap_flag = seq::tool_settings_snap_flag_get(scene);
 
   /* Effects will always change position with strip to which they are connected and they don't
    * have to be selected. Remove such strips from `snap_targets` collection. */
-  blender::VectorSet effects_of_snap_sources = snap_sources;
-  SEQ_iterator_set_expand(scene, seqbase, effects_of_snap_sources, query_strip_effects_fn);
-  effects_of_snap_sources.remove_if([&](Sequence *seq) {
-    return (seq->type & SEQ_TYPE_EFFECT) != 0 && SEQ_effect_get_num_inputs(seq->type) == 0;
-  });
+  VectorSet effects_of_strip_sources = strip_sources;
+  seq::expand_strips(ed, effects_of_strip_sources, seq::StripRelation::Effects);
+  effects_of_strip_sources.remove_if(
+      [&](Strip *strip) { return strip->is_effect() && !strip->is_effect_with_inputs(); });
 
-  blender::VectorSet<Sequence *> snap_targets;
-  LISTBASE_FOREACH (Sequence *, seq, seqbase) {
-    if (exclude_selected && seq->flag & SELECT) {
-      continue; /* Selected are being transformed if there is no drag and drop. */
-    }
-    if (SEQ_render_is_muted(channels, seq) && (snap_flag & SEQ_SNAP_IGNORE_MUTED)) {
+  VectorSet<Strip *> strip_targets;
+  for (Strip &strip : *seqbase) {
+    if (!drag_and_drop && strip.flag & SEQ_SELECT && !seq::transform_is_locked(channels, &strip)) {
+      /* Selected (and unlocked) strips are being transformed, they shouldn't be a target. */
       continue;
     }
-    if (seq->type == SEQ_TYPE_SOUND_RAM && (snap_flag & SEQ_SNAP_IGNORE_SOUND)) {
+    if (seq::render_is_muted(channels, &strip) && (snap_flag & SEQ_SNAP_IGNORE_MUTED)) {
       continue;
     }
-    if (effects_of_snap_sources.contains(seq)) {
+    if (strip.type == STRIP_TYPE_SOUND && (snap_flag & SEQ_SNAP_IGNORE_SOUND)) {
+      continue;
+    }
+    if (effects_of_strip_sources.contains(&strip)) {
       continue;
     }
 
-    snap_targets.add(seq);
+    strip_targets.add(&strip);
   }
 
-  return snap_targets;
+  return strip_targets;
 }
 
-static blender::VectorSet<Sequence *> query_snap_targets_preview(Scene *scene,
-                                                                 const short snap_mode)
+static VectorSet<Strip *> query_strip_targets_preview(const TransInfo *t)
 {
-  blender::VectorSet<Sequence *> snap_targets;
+  Scene *scene = t->scene;
+  short snap_mode = t->tsnap.mode;
+
+  VectorSet<Strip *> strip_targets;
 
   /* We don't need to calculate strip snap targets if the option is unselected. */
   if ((snap_mode & SEQ_SNAP_TO_STRIPS_PREVIEW) == 0) {
-    return snap_targets;
+    return strip_targets;
   }
 
-  Editing *ed = SEQ_editing_get(scene);
-  ListBase *channels = SEQ_channels_displayed_get(ed);
+  Editing *ed = seq::editing_get(scene);
+  ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
 
-  snap_targets = SEQ_query_rendered_strips(scene, channels, ed->seqbasep, scene->r.cfra, 0);
-  snap_targets.remove_if([&](Sequence *seq) { return (seq->flag & SELECT) == 1; });
+  strip_targets = seq::query_rendered_strips(
+      scene, channels, ed->current_strips(), scene->r.cfra, 0);
 
-  return snap_targets;
-}
-
-static blender::Map<SeqRetimingKey *, Sequence *> visible_retiming_keys_get(
-    const Scene *scene, blender::Span<Sequence *> snap_strip_targets)
-{
-  blender::Map<SeqRetimingKey *, Sequence *> visible_keys;
-
-  for (Sequence *seq : snap_strip_targets) {
-    for (SeqRetimingKey &key : SEQ_retiming_keys_get(seq)) {
-      const int key_frame = SEQ_retiming_key_timeline_frame_get(scene, seq, &key);
-      if (SEQ_time_strip_intersects_frame(scene, seq, key_frame)) {
-        visible_keys.add(&key, seq);
-      }
-    }
+  /* Selected strips are only valid targets when snapping the cursor or origin. */
+  if ((t->data_type == &TransConvertType_SequencerImage) && (t->flag & T_ORIGIN) == 0) {
+    strip_targets.remove_if([&](Strip *strip) { return (strip->flag & SEQ_SELECT) != 0; });
   }
 
-  return visible_keys;
-}
-
-static int seq_get_snap_target_points_count_timeline(
-    const Scene *scene,
-    const short snap_mode,
-    const blender::Span<Sequence *> snap_strip_targets,
-    const blender::Map<SeqRetimingKey *, Sequence *> &retiming_targets)
-{
-  int count = 0;
-
-  if (snap_mode & SEQ_SNAP_TO_STRIPS) {
-    count += 2; /* Strip start and end are always used. */
-  }
-
-  if (snap_mode & SEQ_SNAP_TO_STRIP_HOLD) {
-    count += 2;
-  }
-
-  count *= snap_strip_targets.size();
-
-  if (snap_mode & SEQ_SNAP_TO_CURRENT_FRAME) {
-    count++;
-  }
-
-  if (snap_mode & SEQ_SNAP_TO_MARKERS) {
-    count += BLI_listbase_count(&scene->markers);
-  }
-
-  if (snap_mode & SEQ_SNAP_TO_RETIMING) {
-    count += retiming_targets.size();
-  }
-  return count;
-}
-
-static int seq_get_snap_target_points_count_preview(const short snap_mode,
-                                                    const blender::Span<Sequence *> snap_targets)
-{
-  int count = 0;
-
-  if (snap_mode & SEQ_SNAP_TO_PREVIEW_BORDERS) {
-    /* Opposite corners of the view have enough information to snap to all four corners. */
-    count += 2;
-  }
-
-  if (snap_mode & SEQ_SNAP_TO_PREVIEW_CENTER) {
-    count++;
-  }
-
-  if (snap_mode & SEQ_SNAP_TO_STRIPS_PREVIEW) {
-    /* Snap to other strips' corners and center. */
-    count += snap_targets.size() * 5;
-  }
-
-  return count;
-}
-
-static void seq_snap_target_points_build_timeline(const Scene *scene,
-                                                  const short snap_mode,
-                                                  TransSeqSnapData *snap_data,
-                                                  const blender::Span<Sequence *> strip_targets)
-{
-  blender::Map retiming_key_targets = visible_retiming_keys_get(scene, strip_targets);
-
-  const size_t point_count_target = seq_get_snap_target_points_count_timeline(
-      scene, snap_mode, strip_targets, retiming_key_targets);
-  if (point_count_target == 0) {
-    return;
-  }
-
-  snap_data->target_snap_points.reinitialize(point_count_target);
-  int i = 0;
-
-  if (snap_mode & SEQ_SNAP_TO_CURRENT_FRAME) {
-    snap_data->target_snap_points[i][0] = scene->r.cfra;
-    i++;
-  }
-
-  if (snap_mode & SEQ_SNAP_TO_MARKERS) {
-    LISTBASE_FOREACH (TimeMarker *, marker, &scene->markers) {
-      snap_data->target_snap_points[i][0] = marker->frame;
-      i++;
-    }
-  }
-
-  for (Sequence *seq : strip_targets) {
-    snap_data->target_snap_points[i][0] = SEQ_time_left_handle_frame_get(scene, seq);
-    snap_data->target_snap_points[i + 1][0] = SEQ_time_right_handle_frame_get(scene, seq);
-    i += 2;
-
-    if (snap_mode & SEQ_SNAP_TO_STRIP_HOLD) {
-      int content_start = SEQ_time_start_frame_get(seq);
-      int content_end = SEQ_time_content_end_frame_get(scene, seq);
-
-      /* Effects and single image strips produce incorrect content length. Skip these strips. */
-      if ((seq->type & SEQ_TYPE_EFFECT) != 0 || seq->len == 1) {
-        content_start = SEQ_time_left_handle_frame_get(scene, seq);
-        content_end = SEQ_time_right_handle_frame_get(scene, seq);
-      }
-
-      CLAMP(content_start,
-            SEQ_time_left_handle_frame_get(scene, seq),
-            SEQ_time_right_handle_frame_get(scene, seq));
-      CLAMP(content_end,
-            SEQ_time_left_handle_frame_get(scene, seq),
-            SEQ_time_right_handle_frame_get(scene, seq));
-
-      snap_data->target_snap_points[i][0] = content_start;
-      snap_data->target_snap_points[i + 1][0] = content_end;
-      i += 2;
-    }
-  }
-
-  if (snap_mode & SEQ_SNAP_TO_RETIMING) {
-    for (auto item : retiming_key_targets.items()) {
-      const int key_frame = SEQ_retiming_key_timeline_frame_get(scene, item.value, item.key);
-      snap_data->target_snap_points[i][0] = key_frame;
-      i++;
-    }
-  }
-
-  BLI_assert(i <= snap_data->target_snap_points.size());
-  qsort(snap_data->target_snap_points.data(),
-        snap_data->target_snap_points.size(),
-        sizeof(blender::float2),
-        cmp_fn);
-}
-
-static bool seq_snap_target_points_build_preview(const Scene *scene,
-                                                 const View2D *v2d,
-                                                 const short snap_mode,
-                                                 TransSeqSnapData *snap_data,
-                                                 const blender::Span<Sequence *> snap_targets)
-{
-
-  const size_t point_count_target = seq_get_snap_target_points_count_preview(snap_mode,
-                                                                             snap_targets);
-  if (point_count_target == 0) {
-    return false;
-  }
-
-  snap_data->target_snap_points.reinitialize(point_count_target);
-  int i = 0;
-
-  if (snap_mode & SEQ_SNAP_TO_PREVIEW_BORDERS) {
-    snap_data->target_snap_points[i][0] = v2d->tot.xmin;
-    snap_data->target_snap_points[i][1] = v2d->tot.ymin;
-
-    snap_data->target_snap_points[i + 1][0] = v2d->tot.xmax;
-    snap_data->target_snap_points[i + 1][1] = v2d->tot.ymax;
-
-    i += 2;
-  }
-
-  if (snap_mode & SEQ_SNAP_TO_PREVIEW_CENTER) {
-    snap_data->target_snap_points[i][0] = 0;
-    snap_data->target_snap_points[i][1] = 0;
-
-    i++;
-  }
-
-  if (snap_mode & SEQ_SNAP_TO_STRIPS_PREVIEW) {
-    for (Sequence *seq : snap_targets) {
-      float seq_image_quad[4][2];
-      SEQ_image_transform_final_quad_get(scene, seq, seq_image_quad);
-
-      for (int j = 0; j < 4; j++) {
-        snap_data->target_snap_points[i][0] = seq_image_quad[j][0];
-        snap_data->target_snap_points[i][1] = seq_image_quad[j][1];
-        i++;
-      }
-
-      float image_origin[2];
-      SEQ_image_transform_origin_offset_pixelspace_get(scene, seq, image_origin);
-      snap_data->target_snap_points[i][0] = image_origin[0];
-      snap_data->target_snap_points[i][1] = image_origin[1];
-
-      i++;
-    }
-  }
-  BLI_assert(i <= snap_data->target_snap_points.size());
-
-  return true;
+  return strip_targets;
 }
 
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Snap utilities
+/** \name Sources
  * \{ */
 
-static float seq_snap_threshold_get_view_distance(const TransInfo *t)
+static int cmp_fn(const void *a, const void *b)
 {
-  const int snap_distance = SEQ_tool_settings_snap_distance_get(t->scene);
-  const View2D *v2d = &t->region->v2d;
-  return UI_view2d_region_to_view_x(v2d, snap_distance) - UI_view2d_region_to_view_x(v2d, 0);
+  return round_fl_to_int((*static_cast<float2 *>(const_cast<void *>(a)))[0] -
+                         (*static_cast<float2 *>(const_cast<void *>(b)))[0]);
 }
 
-static int seq_snap_threshold_get_frame_distance(const TransInfo *t)
+static void build_sources_timeline(const Scene *scene,
+                                   TransSeqSnapData *snap_data,
+                                   const Span<Strip *> strip_sources)
 {
-  return round_fl_to_int(seq_snap_threshold_get_view_distance(t));
+  for (Strip *strip : strip_sources) {
+    const int channel = strip->channel;
+    const int left = strip->left_handle();
+    const int right = strip->right_handle(scene);
+
+    if (strip->flag & SEQ_LEFTSEL && !(strip->flag & SEQ_RIGHTSEL)) {
+      snap_data->sources.append(float2(left, channel));
+    }
+    else if (strip->flag & SEQ_RIGHTSEL && !(strip->flag & SEQ_LEFTSEL)) {
+      snap_data->sources.append(float2(right, channel));
+    }
+    else {
+      snap_data->sources.append(float2(left, channel));
+      snap_data->sources.append(float2(right, channel));
+    }
+  }
+
+  qsort(snap_data->sources.data(), snap_data->sources.size(), sizeof(float2), cmp_fn);
+}
+
+static void build_sources_timeline_retiming(const Scene *scene, TransSeqSnapData *snap_data)
+{
+  const Editing *ed = seq::editing_get(scene);
+  const Map retiming_selection = seq::retiming_selection_get(ed);
+
+  for (auto item : retiming_selection.items()) {
+    const int channel = item.value->channel;
+    const int key_frame = seq::retiming_key_frame_get(scene, item.value, item.key);
+    snap_data->sources.append(float2(key_frame, channel));
+  }
+
+  qsort(snap_data->sources.data(), snap_data->sources.size(), sizeof(float2), cmp_fn);
+}
+
+static void build_sources_preview(const Scene *scene,
+                                  TransSeqSnapData *snap_data,
+                                  const Span<Strip *> strip_sources,
+                                  bool translate_origin)
+{
+  for (Strip *strip : strip_sources) {
+    if (!translate_origin) {
+      const Array<float2> strip_image_quad = seq::image_transform_quad_get(scene, strip);
+      for (const float2 &point : strip_image_quad) {
+        snap_data->sources.append(point);
+      }
+    }
+
+    /* Add origins last */
+    const float2 image_origin = seq::image_transform_origin_preview_offset_get(scene, strip);
+    snap_data->sources.append(image_origin);
+  }
 }
 
 /** \} */
 
-static TransSeqSnapData *transform_snap_sequencer_data_alloc_timeline_strips(const TransInfo *t)
-{
-  TransSeqSnapData *snap_data = MEM_new<TransSeqSnapData>(__func__);
+/* -------------------------------------------------------------------- */
+/** \name Targets
+ * \{ */
 
+static void build_targets_timeline(const Scene *scene,
+                                   const short snap_mode,
+                                   TransSeqSnapData *snap_data,
+                                   const Span<Strip *> strip_targets)
+{
+  if (snap_mode & SEQ_SNAP_TO_CURRENT_FRAME) {
+    snap_data->targets.append(float2(scene->r.cfra, all_channels));
+  }
+
+  if (snap_mode & SEQ_SNAP_TO_MARKERS) {
+    for (TimeMarker &marker : scene->markers) {
+      snap_data->targets.append(float2(marker.frame, all_channels));
+    }
+  }
+
+  if (snap_mode & SEQ_SNAP_TO_FRAME_RANGE) {
+    snap_data->targets.append(float2(scene->playback_start(), all_channels));
+    snap_data->targets.append(float2(scene->playback_end() + 1, all_channels));
+    /* Also snap to meta-strip display range if we are in a meta-strip. */
+    MetaStack *ms = seq::meta_stack_active_get(seq::editing_get(scene));
+    if (ms != nullptr) {
+      snap_data->targets.append(float2(ms->disp_range[0], all_channels));
+      snap_data->targets.append(float2(ms->disp_range[1], all_channels));
+    }
+  }
+
+  for (Strip *strip : strip_targets) {
+    const int channel = strip->channel;
+    /* Snap to left and right handles by default. */
+    snap_data->targets.append(float2(strip->left_handle(), channel));
+    snap_data->targets.append(float2(strip->right_handle(scene), channel));
+
+    /* Effects and strips with a single static image do not have holds. Skip these strips. */
+    if (snap_mode & SEQ_SNAP_TO_STRIP_HOLD && !strip->is_effect() &&
+        !seq::transform_single_image_check(strip))
+    {
+      if (strip->content_start() > strip->left_handle()) {
+        snap_data->targets.append(float2(strip->content_start(), channel));
+      }
+      if (strip->content_end(scene) < strip->right_handle(scene)) {
+        snap_data->targets.append(float2(strip->content_end(scene), channel));
+      }
+    }
+
+    if (snap_mode & SEQ_SNAP_TO_RETIMING) {
+      for (SeqRetimingKey &key : seq::retiming_keys_get(strip)) {
+        const int key_frame = seq::retiming_key_frame_get(scene, strip, &key);
+        /* Only add visible keyframes. */
+        if (strip->intersects_frame(scene, key_frame)) {
+          snap_data->targets.append(float2(key_frame, channel));
+        }
+      }
+    }
+  }
+
+  qsort(snap_data->targets.data(), snap_data->targets.size(), sizeof(float2), cmp_fn);
+}
+
+static void build_targets_preview(const Scene *scene,
+                                  const View2D *v2d,
+                                  const short snap_mode,
+                                  TransSeqSnapData *snap_data,
+                                  const Span<Strip *> strip_targets,
+                                  const Span<Strip *> strip_sources,
+                                  bool translate_origin)
+{
+  if (snap_mode & SEQ_SNAP_TO_PREVIEW_BORDERS) {
+    snap_data->targets.append(float2(v2d->tot.xmin, v2d->tot.ymin));
+    snap_data->targets.append(float2(v2d->tot.xmax, v2d->tot.ymax));
+    snap_data->targets.append(float2(v2d->tot.xmin, v2d->tot.ymax));
+    snap_data->targets.append(float2(v2d->tot.xmax, v2d->tot.ymin));
+  }
+
+  if (snap_mode & SEQ_SNAP_TO_PREVIEW_CENTER) {
+    snap_data->targets.append(float2(0, 0));
+  }
+
+  auto build_corners = [&](Strip *strip) {
+    const Array<float2> corners = seq::image_transform_quad_get(scene, strip);
+    for (const float2 &point : corners) {
+      snap_data->targets.append(point);
+    }
+    return corners;
+  };
+
+  if (snap_mode & SEQ_SNAP_TO_STRIPS_PREVIEW) {
+    for (Strip *strip : strip_targets) {
+      build_corners(strip);
+      const float2 image_origin = seq::image_transform_origin_preview_offset_get(scene, strip);
+      snap_data->targets.append(image_origin);
+    }
+  }
+
+  if (translate_origin) {
+    for (Strip *strip : strip_sources) {
+      const Array<float2> corners = build_corners(strip);
+      const float2 center = (corners[0] + corners[1] + corners[2] + corners[3]) * 0.25f;
+      snap_data->targets.append(center);
+    }
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Build Snap Data
+ * \{ */
+
+static void build_snap_data_timeline(const TransInfo *t, TransSeqSnapData *snap_data)
+{
   Scene *scene = t->scene;
   short snap_mode = t->tsnap.mode;
 
-  blender::Map retiming_selection = SEQ_retiming_selection_get(SEQ_editing_get(scene));
-  blender::VectorSet<Sequence *> snap_sources = query_snap_sources_timeline(scene,
-                                                                            retiming_selection);
-  blender::VectorSet<Sequence *> snap_targets = query_snap_targets_timeline(
-      scene, snap_sources, true);
+  VectorSet<Strip *> strip_sources = query_strip_sources_timeline(scene);
+  VectorSet<Strip *> strip_targets = query_strip_targets_timeline(scene, strip_sources, false);
 
   /* Build arrays of snap points. */
   if (t->data_type == &TransConvertType_Sequencer) {
-    seq_snap_source_points_build_timeline_strips(scene, snap_data, snap_sources);
+    build_sources_timeline(scene, snap_data, strip_sources);
   }
   else { /* &TransConvertType_SequencerRetiming */
-    seq_snap_source_points_build_timeline_retiming(scene, snap_data, retiming_selection);
+    build_sources_timeline_retiming(scene, snap_data);
   }
-  seq_snap_target_points_build_timeline(scene, snap_mode, snap_data, snap_targets);
-
-  if (snap_data->source_snap_points.is_empty() || snap_data->target_snap_points.is_empty()) {
-    MEM_delete(snap_data);
-    return nullptr;
-  }
-
-  return snap_data;
+  build_targets_timeline(scene, snap_mode, snap_data, strip_targets);
 }
 
-static TransSeqSnapData *transform_snap_sequencer_data_alloc_preview(const TransInfo *t)
+static void build_snap_data_preview(const TransInfo *t, TransSeqSnapData *snap_data)
 {
-  TransSeqSnapData *snap_data = MEM_new<TransSeqSnapData>(__func__);
-
   Scene *scene = t->scene;
   short snap_mode = t->tsnap.mode;
   View2D *v2d = &t->region->v2d;
+  SpaceSeq *sseq = static_cast<SpaceSeq *>(t->area->spacedata.first);
 
-  blender::VectorSet<Sequence *> snap_sources = query_snap_sources_preview(scene);
-  blender::VectorSet<Sequence *> snap_targets = query_snap_targets_preview(scene, snap_mode);
+  VectorSet<Strip *> strip_sources = query_strip_sources_preview(scene);
+  VectorSet<Strip *> strip_targets = query_strip_targets_preview(t);
 
   /* Build arrays of snap points. */
-  if (!seq_snap_source_points_build_preview(scene, snap_data, snap_sources) ||
-      !seq_snap_target_points_build_preview(scene, v2d, snap_mode, snap_data, snap_targets))
-  {
+  if (t->data_type == &TransConvertType_SequencerImage) {
+    const bool translate_origin = (t->flag & T_ORIGIN);
+    build_sources_preview(scene, snap_data, strip_sources, translate_origin);
+    build_targets_preview(
+        scene, v2d, snap_mode, snap_data, strip_targets, strip_sources, translate_origin);
+  }
+  else if (t->data_type == &TransConvertType_CursorSequencer) {
+    float2 cursor_view = float2(sseq->cursor) * float2(t->aspect);
+    snap_data->sources.append(cursor_view);
+    build_targets_preview(scene, v2d, snap_mode, snap_data, strip_targets, {}, false);
+  }
+}
+
+TransSeqSnapData *snap_sequencer_data_build(const TransInfo *t)
+{
+  TransSeqSnapData *snap_data = MEM_new<TransSeqSnapData>(__func__);
+
+  if (ELEM(t->data_type, &TransConvertType_Sequencer, &TransConvertType_SequencerRetiming)) {
+    build_snap_data_timeline(t, snap_data);
+  }
+  else {
+    build_snap_data_preview(t, snap_data);
+  }
+
+  if (snap_data->sources.is_empty() || snap_data->targets.is_empty()) {
     MEM_delete(snap_data);
     return nullptr;
   }
@@ -541,94 +424,109 @@ static TransSeqSnapData *transform_snap_sequencer_data_alloc_preview(const Trans
   return snap_data;
 }
 
-TransSeqSnapData *transform_snap_sequencer_data_alloc(const TransInfo *t)
-{
-  if (ELEM(t->data_type, &TransConvertType_Sequencer, &TransConvertType_SequencerRetiming)) {
-    return transform_snap_sequencer_data_alloc_timeline_strips(t);
-  }
-  return transform_snap_sequencer_data_alloc_preview(t);
-}
-
-void transform_snap_sequencer_data_free(TransSeqSnapData *data)
+void snap_sequencer_data_free(TransSeqSnapData *data)
 {
   MEM_delete(data);
 }
 
-static bool transform_snap_sequencer_calc_timeline(TransInfo *t, const TransSeqSnapData *snap_data)
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Snap Calculation
+ * \{ */
+
+static bool snap_calc_timeline(TransInfo *t, const TransSeqSnapData *snap_data)
 {
   /* Prevent snapping when constrained to Y axis. */
   if (t->con.mode & CON_APPLY && t->con.mode & CON_AXIS1) {
     return false;
   }
 
-  int best_dist = MAXFRAME, best_target_frame = 0, best_source_frame = 0;
+  const short snap_flag = seq::tool_settings_snap_flag_get(t->scene);
+  const bool ignore_other_channels = !(snap_flag & SEQ_SNAP_TO_ALL_CHANNEL_STRIPS);
 
-  for (const float *snap_source_point : snap_data->source_snap_points) {
-    for (const float *snap_target_point : snap_data->target_snap_points) {
-      int snap_source_frame = snap_source_point[0];
-      int snap_target_frame = snap_target_point[0];
-      int dist = abs(snap_target_frame - (snap_source_frame + round_fl_to_int(t->values[0])));
+  int best_dist = MAXFRAME;
+  float2 best_target(0.0f);
+  float2 best_source(0.0f);
+
+  for (const float2 source : snap_data->sources) {
+    for (const float2 target : snap_data->targets) {
+      if (ignore_other_channels && target[1] != all_channels &&
+          (source[1] + round_fl_to_int(t->values[1])) != target[1])
+      {
+        continue;
+      }
+
+      int source_frame = source[0];
+      int target_frame = target[0];
+      int dist = abs(target_frame - (source_frame + round_fl_to_int(t->values[0])));
       if (dist > best_dist) {
         continue;
       }
 
       best_dist = dist;
-      best_target_frame = snap_target_frame;
-      best_source_frame = snap_source_frame;
+      best_target = target;
+      best_source = source;
     }
   }
 
-  if (best_dist > seq_snap_threshold_get_frame_distance(t)) {
+  if (best_dist > snap_distance_frame_threshold_get(t)) {
     return false;
   }
 
-  t->tsnap.snap_target[0] = best_target_frame;
-  t->tsnap.snap_source[0] = best_source_frame;
+  float2 best_offset(float(best_target[0] - best_source[0]), 0.0f);
+  if (transform_convert_sequencer_clamp(t, best_offset)) {
+    return false;
+  }
+
+  copy_v2_v2(t->tsnap.snap_target, best_target);
+  copy_v2_v2(t->tsnap.snap_source, best_source);
   return true;
 }
 
-static bool transform_snap_sequencer_calc_preview(TransInfo *t, const TransSeqSnapData *snap_data)
+static bool snap_calc_preview(TransInfo *t, const TransSeqSnapData *snap_data)
 {
   /* Store best snap candidates in x and y directions separately. */
-  blender::float2 best_dist(std::numeric_limits<float>::max());
-  blender::float2 best_target_point(0.0f);
-  blender::float2 best_source_point(0.0f);
+  float2 best_dist(std::numeric_limits<float>::max());
+  float2 best_target(0.0f);
+  float2 best_source(0.0f);
 
-  for (const float *snap_source_point : snap_data->source_snap_points) {
-    for (const float *snap_target_point : snap_data->target_snap_points) {
+  for (const float2 source : snap_data->sources) {
+    for (const float2 target : snap_data->targets) {
       /* First update snaps in x direction, then y direction. */
-      for (int i = 0; i < 2; i++) {
-        int dist = abs(snap_target_point[i] - (snap_source_point[i] + t->values[i]));
+      constexpr int num_axes = 2;
+      for (const int i : IndexRange(num_axes)) {
+        int dist = abs(target[i] - (source[i] + t->values[i]));
         if (dist > best_dist[i]) {
           continue;
         }
 
         best_dist[i] = dist;
-        best_target_point[i] = snap_target_point[i];
-        best_source_point[i] = snap_source_point[i];
+        best_target[i] = target[i];
+        best_source[i] = source[i];
       }
     }
   }
 
   t->tsnap.direction &= ~(DIR_GLOBAL_X | DIR_GLOBAL_Y);
-  float thr = seq_snap_threshold_get_view_distance(t);
+  float thr = snap_distance_view_threshold_get(t);
 
   if (best_dist[0] <= thr) {
-    t->tsnap.snap_target[0] = best_target_point[0];
-    t->tsnap.snap_source[0] = best_source_point[0];
+    t->tsnap.snap_target[0] = best_target[0];
+    t->tsnap.snap_source[0] = best_source[0];
     t->tsnap.direction |= DIR_GLOBAL_X;
   }
 
   if (best_dist[1] <= thr) {
-    t->tsnap.snap_target[1] = best_target_point[1];
-    t->tsnap.snap_source[1] = best_source_point[1];
+    t->tsnap.snap_target[1] = best_target[1];
+    t->tsnap.snap_source[1] = best_source[1];
     t->tsnap.direction |= DIR_GLOBAL_Y;
   }
 
   return (best_dist[0] <= thr || best_dist[1] <= thr);
 }
 
-bool transform_snap_sequencer_calc(TransInfo *t)
+bool snap_sequencer_calc(TransInfo *t)
 {
   const TransSeqSnapData *snap_data = t->tsnap.seq_context;
   if (snap_data == nullptr) {
@@ -636,19 +534,17 @@ bool transform_snap_sequencer_calc(TransInfo *t)
   }
 
   if (ELEM(t->data_type, &TransConvertType_Sequencer, &TransConvertType_SequencerRetiming)) {
-    return transform_snap_sequencer_calc_timeline(t, snap_data);
+    return snap_calc_timeline(t, snap_data);
   }
-  else {
-    return transform_snap_sequencer_calc_preview(t, snap_data);
-  }
+  return snap_calc_preview(t, snap_data);
 }
 
-void transform_snap_sequencer_apply_seqslide(TransInfo *t, float *vec)
+void snap_sequencer_apply_seqslide(TransInfo *t, float *vec)
 {
   *vec = t->tsnap.snap_target[0] - t->tsnap.snap_source[0];
 }
 
-void transform_snap_sequencer_image_apply_translate(TransInfo *t, float vec[2])
+void snap_sequencer_image_apply_translate(TransInfo *t, float vec[2])
 {
   /* Apply snap along x and y axes independently. */
   if (t->tsnap.direction & DIR_GLOBAL_X) {
@@ -660,36 +556,41 @@ void transform_snap_sequencer_image_apply_translate(TransInfo *t, float vec[2])
   }
 }
 
-static int transform_snap_sequencer_to_closest_strip_ex(TransInfo *t,
-                                                        const int frame_1,
-                                                        const int frame_2)
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Drag and Drop Snapping
+ * \{ */
+
+static int snap_sequencer_calc_drag_drop_impl(TransInfo *t,
+                                              const int left_frame,
+                                              const int right_frame,
+                                              const int channel)
 {
   Scene *scene = t->scene;
   TransSeqSnapData *snap_data = MEM_new<TransSeqSnapData>(__func__);
 
-  blender::VectorSet<Sequence *> empty_col;
-  blender::VectorSet<Sequence *> snap_targets = query_snap_targets_timeline(
-      scene, empty_col, false);
+  VectorSet<Strip *> empty_col;
+  VectorSet<Strip *> strip_targets = query_strip_targets_timeline(scene, empty_col, true);
 
-  BLI_assert(frame_1 <= frame_2);
-  snap_data->source_snap_points.reinitialize(2);
-  snap_data->source_snap_points[0][0] = frame_1;
-  snap_data->source_snap_points[1][0] = frame_2;
+  BLI_assert(left_frame <= right_frame);
 
-  short snap_mode = t->tsnap.mode;
+  snap_data->sources.append(float2(left_frame, channel));
+  snap_data->sources.append(float2(right_frame, channel));
 
   /* Build arrays of snap target frames. */
-  seq_snap_target_points_build_timeline(scene, snap_mode, snap_data, snap_targets);
+  const short snap_mode = t->tsnap.mode;
+  build_targets_timeline(scene, snap_mode, snap_data, strip_targets);
 
   t->tsnap.seq_context = snap_data;
-  bool snap_success = transform_snap_sequencer_calc(t);
-  transform_snap_sequencer_data_free(snap_data);
+  bool snap_success = snap_sequencer_calc(t);
+  snap_sequencer_data_free(snap_data);
   t->tsnap.seq_context = nullptr;
 
   float snap_offset = 0;
   if (snap_success) {
     t->tsnap.status |= (SNAP_TARGET_FOUND | SNAP_SOURCE_FOUND);
-    transform_snap_sequencer_apply_seqslide(t, &snap_offset);
+    snap_sequencer_apply_seqslide(t, &snap_offset);
   }
   else {
     t->tsnap.status &= ~(SNAP_TARGET_FOUND | SNAP_SOURCE_FOUND);
@@ -698,12 +599,13 @@ static int transform_snap_sequencer_to_closest_strip_ex(TransInfo *t,
   return snap_offset;
 }
 
-bool ED_transform_snap_sequencer_to_closest_strip_calc(Scene *scene,
-                                                       ARegion *region,
-                                                       const int frame_1,
-                                                       const int frame_2,
-                                                       int *r_snap_distance,
-                                                       float *r_snap_frame)
+bool snap_sequencer_calc_drag_drop(Scene *scene,
+                                   ARegion *region,
+                                   const int left_frame,
+                                   const int right_frame,
+                                   const int channel,
+                                   int *r_snap_distance,
+                                   float2 *r_snap_point)
 {
   TransInfo t = {nullptr};
   t.scene = scene;
@@ -711,23 +613,29 @@ bool ED_transform_snap_sequencer_to_closest_strip_calc(Scene *scene,
   t.values[0] = 0;
   t.data_type = &TransConvertType_Sequencer;
 
-  t.tsnap.mode = eSnapMode(SEQ_tool_settings_snap_mode_get(scene));
-  *r_snap_distance = transform_snap_sequencer_to_closest_strip_ex(&t, frame_1, frame_2);
-  *r_snap_frame = t.tsnap.snap_target[0];
+  t.tsnap.mode = eSnapMode(seq::tool_settings_snap_mode_get(scene));
+  t.tsnap.flag = eSnapFlag(seq::tool_settings_snap_flag_get(scene));
+  *r_snap_distance = snap_sequencer_calc_drag_drop_impl(&t, left_frame, right_frame, channel);
+  copy_v2_v2(*r_snap_point, t.tsnap.snap_target);
   return validSnap(&t);
 }
 
-void ED_draw_sequencer_snap_point(ARegion *region, const float snap_point)
+void snap_sequencer_draw_drag_drop(Scene *scene, ARegion *region, const float2 snap_point)
 {
   /* Reuse the snapping drawing code from the transform system. */
   TransInfo t = {nullptr};
+  t.scene = scene;
+  t.region = region;
   t.mode = TFM_SEQ_SLIDE;
   t.modifiers = MOD_SNAP;
   t.spacetype = SPACE_SEQ;
   t.tsnap.flag = SCE_SNAP;
   t.tsnap.status = (SNAP_TARGET_FOUND | SNAP_SOURCE_FOUND);
-  t.tsnap.snap_target[0] = snap_point;
-  t.region = region;
+  copy_v2_v2(t.tsnap.snap_target, snap_point);
 
   drawSnapping(&t);
 }
+
+/** \} */
+
+}  // namespace blender::ed::transform

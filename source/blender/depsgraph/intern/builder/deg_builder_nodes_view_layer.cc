@@ -10,22 +10,16 @@
 
 #include "intern/builder/deg_builder_nodes.h"
 
-#include <cstdio>
 #include <cstdlib>
-
-#include "MEM_guardedalloc.h"
-
-#include "BLI_blenlib.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
 
 #include "DNA_collection_types.h"
 #include "DNA_freestyle_types.h"
 #include "DNA_layer_types.h"
-#include "DNA_linestyle_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
+
+#include "BLI_listbase.hh"
 
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
@@ -36,26 +30,25 @@
 
 #include "intern/builder/deg_builder.h"
 #include "intern/depsgraph.hh"
-#include "intern/depsgraph_type.hh"
 #include "intern/node/deg_node.hh"
 #include "intern/node/deg_node_component.hh"
 #include "intern/node/deg_node_operation.hh"
 
 namespace blender::deg {
 
-void DepsgraphNodeBuilder::build_layer_collections(ListBase *lb)
+void DepsgraphNodeBuilder::build_layer_collections(ListBaseT<LayerCollection> *lb)
 {
   const int visibility_flag = (graph_->mode == DAG_EVAL_VIEWPORT) ? COLLECTION_HIDE_VIEWPORT :
                                                                     COLLECTION_HIDE_RENDER;
 
-  LISTBASE_FOREACH (LayerCollection *, lc, lb) {
-    if (lc->collection->flag & visibility_flag) {
+  for (LayerCollection &lc : *lb) {
+    if (lc.collection->flag & visibility_flag) {
       continue;
     }
-    if ((lc->flag & LAYER_COLLECTION_EXCLUDE) == 0) {
-      build_collection(lc, lc->collection);
+    if ((lc.flag & LAYER_COLLECTION_EXCLUDE) == 0) {
+      build_collection(&lc, lc.collection);
     }
-    build_layer_collections(&lc->layer_collections);
+    build_layer_collections(&lc.layer_collections);
   }
 }
 
@@ -94,10 +87,10 @@ void DepsgraphNodeBuilder::build_view_layer(Scene *scene,
    * but object is expected to be an original one. Hence we go into some
    * tricks here iterating over the view layer. */
   int base_index = 0;
-  BKE_view_layer_synced_ensure(scene, view_layer);
-  LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
+  BKE_view_layer_synced_ensure(*bmain_, scene, view_layer);
+  for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
     /* object itself */
-    if (!need_pull_base_into_graph(base)) {
+    if (!need_pull_base_into_graph(&base)) {
       continue;
     }
 
@@ -106,11 +99,11 @@ void DepsgraphNodeBuilder::build_view_layer(Scene *scene,
      * will never be evaluated.
      *
      * TODO(sergey): Need to go more granular on visibility checks. */
-    build_object(base_index, base->object, linked_state, true);
+    build_object(base_index, base.object, linked_state, true);
     base_index++;
 
     if (!graph_->has_animated_visibility) {
-      graph_->has_animated_visibility |= is_object_visibility_animated(base->object);
+      graph_->has_animated_visibility |= is_object_visibility_animated(base.object);
     }
   }
   build_layer_collections(&view_layer->layer_collections);
@@ -128,16 +121,16 @@ void DepsgraphNodeBuilder::build_view_layer(Scene *scene,
     build_world(scene->world);
   }
   /* Cache file. */
-  LISTBASE_FOREACH (CacheFile *, cachefile, &bmain_->cachefiles) {
-    build_cachefile(cachefile);
+  for (CacheFile &cachefile : bmain_->cachefiles) {
+    build_cachefile(&cachefile);
   }
   /* Masks. */
-  LISTBASE_FOREACH (Mask *, mask, &bmain_->masks) {
-    build_mask(mask);
+  for (Mask &mask : bmain_->masks) {
+    build_mask(&mask);
   }
   /* Movie clips. */
-  LISTBASE_FOREACH (MovieClip *, clip, &bmain_->movieclips) {
-    build_movieclip(clip);
+  for (MovieClip &clip : bmain_->movieclips) {
+    build_movieclip(&clip);
   }
   /* Material override. */
   if (view_layer->mat_override != nullptr) {
@@ -148,8 +141,8 @@ void DepsgraphNodeBuilder::build_view_layer(Scene *scene,
     build_world(view_layer->world_override);
   }
   /* Freestyle linesets. */
-  LISTBASE_FOREACH (FreestyleLineSet *, fls, &view_layer->freestyle_config.linesets) {
-    build_freestyle_lineset(fls);
+  for (FreestyleLineSet &fls : view_layer->freestyle_config.linesets) {
+    build_freestyle_lineset(&fls);
   }
   /* Sequencer. */
   if (linked_state == DEG_ID_LINKED_DIRECTLY) {
@@ -157,12 +150,13 @@ void DepsgraphNodeBuilder::build_view_layer(Scene *scene,
     build_scene_sequencer(scene);
   }
   /* Collections. */
-  add_operation_node(&scene->id,
-                     NodeType::LAYER_COLLECTIONS,
-                     OperationCode::VIEW_LAYER_EVAL,
-                     [view_layer_index = view_layer_index_, scene_cow](::Depsgraph *depsgraph) {
-                       BKE_layer_eval_view_layer_indexed(depsgraph, scene_cow, view_layer_index);
-                     });
+  add_operation_node(
+      &scene->id,
+      NodeType::LAYER_COLLECTIONS,
+      OperationCode::VIEW_LAYER_EVAL,
+      [view_layer_index = view_layer_index_, scene_cow](blender::Depsgraph *depsgraph) {
+        BKE_layer_eval_view_layer_indexed(depsgraph, scene_cow, view_layer_index);
+      });
   /* Parameters evaluation for scene relations mainly. */
   build_scene_compositor(scene);
   build_scene_parameters(scene);

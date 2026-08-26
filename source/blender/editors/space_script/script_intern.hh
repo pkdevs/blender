@@ -8,7 +8,12 @@
 
 #pragma once
 
+namespace blender {
+
 /* internal exports only */
+
+struct wmKeyConfig;
+struct wmOperatorType;
 
 /* `script_ops.cc` */
 
@@ -19,3 +24,5 @@ void script_keymap(wmKeyConfig *keyconf);
 
 void SCRIPT_OT_reload(wmOperatorType *ot);
 void SCRIPT_OT_python_file_run(wmOperatorType *ot);
+
+}  // namespace blender

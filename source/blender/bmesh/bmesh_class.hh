@@ -11,15 +11,23 @@
  * that benefit from accessing connectivity information.
  */
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
+#include "BLI_sys_types.hh"
+
+#include "DNA_customdata_types.h"
+#include "DNA_listBase.h"
+
+namespace blender {
 
 /* disable holes for now,
  * these are ifdef'd because they use more memory and can't be saved in DNA currently */
 // #define USE_BMESH_HOLES
 
+struct BMEditSelection;
 struct BMEdge;
 struct BMFace;
 struct BMLoop;
+struct BMOpError;
 struct BMVert;
 struct BMesh;
 
@@ -27,13 +35,7 @@ struct MLoopNorSpaceArray;
 
 struct BLI_mempool;
 
-/* NOTE: it is very important for BMHeader to start with two
- * pointers. this is a requirement of mempool's method of
- * iteration.
- *
- * hrm. it doesn't but still works ok, remove the comment above? - campbell.
- */
-
+// #pragma GCC diagnostic push
 // #pragma GCC diagnostic error "-Wpadded"
 
 /**
@@ -48,8 +50,14 @@ struct BLI_mempool;
  * 3: Unique ID in the #BMesh.
  * 4: some elements for internal record keeping.
  */
-typedef struct BMHeader {
-  /** Customdata layers. */
+struct BMHeader {
+
+  /* NOTE: it its essential the #BMHeader is at least the size of two pointers.
+   * This is a requirement of mempool's method of iteration.
+   *
+   * Even though there is only a single pointer, the struct will be padded to two. */
+
+  /** CustomData layers. */
   void *data;
 
   /**
@@ -75,7 +83,7 @@ typedef struct BMHeader {
    */
   char api_flag;
   // char _pad;
-} BMHeader;
+};
 
 BLI_STATIC_ASSERT((sizeof(BMHeader) <= 16), "BMHeader size has grown!");
 
@@ -83,11 +91,12 @@ BLI_STATIC_ASSERT((sizeof(BMHeader) <= 16), "BMHeader size has grown!");
  * make them point directly into structs.  and some way to make it only happen to the
  * active layer, and properly update when switching active layers. */
 
-typedef struct BMVert {
+struct BMVert {
   BMHeader head;
-
-  float co[3]; /* vertex coordinates */
-  float no[3]; /* vertex normal */
+  /** Vertex coordinate. */
+  float co[3];
+  /** Vertex normal. */
+  float no[3];
 
   /**
    * Pointer to (any) edge using this vertex (for disk cycles).
@@ -97,19 +106,22 @@ typedef struct BMVert {
    * (use with care!).
    */
   struct BMEdge *e;
-} BMVert;
+};
 
-typedef struct BMVert_OFlag {
+struct BMVert_OFlag {
   BMVert base;
   struct BMFlagLayer *oflags;
-} BMVert_OFlag;
+};
 
-/* disk link structure, only used by edges */
-typedef struct BMDiskLink {
+/**
+ * Disk link structure (the element in a circular linked list),
+ * only used by edges to reference connected edges for the first & second vertices.
+ */
+struct BMDiskLink {
   struct BMEdge *next, *prev;
-} BMDiskLink;
+};
 
-typedef struct BMEdge {
+struct BMEdge {
   BMHeader head;
 
   /**
@@ -124,7 +136,7 @@ typedef struct BMEdge {
   BMVert *v1, *v2;
 
   /**
-   * The list of loops around the edge, see doc-string for #BMLoop.radial_next
+   * The list of loops around the edge, see docstring for #BMLoop.radial_next
    * for an example of using this to loop over all faces used by an edge.
    */
   struct BMLoop *l;
@@ -136,16 +148,16 @@ typedef struct BMEdge {
    * edge around vertex v1 and d2 does the same for v2.
    */
   BMDiskLink v1_disk_link, v2_disk_link;
-} BMEdge;
+};
 
-typedef struct BMEdge_OFlag {
+struct BMEdge_OFlag {
   BMEdge base;
   struct BMFlagLayer *oflags;
-} BMEdge_OFlag;
+};
 
-typedef struct BMLoop {
+struct BMLoop {
   BMHeader head;
-  /* notice no flags layer */
+  /* Notice no #BMFlagLayer, making this different from other elements. */
 
   /**
    * The vertex this loop points to.
@@ -233,32 +245,42 @@ typedef struct BMLoop {
    * \endcode
    */
   struct BMLoop *next, *prev;
-} BMLoop;
+};
 
-/* can cast BMFace/BMEdge/BMVert, but NOT BMLoop, since these don't have a flag layer */
-typedef struct BMElemF {
+/**
+ * A struct which only (#BMFace, #BMEdge, #BMVert) can be cast to.
+ * But *not* #BMLoop, since these don't have a flag layer.
+ */
+struct BMElemF {
   BMHeader head;
-} BMElemF;
+};
 
-/* can cast anything to this, including BMLoop */
-typedef struct BMElem {
+/**
+ * A struct which any element type can be cast to:
+ * (#BMFace, #BMLoop, #BMEdge, #BMVert).
+ */
+struct BMElem {
   BMHeader head;
-} BMElem;
+};
 
 #ifdef USE_BMESH_HOLES
-/* eventually, this structure will be used for supporting holes in faces */
-typedef struct BMLoopList {
+/**
+ * NOTE(@ideasman42): this structure was planned for supporting holes in faces.
+ * although there are no near term plans for this.
+ */
+struct BMLoopList {
   struct BMLoopList *next, *prev;
   struct BMLoop *first, *last;
-} BMLoopList;
+};
 #endif
 
-typedef struct BMFace {
+struct BMFace {
   BMHeader head;
 
 #ifdef USE_BMESH_HOLES
-  int totbounds; /* Total boundaries, is one plus the number of holes in the face. */
-  ListBase loops;
+  /** Total boundaries, is one plus the number of holes in the face. */
+  int totbounds;
+  ListBaseT<BMLoop> loops;
 #else
   BMLoop *l_first;
 #endif
@@ -273,89 +295,126 @@ typedef struct BMFace {
   float no[3];
   /**
    * Material index, typically >= 0 and < #Mesh.totcol although this isn't enforced
-   * Python for e.g. can set this to any positive value since scripts may create
+   * Python for example can set this to any positive value since scripts may create
    * mesh data first and setup material slots later.
    *
    * When using to index into a material array it's range should be checked first,
    * values exceeding the range should be ignored or treated as zero
-   * (if a material slot needs to be used - when drawing for e.g.)
+   * (if a material slot needs to be used - when drawing for example)
    */
   short mat_nr;
   //  short _pad[3];
-} BMFace;
+};
 
-typedef struct BMFace_OFlag {
+struct BMFace_OFlag {
   BMFace base;
   struct BMFlagLayer *oflags;
-} BMFace_OFlag;
+};
 
-typedef struct BMFlagLayer {
+struct BMFlagLayer {
   short f; /* flags */
-} BMFlagLayer;
+};
 
-// #pragma GCC diagnostic ignored "-Wpadded"
+// #pragma GCC diagnostic pop
 
-typedef struct BMesh {
-  int totvert, totedge, totloop, totface;
-  int totvertsel, totedgesel, totfacesel;
+struct BMesh {
+  int totvert = 0;
+  int totedge = 0;
+  int totloop = 0;
+  int totface = 0;
+  int totvertsel = 0;
+  int totedgesel = 0;
+  int totfacesel = 0;
 
   /**
    * Flag index arrays as being dirty so we can check if they are clean and
    * avoid looping over the entire vert/edge/face/loop array in those cases.
    * valid flags are: `(BM_VERT | BM_EDGE | BM_FACE | BM_LOOP)`
    */
-  char elem_index_dirty;
+  char elem_index_dirty = 0;
 
   /**
    * Flag array table as being dirty so we know when its safe to use it,
    * or when it needs to be re-created.
    */
-  char elem_table_dirty;
+  char elem_table_dirty = 0;
 
-  /* element pools */
-  struct BLI_mempool *vpool, *epool, *lpool, *fpool;
+  /** Element pools. */
+  BLI_mempool *vpool = nullptr;
+  BLI_mempool *epool = nullptr;
+  BLI_mempool *lpool = nullptr;
+  BLI_mempool *fpool = nullptr;
 
-  /* mempool lookup tables (optional)
-   * index tables, to map indices to elements via
-   * BM_mesh_elem_table_ensure and associated functions.  don't
-   * touch this or read it directly.\
-   * Use BM_mesh_elem_table_ensure(), BM_vert/edge/face_at_index() */
-  BMVert **vtable;
-  BMEdge **etable;
-  BMFace **ftable;
+  /* #BLI_mempool lookup tables (optional).
+   * Map indices to elements via #BM_mesh_elem_table_ensure and associated functions.
+   * Don't touch this or read it directly.
+   * Use #BM_mesh_elem_table_ensure(), `BM_vert/edge/face_at_index()`. */
 
-  /* size of allocated tables */
-  int vtable_tot;
-  int etable_tot;
-  int ftable_tot;
+  /** Vertex table. */
+  BMVert **vtable = nullptr;
+  /** Edge table. */
+  BMEdge **etable = nullptr;
+  /** Face table. */
+  BMFace **ftable = nullptr;
 
-  /* Operator API stuff (must be all null or all allocated). */
-  struct BLI_mempool *vtoolflagpool, *etoolflagpool, *ftoolflagpool;
+  /* Size of allocated tables. */
 
-  uint use_toolflags : 1;
+  int vtable_tot = 0;
+  int etable_tot = 0;
+  int ftable_tot = 0;
 
-  int toolflag_index;
+  /** Operator API stuff (must be all null or all allocated). */
+  BLI_mempool *vtoolflagpool = nullptr;
+  BLI_mempool *etoolflagpool = nullptr;
+  BLI_mempool *ftoolflagpool = nullptr;
 
-  CustomData vdata, edata, ldata, pdata;
+  bool use_toolflags = false;
+
+  /**
+   * Used when the UV select sync tool-setting is enabled (see: #UV_FLAG_SELECT_SYNC).
+   *
+   * When true, UV selection flags are "valid" (see: #BM_ELEM_SELECT_UV & #BM_ELEM_SELECT_UV_EDGE).
+   * Otherwise UV selection is read from vertex/edge/face selection flags used in the viewport.
+   *
+   * Notes:
+   * - This should be cleared aggressively when there is no need
+   *   to store a separate UV selection to avoid unnecessary overhead.
+   * - Clear using #BM_mesh_uvselect_clear (instead of setting directly).
+   * - When in `selectmode` is set to #SCE_SELECT_FACE this should typically be false,
+   *   because there is no reason to sync two different selections in this case.
+   *   However it's not an error either. Mode switching is responsible for clearing it.
+   *
+   * - See `bmesh_uvselect.hh` for a more comprehensive explanation.
+   */
+  bool uv_select_sync_valid = false;
+
+  int toolflag_index = 0;
+
+  CustomData vdata;
+  CustomData edata;
+  CustomData ldata;
+  CustomData pdata;
 
 #ifdef USE_BMESH_HOLES
-  struct BLI_mempool *looplistpool;
+  BLI_mempool *looplistpool = nullptr;
 #endif
 
-  struct MLoopNorSpaceArray *lnor_spacearr;
-  char spacearr_dirty;
+  struct MLoopNorSpaceArray *lnor_spacearr = nullptr;
+  char spacearr_dirty = 0;
 
-  /* Should be copy of scene select mode. */
-  /* Stored in #BMEditMesh too, this is a bit confusing,
-   * make sure they're in sync!
-   * Only use when the edit mesh can't be accessed - campbell */
-  short selectmode;
+  /**
+   * Should be copy of scene select mode.
+   *
+   * NOTE(@ideasman42): Stored in #BMEditMesh too, a bit confusing, make sure they're in sync!
+   * Only use when the edit mesh can't be accessed.
+   */
+  short selectmode = 0;
 
-  /* ID of the shape key this bmesh came from */
-  int shapenr;
+  /** 1-based index of the shape key's #Key::block this #BMesh came from. */
+  int shapenr = 0;
 
-  int totflags;
-  ListBase selected;
+  int totflags = 0;
+  ListBaseT<BMEditSelection> selected = {};
 
   /**
    * The active face.
@@ -365,10 +424,10 @@ typedef struct BMesh {
    * Without this the active image in the UV editor would flicker in a distracting way
    * while changing selection in the 3D viewport.
    */
-  BMFace *act_face;
+  BMFace *act_face = nullptr;
 
   /** List of #BMOpError, used for operator error handling. */
-  ListBase errorstack;
+  ListBaseT<BMOpError> errorstack = {};
 
   /**
    * Keep a single reference to the Python instance of this #BMesh (if any exists).
@@ -379,8 +438,8 @@ typedef struct BMesh {
    *
    * Doesn't hold a #PyObject reference, cleared when the last object is de-referenced.
    */
-  void *py_handle;
-} BMesh;
+  void *py_handle = nullptr;
+};
 
 /** #BMHeader.htype (char) */
 enum {
@@ -390,16 +449,16 @@ enum {
   BM_FACE = 8,
 };
 
-typedef struct BMLoopNorEditData {
+struct BMLoopNorEditData {
   int loop_index;
   BMLoop *loop;
   float niloc[3];
   float nloc[3];
   float *loc;
   short *clnors_data;
-} BMLoopNorEditData;
+};
 
-typedef struct BMLoopNorEditDataArray {
+struct BMLoopNorEditDataArray {
   BMLoopNorEditData *lnor_editdata;
   /**
    * This one has full amount of loops,
@@ -409,7 +468,7 @@ typedef struct BMLoopNorEditDataArray {
 
   int cd_custom_normal_offset;
   int totloop;
-} BMLoopNorEditDataArray;
+};
 
 #define BM_ALL (BM_VERT | BM_EDGE | BM_LOOP | BM_FACE)
 #define BM_ALL_NOLOOP (BM_VERT | BM_EDGE | BM_FACE)
@@ -460,7 +519,8 @@ enum {
 #define BM_CHECK_TYPE_FACE(ele) \
   CHECK_TYPE_ANY(ele, _BM_GENERIC_TYPE_FACE_NONCONST, _BM_GENERIC_TYPE_FACE_CONST)
 
-/* Assignment from a void* to a typed pointer is not allowed in C++,
+/**
+ * Assignment from a void* to a typed pointer is not allowed in C++,
  * casting the LHS to void works fine though.
  */
 #define BM_CHECK_TYPE_ELEM_ASSIGN(ele) (BM_CHECK_TYPE_ELEM(ele)), *((void **)&ele)
@@ -480,7 +540,11 @@ enum {
    */
   BM_ELEM_TAG = (1 << 4),
 
-  BM_ELEM_DRAW = (1 << 5), /* edge display */
+  /**
+   * Used for #BMLoop for loop-vertex selection & #BMFace when the face is selected.
+   * The #BMLoop also stores edge selection: #BM_ELEM_SELECT_UV_EDGE.
+   */
+  BM_ELEM_SELECT_UV = (1 << 5),
 
   /** Spare tag, assumed dirty, use define in each function to name based on use. */
   BM_ELEM_TAG_ALT = (1 << 6),
@@ -493,15 +557,18 @@ enum {
   BM_ELEM_INTERNAL_TAG = (1 << 7),
 };
 
+/* Only for #BMLoop to select an edge. */
+#define BM_ELEM_SELECT_UV_EDGE BM_ELEM_SEAM
+
 struct BPy_BMGeneric;
 extern void bpy_bm_generic_invalidate(struct BPy_BMGeneric *self);
 
-typedef bool (*BMElemFilterFunc)(const BMElem *, void *user_data);
-typedef bool (*BMVertFilterFunc)(const BMVert *, void *user_data);
-typedef bool (*BMEdgeFilterFunc)(const BMEdge *, void *user_data);
-typedef bool (*BMFaceFilterFunc)(const BMFace *, void *user_data);
-typedef bool (*BMLoopFilterFunc)(const BMLoop *, void *user_data);
-typedef bool (*BMLoopPairFilterFunc)(const BMLoop *, const BMLoop *, void *user_data);
+using BMElemFilterFunc = bool (*)(const BMElem *, void *user_data);
+using BMVertFilterFunc = bool (*)(const BMVert *, void *user_data);
+using BMEdgeFilterFunc = bool (*)(const BMEdge *, void *user_data);
+using BMFaceFilterFunc = bool (*)(const BMFace *, void *user_data);
+using BMLoopFilterFunc = bool (*)(const BMLoop *, void *user_data);
+using BMLoopPairFilterFunc = bool (*)(const BMLoop *, const BMLoop *, void *user_data);
 
 /* defines */
 #define BM_ELEM_CD_SET_INT(ele, offset, f) \
@@ -530,10 +597,10 @@ typedef bool (*BMLoopPairFilterFunc)(const BMLoop *, const BMLoop *, void *user_
 #  define BM_ELEM_CD_GET_BOOL_P(ele, offset) \
     (BLI_assert(offset != -1), \
      _Generic(ele, \
-     GENERIC_TYPE_ANY((bool *)POINTER_OFFSET((ele)->head.data, offset), \
-                      _BM_GENERIC_TYPE_ELEM_NONCONST), \
-     GENERIC_TYPE_ANY((const bool *)POINTER_OFFSET((ele)->head.data, offset), \
-                      _BM_GENERIC_TYPE_ELEM_CONST)))
+         GENERIC_TYPE_ANY((bool *)POINTER_OFFSET((ele)->head.data, offset), \
+                          _BM_GENERIC_TYPE_ELEM_NONCONST), \
+         GENERIC_TYPE_ANY((const bool *)POINTER_OFFSET((ele)->head.data, offset), \
+                          _BM_GENERIC_TYPE_ELEM_CONST)))
 #else
 #  define BM_ELEM_CD_GET_BOOL_P(ele, offset) \
     (BLI_assert(offset != -1), (bool *)((char *)(ele)->head.data + (offset)))
@@ -543,9 +610,10 @@ typedef bool (*BMLoopPairFilterFunc)(const BMLoop *, const BMLoop *, void *user_
 #  define BM_ELEM_CD_GET_VOID_P(ele, offset) \
     (BLI_assert(offset != -1), \
      _Generic(ele, \
-     GENERIC_TYPE_ANY(POINTER_OFFSET((ele)->head.data, offset), _BM_GENERIC_TYPE_ELEM_NONCONST), \
-     GENERIC_TYPE_ANY((const void *)POINTER_OFFSET((ele)->head.data, offset), \
-                      _BM_GENERIC_TYPE_ELEM_CONST)))
+         GENERIC_TYPE_ANY(POINTER_OFFSET((ele)->head.data, offset), \
+                          _BM_GENERIC_TYPE_ELEM_NONCONST), \
+         GENERIC_TYPE_ANY((const void *)POINTER_OFFSET((ele)->head.data, offset), \
+                          _BM_GENERIC_TYPE_ELEM_CONST)))
 #else
 #  define BM_ELEM_CD_GET_VOID_P(ele, offset) \
     (BLI_assert(offset != -1), (void *)((char *)(ele)->head.data + (offset)))
@@ -567,26 +635,26 @@ typedef bool (*BMLoopPairFilterFunc)(const BMLoop *, const BMLoop *, void *user_
 #  define BM_ELEM_CD_GET_FLOAT_P(ele, offset) \
     (BLI_assert(offset != -1), \
      _Generic(ele, \
-     GENERIC_TYPE_ANY((float *)POINTER_OFFSET((ele)->head.data, offset), \
-                      _BM_GENERIC_TYPE_ELEM_NONCONST), \
-     GENERIC_TYPE_ANY((const float *)POINTER_OFFSET((ele)->head.data, offset), \
-                      _BM_GENERIC_TYPE_ELEM_CONST)))
+         GENERIC_TYPE_ANY((float *)POINTER_OFFSET((ele)->head.data, offset), \
+                          _BM_GENERIC_TYPE_ELEM_NONCONST), \
+         GENERIC_TYPE_ANY((const float *)POINTER_OFFSET((ele)->head.data, offset), \
+                          _BM_GENERIC_TYPE_ELEM_CONST)))
 
 #  define BM_ELEM_CD_GET_FLOAT2_P(ele, offset) \
     (BLI_assert(offset != -1), \
      _Generic(ele, \
-     GENERIC_TYPE_ANY((float(*)[2])POINTER_OFFSET((ele)->head.data, offset), \
-                      _BM_GENERIC_TYPE_ELEM_NONCONST), \
-     GENERIC_TYPE_ANY((const float(*)[2])POINTER_OFFSET((ele)->head.data, offset), \
-                      _BM_GENERIC_TYPE_ELEM_CONST)))
+         GENERIC_TYPE_ANY((float (*)[2])POINTER_OFFSET((ele)->head.data, offset), \
+                          _BM_GENERIC_TYPE_ELEM_NONCONST), \
+         GENERIC_TYPE_ANY((const float (*)[2])POINTER_OFFSET((ele)->head.data, offset), \
+                          _BM_GENERIC_TYPE_ELEM_CONST)))
 
 #  define BM_ELEM_CD_GET_FLOAT3_P(ele, offset) \
     (BLI_assert(offset != -1), \
      _Generic(ele, \
-     GENERIC_TYPE_ANY((float(*)[3])POINTER_OFFSET((ele)->head.data, offset), \
-                      _BM_GENERIC_TYPE_ELEM_NONCONST), \
-     GENERIC_TYPE_ANY((const float(*)[3])POINTER_OFFSET((ele)->head.data, offset), \
-                      _BM_GENERIC_TYPE_ELEM_CONST)))
+         GENERIC_TYPE_ANY((float (*)[3])POINTER_OFFSET((ele)->head.data, offset), \
+                          _BM_GENERIC_TYPE_ELEM_NONCONST), \
+         GENERIC_TYPE_ANY((const float (*)[3])POINTER_OFFSET((ele)->head.data, offset), \
+                          _BM_GENERIC_TYPE_ELEM_CONST)))
 
 #else
 
@@ -594,10 +662,10 @@ typedef bool (*BMLoopPairFilterFunc)(const BMLoop *, const BMLoop *, void *user_
     (BLI_assert(offset != -1), (float *)((char *)(ele)->head.data + (offset)))
 
 #  define BM_ELEM_CD_GET_FLOAT2_P(ele, offset) \
-    (BLI_assert(offset != -1), (float(*)[2])((char *)(ele)->head.data + (offset)))
+    (BLI_assert(offset != -1), (float (*)[2])((char *)(ele)->head.data + (offset)))
 
 #  define BM_ELEM_CD_GET_FLOAT3_P(ele, offset) \
-    (BLI_assert(offset != -1), (float(*)[3])((char *)(ele)->head.data + (offset)))
+    (BLI_assert(offset != -1), (float (*)[3])((char *)(ele)->head.data + (offset)))
 
 #endif
 
@@ -653,11 +721,18 @@ typedef bool (*BMLoopPairFilterFunc)(const BMLoop *, const BMLoop *, void *user_
  * often used with #BM_iter_as_arrayN().
  */
 #define BM_DEFAULT_ITER_STACK_SIZE 16
+/**
+ * Size to use for stack arrays when gathering topology-related data
+ * (e.g. collecting edges, faces, or vertices during mesh operations).
+ * Prefer more specific defines (such as #BM_DEFAULT_NGON_STACK_SIZE) when applicable.
+ */
+#define BM_DEFAULT_TOPOLOGY_STACK_SIZE 64
 
-/* avoid inf loop, this value is arbitrary
- * but should not error on valid cases */
+/** Avoid an eternal loop, this value is arbitrary but should not error on valid cases. */
 #define BM_LOOP_RADIAL_MAX 10000
 #define BM_NGON_MAX 100000
 
-/* Minimum number of elements before using threading. */
+/** Minimum number of elements before using threading. */
 #define BM_THREAD_LIMIT 10000
+
+}  // namespace blender

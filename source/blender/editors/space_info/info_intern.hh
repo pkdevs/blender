@@ -8,8 +8,11 @@
 
 #pragma once
 
+namespace blender {
+
 /* internal exports only */
 
+struct ARegion;
 struct ReportList;
 struct SpaceInfo;
 struct wmOperatorType;
@@ -47,3 +50,5 @@ void INFO_OT_select_box(wmOperatorType *ot);
 void INFO_OT_report_replay(wmOperatorType *ot);
 void INFO_OT_report_delete(wmOperatorType *ot);
 void INFO_OT_report_copy(wmOperatorType *ot);
+
+}  // namespace blender

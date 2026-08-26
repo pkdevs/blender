@@ -8,10 +8,7 @@
  * \ingroup bke
  */
 
-#include <optional>
-
-#include "BLI_bounds_types.hh"
-#include "BLI_math_vector_types.hh"
+namespace blender {
 
 struct Object;
 struct bGPDframe;
@@ -50,32 +47,6 @@ void BKE_gpencil_stroke_geometry_update(struct bGPdata *gpd, struct bGPDstroke *
  */
 void BKE_gpencil_stroke_uv_update(struct bGPDstroke *gps);
 
-typedef struct GPencilPointCoordinates {
-  /* This is used when doing "move only origin" in object_data_transform.cc.
-   * pressure is needs to be stored here as it is tied to object scale. */
-  float co[3];
-  float pressure;
-} GPencilPointCoordinates;
-
-/**
- * \note Used for "move only origins" in object_data_transform.cc.
- */
-int BKE_gpencil_stroke_point_count(const struct bGPdata *gpd);
-/**
- * \note Used for "move only origins" in object_data_transform.cc.
- */
-void BKE_gpencil_point_coords_get(struct bGPdata *gpd, GPencilPointCoordinates *elem_data);
-/**
- * \note Used for "move only origins" in object_data_transform.cc.
- */
-void BKE_gpencil_point_coords_apply(struct bGPdata *gpd, const GPencilPointCoordinates *elem_data);
-/**
- * \note Used for "move only origins" in object_data_transform.cc.
- */
-void BKE_gpencil_point_coords_apply_with_mat4(struct bGPdata *gpd,
-                                              const GPencilPointCoordinates *elem_data,
-                                              const float mat[4][4]);
-
 /**
  * Split the given stroke into several new strokes, partitioning
  * it based on whether the stroke points have a particular flag
@@ -89,3 +60,5 @@ struct bGPDstroke *BKE_gpencil_stroke_delete_tagged_points(struct bGPdata *gpd,
                                                            bool select,
                                                            bool flat_cap,
                                                            int limit);
+
+}  // namespace blender

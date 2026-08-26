@@ -6,8 +6,6 @@
  * \ingroup blenloader
  */
 
-#include <cerrno>
-#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -24,8 +22,8 @@
 
 #include "DNA_listBase.h"
 
-#include "BLI_blenlib.h"
 #include "BLI_implicit_sharing.hh"
+#include "BLI_listbase.hh"
 
 #include "BLO_readfile.hh"
 #include "BLO_undofile.hh"
@@ -34,7 +32,11 @@
 #include "BKE_main.hh"
 #include "BKE_undo_system.hh"
 
-#include "BLI_strict_flags.h" /* Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+#include "writefile.hh"
+
+namespace blender {
 
 /* **************** support for memory-write, for undo buffers *************** */
 
@@ -42,20 +44,19 @@ void BLO_memfile_free(MemFile *memfile)
 {
   while (MemFileChunk *chunk = static_cast<MemFileChunk *>(BLI_pophead(&memfile->chunks))) {
     if (chunk->is_identical == false) {
-      MEM_freeN((void *)chunk->buf);
+      MEM_delete(chunk->buf);
     }
-    MEM_freeN(chunk);
+    MEM_delete(chunk);
   }
-  MEM_delete(memfile->shared_storage);
-  memfile->shared_storage = nullptr;
+  MEM_SAFE_DELETE(memfile->shared_storage);
   memfile->size = 0;
 }
 
 MemFileSharedStorage::~MemFileSharedStorage()
 {
-  for (const blender::ImplicitSharingInfo *sharing_info : map.values()) {
+  for (const ImplicitSharingInfoAndData &data : sharing_info_by_address_id.values()) {
     /* Removing the user makes sure shared data is freed when the undo step was its last owner. */
-    sharing_info->remove_user_and_delete_if_last();
+    data.sharing_info->remove_user_and_delete_if_last();
   }
 }
 
@@ -63,23 +64,23 @@ void BLO_memfile_merge(MemFile *first, MemFile *second)
 {
   /* We use this mapping to store the memory buffers from second memfile chunks which are not owned
    * by it (i.e. shared with some previous memory steps). */
-  blender::Map<const char *, MemFileChunk *> buffer_to_second_memchunk;
+  Map<const char *, MemFileChunk *> buffer_to_second_memchunk;
 
   /* First, detect all memchunks in second memfile that are not owned by it. */
-  LISTBASE_FOREACH (MemFileChunk *, sc, &second->chunks) {
-    if (sc->is_identical) {
-      buffer_to_second_memchunk.add(sc->buf, sc);
+  for (MemFileChunk &sc : second->chunks) {
+    if (sc.is_identical) {
+      buffer_to_second_memchunk.add(sc.buf, &sc);
     }
   }
 
   /* Now, check all chunks from first memfile (the one we are removing), and if a memchunk owned by
    * it is also used by the second memfile, transfer the ownership. */
-  LISTBASE_FOREACH (MemFileChunk *, fc, &first->chunks) {
-    if (!fc->is_identical) {
-      if (MemFileChunk *sc = buffer_to_second_memchunk.lookup_default(fc->buf, nullptr)) {
+  for (MemFileChunk &fc : first->chunks) {
+    if (!fc.is_identical) {
+      if (MemFileChunk *sc = buffer_to_second_memchunk.lookup_default(fc.buf, nullptr)) {
         BLI_assert(sc->is_identical);
         sc->is_identical = false;
-        fc->is_identical = true;
+        fc.is_identical = true;
       }
       /* Note that if the second memfile does not use that chunk, we assume that the first one
        * fully owns it without sharing it with any other memfile, and hence it should be freed with
@@ -92,15 +93,18 @@ void BLO_memfile_merge(MemFile *first, MemFile *second)
 
 void BLO_memfile_clear_future(MemFile *memfile)
 {
-  LISTBASE_FOREACH (MemFileChunk *, chunk, &memfile->chunks) {
-    chunk->is_identical_future = false;
+  for (MemFileChunk &chunk : memfile->chunks) {
+    chunk.is_identical_future = false;
   }
 }
 
-void BLO_memfile_write_init(MemFileWriteData *mem_data,
+void BLO_memfile_write_init(WriteData *wd,
+                            MemFileWriteData *mem_data,
                             MemFile *written_memfile,
                             MemFile *reference_memfile)
 {
+  wd->use_memfile = true;
+
   mem_data->written_memfile = written_memfile;
   mem_data->reference_memfile = reference_memfile;
   mem_data->reference_current_chunk = reference_memfile ? static_cast<MemFileChunk *>(
@@ -114,18 +118,18 @@ void BLO_memfile_write_init(MemFileWriteData *mem_data,
    */
   if (reference_memfile != nullptr) {
     uint current_session_uid = MAIN_ID_SESSION_UID_UNSET;
-    LISTBASE_FOREACH (MemFileChunk *, mem_chunk, &reference_memfile->chunks) {
-      if (!ELEM(mem_chunk->id_session_uid, MAIN_ID_SESSION_UID_UNSET, current_session_uid)) {
-        current_session_uid = mem_chunk->id_session_uid;
-        mem_data->id_session_uid_mapping.add_new(current_session_uid, mem_chunk);
+    for (MemFileChunk &mem_chunk : reference_memfile->chunks) {
+      if (!ELEM(mem_chunk.id_session_uid, MAIN_ID_SESSION_UID_UNSET, current_session_uid)) {
+        current_session_uid = mem_chunk.id_session_uid;
+        mem_data->id_session_uid_mapping.add_new(current_session_uid, &mem_chunk);
       }
     }
   }
 }
 
-void BLO_memfile_write_finalize(MemFileWriteData *mem_data)
+void BLO_memfile_write_finalize(WriteData * /*wd*/, MemFileWriteData *mem_data)
 {
-  mem_data->id_session_uid_mapping.clear_and_shrink();
+  mem_data->id_session_uid_mapping.clear();
 }
 
 void BLO_memfile_chunk_add(MemFileWriteData *mem_data, const char *buf, size_t size)
@@ -133,8 +137,7 @@ void BLO_memfile_chunk_add(MemFileWriteData *mem_data, const char *buf, size_t s
   MemFile *memfile = mem_data->written_memfile;
   MemFileChunk **compchunk_step = &mem_data->reference_current_chunk;
 
-  MemFileChunk *curchunk = static_cast<MemFileChunk *>(
-      MEM_mallocN(sizeof(MemFileChunk), "MemFileChunk"));
+  MemFileChunk *curchunk = MEM_new_uninitialized<MemFileChunk>("MemFileChunk");
   curchunk->size = size;
   curchunk->buf = nullptr;
   curchunk->is_identical = false;
@@ -160,7 +163,7 @@ void BLO_memfile_chunk_add(MemFileWriteData *mem_data, const char *buf, size_t s
 
   /* not equal... */
   if (curchunk->buf == nullptr) {
-    char *buf_new = static_cast<char *>(MEM_mallocN(size, "Chunk buffer"));
+    char *buf_new = MEM_new_array_uninitialized<char>(size, "Chunk buffer");
     memcpy(buf_new, buf, size);
     curchunk->buf = buf_new;
     memfile->size += size;
@@ -180,7 +183,7 @@ Main *BLO_memfile_main_get(MemFile *memfile, Main *bmain, Scene **r_scene)
       *r_scene = bfd->curscene;
     }
 
-    MEM_freeN(bfd);
+    MEM_delete(bfd);
   }
 
   return bmain_undo;
@@ -188,7 +191,7 @@ Main *BLO_memfile_main_get(MemFile *memfile, Main *bmain, Scene **r_scene)
 
 static int64_t undo_read(FileReader *reader, void *buffer, size_t size)
 {
-  UndoReader *undo = (UndoReader *)reader;
+  UndoReader *undo = reinterpret_cast<UndoReader *>(reader);
 
   static size_t seek = SIZE_MAX; /* The current position. */
   static size_t offset = 0;      /* Size of previous chunks. */
@@ -244,7 +247,7 @@ static int64_t undo_read(FileReader *reader, void *buffer, size_t size)
 
       memcpy(POINTER_OFFSET(buffer, totread), chunk->buf + chunkoffset, readsize);
       totread += readsize;
-      undo->reader.offset += (off64_t)readsize;
+      undo->reader.offset += off64_t(readsize);
       seek += readsize;
 
       /* `is_identical` of current chunk represents whether it changed compared to previous undo
@@ -263,12 +266,12 @@ static int64_t undo_read(FileReader *reader, void *buffer, size_t size)
 
 static void undo_close(FileReader *reader)
 {
-  MEM_freeN(reader);
+  MEM_delete(reader);
 }
 
 FileReader *BLO_memfile_new_filereader(MemFile *memfile, int undo_direction)
 {
-  UndoReader *undo = static_cast<UndoReader *>(MEM_callocN(sizeof(UndoReader), __func__));
+  UndoReader *undo = MEM_new_zeroed<UndoReader>(__func__);
 
   undo->memfile = memfile;
   undo->undo_direction = undo_direction;
@@ -277,5 +280,7 @@ FileReader *BLO_memfile_new_filereader(MemFile *memfile, int undo_direction)
   undo->reader.seek = nullptr;
   undo->reader.close = undo_close;
 
-  return (FileReader *)undo;
+  return reinterpret_cast<FileReader *>(undo);
 }
+
+}  // namespace blender

@@ -18,7 +18,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "BKE_context.hh"
@@ -43,6 +44,8 @@
 /* own includes */
 #include "../gizmo_library_intern.hh"
 
+namespace blender {
+
 #define MVAL_MAX_PX_DIST 12.0f
 #define RING_2D_RESOLUTION 32
 
@@ -54,16 +57,16 @@ struct MoveGizmo3D {
 
 static void gizmo_move_matrix_basis_get(const wmGizmo *gz, float r_matrix[4][4])
 {
-  MoveGizmo3D *move = (MoveGizmo3D *)gz;
+  MoveGizmo3D *move = reinterpret_cast<MoveGizmo3D *>(const_cast<wmGizmo *>(gz));
 
   copy_m4_m4(r_matrix, move->gizmo.matrix_basis);
   add_v3_v3(r_matrix[3], move->prop_co);
 }
 
-static int gizmo_move_modal(bContext *C,
-                            wmGizmo *gz,
-                            const wmEvent *event,
-                            eWM_GizmoFlagTweak tweak_flag);
+static wmOperatorStatus gizmo_move_modal(bContext *C,
+                                         wmGizmo *gz,
+                                         const wmEvent *event,
+                                         eWM_GizmoFlagTweak tweak_flag);
 
 struct MoveInteraction {
   struct {
@@ -77,7 +80,7 @@ struct MoveInteraction {
   } prev;
 
   /* We could have other snap contexts, for now only support 3D view. */
-  SnapObjectContext *snap_context_v3d;
+  ed::transform::SnapObjectContext *snap_context_v3d;
 };
 
 /* -------------------------------------------------------------------- */
@@ -99,7 +102,7 @@ static void move_geom_draw(const wmGizmo *gz,
 
   GPUVertFormat *format = immVertexFormat();
   /* NOTE(Metal): Prefer using 3D coordinates with 3D shader, even if rendering 2D gizmo's. */
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32_32);
 
   immBindBuiltinProgram(filled ? GPU_SHADER_3D_UNIFORM_COLOR :
                                  GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
@@ -107,7 +110,7 @@ static void move_geom_draw(const wmGizmo *gz,
   float viewport[4];
   GPU_viewport_size_get_f(viewport);
   immUniform2fv("viewportSize", &viewport[2]);
-  immUniform1f("lineWidth", gz->line_width * U.pixelsize);
+  immUniform1f("lineWidth", (gz->line_width * U.pixelsize) + WM_gizmo_select_bias(select));
 
   immUniformColor4fv(color);
 
@@ -208,7 +211,7 @@ static void move3d_draw_intern(const bContext *C,
     }
 
     GPU_blend(GPU_BLEND_ALPHA);
-    move_geom_draw(gz, blender::float4(0.5f, 0.5f, 0.5f, 0.5f), select, draw_options);
+    move_geom_draw(gz, float4(0.5f, 0.5f, 0.5f, 0.5f), select, draw_options);
     GPU_blend(GPU_BLEND_NONE);
     GPU_matrix_pop();
   }
@@ -232,16 +235,17 @@ static void gizmo_move_draw(const bContext *C, wmGizmo *gz)
   GPU_blend(GPU_BLEND_NONE);
 }
 
-static int gizmo_move_modal(bContext *C,
-                            wmGizmo *gz,
-                            const wmEvent *event,
-                            eWM_GizmoFlagTweak tweak_flag)
+static wmOperatorStatus gizmo_move_modal(bContext *C,
+                                         wmGizmo *gz,
+                                         const wmEvent *event,
+                                         eWM_GizmoFlagTweak tweak_flag)
 {
+  using namespace blender::ed;
   MoveInteraction *inter = static_cast<MoveInteraction *>(gz->interaction_data);
   if ((event->type != MOUSEMOVE) && (inter->prev.tweak_flag == tweak_flag)) {
     return OPERATOR_RUNNING_MODAL;
   }
-  MoveGizmo3D *move = (MoveGizmo3D *)gz;
+  MoveGizmo3D *move = reinterpret_cast<MoveGizmo3D *>(gz);
   ARegion *region = CTX_wm_region(C);
 
   float prop_delta[3];
@@ -251,8 +255,7 @@ static int gizmo_move_modal(bContext *C,
   else {
     float mval_proj_init[2], mval_proj_curr[2];
     if ((gizmo_window_project_2d(C, gz, inter->init.mval, 2, false, mval_proj_init) == false) ||
-        (gizmo_window_project_2d(
-             C, gz, blender::float2(blender::int2(event->mval)), 2, false, mval_proj_curr) ==
+        (gizmo_window_project_2d(C, gz, float2(int2(event->mval)), 2, false, mval_proj_curr) ==
          false))
     {
       return OPERATOR_RUNNING_MODAL;
@@ -275,11 +278,11 @@ static int gizmo_move_modal(bContext *C,
       float dist_px = MVAL_MAX_PX_DIST * U.pixelsize;
       const float mval_fl[2] = {float(event->mval[0]), float(event->mval[1])};
       float co[3];
-      SnapObjectParams params{};
+      transform::SnapObjectParams params{};
       params.snap_target_select = SCE_SNAP_TARGET_ALL;
-      params.edit_mode_type = SNAP_GEOM_EDIT;
-      params.occlusion_test = SNAP_OCCLUSION_AS_SEEM;
-      if (ED_transform_snap_object_project_view3d(
+      params.edit_mode_type = transform::SNAP_GEOM_EDIT;
+      params.occlusion_test = transform::SNAP_OCCLUSION_AS_SEEM;
+      if (transform::snap_object_project_view3d(
               inter->snap_context_v3d,
               CTX_data_ensure_evaluated_depsgraph(C),
               region,
@@ -338,7 +341,7 @@ static void gizmo_move_exit(bContext *C, wmGizmo *gz, const bool cancel)
   }
 
   if (inter->snap_context_v3d) {
-    ED_transform_snap_object_context_destroy(inter->snap_context_v3d);
+    ed::transform::snap_object_context_destroy(inter->snap_context_v3d);
     inter->snap_context_v3d = nullptr;
   }
 
@@ -350,12 +353,11 @@ static void gizmo_move_exit(bContext *C, wmGizmo *gz, const bool cancel)
   }
 }
 
-static int gizmo_move_invoke(bContext *C, wmGizmo *gz, const wmEvent *event)
+static wmOperatorStatus gizmo_move_invoke(bContext *C, wmGizmo *gz, const wmEvent *event)
 {
   const bool use_snap = RNA_boolean_get(gz->ptr, "use_snap");
 
-  MoveInteraction *inter = static_cast<MoveInteraction *>(
-      MEM_callocN(sizeof(MoveInteraction), __func__));
+  MoveInteraction *inter = MEM_new_zeroed<MoveInteraction>(__func__);
   inter->init.mval[0] = event->mval[0];
   inter->init.mval[1] = event->mval[1];
 
@@ -375,7 +377,7 @@ static int gizmo_move_invoke(bContext *C, wmGizmo *gz, const wmEvent *event)
     if (area) {
       switch (area->spacetype) {
         case SPACE_VIEW3D: {
-          inter->snap_context_v3d = ED_transform_snap_object_context_create(CTX_data_scene(C), 0);
+          inter->snap_context_v3d = ed::transform::snap_object_context_create();
           break;
         }
         default:
@@ -394,9 +396,7 @@ static int gizmo_move_test_select(bContext *C, wmGizmo *gz, const int mval[2])
 {
   float point_local[2];
 
-  if (gizmo_window_project_2d(C, gz, blender::float2(blender::int2(mval)), 2, true, point_local) ==
-      false)
-  {
+  if (gizmo_window_project_2d(C, gz, float2(int2(mval)), 2, true, point_local) == false) {
     return -1;
   }
 
@@ -412,7 +412,7 @@ static int gizmo_move_test_select(bContext *C, wmGizmo *gz, const int mval[2])
 
 static void gizmo_move_property_update(wmGizmo *gz, wmGizmoProperty *gz_prop)
 {
-  MoveGizmo3D *move = (MoveGizmo3D *)gz;
+  MoveGizmo3D *move = reinterpret_cast<MoveGizmo3D *>(gz);
   if (WM_gizmo_target_property_is_valid(gz_prop)) {
     WM_gizmo_target_property_float_get_array(gz, gz_prop, move->prop_co);
   }
@@ -435,7 +435,7 @@ static void GIZMO_GT_move_3d(wmGizmoType *gzt)
   /* identifiers */
   gzt->idname = "GIZMO_GT_move_3d";
 
-  /* api callbacks */
+  /* API callbacks. */
   gzt->draw = gizmo_move_draw;
   gzt->draw_select = gizmo_move_draw_select;
   gzt->test_select = gizmo_move_test_select;
@@ -475,3 +475,5 @@ void ED_gizmotypes_move_3d()
 }
 
 /** \} */ /* Move Gizmo API */
+
+}  // namespace blender

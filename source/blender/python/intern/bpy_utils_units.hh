@@ -8,4 +8,10 @@
 
 #pragma once
 
-PyObject *BPY_utils_units();
+#include <Python.h>
+
+namespace blender {
+
+[[nodiscard]] PyObject *BPY_utils_units();
+
+}  // namespace blender

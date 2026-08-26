@@ -5,6 +5,17 @@
 
 # Simple module for inspecting GITEA users, pulls and issues.
 
+__all__ = (
+    "git_username_detect",
+    "gitea_json_activities_get",
+    "gitea_json_pull_request_by_base_and_head_get",
+    "gitea_json_issue_events_filter",
+    "gitea_json_issue_get",
+    "gitea_json_issues_search",
+    "gitea_user_get",
+)
+
+import os
 import datetime
 import json
 import urllib.error
@@ -15,16 +26,23 @@ from typing import (
     Any,
 )
 
+API_TOKEN_ENV = 'GITEA_API_TOKEN'
 BASE_API_URL = "https://projects.blender.org/api/v1"
 
 
-def url_json_get(url: str) -> dict[str, Any] | list[dict[str, Any]] | None:
+def url_json_get(url: str, quiet: bool = False) -> dict[str, Any] | list[dict[str, Any]] | None:
+    request = urllib.request.Request(url)
+    # If the token environment variable is set, add the `Authorization` header to the request
+    token = os.environ.get(API_TOKEN_ENV)
+    if token:
+        request.add_header('Authorization', "token " + token)
     try:
         # Make the HTTP request and store the response in a 'response' object
-        response = urllib.request.urlopen(url)
+        response = urllib.request.urlopen(request)
     except urllib.error.URLError as ex:
-        print(url)
-        print("Error making HTTP request:", ex)
+        if not quiet:
+            print(url)
+            print("Error making HTTP request:", ex)
         return None
 
     # Convert the response content to a JSON object containing the user information.
@@ -47,7 +65,8 @@ def url_json_get_all_pages(
             # XXX: In some cases, a bug prevents using the `page` and `limit` parameters if the page is 1
             result_page = url_json_get(url)
         else:
-            result_page = url_json_get(f"{url}&page={page}")
+            separator = '&' if urllib.parse.urlparse(url).query else '?'
+            result_page = url_json_get(f"{url}{separator}page={page}")
 
         if not result_page:
             break
@@ -93,6 +112,19 @@ def gitea_json_activities_get(username: str, date: str) -> list[dict[str, Any]]:
     activity_url = f"{BASE_API_URL}/users/{username}/activities/feeds?only-performed-by=true&date={date}"
     result = url_json_get_all_pages(activity_url)
     assert isinstance(result, list)
+    return result
+
+
+def gitea_json_pull_request_by_base_and_head_get(repo_name: str, base: str, head: str) -> dict[str, Any] | None:
+    """
+    Get a pull request by base and head
+    :param repo_name: Full name of the repository, e.g. "blender/blender".
+    :param base: Target branch of the PR (branch it wants to merge into), e.g. "main".
+    :param head: Full identifier of the branch the PR is made from, e.g. "MyRepository:temp-feature-branch"
+    """
+    url = f"{BASE_API_URL}/repos/{repo_name}/pulls/{base}/{head}"
+    result = url_json_get(url, quiet=True)
+    assert result is None or isinstance(result, dict)
     return result
 
 
@@ -153,24 +185,32 @@ def gitea_json_issue_events_filter(
         date_end: datetime.datetime | None = None,
         username: str | None = None,
         labels: set[str] | None = None,
-        event_type: set[str] = set(),
+        event_type: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Filter all comments and events on the issue list.
+    Filter all comments and events on the issue list. If both labels and event_type are provided,
+    an event is included if either the label or event type matches.
     :param issue_fullname: string in the format "{owner}/{repo}/issues/{number}"
     :param date_start: if provided, only comments updated since the specified time are returned.
     :param date_end: if provided, only comments updated before the provided time are returned.
-    :param labels: list of labels. Fetch only events that have any of this labels.
+    :param labels: list of labels. Fetch only events that have any of these labels (plus, events
+       passing the event_type check if set)
     :param event_type: set of types of events in {"close", "commit_ref"...}.
     :return: List of comments or events.
     """
     issue_events_url = f"{BASE_API_URL}/repos/{issue_fullname}/timeline"
     if date_start or date_end:
         query_params = {}
+        # Assume that if no timezone is provided, that it's UTC.
+        # Without this, dates passed in that *do* have a timezone aren't handled properly.
         if date_start:
-            query_params["since"] = f"{date_start.isoformat()}Z"
+            if date_start.tzinfo is None:
+                date_start = date_start.replace(tzinfo=datetime.timezone.utc)
+            query_params["since"] = date_start.isoformat()
         if date_end:
-            query_params["before"] = f"{date_end.isoformat()}Z"
+            if date_end.tzinfo is None:
+                date_end = date_end.replace(tzinfo=datetime.timezone.utc)
+            query_params["before"] = date_end.isoformat()
 
         encoded_query_params = urllib.parse.urlencode(query_params)
         issue_events_url = f"{issue_events_url}?{encoded_query_params}"
@@ -180,14 +220,14 @@ def gitea_json_issue_events_filter(
         if not event:
             continue
 
-        if not event["user"] or event["user"]["username"] != username:
+        if username and (not event["user"] or event["user"]["username"] != username):
             continue
 
         if labels and event["type"] == "label" and event["label"]["name"] in labels:
             pass
-        elif event["type"] in event_type:
+        elif event_type and event["type"] in event_type:
             pass
-        else:
+        elif labels or event_type:
             continue
 
         result.append(event)
@@ -199,7 +239,6 @@ def gitea_json_issue_events_filter(
 # However, it provides an option to fetch the configured username from the local Git,
 # in case the user does not explicitly supply the username.
 def git_username_detect() -> str | None:
-    import os
     import subprocess
 
     # Get the repository directory

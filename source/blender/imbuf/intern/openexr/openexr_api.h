@@ -8,14 +8,14 @@
 
 #pragma once
 
-#include <stdio.h>
+namespace blender {
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+struct ImFileColorSpace;
 
-void imb_initopenexr(void);
-void imb_exitopenexr(void);
+extern const char *imb_file_extensions_openexr[];
+
+void imb_initopenexr();
+void imb_exitopenexr();
 
 /**
  * Test presence of OpenEXR file.
@@ -23,17 +23,19 @@ void imb_exitopenexr(void);
  */
 bool imb_is_a_openexr(const unsigned char *mem, size_t size);
 
-bool imb_save_openexr(struct ImBuf *ibuf, const char *filepath, int flags);
+bool imb_save_openexr(ImBuf *ibuf, const char *filepath, ImBufFlags flags);
+Vector<uint8_t> imb_save_buffer_openexr(ImBuf *ibuf, ImBufFlags flags);
 
-struct ImBuf *imb_load_openexr(const unsigned char *mem, size_t size, int flags, char *colorspace);
+ImBuf *imb_load_openexr(const unsigned char *mem,
+                        size_t size,
+                        ImBufFlags flags,
+                        ImFileColorSpace &r_colorspace);
 
-struct ImBuf *imb_load_filepath_thumbnail_openexr(const char *filepath,
-                                                  int flags,
-                                                  size_t max_thumb_size,
-                                                  char colorspace[],
-                                                  size_t *r_width,
-                                                  size_t *r_height);
+ImBuf *imb_load_filepath_thumbnail_openexr(const char *filepath,
+                                           ImBufFlags flags,
+                                           size_t max_thumb_size,
+                                           ImFileColorSpace &r_colorspace,
+                                           size_t *r_width,
+                                           size_t *r_height);
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

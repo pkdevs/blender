@@ -11,19 +11,21 @@
 #include "BLO_read_write.hh"
 
 #include "DNA_collection_types.h"
-#include "DNA_defaults.h"
 #include "DNA_gpencil_modifier_types.h"
+#include "DNA_layer_types.h"
+#include "DNA_lineart_types.h"
 #include "DNA_scene_types.h"
 
+#include "BKE_anim_data.hh"
 #include "BKE_collection.hh"
+#include "BKE_deform.hh"
 #include "BKE_geometry_set.hh"
-#include "BKE_global.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_lib_query.hh"
-#include "BKE_material.h"
+#include "BKE_material.hh"
 #include "BKE_modifier.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
 #include "MOD_grease_pencil_util.hh"
@@ -32,6 +34,7 @@
 #include "MOD_ui_common.hh"
 
 #include "RNA_access.hh"
+#include "RNA_path.hh"
 #include "RNA_prototypes.hh"
 
 #include "DEG_depsgraph_query.hh"
@@ -77,11 +80,8 @@ static bool is_last_line_art(const GreasePencilLineartModifierData &md, const bo
 
 static void init_data(ModifierData *md)
 {
-  GreasePencilLineartModifierData *gpmd = (GreasePencilLineartModifierData *)md;
-
-  BLI_assert(MEMCMP_STRUCT_AFTER_IS_ZERO(gpmd, modifier));
-
-  MEMCPY_STRUCT_AFTER(gpmd, DNA_struct_default_get(GreasePencilLineartModifierData), modifier);
+  GreasePencilLineartModifierData *gpmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
+  INIT_DEFAULT_STRUCT_AFTER(gpmd, modifier);
 }
 
 static void copy_data(const ModifierData *md, ModifierData *target, const int flag)
@@ -90,26 +90,22 @@ static void copy_data(const ModifierData *md, ModifierData *target, const int fl
 
   const GreasePencilLineartModifierData *source_lmd =
       reinterpret_cast<const GreasePencilLineartModifierData *>(md);
-  const LineartModifierRuntime *source_runtime = reinterpret_cast<const LineartModifierRuntime *>(
-      source_lmd->runtime);
+  const LineartModifierRuntime *source_runtime = source_lmd->runtime;
 
   GreasePencilLineartModifierData *target_lmd =
       reinterpret_cast<GreasePencilLineartModifierData *>(target);
 
-  target_lmd->runtime = MEM_new<LineartModifierRuntime>(__func__);
-  LineartModifierRuntime *target_runtime = reinterpret_cast<LineartModifierRuntime *>(
-      target_lmd->runtime);
-
-  blender::Set<const Object *> *object_dependencies = source_runtime->object_dependencies.get();
-  target_runtime->object_dependencies.reset(
-      new blender::Set<const Object *>(*object_dependencies));
+  if (source_runtime) {
+    /* `source_runtime` can be nullptr when line art is imported from asset. `target_lmd->runtime`
+     * Will also re-init before calculation/depsgraph evaluation if it's nullptr anyway.  */
+    target_lmd->runtime = MEM_new<LineartModifierRuntime>(__func__, *source_runtime);
+  }
 }
 
 static void free_data(ModifierData *md)
 {
   GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
-  if (lmd->runtime) {
-    LineartModifierRuntime *runtime = reinterpret_cast<LineartModifierRuntime *>(lmd->runtime);
+  if (LineartModifierRuntime *runtime = lmd->runtime) {
     MEM_delete(runtime);
     lmd->runtime = nullptr;
   }
@@ -117,7 +113,7 @@ static void free_data(ModifierData *md)
 
 static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_render_params*/)
 {
-  GreasePencilLineartModifierData *lmd = (GreasePencilLineartModifierData *)md;
+  GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
 
   if (lmd->target_layer[0] == '\0' || !lmd->target_material) {
     return true;
@@ -129,17 +125,35 @@ static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_re
     return true;
   }
   /* Preventing calculation in depsgraph when baking frames. */
-  if (lmd->flags & MOD_LINEART_IS_BAKED) {
+  if (int(lmd->flags) & int(MOD_LINEART_IS_BAKED)) {
     return true;
   }
 
   return false;
 }
 
+struct LineartVisibilityProps {
+  PropertyRNA *prop_hide_viewport;
+  PropertyRNA *prop_hide_render;
+};
+
+static bool is_visibility_animated(LineartVisibilityProps &visibility_props, Object *ob)
+{
+  auto is_prop_animated = [ob](PropertyRNA *prop) {
+    PointerRNA ptr = RNA_pointer_create_discrete(&ob->id, RNA_Object, ob);
+    std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop);
+    return bke::animdata::prop_is_animated(ob->adt, path->c_str(), 0);
+  };
+
+  return is_prop_animated(visibility_props.prop_hide_viewport) ||
+         is_prop_animated(visibility_props.prop_hide_render);
+}
+
 static void add_this_collection(Collection &collection,
                                 const ModifierUpdateDepsgraphContext *ctx,
                                 const int mode,
-                                Set<const Object *> &object_dependencies)
+                                Set<const Object *> &object_dependencies,
+                                LineartVisibilityProps &visibility_props)
 {
   bool default_add = true;
   /* Do not do nested collection usage check, this is consistent with lineart calculation, because
@@ -149,8 +163,19 @@ static void add_this_collection(Collection &collection,
   if (collection.lineart_usage & COLLECTION_LRT_EXCLUDE) {
     default_add = false;
   }
-  FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_BEGIN (&collection, ob, mode) {
-    if (ELEM(ob->type, OB_MESH, OB_MBALL, OB_CURVES_LEGACY, OB_SURF, OB_FONT)) {
+
+  int object_visibility_flag = (mode == DAG_EVAL_VIEWPORT) ? OB_HIDE_VIEWPORT : OB_HIDE_RENDER;
+  FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (&collection, ob) {
+    if (ob->visibility_flag & object_visibility_flag) {
+      /* If an object is hidden, we check if they have animated visibility flag so it can be
+       * visible some point later, that way the object will still be taken into account when
+       * calculating lines without re-building dependencies with the modifier. */
+      if (!is_visibility_animated(visibility_props, ob)) {
+        continue;
+      }
+    }
+
+    if (ELEM(ob->type, OB_MESH, OB_MBALL, OB_CURVES_LEGACY, OB_SURF, OB_FONT, OB_CURVES)) {
       if ((ob->lineart.usage == OBJECT_LRT_INHERIT && default_add) ||
           ob->lineart.usage != OBJECT_LRT_EXCLUDE)
       {
@@ -163,18 +188,19 @@ static void add_this_collection(Collection &collection,
       if (!ob->instance_collection) {
         continue;
       }
-      add_this_collection(*ob->instance_collection, ctx, mode, object_dependencies);
+      add_this_collection(
+          *ob->instance_collection, ctx, mode, object_dependencies, visibility_props);
       object_dependencies.add(ob);
     }
   }
-  FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_END;
+  FOREACH_COLLECTION_OBJECT_RECURSIVE_END;
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
 {
   DEG_add_object_relation(ctx->node, ctx->object, DEG_OB_COMP_TRANSFORM, "Line Art Modifier");
 
-  GreasePencilLineartModifierData *lmd = (GreasePencilLineartModifierData *)md;
+  GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
 
   /* Always add whole master collection because line art will need the whole scene for
    * visibility computation. Line art exclusion is handled inside #add_this_collection. */
@@ -185,20 +211,23 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
   if (!runtime) {
     runtime = MEM_new<LineartModifierRuntime>(__func__);
     lmd->runtime = runtime;
-    runtime->object_dependencies = nullptr;
   }
-  Set<const Object *> *object_dependencies = runtime->object_dependencies.get();
-  if (!object_dependencies) {
-    runtime->object_dependencies = std::make_unique<Set<const Object *>>();
-    object_dependencies = runtime->object_dependencies.get();
-  }
+  Set<const Object *> &object_dependencies = runtime->object_dependencies;
+  object_dependencies.clear();
 
-  object_dependencies->clear();
-  add_this_collection(
-      *ctx->scene->master_collection, ctx, DAG_EVAL_VIEWPORT, *object_dependencies);
+  LineartVisibilityProps visibility_props;
+
+  visibility_props.prop_hide_viewport = RNA_struct_type_find_property(RNA_Object, "hide_viewport");
+  visibility_props.prop_hide_render = RNA_struct_type_find_property(RNA_Object, "hide_render");
+
+  add_this_collection(*ctx->scene->master_collection,
+                      ctx,
+                      DAG_EVAL_VIEWPORT,
+                      object_dependencies,
+                      visibility_props);
 
   /* No need to add any non-geometry objects into `lmd->object_dependencies` because we won't be
-   * loading */
+   * loading... */
   if (lmd->calculation_flags & MOD_LINEART_USE_CUSTOM_CAMERA && lmd->source_camera) {
     DEG_add_object_relation(
         ctx->node, lmd->source_camera, DEG_OB_COMP_TRANSFORM, "Line Art Modifier");
@@ -220,19 +249,19 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
 
 static void foreach_ID_link(ModifierData *md, Object *ob, IDWalkFunc walk, void *user_data)
 {
-  GreasePencilLineartModifierData *lmd = (GreasePencilLineartModifierData *)md;
+  GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
 
-  walk(user_data, ob, (ID **)&lmd->target_material, IDWALK_CB_USER);
-  walk(user_data, ob, (ID **)&lmd->source_collection, IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&lmd->target_material), IDWALK_CB_USER);
+  walk(user_data, ob, reinterpret_cast<ID **>(&lmd->source_collection), IDWALK_CB_NOP);
 
-  walk(user_data, ob, (ID **)&lmd->source_object, IDWALK_CB_NOP);
-  walk(user_data, ob, (ID **)&lmd->source_camera, IDWALK_CB_NOP);
-  walk(user_data, ob, (ID **)&lmd->light_contour_object, IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&lmd->source_object), IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&lmd->source_camera), IDWALK_CB_NOP);
+  walk(user_data, ob, reinterpret_cast<ID **>(&lmd->light_contour_object), IDWALK_CB_NOP);
 }
 
 static void panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
@@ -242,42 +271,44 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   const int source_type = RNA_enum_get(ptr, "source_type");
   const bool is_baked = RNA_boolean_get(ptr, "is_baked");
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetEnabled(layout, !is_baked);
+  layout.use_property_split_set(true);
+  layout.enabled_set(!is_baked);
 
   if (!is_first_lineart(*static_cast<const GreasePencilLineartModifierData *>(ptr->data))) {
-    uiItemR(layout, ptr, "use_cache", UI_ITEM_NONE, nullptr, ICON_NONE);
+    layout.prop(ptr, "use_cache", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  uiItemR(layout, ptr, "source_type", UI_ITEM_NONE, nullptr, ICON_NONE);
+  layout.prop(ptr, "source_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   if (source_type == LINEART_SOURCE_OBJECT) {
-    uiItemR(layout, ptr, "source_object", UI_ITEM_NONE, nullptr, ICON_OBJECT_DATA);
+    layout.prop(ptr, "source_object", UI_ITEM_NONE, std::nullopt, ICON_OBJECT_DATA);
   }
   else if (source_type == LINEART_SOURCE_COLLECTION) {
-    uiLayout *sub = uiLayoutRow(layout, true);
-    uiItemR(sub, ptr, "source_collection", UI_ITEM_NONE, nullptr, ICON_OUTLINER_COLLECTION);
-    uiItemR(sub, ptr, "use_invert_collection", UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
+    ui::Layout &sub = layout.row(true);
+    sub.prop(ptr, "source_collection", UI_ITEM_NONE, std::nullopt, ICON_OUTLINER_COLLECTION);
+    sub.prop(ptr, "use_invert_collection", UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
   }
   else {
     /* Source is Scene. */
   }
 
-  uiLayout *col = uiLayoutColumn(layout, false);
-  uiItemPointerR(
-      col, ptr, "target_layer", &obj_data_ptr, "layers", nullptr, ICON_OUTLINER_DATA_GP_LAYER);
-  uiItemPointerR(col, ptr, "target_material", &obj_data_ptr, "materials", nullptr, ICON_MATERIAL);
+  ui::Layout *col = &layout.column(false);
+  col->prop_search(
+      ptr, "target_layer", &obj_data_ptr, "layers", std::nullopt, ICON_OUTLINER_DATA_GP_LAYER);
+  col->prop_search(
+      ptr, "target_material", &obj_data_ptr, "materials", std::nullopt, ICON_MATERIAL);
 
-  col = uiLayoutColumn(layout, false);
-  uiItemR(col, ptr, "thickness", UI_ITEM_R_SLIDER, IFACE_("Line Thickness"), ICON_NONE);
-  uiItemR(col, ptr, "opacity", UI_ITEM_R_SLIDER, nullptr, ICON_NONE);
+  col = &layout.column(false);
+  col->prop(ptr, "radius", ui::ITEM_R_SLIDER, IFACE_("Line Radius"), ICON_NONE);
+  col->prop(ptr, "opacity", ui::ITEM_R_SLIDER, std::nullopt, ICON_NONE);
+  col->prop(ptr, "fill_strokes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  modifier_panel_end(layout, ptr);
+  modifier_error_message_draw(layout, ptr);
 }
 
 static void edge_types_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
@@ -285,118 +316,111 @@ static void edge_types_panel_draw(const bContext * /*C*/, Panel *panel)
   const bool use_cache = RNA_boolean_get(ptr, "use_cache");
   const bool is_first = is_first_lineart(
       *static_cast<const GreasePencilLineartModifierData *>(ptr->data));
-  const bool has_light = RNA_pointer_get(ptr, "light_contour_object").data != nullptr;
+  const bool has_light = RNA_pointer_get(ptr, "light_contour_object").has_data();
 
-  uiLayoutSetEnabled(layout, !is_baked);
+  layout.enabled_set(!is_baked);
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
-  uiLayout *sub = uiLayoutRow(layout, false);
-  uiLayoutSetActive(sub, has_light);
-  uiItemR(sub,
-          ptr,
-          "shadow_region_filtering",
-          UI_ITEM_NONE,
-          IFACE_("Illumination Filtering"),
-          ICON_NONE);
+  ui::Layout *sub = &layout.row(false);
+  sub->active_set(has_light);
+  sub->prop(
+      ptr, "shadow_region_filtering", UI_ITEM_NONE, IFACE_("Illumination Filtering"), ICON_NONE);
 
-  uiLayout *col = uiLayoutColumn(layout, true);
+  ui::Layout *col = &layout.column(true);
 
-  sub = uiLayoutRowWithHeading(col, false, IFACE_("Create"));
-  uiItemR(sub, ptr, "use_contour", UI_ITEM_NONE, "", ICON_NONE);
+  sub = &col->row(false, IFACE_("Create"));
+  sub->prop(ptr, "use_contour", UI_ITEM_NONE, "", ICON_NONE);
 
-  uiLayout *entry = uiLayoutRow(sub, true);
-  uiLayoutSetActive(entry, RNA_boolean_get(ptr, "use_contour"));
-  uiItemR(entry, ptr, "silhouette_filtering", UI_ITEM_NONE, "", ICON_NONE);
+  ui::Layout *entry = &sub->row(true);
+  entry->active_set(RNA_boolean_get(ptr, "use_contour"));
+  entry->prop(ptr, "silhouette_filtering", UI_ITEM_NONE, "", ICON_NONE);
 
   const int silhouette_filtering = RNA_enum_get(ptr, "silhouette_filtering");
   if (silhouette_filtering != LINEART_SILHOUETTE_FILTER_NONE) {
-    uiItemR(entry, ptr, "use_invert_silhouette", UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
+    entry->prop(ptr, "use_invert_silhouette", UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
   }
 
-  sub = uiLayoutRow(col, false);
+  sub = &col->row(false);
   if (use_cache && !is_first) {
-    uiItemR(sub, ptr, "use_crease", UI_ITEM_NONE, IFACE_("Crease (Angle Cached)"), ICON_NONE);
+    sub->prop(ptr, "use_crease", UI_ITEM_NONE, IFACE_("Crease (Angle Cached)"), ICON_NONE);
   }
   else {
-    uiItemR(sub, ptr, "use_crease", UI_ITEM_NONE, "", ICON_NONE);
-    uiItemR(sub,
-            ptr,
-            "crease_threshold",
-            UI_ITEM_R_SLIDER | UI_ITEM_R_FORCE_BLANK_DECORATE,
-            nullptr,
-            ICON_NONE);
+    sub->prop(ptr, "use_crease", UI_ITEM_NONE, "", ICON_NONE);
+    sub->prop(ptr,
+              "crease_threshold",
+              ui::ITEM_R_SLIDER | ui::ITEM_R_FORCE_BLANK_DECORATE,
+              std::nullopt,
+              ICON_NONE);
   }
 
-  uiItemR(col, ptr, "use_intersection", UI_ITEM_NONE, IFACE_("Intersections"), ICON_NONE);
-  uiItemR(col, ptr, "use_material", UI_ITEM_NONE, IFACE_("Material Borders"), ICON_NONE);
-  uiItemR(col, ptr, "use_edge_mark", UI_ITEM_NONE, IFACE_("Edge Marks"), ICON_NONE);
-  uiItemR(col, ptr, "use_loose", UI_ITEM_NONE, IFACE_("Loose"), ICON_NONE);
+  col->prop(ptr, "use_intersection", UI_ITEM_NONE, IFACE_("Intersections"), ICON_NONE);
+  col->prop(ptr, "use_material", UI_ITEM_NONE, IFACE_("Material Borders"), ICON_NONE);
+  col->prop(ptr, "use_edge_mark", UI_ITEM_NONE, IFACE_("Edge Marks"), ICON_NONE);
+  col->prop(ptr, "use_loose", UI_ITEM_NONE, IFACE_("Loose"), ICON_NONE);
 
-  entry = uiLayoutColumn(col, false);
-  uiLayoutSetActive(entry, has_light);
+  entry = &col->column(false);
+  entry->active_set(has_light);
 
-  sub = uiLayoutRow(entry, false);
-  uiItemR(sub, ptr, "use_light_contour", UI_ITEM_NONE, IFACE_("Light Contour"), ICON_NONE);
+  sub = &entry->row(false);
+  sub->prop(ptr, "use_light_contour", UI_ITEM_NONE, IFACE_("Light Contour"), ICON_NONE);
 
-  uiItemR(entry,
-          ptr,
-          "use_shadow",
-          UI_ITEM_NONE,
-          CTX_IFACE_(BLT_I18NCONTEXT_ID_GPENCIL, "Cast Shadow"),
-          ICON_NONE);
+  entry->prop(ptr,
+              "use_shadow",
+              UI_ITEM_NONE,
+              CTX_IFACE_(BLT_I18NCONTEXT_ID_GPENCIL, "Cast Shadow"),
+              ICON_NONE);
 
-  uiItemL(layout, IFACE_("Options"), ICON_NONE);
+  layout.label(IFACE_("Options"), ICON_NONE);
 
-  sub = uiLayoutColumn(layout, false);
+  sub = &layout.column(false);
   if (use_cache && !is_first) {
-    uiItemL(sub, IFACE_("Type overlapping cached"), ICON_INFO);
+    sub->label(IFACE_("Type overlapping cached"), ICON_STATUS_INFO);
   }
   else {
-    uiItemR(sub,
-            ptr,
-            "use_overlap_edge_type_support",
-            UI_ITEM_NONE,
-            IFACE_("Allow Overlapping Types"),
-            ICON_NONE);
+    sub->prop(ptr,
+              "use_overlap_edge_type_support",
+              UI_ITEM_NONE,
+              IFACE_("Allow Overlapping Types"),
+              ICON_NONE);
   }
 }
 
 static void options_light_reference_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
   const bool is_baked = RNA_boolean_get(ptr, "is_baked");
   const bool use_cache = RNA_boolean_get(ptr, "use_cache");
-  const bool has_light = RNA_pointer_get(ptr, "light_contour_object").data != nullptr;
+  const bool has_light = RNA_pointer_get(ptr, "light_contour_object").has_data();
   const bool is_first = is_first_lineart(
       *static_cast<const GreasePencilLineartModifierData *>(ptr->data));
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetEnabled(layout, !is_baked);
+  layout.use_property_split_set(true);
+  layout.enabled_set(!is_baked);
 
   if (use_cache && !is_first) {
-    uiItemL(layout, RPT_("Cached from the first Line Art modifier."), ICON_INFO);
+    layout.label(RPT_("Cached from the first Line Art modifier."), ICON_STATUS_INFO);
     return;
   }
 
-  uiItemR(layout, ptr, "light_contour_object", UI_ITEM_NONE, nullptr, ICON_NONE);
+  layout.prop(ptr, "light_contour_object", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  uiLayout *remaining = uiLayoutColumn(layout, false);
-  uiLayoutSetActive(remaining, has_light);
+  ui::Layout &remaining = layout.column(false);
+  remaining.active_set(has_light);
 
-  uiItemR(remaining, ptr, "shadow_camera_size", UI_ITEM_NONE, nullptr, ICON_NONE);
+  remaining.prop(ptr, "shadow_camera_size", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  uiLayout *col = uiLayoutColumn(remaining, true);
-  uiItemR(col, ptr, "shadow_camera_near", UI_ITEM_NONE, IFACE_("Near"), ICON_NONE);
-  uiItemR(col, ptr, "shadow_camera_far", UI_ITEM_NONE, IFACE_("Far"), ICON_NONE);
+  ui::Layout &col = remaining.column(true);
+  col.prop(ptr, "shadow_camera_near", UI_ITEM_NONE, IFACE_("Near"), ICON_NONE);
+  col.prop(ptr, "shadow_camera_far", UI_ITEM_NONE, IFACE_("Far"), ICON_NONE);
 }
 
 static void options_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
@@ -405,44 +429,36 @@ static void options_panel_draw(const bContext * /*C*/, Panel *panel)
   const bool is_first = is_first_lineart(
       *static_cast<const GreasePencilLineartModifierData *>(ptr->data));
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetEnabled(layout, !is_baked);
+  layout.use_property_split_set(true);
+  layout.enabled_set(!is_baked);
 
   if (use_cache && !is_first) {
-    uiItemL(layout, TIP_("Cached from the first Line Art modifier"), ICON_INFO);
+    layout.label(TIP_("Cached from the first Line Art modifier"), ICON_STATUS_INFO);
     return;
   }
 
-  uiLayout *row = uiLayoutRowWithHeading(layout, false, IFACE_("Custom Camera"));
-  uiItemR(row, ptr, "use_custom_camera", UI_ITEM_NONE, "", ICON_NONE);
-  uiLayout *subrow = uiLayoutRow(row, true);
-  uiLayoutSetActive(subrow, RNA_boolean_get(ptr, "use_custom_camera"));
-  uiLayoutSetPropSep(subrow, true);
-  uiItemR(subrow, ptr, "source_camera", UI_ITEM_NONE, "", ICON_OBJECT_DATA);
+  ui::Layout &row = layout.row(false, IFACE_("Custom Camera"));
+  row.prop(ptr, "use_custom_camera", UI_ITEM_NONE, "", ICON_NONE);
+  ui::Layout &subrow = row.row(true);
+  subrow.active_set(RNA_boolean_get(ptr, "use_custom_camera"));
+  subrow.use_property_split_set(true);
+  subrow.prop(ptr, "source_camera", UI_ITEM_NONE, "", ICON_OBJECT_DATA);
 
-  uiLayout *col = uiLayoutColumn(layout, true);
+  ui::Layout &col = layout.column(true);
 
-  uiItemR(col,
-          ptr,
-          "use_edge_overlap",
-          UI_ITEM_NONE,
-          IFACE_("Overlapping Edges As Contour"),
-          ICON_NONE);
-  uiItemR(col, ptr, "use_object_instances", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(col, ptr, "use_clip_plane_boundaries", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(col, ptr, "use_crease_on_smooth", UI_ITEM_NONE, IFACE_("Crease On Smooth"), ICON_NONE);
-  uiItemR(col, ptr, "use_crease_on_sharp", UI_ITEM_NONE, IFACE_("Crease On Sharp"), ICON_NONE);
-  uiItemR(col,
-          ptr,
-          "use_back_face_culling",
-          UI_ITEM_NONE,
-          IFACE_("Force Backface Culling"),
-          ICON_NONE);
+  col.prop(
+      ptr, "use_edge_overlap", UI_ITEM_NONE, IFACE_("Overlapping Edges As Contour"), ICON_NONE);
+  col.prop(ptr, "use_object_instances", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(ptr, "use_clip_plane_boundaries", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(ptr, "use_crease_on_smooth", UI_ITEM_NONE, IFACE_("Crease On Smooth"), ICON_NONE);
+  col.prop(ptr, "use_crease_on_sharp", UI_ITEM_NONE, IFACE_("Crease On Sharp"), ICON_NONE);
+  col.prop(
+      ptr, "use_back_face_culling", UI_ITEM_NONE, IFACE_("Force Backface Culling"), ICON_NONE);
 }
 
 static void occlusion_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
@@ -451,25 +467,25 @@ static void occlusion_panel_draw(const bContext * /*C*/, Panel *panel)
   const bool use_multiple_levels = RNA_boolean_get(ptr, "use_multiple_levels");
   const bool show_in_front = RNA_boolean_get(&ob_ptr, "show_in_front");
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetEnabled(layout, !is_baked);
+  layout.use_property_split_set(true);
+  layout.enabled_set(!is_baked);
 
   if (!show_in_front) {
-    uiItemL(layout, TIP_("Object is not in front"), ICON_INFO);
+    layout.label(TIP_("Object is not in front"), ICON_STATUS_INFO);
   }
 
-  layout = uiLayoutColumn(layout, false);
-  uiLayoutSetActive(layout, show_in_front);
+  ui::Layout &col = layout.column(false);
+  col.active_set(show_in_front);
 
-  uiItemR(layout, ptr, "use_multiple_levels", UI_ITEM_NONE, IFACE_("Range"), ICON_NONE);
+  col.prop(ptr, "use_multiple_levels", UI_ITEM_NONE, IFACE_("Range"), ICON_NONE);
 
   if (use_multiple_levels) {
-    uiLayout *col = uiLayoutColumn(layout, true);
-    uiItemR(col, ptr, "level_start", UI_ITEM_NONE, nullptr, ICON_NONE);
-    uiItemR(col, ptr, "level_end", UI_ITEM_NONE, IFACE_("End"), ICON_NONE);
+    ui::Layout &sub = col.column(true);
+    sub.prop(ptr, "level_start", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    sub.prop(ptr, "level_end", UI_ITEM_NONE, IFACE_("End"), ICON_NONE);
   }
   else {
-    uiItemR(layout, ptr, "level_start", UI_ITEM_NONE, IFACE_("Level"), ICON_NONE);
+    col.prop(ptr, "level_start", UI_ITEM_NONE, IFACE_("Level"), ICON_NONE);
   }
 }
 
@@ -486,75 +502,75 @@ static bool anything_showing_through(PointerRNA *ptr)
 
 static void material_mask_panel_draw_header(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
   const bool is_baked = RNA_boolean_get(ptr, "is_baked");
   const bool show_in_front = RNA_boolean_get(&ob_ptr, "show_in_front");
 
-  uiLayoutSetEnabled(layout, !is_baked);
-  uiLayoutSetActive(layout, show_in_front && anything_showing_through(ptr));
+  layout.enabled_set(!is_baked);
+  layout.active_set(show_in_front && anything_showing_through(ptr));
 
-  uiItemR(layout, ptr, "use_material_mask", UI_ITEM_NONE, IFACE_("Material Mask"), ICON_NONE);
+  layout.prop(ptr, "use_material_mask", UI_ITEM_NONE, IFACE_("Material Mask"), ICON_NONE);
 }
 
 static void material_mask_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
   const bool is_baked = RNA_boolean_get(ptr, "is_baked");
-  uiLayoutSetEnabled(layout, !is_baked);
-  uiLayoutSetActive(layout, anything_showing_through(ptr));
+  layout.enabled_set(!is_baked);
+  layout.active_set(anything_showing_through(ptr));
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
-  uiLayoutSetEnabled(layout, RNA_boolean_get(ptr, "use_material_mask"));
+  layout.enabled_set(RNA_boolean_get(ptr, "use_material_mask"));
 
-  uiLayout *col = uiLayoutColumn(layout, true);
-  uiLayout *sub = uiLayoutRowWithHeading(col, true, IFACE_("Masks"));
+  ui::Layout &col = layout.column(true);
+  ui::Layout *sub = &col.row(true, IFACE_("Masks"));
 
   PropertyRNA *prop = RNA_struct_find_property(ptr, "use_material_mask_bits");
   for (int i = 0; i < 8; i++) {
-    uiItemFullR(sub, ptr, prop, i, 0, UI_ITEM_R_TOGGLE, " ", ICON_NONE);
+    sub->prop(ptr, prop, i, 0, ui::ITEM_R_TOGGLE, " ", ICON_NONE);
     if (i == 3) {
-      sub = uiLayoutRow(col, true);
+      sub = &col.row(true);
     }
   }
 
-  uiItemR(layout, ptr, "use_material_mask_match", UI_ITEM_NONE, IFACE_("Exact Match"), ICON_NONE);
+  layout.prop(ptr, "use_material_mask_match", UI_ITEM_NONE, IFACE_("Exact Match"), ICON_NONE);
 }
 
 static void intersection_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
   const bool is_baked = RNA_boolean_get(ptr, "is_baked");
-  uiLayoutSetEnabled(layout, !is_baked);
+  layout.enabled_set(!is_baked);
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
-  uiLayoutSetActive(layout, RNA_boolean_get(ptr, "use_intersection"));
+  layout.active_set(RNA_boolean_get(ptr, "use_intersection"));
 
-  uiLayout *col = uiLayoutColumn(layout, true);
-  uiLayout *sub = uiLayoutRowWithHeading(col, true, IFACE_("Collection Masks"));
+  ui::Layout &col = layout.column(true);
+  ui::Layout *sub = &col.row(true, IFACE_("Collection Masks"));
 
   PropertyRNA *prop = RNA_struct_find_property(ptr, "use_intersection_mask");
   for (int i = 0; i < 8; i++) {
-    uiItemFullR(sub, ptr, prop, i, 0, UI_ITEM_R_TOGGLE, " ", ICON_NONE);
+    sub->prop(ptr, prop, i, 0, ui::ITEM_R_TOGGLE, " ", ICON_NONE);
     if (i == 3) {
-      sub = uiLayoutRow(col, true);
+      sub = &col.row(true);
     }
   }
 
-  uiItemR(layout, ptr, "use_intersection_match", UI_ITEM_NONE, IFACE_("Exact Match"), ICON_NONE);
+  layout.prop(ptr, "use_intersection_match", UI_ITEM_NONE, IFACE_("Exact Match"), ICON_NONE);
 }
 
 static void face_mark_panel_draw_header(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
@@ -564,17 +580,17 @@ static void face_mark_panel_draw_header(const bContext * /*C*/, Panel *panel)
       *static_cast<const GreasePencilLineartModifierData *>(ptr->data));
 
   if (!use_cache || is_first) {
-    uiLayoutSetEnabled(layout, !is_baked);
-    uiItemR(layout, ptr, "use_face_mark", UI_ITEM_NONE, IFACE_("Face Mark Filtering"), ICON_NONE);
+    layout.enabled_set(!is_baked);
+    layout.prop(ptr, "use_face_mark", UI_ITEM_NONE, IFACE_("Face Mark Filtering"), ICON_NONE);
   }
   else {
-    uiItemL(layout, IFACE_("Face Mark Filtering"), ICON_NONE);
+    layout.label(IFACE_("Face Mark Filtering"), ICON_NONE);
   }
 }
 
 static void face_mark_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
@@ -584,20 +600,20 @@ static void face_mark_panel_draw(const bContext * /*C*/, Panel *panel)
   const bool is_first = is_first_lineart(
       *static_cast<const GreasePencilLineartModifierData *>(ptr->data));
 
-  uiLayoutSetEnabled(layout, !is_baked);
+  layout.enabled_set(!is_baked);
 
   if (use_cache && !is_first) {
-    uiItemL(layout, TIP_("Cached from the first Line Art modifier"), ICON_INFO);
+    layout.label(TIP_("Cached from the first Line Art modifier"), ICON_STATUS_INFO);
     return;
   }
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
-  uiLayoutSetActive(layout, use_mark);
+  layout.active_set(use_mark);
 
-  uiItemR(layout, ptr, "use_face_mark_invert", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "use_face_mark_boundaries", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "use_face_mark_keep_contour", UI_ITEM_NONE, nullptr, ICON_NONE);
+  layout.prop(ptr, "use_face_mark_invert", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "use_face_mark_boundaries", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "use_face_mark_keep_contour", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static void chaining_panel_draw(const bContext * /*C*/, Panel *panel)
@@ -605,7 +621,7 @@ static void chaining_panel_draw(const bContext * /*C*/, Panel *panel)
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   const bool is_baked = RNA_boolean_get(ptr, "is_baked");
   const bool use_cache = RNA_boolean_get(ptr, "use_cache");
@@ -613,32 +629,31 @@ static void chaining_panel_draw(const bContext * /*C*/, Panel *panel)
       *static_cast<const GreasePencilLineartModifierData *>(ptr->data));
   const bool is_geom = RNA_boolean_get(ptr, "use_geometry_space_chain");
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetEnabled(layout, !is_baked);
+  layout.use_property_split_set(true);
+  layout.enabled_set(!is_baked);
 
   if (use_cache && !is_first) {
-    uiItemL(layout, TIP_("Cached from the first Line Art modifier"), ICON_INFO);
+    layout.label(TIP_("Cached from the first Line Art modifier"), ICON_STATUS_INFO);
     return;
   }
 
-  uiLayout *col = uiLayoutColumnWithHeading(layout, true, IFACE_("Chain"));
-  uiItemR(col, ptr, "use_fuzzy_intersections", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(col, ptr, "use_fuzzy_all", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(col, ptr, "use_loose_edge_chain", UI_ITEM_NONE, IFACE_("Loose Edges"), ICON_NONE);
-  uiItemR(
-      col, ptr, "use_loose_as_contour", UI_ITEM_NONE, IFACE_("Loose Edges As Contour"), ICON_NONE);
-  uiItemR(col, ptr, "use_detail_preserve", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(col, ptr, "use_geometry_space_chain", UI_ITEM_NONE, IFACE_("Geometry Space"), ICON_NONE);
+  ui::Layout &col = layout.column(true, IFACE_("Chain"));
+  col.prop(ptr, "use_fuzzy_intersections", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(ptr, "use_fuzzy_all", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(ptr, "use_loose_edge_chain", UI_ITEM_NONE, IFACE_("Loose Edges"), ICON_NONE);
+  col.prop(ptr, "use_loose_as_contour", UI_ITEM_NONE, IFACE_("Loose Edges As Contour"), ICON_NONE);
+  col.prop(ptr, "use_detail_preserve", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(ptr, "use_geometry_space_chain", UI_ITEM_NONE, IFACE_("Geometry Space"), ICON_NONE);
 
-  uiItemR(layout,
-          ptr,
-          "chaining_image_threshold",
-          UI_ITEM_NONE,
-          is_geom ? IFACE_("Geometry Threshold") : nullptr,
-          ICON_NONE);
+  layout.prop(ptr,
+              "chaining_image_threshold",
+              UI_ITEM_NONE,
+              is_geom ? std::make_optional<StringRefNull>(IFACE_("Geometry Threshold")) :
+                        std::nullopt,
+              ICON_NONE);
 
-  uiItemR(layout, ptr, "smooth_tolerance", UI_ITEM_R_SLIDER, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "split_angle", UI_ITEM_R_SLIDER, nullptr, ICON_NONE);
+  layout.prop(ptr, "smooth_tolerance", ui::ITEM_R_SLIDER, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "split_angle", ui::ITEM_R_SLIDER, std::nullopt, ICON_NONE);
 }
 
 static void vgroup_panel_draw(const bContext * /*C*/, Panel *panel)
@@ -646,62 +661,60 @@ static void vgroup_panel_draw(const bContext * /*C*/, Panel *panel)
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   const bool is_baked = RNA_boolean_get(ptr, "is_baked");
   const bool use_cache = RNA_boolean_get(ptr, "use_cache");
   const bool is_first = is_first_lineart(
       *static_cast<const GreasePencilLineartModifierData *>(ptr->data));
 
-  uiLayoutSetPropSep(layout, true);
-  uiLayoutSetEnabled(layout, !is_baked);
+  layout.use_property_split_set(true);
+  layout.enabled_set(!is_baked);
 
   if (use_cache && !is_first) {
-    uiItemL(layout, TIP_("Cached from the first Line Art modifier"), ICON_INFO);
+    layout.label(TIP_("Cached from the first Line Art modifier"), ICON_STATUS_INFO);
     return;
   }
 
-  uiLayout *col = uiLayoutColumn(layout, true);
+  ui::Layout &col = layout.column(true);
 
-  uiLayout *row = uiLayoutRow(col, true);
+  ui::Layout &row = col.row(true);
 
-  uiItemR(
-      row, ptr, "source_vertex_group", UI_ITEM_NONE, IFACE_("Filter Source"), ICON_GROUP_VERTEX);
-  uiItemR(row, ptr, "invert_source_vertex_group", UI_ITEM_R_TOGGLE, "", ICON_ARROW_LEFTRIGHT);
+  row.prop(ptr, "source_vertex_group", UI_ITEM_NONE, IFACE_("Filter Source"), ICON_GROUP_VERTEX);
+  row.prop(ptr, "invert_source_vertex_group", ui::ITEM_R_TOGGLE, "", ICON_ARROW_LEFTRIGHT);
 
-  uiItemR(col, ptr, "use_output_vertex_group_match_by_name", UI_ITEM_NONE, nullptr, ICON_NONE);
+  col.prop(ptr, "use_output_vertex_group_match_by_name", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  uiItemPointerR(col, ptr, "vertex_group", &ob_ptr, "vertex_groups", IFACE_("Target"), ICON_NONE);
+  col.prop_search(ptr, "vertex_group", &ob_ptr, "vertex_groups", IFACE_("Target"), ICON_NONE);
 }
 
 static void bake_panel_draw(const bContext * /*C*/, Panel *panel)
 {
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
   const bool is_baked = RNA_boolean_get(ptr, "is_baked");
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
   if (is_baked) {
-    uiLayout *col = uiLayoutColumn(layout, false);
-    uiLayoutSetPropSep(col, false);
-    uiItemL(col, TIP_("Modifier has baked data"), ICON_NONE);
-    uiItemR(
-        col, ptr, "is_baked", UI_ITEM_R_TOGGLE, IFACE_("Continue Without Clearing"), ICON_NONE);
+    ui::Layout &col = layout.column(false);
+    col.use_property_split_set(false);
+    col.label(TIP_("Modifier has baked data"), ICON_NONE);
+    col.prop(ptr, "is_baked", ui::ITEM_R_TOGGLE, IFACE_("Continue Without Clearing"), ICON_NONE);
   }
 
-  uiLayout *col = uiLayoutColumn(layout, false);
-  uiLayoutSetEnabled(col, !is_baked);
-  uiItemO(col, nullptr, ICON_NONE, "OBJECT_OT_lineart_bake_strokes");
-  uiItemBooleanO(
-      col, IFACE_("Bake All"), ICON_NONE, "OBJECT_OT_lineart_bake_strokes", "bake_all", true);
+  ui::Layout *col = &layout.column(false);
+  col->enabled_set(!is_baked);
+  col->op("OBJECT_OT_lineart_bake_strokes", std::nullopt, ICON_NONE);
+  PointerRNA op_ptr = col->op("OBJECT_OT_lineart_bake_strokes", IFACE_("Bake All"), ICON_NONE);
+  RNA_boolean_set(&op_ptr, "bake_all", true);
 
-  col = uiLayoutColumn(layout, false);
-  uiItemO(col, nullptr, ICON_NONE, "OBJECT_OT_lineart_clear");
-  uiItemBooleanO(
-      col, IFACE_("Clear All"), ICON_NONE, "OBJECT_OT_lineart_clear", "clear_all", true);
+  col = &layout.column(false);
+  col->op("OBJECT_OT_lineart_clear", std::nullopt, ICON_NONE);
+  op_ptr = col->op("OBJECT_OT_lineart_clear", IFACE_("Clear All"), ICON_NONE);
+  RNA_boolean_set(&op_ptr, "clear_all", true);
 }
 
 static void composition_panel_draw(const bContext * /*C*/, Panel *panel)
@@ -709,29 +722,28 @@ static void composition_panel_draw(const bContext * /*C*/, Panel *panel)
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
-  uiLayout *layout = panel->layout;
+  ui::Layout &layout = *panel->layout;
 
   const bool show_in_front = RNA_boolean_get(&ob_ptr, "show_in_front");
 
-  uiLayoutSetPropSep(layout, true);
+  layout.use_property_split_set(true);
 
-  uiItemR(layout, ptr, "overscan", UI_ITEM_NONE, nullptr, ICON_NONE);
-  uiItemR(layout, ptr, "use_image_boundary_trimming", UI_ITEM_NONE, nullptr, ICON_NONE);
+  layout.prop(ptr, "overscan", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(ptr, "use_image_boundary_trimming", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   if (show_in_front) {
-    uiItemL(layout, TIP_("Object is shown in front"), ICON_ERROR);
+    layout.label(TIP_("Object is shown in front"), ICON_STATUS_ERROR);
   }
 
-  uiLayout *col = uiLayoutColumn(layout, false);
-  uiLayoutSetActive(col, !show_in_front);
+  ui::Layout &col = layout.column(false);
+  col.active_set(!show_in_front);
 
-  uiItemR(col, ptr, "stroke_depth_offset", UI_ITEM_R_SLIDER, IFACE_("Depth Offset"), ICON_NONE);
-  uiItemR(col,
-          ptr,
-          "use_offset_towards_custom_camera",
-          UI_ITEM_NONE,
-          IFACE_("Towards Custom Camera"),
-          ICON_NONE);
+  col.prop(ptr, "stroke_depth_offset", UI_ITEM_NONE, IFACE_("Depth Offset"), ICON_NONE);
+  col.prop(ptr,
+           "use_offset_towards_custom_camera",
+           UI_ITEM_NONE,
+           IFACE_("Towards Custom Camera"),
+           ICON_NONE);
 }
 
 static void panel_register(ARegionType *region_type)
@@ -785,7 +797,7 @@ static void generate_strokes(ModifierData &md,
   }
 
   const bool is_first_lineart = (&first_lineart == &lmd);
-  const bool use_cache = (lmd.flags & MOD_LINEART_USE_CACHE);
+  const bool use_cache = (int(lmd.flags) & int(MOD_LINEART_USE_CACHE));
   LineartCache *local_lc = (is_first_lineart || use_cache) ? first_lineart.shared_cache : nullptr;
 
   /* Only calculate strokes in these three conditions:
@@ -819,6 +831,9 @@ static void generate_strokes(ModifierData &md,
   }();
 
   if (drawing) {
+    BKE_defgroup_copy_list(&drawing->wrap().geometry.vertex_group_names,
+                           &grease_pencil.vertex_group_names);
+
     MOD_lineart_gpencil_generate_v3(
         lmd.cache,
         mat,
@@ -834,8 +849,9 @@ static void generate_strokes(ModifierData &md,
         lmd.mask_switches,
         lmd.material_mask_bits,
         lmd.intersection_mask,
-        float(lmd.thickness) / 1000.0f,
+        lmd.radius,
         lmd.opacity,
+        lmd.fill_strokes,
         lmd.shadow_selection,
         lmd.silhouette_selection,
         lmd.source_vertex_group,
@@ -862,10 +878,10 @@ static void modify_geometry_set(ModifierData *md,
     return;
   }
   GreasePencil &grease_pencil = *geometry_set->get_grease_pencil_for_write();
-  auto mmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
+  auto *mmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
 
-  GreasePencilLineartModifierData *first_lineart =
-      blender::ed::greasepencil::get_first_lineart_modifier(*ctx->object);
+  GreasePencilLineartModifierData *first_lineart = ed::greasepencil::get_first_lineart_modifier(
+      *ctx->object);
   BLI_assert(first_lineart);
 
   /* Since settings for line art cached data are always in the first line art modifier, we need to
@@ -894,7 +910,7 @@ static void blend_write(BlendWriter *writer, const ID * /*id_owner*/, const Modi
 {
   const auto *lmd = reinterpret_cast<const GreasePencilLineartModifierData *>(md);
 
-  BLO_write_struct(writer, GreasePencilLineartModifierData, lmd);
+  writer->write_struct(lmd);
 }
 
 static void blend_read(BlendDataReader * /*reader*/, ModifierData *md)
@@ -902,8 +918,6 @@ static void blend_read(BlendDataReader * /*reader*/, ModifierData *md)
   GreasePencilLineartModifierData *lmd = reinterpret_cast<GreasePencilLineartModifierData *>(md);
   lmd->runtime = MEM_new<LineartModifierRuntime>(__func__);
 }
-
-}  // namespace blender
 
 ModifierTypeInfo modifierType_GreasePencilLineart = {
     /*idname*/ "Lineart Modifier",
@@ -915,26 +929,28 @@ ModifierTypeInfo modifierType_GreasePencilLineart = {
     /*flags*/ eModifierTypeFlag_AcceptsGreasePencil,
     /*icon*/ ICON_MOD_LINEART,
 
-    /*copy_data*/ blender::copy_data,
+    /*copy_data*/ copy_data,
 
     /*deform_verts*/ nullptr,
     /*deform_matrices*/ nullptr,
     /*deform_verts_EM*/ nullptr,
     /*deform_matrices_EM*/ nullptr,
     /*modify_mesh*/ nullptr,
-    /*modify_geometry_set*/ blender::modify_geometry_set,
+    /*modify_geometry_set*/ modify_geometry_set,
 
-    /*init_data*/ blender::init_data,
+    /*init_data*/ init_data,
     /*required_data_mask*/ nullptr,
-    /*free_data*/ blender::free_data,
-    /*is_disabled*/ blender::is_disabled,
-    /*update_depsgraph*/ blender::update_depsgraph,
+    /*free_data*/ free_data,
+    /*is_disabled*/ is_disabled,
+    /*update_depsgraph*/ update_depsgraph,
     /*depends_on_time*/ nullptr,
     /*depends_on_normals*/ nullptr,
-    /*foreach_ID_link*/ blender::foreach_ID_link,
+    /*foreach_ID_link*/ foreach_ID_link,
     /*foreach_tex_link*/ nullptr,
     /*free_runtime_data*/ nullptr,
-    /*panel_register*/ blender::panel_register,
-    /*blend_write*/ blender::blend_write,
-    /*blend_read*/ blender::blend_read,
+    /*panel_register*/ panel_register,
+    /*blend_write*/ blend_write,
+    /*blend_read*/ blend_read,
 };
+
+}  // namespace blender

@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "DNA_collection_types.h"
 #include "DNA_object_types.h"
 #include "DNA_rigidbody_types.h"
 #include "DNA_scene_types.h"
@@ -17,6 +18,7 @@
 #include "BLT_translation.hh"
 
 #include "BKE_context.hh"
+#include "BKE_library.hh"
 #include "BKE_report.hh"
 #include "BKE_rigidbody.h"
 
@@ -38,6 +40,8 @@
 
 #include "physics_intern.hh"
 
+namespace blender {
+
 /* ********************************************** */
 /* Helper API's for RigidBody Objects Editing */
 
@@ -53,7 +57,7 @@ static bool operator_rigidbody_editable_poll(Scene *scene)
   return true;
 }
 
-static bool ED_operator_rigidbody_active_poll(bContext *C)
+static bool operator_rigidbody_active_poll(bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
   if (!operator_rigidbody_editable_poll(scene)) {
@@ -61,14 +65,14 @@ static bool ED_operator_rigidbody_active_poll(bContext *C)
   }
 
   if (ED_operator_object_active_editable(C)) {
-    Object *ob = blender::ed::object::context_active_object(C);
+    Object *ob = ed::object::context_active_object(C);
     return (ob && ob->rigidbody_object);
   }
 
   return false;
 }
 
-static bool ED_operator_rigidbody_add_poll(bContext *C)
+static bool operator_rigidbody_add_poll(bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
   if (!operator_rigidbody_editable_poll(scene)) {
@@ -76,7 +80,7 @@ static bool ED_operator_rigidbody_add_poll(bContext *C)
   }
 
   if (ED_operator_object_active_editable(C)) {
-    Object *ob = blender::ed::object::context_active_object(C);
+    Object *ob = ed::object::context_active_object(C);
     return (ob && ob->type == OB_MESH);
   }
 
@@ -85,7 +89,8 @@ static bool ED_operator_rigidbody_add_poll(bContext *C)
 
 /* ----------------- */
 
-bool ED_rigidbody_object_add(Main *bmain, Scene *scene, Object *ob, int type, ReportList *reports)
+bool ED_rigidbody_object_add(
+    Main *bmain, Scene *scene, Object *ob, eRigidBodyOb_Type type, ReportList *reports)
 {
   return BKE_rigidbody_add_object(bmain, scene, ob, type, reports);
 }
@@ -100,12 +105,12 @@ void ED_rigidbody_object_remove(Main *bmain, Scene *scene, Object *ob)
 
 /* ************ Add Rigid Body ************** */
 
-static int rigidbody_object_add_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus rigidbody_object_add_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
-  Object *ob = blender::ed::object::context_active_object(C);
-  int type = RNA_enum_get(op->ptr, "type");
+  Object *ob = ed::object::context_active_object(C);
+  eRigidBodyOb_Type type = eRigidBodyOb_Type(RNA_enum_get(op->ptr, "type"));
   bool changed;
 
   /* apply to active object */
@@ -131,7 +136,7 @@ void RIGIDBODY_OT_object_add(wmOperatorType *ot)
 
   /* callbacks */
   ot->exec = rigidbody_object_add_exec;
-  ot->poll = ED_operator_rigidbody_add_poll;
+  ot->poll = operator_rigidbody_add_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -147,11 +152,11 @@ void RIGIDBODY_OT_object_add(wmOperatorType *ot)
 
 /* ************ Remove Rigid Body ************** */
 
-static int rigidbody_object_remove_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus rigidbody_object_remove_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
-  Object *ob = blender::ed::object::context_active_object(C);
+  Object *ob = ed::object::context_active_object(C);
   bool changed = false;
 
   /* apply to active object */
@@ -182,7 +187,7 @@ void RIGIDBODY_OT_object_remove(wmOperatorType *ot)
 
   /* callbacks */
   ot->exec = rigidbody_object_remove_exec;
-  ot->poll = ED_operator_rigidbody_active_poll;
+  ot->poll = operator_rigidbody_active_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -193,11 +198,11 @@ void RIGIDBODY_OT_object_remove(wmOperatorType *ot)
 
 /* ************ Add Rigid Bodies ************** */
 
-static int rigidbody_objects_add_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus rigidbody_objects_add_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
-  int type = RNA_enum_get(op->ptr, "type");
+  eRigidBodyOb_Type type = eRigidBodyOb_Type(RNA_enum_get(op->ptr, "type"));
   bool changed = false;
 
   /* create rigid body objects and add them to the world's group */
@@ -226,7 +231,7 @@ void RIGIDBODY_OT_objects_add(wmOperatorType *ot)
 
   /* callbacks */
   ot->exec = rigidbody_objects_add_exec;
-  ot->poll = ED_operator_rigidbody_add_poll;
+  ot->poll = operator_rigidbody_add_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -242,7 +247,7 @@ void RIGIDBODY_OT_objects_add(wmOperatorType *ot)
 
 /* ************ Remove Rigid Bodies ************** */
 
-static int rigidbody_objects_remove_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus rigidbody_objects_remove_exec(bContext *C, wmOperator * /*op*/)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
@@ -277,7 +282,7 @@ void RIGIDBODY_OT_objects_remove(wmOperatorType *ot)
 
   /* callbacks */
   ot->exec = rigidbody_objects_remove_exec;
-  ot->poll = ED_operator_rigidbody_active_poll;
+  ot->poll = operator_rigidbody_active_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -288,7 +293,7 @@ void RIGIDBODY_OT_objects_remove(wmOperatorType *ot)
 
 /* ************ Change Collision Shapes ************** */
 
-static int rigidbody_objects_shape_change_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus rigidbody_objects_shape_change_exec(bContext *C, wmOperator *op)
 {
   int shape = RNA_enum_get(op->ptr, "type");
   bool changed = false;
@@ -297,7 +302,8 @@ static int rigidbody_objects_shape_change_exec(bContext *C, wmOperator *op)
   CTX_DATA_BEGIN (C, Object *, ob, selected_objects) {
     if (ob->rigidbody_object) {
       /* use RNA-system to change the property and perform all necessary changes */
-      PointerRNA ptr = RNA_pointer_create(&ob->id, &RNA_RigidBodyObject, ob->rigidbody_object);
+      PointerRNA ptr = RNA_pointer_create_discrete(
+          &ob->id, RNA_RigidBodyObject, ob->rigidbody_object);
       RNA_enum_set(&ptr, "collision_shape", shape);
 
       DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM);
@@ -328,7 +334,7 @@ void RIGIDBODY_OT_shape_change(wmOperatorType *ot)
   /* callbacks */
   ot->invoke = WM_menu_invoke;
   ot->exec = rigidbody_objects_shape_change_exec;
-  ot->poll = ED_operator_rigidbody_active_poll;
+  ot->poll = operator_rigidbody_active_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -447,7 +453,7 @@ static const EnumPropertyItem *rigidbody_materials_itemf(bContext * /*C*/,
 
 /* ------------------------------------------ */
 
-static int rigidbody_objects_calc_mass_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus rigidbody_objects_calc_mass_exec(bContext *C, wmOperator *op)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   int material = RNA_enum_get(op->ptr, "material");
@@ -478,12 +484,13 @@ static int rigidbody_objects_calc_mass_exec(bContext *C, wmOperator *op)
       /* mass is calculated from the approximate volume of the object,
        * and the density of the material we're simulating
        */
-      Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
+      Object *ob_eval = DEG_get_evaluated(depsgraph, ob);
       BKE_rigidbody_calc_volume(ob_eval, &volume);
       mass = volume * density;
 
       /* use RNA-system to change the property and perform all necessary changes */
-      PointerRNA ptr = RNA_pointer_create(&ob->id, &RNA_RigidBodyObject, ob->rigidbody_object);
+      PointerRNA ptr = RNA_pointer_create_discrete(
+          &ob->id, RNA_RigidBodyObject, ob->rigidbody_object);
       RNA_float_set(&ptr, "mass", mass);
 
       DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM);
@@ -513,10 +520,10 @@ static bool mass_calculate_poll_property(const bContext * /*C*/,
   if (STREQ(prop_id, "density")) {
     int material = RNA_enum_get(op->ptr, "material");
     if (material >= 0) {
-      RNA_def_property_clear_flag((PropertyRNA *)prop, PROP_EDITABLE);
+      RNA_def_property_clear_flag(const_cast<PropertyRNA *>(prop), PROP_EDITABLE);
     }
     else {
-      RNA_def_property_flag((PropertyRNA *)prop, PROP_EDITABLE);
+      RNA_def_property_flag(const_cast<PropertyRNA *>(prop), PROP_EDITABLE);
     }
   }
 
@@ -535,7 +542,7 @@ void RIGIDBODY_OT_mass_calculate(wmOperatorType *ot)
   /* callbacks */
   ot->invoke = WM_menu_invoke; /* XXX */
   ot->exec = rigidbody_objects_calc_mass_exec;
-  ot->poll = ED_operator_rigidbody_active_poll;
+  ot->poll = operator_rigidbody_active_poll;
   ot->poll_property = mass_calculate_poll_property;
 
   /* flags */
@@ -564,3 +571,5 @@ void RIGIDBODY_OT_mass_calculate(wmOperatorType *ot)
 }
 
 /* ********************************************** */
+
+}  // namespace blender

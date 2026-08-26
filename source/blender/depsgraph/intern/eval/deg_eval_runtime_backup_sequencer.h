@@ -10,14 +10,15 @@
 
 #include "DNA_session_uid_types.h"
 
-#include "BLI_session_uid.h"
+#include "BLI_map.hh"
 
-#include "intern/depsgraph_type.hh"
 #include "intern/eval/deg_eval_runtime_backup_sequence.h"
+
+namespace blender {
 
 struct Scene;
 
-namespace blender::deg {
+namespace deg {
 
 struct Depsgraph;
 
@@ -31,7 +32,8 @@ class SequencerBackup {
 
   const Depsgraph *depsgraph;
 
-  Map<SessionUID, SequenceBackup> sequences_backup;
+  Map<SessionUID, StripBackup> strips_backup;
 };
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

@@ -7,9 +7,11 @@
 
 #include "usd_writer_abstract.hh"
 
+namespace blender {
+
 struct Volume;
 
-namespace blender::io::usd {
+namespace io::usd {
 
 /* Writer for writing OpenVDB assets to UsdVolVolume. Volume data is stored in separate `.vdb`
  * files which are referenced in USD file. */
@@ -18,8 +20,8 @@ class USDVolumeWriter : public USDAbstractWriter {
   USDVolumeWriter(const USDExporterContext &ctx);
 
  protected:
-  virtual bool check_is_animated(const HierarchyContext &context) const override;
-  virtual void do_write(HierarchyContext &context) override;
+  bool check_is_animated(const HierarchyContext &context) const override;
+  void do_write(HierarchyContext &context) override;
 
  private:
   /* Try to ensure that external `.vdb` file is available for USD to be referenced. Blender can
@@ -34,4 +36,5 @@ class USDVolumeWriter : public USDAbstractWriter {
       const std::string &vdb_file_path) const;
 };
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

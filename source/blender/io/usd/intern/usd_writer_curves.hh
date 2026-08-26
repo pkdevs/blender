@@ -9,12 +9,14 @@
 #include <pxr/usd/usdGeom/curves.h>
 #include <pxr/usd/usdGeom/nurbsCurves.h>
 
-namespace blender::bke {
+namespace blender {
+
+namespace bke {
 class AttributeIter;
 class CurvesGeometry;
-}  // namespace blender::bke
+}  // namespace bke
 
-namespace blender::io::usd {
+namespace io::usd {
 
 /* Writer for writing Curves data as USD curves. */
 class USDCurvesWriter final : public USDAbstractWriter {
@@ -23,7 +25,7 @@ class USDCurvesWriter final : public USDAbstractWriter {
   ~USDCurvesWriter() final = default;
 
  protected:
-  virtual void do_write(HierarchyContext &context) override;
+  void do_write(HierarchyContext &context) override;
   void assign_materials(const HierarchyContext &context, const pxr::UsdGeomCurves &usd_curves);
 
  private:
@@ -33,16 +35,17 @@ class USDCurvesWriter final : public USDAbstractWriter {
                                                    bool cubic) const;
 
   void set_writer_attributes(pxr::UsdGeomCurves &usd_curves,
-                             const pxr::VtArray<pxr::GfVec3f> &verts,
-                             const pxr::VtIntArray &control_point_counts,
-                             const pxr::VtArray<float> &widths,
-                             const pxr::UsdTimeCode timecode,
+                             pxr::VtArray<pxr::GfVec3f> &verts,
+                             pxr::VtIntArray &control_point_counts,
+                             pxr::VtArray<float> &widths,
+                             const pxr::UsdTimeCode time,
                              const pxr::TfToken interpolation);
 
   void set_writer_attributes_for_nurbs(const pxr::UsdGeomNurbsCurves &usd_nurbs_curves,
-                                       const pxr::VtArray<double> &knots,
-                                       const pxr::VtArray<int> &orders,
-                                       const pxr::UsdTimeCode timecode);
+                                       pxr::VtArray<double> &knots,
+                                       pxr::VtArray<double> &weights,
+                                       pxr::VtArray<int> &orders,
+                                       const pxr::UsdTimeCode time);
 
   void write_generic_data(const bke::CurvesGeometry &curves,
                           const bke::AttributeIter &attr,
@@ -50,8 +53,10 @@ class USDCurvesWriter final : public USDAbstractWriter {
 
   void write_uv_data(const bke::AttributeIter &attr, const pxr::UsdGeomCurves &usd_curves);
 
-  void write_custom_data(const blender::bke::CurvesGeometry &curves,
-                         const pxr::UsdGeomCurves &usd_curves);
+  void write_velocities(const bke::CurvesGeometry &curves, const pxr::UsdGeomCurves &usd_curves);
+
+  void write_custom_data(const bke::CurvesGeometry &curves, const pxr::UsdGeomCurves &usd_curves);
 };
 
-}  // namespace blender::io::usd
+}  // namespace io::usd
+}  // namespace blender

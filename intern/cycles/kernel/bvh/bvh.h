@@ -4,21 +4,27 @@
 
 #pragma once
 
+#include "kernel/bvh/intersect_filter.h"
+#include "kernel/bvh/nodes.h"
 #include "kernel/bvh/types.h"
 #include "kernel/bvh/util.h"
 
-#include "kernel/integrator/state_util.h"
+#include "kernel/geom/curve_intersect.h"
+#include "kernel/geom/motion_triangle_intersect.h"
+#include "kernel/geom/object.h"
+#include "kernel/geom/point_intersect.h"
+#include "kernel/geom/triangle_intersect.h"
 
 /* Device specific acceleration structures for ray tracing. */
 
 #if defined(__EMBREE__)
 #  include "kernel/device/cpu/bvh.h"
 #  define __BVH2__
-#elif defined(__METALRT__)
+#elif defined(__KERNEL_METALRT__)
 #  include "kernel/device/metal/bvh.h"
 #elif defined(__KERNEL_OPTIX__)
 #  include "kernel/device/optix/bvh.h"
-#elif defined(__HIPRT__)
+#elif defined(__KERNEL_HIPRT__)
 #  include "kernel/device/hiprt/bvh.h"
 #else
 #  define __BVH2__
@@ -48,6 +54,134 @@ static constexpr sycl::specialization_id<RTCFeatureFlags> oneapi_embree_features
 
 CCL_NAMESPACE_BEGIN
 
+/* --------------------------------------------------------------------
+ * Transparent shadow BVH traversal, recording multiple intersections.
+ */
+
+#ifdef __TRANSPARENT_SHADOWS__
+
+#  if defined(__BVH2__)
+#    define BVH_FUNCTION_NAME bvh_intersect_shadow_all
+#    define BVH_FUNCTION_FEATURES BVH_POINTCLOUD
+#    include "kernel/bvh/shadow_all.h"
+
+#    if defined(__HAIR__)
+#      define BVH_FUNCTION_NAME bvh_intersect_shadow_all_hair
+#      define BVH_FUNCTION_FEATURES BVH_HAIR | BVH_POINTCLOUD
+#      include "kernel/bvh/shadow_all.h"
+#    endif
+
+#    if defined(__OBJECT_MOTION__)
+#      define BVH_FUNCTION_NAME bvh_intersect_shadow_all_motion
+#      define BVH_FUNCTION_FEATURES BVH_MOTION | BVH_POINTCLOUD
+#      include "kernel/bvh/shadow_all.h"
+#    endif
+
+#    if defined(__HAIR__) && defined(__OBJECT_MOTION__)
+#      define BVH_FUNCTION_NAME bvh_intersect_shadow_all_hair_motion
+#      define BVH_FUNCTION_FEATURES BVH_HAIR | BVH_MOTION | BVH_POINTCLOUD
+#      include "kernel/bvh/shadow_all.h"
+#    endif
+
+ccl_device_inline void scene_intersect_shadow_all_bvh2(
+    KernelGlobals kg,
+    const ccl_private Ray *ccl_restrict ray,
+    ccl_private BVHShadowAllPayload &ccl_restrict payload)
+{
+#    ifdef __OBJECT_MOTION__
+  if (kernel_data.bvh.have_motion) {
+#      ifdef __HAIR__
+    if (kernel_data.bvh.have_curves) {
+      bvh_intersect_shadow_all_hair_motion(kg, ray, payload);
+      return;
+    }
+#      endif /* __HAIR__ */
+    bvh_intersect_shadow_all_motion(kg, ray, payload);
+    return;
+  }
+#    endif /* __OBJECT_MOTION__ */
+
+#    ifdef __HAIR__
+  if (kernel_data.bvh.have_curves) {
+    bvh_intersect_shadow_all_hair(kg, ray, payload);
+    return;
+  }
+#    endif /* __HAIR__ */
+  bvh_intersect_shadow_all(kg, ray, payload);
+}
+#  endif /* __BVH2__ */
+
+ccl_device_intersect void scene_intersect_shadow_all(KernelGlobals kg,
+                                                     IntegratorShadowState state,
+                                                     const ccl_private Ray *ray,
+                                                     const uint visibility,
+                                                     const uint max_transparent_hits,
+                                                     ccl_private uint *num_recorded_hits,
+                                                     ccl_private float3 *throughput)
+{
+#  if !defined(__KERNEL_OPTIX__)
+  /* OptiX does not perform well with conditional trace calls, so it handles the validity of the
+   * ray in the scene_intersect_shadow_all_optix(). */
+  if (!intersection_ray_valid(ray)) {
+    *num_recorded_hits = 0;
+    *throughput = one_float3();
+    return;
+  }
+#  endif
+
+  BVHShadowAllPayload payload;
+
+  /* A bit of a tricky initialization:
+   * - Some backends require extra ray information for custom motion blur intersection.
+   * - Some backends utilize registers to pass commonly accessed data to the trace calls. */
+#  if !defined(__KERNEL_OPTIX__)
+  BVH_PAYLOAD_BASE(payload).ray_self = ray->self;
+  BVH_PAYLOAD_BASE(payload).ray_visibility = visibility;
+#    if defined(__KERNEL_HIPRT__)
+  BVH_PAYLOAD_BASE(payload).ray_time = ray->time;
+#    endif
+#  endif
+
+  payload.state = state;
+  payload.max_transparent_hits = max_transparent_hits;
+  payload.max_record_isect_t = ray->tmax;
+
+#  ifdef __EMBREE__
+  IF_USING_EMBREE
+  {
+    if (kernel_data.device_bvh) {
+      kernel_embree_intersect_shadow_all(kg, ray, payload);
+      *num_recorded_hits = payload.num_recorded_hits;
+      *throughput = payload.throughput;
+      return;
+    }
+  }
+#  endif
+
+  IF_NOT_USING_EMBREE
+  {
+#  if defined(__BVH2__)
+    scene_intersect_shadow_all_bvh2(kg, ray, payload);
+#  elif defined(__KERNEL_HIPRT__)
+    scene_intersect_shadow_all_hiprt(kg, ray, payload);
+#  elif defined(__KERNEL_METALRT__)
+    scene_intersect_shadow_all_metalrt(ray, payload);
+#  elif defined(__KERNEL_OPTIX__)
+    scene_intersect_shadow_all_optix(ray, visibility, payload);
+#  endif
+
+    *num_recorded_hits = payload.num_recorded_hits;
+    *throughput = payload.throughput;
+
+    return;
+  }
+
+  kernel_assert(false);
+}
+#endif /* __TRANSPARENT_SHADOWS__ */
+
+// ------------------------------------------------------------------------------------------------
+
 #ifdef __BVH2__
 
 /* BVH2
@@ -62,8 +196,6 @@ CCL_NAMESPACE_BEGIN
  * Originally based on "Understanding the Efficiency of Ray Traversal on GPUs",
  * the code has been extended and modified to support more primitives and work
  * with CPU and various GPU kernel languages. */
-
-#  include "kernel/bvh/nodes.h"
 
 /* Regular BVH traversal */
 
@@ -90,7 +222,7 @@ CCL_NAMESPACE_BEGIN
 #  endif
 
 ccl_device_intersect bool scene_intersect(KernelGlobals kg,
-                                          ccl_private const Ray *ray,
+                                          const ccl_private Ray *ray,
                                           const uint visibility,
                                           ccl_private Intersection *isect)
 {
@@ -135,7 +267,7 @@ ccl_device_intersect bool scene_intersect(KernelGlobals kg,
 }
 
 ccl_device_intersect bool scene_intersect_shadow(KernelGlobals kg,
-                                                 ccl_private const Ray *ray,
+                                                 const ccl_private Ray *ray,
                                                  const uint visibility)
 {
   Intersection isect;
@@ -158,11 +290,11 @@ ccl_device_intersect bool scene_intersect_shadow(KernelGlobals kg,
 
 template<bool single_hit = false>
 ccl_device_intersect bool scene_intersect_local(KernelGlobals kg,
-                                                ccl_private const Ray *ray,
+                                                const ccl_private Ray *ray,
                                                 ccl_private LocalIntersection *local_isect,
-                                                int local_object,
+                                                const int local_object,
                                                 ccl_private uint *lcg_state,
-                                                int max_hits)
+                                                const int max_hits)
 {
   if (!intersection_ray_valid(ray)) {
     if (local_isect) {
@@ -196,88 +328,6 @@ ccl_device_intersect bool scene_intersect_local(KernelGlobals kg,
 }
 #  endif
 
-/* Transparent shadow BVH traversal, recording multiple intersections. */
-
-#  ifdef __SHADOW_RECORD_ALL__
-
-#    define BVH_FUNCTION_NAME bvh_intersect_shadow_all
-#    define BVH_FUNCTION_FEATURES BVH_POINTCLOUD
-#    include "kernel/bvh/shadow_all.h"
-
-#    if defined(__HAIR__)
-#      define BVH_FUNCTION_NAME bvh_intersect_shadow_all_hair
-#      define BVH_FUNCTION_FEATURES BVH_HAIR | BVH_POINTCLOUD
-#      include "kernel/bvh/shadow_all.h"
-#    endif
-
-#    if defined(__OBJECT_MOTION__)
-#      define BVH_FUNCTION_NAME bvh_intersect_shadow_all_motion
-#      define BVH_FUNCTION_FEATURES BVH_MOTION | BVH_POINTCLOUD
-#      include "kernel/bvh/shadow_all.h"
-#    endif
-
-#    if defined(__HAIR__) && defined(__OBJECT_MOTION__)
-#      define BVH_FUNCTION_NAME bvh_intersect_shadow_all_hair_motion
-#      define BVH_FUNCTION_FEATURES BVH_HAIR | BVH_MOTION | BVH_POINTCLOUD
-#      include "kernel/bvh/shadow_all.h"
-#    endif
-
-ccl_device_intersect bool scene_intersect_shadow_all(KernelGlobals kg,
-                                                     IntegratorShadowState state,
-                                                     ccl_private const Ray *ray,
-                                                     uint visibility,
-                                                     uint max_hits,
-                                                     ccl_private uint *num_recorded_hits,
-                                                     ccl_private float *throughput)
-{
-  if (!intersection_ray_valid(ray)) {
-    *num_recorded_hits = 0;
-    *throughput = 1.0f;
-    return false;
-  }
-
-#    ifdef __EMBREE__
-  IF_USING_EMBREE
-  {
-    if (kernel_data.device_bvh) {
-      return kernel_embree_intersect_shadow_all(
-          kg, state, ray, visibility, max_hits, num_recorded_hits, throughput);
-    }
-  }
-#    endif
-
-  IF_NOT_USING_EMBREE
-  {
-#    ifdef __OBJECT_MOTION__
-    if (kernel_data.bvh.have_motion) {
-#      ifdef __HAIR__
-      if (kernel_data.bvh.have_curves) {
-        return bvh_intersect_shadow_all_hair_motion(
-            kg, ray, state, visibility, max_hits, num_recorded_hits, throughput);
-      }
-#      endif /* __HAIR__ */
-
-      return bvh_intersect_shadow_all_motion(
-          kg, ray, state, visibility, max_hits, num_recorded_hits, throughput);
-    }
-#    endif /* __OBJECT_MOTION__ */
-
-#    ifdef __HAIR__
-    if (kernel_data.bvh.have_curves) {
-      return bvh_intersect_shadow_all_hair(
-          kg, ray, state, visibility, max_hits, num_recorded_hits, throughput);
-    }
-#    endif /* __HAIR__ */
-
-    return bvh_intersect_shadow_all(
-        kg, ray, state, visibility, max_hits, num_recorded_hits, throughput);
-  }
-
-  kernel_assert(false);
-  return false;
-}
-#  endif /* __SHADOW_RECORD_ALL__ */
-
 /* Volume BVH traversal, for initializing or updating the volume stack. */
 
 #  if defined(__VOLUME__) && !defined(__VOLUME_RECORD_ALL__)
@@ -293,7 +343,7 @@ ccl_device_intersect bool scene_intersect_shadow_all(KernelGlobals kg,
 #    endif
 
 ccl_device_intersect bool scene_intersect_volume(KernelGlobals kg,
-                                                 ccl_private const Ray *ray,
+                                                 const ccl_private Ray *ray,
                                                  ccl_private Intersection *isect,
                                                  const uint visibility)
 {
@@ -342,7 +392,7 @@ ccl_device_intersect bool scene_intersect_volume(KernelGlobals kg,
 #    endif
 
 ccl_device_intersect uint scene_intersect_volume(KernelGlobals kg,
-                                                 ccl_private const Ray *ray,
+                                                 const ccl_private Ray *ray,
                                                  ccl_private Intersection *isect,
                                                  const uint max_hits,
                                                  const uint visibility)

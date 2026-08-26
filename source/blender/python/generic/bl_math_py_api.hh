@@ -9,4 +9,10 @@
 
 #pragma once
 
+#include <Python.h>
+
+namespace blender {
+
 PyMODINIT_FUNC BPyInit_bl_math();
+
+}  // namespace blender

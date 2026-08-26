@@ -8,9 +8,8 @@
 
 #include <cstdio>
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_vector_set.hh"
 
 #include "BKE_main.hh"
 #include "BKE_screen.hh"
@@ -32,26 +31,35 @@
 #include "wm_gizmo_intern.hh"
 #include "wm_gizmo_wmapi.hh"
 
+namespace blender {
+
 /* -------------------------------------------------------------------- */
 /** \name Gizmo Type Append
  *
  * \note This follows conventions from #WM_operatortype_find #WM_operatortype_append & friends.
  * \{ */
 
-static GHash *global_gizmotype_hash = nullptr;
-
-const wmGizmoType *WM_gizmotype_find(const char *idname, bool quiet)
+static auto &get_gizmo_type_map()
 {
-  if (idname[0]) {
-    wmGizmoType *gzt;
+  struct IDNameGetter {
+    StringRef operator()(const wmGizmoType *value) const
+    {
+      return StringRef(value->idname);
+    }
+  };
+  static CustomIDVectorSet<wmGizmoType *, IDNameGetter> map;
+  return map;
+}
 
-    gzt = static_cast<wmGizmoType *>(BLI_ghash_lookup(global_gizmotype_hash, idname));
-    if (gzt) {
-      return gzt;
+const wmGizmoType *WM_gizmotype_find(const StringRef idname, bool quiet)
+{
+  if (!idname.is_empty()) {
+    if (wmGizmoType *const *gzt = get_gizmo_type_map().lookup_key_ptr_as(idname)) {
+      return *gzt;
     }
 
     if (!quiet) {
-      printf("search for unknown gizmo '%s'\n", idname);
+      printf("search for unknown gizmo '%s'\n", std::string(idname).c_str());
     }
   }
   else {
@@ -63,15 +71,10 @@ const wmGizmoType *WM_gizmotype_find(const char *idname, bool quiet)
   return nullptr;
 }
 
-void WM_gizmotype_iter(GHashIterator *ghi)
-{
-  BLI_ghashIterator_init(ghi, global_gizmotype_hash);
-}
-
 static wmGizmoType *wm_gizmotype_append__begin()
 {
-  wmGizmoType *gzt = static_cast<wmGizmoType *>(MEM_callocN(sizeof(wmGizmoType), "gizmotype"));
-  gzt->srna = RNA_def_struct_ptr(&BLENDER_RNA, "", &RNA_GizmoProperties);
+  wmGizmoType *gzt = MEM_new_zeroed<wmGizmoType>("gizmotype");
+  gzt->srna = RNA_def_struct_ptr(&RNA_blender_rna_get(), "", RNA_GizmoProperties);
 #if 0
   /* Set the default i18n context now, so that opfunc can redefine it if needed! */
   RNA_def_struct_translation_context(ot->srna, BLT_I18NCONTEXT_OPERATOR_DEFAULT);
@@ -83,9 +86,9 @@ static void wm_gizmotype_append__end(wmGizmoType *gzt)
 {
   BLI_assert(gzt->struct_size >= sizeof(wmGizmo));
 
-  RNA_def_struct_identifier(&BLENDER_RNA, gzt->srna, gzt->idname);
+  RNA_def_struct_identifier(&RNA_blender_rna_get(), gzt->srna, gzt->idname);
 
-  BLI_ghash_insert(global_gizmotype_hash, (void *)gzt->idname, gzt);
+  get_gizmo_type_map().add(gzt);
 }
 
 void WM_gizmotype_append(void (*gtfunc)(wmGizmoType *))
@@ -106,11 +109,11 @@ void WM_gizmotype_free_ptr(wmGizmoType *gzt)
 {
   /* Python gizmo, allocates its own string. */
   if (gzt->rna_ext.srna) {
-    MEM_freeN((void *)gzt->idname);
+    MEM_delete(gzt->idname);
   }
 
-  BLI_freelistN(&gzt->target_property_defs);
-  MEM_freeN(gzt);
+  gzt->target_property_defs.free_no_destruct();
+  MEM_delete(gzt);
 }
 
 /**
@@ -122,21 +125,21 @@ static void gizmotype_unlink(bContext *C, Main *bmain, wmGizmoType *gzt)
   for (bScreen *screen = static_cast<bScreen *>(bmain->screens.first); screen;
        screen = static_cast<bScreen *>(screen->id.next))
   {
-    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-      LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
-        ListBase *lb = (sl == area->spacedata.first) ? &area->regionbase : &sl->regionbase;
-        LISTBASE_FOREACH (ARegion *, region, lb) {
-          wmGizmoMap *gzmap = region->runtime->gizmo_map;
+    for (ScrArea &area : screen->areabase) {
+      for (SpaceLink &sl : area.spacedata) {
+        ListBaseT<ARegion> *lb = (&sl == area.spacedata.first) ? &area.regionbase : &sl.regionbase;
+        for (ARegion &region : *lb) {
+          wmGizmoMap *gzmap = region.runtime->gizmo_map;
           if (gzmap) {
-            LISTBASE_FOREACH (wmGizmoGroup *, gzgroup, &gzmap->groups) {
-              for (wmGizmo *gz = static_cast<wmGizmo *>(gzgroup->gizmos.first), *gz_next; gz;
+            for (wmGizmoGroup &gzgroup : gzmap->groups) {
+              for (wmGizmo *gz = static_cast<wmGizmo *>(gzgroup.gizmos.first), *gz_next; gz;
                    gz = gz_next)
               {
                 gz_next = gz->next;
-                BLI_assert(gzgroup->parent_gzmap == gzmap);
+                BLI_assert(gzgroup.parent_gzmap == gzmap);
                 if (gz->type == gzt) {
-                  WM_gizmo_unlink(&gzgroup->gizmos, gzgroup->parent_gzmap, gz, C);
-                  ED_region_tag_redraw_editor_overlays(region);
+                  WM_gizmo_unlink(&gzgroup.gizmos, gzgroup.parent_gzmap, gz, C);
+                  ED_region_tag_redraw_editor_overlays(&region);
                 }
               }
             }
@@ -151,39 +154,37 @@ void WM_gizmotype_remove_ptr(bContext *C, Main *bmain, wmGizmoType *gzt)
 {
   BLI_assert(gzt == WM_gizmotype_find(gzt->idname, false));
 
-  BLI_ghash_remove(global_gizmotype_hash, gzt->idname, nullptr, nullptr);
+  get_gizmo_type_map().remove(gzt);
 
   gizmotype_unlink(C, bmain, gzt);
 }
 
-bool WM_gizmotype_remove(bContext *C, Main *bmain, const char *idname)
+bool WM_gizmotype_remove(bContext *C, Main *bmain, const StringRef idname)
 {
-  wmGizmoType *gzt = static_cast<wmGizmoType *>(BLI_ghash_lookup(global_gizmotype_hash, idname));
-
+  wmGizmoType *const *gzt = get_gizmo_type_map().lookup_key_ptr_as(idname);
   if (gzt == nullptr) {
     return false;
   }
 
-  WM_gizmotype_remove_ptr(C, bmain, gzt);
+  WM_gizmotype_remove_ptr(C, bmain, *gzt);
 
   return true;
 }
 
-static void wm_gizmotype_ghash_free_cb(wmGizmoType *gzt)
-{
-  WM_gizmotype_free_ptr(gzt);
-}
-
 void wm_gizmotype_free()
 {
-  BLI_ghash_free(global_gizmotype_hash, nullptr, (GHashValFreeFP)wm_gizmotype_ghash_free_cb);
-  global_gizmotype_hash = nullptr;
+  for (wmGizmoType *gzt : get_gizmo_type_map()) {
+    WM_gizmotype_free_ptr(gzt);
+  }
+  get_gizmo_type_map().clear();
 }
 
 void wm_gizmotype_init()
 {
   /* Reserve size is set based on blender default setup. */
-  global_gizmotype_hash = BLI_ghash_str_new_ex("wm_gizmotype_init gh", 128);
+  get_gizmo_type_map().reserve(128);
 }
 
 /** \} */
+
+}  // namespace blender

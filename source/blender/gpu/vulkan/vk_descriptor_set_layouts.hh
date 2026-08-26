@@ -17,15 +17,19 @@
 
 #pragma once
 
-#include <mutex>
-
 #include "BLI_map.hh"
+#include "BLI_mutex.hh"
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector.hh"
 
 #include "vk_common.hh"
 
-namespace blender::gpu {
+namespace blender {
+
+namespace gpu {
+
+class VKDevice;
+
 /**
  * Key of descriptor set layout
  *
@@ -43,11 +47,10 @@ struct VKDescriptorSetLayoutInfo {
   };
 };
 
-};  // namespace blender::gpu
+};  // namespace gpu
 
-namespace blender {
 /**
- * Default hash for blender::gpu::VKDescriptorSetLayoutInfo.
+ * Default hash for gpu::VKDescriptorSetLayoutInfo.
  *
  * NOTE: DefaultHash needs to be implemented in namespace `blender`.
  */
@@ -61,9 +64,9 @@ template<> struct DefaultHash<gpu::VKDescriptorSetLayoutInfo> {
     return hash;
   }
 };
-}  // namespace blender
 
-namespace blender::gpu {
+namespace gpu {
+
 /**
  * Registries of descriptor set layouts.
  */
@@ -81,7 +84,7 @@ class VKDescriptorSetLayouts : NonCopyable {
    */
   VkDescriptorSetLayoutCreateInfo vk_descriptor_set_layout_create_info_;
   Vector<VkDescriptorSetLayoutBinding> vk_descriptor_set_layout_bindings_;
-  std::mutex mutex_;
+  Mutex mutex_;
 
  public:
   VKDescriptorSetLayouts();
@@ -95,7 +98,7 @@ class VKDescriptorSetLayouts : NonCopyable {
    */
   VkDescriptorSetLayout get_or_create(const VKDescriptorSetLayoutInfo &info,
                                       bool &r_created,
-                                      [[deprecated]] bool &r_needed);
+                                      bool &r_needed);
 
   /**
    * Free all descriptor set layouts.
@@ -116,4 +119,5 @@ class VKDescriptorSetLayouts : NonCopyable {
   void update_layout_bindings(const VKDescriptorSetLayoutInfo &info);
 };
 
-}  // namespace blender::gpu
+}  // namespace gpu
+}  // namespace blender

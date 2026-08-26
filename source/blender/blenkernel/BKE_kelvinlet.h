@@ -7,16 +7,14 @@
  * \ingroup bke
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace blender {
 
 /* Regularized Kelvinlets: Sculpting Brushes based on Fundamental Solutions of Elasticity
  * Pixar Technical Memo #17-03 */
 
 #define KELVINLET_MAX_ITERATIONS 3
 
-typedef struct KelvinletParams {
+struct KelvinletParams {
   float a;
   float b;
   float c;
@@ -24,7 +22,7 @@ typedef struct KelvinletParams {
   float f;
 
   float radius_scaled[KELVINLET_MAX_ITERATIONS];
-} KelvinletParams;
+};
 
 /* Initialize KelvinletParams to store the parameters that will affect the deformation produced by
  * a Kelvinlet */
@@ -60,6 +58,4 @@ void BKE_kelvinlet_twist(float radius_elem_disp[3],
                          const float brush_location[3],
                          const float surface_normal[3]);
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

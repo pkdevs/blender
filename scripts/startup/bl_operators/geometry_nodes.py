@@ -9,10 +9,11 @@ from bpy.props import BoolProperty
 from bpy.app.translations import pgettext_data as data_
 
 
-def add_empty_geometry_node_group(name):
+def add_empty_geometry_node_group(name, add_geometry_input=True):
     group = bpy.data.node_groups.new(name, 'GeometryNodeTree')
 
-    group.interface.new_socket(data_("Geometry"), in_out='INPUT', socket_type='NodeSocketGeometry')
+    if add_geometry_input:
+        group.interface.new_socket(data_("Geometry"), in_out='INPUT', socket_type='NodeSocketGeometry')
     input_node = group.nodes.new('NodeGroupInput')
     input_node.select = False
     input_node.location.x = -200 - input_node.width
@@ -26,36 +27,46 @@ def add_empty_geometry_node_group(name):
     return group
 
 
-def geometry_node_group_empty_new(name):
-    group = add_empty_geometry_node_group(name)
-    group.links.new(group.nodes[data_("Group Input")].outputs[0], group.nodes[data_("Group Output")].inputs[0])
+def geometry_node_group_empty_new(name, add_geometry_input=True):
+    group = add_empty_geometry_node_group(name, add_geometry_input)
+    if add_geometry_input:
+        group.links.new(group.nodes[data_("Group Input")].outputs[0], group.nodes[data_("Group Output")].inputs[0])
     return group
 
 
-def geometry_node_group_empty_modifier_new(name):
-    group = geometry_node_group_empty_new(data_("Geometry Nodes"))
+def geometry_node_group_empty_modifier_new(name, add_geometry_input=True):
+    group = geometry_node_group_empty_new(name, add_geometry_input)
     group.is_modifier = True
     return group
 
 
 def geometry_node_group_empty_tool_new(context):
+    import re
+
     group = geometry_node_group_empty_new(data_("Tool"))
     # Node tools have fake users by default, otherwise Blender will delete them since they have no users.
     group.use_fake_user = True
     group.is_tool = True
+
+    # Operator identifier names only support lowercase ASCII characters or numbers.
+    group.node_tool_idname = "geometry." + re.sub('[^0-9a-z]+', '_', group.name.strip().lower())
 
     ob = context.object
     ob_type = ob.type if ob else 'MESH'
     if ob_type == 'CURVES':
         group.is_type_curve = True
     elif ob_type == 'POINTCLOUD':
-        group.is_type_point_cloud = True
+        group.is_type_pointcloud = True
+    elif ob_type == 'GREASEPENCIL':
+        group.is_type_grease_pencil = True
     else:
         group.is_type_mesh = True
 
     mode = ob.mode if ob else 'OBJECT'
-    if mode in {'SCULPT', 'SCULPT_CURVES'}:
+    if mode in {'SCULPT', 'SCULPT_CURVES', 'SCULPT_GREASE_PENCIL'}:
         group.is_mode_sculpt = True
+    elif mode == 'PAINT_GREASE_PENCIL':
+        group.is_mode_paint = True
     elif mode == 'EDIT':
         group.is_mode_edit = True
     else:
@@ -68,7 +79,7 @@ def geometry_modifier_poll(context):
     ob = context.object
 
     # Test object support for geometry node modifier
-    if not ob or ob.type not in {'MESH', 'POINTCLOUD', 'VOLUME', 'CURVE', 'FONT', 'CURVES', 'GREASEPENCIL'}:
+    if not ob or ob.type not in {'MESH', 'POINTCLOUD', 'VOLUME', 'CURVE', 'FONT', 'CURVES', 'GREASEPENCIL', 'EMPTY'}:
         return False
 
     return True
@@ -80,7 +91,7 @@ def get_context_modifier(context):
     if modifier is ...:
         ob = context.object
         if ob is None:
-            return False
+            return None
         modifier = ob.modifiers.active
     if modifier is None or modifier.type != 'NODES':
         return None
@@ -88,7 +99,10 @@ def get_context_modifier(context):
 
 
 def edit_geometry_nodes_modifier_poll(context):
-    return get_context_modifier(context) is not None
+    modifier = get_context_modifier(context)
+    if modifier is None:
+        return False
+    return modifier.id_data.is_editable
 
 
 def socket_idname_to_attribute_type(idname):
@@ -103,20 +117,6 @@ def socket_idname_to_attribute_type(idname):
     elif idname.startswith("NodeSocketFloat"):
         return 'FLOAT'
     raise ValueError("Unsupported socket type")
-
-
-def modifier_attribute_name_get(modifier, identifier):
-    try:
-        return modifier[identifier + "_attribute_name"]
-    except KeyError:
-        return None
-
-
-def modifier_input_use_attribute(modifier, identifier):
-    try:
-        return modifier[identifier + "_use_attribute"] != 0
-    except KeyError:
-        return False
 
 
 def get_socket_with_identifier(sockets, identifier):
@@ -169,16 +169,17 @@ def create_wrapper_group(operator, modifier, old_group):
             continue
         identifier = input_socket.identifier
         group_node_input = get_socket_with_identifier(group_node.inputs, identifier)
-        if modifier_input_use_attribute(modifier, identifier):
+        prop = getattr(modifier.properties.inputs, identifier)
+        if hasattr(prop, "type") and prop.type == "ATTRIBUTE":
             input_node = group.nodes.new("GeometryNodeInputNamedAttribute")
             input_nodes.append(input_node)
             input_node.data_type = socket_idname_to_attribute_type(input_socket.bl_socket_idname)
-            attribute_name = modifier_attribute_name_get(modifier, identifier)
+            attribute_name = prop.attribute_name
             input_node.inputs["Name"].default_value = attribute_name
             output_socket = get_enabled_socket_with_name(input_node.outputs, "Attribute")
             group.links.new(output_socket, group_node_input)
         elif hasattr(input_socket, "default_value"):
-            group_node_input.default_value = modifier[identifier]
+            group_node_input.default_value = prop.value
 
     if first_geometry_input:
         group.links.new(
@@ -201,7 +202,8 @@ def create_wrapper_group(operator, modifier, old_group):
             continue
         identifier = output_socket.identifier
         group_node_output = get_socket_with_identifier(group_node.outputs, identifier)
-        attribute_name = modifier_attribute_name_get(modifier, identifier)
+
+        attribute_name = getattr(group_node_output, "attribute_name", None)
         if attribute_name:
             store_node = group.nodes.new("GeometryNodeStoreNamedAttribute")
             store_nodes.append(store_node)
@@ -300,7 +302,10 @@ class NewGeometryNodesModifier(Operator):
         if not modifier:
             return {'CANCELLED'}
 
-        group = geometry_node_group_empty_modifier_new(data_("Geometry Nodes"))
+        is_first_modifier = ob.modifiers[0] == modifier
+        # For empty objects, don't add a geometry input for the first modifier
+        add_geometry_input = not (ob.type == 'EMPTY' and ob.instance_collection is None and is_first_modifier)
+        group = geometry_node_group_empty_modifier_new(data_("Geometry Nodes"), add_geometry_input)
         modifier.node_group = group
 
         return {'FINISHED'}
@@ -321,7 +326,12 @@ class NewGeometryNodeTreeAssign(Operator):
         modifier = get_context_modifier(context)
         if not modifier:
             return {'CANCELLED'}
-        group = geometry_node_group_empty_modifier_new(data_("Geometry Nodes"))
+
+        ob = context.object
+        is_first_modifier = ob.modifiers[0] == modifier
+        # For empty objects, don't add a geometry input for the first modifier
+        add_geometry_input = not (ob.type == 'EMPTY' and ob.instance_collection is None and is_first_modifier)
+        group = geometry_node_group_empty_modifier_new(data_("Geometry Nodes"), add_geometry_input)
         modifier.node_group = group
 
         return {'FINISHED'}
@@ -336,11 +346,11 @@ class NewGeometryNodeGroupTool(Operator):
     @classmethod
     def poll(cls, context):
         space = context.space_data
-        return space and space.type == 'NODE_EDITOR' and space.geometry_nodes_type == 'TOOL'
+        return space and space.type == 'NODE_EDITOR' and space.node_tree_sub_type == 'TOOL'
 
     def execute(self, context):
         group = geometry_node_group_empty_tool_new(context)
-        context.space_data.geometry_nodes_tool_tree = group
+        context.space_data.selected_node_group = group
         return {'FINISHED'}
 
 

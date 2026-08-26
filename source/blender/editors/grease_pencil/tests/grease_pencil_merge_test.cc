@@ -7,6 +7,7 @@
 #include "BKE_attribute.hh"
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -17,8 +18,6 @@
 
 #include "ED_grease_pencil.hh"
 
-#include <iostream>
-
 namespace blender::ed::greasepencil::tests {
 
 struct GreasePencilIDTestContext {
@@ -27,9 +26,8 @@ struct GreasePencilIDTestContext {
 
   GreasePencilIDTestContext()
   {
-    BKE_idtype_init();
     this->bmain = BKE_main_new();
-    this->grease_pencil = static_cast<GreasePencil *>(BKE_id_new(this->bmain, ID_GP, "GP"));
+    this->grease_pencil = BKE_id_new<GreasePencil>(this->bmain, "GP");
   }
   ~GreasePencilIDTestContext()
   {
@@ -37,7 +35,9 @@ struct GreasePencilIDTestContext {
   }
 };
 
-TEST(grease_pencil_merge, merge_simple)
+class GreasePencilMergeTest : public bke::BlenderGTestBase {};
+
+TEST_F(GreasePencilMergeTest, merge_simple)
 {
   using namespace bke::greasepencil;
   GreasePencilIDTestContext ctx;
@@ -65,7 +65,7 @@ TEST(grease_pencil_merge, merge_simple)
   BKE_id_free(nullptr, merged_grease_pencil);
 }
 
-TEST(grease_pencil_merge, merge_in_same_group)
+TEST_F(GreasePencilMergeTest, merge_in_same_group)
 {
   using namespace bke::greasepencil;
   GreasePencilIDTestContext ctx;
@@ -117,7 +117,7 @@ TEST(grease_pencil_merge, merge_in_same_group)
   BKE_id_free(nullptr, merged_grease_pencil);
 }
 
-TEST(grease_pencil_merge, merge_in_different_group)
+TEST_F(GreasePencilMergeTest, merge_in_different_group)
 {
   using namespace bke::greasepencil;
   GreasePencilIDTestContext ctx;
@@ -178,7 +178,7 @@ TEST(grease_pencil_merge, merge_in_different_group)
   BKE_id_free(nullptr, merged_grease_pencil);
 }
 
-TEST(grease_pencil_merge, merge_keyframes)
+TEST_F(GreasePencilMergeTest, merge_keyframes)
 {
   using namespace bke::greasepencil;
   GreasePencilIDTestContext ctx;
@@ -192,21 +192,28 @@ TEST(grease_pencil_merge, merge_keyframes)
 
   Drawing *drawing = grease_pencil.insert_frame(layer1, 0);
   drawing->strokes_for_write().resize(10, 2);
+  drawing->strokes_for_write().update_curve_types();
 
   drawing = grease_pencil.insert_frame(layer2, 0);
   drawing->strokes_for_write().resize(20, 3);
+  drawing->strokes_for_write().update_curve_types();
   drawing = grease_pencil.insert_frame(layer2, 2);
   drawing->strokes_for_write().resize(30, 4);
+  drawing->strokes_for_write().update_curve_types();
 
   drawing = grease_pencil.insert_frame(layer3, 0);
   drawing->strokes_for_write().resize(40, 5);
+  drawing->strokes_for_write().update_curve_types();
   drawing = grease_pencil.insert_frame(layer3, 3);
   drawing->strokes_for_write().resize(50, 6);
+  drawing->strokes_for_write().update_curve_types();
 
   drawing = grease_pencil.insert_frame(layer4, 1);
   drawing->strokes_for_write().resize(60, 7);
+  drawing->strokes_for_write().update_curve_types();
   drawing = grease_pencil.insert_frame(layer4, 3);
   drawing->strokes_for_write().resize(70, 8);
+  drawing->strokes_for_write().update_curve_types();
 
   GreasePencil *merged_grease_pencil = BKE_grease_pencil_new_nomain();
   BKE_grease_pencil_copy_parameters(grease_pencil, *merged_grease_pencil);
@@ -229,7 +236,7 @@ TEST(grease_pencil_merge, merge_keyframes)
   BKE_id_free(nullptr, merged_grease_pencil);
 }
 
-TEST(grease_pencil_merge, merge_layer_attributes)
+TEST_F(GreasePencilMergeTest, merge_layer_attributes)
 {
   using namespace bke;
   using namespace bke::greasepencil;
@@ -244,6 +251,7 @@ TEST(grease_pencil_merge, merge_layer_attributes)
   SpanAttributeWriter<float> test_attribute =
       grease_pencil.attributes_for_write().lookup_or_add_for_write_only_span<float>(
           "test", AttrDomain::Layer);
+  EXPECT_TRUE(test_attribute);
   test_attribute.span.copy_from(test_float_values);
   test_attribute.finish();
 

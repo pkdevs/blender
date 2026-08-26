@@ -14,16 +14,18 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_bitmap.h"
-#include "BLI_compiler_compat.h"
-#include "BLI_math_vector.h"
-#include "BLI_noise.h"
-#include "BLI_rand.h"
+#include "BLI_bitmap.hh"
+#include "BLI_compiler_compat.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_noise_c.hh"
 #include "BLI_rand.hh"
-#include "BLI_sys_types.h"
-#include "BLI_threads.h"
+#include "BLI_rand_c.hh"
+#include "BLI_sys_types.hh"
+#include "BLI_threads.hh"
 
-#include "BLI_strict_flags.h" /* Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 #define hash BLI_noise_hash_uchar_512
 
@@ -31,7 +33,7 @@
  * Random Number Generator.
  */
 struct RNG {
-  blender::RandomNumberGenerator rng;
+  RandomNumberGenerator rng;
 
   MEM_CXX_CLASS_ALLOC_FUNCS("RNG")
 };
@@ -67,7 +69,7 @@ void BLI_rng_srandom(RNG *rng, uint seed)
 
 void BLI_rng_get_char_n(RNG *rng, char *bytes, size_t bytes_len)
 {
-  rng->rng.get_bytes(blender::MutableSpan(bytes, int64_t(bytes_len)));
+  rng->rng.get_bytes(MutableSpan(bytes, int64_t(bytes_len)));
 }
 
 int BLI_rng_get_int(RNG *rng)
@@ -109,8 +111,8 @@ void BLI_rng_shuffle_array(RNG *rng, void *data, uint elem_size_i, uint elem_num
   while (i--) {
     const uint j = BLI_rng_get_uint(rng) % elem_num;
     if (i != j) {
-      void *iElem = (uchar *)data + i * elem_size_i;
-      void *jElem = (uchar *)data + j * elem_size_i;
+      void *iElem = static_cast<uchar *>(data) + i * elem_size_i;
+      void *jElem = static_cast<uchar *>(data) + j * elem_size_i;
       memcpy(temp, iElem, elem_size);
       memcpy(iElem, jElem, elem_size);
       memcpy(jElem, temp, elem_size);
@@ -172,14 +174,13 @@ void BLI_bitmap_randomize(BLI_bitmap *bitmap, uint bits_num, uint seed)
 /* ********* for threaded random ************** */
 
 struct RNG_THREAD_ARRAY {
-  RNG rng_tab[BLENDER_MAX_THREADS];
+  std::array<RNG, BLENDER_MAX_THREADS> rng_tab;
 };
 
 RNG_THREAD_ARRAY *BLI_rng_threaded_new()
 {
   uint i;
-  RNG_THREAD_ARRAY *rngarr = (RNG_THREAD_ARRAY *)MEM_mallocN(sizeof(RNG_THREAD_ARRAY),
-                                                             "random_array");
+  RNG_THREAD_ARRAY *rngarr = MEM_new<RNG_THREAD_ARRAY>("random_array");
 
   for (i = 0; i < BLENDER_MAX_THREADS; i++) {
     BLI_rng_srandom(&rngarr->rng_tab[i], uint(clock()));
@@ -190,12 +191,12 @@ RNG_THREAD_ARRAY *BLI_rng_threaded_new()
 
 void BLI_rng_threaded_free(RNG_THREAD_ARRAY *rngarr)
 {
-  MEM_freeN(rngarr);
+  MEM_delete(rngarr);
 }
 
 int BLI_rng_thread_rand(RNG_THREAD_ARRAY *rngarr, int thread)
 {
-  return BLI_rng_get_int(&rngarr->rng_tab[thread]);
+  return BLI_rng_get_int(&rngarr->rng_tab[size_t(thread)]);
 }
 
 /* ********* Low-discrepancy sequences ************** */
@@ -283,8 +284,6 @@ void BLI_hammersley_1d(uint n, double *r)
 {
   *r = radical_inverse(n);
 }
-
-namespace blender {
 
 RandomNumberGenerator RandomNumberGenerator::from_random_seed()
 {
@@ -388,16 +387,13 @@ void RandomNumberGenerator::get_bytes(MutableSpan<char> r_bytes)
     last_len = r_bytes.size();
   }
 
-  const char *data_src = (const char *)&x_;
+  const char *data_src = reinterpret_cast<const char *>(&x_);
   int64_t i = 0;
   while (i != trim_len) {
     BLI_assert(i < trim_len);
-#ifdef __BIG_ENDIAN__
-    for (int64_t j = (rand_stride + mask_bytes) - 1; j != mask_bytes - 1; j--)
-#else
-    for (int64_t j = 0; j != rand_stride; j++)
-#endif
-    {
+    /* NOTE: this is endianness-sensitive.
+     * Big Endian needs to iterate in reverse, with a `mask_bytes - 1` offset. */
+    for (int64_t j = 0; j != rand_stride; j++) {
       r_bytes[i++] = data_src[j];
     }
     this->step();

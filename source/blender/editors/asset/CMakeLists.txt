@@ -5,12 +5,9 @@
 set(INC
   .
   ../include
-  ../../asset_system
-  ../../blenkernel
-  ../../blenloader
-  ../../blentranslation
+  ../../gpu
+  ../../imbuf
   ../../makesrna
-  ../../windowmanager
   # dna_type_offsets.h
   ${CMAKE_CURRENT_BINARY_DIR}/../../makesdna/intern
   # RNA_prototypes.hh
@@ -23,10 +20,13 @@ set(INC_SYS
 set(SRC
   intern/asset_catalog.cc
   intern/asset_filter.cc
-  intern/asset_handle.cc
   intern/asset_import.cc
   intern/asset_indexer.cc
+  intern/asset_indexer_remote_file_status.cc
+  intern/asset_indexer_remote_listing.cc
+  intern/asset_indexer_remote_listing_v1.cc
   intern/asset_library_reference_enum.cc
+  intern/asset_library_utils.cc
   intern/asset_list.cc
   intern/asset_mark_clear.cc
   intern/asset_menu_utils.cc
@@ -40,30 +40,44 @@ set(SRC
   intern/asset_temp_id_consumer.cc
   intern/asset_type.cc
   intern/asset_ui_utils.cc
+  intern/custom_asset_library_list_ui.cc
 
   ED_asset_catalog.hh
   ED_asset_filter.hh
-  ED_asset_handle.hh
   ED_asset_import.hh
   ED_asset_indexer.hh
   ED_asset_library.hh
+  ED_asset_library_ui.hh
   ED_asset_list.hh
   ED_asset_mark_clear.hh
   ED_asset_shelf.hh
   ED_asset_temp_id_consumer.hh
   ED_asset_type.hh
+  intern/asset_index.hh
+  intern/asset_indexer_remote_file_status.hh
+  intern/asset_indexer_remote_listing.hh
   intern/asset_library_reference.hh
   intern/asset_shelf.hh
 )
 
 set(LIB
-  bf_blenkernel
+  PRIVATE bf::asset_system
+  PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
-  bf_blenloader
+  PRIVATE bf::blenloader
+  PRIVATE bf::blentranslation
   PRIVATE bf::dna
   PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::windowmanager
 )
+
+if(WITH_PYTHON)
+  list(APPEND INC
+    ../../python
+  )
+  add_definitions(-DWITH_PYTHON)
+endif()
 
 blender_add_lib(bf_editor_asset "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 

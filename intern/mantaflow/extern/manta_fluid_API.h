@@ -6,12 +6,9 @@
  * \ingroup intern_mantaflow
  */
 
-#ifndef MANTA_API_H
-#define MANTA_API_H
+#include <cstddef>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace blender {
 
 struct MANTA;
 
@@ -65,8 +62,8 @@ bool manta_needs_realloc(struct MANTA *fluid, struct FluidModifierData *fmd);
 void manta_update_pointers(struct MANTA *fluid, struct FluidModifierData *fmd, bool flush);
 
 /* Fluid accessors */
-size_t manta_get_index(int x, int max_x, int y, int max_y, int z /*, int max_z */);
-size_t manta_get_index2d(int x, int max_x, int y /*, int max_y, int z, int max_z */);
+size_t manta_get_index(int x, int max_x, int y, int max_y, int z /* , int max_z */);
+size_t manta_get_index2d(int x, int max_x, int y /* , int max_y, int z, int max_z */);
 float *manta_get_velocity_x(struct MANTA *fluid);
 float *manta_get_velocity_y(struct MANTA *fluid);
 float *manta_get_velocity_z(struct MANTA *fluid);
@@ -119,7 +116,7 @@ float *manta_smoke_get_fuel(struct MANTA *smoke);
 float *manta_smoke_get_react(struct MANTA *smoke);
 float *manta_smoke_get_heat(struct MANTA *smoke);
 float *manta_smoke_get_flame(struct MANTA *smoke);
-float *manta_smoke_get_shadow(struct MANTA *fluid);
+float *manta_smoke_get_shadow(struct MANTA *smoke);
 float *manta_smoke_get_color_r(struct MANTA *smoke);
 float *manta_smoke_get_color_g(struct MANTA *smoke);
 float *manta_smoke_get_color_b(struct MANTA *smoke);
@@ -154,8 +151,8 @@ void manta_noise_get_res(struct MANTA *smoke, int *res);
 int manta_noise_get_cells(struct MANTA *smoke);
 
 /* Liquid functions */
-bool manta_liquid_export_script(struct MANTA *smoke, struct FluidModifierData *fmd);
-bool manta_liquid_ensure_sndparts(struct MANTA *fluid, struct FluidModifierData *fmd);
+bool manta_liquid_export_script(struct MANTA *liquid, struct FluidModifierData *fmd);
+bool manta_liquid_ensure_sndparts(struct MANTA *liquid, struct FluidModifierData *fmd);
 
 /* Liquid accessors */
 int manta_liquid_get_particle_res_x(struct MANTA *liquid);
@@ -198,8 +195,4 @@ float manta_liquid_get_snd_particle_velocity_x_at(struct MANTA *liquid, int i);
 float manta_liquid_get_snd_particle_velocity_y_at(struct MANTA *liquid, int i);
 float manta_liquid_get_snd_particle_velocity_z_at(struct MANTA *liquid, int i);
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* MANTA_API_H_ */
+}  // namespace blender

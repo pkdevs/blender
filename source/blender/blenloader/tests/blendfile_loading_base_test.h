@@ -7,8 +7,10 @@
 #include "DEG_depsgraph.hh"
 #include "testing/testing.h"
 
-struct BlendFileData;
+namespace blender {
+
 struct Depsgraph;
+struct BlendFileData;
 
 class BlendfileLoadingBaseTest : public testing::Test {
  protected:
@@ -23,12 +25,12 @@ class BlendfileLoadingBaseTest : public testing::Test {
 
  protected:
   /* Frees the depsgraph & blendfile. */
-  virtual void TearDown();
+  void TearDown() override;
 
-  /* Loads a blend file from the tests/data directory from SVN.
+  /* Loads a blend file from the tests/files directory from SVN.
    * Returns 'ok' flag (true=good, false=bad) and sets `this->bfile`.
    * Fails the test if the file cannot be loaded (still returns though).
-   * Requires the CLI argument `--test-asset-dir` to point to `../tests/data`.
+   * Requires the CLI argument `--test-asset-dir` to point to `../tests/files`.
    *
    * WARNING: only files saved with Blender 2.80+ can be loaded. Since Blender
    * is only partially initialized (most importantly, without window manager),
@@ -44,3 +46,5 @@ class BlendfileLoadingBaseTest : public testing::Test {
   /* Free the depsgraph if it's not nullptr. */
   virtual void depsgraph_free();
 };
+
+}  // namespace blender

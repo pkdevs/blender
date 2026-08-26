@@ -9,10 +9,15 @@
 #include <fmt/core.h>
 
 #include "BLI_timeit.hh"
+
 #include "DNA_windowmanager_types.h"
+
 #include "IO_ply.hh"
+
 #include "ply_export.hh"
 #include "ply_import.hh"
+
+namespace blender {
 
 using namespace blender::timeit;
 
@@ -24,21 +29,23 @@ static void report_duration(const char *job, const TimePoint &start_time, const 
   fmt::print("\n");
 }
 
-void PLY_export(bContext *C, const PLYExportParams *export_params)
+void PLY_export(bContext *C, const PLYExportParams &params)
 {
   TimePoint start_time = Clock::now();
-  blender::io::ply::exporter_main(C, *export_params);
-  report_duration("export", start_time, export_params->filepath);
+  io::ply::exporter_main(C, params);
+  report_duration("export", start_time, params.filepath);
 }
 
-void PLY_import(bContext *C, const PLYImportParams *import_params)
+void PLY_import(bContext *C, const PLYImportParams &params)
 {
   TimePoint start_time = Clock::now();
-  blender::io::ply::importer_main(C, *import_params);
-  report_duration("import", start_time, import_params->filepath);
+  io::ply::importer_main(C, params);
+  report_duration("import", start_time, params.filepath);
 }
 
-Mesh *PLY_import_mesh(const PLYImportParams *import_params)
+Mesh *PLY_import_mesh(const PLYImportParams &params)
 {
-  return blender::io::ply::import_mesh(*import_params);
+  return io::ply::import_mesh(params);
 }
+
+}  // namespace blender

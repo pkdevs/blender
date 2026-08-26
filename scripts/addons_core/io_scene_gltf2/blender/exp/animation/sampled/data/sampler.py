@@ -4,8 +4,10 @@
 
 import bpy
 import typing
+import numpy as np
 from ......io.com import gltf2_io
 from ......io.exp import binary_data as gltf2_io_binary_data
+from ......io.exp.meshopt import MeshoptEncoder
 from ......io.com import constants as gltf2_io_constants
 from ....cache import cached
 from ....accessors import gather_accessor
@@ -14,28 +16,34 @@ from .keyframes import gather_data_sampled_keyframes
 
 @cached
 def gather_data_sampled_animation_sampler(
+        blender_main_type,
         blender_type_data: str,
         blender_id: str,
+        bone_name: typing.Optional[str],
         channel: str,
         action_name: str,
+        slot_identifier: str,
         node_channel_is_animated: bool,
         node_channel_interpolation: str,
         additional_key: str,  # Used to differentiate between material / material node_tree
         export_settings
 ):
 
-    keyframes = __gather_keyframes(
+    keyframes, alpha_cst = __gather_keyframes(
+        blender_main_type,
         blender_type_data,
         blender_id,
+        bone_name,
         channel,
         action_name,
+        slot_identifier,
         node_channel_is_animated,
         additional_key,
         export_settings)
 
     if keyframes is None:
         # After check, no need to animate this node for this channel
-        return None
+        return None, None
 
     # Now we are raw input/output, we need to convert to glTF data
     input, output = __convert_keyframes(blender_type_data, blender_id, channel, keyframes, action_name, export_settings)
@@ -43,23 +51,29 @@ def gather_data_sampled_animation_sampler(
     sampler = gltf2_io.AnimationSampler(extensions=None, extras=None, input=input, interpolation=__gather_interpolation(
         blender_type_data, node_channel_is_animated, node_channel_interpolation, keyframes, export_settings), output=output)
 
-    return sampler
+    return sampler, alpha_cst
 
 
 def __gather_keyframes(
+        blender_main_type,
         blender_type_data,
         blender_id,
+        bone_name,
         channel,
         action_name,
+        slot_identifier,
         node_channel_is_animated,
         additional_key,  # Used to differentiate between material / material node_tree
         export_settings):
 
-    keyframes = gather_data_sampled_keyframes(
+    keyframes, alpha_cst = gather_data_sampled_keyframes(
+        blender_main_type,
         blender_type_data,
         blender_id,
+        bone_name,
         channel,
         action_name,
+        slot_identifier,
         node_channel_is_animated,
         additional_key,
         export_settings
@@ -67,9 +81,9 @@ def __gather_keyframes(
 
     if keyframes is None:
         # After check, no need to animation this node
-        return None
+        return None, None
 
-    return keyframes
+    return keyframes, alpha_cst
 
 
 def __convert_keyframes(blender_type_data, blender_id, channel, keyframes, action_name, export_settings):
@@ -83,13 +97,29 @@ def __convert_keyframes(blender_type_data, blender_id, channel, keyframes, actio
             k.seconds = k.frame / bpy.context.scene.render.fps
 
     times = [k.seconds for k in keyframes]
+
+    binary_data = gltf2_io_binary_data.BinaryData.from_list(times, gltf2_io_constants.ComponentType.Float)
+    if export_settings['gltf_meshopt_compression']:
+        compressed_time, filter = MeshoptEncoder.encode_attribute(
+            'TIME', np.array(times, dtype=np.float32), 4, export_settings)
+        binary_data.set_extension(export_settings['gltf_meshopt_extension'], {
+            'buffer': compressed_time,  # to be filled in later by the exporter, use data in placeholder for now
+            'byteOffset': None,  # to be filled in later by the exporter
+            'byteLength': len(compressed_time),
+            'byteStride': 4,
+            'count': len(times),
+            'mode': 'ATTRIBUTES',
+            'filter': filter
+        })
+
     input = gather_accessor(
-        gltf2_io_binary_data.BinaryData.from_list(times, gltf2_io_constants.ComponentType.Float),
+        binary_data,
         gltf2_io_constants.ComponentType.Float,
         len(times),
         tuple([max(times)]),
         tuple([min(times)]),
         gltf2_io_constants.DataType.Scalar,
+        None,
         export_settings)
 
     values = []
@@ -104,19 +134,15 @@ def __convert_keyframes(blender_type_data, blender_id, channel, keyframes, actio
     else:
         data_type = gltf2_io_constants.DataType.vec_type_from_num(1)
 
-    output = gltf2_io.Accessor(
-        buffer_view=gltf2_io_binary_data.BinaryData.from_list(values, component_type),
-        byte_offset=None,
-        component_type=component_type,
-        count=len(values) // gltf2_io_constants.DataType.num_elements(data_type),
-        extensions=None,
-        extras=None,
-        max=None,
-        min=None,
-        name=None,
-        normalized=None,
-        sparse=None,
-        type=data_type
+    output = gather_accessor(
+        gltf2_io_binary_data.BinaryData.from_list(values, component_type),
+        component_type,
+        len(values) // gltf2_io_constants.DataType.num_elements(data_type),
+        None,
+        None,
+        data_type,
+        None,
+        export_settings
     )
 
     return input, output
@@ -129,7 +155,7 @@ def __gather_interpolation(
         keyframes,
         export_settings):
     # TODOPointer
-    return 'LINEAR'
+    return export_settings['gltf_sampling_interpolation_fallback']
 
 
 def __convert_to_gltf(value):

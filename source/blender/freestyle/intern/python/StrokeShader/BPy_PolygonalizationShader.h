@@ -10,10 +10,6 @@
 
 #include "../BPy_StrokeShader.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject PolygonalizationShader_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject PolygonalizationShader_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&PolygonalizationShader_Type))
 
 /*---------------------------Python BPy_PolygonalizationShader structure definition----------*/
-typedef struct {
+struct BPy_PolygonalizationShader {
   BPy_StrokeShader py_ss;
-} BPy_PolygonalizationShader;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

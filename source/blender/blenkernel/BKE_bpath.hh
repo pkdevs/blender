@@ -14,7 +14,13 @@
 
 #pragma once
 
-#include "BLI_utildefines.h"
+#include <cstddef>
+
+#include "BLI_enum_flags.hh"
+#include "BLI_function_ref.hh"
+#include "BLI_string_ref.hh"
+
+namespace blender {
 
 struct ID;
 struct Main;
@@ -23,8 +29,13 @@ struct ReportList;
 /** \name Core `foreach_path` API.
  * \{ */
 
+/**
+ * Flags controlling the behavior of the generic BPath API.
+ *
+ * Note: these are referred to by `rna_enum_file_path_foreach_flag_items`, so make sure that any
+ * new enum items are added there too.
+ */
 enum eBPathForeachFlag {
-  /* Flags controlling the behavior of the generic BPath API. */
   /**
    * Ensures the `absolute_base_path` member of #BPathForeachPathData is initialized properly with
    * the path of the current .blend file. This can be used by the callbacks to convert relative
@@ -35,31 +46,56 @@ enum eBPathForeachFlag {
   BKE_BPATH_FOREACH_PATH_SKIP_LINKED = (1 << 1),
   /** Skip paths when their matching data is packed. */
   BKE_BPATH_FOREACH_PATH_SKIP_PACKED = (1 << 2),
-  /** Resolve tokens within a virtual filepath to a single, concrete, filepath. */
+  /**
+   * Resolve tokens within a virtual filepath to a single, concrete, filepath. Currently only used
+   * for UDIM tiles.
+   */
   BKE_BPATH_FOREACH_PATH_RESOLVE_TOKEN = (1 << 3),
-  /* Skip weak reference paths. Those paths are typically 'nice to have' extra information, but are
+  /**
+   * Skip weak reference paths. Those paths are typically 'nice to have' extra information, but are
    * not used as actual source of data by the current .blend file.
    *
    * NOTE: Currently this only concerns the weak reference to a library file stored in
-   * `ID::library_weak_reference`. */
+   * `ID::library_weak_reference`.
+   */
   BKE_BPATH_TRAVERSE_SKIP_WEAK_REFERENCES = (1 << 5),
 
-  /** Flags not affecting the generic BPath API. Those may be used by specific IDTypeInfo
-   * `foreach_path` implementations and/or callbacks to implement specific behaviors. */
+  /**
+   * Flags not affecting the generic BPath API. Those may be used by specific IDTypeInfo
+   * `foreach_path` implementations and/or callbacks to implement specific behaviors.
+   */
 
-  /** Skip paths where a single dir is used with an array of files, eg. sequence strip images or
-   * point-caches. In this case only use the first file path is processed.
+  /**
+   * Skip paths where a single dir is used with an array of files, eg. sequence strip images or
+   * point-caches. In this case only the first file path is processed.
    *
    * This is needed for directory manipulation callbacks which might otherwise modify the same
-   * directory multiple times. */
+   * directory multiple times.
+   */
   BKE_BPATH_FOREACH_PATH_SKIP_MULTIFILE = (1 << 8),
   /**
    * Reload data (when the path is edited).
    * \note Only used by Image #IDType currently.
    */
   BKE_BPATH_FOREACH_PATH_RELOAD_EDITED = (1 << 9),
+  /**
+   * Expand template tokens in virtual file paths to all matching concrete paths, invoking the
+   * callback once per expanded path. Currently only used for UDIM tiles. These paths can not
+   * be edited.
+   */
+  BKE_BPATH_FOREACH_PATH_EXPAND_TOKENS = (1 << 10),
+  /**
+   * Expand image sequences and similar multi-file resources to all individual file paths on disk,
+   * invoking the callback once per file. These paths can not be edited.
+   */
+  BKE_BPATH_FOREACH_PATH_EXPAND_SEQUENCES = (1 << 11),
+  /**
+   * Visit cache files, for example texture cache files associated with images. These paths can
+   * not be edited.
+   */
+  BKE_BPATH_FOREACH_PATH_EXPAND_CACHES = (1 << 12),
 };
-ENUM_OPERATORS(eBPathForeachFlag, BKE_BPATH_FOREACH_PATH_RELOAD_EDITED)
+ENUM_OPERATORS(eBPathForeachFlag)
 
 struct BPathForeachPathData;
 
@@ -91,8 +127,10 @@ struct BPathForeachPathData {
 
   /* 'Private' data, caller don't need to set those. */
 
-  /** The root to use as base for relative paths. Only set if `BKE_BPATH_FOREACH_PATH_ABSOLUTE`
-   * flag is set, NULL otherwise. */
+  /**
+   * The root to use as base for relative paths.
+   * Only set if #BKE_BPATH_FOREACH_PATH_ABSOLUTE flag is set, NULL otherwise.
+   */
   const char *absolute_base_path;
 
   /** ID owning the path being processed. */
@@ -102,6 +140,21 @@ struct BPathForeachPathData {
    * IDTypeInfo callbacks are responsible to set this boolean if they modified one or more paths.
    */
   bool is_path_modified;
+
+  /**
+   * Set while visiting a path expanded from a UDIM tile or sequence frame.
+   * These paths can not be edited.
+   */
+  bool is_expanded;
+  /**
+   * Set while visiting a cache file path, like a texture cache file.
+   * These paths can not be edited.
+   */
+  bool is_cache;
+  /**
+   * Set while visiting a read-only path that callbacks can not edit.
+   */
+  bool is_readonly;
 };
 
 /** Run `bpath_data.callback_function` on all paths contained in `id`. */
@@ -128,6 +181,22 @@ void BKE_bpath_foreach_path_main(BPathForeachPathData *bpath_data);
 bool BKE_bpath_foreach_path_fixed_process(BPathForeachPathData *bpath_data,
                                           char *path,
                                           size_t path_maxncpy);
+
+/**
+ * Run the callback on a read-only path, any edits will be discarded.
+ *
+ * \param path: A fixed, FILE_MAX-sized char buffer.
+ */
+void BKE_bpath_foreach_path_readonly_process(BPathForeachPathData *bpath_data, const char *path);
+
+/**
+ * Run the callback on every existing file on disk matching a `<head><digits><tail>`
+ * numbered-sequence pattern derived from `abs_filepath`. If `abs_filepath` itself is not a
+ * numbered sequence, the callback is invoked once with `abs_filepath` if it exists.
+ */
+void BKE_bpath_sequence_filepaths_foreach(
+    const char *abs_filepath,
+    blender::FunctionRef<void(blender::StringRef frame_filepath)> callback);
 
 /**
  * Run the callback on a (directory + file) path, replacing the content of the two strings as
@@ -188,7 +257,8 @@ void BKE_bpath_summary_report(const BPathSummary &summary, ReportList *reports);
 void BKE_bpath_missing_files_find(Main *bmain,
                                   const char *searchpath,
                                   ReportList *reports,
-                                  bool find_all);
+                                  bool find_all,
+                                  BPathSummary *r_summary = nullptr);
 
 /** Rebase all relative file paths in given \a bmain from \a basedir_src to \a basedir_dst. */
 void BKE_bpath_relative_rebase(Main *bmain,
@@ -234,3 +304,5 @@ void BKE_bpath_list_restore(Main *bmain, eBPathForeachFlag flag, void *path_list
 void BKE_bpath_list_free(void *path_list_handle);
 
 /** \} */
+
+}  // namespace blender

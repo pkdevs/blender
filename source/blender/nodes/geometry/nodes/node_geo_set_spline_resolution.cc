@@ -5,17 +5,27 @@
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
 
+#include "GEO_foreach_geometry.hh"
+
 #include "node_geometry_util.hh"
 
 namespace blender::nodes::node_geo_set_spline_resolution_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Geometry")
-      .supported_type({GeometryComponent::Type::Curve, GeometryComponent::Type::GreasePencil});
-  b.add_input<decl::Bool>("Selection").default_value(true).hide_value().field_on_all();
-  b.add_input<decl::Int>("Resolution").min(1).default_value(12).field_on_all();
-  b.add_output<decl::Geometry>("Geometry").propagate_all();
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
+  b.add_input<decl::Geometry>("Curve"_ustr, "Geometry"_ustr)
+      .supported_type({GeometryComponent::Type::Curve, GeometryComponent::Type::GreasePencil})
+      .description("Curves to change the resolution of");
+  b.add_output<decl::Geometry>("Curve"_ustr, "Geometry"_ustr)
+      .propagate_all_geometry()
+      .align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
+  b.add_input<decl::Int>("Resolution"_ustr).min(1).default_value(12).evaluated_geometry_field();
 }
 
 static void set_curve_resolution(bke::CurvesGeometry &curves,
@@ -46,16 +56,17 @@ static void set_grease_pencil_resolution(GreasePencil &grease_pencil,
         bke::GreasePencilLayerFieldContext(grease_pencil, AttrDomain::Curve, layer_index),
         selection,
         resolution);
+    drawing->tag_topology_changed();
   }
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
-  const Field<bool> selection = params.extract_input<Field<bool>>("Selection");
-  const Field<int> resolution = params.extract_input<Field<int>>("Resolution");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry"_ustr);
+  const Field<bool> selection = params.extract_input<Field<bool>>("Selection"_ustr);
+  const Field<int> resolution = params.extract_input<Field<int>>("Resolution"_ustr);
 
-  geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
+  geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
     if (Curves *curves_id = geometry_set.get_curves_for_write()) {
       bke::CurvesGeometry &curves = curves_id->geometry.wrap();
       const bke::CurvesFieldContext field_context(*curves_id, AttrDomain::Curve);
@@ -66,18 +77,24 @@ static void node_geo_exec(GeoNodeExecParams params)
     }
   });
 
-  params.set_output("Geometry", std::move(geometry_set));
+  params.set_output("Geometry"_ustr, std::move(geometry_set));
 }
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
   geo_node_type_base(
-      &ntype, GEO_NODE_SET_SPLINE_RESOLUTION, "Set Spline Resolution", NODE_CLASS_GEOMETRY);
+      &ntype, "GeometryNodeSetSplineResolution"_ustr, GEO_NODE_SET_SPLINE_RESOLUTION);
+  ntype.ui_name = "Set Spline Resolution";
+  ntype.ui_description =
+      "Control how many evaluated points should be generated on every curve segment";
+  ntype.enum_name_legacy = "SET_SPLINE_RESOLUTION";
+  ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
-  blender::bke::node_register_type(&ntype);
+  ntype.default_width = bke::NodeWidth::_160;
+  bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)
 

@@ -8,12 +8,15 @@
 
 #pragma once
 
-#include "BLI_utildefines.h" /* for bool type */
+#include "BLI_string_ref.hh"
 
 #define TEXT_DOMAIN_NAME "blender"
 
-bool BLT_is_default_context(const char *msgctxt);
+namespace blender {
+
+bool BLT_is_default_context(StringRef msgctxt);
 const char *BLT_pgettext(const char *msgctxt, const char *msgid);
+StringRef BLT_pgettext(StringRef msgctxt, StringRef msgid);
 
 /* Translation */
 /* - iface includes buttons in the user interface: short labels displayed in windows, panels,
@@ -27,17 +30,22 @@ bool BLT_translate_tooltips();
 bool BLT_translate_reports();
 bool BLT_translate_new_dataname();
 const char *BLT_translate_do(const char *msgctxt, const char *msgid);
+StringRef BLT_translate_do(StringRef msgctxt, StringRef msgid);
 const char *BLT_translate_do_iface(const char *msgctxt, const char *msgid);
+StringRef BLT_translate_do_iface(StringRef msgctxt, StringRef msgid);
 const char *BLT_translate_do_tooltip(const char *msgctxt, const char *msgid);
+StringRef BLT_translate_do_tooltip(StringRef msgctxt, StringRef msgid);
 const char *BLT_translate_do_report(const char *msgctxt, const char *msgid);
+StringRef BLT_translate_do_report(StringRef msgctxt, StringRef msgid);
 const char *BLT_translate_do_new_dataname(const char *msgctxt, const char *msgid);
+StringRef BLT_translate_do_new_dataname(StringRef msgctxt, StringRef msgid);
 
 /* The "translation-marker" macro. */
 #define N_(msgid) msgid
 #define CTX_N_(context, msgid) msgid
 
 /* These macros should be used everywhere in UI code. */
-/*#  define _(msgid) BLT_gettext(msgid) */
+// #define _(msgid) BLT_gettext(msgid)
 #define IFACE_(msgid) BLT_translate_do_iface(NULL, msgid)
 #define TIP_(msgid) BLT_translate_do_tooltip(NULL, msgid)
 #define RPT_(msgid) BLT_translate_do_report(NULL, msgid)
@@ -82,6 +90,18 @@ const char *BLT_translate_do_new_dataname(const char *msgctxt, const char *msgid
 /* Mark the msgid applies to several elements
  * (needed in some cases, as English adjectives have no plural mark :( ). */
 #define BLT_I18NCONTEXT_PLURAL "Plural"
+
+/* Some words can be either countable or uncountable in English, but translate to different words
+ * in other languages. An example is "Amount", which can refer to "a number of things", countable,
+ * or "a quantity or volume", uncountable. */
+#define BLT_I18NCONTEXT_COUNTABLE "Countable"
+
+/* Special cases when translation cannot be avoided, for example in an interface where some props
+ * are built-in (translatable) and others are user-defined (non-translatable), but we don't know
+ * which ones in advance.
+ * It allows specifying explicitly that translation should not occur for user data when building
+ * the UI. */
+#define BLT_I18NCONTEXT_NO_TRANSLATION "Do not translate"
 
 /* ID-types contexts. */
 /* WARNING! Keep it in sync with ID-types in `blenkernel/intern/idtype.cc`. */
@@ -138,7 +158,11 @@ const char *BLT_translate_do_new_dataname(const char *msgctxt, const char *msgid
 /* Generic contexts. */
 #define BLT_I18NCONTEXT_AMOUNT "Amount"
 #define BLT_I18NCONTEXT_COLOR "Color"
+#define BLT_I18NCONTEXT_COLOR_MANAGEMENT "Color Management"
 #define BLT_I18NCONTEXT_CONSTRAINT "Constraint"
+#define BLT_I18NCONTEXT_MODIFIER "Modifier"
+#define BLT_I18NCONTEXT_NAVIGATION "Navigation"
+#define BLT_I18NCONTEXT_RENDER_LAYER "Render Layer"
 #define BLT_I18NCONTEXT_TIME "Time"
 #define BLT_I18NCONTEXT_UNIT "Unit"
 
@@ -149,10 +173,7 @@ struct BLT_i18n_contexts_descriptor {
   const char *value;
 };
 
-#define BLT_I18NCONTEXTS_ITEM(ctxt_id, py_id) \
-  { \
-    #ctxt_id, py_id, ctxt_id \
-  }
+#define BLT_I18NCONTEXTS_ITEM(ctxt_id, py_id) {#ctxt_id, py_id, ctxt_id}
 
 #define BLT_I18NCONTEXTS_DESC \
   { \
@@ -161,8 +182,10 @@ struct BLT_i18n_contexts_descriptor {
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "operator_default"), \
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_UI_EVENTS, "ui_events_keymaps"), \
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_PLURAL, "plural"), \
+        BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_COUNTABLE, "countable"), \
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_ID_ACTION, "id_action"), \
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_ID_ARMATURE, "id_armature"), \
+        BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_NO_TRANSLATION, "no_translation"), \
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_ID_BRUSH, "id_brush"), \
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_ID_CACHEFILE, "id_cachefile"), \
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_ID_CAMERA, "id_camera"), \
@@ -210,10 +233,16 @@ struct BLT_i18n_contexts_descriptor {
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_EDITOR_VIEW3D, "editor_view3d"), \
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_AMOUNT, "amount"), \
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_COLOR, "color"), \
+        BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_COLOR_MANAGEMENT, "color_management"), \
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_CONSTRAINT, "constraint"), \
+        BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_MODIFIER, "modifier"), \
+        BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_NAVIGATION, "navigation"), \
+        BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_RENDER_LAYER, "render_layer"), \
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_TIME, "time"), \
         BLT_I18NCONTEXTS_ITEM(BLT_I18NCONTEXT_UNIT, "unit"), \
     { \
       NULL, NULL, NULL \
     } \
   }
+
+}  // namespace blender

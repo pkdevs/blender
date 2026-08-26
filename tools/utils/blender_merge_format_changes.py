@@ -3,6 +3,10 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+__all__ = (
+    "main",
+)
+
 import os
 import subprocess
 import sys
@@ -61,16 +65,18 @@ def main() -> int:
     rebase_merge = get_string(['git', 'rev-parse', '--git-path', 'rebase-merge'])
     rebase_apply = get_string(['git', 'rev-parse', '--git-path', 'rebase-apply'])
     merge_head = get_string(['git', 'rev-parse', '--git-path', 'MERGE_HEAD'])
-    if os.path.exists(rebase_merge) or \
-       os.path.exists(rebase_apply) or \
-       os.path.exists(merge_head):
+    if (
+            os.path.exists(rebase_merge) or
+            os.path.exists(rebase_apply) or
+            os.path.exists(merge_head)
+    ):
         print("BLENDER MERGE: rebase or merge in progress, complete it first")
         return 1
 
     # Abort if uncommitted changes.
     changes = get_string(['git', 'status', '--porcelain', '--untracked-files=no'])
     if len(changes) != 0:
-        print("BLENDER MERGE: detected uncommitted changes, can't run")
+        print("BLENDER MERGE: detected uncommitted changes, cannot run")
         return 1
 
     # Setup command, with commit message for merge commits.

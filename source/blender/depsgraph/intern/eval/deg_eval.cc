@@ -8,18 +8,19 @@
  * Evaluation engine entry-points for Depsgraph Engine.
  */
 
+#include <atomic>
+#include <cstdint>
+
 #include "intern/eval/deg_eval.h"
 
-#include "BLI_compiler_attrs.h"
 #include "BLI_function_ref.hh"
-#include "BLI_gsqueue.h"
-#include "BLI_task.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_gsqueue.hh"
+#include "BLI_task_c.hh"
+#include "BLI_time.hh"
 
 #include "BKE_global.hh"
 
-#include "DNA_node_types.h"
+#include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
@@ -43,7 +44,6 @@
 #include "intern/node/deg_node_component.hh"
 #include "intern/node/deg_node_id.hh"
 #include "intern/node/deg_node_operation.hh"
-#include "intern/node/deg_node_time.hh"
 
 namespace blender::deg {
 
@@ -59,7 +59,7 @@ void schedule_children(DepsgraphEvalState *state,
 
 /* Denotes which part of dependency graph is being evaluated. */
 enum class EvaluationStage {
-  /* Stage 1: Only  Copy-on-Write operations are to be evaluated, prior to anything else.
+  /* Stage 1: Only Copy-on-Write operations are to be evaluated, prior to anything else.
    * This allows other operations to access its dependencies when there is a dependency cycle
    * involved. */
   COPY_ON_EVAL,
@@ -87,7 +87,7 @@ struct DepsgraphEvalState {
 
 void evaluate_node(const DepsgraphEvalState *state, OperationNode *operation_node)
 {
-  ::Depsgraph *depsgraph = reinterpret_cast<::Depsgraph *>(state->graph);
+  blender::Depsgraph *depsgraph = reinterpret_cast<blender::Depsgraph *>(state->graph);
 
   /* Sanity checks. */
   BLI_assert_msg(!operation_node->is_noop(), "NOOP nodes should not actually be scheduled");
@@ -111,7 +111,7 @@ void evaluate_node(const DepsgraphEvalState *state, OperationNode *operation_nod
 void deg_task_run_func(TaskPool *pool, void *taskdata)
 {
   void *userdata_v = BLI_task_pool_user_data(pool);
-  DepsgraphEvalState *state = (DepsgraphEvalState *)userdata_v;
+  DepsgraphEvalState *state = static_cast<DepsgraphEvalState *>(userdata_v);
 
   /* Evaluate node. */
   OperationNode *operation_node = reinterpret_cast<OperationNode *>(taskdata);
@@ -156,7 +156,7 @@ void calculate_pending_parents_for_node(const DepsgraphEvalState *state, Operati
   }
   for (Relation *rel : node->inlinks) {
     if (rel->from->type == NodeType::OPERATION && (rel->flag & RELATION_FLAG_CYCLIC) == 0) {
-      OperationNode *from = (OperationNode *)rel->from;
+      OperationNode *from = static_cast<OperationNode *>(rel->from);
       /* TODO(sergey): This is how old layer system was checking for the
        * calculation, but how is it possible that visible object depends
        * on an invisible? This is something what is prohibited after
@@ -200,11 +200,44 @@ bool is_metaball_object_operation(const OperationNode *operation_node)
 {
   const ComponentNode *component_node = operation_node->owner;
   const IDNode *id_node = component_node->owner;
+  /* This runs after the COPY_ON_EVAL stage which creates id_cow. */
+  BLI_assert(id_node->id_cow);
   if (GS(id_node->id_cow->name) != ID_OB) {
     return false;
   }
   const Object *object = reinterpret_cast<const Object *>(id_node->id_cow);
   return object->type == OB_MBALL;
+}
+
+/* Simulation modifiers with sub-frames (fluid domain, dynamic paint canvas) perform direct updates
+ * of other objects, which can cause race conditions over certain data (#115636). Unless and until
+ * sub-steps are fully supported in depsgraph evaluation such objects must use single-threaded
+ * evaluation. */
+bool is_modifier_subframe_operation(const OperationNode *operation_node)
+{
+  const ComponentNode *component_node = operation_node->owner;
+  const IDNode *id_node = component_node->owner;
+  /* This runs after the COPY_ON_EVAL stage which creates id_cow. */
+  BLI_assert(id_node->id_cow);
+  if (GS(id_node->id_cow->name) != ID_OB) {
+    return false;
+  }
+  const Object *object = reinterpret_cast<const Object *>(id_node->id_cow);
+  for (const ModifierData &md : object->modifiers) {
+    if (md.type == eModifierType_Fluid) {
+      const auto &fmd = reinterpret_cast<const FluidModifierData &>(md);
+      if (fmd.type == MOD_FLUID_TYPE_DOMAIN) {
+        return true;
+      }
+    }
+    if (md.type == eModifierType_DynamicPaint) {
+      const auto &dmd = reinterpret_cast<const DynamicPaintModifierData &>(md);
+      if (dmd.type == MOD_DYNAMICPAINT_TYPE_CANVAS) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 bool need_evaluate_operation_at_stage(DepsgraphEvalState *state,
@@ -220,6 +253,10 @@ bool need_evaluate_operation_at_stage(DepsgraphEvalState *state,
 
     case EvaluationStage::THREADED_EVALUATION:
       if (is_metaball_object_operation(operation_node)) {
+        state->need_single_thread_pass = true;
+        return false;
+      }
+      if (is_modifier_subframe_operation(operation_node)) {
         state->need_single_thread_pass = true;
         return false;
       }
@@ -266,7 +303,8 @@ void schedule_node(DepsgraphEvalState *state,
     return;
   }
   /* Actually schedule the node. */
-  bool is_scheduled = atomic_fetch_and_or_uint8((uint8_t *)&node->scheduled, uint8_t(true));
+  bool is_scheduled = atomic_fetch_and_or_uint8(reinterpret_cast<uint8_t *>(&node->scheduled),
+                                                uint8_t(true));
   if (!is_scheduled) {
     if (node->is_noop()) {
       /* Clear flags to avoid affecting subsequent update propagation.
@@ -296,7 +334,7 @@ void schedule_children(DepsgraphEvalState *state,
                        const FunctionRef<void(OperationNode *node)> schedule_fn)
 {
   for (Relation *rel : node->outlinks) {
-    OperationNode *child = (OperationNode *)rel->to;
+    OperationNode *child = static_cast<OperationNode *>(rel->to);
     BLI_assert(child->type == NodeType::OPERATION);
     if (child->scheduled) {
       /* Happens when having cyclic dependencies. */
@@ -386,7 +424,16 @@ void deg_evaluate_on_refresh(Depsgraph *graph)
     return;
   }
 
-  graph->update_count++;
+  /* The update counts can be used to check if the Depsgraph was changed since the last time it was
+   * cached by comparing its current update count with the one stored at the moment the Depsgraph
+   * data were cached.
+   *
+   * A global atomic is used as opposed to incrementing the update count per Depsgraph to protect
+   * against the case where the Depsgraph is being recreated for each update and used to feed the
+   * same running engine instances. This can happen when using a brute force update pattern (see
+   * #135635). */
+  static std::atomic<uint64_t> global_update_count = 0;
+  graph->update_count = global_update_count.fetch_add(1) + 1;
 
   graph->debug.begin_graph_evaluation();
 

@@ -8,4 +8,10 @@
  * \ingroup pymathutils
  */
 
+#include <Python.h>
+
+namespace blender {
+
 PyMODINIT_FUNC PyInit_mathutils_geometry();
+
+}  // namespace blender

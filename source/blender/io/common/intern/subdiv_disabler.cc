@@ -3,9 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "IO_subdiv_disabler.hh"
 
-#include <cstdio>
-
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
@@ -86,9 +84,9 @@ void SubdivModifierDisabler::disable_modifiers()
   Scene *scene = DEG_get_input_scene(depsgraph_);
   ViewLayer *view_layer = DEG_get_input_view_layer(depsgraph_);
 
-  BKE_view_layer_synced_ensure(scene, view_layer);
-  LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
-    Object *object = base->object;
+  BKE_view_layer_synced_ensure(*DEG_get_bmain(depsgraph_), scene, view_layer);
+  for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
+    Object *object = base.object;
 
     if (object->type != OB_MESH) {
       continue;
@@ -105,7 +103,7 @@ void SubdivModifierDisabler::disable_modifiers()
      * moving to a different frame is also going to be faster, so in the end this is probably
      * a good thing to do. */
     disable_modifier(mod);
-    modified_objects_.insert(object);
+    modified_objects_.append(object);
     DEG_id_tag_update(&object->id, ID_RECALC_GEOMETRY);
   }
 }
@@ -113,7 +111,7 @@ void SubdivModifierDisabler::disable_modifiers()
 void SubdivModifierDisabler::disable_modifier(ModifierData *mod)
 {
   mod->mode |= eModifierMode_DisableTemporary;
-  disabled_modifiers_.insert(mod);
+  disabled_modifiers_.append(mod);
 }
 
 }  // namespace blender::io

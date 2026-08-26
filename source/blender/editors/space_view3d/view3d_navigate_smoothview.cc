@@ -10,9 +10,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_context.hh"
 
@@ -24,6 +24,8 @@
 
 #include "view3d_intern.hh"
 #include "view3d_navigate.hh" /* Own include. */
+
+namespace blender {
 
 static void view3d_smoothview_apply_with_interp(
     bContext *C, View3D *v3d, RegionView3D *rv3d, const bool use_autokey, const float factor);
@@ -56,11 +58,11 @@ void ED_view3d_smooth_view_undo_begin(bContext *C, const ScrArea *area)
    * NOTE: It doesn't matter if the actual object being manipulated is the camera or not. */
   camera->id.tag &= ~ID_TAG_DOIT;
 
-  LISTBASE_FOREACH (const ARegion *, region, &area->regionbase) {
-    if (region->regiontype != RGN_TYPE_WINDOW) {
+  for (const ARegion &region : area->regionbase) {
+    if (region.regiontype != RGN_TYPE_WINDOW) {
       continue;
     }
-    const RegionView3D *rv3d = static_cast<const RegionView3D *>(region->regiondata);
+    const RegionView3D *rv3d = static_cast<const RegionView3D *>(region.regiondata);
     if (ED_view3d_camera_lock_undo_test(v3d, rv3d, C)) {
       camera->id.tag |= ID_TAG_DOIT;
       break;
@@ -96,13 +98,13 @@ void ED_view3d_smooth_view_undo_end(bContext *C,
 
   /* An undo push should be performed. */
   bool is_interactive = false;
-  LISTBASE_FOREACH (const ARegion *, region, &area->regionbase) {
-    if (region->regiontype != RGN_TYPE_WINDOW) {
+  for (const ARegion &region : area->regionbase) {
+    if (region.regiontype != RGN_TYPE_WINDOW) {
       continue;
     }
-    const RegionView3D *rv3d = static_cast<const RegionView3D *>(region->regiondata);
+    const RegionView3D *rv3d = static_cast<const RegionView3D *>(region.regiondata);
     if (ED_view3d_camera_lock_undo_test(v3d, rv3d, C)) {
-      region_camera = region;
+      region_camera = &region;
       if (rv3d->sms) {
         is_interactive = true;
       }
@@ -175,9 +177,9 @@ struct SmoothView3DStore {
    * When smooth-view is enabled, store the 'rv3d->view' here,
    * assign back when the view motion is completed.
    */
-  char org_view;
+  eRegionView3D_View org_view;
   /** Same behavior as `view`. */
-  char org_view_axis_roll;
+  eRegionView3D_ViewAxisRoll org_view_axis_roll;
 
   double time_allowed;
 };
@@ -275,12 +277,13 @@ void ED_view3d_smooth_view_ex(
   }
 
   if (sview->camera) {
-    Object *ob_camera_eval = DEG_get_evaluated_object(depsgraph, sview->camera);
+    Object *ob_camera_eval = DEG_get_evaluated(depsgraph, sview->camera);
     if (sview->ofs != nullptr) {
       sms.dst.dist = ED_view3d_offset_distance(
           ob_camera_eval->object_to_world().ptr(), sview->ofs, VIEW3D_DIST_FALLBACK);
     }
-    ED_view3d_from_object(ob_camera_eval, sms.dst.ofs, sms.dst.quat, &sms.dst.dist, &sms.dst.lens);
+    ED_view3d_from_object(
+        ob_camera_eval, sms.dst.ofs, sms.dst.quat, &sms.dst.dist, rv3d->camroll, &sms.dst.lens);
     /* Restore view3d values in end. */
     sms.to_camera = true;
   }
@@ -301,13 +304,20 @@ void ED_view3d_smooth_view_ex(
 
     /* Original values. */
     if (sview->camera_old) {
-      Object *ob_camera_old_eval = DEG_get_evaluated_object(depsgraph, sview->camera_old);
+      Object *ob_camera_old_eval = DEG_get_evaluated(depsgraph, sview->camera_old);
       if (sview->ofs != nullptr) {
+        /* This assignment will temporarily set the #RegionView3D::dist to zero.
+         * While this isn't typically allowed, it's not a bug to set this temporarily,
+         * doing so shouldn't crash or cause an invalid display, see !143946. */
         sms.src.dist = ED_view3d_offset_distance(
             ob_camera_old_eval->object_to_world().ptr(), sview->ofs, 0.0f);
       }
-      ED_view3d_from_object(
-          ob_camera_old_eval, sms.src.ofs, sms.src.quat, &sms.src.dist, &sms.src.lens);
+      ED_view3d_from_object(ob_camera_old_eval,
+                            sms.src.ofs,
+                            sms.src.quat,
+                            &sms.src.dist,
+                            rv3d->camroll,
+                            &sms.src.lens);
     }
     /* Grid draw as floor. */
     if ((RV3D_LOCK_FLAGS(rv3d) & RV3D_LOCK_ROTATION) == 0) {
@@ -329,9 +339,9 @@ void ED_view3d_smooth_view_ex(
     /* Ensure it shows correct. */
     if (sms.to_camera) {
       /* Use orthographic if we move from an orthographic view to an orthographic camera. */
-      Object *ob_camera_eval = DEG_get_evaluated_object(depsgraph, sview->camera);
+      Object *ob_camera_eval = DEG_get_evaluated(depsgraph, sview->camera);
       rv3d->persp = ((rv3d->is_persp == false) && (ob_camera_eval->type == OB_CAMERA) &&
-                     (static_cast<Camera *>(ob_camera_eval->data)->type == CAM_ORTHO)) ?
+                     (id_cast<Camera *>(ob_camera_eval->data)->type == CAM_ORTHO)) ?
                         RV3D_ORTHO :
                         RV3D_PERSP;
     }
@@ -344,8 +354,7 @@ void ED_view3d_smooth_view_ex(
 
     /* Keep track of running timer! */
     if (rv3d->sms == nullptr) {
-      rv3d->sms = static_cast<SmoothView3DStore *>(
-          MEM_mallocN(sizeof(SmoothView3DStore), "smoothview v3d"));
+      rv3d->sms = MEM_new_uninitialized<SmoothView3DStore>("smoothview v3d");
     }
     *rv3d->sms = sms;
     if (rv3d->smooth_timer) {
@@ -471,7 +480,7 @@ static void view3d_smoothview_apply_and_finish_ex(wmWindowManager *wm,
     rv3d->view_axis_roll = sms->org_view_axis_roll;
   }
 
-  MEM_freeN(rv3d->sms);
+  MEM_delete(rv3d->sms);
   rv3d->sms = nullptr;
 
   WM_event_timer_remove(wm, win, rv3d->smooth_timer);
@@ -525,7 +534,9 @@ static void view3d_smoothview_apply_from_timer(bContext *C, View3D *v3d, ARegion
   ED_region_tag_redraw(region);
 }
 
-static int view3d_smoothview_invoke(bContext *C, wmOperator * /*op*/, const wmEvent *event)
+static wmOperatorStatus view3d_smoothview_invoke(bContext *C,
+                                                 wmOperator * /*op*/,
+                                                 const wmEvent *event)
 {
   View3D *v3d = CTX_wm_view3d(C);
   ARegion *region = CTX_wm_region(C);
@@ -585,7 +596,7 @@ void ED_view3d_smooth_view_force_finish_no_camera_lock(const Depsgraph *depsgrap
 
   /* NOTE(@ideasman42): Ideally we would *always* apply the camera lock.
    * Failing to do so results in incorrect behavior when a user performs
-   * a camera-locked view-port manipulation & immediately enters enters local-view
+   * a camera-locked view-port manipulation & immediately enters local-view
    * before the operation is completed.
    * In this case the camera isn't key-framed when it should be.
    *
@@ -616,4 +627,11 @@ void VIEW3D_OT_smoothview(wmOperatorType *ot)
   ot->flag = OPTYPE_INTERNAL;
 }
 
+void view3d_smooth_free(RegionView3D *rv3d)
+{
+  MEM_SAFE_DELETE(rv3d->sms);
+}
+
 /** \} */
+
+}  // namespace blender

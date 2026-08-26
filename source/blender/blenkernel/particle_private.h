@@ -8,13 +8,13 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "BKE_particle.h"
+
+namespace blender {
 
 struct CurveMapping;
 
-typedef struct ParticleChildModifierContext {
+struct ParticleChildModifierContext {
   ParticleThreadContext *thread_ctx;
   ParticleSimulationData *sim;
   ParticleTexture *ptex;
@@ -25,7 +25,7 @@ typedef struct ParticleChildModifierContext {
   const float *par_orco; /* float3 */
   const float *orco;     /* float3 */
   ParticleCacheKey *parent_keys;
-} ParticleChildModifierContext;
+};
 
 void do_kink(ParticleKey *state,
              const float par_co[3],
@@ -55,6 +55,4 @@ void do_child_modifiers(const ParticleChildModifierContext *modifier_ctx,
                         ParticleKey *state,
                         float t);
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

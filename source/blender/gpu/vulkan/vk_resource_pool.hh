@@ -8,13 +8,62 @@
 
 #pragma once
 
+#include "BLI_mutex.hh"
+
 #include "vk_common.hh"
 
+#include "render_graph/vk_resource_state_tracker.hh"
 #include "vk_descriptor_pools.hh"
 #include "vk_immediate.hh"
 
 namespace blender::gpu {
 class VKDevice;
+class VKDiscardPool;
+
+template<typename Item> class TimelineResources : Vector<std::pair<TimelineValue, Item>> {
+  friend class VKDiscardPool;
+
+ public:
+  void append_timeline(TimelineValue timeline, Item item)
+  {
+    this->append(std::pair(timeline, item));
+  }
+
+  void update_timeline(TimelineValue timeline)
+  {
+    for (std::pair<TimelineValue, Item> &pair : *this) {
+      pair.first = timeline;
+    }
+  }
+
+  int64_t size() const
+  {
+    return static_cast<const Vector<std::pair<TimelineValue, Item>> &>(*this).size();
+  }
+  bool is_empty() const
+  {
+    return static_cast<const Vector<std::pair<TimelineValue, Item>> &>(*this).is_empty();
+  }
+
+  /**
+   * Remove all items that are used in a timeline before or equal to the current_timeline.
+   */
+  template<typename Deleter> void remove_old(TimelineValue current_timeline, Deleter deleter)
+  {
+    int64_t first_index_to_keep = 0;
+    for (std::pair<TimelineValue, Item> &item : *this) {
+      if (item.first > current_timeline) {
+        break;
+      }
+      deleter(item.second);
+      first_index_to_keep++;
+    }
+
+    if (first_index_to_keep > 0) {
+      this->remove(0, first_index_to_keep);
+    }
+  }
+};
 
 /**
  * Pool of resources that are discarded, but can still be in used and cannot be destroyed.
@@ -28,61 +77,75 @@ class VKDevice;
  */
 class VKDiscardPool {
   friend class VKDevice;
+  friend class VKBackend;
 
  private:
-  Vector<std::pair<VkImage, VmaAllocation>> images_;
-  Vector<std::pair<VkBuffer, VmaAllocation>> buffers_;
-  Vector<VkImageView> image_views_;
-  Vector<VkShaderModule> shader_modules_;
-  Vector<VkPipelineLayout> pipeline_layouts_;
-  Vector<VkRenderPass> render_passes_;
-  Vector<VkFramebuffer> framebuffers_;
-  Map<VkCommandPool, Vector<VkCommandBuffer>> command_buffers_;
+  TimelineResources<VkImage> swapchain_images_;
+  TimelineResources<std::pair<VkImage, VmaAllocation>> images_;
+  TimelineResources<std::pair<ResourceHandle, VmaAllocation>> buffers_;
+  TimelineResources<VmaAllocation> allocations_;
+  TimelineResources<VkImageView> image_views_;
+  TimelineResources<VkBufferView> buffer_views_;
+  TimelineResources<VkShaderModule> shader_modules_;
+  TimelineResources<VkPipeline> pipelines_;
+  TimelineResources<VkPipelineLayout> pipeline_layouts_;
+  TimelineResources<VkAccelerationStructureKHR> acceleration_structures_;
+  TimelineResources<std::pair<VkDescriptorPool, VKDescriptorPools *>> descriptor_pools_;
 
-  std::mutex mutex_;
+  Mutex mutex_;
 
-  /**
-   * Free command buffers generated from `vk_command_pool`.
-   *
-   * Command buffers are freed in `destroy_discarded_resources`, however if a `vk_command_pool` is
-   * going to be destroyed, commands buffers generated from this command pool needs to be freed at
-   * forehand.
-   */
-  void free_command_pool_buffers(VkCommandPool vk_command_pool, VKDevice &device);
+  TimelineValue timeline_ = UINT64_MAX;
 
  public:
   void deinit(VKDevice &device);
 
+  void discard_swapchain_image(VkImage vk_image);
   void discard_image(VkImage vk_image, VmaAllocation vma_allocation);
-  void discard_command_buffer(VkCommandBuffer vk_command_buffer, VkCommandPool vk_command_pool);
+  void discard_allocation(VmaAllocation vma_allocation);
   void discard_image_view(VkImageView vk_image_view);
-  void discard_buffer(VkBuffer vk_buffer, VmaAllocation vma_allocation);
+  void discard_buffer(ResourceHandle buffer_handle, VmaAllocation vma_allocation);
+  void discard_buffer_view(VkBufferView vk_buffer_view);
   void discard_shader_module(VkShaderModule vk_shader_module);
+  void discard_pipeline(VkPipeline vk_pipeline);
   void discard_pipeline_layout(VkPipelineLayout vk_pipeline_layout);
-  void discard_framebuffer(VkFramebuffer vk_framebuffer);
-  void discard_render_pass(VkRenderPass vk_render_pass);
+  void discard_descriptor_pool_for_reuse(VkDescriptorPool vk_descriptor_pool,
+                                         VKDescriptorPools *descriptor_pools);
+  void discard_acceleration_structure(VkAccelerationStructureKHR vk_acceleration_structure);
 
   /**
    * Move discarded resources from src_pool into this.
    *
    * GPU resources that are discarded from the dependency graph are stored in the device orphaned
-   * data. When a swap chain context list is made active the orphaned data can be merged into a
-   * swap chain discard pool.
+   * data. When a swap-chain context list is made active the orphaned data can be merged into a
+   * swap-chain discard pool.
+   *
+   * All moved items will receive a new timeline.
+   *
+   * Function must be externally synced:
+   *
+   * \code{.cc}
+   * {
+   *   std::scoped_lock lock(pool.mutex_get()));
+   *   pool.move_data(src_pool, timeline);
+   * }
+   * \endcode
    */
-  void move_data(VKDiscardPool &src_pool);
-  void destroy_discarded_resources(VKDevice &device);
+  void move_data(VKDiscardPool &src_pool, TimelineValue timeline);
+  inline Mutex &mutex_get()
+  {
+    return mutex_;
+  }
+  void destroy_discarded_resources(VKDevice &device, TimelineValue current_timeline);
+
+  /**
+   * Returns the discard pool for the current thread.
+   *
+   * When active thread has a context it uses the context discard pool.
+   * Otherwise a device discard pool is used.
+   */
+  static VKDiscardPool &discard_pool_get();
+
+  friend std::ostream &operator<<(std::ostream &os, const VKDiscardPool &discard_pool);
 };
 
-class VKResourcePool {
-
- public:
-  VKDescriptorPools descriptor_pools;
-  VKDescriptorSetTracker descriptor_set;
-  VKDiscardPool discard_pool;
-  VKImmediate immediate;
-
-  void init(VKDevice &device);
-  void deinit(VKDevice &device);
-  void reset();
-};
 }  // namespace blender::gpu

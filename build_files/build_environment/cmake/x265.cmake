@@ -23,15 +23,15 @@ if(BLENDER_PLATFORM_WINDOWS_ARM)
   set(X265_10_PATCH_COMMAND COMMAND ${PATCH_CMD} -p 1 -d ${BUILD_DIR}/x265_10/src/external_x265_10 < ${PATCH_DIR}/x265_windows_arm.diff)
   set(X265_PATCH_COMMAND COMMAND ${PATCH_CMD} -p 1 -d ${BUILD_DIR}/x265/src/external_x265 < ${PATCH_DIR}/x265_windows_arm.diff)
 elseif(APPLE)
-  set(X265_COMMON_ARGS)
+  set(X265_COMMON_ARGS "")
   set(X265_12_PATCH_COMMAND COMMAND ${PATCH_CMD} -p 1 -d ${BUILD_DIR}/x265_12/src/external_x265_12 < ${PATCH_DIR}/x265_apple.diff)
   set(X265_10_PATCH_COMMAND COMMAND ${PATCH_CMD} -p 1 -d ${BUILD_DIR}/x265_10/src/external_x265_10 < ${PATCH_DIR}/x265_apple.diff)
   set(X265_PATCH_COMMAND COMMAND ${PATCH_CMD} -p 1 -d ${BUILD_DIR}/x265/src/external_x265 < ${PATCH_DIR}/x265_apple.diff)
 else()
-  set(X265_COMMON_ARGS)
-  set(X265_12_PATCH_COMMAND)
-  set(X265_10_PATCH_COMMAND)
-  set(X265_PATCH_COMMAND)
+  set(X265_COMMON_ARGS "")
+  set(X265_12_PATCH_COMMAND "")
+  set(X265_10_PATCH_COMMAND "")
+  set(X265_PATCH_COMMAND "")
 endif()
 
 # 12 bit build flags
@@ -55,10 +55,10 @@ set(X265_10_EXTRA_ARGS
 
 # 8 bit build flags
 set(X265_EXTRA_ARGS
- -DENABLE_SHARED=OFF
- -DEXTRA_LIB=${LIBDIR}/x265_12/lib/${LIB_PREFIX}x265${LIB_SUFFIX}${LIBEXT}^^${LIBDIR}/x265_10/lib/${LIB_PREFIX}x265${LIB_SUFFIX}${LIBEXT}
- -DLINKED_10BIT=ON
- -DLINKED_12BIT=ON
+  -DENABLE_SHARED=OFF
+  -DEXTRA_LIB=${LIBDIR}/x265_12/lib/${LIB_PREFIX}x265${LIB_SUFFIX}${LIBEXT}^^${LIBDIR}/x265_10/lib/${LIB_PREFIX}x265${LIB_SUFFIX}${LIBEXT}
+  -DLINKED_10BIT=ON
+  -DLINKED_12BIT=ON
 )
 
 if(UNIX)
@@ -155,8 +155,8 @@ set(ARG_AR_INPUT $\{CMAKE_ARGV$\{INDEX_AR_INPUT\}\})
 execute_process(
   COMMAND $\{ARG_AR\} -M
   INPUT_FILE $\{ARG_AR_INPUT\}
-)
-")
+)"
+    )
 
     ExternalProject_Add_Step(external_x265 after_install
       COMMAND ${CMAKE_COMMAND} -P ${_ar_cmake} -- ${CMAKE_AR} ${_ar_stdin}

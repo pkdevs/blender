@@ -16,10 +16,12 @@
 #include "IMB_imbuf_types.hh"
 #include "nanosvgrast.h"
 
+namespace blender {
+
 ImBuf *imb_load_filepath_thumbnail_svg(const char *filepath,
-                                       const int /*flags*/,
+                                       const ImBufFlags /*flags*/,
                                        const size_t max_thumb_size,
-                                       char colorspace[],
+                                       ImFileColorSpace & /*r_colorspace*/,
                                        size_t *r_width,
                                        size_t *r_height)
 {
@@ -47,19 +49,21 @@ ImBuf *imb_load_filepath_thumbnail_svg(const char *filepath,
     return nullptr;
   }
 
-  colorspace_set_default_role(colorspace, IM_MAX_SPACE, COLOR_ROLE_DEFAULT_BYTE);
-
   const float scale = float(max_thumb_size) / std::max(w, h);
   const int dest_w = std::max(int(w * scale), 1);
   const int dest_h = std::max(int(h * scale), 1);
 
-  ImBuf *ibuf = IMB_allocImBuf(dest_w, dest_h, 32, IB_rect);
+  ImBuf *ibuf = IMB_allocImBuf(dest_w, dest_h, ImBufFlags::ByteData);
   if (ibuf != nullptr) {
-    nsvgRasterize(rast, image, 0, 0, scale, ibuf->byte_buffer.data, dest_w, dest_h, dest_w * 4);
-    nsvgDeleteRasterizer(rast);
-    nsvgDelete(image);
+    nsvgRasterize(
+        rast, image, 0, 0, scale, ibuf->byte_data_for_write(), dest_w, dest_h, dest_w * 4);
     IMB_flipy(ibuf);
   }
 
+  nsvgDeleteRasterizer(rast);
+  nsvgDelete(image);
+
   return ibuf;
 }
+
+}  // namespace blender

@@ -20,15 +20,17 @@
 #include "UI_abstract_view.hh"
 #include "UI_resources.hh"
 
+namespace blender {
+
 struct bContext;
-struct uiBlock;
-struct uiLayout;
 struct View2D;
 
-namespace blender::ui {
+namespace ui {
 
 class AbstractGridView;
 class GridViewItemDropTarget;
+
+struct Layout;
 
 /* ---------------------------------------------------------------------- */
 /** \name Grid-View Item Type
@@ -39,13 +41,17 @@ class AbstractGridViewItem : public AbstractViewItem {
   friend class GridViewLayoutBuilder;
 
  protected:
-  /** Reference to a string that uniquely identifies this item in the view. */
-  StringRef identifier_{};
+  /**
+   * A string that uniquely identifies this item in the view.
+   *
+   * Ideally this would just be a StringRef to save memory. This was made a
+   * std::string to fix #141882 in a relatively safe way. */
+  std::string identifier_{};
 
  public:
   /* virtual */ ~AbstractGridViewItem() override = default;
 
-  virtual void build_grid_tile(const bContext &C, uiLayout &layout) const = 0;
+  virtual void build_grid_tile(const bContext &C, Layout &layout) const = 0;
 
   /* virtual */ std::optional<std::string> debug_name() const override;
 
@@ -61,8 +67,7 @@ class AbstractGridViewItem : public AbstractViewItem {
   virtual std::unique_ptr<GridViewItemDropTarget> create_drop_target();
 
  private:
-  static void grid_tile_click_fn(bContext *, void *but_arg1, void *);
-  void add_grid_tile_button(uiBlock &block);
+  void add_grid_tile_button(Block &block);
 };
 
 /** \} */
@@ -90,6 +95,7 @@ class AbstractGridView : public AbstractView {
    * #update_from_old(). */
   Map<StringRef, AbstractGridViewItem *> item_map_;
   GridViewStyle style_;
+  int cols_per_row_ = 0;
 
  public:
   AbstractGridView();
@@ -118,6 +124,17 @@ class AbstractGridView : public AbstractView {
   int get_item_count_filtered() const;
 
   void set_tile_size(int tile_width, int tile_height);
+  AbstractViewItem *find_active_or_visible_item() const override;
+  AbstractViewItem *navigate_left(AbstractViewItem *from) override;
+  AbstractViewItem *navigate_right(AbstractViewItem *from) override;
+  AbstractViewItem *navigate_up(AbstractViewItem *from) override;
+  AbstractViewItem *navigate_down(AbstractViewItem *from) override;
+
+  void scroll_active_into_view(bContext *C, bool scroll_active_to_center = false) override;
+  void page_scroll(bContext *C, PageScrollDirection direction) override;
+
+  IndexRange get_visible_range(const View2D &v2d,
+                               const AbstractGridViewItem *force_visible_item) const;
 
  protected:
   virtual void build_items() = 0;
@@ -168,11 +185,11 @@ class GridViewItemDropTarget : public DropTargetInterface {
 
 class GridViewBuilder {
  public:
-  GridViewBuilder(uiBlock &block);
+  GridViewBuilder(Block &block);
 
   void build_grid_view(const bContext &C,
                        AbstractGridView &grid_view,
-                       uiLayout &layout,
+                       Layout &layout,
                        std::optional<StringRef> search_string = {});
 };
 
@@ -206,9 +223,9 @@ class PreviewGridItem : public AbstractGridViewItem {
 
   PreviewGridItem(StringRef identifier, StringRef label, int preview_icon_id);
 
-  void build_grid_tile(const bContext &C, uiLayout &layout) const override;
+  void build_grid_tile(const bContext &C, Layout &layout) const override;
 
-  void build_grid_tile_button(uiLayout &layout,
+  void build_grid_tile_button(Layout &layout,
                               BIFIconID override_preview_icon_id = ICON_NONE) const;
 
   /**
@@ -235,7 +252,7 @@ class PreviewGridItem : public AbstractGridViewItem {
 
 template<class ItemT, typename... Args> inline ItemT &AbstractGridView::add_item(Args &&...args)
 {
-  static_assert(std::is_base_of<AbstractGridViewItem, ItemT>::value,
+  static_assert(std::is_base_of_v<AbstractGridViewItem, ItemT>,
                 "Type must derive from and implement the AbstractGridViewItem interface");
 
   return dynamic_cast<ItemT &>(add_item(std::make_unique<ItemT>(std::forward<Args>(args)...)));
@@ -243,9 +260,10 @@ template<class ItemT, typename... Args> inline ItemT &AbstractGridView::add_item
 
 template<class ViewType> ViewType &GridViewItemDropTarget::get_view() const
 {
-  static_assert(std::is_base_of<AbstractGridView, ViewType>::value,
+  static_assert(std::is_base_of_v<AbstractGridView, ViewType>,
                 "Type must derive from and implement the ui::AbstractGridView interface");
   return dynamic_cast<ViewType &>(view_);
 }
 
-}  // namespace blender::ui
+}  // namespace ui
+}  // namespace blender

@@ -5,7 +5,7 @@
 import numpy as np
 from math import ceil
 
-from ...io.com import gltf2_io, constants as gltf2_io_constants, debug as gltf2_io_debug
+from ...io.com import gltf2_io, constants as gltf2_io_constants
 from ...io.exp import binary_data as gltf2_io_binary_data
 from ...io.exp.user_extensions import export_user_extensions
 from .accessors import array_to_accessor
@@ -139,6 +139,7 @@ def __gather_skins(blender_primitive, export_settings):
                     joints[:, idx] = 0.0
 
         joint = array_to_accessor(
+            "JOINTS",
             joints,
             export_settings,
             component_type,
@@ -161,6 +162,7 @@ def __gather_skins(blender_primitive, export_settings):
         weight_arrs[s] /= weight_total
 
         weight = array_to_accessor(
+            "WEIGHTS",
             weight_arrs[s],
             export_settings,
             component_type=gltf2_io_constants.ComponentType.Float,
@@ -178,10 +180,11 @@ def __gather_attribute(blender_primitive, attribute, export_settings):
         "POSITION": True
     }
 
-    if (attribute.startswith("_") or attribute.startswith("COLOR_")
+    if (attribute.startswith("_") or attribute.startswith("COLOR_") or attribute.startswith("KHR_")
         ) and blender_primitive["attributes"][attribute]['component_type'] == gltf2_io_constants.ComponentType.UnsignedShort:
         # Byte Color vertex color, need to normalize
 
+        data['data'] = np.clip(data['data'], 0, 1)
         data['data'] *= 65535
         data['data'] += 0.5  # bias for rounding
         data['data'] = data['data'].astype(np.uint16)
@@ -241,6 +244,7 @@ def __gather_attribute(blender_primitive, attribute, export_settings):
 
         return {
             attribute: array_to_accessor(
+                attribute,
                 data['data'],
                 export_settings,
                 component_type=data['component_type'],

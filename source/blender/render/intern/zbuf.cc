@@ -4,23 +4,24 @@
 
 /** \file
  * \ingroup render
- *
- * \note Some of this logic has been duplicated in `COM_VectorBlurOperation.cc`
- * changes here may also apply also apply to that file.
  */
 
 /*---------------------------------------------------------------------------*/
 /* Common includes                                                           */
 /*---------------------------------------------------------------------------*/
 
+#include <algorithm>
 #include <cstring>
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_base.h"
+#include "BLI_math_base.hh"
+#include "BLI_math_base_c.hh"
 
 /* own includes */
 #include "zbuf.h"
+
+namespace blender {
 
 /* could enable at some point but for now there are far too many conversions */
 #ifdef __GNUC__
@@ -36,15 +37,15 @@ void zbuf_alloc_span(ZSpan *zspan, int rectx, int recty)
   zspan->rectx = rectx;
   zspan->recty = recty;
 
-  zspan->span1 = static_cast<float *>(MEM_mallocN(recty * sizeof(float), "zspan"));
-  zspan->span2 = static_cast<float *>(MEM_mallocN(recty * sizeof(float), "zspan"));
+  zspan->span1 = MEM_new_array_uninitialized<float>(recty, "zspan");
+  zspan->span2 = MEM_new_array_uninitialized<float>(recty, "zspan");
 }
 
 void zbuf_free_span(ZSpan *zspan)
 {
   if (zspan) {
-    MEM_SAFE_FREE(zspan->span1);
-    MEM_SAFE_FREE(zspan->span2);
+    MEM_SAFE_DELETE(zspan->span1);
+    MEM_SAFE_DELETE(zspan->span2);
   }
 }
 
@@ -84,9 +85,7 @@ static void zbuf_add_to_span(ZSpan *zspan, const float v1[2], const float v2[2])
     my2 = zspan->recty - 1;
   }
   /* clip bottom */
-  if (my0 < 0) {
-    my0 = 0;
-  }
+  my0 = std::max(my0, 0);
 
   if (my0 > my2) {
     return;
@@ -124,12 +123,8 @@ static void zbuf_add_to_span(ZSpan *zspan, const float v1[2], const float v2[2])
     if (zspan->maxp1 == nullptr || zspan->maxp1[1] < maxv[1]) {
       zspan->maxp1 = maxv;
     }
-    if (my0 < zspan->miny1) {
-      zspan->miny1 = my0;
-    }
-    if (my2 > zspan->maxy1) {
-      zspan->maxy1 = my2;
-    }
+    zspan->miny1 = std::min(my0, zspan->miny1);
+    zspan->maxy1 = std::max(my2, zspan->maxy1);
   }
   else {
     //      printf("right span my0 %d my2 %d\n", my0, my2);
@@ -139,12 +134,8 @@ static void zbuf_add_to_span(ZSpan *zspan, const float v1[2], const float v2[2])
     if (zspan->maxp2 == nullptr || zspan->maxp2[1] < maxv[1]) {
       zspan->maxp2 = maxv;
     }
-    if (my0 < zspan->miny2) {
-      zspan->miny2 = my0;
-    }
-    if (my2 > zspan->maxy2) {
-      zspan->maxy2 = my2;
-    }
+    zspan->miny2 = std::min(my0, zspan->miny2);
+    zspan->maxy2 = std::max(my2, zspan->maxy2);
   }
 
   for (y = my2; y >= my0; y--, xs0 += dx0) {
@@ -157,12 +148,21 @@ static void zbuf_add_to_span(ZSpan *zspan, const float v1[2], const float v2[2])
 /* Functions                                                 */
 /*-----------------------------------------------------------*/
 
-void zspan_scanconvert(ZSpan *zspan,
-                       void *handle,
-                       float *v1,
-                       float *v2,
-                       float *v3,
-                       void (*func)(void *, int, int, float, float))
+/* NOTE(@ideasman42): workaround for pixel aligned UVs which are common and can screw
+ * up our intersection tests where a pixel gets in between 2 faces or the middle of a
+ * quad, camera aligned quads also have this problem but they are less common. Add a
+ * small offset to the UVs, fixes bug #18685. */
+constexpr float ZSPAN_X_EPSILON = 0.001f;
+constexpr float ZSPAN_Y_EPSILON = 0.002f;
+constexpr float ZSPAN_X_OFFSET = 0.5f + ZSPAN_X_EPSILON;
+constexpr float ZSPAN_Y_OFFSET = 0.5f + ZSPAN_Y_EPSILON;
+
+void zspan_rasterize_triangle(ZSpan *zspan,
+                              void *handle,
+                              const float *v1_in,
+                              const float *v2_in,
+                              const float *v3_in,
+                              void (*func)(void *, int, int, float, float))
 {
   float x0, y0, x1, y1, x2, y2, z0, z1, z2;
   float u, v, uxd, uyd, vxd, vyd, uy0, vy0, xx1;
@@ -171,6 +171,10 @@ void zspan_scanconvert(ZSpan *zspan,
 
   /* init */
   zbuf_init_span(zspan);
+
+  const float v1[2] = {v1_in[0] - ZSPAN_X_OFFSET, v1_in[1] - ZSPAN_Y_OFFSET};
+  const float v2[2] = {v2_in[0] - ZSPAN_X_OFFSET, v2_in[1] - ZSPAN_Y_OFFSET};
+  const float v3[2] = {v3_in[0] - ZSPAN_X_OFFSET, v3_in[1] - ZSPAN_Y_OFFSET};
 
   /* set spans */
   zbuf_add_to_span(zspan, v1, v2);
@@ -236,9 +240,7 @@ void zspan_scanconvert(ZSpan *zspan,
     if (sn2 >= rectx) {
       sn2 = rectx - 1;
     }
-    if (sn1 < 0) {
-      sn1 = 0;
-    }
+    sn1 = std::max(sn1, 0);
 
     u = ((double(sn1) * uxd) + uy0) - (i * uyd);
     v = ((double(sn1) * vxd) + vy0) - (i * vyd);
@@ -248,3 +250,97 @@ void zspan_scanconvert(ZSpan *zspan,
     }
   }
 }
+
+static void zspan_rasterize_conservative_line(ZSpan *zspan,
+                                              void *handle,
+                                              const float *v1_in,
+                                              const float *v2_in,
+                                              const float *uv1,
+                                              const float *uv2,
+                                              void (*func)(void *, int, int, float, float))
+{
+  const float v1[2] = {v1_in[0] - ZSPAN_X_OFFSET, v1_in[1] - ZSPAN_Y_OFFSET};
+  const float v2[2] = {v2_in[0] - ZSPAN_X_OFFSET, v2_in[1] - ZSPAN_Y_OFFSET};
+
+  const float miny = std::min(v1[1], v2[1]);
+  const float maxy = std::max(v1[1], v2[1]);
+
+  int y0 = floor(miny + 0.5f);
+  int y1 = floor(maxy + 0.5f);
+
+  /* Clip and cull the line. */
+  y0 = std::max(y0, 0);
+  if (y1 >= zspan->recty) {
+    y1 = zspan->recty - 1;
+  }
+
+  if (y0 > y1) {
+    return;
+  }
+
+  /* Line direction divided by length for uv interpolation. */
+  float dir[2] = {v2[0] - v1[0], v2[1] - v1[1]};
+  float len_sqr = dir[0] * dir[0] + dir[1] * dir[1];
+
+  if (len_sqr > FLT_EPSILON) {
+    dir[0] /= len_sqr;
+    dir[1] /= len_sqr;
+  }
+
+  /* X coordinates of the line endpoints. */
+  const float x_miny = (v1[1] < v2[1]) ? v1[0] : v2[0];
+  const float x_maxy = (v1[1] < v2[1]) ? v2[0] : v1[0];
+  const float inv_dy = math::safe_divide(1.0f, maxy - miny);
+
+  for (; y0 <= y1; y0++) {
+    /* Compute line x range inside current scan-line, interpolating between endpoints. */
+    const float ta = (clamp_f(y0 - 0.5f, miny, maxy) - miny) * inv_dy;
+    const float tb = (maxy - clamp_f(y0 + 0.5f, miny, maxy)) * inv_dy;
+    const float xa = math::interpolate(x_miny, x_maxy, ta);
+    const float xb = math::interpolate(x_miny, x_maxy, 1.0f - tb);
+
+    const float minx = std::min(xa, xb);
+    const float maxx = std::max(xa, xb);
+
+    int x0 = floor(minx + 0.5f);
+    int x1 = floor(maxx + 0.5f);
+
+    /* Clip and cull scan-line. */
+    x0 = std::max(x0, 0);
+    if (x1 >= zspan->rectx) {
+      x1 = zspan->rectx - 1;
+    }
+
+    if (x0 > x1) {
+      continue;
+    }
+
+    for (; x0 <= x1; x0++) {
+      float w = (x0 - v1[0]) * dir[0] + (y0 - v1[1]) * dir[1];
+      w = clamp_f(w, 0, 1);
+
+      float u = (1 - w) * uv1[0] + w * uv2[0];
+      float v = (1 - w) * uv1[1] + w * uv2[1];
+
+      func(handle, x0, y0, u, v);
+    }
+  }
+}
+
+void zspan_rasterize_conservative_wireframe(ZSpan *zspan,
+                                            void *handle,
+                                            const float *v1,
+                                            const float *v2,
+                                            const float *v3,
+                                            void (*func)(void *, int, int, float, float))
+{
+  float uv1[2] = {1, 0};
+  float uv2[2] = {0, 1};
+  float uv3[2] = {0, 0};
+
+  zspan_rasterize_conservative_line(zspan, handle, v1, v2, uv1, uv2, func);
+  zspan_rasterize_conservative_line(zspan, handle, v2, v3, uv2, uv3, func);
+  zspan_rasterize_conservative_line(zspan, handle, v3, v1, uv3, uv1, func);
+}
+
+}  // namespace blender

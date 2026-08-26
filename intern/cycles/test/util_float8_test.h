@@ -2,7 +2,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
-#include "testing/testing.h"
+#include <gtest/gtest.h>
+
 #include "util/math.h"
 #include "util/system.h"
 #include "util/types.h"
@@ -11,7 +12,6 @@ CCL_NAMESPACE_BEGIN
 
 static bool validate_cpu_capabilities()
 {
-
 #if defined(__KERNEL_AVX2__)
   return system_cpu_support_avx2();
 #elif defined(__KERNEL_AVX__)

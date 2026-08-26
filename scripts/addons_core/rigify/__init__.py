@@ -5,7 +5,9 @@
 bl_info = {
     "name": "Rigify",
     "version": (0, 6, 10),
-    "author": "Nathan Vegdahl, Lucio Rossi, Ivan Cappiello, Alexander Gavrilov",  # noqa
+    # This is now displayed as the maintainer, so show the foundation.
+    # "author": "Nathan Vegdahl, Lucio Rossi, Ivan Cappiello, Alexander Gavrilov", # Original Authors
+    "author": "Blender Foundation",
     "blender": (4, 0, 0),
     "description": "Automatic rigging from building-block components",
     "location": "Armature properties, Bone properties, View3d tools panel, Armature Add menu",
@@ -19,7 +21,10 @@ import sys
 import bpy
 import typing
 
-from bpy.app.translations import pgettext_iface as iface_
+from bpy.app.translations import (
+    pgettext_iface as iface_,
+    pgettext_rpt as rpt_,
+)
 
 # The order in which core modules of the addon are loaded and reloaded.
 # Modules not in this list are removed from memory upon reload.
@@ -167,29 +172,26 @@ class RIGIFY_UL_FeatureSets(bpy.types.UIList):
         # feature_sets = rigify_prefs.rigify_feature_sets
         # active_set: RigifyFeatureSets = feature_sets[rigify_prefs.active_feature_set_index]
         feature_set_entry: RigifyFeatureSets = item
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            row = layout.row()
+        row = layout.row()
 
-            name = feature_set_entry.name
-            icon = "BLANK1"
+        name = feature_set_entry.name
+        icon = "BLANK1"
 
-            if not feature_set_entry.module_name:
-                name += iface_(" (not installed)")
-                icon = "URL"
-            elif feature_set_entry.has_errors or feature_set_entry.has_exceptions:
-                icon = "ERROR"
-                row.alert = True
+        if not feature_set_entry.module_name:
+            name += iface_(" (not installed)")
+            icon = "URL"
+        elif feature_set_entry.has_errors or feature_set_entry.has_exceptions:
+            icon = "ERROR"
+            row.alert = True
 
-            row.label(text=name, icon=icon, translate=False)
+        row.label(text=name, icon=icon, translate=False)
 
-            if feature_set_entry.module_name:
-                icon = 'CHECKBOX_HLT' if feature_set_entry.enabled else 'CHECKBOX_DEHLT'
-                row.enabled = feature_set_entry.enabled
-                layout.prop(feature_set_entry, 'enabled', text="", icon=icon, emboss=False)
-            else:
-                row.enabled = False
-        elif self.layout_type in {'GRID'}:
-            pass
+        if feature_set_entry.module_name:
+            icon = 'CHECKBOX_HLT' if feature_set_entry.enabled else 'CHECKBOX_DEHLT'
+            row.enabled = feature_set_entry.enabled
+            layout.prop(feature_set_entry, 'enabled', text="", icon=icon, emboss=False)
+        else:
+            row.enabled = False
 
 
 class RigifyPreferences(AddonPreferences):
@@ -314,10 +316,10 @@ def check_feature_set_error(_feature_set: RigifyFeatureSets, info: dict, layout:
             sub = split.row()
             sub.alert = True
             text = (
-                iface_("This feature set requires Blender {:s} or newer to work properly.")
+                rpt_("This feature set requires Blender {:s} or newer to work properly.")
                 .format(".".join(str(x) for x in info['blender']))
             )
-            sub.label(icon='ERROR', text=text, translate=False)
+            sub.label(icon='STATUS_WARNING', text=text, translate=False)
 
     for dep_link in info.get("dependencies", []):
         if not feature_set_list.get_module_by_link_safe(dep_link):
@@ -330,7 +332,7 @@ def check_feature_set_error(_feature_set: RigifyFeatureSets, info: dict, layout:
                 sub.alert = True
                 sub.label(
                     text="This feature set depends on the following feature set to work properly:",
-                    icon='ERROR'
+                    icon='STATUS_WARNING'
                 )
                 sub_split = col.split(factor=0.8)
                 sub = sub_split.row()
@@ -366,7 +368,7 @@ def draw_feature_set_prefs(layout: bpy.types.UILayout, _context: bpy.types.Conte
         split.label(text="Error:")
         sub = split.row()
         sub.alert = True
-        sub.label(text="This feature set failed to load correctly.", icon='ERROR')
+        sub.label(text="This feature set failed to load correctly.", icon='STATUS_ERROR')
 
     split = col.row().split(factor=split_factor)
     split.label(text="Description:")
@@ -387,7 +389,7 @@ def draw_feature_set_prefs(layout: bpy.types.UILayout, _context: bpy.types.Conte
     if 'warning' in info:
         split = col.row().split(factor=split_factor)
         split.label(text="Warning:")
-        split.label(text="  " + info['warning'], icon='ERROR')
+        split.label(text="  " + info['warning'], icon='STATUS_WARNING')
 
     split = col.row().split(factor=split_factor)
     split.label(text="Internet:")
@@ -421,25 +423,25 @@ class RigifyName(bpy.types.PropertyGroup):
 class RigifyColorSet(bpy.types.PropertyGroup):
     name: StringProperty(name="Color Set", default=" ")
     active: FloatVectorProperty(
-        name="object_color",
+        name="Active Color",
         subtype='COLOR',
         default=(1.0, 1.0, 1.0),
         min=0.0, max=1.0,
-        description="Color picker"
+        description="Color of bone when active"
     )
     normal: FloatVectorProperty(
-        name="object_color",
+        name="Normal Color",
         subtype='COLOR',
         default=(1.0, 1.0, 1.0),
         min=0.0, max=1.0,
-        description="Color picker"
+        description="Color of bone when not selected or active"
     )
     select: FloatVectorProperty(
-        name="object_color",
+        name="Selected Color",
         subtype='COLOR',
         default=(1.0, 1.0, 1.0),
         min=0.0, max=1.0,
-        description="Color picker"
+        description="Color of bone when selected"
     )
     standard_colors_lock: BoolProperty(default=True)
 
@@ -452,24 +454,27 @@ class RigifyColorSet(bpy.types.PropertyGroup):
 
 class RigifySelectionColors(bpy.types.PropertyGroup):
     select: FloatVectorProperty(
-        name="object_color",
+        name="Selected Color",
         subtype='COLOR',
         default=(0.314, 0.784, 1.0),
         min=0.0, max=1.0,
-        description="color picker"
+        description="Color of bone when selected"
     )
 
     active: FloatVectorProperty(
-        name="object_color",
+        name="Active Color",
         subtype='COLOR',
         default=(0.549, 1.0, 1.0),
         min=0.0, max=1.0,
-        description="color picker"
+        description="Color of bone when active"
     )
 
 
 class RigifyParameters(bpy.types.PropertyGroup):
     name: StringProperty()
+
+    # NOTE: parameters are dynamically added to this PropertyGroup.
+    # Check `ControlLayersOption` in `layers.py`.
 
 
 class RigifyBoneCollectionReference(bpy.types.PropertyGroup):
@@ -478,6 +483,8 @@ class RigifyBoneCollectionReference(bpy.types.PropertyGroup):
     uid: IntProperty(name="Unique ID", default=-1)
 
     def find_collection(self, *, update=False, raise_error=False) -> bpy.types.BoneCollection | None:
+        if self.uid < 0:
+            return None
         return utils.layers.resolve_collection_reference(self.id_data, self, update=update, raise_error=raise_error)
 
     def set_collection(self, coll: bpy.types.BoneCollection | None):
@@ -650,7 +657,82 @@ def register():
     for cls in classes:
         register_class(cls)
 
-    # Properties.
+    register_usetime_properties()
+    register_rna_properties()
+
+    prefs = RigifyPreferences.get_instance()
+    prefs.register_feature_sets(True)
+    prefs.update_external_rigs()
+
+    # Add rig parameters
+    register_rig_parameters()
+
+
+def register_rig_parameters():
+    seen_error = False
+    for rig in rig_lists.rigs:
+        rig_module = rig_lists.rigs[rig]['module']
+        rig_class = rig_module.Rig
+        rig_def = rig_class if hasattr(rig_class, 'add_parameters') else rig_module
+        # noinspection PyBroadException
+        try:
+            if hasattr(rig_def, 'add_parameters'):
+                validator = RigifyParameterValidator(RigifyParameters, rig, RIGIFY_PARAMETER_TABLE)
+                rig_def.add_parameters(validator)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            seen_error = True
+
+    if seen_error:
+        # Make sure errors are seen by the caller. This helps to catch issues with
+        # Rigify in automated systems like the buildbot.
+        raise RuntimeError("There was an issue registering at least one Rigify rig type, check the terminal for errors")
+
+
+def unregister():
+    from bpy.utils import unregister_class
+
+    prefs = RigifyPreferences.get_instance()
+    prefs.register_feature_sets(False)
+
+    unregister_rna_properties()
+    unregister_usetime_properties()
+
+    # Classes.
+    for cls in classes:
+        unregister_class(cls)
+
+    clear_rigify_parameters()
+
+    # Sub-modules.
+    operators.unregister()
+    metarig_menu.unregister()
+    ui.unregister()
+    feature_set_list.unregister()
+
+
+def register_usetime_properties() -> None:
+    """
+    Register all properties that are required at use-time.
+    This makes it possible to use a rigify created rig without having the rigify addon enabled.
+    See rig_ui_template.py
+    """
+    coll_store = bpy.types.BoneCollection
+    coll_store.rigify_ui_row = bpy.props.IntProperty(
+        name="UI Row", default=0, min=0,
+        description="If not zero, row of the UI panel where the button for this collection is shown")
+    coll_store.rigify_ui_title = bpy.props.StringProperty(
+        name="UI Title", description="Text to use on the UI panel button instead of the collection name")
+
+
+def unregister_usetime_properties() -> None:
+    coll_store: typing.Any = bpy.types.BoneCollection
+    del coll_store.rigify_ui_row
+    del coll_store.rigify_ui_title
+
+
+def register_rna_properties() -> None:
     bpy.types.Armature.active_feature_set = EnumProperty(
         items=feature_set_list.feature_set_items,
         name="Feature Set",
@@ -667,26 +749,26 @@ def register():
     bpy.types.Armature.rigify_colors_index = IntProperty(default=-1)
     bpy.types.Armature.rigify_colors_lock = BoolProperty(default=True)
     bpy.types.Armature.rigify_theme_to_add = EnumProperty(items=(
-        ('THEME01', 'THEME01', ''),
-        ('THEME02', 'THEME02', ''),
-        ('THEME03', 'THEME03', ''),
-        ('THEME04', 'THEME04', ''),
-        ('THEME05', 'THEME05', ''),
-        ('THEME06', 'THEME06', ''),
-        ('THEME07', 'THEME07', ''),
-        ('THEME08', 'THEME08', ''),
-        ('THEME09', 'THEME09', ''),
-        ('THEME10', 'THEME10', ''),
-        ('THEME11', 'THEME11', ''),
-        ('THEME12', 'THEME12', ''),
-        ('THEME13', 'THEME13', ''),
-        ('THEME14', 'THEME14', ''),
-        ('THEME15', 'THEME15', ''),
-        ('THEME16', 'THEME16', ''),
-        ('THEME17', 'THEME17', ''),
-        ('THEME18', 'THEME18', ''),
-        ('THEME19', 'THEME19', ''),
-        ('THEME20', 'THEME20', '')
+        ('THEME01', 'Theme 01', ''),
+        ('THEME02', 'Theme 02', ''),
+        ('THEME03', 'Theme 03', ''),
+        ('THEME04', 'Theme 04', ''),
+        ('THEME05', 'Theme 05', ''),
+        ('THEME06', 'Theme 06', ''),
+        ('THEME07', 'Theme 07', ''),
+        ('THEME08', 'Theme 08', ''),
+        ('THEME09', 'Theme 09', ''),
+        ('THEME10', 'Theme 10', ''),
+        ('THEME11', 'Theme 11', ''),
+        ('THEME12', 'Theme 12', ''),
+        ('THEME13', 'Theme 13', ''),
+        ('THEME14', 'Theme 14', ''),
+        ('THEME15', 'Theme 15', ''),
+        ('THEME16', 'Theme 16', ''),
+        ('THEME17', 'Theme 17', ''),
+        ('THEME18', 'Theme 18', ''),
+        ('THEME19', 'Theme 19', ''),
+        ('THEME20', 'Theme 20', '')
     ), name='Theme')
 
     id_store = bpy.types.WindowManager
@@ -701,44 +783,46 @@ def register():
                                               description="The selected rig type")
 
     bpy.types.Armature.rigify_force_widget_update = BoolProperty(
-        name="Overwrite Widget Meshes",
-        description="Forces Rigify to delete and rebuild all of the rig widget objects. By "
-                    "default, already existing widgets are reused as-is to facilitate manual "
-                    "editing",
+        name="Overwrite Widgets",
+        description="Forces Rigify to delete and rebuild all of the generated widget objects. "
+                    "If disabled, widgets that already exist when regenerating will not be replaced "
+                    "to facilitate manual editing",
         default=False)
 
     bpy.types.Armature.rigify_mirror_widgets = BoolProperty(
         name="Mirror Widgets",
-        description="Make widgets for left and right side bones linked duplicates with negative "
-                    "X scale for the right side, based on bone name symmetry",
+        description="Generate symmetrical left/right widgets as linked duplicates. "
+                    "Widgets on the Right side will be scaled by -1 on the x axis",
         default=True)
 
     bpy.types.Armature.rigify_widgets_collection = PointerProperty(
         type=bpy.types.Collection,
-        name="Widgets Collection",
-        description="Defines which collection to place widget objects in. If unset, a new one "
+        name="Widget Collection",
+        description="Defines which collection to place widget objects in. If unset, a new collection "
                     "will be created based on the name of the rig")
 
     bpy.types.Armature.rigify_rig_basename = StringProperty(
         name="Rigify Rig Name",
-        description="Optional. If specified, this name will be used for the newly generated rig, "
+        description="If specified, this name will be used for the newly generated armature object, "
                     "widget collection and script. Otherwise, a name is generated based on the "
-                    "name of the metarig object by replacing 'metarig' with 'rig', 'META' with "
-                    "'RIG', or prefixing with 'RIG-'. When updating an already generated rig its "
-                    "name is never changed",
+                    "name of the metarig object by either replacing... "
+                    "- 'metarig' with 'rig'"
+                    "- 'META' with 'RIG'"
+                    "- or prefixing with 'RIG-' "
+                    "When updating an already generated rig its name is never changed",
         default="")
 
     bpy.types.Armature.rigify_target_rig = PointerProperty(
         type=bpy.types.Object,
         name="Rigify Target Rig",
-        description="Defines which rig to overwrite. If unset, a new one will be created with "
-                    "name based on the Rig Name option or the name of the metarig",
+        description="Defines which armature object to overwrite. If unset, a new one will be created with "
+                    "a name based on the Rig Name option or the name of the metarig",
         poll=lambda self, obj: obj.type == 'ARMATURE' and obj.data is not self)
 
     bpy.types.Armature.rigify_rig_ui = PointerProperty(
         type=bpy.types.Text,
         name="Rigify Target Rig UI",
-        description="Defines the UI to overwrite. If unset, a new one will be created and named "
+        description="Defines the text data-block to overwrite. If unset, a new one will be created and named "
                     "based on the name of the rig")
 
     bpy.types.Armature.rigify_finalize_script = PointerProperty(
@@ -755,10 +839,10 @@ def register():
 
     coll_store.rigify_uid = IntProperty(name="Unique ID", default=-1)
     coll_store.rigify_ui_row = IntProperty(
-        name="UI Row", default=0, min=0,
-        description="If not zero, row of the UI panel where the button for this collection is shown")
+        name="Button Row", default=0, min=0,
+        description="The row in the UI panel where the button for this collection is shown. (0 = hidden)")
     coll_store.rigify_ui_title = StringProperty(
-        name="UI Title", description="Text to use on the UI panel button instead of the collection name")
+        name="Button Text", description="Text to use on the UI panel button instead of the collection name")
     coll_store.rigify_sel_set = BoolProperty(
         name="Add Selection Set", default=False, description='Add Selection Set for this collection')
     coll_store.rigify_color_set_id = IntProperty(name="Color Set ID", default=0, min=0)
@@ -770,7 +854,7 @@ def register():
         coll.rigify_ui_title = "" if new_val == coll.name else new_val
 
     coll_store.rigify_ui_title_name = StringProperty(
-        name="UI Title", description="Text to use on the UI panel button (does not edit the collection name)",
+        name="Button Text", description="Text to use on the UI panel button (does not edit the collection name)",
         get=ui_title_get, set=ui_title_set
     )
 
@@ -808,35 +892,12 @@ def register():
         name="Rigify Owner Rig",
         description="Rig that owns this object and may delete or overwrite it upon re-generation")
 
-    prefs = RigifyPreferences.get_instance()
-    prefs.register_feature_sets(True)
-    prefs.update_external_rigs()
-
-    # Add rig parameters
-    register_rig_parameters()
+    # 5.0: Version metarigs to new Action Slot selector properties on file load.
+    from .utils.action_layers import versioning_5_0
+    bpy.app.handlers.load_post.append(versioning_5_0)
 
 
-def register_rig_parameters():
-    for rig in rig_lists.rigs:
-        rig_module = rig_lists.rigs[rig]['module']
-        rig_class = rig_module.Rig
-        rig_def = rig_class if hasattr(rig_class, 'add_parameters') else rig_module
-        # noinspection PyBroadException
-        try:
-            if hasattr(rig_def, 'add_parameters'):
-                validator = RigifyParameterValidator(RigifyParameters, rig, RIGIFY_PARAMETER_TABLE)
-                rig_def.add_parameters(validator)
-        except Exception:
-            import traceback
-            traceback.print_exc()
-
-
-def unregister():
-    from bpy.utils import unregister_class
-
-    prefs = RigifyPreferences.get_instance()
-    prefs.register_feature_sets(False)
-
+def unregister_rna_properties() -> None:
     # Properties on PoseBones and Armature. (Annotated to suppress unknown attribute warnings.)
     pose_bone: typing.Any = bpy.types.PoseBone
 
@@ -865,8 +926,6 @@ def unregister():
     coll_store: typing.Any = bpy.types.BoneCollection
 
     del coll_store.rigify_uid
-    del coll_store.rigify_ui_row
-    del coll_store.rigify_ui_title
     del coll_store.rigify_ui_title_name
     del coll_store.rigify_sel_set
     del coll_store.rigify_color_set_id
@@ -875,15 +934,3 @@ def unregister():
     obj_store: typing.Any = bpy.types.Object
 
     del obj_store.rigify_owner_rig
-
-    # Classes.
-    for cls in classes:
-        unregister_class(cls)
-
-    clear_rigify_parameters()
-
-    # Sub-modules.
-    operators.unregister()
-    metarig_menu.unregister()
-    ui.unregister()
-    feature_set_list.unregister()

@@ -8,21 +8,49 @@
 
 #pragma once
 
-/* `select_engine.cc` */
+#include "DRW_render.hh"
 
-extern DrawEngineType draw_engine_select_type;
-extern RenderEngineType DRW_engine_viewport_select_type;
+namespace blender {
+
+/* `select_engine.cc` */
 
 #ifdef WITH_DRAW_DEBUG
 /* `select_debug_engine.cc` */
 
-extern DrawEngineType draw_engine_debug_select_type;
+namespace draw::edit_select_debug {
+
+struct Engine : public DrawEngine::Pointer {
+  DrawEngine *create_instance() final;
+
+  static void free_static();
+};
+
+}  // namespace draw::edit_select_debug
+
 #endif
 
 struct SELECTID_Context *DRW_select_engine_context_get();
-struct GPUFrameBuffer *DRW_engine_select_framebuffer_get();
-struct GPUTexture *DRW_engine_select_texture_get();
+gpu::FrameBuffer *DRW_engine_select_framebuffer_get();
+gpu::Texture *DRW_engine_select_texture_get();
 
 /* select_instance.cc */
 
-extern DrawEngineType draw_engine_select_next_type;
+namespace draw::select {
+
+struct Engine : public DrawEngine::Pointer {
+  DrawEngine *create_instance() final;
+};
+
+}  // namespace draw::select
+
+namespace draw::edit_select {
+
+struct Engine : public DrawEngine::Pointer {
+  DrawEngine *create_instance() final;
+
+  static void free_static();
+};
+
+}  // namespace draw::edit_select
+
+}  // namespace blender

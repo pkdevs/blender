@@ -10,10 +10,6 @@
 
 #include "../BPy_BinaryPredicate1D.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject ViewMapGradientNormBP1D_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject ViewMapGradientNormBP1D_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&ViewMapGradientNormBP1D_Type))
 
 /*---------------------------Python BPy_ViewMapGradientNormBP1D structure definition----------*/
-typedef struct {
+struct BPy_ViewMapGradientNormBP1D {
   BPy_BinaryPredicate1D py_bp1D;
-} BPy_ViewMapGradientNormBP1D;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

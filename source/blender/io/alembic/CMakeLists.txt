@@ -5,30 +5,18 @@
 set(INC
   .
   ../common
-  ../../blenkernel
-  ../../blenloader
-  ../../blentranslation
-  ../../bmesh
   ../../editors/include
   ../../makesrna
-  ../../windowmanager
   ../../../../intern/utfconv
 )
 
 set(INC_SYS
-  ${ALEMBIC_INCLUDE_DIRS}
-  ${OPENEXR_INCLUDE_DIRS}
 )
-
-if(WITH_BOOST)
-  list(APPEND INC_SYS
-    ${BOOST_INCLUDE_DIR}
-  )
-endif()
 
 set(SRC
   intern/abc_axis_conversion.cc
   intern/abc_customdata.cc
+  intern/abc_keyframing.cc
   intern/abc_reader_archive.cc
   intern/abc_reader_camera.cc
   intern/abc_reader_curves.cc
@@ -58,6 +46,7 @@ set(SRC
   ABC_alembic.h
   intern/abc_axis_conversion.h
   intern/abc_customdata.h
+  intern/abc_keyframing.h
   intern/abc_reader_archive.h
   intern/abc_reader_camera.h
   intern/abc_reader_curves.h
@@ -84,23 +73,22 @@ set(SRC
 )
 
 set(LIB
-  bf_blenkernel
+  PRIVATE bf::animrig
+  PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::blenloader
+  PRIVATE bf::blentranslation
+  PRIVATE bf::bmesh
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
   bf_io_common
+  PRIVATE bf::windowmanager
 
-  ${ALEMBIC_LIBRARIES}
-  ${OPENEXR_LIBRARIES}
+  PRIVATE bf::dependencies::optional::alembic
+  PRIVATE bf::dependencies::openexr
 )
-
-if(WITH_BOOST)
-  list(APPEND LIB
-    ${BOOST_LIBRARIES}
-  )
-endif()
 
 blender_add_lib(bf_io_alembic "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 

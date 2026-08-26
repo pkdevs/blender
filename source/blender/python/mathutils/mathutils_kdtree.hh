@@ -8,6 +8,12 @@
 
 #pragma once
 
+#include <Python.h>
+
+namespace blender {
+
 PyMODINIT_FUNC PyInit_mathutils_kdtree();
 
 extern PyTypeObject PyKDTree_Type;
+
+}  // namespace blender

@@ -8,10 +8,6 @@
 
 #include "BPy_TrueBP1D.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 using namespace Freestyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -27,13 +23,12 @@ PyDoc_STRVAR(
     "\n"
     "   Always returns true.\n"
     "\n"
-    "   :arg inter1: The first Interface1D object.\n"
+    "   :param inter1: The first Interface1D object.\n"
     "   :type inter1: :class:`freestyle.types.Interface1D`\n"
-    "   :arg inter2: The second Interface1D object.\n"
+    "   :param inter2: The second Interface1D object.\n"
     "   :type inter2: :class:`freestyle.types.Interface1D`\n"
     "   :return: True.\n"
     "   :rtype: bool\n");
-
 static int TrueBP1D___init__(BPy_TrueBP1D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {nullptr};
@@ -89,7 +84,3 @@ PyTypeObject TrueBP1D_Type = {
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

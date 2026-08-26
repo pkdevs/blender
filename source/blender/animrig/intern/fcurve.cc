@@ -13,9 +13,9 @@
 #include "ANIM_animdata.hh"
 #include "ANIM_fcurve.hh"
 #include "BKE_fcurve.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "DNA_anim_types.h"
 #include "MEM_guardedalloc.h"
 
@@ -35,32 +35,35 @@ KeyframeSettings get_keyframe_settings(const bool from_userprefs)
   return settings;
 }
 
-const FCurve *fcurve_find(Span<const FCurve *> fcurves, const FCurveDescriptor fcurve_descriptor)
+const FCurve *fcurve_find(Span<const FCurve *> fcurves, const FCurveDescriptor &fcurve_descriptor)
 {
   for (const FCurve *fcurve : fcurves) {
     /* Check indices first, much cheaper than a string comparison. */
-    if (fcurve->array_index == fcurve_descriptor.array_index && fcurve->rna_path &&
-        StringRef(fcurve->rna_path) == fcurve_descriptor.rna_path)
+    if (fcurve->array_index == fcurve_descriptor.array_index &&
+        fcurve->rna_path() == fcurve_descriptor.rna_path)
     {
       return fcurve;
     }
   }
   return nullptr;
 }
-FCurve *fcurve_find(Span<FCurve *> fcurves, const FCurveDescriptor fcurve_descriptor)
+FCurve *fcurve_find(Span<FCurve *> fcurves, const FCurveDescriptor &fcurve_descriptor)
 {
   const FCurve *fcurve = fcurve_find(fcurves.cast<const FCurve *>(), fcurve_descriptor);
   return const_cast<FCurve *>(fcurve);
 }
 
-FCurve *create_fcurve_for_channel(const FCurveDescriptor fcurve_descriptor)
+FCurve *create_fcurve_for_channel(const FCurveDescriptor &fcurve_descriptor)
 {
   FCurve *fcu = BKE_fcurve_create();
-  fcu->rna_path = BLI_strdupn(fcurve_descriptor.rna_path.data(),
-                              fcurve_descriptor.rna_path.size());
+  fcu->rna_path_set(fcurve_descriptor.rna_path);
   fcu->array_index = fcurve_descriptor.array_index;
   fcu->flag = (FCURVE_VISIBLE | FCURVE_SELECTED);
   fcu->auto_smoothing = U.auto_smoothing_new;
+
+  if (fcurve_descriptor.prop_type.has_value()) {
+    fcu->flag |= fcurve_flags_for_property_type(*fcurve_descriptor.prop_type);
+  }
 
   /* Set the fcurve's color mode if needed/able. */
   if ((U.keying_flag & KEYING_FLAG_XYZ2RGB) != 0 && fcurve_descriptor.prop_subtype.has_value()) {
@@ -86,9 +89,26 @@ FCurve *create_fcurve_for_channel(const FCurveDescriptor fcurve_descriptor)
   return fcu;
 }
 
+eFCurve_Flags fcurve_flags_for_property_type(const PropertyType prop_type)
+{
+  switch (prop_type) {
+    case PROP_FLOAT:
+      return eFCurve_Flags{};
+    case PROP_INT:
+      /* Do integer (only 'whole' numbers) interpolation between all points. */
+      return FCURVE_INT_VALUES;
+    default:
+      /* Do 'discrete' (i.e. enum, boolean values which cannot take any intermediate
+       * values at all) interpolation between all points.
+       *    - however, we must also ensure that evaluated values are only integers still.
+       */
+      return FCURVE_DISCRETE_VALUES | FCURVE_INT_VALUES;
+  }
+}
+
 bool fcurve_delete_keyframe_at_time(FCurve *fcurve, const float time)
 {
-  if (BKE_fcurve_is_protected(fcurve)) {
+  if (!fcurve || BKE_fcurve_is_protected(*fcurve)) {
     return false;
   }
   bool found;
@@ -100,7 +120,7 @@ bool fcurve_delete_keyframe_at_time(FCurve *fcurve, const float time)
   }
 
   BKE_fcurve_delete_key(fcurve, index);
-  BKE_fcurve_handles_recalc(fcurve);
+  BKE_fcurve_handles_recalc(*fcurve);
 
   return true;
 }
@@ -165,7 +185,7 @@ int insert_bezt_fcurve(FCurve *fcu, const BezTriple *bezt, eInsertKeyFlags flag)
         if (flag & INSERTKEY_CYCLE_AWARE) {
           /* If replacing an end point of a cyclic curve without offset,
            * modify the other end too. */
-          if (ELEM(i, 0, fcu->totvert - 1) && BKE_fcurve_get_cycle_type(fcu) == FCU_CYCLE_PERFECT)
+          if (ELEM(i, 0, fcu->totvert - 1) && BKE_fcurve_get_cycle_type(*fcu) == FCU_CYCLE_PERFECT)
           {
             replace_bezt_keyframe_ypos(&fcu->bezt[i == 0 ? fcu->totvert - 1 : 0], bezt);
           }
@@ -175,8 +195,7 @@ int insert_bezt_fcurve(FCurve *fcu, const BezTriple *bezt, eInsertKeyFlags flag)
     /* Keyframing modes allow not replacing the keyframe. */
     else if ((flag & INSERTKEY_REPLACE) == 0) {
       /* Insert new - if we're not restricted to replacing keyframes only. */
-      BezTriple *newb = static_cast<BezTriple *>(
-          MEM_callocN((fcu->totvert + 1) * sizeof(BezTriple), "beztriple"));
+      BezTriple *newb = MEM_new_array_zeroed<BezTriple>(fcu->totvert + 1, "beztriple");
 
       /* Add the beztriples that should occur before the beztriple to be pasted
        * (originally in fcu). */
@@ -193,7 +212,7 @@ int insert_bezt_fcurve(FCurve *fcu, const BezTriple *bezt, eInsertKeyFlags flag)
       }
 
       /* Replace (+ free) old with new, only if necessary to do so. */
-      MEM_freeN(fcu->bezt);
+      MEM_delete(fcu->bezt);
       fcu->bezt = newb;
 
       fcu->totvert++;
@@ -210,7 +229,7 @@ int insert_bezt_fcurve(FCurve *fcu, const BezTriple *bezt, eInsertKeyFlags flag)
    */
   else if ((flag & INSERTKEY_REPLACE) == 0 && (fcu->fpt == nullptr)) {
     /* Create new keyframes array. */
-    fcu->bezt = static_cast<BezTriple *>(MEM_callocN(sizeof(BezTriple), "beztriple"));
+    fcu->bezt = MEM_new_zeroed<BezTriple>("beztriple");
     *(fcu->bezt) = *bezt;
     fcu->totvert = 1;
   }
@@ -292,7 +311,7 @@ void initialize_bezt(BezTriple *beztr,
   beztr->vec[1][1] = position.y;
   beztr->vec[2][0] = position.x + 1.0f;
   beztr->vec[2][1] = position.y;
-  beztr->f1 = beztr->f2 = beztr->f3 = SELECT;
+  beztr->f1 = beztr->f2 = beztr->f3 = BEZT_FLAG_SELECT;
 
   beztr->h1 = beztr->h2 = settings.handle;
   beztr->ipo = settings.interpolation;
@@ -395,7 +414,8 @@ static float2 remap_cyclic_keyframe_location(const FCurve &fcu,
 
     if (type == FCU_CYCLE_OFFSET) {
       /* Nasty check to handle the case when the modes are different better. */
-      FMod_Cycles *data = static_cast<FMod_Cycles *>(((FModifier *)fcu.modifiers.first)->data);
+      FMod_Cycles *data = static_cast<FMod_Cycles *>(
+          static_cast<FModifier *>(fcu.modifiers.first)->data);
       short mode = (step >= 0) ? data->after_mode : data->before_mode;
 
       if (mode == FCM_EXTRAPOLATE_CYCLIC_OFFSET) {
@@ -417,7 +437,7 @@ SingleKeyingResult insert_vert_fcurve(FCurve *fcu,
   float2 remapped_position = position;
   /* Adjust coordinates for cycle aware insertion. */
   if (flag & INSERTKEY_CYCLE_AWARE) {
-    eFCU_Cycle_Type type = BKE_fcurve_get_cycle_type(fcu);
+    eFCU_Cycle_Type type = BKE_fcurve_get_cycle_type(*fcu);
     remapped_position = remap_cyclic_keyframe_location(*fcu, type, position);
     if (type != FCU_CYCLE_PERFECT) {
       /* Inhibit action from insert_bezt_fcurve unless it's a perfect cycle. */
@@ -475,7 +495,7 @@ SingleKeyingResult insert_vert_fcurve(FCurve *fcu,
    * - we may calculate twice (due to auto-handle needing to be calculated twice)
    */
   if ((flag & INSERTKEY_FAST) == 0) {
-    BKE_fcurve_handles_recalc(fcu);
+    BKE_fcurve_handles_recalc(*fcu);
   }
 
   /* Return the index at which the keyframe was added. */
@@ -501,7 +521,7 @@ static void remove_fcurve_key_range(FCurve *fcu,
   switch (removal_mode) {
 
     case BakeCurveRemove::ALL: {
-      BKE_fcurve_delete_keys_all(fcu);
+      BKE_fcurve_delete_keys_all(*fcu);
       break;
     }
 
@@ -512,7 +532,7 @@ static void remove_fcurve_key_range(FCurve *fcu,
           fcu->bezt, range[0], fcu->totvert, &replace);
 
       if (before_index > 0) {
-        BKE_fcurve_delete_keys(fcu, {0, uint(before_index)});
+        BKE_fcurve_delete_keys(*fcu, {0, uint(before_index)});
       }
 
       int after_index = BKE_fcurve_bezt_binarysearch_index(
@@ -522,7 +542,7 @@ static void remove_fcurve_key_range(FCurve *fcu,
         after_index++;
       }
       if (after_index < fcu->totvert) {
-        BKE_fcurve_delete_keys(fcu, {uint(after_index), fcu->totvert});
+        BKE_fcurve_delete_keys(*fcu, {uint(after_index), fcu->totvert});
       }
       break;
     }
@@ -538,7 +558,7 @@ static void remove_fcurve_key_range(FCurve *fcu,
       }
 
       if (range_end_index > range_start_index) {
-        BKE_fcurve_delete_keys(fcu, {uint(range_start_index), uint(range_end_index)});
+        BKE_fcurve_delete_keys(*fcu, {uint(range_start_index), uint(range_end_index)});
       }
       break;
     }
@@ -555,8 +575,7 @@ void bake_fcurve(FCurve *fcu,
 {
   BLI_assert(step > 0);
   const int sample_count = (range[1] - range[0]) / step + 1;
-  float *samples = static_cast<float *>(
-      MEM_callocN(sample_count * sizeof(float), "Channel Bake Samples"));
+  float *samples = MEM_new_array_zeroed<float>(sample_count, "Channel Bake Samples");
   const float sample_rate = 1.0f / step;
   sample_fcurve_segment(fcu, range[0], sample_rate, samples, sample_count);
 
@@ -564,8 +583,7 @@ void bake_fcurve(FCurve *fcu,
     remove_fcurve_key_range(fcu, range, remove_existing);
   }
 
-  BezTriple *baked_keys = static_cast<BezTriple *>(
-      MEM_callocN(sample_count * sizeof(BezTriple), "beztriple"));
+  BezTriple *baked_keys = MEM_new_array_zeroed<BezTriple>(sample_count, "beztriple");
 
   const KeyframeSettings settings = get_keyframe_settings(true);
 
@@ -581,14 +599,14 @@ void bake_fcurve(FCurve *fcu,
 
   if (fcu->bezt != nullptr) {
     /* Can happen if we removed all keys beforehand. */
-    MEM_freeN(fcu->bezt);
+    MEM_delete(fcu->bezt);
   }
-  MEM_freeN(baked_keys);
+  MEM_delete(baked_keys);
   fcu->bezt = merged_bezt;
   fcu->totvert = merged_size;
 
-  MEM_freeN(samples);
-  BKE_fcurve_handles_recalc(fcu);
+  MEM_delete(samples);
+  BKE_fcurve_handles_recalc(*fcu);
 }
 
 struct TempFrameValCache {
@@ -636,8 +654,7 @@ void bake_fcurve_segments(FCurve *fcu)
         sfra = int(floor(start->vec[1][0]));
 
         if (range) {
-          value_cache = static_cast<TempFrameValCache *>(
-              MEM_callocN(sizeof(TempFrameValCache) * range, "IcuFrameValCache"));
+          value_cache = MEM_new_array_zeroed<TempFrameValCache>(range, "IcuFrameValCache");
 
           /* Sample values. */
           for (n = 1, fp = value_cache; n < range && fp; n++, fp++) {
@@ -647,11 +664,10 @@ void bake_fcurve_segments(FCurve *fcu)
 
           /* Add keyframes with these, tagging as 'breakdowns'. */
           for (n = 1, fp = value_cache; n < range && fp; n++, fp++) {
-            blender::animrig::insert_vert_fcurve(
-                fcu, {fp->frame, fp->val}, settings, INSERTKEY_NOFLAGS);
+            animrig::insert_vert_fcurve(fcu, {fp->frame, fp->val}, settings, INSERTKEY_NOFLAGS);
           }
 
-          MEM_freeN(value_cache);
+          MEM_delete(value_cache);
 
           /* As we added keyframes, we need to compensate so that bezt is at the right place. */
           bezt = fcu->bezt + i + range - 1;
@@ -670,7 +686,7 @@ void bake_fcurve_segments(FCurve *fcu)
     }
   }
 
-  BKE_fcurve_handles_recalc(fcu);
+  BKE_fcurve_handles_recalc(*fcu);
 }
 
 bool fcurve_frame_has_keyframe(const FCurve *fcu, const float frame)

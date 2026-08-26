@@ -8,12 +8,12 @@
  * Fill boundary edge loop(s) with faces.
  */
 
-#include "BLI_utildefines.h"
-
 #include "bmesh.hh"
 #include "bmesh_tools.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
 
 void bmo_holes_fill_exec(BMesh *bm, BMOperator *op)
 {
@@ -66,3 +66,5 @@ void bmo_holes_fill_exec(BMesh *bm, BMOperator *op)
   }
   BMO_op_finish(bm, &op_attr);
 }
+
+}  // namespace blender

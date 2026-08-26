@@ -28,17 +28,18 @@ class RenderDepsgraphRelationBuilder : public DepsgraphRelationBuilder {
 
 }  // namespace
 
-RenderBuilderPipeline::RenderBuilderPipeline(::Depsgraph *graph) : AbstractBuilderPipeline(graph)
+RenderBuilderPipeline::RenderBuilderPipeline(blender::Depsgraph *graph)
+    : AbstractBuilderPipeline(graph)
 {
   deg_graph_->is_render_pipeline_depsgraph = true;
 }
 
-unique_ptr<DepsgraphNodeBuilder> RenderBuilderPipeline::construct_node_builder()
+std::unique_ptr<DepsgraphNodeBuilder> RenderBuilderPipeline::construct_node_builder()
 {
   return std::make_unique<RenderDepsgraphNodeBuilder>(bmain_, deg_graph_, &builder_cache_);
 }
 
-unique_ptr<DepsgraphRelationBuilder> RenderBuilderPipeline::construct_relation_builder()
+std::unique_ptr<DepsgraphRelationBuilder> RenderBuilderPipeline::construct_relation_builder()
 {
   return std::make_unique<RenderDepsgraphRelationBuilder>(bmain_, deg_graph_, &builder_cache_);
 }

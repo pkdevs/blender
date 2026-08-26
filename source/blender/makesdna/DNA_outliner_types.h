@@ -8,33 +8,15 @@
 
 #pragma once
 
+#include "BLI_enum_flags.hh"
 #include "DNA_defs.h"
+
+namespace blender {
 
 struct ID;
 
-typedef struct TreeStoreElem {
-  short type, nr, flag, used;
-
-  /* XXX We actually also store non-ID data in this pointer for identifying
-   * the #TreeStoreElem for a #TreeElement when rebuilding the tree. Ugly! */
-  struct ID *id;
-} TreeStoreElem;
-
-/** Used only to store data in blend files. */
-typedef struct TreeStore {
-  /** Was previously used for memory pre-allocation. */
-  int totelem DNA_DEPRECATED;
-  /** Number of elements in data array. */
-  int usedelem;
-  /**
-   * Elements to be packed from mempool in `writefile.cc`
-   * or extracted to mempool in `readfile.cc`.
-   */
-  TreeStoreElem *data;
-} TreeStore;
-
 /** #TreeStoreElem.flag */
-enum {
+enum eTreeStoreElem_Flag : short {
   TSE_CLOSED = (1 << 0),
   TSE_SELECTED = (1 << 1),
   TSE_TEXTBUT = (1 << 2),
@@ -51,9 +33,10 @@ enum {
   TSE_DRAG_ANY = (TSE_DRAG_INTO | TSE_DRAG_BEFORE | TSE_DRAG_AFTER),
   TSE_HIGHLIGHTED_ANY = (TSE_HIGHLIGHTED | TSE_HIGHLIGHTED_ICON),
 };
+ENUM_OPERATORS(eTreeStoreElem_Flag)
 
 /** #TreeStoreElem.types */
-typedef enum eTreeStoreElemType {
+enum eTreeStoreElemType : short {
   /**
    * If an element is of this type, `TreeStoreElem.id` points to a valid ID and the ID-type can be
    * received through `TreeElement.idcode` (or `GS(TreeStoreElem.id->name)`). Note however that the
@@ -91,9 +74,9 @@ typedef enum eTreeStoreElemType {
   /* TSE_LINKED_LAMP = 23, */
   TSE_BONE_COLLECTION_BASE = 24,
   TSE_BONE_COLLECTION = 25,
-  TSE_SEQUENCE = 26,     /* NO ID */
-  TSE_SEQ_STRIP = 27,    /* NO ID */
-  TSE_SEQUENCE_DUP = 28, /* NO ID */
+  TSE_STRIP = 26,      /* NO ID */
+  TSE_STRIP_DATA = 27, /* NO ID */
+  TSE_STRIP_DUP = 28,  /* NO ID */
   TSE_LINKED_PSYS = 29,
   TSE_RNA_STRUCT = 30,        /* NO ID */
   TSE_RNA_PROPERTY = 31,      /* NO ID */
@@ -115,7 +98,10 @@ typedef enum eTreeStoreElemType {
   TSE_GENERIC_LABEL = 47, /* No ID */
   TSE_GREASE_PENCIL_NODE = 48,
   TSE_LINKED_NODE_TREE = 49,
-} eTreeStoreElemType;
+  TSE_ACTION_SLOT = 50,
+  TSE_SHAPE_KEY_BLOCK = 51,
+  TSE_SHAPE_KEY_BASE = 52,
+};
 
 /** Check whether given #TreeStoreElem should have a real ID in #TreeStoreElem.id member. */
 #define TSE_IS_REAL_ID(_tse) \
@@ -123,12 +109,38 @@ typedef enum eTreeStoreElemType {
          TSE_NLA, \
          TSE_NLA_TRACK, \
          TSE_DRIVER_BASE, \
-         TSE_SEQUENCE, \
-         TSE_SEQ_STRIP, \
-         TSE_SEQUENCE_DUP, \
+         TSE_STRIP, \
+         TSE_STRIP_DATA, \
+         TSE_STRIP_DUP, \
          TSE_RNA_STRUCT, \
          TSE_RNA_PROPERTY, \
          TSE_RNA_ARRAY_ELEM, \
          TSE_ID_BASE, \
          TSE_GP_LAYER, \
          TSE_GENERIC_LABEL))
+
+struct TreeStoreElem {
+  eTreeStoreElemType type = TSE_SOME_ID;
+  short nr = 0;
+  eTreeStoreElem_Flag flag = {};
+  short used = 0;
+
+  /* XXX We actually also store non-ID data in this pointer for identifying
+   * the #TreeStoreElem for a #TreeElement when rebuilding the tree. Ugly! */
+  struct ID *id = nullptr;
+};
+
+/** Used only to store data in blend files. */
+struct TreeStore {
+  /** Was previously used for memory pre-allocation. */
+  DNA_DEPRECATED int totelem = 0;
+  /** Number of elements in data array. */
+  int usedelem = 0;
+  /**
+   * Elements to be packed from mempool in `writefile.cc`
+   * or extracted to mempool in `readfile.cc`.
+   */
+  TreeStoreElem *data = nullptr;
+};
+
+}  // namespace blender

@@ -6,23 +6,26 @@
  * \ingroup RNA
  */
 
-#include <cstdio>
 #include <cstdlib>
 
 #include "RNA_define.hh"
 
-#include "BLI_sys_types.h"
-
-#include "BLI_utildefines.h"
-
-#include "BKE_curve.hh"
-
 #include "rna_internal.hh" /* own include */
 
 #ifdef RNA_RUNTIME
+#  include "DNA_curve_types.h"
+
+#  include "BLI_string.hh"
+
+#  include "BKE_curve.hh"
+
+#  include "DEG_depsgraph.hh"
+
+namespace blender {
+
 static void rna_Curve_transform(Curve *cu, const float mat[16], bool shape_keys)
 {
-  BKE_curve_transform(cu, (const float(*)[4])mat, shape_keys, true);
+  BKE_curve_transform(cu, reinterpret_cast<const float (*)[4]>(mat), shape_keys, true);
 
   DEG_id_tag_update(&cu->id, 0);
 }
@@ -67,7 +70,11 @@ static void rna_Nurb_valid_message(Nurb *nu, int direction, const char **r_resul
   }
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 void RNA_api_curve(StructRNA *srna)
 {
@@ -134,5 +141,7 @@ void RNA_api_curve_nurb(StructRNA *srna)
   RNA_def_parameter_flags(parm, PROP_DYNAMIC, PARM_OUTPUT);
   RNA_def_property_clear_flag(parm, PROP_NEVER_NULL);
 }
+
+}  // namespace blender
 
 #endif

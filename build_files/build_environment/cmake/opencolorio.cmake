@@ -2,6 +2,14 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+set(OCIO_PATCH echo .)
+
+if(WIN32)
+  set(MINIZIP_LIBRARY minizip${LIBEXT})
+else()
+  set(MINIZIP_LIBRARY libminizip${LIBEXT})
+endif()
+
 set(OPENCOLORIO_EXTRA_ARGS
   -DOCIO_BUILD_APPS=OFF
   -DOCIO_BUILD_PYTHON=ON
@@ -16,13 +24,13 @@ set(OPENCOLORIO_EXTRA_ARGS
   -DOCIO_INSTALL_EXT_PACKAGES=NONE
 
   -Dexpat_ROOT=${LIBDIR}/expat
-  -Dyaml-cpp_ROOT=${LIBDIR}/yamlcpp
+  -Dyaml-cpp_DIR=${LIBDIR}/yamlcpp/lib/cmake/yaml-cpp
   -Dyaml-cpp_VERSION=${YAMLCPP_VERSION}
   -Dpystring_ROOT=${LIBDIR}/pystring
   -DImath_ROOT=${LIBDIR}/imath
   -Dminizip-ng_ROOT=${LIBDIR}/minizipng
-  -Dminizip-ng_INCLUDE_DIR=${LIBDIR}/minizipng/include/minizip-ng
-  -Dminizip-ng_LIBRARY=${LIBDIR}/minizipng/lib/libminizip${LIBEXT}
+  -Dminizip-ng_INCLUDE_DIR=${LIBDIR}/minizipng/include/minizip-ng/minizip
+  -Dminizip-ng_LIBRARY=${LIBDIR}/minizipng/lib/${MINIZIP_LIBRARY}
   -DZLIB_LIBRARY=${LIBDIR}/zlib/lib/${ZLIB_LIBRARY}
   -DZLIB_INCLUDE_DIR=${LIBDIR}/zlib/include/
   -DPython_EXECUTABLE=${PYTHON_BINARY}
@@ -30,14 +38,16 @@ set(OPENCOLORIO_EXTRA_ARGS
 )
 
 if(APPLE)
-  # Work around issue where minizip-ng_LIBRARY assumes -ng in file name.
   set(OPENCOLORIO_EXTRA_ARGS
     ${OPENCOLORIO_EXTRA_ARGS}
+    # Work around issue where minizip-ng_LIBRARY assumes -ng in file name.
     -Dminizip_LIBRARY=${LIBDIR}/minizipng/lib/libminizip${LIBEXT}
+    # Work around issue where homebrew Imath's can be prioritized over our own dependency during linking if installed.
+    -DImath_LIBRARY=${LIBDIR}/imath/lib/libImath${SHAREDLIBEXT}
   )
 endif()
 
-if(BLENDER_PLATFORM_ARM)
+if(BLENDER_PLATFORM_ARM AND NOT WIN32)
   set(OPENCOLORIO_EXTRA_ARGS
     ${OPENCOLORIO_EXTRA_ARGS}
     -DOCIO_USE_SSE=OFF
@@ -68,6 +78,7 @@ ExternalProject_Add(external_opencolorio
   URL_HASH ${OPENCOLORIO_HASH_TYPE}=${OPENCOLORIO_HASH}
   CMAKE_GENERATOR ${PLATFORM_ALT_GENERATOR}
   PREFIX ${BUILD_DIR}/opencolorio
+  PATCH_COMMAND ${OCIO_PATCH}
 
   CMAKE_ARGS
     -DCMAKE_INSTALL_PREFIX=${LIBDIR}/opencolorio
@@ -96,8 +107,8 @@ if(WIN32)
         ${LIBDIR}/opencolorio/include
         ${HARVEST_TARGET}/opencolorio/include
       COMMAND ${CMAKE_COMMAND} -E copy
-        ${LIBDIR}/opencolorio/bin/OpenColorIO_2_3.dll
-        ${HARVEST_TARGET}/opencolorio/bin/OpenColorIO_2_3.dll
+        ${LIBDIR}/opencolorio/bin/OpenColorIO_2_5.dll
+        ${HARVEST_TARGET}/opencolorio/bin/OpenColorIO_2_5.dll
       COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${LIBDIR}/opencolorio/lib
         ${HARVEST_TARGET}/opencolorio/lib
@@ -108,15 +119,17 @@ if(WIN32)
   if(BUILD_MODE STREQUAL Debug)
     ExternalProject_Add_Step(external_opencolorio after_install
       COMMAND ${CMAKE_COMMAND} -E copy
-        ${LIBDIR}/opencolorio/bin/OpenColorIO_d_2_3.dll
-        ${HARVEST_TARGET}/opencolorio/bin/OpenColorIO_d_2_3.dll
+        ${LIBDIR}/opencolorio/bin/OpenColorIO_d_2_5.dll
+        ${HARVEST_TARGET}/opencolorio/bin/OpenColorIO_d_2_5.dll
       COMMAND ${CMAKE_COMMAND} -E copy
-        ${LIBDIR}/opencolorio/lib/Opencolorio_d.lib
+        ${LIBDIR}/opencolorio/lib/OpenColorIO_d.lib
         ${HARVEST_TARGET}/opencolorio/lib/OpenColorIO_d.lib
       COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${LIBDIR}/opencolorio/lib/site-packages
         ${HARVEST_TARGET}/opencolorio/lib/site-packages-debug
-
+      COMMAND ${CMAKE_COMMAND} -E copy
+        ${LIBDIR}/opencolorio/lib/cmake/OpenColorIO/OpenColorIOTargets-debug.cmake
+        ${HARVEST_TARGET}/opencolorio/lib/cmake/OpenColorIO/OpenColorIOTargets-debug.cmake
       DEPENDEES install
     )
   endif()
@@ -136,6 +149,8 @@ else()
   )
 
   harvest(external_opencolorio opencolorio/include opencolorio/include "*.h")
+  # Cmake files first because harvest_rpath_lib edits them.
+  harvest(external_opencolorio opencolorio/lib/cmake/OpenColorIO opencolorio/lib/cmake/OpenColorIO "*.cmake")
   harvest_rpath_lib(external_opencolorio opencolorio/lib opencolorio/lib "*${SHAREDLIBEXT}*")
   harvest_rpath_python(
     external_opencolorio

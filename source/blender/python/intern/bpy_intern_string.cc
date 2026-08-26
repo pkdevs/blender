@@ -14,7 +14,9 @@
 
 #include "bpy_intern_string.hh"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
+
+namespace blender {
 
 static PyObject *bpy_intern_str_arr[17];
 
@@ -76,3 +78,5 @@ void bpy_intern_string_exit()
     Py_DECREF(bpy_intern_str_arr[i]);
   }
 }
+
+}  // namespace blender

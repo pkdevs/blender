@@ -5,21 +5,20 @@
 #pragma once
 
 #include <optional>
-#include <string>
 
 #include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
 
+namespace blender {
+
 struct Mesh;
 
-namespace blender::geometry {
+namespace geometry {
 
-Mesh *create_cuboid_mesh(const float3 &size,
-                         int verts_x,
-                         int verts_y,
-                         int verts_z,
-                         const std::optional<StringRef> &uv_id);
+Mesh *create_cuboid_mesh(
+    const float3 &size, int verts_x, int verts_y, int verts_z, std::optional<StringRef> uv_id);
 
 Mesh *create_cuboid_mesh(const float3 &size, int verts_x, int verts_y, int verts_z);
 
-}  // namespace blender::geometry
+}  // namespace geometry
+}  // namespace blender

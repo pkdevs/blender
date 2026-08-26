@@ -8,33 +8,34 @@
 
 #pragma once
 
+namespace blender {
+
 struct ARegion;
 struct ID;
 struct Main;
 struct Scene;
 struct SpaceNode;
+struct wmWindow;
 struct Tex;
 struct View2D;
+struct ViewLayer;
 struct bContext;
 struct bNode;
 struct bNodeTree;
-namespace blender::bke {
+namespace bke {
 struct bNodeTreeType;
 struct bNodeType;
 struct bNodeSocketType;
-}  // namespace blender::bke
+}  // namespace bke
 
-#define NODE_GRID_STEP_SIZE (20.0f * UI_SCALE_FAC) /* Based on the grid nodes snap to. */
+#define NODE_GRID_UNIT 20.0f
+#define NODE_GRID_STEP_SIZE (NODE_GRID_UNIT * UI_SCALE_FAC) /* Size of node snap grid. */
 #define NODE_EDGE_PAN_INSIDE_PAD 2
 #define NODE_EDGE_PAN_OUTSIDE_PAD 0 /* Disable clamping for node panning, use whole screen. */
 #define NODE_EDGE_PAN_SPEED_RAMP 1
 #define NODE_EDGE_PAN_MAX_SPEED 26 /* In UI units per second, slower than default. */
 #define NODE_EDGE_PAN_DELAY 0.5f
 #define NODE_EDGE_PAN_ZOOM_INFLUENCE 0.5f
-
-/* `clipboard.cc` */
-
-void ED_node_clipboard_free();
 
 /* `space_node.cc` */
 
@@ -47,9 +48,9 @@ int ED_node_tree_path_length(SpaceNode *snode);
  */
 void ED_node_tree_path_get(SpaceNode *snode, char *value);
 
-void ED_node_tree_start(SpaceNode *snode, bNodeTree *ntree, ID *id, ID *from);
-void ED_node_tree_push(SpaceNode *snode, bNodeTree *ntree, bNode *gnode);
-void ED_node_tree_pop(SpaceNode *snode);
+void ED_node_tree_start(ARegion *region, SpaceNode *snode, bNodeTree *ntree, ID *id, ID *from);
+void ED_node_tree_push(ARegion *region, SpaceNode *snode, bNodeTree *ntree, bNode *gnode);
+void ED_node_tree_pop(ARegion *region, SpaceNode *snode);
 int ED_node_tree_depth(SpaceNode *snode);
 bNodeTree *ED_node_tree_get(SpaceNode *snode, int level);
 
@@ -58,39 +59,22 @@ void ED_node_set_active_viewer_key(SpaceNode *snode);
 /* `drawnode.cc` */
 
 void ED_node_init_butfuncs();
-void ED_init_custom_node_type(blender::bke::bNodeType *ntype);
-void ED_init_custom_node_socket_type(blender::bke::bNodeSocketType *stype);
-void ED_init_standard_node_socket_type(blender::bke::bNodeSocketType *stype);
-void ED_init_node_socket_type_virtual(blender::bke::bNodeSocketType *stype);
+void ED_init_custom_node_type(bke::bNodeType *ntype);
+void ED_init_custom_node_socket_type(bke::bNodeSocketType *stype);
+void ED_init_standard_node_socket_type(bke::bNodeSocketType *stype);
+void ED_init_node_socket_type_virtual(bke::bNodeSocketType *stype);
 void ED_node_sample_set(const float col[4]);
 void ED_node_type_draw_color(const char *idname, float *r_color);
 
-/* `node_draw.cc` */
-
-void ED_node_tree_update(const bContext *C);
-void ED_node_tag_update_id(ID *id);
-
-float ED_node_grid_size();
-
 /* `node_edit.cc` */
 
-void ED_node_set_tree_type(SpaceNode *snode, blender::bke::bNodeTreeType *typeinfo);
+void ED_node_set_tree_type(SpaceNode *snode, bke::bNodeTreeType *typeinfo);
 bool ED_node_is_compositor(const SpaceNode *snode);
 bool ED_node_is_shader(SpaceNode *snode);
 bool ED_node_is_texture(SpaceNode *snode);
-bool ED_node_is_geometry(SpaceNode *snode);
+bool ED_node_is_geometry(const SpaceNode *snode);
 bool ED_node_supports_preview(SpaceNode *snode);
 
-/**
- * Assumes nothing being done in ntree yet, sets the default in/out node.
- * Called from shading buttons or header.
- */
-void ED_node_shader_default(const bContext *C, ID *id);
-/**
- * Assumes nothing being done in ntree yet, sets the default in/out node.
- * Called from shading buttons or header.
- */
-void ED_node_composit_default(const bContext *C, Scene *scene);
 /**
  * Assumes nothing being done in ntree yet, sets the default in/out node.
  * Called from shading buttons or header.
@@ -100,32 +84,16 @@ void ED_node_post_apply_transform(bContext *C, bNodeTree *ntree);
 void ED_node_set_active(
     Main *bmain, SpaceNode *snode, bNodeTree *ntree, bNode *node, bool *r_active_texture_changed);
 
-/**
- * Call after one or more node trees have been changed and tagged accordingly.
- *
- * This function will make sure that other parts of Blender update accordingly. For example, if the
- * node group interface changed, parent node groups have to be updated as well.
- *
- * Additionally, this will send notifiers and tag the depsgraph based on the changes. Depsgraph
- * relation updates have to be triggered by the caller.
- *
- * \param C: Context if available. This can be null.
- * \param bmain: Main whose data-blocks should be updated based on the changes.
- * \param ntree: Under some circumstances the caller knows that only one node tree has
- *   changed since the last update. In this case the function may be able to skip scanning #bmain
- *   for other things that have to be changed. It may still scan #bmain if the interface of the
- *   node tree has changed.
- */
-void ED_node_tree_propagate_change(const bContext *C, Main *bmain, bNodeTree *ntree);
+/* `node_compositor_job.cc` */
 
 /**
- * \param scene_owner: is the owner of the job,
- * we don't use it for anything else currently so could also be a void pointer,
- * but for now keep it an 'Scene' for consistency.
- *
- * \note only call from spaces `refresh` callbacks, not direct! - use with care.
- */
-void ED_node_composite_job(const bContext *C, bNodeTree *nodetree, Scene *scene_owner);
+ * Launch a compositor job for the given scene and view layer. Triggered by user indicates whether
+ * the compositor is executing due to the user making a modification or if it is executing due to
+ * playback or rendering. */
+void ED_node_compositor_job(Main *bmain,
+                            Scene *scene,
+                            ViewLayer *view_layer,
+                            bool triggered_by_user);
 
 /* `node_ops.cc` */
 
@@ -144,3 +112,5 @@ bool ED_space_node_get_position(
  */
 bool ED_space_node_color_sample(
     Main *bmain, SpaceNode *snode, ARegion *region, const int mval[2], float r_col[3]);
+
+}  // namespace blender

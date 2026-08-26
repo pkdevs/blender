@@ -27,7 +27,7 @@ import zipfile
 
 from typing import (
     Any,
-    Generator,
+    Iterator,
     IO,
     NamedTuple,
 )
@@ -70,6 +70,26 @@ PKG_MANIFEST_FILENAME_TOML = "blender_manifest.toml"
 REPO_LOCAL_PRIVATE_DIR = ".blender_ext"
 
 URL_KNOWN_PREFIX = ("http://", "https://", "file://")
+
+# Extension types supported by this version of Blender.
+# Unknown types are skipped, allowing repositories to contain future extension types.
+PKG_MANIFEST_TYPE_SUPPORTED = {"add-on", "theme"}
+
+
+def pkg_manifest_skip_for_future_compat(item: dict[str, Any]) -> bool:
+    """
+    Return True if this item should be skipped for forward compatibility.
+
+    This allows repositories to contain extensions for future Blender versions
+    without causing errors in older versions.
+    Items with unknown types are silently skipped rather than treated as invalid.
+    """
+    # NOTE: this currently checks the type but it is intended for any future changes
+    # we don't want to hard fail on.
+    if (value := item.get("type")) is not None:
+        return value not in PKG_MANIFEST_TYPE_SUPPORTED
+    return False
+
 
 MESSAGE_TYPES = {
     # Status report about what is being done.
@@ -141,43 +161,6 @@ ${body}
 </body>
 </html>
 '''
-
-
-# -----------------------------------------------------------------------------
-# Workarounds
-
-def _worlaround_win32_ssl_cert_failure() -> None:
-    # Applies workaround by `pukkandan` on GITHUB at run-time:
-    # See: https://github.com/python/cpython/pull/91740
-    import ssl
-
-    class SSLContext_DUMMY(ssl.SSLContext):
-        def _load_windows_store_certs(self, storename: str, purpose: ssl.Purpose) -> bytearray:
-            # WIN32 only.
-            enum_certificates = getattr(ssl, "enum_certificates", None)
-            assert callable(enum_certificates)
-            certs = bytearray()
-            try:
-                for cert, encoding, trust in enum_certificates(storename):
-                    try:
-                        self.load_verify_locations(cadata=cert)
-                    except ssl.SSLError:
-                        # warnings.warn("Bad certificate in Windows certificate store")
-                        pass
-                    else:
-                        # CA certs are never PKCS#7 encoded
-                        if encoding == "x509_asn":
-                            if trust is True or purpose.oid in trust:
-                                certs.extend(cert)
-            except PermissionError:
-                # warnings.warn("unable to enumerate Windows certificate store")
-                pass
-            # NOTE(@ideasman42): Python never uses this return value internally.
-            # Keep it for consistency.
-            return certs
-
-    # pylint: disable-next=protected-access
-    ssl.SSLContext._load_windows_store_certs = SSLContext_DUMMY._load_windows_store_certs  # type: ignore
 
 
 # -----------------------------------------------------------------------------
@@ -439,7 +422,11 @@ class PkgServerRepoConfig(NamedTuple):
 def path_to_url(path: str) -> str:
     from urllib.parse import urljoin
     from urllib.request import pathname2url
-    return urljoin("file:", pathname2url(path))
+    # Python 3.14+: pathname2url returns '///path' (RFC 8089), use 'file://' base.
+    file_prefix = "file://" if sys.version_info >= (3, 14) else "file:"
+    result = urljoin(file_prefix, pathname2url(path))
+    assert result.startswith('file:///')
+    return result
 
 
 def path_from_url(path: str) -> str:
@@ -465,7 +452,7 @@ def path_from_url(path: str) -> str:
     return result
 
 
-def random_acii_lines(*, seed: int | str, width: int) -> Generator[str, None, None]:
+def random_acii_lines(*, seed: int | str, width: int) -> Iterator[str]:
     """
     Generate random ASCII text [A-Za-z0-9].
     Intended not to compress well, it's possible to simulate downloading a large package.
@@ -522,7 +509,7 @@ def scandir_recursive_impl(
         path: str,
         *,
         filter_fn: Callable[[str, bool], bool],
-) -> Generator[tuple[str, str], None, None]:
+) -> Iterator[tuple[str, str]]:
     """Recursively yield DirEntry objects for given directory."""
     for entry in os.scandir(path):
         if entry.is_symlink():
@@ -548,7 +535,7 @@ def scandir_recursive_impl(
 def scandir_recursive(
         path: str,
         filter_fn: Callable[[str, bool], bool],
-) -> Generator[tuple[str, str], None, None]:
+) -> Iterator[tuple[str, str]]:
     yield from scandir_recursive_impl(path, path, filter_fn=filter_fn)
 
 
@@ -573,13 +560,7 @@ def rmtree_with_fallback_or_error(
     # so use it's callback that raises a link error and remove the link in that case.
     errors = []
 
-    # *DEPRECATED* 2024/07/01 Remove when 3.11 is dropped.
-    if sys.version_info >= (3, 12):
-        shutil.rmtree(path, onexc=lambda *args: errors.append(args))
-    else:
-        # Ignore as the deprecated logic is only used for older Python versions.
-        # pylint: disable-next=deprecated-argument
-        shutil.rmtree(path, onerror=lambda *args: errors.append((args[0], args[1], args[2][1])))
+    shutil.rmtree(path, onexc=lambda *args: errors.append(args))
 
     # Happy path (for practically all cases).
     if not errors:
@@ -690,18 +671,29 @@ def rmtree_with_fallback_or_error_pseudo_atomic(
 def build_paths_expand_iter(
         path: str,
         path_list: Sequence[str],
-) -> Generator[tuple[str, str], None, None]:
+) -> Iterator[tuple[str, str]]:
     """
     Expand paths from a path list which always uses "/" slashes.
     """
     path_swap = os.sep != "/"
     path_strip = path.rstrip(os.sep)
     for filepath in path_list:
+        # This is needed so it's possible to compare relative paths against string literals.
+        # So it's possible to know if a path list includes a path or not.
+        #
+        # Simple path normalization:
+        # - Remove redundant slashes.
+        # - Strip all `./`.
+        while "//" in filepath:
+            filepath = filepath.replace("//", "/")
+        while filepath.startswith("./"):
+            filepath = filepath[2:]
+
         if path_swap:
             filepath = filepath.replace("/", "\\")
 
         # Avoid `os.path.join(path, filepath)` because `path` is ignored `filepath` is an absolute path.
-        # In the contest of declaring build paths we *never* want to reference an absolute directory
+        # In the context of declaring build paths we *never* want to reference an absolute directory
         # such as `C:\path` or `/tmp/path`.
         yield (
             "{:s}{:s}{:s}".format(path_strip, os.sep, filepath.lstrip(os.sep)),
@@ -960,9 +952,9 @@ def pkg_server_repo_config_from_toml_and_validate(
         if not isinstance(item, dict):
             return "blocklist contains non dictionary item, found ({:s})".format(str(type(item)))
         if not isinstance(value := item.get("id"), str):
-            return "blocklist items must have have a string typed \"id\" entry, found {:s}".format(str(type(value)))
+            return "blocklist items must have a string typed \"id\" entry, found {:s}".format(str(type(value)))
         if not isinstance(value := item.get("reason"), str):
-            return "blocklist items must have have a string typed \"reason\" entry, found {:s}".format(str(type(value)))
+            return "blocklist items must have a string typed \"reason\" entry, found {:s}".format(str(type(value)))
 
     return PkgServerRepoConfig(
         schema_version=field_schema_version,
@@ -1081,7 +1073,7 @@ def zipfile_make_root_directory(
         filename = member.filename
         if not filename.startswith(root_dir):
             continue
-        # Ensure the path is not _ony_ the directory (can happen for some ZIP files).
+        # Ensure the path is not _only_ the directory (can happen for some ZIP files).
         if not (filename := filename[len(root_dir):]):
             continue
 
@@ -1115,7 +1107,7 @@ class PathPatternMatch:
     #   to delimit on `/` which is necessary for `gitignore` style matching.
     #   So `/` are replaced with newlines, then REGEX multi-line logic is used
     #   to delimit the separators.
-    # - This is used for building packages, so it doesn't have to to especially fast,
+    # - This is used for building packages, so it doesn't have to be especially fast,
     #   although it shouldn't cause noticeable delays at build time.
     # - The test is located in: `../cli/test_path_pattern_match.py`
 
@@ -1148,6 +1140,10 @@ class PathPatternMatch:
     @staticmethod
     def _pattern_match_as_regex_single(pattern: str) -> str:
         from fnmatch import translate
+
+        # `fnmatch.translate` appends an end-of-string anchor: `\Z` on Python 3.13 and earlier,
+        # `\z` on 3.14+. Both are equivalent.
+        translate_end_anchor = "\\z" if sys.version_info >= (3, 14) else "\\Z"
 
         # Special case: `!` literal prefix, needed to avoid this being handled as negation.
         if pattern.startswith("\\!"):
@@ -1219,7 +1215,7 @@ class PathPatternMatch:
             #
             # - Always adds an "end-of-string" match which isn't desired here.
             #
-            elem_regex = translate(pattern_split[i]).removesuffix("\\Z")
+            elem_regex = translate(pattern_split[i]).removesuffix(translate_end_anchor)
             # Don't match newlines.
             if elem_regex.startswith("(?s:"):
                 elem_regex = "(?:" + elem_regex[4:]
@@ -1250,7 +1246,7 @@ class PathPatternMatch:
             pattern = "\\A" + pattern
 
         if only_directory:
-            # Ensure this only ever matches a directly.
+            # Ensure this only ever matches a directory.
             pattern = pattern + "[\\n/]"
         else:
             # Ensure this isn't part of a longer string.
@@ -1290,6 +1286,26 @@ class PathPatternMatch:
 # -----------------------------------------------------------------------------
 # URL Downloading
 
+
+# NOTE:
+# - Using return arguments isn't ideal but is better than including
+#   a static value in the iterator.
+# - Other data could be added here as needed (response headers if the caller needs them).
+class DataRetrieveInfo:
+    """
+    When accessing a file from a URL or from the file-system,
+    this is a "return" argument so the caller can know the size of the chunks it's iterating over,
+    or -1 when the size is not known.
+    """
+    __slots__ = (
+        "size_hint",
+    )
+    size_hint: int
+
+    def __init__(self) -> None:
+        self.size_hint = -1
+
+
 # Originally based on `urllib.request.urlretrieve`.
 def url_retrieve_to_data_iter(
         url: str,
@@ -1298,21 +1314,16 @@ def url_retrieve_to_data_iter(
         headers: dict[str, str],
         chunk_size: int,
         timeout_in_seconds: float,
-) -> Generator[tuple[bytes, int, Any], None, None]:
+        retrieve_info: DataRetrieveInfo,
+) -> Iterator[bytes]:
     """
-    Retrieve a URL into a temporary location on disk.
+    Iterate over byte data downloaded from a URL
+    limited to ``chunk_size``.
 
-    Requires a URL argument. If a filename is passed, it is used as
-    the temporary file location. The reporthook argument should be
-    a callable that accepts a block number, a read size, and the
-    total file size of the URL target. The data argument should be
-    valid URL encoded data.
-
-    If a filename is passed and the URL points to a local resource,
-    the result is a copy from local file to new file.
-
-    Returns a tuple containing the path to the newly created
-    data file as well as the resulting HTTPMessage object.
+    - The ``retrieve_info.size_hint``
+      will be set once the iterator starts and can be used for progress display.
+    - The iterator will start with an empty block, so the size can be known
+      before time is spent downloading data.
     """
     from urllib.error import ContentTooShortError
     from urllib.request import urlopen
@@ -1334,7 +1345,10 @@ def url_retrieve_to_data_iter(
         if "content-length" in response_headers:
             size = int(response_headers["Content-Length"])
 
-        yield (b'', size, response_headers)
+        retrieve_info.size_hint = size
+
+        # Yield an empty block so progress display may start.
+        yield b""
 
         if timeout_in_seconds <= 0.0:
             while True:
@@ -1342,22 +1356,23 @@ def url_retrieve_to_data_iter(
                 if not block:
                     break
                 read += len(block)
-                yield (block, size, response_headers)
+                yield block
         else:
             while True:
                 block = read_with_timeout(fp, chunk_size, timeout_in_seconds=timeout_in_seconds)
                 if not block:
                     break
                 read += len(block)
-                yield (block, size, response_headers)
+                yield block
 
     if size >= 0 and read < size:
         raise ContentTooShortError(
-            "retrieval incomplete: got only %i out of %i bytes" % (read, size),
+            "retrieval incomplete: got only {:d} out of {:d} bytes".format(read, size),
             response_headers,
         )
 
 
+# See `url_retrieve_to_data_iter` docstring.
 def url_retrieve_to_filepath_iter(
         url: str,
         filepath: str,
@@ -1366,69 +1381,77 @@ def url_retrieve_to_filepath_iter(
         data: Any | None = None,
         chunk_size: int,
         timeout_in_seconds: float,
-) -> Generator[tuple[int, int, Any], None, None]:
+        retrieve_info: DataRetrieveInfo,
+) -> Iterator[int]:
     # Handle temporary file setup.
     with open(filepath, 'wb') as fh_output:
-        for block, size, response_headers in url_retrieve_to_data_iter(
+        for block in url_retrieve_to_data_iter(
                 url,
                 headers=headers,
                 data=data,
                 chunk_size=chunk_size,
                 timeout_in_seconds=timeout_in_seconds,
+                retrieve_info=retrieve_info,
         ):
             fh_output.write(block)
-            yield (len(block), size, response_headers)
+            yield len(block)
 
 
+# See `url_retrieve_to_data_iter` docstring.
 def filepath_retrieve_to_filepath_iter(
         filepath_src: str,
         filepath: str,
         *,
         chunk_size: int,
         timeout_in_seconds: float,
-) -> Generator[tuple[int, int], None, None]:
+        retrieve_info: DataRetrieveInfo,
+) -> Iterator[int]:
     # TODO: `timeout_in_seconds`.
     # Handle temporary file setup.
     _ = timeout_in_seconds
     with open(filepath_src, 'rb') as fh_input:
-        size = os.fstat(fh_input.fileno()).st_size
+        retrieve_info.size_hint = os.fstat(fh_input.fileno()).st_size
+        yield 0
         with open(filepath, 'wb') as fh_output:
             while (block := fh_input.read(chunk_size)):
                 fh_output.write(block)
-                yield (len(block), size)
+                yield len(block)
 
 
 def url_retrieve_to_data_iter_or_filesystem(
         url: str,
         headers: dict[str, str],
+        *,
         chunk_size: int,
         timeout_in_seconds: float,
-) -> Generator[bytes, None, None]:
+        retrieve_info: DataRetrieveInfo,
+) -> Iterator[bytes]:
     if url_is_filesystem(url):
         with open(path_from_url(url), "rb") as fh_source:
+            retrieve_info.size_hint = os.fstat(fh_source.fileno()).st_size
+            yield b""
             while (block := fh_source.read(chunk_size)):
                 yield block
     else:
-        for (
-                block,
-                _size,
-                _response_headers,
-        ) in url_retrieve_to_data_iter(
+        yield from url_retrieve_to_data_iter(
             url,
             headers=headers,
             chunk_size=chunk_size,
             timeout_in_seconds=timeout_in_seconds,
-        ):
-            yield block
+            retrieve_info=retrieve_info,
+        )
 
 
+# See `url_retrieve_to_data_iter` docstring.
 def url_retrieve_to_filepath_iter_or_filesystem(
         url: str,
         filepath: str,
+        *,
         headers: dict[str, str],
         chunk_size: int,
         timeout_in_seconds: float,
-) -> Generator[tuple[int, int], None, None]:
+        retrieve_info: DataRetrieveInfo,
+) -> Iterator[int]:
     """
     Callers should catch: ``(Exception, KeyboardInterrupt)`` and convert them to message using:
     ``url_retrieve_exception_as_message``.
@@ -1439,16 +1462,17 @@ def url_retrieve_to_filepath_iter_or_filesystem(
             filepath,
             chunk_size=chunk_size,
             timeout_in_seconds=timeout_in_seconds,
+            retrieve_info=retrieve_info,
         )
     else:
-        for (read, size, _response_headers) in url_retrieve_to_filepath_iter(
+        yield from url_retrieve_to_filepath_iter(
             url,
             filepath,
             headers=headers,
             chunk_size=chunk_size,
             timeout_in_seconds=timeout_in_seconds,
-        ):
-            yield (read, size)
+            retrieve_info=retrieve_info,
+        )
 
 
 def url_retrieve_exception_is_connectivity(
@@ -1492,7 +1516,7 @@ def url_retrieve_exception_as_message(
 
 def pkg_idname_is_valid_or_error(pkg_idname: str) -> str | None:
     if not pkg_idname.isidentifier():
-        return "Not a valid identifier"
+        return "Not a valid Python identifier"
     if "__" in pkg_idname:
         return "Only single separators are supported"
     if pkg_idname.startswith("_"):
@@ -1517,7 +1541,7 @@ def pkg_manifest_validate_terse_description_or_error(value: str) -> str | None:
     elif value[-1] in {")", "]", "}"}:
         pass  # Allow closing brackets (sometimes used to mention formats).
     else:
-        return "alpha-numeric suffix expected, the string must not end with punctuation"
+        return "alphanumeric suffix expected, the string must not end with punctuation"
     return None
 
 
@@ -1609,7 +1633,7 @@ def pkg_manifest_tags_valid_or_error(
 # - When building packages.
 # - When validating packages from the command line.
 #
-# However manifests from severs that don't adhere to strict rules are not prevented from loading.
+# However manifests from servers that don't adhere to strict rules are not prevented from loading.
 
 # pylint: disable-next=useless-return
 def pkg_manifest_validate_field_nop(
@@ -1707,9 +1731,9 @@ def pkg_manifest_validate_field_idname(value: str, strict: bool) -> str | None:
 def pkg_manifest_validate_field_type(value: str, strict: bool) -> str | None:
     _ = strict
     # NOTE: add "keymap" in the future.
-    value_expected = {"add-on", "theme"}
+    value_expected = PKG_MANIFEST_TYPE_SUPPORTED
     if value not in value_expected:
-        return "Expected to be one of [{:s}], found {!r}".format(", ".join(value_expected), value)
+        return "Expected to be one of [{:s}], found {!r}".format(", ".join(sorted(value_expected)), value)
     return None
 
 
@@ -1770,7 +1794,7 @@ def pkg_manifest_validate_field_copyright(
             if not year_valid:
                 return "at index {:d} must be a number or two numbers separated by \"-\"".format(i)
             if not name.strip():
-                return "at index {:d} name may not be empty".format(i)
+                return "at index {:d} copyright name must be non-empty".format(i)
         return None
     else:
         return pkg_manifest_validate_field_any_list_of_non_empty_strings(value, strict)
@@ -1804,7 +1828,7 @@ def pkg_manifest_validate_field_permissions(
             if not isinstance(item_key, str):
                 return "key \"{:s}\" must be a string not a {:s}".format(str(item_key), str(type(item_key)))
             if item_key not in keys_valid:
-                return "value of \"{:s}\" must be a value in {!r}".format(item_key, tuple(keys_valid))
+                return "key \"{:s}\" must be one of {!r}".format(item_key, tuple(keys_valid))
 
             # Validate the value.
             if not isinstance(item_value, str):
@@ -1824,7 +1848,7 @@ def pkg_manifest_validate_field_permissions(
             # Historic beta convention, keep for compatibility.
             for i, item in enumerate(value):
                 if not isinstance(item, str):
-                    return "Expected item at index {:d} to be an int not a {:s}".format(i, str(type(item)))
+                    return "Expected item at index {:d} to be a string not a {:s}".format(i, str(type(item)))
         else:
             # The caller doesn't allow this.
             assert False, "internal error, disallowed type"
@@ -1882,14 +1906,14 @@ def pkg_manifest_validate_field_wheels(
 
     for wheel in value:
         if "\"" in wheel:
-            return "wheel paths most not contain quotes, found {!r}".format(wheel)
+            return "wheel paths must not contain quotes, found {!r}".format(wheel)
         if "\\" in wheel:
             return "wheel paths must use forward slashes, found {!r}".format(wheel)
 
         if (error := pkg_manifest_validate_field_any_non_empty_string_stripped_no_control_chars(
                 wheel, True,
         )) is not None:
-            return "wheel paths detected: {:s}, found {!r}".format(error, wheel)
+            return "wheel path error: {:s}, found {!r}".format(error, wheel)
 
         wheel_filename = os.path.basename(wheel)
         if not wheel_filename.lower().endswith(".whl"):
@@ -2237,8 +2261,8 @@ def python_versions_from_wheel_python_tag(python_tag: str) -> set[tuple[int] | t
             versions.add(version)
         else:
             return (
-                "wheel filename version prefix failed to be extracted "
-                "found \"{:s}\" int \"{:s}\", expected a value in ({:s})"
+                "wheel filename version prefix not recognized, "
+                "found \"{:s}\" in \"{:s}\", expected a value in ({:s})"
             ).format(
                 version_prefix,
                 python_tag,
@@ -2269,7 +2293,7 @@ def python_versions_from_wheel_abi_tag(
 
 def python_versions_from_wheel(wheel_filename: str) -> set[tuple[int] | tuple[int, int]] | str:
     """
-    Extract a set of Python versions from a list of wheels or return an error string.
+    Extract a set of Python versions from a wheel or return an error string.
     """
     wheel_filename_split = wheel_filename.split("-")
 
@@ -2281,7 +2305,7 @@ def python_versions_from_wheel(wheel_filename: str) -> set[tuple[int] | tuple[in
     abi_tag = wheel_filename_split[-2]
 
     # NOTE(@ideasman42): when the ABI is set, simply return the major version,
-    # This is needed because older version of CPython (3.6) for e.g. are compatible with newer versions of CPython,
+    # This is needed because older version of CPython (3.6) for example are compatible with newer versions of CPython,
     # but returning the old version causes it not to register as being compatible.
     # So return the ABI version to allow any version of CPython 3.x.
     #
@@ -2369,7 +2393,7 @@ def build_paths_filter_by_platform(
         build_paths: list[tuple[str, str]],
         wheel_range: tuple[int, int],
         platforms: tuple[str, ...],
-) -> Generator[tuple[list[tuple[str, str]], str], None, None]:
+) -> Iterator[tuple[list[tuple[str, str]], str]]:
     if not platforms:
         yield (build_paths, "")
         return
@@ -2407,10 +2431,32 @@ def repository_filter_skip(
         skip_message_fn: Callable[[str], None] | None,
         error_fn: Callable[[Exception], None],
 ) -> bool:
+    """
+    This function takes an ``item`` which represents un-validated extension meta-data.
+    Return True when the extension should be excluded.
+
+    The meta-data is a subset of the ``blender_manifest.toml`` which is extracted
+    into the ``index.json`` hosted by a remote server.
+
+    Filtering will exclude extensions when:
+
+    - They're incompatible with Blender, Python or the platform defined by the ``filter_*`` arguments.
+      ``skip_message_fn`` callback will run with the cause of the incompatibility.
+    - The meta-data is malformed, it doesn't confirm to ``blender_manifest.toml`` data-types.
+      ``error_fn`` callback will run with the cause of the error.
+
+    This is used so Blender's extensions listing only shows compatible extensions as well as
+    reporting errors if the user attempts to install an extension which isn't compatible with their system.
+    """
+
+    # Skip unknown extension types (allows repositories to contain future extension types).
+    if pkg_manifest_skip_for_future_compat(item):
+        return True
+
     if (platforms := item.get("platforms")) is not None:
         if not isinstance(platforms, list):
             # Possibly noisy, but this should *not* be happening on a regular basis.
-            error_fn(TypeError("platforms is not a list, found a: {:s}".format(str(type(platforms)))))
+            error_fn(TypeError("platforms is not a list, found: {:s}".format(str(type(platforms)))))
         elif platforms and (filter_platform not in platforms):
             if skip_message_fn is not None:
                 skip_message_fn("This platform ({:s}) isn't one of ({:s})".format(
@@ -2423,7 +2469,7 @@ def repository_filter_skip(
         if (python_versions := item.get("python_versions")) is not None:
             if not isinstance(python_versions, list):
                 # Possibly noisy, but this should *not* be happening on a regular basis.
-                error_fn(TypeError("python_versions is not a list, found a: {:s}".format(str(type(python_versions)))))
+                error_fn(TypeError("python_versions is not a list, found: {:s}".format(str(type(python_versions)))))
             elif python_versions:
                 ok = True
                 python_versions_as_set: set[str] = set()
@@ -2534,7 +2580,7 @@ def python_version_parse_or_error(version: str) -> tuple[int, int, int] | str:
 
 def blender_version_parse_any_or_error(version: Any) -> tuple[int, int, int] | str:
     if not isinstance(version, str):
-        return "blender version should be a string, found a: {:s}".format(str(type(version)))
+        return "blender version should be a string, found: {:s}".format(str(type(version)))
 
     result = blender_version_parse_or_error(version)
     assert isinstance(result, (tuple, str))
@@ -2548,7 +2594,7 @@ def url_request_headers_create(*, accept_json: bool, user_agent: str, access_tok
         headers["Accept"] = "application/json"
 
     if user_agent:
-        # Typically: `Blender/4.2.0 (Linux x84_64; cycle=alpha)`.
+        # Typically: `Blender/4.2.0 (Linux x86_64; cycle=alpha)`.
         headers["User-Agent"] = user_agent
 
     if access_token:
@@ -2600,6 +2646,10 @@ def repo_json_is_valid_or_error(filepath: str) -> str | None:
             return "Expected key at index {:d} to be an identifier, \"{:s}\" failed: {:s}".format(
                 i, pkg_idname, error_msg,
             )
+
+        # Skip unknown extension types (allows repositories to contain future extension types).
+        if pkg_manifest_skip_for_future_compat(item):
+            continue
 
         if (error_msg := pkg_manifest_is_valid_or_error(item, from_repo=True, strict=False)) is not None:
             return "Error at index {:d}: {:s}".format(i, error_msg)
@@ -2778,7 +2828,7 @@ def pkg_manifest_detect_duplicates(
             del python_versions_full
 
     # This can be expanded with additional values as needed.
-    # We could in principle have ABI flags (debug/release) for e.g.
+    # We could in principle have ABI flags (debug/release) for example
     PkgCfgKey = tuple[
         # Platform.
         str,
@@ -2862,7 +2912,7 @@ def toml_from_filepath_or_error(filepath: str) -> dict[str, Any] | str:
 
 def repo_local_private_dir(*, local_dir: str) -> str:
     """
-    Ensure the repos hidden directory exists.
+    Ensure the repositories hidden directory exists.
     """
     return os.path.join(local_dir, REPO_LOCAL_PRIVATE_DIR)
 
@@ -2873,7 +2923,7 @@ def repo_local_private_dir_ensure(
         error_fn: Callable[[Exception], None],
 ) -> str | None:
     """
-    Ensure the repos hidden directory exists.
+    Ensure the repositories hidden directory exists.
     """
     local_private_dir = repo_local_private_dir(local_dir=local_dir)
     if not os.path.isdir(local_private_dir):
@@ -2965,8 +3015,9 @@ def repo_sync_from_remote(
             return False
 
         try:
+            retrieve_info = DataRetrieveInfo()
             read_total = 0
-            for (read, size) in url_retrieve_to_filepath_iter_or_filesystem(
+            for read in url_retrieve_to_filepath_iter_or_filesystem(
                     remote_json_url,
                     local_json_path_temp,
                     headers=url_request_headers_create(
@@ -2976,14 +3027,16 @@ def repo_sync_from_remote(
                     ),
                     chunk_size=CHUNK_SIZE_DEFAULT,
                     timeout_in_seconds=timeout_in_seconds,
+                    retrieve_info=retrieve_info,
             ):
-                request_exit |= msglog.progress("Downloading...", read_total, size, 'BYTE')
+                request_exit |= msglog.progress("Downloading...", read_total, retrieve_info.size_hint, 'BYTE')
                 if request_exit:
                     break
                 read_total += read
             del read_total
+            del retrieve_info
         except (Exception, KeyboardInterrupt) as ex:
-            msg = url_retrieve_exception_as_message(ex, prefix="sync", url=remote_url)
+            msg = url_retrieve_exception_as_message(ex, prefix="sync", url=remote_json_url)
             if demote_connection_errors_to_status and url_retrieve_exception_is_connectivity(ex):
                 msglog.status(msg)
             else:
@@ -3190,7 +3243,7 @@ def generic_arg_server_generate_repo_config(subparse: argparse.ArgumentParser) -
             "   id = \"my_example_package\"\n"
             "   reason = \"Explanation for why this extension was blocked\"\n"
             "   [[blocklist]]\n"
-            "   id = \"other_extenison\"\n"
+            "   id = \"other_extension\"\n"
             "   reason = \"Another reason for why this is blocked\"\n"
             "\n"
         ),
@@ -3380,7 +3433,7 @@ def generic_arg_package_source_dir(subparse: argparse.ArgumentParser) -> None:
         help=(
             "The package source directory containing a ``{:s}`` manifest.\n"
             "\n"
-            "Default's to the current directory."
+            "Defaults to the current directory."
         ).format(PKG_MANIFEST_FILENAME_TOML),
     )
 
@@ -3394,7 +3447,7 @@ def generic_arg_package_output_dir(subparse: argparse.ArgumentParser) -> None:
         help=(
             "The package output directory.\n"
             "\n"
-            "Default's to the current directory."
+            "Defaults to the current directory."
         ),
     )
 
@@ -3888,11 +3941,12 @@ class subcmd_client:
                     ),
                     chunk_size=CHUNK_SIZE_DEFAULT,
                     timeout_in_seconds=timeout_in_seconds,
+                    retrieve_info=DataRetrieveInfo(),  # Unused.
             ):
                 result.write(block)
 
         except (Exception, KeyboardInterrupt) as ex:
-            msg = url_retrieve_exception_as_message(ex, prefix="list", url=remote_url)
+            msg = url_retrieve_exception_as_message(ex, prefix="list", url=remote_json_url)
             if demote_connection_errors_to_status and url_retrieve_exception_is_connectivity(ex):
                 msglog.status(msg)
             else:
@@ -3909,7 +3963,7 @@ class subcmd_client:
             return False
 
         if isinstance((repo_gen_dict := pkg_repo_data_from_json_or_error(result_dict)), str):
-            msglog.fatal_error("unexpected contants in JSON {:s}".format(repo_gen_dict))
+            msglog.fatal_error("unexpected contents in JSON {:s}".format(repo_gen_dict))
             return False
         del result_dict
 
@@ -3990,7 +4044,7 @@ class subcmd_client:
 
                 manifest = pkg_manifest_from_zipfile_and_validate(zip_fh, archive_subdir, strict=False)
                 if isinstance(manifest, str):
-                    msglog.error("Failed to load manifest from: {:s}".format(manifest))
+                    msglog.error("Failed to load manifest: {:s} from {:s}".format(manifest, filepath_archive))
                     return False
 
                 if manifest_compare is not None:
@@ -4092,7 +4146,7 @@ class subcmd_client:
             try:
                 os.rename(filepath_local_pkg_temp, filepath_local_pkg)
             except Exception as ex:
-                msglog.error("Failed to rename directory, causing unexpected removal \"{:s}\": {:s}".format(
+                msglog.error("Failed to rename directory for \"{:s}\": {:s}".format(
                     manifest.id,
                     str(ex),
                 ))
@@ -4339,6 +4393,7 @@ class subcmd_client:
                                     ),
                                     chunk_size=CHUNK_SIZE_DEFAULT,
                                     timeout_in_seconds=timeout_in_seconds,
+                                    retrieve_info=DataRetrieveInfo(),  # Unused.
                             ):
                                 request_exit |= msglog.progress(
                                     "Downloading \"{:s}\"".format(pkg_idname),
@@ -4358,7 +4413,7 @@ class subcmd_client:
                         # Unlike querying information which might reasonably be skipped.
                         msglog.fatal_error(
                             url_retrieve_exception_as_message(
-                                ex, prefix="install", url=remote_url))
+                                ex, prefix="install", url=filepath_remote_archive))
                         return False
 
                     if request_exit:
@@ -4590,12 +4645,25 @@ class subcmd_author:
             # Make default build options if none are provided.
             manifest_build = PkgManifest_Build(
                 paths=None,
+                # Limit exclusions to:
+                # - Python cache since extensions are written in Python.
+                # - Dot-files since this is standard *enough*.
+                # - ZIP archives to exclude packages that have been build.
+                # - BLEND file backups since this is for Blender extensions,
+                #   it makes sense to skip them.
+                #
+                # Further, it's not the purpose of this exclusion list to support all known file-system lint,
+                # as it changes over time and *could* result in false positives.
+                #
+                # Extension authors are expected to declare exclude patterns based on their development environment.
                 paths_exclude_pattern=[
                     "__pycache__/",
                     # Hidden dot-files.
                     ".*",
                     # Any packages built in-source.
                     "/*.zip",
+                    # Backup `.blend` files.
+                    "*.blend[1-9]",
                 ],
             )
 
@@ -4609,7 +4677,13 @@ class subcmd_author:
 
         # Manifest & wheels.
         if build_paths_extra:
-            build_paths.extend(build_paths_expand_iter(pkg_source_dir, build_paths_extra))
+            build_paths.extend(build_paths_expand_iter(
+                pkg_source_dir,
+                # When "paths" is set, paths after `build_paths_extra_skip_index` have been added,
+                # see: `PkgManifest_Build.from_dict_all_errors`.
+                build_paths_extra if manifest_build.paths is None else
+                build_paths_extra[:build_paths_extra_skip_index],
+            ))
 
         if manifest_build.paths is not None:
             build_paths.extend(build_paths_expand_iter(pkg_source_dir, manifest_build.paths))
@@ -4672,6 +4746,20 @@ class subcmd_author:
             except Exception as ex:
                 msglog.fatal_error("Error building path list \"{:s}\"".format(str(ex)))
                 return False
+
+        if manifest.type == "add-on":
+            # We could have a more generic way to find expected files,
+            # for now perform specific checks.
+            is_valid_python_package = False
+            for _, filepath_rel in build_paths:
+                # Other Python module suffixes besides `.py` can be used.
+                if filepath_rel.startswith("__init__."):
+                    is_valid_python_package = True
+                    break
+            if not is_valid_python_package:
+                msglog.fatal_error("Not a Python package: missing \"__init__.*\" file, typically \"__init__.py\"")
+                return False
+            del is_valid_python_package
 
         request_exit = False
 
@@ -4794,7 +4882,7 @@ class subcmd_author:
             *,
             manifest: PkgManifest,
             # NOTE: This path is only for inclusion in the error message,
-            # the path may not exist on the file-system (it may refer to a path inside an archive for e.g.).
+            # the path may not exist on the file-system (it may refer to a path inside an archive for example).
             pkg_manifest_filepath: str,
             valid_tags_filepath: str,
     ) -> bool:
@@ -4914,7 +5002,7 @@ class subcmd_author:
                     return False
 
             # NOTE: this is arguably *not* manifest validation, the check could be refactored out.
-            # Currently we always want to check both and it's useful to do that while the informatio
+            # Currently we always want to check both and it's useful to do that while the information is loaded.
             expected_files = []
             if manifest.type == "add-on":
                 if archive_subdir:
@@ -5072,18 +5160,22 @@ def unregister():
             *,
             time_duration: float,
             time_delay: float,
+            steps_limit: int,
     ) -> bool:
         import time
         request_exit = False
         time_start = time.time() if (time_duration > 0.0) else 0.0
         size_beg = 0
-        size_end = 100
+        size_end = steps_limit
         while time_duration == 0.0 or (time.time() - time_start < time_duration):
             request_exit |= msglog.progress("Demo", size_beg, size_end, 'BYTE')
             if request_exit:
                 break
             size_beg += 1
             if size_beg > size_end:
+                # Limit by the number of steps.
+                if time_duration == 0.0:
+                    break
                 size_beg = 0
             time.sleep(time_delay)
         if request_exit:
@@ -5391,15 +5483,15 @@ def argparse_create_dummy_repo(subparsers: "argparse._SubParsersAction[argparse.
         ),
     )
 
+
 # -----------------------------------------------------------------------------
 # Dummy Output
-
 
 def argparse_create_dummy_progress(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
     subparse = subparsers.add_parser(
         "dummy-progress",
         help="Dummy progress output.",
-        description="Demo output.",
+        description="Demo output, included for testing.",
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
@@ -5422,6 +5514,16 @@ def argparse_create_dummy_progress(subparsers: "argparse._SubParsersAction[argpa
         default=0.05,
     )
 
+    subparse.add_argument(
+        "--steps-limit",
+        dest="steps_limit",
+        type=int,
+        help=(
+            "The number of steps to report"
+        ),
+        default=100,
+    )
+
     generic_arg_output_type(subparse)
 
     subparse.set_defaults(
@@ -5429,9 +5531,13 @@ def argparse_create_dummy_progress(subparsers: "argparse._SubParsersAction[argpa
             msglog_from_args(args),
             time_duration=args.time_duration,
             time_delay=args.time_delay,
+            steps_limit=max(1, args.steps_limit),
         ),
     )
 
+
+# -----------------------------------------------------------------------------
+# Top Level Argument Parser
 
 def argparse_create(
         args_internal: bool = True,
@@ -5546,6 +5652,9 @@ def main(
 
     # Run early to prevent a `KeyboardInterrupt` exception.
     signal.signal(signal.SIGINT, signal_handler_sigint)
+    if sys.platform == "win32":
+        # WIN32 needs to check for break as sending SIGINT isn't supported from the caller, see #131947.
+        signal.signal(signal.SIGBREAK, signal_handler_sigint)
 
     # Needed on WIN32 which doesn't default to `utf-8`.
     for fh in (sys.stdout, sys.stderr):
@@ -5560,9 +5669,6 @@ def main(
     if "--version" in sys.argv:
         sys.stdout.write("{:s}\n".format(VERSION))
         return 0
-
-    if (sys.platform == "win32") and (sys.version_info < (3, 12, 6)):
-        _worlaround_win32_ssl_cert_failure()
 
     parser = argparse_create(
         args_internal=args_internal,

@@ -14,7 +14,9 @@
 
 #include "DNA_sound_types.h"
 
-#include "BKE_sound.h"
+#include "BKE_sound.hh"
+
+namespace blender {
 
 /* Enumeration for Audio Channels, compatible with eSoundChannels */
 static const EnumPropertyItem rna_enum_audio_channels_items[] = {
@@ -30,20 +32,24 @@ static const EnumPropertyItem rna_enum_audio_channels_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+}  // namespace blender
+
 #ifdef RNA_RUNTIME
 
 #  include "BKE_context.hh"
-#  include "BKE_sound.h"
+#  include "BKE_library.hh"
 
 #  include "DEG_depsgraph.hh"
 
 #  include "SEQ_sequencer.hh"
 #  include "SEQ_utils.hh"
 
+namespace blender {
+
 static void rna_Sound_update(Main * /*bmain*/, Scene *scene, PointerRNA *ptr)
 {
-  bSound *sound = (bSound *)ptr->data;
-  blender::seq::media_presence_invalidate_sound(scene, sound);
+  bSound *sound = static_cast<bSound *>(ptr->data);
+  seq::media_presence_invalidate_sound(scene, sound);
   DEG_id_tag_update(&sound->id, ID_RECALC_AUDIO);
 }
 
@@ -53,7 +59,11 @@ static void rna_Sound_caching_update(Main *bmain, Scene *scene, PointerRNA *ptr)
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
 }
 
+}  // namespace blender
+
 #else
+
+namespace blender {
 
 static void rna_def_sound(BlenderRNA *brna)
 {
@@ -70,6 +80,7 @@ static void rna_def_sound(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "filepath", PROP_STRING, PROP_FILEPATH);
   RNA_def_property_string_sdna(prop, nullptr, "filepath");
+  RNA_def_property_flag(prop, PROP_PATH_SUPPORTS_BLEND_RELATIVE);
   RNA_def_property_ui_text(prop, "File Path", "Sound sample file used by this Sound data-block");
   RNA_def_property_update(prop, 0, "rna_Sound_update");
 
@@ -109,5 +120,7 @@ void RNA_def_sound(BlenderRNA *brna)
 {
   rna_def_sound(brna);
 }
+
+}  // namespace blender
 
 #endif

@@ -11,45 +11,47 @@
 
 #include "DEG_depsgraph_query.hh"
 
+#include "ED_node.hh"
+
 #include "RNA_access.hh"
 
-#include "UI_interface.hh"
+#include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-namespace blender::nodes::node_shader_uvmap_cc {
+namespace blender {
+
+namespace nodes::node_shader_uvmap_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Vector>("UV");
+  b.add_output<decl::Vector>("UV"_ustr);
 }
 
-static void node_shader_buts_uvmap(uiLayout *layout, bContext *C, PointerRNA *ptr)
+static void node_shader_buts_uvmap(ui::Layout &layout, bContext *C, PointerRNA *ptr)
 {
-  uiItemR(layout, ptr, "from_instancer", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
+  layout.prop(ptr, "from_instancer", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
 
   if (!RNA_boolean_get(ptr, "from_instancer")) {
-    PointerRNA obptr = CTX_data_pointer_get(C, "active_object");
+    Object *object = ed::space_node::get_space_editor_object(C);
 
-    if (obptr.data && RNA_enum_get(&obptr, "type") == OB_MESH) {
-      PointerRNA eval_obptr;
-
+    if (object && object->type == OB_MESH) {
       Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
 
       if (depsgraph) {
-        DEG_get_evaluated_rna_pointer(depsgraph, &obptr, &eval_obptr);
-        PointerRNA dataptr = RNA_pointer_get(&eval_obptr, "data");
-        uiItemPointerR(layout, ptr, "uv_map", &dataptr, "uv_layers", "", ICON_GROUP_UVS);
+        Object *object_eval = DEG_get_evaluated(depsgraph, object);
+        PointerRNA dataptr = RNA_id_pointer_create(object_eval->data);
+        layout.prop_search(ptr, "uv_map", &dataptr, "uv_layers", "", ICON_GROUP_UVS);
         return;
       }
     }
 
-    uiItemR(layout, ptr, "uv_map", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_GROUP_UVS);
+    layout.prop(ptr, "uv_map", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_GROUP_UVS);
   }
 }
 
 static void node_shader_init_uvmap(bNodeTree * /*ntree*/, bNode *node)
 {
-  NodeShaderUVMap *attr = MEM_cnew<NodeShaderUVMap>("NodeShaderUVMap");
+  NodeShaderUVMap *attr = MEM_new<NodeShaderUVMap>("NodeShaderUVMap");
   node->storage = attr;
 }
 
@@ -84,24 +86,31 @@ NODE_SHADER_MATERIALX_BEGIN
 #endif
 NODE_SHADER_MATERIALX_END
 
-}  // namespace blender::nodes::node_shader_uvmap_cc
+}  // namespace nodes::node_shader_uvmap_cc
 
 /* node type definition */
 void register_node_type_sh_uvmap()
 {
-  namespace file_ns = blender::nodes::node_shader_uvmap_cc;
+  namespace file_ns = nodes::node_shader_uvmap_cc;
 
-  static blender::bke::bNodeType ntype;
+  static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, SH_NODE_UVMAP, "UV Map", NODE_CLASS_INPUT);
+  sh_node_type_base(&ntype, "ShaderNodeUVMap"_ustr, SH_NODE_UVMAP);
+  ntype.ui_name = "UV Map";
+  ntype.ui_description =
+      "Retrieve a UV map from the geometry, or the default fallback if none is specified";
+  ntype.enum_name_legacy = "UVMAP";
+  ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = file_ns::node_declare;
   ntype.draw_buttons = file_ns::node_shader_buts_uvmap;
-  blender::bke::node_type_size_preset(&ntype, blender::bke::eNodeSizePreset::Middle);
+  ntype.default_width = bke::NodeWidth::_160;
   ntype.initfunc = file_ns::node_shader_init_uvmap;
-  blender::bke::node_type_storage(
-      &ntype, "NodeShaderUVMap", node_free_standard_storage, node_copy_standard_storage);
+  bke::node_type_storage(
+      ntype, "NodeShaderUVMap", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = file_ns::node_shader_gpu_uvmap;
   ntype.materialx_fn = file_ns::node_shader_materialx;
 
-  blender::bke::node_register_type(&ntype);
+  bke::node_register_type(ntype);
 }
+
+}  // namespace blender

@@ -11,8 +11,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_layer.hh"
 #include "BKE_object_types.hh"
@@ -27,6 +27,8 @@
 /* Own include. */
 #include "transform_convert.hh"
 
+namespace blender::ed::transform {
+
 /* -------------------------------------------------------------------- */
 /** \name Particle Edit Transform Creation
  * \{ */
@@ -37,7 +39,7 @@ static void createTransParticleVerts(bContext * /*C*/, TransInfo *t)
 
     TransData *td = nullptr;
     TransDataExtension *tx;
-    BKE_view_layer_synced_ensure(t->scene, t->view_layer);
+    BKE_view_layer_synced_ensure(*t->bmain, t->scene, t->view_layer);
     Object *ob = BKE_view_layer_active_object_get(t->view_layer);
     ParticleEditSettings *pset = PE_settings(t->scene);
     PTCacheEdit *edit = PE_get_current(t->depsgraph, t->scene, ob);
@@ -85,12 +87,11 @@ static void createTransParticleVerts(bContext * /*C*/, TransInfo *t)
     }
 
     tc->data_len = count;
-    td = tc->data = static_cast<TransData *>(
-        MEM_callocN(tc->data_len * sizeof(TransData), "TransObData(Particle Mode)"));
+    td = tc->data = MEM_new_array_zeroed<TransData>(tc->data_len, "TransObData(Particle Mode)");
 
     if (t->mode == TFM_BAKE_TIME) {
-      tx = tc->data_ext = static_cast<TransDataExtension *>(
-          MEM_callocN(tc->data_len * sizeof(TransDataExtension), "Particle_TransExtension"));
+      tx = tc->data_ext = MEM_new_array_zeroed<TransDataExtension>(tc->data_len,
+                                                                   "Particle_TransExtension");
     }
     else {
       tx = tc->data_ext = nullptr;
@@ -142,17 +143,16 @@ static void createTransParticleVerts(bContext * /*C*/, TransInfo *t)
           td->protectflag |= OB_LOCK_LOC;
         }
 
-        td->ext = tx;
         if (t->mode == TFM_BAKE_TIME) {
           td->val = key->time;
           td->ival = *(key->time);
-          /* Abuse size and quat for min/max values. */
+          /* Abuse scale and quat for min/max values. */
           td->flag |= TD_NO_EXT;
           if (k == 0) {
-            tx->size = nullptr;
+            tx->scale = nullptr;
           }
           else {
-            tx->size = (key - 1)->time;
+            tx->scale = (key - 1)->time;
           }
 
           if (k == point->totkey - 1) {
@@ -187,21 +187,19 @@ static void flushTransParticles(TransInfo *t)
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     Scene *scene = t->scene;
     ViewLayer *view_layer = t->view_layer;
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*t->bmain, scene, view_layer);
     Object *ob = BKE_view_layer_active_object_get(view_layer);
     PTCacheEdit *edit = PE_get_current(t->depsgraph, scene, ob);
     ParticleSystem *psys = edit->psys;
     PTCacheEditPoint *point;
     PTCacheEditKey *key;
-    TransData *td;
     float mat[4][4], imat[4][4], co[3];
     int i, k;
     const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
 
     /* We do transform in world space, so flush world space position
      * back to particle local space (only for hair particles). */
-    td = tc->data;
-    for (i = 0, point = edit->points; i < edit->totpoint; i++, point++, td++) {
+    for (i = 0, point = edit->points; i < edit->totpoint; i++, point++) {
       if (!(point->flag & PEP_TRANSFORM)) {
         continue;
       }
@@ -256,3 +254,5 @@ TransConvertTypeInfo TransConvertType_Particle = {
     /*recalc_data*/ recalcData_particles,
     /*special_aftertrans_update*/ nullptr,
 };
+
+}  // namespace blender::ed::transform

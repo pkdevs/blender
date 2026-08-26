@@ -5,15 +5,7 @@
 set(INC
   ../asset
   ../include
-  ../../asset_system
-  ../../blenkernel
-  ../../blenloader
-  ../../blentranslation
-  ../../gpu
-  ../../imbuf
   ../../makesrna
-  ../../render
-  ../../windowmanager
 
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
@@ -24,37 +16,77 @@ set(INC_SYS
 
 set(SRC
   asset_catalog_tree_view.cc
+  file_banner.cc
+  file_banner_remote_assets.cc
   file_context.cc
   file_draw.cc
   file_indexer.cc
   file_ops.cc
   file_panels.cc
   file_utils.cc
-  filelist.cc
+  filelist/filelist.cc
+  filelist/filelist_filter.cc
+  filelist/filelist_readjob.cc
+  filelist/filelist_readjob_asset_library_all.cc
+  filelist/filelist_readjob_asset_library_current_file.cc
+  filelist/filelist_readjob_asset_library_essentials.cc
+  filelist/filelist_readjob_asset_library_on_disk.cc
+  filelist/filelist_readjob_asset_library_remote.cc
+  filelist/filelist_readjob_common.cc
+  filelist/filelist_readjob_directories.cc
+  filelist/filelist_readjob_library.cc
+
+  filelist/filelist_sort.cc
   filesel.cc
   folder_history.cc
   fsmenu.cc
-  fsmenu_system.cc
   space_file.cc
 
+  file_banner.hh
   file_indexer.hh
   file_intern.hh
   filelist.hh
-  fsmenu.h
-)
-
-set(LIB
-  PRIVATE bf::blenfont
-  bf_blenkernel
-  PRIVATE bf::blenlib
-  PRIVATE bf::dna
-  PRIVATE bf::intern::guardedalloc
-  PRIVATE bf::extern::fmtlib
-  PRIVATE bf::intern::atomic
+  filelist/filelist_intern.hh
+  filelist/filelist_readjob.hh
+  fsmenu.hh
 )
 
 if(WIN32)
-  add_definitions(-DNOMINMAX)
+  list(APPEND SRC
+    fsmenu_system_win32.cc
+  )
+elseif(APPLE)
+  list(APPEND SRC
+    fsmenu_system_macos.mm
+  )
+else() # Generic UNIX
+  list(APPEND SRC
+    fsmenu_system_unix.cc
+  )
+endif()
+
+set(LIB
+  PRIVATE bf::asset_system
+  PRIVATE bf::blenfont
+  PRIVATE bf::blenkernel
+  PRIVATE bf::blenlib
+  PRIVATE bf::blenloader
+  PRIVATE bf::blentranslation
+  PRIVATE bf::dna
+  PRIVATE bf::gpu
+  PRIVATE bf::imbuf
+  PRIVATE bf::imbuf::movie
+  PRIVATE bf::intern::clog
+  PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::intern::atomic
+  PRIVATE bf::render
+  PRIVATE bf::windowmanager
+)
+
+if(WIN32)
+  list(APPEND LIB
+    PRIVATE bf::intern::utfconv
+  )
 endif()
 
 if(WITH_HEADLESS)
@@ -65,20 +97,16 @@ else()
   )
 endif()
 
-if(WITH_IMAGE_OPENEXR)
-  add_definitions(-DWITH_OPENEXR)
-endif()
-
 if(WITH_IMAGE_OPENJPEG)
-  add_definitions(-DWITH_OPENJPEG)
+  add_definitions(-DWITH_IMAGE_OPENJPEG)
 endif()
 
 if(WITH_IMAGE_CINEON)
-  add_definitions(-DWITH_CINEON)
+  add_definitions(-DWITH_IMAGE_CINEON)
 endif()
 
 if(WITH_IMAGE_WEBP)
-  add_definitions(-DWITH_WEBP)
+  add_definitions(-DWITH_IMAGE_WEBP)
 endif()
 
 if(WITH_FREESTYLE)

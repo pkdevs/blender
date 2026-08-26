@@ -6,12 +6,14 @@
 
 #include "scene/camera.h"
 
+#include "BLI_bounds.hh"
+
 #include "blender/object_cull.h"
 #include "blender/util.h"
 
 CCL_NAMESPACE_BEGIN
 
-BlenderObjectCulling::BlenderObjectCulling(Scene *scene, BL::Scene &b_scene)
+BlenderObjectCulling::BlenderObjectCulling(Scene *scene, blender::Scene &b_scene)
     : use_scene_camera_cull_(false),
       use_camera_cull_(false),
       camera_cull_margin_(0.0f),
@@ -19,14 +21,17 @@ BlenderObjectCulling::BlenderObjectCulling(Scene *scene, BL::Scene &b_scene)
       use_distance_cull_(false),
       distance_cull_margin_(0.0f)
 {
-  if (b_scene.render().use_simplify()) {
-    PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
+  if ((b_scene.r.mode & blender::R_SIMPLIFY) != 0) {
+    blender::PointerRNA scene_rna_ptr = RNA_id_pointer_create(&b_scene.id);
+    blender::PointerRNA cscene = RNA_pointer_get(&scene_rna_ptr, "cycles");
 
-    use_scene_camera_cull_ = scene->camera->get_camera_type() != CAMERA_PANORAMA &&
-                             !b_scene.render().use_multiview() &&
+    const bool cam_supported = (scene->camera->get_camera_type() == CAMERA_PERSPECTIVE) ||
+                               (scene->camera->get_camera_type() == CAMERA_ORTHOGRAPHIC);
+
+    use_scene_camera_cull_ = cam_supported && ((b_scene.r.scemode & blender::R_MULTIVIEW) == 0) &&
                              get_boolean(cscene, "use_camera_cull");
-    use_scene_distance_cull_ = scene->camera->get_camera_type() != CAMERA_PANORAMA &&
-                               !b_scene.render().use_multiview() &&
+    use_scene_distance_cull_ = cam_supported &&
+                               ((b_scene.r.scemode & blender::R_MULTIVIEW) == 0) &&
                                get_boolean(cscene, "use_distance_cull");
 
     camera_cull_margin_ = get_float(cscene, "camera_cull_margin");
@@ -38,13 +43,14 @@ BlenderObjectCulling::BlenderObjectCulling(Scene *scene, BL::Scene &b_scene)
   }
 }
 
-void BlenderObjectCulling::init_object(Scene *scene, BL::Object &b_ob)
+void BlenderObjectCulling::init_object(Scene *scene, blender::Object &b_ob)
 {
   if (!use_scene_camera_cull_ && !use_scene_distance_cull_) {
     return;
   }
 
-  PointerRNA cobject = RNA_pointer_get(&b_ob.ptr, "cycles");
+  blender::PointerRNA b_ob_rna_ptr = RNA_id_pointer_create(&b_ob.id);
+  blender::PointerRNA cobject = RNA_pointer_get(&b_ob_rna_ptr, "cycles");
 
   use_camera_cull_ = use_scene_camera_cull_ && get_boolean(cobject, "use_camera_cull");
   use_distance_cull_ = use_scene_distance_cull_ && get_boolean(cobject, "use_distance_cull");
@@ -55,7 +61,7 @@ void BlenderObjectCulling::init_object(Scene *scene, BL::Object &b_ob)
   }
 }
 
-bool BlenderObjectCulling::test(Scene *scene, BL::Object &b_ob, Transform &tfm)
+bool BlenderObjectCulling::test(Scene *scene, blender::Object &b_ob, const Transform &tfm)
 {
   if (!use_camera_cull_ && !use_distance_cull_) {
     return false;
@@ -63,14 +69,22 @@ bool BlenderObjectCulling::test(Scene *scene, BL::Object &b_ob, Transform &tfm)
 
   /* Compute world space bounding box corners. */
   float3 bb[8];
-  BL::Array<float, 24> boundbox = b_ob.bound_box();
+  std::array<blender::float3, 8> boundbox;
+  if (const std::optional<blender::Bounds<blender::float3>> bounds =
+          BKE_object_boundbox_eval_cached_get(&b_ob))
+  {
+    boundbox = blender::bounds::corners(*bounds);
+  }
+  else {
+    boundbox.fill(blender::float3(0));
+  }
   for (int i = 0; i < 8; ++i) {
-    float3 p = make_float3(boundbox[3 * i + 0], boundbox[3 * i + 1], boundbox[3 * i + 2]);
+    const float3 p = make_float3(boundbox[i].x, boundbox[i].y, boundbox[i].z);
     bb[i] = transform_point(&tfm, p);
   }
 
-  bool camera_culled = use_camera_cull_ && test_camera(scene, bb);
-  bool distance_culled = use_distance_cull_ && test_distance(scene, bb);
+  const bool camera_culled = use_camera_cull_ && test_camera(scene, bb);
+  const bool distance_culled = use_distance_cull_ && test_distance(scene, bb);
 
   return ((camera_culled && distance_culled) || (camera_culled && !use_distance_cull_) ||
           (distance_culled && !use_camera_cull_));
@@ -79,19 +93,19 @@ bool BlenderObjectCulling::test(Scene *scene, BL::Object &b_ob, Transform &tfm)
 /* TODO(sergey): Not really optimal, consider approaches based on k-DOP in order
  * to reduce number of objects which are wrongly considered visible.
  */
-bool BlenderObjectCulling::test_camera(Scene *scene, float3 bb[8])
+bool BlenderObjectCulling::test_camera(Scene *scene, const float3 bb[8])
 {
   Camera *cam = scene->camera;
   const ProjectionTransform &worldtondc = cam->worldtondc;
-  float3 bb_min = make_float3(FLT_MAX, FLT_MAX, FLT_MAX),
-         bb_max = make_float3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+  float3 bb_min = make_float3(FLT_MAX, FLT_MAX, FLT_MAX);
+  float3 bb_max = make_float3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
   bool all_behind = true;
   for (int i = 0; i < 8; ++i) {
     float3 p = bb[i];
-    float4 b = make_float4(p.x, p.y, p.z, 1.0f);
-    float4 c = make_float4(
+    const float4 b = make_float4(p, 1.0f);
+    const float4 c = make_float4(
         dot(worldtondc.x, b), dot(worldtondc.y, b), dot(worldtondc.z, b), dot(worldtondc.w, b));
-    p = float4_to_float3(c / c.w);
+    p = make_float3(c / c.w);
     if (c.z < 0.0f) {
       p.x = 1.0f - p.x;
       p.y = 1.0f - p.y;
@@ -109,20 +123,20 @@ bool BlenderObjectCulling::test_camera(Scene *scene, float3 bb[8])
           bb_max.x <= -camera_cull_margin_ || bb_max.y <= -camera_cull_margin_);
 }
 
-bool BlenderObjectCulling::test_distance(Scene *scene, float3 bb[8])
+bool BlenderObjectCulling::test_distance(Scene *scene, const float3 bb[8])
 {
-  float3 camera_position = transform_get_column(&scene->camera->get_matrix(), 3);
-  float3 bb_min = make_float3(FLT_MAX, FLT_MAX, FLT_MAX),
-         bb_max = make_float3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+  const float3 camera_position = transform_get_column(&scene->camera->get_matrix(), 3);
+  float3 bb_min = make_float3(FLT_MAX, FLT_MAX, FLT_MAX);
+  float3 bb_max = make_float3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 
   /* Find min & max points for x & y & z on bounding box */
   for (int i = 0; i < 8; ++i) {
-    float3 p = bb[i];
+    const float3 p = bb[i];
     bb_min = min(bb_min, p);
     bb_max = max(bb_max, p);
   }
 
-  float3 closest_point = max(min(bb_max, camera_position), bb_min);
+  const float3 closest_point = max(min(bb_max, camera_position), bb_min);
   return (len_squared(camera_position - closest_point) >
           distance_cull_margin_ * distance_cull_margin_);
 }

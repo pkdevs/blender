@@ -7,7 +7,6 @@
  */
 
 #include "logImageCore.h"
-#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -20,14 +19,17 @@
 
 #include "MEM_guardedalloc.h"
 
-static ImBuf *imb_load_dpx_cineon(
-    const uchar *mem, size_t size, int use_cineon, int flags, char colorspace[IM_MAX_SPACE])
+namespace blender {
+
+static ImBuf *imb_load_dpx_cineon(const uchar *mem,
+                                  size_t size,
+                                  int use_cineon,
+                                  ImBufFlags flags,
+                                  ImFileColorSpace &r_colorspace)
 {
   ImBuf *ibuf;
   LogImageFile *image;
   int width, height, depth;
-
-  colorspace_set_default_role(colorspace, IM_MAX_SPACE, COLOR_ROLE_DEFAULT_FLOAT);
 
   logImageSetVerbose((G.debug & G_DEBUG) ? 1 : 0);
 
@@ -40,14 +42,14 @@ static ImBuf *imb_load_dpx_cineon(
 
   logImageGetSize(image, &width, &height, &depth);
 
-  ibuf = IMB_allocImBuf(width, height, 32, IB_rectfloat | flags);
+  ibuf = IMB_allocImBuf(width, height, ImBufFlags::FloatData | flags);
   if (ibuf == nullptr) {
     logImageClose(image);
     return nullptr;
   }
 
-  if (!(flags & IB_test)) {
-    if (logImageGetDataRGBA(image, ibuf->float_buffer.data, 1) != 0) {
+  if (!flag_is_set(flags, ImBufFlags::Test)) {
+    if (logImageGetDataRGBA(image, ibuf->float_data_for_write(), 1) != 0) {
       logImageClose(image);
       IMB_freeImBuf(ibuf);
       return nullptr;
@@ -58,53 +60,56 @@ static ImBuf *imb_load_dpx_cineon(
   logImageClose(image);
   ibuf->ftype = use_cineon ? IMB_FTYPE_CINEON : IMB_FTYPE_DPX;
 
-  if (flags & IB_alphamode_detect) {
-    ibuf->flags |= IB_alphamode_premul;
+  if (flag_is_set(flags, ImBufFlags::AlphaDetect)) {
+    ibuf->flags |= ImBufFlags::AlphaPremul;
   }
+
+  r_colorspace.is_hdr_float = true;
 
   return ibuf;
 }
 
-static int imb_save_dpx_cineon(ImBuf *ibuf, const char *filepath, int use_cineon, int flags)
+static int imb_save_dpx_cineon(ImBuf *ibuf, const char *filepath, int use_cineon)
 {
   LogImageFile *logImage;
   float *fbuf;
   float *fbuf_ptr;
   const uchar *rect_ptr;
-  int x, y, depth, bitspersample, rvalue;
-
-  if (flags & IB_mem) {
-    printf("DPX/Cineon: saving in memory is not supported.\n");
-    return 0;
-  }
+  int x, y, bitspersample, rvalue;
 
   logImageSetVerbose((G.debug & G_DEBUG) ? 1 : 0);
 
-  depth = (ibuf->planes + 7) >> 3;
-  if (depth > 4 || depth < 3) {
-    printf("DPX/Cineon: unsupported depth: %d for file: '%s'\n", depth, filepath);
+  if (!ELEM(ibuf->color_mode, ImColorMode::RGB, ImColorMode::RGBA)) {
+    printf("DPX/Cineon: only RGB/RGBA is supported, file: '%s'\n", filepath);
     return 0;
   }
 
-  if (ibuf->foptions.flag & CINEON_10BIT) {
+  if (use_cineon) {
+    /* Only 10bit is supported. */
     bitspersample = 10;
   }
-  else if (ibuf->foptions.flag & CINEON_12BIT) {
-    bitspersample = 12;
-  }
-  else if (ibuf->foptions.flag & CINEON_16BIT) {
-    bitspersample = 16;
-  }
   else {
-    bitspersample = 8;
+    if (ibuf->foptions.flag & CINEON_10BIT) {
+      bitspersample = 10;
+    }
+    else if (ibuf->foptions.flag & CINEON_12BIT) {
+      bitspersample = 12;
+    }
+    else if (ibuf->foptions.flag & CINEON_16BIT) {
+      bitspersample = 16;
+    }
+    else {
+      bitspersample = 8;
+    }
   }
 
+  const bool has_alpha = ibuf->color_mode == ImColorMode::RGBA;
   logImage = logImageCreate(filepath,
                             use_cineon,
                             ibuf->x,
                             ibuf->y,
                             bitspersample,
-                            (depth == 4),
+                            has_alpha,
                             (ibuf->foptions.flag & CINEON_LOG),
                             -1,
                             -1,
@@ -116,68 +121,76 @@ static int imb_save_dpx_cineon(ImBuf *ibuf, const char *filepath, int use_cineon
     return 0;
   }
 
-  if (ibuf->float_buffer.data != nullptr && bitspersample != 8) {
+  if (ibuf->float_data() != nullptr && bitspersample != 8) {
     /* Don't use the float buffer to save 8 BPP picture to prevent color banding
      * (there's no dithering algorithm behind the #logImageSetDataRGBA function). */
 
-    fbuf = (float *)MEM_mallocN(sizeof(float[4]) * ibuf->x * ibuf->y,
-                                "fbuf in imb_save_dpx_cineon");
+    fbuf = MEM_new_array_uninitialized<float>(4 * size_t(ibuf->x) * size_t(ibuf->y),
+                                              "fbuf in imb_save_dpx_cineon");
 
     for (y = 0; y < ibuf->y; y++) {
-      float *dst_ptr = fbuf + 4 * ((ibuf->y - y - 1) * ibuf->x);
-      const float *src_ptr = ibuf->float_buffer.data + 4 * (y * ibuf->x);
+      float *dst_ptr = fbuf + (4 * (size_t(ibuf->y - y - 1) * size_t(ibuf->x)));
+      const float *src_ptr = ibuf->float_data() + (4 * (size_t(y) * size_t(ibuf->x)));
 
       memcpy(dst_ptr, src_ptr, 4 * ibuf->x * sizeof(float));
     }
 
     rvalue = (logImageSetDataRGBA(logImage, fbuf, 1) == 0);
 
-    MEM_freeN(fbuf);
+    MEM_delete(fbuf);
   }
   else {
-    if (ibuf->byte_buffer.data == nullptr) {
-      IMB_rect_from_float(ibuf);
+    if (ibuf->byte_data()) {
+      IMB_byte_from_float(ibuf);
     }
 
-    fbuf = (float *)MEM_mallocN(sizeof(float[4]) * ibuf->x * ibuf->y,
-                                "fbuf in imb_save_dpx_cineon");
+    fbuf = MEM_new_array_uninitialized<float>(4 * size_t(ibuf->x) * size_t(ibuf->y),
+                                              "fbuf in imb_save_dpx_cineon");
     if (fbuf == nullptr) {
       printf("DPX/Cineon: error allocating memory.\n");
       logImageClose(logImage);
       return 0;
     }
+    const uint8_t *byte_data = ibuf->byte_data();
     for (y = 0; y < ibuf->y; y++) {
+      fbuf_ptr = fbuf + (4 * (size_t(ibuf->y - y - 1) * size_t(ibuf->x)));
+      rect_ptr = byte_data + (4 * (size_t(y) * size_t(ibuf->x)));
       for (x = 0; x < ibuf->x; x++) {
-        fbuf_ptr = fbuf + 4 * ((ibuf->y - y - 1) * ibuf->x + x);
-        rect_ptr = ibuf->byte_buffer.data + 4 * (y * ibuf->x + x);
         fbuf_ptr[0] = float(rect_ptr[0]) / 255.0f;
         fbuf_ptr[1] = float(rect_ptr[1]) / 255.0f;
         fbuf_ptr[2] = float(rect_ptr[2]) / 255.0f;
-        fbuf_ptr[3] = (depth == 4) ? (float(rect_ptr[3]) / 255.0f) : 1.0f;
+        fbuf_ptr[3] = has_alpha ? (float(rect_ptr[3]) / 255.0f) : 1.0f;
+        fbuf_ptr += 4;
+        rect_ptr += 4;
       }
     }
     rvalue = (logImageSetDataRGBA(logImage, fbuf, 0) == 0);
-    MEM_freeN(fbuf);
+    MEM_delete(fbuf);
   }
 
   logImageClose(logImage);
   return rvalue;
 }
 
-bool imb_save_cineon(ImBuf *buf, const char *filepath, int flags)
+bool imb_save_cineon(ImBuf *buf, const char *filepath, ImBufFlags /*flags*/)
 {
-  return imb_save_dpx_cineon(buf, filepath, 1, flags);
+  return imb_save_dpx_cineon(buf, filepath, 1);
 }
 
-bool imb_is_a_cineon(const uchar *buf, size_t size)
+bool imb_is_a_cineon(const uchar *mem, size_t size)
 {
-  return logImageIsCineon(buf, size);
+  return logImageIsCineon(mem, size);
 }
 
-ImBuf *imb_load_cineon(const uchar *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
+ImBuf *imb_load_cineon(const uchar *mem,
+                       size_t size,
+                       ImBufFlags flags,
+                       ImFileColorSpace &r_colorspace)
 {
   if (!imb_is_a_cineon(mem, size)) {
     return nullptr;
   }
-  return imb_load_dpx_cineon(mem, size, 1, flags, colorspace);
+  return imb_load_dpx_cineon(mem, size, 1, flags, r_colorspace);
 }
+
+}  // namespace blender

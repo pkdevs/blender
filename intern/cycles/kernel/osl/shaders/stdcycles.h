@@ -13,6 +13,9 @@
 // Constants
 #define FLT_MAX 3.402823466e+38  // max value
 
+/* Default offset of coordinates for evaluating bump node. Unit in pixel. */
+#define BUMP_FILTER_WIDTH 0.1
+
 // Declaration of built-in functions and closures, stdosl.h does not make
 // these available so we have to redefine them.
 #define BUILTIN [[int builtin = 1]]
@@ -33,6 +36,16 @@ closure color microfacet_f82_tint(
  * otherwise could be replaced by microfacet() */
 closure color microfacet_multi_ggx_glass(normal N, float ag, float eta, color C) BUILTIN;
 closure color microfacet_multi_ggx_aniso(normal N, vector T, float ax, float ay, color C) BUILTIN;
+closure color thin_glass(normal N,
+                         vector T,
+                         color reflection,
+                         color transmission,
+                         float ior,
+                         float roughness,
+                         float thinfilm_thickness,
+                         float thinfilm_ior) BUILTIN;
+closure color
+thin_subsurface(normal N, vector T, color C, float anisotropy, float roughness) BUILTIN;
 
 // BSSRDF
 closure color bssrdf(string method, normal N, vector radius, color albedo) BUILTIN;
@@ -68,5 +81,15 @@ closure color absorption() BUILTIN;
 
 // Ray Portal
 closure color ray_portal_bsdf(vector position, vector direction) BUILTIN;
+
+point camera_shader_raster_position()
+{
+  return P;
+}
+
+vector camera_shader_random_sample()
+{
+  return vector(N);
+}
 
 #endif /* CCL_STDOSL_H */

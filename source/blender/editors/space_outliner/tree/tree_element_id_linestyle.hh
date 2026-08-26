@@ -10,9 +10,11 @@
 
 #include "tree_element_id.hh"
 
+namespace blender {
+
 struct FreestyleLineStyle;
 
-namespace blender::ed::outliner {
+namespace ed::outliner {
 
 class TreeElementIDLineStyle final : public TreeElementID {
   FreestyleLineStyle &linestyle_;
@@ -20,10 +22,11 @@ class TreeElementIDLineStyle final : public TreeElementID {
  public:
   TreeElementIDLineStyle(TreeElement &legacy_te, FreestyleLineStyle &linestyle);
 
-  void expand(SpaceOutliner &) const override;
+  void expand(SpaceOutliner & /*soops*/) const override;
 
  private:
   void expand_textures() const;
 };
 
-}  // namespace blender::ed::outliner
+}  // namespace ed::outliner
+}  // namespace blender

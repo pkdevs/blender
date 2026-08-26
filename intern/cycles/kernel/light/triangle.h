@@ -4,29 +4,38 @@
 
 #pragma once
 
-#include "kernel/geom/geom.h"
+#include "kernel/globals.h"
+
+#include "kernel/light/common.h"
+
+#include "kernel/geom/motion_triangle.h"
+#include "kernel/geom/object.h"
+#include "kernel/geom/triangle.h"
+
+#include "util/math_fast.h"
+#include "util/math_intersect.h"
 
 CCL_NAMESPACE_BEGIN
 
 /* returns true if the triangle is has motion blur or an instancing transform applied */
 ccl_device_inline bool triangle_world_space_vertices(
-    KernelGlobals kg, int object, int prim, float time, float3 V[3])
+    KernelGlobals kg, const int object, const int prim, const float time, float3 V[3])
 {
   bool has_motion = false;
-  const int object_flag = kernel_data_fetch(object_flag, object);
+  const uint object_flag = kernel_data_fetch(object_flag, object);
 
   if (object_flag & SD_OBJECT_HAS_VERTEX_MOTION && time >= 0.0f) {
     motion_triangle_vertices(kg, object, prim, time, V);
     has_motion = true;
   }
   else {
-    triangle_vertices(kg, prim, V);
+    triangle_vertices(kg, object, prim, V);
   }
 
   if (!(object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
 #ifdef __OBJECT_MOTION__
-    float object_time = (time >= 0.0f) ? time : 0.5f;
-    Transform tfm = object_fetch_transform_motion_test(kg, object, object_time, NULL);
+    const float object_time = (time >= 0.0f) ? time : 0.5f;
+    const Transform tfm = object_fetch_transform_motion_test(kg, object, object_time, nullptr);
 #else
     Transform tfm = object_fetch_transform(kg, object, OBJECT_TRANSFORM);
 #endif
@@ -38,9 +47,11 @@ ccl_device_inline bool triangle_world_space_vertices(
   return has_motion;
 }
 
-ccl_device_inline float triangle_light_pdf_area_sampling(const float3 Ng, const float3 I, float t)
+ccl_device_inline float triangle_light_pdf_area_sampling(const float3 Ng,
+                                                         const float3 I,
+                                                         const float t)
 {
-  float cos_pi = fabsf(dot(Ng, I));
+  const float cos_pi = fabsf(dot(Ng, I));
 
   if (cos_pi == 0.0f) {
     return 0.0f;
@@ -50,15 +61,15 @@ ccl_device_inline float triangle_light_pdf_area_sampling(const float3 Ng, const 
 }
 
 ccl_device_forceinline float triangle_light_pdf(KernelGlobals kg,
-                                                ccl_private const ShaderData *sd,
-                                                float t)
+                                                const ccl_private ShaderData *sd,
+                                                const float t)
 {
   /* A naive heuristic to decide between costly solid angle sampling
    * and simple area sampling, comparing the distance to the triangle plane
    * to the length of the edges of the triangle. */
 
   float3 V[3];
-  bool has_motion = triangle_world_space_vertices(kg, sd->object, sd->prim, sd->time, V);
+  const bool has_motion = triangle_world_space_vertices(kg, sd->object, sd->prim, sd->time, V);
 
   const float3 e0 = V[1] - V[0];
   const float3 e1 = V[2] - V[0];
@@ -87,9 +98,7 @@ ccl_device_forceinline float triangle_light_pdf(KernelGlobals kg,
     if (UNLIKELY(solid_angle == 0.0f)) {
       return 0.0f;
     }
-    else {
-      pdf = 1.0f / solid_angle;
-    }
+    pdf = 1.0f / solid_angle;
   }
   else {
     if (UNLIKELY(area == 0.0f)) {
@@ -117,10 +126,10 @@ ccl_device_forceinline float triangle_light_pdf(KernelGlobals kg,
 
 template<bool in_volume_segment>
 ccl_device_forceinline bool triangle_light_sample(KernelGlobals kg,
-                                                  int prim,
-                                                  int object,
+                                                  const int prim,
+                                                  const int object,
                                                   const float2 rand,
-                                                  float time,
+                                                  const float time,
                                                   ccl_private LightSample *ls,
                                                   const float3 P)
 {
@@ -129,7 +138,7 @@ ccl_device_forceinline bool triangle_light_sample(KernelGlobals kg,
    * to the length of the edges of the triangle. */
 
   float3 V[3];
-  bool has_motion = triangle_world_space_vertices(kg, object, prim, time, V);
+  const bool has_motion = triangle_world_space_vertices(kg, object, prim, time, V);
 
   const float3 e0 = V[1] - V[0];
   const float3 e1 = V[2] - V[0];
@@ -137,7 +146,7 @@ ccl_device_forceinline bool triangle_light_sample(KernelGlobals kg,
   const float longest_edge_squared = max(len_squared(e0), max(len_squared(e1), len_squared(e2)));
   float3 N0 = cross(e0, e1);
   /* Flip normal if necessary. */
-  const int object_flag = kernel_data_fetch(object_flag, object);
+  const uint object_flag = kernel_data_fetch(object_flag, object);
   if (object_flag & SD_OBJECT_NEGATIVE_SCALE) {
     N0 = -N0;
   }
@@ -159,7 +168,6 @@ ccl_device_forceinline bool triangle_light_sample(KernelGlobals kg,
   ls->eval_fac = 1.0f;
   ls->object = object;
   ls->prim = prim;
-  ls->lamp = LAMP_NONE;
   ls->shader |= SHADER_USE_MIS;
   ls->type = LIGHT_TRIANGLE;
   ls->group = object_lightgroup(kg, object);
@@ -191,7 +199,8 @@ ccl_device_forceinline bool triangle_light_sample(KernelGlobals kg,
     /* Select a random sub-area of the spherical triangle and calculate the third vertex C_ of that
      * new triangle. */
     const float A_hat = rand.x * solid_angle;
-    float sin_phi, cos_phi;
+    float sin_phi;
+    float cos_phi;
     fast_sincosf(A_hat - alpha, &sin_phi, &cos_phi);
     const float u = cos_phi - cos_alpha;
     const float v = sin_phi + sin_alpha * cos_c;
@@ -208,7 +217,9 @@ ccl_device_forceinline bool triangle_light_sample(KernelGlobals kg,
     ls->D = z * B + sin_from_cos(z) * safe_normalize(C_ - dot(C_, B) * B);
 
     /* calculate intersection with the planar triangle */
-    if (!ray_triangle_intersect(P, ls->D, 0.0f, FLT_MAX, V[0], V[1], V[2], &ls->u, &ls->v, &ls->t))
+    float unused_u, unused_v;
+    if (!ray_triangle_intersect(
+            P, ls->D, 0.0f, FLT_MAX, V[0], V[1], V[2], &unused_u, &unused_v, &ls->t))
     {
       ls->pdf = 0.0f;
       return false;
@@ -222,9 +233,7 @@ ccl_device_forceinline bool triangle_light_sample(KernelGlobals kg,
       ls->pdf = 0.0f;
       return false;
     }
-    else {
-      ls->pdf = 1.0f / solid_angle;
-    }
+    ls->pdf = 1.0f / solid_angle;
   }
   else {
     if (UNLIKELY(area == 0.0f)) {
@@ -249,8 +258,6 @@ ccl_device_forceinline bool triangle_light_sample(KernelGlobals kg,
     /* compute incoming direction, distance and pdf */
     ls->D = normalize_len(ls->P - P, &ls->t);
     ls->pdf = triangle_light_pdf_area_sampling(ls->Ng, -ls->D, ls->t) / area;
-    ls->u = u;
-    ls->v = v;
   }
 
   /* Belongs in distribution.h but can reuse computations here. */
@@ -310,7 +317,7 @@ ccl_device_forceinline bool triangle_light_tree_parameters(
   cos_theta_u = FLT_MAX;
 
   float3 vertices[3];
-  triangle_vertices(kg, kemitter->triangle.id, vertices);
+  triangle_vertices(kg, kemitter->object_id, kemitter->triangle.id, vertices);
 
   bool shape_above_surface = false;
   for (int i = 0; i < 3; i++) {
@@ -327,6 +334,18 @@ ccl_device_forceinline bool triangle_light_tree_parameters(
   const bool front_facing = bcone.theta_o != 0.0f || dot(bcone.axis, point_to_centroid) < 0;
 
   return front_facing && shape_above_surface;
+}
+
+ccl_device float2 triangle_light_uv(KernelGlobals kg,
+                                    const int object,
+                                    const int prim,
+                                    const float time,
+                                    const float3 ray_P,
+                                    const float3 ray_D)
+{
+  float3 V[3];
+  triangle_world_space_vertices(kg, object, prim, time, V);
+  return ray_triangle_uv(ray_P, ray_D, V[0], V[1], V[2]);
 }
 
 CCL_NAMESPACE_END

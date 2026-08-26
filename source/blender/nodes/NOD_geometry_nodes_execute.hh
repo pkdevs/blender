@@ -5,33 +5,43 @@
 #pragma once
 
 #include "BLI_compute_context.hh"
-#include "BLI_function_ref.hh"
-#include "BLI_multi_value_map.hh"
-#include "BLI_set.hh"
+#include "BLI_generic_pointer.hh"
+#include "BLI_resource_scope.hh"
+#include "BLI_vector_set.hh"
+
+#include "DNA_node_types.h"
 
 #include "BKE_idprop.hh"
-#include "BKE_node.hh"
+
+#include "NOD_socket_value_inference.hh"
+
+namespace blender {
 
 struct bNodeTree;
 struct bNodeTreeInterfaceSocket;
-namespace blender::bke {
+struct PointerRNA;
+namespace bke {
 struct GeometrySet;
 }
 struct IDProperty;
-namespace blender::nodes {
+namespace nodes {
 struct GeoNodesCallData;
-namespace geo_eval_log {
-class GeoModifierLog;
-}  // namespace geo_eval_log
-}  // namespace blender::nodes
+namespace eval_log {
+class NodesEvalLog;
+}  // namespace eval_log
+}  // namespace nodes
 
-namespace blender::nodes {
+namespace nodes {
 
 constexpr StringRef input_use_attribute_suffix = "_use_attribute";
 constexpr StringRef input_attribute_name_suffix = "_attribute_name";
 
-std::optional<StringRef> input_attribute_name_get(const IDProperty &props,
-                                                  const bNodeTreeInterfaceSocket &io_input);
+struct IDPropNameGetter {
+  StringRef operator()(const IDProperty *value) const
+  {
+    return StringRef(value->name);
+  }
+};
 
 /**
  * \return Whether using an attribute to input values of this type is supported.
@@ -44,26 +54,20 @@ bool socket_type_has_attribute_toggle(eNodeSocketDatatype type);
  */
 bool input_has_attribute_toggle(const bNodeTree &node_tree, const int socket_index);
 
-bool id_property_type_matches_socket(const bNodeTreeInterfaceSocket &socket,
-                                     const IDProperty &property,
-                                     bool use_name_for_ids = false);
-
-std::unique_ptr<IDProperty, bke::idprop::IDPropertyDeleter> id_property_create_from_socket(
-    const bNodeTreeInterfaceSocket &socket, bool use_name_for_ids);
-
 bke::GeometrySet execute_geometry_nodes_on_geometry(const bNodeTree &btree,
-                                                    const IDProperty *properties,
+                                                    const PointerRNA &properties_ptr,
                                                     const ComputeContext &base_compute_context,
                                                     GeoNodesCallData &call_data,
                                                     bke::GeometrySet input_geometry);
 
-void update_input_properties_from_node_tree(const bNodeTree &tree,
-                                            const IDProperty *old_properties,
-                                            IDProperty &properties,
-                                            bool use_name_for_ids = false);
+/**
+ * Get input values for the node tree for static value/usage inferencing. Inferencing does not
+ * fully evaluate the node tree (would be way to slow), and does not support all socket types. So
+ * this function may return #InferenceValue::Unknown for some sockets.
+ */
+Vector<InferenceValue> get_geometry_nodes_input_inference_values(const bNodeTree &btree,
+                                                                 const PointerRNA &properties_ptr,
+                                                                 ResourceScope &scope);
 
-void update_output_properties_from_node_tree(const bNodeTree &tree,
-                                             const IDProperty *old_properties,
-                                             IDProperty &properties);
-
-}  // namespace blender::nodes
+}  // namespace nodes
+}  // namespace blender

@@ -10,10 +10,6 @@
 
 #include "../BPy_StrokeShader.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject ConstantThicknessShader_Type;
@@ -22,12 +18,8 @@ extern PyTypeObject ConstantThicknessShader_Type;
   (PyObject_IsInstance((PyObject *)v, (PyObject *)&ConstantThicknessShader_Type))
 
 /*---------------------------Python BPy_ConstantThicknessShader structure definition----------*/
-typedef struct {
+struct BPy_ConstantThicknessShader {
   BPy_StrokeShader py_ss;
-} BPy_ConstantThicknessShader;
+};
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
-}
-#endif

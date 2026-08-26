@@ -6,7 +6,7 @@
 /** \file
  * \ingroup bke
  *
- * This code parses the Freetype font outline data to chains of Blender's bezier-triples.
+ * This code parses the FreeType font outline data to chains of Blender's bezier-triples.
  * Additional information can be found at the bottom of this file.
  *
  * Code that uses exotic character maps is present but commented out.
@@ -16,10 +16,9 @@
 
 #include "BLF_api.hh"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_curve.hh"
 #include "BKE_vfont.hh"
@@ -28,8 +27,17 @@
 #include "DNA_packedFile_types.h"
 #include "DNA_vfont_types.h"
 
+namespace blender {
+
 extern const void *builtin_font_data;
 extern int builtin_font_size;
+
+void BKE_vfontdata_metrics_get_defaults(VFontData_Metrics *metrics)
+{
+  metrics->scale = BLF_VFONT_METRICS_SCALE_DEFAULT;
+  metrics->em_ratio = BLF_VFONT_METRICS_EM_RATIO_DEFAULT;
+  metrics->ascend_ratio = BLF_VFONT_METRICS_ASCEND_RATIO_DEFAULT;
+}
 
 VFontData *BKE_vfontdata_from_freetypefont(PackedFile *pf)
 {
@@ -39,51 +47,66 @@ VFontData *BKE_vfontdata_from_freetypefont(PackedFile *pf)
   }
 
   /* allocate blender font */
-  VFontData *vfd = static_cast<VFontData *>(MEM_callocN(sizeof(*vfd), "FTVFontData"));
+  VFontData *vfd = MEM_new_zeroed<VFontData>("FTVFontData");
 
   /* Get the font name. */
   char *name = BLF_display_name_from_id(fontid);
   STRNCPY(vfd->name, name);
   /* BLF_display_name result must be freed. */
-  MEM_freeN(name);
+  MEM_delete(name);
 
   BLI_str_utf8_invalid_strip(vfd->name, ARRAY_SIZE(vfd->name));
 
-  BLF_get_vfont_metrics(fontid, &vfd->ascender, &vfd->em_height, &vfd->scale);
+  if (!BLF_get_vfont_metrics(
+          fontid, &vfd->metrics.ascend_ratio, &vfd->metrics.em_ratio, &vfd->metrics.scale))
+  {
+    BKE_vfontdata_metrics_get_defaults(&vfd->metrics);
+  }
 
-  vfd->characters = BLI_ghash_int_new_ex(__func__, 255);
+  vfd->characters = MEM_new<Map<uint, VChar *>>(__func__);
+  vfd->characters->reserve(255);
 
   BLF_unload_id(fontid);
 
   return vfd;
 }
 
-static void *vfontdata_copy_characters_value_cb(const void *src)
-{
-  return BKE_vfontdata_char_copy(static_cast<const VChar *>(src));
-}
-
 VFontData *BKE_vfontdata_copy(const VFontData *vfont_src, const int /*flag*/)
 {
-  VFontData *vfont_dst = static_cast<VFontData *>(MEM_dupallocN(vfont_src));
+  VFontData *vfont_dst = MEM_dupalloc(vfont_src);
 
   if (vfont_src->characters != nullptr) {
-    vfont_dst->characters = BLI_ghash_copy(
-        vfont_src->characters, nullptr, vfontdata_copy_characters_value_cb);
+    vfont_dst->characters = MEM_new<Map<uint, VChar *>>(__func__);
+    vfont_dst->characters->reserve(vfont_src->characters->size());
+    for (const auto &item : vfont_src->characters->items()) {
+      VChar *vchar_src = item.value;
+      VChar *vchar_dst = vchar_src ? BKE_vfontdata_char_copy(vchar_src) : nullptr;
+      vfont_dst->characters->add(item.key, vchar_dst);
+    }
   }
 
   return vfont_dst;
 }
 
-VChar *BKE_vfontdata_char_from_freetypefont(VFont *vfont, ulong character)
+VChar *BKE_vfontdata_char_from_freetypefont(VFont *vfont, uint character)
 {
   if (!vfont) {
     return nullptr;
   }
 
   int font_id = -1;
+  const bool is_builtin = BKE_vfont_is_builtin(vfont);
 
-  if (BKE_vfont_is_builtin(vfont)) {
+  /* If the default font is selected (usually because nothing has been selected)
+   * then allow use of the fallback font stack when characters are not found in it.
+   * This allows a nice first experience, for testing, and allows the translation of the initial
+   * "Text" string. However, when a different specific font then do not use fallback,
+   * only allow characters that are included in that font.
+   * Do this for predictable control of what is shown when selecting specific fonts,
+   * also for consistent output when the UI fonts are changed or updated. */
+  const bool use_fallback = is_builtin;
+
+  if (is_builtin) {
     font_id = BLF_load_mem(
         vfont->data->name, static_cast<const uchar *>(builtin_font_data), builtin_font_size);
   }
@@ -93,31 +116,41 @@ VChar *BKE_vfontdata_char_from_freetypefont(VFont *vfont, ulong character)
   }
 
   if (font_id == -1) {
-    /* This could happen for a saved file with an unpacked local font that was
-     * later removed. Load the default UI font so we can still show _something_. */
-    font_id = BLF_load_mem(
-        vfont->data->name, static_cast<const uchar *>(builtin_font_data), builtin_font_size);
+    return nullptr;
   }
 
-  VChar *che = (VChar *)MEM_callocN(sizeof(VChar), "objfnt_char");
-  che->index = character;
+  VChar *che = MEM_new_zeroed<VChar>("objfnt_char");
 
   /* need to set a size for embolden, etc. */
   BLF_size(font_id, 16);
 
-  che->width = BLF_character_to_curves(font_id, character, &che->nurbsbase, vfont->data->scale);
+  if (!BLF_character_to_curves(font_id,
+                               character,
+                               &che->nurbsbase,
+                               vfont->data->metrics.scale,
+                               use_fallback,
+                               &che->width,
+                               &che->bounds))
+  {
+    /* Free but add to the character cache to prevent future lookups
+     * from attempting to load the font again. */
+    MEM_delete(che);
+    che = nullptr;
+  }
 
-  BLI_ghash_insert(vfont->data->characters, POINTER_FROM_UINT(che->index), che);
+  vfont->data->characters->add(character, che);
   BLF_unload_id(font_id);
   return che;
 }
 
 VChar *BKE_vfontdata_char_copy(const VChar *vchar_src)
 {
-  VChar *vchar_dst = static_cast<VChar *>(MEM_dupallocN(vchar_src));
+  VChar *vchar_dst = MEM_dupalloc(vchar_src);
 
-  BLI_listbase_clear(&vchar_dst->nurbsbase);
+  vchar_dst->nurbsbase.clear_no_delete();
   BKE_nurbList_duplicate(&vchar_dst->nurbsbase, &vchar_src->nurbsbase);
 
   return vchar_dst;
 }
+
+}  // namespace blender

@@ -9,10 +9,11 @@
 #include "BKE_image.hh"
 #include "BKE_main.hh"
 #include "BKE_node.hh"
+#include "BKE_node_legacy_types.hh"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
@@ -23,9 +24,12 @@
 #include "obj_import_mtl.hh"
 
 #include "CLG_log.h"
+
+namespace blender {
+
 static CLG_LogRef LOG = {"io.obj"};
 
-namespace blender::io::obj {
+namespace io::obj {
 
 /**
  * Set the socket's (of given ID) value to the given number(s).
@@ -37,7 +41,7 @@ static void set_property_of_socket(eNodeSocketDatatype property_type,
                                    bNode *r_node)
 {
   BLI_assert(r_node);
-  bNodeSocket *socket{bke::node_find_socket(r_node, SOCK_IN, socket_id)};
+  bNodeSocket *socket{bke::node_find_socket(*r_node, SOCK_IN, UString(socket_id))};
   BLI_assert(socket && socket->type == property_type);
   switch (property_type) {
     case SOCK_FLOAT: {
@@ -72,9 +76,10 @@ static Image *load_image_at_path(Main *bmain, const std::string &path, bool rela
     CLOG_WARN(&LOG, "Cannot load image file: '%s'", path.c_str());
     return nullptr;
   }
-  CLOG_INFO(&LOG, 1, "Loaded image from: '%s'", path.c_str());
+  CLOG_INFO(&LOG, "Loaded image from: '%s'", path.c_str());
   if (relative_paths) {
     BLI_path_rel(image->filepath, BKE_main_blendfile_path(bmain));
+    BLI_path_normalize(image->filepath);
   }
   return image;
 }
@@ -83,8 +88,8 @@ static Image *create_placeholder_image(Main *bmain, const std::string &path)
 {
   const float color[4] = {0, 0, 0, 1};
   Image *image = BKE_image_add_generated(bmain,
-                                         32,
-                                         32,
+                                         1,
+                                         1,
                                          BLI_path_basename(path.c_str()),
                                          24,
                                          false,
@@ -94,7 +99,12 @@ static Image *create_placeholder_image(Main *bmain, const std::string &path)
                                          false,
                                          false);
   STRNCPY(image->filepath, path.c_str());
+
+  /* Ensure that we are not marked as a generated image and clear any buffers created so far. */
   image->source = IMA_SRC_FILE;
+  image->type = IMA_TYPE_IMAGE;
+  BKE_image_free_buffers(image);
+
   return image;
 }
 
@@ -156,9 +166,9 @@ const float node_locy_step = 300.0f;
 /* Add a node of the given type at the given location. */
 static bNode *add_node(bNodeTree *ntree, int type, float x, float y)
 {
-  bNode *node = bke::node_add_static_node(nullptr, ntree, type);
-  node->locx = x;
-  node->locy = y;
+  bNode *node = bke::node_add_static_node(nullptr, *ntree, type);
+  node->location[0] = x;
+  node->location[1] = y;
   return node;
 }
 
@@ -168,10 +178,10 @@ static void link_sockets(bNodeTree *ntree,
                          bNode *to_node,
                          const char *to_node_id)
 {
-  bNodeSocket *from_sock{bke::node_find_socket(from_node, SOCK_OUT, from_node_id)};
-  bNodeSocket *to_sock{bke::node_find_socket(to_node, SOCK_IN, to_node_id)};
+  bNodeSocket *from_sock{bke::node_find_socket(*from_node, SOCK_OUT, UString(from_node_id))};
+  bNodeSocket *to_sock{bke::node_find_socket(*to_node, SOCK_IN, UString(to_node_id))};
   BLI_assert(from_sock && to_sock);
-  bke::node_add_link(ntree, from_node, from_sock, to_node, to_sock);
+  bke::node_add_link(*ntree, *from_node, *from_sock, *to_node, *to_sock);
 }
 
 static void set_bsdf_socket_values(bNode *bsdf, Material *mat, const MTLMaterial &mtl_mat)
@@ -300,13 +310,26 @@ static void set_bsdf_socket_values(bNode *bsdf, Material *mat, const MTLMaterial
     mat->b = base_color.z;
   }
 
-  float3 emission_color = mtl_mat.emission_color;
-  if (emission_color.x >= 0 && emission_color.y >= 0 && emission_color.z >= 0) {
-    set_property_of_socket(SOCK_RGBA, "Emission Color", {emission_color, 3}, bsdf);
-  }
   if (mtl_mat.tex_map_of_type(MTLTexMapType::Emission).is_valid()) {
     set_property_of_socket(SOCK_FLOAT, "Emission Strength", {1.0f}, bsdf);
   }
+
+  float3 emission_color = mtl_mat.emission_color;
+  if (emission_color.x >= 0 && emission_color.y >= 0 && emission_color.z >= 0) {
+    float emission_strength = fmax(emission_color.x, fmax(emission_color.y, emission_color.z));
+    if (emission_strength > 1.0f) {
+      /* For colors brighter than 1.0, change color to be in 0..1 range, and set emission
+       * strength accordingly. */
+      set_property_of_socket(
+          SOCK_RGBA, "Emission Color", {emission_color / emission_strength, 3}, bsdf);
+      set_property_of_socket(SOCK_FLOAT, "Emission Strength", {emission_strength}, bsdf);
+    }
+    else {
+      set_property_of_socket(SOCK_RGBA, "Emission Color", {emission_color, 3}, bsdf);
+      set_property_of_socket(SOCK_FLOAT, "Emission Strength", {1.0f}, bsdf);
+    }
+  }
+
   set_property_of_socket(SOCK_FLOAT, "Specular IOR Level", {specular}, bsdf);
   set_property_of_socket(SOCK_FLOAT, "Roughness", {roughness}, bsdf);
   mat->roughness = roughness;
@@ -417,8 +440,8 @@ bNodeTree *create_mtl_node_tree(Main *bmain,
                                 Material *mat,
                                 bool relative_paths)
 {
-  bNodeTree *ntree = blender::bke::node_tree_add_tree_embedded(
-      nullptr, &mat->id, "Shader Nodetree", ntreeType_Shader->idname);
+  bNodeTree *ntree = mat->nodetree;
+  BLI_assert(mat->nodetree);
 
   bNode *bsdf = add_node(ntree, SH_NODE_BSDF_PRINCIPLED, node_locx_bsdf, node_locy_top);
   bNode *output = add_node(ntree, SH_NODE_OUTPUT_MATERIAL, node_locx_output, node_locy_top);
@@ -426,9 +449,10 @@ bNodeTree *create_mtl_node_tree(Main *bmain,
   set_bsdf_socket_values(bsdf, mat, mtl_mat);
   add_image_textures(bmain, ntree, bsdf, mat, mtl_mat, relative_paths);
   link_sockets(ntree, bsdf, "BSDF", output, "Surface");
-  bke::node_set_active(ntree, output);
+  bke::node_set_active(*ntree, *output);
 
   return ntree;
 }
 
-}  // namespace blender::io::obj
+}  // namespace io::obj
+}  // namespace blender

@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 #include "BKE_file_handler.hh"
+#include "BKE_gtest_base.hh"
 
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "testing/testing.h"
 
@@ -16,7 +17,7 @@ static void file_handler_add_test(const int test_number,
                                   const char *idname,
                                   const char *label,
                                   const char *file_extensions_str,
-                                  blender::Vector<std::string> expected_file_extensions)
+                                  Vector<std::string> expected_file_extensions)
 {
   EXPECT_LE(test_number, MAX_FILE_HANDLERS_TEST_SIZE);
   EXPECT_GE(test_number, 1);
@@ -36,7 +37,9 @@ static void file_handler_add_test(const int test_number,
   EXPECT_EQ(file_handlers()[test_number - 1]->file_extensions, expected_file_extensions);
 }
 
-TEST(file_handler, add)
+class FileHandlerTest : public BlenderGTestBase {};
+
+TEST_F(FileHandlerTest, add)
 {
   file_handler_add_test(1,
                         "Test_FH_blender1",
@@ -52,7 +55,7 @@ TEST(file_handler, add)
   file_handler_add_test(8, "Test_FH_blender8", "File Handler Test 8", "", {});
 }
 
-TEST(file_handler, find)
+TEST_F(FileHandlerTest, find)
 {
   EXPECT_EQ(file_handlers().size(), MAX_FILE_HANDLERS_TEST_SIZE);
   EXPECT_EQ(file_handler_find("Test_FH_blender1"), test_file_handlers[0]);
@@ -67,7 +70,7 @@ TEST(file_handler, find)
   EXPECT_EQ(file_handler_find("TstFH_blen"), nullptr);
 }
 
-TEST(file_handler, remove)
+TEST_F(FileHandlerTest, remove)
 {
   EXPECT_EQ(file_handlers().size(), MAX_FILE_HANDLERS_TEST_SIZE);
 
@@ -98,7 +101,7 @@ TEST(file_handler, remove)
   EXPECT_EQ(file_handlers().size(), MAX_FILE_HANDLERS_TEST_SIZE - 2);
   EXPECT_EQ(file_handler_find("Test_FH_blender8"), nullptr);
 
-  /** `FileHandlerType` pointer  in `test_file_handlers[7]` is not longer valid. */
+  /** `FileHandlerType` pointer in `test_file_handlers[7]` is not longer valid. */
   EXPECT_EQ(file_handler_find("Test_FH_blender1"), test_file_handlers[0]);
   EXPECT_EQ(file_handler_find("Test_FH_blender3"), test_file_handlers[2]);
   EXPECT_EQ(file_handler_find("Test_FH_blender4"), test_file_handlers[3]);

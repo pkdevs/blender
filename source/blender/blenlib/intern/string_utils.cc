@@ -12,19 +12,25 @@
 
 #include <array>
 
+#include <stdexcept>
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_string_utf8_symbols.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_dynstr.h"
+#include "BLI_dynstr.hh"
 
 #include "DNA_listBase.h"
 
-#include "BLI_strict_flags.h" /* Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name String Replace
@@ -74,7 +80,7 @@ char *BLI_string_replaceN(const char *__restrict str,
      * - we've been adjusting `str` to point at the end of the replaced segments. */
     BLI_dynstr_append(ds, str);
 
-    /* Convert to new c-string (MEM_malloc'd), and free the buffer. */
+    /* Convert to new c-string (MEM_new'd), and free the buffer. */
     str_new = BLI_dynstr_get_cstring(ds);
     BLI_dynstr_free(ds);
 
@@ -83,6 +89,25 @@ char *BLI_string_replaceN(const char *__restrict str,
   /* Just create a new copy of the entire string - we avoid going through the assembly buffer
    * for what should be a bit more efficiency. */
   return BLI_strdup(str);
+}
+
+void BLI_string_replace(std::string &haystack, const StringRef needle, const StringRef other)
+{
+  size_t i = 0;
+  size_t index;
+  while ((index = haystack.find(needle, i)) != std::string::npos) {
+    haystack.replace(index, size_t(needle.size()), other);
+    i = index + size_t(other.size());
+  }
+}
+
+std::string BLI_string_pad_number_sign(const blender::StringRef str)
+{
+  if (str.startswith("-")) {
+    return std::string(str);
+  }
+
+  return std::string(BLI_STR_UTF8_FIGURE_SPACE + str);
 }
 
 void BLI_string_replace_char(char *str, char src, char dst)
@@ -96,15 +121,15 @@ void BLI_string_replace_char(char *str, char src, char dst)
 }
 
 bool BLI_string_replace_table_exact(char *string,
-                                    const size_t string_len,
+                                    const size_t string_maxncpy,
                                     const char *replace_table[][2],
                                     int replace_table_len)
 {
-  BLI_string_debug_size_after_nil(string, string_len);
+  BLI_string_debug_size_after_nil(string, string_maxncpy);
 
   for (int i = 0; i < replace_table_len; i++) {
     if (STREQ(string, replace_table[i][0])) {
-      BLI_strncpy(string, replace_table[i][1], string_len);
+      BLI_strncpy(string, replace_table[i][1], string_maxncpy);
       return true;
     }
   }
@@ -124,7 +149,7 @@ size_t BLI_string_replace_range(
     /* Grow, first handle special cases. */
 
     /* Special case, the src_end is entirely clipped. */
-    if (UNLIKELY(int(string_maxncpy) <= src_beg + dst_len)) {
+    if (int(string_maxncpy) <= src_beg + dst_len) [[unlikely]] {
       /* There is only room for the destination. */
       dst_len = (int(string_maxncpy) - src_beg) - 1;
       string_len = src_end;
@@ -162,37 +187,42 @@ size_t BLI_string_replace_range(
 
 /** \} */
 
+StringRef BLI_string_split_name_number(const StringRef name_full, const char delim, int &r_number)
+{
+  const int64_t delim_index = name_full.rfind(delim);
+  r_number = 0;
+  if (delim_index == StringRef::not_found) {
+    return name_full;
+  }
+
+  StringRef name_base = name_full.substr(0, delim_index);
+
+  if (delim_index < name_full.size() - 1) {
+    const StringRef num_str = name_full.substr(delim_index + 1);
+    if (!std::all_of(num_str.begin(), num_str.end(), ::isdigit)) {
+      return name_full;
+    }
+    /* Converting numerical suffix to an int, can overflow for large numbers. */
+    try {
+      r_number = std::stoi(num_str);
+      return name_base;
+    }
+    catch (std::out_of_range const & /*ex*/) {
+      r_number = 0;
+    }
+  }
+
+  return name_full;
+}
+
 size_t BLI_string_split_name_number(const char *name,
                                     const char delim,
                                     char *r_name_left,
                                     int *r_number)
 {
-  const size_t name_len = strlen(name);
-
-  *r_number = 0;
-  memcpy(r_name_left, name, (name_len + 1) * sizeof(char));
-
-  /* name doesn't end with a delimiter "foo." */
-  if ((name_len > 1 && name[name_len - 1] == delim) == 0) {
-    size_t a = name_len;
-    while (a--) {
-      if (name[a] == delim) {
-        r_name_left[a] = '\0'; /* truncate left part here */
-        *r_number = int(atol(name + a + 1));
-        /* casting down to an int, can overflow for large numbers */
-        if (*r_number < 0) {
-          *r_number = 0;
-        }
-        return a;
-      }
-      if (isdigit(name[a]) == 0) {
-        /* non-numeric suffix - give up */
-        break;
-      }
-    }
-  }
-
-  return name_len;
+  const std::string name_base = BLI_string_split_name_number(name, delim, *r_number);
+  BLI_strncpy(r_name_left, name_base.c_str(), name_base.size() + 1);
+  return name_base.size();
 }
 
 bool BLI_string_is_decimal(const char *string)
@@ -282,7 +312,7 @@ size_t BLI_string_flip_side_name(char *name_dst,
   *prefix = *suffix = *number = '\0';
 
   /* always copy the name, since this can be called with an uninitialized string */
-  len = BLI_strncpy_rlen(name_dst, name_src, name_dst_maxncpy);
+  len = BLI_strncpy_utf8_rlen(name_dst, name_src, name_dst_maxncpy);
   if (len < 3) {
     /* We don't support names such as `.R` or `.L`. */
     return len;
@@ -293,14 +323,14 @@ size_t BLI_string_flip_side_name(char *name_dst,
     index = strrchr(name_dst, '.');   /* Last occurrence. */
     if (index && isdigit(index[1])) { /* Doesn't handle case `bone.1abc2` correct..., whatever! */
       if (strip_number == false) {
-        BLI_strncpy(number, index, name_dst_maxncpy);
+        BLI_strncpy_utf8(number, index, name_dst_maxncpy);
       }
-      *index = 0;
-      len = BLI_strnlen(name_dst, name_dst_maxncpy);
+      *index = '\0';
+      len = size_t(index - name_dst); /* Same as `strlen(name_dst)`. */
     }
   }
 
-  BLI_strncpy(prefix, name_dst, name_dst_maxncpy);
+  BLI_strncpy_utf8(prefix, name_dst, name_dst_maxncpy);
 
   /* First case; separator (`.` or `_`) with extensions in `r R l L`. */
   if ((len > 1) && is_char_sep(name_dst[len - 2])) {
@@ -333,22 +363,22 @@ size_t BLI_string_flip_side_name(char *name_dst,
     switch (name_dst[0]) {
       case 'l':
         replace = "r";
-        BLI_strncpy(suffix, name_dst + 1, name_dst_maxncpy);
+        BLI_strncpy_utf8(suffix, name_dst + 1, name_dst_maxncpy);
         prefix[0] = 0;
         break;
       case 'r':
         replace = "l";
-        BLI_strncpy(suffix, name_dst + 1, name_dst_maxncpy);
+        BLI_strncpy_utf8(suffix, name_dst + 1, name_dst_maxncpy);
         prefix[0] = 0;
         break;
       case 'L':
         replace = "R";
-        BLI_strncpy(suffix, name_dst + 1, name_dst_maxncpy);
+        BLI_strncpy_utf8(suffix, name_dst + 1, name_dst_maxncpy);
         prefix[0] = 0;
         break;
       case 'R':
         replace = "L";
-        BLI_strncpy(suffix, name_dst + 1, name_dst_maxncpy);
+        BLI_strncpy_utf8(suffix, name_dst + 1, name_dst_maxncpy);
         prefix[0] = 0;
         break;
       default:
@@ -367,7 +397,7 @@ size_t BLI_string_flip_side_name(char *name_dst,
         replace = (index[1] == 'I' ? "LEFT" : "Left");
       }
       *index = 0;
-      BLI_strncpy(suffix, index + 5, name_dst_maxncpy);
+      BLI_strncpy_utf8(suffix, index + 5, name_dst_maxncpy);
     }
     else if (((index = BLI_strcasestr(prefix, "left")) == prefix) || (index == prefix + len - 4)) {
       is_set = true;
@@ -378,18 +408,17 @@ size_t BLI_string_flip_side_name(char *name_dst,
         replace = (index[1] == 'E' ? "RIGHT" : "Right");
       }
       *index = 0;
-      BLI_strncpy(suffix, index + 4, name_dst_maxncpy);
+      BLI_strncpy_utf8(suffix, index + 4, name_dst_maxncpy);
     }
   }
 
-  return BLI_snprintf_rlen(
+  return BLI_snprintf_utf8_rlen(
       name_dst, name_dst_maxncpy, "%s%s%s%s", prefix, replace ? replace : "", suffix, number);
 }
 
 /* Unique name utils. */
 
-void BLI_uniquename_cb(UniquenameCheckCallback unique_check,
-                       void *arg,
+void BLI_uniquename_cb(FunctionRef<bool(StringRefNull)> unique_check,
                        const char *defname,
                        char delim,
                        char *name,
@@ -398,22 +427,22 @@ void BLI_uniquename_cb(UniquenameCheckCallback unique_check,
   BLI_string_debug_size_after_nil(name, name_maxncpy);
 
   if (name[0] == '\0') {
-    BLI_strncpy(name, defname, name_maxncpy);
+    BLI_strncpy_utf8(name, defname, name_maxncpy);
   }
 
-  if (unique_check(arg, name)) {
+  if (unique_check(name)) {
     char numstr[16];
     char *tempname = static_cast<char *>(alloca(name_maxncpy));
     char *left = static_cast<char *>(alloca(name_maxncpy));
     int number;
     size_t len = BLI_string_split_name_number(name, delim, left, &number);
     do {
-      const size_t numlen = SNPRINTF(numstr, "%c%03d", delim, ++number);
+      const size_t numlen = SNPRINTF_UTF8(numstr, "%c%03d", delim, ++number);
 
       /* highly unlikely the string only has enough room for the number
        * but support anyway */
-      if (UNLIKELY((len == 0) || (numlen + 1 >= name_maxncpy))) {
-        /* number is know not to be utf-8 */
+      if ((len == 0) || (numlen + 1 >= name_maxncpy)) [[unlikely]] {
+        /* Number is known not to be UTF8. */
         BLI_strncpy(tempname, numstr, name_maxncpy);
       }
       else {
@@ -421,15 +450,15 @@ void BLI_uniquename_cb(UniquenameCheckCallback unique_check,
         tempname_buf = tempname + BLI_strncpy_utf8_rlen(tempname, left, name_maxncpy - numlen);
         memcpy(tempname_buf, numstr, numlen + 1);
       }
-    } while (unique_check(arg, tempname));
-
-    BLI_strncpy(name, tempname, name_maxncpy);
+    } while (unique_check(tempname));
+    /* There will always be enough room for this string. */
+    BLI_strncpy_utf8(name, tempname, name_maxncpy);
   }
 }
 
-std::string BLI_uniquename_cb(blender::FunctionRef<bool(blender::StringRef)> unique_check,
+std::string BLI_uniquename_cb(FunctionRef<bool(StringRef)> unique_check,
                               const char delim,
-                              const blender::StringRef name)
+                              const StringRef name)
 {
   std::string new_name = name;
 
@@ -438,7 +467,7 @@ std::string BLI_uniquename_cb(blender::FunctionRef<bool(blender::StringRef)> uni
   }
 
   int number;
-  blender::Array<char> left_buffer(int64_t(new_name.size()) + 1);
+  Array<char> left_buffer(int64_t(new_name.size()) + 1);
   const size_t len = BLI_string_split_name_number(
       new_name.c_str(), delim, left_buffer.data(), &number);
 
@@ -459,45 +488,6 @@ std::string BLI_uniquename_cb(blender::FunctionRef<bool(blender::StringRef)> uni
   return new_name;
 }
 
-/**
- * Generic function to set a unique name. It is only designed to be used in situations
- * where the name is part of the struct.
- *
- * For places where this is used, see `constraint.cc` for example...
- *
- * \param name_offset: should be calculated using `offsetof(structname, membername)`
- * macro from `stddef.h`
- */
-static bool uniquename_find_dupe(const ListBase *list,
-                                 void *vlink,
-                                 const char *name,
-                                 int name_offset)
-{
-  for (Link *link = static_cast<Link *>(list->first); link; link = link->next) {
-    if (link != vlink) {
-      if (STREQ(static_cast<const char *>(POINTER_OFFSET((const char *)link, name_offset)), name))
-      {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-struct UniqueNameCheckData {
-  const ListBase *lb;
-  void *vlink;
-  int name_offset;
-};
-
-static bool uniquename_unique_check(void *arg, const char *name)
-{
-  UniqueNameCheckData *data = static_cast<UniqueNameCheckData *>(arg);
-
-  return uniquename_find_dupe(data->lb, data->vlink, name, data->name_offset);
-}
-
 void BLI_uniquename(const ListBase *list,
                     void *vlink,
                     const char *defname,
@@ -505,11 +495,6 @@ void BLI_uniquename(const ListBase *list,
                     int name_offset,
                     size_t name_maxncpy)
 {
-  UniqueNameCheckData data{};
-  data.lb = list;
-  data.vlink = vlink;
-  data.name_offset = name_offset;
-
   BLI_assert(name_maxncpy > 1);
 
   /* See if we are given an empty string */
@@ -517,12 +502,22 @@ void BLI_uniquename(const ListBase *list,
     return;
   }
 
-  BLI_uniquename_cb(uniquename_unique_check,
-                    &data,
-                    defname,
-                    delim,
-                    static_cast<char *>(POINTER_OFFSET(vlink, name_offset)),
-                    name_maxncpy);
+  BLI_uniquename_cb(
+      [&](const StringRefNull name) {
+        for (Link *link = static_cast<Link *>(list->first); link; link = link->next) {
+          if (link != vlink) {
+            const char *link_name = POINTER_OFFSET((const char *)link, name_offset);
+            if (name == link_name) {
+              return true;
+            }
+          }
+        }
+        return false;
+      },
+      defname,
+      delim,
+      static_cast<char *>(POINTER_OFFSET(vlink, name_offset)),
+      name_maxncpy);
 }
 
 size_t BLI_string_len_array(const char *strings[], uint strings_num)
@@ -557,7 +552,7 @@ size_t BLI_string_join_array(char *result,
   for (uint i = 0; i < strings_num; i++) {
     const char *p = strings[i];
     while (*p) {
-      if (UNLIKELY(!(c < c_end))) {
+      if (!(c < c_end)) [[unlikely]] {
         i = strings_num; /* Break outer loop. */
         break;
       }
@@ -577,14 +572,14 @@ size_t BLI_string_join_array_by_sep_char(
   char *c_end = &result[result_maxncpy - 1];
   for (uint i = 0; i < strings_num; i++) {
     if (i != 0) {
-      if (UNLIKELY(!(c < c_end))) {
+      if (!(c < c_end)) [[unlikely]] {
         break;
       }
       *c++ = sep;
     }
     const char *p = strings[i];
     while (*p) {
-      if (UNLIKELY(!(c < c_end))) {
+      if (!(c < c_end)) [[unlikely]] {
         i = strings_num; /* Break outer loop. */
         break;
       }
@@ -598,7 +593,7 @@ size_t BLI_string_join_array_by_sep_char(
 char *BLI_string_join_arrayN(const char *strings[], uint strings_num)
 {
   const size_t result_size = BLI_string_len_array(strings, strings_num) + 1;
-  char *result = MEM_cnew_array<char>(result_size, __func__);
+  char *result = MEM_new_array_zeroed<char>(result_size, __func__);
   char *c = result;
   for (uint i = 0; i < strings_num; i++) {
     const size_t string_len = strlen(strings[i]);
@@ -615,7 +610,7 @@ char *BLI_string_join_array_by_sep_charN(char sep, const char *strings[], uint s
 {
   const size_t result_size = BLI_string_len_array(strings, strings_num) +
                              (strings_num ? strings_num - 1 : 0) + 1;
-  char *result = MEM_cnew_array<char>(result_size, __func__);
+  char *result = MEM_new_array_zeroed<char>(result_size, __func__);
   char *c = result;
   if (strings_num != 0) {
     for (uint i = 0; i < strings_num; i++) {
@@ -645,7 +640,7 @@ char *BLI_string_join_array_by_sep_char_with_tableN(char sep,
     result_size = 1;
   }
 
-  char *result = MEM_cnew_array<char>(result_size, __func__);
+  char *result = MEM_new_array_zeroed<char>(result_size, __func__);
   char *c = result;
   if (strings_num != 0) {
     for (uint i = 0; i < strings_num; i++) {
@@ -665,3 +660,5 @@ char *BLI_string_join_array_by_sep_char_with_tableN(char sep,
 }
 
 /** \} */
+
+}  // namespace blender

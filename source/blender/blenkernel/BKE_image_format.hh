@@ -8,6 +8,12 @@
  * \ingroup bke
  */
 
+#include <cstddef>
+
+#include "BKE_path_templates.hh"
+
+namespace blender {
+
 struct BlendDataReader;
 struct BlendWriter;
 struct ID;
@@ -15,10 +21,12 @@ struct ImbFormatOptions;
 struct ImageFormatData;
 struct ImBuf;
 struct Scene;
+struct RenderData;
+enum eImbFileType : int8_t;
 
 /* Init/Copy/Free */
 
-void BKE_image_format_init(ImageFormatData *imf, const bool render);
+void BKE_image_format_init(ImageFormatData *imf);
 void BKE_image_format_copy(ImageFormatData *imf_dst, const ImageFormatData *imf_src);
 void BKE_image_format_free(ImageFormatData *imf);
 
@@ -30,24 +38,42 @@ void BKE_image_format_update_color_space_for_type(ImageFormatData *format);
 void BKE_image_format_blend_read_data(BlendDataReader *reader, ImageFormatData *imf);
 void BKE_image_format_blend_write(BlendWriter *writer, ImageFormatData *imf);
 
+/* Sets the media type of the given format that belongs to the given ID. This involves updating the
+ * imtype to a default format if it does not match the newly set media type. */
+void BKE_image_format_media_type_set(ImageFormatData *format,
+                                     ID *owner_id,
+                                     const MediaType media_type);
+void BKE_image_format_set(ImageFormatData *imf, ID *owner_id, const char imtype);
+
 /* File Paths */
 
-void BKE_image_path_from_imformat(char *filepath,
-                                  const char *base,
-                                  const char *relbase,
-                                  int frame,
-                                  const ImageFormatData *im_format,
-                                  bool use_ext,
-                                  bool use_frames,
-                                  const char *suffix);
-void BKE_image_path_from_imtype(char *filepath,
-                                const char *base,
-                                const char *relbase,
-                                int frame,
-                                char imtype,
-                                bool use_ext,
-                                bool use_frames,
-                                const char *suffix);
+/**
+ * \param template_variables: the map of variables to use for template
+ * substitution. Optional: if null, template substitution will not be performed.
+ *
+ * \return If any template errors are encountered, returns those errors. On
+ * success, returns an empty Vector.
+ */
+Vector<bke::path_templates::Error> BKE_image_path_from_imformat(
+    char *filepath,
+    const char *base,
+    const char *relbase,
+    const bke::path_templates::VariableMap *template_variables,
+    int frame,
+    const ImageFormatData *im_format,
+    bool use_ext,
+    bool use_frames,
+    const char *suffix);
+Vector<bke::path_templates::Error> BKE_image_path_from_imtype(
+    char *filepath,
+    const char *base,
+    const char *relbase,
+    const bke::path_templates::VariableMap *template_variables,
+    int frame,
+    char imtype,
+    bool use_ext,
+    bool use_frames,
+    const char *suffix);
 
 /**
  * The number of extensions an image may have (`.jpg`, `.jpeg` for example).
@@ -76,16 +102,22 @@ int BKE_image_path_ext_from_imtype_ensure(char *filepath, size_t filepath_maxncp
 #define IMA_CHAN_FLAG_RGB 2
 #define IMA_CHAN_FLAG_RGBA 4
 
-char BKE_ftype_to_imtype(int ftype, const ImbFormatOptions *options);
-int BKE_imtype_to_ftype(char imtype, ImbFormatOptions *r_options);
+char BKE_ftype_to_imtype(eImbFileType ftype, const ImbFormatOptions *options);
+eImbFileType BKE_imtype_to_ftype(char imtype, ImbFormatOptions *r_options);
 
+/* Returns true if the given imtype represents an image. This excludes multi-layer images, use
+ * BKE_imtype_is_multi_layer_image to detect those images. */
+bool BKE_imtype_is_image(char imtype);
+/* Returns true if the given imtype represents a multi-layer image. */
+bool BKE_imtype_is_multi_layer_image(char imtype);
 bool BKE_imtype_is_movie(char imtype);
 bool BKE_imtype_supports_compress(char imtype);
 bool BKE_imtype_supports_quality(char imtype);
 bool BKE_imtype_requires_linear_float(char imtype);
-char BKE_imtype_valid_channels(char imtype, bool write_file);
-char BKE_imtype_valid_depths(char imtype);
-char BKE_imtype_valid_depths_with_video(char imtype, const ID *owner_id);
+char BKE_imtype_valid_channels(char imtype);
+eImageFormatDepth BKE_imtype_valid_depths(char imtype);
+eImageFormatDepth BKE_imtype_valid_depths_with_video(char imtype, const ID *owner_id);
+eImageFormatDepth BKE_imtype_first_valid_depth(eImageFormatDepth valid_depths);
 
 /**
  * String is from command line `--render-format` argument,
@@ -112,4 +144,7 @@ void BKE_image_format_color_management_copy_from_scene(ImageFormatData *imf, con
 
 void BKE_image_format_init_for_write(ImageFormatData *imf,
                                      const Scene *scene_src,
-                                     const ImageFormatData *imf_src);
+                                     const ImageFormatData *imf_src,
+                                     const bool allow_video = false);
+
+}  // namespace blender

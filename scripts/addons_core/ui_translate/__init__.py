@@ -4,7 +4,9 @@
 
 bl_info = {
     "name": "Manage UI translations",
-    "author": "Bastien Montagne",
+    # This is now displayed as the maintainer, so show the foundation.
+    # "author": "Bastien Montagne", # Original Author
+    "author": "Blender Foundation",
     "version": (2, 1, 0),
     "blender": (4, 2, 0),
     "location": "Render properties, I18n Update Translation panel",
@@ -42,7 +44,7 @@ def register():
     bpy.types.WindowManager.i18n_update_settings = \
         bpy.props.PointerProperty(type=update_ui.I18nUpdateTranslationSettings)
 
-    # Init addon's preferences (unfortunately, as we are using an external storage for the properties,
+    # Init add-on's preferences (unfortunately, as we are using an external storage for the properties,
     # the load/save user preferences process has no effect on them :( ).
     if __name__ in bpy.context.preferences.addons:
         pref = bpy.context.preferences.addons[__name__].preferences

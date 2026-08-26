@@ -2,47 +2,56 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-void set_value(float val, out float outval)
+[[node]]
+void set_value(float val, float &outval)
 {
   outval = val;
 }
 
-void set_rgb(vec3 col, out vec3 outcol)
+[[node]]
+void set_rgb(float3 col, float3 &outcol)
 {
   outcol = col;
 }
 
-void set_rgba(vec4 col, out vec4 outcol)
+[[node]]
+void set_rgba(float4 col, float4 &outcol)
 {
   outcol = col;
 }
 
-void set_value_zero(out float outval)
+[[node]]
+void set_value_zero(float &outval)
 {
-  outval = 0.0;
+  outval = 0.0f;
 }
 
-void set_value_one(out float outval)
+[[node]]
+void set_value_one(float &outval)
 {
-  outval = 1.0;
+  outval = 1.0f;
 }
 
-void set_rgb_zero(out vec3 outval)
+[[node]]
+void set_rgb_zero(float3 &outval)
 {
-  outval = vec3(0.0);
+  outval = float3(0.0f);
 }
 
-void set_rgb_one(out vec3 outval)
+[[node]]
+void set_rgb_one(float3 &outval)
 {
-  outval = vec3(1.0);
+  outval = float3(1.0f);
 }
 
-void set_rgba_zero(out vec4 outval)
+[[node]]
+void set_rgba_zero(float4 &outval)
 {
-  outval = vec4(0.0);
+  outval = float4(0.0f);
 }
 
-void set_rgba_one(out vec4 outval)
+[[node]]
+void set_rgba_one(float4 &outval)
 {
-  outval = vec4(1.0);
+  outval = float4(1.0f);
 }

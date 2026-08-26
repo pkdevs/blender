@@ -10,7 +10,7 @@
 #  EMBREE_LIBRARIES, libraries to link against to use Embree.
 #  EMBREE_ROOT_DIR, The base directory to search for Embree.
 #                        This can also be an environment variable.
-#  EMBREEFOUND, If false, do not try to use Embree.
+#  EMBREE_FOUND, If false, do not try to use Embree.
 
 # If `EMBREE_ROOT_DIR` was defined in the environment, use it.
 if(DEFINED EMBREE_ROOT_DIR)
@@ -58,7 +58,7 @@ if(EMBREE_INCLUDE_DIR)
 endif()
 
 if(EMBREE_STATIC_LIB)
-  if(NOT (("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64") OR (APPLE AND ("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "arm64"))))
+  if((CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64") OR (APPLE AND (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64")))
     set(_embree_SIMD_COMPONENTS
       embree_sse42
       embree_avx
@@ -94,7 +94,7 @@ else()
   endif()
 endif()
 
-set(_embree_LIBRARIES)
+set(_embree_LIBRARIES "")
 foreach(COMPONENT ${_embree_FIND_COMPONENTS})
   string(TOUPPER ${COMPONENT} UPPERCOMPONENT)
   find_library(EMBREE_${UPPERCOMPONENT}_LIBRARY
@@ -104,7 +104,7 @@ foreach(COMPONENT ${_embree_FIND_COMPONENTS})
       ${_embree_SEARCH_DIRS}
     PATH_SUFFIXES
       lib64 lib
-    )
+  )
   list(APPEND _embree_LIBRARIES "${EMBREE_${UPPERCOMPONENT}_LIBRARY}")
 endforeach()
 
@@ -112,7 +112,7 @@ endforeach()
 # all listed variables are TRUE
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(Embree DEFAULT_MSG
-    _embree_LIBRARIES EMBREE_INCLUDE_DIR)
+  _embree_LIBRARIES EMBREE_INCLUDE_DIR)
 
 if(EMBREE_FOUND)
   set(EMBREE_LIBRARIES ${_embree_LIBRARIES})

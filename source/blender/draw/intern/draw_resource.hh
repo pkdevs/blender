@@ -11,7 +11,8 @@
  * Each of them are reference by resource index (#ResourceHandle).
  */
 
-#include "BLI_math_base.h"
+#include "BLI_bounds.hh"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_matrix.hh"
 
 #include "BKE_curve.hh"
@@ -19,15 +20,17 @@
 #include "BKE_mesh.h"
 #include "BKE_object.hh"
 #include "BKE_volume.hh"
-#include "BLI_hash.h"
+#include "BLI_hash_c.hh"
 #include "DNA_curve_types.h"
 #include "DNA_layer_types.h"
 #include "DNA_meta_types.h"
 #include "DNA_object_types.h"
 
+#include "DRW_render.hh"
 #include "draw_handle.hh"
-#include "draw_manager.hh"
 #include "draw_shader_shared.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name ObjectMatrices
@@ -42,7 +45,7 @@ inline void ObjectMatrices::sync(const Object &object)
 inline void ObjectMatrices::sync(const float4x4 &model_matrix)
 {
   model = model_matrix;
-  model_inverse = blender::math::invert(model_matrix);
+  model_inverse = math::invert(model_matrix);
 }
 
 inline std::ostream &operator<<(std::ostream &stream, const ObjectMatrices &matrices)
@@ -59,24 +62,41 @@ inline std::ostream &operator<<(std::ostream &stream, const ObjectMatrices &matr
 /** \name ObjectInfos
  * \{ */
 
-ENUM_OPERATORS(eObjectInfoFlag, OBJECT_NEGATIVE_SCALE)
+inline float shadow_terminator_normal_offset_get(const Object &object,
+                                                 const float4x4 &object_to_world)
+{
+  if (object.shadow_terminator_normal_offset == 0.0f) {
+    return 0.0f;
+  }
+  using namespace blender::math;
+  return object.shadow_terminator_normal_offset * reduce_max(to_scale(object_to_world));
+}
 
 inline void ObjectInfos::sync()
 {
   object_attrs_len = 0;
   object_attrs_offset = 0;
-
+  /* Zero-Initialize since this data might still be accessible (See #154105). */
+  orco_add = float3(0.0f);
+  orco_mul = float3(0.0f);
+  ob_color = float4(0.0f);
+  index = 0;
+  light_and_shadow_set_membership = 0;
+  random = 0.0f;
   flag = eObjectInfoFlag::OBJECT_NO_INFO;
+  shadow_terminator_normal_offset = 0.0f;
+  shadow_terminator_geometry_offset = 0.0f;
 }
 
-inline void ObjectInfos::sync(const blender::draw::ObjectRef ref, bool is_active_object)
+inline void ObjectInfos::sync(const draw::ObjectRef ref,
+                              bool is_active_object,
+                              bool is_active_edit_mode)
 {
   object_attrs_len = 0;
   object_attrs_offset = 0;
   light_and_shadow_set_membership = 0;
 
-  LightLinking *light_linking = (ref.dupli_parent) != nullptr ? ref.dupli_parent->light_linking :
-                                                                ref.object->light_linking;
+  LightLinking *light_linking = ref.light_linking();
   if (light_linking) {
     light_and_shadow_set_membership |= light_linking->runtime.receiver_light_set;
     light_and_shadow_set_membership |= light_linking->runtime.blocker_shadow_set << 8;
@@ -97,16 +117,23 @@ inline void ObjectInfos::sync(const blender::draw::ObjectRef ref, bool is_active
   SET_FLAG_FROM_TEST(
       flag, ref.object->transflag & OB_NEG_SCALE, eObjectInfoFlag::OBJECT_NEGATIVE_SCALE);
   SET_FLAG_FROM_TEST(flag, is_holdout, eObjectInfoFlag::OBJECT_HOLDOUT);
+  SET_FLAG_FROM_TEST(flag, is_active_edit_mode, eObjectInfoFlag::OBJECT_ACTIVE_EDIT_MODE);
 
-  if (ref.dupli_object == nullptr) {
-    /* TODO(fclem): this is rather costly to do at draw time. Maybe we can
-     * put it in ob->runtime and make depsgraph ensure it is up to date. */
-    random = BLI_hash_int_2d(BLI_hash_string(ref.object->id.name + 2), 0) *
-             (1.0f / (float)0xFFFFFFFF);
+  if (ref.object->shadow_terminator_normal_offset > 0.0f) {
+    shadow_terminator_geometry_offset = ref.object->shadow_terminator_geometry_offset;
+    shadow_terminator_normal_offset = 0.0f;
+    if (!ref.is_dupli()) {
+      /* Normal offset is scaled by world transform, so it must be computed per instance. */
+      shadow_terminator_normal_offset = shadow_terminator_normal_offset_get(
+          *ref.object, ref.object->object_to_world());
+    }
   }
   else {
-    random = ref.dupli_object->random_id * (1.0f / (float)0xFFFFFFFF);
+    shadow_terminator_geometry_offset = 0.0f;
+    shadow_terminator_normal_offset = 0.0f;
   }
+
+  random = ref.random(0);
 
   if (ref.object->data == nullptr) {
     orco_add = float3(0.0f);
@@ -116,10 +143,10 @@ inline void ObjectInfos::sync(const blender::draw::ObjectRef ref, bool is_active
 
   switch (GS(reinterpret_cast<ID *>(ref.object->data)->name)) {
     case ID_VO: {
-      std::optional<const blender::Bounds<float3>> bounds = BKE_volume_min_max(
-          static_cast<const Volume *>(ref.object->data));
+      std::optional<const Bounds<float3>> bounds = BKE_volume_min_max(
+          &DRW_object_get_data_for_drawing<const Volume>(*ref.object));
       if (bounds) {
-        orco_add = blender::math::midpoint(bounds->min, bounds->max);
+        orco_add = math::midpoint(bounds->min, bounds->max);
         orco_mul = (bounds->max - bounds->min) * 0.5f;
       }
       else {
@@ -129,18 +156,19 @@ inline void ObjectInfos::sync(const blender::draw::ObjectRef ref, bool is_active
       break;
     }
     case ID_ME: {
-      BKE_mesh_texspace_get(static_cast<Mesh *>(ref.object->data), orco_add, orco_mul);
+      BKE_mesh_texspace_get(
+          &DRW_object_get_data_for_drawing<Mesh>(*ref.object), orco_add, orco_mul);
       break;
     }
     case ID_CU_LEGACY: {
-      Curve &cu = *static_cast<Curve *>(ref.object->data);
+      Curve &cu = DRW_object_get_data_for_drawing<Curve>(*ref.object);
       BKE_curve_texspace_ensure(&cu);
       orco_add = cu.texspace_location;
       orco_mul = cu.texspace_size;
       break;
     }
     case ID_MB: {
-      MetaBall &mb = *static_cast<MetaBall *>(ref.object->data);
+      MetaBall &mb = DRW_object_get_data_for_drawing<MetaBall>(*ref.object);
       orco_add = mb.texspace_location;
       orco_mul = mb.texspace_size;
       break;
@@ -189,7 +217,7 @@ inline void ObjectBounds::sync()
 
 inline void ObjectBounds::sync(const Object &ob, float inflate_bounds)
 {
-  const std::optional<blender::Bounds<float3>> bounds = BKE_object_boundbox_get(&ob);
+  const std::optional<Bounds<float3>> bounds = BKE_object_boundbox_get(&ob);
   if (!bounds) {
 #ifndef NDEBUG
     /* Initialize to NaN for easier debugging of uninitialized data usage. */
@@ -202,12 +230,11 @@ inline void ObjectBounds::sync(const Object &ob, float inflate_bounds)
     bounding_sphere.w = -1.0f; /* Disable test. */
     return;
   }
-  BoundBox bbox;
-  BKE_boundbox_init_from_minmax(&bbox, bounds->min, bounds->max);
-  *reinterpret_cast<float3 *>(&bounding_corners[0]) = bbox.vec[0];
-  *reinterpret_cast<float3 *>(&bounding_corners[1]) = bbox.vec[4];
-  *reinterpret_cast<float3 *>(&bounding_corners[2]) = bbox.vec[3];
-  *reinterpret_cast<float3 *>(&bounding_corners[3]) = bbox.vec[1];
+  const std::array<float3, 8> corners = bounds::corners(*bounds);
+  *reinterpret_cast<float3 *>(&bounding_corners[0]) = corners[0];
+  *reinterpret_cast<float3 *>(&bounding_corners[1]) = corners[4];
+  *reinterpret_cast<float3 *>(&bounding_corners[2]) = corners[3];
+  *reinterpret_cast<float3 *>(&bounding_corners[3]) = corners[1];
   bounding_sphere.w = 0.0f; /* Enable test. */
 
   if (inflate_bounds != 0.0f) {
@@ -253,3 +280,5 @@ inline std::ostream &operator<<(std::ostream &stream, const ObjectBounds &bounds
 }
 
 /** \} */
+
+}  // namespace blender

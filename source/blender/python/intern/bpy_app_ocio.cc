@@ -6,16 +6,18 @@
  * \ingroup pythonintern
  */
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include <Python.h>
+
+#include "../generic/python_compat.hh" /* IWYU pragma: keep. */
 
 #include "bpy_app_ocio.hh"
 
 #include "../generic/py_capi_utils.hh"
 
-#ifdef WITH_OCIO
-#  include "ocio_capi.h"
-#endif
+#include "OCIO_version.hh"
+
+namespace blender {
 
 static PyTypeObject BlenderAppOCIOType;
 
@@ -38,40 +40,24 @@ static PyObject *make_ocio_info()
   PyObject *ocio_info;
   int pos = 0;
 
-#ifdef WITH_OCIO
-  int curversion;
-#endif
-
   ocio_info = PyStructSequence_New(&BlenderAppOCIOType);
   if (ocio_info == nullptr) {
     return nullptr;
   }
 
-#ifndef WITH_OCIO
-#  define SetStrItem(str) PyStructSequence_SET_ITEM(ocio_info, pos++, PyUnicode_FromString(str))
-#endif
-
 #define SetObjItem(obj) PyStructSequence_SET_ITEM(ocio_info, pos++, obj)
 
-#ifdef WITH_OCIO
-  curversion = OCIO_getVersionHex();
+  const ocio::Version ocio_version = ocio::get_version();
   SetObjItem(PyBool_FromLong(1));
-  SetObjItem(
-      PyC_Tuple_Pack_I32({curversion >> 24, (curversion >> 16) % 256, (curversion >> 8) % 256}));
+  SetObjItem(PyC_Tuple_Pack_I32({ocio_version.major, ocio_version.minor, ocio_version.patch}));
   SetObjItem(PyUnicode_FromFormat(
-      "%2d, %2d, %2d", curversion >> 24, (curversion >> 16) % 256, (curversion >> 8) % 256));
-#else
-  SetObjItem(PyBool_FromLong(0));
-  SetObjItem(PyC_Tuple_Pack_I32({0, 0, 0}));
-  SetStrItem("Unknown");
-#endif
+      "%2d, %2d, %2d", ocio_version.major, ocio_version.minor, ocio_version.patch));
 
-  if (UNLIKELY(PyErr_Occurred())) {
+  if (PyErr_Occurred()) [[unlikely]] {
     Py_DECREF(ocio_info);
     return nullptr;
   }
 
-#undef SetStrItem
 #undef SetObjItem
 
   return ocio_info;
@@ -89,7 +75,9 @@ PyObject *BPY_app_ocio_struct()
   BlenderAppOCIOType.tp_init = nullptr;
   BlenderAppOCIOType.tp_new = nullptr;
   /* Without this we can't do `set(sys.modules)` #29635. */
-  BlenderAppOCIOType.tp_hash = (hashfunc)_Py_HashPointer;
+  BlenderAppOCIOType.tp_hash = reinterpret_cast<hashfunc>(Py_HashPointer);
 
   return ret;
 }
+
+}  // namespace blender

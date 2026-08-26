@@ -5,7 +5,7 @@
 import bpy
 from bpy.types import Panel
 from rna_prop_ui import PropertyPanel
-from .space_properties import PropertiesAnimationMixin
+from bl_ui.space_properties import PropertiesAnimationMixin
 
 from bpy.types import Curve, SurfaceCurve, TextCurve
 
@@ -106,6 +106,10 @@ class DATA_PT_shape_curve(CurveButtonsPanel, Panel):
             sub = col.column()
             sub.active = (curve.dimensions == '2D' or (curve.bevel_mode != 'OBJECT' and curve.dimensions == '3D'))
             sub.prop(curve, "fill_mode")
+            sub.prop(curve, "fill_solver")
+            sub_rule = sub.column()
+            sub_rule.active = (curve.fill_solver == 'CDT')
+            sub_rule.prop(curve, "fill_rule")
 
         if is_curve:
             col = layout.column()
@@ -272,85 +276,6 @@ class DATA_PT_pathanim(CurveButtonsPanelCurve, Panel):
 
         col.prop(curve, "use_path_clamp")
         col.prop(curve, "use_path_follow")
-
-
-class DATA_PT_active_spline(CurveButtonsPanelActive, Panel):
-    bl_label = "Active Spline"
-    bl_options = {'DEFAULT_CLOSED'}
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-
-        curve = context.curve
-        act_spline = curve.splines.active
-        is_surf = type(curve) is SurfaceCurve
-        is_poly = (act_spline.type == 'POLY')
-
-        col = layout.column()
-
-        if is_poly:
-            # These settings are below but its easier to have
-            # polys set aside since they use so few settings
-
-            col.prop(act_spline, "use_cyclic_u")
-            col.prop(act_spline, "use_smooth")
-        else:
-
-            sub = col.column(heading="Cyclic", align=True)
-            sub.prop(act_spline, "use_cyclic_u", text="U")
-            if is_surf:
-                sub.prop(act_spline, "use_cyclic_v", text="V")
-
-            if act_spline.type == 'NURBS':
-                sub = col.column(heading="Bézier", align=True)
-                # sub.active = (not act_spline.use_cyclic_u)
-                sub.prop(act_spline, "use_bezier_u", text="U")
-
-                if is_surf:
-                    subsub = sub.column()
-                    subsub.prop(act_spline, "use_bezier_v", text="V")
-
-                sub = col.column(heading="Endpoint", align=True)
-                sub.prop(act_spline, "use_endpoint_u", text="U")
-
-                if is_surf:
-                    subsub = sub.column()
-                    subsub.prop(act_spline, "use_endpoint_v", text="V")
-
-                sub = col.column(align=True)
-                sub.prop(act_spline, "order_u", text="Order U")
-
-                if is_surf:
-                    sub.prop(act_spline, "order_v", text="V")
-
-            sub = col.column(align=True)
-            sub.prop(act_spline, "resolution_u", text="Resolution U")
-            if is_surf:
-                sub.prop(act_spline, "resolution_v", text="V")
-
-            if act_spline.type == 'BEZIER':
-
-                col.separator()
-
-                sub = col.column()
-                sub.active = (curve.dimensions == '3D')
-                sub.prop(act_spline, "tilt_interpolation", text="Interpolation Tilt")
-
-                col.prop(act_spline, "radius_interpolation", text="Radius")
-
-            layout.prop(act_spline, "use_smooth")
-            if act_spline.type == 'NURBS':
-                col = None
-                for direction in range(2):
-                    message = act_spline.valid_message(direction)
-                    if not message:
-                        continue
-                    if col is None:
-                        layout.separator()
-                        col = layout.column(align=True)
-                    col.label(text=message, icon='INFO')
-                del col
 
 
 class DATA_PT_font(CurveButtonsPanelText, Panel):
@@ -524,7 +449,6 @@ classes = (
     DATA_PT_geometry_curve_bevel,
     DATA_PT_geometry_curve_start_end,
     DATA_PT_pathanim,
-    DATA_PT_active_spline,
     DATA_PT_font,
     DATA_PT_font_transform,
     DATA_PT_paragraph,

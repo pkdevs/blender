@@ -2,10 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BKE_deform.hh"
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
 #include "BLI_set.hh"
-#include "BLI_task.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_attribute_math.hh"
@@ -17,6 +17,20 @@
 
 namespace blender::geometry {
 
+/* Don't copy attributes that are built-in on meshes but not on curves. */
+static auto filter_builtin_attributes(const bke::AttributeAccessor &mesh_attributes,
+                                      const bke::AttributeAccessor &curves_attributes,
+                                      Set<StringRef> &storage,
+                                      const bke::AttributeFilter &attribute_filter)
+{
+  for (const StringRef name : mesh_attributes.all_names()) {
+    if (mesh_attributes.is_builtin(name) && !curves_attributes.is_builtin(name)) {
+      storage.add(name);
+    }
+  }
+  return bke::attribute_filter_with_skip_ref(attribute_filter, storage);
+}
+
 BLI_NOINLINE bke::CurvesGeometry create_curve_from_vert_indices(
     const bke::AttributeAccessor &mesh_attributes,
     const Span<int> vert_indices,
@@ -24,6 +38,7 @@ BLI_NOINLINE bke::CurvesGeometry create_curve_from_vert_indices(
     const IndexRange cyclic_curves,
     const bke::AttributeFilter &attribute_filter)
 {
+  PRF_scope(ProfileCategory::Default);
   bke::CurvesGeometry curves(vert_indices.size(), curve_offsets.size());
   curves.offsets_for_write().drop_back(1).copy_from(curve_offsets);
   curves.offsets_for_write().last() = vert_indices.size();
@@ -35,15 +50,9 @@ BLI_NOINLINE bke::CurvesGeometry create_curve_from_vert_indices(
     curves.cyclic_for_write().slice(cyclic_curves).fill(true);
   }
 
-  /* Don't copy attributes that are built-in on meshes but not on curves. */
-  Set<std::string> skip;
-  for (const StringRef id : mesh_attributes.all_ids()) {
-    if (mesh_attributes.is_builtin(id) && !curves_attributes.is_builtin(id)) {
-      skip.add(id);
-    }
-  }
-  const auto attribute_filter_with_skip = bke::attribute_filter_with_skip_ref(attribute_filter,
-                                                                              skip);
+  Set<StringRef> skip_storage;
+  const auto attribute_filter_with_skip = filter_builtin_attributes(
+      mesh_attributes, curves_attributes, skip_storage, attribute_filter);
 
   bke::gather_attributes(mesh_attributes,
                          bke::AttrDomain::Point,
@@ -52,11 +61,12 @@ BLI_NOINLINE bke::CurvesGeometry create_curve_from_vert_indices(
                          vert_indices,
                          curves_attributes);
 
+  /* Transfer attributes from edge, face, and corner domains to curve points. */
   mesh_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
     if (iter.domain == bke::AttrDomain::Point) {
       return;
     }
-    if (iter.data_type == CD_PROP_STRING) {
+    if (iter.data_type == bke::AttrType::String) {
       return;
     }
     if (attribute_filter_with_skip.allow_skip(iter.name)) {
@@ -69,6 +79,15 @@ BLI_NOINLINE bke::CurvesGeometry create_curve_from_vert_indices(
     if (!src) {
       return;
     }
+
+    const CommonVArrayInfo info = src.varray.common_info();
+    if (info.type == CommonVArrayInfo::Type::Single) {
+      const bke::AttributeInitValue init(GPointer(src.varray.type(), info.data));
+      if (curves_attributes.add(iter.name, bke::AttrDomain::Point, iter.data_type, init)) {
+        return;
+      }
+    }
+
     bke::GSpanAttributeWriter dst = curves_attributes.lookup_or_add_for_write_only_span(
         iter.name, bke::AttrDomain::Point, iter.data_type);
     if (!dst) {
@@ -95,10 +114,11 @@ struct CurveFromEdgesOutput {
 BLI_NOINLINE static CurveFromEdgesOutput edges_to_curve_point_indices(const int verts_num,
                                                                       const Span<int2> edges)
 {
+  PRF_scope(ProfileCategory::Default);
   /* Compute the number of edges connecting to each vertex. */
   Array<int> neighbor_offsets_data(verts_num + 1, 0);
-  offset_indices::build_reverse_offsets(edges.cast<int>(), neighbor_offsets_data);
-  const OffsetIndices<int> neighbor_offsets(neighbor_offsets_data);
+  const OffsetIndices<int> neighbor_offsets = offset_indices::build_reverse_offsets(
+      edges.cast<int>(), neighbor_offsets_data);
 
   /* Use as an index into the "neighbor group" for each vertex. */
   Array<int> used_slots(verts_num, 0);
@@ -212,10 +232,11 @@ BLI_NOINLINE static bke::CurvesGeometry edges_to_curves_convert(
                                         attribute_filter);
 }
 
-bke::CurvesGeometry mesh_to_curve_convert(const Mesh &mesh,
-                                          const IndexMask &selection,
-                                          const bke::AttributeFilter &attribute_filter)
+bke::CurvesGeometry mesh_edges_to_curves_convert(const Mesh &mesh,
+                                                 const IndexMask &selection,
+                                                 const bke::AttributeFilter &attribute_filter)
 {
+  PRF_scope(ProfileCategory::Default);
   const Span<int2> edges = mesh.edges();
   if (selection.size() == edges.size()) {
     return edges_to_curves_convert(mesh, edges, attribute_filter);
@@ -223,6 +244,113 @@ bke::CurvesGeometry mesh_to_curve_convert(const Mesh &mesh,
   Array<int2> selected_edges(selection.size());
   array_utils::gather(edges, selection, selected_edges.as_mutable_span());
   return edges_to_curves_convert(mesh, selected_edges, attribute_filter);
+}
+
+static bke::CurvesGeometry create_curves_for_faces(const Mesh &mesh,
+                                                   const OffsetIndices<int> faces,
+                                                   const IndexMask &selection)
+{
+  bke::CurvesGeometry curves;
+  if (selection.size() == faces.size()) {
+    implicit_sharing::copy_shared_pointer(mesh.face_offset_indices,
+                                          mesh.runtime->face_offsets_sharing_info,
+                                          &curves.curve_offsets,
+                                          &curves.runtime->curve_offsets_sharing_info);
+    curves.curve_num = faces.size();
+    curves.resize(mesh.corners_num, faces.size());
+  }
+  else {
+    curves.resize(0, selection.size());
+    offset_indices::gather_selected_offsets(faces, selection, curves.offsets_for_write());
+    curves.resize(curves.offsets().last(), curves.curves_num());
+  }
+
+  BKE_defgroup_copy_list(&curves.vertex_group_names, &mesh.vertex_group_names);
+  bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+  attributes.add<bool>("cyclic", bke::AttrDomain::Curve, bke::AttributeInitValue(true));
+  curves.fill_curve_types(CURVE_TYPE_POLY);
+  return curves;
+}
+
+static Span<int> create_point_to_vert_map(const Mesh &mesh,
+                                          const OffsetIndices<int> faces,
+                                          const OffsetIndices<int> points_by_curve,
+                                          const IndexMask &selection,
+                                          Array<int> &map_data)
+{
+  if (selection.size() == faces.size()) {
+    return mesh.corner_verts();
+  }
+  map_data.reinitialize(points_by_curve.total_size());
+  array_utils::gather_group_to_group(
+      faces, points_by_curve, selection, mesh.corner_verts(), map_data.as_mutable_span());
+  return map_data;
+}
+
+bke::CurvesGeometry mesh_faces_to_curves_convert(const Mesh &mesh,
+                                                 const IndexMask &selection,
+                                                 const bke::AttributeFilter &attribute_filter)
+{
+  PRF_scope(ProfileCategory::Default);
+  const OffsetIndices faces = mesh.faces();
+  const bke::AttributeAccessor src_attributes = mesh.attributes();
+
+  bke::CurvesGeometry curves = create_curves_for_faces(mesh, faces, selection);
+  const OffsetIndices points_by_curve = curves.points_by_curve();
+  bke::MutableAttributeAccessor dst_attributes = curves.attributes_for_write();
+
+  Array<int> point_to_vert_data;
+  const Span<int> point_to_vert_map = create_point_to_vert_map(
+      mesh, faces, points_by_curve, selection, point_to_vert_data);
+
+  Set<StringRef> skip_storage;
+  const auto attribute_filter_with_skip = filter_builtin_attributes(
+      src_attributes, dst_attributes, skip_storage, attribute_filter);
+
+  bke::gather_attributes(src_attributes,
+                         bke::AttrDomain::Point,
+                         bke::AttrDomain::Point,
+                         attribute_filter_with_skip,
+                         point_to_vert_map,
+                         dst_attributes);
+
+  src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (iter.domain != bke::AttrDomain::Edge) {
+      return;
+    }
+    if (iter.data_type == bke::AttrType::String) {
+      return;
+    }
+    if (attribute_filter_with_skip.allow_skip(iter.name)) {
+      return;
+    }
+    const GVArray src = *iter.get(bke::AttrDomain::Point);
+    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+        iter.name, bke::AttrDomain::Point, iter.data_type);
+    if (!dst) {
+      return;
+    }
+    bke::attribute_math::gather(src, point_to_vert_map, dst.span);
+    dst.finish();
+  });
+
+  bke::gather_attributes(src_attributes,
+                         bke::AttrDomain::Face,
+                         bke::AttrDomain::Curve,
+                         attribute_filter_with_skip,
+                         selection,
+                         dst_attributes);
+
+  bke::gather_attributes_group_to_group(src_attributes,
+                                        bke::AttrDomain::Corner,
+                                        bke::AttrDomain::Point,
+                                        attribute_filter_with_skip,
+                                        faces,
+                                        points_by_curve,
+                                        selection,
+                                        dst_attributes);
+
+  return curves;
 }
 
 }  // namespace blender::geometry

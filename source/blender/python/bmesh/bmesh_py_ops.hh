@@ -8,4 +8,10 @@
 
 #pragma once
 
-PyObject *BPyInit_bmesh_ops();
+#include <Python.h>
+
+namespace blender {
+
+[[nodiscard]] PyObject *BPyInit_bmesh_ops();
+
+}  // namespace blender

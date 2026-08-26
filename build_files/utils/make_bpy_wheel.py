@@ -27,6 +27,9 @@ NOTE:
 Some type annotations are quoted to avoid errors in Python 3.9.
 These can be unquoted eventually.
 """
+__all__ = (
+    "main",
+)
 
 import argparse
 import make_utils
@@ -37,19 +40,32 @@ import string
 import setuptools
 import sys
 
-from collections.abc import (
+from typing import (
+    Tuple,
+    # Proxies for `collections.abc`
     Iterator,
     Sequence,
 )
+
 
 # ------------------------------------------------------------------------------
 # Long Description
 
 long_description = """# Blender
 
-[Blender](https://www.blender.org) is the free and open source 3D creation suite. It supports the entirety of the 3D pipeline—modeling, rigging, animation, simulation, rendering, compositing and motion tracking, even video editing.
+[Blender](https://www.blender.org) is the free and open source 3D creation suite. It supports the entirety of the 3D pipeline: modeling, rigging, animation, simulation, rendering, compositing and motion tracking, even video editing.
 
 This package provides Blender as a Python module for use in studio pipelines, web services, scientific research, and more.
+
+### Archived Versions
+
+Blender versions outside the current LTS window are removed from PyPI but are available at [https://download.blender.org/pypi/bpy/](https://download.blender.org/pypi/bpy/).
+
+These versions can still be installed manually. For example, to install version 3.6.0:
+
+```bash
+pip install bpy==3.6.0 --extra-index-url https://download.blender.org/pypi/
+```
 
 ## Documentation
 
@@ -95,7 +111,7 @@ def find_dominating_file(
 # ------------------------------------------------------------------------------
 # CMake Cache Access
 
-def cmake_cache_var_iter(filepath_cmake_cache: str) -> Iterator[tuple[str, str, str]]:
+def cmake_cache_var_iter(filepath_cmake_cache: str) -> Iterator[Tuple[str, str, str]]:
     re_cache = re.compile(r"([A-Za-z0-9_\-]+)?:?([A-Za-z0-9_\-]+)?=(.*)$")
     with open(filepath_cmake_cache, "r", encoding="utf-8") as cache_file:
         for l in cache_file:
@@ -154,6 +170,15 @@ def argparse_create() -> argparse.ArgumentParser:
 
 def main() -> None:
 
+    # NOTE: Import inline because the built-bot runs this with Python 3.6
+    # which fails to import `wheel`, the actual script should run with a newer Python.
+
+    # `wheel.bdist_wheel` is deprecated, `setuptools >= 70.1` includes it.
+    if tuple(int(x) for x in setuptools.__version__.split(".")[:2]) >= (70, 1):
+        from setuptools.command.bdist_wheel import bdist_wheel
+    else:
+        from wheel.bdist_wheel import bdist_wheel
+
     # Parse arguments.
     args = argparse_create().parse_args()
 
@@ -195,7 +220,16 @@ def main() -> None:
         machine = cmake_cache_var_or_exit(filepath_cmake_cache, "CMAKE_OSX_ARCHITECTURES")
         platform_tag = "macosx_%d_%d_%s" % (target_major, target_minor, machine)
     elif sys.platform == "win32":
-        platform_tag = "win_%s" % (platform.machine().lower())
+        # Workaround for Python process running in a virtualized environment on Windows-on-Arm:
+        # use the actual processor architecture instead of the virtualized one.
+        #
+        # The win_arm64 matches the behavior when native WoA Python is used, and also matches
+        # sysconfig.get_platform() from a native Python build (although it returns win-arm64 with a
+        # dash and not underscore).
+        if "ARM" in os.environ.get("PROCESSOR_IDENTIFIER", ""):
+            platform_tag = "win_arm64"
+        else:
+            platform_tag = "win_%s" % (platform.machine().lower())
     elif sys.platform == "linux":
         glibc = os.confstr("CS_GNU_LIBC_VERSION")
         if glibc is None:
@@ -210,6 +244,7 @@ def main() -> None:
     # Manually specify, otherwise it uses the version of the executable used to run
     # this script which may not match the Blender python version.
     python_tag = "py%d%d" % (python_version_number[0], python_version_number[1])
+    cpython_tag = "cp%d%d" % (python_version_number[0], python_version_number[1])
 
     os.chdir(install_dir)
 
@@ -225,17 +260,30 @@ def main() -> None:
         def has_ext_modules(self) -> bool:
             return True
 
+    # NOTE: this class is needed because:
+    # - The Python used to build the wheel is the systems Python,
+    #   so we can't rely on its "tag" matching Blender's.
+    # - There is no way to override the "tag" using options.
+    #   If this is supported at some point, this class can be removed.
+    class TargetPythonBdistWheel(bdist_wheel):
+        def get_tag(self) -> Tuple[str, str, str]:
+            _python, _abi, plat = super().get_tag()
+            return cpython_tag, cpython_tag, plat
+
     # Build wheel.
     sys.argv = [sys.argv[0], "bdist_wheel"]
 
     setuptools.setup(
         name="bpy",
         version=blender_version_str,
-        install_requires=["cython", "numpy", "requests", "zstandard"],
+
+        install_requires=["cattrs", "cython", "numpy>=2.2,<3.0", "requests", "zstandard"],
+
         python_requires="==%d.%d.*" % (python_version_number[0], python_version_number[1]),
         packages=["bpy"],
         package_data={"": package_files("bpy")},
         distclass=BinaryDistribution,
+        cmdclass={"bdist_wheel": TargetPythonBdistWheel},
         options={"bdist_wheel": {"plat_name": platform_tag, "python_tag": python_tag}},
 
         description="Blender as a Python module",
@@ -253,17 +301,9 @@ def main() -> None:
     dist_dir = os.path.join(install_dir, "dist")
     for f in os.listdir(dist_dir):
         if f.endswith(".whl"):
-            blender_py = "cp%d%d" % (python_version_number[0], python_version_number[1])
-
-            # No apparent way to override this ABI version with setuptools, so rename.
-            sys_py = "cp%d%d" % (sys.version_info.major, sys.version_info.minor)
-            if hasattr(sys, "abiflags"):
-                sys_py_abi = sys_py + sys.abiflags
-                renamed_f = f.replace(sys_py_abi, blender_py).replace(sys_py, blender_py)
-            else:
-                renamed_f = f.replace(sys_py, blender_py)
-
-            os.rename(os.path.join(dist_dir, f), os.path.join(output_dir, renamed_f))
+            # The wheel is already tagged correctly (cpXY-cpXY-plat) by TargetPythonBdistWheel,
+            # so only move it to the output directory.
+            os.rename(os.path.join(dist_dir, f), os.path.join(output_dir, f))
 
 
 if __name__ == "__main__":

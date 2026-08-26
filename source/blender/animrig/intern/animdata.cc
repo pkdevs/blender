@@ -14,13 +14,13 @@
 #include "BKE_key.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
-#include "BKE_material.h"
+#include "BKE_material.hh"
 #include "BKE_node.hh"
 
 #include "BLT_translation.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -28,11 +28,9 @@
 #include "DNA_anim_types.h"
 #include "DNA_key_types.h"
 #include "DNA_material_types.h"
-#include "DNA_mesh_types.h"
 #include "DNA_particle_types.h"
 
 #include "RNA_access.hh"
-#include "RNA_path.hh"
 
 namespace blender::animrig {
 
@@ -52,7 +50,7 @@ static void add_object_data_users(const Main &bmain, const ID &id, Vector<ID *> 
   Object *ob;
   ID *object_id;
   FOREACH_MAIN_LISTBASE_ID_BEGIN (&bmain.objects, object_id) {
-    ob = (Object *)object_id;
+    ob = reinterpret_cast<Object *>(object_id);
     if (ob->data != &id) {
       continue;
     }
@@ -86,29 +84,29 @@ Vector<ID *> find_related_ids(Main &bmain, ID &id)
     /* No action found on current ID, add related IDs to the ID Vector. */
     switch (GS(related_id->name)) {
       case ID_OB: {
-        Object *ob = (Object *)related_id;
+        Object *ob = reinterpret_cast<Object *>(related_id);
         if (!ob->data) {
           break;
         }
-        ID *data = (ID *)ob->data;
+        ID *data = ob->data;
         if (ID_REAL_USERS(data) == 1) {
           related_ids.append_non_duplicates(data);
         }
-        LISTBASE_FOREACH (ParticleSystem *, particle_system, &ob->particlesystem) {
-          if (!particle_system) {
+        for (ParticleSystem &particle_system : ob->particlesystem) {
+          if (!particle_system.part) {
             continue;
           }
-          if (ID_REAL_USERS(&particle_system->part->id) != 1) {
+          if (ID_REAL_USERS(&particle_system.part->id) != 1) {
             continue;
           }
-          related_ids.append_non_duplicates(&particle_system->part->id);
+          related_ids.append_non_duplicates(&particle_system.part->id);
         }
         break;
       }
 
       case ID_KE: {
         /* Shape-keys. */
-        Key *key = (Key *)related_id;
+        Key *key = reinterpret_cast<Key *>(related_id);
         /* Shape-keys are not embedded but there is currently no way to reuse them. */
         BLI_assert(ID_REAL_USERS(related_id) == 1);
         related_ids.append_non_duplicates(key->from);
@@ -117,7 +115,7 @@ Vector<ID *> find_related_ids(Main &bmain, ID &id)
 
       case ID_MA: {
         /* Explicitly not relating materials and material users. */
-        Material *mat = (Material *)related_id;
+        Material *mat = reinterpret_cast<Material *>(related_id);
         if (mat->nodetree && ID_REAL_USERS(&mat->nodetree->id) == 1) {
           related_ids.append_non_duplicates(&mat->nodetree->id);
         }
@@ -132,13 +130,13 @@ Vector<ID *> find_related_ids(Main &bmain, ID &id)
         ID *object_id;
         /* Find users of this particle setting. */
         FOREACH_MAIN_LISTBASE_ID_BEGIN (&bmain.objects, object_id) {
-          ob = (Object *)object_id;
+          ob = reinterpret_cast<Object *>(object_id);
           bool object_uses_particle_settings = false;
-          LISTBASE_FOREACH (ParticleSystem *, particle_system, &ob->particlesystem) {
-            if (!particle_system) {
+          for (ParticleSystem &particle_system : ob->particlesystem) {
+            if (!particle_system.part) {
               continue;
             }
-            if (&particle_system->part->id != related_id) {
+            if (&particle_system.part->id != related_id) {
               continue;
             }
             object_uses_particle_settings = true;
@@ -184,7 +182,7 @@ static bAction *find_related_action(Main &bmain, ID &id)
 
   for (ID *related_id : related_ids) {
     Action *action = get_action(*related_id);
-    if (action && action->is_action_layered()) {
+    if (action && BKE_id_is_editable(&bmain, &action->id)) {
       /* Returning the first action found means highest priority has the action closest in the
        * relationship graph. */
       return action;
@@ -215,14 +213,14 @@ bAction *id_action_ensure(Main *bmain, ID *id)
         ID *owner_id = BKE_id_owner_get(id);
         /* If the ID is embedded it should have an owner. */
         BLI_assert(owner_id != nullptr);
-        SNPRINTF(actname, DATA_("%sAction"), owner_id->name + 2);
+        SNPRINTF_UTF8(actname, DATA_("%sAction"), owner_id->name + 2);
       }
       else if (GS(id->name) == ID_KE) {
-        Key *key = (Key *)id;
-        SNPRINTF(actname, DATA_("%sAction"), key->from->name + 2);
+        Key *key = reinterpret_cast<Key *>(id);
+        SNPRINTF_UTF8(actname, DATA_("%sAction"), key->from->name + 2);
       }
       else {
-        SNPRINTF(actname, DATA_("%sAction"), id->name + 2);
+        SNPRINTF_UTF8(actname, DATA_("%sAction"), id->name + 2);
       }
 
       /* create action */
@@ -253,7 +251,7 @@ bAction *id_action_ensure(Main *bmain, ID *id)
 void animdata_fcurve_delete(AnimData *adt, FCurve *fcu)
 {
   /* - If no AnimData, we've got nowhere to remove the F-Curve from
-   *   (this doesn't guarantee that the F-Curve is in there, but at least we tried
+   *   (this doesn't guarantee that the F-Curve is in there, but at least we tried).
    * - If no F-Curve, there is nothing to remove
    */
   if (ELEM(nullptr, adt, fcu)) {
@@ -266,41 +264,10 @@ void animdata_fcurve_delete(AnimData *adt, FCurve *fcu)
   }
   else if (adt->action) {
     Action &action = adt->action->wrap();
-
-    if (action.is_action_legacy()) {
-      /* Remove from group or action, whichever one "owns" the F-Curve. */
-      if (fcu->grp) {
-        bActionGroup *agrp = fcu->grp;
-
-        /* Remove F-Curve from group+action. */
-        action_groups_remove_channel(&action, fcu);
-
-        /* If group has no more channels, remove it too,
-         * otherwise can have many dangling groups #33541.
-         */
-        if (BLI_listbase_is_empty(&agrp->channels)) {
-          BLI_freelinkN(&action.groups, agrp);
-        }
-      }
-      else {
-        BLI_remlink(&action.curves, fcu);
-      }
-
-      /* If action has no more F-Curves as a result of this, unlink it from
-       * AnimData if it did not come from a NLA Strip being tweaked.
-       *
-       * This is done so that we don't have dangling Object+Action entries in
-       * channel list that are empty, and linger around long after the data they
-       * are for has disappeared (and probably won't come back).
-       */
-      animdata_remove_empty_action(adt);
-    }
-    else {
-      action_fcurve_remove(action, *fcu);
-      /* Return early to avoid the call to BKE_fcurve_free because the fcu has already been freed
-       * by action_fcurve_remove. */
-      return;
-    }
+    action_fcurve_remove(action, *fcu);
+    /* Return early to avoid the call to BKE_fcurve_free because the fcu has already been freed
+     * by action_fcurve_remove. */
+    return;
   }
   else {
     BLI_assert_unreachable();
@@ -314,7 +281,8 @@ bool animdata_remove_empty_action(AnimData *adt)
   if (adt->action != nullptr) {
     bAction *act = adt->action;
     DEG_id_tag_update(&act->id, ID_RECALC_ANIMATION_NO_FLUSH);
-    if (BLI_listbase_is_empty(&act->curves) && (adt->flag & ADT_NLA_EDIT_ON) == 0) {
+    Action &action = act->wrap();
+    if (action.is_empty() && (adt->flag & ADT_NLA_EDIT_ON) == 0) {
       id_us_min(&act->id);
       adt->action = nullptr;
       return true;
@@ -336,7 +304,6 @@ const FCurve *fcurve_find_by_rna_path(const AnimData &adt,
   }
 
   const Action &action = adt.action->wrap();
-  BLI_assert(action.is_action_layered());
 
   const Slot *slot = action.slot_for_handle(adt.slot_handle);
   if (!slot) {
@@ -377,6 +344,23 @@ const FCurve *fcurve_find_by_rna_path(const AnimData &adt,
   }
 
   return nullptr;
+}
+
+Span<FCurve *> fcurves_for_assigned_action(AnimData *adt)
+{
+  if (!adt || !adt->action) {
+    return {};
+  }
+  return fcurves_for_action_slot(adt->action->wrap(), adt->slot_handle);
+}
+
+Span<const FCurve *> fcurves_for_assigned_action(const AnimData *adt)
+{
+  if (!adt || !adt->action) {
+    return {};
+  }
+  return fcurves_for_action_slot(const_cast<const bAction *>(adt->action)->wrap(),
+                                 adt->slot_handle);
 }
 
 }  // namespace blender::animrig

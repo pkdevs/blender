@@ -2,17 +2,24 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include "DNA_node_types.h"
 
-namespace blender::dot {
+namespace blender {
+
+namespace dot_export {
 class DirectedEdge;
 }
 
-namespace blender::bke {
+namespace bke {
 
 /**
  * Allows customizing how the generated dot graph looks like.
@@ -21,7 +28,8 @@ class bNodeTreeToDotOptions {
  public:
   virtual std::string socket_name(const bNodeSocket &socket) const;
   virtual std::optional<std::string> socket_font_color(const bNodeSocket &socket) const;
-  virtual void add_edge_attributes(const bNodeLink &link, dot::DirectedEdge &dot_edge) const;
+  virtual void add_edge_attributes(const bNodeLink &link,
+                                   dot_export::DirectedEdge &dot_edge) const;
 };
 
 /**
@@ -31,4 +39,5 @@ class bNodeTreeToDotOptions {
 std::string node_tree_to_dot(const bNodeTree &tree,
                              const bNodeTreeToDotOptions &options = bNodeTreeToDotOptions());
 
-}  // namespace blender::bke
+}  // namespace bke
+}  // namespace blender

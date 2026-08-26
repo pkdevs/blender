@@ -7,12 +7,15 @@
  * \ingroup bke
  */
 
-#include "BLI_array.hh"
-#include "BLI_compiler_attrs.h"
-#include "BLI_compiler_compat.h"
-#include "BLI_utildefines.h"
+#include <cstdint>
 
+#include "BLI_array.hh"
+#include "BLI_string_ref.hh"
+
+#include "DNA_listBase.h"
 #include "DNA_mesh_types.h"
+
+namespace blender {
 
 struct BMesh;
 struct BMeshCreateParams;
@@ -23,7 +26,6 @@ struct CustomData_MeshMasks;
 struct Depsgraph;
 struct KeyBlock;
 struct LinkNode;
-struct ListBase;
 struct MDeformVert;
 struct MDisps;
 struct MFace;
@@ -32,9 +34,17 @@ struct MemArena;
 struct Mesh;
 struct Object;
 struct Scene;
+struct DispList;
+struct Nurb;
+
+namespace draw {
+struct MeshBatchCache;
+}
+
+enum eMSelect_Type : int;
 
 /* TODO: Move to `BKE_mesh_types.hh` when possible. */
-enum eMeshBatchDirtyMode {
+enum eMeshBatchDirtyMode : int8_t {
   BKE_MESH_BATCH_DIRTY_ALL = 0,
   BKE_MESH_BATCH_DIRTY_SELECT,
   BKE_MESH_BATCH_DIRTY_SELECT_PAINT,
@@ -48,8 +58,12 @@ enum eMeshBatchDirtyMode {
 BMesh *BKE_mesh_to_bmesh_ex(const Mesh *mesh,
                             const BMeshCreateParams *create_params,
                             const BMeshFromMeshParams *convert_params);
+/**
+ * \param active_shapekey: See #BMeshFromMeshParams::active_shapekey.
+ * \param add_key_index: See #BMeshFromMeshParams::add_key_index.
+ */
 BMesh *BKE_mesh_to_bmesh(Mesh *mesh,
-                         Object *ob,
+                         int active_shapekey,
                          bool add_key_index,
                          const BMeshCreateParams *params);
 
@@ -74,12 +88,6 @@ void BKE_mesh_ensure_default_orig_index_customdata(Mesh *mesh);
  * must be done by the caller.
  */
 void BKE_mesh_ensure_default_orig_index_customdata_no_check(Mesh *mesh);
-
-/**
- * Free (or release) any data used by this mesh (does not free the mesh itself).
- * Only use for undo, in most cases `BKE_id_free(nullptr, me)` should be used.
- */
-void BKE_mesh_free_data_for_undo(Mesh *mesh);
 
 /**
  * Remove all geometry and derived data like caches from the mesh.
@@ -132,14 +140,13 @@ Mesh *BKE_mesh_copy_for_eval(const Mesh &source);
  * contrary to #BKE_mesh_to_curve_nurblist which modifies ob itself.
  */
 Mesh *BKE_mesh_new_nomain_from_curve(const Object *ob);
-Mesh *BKE_mesh_new_nomain_from_curve_displist(const Object *ob, const ListBase *dispbase);
+Mesh *BKE_mesh_new_nomain_from_curve_displist(const Object *ob,
+                                              const ListBaseT<DispList> *dispbase);
 
-bool BKE_mesh_attribute_required(const char *name);
+bool BKE_mesh_attribute_required(StringRef name);
 
-blender::Array<blender::float3> BKE_mesh_orco_verts_get(const Object *ob);
-void BKE_mesh_orco_verts_transform(Mesh *mesh,
-                                   blender::MutableSpan<blender::float3> orco,
-                                   bool invert);
+Array<float3> BKE_mesh_orco_verts_get(const Object *ob);
+void BKE_mesh_orco_verts_transform(Mesh *mesh, MutableSpan<float3> orco, bool invert);
 void BKE_mesh_orco_verts_transform(Mesh *mesh, float (*orco)[3], int totvert, bool invert);
 
 /**
@@ -149,7 +156,7 @@ void BKE_mesh_orco_ensure(Object *ob, Mesh *mesh);
 
 Mesh *BKE_mesh_from_object(Object *ob);
 void BKE_mesh_assign_object(Main *bmain, Object *ob, Mesh *mesh);
-void BKE_mesh_to_curve_nurblist(const Mesh *mesh, ListBase *nurblist, int edge_users_test);
+void BKE_mesh_to_curve_nurblist(const Mesh *mesh, ListBaseT<Nurb> *nurblist, int edge_users_test);
 void BKE_mesh_to_curve(Main *bmain, Depsgraph *depsgraph, Scene *scene, Object *ob);
 void BKE_mesh_to_pointcloud(Main *bmain, Depsgraph *depsgraph, Scene *scene, Object *ob);
 void BKE_pointcloud_to_mesh(Main *bmain, Depsgraph *depsgraph, Scene *scene, Object *ob);
@@ -179,7 +186,8 @@ void BKE_mesh_texspace_get_reference(Mesh *mesh,
 Mesh *BKE_mesh_new_from_object(Depsgraph *depsgraph,
                                Object *object,
                                bool preserve_all_data_layers,
-                               bool preserve_origindex);
+                               bool preserve_origindex,
+                               bool ensure_subdivision);
 
 /**
  * This is a version of BKE_mesh_new_from_object() which stores mesh in the given main database.
@@ -194,15 +202,18 @@ Mesh *BKE_mesh_new_from_object_to_bmain(Main *bmain,
 /**
  * Move data from a mesh outside of the main data-base into a mesh in the data-base.
  * Takes ownership of the source mesh.
+ *
+ * \param process_shape_keys: Whether to move #CD_SHAPEKEY layers to the destination mesh. If there
+ * are no such layers and the number of vertices changed, the shape key data will be lost. If this
+ * parameter is false, the caller is expected to handle shape keys itself.
  */
-void BKE_mesh_nomain_to_mesh(Mesh *mesh_src, Mesh *mesh_dst, Object *ob);
+void BKE_mesh_nomain_to_mesh(Mesh *mesh_src,
+                             Mesh *mesh_dst,
+                             Object *ob,
+                             bool process_shape_keys = true);
 void BKE_mesh_nomain_to_meshkey(Mesh *mesh_src, Mesh *mesh_dst, KeyBlock *kb);
 
 /* Vertex level transformations & checks (no evaluated mesh). */
-
-/* basic vertex data functions */
-void BKE_mesh_transform(Mesh *mesh, const float mat[4][4], bool do_keys);
-void BKE_mesh_translate(Mesh *mesh, const float offset[3], bool do_keys);
 
 void BKE_mesh_tessface_clear(Mesh *mesh);
 
@@ -211,12 +222,12 @@ void BKE_mesh_mselect_validate(Mesh *mesh);
 /**
  * \return the index within `me->mselect`, or -1
  */
-int BKE_mesh_mselect_find(const Mesh *mesh, int index, int type);
+int BKE_mesh_mselect_find(const Mesh *mesh, int index, eMSelect_Type type);
 /**
  * \return The index of the active element.
  */
-int BKE_mesh_mselect_active_get(const Mesh *mesh, int type);
-void BKE_mesh_mselect_active_set(Mesh *mesh, int index, int type);
+int BKE_mesh_mselect_active_get(const Mesh *mesh, eMSelect_Type type);
+void BKE_mesh_mselect_active_set(Mesh *mesh, int index, eMSelect_Type type);
 
 void BKE_mesh_count_selected_items(const Mesh *mesh, int r_count[3]);
 
@@ -229,23 +240,43 @@ bool BKE_mesh_vert_normals_are_dirty(const Mesh *mesh);
 bool BKE_mesh_face_normals_are_dirty(const Mesh *mesh);
 
 /**
- * References a contiguous loop-fan with normal offset vars.
+ * References a contiguous loop-fan.
+ * Combined with the automatically calculated face corner normal, this gives a dimensional
+ * coordinate space used to convert normals between the "custom normal" #short2 representation and
+ * a regular #float3 format.
  */
 struct MLoopNorSpace {
-  /** Automatically computed loop normal. */
+  /** The automatically computed face corner normal, not including influence of custom normals. */
   float vec_lnor[3];
-  /** Reference vector, orthogonal to vec_lnor. */
+  /**
+   * Reference vector, orthogonal to #vec_lnor, aligned with one of the edges (borders) of the
+   * smooth fan, called 'reference edge'.
+   */
   float vec_ref[3];
-  /** Third vector, orthogonal to vec_lnor and vec_ref. */
+  /** Third vector, orthogonal to #vec_lnor and #vec_ref. */
   float vec_ortho[3];
-  /** Reference angle, around vec_ortho, in ]0, pi] range (0.0 marks that space as invalid). */
+  /**
+   * Reference angle around #vec_ortho, in (0, pi] range, between #vec_lnor and the reference edge.
+   *
+   * A 0.0 value marks that space as invalid, as it can only happen in extremely degenerate
+   * geometry cases (it would mean that the default normal is perfectly aligned with the reference
+   * edge).
+   */
   float ref_alpha;
-  /** Reference angle, around vec_lnor, in ]0, 2pi] range (0.0 marks that space as invalid). */
+  /**
+   * Reference angle around #vec_lnor, in (0, 2pi] range, between the reference edge and the other
+   * border edge of the fan.
+   *
+   * A 0.0 value marks that space as invalid, as it can only happen in degenerate geometry cases
+   * (it would mean that all the edges connected to that corner of the smooth fan are perfectly
+   * aligned).
+   */
   float ref_beta;
-  /** All loops using this lnor space (i.e. smooth fan of loops),
+  /**
+   * All loops using this lnor space (i.e. smooth fan of loops),
    * as (depending on owning MLoopNorSpaceArrary.data_type):
-   *     - Indices (uint_in_ptr), or
-   *     - BMLoop pointers. */
+   * - Indices (uint_in_ptr), or
+   * - BMLoop pointers. */
   struct LinkNode *loops;
   char flags;
 };
@@ -260,11 +291,14 @@ enum {
  * Collection of #MLoopNorSpace basic storage & pre-allocation.
  */
 struct MLoopNorSpaceArray {
-  MLoopNorSpace **lspacearr; /* Face corner aligned array */
-  struct LinkNode
-      *loops_pool; /* Allocated once, avoids to call BLI_linklist_prepend_arena() for each loop! */
-  char data_type;  /* Whether we store loop indices, or pointers to BMLoop. */
-  int spaces_num;  /* Number of clnors spaces defined in this array. */
+  /** Face corner aligned array. */
+  MLoopNorSpace **lspacearr;
+  /** Allocated once, avoids to call #BLI_linklist_prepend_arena() for each loop! */
+  struct LinkNode *loops_pool;
+  /** Whether we store loop indices, or pointers to #BMLoop. */
+  char data_type;
+  /** Number of `clnors` spaces defined in this array. */
+  int spaces_num;
   struct MemArena *mem;
 };
 /**
@@ -308,7 +342,7 @@ void BKE_lnor_space_define(MLoopNorSpace *lnor_space,
                            const float lnor[3],
                            const float vec_ref[3],
                            const float vec_other[3],
-                           blender::Span<blender::float3> edge_vectors);
+                           Span<float3> edge_vectors);
 
 /**
  * Add a new given loop to given lnor_space.
@@ -331,41 +365,9 @@ void BKE_lnor_space_custom_normal_to_data(const MLoopNorSpace *lnor_space,
                                           short r_clnor_data[2]);
 
 /**
- * Computes average per-vertex normals from given custom loop normals.
- *
- * \param clnors: The computed custom loop normals.
- * \param r_vert_clnors: The (already allocated) array where to store averaged per-vertex normals.
- */
-void BKE_mesh_normals_loop_to_vertex(int numVerts,
-                                     const int *corner_verts,
-                                     int numLoops,
-                                     const float (*clnors)[3],
-                                     float (*r_vert_clnors)[3]);
-
-/**
  * High-level custom normals functions.
  */
 bool BKE_mesh_has_custom_loop_normals(Mesh *mesh);
-
-/**
- * Higher level functions hiding most of the code needed around call to
- * #normals_corner_custom_set().
- *
- * \param r_custom_loop_normals: is not const, since code will replace zero_v3 normals there
- * with automatically computed vectors.
- */
-void BKE_mesh_set_custom_normals(Mesh *mesh, float (*r_custom_loop_normals)[3]);
-void BKE_mesh_set_custom_normals_normalized(Mesh *mesh, float (*r_custom_loop_normals)[3]);
-/**
- * Higher level functions hiding most of the code needed around call to
- * #normals_corner_custom_set_from_verts().
- *
- * \param r_custom_vert_normals: is not const, since code will replace zero_v3 normals there
- * with automatically computed vectors.
- */
-void BKE_mesh_set_custom_normals_from_verts(Mesh *mesh, float (*r_custom_vert_normals)[3]);
-void BKE_mesh_set_custom_normals_from_verts_normalized(Mesh *mesh,
-                                                       float (*r_custom_vert_normals)[3]);
 
 /* *** mesh_evaluate.cc *** */
 
@@ -392,7 +394,7 @@ bool BKE_mesh_center_of_volume(const Mesh *mesh, float r_cent[3]);
  */
 void BKE_mesh_calc_volume(const float (*vert_positions)[3],
                           int mverts_num,
-                          const blender::int3 *corner_tris,
+                          const int3 *corner_tris,
                           int corner_tris_num,
                           const int *corner_verts,
                           float *r_volume,
@@ -437,75 +439,16 @@ void BKE_mesh_calc_relative_deform(const int *face_offsets,
                                    const float (*vert_cos_org)[3],
                                    float (*vert_cos_new)[3]);
 
-/* *** mesh_validate.cc *** */
-
-/**
- * Validates and corrects a Mesh.
- *
- * \returns true if a change is made.
- */
-bool BKE_mesh_validate(Mesh *mesh, bool do_verbose, bool cddata_check_mask);
-/**
- * Checks if a Mesh is valid without any modification. This is always verbose.
- * \returns True if the mesh is valid.
- */
-bool BKE_mesh_is_valid(Mesh *mesh);
-/**
- * Check all material indices of faces are valid, invalid ones are set to 0.
- * \returns True if the material indices are valid.
- */
-bool BKE_mesh_validate_material_indices(Mesh *mesh);
-
-/**
- * Validate the mesh, \a do_fixes requires \a mesh to be non-null.
- *
- * \return false if no changes needed to be made.
- */
-bool BKE_mesh_validate_arrays(Mesh *mesh,
-                              float (*vert_positions)[3],
-                              unsigned int verts_num,
-                              blender::int2 *edges,
-                              unsigned int edges_num,
-                              MFace *legacy_faces,
-                              unsigned int legacy_faces_num,
-                              const int *corner_verts,
-                              int *corner_edges,
-                              unsigned int corners_num,
-                              const int *face_offsets,
-                              unsigned int faces_num,
-                              MDeformVert *dverts, /* assume totvert length */
-                              bool do_verbose,
-                              bool do_fixes,
-                              bool *r_change);
-
-/**
- * \returns is_valid.
- */
-bool BKE_mesh_validate_all_customdata(CustomData *vert_data,
-                                      uint verts_num,
-                                      CustomData *edge_data,
-                                      uint edges_num,
-                                      CustomData *corner_data,
-                                      uint corners_num,
-                                      CustomData *face_data,
-                                      uint faces_num,
-                                      bool check_meshmask,
-                                      bool do_verbose,
-                                      bool do_fixes,
-                                      bool *r_change);
-
-void BKE_mesh_strip_loose_faces(Mesh *mesh);
-
 /* **** Depsgraph evaluation **** */
 
 void BKE_mesh_eval_geometry(Depsgraph *depsgraph, Mesh *mesh);
 
 /* Draw Cache */
 void BKE_mesh_batch_cache_dirty_tag(Mesh *mesh, eMeshBatchDirtyMode mode);
-void BKE_mesh_batch_cache_free(void *batch_cache);
+void BKE_mesh_batch_cache_free(draw::MeshBatchCache *batch_cache);
 
 extern void (*BKE_mesh_batch_cache_dirty_tag_cb)(Mesh *mesh, eMeshBatchDirtyMode mode);
-extern void (*BKE_mesh_batch_cache_free_cb)(void *batch_cache);
+extern void (*BKE_mesh_batch_cache_free_cb)(draw::MeshBatchCache *batch_cache);
 
 /* `mesh_debug.cc` */
 
@@ -513,3 +456,5 @@ extern void (*BKE_mesh_batch_cache_free_cb)(void *batch_cache);
 char *BKE_mesh_debug_info(const Mesh *mesh) ATTR_NONNULL(1) ATTR_MALLOC ATTR_WARN_UNUSED_RESULT;
 void BKE_mesh_debug_print(const Mesh *mesh) ATTR_NONNULL(1);
 #endif
+
+}  // namespace blender

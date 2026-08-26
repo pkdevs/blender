@@ -8,19 +8,23 @@
  * Interactions with the underlying platform.
  */
 
-#include "BLI_string.h"
-
 #include "WM_api.hh" /* Own include. */
 
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #elif defined(__APPLE__)
 /* Pass. */
 #else
-#  include "BKE_context.hh"
+#  ifdef WITH_PYTHON
+#    include "BLI_string.hh"
 
-#  include "BPY_extern_run.hh"
+#    include "BKE_context.hh"
+
+#    include "BPY_extern_run.hh"
+#  endif
 #endif
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Register File Association
@@ -54,15 +58,20 @@ bool WM_platform_associate_set(bool do_register, bool all_users, char **r_error_
   UNUSED_VARS(do_register, all_users);
 #else
   {
+#  ifdef WITH_PYTHON
     BPy_RunErrInfo err_info = {};
     err_info.use_single_line_error = true;
     err_info.r_string = r_error_msg;
 
-    const char *imports[] = {"_bpy_internal", "_bpy_internal.freedesktop", nullptr};
+    const char *imports[] = {
+        "_bpy_internal",
+        "_bpy_internal.platform.freedesktop",
+        nullptr,
+    };
     char expr_buf[128];
 
     SNPRINTF(expr_buf,
-             "_bpy_internal.freedesktop.%s(all_users=%d)",
+             "_bpy_internal.platform.freedesktop.%s(all_users=%d)",
              do_register ? "register" : "unregister",
              int(all_users));
 
@@ -77,9 +86,15 @@ bool WM_platform_associate_set(bool do_register, bool all_users, char **r_error_
     }
     /* Else `r_error_msg` will be set to a single line exception. */
     CTX_free(C_temp);
+#  else
+    /* Pass. */
+    UNUSED_VARS(do_register, all_users);
+#  endif
   }
 #endif
   return result;
 }
 
 /** \} */
+
+}  // namespace blender

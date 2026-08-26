@@ -9,15 +9,15 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
+#include "DNA_curve_types.h"
+#include "DNA_lattice_types.h"
 #include "DNA_meta_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_action.hh"
 #include "BKE_armature.hh"
@@ -32,9 +32,30 @@
 #include "ED_curve.hh"
 #include "ED_object.hh" /* own include */
 
+#include "WM_api.hh"
+
 #include "MEM_guardedalloc.h"
 
 namespace blender::ed::object {
+
+/* -------------------------------------------------------------------- */
+/** \name Material Functions
+ * \{ */
+
+bool material_active_index_set(Object *ob, const int index)
+{
+  if (ob->totcol > 0) {
+    const short actcol_test = std::clamp(index + 1, 1, ob->totcol);
+    if (ob->actcol != actcol_test) {
+      ob->actcol = actcol_test;
+      WM_main_add_notifier(NC_MATERIAL | ND_SHADING_LINKS, nullptr);
+      return true;
+    }
+  }
+  return false;
+}
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Active Element Center
@@ -54,7 +75,7 @@ bool calc_active_center_for_editmode(Object *obedit, const bool select_only, flo
       break;
     }
     case OB_ARMATURE: {
-      bArmature *arm = static_cast<bArmature *>(obedit->data);
+      bArmature *arm = id_cast<bArmature *>(obedit->data);
       EditBone *ebo = arm->act_edbone;
 
       if (ebo && (!select_only || (ebo->flag & (BONE_SELECTED | BONE_ROOTSEL)))) {
@@ -66,7 +87,7 @@ bool calc_active_center_for_editmode(Object *obedit, const bool select_only, flo
     }
     case OB_CURVES_LEGACY:
     case OB_SURF: {
-      Curve *cu = static_cast<Curve *>(obedit->data);
+      Curve *cu = id_cast<Curve *>(obedit->data);
 
       if (ED_curve_active_center(cu, r_center)) {
         return true;
@@ -74,7 +95,7 @@ bool calc_active_center_for_editmode(Object *obedit, const bool select_only, flo
       break;
     }
     case OB_MBALL: {
-      MetaBall *mb = static_cast<MetaBall *>(obedit->data);
+      MetaBall *mb = id_cast<MetaBall *>(obedit->data);
       MetaElem *ml_act = mb->lastelem;
 
       if (ml_act && (!select_only || (ml_act->flag & SELECT))) {
@@ -84,7 +105,7 @@ bool calc_active_center_for_editmode(Object *obedit, const bool select_only, flo
       break;
     }
     case OB_LATTICE: {
-      BPoint *actbp = BKE_lattice_active_point_get(static_cast<Lattice *>(obedit->data));
+      BPoint *actbp = BKE_lattice_active_point_get(id_cast<Lattice *>(obedit->data));
 
       if (actbp) {
         copy_v3_v3(r_center, actbp->vec);
@@ -92,6 +113,13 @@ bool calc_active_center_for_editmode(Object *obedit, const bool select_only, flo
       }
       break;
     }
+    case OB_GREASE_PENCIL: {
+      copy_v3_v3(r_center, obedit->loc);
+      mul_m4_v3(obedit->world_to_object().ptr(), r_center);
+      return true;
+    }
+    default:
+      break;
   }
 
   return false;
@@ -100,8 +128,9 @@ bool calc_active_center_for_editmode(Object *obedit, const bool select_only, flo
 bool calc_active_center_for_posemode(Object *ob, const bool select_only, float r_center[3])
 {
   bPoseChannel *pchan = BKE_pose_channel_active_if_bonecoll_visible(ob);
-  if (pchan && (!select_only || (pchan->bone->flag & BONE_SELECTED))) {
-    copy_v3_v3(r_center, pchan->pose_head);
+  if (pchan && (!select_only || (pchan->flag & POSE_SELECTED))) {
+    const bArmature *arm = id_cast<bArmature *>(ob->data);
+    BKE_pose_channel_transform_location(arm, pchan, r_center);
     return true;
   }
   return false;
@@ -142,41 +171,38 @@ bool calc_active_center(Object *ob, const bool select_only, float r_center[3])
  *
  * \{ */
 
-struct XFormObjectSkipChild_Container {
-  GHash *obchild_in_obmode_map;
+struct XFormObjectSkipChild {
+  float obmat_orig[4][4] = {};
+  float parent_obmat_orig[4][4] = {};
+  float parent_obmat_inv_orig[4][4] = {};
+  float parent_recurse_obmat_orig[4][4] = {};
+  float parentinv_orig[4][4] = {};
+  Object *ob_parent_recurse = nullptr;
+  int mode = OB_MODE_OBJECT;
 };
 
-struct XFormObjectSkipChild {
-  float obmat_orig[4][4];
-  float parent_obmat_orig[4][4];
-  float parent_obmat_inv_orig[4][4];
-  float parent_recurse_obmat_orig[4][4];
-  float parentinv_orig[4][4];
-  Object *ob_parent_recurse;
-  int mode;
+struct XFormObjectSkipChild_Container {
+  Map<Object *, std::unique_ptr<XFormObjectSkipChild>> obchild_in_obmode_map;
 };
 
 XFormObjectSkipChild_Container *xform_skip_child_container_create()
 {
-  XFormObjectSkipChild_Container *xcs = static_cast<XFormObjectSkipChild_Container *>(
-      MEM_callocN(sizeof(*xcs), __func__));
-  if (xcs->obchild_in_obmode_map == nullptr) {
-    xcs->obchild_in_obmode_map = BLI_ghash_ptr_new(__func__);
-  }
+  XFormObjectSkipChild_Container *xcs = MEM_new<XFormObjectSkipChild_Container>(__func__);
   return xcs;
 }
 
 void xform_skip_child_container_item_ensure_from_array(XFormObjectSkipChild_Container *xcs,
+                                                       const Main &bmain,
                                                        const Scene *scene,
                                                        ViewLayer *view_layer,
                                                        Object **objects,
                                                        uint objects_len)
 {
   Set<Object *> objects_in_transdata(Span(objects, objects_len));
-  BKE_view_layer_synced_ensure(scene, view_layer);
-  ListBase *object_bases = BKE_view_layer_object_bases_get(view_layer);
-  LISTBASE_FOREACH (Base *, base, object_bases) {
-    Object *ob = base->object;
+  BKE_view_layer_synced_ensure(bmain, scene, view_layer);
+  ListBaseT<Base> *object_bases = BKE_view_layer_object_bases_get(view_layer);
+  for (Base &base : *object_bases) {
+    Object *ob = base.object;
     if (ob->parent != nullptr) {
       if (!objects_in_transdata.contains(ob)) {
         if (objects_in_transdata.contains(ob->parent)) {
@@ -205,8 +231,8 @@ void xform_skip_child_container_item_ensure_from_array(XFormObjectSkipChild_Cont
     }
   }
 
-  LISTBASE_FOREACH (Base *, base, object_bases) {
-    Object *ob = base->object;
+  for (Base &base : *object_bases) {
+    Object *ob = base.object;
 
     if (objects_in_transdata.contains(ob)) {
       /* pass. */
@@ -224,8 +250,7 @@ void xform_skip_child_container_item_ensure_from_array(XFormObjectSkipChild_Cont
 
 void object_xform_skip_child_container_destroy(XFormObjectSkipChild_Container *xcs)
 {
-  BLI_ghash_free(xcs->obchild_in_obmode_map, nullptr, MEM_freeN);
-  MEM_freeN(xcs);
+  MEM_delete(xcs);
 }
 
 void object_xform_skip_child_container_item_ensure(XFormObjectSkipChild_Container *xcs,
@@ -233,10 +258,8 @@ void object_xform_skip_child_container_item_ensure(XFormObjectSkipChild_Containe
                                                    Object *ob_parent_recurse,
                                                    int mode)
 {
-  void **xf_p;
-  if (!BLI_ghash_ensure_p(xcs->obchild_in_obmode_map, ob, &xf_p)) {
-    XFormObjectSkipChild *xf = static_cast<XFormObjectSkipChild *>(
-        MEM_mallocN(sizeof(*xf), __func__));
+  xcs->obchild_in_obmode_map.lookup_or_add_cb(ob, [&]() {
+    std::unique_ptr<XFormObjectSkipChild> xf = std::make_unique<XFormObjectSkipChild>();
     copy_m4_m4(xf->parentinv_orig, ob->parentinv);
     copy_m4_m4(xf->obmat_orig, ob->object_to_world().ptr());
     copy_m4_m4(xf->parent_obmat_orig, ob->parent->object_to_world().ptr());
@@ -246,8 +269,8 @@ void object_xform_skip_child_container_item_ensure(XFormObjectSkipChild_Containe
     }
     xf->mode = mode;
     xf->ob_parent_recurse = ob_parent_recurse;
-    *xf_p = xf;
-  }
+    return xf;
+  });
 }
 
 void object_xform_skip_child_container_update_all(XFormObjectSkipChild_Container *xcs,
@@ -256,24 +279,22 @@ void object_xform_skip_child_container_update_all(XFormObjectSkipChild_Container
 {
   BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
 
-  GHashIterator gh_iter;
-  GHASH_ITER (gh_iter, xcs->obchild_in_obmode_map) {
-    Object *ob = static_cast<Object *>(BLI_ghashIterator_getKey(&gh_iter));
-    XFormObjectSkipChild *xf = static_cast<XFormObjectSkipChild *>(
-        BLI_ghashIterator_getValue(&gh_iter));
+  for (auto item : xcs->obchild_in_obmode_map.items()) {
+    Object *ob = item.key;
+    XFormObjectSkipChild *xf = item.value.get();
 
     /* The following blocks below assign 'dmat'. */
     float dmat[4][4];
 
     if (xf->mode == XFORM_OB_SKIP_CHILD_PARENT_IS_XFORM) {
       /* Parent is transformed, this isn't so compensate. */
-      Object *ob_parent_eval = DEG_get_evaluated_object(depsgraph, ob->parent);
+      Object *ob_parent_eval = DEG_get_evaluated(depsgraph, ob->parent);
       mul_m4_m4m4(dmat, xf->parent_obmat_inv_orig, ob_parent_eval->object_to_world().ptr());
       invert_m4(dmat);
     }
     else if (xf->mode == XFORM_OB_SKIP_CHILD_PARENT_IS_XFORM_INDIRECT) {
       /* Calculate parent matrix (from the root transform). */
-      Object *ob_parent_recurse_eval = DEG_get_evaluated_object(depsgraph, xf->ob_parent_recurse);
+      Object *ob_parent_recurse_eval = DEG_get_evaluated(depsgraph, xf->ob_parent_recurse);
       float parent_recurse_obmat_inv[4][4];
       invert_m4_m4(parent_recurse_obmat_inv, ob_parent_recurse_eval->object_to_world().ptr());
       mul_m4_m4m4(dmat, xf->parent_recurse_obmat_orig, parent_recurse_obmat_inv);
@@ -288,7 +309,7 @@ void object_xform_skip_child_container_update_all(XFormObjectSkipChild_Container
     else {
       BLI_assert(xf->mode == XFORM_OB_SKIP_CHILD_PARENT_APPLY);
       /* Transform this - without transform data. */
-      Object *ob_parent_recurse_eval = DEG_get_evaluated_object(depsgraph, xf->ob_parent_recurse);
+      Object *ob_parent_recurse_eval = DEG_get_evaluated(depsgraph, xf->ob_parent_recurse);
       float parent_recurse_obmat_inv[4][4];
       invert_m4_m4(parent_recurse_obmat_inv, ob_parent_recurse_eval->object_to_world().ptr());
       mul_m4_m4m4(dmat, xf->parent_recurse_obmat_orig, parent_recurse_obmat_inv);
@@ -325,59 +346,52 @@ void object_xform_skip_child_container_update_all(XFormObjectSkipChild_Container
  *
  * \{ */
 
-struct XFormObjectData_Container {
-  GHash *obdata_in_obmode_map;
+struct XFormObjectData_Extra {
+  Object *ob = nullptr;
+  float obmat_orig[4][4] = {};
+  std::unique_ptr<XFormObjectData> xod;
 };
 
-struct XFormObjectData_Extra {
-  Object *ob;
-  float obmat_orig[4][4];
-  XFormObjectData *xod;
+struct XFormObjectData_Container {
+  Map<ID *, std::unique_ptr<XFormObjectData_Extra>> obdata_in_obmode_map;
 };
 
 void data_xform_container_item_ensure(XFormObjectData_Container *xds, Object *ob)
 {
-  if (xds->obdata_in_obmode_map == nullptr) {
-    xds->obdata_in_obmode_map = BLI_ghash_ptr_new(__func__);
-  }
-
-  void **xf_p;
-  if (!BLI_ghash_ensure_p(xds->obdata_in_obmode_map, ob->data, &xf_p)) {
-    XFormObjectData_Extra *xf = static_cast<XFormObjectData_Extra *>(
-        MEM_mallocN(sizeof(*xf), __func__));
+  xds->obdata_in_obmode_map.lookup_or_add_cb(ob->data, [&]() {
+    auto xf = std::make_unique<XFormObjectData_Extra>();
     copy_m4_m4(xf->obmat_orig, ob->object_to_world().ptr());
     xf->ob = ob;
     /* Result may be nullptr, that's OK. */
-    xf->xod = data_xform_create(static_cast<ID *>(ob->data));
-    *xf_p = xf;
-  }
+    xf->xod = data_xform_create(ob->data);
+    return xf;
+  });
 }
 
 void data_xform_container_update_all(XFormObjectData_Container *xds,
                                      Main *bmain,
                                      Depsgraph *depsgraph)
 {
-  if (xds->obdata_in_obmode_map == nullptr) {
+  if (xds->obdata_in_obmode_map.is_empty()) {
     return;
   }
   BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
 
-  GHashIterator gh_iter;
-  GHASH_ITER (gh_iter, xds->obdata_in_obmode_map) {
-    ID *id = static_cast<ID *>(BLI_ghashIterator_getKey(&gh_iter));
-    XFormObjectData_Extra *xf = static_cast<XFormObjectData_Extra *>(
-        BLI_ghashIterator_getValue(&gh_iter));
-    if (xf->xod == nullptr) {
+  for (const auto &item : xds->obdata_in_obmode_map.items()) {
+    ID *id = item.key;
+    XFormObjectData_Extra *xf = item.value.get();
+
+    if (!xf->xod) {
       continue;
     }
 
-    Object *ob_eval = DEG_get_evaluated_object(depsgraph, xf->ob);
-    float imat[4][4], dmat[4][4];
-    invert_m4_m4(imat, xf->obmat_orig);
-    mul_m4_m4m4(dmat, imat, ob_eval->object_to_world().ptr());
-    invert_m4(dmat);
+    Object *ob_eval = DEG_get_evaluated(depsgraph, xf->ob);
+    float4x4 imat, dmat;
+    invert_m4_m4(imat.ptr(), xf->obmat_orig);
+    mul_m4_m4m4(dmat.ptr(), imat.ptr(), ob_eval->object_to_world().ptr());
+    invert_m4(dmat.ptr());
 
-    data_xform_by_mat4(xf->xod, dmat);
+    data_xform_by_mat4(*xf->xod, dmat);
     if (xf->ob->type == OB_ARMATURE) {
       /* TODO: none of the current flags properly update armatures, needs investigation. */
       DEG_id_tag_update(id, 0);
@@ -388,28 +402,14 @@ void data_xform_container_update_all(XFormObjectData_Container *xds,
   }
 }
 
-/** Callback for #GHash free. */
-static void trans_obdata_in_obmode_free_elem(void *xf_p)
-{
-  XFormObjectData_Extra *xf = static_cast<XFormObjectData_Extra *>(xf_p);
-  if (xf->xod) {
-    data_xform_destroy(xf->xod);
-  }
-  MEM_freeN(xf);
-}
-
 XFormObjectData_Container *data_xform_container_create()
 {
-  XFormObjectData_Container *xds = static_cast<XFormObjectData_Container *>(
-      MEM_callocN(sizeof(*xds), __func__));
-  xds->obdata_in_obmode_map = BLI_ghash_ptr_new(__func__);
-  return xds;
+  return MEM_new<XFormObjectData_Container>(__func__);
 }
 
 void data_xform_container_destroy(XFormObjectData_Container *xds)
 {
-  BLI_ghash_free(xds->obdata_in_obmode_map, nullptr, trans_obdata_in_obmode_free_elem);
-  MEM_freeN(xds);
+  MEM_delete(xds);
 }
 
 /** \} */

@@ -4,8 +4,8 @@
 
 #include "testing/testing.h"
 
-#include "BLI_build_config.h"
-#include "BLI_endian_defines.h"
+#include "BLI_build_config.hh"
+#include "BLI_endian_defines.hh"
 
 namespace blender::tests {
 
@@ -26,6 +26,8 @@ TEST(BLI_build_config, Endian)
 #if defined(__BIG_ENDIAN__)
   static_assert(ARCH_CPU_BIG_ENDIAN);
   static_assert(!ARCH_CPU_LITTLE_ENDIAN);
+  /* Blender does not build on big endian systems. */
+  static_assert(0);
 #endif
 #if defined(__LITTLE_ENDIAN__)
   static_assert(!ARCH_CPU_BIG_ENDIAN);

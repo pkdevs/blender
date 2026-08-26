@@ -11,6 +11,9 @@ While it can be called directly, you may prefer to run this from Blender's root 
    make format
 
 """
+__all__ = (
+    "main",
+)
 
 import argparse
 import multiprocessing
@@ -22,8 +25,8 @@ from collections.abc import (
     Sequence,
 )
 
-VERSION_MIN = (17, 0, 6)
-VERSION_MAX_RECOMMENDED = (17, 0, 6)
+VERSION_MIN = (20, 1, 8)
+VERSION_MAX_RECOMMENDED = (20, 1, 8)
 CLANG_FORMAT_CMD = "clang-format"
 
 BASE_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -93,7 +96,7 @@ def source_files_from_git(paths: Sequence[str], changed_only: bool) -> list[str]
     else:
         cmd = ("git", "ls-tree", "-r", "HEAD", *paths, "--name-only", "-z")
     files = subprocess.check_output(cmd).split(b'\0')
-    return [f.decode('ascii') for f in files]
+    return [f.decode('utf-8') for f in files]
 
 
 def convert_tabs_to_spaces(files: Sequence[str]) -> None:
@@ -101,23 +104,21 @@ def convert_tabs_to_spaces(files: Sequence[str]) -> None:
         print("TabExpand", f)
         with open(f, 'r', encoding="utf-8") as fh:
             data = fh.read()
-            if False:
-                # Simple 4 space
-                data = data.expandtabs(4)
-            else:
-                # Complex 2 space
-                # because some comments have tabs for alignment.
-                def handle(l: str) -> str:
-                    ls = l.lstrip("\t")
-                    d = len(l) - len(ls)
-                    if d != 0:
-                        return ("  " * d) + ls.expandtabs(4)
-                    else:
-                        return l.expandtabs(4)
+            # Simple 4 space (but we're using 2 spaces).
+            # `data = data.expandtabs(4)`
 
-                lines = data.splitlines(keepends=True)
-                lines = [handle(l) for l in lines]
-                data = "".join(lines)
+            # Complex 2 space
+            # because some comments have tabs for alignment.
+            def handle(line: str) -> str:
+                line_strip = line.lstrip("\t")
+                d = len(line) - len(line_strip)
+                if d != 0:
+                    return ("  " * d) + line_strip.expandtabs(4)
+                return line.expandtabs(4)
+
+            lines = data.splitlines(keepends=True)
+            lines = [handle(line) for line in lines]
+            data = "".join(lines)
         with open(f, 'w', encoding="utf-8") as fh:
             fh.write(data)
 

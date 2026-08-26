@@ -8,8 +8,6 @@
  * Bevel wrapper around #BM_mesh_bevel
  */
 
-#include "BLI_utildefines.h"
-
 #include "DNA_curveprofile_types.h"
 #include "bmesh.hh"
 #include "bmesh_tools.hh"
@@ -17,6 +15,8 @@
 #include "BKE_customdata.hh"
 
 #include "intern/bmesh_operators_private.hh" /* own include */
+
+namespace blender {
 
 void bmo_bevel_exec(BMesh *bm, BMOperator *op)
 {
@@ -92,3 +92,5 @@ void bmo_bevel_exec(BMesh *bm, BMOperator *op)
     BMO_slot_buffer_from_enabled_hflag(bm, op, op->slots_out, "verts.out", BM_VERT, BM_ELEM_TAG);
   }
 }
+
+}  // namespace blender

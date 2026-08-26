@@ -9,20 +9,13 @@
 
 #pragma once
 
-#include "../GHOST_Types.h"
-#include "GHOST_DisplayManagerSDL.hh"
+#include "../GHOST_Types.hh"
 #include "GHOST_Event.hh"
 #include "GHOST_System.hh"
 #include "GHOST_TimerManager.hh"
 #include "GHOST_WindowSDL.hh"
 
-extern "C" {
-#include "SDL.h"
-}
-
-#if !SDL_VERSION_ATLEAST(2, 0, 0)
-#  error "SDL 2.0 or newer is needed to build with Ghost"
-#endif
+#include <SDL3/SDL.h>
 
 class GHOST_WindowSDL;
 
@@ -62,7 +55,7 @@ class GHOST_SystemSDL : public GHOST_System {
 
   void getMainDisplayDimensions(uint32_t &width, uint32_t &height) const override;
 
-  GHOST_IContext *createOffscreenContext(GHOST_GPUSettings gpuSettings) override;
+  GHOST_IContext *createOffscreenContext(GHOST_GPUSettings gpu_settings) override;
 
   GHOST_TSuccess disposeContext(GHOST_IContext *context) override;
 
@@ -75,10 +68,10 @@ class GHOST_SystemSDL : public GHOST_System {
                               uint32_t width,
                               uint32_t height,
                               GHOST_TWindowState state,
-                              GHOST_GPUSettings gpuSettings,
+                              GHOST_GPUSettings gpu_settings,
                               const bool exclusive = false,
                               const bool is_dialog = false,
-                              const GHOST_IWindow *parentWindow = nullptr) override;
+                              const GHOST_IWindow *parent_window = nullptr) override;
 
   /* SDL specific */
   GHOST_WindowSDL *findGhostWindow(SDL_Window *sdl_win);
@@ -88,5 +81,5 @@ class GHOST_SystemSDL : public GHOST_System {
   void processEvent(SDL_Event *sdl_event);
 
   /** The vector of windows that need to be updated. */
-  std::vector<GHOST_WindowSDL *> m_dirty_windows;
+  std::vector<GHOST_WindowSDL *> dirty_windows_;
 };

@@ -8,14 +8,11 @@
 
 #include "intern/builder/deg_builder_cache.h"
 
-#include "MEM_guardedalloc.h"
-
 #include "DNA_anim_types.h"
-
-#include "BLI_utildefines.h"
 
 #include "BKE_anim_data.hh"
 
+#include "RNA_access.hh"
 #include "RNA_path.hh"
 
 namespace blender::deg {
@@ -69,14 +66,15 @@ void AnimatedPropertyStorage::initializeFromID(DepsgraphBuilderCache *builder_ca
 {
   PointerRNA own_pointer_rna = RNA_id_pointer_create(const_cast<ID *>(id));
   BKE_fcurves_id_cb(const_cast<ID *>(id), [&](ID * /*id*/, FCurve *fcurve) {
-    if (fcurve->rna_path == nullptr || fcurve->rna_path[0] == '\0') {
+    const StringRefNull rna_path = fcurve->rna_path();
+    if (rna_path.is_empty()) {
       return;
     }
     /* Resolve property. */
     PointerRNA pointer_rna;
     PropertyRNA *property_rna = nullptr;
     if (!RNA_path_resolve_property(
-            &own_pointer_rna, fcurve->rna_path, &pointer_rna, &property_rna))
+            &own_pointer_rna, rna_path.c_str(), &pointer_rna, &property_rna))
     {
       return;
     }

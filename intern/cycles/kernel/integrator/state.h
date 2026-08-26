@@ -24,16 +24,14 @@
  *
  * INTEGRATOR_STATE_ARRAY(state, x, index, y): read x[index].y
  * INTEGRATOR_STATE_ARRAY_WRITE(state, x, index, y): write x[index].y
- *
- * INTEGRATOR_STATE_NULL: use to pass empty state to other functions.
  */
 
 #include "kernel/types.h"
 
 #include "util/types.h"
 
-#ifdef __PATH_GUIDING__
-#  include "util/guiding.h"
+#if defined(__PATH_GUIDING__)
+#  include "util/guiding.h"  // IWYU pragma: keep
 #endif
 
 #pragma once
@@ -45,7 +43,7 @@ CCL_NAMESPACE_BEGIN
 /* Integrator State
  *
  * CPU rendering path state with AoS layout. */
-typedef struct IntegratorShadowStateCPU {
+struct IntegratorShadowStateCPU {
 #define KERNEL_STRUCT_BEGIN(name) struct {
 #define KERNEL_STRUCT_BEGIN_PACKED(parent_struct, feature) struct {
 #define KERNEL_STRUCT_MEMBER(parent_struct, type, name, feature) type name;
@@ -66,9 +64,9 @@ typedef struct IntegratorShadowStateCPU {
 #undef KERNEL_STRUCT_ARRAY_MEMBER
 #undef KERNEL_STRUCT_END
 #undef KERNEL_STRUCT_END_ARRAY
-} IntegratorShadowStateCPU;
+};
 
-typedef struct IntegratorStateCPU {
+struct IntegratorStateCPU {
 #define KERNEL_STRUCT_BEGIN(name) struct {
 #define KERNEL_STRUCT_BEGIN_PACKED(parent_struct, feature) struct {
 #define KERNEL_STRUCT_MEMBER(parent_struct, type, name, feature) type name;
@@ -93,15 +91,16 @@ typedef struct IntegratorStateCPU {
 
   IntegratorShadowStateCPU shadow;
   IntegratorShadowStateCPU ao;
-} IntegratorStateCPU;
+};
 
 /* Path Queue
  *
  * Keep track of which kernels are queued to be executed next in the path
  * for GPU rendering. */
-typedef struct IntegratorQueueCounter {
-  int num_queued[DEVICE_KERNEL_INTEGRATOR_NUM];
-} IntegratorQueueCounter;
+struct IntegratorQueueCounter {
+  int num_queued[DEVICE_GPU_KERNEL_INTEGRATOR_NUM];
+  int cache_miss;
+};
 
 #if defined(__INTEGRATOR_GPU_PACKED_STATE__) && defined(__KERNEL_GPU__)
 
@@ -138,7 +137,7 @@ typedef struct IntegratorQueueCounter {
 /* Integrator State GPU
  *
  * GPU rendering path state with SoA layout. */
-typedef struct IntegratorStateGPU {
+struct IntegratorStateGPU {
 #define KERNEL_STRUCT_BEGIN(name) struct {
 
 #ifdef __INTEGRATOR_GPU_PACKED_STATE__
@@ -198,7 +197,7 @@ typedef struct IntegratorStateGPU {
   ccl_global IntegratorQueueCounter *queue_counter;
 
   /* Count number of kernels queued for specific shaders. */
-  ccl_global int *sort_key_counter[DEVICE_KERNEL_INTEGRATOR_NUM];
+  ccl_global int *sort_key_counter[DEVICE_GPU_KERNEL_INTEGRATOR_NUM];
 
   /* Index of shadow path which will be used by a next shadow path. */
   ccl_global int *next_shadow_path_index;
@@ -211,7 +210,7 @@ typedef struct IntegratorStateGPU {
 
   /* Divisor used to partition active indices by locality when sorting by material. */
   uint sort_partition_divisor;
-} IntegratorStateGPU;
+};
 
 /* Abstraction
  *
@@ -225,12 +224,12 @@ typedef struct IntegratorStateGPU {
 
 /* Scalar access on CPU. */
 
-typedef IntegratorStateCPU *ccl_restrict IntegratorState;
-typedef const IntegratorStateCPU *ccl_restrict ConstIntegratorState;
-typedef IntegratorShadowStateCPU *ccl_restrict IntegratorShadowState;
-typedef const IntegratorShadowStateCPU *ccl_restrict ConstIntegratorShadowState;
-
-#  define INTEGRATOR_STATE_NULL nullptr
+using IntegratorState = IntegratorStateCPU *;
+using ConstIntegratorState = const IntegratorStateCPU *;
+using IntegratorShadowState = IntegratorShadowStateCPU *;
+using ConstIntegratorShadowState = const IntegratorShadowStateCPU *;
+struct IntegratorBakeState {};
+using ConstIntegratorBakeState = IntegratorBakeState;
 
 #  define INTEGRATOR_STATE(state, nested_struct, member) ((state)->nested_struct.member)
 #  define INTEGRATOR_STATE_WRITE(state, nested_struct, member) ((state)->nested_struct.member)
@@ -244,12 +243,23 @@ typedef const IntegratorShadowStateCPU *ccl_restrict ConstIntegratorShadowState;
 
 /* Array access on GPU with Structure-of-Arrays. */
 
-typedef int IntegratorState;
-typedef int ConstIntegratorState;
-typedef int IntegratorShadowState;
-typedef int ConstIntegratorShadowState;
+using IntegratorState = int;
+using ConstIntegratorState = int;
 
-#  define INTEGRATOR_STATE_NULL -1
+/* Shadow state is wrapped in a struct to support function overloading and templates. */
+struct IntegratorShadowState {
+  ccl_device_inline_method IntegratorShadowState() {}
+  ccl_device_inline_method IntegratorShadowState(int state) : state(state) {}
+  ccl_device_inline_method operator int() const
+  {
+    return state;
+  }
+  int state;
+};
+using ConstIntegratorShadowState = IntegratorShadowState;
+
+struct IntegratorBakeState {};
+using ConstIntegratorBakeState = IntegratorBakeState;
 
 #  ifdef __INTEGRATOR_GPU_PACKED_STATE__
 

@@ -32,27 +32,27 @@ class InverseEvalParams {
                     const Map<const bNodeSocket *, bke::SocketValueVariant> &socket_values,
                     Map<const bNodeSocket *, bke::SocketValueVariant> &updated_socket_values);
 
-  template<typename T> T get_output(const StringRef identifier) const
+  template<typename T> T get_output(const UString identifier) const
   {
-    const bNodeSocket &socket = node.output_by_identifier(identifier);
+    const bNodeSocket &socket = *node.output_by_identifier(identifier);
     if (const bke::SocketValueVariant *value = socket_values_.lookup_ptr(&socket)) {
       return value->get<T>();
     }
     return T();
   }
 
-  template<typename T> T get_input(const StringRef identifier) const
+  template<typename T> T get_input(const UString identifier) const
   {
-    const bNodeSocket &socket = node.input_by_identifier(identifier);
+    const bNodeSocket &socket = *node.input_by_identifier(identifier);
     if (const bke::SocketValueVariant *value = socket_values_.lookup_ptr(&socket)) {
       return value->get<T>();
     }
     return T();
   }
 
-  template<typename T> void set_input(const StringRef identifier, T value)
+  template<typename T> void set_input(const UString identifier, T value)
   {
-    const bNodeSocket &socket = node.input_by_identifier(identifier);
+    const bNodeSocket &socket = *node.input_by_identifier(identifier);
     updated_socket_values_.add(&socket, bke::SocketValueVariant(value));
   }
 };

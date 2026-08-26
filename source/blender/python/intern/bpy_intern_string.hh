@@ -8,6 +8,10 @@
  * \ingroup pythonintern
  */
 
+#include <Python.h>
+
+namespace blender {
+
 void bpy_intern_string_init();
 void bpy_intern_string_exit();
 
@@ -28,3 +32,5 @@ extern PyObject *bpy_intern_str_register;
 extern PyObject *bpy_intern_str_self;
 extern PyObject *bpy_intern_str_depsgraph;
 extern PyObject *bpy_intern_str_unregister;
+
+}  // namespace blender

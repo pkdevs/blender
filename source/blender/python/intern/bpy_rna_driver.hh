@@ -8,6 +8,10 @@
  * \ingroup pythonintern
  */
 
+#include <Python.h>
+
+namespace blender {
+
 struct AnimationEvalContext;
 struct ChannelDriver;
 struct DriverTarget;
@@ -17,10 +21,14 @@ struct PathResolvedRNA;
 /**
  * A version of #driver_get_variable_value which returns a #PyObject.
  */
-PyObject *pyrna_driver_get_variable_value(const AnimationEvalContext *anim_eval_context,
-                                          ChannelDriver *driver,
-                                          DriverVar *dvar,
-                                          DriverTarget *dtar);
+[[nodiscard]] PyObject *pyrna_driver_get_variable_value(
+    const AnimationEvalContext *anim_eval_context,
+    ChannelDriver *driver,
+    DriverVar *dvar,
+    DriverTarget *dtar);
 
-PyObject *pyrna_driver_self_from_anim_rna(PathResolvedRNA *anim_rna);
-bool pyrna_driver_is_equal_anim_rna(const PathResolvedRNA *anim_rna, const PyObject *py_anim_rna);
+[[nodiscard]] PyObject *pyrna_driver_self_from_anim_rna(PathResolvedRNA *anim_rna);
+[[nodiscard]] bool pyrna_driver_is_equal_anim_rna(const PathResolvedRNA *anim_rna,
+                                                  const PyObject *py_anim_rna);
+
+}  // namespace blender

@@ -8,9 +8,7 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace blender {
 
 struct Depsgraph;
 struct Object;
@@ -34,8 +32,6 @@ struct IKPlugin {
   void (*test_constraint)(struct Object *ob, struct bConstraint *cons);
 };
 
-typedef struct IKPlugin IKPlugin;
+using IKPlugin = struct IKPlugin;
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

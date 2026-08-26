@@ -32,6 +32,13 @@ class RENDER_MT_framerate_presets(Menu):
     draw = Menu.draw_preset
 
 
+class RENDER_MT_pixeldensity_presets(Menu):
+    bl_label = "Pixel Density Presets"
+    preset_subdir = "pixel_density"
+    preset_operator = "script.execute_preset"
+    draw = Menu.draw_preset
+
+
 class RenderOutputButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -47,7 +54,7 @@ class RENDER_PT_format(RenderOutputButtonsPanel, Panel):
     bl_label = "Format"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -71,7 +78,7 @@ class RENDER_PT_format(RenderOutputButtonsPanel, Panel):
             fps_rate = round(fps / fps_base, 2)
 
         # TODO: Change the following to iterate over existing presets
-        custom_framerate = (fps_rate not in {23.98, 24, 25, 29.97, 30, 50, 59.94, 60, 120, 240})
+        custom_framerate = (fps_rate not in {6, 8, 12, 23.98, 24, 25, 29.97, 30, 50, 59.94, 60, 120, 240})
 
         if custom_framerate is True:
             fps_label_text = iface_("Custom ({:.4g} fps)").format(fps_rate)
@@ -129,7 +136,7 @@ class RENDER_PT_frame_range(RenderOutputButtonsPanel, Panel):
     bl_label = "Frame Range"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -152,7 +159,7 @@ class RENDER_PT_time_stretching(RenderOutputButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -173,7 +180,7 @@ class RENDER_PT_post_processing(RenderOutputButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -195,7 +202,7 @@ class RENDER_PT_stamp(RenderOutputButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -233,7 +240,7 @@ class RENDER_PT_stamp_note(RenderOutputButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -248,7 +255,7 @@ class RENDER_PT_stamp_note(RenderOutputButtonsPanel, Panel):
         rd = context.scene.render
 
         layout.active = rd.use_stamp_note
-        layout.prop(rd, "stamp_note_text", text="")
+        layout.textbox(rd, "stamp_note_text")
 
 
 class RENDER_PT_stamp_burn(RenderOutputButtonsPanel, Panel):
@@ -257,7 +264,7 @@ class RENDER_PT_stamp_burn(RenderOutputButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -285,9 +292,13 @@ class RENDER_PT_output(RenderOutputButtonsPanel, Panel):
     bl_label = "Output"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
+
+    def draw_header(self, context):
+        rd = context.scene.render
+        self.layout.prop(rd, "save_output", text="")
 
     def draw(self, context):
         layout = self.layout
@@ -296,6 +307,7 @@ class RENDER_PT_output(RenderOutputButtonsPanel, Panel):
 
         rd = context.scene.render
         image_settings = rd.image_settings
+        layout.active = rd.save_output
 
         layout.prop(rd, "filepath", text="")
 
@@ -318,7 +330,7 @@ class RENDER_PT_output_views(RenderOutputButtonsPanel, Panel):
     bl_parent_id = "RENDER_PT_output"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -342,17 +354,19 @@ class RENDER_PT_output_color_management(RenderOutputButtonsPanel, Panel):
     bl_parent_id = "RENDER_PT_output"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
     def draw(self, context):
         scene = context.scene
         image_settings = scene.render.image_settings
+        rd = scene.render
 
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False  # No animation.
+        layout.active = rd.save_output
 
         layout.row().prop(image_settings, "color_management", text=" ", expand=True)
 
@@ -368,11 +382,92 @@ class RENDER_PT_output_color_management(RenderOutputButtonsPanel, Panel):
 
         if image_settings.has_linear_colorspace:
             if hasattr(owner, "linear_colorspace_settings"):
-                col.prop(owner.linear_colorspace_settings, "name", text="Color Space")
+                col.prop_with_menu(
+                    owner.linear_colorspace_settings,
+                    "name",
+                    text="Color Space",
+                    menu="UI_MT_color_space_select")
         else:
             col.prop(owner.display_settings, "display_device")
             col.separator()
             col.template_colormanaged_view_settings(owner, "view_settings")
+
+
+class RENDER_PT_output_pixel_density(RenderOutputButtonsPanel, Panel):
+    bl_label = "Pixel Density"
+    bl_options = {'DEFAULT_CLOSED'}
+    bl_parent_id = "RENDER_PT_output"
+
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_WORKBENCH',
+    }
+
+    _pixel_density_args_prev = None
+    _preset_class = None
+
+    @staticmethod
+    def _draw_pixeldensity_label(*args):
+        # Avoids re-creating text string each draw.
+        if RENDER_PT_output_pixel_density._pixel_density_args_prev == args:
+            return RENDER_PT_output_pixel_density._pixel_density_ret
+
+        ppm_base, preset_label = args
+
+        # NOTE: `as_float_32` is needed because Blender stores this value as a 32bit float.
+        # Which won't match Python's 64bit float.
+        def as_float_32(f):
+            from struct import pack, unpack
+            return unpack("f", pack("f", f))[0]
+
+        # NOTE: Values here are duplicated from presets, ideally this could be avoided.
+        unit_name = {
+            as_float_32(0.0254): iface_("Inch"),
+            as_float_32(0.01): iface_("Centimeter"),
+            as_float_32(1.0): iface_("Meter"),
+        }.get(ppm_base)
+
+        if unit_name is None:
+            pixeldensity_label_text = iface_("Custom")
+            show_pixeldensity = True
+        else:
+            pixeldensity_label_text = iface_("Pixels/{:s}").format(unit_name)
+            show_pixeldensity = (preset_label == "Custom")
+
+        RENDER_PT_output_pixel_density._pixel_density_args_prev = args
+        RENDER_PT_output_pixel_density._pixel_density_ret = args = (pixeldensity_label_text, show_pixeldensity)
+        return args
+
+    @staticmethod
+    def draw_pixeldensity(layout, rd):
+        if RENDER_PT_output_pixel_density._preset_class is None:
+            RENDER_PT_output_pixel_density._preset_class = bpy.types.RENDER_MT_pixeldensity_presets
+
+        args = rd.ppm_base, RENDER_PT_output_pixel_density._preset_class.bl_label
+        pixeldensity_label_text, show_pixeldensity = RENDER_PT_output_pixel_density._draw_pixeldensity_label(*args)
+
+        layout.prop(rd, "ppm_factor", text="Pixels")
+        layout.active = rd.save_output
+
+        row = layout.split(factor=0.4)
+        row.alignment = 'RIGHT'
+        row.label(text="Unit")
+        row.menu("RENDER_MT_pixeldensity_presets", text=pixeldensity_label_text)
+
+        if show_pixeldensity:
+            col = layout.column(align=True)
+            col.prop(rd, "ppm_base", text="Base")
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        scene = context.scene
+        rd = scene.render
+
+        self.draw_pixeldensity(layout, rd)
 
 
 class RENDER_PT_encoding(RenderOutputButtonsPanel, Panel):
@@ -381,7 +476,7 @@ class RENDER_PT_encoding(RenderOutputButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -410,7 +505,7 @@ class RENDER_PT_encoding_video(RenderOutputButtonsPanel, Panel):
     bl_parent_id = "RENDER_PT_encoding"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -445,15 +540,45 @@ class RENDER_PT_encoding_video(RenderOutputButtonsPanel, Panel):
         if needs_codec and ffmpeg.codec == 'NONE':
             return
 
+        image_settings = context.scene.render.image_settings
+
+        if image_settings.color_management == 'OVERRIDE':
+            display_settings = image_settings.display_settings
+            view_settings = image_settings.view_settings
+        else:
+            display_settings = context.scene.display_settings
+            view_settings = context.scene.view_settings
+
+        # HDR compatibility
+        if view_settings.is_hdr and (not needs_codec or ffmpeg.codec not in {'H265', 'AV1'}):
+            layout.label(text="HDR needs H.265 or AV1", icon='STATUS_ERROR')
+
         # Color depth. List of codecs needs to be in sync with
-        # `BKE_ffmpeg_valid_bit_depths` in source code.
-        use_bpp = needs_codec and ffmpeg.codec in {'H264', 'H265', 'AV1'}
+        # `IMB_ffmpeg_valid_bit_depths` in source code.
+        use_bpp = needs_codec and ffmpeg.codec in {'H264', 'H265', 'AV1', 'PRORES', 'FFV1'}
         if use_bpp:
-            image_settings = context.scene.render.image_settings
             layout.prop(image_settings, "color_depth", expand=True)
 
-        if ffmpeg.codec == 'DNXHD':
+        # HDR compatibility
+        if view_settings.is_hdr and image_settings.color_depth not in {'10', '12'}:
+            layout.label(text="HDR needs 10 or 12 bits", icon='STATUS_ERROR')
+
+        # Color space
+        split = layout.split(factor=0.4)
+        col = split.column()
+        col.alignment = 'RIGHT'
+        col.label(text="Color Space")
+
+        col = split.column()
+        row = col.row()
+        row.enabled = False
+        row.prop(display_settings, "display_device", text="")
+
+        if needs_codec and ffmpeg.codec == 'DNXHD':
             layout.prop(ffmpeg, "use_lossless_output")
+
+        if needs_codec and ffmpeg.codec == 'PRORES':
+            layout.prop(ffmpeg, "ffmpeg_prores_profile")
 
         # Output quality
         use_crf = needs_codec and ffmpeg.codec in {
@@ -465,32 +590,44 @@ class RENDER_PT_encoding_video(RenderOutputButtonsPanel, Panel):
         }
         if use_crf:
             layout.prop(ffmpeg, "constant_rate_factor")
+            if (ffmpeg.constant_rate_factor == 'CUSTOM'):
+                layout.prop(ffmpeg, "custom_constant_rate_factor")
+
+        use_encoding_speed = needs_codec and ffmpeg.codec not in {'DNXHD', 'FFV1', 'HUFFYUV', 'PNG', 'PRORES', 'QTRLE'}
+        use_bitrate = needs_codec and ffmpeg.codec not in {'FFV1', 'HUFFYUV', 'PNG', 'PRORES', 'QTRLE'}
+        use_min_max_bitrate = ffmpeg.codec not in {'DNXHD'}
+        use_gop = needs_codec and ffmpeg.codec not in {'DNXHD', 'HUFFYUV', 'PNG', 'PRORES'}
+        use_b_frames = needs_codec and use_gop and ffmpeg.codec not in {'FFV1', 'QTRLE'}
 
         # Encoding speed
-        layout.prop(ffmpeg, "ffmpeg_preset")
+        if use_encoding_speed:
+            layout.prop(ffmpeg, "ffmpeg_preset")
         # I-frames
-        layout.prop(ffmpeg, "gopsize")
+        if use_gop:
+            layout.prop(ffmpeg, "gopsize")
         # B-Frames
-        row = layout.row(align=True, heading="Max B-frames")
-        row.prop(ffmpeg, "use_max_b_frames", text="")
-        sub = row.row(align=True)
-        sub.active = ffmpeg.use_max_b_frames
-        sub.prop(ffmpeg, "max_b_frames", text="")
+        if use_b_frames:
+            row = layout.row(align=True, heading="Max B-frames")
+            row.prop(ffmpeg, "use_max_b_frames", text="")
+            sub = row.row(align=True)
+            sub.active = ffmpeg.use_max_b_frames
+            sub.prop(ffmpeg, "max_b_frames", text="")
 
-        if not use_crf or ffmpeg.constant_rate_factor == 'NONE':
+        if (not use_crf or ffmpeg.constant_rate_factor == 'NONE') and use_bitrate:
             col = layout.column()
 
             sub = col.column(align=True)
             sub.prop(ffmpeg, "video_bitrate")
-            sub.prop(ffmpeg, "minrate", text="Minimum")
-            sub.prop(ffmpeg, "maxrate", text="Maximum")
+            if use_min_max_bitrate:
+                sub.prop(ffmpeg, "minrate", text="Minimum")
+                sub.prop(ffmpeg, "maxrate", text="Maximum")
 
-            col.prop(ffmpeg, "buffersize", text="Buffer")
+                col.prop(ffmpeg, "buffersize", text="Buffer")
 
-            col.separator()
+                col.separator()
 
-            col.prop(ffmpeg, "muxrate", text="Mux Rate")
-            col.prop(ffmpeg, "packetsize", text="Mux Packet Size")
+                col.prop(ffmpeg, "muxrate", text="Mux Rate")
+                col.prop(ffmpeg, "packetsize", text="Mux Packet Size")
 
 
 class RENDER_PT_encoding_audio(RenderOutputButtonsPanel, Panel):
@@ -498,7 +635,7 @@ class RENDER_PT_encoding_audio(RenderOutputButtonsPanel, Panel):
     bl_parent_id = "RENDER_PT_encoding"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 
@@ -521,30 +658,26 @@ class RENDER_PT_encoding_audio(RenderOutputButtonsPanel, Panel):
         if ffmpeg.audio_codec != 'NONE':
             layout.prop(ffmpeg, "audio_channels")
             layout.prop(ffmpeg, "audio_mixrate", text="Sample Rate")
-            layout.prop(ffmpeg, "audio_bitrate")
+            if ffmpeg.audio_codec not in {'FLAC', 'PCM'}:
+                layout.prop(ffmpeg, "audio_bitrate")
             layout.prop(ffmpeg, "audio_volume", slider=True)
 
 
 class RENDER_UL_renderviews(UIList):
     def draw_item(self, _context, layout, _data, item, icon, _active_data, _active_propname, index):
         view = item
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            if view.name in {"left", "right"}:
-                layout.label(text=view.name, icon_value=icon + (not view.use))
-            else:
-                layout.prop(view, "name", text="", index=index, icon_value=icon, emboss=False)
-            layout.prop(view, "use", text="", index=index)
-
-        elif self.layout_type == 'GRID':
-            layout.alignment = 'CENTER'
-            layout.label(text="", icon_value=icon + (not view.use))
+        if view.name in {"left", "right"}:
+            layout.label(text=view.name, icon_value=icon - (not view.use))
+        else:
+            layout.prop(view, "name", text="", index=index, icon_value=icon, emboss=False)
+        layout.prop(view, "use", text="", index=index)
 
 
 class RENDER_PT_stereoscopy(RenderOutputButtonsPanel, Panel):
     bl_label = "Stereoscopy"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
-        'BLENDER_EEVEE_NEXT',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
     bl_options = {'DEFAULT_CLOSED'}
@@ -593,6 +726,7 @@ classes = (
     RENDER_PT_format_presets,
     RENDER_PT_ffmpeg_presets,
     RENDER_MT_framerate_presets,
+    RENDER_MT_pixeldensity_presets,
     RENDER_PT_format,
     RENDER_PT_frame_range,
     RENDER_PT_time_stretching,
@@ -600,6 +734,7 @@ classes = (
     RENDER_PT_output,
     RENDER_PT_output_views,
     RENDER_PT_output_color_management,
+    RENDER_PT_output_pixel_density,
     RENDER_PT_encoding,
     RENDER_PT_encoding_video,
     RENDER_PT_encoding_audio,

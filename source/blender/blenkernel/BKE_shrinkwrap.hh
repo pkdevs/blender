@@ -10,6 +10,7 @@
 /* Shrinkwrap stuff */
 #include "BKE_bvhutils.hh"
 
+#include "BKE_context.hh"
 #include "BLI_array.hh"
 #include "BLI_bit_vector.hh"
 #include "BLI_math_vector_types.hh"
@@ -29,7 +30,10 @@
  * (So that you don't have to pass an enormous amount of arguments to functions)
  */
 
+namespace blender {
+
 struct BVHTree;
+struct Depsgraph;
 struct MDeformVert;
 struct Mesh;
 struct ModifierEvalContext;
@@ -51,45 +55,45 @@ class ShrinkwrapBoundaryData {
  public:
   /* Returns true if there is boundary information. If there is no boundary information, then the
    * mesh from which this data is created from has no boundaries. */
-  inline bool has_boundary() const
+  bool has_boundary() const
   {
     return !edge_is_boundary.is_empty();
   }
 
   /* True if the edge belongs to exactly one face. */
-  blender::BitVector<> edge_is_boundary;
+  BitVector<> edge_is_boundary;
   /* True if the triangle has any boundary edges. */
-  blender::BitVector<> tri_has_boundary;
+  BitVector<> tri_has_boundary;
 
   /* Mapping from vertex index to boundary vertex index, or -1.
    * Used for compact storage of data about boundary vertices. */
-  blender::Array<int> vert_boundary_id;
+  Array<int> vert_boundary_id;
 
   /* Direction data about boundary vertices. */
-  blender::Array<ShrinkwrapBoundaryVertData> boundary_verts;
+  Array<ShrinkwrapBoundaryVertData> boundary_verts;
 };
 
-namespace blender::bke::shrinkwrap {
+namespace bke::shrinkwrap {
 
 const ShrinkwrapBoundaryData &boundary_cache_ensure(const Mesh &mesh);
 
-}  // namespace blender::bke::shrinkwrap
+}  // namespace bke::shrinkwrap
 
 /* Information about a mesh and BVH tree. */
 struct ShrinkwrapTreeData {
   Mesh *mesh;
 
   const BVHTree *bvh;
-  BVHTreeFromMesh treeData;
+  bke::BVHTreeFromMesh treeData;
 
-  blender::OffsetIndices<int> faces;
-  blender::Span<blender::int2> edges;
-  blender::Span<int> corner_edges;
+  OffsetIndices<int> faces;
+  Span<int2> edges;
+  Span<int> corner_edges;
 
-  blender::Span<blender::float3> face_normals;
-  blender::Span<blender::float3> vert_normals;
-  blender::Span<blender::float3> corner_normals;
-  blender::VArraySpan<bool> sharp_faces;
+  Span<float3> face_normals;
+  Span<float3> vert_normals;
+  Span<float3> corner_normals;
+  VArraySpan<bool> sharp_faces;
   const ShrinkwrapBoundaryData *boundary;
 };
 
@@ -121,13 +125,6 @@ void shrinkwrapModifier_deform(ShrinkwrapModifierData *smd,
                                int defgrp_index,
                                float (*vertexCos)[3],
                                int numVerts);
-/* Implementation of the Shrinkwrap Grease Pencil modifier. */
-void shrinkwrapGpencilModifier_deform(ShrinkwrapGpencilModifierData *mmd,
-                                      Object *ob,
-                                      MDeformVert *dvert,
-                                      int defgrp_index,
-                                      float (*vertexCos)[3],
-                                      int numVerts);
 
 struct ShrinkwrapParams {
   /** Shrink target. */
@@ -158,12 +155,12 @@ struct ShrinkwrapParams {
 void shrinkwrapParams_deform(const ShrinkwrapParams &params,
                              Object &object,
                              ShrinkwrapTreeData &tree,
-                             blender::Span<MDeformVert> dvert,
+                             Span<MDeformVert> dvert,
                              int defgrp_index,
-                             blender::MutableSpan<blender::float3> positions);
+                             MutableSpan<float3> positions);
 
 /**
- * Used in `editmesh_mask_extract.cc` to shrink-wrap the extracted mesh to the sculpt.
+ * Used in `sculpt_mask_extract.cc` to shrink-wrap the extracted mesh to the sculpt.
  */
 void BKE_shrinkwrap_mesh_nearest_surface_deform(Depsgraph *depsgraph,
                                                 Scene *scene,
@@ -184,7 +181,7 @@ void BKE_shrinkwrap_remesh_target_project(Mesh *src_me, Mesh *target_me, Object 
  * - #MOD_SHRINKWRAP_CULL_TARGET_BACKFACE (back faces hits are ignored)
  *
  * \param transf: Take into consideration the space_transform, that is:
- * if `transf` was configured with `SPACE_TRANSFORM_SETUP( &transf,  ob1, ob2)`
+ * if `transf` was configured with `SPACE_TRANSFORM_SETUP(&transf, ob1, ob2)`
  * then the input (vert, dir, #BVHTreeRayHit) must be defined in ob1 coordinates space
  * and the #BVHTree must be built in ob2 coordinate space.
  * Thus it provides an easy way to cast the same ray across several trees
@@ -244,17 +241,19 @@ void BKE_shrinkwrap_snap_point_to_surface(const ShrinkwrapTreeData *tree,
  */
 #define NULL_ShrinkwrapCalcData \
   { \
-    NULL, \
+      NULL, \
   }
 #define NULL_BVHTreeFromMesh \
   { \
-    NULL, \
+      NULL, \
   }
 #define NULL_BVHTreeRayHit \
   { \
-    NULL, \
+      NULL, \
   }
 #define NULL_BVHTreeNearest \
   { \
-    0, \
+      0, \
   }
+
+}  // namespace blender

@@ -12,41 +12,32 @@
 
 #include "BLI_index_mask_fwd.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_struct_equality_utils.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_paint_bvh.hh"
 
 #include "DNA_customdata_types.h"
 
-namespace blender::gpu {
+namespace blender {
+
+namespace gpu {
 class Batch;
 class IndexBuf;
 class VertBuf;
-}  // namespace blender::gpu
+}  // namespace gpu
 struct Object;
-namespace blender::bke {
+namespace bke {
 enum class AttrDomain : int8_t;
 namespace pbvh {
 class Node;
 class DrawCache;
 class Tree;
 }  // namespace pbvh
-}  // namespace blender::bke
+}  // namespace bke
 
-namespace blender::draw::pbvh {
+namespace draw::pbvh {
 
-class GenericRequest {
- public:
-  std::string name;
-  eCustomDataType type;
-  bke::AttrDomain domain;
-  GenericRequest(const StringRef name, const eCustomDataType type, const bke::AttrDomain domain)
-      : name(name), type(type), domain(domain)
-  {
-  }
-  BLI_STRUCT_EQUALITY_OPERATORS_3(GenericRequest, type, domain, name);
-};
+using GenericRequest = std::string;
 
 enum class CustomRequest : int8_t {
   Position,
@@ -60,13 +51,13 @@ using AttributeRequest = std::variant<CustomRequest, GenericRequest>;
 struct ViewportRequest {
   Vector<AttributeRequest> attributes;
   bool use_coarse_grids;
-  BLI_STRUCT_EQUALITY_OPERATORS_2(ViewportRequest, attributes, use_coarse_grids);
+  friend bool operator==(const ViewportRequest &a, const ViewportRequest &b) = default;
   uint64_t hash() const;
 };
 
 class DrawCache : public bke::pbvh::DrawCache {
  public:
-  virtual ~DrawCache() = default;
+  ~DrawCache() override = default;
   /**
    * Recalculate and copy data as necessary to prepare batches for drawing triangles for a
    * specific combination of attributes.
@@ -91,4 +82,5 @@ class DrawCache : public bke::pbvh::DrawCache {
 
 DrawCache &ensure_draw_data(std::unique_ptr<bke::pbvh::DrawCache> &ptr);
 
-}  // namespace blender::draw::pbvh
+}  // namespace draw::pbvh
+}  // namespace blender

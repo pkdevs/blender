@@ -7,12 +7,53 @@
 #include "BKE_camera.h"
 
 #include "DNA_camera_types.h"
+#include "DNA_object_types.h"
+#include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_view3d_types.h"
 
-#include "hydra/object.hh"
+#include "DEG_depsgraph_query.hh"
 
 namespace blender::render::hydra {
+
+static pxr::GfMatrix4d gf_matrix_from_transform(const float m[4][4])
+{
+  pxr::GfMatrix4d ret;
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      ret[i][j] = m[i][j];
+    }
+  }
+  return ret;
+}
+
+static void gf_camera_fill_dof_data(const Object *camera_obj, pxr::GfCamera *gf_camera)
+{
+  if (camera_obj == nullptr || camera_obj->type != OB_CAMERA) {
+    return;
+  }
+
+  const Camera *camera = id_cast<Camera *>(camera_obj->data);
+  if (!(camera->dof.flag & CAM_DOF_ENABLED)) {
+    return;
+  }
+
+  /* World units. Handles DoF object and value. Object takes precedence. */
+  const float focus_distance = BKE_camera_object_dof_distance(camera_obj);
+  gf_camera->SetFocusDistance(focus_distance);
+
+  /*
+   * F-stop is unit-less, however it's a ratio between focal length and aperture diameter.
+   * The aperture must be in the same unit for correctness.
+   * Focal length in GfCamera is defined in tenths of a world unit.
+   *
+   * Following the logic of USD camera data writer:
+   * tenth_unit_to_meters = 1 / 10
+   * tenth_unit_to_millimeters = 1000 * tenth_unit_to_meters = 100
+   * Scene's units scale is not used for camera's focal length.
+   */
+  gf_camera->SetFStop(camera->dof.aperture_fstop * 100.0);
+}
 
 static pxr::GfCamera gf_camera(const CameraParams &params,
                                const pxr::GfVec2i &res,
@@ -59,14 +100,20 @@ pxr::GfCamera gf_camera(const Depsgraph *depsgraph,
                         const ARegion *region,
                         const pxr::GfVec4f &border)
 {
-  const RegionView3D *region_data = (const RegionView3D *)region->regiondata;
+  const RegionView3D *region_data = static_cast<const RegionView3D *>(region->regiondata);
+  const Scene *scene = DEG_get_evaluated_scene(depsgraph);
 
   CameraParams params;
   BKE_camera_params_init(&params);
   BKE_camera_params_from_view3d(&params, depsgraph, v3d, region_data);
 
   pxr::GfCamera camera = gf_camera(params, pxr::GfVec2i(region->winx, region->winy), border);
-  camera.SetTransform(io::hydra::gf_matrix_from_transform(region_data->viewmat).GetInverse());
+  camera.SetTransform(gf_matrix_from_transform(region_data->viewmat).GetInverse());
+
+  /* Ensure viewport is in active camera view mode. */
+  if (region_data->persp == RV3D_CAMOB) {
+    gf_camera_fill_dof_data(scene->camera, &camera);
+  }
 
   return camera;
 }
@@ -80,7 +127,9 @@ pxr::GfCamera gf_camera(const Object *camera_obj,
   BKE_camera_params_from_object(&params, camera_obj);
 
   pxr::GfCamera camera = gf_camera(params, res, border);
-  camera.SetTransform(io::hydra::gf_matrix_from_transform(camera_obj->object_to_world().ptr()));
+  camera.SetTransform(gf_matrix_from_transform(camera_obj->object_to_world().ptr()));
+
+  gf_camera_fill_dof_data(camera_obj, &camera);
 
   return camera;
 }

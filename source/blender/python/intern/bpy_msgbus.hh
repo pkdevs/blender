@@ -8,4 +8,10 @@
 
 #pragma once
 
-PyObject *BPY_msgbus_module();
+#include <Python.h>
+
+namespace blender {
+
+[[nodiscard]] PyObject *BPY_msgbus_module();
+
+}  // namespace blender

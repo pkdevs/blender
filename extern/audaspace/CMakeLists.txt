@@ -14,16 +14,12 @@
 # limitations under the License.
 ################################################################################
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.21)
 include(CMakeDependentOption)
-
-if(POLICY CMP0054)
-	cmake_policy(SET CMP0054 NEW)
-endif()
 
 project(audaspace)
 
-set(AUDASPACE_VERSION 1.5)
+set(AUDASPACE_VERSION 1.9)
 set(AUDASPACE_LONG_VERSION ${AUDASPACE_VERSION}.0)
 
 if(DEFINED AUDASPACE_CMAKE_CFG)
@@ -37,10 +33,9 @@ endif()
 # sources
 
 set(SRC
-	src/devices/DefaultSynchronizer.cpp
 	src/devices/DeviceManager.cpp
+	src/devices/MixingThreadDevice.cpp
 	src/devices/NULLDevice.cpp
-	src/devices/OpenCloseDevice.cpp
 	src/devices/ReadDevice.cpp
 	src/devices/SoftwareDevice.cpp
 	src/devices/ThreadedDevice.cpp
@@ -93,6 +88,8 @@ set(SRC
 	src/fx/VolumeReader.cpp
 	src/fx/VolumeSound.cpp
 	src/fx/VolumeStorage.cpp
+	src/fx/Echo.cpp
+	src/fx/EchoReader.cpp
 	src/generator/Sawtooth.cpp
 	src/generator/SawtoothReader.cpp
 	src/generator/Silence.cpp
@@ -142,16 +139,15 @@ set(PRIVATE_HDR
 )
 
 set(PUBLIC_HDR
-	include/devices/DefaultSynchronizer.h
 	include/devices/DeviceManager.h
 	include/devices/I3DDevice.h
 	include/devices/I3DHandle.h
+	include/devices/ICaptureDeviceFactory.h
 	include/devices/IDeviceFactory.h
 	include/devices/IDevice.h
 	include/devices/IHandle.h
-	include/devices/ISynchronizer.h
+	include/devices/MixingThreadDevice.h
 	include/devices/NULLDevice.h
-	include/devices/OpenCloseDevice.h
 	include/devices/ReadDevice.h
 	include/devices/SoftwareDevice.h
 	include/devices/ThreadedDevice.h
@@ -209,6 +205,8 @@ set(PUBLIC_HDR
 	include/fx/VolumeReader.h
 	include/fx/VolumeSound.h
 	include/fx/VolumeStorage.h
+	include/fx/Echo.h
+	include/fx/EchoReader.h
 	include/generator/Sawtooth.h
 	include/generator/SawtoothReader.h
 	include/generator/Silence.h
@@ -260,9 +258,9 @@ set(HDR ${PRIVATE_HDR} ${PUBLIC_HDR})
 set(INCLUDE ${CMAKE_CURRENT_BINARY_DIR} include)
 
 if(WIN32)
-	set(LIBRARIES)
+	set(LIBRARIES "")
 	if(AUDASPACE_STANDALONE)
-		set(DLLS)
+		set(DLLS "")
 		set(LIBRARY_PATH "../lib" CACHE PATH "Path which contains the libraries.")
 		file(GLOB LIBRARY_DIRS ${LIBRARY_PATH}/*)
 		list(APPEND CMAKE_PREFIX_PATH ${LIBRARY_DIRS})
@@ -291,6 +289,7 @@ if(AUDASPACE_STANDALONE)
 	option(WITH_LIBSNDFILE "Build With LibSndFile" TRUE)
 	option(WITH_OPENAL "Build With OpenAL" TRUE)
 	option(WITH_PYTHON "Build With Python Library" TRUE)
+	option(WITH_RUBBERBAND "Build With Rubber Band Library" TRUE)
 	option(WITH_SDL "Build With SDL" TRUE)
 	option(WITH_STRICT_DEPENDENCIES "Error and abort instead of warning if a library is not found." FALSE)
 	if(APPLE)
@@ -327,7 +326,7 @@ if(AUDASPACE_STANDALONE)
 	cmake_dependent_option(PLUGIN_SDL "Build SDL Plugin" TRUE "WITH_SDL;SHARED_LIBRARY" FALSE)
 	cmake_dependent_option(PLUGIN_WASAPI "Build WASAPI Plugin" TRUE "WITH_WASAPI;SHARED_LIBRARY" FALSE)
 	cmake_dependent_option(WITH_PYTHON_MODULE "Build Python Module" TRUE "WITH_PYTHON" FALSE)
-	cmake_dependent_option(USE_SDL2 "Use SDL2 instead of 1 if available" TRUE "WITH_SDL" FALSE)
+	cmake_dependent_option(USE_SDL3 "Use SDL3" TRUE "WITH_SDL" FALSE)
 	cmake_dependent_option(DYNLOAD_JACK "Dynamically load JACK" FALSE "WITH_JACK" FALSE)
 	cmake_dependent_option(DYNLOAD_PULSEAUDIO "Dynamically load PulseAudio" FALSE "WITH_PULSEAUDIO" FALSE)
 	cmake_dependent_option(DYNLOAD_PIPEWIRE "Dynamically load PipeWire" FALSE "WITH_PIPEWIRE" FALSE)
@@ -435,11 +434,9 @@ if(WITH_COREAUDIO)
 
 		set(COREAUDIO_SRC
 			plugins/coreaudio/CoreAudioDevice.cpp
-			plugins/coreaudio/CoreAudioSynchronizer.cpp
 		)
 		set(COREAUDIO_HDR
 			plugins/coreaudio/CoreAudioDevice.h
-			plugins/coreaudio/CoreAudioSynchronizer.h
 		)
 
 		if(NOT PLUGIN_COREAUDIO)
@@ -567,12 +564,10 @@ if(WITH_JACK)
 	if(JACK_FOUND)
 		set(JACK_SRC
 			plugins/jack/JackDevice.cpp
-			plugins/jack/JackSynchronizer.cpp
 			plugins/jack/JackLibrary.cpp
 		)
 		set(JACK_HDR
 			plugins/jack/JackDevice.h
-			plugins/jack/JackSynchronizer.h
 			plugins/jack/JackLibrary.h
 			plugins/jack/JackSymbols.h
 		)
@@ -727,7 +722,7 @@ endif()
 if(WITH_PIPEWIRE)
 	if(AUDASPACE_STANDALONE)
 		find_package(PkgConfig)
-		pkg_check_modules(PIPEWIRE ${PACKAGE_OPTION} libpipewire-0.3)
+		pkg_check_modules(PIPEWIRE ${PACKAGE_OPTION} libpipewire-0.3>=1.1.0)
 	endif()
 
 	if(PIPEWIRE_FOUND)
@@ -799,14 +794,51 @@ if(WITH_PYTHON)
 	endif()
 endif()
 
+# Rubber Band Library
+if(WITH_RUBBERBAND)
+	if(AUDASPACE_STANDALONE)
+		find_package(Rubberband ${PACKAGE_OPTION})
+	endif()
+
+	if(RUBBERBAND_FOUND)
+		set(RUBBERBAND_SRC
+			src/fx/TimeStretchPitchScale.cpp
+			src/fx/TimeStretchPitchScaleReader.cpp
+			src/fx/AnimateableTimeStretchPitchScale.cpp
+			src/fx/AnimateableTimeStretchPitchScaleReader.cpp
+		)
+		set(RUBBERBAND_HDR
+			include/fx/TimeStretchPitchScale.h
+			include/fx/TimeStretchPitchScaleReader.h
+			include/fx/AnimateableTimeStretchPitchScale.h
+			include/fx/AnimateableTimeStretchPitchScaleReader.h
+		)
+
+		add_definitions(-DWITH_RUBBERBAND)
+
+		list(APPEND INCLUDE ${RUBBERBAND_INCLUDE_DIRS})
+		list(APPEND LIBRARIES ${RUBBERBAND_LIBRARIES})
+
+		list(APPEND SRC ${RUBBERBAND_SRC})
+		list(APPEND HDR ${RUBBERBAND_HDR})
+	else()
+		if(AUDASPACE_STANDALONE)
+			set(WITH_RUBBERBAND FALSE CACHE BOOL "Build with Rubber Band" FORCE)
+		else()
+			set(WITH_RUBBERBAND FALSE)
+		endif()
+		message(WARNING "Rubber Band Library not found, time-stretching and pitch-scaling functionality will not be built.")
+	endif()
+endif()
+
 # SDL
 if(WITH_SDL)
 	if(AUDASPACE_STANDALONE)
-		if(USE_SDL2)
-			find_package(SDL2)
-			if(SDL2_FOUND)
-				set(SDL_INCLUDE_DIR ${SDL2_INCLUDE_DIR})
-				set(SDL_LIBRARY ${SDL2_LIBRARY})
+		if(USE_SDL3)
+			find_package(SDL3 CONFIG)
+			if(SDL3_FOUND)
+				get_target_property(SDL_INCLUDE_DIR SDL3::Headers INTERFACE_INCLUDE_DIRECTORIES)
+				set(SDL_LIBRARY SDL3::SDL3)
 				set(SDL_FOUND TRUE)
 			else()
 				find_package(SDL ${PACKAGE_OPTION})
@@ -911,7 +943,6 @@ endif()
 # directories
 
 include_directories(${INCLUDE})
-link_directories()
 
 # install configuration
 
@@ -1147,6 +1178,7 @@ endif()
 
 if(WITH_PYTHON)
 	set(PYTHON_SRC
+		bindings/python/PyAnimateableProperty.cpp
 		bindings/python/PyAPI.cpp
 		bindings/python/PyDevice.cpp
 		bindings/python/PyDynamicMusic.cpp
@@ -1159,6 +1191,7 @@ if(WITH_PYTHON)
 		bindings/python/PyThreadPool.cpp
 	)
 	set(PYTHON_HDR
+		bindings/python/PyAnimateableProperty.h
 		bindings/python/PyAPI.h
 		bindings/python/PyDevice.h
 		bindings/python/PyDynamicMusic.h
@@ -1183,7 +1216,14 @@ if(WITH_PYTHON)
 	endif()
 
 	add_library(audaspace-py ${LIBRARY_TYPE} ${PYTHON_SRC} ${PYTHON_HDR})
-	target_link_libraries(audaspace-py audaspace ${PYTHON_LIBRARIES})
+	# When Blender is built as a Python module, `PYTHON_LIBRARIES` won't be defined.
+	# NOTE: AUDASPACE has its own `WITH_PYTHON_MODULE` option with different meaning,
+	# so we check the variable is defined instead.
+	if(DEFINED PYTHON_LIBRARIES)
+		target_link_libraries(audaspace-py audaspace ${PYTHON_LIBRARIES})
+	else()
+		target_link_libraries(audaspace-py audaspace)
+	endif()
 	set_target_properties(audaspace-py PROPERTIES SOVERSION ${AUDASPACE_VERSION})
 
 	if(AUDASPACE_STANDALONE)

@@ -26,6 +26,7 @@ set(SRC
   ./intern/memory_usage.cc
 
   MEM_guardedalloc.h
+  MEM_safe_multiply.h
   ./intern/mallocn_inline.hh
   ./intern/mallocn_intern.hh
   ./intern/mallocn_intern_function_pointers.hh
@@ -40,25 +41,9 @@ set(SRC
 
 set(LIB
   PRIVATE bf::intern::atomic
+  PRIVATE bf::intern::profile
+  PRIVATE bf::dependencies::pthreads
 )
-
-if(WIN32 AND NOT UNIX)
-  list(APPEND INC_SYS
-    ${PTHREADS_INC}
-  )
-  if(DEFINED PTHREADS_LIBRARIES)
-    list(APPEND LIB
-      ${PTHREADS_LIBRARIES}
-    )
-  endif()
-endif()
-
-# Jemalloc 5.0.0+ needs extra configuration.
-if(WITH_MEM_JEMALLOC)
-  if(NOT ("${JEMALLOC_VERSION}" VERSION_LESS "5.0.0"))
-    add_definitions(-DWITH_JEMALLOC_CONF)
-  endif()
-endif()
 
 blender_add_lib(bf_intern_guardedalloc "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 add_library(bf::intern::guardedalloc ALIAS bf_intern_guardedalloc)
@@ -67,6 +52,7 @@ if(WITH_GTESTS)
   set(TEST_SRC
     tests/guardedalloc_alignment_test.cc
     tests/guardedalloc_overflow_test.cc
+    tests/guardedalloc_safe_multiply_test.cc
     tests/guardedalloc_test_base.h
   )
   set(TEST_INC

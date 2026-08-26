@@ -14,11 +14,13 @@
 
 #ifdef RNA_RUNTIME
 
+namespace blender {
+
 /**
  * Get the Action slot, given this slot handle.
  */
 PointerRNA rna_generic_action_slot_get(bAction *dna_action,
-                                       const blender::animrig::slot_handle_t slot_handle);
+                                       const animrig::slot_handle_t slot_handle);
 
 /**
  * Set the Action slot.
@@ -28,7 +30,7 @@ PointerRNA rna_generic_action_slot_get(bAction *dna_action,
 void rna_generic_action_slot_set(PointerRNA rna_slot_to_assign,
                                  ID &animated_id,
                                  bAction *&action_ptr_ref,
-                                 blender::animrig::slot_handle_t &slot_handle_ref,
+                                 animrig::slot_handle_t &slot_handle_ref,
                                  char *slot_name,
                                  ReportList *reports);
 
@@ -38,10 +40,10 @@ void rna_generic_action_slot_set(PointerRNA rna_slot_to_assign,
  * Requires that there is an Action already assigned, unless the slot to assign
  * is Slot::unassigned (that always works).
  */
-void rna_generic_action_slot_handle_set(blender::animrig::slot_handle_t slot_handle_to_assign,
+void rna_generic_action_slot_handle_set(animrig::slot_handle_t slot_handle_to_assign,
                                         ID &animated_id,
                                         bAction *&action_ptr_ref,
-                                        blender::animrig::slot_handle_t &slot_handle_ref,
+                                        animrig::slot_handle_t &slot_handle_ref,
                                         char *slot_name);
 
 /**
@@ -51,6 +53,29 @@ void rna_generic_action_slot_handle_set(blender::animrig::slot_handle_t slot_han
  * "rna_iterator_array_end", "rna_iterator_array_dereference_get".
  */
 void rna_iterator_generic_action_suitable_slots_begin(CollectionPropertyIterator *iter,
+                                                      PointerRNA *owner_ptr,
                                                       bAction *assigned_action);
+
+/**
+ * Generic function for handling library overrides on Action slot handle properties.
+ *
+ * This is used for `id.animation_data.action_slot_handle`, and similar properties. These
+ * properties determine which Action Slot is assigned. The reason this needs special code is that
+ * the assigned slot is determined by two properties: the assigned Action, and the slot handle. So
+ * even when the slot handle itself is numerically identical in the library file and the override,
+ * if the Action assignment is overridden, that number indicates a different, unrelated slot.
+ *
+ * In the above case, when the library overrides get applied, first the new Action is assigned.
+ * This will make Blender auto-select a slot, which may fail, resulting in having no slot assigned.
+ * To ensure that the intended slot is assigned after this, this function will emit a library
+ * override operation for the slot handle as well. That way, after the Action is assigned, an
+ * explicit slot will be assigned.
+ */
+void rna_generic_action_slot_handle_override_diff(Main *bmain,
+                                                  RNAPropertyOverrideDiffContext &rnadiff_ctx,
+                                                  const bAction *action_a,
+                                                  const bAction *action_b);
+
+}  // namespace blender
 
 #endif /* RNA_RUNTIME */

@@ -11,11 +11,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
+#include "BKE_compositor.hh"
 #include "BKE_context.hh"
-#include "BKE_mask.h"
+#include "BKE_mask.hh"
 
 #include "ED_clip.hh"
 #include "ED_image.hh"
@@ -29,6 +31,8 @@
 #include "transform.hh"
 #include "transform_convert.hh"
 
+namespace blender::ed::transform {
+
 struct TransDataMasking {
   bool is_handle;
 
@@ -37,7 +41,7 @@ struct TransDataMasking {
   MaskSplinePoint *point;
   float parent_matrix[3][3];
   float parent_inverse_matrix[3][3];
-  char orig_handle_type;
+  eBezTriple_Handle orig_handle_type;
 
   eMaskWhichHandle which_handle;
 };
@@ -56,7 +60,7 @@ static void MaskHandleToTransData(MaskSplinePoint *point,
                                   /*const*/ const float parent_inverse_matrix[3][3])
 {
   BezTriple *bezt = &point->bezt;
-  const bool is_sel_any = MASKPOINT_ISSEL_ANY(point);
+  const bool is_sel_any = BKE_mask_point_selected(point);
 
   tdm->point = point;
   copy_m3_m3(tdm->vec, bezt->vec);
@@ -87,7 +91,6 @@ static void MaskHandleToTransData(MaskSplinePoint *point,
   memset(td->axismtx, 0, sizeof(td->axismtx));
   td->axismtx[2][2] = 1.0f;
 
-  td->ext = nullptr;
   td->val = nullptr;
 
   if (is_sel_any) {
@@ -116,8 +119,8 @@ static void MaskPointToTransData(Scene *scene,
                                  const float asp[2])
 {
   BezTriple *bezt = &point->bezt;
-  const bool is_sel_point = MASKPOINT_ISSEL_KNOT(point);
-  const bool is_sel_any = MASKPOINT_ISSEL_ANY(point);
+  const bool is_sel_point = BKE_mask_point_selected_knot(point);
+  const bool is_sel_any = BKE_mask_point_selected(point);
   float parent_matrix[3][3], parent_inverse_matrix[3][3];
 
   BKE_mask_point_parent_matrix_get(point, scene->r.cfra, parent_matrix);
@@ -152,8 +155,6 @@ static void MaskPointToTransData(Scene *scene,
 
       memset(td->axismtx, 0, sizeof(td->axismtx));
       td->axismtx[2][2] = 1.0f;
-
-      td->ext = nullptr;
 
       if (i == 1) {
         /* Scaling weights. */
@@ -268,19 +269,19 @@ static void createTransMaskingData(bContext *C, TransInfo *t)
   }
 
   /* Count. */
-  LISTBASE_FOREACH (MaskLayer *, masklay, &mask->masklayers) {
-    if (masklay->visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
+  for (MaskLayer &masklay : mask->masklayers) {
+    if (masklay.visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
       continue;
     }
 
-    LISTBASE_FOREACH (MaskSpline *, spline, &masklay->splines) {
+    for (MaskSpline &spline : masklay.splines) {
       int i;
 
-      for (i = 0; i < spline->tot_point; i++) {
-        MaskSplinePoint *point = &spline->points[i];
+      for (i = 0; i < spline.tot_point; i++) {
+        MaskSplinePoint *point = &spline.points[i];
 
-        if (MASKPOINT_ISSEL_ANY(point)) {
-          if (MASKPOINT_ISSEL_KNOT(point)) {
+        if (BKE_mask_point_selected(point)) {
+          if (BKE_mask_point_selected_knot(point)) {
             countsel += 3;
           }
           else {
@@ -314,32 +315,31 @@ static void createTransMaskingData(bContext *C, TransInfo *t)
   ED_mask_get_aspect(t->area, t->region, &asp[0], &asp[1]);
 
   tc->data_len = (is_prop_edit) ? count : countsel;
-  td = tc->data = static_cast<TransData *>(
-      MEM_callocN(tc->data_len * sizeof(TransData), "TransObData(Mask Editing)"));
+  td = tc->data = MEM_new_array_zeroed<TransData>(tc->data_len, "TransObData(Mask Editing)");
   /* For each 2d uv coord a 3d vector is allocated, so that they can be
    * treated just as if they were 3d verts. */
-  td2d = tc->data_2d = static_cast<TransData2D *>(
-      MEM_callocN(tc->data_len * sizeof(TransData2D), "TransObData2D(Mask Editing)"));
-  tc->custom.type.data = tdm = static_cast<TransDataMasking *>(
-      MEM_callocN(tc->data_len * sizeof(TransDataMasking), "TransDataMasking(Mask Editing)"));
+  td2d = tc->data_2d = MEM_new_array_zeroed<TransData2D>(tc->data_len,
+                                                         "TransObData2D(Mask Editing)");
+  tc->custom.type.data = tdm = MEM_new_array_zeroed<TransDataMasking>(
+      tc->data_len, "TransDataMasking(Mask Editing)");
   tc->custom.type.use_free = true;
 
   /* Create data. */
-  LISTBASE_FOREACH (MaskLayer *, masklay, &mask->masklayers) {
-    if (masklay->visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
+  for (MaskLayer &masklay : mask->masklayers) {
+    if (masklay.visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
       continue;
     }
 
-    LISTBASE_FOREACH (MaskSpline *, spline, &masklay->splines) {
+    for (MaskSpline &spline : masklay.splines) {
       int i;
 
-      for (i = 0; i < spline->tot_point; i++) {
-        MaskSplinePoint *point = &spline->points[i];
+      for (i = 0; i < spline.tot_point; i++) {
+        MaskSplinePoint *point = &spline.points[i];
 
-        if (is_prop_edit || MASKPOINT_ISSEL_ANY(point)) {
+        if (is_prop_edit || BKE_mask_point_selected(point)) {
           MaskPointToTransData(scene, point, td, td2d, tdm, is_prop_edit, asp);
 
-          if (is_prop_edit || MASKPOINT_ISSEL_KNOT(point)) {
+          if (is_prop_edit || BKE_mask_point_selected_knot(point)) {
             td += 3;
             td2d += 3;
             tdm += 3;
@@ -449,15 +449,15 @@ static void special_aftertrans_update__mask(bContext *C, TransInfo *t)
     BLI_assert(0);
   }
 
-  if (t->scene->nodetree) {
+  if (bke::compositor::is_enabled(*t->scene, bke::compositor::ExecutionMode::Preview)) {
     WM_event_add_notifier(C, NC_MASK | ND_DATA, &mask->id);
   }
 
   /* TODO: don't key all masks. */
-  if (blender::animrig::is_autokey_on(t->scene)) {
+  if (animrig::is_autokey_on(t->scene)) {
     Scene *scene = t->scene;
 
-    if (ED_mask_layer_shape_auto_key_select(mask, scene->r.cfra)) {
+    if (ED_mask_layer_shape_auto_key_select(C, mask, scene->r.cfra)) {
       WM_event_add_notifier(C, NC_MASK | ND_DATA, &mask->id);
       DEG_id_tag_update(&mask->id, 0);
     }
@@ -472,3 +472,5 @@ TransConvertTypeInfo TransConvertType_Mask = {
     /*recalc_data*/ recalcData_mask_common,
     /*special_aftertrans_update*/ special_aftertrans_update__mask,
 };
+
+}  // namespace blender::ed::transform

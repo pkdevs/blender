@@ -8,7 +8,11 @@
 
 #pragma once
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
+
+#include "DNA_windowmanager_enums.h"
+
+namespace blender {
 
 struct bContext;
 struct Main;
@@ -18,7 +22,7 @@ struct wmOperatorType;
 struct wmWindow;
 struct wmWindowManager;
 
-/* *************** internal api ************** */
+/* *************** Internal API ************** */
 
 /**
  * \note #bContext can be null in background mode because we don't
@@ -63,7 +67,17 @@ wmWindow *wm_window_copy_test(bContext *C, wmWindow *win_src, bool duplicate_lay
  */
 void wm_window_free(bContext *C, wmWindowManager *wm, wmWindow *win);
 /**
- * This is event from ghost, or exit-Blender operator.
+ * User request to close the window (close event for example, or exit operator).
+ *
+ * - Close may be deferred (if the file isn't saved).
+ * - Store temp window screen coordinates.
+ */
+void wm_window_close_request(bContext *C, wmWindowManager *wm, wmWindow *win);
+/**
+ * Close the window unconditionally.
+ *
+ * \note Lower level, may run if GHOST failed to initialize the window.
+ * We cannot assume GHOST or the GPU context is valid at this point.
  */
 void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win);
 
@@ -100,7 +114,8 @@ void wm_window_set_size(wmWindow *win, int width, int height);
 /**
  * \brief Push rendered buffer to the screen.
  */
-void wm_window_swap_buffers(wmWindow *win);
+void wm_window_swap_buffer_acquire(wmWindow *win);
+void wm_window_swap_buffer_release(wmWindow *win);
 void wm_window_set_swap_interval(wmWindow *win, int interval);
 bool wm_window_get_swap_interval(wmWindow *win, int *r_interval);
 
@@ -111,11 +126,6 @@ void wm_cursor_position_to_ghost_screen_coords(wmWindow *win, int *x, int *y);
 void wm_cursor_position_from_ghost_client_coords(wmWindow *win, int *x, int *y);
 void wm_cursor_position_to_ghost_client_coords(wmWindow *win, int *x, int *y);
 
-#ifdef WITH_INPUT_IME
-void wm_window_IME_begin(wmWindow *win, int x, int y, int w, int h, bool complete);
-void wm_window_IME_end(wmWindow *win);
-#endif
-
 /**
  * Effectively remove timers from the list and delete them. Calling this should only be done by
  * internal WM management code, from specific, safe places.
@@ -124,11 +134,11 @@ void wm_window_timers_delete_removed(wmWindowManager *wm);
 
 /* *************** window operators ************** */
 
-int wm_window_close_exec(bContext *C, wmOperator *op);
+wmOperatorStatus wm_window_close_exec(bContext *C, wmOperator *op);
 /**
  * Full-screen operator callback.
  */
-int wm_window_fullscreen_toggle_exec(bContext *C, wmOperator *op);
+wmOperatorStatus wm_window_fullscreen_toggle_exec(bContext *C, wmOperator *op);
 /**
  * Call the quit confirmation prompt or exit directly if needed. The use can
  * still cancel via the confirmation popup. Also, this may not quit Blender
@@ -138,8 +148,11 @@ int wm_window_fullscreen_toggle_exec(bContext *C, wmOperator *op);
  */
 void wm_quit_with_optional_confirmation_prompt(bContext *C, wmWindow *win) ATTR_NONNULL();
 
-int wm_window_new_exec(bContext *C, wmOperator *op);
-int wm_window_new_main_exec(bContext *C, wmOperator *op);
+wmOperatorStatus wm_window_new_exec(bContext *C, wmOperator *op);
+wmOperatorStatus wm_window_new_main_exec(bContext *C, wmOperator *op);
 
 void wm_test_autorun_revert_action_set(wmOperatorType *ot, PointerRNA *ptr);
 void wm_test_autorun_warning(bContext *C);
+void wm_test_foreign_file_warning(bContext *C);
+
+}  // namespace blender

@@ -8,17 +8,17 @@
  * \ingroup bke
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <stddef.h>
+
+namespace blender {
 
 #define CDF_TYPE_IMAGE 0
 #define CDF_TYPE_MESH 1
 
 #define CDF_LAYER_NAME_MAX 64
 
-typedef struct CDataFile CDataFile;
-typedef struct CDataFileLayer CDataFileLayer;
+struct CDataFile;
+struct CDataFileLayer;
 
 /* Create/Free */
 
@@ -44,6 +44,4 @@ void cdf_remove(const char *filepath);
 CDataFileLayer *cdf_layer_find(CDataFile *cdf, int type, const char *name);
 CDataFileLayer *cdf_layer_add(CDataFile *cdf, int type, const char *name, size_t datasize);
 
-#ifdef __cplusplus
-}
-#endif
+}  // namespace blender

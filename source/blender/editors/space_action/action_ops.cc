@@ -6,7 +6,6 @@
  * \ingroup spaction
  */
 
-#include <cmath>
 #include <cstdlib>
 
 #include "DNA_space_types.h"
@@ -20,6 +19,8 @@
 
 #include "WM_api.hh"
 #include "WM_types.hh"
+
+namespace blender {
 
 /* ************************** registration - operator types **********************************/
 
@@ -37,6 +38,7 @@ void action_operatortypes()
   WM_operatortype_append(ACTION_OT_select_more);
   WM_operatortype_append(ACTION_OT_select_less);
   WM_operatortype_append(ACTION_OT_select_leftright);
+  WM_operatortype_append(ACTION_OT_select_by_type);
 
   /* editing */
   WM_operatortype_append(ACTION_OT_snap);
@@ -62,9 +64,6 @@ void action_operatortypes()
   WM_operatortype_append(ACTION_OT_stash);
   WM_operatortype_append(ACTION_OT_stash_and_create);
 
-  WM_operatortype_append(ACTION_OT_layer_next);
-  WM_operatortype_append(ACTION_OT_layer_prev);
-
   WM_operatortype_append(ACTION_OT_previewrange_set);
   WM_operatortype_append(ACTION_OT_view_all);
   WM_operatortype_append(ACTION_OT_view_selected);
@@ -84,7 +83,7 @@ void ED_operatormacros_action()
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   WM_operatortype_macro_define(ot, "ACTION_OT_duplicate");
   otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_transform");
-  RNA_enum_set(otmacro->ptr, "mode", TFM_TIME_TRANSLATE);
+  RNA_enum_set(otmacro->ptr, "mode", ed::transform::TFM_TIME_TRANSLATE);
   RNA_boolean_set(otmacro->ptr, "use_duplicated_keyframes", true);
   RNA_boolean_set(otmacro->ptr, "use_proportional_edit", false);
 }
@@ -109,3 +108,5 @@ void action_keymap(wmKeyConfig *keyconf)
   /* keyframes */
   WM_keymap_ensure(keyconf, "Dopesheet", SPACE_ACTION, RGN_TYPE_WINDOW);
 }
+
+}  // namespace blender

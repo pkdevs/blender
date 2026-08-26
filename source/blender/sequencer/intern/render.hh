@@ -8,26 +8,37 @@
  * \ingroup sequencer
  */
 
+#include "DNA_listBase.h"
+
 #include "BLI_math_vector_types.hh"
-#include "BLI_vector.hh"
+#include "BLI_set.hh"
 
+namespace blender {
+
+struct Depsgraph;
 struct ImBuf;
-struct LinkNode;
-struct ListBase;
+struct Mask;
+struct RenderData;
 struct Scene;
-struct SeqEffectHandle;
-struct SeqRenderData;
-struct Sequence;
+struct SeqTimelineChannel;
+struct Strip;
 
-/* mutable state for sequencer */
+namespace seq {
+
+/* Recursion protection while rendering a single sequencer frame.
+ * If the same scene or strip is seen, recursion stops. */
 struct SeqRenderState {
-  LinkNode *scene_parents = nullptr;
+  Set<Scene *> scenes_in_progress;
+  Set<Strip *> strips_in_progress;
+
+  /* Is the top-level render request for the scene's currently evaluated frame. */
+  bool is_current_frame = false;
 };
 
 /* Strip corner coordinates in screen pixel space. Note that they might not be
  * axis aligned when rotation is present. */
 struct StripScreenQuad {
-  blender::float2 v0, v1, v2, v3;
+  float2 v0, v1, v2, v3;
 
   bool is_empty() const
   {
@@ -35,29 +46,55 @@ struct StripScreenQuad {
   }
 };
 
-ImBuf *seq_render_give_ibuf_seqbase(const SeqRenderData *context,
-                                    float timeline_frame,
-                                    int chan_shown,
-                                    ListBase *channels,
-                                    ListBase *seqbasep);
-ImBuf *seq_render_effect_execute_threaded(SeqEffectHandle *sh,
-                                          const SeqRenderData *context,
-                                          Sequence *seq,
-                                          float timeline_frame,
-                                          float fac,
-                                          ImBuf *ibuf1,
-                                          ImBuf *ibuf2);
-void seq_imbuf_to_sequencer_space(const Scene *scene, ImBuf *ibuf, bool make_float);
-blender::Vector<Sequence *> seq_get_shown_sequences(
-    const Scene *scene, ListBase *channels, ListBase *seqbase, int timeline_frame, int chanshown);
-ImBuf *seq_render_strip(const SeqRenderData *context,
-                        SeqRenderState *state,
-                        Sequence *seq,
-                        float timeline_frame);
-ImBuf *seq_render_mask(const SeqRenderData *context,
-                       Mask *mask,
+/**
+ * Result of rendering a strip: the produced image,
+ * plus some auxiliary data.
+ */
+struct SeqResult {
+  bool is_valid() const
+  {
+    return image != nullptr;
+  }
+
+  ImBuf *image = nullptr;
+  /* How much the resulting image should be translated, in pixels. */
+  float2 translation = float2(0, 0);
+  bool is_opaque_before_transform = false;
+};
+
+SeqResult seq_render_give_ibuf_seqbase(const RenderData *context,
+                                       SeqRenderState *state,
+                                       float timeline_frame,
+                                       int chan_shown,
+                                       ListBaseT<SeqTimelineChannel> *channels,
+                                       ListBaseT<Strip> *seqbasep);
+SeqResult seq_render_strip(const RenderData *context,
+                           SeqRenderState *state,
+                           Strip *strip,
+                           float timeline_frame);
+
+/* Renders Mask into an image suitable for sequencer:
+ * RGB channels contain mask intensity; alpha channel is opaque. */
+ImBuf *seq_render_mask(Depsgraph *depsgraph,
+                       int width,
+                       int height,
+                       const Mask *mask,
                        float frame_index,
                        bool make_float);
+
+/* Converts image to sequencer color space, if needed. */
+void ensure_ibuf_is_sequencer_space(const Scene *scene, ImBuf *ibuf, bool make_float);
+
 void seq_imbuf_assign_spaces(const Scene *scene, ImBuf *ibuf);
 
-StripScreenQuad get_strip_screen_quad(const SeqRenderData *context, const Sequence *seq);
+StripScreenQuad get_strip_screen_quad(const RenderData *context, const Strip *strip);
+
+/** Ensure image buffer has 4 channels, most sequencer code assumes this. */
+void ensure_ibuf_is_rgba(ImBuf *ibuf);
+bool seq_strip_do_multiview_render(const Scene *scene,
+                                   const Strip *strip,
+                                   const char *filepath,
+                                   char *r_prefix);
+
+}  // namespace seq
+}  // namespace blender

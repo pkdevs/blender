@@ -6,6 +6,10 @@
 /** \file
  * \ingroup bke
  */
+#include "BLI_math_vector_types.hh"
+#include <cstdint>
+
+namespace blender {
 
 struct BlendDataReader;
 struct BlendWriter;
@@ -20,16 +24,21 @@ struct ImBuf;
 struct Scopes;
 struct rctf;
 
+enum eBezTriple_Handle : uint8_t;
+
 void BKE_curvemapping_set_defaults(CurveMapping *cumap,
                                    int tot,
                                    float minx,
                                    float miny,
                                    float maxx,
                                    float maxy,
-                                   short default_handle_type);
+                                   eBezTriple_Handle default_handle_type);
 CurveMapping *BKE_curvemapping_add(int tot, float minx, float miny, float maxx, float maxy);
+void BKE_curvemapping_free_data_single(CurveMapping *cumap, int index);
 void BKE_curvemapping_free_data(CurveMapping *cumap);
 void BKE_curvemapping_free(CurveMapping *cumap);
+void BKE_curvemapping_copy_data_single(
+    CurveMapping *target, const CurveMapping *cumap, int to_idx, int from_idx, bool make_copy);
 void BKE_curvemapping_copy_data(CurveMapping *target, const CurveMapping *cumap);
 CurveMapping *BKE_curvemapping_copy(const CurveMapping *cumap);
 void BKE_curvemapping_set_black_white_ex(const float black[3],
@@ -39,17 +48,23 @@ void BKE_curvemapping_set_black_white(CurveMapping *cumap,
                                       const float black[3],
                                       const float white[3]);
 
-enum {
-  CURVEMAP_SLOPE_NEGATIVE = 0,
-  CURVEMAP_SLOPE_POSITIVE = 1,
-  CURVEMAP_SLOPE_POS_NEG = 2,
+enum class CurveMapSlopeType : int8_t {
+  Negative = 0,
+  Positive = 1,
+  PositiveNegative = 2,
 };
 
 /**
  * Reset the view for current curve.
  */
 void BKE_curvemapping_reset_view(CurveMapping *cumap);
-void BKE_curvemap_reset(CurveMap *cuma, const rctf *clipr, int preset, int slope);
+void BKE_curvemap_reset(CurveMap *cuma, const rctf *clipr, int preset, CurveMapSlopeType slope);
+/**
+ * When the current point is deselected, activate the closest remaining point
+ * by index. The function searches for the nearest valid index relative to the previously
+ * active index, not the nearest point by distance.
+ */
+void BKE_curvemap_activate_nearest_point(struct CurveMap *cuma, const int i_last);
 /**
  * Removes with flag set.
  */
@@ -60,9 +75,15 @@ void BKE_curvemap_remove(CurveMap *cuma, short flag);
 bool BKE_curvemap_remove_point(CurveMap *cuma, CurveMapPoint *point);
 CurveMapPoint *BKE_curvemap_insert(CurveMap *cuma, float x, float y);
 /**
+ * Shift all selected points.
+ */
+void BKE_curvemap_translate_selection(CurveMap *cuma, const blender::float2 &offset);
+/**
  * \param type: #eBezTriple_Handle
  */
 void BKE_curvemap_handle_set(CurveMap *cuma, int type);
+
+CurveMapPoint *BKE_curvemap_active_get(CurveMap *cuma);
 
 /**
  * \note only does current curvemap!.
@@ -126,6 +147,7 @@ void BKE_curvemapping_evaluate_premulRGBF(const CurveMapping *cumap,
 bool BKE_curvemapping_RGBA_does_something(const CurveMapping *cumap);
 void BKE_curvemapping_table_F(const CurveMapping *cumap, float **array, int *size);
 void BKE_curvemapping_table_RGBA(const CurveMapping *cumap, float **array, int *size);
+int BKE_curvemapping_num_channels(const CurveMapping *cumap);
 
 /** Get the minimum x value of each curve map table. */
 void BKE_curvemapping_get_range_minimums(const CurveMapping *curve_mapping, float minimums[4]);
@@ -190,28 +212,26 @@ void BKE_color_managed_display_settings_copy(ColorManagedDisplaySettings *new_se
                                              const ColorManagedDisplaySettings *settings);
 
 /**
- * Initialize view settings to be best suitable for render type of viewing.
- * This will use default view transform from the OCIO configuration if none
- * is specified.
+ * Initialize view settings to the default.
  */
-void BKE_color_managed_view_settings_init_render(
-    ColorManagedViewSettings *view_settings,
-    const ColorManagedDisplaySettings *display_settings,
-    const char *view_transform);
-
-/**
- * Initialize view settings which are best suitable for viewing non-render images.
- * For example,s movie clips while tracking.
- */
-void BKE_color_managed_view_settings_init_default(
-    ColorManagedViewSettings *view_settings, const ColorManagedDisplaySettings *display_settings);
+void BKE_color_managed_view_settings_init(ColorManagedViewSettings *view_settings,
+                                          const ColorManagedDisplaySettings *display_settings,
+                                          const char *view_transform);
 
 void BKE_color_managed_view_settings_copy(ColorManagedViewSettings *new_settings,
                                           const ColorManagedViewSettings *settings);
+
+/**
+ * Copy view settings that are not related to the curve mapping. Keep the curve mapping unchanged
+ * in the new_settings.
+ */
+void BKE_color_managed_view_settings_copy_keep_curve_mapping(
+    ColorManagedViewSettings *new_settings, const ColorManagedViewSettings *settings);
+
 void BKE_color_managed_view_settings_free(ColorManagedViewSettings *settings);
 
 void BKE_color_managed_view_settings_blend_write(BlendWriter *writer,
-                                                 ColorManagedViewSettings *settings);
+                                                 const ColorManagedViewSettings *settings);
 void BKE_color_managed_view_settings_blend_read_data(BlendDataReader *reader,
                                                      ColorManagedViewSettings *settings);
 
@@ -222,3 +242,5 @@ void BKE_color_managed_colorspace_settings_copy(
     const ColorManagedColorspaceSettings *settings);
 bool BKE_color_managed_colorspace_settings_equals(const ColorManagedColorspaceSettings *settings1,
                                                   const ColorManagedColorspaceSettings *settings2);
+
+}  // namespace blender

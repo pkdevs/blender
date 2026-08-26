@@ -7,21 +7,23 @@ set(INC
   PUBLIC ${CMAKE_CURRENT_BINARY_DIR}
   ../../blenlib
   ../../imbuf
+  ../../imbuf/movie
 )
 
 set(INC_SYS
-
 )
 
 set(LIB
   PRIVATE bf::intern::atomic
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::dependencies::optional::tbb
+  PUBLIC bf::dependencies::openimageio
+  bf::dependencies::fmt
 )
 
 add_definitions(-DWITH_DNA_GHASH)
 
-# Needed for `mallocn.c`.
+# Needed for `mallocn.cc`.
 if(HAVE_MALLOC_STATS_H)
   add_definitions(-DHAVE_MALLOC_STATS_H)
 endif()
@@ -32,7 +34,7 @@ set(dna_header_string_file "${CMAKE_CURRENT_BINARY_DIR}/dna_includes_as_strings.
 set(DNA_INCLUDE_TEXT "/* Do not edit manually, changes will be overwritten. */\n")
 set(DNA_FILE_LIST "/* Do not edit manually, changes will be overwritten. */\n")
 foreach(header ${SRC_DNA_INC})
-  get_filename_component(dna_header_file ${header} NAME)
+  cmake_path(GET header FILENAME dna_header_file)
   string(APPEND DNA_INCLUDE_TEXT "#include \"${header}\"\n")
   string(APPEND DNA_FILE_LIST "\t\"${dna_header_file}\",\n")
 endforeach()
@@ -45,34 +47,37 @@ file(GENERATE OUTPUT ${dna_header_string_file} CONTENT "${DNA_FILE_LIST}")
 
 # Subset of `blenlib` used by `makesdna`.
 set(BLENLIB_SRC
-  ../../blenlib/intern/BLI_assert.c
-  ../../blenlib/intern/BLI_ghash.c
+  ../../blenlib/intern/BLI_assert.cc
+  ../../blenlib/intern/BLI_ghash.cc
   ../../blenlib/intern/BLI_ghash_utils.cc
-  ../../blenlib/intern/BLI_linklist.c
-  ../../blenlib/intern/BLI_memarena.c
-  ../../blenlib/intern/BLI_mempool.c
-  ../../blenlib/intern/endian_switch.c
+  ../../blenlib/intern/BLI_linklist.cc
+  ../../blenlib/intern/BLI_memarena.cc
+  ../../blenlib/intern/BLI_mempool.cc
   ../../blenlib/intern/listbase.cc
-  ../../blenlib/intern/string.c
+  ../../blenlib/intern/string.cc
 
-  # Dependency of BLI_ghash.c
+  # Dependency of BLI_ghash.cc
   ../../blenlib/intern/hash_mm2a.cc
 
-  # Dependencies of BLI_mempool.c when ASAN is enabled.
-  ../../blenlib/intern/gsqueue.c
+  # Dependencies of BLI_mempool.cc when ASAN is enabled.
+  ../../blenlib/intern/gsqueue.cc
   ../../blenlib/intern/threads.cc
-  ../../blenlib/intern/time.c
+  ../../blenlib/intern/time.cc
 )
 
 set(SRC
+  dna_parse.cc
   dna_utils.cc
   makesdna.cc
   ${BLENLIB_SRC}
   ${dna_header_include_file}
   ${dna_header_string_file}
+
+  dna_parse.h
+  dna_utils.h
 )
 
-# BLI_mempool.c needs these files for ThreadMutex when
+# BLI_mempool.cc needs these files for ThreadMutex when
 # compiling in address sanitizer mode.
 if(WITH_COMPILER_ASAN)
   list(APPEND SRC
@@ -81,7 +86,7 @@ endif()
 
 # `SRC_DNA_INC` is defined in the parent directory.
 
-add_cc_flags_custom_test(makesdna)
+add_c_and_cxx_flags_custom_test(makesdna)
 
 add_executable(makesdna ${SRC} ${SRC_DNA_INC})
 setup_platform_linker_flags(makesdna)
@@ -89,25 +94,24 @@ setup_platform_linker_libs(makesdna)
 blender_target_include_dirs(makesdna ${INC})
 blender_target_include_dirs_sys(makesdna ${INC_SYS})
 target_link_libraries(makesdna ${LIB})
+target_link_libraries(makesdna PRIVATE bf::dependencies::pthreads)
 
-if(WIN32 AND NOT UNIX)
-  if(DEFINED PTHREADS_LIBRARIES)
-    target_link_libraries(makesdna PRIVATE ${PTHREADS_LIBRARIES})
-  endif()
-endif()
-
-# Output dna.c
+# Output dna.cc
 add_custom_command(
   OUTPUT
-    ${CMAKE_CURRENT_BINARY_DIR}/dna.c
+    ${CMAKE_CURRENT_BINARY_DIR}/dna.cc
+    ${CMAKE_CURRENT_BINARY_DIR}/dna_defaults.cc
+    ${CMAKE_CURRENT_BINARY_DIR}/dna_struct_ids.cc
     ${CMAKE_CURRENT_BINARY_DIR}/dna_type_offsets.h
-    ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.c
+    ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.cc
   COMMAND
     ${CMAKE_COMMAND} -E env ${PLATFORM_ENV_BUILD}
     "$<TARGET_FILE:makesdna>"
-    ${CMAKE_CURRENT_BINARY_DIR}/dna.c
+    ${CMAKE_CURRENT_BINARY_DIR}/dna.cc
     ${CMAKE_CURRENT_BINARY_DIR}/dna_type_offsets.h
-    ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.c
+    ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.cc
+    ${CMAKE_CURRENT_BINARY_DIR}/dna_struct_ids.cc
+    ${CMAKE_CURRENT_BINARY_DIR}/dna_defaults.cc
     ${CMAKE_SOURCE_DIR}/source/blender/makesdna/
   DEPENDS makesdna
 )
@@ -116,11 +120,11 @@ add_custom_command(
 # -----------------------------------------------------------------------------
 # Build bf_dna library
 set(SRC
-  dna_defaults.c
   dna_genfile.cc
   dna_utils.cc
-  ${CMAKE_CURRENT_BINARY_DIR}/dna.c
-  ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.c
+  ${CMAKE_CURRENT_BINARY_DIR}/dna.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/dna_struct_ids.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.cc
   ${SRC_DNA_INC}
 
   ${CMAKE_CURRENT_BINARY_DIR}/dna_type_offsets.h
@@ -129,15 +133,32 @@ set(SRC
 )
 
 set_source_files_properties(
-  ${CMAKE_CURRENT_BINARY_DIR}/dna.c
+  ${CMAKE_CURRENT_BINARY_DIR}/dna.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/dna_struct_ids.cc
   ${CMAKE_CURRENT_BINARY_DIR}/dna_type_offsets.h
-  ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.c
+  ${CMAKE_CURRENT_BINARY_DIR}/dna_verify.cc
   PROPERTIES GENERATED TRUE
 )
 
 blender_add_lib(bf_dna "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 add_library(bf::dna ALIAS bf_dna)
 
+
+# -----------------------------------------------------------------------------
+# Build bf_dna_defaults library
+
+set(SRC
+  ${CMAKE_CURRENT_BINARY_DIR}/dna_defaults.cc
+  ${CMAKE_SOURCE_DIR}/release/datafiles/userdef/userdef_default_theme.c
+  ${SRC_DNA_INC}
+)
+
+set_source_files_properties(
+  ${CMAKE_CURRENT_BINARY_DIR}/dna_defaults.cc
+  PROPERTIES GENERATED TRUE
+)
+
+blender_add_lib(bf_dna_defaults "${SRC}" "${INC}" "${INC_SYS}" "${LIB};bf_dna")
 
 
 # -----------------------------------------------------------------------------
@@ -148,18 +169,17 @@ set(INC
 )
 
 set(INC_SYS
-
 )
 
 set(SRC
   ${BLENLIB_SRC}
-  ${SRC_DNA_DEFAULTS_INC}
   ${SRC_DNA_OTHER_INC}
 )
 
 set(LIB
   PRIVATE bf::intern::atomic
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::dependencies::fmt
   PRIVATE bf::dependencies::optional::tbb
 )
 

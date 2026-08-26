@@ -8,124 +8,137 @@
  * \ingroup sequencer
  */
 
-struct ListBase;
-struct Scene;
-struct Sequence;
+#include "DNA_listBase.h"
 
-bool SEQ_transform_sequence_can_be_translated(const Sequence *seq);
+#include "BLI_array.hh"
+#include "BLI_bounds_types.hh"
+#include "BLI_math_matrix_types.hh"
+#include "BLI_span.hh"
+
+namespace blender {
+
+struct Scene;
+struct Strip;
+struct SeqTimelineChannel;
+struct TimeMarker;
+
+namespace seq {
+
+bool transform_strip_can_be_translated(const Strip *strip);
 /**
- * Used so we can do a quick check for single image seq
- * since they work a bit differently to normal image seq's (during transform).
+ * Checks whether the strip functions as a single static display,
+ * which means it has only one unique frame of content and does not draw holds.
+ * This includes non-sequence image strips and all effect strips with no inputs (e.g. color, text).
  */
-bool SEQ_transform_single_image_check(const Sequence *seq);
-bool SEQ_transform_test_overlap(const Scene *scene, ListBase *seqbasep, Sequence *test);
-bool SEQ_transform_test_overlap_seq_seq(const Scene *scene, Sequence *seq1, Sequence *seq2);
-void SEQ_transform_translate_sequence(Scene *evil_scene, Sequence *seq, int delta);
+bool transform_single_image_check(const Strip *strip);
+bool transform_test_overlap(const Scene *scene, ListBaseT<Strip> *seqbasep, Strip *test);
+bool transform_test_overlap(const Scene *scene, Strip *strip1, Strip *strip2);
+void transform_translate_strip(Scene *evil_scene, Strip *strip, int delta);
 /**
  * \return 0 if there weren't enough space.
  */
-bool SEQ_transform_seqbase_shuffle_ex(ListBase *seqbasep,
-                                      Sequence *test,
-                                      Scene *evil_scene,
-                                      int channel_delta);
-bool SEQ_transform_seqbase_shuffle(ListBase *seqbasep, Sequence *test, Scene *evil_scene);
-bool SEQ_transform_seqbase_shuffle_time(blender::Span<Sequence *> strips_to_shuffle,
-                                        blender::Span<Sequence *> time_dependent_strips,
-                                        ListBase *seqbasep,
-                                        Scene *evil_scene,
-                                        ListBase *markers,
-                                        bool use_sync_markers);
-bool SEQ_transform_seqbase_shuffle_time(blender::Span<Sequence *> strips_to_shuffle,
-                                        ListBase *seqbasep,
-                                        Scene *evil_scene,
-                                        ListBase *markers,
-                                        bool use_sync_markers);
+bool transform_seqbase_shuffle_ex(ListBaseT<Strip> *seqbasep,
+                                  Strip *test,
+                                  Scene *evil_scene,
+                                  int channel_delta);
+bool transform_seqbase_shuffle(ListBaseT<Strip> *seqbasep, Strip *test, Scene *evil_scene);
+bool transform_seqbase_shuffle_time(Span<Strip *> strips_to_shuffle,
+                                    Span<Strip *> time_dependent_strips,
+                                    ListBaseT<Strip> *seqbasep,
+                                    Scene *evil_scene,
+                                    ListBaseT<TimeMarker> *markers,
+                                    bool use_sync_markers);
+bool transform_seqbase_shuffle_time(Span<Strip *> strips_to_shuffle,
+                                    ListBaseT<Strip> *seqbasep,
+                                    Scene *evil_scene,
+                                    ListBaseT<TimeMarker> *markers,
+                                    bool use_sync_markers);
 
-void SEQ_transform_handle_overlap(Scene *scene,
-                                  ListBase *seqbasep,
-                                  blender::Span<Sequence *> transformed_strips,
-                                  blender::Span<Sequence *> time_dependent_strips,
-                                  bool use_sync_markers);
-void SEQ_transform_handle_overlap(Scene *scene,
-                                  ListBase *seqbasep,
-                                  blender::Span<Sequence *> transformed_strips,
-                                  bool use_sync_markers);
+void transform_handle_overlap(Scene *scene,
+                              ListBaseT<Strip> *seqbasep,
+                              Span<Strip *> source_strips,
+                              Span<Strip *> time_dependent_strips,
+                              bool use_sync_markers);
+void transform_handle_overlap(Scene *scene,
+                              ListBaseT<Strip> *seqbasep,
+                              Span<Strip *> source_strips,
+                              bool use_sync_markers);
 /**
- * Check if the selected seq's reference unselected seq's.
+ * Move strips and markers (if not locked) that start after \a timeline_frame by \a delta frames.
  */
-bool SEQ_transform_seqbase_isolated_sel_check(ListBase *seqbase);
-/**
- * Move strips and markers (if not locked) that start after timeline_frame by delta frames
- *
- * \param scene: Scene in which strips are located
- * \param seqbase: ListBase in which strips are located
- * \param delta: offset in frames to be applied
- * \param timeline_frame: frame on timeline from where strips are moved
- */
-void SEQ_transform_offset_after_frame(Scene *scene,
-                                      ListBase *seqbase,
-                                      int delta,
-                                      int timeline_frame);
+void transform_strips_after_frame(Scene *scene,
+                                  ListBaseT<Strip> *seqbase,
+                                  int timeline_frame,
+                                  int delta);
 
 /**
- * Check if `seq` can be moved.
+ * Check if `strip` can be moved.
  * This function also checks `SeqTimelineChannel` flag.
  */
-bool SEQ_transform_is_locked(ListBase *channels, const Sequence *seq);
+bool transform_is_locked(const ListBaseT<SeqTimelineChannel> *channels, const Strip *strip);
 
 /* Image transformation. */
 
-void SEQ_image_transform_mirror_factor_get(const Sequence *seq, float r_mirror[2]);
 /**
- * Get strip transform origin offset from image center
- * NOTE: This function does not apply axis mirror.
- *
- * \param scene: Scene in which strips are located
- * \param seq: Sequence to calculate image transform origin
- * \param r_origin: return value
- */
-void SEQ_image_transform_origin_offset_pixelspace_get(const Scene *scene,
-                                                      const Sequence *seq,
-                                                      float r_origin[2]);
+ * Get per-axis mirror factors for a \a strip image.
+ * \return float2 where each component is 1.0f (normal) or -1.0f (mirrored). */
+float2 image_transform_mirror_factor_get(const Strip *strip);
+
 /**
- * Get 4 corner points of strip image, optionally without rotation component applied.
- * Corner vectors are in viewport space.
+ * Get the \a strip origin as a fraction of its rendered image. This origin can be anywhere, but
+ * (0,0) corresponds to the bottom left of the image, and (1,1) the top right.
  *
- * \param scene: Scene in which strips are located
- * \param seq: Sequence to calculate transformed image quad
- * \param apply_rotation: Apply sequence rotation transform to the quad
- * \param r_quad: array of 4 2D vectors
+ * NOTE: #StripTransform::origin is stored relative to the strip box
+ * (#image_transform_box_size_get), which for text strips is smaller than their rendered image.
+ * This function properly converts it to be relative to the rendered image for the render pipeline
+ * to use. Being a fraction, it is independent of proxy render size.
  */
-void SEQ_image_transform_quad_get(const Scene *scene,
-                                  const Sequence *seq,
-                                  bool apply_rotation,
-                                  float r_quad[4][2]);
+float2 image_transform_origin_get(const Scene *scene, const Strip *strip);
+
+/**
+ * Get the \a strip origin's offset in view-space pixels from the preview's center, including axis
+ * mirror and viewport pixel aspect.
+ */
+float2 image_transform_origin_preview_offset_get(const Scene *scene, const Strip *strip);
+
+/**
+ * Get \a strip image transformation matrix relative to its origin in view-space, including axis
+ * mirror and viewport pixel aspect.
+ */
+float3x3 image_transform_matrix_get(const Scene *scene, const Strip *strip);
+
+/**
+ * Get the size of the drawn \a strip quad before any cropping, scaling, or transformation.
+ * This is the size of the rendered `ImBuf` for every type but text strips, where it is the tighter
+ * bounding box of the text glyphs.
+ *
+ * For the fully-processed quad, see #image_transform_quad_get.
+ * For the bounding box of the quad, see #image_transform_bounding_box_from_strips_get.
+ *
+ * \return int2 with (width, height) in view-space pixels
+ */
+int2 image_transform_box_size_get(const Scene *scene, const Strip *strip);
+
 /**
  * Get 4 corner points of strip image. Corner vectors are in viewport space.
+ * Indices correspond to following corners (assuming no rotation):
+ * 3--0
+ * |  |
+ * 2--1
  *
- * \param scene: Scene in which strips are located
- * \param seq: Sequence to calculate transformed image quad
- * \param r_quad: array of 4 2D vectors
+ * \param strip: Strip to calculate transformed image quad
+ * \return array of four 2D points
  */
-void SEQ_image_transform_final_quad_get(const Scene *scene,
-                                        const Sequence *seq,
-                                        float r_quad[4][2]);
+Array<float2> image_transform_quad_get(const Scene *scene, const Strip *strip);
 
-void SEQ_image_preview_unit_to_px(const Scene *scene, const float co_src[2], float co_dst[2]);
-void SEQ_image_preview_unit_from_px(const Scene *scene, const float co_src[2], float co_dst[2]);
+float2 image_preview_unit_to_px(const Scene *scene, float2 co_src);
+float2 image_preview_unit_from_px(const Scene *scene, float2 co_src);
 
 /**
- * Get viewport axis aligned bounding box from a collection of sequences.
- * The collection must have one or more strips
- *
- * \param scene: Scene in which strips are located
- * \param strips: Collection of strips to get the bounding box from
- * \param apply_rotation: Include sequence rotation transform in the bounding box calculation
- * \param r_min: Minimum x and y values
- * \param r_max: Maximum x and y values
+ * Get viewport axis aligned bounding box from multiple strips.
+ * \param strips: Span of strips to calculate the bounding box for
  */
-void SEQ_image_transform_bounding_box_from_collection(Scene *scene,
-                                                      blender::Span<Sequence *> strips,
-                                                      bool apply_rotation,
-                                                      float r_min[2],
-                                                      float r_max[2]);
+Bounds<float2> image_transform_bounding_box_from_strips_get(Scene *scene, Span<Strip *> strips);
+
+}  // namespace seq
+}  // namespace blender

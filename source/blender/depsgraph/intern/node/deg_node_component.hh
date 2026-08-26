@@ -8,22 +8,22 @@
 
 #pragma once
 
+#include "BLI_span.hh"
+#include "BLI_string_ref.hh"
 #include "intern/eval/deg_eval_copy_on_write.h"
 #include "intern/node/deg_node.hh"
 #include "intern/node/deg_node_id.hh"
 #include "intern/node/deg_node_operation.hh"
 
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_map.hh"
+#include "BLI_vector.hh"
 
-#include "BKE_object.hh"
-
-#include "DNA_object_types.h"
+namespace blender {
 
 struct ID;
 struct bPoseChannel;
 
-namespace blender::deg {
+namespace deg {
 
 struct Depsgraph;
 struct IDNode;
@@ -33,46 +33,50 @@ struct OperationNode;
 struct ComponentNode : public Node {
   /* Key used to look up operations within a component */
   struct OperationIDKey {
-    OperationCode opcode;
-    const char *name;
-    int name_tag;
+    OperationCode opcode = OperationCode::OPERATION;
+    int name_tag = -1;
+    StringRef name = "";
 
-    OperationIDKey();
-    OperationIDKey(OperationCode opcode);
-    OperationIDKey(OperationCode opcode, const char *name, int name_tag);
+    OperationIDKey() = default;
+    OperationIDKey(const OperationCode opcode) : opcode(opcode) {}
+    OperationIDKey(const OperationCode opcode, const StringRef name, const int name_tag)
+        : opcode(opcode), name_tag(name_tag), name(name)
+    {
+    }
 
-    string identifier() const;
-    bool operator==(const OperationIDKey &other) const;
-    uint64_t hash() const;
+    std::string identifier() const;
+    friend bool operator==(const OperationIDKey &a, const OperationIDKey &b) = default;
+    uint64_t hash() const
+    {
+      return get_default_hash(opcode, name_tag, name);
+    }
   };
 
   /* Typedef for container of operations */
   ComponentNode();
-  ~ComponentNode();
+  ~ComponentNode() override;
 
   /** Initialize 'component' node - from pointer data given. */
   void init(const ID *id, const char *subdata) override;
 
-  virtual string identifier() const override;
+  std::string identifier() const override;
 
   /* Find an existing operation, if requested operation does not exist nullptr will be returned.
    * See #add_operation for the meaning and examples of #name and #name_tag.
    */
   OperationNode *find_operation(OperationIDKey key) const;
   OperationNode *find_operation(OperationCode opcode,
-                                const char *name = "",
+                                StringRef name = "",
                                 int name_tag = -1) const;
 
   /* Find an existing operation, will throw an assert() if it does not exist.
    * See #add_operation for the meaning and examples of #name and #name_tag. */
   OperationNode *get_operation(OperationIDKey key) const;
-  OperationNode *get_operation(OperationCode opcode,
-                               const char *name = "",
-                               int name_tag = -1) const;
+  OperationNode *get_operation(OperationCode opcode, StringRef name = "", int name_tag = -1) const;
 
   /* Check operation exists and return it. */
   bool has_operation(OperationIDKey key) const;
-  bool has_operation(OperationCode opcode, const char *name = "", int name_tag = -1) const;
+  bool has_operation(OperationCode opcode, StringRef name = "", int name_tag = -1) const;
 
   /**
    * Create a new node for representing an operation and add this to graph
@@ -92,7 +96,7 @@ struct ComponentNode : public Node {
    */
   OperationNode *add_operation(const DepsEvalOperationCb &op,
                                OperationCode opcode,
-                               const char *name = "",
+                               const StringRef name = "",
                                int name_tag = -1);
 
   /* Entry/exit operations management.
@@ -103,10 +107,10 @@ struct ComponentNode : public Node {
 
   void clear_operations();
 
-  virtual void tag_update(Depsgraph *graph, eUpdateSource source) override;
+  void tag_update(Depsgraph *graph, eUpdateSource source) override;
 
-  virtual OperationNode *get_entry_operation() override;
-  virtual OperationNode *get_exit_operation() override;
+  OperationNode *get_entry_operation() override;
+  OperationNode *get_exit_operation() override;
 
   void finalize_build(Depsgraph *graph);
 
@@ -197,6 +201,7 @@ DEG_COMPONENT_NODE_DECLARE_GENERIC(ParticleSettings);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(Pose);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(PointCache);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(Sequencer);
+DEG_COMPONENT_NODE_DECLARE_GENERIC(Compositor);
 DEG_COMPONENT_NODE_DECLARE_NO_COW_TAG_ON_UPDATE(Shading);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(ShadingParameters);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(Transform);
@@ -215,7 +220,7 @@ DEG_COMPONENT_NODE_DECLARE_GENERIC(NTreeGeometryPreprocess);
 /* Bone Component */
 struct BoneComponentNode : public ComponentNode {
   /** Initialize 'bone component' node - from pointer data given. */
-  void init(const ID *id, const char *subdata);
+  void init(const ID *id, const char *subdata) override;
 
   struct bPoseChannel *pchan; /* the bone that this component represents */
 
@@ -225,7 +230,7 @@ struct BoneComponentNode : public ComponentNode {
 /* Eventually we would not tag parameters in all cases.
  * Support for this each ID needs to be added on an individual basis. */
 struct ParametersComponentNode : public ComponentNode {
-  virtual bool need_tag_cow_before_update(const IDRecalcFlag /*tag*/) override
+  bool need_tag_cow_before_update(const IDRecalcFlag /*tag*/) override
   {
     if (ID_TYPE_SUPPORTS_PARAMS_WITHOUT_COW(owner->id_type)) {
       /* Disabled as this is not true for newly added objects, needs investigation. */
@@ -240,7 +245,7 @@ struct ParametersComponentNode : public ComponentNode {
 
 /* Audio component. */
 struct AudioComponentNode : public ComponentNode {
-  virtual bool need_tag_cow_before_update(const IDRecalcFlag tag) override
+  bool need_tag_cow_before_update(const IDRecalcFlag tag) override
   {
     /* Frame change doesn't require a copy of the scene, doing so can be a heavy operation
      * especially when the collection contains many objects, see #104798. */
@@ -252,4 +257,5 @@ struct AudioComponentNode : public ComponentNode {
 
 void deg_register_component_depsnodes();
 
-}  // namespace blender::deg
+}  // namespace deg
+}  // namespace blender

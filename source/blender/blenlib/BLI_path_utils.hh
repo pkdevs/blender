@@ -7,10 +7,12 @@
  * \ingroup bli
  */
 
-#include "BLI_compiler_attrs.h"
-#include "BLI_compiler_compat.h"
-#include "BLI_utildefines.h"
-#include "BLI_utildefines_variadic.h"
+#include "BLI_compiler_attrs.hh"
+#include "BLI_compiler_compat.hh"
+#include "BLI_utildefines.hh"
+#include "BLI_utildefines_variadic.hh"
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Path Queries
@@ -98,6 +100,11 @@ const char *BLI_path_parent_dir_end(const char *path, size_t path_len)
  * https://en.wikipedia.org/wiki/Filename#Reserved_characters_and_words )
  * by underscores ('_').
  *
+ * \note This should only be used when creating new paths from user-input or
+ * to sanitize a file-names initialized from non-path text such as the name of a data-block.
+ * It must never be used on references to existing paths since this function
+ * will change the paths causing them to become invalid.
+ *
  * \note Space case ' ' is a bit of an edge case here - in theory it is allowed,
  * but again can be an issue in some cases, so we simply replace it by an underscore too
  * (good practice anyway).
@@ -118,12 +125,18 @@ bool BLI_path_make_safe_filename(char *filename) ATTR_NONNULL(1);
  * Make given path OS-safe.
  *
  * \return true if \a path was changed, false otherwise.
+ *
+ * \note When the file-name component of the path may not use safe characters,
+ * #BLI_path_make_safe_filename should be used on the file-name part,
+ * so slashes are replaced, treating the text as a single file-name.
  */
 bool BLI_path_make_safe(char *path) ATTR_NONNULL(1);
 
 /**
  * Creates a display string from path to be used menus and the user interface.
  * Like `bpy.path.display_name()`.
+ *
+ * The resulting path is guaranteed to be valid UTF8, even if the input path is not.
  */
 void BLI_path_to_display_name(char *display_name, int display_name_maxncpy, const char *name)
     ATTR_NONNULL(1, 3);
@@ -190,9 +203,9 @@ void BLI_path_normalize_unc(char *path, int path_maxncpy);
 /**
  * Convert `path` to a canonical representation.
  * This is intended for system paths (passed in as command-line arguments of via scripts)
- * which are valid in that they resolve to a file/directory and but could be `CWD` relative or
+ * which are valid in that they resolve to a file/directory but could be `CWD` relative or
  * contain redundant slashes that cause absolute/relative conversion to fail.
- * (specifically the "//" prefix used by Blender).
+ * (specifically the `//` prefix used by Blender).
  *
  * Perform the following operations:
  *
@@ -343,7 +356,7 @@ size_t BLI_path_append_dir(char *__restrict dst, size_t dst_maxncpy, const char 
  * \{ */
 
 /**
- * See #BLI_path_join doc-string.
+ * See #BLI_path_join docstring.
  */
 size_t BLI_path_join_array(char *__restrict dst,
                            const size_t dst_maxncpy,
@@ -354,7 +367,7 @@ size_t BLI_path_join_array(char *__restrict dst,
  * Join multiple strings into a path, ensuring only a single path separator between each,
  * and trailing slash is kept.
  *
- * \param path: The first patch which has special treatment,
+ * The first path which has special treatment,
  * allowing `//` prefix which is kept intact unlike double-slashes which are stripped
  * from the bounds of all other paths passed in.
  * Passing in the following paths all result in the same output (`//a/b/c`):
@@ -616,7 +629,9 @@ bool BLI_path_frame(char *path, size_t path_maxncpy, int frame, int digits) ATTR
 bool BLI_path_frame_range(char *path, size_t path_maxncpy, int sta, int end, int digits)
     ATTR_NONNULL(1);
 /**
- * Get the frame from a filename formatted by blender's frame scheme
+ * Get the frame from a filename formatted by blender's frame scheme.
+ * \return true if a frame in the valid range was found.
+ * \note Only frames that can be represented in the integer range are considered.
  */
 bool BLI_path_frame_get(const char *path, int *r_frame, int *r_digits_len) ATTR_NONNULL(1, 2, 3);
 /**
@@ -624,6 +639,7 @@ bool BLI_path_frame_get(const char *path, int *r_frame, int *r_digits_len) ATTR_
  * character and extract the extension.
  * So:      `/some/path_123.jpeg`
  * Becomes: `/some/path_###` with `r_ext` set to `.jpeg`.
+ * \note Only frames that can be represented in the integer range are considered.
  */
 void BLI_path_frame_strip(char *path, char *r_ext, size_t ext_maxncpy) ATTR_NONNULL(1, 2);
 /**
@@ -658,24 +674,24 @@ bool BLI_path_frame_check_chars(const char *path) ATTR_NONNULL(1) ATTR_WARN_UNUS
 #endif
 
 /**
- * If path begins with "//", strips that and replaces it with `basepath` directory.
+ * If path begins with `//`, strips that and replaces it with `basepath` directory.
  *
  * \note Also converts drive-letter prefix to something more sensible
  * if this is a non-drive-letter-based system.
  *
  * \param path: The path to convert.
  * \param basepath: The directory to base relative paths with.
- * \return true if the path was relative (started with "//").
+ * \return true if the path was relative (started with `//`).
  */
 bool BLI_path_abs(char path[FILE_MAX], const char *basepath) ATTR_NONNULL(1, 2);
 /**
- * Replaces `path` with a relative version (prefixed by "//") such that #BLI_path_abs, given
+ * Replaces `path` with a relative version (prefixed by `//`) such that #BLI_path_abs, given
  * the same `basepath`, will convert it back to its original value.
  */
 void BLI_path_rel(char path[FILE_MAX], const char *basepath) ATTR_NONNULL(1);
 
 /**
- * Does path begin with the special "//" prefix that Blender uses to indicate
+ * Does path begin with the special `//` prefix that Blender uses to indicate
  * a path relative to the .blend file.
  */
 bool BLI_path_is_rel(const char *path) ATTR_NONNULL(1) ATTR_WARN_UNUSED_RESULT;
@@ -687,7 +703,7 @@ bool BLI_path_is_rel(const char *path) ATTR_NONNULL(1) ATTR_WARN_UNUSED_RESULT;
  * \{ */
 
 /**
- * Checks for a relative path (ignoring Blender's "//") prefix
+ * Checks for a relative path (ignoring Blender's `//`) prefix
  * (unlike `!BLI_path_is_rel(path)`).
  * When false, #BLI_path_abs_from_cwd would expand the absolute path.
  */
@@ -697,7 +713,7 @@ bool BLI_path_is_abs_from_cwd(const char *path) ATTR_NONNULL(1) ATTR_WARN_UNUSED
  * \returns true if the expansion was performed.
  *
  * \note Should only be called with command line paths.
- * This is _not_ something Blender's internal paths support, instead they use the "//" prefix.
+ * This is _not_ something Blender's internal paths support, instead they use the `//` prefix.
  * In most cases #BLI_path_abs should be used instead.
  */
 bool BLI_path_abs_from_cwd(char *path, size_t path_maxncpy) ATTR_NONNULL(1);
@@ -709,13 +725,13 @@ bool BLI_path_abs_from_cwd(char *path, size_t path_maxncpy) ATTR_NONNULL(1);
  * \{ */
 
 #ifdef WIN32
-#  define SEP '\\'
-#  define ALTSEP '/'
+constexpr char SEP = '\\';
+constexpr char ALTSEP = '/';
 #  define SEP_STR "\\"
 #  define ALTSEP_STR "/"
 #else
-#  define SEP '/'
-#  define ALTSEP '\\'
+constexpr char SEP = '/';
+constexpr char ALTSEP = '\\';
 #  define SEP_STR "/"
 #  define ALTSEP_STR "\\"
 #endif
@@ -764,7 +780,7 @@ void BLI_setenv_if_new(const char *env, const char *val) ATTR_NONNULL(1);
  * On windows #getenv gets its variables from a static copy of the environment variables taken at
  * process start-up, causing it to not pick up on environment variables created during runtime.
  * This function uses an alternative method to get environment variables that does pick up on
- * runtime environment variables. The result will be UTF-8 encoded.
+ * runtime environment variables. The result will be UTF8 encoded.
  */
 const char *BLI_getenv(const char *env) ATTR_NONNULL(1) ATTR_WARN_UNUSED_RESULT;
 
@@ -785,3 +801,5 @@ const char *BLI_getenv(const char *env) ATTR_NONNULL(1) ATTR_WARN_UNUSED_RESULT;
   (((_n)[0] == '.') && (((_n)[1] == '\0') || (((_n)[1] == '.') && ((_n)[2] == '\0'))))
 
 /** \} */
+
+}  // namespace blender

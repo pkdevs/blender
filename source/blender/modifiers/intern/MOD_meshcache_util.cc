@@ -6,12 +6,13 @@
  * \ingroup modifiers
  */
 
-#include "BLI_math_base.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_base_c.hh"
 
 #include "DNA_modifier_types.h"
 
 #include "MOD_meshcache_util.hh"
+
+namespace blender {
 
 void MOD_meshcache_calc_range(const float frame,
                               const char interp,
@@ -49,3 +50,5 @@ void MOD_meshcache_calc_range(const float frame,
     }
   }
 }
+
+}  // namespace blender

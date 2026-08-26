@@ -11,6 +11,7 @@
 #include "nodes/vk_begin_query_node.hh"
 #include "nodes/vk_begin_rendering_node.hh"
 #include "nodes/vk_blit_image_node.hh"
+#include "nodes/vk_build_acceleration_structure_node.hh"
 #include "nodes/vk_clear_attachments_node.hh"
 #include "nodes/vk_clear_color_image_node.hh"
 #include "nodes/vk_clear_depth_stencil_image_node.hh"
@@ -40,6 +41,92 @@ namespace blender::gpu::render_graph {
 using NodeHandle = uint64_t;
 
 /**
+ * Block-allocated storage for node data.
+ *
+ * Uses an index counter (`next`) instead of clear + append.
+ * On reset, only the counter resets to 0 (memory is preserved and reused).
+ * When storage is full, grows by 1024-element blocks.
+ */
+template<typename T, int BlockSize = 1024> struct VKNodeStorage {
+  Vector<T> data;
+  int64_t next = 0;
+
+  T &alloc(int64_t &r_index)
+  {
+    if (next >= data.size()) {
+      data.resize(data.size() + BlockSize);
+    }
+    int64_t index = next++;
+    r_index = index;
+    return data[index];
+  }
+
+  void reset()
+  {
+    next = 0;
+  }
+
+  T &operator[](int64_t index)
+  {
+    return data[index];
+  }
+
+  const T &operator[](int64_t index) const
+  {
+    return data[index];
+  }
+
+  int64_t size() const
+  {
+    return next;
+  }
+
+  int64_t capacity() const
+  {
+    return data.capacity();
+  }
+};
+
+/**
+ * Node storage for nodes that uses large data structs.
+ *
+ * Some node structs are to large to store them as part of the node. The data are stored as a
+ * vector of structs. Typically structs that occupy more than one cache line (64 bytes) should be
+ * considered to be moved here.
+ *
+ */
+struct VKRenderGraphStorage {
+  Vector<VKBeginRenderingNode::Data, 1024> begin_rendering;
+  Vector<VKClearAttachmentsNode::Data, 1024> clear_attachments;
+  Vector<VKBlitImageNode::Data, 1024> blit_image;
+  Vector<VKCopyBufferToImageNode::Data, 1024> copy_buffer_to_image;
+  Vector<VKCopyImageNode::Data, 1024> copy_image;
+  Vector<VKCopyImageToBufferNode::Data, 1024> copy_image_to_buffer;
+  VKNodeStorage<VKDrawNode::Data> draw;
+  VKNodeStorage<VKDrawIndexedNode::Data> draw_indexed;
+  VKNodeStorage<VKDrawIndexedIndirectNode::Data> draw_indexed_indirect;
+  VKNodeStorage<VKDrawIndirectNode::Data> draw_indirect;
+  Vector<uint8_t> push_constants;
+  Vector<VKBuildAccelerationStructureNode::Data, 1024> build_acceleration_structure;
+
+  void reset()
+  {
+    begin_rendering.clear();
+    clear_attachments.clear();
+    blit_image.clear();
+    copy_buffer_to_image.clear();
+    copy_image.clear();
+    copy_image_to_buffer.clear();
+    draw.reset();
+    draw_indexed.reset();
+    draw_indexed_indirect.reset();
+    draw_indirect.reset();
+    push_constants.clear();
+    build_acceleration_structure.clear_and_shrink();
+  }
+};
+
+/**
  * Node stored inside a render graph.
  *
  * Node specific data in the render graph are stored in a vector to ensure that the data can be
@@ -50,21 +137,11 @@ struct VKRenderGraphNode {
   VKNodeType type;
   union {
     VKBeginQueryNode::Data begin_query;
-    VKBeginRenderingNode::Data begin_rendering;
-    VKBlitImageNode::Data blit_image;
-    VKClearAttachmentsNode::Data clear_attachments;
     VKClearColorImageNode::Data clear_color_image;
     VKClearDepthStencilImageNode::Data clear_depth_stencil_image;
     VKCopyBufferNode::Data copy_buffer;
-    VKCopyBufferToImageNode::Data copy_buffer_to_image;
-    VKCopyImageNode::Data copy_image;
-    VKCopyImageToBufferNode::Data copy_image_to_buffer;
     VKDispatchNode::Data dispatch;
     VKDispatchIndirectNode::Data dispatch_indirect;
-    VKDrawNode::Data draw;
-    VKDrawIndexedNode::Data draw_indexed;
-    VKDrawIndexedIndirectNode::Data draw_indexed_indirect;
-    VKDrawIndirectNode::Data draw_indirect;
     VKEndQueryNode::Data end_query;
     VKEndRenderingNode::Data end_rendering;
     VKFillBufferNode::Data fill_buffer;
@@ -72,7 +149,15 @@ struct VKRenderGraphNode {
     VKSynchronizationNode::Data synchronization;
     VKUpdateBufferNode::Data update_buffer;
     VKUpdateMipmapsNode::Data update_mipmaps;
+    int64_t storage_index = -1;
   };
+
+  struct {
+    /** Range where the input/output buffers are stored inside #VKRenderGraph.buffer_links_. */
+    IndexRange buffers;
+    /** Range where the input/output images are stored inside #VKRenderGraph.image_links_. */
+    IndexRange images;
+  } links;
 
   /**
    * Set the data of the node.
@@ -82,30 +167,74 @@ struct VKRenderGraphNode {
    *   between consecutive use. Checking for unused node types will ensure that previous usage has
    *   been reset. Resetting is done as part of `free_data`
    */
-  template<typename NodeInfo> void set_node_data(const typename NodeInfo::CreateInfo &create_info)
+  template<typename NodeInfo>
+  void set_node_data(VKRenderGraphStorage &storage,
+                     const typename NodeInfo::CreateInfo &create_info)
   {
     BLI_assert(type == VKNodeType::UNUSED);
     /* Instance of NodeInfo is needed to call virtual methods. CPP doesn't support overloading of
      * static methods. */
     NodeInfo node_info;
     type = NodeInfo::node_type;
-    node_info.set_node_data(*this, create_info);
+    node_info.set_node_data(*this, storage, create_info);
   }
 
   /**
    * Build the input/output links for this.
    *
-   * Newly created links are added to the `node_links` parameter.
+   * Newly created links are added to the `links` parameter.
    */
   template<typename NodeInfo>
   void build_links(VKResourceStateTracker &resources,
-                   VKRenderGraphNodeLinks &node_links,
+                   VKRenderGraphLinks &links,
                    const typename NodeInfo::CreateInfo &create_info)
   {
     /* Instance of NodeInfo is needed to call virtual methods. CPP doesn't support overloading of
      * static methods. */
     NodeInfo node_info;
-    node_info.build_links(resources, node_links, create_info);
+    int64_t buffer_index_start = links.buffers.size();
+    int64_t image_index_start = links.images.size();
+    node_info.build_links(resources, links, create_info);
+    this->links.buffers = IndexRange::from_begin_end(buffer_index_start, links.buffers.size());
+    this->links.images = IndexRange::from_begin_end(image_index_start, links.images.size());
+  }
+
+  /**
+   * Allocate node data in storage for the new draw node model.
+   *
+   * Sets the node type and returns a reference to the in-place data inside the render graph.
+   * Caller can then update the data directly, what will remove a copy later on.
+   * After the data is set, the caller needs to call finalize_node.
+   *
+   * Currently only implemented for Draw nodes as other nodes don't benefit from this pattern.
+   */
+  template<typename NodeInfo>
+  typename NodeInfo::Data &alloc_node_data(VKRenderGraphStorage &storage)
+  {
+    BLI_assert(type == VKNodeType::UNUSED);
+    type = NodeInfo::node_type;
+    return NodeInfo::alloc_node_data(storage, storage_index);
+  }
+
+  /**
+   * Finalize a node by building its resource links.
+   *
+   * To be called after the caller has written data into the storage slot
+   * obtained via alloc_node_data.
+   */
+  template<typename NodeInfo>
+  void finalize_node(VKRenderGraphStorage &storage,
+                     VKResourceStateTracker &resources,
+                     VKRenderGraphLinks &links,
+                     const typename NodeInfo::CreateInfo &create_info)
+  {
+    NodeInfo node_info;
+    int64_t buffer_index_start = links.buffers.size();
+    int64_t image_index_start = links.images.size();
+    node_info.build_links(
+        resources, links, create_info, NodeInfo::storage_data(storage, storage_index));
+    this->links.buffers = IndexRange::from_begin_end(buffer_index_start, links.buffers.size());
+    this->links.images = IndexRange::from_begin_end(image_index_start, links.images.size());
   }
 
   /**
@@ -122,6 +251,8 @@ struct VKRenderGraphNode {
         return VKBeginQueryNode::pipeline_stage;
       case VKNodeType::BEGIN_RENDERING:
         return VKBeginRenderingNode::pipeline_stage;
+      case VKNodeType::BUILD_ACCELERATION_STRUCTURE:
+        return VKBuildAccelerationStructureNode::pipeline_stage;
       case VKNodeType::CLEAR_ATTACHMENTS:
         return VKClearAttachmentsNode::pipeline_stage;
       case VKNodeType::CLEAR_COLOR_IMAGE:
@@ -173,25 +304,41 @@ struct VKRenderGraphNode {
    * Build commands for this node and record them in the given command_buffer.
    *
    * NOTE: Pipeline barriers should already be added. See
-   * `VKCommandBuilder::build_node` and `VKCommandBuilder::build_pipeline_barriers.
+   * `VKCommandBuilder::build_node` and `VKCommandBuilder::build_pipeline_barriers`.
    */
   void build_commands(VKCommandBufferInterface &command_buffer,
+                      VKRenderGraphStorage &storage,
                       VKBoundPipelines &r_bound_pipelines)
   {
     switch (type) {
       case VKNodeType::UNUSED: {
         break;
       }
+#define BUILD_COMMANDS_STORAGE(NODE_TYPE, NODE_CLASS, ATTRIBUTE_NAME) \
+  case NODE_TYPE: { \
+    NODE_CLASS node_info; \
+    node_info.build_commands(command_buffer, \
+                             storage.ATTRIBUTE_NAME[storage_index], \
+                             storage.push_constants, \
+                             r_bound_pipelines); \
+    break; \
+  }
+
 #define BUILD_COMMANDS(NODE_TYPE, NODE_CLASS, ATTRIBUTE_NAME) \
   case NODE_TYPE: { \
     NODE_CLASS node_info; \
-    node_info.build_commands(command_buffer, ATTRIBUTE_NAME, r_bound_pipelines); \
+    node_info.build_commands( \
+        command_buffer, ATTRIBUTE_NAME, storage.push_constants, r_bound_pipelines); \
     break; \
   }
 
         BUILD_COMMANDS(VKNodeType::BEGIN_QUERY, VKBeginQueryNode, begin_query)
-        BUILD_COMMANDS(VKNodeType::BEGIN_RENDERING, VKBeginRenderingNode, begin_rendering)
-        BUILD_COMMANDS(VKNodeType::CLEAR_ATTACHMENTS, VKClearAttachmentsNode, clear_attachments)
+        BUILD_COMMANDS_STORAGE(VKNodeType::BEGIN_RENDERING, VKBeginRenderingNode, begin_rendering)
+        BUILD_COMMANDS_STORAGE(VKNodeType::BUILD_ACCELERATION_STRUCTURE,
+                               VKBuildAccelerationStructureNode,
+                               build_acceleration_structure)
+        BUILD_COMMANDS_STORAGE(
+            VKNodeType::CLEAR_ATTACHMENTS, VKClearAttachmentsNode, clear_attachments)
         BUILD_COMMANDS(VKNodeType::CLEAR_COLOR_IMAGE, VKClearColorImageNode, clear_color_image)
         BUILD_COMMANDS(VKNodeType::CLEAR_DEPTH_STENCIL_IMAGE,
                        VKClearDepthStencilImageNode,
@@ -201,23 +348,24 @@ struct VKRenderGraphNode {
         BUILD_COMMANDS(VKNodeType::FILL_BUFFER, VKFillBufferNode, fill_buffer)
         BUILD_COMMANDS(VKNodeType::UPDATE_BUFFER, VKUpdateBufferNode, update_buffer)
         BUILD_COMMANDS(VKNodeType::COPY_BUFFER, VKCopyBufferNode, copy_buffer)
-        BUILD_COMMANDS(
+        BUILD_COMMANDS_STORAGE(
             VKNodeType::COPY_BUFFER_TO_IMAGE, VKCopyBufferToImageNode, copy_buffer_to_image)
-        BUILD_COMMANDS(VKNodeType::COPY_IMAGE, VKCopyImageNode, copy_image)
-        BUILD_COMMANDS(
+        BUILD_COMMANDS_STORAGE(VKNodeType::COPY_IMAGE, VKCopyImageNode, copy_image)
+        BUILD_COMMANDS_STORAGE(
             VKNodeType::COPY_IMAGE_TO_BUFFER, VKCopyImageToBufferNode, copy_image_to_buffer)
-        BUILD_COMMANDS(VKNodeType::BLIT_IMAGE, VKBlitImageNode, blit_image)
+        BUILD_COMMANDS_STORAGE(VKNodeType::BLIT_IMAGE, VKBlitImageNode, blit_image)
         BUILD_COMMANDS(VKNodeType::RESET_QUERY_POOL, VKResetQueryPoolNode, reset_query_pool)
         BUILD_COMMANDS(VKNodeType::SYNCHRONIZATION, VKSynchronizationNode, synchronization)
         BUILD_COMMANDS(VKNodeType::UPDATE_MIPMAPS, VKUpdateMipmapsNode, update_mipmaps)
         BUILD_COMMANDS(VKNodeType::DISPATCH, VKDispatchNode, dispatch)
         BUILD_COMMANDS(VKNodeType::DISPATCH_INDIRECT, VKDispatchIndirectNode, dispatch_indirect)
-        BUILD_COMMANDS(VKNodeType::DRAW, VKDrawNode, draw)
-        BUILD_COMMANDS(VKNodeType::DRAW_INDEXED, VKDrawIndexedNode, draw_indexed)
-        BUILD_COMMANDS(
+        BUILD_COMMANDS_STORAGE(VKNodeType::DRAW, VKDrawNode, draw)
+        BUILD_COMMANDS_STORAGE(VKNodeType::DRAW_INDEXED, VKDrawIndexedNode, draw_indexed)
+        BUILD_COMMANDS_STORAGE(
             VKNodeType::DRAW_INDEXED_INDIRECT, VKDrawIndexedIndirectNode, draw_indexed_indirect)
-        BUILD_COMMANDS(VKNodeType::DRAW_INDIRECT, VKDrawIndirectNode, draw_indirect)
+        BUILD_COMMANDS_STORAGE(VKNodeType::DRAW_INDIRECT, VKDrawIndirectNode, draw_indirect)
 #undef BUILD_COMMANDS
+#undef BUILD_COMMANDS_STORAGE
     }
   }
 
@@ -235,19 +383,14 @@ struct VKRenderGraphNode {
     break; \
   }
 
-      FREE_DATA(VKNodeType::DISPATCH, VKDispatchNode, dispatch)
-      FREE_DATA(VKNodeType::DISPATCH_INDIRECT, VKDispatchIndirectNode, dispatch_indirect)
-      FREE_DATA(VKNodeType::DRAW, VKDrawNode, draw)
-      FREE_DATA(VKNodeType::DRAW_INDEXED, VKDrawIndexedNode, draw_indexed)
-      FREE_DATA(
-          VKNodeType::DRAW_INDEXED_INDIRECT, VKDrawIndexedIndirectNode, draw_indexed_indirect)
-      FREE_DATA(VKNodeType::DRAW_INDIRECT, VKDrawIndirectNode, draw_indirect)
       FREE_DATA(VKNodeType::UPDATE_BUFFER, VKUpdateBufferNode, update_buffer)
+
 #undef FREE_DATA
 
       case VKNodeType::UNUSED:
       case VKNodeType::BEGIN_QUERY:
       case VKNodeType::BEGIN_RENDERING:
+      case VKNodeType::BUILD_ACCELERATION_STRUCTURE:
       case VKNodeType::CLEAR_ATTACHMENTS:
       case VKNodeType::CLEAR_COLOR_IMAGE:
       case VKNodeType::CLEAR_DEPTH_STENCIL_IMAGE:
@@ -262,6 +405,12 @@ struct VKRenderGraphNode {
       case VKNodeType::RESET_QUERY_POOL:
       case VKNodeType::SYNCHRONIZATION:
       case VKNodeType::UPDATE_MIPMAPS:
+      case VKNodeType::DISPATCH:
+      case VKNodeType::DISPATCH_INDIRECT:
+      case VKNodeType::DRAW:
+      case VKNodeType::DRAW_INDEXED:
+      case VKNodeType::DRAW_INDEXED_INDIRECT:
+      case VKNodeType::DRAW_INDIRECT:
         break;
     }
   }
@@ -275,9 +424,13 @@ struct VKRenderGraphNode {
   void reset()
   {
     free_data();
-    memset(this, 0, sizeof(VKRenderGraphNode));
     type = VKNodeType::UNUSED;
+    storage_index = -1;
   }
 };
+
+BLI_STATIC_ASSERT(sizeof(VKRenderGraphNode) <= 104,
+                  "VKRenderGraphNode should be kept small. Consider moving data to the "
+                  "VKRenderGraphStorage class.");
 
 }  // namespace blender::gpu::render_graph

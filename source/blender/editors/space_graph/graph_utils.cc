@@ -7,7 +7,6 @@
  */
 
 #include <cfloat>
-#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -17,17 +16,22 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_listbase.hh"
+
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_screen.hh"
 
 #include "ED_anim_api.hh"
 #include "ED_screen.hh"
+
 #include "UI_interface.hh"
 
 #include "RNA_prototypes.hh"
 
 #include "graph_intern.hh" /* own include */
+
+namespace blender {
 
 /* -------------------------------------------------------------------- */
 /** \name Set Up Drivers Editor
@@ -35,7 +39,7 @@
 
 void ED_drivers_editor_init(bContext *C, ScrArea *area)
 {
-  SpaceGraph *sipo = (SpaceGraph *)area->spacedata.first;
+  SpaceGraph *sipo = static_cast<SpaceGraph *>(area->spacedata.first);
 
   /* Set mode */
   sipo->mode = SIPO_MODE_DRIVERS;
@@ -43,7 +47,7 @@ void ED_drivers_editor_init(bContext *C, ScrArea *area)
   /* Show Properties Region (or else the settings can't be edited) */
   ARegion *region_props = BKE_area_find_region_type(area, RGN_TYPE_UI);
   if (region_props) {
-    UI_panel_category_active_set(region_props, "Drivers");
+    ui::panel_category_active_set(region_props, "Drivers");
 
     region_props->flag &= ~RGN_FLAG_HIDDEN;
     /* XXX: Adjust width of this too? */
@@ -78,7 +82,7 @@ void ED_drivers_editor_init(bContext *C, ScrArea *area)
 
 bAnimListElem *get_active_fcurve_channel(bAnimContext *ac)
 {
-  ListBase anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
   int filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_FOREDIT | ANIMFILTER_ACTIVE |
                 ANIMFILTER_FCURVESONLY);
   size_t items = ANIM_animdata_filter(
@@ -88,7 +92,7 @@ bAnimListElem *get_active_fcurve_channel(bAnimContext *ac)
    * if they were from linked data.
    */
   if (items) {
-    bAnimListElem *ale = (bAnimListElem *)anim_data.first;
+    bAnimListElem *ale = static_cast<bAnimListElem *>(anim_data.first);
 
     /* remove first item from list, then free the rest of the list and return the stored one */
     BLI_remlink(&anim_data, ale);
@@ -110,7 +114,7 @@ bAnimListElem *get_active_fcurve_channel(bAnimContext *ac)
 bool graphop_visible_keyframes_poll(bContext *C)
 {
   bAnimContext ac;
-  ListBase anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
   ScrArea *area = CTX_wm_area(C);
   size_t items;
   int filter;
@@ -137,8 +141,8 @@ bool graphop_visible_keyframes_poll(bContext *C)
     return found;
   }
 
-  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    const FCurve *fcu = (const FCurve *)ale->data;
+  for (bAnimListElem &ale : anim_data) {
+    const FCurve *fcu = static_cast<const FCurve *>(ale.data);
 
     /* visible curves for selection must fulfill the following criteria:
      * - it has bezier keyframes
@@ -148,7 +152,7 @@ bool graphop_visible_keyframes_poll(bContext *C)
     if (fcu->bezt == nullptr) {
       continue;
     }
-    if (BKE_fcurve_are_keyframes_usable(fcu)) {
+    if (BKE_fcurve_are_keyframes_usable(*fcu)) {
       found = true;
       break;
     }
@@ -162,13 +166,13 @@ bool graphop_visible_keyframes_poll(bContext *C)
 bool graphop_editable_keyframes_poll(bContext *C)
 {
   bAnimContext ac;
-  ListBase anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
   ScrArea *area = CTX_wm_area(C);
   size_t items;
   int filter;
   bool found = false;
 
-  /* firstly, check if in Graph Editor or Dopesheet */
+  /* Firstly, check if in Graph Editor or Dope-sheet. */
   /* TODO: also check for region? */
   if (area == nullptr || !ELEM(area->spacetype, SPACE_GRAPH, SPACE_ACTION)) {
     return found;
@@ -191,12 +195,12 @@ bool graphop_editable_keyframes_poll(bContext *C)
     return found;
   }
 
-  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    const FCurve *fcu = (const FCurve *)ale->data;
+  for (bAnimListElem &ale : anim_data) {
+    const FCurve *fcu = static_cast<const FCurve *>(ale.data);
 
     /* editable curves must fulfill the following criteria:
      * - it has bezier keyframes
-     * - it must not be protected from editing (this is already checked for with the edit flag
+     * - it must not be protected from editing (this is already checked for with the edit flag)
      * - F-Curve modifiers do not interfere with the result too much
      *   (i.e. the modifier-control drawing check returns false)
      */
@@ -204,7 +208,7 @@ bool graphop_editable_keyframes_poll(bContext *C)
       /* This is a baked curve, it is never editable. */
       continue;
     }
-    if (BKE_fcurve_is_keyframable(fcu)) {
+    if (BKE_fcurve_is_keyframable(*fcu)) {
       found = true;
       break;
     }
@@ -247,12 +251,12 @@ bool graphop_active_fcurve_poll(bContext *C)
    */
   has_fcurve = ((ale->data) && ELEM(ale->type, ANIMTYPE_FCURVE, ANIMTYPE_NLACURVE));
   if (has_fcurve) {
-    const FCurve *fcu = (const FCurve *)ale->data;
+    const FCurve *fcu = static_cast<const FCurve *>(ale->data);
     has_fcurve = (fcu->flag & FCURVE_VISIBLE) != 0;
   }
 
   /* free temp data... */
-  MEM_freeN(ale);
+  MEM_delete(ale);
 
   /* return success */
   return has_fcurve;
@@ -260,15 +264,15 @@ bool graphop_active_fcurve_poll(bContext *C)
 
 bool graphop_active_editable_fcurve_ctx_poll(bContext *C)
 {
-  PointerRNA ptr = CTX_data_pointer_get_type(C, "active_editable_fcurve", &RNA_FCurve);
+  PointerRNA ptr = CTX_data_pointer_get_type(C, "active_editable_fcurve", RNA_FCurve);
 
-  return ptr.data != nullptr;
+  return ptr;
 }
 
 bool graphop_selected_fcurve_poll(bContext *C)
 {
   bAnimContext ac;
-  ListBase anim_data = {nullptr, nullptr};
+  ListBaseT<bAnimListElem> anim_data = {nullptr, nullptr};
   ScrArea *area = CTX_wm_area(C);
   size_t items;
   int filter;
@@ -301,3 +305,5 @@ bool graphop_selected_fcurve_poll(bContext *C)
 }
 
 /** \} */
+
+}  // namespace blender

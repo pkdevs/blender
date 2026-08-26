@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include "BLI_math_bits.h"
+#include "BLI_math_bits.hh"
 #include "GPU_batch.hh"
 #include "GPU_vertex_format.hh"
 
@@ -25,7 +25,7 @@ namespace blender::gpu {
  * for use in PSO construction and caching.
  */
 struct MTLVertexAttributeDescriptorPSO {
-  MTLVertexFormat format;
+  ::MTLVertexFormat format;
   int offset;
   int buffer_index;
   GPUVertFetchMode format_conversion_mode;
@@ -53,19 +53,21 @@ struct MTLVertexAttributeDescriptorPSO {
 };
 
 struct MTLVertexBufferLayoutDescriptorPSO {
-  MTLVertexStepFunction step_function;
+  ::MTLVertexStepFunction step_function;
   int step_rate;
   int stride;
+  int buffer_slot;
 
   bool operator==(const MTLVertexBufferLayoutDescriptorPSO &other) const
   {
     return (step_function == other.step_function) && (step_rate == other.step_rate) &&
-           (stride == other.stride);
+           (stride == other.stride) && (buffer_slot == other.buffer_slot);
   }
 
   uint64_t hash() const
   {
-    return uint64_t(uint64_t(this->step_function) ^ (this->step_rate << 4) ^ (this->stride << 8));
+    return uint64_t(uint64_t(this->step_function) ^ (this->step_rate << 4) ^ (this->stride << 8) ^
+                    (uint64_t(this->buffer_slot) << 32));
   }
 
   void reset()
@@ -76,57 +78,14 @@ struct MTLVertexBufferLayoutDescriptorPSO {
   }
 };
 
-/* SSBO attribute state caching. */
-struct MTLSSBOAttribute {
-
-  int mtl_attribute_index;
-  int vbo_id;
-  int attribute_offset;
-  int per_vertex_stride;
-  int attribute_format;
-  bool is_instance;
-
-  MTLSSBOAttribute() = default;
-  MTLSSBOAttribute(
-      int attribute_ind, int vertexbuffer_ind, int offset, int stride, int format, bool instanced)
-      : mtl_attribute_index(attribute_ind),
-        vbo_id(vertexbuffer_ind),
-        attribute_offset(offset),
-        per_vertex_stride(stride),
-        attribute_format(format),
-        is_instance(instanced)
-  {
-  }
-
-  bool operator==(const MTLSSBOAttribute &other) const
-  {
-    return (mtl_attribute_index == other.mtl_attribute_index && vbo_id == other.vbo_id &&
-            attribute_offset == other.attribute_offset &&
-            per_vertex_stride == other.per_vertex_stride &&
-            attribute_format == other.attribute_format && is_instance == other.is_instance);
-  }
-
-  void reset()
-  {
-    mtl_attribute_index = 0;
-    vbo_id = 0;
-    attribute_offset = 0;
-    per_vertex_stride = 0;
-    attribute_format = 0;
-    is_instance = false;
-  }
-};
-
 struct MTLVertexDescriptor {
-
   /* Core Vertex Attributes. */
   MTLVertexAttributeDescriptorPSO attributes[GPU_VERT_ATTR_MAX_LEN];
-  MTLVertexBufferLayoutDescriptorPSO
-      buffer_layouts[GPU_BATCH_VBO_MAX_LEN + GPU_BATCH_INST_VBO_MAX_LEN];
+  MTLVertexBufferLayoutDescriptorPSO buffer_layouts[GPU_BATCH_VBO_MAX_LEN];
   int max_attribute_value;
   int total_attributes;
   int num_vert_buffers;
-  MTLPrimitiveTopologyClass prim_topology_class;
+  ::MTLPrimitiveTopologyClass prim_topology_class;
 
   bool operator==(const MTLVertexDescriptor &other) const
   {
@@ -146,7 +105,7 @@ struct MTLVertexDescriptor {
       }
     }
 
-    for (const int b : IndexRange(this->num_vert_buffers)) {
+    for (const int b : IndexRange(ARRAY_SIZE(this->buffer_layouts))) {
       if (!(this->buffer_layouts[b] == other.buffer_layouts[b])) {
         return false;
       }
@@ -160,7 +119,7 @@ struct MTLVertexDescriptor {
 
   uint64_t hash() const
   {
-    uint64_t hash = (uint64_t)(this->max_attribute_value ^ this->num_vert_buffers);
+    uint64_t hash = uint64_t(this->max_attribute_value ^ this->num_vert_buffers);
     for (const int a : IndexRange(this->max_attribute_value + 1)) {
       hash ^= this->attributes[a].hash() << a;
     }
@@ -173,10 +132,13 @@ struct MTLVertexDescriptor {
 };
 
 struct SpecializationStateDescriptor {
-  Vector<Shader::Constants::Value> values;
+  Vector<shader::SpecializationConstant::Value> values;
 
   SpecializationStateDescriptor() = default;
-  SpecializationStateDescriptor(Vector<Shader::Constants::Value> source) : values(source) {}
+  SpecializationStateDescriptor(Vector<shader::SpecializationConstant::Value> source)
+      : values(source)
+  {
+  }
 
   bool operator==(const SpecializationStateDescriptor &other) const
   {
@@ -187,7 +149,7 @@ struct SpecializationStateDescriptor {
   {
     uint64_t hash = values.size();
     uint seed = 0xFF;
-    for (const Shader::Constants::Value &value : values) {
+    for (const shader::SpecializationConstant::Value &value : values) {
       seed = seed << 1;
       hash ^= seed ^ value.u;
     }
@@ -216,6 +178,7 @@ struct MTLRenderPipelineStateDescriptor {
   MTLPixelFormat color_attachment_format[GPU_FB_MAX_COLOR_ATTACHMENT];
   MTLPixelFormat depth_attachment_format;
   MTLPixelFormat stencil_attachment_format;
+  uint8_t color_attachment_mask = 0xFF;
 
   /* Render Pipeline State affecting PSO creation. */
   bool blending_enabled;
@@ -259,6 +222,7 @@ struct MTLRenderPipelineStateDescriptor {
         (dest_rgb_blend_factor != other.dest_rgb_blend_factor) ||
         (src_alpha_blend_factor != other.src_alpha_blend_factor) ||
         (src_rgb_blend_factor != other.src_rgb_blend_factor) ||
+        (color_attachment_mask != other.color_attachment_mask) ||
         (vertex_descriptor.prim_topology_class != other.vertex_descriptor.prim_topology_class) ||
         (point_size != other.point_size))
     {
@@ -291,8 +255,7 @@ struct MTLRenderPipelineStateDescriptor {
     hash ^= uint64_t(this->num_color_attachments) << 16;     /* up to 6 (3 bits). */
     hash ^= uint64_t(this->depth_attachment_format) << 18;   /* up to 555 (9 bits). */
     hash ^= uint64_t(this->stencil_attachment_format) << 20; /* up to 555 (9 bits). */
-    hash ^= uint64_t(
-        *((uint64_t *)&this->vertex_descriptor.prim_topology_class)); /* Up to 3 (2 bits). */
+    hash ^= (*((uint64_t *)&this->vertex_descriptor.prim_topology_class)); /* Up to 3 (2 bits). */
 
     /* Only include elements in Hash if they are needed - avoids variable null assignments
      * influencing hash. */
@@ -304,6 +267,7 @@ struct MTLRenderPipelineStateDescriptor {
       hash ^= uint64_t(this->dest_rgb_blend_factor) << 37;   /* Up to 18 (5 bits). */
       hash ^= uint64_t(this->src_alpha_blend_factor) << 42;  /* Up to 18 (5 bits). */
       hash ^= uint64_t(this->src_rgb_blend_factor) << 47;    /* Up to 18 (5 bits). */
+      hash ^= uint64_t(this->color_attachment_mask) << 47;   /* 8 bit bit-mask. */
 
       for (const uint c : IndexRange(GPU_FB_MAX_COLOR_ATTACHMENT)) {
         hash ^= uint64_t(this->color_attachment_format[c]) << (c + 52); /* Up to 555 (9 bits). */
@@ -343,7 +307,7 @@ struct MTLComputePipelineStateDescriptor {
   SpecializationStateDescriptor specialization_state;
 
   MTLComputePipelineStateDescriptor() = default;
-  MTLComputePipelineStateDescriptor(Vector<Shader::Constants::Value> values)
+  MTLComputePipelineStateDescriptor(Vector<shader::SpecializationConstant::Value> values)
   {
     specialization_state.values = values;
   }
