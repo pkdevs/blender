@@ -260,7 +260,9 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
       break;
     }
   }
-  // XXX: Gaussian splats technically have transparent shadows.
+
+  /* TODO(sergey): Treat gaussian splats as semi-transparent objects. */
+  /* It will allow accumulation of transparency in the intersect_shadows_all(). */
 
   kintegrator->volume_ray_marching = volume_ray_marching;
   kintegrator->volume_max_steps = volume_max_steps;
