@@ -73,11 +73,11 @@ NODE_DEFINE(PointCloud)
 
   SOCKET_INT_ARRAY(shader, "Shader", array<int>());
 
-  static NodeEnum remder_as_enum;
-  remder_as_enum.insert("points", RENDER_AS_POINTS);
-  remder_as_enum.insert("gsplats", RENDER_AS_GSPLATS);
+  static NodeEnum render_as_enum;
+  render_as_enum.insert("points", RENDER_AS_POINTS);
+  render_as_enum.insert("gsplats", RENDER_AS_GSPLATS);
 
-  SOCKET_ENUM(render_as, "Render As", remder_as_enum, RENDER_AS_POINTS);
+  SOCKET_ENUM(render_as, "Render As", render_as_enum, RENDER_AS_POINTS);
 
   return type;
 }
