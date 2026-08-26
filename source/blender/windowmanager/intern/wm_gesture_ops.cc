@@ -93,6 +93,16 @@ static void gesture_modal_state_to_operator(wmOperator *op, int modal_state)
   }
 }
 
+void gesture_init_mval_set(wmGesture *gesture, const int2 mval)
+{
+  if (gesture->edge_pan_data == nullptr) {
+    return;
+  }
+  const View2D *v2d = gesture->edge_pan_data->v2d;
+  gesture->init_mval_view = float2(ui::view2d_region_to_view_x(v2d, mval.x),
+                                   ui::view2d_region_to_view_y(v2d, mval.y));
+}
+
 static int UNUSED_FUNCTION(gesture_modal_state_from_operator)(wmOperator *op)
 {
   PropertyRNA *prop;
@@ -183,8 +193,19 @@ wmOperatorStatus WM_gesture_box_invoke(bContext *C, wmOperator *op, const wmEven
   {
     wmGesture *gesture = static_cast<wmGesture *>(op->customdata);
     gesture->wait_for_input = wait_for_input;
-    gesture->edge_pan_data = MEM_new<ui::View2DEdgePanData>(__func__);
-    view2d_edge_pan_init(C, gesture->edge_pan_data, 2, 0, 1, 10, 0.5f, 0.5f);
+    if (ui::view2d_edge_pan_poll(C)) {
+      gesture->edge_pan_data = MEM_new<ui::View2DEdgePanData>(__func__);
+      ui::view2d_edge_pan_init(C, gesture->edge_pan_data, 2, 0, 1, 10, 0.5f, 0.5f);
+
+      /* `SPACE_ACTION` clamps view at draw-time (footgun, draw code should probably be
+       * read-only...), so prevent panning past that. We shouldn't limit horizontal range to `tot`,
+       * however, because for timelines it is the scene playback range. */
+      gesture->edge_pan_data->limit.ymin = region->v2d.tot.ymin;
+      gesture->edge_pan_data->limit.ymax = region->v2d.tot.ymax;
+
+      const rcti *rect = static_cast<const rcti *>(gesture->customdata);
+      gesture_init_mval_set(gesture, int2(rect->xmin, rect->ymin));
+    }
   }
 
   /* Add modal handler. */
@@ -237,28 +258,25 @@ wmOperatorStatus WM_gesture_box_modal(bContext *C, wmOperator *op, const wmEvent
   else {
     switch (event->type) {
       case MOUSEMOVE: {
-        /* Grab lower-left corner in view space before edge pan shifts, then shift rect by pixel
-         * delta afterwards. This keeps the rect anchored to the view as it scrolls.  */
-        const ScrArea *area = CTX_wm_area(C);
-        if (area->spacetype != SPACE_VIEW3D) {
-          const ARegion *region = CTX_wm_region(C);
-          const View2D *v2d = &region->v2d;
-          const float anchor_x = ui::view2d_region_to_view_x(v2d, rect->xmin);
-          const float anchor_y = ui::view2d_region_to_view_y(v2d, rect->ymin);
-          view2d_edge_pan_apply_event(C, gesture->edge_pan_data, event);
-          const int pan_dx = int(ui::view2d_view_to_region_x(v2d, anchor_x)) - rect->xmin;
-          const int pan_dy = int(ui::view2d_view_to_region_y(v2d, anchor_y)) - rect->ymin;
-          BLI_rcti_translate(rect, pan_dx, pan_dy);
+        if (gesture->edge_pan_data) {
+          const View2D *v2d = gesture->edge_pan_data->v2d;
+          ui::view2d_edge_pan_apply_event(C, gesture->edge_pan_data, event);
+          if (!gesture->move) {
+            rect->xmin = ui::view2d_view_to_region_x(v2d, gesture->init_mval_view.x);
+            rect->ymin = ui::view2d_view_to_region_y(v2d, gesture->init_mval_view.y);
+          }
         }
 
         if (gesture->type == WM_GESTURE_CROSS_RECT && gesture->is_active == false) {
           rect->xmin = rect->xmax = event->xy[0] - gesture->winrct.xmin;
           rect->ymin = rect->ymax = event->xy[1] - gesture->winrct.ymin;
+          gesture_init_mval_set(gesture, int2(rect->xmin, rect->ymin));
         }
         else if (gesture->move) {
           BLI_rcti_translate(rect,
                              (event->xy[0] - gesture->winrct.xmin) - rect->xmax,
                              (event->xy[1] - gesture->winrct.ymin) - rect->ymax);
+          gesture_init_mval_set(gesture, int2(rect->xmin, rect->ymin));
         }
         else {
           rect->xmax = event->xy[0] - gesture->winrct.xmin;

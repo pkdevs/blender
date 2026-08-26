@@ -485,13 +485,19 @@ static void sequencer_main_region_draw_overlay(const bContext *C, ARegion *regio
   draw_timeline_seq_display(C, region);
 }
 
-rctf sequencer_clamp_view_bounds(const bContext *C, ARegion *region)
+rctf sequencer_clamped_view_bounds_get(const bContext *C, ARegion *region)
 {
   SpaceSeq *sseq = CTX_wm_space_seq(C);
   View2D *v2d = &region->v2d;
   Scene *scene = CTX_data_sequencer_scene(C);
 
   rctf strip_boundbox;
+
+  if ((sseq->flag & SEQ_CLAMP_VIEW) == 0) {
+    BLI_rctf_init_minmax(&strip_boundbox);
+    return strip_boundbox;
+  }
+
   /* Initialize default view with 7 channels, that are visible even if empty. */
   seq::timeline_init_boundbox(scene, &strip_boundbox);
   Editing *ed = seq::editing_get(scene);
@@ -539,7 +545,7 @@ static void sequencer_main_clamp_view(const bContext *C, ARegion *region)
     return;
   }
 
-  rctf strip_boundbox = sequencer_clamp_view_bounds(C, region);
+  rctf strip_boundbox = sequencer_clamped_view_bounds_get(C, region);
   rctf view_clamped = v2d->cur;
   float range_y = BLI_rctf_size_y(&view_clamped);
   if (view_clamped.ymax > strip_boundbox.ymax) {

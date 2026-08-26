@@ -92,7 +92,7 @@ bool is_scene_time_sync_needed(const bContext &C);
 const Strip *get_scene_strip_for_time_sync(const Scene *sequencer_scene);
 void sync_active_scene_and_time_with_scene_strip(bContext &C);
 
-rctf sequencer_clamp_view_bounds(const bContext *C, ARegion *region);
+rctf sequencer_clamped_view_bounds_get(const bContext *C, ARegion *region);
 
 }  // namespace ed::vse
 }  // namespace blender

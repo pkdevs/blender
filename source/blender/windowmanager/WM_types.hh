@@ -676,6 +676,8 @@ struct wmGesture {
   bool draw_active_side;
   /** Latest mouse position relative to area. Currently only used by lasso drawing code. */
   int2 mval;
+  /** Mouse position the gesture started at in view space. Used by edge panning. */
+  float2 init_mval_view;
 
   /**
    * For modal operators which may be running idle, waiting for an event to activate the gesture.
