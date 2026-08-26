@@ -165,7 +165,6 @@ struct Node {
 };
 
 struct SculptAttrRef {
-  /** If this is nullopt, the ref is not referencing anything. */
   std::optional<bke::AttrDomain> domain;
   bke::AttrType type;
   std::string name;
