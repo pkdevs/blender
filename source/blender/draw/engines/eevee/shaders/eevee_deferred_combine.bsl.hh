@@ -125,8 +125,6 @@ void combine_frag([[resource_table]] Combine &srt,
   float3 specular_direct =
       render_passes.load_color(texel, uni.uniform_buf.render_pass.specular_light_id).rgb;
   float3 specular_indirect = float3(0.0f);
-  diffuse_direct *= diffuse_color;
-  specular_direct *= specular_color;
   float3 out_direct = diffuse_direct + specular_direct;
   float3 out_indirect = float3(0.0f);
   float3 average_normal = float3(0.0f);

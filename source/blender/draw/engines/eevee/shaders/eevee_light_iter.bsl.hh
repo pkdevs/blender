@@ -148,7 +148,7 @@ struct VisibleLightIterator {
       }
       case LIGHT_ITER_PHASE_DIRECTIONAL: {
         index++;
-        if (index < culling.items_count) {
+        if (index < int(culling.items_count)) {
           return true;
         }
         phase = LIGHT_ITER_PHASE_LOCAL;

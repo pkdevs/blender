@@ -193,10 +193,9 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
         out_texel, uni.uniform_buf.render_pass.emission_id, float4(g_emission, 1.0f));
 
 #if defined(MAT_LIGHT_ITER)
-    if (g_light_accumulation_count > 0) {
-      g_diffuse_color /= float(g_light_accumulation_count);
-      g_specular_color /= float(g_light_accumulation_count);
-    }
+    float light_sample_rcp = safe_rcp(float(g_light_accumulation_count));
+    g_diffuse_color *= light_sample_rcp;
+    g_specular_color *= light_sample_rcp;
     g_diffuse_light *= alpha_rcp;
     g_specular_light *= alpha_rcp;
     // TODO: Write as fragment output?
