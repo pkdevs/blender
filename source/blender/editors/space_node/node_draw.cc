@@ -4113,6 +4113,23 @@ static void node_draw_comment(const bContext &C,
     ui::draw_roundbox_4fv(&rct, false, BASIS_RAD, outline_color);
   }
 
+  const float padding = UI_UNIT_X * 0.2f;
+
+  NodeComment &storage = *static_cast<NodeComment *>(node.storage);
+  const StringRef full_text = storage.text;
+
+  const int fontid = ui::style_get()->widget.uifont_id;
+  const float aspect = snode.runtime->aspect;
+  BLF_enable(fontid, BLF_ASPECT);
+  BLF_aspect(fontid, aspect, aspect, 1.0f);
+  const float size = 12;
+  BLF_size(fontid, size * UI_SCALE_FAC / aspect);
+
+  BLF_position(fontid, rct.xmin + padding, rct.ymax - padding - size * UI_SCALE_FAC, 0);
+  BLF_draw(fontid, full_text.data(), full_text.size());
+
+  BLF_disable(fontid, BLF_ASPECT);
+
   block_end_ex(&C,
                tree_draw_ctx.bmain,
                tree_draw_ctx.window,
