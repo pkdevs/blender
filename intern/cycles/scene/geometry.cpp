@@ -416,7 +416,6 @@ void GeometryManager::geom_calc_offset(Scene *scene, BVHLayout bvh_layout)
       /* Changing Render As on point cloud is likely to change its underlying BVH type (i.e. Render
        * As Points uses hardware-accelerated point primitives, and Render As GSplats uses custom
        * primitives). */
-      /* TODO(sergey): There could be a better place for doing this check. */
       if (pointcloud->render_as_is_modified()) {
         geom->need_update_rebuild = true;
       }
