@@ -24,6 +24,7 @@
 #include "BKE_action.hh"
 #include "BKE_anim_path.h"
 #include "BKE_armature.hh"
+#include "BKE_constraint.h"
 #include "BKE_curve.hh"
 #include "BKE_object_types.hh"
 #include "BKE_scene.hh"
@@ -77,7 +78,7 @@ static void splineik_init_tree_from_pchan(Scene * /*scene*/, Object *ob, bPoseCh
         continue;
       }
       /* Skip if disabled. */
-      if ((con->enforce == 0.0f) || (con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF))) {
+      if (!BKE_constraint_has_influence(con)) {
         continue;
       }
 
@@ -796,15 +797,13 @@ void BKE_splineik_execute_tree(
 
 void BKE_pose_pchan_index_rebuild(bPose *pose)
 {
-  MEM_SAFE_DELETE(pose->chan_array);
   const int num_channels = pose->chanbase.count();
-  pose->chan_array = MEM_new_array_uninitialized<bPoseChannel *>(size_t(num_channels),
-                                                                 "pose->chan_array");
+  pose->runtime->chan_array.reinitialize(num_channels);
   int pchan_index = 0;
   for (bPoseChannel *pchan = static_cast<bPoseChannel *>(pose->chanbase.first); pchan != nullptr;
        pchan = pchan->next)
   {
-    pose->chan_array[pchan_index++] = pchan;
+    pose->runtime->chan_array[pchan_index++] = pchan;
   }
 }
 
@@ -812,10 +811,10 @@ BLI_INLINE bPoseChannel *pose_pchan_get_indexed(Object *ob, int pchan_index)
 {
   bPose *pose = ob->pose;
   BLI_assert(pose != nullptr);
-  BLI_assert(pose->chan_array != nullptr);
+  BLI_assert(!pose->runtime->chan_array.is_empty());
   BLI_assert(pchan_index >= 0);
-  BLI_assert(pchan_index < MEM_allocN_len(pose->chan_array) / sizeof(bPoseChannel *));
-  return pose->chan_array[pchan_index];
+  BLI_assert(pchan_index < pose->runtime->chan_array.size());
+  return pose->runtime->chan_array[pchan_index];
 }
 
 void BKE_pose_eval_init(Depsgraph *depsgraph, Scene * /*scene*/, Object *object)
@@ -847,7 +846,7 @@ void BKE_pose_eval_init(Depsgraph *depsgraph, Scene * /*scene*/, Object *object)
     }
   }
 
-  BLI_assert(pose->chan_array != nullptr || pose->chanbase.is_empty());
+  BLI_assert(!pose->runtime->chan_array.is_empty() || pose->chanbase.is_empty());
 }
 
 void BKE_pose_eval_init_ik(Depsgraph *depsgraph, Scene *scene, Object *object)
@@ -1043,7 +1042,7 @@ static void pose_eval_cleanup_common(Object *object)
 {
   bPose *pose = object->pose;
   BLI_assert(pose != nullptr);
-  BLI_assert(pose->chan_array != nullptr || pose->chanbase.is_empty());
+  BLI_assert(!pose->runtime->chan_array.is_empty() || pose->chanbase.is_empty());
   UNUSED_VARS_NDEBUG(pose);
 }
 

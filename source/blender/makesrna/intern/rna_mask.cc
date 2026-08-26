@@ -33,6 +33,7 @@
 #  include "BLI_string.hh"
 #  include "BLI_string_utf8.hh"
 
+#  include "BKE_global.hh"
 #  include "BKE_mask.hh"
 #  include "BKE_movieclip.hh"
 #  include "BKE_tracking.hh"
@@ -199,7 +200,7 @@ static void rna_MaskLayer_name_set(PointerRNA *ptr, const char *value)
   STRNCPY(oldname, masklay->name);
   STRNCPY_UTF8(newname, value);
 
-  BKE_mask_layer_rename(mask, masklay, oldname, newname);
+  BKE_mask_layer_rename(*G_MAIN, mask, masklay, oldname, newname);
 }
 
 static PointerRNA rna_MaskLayer_active_spline_get(PointerRNA *ptr)
@@ -842,6 +843,7 @@ static void rna_def_mask_splines(BlenderRNA *brna)
   RNA_def_function_flag(func, FUNC_USE_SELF_ID);
   RNA_def_function_ui_description(func, "Add a new spline to the layer");
   parm = RNA_def_pointer(func, "spline", "MaskSpline", "", "The newly created spline");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   /* Remove the spline */
@@ -1132,6 +1134,7 @@ static void rna_def_masklayers(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_ui_description(func, "Add layer to this mask");
   RNA_def_string(func, "name", nullptr, 0, "Name", "Name of new layer");
   parm = RNA_def_pointer(func, "layer", "MaskLayer", "", "New mask layer");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_Mask_layers_remove");

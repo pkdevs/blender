@@ -311,7 +311,7 @@ void WM_operator_type_set(wmOperator *op, wmOperatorType *ot)
 
     WM_operator_properties_default(&ptr, false);
 
-    if (ptr.data) {
+    if (ptr) {
       IDP_SyncGroupTypes(op->properties, static_cast<const IDProperty *>(ptr.data), true);
     }
 
@@ -580,8 +580,11 @@ void wm_close_and_free(bContext *C, wmWindowManager *wm)
   wm_xr_data_free(wm);
 
   while (wmWindow *win = static_cast<wmWindow *>(BLI_pophead(&wm->windows))) {
-    /* Prevent draw clear to use screen. */
-    BKE_workspace_active_set(win->workspace_hook, nullptr);
+    /* Prevent draw clear to use screen. `workspace_hook` may be null for a window that was not
+     * completely read from an invalid file. */
+    if (win->workspace_hook != nullptr) {
+      BKE_workspace_active_set(win->workspace_hook, nullptr);
+    }
     wm_window_free(C, wm, win);
   }
 

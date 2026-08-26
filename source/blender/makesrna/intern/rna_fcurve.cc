@@ -620,38 +620,25 @@ static void rna_FCurve_RnaPath_get(PointerRNA *ptr, char *value)
 {
   FCurve *fcu = static_cast<FCurve *>(ptr->data);
 
-  if (fcu->rna_path) {
-    strcpy(value, fcu->rna_path);
-  }
-  else {
-    value[0] = '\0';
-  }
+  strcpy(value, fcu->rna_path().c_str());
 }
 
 static int rna_FCurve_RnaPath_length(PointerRNA *ptr)
 {
   FCurve *fcu = static_cast<FCurve *>(ptr->data);
-
-  if (fcu->rna_path) {
-    return strlen(fcu->rna_path);
-  }
-  return 0;
+  return fcu->rna_path().size();
 }
 
 static void rna_FCurve_RnaPath_set(PointerRNA *ptr, const char *value)
 {
   FCurve *fcu = static_cast<FCurve *>(ptr->data);
 
-  if (fcu->rna_path) {
-    MEM_delete(fcu->rna_path);
-  }
-
   if (value[0]) {
-    fcu->rna_path = BLI_strdup(value);
+    fcu->rna_path_set(value);
     fcu->flag &= ~FCURVE_DISABLED;
   }
   else {
-    fcu->rna_path = nullptr;
+    fcu->rna_path_set("");
   }
 }
 
@@ -669,7 +656,7 @@ static void rna_FCurve_group_set(PointerRNA *ptr, PointerRNA value, ReportList *
            vid);
     return;
   }
-  if (value.data && (pid != vid)) {
+  if (value && (pid != vid)) {
     /* ids differ, can't do this, should raise an error */
     printf("ERROR: IDs differ - ptr=%p vs value=%p\n", pid, vid);
     return;
@@ -711,7 +698,7 @@ static void rna_FCurve_group_set(PointerRNA *ptr, PointerRNA value, ReportList *
     printf(
         "ERROR: F-Curve (datapath: '%s') doesn't belong to the same channel bag as "
         "channel group '%s'\n",
-        fcu->rna_path,
+        fcu->rna_path().c_str(),
         group->name);
     return;
   }
@@ -1468,6 +1455,7 @@ static void rna_def_fmodifier_envelope_control_points(BlenderRNA *brna, Property
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(
       func, "point", "FModifierEnvelopeControlPoint", "", "Newly created control-point");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_FModifierEnvelope_points_remove");
@@ -2200,6 +2188,7 @@ static void rna_def_channeldriver_variables(BlenderRNA *brna, PropertyRNA *cprop
   RNA_def_function_ui_description(func, "Add a new variable for the driver");
   /* return type */
   parm = RNA_def_pointer(func, "var", "DriverVariable", "", "Newly created Driver Variable");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   /* remove variable */

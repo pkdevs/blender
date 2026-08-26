@@ -60,12 +60,14 @@
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+#include "IMB_partial_update.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
 
 #include "ED_mesh.hh"
 #include "ED_object.hh"
+#include "ED_render.hh"
 #include "ED_screen.hh"
 #include "ED_uvedit.hh"
 
@@ -311,12 +313,8 @@ static bool write_internal_bake_pixels(Image *image,
     RE_bake_margin(ibuf, mask_buffer, margin, margin_type, mesh_eval, uv_layer, uv_offset);
   }
 
-  ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-  BKE_image_mark_dirty(image, ibuf);
-
-  if (ibuf->float_data()) {
-    ibuf->userflags |= IB_RECT_INVALID;
-  }
+  IMB_partial_update_mark_full(ibuf);
+  IMB_mark_dirty(ibuf);
 
   BKE_image_release_ibuf(image, ibuf, nullptr);
 
@@ -334,7 +332,6 @@ static void bake_targets_refresh(BakeTargets *targets)
     Image *ima = targets->images[i].image;
 
     if (ima) {
-      BKE_image_partial_update_mark_full_update(ima);
       DEG_id_tag_update(&ima->id, 0);
     }
   }
@@ -1061,6 +1058,7 @@ static void bake_targets_populate_pixels_color_attributes(BakeTargets *targets,
     pixel->dv_dy = 0.0f;
     pixel->uv[0] = 0.0f;
     pixel->uv[1] = 0.0f;
+    pixel->is_margin = false;
   }
 
   /* Populate through adjacent triangles, first triangle wins. */
@@ -1340,7 +1338,8 @@ static void bake_targets_populate_pixels(const BakeAPIRender *bkr,
     bake_targets_populate_pixels_color_attributes(targets, ob, mesh_eval, pixel_array);
   }
   else {
-    RE_bake_pixels_populate(mesh_eval, pixel_array, targets->pixels_num, targets, bkr->uv_layer);
+    RE_bake_pixels_populate(
+        mesh_eval, pixel_array, targets->pixels_num, targets, bkr->uv_layer, bkr->margin);
   }
 }
 
@@ -1950,6 +1949,8 @@ static wmOperatorStatus bake_exec(bContext *C, wmOperator *op)
     return result;
   }
 
+  ED_render_view3d_auto_pause(CTX_data_main(C), true);
+
   if (bkr.is_clear) {
     const bool is_tangent = ((bkr.pass_type == SCE_PASS_NORMAL) &&
                              (bkr.normal_space == R_BAKE_SPACE_TANGENT));
@@ -1972,6 +1973,7 @@ static wmOperatorStatus bake_exec(bContext *C, wmOperator *op)
   RE_SetReports(re, nullptr);
 
   G.is_rendering = false;
+  ED_render_view3d_auto_pause(CTX_data_main(C), false);
   return result;
 }
 
@@ -2045,6 +2047,8 @@ static void bake_freejob(void *bkv)
   MEM_delete(bkr);
 
   G.is_rendering = false;
+
+  ED_render_view3d_auto_pause(G_MAIN, false);
 }
 
 static void bake_set_props(wmOperator *op, Scene *scene)
@@ -2194,6 +2198,8 @@ static wmOperatorStatus bake_invoke(bContext *C, wmOperator *op, const wmEvent *
 
   G.is_break = false;
   G.is_rendering = true;
+
+  ED_render_view3d_auto_pause(CTX_data_main(C), true);
 
   WM_jobs_start(CTX_wm_manager(C), wm_job);
 

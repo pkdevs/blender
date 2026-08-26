@@ -24,6 +24,9 @@ std::string ParsedResource::serialize() const
   if (res_type == "legacy_info") {
     ss << "ADDITIONAL_INFO(" << var_name << ")";
   }
+  else if (res_type == "legacy_iface") {
+    ss << "VERTEX_OUT(" << var_type << "_t)";
+  }
   else if (res_type == "resource_table") {
     if (!res_condition.empty()) {
       ss << ".additional_info_with_condition(\"" << var_type << "\"" << res_condition_lambda
@@ -62,6 +65,12 @@ std::string ParsedResource::serialize() const
     ss << ", Qualifier::" << res_qualifier;
     ss << ", \"" << var_type << "\"";
     ss << ", \"" << var_name << var_array << "\"";
+    ss << ", Frequency::" << res_frequency;
+    ss << res_condition_lambda << ")";
+  }
+  else if (res_type == "acceleration_structure") {
+    ss << ".acceleration_structure(" << res_slot;
+    ss << ", \"" << var_name << "\"";
     ss << ", Frequency::" << res_frequency;
     ss << res_condition_lambda << ")";
   }
