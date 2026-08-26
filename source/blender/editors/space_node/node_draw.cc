@@ -4076,7 +4076,7 @@ static void reroute_node_draw(const bContext &C,
 }
 
 struct MarkdownSpan {
-  /** Top left corner of the span. */
+  /** Left edge and baseline of the span. */
   float x, y;
   float size;
   int fontid;
@@ -4115,7 +4115,8 @@ class MarkdownLayouter {
     main_fontid_ = ui::style_get()->widget.uifont_id;
     mono_fontid_ = blf_mono_font;
     x_ = bounds.xmin;
-    y_ = bounds.ymax;
+    /* Baseline starts at 0; finalized once the first line's ascenders are known. */
+    y_ = 0.0f;
     default_size_ = 12 * UI_SCALE_FAC / snode_.runtime->aspect;
     current_size_ = default_size_;
   }
@@ -4151,11 +4152,41 @@ class MarkdownLayouter {
     BLF_aspect(mono_fontid_, aspect, aspect, 1.0f);
 
     md_parse(full_text_.data(), full_text_.size(), &md_parser, this);
+    this->finalize_vertical_positions();
 
     BLF_disable(main_fontid_, BLF_ASPECT | BLF_ITALIC);
     BLF_disable(mono_fontid_, BLF_ASPECT | BLF_ITALIC);
 
     return std::move(layout_);
+  }
+
+  void finalize_vertical_positions()
+  {
+    if (layout_.spans.is_empty()) {
+      return;
+    }
+
+    /* First line has the largest baseline y (layout starts at y = 0 and moves downward). */
+    float first_line_y = layout_.spans.first().y;
+    for (const MarkdownSpan &span : layout_.spans) {
+      first_line_y = math::max(first_line_y, span.y);
+    }
+
+    const float aspect = snode_.runtime->aspect;
+    float max_ascender = 0.0f;
+    for (const MarkdownSpan &span : layout_.spans) {
+      if (span.y != first_line_y) {
+        continue;
+      }
+      this->apply_span_font_style(span);
+      max_ascender = math::max(max_ascender, BLF_ascender(span.fontid) * aspect);
+    }
+
+    /* Place the first line so its tallest glyph top sits on the bounds top edge. */
+    const float y_offset = bounds_.ymax - max_ascender;
+    for (MarkdownSpan &span : layout_.spans) {
+      span.y += y_offset;
+    }
   }
 
   void md_enter_block(const MD_BLOCKTYPE block_type, void *detail)
@@ -4360,6 +4391,18 @@ class MarkdownLayouter {
     layout_.spans.append(std::move(span));
   }
 
+  void apply_span_font_style(const MarkdownSpan &span) const
+  {
+    BLF_character_weight(span.fontid, span.weight);
+    BLF_size(span.fontid, span.size);
+    if (span.italic) {
+      BLF_enable(span.fontid, BLF_ITALIC);
+    }
+    else {
+      BLF_disable(span.fontid, BLF_ITALIC);
+    }
+  }
+
   void apply_font_style(const int fontid) const
   {
     BLF_character_weight(fontid, this->current_weight());
@@ -4434,7 +4477,7 @@ static void draw_markdown_layout(const MarkdownLayout &md_layout,
     const float font_height = ascender - descender;
     const float width = BLF_width(span.fontid, span.text.data(), span.text.size());
 
-    BLF_position(span.fontid, span.x, span.y - ascender, 0.0f);
+    BLF_position(span.fontid, span.x, span.y, 0.0f);
     BLF_draw(span.fontid, span.text.data(), span.text.size());
 
     if (span.url) {
@@ -4444,7 +4487,7 @@ static void draw_markdown_layout(const MarkdownLayout &md_layout,
                                      ui::ButtonType::But,
                                      ICON_NONE,
                                      span.x,
-                                     span.y - font_height,
+                                     span.y + descender,
                                      width,
                                      font_height,
                                      nullptr,
