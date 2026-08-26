@@ -557,7 +557,7 @@ void Result::allocate_texture(const Domain domain,
   if (use_gpu) {
     storage_type_ = ResultStorageType::GPUImage;
     auto *new_texture = new ImplicitSharedValue<GPUData>(
-        domain_.data_size, this->type(), this->precision(), from_pool);
+        domain_.data_size, this->type(), this->precision(), false);
     sharing_info_ = ImplicitSharingPtr<>(new_texture);
     gpu_texture_ = new_texture->data.texture;
     return;
@@ -858,12 +858,11 @@ gpu::Texture *Result::bind_as_texture_or_single_value(gpu::Shader *shader,
   const eGPUTextureUsage usage = GPU_TEXTURE_USAGE_GENERAL;
   gpu::Texture *single_value_texture = nullptr;
   if (this->type() == ResultType::Float4x4) {
-    single_value_texture = gpu::TexturePool::get().acquire_texture_2d_array(
-        int2(1, 1), 4, 1, format, usage);
+    single_value_texture = GPU_texture_create_2d_array(
+        __func__, 1, 1, 4, 1, format, usage, nullptr);
   }
   else {
-    single_value_texture = gpu::TexturePool::get().acquire_texture_2d(
-        int2(1, 1), 1, format, usage);
+    single_value_texture = GPU_texture_create_2d(__func__, 1, 1, 1, format, usage, nullptr);
   }
 
   /* Upload the single value to the texture. */
@@ -948,7 +947,7 @@ void Result::unbind_as_texture_or_single_value(gpu::Texture *single_value_textur
 
   BLI_assert(single_value_texture);
   GPU_texture_unbind(single_value_texture);
-  gpu::TexturePool::get().release_texture(single_value_texture);
+  GPU_texture_free(single_value_texture);
 }
 
 void Result::unbind_as_image() const
