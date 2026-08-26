@@ -205,8 +205,9 @@ static void rna_Main_blender_project_init(struct BlendData * /* blenddata */,
                 "parameters are non-empty.");
   }
 
-  /* Force full redraw of all windows. */
+  /* Force full redraw of all windows, and refresh their title. */
   WM_main_add_notifier(NC_WINDOW, nullptr);
+  WM_main_add_notifier(NC_WM | ND_PROJECT_CHANGED, nullptr);
 }
 
 static void rna_Main_blender_project_clear(struct BlendData * /* blenddata */,
@@ -214,8 +215,9 @@ static void rna_Main_blender_project_clear(struct BlendData * /* blenddata */,
 {
   BKE_blender_project_clear();
 
-  /* Force full redraw of all windows. */
+  /* Force full redraw of all windows, and refresh their title. */
   WM_main_add_notifier(NC_WINDOW, nullptr);
+  WM_main_add_notifier(NC_WM | ND_PROJECT_CHANGED, nullptr);
 }
 
 static Camera *rna_Main_cameras_new(Main *bmain, const char *name)
