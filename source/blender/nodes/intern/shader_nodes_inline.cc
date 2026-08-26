@@ -1538,8 +1538,8 @@ class ShaderNodesInliner {
     const std::optional<PrimitiveSocketValue> primitive_show = show_value->to_primitive(
         *show_input_socket->typeinfo);
     if (!primitive_show) {
-      this->report_required_constant_input_or_backtrack(node,
-                                                        TIP_("Inputs have to be constant values"));
+      this->report_error(
+          node, TIP_("Warnings only work when inputs are constant values"), NodeWarningType::Info);
       this->store_socket_value_fallback(socket);
       return;
     }
@@ -1560,8 +1560,9 @@ class ShaderNodesInliner {
         this->report_error(node, message, type);
       }
       else {
-        this->report_required_constant_input_or_backtrack(
-            node, TIP_("Inputs have to be constant values"));
+        this->report_error(node,
+                           TIP_("Warnings only work when inputs are constant values"),
+                           NodeWarningType::Info);
       }
     }
     this->forward_value_or_schedule(socket, show_input_socket);
