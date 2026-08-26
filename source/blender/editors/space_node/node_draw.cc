@@ -4075,6 +4075,12 @@ static void reroute_node_draw(const bContext &C,
   block_draw(&C, &block);
 }
 
+enum class MarkdownSpanType {
+  Text,
+  Bullet,
+  OrderedMarker,
+};
+
 struct MarkdownSpan {
   /** Left edge and baseline of the span. */
   float x, y;
@@ -4082,7 +4088,11 @@ struct MarkdownSpan {
   int fontid;
   int weight;
   bool italic = false;
+  MarkdownSpanType type = MarkdownSpanType::Text;
+  /** Used when #type is #MarkdownSpanType::Text. */
   StringRef text;
+  /** Used when #type is #MarkdownSpanType::OrderedMarker. */
+  int list_number = 0;
   std::optional<StringRef> url;
 };
 
@@ -4092,6 +4102,14 @@ struct MarkdownLayout {
 
 class MarkdownLayouter {
  private:
+  struct ListState {
+    bool is_ordered = false;
+    bool is_tight = false;
+    int next_number = 1;
+    float marker_x = 0.0f;
+    float content_x = 0.0f;
+  };
+
   const SpaceNode &snode_;
   const StringRef full_text_;
   const rctf bounds_;
@@ -4099,6 +4117,8 @@ class MarkdownLayouter {
   int mono_fontid_;
   float x_;
   float y_;
+  /** Left edge for the current line (list content indent, or bounds). */
+  float line_indent_x_;
 
   float default_size_;
   float current_size_;
@@ -4106,6 +4126,7 @@ class MarkdownLayouter {
   bool is_bold_ = false;
   bool is_italic_ = false;
   bool is_code_ = false;
+  Vector<ListState> list_stack_;
   MarkdownLayout layout_;
 
  public:
@@ -4115,6 +4136,7 @@ class MarkdownLayouter {
     main_fontid_ = ui::style_get()->widget.uifont_id;
     mono_fontid_ = blf_mono_font;
     x_ = bounds.xmin;
+    line_indent_x_ = bounds.xmin;
     /* Baseline starts at 0; finalized once the first line's ascenders are known. */
     y_ = 0.0f;
     default_size_ = 12 * UI_SCALE_FAC / snode_.runtime->aspect;
@@ -4204,6 +4226,20 @@ class MarkdownLayouter {
         is_code_ = true;
         break;
       }
+      case MD_BLOCK_UL: {
+        const MD_BLOCK_UL_DETAIL &detail_ul = *static_cast<const MD_BLOCK_UL_DETAIL *>(detail);
+        this->enter_list(false, detail_ul.is_tight != 0, 1);
+        break;
+      }
+      case MD_BLOCK_OL: {
+        const MD_BLOCK_OL_DETAIL &detail_ol = *static_cast<const MD_BLOCK_OL_DETAIL *>(detail);
+        this->enter_list(true, detail_ol.is_tight != 0, detail_ol.start);
+        break;
+      }
+      case MD_BLOCK_LI: {
+        this->enter_list_item();
+        break;
+      }
       default: {
         break;
       }
@@ -4212,20 +4248,31 @@ class MarkdownLayouter {
 
   void md_leave_block(const MD_BLOCKTYPE block_type, void * /*detail*/)
   {
-    x_ = bounds_.xmin;
     switch (block_type) {
       case MD_BLOCK_P: {
         y_ -= UI_UNIT_Y * 1.5f;
+        x_ = line_indent_x_;
         break;
       }
       case MD_BLOCK_H: {
         y_ -= UI_UNIT_Y * 1.3f;
         current_size_ = default_size_;
+        x_ = line_indent_x_;
         break;
       }
       case MD_BLOCK_CODE: {
         is_code_ = false;
         y_ -= UI_UNIT_Y * 1.5f;
+        x_ = line_indent_x_;
+        break;
+      }
+      case MD_BLOCK_UL:
+      case MD_BLOCK_OL: {
+        this->leave_list();
+        break;
+      }
+      case MD_BLOCK_LI: {
+        this->leave_list_item();
         break;
       }
       default: {
@@ -4323,6 +4370,81 @@ class MarkdownLayouter {
     }
   }
 
+  void enter_list(const bool is_ordered, const bool is_tight, const int start_number)
+  {
+    if (x_ > line_indent_x_) {
+      y_ -= UI_UNIT_Y * 0.8f;
+      x_ = line_indent_x_;
+    }
+    ListState state;
+    state.is_ordered = is_ordered;
+    state.is_tight = is_tight;
+    state.next_number = start_number;
+    state.marker_x = line_indent_x_;
+    list_stack_.append(state);
+  }
+
+  void leave_list()
+  {
+    list_stack_.pop_last();
+    if (list_stack_.is_empty()) {
+      line_indent_x_ = bounds_.xmin;
+    }
+    else {
+      line_indent_x_ = list_stack_.last().content_x;
+    }
+    x_ = line_indent_x_;
+  }
+
+  void enter_list_item()
+  {
+    ListState &list = list_stack_.last();
+    if (x_ > list.marker_x) {
+      y_ -= UI_UNIT_Y * 0.8f;
+    }
+    x_ = list.marker_x;
+    this->append_list_marker(list);
+    list.content_x = x_;
+    line_indent_x_ = list.content_x;
+  }
+
+  void leave_list_item()
+  {
+    const ListState &list = list_stack_.last();
+    if (list.is_tight) {
+      y_ -= UI_UNIT_Y * 0.8f;
+    }
+    x_ = list.marker_x;
+    line_indent_x_ = list.marker_x;
+  }
+
+  void append_list_marker(ListState &list)
+  {
+    MarkdownSpan span;
+    span.x = x_;
+    span.y = y_;
+    span.size = current_size_;
+    span.fontid = main_fontid_;
+    span.weight = this->current_weight();
+    span.italic = false;
+
+    this->apply_font_style(main_fontid_);
+
+    std::string marker;
+    if (list.is_ordered) {
+      span.type = MarkdownSpanType::OrderedMarker;
+      span.list_number = list.next_number++;
+      marker = fmt::format("{}. ", span.list_number);
+    }
+    else {
+      span.type = MarkdownSpanType::Bullet;
+      marker = "\u2022 ";
+    }
+
+    x_ += BLF_width(main_fontid_, marker.c_str(), marker.size());
+    layout_.spans.append(std::move(span));
+  }
+
   void append_wrapped_text(StringRef text)
   {
     const int fontid = this->current_fontid();
@@ -4347,7 +4469,7 @@ class MarkdownLayouter {
           drop_bytes = size_t(last_space) + 1; /* Skip the space. */
           needed_width = BLF_width(fontid, text.data(), draw_bytes);
         }
-        else if (x_ > bounds_.xmin) {
+        else if (x_ > line_indent_x_) {
           /* Word does not fit on this line; retry on the next. */
           this->advance_to_next_line();
           continue;
@@ -4428,7 +4550,7 @@ class MarkdownLayouter {
 
   void advance_to_next_line()
   {
-    x_ = bounds_.xmin;
+    x_ = line_indent_x_;
     y_ -= UI_UNIT_Y * 0.8f;
   }
 };
@@ -4439,6 +4561,24 @@ static MarkdownLayout compute_markdown_layout(const SpaceNode &snode,
 {
   MarkdownLayouter layouter(snode, full_text, bounds);
   return layouter.compute_layout();
+}
+
+static StringRef markdown_span_draw_text(const MarkdownSpan &span, std::string &owned_marker)
+{
+  switch (span.type) {
+    case MarkdownSpanType::Text: {
+      return span.text;
+    }
+    case MarkdownSpanType::Bullet: {
+      owned_marker = "\u2022 ";
+      return owned_marker;
+    }
+    case MarkdownSpanType::OrderedMarker: {
+      owned_marker = fmt::format("{}. ", span.list_number);
+      return owned_marker;
+    }
+  }
+  return {};
 }
 
 static void draw_markdown_layout(const MarkdownLayout &md_layout,
@@ -4472,13 +4612,16 @@ static void draw_markdown_layout(const MarkdownLayout &md_layout,
       BLF_color4f(span.fontid, 0.8f, 0.8f, 0.8f, 1.0f);
     }
 
+    std::string owned_marker;
+    const StringRef text = markdown_span_draw_text(span, owned_marker);
+
     const float ascender = BLF_ascender(span.fontid) * aspect;
     const float descender = BLF_descender(span.fontid) * aspect;
     const float font_height = ascender - descender;
-    const float width = BLF_width(span.fontid, span.text.data(), span.text.size());
+    const float width = BLF_width(span.fontid, text.data(), text.size());
 
     BLF_position(span.fontid, span.x, span.y, 0.0f);
-    BLF_draw(span.fontid, span.text.data(), span.text.size());
+    BLF_draw(span.fontid, text.data(), text.size());
 
     if (span.url) {
       const ui::EmbossType previous_emboss = ui::block_emboss_get(&ui_block);
