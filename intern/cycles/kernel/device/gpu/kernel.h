@@ -1068,7 +1068,7 @@ ccl_gpu_kernel_postfix
 
 ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
     ccl_gpu_kernel_signature(filter_color_preprocess_to_surface,
-                             ccl_gpu_image_object_2D color_surface,
+                             const uint64_t color_surface,
                              ccl_global float *render_buffer,
                              const int full_x,
                              const int full_y,
@@ -1185,12 +1185,12 @@ ccl_gpu_kernel_postfix
 
 ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
     ccl_gpu_kernel_signature(filter_guiding_preprocess_to_surface,
-                             ccl_gpu_image_object_2D depth_surface,
-                             ccl_gpu_image_object_2D albedo_surface,
-                             ccl_gpu_image_object_2D specular_albedo_surface,
-                             ccl_gpu_image_object_2D normal_roughness_surface,
-                             ccl_gpu_image_object_2D motion_surface,
-                             ccl_gpu_image_object_2D specular_motion_surface,
+                             const uint64_t depth_surface,
+                             const uint64_t albedo_surface,
+                             const uint64_t specular_albedo_surface,
+                             const uint64_t normal_roughness_surface,
+                             const uint64_t motion_surface,
+                             const uint64_t specular_motion_surface,
                              const ccl_global float *render_buffer,
                              const int render_offset,
                              const int render_stride,
@@ -1413,7 +1413,7 @@ ccl_gpu_kernel_postfix
 
 ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
     ccl_gpu_kernel_signature(filter_color_postprocess_from_surface,
-                             ccl_gpu_image_object_2D color_surface,
+                             const uint64_t color_surface,
                              ccl_global float *render_buffer,
                              const int full_x,
                              const int full_y,
