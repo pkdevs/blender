@@ -599,6 +599,7 @@ rctf BKE_camera_view_border(const Scene *scene,
   }
   if (no_roll) {
     params.roll = 0.0f;
+    params.is_mirrored = false;
   }
   BKE_camera_params_compute_viewplane(&params, winx, winy, 1.0f, 1.0f);
   rect_view = params.viewplane;
