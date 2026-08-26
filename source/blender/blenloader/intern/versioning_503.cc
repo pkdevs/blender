@@ -408,8 +408,8 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfPrincipled", 18, 1, 34);
     version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfAnisotropic", 4, 1, 7);
     version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfMetallic", 7, 1, 12);
+    version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfGlass", 3, 1, 7);
   }
-
 
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
