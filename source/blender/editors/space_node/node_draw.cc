@@ -4089,6 +4089,7 @@ class MarkdownDrawer {
   float default_size_;
   float current_size_;
   std::optional<StringRef> href_;
+  bool is_bold_ = false;
 
  public:
   MarkdownDrawer(const SpaceNode &snode,
@@ -4183,6 +4184,10 @@ class MarkdownDrawer {
         href_ = StringRef(detail_a.href.text, detail_a.href.size);
         break;
       }
+      case MD_SPAN_STRONG: {
+        is_bold_ = true;
+        break;
+      }
       default: {
         break;
       }
@@ -4194,6 +4199,10 @@ class MarkdownDrawer {
     switch (span_type) {
       case MD_SPAN_A: {
         href_.reset();
+        break;
+      }
+      case MD_SPAN_STRONG: {
+        is_bold_ = false;
         break;
       }
       default: {
@@ -4211,11 +4220,31 @@ class MarkdownDrawer {
     else {
       BLF_color4f(fontid, 0.8f, 0.8f, 0.8f, 1.0f);
     }
+    if (is_bold_) {
+      BLF_character_weight(fontid, 800);
+    }
+    else {
+      BLF_character_weight(fontid, BLF_default_weight(fontid));
+    }
+    BLF_size(main_fontid_, current_size_);
     switch (text_type) {
       case MD_TEXT_NORMAL: {
-        BLF_size(main_fontid_, current_size_);
-        BLF_position(main_fontid_, x_, y_, 0.0f);
-        BLF_draw(main_fontid_, text.data(), text.size());
+        StringRef remaining_text = text;
+        while (!remaining_text.is_empty()) {
+          const float remaining_width = bounds_.xmax - x_;
+          float needed_width = 0.0f;
+          const size_t char_i = BLF_width_to_strlen(
+              fontid, text.data(), text.size(), remaining_width, &needed_width);
+          const StringRef fitting_text = remaining_text.substr(0, char_i);
+          remaining_text = remaining_text.drop_prefix(char_i);
+          BLF_position(main_fontid_, x_, y_, 0.0f);
+          BLF_draw(main_fontid_, fitting_text.data(), fitting_text.size());
+          x_ += needed_width;
+          if (char_i + 1 < text.size()) {
+            x_ = bounds_.xmin;
+            y_ -= UI_UNIT_Y * 0.8f;
+          }
+        }
         break;
       }
       case MD_TEXT_SOFTBR: {
