@@ -7,6 +7,8 @@
 #include "scene/pointcloud.h"
 #include "scene/scene.h"
 
+#include "util/tbb.h"
+
 CCL_NAMESPACE_BEGIN
 
 /* PointCloud Point */
@@ -304,19 +306,20 @@ void PointCloud::update_gsplat_radii()
   const float4 *radiance_base_data = attr_radiance_base->data<float4>();
   const packed_float3 *scale_data = attr_scale->data<packed_float3>();
 
-  const size_t num_points = this->num_points();
   float *radius_data = get_radius_for_write();
 
-  for (size_t i = 0; i < num_points; i++) {
-    const float opacity = radiance_base_data[i].w;
-    if (opacity < ALPHA_MIN) {
-      radius_data[i] = 0;
-      continue;
+  parallel_for(blocked_range<size_t>(0, num_points(), 32), [&](const blocked_range<size_t> &r) {
+    for (size_t i = r.begin(); i != r.end(); i++) {
+      const float opacity = radiance_base_data[i].w;
+      if (opacity < ALPHA_MIN) {
+        radius_data[i] = 0;
+        continue;
+      }
+      const float factor = sqrtf(2.0f * logf(opacity / ALPHA_MIN));
+      const float3 scale = fabs(factor * scale_data[i]);
+      radius_data[i] = reduce_max(scale);
     }
-    const float factor = sqrtf(2.0f * logf(opacity / ALPHA_MIN));
-    const float3 scale = fabs(factor * scale_data[i]);
-    radius_data[i] = reduce_max(scale);
-  }
+  });
 }
 
 PrimitiveType PointCloud::primitive_type() const

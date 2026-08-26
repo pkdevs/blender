@@ -7,6 +7,7 @@
 #include "scene/scene.h"
 
 #include "util/hash.h"
+#include "util/tbb.h"
 
 #include "blender/attribute_convert.h"
 #include "blender/sync.h"
@@ -144,6 +145,7 @@ static void export_pointcloud_gsplat_attributes(PointCloud *pointcloud,
 
   /* Spherical harmonics. */
   vector<blender::bke::AttributeReader<blender::float3>> sh_attribute_readers;
+  vector<blender::VArraySpan<blender::float3>> sh_attribute_spans;
   for (int i = 0; i < PackedSphericalHarmonics::MAX_COEFFICIENTS; ++i) {
     const string sh_attr_name = "radiance:sh_" + std::to_string(i);
     blender::bke::AttributeReader<blender::float3> reader = b_attributes.lookup<blender::float3>(
@@ -152,20 +154,25 @@ static void export_pointcloud_gsplat_attributes(PointCloud *pointcloud,
       break;
     }
     sh_attribute_readers.push_back(std::move(reader));
+    sh_attribute_spans.push_back(
+        blender::VArraySpan<blender::float3>(*sh_attribute_readers.back()));
   }
   if (!sh_attribute_readers.empty()) {
     Attribute *attr = pointcloud->attributes.add(ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS);
     PackedSphericalHarmonics *sh_data = attr->data_for_write<PackedSphericalHarmonics>();
-    for (size_t point_index = 0; point_index < num_points; ++point_index) {
-      spherical_harmonics_fill_zero(sh_data[point_index]);
-      for (int sh_index = 0; sh_index < sh_attribute_readers.size(); ++sh_index) {
-        const blender::VArraySpan<blender::float3> src = *sh_attribute_readers[sh_index];
-        spherical_harmonics_set_coefficient(
-            sh_data[point_index],
-            sh_index,
-            make_float3(src[point_index].x, src[point_index].y, src[point_index].z));
+    parallel_for(blocked_range<size_t>(0, num_points, 32), [&](const blocked_range<size_t> &r) {
+      for (size_t point_index = r.begin(); point_index != r.end(); point_index++) {
+        spherical_harmonics_fill_zero(sh_data[point_index]);
+        for (int sh_index = 0; sh_index < int(sh_attribute_readers.size()); ++sh_index) {
+          spherical_harmonics_set_coefficient(
+              sh_data[point_index],
+              sh_index,
+              make_float3(sh_attribute_spans[sh_index][point_index].x,
+                          sh_attribute_spans[sh_index][point_index].y,
+                          sh_attribute_spans[sh_index][point_index].z));
+        }
       }
-    }
+    });
   }
 }
 
