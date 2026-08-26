@@ -227,7 +227,13 @@ ccl_device_forceinline void kernel_embree_filter_intersection_func_impl(
 #endif
 }
 
-static void custom_intersect(const RTCIntersectFunctionNArguments *args)
+ccl_device_forceinline int custom_intersect_get_object(const RTCRayQueryContext &ctx,
+                                                       unsigned int geom_id)
+{
+  return ((ctx.instID[0] != RTC_INVALID_GEOMETRY_ID) ? ctx.instID[0] : geom_id) / 2;
+}
+
+ccl_device_inline void custom_intersect(const RTCIntersectFunctionNArguments *args)
 {
   assert(args->N == 1);
   static_assert(RTC_MAX_INSTANCE_LEVEL_COUNT == 1);
@@ -249,9 +255,7 @@ static void custom_intersect(const RTCIntersectFunctionNArguments *args)
   const float3 ray_P = make_float3(ray_hit->ray.org_x, ray_hit->ray.org_y, ray_hit->ray.org_z);
   const float3 ray_D = make_float3(ray_hit->ray.dir_x, ray_hit->ray.dir_y, ray_hit->ray.dir_z);
 
-  const uint object = ((ctx->instID[0] != RTC_INVALID_GEOMETRY_ID) ? ctx->instID[0] :
-                                                                     args->geomID) /
-                      2;
+  const uint object = custom_intersect_get_object(*ctx, args->geomID);
   const int prim_offset = kernel_data_fetch(object_prim_offset, object);
   const int prim = args->primID + prim_offset;
 
@@ -297,7 +301,7 @@ static void custom_intersect(const RTCIntersectFunctionNArguments *args)
 #endif
 }
 
-static void custom_occluded(const RTCOccludedFunctionNArguments *args)
+ccl_device_inline void custom_occluded(const RTCOccludedFunctionNArguments *args)
 {
   assert(args->N == 1);
   static_assert(RTC_MAX_INSTANCE_LEVEL_COUNT == 1);
@@ -307,7 +311,52 @@ static void custom_occluded(const RTCOccludedFunctionNArguments *args)
     return;
   }
 
-  /* XXX: Implement accumulation of the gsplat transparency. */
+  CCLShadowContext *ctx = (CCLShadowContext *)(args->context);
+  RTCRay *ray = (RTCRay *)args->ray;
+  BVHShadowAllPayload &payload = *ctx->payload;
+
+#  ifdef __KERNEL_ONEAPI__
+  KernelGlobalsGPU *kg = nullptr;
+#  else
+  const ThreadKernelGlobalsCPU *kg = ctx->kg;
+#  endif
+
+  const float3 ray_P = make_float3(ray->org_x, ray->org_y, ray->org_z);
+  const float3 ray_D = make_float3(ray->dir_x, ray->dir_y, ray->dir_z);
+
+  const uint object = custom_intersect_get_object(*ctx, args->geomID);
+  const int prim_offset = kernel_data_fetch(object_prim_offset, object);
+  const int prim = args->primID + prim_offset;
+
+  const int primitive_type = kernel_data_fetch(objects, object).primitive_type;
+  assert(primitive_type == PRIMITIVE_GSPLAT);
+
+  Intersection isect;
+  if (!gsplat_intersect(kg,
+                        &isect,
+                        ray_P,
+                        ray_D,
+                        ray->tnear,
+                        ray->tfar,
+                        object,
+                        prim,
+                        ray->time,
+                        primitive_type))
+  {
+    args->valid[0] = 0;
+    return;
+  }
+
+  if (bvh_shadow_all_anyhit_filter<ISECT_TEST_ALL & ~ISECT_TEST_VISIBILITY_FLAG>(
+          kg, payload.state, payload, payload.base.ray_self, 0, isect))
+  {
+    return;
+  }
+
+  payload.throughput = zero_float3();
+
+  ray->tfar = neg_inf;
+  args->valid[0] = -1;
 #else
   (void)args;
 #endif
