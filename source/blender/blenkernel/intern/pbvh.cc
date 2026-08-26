@@ -349,12 +349,6 @@ Tree Tree::from_mesh(const Mesh &mesh)
 
   build_mesh_leaf_nodes(mesh.verts_num, faces, corner_verts, nodes);
 
-  for (const MeshNode &node : nodes) {
-    if (node.verts().size() > 0) {
-      printf("PBVH leaf verts: %lld\n", (long long)node.verts().size());
-    }
-  }
-
   pbvh.tag_positions_changed(nodes.index_range());
 
   pbvh.update_bounds_mesh(vert_positions);
