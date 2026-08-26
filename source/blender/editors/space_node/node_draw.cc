@@ -4103,6 +4103,7 @@ class MarkdownLayouter {
   float current_size_;
   std::optional<StringRef> href_;
   bool is_bold_ = false;
+  bool is_code_ = false;
   MarkdownLayout layout_;
 
  public:
@@ -4144,10 +4145,13 @@ class MarkdownLayouter {
     const float aspect = snode_.runtime->aspect;
     BLF_enable(main_fontid_, BLF_ASPECT);
     BLF_aspect(main_fontid_, aspect, aspect, 1.0f);
+    BLF_enable(mono_fontid_, BLF_ASPECT);
+    BLF_aspect(mono_fontid_, aspect, aspect, 1.0f);
 
     md_parse(full_text_.data(), full_text_.size(), &md_parser, this);
 
     BLF_disable(main_fontid_, BLF_ASPECT);
+    BLF_disable(mono_fontid_, BLF_ASPECT);
 
     return std::move(layout_);
   }
@@ -4161,6 +4165,10 @@ class MarkdownLayouter {
       case MD_BLOCK_H: {
         const MD_BLOCK_H_DETAIL &detail_h = *static_cast<const MD_BLOCK_H_DETAIL *>(detail);
         current_size_ = default_size_ * (1.0f / detail_h.level + 1.0f);
+        break;
+      }
+      case MD_BLOCK_CODE: {
+        is_code_ = true;
         break;
       }
       default: {
@@ -4182,6 +4190,11 @@ class MarkdownLayouter {
         current_size_ = default_size_;
         break;
       }
+      case MD_BLOCK_CODE: {
+        is_code_ = false;
+        y_ -= UI_UNIT_Y * 1.5f;
+        break;
+      }
       default: {
         break;
       }
@@ -4198,6 +4211,10 @@ class MarkdownLayouter {
       }
       case MD_SPAN_STRONG: {
         is_bold_ = true;
+        break;
+      }
+      case MD_SPAN_CODE: {
+        is_code_ = true;
         break;
       }
       default: {
@@ -4217,6 +4234,10 @@ class MarkdownLayouter {
         is_bold_ = false;
         break;
       }
+      case MD_SPAN_CODE: {
+        is_code_ = false;
+        break;
+      }
       default: {
         break;
       }
@@ -4225,86 +4246,125 @@ class MarkdownLayouter {
 
   void md_text(const MD_TEXTTYPE text_type, const StringRef text)
   {
-    const int fontid = main_fontid_;
-    const int weight = is_bold_ ? 800 : BLF_default_weight(fontid);
-    BLF_character_weight(fontid, weight);
-    BLF_size(fontid, current_size_);
-
     switch (text_type) {
       case MD_TEXT_NORMAL: {
+        this->append_wrapped_text(text);
+        break;
+      }
+      case MD_TEXT_CODE: {
         StringRef remaining_text = text;
         while (!remaining_text.is_empty()) {
-          const float remaining_width = bounds_.xmax - x_;
-          float needed_width = 0.0f;
-          size_t last_fit_char_i = BLF_width_to_strlen(fontid,
-                                                       remaining_text.data(),
-                                                       size_t(remaining_text.size()),
-                                                       remaining_width,
-                                                       &needed_width);
-
-          size_t draw_bytes = last_fit_char_i;
-          size_t drop_bytes = last_fit_char_i;
-          bool wrap_to_next_line = last_fit_char_i < size_t(remaining_text.size());
-
-          if (wrap_to_next_line) {
-            const int64_t last_space = (last_fit_char_i > 0) ?
-                                           remaining_text.find_last_of(
-                                               ' ', int64_t(last_fit_char_i) - 1) :
-                                           StringRef::not_found;
-            if (last_space != StringRef::not_found) {
-              draw_bytes = size_t(last_space);
-              drop_bytes = size_t(last_space) + 1; /* Skip the space. */
-              needed_width = BLF_width(fontid, remaining_text.data(), draw_bytes);
-            }
-            else if (x_ > bounds_.xmin) {
-              /* Word does not fit on this line; retry on the next. */
-              x_ = bounds_.xmin;
-              y_ -= UI_UNIT_Y * 0.8f;
-              continue;
-            }
-            else if (last_fit_char_i == 0) {
-              /* Nothing fits on an empty line; advance one character to avoid an infinite loop. */
-              draw_bytes = drop_bytes = size_t(BLI_str_utf8_size_safe(remaining_text.data()));
-              needed_width = BLF_width(fontid, remaining_text.data(), draw_bytes);
-            }
+          /* Code blocks include literal newlines in the text. */
+          if (remaining_text[0] == '\n') {
+            remaining_text = remaining_text.drop_prefix(1);
+            this->advance_to_next_line();
+            continue;
           }
 
-          const StringRef fitting_text = remaining_text.substr(0, draw_bytes);
-          remaining_text = remaining_text.drop_prefix(drop_bytes);
-
-          if (draw_bytes > 0) {
-            MarkdownSpan span;
-            span.x = x_;
-            span.y = y_;
-            span.size = current_size_;
-            span.fontid = fontid;
-            span.weight = weight;
-            span.text = fitting_text;
-            if (href_) {
-              span.url = std::string(*href_);
-            }
-            layout_.spans.append(std::move(span));
+          const int64_t newline = remaining_text.find_first_of('\n');
+          if (newline == StringRef::not_found) {
+            this->append_wrapped_text(remaining_text);
+            break;
           }
 
-          if (wrap_to_next_line) {
-            x_ = bounds_.xmin;
-            y_ -= UI_UNIT_Y * 0.8f;
-          }
-          else {
-            x_ += needed_width;
-          }
+          this->append_wrapped_text(remaining_text.substr(0, newline));
+          remaining_text = remaining_text.drop_prefix(newline);
         }
         break;
       }
       case MD_TEXT_SOFTBR: {
-        x_ = bounds_.xmin;
-        y_ -= UI_UNIT_Y * 0.8f;
+        this->advance_to_next_line();
         break;
       }
       default: {
         break;
       }
     }
+  }
+
+  void append_wrapped_text(StringRef text)
+  {
+    const int fontid = this->current_fontid();
+    BLF_character_weight(fontid, this->current_weight());
+    BLF_size(fontid, current_size_);
+
+    while (!text.is_empty()) {
+      const float remaining_width = bounds_.xmax - x_;
+      float needed_width = 0.0f;
+      size_t last_fit_char_i = BLF_width_to_strlen(
+          fontid, text.data(), size_t(text.size()), remaining_width, &needed_width);
+
+      size_t draw_bytes = last_fit_char_i;
+      size_t drop_bytes = last_fit_char_i;
+      const bool wrap_to_next_line = last_fit_char_i < size_t(text.size());
+
+      if (wrap_to_next_line) {
+        const int64_t last_space = (last_fit_char_i > 0) ?
+                                       text.find_last_of(' ', int64_t(last_fit_char_i) - 1) :
+                                       StringRef::not_found;
+        if (last_space != StringRef::not_found) {
+          draw_bytes = size_t(last_space);
+          drop_bytes = size_t(last_space) + 1; /* Skip the space. */
+          needed_width = BLF_width(fontid, text.data(), draw_bytes);
+        }
+        else if (x_ > bounds_.xmin) {
+          /* Word does not fit on this line; retry on the next. */
+          this->advance_to_next_line();
+          continue;
+        }
+        else if (last_fit_char_i == 0) {
+          /* Nothing fits on an empty line; advance one character to avoid an infinite loop. */
+          draw_bytes = drop_bytes = size_t(BLI_str_utf8_size_safe(text.data()));
+          needed_width = BLF_width(fontid, text.data(), draw_bytes);
+        }
+      }
+
+      const StringRef fitting_text = text.substr(0, draw_bytes);
+      text = text.drop_prefix(drop_bytes);
+
+      if (draw_bytes > 0) {
+        this->append_span(fitting_text);
+      }
+
+      if (wrap_to_next_line) {
+        this->advance_to_next_line();
+      }
+      else {
+        x_ += needed_width;
+      }
+    }
+  }
+
+  void append_span(const StringRef text)
+  {
+    MarkdownSpan span;
+    span.x = x_;
+    span.y = y_;
+    span.size = current_size_;
+    span.fontid = this->current_fontid();
+    span.weight = this->current_weight();
+    span.text = text;
+    if (href_) {
+      span.url = *href_;
+    }
+    layout_.spans.append(std::move(span));
+  }
+
+  int current_weight() const
+  {
+    const int fontid = this->current_fontid();
+    return is_bold_ ? 800 : BLF_default_weight(fontid);
+  }
+
+  int current_fontid() const
+  {
+    return is_code_ ? mono_fontid_ : main_fontid_;
+  }
+
+  void advance_to_next_line()
+  {
+    x_ = bounds_.xmin;
+    y_ -= UI_UNIT_Y * 0.8f;
   }
 };
 
