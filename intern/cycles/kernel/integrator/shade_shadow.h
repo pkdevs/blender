@@ -84,11 +84,8 @@ ccl_device_inline bool shadow_intersections_has_remaining(const uint packed_num_
 }
 
 #ifdef __TRANSPARENT_SHADOWS__
-ccl_device_inline TransparentShadowEvalResult
-integrate_transparent_surface_shadow(KernelGlobals kg,
-                                     IntegratorShadowState state,
-                                     const int num_hits,
-                                     const int hit)
+ccl_device_inline TransparentShadowEvalResult integrate_transparent_surface_shadow(
+    KernelGlobals kg, IntegratorShadowState state, const int num_hits, const int hit)
 {
   PROFILING_INIT(kg, PROFILING_SHADE_SHADOW_SURFACE);
 
@@ -205,10 +202,8 @@ integrate_transparent_volume_shadow(KernelGlobals kg,
 }
 #  endif
 
-ccl_device_inline TransparentShadowEvalResult
-integrate_transparent_shadow(KernelGlobals kg,
-                             IntegratorShadowState state,
-                             const uint packed_num_hits)
+ccl_device_inline TransparentShadowEvalResult integrate_transparent_shadow(
+    KernelGlobals kg, IntegratorShadowState state, const uint packed_num_hits)
 {
   /* Accumulate shadow for transparent surfaces. */
   const uint num_hits = shadow_num_hits_get(packed_num_hits);
@@ -274,7 +269,8 @@ ccl_device void integrator_shade_shadow(KernelGlobals kg,
 
 #ifdef __TRANSPARENT_SHADOWS__
   /* Evaluate transparent shadows. */
-  const TransparentShadowEvalResult result = integrate_transparent_shadow(kg, state, packed_num_hits);
+  const TransparentShadowEvalResult result = integrate_transparent_shadow(
+      kg, state, packed_num_hits);
   if (result == TRANSPARENT_SHADOW_EVAL_CACHE_MISS) {
     integrator_shadow_path_cache_miss(state, DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW);
     return;
