@@ -2057,12 +2057,7 @@ bool jump_to_target_button_poll(bContext *C)
 static wmOperatorStatus jump_to_target_button_exec(bContext *C, wmOperator * /*op*/)
 {
   const bool success = jump_to_target_button(C, false);
-  if (!success) {
-    return OPERATOR_CANCELLED;
-  }
-  ED_outliner_select_sync_from_object_tag(C);
-
-  return OPERATOR_FINISHED;
+  return (success) ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
 static void UI_OT_jump_to_target_button(wmOperatorType *ot)
