@@ -1466,7 +1466,6 @@ static void calc_area_normal_and_center_node_mesh(const Object &object,
                                                   const Brush &brush,
                                                   const AverageDataFlags flag,
                                                   const bke::pbvh::MeshNode &node,
-                                                  SampleLocalData &tls,
                                                   AreaNormalCenterData &anctd)
 {
   const SculptSession &ss = *object.runtime->sculpt_session;
@@ -1481,6 +1480,8 @@ static void calc_area_normal_and_center_node_mesh(const Object &object,
 
   const Span<int> verts = node.verts();
 
+  Array<float, bke::pbvh::MESH_LEAF_LIMIT> distances_sq(verts.size());
+
   if (ss.cache && !ss.cache->accum) {
     if (const std::optional<OrigPositionData> orig_data = orig_position_data_lookup_mesh(object,
                                                                                          node))
@@ -1488,8 +1489,6 @@ static void calc_area_normal_and_center_node_mesh(const Object &object,
       const Span<float3> orig_positions = orig_data->positions;
       const Span<float3> orig_normals = orig_data->normals;
 
-      tls.distances.reinitialize(verts.size());
-      const MutableSpan<float> distances_sq = tls.distances;
       calc_brush_distances_squared(
           ss, orig_positions, eBrushFalloffShape(brush.falloff_shape), distances_sq);
 
@@ -1520,8 +1519,6 @@ static void calc_area_normal_and_center_node_mesh(const Object &object,
     }
   }
 
-  tls.distances.reinitialize(verts.size());
-  const MutableSpan<float> distances_sq = tls.distances;
   calc_brush_distances_squared(
       ss, vert_positions, verts, eBrushFalloffShape(brush.falloff_shape), distances_sq);
 
@@ -1851,7 +1848,6 @@ void calc_area_center(const Depsgraph &depsgraph,
           1,
           AreaNormalCenterData{},
           [&](const IndexRange range, AreaNormalCenterData anctd) {
-            SampleLocalData &tls = all_tls.local();
             node_mask.slice(range).foreach_index([&](const int i) {
               calc_area_normal_and_center_node_mesh(ob,
                                                     vert_positions,
@@ -1860,7 +1856,6 @@ void calc_area_center(const Depsgraph &depsgraph,
                                                     brush,
                                                     AverageDataFlags::Position,
                                                     nodes[i],
-                                                    tls,
                                                     anctd);
             });
             return anctd;
@@ -1951,7 +1946,6 @@ std::optional<float3> calc_area_normal(const Depsgraph &depsgraph,
           1,
           AreaNormalCenterData{},
           [&](const IndexRange range, AreaNormalCenterData anctd) {
-            SampleLocalData &tls = all_tls.local();
             node_mask.slice(range).foreach_index([&](const int i) {
               calc_area_normal_and_center_node_mesh(ob,
                                                     vert_positions,
@@ -1960,7 +1954,6 @@ std::optional<float3> calc_area_normal(const Depsgraph &depsgraph,
                                                     brush,
                                                     AverageDataFlags::Normal,
                                                     nodes[i],
-                                                    tls,
                                                     anctd);
             });
             return anctd;
@@ -2149,7 +2142,6 @@ void calc_area_normal_and_center(const Depsgraph &depsgraph,
           1,
           AreaNormalCenterData{},
           [&](const IndexRange range, AreaNormalCenterData anctd) {
-            SampleLocalData &tls = all_tls.local();
             node_mask.slice(range).foreach_index([&](const int i) {
               calc_area_normal_and_center_node_mesh(ob,
                                                     vert_positions,
@@ -2158,7 +2150,6 @@ void calc_area_normal_and_center(const Depsgraph &depsgraph,
                                                     brush,
                                                     AverageDataFlags::All,
                                                     nodes[i],
-                                                    tls,
                                                     anctd);
             });
             return anctd;
