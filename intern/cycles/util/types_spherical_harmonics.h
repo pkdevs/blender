@@ -20,7 +20,7 @@ CCL_NAMESPACE_BEGIN
  * NOTE: There is an utility spherical_harmonics_get<L, M> to access bands in a more semantic way.
  */
 struct PackedSphericalHarmonics {
-  /* SOme formats (like SPZ) define the maximum degree as 4.
+  /* Some formats (like SPZ) define the maximum degree as 4.
    * However, in practice it is hard to run across dataset that is actually trained using such
    * high degree, and the difference that the higher degree brings is probably barely perceivable.
    * To keep logic simple, assume the most commonly used degree of 3, and allocate coefficients for
