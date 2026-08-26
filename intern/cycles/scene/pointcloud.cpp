@@ -75,7 +75,7 @@ NODE_DEFINE(PointCloud)
 
   static NodeEnum render_as_enum;
   render_as_enum.insert("points", RENDER_AS_POINTS);
-  render_as_enum.insert("gsplats", RENDER_AS_GSPLATS);
+  render_as_enum.insert("gaussian_splats", RENDER_AS_GSPLATS);
 
   SOCKET_ENUM(render_as, "Render As", render_as_enum, RENDER_AS_POINTS);
 
