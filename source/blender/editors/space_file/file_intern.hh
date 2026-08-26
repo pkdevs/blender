@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "AS_asset_catalog_path.hh"
+
 #include "DNA_space_types.h"
 
 #include "BKE_report.hh"
@@ -197,14 +199,17 @@ using onReloadFn = void (*)(SpaceFile *space_data, onReloadFnData custom_data);
 struct SpaceFile_Runtime {
   /* Called once after the file browser has reloaded. Reset to NULL after calling.
    * Use file_on_reload_callback_register() to register a callback. */
-  onReloadFn on_reload;
-  onReloadFnData on_reload_custom_data;
+  onReloadFn on_reload = nullptr;
+  onReloadFnData on_reload_custom_data = nullptr;
 
   /* Indicates, if the current filepath is a blendfile library one, if its status has been checked,
    * and if it is readable. */
-  bool is_blendfile_status_set;
-  bool is_blendfile_readable;
+  bool is_blendfile_status_set = false;
+  bool is_blendfile_readable = false;
   ReportList is_blendfile_readable_reports;
+
+  /** Path of the most recently selected catalog, used to restore selections across libraries. */
+  asset_system::AssetCatalogPath last_selected_catalog_path;
 };
 
 /**

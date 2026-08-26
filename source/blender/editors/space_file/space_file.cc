@@ -148,7 +148,7 @@ static void file_init(wmWindowManager * /*wm*/, ScrArea *area)
   }
 
   if (sfile->runtime == nullptr) {
-    sfile->runtime = MEM_new_zeroed<SpaceFile_Runtime>(__func__);
+    sfile->runtime = MEM_new<SpaceFile_Runtime>(__func__);
     BKE_reports_init(&sfile->runtime->is_blendfile_readable_reports, RPT_STORE);
   }
   /* Validate the params right after file read. */
@@ -364,6 +364,40 @@ static void file_reset_filelist_showing_main_data(ScrArea *area, SpaceFile *sfil
   }
 }
 
+static void file_restore_last_selected_asset_catalog(FileList *files,
+                                                     SpaceFile_Runtime *runtime,
+                                                     FileAssetSelectParams *asset_params)
+{
+  if (!files || !runtime || !asset_params) {
+    return;
+  }
+
+  const asset_system::AssetCatalogPath &path = runtime->last_selected_catalog_path;
+
+  if (!path || !filelist_is_ready(files)) {
+    return;
+  }
+
+  asset_system::AssetLibrary *library = filelist_asset_library(files);
+  if (!library) {
+    return;
+  }
+
+  const asset_system::AssetCatalogTreeItem *catalog =
+      library->catalog_service().catalog_tree()->find_item(path);
+
+  if (!catalog) {
+    return;
+  }
+
+  if (asset_params->catalog_id == catalog->get_catalog_id()) {
+    return;
+  }
+
+  asset_params->catalog_id = catalog->get_catalog_id();
+  asset_params->asset_catalog_visibility = FILE_SHOW_ASSETS_FROM_CATALOG;
+}
+
 static void file_listener(const wmSpaceTypeListenerParams *listener_params)
 {
   ScrArea *area = listener_params->area;
@@ -375,6 +409,10 @@ static void file_listener(const wmSpaceTypeListenerParams *listener_params)
     case NC_SPACE:
       switch (wmn->data) {
         case ND_SPACE_FILE_LIST:
+          if (wmn->action == NA_JOB_FINISHED && sfile->browse_mode == FILE_BROWSE_MODE_ASSETS) {
+            file_restore_last_selected_asset_catalog(
+                sfile->files, sfile->runtime, ED_fileselect_get_asset_params(sfile));
+          }
           ED_area_tag_refresh(area);
           break;
         case ND_SPACE_FILE_PARAMS:
