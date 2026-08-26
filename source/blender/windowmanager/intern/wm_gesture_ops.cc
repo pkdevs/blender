@@ -37,6 +37,8 @@
 #include "ED_screen.hh"
 #include "ED_select_utils.hh"
 
+#include "UI_view2d.hh"
+
 #include "RNA_access.hh"
 
 namespace blender {
@@ -181,7 +183,8 @@ wmOperatorStatus WM_gesture_box_invoke(bContext *C, wmOperator *op, const wmEven
   {
     wmGesture *gesture = static_cast<wmGesture *>(op->customdata);
     gesture->wait_for_input = wait_for_input;
-    view2d_edge_pan_init(C, &gesture->edge_pan_data, 2, 0, 1, 10, 0.5f, 0.5f);
+    gesture->edge_pan_data = MEM_new<ui::View2DEdgePanData>(__func__);
+    view2d_edge_pan_init(C, gesture->edge_pan_data, 2, 0, 1, 10, 0.5f, 0.5f);
   }
 
   /* Add modal handler. */
@@ -242,7 +245,7 @@ wmOperatorStatus WM_gesture_box_modal(bContext *C, wmOperator *op, const wmEvent
           const View2D *v2d = &region->v2d;
           const float anchor_x = ui::view2d_region_to_view_x(v2d, rect->xmin);
           const float anchor_y = ui::view2d_region_to_view_y(v2d, rect->ymin);
-          view2d_edge_pan_apply_event(C, &gesture->edge_pan_data, event);
+          view2d_edge_pan_apply_event(C, gesture->edge_pan_data, event);
           const int pan_dx = int(ui::view2d_view_to_region_x(v2d, anchor_x)) - rect->xmin;
           const int pan_dy = int(ui::view2d_view_to_region_y(v2d, anchor_y)) - rect->ymin;
           BLI_rcti_translate(rect, pan_dx, pan_dy);

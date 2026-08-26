@@ -115,7 +115,6 @@
 #include "wm_event_types.hh"        // IWYU pragma: export
 
 /* Include external gizmo API's. */
-#include "../editors/include/UI_view2d.hh"
 #include "gizmo/WM_gizmo_api.hh"  // IWYU pragma: export
 
 struct CLG_LogRef;
@@ -138,6 +137,10 @@ struct wmWindowManager;
 
 namespace asset_system {
 class AssetRepresentation;
+}
+
+namespace ui {
+struct View2DEdgePanData;
 }
 
 using wmGenericUserDataFreeFn = void (*)(void *data);
@@ -707,7 +710,7 @@ struct wmGesture {
 
   /** Free pointer to use for operator allocations (if set, its freed on exit). */
   wmGenericUserData user_data;
-  ui::View2DEdgePanData edge_pan_data;
+  ui::View2DEdgePanData *edge_pan_data;
 };
 
 /* ************** wmEvent ************************ */

@@ -2146,8 +2146,8 @@ static wmOperatorStatus sequencer_box_select_invoke(bContext *C,
   if (sseq->flag & SEQ_CLAMP_VIEW) {
     wmGesture *gesture = static_cast<wmGesture *>(op->customdata);
     const rctf view_bounds = sequencer_clamp_view_bounds(C, region);
-    gesture->edge_pan_data.limit.ymin = view_bounds.ymin;
-    gesture->edge_pan_data.limit.ymax = view_bounds.ymax;
+    gesture->edge_pan_data->limit.ymin = view_bounds.ymin;
+    gesture->edge_pan_data->limit.ymax = view_bounds.ymax;
   }
 
   return opstatus;
