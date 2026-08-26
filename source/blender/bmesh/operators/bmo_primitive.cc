@@ -864,50 +864,6 @@ static const float cube_faces_uv[6][2] = {
     {0.625f, 0.5f},
 };
 
-/**
- * Map a location on the surface of a cube (each axis in [-1, 1]) onto a sphere.
- *
- * \param co: The location on the cube, at least one axis must be on a face.
- * \param on_face: For each axis, true when `co` is on the face perpendicular to it.
- * \param iter_num: Times to evaluate the mapping, zero maps radially, one is un-refined
- * (the reference counts one fewer, refinements on top of the first).
- * In practice it converges by the third pass.
- * \return The direction on the sphere, the caller scales it to the radius.
- */
-static float3 quadsphere_co_from_cube(const float3 &co, const bool on_face[3], const int iter_num)
-{
-  /* Mapping & refinement ("Update 1") by Harry van Langen,
-   * see: https://mathoverflow.net/questions/446657
-   *
-   * - Normalizing `co` would bunch vertices towards the cube corners.
-   *
-   * - The reference raises each axis to a large power `p` as a ternary - one on the
-   *   face perpendicular to that axis, zero elsewhere - since a formula can't branch.
-   *   The vertices are generated on the cube, so `on_face` branches instead,
-   *   giving exactly the value a large `p` only approaches.
-   */
-  BLI_assert(on_face[0] || on_face[1] || on_face[2]);
-  float3 co_iter = co;
-  for (int iter = 0; iter < iter_num; iter++) {
-    float3 co_next;
-    for (int axis = 0; axis < 3; axis++) {
-      if (on_face[axis]) {
-        /* Maps to itself, at every iteration. */
-        co_next[axis] = co[axis];
-        continue;
-      }
-      const int axis_a = (axis + 1) % 3;
-      const int axis_b = (axis + 2) % 3;
-      /* Never zero, another axis is on its own face which contributes one. */
-      const float len = std::sqrt((co_iter[axis_a] * co_iter[axis_a]) +
-                                  (co_iter[axis_b] * co_iter[axis_b]));
-      co_next[axis] = len * std::tan(co[axis] * std::atan(1.0f / len));
-    }
-    co_iter = co_next;
-  }
-  return co_iter;
-}
-
 void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
 {
   BMOpSlot *slot_verts_out = BMO_slot_get(op->slots_out, "verts.out");
@@ -917,22 +873,11 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   const int seg = max_ii(1, BMO_slot_int_get(op->slots_in, "segments"));
   /* Vertices along each cube edge. */
   const int seg_vert = seg + 1;
-  /* Iterations to distribute vertices evenly.
-   *
-   * The maximum error for each iteration.
-   * - 0: 0.0782
-   * - 1: 0.00343
-   * - 2: 0.000159
-   * - 3: 0.00000766
-   * - 4: 0.000000446
-   * - 5: 0.000000130
-   *
-   * 3 is a good balance between being a low number of iterations
-   * while the error being low enough to be perceptually *perfect*.
-   *
-   * NOTE: measured by comparing the the distance to an iteration of 50. */
-  const int iter_num = 3;
-
+  /* Optimal angle for the tangent wrap
+   See https://jcgt.org/published/0007/02/01/ by Matt Zucker and Yosuke Higashi - Swarthmore College
+  */
+  const float theta = 0.8687f;
+  const float tan_theta = std::tan(theta);
   const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_PROP_FLOAT2);
   const bool calc_uvs = (cd_loop_uv_offset != -1) && BMO_slot_bool_get(op->slots_in, "calc_uvs");
 
@@ -979,58 +924,24 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   /* Location on the cube for a single axis, in [-1, 1]. */
   auto cube_co_from_grid_fn = [seg](const int i) { return float((i * 2) - seg) / float(seg); };
 
-  /* The mapping has the cube's full symmetry, so only an eighth of one face is calculated.
-   * Every other vertex follows by permuting the axes, negating an axis or swapping the two
-   * spanning axes, each doing the same to the result.
-   *
-   * `map_table` holds the first spanning axis, transposed it gives the second. */
-  const int map_lo = (seg + 1) / 2;
-  const int map_len = seg - map_lo + 1;
-  Array<float> map_table(map_len * map_len);
-  {
-    bool on_face[3] = {true, false, false};
-    float3 co = {1.0f, 0.0f, 0.0f};
-    for (int a = map_lo; a <= seg; a++) {
-      on_face[1] = a == seg;
-      co[1] = cube_co_from_grid_fn(a);
-      const int a_index = a - map_lo;
-      for (int b = map_lo; b <= a; b++) {
-        on_face[2] = b == seg;
-        co[2] = cube_co_from_grid_fn(b);
-        const int b_index = b - map_lo;
-        const float3 co_sphere = quadsphere_co_from_cube(co, on_face, iter_num);
-        map_table[(a_index * map_len) + b_index] = co_sphere[1];
-        map_table[(b_index * map_len) + a_index] = co_sphere[2];
-      }
-    }
+  Array<float> wrap_table(seg_vert);
+  for (int i = 0; i <= seg; i++) {
+    const float co = cube_co_from_grid_fn(i);
+    wrap_table[i] = std::tan(co * theta) / tan_theta;
   }
-
-  /* A single axis mirrored into the quadrant `map_table` covers, with its sign. */
-  struct MapIndexAndSign {
-    int index;
-    float sign;
-  };
-  auto map_index_and_sign_from_grid_fn = [seg, map_lo](const int i) -> MapIndexAndSign {
-    return ((i * 2) >= seg) ? MapIndexAndSign{i - map_lo, 1.0f} :
-                              MapIndexAndSign{seg - i - map_lo, -1.0f};
-  };
 
   /* Direction on the sphere, the caller scales it to the radius. */
   auto sphere_co_from_grid_index_fn =
-      [seg, map_len, &map_table, &map_index_and_sign_from_grid_fn, &cube_co_from_grid_fn](
-          const int3 &grid_index) -> float3 {
+      [seg, &wrap_table, &cube_co_from_grid_fn](const int3 &grid_index) -> float3 {
     /* The axis on a cube face, maps to itself (exactly -1 or 1). */
     const int axis_face = ELEM(grid_index.x, 0, seg) ? 0 : (ELEM(grid_index.y, 0, seg) ? 1 : 2);
     BLI_assert(ELEM(grid_index[axis_face], 0, seg));
     const int axis_a = (axis_face + 1) % 3;
     const int axis_b = (axis_face + 2) % 3;
-    const MapIndexAndSign map_a = map_index_and_sign_from_grid_fn(grid_index[axis_a]);
-    const MapIndexAndSign map_b = map_index_and_sign_from_grid_fn(grid_index[axis_b]);
-
     float3 co_sphere;
     co_sphere[axis_face] = cube_co_from_grid_fn(grid_index[axis_face]);
-    co_sphere[axis_a] = map_a.sign * map_table[(map_a.index * map_len) + map_b.index];
-    co_sphere[axis_b] = map_b.sign * map_table[(map_b.index * map_len) + map_a.index];
+    co_sphere[axis_a] = wrap_table[grid_index[axis_a]];
+    co_sphere[axis_b] = wrap_table[grid_index[axis_b]];
     return co_sphere;
   };
 
