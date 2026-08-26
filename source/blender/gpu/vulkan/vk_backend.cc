@@ -168,9 +168,7 @@ static Vector<StringRefNull> missing_capabilities_get(VkPhysicalDevice vk_physic
   if (features.features.fragmentStoresAndAtomics == VK_FALSE) {
     missing_capabilities.append("fragment stores and atomics");
   }
-  if (features.features.logicOp == VK_FALSE) {
-    missing_capabilities.append("logical operations");
-  }
+
   if (features.features.dualSrcBlend == VK_FALSE) {
     missing_capabilities.append("dual source blending");
   }
@@ -379,7 +377,7 @@ void VKBackend::supported_devices_print(FILE *fp)
   size_t w_id = strlen(col_id);
   for (const Row &row : rows) {
     char buf[16];
-    w_index = std::max(w_index, BLI_snprintf_rlen(buf, sizeof(buf), "%d", row.index));
+    w_index = std::max(w_index, SNPRINTF_RLEN(buf, "%d", row.index));
     w_id = std::max(w_id, row.identifier.size());
   }
 
@@ -551,7 +549,7 @@ void VKBackend::detect_workarounds(VKDevice &device)
       VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME);
   extensions.dynamic_rendering_unused_attachments = device.supports_extension(
       VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME);
-  extensions.logic_ops = device.physical_device_features_get().logicOp;
+
   extensions.maintenance4 = device.supports_extension(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
   extensions.memory_priority = device.supports_extension(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME);
   extensions.pageable_device_local_memory = device.supports_extension(
@@ -746,7 +744,7 @@ Fence *VKBackend::fence_alloc()
   return new VKFence();
 }
 
-WorkInFlight *VKBackend::work_in_flight_alloc(unsigned int max_in_flight)
+WorkInFlight *VKBackend::work_in_flight_alloc(uint max_in_flight)
 {
   return new VKWorkInFlight(max_in_flight);
 }
@@ -875,6 +873,8 @@ void VKBackend::capabilities_init(VKDevice &device)
       device.physical_device_acceleration_structure_properties_get().maxGeometryCount > 0 &&
       device.physical_device_acceleration_structure_properties_get().maxPrimitiveCount > 0 &&
       device.physical_device_acceleration_structure_properties_get().maxInstanceCount > 0;
+
+  GCaps.srgb_write_view_support = true;
 
   GCaps.max_texture_size = max_ii(limits.maxImageDimension1D, limits.maxImageDimension2D);
   GCaps.max_texture_3d_size = min_uu(limits.maxImageDimension3D, INT_MAX);
