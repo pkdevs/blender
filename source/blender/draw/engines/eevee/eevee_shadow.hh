@@ -403,6 +403,73 @@ class ShadowModule {
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Shadow Level Range
+ * Unlike IndexRange, this supports negative level values for small scenes.
+ * \{ */
+struct ShadowLevelRange {
+  int start_ = 0;
+  int size_ = 0;
+
+  constexpr ShadowLevelRange() = default;
+  constexpr ShadowLevelRange(int start, int size) : start_(start), size_(size) {}
+
+  constexpr int size() const
+  {
+    return size_;
+  }
+  constexpr int start() const
+  {
+    return start_;
+  }
+  constexpr int first() const
+  {
+    return start_;
+  }
+  constexpr int last(int n = 0) const
+  {
+    return start_ + size_ - 1 - n;
+  }
+  constexpr int one_after_last() const
+  {
+    return start_ + size_;
+  }
+  constexpr bool is_empty() const
+  {
+    return size_ == 0;
+  }
+
+  constexpr friend bool operator==(ShadowLevelRange a, ShadowLevelRange b)
+  {
+    return (a.size_ == b.size_) && (a.start_ == b.start_ || a.size_ == 0);
+  }
+  constexpr friend bool operator!=(ShadowLevelRange a, ShadowLevelRange b)
+  {
+    return !(a == b);
+  }
+
+  constexpr ShadowLevelRange intersect(ShadowLevelRange other) const
+  {
+    int old_end = start_ + size_;
+    int new_start = std::min(old_end, std::max(start_, other.start_));
+    int new_end = std::max(new_start, std::min(old_end, other.start_ + other.size_));
+    return ShadowLevelRange(new_start, new_end - new_start);
+  }
+
+  constexpr ShadowLevelRange take_back(int n) const
+  {
+    int new_size = std::min(size_, n);
+    return ShadowLevelRange(start_ + size_ - new_size, new_size);
+  }
+
+  constexpr ShadowLevelRange shift(int n) const
+  {
+    return ShadowLevelRange(start_ + n, size_);
+  }
+};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Shadow
  *
  * A shadow component is associated to a `eevee::Light` and manages its associated Tile-maps.
@@ -441,7 +508,7 @@ class ShadowDirectional : public NonCopyable, NonMovable {
   /** Tile-map for each clip-map level. */
   Vector<ShadowTileMap *> tilemaps_;
   /** Current range of clip-map / cascades levels covered by this shadow. */
-  IndexRange levels_range = IndexRange(0);
+  ShadowLevelRange levels_range;
 
  public:
   ShadowDirectional(ShadowModule &module) : shadows_(module) {};
@@ -478,8 +545,8 @@ class ShadowDirectional : public NonCopyable, NonMovable {
   }
 
  private:
-  IndexRange clipmap_level_range(const Camera &camera);
-  IndexRange cascade_level_range(const Light &light, const Camera &camera);
+  ShadowLevelRange clipmap_level_range(const Camera &camera);
+  ShadowLevelRange cascade_level_range(const Light &light, const Camera &camera);
 
   /**
    * Distribute tile-maps in a linear pattern along camera forward vector instead of a clipmap

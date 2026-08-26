@@ -304,7 +304,7 @@ void ShadowDirectional::cascade_tilemaps_distribution_near_far_points(const Came
       light.object_to_world, camera.position() - camera.forward() * cam_data.clip_near);
 }
 
-IndexRange ShadowDirectional::cascade_level_range(const Light &light, const Camera &camera)
+ShadowLevelRange ShadowDirectional::cascade_level_range(const Light &light, const Camera &camera)
 {
   /* NOTE: All tile-maps are meant to have the same LOD
    * but we still return a range starting at the unique LOD. */
@@ -331,11 +331,6 @@ IndexRange ShadowDirectional::cascade_level_range(const Light &light, const Came
     min_diagonal_tilemap_size *= cam_data.clip_far / cam_data.clip_near;
   }
 
-  /* TODO(fclem): Zoomed in camera can have very small diagonal size which will then result in
-   * negative lod_level. Since negative ranges are not supported inside `IndexRange` we have to
-   * ensure this doesn't happen. */
-  min_diagonal_tilemap_size = max(min_diagonal_tilemap_size, 0.5f);
-
   /* Level of detail (or size) of every tile-maps of this light. */
   /* TODO(fclem): Add support for lod bias from light. */
   int lod_level = ceil(log2(max_ff(min_depth_tilemap_size, min_diagonal_tilemap_size)) + 0.5);
@@ -345,7 +340,7 @@ IndexRange ShadowDirectional::cascade_level_range(const Light &light, const Came
   /* Number of tile-maps needed to cover the whole view. */
   /* NOTE: floor + 0.5 to avoid 0 when parallel. */
   int tilemap_len = ceil(0.5f + depth_range_in_shadow_space / per_tilemap_coverage);
-  return IndexRange(lod_level, tilemap_len);
+  return ShadowLevelRange(lod_level, tilemap_len);
 }
 
 void ShadowDirectional::cascade_tilemaps_distribution(Light &light, const Camera &camera)
@@ -409,7 +404,7 @@ void ShadowDirectional::cascade_tilemaps_distribution(Light &light, const Camera
  *                         Clip-map Distribution                        *
  ************************************************************************/
 
-IndexRange ShadowDirectional::clipmap_level_range(const Camera &cam)
+ShadowLevelRange ShadowDirectional::clipmap_level_range(const Camera &cam)
 {
   using namespace blender::math;
   /* Covers the closest points of the view. */
@@ -420,7 +415,7 @@ IndexRange ShadowDirectional::clipmap_level_range(const Camera &cam)
   int max_level = ceil(log2(cam.bound_radius() + distance(cam.bound_center(), cam.position())));
   /* We actually need to cover a bit more because of clipmap origin snapping. */
   max_level = max(min_level, max_level) + 1;
-  IndexRange range(min_level, max_level - min_level + 1);
+  ShadowLevelRange range(min_level, max_level - min_level + 1);
   /* 32 to be able to pack offset into a single int2.
    * The maximum level count is bounded by the mantissa of a 32bit float. */
   const int max_tilemap_per_shadows = 24;
@@ -494,7 +489,7 @@ void ShadowDirectional::clipmap_tilemaps_distribution(Light &light, const Camera
 
 void ShadowDirectional::release_excess_tilemaps(const Light &light, const Camera &camera)
 {
-  IndexRange levels_new = directional_distribution_type_get(camera) == SHADOW_PROJECTION_CASCADE ?
+  ShadowLevelRange levels_new = directional_distribution_type_get(camera) == SHADOW_PROJECTION_CASCADE ?
                               cascade_level_range(light, camera) :
                               clipmap_level_range(camera);
 
@@ -502,28 +497,31 @@ void ShadowDirectional::release_excess_tilemaps(const Light &light, const Camera
     return;
   }
 
-  IndexRange isect_range = levels_range.intersect(levels_new);
-  IndexRange before_range(levels_range.start(), isect_range.start() - levels_range.start());
-  IndexRange after_range(isect_range.one_after_last(),
-                         levels_range.one_after_last() - isect_range.one_after_last());
+  ShadowLevelRange isect_range = levels_range.intersect(levels_new);
+  ShadowLevelRange before_range(levels_range.start(), isect_range.start() - levels_range.start());
+  ShadowLevelRange after_range(isect_range.one_after_last(),
+                               levels_range.one_after_last() - isect_range.one_after_last());
 
   auto span = tilemaps_.as_span();
-  shadows_.tilemap_pool.release(span.slice(before_range.shift(-levels_range.start())));
-  shadows_.tilemap_pool.release(span.slice(after_range.shift(-levels_range.start())));
-  tilemaps_ = span.slice(isect_range.shift(-levels_range.start()));
+  ShadowLevelRange before = before_range.shift(-levels_range.start());
+  ShadowLevelRange after = after_range.shift(-levels_range.start());
+  ShadowLevelRange isect = isect_range.shift(-levels_range.start());
+  shadows_.tilemap_pool.release(span.slice(before.start(), before.size()));
+  shadows_.tilemap_pool.release(span.slice(after.start(), after.size()));
+  tilemaps_ = span.slice(isect.start(), isect.size());
   levels_range = isect_range;
 }
 
 void ShadowDirectional::end_sync(Light &light, const Camera &camera)
 {
   ShadowTileMapPool &tilemap_pool = shadows_.tilemap_pool;
-  IndexRange levels_new = directional_distribution_type_get(camera) == SHADOW_PROJECTION_CASCADE ?
+  ShadowLevelRange levels_new = directional_distribution_type_get(camera) == SHADOW_PROJECTION_CASCADE ?
                               cascade_level_range(light, camera) :
                               clipmap_level_range(camera);
 
   if (levels_range != levels_new) {
     /* Acquire missing tile-maps. */
-    IndexRange isect_range = levels_new.intersect(levels_range);
+    ShadowLevelRange isect_range = levels_new.intersect(levels_range);
     int64_t before_range = isect_range.start() - levels_new.start();
     int64_t after_range = levels_new.one_after_last() - isect_range.one_after_last();
 
