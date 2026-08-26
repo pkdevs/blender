@@ -588,7 +588,7 @@ void Scene::update_kernel_features()
     else if (geom->is_pointcloud()) {
       const PointCloud *pointcloud = static_cast<const PointCloud *>(geom);
       kernel_features |= KERNEL_FEATURE_POINTCLOUD;
-      if (pointcloud->get_render_as() == PointCloud::RENDER_AS_GSPLATS) {
+      if (pointcloud->primitive_type() & PRIMITIVE_GSPLAT) {
         kernel_features |= KERNEL_FEATURE_GSPLATS;
       }
       kernel_max_prim_count = max(kernel_max_prim_count, pointcloud->num_points());

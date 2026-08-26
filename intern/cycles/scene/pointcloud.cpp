@@ -258,8 +258,8 @@ void PointCloud::pack(Scene *scene, uint *packed_shader)
   const size_t numpoints = num_points();
   int *shader_data = shader.data();
 
-  Shader *default_shader = (render_as == RENDER_AS_GSPLATS) ? scene->default_gsplat :
-                                                              scene->default_surface;
+  Shader *default_shader = (primitive_type() & PRIMITIVE_GSPLAT) ? scene->default_gsplat :
+                                                                   scene->default_surface;
 
   uint shader_id = 0;
   uint last_shader = -1;
@@ -293,7 +293,7 @@ void PointCloud::update_gsplat_radii()
    * The value comes from the paper. */
   constexpr float ALPHA_MIN = 0.01f;
 
-  if (render_as != RENDER_AS_GSPLATS) {
+  if ((primitive_type() & PRIMITIVE_GSPLAT) == 0) {
     return;
   }
 
