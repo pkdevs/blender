@@ -45,7 +45,7 @@ ccl_device_forceinline void spherical_harmonics_fill_zero(
       packed_spherical_harmonics.coefficients, 0, sizeof(packed_spherical_harmonics.coefficients));
 #else
   /* Metal does not support memset() call. */
-  for (int i = 0; i < PackedSphericalHarmonics::MAX_COEFFICIENTS; ++i) {
+  for (int i = 0; i < 3 * PackedSphericalHarmonics::MAX_COEFFICIENTS; ++i) {
     packed_spherical_harmonics.coefficients[i] = 0;
   }
 #endif
