@@ -443,10 +443,6 @@ static wmOperatorStatus sequencer_de_select_all_exec(bContext *C, wmOperator *op
     deselect_all_strips(scene);
   }
   for (Strip *strip : strips) {
-    /* Transition handles and normal strips should not be selected at the same time. */
-    if (strip->is_overlap_transition()) {
-      strip->flag &= ~(SEQ_LEFTSEL | SEQ_RIGHTSEL);
-    }
     switch (action) {
       case SEL_SELECT:
         strip->flag |= SEQ_SELECT;
