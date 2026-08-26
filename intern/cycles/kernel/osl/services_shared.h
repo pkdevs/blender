@@ -1214,11 +1214,13 @@ ccl_device_inline bool osl_shared_get_object_standard_attribute(KernelGlobals kg
     }
     return set_attribute(f, type, derivatives, val);
   }
+#if defined(__GSPLATS__)
   /* Gaussian splats attributes. */
-  if (sd->type == PRIMITIVE_GSPLAT && name == DeviceStrings::u_geom_radiance) {
+  if (sd->type & PRIMITIVE_GSPLAT && name == DeviceStrings::u_geom_radiance) {
     const float3 radiance = gsplat_radiance(kg, *sd);
     return set_attribute(radiance, type, derivatives, val);
   }
+#endif
   return osl_shared_get_background_attribute(kg, sg, sd, name, type, derivatives, val);
 }
 

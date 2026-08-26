@@ -290,6 +290,8 @@ static void custom_occluded(const RTCOccludedFunctionNArguments *args)
   }
 
   /* XXX: Implement accumulation of the gsplat transparency. */
+#else
+  (void)args;
 #endif
 }
 

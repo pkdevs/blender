@@ -75,10 +75,12 @@ svm_node_attr_surface_eval(KernelGlobals kg,
 {
   using FloatType = dual_scalar_t<Float3Type>;
 
-  if (sd->type == PRIMITIVE_GSPLAT && node.attr == ATTR_STD_GSPLAT_RADIANCE) {
+#if defined(__GSPLATS__)
+  if (sd->type & PRIMITIVE_GSPLAT && node.attr == ATTR_STD_GSPLAT_RADIANCE) {
     const float3 radiance = gsplat_radiance(kg, *sd);
     return Float3Type(radiance);
   }
+#endif
 
   if (sd->type == PRIMITIVE_LAMP && node.attr == ATTR_STD_UV) {
     Float3Type uv(make_float3(1.0f - sd->u - sd->v, sd->u, 0.0f));
