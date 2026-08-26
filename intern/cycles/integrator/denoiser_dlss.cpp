@@ -93,7 +93,11 @@ struct NGXDriver {
         return false;
       }
 
+#    ifdef _M_ARM64
+      wcscat_s(ngx_path, L"\\_arm64_nvngx.dll");
+#    else
       wcscat_s(ngx_path, L"\\_nvngx.dll");
+#    endif
     }
 #  else
     const char *const ngx_path = "libnvidia-ngx.so.1";
