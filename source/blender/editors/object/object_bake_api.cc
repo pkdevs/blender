@@ -127,7 +127,6 @@ struct BakeAPIRender {
 
   /* Operator state. */
   ReportList *reports;
-  int result;
   ScrArea *area;
 };
 
@@ -1897,8 +1896,6 @@ static void bake_init_api_data(wmOperator *op, bContext *C, BakeAPIRender *bkr)
 
   bkr->reports = op->reports;
 
-  bkr->result = OPERATOR_CANCELLED;
-
   bkr->render = RE_NewSceneRender(bkr->scene);
 
   /* XXX hack to force saving to always be internal. Whether (and how) to support
@@ -1997,7 +1994,6 @@ static void bake_startjob(void *bkv, wmJobWorkerStatus *worker_status)
   RE_SetReports(bkr->render, bkr->reports);
 
   if (!bake_pass_filter_check(bkr->pass_type, bkr->pass_filter, bkr->reports)) {
-    bkr->result = OPERATOR_CANCELLED;
     return;
   }
 
@@ -2010,7 +2006,6 @@ static void bake_startjob(void *bkv, wmJobWorkerStatus *worker_status)
                           bkr->is_selected_to_active,
                           bkr->target))
   {
-    bkr->result = OPERATOR_CANCELLED;
     return;
   }
 
@@ -2021,16 +2016,15 @@ static void bake_startjob(void *bkv, wmJobWorkerStatus *worker_status)
   }
 
   if (bkr->is_selected_to_active) {
-    bkr->result = bake(bkr, bkr->ob, bkr->selected_objects, bkr->reports);
+    bake(bkr, bkr->ob, bkr->selected_objects, bkr->reports);
   }
   else {
     bkr->is_clear = bkr->is_clear && bkr->selected_objects.size() == 1;
     for (const PointerRNA &ptr : bkr->selected_objects) {
       Object *ob_iter = static_cast<Object *>(ptr.data);
-      bkr->result = bake(bkr, ob_iter, {}, bkr->reports);
-
-      if (bkr->result == OPERATOR_CANCELLED) {
-        return;
+      bake(bkr, ob_iter, {}, bkr->reports);
+      if (bake_has_been_canceled(bkr)) {
+        break;
       }
     }
   }
