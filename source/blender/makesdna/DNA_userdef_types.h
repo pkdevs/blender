@@ -1069,7 +1069,7 @@ struct UserDef {
   /** Startup application template. */
   char app_template[64] = "";
 
-  UserPrefThemeChoice active_theme_type = UserPrefThemeChoice::System;
+  UserPrefThemeChoice active_theme_type = UserPrefThemeChoice::Dark;
 
   char _pad[7] = {};
 
