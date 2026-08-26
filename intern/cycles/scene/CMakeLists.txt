@@ -86,6 +86,7 @@ set(SRC_HEADERS
   pointcloud.h
   curves.h
   scene.h
+  scene_attributes.h
   shader.h
   shader_graph.h
   shader_nodes.h
