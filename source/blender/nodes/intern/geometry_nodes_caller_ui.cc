@@ -15,8 +15,8 @@
 #include "BKE_node_runtime.hh"
 #include "BKE_screen.hh"
 
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -30,9 +30,9 @@
 
 #include "MOD_nodes.hh"
 #include "NOD_caller_ui.hh"
+#include "NOD_eval_log.hh"
 #include "NOD_geometry.hh"
 #include "NOD_geometry_nodes_caller_ui.hh"
-#include "NOD_geometry_nodes_log.hh"
 #include "NOD_geometry_nodes_srna.hh"
 #include "NOD_socket_usage_inference.hh"
 
@@ -47,11 +47,9 @@
 
 namespace blender::nodes {
 
-namespace geo_log = geo_eval_log;
-
 namespace {
 struct SearchInfo {
-  geo_log::GeoTreeLog *tree_log = nullptr;
+  eval_log::NodeTreeLog *tree_log = nullptr;
   bNodeTree *tree = nullptr;
   std::optional<PointerRNA> socket_props_ptr;
 };
@@ -63,7 +61,7 @@ struct ModifierSearchData {
 
 struct OperatorSearchData {
   /** Can store this data directly, because it's more persistent than for the modifier. */
-  geo_log::GeoTreeLog *tree_log = nullptr;
+  eval_log::NodeTreeLog *tree_log = nullptr;
   bNodeTree *tree = nullptr;
   wmOperator *op = nullptr;
 };
@@ -82,7 +80,7 @@ BLI_STATIC_ASSERT(std::is_trivially_destructible_v<SocketSearchData>, "");
 struct DrawGroupInputsContext {
   const bContext &C;
   bNodeTree *tree;
-  geo_log::GeoTreeLog *tree_log;
+  eval_log::NodeTreeLog *tree_log;
   PointerRNA *properties_ptr;
   PointerRNA *bmain_ptr;
   Array<nodes::socket_usage_inference::SocketUsage> input_usages;
@@ -104,13 +102,13 @@ struct DrawGroupInputsContext {
 };
 }  // namespace
 
-static geo_log::GeoTreeLog *get_root_tree_log(const Object &object, const NodesModifierData &nmd)
+static eval_log::NodeTreeLog *get_root_tree_log(const Object &object, const NodesModifierData &nmd)
 {
   if (!nmd.runtime->eval_log) {
     return nullptr;
   }
   bke::DataBlockComputeContext data_block_context{nullptr, object.id};
-  bke::ModifierComputeContext modifier_context{&data_block_context, nmd};
+  bke::GeometryNodesModifierComputeContext modifier_context{&data_block_context, nmd};
   return &nmd.runtime->eval_log->get_tree_log(modifier_context.hash());
 }
 
@@ -149,7 +147,7 @@ SearchInfo SocketSearchData::info(const bContext &C) const
     if (nmd->node_group == nullptr || ID_MISSING(nmd->node_group)) {
       return {};
     }
-    geo_log::GeoTreeLog *tree_log = get_root_tree_log(*object_and_modifier->object, *nmd);
+    eval_log::NodeTreeLog *tree_log = get_root_tree_log(*object_and_modifier->object, *nmd);
     PointerRNA nmd_ptr = RNA_pointer_create_discrete(
         &const_cast<Object *>(object_and_modifier->object)->id,
         RNA_NodesModifier,
@@ -196,13 +194,13 @@ static void layer_name_search_update_fn(
   Set<StringRef> names;
   Vector<const std::string *> layer_names;
   for (const bNodeSocket *socket : sockets_to_check) {
-    const geo_log::ValueLog *value_log = info.tree_log->find_socket_value_log(*socket);
+    const eval_log::ValueLog *value_log = info.tree_log->find_socket_value_log(*socket);
     if (value_log == nullptr) {
       continue;
     }
-    if (const auto *geo_log = dynamic_cast<const geo_log::GeometryInfoLog *>(value_log)) {
-      if (const std::optional<geo_log::GeometryInfoLog::GreasePencilInfo> &grease_pencil_info =
-              geo_log->grease_pencil_info)
+    if (const auto *eval_log = dynamic_cast<const eval_log::GeometryInfoLog *>(value_log)) {
+      if (const std::optional<eval_log::GeometryInfoLog::GreasePencilInfo> &grease_pencil_info =
+              eval_log->grease_pencil_info)
       {
         for (const std::string &name : grease_pencil_info->layer_names) {
           if (names.add(name)) {
@@ -321,14 +319,14 @@ static void attribute_search_update_fn(
     }
   }
   Set<StringRef> names;
-  Vector<const geo_log::GeometryAttributeInfo *> attributes;
+  Vector<const eval_log::GeometryAttributeInfo *> attributes;
   for (const bNodeSocket *socket : sockets_to_check) {
-    const geo_log::ValueLog *value_log = info.tree_log->find_socket_value_log(*socket);
+    const eval_log::ValueLog *value_log = info.tree_log->find_socket_value_log(*socket);
     if (value_log == nullptr) {
       continue;
     }
-    if (const auto *geo_log = dynamic_cast<const geo_log::GeometryInfoLog *>(value_log)) {
-      for (const geo_log::GeometryAttributeInfo &attribute : geo_log->attributes) {
+    if (const auto *eval_log = dynamic_cast<const eval_log::GeometryInfoLog *>(value_log)) {
+      for (const eval_log::GeometryAttributeInfo &attribute : eval_log->attributes) {
         if (names.add(attribute.name)) {
           attributes.append(&attribute);
         }
@@ -344,7 +342,7 @@ static void attribute_search_exec_fn(bContext *C, void *data_v, void *item_v)
     return;
   }
   SocketSearchData &data = *static_cast<SocketSearchData *>(data_v);
-  const auto &item = *static_cast<const geo_log::GeometryAttributeInfo *>(item_v);
+  const auto &item = *static_cast<const eval_log::GeometryAttributeInfo *>(item_v);
   SearchInfo info = data.info(*C);
   if (!info.socket_props_ptr) {
     return;
@@ -452,7 +450,7 @@ static void add_attribute_search_or_value_buttons(
     layout.label("", ICON_BLANK1);
   }
   else {
-    const char *name = IFACE_(socket_name.c_str());
+    const StringRef name = IFACE_(socket_name);
     prop_row->prop(socket_props_ptr, "value", UI_ITEM_NONE, name, ICON_NONE);
     layout.decorator(socket_props_ptr, "value", -1);
   }
@@ -522,11 +520,11 @@ static void draw_property_for_socket(DrawGroupInputsContext &ctx,
       break;
     }
     case SOCK_FONT: {
-      PropertyRNA *prop = RNA_struct_find_property(ctx.properties_ptr, "value");
+      PropertyRNA *prop = RNA_struct_find_property(socket_props_ptr, "value");
       if (prop && RNA_property_type(prop) == PROP_POINTER) {
         template_id(&row,
                     &ctx.C,
-                    ctx.properties_ptr,
+                    socket_props_ptr,
                     "value",
                     nullptr,
                     "FONT_OT_open",
@@ -538,37 +536,54 @@ static void draw_property_for_socket(DrawGroupInputsContext &ctx,
       else {
         /* #template_id only supports pointer properties currently. Node tools store
          * data-block pointers in strings currently. */
-        row.prop_search(ctx.properties_ptr, "value", ctx.bmain_ptr, "fonts", name, ICON_FONT_DATA);
+        row.prop_search(socket_props_ptr, "value", ctx.bmain_ptr, "fonts", name, ICON_FONT_DATA);
       }
       break;
     }
     case SOCK_SCENE: {
-      row.prop_search(ctx.properties_ptr, "value", ctx.bmain_ptr, "scenes", name, ICON_SCENE);
+      row.prop_search(socket_props_ptr, "value", ctx.bmain_ptr, "scenes", name, ICON_SCENE);
       break;
     }
     case SOCK_TEXT_ID: {
-      row.prop_search(ctx.properties_ptr, "value", ctx.bmain_ptr, "texts", name, ICON_TEXT);
+      row.prop_search(socket_props_ptr, "value", ctx.bmain_ptr, "texts", name, ICON_TEXT);
       break;
     }
     case SOCK_MASK: {
-      row.prop_search(ctx.properties_ptr, "value", ctx.bmain_ptr, "masks", name, ICON_NONE);
+      row.prop_search(socket_props_ptr, "value", ctx.bmain_ptr, "masks", name, ICON_NONE);
       break;
     }
     case SOCK_SOUND: {
-      row.prop_search(ctx.properties_ptr, "value", ctx.bmain_ptr, "sounds", name, ICON_SOUND);
+      PropertyRNA *prop = RNA_struct_find_property(socket_props_ptr, "value");
+      if (prop && RNA_property_type(prop) == PROP_POINTER) {
+        template_id(&row, &ctx.C, socket_props_ptr, "value", nullptr, "SOUND_OT_open", nullptr);
+      }
+      else {
+        /* #template_id only supports pointer properties currently. Node tools store
+         * data-block pointers in strings currently. */
+        row.prop_search(socket_props_ptr, "value", ctx.bmain_ptr, "sounds", name, ICON_SOUND);
+      }
+
       break;
     }
     case SOCK_IMAGE: {
-      template_id(&row,
-                  &ctx.C,
-                  socket_props_ptr,
-                  "value",
-                  "image.new",
-                  "image.open",
-                  nullptr,
-                  ui::TEMPLATE_ID_FILTER_ALL,
-                  false,
-                  name);
+      PropertyRNA *prop = RNA_struct_find_property(socket_props_ptr, "value");
+      if (prop && RNA_property_type(prop) == PROP_POINTER) {
+        template_id(&row,
+                    &ctx.C,
+                    socket_props_ptr,
+                    "value",
+                    "image.new",
+                    "image.open",
+                    nullptr,
+                    ui::TEMPLATE_ID_FILTER_ALL,
+                    false,
+                    name);
+      }
+      else {
+        /* #template_id only supports pointer properties currently. Node tools store
+         * data-block pointers in strings currently. */
+        row.prop_search(socket_props_ptr, "value", ctx.bmain_ptr, "images", name, ICON_IMAGE_DATA);
+      }
       break;
     }
     case SOCK_MENU: {
@@ -643,9 +658,9 @@ static void draw_warnings(const bContext *C,
     /* Avoid accessing this data while baking in a separate thread. */
     return;
   }
-  using namespace geo_log;
+  using namespace eval_log;
   Object &object = *id_cast<Object *>(md_ptr->owner_id);
-  GeoTreeLog *tree_log = get_root_tree_log(object, nmd);
+  NodeTreeLog *tree_log = get_root_tree_log(object, nmd);
   if (!tree_log) {
     return;
   }
@@ -663,7 +678,7 @@ static void draw_warnings(const bContext *C,
   const int num_infos = count_by_type.lookup_default(NodeWarningType::Info, 0);
   const std::string panel_name = get_node_warning_panel_name(num_errors, num_warnings, num_infos);
   ui::PanelLayout panel = layout.panel_prop(C, md_ptr, "open_warnings_panel");
-  panel.header->label(panel_name.c_str(), ICON_NONE);
+  panel.header->label(panel_name, ICON_NONE);
   if (!panel.body) {
     return;
   }
@@ -702,13 +717,18 @@ static void draw_warnings(const bContext *C,
   }
 }
 
-static bool has_output_attribute(const bNodeTree *tree)
+static bool has_output_attribute(const DrawGroupInputsContext &ctx, const bNodeTree *tree)
 {
   if (!tree || ID_MISSING(tree)) {
     return false;
   }
-  for (const bNodeTreeInterfaceSocket *interface_socket : tree->interface_outputs()) {
-    const bke::bNodeSocketType *typeinfo = interface_socket->socket_typeinfo();
+  const Span<const bNodeTreeInterfaceSocket *> interface_outputs = ctx.tree->interface_outputs();
+  for (const int i : interface_outputs.index_range()) {
+    const bNodeTreeInterfaceSocket &socket = *interface_outputs[i];
+    if (!ctx.output_usages[i].is_visible) {
+      continue;
+    }
+    const bke::bNodeSocketType *typeinfo = socket.socket_typeinfo();
     const eNodeSocketDatatype type = typeinfo ? typeinfo->type : SOCK_CUSTOM;
     if (nodes::socket_type_has_attribute_toggle(type)) {
       return true;
@@ -739,9 +759,6 @@ static void draw_property_for_output_socket(DrawGroupInputsContext &ctx,
 
 static void draw_output_attributes_panel(DrawGroupInputsContext &ctx, ui::Layout &layout)
 {
-  if (!ctx.tree) {
-    return;
-  }
   const Span<const bNodeTreeInterfaceSocket *> interface_outputs = ctx.tree->interface_outputs();
   for (const int i : interface_outputs.index_range()) {
     const bNodeTreeInterfaceSocket &socket = *interface_outputs[i];
@@ -771,23 +788,23 @@ static void draw_named_attributes_panel(ui::Layout &layout, Object &object, Node
     /* Avoid accessing this data while baking in a separate thread. */
     return;
   }
-  geo_log::GeoTreeLog *tree_log = get_root_tree_log(object, nmd);
+  eval_log::NodeTreeLog *tree_log = get_root_tree_log(object, nmd);
   if (tree_log == nullptr) {
     return;
   }
 
   tree_log->ensure_used_named_attributes();
-  const Map<StringRefNull, geo_log::NamedAttributeUsage> &usage_by_attribute =
+  const Map<StringRefNull, eval_log::NamedAttributeUsage> &usage_by_attribute =
       tree_log->used_named_attributes;
 
   if (usage_by_attribute.is_empty()) {
-    layout.label(RPT_("No named attributes used"), ICON_INFO);
+    layout.label(RPT_("No named attributes used"), ICON_STATUS_INFO);
     return;
   }
 
   struct NameWithUsage {
     StringRefNull name;
-    geo_log::NamedAttributeUsage usage;
+    eval_log::NamedAttributeUsage usage;
   };
 
   Vector<NameWithUsage> sorted_used_attribute;
@@ -800,20 +817,20 @@ static void draw_named_attributes_panel(ui::Layout &layout, Object &object, Node
 
   for (const NameWithUsage &attribute : sorted_used_attribute) {
     const StringRef attribute_name = attribute.name;
-    const geo_log::NamedAttributeUsage usage = attribute.usage;
+    const eval_log::NamedAttributeUsage usage = attribute.usage;
 
     /* #uiLayoutRowWithHeading doesn't seem to work in this case. */
     ui::Layout &split = layout.split(0.4f, false);
 
     std::stringstream ss;
     Vector<std::string> usages;
-    if (flag_is_set(usage, geo_log::NamedAttributeUsage::Read)) {
+    if (flag_is_set(usage, eval_log::NamedAttributeUsage::Read)) {
       usages.append(IFACE_("Read"));
     }
-    if (flag_is_set(usage, geo_log::NamedAttributeUsage::Write)) {
+    if (flag_is_set(usage, eval_log::NamedAttributeUsage::Write)) {
       usages.append(IFACE_("Write"));
     }
-    if (flag_is_set(usage, geo_log::NamedAttributeUsage::Remove)) {
+    if (flag_is_set(usage, eval_log::NamedAttributeUsage::Remove)) {
       usages.append(CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Remove"));
     }
     for (const int i : usages.index_range()) {
@@ -917,7 +934,7 @@ void draw_geometry_nodes_modifier_ui(const bContext &C,
 
   draw_warnings(&C, nmd, layout, modifier_ptr);
 
-  if (has_output_attribute(nmd.node_group)) {
+  if (has_output_attribute(ctx, nmd.node_group)) {
     if (ui::Layout *panel_layout = layout.panel_prop(
             &C, modifier_ptr, "open_output_attributes_panel", IFACE_("Output Attributes")))
     {
@@ -937,7 +954,7 @@ void draw_geometry_nodes_modifier_ui(const bContext &C,
 void draw_geometry_nodes_operator_redo_ui(const bContext &C,
                                           wmOperator &op,
                                           bNodeTree &tree,
-                                          geo_eval_log::GeoTreeLog *tree_log)
+                                          eval_log::NodeTreeLog *tree_log)
 {
   ui::Layout &layout = *op.layout;
   Main &bmain = *CTX_data_main(&C);

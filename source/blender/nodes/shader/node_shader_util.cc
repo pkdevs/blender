@@ -11,8 +11,8 @@
 #include "DNA_node_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 
 #include "BKE_context.hh"
 #include "BKE_node_runtime.hh"
@@ -154,6 +154,9 @@ static void nodestack_get_vec(float *in, short type_in, bNodeStack *ns)
       copy_v3_v3(in, from);
     }
   }
+  else if (type_in == SOCK_ROTATION) {
+    copy_v4_v4(in, from);
+  }
   else { /* type_in==SOCK_RGBA */
     if (ns->sockettype == SOCK_RGBA) {
       copy_v4_v4(in, from);
@@ -217,6 +220,9 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
     }
     else if (socket->type == SOCK_SHADER) {
       gs->type = GPU_CLOSURE;
+    }
+    else if (socket->type == SOCK_ROTATION) {
+      gs->type = GPU_VEC4;
     }
     else {
       gs->type = GPU_NONE;

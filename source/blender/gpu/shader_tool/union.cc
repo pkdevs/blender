@@ -15,6 +15,7 @@
 namespace blender::gpu::shader {
 using namespace std;
 using namespace shader::parser;
+using namespace shader::parser::ast;
 using namespace metadata;
 
 void SourceProcessor::lower_unions(Parser &parser)
@@ -214,10 +215,10 @@ void SourceProcessor::lower_unions(Parser &parser)
         if (is_enum) {
           return struct_member.type + "(floatBitsToUint(" + access + "))";
         }
-        if (type.substr(0, 4) == "uint") {
+        if (type.starts_with("uint")) {
           return "floatBitsToUint(" + access + ")";
         }
-        if (type.substr(0, 3) == "int") {
+        if (type.starts_with("int")) {
           return "floatBitsToInt(" + access + ")";
         }
         if (type == "bool") {
@@ -235,10 +236,10 @@ void SourceProcessor::lower_unions(Parser &parser)
         if (is_enum) {
           return "uintBitsToFloat(uint(" + access + "))";
         }
-        if (type.substr(0, 4) == "uint") {
+        if (type.starts_with("uint")) {
           return "uintBitsToFloat(" + access + ")";
         }
-        if (type.substr(0, 3) == "int") {
+        if (type.starts_with("int")) {
           return "intBitsToFloat(" + access + ")";
         }
         if (type == "bool") {
@@ -357,7 +358,7 @@ void SourceProcessor::lower_unions(Parser &parser)
         dst.emplace_back(member);
         continue;
       }
-      if (struct_members.find(member.type) == struct_members.end()) {
+      if (!struct_members.contains(member.type)) {
         report_error(
             type,
             "Unknown type encountered while unwrapping union. Contained types must be defined "
@@ -383,19 +384,19 @@ void SourceProcessor::lower_unions(Parser &parser)
   };
 
   parser().foreach_struct([&](Token, Scope, Token struct_name, Scope body) {
-    if (union_members.find(string(struct_name.str())) != union_members.end()) {
+    if (union_members.contains(string(struct_name.str()))) {
       replace_placeholder_member(body);
       return;
     }
 
     body.foreach_declaration([&](Scope, Token, Token type, Scope, Token name, Scope, Token) {
-      if (union_members.find(string(type.str())) == union_members.end()) {
+      if (!union_members.contains(string(type.str()))) {
         return;
       }
 
       const vector<Member> &members = union_members.find(string(type.str()))->second;
       for (const auto &member : members) {
-        if (struct_members.find(member.type) == struct_members.end()) {
+        if (!struct_members.contains(member.type)) {
           report_error(
               type,
               "Unknown union member type. Type must be defined in this file and decorated "
@@ -413,6 +414,11 @@ void SourceProcessor::lower_unions(Parser &parser)
     });
   });
 
+  lower_union_setters(parser);
+}
+
+void SourceProcessor::lower_union_setters(Parser &parser)
+{
   /* Replace assignment pattern.
    * Example: `a.b() = c;` >  `a.b_set_(c);`
    * This pattern is currently only allowed for `union_t`. */
@@ -455,6 +461,39 @@ void SourceProcessor::lower_union_accessor_templates(Parser &parser)
           });
     });
   });
+  parser.apply_mutations();
+}
+
+/**
+ * For safety reason, union members need to be declared with the union_t template.
+ * This avoid raw member access which we cannot emulate. Instead this forces the use of the `()`
+ * operator for accessing the members of the enum.
+ *
+ * Need to run before lower_unions.
+ */
+void SourceProcessor::lower_union_accessor_templates_ast(Parser &parser)
+{
+  for (ClassDecl decl : parser.root().descendants_of_type<ClassDecl>()) {
+    if (decl.is_union()) {
+      for (VarDecl var : decl.body().children_of_type<VarDecl>()) {
+        IdType type = var.type();
+        Id name = type.identifier().name();
+
+        if (type.identifier().name().str() != "union_t") {
+          continue;
+        }
+
+        /* Remove the template but not the wrapped type. */
+        parser.erase(name);
+        TemplateParamList param = type.identifier().template_params();
+        if (param.is_valid()) {
+          parser.erase(param.front());
+          parser.erase(param.back());
+        }
+      }
+    }
+  }
+
   parser.apply_mutations();
 }
 

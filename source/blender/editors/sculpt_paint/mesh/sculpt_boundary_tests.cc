@@ -3,10 +3,8 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "sculpt_boundary.hh"
 
-#include "BKE_idtype.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_lib_id.hh"
-
-#include "CLG_log.h"
 
 #include "DNA_mesh_types.h"
 
@@ -16,20 +14,10 @@
 #include "testing/testing.h"
 
 namespace blender::ed::sculpt_paint::tests {
-class MeshTests : public testing::Test {
+
+class SculptBoundaryTests : public bke::BlenderGTestBase {
  public:
   Mesh *mesh = nullptr;
-
-  static void SetUpTestSuite()
-  {
-    CLG_init();
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
 
   void TearDown() override
   {
@@ -39,7 +27,7 @@ class MeshTests : public testing::Test {
   }
 };
 
-TEST_F(MeshTests, create_boundary_info__cube)
+TEST_F(SculptBoundaryTests, create_boundary_info__cube)
 {
   mesh = geometry::create_cuboid_mesh(float3(1.0, 1.0, 1.0), 2, 2, 2);
 
@@ -56,7 +44,7 @@ TEST_F(MeshTests, create_boundary_info__cube)
   ASSERT_EQ(boundary_info_cache.edges.size(), 0);
 }
 
-TEST_F(MeshTests, create_boundary_info__grid)
+TEST_F(SculptBoundaryTests, create_boundary_info__grid)
 {
   mesh = geometry::create_grid_mesh(3, 3, 1.0, 1.0, {});
 
@@ -75,7 +63,7 @@ TEST_F(MeshTests, create_boundary_info__grid)
   ASSERT_NE(boundary_info_cache.edges.size(), mesh->edges().size());
 }
 
-TEST_F(MeshTests, create_boundary_info__1D_strip)
+TEST_F(SculptBoundaryTests, create_boundary_info__1D_strip)
 {
   mesh = geometry::create_grid_mesh(3, 2, 1.0, 1.0, {});
 

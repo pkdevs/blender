@@ -39,7 +39,7 @@ bool CUDADevice::have_precompiled_kernels()
   return path_exists(cubins_path);
 }
 
-BVHLayoutMask CUDADevice::get_bvh_layout_mask(uint /*kernel_features*/) const
+BVHLayoutMask CUDADevice::get_bvh_layout_mask(const uint64_t /*kernel_features*/) const
 {
   return BVH_LAYOUT_BVH2;
 }
@@ -140,7 +140,7 @@ CUDADevice::~CUDADevice()
   cuda_assert(cuDevicePrimaryCtxRelease(cuDevice));
 }
 
-bool CUDADevice::support_device(const uint /*kernel_features*/)
+bool CUDADevice::support_device(const uint64_t /*kernel_features*/)
 {
   int major, minor;
   cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, cuDevId);
@@ -213,12 +213,13 @@ bool CUDADevice::use_adaptive_compilation()
 /* Common NVCC flags which stays the same regardless of shading model,
  * kernel sources md5 and only depends on compiler or compilation settings.
  */
-string CUDADevice::compile_kernel_get_common_cflags(const uint kernel_features)
+string CUDADevice::compile_kernel_get_common_cflags(const uint64_t kernel_features)
 {
   const int machine = system_cpu_bits();
   const string source_path = path_get("source");
   const string include_path = source_path;
   string cflags = string_printf(
+      "-std=c++17 "
       "-m%d "
       "--ptxas-options=\"-v\" "
       "--use_fast_math "
@@ -262,11 +263,18 @@ string CUDADevice::compile_kernel(const string &common_cflags, const char *name,
   }
   /* Attempt to use kernel provided with Blender. */
   else if (!use_adaptive_compilation()) {
-    const string cubin = path_get(string_printf("lib/%s_sm_%d%d.cubin.zst", name, major, minor));
-    LOG_INFO << "Testing for pre-compiled kernel " << cubin << ".";
-    if (path_exists(cubin)) {
-      LOG_INFO << "Using precompiled kernel.";
-      return cubin;
+    /* Binaries within a major version are compatible, so find the closest one. */
+    int cubin_minor = minor;
+    while (cubin_minor >= 0) {
+      const string cubin = path_get(
+          string_printf("lib/%s_sm_%d%d.cubin.zst", name, major, cubin_minor));
+      LOG_INFO << "Testing for pre-compiled kernel " << cubin << ".";
+      if (path_exists(cubin)) {
+        LOG_INFO << "Using precompiled kernel.";
+        return cubin;
+      }
+
+      cubin_minor--;
     }
 
     /* The driver can JIT-compile PTX generated for older generations, so find the closest one. */
@@ -402,7 +410,7 @@ string CUDADevice::compile_kernel(const string &common_cflags, const char *name,
   return cubin;
 }
 
-bool CUDADevice::load_kernels(const uint kernel_features)
+bool CUDADevice::load_kernels(const uint64_t kernel_features)
 {
   /* TODO(sergey): Support kernels re-load for CUDA devices adaptive compile.
    *
@@ -460,7 +468,7 @@ bool CUDADevice::load_kernels(const uint kernel_features)
   return (result == CUDA_SUCCESS);
 }
 
-void CUDADevice::reserve_local_memory(const uint kernel_features)
+void CUDADevice::reserve_local_memory(const uint64_t kernel_features)
 {
   /* Together with CU_CTX_LMEM_RESIZE_TO_MAX, this reserves local memory
    * needed for kernel launches, so that we can reliably figure out when
@@ -476,8 +484,6 @@ void CUDADevice::reserve_local_memory(const uint kernel_features)
     /* Use the biggest kernel for estimation. */
     const DeviceKernel test_kernel = (kernel_features & KERNEL_FEATURE_NODE_RAYTRACE) ?
                                          DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE :
-                                     (kernel_features & KERNEL_FEATURE_MNEE) ?
-                                         DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE :
                                          DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE;
 
     /* Launch kernel, using just 1 block appears sufficient to reserve memory for all

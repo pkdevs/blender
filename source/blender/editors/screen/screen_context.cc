@@ -21,10 +21,10 @@
 #include "DNA_windowmanager_types.h"
 #include "DNA_workspace_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_set.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_action.hh"
 #include "BKE_armature.hh"
@@ -571,7 +571,7 @@ static eContextResult screen_ctx_property(const bContext *C, bContextDataResult 
   int index;
 
   ui::context_active_but_prop_get(C, &ptr, &prop, &index);
-  if (ptr.data && prop) {
+  if (ptr && prop) {
     /* context_active_but_prop_get returns an index of 0 if the property is not
      * an array, but other functions expect -1 for non-arrays. */
     if (!RNA_property_array_check(prop)) {

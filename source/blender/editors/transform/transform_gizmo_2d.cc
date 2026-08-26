@@ -12,9 +12,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "DNA_object_types.h"
@@ -275,8 +275,7 @@ static bool gizmo2d_calc_bounds(const bContext *C, float *r_center, float *r_min
     int selected_strips = strips.size();
     if (selected_strips > 0) {
       has_select = true;
-      const Bounds<float2> box = seq::image_transform_bounding_box_from_collection(
-          scene, strips, selected_strips != 1);
+      const Bounds<float2> box = seq::image_transform_bounding_box_from_strips_get(scene, strips);
       copy_v2_v2(r_min, box.min);
       copy_v2_v2(r_max, box.max);
     }
@@ -374,7 +373,7 @@ static bool seq_get_strip_pivot_median(const Scene *scene, float r_pivot[2])
 
   if (has_select) {
     for (Strip *strip : strips) {
-      const float2 origin = seq::image_transform_origin_offset_pixelspace_get(scene, strip);
+      const float2 origin = seq::image_transform_origin_preview_offset_get(scene, strip);
       add_v2_v2(r_pivot, origin);
     }
     mul_v2_fl(r_pivot, 1.0f / strips.size());
@@ -683,15 +682,16 @@ static void gizmo2d_xform_invoke_prepare(const bContext *C,
    * rotating with the gizmo.
    *
    * The coordinates are referred to as their cardinal directions:
-   *       N
-   *       o
-   *NW     |     NE
-   * x-----------x
-   * |           |
-   *W|     C     |E
-   * |           |
-   * x-----------x
-   *SW     S     SE
+   *
+   *        N
+   *        o
+   * NW     |     NE
+   *  x-----------x
+   *  |           |
+   * W|     C     |E
+   *  |           |
+   *  x-----------x
+   * SW     S     SE
    */
   float n[3] = {mid[0], max[1], 0.0f};
   float w[3] = {min[0], mid[1], 0.0f};

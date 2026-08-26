@@ -12,10 +12,10 @@
 
 #include <cstdlib>
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
 #ifdef _WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 #include "IMB_filetype.hh"
@@ -67,10 +67,8 @@ const char *imb_ext_image[] = {
     /* #IMB_FTYPE_CINEON */
     ".cin",
 #endif
-#ifdef WITH_IMAGE_OPENEXR
     /* #IMB_FTYPE_EXR */
     ".exr",
-#endif
     /* #IMB_FTYPE_PSD */
     ".psd",
     ".pdd",

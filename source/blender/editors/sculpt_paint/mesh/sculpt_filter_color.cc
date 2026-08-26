@@ -9,8 +9,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_math_color.h"
-#include "BLI_math_color_blend.h"
+#include "BLI_math_color_blend.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_vector.hh"
 
 #include "BLT_translation.hh"
@@ -552,8 +552,7 @@ static int sculpt_color_filter_init(bContext *C, wmOperator *op)
     if (v3d) {
       /* Update the active face set manually as the paint cursor is not enabled when using the Mesh
        * Filter Tool. */
-      CursorGeometryInfo cgi;
-      cursor_geometry_info_update(C, &cgi, mval_fl, false);
+      cursor_geometry_info_update(C, mval_fl, false);
     }
   }
 
@@ -571,7 +570,7 @@ static int sculpt_color_filter_init(bContext *C, wmOperator *op)
   /* CTX_data_ensure_evaluated_depsgraph should be used at the end to include the potential
    * creation of color layer data. */
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, true);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, true);
 
   filter::cache_init(C,
                      ob,

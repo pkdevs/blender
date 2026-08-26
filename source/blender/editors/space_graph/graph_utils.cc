@@ -16,7 +16,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
@@ -200,7 +200,7 @@ bool graphop_editable_keyframes_poll(bContext *C)
 
     /* editable curves must fulfill the following criteria:
      * - it has bezier keyframes
-     * - it must not be protected from editing (this is already checked for with the edit flag
+     * - it must not be protected from editing (this is already checked for with the edit flag)
      * - F-Curve modifiers do not interfere with the result too much
      *   (i.e. the modifier-control drawing check returns false)
      */
@@ -266,7 +266,7 @@ bool graphop_active_editable_fcurve_ctx_poll(bContext *C)
 {
   PointerRNA ptr = CTX_data_pointer_get_type(C, "active_editable_fcurve", RNA_FCurve);
 
-  return ptr.data != nullptr;
+  return ptr;
 }
 
 bool graphop_selected_fcurve_poll(bContext *C)

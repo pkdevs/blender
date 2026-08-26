@@ -355,7 +355,7 @@ if(NOT EXISTS "${LIBDIR}/.git")
   )
 endif()
 
-include(platform_old_libs_update)
+include("${CMAKE_CURRENT_LIST_DIR}/platform_old_libs_update.cmake")
 
 # Only supported in the VS IDE & Clang Tidy needs to be on.
 if(CMAKE_GENERATOR MATCHES "^Visual Studio.+" AND WITH_CLANG_TIDY)
@@ -414,6 +414,14 @@ if(WITH_LIBMV)
   find_package(Ceres REQUIRED CONFIG)
 endif()
 
+if(WITH_DRACO)
+  find_package(draco REQUIRED CONFIG)
+endif()
+
+if(WITH_MESHOPTIMIZER)
+  find_package(meshoptimizer REQUIRED CONFIG)
+endif()
+
 windows_find_package(ZLIB) # We want to find before finding things that depend on it like PNG.
 windows_find_package(PNG)
 if(NOT PNG_FOUND)
@@ -436,8 +444,8 @@ endif()
 set(EPOXY_ROOT_DIR ${LIBDIR}/epoxy)
 windows_find_package(Epoxy REQUIRED)
 if(NOT EPOXY_FOUND)
-  set(Epoxy_INCLUDE_DIRS ${LIBDIR}/epoxy/include)
-  set(Epoxy_LIBRARIES ${LIBDIR}/epoxy/lib/epoxy.lib)
+  set(EPOXY_INCLUDE_DIRS ${LIBDIR}/epoxy/include)
+  set(EPOXY_LIBRARIES ${LIBDIR}/epoxy/lib/epoxy.lib)
 endif()
 
 set(PTHREADS_INCLUDE_DIRS ${LIBDIR}/pthreads/include)
@@ -531,20 +539,10 @@ endif()
 
 set(openjph_ROOT ${LIBDIR}/openjph)
 
-if(WITH_IMAGE_OPENEXR)
-  set(IMATH_ROOT ${LIBDIR}/imath)
-  find_package(IMATH REQUIRED CONFIG)
-  set(OpenEXR_ROOT ${LIBDIR}/openexr)
-  find_package(OpenEXR REQUIRED CONFIG)
-endif()
-
-# Try to find tiff first then complain and set static and maybe wrong paths
-windows_find_package(TIFF)
-if(NOT TIFF_FOUND)
-  warn_hardcoded_paths(libtiff)
-  set(TIFF_LIBRARY ${LIBDIR}/tiff/lib/libtiff.lib)
-  set(TIFF_INCLUDE_DIR ${LIBDIR}/tiff/include)
-endif()
+set(IMATH_ROOT ${LIBDIR}/imath)
+find_package(IMATH REQUIRED CONFIG)
+set(OpenEXR_ROOT ${LIBDIR}/openexr)
+find_package(OpenEXR REQUIRED CONFIG)
 
 if(WITH_JACK)
   set(JACK_INCLUDE_DIRS
@@ -586,6 +584,8 @@ if(WITH_PYTHON)
   set(PYTHON_LIBRARY_DEBUG ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/libs/python${_PYTHON_VERSION_NO_DOTS}_d.lib)
 
   set(PYTHON_INCLUDE_DIR ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/include)
+  # Needed to locate bundled modules, see `find_python_module_file`.
+  set(PYTHON_LIBPATH ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/lib)
   set(PYTHON_NUMPY_INCLUDE_DIRS ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/lib/site-packages/numpy/_core/include)
   set(NUMPY_FOUND ON)
   # uncached vars
@@ -630,32 +630,7 @@ if(WITH_LLVM)
 
 endif()
 
-if(WITH_OPENCOLORIO)
-  windows_find_package(OpenColorIO)
-  if(NOT OpenColorIO_FOUND)
-    set(OPENCOLORIO ${LIBDIR}/OpenColorIO)
-    set(OPENCOLORIO_INCLUDE_DIRS ${OPENCOLORIO}/include)
-    set(OPENCOLORIO_LIBPATH ${OPENCOLORIO}/lib)
-    if(EXISTS ${OPENCOLORIO_LIBPATH}/libexpatMD.lib) # 3.4
-      set(OPENCOLORIO_LIBRARIES
-        optimized ${OPENCOLORIO_LIBPATH}/OpenColorIO.lib
-        optimized ${OPENCOLORIO_LIBPATH}/libexpatMD.lib
-        optimized ${OPENCOLORIO_LIBPATH}/pystring.lib
-        optimized ${OPENCOLORIO_LIBPATH}/libyaml-cpp.lib
-        debug ${OPENCOLORIO_LIBPATH}/OpencolorIO_d.lib
-        debug ${OPENCOLORIO_LIBPATH}/libexpatdMD.lib
-        debug ${OPENCOLORIO_LIBPATH}/pystring_d.lib
-        debug ${OPENCOLORIO_LIBPATH}/libyaml-cpp_d.lib
-      )
-      set(OPENCOLORIO_DEFINITIONS "-DOpenColorIO_SKIP_IMPORTS")
-    else()
-      set(OPENCOLORIO_LIBRARIES
-        optimized ${OPENCOLORIO_LIBPATH}/OpenColorIO.lib
-        debug ${OPENCOLORIO_LIBPATH}/OpencolorIO_d.lib
-      )
-    endif()
-  endif()
-endif()
+find_package(OpenColorIO REQUIRED CONFIG)
 
 if(WITH_OPENVDB)
   windows_find_package(OpenVDB)
@@ -788,10 +763,7 @@ if(WITH_RUBBERBAND)
 endif()
 
 if(WITH_SDL)
-  set(SDL ${LIBDIR}/sdl)
-  set(SDL_INCLUDE_DIR ${SDL}/include)
-  set(SDL_LIBPATH ${SDL}/lib)
-  set(SDL_LIBRARY ${SDL_LIBPATH}/SDL2.lib)
+  find_package(SDL3 REQUIRED CONFIG)
 endif()
 
 # Audio IO
@@ -878,11 +850,11 @@ endif()
 
 if(WITH_CYCLES AND WITH_CYCLES_OSL)
   set(CYCLES_OSL ${LIBDIR}/osl CACHE PATH "Path to OpenShadingLanguage installation")
-  set(OSL_ROOT ${CYCLES_OSL}) 
-  find_package(OSL REQUIRED CONFIG) 
+  set(OSL_ROOT ${CYCLES_OSL})
+  find_package(OSL REQUIRED CONFIG)
 endif()
 
-if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
+if(WITH_EMBREE)
   windows_find_package(Embree)
   if(NOT Embree_FOUND)
     set(EMBREE_ROOT_DIR ${LIBDIR}/embree)
@@ -1113,8 +1085,6 @@ if(WITH_VULKAN_BACKEND)
     set(VULKAN_ROOT_DIR ${LIBDIR}/vulkan)
     set(VULKAN_INCLUDE_DIR ${VULKAN_ROOT_DIR}/include)
     set(VULKAN_INCLUDE_DIRS ${VULKAN_INCLUDE_DIR})
-    set(VULKAN_LIBRARY ${VULKAN_ROOT_DIR}/lib/vulkan-1.lib)
-    set(VULKAN_LIBRARIES ${VULKAN_LIBRARY})
   else()
     message(WARNING "Vulkan SDK was not found, disabling WITH_VULKAN_BACKEND")
     set(WITH_VULKAN_BACKEND OFF)
@@ -1156,7 +1126,7 @@ endif()
 set(ZSTD_INCLUDE_DIRS ${LIBDIR}/zstd/include)
 set(ZSTD_LIBRARIES ${LIBDIR}/zstd/lib/zstd_static.lib)
 
-if(WITH_CYCLES AND (WITH_CYCLES_DEVICE_ONEAPI OR (WITH_CYCLES_EMBREE AND EMBREE_SYCL_SUPPORT)))
+if((WITH_EMBREE AND EMBREE_SYCL_SUPPORT) OR (WITH_CYCLES AND WITH_CYCLES_DEVICE_ONEAPI))
   set(LEVEL_ZERO_ROOT_DIR ${LIBDIR}/level_zero)
   set(CYCLES_SYCL ${LIBDIR}/dpcpp CACHE PATH "Path to oneAPI DPC++ compiler")
   mark_as_advanced(CYCLES_SYCL)
@@ -1179,6 +1149,8 @@ if(WITH_CYCLES AND (WITH_CYCLES_DEVICE_ONEAPI OR (WITH_CYCLES_EMBREE AND EMBREE_
   )
   # Cycles doesn't currently support the OpenCL backend
   list(FILTER _sycl_unified_runtime_libraries_glob EXCLUDE REGEX "opencl")
+  # Only bundle the v2 Level Zero adapter, not the legacy ur_adapter_level_zero.dll (#159584).
+  list(FILTER _sycl_unified_runtime_libraries_glob EXCLUDE REGEX "ur_adapter_level_zerod?\\.dll")
 
   foreach(sycl_unified_runtime_library IN LISTS _sycl_unified_runtime_libraries_glob)
     # We do not know, which library we would discover first, debug or release, so we check for both.
@@ -1188,11 +1160,10 @@ if(WITH_CYCLES AND (WITH_CYCLES_DEVICE_ONEAPI OR (WITH_CYCLES_EMBREE AND EMBREE_
     # there is a safe guard against it below.
     string(REPLACE "d.dll" ".dll" sycl_unified_runtime_library_release ${sycl_unified_runtime_library})
 
-    list(FIND _sycl_unified_runtime_libraries_glob ${sycl_unified_runtime_library_debug} debug_index)
-    list(FIND _sycl_unified_runtime_libraries_glob ${sycl_unified_runtime_library_release} release_index)
-    if(NOT debug_index EQUAL -1)
+    if(sycl_unified_runtime_library_debug IN_LIST _sycl_unified_runtime_libraries_glob)
       set(sycl_unified_runtime_library_release ${sycl_unified_runtime_library})
-    elseif(NOT release_index EQUAL -1 AND NOT sycl_unified_runtime_library_release STREQUAL sycl_unified_runtime_library)
+    elseif(sycl_unified_runtime_library_release IN_LIST _sycl_unified_runtime_libraries_glob AND
+           NOT sycl_unified_runtime_library_release STREQUAL sycl_unified_runtime_library)
       set(sycl_unified_runtime_library_debug ${sycl_unified_runtime_library})
     else()
       # If there is no debug pair version of the library, then we are assuming
@@ -1201,8 +1172,7 @@ if(WITH_CYCLES AND (WITH_CYCLES_DEVICE_ONEAPI OR (WITH_CYCLES_EMBREE AND EMBREE_
       set(sycl_unified_runtime_library_release ${sycl_unified_runtime_library})
       set(sycl_unified_runtime_library_debug ${sycl_unified_runtime_library})
     endif()
-    list(FIND _sycl_runtime_libraries ${sycl_unified_runtime_library_release} found_index)
-    if(found_index EQUAL -1)
+    if(NOT sycl_unified_runtime_library_release IN_LIST _sycl_runtime_libraries)
       list(APPEND _sycl_runtime_libraries RELEASE ${sycl_unified_runtime_library_release})
       list(APPEND _sycl_runtime_libraries DEBUG ${sycl_unified_runtime_library_debug})
       # NOTE(Sirgienko) Due to a bug in DPC++ runtime, in versions 6.2 and 6.3
@@ -1220,6 +1190,11 @@ if(WITH_CYCLES AND (WITH_CYCLES_DEVICE_ONEAPI OR (WITH_CYCLES_EMBREE AND EMBREE_
     optimized ${SYCL_LIBRARY}
     debug ${SYCL_LIBRARY_DEBUG}
   )
+endif()
+
+if(WITH_TRACY)
+  set(Tracy_ROOT_DIR ${LIBDIR}/tracy)
+  find_package(Tracy REQUIRED CONFIG)
 endif()
 
 # Add the MSVC directory to the path so when building with ASAN enabled tools such as

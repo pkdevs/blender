@@ -10,10 +10,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
+#include "BKE_compositor.hh"
 #include "BKE_context.hh"
 #include "BKE_movieclip.hh"
 #include "BKE_node_tree_update.hh"
@@ -418,9 +419,9 @@ static void cancelTransTracking(TransInfo *t)
 
       BLI_assert(marker != nullptr);
 
-      marker->flag = tdt->flag;
+      marker->flag = TrackingMarkerFlag(tdt->flag);
 
-      if (track->flag & SELECT) {
+      if (track->flag & TRACK_SELECT) {
         i++;
       }
 
@@ -439,7 +440,7 @@ static void cancelTransTracking(TransInfo *t)
 
       BLI_assert(plane_marker != nullptr);
 
-      plane_marker->flag = tdt->flag;
+      plane_marker->flag = TrackingPlaneMarkerFlag(tdt->flag);
       i += 3;
     }
 
@@ -449,7 +450,6 @@ static void cancelTransTracking(TransInfo *t)
 
 static void flushTransTracking(TransInfo *t)
 {
-  TransData *td;
   TransData2D *td2d;
   TransDataTracking *tdt;
   int td_index;
@@ -462,11 +462,10 @@ static void flushTransTracking(TransInfo *t)
 
   /* Flush to 2d vector from internally used 3d vector. */
   for (td_index = 0,
-      td = tc->data,
       td2d = tc->data_2d,
       tdt = static_cast<TransDataTracking *>(tc->custom.type.data);
        td_index < tc->data_len;
-       td_index++, td2d++, td++, tdt++)
+       td_index++, td2d++, tdt++)
   {
     if (tdt->mode == transDataTracking_ModeTracks) {
       float loc2d[2];
@@ -604,7 +603,8 @@ static void special_aftertrans_update__movieclip(bContext *C, TransInfo *t)
       BKE_tracking_track_plane_from_existing_motion(&plane_track, framenr);
     }
   }
-  if (t->scene->compositing_node_group != nullptr) {
+
+  if (bke::compositor::is_enabled(*t->scene, bke::compositor::ExecutionMode::Preview)) {
     /* Tracks can be used for stabilization nodes,
      * flush update for such nodes.
      */

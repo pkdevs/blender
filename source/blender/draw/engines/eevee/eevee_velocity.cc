@@ -20,6 +20,7 @@
 #include "DNA_rigidbody_types.h"
 
 #include "DRW_engine.hh"
+#include "GPU_capabilities.hh"
 #include "draw_cache.hh"
 #include "draw_cache_impl.hh"
 
@@ -157,6 +158,8 @@ bool VelocityModule::step_object_sync(const ObjectHandle &ob_handle,
         case OB_MESH:
           data.pos_buf = DRW_cache_mesh_surface_get(ob_handle.object);
           break;
+        default:
+          break;
       }
       return data;
     };
@@ -175,7 +178,13 @@ bool VelocityModule::step_object_sync(const ObjectHandle &ob_handle,
      * We live with that until we have a correct way of identifying new objects. */
     VelocityObjectData &vel = velocity_map.lookup_or_add_default(ObjectKey(ob_handle, i));
     vel.obj.ofs[step_] = object_steps_usage[step_]++;
-    vel.obj.resource_index = ob_handle.res_handle.sub_handle(i).index();
+    if (ob_handle.res_handle.is_valid()) {
+      vel.obj.resource_index = ob_handle.res_handle.sub_handle(i).index();
+    }
+    else {
+      /* Called from `step_object_sync_render`. */
+      vel.obj.resource_index = 0;
+    }
     vel.id = velocity_id;
     object_steps[step_]->get_or_resize(vel.obj.ofs[step_]) = ob_handle.object_to_world(i);
     if (step_ == STEP_CURRENT) {
@@ -240,8 +249,19 @@ void VelocityModule::geometry_steps_fill()
     geom.ofs = dst_ofs;
     dst_ofs += src_len;
   }
-  /* TODO(@fclem): Fail gracefully (disable motion blur + warning print) if
-   * `tot_len * sizeof(float4)` is greater than max SSBO size. */
+
+  /* Fallback when velocity buffer could not be allocated.  */
+  if (GPU_max_storage_buffer_size() < dst_ofs * sizeof(float) * 4) {
+    inst_.info_append_i18n(
+        "Error: Could not allocate velocity geometry buffer. Only object and camera velocities "
+        "will be used.");
+    for (VelocityObjectData &vel : velocity_map.values()) {
+      vel.geo.len[step_] = -1;
+      vel.geo.ofs[step_] = -1;
+      vel.id = 0;
+    }
+    return;
+  }
   geometry_steps[step_]->resize(max_ii(16, dst_ofs));
 
   DRW_submission_start();

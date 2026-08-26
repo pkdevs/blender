@@ -451,6 +451,48 @@ class TestBMeshUVSelectSimple(unittest.TestCase):
         # Nothing should be selected because the mesh is hidden.
         self.assertEqual(bm_loop_select_count_vert_edge_face(bm), ((0, 0, 0), (0, 0, 0)))
 
+    def test_uv_select_sync_to_mesh_face_mode(self):
+        # In face mode, the UV face selection is the only source for the mesh face selection.
+        # A 1:1 selection match is expected, see: #162004.
+
+        bm = bmesh.new()
+        uv_layer = bm.loops.layers.uv.new()
+
+        # A 3x3 grid of quads, so the center face is entirely surrounded.
+        bmesh.ops.create_grid(bm, x_segments=3, y_segments=3, size=2.0)
+        bm_uv_layer_from_coords(bm, uv_layer)
+        bm.select_mode = {'FACE'}
+        # Needed for methods that act on UV select.
+        bm.uv_select_sync_valid = True
+
+        # The center face is the only one with all it's edges shared with other faces.
+        faces_center = [f for f in bm.faces if all(len(e.link_faces) == 2 for e in f.edges)]
+        self.assertEqual(len(faces_center), 1)
+        face_center = faces_center[0]
+        del faces_center
+
+        # Select everything.
+        bm.uv_select_foreach_set(True, faces=bm.faces)
+        bm.uv_select_sync_to_mesh()
+        self.assertEqual(bm_loop_select_count_vert_edge_face(bm), ((36, 36, 9), (16, 24, 9)))
+        self.assertEqual(bm_uv_select_check_non_zero(bm, sync=True, flush=True, contiguous=True), {})
+
+        # De-select the center face, it's UV vertices & edges stay selected via the surrounding faces.
+        face_center.uv_select = False
+        bm.uv_select_sync_to_mesh()
+        self.assertFalse(face_center.select)
+        self.assertEqual(bm_loop_select_count_vert_edge_face(bm), ((36, 36, 8), (16, 24, 8)))
+        self.assertEqual(bm_uv_select_check_non_zero(bm, sync=True, flush=True, contiguous=True), {})
+
+        # Syncing back must round-trip, leaving the UV selection unchanged.
+        # Selecting the mesh face flushed back to the UV's, re-selecting the face the user de-selected.
+        bm.uv_select_sync_from_mesh()
+        self.assertFalse(face_center.uv_select)
+        self.assertEqual(bm_loop_select_count_vert_edge_face(bm), ((36, 36, 8), (16, 24, 8)))
+        self.assertEqual(bm_uv_select_check_non_zero(bm, sync=True, flush=True, contiguous=True), {})
+
+        bm.free()
+
     def test_uv_select_foreach_set(self):
         # Select UV's directly, similar to selecting in the UV editor.
         bm = bmesh.new()
@@ -682,6 +724,179 @@ class TestBMeshUVSelectSimple(unittest.TestCase):
         })
 
         # save_to_blend_file_for_testing(bm)
+
+
+# ------------------------------------------------------------------------------
+# BMesh Operators
+
+class TestBMeshOperators(unittest.TestCase):
+
+    def test_spin_primitive(self):
+        import math
+
+        # Regular hexagon with a 1.0 radius.
+        expected_area = (3.0 * math.sqrt(3.0)) / 2.0
+
+        unique_coords_pair = [set(), set()]
+
+        for do_dupli in (False, True):
+            with self.subTest(do_dupli=do_dupli):
+                bm = bmesh.new()
+                v = bm.verts.new((1.0, 0.0, 0.0))
+
+                bmesh.ops.spin(
+                    bm,
+                    geom=[v],
+                    cent=(0.0, 0.0, 0.0),
+                    axis=(0.0, 0.0, 1.0),
+                    angle=math.radians(360.0),
+                    steps=6,
+                    use_merge=True,
+                    use_duplicate=do_dupli,
+                )
+
+                if do_dupli:
+                    # Duplicate mode does not merge first/last.
+                    # The trailing vert is rotated one revolution causing it not to be an exact match.
+                    # Ensure it's close, then de-duplicate the location so the unique coords test passes.
+                    bm.verts.ensure_lookup_table()
+                    v0 = bm.verts[0]
+                    v_near = bm.verts[-1]
+                    self.assertLess((v_near.co - v0.co).length, 1e-4)
+                    v_near.co = v0.co
+
+                    f = bm.faces.new(bm.verts[:6])
+                    self.assertEqual((len(bm.verts), len(bm.edges), len(bm.faces)), (7, 6, 1))
+                else:
+                    self.assertEqual((len(bm.verts), len(bm.edges), len(bm.faces)), (6, 6, 0))
+
+                    # All edges should have the same length (regular hexagon).
+                    edge_lengths = [e.calc_length() for e in bm.edges]
+                    for length in edge_lengths[1:]:
+                        self.assertAlmostEqual(length, edge_lengths[0], places=5)
+
+                    f = bmesh.ops.contextual_create(bm, geom=bm.edges[:])["faces"][0]
+                    self.assertEqual((len(bm.verts), len(bm.edges), len(bm.faces)), (6, 6, 1))
+
+                self.assertAlmostEqual(f.calc_area(), expected_area, places=5)
+
+                unique_coords_pair[do_dupli] = {v.co[:] for v in bm.verts}
+
+                bm.free()
+
+        # Both paths should produce the same set of unique vertex positions.
+        self.assertEqual(unique_coords_pair[False], unique_coords_pair[True])
+
+    def test_spin_screw_complex(self):
+        import math
+        from mathutils import Matrix, Vector
+
+        # Non-identity "space" matrix combining translation, rotation, and scale.
+        # So spatial arguments interpreted in this local space.
+        space = (
+            Matrix.Translation((10.0, 0.0, 0.0)) @
+            Matrix.Rotation(math.radians(90.0), 4, Vector((1.0, 1.0, 1.0))) @
+            Matrix.Scale(2.0, 4)
+        )
+
+        steps = 6
+
+        unique_coords_pair = [set(), set()]
+
+        for do_dupli in (False, True):
+            with self.subTest(do_dupli=do_dupli):
+                bm = bmesh.new()
+
+                # Isolated vert (z=0).
+                bm.verts.new((11.0, 0.0, 0.0))
+                # Edge (z=1..2).
+                bm.edges.new([bm.verts.new(co) for co in (
+                    (11.0, 0.0, 1.0),
+                    (11.0, 0.0, 2.0),
+                )])
+                # Quad (z=3..4 in XZ).
+                bm.faces.new([bm.verts.new(co) for co in (
+                    (11.0, 0.0, 3.0),
+                    (12.0, 0.0, 3.0),
+                    (12.0, 0.0, 4.0),
+                    (11.0, 0.0, 4.0),
+                )])
+
+                bmesh.ops.spin(
+                    bm,
+                    geom=bm.verts[:] + bm.edges[:] + bm.faces[:],
+                    cent=(0.0, 0.0, 0.0),
+                    axis=(0.0, 0.0, 1.0),
+                    space=space,
+                    angle=math.radians(360.0),
+                    steps=steps,
+                    dvec=(0.0, 0.0, 0.5),
+                    use_duplicate=do_dupli,
+                )
+
+                total_area = sum(f.calc_area() for f in bm.faces)
+                total_length = sum(e.calc_length() for e in bm.edges)
+                if do_dupli:
+                    self.assertEqual((len(bm.verts), len(bm.edges), len(bm.faces)), (49, 35, 7))
+                    self.assertAlmostEqual(total_area, 7.0, places=4)
+                    self.assertAlmostEqual(total_length, 35.0, places=4)
+                else:
+                    self.assertEqual((len(bm.verts), len(bm.edges), len(bm.faces)), (49, 77, 32))
+                    self.assertAlmostEqual(total_area, 297.830433, places=4)
+                    self.assertAlmostEqual(total_length, 651.346448, places=4)
+
+                unique_coords_pair[do_dupli] = {v.co[:] for v in bm.verts}
+
+                bm.free()
+
+        # Both paths should produce the same set of unique vertex positions.
+        self.assertEqual(unique_coords_pair[False], unique_coords_pair[True])
+
+    def test_spin_screw(self):
+        import math
+
+        steps = 8
+
+        unique_coords_pair = [set(), set()]
+
+        for do_dupli in (False, True):
+            with self.subTest(do_dupli=do_dupli):
+                bm = bmesh.new()
+
+                # Vertical edge at radius 1.0.
+                bm.edges.new([bm.verts.new(co) for co in (
+                    (1.0, 0.0, 0.0),
+                    (1.0, 0.0, 1.0),
+                )])
+
+                bmesh.ops.spin(
+                    bm,
+                    geom=bm.verts[:] + bm.edges[:],
+                    cent=(-1.0, -1.0, -1.0),
+                    axis=(1.0, 1.0, 1.0),
+                    angle=math.radians(360.0),
+                    steps=steps,
+                    dvec=(0.0, 0.0, 1.0 / steps),
+                    use_duplicate=do_dupli,
+                )
+
+                total_area = sum(f.calc_area() for f in bm.faces)
+                total_length = sum(e.calc_length() for e in bm.edges)
+                if do_dupli:
+                    self.assertEqual((len(bm.verts), len(bm.edges), len(bm.faces)), (18, 9, 0))
+                    self.assertAlmostEqual(total_area, 0.0, places=4)
+                    self.assertAlmostEqual(total_length, 9.0, places=4)
+                else:
+                    self.assertEqual((len(bm.verts), len(bm.edges), len(bm.faces)), (18, 25, 8))
+                    self.assertAlmostEqual(total_area, 3.600270, places=4)
+                    self.assertAlmostEqual(total_length, 19.121252, places=4)
+
+                unique_coords_pair[do_dupli] = {v.co[:] for v in bm.verts}
+
+                bm.free()
+
+        # Both paths should produce the same set of unique vertex positions.
+        self.assertEqual(unique_coords_pair[False], unique_coords_pair[True])
 
 
 def main():

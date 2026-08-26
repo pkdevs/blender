@@ -24,6 +24,9 @@ std::string ParsedResource::serialize() const
   if (res_type == "legacy_info") {
     ss << "ADDITIONAL_INFO(" << var_name << ")";
   }
+  else if (res_type == "legacy_iface") {
+    ss << "VERTEX_OUT(" << var_type << "_t)";
+  }
   else if (res_type == "resource_table") {
     if (!res_condition.empty()) {
       ss << ".additional_info_with_condition(\"" << var_type << "\"" << res_condition_lambda
@@ -65,6 +68,12 @@ std::string ParsedResource::serialize() const
     ss << ", Frequency::" << res_frequency;
     ss << res_condition_lambda << ")";
   }
+  else if (res_type == "acceleration_structure") {
+    ss << ".acceleration_structure(" << res_slot;
+    ss << ", \"" << var_name << "\"";
+    ss << ", Frequency::" << res_frequency;
+    ss << res_condition_lambda << ")";
+  }
   else if (res_type == "shared") {
     ss << "GROUP_SHARED(" << var_type << ", " << var_name << var_array << ")";
   }
@@ -81,6 +90,8 @@ std::string ParsedResource::serialize() const
     /* Needs to be defined on the shader declaration. */
     /* TODO(fclem): Add check that shader sets an existing compilation constant. */
     // ss << "COMPILATION_CONSTANT(" << var_type << ", " << var_name << ", " << res_value << ")";
+    /* WORKAROUND: Avoid unused expression warning.  */
+    ss << ".noop()\n";
   }
   else if (res_type == "specialization_constant") {
     ss << "SPECIALIZATION_CONSTANT(" << var_type << ", " << var_name << ", " << res_value << ")";
@@ -133,7 +144,28 @@ std::string ParsedFragOuput::serialize() const
   return ss.str();
 }
 
+std::string ParsedFragInput::serialize() const
+{
+  std::stringstream ss;
+  ss << "SUBPASS_IN(" << slot << ", " << var_type << ", " << image_type << ", " << var_name << ", "
+     << raster_order_group << ")";
+  return ss.str();
+}
+
 std::string FragmentOutputs::serialize() const
+{
+  std::stringstream ss;
+  ss << "GPU_SHADER_CREATE_INFO(" << name << ")\n";
+
+  for (const auto &res : *this) {
+    ss << res.serialize() << "\n";
+  }
+
+  ss << "GPU_SHADER_CREATE_END()\n";
+  return ss.str();
+}
+
+std::string FragmentInputs::serialize() const
 {
   std::stringstream ss;
   ss << "GPU_SHADER_CREATE_INFO(" << name << ")\n";
@@ -224,6 +256,9 @@ std::string Source::serialize_infos() const
   ss << "\n";
   for (auto frag_outputs : fragment_outputs) {
     ss << frag_outputs.serialize() << "\n";
+  }
+  for (auto frag_inputs : fragment_inputs) {
+    ss << frag_inputs.serialize() << "\n";
   }
   ss << "\n";
   for (auto iface : stage_interfaces) {

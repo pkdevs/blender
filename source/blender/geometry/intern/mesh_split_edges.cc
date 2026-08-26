@@ -28,7 +28,6 @@ static void propagate_vert_attributes(Mesh &mesh, const Span<int> new_to_old_ver
   /* These types aren't supported for interpolation below. */
   CustomData_free_layers(&mesh.vert_data, CD_SHAPEKEY);
   CustomData_free_layers(&mesh.vert_data, CD_CLOTH_ORCO);
-  CustomData_free_layers(&mesh.vert_data, CD_MVERT_SKIN);
   CustomData_realloc(
       &mesh.vert_data, mesh.verts_num, mesh.verts_num + new_to_old_verts_map.size());
   mesh.verts_num += new_to_old_verts_map.size();
@@ -388,7 +387,7 @@ static Array<int2> calc_new_edges(const OffsetIndices<int> faces,
           const OrderedEdge edge = edge_from_corner(
               faces, corner_verts, corner_to_face_map, corner);
           int index = deduplication.first_index_of_try(edge);
-          if (UNLIKELY(index != -1)) {
+          if (index != -1) [[unlikely]] {
             found_duplicate.store(true, std::memory_order_relaxed);
           }
           else {
