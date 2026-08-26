@@ -874,7 +874,8 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   /* Vertices along each cube edge. */
   const int seg_vert = seg + 1;
   /* Optimal angle for the tangent wrap
-   See https://jcgt.org/published/0007/02/01/ by Matt Zucker and Yosuke Higashi - Swarthmore College
+   See https://jcgt.org/published/0007/02/01/ by Matt Zucker and Yosuke Higashi - Swarthmore
+   College
   */
   const float theta = 0.8687f;
   const float tan_theta = std::tan(theta);
