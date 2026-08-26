@@ -11,6 +11,7 @@ shader node_glass_bsdf(color Color = 0.8,
                        float IOR = 1.45,
                        float ThinFilmThickness = 0.0,
                        float ThinFilmIOR = 1.33,
+                       float Retroreflectivity = 0.0,
                        normal Normal = N,
                        output closure color BSDF = 0)
 {
@@ -36,5 +37,7 @@ shader node_glass_bsdf(color Color = 0.8,
                                   "thinfilm_thickness",
                                   ThinFilmThickness,
                                   "thinfilm_ior",
-                                  thinfilm_ior);
+                                  thinfilm_ior,
+                                  "retroreflectivity",
+                                  Retroreflectivity);
 }

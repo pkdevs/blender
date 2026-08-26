@@ -2250,11 +2250,10 @@ NODE_DEFINE(MetallicBsdfNode)
   SOCKET_IN_FLOAT(roughness, "Roughness", 0.5f);
   SOCKET_IN_FLOAT(anisotropy, "Anisotropy", 0.0f);
   SOCKET_IN_FLOAT(rotation, "Rotation", 0.0f);
+  SOCKET_IN_FLOAT(retroreflectivity, "Retroreflectivity", 0.0f);
 
   SOCKET_IN_FLOAT(thin_film_thickness, "Thin Film Thickness", 0.0f);
   SOCKET_IN_FLOAT(thin_film_ior, "Thin Film IOR", 1.33f);
-
-  SOCKET_IN_FLOAT(retroreflectivity, "Retroreflectivity", 0.0f);
 
   SOCKET_OUT_CLOSURE(BSDF, "BSDF");
 
@@ -2310,9 +2309,9 @@ void MetallicBsdfNode::compile(SVMCompiler &compiler)
           .roughness = compiler.input_float("Roughness"),
           .anisotropy = compiler.input_float("Anisotropy"),
           .rotation = compiler.input_float("Rotation"),
+          .retroreflectivity = compiler.input_float("Retroreflectivity"),
           .thin_film_thickness = compiler.input_float("Thin Film Thickness"),
           .thin_film_ior = compiler.input_float("Thin Film IOR"),
-          .retroreflectivity = compiler.input_float("Retroreflectivity"),
           .normal_offset = compiler.input_link("Normal"),
           .tangent_offset = compiler.input_link("Tangent"),
       });
@@ -2428,6 +2427,7 @@ NODE_DEFINE(GlassBsdfNode)
       distribution, "Distribution", distribution_enum, CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID);
   SOCKET_IN_FLOAT(roughness, "Roughness", 0.0f);
   SOCKET_IN_FLOAT(IOR, "IOR", 1.5f);
+  SOCKET_IN_FLOAT(retroreflectivity, "Retroreflectivity", 0.0f);
 
   SOCKET_IN_FLOAT(thin_film_thickness, "Thin Film Thickness", 0.0f);
   SOCKET_IN_FLOAT(thin_film_ior, "Thin Film IOR", 1.33f);
@@ -2450,6 +2450,7 @@ void GlassBsdfNode::compile(SVMCompiler &compiler)
                         .color = compiler.input_float3("Color"),
                         .roughness = compiler.input_float("Roughness"),
                         .ior = compiler.input_float("IOR"),
+                        .retroreflectivity = compiler.input_float("Retroreflectivity"),
                         .thin_film_thickness = compiler.input_float("Thin Film Thickness"),
                         .thin_film_ior = compiler.input_float("Thin Film IOR"),
                         .normal_offset = compiler.input_link("Normal"),
@@ -2670,8 +2671,8 @@ NODE_DEFINE(PrincipledBsdfNode)
   SOCKET_IN_COLOR(specular_tint, "Specular Tint", one_float3());
   SOCKET_IN_FLOAT(anisotropic, "Anisotropic", 0.0f);
   SOCKET_IN_FLOAT(anisotropic_rotation, "Anisotropic Rotation", 0.0f);
-  SOCKET_IN_NORMAL(tangent, "Tangent", zero_float3(), SocketType::LINK_TANGENT);
   SOCKET_IN_FLOAT(retroreflectivity, "Retroreflectivity", 0.0f);
+  SOCKET_IN_NORMAL(tangent, "Tangent", zero_float3(), SocketType::LINK_TANGENT);
 
   SOCKET_IN_FLOAT(transmission_weight, "Transmission Weight", 0.0f);
   SOCKET_IN_FLOAT(transmission_dispersion_scale, "Transmission Dispersion Scale", 0.0f);

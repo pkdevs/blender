@@ -1140,7 +1140,8 @@ ccl_device int bsdf_microfacet_ggx_refraction_setup(ccl_private MicrofacetBsdf *
   return SR_BSDF | SR_BSDF_HAS_TRANSMISSION | bsdf_microfacet_eval_flag(bsdf);
 }
 
-ccl_device int bsdf_microfacet_ggx_glass_setup(ccl_private MicrofacetBsdf *bsdf)
+ccl_device int bsdf_microfacet_ggx_glass_setup(ccl_private MicrofacetBsdf *bsdf,
+                                               ccl_private ShaderData *sd)
 {
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
   bsdf->alpha_y = bsdf->alpha_x;
@@ -1148,6 +1149,10 @@ ccl_device int bsdf_microfacet_ggx_glass_setup(ccl_private MicrofacetBsdf *bsdf)
   bsdf->fresnel_type = MicrofacetFresnel::DIELECTRIC;
   bsdf->energy_scale = 1.0f;
   bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID;
+
+  /* Probabilistically swap between the regular and retroreflective lobe */
+  bsdf->retroreflectivity = bsdf->retroreflectivity > 0.0f &&
+                            lcg_step_float(&sd->lcg_state) < bsdf->retroreflectivity;
 
   return SR_BSDF | SR_BSDF_HAS_TRANSMISSION | bsdf_microfacet_eval_flag(bsdf);
 }
@@ -1219,13 +1224,18 @@ ccl_device int bsdf_microfacet_beckmann_refraction_setup(ccl_private MicrofacetB
   return SR_BSDF | SR_BSDF_HAS_TRANSMISSION | bsdf_microfacet_eval_flag(bsdf);
 }
 
-ccl_device int bsdf_microfacet_beckmann_glass_setup(ccl_private MicrofacetBsdf *bsdf)
+ccl_device int bsdf_microfacet_beckmann_glass_setup(ccl_private MicrofacetBsdf *bsdf,
+                                                    ccl_private ShaderData *sd)
 {
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
   bsdf->alpha_y = bsdf->alpha_x;
 
   bsdf->fresnel_type = MicrofacetFresnel::DIELECTRIC;
   bsdf->type = CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID;
+
+  /* Probabilistically swap between the regular and retroreflective lobe */
+  bsdf->retroreflectivity = bsdf->retroreflectivity > 0.0f &&
+                            lcg_step_float(&sd->lcg_state) < bsdf->retroreflectivity;
 
   return SR_BSDF | SR_BSDF_HAS_TRANSMISSION | bsdf_microfacet_eval_flag(bsdf);
 }
@@ -1265,8 +1275,8 @@ ccl_device void bsdf_dielectric_tint_setup(KernelGlobals kg,
   const bool has_transmission = !is_zero(fresnel->tint.transmittance);
 
   if (has_reflection && has_transmission) {
-    sd->runtime_flag |= is_beckmann ? bsdf_microfacet_beckmann_glass_setup(bsdf) :
-                                      bsdf_microfacet_ggx_glass_setup(bsdf);
+    sd->runtime_flag |= is_beckmann ? bsdf_microfacet_beckmann_glass_setup(bsdf, sd) :
+                                      bsdf_microfacet_ggx_glass_setup(bsdf, sd);
   }
   else if (has_transmission) {
     sd->runtime_flag |= is_beckmann ? bsdf_microfacet_beckmann_refraction_setup(bsdf) :

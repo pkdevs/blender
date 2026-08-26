@@ -9,6 +9,7 @@
 void node_bsdf_glass(float4 color,
                      float roughness,
                      float ior,
+                     float retroreflectivity,
                      float3 N,
                      float weight,
                      float thin_film_thickness,
@@ -20,6 +21,7 @@ void node_bsdf_glass(float4 color,
   roughness = saturate(roughness);
   ior = max(ior, 1e-5f);
   N = safe_normalize(N);
+  /* retroreflectivity = saturate(retroreflectivity); */
 
   float3 V = coordinate_incoming(g_data.P);
   float NV = dot(N, V);

@@ -439,7 +439,7 @@ ccl_device void osl_closure_generalized_schlick_bsdf_setup(
   /* Beckmann */
   if (closure->distribution == make_string("beckmann", 14712237670914973463ull)) {
     if (has_reflection && has_transmission) {
-      sd->runtime_flag |= bsdf_microfacet_beckmann_glass_setup(bsdf);
+      sd->runtime_flag |= bsdf_microfacet_beckmann_glass_setup(bsdf, sd);
     }
     else if (has_transmission) {
       sd->runtime_flag |= bsdf_microfacet_beckmann_refraction_setup(bsdf);
@@ -451,7 +451,7 @@ ccl_device void osl_closure_generalized_schlick_bsdf_setup(
   /* GGX (either single- or multi-scattering) */
   else {
     if (has_reflection && has_transmission) {
-      sd->runtime_flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
+      sd->runtime_flag |= bsdf_microfacet_ggx_glass_setup(bsdf, sd);
     }
     else if (has_transmission) {
       sd->runtime_flag |= bsdf_microfacet_ggx_refraction_setup(bsdf);
@@ -601,7 +601,7 @@ ccl_device void osl_closure_microfacet_setup(KernelGlobals kg,
       sd->runtime_flag |= bsdf_microfacet_beckmann_refraction_setup(bsdf);
     }
     else if (closure->refract == 2) {
-      sd->runtime_flag |= bsdf_microfacet_beckmann_glass_setup(bsdf);
+      sd->runtime_flag |= bsdf_microfacet_beckmann_glass_setup(bsdf, sd);
     }
     else {
       sd->runtime_flag |= bsdf_microfacet_beckmann_setup(bsdf, sd);
@@ -617,7 +617,7 @@ ccl_device void osl_closure_microfacet_setup(KernelGlobals kg,
       sd->runtime_flag |= bsdf_microfacet_ggx_refraction_setup(bsdf);
     }
     else if (closure->refract == 2) {
-      sd->runtime_flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
+      sd->runtime_flag |= bsdf_microfacet_ggx_glass_setup(bsdf, sd);
     }
     else {
       sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf, sd);
@@ -721,9 +721,9 @@ ccl_device void osl_closure_microfacet_multi_ggx_glass_setup(
   bsdf->ior = closure->ior;
 
   bsdf->T = zero_float3();
-  bsdf->retroreflectivity = 0.0f;
+  bsdf->retroreflectivity = closure->retroreflectivity;
 
-  sd->runtime_flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
+  sd->runtime_flag |= bsdf_microfacet_ggx_glass_setup(bsdf, sd);
   bsdf_microfacet_setup_fresnel_constant(kg, bsdf, sd->wi, rgb_to_spectrum(closure->color));
 }
 

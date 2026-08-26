@@ -29,6 +29,11 @@ static void node_declare(NodeDeclarationBuilder &b)
       .max(1.0f)
       .subtype(PROP_FACTOR);
   b.add_input<decl::Float>("IOR"_ustr).default_value(1.5f).min(0.0f).max(1000.0f);
+  b.add_input<decl::Float>("Retroreflectivity"_ustr)
+      .default_value(0.0f)
+      .min(0.0f)
+      .max(1.0f)
+      .subtype(PROP_FACTOR);
   b.add_input<decl::Vector>("Normal"_ustr).hide_value();
   b.add_input<decl::Float>("Weight"_ustr).available(is_gpu_internal);
 

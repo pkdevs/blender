@@ -1089,6 +1089,7 @@ struct SVMNodeGlassBsdfData {
   SVMInputFloat3 color;
   SVMInputFloat roughness;
   SVMInputFloat ior;
+  SVMInputFloat retroreflectivity;
   SVMInputFloat thin_film_thickness;
   SVMInputFloat thin_film_ior;
   SVMStackOffset normal_offset;
@@ -1105,9 +1106,9 @@ struct SVMNodeMetallicBsdfData {
   SVMInputFloat roughness;
   SVMInputFloat anisotropy;
   SVMInputFloat rotation;
+  SVMInputFloat retroreflectivity;
   SVMInputFloat thin_film_thickness;
   SVMInputFloat thin_film_ior;
-  SVMInputFloat retroreflectivity;
   SVMStackOffset normal_offset;
   SVMStackOffset tangent_offset;
   uint8_t _pad[2];

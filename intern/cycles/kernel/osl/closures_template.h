@@ -166,6 +166,8 @@ OSL_CLOSURE_STRUCT_BEGIN(MicrofacetMultiGGXGlass, microfacet_multi_ggx_glass)
   OSL_CLOSURE_STRUCT_MEMBER(MicrofacetMultiGGXGlass, FLOAT, float, alpha_x, nullptr)
   OSL_CLOSURE_STRUCT_MEMBER(MicrofacetMultiGGXGlass, FLOAT, float, ior, nullptr)
   OSL_CLOSURE_STRUCT_MEMBER(MicrofacetMultiGGXGlass, VECTOR, packed_float3, color, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(
+      MicrofacetMultiGGXGlass, FLOAT, float, retroreflectivity, "retroreflectivity")
 OSL_CLOSURE_STRUCT_END(MicrofacetMultiGGXGlass, microfacet_multi_ggx_glass)
 
 OSL_CLOSURE_STRUCT_BEGIN(MicrofacetMultiGGX, microfacet_multi_ggx_aniso)

@@ -399,7 +399,7 @@ ccl_device
               bsdf->N = valid_reflection_N;
               bsdf->T = zero_float3();
               bsdf->alpha_x = bsdf->alpha_y = sqr(roughness);
-              bsdf->retroreflectivity = 0.0f;
+              bsdf->retroreflectivity = retroreflectivity;
 
               const float dispersion_scale = saturatef(
                   stack_load(stack, data.transmission_dispersion_scale));
@@ -421,7 +421,7 @@ ccl_device
                                                    thinfilm);
 
               /* setup bsdf */
-              sd->runtime_flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
+              sd->runtime_flag |= bsdf_microfacet_ggx_glass_setup(bsdf, sd);
               const bool is_multiggx = (distribution ==
                                         CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
               bsdf_microfacet_setup_fresnel_generalized_schlick(
@@ -814,6 +814,7 @@ ccl_device
 
       const float thinfilm_thickness = stack_load(stack, bsdf_data.thin_film_thickness);
       const float thinfilm_ior = fmaxf(stack_load(stack, bsdf_data.thin_film_ior), 1e-5f);
+      const float retroreflectivity = saturatef(stack_load(stack, bsdf_data.retroreflectivity));
 
       ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
           sd, sizeof(MicrofacetBsdf), make_spectrum(mix_weight));
@@ -825,7 +826,7 @@ ccl_device
       if (bsdf && fresnel) {
         bsdf->N = maybe_ensure_valid_specular_reflection(sd, N);
         bsdf->T = zero_float3();
-        bsdf->retroreflectivity = 0.0f;
+        bsdf->retroreflectivity = retroreflectivity;
 
         const float ior = fmaxf(stack_load(stack, bsdf_data.ior), 1e-5f);
         bsdf->ior = (sd->runtime_flag & SR_BACKFACING) ? 1.0f / ior : ior;
@@ -841,10 +842,10 @@ ccl_device
                                                                       thinfilm_ior;
         /* setup bsdf */
         if (type == CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID) {
-          sd->runtime_flag |= bsdf_microfacet_beckmann_glass_setup(bsdf);
+          sd->runtime_flag |= bsdf_microfacet_beckmann_glass_setup(bsdf, sd);
         }
         else {
-          sd->runtime_flag |= bsdf_microfacet_ggx_glass_setup(bsdf);
+          sd->runtime_flag |= bsdf_microfacet_ggx_glass_setup(bsdf, sd);
         }
         const bool is_multiggx = (type == CLOSURE_BSDF_MICROFACET_MULTI_GGX_GLASS_ID);
         bsdf_microfacet_setup_fresnel_generalized_schlick(kg, bsdf, sd->wi, fresnel, is_multiggx);
