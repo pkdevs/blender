@@ -4239,6 +4239,31 @@ class MarkdownDrawer {
           remaining_text = remaining_text.drop_prefix(char_i);
           BLF_position(main_fontid_, x_, y_, 0.0f);
           BLF_draw(main_fontid_, fitting_text.data(), fitting_text.size());
+
+          if (href_) {
+            const float aspect = snode_.runtime->aspect;
+            const float ascender = BLF_ascender(fontid) * aspect;
+            const float descender = BLF_descender(fontid) * aspect;
+            const ui::EmbossType previous_emboss = ui::block_emboss_get(&ui_block_);
+            ui::block_emboss_set(&ui_block_, ui::EmbossType::None);
+            ui::Button *but = uiDefIconBut(&ui_block_,
+                                           ui::ButtonType::But,
+                                           ICON_NONE,
+                                           x_,
+                                           y_ + descender,
+                                           needed_width,
+                                           ascender - descender,
+                                           nullptr,
+                                           0.0,
+                                           0.0,
+                                           std::nullopt);
+            ui::block_emboss_set(&ui_block_, previous_emboss);
+            wmOperatorType *ot = WM_operatortype_find("WM_OT_url_open", false);
+            PointerRNA props = WM_operator_properties_create_ptr(ot);
+            RNA_string_set(&props, "url", std::string(*href_).c_str());
+            ui::button_operator_set(but, ot, wm::OpCallContext::InvokeDefault, &props);
+          }
+
           x_ += needed_width;
           if (char_i + 1 < text.size()) {
             x_ = bounds_.xmin;
