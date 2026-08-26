@@ -222,9 +222,9 @@ static bool cycles_precompute(std::string name)
    * depending on cosI and roughness, for IOR>1, using dielectric Fresnel mode. */
   precompute_terms["ggx_gen_schlick_ior_s"] = {
       1 << 20,
-      GGX_GEN_SCHLICK_S_IOR_RES_ROUGH,
-      GGX_GEN_SCHLICK_S_IOR_RES_MU,
-      GGX_GEN_SCHLICK_S_IOR_RES_IOR,
+      GGX_GEN_SCHLICK_IOR_S_RES_ROUGH,
+      GGX_GEN_SCHLICK_IOR_S_RES_MU,
+      GGX_GEN_SCHLICK_IOR_S_RES_IOR,
       [](const float rough, const float y, const float z, const float3 rand) {
         const float ior = ior_parametrization(z);
         const float mu = mu_parametrization(y);

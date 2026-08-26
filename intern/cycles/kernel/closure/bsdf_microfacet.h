@@ -124,7 +124,10 @@ struct MicrofacetBsdf {
 
 static_assert(sizeof(ShaderClosure) >= sizeof(MicrofacetBsdf), "MicrofacetBsdf is too large!");
 
-ccl_device_forceinline float alpha_to_roughness(const float alpha_x, const float alpha_y)
+/* The following function are used to map from GGX alpha, IOR, and mu to the indicies of
+ * 2D and 3D LUTs (e.g., for multis-scatter GGX energy compensation or scattering albedos). */
+
+ccl_device_forceinline float alpha_to_roughness_index(const float alpha_x, const float alpha_y)
 {
   return sqrtf(sqrtf(alpha_x * alpha_y));
 }
@@ -521,7 +524,7 @@ ccl_device_inline void microfacet_ggx_preserve_energy(KernelGlobals kg,
 {
   const float mu = dot(wi, bsdf->N);
   const float y = mu_to_y_index(mu);
-  const float rough = alpha_to_roughness(bsdf->alpha_x, bsdf->alpha_y);
+  const float rough = alpha_to_roughness_index(bsdf->alpha_x, bsdf->alpha_y);
 
   float E;
   float E_avg;
@@ -604,7 +607,7 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
        * reflection approximation from the microfacet_fresnel call above in that case. */
     }
     else {
-      const float rough = alpha_to_roughness(bsdf->alpha_x, bsdf->alpha_y);
+      const float rough = alpha_to_roughness_index(bsdf->alpha_x, bsdf->alpha_y);
       float s;
       if (fresnel->exponent < 0.0f) {
         const float z = ior_to_z_index(bsdf->ior);
@@ -614,9 +617,9 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
                                  y,
                                  z,
                                  kernel_data.tables.ggx_gen_schlick_ior_s,
-                                 GGX_GEN_SCHLICK_S_IOR_RES_ROUGH,
-                                 GGX_GEN_SCHLICK_S_IOR_RES_MU,
-                                 GGX_GEN_SCHLICK_S_IOR_RES_IOR);
+                                 GGX_GEN_SCHLICK_IOR_S_RES_ROUGH,
+                                 GGX_GEN_SCHLICK_IOR_S_RES_MU,
+                                 GGX_GEN_SCHLICK_IOR_S_RES_IOR);
       }
       else {
         const float z = 1.0f / (0.2f * fresnel->exponent + 1.0f);
@@ -642,7 +645,7 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
        * reflection approximation from the microfacet_fresnel call above in that case. */
     }
     else {
-      const float rough = alpha_to_roughness(bsdf->alpha_x, bsdf->alpha_y);
+      const float rough = alpha_to_roughness_index(bsdf->alpha_x, bsdf->alpha_y);
       const float y = mu_to_y_index(cos_NI);
       const float s = lookup_table_read_3D(kg,
                                            rough,
@@ -663,7 +666,7 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
   {
     /* We can re-use the ggx_gen_schlick_ior_s table here, since it's already precomputed for our
      * exponent<0 corner case where we use the real dielectric Fresnel. */
-    const float rough = alpha_to_roughness(bsdf->alpha_x, bsdf->alpha_y);
+    const float rough = alpha_to_roughness_index(bsdf->alpha_x, bsdf->alpha_y);
     const float z = ior_to_z_index(bsdf->ior);
     const float y = mu_to_y_index(cos_NI);
     const float s = lookup_table_read_3D(kg,
@@ -671,9 +674,9 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
                                          y,
                                          z,
                                          kernel_data.tables.ggx_gen_schlick_ior_s,
-                                         GGX_GEN_SCHLICK_S_IOR_RES_ROUGH,
-                                         GGX_GEN_SCHLICK_S_IOR_RES_MU,
-                                         GGX_GEN_SCHLICK_S_IOR_RES_IOR);
+                                         GGX_GEN_SCHLICK_IOR_S_RES_ROUGH,
+                                         GGX_GEN_SCHLICK_IOR_S_RES_MU,
+                                         GGX_GEN_SCHLICK_IOR_S_RES_IOR);
 
 #if defined(__KERNEL_HIP__)
     /* Temporary workaround for a HIP compiler bug under Windows in combination with AMD 6800 XT
