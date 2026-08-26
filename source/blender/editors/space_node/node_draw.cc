@@ -105,6 +105,7 @@
 #include "node_intern.hh" /* own include */
 
 #include <fmt/format.h>
+#include <md4c.h>
 #include <sstream>
 
 namespace blender {
