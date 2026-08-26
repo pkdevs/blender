@@ -23,6 +23,7 @@
 #include "render_types.h"
 
 #include "IMB_imbuf_types.hh"
+#include "IMB_partial_update.hh"
 
 #include "gpencil_engine_private.hh"
 
@@ -209,6 +210,8 @@ static void render_result_z(const DRWContext *draw_ctx,
       }
     }
   }
+
+  IMB_partial_update_mark_full(rp->ibuf);
 }
 
 static void render_result_combined(RenderLayer *rl,
@@ -230,9 +233,11 @@ static void render_result_combined(RenderLayer *rl,
                              0,
                              GPU_DATA_FLOAT,
                              rp->ibuf->float_data_for_write());
+
+  IMB_partial_update_mark_full(rp->ibuf);
 }
 
-static void render_result_separated_pass(float *data, Instance &instance, const rcti *rect)
+static void render_result_separated_pass(ImBuf *ibuf, Instance &instance, const rcti *rect)
 {
   Framebuffer read_fb;
   read_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(instance.accumulation_tx));
@@ -245,7 +250,9 @@ static void render_result_separated_pass(float *data, Instance &instance, const 
                              4,
                              0,
                              GPU_DATA_FLOAT,
-                             data);
+                             ibuf->float_data_for_write());
+
+  IMB_partial_update_mark_full(ibuf);
 }
 
 /* This is taken from eevee::Sampling::cdf_from_curvemapping. */
@@ -433,10 +440,11 @@ void Engine::render_to_image(RenderEngine *engine, RenderLayer *render_layer, co
   render_frame(engine, depsgraph, draw_ctx, render_layer, rect, inst, manager, false);
   render_result_combined(render_layer, viewname, inst, &rect);
 
-  float *pass_data = RE_RenderLayerGetPass(render_layer, RE_PASSNAME_GREASE_PENCIL, viewname);
-  if (pass_data) {
+  ImBuf *gpencil_ibuf = RE_RenderLayerGetPassImBuf(
+      render_layer, RE_PASSNAME_GREASE_PENCIL, viewname);
+  if (gpencil_ibuf) {
     render_frame(engine, depsgraph, draw_ctx, render_layer, rect, inst, manager, true);
-    render_result_separated_pass(pass_data, inst, &rect);
+    render_result_separated_pass(gpencil_ibuf, inst, &rect);
   }
 
   /* Transfer depth in the last step, because if we need to render separate pass, we need original
