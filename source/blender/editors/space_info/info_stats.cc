@@ -639,6 +639,10 @@ static void get_stats_string(char *info,
   }
 
   if ((ob) && (ob->type == OB_GREASE_PENCIL)) {
+    if (BKE_keyblock_from_object(ob)) {
+      *ofs += BLI_strncpy_utf8_rlen(info + *ofs, IFACE_("(Key) "), len - *ofs);
+    }
+
     *ofs += BLI_snprintf_utf8_rlen(info + *ofs,
                                    len - *ofs,
 

@@ -1283,7 +1283,7 @@ static void draw_selected_name(const Main &bmain,
         }
       }
     }
-    else if (ELEM(ob->type, OB_MESH, OB_LATTICE, OB_CURVES_LEGACY)) {
+    else if (ELEM(ob->type, OB_MESH, OB_LATTICE, OB_CURVES_LEGACY, OB_GREASE_PENCIL)) {
       /* Try to display active bone and active shape-key too (if they exist). */
 
       if (ob->type == OB_MESH && ob->mode & OB_MODE_WEIGHT_PAINT) {
