@@ -26,7 +26,6 @@ CCL_NAMESPACE_BEGIN
 
 #if defined(__GSPLATS__)
 
-/* Gaussian splat normal in object space. */
 ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private ShaderData &sd)
 {
   const int radiance_base_offset =
