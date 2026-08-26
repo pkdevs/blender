@@ -179,7 +179,9 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
                                                                 "thinfilm_ior",
                                                                 thinfilm_ior,
                                                                 "inv_abbe",
-                                                                inv_abbe);
+                                                                inv_abbe,
+                                                                "retroreflectivity",
+                                                                Retroreflectivity);
       BSDF = mix(TransmissionBSDF, BSDF, 1.0 - transmission);
     }
   }
