@@ -409,6 +409,7 @@ enum class ShaderNodeAncestorFlags {
   ShaderMaterialOutput = 1u << 0,
   ShaderToRGB = 1u << 1,
   LightAccumulation = 1u << 2,
+  LightAccumulationColor = 1u << 3,
 };
 ENUM_OPERATORS(ShaderNodeAncestorFlags);
 
@@ -1549,10 +1550,15 @@ class NodeTreeMainUpdater {
           ShaderNodeAncestorFlags::ShaderMaterialOutput);
     }
 
-    auto tag_by_ancestor = [](bNode *node, bNode * /*to_node*/, void *userdata) -> bool {
+    auto tag_by_ancestor = [](bNode *node, bNode * /*to_node*/, void * /*userdata*/) -> bool {
       for (const bNodeSocket *socket : node->output_sockets()) {
         for (const bNodeSocket *linked_socket : socket->logically_linked_sockets()) {
           node->runtime->tmp_flag |= linked_socket->owner_node().runtime->tmp_flag;
+          if (linked_socket->owner_node().type_legacy == SH_NODE_LIGHT_ACCUMULATION &&
+              ELEM(StringRefNull(linked_socket->name), "Diffuse Color", "Glossy Color"))
+          {
+            node->runtime->tmp_flag |= short(ShaderNodeAncestorFlags::LightAccumulationColor);
+          }
         }
       }
 
@@ -1587,12 +1593,20 @@ class NodeTreeMainUpdater {
       case SH_NODE_LIGHT_INFO:
       case SH_NODE_LIGHT_EVALUATION:
       case SH_NODE_SHADOW_RAYCAST:
-        if (bool(flags & ShaderNodeAncestorFlags::ShaderMaterialOutput) &&
-            !bool(flags & ShaderNodeAncestorFlags::LightAccumulation))
-        {
-          return TIP_(
-              "Lighting nodes must be connected to a Light Accumulation node before reaching the "
-              "Material Output");
+        if (bool(flags & ShaderNodeAncestorFlags::ShaderMaterialOutput)) {
+          if (!bool(flags & ShaderNodeAncestorFlags::LightAccumulation)) {
+            return TIP_(
+                "Lighting nodes must be connected to the Light sockets of a Light Accumulation "
+                "node before reaching the Material Output");
+          }
+          if (bool(flags & ShaderNodeAncestorFlags::LightAccumulationColor) &&
+              (link.tonode->type_legacy != SH_NODE_LIGHT_ACCUMULATION ||
+               ELEM(StringRefNull(link.tosock->name), "Diffuse Color", "Glossy Color")))
+          {
+            return TIP_(
+                "Lighting nodes can't be connected to the Color sockets of a Light Accumulation "
+                "node");
+          }
         }
         break;
       default:
