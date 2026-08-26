@@ -1769,6 +1769,7 @@ static bool bake(const BakeAPIRender *bkr,
                           "No UV map found in the evaluated object \"%s\"",
                           ob_low->id.name + 2);
               BKE_id_free(nullptr, &me_nores->id);
+              ok = false;
               goto cleanup;
             }
             bake_targets_populate_pixels(bkr, &targets, ob_low, me_nores, pixel_array_low);
@@ -1796,6 +1797,9 @@ static bool bake(const BakeAPIRender *bkr,
 
   if (!ok) {
     BKE_reportf(reports, RPT_ERROR, "Problem baking object \"%s\"", ob_low->id.name + 2);
+  }
+  else if (bake_has_been_canceled(bkr)) {
+    ok = false;
   }
   else {
     /* save the results */
@@ -2023,6 +2027,7 @@ static void bake_startjob(void *bkv, wmJobWorkerStatus *worker_status)
     for (const PointerRNA &ptr : bkr->selected_objects) {
       Object *ob_iter = static_cast<Object *>(ptr.data);
       bake(bkr, ob_iter, {}, bkr->reports);
+
       if (bake_has_been_canceled(bkr)) {
         break;
       }
