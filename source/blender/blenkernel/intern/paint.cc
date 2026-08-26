@@ -9,6 +9,7 @@
 /* ALlow using deprecated color for sync legacy. */
 #define DNA_DEPRECATED_ALLOW
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <optional>
@@ -604,36 +605,6 @@ PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref)
   }
 
   return PaintMode::Invalid;
-}
-
-bool BKE_paint_use_unified_size(const Paint *paint)
-{
-  /* For now, Grease Pencil Draw mode doesn't use the unified paint settings. */
-  if (paint->runtime->ob_mode == OB_MODE_PAINT_GREASE_PENCIL) {
-    return false;
-  }
-
-  return paint->unified_paint_settings.flag & UNIFIED_PAINT_SIZE;
-}
-
-bool BKE_paint_use_unified_strength(const Paint *paint)
-{
-  /* For now, Grease Pencil Draw mode doesn't use the unified paint settings. */
-  if (paint->runtime->ob_mode == OB_MODE_PAINT_GREASE_PENCIL) {
-    return false;
-  }
-
-  return paint->unified_paint_settings.flag & UNIFIED_PAINT_ALPHA;
-}
-
-bool BKE_paint_use_unified_color(const Paint *paint)
-{
-  /* For now, Grease Pencil Draw mode doesn't use the unified paint settings. */
-  if (paint->runtime->ob_mode == OB_MODE_PAINT_GREASE_PENCIL) {
-    return false;
-  }
-
-  return paint->unified_paint_settings.flag & UNIFIED_PAINT_COLOR;
 }
 
 /**
@@ -1677,17 +1648,32 @@ void BKE_paint_settings_foreach_mode(ToolSettings *ts, FunctionRef<void(Paint *p
   fn(reinterpret_cast<Paint *>(&ts->imapaint));
 }
 
-void BKE_paint_stroke_get_average(const Paint *paint, const Object *ob, float stroke[3])
+namespace bke::paint {
+float3 stroke_get_average(const Paint *paint, const Object *ob)
 {
-  const bke::PaintRuntime &paint_runtime = *paint->runtime;
+  const PaintRuntime &paint_runtime = *paint->runtime;
   if (paint_runtime.last_stroke_valid && paint_runtime.average_stroke_counter > 0) {
     float fac = 1.0f / paint_runtime.average_stroke_counter;
-    mul_v3_v3fl(stroke, paint_runtime.average_stroke_accum, fac);
+    return paint_runtime.average_stroke_accum * fac;
   }
-  else {
-    copy_v3_v3(stroke, ob->object_to_world().location());
-  }
+
+  return ob->object_to_world().location();
 }
+void stroke_track_location(Paint &paint, float3 location)
+{
+  PaintRuntime &paint_runtime = *paint.runtime;
+  paint_runtime.average_stroke_accum += location;
+  paint_runtime.average_stroke_counter++;
+  paint_runtime.last_stroke_valid = true;
+}
+void stroke_set_location(Paint &paint, float3 location)
+{
+  PaintRuntime &paint_runtime = *paint.runtime;
+  paint_runtime.average_stroke_accum = location;
+  paint_runtime.average_stroke_counter = 1;
+  paint_runtime.last_stroke_valid = true;
+}
+}  // namespace bke::paint
 
 float3 BKE_paint_randomize_color(const BrushColorJitterSettings &color_jitter,
                                  const float3 &initial_hsv_jitter,
@@ -1959,9 +1945,24 @@ float paint_grid_paint_mask(const GridPaintMask *gpm, uint level, uint x, uint y
 }
 
 /* Threshold to move before updating the brush rotation, reduces jitter. */
-static float paint_rake_rotation_spacing(const Paint & /*ups*/, const Brush &brush)
+static float paint_rake_rotation_spacing(const Paint & /*paint*/,
+                                         const Brush &brush,
+                                         bool in_stroke,
+                                         bool is_first_dab)
 {
-  return brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_CLAY_STRIPS ? 1.0f : 20.0f;
+  const float rotation_spacing = brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_CLAY_STRIPS ? 1.0f :
+                                                                                            20.0f;
+  if (!in_stroke) {
+    /* Increase spacing when not in stroke to avoid cursor jitter. */
+    return std::max(rotation_spacing, 20.0f);
+  }
+  else if (is_first_dab) {
+    /* Use a smaller limit if the stroke hasn't started to prevent excessive pre-roll. */
+    return std::min(rotation_spacing, 4.0f);
+  }
+  else {
+    return rotation_spacing;
+  }
 }
 
 void paint_update_brush_rake_rotation(Paint &paint, const Brush &brush, float rotation)
@@ -1992,19 +1993,15 @@ bool paint_calculate_rake_rotation(Paint &paint,
                                    const Brush &brush,
                                    const float mouse_pos[2],
                                    const PaintMode paint_mode,
-                                   bool stroke_has_started)
+                                   bool in_stroke,
+                                   bool is_first_dab)
 {
   bke::PaintRuntime &paint_runtime = *paint.runtime;
 
   bool ok = false;
   if (paint_rake_rotation_active(brush, paint_mode)) {
-    float r = paint_rake_rotation_spacing(paint, brush);
+    const float r = paint_rake_rotation_spacing(paint, brush, in_stroke, is_first_dab);
     float rotation;
-
-    /* Use a smaller limit if the stroke hasn't started to prevent excessive pre-roll. */
-    if (!stroke_has_started) {
-      r = min_ff(r, 4.0f);
-    }
 
     float dpos[2];
     sub_v2_v2v2(dpos, mouse_pos, paint_runtime.last_rake);
@@ -2331,7 +2328,7 @@ static bool sculpt_modifiers_active(const Scene *scene, const Sculpt *sd, Object
   return false;
 }
 
-static void sculpt_update_object(Depsgraph *depsgraph,
+static void sculptsession_update(Depsgraph *depsgraph,
                                  Object *ob,
                                  Object *ob_eval,
                                  bool is_paint_tool)
@@ -2444,7 +2441,7 @@ static void sculpt_update_object(Depsgraph *depsgraph,
   bke::pbvh::update_normals(*depsgraph, *ob, pbvh);
 }
 
-void BKE_sculpt_update_object_before_eval(Object *ob_eval)
+void BKE_sculptsession_update_before_eval(Object *ob_eval)
 {
   /* Update before mesh evaluation in the dependency graph. */
   Object *ob_orig = DEG_get_original(ob_eval);
@@ -2480,13 +2477,13 @@ void BKE_sculpt_update_object_before_eval(Object *ob_eval)
   }
 }
 
-void BKE_sculpt_update_object_after_eval(Depsgraph *depsgraph, Object *ob_eval)
+void BKE_sculptsession_update_after_eval(Depsgraph *depsgraph, Object *ob_eval)
 {
   /* Update after mesh evaluation in the dependency graph, to rebuild pbvh::Tree or
    * other data when modifiers change the mesh. */
   Object *ob_orig = DEG_get_original(ob_eval);
 
-  sculpt_update_object(depsgraph, ob_orig, ob_eval, false);
+  sculptsession_update(depsgraph, ob_orig, ob_eval, false);
 }
 
 void BKE_sculpt_color_layer_create_if_needed(Object *object)
@@ -2512,14 +2509,14 @@ void BKE_sculpt_color_layer_create_if_needed(Object *object)
   BKE_mesh_tessface_clear(orig_me);
 }
 
-void BKE_sculpt_update_object_for_edit(Depsgraph *depsgraph, Object *ob_orig, bool is_paint_tool)
+void BKE_sculptsession_update_for_edit(Depsgraph *depsgraph, Object *ob_orig, bool is_paint_tool)
 {
   PRF_scope(ProfileCategory::Editor);
   BLI_assert(ob_orig == DEG_get_original(ob_orig));
 
   Object *ob_eval = DEG_get_evaluated(depsgraph, ob_orig);
 
-  sculpt_update_object(depsgraph, ob_orig, ob_eval, is_paint_tool);
+  sculptsession_update(depsgraph, ob_orig, ob_eval, is_paint_tool);
 }
 
 void BKE_sculpt_mask_layers_ensure(Depsgraph *depsgraph,
@@ -2585,41 +2582,6 @@ void BKE_sculpt_mask_layers_ensure(Depsgraph *depsgraph,
   }
   else {
     attributes.add<float>(".sculpt_mask", AttrDomain::Point, AttributeInitDefaultValue());
-  }
-}
-
-void BKE_sculpt_toolsettings_data_ensure(Main *bmain, Scene *scene)
-{
-  BKE_paint_init(bmain, scene, PaintMode::Sculpt, true);
-
-  Sculpt *sd = scene->toolsettings->sculpt;
-
-  const Sculpt defaults = {};
-
-  /* We have file versioning code here for historical
-   * reasons.  Don't add more checks here, do it properly
-   * in blenloader.
-   */
-
-  if (sd->detail_percent == 0.0f) {
-    sd->detail_percent = defaults.detail_percent;
-  }
-  if (sd->constant_detail == 0.0f) {
-    sd->constant_detail = defaults.constant_detail;
-  }
-  if (sd->detail_size == 0.0f) {
-    sd->detail_size = defaults.detail_size;
-  }
-
-  /* Set sane default tiling offsets. */
-  if (!sd->paint.tile_offset[0]) {
-    sd->paint.tile_offset[0] = 1.0f;
-  }
-  if (!sd->paint.tile_offset[1]) {
-    sd->paint.tile_offset[1] = 1.0f;
-  }
-  if (!sd->paint.tile_offset[2]) {
-    sd->paint.tile_offset[2] = 1.0f;
   }
 }
 

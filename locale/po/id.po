@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 LTS Release Candidate (b'3d8c46ac31f4')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'09417042a1fa')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-13 07:34+0000\n"
+"POT-Creation-Date: 2026-08-24 07:38+0000\n"
 "PO-Revision-Date: 2026-06-02 05:12+0000\n"
 "Last-Translator: Fadli Birdie Zeinda <justbirdie00@gmail.com>\n"
 "Language-Team: Indonesian <https://translate.blender.org/projects/blender-ui/ui/id/>\n"
@@ -2463,56 +2463,28 @@ msgid "Point"
 msgstr "Titik"
 
 
-msgid "Attribute on point"
-msgstr "Atribut di titik"
-
-
 msgid "Edge"
 msgstr "Tepi"
-
-
-msgid "Attribute on mesh edge"
-msgstr "Atribut di ujung jaring 3D"
 
 
 msgid "Face"
 msgstr "Bidang"
 
 
-msgid "Attribute on mesh faces"
-msgstr "Atribut di bidang-bidang jaring 3D"
-
-
 msgid "Face Corner"
 msgstr "Ujung Wajah"
-
-
-msgid "Attribute on mesh face corner"
-msgstr "Atribut di pojok bidang jaring 3D"
 
 
 msgid "Spline"
 msgstr "Spline"
 
 
-msgid "Attribute on spline"
-msgstr "Atribut di spline"
-
-
 msgid "Instance"
 msgstr "Contoh"
 
 
-msgid "Attribute on instance"
-msgstr "Atribut di contoh"
-
-
 msgid "Layer"
 msgstr "Lapis"
-
-
-msgid "Attribute on Grease Pencil layer"
-msgstr "Atribut di lapisan Pensil Grease"
 
 
 msgid "Is Internal"
@@ -3687,10 +3659,6 @@ msgid "Collection of worlds"
 msgstr "Koleksi dunia"
 
 
-msgid "ACEScg"
-msgstr "ACEScg"
-
-
 msgid "Blendfile Import Context"
 msgstr "Konteks Impor Berkasblend"
 
@@ -3762,6 +3730,10 @@ msgstr "Sumber Pustaka"
 
 msgid "Source Library"
 msgstr "Sumber Pustaka"
+
+
+msgid "Dirty"
+msgstr "Kotor"
 
 
 msgid "Blender RNA"
@@ -4780,18 +4752,6 @@ msgstr "Tambah Set Seleksi"
 
 msgid "Add Selection Set for this collection"
 msgstr "Tambah Set Seleksi untuk koleksi ini"
-
-
-msgid "UI Row"
-msgstr "Barisan UI"
-
-
-msgid "If not zero, row of the UI panel where the button for this collection is shown"
-msgstr "Jika bukan nol, barisan panel UI dimana tombol untuk koleksi ini ditampilkan"
-
-
-msgid "UI Title"
-msgstr "Judul UI"
 
 
 msgid "Text to use on the UI panel button instead of the collection name"
@@ -6689,10 +6649,6 @@ msgid "Color management specific to display device"
 msgstr "Manajemen warna spesifik ke perangkat tampilan"
 
 
-msgid "Display"
-msgstr "Tampilkan"
-
-
 msgid "Input color space settings"
 msgstr "Pengaturan spasi warna masukan"
 
@@ -6705,28 +6661,8 @@ msgid "Treat image as non-color data without color management, like normal or di
 msgstr "Perlakukan gabar sebagai data non-warna tanpa manajemen warna, seperti normal atau peta perpindahan"
 
 
-msgid "Input Color Space"
-msgstr "Memasukkan Ruang Warna"
-
-
 msgid "Color space in the image file, to convert to and from when saving and loading the image"
 msgstr "Ruang warna dalam dokumen gambar, untuk mengubahnya ke dan dari saat menyimpan atau memuat gambar"
-
-
-msgid "ACES2065-1"
-msgstr "ACES2065-1"
-
-
-msgid "Non-Color"
-msgstr "Non-Warna"
-
-
-msgid "Rec.1886"
-msgstr "Rec.1886"
-
-
-msgid "Rec.2020"
-msgstr "Rec.2020"
 
 
 msgid "Do not perform any color transform on load, treat colors as in scene linear space already"
@@ -6757,10 +6693,6 @@ msgid "Gamma"
 msgstr "Gamma"
 
 
-msgid "Look"
-msgstr "Lihat"
-
-
 msgid "Additional transform applied before view transform for artistic needs"
 msgstr "Transfromasi tambahan diterapkan sebelum tampilan transformasi untuk kebutuhan artistik"
 
@@ -6771,10 +6703,6 @@ msgstr "Gunakan Kurva"
 
 msgid "Use RGB curved for pre-display transformation"
 msgstr "Gunakan RGB kurva untuk pra-tampilkan transformasi"
-
-
-msgid "View"
-msgstr "Pandangan"
 
 
 msgid "View used when converting image to a display space"
@@ -8609,6 +8537,10 @@ msgstr "Normal ke Permukaan"
 
 msgid "Tangent to Surface"
 msgstr "Tangen ke Permukaan"
+
+
+msgid "View"
+msgstr "Pandangan"
 
 
 msgid "Project the strokes only onto selected objects"
@@ -12379,6 +12311,10 @@ msgid "Show texture in viewport"
 msgstr "Tampilkan tekstur di jendela tampilan"
 
 
+msgid "Use Unified Weight"
+msgstr "Partikel"
+
+
 msgid "Use this brush in Grease Pencil vertex color mode"
 msgstr "Gunakan kuas ini di mode warna titik sudut Pensil Grease"
 
@@ -12884,10 +12820,6 @@ msgstr "Kosong"
 
 msgid "UV Grid"
 msgstr "Grid UV"
-
-
-msgid "Dirty"
-msgstr "Kotor"
 
 
 msgid "True if this image is stored in floating-point buffer"
@@ -13500,6 +13432,10 @@ msgstr "Jumlah damping"
 
 msgid "Display Color"
 msgstr "Tampilkan Warna"
+
+
+msgid "Display"
+msgstr "Tampilkan"
 
 
 msgid "Steps"
@@ -15740,32 +15676,12 @@ msgid "Use Material Mask"
 msgstr "Gunakan Masker Bahan"
 
 
-msgid "Merge"
-msgstr "Menggabungkan"
-
-
-msgid "Metaball"
-msgstr "Metabola"
-
-
-msgid "Math"
-msgstr "Matematika"
-
-
-msgid "Names"
-msgstr "Nama"
-
-
-msgid "Utilities"
-msgstr "Utilitas"
+msgid "Snap"
+msgstr "Jepret"
 
 
 msgid "Sample"
 msgstr "Sampel"
-
-
-msgid "Snap"
-msgstr "Jepret"
 
 
 msgid "Gizmo"
@@ -15784,8 +15700,16 @@ msgid "Mirror"
 msgstr "Cermin"
 
 
+msgid "Utilities"
+msgstr "Utilitas"
+
+
 msgid "Navigation"
 msgstr "Navigasi"
+
+
+msgid "Math"
+msgstr "Matematika"
 
 
 msgid "UV"
@@ -15798,6 +15722,10 @@ msgstr "Seleksi yang Terhubung"
 
 msgid "Assign Material"
 msgstr "Tugaskan Bahan"
+
+
+msgid "Metaball"
+msgstr "Metabola"
 
 
 msgid "Light"
@@ -15838,6 +15766,14 @@ msgstr "Kait"
 
 msgid "Tracking"
 msgstr "Pelacakan"
+
+
+msgid "Names"
+msgstr "Nama"
+
+
+msgid "Merge"
+msgstr "Menggabungkan"
 
 
 msgid "Animals"
@@ -15923,6 +15859,10 @@ msgid "Particle Specials"
 msgstr "Spesial Partikel"
 
 
+msgid "Save & Load"
+msgstr "Simpan & Buka"
+
+
 msgid "Frame Rate Presets"
 msgstr "Preset Frame Rate"
 
@@ -15953,10 +15893,6 @@ msgstr "Masukan"
 
 msgid "Lock/Mute"
 msgstr "Kunci/Mute"
-
-
-msgid "Movie Strip"
-msgstr "Strip Film"
 
 
 msgid "Texture Specials"
@@ -16025,10 +15961,6 @@ msgstr "Preset"
 
 msgid "KeyPresets"
 msgstr "PresetKunci"
-
-
-msgid "Save & Load"
-msgstr "Simpan & Buka"
 
 
 msgctxt "Operator"
@@ -18064,10 +17996,6 @@ msgid "Color space used for YCbCrA processing"
 msgstr "Ruang warna yang digunakan untuk pemrosesan YCbCrA"
 
 
-msgid "To"
-msgstr "Ke"
-
-
 msgid "Cryptomatte (Legacy)"
 msgstr "Cryptomatte (Warisan)"
 
@@ -18952,6 +18880,10 @@ msgid "Node Output"
 msgstr "Keluaran Node"
 
 
+msgid "Scalar"
+msgstr "Skalar"
+
+
 msgid "Tooltip"
 msgstr "Alat"
 
@@ -19760,10 +19692,6 @@ msgstr "Setelah Ini"
 
 msgid "Change brush size by a scalar"
 msgstr "Ganti ukuran kuas oleh skalar"
-
-
-msgid "Scalar"
-msgstr "Skalar"
 
 
 msgctxt "Operator"
@@ -24020,24 +23948,12 @@ msgid "Select the strips and their handles"
 msgstr "Pilih strip dan pegangan mereka"
 
 
-msgid "Shared strip type"
-msgstr "Tipe strip yang terbagi"
-
-
-msgid "Global Type"
-msgstr "Tipe Global"
+msgid "Movie"
+msgstr "Film"
 
 
 msgid "Effect"
 msgstr "Efek"
-
-
-msgid "Shared effects"
-msgstr "Efek yang terbagi"
-
-
-msgid "Effect/Linked"
-msgstr "Efek/Terhubung"
 
 
 msgid "Same Channel"
@@ -26453,10 +26369,6 @@ msgid "AO Bounces Render"
 msgstr "AO Memantul Render"
 
 
-msgid "Adaptively blur glossy shaders after blurry bounces, to reduce noise at the cost of accuracy"
-msgstr "Secara adaptif blur shader glossy setelah blur memantul, untuk mengurangi noise dengan mengorbankan akurasi"
-
-
 msgid "GPU Compute"
 msgstr "Tipe"
 
@@ -26539,10 +26451,6 @@ msgstr "Miringkan Y"
 
 msgid "Tiny Prim Culling"
 msgstr "Culling Prim Kecil"
-
-
-msgid "object_color"
-msgstr "benda_warna"
 
 
 msgid "Arm"
@@ -26746,6 +26654,10 @@ msgid "SPH Solver"
 msgstr "Kamera"
 
 
+msgid "Use effect during render"
+msgstr "Gunakan efek saat render"
+
+
 msgid "Max Size"
 msgstr "Ukuran Maks"
 
@@ -26876,10 +26788,6 @@ msgstr "Nama efek"
 
 msgid "Set effect expansion in the user interface"
 msgstr "Set ekspansi efek di antarmuka pengguna"
-
-
-msgid "Use effect during render"
-msgstr "Gunakan efek saat render"
 
 
 msgid "Gaussian Blur Effect"
@@ -27587,6 +27495,10 @@ msgid "Clock"
 msgstr "Jam"
 
 
+msgid "Movie Strip"
+msgstr "Strip Film"
+
+
 msgid "Correction for midtones"
 msgstr "Koreksi untuk nada tengah"
 
@@ -27890,10 +27802,6 @@ msgstr "Tata Letak"
 
 msgid "Diameter of the brush"
 msgstr "Diameter kuas"
-
-
-msgid "Use Unified Weight"
-msgstr "Partikel"
 
 
 msgid "The unit system to use for user interface controls"
@@ -28305,16 +28213,6 @@ msgstr "Editor UV"
 
 
 msgctxt "WindowManager"
-msgid "UV Sculpt"
-msgstr "Pahat UV"
-
-
-msgctxt "WindowManager"
-msgid "Image View"
-msgstr "Lihat Gambar"
-
-
-msgctxt "WindowManager"
 msgid "Image Generic"
 msgstr "Gambar Generik"
 
@@ -28655,11 +28553,6 @@ msgid "File:"
 msgstr "Berkas:"
 
 
-msgctxt "Operator"
-msgid "Apply"
-msgstr "Setujui"
-
-
 msgid "Incorrect armature..."
 msgstr "Kerangka salah..."
 
@@ -28919,6 +28812,11 @@ msgstr "Sebelum"
 
 
 msgctxt "Operator"
+msgid "Search..."
+msgstr "Telusuri..."
+
+
+msgctxt "Operator"
 msgid "Animate Path"
 msgstr "Menganimasi Jalur"
 
@@ -29086,11 +28984,6 @@ msgstr "Balik"
 
 msgid "Update on Edit"
 msgstr "Perbarui di Edit"
-
-
-msgctxt "Operator"
-msgid "Search..."
-msgstr "Telusuri..."
 
 
 msgid "Distance Reference"
@@ -31200,6 +31093,11 @@ msgid "Quick Edit"
 msgstr "Sunting Cepat"
 
 
+msgctxt "Operator"
+msgid "Apply"
+msgstr "Setujui"
+
+
 msgid "Editing Type"
 msgstr "Tipe Mengedit"
 
@@ -31609,12 +31507,12 @@ msgid "Value: {}"
 msgstr "Nilai: {}"
 
 
-msgid "Movie"
-msgstr "Film"
-
-
 msgid "File not found"
 msgstr "Berkas tidak ditemukan"
+
+
+msgid "Look"
+msgstr "Lihat"
 
 
 msgid "Zoom in"
@@ -31941,6 +31839,10 @@ msgid "Selected faces required"
 msgstr "Wajah yang terseleksi diperlukan"
 
 
+msgid "No edges selected"
+msgstr "Tidak ada tepi yang terseleksi"
+
+
 msgid "No face selected"
 msgstr "Tidak ada wajah yang terseleksi"
 
@@ -31951,10 +31853,6 @@ msgstr "Tidak ada tepi yang terseleksi"
 
 msgid "No vertex group among the selected vertices"
 msgstr "Tidak ada kelompok simpul di antara simpul yang terpilih"
-
-
-msgid "No edges selected"
-msgstr "Tidak ada tepi yang terseleksi"
 
 
 msgid "Invalid selection order"
@@ -32657,10 +32555,6 @@ msgstr "Buat contoh benda dari benda-data"
 
 msgid "Gizmos hidden in this view"
 msgstr "Gizmo-gizmo tidak terlihat di tampilan ini"
-
-
-msgid "Cannot fly an object with constraints"
-msgstr "Data Objek"
 
 
 msgid "Depth too large"
