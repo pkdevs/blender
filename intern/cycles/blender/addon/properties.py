@@ -282,7 +282,8 @@ def enum_openimagedenoise_denoiser(self, context):
 
 def enum_dlss_denoiser(self, context):
     import _cycles
-    if _cycles.with_dlss and (not context or bool(context.preferences.addons[__package__].preferences.get_devices_for_type('CUDA'))):
+    if _cycles.with_dlss and (not context or bool(
+            context.preferences.addons[__package__].preferences.get_devices_for_type('CUDA'))):
         return [('DLSS', "DLSS",
                  n_("Use NVIDIA DLSS Ray Reconstruction"), 8)]
     return []
