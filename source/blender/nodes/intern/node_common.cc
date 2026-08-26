@@ -28,6 +28,8 @@
 
 #include "BLT_translation.hh"
 
+#include "BLO_read_write.hh"
+
 #include "BKE_context.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
@@ -1228,6 +1230,20 @@ static void node_comment_layout_ex(ui::Layout &layout, bContext *C, PointerRNA *
   layout.textbox(C, ptr, "text");
 }
 
+static void node_comment_blend_write(const bNodeTree & /*ntree*/,
+                                     const bNode &node,
+                                     BlendWriter &writer)
+{
+  const NodeComment &data = *static_cast<NodeComment *>(node.storage);
+  writer.write_string(data.text);
+}
+
+static void node_comment_blend_read(bNodeTree & /*ntree*/, bNode &node, BlendDataReader &reader)
+{
+  NodeComment *data = static_cast<NodeComment *>(node.storage);
+  BLO_read_string(&reader, &data->text);
+}
+
 void register_node_type_comment()
 {
   static bke::bNodeType ntype;
@@ -1237,6 +1253,8 @@ void register_node_type_comment()
   ntype.nclass = NODE_CLASS_INTERFACE;
   ntype.draw_buttons_ex = node_comment_layout_ex;
   ntype.initfunc = node_comment_init;
+  ntype.blend_write_storage_content = node_comment_blend_write;
+  ntype.blend_data_read_storage_content = node_comment_blend_read;
   bke::node_type_storage(ntype, "NodeComment", node_comment_free, node_comment_copy);
   bke::node_register_type(ntype);
 }
