@@ -8,13 +8,13 @@
 
 #include "DNA_userdef_types.h"
 
-namespace blender::bke {
+namespace blender::bke::theme {
 
 /** Resolve #UserDef::active_theme_type, accounting for "System" mode. */
-UserPrefThemeType resolve_active_theme_type();
+UserPrefThemeType resolve_active_type();
 
 /** The #bTheme referenced by whichever of dark/light is currently active. */
-const bTheme &active_theme_get();
+const bTheme &active_get();
 
 /**
  * Reset an already-loaded theme's values to the compiled-in baseline, keeping its `filepath`
@@ -35,4 +35,4 @@ void reset_theme(bTheme &theme);
  */
 bTheme &ensure_theme(StringRefNull filepath, UserPrefThemeType slot);
 
-}  // namespace blender::bke
+}  // namespace blender::bke::theme

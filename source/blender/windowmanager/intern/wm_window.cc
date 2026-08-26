@@ -1225,7 +1225,7 @@ static void system_appearance_update(bContext *C, const int blocking_timeout_ms 
    *
    * `force_reset=False` so this only ever fills in a theme slot that's never been loaded,
    * it must never reset a theme the user has already loaded or customized. */
-  if (bke::resolve_active_theme_type() == UserPrefThemeType::Light && !U.active_theme_light) {
+  if (bke::theme::resolve_active_type() == UserPrefThemeType::Light && !U.active_theme_light) {
     if (wmOperatorType *ot = WM_operatortype_find("preferences.reset_default_theme", true)) {
       PointerRNA props_ptr = WM_operator_properties_create_ptr(ot);
       RNA_boolean_set(&props_ptr, "force_reset", false);

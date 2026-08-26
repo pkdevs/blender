@@ -1123,7 +1123,7 @@ void init_default()
 
 void theme_set(int spacetype, int regionid)
 {
-  const bTheme &theme = bke::active_theme_get();
+  const bTheme &theme = bke::theme::active_get();
   if (spacetype) {
     /* later on, a local theme can be found too */
     g_theme_state.theme = &theme;
@@ -1146,7 +1146,7 @@ void theme_set(int spacetype, int regionid)
 
 const bTheme *theme_get()
 {
-  return &bke::active_theme_get();
+  return &bke::theme::active_get();
 }
 
 void theme_store(bThemeState *theme_state)

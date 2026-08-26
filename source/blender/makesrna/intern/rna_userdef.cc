@@ -1022,18 +1022,18 @@ static const EnumPropertyItem *rna_UseDef_active_section_itemf(bContext * /*C*/,
 
 static PointerRNA rna_UserDef_active_theme_get(PointerRNA *ptr)
 {
-  bTheme *btheme = const_cast<bTheme *>(&blender::bke::active_theme_get());
+  bTheme *btheme = const_cast<bTheme *>(&blender::bke::theme::active_get());
   return RNA_pointer_create_with_parent(*ptr, RNA_Theme, btheme);
 }
 
 static int rna_UserDef_active_theme_type_resolved_get(PointerRNA * /*ptr*/)
 {
-  return int(blender::bke::resolve_active_theme_type());
+  return int(blender::bke::theme::resolve_active_type());
 }
 
 static void rna_UserDef_ensure_theme(bContext *C, const char *filepath)
 {
-  blender::bke::ensure_theme(filepath, blender::bke::resolve_active_theme_type());
+  blender::bke::theme::ensure_theme(filepath, blender::bke::theme::resolve_active_type());
 
   WM_reinit_gizmomap_all(CTX_data_main(C));
   WM_main_add_notifier(NC_WINDOW, nullptr);
@@ -1308,7 +1308,7 @@ static void rna_Theme_name_set(PointerRNA *ptr, const char *value)
 
 static void rna_Theme_reset_to_baseline(bTheme *theme)
 {
-  blender::bke::reset_theme(*theme);
+  blender::bke::theme::reset_theme(*theme);
 }
 
 static void rna_Addon_module_set(PointerRNA *ptr, const char *value)

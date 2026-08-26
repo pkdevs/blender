@@ -1798,7 +1798,7 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->active_theme_type = UserPrefThemeChoice::Dark;
     /* Adding dark/light theme split: Update dark theme to the previous active theme. The light
      * slot is left unset, falling back to the dark theme until the user picks one, see
-     * #blender::bke::active_theme_get. */
+     * #blender::bke::theme::active_get. */
     if (!userdef->active_theme_dark) {
       userdef->active_theme_dark = static_cast<bTheme *>(userdef->themes.first);
     }

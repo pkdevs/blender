@@ -12,9 +12,9 @@
 
 #include "MEM_guardedalloc.h"
 
-namespace blender::bke {
+namespace blender::bke::theme {
 
-UserPrefThemeType resolve_active_theme_type()
+UserPrefThemeType resolve_active_type()
 {
   switch (U.active_theme_type) {
     case UserPrefThemeChoice::Dark:
@@ -26,9 +26,9 @@ UserPrefThemeType resolve_active_theme_type()
   return UserPrefThemeType::Dark;
 }
 
-const bTheme &active_theme_get()
+const bTheme &active_get()
 {
-  if (resolve_active_theme_type() == UserPrefThemeType::Light && U.active_theme_light) {
+  if (resolve_active_type() == UserPrefThemeType::Light && U.active_theme_light) {
     return *U.active_theme_light;
   }
   /* No light theme has been set up yet (or dark is active): fall back to dark. */
@@ -65,4 +65,4 @@ bTheme &ensure_theme(StringRefNull filepath, UserPrefThemeType slot)
   return *btheme;
 }
 
-}  // namespace blender::bke
+}  // namespace blender::bke::theme
