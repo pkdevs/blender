@@ -4227,6 +4227,12 @@ class MarkdownDrawer {
       BLF_character_weight(fontid, BLF_default_weight(fontid));
     }
     BLF_size(main_fontid_, current_size_);
+
+    const float aspect = snode_.runtime->aspect;
+    const int ascender = BLF_ascender(fontid) * aspect;
+    const int descender = BLF_descender(fontid) * aspect;
+    const int font_height = ascender - descender;
+
     switch (text_type) {
       case MD_TEXT_NORMAL: {
         StringRef remaining_text = text;
@@ -4237,22 +4243,19 @@ class MarkdownDrawer {
               fontid, text.data(), text.size(), remaining_width, &needed_width);
           const StringRef fitting_text = remaining_text.substr(0, char_i);
           remaining_text = remaining_text.drop_prefix(char_i);
-          BLF_position(main_fontid_, x_, y_, 0.0f);
+          BLF_position(main_fontid_, x_, y_ - ascender, 0.0f);
           BLF_draw(main_fontid_, fitting_text.data(), fitting_text.size());
 
           if (href_) {
-            const float aspect = snode_.runtime->aspect;
-            const float ascender = BLF_ascender(fontid) * aspect;
-            const float descender = BLF_descender(fontid) * aspect;
             const ui::EmbossType previous_emboss = ui::block_emboss_get(&ui_block_);
             ui::block_emboss_set(&ui_block_, ui::EmbossType::None);
             ui::Button *but = uiDefIconBut(&ui_block_,
                                            ui::ButtonType::But,
                                            ICON_NONE,
                                            x_,
-                                           y_ + descender,
+                                           y_ - font_height,
                                            needed_width,
-                                           ascender - descender,
+                                           font_height,
                                            nullptr,
                                            0.0,
                                            0.0,
