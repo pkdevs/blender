@@ -313,7 +313,7 @@ Tree Tree::from_mesh(const Mesh &mesh)
     return pbvh;
   }
 
-  constexpr int leaf_limit = 2500;
+  constexpr int leaf_limit = MESH_LEAF_LIMIT;
   static_assert(leaf_limit < std::numeric_limits<MeshNode::LocalVertMapIndexT>::max());
 
   Array<float3> face_centers(faces.size());
@@ -348,6 +348,12 @@ Tree Tree::from_mesh(const Mesh &mesh)
   }
 
   build_mesh_leaf_nodes(mesh.verts_num, faces, corner_verts, nodes);
+
+  for (const MeshNode &node : nodes) {
+    if (node.verts().size() > 0) {
+      printf("PBVH leaf verts: %lld\n", (long long)node.verts().size());
+    }
+  }
 
   pbvh.tag_positions_changed(nodes.index_range());
 
@@ -1059,6 +1065,7 @@ static void normals_calc_faces(const Span<float3> positions,
                                const Span<int> face_indices,
                                MutableSpan<float3> face_normals)
 {
+  PRF_scope(ProfileCategory::Core);
   for (const int i : face_indices) {
     face_normals[i] = mesh::face_normal_calc(positions, corner_verts.slice(faces[i]));
   }
@@ -1094,6 +1101,7 @@ static void normals_calc_verts_simple(const GroupedSpan<int> vert_to_face_map,
                                       const Span<int> verts,
                                       MutableSpan<float3> vert_normals)
 {
+  PRF_scope(ProfileCategory::Core);
   for (const int vert : verts) {
     float3 normal(0.0f);
     for (const int face : vert_to_face_map[vert]) {
@@ -1135,6 +1143,7 @@ static void update_normals_mesh(Object &object_orig,
                                 const Span<MeshNode> nodes,
                                 const IndexMask &nodes_to_update)
 {
+  PRF_scope(ProfileCategory::Core);
   /* Position changes are tracked on a per-node level, so all the vertex and face normals for every
    * affected node are recalculated. However, the additional complexity comes from the fact that
    * changing vertex normals also changes surrounding face normals. Those changed face normals then

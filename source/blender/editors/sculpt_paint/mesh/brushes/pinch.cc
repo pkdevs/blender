@@ -69,15 +69,17 @@ static void calc_faces(const Depsgraph &depsgraph,
                        const Span<float3> vert_normals,
                        const bke::pbvh::MeshNode &node,
                        Object &object,
-                       LocalData &tls,
                        const PositionDeformData &position_data)
 {
   SculptSession &ss = *object.runtime->sculpt_session;
   const StrokeCache &cache = *ss.cache;
 
   const Span<int> verts = node.verts();
-  const MutableSpan positions = gather_data_mesh(position_data.eval, verts, tls.positions);
+  Array<float3, bke::pbvh::MESH_LEAF_LIMIT> positions(verts.size());
+  gather_data_mesh<float3>(position_data.eval, verts, positions);
 
+  Array<float, bke::pbvh::MESH_LEAF_LIMIT> factors(verts.size());
+  Array<float, bke::pbvh::MESH_LEAF_LIMIT> distances(verts.size());
   calc_factors_common_mesh(depsgraph,
                            brush,
                            object,
@@ -85,19 +87,18 @@ static void calc_faces(const Depsgraph &depsgraph,
                            positions,
                            vert_normals,
                            node,
-                           tls.factors,
-                           tls.distances);
+                           factors,
+                           distances);
 
-  scale_factors(tls.factors, strength);
+  scale_factors(factors, strength);
 
-  tls.translations.resize(verts.size());
-  const MutableSpan<float3> translations = tls.translations;
+  Array<float3, bke::pbvh::MESH_LEAF_LIMIT> translations(verts.size());
   calc_translations(positions, cache.location_symm, stroke_xz, translations);
   if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
     project_translations(translations, cache.view_normal_symm);
   }
 
-  scale_translations(translations, tls.factors);
+  scale_translations(translations, factors);
 
   clip_and_lock_translations(sd, ss, position_data.eval, verts, translations);
   position_data.deform(translations, verts);
@@ -215,7 +216,6 @@ void do_pinch_brush(const Depsgraph &depsgraph,
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
       node_mask.foreach_index(
           [&](const int i) {
-            LocalData &tls = all_tls.local();
             calc_faces(depsgraph,
                        sd,
                        brush,
@@ -225,7 +225,6 @@ void do_pinch_brush(const Depsgraph &depsgraph,
                        vert_normals,
                        nodes[i],
                        object,
-                       tls,
                        position_data);
             bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
           },
