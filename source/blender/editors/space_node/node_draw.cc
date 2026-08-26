@@ -4081,8 +4081,8 @@ struct MarkdownSpan {
   float size;
   int fontid;
   int weight;
-  std::string text;
-  std::optional<std::string> url;
+  StringRef text;
+  std::optional<StringRef> url;
 };
 
 struct MarkdownLayout {
@@ -4344,10 +4344,10 @@ static void draw_markdown_layout(const MarkdownLayout &md_layout,
     const float ascender = BLF_ascender(span.fontid) * aspect;
     const float descender = BLF_descender(span.fontid) * aspect;
     const float font_height = ascender - descender;
-    const float width = BLF_width(span.fontid, span.text.c_str(), span.text.size());
+    const float width = BLF_width(span.fontid, span.text.data(), span.text.size());
 
     BLF_position(span.fontid, span.x, span.y - ascender, 0.0f);
-    BLF_draw(span.fontid, span.text.c_str(), span.text.size());
+    BLF_draw(span.fontid, span.text.data(), span.text.size());
 
     if (span.url) {
       const ui::EmbossType previous_emboss = ui::block_emboss_get(&ui_block);
@@ -4366,7 +4366,7 @@ static void draw_markdown_layout(const MarkdownLayout &md_layout,
       ui::block_emboss_set(&ui_block, previous_emboss);
       wmOperatorType *ot = WM_operatortype_find("WM_OT_url_open", false);
       PointerRNA props = WM_operator_properties_create_ptr(ot);
-      RNA_string_set(&props, "url", span.url->c_str());
+      RNA_string_set(&props, "url", std::string(*span.url).c_str());
       ui::button_operator_set(but, ot, wm::OpCallContext::InvokeDefault, &props);
     }
   }
