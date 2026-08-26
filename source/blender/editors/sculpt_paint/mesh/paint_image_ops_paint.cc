@@ -218,7 +218,7 @@ void ImagePaintStroke::done(const bool is_cancel, const bool /*stroke_started*/)
 std::optional<float3> ImagePaintStroke::get_location(const float2 /*mouse*/,
                                                      bool /*force_original*/)
 {
-  return float3(0.0f);
+  return std::nullopt;
 }
 
 bool ImagePaintStroke::test_cancel()
@@ -389,7 +389,9 @@ void TexturePaintStroke::done(const bool is_cancel, const bool /*stroke_started*
 std::optional<float3> TexturePaintStroke::get_location(const float2 /*mouse*/,
                                                        bool /*force_original*/)
 {
-  return float3(0.0f);
+  /* TODO: This value is a dummy value and not actually used by the rest of the stroke system,
+   * this could be replaced with std::nullopt, but that requires further refactoring. */
+  return float3(0.0f, 0.0f, 0.0f);
 }
 
 bool TexturePaintStroke::test_cancel()
