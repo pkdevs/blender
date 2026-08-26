@@ -85,6 +85,13 @@ svm_node_attr_surface_eval(KernelGlobals kg,
   }
 #endif
 
+  /* Spherical harmonics attribute can not be currently accessed.
+   * It is stored as PackedSphericalHarmonics that does not have a float or float3 representation.
+   */
+  if (node.attr == ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS) {
+    return make_float3(FloatType(0.0f));
+  }
+
   if (sd->type == PRIMITIVE_LAMP && node.attr == ATTR_STD_UV) {
     Float3Type uv(make_float3(1.0f - sd->u - sd->v, sd->u, 0.0f));
     if constexpr (is_dual_v<Float3Type>) {
