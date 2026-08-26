@@ -4075,6 +4075,37 @@ static void reroute_node_draw(const bContext &C,
   block_draw(&C, &block);
 }
 
+class MarkdownDrawer {
+ private:
+  const SpaceNode &snode_;
+  const StringRef full_text_;
+  const rctf bounds_;
+  int main_fontid_;
+  int mono_fontid_;
+
+ public:
+  MarkdownDrawer(const SpaceNode &snode, const StringRef full_text, const rctf &bounds)
+      : snode_(snode), full_text_(full_text), bounds_(bounds)
+  {
+    main_fontid_ = ui::style_get()->widget.uifont_id;
+    mono_fontid_ = blf_mono_font;
+  }
+
+  void draw()
+  {
+    const float aspect = snode_.runtime->aspect;
+    BLF_enable(main_fontid_, BLF_ASPECT);
+    BLF_aspect(main_fontid_, aspect, aspect, 1.0f);
+    const float size = 12;
+    BLF_size(main_fontid_, size * UI_SCALE_FAC / aspect);
+
+    BLF_position(main_fontid_, bounds_.xmin, bounds_.ymax - size * UI_SCALE_FAC, 0);
+    BLF_draw(main_fontid_, full_text_.data(), full_text_.size());
+
+    BLF_disable(main_fontid_, BLF_ASPECT);
+  }
+};
+
 static void node_draw_comment(const bContext &C,
                               TreeDrawContext &tree_draw_ctx,
                               ARegion &region,
@@ -4114,22 +4145,10 @@ static void node_draw_comment(const bContext &C,
     ui::draw_roundbox_4fv(&rct, false, BASIS_RAD, outline_color);
   }
 
-  const float padding = UI_UNIT_X * 0.2f;
-
   NodeComment &storage = *static_cast<NodeComment *>(node.storage);
   const StringRef full_text = storage.text;
-
-  const int fontid = ui::style_get()->widget.uifont_id;
-  const float aspect = snode.runtime->aspect;
-  BLF_enable(fontid, BLF_ASPECT);
-  BLF_aspect(fontid, aspect, aspect, 1.0f);
-  const float size = 12;
-  BLF_size(fontid, size * UI_SCALE_FAC / aspect);
-
-  BLF_position(fontid, rct.xmin + padding, rct.ymax - padding - size * UI_SCALE_FAC, 0);
-  BLF_draw(fontid, full_text.data(), full_text.size());
-
-  BLF_disable(fontid, BLF_ASPECT);
+  MarkdownDrawer drawer(snode, full_text, rct);
+  drawer.draw();
 
   block_end_ex(&C,
                tree_draw_ctx.bmain,
