@@ -506,11 +506,11 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
 
 ccl_device_inline void microfacet_ggx_preserve_energy(KernelGlobals kg,
                                                       ccl_private MicrofacetBsdf *bsdf,
-                                                      const float3 wi,
+                                                      const float3 wi_in,
                                                       const Spectrum Fss)
 {
-  const float3 wi_eff = bsdf->retroreflectivity ? reflect(-wi, bsdf->N) : wi;
-  const float mu = dot(wi_eff, bsdf->N);
+  const float3 wi = bsdf->retroreflectivity ? reflect(-wi_in, bsdf->N) : wi_in;
+  const float mu = dot(wi, bsdf->N);
   const float rough = sqrtf(sqrtf(bsdf->alpha_x * bsdf->alpha_y));
 
   float E;
@@ -572,13 +572,13 @@ ccl_device_inline void microfacet_ggx_preserve_energy(KernelGlobals kg,
  * energy-preserving then transmission should just be `1 - reflection`. For dielectric we could
  * probably split the LUT for multiGGX if smooth assumption is not good enough. */
 ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
-                                                    const float3 wi,
+                                                    const float3 wi_in,
                                                     const ccl_private MicrofacetBsdf *bsdf,
                                                     const bool eval_reflection,
                                                     const bool eval_transmission)
 {
-  const float3 wi_eff = bsdf->retroreflectivity ? reflect(-wi, bsdf->N) : wi;
-  const float cos_NI = dot(wi_eff, bsdf->N);
+  const float3 wi = bsdf->retroreflectivity ? reflect(-wi_in, bsdf->N) : wi_in;
+  const float cos_NI = dot(wi, bsdf->N);
   FresnelCoeff coeff(eval_reflection, eval_transmission);
 
   /* Use lookup tables for generalized Schlick reflection, otherwise assume smooth surface.
