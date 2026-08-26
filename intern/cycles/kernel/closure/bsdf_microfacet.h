@@ -124,8 +124,12 @@ struct MicrofacetBsdf {
 
 static_assert(sizeof(ShaderClosure) >= sizeof(MicrofacetBsdf), "MicrofacetBsdf is too large!");
 
-/* The following function are used to map from GGX alpha, IOR, and mu to the indicies of
- * 2D and 3D LUTs (e.g., for multis-scatter GGX energy compensation or scattering albedos). */
+/* -------------------------------------------------------------------- */
+/** \name GGX LUT Index Mapping Functions
+ *
+ * This section contains functions to map from GGX alphas, IOR, and mu to the indicies of
+ * 2D and 3D LUTs (e.g., for multis-scatter GGX energy compensation or scattering albedos).
+ * \{ */
 
 ccl_device_forceinline float alpha_to_roughness_index(const float alpha_x, const float alpha_y)
 {
@@ -141,6 +145,8 @@ ccl_device_forceinline float mu_to_y_index(const float mu)
 {
   return safe_sqrtf(mu);
 }
+
+/** \} */
 
 ccl_device_inline void adjust_thin_film_ior_at_backface(ccl_private float &film_ior,
                                                         const float inv_bulk_ior)
