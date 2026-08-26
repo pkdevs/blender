@@ -266,7 +266,6 @@ class RuleViewItem : public AbstractTreeViewItem {
     if (rule_.target_filter.type != DynamicOverrideRuleTargetFilterType::IDSingle) {
       return;
     }
-    DynamicOverrideRuleIDData &rule = reinterpret_cast<DynamicOverrideRuleIDData &>(rule_);
 
     PointerRNA rule_ptr = RNA_pointer_create_id_subdata(
         dynoverride_.id, RNA_DynamicOverrideRuleIDData, &rule_);
@@ -284,7 +283,7 @@ class RuleViewItem : public AbstractTreeViewItem {
                    {},
                    bool(rule_.flag & DynamicOverrideRuleFlag::IsMuted) ? ICON_CHECKBOX_DEHLT :
                                                                          ICON_CHECKBOX_HLT);
-    sub_butts.separator_spacer();
+
     PointerRNA op_data = sub_butts.op("UI_OT_dynoverride_remove_rule", "", ICON_X);
     RNA_int_set(&op_data, "session_uid", int(dynoverride_.id.session_uid));
     RNA_string_set(&op_data, "rule_name", rule_.name);
@@ -301,7 +300,10 @@ class RNAPathViewItem : public AbstractTreeViewItem {
   RNAPathViewItem(DynamicOverride &dynoverride,
                   DynamicOverrideRule &rule,
                   const ParsedRNAPathRef rna_parsed_path)
-      : dynoverride_(dynoverride), rule_(rule), rna_parsed_path_(rna_parsed_path)
+      : dynoverride_(dynoverride),
+        rule_(rule),
+        rna_parsed_path_(rna_parsed_path),
+        rna_path_(ParsedRNAPath<4>(rna_parsed_path_).to_string())
   {
     this->label_ = rna_path::to_string(rna_parsed_path_.last());
   }
@@ -330,13 +332,37 @@ class RNAPathViewItem : public AbstractTreeViewItem {
   DynamicOverride &dynoverride_;
   DynamicOverrideRule &rule_;
   const ParsedRNAPathRef rna_parsed_path_;
+  const std::string rna_path_;
 
   void build_rnapath_item_name(Layout &row)
   {
     uiItemL_ex(&row, label_, ICON_NONE, false, false);
   }
 
-  void build_rnapath_item_buttons(Layout &row) {}
+  void build_rnapath_item_buttons(Layout &row)
+  {
+    Layout &sub_butts = row.row(true);
+
+    std::optional<ParsedRNAPath<4>> rna_path(rna_parsed_path_);
+    BLI_assert(rna_path.has_value());
+    Vector<DynamicOverrideRuleProperty *> properties =
+        bke::dynoverride::rule_rna_property_lookup_root_rnapath(rule_, *rna_path);
+    BLI_assert(!properties.is_empty());
+    bool is_all_muted = std::all_of(
+        properties.begin(), properties.end(), [](DynamicOverrideRuleProperty *p) -> bool {
+          return bool(p->flag & DynamicOverrideRulePropertyFlag::IsMuted);
+        });
+    const int icon = is_all_muted ? ICON_CHECKBOX_DEHLT : ICON_CHECKBOX_HLT;
+    PointerRNA op_data = sub_butts.op("UI_OT_dynoverride_toggle_mute_rule_property", "", icon);
+    RNA_int_set(&op_data, "session_uid", int(dynoverride_.id.session_uid));
+    RNA_string_set(&op_data, "rule_name", rule_.name);
+    RNA_string_set(&op_data, "property_rna_path", rna_path_.c_str());
+
+    op_data = sub_butts.op("UI_OT_dynoverride_remove_rule_property", "", ICON_X);
+    RNA_int_set(&op_data, "session_uid", int(dynoverride_.id.session_uid));
+    RNA_string_set(&op_data, "rule_name", rule_.name);
+    RNA_string_set(&op_data, "property_rna_path", rna_path_.c_str());
+  }
 };
 
 /**
@@ -408,7 +434,7 @@ class PropertyViewItem : public AbstractTreeViewItem {
                    bool(property_.flag & DynamicOverrideRulePropertyFlag::IsMuted) ?
                        ICON_CHECKBOX_DEHLT :
                        ICON_CHECKBOX_HLT);
-    sub_butts.separator_spacer();
+
     PointerRNA op_data = sub_butts.op("UI_OT_dynoverride_remove_rule_property", "", ICON_X);
     RNA_int_set(&op_data, "session_uid", int(dynoverride_.id.session_uid));
     RNA_string_set(&op_data, "rule_name", rule_.name);

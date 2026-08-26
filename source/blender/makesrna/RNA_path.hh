@@ -23,6 +23,7 @@
 
 #include "DNA_listBase.h"
 
+#include "RNA_path.hh"
 #include "RNA_types.hh"
 
 #include "BLI_string_ref.hh"
@@ -150,6 +151,9 @@ template<int64_t N = 4> class ParsedRNAPath {
   static std::optional<ParsedRNAPath> from_string(StringRefNull path);
 
   std::string to_string() const;
+
+  /** Return `true` if this path is a sub-path of (or identical to) the given `root_path`. */
+  bool is_subpath(const ParsedRNAPathRef root_path) const;
 
   operator ParsedRNAPathRef() const
   {

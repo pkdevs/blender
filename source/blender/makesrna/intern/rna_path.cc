@@ -238,6 +238,19 @@ std::optional<ParsedRNAPath<N>> ParsedRNAPath<N>::from_string(const StringRefNul
   return parsed;
 }
 
+template<int64_t N> bool ParsedRNAPath<N>::is_subpath(const ParsedRNAPathRef root_path) const
+{
+  if (root_path.size() > this->items.size()) {
+    return false;
+  }
+  for (int i = 0; i < root_path.size(); i++) {
+    if (root_path[i] != this->items[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 namespace rna_path {
 
 std::string to_string(const Item &item)

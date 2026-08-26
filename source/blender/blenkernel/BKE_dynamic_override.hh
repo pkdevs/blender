@@ -8,12 +8,11 @@
  * \ingroup bke
  */
 
+#include "RNA_path_fwd.hh"
+
 #include "BLI_multi_value_map.hh"
 #include "BLI_span.hh"
 #include "BLI_vector_set.hh"
-
-#include <type_traits>
-#include <variant>
 
 namespace blender {
 
@@ -29,15 +28,6 @@ struct RNAPath;
 struct StructRNA;
 struct Scene;
 struct ViewLayer;
-
-template<typename T> class Span;
-namespace rna_path {
-struct Member;
-struct LookupIndex;
-struct LookupKey;
-using Item = std::variant<Member, LookupIndex, LookupKey>;
-}  // namespace rna_path
-using ParsedRNAPathRef = Span<rna_path::Item>;
 
 namespace bke::dynoverride {
 
@@ -69,6 +59,8 @@ DynamicOverrideRuleProperty *rule_rna_property_add(Main &bmain,
 
 DynamicOverrideRuleProperty *rule_rna_property_lookup(DynamicOverrideRule &rule,
                                                       RNAPath &rna_path);
+Vector<DynamicOverrideRuleProperty *> rule_rna_property_lookup_root_rnapath(
+    DynamicOverrideRule &rule, const ParsedRNAPathRef &rna_path);
 
 void rule_property_remove(Main &bmain,
                           DynamicOverride &dynamic_override,
@@ -119,7 +111,8 @@ bool rule_property_rna_path_set(DynamicOverrideRule &rule,
  * string representation.
  * \note This may return empty when an invalid RNA path that cannot be parsed is set.
  */
-ParsedRNAPathRef rule_property_rna_path_parsed(const blender::DynamicOverrideRuleProperty &rule_property);
+ParsedRNAPathRef rule_property_rna_path_parsed(
+    const blender::DynamicOverrideRuleProperty &rule_property);
 
 /**
  * Return an identifier representing the RNA path of the property, that is usable as a RNA

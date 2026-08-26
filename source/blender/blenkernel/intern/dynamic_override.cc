@@ -646,6 +646,24 @@ DynamicOverrideRuleProperty *rule_rna_property_lookup(DynamicOverrideRule &rule,
   return rule_property;
 }
 
+Vector<DynamicOverrideRuleProperty *> rule_rna_property_lookup_root_rnapath(
+    DynamicOverrideRule &rule, const ParsedRNAPathRef &rna_path)
+{
+  if (rule.type != DynamicOverrideRuleType::IDData) {
+    return {};
+  }
+
+  DynamicOverrideRuleIDData &rule_iddata = reinterpret_cast<DynamicOverrideRuleIDData &>(rule);
+  Vector<DynamicOverrideRuleProperty *> rule_properties;
+  for (DynamicOverrideRuleProperty &rule_property : rule_iddata.properties) {
+    BLI_assert(rule_property.runtime->parsed_rna_path.has_value());
+    if (rule_property.runtime->parsed_rna_path->is_subpath(rna_path)) {
+      rule_properties.append_as(&rule_property);
+    }
+  }
+  return rule_properties;
+}
+
 void rule_property_remove(Main &bmain,
                           DynamicOverride &dynamic_override,
                           DynamicOverrideRule &rule,
