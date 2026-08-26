@@ -40,23 +40,6 @@ CCL_NAMESPACE_BEGIN
 #ifdef __POINTCLOUD__
 
 #  if defined(__GSPLATS__)
-/* Check whether the gaussian splat occludes the given ray. */
-ccl_device_forceinline bool gsplat_occluded_test(KernelGlobals kg,
-                                                 const float3 ray_P,
-                                                 const float3 ray_D,
-                                                 const float ray_tmin,
-                                                 const float ray_tmax,
-                                                 const int object,
-                                                 const int prim)
-{
-  const int position_offset = kernel_data_fetch(objects, object).position_offset;
-  const float4 point = kernel_data_fetch(points, position_offset + prim);
-
-  /* TODO(sergey): It is possible to intersect against ellipsoid for a better fit. */
-  float sphere_t;
-  return point_intersect_test(point, ray_P, ray_D, ray_tmin, ray_tmax, &sphere_t);
-}
-
 /* Intersect ray against gaussian splat.
  * Performs stochastic alpha test described in [sun2025]. */
 ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
