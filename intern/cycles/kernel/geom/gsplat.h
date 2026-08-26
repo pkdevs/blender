@@ -55,24 +55,50 @@ ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private Sha
   return rec709_to_rgb(kg, make_float3(color_rec709));
 }
 
+/* Get gaussian splat normal in the object space. */
 ccl_device_inline float3 gsplat_normal(KernelGlobals kg, const int object, const int prim)
 {
   /* Follows the "Flattening 3D Gaussian" section of [chen2024pgsr].
    *
-   * The intuitive way to think about it is that gsplat is a pancake, so its normal points in the
-   * direction of the smallest scale. The implementation here checks which of the scale axis is the
-   * smallest and calculates corresponding axis of the rotation matrix. */
+   * The intuitive way to think about it is that gsplat is a pancake, so its normal in the gaussian
+   * splat space points in the direction of the smallest scale. This means, for example, that if
+   * the scale's z component is the smallest then the normal in the splat space is (0, 0, 1).
+   *
+   * It needs to be converted to the object space. The naive implementation would be is
+   *
+   *   N_{object_space} = R * N_{splat_space}
+   *
+   * where R is a transformation matrix constructed from the gaussian splat rotation:
+   *
+   *  R = quaternion_to_rotation(rotation_quat)
+   *
+   * We can avoid the matrix multiplication by utilizing the knowledge that the normal is the
+   * gaussian splat space has only one component set to 1 and the rest are set to 0: the result
+   * is the column of the matrix R with the same index as the component of the local normal that is
+   * set to 1. */
 
-  /* TODO(sergey): The paper mentions ambiguity of the normal direction when there are two
-   * directions for the shortest axis. Current code does not deal with this. */
-
-  /* TODO(sergey): There might be much better normal approximation. */
+  /* TODO(sergey): Solve ambiguity when there are two smallest axis.*/
+  /* The paper mentions this case explicitly and that it is solved using the view direction. */
 
   const int scale_offset = kernel_data_fetch(objects, object).gsplat_scale_offset;
   const int rotation_offset = kernel_data_fetch(objects, object).gsplat_rotation_offset;
   const float3 scale = kernel_data_fetch(attributes_float3, scale_offset + prim);
   const float4 rotation = kernel_data_fetch(attributes_float4, rotation_offset + prim);
 
+#  if 0
+  /* The naive implementation, for the reference. */
+  const float3x3 R = quaternion_to_rotation(rotation);
+  if ((scale.x <= scale.y) && (scale.x <= scale.z)) {
+    return R * make_float3(1.0f, 0.0f, 0.0f);
+  }
+  if ((scale.y < scale.x) && (scale.y <= scale.z)) {
+    return R * make_float3(0.0f, 1.0f, 0.0f);
+  }
+  kernel_assert((scale.z < scale.x) && (scale.z < scale.y));
+  return R * make_float3(0.0f, 0.0f, 1.0f);
+#  else
+  /* More optimal implementation: only evaluate the actually required elements of the rotation
+   * matrix. */
   const float normalizer = 1.0f / (rotation.x * rotation.x + rotation.y * rotation.y +
                                    rotation.z * rotation.z + rotation.w * rotation.w);
 
@@ -83,18 +109,19 @@ ccl_device_inline float3 gsplat_normal(KernelGlobals kg, const int object, const
 
   if ((scale.x <= scale.y) && (scale.x <= scale.z)) {
     return make_float3(
-               a * a + b * b - c * c - d * d, 2.0f * (b * c - a * d), 2.0f * (a * c + b * d)) *
+               a * a + b * b - c * c - d * d, 2.0f * (a * d + b * c), 2.0f * (b * d - a * c)) *
            normalizer;
   }
   if ((scale.y < scale.x) && (scale.y <= scale.z)) {
     return make_float3(
-               2.0f * (a * d + b * c), a * a - b * b + c * c - d * d, 2.0f * (c * d - a * b)) *
+               2.0f * (b * c - a * d), a * a - b * b + c * c - d * d, .0f * (a * b + c * d)) *
            normalizer;
   }
   kernel_assert((scale.z < scale.x) && (scale.z < scale.y));
   return make_float3(
-             2.0f * (b * d - a * c), 2.0f * (a * b + c * d), a * a - b * b - c * c + d * d) *
+             2.0f * (a * c + b * d), 2.0f * (c * d - a * b), a * a - b * b - c * c + d * d) *
          normalizer;
+#  endif
 }
 
 #endif /* __GSPLATS__ */
