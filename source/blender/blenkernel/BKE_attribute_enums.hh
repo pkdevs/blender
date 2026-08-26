@@ -58,13 +58,13 @@ enum class AttrDomain : int8_t {
 enum class AttrDomainSelection : int8_t {
   /* Used to choose automatically based on other data. */
   Auto = -1,
-  Point = int(AttrDomain::Point),
-  Edge = int(AttrDomain::Edge),
-  Face = int(AttrDomain::Face),
-  Corner = int(AttrDomain::Corner),
-  Curve = int(AttrDomain::Curve),
-  Instance = int(AttrDomain::Instance),
-  Layer = int(AttrDomain::Layer),
+  Point = int8_t(AttrDomain::Point),
+  Edge = int8_t(AttrDomain::Edge),
+  Face = int8_t(AttrDomain::Face),
+  Corner = int8_t(AttrDomain::Corner),
+  Curve = int8_t(AttrDomain::Curve),
+  Instance = int8_t(AttrDomain::Instance),
+  Layer = int8_t(AttrDomain::Layer),
 };
 
 }  // namespace blender::bke
