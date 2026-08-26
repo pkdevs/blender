@@ -284,6 +284,7 @@ void BVHBuild::add_reference_points(BoundBox &root,
     const int num_bvh_steps = params.num_motion_point_steps * 2 + 1;
     const float num_bvh_steps_inv_1 = 1.0f / (num_bvh_steps - 1);
     const Attribute *attr_R_motion = attr_R->has_motion() ? attr_R : nullptr;
+    const PrimitiveType primitive_type = pointcloud->primitive_type();
 
     for (uint j = 0; j < num_points; j++) {
       const PointCloud::Point point = pointcloud->get_point(j);
@@ -307,8 +308,7 @@ void BVHBuild::add_reference_points(BoundBox &root,
         bounds.grow(curr_bounds);
         if (bounds.valid()) {
           const float prev_time = (float)(bvh_step - 1) * num_bvh_steps_inv_1;
-          references.push_back(
-              BVHReference(bounds, j, i, PRIMITIVE_MOTION_POINT, prev_time, curr_time));
+          references.push_back(BVHReference(bounds, j, i, primitive_type, prev_time, curr_time));
           root.grow(bounds);
           center.grow(bounds.center2());
         }
