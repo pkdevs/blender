@@ -77,6 +77,9 @@ svm_node_attr_surface_eval(KernelGlobals kg,
 
 #if defined(__GSPLATS__)
   if (sd->type & PRIMITIVE_GSPLAT && node.attr == ATTR_STD_GSPLAT_RADIANCE) {
+    if (type == NODE_ATTR_OUTPUT_FLOAT_ALPHA) {
+      return make_float3(FloatType(1.0f));
+    }
     const float3 radiance = gsplat_radiance(kg, *sd);
     return Float3Type(radiance);
   }
