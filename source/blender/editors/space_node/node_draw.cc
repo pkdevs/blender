@@ -4081,6 +4081,7 @@ struct MarkdownSpan {
   float size;
   int fontid;
   int weight;
+  bool italic = false;
   StringRef text;
   std::optional<StringRef> url;
 };
@@ -4103,6 +4104,7 @@ class MarkdownLayouter {
   float current_size_;
   std::optional<StringRef> href_;
   bool is_bold_ = false;
+  bool is_italic_ = false;
   bool is_code_ = false;
   MarkdownLayout layout_;
 
@@ -4150,8 +4152,8 @@ class MarkdownLayouter {
 
     md_parse(full_text_.data(), full_text_.size(), &md_parser, this);
 
-    BLF_disable(main_fontid_, BLF_ASPECT);
-    BLF_disable(mono_fontid_, BLF_ASPECT);
+    BLF_disable(main_fontid_, BLF_ASPECT | BLF_ITALIC);
+    BLF_disable(mono_fontid_, BLF_ASPECT | BLF_ITALIC);
 
     return std::move(layout_);
   }
@@ -4209,6 +4211,10 @@ class MarkdownLayouter {
         href_ = StringRef(detail_a.href.text, detail_a.href.size);
         break;
       }
+      case MD_SPAN_EM: {
+        is_italic_ = true;
+        break;
+      }
       case MD_SPAN_STRONG: {
         is_bold_ = true;
         break;
@@ -4228,6 +4234,10 @@ class MarkdownLayouter {
     switch (span_type) {
       case MD_SPAN_A: {
         href_.reset();
+        break;
+      }
+      case MD_SPAN_EM: {
+        is_italic_ = false;
         break;
       }
       case MD_SPAN_STRONG: {
@@ -4285,8 +4295,7 @@ class MarkdownLayouter {
   void append_wrapped_text(StringRef text)
   {
     const int fontid = this->current_fontid();
-    BLF_character_weight(fontid, this->current_weight());
-    BLF_size(fontid, current_size_);
+    this->apply_font_style(fontid);
 
     while (!text.is_empty()) {
       const float remaining_width = bounds_.xmax - x_;
@@ -4343,11 +4352,24 @@ class MarkdownLayouter {
     span.size = current_size_;
     span.fontid = this->current_fontid();
     span.weight = this->current_weight();
+    span.italic = is_italic_;
     span.text = text;
     if (href_) {
       span.url = *href_;
     }
     layout_.spans.append(std::move(span));
+  }
+
+  void apply_font_style(const int fontid) const
+  {
+    BLF_character_weight(fontid, this->current_weight());
+    BLF_size(fontid, current_size_);
+    if (is_italic_) {
+      BLF_enable(fontid, BLF_ITALIC);
+    }
+    else {
+      BLF_disable(fontid, BLF_ITALIC);
+    }
   }
 
   int current_weight() const
@@ -4393,6 +4415,12 @@ static void draw_markdown_layout(const MarkdownLayout &md_layout,
   for (const MarkdownSpan &span : md_layout.spans) {
     BLF_size(span.fontid, span.size);
     BLF_character_weight(span.fontid, span.weight);
+    if (span.italic) {
+      BLF_enable(span.fontid, BLF_ITALIC);
+    }
+    else {
+      BLF_disable(span.fontid, BLF_ITALIC);
+    }
 
     if (span.url) {
       BLF_color4f(span.fontid, 0.6f, 0.6f, 1.0f, 1.0f);
@@ -4432,7 +4460,7 @@ static void draw_markdown_layout(const MarkdownLayout &md_layout,
   }
 
   for (const MarkdownSpan &span : md_layout.spans) {
-    BLF_disable(span.fontid, BLF_ASPECT);
+    BLF_disable(span.fontid, BLF_ASPECT | BLF_ITALIC);
   }
 }
 
