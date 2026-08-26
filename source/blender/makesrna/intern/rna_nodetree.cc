@@ -9457,6 +9457,7 @@ static void def_comment(BlenderRNA * /*brna*/, StructRNA *srna)
 
   prop = RNA_def_property(srna, "text", PROP_STRING, PROP_NONE);
   RNA_def_property_ui_text(prop, "Text", "Text to show in the node");
+  RNA_def_property_flag(prop, PROP_TEXTEDIT_UPDATE);
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, nullptr);
 }
 

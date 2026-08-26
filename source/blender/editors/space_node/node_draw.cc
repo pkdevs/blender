@@ -4082,27 +4082,151 @@ class MarkdownDrawer {
   const rctf bounds_;
   int main_fontid_;
   int mono_fontid_;
+  float x_;
+  float y_;
+  ui::Block &ui_block_;
+
+  float default_size_;
+  float current_size_;
+  std::optional<StringRef> href_;
 
  public:
-  MarkdownDrawer(const SpaceNode &snode, const StringRef full_text, const rctf &bounds)
-      : snode_(snode), full_text_(full_text), bounds_(bounds)
+  MarkdownDrawer(const SpaceNode &snode,
+                 const StringRef full_text,
+                 const rctf &bounds,
+                 ui::Block &ui_block)
+      : snode_(snode), full_text_(full_text), bounds_(bounds), ui_block_(ui_block)
   {
     main_fontid_ = ui::style_get()->widget.uifont_id;
     mono_fontid_ = blf_mono_font;
+    x_ = bounds.xmin;
+    y_ = bounds.ymax;
+    default_size_ = 12 * UI_SCALE_FAC / snode_.runtime->aspect;
+    current_size_ = default_size_;
   }
 
   void draw()
   {
+
+    MD_PARSER md_parser{};
+    md_parser.enter_block = [](MD_BLOCKTYPE block_type, void *detail, void *userdata) {
+      static_cast<MarkdownDrawer *>(userdata)->md_enter_block(block_type, detail);
+      return 0;
+    };
+    md_parser.leave_block = [](MD_BLOCKTYPE block_type, void *detail, void *userdata) {
+      static_cast<MarkdownDrawer *>(userdata)->md_leave_block(block_type, detail);
+      return 0;
+    };
+    md_parser.enter_span = [](MD_SPANTYPE span_type, void *detail, void *userdata) {
+      static_cast<MarkdownDrawer *>(userdata)->md_enter_span(span_type, detail);
+      return 0;
+    };
+    md_parser.leave_span = [](MD_SPANTYPE span_type, void *detail, void *userdata) {
+      static_cast<MarkdownDrawer *>(userdata)->md_leave_span(span_type, detail);
+      return 0;
+    };
+    md_parser.text = [](MD_TEXTTYPE text_type, const char *text, uint32_t length, void *userdata) {
+      static_cast<MarkdownDrawer *>(userdata)->md_text(text_type, StringRef(text, length));
+      return 0;
+    };
+
     const float aspect = snode_.runtime->aspect;
     BLF_enable(main_fontid_, BLF_ASPECT);
     BLF_aspect(main_fontid_, aspect, aspect, 1.0f);
-    const float size = 12;
-    BLF_size(main_fontid_, size * UI_SCALE_FAC / aspect);
 
-    BLF_position(main_fontid_, bounds_.xmin, bounds_.ymax - size * UI_SCALE_FAC, 0);
-    BLF_draw(main_fontid_, full_text_.data(), full_text_.size());
+    md_parse(full_text_.data(), full_text_.size(), &md_parser, this);
 
     BLF_disable(main_fontid_, BLF_ASPECT);
+  }
+
+  void md_enter_block(const MD_BLOCKTYPE block_type, void *detail)
+  {
+    switch (block_type) {
+      case MD_BLOCK_P: {
+        break;
+      }
+      case MD_BLOCK_H: {
+        const MD_BLOCK_H_DETAIL &detail_h = *static_cast<const MD_BLOCK_H_DETAIL *>(detail);
+        current_size_ = default_size_ * (1.0f / detail_h.level + 1.0f);
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+  }
+
+  void md_leave_block(const MD_BLOCKTYPE block_type, void *detail)
+  {
+    x_ = bounds_.xmin;
+    switch (block_type) {
+      case MD_BLOCK_P: {
+        y_ -= UI_UNIT_Y * 1.5f;
+        break;
+      }
+      case MD_BLOCK_H: {
+        y_ -= UI_UNIT_Y * 1.3f;
+        current_size_ = default_size_;
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+  }
+
+  void md_enter_span(const MD_SPANTYPE span_type, void *detail)
+  {
+    switch (span_type) {
+      case MD_SPAN_A: {
+        const MD_SPAN_A_DETAIL &detail_a = *static_cast<const MD_SPAN_A_DETAIL *>(detail);
+        href_ = StringRef(detail_a.href.text, detail_a.href.size);
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+  }
+
+  void md_leave_span(const MD_SPANTYPE span_type, void *detail)
+  {
+    switch (span_type) {
+      case MD_SPAN_A: {
+        href_.reset();
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+  }
+
+  void md_text(const MD_TEXTTYPE text_type, const StringRef text)
+  {
+    const int fontid = main_fontid_;
+    if (href_) {
+      BLF_color4f(fontid, 0.6f, 0.6f, 1.0f, 1.0f);
+    }
+    else {
+      BLF_color4f(fontid, 0.8f, 0.8f, 0.8f, 1.0f);
+    }
+    switch (text_type) {
+      case MD_TEXT_NORMAL: {
+        BLF_size(main_fontid_, current_size_);
+        BLF_position(main_fontid_, x_, y_, 0.0f);
+        BLF_draw(main_fontid_, text.data(), text.size());
+        break;
+      }
+      case MD_TEXT_SOFTBR: {
+        x_ = bounds_.xmin;
+        y_ -= UI_UNIT_Y * 0.8f;
+        break;
+      }
+      default: {
+        break;
+      }
+    }
   }
 };
 
@@ -4147,7 +4271,7 @@ static void node_draw_comment(const bContext &C,
 
   NodeComment &storage = *static_cast<NodeComment *>(node.storage);
   const StringRef full_text = storage.text;
-  MarkdownDrawer drawer(snode, full_text, rct);
+  MarkdownDrawer drawer(snode, full_text, rct, block);
   drawer.draw();
 
   block_end_ex(&C,
