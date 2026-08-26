@@ -4075,7 +4075,21 @@ static void reroute_node_draw(const bContext &C,
   block_draw(&C, &block);
 }
 
-class MarkdownDrawer {
+struct MarkdownSpan {
+  /** Top left corner of the span. */
+  float x, y;
+  float size;
+  int fontid;
+  int weight;
+  std::string text;
+  std::optional<std::string> url;
+};
+
+struct MarkdownLayout {
+  Vector<MarkdownSpan> spans;
+};
+
+class MarkdownLayouter {
  private:
   const SpaceNode &snode_;
   const StringRef full_text_;
@@ -4084,19 +4098,16 @@ class MarkdownDrawer {
   int mono_fontid_;
   float x_;
   float y_;
-  ui::Block &ui_block_;
 
   float default_size_;
   float current_size_;
   std::optional<StringRef> href_;
   bool is_bold_ = false;
+  MarkdownLayout layout_;
 
  public:
-  MarkdownDrawer(const SpaceNode &snode,
-                 const StringRef full_text,
-                 const rctf &bounds,
-                 ui::Block &ui_block)
-      : snode_(snode), full_text_(full_text), bounds_(bounds), ui_block_(ui_block)
+  MarkdownLayouter(const SpaceNode &snode, const StringRef full_text, const rctf &bounds)
+      : snode_(snode), full_text_(full_text), bounds_(bounds)
   {
     main_fontid_ = ui::style_get()->widget.uifont_id;
     mono_fontid_ = blf_mono_font;
@@ -4106,28 +4117,27 @@ class MarkdownDrawer {
     current_size_ = default_size_;
   }
 
-  void draw()
+  MarkdownLayout compute_layout()
   {
-
     MD_PARSER md_parser{};
     md_parser.enter_block = [](MD_BLOCKTYPE block_type, void *detail, void *userdata) {
-      static_cast<MarkdownDrawer *>(userdata)->md_enter_block(block_type, detail);
+      static_cast<MarkdownLayouter *>(userdata)->md_enter_block(block_type, detail);
       return 0;
     };
     md_parser.leave_block = [](MD_BLOCKTYPE block_type, void *detail, void *userdata) {
-      static_cast<MarkdownDrawer *>(userdata)->md_leave_block(block_type, detail);
+      static_cast<MarkdownLayouter *>(userdata)->md_leave_block(block_type, detail);
       return 0;
     };
     md_parser.enter_span = [](MD_SPANTYPE span_type, void *detail, void *userdata) {
-      static_cast<MarkdownDrawer *>(userdata)->md_enter_span(span_type, detail);
+      static_cast<MarkdownLayouter *>(userdata)->md_enter_span(span_type, detail);
       return 0;
     };
     md_parser.leave_span = [](MD_SPANTYPE span_type, void *detail, void *userdata) {
-      static_cast<MarkdownDrawer *>(userdata)->md_leave_span(span_type, detail);
+      static_cast<MarkdownLayouter *>(userdata)->md_leave_span(span_type, detail);
       return 0;
     };
     md_parser.text = [](MD_TEXTTYPE text_type, const char *text, uint32_t length, void *userdata) {
-      static_cast<MarkdownDrawer *>(userdata)->md_text(text_type, StringRef(text, length));
+      static_cast<MarkdownLayouter *>(userdata)->md_text(text_type, StringRef(text, length));
       return 0;
     };
 
@@ -4138,6 +4148,8 @@ class MarkdownDrawer {
     md_parse(full_text_.data(), full_text_.size(), &md_parser, this);
 
     BLF_disable(main_fontid_, BLF_ASPECT);
+
+    return std::move(layout_);
   }
 
   void md_enter_block(const MD_BLOCKTYPE block_type, void *detail)
@@ -4157,7 +4169,7 @@ class MarkdownDrawer {
     }
   }
 
-  void md_leave_block(const MD_BLOCKTYPE block_type, void *detail)
+  void md_leave_block(const MD_BLOCKTYPE block_type, void * /*detail*/)
   {
     x_ = bounds_.xmin;
     switch (block_type) {
@@ -4194,7 +4206,7 @@ class MarkdownDrawer {
     }
   }
 
-  void md_leave_span(const MD_SPANTYPE span_type, void *detail)
+  void md_leave_span(const MD_SPANTYPE span_type, void * /*detail*/)
   {
     switch (span_type) {
       case MD_SPAN_A: {
@@ -4214,24 +4226,9 @@ class MarkdownDrawer {
   void md_text(const MD_TEXTTYPE text_type, const StringRef text)
   {
     const int fontid = main_fontid_;
-    if (href_) {
-      BLF_color4f(fontid, 0.6f, 0.6f, 1.0f, 1.0f);
-    }
-    else {
-      BLF_color4f(fontid, 0.8f, 0.8f, 0.8f, 1.0f);
-    }
-    if (is_bold_) {
-      BLF_character_weight(fontid, 800);
-    }
-    else {
-      BLF_character_weight(fontid, BLF_default_weight(fontid));
-    }
-    BLF_size(main_fontid_, current_size_);
-
-    const float aspect = snode_.runtime->aspect;
-    const int ascender = BLF_ascender(fontid) * aspect;
-    const int descender = BLF_descender(fontid) * aspect;
-    const int font_height = ascender - descender;
+    const int weight = is_bold_ ? 800 : BLF_default_weight(fontid);
+    BLF_character_weight(fontid, weight);
+    BLF_size(fontid, current_size_);
 
     switch (text_type) {
       case MD_TEXT_NORMAL: {
@@ -4251,9 +4248,9 @@ class MarkdownDrawer {
 
           if (wrap_to_next_line) {
             const int64_t last_space = (last_fit_char_i > 0) ?
-                                          remaining_text.find_last_of(
-                                              ' ', int64_t(last_fit_char_i) - 1) :
-                                          StringRef::not_found;
+                                           remaining_text.find_last_of(
+                                               ' ', int64_t(last_fit_char_i) - 1) :
+                                           StringRef::not_found;
             if (last_space != StringRef::not_found) {
               draw_bytes = size_t(last_space);
               drop_bytes = size_t(last_space) + 1; /* Skip the space. */
@@ -4276,29 +4273,17 @@ class MarkdownDrawer {
           remaining_text = remaining_text.drop_prefix(drop_bytes);
 
           if (draw_bytes > 0) {
-            BLF_position(main_fontid_, x_, y_ - ascender, 0.0f);
-            BLF_draw(main_fontid_, fitting_text.data(), fitting_text.size());
-
+            MarkdownSpan span;
+            span.x = x_;
+            span.y = y_;
+            span.size = current_size_;
+            span.fontid = fontid;
+            span.weight = weight;
+            span.text = fitting_text;
             if (href_) {
-              const ui::EmbossType previous_emboss = ui::block_emboss_get(&ui_block_);
-              ui::block_emboss_set(&ui_block_, ui::EmbossType::None);
-              ui::Button *but = uiDefIconBut(&ui_block_,
-                                             ui::ButtonType::But,
-                                             ICON_NONE,
-                                             x_,
-                                             y_ - font_height,
-                                             needed_width,
-                                             font_height,
-                                             nullptr,
-                                             0.0,
-                                             0.0,
-                                             std::nullopt);
-              ui::block_emboss_set(&ui_block_, previous_emboss);
-              wmOperatorType *ot = WM_operatortype_find("WM_OT_url_open", false);
-              PointerRNA props = WM_operator_properties_create_ptr(ot);
-              RNA_string_set(&props, "url", std::string(*href_).c_str());
-              ui::button_operator_set(but, ot, wm::OpCallContext::InvokeDefault, &props);
+              span.url = std::string(*href_);
             }
+            layout_.spans.append(std::move(span));
           }
 
           if (wrap_to_next_line) {
@@ -4322,6 +4307,74 @@ class MarkdownDrawer {
     }
   }
 };
+
+static MarkdownLayout compute_markdown_layout(const SpaceNode &snode,
+                                              const StringRef full_text,
+                                              const rctf &bounds)
+{
+  MarkdownLayouter layouter(snode, full_text, bounds);
+  return layouter.compute_layout();
+}
+
+static void draw_markdown_layout(const MarkdownLayout &md_layout,
+                                 const SpaceNode &snode,
+                                 ui::Block &ui_block)
+{
+  if (md_layout.spans.is_empty()) {
+    return;
+  }
+
+  const float aspect = snode.runtime->aspect;
+  for (const MarkdownSpan &span : md_layout.spans) {
+    BLF_enable(span.fontid, BLF_ASPECT);
+    BLF_aspect(span.fontid, aspect, aspect, 1.0f);
+  }
+
+  for (const MarkdownSpan &span : md_layout.spans) {
+    BLF_size(span.fontid, span.size);
+    BLF_character_weight(span.fontid, span.weight);
+
+    if (span.url) {
+      BLF_color4f(span.fontid, 0.6f, 0.6f, 1.0f, 1.0f);
+    }
+    else {
+      BLF_color4f(span.fontid, 0.8f, 0.8f, 0.8f, 1.0f);
+    }
+
+    const float ascender = BLF_ascender(span.fontid) * aspect;
+    const float descender = BLF_descender(span.fontid) * aspect;
+    const float font_height = ascender - descender;
+    const float width = BLF_width(span.fontid, span.text.c_str(), span.text.size());
+
+    BLF_position(span.fontid, span.x, span.y - ascender, 0.0f);
+    BLF_draw(span.fontid, span.text.c_str(), span.text.size());
+
+    if (span.url) {
+      const ui::EmbossType previous_emboss = ui::block_emboss_get(&ui_block);
+      ui::block_emboss_set(&ui_block, ui::EmbossType::None);
+      ui::Button *but = uiDefIconBut(&ui_block,
+                                     ui::ButtonType::But,
+                                     ICON_NONE,
+                                     span.x,
+                                     span.y - font_height,
+                                     width,
+                                     font_height,
+                                     nullptr,
+                                     0.0,
+                                     0.0,
+                                     std::nullopt);
+      ui::block_emboss_set(&ui_block, previous_emboss);
+      wmOperatorType *ot = WM_operatortype_find("WM_OT_url_open", false);
+      PointerRNA props = WM_operator_properties_create_ptr(ot);
+      RNA_string_set(&props, "url", span.url->c_str());
+      ui::button_operator_set(but, ot, wm::OpCallContext::InvokeDefault, &props);
+    }
+  }
+
+  for (const MarkdownSpan &span : md_layout.spans) {
+    BLF_disable(span.fontid, BLF_ASPECT);
+  }
+}
 
 static void node_draw_comment(const bContext &C,
                               TreeDrawContext &tree_draw_ctx,
@@ -4364,8 +4417,8 @@ static void node_draw_comment(const bContext &C,
 
   NodeComment &storage = *static_cast<NodeComment *>(node.storage);
   const StringRef full_text = storage.text;
-  MarkdownDrawer drawer(snode, full_text, rct, block);
-  drawer.draw();
+  const MarkdownLayout md_layout = compute_markdown_layout(snode, full_text, rct);
+  draw_markdown_layout(md_layout, snode, block);
 
   block_end_ex(&C,
                tree_draw_ctx.bmain,
