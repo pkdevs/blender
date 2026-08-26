@@ -246,8 +246,8 @@ TEST_F(Float3x3Test, quaternion_to_rotation)
    * >>> r = R.from_quat([np.cos(np.pi/4), 0, 0, np.sin(np.pi/4)], scalar_first=True)
    * >>> r.as_matrix()
    * array([[ 2.22044605e-16, -1.00000000e+00,  0.00000000e+00],
-   *      [ 1.00000000e+00,  2.22044605e-16,  0.00000000e+00],
-   *      [ 0.00000000e+00,  0.00000000e+00,  1.00000000e+00]]) */
+   *        [ 1.00000000e+00,  2.22044605e-16,  0.00000000e+00],
+   *        [ 0.00000000e+00,  0.00000000e+00,  1.00000000e+00]]) */
   EXPECT_THAT(quaternion_to_rotation(make_float4(cosf(M_PI_F / 4.0f), 0, 0, sinf(M_PI_F / 4.0f))),
               IsNearFloat3x3(make_float3x3(make_float3(0.0f, -1.0f, 0.0f),
                                            make_float3(1.0f, 0.0f, 0.0f),
