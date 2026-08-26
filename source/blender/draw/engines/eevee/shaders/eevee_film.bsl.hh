@@ -170,6 +170,8 @@ struct Film {
   [[specialization_constant(-1)]] int display_id;
   [[specialization_constant(-1)]] int normal_id;
 
+  [[compilation_constant]] bool use_panoramic;
+
   /* Sample inputs. Data freshly rendered. */
   [[sampler(0)]] sampler2DDepth depth_tx;
   [[sampler(1)]] sampler2D combined_tx;
@@ -329,12 +331,14 @@ struct Film {
     return sample_get(sample_n, texel_film);
   }
 
-  FilmSample sample_get(int sample_n,
-                        int2 texel_film,
-                        FilmSample panoramic_sample,
-                        bool use_panoramic_sample)
+  FilmSample sample_get(int sample_n, int2 texel_film, FilmSample panoramic_sample)
   {
-    return use_panoramic_sample ? panoramic_sample : sample_get(sample_n, texel_film);
+    if (use_panoramic) [[static_branch]] {
+      return panoramic_sample;
+    }
+    else {
+      return sample_get(sample_n, texel_film);
+    }
   }
 
   /* Returns the combined weights of all samples affecting this film pixel. */
@@ -429,7 +433,6 @@ struct Film {
   void cryptomatte_layer_accum_and_store(FilmSample dst,
                                          int2 texel_film,
                                          FilmSample panoramic_sample,
-                                         bool use_panoramic_sample,
                                          int pass_id,
                                          int layer_component,
                                          float4 &out_color)
@@ -445,7 +448,7 @@ struct Film {
     float2 crypto_samples[4] = float2_array(
         float2(0.0f), float2(0.0f), float2(0.0f), float2(0.0f));
     for (int i = 0; i < samples_len; i++) {
-      FilmSample src = sample_get(i, texel_film, panoramic_sample, use_panoramic_sample);
+      FilmSample src = sample_get(i, texel_film, panoramic_sample);
       sample_cryptomatte_accum(src, layer_component, cryptomatte_tx, crypto_samples);
     }
     float4 display_color = float4(0.0f);
@@ -985,8 +988,7 @@ struct Film {
     }
 
     float2 uv = (float2(texel_sample) + 0.5f) / float2(textureSize(depth_tx, 0).xy);
-    float depth_value = depth_convert_to_scene(
-        views.get(0), value, uv, is_panoramic(uni.uniform_buf.camera.type));
+    float depth_value = depth_convert_to_scene(views.get(0), value, uv, use_panoramic);
     out_depth = depth_value;
 
     if (value == 1.0f) {
@@ -1041,8 +1043,7 @@ struct Film {
     panoramic_sample.weight = 0.0f;
     panoramic_sample.weight_sum_inv = 0.0f;
 
-    const bool use_panoramic_sample = is_panoramic(uni.uniform_buf.camera.type);
-    if (use_panoramic_sample) {
+    if (use_panoramic) [[static_branch]] {
       /* Panoramic views use a single owning cubemap face per film texel. */
       panoramic_sample = sample_get(0, texel_film, panoramic_view_id_get());
       if (panoramic_sample.weight == 0.0f) {
@@ -1061,8 +1062,13 @@ struct Film {
       }
     }
 
-    float weight_accum = use_panoramic_sample ? panoramic_sample.weight :
-                                                weight_accumulation(texel_film);
+    float weight_accum;
+    if (use_panoramic) [[static_branch]] {
+      weight_accum = panoramic_sample.weight;
+    }
+    else {
+      weight_accum = weight_accumulation(texel_film);
+    }
     float film_weight = weight_load(texel_film);
     float weight_sum = film_weight + weight_accum;
     store_weight(texel_film, weight_sum);
@@ -1082,7 +1088,7 @@ struct Film {
 
       FilmSample src;
       for (int i = samples_len - 1; i >= 0; i--) {
-        src = sample_get(i, texel_film, panoramic_sample, use_panoramic_sample);
+        src = sample_get(i, texel_film, panoramic_sample);
         sample_accum_combined(src, combined_accum, weight_accum);
       }
       /* NOTE: src.texel is center texel in incoming data buffer. */
@@ -1093,7 +1099,7 @@ struct Film {
       float film_distance = distance_load(texel_film);
 
       /* Get sample closest to target texel. It is always sample 0. */
-      FilmSample film_sample = sample_get(0, texel_film, panoramic_sample, use_panoramic_sample);
+      FilmSample film_sample = sample_get(0, texel_film, panoramic_sample);
 
       /* Using film weight as distance to the pixel. So the check is inverted. */
       if (film_sample.weight > film_distance) {
@@ -1141,7 +1147,7 @@ struct Film {
       float4 specular_light_accum = float4(0.0f);
 
       for (int i = 0; i < samples_len; i++) {
-        FilmSample src = sample_get(i, texel_film, panoramic_sample, use_panoramic_sample);
+        FilmSample src = sample_get(i, texel_film, panoramic_sample);
         sample_accum(src,
                      uni.uniform_buf.film.diffuse_color_id,
                      uni.uniform_buf.render_pass.diffuse_color_id,
@@ -1187,7 +1193,7 @@ struct Film {
       float ao_accum = 0.0f;
 
       for (int i = 0; i < samples_len; i++) {
-        FilmSample src = sample_get(i, texel_film, panoramic_sample, use_panoramic_sample);
+        FilmSample src = sample_get(i, texel_film, panoramic_sample);
         sample_accum(src,
                      uni.uniform_buf.film.volume_light_id,
                      uni.uniform_buf.render_pass.volume_light_id,
@@ -1231,7 +1237,7 @@ struct Film {
       float4 transparent_accum = float4(0.0f);
 
       for (int i = 0; i < samples_len; i++) {
-        FilmSample src = sample_get(i, texel_film, panoramic_sample, use_panoramic_sample);
+        FilmSample src = sample_get(i, texel_film, panoramic_sample);
         sample_accum(src,
                      uni.uniform_buf.film.transparent_id,
                      uni.uniform_buf.render_pass.transparent_id,
@@ -1263,8 +1269,7 @@ struct Film {
             /* Average over view space z. */
             [[resource_table]] const draw::View &views = this->views_;
             float2 uv = (float2(src.texel) + 0.5f) / float2(textureSize(depth_tx, 0).xy);
-            depth = depth_convert_to_scene(
-                views.get(0), depth, uv, is_panoramic(uni.uniform_buf.camera.type));
+            depth = depth_convert_to_scene(views.get(0), depth, uv, use_panoramic);
           }
           denoising_depth_accum += depth * src.weight;
         }
@@ -1310,7 +1315,7 @@ struct Film {
         float4 aov_accum = float4(0.0f);
 
         for (int i = 0; i < samples_len; i++) {
-          FilmSample src = sample_get(i, texel_film, panoramic_sample, use_panoramic_sample);
+          FilmSample src = sample_get(i, texel_film, panoramic_sample);
           sample_accum(
               src, 0, uni.uniform_buf.render_pass.color_len + aov, rp_color_tx, aov_accum);
         }
@@ -1321,7 +1326,7 @@ struct Film {
         float aov_accum = 0.0f;
 
         for (int i = 0; i < samples_len; i++) {
-          FilmSample src = sample_get(i, texel_film, panoramic_sample, use_panoramic_sample);
+          FilmSample src = sample_get(i, texel_film, panoramic_sample);
           sample_accum(
               src, 0, uni.uniform_buf.render_pass.value_len + aov, rp_value_tx, aov_accum);
         }
@@ -1341,21 +1346,18 @@ struct Film {
         cryptomatte_layer_accum_and_store(dst,
                                           texel_film,
                                           panoramic_sample,
-                                          use_panoramic_sample,
                                           uni.uniform_buf.film.cryptomatte_object_id,
                                           0,
                                           out_color);
         cryptomatte_layer_accum_and_store(dst,
                                           texel_film,
                                           panoramic_sample,
-                                          use_panoramic_sample,
                                           uni.uniform_buf.film.cryptomatte_asset_id,
                                           1,
                                           out_color);
         cryptomatte_layer_accum_and_store(dst,
                                           texel_film,
                                           panoramic_sample,
-                                          use_panoramic_sample,
                                           uni.uniform_buf.film.cryptomatte_material_id,
                                           2,
                                           out_color);
@@ -1571,10 +1573,16 @@ template void pass_convert<ConvertCryptomatte, true>(ConvertCryptomatte &, const
 
 }  // namespace eevee::film
 
-PipelineCompute eevee_film_comp(eevee::film::accumulate_comp);
+PipelineCompute eevee_film_comp(eevee::film::accumulate_comp,
+                                eevee::film::Film{.use_panoramic = false});
+PipelineCompute eevee_film_comp_panoramic(eevee::film::accumulate_comp,
+                                          eevee::film::Film{.use_panoramic = true});
 PipelineGraphic eevee_film_frag(eevee::film::fullscreen_vert,
-                                eevee::film::accumulate_or_display_frag);
-PipelineGraphic eevee_film_copy_frag(eevee::film::fullscreen_vert, eevee::film::display_frag);
+                                eevee::film::accumulate_or_display_frag,
+                                eevee::film::Film{.use_panoramic = false});
+PipelineGraphic eevee_film_copy_frag(eevee::film::fullscreen_vert,
+                                     eevee::film::display_frag,
+                                     eevee::film::Film{.use_panoramic = false});
 
 PipelineCompute eevee_film_pass_convert_combined(
     eevee::film::pass_convert<eevee::film::ConvertCombined, false>);

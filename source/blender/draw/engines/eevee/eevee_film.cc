@@ -613,9 +613,10 @@ void Film::sync()
                  GPU_type_matches_ex(
                      GPU_DEVICE_QUALCOMM, GPU_OS_WIN, GPU_DRIVER_ANY, GPU_BACKEND_VULKAN);
 
-  eShaderType shader = use_compute_ ? FILM_COMP : FILM_FRAG;
+  eShaderType shader = inst_.camera.is_panoramic() ? FILM_COMP_PANORAMIC :
+                                                     (use_compute_ ? FILM_COMP : FILM_FRAG);
 
-  /* TODO(fclem): Shader variation for panoramic & scaled resolution. */
+  /* TODO(fclem): Shader variation for scaled resolution. */
 
   gpu::Shader *sh = inst_.shaders.static_shader_get(shader);
   accumulate_ps_.init();
