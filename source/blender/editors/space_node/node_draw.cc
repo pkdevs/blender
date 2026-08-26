@@ -4239,38 +4239,74 @@ class MarkdownDrawer {
         while (!remaining_text.is_empty()) {
           const float remaining_width = bounds_.xmax - x_;
           float needed_width = 0.0f;
-          const size_t char_i = BLF_width_to_strlen(
-              fontid, text.data(), text.size(), remaining_width, &needed_width);
-          const StringRef fitting_text = remaining_text.substr(0, char_i);
-          remaining_text = remaining_text.drop_prefix(char_i);
-          BLF_position(main_fontid_, x_, y_ - ascender, 0.0f);
-          BLF_draw(main_fontid_, fitting_text.data(), fitting_text.size());
+          size_t last_fit_char_i = BLF_width_to_strlen(fontid,
+                                                       remaining_text.data(),
+                                                       size_t(remaining_text.size()),
+                                                       remaining_width,
+                                                       &needed_width);
 
-          if (href_) {
-            const ui::EmbossType previous_emboss = ui::block_emboss_get(&ui_block_);
-            ui::block_emboss_set(&ui_block_, ui::EmbossType::None);
-            ui::Button *but = uiDefIconBut(&ui_block_,
-                                           ui::ButtonType::But,
-                                           ICON_NONE,
-                                           x_,
-                                           y_ - font_height,
-                                           needed_width,
-                                           font_height,
-                                           nullptr,
-                                           0.0,
-                                           0.0,
-                                           std::nullopt);
-            ui::block_emboss_set(&ui_block_, previous_emboss);
-            wmOperatorType *ot = WM_operatortype_find("WM_OT_url_open", false);
-            PointerRNA props = WM_operator_properties_create_ptr(ot);
-            RNA_string_set(&props, "url", std::string(*href_).c_str());
-            ui::button_operator_set(but, ot, wm::OpCallContext::InvokeDefault, &props);
+          size_t draw_bytes = last_fit_char_i;
+          size_t drop_bytes = last_fit_char_i;
+          bool wrap_to_next_line = last_fit_char_i < size_t(remaining_text.size());
+
+          if (wrap_to_next_line) {
+            const int64_t last_space = (last_fit_char_i > 0) ?
+                                          remaining_text.find_last_of(
+                                              ' ', int64_t(last_fit_char_i) - 1) :
+                                          StringRef::not_found;
+            if (last_space != StringRef::not_found) {
+              draw_bytes = size_t(last_space);
+              drop_bytes = size_t(last_space) + 1; /* Skip the space. */
+              needed_width = BLF_width(fontid, remaining_text.data(), draw_bytes);
+            }
+            else if (x_ > bounds_.xmin) {
+              /* Word does not fit on this line; retry on the next. */
+              x_ = bounds_.xmin;
+              y_ -= UI_UNIT_Y * 0.8f;
+              continue;
+            }
+            else if (last_fit_char_i == 0) {
+              /* Nothing fits on an empty line; advance one character to avoid an infinite loop. */
+              draw_bytes = drop_bytes = size_t(BLI_str_utf8_size_safe(remaining_text.data()));
+              needed_width = BLF_width(fontid, remaining_text.data(), draw_bytes);
+            }
           }
 
-          x_ += needed_width;
-          if (char_i + 1 < text.size()) {
+          const StringRef fitting_text = remaining_text.substr(0, draw_bytes);
+          remaining_text = remaining_text.drop_prefix(drop_bytes);
+
+          if (draw_bytes > 0) {
+            BLF_position(main_fontid_, x_, y_ - ascender, 0.0f);
+            BLF_draw(main_fontid_, fitting_text.data(), fitting_text.size());
+
+            if (href_) {
+              const ui::EmbossType previous_emboss = ui::block_emboss_get(&ui_block_);
+              ui::block_emboss_set(&ui_block_, ui::EmbossType::None);
+              ui::Button *but = uiDefIconBut(&ui_block_,
+                                             ui::ButtonType::But,
+                                             ICON_NONE,
+                                             x_,
+                                             y_ - font_height,
+                                             needed_width,
+                                             font_height,
+                                             nullptr,
+                                             0.0,
+                                             0.0,
+                                             std::nullopt);
+              ui::block_emboss_set(&ui_block_, previous_emboss);
+              wmOperatorType *ot = WM_operatortype_find("WM_OT_url_open", false);
+              PointerRNA props = WM_operator_properties_create_ptr(ot);
+              RNA_string_set(&props, "url", std::string(*href_).c_str());
+              ui::button_operator_set(but, ot, wm::OpCallContext::InvokeDefault, &props);
+            }
+          }
+
+          if (wrap_to_next_line) {
             x_ = bounds_.xmin;
             y_ -= UI_UNIT_Y * 0.8f;
+          }
+          else {
+            x_ += needed_width;
           }
         }
         break;
