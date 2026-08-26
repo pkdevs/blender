@@ -2101,6 +2101,9 @@ class ShaderNodesInliner {
     Vector<NodeInContext> nodes;
     nodes.append(node);
     for (const ComputeContext *context = node.context; context; context = context->parent()) {
+      if (!warning_is_propagated(nodes.last()->warning_propagation, type)) {
+        break;
+      }
       if (const auto *group_context = dynamic_cast<const bke::GroupNodeComputeContext *>(context))
       {
         nodes.append({context->parent(), group_context->node()});
