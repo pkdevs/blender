@@ -665,7 +665,6 @@ void BVHEmbree::add_gsplats(const Object *ob, const PointCloud *pointcloud, cons
 
   rtcSetGeometryUserData(geom_id, const_cast<PointCloud *>(pointcloud));
   rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
-  rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
 
   rtcSetGeometryUserPrimitiveCount(geom_id, pointcloud->num_points());
   rtcSetGeometryBoundsFunction(geom_id, gsplat_bounds_func, nullptr);

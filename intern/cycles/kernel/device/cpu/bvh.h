@@ -265,15 +265,33 @@ static void custom_intersect(const RTCIntersectFunctionNArguments *args)
     return;
   }
 
-  ray_hit->hit.u = 0.0f;
-  ray_hit->hit.v = 0.0f;
-  ray_hit->hit.primID = args->primID;
-  ray_hit->hit.geomID = args->geomID;
-  ray_hit->hit.instID[0] = ctx->instID[0];
+  RTCHit potential_hit;
+  potential_hit.u = 0.0f;
+  potential_hit.v = 0.0f;
+  potential_hit.primID = args->primID;
+  potential_hit.geomID = args->geomID;
+  potential_hit.instID[0] = ctx->instID[0];
 
+  const float old_tfar = ray_hit->ray.tfar;
   ray_hit->ray.tfar = isect_t;
 
-  args->valid[0] = 1;
+  RTCFilterFunctionNArguments filter_args;
+  int valid = -1;
+  filter_args.valid = &valid;
+  filter_args.geometryUserPtr = args->geometryUserPtr;
+  filter_args.context = args->context;
+  filter_args.ray = (RTCRayN *)&ray_hit->ray;
+  filter_args.hit = (RTCHitN *)&potential_hit;
+  filter_args.N = 1;
+  kernel_embree_filter_intersection_func_impl(&filter_args);
+  if (!valid) {
+    ray_hit->ray.tfar = old_tfar;
+    args->valid[0] = 0;
+    return;
+  }
+
+  ray_hit->hit = potential_hit;
+  args->valid[0] = -1;
 #else
   args->valid[0] = 0;
 #endif
