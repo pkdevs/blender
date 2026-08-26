@@ -922,6 +922,7 @@ ccl_device
         printf("integrate_surface_direct_light() returned!; !restir_light_reference_from_sample()=%u\n\n\n\n",
                (!restir_light_reference_from_sample(kg, &ls, sd->time, &reference)));
         continue;
+        // break; // !!!: Break or continue?
       }
     }
 
@@ -942,23 +943,23 @@ ccl_device
     PROFILING_EVENT(PROFILING_RESTIR_RESERVOIR);
 
 
-printf(
-    "\n=== BEFORE RESERVOIR ADD ===\n"
-    "radiance.sum = (%e, %e, %e)\n"
-    "rgb_to_y     = (%e, %e, %e)\n"
-    // "luminance    = %e\n"
-    "eval_fac     = %e\n"
-    "ls.pdf       = %e\n"
-    "============================\n",
-    (double)radiance.sum.x,
-    (double)radiance.sum.y,
-    (double)radiance.sum.z,
-    (double)reservoir.rgb_to_y.x,
-    (double)reservoir.rgb_to_y.y,
-    (double)reservoir.rgb_to_y.z,
-    // (double)reservoir_compute_luminance(reservoir, radiance),
-    (double)ls.eval_fac,
-    (double)ls.pdf);
+// printf(
+//     "\n=== BEFORE RESERVOIR ADD ===\n"
+//     "radiance.sum = (%e, %e, %e)\n"
+//     "rgb_to_y     = (%e, %e, %e)\n"
+//     // "luminance    = %e\n"
+//     "eval_fac     = %e\n"
+//     "ls.pdf       = %e\n"
+//     "============================\n",
+//     (double)radiance.sum.x,
+//     (double)radiance.sum.y,
+//     (double)radiance.sum.z,
+//     (double)reservoir.rgb_to_y.x,
+//     (double)reservoir.rgb_to_y.y,
+//     (double)reservoir.rgb_to_y.z,
+//     // (double)reservoir_compute_luminance(reservoir, radiance),
+//     (double)ls.eval_fac,
+//     (double)ls.pdf);
 
     /* Compute the NEE MIS weight and divide by the light PDF in the appropriate measure. */
     reservoir_add_light_sample(&reservoir, ls, reference, radiance, bsdf_pdf, rand_pick, use_restir); // !!!

@@ -465,9 +465,9 @@ printf(
 
   // TODO: this works for diffuse surfaces. For specular, probably `sd->wi` is needed instead.
   // TODO: compress the data.
-  // reservoir->reference.type = (LightType)(int)buffer[i++];
-  // // !!!: No need for flags! restir_light_reference_restore_metadata() can handle it
-  // // reservoir->reference.flags = (uint32_t)buffer[i++];
+
+  reservoir->reference.type = (LightType)(int)buffer[i++];
+  reservoir->reference.flags = (uint32_t)buffer[i++];
 
   reservoir->reference.object = (int)buffer[i++];
   reservoir->reference.prim = (int)buffer[i++]; // For analytic lights: object = OBJECT_NONE; prim = KernelLight index
@@ -495,7 +495,7 @@ printf( // Rejected candidates
   /* No selected sample exists in an empty reservoir.
    * Do not attempt to restore/reconstruct its light reference.
    */
-  if (reservoir_is_empty(reservoir)) { // !!!: always Returning false here for 0-radius lights!
+  if (reservoir_is_empty(reservoir)) {
     printf("restir_unpack_reservoir() returns false on empty reservoir!\n\n");
     return false;
   }
@@ -519,9 +519,8 @@ printf( // Accepted candidates
     (double)reservoir->reference.param.x,
     (double)reservoir->reference.param.y);
 
-  // !!!: sees: reference->type == 0 which isn't LIGHT_TRIANGLE
-  // Reconstruct reference.type, RESTIR_LIGHT_REFERENCE_VALID, RESTIR_LIGHT_REFERENCE_HAS_PARAM
-  return restir_light_reference_restore_metadata(kg, &reservoir->reference); // !!!: See why triangle fails
+  // TODO: Compress later... flags and ...
+  // return restir_light_reference_restore_metadata(kg, &reservoir->reference);
 }
 
 

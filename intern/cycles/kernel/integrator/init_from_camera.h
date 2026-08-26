@@ -148,8 +148,8 @@ ccl_device bool integrator_init_from_camera(KernelGlobals kg,
 
     film_clear_pass_reservoir(kg, state, render_buffer);
 
-    /* Continue with intersect_closest kernel, optionally initializing volume
-     * stack before that if the camera may be inside a volume. */
+    /* Continue with the intersect_closest kernel, optionally initializing the volume 
+     * stack beforehand if the camera may be inside a volume.*/
     if (kernel_data.cam.is_inside_volume) {
       integrator_path_init(state, DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK);
     }
