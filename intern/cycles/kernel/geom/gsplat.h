@@ -26,6 +26,7 @@ CCL_NAMESPACE_BEGIN
 
 #if defined(__GSPLATS__)
 
+/* Gaussian splat normal in object space. */
 ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private ShaderData &sd)
 {
   const int radiance_base_offset =
@@ -82,14 +83,15 @@ ccl_device_inline float3 gsplat_normal(KernelGlobals kg, const int object, const
 
   if ((scale.x <= scale.y) && (scale.x <= scale.z)) {
     return make_float3(
-        a * a + b * b - c * c - d * d, 2.0f * (b * c - a * d), 2.0f * (a * c + b * d));
+               a * a + b * b - c * c - d * d, 2.0f * (b * c - a * d), 2.0f * (a * c + b * d)) *
+           normalizer;
   }
   if ((scale.y < scale.x) && (scale.y <= scale.z)) {
     return make_float3(
                2.0f * (a * d + b * c), a * a - b * b + c * c - d * d, 2.0f * (c * d - a * b)) *
            normalizer;
   }
-  // if ((scale.z < scale.x) && (scale.z < scale.y))
+  kernel_assert((scale.z < scale.x) && (scale.z < scale.y));
   return make_float3(
              2.0f * (b * d - a * c), 2.0f * (a * b + c * d), a * a - b * b - c * c + d * d) *
          normalizer;
