@@ -151,10 +151,6 @@ template<> struct TypeTraitConverter<MStringProperty> {
 static GeometryScope get_scope_for_attribute_domain(bke::AttrDomain domain)
 {
   switch (domain) {
-    case bke::AttrDomain::Auto: {
-      BLI_assert_unreachable();
-      break;
-    }
     case bke::AttrDomain::Instance:
     case bke::AttrDomain::Edge:
     case bke::AttrDomain::Layer: {
