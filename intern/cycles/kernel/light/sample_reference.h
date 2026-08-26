@@ -89,8 +89,8 @@ ccl_device_inline bool restir_point_light_reference_from_sample(
   }
 
   reference->type = LIGHT_POINT;
-  // reference->object = ls->object;
-  reference->object = OBJECT_NONE;
+  reference->object = ls->object;
+  // reference->object = OBJECT_NONE;
   reference->prim = ls->prim;
 
   if (klight->spot.is_sphere) {
@@ -148,7 +148,8 @@ ccl_device_inline bool restir_sun_light_reference_from_sample(
   }
 
   reference->type = LIGHT_SUN;
-  reference->object = OBJECT_NONE;
+  // reference->object = OBJECT_NONE;
+  reference->object = ls->object;
   reference->prim = ls->prim;
 
   // store light-local cone direction
@@ -158,6 +159,10 @@ ccl_device_inline bool restir_sun_light_reference_from_sample(
   reference->param = restir_direction_encode(local_Ng);
   reference->flags = RESTIR_LIGHT_REFERENCE_VALID |
                      RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+
+
+printf("\nSUN PRODUCER: ls object=%d prim=%d -> ref object=%d prim=%d\n",
+       ls->object, ls->prim, reference->object, reference->prim);
 
   return true;
 }
@@ -186,8 +191,8 @@ ccl_device_inline bool restir_area_light_reference_from_sample(
   }
 
   reference->type = LIGHT_AREA;
-  // reference->object = ls->object;
-  reference->object = OBJECT_NONE;
+  reference->object = ls->object;
+  // reference->object = OBJECT_NONE;
   reference->prim = ls->prim;
 // param stores the same barycentric-style emitter coordinates `float2(v + 0.5f, -u - v)`.
   reference->param = area_light_uv(klight, ls->P);
@@ -256,8 +261,8 @@ ccl_device_inline bool restir_spot_light_reference_from_sample(
 
     /* Persistent light identity. */
     reference->type = LIGHT_SPOT;
-    // reference->object = ls->object;
-    reference->object = OBJECT_NONE;
+    reference->object = ls->object;
+    // reference->object = OBJECT_NONE;
     reference->prim = ls->prim;
     reference->param = param;
 
@@ -274,15 +279,14 @@ ccl_device_inline bool restir_spot_light_reference_from_sample(
      * with no additional geometric parameter.
      */
     reference->type = LIGHT_SPOT;
-    reference->object = OBJECT_NONE;
+    // reference->object = OBJECT_NONE;
+    reference->object = ls->object;
     reference->prim = ls->prim;
     reference->flags = RESTIR_LIGHT_REFERENCE_VALID;
 
     return true;
   }
 }
-
-
 
 ccl_device_inline bool restir_triangle_light_reference_from_sample(
     KernelGlobals kg,
@@ -353,11 +357,10 @@ ccl_device_inline bool restir_triangle_light_reference_from_sample(
   return true;
 }
 
-// TODO: Handle all analytic lights
 /* Dispatcher
  * Fallback Conversion API: Available for paths where only an LS exists, such as ordinary NEE samples.
  */
-ccl_device_inline bool restir_light_reference_from_sample( // !!!
+ccl_device_inline bool restir_light_reference_from_sample( // !!!: DI Blackout
     KernelGlobals kg,
     const ccl_private LightSample *ls,
     const float time,
@@ -970,6 +973,14 @@ ccl_device_inline bool restir_light_sample_from_reference(
     const uint32_t path_flag,
     ccl_private LightSample *ls)
 {
+printf("RECONSTRUCT DISPATCH: flags=%u type=%d prim=%d object=%d param=(%f,%f)\n",
+       reference->flags,
+       reference->type,
+       reference->prim,
+       reference->object,
+       (double)reference->param.x,
+       (double)reference->param.y);
+
   if (!restir_light_reference_is_valid(reference)) {
     *ls = {};
     return false;

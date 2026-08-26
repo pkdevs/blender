@@ -760,13 +760,13 @@ ccl_device_inline void film_write_pass_reservoir(
 
   // TODO(weizhen): it is possible to compress the light sample reference.
 
-// DEBUG ONLY
-if (reservoir->total_weight > 0.0f) {
-  printf(
-      "film_write_pass_reservoir(); FILM INVARIANT: weight>0 => prim=%d flags=%u\n",
-      reservoir->reference.prim,
-      reservoir->reference.flags);
-}
+// // DEBUG ONLY
+// if (reservoir->total_weight > 0.0f) {
+//   printf(
+//       "film_write_pass_reservoir(); FILM INVARIANT: weight>0 => prim=%d flags=%u\n",
+//       reservoir->reference.prim,
+//       reservoir->reference.flags);
+// }
 
   film_overwrite_pass_float(ptr++, (float)reservoir->reference.type);
   film_overwrite_pass_float(ptr++, (float)reservoir->reference.flags);

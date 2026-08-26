@@ -606,16 +606,6 @@ struct ReSTIRLightSampleReference {
   LightType type;     // May eventually need a dedicated ReSTIRLightReferenceType (If KernelLight can't derive some distinctions...)
   uint flags;
 
-  /* Current Cycles identity convention:
-   *
-   * Analytic light:
-   *   object == OBJECT_NONE
-   *   prim   == KernelLight index
-   *
-   * Geometric emitter:
-   *   object == object index
-   *   prim   == primitive index
-   */
   int object;
   int prim;
 
@@ -1870,8 +1860,7 @@ struct KernelWorkTile {
   int min_y;
   int max_y;
 
-  int restir_iteration; // New
-  // uint8_t restir_mode;
+  int restir_iteration;
   bool setup_restir;
   bool final_evaluation;
 };

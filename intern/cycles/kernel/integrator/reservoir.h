@@ -492,6 +492,9 @@ printf( // Rejected candidates
     reservoir->reference.prim,
     reservoir->reference.object);
 
+  // return !reservoir_is_empty(reservoir); // TODO: Uncomment :)
+
+
   /* No selected sample exists in an empty reservoir.
    * Do not attempt to restore/reconstruct its light reference.
    */
@@ -518,6 +521,8 @@ printf( // Accepted candidates
     reservoir->reference.prim,
     (double)reservoir->reference.param.x,
     (double)reservoir->reference.param.y);
+
+  return true;
 
   // TODO: Compress later... flags and ...
   // return restir_light_reference_restore_metadata(kg, &reservoir->reference);
