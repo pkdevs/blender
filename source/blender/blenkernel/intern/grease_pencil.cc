@@ -2260,21 +2260,21 @@ void ensure_non_empty_layer_names(Main &bmain, GreasePencil &grease_pencil)
 std::string shapekey_position_attribute(const char *name)
 {
   char attr_name[64];
-  SNPRINTF_UTF8(attr_name, ".SK_%s", name);
+  SNPRINTF_UTF8(attr_name, "SKp_%s", name);
   return std::string(attr_name);
 }
 
 std::string shapekey_radius_attribute(const char *name)
 {
   char attr_name[64];
-  SNPRINTF_UTF8(attr_name, ".SKr_%s", name);
+  SNPRINTF_UTF8(attr_name, "SKr_%s", name);
   return std::string(attr_name);
 }
 
 std::string shapekey_opacity_attribute(const char *name)
 {
   char attr_name[64];
-  SNPRINTF_UTF8(attr_name, ".SKo_%s", name);
+  SNPRINTF_UTF8(attr_name, "SKo_%s", name);
   return std::string(attr_name);
 }
 
