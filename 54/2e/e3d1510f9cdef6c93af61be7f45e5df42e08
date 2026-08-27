@@ -1,1 +1,2 @@
 Referenced by issue #163150, Very garbled import of specific SVG curve to Grease Pencil in 5.2, seems to work better in 5.1
+Referenced by pull request #163189, Fix #160384: False straight line detection in Grease Pencil plane normal
