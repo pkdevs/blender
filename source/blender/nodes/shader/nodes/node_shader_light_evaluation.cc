@@ -14,14 +14,32 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
 
   b.add_input<decl::Int>("LightIndex"_ustr).available(is_gpu_internal);
-
-  b.add_input<decl::Vector>("Position"_ustr).hide_value();
-  b.add_input<decl::Vector>("Normal"_ustr).hide_value();
+  b.add_input<decl::Vector>("Position"_ustr)
+      .hide_value()
+      .description("Evaluation position. Surface position by default");
+  b.add_input<decl::Vector>("Normal"_ustr)
+      .hide_value()
+      .description("Evaluation normal. Surface normal by default");
   b.add_input<decl::Float>("Roughness"_ustr)
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
-      .subtype(PROP_FACTOR);
+      .subtype(PROP_FACTOR)
+      .description("Evaluation roughness. Used for reflection factor");
+
+  b.add_output<decl::Vector>("Direction"_ustr)
+      .description(
+          "Local lights: Normalized direction from evaluation position to light position.\n"
+          "Sun lights: Sun direction * -1.0");
+  b.add_output<decl::Float>("Distance"_ustr)
+      .description(
+          "Local lights: Distance from evaluation position to light position.\n"
+          "Sun lights: 1.0");
+  b.add_output<decl::Float>("Mask"_ustr)
+      .description(
+          "All local lights: Mask to smooth the light cutoff.\n"
+          "Spot lights: Cutoff mask and spot attenuation.\n"
+          "Sun lights: 1.0");
   b.add_output<decl::Float>("Factor"_ustr).description("Shading reflection factor, scaled by PI");
 }
 
@@ -37,7 +55,13 @@ static int node_shader_gpu_light_evaluation(GPUMaterial *mat,
   if (!in[2].link) {
     GPU_link(mat, "world_normals_get", &in[2].link);
   }
-  return GPU_stack_link(mat, node, "node_light_evaluation", in, out);
+
+  return GPU_stack_link(mat,
+                        node,
+                        out[3].hasoutput ? "node_light_evaluation_with_factor" :
+                                           "node_light_evaluation",
+                        in,
+                        out);
 }
 
 }  // namespace nodes::node_shader_light_evaluation_cc

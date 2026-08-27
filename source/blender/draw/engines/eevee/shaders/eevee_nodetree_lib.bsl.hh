@@ -879,16 +879,7 @@ bool light_iter_should_skip([[maybe_unused]] eevee::light::VisibleLightIterator 
   } \
   }
 
-void node_light_info_impl(const int light_index,
-                          float3 position,
-                          float4 &color,
-                          float &power,
-                          float3 &light_position,
-                          float &cutoff_distance,
-                          float &is_sun,
-                          float3 &direction,
-                          float &distance,
-                          float &mask)
+void node_light_info_impl(const int light_index, float4 &color, float &power, float3 &position)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
@@ -899,48 +890,39 @@ void node_light_info_impl(const int light_index,
   /* Pre-divide power by PI,
    * so users get a closer match to physically correct energy by default. */
   power = light.point_power * M_1_PI;
-  light_position = light.object_to_world.location();
+  position = light.object_to_world.location();
+}
+
+void node_light_evaluation_impl(
+    const int light_index, float3 position, float3 &direction, float &distance, float &mask)
+{
+  /* clang-format off */ /* Multiline macros would break line count. */
+  [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
+  /* clang-format on */
+
+  LightData light = lrd.light_buf[light_index];
   const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
   LightVector lv = light_vector_get(light, is_directional, position);
   direction = lv.L;
   distance = lv.dist;
-  cutoff_distance = is_directional ? 1.0f : light.local().local.influence_radius_max;
   mask = light_attenuation_surface(light, is_directional, lv);
-  is_sun = is_directional ? 1.0f : 0.0f;
 }
 
-void node_light_accumulation_impl([[maybe_unused]] const int light_index,
-                                  [[maybe_unused]] float4 diffuse_light,
-                                  [[maybe_unused]] float4 diffuse_color,
-                                  [[maybe_unused]] float4 glossy_light,
-                                  [[maybe_unused]] float4 glossy_color,
-                                  [[maybe_unused]] float weight,
-                                  Closure &result)
-{
-  /* clang-format off */ /* Multiline macros would break line count. */
-  [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
-/* clang-format on */
-#if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
-  LightData light = lrd.light_buf[light_index];
-  float3 diffuse_color_weight = diffuse_color.rgb * weight;
-  float3 glossy_color_weight = glossy_color.rgb * weight;
-  g_diffuse_light += diffuse_color_weight * diffuse_light.rgb * light.power_factor[LIGHT_DIFFUSE];
-  g_specular_light += glossy_color_weight * glossy_light.rgb * light.power_factor[LIGHT_SPECULAR];
-  g_diffuse_color += diffuse_color_weight;
-  g_specular_color += glossy_color_weight;
-  g_light_accumulation_count++;
-#endif
-
-  result = Closure(0);
-}
-
-void node_light_evaluation_impl(
-    const int light_index, float3 position, float3 normal, float roughness, float &factor)
+void node_light_evaluation_with_factor_impl(const int light_index,
+                                            float3 position,
+                                            float3 normal,
+                                            float roughness,
+                                            float3 &direction,
+                                            float &distance,
+                                            float &mask,
+                                            float &factor)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
   /* clang-format on */
   [[resource_table]] UtilityTexture &util_tx = resource_table_get(UtilityTexture);
+
+  node_light_evaluation_impl(light_index, position, direction, distance, mask);
 
   LightData light = lrd.light_buf[light_index];
 
@@ -1045,6 +1027,31 @@ float4 node_attribute_light_impl(const int light_index, uint attr_hash)
     }
   }
   return float4(0.0f);
+}
+
+void node_light_accumulation_impl([[maybe_unused]] const int light_index,
+                                  [[maybe_unused]] float4 diffuse_light,
+                                  [[maybe_unused]] float4 diffuse_color,
+                                  [[maybe_unused]] float4 glossy_light,
+                                  [[maybe_unused]] float4 glossy_color,
+                                  [[maybe_unused]] float weight,
+                                  Closure &result)
+{
+  /* clang-format off */ /* Multiline macros would break line count. */
+  [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
+/* clang-format on */
+#if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
+  LightData light = lrd.light_buf[light_index];
+  float3 diffuse_color_weight = diffuse_color.rgb * weight;
+  float3 glossy_color_weight = glossy_color.rgb * weight;
+  g_diffuse_light += diffuse_color_weight * diffuse_light.rgb * light.power_factor[LIGHT_DIFFUSE];
+  g_specular_light += glossy_color_weight * glossy_light.rgb * light.power_factor[LIGHT_SPECULAR];
+  g_diffuse_color += diffuse_color_weight;
+  g_specular_color += glossy_color_weight;
+  g_light_accumulation_count++;
+#endif
+
+  result = Closure(0);
 }
 
 /** \} */
