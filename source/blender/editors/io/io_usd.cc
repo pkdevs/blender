@@ -511,7 +511,7 @@ static void wm_usd_export_draw(bContext *C, wmOperator *op)
   {
     ui::Layout &col = panel->column(false);
     col.prop(ptr, "accessibility_label", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    col.prop(ptr, "accessibility_description", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.textbox(C, ptr, "accessibility_description", IFACE_("Description"));
   }
 
   if (ui::Layout *panel = layout.panel(C, "USD_export_experimental", true, IFACE_("Experimental")))
