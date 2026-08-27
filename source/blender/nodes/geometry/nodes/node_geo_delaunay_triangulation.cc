@@ -567,7 +567,7 @@ static void calc_group_triangulation(const Mesh *mesh,
       const int dst_point = intersection_points[intersection_point];
       const int edge1 = intersected_edges_orig[dst_point][0];
       const int edge2 = intersected_edges_orig[dst_point][1];
-      BLI_assert(edge1 != -1 && edge2 != -1);
+      BLI_assert(edge1 != -1 && edge2 != -1 && edge1 != edge2);
 
       const auto [vert1, vert2] = verts_from_cdt_edge(edge1);
       const auto [vert3, vert4] = verts_from_cdt_edge(edge2);
