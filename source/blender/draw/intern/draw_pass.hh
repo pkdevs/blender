@@ -272,6 +272,16 @@ class PassBase {
   void draw(gpu::Batch *batch, ResourceIDRange res_id, uint custom_id = 0);
 
   /**
+   * Record a stream of draw records for the given batch. Each record is culled
+   * against its own resource bound and written to a static draw command slot. Records are issued
+   * as multi-draw indirect calls.
+   *
+   * \note Only supported by `PassMain`.
+   * \note Does not support primitive expansion.
+   */
+  void draw_multi(gpu::Batch *batch, Span<command::DrawRecord> records);
+
+  /**
    * Record a procedural draw call. Geometry is **NOT** source from a gpu::Batch.
    * \note An instance or vertex count of 0 will discard the draw call. It will not be recorded.
    */
@@ -932,6 +942,17 @@ template<class T>
 inline void PassBase<T>::draw(gpu::Batch *batch, ResourceIDRange res_id, uint custom_id)
 {
   this->draw(batch, -1, -1, -1, res_id, custom_id);
+}
+
+template<class T>
+inline void PassBase<T>::draw_multi(gpu::Batch *batch, Span<command::DrawRecord> records)
+{
+  if (records.is_empty() || batch == nullptr) {
+    return;
+  }
+  BLI_assert(shader_);
+  draw_commands_buf_.append_records(headers_, commands_, batch, records);
+  is_empty_ = false;
 }
 
 template<class T>

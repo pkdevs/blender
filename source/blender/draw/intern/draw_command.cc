@@ -254,6 +254,38 @@ void DrawMulti::execute(RecordingState &state) const
 
     group_index = group.next;
   }
+
+  /* Issue the record draws. Each record occupies 2 command slots (back/front winding) inside the
+   * record region of the command buffer. A culled record gets an instance_len of 0. */
+  const Vector<DrawMultiBuf::DrawRecordRange> *record_ranges =
+      multi_draw_buf->record_ranges_.lookup_ptr(this->uuid);
+
+  if (record_ranges != nullptr) {
+    const uint record_start = multi_draw_buf->record_start_;
+
+    constexpr intptr_t slot_stride = 2 * sizeof(DrawCommand);
+    /* `record_start` is in command slot units. */
+    intptr_t record_base = intptr_t(record_start) * intptr_t(sizeof(DrawCommand));
+
+    for (const DrawMultiBuf::DrawRecordRange &range : *record_ranges) {
+      gpu::Batch *batch = range.batch;
+      GPU_batch_set_shader(batch, state.shader, state.specialization_constants_get());
+
+      /* Spans all records of range.first..first+count inside [record_start; record_start +
+       * record_count) slots. */
+      const intptr_t offset = record_base + intptr_t(range.first) * slot_stride;
+
+      /* Back-facing command slots are at even locations, front-facing at off locations. */
+      state.front_facing_set(true);
+      GPU_batch_multi_draw_indirect(batch, indirect_buf, int(range.count), offset, slot_stride);
+      state.front_facing_set(false);
+      GPU_batch_multi_draw_indirect(batch,
+                                    indirect_buf,
+                                    int(range.count),
+                                    offset + intptr_t(sizeof(DrawCommand)),
+                                    slot_stride);
+    }
+  }
 }
 
 void DrawIndirect::execute(RecordingState &state) const
@@ -643,6 +675,25 @@ std::string DrawMulti::serialize(const std::string &line_prefix) const
     group_len++;
   }
 
+  const Vector<DrawMultiBuf::DrawRecordRange> *record_ranges =
+      multi_draw_buf->record_ranges_.lookup_ptr(this->uuid);
+  if (record_ranges != nullptr) {
+    const uint record_count = multi_draw_buf->record_count_;
+    ss << std::endl << line_prefix << "  .records(count=" << record_count << ")";
+    for (const DrawMultiBuf::DrawRecordRange &range : *record_ranges) {
+      for (uint r = 0; r < range.count; r++) {
+        const DrawRecord &rec = multi_draw_buf->record_buf_[range.first + r];
+        ss << std::endl
+           << line_prefix << "    .record(id=" << range.first + r
+           << ", instance_first=" << rec.instance_first << ", instance_len=" << rec.instance_len
+           << ", vertex_len=" << rec.vertex_len << ", vertex_first=" << rec.vertex_first
+           << ", resource_id=" << (rec.res_id & 0x7FFFFFFFu)
+           << ((rec.res_id & 0x80000000u) ? ", back_face" : ", front_face")
+           << ", custom_id=" << rec.custom_id << ")";
+      }
+    }
+  }
+
   ss << std::endl;
 
   return line_prefix + ".draw_multi(" + std::to_string(group_len) + ")" + ss.str();
@@ -805,9 +856,10 @@ void DrawMultiBuf::generate_commands(Vector<Header, 0> & /*headers*/,
 {
   GPU_debug_group_begin("DrawMultiBuf.bind");
 
-  resource_id_count_ = 0u;
+  resource_id_count_ = record_res_id_count_;
   for (DrawGroup &group : MutableSpan<DrawGroup>(group_buf_.data(), group_count_)) {
-    /* Compute prefix sum of all instance of previous group. */
+    /* Compute prefix sum of all instance of previous group. The records own the range before
+     * this base (see record_res_id_count_). */
     group.start = resource_id_count_;
     resource_id_count_ += group.len;
 
@@ -850,15 +902,19 @@ void DrawMultiBuf::generate_commands(Vector<Header, 0> & /*headers*/,
 
   group_buf_.push_update();
   prototype_buf_.push_update();
+  record_buf_.push_update();
+  record_start_ = group_count_ * 2;
   /* Allocate enough for the expansion pass. */
   resource_id_buf_.get_or_resize(resource_id_count_ * view_len * (use_custom_ids ? 2 : 1));
-  /* Two commands per group (inverted and non-inverted scale). */
-  command_buf_.get_or_resize(group_count_ * 2);
+  /* Two commands per group (inverted and non-inverted scale) and record. */
+  command_buf_.get_or_resize((group_count_ + record_count_) * 2);
 
-  if (prototype_count_ > 0) {
+  if (prototype_count_ + record_count_ > 0) {
     gpu::Shader *shader = DRW_shader_draw_command_generate_get();
     GPU_shader_bind(shader);
     GPU_shader_uniform_1i(shader, "prototype_len", prototype_count_);
+    GPU_shader_uniform_1i(shader, "record_len", record_count_);
+    GPU_shader_uniform_1i(shader, "record_start", record_start_);
     GPU_shader_uniform_1i(shader, "visibility_word_per_draw", visibility_word_per_draw);
     GPU_shader_uniform_1i(shader, "view_len", view_len);
     GPU_shader_uniform_1i(shader, "view_shift", log2_ceil_u(view_len));
@@ -866,9 +922,11 @@ void DrawMultiBuf::generate_commands(Vector<Header, 0> & /*headers*/,
     GPU_storagebuf_bind(group_buf_, GPU_shader_get_ssbo_binding(shader, "group_buf"));
     GPU_storagebuf_bind(visibility_buf, GPU_shader_get_ssbo_binding(shader, "visibility_buf"));
     GPU_storagebuf_bind(prototype_buf_, GPU_shader_get_ssbo_binding(shader, "prototype_buf"));
+    GPU_storagebuf_bind(record_buf_, GPU_shader_get_ssbo_binding(shader, "record_buf"));
     GPU_storagebuf_bind(command_buf_, GPU_shader_get_ssbo_binding(shader, "command_buf"));
     GPU_storagebuf_bind(resource_id_buf_, DRW_RESOURCE_ID_SLOT);
-    GPU_compute_dispatch(shader, divide_ceil_u(prototype_count_, DRW_COMMAND_GROUP_SIZE), 1, 1);
+    GPU_compute_dispatch(
+        shader, divide_ceil_u(prototype_count_ + record_count_, DRW_COMMAND_GROUP_SIZE), 1, 1);
     /* TODO(@fclem): Investigate moving the barrier in the bind function. */
     GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
     GPU_storagebuf_sync_as_indirect_buffer(command_buf_);

@@ -102,6 +102,23 @@ struct [[host_shared]] DrawPrototype {
   uint instance_len;
 };
 
+/**
+ * A draw record is a draw command for a sub-range of a single gpu::Batch, with its own
+ * resource bound for visibility culling.
+ */
+struct [[host_shared]] DrawRecord {
+  uint vertex_len;
+  uint instance_len;
+  uint vertex_first;
+  int base_index;
+  uint instance_first;
+  /* Resource handle index used for visibility culling. The most significant bit encodes the
+   * winding order. */
+  uint res_id;
+  /* Custom extra value to be used by the engines. */
+  uint custom_id;
+};
+
 /** \} */
 
 #ifndef GPU_SHADER

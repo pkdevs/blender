@@ -15,6 +15,7 @@
 #include "draw_testing.hh"
 
 #include <bitset>
+#include <cstddef>
 
 namespace blender::draw {
 
@@ -248,6 +249,61 @@ static void test_draw_pass_multi_draw()
 }
 DRAW_TEST(draw_pass_multi_draw)
 
+static void test_draw_record_layout()
+{
+  /* DrawRecord is uploaded to its own buffer, so it does not need to match DrawCommand's size.
+   * Layout must however stay in sync with the host / shader definition. */
+  EXPECT_EQ(sizeof(command::DrawRecord), 28);
+  EXPECT_EQ(offsetof(command::DrawRecord, vertex_len), 0u);
+  EXPECT_EQ(offsetof(command::DrawRecord, instance_len), 4u);
+  EXPECT_EQ(offsetof(command::DrawRecord, vertex_first), 8u);
+  EXPECT_EQ(offsetof(command::DrawRecord, base_index), 12u);
+  EXPECT_EQ(offsetof(command::DrawRecord, instance_first), 16u);
+  EXPECT_EQ(offsetof(command::DrawRecord, res_id), 20u);
+  EXPECT_EQ(offsetof(command::DrawRecord, custom_id), 24u);
+}
+DRAW_TEST(draw_record_layout)
+
+static void test_draw_pass_multi_draw_records()
+{
+  PassMain pass = {"test.multi_draw_records"};
+  pass.init();
+  pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR));
+
+  gpu::Batch *batch = GPU_batch_procedural_triangles_get();
+
+  /* First range on a new command. Second record is discarded (vertex_len 0). */
+  Vector<command::DrawRecord> records = {
+      {10, 1, 0, 5, 0, 1, 0},
+      {0, 1, 0, 5, 0, 99, 0},
+      {6, 2, 1, 5, 0, 2 | 0x80000000u, 0},
+  };
+  pass.draw_multi(batch, records);
+
+  /* Same shader state: appends to the same DrawMulti command. */
+  Vector<command::DrawRecord> records_2 = {{7, 1, 2, 5, 0, 3, 0}};
+  pass.draw_multi(batch, records_2);
+
+  std::string result = pass.serialize();
+  std::stringstream expected;
+  expected << ".test.multi_draw_records" << std::endl;
+  expected << "  .shader_bind(gpu_shader_3D_image_color)" << std::endl;
+  expected << "  .draw_multi(0)" << std::endl;
+  expected << "    .records(count=3)" << std::endl;
+  expected << "      .record(id=0, instance_first=0, instance_len=1, vertex_len=10, "
+              "vertex_first=0, resource_id=1, front_face, custom_id=0)"
+           << std::endl;
+  expected << "      .record(id=1, instance_first=1, instance_len=2, vertex_len=6, "
+              "vertex_first=1, resource_id=2, back_face, custom_id=0)"
+           << std::endl;
+  expected << "      .record(id=2, instance_first=3, instance_len=1, vertex_len=7, "
+              "vertex_first=2, resource_id=3, front_face, custom_id=0)"
+           << std::endl;
+
+  EXPECT_EQ(result, expected.str());
+}
+DRAW_TEST(draw_pass_multi_draw_records)
+
 static void test_draw_pass_sortable()
 {
   PassSortable pass = {"test.sortable"};
@@ -359,8 +415,6 @@ DRAW_TEST(draw_resource_id_gen)
 
 static void test_draw_visibility()
 {
-  GTEST_SKIP() << "This test needs to be reviewed. It should check visibility checks, but all "
-                  "resource handles are visible.";
   GPU_render_begin();
   Texture color_attachment;
   Framebuffer framebuffer;
@@ -381,7 +435,7 @@ static void test_draw_visibility()
 
   drw.begin_sync();                                   /* Default {0} always visible. */
   drw.resource_handle(obmat_1);                       /* No bounds, always visible. */
-  drw.resource_handle(obmat_1, float3(3), float3(1)); /* Out of view. */
+  drw.resource_handle(obmat_1, float3(7), float3(1)); /* Out of view. */
   drw.resource_handle(obmat_2, float3(0), float3(1)); /* Inside view. */
   drw.end_sync();
 
@@ -408,6 +462,188 @@ static void test_draw_visibility()
   DRW_shaders_free();
 }
 DRAW_TEST(draw_visibility)
+
+/* Common fixture for the visibility culling tests.
+ * The fixture creates three resources:
+ *   1. vis_handle: positive scale, bounding box fully inside the view frustum (visible).
+ *   2. cul_pos_handle: positive scale, bounding box fully outside the view frustum (culled).
+ *   3. cul_neg_handle: negative scale, bounding box fully outside the view frustum (culled).
+ * The manager default resource (index 0) has no bounds and is always visible.
+ * The visibility buffer is cleared to all-ones, so only culled resources clear their bit and bits
+ * of unused resources stay set.
+ */
+class VisibilityFixture {
+ public:
+  Texture color_attachment;
+  Framebuffer framebuffer;
+  Texture tex;
+  View view;
+  Manager mgr;
+  ResourceHandleRange vis_handle;
+  ResourceHandleRange cul_pos_handle;
+  ResourceHandleRange cul_neg_handle;
+  VisibilityFixture() : view("test_view_visibility")
+  {
+    GPU_render_begin();
+    this->color_attachment.ensure_2d(gpu::TextureFormat::SFLOAT_32_32_32_32, int2(1));
+    this->framebuffer.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(this->color_attachment));
+    this->framebuffer.bind();
+    this->tex.ensure_2d(gpu::TextureFormat::SFLOAT_16_16_16_16, int2(1));
+
+    float4x4 win_mat;
+    orthographic_m4(win_mat.ptr(), -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+    this->view.sync(float4x4::identity(), win_mat);
+
+    const float4x4 m_pos = math::from_scale<float4x4>(float3(1.0f));
+    const float4x4 m_neg = math::from_scale<float4x4>(float3(-1.0f));
+
+    this->mgr.begin_sync();
+    this->vis_handle = this->mgr.resource_handle(m_pos, float3(0.0f), float3(0.5f));
+    this->cul_pos_handle = this->mgr.resource_handle(m_pos, float3(10.0f), float3(1.0f));
+    this->cul_neg_handle = this->mgr.resource_handle(m_neg, float3(10.0f), float3(1.0f));
+    this->mgr.end_sync();
+  }
+
+  ~VisibilityFixture()
+  {
+    GPU_render_end();
+    DRW_shaders_free();
+  }
+};
+
+static std::string mask_to_string(Span<uint32_t> buf)
+{
+  std::stringstream s;
+  for (const uint32_t v : buf) {
+    s << std::bitset<32>(v).to_string();
+  }
+  return s.str();
+}
+
+static std::string resource_id_to_string(Span<uint32_t> buf)
+{
+  std::stringstream s;
+  for (const uint32_t v : buf) {
+    s << v << " ";
+  }
+  return s.str();
+}
+
+static void test_draw_visibility_regular()
+{
+  VisibilityFixture fixture;
+
+  PassMain pass = {"test.visibility_regular"};
+  pass.init();
+  pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR));
+  pass.bind_texture("image", fixture.tex);
+  /* Interleave culled and visible draws. */
+  pass.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, fixture.cul_pos_handle);
+  pass.draw_procedural(
+      GPU_PRIM_TRIS, 2, -1, -1, fixture.vis_handle); /* Draw 2 visible instances. */
+  pass.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, fixture.cul_neg_handle);
+  pass.draw_procedural(
+      GPU_PRIM_TRIS, 3, -1, -1, fixture.vis_handle); /* Draw 3 visible instances. */
+
+  Manager::SubmitDebugOutput out = fixture.mgr.submit_debug(pass, fixture.view);
+
+  EXPECT_EQ(mask_to_string(out.visibility), "11111111111111111111111111110011")
+      << "visibility bitmask mismatch";
+  /* Every instance is drawn; culled instances get the invalid resource id. */
+  EXPECT_EQ(out.resource_id.size(), 7u)
+      << "resource_id: " << resource_id_to_string(out.resource_id);
+}
+DRAW_TEST(draw_visibility_regular)
+
+static void test_draw_visibility_multi()
+{
+  VisibilityFixture fixture;
+
+  PassMain pass = {"test.visibility_multi"};
+  pass.init();
+  pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR));
+  pass.bind_texture("image", fixture.tex);
+
+  gpu::Batch *batch = GPU_batch_procedural_triangles_get();
+  Vector<command::DrawRecord> records = {
+      {1, 1, 0, -1, 0, uint(fixture.cul_pos_handle.index()), 0},
+      {1, 2, 0, -1, 0, uint(fixture.vis_handle.index()), 0}, /* Draw 2 visible instances. */
+      {1, 1, 0, -1, 0, uint(fixture.cul_neg_handle.index()), 0},
+  };
+  pass.draw_multi(batch, records);
+
+  Manager::SubmitDebugOutput out = fixture.mgr.submit_debug(pass, fixture.view);
+
+  EXPECT_EQ(mask_to_string(out.visibility), "11111111111111111111111111110011")
+      << "visibility bitmask mismatch";
+  /* Every instance is drawn; culled instances get the invalid resource id. */
+  EXPECT_EQ(out.resource_id.size(), 4u)
+      << "resource_id: " << resource_id_to_string(out.resource_id);
+}
+DRAW_TEST(draw_visibility_multi)
+
+static void test_draw_visibility_mixed()
+{
+  VisibilityFixture fixture;
+
+  PassMain pass = {"test.visibility_mixed"};
+  pass.init();
+  pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR));
+  pass.bind_texture("image", fixture.tex);
+
+  gpu::Batch *batch = GPU_batch_procedural_triangles_get();
+  /* Regular draws. */
+  pass.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, fixture.cul_pos_handle);
+  pass.draw_procedural(
+      GPU_PRIM_TRIS, 2, -1, -1, fixture.vis_handle); /* Draw 2 visible instances. */
+  /* Add multi-draw records in between. */
+  Vector<command::DrawRecord> records = {
+      {1, 1, 0, -1, 0, uint(fixture.cul_neg_handle.index()), 0},
+      {1, 3, 0, -1, 0, uint(fixture.vis_handle.index()), 0}, /* Draw 3 visible instances. */
+  };
+  pass.draw_multi(batch, records);
+  /* Regular draw after the records to exercise both paths in one pass. */
+  pass.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, fixture.vis_handle); /* 1 visible instance. */
+
+  Manager::SubmitDebugOutput out = fixture.mgr.submit_debug(pass, fixture.view);
+
+  EXPECT_EQ(mask_to_string(out.visibility), "11111111111111111111111111110011")
+      << "visibility bitmask mismatch";
+  /* All 1 + 2 + 1 + 3 + 1 instances are drawn; all culled ones use the invalid resource id. */
+  EXPECT_EQ(out.resource_id.size(), 8u)
+      << "resource_id: " << resource_id_to_string(out.resource_id);
+}
+DRAW_TEST(draw_visibility_mixed)
+
+static void test_draw_visibility_sortable()
+{
+  VisibilityFixture fixture;
+
+  PassSortable pass = {"test.visibility_sortable"};
+  pass.init();
+  pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR));
+  pass.bind_texture("image", fixture.tex);
+
+  /* Create two sub pass with different sort values. Sub 'A' (1.0) is sorted first and holds the
+   * visible draws; sub 'B' (2.0) holds culled draws only. */
+  PassMain::Sub &sub_a = pass.sub("SubA", 1.0f);
+  PassMain::Sub &sub_b = pass.sub("SubB", 2.0f);
+  sub_a.draw_procedural(
+      GPU_PRIM_TRIS, 2, -1, -1, fixture.vis_handle); /* Draw 2 visible instances. */
+  sub_b.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, fixture.cul_pos_handle);
+  sub_a.draw_procedural(
+      GPU_PRIM_TRIS, 3, -1, -1, fixture.vis_handle); /* Draw 3 visible instances. */
+  sub_b.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, fixture.cul_neg_handle);
+
+  Manager::SubmitDebugOutput out = fixture.mgr.submit_debug(pass, fixture.view);
+
+  EXPECT_EQ(mask_to_string(out.visibility), "11111111111111111111111111110011")
+      << "visibility bitmask mismatch";
+  /* All 2 + 3 + 1 + 1 instances are drawn; all culled ones use the invalid resource id. */
+  EXPECT_EQ(out.resource_id.size(), 7u)
+      << "resource_id: " << resource_id_to_string(out.resource_id);
+}
+DRAW_TEST(draw_visibility_sortable)
 
 static void test_draw_manager_sync()
 {
