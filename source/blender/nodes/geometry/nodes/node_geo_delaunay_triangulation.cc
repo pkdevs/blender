@@ -55,8 +55,7 @@ static const EnumPropertyItem triangulation_mode_items[] = {
      0,
      N_("Inside With Holes"),
      N_("Triangles fully enclosed by constraint edges or faces excluding triangles inside "
-        "detected "
-        "holes")},
+        "detected holes")},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -94,8 +93,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .evaluated_geometry_field()
       .hide_value()
       .description(
-          "An index used to group points together. Triangulation is done separately for each "
-          "group");
+          "An ID used to group points together. Triangulation is done separately for each group");
   b.add_input<decl::Menu>("Mode"_ustr)
       .static_items(triangulation_mode_items)
       .default_value(MenuValue(TriangulationMode::Full))
@@ -117,7 +115,7 @@ static void node_declare(NodeDeclarationBuilder &b)
           [](const socket_usage_inference::SocketUsageParams &params) -> std::optional<bool> {
             return params.menu_input_may_be("Mode"_ustr, int(TriangulationMode::InsideWithHoles));
           });
-  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all();
+  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all_geometry();
   b.add_output<decl::Bool>("Intersection Points"_ustr)
       .anonymous_attribute_output()
       .description("A selection of newly created intersection points")
@@ -845,8 +843,8 @@ static void mix_intersection_attributes_for_result(
             const int src_point = src_indices[i];
             mixer.mix_in(dst_point, src_attribute.varray[src_point], src_weights[i]);
           }
-          mixer.finalize(range);
         }
+        mixer.finalize(range);
       });
     });
     dst_generic.finish();
