@@ -884,13 +884,18 @@ void node_light_info_impl(const int light_index, float4 &color, float &power, fl
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
   /* clang-format on */
+  [[resource_table]] const draw::Model &models = resource_table_get(draw::Model);
 
   LightData light = lrd.light_buf[light_index];
+  const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
+
   color = float4(light.color, 1.0f);
   /* Pre-divide power by PI,
    * so users get a closer match to physically correct energy by default. */
   power = light.point_power * M_1_PI;
-  position = light.object_to_world.location();
+  /* Retrieve the data from the draw manager matrix, since Sun lights object_to_world doesn't store
+   * the actual position. */
+  position = models.get(light.resource_id).model[3].xyz;
 }
 
 void node_light_evaluation_impl(
