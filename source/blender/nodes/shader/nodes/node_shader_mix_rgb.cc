@@ -11,7 +11,7 @@
 
 #include "BKE_material.hh"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "DNA_material_types.h"
 
@@ -165,7 +165,7 @@ void register_node_type_sh_mix_rgb()
 
   static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "ShaderNodeMixRGB", SH_NODE_MIX_RGB_LEGACY);
+  common_node_type_base(&ntype, "ShaderNodeMixRGB"_ustr, SH_NODE_MIX_RGB_LEGACY);
   ntype.ui_name = "Mix (Legacy)";
   ntype.ui_description = "Mix two input colors";
   ntype.enum_name_legacy = "MIX_RGB";

@@ -6,8 +6,8 @@
  * \ingroup edcurves
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_base_safe.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_safe.hh"
 #include "BLI_rand.hh"
 
 #include "BKE_attribute.hh"
@@ -31,7 +31,7 @@ namespace blender::ed::curves {
 
 static bool has_surface_deformation_node(const bNodeTree &ntree)
 {
-  if (!ntree.nodes_by_type("GeometryNodeDeformCurvesOnSurface").is_empty()) {
+  if (!ntree.nodes_by_type("GeometryNodeDeformCurvesOnSurface"_ustr).is_empty()) {
     return true;
   }
   for (const bNode *node : ntree.group_nodes()) {
@@ -96,10 +96,10 @@ void ensure_surface_deformation_node_exists(bContext &C, Object &curves_ob)
                      *group_input,
                      *static_cast<bNodeSocket *>(group_input->outputs.first),
                      *deform_node,
-                     *bke::node_find_socket(*deform_node, SOCK_IN, "Curves"));
+                     *bke::node_find_socket(*deform_node, SOCK_IN, "Curves"_ustr));
   bke::node_add_link(*ntree,
                      *deform_node,
-                     *bke::node_find_socket(*deform_node, SOCK_OUT, "Curves"),
+                     *bke::node_find_socket(*deform_node, SOCK_OUT, "Curves"_ustr),
                      *group_output,
                      *static_cast<bNodeSocket *>(group_output->inputs.first));
 

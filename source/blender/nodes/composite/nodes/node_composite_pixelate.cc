@@ -25,6 +25,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   b.add_input<decl::Int>("Size"_ustr)
       .default_value(1)
+      .subtype(PROP_PIXEL)
       .min(1)
       .description("The number of pixels that correspond to the same output pixel");
 }
@@ -118,7 +119,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodePixelate", CMP_NODE_PIXELATE);
+  cmp_node_type_base(&ntype, "CompositorNodePixelate"_ustr, CMP_NODE_PIXELATE);
   ntype.ui_name = "Pixelate";
   ntype.ui_description =
       "Reduce detail in an image by making individual pixels more prominent, for a blocky or "

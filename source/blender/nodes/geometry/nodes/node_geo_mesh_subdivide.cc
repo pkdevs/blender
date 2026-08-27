@@ -19,7 +19,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Mesh"_ustr)
       .supported_type(GeometryComponent::Type::Mesh)
       .description("Mesh to subdivide");
-  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all().align_with_previous();
+  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all_geometry().align_with_previous();
   b.add_input<decl::Int>("Level"_ustr).default_value(1).min(0).max(6);
 }
 
@@ -89,7 +89,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSubdivideMesh", GEO_NODE_SUBDIVIDE_MESH);
+  geo_node_type_base(&ntype, "GeometryNodeSubdivideMesh"_ustr, GEO_NODE_SUBDIVIDE_MESH);
   ntype.ui_name = "Subdivide Mesh";
   ntype.ui_description =
       "Divide mesh faces into smaller ones without changing the shape or volume, using linear "

@@ -33,7 +33,7 @@ static void node_declare(NodeDeclarationBuilder &b)
     }
 
     if (default_value->has_conflict()) {
-      row.label(IFACE_("Menu Error"), ICON_ERROR);
+      row.label(IFACE_("Menu Error"), ICON_STATUS_ERROR);
     }
     else {
       row.label(IFACE_("Menu Undefined"), ICON_QUESTION);
@@ -59,7 +59,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "FunctionNodeInputMenu");
+  common_node_type_base(&ntype, "FunctionNodeInputMenu"_ustr);
   ntype.ui_name = "Menu";
   ntype.ui_description = "Provide a menu value that can be connected to other nodes in the tree";
   ntype.nclass = NODE_CLASS_INPUT;

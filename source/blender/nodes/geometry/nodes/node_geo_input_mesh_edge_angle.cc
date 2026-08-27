@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_math_quaternion.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_ordered_edge.hh"
 
 #include "BKE_mesh.hh"
@@ -15,13 +15,13 @@ namespace blender::nodes::node_geo_input_mesh_edge_angle_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_output<decl::Float>("Unsigned Angle"_ustr)
-      .field_source()
+      .structure_type(StructureType::Field)
       .description(
           "The shortest angle in radians between two faces where they meet at an edge. Flat edges "
           "and Non-manifold edges have an angle of zero. Computing this value is faster than the "
           "signed angle");
   b.add_output<decl::Float>("Signed Angle"_ustr)
-      .field_source()
+      .structure_type(StructureType::Field)
       .description(
           "The signed angle in radians between two faces where they meet at an edge. Flat edges "
           "and Non-manifold edges have an angle of zero. Concave angles are positive and convex "
@@ -81,15 +81,10 @@ class AngleFieldInput final : public bke::MeshFieldInput {
     return mesh.attributes().adapt_domain<float>(std::move(angles), AttrDomain::Edge, domain);
   }
 
-  uint64_t hash() const override
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep & /*deep_hash_cache*/) const override
   {
-    /* Some random constant hash. */
-    return 32426725235;
-  }
-
-  bool is_equal_to(const fn::FieldInput &other) const override
-  {
-    return dynamic_cast<const AngleFieldInput *>(&other) != nullptr;
+    static constexpr int8_t id = 0;
+    hash.add(&id);
   }
 
   std::optional<AttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
@@ -179,15 +174,10 @@ class SignedAngleFieldInput final : public bke::MeshFieldInput {
     return mesh.attributes().adapt_domain<float>(std::move(angles), AttrDomain::Edge, domain);
   }
 
-  uint64_t hash() const override
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep & /*deep_hash_cache*/) const override
   {
-    /* Some random constant hash. */
-    return 68465416863;
-  }
-
-  bool is_equal_to(const fn::FieldInput &other) const override
-  {
-    return dynamic_cast<const SignedAngleFieldInput *>(&other) != nullptr;
+    static constexpr int8_t id = 0;
+    hash.add(&id);
   }
 
   std::optional<AttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
@@ -209,7 +199,8 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeInputMeshEdgeAngle", GEO_NODE_INPUT_MESH_EDGE_ANGLE);
+  geo_node_type_base(
+      &ntype, "GeometryNodeInputMeshEdgeAngle"_ustr, GEO_NODE_INPUT_MESH_EDGE_ANGLE);
   ntype.ui_name = "Edge Angle";
   ntype.ui_description = "The angle between the normals of connected manifold faces";
   ntype.enum_name_legacy = "MESH_EDGE_ANGLE";

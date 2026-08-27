@@ -140,6 +140,13 @@ class ColorBandFunction : public mf::MultiFunction {
       alphas[i] = color.a;
     });
   }
+
+  void hash_unique(UniqueHashBytes &hash) const override
+  {
+    static constexpr int8_t id = 0;
+    hash.add(&id);
+    hash.add(&color_band_);
+  }
 };
 
 static void sh_node_valtorgb_build_multi_function(nodes::NodeMultiFunctionBuilder &builder)
@@ -167,14 +174,14 @@ void register_node_type_sh_valtorgb()
 
   static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "ShaderNodeValToRGB", SH_NODE_VALTORGB);
+  common_node_type_base(&ntype, "ShaderNodeValToRGB"_ustr, SH_NODE_VALTORGB);
   ntype.ui_name = "Color Ramp";
   ntype.ui_description = "Map values to colors with the use of a gradient";
   ntype.enum_name_legacy = "VALTORGB";
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.declare = file_ns::sh_node_valtorgb_declare;
   ntype.initfunc = file_ns::node_shader_init_valtorgb;
-  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Large);
+  ntype.default_width = bke::NodeWidth::_240;
   bke::node_type_storage(
       ntype, "ColorBand", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = file_ns::gpu_shader_valtorgb;

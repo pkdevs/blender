@@ -8,7 +8,7 @@ namespace blender::nodes::node_geo_input_curve_tilt_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Float>("Tilt"_ustr).field_source();
+  b.add_output<decl::Float>("Tilt"_ustr).structure_type(StructureType::Field);
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -21,7 +21,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeInputCurveTilt", GEO_NODE_INPUT_CURVE_TILT);
+  geo_node_type_base(&ntype, "GeometryNodeInputCurveTilt"_ustr, GEO_NODE_INPUT_CURVE_TILT);
   ntype.ui_name = "Curve Tilt";
   ntype.ui_description =
       "Retrieve the angle at each control point used to twist the curve's normal around its "

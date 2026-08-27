@@ -11,6 +11,7 @@
 
 #include "abc_writer_curves.h"
 #include "intern/abc_axis_conversion.h"
+#include "intern/abc_util.h"
 
 #include "BLI_array_utils.hh"
 #include "BLI_offset_indices.hh"
@@ -39,8 +40,6 @@ using Alembic::AbcGeom::ON3fGeomParam;
 using Alembic::AbcGeom::OV2fGeomParam;
 
 namespace io::alembic {
-
-const std::string ABC_CURVE_RESOLUTION_U_PROPNAME("blender:resolution");
 
 static inline Imath::V3f to_yup_V3f(float3 v)
 {
@@ -74,6 +73,8 @@ void ABCCurveWriter::create_alembic_objects(const HierarchyContext *context)
       resolution_u = curves.resolution().first();
       break;
     }
+    default:
+      break;
   }
 
   OCompoundProperty user_props = abc_curve_schema_.getUserProperties();
@@ -250,6 +251,11 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
                                orders,
                                knots);
 
+  std::vector<Imath::V3f> velocities;
+  if (get_velocities(curves.attributes(), velocities)) {
+    sample.setVelocities(velocities);
+  }
+
   update_bounding_box(context.object);
   sample.setSelfBounds(bounding_box_);
   abc_curve_schema_.set(sample);
@@ -275,10 +281,13 @@ Mesh *ABCCurveMeshWriter::get_export_mesh(Object *object_eval, bool &r_needsfree
       return BKE_mesh_new_nomain_from_curve(object_eval);
     }
 
-    case OB_CURVES:
+    case OB_CURVES: {
       Curves *curves = id_cast<Curves *>(object_eval->data);
       r_needsfree = true;
       return bke::curve_to_wire_mesh(curves->geometry.wrap());
+    }
+    default:
+      break;
   }
 
   return nullptr;

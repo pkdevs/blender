@@ -5,9 +5,9 @@
 #include "node_geometry_util.hh"
 
 #include "BLI_generic_key_string.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_memory_cache_file_load.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_instances.hh"
 #include "BKE_report.hh"
@@ -30,7 +30,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 class LoadObjCache : public memory_cache::CachedValue {
  public:
   GeometrySet geometry;
-  Vector<geo_eval_log::NodeWarning> warnings;
+  Vector<NodeWarning> warnings;
 
   void count_memory(MemoryCounter &counter) const override
   {
@@ -78,7 +78,7 @@ static void node_geo_exec(GeoNodeExecParams params)
         return cached_value;
       });
 
-  for (const geo_eval_log::NodeWarning &warning : cached_value->warnings) {
+  for (const NodeWarning &warning : cached_value->warnings) {
     params.error_message_add(warning.type, warning.message);
   }
 
@@ -94,7 +94,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeImportOBJ", GEO_NODE_IMPORT_OBJ);
+  geo_node_type_base(&ntype, "GeometryNodeImportOBJ"_ustr, GEO_NODE_IMPORT_OBJ);
   ntype.ui_name = "Import OBJ";
   ntype.ui_description = "Import geometry from an OBJ file";
   ntype.enum_name_legacy = "IMPORT_OBJ";

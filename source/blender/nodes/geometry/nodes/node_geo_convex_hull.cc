@@ -25,7 +25,7 @@ namespace blender::nodes::node_geo_convex_hull_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>("Geometry"_ustr).description("Points to compute the convex hull of");
-  b.add_output<decl::Geometry>("Convex Hull"_ustr).propagate_all_instance_attributes();
+  b.add_output<decl::Geometry>("Convex Hull"_ustr).propagate_all_geometry();
 }
 
 #ifdef WITH_BULLET
@@ -57,7 +57,7 @@ static Mesh *hull_from_bullet(const Mesh *mesh, Span<float3> coords)
     float3 dummy_co;
     int original_index;
     plConvexHullGetVertex(hull, i, dummy_co, &original_index);
-    if (UNLIKELY(!coords.index_range().contains(original_index))) {
+    if (!coords.index_range().contains(original_index)) [[unlikely]] {
       BLI_assert_unreachable();
       dst_positions[i] = float3(0);
       continue;
@@ -285,7 +285,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeConvexHull", GEO_NODE_CONVEX_HULL);
+  geo_node_type_base(&ntype, "GeometryNodeConvexHull"_ustr, GEO_NODE_CONVEX_HULL);
   ntype.ui_name = "Convex Hull";
   ntype.ui_description =
       "Create a mesh that encloses all points in the input geometry with the smallest number of "

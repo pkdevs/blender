@@ -30,13 +30,16 @@ static void node_declare(NodeDeclarationBuilder &b)
                        GeometryComponent::Type::Curve,
                        GeometryComponent::Type::Instance})
       .description("Geometry to split into instances");
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).field_on_all().hide_value();
-  b.add_input<decl::Int>("Group ID"_ustr).field_on_all().hide_value();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .evaluated_geometry_field()
+      .hide_value();
+  b.add_input<decl::Int>("Group ID"_ustr).evaluated_geometry_field().hide_value();
   b.add_output<decl::Geometry>("Instances"_ustr)
-      .propagate_all()
+      .propagate_all_geometry()
       .description("All geometry groups as separate instances");
   b.add_output<decl::Int>("Group ID"_ustr)
-      .field_on_all()
+      .anonymous_attribute_output()
       .description("The group ID of each group instance");
 }
 
@@ -353,7 +356,7 @@ static void node_rna(StructRNA *srna)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeSplitToInstances", GEO_NODE_SPLIT_TO_INSTANCES);
+  geo_node_type_base(&ntype, "GeometryNodeSplitToInstances"_ustr, GEO_NODE_SPLIT_TO_INSTANCES);
   ntype.ui_name = "Split to Instances";
   ntype.ui_description = "Create separate geometries containing the elements from the same group";
   ntype.enum_name_legacy = "Split to Instances";

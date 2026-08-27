@@ -39,7 +39,7 @@ class SocketSearchOp {
   eNodeSocketDatatype socket_type;
   void operator()(LinkSearchOpParams &params)
   {
-    bNode &node = params.add_node("GeometryNodeListLength");
+    bNode &node = params.add_node("GeometryNodeListLength"_ustr);
     node.custom1 = socket_type;
     params.update_and_connect_available_socket(node, socket_name);
   }
@@ -47,10 +47,7 @@ class SocketSearchOp {
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
-  if (!U.experimental.use_geometry_nodes_lists) {
-    return;
-  }
-  const eNodeSocketDatatype socket_type = eNodeSocketDatatype(params.other_socket().type);
+  const eNodeSocketDatatype socket_type = params.other_socket().type;
   if (params.in_out() == SOCK_IN) {
     params.add_item(IFACE_("List"), SocketSearchOp{"List"_ustr, socket_type});
   }
@@ -63,7 +60,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  ListPtr list = params.extract_input<ListPtr>("List"_ustr);
+  auto list = params.extract_input<GListPtr>("List"_ustr);
   if (!list) {
     params.set_default_remaining_outputs();
     return;
@@ -96,7 +93,7 @@ static void node_rna(StructRNA *srna)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeListLength");
+  geo_node_type_base(&ntype, "GeometryNodeListLength"_ustr);
   ntype.ui_name = "List Length";
   ntype.ui_description = "Count how many items are in a given list";
   ntype.nclass = NODE_CLASS_CONVERTER;

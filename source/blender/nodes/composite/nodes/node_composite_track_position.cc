@@ -4,7 +4,7 @@
 
 #include "BLI_index_range.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_movieclip_types.h"
 #include "DNA_tracking_types.h"
@@ -362,7 +362,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeTrackPos", CMP_NODE_TRACKPOS);
+  cmp_node_type_base(&ntype, "CompositorNodeTrackPos"_ustr, CMP_NODE_TRACKPOS);
   ntype.ui_name = "Track Position";
   ntype.ui_description =
       "Provide information about motion tracking points, such as x and y values";

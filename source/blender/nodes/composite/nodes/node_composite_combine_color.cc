@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 
 #include "FN_multi_function_builder.hh"
 
@@ -34,7 +34,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .label_fn([](bNode node) {
+      .label_fn([](const bNode &node) {
         switch (node_storage(node).mode) {
           case CMP_NODE_COMBSEP_COLOR_RGB:
           default:
@@ -52,7 +52,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .label_fn([](bNode node) {
+      .label_fn([](const bNode &node) {
         switch (node_storage(node).mode) {
           case CMP_NODE_COMBSEP_COLOR_RGB:
           default:
@@ -71,7 +71,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .label_fn([](bNode node) {
+      .label_fn([](const bNode &node) {
         switch (node_storage(node).mode) {
           case CMP_NODE_COMBSEP_COLOR_RGB:
           default:
@@ -250,7 +250,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeCombineColor", CMP_NODE_COMBINE_COLOR);
+  cmp_node_type_base(&ntype, "CompositorNodeCombineColor"_ustr, CMP_NODE_COMBINE_COLOR);
   ntype.ui_name = "Combine Color";
   ntype.ui_description = "Combine an image from its composite color channels";
   ntype.enum_name_legacy = "COMBINE_COLOR";

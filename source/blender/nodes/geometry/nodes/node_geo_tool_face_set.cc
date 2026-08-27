@@ -10,8 +10,8 @@ namespace blender::nodes::node_geo_tool_face_set_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Int>("Face Set"_ustr).field_source();
-  b.add_output<decl::Bool>("Exists"_ustr).field_source();
+  b.add_output<decl::Int>("Face Set"_ustr).structure_type(StructureType::Field);
+  b.add_output<decl::Bool>("Exists"_ustr).structure_type(StructureType::Field);
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -27,7 +27,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeToolFaceSet", GEO_NODE_TOOL_FACE_SET);
+  geo_node_type_base(&ntype, "GeometryNodeToolFaceSet"_ustr, GEO_NODE_TOOL_FACE_SET);
   ntype.ui_name = "Face Set";
   ntype.ui_description = "Each face's sculpt face set value";
   ntype.enum_name_legacy = "TOOL_FACE_SET";

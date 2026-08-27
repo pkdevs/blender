@@ -2,10 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 
 #include "BKE_action.hh"
 #include "BKE_armature.hh"
@@ -13,14 +13,14 @@
 #include "BKE_deform.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
 #include "BKE_object_deform.h"
-
-#include "CLG_log.h"
+#include "BKE_pose.hh"
 
 #include "DNA_armature_types.h"
 #include "DNA_curves_types.h"
@@ -106,11 +106,13 @@ class ArmatureDeformTestBase {
   }
 
   /* This happens usually in BKE_pose_bone_done. Update here to avoid creating a full depsgraph. */
-  static void update_pose_matrices(bPoseChannel &pchan)
+  static void update_pose_matrices(bke::PChanBone pchanbone)
   {
-    BKE_pchan_calc_mat(&pchan);
-    if (!(pchan.bone->flag & BONE_NO_DEFORM)) {
-      mat4_to_dquat(&pchan.runtime.deform_dual_quat, pchan.bone->arm_mat, pchan.chan_mat);
+    BKE_pchan_calc_mat(pchanbone);
+    if (!(pchanbone.bone->flag & BONE_NO_DEFORM)) {
+      mat4_to_dquat(&pchanbone.pchan->runtime.deform_dual_quat,
+                    pchanbone.bone->arm_mat,
+                    pchanbone.pchan->chan_mat);
     }
   }
 
@@ -148,8 +150,8 @@ class ArmatureDeformTestBase {
     bPoseChannel *pchan2 = BKE_pose_channel_find_name(ob->pose, "Bone2");
     copy_v3_v3(pchan1->loc, offset_bone1());
     copy_v3_v3(pchan2->loc, offset_bone2());
-    update_pose_matrices(*pchan1);
-    update_pose_matrices(*pchan2);
+    update_pose_matrices({pchan1, bone1});
+    update_pose_matrices({pchan2, bone2});
 
     return ob;
   }
@@ -272,7 +274,7 @@ class ArmatureDeformTestBase {
 
     bke::greasepencil::Layer &layer = grease_pencil->add_layer("Test");
     greasepencil::Drawing &drawing = grease_pencil->insert_frame(layer, 1)->wrap();
-    bke::CurvesGeometry &curves = drawing.geometry.wrap();
+    bke::CurvesGeometry &curves = drawing.strokes_for_write();
 
     curves.resize(vertex_positions().size(), 3);
     curves.offsets_for_write().copy_from(curve_offsets());
@@ -587,7 +589,7 @@ class ArmatureDeformTestBase {
     GreasePencilDrawingBase *drawing_base = grease_pencil->drawings()[0];
     BLI_assert(drawing_base->type == GP_DRAWING);
     greasepencil::Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(drawing_base)->wrap();
-    bke::CurvesGeometry &curves = drawing.geometry.wrap();
+    bke::CurvesGeometry &curves = drawing.strokes_for_write();
 
     Array<float3x3> deform_mats;
     std::optional<MutableSpan<float3x3>> deform_mats_opt;
@@ -629,13 +631,12 @@ class ArmatureDeformParamTest : public ArmatureDeformTestBase,
  public:
   static void SetUpTestSuite()
   {
-    CLG_init();
-    BKE_idtype_init();
+    bke::gtest_setup();
   }
 
   static void TearDownTestSuite()
   {
-    CLG_exit();
+    bke::gtest_teardown();
   }
 
   void SetUp() override
@@ -767,13 +768,12 @@ class ArmatureDeformTest : public ArmatureDeformTestBase, public testing::Test {
  public:
   static void SetUpTestSuite()
   {
-    CLG_init();
-    BKE_idtype_init();
+    bke::gtest_setup();
   }
 
   static void TearDownTestSuite()
   {
-    CLG_exit();
+    bke::gtest_teardown();
   }
 
   void SetUp() override

@@ -136,26 +136,33 @@ class SeparateMatrixFunction : public mf::MultiFunction {
         16, "Column 4 Row 4");
 
     if (const std::optional<float4x4> single = matrices.get_if_single()) {
-      const float4x4 matrix = *single;
-      column_1_row_1.fill(matrix[0][0]);
-      column_1_row_2.fill(matrix[0][1]);
-      column_1_row_3.fill(matrix[0][2]);
-      column_1_row_4.fill(matrix[0][3]);
+      const float4x4 &matrix = *single;
+      auto fill_value = [&](const MutableSpan<float> &r_values, const float value) {
+        /* If it's empty, the output is not used. */
+        if (!r_values.is_empty()) {
+          index_mask::masked_fill(r_values, value, mask);
+        }
+      };
 
-      column_2_row_1.fill(matrix[1][0]);
-      column_2_row_2.fill(matrix[1][1]);
-      column_2_row_3.fill(matrix[1][2]);
-      column_2_row_4.fill(matrix[1][3]);
+      fill_value(column_1_row_1, matrix[0][0]);
+      fill_value(column_1_row_2, matrix[0][1]);
+      fill_value(column_1_row_3, matrix[0][2]);
+      fill_value(column_1_row_4, matrix[0][3]);
 
-      column_3_row_1.fill(matrix[2][0]);
-      column_3_row_2.fill(matrix[2][1]);
-      column_3_row_3.fill(matrix[2][2]);
-      column_3_row_4.fill(matrix[2][3]);
+      fill_value(column_2_row_1, matrix[1][0]);
+      fill_value(column_2_row_2, matrix[1][1]);
+      fill_value(column_2_row_3, matrix[1][2]);
+      fill_value(column_2_row_4, matrix[1][3]);
 
-      column_4_row_1.fill(matrix[3][0]);
-      column_4_row_2.fill(matrix[3][1]);
-      column_4_row_3.fill(matrix[3][2]);
-      column_4_row_4.fill(matrix[3][3]);
+      fill_value(column_3_row_1, matrix[2][0]);
+      fill_value(column_3_row_2, matrix[2][1]);
+      fill_value(column_3_row_3, matrix[2][2]);
+      fill_value(column_3_row_4, matrix[2][3]);
+
+      fill_value(column_4_row_1, matrix[3][0]);
+      fill_value(column_4_row_2, matrix[3][1]);
+      fill_value(column_4_row_3, matrix[3][2]);
+      fill_value(column_4_row_4, matrix[3][3]);
       return;
     }
 
@@ -284,7 +291,7 @@ static int node_gpu_material(GPUMaterial *material,
 static void node_register()
 {
   static bke::bNodeType ntype;
-  fn_cmp_node_type_base(&ntype, "FunctionNodeSeparateMatrix", FN_NODE_SEPARATE_MATRIX);
+  fn_cmp_node_type_base(&ntype, "FunctionNodeSeparateMatrix"_ustr, FN_NODE_SEPARATE_MATRIX);
   ntype.ui_name = "Separate Matrix";
   ntype.ui_description = "Split a 4x4 matrix into its individual values";
   ntype.enum_name_legacy = "SEPARATE_MATRIX";

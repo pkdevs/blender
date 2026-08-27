@@ -13,7 +13,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Geometry"_ustr)
       .multi_input()
       .description("Each input geometry is turned into a separate instance");
-  b.add_output<decl::Geometry>("Instances"_ustr).propagate_all();
+  b.add_output<decl::Geometry>("Instances"_ustr).propagate_all_geometry();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -39,14 +39,14 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeGeometryToInstance", GEO_NODE_GEOMETRY_TO_INSTANCE);
+  geo_node_type_base(&ntype, "GeometryNodeGeometryToInstance"_ustr, GEO_NODE_GEOMETRY_TO_INSTANCE);
   ntype.ui_name = "Geometry to Instance";
   ntype.ui_description =
       "Convert each input geometry into an instance, which can be much faster than the Join "
       "Geometry node when the inputs are large";
   ntype.enum_name_legacy = "GEOMETRY_TO_INSTANCE";
   ntype.nclass = NODE_CLASS_GEOMETRY;
-  bke::node_type_size(ntype, 160, 100, 300);
+  ntype.default_width = bke::NodeWidth::_160;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
   bke::node_register_type(ntype);

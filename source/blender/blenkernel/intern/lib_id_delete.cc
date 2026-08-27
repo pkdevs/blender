@@ -14,9 +14,9 @@
 #include "DNA_ID.h"
 #include "DNA_key_types.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_set.hh"
 #include "BLI_vector.hh"
 
@@ -31,6 +31,7 @@
 #include "BKE_lib_remap.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
+#include "BKE_main_invariants.hh"
 #include "BKE_main_namemap.hh"
 
 #include "BLO_readfile.hh"
@@ -50,13 +51,11 @@ using namespace bke::id;
 void BKE_libblock_free_data(ID *id, const bool do_id_user)
 {
   if (id->properties) {
-    IDP_FreePropertyContent_ex(id->properties, do_id_user);
-    MEM_delete(id->properties);
+    IDP_FreeProperty_ex(id->properties, do_id_user);
     id->properties = nullptr;
   }
   if (id->system_properties) {
-    IDP_FreePropertyContent_ex(id->system_properties, do_id_user);
-    MEM_delete(id->system_properties);
+    IDP_FreeProperty_ex(id->system_properties, do_id_user);
     id->system_properties = nullptr;
   }
 
@@ -136,7 +135,7 @@ static int id_free(Main *bmain, void *idv, int flag, const bool use_flag_from_id
   BLI_assert((flag & LIB_ID_FREE_NO_MAIN) != 0 || (flag & LIB_ID_FREE_NOT_ALLOCATED) == 0);
   BLI_assert((flag & LIB_ID_FREE_NO_MAIN) != 0 || (flag & LIB_ID_FREE_NO_USER_REFCOUNT) == 0);
 
-  const short type = GS(id->name);
+  const short type = id->id_type();
 
   if (bmain && (flag & LIB_ID_FREE_NO_DEG_TAG) == 0) {
     BLI_assert(bmain->is_locked_for_linking == false);
@@ -205,7 +204,7 @@ void BKE_id_free_ex(Main *bmain, void *idv, const int flag_orig, const bool use_
     BKE_layer_collection_resync_forbid(*bmain);
   }
 
-  const ID_Type id_type = GS(static_cast<ID *>(idv)->name);
+  const ID_Type id_type = static_cast<ID *>(idv)->id_type();
 
   int flag_final = id_free(bmain, idv, flag_orig, use_flag_from_idtag);
 
@@ -241,12 +240,12 @@ void BKE_id_free_us(Main *bmain, void *idv) /* test users */
    *     Otherwise, there is no real way to get rid of an object anymore -
    *     better handling of this is TODO.
    */
-  if ((GS(id->name) == ID_OB) && (id->us == 1) && !ID_IS_LINKED(id)) {
+  if ((id->id_type() == ID_OB) && (id->us == 1) && !ID_IS_LINKED(id)) {
     id_us_clear_real(id);
   }
 
   if (id->us == 0) {
-    const bool is_lib = GS(id->name) == ID_LI;
+    const bool is_lib = id->id_type() == ID_LI;
 
     BKE_libblock_unlink(bmain, id, false);
 
@@ -258,9 +257,11 @@ void BKE_id_free_us(Main *bmain, void *idv) /* test users */
   }
 }
 
-static size_t id_delete(Main *bmain, Set<ID *> &ids_to_delete, const int extra_remapping_flags)
+static size_t id_delete(Main *bmain, Set<ID *> &ids_to_delete, const BKEIDDeleteOptions &options)
 {
+  const int extra_remapping_flags = options.extra_remapping_flags;
   bool has_deleted_library = false;
+  bool has_deleted_linked_or_liboverride_id = false;
 
   /* Used by batch tagged deletion, when we call BKE_id_free then, id is no more in Main database,
    * and has already properly unlinked its other IDs usages.
@@ -276,6 +277,24 @@ static size_t id_delete(Main *bmain, Set<ID *> &ids_to_delete, const int extra_r
   BKE_main_lock(bmain);
   BKE_layer_collection_resync_forbid(*bmain);
   IDRemapper id_remapper;
+
+  auto process_id_to_delete =
+      [&bmain, &ids_to_delete, &id_remapper, &has_deleted_linked_or_liboverride_id](
+          ListBaseT<ID> *lb, ID *id_iter) -> void {
+    /* Do not tag as no_main now, we want to unlink it first (lower-level ID management
+     * code has some specific handling of 'no main' IDs that would be a problem in that
+     * case). */
+    BLI_remlink(lb, id_iter);
+    BKE_main_namemap_remove_id(*bmain, *id_iter);
+    ids_to_delete.add(id_iter);
+    id_remapper.add(id_iter, nullptr);
+
+    if (!has_deleted_linked_or_liboverride_id &&
+        (ID_IS_LINKED(id_iter) || ID_IS_OVERRIDE_LIBRARY(id_iter)))
+    {
+      has_deleted_linked_or_liboverride_id = true;
+    }
+  };
 
   /* Main idea of batch deletion is to remove all IDs to be deleted from Main database.
    * This means that we won't have to loop over all deleted IDs to remove usages
@@ -301,23 +320,14 @@ static size_t id_delete(Main *bmain, Set<ID *> &ids_to_delete, const int extra_r
         if (ids_to_delete.contains(id_iter) ||
             (ID_IS_LINKED(id_iter) && ids_to_delete.contains(&id_iter->lib->id)))
         {
-          BLI_remlink(lb, id_iter);
-          BKE_main_namemap_remove_id(*bmain, *id_iter);
-          ids_to_delete.add(id_iter);
-          id_remapper.add(id_iter, nullptr);
-          /* Do not tag as no_main now, we want to unlink it first (lower-level ID management
-           * code has some specific handling of 'no main' IDs that would be a problem in that
-           * case). */
+          process_id_to_delete(lb, id_iter);
 
           /* Forcefully also delete shapekeys of the deleted ID if any, 'orphaned' shapekeys are
            * not allowed in Blender and will cause lots of problem in modern code (liboverrides,
            * warning on write & read, etc.). */
           Key *shape_key = BKE_key_from_id(id_iter);
           if (shape_key && !ids_to_delete.contains(&shape_key->id)) {
-            BLI_remlink(&bmain->shapekeys, &shape_key->id);
-            BKE_main_namemap_remove_id(*bmain, shape_key->id);
-            ids_to_delete.add(&shape_key->id);
-            id_remapper.add(&shape_key->id, nullptr);
+            process_id_to_delete(&bmain->shapekeys.cast<ID>(), &shape_key->id);
           }
 
           keep_looping = true;
@@ -335,6 +345,7 @@ static size_t id_delete(Main *bmain, Set<ID *> &ids_to_delete, const int extra_r
     BKE_libblock_remap_multiple_locked(bmain, id_remapper, remapping_flags);
     for (ID *id_never_null_iter : id_remapper.never_null_users()) {
       ids_to_delete.add(id_never_null_iter);
+      keep_looping = true;
     }
     id_remapper.clear();
   }
@@ -364,7 +375,7 @@ static size_t id_delete(Main *bmain, Set<ID *> &ids_to_delete, const int extra_r
      * remapping code, depending on order in which these are handled). */
     id->us = ID_FAKE_USERS(id);
 
-    if (!has_deleted_library && GS(id->name) == ID_LI) {
+    if (!has_deleted_library && id->id_type() == ID_LI) {
       has_deleted_library = true;
     }
 
@@ -374,30 +385,34 @@ static size_t id_delete(Main *bmain, Set<ID *> &ids_to_delete, const int extra_r
   BKE_main_unlock(bmain);
   BKE_layer_collection_resync_allow(*bmain);
   BKE_main_collection_sync_remap(bmain);
+  if (!options.prevent_invariants_update) {
+    BKE_main_ensure_invariants(*bmain);
+  }
 
   if (has_deleted_library) {
     BKE_library_main_rebuild_hierarchy(bmain);
+  }
+
+  /* Deleting a liboverride or linked ID may have had some impact on validity of liboverrides
+   * hierarchy roots, these need to be re-validated/re-generated. */
+  if (has_deleted_linked_or_liboverride_id && !options.prevent_liboverride_hierarchy_root_ensure) {
+    BKE_lib_override_library_main_hierarchy_root_ensure(bmain);
   }
 
   bmain->is_memfile_undo_written = false;
   return size_t(ids_to_delete.size());
 }
 
-void BKE_id_delete_ex(Main *bmain, void *idv, const int extra_remapping_flags)
+void BKE_id_delete(Main *bmain, void *idv, const BKEIDDeleteOptions &options)
 {
   ID *id = static_cast<ID *>(idv);
   BLI_assert_msg((id->tag & ID_TAG_NO_MAIN) == 0, "Cannot be used with IDs outside of Main");
 
   Set<ID *> ids_to_delete = {id};
-  id_delete(bmain, ids_to_delete, extra_remapping_flags);
+  id_delete(bmain, ids_to_delete, options);
 }
 
-void BKE_id_delete(Main *bmain, void *idv)
-{
-  BKE_id_delete_ex(bmain, idv, 0);
-}
-
-size_t BKE_id_multi_tagged_delete(Main *bmain)
+size_t BKE_id_multi_tagged_delete(Main *bmain, const BKEIDDeleteOptions &options)
 {
   Set<ID *> ids_to_delete;
   ID *id_iter;
@@ -407,12 +422,14 @@ size_t BKE_id_multi_tagged_delete(Main *bmain)
     }
   }
   FOREACH_MAIN_ID_END;
-  return id_delete(bmain, ids_to_delete, 0);
+  return id_delete(bmain, ids_to_delete, options);
 }
 
-size_t BKE_id_multi_delete(Main *bmain, Set<ID *> &ids_to_delete)
+size_t BKE_id_multi_delete(Main *bmain,
+                           Set<ID *> &ids_to_delete,
+                           const BKEIDDeleteOptions &options)
 {
-  return id_delete(bmain, ids_to_delete, 0);
+  return id_delete(bmain, ids_to_delete, options);
 }
 
 /* -------------------------------------------------------------------- */

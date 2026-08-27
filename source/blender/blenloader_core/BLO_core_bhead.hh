@@ -6,8 +6,8 @@
 
 #include <optional>
 
-#include "BLI_endian_switch.h"
-#include "BLI_sys_types.h"
+#include "BLI_endian_switch.hh"
+#include "BLI_sys_types.hh"
 
 namespace blender {
 
@@ -60,10 +60,10 @@ enum class BHeadType {
 /** Make #BHead.code from 4 chars. */
 #ifdef __BIG_ENDIAN__
 /* Big Endian */
-#  define BLEND_MAKE_ID(a, b, c, d) ((int)(a) << 24 | (int)(b) << 16 | (c) << 8 | (d))
+#  define BLEND_MAKE_ID(a, b, c, d) (int(a) << 24 | int(b) << 16 | (c) << 8 | (d))
 #else
 /* Little Endian */
-#  define BLEND_MAKE_ID(a, b, c, d) ((int)(d) << 24 | (int)(c) << 16 | (b) << 8 | (a))
+#  define BLEND_MAKE_ID(a, b, c, d) (int(d) << 24 | int(c) << 16 | (b) << 8 | (a))
 #endif
 
 /**

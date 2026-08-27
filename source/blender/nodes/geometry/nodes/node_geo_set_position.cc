@@ -20,11 +20,15 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
   b.add_input<decl::Geometry>("Geometry"_ustr).description("Points to modify the positions of");
-  b.add_output<decl::Geometry>("Geometry"_ustr).propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
+  b.add_output<decl::Geometry>("Geometry"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
   b.add_input<decl::Vector>("Position"_ustr)
-      .implicit_field_on_all(NODE_DEFAULT_INPUT_POSITION_FIELD);
-  b.add_input<decl::Vector>("Offset"_ustr).subtype(PROP_TRANSLATION).field_on_all();
+      .evaluated_geometry_field()
+      .default_input_type(NODE_DEFAULT_INPUT_POSITION_FIELD);
+  b.add_input<decl::Vector>("Offset"_ustr).subtype(PROP_TRANSLATION).evaluated_geometry_field();
 }
 
 static const auto &get_add_fn()
@@ -163,7 +167,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSetPosition", GEO_NODE_SET_POSITION);
+  geo_node_type_base(&ntype, "GeometryNodeSetPosition"_ustr, GEO_NODE_SET_POSITION);
   ntype.ui_name = "Set Position";
   ntype.ui_description = "Set the location of each point";
   ntype.enum_name_legacy = "SET_POSITION";

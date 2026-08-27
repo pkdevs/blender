@@ -19,10 +19,13 @@ static void node_declare(NodeDeclarationBuilder &b)
       .supported_type({GeometryComponent::Type::Curve, GeometryComponent::Type::GreasePencil})
       .description("Curves to change the cyclic state of");
   b.add_output<decl::Geometry>("Curve"_ustr, "Geometry"_ustr)
-      .propagate_all()
+      .propagate_all_geometry()
       .align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
-  b.add_input<decl::Bool>("Cyclic"_ustr).field_on_all();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
+  b.add_input<decl::Bool>("Cyclic"_ustr).evaluated_geometry_field();
 }
 
 static void set_curve_cyclic(bke::CurvesGeometry &curves,
@@ -80,7 +83,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSetSplineCyclic", GEO_NODE_SET_SPLINE_CYCLIC);
+  geo_node_type_base(&ntype, "GeometryNodeSetSplineCyclic"_ustr, GEO_NODE_SET_SPLINE_CYCLIC);
   ntype.ui_name = "Set Spline Cyclic";
   ntype.ui_description =
       "Control whether each spline loops back on itself by changing the \"cyclic\" attribute";

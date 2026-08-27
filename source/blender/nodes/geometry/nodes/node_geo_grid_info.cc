@@ -69,14 +69,14 @@ static void node_gather_link_search_ops(GatherLinkSearchOpParams &params)
   const StructureType structure_type = other_socket.runtime->inferred_structure_type;
   const bool is_grid = structure_type == StructureType::Grid;
   const bool is_dynamic = structure_type == StructureType::Dynamic;
-  const eNodeSocketDatatype other_type = eNodeSocketDatatype(other_socket.type);
+  const eNodeSocketDatatype other_type = other_socket.type;
 
   if (params.in_out() == SOCK_IN) {
     if (is_grid || is_dynamic) {
       const std::optional<eNodeSocketDatatype> data_type = node_type_for_socket_type(other_socket);
       if (data_type) {
         params.add_item(IFACE_("Grid"), [data_type](LinkSearchOpParams &params) {
-          bNode &node = params.add_node("GeometryNodeGridInfo");
+          bNode &node = params.add_node("GeometryNodeGridInfo"_ustr);
           node.custom1 = *data_type;
           params.update_and_connect_available_socket(node, "Grid"_ustr);
         });
@@ -86,14 +86,14 @@ static void node_gather_link_search_ops(GatherLinkSearchOpParams &params)
   else {
     if (params.node_tree().typeinfo->validate_link(SOCK_MATRIX, other_type)) {
       params.add_item(IFACE_("Transform"), [](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("GeometryNodeGridInfo");
+        bNode &node = params.add_node("GeometryNodeGridInfo"_ustr);
         params.update_and_connect_available_socket(node, "Transform"_ustr);
       });
     }
     const std::optional<eNodeSocketDatatype> data_type = node_type_for_socket_type(other_socket);
     if (data_type) {
       params.add_item(IFACE_("Background Value"), [data_type](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("GeometryNodeGridInfo");
+        bNode &node = params.add_node("GeometryNodeGridInfo"_ustr);
         node.custom1 = *data_type;
         params.update_and_connect_available_socket(node, "Background Value"_ustr);
       });
@@ -120,9 +120,9 @@ static void node_geo_exec(GeoNodeExecParams params)
       *bke::socket_type_to_geo_nodes_base_cpp_type(data_type), [&]<typename ValueT>() {
         using type_traits = typename bke::VolumeGridTraits<ValueT>;
         using TreeType = typename type_traits::TreeType;
-        using GridType = openvdb::Grid<TreeType>;
 
-        if constexpr (!std::is_same_v<typename type_traits::BlenderType, void>) {
+        if constexpr (!std::is_same_v<TreeType, void>) {
+          using GridType = openvdb::Grid<TreeType>;
           const std::shared_ptr<const GridType> vdb_typed_grid = openvdb::GridBase::grid<GridType>(
               vdb_grid);
           params.set_output("Background Value"_ustr,
@@ -155,7 +155,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeGridInfo");
+  geo_node_type_base(&ntype, "GeometryNodeGridInfo"_ustr);
   ntype.ui_name = "Grid Info";
   ntype.ui_description = "Retrieve information about a volume grid";
   ntype.nclass = NODE_CLASS_INPUT;

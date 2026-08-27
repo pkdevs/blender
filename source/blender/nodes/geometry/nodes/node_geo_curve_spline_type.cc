@@ -28,8 +28,11 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Curve"_ustr)
       .supported_type(GeometryComponent::Type::Curve)
       .description("Curves to change the type of");
-  b.add_output<decl::Geometry>("Curve"_ustr).propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
+  b.add_output<decl::Geometry>("Curve"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
 }
 
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -98,7 +101,7 @@ static void node_rna(StructRNA *srna)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeCurveSplineType", GEO_NODE_CURVE_SPLINE_TYPE);
+  geo_node_type_base(&ntype, "GeometryNodeCurveSplineType"_ustr, GEO_NODE_CURVE_SPLINE_TYPE);
   ntype.ui_name = "Set Spline Type";
   ntype.ui_description = "Change the type of curves";
   ntype.enum_name_legacy = "CURVE_SPLINE_TYPE";

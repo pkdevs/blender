@@ -8,7 +8,7 @@ namespace blender::nodes::node_geo_input_position_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Vector>("Position"_ustr).field_source();
+  b.add_output<decl::Vector>("Position"_ustr).structure_type(StructureType::Field);
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -20,7 +20,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeInputPosition", GEO_NODE_INPUT_POSITION);
+  geo_node_type_base(&ntype, "GeometryNodeInputPosition"_ustr, GEO_NODE_INPUT_POSITION);
   ntype.ui_name = "Position";
   ntype.ui_description = "Retrieve a vector indicating the location of each element";
   ntype.enum_name_legacy = "POSITION";

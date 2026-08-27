@@ -84,32 +84,6 @@ function(path_strip_trailing_slash
   set(${path_new} "${${path_new}}" PARENT_SCOPE)
 endfunction()
 
-# Our own version of `cmake_path(IS_PREFIX ..)`.
-# This can be removed when 3.20 or greater is the minimum supported version.
-#
-# Return values:
-# - `${result_var}`: `TRUE` if `path_prefix` is a prefix of `path`.
-function(path_is_prefix
-  path_prefix path result_var
-  )
-  # Remove when CMAKE version is bumped to "3.20" or greater.
-  # `cmake_path(IS_PREFIX ${path_prefix} ${path} NORMALIZE result_var)`
-  # Get the normalized paths (needed to remove `..`).
-  get_filename_component(_abs_prefix "${${path_prefix}}" ABSOLUTE)
-  get_filename_component(_abs_suffix "${${path}}" ABSOLUTE)
-  string(LENGTH "${_abs_prefix}" _len)
-  string(SUBSTRING "${_abs_suffix}" 0 "${_len}" _substr)
-  string(COMPARE EQUAL "${_abs_prefix}" "${_substr}" _is_prefix)
-  # Ensure "/foo/bar" isn't considered a prefix of "/foo/bar_baz".
-  # Checking "/" is sufficient on WIN32 since `get_filename_component` normalizes paths.
-  if(_is_prefix)
-    string(SUBSTRING "${_abs_suffix}" "${_len}" 1 _next_char)
-    if(NOT "${_next_char}" STREQUAL "" AND NOT "${_next_char}" STREQUAL "/")
-      set(_is_prefix FALSE)
-    endif()
-  endif()
-  set("${result_var}" "${_is_prefix}" PARENT_SCOPE)
-endfunction()
 
 # foo_bar.spam --> foo_barMySuffix.spam
 #
@@ -122,7 +96,10 @@ function(file_suffix
   get_filename_component(_file_name_PATH ${file_name} PATH)
   get_filename_component(_file_name_NAME_WE ${file_name} NAME_WE)
   get_filename_component(_file_name_EXT ${file_name} EXT)
-  set(${file_name_new} "${_file_name_PATH}/${_file_name_NAME_WE}${file_suffix}${_file_name_EXT}" PARENT_SCOPE)
+  set(${file_name_new}
+    "${_file_name_PATH}/${_file_name_NAME_WE}${file_suffix}${_file_name_EXT}"
+    PARENT_SCOPE
+  )
 endfunction()
 
 # useful for adding debug suffix to library lists:
@@ -295,8 +272,8 @@ function(blender_source_group
   if(IDE_GROUP_SOURCES_IN_FOLDERS)
     foreach(_SRC ${sources})
       # remove ../'s
-      get_filename_component(_SRC_DIR ${_SRC} REALPATH)
-      get_filename_component(_SRC_DIR ${_SRC_DIR} DIRECTORY)
+      cmake_path(ABSOLUTE_PATH _SRC NORMALIZE OUTPUT_VARIABLE _SRC_DIR)
+      cmake_path(GET _SRC_DIR PARENT_PATH _SRC_DIR)
       string(FIND "${_SRC_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/" _pos)
       if(NOT _pos EQUAL -1)
         string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "" GROUP_ID ${_SRC_DIR})
@@ -450,6 +427,21 @@ function(blender_link_libraries
   target_link_libraries(${target} ${dependency_libraries})
 endfunction()
 
+function(is_c_or_cxx_source file variable)
+  set(result FALSE)
+  cmake_path(GET file EXTENSION LAST_ONLY _ext)
+  # Files without an extension are not sources.
+  if(_ext)
+    # Strip the leading dot.
+    string(SUBSTRING "${_ext}" 1 -1 _ext)
+    if(("${_ext}" IN_LIST CMAKE_C_SOURCE_FILE_EXTENSIONS) OR
+       ("${_ext}" IN_LIST CMAKE_CXX_SOURCE_FILE_EXTENSIONS))
+      set(result TRUE)
+    endif()
+  endif()
+  set(${variable} ${result} PARENT_SCOPE)
+endfunction()
+
 function(blender_add_lib__impl
   name
   sources
@@ -460,7 +452,25 @@ function(blender_add_lib__impl
 
   # message(STATUS "Configuring library ${name}")
 
-  add_library(${name} ${sources})
+  # Check if all sources are header-only (not C/C++ sources).
+  set(_all_headers TRUE)
+  foreach(_src ${sources})
+    is_c_or_cxx_source("${_src}" _is_source)
+    if(_is_source)
+      set(_all_headers FALSE)
+      break()
+    endif()
+  endforeach()
+  unset(_src)
+  unset(_is_source)
+
+  if(_all_headers)
+    add_library(${name} INTERFACE)
+    target_sources(${name} PRIVATE ${sources})
+  else()
+    add_library(${name} ${sources})
+  endif()
+  unset(_all_headers)
 
   # On windows vcpkg goes out of its way to make its libs the preferred
   # libs, and needs to be explicitly be told not to do that.
@@ -620,33 +630,44 @@ function(setup_platform_linker_libs
 endfunction()
 
 # Return values:
-# - `${_sse42_flags}`: compiler flags to enable SSE4.2 support.
-function(get_sse_flags
-  _sse42_flags)
+# - `${_simd_flags}`: compiler flags to enable SIMD support.
+function(get_compiler_simd_flags
+  _simd_flags)
 
-  if (CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64)|(AMD64)" OR CMAKE_OSX_ARCHITECTURES MATCHES x86_64)
-    # message(STATUS "Detecting SSE support")
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64)|(AMD64)" OR CMAKE_OSX_ARCHITECTURES MATCHES x86_64)
+    # message(STATUS "Detecting SIMD support")
     if((CMAKE_C_COMPILER_ID STREQUAL "GNU") OR (CMAKE_C_COMPILER_ID MATCHES "Clang"))
-      set(${_sse42_flags} "-march=x86-64-v2" PARENT_SCOPE)
+      set(${_simd_flags} "-march=x86-64-v2" PARENT_SCOPE)
     elseif(MSVC)
       # MSVC has no specific compile flags for SSE42 (only for AVX).
-      set(${_sse42_flags} PARENT_SCOPE)
+      set(${_simd_flags} PARENT_SCOPE)
       # It also doesn't define __SSE__/__MMX__ flags and only does the AVX and higher flags.
       # For consistency we define these flags for MSVC.
       add_compile_definitions(__MMX__ __SSE__ __SSE2__ __SSE3__ __SSE4_1__ __SSE4_2__)
     elseif(CMAKE_C_COMPILER_ID STREQUAL "Intel")
       if(WIN32)
-        set(${_sse42_flags} "/QxSSE4.2" PARENT_SCOPE)
+        set(${_simd_flags} "/QxSSE4.2" PARENT_SCOPE)
       else()
-        set(${_sse42_flags} "-xsse4.2" PARENT_SCOPE)
+        set(${_simd_flags} "-xsse4.2" PARENT_SCOPE)
       endif()
     else()
-      message(WARNING "SSE flags for this compiler: '${CMAKE_C_COMPILER_ID}' not known")
-      set(${_sse42_flags} PARENT_SCOPE)
+      message(WARNING "SIMD flags for this compiler: '${CMAKE_C_COMPILER_ID}' not known")
+      set(${_simd_flags} PARENT_SCOPE)
+    endif()
+  elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|ARM64|arm64" OR CMAKE_OSX_ARCHITECTURES MATCHES "arm64")
+    if((CMAKE_C_COMPILER_ID STREQUAL "GNU") OR (CMAKE_C_COMPILER_ID MATCHES "Clang"))
+      if(UNIX AND NOT APPLE)
+        # Target ARMv8.2-A with dot product and half float.
+        set(${_simd_flags} "-march=armv8.2-a+dotprod+fp16+lse" PARENT_SCOPE)
+      else()
+        set(${_simd_flags} PARENT_SCOPE)
+      endif()
+    else()
+      set(${_simd_flags} PARENT_SCOPE)
     endif()
   else()
-    # Not a 64bit x86 system, don't set any SSE x86 compiler flags.
-    set(${_sse42_flags} PARENT_SCOPE)
+    # Not a supported system, don't set any SIMD compiler flags.
+    set(${_simd_flags} PARENT_SCOPE)
   endif()
 endfunction()
 
@@ -904,7 +925,7 @@ function(add_check_c_compiler_flag_impl
   include(CheckCCompilerFlag)
 
   set(_is_new TRUE)
-  if (DEFINED CACHE{${_CACHE_VAR}})
+  if(DEFINED CACHE{${_CACHE_VAR}})
     set(_is_new FALSE)
   endif()
 
@@ -928,7 +949,7 @@ function(add_check_cxx_compiler_flag_impl
   include(CheckCXXCompilerFlag)
 
   set(_is_new TRUE)
-  if (DEFINED CACHE{${_CACHE_VAR}})
+  if(DEFINED CACHE{${_CACHE_VAR}})
     set(_is_new FALSE)
   endif()
 
@@ -1029,49 +1050,6 @@ function(get_blender_version)
 endfunction()
 
 
-# hacks to override initial project settings
-# these macros must be called directly before/after project(Blender)
-#
-# NOTE: must be a macro pair, `_pre` sets `_reset_standard_c*flags_rel`
-# variables that `_post` reads from the same scope, and `_post` modifies
-# `CMAKE_C/CXX_FLAGS_RELEASE` cache entries.
-macro(blender_project_hack_pre)
-  # ------------------
-  # GCC -O3 HACK START
-  # needed because O3 can cause problems but
-  # allow the builder to set O3 manually after.
-  if(DEFINED CMAKE_C_FLAGS_RELEASE)
-    set(_reset_standard_cflags_rel OFF)
-  else()
-    set(_reset_standard_cflags_rel ON)
-  endif()
-  if(DEFINED CMAKE_CXX_FLAGS_RELEASE)
-    set(_reset_standard_cxxflags_rel OFF)
-  else()
-    set(_reset_standard_cxxflags_rel ON)
-  endif()
-endmacro()
-
-
-macro(blender_project_hack_post)
-  # ----------------
-  # GCC -O3 HACK END
-  if(_reset_standard_cflags_rel)
-    string(REGEX REPLACE "-O3" "-O2" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
-    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}" CACHE STRING "" FORCE)
-    mark_as_advanced(CMAKE_C_FLAGS_RELEASE)
-  endif()
-
-  if(_reset_standard_cxxflags_rel)
-    string(REGEX REPLACE "-O3" "-O2" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}" CACHE STRING "" FORCE)
-    mark_as_advanced(CMAKE_CXX_FLAGS_RELEASE)
-  endif()
-
-  unset(_reset_standard_cflags_rel)
-  unset(_reset_standard_cxxflags_rel)
-endmacro()
-
 # pair of macros to allow libraries to be specify files to install, but to
 # only install them at the end so the directories don't get cleared with
 # the files in them. used by cycles to install addon.
@@ -1144,8 +1122,8 @@ function(data_to_c_simple
   )
 
   # remove ../'s
-  get_filename_component(_file_from ${CMAKE_CURRENT_SOURCE_DIR}/${file_from}   REALPATH)
-  get_filename_component(_file_to   ${CMAKE_CURRENT_BINARY_DIR}/${file_from}.c REALPATH)
+  cmake_path(SET _file_from NORMALIZE "${CMAKE_CURRENT_SOURCE_DIR}/${file_from}")
+  cmake_path(SET _file_to   NORMALIZE "${CMAKE_CURRENT_BINARY_DIR}/${file_from}.c")
 
   list(APPEND ${list_to_add} ${_file_to})
   source_group(Generated FILES ${_file_to})
@@ -1169,16 +1147,17 @@ function(glsl_to_c
   )
 
   # remove ../'s
-  get_filename_component(_file_from ${CMAKE_CURRENT_SOURCE_DIR}/${file_from}    REALPATH)
-  get_filename_component(_file_tmp  ${CMAKE_CURRENT_BINARY_DIR}/${file_from}    REALPATH)
-  get_filename_component(_file_meta ${CMAKE_CURRENT_BINARY_DIR}/${file_from}.hh REALPATH)
-  get_filename_component(_file_info ${CMAKE_CURRENT_BINARY_DIR}/${file_from}.info  REALPATH)
-  get_filename_component(_file_to   ${CMAKE_CURRENT_BINARY_DIR}/${file_from}.c  REALPATH)
+  cmake_path(SET _file_from NORMALIZE "${CMAKE_CURRENT_SOURCE_DIR}/${file_from}")
+  cmake_path(SET _file_tmp  NORMALIZE "${CMAKE_CURRENT_BINARY_DIR}/${file_from}.tmp")
+  cmake_path(SET _file_meta NORMALIZE "${CMAKE_CURRENT_BINARY_DIR}/${file_from}.hh")
+  cmake_path(SET _file_info NORMALIZE "${CMAKE_CURRENT_BINARY_DIR}/${file_from}.info")
+  cmake_path(SET _file_to   NORMALIZE "${CMAKE_CURRENT_BINARY_DIR}/${file_from}.c")
+  cmake_path(SET _file_dep  NORMALIZE "${CMAKE_CURRENT_BINARY_DIR}/${file_from}.d")
 
   # Turn include directories into absolute paths
   set(_inc_list "")
   foreach(path IN LISTS ${include_list})
-    get_filename_component(_inc_path ${CMAKE_CURRENT_SOURCE_DIR}/${path} REALPATH)
+    cmake_path(SET _inc_path NORMALIZE "${CMAKE_CURRENT_SOURCE_DIR}/${path}")
     list(APPEND _inc_list ${_inc_path})
   endforeach()
 
@@ -1188,10 +1167,17 @@ function(glsl_to_c
   set(${list_to_add} ${${list_to_add}} PARENT_SCOPE)
 
   add_custom_command(
-    OUTPUT  ${_file_to} ${_file_meta} ${_file_info}
-    COMMAND "$<TARGET_FILE:shader_tool>" ${_file_from} ${_file_tmp} ${_file_meta} ${_file_info} ${_inc_list}
+    OUTPUT  ${_file_tmp} ${_file_meta} ${_file_info} ${_file_dep}
+    DEPFILE ${_file_dep}
+    COMMAND
+      "$<TARGET_FILE:shader_tool>"
+      ${_file_from} ${_file_tmp} ${_file_meta} ${_file_info} ${_file_dep} ${_inc_list}
+    DEPENDS ${_file_from} shader_tool)
+
+  add_custom_command(
+    OUTPUT  ${_file_to}
     COMMAND "$<TARGET_FILE:datatoc>" ${_file_tmp} ${_file_to}
-    DEPENDS ${_file_from} datatoc shader_tool)
+    DEPENDS ${_file_tmp} datatoc)
 
   set_source_files_properties(${_file_tmp} PROPERTIES GENERATED TRUE)
   set_source_files_properties(${_file_to}  PROPERTIES GENERATED TRUE)
@@ -1208,8 +1194,8 @@ function(msgfmt_simple
   # remove ../'s
   get_filename_component(_file_from_we ${file_from} NAME_WE)
 
-  get_filename_component(_file_from ${file_from} REALPATH)
-  get_filename_component(_file_to ${CMAKE_CURRENT_BINARY_DIR}/${_file_from_we}.mo REALPATH)
+  cmake_path(ABSOLUTE_PATH file_from NORMALIZE OUTPUT_VARIABLE _file_from)
+  cmake_path(SET _file_to NORMALIZE "${CMAKE_CURRENT_BINARY_DIR}/${_file_from_we}.mo")
 
   list(APPEND ${list_to_add} ${_file_to})
   set(${list_to_add} ${${list_to_add}} PARENT_SCOPE)
@@ -1372,7 +1358,12 @@ function(find_python_module_file
   endif()
 
   path_strip_trailing_slash(_python_root "${PYTHON_LIBPATH}")
-  set(_python_base "${_python_root}/python${PYTHON_VERSION}")
+  if(WIN32)
+    # MS-Windows has no `python${PYTHON_VERSION}` directory, `site-packages` is directly in `lib`.
+    set(_python_base "${_python_root}")
+  else()
+    set(_python_base "${_python_root}/python${PYTHON_VERSION}")
+  endif()
   # This always moves up one level (even if there is a trailing slash).
   get_filename_component(_python_root "${_python_root}" DIRECTORY)
   path_ensure_trailing_slash(_python_root "${_python_root}")
@@ -1644,9 +1635,26 @@ function(compile_sources_as_cpp
   define
   )
 
-  foreach(glsl_file ${sources})
-    set_source_files_properties(${glsl_file} PROPERTIES LANGUAGE CXX)
-  endforeach()
+  # On Windows, MSVC/Clang echo the filename being compiled to the console.
+  # Ninja suppresses this only for recognized C++ extensions (.cc/.cpp etc.),
+  # not .glsl. Generate a .cc wrapper per source so Ninja suppresses the echo.
+  # On other platforms, just set LANGUAGE CXX directly on each source file.
+
+  if(WIN32)
+    foreach(glsl_file ${sources})
+      cmake_path(SET _file_from NORMALIZE "${CMAKE_CURRENT_SOURCE_DIR}/${glsl_file}")
+      cmake_path(SET _file_to   NORMALIZE "${CMAKE_CURRENT_BINARY_DIR}/${glsl_file}.cc")
+      file(WRITE "${_file_to}" "#include \"${_file_from}\"\n")
+      list(APPEND sources ${_file_to})
+      # Mark the original file as header only, so no attempt will be made at compiling it
+      # regardless of extention.
+      set_source_files_properties(${glsl_file} PROPERTIES HEADER_FILE_ONLY TRUE)
+    endforeach()
+  else()
+    foreach(glsl_file ${sources})
+      set_source_files_properties(${glsl_file} PROPERTIES LANGUAGE CXX)
+    endforeach()
+  endif()
 
   add_library(${library} OBJECT ${sources})
   set_target_properties(${library} PROPERTIES LINKER_LANGUAGE CXX)

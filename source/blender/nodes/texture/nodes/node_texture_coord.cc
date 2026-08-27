@@ -6,7 +6,7 @@
  * \ingroup texnodes
  */
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "node_texture_util.hh"
 
 namespace blender {
@@ -36,7 +36,7 @@ void register_node_type_tex_coord()
 {
   static bke::bNodeType ntype;
 
-  tex_node_type_base(&ntype, "TextureNodeCoordinates", TEX_NODE_COORD);
+  tex_node_type_base(&ntype, "TextureNodeCoordinates"_ustr, TEX_NODE_COORD);
   ntype.ui_name = "Coordinates";
   ntype.enum_name_legacy = "COORD";
   ntype.nclass = NODE_CLASS_INPUT;

@@ -5,7 +5,7 @@
 #include "BLI_array.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_movieclip_types.h"
 #include "DNA_tracking_types.h"
@@ -180,11 +180,10 @@ class PlaneTrackDeformOperation : public NodeOperation {
 
     Result &output_mask = get_result("Plane");
     if (output_mask.should_compute()) {
-      output_mask.steal_data(anti_aliased_plane_mask);
+      output_mask.share_data(anti_aliased_plane_mask);
     }
-    else {
-      anti_aliased_plane_mask.release();
-    }
+
+    anti_aliased_plane_mask.release();
   }
 
   void compute_plane_gpu(const Array<float4x4> &homography_matrices,
@@ -262,11 +261,10 @@ class PlaneTrackDeformOperation : public NodeOperation {
 
     Result &output_mask = get_result("Plane");
     if (output_mask.should_compute()) {
-      output_mask.steal_data(anti_aliased_plane_mask);
+      output_mask.share_data(anti_aliased_plane_mask);
     }
-    else {
-      anti_aliased_plane_mask.release();
-    }
+
+    anti_aliased_plane_mask.release();
   }
 
   void compute_plane_cpu(const Array<float4x4> &homography_matrices, Result &plane_mask)
@@ -452,7 +450,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodePlaneTrackDeform", CMP_NODE_PLANETRACKDEFORM);
+  cmp_node_type_base(&ntype, "CompositorNodePlaneTrackDeform"_ustr, CMP_NODE_PLANETRACKDEFORM);
   ntype.ui_name = "Plane Track Deform";
   ntype.ui_description =
       "Replace flat planes in footage by another image, detected by plane tracks from motion "

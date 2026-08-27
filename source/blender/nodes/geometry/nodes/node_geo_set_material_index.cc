@@ -19,11 +19,16 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
   b.add_input<decl::Geometry>("Geometry"_ustr)
-      .supported_type({GeometryComponent::Type::Mesh, GeometryComponent::Type::GreasePencil})
+      .supported_type({GeometryComponent::Type::Mesh,
+                       GeometryComponent::Type::Curve,
+                       GeometryComponent::Type::GreasePencil})
       .description("Geometry to update the material indices on");
-  b.add_output<decl::Geometry>("Geometry"_ustr).propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
-  b.add_input<decl::Int>("Material Index"_ustr).min(0).field_on_all();
+  b.add_output<decl::Geometry>("Geometry"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
+  b.add_input<decl::Int>("Material Index"_ustr).min(0).evaluated_geometry_field();
 }
 
 static void set_material_index_in_grease_pencil(GreasePencil &grease_pencil,
@@ -61,6 +66,15 @@ static void node_geo_exec(GeoNodeExecParams params)
                                          selection,
                                          material_index);
     }
+    if (Curves *curves_id = geometry_set.get_curves_for_write()) {
+      bke::CurvesGeometry &curves = curves_id->geometry.wrap();
+      bke::try_capture_field_on_geometry(curves.attributes_for_write(),
+                                         bke::CurvesFieldContext(curves, AttrDomain::Curve),
+                                         "material_index",
+                                         AttrDomain::Curve,
+                                         selection,
+                                         material_index);
+    }
     if (GreasePencil *grease_pencil = geometry_set.get_grease_pencil_for_write()) {
       set_material_index_in_grease_pencil(*grease_pencil, selection, material_index);
     }
@@ -72,7 +86,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSetMaterialIndex", GEO_NODE_SET_MATERIAL_INDEX);
+  geo_node_type_base(&ntype, "GeometryNodeSetMaterialIndex"_ustr, GEO_NODE_SET_MATERIAL_INDEX);
   ntype.ui_name = "Set Material Index";
   ntype.ui_description = "Set the material index for each selected geometry element";
   ntype.enum_name_legacy = "SET_MATERIAL_INDEX";

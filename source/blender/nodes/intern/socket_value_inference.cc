@@ -23,7 +23,7 @@
 #include "ANIM_action.hh"
 #include "ANIM_action_iterators.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_stack.hh"
 
 namespace blender::nodes {
@@ -193,11 +193,11 @@ class SocketValueInferencerImpl {
         return;
       }
       default: {
-        if (node->is_type("NodeEnableOutput")) {
+        if (node->is_type("NodeEnableOutput"_ustr)) {
           this->value_task__output__enable_output(socket);
           return;
         }
-        if (node->is_type("NodeImplicitConversion")) {
+        if (node->is_type("NodeImplicitConversion"_ustr)) {
           this->value_task__output__implicit_conversion_node(socket);
           return;
         }
@@ -782,7 +782,7 @@ class SocketValueInferencerImpl {
       return;
     }
     if (const SocketDeclaration *socket_decl = socket.socket->runtime->declaration) {
-      if (socket_decl->input_field_type == InputSocketFieldType::Implicit) {
+      if (socket_decl->default_input_type != NODE_DEFAULT_INPUT_VALUE) {
         /* Implicit fields inputs don't have a single static value. */
         all_socket_values_.add_new(socket, InferenceValue::Unknown());
         return;
@@ -870,12 +870,12 @@ class SocketValueInferencerImpl {
     if (tree.adt->action) {
       animrig::foreach_fcurve_in_action_slot(
           tree.adt->action->wrap(), tree.adt->slot_handle, [&](const FCurve &fcurve) {
-            handle_rna_path(fcurve.rna_path);
+            handle_rna_path(fcurve.rna_path().c_str());
           });
     }
     /* Gather all inputs controlled by drivers. */
     for (const FCurve &driver : tree.adt->drivers) {
-      handle_rna_path(driver.rna_path);
+      handle_rna_path(driver.rna_path().c_str());
     }
 
     /* Actually find the #bNodeSocket for each controlled input. */

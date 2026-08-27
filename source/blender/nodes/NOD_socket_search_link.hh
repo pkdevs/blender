@@ -52,7 +52,7 @@ class LinkSearchOpParams {
   {
   }
 
-  bNode &add_node(StringRef idname);
+  bNode &add_node(UString idname);
   bNode &add_node(const bke::bNodeType &node_type);
   /**
    * Find a socket with the given name (correctly checks for inputs and outputs)
@@ -65,6 +65,8 @@ class LinkSearchOpParams {
    * Like #connect_available_socket, but also calls the node's update function.
    */
   void update_and_connect_available_socket(bNode &new_node, UString socket_name);
+  void update_and_connect_available_socket_by_identifier(bNode &new_node,
+                                                         UString socket_identifier);
 };
 
 struct SocketLinkOperation {

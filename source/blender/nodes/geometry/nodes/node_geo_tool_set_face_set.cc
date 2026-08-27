@@ -18,8 +18,11 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Geometry>("Mesh"_ustr)
       .align_with_previous()
       .description("Mesh to override the face set attribute on");
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
-  b.add_input<decl::Int>("Face Set"_ustr).hide_value().field_on_all();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
+  b.add_input<decl::Int>("Face Set"_ustr).hide_value().evaluated_geometry_field();
 }
 
 static bool is_constant_zero(const Field<int> &face_set)
@@ -60,7 +63,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeToolSetFaceSet", GEO_NODE_TOOL_SET_FACE_SET);
+  geo_node_type_base(&ntype, "GeometryNodeToolSetFaceSet"_ustr, GEO_NODE_TOOL_SET_FACE_SET);
   ntype.ui_name = "Set Face Set";
   ntype.ui_description = "Set sculpt face set values for faces";
   ntype.enum_name_legacy = "TOOL_SET_FACE_SET";

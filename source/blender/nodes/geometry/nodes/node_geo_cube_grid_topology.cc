@@ -117,7 +117,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeCubeGridTopology");
+  geo_node_type_base(&ntype, "GeometryNodeCubeGridTopology"_ustr);
   ntype.ui_name = "Cube Grid Topology";
   ntype.ui_description =
       "Create a boolean grid topology with the given dimensions, for use with the Field to Grid "
@@ -125,6 +125,7 @@ static void node_register()
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
+  ntype.default_width = bke::NodeWidth::_160;
   bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)

@@ -53,13 +53,13 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("Height of the generated cone");
   b.add_output<decl::Geometry>("Mesh"_ustr);
   b.add_output<decl::Bool>("Top"_ustr)
-      .field_on_all()
+      .anonymous_attribute_output()
       .translation_context(BLT_I18NCONTEXT_ID_NODETREE);
   b.add_output<decl::Bool>("Bottom"_ustr)
-      .field_on_all()
+      .anonymous_attribute_output()
       .translation_context(BLT_I18NCONTEXT_ID_NODETREE);
-  b.add_output<decl::Bool>("Side"_ustr).field_on_all();
-  b.add_output<decl::Vector>("UV Map"_ustr).field_on_all();
+  b.add_output<decl::Bool>("Side"_ustr).anonymous_attribute_output();
+  b.add_output<decl::Vector>("UV Map"_ustr).anonymous_attribute_output();
 
   const bNode *node = b.node_or_null();
   if (node != nullptr) {
@@ -156,7 +156,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeMeshCone", GEO_NODE_MESH_PRIMITIVE_CONE);
+  geo_node_type_base(&ntype, "GeometryNodeMeshCone"_ustr, GEO_NODE_MESH_PRIMITIVE_CONE);
   ntype.ui_name = "Cone";
   ntype.ui_description = "Generate a cone mesh";
   ntype.enum_name_legacy = "MESH_PRIMITIVE_CONE";

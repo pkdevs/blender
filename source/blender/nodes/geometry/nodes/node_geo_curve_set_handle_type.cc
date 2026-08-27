@@ -25,8 +25,11 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Curve"_ustr)
       .supported_type(GeometryComponent::Type::Curve)
       .description("Curves to set handles of control points on");
-  b.add_output<decl::Geometry>("Curve"_ustr).propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
+  b.add_output<decl::Geometry>("Curve"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
 }
 
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -127,7 +130,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeCurveSetHandles", GEO_NODE_CURVE_SET_HANDLE_TYPE);
+  geo_node_type_base(&ntype, "GeometryNodeCurveSetHandles"_ustr, GEO_NODE_CURVE_SET_HANDLE_TYPE);
   ntype.ui_name = "Set Handle Type";
   ntype.ui_description = "Set the handle type for the control points of a Bézier curve";
   ntype.enum_name_legacy = "CURVE_SET_HANDLES";

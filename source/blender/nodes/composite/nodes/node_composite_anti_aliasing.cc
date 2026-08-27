@@ -94,14 +94,14 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeAntiAliasing", CMP_NODE_ANTIALIASING);
+  cmp_node_type_base(&ntype, "CompositorNodeAntiAliasing"_ustr, CMP_NODE_ANTIALIASING);
   ntype.ui_name = "Anti-Aliasing";
   ntype.ui_description = "Smooth away jagged edges";
   ntype.enum_name_legacy = "ANTIALIASING";
   ntype.nclass = NODE_CLASS_OP_FILTER;
   ntype.declare = node_declare;
   ntype.flag |= NODE_PREVIEW;
-  bke::node_type_size(ntype, 175, 140, 200);
+  ntype.default_width = bke::NodeWidth::_180;
   ntype.get_compositor_operation = get_compositor_operation;
 
   bke::node_register_type(ntype);

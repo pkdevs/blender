@@ -40,10 +40,10 @@ static void node_declare(NodeDeclarationBuilder &b)
   if (const bNode *node = b.node_or_null()) {
     switch (SelectionType(node->custom2)) {
       case SelectionType::Boolean:
-        b.add_input<decl::Bool>("Selection"_ustr).default_value(true).field_on_all();
+        b.add_input<decl::Bool>("Selection"_ustr).default_value(true).evaluated_geometry_field();
         break;
       case SelectionType::Float:
-        b.add_input<decl::Float>("Selection"_ustr).default_value(1.0f).field_on_all();
+        b.add_input<decl::Float>("Selection"_ustr).default_value(1.0f).evaluated_geometry_field();
         break;
     }
   }
@@ -233,7 +233,7 @@ static void node_rna(StructRNA *srna)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeToolSetSelection", GEO_NODE_TOOL_SET_SELECTION);
+  geo_node_type_base(&ntype, "GeometryNodeToolSetSelection"_ustr, GEO_NODE_TOOL_SET_SELECTION);
   ntype.ui_name = "Set Selection";
   ntype.ui_description = "Set selection of the edited geometry, for tool execution";
   ntype.enum_name_legacy = "TOOL_SELECTION_SET";

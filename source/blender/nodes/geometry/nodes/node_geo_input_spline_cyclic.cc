@@ -8,7 +8,7 @@ namespace blender::nodes::node_geo_input_spline_cyclic_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Bool>("Cyclic"_ustr).field_source();
+  b.add_output<decl::Bool>("Cyclic"_ustr).structure_type(StructureType::Field);
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -21,7 +21,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeInputSplineCyclic", GEO_NODE_INPUT_SPLINE_CYCLIC);
+  geo_node_type_base(&ntype, "GeometryNodeInputSplineCyclic"_ustr, GEO_NODE_INPUT_SPLINE_CYCLIC);
   ntype.ui_name = "Is Spline Cyclic";
   ntype.ui_description = "Retrieve whether each spline endpoint connects to the beginning";
   ntype.enum_name_legacy = "INPUT_SPLINE_CYCLIC";

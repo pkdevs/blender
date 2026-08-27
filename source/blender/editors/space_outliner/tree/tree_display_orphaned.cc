@@ -9,7 +9,7 @@
 #include "DNA_ID.h"
 #include "DNA_space_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_listbase_wrapper.hh"
 
 #include "BKE_idtype.hh"
@@ -56,7 +56,6 @@ ListBaseT<TreeElement> TreeDisplayIDOrphans::build_tree(const TreeSourceData &so
     if (!filter_id_type) {
       ID *id = static_cast<ID *>(lbarray[a]->first);
       te = add_element(&tree, nullptr, lbarray[a], nullptr, TSE_ID_BASE, 0);
-      te->directdata = lbarray[a];
       te->name = outliner_idcode_to_plural(GS(id->name));
     }
 
@@ -73,7 +72,7 @@ ListBaseT<TreeElement> TreeDisplayIDOrphans::build_tree(const TreeSourceData &so
 
 bool TreeDisplayIDOrphans::datablock_has_orphans(ListBaseT<ID> &lb) const
 {
-  if (BLI_listbase_is_empty(&lb)) {
+  if (lb.is_empty()) {
     return false;
   }
   const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(static_cast<ID *>(lb.first));

@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_constants.h"
+#include "BLI_math_constants.hh"
 
 #include "DNA_mesh_types.h"
 
@@ -31,7 +31,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .max(7)
       .description("Number of subdivisions on top of the basic icosahedron");
   b.add_output<decl::Geometry>("Mesh"_ustr);
-  b.add_output<decl::Vector>("UV Map"_ustr).field_on_all();
+  b.add_output<decl::Vector>("UV Map"_ustr).anonymous_attribute_output();
 }
 
 static Bounds<float3> calculate_bounds_ico_sphere(const float radius, const int subdivisions)
@@ -136,7 +136,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeMeshIcoSphere", GEO_NODE_MESH_PRIMITIVE_ICO_SPHERE);
+  geo_node_type_base(&ntype, "GeometryNodeMeshIcoSphere"_ustr, GEO_NODE_MESH_PRIMITIVE_ICO_SPHERE);
   ntype.ui_name = "Ico Sphere";
   ntype.ui_description = "Generate a spherical mesh that consists of equally sized triangles";
   ntype.enum_name_legacy = "MESH_PRIMITIVE_ICO_SPHERE";

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "BLI_enum_flags.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 namespace blender {
 
@@ -170,7 +170,7 @@ void GPU_line_smooth(bool enable);
  * but is not expected to restore its previous value.
  */
 void GPU_line_width(float width);
-void GPU_logic_op_xor_set(bool enable);
+
 void GPU_point_size(float size);
 void GPU_polygon_smooth(bool enable);
 

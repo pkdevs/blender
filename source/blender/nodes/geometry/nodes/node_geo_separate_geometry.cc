@@ -24,7 +24,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Bool>("Selection"_ustr)
       .default_value(true)
       .hide_value()
-      .field_on_all()
+      .evaluated_geometry_field()
       .description("The parts of the geometry that go into the first output");
   b.add_output<decl::Geometry>("Selection"_ustr)
       .propagate_all()
@@ -109,7 +109,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSeparateGeometry", GEO_NODE_SEPARATE_GEOMETRY);
+  geo_node_type_base(&ntype, "GeometryNodeSeparateGeometry"_ustr, GEO_NODE_SEPARATE_GEOMETRY);
   ntype.ui_name = "Separate Geometry";
   ntype.ui_description = "Split a geometry into two geometry outputs based on a selection";
   ntype.enum_name_legacy = "SEPARATE_GEOMETRY";

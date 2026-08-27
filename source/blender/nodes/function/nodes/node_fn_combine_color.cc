@@ -4,7 +4,7 @@
 
 #include "node_function_util.hh"
 
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -25,7 +25,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .label_fn([](bNode node) {
+      .label_fn([](const bNode &node) {
         switch (node_storage(node).mode) {
           case NODE_COMBSEP_COLOR_RGB:
           default:
@@ -40,7 +40,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .label_fn([](bNode node) {
+      .label_fn([](const bNode &node) {
         switch (node_storage(node).mode) {
           case NODE_COMBSEP_COLOR_RGB:
           default:
@@ -55,7 +55,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .label_fn([](bNode node) {
+      .label_fn([](const bNode &node) {
         switch (node_storage(node).mode) {
           case NODE_COMBSEP_COLOR_RGB:
           default:
@@ -140,7 +140,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  fn_node_type_base(&ntype, "FunctionNodeCombineColor", FN_NODE_COMBINE_COLOR);
+  fn_node_type_base(&ntype, "FunctionNodeCombineColor"_ustr, FN_NODE_COMBINE_COLOR);
   ntype.ui_name = "Combine Color";
   ntype.ui_description =
       "Combine four channels into a single color, based on a particular color model";

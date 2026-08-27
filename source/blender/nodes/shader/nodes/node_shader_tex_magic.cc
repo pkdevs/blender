@@ -19,7 +19,13 @@ namespace nodes::node_shader_tex_magic_cc {
 static void sh_node_tex_magic_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Vector>("Vector"_ustr).implicit_field(NODE_DEFAULT_INPUT_POSITION_FIELD);
+
+  const bool is_compositor = b.tree_or_null() && b.tree_or_null()->type == NTREE_COMPOSIT;
+  const NodeDefaultInputType default_input_type =
+      is_compositor ? NODE_DEFAULT_INPUT_UNIFORM_IMAGE_COORDINATES :
+                      NODE_DEFAULT_INPUT_POSITION_FIELD;
+  b.add_input<decl::Vector>("Vector"_ustr).default_input_type(default_input_type);
+
   b.add_input<decl::Float>("Scale"_ustr)
       .min(-1000.0f)
       .max(1000.0f)
@@ -171,6 +177,13 @@ class MagicFunction : public mf::MultiFunction {
       });
     }
   }
+
+  void hash_unique(UniqueHashBytes &hash) const override
+  {
+    static constexpr int8_t id = 0;
+    hash.add(&id);
+    hash.add(depth_);
+  }
 };
 
 static void sh_node_magic_tex_build_multi_function(NodeMultiFunctionBuilder &builder)
@@ -188,7 +201,7 @@ void register_node_type_sh_tex_magic()
 
   static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "ShaderNodeTexMagic", SH_NODE_TEX_MAGIC);
+  common_node_type_base(&ntype, "ShaderNodeTexMagic"_ustr, SH_NODE_TEX_MAGIC);
   ntype.ui_name = "Magic Texture";
   ntype.ui_description = "Generate a psychedelic color texture";
   ntype.enum_name_legacy = "TEX_MAGIC";
