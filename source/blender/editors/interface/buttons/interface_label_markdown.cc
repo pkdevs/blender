@@ -527,18 +527,6 @@ class MarkdownLayouter {
   }
 };
 
-static bool markdown_link_identity_compare(const Button *a, const Button *b)
-{
-  if (!a->opptr || !b->opptr) {
-    return false;
-  }
-  if (RNA_string_get(a->opptr, "url") != RNA_string_get(b->opptr, "url")) {
-    return false;
-  }
-  /* Distinguish multiple links to the same URL by position. */
-  return a->rect.xmin == b->rect.xmin && a->rect.ymin == b->rect.ymin;
-}
-
 static void create_link_buttons_for_label(ButtonLabel *button)
 {
   if (!button->markdown_cache) {
@@ -575,12 +563,20 @@ static void create_link_buttons_for_label(ButtonLabel *button)
 
     const EmbossType previous_emboss = block_emboss_get(block);
     block_emboss_set(block, EmbossType::None);
-    Button *but = uiDefIconBut(
-        block, ButtonType::But, ICON_NONE, x, y, width, font_height, nullptr, 0.0, 0.0, std::nullopt);
+    Button *but = uiDefIconBut(block,
+                               ButtonType::But,
+                               ICON_NONE,
+                               x,
+                               y,
+                               width,
+                               font_height,
+                               nullptr,
+                               0.0,
+                               0.0,
+                               std::nullopt);
     block_emboss_set(block, previous_emboss);
 
     static_cast<ButtonPush *>(but)->draw_as_link = true;
-    button_func_identity_compare_set(but, markdown_link_identity_compare);
 
     PointerRNA props = WM_operator_properties_create_ptr(ot);
     RNA_string_set(&props, "url", std::string(*span.url).c_str());

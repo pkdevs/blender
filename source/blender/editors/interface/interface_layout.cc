@@ -3412,6 +3412,7 @@ void Layout::label_markdown(StringRef text)
   ButtonLabel *label = static_cast<ButtonLabel *>(button);
   label->label_type = ButtonLabelType::Markdown;
   button->emboss = EmbossType::None;
+  button->drawflag |= BUT_NO_TEXT_PADDING;
   if (this->red_alert()) {
     button_flag_enable(button, BUT_REDALERT);
   }
