@@ -2386,19 +2386,6 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
   return OPERATOR_FINISHED;
 }
 
-static wmOperatorStatus sequencer_add_transition_strip_invoke(bContext *C,
-                                                              wmOperator *op,
-                                                              const wmEvent * /*event*/)
-{
-  bool is_type_set = RNA_struct_property_is_set(op->ptr, "type");
-  if (!is_type_set) {
-    BKE_report(op->reports, RPT_ERROR_INVALID_INPUT, "Strip type is not set.");
-    return OPERATOR_CANCELLED;
-  }
-
-  return sequencer_add_transition_strip_exec(C, op);
-}
-
 static std::string sequencer_add_transition_strip_get_description(bContext * /*C*/,
                                                                   wmOperatorType * /*ot*/,
                                                                   PointerRNA *ptr)
@@ -2433,7 +2420,6 @@ void SEQUENCER_OT_transition_strip_add(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->poll = ED_operator_sequencer_active_editable;
-  ot->invoke = sequencer_add_transition_strip_invoke;
   ot->exec = sequencer_add_transition_strip_exec;
   ot->get_description = sequencer_add_transition_strip_get_description;
 
