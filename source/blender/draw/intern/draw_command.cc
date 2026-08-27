@@ -264,7 +264,8 @@ void DrawMulti::execute(RecordingState &state) const
     const uint record_start = multi_draw_buf->record_start_;
 
     constexpr intptr_t slot_stride = 2 * sizeof(DrawCommand);
-    intptr_t record_base = intptr_t(record_start) * slot_stride;
+    /* `record_start` is in command slot units. */
+    intptr_t record_base = intptr_t(record_start) * intptr_t(sizeof(DrawCommand));
 
     for (const DrawMultiBuf::DrawRecordRange &range : *record_ranges) {
       gpu::Batch *batch = range.batch;
