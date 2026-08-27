@@ -1229,6 +1229,7 @@ void BKE_libblock_management_main_add(Main *bmain, void *idv)
   ListBaseT<ID> *lb = which_libbase(bmain, id->id_type());
   BKE_main_lock(bmain);
   BLI_addtail(lb, id);
+  BKE_libblock_owner_bmain_set(*id, bmain);
   /* We need to allow adding extra datablocks into libraries too, e.g. to support generating new
    * overrides for recursive resync. */
   BKE_id_new_name_validate(*bmain, *lb, *id, nullptr, IDNewNameMode::RenameExistingNever, true);
@@ -1254,6 +1255,7 @@ void BKE_libblock_management_main_remove(Main *bmain, void *idv)
   ListBaseT<ID> *lb = which_libbase(bmain, id->id_type());
   BKE_main_lock(bmain);
   BLI_remlink(lb, id);
+  BKE_libblock_owner_bmain_set(*id, nullptr);
   BKE_main_namemap_remove_id(*bmain, *id);
   id->tag |= ID_TAG_NO_MAIN;
   bmain->is_memfile_undo_written = false;
@@ -1406,6 +1408,12 @@ void BKE_libblock_runtime_ensure(ID &id)
   }
 }
 
+void BKE_libblock_owner_bmain_set(ID &id, const Main *bmain)
+{
+  BKE_libblock_runtime_ensure(id);
+  id.runtime->owner_bmain = bmain;
+}
+
 size_t BKE_libblock_get_alloc_info(short type, const char **r_name)
 {
   const IDTypeInfo *id_type = BKE_idtype_get_info_from_idcode(type);
@@ -1494,6 +1502,7 @@ void *BKE_libblock_alloc_in_lib(Main *bmain,
 
       BKE_main_lock(bmain);
       BLI_addtail(lb, id);
+      BKE_libblock_owner_bmain_set(*id, bmain);
       BKE_id_new_name_validate(*bmain, *lb, *id, name, IDNewNameMode::RenameExistingNever, true);
       bmain->is_memfile_undo_written = false;
       /* alphabetic insertion: is in new_id */

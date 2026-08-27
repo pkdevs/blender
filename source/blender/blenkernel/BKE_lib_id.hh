@@ -152,6 +152,12 @@ void BKE_libblock_init_empty(ID *id) ATTR_NONNULL(1);
 void BKE_libblock_runtime_ensure(ID &id);
 
 /**
+ * Set the #Main currently containing this ID, or null if it is not in any Main. Must be called
+ * whenever an ID is added to, removed from, or moved between Mains.
+ */
+void BKE_libblock_owner_bmain_set(ID &id, const Main *bmain);
+
+/**
  * Reset the runtime counters used by ID remapping.
  */
 void BKE_libblock_runtime_reset_remapping_status(ID *id) ATTR_NONNULL(1);
