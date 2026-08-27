@@ -194,7 +194,6 @@ PointCloud *read_spz_gzip_compressed_file(FILE *file, ReportList *reports)
   }
 
   point_cloud->render_as = PT_RENDER_AS_SPLATS;
-  point_cloud->spherical_harmonics_degree = header.sh_degree;
 
   /* TODO(sergey): Handle extensions. */
 
