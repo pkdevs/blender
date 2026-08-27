@@ -354,6 +354,7 @@ static CurvesPointSelectionStatus init_curves_point_selection_status(
   const OffsetIndices points_by_curve = curves.points_by_curve();
   const VArray<int8_t> curve_types = curves.curve_types();
   const std::optional<Span<float>> nurbs_weights = curves.nurbs_weights();
+  const bke::AttributeAccessor attributes = curves.attributes();
   const VArray<float> tilt = curves.tilt();
 
   Array<float3> positions = Array<float3>(curves.positions());
@@ -361,7 +362,6 @@ static CurvesPointSelectionStatus init_curves_point_selection_status(
   array_utils::copy(curves.radius(), radius.as_mutable_span());
 
   if (key) {
-    const bke::AttributeAccessor attributes = curves.attributes();
     bke::greasepencil::shapekey_get_applied_position(key, attributes, positions);
     bke::greasepencil::shapekey_get_applied_radius(key, attributes, radius);
   }
@@ -418,8 +418,23 @@ static CurvesPointSelectionStatus init_curves_point_selection_status(
 
     status.total += selection.size();
 
-    selection.foreach_index_optimized<int>(
-        [&](const int point) { add_v3_v3(status.median.location, (*positions)[point]); });
+    if (key) {
+      Array<float3> handle_positions = Array<float3>(*positions);
+
+      if (selection_attribute == ".selection_handle_left") {
+        bke::greasepencil::shapekey_get_applied_handle_left(key, attributes, handle_positions);
+      }
+      else {
+        bke::greasepencil::shapekey_get_applied_handle_right(key, attributes, handle_positions);
+      }
+
+      selection.foreach_index_optimized<int>(
+          [&](const int point) { add_v3_v3(status.median.location, handle_positions[point]); });
+    }
+    else {
+      selection.foreach_index_optimized<int>(
+          [&](const int point) { add_v3_v3(status.median.location, (*positions)[point]); });
+    }
   };
 
   add_handles(".selection_handle_left", curves.handle_positions_left());
@@ -521,27 +536,49 @@ static bool apply_to_curves_point_selection(const int tot,
       curves, CURVE_TYPE_BEZIER, memory);
 
   auto apply_to_handles = [&](StringRef selection_attribute, StringRef handles_attribute) {
-    const IndexMask selection = retrieve_selected_points(
+    const IndexMask handle_selection = retrieve_selected_points(
         curves, selection_attribute, bezier_points, memory);
-    if (selection.is_empty()) {
+    if (handle_selection.is_empty()) {
       return;
     }
 
     bke::SpanAttributeWriter<float3> handles =
-        curves.attributes_for_write().lookup_for_write_span<float3>(handles_attribute);
-    selection.foreach_index(
+        curves.attributes_for_write().lookup_or_add_for_write_span<float3>(handles_attribute,
+                                                                           bke::AttrDomain::Point);
+    handle_selection.foreach_index(
         [&](const int point) {
           apply_raw_diff_v3(
               handles.span[point], tot, ve_median.location, float3(median.location) / influence);
         },
         exec_mode::grain_size(2048));
+
+    /* Unapply the position of the main point, to not double the transform. */
+    if (actkb) {
+      selection.foreach_index(
+          [&](const int point) {
+            apply_raw_diff_v3(handles.span[point],
+                              tot,
+                              ve_median.location,
+                              -float3(median.location) / influence);
+          },
+          exec_mode::grain_size(2048));
+    }
+
     handles.finish();
 
     changed = true;
   };
 
-  apply_to_handles(".selection_handle_left", "handle_left");
-  apply_to_handles(".selection_handle_right", "handle_right");
+  if (actkb) {
+    apply_to_handles(".selection_handle_left",
+                     bke::greasepencil::shapekey_attribute_name_handle_left(actkb->name));
+    apply_to_handles(".selection_handle_right",
+                     bke::greasepencil::shapekey_attribute_name_handle_right(actkb->name));
+  }
+  else {
+    apply_to_handles(".selection_handle_left", "handle_left");
+    apply_to_handles(".selection_handle_right", "handle_right");
+  }
 
   if (changed) {
     curves.calculate_bezier_auto_handles();
