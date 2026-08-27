@@ -407,22 +407,26 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 18)) {
     for (Material &materials : bmain->materials) {
-      if (materials.gp_style != nullptr) {
-        if (materials.gp_style->fill_style == GP_MATERIAL_FILL_STYLE_GRADIENT) {
-          materials.gp_style->gradient = BKE_colorband_add(true);
-
-          if (materials.gp_style->flag & GP_MATERIAL_FLIP_FILL) {
-            copy_v4_v4(&materials.gp_style->gradient->data[0].r, materials.gp_style->mix_rgba);
-            copy_v4_v4(&materials.gp_style->gradient->data[1].r, materials.gp_style->fill_rgba);
-          }
-          else {
-            copy_v4_v4(&materials.gp_style->gradient->data[0].r, materials.gp_style->fill_rgba);
-            copy_v4_v4(&materials.gp_style->gradient->data[1].r, materials.gp_style->mix_rgba);
-          }
-
-          materials.gp_style->flag &= ~GP_MATERIAL_FLIP_FILL;
-        }
+      if (materials.gp_style == nullptr) {
+        continue;
       }
+
+      if (materials.gp_style->fill_style != GP_MATERIAL_FILL_STYLE_GRADIENT) {
+        continue;
+      }
+
+      materials.gp_style->gradient = BKE_colorband_add(true);
+
+      if (materials.gp_style->flag & GP_MATERIAL_FLIP_FILL) {
+        copy_v4_v4(&materials.gp_style->gradient->data[0].r, materials.gp_style->mix_rgba);
+        copy_v4_v4(&materials.gp_style->gradient->data[1].r, materials.gp_style->fill_rgba);
+      }
+      else {
+        copy_v4_v4(&materials.gp_style->gradient->data[0].r, materials.gp_style->fill_rgba);
+        copy_v4_v4(&materials.gp_style->gradient->data[1].r, materials.gp_style->mix_rgba);
+      }
+
+      materials.gp_style->flag &= ~GP_MATERIAL_FLIP_FILL;
     }
   }
 
