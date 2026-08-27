@@ -21,8 +21,10 @@ packed_float3 g_volume_absorption;
 #if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
 packed_float3 g_diffuse_light;
 packed_float3 g_diffuse_color;
-packed_float3 g_specular_light;
-packed_float3 g_specular_color;
+packed_float3 g_glossy_light;
+packed_float3 g_glossy_color;
+packed_float3 g_transmission_light;
+packed_float3 g_transmission_color;
 int g_light_accumulation_count;
 #endif
 
@@ -174,8 +176,8 @@ void closure_weights_reset(float closure_rand)
 #if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
   g_diffuse_light = float3(0.0f);
   g_diffuse_color = float3(0.0f);
-  g_specular_light = float3(0.0f);
-  g_specular_color = float3(0.0f);
+  g_glossy_light = float3(0.0f);
+  g_glossy_color = float3(0.0f);
   g_light_accumulation_count = 0;
 #endif
 }

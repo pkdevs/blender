@@ -195,9 +195,11 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
 #if defined(MAT_LIGHT_ITER)
     float light_sample_rcp = safe_rcp(float(g_light_accumulation_count));
     g_diffuse_color *= light_sample_rcp;
-    g_specular_color *= light_sample_rcp;
     g_diffuse_light *= alpha_rcp;
-    g_specular_light *= alpha_rcp;
+    g_glossy_color *= light_sample_rcp;
+    g_glossy_light *= alpha_rcp;
+    g_transmission_color *= light_sample_rcp;
+    g_transmission_light *= alpha_rcp;
     // TODO: Write as fragment output?
     if (uni.uniform_buf.render_pass.diffuse_light_id >= 0 &&
         uni.uniform_buf.render_pass.diffuse_color_id >= 0)
@@ -216,14 +218,32 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
     {
       render_passes.store_color(out_texel,
                                 uni.uniform_buf.render_pass.specular_light_id,
-                                float4(g_specular_light, 1.0f));
+                                float4(g_glossy_light + g_transmission_light, 1.0f));
+      /* TODO(fclem): Adding color passes together is wrong. Split the passes. */
       render_passes.store_color(out_texel,
                                 uni.uniform_buf.render_pass.specular_color_id,
-                                float4(g_specular_color, 1.0f));
+                                float4(g_glossy_color + g_transmission_color, 1.0f));
     }
     else {
-      g_emission += g_specular_color * g_specular_light;
+      g_emission += g_glossy_color * g_glossy_light;
+      g_emission += g_transmission_color * g_transmission_light;
     }
+
+#  if 0 /* TODO Transmission pass */
+    if (uni.uniform_buf.render_pass.transmission_light_id >= 0 &&
+        uni.uniform_buf.render_pass.transmission_color_id >= 0)
+    {
+      render_passes.store_color(out_texel,
+                                uni.uniform_buf.render_pass.transmission_light_id,
+                                float4(g_transmission_light, 1.0f));
+      render_passes.store_color(out_texel,
+                                uni.uniform_buf.render_pass.transmission_color_id,
+                                float4(g_transmission_color, 1.0f));
+    }
+    else {
+      g_emission += g_transmission_color * g_transmission_light;
+    }
+#  endif
 #endif
   }
 

@@ -1034,10 +1034,12 @@ float4 node_attribute_light_impl(const int light_index, uint attr_hash)
 }
 
 void node_light_accumulation_impl([[maybe_unused]] const int light_index,
-                                  [[maybe_unused]] float4 diffuse_light,
-                                  [[maybe_unused]] float4 diffuse_color,
-                                  [[maybe_unused]] float4 glossy_light,
-                                  [[maybe_unused]] float4 glossy_color,
+                                  [[maybe_unused]] float3 diffuse_light,
+                                  [[maybe_unused]] float3 diffuse_color,
+                                  [[maybe_unused]] float3 glossy_light,
+                                  [[maybe_unused]] float3 glossy_color,
+                                  [[maybe_unused]] float3 transmission_light,
+                                  [[maybe_unused]] float3 transmission_color,
                                   [[maybe_unused]] float weight,
                                   Closure &result)
 {
@@ -1046,12 +1048,16 @@ void node_light_accumulation_impl([[maybe_unused]] const int light_index,
 /* clang-format on */
 #if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
   LightData light = lrd.light_buf[light_index];
-  float3 diffuse_color_weight = diffuse_color.rgb * weight;
-  float3 glossy_color_weight = glossy_color.rgb * weight;
-  g_diffuse_light += diffuse_color_weight * diffuse_light.rgb * light.power_factor[LIGHT_DIFFUSE];
-  g_specular_light += glossy_color_weight * glossy_light.rgb * light.power_factor[LIGHT_SPECULAR];
+  float3 diffuse_color_weight = diffuse_color * weight;
+  float3 glossy_color_weight = glossy_color * weight;
+  float3 transmission_color_weight = transmission_color * weight;
+  g_diffuse_light += diffuse_color_weight * diffuse_light * light.power_factor[LIGHT_DIFFUSE];
+  g_glossy_light += glossy_color_weight * glossy_light * light.power_factor[LIGHT_SPECULAR];
+  g_transmission_light += transmission_color_weight * transmission_light *
+                          light.power_factor[LIGHT_TRANSMISSION];
   g_diffuse_color += diffuse_color_weight;
-  g_specular_color += glossy_color_weight;
+  g_glossy_color += glossy_color_weight;
+  g_transmission_color += transmission_color_weight;
   g_light_accumulation_count++;
 #endif
 
