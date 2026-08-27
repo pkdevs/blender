@@ -80,7 +80,7 @@ static int gpu_shader_normal_map(GPUMaterial *mat,
     strength = in[0].link;
   }
   else {
-    strength = gpu_node_stack_uniform_link(in[0]);
+    strength = GPU_uniform(in[0]);
   }
 
   GPUNodeLink *newnormal;
@@ -88,7 +88,7 @@ static int gpu_shader_normal_map(GPUMaterial *mat,
     newnormal = in[1].link;
   }
   else {
-    newnormal = gpu_node_stack_uniform_link(in[1]);
+    newnormal = GPU_uniform(in[1]);
   }
 
   const char *color_to_normal_fnc_name = "color_to_normal_new_shading";

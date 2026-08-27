@@ -181,7 +181,7 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
   if (ns == nullptr) {
     /* node_get_stack() will generate nullptr bNodeStack pointers
      * for unknown/unsupported types of sockets. */
-    gs->value = float4(0);
+    gs->value = std::monostate{};
     gs->link = nullptr;
     gs->type = GPU_NONE;
     gs->hasinput = false;
@@ -230,7 +230,24 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
     /* The value is retrieved as float4, but then stored using the type of the socket. */
     float4 vec(0.0f);
     nodestack_get_vec(vec, socket->type, ns);
-    gs->set_float_vec(vec);
+    switch (gs->type) {
+      case GPU_FLOAT:
+        gs->value = vec.x;
+        break;
+      case GPU_VEC2:
+        gs->value = float2(vec);
+        break;
+      case GPU_VEC3:
+        gs->value = float3(vec);
+        break;
+      case GPU_VEC4:
+        gs->value = vec;
+        break;
+      default:
+        BLI_assert_unreachable();
+        gs->value = std::monostate{};
+        break;
+    }
 
     gs->hasinput = ns->hasinput && ns->data;
     /* XXX Commented out the ns->data check here, as it seems it's not always set,
@@ -244,7 +261,25 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
 
 void node_data_from_gpu_stack(bNodeStack *ns, GPUNodeStack *gs)
 {
-  copy_v4_v4(ns->vec, gs->get_float_vec());
+  float4 vec(0.0f);
+  switch (gs->type) {
+    case GPU_FLOAT:
+      vec.x = std::get<float>(gs->value);
+      break;
+    case GPU_VEC2:
+      vec = float4(std::get<float2>(gs->value), 0.0f, 0.0f);
+      break;
+    case GPU_VEC3:
+      vec = float4(std::get<float3>(gs->value), 0.0f);
+      break;
+    case GPU_VEC4:
+      vec = std::get<float4>(gs->value);
+      break;
+    default:
+      BLI_assert_unreachable();
+      break;
+  }
+  copy_v4_v4(ns->vec, vec);
   ns->data = gs->link;
   ns->sockettype = gs->sockettype;
 }

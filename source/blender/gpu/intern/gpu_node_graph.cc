@@ -327,12 +327,16 @@ GPUNodeLink *GPU_uniform(const bool *num)
   return link;
 }
 
-GPUNodeLink *gpu_node_stack_constant_link(const GPUNodeStack &stack)
+GPUNodeLink *GPU_constant(const GPUNodeStack &stack)
 {
   return std::visit(
       [](const auto &value) -> GPUNodeLink * {
         using T = std::decay_t<decltype(value)>;
-        if constexpr (std::is_arithmetic_v<T>) {
+        if constexpr (std::is_same_v<T, std::monostate>) {
+          BLI_assert_unreachable();
+          return nullptr;
+        }
+        else if constexpr (std::is_arithmetic_v<T>) {
           return GPU_constant(&value);
         }
         else if constexpr (is_same_any_v<T, float3x3, float4x4>) {
@@ -345,12 +349,16 @@ GPUNodeLink *gpu_node_stack_constant_link(const GPUNodeStack &stack)
       stack.value);
 }
 
-GPUNodeLink *gpu_node_stack_uniform_link(const GPUNodeStack &stack)
+GPUNodeLink *GPU_uniform(const GPUNodeStack &stack)
 {
   return std::visit(
       [](const auto &value) -> GPUNodeLink * {
         using T = std::decay_t<decltype(value)>;
-        if constexpr (std::is_arithmetic_v<T>) {
+        if constexpr (std::is_same_v<T, std::monostate>) {
+          BLI_assert_unreachable();
+          return nullptr;
+        }
+        else if constexpr (std::is_arithmetic_v<T>) {
           return GPU_uniform(&value);
         }
         else if constexpr (is_same_any_v<T, float3x3, float4x4>) {
@@ -411,7 +419,7 @@ static GPUNodeLink *gpu_uniformbuffer_link(GPUMaterial *mat,
     return nullptr;
   }
 
-  GPUNodeLink *link = gpu_node_stack_uniform_link(*stack);
+  GPUNodeLink *link = GPU_uniform(*stack);
 
   if (in_out == SOCK_IN) {
     GPU_link(mat, gpu_uniform_set_function_from_type(socket->type), link, &stack->link);
@@ -432,7 +440,7 @@ static void gpu_node_input_socket(
     gpu_node_input_link(node, sock->link, sock->type);
   }
   else {
-    gpu_node_input_link(node, gpu_node_stack_constant_link(*sock), sock->type);
+    gpu_node_input_link(node, GPU_constant(*sock), sock->type);
   }
 }
 
@@ -1320,7 +1328,7 @@ GPUNodeLink *GPU_node_get_input_link(const bNode &node,
   if (input.link) {
     return input.link;
   }
-  return gpu_node_stack_uniform_link(input);
+  return GPU_uniform(input);
 }
 
 }  // namespace blender

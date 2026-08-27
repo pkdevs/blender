@@ -386,8 +386,7 @@ static int gpu_shader_mix(GPUMaterial *mat,
     if (is_non_uniform && is_vector_mode) {
       const float min[3] = {0.0f, 0.0f, 0.0f};
       const float max[3] = {1.0f, 1.0f, 1.0f};
-      const GPUNodeLink *factor_link = in[1].link ? in[1].link :
-                                                    gpu_node_stack_uniform_link(in[1]);
+      const GPUNodeLink *factor_link = in[1].link ? in[1].link : GPU_uniform(in[1]);
       GPU_link(mat,
                "node_mix_clamp_vector",
                factor_link,
@@ -398,8 +397,7 @@ static int gpu_shader_mix(GPUMaterial *mat,
     else {
       const float min = 0.0f;
       const float max = 1.0f;
-      const GPUNodeLink *factor_link = in[0].link ? in[0].link :
-                                                    gpu_node_stack_uniform_link(in[0]);
+      const GPUNodeLink *factor_link = in[0].link ? in[0].link : GPU_uniform(in[0]);
       GPU_link(mat,
                "node_mix_clamp_value",
                factor_link,

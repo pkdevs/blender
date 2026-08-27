@@ -107,7 +107,7 @@ static void populate_gpu_node_stack(const bNodeSocket &socket, GPUNodeStack &sta
   stack.type = gpu_type_from_socket(socket);
 
   /* This will be initialized by the GPU material compiler if needed. */
-  stack.value = gpu_node_stack_value_from_type(stack.type);
+  stack.value = GPU_node_stack_default_value(stack.type);
 
   stack.hasinput = socket.is_logically_linked();
   stack.hasoutput = socket.is_logically_linked();
