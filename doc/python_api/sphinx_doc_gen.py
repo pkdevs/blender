@@ -2002,6 +2002,7 @@ context_type_map = {
     "collection": [("LayerCollection", False)],
     "collision": [("CollisionModifier", False)],
     "curve": [("Curve", False)],
+    "dynamic_override": [("DynamicOverride", False)],
     "dynamic_paint": [("DynamicPaintModifier", False)],
     "edit_bone": [("EditBone", False)],
     "edit_image": [("Image", False)],
