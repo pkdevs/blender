@@ -887,7 +887,6 @@ void node_light_info_impl(const int light_index, float4 &color, float &power, fl
   [[resource_table]] const draw::Model &models = resource_table_get(draw::Model);
 
   LightData light = lrd.light_buf[light_index];
-  const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
 
   color = float4(light.color, 1.0f);
   /* Pre-divide power by PI,
