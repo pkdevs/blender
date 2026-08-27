@@ -454,15 +454,25 @@ bool TexturePaintStroke::test_start(wmOperator *op, const float2 mouse)
   return true;
 }
 
+static PaintStroke *create_paint_stroke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  if (CTX_wm_region_view3d(C)) {
+    return MEM_new<TexturePaintStroke>(__func__, C, op, event);
+  }
+  return MEM_new<ImagePaintStroke>(__func__, C, op, event);
+}
+
+static PaintStroke *get_paint_stroke(bContext *C, wmOperator *op)
+{
+  if (CTX_wm_region_view3d(C)) {
+    return static_cast<TexturePaintStroke *>(op->customdata);
+  }
+  return static_cast<ImagePaintStroke *>(op->customdata);
+}
+
 static wmOperatorStatus paint_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  PaintStroke *stroke = nullptr;
-  if (CTX_wm_region_view3d(C)) {
-    stroke = MEM_new<TexturePaintStroke>(__func__, C, op, event);
-  }
-  else {
-    stroke = MEM_new<ImagePaintStroke>(__func__, C, op, event);
-  }
+  PaintStroke *stroke = create_paint_stroke(C, op, event);
 
   op->customdata = stroke;
 
@@ -470,12 +480,7 @@ static wmOperatorStatus paint_invoke(bContext *C, wmOperator *op, const wmEvent 
   OPERATOR_RETVAL_CHECK(retval);
 
   if (retval == OPERATOR_FINISHED) {
-    if (CTX_wm_region_view3d(C)) {
-      stroke = static_cast<TexturePaintStroke *>(op->customdata);
-    }
-    else {
-      stroke = static_cast<ImagePaintStroke *>(op->customdata);
-    }
+    stroke = get_paint_stroke(C, op);
     if (stroke) {
       stroke->finish(C);
       MEM_delete(stroke);
@@ -492,13 +497,7 @@ static wmOperatorStatus paint_invoke(bContext *C, wmOperator *op, const wmEvent 
 
 static wmOperatorStatus paint_exec(bContext *C, wmOperator *op)
 {
-  PaintStroke *stroke = nullptr;
-  if (CTX_wm_region_view3d(C)) {
-    stroke = MEM_new<TexturePaintStroke>(__func__, C, op, nullptr);
-  }
-  else {
-    stroke = MEM_new<ImagePaintStroke>(__func__, C, op, nullptr);
-  }
+  PaintStroke *stroke = create_paint_stroke(C, op, nullptr);
   op->customdata = stroke;
 
   wmOperatorStatus ret_val = stroke->exec(C, op);
@@ -510,13 +509,7 @@ static wmOperatorStatus paint_exec(bContext *C, wmOperator *op)
 
 static wmOperatorStatus paint_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  PaintStroke *stroke = nullptr;
-  if (CTX_wm_region_view3d(C)) {
-    stroke = static_cast<TexturePaintStroke *>(op->customdata);
-  }
-  else {
-    stroke = static_cast<ImagePaintStroke *>(op->customdata);
-  }
+  PaintStroke *stroke = get_paint_stroke(C, op);
   const wmOperatorStatus retval = stroke->modal(C, op, event);
 
   if (ELEM(retval, OPERATOR_FINISHED, OPERATOR_CANCELLED)) {
@@ -529,13 +522,7 @@ static wmOperatorStatus paint_modal(bContext *C, wmOperator *op, const wmEvent *
 
 static void paint_cancel(bContext *C, wmOperator *op)
 {
-  PaintStroke *stroke = nullptr;
-  if (CTX_wm_region_view3d(C)) {
-    stroke = static_cast<TexturePaintStroke *>(op->customdata);
-  }
-  else {
-    stroke = static_cast<ImagePaintStroke *>(op->customdata);
-  }
+  PaintStroke *stroke = get_paint_stroke(C, op);
   UndoStack *ustack = CTX_wm_manager(C)->runtime->undo_stack;
   if (ustack->step_init) {
     /* If the user cancels a stroke when none actually started, there is nothing to undo from. */
