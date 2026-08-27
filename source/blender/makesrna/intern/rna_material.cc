@@ -432,6 +432,17 @@ static void rna_grease_pencil_fill_style_set(PointerRNA *ptr, int value)
   }
 }
 
+static PointerRNA rna_grease_pencil_gradient_get(PointerRNA *ptr)
+{
+  MaterialGPencilStyle *pcolor = static_cast<MaterialGPencilStyle *>(ptr->data);
+
+  if (pcolor->gradient == nullptr) {
+    pcolor->gradient = BKE_colorband_add(true);
+  }
+
+  return RNA_pointer_create_discrete(ptr->owner_id, RNA_ColorRamp, pcolor->gradient);
+}
+
 static std::optional<std::string> rna_GpencilColorData_path(const PointerRNA * /*ptr*/)
 {
   return "grease_pencil";
@@ -643,6 +654,8 @@ static void rna_def_material_greasepencil(BlenderRNA *brna)
   /* Gradient */
   prop = RNA_def_property(srna, "gradient", PROP_POINTER, PROP_NEVER_NULL);
   RNA_def_property_pointer_sdna(prop, nullptr, "gradient");
+  RNA_def_property_pointer_funcs(
+      prop, "rna_grease_pencil_gradient_get", nullptr, nullptr, nullptr);
   RNA_def_property_struct_type(prop, "ColorRamp");
   RNA_def_property_ui_text(prop, "Gradient", "");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialGpencil_update");
