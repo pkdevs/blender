@@ -529,12 +529,20 @@ static bool gpu_backend_supported()
 #endif
     case GPU_BACKEND_VULKAN:
 #ifdef WITH_VULKAN_BACKEND
+      /* Skip the support check if "--debug-gpu-backend-no-fallback" is used. */
+      if (G.debug & G_DEBUG_GPU_BACKEND_NO_FALLBACK) {
+        return true;
+      }
       return VKBackend::is_supported();
 #else
       return false;
 #endif
     case GPU_BACKEND_METAL:
 #ifdef WITH_METAL_BACKEND
+      /* Skip the support check if "--debug-gpu-backend-no-fallback" is used. */
+      if (G.debug & G_DEBUG_GPU_BACKEND_NO_FALLBACK) {
+        return true;
+      }
       return MTLBackend::metal_is_supported();
 #else
       return false;

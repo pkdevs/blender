@@ -1064,7 +1064,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
             ${CMAKE_CURRENT_LIST_DIR}/${script}
             --testdir "${TEST_SRC_DIR}/render/${render_test}"
             --outdir "${TEST_OUT_DIR}/${name}_opengl"
-            --gpu-backend opengl
+            --gpu-backend opengl --debug-gpu-backend-no-fallback
             ${ARGN}
           )
         endforeach()
@@ -1077,7 +1077,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
             ${CMAKE_CURRENT_LIST_DIR}/${script}
             --testdir "${TEST_SRC_DIR}/render/${render_test}"
             --outdir "${TEST_OUT_DIR}/${name}_metal"
-            --gpu-backend metal
+            --gpu-backend metal --debug-gpu-backend-no-fallback
             ${ARGN}
           )
         endforeach()
@@ -1091,7 +1091,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
             ${CMAKE_CURRENT_LIST_DIR}/${script}
             --testdir "${TEST_SRC_DIR}/render/${render_test}"
             --outdir "${TEST_OUT_DIR}/${name}_vulkan"
-            --gpu-backend vulkan
+            --gpu-backend vulkan --debug-gpu-backend-no-fallback
             ${ARGN}
           )
         endforeach()
