@@ -70,8 +70,9 @@ static gpu::Texture *gpencil_gradient_texture_create(const ColorBand *coba)
     linearrgb_to_srgb_v4(&data[i * 4], &data[i * 4]);
   }
 
-  gpu_tex = GPU_texture_create_1d("color_gradient",
+  gpu_tex = GPU_texture_create_2d("color_gradient",
                                   size,
+                                  1,
                                   1,
                                   gpu::TextureFormat::SRGBA_8_8_8_8,
                                   GPU_TEXTURE_USAGE_SHADER_READ,
