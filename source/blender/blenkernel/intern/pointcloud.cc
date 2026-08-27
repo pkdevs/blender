@@ -477,27 +477,5 @@ PointCloud *pointcloud_new_no_attributes(int totpoint)
   return pointcloud;
 }
 
-namespace pointcloud {
-
-PointCloud *copy_selection(const PointCloud &src,
-                           const IndexMask &mask,
-                           const AttributeFilter &attribute_filter)
-{
-  if (mask.size() == src.totpoint) {
-    return BKE_pointcloud_copy_for_eval(&src);
-  }
-  PointCloud *dst = BKE_pointcloud_new_nomain(mask.size());
-  bke::gather_attributes(src.attributes(),
-                         bke::AttrDomain::Point,
-                         bke::AttrDomain::Point,
-                         attribute_filter,
-                         mask,
-                         dst->attributes_for_write());
-  pointcloud_copy_parameters(src, *dst);
-  return dst;
-}
-
-}  // namespace pointcloud
-
 }  // namespace bke
 }  // namespace blender

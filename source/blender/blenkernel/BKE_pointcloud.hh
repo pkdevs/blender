@@ -54,13 +54,6 @@ struct PointCloudRuntime {
 
 PointCloud *pointcloud_new_no_attributes(int totpoint);
 
-namespace pointcloud {
-/* TODO: remove copy function in ED_pointcloud.hh */
-PointCloud *copy_selection(const PointCloud &src,
-                           const IndexMask &mask,
-                           const AttributeFilter &attribute_filter);
-}  // namespace pointcloud
-
 }  // namespace bke
 
 PointCloud *BKE_pointcloud_add(Main *bmain, const char *name);
