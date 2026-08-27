@@ -469,9 +469,9 @@ static bool apply_to_curves_point_selection(const int tot,
 
     bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
     key_positions = attributes.lookup_or_add_for_write_span<float3>(
-        bke::greasepencil::shapekey_position_attribute(actkb->name), bke::AttrDomain::Point);
+        bke::greasepencil::shapekey_attribute_name_position(actkb->name), bke::AttrDomain::Point);
     key_radius = attributes.lookup_or_add_for_write_span<float>(
-        bke::greasepencil::shapekey_radius_attribute(actkb->name), bke::AttrDomain::Point);
+        bke::greasepencil::shapekey_attribute_name_radius(actkb->name), bke::AttrDomain::Point);
 
     positions = key_positions.span;
     radius = key_radius.span;

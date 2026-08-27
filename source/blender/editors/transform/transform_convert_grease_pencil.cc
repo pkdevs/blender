@@ -276,7 +276,7 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
           const float keyblock_influence = actkb->curval;
 
           const VArray<float3> key_positions = *attributes.lookup_or_default<float3>(
-              blender::bke::greasepencil::shapekey_position_attribute(actkb->name),
+              bke::greasepencil::shapekey_attribute_name_position(actkb->name),
               bke::AttrDomain::Point,
               float3(0.0f));
 
@@ -383,7 +383,7 @@ static void recalcData_grease_pencil(TransInfo *t)
 
             bke::SpanAttributeWriter<float3> key_positions =
                 attributes.lookup_or_add_for_write_span<float3>(
-                    blender::bke::greasepencil::shapekey_position_attribute(actkb->name),
+                    bke::greasepencil::shapekey_attribute_name_position(actkb->name),
                     bke::AttrDomain::Point);
 
             Span<float3> trans_positions = transform_data.positions.as_span().slice(

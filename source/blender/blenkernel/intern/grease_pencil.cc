@@ -2257,21 +2257,21 @@ void ensure_non_empty_layer_names(Main &bmain, GreasePencil &grease_pencil)
   }
 }
 
-std::string shapekey_position_attribute(const char *name)
+std::string shapekey_attribute_name_position(const char *name)
 {
   char attr_name[64];
   SNPRINTF_UTF8(attr_name, "SKp_%s", name);
   return std::string(attr_name);
 }
 
-std::string shapekey_radius_attribute(const char *name)
+std::string shapekey_attribute_name_radius(const char *name)
 {
   char attr_name[64];
   SNPRINTF_UTF8(attr_name, "SKr_%s", name);
   return std::string(attr_name);
 }
 
-std::string shapekey_opacity_attribute(const char *name)
+std::string shapekey_attribute_name_opacity(const char *name)
 {
   char attr_name[64];
   SNPRINTF_UTF8(attr_name, "SKo_%s", name);
@@ -2308,11 +2308,11 @@ void shapekey_get_applied_position(const Key *key,
     }
 
     const VArray<float3> key_position = *attributes.lookup_or_default<float3>(
-        blender::bke::greasepencil::shapekey_position_attribute(keyblock.name),
+        blender::bke::greasepencil::shapekey_attribute_name_position(keyblock.name),
         bke::AttrDomain::Point,
         float3(0.0f));
     const VArray<float3> ref_key_position = *attributes.lookup_or_default<float3>(
-        blender::bke::greasepencil::shapekey_position_attribute(ref_keyblock->name),
+        blender::bke::greasepencil::shapekey_attribute_name_position(ref_keyblock->name),
         bke::AttrDomain::Point,
         float3(0.0f));
 
@@ -2354,11 +2354,11 @@ void shapekey_get_applied_radius(const Key *key,
     }
 
     const VArray<float> key_radius = *attributes.lookup_or_default<float>(
-        blender::bke::greasepencil::shapekey_radius_attribute(keyblock.name),
+        blender::bke::greasepencil::shapekey_attribute_name_radius(keyblock.name),
         bke::AttrDomain::Point,
         0.0f);
     const VArray<float> ref_key_radius = *attributes.lookup_or_default<float>(
-        blender::bke::greasepencil::shapekey_radius_attribute(ref_keyblock->name),
+        blender::bke::greasepencil::shapekey_attribute_name_radius(ref_keyblock->name),
         bke::AttrDomain::Point,
         0.0f);
 
@@ -2407,11 +2407,11 @@ void shapekey_get_applied_opacity(const Key *key,
     }
 
     const VArray<float> key_opacity = *attributes.lookup_or_default<float>(
-        blender::bke::greasepencil::shapekey_opacity_attribute(keyblock.name),
+        blender::bke::greasepencil::shapekey_attribute_name_opacity(keyblock.name),
         bke::AttrDomain::Point,
         0.0f);
     const VArray<float> ref_key_opacity = *attributes.lookup_or_default<float>(
-        blender::bke::greasepencil::shapekey_opacity_attribute(ref_keyblock->name),
+        blender::bke::greasepencil::shapekey_attribute_name_opacity(ref_keyblock->name),
         bke::AttrDomain::Point,
         0.0f);
 
@@ -2445,7 +2445,7 @@ void shapekey_set_applied_position(const Key *key,
   shapekey_get_applied_position(key, attributes, old_position.as_mutable_span());
 
   bke::SpanAttributeWriter<float3> key_position = attributes.lookup_or_add_for_write_span<float3>(
-      blender::bke::greasepencil::shapekey_position_attribute(actkb->name),
+      blender::bke::greasepencil::shapekey_attribute_name_position(actkb->name),
       bke::AttrDomain::Point);
 
   selection.foreach_index([&](const int point_i) {
@@ -2471,7 +2471,8 @@ void shapekey_set_applied_radius(const Key *key,
   shapekey_get_applied_radius(key, attributes, old_radius.as_mutable_span());
 
   bke::SpanAttributeWriter<float> key_radius = attributes.lookup_or_add_for_write_span<float>(
-      blender::bke::greasepencil::shapekey_radius_attribute(actkb->name), bke::AttrDomain::Point);
+      blender::bke::greasepencil::shapekey_attribute_name_radius(actkb->name),
+      bke::AttrDomain::Point);
 
   selection.foreach_index([&](const int point_i) {
     key_radius.span[point_i] += (new_radius[point_i] - old_radius[point_i]) / keyblock_influence;
@@ -2495,7 +2496,8 @@ void shapekey_set_applied_opacity(const Key *key,
   shapekey_get_applied_opacity(key, attributes, old_opacity.as_mutable_span());
 
   bke::SpanAttributeWriter<float> key_opacity = attributes.lookup_or_add_for_write_span<float>(
-      blender::bke::greasepencil::shapekey_opacity_attribute(actkb->name), bke::AttrDomain::Point);
+      blender::bke::greasepencil::shapekey_attribute_name_opacity(actkb->name),
+      bke::AttrDomain::Point);
 
   selection.foreach_index([&](const int point_i) {
     key_opacity.span[point_i] += (new_opacity[point_i] - old_opacity[point_i]) /

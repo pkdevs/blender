@@ -4886,9 +4886,9 @@ bool BKE_object_shapekey_remove(Main *bmain, Object *ob, KeyBlock *kb)
 
       bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-      attributes.remove(blender::bke::greasepencil::shapekey_position_attribute(kb->name));
-      attributes.remove(blender::bke::greasepencil::shapekey_radius_attribute(kb->name));
-      attributes.remove(blender::bke::greasepencil::shapekey_opacity_attribute(kb->name));
+      attributes.remove(blender::bke::greasepencil::shapekey_attribute_name_position(kb->name));
+      attributes.remove(blender::bke::greasepencil::shapekey_attribute_name_radius(kb->name));
+      attributes.remove(blender::bke::greasepencil::shapekey_attribute_name_opacity(kb->name));
     }
   }
 

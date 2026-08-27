@@ -977,9 +977,9 @@ const AttributeAccessorFunctions &get_attribute_accessor_functions();
  */
 void ensure_non_empty_layer_names(Main &bmain, GreasePencil &grease_pencil);
 
-std::string shapekey_position_attribute(const char *name);
-std::string shapekey_radius_attribute(const char *name);
-std::string shapekey_opacity_attribute(const char *name);
+std::string shapekey_attribute_name_position(const char *name);
+std::string shapekey_attribute_name_radius(const char *name);
+std::string shapekey_attribute_name_opacity(const char *name);
 
 void shapekey_get_applied_position(const Key *key,
                                    const bke::AttributeAccessor &attributes,

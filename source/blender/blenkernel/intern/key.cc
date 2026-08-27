@@ -1974,12 +1974,12 @@ void BKE_keyblock_rename(Main &bmain, Key *key, KeyBlock *kb, const char *newnam
 
       bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-      attributes.rename(blender::bke::greasepencil::shapekey_position_attribute(oldname),
-                        blender::bke::greasepencil::shapekey_position_attribute(newname));
-      attributes.rename(blender::bke::greasepencil::shapekey_radius_attribute(oldname),
-                        blender::bke::greasepencil::shapekey_radius_attribute(newname));
-      attributes.rename(blender::bke::greasepencil::shapekey_opacity_attribute(oldname),
-                        blender::bke::greasepencil::shapekey_opacity_attribute(newname));
+      attributes.rename(blender::bke::greasepencil::shapekey_attribute_name_position(oldname),
+                        blender::bke::greasepencil::shapekey_attribute_name_position(newname));
+      attributes.rename(blender::bke::greasepencil::shapekey_attribute_name_radius(oldname),
+                        blender::bke::greasepencil::shapekey_attribute_name_radius(newname));
+      attributes.rename(blender::bke::greasepencil::shapekey_attribute_name_opacity(oldname),
+                        blender::bke::greasepencil::shapekey_attribute_name_opacity(newname));
     }
   }
 }

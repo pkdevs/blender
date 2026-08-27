@@ -63,7 +63,7 @@ void ThicknessOperation::on_stroke_extended(const bContext &C, const InputSample
           bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
           bke::SpanAttributeWriter<float> key_radius =
               attributes.lookup_or_add_for_write_span<float>(
-                  blender::bke::greasepencil::shapekey_radius_attribute(actkb->name),
+                  blender::bke::greasepencil::shapekey_attribute_name_radius(actkb->name),
                   bke::AttrDomain::Point);
 
           point_mask.foreach_index(
