@@ -21,6 +21,7 @@
 #include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_memarena.hh"
 #include "BLI_scanfill.hh"
@@ -531,7 +532,7 @@ static DispList *displist_fill_cdt_process_group(const CDTFillGroup &group,
   input.face_offsets = face_offsets;
   input.face_vert_indices = face_vert_indices_data;
   input.epsilon = 1e-8;
-  input.need_ids = true;
+  input.needed_ids = CDT_ORIG_VERTS | CDT_ORIG_EDGES;
 
   meshintersect::CDT_result<double> result = meshintersect::delaunay_2d_calc(input,
                                                                              cdt_output_type);
@@ -564,8 +565,8 @@ static DispList *displist_fill_cdt_process_group(const CDTFillGroup &group,
       if (result.edge_orig[e].is_empty()) {
         continue;
       }
-      const int v0 = result.edge[e].first;
-      const int v1 = result.edge[e].second;
+      const int v0 = result.edge[e][0];
+      const int v1 = result.edge[e][1];
       if (result.vert_orig[v0].is_empty()) {
         isect_vert_to_edge[v0] = e;
       }

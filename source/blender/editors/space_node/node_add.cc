@@ -25,6 +25,7 @@
 
 #include "BLT_translation.hh"
 
+#include "BKE_compositor.hh"
 #include "BKE_context.hh"
 #include "BKE_image.hh"
 #include "BKE_lib_id.hh"
@@ -1238,28 +1239,29 @@ static wmOperatorStatus node_add_import_node_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   SpaceNode *snode = CTX_wm_space_node(C);
   bNodeTree *ntree = snode->edittree;
+  const bool is_geometry_tree = ntree->type == NTREE_GEOMETRY;
 
   const Vector<std::string> paths = ed::io::paths_from_operator_properties(op->ptr);
 
   Vector<bNode *> new_nodes;
   for (const StringRefNull path : paths) {
     bNode *node = nullptr;
-    if (path.endswith(".csv")) {
+    if (is_geometry_tree && path.endswith(".csv")) {
       node = add_node(*C, "GeometryNodeImportCSV"_ustr, snode->runtime->cursor);
     }
-    else if (path.endswith(".obj")) {
+    else if (is_geometry_tree && path.endswith(".obj")) {
       node = add_node(*C, "GeometryNodeImportOBJ"_ustr, snode->runtime->cursor);
     }
-    else if (path.endswith(".ply")) {
+    else if (is_geometry_tree && path.endswith(".ply")) {
       node = add_node(*C, "GeometryNodeImportPLY"_ustr, snode->runtime->cursor);
     }
-    else if (path.endswith(".stl")) {
+    else if (is_geometry_tree && path.endswith(".stl")) {
       node = add_node(*C, "GeometryNodeImportSTL"_ustr, snode->runtime->cursor);
     }
     else if (path.endswith(".txt")) {
       node = add_node(*C, "GeometryNodeImportText"_ustr, snode->runtime->cursor);
     }
-    else if (path.endswith(".vdb")) {
+    else if (is_geometry_tree && path.endswith(".vdb")) {
       node = add_node(*C, "GeometryNodeImportVDB"_ustr, snode->runtime->cursor);
     }
 
@@ -1318,7 +1320,8 @@ static wmOperatorStatus node_add_import_node_invoke(bContext *C,
 static bool node_add_import_node_poll(bContext *C)
 {
   const SpaceNode *snode = CTX_wm_space_node(C);
-  return ED_operator_node_editable(C) && snode->nodetree->type == NTREE_GEOMETRY;
+  return ED_operator_node_editable(C) &&
+         ELEM(snode->nodetree->type, NTREE_GEOMETRY, NTREE_COMPOSIT);
 }
 
 void NODE_OT_add_import_node(wmOperatorType *ot)
@@ -1731,12 +1734,15 @@ static wmOperatorStatus new_compositing_node_group_invoke(bContext *C,
   return new_compositing_node_group_exec(C, op);
 }
 
+/* Todo(#140111): Unused, remove in 6.0. */
 void NODE_OT_new_compositing_node_group(wmOperatorType *ot)
 {
   /* identifiers */
   ot->name = "New Compositing Node Group";
   ot->idname = "NODE_OT_new_compositing_node_group";
-  ot->description = "Create a new compositing node group and initialize it with default nodes";
+  ot->description =
+      "Create a new compositing node group and initialize it with default nodes. Deprecated and "
+      "will be removed in 6.0";
 
   /* api callbacks */
   ot->exec = new_compositing_node_group_exec;
@@ -1773,28 +1779,6 @@ static wmOperatorStatus duplicate_and_assign_node_tree(bContext *C, bNodeTree *s
   return OPERATOR_FINISHED;
 }
 
-static wmOperatorStatus duplicate_compositing_node_group_exec(bContext *C, wmOperator * /*op*/)
-{
-  Scene *scene = CTX_data_scene(C);
-  return duplicate_and_assign_node_tree(C, scene->compositing_node_group);
-}
-
-void NODE_OT_duplicate_compositing_node_group(wmOperatorType *ot)
-{
-  ot->name = "New Compositing Node Group";
-  ot->idname = "NODE_OT_duplicate_compositing_node_group";
-  ot->description = "Duplicate the currently assigned compositing node group.";
-
-  ot->exec = duplicate_compositing_node_group_exec;
-
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Duplicate Compositing Modifier Node Tree Operator
- * \{ */
 static wmOperatorStatus duplicate_compositing_modifier_node_group_exec(bContext *C,
                                                                        wmOperator * /*op*/)
 {
