@@ -11,6 +11,7 @@
 #include "DNA_scene_types.h"
 #include "DNA_sound_types.h"
 
+#include "BLI_listbase.hh"
 #include "BLI_math_base_c.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_string.hh"
@@ -22,6 +23,7 @@
 #include "BKE_file_handler.hh"
 #include "BKE_image.hh"
 #include "BKE_main.hh"
+#include "BKE_movieclip.hh"
 
 #include "SEQ_add.hh"
 #include "SEQ_channels.hh"
@@ -135,9 +137,6 @@ static bool is_movie(wmDrag *drag)
       return true;
     }
   }
-  if (WM_drag_is_ID_type(drag, ID_MC)) {
-    return true;
-  }
   return false;
 }
 
@@ -147,6 +146,16 @@ static bool movie_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
                          test_single_file_handler_poll(C, drag, "SEQUENCER_FH_movie_strip")))
   {
     generic_poll_operations(C, event, TH_SEQ_MOVIE);
+    return true;
+  }
+
+  return false;
+}
+
+static bool movieclip_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
+{
+  if (WM_drag_is_ID_type(drag, ID_MC)) {
+    generic_poll_operations(C, event, TH_SEQ_MOVIECLIP);
     return true;
   }
 
@@ -316,9 +325,8 @@ static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
       RNA_string_set(&itemptr, "name", file);
     }
     else if (id_type == ID_MC) {
-      MovieClip *clip = id_cast<MovieClip *>(id);
-      RNA_string_set(drop->ptr, "filepath", clip->filepath);
-      RNA_struct_property_unset(drop->ptr, "name");
+      Main *bmain = CTX_data_main(C);
+      RNA_enum_set(drop->ptr, "clip", BLI_findindex(&bmain->movieclips, id));
     }
     else if (id_type == ID_SO) {
       bSound *sound = id_cast<bSound *>(id);
@@ -673,6 +681,22 @@ static void image_drop_on_enter(wmDropBox *drop, wmDrag * /*drag*/)
   coords->num_channels = 1;
 }
 
+static void movieclip_drop_on_enter(wmDropBox *drop, wmDrag *drag)
+{
+  if (generic_drop_draw_handling(drop)) {
+    return;
+  }
+
+  SeqDropCoords *coords = static_cast<SeqDropCoords *>(drop->draw_data);
+  ID *id = WM_drag_get_local_ID(drag, ID_MC);
+  coords->strip_length = id ? BKE_movieclip_get_duration(id_cast<MovieClip *>(id)) :
+                              seq::DEFAULT_STRIP_LENGTH;
+  coords->num_channels = 1;
+  coords->num_audio = 0;
+  coords->playback_rate = 0.0f;
+  coords->only_audio = false;
+}
+
 static void sequencer_drop_on_exit(wmDropBox *drop, wmDrag * /*drag*/)
 {
   SeqDropCoords *coords = static_cast<SeqDropCoords *>(drop->draw_data);
@@ -715,6 +739,17 @@ static void sequencer_dropboxes_add_to_lb(ListBaseT<wmDropBox> *lb)
 
   drop->on_drag_start = video_prefetch;
 
+  drop = WM_dropbox_add(lb,
+                        "SEQUENCER_OT_movieclip_strip_add",
+                        movieclip_drop_poll,
+                        sequencer_drop_copy,
+                        nullptr,
+                        nullptr);
+  drop->draw_droptip = nop_draw_droptip_fn;
+  drop->draw_in_view = draw_strip_in_view;
+  drop->on_enter = movieclip_drop_on_enter;
+  drop->on_exit = sequencer_drop_on_exit;
+
   drop = WM_dropbox_add(
       lb, "SEQUENCER_OT_sound_strip_add", sound_drop_poll, sequencer_drop_copy, nullptr, nullptr);
   drop->draw_droptip = nop_draw_droptip_fn;
@@ -744,6 +779,11 @@ static bool movie_drop_preview_poll(bContext * /*C*/, wmDrag *drag, const wmEven
     }
   }
 
+  return false;
+}
+
+static bool movieclip_drop_preview_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
+{
   return WM_drag_is_ID_type(drag, ID_MC);
 }
 
@@ -771,6 +811,13 @@ static void sequencer_preview_dropboxes_add_to_lb(ListBaseT<wmDropBox> *lb)
   WM_dropbox_add(lb,
                  "SEQUENCER_OT_movie_strip_add",
                  movie_drop_preview_poll,
+                 sequencer_drop_copy,
+                 nullptr,
+                 nullptr);
+
+  WM_dropbox_add(lb,
+                 "SEQUENCER_OT_movieclip_strip_add",
+                 movieclip_drop_preview_poll,
                  sequencer_drop_copy,
                  nullptr,
                  nullptr);
