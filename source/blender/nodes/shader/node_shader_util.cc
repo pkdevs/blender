@@ -135,42 +135,58 @@ bool object_eevee_shader_nodes_poll(const bContext *C)
 static void nodestack_get_vec(float *in, short type_in, bNodeStack *ns)
 {
   const float *from = ns->vec;
+  const bool ns_is_scalar = ELEM(ns->sockettype, SOCK_FLOAT, SOCK_INT, SOCK_BOOLEAN);
 
-  if (type_in == SOCK_FLOAT) {
-    if (ns->sockettype == SOCK_FLOAT) {
-      *in = *from;
+  switch (type_in) {
+    case SOCK_FLOAT:
+    case SOCK_INT:
+      *in = ns_is_scalar ? from[0] : (from[0] + from[1] + from[2]) / 3.0f;
+      break;
+    case SOCK_BOOLEAN: {
+      if (ns_is_scalar) {
+        *in = from[0];
+      }
+      else if (ns->sockettype == SOCK_RGBA) {
+        *in = IMB_colormanagement_get_luminance(from);
+      }
+      else {
+        *in = !is_zero_v3(from);
+      }
+      break;
     }
-    else {
-      *in = (from[0] + from[1] + from[2]) / 3.0f;
-    }
-  }
-  else if (type_in == SOCK_VECTOR) {
-    if (ns->sockettype == SOCK_FLOAT) {
-      in[0] = from[0];
-      in[1] = from[0];
-      in[2] = from[0];
-    }
-    else {
-      copy_v3_v3(in, from);
-    }
-  }
-  else if (type_in == SOCK_ROTATION) {
-    copy_v4_v4(in, from);
-  }
-  else { /* type_in==SOCK_RGBA */
-    if (ns->sockettype == SOCK_RGBA) {
+    case SOCK_VECTOR:
+      if (ns_is_scalar) {
+        in[0] = from[0];
+        in[1] = from[0];
+        in[2] = from[0];
+      }
+      else {
+        copy_v3_v3(in, from);
+      }
+      break;
+    case SOCK_ROTATION:
       copy_v4_v4(in, from);
-    }
-    else if (ns->sockettype == SOCK_FLOAT) {
-      in[0] = from[0];
-      in[1] = from[0];
-      in[2] = from[0];
-      in[3] = 1.0f;
-    }
-    else {
-      copy_v3_v3(in, from);
-      in[3] = 1.0f;
-    }
+      break;
+    case SOCK_RGBA:
+      if (ns->sockettype == SOCK_RGBA) {
+        copy_v4_v4(in, from);
+      }
+      else if (ns_is_scalar) {
+        in[0] = from[0];
+        in[1] = from[0];
+        in[2] = from[0];
+        in[3] = 1.0f;
+      }
+      else {
+        copy_v3_v3(in, from);
+        in[3] = 1.0f;
+      }
+      break;
+    case SOCK_SHADER:
+      break;
+    default:
+      BLI_assert_unreachable();
+      break;
   }
 }
 
@@ -195,10 +211,10 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
       gs->type = GPU_FLOAT;
     }
     else if (socket->type == SOCK_INT) {
-      gs->type = GPU_FLOAT; /* HACK: Support as float. */
+      gs->type = GPU_INT;
     }
     else if (socket->type == SOCK_BOOLEAN) {
-      gs->type = GPU_FLOAT; /* HACK: Support as float. */
+      gs->type = GPU_BOOL;
     }
     else if (socket->type == SOCK_VECTOR) {
       switch (socket->default_value_typed<bNodeSocketValueVector>()->dimensions) {
@@ -234,6 +250,12 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
       case GPU_FLOAT:
         gs->value = vec.x;
         break;
+      case GPU_INT:
+        gs->value = int(vec.x);
+        break;
+      case GPU_BOOL:
+        gs->value = vec.x > 0.0f;
+        break;
       case GPU_VEC2:
         gs->value = float2(vec);
         break;
@@ -264,6 +286,12 @@ void node_data_from_gpu_stack(bNodeStack *ns, GPUNodeStack *gs)
   switch (gs->type) {
     case GPU_FLOAT:
       vec.x = std::get<float>(gs->value);
+      break;
+    case GPU_INT:
+      vec.x = float(std::get<int>(gs->value));
+      break;
+    case GPU_BOOL:
+      vec.x = float(std::get<bool>(gs->value));
       break;
     case GPU_VEC2:
       vec = float4(std::get<float2>(gs->value), 0.0f, 0.0f);
