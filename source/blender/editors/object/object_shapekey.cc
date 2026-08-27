@@ -437,75 +437,27 @@ static wmOperatorStatus shape_key_copy_exec(bContext *C, wmOperator * /*op*/)
 
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-        const VArray<float3> key_positions_old = *attributes.lookup_or_default<float3>(
-            bke::greasepencil::shapekey_attribute_name_position(kb_src->name),
-            bke::AttrDomain::Point,
-            float3(0.0f));
+        const Vector<std::string> src_names = bke::greasepencil::shapekey_all_attribute_names(
+            kb_src->name);
+        const Vector<std::string> new_names = bke::greasepencil::shapekey_all_attribute_names(
+            kb_new->name);
 
-        bke::SpanAttributeWriter<float3> key_positions_new =
-            attributes.lookup_or_add_for_write_span<float3>(
-                bke::greasepencil::shapekey_attribute_name_position(kb_new->name),
-                bke::AttrDomain::Point);
+        for (const int i : src_names.index_range()) {
+          const GVArray key_old = *attributes.lookup(src_names[i]);
 
-        array_utils::copy(key_positions_old, key_positions_new.span);
+          if (!key_old) {
+            continue;
+          }
 
-        key_positions_new.finish();
+          bke::GSpanAttributeWriter key_new = attributes.lookup_or_add_for_write_span(
+              new_names[i],
+              bke::AttrDomain::Point,
+              bke::cpp_type_to_attribute_type(key_old.type()));
 
-        const VArray<float> key_radius_old = *attributes.lookup_or_default<float>(
-            bke::greasepencil::shapekey_attribute_name_radius(kb_src->name),
-            bke::AttrDomain::Point,
-            0.0f);
+          array_utils::copy(key_old, key_new.span);
 
-        bke::SpanAttributeWriter<float> key_radius_new =
-            attributes.lookup_or_add_for_write_span<float>(
-                bke::greasepencil::shapekey_attribute_name_radius(kb_new->name),
-                bke::AttrDomain::Point);
-
-        array_utils::copy(key_radius_old, key_radius_new.span);
-
-        key_radius_new.finish();
-
-        const VArray<float> key_opacity_old = *attributes.lookup_or_default<float>(
-            bke::greasepencil::shapekey_attribute_name_opacity(kb_src->name),
-            bke::AttrDomain::Point,
-            0.0f);
-
-        bke::SpanAttributeWriter<float> key_opacity_new =
-            attributes.lookup_or_add_for_write_span<float>(
-                bke::greasepencil::shapekey_attribute_name_opacity(kb_new->name),
-                bke::AttrDomain::Point);
-
-        array_utils::copy(key_opacity_old, key_opacity_new.span);
-
-        key_opacity_new.finish();
-
-        const VArray<float3> key_handle_left_old = *attributes.lookup_or_default<float3>(
-            bke::greasepencil::shapekey_attribute_name_handle_left(kb_src->name),
-            bke::AttrDomain::Point,
-            float3(0.0f));
-
-        bke::SpanAttributeWriter<float3> key_handle_left_new =
-            attributes.lookup_or_add_for_write_span<float3>(
-                bke::greasepencil::shapekey_attribute_name_handle_left(kb_new->name),
-                bke::AttrDomain::Point);
-
-        array_utils::copy(key_handle_left_old, key_handle_left_new.span);
-
-        key_handle_left_new.finish();
-
-        const VArray<float3> key_handle_right_old = *attributes.lookup_or_default<float3>(
-            bke::greasepencil::shapekey_attribute_name_handle_right(kb_src->name),
-            bke::AttrDomain::Point,
-            float3(0.0f));
-
-        bke::SpanAttributeWriter<float3> key_handle_right_new =
-            attributes.lookup_or_add_for_write_span<float3>(
-                bke::greasepencil::shapekey_attribute_name_handle_right(kb_new->name),
-                bke::AttrDomain::Point);
-
-        array_utils::copy(key_handle_right_old, key_handle_right_new.span);
-
-        key_handle_right_new.finish();
+          key_new.finish();
+        }
       }
     }
   }

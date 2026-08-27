@@ -982,6 +982,7 @@ std::string shapekey_attribute_name_radius(const char *name);
 std::string shapekey_attribute_name_opacity(const char *name);
 std::string shapekey_attribute_name_handle_left(const char *name);
 std::string shapekey_attribute_name_handle_right(const char *name);
+Vector<std::string> shapekey_all_attribute_names(const char *name);
 
 void shapekey_get_applied_position(const Key *key,
                                    const bke::AttributeAccessor &attributes,

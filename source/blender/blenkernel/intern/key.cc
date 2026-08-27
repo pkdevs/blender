@@ -1974,16 +1974,14 @@ void BKE_keyblock_rename(Main &bmain, Key *key, KeyBlock *kb, const char *newnam
 
       bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-      attributes.rename(bke::greasepencil::shapekey_attribute_name_position(oldname),
-                        bke::greasepencil::shapekey_attribute_name_position(newname));
-      attributes.rename(bke::greasepencil::shapekey_attribute_name_radius(oldname),
-                        bke::greasepencil::shapekey_attribute_name_radius(newname));
-      attributes.rename(bke::greasepencil::shapekey_attribute_name_opacity(oldname),
-                        bke::greasepencil::shapekey_attribute_name_opacity(newname));
-      attributes.rename(bke::greasepencil::shapekey_attribute_name_handle_left(oldname),
-                        bke::greasepencil::shapekey_attribute_name_handle_left(newname));
-      attributes.rename(bke::greasepencil::shapekey_attribute_name_handle_right(oldname),
-                        bke::greasepencil::shapekey_attribute_name_handle_right(newname));
+      const Vector<std::string> old_names = bke::greasepencil::shapekey_all_attribute_names(
+          oldname);
+      const Vector<std::string> new_names = bke::greasepencil::shapekey_all_attribute_names(
+          newname);
+
+      for (const int i : old_names.index_range()) {
+        attributes.rename(old_names[i], new_names[i]);
+      }
     }
   }
 }
