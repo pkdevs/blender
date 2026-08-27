@@ -1817,7 +1817,7 @@ static void knife_start_cut(KnifeTool_OpData *kcd, const float2 &mval)
   if (kcd->prev.vert == nullptr && kcd->prev.edge == nullptr) {
     float ofs_local[3];
     negate_v3_v3(ofs_local, kcd->vc.rv3d->ofs);
-    ED_view3d_win_to_3d(kcd->vc.v3d, kcd->region, ofs_local, kcd->curr.mval, kcd->prev.cage);
+    ED_view3d_win_to_3d(kcd->vc.v3d, kcd->region, ofs_local, mval, kcd->prev.cage);
   }
 
   knife_snap_curr(kcd, mval, ray_orig, ray_dir, nullptr, nullptr);
