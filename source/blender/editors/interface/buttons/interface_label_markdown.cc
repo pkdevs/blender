@@ -50,13 +50,41 @@ static void markdown_disable_item_font(const MarkdownItemText &item)
   BLF_disable(item.fontid, BLF_ASPECT | BLF_ITALIC);
 }
 
+struct MdHeaderStyle {
+  float size_factor = 1.0f;
+  int weight = 400;
+  bool italic = false;
+};
+
+constexpr std::array<MdHeaderStyle, 6> header_styles = {
+    /* H1: Main Title - Largest & Boldest. */
+    MdHeaderStyle{.size_factor = 2.00f, .weight = 700, .italic = false},
+    /* H2: Major Section. */
+    MdHeaderStyle{.size_factor = 1.50f, .weight = 600, .italic = false},
+    /* H3: Subsection. */
+    MdHeaderStyle{.size_factor = 1.25f, .weight = 600, .italic = false},
+    /* H4: Sub-subsection. */
+    MdHeaderStyle{.size_factor = 1.00f, .weight = 600, .italic = false},
+    /* H5: Small Heading (Same size as body text, but medium-bold). */
+    MdHeaderStyle{.size_factor = 1.00f, .weight = 500, .italic = false},
+    /* H6: Micro Heading (Same size as body text, but styled with italics). */
+    MdHeaderStyle{.size_factor = 1.00f, .weight = 400, .italic = true},
+};
+
 class MarkdownLayouter {
  private:
   MarkdownLayoutCache &cache_;
-  int main_fontid_;
-  int mono_fontid_;
-  float default_font_size_ = 12.0f;
-  float default_weight_ = 400;
+
+  struct FontConfig {
+    int fontid;
+    float default_size;
+    float default_weight;
+    float bold_weight;
+    float default_line_height;
+  };
+
+  FontConfig main_font_;
+  FontConfig mono_font_;
 
   float x_;
   float y_;
@@ -64,6 +92,7 @@ class MarkdownLayouter {
   struct DocBlock {};
 
   struct HeaderBlock {
+    /** Only values from 1 to 6 are valid. */
     int level = 1;
   };
 
@@ -109,14 +138,31 @@ class MarkdownLayouter {
 
   Vector<MdBlock, 16> block_stack_;
   Vector<MdSpan, 16> span_stack_;
+  std::optional<MdBlock> last_left_block_;
 
  public:
   MarkdownLayouter(MarkdownLayoutCache &cache_) : cache_(cache_)
   {
-    main_fontid_ = style_get()->widget.uifont_id;
-    mono_fontid_ = blf_mono_font;
+    main_font_ = make_font_config(style_get()->widget.uifont_id, 12.0f, 400, 700);
+    mono_font_ = make_font_config(blf_mono_font, 12.0f, 400, 700);
     x_ = 0.0f;
     y_ = 0.0f;
+  }
+
+  FontConfig make_font_config(const int fontid,
+                              const float default_size,
+                              const float default_weight,
+                              const int bold_weight)
+  {
+    FontConfig config;
+    config.fontid = fontid;
+    config.default_size = default_size;
+    config.default_weight = default_weight;
+    config.bold_weight = bold_weight;
+    BLF_size(fontid, default_size);
+    BLF_character_weight(fontid, default_weight);
+    config.default_line_height = BLF_height_max(fontid);
+    return config;
   }
 
   void compute_layout()
@@ -143,18 +189,8 @@ class MarkdownLayouter {
       return 0;
     };
 
-    const float aspect = cache_.key.aspect;
     const StringRef text = cache_.key.text;
-    BLF_enable(main_fontid_, BLF_ASPECT);
-    BLF_aspect(main_fontid_, aspect, aspect, 1.0f);
-    BLF_enable(mono_fontid_, BLF_ASPECT);
-    BLF_aspect(mono_fontid_, aspect, aspect, 1.0f);
-
     md_parse(text.data(), text.size(), &md_parser, this);
-
-    BLF_disable(main_fontid_, BLF_ASPECT | BLF_ITALIC);
-    BLF_disable(mono_fontid_, BLF_ASPECT | BLF_ITALIC);
-
     this->finalize_vertical_positions();
   }
 
@@ -180,7 +216,7 @@ class MarkdownLayouter {
       }
       case MD_BLOCK_H: {
         const auto *h_detail = static_cast<const MD_BLOCK_H_DETAIL *>(detail);
-        block_stack_.append(HeaderBlock{int(h_detail->level)});
+        block_stack_.append(HeaderBlock{std::clamp<int>(h_detail->level, 1, 6)});
         break;
       }
       case MD_BLOCK_CODE: {
@@ -208,6 +244,27 @@ class MarkdownLayouter {
         break;
       }
     }
+    const float margin = this->get_space_above_new_block();
+    y_ -= margin;
+    x_ = this->context_block_start_x();
+  }
+
+  float get_space_above_new_block() const
+  {
+    if (!last_left_block_) {
+      return 0.0f;
+    }
+    const MdBlock &new_block = block_stack_.last();
+    // const MdBlock &last_block = *last_left_block_;
+
+    if (const auto *md_header = std::get_if<HeaderBlock>(&new_block)) {
+      const MdHeaderStyle &style = header_styles[md_header->level - 1];
+      return main_font_.default_line_height * style.size_factor;
+    }
+    if (std::holds_alternative<ParagraphBlock>(new_block)) {
+      return main_font_.default_line_height * 1.5f;
+    }
+    return main_font_.default_line_height * 1.5f;
   }
 
   void md_leave_block(const MD_BLOCKTYPE block_type, void * /*detail*/)
@@ -258,7 +315,7 @@ class MarkdownLayouter {
         break;
       }
     }
-    block_stack_.pop_last();
+    last_left_block_ = block_stack_.pop_last();
   }
 
   void md_enter_span(const MD_SPANTYPE span_type, void *detail)
@@ -338,9 +395,13 @@ class MarkdownLayouter {
         this->md_text_code(text);
         break;
       }
-      case MD_TEXT_NULLCHAR:
       case MD_TEXT_BR:
-      case MD_TEXT_SOFTBR:
+      case MD_TEXT_SOFTBR: {
+        x_ = this->context_block_start_x();
+        y_ -= main_font_.default_line_height;
+        break;
+      }
+      case MD_TEXT_NULLCHAR:
       case MD_TEXT_ENTITY:
       case MD_TEXT_HTML:
       case MD_TEXT_LATEXMATH: {
@@ -352,19 +413,23 @@ class MarkdownLayouter {
 
   void md_text_normal(const StringRef text)
   {
-    const int fontid = main_fontid_;
     const ContextFontSettings settings = this->get_context_font_settings();
     const float start_x = this->context_block_start_x();
-    this->output_wrapped_text(
-        text, settings.size, fontid, settings.weight, settings.italic, settings.url, start_x);
+    this->output_wrapped_text(text,
+                              settings.size,
+                              settings.fontid,
+                              settings.weight,
+                              settings.italic,
+                              settings.url,
+                              start_x);
   }
 
   void md_text_code(StringRef text)
   {
-    const int fontid = mono_fontid_;
     const ContextFontSettings settings = this->get_context_font_settings();
     const float start_x = this->context_block_start_x();
-    const float line_height = BLF_height_max(fontid);
+    BLF_size(settings.fontid, settings.size);
+    const float line_height = BLF_height_max(settings.fontid);
     while (!text.is_empty()) {
       /* Literal newlines should be taken into account in code. */
       if (text[0] == '\n') {
@@ -375,13 +440,18 @@ class MarkdownLayouter {
       }
       const int64_t newline = text.find_first_of('\n');
       if (newline == StringRef::not_found) {
-        this->output_wrapped_text(
-            text, settings.size, fontid, settings.weight, settings.italic, settings.url, start_x);
+        this->output_wrapped_text(text,
+                                  settings.size,
+                                  settings.fontid,
+                                  settings.weight,
+                                  settings.italic,
+                                  settings.url,
+                                  start_x);
         break;
       }
       this->output_wrapped_text(text.substr(0, newline),
                                 settings.size,
-                                fontid,
+                                settings.fontid,
                                 settings.weight,
                                 settings.italic,
                                 settings.url,
@@ -391,33 +461,44 @@ class MarkdownLayouter {
   }
 
   struct ContextFontSettings {
+    int fontid;
     float weight;
-    float size;
     bool italic;
+    float size;
     std::optional<StringRef> url;
   };
 
   ContextFontSettings get_context_font_settings() const
   {
     ContextFontSettings settings;
-    settings.weight = default_weight_;
-    settings.size = default_font_size_;
+    settings.fontid = main_font_.fontid;
+    settings.weight = main_font_.default_weight;
+    settings.size = main_font_.default_size;
     settings.italic = false;
-    settings.url = std::nullopt;
     for (const auto &md_block : block_stack_) {
       if (const auto *header_block = std::get_if<HeaderBlock>(&md_block)) {
-        settings.size = this->default_font_size_ * (1.0f / header_block->level + 1.0f);
+        const MdHeaderStyle &style = header_styles[header_block->level - 1];
+        settings.fontid = main_font_.fontid;
+        settings.size = main_font_.default_size * style.size_factor;
+        settings.weight = style.weight;
+        settings.italic = style.italic;
+      }
+      else if (std::holds_alternative<CodeBlock>(md_block)) {
+        settings.fontid = mono_font_.fontid;
+        settings.size = mono_font_.default_size;
+        settings.weight = mono_font_.default_weight;
+        settings.italic = false;
       }
     }
     for (const auto &md_span : span_stack_) {
       if (std::holds_alternative<StrongSpan>(md_span)) {
-        settings.weight = 800;
-      }
-      if (const auto *link_span = std::get_if<LinkSpan>(&md_span)) {
-        settings.url = link_span->url;
+        settings.weight = main_font_.bold_weight;
       }
       if (std::holds_alternative<EmSpan>(md_span)) {
         settings.italic = true;
+      }
+      if (const auto *link_span = std::get_if<LinkSpan>(&md_span)) {
+        settings.url = link_span->url;
       }
     }
     return settings;
@@ -544,10 +625,11 @@ class MarkdownLayouter {
         markdown_disable_item_font(*text_item);
       }
       else if (const auto *bullet_item = std::get_if<MarkdownItemBullet>(&item)) {
-        BLF_aspect(main_fontid_, aspect, aspect, 1.0f);
-        BLF_size(main_fontid_, default_font_size_);
-        BLF_character_weight(main_fontid_, default_weight_);
-        bottom_y = std::min(bottom_y, bullet_item->y + BLF_descender(main_fontid_) * aspect);
+        const int fontid = main_font_.fontid;
+        BLF_aspect(main_font_.fontid, aspect, aspect, 1.0f);
+        BLF_size(fontid, main_font_.default_size);
+        BLF_character_weight(fontid, main_font_.default_weight);
+        bottom_y = std::min(bottom_y, bullet_item->y + BLF_descender(fontid) * aspect);
       }
     }
     if (bottom_y != FLT_MAX) {
