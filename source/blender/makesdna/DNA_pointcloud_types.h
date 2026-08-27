@@ -66,7 +66,7 @@ struct PointCloud {
   /* Custom Data */
   struct CustomData pdata_legacy;
   /** Set to -1 when none is active. */
-  int attributes_active_index = 0;
+  int attributes_active_index = -1;
   int _pad4 = {};
 
   /* Material */
@@ -75,11 +75,7 @@ struct PointCloud {
 
   ePointCloud_RenderAs render_as = PT_RENDER_AS_POINTS;
 
-  /* When the PointCloud is rendered as splats: the degree of spherical harmonics. */
-  /* TODO(sergey): Comment about attribute names. */
-  short spherical_harmonics_degree = 0;
-
-  short _pad3 = {};
+  short _pad3[2] = {};
 
 #ifdef __cplusplus
   Span<float3> positions() const;

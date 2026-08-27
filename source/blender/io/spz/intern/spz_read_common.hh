@@ -70,7 +70,8 @@ bool read_positions(ReaderType &reader,
    *   Positions are represented as (x, y, z) coordinates, each as a 24-bit fixed point signed
    *   integer. The number of fractional bits is determined by the fractionalBits field in the
    *   header. */
-  const float scale = 1.0 / (1 << fractional_bits);
+  BLI_assert(fractional_bits >= 0 && fractional_bits < 24);
+  const float scale = 1.0f / (1 << fractional_bits);
   for (float3 &position : positions) {
     int3 fixed;
     if (!internal::read_single_position_as_fixed(reader, fixed)) {
@@ -82,20 +83,30 @@ bool read_positions(ReaderType &reader,
 }
 
 template<class ReaderType>
-bool read_alphas(ReaderType &reader, const MutableSpan<ColorGeometry4f> colors)
+bool read_alphas(ReaderType &reader, const MutableSpan<float4> radiance_base)
 {
-  for (ColorGeometry4f &color : colors) {
+  for (float4 &base : radiance_base) {
     uint8_t alpha;
     if (!reader.read(alpha)) {
       return false;
     }
-    color.a = internal::inv_sigmoid(float(alpha) / 255.0f);
+    if (false) {
+      /* The naive implementation.
+       * The inv_sigmoid() and decode_opacity() are actually canceling each other.
+       * Code kept for the reference and possible situation when other activation functions are
+       * used in the future. */
+      base.w = internal::inv_sigmoid(float(alpha) / 255.0f);
+      base.w = gsplat::OriginalActivationFunctions::decode_opacity(base.w);
+    }
+    else {
+      base.w = float(alpha) / 255.0f;
+    }
   }
   return true;
 }
 
 template<class ReaderType>
-bool read_colors(ReaderType &reader, const MutableSpan<ColorGeometry4f> colors)
+bool read_colors(ReaderType &reader, const MutableSpan<float4> radiance_base)
 {
   /* From SPZ:
    *   Scale factor for DC color components. To convert to RGB, we should multiply by 0.282, but it
@@ -104,14 +115,14 @@ bool read_colors(ReaderType &reader, const MutableSpan<ColorGeometry4f> colors)
   constexpr float COLOR_SCALE = 0.15f;
   const float INV_COLOR_SCALE = 1.0f / COLOR_SCALE;
 
-  for (ColorGeometry4f &color : colors) {
+  for (float4 &base : radiance_base) {
     std::array<uint8_t, 3> color_buffer;
     if (!reader.read_buffer(color_buffer)) {
       return false;
     }
-    color.r = ((color_buffer[0] / 255.0f) - 0.5f) * INV_COLOR_SCALE;
-    color.g = ((color_buffer[1] / 255.0f) - 0.5f) * INV_COLOR_SCALE;
-    color.b = ((color_buffer[2] / 255.0f) - 0.5f) * INV_COLOR_SCALE;
+    base.x = ((color_buffer[0] / 255.0f) - 0.5f) * INV_COLOR_SCALE;
+    base.y = ((color_buffer[1] / 255.0f) - 0.5f) * INV_COLOR_SCALE;
+    base.z = ((color_buffer[2] / 255.0f) - 0.5f) * INV_COLOR_SCALE;
   }
 
   return true;
@@ -129,6 +140,7 @@ template<class ReaderType> bool read_scales(ReaderType &reader, const MutableSpa
       return false;
     }
     scale = float3(encoded[0], encoded[1], encoded[2]) / 16.0f - 10.0f;
+    scale = gsplat::OriginalActivationFunctions::decode_scale(scale);
   }
   return true;
 }
@@ -189,7 +201,7 @@ bool read_rotations(ReaderType &reader,
         sum_sq += spz_rotation[i] * spz_rotation[i];
         packed = packed >> 10;
       }
-      spz_rotation[largest_index] = sqrt(1.0f - sum_sq);
+      spz_rotation[largest_index] = sqrt(math::max(1.0f - sum_sq, 0.0f));
       /* Convert to Blender's (w, x, y, z). */
       rotation = math::Quaternion(
           spz_rotation[3], spz_rotation[0], spz_rotation[1], spz_rotation[2]);

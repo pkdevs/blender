@@ -29,7 +29,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 class LoadSpzCache : public memory_cache::CachedValue {
  public:
   GeometrySet geometry;
-  Vector<eval_log::NodeWarning> warnings;
+  Vector<NodeWarning> warnings;
 
   void count_memory(MemoryCounter &counter) const override
   {
@@ -69,7 +69,7 @@ static void node_geo_exec(GeoNodeExecParams params)
         return cached_value;
       });
 
-  for (const eval_log::NodeWarning &warning : cached_value->warnings) {
+  for (const NodeWarning &warning : cached_value->warnings) {
     params.error_message_add(warning.type, warning.message);
   }
 
@@ -88,7 +88,8 @@ static void node_register()
 
   geo_node_type_base(&ntype, "GeometryNodeImportSPZ"_ustr, GEO_NODE_IMPORT_SPZ);
   ntype.ui_name = "Import SPZ";
-  ntype.ui_description = "Import a point cloud from an SPZ file";
+  ntype.ui_description =
+      "Import a point cloud object that is rendered as gaussian splat from an SPZ file";
   ntype.enum_name_legacy = "IMPORT_SPZ";
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.geometry_node_execute = node_geo_exec;

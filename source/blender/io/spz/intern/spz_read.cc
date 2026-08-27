@@ -24,7 +24,7 @@ static CLG_LogRef LOG = {"io.spz"};
 
 template<class T> static bool read_spz_scalar(FILE *file, T &data)
 {
-  if (fread(&data, sizeof(T), 1, file) != sizeof(T)) {
+  if (fread(&data, sizeof(T), 1, file) != 1) {
     return false;
   }
   return true;
@@ -44,12 +44,12 @@ PointCloud *read_spz_file(const StringRefNull filepath, ReportList *reports)
   }
 
   uint32_t magic = 0;
-  if (read_spz_scalar(file, magic)) {
+  if (!read_spz_scalar(file, magic)) {
     BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading magic value from file");
     fclose(file);
     return nullptr;
   }
-  CLOG_DEBUG(&LOG, "God file header magic: 0x%X", magic);
+  CLOG_DEBUG(&LOG, "Got file header magic: 0x%X", magic);
 
   /* Rewind the file stream so that specialized version reading can start from its beginning. */
   if (fseek(file, 0, SEEK_SET) == -1) {
@@ -67,6 +67,9 @@ PointCloud *read_spz_file(const StringRefNull filepath, ReportList *reports)
     /* Format prior to v4: single GZip stream. */
     CLOG_DEBUG(&LOG, "Detected Gzip compressed stream");
     point_cloud = read_spz_gzip_compressed_file(file, reports);
+  }
+  else {
+    BKE_reportf(reports, RPT_ERROR, "SPZ Read: Unrecognized file format");
   }
 
   fclose(file);

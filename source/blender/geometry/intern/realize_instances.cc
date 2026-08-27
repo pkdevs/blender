@@ -805,7 +805,7 @@ static void gather_realize_tasks_recursive(GatherTasksInfo &gather_info,
         const auto &pointcloud_component = *static_cast<const bke::PointCloudComponent *>(
             component);
         const PointCloud *pointcloud = pointcloud_component.get();
-        if (pointcloud != nullptr && pointcloud->totpoint > 0) {
+        if (pointcloud != nullptr) {
           const int pointcloud_index = gather_info.pointclouds.order.index_of(pointcloud);
           const PointCloudRealizeInfo &pointcloud_info =
               gather_info.pointclouds.realize_info[pointcloud_index];
@@ -1258,9 +1258,7 @@ static void gather_pointclouds_to_realize(const bke::GeometrySet &geometry_set,
                                           VectorSet<const PointCloud *> &r_pointclouds)
 {
   if (const PointCloud *pointcloud = geometry_set.get_pointcloud()) {
-    if (pointcloud->totpoint > 0) {
-      r_pointclouds.add(pointcloud);
-    }
+    r_pointclouds.add(pointcloud);
   }
   if (const Instances *instances = geometry_set.get_instances()) {
     instances->foreach_referenced_geometry([&](const bke::GeometrySet &instance_geometry_set) {
@@ -1408,12 +1406,12 @@ static void execute_realize_pointcloud_tasks(const RealizeInstancesOptions &opti
   }
 
   /* Allocate new point cloud. */
-  PointCloud *dst_pointcloud = BKE_pointcloud_new_nomain(tot_points);
+  const RealizePointCloudTask &first_task = tasks.first();
+  const PointCloud &first_pointcloud = *first_task.pointcloud_info->pointcloud;
+  PointCloud *dst_pointcloud = BKE_pointcloud_new_nomain(tot_points, first_pointcloud.render_as);
   r_result.geometry.replace_pointcloud(dst_pointcloud);
   bke::MutableAttributeAccessor dst_attributes = dst_pointcloud->attributes_for_write();
 
-  const RealizePointCloudTask &first_task = tasks.first();
-  const PointCloud &first_pointcloud = *first_task.pointcloud_info->pointcloud;
   dst_pointcloud->mat = MEM_dupalloc(first_pointcloud.mat);
   dst_pointcloud->totcol = first_pointcloud.totcol;
 

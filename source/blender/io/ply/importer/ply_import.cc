@@ -229,7 +229,7 @@ static bool is_data_gaussian_splat(const PlyData &data)
 
   constexpr auto required_attr_names = std::to_array<const char *>({"f_dc_0",
                                                                     "f_dc_1",
-                                                                    "f_dc_0",
+                                                                    "f_dc_2",
                                                                     "opacity",
                                                                     "scale_0",
                                                                     "scale_1",
@@ -274,6 +274,9 @@ PointCloud *import_point_cloud(const PLYImportParams &import_params)
   /* Stuff ply data into the mesh. */
   std::unique_ptr<PlyData> data = read_ply_to_data(import_params, ob_name);
   if (!data) {
+    return nullptr;
+  }
+  if (!is_data_gaussian_splat(*data)) {
     return nullptr;
   }
   return convert_gsplat_ply_to_point_cloud(*data, import_params);

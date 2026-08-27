@@ -25,6 +25,7 @@
 #include "CLG_log.h"
 
 #include "IO_gsplat.hh"
+#include "IO_validate.hh"
 
 #include "spz_read_common.hh"
 #include "spz_types.hh"
@@ -108,12 +109,13 @@ class StreamedGzipReader {
 
       const int ret = inflate(&stream_, Z_NO_FLUSH);
       BLI_assert(ret != Z_STREAM_ERROR);
-      switch (ret) {
-        case Z_NEED_DICT:
-        case Z_DATA_ERROR:
-        case Z_MEM_ERROR:
-          // TODO(sergey): Report error?
-          return false;
+      if (ret == Z_STREAM_END) {
+        BLI_assert(stream_.avail_out == 0);
+        break;
+      }
+      if (ret != Z_OK) {
+        /* TODO(sergey): Report error. */
+        return false;
       }
     } while (stream_.avail_out != 0);
 
@@ -153,11 +155,11 @@ PointCloud *read_spz_gzip_compressed_file(FILE *file, ReportList *reports)
     return nullptr;
   }
   if (header.version != 2 && header.version != 3) {
-    BKE_reportf(reports, RPT_ERROR, "SPZ Read: Unsupported SPZ version %d", header.version);
+    BKE_reportf(reports, RPT_ERROR, "SPZ Read: Unsupported SPZ version %u", header.version);
     return nullptr;
   }
 
-  CLOG_DEBUG(&LOG, "SPZ header num_points: %d", header.num_points);
+  CLOG_DEBUG(&LOG, "SPZ header num_points: %u", header.num_points);
   CLOG_DEBUG(&LOG, "SPZ header sh_degree: %d", int(header.sh_degree));
   CLOG_DEBUG(&LOG, "SPZ header fractional_bits: %d", int(header.fractional_bits));
   CLOG_DEBUG(&LOG, "SPZ header flags: %d", header.flags);
@@ -171,12 +173,17 @@ PointCloud *read_spz_gzip_compressed_file(FILE *file, ReportList *reports)
     CLOG_WARN(&LOG, "SPZ file contains extensions that are not yet supported");
   }
 
-  PointCloud *point_cloud = BKE_pointcloud_new_nomain(header.num_points);
+  if (!validate::size_fits_in_int(header.num_points)) {
+    BKE_report(reports, RPT_ERROR, "SPZ Read: Too many points");
+    return nullptr;
+  }
+
+  PointCloud *point_cloud = BKE_pointcloud_new_nomain(header.num_points, PT_RENDER_AS_SPLATS);
   gsplat::GsplatMutableAttributeAccessor accessor(*point_cloud, header.sh_degree);
 
   if (!read_positions(reader, header.fractional_bits, accessor.positions_for_write()) ||
-      !read_alphas(reader, accessor.colors_for_write()) ||
-      !read_colors(reader, accessor.colors_for_write()) ||
+      !read_alphas(reader, accessor.radiance_base_for_write()) ||
+      !read_colors(reader, accessor.radiance_base_for_write()) ||
       !read_scales(reader, accessor.scales_for_write()) ||
       !read_rotations(reader, header.version, accessor.rotations_for_write()) ||
       !read_sh(reader, accessor.sh_for_write()))
@@ -189,7 +196,7 @@ PointCloud *read_spz_gzip_compressed_file(FILE *file, ReportList *reports)
   point_cloud->render_as = PT_RENDER_AS_SPLATS;
   point_cloud->spherical_harmonics_degree = header.sh_degree;
 
-  // TODO(sergey): Handle extensions.
+  /* TODO(sergey): Handle extensions. */
 
   convert_axis_to_blender(accessor);
 
