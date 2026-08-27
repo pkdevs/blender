@@ -413,8 +413,8 @@ struct Layout : public Item, NonCopyable, NonMovable {
                        int max_lines = 0);
 
   /**
-   * Adds a markdown label that displays formatted markdown text in the layout.
-   * Links remain clickable.
+   * Renders the given text rendered as markdown. Only a subset of markdown is supported:
+   * Bold, italic, code, links.
    */
   void label_markdown(StringRef text);
 

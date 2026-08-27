@@ -15,6 +15,7 @@
 #include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_resource_scope.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
@@ -383,29 +384,45 @@ enum class MarkdownSpanType {
   OrderedMarker,
 };
 
-struct MarkdownSpan {
-  /** Position relative to the label button's top-left corner, in block space. */
+struct MarkdownItemText {
+  /**
+   * Position relative to the label button's top-left corner, in block space.
+   * This is the baseline position of the text.
+   */
   float x = 0.0f;
   float y = 0.0f;
-  float size = 0.0f;
+  float size = 12.0f;
   int fontid = 0;
-  int weight = 0;
+  int weight = 400;
   bool italic = false;
-  MarkdownSpanType type = MarkdownSpanType::Text;
-  /** Used when #type is #MarkdownSpanType::Text. References #MarkdownLayoutCache::text. */
   StringRef text;
-  /** Used when #type is #MarkdownSpanType::OrderedMarker. */
-  int list_number = 0;
-  /** Optional URL for link spans. References #MarkdownLayoutCache::text. */
   std::optional<StringRef> url;
 };
 
-struct MarkdownLayoutCache {
+struct MarkdownItemBullet {
+  float x = 0.0f;
+  float y = 0.0f;
+  int level = 0;
+};
+
+using MarkdownItem = std::variant<MarkdownItemText, MarkdownItemBullet>;
+
+struct MarkdownLayoutCacheKey {
+  StringRef text;
   int wrap_width = 0;
   float aspect = 0.0f;
-  std::string text;
-  Vector<MarkdownSpan> spans;
+
+  bool operator==(const MarkdownLayoutCacheKey &other) const = default;
+};
+struct MarkdownLayout {
+  Vector<MarkdownItem> items;
   float content_height = 0.0f;
+};
+
+struct MarkdownLayoutCache {
+  ResourceScope scope;
+  MarkdownLayoutCacheKey key;
+  MarkdownLayout md_layout;
 };
 
 /** Derived struct for #ButtonType::Text */

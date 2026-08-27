@@ -1424,7 +1424,7 @@ static void widget_draw_icon(
     }
 
     /* Align icon to the top. */
-    if (button_label_is_multiline(but) || button_label_is_markdown(but)) {
+    if (button_label_is_multiline(but)) {
       ys = rect->ymax - height - 2.0f * ofs;
     }
     else {

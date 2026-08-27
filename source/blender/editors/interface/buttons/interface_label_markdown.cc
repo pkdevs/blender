@@ -2,6 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include <cfloat>
 #include <md4c.h>
 
 #include "BLF_api.hh"
@@ -30,87 +31,92 @@ bool button_label_is_markdown(const Button *button)
          static_cast<const ButtonLabel *>(button)->label_type == ButtonLabelType::Markdown;
 }
 
-static StringRef markdown_span_draw_text(const MarkdownSpan &span, std::string &owned_marker)
+static void markdown_apply_item_font(const MarkdownItemText &item, const float aspect)
 {
-  switch (span.type) {
-    case MarkdownSpanType::Text: {
-      return span.text;
-    }
-    case MarkdownSpanType::Bullet: {
-      owned_marker = "\u2022 ";
-      return owned_marker;
-    }
-    case MarkdownSpanType::OrderedMarker: {
-      owned_marker = fmt::format("{}. ", span.list_number);
-      return owned_marker;
-    }
-  }
-  return {};
-}
-
-static void markdown_apply_span_font(const MarkdownSpan &span, const float aspect)
-{
-  BLF_enable(span.fontid, BLF_ASPECT);
-  BLF_aspect(span.fontid, aspect, aspect, 1.0f);
-  BLF_size(span.fontid, span.size);
-  BLF_character_weight(span.fontid, span.weight);
-  if (span.italic) {
-    BLF_enable(span.fontid, BLF_ITALIC);
+  BLF_enable(item.fontid, BLF_ASPECT);
+  BLF_aspect(item.fontid, aspect, aspect, 1.0f);
+  BLF_size(item.fontid, item.size);
+  BLF_character_weight(item.fontid, item.weight);
+  if (item.italic) {
+    BLF_enable(item.fontid, BLF_ITALIC);
   }
   else {
-    BLF_disable(span.fontid, BLF_ITALIC);
+    BLF_disable(item.fontid, BLF_ITALIC);
   }
 }
 
-static void markdown_disable_span_font(const MarkdownSpan &span)
+static void markdown_disable_item_font(const MarkdownItemText &item)
 {
-  BLF_disable(span.fontid, BLF_ASPECT | BLF_ITALIC);
+  BLF_disable(item.fontid, BLF_ASPECT | BLF_ITALIC);
 }
 
 class MarkdownLayouter {
  private:
-  struct ListState {
-    bool is_ordered = false;
-    bool is_tight = false;
-    int next_number = 1;
-    float marker_x = 0.0f;
-    float content_x = 0.0f;
-  };
-
-  const float aspect_;
-  const StringRef full_text_;
-  const float width_;
+  MarkdownLayoutCache &cache_;
   int main_fontid_;
   int mono_fontid_;
+  float default_font_size_ = 12.0f;
+  float default_weight_ = 400;
+
   float x_;
   float y_;
-  /** Left edge for the current line (list content indent, or left edge). */
-  float line_indent_x_;
 
-  float default_size_;
-  float current_size_;
-  std::optional<StringRef> href_;
-  bool is_bold_ = false;
-  bool is_italic_ = false;
-  bool is_code_ = false;
-  Vector<ListState> list_stack_;
-  MarkdownLayoutCache &cache_;
+  struct DocBlock {};
+
+  struct HeaderBlock {
+    int level = 1;
+  };
+
+  struct UnorderedListBlock {
+    bool is_tight = false;
+  };
+
+  struct OrderedListBlock {
+    bool is_tight = false;
+    int next_number = 1;
+  };
+
+  struct ListItemBlock {
+    std::optional<int> number = 0;
+  };
+
+  struct ParagraphBlock {};
+
+  struct CodeBlock {};
+
+  struct QuoteBlock {};
+
+  struct UnknownBlock {};
+
+  struct EmSpan {};
+  struct StrongSpan {};
+  struct LinkSpan {
+    StringRef url;
+  };
+  struct CodeSpan {};
+  struct UnknownSpan {};
+
+  using MdBlock = std::variant<DocBlock,
+                               HeaderBlock,
+                               UnorderedListBlock,
+                               OrderedListBlock,
+                               ListItemBlock,
+                               ParagraphBlock,
+                               CodeBlock,
+                               QuoteBlock,
+                               UnknownBlock>;
+  using MdSpan = std::variant<EmSpan, StrongSpan, LinkSpan, CodeSpan, UnknownSpan>;
+
+  Vector<MdBlock, 16> block_stack_;
+  Vector<MdSpan, 16> span_stack_;
 
  public:
-  MarkdownLayouter(const float aspect,
-                   const StringRef full_text,
-                   const float width,
-                   MarkdownLayoutCache &cache)
-      : aspect_(aspect), full_text_(full_text), width_(width), cache_(cache)
+  MarkdownLayouter(MarkdownLayoutCache &cache_) : cache_(cache_)
   {
     main_fontid_ = style_get()->widget.uifont_id;
     mono_fontid_ = blf_mono_font;
     x_ = 0.0f;
-    line_indent_x_ = 0.0f;
-    /* Baseline starts at 0; finalized once the first line's ascenders are known. */
     y_ = 0.0f;
-    default_size_ = style_get()->widget.points * UI_SCALE_FAC / aspect_;
-    current_size_ = default_size_;
   }
 
   void compute_layout()
@@ -137,82 +143,68 @@ class MarkdownLayouter {
       return 0;
     };
 
+    const float aspect = cache_.key.aspect;
+    const StringRef text = cache_.key.text;
     BLF_enable(main_fontid_, BLF_ASPECT);
-    BLF_aspect(main_fontid_, aspect_, aspect_, 1.0f);
+    BLF_aspect(main_fontid_, aspect, aspect, 1.0f);
     BLF_enable(mono_fontid_, BLF_ASPECT);
-    BLF_aspect(mono_fontid_, aspect_, aspect_, 1.0f);
+    BLF_aspect(mono_fontid_, aspect, aspect, 1.0f);
 
-    md_parse(full_text_.data(), full_text_.size(), &md_parser, this);
-    this->finalize_vertical_positions();
+    md_parse(text.data(), text.size(), &md_parser, this);
 
     BLF_disable(main_fontid_, BLF_ASPECT | BLF_ITALIC);
     BLF_disable(mono_fontid_, BLF_ASPECT | BLF_ITALIC);
-  }
 
-  void finalize_vertical_positions()
-  {
-    if (cache_.spans.is_empty()) {
-      cache_.content_height = UI_UNIT_Y;
-      return;
-    }
-
-    /* First line has the largest baseline y (layout starts at y = 0 and moves downward). */
-    float first_line_y = cache_.spans.first().y;
-    for (const MarkdownSpan &span : cache_.spans) {
-      first_line_y = math::max(first_line_y, span.y);
-    }
-
-    float max_ascender = 0.0f;
-    for (const MarkdownSpan &span : cache_.spans) {
-      if (span.y != first_line_y) {
-        continue;
-      }
-      this->apply_span_font_style(span);
-      max_ascender = math::max(max_ascender, BLF_ascender(span.fontid) * aspect_);
-    }
-
-    /* Place the first line so its tallest glyph top sits on y = 0. */
-    const float y_offset = -max_ascender;
-    float min_bottom = 0.0f;
-    for (MarkdownSpan &span : cache_.spans) {
-      span.y += y_offset;
-      this->apply_span_font_style(span);
-      const float descender = BLF_descender(span.fontid) * aspect_;
-      min_bottom = math::min(min_bottom, span.y + descender);
-    }
-    cache_.content_height = math::max(-min_bottom, float(UI_UNIT_Y));
+    this->finalize_vertical_positions();
   }
 
   void md_enter_block(const MD_BLOCKTYPE block_type, void *detail)
   {
     switch (block_type) {
-      case MD_BLOCK_P: {
-        break;
-      }
-      case MD_BLOCK_H: {
-        const MD_BLOCK_H_DETAIL &detail_h = *static_cast<const MD_BLOCK_H_DETAIL *>(detail);
-        current_size_ = default_size_ * (1.0f / detail_h.level + 1.0f);
-        break;
-      }
-      case MD_BLOCK_CODE: {
-        is_code_ = true;
+      case MD_BLOCK_QUOTE: {
+        block_stack_.append(QuoteBlock{});
         break;
       }
       case MD_BLOCK_UL: {
-        const MD_BLOCK_UL_DETAIL &detail_ul = *static_cast<const MD_BLOCK_UL_DETAIL *>(detail);
-        this->enter_list(false, detail_ul.is_tight != 0, 1);
+        block_stack_.append(UnorderedListBlock{});
         break;
       }
       case MD_BLOCK_OL: {
-        const MD_BLOCK_OL_DETAIL &detail_ol = *static_cast<const MD_BLOCK_OL_DETAIL *>(detail);
-        this->enter_list(true, detail_ol.is_tight != 0, detail_ol.start);
+        const auto *ol_detail = static_cast<const MD_BLOCK_OL_DETAIL *>(detail);
+        block_stack_.append(OrderedListBlock{bool(ol_detail->is_tight), int(ol_detail->start)});
         break;
       }
       case MD_BLOCK_LI: {
-        this->enter_list_item();
+        block_stack_.append(ListItemBlock{});
         break;
       }
-      default: {
+      case MD_BLOCK_H: {
+        const auto *h_detail = static_cast<const MD_BLOCK_H_DETAIL *>(detail);
+        block_stack_.append(HeaderBlock{int(h_detail->level)});
+        break;
+      }
+      case MD_BLOCK_CODE: {
+        block_stack_.append(CodeBlock{});
+        break;
+      }
+      case MD_BLOCK_P: {
+        block_stack_.append(ParagraphBlock{});
+        break;
+      }
+      case MD_BLOCK_DOC: {
+        block_stack_.append(DocBlock{});
+        break;
+      }
+      case MD_BLOCK_HR:
+      case MD_BLOCK_HTML:
+      case MD_BLOCK_TABLE:
+      case MD_BLOCK_THEAD:
+      case MD_BLOCK_TBODY:
+      case MD_BLOCK_TR:
+      case MD_BLOCK_TH:
+      case MD_BLOCK_TD: {
+        /* Not implemented. */
+        block_stack_.append(UnknownBlock{});
         break;
       }
     }
@@ -220,60 +212,83 @@ class MarkdownLayouter {
 
   void md_leave_block(const MD_BLOCKTYPE block_type, void * /*detail*/)
   {
+    const MdBlock &md_block = block_stack_.last();
     switch (block_type) {
-      case MD_BLOCK_P: {
-        y_ -= UI_UNIT_Y * 1.5f;
-        x_ = line_indent_x_;
+      case MD_BLOCK_QUOTE: {
+        BLI_assert(std::holds_alternative<QuoteBlock>(md_block));
         break;
       }
-      case MD_BLOCK_H: {
-        y_ -= UI_UNIT_Y * 1.3f;
-        current_size_ = default_size_;
-        x_ = line_indent_x_;
+      case MD_BLOCK_UL: {
+        BLI_assert(std::holds_alternative<UnorderedListBlock>(md_block));
         break;
       }
-      case MD_BLOCK_CODE: {
-        is_code_ = false;
-        y_ -= UI_UNIT_Y * 1.5f;
-        x_ = line_indent_x_;
-        break;
-      }
-      case MD_BLOCK_UL:
       case MD_BLOCK_OL: {
-        this->leave_list();
+        BLI_assert(std::holds_alternative<OrderedListBlock>(md_block));
         break;
       }
       case MD_BLOCK_LI: {
-        this->leave_list_item();
+        BLI_assert(std::holds_alternative<ListItemBlock>(md_block));
         break;
       }
-      default: {
+      case MD_BLOCK_H: {
+        BLI_assert(std::holds_alternative<HeaderBlock>(md_block));
+        break;
+      }
+      case MD_BLOCK_CODE: {
+        BLI_assert(std::holds_alternative<CodeBlock>(md_block));
+        break;
+      }
+      case MD_BLOCK_P: {
+        BLI_assert(std::holds_alternative<ParagraphBlock>(md_block));
+        break;
+      }
+      case MD_BLOCK_DOC: {
+        BLI_assert(std::holds_alternative<DocBlock>(md_block));
+        break;
+      }
+      case MD_BLOCK_HR:
+      case MD_BLOCK_HTML:
+      case MD_BLOCK_TABLE:
+      case MD_BLOCK_THEAD:
+      case MD_BLOCK_TBODY:
+      case MD_BLOCK_TR:
+      case MD_BLOCK_TH:
+      case MD_BLOCK_TD: {
+        BLI_assert(std::holds_alternative<UnknownBlock>(md_block));
         break;
       }
     }
+    block_stack_.pop_last();
   }
 
   void md_enter_span(const MD_SPANTYPE span_type, void *detail)
   {
     switch (span_type) {
-      case MD_SPAN_A: {
-        const MD_SPAN_A_DETAIL &detail_a = *static_cast<const MD_SPAN_A_DETAIL *>(detail);
-        href_ = StringRef(detail_a.href.text, detail_a.href.size);
-        break;
-      }
       case MD_SPAN_EM: {
-        is_italic_ = true;
+        span_stack_.append(EmSpan{});
         break;
       }
       case MD_SPAN_STRONG: {
-        is_bold_ = true;
+        span_stack_.append(StrongSpan{});
+        break;
+      }
+      case MD_SPAN_A: {
+        const auto *a_detail = static_cast<const MD_SPAN_A_DETAIL *>(detail);
+        span_stack_.append(LinkSpan{StringRef(a_detail->href.text, a_detail->href.size)});
         break;
       }
       case MD_SPAN_CODE: {
-        is_code_ = true;
+        span_stack_.append(CodeSpan{});
         break;
       }
-      default: {
+      case MD_SPAN_IMG:
+      case MD_SPAN_DEL:
+      case MD_SPAN_LATEXMATH:
+      case MD_SPAN_LATEXMATH_DISPLAY:
+      case MD_SPAN_WIKILINK:
+      case MD_SPAN_U: {
+        /* Not implemented. */
+        span_stack_.append(UnknownSpan{});
         break;
       }
     }
@@ -281,251 +296,618 @@ class MarkdownLayouter {
 
   void md_leave_span(const MD_SPANTYPE span_type, void * /*detail*/)
   {
+    const MdSpan &md_span = span_stack_.last();
     switch (span_type) {
-      case MD_SPAN_A: {
-        href_.reset();
-        break;
-      }
       case MD_SPAN_EM: {
-        is_italic_ = false;
+        BLI_assert(std::holds_alternative<EmSpan>(md_span));
         break;
       }
       case MD_SPAN_STRONG: {
-        is_bold_ = false;
+        BLI_assert(std::holds_alternative<StrongSpan>(md_span));
+        break;
+      }
+      case MD_SPAN_A: {
+        BLI_assert(std::holds_alternative<LinkSpan>(md_span));
         break;
       }
       case MD_SPAN_CODE: {
-        is_code_ = false;
+        BLI_assert(std::holds_alternative<CodeSpan>(md_span));
         break;
       }
-      default: {
+      case MD_SPAN_IMG:
+      case MD_SPAN_DEL:
+      case MD_SPAN_LATEXMATH:
+      case MD_SPAN_LATEXMATH_DISPLAY:
+      case MD_SPAN_WIKILINK:
+      case MD_SPAN_U: {
+        BLI_assert(std::holds_alternative<UnknownSpan>(md_span));
         break;
       }
     }
+    span_stack_.pop_last();
   }
 
   void md_text(const MD_TEXTTYPE text_type, const StringRef text)
   {
     switch (text_type) {
       case MD_TEXT_NORMAL: {
-        this->append_wrapped_text(text);
+        this->md_text_normal(text);
         break;
       }
-      case MD_TEXT_CODE: {
-        StringRef remaining_text = text;
-        while (!remaining_text.is_empty()) {
-          /* Code blocks include literal newlines in the text. */
-          if (remaining_text[0] == '\n') {
-            remaining_text = remaining_text.drop_prefix(1);
-            this->advance_to_next_line();
-            continue;
-          }
-
-          const int64_t newline = remaining_text.find_first_of('\n');
-          if (newline == StringRef::not_found) {
-            this->append_wrapped_text(remaining_text);
-            break;
-          }
-
-          this->append_wrapped_text(remaining_text.substr(0, newline));
-          remaining_text = remaining_text.drop_prefix(newline);
-        }
-        break;
-      }
-      case MD_TEXT_SOFTBR: {
-        this->advance_to_next_line();
-        break;
-      }
-      default: {
+      case MD_TEXT_NULLCHAR:
+      case MD_TEXT_BR:
+      case MD_TEXT_SOFTBR:
+      case MD_TEXT_ENTITY:
+      case MD_TEXT_CODE:
+      case MD_TEXT_HTML:
+      case MD_TEXT_LATEXMATH: {
+        /* Not implemented. */
         break;
       }
     }
   }
 
-  void enter_list(const bool is_ordered, const bool is_tight, const int start_number)
+  void md_text_normal(const StringRef text)
   {
-    if (x_ > line_indent_x_) {
-      y_ -= UI_UNIT_Y * 0.8f;
-      x_ = line_indent_x_;
-    }
-    ListState state;
-    state.is_ordered = is_ordered;
-    state.is_tight = is_tight;
-    state.next_number = start_number;
-    state.marker_x = line_indent_x_;
-    list_stack_.append(state);
-  }
-
-  void leave_list()
-  {
-    list_stack_.pop_last();
-    if (list_stack_.is_empty()) {
-      line_indent_x_ = 0.0f;
-    }
-    else {
-      line_indent_x_ = list_stack_.last().content_x;
-    }
-    x_ = line_indent_x_;
-  }
-
-  void enter_list_item()
-  {
-    ListState &list = list_stack_.last();
-    if (x_ > list.marker_x) {
-      y_ -= UI_UNIT_Y * 0.8f;
-    }
-    x_ = list.marker_x;
-    this->append_list_marker(list);
-    list.content_x = x_;
-    line_indent_x_ = list.content_x;
-  }
-
-  void leave_list_item()
-  {
-    const ListState &list = list_stack_.last();
-    if (list.is_tight) {
-      y_ -= UI_UNIT_Y * 0.8f;
-    }
-    x_ = list.marker_x;
-    line_indent_x_ = list.marker_x;
-  }
-
-  void append_list_marker(ListState &list)
-  {
-    MarkdownSpan span;
-    span.x = x_;
-    span.y = y_;
-    span.size = current_size_;
-    span.fontid = main_fontid_;
-    span.weight = this->current_weight();
-    span.italic = false;
-
-    this->apply_font_style(main_fontid_);
-
-    std::string marker;
-    if (list.is_ordered) {
-      span.type = MarkdownSpanType::OrderedMarker;
-      span.list_number = list.next_number++;
-      marker = fmt::format("{}. ", span.list_number);
-    }
-    else {
-      span.type = MarkdownSpanType::Bullet;
-      marker = "\u2022 ";
-    }
-
-    x_ += BLF_width(main_fontid_, marker.c_str(), marker.size());
-    cache_.spans.append(std::move(span));
-  }
-
-  void append_wrapped_text(StringRef text)
-  {
-    const int fontid = this->current_fontid();
-    this->apply_font_style(fontid);
-
-    while (!text.is_empty()) {
-      const float remaining_width = width_ - x_;
-      float needed_width = 0.0f;
-      size_t last_fit_char_i = BLF_width_to_strlen(
-          fontid, text.data(), size_t(text.size()), remaining_width, &needed_width);
-
-      size_t draw_bytes = last_fit_char_i;
-      size_t drop_bytes = last_fit_char_i;
-      const bool wrap_to_next_line = last_fit_char_i < size_t(text.size());
-
-      if (wrap_to_next_line) {
-        const int64_t last_space = (last_fit_char_i > 0) ?
-                                       text.find_last_of(' ', int64_t(last_fit_char_i) - 1) :
-                                       StringRef::not_found;
-        if (last_space != StringRef::not_found) {
-          draw_bytes = size_t(last_space);
-          drop_bytes = size_t(last_space) + 1; /* Skip the space. */
-          needed_width = BLF_width(fontid, text.data(), draw_bytes);
-        }
-        else if (x_ > line_indent_x_) {
-          /* Word does not fit on this line; retry on the next. */
-          this->advance_to_next_line();
-          continue;
-        }
-        else if (last_fit_char_i == 0) {
-          /* Nothing fits on an empty line; advance one character to avoid an infinite loop. */
-          draw_bytes = drop_bytes = size_t(BLI_str_utf8_size_safe(text.data()));
-          needed_width = BLF_width(fontid, text.data(), draw_bytes);
-        }
-      }
-
-      const StringRef fitting_text = text.substr(0, draw_bytes);
-      text = text.drop_prefix(drop_bytes);
-
-      if (draw_bytes > 0) {
-        this->append_span(fitting_text);
-      }
-
-      if (wrap_to_next_line) {
-        this->advance_to_next_line();
-      }
-      else {
-        x_ += needed_width;
+    int fontid = main_fontid_;
+    int weight = default_weight_;
+    float size = default_font_size_;
+    bool italic = false;
+    std::optional<StringRef> url;
+    for (const auto &md_block : block_stack_) {
+      if (const auto *header_block = std::get_if<HeaderBlock>(&md_block)) {
+        size = this->default_font_size_ * (1.0f / header_block->level + 1.0f);
       }
     }
-  }
-
-  void append_span(const StringRef text)
-  {
-    MarkdownSpan span;
-    span.x = x_;
-    span.y = y_;
-    span.size = current_size_;
-    span.fontid = this->current_fontid();
-    span.weight = this->current_weight();
-    span.italic = is_italic_;
-    span.text = text;
-    if (href_) {
-      span.url = *href_;
+    for (const auto &md_span : span_stack_) {
+      if (std::holds_alternative<CodeSpan>(md_span)) {
+        fontid = mono_fontid_;
+      }
+      if (std::holds_alternative<StrongSpan>(md_span)) {
+        weight = 800;
+      }
+      if (const auto *link_span = std::get_if<LinkSpan>(&md_span)) {
+        url = link_span->url;
+      }
+      if (std::holds_alternative<EmSpan>(md_span)) {
+        italic = true;
+      }
     }
-    cache_.spans.append(std::move(span));
+
+    const float block_indentation = this->current_block_indentation();
+
+    MarkdownItemText item;
+    item.x = x_ + block_indentation;
+    item.y = y_;
+    item.size = size;
+    item.fontid = fontid;
+    item.weight = weight;
+    item.italic = italic;
+    item.text = text;
+    item.url = url;
+    cache_.md_layout.items.append(item);
   }
 
-  void apply_span_font_style(const MarkdownSpan &span) const
+  float current_block_indentation() const
   {
-    BLF_character_weight(span.fontid, span.weight);
-    BLF_size(span.fontid, span.size);
-    if (span.italic) {
-      BLF_enable(span.fontid, BLF_ITALIC);
+    float indentation = 0.0f;
+    for (const auto &md_block : block_stack_) {
+      if (std::holds_alternative<QuoteBlock>(md_block)) {
+        indentation += UI_UNIT_X;
+      }
+      if (std::holds_alternative<ListItemBlock>(md_block)) {
+        indentation += UI_UNIT_X;
+      }
+    }
+    return indentation;
+  }
+
+  void finalize_vertical_positions()
+  {
+    const float aspect = cache_.key.aspect;
+    constexpr float first_line_y = 0.0f;
+    float max_ascender = -FLT_MAX;
+    for (const MarkdownItem &item : cache_.md_layout.items) {
+      const auto *text_item = std::get_if<MarkdownItemText>(&item);
+      if (!text_item) {
+        continue;
+      }
+      if (text_item->y != first_line_y) {
+        break;
+      }
+      markdown_apply_item_font(*text_item, aspect);
+      const float ascender = BLF_ascender(text_item->fontid);
+      max_ascender = std::max(max_ascender, ascender * aspect);
+      markdown_disable_item_font(*text_item);
+    }
+    if (max_ascender != -FLT_MAX) {
+      for (MarkdownItem &item : cache_.md_layout.items) {
+        std::visit([&](auto &item) { item.y -= max_ascender; }, item);
+      }
+    }
+    float bottom_y = FLT_MAX;
+    for (const MarkdownItem &item : cache_.md_layout.items) {
+      if (const auto *text_item = std::get_if<MarkdownItemText>(&item)) {
+        markdown_apply_item_font(*text_item, aspect);
+        bottom_y = std::min(bottom_y, text_item->y + BLF_descender(text_item->fontid) * aspect);
+        markdown_disable_item_font(*text_item);
+      }
+      else if (const auto *bullet_item = std::get_if<MarkdownItemBullet>(&item)) {
+        BLF_aspect(main_fontid_, aspect, aspect, 1.0f);
+        BLF_size(main_fontid_, default_font_size_);
+        BLF_character_weight(main_fontid_, default_weight_);
+        bottom_y = std::min(bottom_y, bullet_item->y + BLF_descender(main_fontid_) * aspect);
+      }
+    }
+    if (bottom_y != FLT_MAX) {
+      cache_.md_layout.content_height = -bottom_y;
     }
     else {
-      BLF_disable(span.fontid, BLF_ITALIC);
+      cache_.md_layout.content_height = UI_UNIT_Y;
     }
-  }
-
-  void apply_font_style(const int fontid) const
-  {
-    BLF_character_weight(fontid, this->current_weight());
-    BLF_size(fontid, current_size_);
-    if (is_italic_) {
-      BLF_enable(fontid, BLF_ITALIC);
-    }
-    else {
-      BLF_disable(fontid, BLF_ITALIC);
-    }
-  }
-
-  int current_weight() const
-  {
-    const int fontid = this->current_fontid();
-    return is_bold_ ? 800 : BLF_default_weight(fontid);
-  }
-
-  int current_fontid() const
-  {
-    return is_code_ ? mono_fontid_ : main_fontid_;
-  }
-
-  void advance_to_next_line()
-  {
-    x_ = line_indent_x_;
-    y_ -= UI_UNIT_Y * 0.8f;
   }
 };
+
+// class MarkdownLayouter {
+//  private:
+//   struct ListState {
+//     bool is_ordered = false;
+//     bool is_tight = false;
+//     int next_number = 1;
+//     float marker_x = 0.0f;
+//     float content_x = 0.0f;
+//   };
+
+//   const float aspect_;
+//   const StringRef full_text_;
+//   const float width_;
+//   int main_fontid_;
+//   int mono_fontid_;
+//   float x_;
+//   float y_;
+//   /** Left edge for the current line (list content indent, or left edge). */
+//   float line_indent_x_;
+
+//   float default_size_;
+//   float current_size_;
+//   std::optional<StringRef> href_;
+//   bool is_bold_ = false;
+//   bool is_italic_ = false;
+//   bool is_code_ = false;
+//   Vector<ListState> list_stack_;
+//   MarkdownLayoutCache &cache_;
+
+//  public:
+//   MarkdownLayouter(const float aspect,
+//                    const StringRef full_text,
+//                    const float width,
+//                    MarkdownLayoutCache &cache)
+//       : aspect_(aspect), full_text_(full_text), width_(width), cache_(cache)
+//   {
+//     main_fontid_ = style_get()->widget.uifont_id;
+//     mono_fontid_ = blf_mono_font;
+//     x_ = 0.0f;
+//     line_indent_x_ = 0.0f;
+//     /* Baseline starts at 0; finalized once the first line's ascenders are known. */
+//     y_ = 0.0f;
+//     default_size_ = style_get()->widget.points * UI_SCALE_FAC / aspect_;
+//     current_size_ = default_size_;
+//   }
+
+//   void compute_layout()
+//   {
+//     MD_PARSER md_parser{};
+//     md_parser.enter_block = [](MD_BLOCKTYPE block_type, void *detail, void *userdata) {
+//       static_cast<MarkdownLayouter *>(userdata)->md_enter_block(block_type, detail);
+//       return 0;
+//     };
+//     md_parser.leave_block = [](MD_BLOCKTYPE block_type, void *detail, void *userdata) {
+//       static_cast<MarkdownLayouter *>(userdata)->md_leave_block(block_type, detail);
+//       return 0;
+//     };
+//     md_parser.enter_span = [](MD_SPANTYPE span_type, void *detail, void *userdata) {
+//       static_cast<MarkdownLayouter *>(userdata)->md_enter_span(span_type, detail);
+//       return 0;
+//     };
+//     md_parser.leave_span = [](MD_SPANTYPE span_type, void *detail, void *userdata) {
+//       static_cast<MarkdownLayouter *>(userdata)->md_leave_span(span_type, detail);
+//       return 0;
+//     };
+//     md_parser.text = [](MD_TEXTTYPE text_type, const char *text, uint32_t length, void
+//     *userdata) {
+//       static_cast<MarkdownLayouter *>(userdata)->md_text(text_type, StringRef(text, length));
+//       return 0;
+//     };
+
+//     BLF_enable(main_fontid_, BLF_ASPECT);
+//     BLF_aspect(main_fontid_, aspect_, aspect_, 1.0f);
+//     BLF_enable(mono_fontid_, BLF_ASPECT);
+//     BLF_aspect(mono_fontid_, aspect_, aspect_, 1.0f);
+
+//     md_parse(full_text_.data(), full_text_.size(), &md_parser, this);
+//     this->finalize_vertical_positions();
+
+//     BLF_disable(main_fontid_, BLF_ASPECT | BLF_ITALIC);
+//     BLF_disable(mono_fontid_, BLF_ASPECT | BLF_ITALIC);
+//   }
+
+//   void finalize_vertical_positions()
+//   {
+//     if (cache_.spans.is_empty()) {
+//       cache_.content_height = UI_UNIT_Y;
+//       return;
+//     }
+
+//     /* First line has the largest baseline y (layout starts at y = 0 and moves downward). */
+//     float first_line_y = cache_.spans.first().y;
+//     for (const MarkdownSpan &span : cache_.spans) {
+//       first_line_y = math::max(first_line_y, span.y);
+//     }
+
+//     float max_ascender = 0.0f;
+//     for (const MarkdownSpan &span : cache_.spans) {
+//       if (span.y != first_line_y) {
+//         continue;
+//       }
+//       this->apply_span_font_style(span);
+//       max_ascender = math::max(max_ascender, BLF_ascender(span.fontid) * aspect_);
+//     }
+
+//     /* Place the first line so its tallest glyph top sits on y = 0. */
+//     const float y_offset = -max_ascender;
+//     float min_bottom = 0.0f;
+//     for (MarkdownSpan &span : cache_.spans) {
+//       span.y += y_offset;
+//       this->apply_span_font_style(span);
+//       const float descender = BLF_descender(span.fontid) * aspect_;
+//       min_bottom = math::min(min_bottom, span.y + descender);
+//     }
+//     cache_.content_height = math::max(-min_bottom, float(UI_UNIT_Y));
+//   }
+
+//   void md_enter_block(const MD_BLOCKTYPE block_type, void *detail)
+//   {
+//     switch (block_type) {
+//       case MD_BLOCK_P: {
+//         break;
+//       }
+//       case MD_BLOCK_H: {
+//         const MD_BLOCK_H_DETAIL &detail_h = *static_cast<const MD_BLOCK_H_DETAIL *>(detail);
+//         current_size_ = default_size_ * (1.0f / detail_h.level + 1.0f);
+//         break;
+//       }
+//       case MD_BLOCK_CODE: {
+//         is_code_ = true;
+//         break;
+//       }
+//       case MD_BLOCK_UL: {
+//         const MD_BLOCK_UL_DETAIL &detail_ul = *static_cast<const MD_BLOCK_UL_DETAIL *>(detail);
+//         this->enter_list(false, detail_ul.is_tight != 0, 1);
+//         break;
+//       }
+//       case MD_BLOCK_OL: {
+//         const MD_BLOCK_OL_DETAIL &detail_ol = *static_cast<const MD_BLOCK_OL_DETAIL *>(detail);
+//         this->enter_list(true, detail_ol.is_tight != 0, detail_ol.start);
+//         break;
+//       }
+//       case MD_BLOCK_LI: {
+//         this->enter_list_item();
+//         break;
+//       }
+//       default: {
+//         break;
+//       }
+//     }
+//   }
+
+//   void md_leave_block(const MD_BLOCKTYPE block_type, void * /*detail*/)
+//   {
+//     switch (block_type) {
+//       case MD_BLOCK_P: {
+//         y_ -= UI_UNIT_Y * 1.5f;
+//         x_ = line_indent_x_;
+//         break;
+//       }
+//       case MD_BLOCK_H: {
+//         y_ -= UI_UNIT_Y * 1.3f;
+//         current_size_ = default_size_;
+//         x_ = line_indent_x_;
+//         break;
+//       }
+//       case MD_BLOCK_CODE: {
+//         is_code_ = false;
+//         y_ -= UI_UNIT_Y * 1.5f;
+//         x_ = line_indent_x_;
+//         break;
+//       }
+//       case MD_BLOCK_UL:
+//       case MD_BLOCK_OL: {
+//         this->leave_list();
+//         break;
+//       }
+//       case MD_BLOCK_LI: {
+//         this->leave_list_item();
+//         break;
+//       }
+//       default: {
+//         break;
+//       }
+//     }
+//   }
+
+//   void md_enter_span(const MD_SPANTYPE span_type, void *detail)
+//   {
+//     switch (span_type) {
+//       case MD_SPAN_A: {
+//         const MD_SPAN_A_DETAIL &detail_a = *static_cast<const MD_SPAN_A_DETAIL *>(detail);
+//         href_ = StringRef(detail_a.href.text, detail_a.href.size);
+//         break;
+//       }
+//       case MD_SPAN_EM: {
+//         is_italic_ = true;
+//         break;
+//       }
+//       case MD_SPAN_STRONG: {
+//         is_bold_ = true;
+//         break;
+//       }
+//       case MD_SPAN_CODE: {
+//         is_code_ = true;
+//         break;
+//       }
+//       default: {
+//         break;
+//       }
+//     }
+//   }
+
+//   void md_leave_span(const MD_SPANTYPE span_type, void * /*detail*/)
+//   {
+//     switch (span_type) {
+//       case MD_SPAN_A: {
+//         href_.reset();
+//         break;
+//       }
+//       case MD_SPAN_EM: {
+//         is_italic_ = false;
+//         break;
+//       }
+//       case MD_SPAN_STRONG: {
+//         is_bold_ = false;
+//         break;
+//       }
+//       case MD_SPAN_CODE: {
+//         is_code_ = false;
+//         break;
+//       }
+//       default: {
+//         break;
+//       }
+//     }
+//   }
+
+//   void md_text(const MD_TEXTTYPE text_type, const StringRef text)
+//   {
+//     switch (text_type) {
+//       case MD_TEXT_NORMAL: {
+//         this->append_wrapped_text(text);
+//         break;
+//       }
+//       case MD_TEXT_CODE: {
+//         StringRef remaining_text = text;
+//         while (!remaining_text.is_empty()) {
+//           /* Code blocks include literal newlines in the text. */
+//           if (remaining_text[0] == '\n') {
+//             remaining_text = remaining_text.drop_prefix(1);
+//             this->advance_to_next_line();
+//             continue;
+//           }
+
+//           const int64_t newline = remaining_text.find_first_of('\n');
+//           if (newline == StringRef::not_found) {
+//             this->append_wrapped_text(remaining_text);
+//             break;
+//           }
+
+//           this->append_wrapped_text(remaining_text.substr(0, newline));
+//           remaining_text = remaining_text.drop_prefix(newline);
+//         }
+//         break;
+//       }
+//       case MD_TEXT_SOFTBR: {
+//         this->advance_to_next_line();
+//         break;
+//       }
+//       default: {
+//         break;
+//       }
+//     }
+//   }
+
+//   void enter_list(const bool is_ordered, const bool is_tight, const int start_number)
+//   {
+//     if (x_ > line_indent_x_) {
+//       y_ -= UI_UNIT_Y * 0.8f;
+//       x_ = line_indent_x_;
+//     }
+//     ListState state;
+//     state.is_ordered = is_ordered;
+//     state.is_tight = is_tight;
+//     state.next_number = start_number;
+//     state.marker_x = line_indent_x_;
+//     list_stack_.append(state);
+//   }
+
+//   void leave_list()
+//   {
+//     list_stack_.pop_last();
+//     if (list_stack_.is_empty()) {
+//       line_indent_x_ = 0.0f;
+//     }
+//     else {
+//       line_indent_x_ = list_stack_.last().content_x;
+//     }
+//     x_ = line_indent_x_;
+//   }
+
+//   void enter_list_item()
+//   {
+//     ListState &list = list_stack_.last();
+//     if (x_ > list.marker_x) {
+//       y_ -= UI_UNIT_Y * 0.8f;
+//     }
+//     x_ = list.marker_x;
+//     this->append_list_marker(list);
+//     list.content_x = x_;
+//     line_indent_x_ = list.content_x;
+//   }
+
+//   void leave_list_item()
+//   {
+//     const ListState &list = list_stack_.last();
+//     if (list.is_tight) {
+//       y_ -= UI_UNIT_Y * 0.8f;
+//     }
+//     x_ = list.marker_x;
+//     line_indent_x_ = list.marker_x;
+//   }
+
+//   void append_list_marker(ListState &list)
+//   {
+//     MarkdownSpan span;
+//     span.x = x_;
+//     span.y = y_;
+//     span.size = current_size_;
+//     span.fontid = main_fontid_;
+//     span.weight = this->current_weight();
+//     span.italic = false;
+
+//     this->apply_font_style(main_fontid_);
+
+//     std::string marker;
+//     if (list.is_ordered) {
+//       span.type = MarkdownSpanType::OrderedMarker;
+//       span.list_number = list.next_number++;
+//       marker = fmt::format("{}. ", span.list_number);
+//     }
+//     else {
+//       span.type = MarkdownSpanType::Bullet;
+//       marker = "\u2022 ";
+//     }
+
+//     x_ += BLF_width(main_fontid_, marker.c_str(), marker.size());
+//     cache_.spans.append(std::move(span));
+//   }
+
+//   void append_wrapped_text(StringRef text)
+//   {
+//     const int fontid = this->current_fontid();
+//     this->apply_font_style(fontid);
+
+//     while (!text.is_empty()) {
+//       const float remaining_width = width_ - x_;
+//       float needed_width = 0.0f;
+//       size_t last_fit_char_i = BLF_width_to_strlen(
+//           fontid, text.data(), size_t(text.size()), remaining_width, &needed_width);
+
+//       size_t draw_bytes = last_fit_char_i;
+//       size_t drop_bytes = last_fit_char_i;
+//       const bool wrap_to_next_line = last_fit_char_i < size_t(text.size());
+
+//       if (wrap_to_next_line) {
+//         const int64_t last_space = (last_fit_char_i > 0) ?
+//                                        text.find_last_of(' ', int64_t(last_fit_char_i) - 1) :
+//                                        StringRef::not_found;
+//         if (last_space != StringRef::not_found) {
+//           draw_bytes = size_t(last_space);
+//           drop_bytes = size_t(last_space) + 1; /* Skip the space. */
+//           needed_width = BLF_width(fontid, text.data(), draw_bytes);
+//         }
+//         else if (x_ > line_indent_x_) {
+//           /* Word does not fit on this line; retry on the next. */
+//           this->advance_to_next_line();
+//           continue;
+//         }
+//         else if (last_fit_char_i == 0) {
+//           /* Nothing fits on an empty line; advance one character to avoid an infinite loop. */
+//           draw_bytes = drop_bytes = size_t(BLI_str_utf8_size_safe(text.data()));
+//           needed_width = BLF_width(fontid, text.data(), draw_bytes);
+//         }
+//       }
+
+//       const StringRef fitting_text = text.substr(0, draw_bytes);
+//       text = text.drop_prefix(drop_bytes);
+
+//       if (draw_bytes > 0) {
+//         this->append_span(fitting_text);
+//       }
+
+//       if (wrap_to_next_line) {
+//         this->advance_to_next_line();
+//       }
+//       else {
+//         x_ += needed_width;
+//       }
+//     }
+//   }
+
+//   void append_span(const StringRef text)
+//   {
+//     MarkdownSpan span;
+//     span.x = x_;
+//     span.y = y_;
+//     span.size = current_size_;
+//     span.fontid = this->current_fontid();
+//     span.weight = this->current_weight();
+//     span.italic = is_italic_;
+//     span.text = text;
+//     if (href_) {
+//       span.url = *href_;
+//     }
+//     cache_.spans.append(std::move(span));
+//   }
+
+//   void apply_span_font_style(const MarkdownSpan &span) const
+//   {
+//     BLF_character_weight(span.fontid, span.weight);
+//     BLF_size(span.fontid, span.size);
+//     if (span.italic) {
+//       BLF_enable(span.fontid, BLF_ITALIC);
+//     }
+//     else {
+//       BLF_disable(span.fontid, BLF_ITALIC);
+//     }
+//   }
+
+//   void apply_font_style(const int fontid) const
+//   {
+//     BLF_character_weight(fontid, this->current_weight());
+//     BLF_size(fontid, current_size_);
+//     if (is_italic_) {
+//       BLF_enable(fontid, BLF_ITALIC);
+//     }
+//     else {
+//       BLF_disable(fontid, BLF_ITALIC);
+//     }
+//   }
+
+//   int current_weight() const
+//   {
+//     const int fontid = this->current_fontid();
+//     return is_bold_ ? 800 : BLF_default_weight(fontid);
+//   }
+
+//   int current_fontid() const
+//   {
+//     return is_code_ ? mono_fontid_ : main_fontid_;
+//   }
+
+//   void advance_to_next_line()
+//   {
+//     x_ = line_indent_x_;
+//     y_ -= UI_UNIT_Y * 0.8f;
+//   }
+// };
 
 static void create_link_buttons_for_label(ButtonLabel *button)
 {
@@ -533,7 +915,7 @@ static void create_link_buttons_for_label(ButtonLabel *button)
     return;
   }
   const MarkdownLayoutCache &cache = *button->markdown_cache;
-  if (cache.spans.is_empty()) {
+  if (cache.md_layout.items.is_empty()) {
     return;
   }
 
@@ -544,22 +926,23 @@ static void create_link_buttons_for_label(ButtonLabel *button)
     return;
   }
 
-  for (const MarkdownSpan &span : cache.spans) {
-    if (!span.url) {
+  for (const MarkdownItem &item : cache.md_layout.items) {
+    const auto *text_item_ptr = std::get_if<MarkdownItemText>(&item);
+    if (!text_item_ptr->url) {
       continue;
     }
+    const MarkdownItemText &text_item = *text_item_ptr;
 
-    markdown_apply_span_font(span, aspect);
+    markdown_apply_item_font(text_item, aspect);
 
-    std::string owned_marker;
-    const StringRef text = markdown_span_draw_text(span, owned_marker);
-    const float descender = BLF_descender(span.fontid) * aspect;
-    const float ascender = BLF_ascender(span.fontid) * aspect;
+    const StringRef text = text_item.text;
+    const float descender = BLF_descender(text_item.fontid) * aspect;
+    const float ascender = BLF_ascender(text_item.fontid) * aspect;
     const float font_height = ascender - descender;
-    const float width = BLF_width(span.fontid, text.data(), text.size());
+    const float width = BLF_width(text_item.fontid, text.data(), text.size());
 
-    const float x = button->rect.xmin + span.x;
-    const float y = button->rect.ymax + span.y + descender;
+    const float x = button->rect.xmin + text_item.x;
+    const float y = button->rect.ymax + text_item.y + descender;
 
     const EmbossType previous_emboss = block_emboss_get(block);
     block_emboss_set(block, EmbossType::None);
@@ -579,7 +962,7 @@ static void create_link_buttons_for_label(ButtonLabel *button)
     static_cast<ButtonPush *>(but)->draw_as_link = true;
 
     PointerRNA props = WM_operator_properties_create_ptr(ot);
-    RNA_string_set(&props, "url", std::string(*span.url).c_str());
+    RNA_string_set(&props, "url", std::string(*text_item.url).c_str());
     button_operator_set(but, ot, wm::OpCallContext::InvokeDefault, &props);
 
     /* Invisible hit-target; markdown draw paints the link text. Show URL on hover. */
@@ -596,7 +979,7 @@ static void create_link_buttons_for_label(ButtonLabel *button)
         nullptr,
         nullptr);
 
-    markdown_disable_span_font(span);
+    markdown_disable_item_font(text_item);
   }
 }
 
@@ -615,57 +998,62 @@ void label_markdown_create_link_buttons(Block *block)
 
 void label_markdown_resolve(ButtonLabel *button)
 {
+  const int wrap_width = std::max<int>(std::ceil(BLI_rctf_size_x(&button->rect)), 0);
   const float aspect = button->block->aspect;
-  const int width = std::max<int>(std::ceil(BLI_rctf_size_x(&button->rect)), 0);
-  StringRef text = button->str;
+  {
+    MarkdownLayoutCacheKey cache_lookup_key;
+    cache_lookup_key.text = button->str;
+    cache_lookup_key.wrap_width = wrap_width;
+    cache_lookup_key.aspect = aspect;
 
-  /* Try to reuse an already attached cache. */
-  if (button->markdown_cache) {
-    const MarkdownLayoutCache &cache = *button->markdown_cache;
-    if (!(cache.aspect == aspect && cache.wrap_width == width && cache.text == text)) {
-      button->markdown_cache.reset();
-    }
-  }
-  /* Try to take a matching cache from the previous block. */
-  if (!button->markdown_cache && button->block->oldblock) {
-    int i = 0;
-    for (std::shared_ptr<MarkdownLayoutCache> &cache_ptr :
-         button->block->oldblock->markdown_layout_cache)
-    {
-      MarkdownLayoutCache &cache = *cache_ptr;
-      if (cache.aspect == aspect && cache.wrap_width == width && cache.text == text) {
-        button->markdown_cache = cache_ptr;
-        break;
+    /* Try to reuse an already attached cache. */
+    if (button->markdown_cache) {
+      const MarkdownLayoutCache &cache = *button->markdown_cache;
+      if (cache.key != cache_lookup_key) {
+        button->markdown_cache.reset();
       }
-      i++;
+    }
+    /* Try to take a matching cache from the previous block. */
+    if (!button->markdown_cache && button->block->oldblock) {
+      int i = 0;
+      for (std::shared_ptr<MarkdownLayoutCache> &cache_ptr :
+           button->block->oldblock->markdown_layout_cache)
+      {
+        MarkdownLayoutCache &cache = *cache_ptr;
+        if (cache.key == cache_lookup_key) {
+          button->markdown_cache = cache_ptr;
+          break;
+        }
+        i++;
+      }
+      if (button->markdown_cache) {
+        button->block->oldblock->markdown_layout_cache.remove(i);
+      }
     }
     if (button->markdown_cache) {
-      button->block->oldblock->markdown_layout_cache.remove(i);
+      button->block->markdown_layout_cache.append(button->markdown_cache);
+      button->rect.ymin = button->rect.ymax - button->markdown_cache->md_layout.content_height;
+      return;
     }
-  }
-  if (button->markdown_cache) {
-    button->block->markdown_layout_cache.append(button->markdown_cache);
-    button->rect.ymin = button->rect.ymax - button->markdown_cache->content_height;
-    return;
   }
 
   button->markdown_cache = std::make_shared<MarkdownLayoutCache>();
   MarkdownLayoutCache &cache = *button->markdown_cache;
-  cache.text = text;
-  cache.wrap_width = width;
-  cache.aspect = aspect;
-
+  cache.key.aspect = aspect;
+  cache.key.wrap_width = wrap_width;
+  /* Copy the string to the cache so that references into it can be preserved. */
+  cache.key.text = cache.scope.allocator().copy_string(button->str);
   button->block->markdown_layout_cache.append(button->markdown_cache);
 
-  MarkdownLayouter layouter(aspect, cache.text, float(width), cache);
+  MarkdownLayouter layouter(cache);
   layouter.compute_layout();
 
-  button->rect.ymin = button->rect.ymax - cache.content_height;
+  button->rect.ymin = button->rect.ymax - cache.md_layout.content_height;
 }
 
 void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const rcti *rect)
 {
-  if (!button->markdown_cache || button->markdown_cache->spans.is_empty()) {
+  if (!button->markdown_cache || button->markdown_cache->md_layout.items.is_empty()) {
     return;
   }
 
@@ -676,32 +1064,24 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
   theme::get_color_4ubv(TH_LINK, link_color);
   link_color[3] = color[3];
 
-  for (const MarkdownSpan &span : cache.spans) {
-    BLF_size(span.fontid, span.size * aspect);
-    BLF_character_weight(span.fontid, span.weight);
-    if (span.italic) {
-      BLF_enable(span.fontid, BLF_ITALIC);
+  for (const MarkdownItem &item : cache.md_layout.items) {
+    if (const auto *text_item = std::get_if<MarkdownItemText>(&item)) {
+      markdown_apply_item_font(*text_item, cache.key.aspect);
+      if (text_item->url) {
+        BLF_color4ubv(text_item->fontid, link_color);
+      }
+      else {
+        BLF_color4ubv(text_item->fontid, color);
+      }
+      const float x = rect->xmin + text_item->x / aspect;
+      const float y = rect->ymax + text_item->y / aspect;
+      BLF_position(text_item->fontid, x, y, 0.0f);
+      BLF_draw(text_item->fontid, text_item->text.data(), text_item->text.size());
+      markdown_disable_item_font(*text_item);
     }
-    else {
-      BLF_disable(span.fontid, BLF_ITALIC);
+    else if (const auto *bullet_item = std::get_if<MarkdownItemBullet>(&item)) {
+      // TODO
     }
-
-    if (span.url) {
-      BLF_color4ubv(span.fontid, link_color);
-    }
-    else {
-      BLF_color4ubv(span.fontid, color);
-    }
-
-    std::string owned_marker;
-    const StringRef text = markdown_span_draw_text(span, owned_marker);
-
-    const float x = rect->xmin + span.x / aspect;
-    const float y = rect->ymax + span.y / aspect;
-    BLF_position(span.fontid, x, y, 0.0f);
-    BLF_draw(span.fontid, text.data(), text.size());
-
-    BLF_disable(span.fontid, BLF_ITALIC);
   }
 }
 
