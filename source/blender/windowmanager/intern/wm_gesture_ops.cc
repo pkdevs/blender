@@ -200,8 +200,8 @@ wmOperatorStatus WM_gesture_box_invoke(bContext *C, wmOperator *op, const wmEven
       const ScrArea &area = *CTX_wm_area(C);
       if (area.spacetype == SPACE_ACTION) {
         /* `SPACE_ACTION` clamps view at draw-time (footgun, draw code should probably be
-         * read-only...), so prevent panning past that. We shouldn't limit horizontal range to `tot`,
-         * however, because for timelines it is the scene playback range. */
+         * read-only...), so prevent panning past that. We shouldn't limit horizontal range to
+         * `tot`, however, because for timelines it is the scene playback range. */
         gesture->edge_pan_data->limit.ymin = region->v2d.tot.ymin;
         gesture->edge_pan_data->limit.ymax = region->v2d.tot.ymax;
       }
