@@ -2230,11 +2230,85 @@ void SEQUENCER_OT_effect_strip_add(wmOperatorType *ot)
 /** \name Add Transition
  * \{ */
 
+struct TransitionLoadData {
+  Strip *left_input;
+  Strip *right_input;
+  int channel;
+  int cutpoint = 0;            /* Only for overlap transitions. */
+  std::pair<int, int> handles; /* left handle, right handle */
+};
+
+static bool calculate_overlap_transition_load_data(const Scene *scene,
+                                                   ReportList *reports,
+                                                   Vector<TransitionLoadData> &load_data)
+{
+  bool clamped = false;
+
+  /* Clamp new transitions to existing strip / transition bounds. */
+  for (TransitionLoadData &transition : load_data) {
+    const auto clamped_handles = seq::transition_handles_clamp(
+        scene, transition.left_input, transition.right_input, transition.handles);
+    clamped |= transition.handles != clamped_handles;
+    transition.handles = clamped_handles;
+  }
+
+  /* Sort by channel and order so new adjacent transitions can be compared. */
+  std::ranges::sort(load_data,
+                    [](const TransitionLoadData &first, const TransitionLoadData &second) {
+                      return first.channel < second.channel || first.cutpoint < second.cutpoint;
+                    });
+
+  /* Check new transitions against adjacent new transitions. If their length would cause them to
+   * overlap, move the overlapping handles an equal distance away to prevent overlap. */
+  for (int i = 0; i < load_data.size() - 1; ++i) {
+    TransitionLoadData &first = load_data[i];
+    TransitionLoadData &second = load_data[i + 1];
+
+    if (first.channel != second.channel) {
+      continue;
+    }
+    if (first.right_input != second.left_input) {
+      continue;
+    }
+
+    const int distance = first.handles.second - second.handles.first;
+    if (distance > 0) {
+      clamped |= true;
+
+      first.handles.second = first.handles.second - ceil(distance / 2.0f);
+      second.handles.first = second.handles.first + floor(distance / 2.0f);
+    }
+  }
+
+  /* Don't add overlap transitions where there isn't space for them. This is done as a separate
+   * step to remove all otherwise overlapping transitions. */
+  const int64_t no_space_count = load_data.remove_if([&](const TransitionLoadData &transition) {
+    return !seq::transition_has_space(scene,
+                                      transition.left_input,
+                                      transition.right_input,
+                                      transition.handles.first,
+                                      transition.handles.second);
+  });
+
+  if (load_data.is_empty()) {
+    BKE_report(reports, RPT_ERROR, "Not enough space for transition(s)");
+    return false;
+  }
+
+  if (clamped) {
+    BKE_report(reports, RPT_WARNING, "Length of transition(s) clamped");
+  }
+  if (no_space_count > 0) {
+    BKE_report(reports, RPT_WARNING, "Some transition(s) were not added due to lack of space");
+  }
+
+  return true; /* No errors. */
+}
+
 static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_ensure(scene);
-  // check if there's anything from sequencer_add_generic_exec missing
 
   VectorSet<Strip *> inputs = seq::query_selected_strips(ed->current_strips());
   /* Ignore sound strips until audio transitions are added (to make connected strips work in the
@@ -2253,30 +2327,23 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
   const auto type = StripType(RNA_enum_get(op->ptr, "type"));
   // add the "clamp" option
 
-  struct OverlapLoadData {
-    Strip *left_input;
-    Strip *right_input;
-    int channel;
-    int cutpoint;
-    int left_handle, right_handle;
-  };
+  Vector<TransitionLoadData> overlap_transitions{};
+  /* Transitions that apppear on a different channel than their inputs. */
+  Vector<TransitionLoadData> effect_transitions{};
 
-  Vector<OverlapLoadData> overlap_transitions{};
-  bool clamped = false;
-
-  /* Find cutpoints for transitions. */
+  /* Find where to place the transitions. */
   for (Strip *left_strip : inputs) {
     for (Strip *right_strip : inputs) {
       if (left_strip == right_strip) {
         continue;
       }
-      const int left_strip_left_handle = left_strip->left_handle();
-      const int left_strip_right_handle = left_strip->right_handle(scene);
-      const int right_strip_left_handle = right_strip->left_handle();
+      const int first_left_handle = left_strip->left_handle();
+      const int first_right_handle = left_strip->right_handle(scene);
+      const int second_left_handle = right_strip->left_handle();
+      const int second_right_handle = right_strip->right_handle(scene);
 
       /* Adjacent strips on the same channel get overlap transitions. */
-      if (left_strip_right_handle == right_strip_left_handle &&
-          left_strip->channel == right_strip->channel)
+      if (first_right_handle == second_left_handle && left_strip->channel == right_strip->channel)
       {
         /* It's clear what the user intends so these aren't errors. */
         const bool has_transition_already = seq::get_transition_between(
@@ -2290,86 +2357,38 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
         const int cutpoint = right_strip->left_handle();
         const std::pair<int, int> handles{cutpoint - floor(length / 2.0),
                                           cutpoint + ceil(length / 2.0)};
-        /* Existing transitions keep their bounds. New transitions are clamped to them. */
-        const auto clamped_handles = seq::transition_handles_clamp(
-            scene, left_strip, right_strip, handles);
-        overlap_transitions.append({left_strip,
-                                    right_strip,
-                                    left_strip->channel,
-                                    cutpoint,
-                                    clamped_handles.first,
-                                    clamped_handles.second});
-        clamped |= handles != clamped_handles;
+        overlap_transitions.append(
+            {left_strip, right_strip, left_strip->channel, cutpoint, handles});
       }
       /* Strips that overlap in time on different channels get old type transition effects. */
-      // can't use the function because it would add twice for one selection. but what about the
-      // case where they match in time? compare the channel
-      else if (right_strip_left_handle >= left_strip_left_handle &&
-               right_strip_left_handle < left_strip_right_handle)
-      {
-        // enough channels check?
+      /* If the input order is ambiguous, sort by channel to prevent adding twice. */
+      const bool horizontal_overlap = first_left_handle == second_left_handle &&
+                                      second_right_handle == first_left_handle &&
+                                      left_strip->channel < right_strip->channel;
+      /* Don't add transitions if one input's frame range is inside that of the other's. */
+      const bool strips_in_order = first_right_handle > second_left_handle &&
+                                   first_right_handle < second_right_handle;
+      if (strips_in_order || horizontal_overlap) {
+        const int channel = math::max(left_strip->channel, right_strip->channel) + 1;
+        effect_transitions.append(
+            {left_strip, right_strip, channel, 0, {second_left_handle, first_right_handle}});
+        // check that there's a free channel in #calculate_overlap_transition_load_data
       }
     }
   }
 
-  std::ranges::sort(overlap_transitions,
-                    [](const OverlapLoadData &first, const OverlapLoadData &second) {
-                      return first.channel < second.channel || first.cutpoint < second.cutpoint;
-                    });
-
-  /* Check new transitions against adjacent new transitions. If their length would cause them to
-   * overlap, move the overlapping handles an equal distance away to prevent overlap. */
-  for (int i = 0; i < overlap_transitions.size() - 1; ++i) {
-    OverlapLoadData &first = overlap_transitions[i];
-    OverlapLoadData &second = overlap_transitions[i + 1];
-
-    if (first.channel != second.channel) {
-      continue;
-    }
-    if (first.right_input != second.left_input) {
-      continue;
-    }
-
-    const int distance = first.right_handle - second.left_handle;
-    if (distance > 0) {
-      clamped |= true;
-
-      first.right_handle = first.right_handle - ceil(distance / 2.0f);
-      second.left_handle = second.left_handle + floor(distance / 2.0f);
-    }
-  }
-
-  /* Don't add overlap transitions where there isn't space for them. This is done as a separate
-   * step to remove all otherwise overlapping transitions. */
-  const int64_t no_space_count = overlap_transitions.remove_if(
-      [&](const OverlapLoadData &transition) {
-        return !seq::transition_has_space(scene,
-                                          transition.left_input,
-                                          transition.right_input,
-                                          transition.left_handle,
-                                          transition.right_handle);
-      });
-
-  if (overlap_transitions.is_empty()) {
-    BKE_report(op->reports, RPT_ERROR, "Not enough space for transition(s)");
+  if (!calculate_overlap_transition_load_data(scene, op->reports, overlap_transitions)) {
     return OPERATOR_CANCELLED;
-  }
-
-  if (clamped) {
-    BKE_report(op->reports, RPT_WARNING, "Length of transition(s) clamped");
-  }
-  if (no_space_count > 0) {
-    BKE_report(op->reports, RPT_WARNING, "Some transition(s) were not added due to lack of space");
   }
 
   deselect_all_strips(scene);
 
   /* Finally do the actual adding. */
-  for (OverlapLoadData &transition_data : overlap_transitions) {
+  for (TransitionLoadData &transition_data : overlap_transitions) {
     /* Zero-initialize other values. */
     seq::LoadData load_data{};
-    load_data.start_frame = transition_data.left_handle;
-    load_data.effect.length = transition_data.right_handle - transition_data.left_handle;
+    load_data.start_frame = transition_data.handles.first;
+    load_data.effect.length = transition_data.handles.second - transition_data.handles.first;
     load_data.effect.type = type;
     load_data.effect.input1 = transition_data.left_input;
     load_data.effect.input2 = transition_data.right_input;
