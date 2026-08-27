@@ -770,6 +770,21 @@ __intersection__point_shadow_all(constant KernelParamsMetal &launch_params_metal
 // Small kernels for processing MetalFX denoising textures.
 #  ifdef WITH_METALFX
 
-
+kernel void filter_color_preprocess(
+                                    device const float *render_buffer [[buffer(0)]],
+                                    texture2d<float, access::write> color_tex [[texture(0)]]
+                                    constant int full_x,
+                                    constant int full_y,
+                                    constant int width,
+                                    constant int height,
+                                    constant int offset,
+                                    constant int stride,
+                                    constant int pass_stride,
+                                    constant int pass_denoised,
+                                    uint2 tid [[thread_position_in_grid]]
+                                    )
+{
+  // color_tex.write(color, tid);
+}
 
 #  endif

@@ -20,16 +20,16 @@ public:
   
 private:
   // void *denoiser_desc_ = nullptr;
-  void *mtlfx_denoiser_ = nullptr;
+  void *mtlfx_denoiser = nullptr;
   
-  void *color_texture_ = nullptr;
-  void *motion_texture_ = nullptr;
+  void *color_texture = nullptr;
+  void *motion_texture = nullptr;
   void *diffuse_albedo_texture = nullptr;
-  void *specular_albedo_texture_ = nullptr;
-  void *normal_texture_ = nullptr;
+  void *specular_albedo_texture = nullptr;
+  void *normal_texture = nullptr;
   void *roughness_texture = nullptr;
-  void *depth_texture_ = nullptr;
-  void *output_texture_ = nullptr;
+  void *depth_texture = nullptr;
+  void *output_texture = nullptr;
   
   virtual bool denoise_create_if_needed(DenoiseContext &context) override;
   

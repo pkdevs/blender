@@ -291,7 +291,7 @@ def enum_mtlfx_denoiser(self, context):
     import _cycles
     if context or bool(context.preferences.addons[__package__].preferences.get_devices_for_type('METAL')):
         return [('METALFX', "MetalFX", n_(
-            "Use MetalFX denoising on Apple Silicon GPUs with macOS 26 Tahoe and Metal 4"), 16)]
+            "Use MetalFX for denoising. Requires M3 or higher with macOS 26 or higher"), 16)]
     return []
 
 
