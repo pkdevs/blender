@@ -235,7 +235,7 @@ ccl_device_forceinline int custom_intersect_get_object(const RTCRayQueryContext 
 
 ccl_device_inline void custom_intersect(const RTCIntersectFunctionNArguments *args)
 {
-  assert(args->N == 1);
+  kernel_assert(args->N == 1);
   static_assert(RTC_MAX_INSTANCE_LEVEL_COUNT == 1);
 
 #if defined(__GSPLATS__)
@@ -260,7 +260,7 @@ ccl_device_inline void custom_intersect(const RTCIntersectFunctionNArguments *ar
   const int prim = args->primID + prim_offset;
 
   const int primitive_type = kernel_data_fetch(objects, object).primitive_type;
-  assert(primitive_type & PRIMITIVE_GSPLAT);
+  kernel_assert(primitive_type & PRIMITIVE_GSPLAT);
 
   float isect_t;
   if (!gsplat_intersect_test(kg,
@@ -312,7 +312,7 @@ ccl_device_inline void custom_intersect(const RTCIntersectFunctionNArguments *ar
 
 ccl_device_inline void custom_occluded(const RTCOccludedFunctionNArguments *args)
 {
-  assert(args->N == 1);
+  kernel_assert(args->N == 1);
   static_assert(RTC_MAX_INSTANCE_LEVEL_COUNT == 1);
 
 #if defined(__GSPLATS__)
@@ -338,7 +338,7 @@ ccl_device_inline void custom_occluded(const RTCOccludedFunctionNArguments *args
   const int prim = args->primID + prim_offset;
 
   const int primitive_type = kernel_data_fetch(objects, object).primitive_type;
-  assert(primitive_type & PRIMITIVE_GSPLAT);
+  kernel_assert(primitive_type & PRIMITIVE_GSPLAT);
 
   Intersection isect;
   if (!gsplat_intersect(kg,
@@ -359,6 +359,7 @@ ccl_device_inline void custom_occluded(const RTCOccludedFunctionNArguments *args
   if (bvh_shadow_all_anyhit_filter<ISECT_TEST_ALL & ~ISECT_TEST_VISIBILITY_FLAG>(
           kg, payload.state, payload, payload.base.ray_self, 0, isect))
   {
+    args->valid[0] = 0;
     return;
   }
 
@@ -367,7 +368,7 @@ ccl_device_inline void custom_occluded(const RTCOccludedFunctionNArguments *args
   ray->tfar = neg_inf;
   args->valid[0] = -1;
 #else
-  (void)args;
+  args->valid[0] = 0;
 #endif
 }
 
@@ -739,6 +740,17 @@ ccl_device_intersect void kernel_embree_intersect_shadow_all(KernelGlobals kg,
 #endif
 
 #ifdef __VOLUME__
+
+ccl_device_inline void custom_occluded_volume(const RTCOccludedFunctionNArguments *args)
+{
+  kernel_assert(args->N == 1);
+
+  /* Ignore intersections with custom primitives.
+   * Currently the only custom primitive is the gaussian splat, which does not support volume
+   * shaders. */
+  args->valid[0] = 0;
+}
+
 ccl_device_intersect uint kernel_embree_intersect_volume(KernelGlobals kg,
                                                          const ccl_private Ray *ray,
                                                          ccl_private Intersection *isect,
@@ -768,6 +780,7 @@ ccl_device_intersect uint kernel_embree_intersect_volume(KernelGlobals kg,
   kernel_embree_setup_ray(*ray, rtc_ray, visibility);
   RTCOccludedArguments args;
   rtcInitOccludedArguments(&args);
+  args.occluded = custom_occluded_volume;
   args.filter = reinterpret_cast<RTCFilterFunctionN>(
       kernel_embree_filter_occluded_volume_all_func);
   args.feature_mask = CYCLES_EMBREE_USED_FEATURES;
