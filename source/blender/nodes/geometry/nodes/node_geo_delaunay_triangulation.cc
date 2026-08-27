@@ -355,10 +355,9 @@ static void calc_group_triangulation(const Mesh *mesh,
   }
 
   /* Add edge constraints. */
-  Array<std::pair<int, int>> cdt_edges(edges_by_source.total_size());
+  Array<int2> cdt_edges(edges_by_source.total_size());
   for (const int source_i : edge_source_domains.index_range()) {
-    MutableSpan<std::pair<int, int>> dst_edges = cdt_edges.as_mutable_span().slice(
-        edges_by_source[source_i]);
+    MutableSpan<int2> dst_edges = cdt_edges.as_mutable_span().slice(edges_by_source[source_i]);
     switch (edge_source_domains[source_i]) {
       case SourceComponent::Mesh: {
         const Span<int2> edges = mesh->edges();
@@ -389,8 +388,7 @@ static void calc_group_triangulation(const Mesh *mesh,
         edge_curves.foreach_index_optimized<int>(
             [&](const int curve, const int pos) {
               const IndexRange points = points_by_curve[curve];
-              MutableSpan<std::pair<int, int>> dst_edges_by_curve = dst_edges.slice(
-                  edges_by_curve[pos]);
+              MutableSpan<int2> dst_edges_by_curve = dst_edges.slice(edges_by_curve[pos]);
               for (const int point : points.index_range().drop_back(1)) {
                 dst_edges_by_curve[point] = {curve_point_to_dst[points[point]] + dst_point_offset,
                                              curve_point_to_dst[points[point] + 1] +
@@ -469,6 +467,7 @@ static void calc_group_triangulation(const Mesh *mesh,
 
   /* Construct CDT input and compute delaunay triangulation. */
   const meshintersect::CDT_input<double> cdt_input{.vert = cdt_verts,
+                                                   .edge = cdt_edges,
                                                    .face_offsets = cdt_faces,
                                                    .face_vert_indices = cdt_face_vert_indices,
                                                    .needed_ids = CDT_ORIG_VERTS |
@@ -526,7 +525,7 @@ static void calc_group_triangulation(const Mesh *mesh,
   const uint32_t face_edge_offset = result.cdt_result.face_edge_offset;
   auto verts_from_cdt_edge = [&](const int edge) -> std::pair<int, int> {
     if (edge < face_edge_offset) {
-      return cdt_edges[edge];
+      return {cdt_edges[edge].x, cdt_edges[edge].y};
     }
     /* See CDT_result::edge_orig for how edge indices are encoded. */
     const int src_face = (edge / face_edge_offset) - 1;
