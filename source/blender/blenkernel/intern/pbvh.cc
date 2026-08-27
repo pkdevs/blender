@@ -735,7 +735,7 @@ static Node *pbvh_iter_next(PBVHIter *iter, Node::Flags leaf_flag)
 }
 
 static void search_callback_occluded(Tree &pbvh,
-                                     const FunctionRef<bool(const Node &, float &r_tmin)> scb,
+                                     const FunctionRef<std::optional<float>(const Node &)> scb,
                                      const FunctionRef<void(Node &node, float *tmin)> hit_fn)
 {
   if (tree_is_empty(pbvh)) {
@@ -749,13 +749,13 @@ static void search_callback_occluded(Tree &pbvh,
   while (!stack.is_empty()) {
     Node *node = stack.pop();
 
-    float node_tmin = 0.0f;
-    if (!scb(*node, node_tmin)) {
+    const std::optional node_distance = scb(*node);
+    if (!node_distance) {
       continue; /* don't traverse, outside of search zone */
     }
 
     if (node->flag_ & Node::Leaf) {
-      hits.append({node_tmin, node});
+      hits.append({*node_distance, node});
       continue;
     }
 
@@ -771,15 +771,15 @@ static void search_callback_occluded(Tree &pbvh,
                            [](const std::pair<float, Node *> &a,
                               const std::pair<float, Node *> &b) { return a.first < b.first; });
 
-  /* Visit the nodes nearest to farthest. #hit_fn narrows #tmin whenever it finds a closer hit, so
-   * once a node's bounds start further away than the closest hit so far, neither it nor any later
-   * node will contribute. */
-  float tmin = FLT_MAX;
-  for (const auto &[node_tmin, node] : hits) {
-    if (node_tmin >= tmin) {
+  /* Visit the nodes nearest to farthest. #hit_fn narrows #distance whenever it finds a closer hit,
+   * so once a node's bounds start further away than the closest hit so far, neither it nor any
+   * later node will contribute. */
+  float distance = FLT_MAX;
+  for (const auto &[node_distance, node] : hits) {
+    if (node_distance >= distance) {
       break;
     }
-    hit_fn(*node, &tmin);
+    hit_fn(*node, &distance);
   }
 }
 
@@ -1674,12 +1674,14 @@ struct RaycastData {
   bool original;
 };
 
-static bool ray_aabb_intersect(const Node &node, const RaycastData &rcd, float &r_tmin)
+static std::optional<float> ray_aabb_intersect(const Node &node, const RaycastData &rcd)
 {
-  if (rcd.original) {
-    return isect_ray_aabb_v3(&rcd.ray, node.bounds_orig_.min, node.bounds_orig_.max, &r_tmin);
+  const Bounds<float3> &bounds = rcd.original ? node.bounds_orig_ : node.bounds_;
+  float distance;
+  if (!isect_ray_aabb_v3(&rcd.ray, bounds.min, bounds.max, &distance)) {
+    return std::nullopt;
   }
-  return isect_ray_aabb_v3(&rcd.ray, node.bounds_.min, node.bounds_.max, &r_tmin);
+  return distance;
 }
 
 void raycast(Tree &pbvh,
@@ -1695,9 +1697,7 @@ void raycast(Tree &pbvh,
   rcd.original = original;
 
   search_callback_occluded(
-      pbvh,
-      [&](const Node &node, float &r_tmin) { return ray_aabb_intersect(node, rcd, r_tmin); },
-      hit_fn);
+      pbvh, [&](const Node &node) { return ray_aabb_intersect(node, rcd); }, hit_fn);
 }
 
 bool ray_face_intersection_quad(const float3 &ray_start,
@@ -2145,28 +2145,19 @@ void clip_ray_ortho(
 
 /* -------------------------------------------------------------------- */
 
-static bool nearest_to_ray_aabb_dist_sq(const Node &node,
-                                        const DistRayAABB_Precalc &dist_ray_to_aabb_precalc,
-                                        const bool original,
-                                        float &r_dist_sq)
+static std::optional<float> nearest_to_ray_aabb_dist_sq(
+    const Node &node, const DistRayAABB_Precalc &dist_ray_to_aabb_precalc, const bool original)
 {
-  const float *bb_min, *bb_max;
-
-  if (original) {
-    /* BKE_pbvh_node_get_original_BB */
-    bb_min = node.bounds_orig_.min;
-    bb_max = node.bounds_orig_.max;
-  }
-  else {
-    bb_min = node.bounds_.min;
-    bb_max = node.bounds_.max;
-  }
+  const Bounds<float3> &bounds = original ? node.bounds_orig_ : node.bounds_;
 
   float co_dummy[3], depth;
-  r_dist_sq = dist_squared_ray_to_aabb_v3(
-      &dist_ray_to_aabb_precalc, bb_min, bb_max, co_dummy, &depth);
+  const float distance = dist_squared_ray_to_aabb_v3(
+      &dist_ray_to_aabb_precalc, bounds.min, bounds.max, co_dummy, &depth);
   /* Ideally we would skip distances outside the range. */
-  return depth > 0.0f;
+  if (depth <= 0.0f) {
+    return std::nullopt;
+  }
+  return distance;
 }
 
 void find_nearest_to_ray(Tree &pbvh,
@@ -2180,8 +2171,8 @@ void find_nearest_to_ray(Tree &pbvh,
 
   search_callback_occluded(
       pbvh,
-      [&](const Node &node, float &r_tmin) {
-        return nearest_to_ray_aabb_dist_sq(node, ray_dist_precalc, original, r_tmin);
+      [&](const Node &node) {
+        return nearest_to_ray_aabb_dist_sq(node, ray_dist_precalc, original);
       },
       fn);
 }
