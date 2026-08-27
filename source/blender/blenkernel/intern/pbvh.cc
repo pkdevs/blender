@@ -736,7 +736,7 @@ static Node *pbvh_iter_next(PBVHIter *iter, Node::Flags leaf_flag)
 
 static void search_callback_occluded(Tree &pbvh,
                                      const FunctionRef<std::optional<float>(const Node &)> scb,
-                                     const FunctionRef<void(Node &node, float *tmin)> hit_fn)
+                                     const FunctionRef<void(Node &node, float *distance)> hit_fn)
 {
   if (tree_is_empty(pbvh)) {
     return;
@@ -1685,7 +1685,7 @@ static std::optional<float> ray_aabb_intersect(const Node &node, const RaycastDa
 }
 
 void raycast(Tree &pbvh,
-             const FunctionRef<void(Node &node, float *tmin)> hit_fn,
+             const FunctionRef<void(Node &node, float *distance)> hit_fn,
              const float3 &ray_start,
              const float3 &ray_normal,
              bool original)
@@ -2161,7 +2161,7 @@ static std::optional<float> nearest_to_ray_aabb_dist_sq(
 }
 
 void find_nearest_to_ray(Tree &pbvh,
-                         const FunctionRef<void(Node &node, float *tmin)> fn,
+                         const FunctionRef<void(Node &node, float *distance)> fn,
                          const float3 &ray_start,
                          const float3 &ray_normal,
                          const bool original)
