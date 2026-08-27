@@ -1942,6 +1942,117 @@ class USDImportTest(AbstractUSDTest):
                         f"Texture should be non-color, got '{tex_image.colorspace_settings.name}'")
 
 
+class USDImportWidthTests(AbstractUSDTest):
+    def test_point_with_width(self):
+        # Default radius is not important here
+        self.get_cache_file('usd_point_with_width.usda', 1.23)
+
+        # Compare Blender data against the expected value for every frame
+        for frame in range(1, 101):
+            bpy.context.scene.frame_set(frame)
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            point_object = bpy.data.objects["PointCloudPoints"].evaluated_get(depsgraph)
+
+            width = (50 - abs(frame - 50)) * 0.01
+            expected_radius = width * 0.5
+            self.verify_pointcloud_data(point_object, expected_radius, frame)
+
+    def test_curve_with_width(self):
+        # Default radius is not important here
+        self.get_cache_file('usd_curve_with_width.usda', 1.23)
+
+        # Compare Blender data against the expected value for every frame
+        for frame in range(1, 101):
+            bpy.context.scene.frame_set(frame)
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            curves_object = bpy.data.objects["CurvesGeom"].evaluated_get(depsgraph)
+
+            width = (50 - abs(frame - 50)) * 0.01
+            expected_radius = width * 0.5
+            self.verify_curves_data(curves_object, expected_radius, frame)
+
+    def test_point_without_width(self):
+        default_radius = 1.23
+
+        cache_file = self.get_cache_file('usd_point_without_width.usda', default_radius)
+
+        # Verify that the original data has the default radius set above
+        point_object = bpy.data.objects["PointCloudPoints"]
+        self.verify_pointcloud_data(point_object, default_radius, None)
+
+        # Modify the CacheFile's default radius every frame and verify it matches the evaluated output
+        for frame in range(1, 101):
+            cache_file.default_radius = frame
+
+            bpy.context.scene.frame_set(frame)
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            point_object = bpy.data.objects["PointCloudPoints"].evaluated_get(depsgraph)
+            self.verify_pointcloud_data(point_object, frame, frame)
+
+    def test_curve_without_width(self):
+        default_radius = 1.23
+
+        cache_file = self.get_cache_file('usd_curve_without_width.usda', default_radius)
+
+        # Verify that the original data has the default radius set above
+        curves_object = bpy.data.objects["CurvesGeom"]
+        self.verify_curves_data(curves_object, default_radius, None)
+
+        # Modify the CacheFile's default radius every frame and verify it matches the evaluated output
+        for frame in range(1, 101):
+            cache_file.default_radius = frame
+
+            bpy.context.scene.frame_set(frame)
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            curves_object = bpy.data.objects["CurvesGeom"].evaluated_get(depsgraph)
+            self.verify_curves_data(curves_object, frame, frame)
+
+    def get_cache_file(self, cache_file_name: str, default_radius: float) -> bpy.types.CacheFile:
+        res = bpy.ops.wm.usd_import(
+            filepath=str(self.testdir / cache_file_name),
+            default_radius=default_radius)
+        self.assertEqual({'FINISHED'}, res)
+
+        return bpy.data.cache_files[cache_file_name]
+
+    def verify_pointcloud_data(self, object: bpy.types.Object, expected_radius: float, frame: float | None):
+        pointcloud = object.data
+        self.assertEqual(len(pointcloud.points), 1)
+
+        radius_attribute = pointcloud.attributes['radius'].data[0]
+
+        if frame is not None:
+            message = f"Frame {frame}: radius values do not match"
+        else:
+            message = "Radius values do not match"
+
+        self.assertAlmostEqual(radius_attribute.value, expected_radius, places=6, msg=message)
+
+    def verify_curves_data(self, object: bpy.types.Object, expected_radius: float, frame: float | None):
+        curves = object.data
+        self.assertEqual(len(curves.points), 2)
+
+        radius_attribute_data = curves.attributes['radius'].data
+
+        if frame is not None:
+            message = f"Frame {frame}: radius values do not match"
+        else:
+            message = "Radius values do not match"
+
+        self.assertAlmostEqual(
+            radius_attribute_data[0].value,
+            expected_radius,
+            places=6,
+            msg=message +
+            " for the first point")
+        self.assertAlmostEqual(
+            radius_attribute_data[1].value,
+            expected_radius,
+            places=6,
+            msg=message +
+            " for the second point")
+
+
 class USDImportComparisonTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

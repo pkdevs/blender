@@ -162,8 +162,8 @@ void USDPointInstancerReader::read_object_data(Main *bmain, const pxr::UsdTimeCo
   bke::GeometrySet geometry_set = bke::GeometrySet::from_pointcloud(
       pointcloud, bke::GeometryOwnershipType::Editable);
 
-  const USDMeshReadParams params = create_mesh_read_params(time.GetValue(),
-                                                           import_params_.mesh_read_flag);
+  const USDMeshReadParams params = create_mesh_read_params(
+      time.GetValue(), import_params_.mesh_read_flag, import_params_.default_radius);
 
   read_geometry(geometry_set, params, nullptr);
 

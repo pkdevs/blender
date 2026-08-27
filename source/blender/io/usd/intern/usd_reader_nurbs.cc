@@ -271,8 +271,9 @@ bool USDNurbsReader::is_animated() const
   return false;
 }
 
-void USDNurbsReader::read_curve_sample(Curves *curves_id, const pxr::UsdTimeCode time)
+void USDNurbsReader::read_curve_sample(Curves *curves_id, const USDMeshReadParams params)
 {
+  const pxr::UsdTimeCode time = params.motion_sample_time;
   USDCurveData usd_data;
   if (!usd_data.load(curve_prim_, time)) {
     return;

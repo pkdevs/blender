@@ -63,6 +63,8 @@ struct ImportSettings {
   bool validate_meshes = false;
   bool always_add_cache_reader = false;
 
+  float default_radius = 0.01f;
+
   CacheFile *cache_file = nullptr;
 
   ImportSettings() = default;
@@ -77,6 +79,7 @@ struct AbcReadGeometryParams {
   std::string velocity_name;
   int read_flag = 0;
   float velocity_scale = 1.0f;
+  float default_radius = 0.01f;
 };
 
 struct AbcReaderConstructorArgs {

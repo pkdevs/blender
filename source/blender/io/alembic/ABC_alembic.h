@@ -87,6 +87,9 @@ struct AlembicImportParams {
   /* True if a cache reader should be added regardless of whether there is animated data in the
    * cached file. */
   bool always_add_cache_reader;
+
+  /* Default radius for curves and points if no such properties are present in the archive. */
+  float default_radius;
 };
 
 /* The ABC_export and ABC_import functions both take a as_background_job
@@ -126,6 +129,7 @@ struct ABCReadParams {
   int read_flags;
   const char *velocity_name;
   float velocity_scale;
+  float default_radius;
 };
 
 namespace bke {

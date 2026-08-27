@@ -189,6 +189,7 @@ static void modify_geometry_set(ModifierData *md,
 #  ifdef WITH_ALEMBIC
       ABCReadParams params;
       params.time = time_offset;
+      params.default_radius = cache_file->default_radius;
       params.read_flags = mcmd->read_flag;
       params.velocity_name = mcmd->cache_file->velocity_name;
       params.velocity_scale = velocity_scale;
@@ -198,8 +199,8 @@ static void modify_geometry_set(ModifierData *md,
     }
     case CACHEFILE_TYPE_USD: {
 #  ifdef WITH_USD
-      const io::usd::USDMeshReadParams params = io::usd::create_mesh_read_params(frame_offset,
-                                                                                 mcmd->read_flag);
+      const io::usd::USDMeshReadParams params = io::usd::create_mesh_read_params(
+          frame_offset, mcmd->read_flag, cache_file->default_radius);
       io::usd::USD_read_geometry(mcmd->reader, ctx->object, *geometry_set, params, &err_str);
 #  endif
       break;
@@ -346,6 +347,10 @@ static void panel_draw(const bContext *C, Panel *panel)
   }
   else if (RNA_enum_get(&ob_ptr, "type") == OB_CURVES) {
     layout.prop(ptr, "use_vertex_interpolation", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.prop(&cache_file_ptr, "default_radius", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+  else if (RNA_enum_get(&ob_ptr, "type") == OB_POINTCLOUD) {
+    layout.prop(&cache_file_ptr, "default_radius", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
   modifier_error_message_draw(layout, ptr);

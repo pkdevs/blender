@@ -111,7 +111,8 @@ struct CacheFile {
   /* Name of the velocity property in the archive. */
   char velocity_name[64] = "";
 
-  char _pad3[4] = {};
+  /** Default radius assigned to curves or points if no such property exists for them. */
+  float default_radius = 0.01f;
 
   /* Runtime */
   struct CacheArchiveHandle *handle = nullptr;

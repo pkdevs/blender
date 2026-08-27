@@ -41,7 +41,7 @@ class USDNurbsReader : public USDCurvesReader {
     return bool(curve_prim_);
   }
 
-  void read_curve_sample(Curves *curves_id, pxr::UsdTimeCode time) override;
+  void read_curve_sample(Curves *curves_id, const USDMeshReadParams params) override;
   bool is_animated() const override;
 };
 

@@ -30,9 +30,12 @@ namespace io::usd {
 struct USDMeshReadParams {
   double motion_sample_time; /* USD TimeCode in frames. */
   int read_flags; /* MOD_MESHSEQ_xxx value that is set from MeshSeqCacheModifierData.read_flag. */
+  float default_radius;
 };
 
-USDMeshReadParams create_mesh_read_params(double motion_sample_time, int read_flags);
+USDMeshReadParams create_mesh_read_params(double motion_sample_time,
+                                          int read_flags,
+                                          float default_radius);
 
 CacheArchiveHandle *USD_create_handle(Main *bmain,
                                       const char *filepath,

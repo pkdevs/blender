@@ -517,6 +517,7 @@ static void import_file(ImportJobData *data, const char *filepath, float progres
    * it is not used by anyone, its use count will be off by one. */
   id_us_min(&cache_file->id);
 
+  cache_file->default_radius = data->settings.default_radius;
   cache_file->is_sequence = data->settings.is_sequence;
   cache_file->scale = data->settings.scale;
   STRNCPY(cache_file->filepath, filepath);
@@ -809,6 +810,7 @@ bool ABC_import(bContext *C, const AlembicImportParams *params, bool as_backgrou
   job->settings.sequence_max_frame = params->sequence_max_frame;
   job->settings.validate_meshes = params->validate_meshes;
   job->settings.always_add_cache_reader = params->always_add_cache_reader;
+  job->settings.default_radius = params->default_radius;
   job->error_code = ABC_NO_ERROR;
   job->was_cancelled = false;
   job->is_background_job = as_background_job;
@@ -919,6 +921,7 @@ void ABC_read_geometry(CacheReader *reader,
   read_params.read_flag = params->read_flags;
   read_params.velocity_name = params->velocity_name ? params->velocity_name : "";
   read_params.velocity_scale = params->velocity_scale;
+  read_params.default_radius = params->default_radius;
   abc_reader->read_geometry(geometry_set, sample_sel, read_params, r_err_str);
 }
 

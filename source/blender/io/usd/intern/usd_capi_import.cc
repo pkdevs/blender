@@ -186,6 +186,7 @@ static void import_startjob(void *customdata, wmJobWorkerStatus *worker_status)
 
       data->cache_file->is_sequence = data->params.is_sequence;
       data->cache_file->scale = scene_scale;
+      data->cache_file->default_radius = data->params.default_radius;
       STRNCPY(data->cache_file->filepath, data->filepath);
       if (data->params.relative_path && !BLI_path_is_rel(data->cache_file->filepath)) {
         BLI_path_rel(data->cache_file->filepath, BKE_main_blendfile_path_from_global());
@@ -519,11 +520,14 @@ static USDPrimReader *get_usd_reader(CacheReader *reader,
   return usd_reader;
 }
 
-USDMeshReadParams create_mesh_read_params(const double motion_sample_time, const int read_flags)
+USDMeshReadParams create_mesh_read_params(const double motion_sample_time,
+                                          const int read_flags,
+                                          const float default_radius)
 {
   USDMeshReadParams params = {};
   params.motion_sample_time = motion_sample_time;
   params.read_flags = read_flags;
+  params.default_radius = default_radius;
   return params;
 }
 

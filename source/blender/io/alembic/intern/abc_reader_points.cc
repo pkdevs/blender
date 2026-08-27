@@ -93,6 +93,7 @@ void AbcPointsReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSel
   bke::GeometrySet geometry_set = bke::GeometrySet::from_pointcloud(
       pointcloud, bke::GeometryOwnershipType::Editable);
   AbcReadGeometryParams read_params{};
+  read_params.default_radius = m_settings->default_radius;
   read_geometry(geometry_set, sample_sel, read_params, nullptr);
 
   PointCloud *read_pointcloud =
@@ -283,7 +284,7 @@ void AbcPointsReader::read_geometry(bke::GeometrySet &geometry_set,
   else {
     attribute_accessor.remove("radius");
     attribute_accessor.add<float>(
-        "radius", bke::AttrDomain::Point, bke::AttributeInitValue(0.01f));
+        "radius", bke::AttrDomain::Point, bke::AttributeInitValue(read_params.default_radius));
   }
 
   read_point_arb_geom_params(m_schema, sample_sel, attribute_accessor);

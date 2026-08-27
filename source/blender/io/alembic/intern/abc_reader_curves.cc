@@ -447,6 +447,7 @@ void AbcCurveReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSele
   m_object->data = id_cast<ID *>(curves);
 
   AbcReadGeometryParams read_params{};
+  read_params.default_radius = m_settings->default_radius;
   read_curves_sample(curves, read_params, m_curves_schema, sample_sel);
 
   if (m_settings->always_add_cache_reader || has_animations(m_curves_schema, m_settings)) {
@@ -594,6 +595,12 @@ void AbcCurveReader::read_curves_sample(Curves *curves_id,
       radii[i_point] = alembic_widths[i_point] / 2.0f;
     }
   }
+  else {
+    bke::MutableAttributeAccessor attribute_accessor = curves.attributes_for_write();
+    attribute_accessor.remove("radius");
+    attribute_accessor.add<float>(
+        "radius", bke::AttrDomain::Point, bke::AttributeInitValue(read_params.default_radius));
+  }
 
   if (data.curve_type == CURVE_TYPE_NURBS) {
     curves.nurbs_orders_for_write().copy_from(data.curves_orders);
@@ -631,7 +638,6 @@ void AbcCurveReader::read_geometry(bke::GeometrySet &geometry_set,
                                    const char ** /*r_err_str*/)
 {
   Curves *curves = geometry_set.get_curves_for_write();
-
   read_curves_sample(curves, read_params, m_curves_schema, sample_sel);
 }
 

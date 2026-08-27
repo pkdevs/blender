@@ -49,8 +49,8 @@ void USDShapeReader::create_object(Main *bmain)
 
 void USDShapeReader::read_object_data(Main *bmain, pxr::UsdTimeCode time)
 {
-  const USDMeshReadParams params = create_mesh_read_params(time.GetValue(),
-                                                           import_params_.mesh_read_flag);
+  const USDMeshReadParams params = create_mesh_read_params(
+      time.GetValue(), import_params_.mesh_read_flag, import_params_.default_radius);
   Mesh *mesh = id_cast<Mesh *>(object_->data);
   Mesh *read_mesh = this->read_mesh(mesh, params, nullptr);
 

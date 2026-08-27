@@ -209,8 +209,8 @@ void USDMeshReader::read_object_data(Main *bmain, const pxr::UsdTimeCode time)
   Mesh *mesh = id_cast<Mesh *>(object_->data);
 
   is_initial_load_ = true;
-  const USDMeshReadParams params = create_mesh_read_params(time.GetValue(),
-                                                           import_params_.mesh_read_flag);
+  const USDMeshReadParams params = create_mesh_read_params(
+      time.GetValue(), import_params_.mesh_read_flag, import_params_.default_radius);
 
   Mesh *read_mesh = this->read_mesh(mesh, params, nullptr);
 

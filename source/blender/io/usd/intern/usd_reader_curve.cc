@@ -140,7 +140,10 @@ void USDCurvesReader::create_object(Main *bmain)
 void USDCurvesReader::read_object_data(Main *bmain, pxr::UsdTimeCode time)
 {
   Curves *cu = id_cast<Curves *>(object_->data);
-  this->read_curve_sample(cu, time);
+
+  const USDMeshReadParams params = create_mesh_read_params(
+      time.GetValue(), import_params_.mesh_read_flag, import_params_.default_radius);
+  this->read_curve_sample(cu, params);
 
   if (this->is_animated()) {
     this->add_cache_modifier();
@@ -208,7 +211,7 @@ void USDCurvesReader::read_geometry(bke::GeometrySet &geometry_set,
   }
 
   Curves *curves = geometry_set.get_curves_for_write();
-  read_curve_sample(curves, params.motion_sample_time);
+  read_curve_sample(curves, params);
 }
 
 bool USDBasisCurvesReader::is_animated() const
@@ -230,7 +233,7 @@ bool USDBasisCurvesReader::is_animated() const
   return false;
 }
 
-void USDBasisCurvesReader::read_curve_sample(Curves *curves_id, const pxr::UsdTimeCode time)
+void USDBasisCurvesReader::read_curve_sample(Curves *curves_id, const USDMeshReadParams params)
 {
   pxr::VtIntArray usd_counts;
   pxr::VtVec3fArray usd_points;
@@ -239,6 +242,7 @@ void USDBasisCurvesReader::read_curve_sample(Curves *curves_id, const pxr::UsdTi
   pxr::TfToken type;
   pxr::TfToken wrap;
 
+  const pxr::UsdTimeCode time = params.motion_sample_time;
   curve_prim_.GetCurveVertexCountsAttr().Get(&usd_counts, time);
   curve_prim_.GetPointsAttr().Get(&usd_points, time);
   curve_prim_.GetWidthsAttr().Get(&usd_widths, time);
@@ -404,6 +408,12 @@ void USDBasisCurvesReader::read_curve_sample(Curves *curves_id, const pxr::UsdTi
         }
       }
     }
+  }
+  else {
+    bke::MutableAttributeAccessor attribute_accessor = curves.attributes_for_write();
+    attribute_accessor.remove("radius");
+    attribute_accessor.add<float>(
+        "radius", bke::AttrDomain::Point, bke::AttributeInitValue(params.default_radius));
   }
 
   this->read_velocities(curves, curve_prim_, time);

@@ -28,8 +28,8 @@ void USDPointsReader::create_object(Main *bmain)
 
 void USDPointsReader::read_object_data(Main *bmain, pxr::UsdTimeCode time)
 {
-  const USDMeshReadParams params = create_mesh_read_params(time.GetValue(),
-                                                           import_params_.mesh_read_flag);
+  const USDMeshReadParams params = create_mesh_read_params(
+      time.GetValue(), import_params_.mesh_read_flag, import_params_.default_radius);
 
   PointCloud *pointcloud = id_cast<PointCloud *>(object_->data);
 
@@ -95,6 +95,12 @@ void USDPointsReader::read_geometry(bke::GeometrySet &geometry_set,
         radii[i_point] = widths[i_point] / 2.0f;
       }
     }
+  }
+  else {
+    bke::MutableAttributeAccessor attribute_accessor = pointcloud->attributes_for_write();
+    attribute_accessor.remove("radius");
+    attribute_accessor.add<float>(
+        "radius", bke::AttrDomain::Point, bke::AttributeInitValue(params.default_radius));
   }
 
   /* TODO: Once Blender supports custom normals for points, we can consider reading in normals.

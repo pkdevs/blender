@@ -972,6 +972,8 @@ static wmOperatorStatus wm_usd_import_exec(bContext *C, wmOperator *op)
 
   params.prim_path_mask = RNA_string_get(op->ptr, "prim_path_mask");
 
+  params.default_radius = RNA_float_get(op->ptr, "default_radius");
+
   RNA_string_get(op->ptr, "import_textures_dir", params.import_textures_dir);
 
   /* Switch out of edit mode to avoid being stuck in it (#54326). */
@@ -1014,6 +1016,7 @@ static void wm_usd_import_draw(bContext *C, wmOperator *op)
 
     col->prop(ptr, "apply_unit_conversion_scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     col->prop(ptr, "scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col->prop(ptr, "default_radius", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     col->prop(ptr, "light_intensity_scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     col->prop(ptr, "property_import_mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
@@ -1317,6 +1320,17 @@ void WM_OT_usd_import(wmOperatorType *ot)
       "Apply Unit Conversion Scale",
       "Scale the scene objects by the USD stage's meters per unit value. "
       "This scaling is applied in addition to the value specified in the Scale option");
+
+  RNA_def_float(ot->srna,
+                "default_radius",
+                0.01f,
+                0.0001f,
+                1000.0f,
+                "Default Radius",
+                "Value to use for defining the radius of curves or points when they do not have a "
+                "property for it",
+                0.0001f,
+                1000.0f);
 }
 
 namespace ed::io {

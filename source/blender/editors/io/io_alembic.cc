@@ -578,6 +578,7 @@ static void ui_alembic_import_settings(const bContext *C, ui::Layout *layout, Po
     col.prop(ptr, "is_sequence", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     col.prop(ptr, "validate_meshes", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     col.prop(ptr, "always_add_cache_reader", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    col.prop(ptr, "default_radius", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 }
 
@@ -609,6 +610,7 @@ static wmOperatorStatus wm_alembic_import_exec(bContext *C, wmOperator *op)
   const bool validate_meshes = RNA_boolean_get(op->ptr, "validate_meshes");
   const bool always_add_cache_reader = RNA_boolean_get(op->ptr, "always_add_cache_reader");
   const bool as_background_job = RNA_boolean_get(op->ptr, "as_background_job");
+  const float default_radius = RNA_float_get(op->ptr, "default_radius");
 
   int sequence_min_frame = std::numeric_limits<int>::max();
   int sequence_max_frame = std::numeric_limits<int>::min();
@@ -641,6 +643,7 @@ static wmOperatorStatus wm_alembic_import_exec(bContext *C, wmOperator *op)
   params.set_frame_range = set_frame_range;
   params.validate_meshes = validate_meshes;
   params.always_add_cache_reader = always_add_cache_reader;
+  params.default_radius = default_radius;
 
   bool ok = ABC_import(C, &params, as_background_job);
 
@@ -709,6 +712,17 @@ void WM_OT_alembic_import(wmOperatorType *ot)
                   false,
                   "Is Sequence",
                   "Set to true if the cache is split into separate files");
+
+  RNA_def_float(ot->srna,
+                "default_radius",
+                0.01f,
+                0.0001f,
+                1000.0f,
+                "Default Radius",
+                "Value to use for defining the radius of curves or points when they do not have a "
+                "property for it",
+                0.0001f,
+                1000.0f);
 
   RNA_def_boolean(
       ot->srna,

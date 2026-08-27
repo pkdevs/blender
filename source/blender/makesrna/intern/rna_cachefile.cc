@@ -351,6 +351,14 @@ static void rna_def_cachefile(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_CacheFile_update");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 
+  prop = RNA_def_property(srna, "default_radius", PROP_FLOAT, PROP_UNIT_LENGTH);
+  RNA_def_property_float_sdna(prop, nullptr, "default_radius");
+  RNA_def_property_ui_text(prop,
+                           "Default Radius",
+                           "Value to use for the radius of curves and points when none is "
+                           "specified in the file");
+  RNA_def_property_update(prop, 0, "rna_CacheFile_update");
+
   /* ----------------- Alembic Layers ----------------- */
 
   prop = RNA_def_property(srna, "layers", PROP_COLLECTION, PROP_NONE);

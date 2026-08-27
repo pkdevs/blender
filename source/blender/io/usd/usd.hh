@@ -231,6 +231,8 @@ struct USDImportParams {
   TexNameCollisionMode tex_name_collision_mode;
   PropertyImportMode property_import_mode;
 
+  float default_radius;
+
   /**
    * Communication structure between the wmJob management code and the worker code. Currently used
    * to generate safely reports from the worker thread.

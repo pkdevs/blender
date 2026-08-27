@@ -47,7 +47,7 @@ class USDCurvesReader : public USDGeomReader {
   void read_custom_data(bke::CurvesGeometry &curves, const pxr::UsdTimeCode time) const;
 
   virtual bool is_animated() const = 0;
-  virtual void read_curve_sample(Curves *curves_id, pxr::UsdTimeCode time) = 0;
+  virtual void read_curve_sample(Curves *curves_id, const USDMeshReadParams params) = 0;
 };
 
 class USDBasisCurvesReader : public USDCurvesReader {
@@ -68,7 +68,7 @@ class USDBasisCurvesReader : public USDCurvesReader {
   }
 
   bool is_animated() const override;
-  void read_curve_sample(Curves *curves_id, pxr::UsdTimeCode time) override;
+  void read_curve_sample(Curves *curves_id, const USDMeshReadParams params) override;
 };
 
 }  // namespace io::usd
