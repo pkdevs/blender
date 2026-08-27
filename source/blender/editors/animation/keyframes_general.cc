@@ -2192,8 +2192,10 @@ eKeyPasteError paste_animedit_keys(bAnimContext *ac,
   /* Try to find "matching" channels to paste keyframes into with increasingly
    * loose matching heuristics. The process finishes when at least one F-Curve
    * has been pasted into. */
-  Vector<pastebuf_match_func> matchers = {
-      pastebuf_match_path_full, pastebuf_match_path_property, pastebuf_match_index_only};
+  Vector<pastebuf_match_func> matchers = {pastebuf_match_path_full,
+                                          pastebuf_match_path_property_and_component_length,
+                                          pastebuf_match_path_property,
+                                          pastebuf_match_index_only};
 
   for (const pastebuf_match_func matcher : matchers) {
     bool found_match = false;
