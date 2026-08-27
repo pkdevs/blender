@@ -1,1 +1,2 @@
 Referenced by issue #125335, object loses initial transform on redo, when operator manipulates world matrix
+Referenced by pull request #163200, Fix #158954: Knife breaks under certain conditions
