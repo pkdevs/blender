@@ -61,13 +61,9 @@ class FlushDenormalsObserver : public tbb::task_scheduler_observer {
   }
 };
 
-static FlushDenormalsObserver *flush_denormals_observer = nullptr;
-
 static void ensure_flush_denormals_observer()
 {
-  if (flush_denormals_observer == nullptr) {
-    flush_denormals_observer = MEM_new<FlushDenormalsObserver>(__func__);
-  }
+  static FlushDenormalsObserver observer;
 }
 #endif
 
@@ -106,10 +102,6 @@ void BLI_task_scheduler_init(const bool use_flush_denormals_to_zero)
 
 void BLI_task_scheduler_exit()
 {
-#ifdef WITH_TBB
-  MEM_SAFE_DELETE(flush_denormals_observer);
-#endif
-
 #ifdef WITH_TBB_GLOBAL_CONTROL
   MEM_delete(task_scheduler_global_control);
 #endif
