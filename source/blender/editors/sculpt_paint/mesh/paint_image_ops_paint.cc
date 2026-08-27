@@ -10,7 +10,9 @@
 #include "DNA_brush_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_space_types.h"
+#include "DNA_windowmanager_types.h"
 
+#include "BLI_listbase_iterator.hh"
 #include "BLI_math_color_c.hh"
 #include "BLI_math_vector_c.hh"
 
@@ -24,7 +26,9 @@
 #include "BKE_paint_types.hh"
 #include "BKE_undo_system.hh"
 
+#include "ED_image.hh"
 #include "ED_paint.hh"
+#include "ED_screen.hh"
 #include "ED_view3d.hh"
 
 #include "GPU_immediate.hh"
@@ -37,7 +41,6 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "ED_image.hh"
 #include "mesh_paint.hh"
 #include "sculpt_intern.hh"
 
@@ -459,10 +462,13 @@ bool TexturePaintStroke::test_start(wmOperator *op, const float2 mouse)
 }
 
 struct ExperimentalTexturePaintStroke final : public PaintStroke {
- public:
+  Base *base_;
+
   ExperimentalTexturePaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
       : PaintStroke(C, op, event)
   {
+    base_ = CTX_data_active_base(C);
+
     if (!G.background) {
       view3d_operator_needs_gpu(C);
     }
@@ -474,6 +480,7 @@ struct ExperimentalTexturePaintStroke final : public PaintStroke {
 
     if (!ss.cache) {
       ss.cache = MEM_new<StrokeCache>(__func__);
+      /* Toggle support */
     }
 
     Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -498,14 +505,166 @@ std::optional<float3> ExperimentalTexturePaintStroke::get_location(float2 mouse,
 }
 bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
 {
-  if (stroke_get_location_bvh(*this->depsgraph, this->vc, *this->paint, this->brush, mouse, op)) {
-    stroke_cache_common_init(this->vc, *this->paint, *this->brush, *this->object, mouse);
+  if (!stroke_get_location_bvh(*this->depsgraph, this->vc, *this->paint, this->brush, mouse, op)) {
+    return false;
   }
+
+  stroke_cache_common_init(this->vc, *this->paint, *this->brush, *this->object, mouse);
+
+  if (brush_type_is_paint(this->brush->sculpt_brush_type)) {
+    BKE_curvemapping_init(this->brush->curve_rand_hue);
+    BKE_curvemapping_init(this->brush->curve_rand_saturation);
+    BKE_curvemapping_init(this->brush->curve_rand_value);
+  }
+
+  cursor_geometry_info_update(*this->depsgraph, *paint, nullptr, this->vc, base_, mouse, false);
+
+  ED_image_undo_push_begin(op->type->name, PaintMode::Texture3D);
+
+  return true;
 };
-void ExperimentalTexturePaintStroke::update_step(wmOperator *op, PointerRNA *itemptr) {}
-void ExperimentalTexturePaintStroke::redraw(bool final) {}
-bool ExperimentalTexturePaintStroke::test_cancel() {}
-void ExperimentalTexturePaintStroke::done(bool is_cancel, bool stroke_started) {}
+
+static void stroke_cache_update(ViewContext &vc, Paint &paint, Object &object, PointerRNA *ptr)
+{
+  SculptSession &ss = *object.runtime->sculpt_session;
+  StrokeCache &cache = *ss.cache;
+  Brush &brush = *BKE_paint_brush(&paint);
+
+  if (stroke_is_first_brush_step_of_symmetry_pass(cache)) {
+    RNA_float_get_array(ptr, "location", cache.location);
+  }
+
+  RNA_float_get_array(ptr, "mouse", cache.mouse);
+  RNA_float_get_array(ptr, "mouse_event", cache.mouse_event);
+
+  if (paint_supports_dynamic_size(brush, PaintMode::Texture3D) || cache.first_time) {
+    cache.pressure = RNA_float_get(ptr, "pressure");
+  }
+
+  cache.tilt = {RNA_float_get(ptr, "x_tilt"), RNA_float_get(ptr, "y_tilt")};
+
+  if (stroke_is_first_brush_step_of_symmetry_pass(*ss.cache)) {
+    cache.initial_radius = object_space_radius_get(*cache.vc, paint, brush, cache.location);
+
+    if (!BKE_brush_use_locked_size(&paint, &brush)) {
+      BKE_brush_unprojected_size_set(&paint, &brush, cache.initial_radius * 2.0f);
+    }
+  }
+
+  if (BKE_brush_use_size_pressure(&brush) && paint_supports_dynamic_size(brush, PaintMode::Sculpt))
+  {
+    const float pressure_eval = BKE_curvemapping_evaluateF(brush.curve_size, 0, cache.pressure);
+    cache.radius = cache.initial_radius + pressure_eval;
+  }
+  else {
+    cache.radius = cache.initial_radius;
+  }
+  cache.radius_squared = cache.radius * cache.radius;
+
+  /* TODO: Brush delta */
+
+  bke::PaintRuntime &paint_runtime = *paint.runtime;
+  cache.special_rotation = paint_runtime.brush_rotation;
+}
+
+static void do_brush_action(const Depsgraph &depsgraph,
+                            const Scene &scene,
+                            const Brush &brush,
+                            Object &ob,
+                            PaintModeData * /*paint_mode_data*/)
+{
+  PRF_scope(ProfileCategory::Editor);
+  PRF_scope_set_dynamic_name("%s", sculpt_brush_type_name(brush));
+  sculpt_pbvh_update_pixels(depsgraph, ob);
+
+  IndexMask texnode_mask = pbvh_gather_texpaint(ob, brush, use_original, 1.0f, memory);
+
+  if (texnode_mask.is_empty()) {
+    return;
+  }
+
+  const brushes::CursorSampleResult cursor_sample_result = calc_brush_node_mask(
+      depsgraph, sd, ob, brush, memory);
+  const IndexMask node_mask = cursor_sample_result.node_mask;
+
+  /* Only act if some verts are inside the brush area. */
+  if (node_mask.is_empty()) {
+    return;
+  }
+
+  if (auto_mask::is_enabled(sd.paint, ob, &brush)) {
+    auto_mask::Cache &cache = auto_mask::stroke_cache_ensure(depsgraph, sd.paint, &brush, ob);
+    if (cache.settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
+      cache.calc_cavity_factor(depsgraph, ob, node_mask);
+    }
+  }
+
+  /* TODO: Sculpt normal */
+  /* TODO: Brush local mat */
+  /* TODO: Cube tip */
+
+  /* Main brush action */
+
+  /* Update average stroke position. */
+  const float3 world_location = math::project_point(ob.object_to_world(), ss.cache->location);
+
+  bke::paint::stroke_track_location(sd.paint, world_location);
+}
+
+void ExperimentalTexturePaintStroke::update_step(wmOperator *op, PointerRNA *itemptr)
+{
+  Object &object = *this->object;
+  SculptSession &ss = *object.runtime->sculpt_session;
+  StrokeCache &cache = *ss.cache;
+
+  cache.stroke_distance = this->stroke_distance();
+  stroke_cache_update(this->vc, *this->paint, object, itemptr);
+
+  /* TODO: 'restore' support */
+
+  const bke::PaintRuntime &paint_runtime = *this->paint->runtime;
+  const float overlap = paint_runtime.overlap_factor;
+  cache.base_brush_strength = cache.pressure * cache.pressure * overlap;
+
+  do_symmetrical_brush_actions_with_tiling_and_feathering(
+      depsgraph, scene, paint, object, do_brush_action, nullptr);
+}
+void ExperimentalTexturePaintStroke::redraw(bool /*final*/) {}
+bool ExperimentalTexturePaintStroke::test_cancel()
+{
+  return true;
+}
+void ExperimentalTexturePaintStroke::done(bool is_cancel, bool stroke_started)
+{
+  Object &ob = *this->object;
+  SculptSession &ss = *ob.runtime->sculpt_session;
+
+  if (!ss.cache) {
+    /* exit tex */
+    return;
+  }
+
+  MEM_delete(ss.cache);
+  ss.cache = nullptr;
+
+  if (!is_cancel && stroke_started) {
+    ED_image_undo_push_end();
+  }
+
+  const wmWindowManager &wm = *CTX_wm_manager(this->evil_C);
+  for (wmWindow &win : wm.windows) {
+    const bScreen &screen = *WM_window_get_active_screen(&win);
+    for (ScrArea &area : screen.areabase) {
+      const SpaceLink &sl = *static_cast<SpaceLink *>(area.spacedata.first);
+      if (sl.spacetype != SPACE_IMAGE) {
+        continue;
+      }
+      ED_area_tag_redraw_regiontype(&area, RGN_TYPE_WINDOW);
+    }
+  }
+
+  /* DEG_id_tag_update(&ob.id, ID); */
+}
 
 static PaintStroke *create_paint_stroke(bContext *C, wmOperator *op, const wmEvent *event)
 {
