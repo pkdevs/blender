@@ -366,7 +366,7 @@ static bool parent_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
   }
 
   if (!allow_parenting_without_modifier_key(space_outliner)) {
-    if ((event->modifier & KM_SHIFT) == 0) {
+    if (event->modifier != KM_SHIFT) {
       return false;
     }
   }
@@ -1285,8 +1285,8 @@ static std::string collection_drop_tooltip(bContext *C,
   const wmEvent *event = win ? win->runtime->eventstate : nullptr;
 
   CollectionDrop data;
-  if (event && ((event->modifier & KM_SHIFT) == 0) && collection_drop_init(C, drag, xy, &data)) {
-    const bool is_link = !data.from || (event->modifier & KM_CTRL);
+  if (event && collection_drop_init(C, drag, xy, &data)) {
+    const bool is_link = !data.from || (event->modifier == KM_CTRL);
 
     /* Test if we are moving within same parent collection. */
     bool same_level = false;
@@ -1329,6 +1329,9 @@ static std::string collection_drop_tooltip(bContext *C,
         wmDragID *drag_id = static_cast<wmDragID *>(drag->ids.first);
         const bool is_object = (GS(drag_id->id->name) == ID_OB);
         if (is_object) {
+          if (event->modifier & (KM_SHIFT | KM_CTRL)) {
+            return TIP_("Move parent object inside collection");
+          }
           return TIP_(
               "Move inside collection (Ctrl to link, Shift to parent,\n Ctrl + Shift to move "
               "only parent)");
