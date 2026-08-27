@@ -1980,6 +1980,10 @@ void BKE_keyblock_rename(Main &bmain, Key *key, KeyBlock *kb, const char *newnam
                         bke::greasepencil::shapekey_attribute_name_radius(newname));
       attributes.rename(bke::greasepencil::shapekey_attribute_name_opacity(oldname),
                         bke::greasepencil::shapekey_attribute_name_opacity(newname));
+      attributes.rename(bke::greasepencil::shapekey_attribute_name_handle_left(oldname),
+                        bke::greasepencil::shapekey_attribute_name_handle_left(newname));
+      attributes.rename(bke::greasepencil::shapekey_attribute_name_handle_right(oldname),
+                        bke::greasepencil::shapekey_attribute_name_handle_right(newname));
     }
   }
 }

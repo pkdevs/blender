@@ -478,6 +478,34 @@ static wmOperatorStatus shape_key_copy_exec(bContext *C, wmOperator * /*op*/)
         array_utils::copy(key_opacity_old, key_opacity_new.span);
 
         key_opacity_new.finish();
+
+        const VArray<float3> key_handle_left_old = *attributes.lookup_or_default<float3>(
+            bke::greasepencil::shapekey_attribute_name_handle_left(kb_src->name),
+            bke::AttrDomain::Point,
+            float3(0.0f));
+
+        bke::SpanAttributeWriter<float3> key_handle_left_new =
+            attributes.lookup_or_add_for_write_span<float3>(
+                bke::greasepencil::shapekey_attribute_name_handle_left(kb_new->name),
+                bke::AttrDomain::Point);
+
+        array_utils::copy(key_handle_left_old, key_handle_left_new.span);
+
+        key_handle_left_new.finish();
+
+        const VArray<float3> key_handle_right_old = *attributes.lookup_or_default<float3>(
+            bke::greasepencil::shapekey_attribute_name_handle_right(kb_src->name),
+            bke::AttrDomain::Point,
+            float3(0.0f));
+
+        bke::SpanAttributeWriter<float3> key_handle_right_new =
+            attributes.lookup_or_add_for_write_span<float3>(
+                bke::greasepencil::shapekey_attribute_name_handle_right(kb_new->name),
+                bke::AttrDomain::Point);
+
+        array_utils::copy(key_handle_right_old, key_handle_right_new.span);
+
+        key_handle_right_new.finish();
       }
     }
   }
