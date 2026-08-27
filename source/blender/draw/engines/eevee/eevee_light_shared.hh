@@ -48,6 +48,13 @@ enum [[host_shared]] eLightType : uint32_t {
   LIGHT_ELLIPSE = 21u
 };
 
+enum [[host_shared]] LightFlag : uint32_t {
+  /* True if the light shape should be invisible to camera rays. */
+  LIGHT_CAMERA_HIDDEN = 1u << 0u,
+  /* True if the light uses jittered soft shadows. */
+  LIGHT_USE_SHADOW_JITTER = 1u << 1u,
+};
+
 static inline bool is_area_light(eLightType type)
 {
   return type >= LIGHT_RECT;
@@ -185,7 +192,8 @@ struct [[host_shared]] LightData {
   float point_power;
 
   uint resource_id;
-  uint pad0_;
+
+  enum LightFlag flags;
 
   /** Light Color. */
   packed_float3 color;
@@ -205,10 +213,8 @@ struct [[host_shared]] LightData {
   float lod_bias;
   /* Shadow Map resolution maximum resolution. */
   float lod_min;
-  /* True if the light uses jittered soft shadows. */
-  bool32_t shadow_jitter;
-  /* True if the light shape should be visible to camera rays. */
-  bool32_t visible_camera;
+  bool32_t _pad0;
+  bool32_t _pad1;
   uint2 light_set_membership;
   /** Used by shadow sync. */
   /* TODO(fclem): this should be part of #eevee::Light struct. But for some reason it gets cleared

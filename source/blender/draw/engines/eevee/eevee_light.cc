@@ -103,8 +103,13 @@ void Light::sync(ShadowModule &shadows,
   this->lod_bias = shadows.global_lod_bias();
   this->lod_min = shadow_lod_min_get(la);
   this->filter_radius = la->shadow_filter_radius;
-  this->shadow_jitter = (la->mode & LA_SHADOW_JITTER) != 0;
-  this->visible_camera = (visibility_flag & OB_HIDE_CAMERA) == 0;
+  this->flags = LightFlag(0u);
+  if (la->mode & LA_SHADOW_JITTER) {
+    this->flags = LightFlag(this->flags | LIGHT_USE_SHADOW_JITTER);
+  }
+  if (visibility_flag & OB_HIDE_CAMERA) {
+    this->flags = LightFlag(this->flags | LIGHT_CAMERA_HIDDEN);
+  }
 
   if (la->mode & LA_SHADOW) {
     shadow_ensure(shadows);

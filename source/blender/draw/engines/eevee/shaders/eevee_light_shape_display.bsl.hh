@@ -99,7 +99,7 @@ void shape_display_vert([[resource_table]] const draw::View &views,
   }
 
   LightData light = lrd.light_buf[light_index];
-  if (!light.visible_camera) {
+  if ((light.flags & LIGHT_CAMERA_HIDDEN) != 0u) {
     return;
   }
 
