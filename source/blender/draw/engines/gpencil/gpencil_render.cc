@@ -214,30 +214,7 @@ static void render_result_z(const DRWContext *draw_ctx,
   IMB_partial_update_mark_full(rp->ibuf);
 }
 
-static void render_result_combined(RenderLayer *rl,
-                                   const char *viewname,
-                                   Instance &instance,
-                                   const rcti *rect)
-{
-  RenderPass *rp = RE_pass_find_by_name(rl, RE_PASSNAME_COMBINED, viewname);
-
-  Framebuffer read_fb;
-  read_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(instance.accumulation_tx));
-  GPU_framebuffer_bind(read_fb);
-  GPU_framebuffer_read_color(read_fb,
-                             rect->xmin,
-                             rect->ymin,
-                             BLI_rcti_size_x(rect),
-                             BLI_rcti_size_y(rect),
-                             4,
-                             0,
-                             GPU_DATA_FLOAT,
-                             rp->ibuf->float_data_for_write());
-
-  IMB_partial_update_mark_full(rp->ibuf);
-}
-
-static void render_result_separated_pass(ImBuf *ibuf, Instance &instance, const rcti *rect)
+static void render_result_color(ImBuf *ibuf, Instance &instance, const rcti *rect)
 {
   Framebuffer read_fb;
   read_fb.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(instance.accumulation_tx));
@@ -438,13 +415,14 @@ void Engine::render_to_image(RenderEngine *engine, RenderLayer *render_layer, co
   render_init_buffers(draw_ctx, inst, engine, render_layer, &rect, false);
 
   render_frame(engine, depsgraph, draw_ctx, render_layer, rect, inst, manager, false);
-  render_result_combined(render_layer, viewname, inst, &rect);
+  ImBuf *combined_ibuf = RE_RenderLayerGetPassImBuf(render_layer, RE_PASSNAME_COMBINED, viewname);
+  render_result_color(combined_ibuf, inst, &rect);
 
   ImBuf *gpencil_ibuf = RE_RenderLayerGetPassImBuf(
       render_layer, RE_PASSNAME_GREASE_PENCIL, viewname);
   if (gpencil_ibuf) {
     render_frame(engine, depsgraph, draw_ctx, render_layer, rect, inst, manager, true);
-    render_result_separated_pass(gpencil_ibuf, inst, &rect);
+    render_result_color(gpencil_ibuf, inst, &rect);
   }
 
   /* Transfer depth in the last step, because if we need to render separate pass, we need original
