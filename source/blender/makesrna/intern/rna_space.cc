@@ -1262,7 +1262,8 @@ static void rna_SpaceView3D_use_local_camera_set(PointerRNA *ptr, bool value)
   v3d->scenelock = !value;
 
   if (!value) {
-    Scene *scene = ED_screen_scene_find(screen, static_cast<wmWindowManager *>(G_MAIN->wm.first));
+    Scene *scene = ED_screen_scene_find(
+        screen, static_cast<wmWindowManager *>(screen->id.owner_bmain()->wm.first));
     /* nullptr if the screen isn't in an active window (happens when setting from Python).
      * This could be moved to the update function, in that case the scene won't relate to the
      * screen so keep it working this way. */
@@ -1276,7 +1277,8 @@ static float rna_View3DOverlay_GridScaleUnit_get(PointerRNA *ptr)
 {
   View3D *v3d = static_cast<View3D *>(ptr->data);
   bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
-  Scene *scene = ED_screen_scene_find(screen, static_cast<wmWindowManager *>(G_MAIN->wm.first));
+  Scene *scene = ED_screen_scene_find(
+      screen, static_cast<wmWindowManager *>(screen->id.owner_bmain()->wm.first));
   if (scene != nullptr) {
     return ED_view3d_grid_scale(scene, v3d, nullptr);
   }
@@ -1580,8 +1582,8 @@ static Scene *rna_3DViewShading_scene(PointerRNA *ptr)
   }
   else {
     bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
-    return WM_windows_scene_get_from_screen(static_cast<wmWindowManager *>(G_MAIN->wm.first),
-                                            screen);
+    return WM_windows_scene_get_from_screen(
+        static_cast<wmWindowManager *>(screen->id.owner_bmain()->wm.first), screen);
   }
 }
 
@@ -1598,8 +1600,8 @@ static ViewLayer *rna_3DViewShading_view_layer(PointerRNA *ptr)
   }
   else {
     bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
-    return WM_windows_view_layer_get_from_screen(static_cast<wmWindowManager *>(G_MAIN->wm.first),
-                                                 screen);
+    return WM_windows_view_layer_get_from_screen(
+        static_cast<wmWindowManager *>(screen->id.owner_bmain()->wm.first), screen);
   }
 }
 
@@ -2095,14 +2097,13 @@ static bool rna_SpaceImageEditor_show_uvedit_get(PointerRNA *ptr)
 {
   SpaceImage *sima = static_cast<SpaceImage *>(ptr->data);
   bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
+  const Main *bmain = screen->id.owner_bmain();
   Object *obedit = nullptr;
-  wmWindow *win = ED_screen_window_find(screen, static_cast<wmWindowManager *>(G_MAIN->wm.first));
+  wmWindow *win = ED_screen_window_find(screen, static_cast<wmWindowManager *>(bmain->wm.first));
   if (win != nullptr) {
     Scene *scene = WM_window_get_active_scene(win);
     ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-    /* FIXME Using G_MAIN is weak, but should work in practice given current context
-     * (code already relies on 'G_MAIN data'). */
-    BKE_view_layer_synced_ensure(*G_MAIN, scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     obedit = BKE_view_layer_edit_object_get(view_layer);
   }
   return ED_space_image_show_uvedit(sima, obedit);
@@ -2112,14 +2113,13 @@ static bool rna_SpaceImageEditor_show_maskedit_get(PointerRNA *ptr)
 {
   SpaceImage *sima = static_cast<SpaceImage *>(ptr->data);
   bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
+  const Main *bmain = screen->id.owner_bmain();
   Object *obedit = nullptr;
-  wmWindow *win = ED_screen_window_find(screen, static_cast<wmWindowManager *>(G_MAIN->wm.first));
+  wmWindow *win = ED_screen_window_find(screen, static_cast<wmWindowManager *>(bmain->wm.first));
   if (win != nullptr) {
     Scene *scene = WM_window_get_active_scene(win);
     ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-    /* FIXME Using G_MAIN is weak, but should work in practice given current context
-     * (code already relies on 'G_MAIN data'). */
-    BKE_view_layer_synced_ensure(*G_MAIN, scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     obedit = BKE_view_layer_edit_object_get(view_layer);
   }
   return ED_space_image_check_show_maskedit(sima, obedit);
@@ -2129,9 +2129,12 @@ static void rna_SpaceImageEditor_image_set(PointerRNA *ptr,
                                            PointerRNA value,
                                            ReportList * /*reports*/)
 {
-  BLI_assert(BKE_id_is_in_global_main(static_cast<ID *>(value.data)));
+  Image *ima = static_cast<Image *>(value.data);
+  bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
+  Main *bmain = const_cast<Main *>(ima ? ima->id.owner_bmain() : screen->id.owner_bmain());
+  BLI_assert(bmain != nullptr);
   SpaceImage *sima = static_cast<SpaceImage *>(ptr->data);
-  ED_space_image_set(G_MAIN, sima, static_cast<Image *>(value.data), false);
+  ED_space_image_set(bmain, sima, ima, false);
 }
 
 static void rna_SpaceImageEditor_mask_set(PointerRNA *ptr,

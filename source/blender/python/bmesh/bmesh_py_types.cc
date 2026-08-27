@@ -1391,8 +1391,7 @@ static PyObject *bpy_bmesh_to_mesh(BPy_BMesh *self, PyObject *args)
      * anything in this case. */
   }
   else {
-    BLI_assert(BKE_id_is_in_global_main(&mesh->id));
-    bmain = G_MAIN; /* XXX UGLY! */
+    bmain = const_cast<Main *>(mesh->id.owner_bmain());
     params.calc_object_remap = true;
   }
 

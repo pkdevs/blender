@@ -287,9 +287,8 @@ static void rna_PoseChannel_name_set(PointerRNA *ptr, const char *value)
   STRNCPY_UTF8(newname, value);
   STRNCPY(oldname, pchan->name); /* Allow non UTF8 encoding for the old name. */
 
-  BLI_assert(BKE_id_is_in_global_main(&ob->id));
-  BLI_assert(BKE_id_is_in_global_main(ob->data));
-  ED_armature_bone_rename(G_MAIN, id_cast<bArmature *>(ob->data), oldname, newname);
+  ED_armature_bone_rename(
+      const_cast<Main *>(ob->id.owner_bmain()), id_cast<bArmature *>(ob->data), oldname, newname);
 }
 
 /* See rna_Bone_update_renamed() */

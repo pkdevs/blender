@@ -26,6 +26,7 @@
 #include "BKE_context.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_global.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_node.hh"
 #include "BKE_node_legacy_types.hh"
 
@@ -2762,12 +2763,20 @@ static void rna_Node_name_set(PointerRNA *ptr, const char *value)
   bke::node_unique_name(*ntree, *node);
 
   /* fix all the animation data which may link to this */
+  const Main *bmain = ntree->id.owner_bmain();
+  if (bmain == nullptr) {
+    /* Embedded node-trees are not in a Main; use the owner ID's Main. */
+    if (ID *owner_id = BKE_id_owner_get(&ntree->id)) {
+      bmain = owner_id->owner_bmain();
+    }
+  }
+  BLI_assert(bmain != nullptr);
   BKE_animdata_fix_paths(ntree->id,
                          "nodes",
                          RNA_path_name_to_infix(oldname),
                          RNA_path_name_to_infix(node->name),
                          /*verify_paths=*/true,
-                         *G_MAIN);
+                         *const_cast<Main *>(bmain));
 }
 
 static int rna_Node_color_tag_get(PointerRNA *ptr)

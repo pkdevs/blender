@@ -2025,8 +2025,7 @@ void rna_ViewLayer_name_set(PointerRNA *ptr, const char *value)
 {
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
   ViewLayer *view_layer = static_cast<ViewLayer *>(ptr->data);
-  BLI_assert(BKE_id_is_in_global_main(&scene->id));
-  BKE_view_layer_rename(G_MAIN, scene, view_layer, value);
+  BKE_view_layer_rename(const_cast<Main *>(scene->id.owner_bmain()), scene, view_layer, value);
 }
 
 static void rna_SceneRenderView_name_set(PointerRNA *ptr, const char *value)
@@ -2193,14 +2192,13 @@ static void rna_Scene_editmesh_select_mode_set(PointerRNA *ptr, const bool *valu
     ts->selectmode = selectmode;
 
     /* Update select mode in all the workspaces in mesh edit mode. */
-    wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+    const Main *bmain = ptr->owner_id->owner_bmain();
+    wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
     for (wmWindow &win : wm->windows) {
       const Scene *scene = WM_window_get_active_scene(&win);
       ViewLayer *view_layer = WM_window_get_active_view_layer(&win);
       if (view_layer) {
-        /* FIXME Using G_MAIN is weak, but should work in practrice given current context (code
-         * already relies on 'G_MAIN data'). */
-        BKE_view_layer_synced_ensure(*G_MAIN, scene, view_layer);
+        BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
         Object *object = BKE_view_layer_active_object_get(view_layer);
         if (object && object->type == OB_MESH) {
           if (BMEditMesh *em = BKE_editmesh_from_object(object)) {

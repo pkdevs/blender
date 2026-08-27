@@ -440,19 +440,18 @@ PyObject *pyrna_struct_keyframe_insert(BPy_StructRNA *self, PyObject *args, PyOb
     }
   }
   else {
-    BLI_assert(BKE_id_is_in_global_main(self->ptr->owner_id));
-
     const std::optional<StringRefNull> channel_group = group_name ? std::optional(group_name) :
                                                                     std::nullopt;
     PointerRNA id_pointer = RNA_id_pointer_create(self->ptr->owner_id);
-    CombinedKeyingResult combined_result = insert_keyframes(G_MAIN,
-                                                            &id_pointer,
-                                                            channel_group,
-                                                            {{path_full, {}, index}},
-                                                            std::nullopt,
-                                                            anim_eval_context,
-                                                            eBezTriple_KeyframeType(keytype),
-                                                            eInsertKeyFlags(options));
+    CombinedKeyingResult combined_result = insert_keyframes(
+        const_cast<Main *>(self->ptr->owner_id->owner_bmain()),
+        &id_pointer,
+        channel_group,
+        {{path_full, {}, index}},
+        std::nullopt,
+        anim_eval_context,
+        eBezTriple_KeyframeType(keytype),
+        eInsertKeyFlags(options));
     const int success_count = combined_result.get_count(SingleKeyingResult::SUCCESS);
     if (success_count == 0) {
       /* Ideally this would use the GUI presentation of RPT_ERROR, as the resulting pop-up has more

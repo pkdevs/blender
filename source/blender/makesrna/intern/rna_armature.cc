@@ -392,7 +392,7 @@ static void rna_BoneCollection_name_set(PointerRNA *ptr, const char *name)
   bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
   BoneCollection *bcoll = static_cast<BoneCollection *>(ptr->data);
 
-  ANIM_armature_bonecoll_name_set(*G_MAIN, arm, bcoll, name);
+  ANIM_armature_bonecoll_name_set(*const_cast<Main *>(arm->id.owner_bmain()), arm, bcoll, name);
 }
 
 static void rna_BoneCollection_is_visible_set(PointerRNA *ptr, const bool is_visible)
@@ -820,8 +820,8 @@ static void rna_EditBone_name_set(PointerRNA *ptr, const char *value)
   STRNCPY_UTF8(newname, value);
   STRNCPY(oldname, ebone->name);
 
-  BLI_assert(BKE_id_is_in_global_main(&arm->id));
-  ED_armature_bone_rename(G_MAIN, arm, oldname, newname);
+  BLI_assert(arm->id.owner_bmain() != nullptr);
+  ED_armature_bone_rename(const_cast<Main *>(arm->id.owner_bmain()), arm, oldname, newname);
 }
 
 static void rna_Bone_name_set(PointerRNA *ptr, const char *value)
@@ -834,8 +834,8 @@ static void rna_Bone_name_set(PointerRNA *ptr, const char *value)
   STRNCPY_UTF8(newname, value);
   STRNCPY(oldname, bone->name);
 
-  BLI_assert(BKE_id_is_in_global_main(&arm->id));
-  ED_armature_bone_rename(G_MAIN, arm, oldname, newname);
+  BLI_assert(arm->id.owner_bmain() != nullptr);
+  ED_armature_bone_rename(const_cast<Main *>(arm->id.owner_bmain()), arm, oldname, newname);
 }
 
 static void rna_EditBone_connected_check(EditBone *ebone)

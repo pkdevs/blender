@@ -1039,7 +1039,7 @@ static void rna_Strip_name_set(PointerRNA *ptr, const char *value)
                          RNA_path_name_to_infix(oldname),
                          RNA_path_name_to_infix(strip->name + 2),
                          /*verify_paths=*/true,
-                         *G_MAIN);
+                         *const_cast<Main *>(scene->id.owner_bmain()));
 }
 
 static int rna_Strip_text_length(PointerRNA *ptr)
@@ -1697,7 +1697,7 @@ static void rna_StripModifier_name_set(PointerRNA *ptr, const char *value)
                          RNA_path_name_to_infix(oldname),
                          RNA_path_name_to_infix(smd->name),
                          /* verify_paths= */ true,
-                         *G_MAIN);
+                         *const_cast<Main *>(scene->id.owner_bmain()));
 }
 
 static void rna_StripModifier_is_active_set(PointerRNA *ptr, bool value)

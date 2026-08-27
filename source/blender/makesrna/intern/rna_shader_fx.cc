@@ -154,7 +154,7 @@ static void rna_ShaderFx_name_set(PointerRNA *ptr, const char *value)
                            RNA_path_name_to_infix(oldname),
                            RNA_path_name_to_infix(gmd->name),
                            /*verify_paths=*/true,
-                           *G_MAIN);
+                           *const_cast<Main *>(ob->id.owner_bmain()));
   }
 }
 

@@ -258,7 +258,7 @@ void rename_effect(Scene &scene,
                          RNA_path_name_to_infix(old_name.c_str()),
                          RNA_path_name_to_infix(effect.name),
                          true,
-                         *G_MAIN);
+                         *const_cast<Main *>(scene.id.owner_bmain()));
 }
 
 SceneCompositorEffect &new_effect(Scene &scene, StringRef name)

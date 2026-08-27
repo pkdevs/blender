@@ -2770,7 +2770,7 @@ bool BKE_id_is_in_main(Main *bmain, ID *id)
 
 bool BKE_id_is_in_global_main(ID *id)
 {
-  return BKE_id_is_in_main(G_MAIN, id);
+  return id->owner_bmain() == G_MAIN;
 }
 
 bool BKE_id_can_be_asset(const ID *id)

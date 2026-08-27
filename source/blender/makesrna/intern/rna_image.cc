@@ -110,15 +110,16 @@ static void rna_Image_source_set(PointerRNA *ptr, int value)
 
   if (value != ima->source) {
     ima->source = eImageSource(value);
-    BLI_assert(BKE_id_is_in_global_main(&ima->id));
-    BKE_image_signal(G_MAIN, ima, nullptr, IMA_SIGNAL_SRC_CHANGE);
+    Main *bmain = const_cast<Main *>(ima->id.owner_bmain());
+    BLI_assert(bmain != nullptr);
+    BKE_image_signal(bmain, ima, nullptr, IMA_SIGNAL_SRC_CHANGE);
     if (ima->source == IMA_SRC_TILED) {
-      BKE_image_signal(G_MAIN, ima, nullptr, IMA_SIGNAL_RELOAD);
+      BKE_image_signal(bmain, ima, nullptr, IMA_SIGNAL_RELOAD);
     }
 
     DEG_id_tag_update(&ima->id, 0);
     DEG_id_tag_update(&ima->id, ID_RECALC_EDITORS | ID_RECALC_SOURCE);
-    DEG_relations_tag_update(G_MAIN);
+    DEG_relations_tag_update(bmain);
   }
 }
 
