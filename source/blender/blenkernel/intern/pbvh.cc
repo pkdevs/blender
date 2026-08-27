@@ -771,9 +771,9 @@ static void search_callback_occluded(Tree &pbvh,
                            [](const std::pair<float, Node *> &a,
                               const std::pair<float, Node *> &b) { return a.first < b.first; });
 
-  /* Visit the nodes front to back. #hit_fn narrows #tmin whenever it finds a closer hit, so once
-   * a node's bounds start further away than the closest hit so far, neither it nor any later node
-   * will contribute. */
+  /* Visit the nodes nearest to farthest. #hit_fn narrows #tmin whenever it finds a closer hit, so
+   * once a node's bounds start further away than the closest hit so far, neither it nor any later
+   * node will contribute. */
   float tmin = FLT_MAX;
   for (const auto &[node_tmin, node] : hits) {
     if (node_tmin >= tmin) {
