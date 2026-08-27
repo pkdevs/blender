@@ -1494,11 +1494,12 @@ static float4 quad_weights_from_irregular_corner(const int x,
 }
 
 template<typename T>
-static void interpolate_vert_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
-                                                  const Span<int> corner_verts,
-                                                  const Span<int> grids,
-                                                  const Span<T> src,
-                                                  gpu::VertBuf &vbo)
+static void interpolate_vert_data_for_flat_layout(
+    const SubdivCCG &subdiv_ccg,
+    const Span<int> corner_verts,
+    const Span<int> grids,
+    const Span<T> src,
+    MutableSpan<typename AttributeConverter<T>::VBOType> vbo)
 {
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
@@ -1508,7 +1509,7 @@ static void interpolate_vert_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
   const int grid_area_1 = grid_size_1 * grid_size_1;
   const int verts_per_grid = grid_area_1 * 4;
   const float grid_size_1_inv = 1.0f / (key.grid_size - 1);
-  MutableSpan<VBOType> dst = vbo.data<VBOType>();
+  MutableSpan<VBOType> dst = vbo;
 
   threading::parallel_for(grids.index_range(), 1024, [&](const IndexRange range) {
     for (const int i : range) {
@@ -1587,11 +1588,12 @@ static void interpolate_vert_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
 }
 
 template<typename T>
-static void interpolate_vert_data_for_standard_layout(const SubdivCCG &subdiv_ccg,
-                                                      const Span<int> corner_verts,
-                                                      const Span<int> grids,
-                                                      const Span<T> src,
-                                                      gpu::VertBuf &vbo)
+static void interpolate_vert_data_for_standard_layout(
+    const SubdivCCG &subdiv_ccg,
+    const Span<int> corner_verts,
+    const Span<int> grids,
+    const Span<T> src,
+    MutableSpan<typename AttributeConverter<T>::VBOType> vbo)
 {
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
@@ -1601,7 +1603,7 @@ static void interpolate_vert_data_for_standard_layout(const SubdivCCG &subdiv_cc
   const int grid_area = key.grid_area;
 
   const float grid_size_1_inv = 1.0f / (grid_size - 1);
-  MutableSpan<VBOType> dst = vbo.data<VBOType>();
+  MutableSpan<VBOType> dst = vbo;
   threading::parallel_for(grids.index_range(), 1024, [&](const IndexRange range) {
     for (const int i : range) {
       const int grid = grids[i];
@@ -1644,10 +1646,11 @@ static void interpolate_vert_data_for_standard_layout(const SubdivCCG &subdiv_cc
 
 BLI_NOINLINE static void calc_generic_vert_attribute_grids(const Object &object,
                                                            const OrigMeshData &orig_mesh_data,
-                                                           const BitSpan &use_flat_layout,
+                                                           const DrawCacheImpl &draw_cache,
+                                                           DrawCacheImpl::AttributeData &attr_vbo,
+                                                           const BitSpan use_flat_layout,
                                                            const IndexMask &node_mask,
-                                                           const StringRef name,
-                                                           const MutableSpan<gpu::VertBufPtr> vbos)
+                                                           const StringRef name)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1661,15 +1664,19 @@ BLI_NOINLINE static void calc_generic_vert_attribute_grids(const Object &object,
 
   node_mask.foreach_index(
       [&](const int i) {
+        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
         bke::attribute_math::to_static_type(attr.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
+            MutableSpan<typename AttributeConverter<T>::VBOType> dst =
+                attr_vbo.vbo->data<typename AttributeConverter<T>::VBOType>().slice(
+                    node_info.vbo.index_range());
             if (use_flat_layout[i]) {
               interpolate_vert_data_for_flat_layout<T>(
-                  subdiv_ccg, corner_verts, nodes[i].grids(), attr.typed<T>(), *vbos[i]);
+                  subdiv_ccg, corner_verts, nodes[i].grids(), attr.typed<T>(), dst);
             }
             else {
               interpolate_vert_data_for_standard_layout<T>(
-                  subdiv_ccg, corner_verts, nodes[i].grids(), attr.typed<T>(), *vbos[i]);
+                  subdiv_ccg, corner_verts, nodes[i].grids(), attr.typed<T>(), dst);
             }
           }
         });
@@ -1678,10 +1685,11 @@ BLI_NOINLINE static void calc_generic_vert_attribute_grids(const Object &object,
 }
 
 template<typename T>
-static void interpolate_corner_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
-                                                    const Span<int> grids,
-                                                    const Span<T> src,
-                                                    gpu::VertBuf &vbo)
+static void interpolate_corner_data_for_flat_layout(
+    const SubdivCCG &subdiv_ccg,
+    const Span<int> grids,
+    const Span<T> src,
+    MutableSpan<typename AttributeConverter<T>::VBOType> vbo)
 {
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
@@ -1691,7 +1699,7 @@ static void interpolate_corner_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
   const int grid_area_1 = grid_size_1 * grid_size_1;
   const int verts_per_grid = grid_area_1 * 4;
   const float grid_size_1_inv = 1.0f / (key.grid_size - 1);
-  MutableSpan<VBOType> dst = vbo.data<VBOType>();
+  MutableSpan<VBOType> dst = vbo;
 
   threading::parallel_for(grids.index_range(), 1024, [&](const IndexRange range) {
     for (const int i : range) {
@@ -1768,10 +1776,11 @@ static void interpolate_corner_data_for_flat_layout(const SubdivCCG &subdiv_ccg,
 }
 
 template<typename T>
-static void interpolate_corner_data_for_standard_layout(const SubdivCCG &subdiv_ccg,
-                                                        const Span<int> grids,
-                                                        const Span<T> src,
-                                                        gpu::VertBuf &vbo)
+static void interpolate_corner_data_for_standard_layout(
+    const SubdivCCG &subdiv_ccg,
+    const Span<int> grids,
+    const Span<T> src,
+    MutableSpan<typename AttributeConverter<T>::VBOType> vbo)
 {
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
@@ -1781,7 +1790,7 @@ static void interpolate_corner_data_for_standard_layout(const SubdivCCG &subdiv_
   const int grid_area = key.grid_area;
 
   const float grid_size_1_inv = 1.0f / (grid_size - 1);
-  MutableSpan<VBOType> dst = vbo.data<VBOType>();
+  MutableSpan<VBOType> dst = vbo;
   threading::parallel_for(grids.index_range(), 1024, [&](const IndexRange range) {
     for (const int i : range) {
       const int grid = grids[i];
@@ -1823,10 +1832,11 @@ static void interpolate_corner_data_for_standard_layout(const SubdivCCG &subdiv_
 BLI_NOINLINE static void calc_generic_corner_attribute_grids(
     const Object &object,
     const OrigMeshData &orig_mesh_data,
-    const BitSpan &use_flat_layout,
+    const DrawCacheImpl &draw_cache,
+    DrawCacheImpl::AttributeData &attr_vbo,
+    const BitSpan use_flat_layout,
     const IndexMask &node_mask,
-    const StringRef name,
-    const MutableSpan<gpu::VertBufPtr> vbos)
+    const StringRef name)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1837,15 +1847,19 @@ BLI_NOINLINE static void calc_generic_corner_attribute_grids(
 
   node_mask.foreach_index(
       [&](const int i) {
+        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
         bke::attribute_math::to_static_type(attr.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
+            MutableSpan<typename AttributeConverter<T>::VBOType> dst =
+                attr_vbo.vbo->data<typename AttributeConverter<T>::VBOType>().slice(
+                    node_info.vbo.index_range());
             if (use_flat_layout[i]) {
               interpolate_corner_data_for_flat_layout<T>(
-                  subdiv_ccg, nodes[i].grids(), attr.typed<T>(), *vbos[i]);
+                  subdiv_ccg, nodes[i].grids(), attr.typed<T>(), dst);
             }
             else {
               interpolate_corner_data_for_standard_layout<T>(
-                  subdiv_ccg, nodes[i].grids(), attr.typed<T>(), *vbos[i]);
+                  subdiv_ccg, nodes[i].grids(), attr.typed<T>(), dst);
             }
           }
         });
@@ -1858,7 +1872,7 @@ static void fill_face_data_grids(const SubdivCCG &subdiv_ccg,
                                  const bool use_flat_layout,
                                  const Span<int> grids,
                                  const Span<T> src,
-                                 gpu::VertBuf &vbo)
+                                 MutableSpan<typename AttributeConverter<T>::VBOType> vbo)
 {
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
@@ -1866,7 +1880,7 @@ static void fill_face_data_grids(const SubdivCCG &subdiv_ccg,
   const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
   const int verts_per_grid = use_flat_layout ? (key.grid_size - 1) * (key.grid_size - 1) * 4 :
                                                key.grid_area;
-  VBOType *dst = vbo.data<VBOType>().data();
+  VBOType *dst = vbo.data();
   for (const int i : grids.index_range()) {
     const int face_index = subdiv_ccg.grid_to_face_map[grids[i]];
     std::fill_n(dst, verts_per_grid, Converter::convert(src[face_index]));
@@ -1876,10 +1890,11 @@ static void fill_face_data_grids(const SubdivCCG &subdiv_ccg,
 
 BLI_NOINLINE static void fill_generic_face_attribute_grids(const Object &object,
                                                            const OrigMeshData &orig_mesh_data,
-                                                           const BitSpan &use_flat_layout,
+                                                           const DrawCacheImpl &draw_cache,
+                                                           DrawCacheImpl::AttributeData &attr_vbo,
+                                                           const BitSpan use_flat_layout,
                                                            const IndexMask &node_mask,
-                                                           const StringRef name,
-                                                           const MutableSpan<gpu::VertBufPtr> vbos)
+                                                           const StringRef name)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1890,10 +1905,14 @@ BLI_NOINLINE static void fill_generic_face_attribute_grids(const Object &object,
 
   node_mask.foreach_index(
       [&](const int i) {
+        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
         bke::attribute_math::to_static_type(attr.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
+            MutableSpan<typename AttributeConverter<T>::VBOType> dst =
+                attr_vbo.vbo->data<typename AttributeConverter<T>::VBOType>().slice(
+                    node_info.vbo.index_range());
             fill_face_data_grids<T>(
-                subdiv_ccg, use_flat_layout[i], nodes[i].grids(), attr.typed<T>(), *vbos[i]);
+                subdiv_ccg, use_flat_layout[i], nodes[i].grids(), attr.typed<T>(), dst);
           }
         });
       },
@@ -1911,7 +1930,20 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
   PRF_scope(ProfileCategory::Draw);
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
   const bke::GAttributeReader attr = attributes.lookup(name);
-  if (!attr || attr.domain == bke::AttrDomain::Edge) {
+  if (attr.domain == bke::AttrDomain::Edge) {
+    return;
+  }
+
+  if (!attr) {
+    attr_vbo.ensure_buffer_capacity(
+        attribute_format(orig_mesh_data, "Dummy", bke::AttrType::Float3),
+        draw_cache.get_vert_len());
+    node_mask.foreach_index(
+        [&](const int i) {
+          const NodeInfo &node_info = draw_cache.get_node_infos()[i];
+          attr_vbo.vbo->data<float3>().slice(node_info.vbo.index_range()).fill(float3(0.0f));
+        },
+        exec_mode::grain_size(1));
     return;
   }
 
@@ -1922,14 +1954,28 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
     return;
   }
 
-  attr_vbo.ensure_buffer_capacity(attribute_format(orig_mesh_data, "Dummy", bke::AttrType::Float3),
-                                  draw_cache.get_vert_len());
-  node_mask.foreach_index(
-      [&](const int i) {
-        const NodeInfo &node_info = draw_cache.get_node_infos()[i];
-        attr_vbo.vbo->data<float3>().slice(node_info.vbo.index_range()).fill(float3(0.0f));
-      },
-      exec_mode::grain_size(1));
+  switch (attr.domain) {
+    case bke::AttrDomain::Point:
+      attr_vbo.ensure_buffer_capacity(attribute_format(orig_mesh_data, name, data_type),
+                                      draw_cache.get_vert_len());
+      calc_generic_vert_attribute_grids(
+          object, orig_mesh_data, draw_cache, attr_vbo, use_flat_layout, node_mask, name);
+      break;
+    case bke::AttrDomain::Corner:
+      attr_vbo.ensure_buffer_capacity(attribute_format(orig_mesh_data, name, data_type),
+                                      draw_cache.get_vert_len());
+      calc_generic_corner_attribute_grids(
+          object, orig_mesh_data, draw_cache, attr_vbo, use_flat_layout, node_mask, name);
+      break;
+    case bke::AttrDomain::Face:
+      attr_vbo.ensure_buffer_capacity(attribute_format(orig_mesh_data, name, data_type),
+                                      draw_cache.get_vert_len());
+      fill_generic_face_attribute_grids(
+          object, orig_mesh_data, draw_cache, attr_vbo, use_flat_layout, node_mask, name);
+      break;
+    default:
+      BLI_assert_unreachable();
+  }
 }
 
 BLI_NOINLINE static void update_positions_bmesh(const Object &object,
