@@ -660,8 +660,7 @@ static Array<TriangulationResult> calc_triangulations(const Mesh *mesh,
         point_evaluator->get_evaluated<int>(0), memory, point_ids);
   }
 
-  VectorSet<int> all_group_ids;
-  all_group_ids.add_multiple(mesh_ids);
+  VectorSet<int> all_group_ids = mesh_ids;
   all_group_ids.add_multiple(curve_ids);
   all_group_ids.add_multiple(point_ids);
   if (all_group_ids.is_empty()) {
