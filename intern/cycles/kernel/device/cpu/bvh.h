@@ -644,6 +644,17 @@ ccl_device_intersect bool kernel_embree_intersect_local(KernelGlobals kg,
                                                         ccl_private uint *lcg_state,
                                                         const int max_hits)
 {
+  /* Explicitly disable intersection with anything that is not a triangle.
+   * Matches other backends, and allows to simplify setup for the custom primitives in the scene.
+   */
+  const int primitive_type = kernel_data_fetch(objects, local_object).primitive_type;
+  if (!(primitive_type & PRIMITIVE_TRIANGLE)) {
+    if (local_isect) {
+      local_isect->num_hits = 0;
+    }
+    return false;
+  }
+
   const bool has_bvh = !(kernel_data_fetch(object_flag, local_object) &
                          SD_OBJECT_TRANSFORM_APPLIED);
   CCLLocalContext ctx;

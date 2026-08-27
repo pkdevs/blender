@@ -327,7 +327,7 @@ ccl_device_inline bool local_intersection_filter(const hiprtRay &ray,
   const int object_id = payload->local_object;
   const uint max_hits = payload->max_hits;
 
-  /* Triangle primitive uses hardware intersection, other primitives  do custom intersection
+  /* Triangle primitive uses hardware intersection, other primitives do custom intersection
    * which does reservoir sampling for intersections. For the custom primitives only check
    * whether we can stop traversal early on. The rest of the checks here only do for the
    * regular triangles. */
