@@ -233,7 +233,8 @@ ccl_device_forceinline int custom_intersect_get_object(const RTCRayQueryContext 
   return ((ctx.instID[0] != RTC_INVALID_GEOMETRY_ID) ? ctx.instID[0] : geom_id) / 2;
 }
 
-ccl_device_inline void custom_intersect(const RTCIntersectFunctionNArguments *args)
+ccl_device_forceinline void kernel_embree_custom_intersection_func_impl(
+    const RTCIntersectFunctionNArguments *args)
 {
   kernel_assert(args->N == 1);
   static_assert(RTC_MAX_INSTANCE_LEVEL_COUNT == 1);
@@ -310,7 +311,8 @@ ccl_device_inline void custom_intersect(const RTCIntersectFunctionNArguments *ar
 #endif
 }
 
-ccl_device_inline void custom_occluded(const RTCOccludedFunctionNArguments *args)
+ccl_device_forceinline void kernel_embree_custom_occluded_func_impl(
+    const RTCOccludedFunctionNArguments *args)
 {
   kernel_assert(args->N == 1);
   static_assert(RTC_MAX_INSTANCE_LEVEL_COUNT == 1);
@@ -365,11 +367,22 @@ ccl_device_inline void custom_occluded(const RTCOccludedFunctionNArguments *args
 
   payload.throughput = zero_float3();
 
-  ray->tfar = neg_inf;
+  ray->tfar = -FLT_MAX;
   args->valid[0] = -1;
 #else
   args->valid[0] = 0;
 #endif
+}
+
+ccl_device_forceinline void kernel_embree_custom_occluded_volume_func_impl(
+    const RTCOccludedFunctionNArguments *args)
+{
+  kernel_assert(args->N == 1);
+
+  /* Ignore intersections with custom primitives.
+   * Currently the only custom primitive is the gaussian splat, which does not support volume
+   * shaders. */
+  args->valid[0] = 0;
 }
 
 /* This gets called by Embree at every valid ray/object intersection.
@@ -578,6 +591,30 @@ kernel_embree_filter_occluded_volume_all_func_static(const RTCFilterFunctionNArg
   context->kernel_embree_filter_occluded_volume_all_func_impl(args);
 }
 
+RTC_SYCL_INDIRECTLY_CALLABLE static void ccl_always_inline
+kernel_embree_custom_intersection_func_static(const RTCIntersectFunctionNArguments *args)
+{
+  CCLFirstHitContext *ctx = (CCLFirstHitContext *)(args->context);
+  ONEAPIKernelContext *context = static_cast<ONEAPIKernelContext *>(ctx->kg);
+  context->kernel_embree_custom_intersection_func_impl(args);
+}
+
+RTC_SYCL_INDIRECTLY_CALLABLE static void ccl_always_inline
+kernel_embree_custom_occluded_func_static(const RTCOccludedFunctionNArguments *args)
+{
+  CCLShadowContext *ctx = (CCLShadowContext *)(args->context);
+  ONEAPIKernelContext *context = ctx->oneapi_kernel_context;
+  context->kernel_embree_custom_occluded_func_impl(args);
+}
+
+RTC_SYCL_INDIRECTLY_CALLABLE static void ccl_always_inline
+kernel_embree_custom_occluded_volume_func_static(const RTCOccludedFunctionNArguments *args)
+{
+  CCLVolumeContext *ctx = (CCLVolumeContext *)(args->context);
+  ONEAPIKernelContext *context = static_cast<ONEAPIKernelContext *>(ctx->kg);
+  context->kernel_embree_custom_occluded_volume_func_impl(args);
+}
+
 #  define kernel_embree_filter_intersection_func \
     ONEAPIKernelContext::kernel_embree_filter_intersection_func_static
 #  define kernel_embree_filter_occluded_shadow_all_func \
@@ -586,6 +623,10 @@ kernel_embree_filter_occluded_volume_all_func_static(const RTCFilterFunctionNArg
     ONEAPIKernelContext::kernel_embree_filter_occluded_local_func_static
 #  define kernel_embree_filter_occluded_volume_all_func \
     ONEAPIKernelContext::kernel_embree_filter_occluded_volume_all_func_static
+#  define kernel_embree_custom_intersection_func kernel_embree_custom_intersection_func_static
+#  define kernel_embree_custom_occluded_func kernel_embree_custom_occluded_func_static
+#  define kernel_embree_custom_occluded_volume_func \
+    kernel_embree_custom_occluded_volume_func_static
 #else
 #  define kernel_embree_filter_intersection_func kernel_embree_filter_intersection_func_impl
 #  define kernel_embree_filter_occluded_shadow_all_func \
@@ -593,6 +634,9 @@ kernel_embree_filter_occluded_volume_all_func_static(const RTCFilterFunctionNArg
 #  define kernel_embree_filter_occluded_local_func kernel_embree_filter_occluded_local_func_impl
 #  define kernel_embree_filter_occluded_volume_all_func \
     kernel_embree_filter_occluded_volume_all_func_impl
+#  define kernel_embree_custom_intersection_func kernel_embree_custom_intersection_func_impl
+#  define kernel_embree_custom_occluded_func kernel_embree_custom_occluded_func_impl
+#  define kernel_embree_custom_occluded_volume_func kernel_embree_custom_occluded_volume_func_impl
 #endif
 
 /* Scene intersection. */
@@ -622,7 +666,7 @@ ccl_device_intersect bool kernel_embree_intersect(KernelGlobals kg,
   RTCIntersectArguments args;
   rtcInitIntersectArguments(&args);
   args.filter = reinterpret_cast<RTCFilterFunctionN>(kernel_embree_filter_intersection_func);
-  args.intersect = custom_intersect;
+  args.intersect = reinterpret_cast<RTCIntersectFunctionN>(kernel_embree_custom_intersection_func);
   args.feature_mask = CYCLES_EMBREE_USED_FEATURES;
   args.context = &ctx;
   rtcTraversableIntersect1(kernel_data.device_bvh, &ray_hit, &args);
@@ -742,7 +786,7 @@ ccl_device_intersect void kernel_embree_intersect_shadow_all(KernelGlobals kg,
   rtcInitOccludedArguments(&args);
   args.filter = reinterpret_cast<RTCFilterFunctionN>(
       kernel_embree_filter_occluded_shadow_all_func);
-  args.occluded = custom_occluded;
+  args.occluded = reinterpret_cast<RTCOccludedFunctionN>(kernel_embree_custom_occluded_func);
   args.feature_mask = CYCLES_EMBREE_USED_FEATURES;
   args.context = &ctx;
 
@@ -751,16 +795,6 @@ ccl_device_intersect void kernel_embree_intersect_shadow_all(KernelGlobals kg,
 #endif
 
 #ifdef __VOLUME__
-
-ccl_device_inline void custom_occluded_volume(const RTCOccludedFunctionNArguments *args)
-{
-  kernel_assert(args->N == 1);
-
-  /* Ignore intersections with custom primitives.
-   * Currently the only custom primitive is the gaussian splat, which does not support volume
-   * shaders. */
-  args->valid[0] = 0;
-}
 
 ccl_device_intersect uint kernel_embree_intersect_volume(KernelGlobals kg,
                                                          const ccl_private Ray *ray,
@@ -791,7 +825,8 @@ ccl_device_intersect uint kernel_embree_intersect_volume(KernelGlobals kg,
   kernel_embree_setup_ray(*ray, rtc_ray, visibility);
   RTCOccludedArguments args;
   rtcInitOccludedArguments(&args);
-  args.occluded = custom_occluded_volume;
+  args.occluded = reinterpret_cast<RTCOccludedFunctionN>(
+      kernel_embree_custom_occluded_volume_func);
   args.filter = reinterpret_cast<RTCFilterFunctionN>(
       kernel_embree_filter_occluded_volume_all_func);
   args.feature_mask = CYCLES_EMBREE_USED_FEATURES;

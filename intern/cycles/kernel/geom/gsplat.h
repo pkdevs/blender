@@ -8,6 +8,8 @@
 #include "kernel/types.h"
 
 #include "kernel/geom/motion_gsplat.h"
+#include "kernel/geom/object.h"
+#include "kernel/util/colorspace.h"
 
 /* Gaussian splats evaluation and utility functions.
  *
