@@ -525,9 +525,9 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
     )
     preview_denoising_upscale_quality: EnumProperty(
         name="Viewport Denoising Upscale Quality",
-        description="Overall quality when using DLSS",
+        description="Overall upscale factor and denoising quality when using DLSS",
         items=enum_denoising_upscale_quality,
-        default='QUALITY',
+        default='BALANCED',
     )
 
     samples: IntProperty(

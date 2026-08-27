@@ -1150,14 +1150,14 @@ DenoiseParams BlenderSync::get_denoise_params(blender::Scene &b_scene,
     DENOISER_INPUT_NUM,
   };
 
-  enum DenoiserDLSSQuality {
-    DENOISER_DLSS_MODE_DLAA = 0,
-    DENOISER_DLSS_MODE_QUALITY = 1,
-    DENOISER_DLSS_MODE_BALANCED = 2,
-    DENOISER_DLSS_MODE_PERF = 3,
-    DENOISER_DLSS_MODE_ULTRA_PERF = 4,
+  enum DenoiserUpscaleQuality {
+    DENOISER_UPSCALE_NONE = 0,
+    DENOISER_UPSCALE_QUALITY = 1,
+    DENOISER_UPSCALE_BALANCED = 2,
+    DENOISER_UPSCALE_PERFORMANCE = 3,
+    DENOISER_UPSCALE_ULTRA_PERFORMANCE = 4,
 
-    DENOISER_DLSS_MODE_NUM,
+    DENOISER_UPSCALE_NUM,
   };
 
   DenoiseParams denoising;
@@ -1219,29 +1219,29 @@ DenoiseParams BlenderSync::get_denoise_params(blender::Scene &b_scene,
 
       denoising.start_sample = 0;
 
-      switch ((DenoiserDLSSQuality)get_enum(cscene,
-                                            "preview_denoising_upscale_quality",
-                                            DENOISER_DLSS_MODE_NUM,
-                                            DENOISER_DLSS_MODE_BALANCED))
+      switch ((DenoiserUpscaleQuality)get_enum(cscene,
+                                               "preview_denoising_upscale_quality",
+                                               DENOISER_UPSCALE_NUM,
+                                               DENOISER_UPSCALE_BALANCED))
       {
-        case DENOISER_DLSS_MODE_DLAA:
+        case DENOISER_UPSCALE_NONE:
           denoising.quality = DENOISER_QUALITY_HIGH;
           denoising.upscale_factor = 1.0f;
           break;
-        case DENOISER_DLSS_MODE_QUALITY:
+        case DENOISER_UPSCALE_QUALITY:
           denoising.quality = DENOISER_QUALITY_HIGH;
           denoising.upscale_factor = 1.0f / 0.66666667f;
           break;
         default:
-        case DENOISER_DLSS_MODE_BALANCED:
+        case DENOISER_UPSCALE_BALANCED:
           denoising.quality = DENOISER_QUALITY_BALANCED;
           denoising.upscale_factor = 1.0f / 0.58f;
           break;
-        case DENOISER_DLSS_MODE_PERF:
+        case DENOISER_UPSCALE_PERFORMANCE:
           denoising.quality = DENOISER_QUALITY_FAST;
           denoising.upscale_factor = 2.0f;
           break;
-        case DENOISER_DLSS_MODE_ULTRA_PERF:
+        case DENOISER_UPSCALE_ULTRA_PERFORMANCE:
           denoising.quality = DENOISER_QUALITY_FAST;
           denoising.upscale_factor = 3.0f;
           break;
