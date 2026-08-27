@@ -12,15 +12,7 @@ namespace light_iter_input_node {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  const bNodeTree *ntree = b.tree_or_null();
-  const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
-
-  b.add_output<decl::Int>("LightIndex"_ustr).available(is_gpu_internal);
-
-  /* Declared as ZoneIO so the Closure result can be read outside the light loop.
-   * Even if we don't really use the value for anything, compilation would fail otherwise. */
-  b.add_input<decl::Shader>("ShaderZoneIO"_ustr).available(is_gpu_internal);
-  b.add_output<decl::Shader>("ShaderZoneIO"_ustr).available(is_gpu_internal);
+  b.add_output<decl::Int>("LightIndex"_ustr);
 }
 
 static int node_shader_fn(GPUMaterial *mat,
@@ -37,16 +29,7 @@ static int node_shader_fn(GPUMaterial *mat,
 
 namespace light_iter_output_node {
 
-static void node_declare(NodeDeclarationBuilder &b)
-{
-  const bNodeTree *ntree = b.tree_or_null();
-  const bool is_gpu_internal = ntree && (ntree->flag & NTREE_IS_GPU_SHADER_INTERNAL);
-
-  /* Declared as ZoneIO so the Closure result can be read outside the light loop.
-   * Even if we don't really use the value for anything, compilation would fail otherwise. */
-  b.add_input<decl::Shader>("ShaderZoneIO"_ustr).available(is_gpu_internal);
-  b.add_output<decl::Shader>("ShaderZoneIO"_ustr).available(is_gpu_internal);
-}
+static void node_declare(NodeDeclarationBuilder & /*b*/) {}
 
 static int node_shader_fn(GPUMaterial *mat,
                           bNode *node,
@@ -59,6 +42,14 @@ static int node_shader_fn(GPUMaterial *mat,
 }
 
 }  // namespace light_iter_output_node
+
+namespace {
+bool add_ui_poll(const bContext * /*C*/)
+{
+  /* This node is for internal use only. */
+  return false;
+}
+}  // namespace
 
 }  // namespace nodes::node_shader_light_iter_internal_cc
 
@@ -77,6 +68,7 @@ void register_node_type_sh_light_iter_internal_input()
   ntype.declare = file_ns::node_declare;
   ntype.gather_link_search_ops = search_link_ops_for_shader_material_lighting_node;
   ntype.gpu_fn = file_ns::node_shader_fn;
+  ntype.add_ui_poll = nodes::node_shader_light_iter_internal_cc::add_ui_poll;
 
   bke::node_register_type(ntype);
 }
@@ -96,6 +88,7 @@ void register_node_type_sh_light_iter_internal_output()
   ntype.declare = file_ns::node_declare;
   ntype.gather_link_search_ops = search_link_ops_for_shader_material_lighting_node;
   ntype.gpu_fn = file_ns::node_shader_fn;
+  ntype.add_ui_poll = nodes::node_shader_light_iter_internal_cc::add_ui_poll;
 
   bke::node_register_type(ntype);
 }

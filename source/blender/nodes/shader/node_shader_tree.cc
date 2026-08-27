@@ -988,6 +988,8 @@ static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
     }
   };
 
+  Map<bNodeSocket *, bNodeSocket *> accumulation_out_to_zone_out;
+
   for (bNode &node : ntree->nodes) {
     if (ELEM(node.type_legacy,
              SH_NODE_LIGHT_ACCUMULATION,
@@ -1006,13 +1008,25 @@ static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
                          *ntree_shader_node_input_get(&node, 0));
 
       if (node.type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
-        /* Connect accumulation result to the zone output node. */
-        /** WATCH: This can add multiple links into the same input socket. */
-        bke::node_add_link(*ntree,
-                           node,
-                           *ntree_shader_node_output_get(&node, 0),
-                           *zone_output,
-                           *ntree_shader_node_input_get(zone_output, 0));
+        /* Connect accumulation result to the zone output node.
+         * Create one zone IO for each Light Accumulation node. */
+        bke::node_add_static_socket(
+            *ntree, *zone_input, SOCK_IN, SOCK_SHADER, PROP_NONE, "ShaderZoneIO", "ShaderZoneIO");
+        bke::node_add_static_socket(
+            *ntree, *zone_input, SOCK_OUT, SOCK_SHADER, PROP_NONE, "ShaderZoneIO", "ShaderZoneIO");
+        bNodeSocket *socket_in = bke::node_add_static_socket(
+            *ntree, *zone_output, SOCK_IN, SOCK_SHADER, PROP_NONE, "ShaderZoneIO", "ShaderZoneIO");
+        bNodeSocket *socket_out = bke::node_add_static_socket(*ntree,
+                                                              *zone_output,
+                                                              SOCK_OUT,
+                                                              SOCK_SHADER,
+                                                              PROP_NONE,
+                                                              "ShaderZoneIO",
+                                                              "ShaderZoneIO");
+
+        bNodeSocket &accumulation_out = *ntree_shader_node_output_get(&node, 0);
+        bke::node_add_link(*ntree, node, accumulation_out, *zone_output, *socket_in);
+        accumulation_out_to_zone_out.add(&accumulation_out, socket_out);
       }
     }
   }
@@ -1024,7 +1038,7 @@ static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
     {
       bke::node_add_link(*ntree,
                          *zone_output,
-                         *ntree_shader_node_output_get(zone_output, 0),
+                         *accumulation_out_to_zone_out.lookup(link.fromsock),
                          *link.tonode,
                          *link.tosock);
       links_to_remove.append(&link);
