@@ -1,2 +1,2 @@
-Referenced by pull request #163114, Fix: Memory leak on WM_exit after recent commit
+Referenced by pull request #163114, Fix #163192: Memory leak on WM_exit after recent commit
 Referenced by issue #163192, Failing tests in linux sanitizer builds mem leak related to `tbb::task_scheduler_observer`
