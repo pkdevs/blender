@@ -64,7 +64,7 @@ void StrengthOperation::on_stroke_extended(const bContext &C, const InputSample 
           bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
           bke::SpanAttributeWriter<float> key_opacity =
               attributes.lookup_or_add_for_write_span<float>(
-                  blender::bke::greasepencil::shapekey_attribute_name_opacity(actkb->name),
+                  bke::greasepencil::shapekey_attribute_name_opacity(actkb->name),
                   bke::AttrDomain::Point);
 
           point_mask.foreach_index(

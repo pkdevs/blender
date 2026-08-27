@@ -2308,11 +2308,9 @@ void shapekey_get_applied_position(const Key *key,
     }
 
     const VArray<float3> key_position = *attributes.lookup_or_default<float3>(
-        blender::bke::greasepencil::shapekey_attribute_name_position(keyblock.name),
-        bke::AttrDomain::Point,
-        float3(0.0f));
+        shapekey_attribute_name_position(keyblock.name), bke::AttrDomain::Point, float3(0.0f));
     const VArray<float3> ref_key_position = *attributes.lookup_or_default<float3>(
-        blender::bke::greasepencil::shapekey_attribute_name_position(ref_keyblock->name),
+        shapekey_attribute_name_position(ref_keyblock->name),
         bke::AttrDomain::Point,
         float3(0.0f));
 
@@ -2354,13 +2352,9 @@ void shapekey_get_applied_radius(const Key *key,
     }
 
     const VArray<float> key_radius = *attributes.lookup_or_default<float>(
-        blender::bke::greasepencil::shapekey_attribute_name_radius(keyblock.name),
-        bke::AttrDomain::Point,
-        0.0f);
+        shapekey_attribute_name_radius(keyblock.name), bke::AttrDomain::Point, 0.0f);
     const VArray<float> ref_key_radius = *attributes.lookup_or_default<float>(
-        blender::bke::greasepencil::shapekey_attribute_name_radius(ref_keyblock->name),
-        bke::AttrDomain::Point,
-        0.0f);
+        shapekey_attribute_name_radius(ref_keyblock->name), bke::AttrDomain::Point, 0.0f);
 
     threading::parallel_for(radius.index_range(), 4096, [&](const IndexRange range) {
       for (const int i : range) {
@@ -2407,13 +2401,9 @@ void shapekey_get_applied_opacity(const Key *key,
     }
 
     const VArray<float> key_opacity = *attributes.lookup_or_default<float>(
-        blender::bke::greasepencil::shapekey_attribute_name_opacity(keyblock.name),
-        bke::AttrDomain::Point,
-        0.0f);
+        shapekey_attribute_name_opacity(keyblock.name), bke::AttrDomain::Point, 0.0f);
     const VArray<float> ref_key_opacity = *attributes.lookup_or_default<float>(
-        blender::bke::greasepencil::shapekey_attribute_name_opacity(ref_keyblock->name),
-        bke::AttrDomain::Point,
-        0.0f);
+        shapekey_attribute_name_opacity(ref_keyblock->name), bke::AttrDomain::Point, 0.0f);
 
     threading::parallel_for(opacity.index_range(), 4096, [&](const IndexRange range) {
       for (const int i : range) {
@@ -2445,8 +2435,7 @@ void shapekey_set_applied_position(const Key *key,
   shapekey_get_applied_position(key, attributes, old_position.as_mutable_span());
 
   bke::SpanAttributeWriter<float3> key_position = attributes.lookup_or_add_for_write_span<float3>(
-      blender::bke::greasepencil::shapekey_attribute_name_position(actkb->name),
-      bke::AttrDomain::Point);
+      shapekey_attribute_name_position(actkb->name), bke::AttrDomain::Point);
 
   selection.foreach_index([&](const int point_i) {
     key_position.span[point_i] += (new_position[point_i] - old_position[point_i]) /
@@ -2471,8 +2460,7 @@ void shapekey_set_applied_radius(const Key *key,
   shapekey_get_applied_radius(key, attributes, old_radius.as_mutable_span());
 
   bke::SpanAttributeWriter<float> key_radius = attributes.lookup_or_add_for_write_span<float>(
-      blender::bke::greasepencil::shapekey_attribute_name_radius(actkb->name),
-      bke::AttrDomain::Point);
+      shapekey_attribute_name_radius(actkb->name), bke::AttrDomain::Point);
 
   selection.foreach_index([&](const int point_i) {
     key_radius.span[point_i] += (new_radius[point_i] - old_radius[point_i]) / keyblock_influence;
@@ -2496,8 +2484,7 @@ void shapekey_set_applied_opacity(const Key *key,
   shapekey_get_applied_opacity(key, attributes, old_opacity.as_mutable_span());
 
   bke::SpanAttributeWriter<float> key_opacity = attributes.lookup_or_add_for_write_span<float>(
-      blender::bke::greasepencil::shapekey_attribute_name_opacity(actkb->name),
-      bke::AttrDomain::Point);
+      shapekey_attribute_name_opacity(actkb->name), bke::AttrDomain::Point);
 
   selection.foreach_index([&](const int point_i) {
     key_opacity.span[point_i] += (new_opacity[point_i] - old_opacity[point_i]) /

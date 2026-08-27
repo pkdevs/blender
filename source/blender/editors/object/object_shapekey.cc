@@ -438,13 +438,13 @@ static wmOperatorStatus shape_key_copy_exec(bContext *C, wmOperator * /*op*/)
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
         const VArray<float3> key_positions_old = *attributes.lookup_or_default<float3>(
-            blender::bke::greasepencil::shapekey_attribute_name_position(kb_src->name),
+            bke::greasepencil::shapekey_attribute_name_position(kb_src->name),
             bke::AttrDomain::Point,
             float3(0.0f));
 
         bke::SpanAttributeWriter<float3> key_positions_new =
             attributes.lookup_or_add_for_write_span<float3>(
-                blender::bke::greasepencil::shapekey_attribute_name_position(kb_new->name),
+                bke::greasepencil::shapekey_attribute_name_position(kb_new->name),
                 bke::AttrDomain::Point);
 
         array_utils::copy(key_positions_old, key_positions_new.span);
@@ -452,13 +452,13 @@ static wmOperatorStatus shape_key_copy_exec(bContext *C, wmOperator * /*op*/)
         key_positions_new.finish();
 
         const VArray<float> key_radius_old = *attributes.lookup_or_default<float>(
-            blender::bke::greasepencil::shapekey_attribute_name_radius(kb_src->name),
+            bke::greasepencil::shapekey_attribute_name_radius(kb_src->name),
             bke::AttrDomain::Point,
             0.0f);
 
         bke::SpanAttributeWriter<float> key_radius_new =
             attributes.lookup_or_add_for_write_span<float>(
-                blender::bke::greasepencil::shapekey_attribute_name_radius(kb_new->name),
+                bke::greasepencil::shapekey_attribute_name_radius(kb_new->name),
                 bke::AttrDomain::Point);
 
         array_utils::copy(key_radius_old, key_radius_new.span);
@@ -466,13 +466,13 @@ static wmOperatorStatus shape_key_copy_exec(bContext *C, wmOperator * /*op*/)
         key_radius_new.finish();
 
         const VArray<float> key_opacity_old = *attributes.lookup_or_default<float>(
-            blender::bke::greasepencil::shapekey_attribute_name_opacity(kb_src->name),
+            bke::greasepencil::shapekey_attribute_name_opacity(kb_src->name),
             bke::AttrDomain::Point,
             0.0f);
 
         bke::SpanAttributeWriter<float> key_opacity_new =
             attributes.lookup_or_add_for_write_span<float>(
-                blender::bke::greasepencil::shapekey_attribute_name_opacity(kb_new->name),
+                bke::greasepencil::shapekey_attribute_name_opacity(kb_new->name),
                 bke::AttrDomain::Point);
 
         array_utils::copy(key_opacity_old, key_opacity_new.span);

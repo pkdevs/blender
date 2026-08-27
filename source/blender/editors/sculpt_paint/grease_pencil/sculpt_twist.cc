@@ -76,7 +76,7 @@ void TwistOperation::on_stroke_extended(const bContext &C, const InputSample &ex
           bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
           bke::SpanAttributeWriter<float3> key_positions =
               attributes.lookup_or_add_for_write_span<float3>(
-                  blender::bke::greasepencil::shapekey_attribute_name_position(actkb->name),
+                  bke::greasepencil::shapekey_attribute_name_position(actkb->name),
                   bke::AttrDomain::Point);
 
           point_mask.foreach_index(
