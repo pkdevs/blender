@@ -638,7 +638,7 @@ static void rna_def_material_greasepencil(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Mix Color", "Color for mixing with primary filling color");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialGpencil_update");
   RNA_def_property_deprecated(
-      prop, "Unused but kept for compatibility with older versions of Blender.", 501, 600);
+      prop, "Unused but kept for compatibility with older versions of Blender.", 503, 600);
 
   /* Gradient */
   prop = RNA_def_property(srna, "gradient", PROP_POINTER, PROP_NEVER_NULL);
@@ -721,7 +721,7 @@ static void rna_def_material_greasepencil(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Flip", "Flip filling colors");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialGpencil_update");
   RNA_def_property_deprecated(
-      prop, "Unused but kept for compatibility with older versions of Blender.", 501, 600);
+      prop, "Unused but kept for compatibility with older versions of Blender.", 503, 600);
 
   prop = RNA_def_property(srna, "use_overlap_strokes", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", GP_MATERIAL_DISABLE_STENCIL);
