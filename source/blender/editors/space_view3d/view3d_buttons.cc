@@ -42,6 +42,7 @@
 #include "BKE_customdata.hh"
 #include "BKE_deform.hh"
 #include "BKE_editmesh.hh"
+#include "BKE_key.hh"
 #include "BKE_layer.hh"
 #include "BKE_library.hh"
 #include "BKE_mesh_types.hh"
@@ -343,7 +344,7 @@ struct CurvesPointSelectionStatus {
 };
 
 static CurvesPointSelectionStatus init_curves_point_selection_status(
-    const bke::CurvesGeometry &curves)
+    const Key *key, const bke::CurvesGeometry &curves)
 {
   using namespace ed::curves;
 
@@ -353,9 +354,17 @@ static CurvesPointSelectionStatus init_curves_point_selection_status(
   const OffsetIndices points_by_curve = curves.points_by_curve();
   const VArray<int8_t> curve_types = curves.curve_types();
   const std::optional<Span<float>> nurbs_weights = curves.nurbs_weights();
-  const VArray<float> radius = curves.radius();
   const VArray<float> tilt = curves.tilt();
-  const Span<float3> positions = curves.positions();
+
+  Array<float3> positions = Array<float3>(curves.positions());
+  Array<float> radius(curves.points_num());
+  array_utils::copy(curves.radius(), radius.as_mutable_span());
+
+  if (key) {
+    const bke::AttributeAccessor attributes = curves.attributes();
+    bke::greasepencil::shapekey_get_applied_position(key, attributes, positions);
+    bke::greasepencil::shapekey_get_applied_radius(key, attributes, radius);
+  }
 
   IndexMaskMemory memory;
   const IndexMask selection = retrieve_selected_points(curves, memory);
@@ -421,6 +430,7 @@ static CurvesPointSelectionStatus init_curves_point_selection_status(
 static bool apply_to_curves_point_selection(const int tot,
                                             const TransformMedian_Curves &median,
                                             const TransformMedian_Curves &ve_median,
+                                            const KeyBlock *actkb,
                                             bke::CurvesGeometry &curves)
 {
   using namespace ed::curves;
@@ -434,8 +444,7 @@ static bool apply_to_curves_point_selection(const int tot,
   const VArray<int8_t> curve_types = curves.curve_types();
   const MutableSpan<float> nurbs_weights = median.nurbs_weight ? curves.nurbs_weights_for_write() :
                                                                  MutableSpan<float>{};
-  const MutableSpan<float> radius = median.radius ? curves.radius_for_write() :
-                                                    MutableSpan<float>{};
+  MutableSpan<float> radius = median.radius ? curves.radius_for_write() : MutableSpan<float>{};
   const MutableSpan<float> tilt = median.tilt ? curves.tilt_for_write() : MutableSpan<float>{};
 
   IndexMaskMemory memory;
@@ -444,6 +453,29 @@ static bool apply_to_curves_point_selection(const int tot,
   MutableSpan<float3> positions = update_location && !selection.is_empty() ?
                                       curves.positions_for_write() :
                                       MutableSpan<float3>();
+
+  bke::SpanAttributeWriter<float3> key_positions;
+  bke::SpanAttributeWriter<float> key_radius;
+  float influence = 1.0f;
+
+  if (actkb) {
+    const float keyblock_influence = actkb->curval;
+
+    if (keyblock_influence == 0.0f) {
+      return false;
+    }
+
+    influence = keyblock_influence;
+
+    bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+    key_positions = attributes.lookup_or_add_for_write_span<float3>(
+        bke::greasepencil::shapekey_position_attribute(actkb->name), bke::AttrDomain::Point);
+    key_radius = attributes.lookup_or_add_for_write_span<float>(
+        bke::greasepencil::shapekey_radius_attribute(actkb->name), bke::AttrDomain::Point);
+
+    positions = key_positions.span;
+    radius = key_radius.span;
+  }
 
   threading::parallel_for(curves.curves_range(), 512, [&](const IndexRange range) {
     for (const int curve : range) {
@@ -462,17 +494,23 @@ static bool apply_to_curves_point_selection(const int tot,
           nurbs_weights[point] = math::clamp(nurbs_weights[point], 0.01f, 100.0f);
         }
         if (median.radius) {
-          apply_raw_diff(&radius[point], tot, ve_median.radius, median.radius);
+          apply_raw_diff(&radius[point], tot, ve_median.radius, median.radius / influence);
         }
         if (median.tilt) {
           apply_raw_diff(&tilt[point], tot, ve_median.tilt, median.tilt);
         }
         if (update_location) {
-          apply_raw_diff_v3(positions[point], tot, ve_median.location, median.location);
+          apply_raw_diff_v3(
+              positions[point], tot, ve_median.location, float3(median.location) / influence);
         }
       });
     }
   });
+
+  if (actkb) {
+    key_positions.finish();
+    key_radius.finish();
+  }
 
   /* Only location can be changed for Bezier handles. */
   if (!update_location || !curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
@@ -493,7 +531,8 @@ static bool apply_to_curves_point_selection(const int tot,
         curves.attributes_for_write().lookup_for_write_span<float3>(handles_attribute);
     selection.foreach_index(
         [&](const int point) {
-          apply_raw_diff_v3(handles.span[point], tot, ve_median.location, median.location);
+          apply_raw_diff_v3(
+              handles.span[point], tot, ve_median.location, float3(median.location) / influence);
         },
         exec_mode::grain_size(2048));
     handles.finish();
@@ -879,6 +918,7 @@ static void v3d_editvertex_buts(
       using namespace ed::curves;
       Scene &scene = *CTX_data_scene(C);
       GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob->data);
+      Key *key = grease_pencil.key;
       Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(scene, grease_pencil);
 
       status = threading::parallel_reduce(
@@ -889,7 +929,8 @@ static void v3d_editvertex_buts(
             CurvesPointSelectionStatus value = acc;
             for (const int drawing : range) {
               value = CurvesPointSelectionStatus::sum(
-                  value, init_curves_point_selection_status(drawings[drawing].drawing.strokes()));
+                  value,
+                  init_curves_point_selection_status(key, drawings[drawing].drawing.strokes()));
             }
             return value;
           },
@@ -898,7 +939,7 @@ static void v3d_editvertex_buts(
     else {
       using namespace ed::curves;
       const Curves &curves_id = *id_cast<Curves *>(ob->data);
-      status = init_curves_point_selection_status(curves_id.geometry.wrap());
+      status = init_curves_point_selection_status(nullptr, curves_id.geometry.wrap());
     }
 
     TransformMedian_Curves &median = median_basis.curves;
@@ -1686,11 +1727,17 @@ static void v3d_editvertex_buts(
       Scene &scene = *CTX_data_scene(C);
       GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob->data);
       Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(scene, grease_pencil);
+      Key *key = grease_pencil.key;
+      KeyBlock *actkb = BKE_keyblock_find_by_index(key, ob->shapenr - 1);
+
+      if (!key || ob->shapenr == 1) {
+        actkb = nullptr;
+      }
 
       threading::parallel_for_each(drawings, [&](const MutableDrawingInfo &info) {
         bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
         if (apply_to_curves_point_selection(
-                tot, median_basis.curves, ve_median_basis.curves, curves))
+                tot, median_basis.curves, ve_median_basis.curves, actkb, curves))
         {
           info.drawing.tag_positions_changed();
         }
@@ -1705,7 +1752,7 @@ static void v3d_editvertex_buts(
       Curves &curves_id = *id_cast<Curves *>(ob->data);
       bke::CurvesGeometry &curves = curves_id.geometry.wrap();
       if (apply_to_curves_point_selection(
-              tot, median_basis.curves, ve_median_basis.curves, curves))
+              tot, median_basis.curves, ve_median_basis.curves, nullptr, curves))
       {
         curves.tag_positions_changed();
       }
