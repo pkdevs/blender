@@ -218,6 +218,7 @@ static Scene *preview_prepare_scene(const Main *bmain,
   ED_preview_world_simple_set_rgb(scene_preview->world, float4{0.05f, 0.05f, 0.05f, 0.05f});
 
   BLI_addtail(&pr_main->materials, mat_copy);
+  BKE_libblock_owner_bmain_set(mat_copy->id, pr_main);
 
   ED_preview_set_visibility(pr_main, scene_preview, view_layer, preview_type, PR_BUTS_RENDER);
 
