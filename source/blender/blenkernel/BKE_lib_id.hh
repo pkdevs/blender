@@ -91,6 +91,12 @@ struct ID_Runtime {
    * freed and the pointer set to `nullptr`.
    */
   ID_Readfile_Data *readfile_data = nullptr;
+
+  /**
+   * #Main data-base containing this ID. Each ID can be in at most one #Main at the same time. This
+   * is null for e.g. evaluated data.
+   */
+  const Main *owner_bmain = nullptr;
 };
 
 }  // namespace bke::id

@@ -40,6 +40,7 @@ struct ID;
 struct Library;
 struct PackedFile;
 struct UniqueName_Map;
+struct Main;
 
 struct IDPropertyUIData {
   /** Tool-tip / property description pointer. Owned by the #IDProperty. */
@@ -543,6 +544,12 @@ struct ID {
   {
     return GS(this->name);
   }
+
+  /**
+   * Get the #Main data-base containing this ID. An ID can be in at most one #Main at the same
+   * time. This is null for e.g. evaluated data.
+   */
+  const Main *owner_bmain() const;
 #endif
 };
 

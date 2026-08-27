@@ -2933,6 +2933,11 @@ void BKE_id_blend_write(BlendWriter *writer, ID *id)
   }
 }
 
+const Main *ID::owner_bmain() const
+{
+  return this->runtime->owner_bmain;
+}
+
 struct SomeTypeWithIDMember {
   int id;
 };
