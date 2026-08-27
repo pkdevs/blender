@@ -2278,6 +2278,20 @@ std::string shapekey_attribute_name_opacity(const char *name)
   return std::string(attr_name);
 }
 
+std::string shapekey_attribute_name_handle_left(const char *name)
+{
+  char attr_name[64];
+  SNPRINTF_UTF8(attr_name, "SKL_%s", name);
+  return std::string(attr_name);
+}
+
+std::string shapekey_attribute_name_handle_right(const char *name)
+{
+  char attr_name[64];
+  SNPRINTF_UTF8(attr_name, "SKR_%s", name);
+  return std::string(attr_name);
+}
+
 void shapekey_get_applied_position(const Key *key,
                                    const bke::AttributeAccessor &attributes,
                                    MutableSpan<float3> position)
@@ -2420,6 +2434,100 @@ void shapekey_get_applied_opacity(const Key *key,
   });
 }
 
+void shapekey_get_applied_handle_left(const Key *key,
+                                      const bke::AttributeAccessor &attributes,
+                                      MutableSpan<float3> position)
+{
+  /* The handles are offset by the main position attributes. */
+  shapekey_get_applied_position(key, attributes, position);
+
+  for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
+    /* Skip the base key frame. */
+    if (&keyblock == key->refkey) {
+      continue;
+    }
+    if (keyblock.flag & KEYBLOCK_MUTE) {
+      continue;
+    }
+
+    const float keyblock_influence = keyblock.curval;
+    if (keyblock_influence == 0.0f) {
+      continue;
+    }
+
+    /* Reference can be any block. */
+    KeyBlock *ref_keyblock = static_cast<KeyBlock *>(BLI_findlink(&key->block, keyblock.relative));
+    if (ref_keyblock == nullptr) {
+      continue;
+    }
+    /* If the reference block is the same as the current block nothing will happen, so
+     * skip. */
+    if (&keyblock == ref_keyblock) {
+      continue;
+    }
+
+    const VArray<float3> key_position_left = *attributes.lookup_or_default<float3>(
+        shapekey_attribute_name_handle_left(keyblock.name), bke::AttrDomain::Point, float3(0.0f));
+    const VArray<float3> ref_key_position_left = *attributes.lookup_or_default<float3>(
+        shapekey_attribute_name_handle_left(ref_keyblock->name),
+        bke::AttrDomain::Point,
+        float3(0.0f));
+
+    threading::parallel_for(position.index_range(), 4096, [&](const IndexRange range) {
+      for (const int i : range) {
+        position[i] += (key_position_left[i] - ref_key_position_left[i]) * keyblock_influence;
+      }
+    });
+  }
+}
+
+void shapekey_get_applied_handle_right(const Key *key,
+                                       const bke::AttributeAccessor &attributes,
+                                       MutableSpan<float3> position)
+{
+  /* The handles are offset by the main position attributes. */
+  shapekey_get_applied_position(key, attributes, position);
+
+  for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
+    /* Skip the base key frame. */
+    if (&keyblock == key->refkey) {
+      continue;
+    }
+    if (keyblock.flag & KEYBLOCK_MUTE) {
+      continue;
+    }
+
+    const float keyblock_influence = keyblock.curval;
+    if (keyblock_influence == 0.0f) {
+      continue;
+    }
+
+    /* Reference can be any block. */
+    KeyBlock *ref_keyblock = static_cast<KeyBlock *>(BLI_findlink(&key->block, keyblock.relative));
+    if (ref_keyblock == nullptr) {
+      continue;
+    }
+    /* If the reference block is the same as the current block nothing will happen, so
+     * skip. */
+    if (&keyblock == ref_keyblock) {
+      continue;
+    }
+
+    const VArray<float3> key_position_right = *attributes.lookup_or_default<float3>(
+        shapekey_attribute_name_handle_right(keyblock.name), bke::AttrDomain::Point, float3(0.0f));
+    const VArray<float3> ref_key_position_right = *attributes.lookup_or_default<float3>(
+        shapekey_attribute_name_handle_right(ref_keyblock->name),
+        bke::AttrDomain::Point,
+        float3(0.0f));
+
+    threading::parallel_for(position.index_range(), 4096, [&](const IndexRange range) {
+      for (const int i : range) {
+        position[i] += (key_position_right[i] - ref_key_position_right[i]) * keyblock_influence;
+      }
+    });
+  }
+}
+
 void shapekey_set_applied_position(const Key *key,
                                    const KeyBlock *actkb,
                                    const IndexMask &selection,
@@ -2492,6 +2600,58 @@ void shapekey_set_applied_opacity(const Key *key,
   });
 
   key_opacity.finish();
+}
+
+void shapekey_set_applied_handle_left(const Key *key,
+                                      const KeyBlock *actkb,
+                                      const IndexMask &selection,
+                                      const Span<float3> new_position,
+                                      bke::MutableAttributeAccessor &attributes)
+{
+  const float keyblock_influence = actkb->curval;
+
+  const VArray<float3> position = *attributes.lookup<float3>("handle_left",
+                                                             bke::AttrDomain::Point);
+
+  Array<float3> old_position(position.size());
+  array_utils::copy(position, old_position.as_mutable_span());
+  shapekey_get_applied_handle_left(key, attributes, old_position.as_mutable_span());
+
+  bke::SpanAttributeWriter<float3> key_position = attributes.lookup_or_add_for_write_span<float3>(
+      shapekey_attribute_name_handle_left(actkb->name), bke::AttrDomain::Point);
+
+  selection.foreach_index([&](const int point_i) {
+    key_position.span[point_i] += (new_position[point_i] - old_position[point_i]) /
+                                  keyblock_influence;
+  });
+
+  key_position.finish();
+}
+
+void shapekey_set_applied_handle_right(const Key *key,
+                                       const KeyBlock *actkb,
+                                       const IndexMask &selection,
+                                       const Span<float3> new_position,
+                                       bke::MutableAttributeAccessor &attributes)
+{
+  const float keyblock_influence = actkb->curval;
+
+  const VArray<float3> position = *attributes.lookup<float3>("handle_right",
+                                                             bke::AttrDomain::Point);
+
+  Array<float3> old_position(position.size());
+  array_utils::copy(position, old_position.as_mutable_span());
+  shapekey_get_applied_handle_right(key, attributes, old_position.as_mutable_span());
+
+  bke::SpanAttributeWriter<float3> key_position = attributes.lookup_or_add_for_write_span<float3>(
+      shapekey_attribute_name_handle_right(actkb->name), bke::AttrDomain::Point);
+
+  selection.foreach_index([&](const int point_i) {
+    key_position.span[point_i] += (new_position[point_i] - old_position[point_i]) /
+                                  keyblock_influence;
+  });
+
+  key_position.finish();
 }
 
 }  // namespace bke::greasepencil
@@ -2853,6 +3013,17 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
     shapekey_get_applied_position(key, attributes, positions);
     shapekey_get_applied_radius(key, attributes, radius);
     shapekey_get_applied_opacity(key, attributes, opacity);
+
+    if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
+      MutableSpan<float3> handle_positions_left = curves.handle_positions_left_for_write();
+      MutableSpan<float3> handle_positions_right = curves.handle_positions_right_for_write();
+
+      shapekey_get_applied_handle_left(key, attributes, handle_positions_left);
+      shapekey_get_applied_handle_right(key, attributes, handle_positions_right);
+
+      curves.calculate_bezier_auto_handles();
+      curves.calculate_bezier_aligned_handles();
+    }
 
     bke::GreasePencilDrawingEditHints *layer_edit_hints = edit_hints.is_empty() ?
                                                               nullptr :

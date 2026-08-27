@@ -367,20 +367,23 @@ bke::crazyspace::GeometryDeformation get_drawing_deformation(
       &params.ob_eval, params.ob_orig, params.drawing);
 }
 
-Array<float2> view_positions_from_point_mask(const GreasePencilStrokeParams &params,
-                                             const IndexMask &point_mask)
+Array<float2> view_positions_from_span_point_mask(const GreasePencilStrokeParams &params,
+                                                  const Span<float3> positions,
+                                                  const IndexMask &selection)
 {
-  const bke::crazyspace::GeometryDeformation deformation = get_drawing_deformation(params);
+  Array<float2> view_positions(positions.size());
 
-  Array<float2> view_positions(deformation.positions.size());
+  if (positions.is_empty()) {
+    return view_positions;
+  }
 
   /* Compute screen space positions. */
   const float4x4 transform = params.layer.to_world_space(params.ob_eval);
-  point_mask.foreach_index(
+  selection.foreach_index(
       [&](const int64_t point_i) {
-        const eV3DProjStatus result = ED_view3d_project_float_global(
+        eV3DProjStatus result = ED_view3d_project_float_global(
             &params.region,
-            math::transform_point(transform, deformation.positions[point_i]),
+            math::transform_point(transform, positions[point_i]),
             view_positions[point_i],
             V3D_PROJ_TEST_CLIP_NEAR | V3D_PROJ_TEST_CLIP_FAR);
         if (result != V3D_PROJ_RET_OK) {
@@ -390,6 +393,14 @@ Array<float2> view_positions_from_point_mask(const GreasePencilStrokeParams &par
       exec_mode::grain_size(4096));
 
   return view_positions;
+}
+
+Array<float2> view_positions_from_point_mask(const GreasePencilStrokeParams &params,
+                                             const IndexMask &point_mask)
+{
+  const bke::crazyspace::GeometryDeformation deformation = get_drawing_deformation(params);
+
+  return view_positions_from_span_point_mask(params, deformation.positions, point_mask);
 }
 
 Array<float2> view_positions_from_curve_mask(const GreasePencilStrokeParams &params,
@@ -426,28 +437,8 @@ Array<float2> view_positions_left_from_point_mask(const GreasePencilStrokeParams
 {
   const Span<float3> handle_positions_left =
       params.drawing.strokes().handle_positions_left().value_or(Span<float3>());
-  Array<float2> view_positions(handle_positions_left.size());
 
-  if (handle_positions_left.is_empty()) {
-    return view_positions;
-  }
-
-  /* Compute screen space positions. */
-  const float4x4 transform = params.layer.to_world_space(params.ob_eval);
-  selection.foreach_index(
-      [&](const int64_t point_i) {
-        eV3DProjStatus result = ED_view3d_project_float_global(
-            &params.region,
-            math::transform_point(transform, handle_positions_left[point_i]),
-            view_positions[point_i],
-            V3D_PROJ_TEST_CLIP_NEAR | V3D_PROJ_TEST_CLIP_FAR);
-        if (result != V3D_PROJ_RET_OK) {
-          view_positions[point_i] = float2(invalid_screen_position);
-        }
-      },
-      exec_mode::grain_size(4096));
-
-  return view_positions;
+  return view_positions_from_span_point_mask(params, handle_positions_left, selection);
 }
 
 Array<float2> view_positions_right_from_point_mask(const GreasePencilStrokeParams &params,
@@ -455,28 +446,8 @@ Array<float2> view_positions_right_from_point_mask(const GreasePencilStrokeParam
 {
   const Span<float3> handle_positions_right =
       params.drawing.strokes().handle_positions_right().value_or(Span<float3>());
-  Array<float2> view_positions(handle_positions_right.size());
 
-  if (handle_positions_right.is_empty()) {
-    return view_positions;
-  }
-
-  /* Compute screen space positions. */
-  const float4x4 transform = params.layer.to_world_space(params.ob_eval);
-  selection.foreach_index(
-      [&](const int64_t point_i) {
-        eV3DProjStatus result = ED_view3d_project_float_global(
-            &params.region,
-            math::transform_point(transform, handle_positions_right[point_i]),
-            view_positions[point_i],
-            V3D_PROJ_TEST_CLIP_NEAR | V3D_PROJ_TEST_CLIP_FAR);
-        if (result != V3D_PROJ_RET_OK) {
-          view_positions[point_i] = float2(invalid_screen_position);
-        }
-      },
-      exec_mode::grain_size(4096));
-
-  return view_positions;
+  return view_positions_from_span_point_mask(params, handle_positions_right, selection);
 }
 
 Array<float> view_radii_from_point_selection(const GreasePencilStrokeParams &params,

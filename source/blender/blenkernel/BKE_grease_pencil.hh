@@ -980,6 +980,8 @@ void ensure_non_empty_layer_names(Main &bmain, GreasePencil &grease_pencil);
 std::string shapekey_attribute_name_position(const char *name);
 std::string shapekey_attribute_name_radius(const char *name);
 std::string shapekey_attribute_name_opacity(const char *name);
+std::string shapekey_attribute_name_handle_left(const char *name);
+std::string shapekey_attribute_name_handle_right(const char *name);
 
 void shapekey_get_applied_position(const Key *key,
                                    const bke::AttributeAccessor &attributes,
@@ -990,6 +992,12 @@ void shapekey_get_applied_radius(const Key *key,
 void shapekey_get_applied_opacity(const Key *key,
                                   const bke::AttributeAccessor &attributes,
                                   MutableSpan<float> opacity);
+void shapekey_get_applied_handle_left(const Key *key,
+                                      const bke::AttributeAccessor &attributes,
+                                      MutableSpan<float3> position);
+void shapekey_get_applied_handle_right(const Key *key,
+                                       const bke::AttributeAccessor &attributes,
+                                       MutableSpan<float3> position);
 
 void shapekey_set_applied_position(const Key *key,
                                    const KeyBlock *actkb,
@@ -1006,6 +1014,16 @@ void shapekey_set_applied_opacity(const Key *key,
                                   const IndexMask &selection,
                                   const Span<float> new_opacity,
                                   bke::MutableAttributeAccessor &attributes);
+void shapekey_set_applied_handle_left(const Key *key,
+                                      const KeyBlock *actkb,
+                                      const IndexMask &selection,
+                                      const Span<float3> new_position,
+                                      bke::MutableAttributeAccessor &attributes);
+void shapekey_set_applied_handle_right(const Key *key,
+                                       const KeyBlock *actkb,
+                                       const IndexMask &selection,
+                                       const Span<float3> new_position,
+                                       bke::MutableAttributeAccessor &attributes);
 
 }  // namespace greasepencil
 

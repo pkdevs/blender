@@ -146,24 +146,29 @@ void SmoothOperation::on_stroke_extended(const bContext &C, const InputSample &e
             const float keyblock_influence = actkb->curval;
 
             if (keyblock_influence != 0.0f) {
-              Array<float3> applied_positions(curves.points_num());
-              array_utils::copy(curves.positions(), applied_positions.as_mutable_span());
+              bke::CurvesGeometry curves_copy = bke::CurvesGeometry(curves);
 
               bke::greasepencil::shapekey_get_applied_position(
-                  key, attributes, applied_positions.as_mutable_span());
+                  key, attributes, curves_copy.positions_for_write());
+              bke::greasepencil::shapekey_get_applied_handle_left(
+                  key, attributes, curves_copy.handle_positions_left_for_write());
+              bke::greasepencil::shapekey_get_applied_handle_right(
+                  key, attributes, curves_copy.handle_positions_right_for_write());
 
-              geometry::smooth_curve_attribute(curves.curves_range(),
-                                               points_by_curve,
+              geometry::smooth_curve_positions(curves_copy,
+                                               curves_copy.curves_range(),
                                                selection_varray,
-                                               cyclic,
                                                iterations,
                                                influences,
                                                false,
-                                               false,
-                                               applied_positions.as_mutable_span());
+                                               false);
 
               bke::greasepencil::shapekey_set_applied_position(
-                  key, actkb, point_mask, applied_positions.as_span(), attributes);
+                  key, actkb, point_mask, curves_copy.positions(), attributes);
+              bke::greasepencil::shapekey_set_applied_handle_left(
+                  key, actkb, point_mask, *curves_copy.handle_positions_left(), attributes);
+              bke::greasepencil::shapekey_set_applied_handle_right(
+                  key, actkb, point_mask, *curves_copy.handle_positions_right(), attributes);
             }
           }
           else {

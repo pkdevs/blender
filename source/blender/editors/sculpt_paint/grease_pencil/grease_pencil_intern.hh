@@ -142,6 +142,9 @@ bke::crazyspace::GeometryDeformation get_drawing_deformation(
 constexpr float invalid_screen_position = -1e10f;
 
 /* Project points from layer space into 2D view space. */
+Array<float2> view_positions_from_span_point_mask(const GreasePencilStrokeParams &params,
+                                                  const Span<float3> positions,
+                                                  const IndexMask &point_mask);
 Array<float2> view_positions_from_point_mask(const GreasePencilStrokeParams &params,
                                              const IndexMask &point_mask);
 Array<float2> view_positions_left_from_point_mask(const GreasePencilStrokeParams &params,
