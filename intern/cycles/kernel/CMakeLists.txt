@@ -132,6 +132,7 @@ set(SRC_KERNEL_GEOM_HEADERS
   geom/gsplat.h
   geom/gsplat_intersect.h
   geom/motion_curve.h
+  geom/motion_gsplat.h
   geom/motion_point.h
   geom/motion_triangle.h
   geom/motion_triangle_intersect.h

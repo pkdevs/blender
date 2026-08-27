@@ -7,6 +7,8 @@
 #include "kernel/globals.h"
 #include "kernel/types.h"
 
+#include "kernel/geom/motion_gsplat.h"
+
 /* Gaussian splats evaluation and utility functions.
  *
  * References:
@@ -28,10 +30,14 @@ CCL_NAMESPACE_BEGIN
 
 ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private ShaderData &sd)
 {
+  kernel_assert(sd.type & PRIMITIVE_GSPLAT);
+
   const int radiance_base_offset =
       kernel_data_fetch(objects, sd.object).gsplat.radiance_base_offset;
-  const float4 radiance_base = kernel_data_fetch(attributes_float4,
-                                                 radiance_base_offset + sd.prim);
+  const float4 radiance_base = (sd.type & PRIMITIVE_MOTION) ?
+                                   motion_gsplat_radiance_base(kg, sd.object, sd.prim, sd.time) :
+                                   kernel_data_fetch(attributes_float4,
+                                                     radiance_base_offset + sd.prim);
 
   /* Transform incident direction into the local pointcloud object.
    * This is easier than transforming spherical harmonics into the world space.
@@ -46,6 +52,7 @@ ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private Sha
 
   float3 color_srgb = spherical_harmonics_evaluate_band_L0(direction, make_float3(radiance_base));
 
+  /* TODO(sergey): Support motion blur for spherical harmonics. */
   const int radiance_spherical_harmonics_offset =
       kernel_data_fetch(objects, sd.object).gsplat.radiance_spherical_harmonics_offset;
   if (radiance_spherical_harmonics_offset != ATTR_STD_NOT_FOUND) {
@@ -60,7 +67,8 @@ ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private Sha
 }
 
 /* Get gaussian splat normal in the object space. */
-ccl_device_inline float3 gsplat_normal(KernelGlobals kg, const int object, const int prim)
+ccl_device_inline float3 gsplat_normal(
+    KernelGlobals kg, const int object, const int prim, const float time, const int primitive_type)
 {
   /* Follows the "Flattening 3D Gaussian" section of [chen2024pgsr].
    *
@@ -81,13 +89,39 @@ ccl_device_inline float3 gsplat_normal(KernelGlobals kg, const int object, const
    * is the column of the matrix R with the same index as the component of the local normal that is
    * set to 1. */
 
-  /* TODO(sergey): Solve ambiguity when there are two smallest axis.*/
+  /* TODO(sergey): Solve ambiguity when there are two smallest axis. */
   /* The paper mentions this case explicitly and that it is solved using the view direction. */
 
   const int scale_offset = kernel_data_fetch(objects, object).gsplat.scale_offset;
   const int rotation_offset = kernel_data_fetch(objects, object).gsplat.rotation_offset;
-  const float3 scale = kernel_data_fetch(attributes_float3, scale_offset + prim);
-  const float4 rotation = kernel_data_fetch(attributes_float4, rotation_offset + prim);
+
+  float3 scale;
+  float4 rotation;
+  if ((primitive_type & PRIMITIVE_MOTION) == 0) {
+    scale = kernel_data_fetch(attributes_float3, scale_offset + prim);
+    rotation = kernel_data_fetch(attributes_float4, rotation_offset + prim);
+  }
+  else {
+    /* Get motion info. */
+    const int num_verts = kernel_data_fetch(objects, object).numverts;
+    int step, num_steps;
+    float t;
+    motion_gsplat_compute_info(kg, object, time, &num_steps, &step, &t);
+
+    const int offset_for_step = motion_point_offset_for_step(num_verts, num_steps, step) + prim;
+    const int offset_for_next_step = motion_point_offset_for_step(num_verts, num_steps, step + 1) +
+                                     prim;
+
+    scale = kernel_data_fetch(attributes_float3, scale_offset + offset_for_step);
+    const float3 next_scale = kernel_data_fetch(attributes_float3,
+                                                scale_offset + offset_for_next_step);
+    scale = (1.0f - t) * scale + t * next_scale;
+
+    rotation = kernel_data_fetch(attributes_float4, rotation_offset + offset_for_step);
+    const float4 next_rotation = kernel_data_fetch(attributes_float4,
+                                                   rotation_offset + offset_for_next_step);
+    rotation = motion_gsplat_rotation_interpolate(rotation, next_rotation, t);
+  }
 
 #  if 0
   /* The naive implementation, for the reference. */

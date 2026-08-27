@@ -259,11 +259,20 @@ ccl_device_inline void custom_intersect(const RTCIntersectFunctionNArguments *ar
   const int prim_offset = kernel_data_fetch(object_prim_offset, object);
   const int prim = args->primID + prim_offset;
 
-  assert(kernel_data_fetch(objects, object).primitive_type & PRIMITIVE_GSPLAT);
+  const int primitive_type = kernel_data_fetch(objects, object).primitive_type;
+  assert(primitive_type & PRIMITIVE_GSPLAT);
 
   float isect_t;
-  if (!gsplat_intersect_test(
-          kg, ray_P, ray_D, ray_hit->ray.tnear, ray_hit->ray.tfar, object, prim, isect_t))
+  if (!gsplat_intersect_test(kg,
+                             ray_P,
+                             ray_D,
+                             ray_hit->ray.tnear,
+                             ray_hit->ray.tfar,
+                             object,
+                             prim,
+                             ray_hit->ray.time,
+                             primitive_type,
+                             isect_t))
   {
     args->valid[0] = 0;
     return;

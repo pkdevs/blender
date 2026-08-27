@@ -141,6 +141,27 @@ void PointCloud::copy_center_to_motion_step(const int motion_step)
   if (attr_R->has_motion()) {
     std::copy_n(get_radius(), numpoints, attr_R->data_for_write<float>(attr_step));
   }
+
+  /* Gaussian splat attributes. */
+  if (Attribute *attr_radiance_base = attributes.find(ATTR_STD_GSPLAT_RADIANCE_BASE);
+      attr_radiance_base->has_motion())
+  {
+    std::copy_n(attr_radiance_base->data<float4>(),
+                numpoints,
+                attr_radiance_base->data_for_write<float4>(attr_step));
+  }
+  if (Attribute *attr_scale = attributes.find(ATTR_STD_GSPLAT_SCALE); attr_scale->has_motion()) {
+    std::copy_n(attr_scale->data<packed_float3>(),
+                numpoints,
+                attr_scale->data_for_write<packed_float3>(attr_step));
+  }
+  if (Attribute *attr_rotation = attributes.find(ATTR_STD_GSPLAT_ROTATION);
+      attr_rotation->has_motion())
+  {
+    std::copy_n(attr_rotation->data<float4>(),
+                numpoints,
+                attr_rotation->data_for_write<float4>(attr_step));
+  }
 }
 
 void PointCloud::get_uv_tiles(ustring map, unordered_set<int> &tiles)
@@ -289,10 +310,6 @@ void PointCloud::update_gsplat_radii()
    * Using Formula (7) from the paper with some tweaks.
    * Since spheres are rotation-agnostic we only consider scale. */
 
-  /* Minimum response of the gaussian splat which must be captures.
-   * The value comes from the paper. */
-  constexpr float ALPHA_MIN = 0.01f;
-
   if ((primitive_type() & PRIMITIVE_GSPLAT) == 0) {
     return;
   }
@@ -308,18 +325,43 @@ void PointCloud::update_gsplat_radii()
 
   float *radius_data = get_radius_for_write();
 
+  auto estimate_gsplat_radius = [](const float opacity, const float3 scale) -> float {
+    /* Minimum response of the gaussian splat which must be captures.
+     * The value comes from the paper. */
+    constexpr float ALPHA_MIN = 0.01f;
+
+    if (opacity < ALPHA_MIN) {
+      return 0.0f;
+    }
+    const float factor = sqrtf(2.0f * logf(opacity / ALPHA_MIN));
+    return reduce_max(fabs(factor * scale));
+  };
+
+  /* Calculate bounding radius for the center step or gaussian splats without motion blur. */
   parallel_for(blocked_range<size_t>(0, num_points(), 32), [&](const blocked_range<size_t> &r) {
     for (size_t i = r.begin(); i != r.end(); i++) {
-      const float opacity = radiance_base_data[i].w;
-      if (opacity < ALPHA_MIN) {
-        radius_data[i] = 0;
-        continue;
-      }
-      const float factor = sqrtf(2.0f * logf(opacity / ALPHA_MIN));
-      const float3 scale = fabs(factor * scale_data[i]);
-      radius_data[i] = reduce_max(scale);
+      radius_data[i] = estimate_gsplat_radius(radiance_base_data[i].w, scale_data[i]);
     }
   });
+
+  Attribute *attr_R = attributes.find(ATTR_STD_RADIUS);
+  if (attr_R->has_motion()) {
+    for (int step = 1; step <= int(attr_R->motion.size()); step++) {
+      const float4 *motion_radiance_base = attr_radiance_base->has_motion() ?
+                                               attr_radiance_base->data<float4>(step) :
+                                               radiance_base_data;
+      const packed_float3 *motion_scale = attr_scale->has_motion() ?
+                                              attr_scale->data<packed_float3>(step) :
+                                              scale_data;
+      float *motion_R = attr_R->data_for_write<float>(step);
+      parallel_for(
+          blocked_range<size_t>(0, num_points(), 32), [&](const blocked_range<size_t> &r) {
+            for (size_t i = r.begin(); i != r.end(); i++) {
+              motion_R[i] = estimate_gsplat_radius(motion_radiance_base[i].w, motion_scale[i]);
+            }
+          });
+    }
+  }
 }
 
 PrimitiveType PointCloud::primitive_type() const

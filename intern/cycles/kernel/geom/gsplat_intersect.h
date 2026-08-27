@@ -7,6 +7,7 @@
 #include "kernel/globals.h"
 #include "kernel/types.h"
 
+#include "kernel/geom/motion_gsplat.h"
 #include "kernel/geom/object.h"
 #include "kernel/geom/point_intersect.h"
 
@@ -40,6 +41,62 @@ CCL_NAMESPACE_BEGIN
 #ifdef __POINTCLOUD__
 
 #  if defined(__GSPLATS__)
+
+/* Parameters of the gaussian splat that are needed for intersection. */
+struct GSplatIsectParams {
+  float3 scale;
+  float4 rotation;
+  float4 radiance_base;
+};
+
+/* Optimized access to gaussian splat parameters for the intersection purposes.
+ * Reuses steps calculation to access multiple motion attributes. */
+ccl_device_forceinline GSplatIsectParams gsplat_intersect_get_params(
+    KernelGlobals kg, const int object, const int prim, const float time, const int primitive_type)
+{
+  const int scale_offset = kernel_data_fetch(objects, object).gsplat.scale_offset;
+  const int rotation_offset = kernel_data_fetch(objects, object).gsplat.rotation_offset;
+  const int radiance_base_offset = kernel_data_fetch(objects, object).gsplat.radiance_base_offset;
+
+  GSplatIsectParams params;
+
+  if ((primitive_type & PRIMITIVE_MOTION) == 0) {
+    params.scale = kernel_data_fetch(attributes_float3, scale_offset + prim);
+    params.rotation = kernel_data_fetch(attributes_float4, rotation_offset + prim);
+    params.radiance_base = kernel_data_fetch(attributes_float4, radiance_base_offset + prim);
+    return params;
+  }
+
+  /* Get motion info. */
+  const int num_verts = kernel_data_fetch(objects, object).numverts;
+  int step, num_steps;
+  float t;
+  motion_gsplat_compute_info(kg, object, time, &num_steps, &step, &t);
+
+  const int offset_for_step = motion_point_offset_for_step(num_verts, num_steps, step) + prim;
+  const int offset_for_next_step = motion_point_offset_for_step(num_verts, num_steps, step + 1) +
+                                   prim;
+
+  const float3 scale = kernel_data_fetch(attributes_float3, scale_offset + offset_for_step);
+  const float3 next_scale = kernel_data_fetch(attributes_float3,
+                                              scale_offset + offset_for_next_step);
+
+  const float4 rotation = kernel_data_fetch(attributes_float4, rotation_offset + offset_for_step);
+  const float4 next_rotation = kernel_data_fetch(attributes_float4,
+                                                 rotation_offset + offset_for_next_step);
+
+  const float4 radiance_base = kernel_data_fetch(attributes_float4,
+                                                 radiance_base_offset + offset_for_step);
+  const float4 next_radiance_base = kernel_data_fetch(attributes_float4,
+                                                      radiance_base_offset + offset_for_next_step);
+
+  params.scale = (1.0f - t) * scale + t * next_scale;
+  params.rotation = motion_gsplat_rotation_interpolate(rotation, next_rotation, t);
+  params.radiance_base = (1.0f - t) * radiance_base + t * next_radiance_base;
+
+  return params;
+}
+
 /* Intersect ray against gaussian splat.
  * Performs stochastic alpha test described in [sun2025]. */
 ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
@@ -49,10 +106,14 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
                                                   const float ray_tmax,
                                                   const int object,
                                                   const int prim,
+                                                  const float time,
+                                                  const int primitive_type,
                                                   ccl_private float &r_t)
 {
   const int position_offset = kernel_data_fetch(objects, object).position_offset;
-  const float4 point = kernel_data_fetch(points, position_offset + prim);
+  const float4 point = (primitive_type & PRIMITIVE_MOTION) ?
+                           motion_gsplat_point(kg, object, prim, time) :
+                           kernel_data_fetch(points, position_offset + prim);
 
   /* Intersect with the bounding sphere.
    * Equivalent to IsNegligible() check in Algorithm 1 of [sun2025]. */
@@ -61,12 +122,8 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
     return false;
   }
 
-  const int scale_offset = kernel_data_fetch(objects, object).gsplat.scale_offset;
-  const int rotation_offset = kernel_data_fetch(objects, object).gsplat.rotation_offset;
-  const int radiance_base_offset = kernel_data_fetch(objects, object).gsplat.radiance_base_offset;
-  const float3 scale = kernel_data_fetch(attributes_float3, scale_offset + prim);
-  const float4 rotation = kernel_data_fetch(attributes_float4, rotation_offset + prim);
-  const float4 radiance_base = kernel_data_fetch(attributes_float4, radiance_base_offset + prim);
+  const GSplatIsectParams params = gsplat_intersect_get_params(
+      kg, object, prim, time, primitive_type);
 
   /* Clamp the scale to avoid division near zero when calculating the inverse covariance matrix.
    *
@@ -79,14 +136,14 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
    * work well for the Le Mont Saint Michel scene where all splats are very small, making it so
    * clamping makes the scene much more blurry than it should be. */
   /* TODO(sergey): Look into more reliable solutions. */
-  const float max_scale = reduce_max(scale);
-  const float3 scale_clamped = max(scale, make_float3(max_scale * 1e-3f));
+  const float max_scale = reduce_max(params.scale);
+  const float3 scale_clamped = max(params.scale, make_float3(max_scale * 1e-3f));
 
   const float3 mu = make_float3(point);
 
   /* [3dgrt2024] Eq. (8). */
   const float3x3 S_inv = float3x3_scale(1.0f / scale_clamped);
-  const float3x3 R = quaternion_to_rotation(rotation);
+  const float3x3 R = quaternion_to_rotation(params.rotation);
   const float3x3 R_T = transposed(R);
   const float3x3 S_inv_x_R_T = S_inv * R_T;
   const float3 o_g = S_inv_x_R_T * (ray_P - mu);
@@ -122,7 +179,7 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
    * From experimentation it seems there should indeed be this factor, otherwise the bicycle model
    * does not render correctly (parts of the wheel and brakes are missing). */
   const float3 x_minus_mu = x - mu;
-  const float particle_opacity = radiance_base.w *
+  const float particle_opacity = params.radiance_base.w *
                                  fast_expf(-1.0f / 2.0f * dot(x_minus_mu, Sigma_inv * x_minus_mu));
 
   /* Approach similar to [sun2025] who uses stateless trigonometric hash function as a source of
@@ -146,20 +203,20 @@ ccl_device_forceinline bool gsplat_intersect(KernelGlobals kg,
                                              const float ray_tmax,
                                              const int object,
                                              const int prim,
-                                             const float /*time*/,
-                                             const int type)
+                                             const float time,
+                                             const int primitive_type)
 {
-  /* TODO(sergey): Support motion blur. */
+  kernel_assert(primitive_type & PRIMITIVE_GSPLAT);
 
-  kernel_assert(type & PRIMITIVE_GSPLAT);
-
-  if (!gsplat_intersect_test(kg, ray_P, ray_D, ray_tmin, ray_tmax, object, prim, isect->t)) {
+  if (!gsplat_intersect_test(
+          kg, ray_P, ray_D, ray_tmin, ray_tmax, object, prim, time, primitive_type, isect->t))
+  {
     return false;
   }
 
   isect->prim = prim;
   isect->object = object;
-  isect->type = type;
+  isect->type = primitive_type;
   isect->u = 0.0f;
   isect->v = 0.0f;
   return true;
@@ -175,18 +232,20 @@ ccl_device_forceinline bool point_or_gsplat_intersect(KernelGlobals kg,
                                                       const int object,
                                                       const int prim,
                                                       const float time,
-                                                      const int type)
+                                                      const int primitive_type)
 {
 #  if defined(__GSPLATS__)
-  if (type & PRIMITIVE_POINT)
+  if (primitive_type & PRIMITIVE_POINT)
 #  endif
   {
-    return point_intersect(kg, isect, ray_P, ray_D, ray_tmin, ray_tmax, object, prim, time, type);
+    return point_intersect(
+        kg, isect, ray_P, ray_D, ray_tmin, ray_tmax, object, prim, time, primitive_type);
   }
 
 #  if defined(__GSPLATS__)
-  kernel_assert(type & PRIMITIVE_GSPLAT);
-  return gsplat_intersect(kg, isect, ray_P, ray_D, ray_tmin, ray_tmax, object, prim, time, type);
+  kernel_assert(primitive_type & PRIMITIVE_GSPLAT);
+  return gsplat_intersect(
+      kg, isect, ray_P, ray_D, ray_tmin, ray_tmax, object, prim, time, primitive_type);
 #  endif
 }
 
