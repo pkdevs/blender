@@ -280,16 +280,12 @@ static void calc_group_triangulation(const Mesh *mesh,
     return;
   }
 
-  /* Edge sources, in the same fixed order. */
-  Vector<SourceComponent, 2> edge_source_domains;
-  Vector<int, 3> edge_offsets;
-  if (mesh && !group.mesh_loose_edges.is_empty()) {
-    edge_source_domains.append(SourceComponent::Mesh);
-    edge_offsets.append(group.mesh_loose_edges.size());
-  }
-
+  /* For curves, cyclic curves (with more than 2 points) are added as face constraints, and
+   * non-cyclic curves are added as edge constraints. The edges are the evaluated line segments of
+   * each curve. */
   IndexMask face_curves;
   IndexMask edge_curves;
+  Vector<int> curve_segment_offsets;
   if (curves && !group.curves.is_empty()) {
     const VArray<bool> cyclic = curves->cyclic();
     face_curves = IndexMask::from_bools(group.curves, cyclic, memory);
@@ -297,6 +293,31 @@ static void calc_group_triangulation(const Mesh *mesh,
     face_curves = IndexMask::from_predicate(
         face_curves, memory, [&](const int curve) { return points_by_curve[curve].size() > 2; });
     edge_curves = face_curves.complement(group.curves, memory);
+    if (!edge_curves.is_empty()) {
+      curve_segment_offsets.resize(edge_curves.size());
+      edge_curves.foreach_index_optimized<int>(
+          [&](const int curve, const int pos) {
+            /* No need for #bke::curves::segments_num because these curves are known to
+             * be non-cyclic. Cyclic curves are processed as faces. */
+            curve_segment_offsets[pos] = points_by_curve[curve].size() - 1;
+          },
+          exec_mode::grain_size(4096));
+    }
+  }
+  curve_segment_offsets.append(0);
+  const OffsetIndices<int> edges_by_curve = offset_indices::accumulate_counts_to_offsets(
+      curve_segment_offsets.as_mutable_span());
+
+  /* Edge sources, in the same fixed order. */
+  Vector<SourceComponent, 2> edge_source_domains;
+  Vector<int, 3> edge_offsets;
+  if (mesh && !group.mesh_loose_edges.is_empty()) {
+    edge_source_domains.append(SourceComponent::Mesh);
+    edge_offsets.append(group.mesh_loose_edges.size());
+  }
+  if (!edges_by_curve.is_empty()) {
+    edge_source_domains.append(SourceComponent::Curve);
+    edge_offsets.append(int(edges_by_curve.total_size()));
   }
 
   /* Face sources, in the same fixed order. */
@@ -349,7 +370,7 @@ static void calc_group_triangulation(const Mesh *mesh,
     index_mask::build_reverse_map<int>(group.mesh_verts, mesh_vert_to_dst);
   }
   Array<int> curve_point_to_dst;
-  if (curves && !face_curves.is_empty()) {
+  if (curves && (!edges_by_curve.is_empty() || !face_curves.is_empty())) {
     curve_point_to_dst.reinitialize(curves->evaluated_points_num());
     index_mask::build_reverse_map<int>(group.curve_points, curve_point_to_dst);
   }
@@ -372,18 +393,6 @@ static void calc_group_triangulation(const Mesh *mesh,
       }
       case SourceComponent::Curve: {
         const OffsetIndices<int> points_by_curve = curves->evaluated_points_by_curve();
-
-        Array<int> segment_offsets(edge_curves.size() + 1);
-        edge_curves.foreach_index_optimized<int>(
-            [&](const int curve, const int pos) {
-              /* No need for #bke::curves::segments_num because these curves are known to
-               * be non-cyclic. Cyclic curves are processed as faces. */
-              segment_offsets[pos] = points_by_curve[curve].size() - 1;
-            },
-            exec_mode::grain_size(4096));
-        const OffsetIndices<int> edges_by_curve = offset_indices::accumulate_counts_to_offsets(
-            segment_offsets.as_mutable_span());
-
         const int dst_point_offset = points_by_source[curve_point_source].start();
         edge_curves.foreach_index_optimized<int>(
             [&](const int curve, const int pos) {
