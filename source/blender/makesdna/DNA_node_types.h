@@ -4012,8 +4012,4 @@ struct NodeStoreBundleItem {
   char _pad = {};
 };
 
-struct NodeComment {
-  char *text = nullptr;
-};
-
 }  // namespace blender

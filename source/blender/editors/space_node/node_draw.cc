@@ -3594,39 +3594,6 @@ static void reroute_node_prepare_for_draw(bNode &node)
   node.runtime->draw_bounds.ymin = loc.y - radius;
 }
 
-static void comment_node_prepare_for_draw(bNode &node, ui::Block &block)
-{
-  const float2 loc = math::round(node_to_view(node.location));
-  const float width = node.width;
-  const float padding = NODE_DYS;
-
-  NodeComment &storage = *static_cast<NodeComment *>(node.storage);
-  const StringRef full_text = storage.text ? storage.text : "";
-
-  ui::Layout &layout = ui::block_layout(&block,
-                                        ui::LayoutDirection::Vertical,
-                                        ui::LayoutType::Panel,
-                                        loc.x + padding,
-                                        loc.y - padding,
-                                        width - 2 * padding,
-                                        0,
-                                        0,
-                                        ui::style_get_dpi());
-  layout.label_markdown(full_text);
-  const int2 offset = ui::block_layout_resolve(&block);
-
-  node.runtime->draw_bounds.xmin = loc.x;
-  node.runtime->draw_bounds.xmax = loc.x + width;
-  node.runtime->draw_bounds.ymax = loc.y;
-  node.runtime->draw_bounds.ymin = std::min(float(offset.y) - padding, loc.y - 2 * NODE_DY);
-
-  block_bounds_set_explicit(&block,
-                            node.runtime->draw_bounds.xmin,
-                            node.runtime->draw_bounds.ymin,
-                            node.runtime->draw_bounds.xmax,
-                            node.runtime->draw_bounds.ymax);
-}
-
 static void node_update_nodetree(const bContext &C,
                                  TreeDrawContext &tree_draw_ctx,
                                  bNodeTree &ntree,
@@ -3648,9 +3615,6 @@ static void node_update_nodetree(const bContext &C,
 
     if (node.is_reroute()) {
       reroute_node_prepare_for_draw(node);
-    }
-    else if (node.is_type("NodeComment"_ustr)) {
-      comment_node_prepare_for_draw(node, block);
     }
     else {
       if (node.flag & NODE_COLLAPSED) {
@@ -4096,55 +4060,6 @@ static void reroute_node_draw(const bContext &C,
   block_draw(&C, &block);
 }
 
-static void node_draw_comment(const bContext &C,
-                              TreeDrawContext &tree_draw_ctx,
-                              ARegion &region,
-                              const SpaceNode & /*snode*/,
-                              bNodeTree & /*ntree*/,
-                              bNode &node,
-                              ui::Block &block)
-{
-  const rctf &rct = node.runtime->draw_bounds;
-  const View2D &v2d = region.v2d;
-
-  /* Skip if out of view. */
-  if (rct.xmax < v2d.cur.xmin || rct.xmin > v2d.cur.xmax || rct.ymax < v2d.cur.ymin ||
-      node.runtime->draw_bounds.ymin > v2d.cur.ymax)
-  {
-    block_end_ex(&C,
-                 tree_draw_ctx.bmain,
-                 tree_draw_ctx.window,
-                 tree_draw_ctx.scene,
-                 tree_draw_ctx.region,
-                 tree_draw_ctx.depsgraph,
-                 &block);
-    return;
-  }
-
-  ui::draw_roundbox_corner_set(ui::CNR_ALL);
-  ui::draw_roundbox_4fv(&rct, true, BASIS_RAD, float4(0.0f, 0.0f, 0.0f, 1.0f));
-
-  if (node.flag & SELECT) {
-    ColorTheme4f outline_color;
-    if (node.flag & NODE_ACTIVE) {
-      ui::theme::get_color_shade_alpha_4fv(TH_ACTIVE, 0, -40, outline_color);
-    }
-    else {
-      ui::theme::get_color_shade_alpha_4fv(TH_SELECT, 0, -40, outline_color);
-    }
-    ui::draw_roundbox_4fv(&rct, false, BASIS_RAD, outline_color);
-  }
-
-  block_end_ex(&C,
-               tree_draw_ctx.bmain,
-               tree_draw_ctx.window,
-               tree_draw_ctx.scene,
-               tree_draw_ctx.region,
-               tree_draw_ctx.depsgraph,
-               &block);
-  block_draw(&C, &block);
-}
-
 static void node_draw(const bContext &C,
                       TreeDrawContext &tree_draw_ctx,
                       ARegion &region,
@@ -4159,9 +4074,6 @@ static void node_draw(const bContext &C,
   }
   else if (node.is_reroute()) {
     reroute_node_draw(C, tree_draw_ctx, region, snode, ntree, node, block);
-  }
-  else if (node.is_type("NodeComment"_ustr)) {
-    node_draw_comment(C, tree_draw_ctx, region, snode, ntree, node, block);
   }
   else {
     const View2D &v2d = region.v2d;
