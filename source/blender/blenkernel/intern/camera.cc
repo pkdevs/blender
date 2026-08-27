@@ -24,6 +24,7 @@
 #include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector_c.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_rect.hh"
 #include "BLI_string.hh"
 #include "BLI_utildefines.hh"
@@ -476,7 +477,9 @@ void BKE_camera_params_compute_viewplane(
 
   const float fasp = params->use_aspect_override ? params->aspect_override :
                                                    (params->ycor * float(winy)) / float(winx);
-  float frame_width = math::min(float(winx), params->ycor * float(winy) / fasp);
+  float2 frame_size;
+  frame_size.x = math::min(float(winx), params->ycor * float(winy) / fasp);
+  frame_size.y = frame_size.x * fasp;
 
   if (params->is_ortho) {
     /* orthographic camera */
@@ -492,10 +495,9 @@ void BKE_camera_params_compute_viewplane(
   /* determine sensor fit */
   sensor_fit = BKE_camera_sensor_fit(params->sensor_fit, 1.0f, fasp);
 
-  viewfac = (sensor_fit == CAMERA_SENSOR_FIT_HOR) ? 1.0f : fasp;
+  viewfac = (sensor_fit == CAMERA_SENSOR_FIT_HOR) ? frame_size.x : frame_size.y;
 
   pixsize /= viewfac;
-  pixsize /= frame_width;
 
   /* extra zoom factor */
   pixsize *= params->zoom;
@@ -508,8 +510,8 @@ void BKE_camera_params_compute_viewplane(
   viewplane.ymax = 0.5f * params->ycor * float(winy);
 
   /* lens shift and offset */
-  dx = params->shiftx * viewfac * frame_width + winx * params->offsetx;
-  dy = params->shifty * viewfac * frame_width + winy * params->offsety;
+  dx = params->shiftx * viewfac + winx * params->offsetx;
+  dy = params->shifty * viewfac + winy * params->offsety;
 
   viewplane.xmin += dx;
   viewplane.ymin += dy;

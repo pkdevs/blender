@@ -60,10 +60,13 @@ struct CameraParams {
   int sensor_fit = 0;
 
   /**
-   * Aspect override: the aspect ratio (y-over-x) of the rect the sensor fit and framing are
-   * resolved against. The resolved frame is inscribed and centered inside the view rect. Currently
-   * it is used in the camera viewport view with scene render size aspect, so its framing follows
-   * the camera's frame rather than the viewport size or aspect.
+   * Aspect override: the aspect (y-over-x) of the camera frame, used to resolve the sensor fit
+   * and framing in place of the view rect.
+   *
+   * Only set when the frame is drawn inside the view rect instead of filling it,
+   * e.g. #BKE_camera_params_from_view3d for the camera view.
+   *
+   * \warning Never set this for rendering, it would change the render output.
    */
   bool use_aspect_override = false;
   float aspect_override = 0.0f;
