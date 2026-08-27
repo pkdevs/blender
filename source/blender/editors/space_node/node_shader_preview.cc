@@ -755,6 +755,7 @@ static void shader_preview_free(void *customdata)
   job_data->tree_previews->cached_preview_type = job_data->preview_type;
   if (job_data->mat_copy != nullptr) {
     BLI_remlink(&G.pr_main->materials, job_data->mat_copy);
+    BKE_libblock_owner_bmain_set(job_data->mat_copy->id, nullptr);
     BKE_id_free(G.pr_main, &job_data->mat_copy->id);
     job_data->mat_copy = nullptr;
   }
