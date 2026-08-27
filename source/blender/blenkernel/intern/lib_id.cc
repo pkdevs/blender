@@ -1414,6 +1414,11 @@ void BKE_libblock_owner_bmain_set(ID &id, const Main *bmain)
   id.runtime->owner_bmain = bmain;
 }
 
+const Main *ID::owner_bmain() const
+{
+  return this->runtime->owner_bmain;
+}
+
 size_t BKE_libblock_get_alloc_info(short type, const char **r_name)
 {
   const IDTypeInfo *id_type = BKE_idtype_get_info_from_idcode(type);
@@ -2940,11 +2945,6 @@ void BKE_id_blend_write(BlendWriter *writer, ID *id)
       }
     }
   }
-}
-
-const Main *ID::owner_bmain() const
-{
-  return this->runtime->owner_bmain;
 }
 
 struct SomeTypeWithIDMember {
