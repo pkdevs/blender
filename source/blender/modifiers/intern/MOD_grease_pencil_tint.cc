@@ -288,8 +288,7 @@ static void modify_fill_color(Object &ob,
     if (!gp_style) {
       return ColorGeometry4f(0.0f, 0.0f, 0.0f, 0.0f);
     }
-    const float4 average_color = float4(gp_style->fill_rgba);
-    return ColorGeometry4f(average_color);
+    return ColorGeometry4f(gp_style->fill_rgba);
   };
 
   auto get_curve_factor = [&](const int64_t curve_i) {
