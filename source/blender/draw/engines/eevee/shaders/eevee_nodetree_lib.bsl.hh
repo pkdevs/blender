@@ -908,6 +908,7 @@ void node_light_evaluation_impl(
   LightData light = lrd.light_buf[light_index];
   const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
   LightVector lv = light_vector_get(light, is_directional, position);
+
   direction = lv.L;
   distance = lv.dist;
   mask = light_attenuation_surface(light, is_directional, lv);
@@ -930,7 +931,6 @@ void node_light_evaluation_with_factor_impl(const int light_index,
   node_light_evaluation_impl(light_index, position, direction, distance, mask);
 
   LightData light = lrd.light_buf[light_index];
-
   const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
   LightVector lv = light_vector_get(light, is_directional, position);
   LightVertices light_shape_vertices = light_shape_corners(light, lv);
