@@ -1,3 +1,4 @@
 Referenced by issue #158172, Sequencer: Playback speed regression
 Referenced by commit ccaadc266d53e690273e32786fc8b9141285cb0a, Fix: VSE: Retiming movement jumps back and forth for different FPS media
 Referenced by pull request #163208, Fix: VSE: Crash when setting speed where retiming key is not clamped properly
+Referenced by commit 1ecb6318230ffaca8c295bcc3f9d48f77a109871, Fix: VSE: Crash when setting speed where retiming key is not clamped properly
