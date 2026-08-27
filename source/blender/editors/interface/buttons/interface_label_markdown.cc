@@ -334,11 +334,14 @@ class MarkdownLayouter {
         this->md_text_normal(text);
         break;
       }
+      case MD_TEXT_CODE: {
+        this->md_text_code(text);
+        break;
+      }
       case MD_TEXT_NULLCHAR:
       case MD_TEXT_BR:
       case MD_TEXT_SOFTBR:
       case MD_TEXT_ENTITY:
-      case MD_TEXT_CODE:
       case MD_TEXT_HTML:
       case MD_TEXT_LATEXMATH: {
         /* Not implemented. */
@@ -349,46 +352,154 @@ class MarkdownLayouter {
 
   void md_text_normal(const StringRef text)
   {
-    int fontid = main_fontid_;
-    int weight = default_weight_;
-    float size = default_font_size_;
-    bool italic = false;
+    const int fontid = main_fontid_;
+    const ContextFontSettings settings = this->get_context_font_settings();
+    const float start_x = this->context_block_start_x();
+    this->output_wrapped_text(
+        text, settings.size, fontid, settings.weight, settings.italic, settings.url, start_x);
+  }
+
+  void md_text_code(StringRef text)
+  {
+    const int fontid = mono_fontid_;
+    const ContextFontSettings settings = this->get_context_font_settings();
+    const float start_x = this->context_block_start_x();
+    const float line_height = BLF_height_max(fontid);
+    while (!text.is_empty()) {
+      /* Literal newlines should be taken into account in code. */
+      if (text[0] == '\n') {
+        text = text.drop_prefix(1);
+        x_ = start_x;
+        y_ -= line_height;
+        continue;
+      }
+      const int64_t newline = text.find_first_of('\n');
+      if (newline == StringRef::not_found) {
+        this->output_wrapped_text(
+            text, settings.size, fontid, settings.weight, settings.italic, settings.url, start_x);
+        break;
+      }
+      this->output_wrapped_text(text.substr(0, newline),
+                                settings.size,
+                                fontid,
+                                settings.weight,
+                                settings.italic,
+                                settings.url,
+                                start_x);
+      text = text.drop_prefix(newline);
+    }
+  }
+
+  struct ContextFontSettings {
+    float weight;
+    float size;
+    bool italic;
     std::optional<StringRef> url;
+  };
+
+  ContextFontSettings get_context_font_settings() const
+  {
+    ContextFontSettings settings;
+    settings.weight = default_weight_;
+    settings.size = default_font_size_;
+    settings.italic = false;
+    settings.url = std::nullopt;
     for (const auto &md_block : block_stack_) {
       if (const auto *header_block = std::get_if<HeaderBlock>(&md_block)) {
-        size = this->default_font_size_ * (1.0f / header_block->level + 1.0f);
+        settings.size = this->default_font_size_ * (1.0f / header_block->level + 1.0f);
       }
     }
     for (const auto &md_span : span_stack_) {
-      if (std::holds_alternative<CodeSpan>(md_span)) {
-        fontid = mono_fontid_;
-      }
       if (std::holds_alternative<StrongSpan>(md_span)) {
-        weight = 800;
+        settings.weight = 800;
       }
       if (const auto *link_span = std::get_if<LinkSpan>(&md_span)) {
-        url = link_span->url;
+        settings.url = link_span->url;
       }
       if (std::holds_alternative<EmSpan>(md_span)) {
-        italic = true;
+        settings.italic = true;
       }
     }
-
-    const float block_indentation = this->current_block_indentation();
-
-    MarkdownItemText item;
-    item.x = x_ + block_indentation;
-    item.y = y_;
-    item.size = size;
-    item.fontid = fontid;
-    item.weight = weight;
-    item.italic = italic;
-    item.text = text;
-    item.url = url;
-    cache_.md_layout.items.append(item);
+    return settings;
   }
 
-  float current_block_indentation() const
+  void output_wrapped_text(StringRef text,
+                           const float size,
+                           const int fontid,
+                           const int weight,
+                           const bool italic,
+                           const std::optional<StringRef> &url,
+                           const float start_x)
+  {
+    MarkdownItemText item_template;
+    item_template.size = size;
+    item_template.fontid = fontid;
+    item_template.weight = weight;
+    item_template.italic = italic;
+    item_template.url = url;
+
+    markdown_apply_item_font(item_template, cache_.key.aspect);
+    BLI_SCOPED_DEFER([&]() { markdown_disable_item_font(item_template); });
+
+    const int line_height = BLF_height_max(fontid);
+
+    while (!text.is_empty()) {
+      const float remaining_width = cache_.key.wrap_width - x_;
+      float needed_width = 0.0f;
+      const int64_t last_fit_char_i = int64_t(BLF_width_to_strlen(
+          fontid, text.data(), size_t(text.size()), remaining_width, &needed_width));
+
+      /* Number of bytes that should be drawn in the current line. */
+      int64_t draw_bytes = last_fit_char_i;
+      /* Number of bytes that should be skipped (this skips e.g. whitespace at the line end).*/
+      int64_t drop_bytes = last_fit_char_i;
+      const bool wrap_to_next_line = last_fit_char_i < text.size();
+
+      if (wrap_to_next_line) {
+        const int64_t last_space = (last_fit_char_i > 0) ?
+                                       text.find_last_of(' ', int64_t(last_fit_char_i) - 1) :
+                                       StringRef::not_found;
+        if (last_space != StringRef::not_found) {
+          draw_bytes = last_space;
+          /* Skip the space. */
+          drop_bytes = last_space + 1;
+          needed_width = BLF_width(fontid, text.data(), draw_bytes);
+        }
+        else if (x_ > start_x) {
+          /* Line has already started and the current word does not fit on it; retry on the next
+           * line. */
+          y_ -= line_height;
+          x_ = start_x;
+          continue;
+        }
+        else if (last_fit_char_i == 0) {
+          /* Nothing fits on an empty line; advance one character to avoid an infinit loop. */
+          draw_bytes = BLI_str_utf8_size_safe(text.data());
+          drop_bytes = draw_bytes;
+          needed_width = BLF_width(fontid, text.data(), draw_bytes);
+        }
+      }
+
+      const StringRef fitting_text = text.substr(0, draw_bytes);
+      text = text.drop_prefix(drop_bytes);
+
+      if (draw_bytes > 0) {
+        item_template.text = fitting_text;
+        item_template.x = x_;
+        item_template.y = y_;
+        cache_.md_layout.items.append(item_template);
+      }
+      if (wrap_to_next_line) {
+        y_ -= line_height;
+        x_ = start_x;
+      }
+      else {
+        x_ += needed_width;
+      }
+    }
+  }
+
+  float context_block_start_x() const
   {
     float indentation = 0.0f;
     for (const auto &md_block : block_stack_) {
