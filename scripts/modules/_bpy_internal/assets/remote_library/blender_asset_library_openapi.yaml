@@ -409,4 +409,3 @@ components:
         - "path"
         - "size_in_bytes"
         - "hash"
-        - "blender_version"

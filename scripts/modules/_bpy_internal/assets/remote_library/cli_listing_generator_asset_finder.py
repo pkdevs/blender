@@ -14,6 +14,7 @@ import urllib.parse
 from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
+from dataclasses import dataclass
 
 import bpy
 
@@ -47,6 +48,15 @@ class FileVersionInfo:
     blender_version_until: BlenderVersion = dataclasses.field(default=(), kw_only=True)
 
     path: Path
+
+
+@dataclass
+class DependencyFile:
+    absolute_path: Path = ""
+    blendlib_version: BlenderVersion | None = None  # None means the file is not at blender file
+
+    def __hash__(self):
+        return hash((self.absolute_path, self.blendlib_version))
 
 
 # Match numbers after `@b`, but do not allow leading zeroes. This prevents having different markers (and thus different
@@ -115,13 +125,14 @@ def filenames_group_by_version_metadata(paths: Iterable[Path]) -> list[FileVersi
 
 def list_assets(blendfile_version_info: FileVersionInfo,
                 asset_library_root: Path) -> tuple[api_models.FileV1,
-                                                   list[api_models.AssetV1]]:
+                                                   list[api_models.AssetV1],
+                                                   list[api_models.FileV1]]:
     blendfile = blendfile_version_info.path
 
     # Start by erasing everything from memory.
     bpy.ops.wm.read_homefile(use_factory_startup=True, use_empty=True, load_ui=False)
 
-    blendfile_info = _blendfile_info(blendfile, asset_library_root)
+    blendfile_info = _file_info(blendfile, asset_library_root)
 
     # Load asset datablocks from the blend file, and check the version of Blender used to write it.
     with bpy.data.libraries.load(str(blendfile), assets_only=True) as (
@@ -164,11 +175,12 @@ def list_assets(blendfile_version_info: FileVersionInfo,
 
     # Collect the asset data.
     assets: list[api_models.AssetV1] = []
+    dependencies: set[DependencyFile] = set()
     for attr in dir(data_to):
         if attr == 'version':
             continue
         datablocks = getattr(data_from, attr)
-        datablocks_assets = _find_assets(
+        datablocks_assets, datablock_dependencies = _find_assets(
             asset_library_root,
             blendfile_info.path,
             bl_versions,
@@ -177,6 +189,7 @@ def list_assets(blendfile_version_info: FileVersionInfo,
             should_write_thumbnails,
         )
         assets.extend(datablocks_assets)
+        dependencies.update(datablock_dependencies)
 
     # After processing is done, set the thumbnail dir mtime to that of the
     # blendfile. By tracking the mtime of the directory itself, not every
@@ -185,7 +198,88 @@ def list_assets(blendfile_version_info: FileVersionInfo,
     thumbnail_timestamper.touch(exist_ok=True)
     os.utime(thumbnail_timestamper, (blend_stat.st_atime, blend_stat.st_mtime))
 
-    return blendfile_info, assets
+    file_dependencies = []
+    for dependency in dependencies:
+        dependency_info = _file_info(dependency.absolute_path, asset_library_root)
+        dependency_info.blender_version = _version_to_string(
+            dependency.blendlib_version) if dependency.blendlib_version else None
+        file_dependencies.append(dependency_info)
+
+    return blendfile_info, assets, file_dependencies
+
+
+def _absolute_path(filepath: str, blend_filepath: Path):
+    if filepath.startswith("//"):
+        return Path(os.path.join(str(blend_filepath), filepath[2::])).absolute()
+    else:
+        return Path(filepath)
+
+
+def _find_dependencies_recursive_impl(
+        visited_pointers: set[any],
+        r_dependencies: set[DependencyFile],
+        data,
+        blend_filepath: Path,
+        asset_library_root: Path):
+
+    if getattr(data, '__module__', None) not in ('bpy.types', '_bpy_types'):
+        return
+
+    if isinstance(data, (bpy.types.Image, bpy.types.Sound, bpy.types.VectorFont)) and data.filepath:
+        dependency = DependencyFile(_absolute_path(data.filepath, blend_filepath), None)
+        r_dependencies.add(dependency)
+
+    if isinstance(data, bpy.types.ID) and data.id_data and data.id_data.library and data.id_data.library.filepath:
+        dependency = DependencyFile(
+            _absolute_path(
+                data.id_data.library.filepath,
+                blend_filepath),
+            data.id_data.library.version)
+        r_dependencies.add(dependency)
+
+    for prop in data.bl_rna.properties:
+        if prop.is_deprecated:
+            continue
+        attr = prop.identifier
+        if attr in ("parent", "owner"):
+            continue
+        if attr.startswith(("id_", "bl_", "rna_")):
+            continue
+        match prop.type:
+            case 'BOOLEAN' | 'INT' | 'FLOAT' | 'ENUM' | 'STRING':
+                continue
+            case 'COLLECTION':
+                value = getattr(data, attr, None)
+                for item in value:
+                    _find_dependencies_recursive(
+                        visited_pointers, r_dependencies, item, blend_filepath, asset_library_root)
+            case 'POINTER':
+                value = getattr(data, attr, None)
+                _find_dependencies_recursive(
+                    visited_pointers, r_dependencies, value, blend_filepath, asset_library_root)
+
+
+def _find_dependencies_recursive(
+        # Track of pointers already visited when gatering dependencies, used to avoid cicular recursion calls
+        visited_pointers: set[any],
+        r_dependencies: set[DependencyFile],  # Return set for all gathered dependencies
+        data,
+        blend_filepath: Path,
+        asset_library_root: Path):
+
+    # Avoid infinite recusion calls with circular references
+    if data in visited_pointers:
+        return
+    visited_pointers.add(data)
+    _find_dependencies_recursive_impl(visited_pointers, r_dependencies, data, blend_filepath, asset_library_root)
+
+
+def _find_asset_dependencies(datablock, blendfile_relpath: str, asset_library_root: Path) -> set[DependencyFile]:
+    dependencies: set[DependencyFile] = set()
+    blend_filepath = Path(os.path.join(asset_library_root, blendfile_relpath)).absolute()
+
+    _find_dependencies_recursive(set(), dependencies, datablock, blend_filepath, asset_library_root)
+    return dependencies
 
 
 def _find_assets(
@@ -195,14 +289,19 @@ def _find_assets(
     datablocks: bpy.types.BlendData,
     thumbnail_dir: Path,
     should_write_thumbnails: bool,
-) -> list[api_models.AssetV1]:
+) -> tuple[list[api_models.AssetV1], set[DependencyFile]]:
 
     assets = []
+    dependencies = set()
     for datablock in datablocks:
         asset_data: bpy.types.AssetData = datablock.asset_data
         if not asset_data:
             continue
-
+        asset_dependencies = _find_asset_dependencies(
+            datablock, blendfile_relpath, asset_library_root)
+        files = [blendfile_relpath]
+        files.extend([dependency.absolute_path.relative_to(asset_library_root).as_posix()
+                     for dependency in asset_dependencies])
         thumbnail_path = _thumbnail_path(datablock, thumbnail_dir)
         if thumbnail_path and should_write_thumbnails:
             _save_thumbnail(datablock, thumbnail_path)
@@ -219,14 +318,15 @@ def _find_assets(
         asset = api_models.AssetV1(
             name=datablock.name,
             id_type=datablock.id_type,
-            files=[blendfile_relpath],
+            files=files,
             thumbnail=thumbnail,
             bl_versions=bl_versions,
             meta=_get_asset_meta(asset_data),
         )
 
         assets.append(asset)
-    return assets
+        dependencies.update(asset_dependencies)
+    return assets, dependencies
 
 
 def _get_asset_meta(asset_data: bpy.types.AssetData) -> api_models.AssetMetadataV1 | None:
@@ -353,7 +453,7 @@ def _name_to_filename(value: str) -> str:
     return _re_safe_filename_dashspace.sub('-', value).strip('-_')
 
 
-def _blendfile_info(filepath: Path, asset_library_root: Path) -> api_models.FileV1:
+def _file_info(filepath: Path, asset_library_root: Path) -> api_models.FileV1:
     stat = filepath.stat()
 
     relative_posix = filepath.relative_to(asset_library_root).as_posix()
@@ -369,7 +469,7 @@ def _blendfile_info(filepath: Path, asset_library_root: Path) -> api_models.File
         url=file_url,
         hash=hashing.hash_file(filepath),
         size_in_bytes=stat.st_size,
-        blender_version="",  # Determined later when the file is opened to find assets.
+        blender_version=None,  # Determined later if this file a blend file.
     )
 
 

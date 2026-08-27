@@ -114,11 +114,12 @@ class FileV1:
     the "SHA256" hash type is supported.
     """
 
-    blender_version: str
+    blender_version: str | None
     """Version of Blender used to write this file.
 
     Only contains the major and minor version, no patch version ("5.2",
     "6.3", etc. but not "5.2.1").
+    If not set this is not a blender file.
     """
 
     url: str | None = None

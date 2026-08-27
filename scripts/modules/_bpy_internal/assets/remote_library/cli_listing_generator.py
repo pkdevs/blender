@@ -83,17 +83,27 @@ def cli_main(arguments_raw: argparse.Namespace) -> None:
         filepath = file_version_info.path
         logger.info(f"* {i + 1}/{limit}: {filepath.relative_to(arguments.repository)}")
 
-        bfile_info, assets_in_file = asset_finder.list_assets(file_version_info, arguments.repository)
+        bfile_info, assets_in_file, dependencies_in_file = asset_finder.list_assets(
+            file_version_info, arguments.repository)
         if not assets_in_file:
             continue
 
         assets.extend(assets_in_file)
         files.append(bfile_info)
-
+        files.extend(dependencies_in_file)
     _sort_assets(assets)
 
+    # Avoid duplicate file entries
+    unique_paths = set()
+    unique_files = []
+    for file in files:
+        if file.path in unique_paths:
+            continue
+        unique_paths.add(file.path)
+        unique_files.append(file)
+
     # Write the listing index and the pages:
-    asset_index_pages = pagination.paginate_asset_list(assets, files, arguments.page_size)
+    asset_index_pages = pagination.paginate_asset_list(assets, unique_files, arguments.page_size)
     index_path = _write_json_files(arguments, asset_index_pages)
 
     # Write the top-level meta file:
