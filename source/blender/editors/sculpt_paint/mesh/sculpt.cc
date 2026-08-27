@@ -5097,6 +5097,7 @@ static StrokeToggleSettings create_toggle_settings(const wmOperator &op, Main &b
   return toggle_settings;
 }
 
+/* TODO: Move this to the constructor? */
 static void brush_stroke_init(bContext *C, const wmOperator *op)
 {
   Object &ob = *CTX_data_active_object(C);
@@ -6019,6 +6020,7 @@ static wmOperatorStatus sculpt_brush_stroke_invoke(bContext *C,
   Sculpt &sd = *CTX_data_tool_settings(C)->sculpt;
   Brush &brush = *BKE_paint_brush(&sd.paint);
 
+  /* TODO: move these into `brush_stroke_init` */
   if (brush_type_is_paint(brush.sculpt_brush_type) &&
       !color_supported_check(scene, ob, op->reports))
   {

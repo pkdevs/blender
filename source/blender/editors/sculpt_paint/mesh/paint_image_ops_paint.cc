@@ -17,7 +17,9 @@
 #include "BKE_brush.hh"
 #include "BKE_colortools.hh"
 #include "BKE_context.hh"
+#include "BKE_global.hh"
 #include "BKE_layer.hh"
+#include "BKE_object_types.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
 #include "BKE_undo_system.hh"
@@ -36,6 +38,8 @@
 #include "WM_types.hh"
 
 #include "ED_image.hh"
+#include "mesh_paint.hh"
+#include "sculpt_intern.hh"
 
 #include "../paint_intern.hh"
 
@@ -453,6 +457,55 @@ bool TexturePaintStroke::test_start(wmOperator *op, const float2 mouse)
 
   return true;
 }
+
+struct ExperimentalTexturePaintStroke final : public PaintStroke {
+ public:
+  ExperimentalTexturePaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
+      : PaintStroke(C, op, event)
+  {
+    if (!G.background) {
+      view3d_operator_needs_gpu(C);
+    }
+
+    Object &ob = *CTX_data_active_object(C);
+    SculptSession &ss = *CTX_data_active_object(C)->runtime->sculpt_session;
+
+    /* paint_brush_init_tex */
+
+    if (!ss.cache) {
+      ss.cache = MEM_new<StrokeCache>(__func__);
+    }
+
+    Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+    BKE_sculptsession_update_for_edit(depsgraph, &ob, true);
+
+    ED_paint_brush_type_update_sticky_shading_color(C, &ob);
+  }
+
+  std::optional<float3> get_location(float2 mouse, bool force_original) override;
+  bool test_start(wmOperator *op, float2 mouse) override;
+  void update_step(wmOperator *op, PointerRNA *itemptr) override;
+  void redraw(bool final) override;
+  bool test_cancel() override;
+  void done(bool is_cancel, bool stroke_started) override;
+};
+
+std::optional<float3> ExperimentalTexturePaintStroke::get_location(float2 mouse,
+                                                                   bool force_original)
+{
+  return stroke_get_location_bvh(
+      *this->depsgraph, this->vc, *this->paint, this->brush, mouse, force_original);
+}
+bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
+{
+  if (stroke_get_location_bvh(*this->depsgraph, this->vc, *this->paint, this->brush, mouse, op)) {
+    stroke_cache_common_init(this->vc, *this->paint, *this->brush, *this->object, mouse);
+  }
+};
+void ExperimentalTexturePaintStroke::update_step(wmOperator *op, PointerRNA *itemptr) {}
+void ExperimentalTexturePaintStroke::redraw(bool final) {}
+bool ExperimentalTexturePaintStroke::test_cancel() {}
+void ExperimentalTexturePaintStroke::done(bool is_cancel, bool stroke_started) {}
 
 static PaintStroke *create_paint_stroke(bContext *C, wmOperator *op, const wmEvent *event)
 {
