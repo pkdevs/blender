@@ -2826,6 +2826,14 @@ static void animfilter_modifier_idpoin_cb(void *afm_ptr,
         afm->items += animdata_filter_ds_nodetree(
             afm->ac, &afm->tmp_data, owner_id, node_tree, afm->filter_mode);
       }
+      break;
+    }
+    case ID_CF: {
+      CacheFile *cache_file = id_cast<CacheFile *>(id);
+      BLI_assert(afm->ac->ads == afm->ads);
+      afm->items += animdata_filter_ds_cachefile(
+          afm->ac, &afm->tmp_data, cache_file, afm->filter_mode);
+      break;
     }
 
     /* TODO: images? */
