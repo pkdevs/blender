@@ -213,13 +213,7 @@ struct [[host_shared]] LightData {
   float lod_bias;
   /* Shadow Map resolution maximum resolution. */
   float lod_min;
-  bool32_t _pad0;
-  bool32_t _pad1;
   uint2 light_set_membership;
-  /** Used by shadow sync. */
-  /* TODO(fclem): this should be part of #eevee::Light struct. But for some reason it gets cleared
-   * to zero after each sync cycle. */
-  uint2 shadow_set_membership;
 
   union {
     union_t<struct LightLocalData> local;
