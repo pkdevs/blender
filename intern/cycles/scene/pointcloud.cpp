@@ -144,19 +144,21 @@ void PointCloud::copy_center_to_motion_step(const int motion_step)
 
   /* Gaussian splat attributes. */
   if (Attribute *attr_radiance_base = attributes.find(ATTR_STD_GSPLAT_RADIANCE_BASE);
-      attr_radiance_base->has_motion())
+      attr_radiance_base && attr_radiance_base->has_motion())
   {
     std::copy_n(attr_radiance_base->data<float4>(),
                 numpoints,
                 attr_radiance_base->data_for_write<float4>(attr_step));
   }
-  if (Attribute *attr_scale = attributes.find(ATTR_STD_GSPLAT_SCALE); attr_scale->has_motion()) {
+  if (Attribute *attr_scale = attributes.find(ATTR_STD_GSPLAT_SCALE);
+      attr_scale && attr_scale->has_motion())
+  {
     std::copy_n(attr_scale->data<packed_float3>(),
                 numpoints,
                 attr_scale->data_for_write<packed_float3>(attr_step));
   }
   if (Attribute *attr_rotation = attributes.find(ATTR_STD_GSPLAT_ROTATION);
-      attr_rotation->has_motion())
+      attr_rotation && attr_rotation->has_motion())
   {
     std::copy_n(attr_rotation->data<float4>(),
                 numpoints,
