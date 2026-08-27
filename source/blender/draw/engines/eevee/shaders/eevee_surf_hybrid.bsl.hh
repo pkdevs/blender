@@ -191,8 +191,9 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
     cryptomatte.store(out_texel, nt.crypto_hash, resource_id);
     render_passes.store_color(
         out_texel, uni.uniform_buf.render_pass.emission_id, float4(g_emission, 1.0f));
+  }
 
-#if defined(MAT_LIGHT_ITER)
+  if (pipe.use_lighting_nodes) [[static_branch]] {
     float light_sample_rcp = safe_rcp(float(g_light_accumulation_count));
     g_diffuse_color *= light_sample_rcp;
     g_diffuse_light *= alpha_rcp;
@@ -229,7 +230,7 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
       g_emission += g_transmission_color * g_transmission_light;
     }
 
-#  if 0 /* TODO Transmission pass */
+#if 0 /* TODO Transmission pass */
     if (uni.uniform_buf.render_pass.transmission_light_id >= 0 &&
         uni.uniform_buf.render_pass.transmission_color_id >= 0)
     {
@@ -243,7 +244,6 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
     else {
       g_emission += g_transmission_color * g_transmission_light;
     }
-#  endif
 #endif
   }
 

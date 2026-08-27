@@ -188,13 +188,6 @@ void forward_lighting_eval(const ViewMatrices view,
     }
   }
 
-#if defined(MAT_LIGHT_ITER)
-  // TODO: Why is this darker than hybrid?
-  radiance_direct += g_diffuse_light;
-  radiance_direct += g_glossy_light;
-  radiance_direct += g_transmission_light;
-#endif
-
   /* Light clamping. */
   float clamp_direct = uni.uniform_buf.clamp.surface_direct;
   float clamp_indirect = uni.uniform_buf.clamp.surface_indirect;

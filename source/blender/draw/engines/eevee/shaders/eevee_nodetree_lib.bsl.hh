@@ -850,7 +850,8 @@ bool light_iter_should_skip([[maybe_unused]] eevee::light::VisibleLightIterator 
 #endif
 }
 
-#if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
+#if (defined(GPU_FRAGMENT_SHADER) && defined(SRT_CONSTANT_use_lighting_nodes)) || \
+    defined(GLSL_CPP_STUBS)
 
 #  define LIGHT_ITER_BEGIN(light_index) \
     { \
@@ -1043,22 +1044,25 @@ void node_light_accumulation_impl([[maybe_unused]] const int light_index,
                                   [[maybe_unused]] float weight,
                                   Closure &result)
 {
+#if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
-/* clang-format on */
-#if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
-  LightData light = lrd.light_buf[light_index];
-  float3 diffuse_color_weight = diffuse_color * weight;
-  float3 glossy_color_weight = glossy_color * weight;
-  float3 transmission_color_weight = transmission_color * weight;
-  g_diffuse_light += diffuse_color_weight * diffuse_light * light.power_factor[LIGHT_DIFFUSE];
-  g_glossy_light += glossy_color_weight * glossy_light * light.power_factor[LIGHT_SPECULAR];
-  g_transmission_light += transmission_color_weight * transmission_light *
-                          light.power_factor[LIGHT_TRANSMISSION];
-  g_diffuse_color += diffuse_color_weight;
-  g_glossy_color += glossy_color_weight;
-  g_transmission_color += transmission_color_weight;
-  g_light_accumulation_count++;
+  [[resource_table]] const eevee::PipelineConstants &pipe = resource_table_get(eevee::PipelineConstants);
+  /* clang-format on */
+  if (pipe.use_lighting_nodes) [[static_branch]] {
+    LightData light = lrd.light_buf[light_index];
+    float3 diffuse_color_weight = diffuse_color * weight;
+    float3 glossy_color_weight = glossy_color * weight;
+    float3 transmission_color_weight = transmission_color * weight;
+    g_diffuse_light += diffuse_color_weight * diffuse_light * light.power_factor[LIGHT_DIFFUSE];
+    g_glossy_light += glossy_color_weight * glossy_light * light.power_factor[LIGHT_SPECULAR];
+    g_transmission_light += transmission_color_weight * transmission_light *
+                            light.power_factor[LIGHT_TRANSMISSION];
+    g_diffuse_color += diffuse_color_weight;
+    g_glossy_color += glossy_color_weight;
+    g_transmission_color += transmission_color_weight;
+    g_light_accumulation_count++;
+  }
 #endif
 
   result = Closure(0);

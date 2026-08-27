@@ -6,8 +6,13 @@
 
 #include "infos/eevee_common_infos.hh"
 
+#include "eevee_pipeline.bsl.hh"
 #include "gpu_shader_codegen_lib.glsl"
 #include "gpu_shader_math_vector_reduce_lib.glsl"
+
+namespace eevee {
+
+}  // namespace eevee
 
 packed_float3 g_emission;
 packed_float3 g_transmittance;
@@ -18,7 +23,8 @@ float g_volume_anisotropy;
 packed_float3 g_volume_absorption;
 
 /* For Light Accumulation. */
-#if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
+#if (defined(GPU_FRAGMENT_SHADER) && defined(SRT_CONSTANT_use_lighting_nodes)) || \
+    defined(GLSL_CPP_STUBS)
 packed_float3 g_diffuse_light;
 packed_float3 g_diffuse_color;
 packed_float3 g_glossy_light;
@@ -173,13 +179,18 @@ void closure_weights_reset(float closure_rand)
   g_volume_absorption = float3(0.0f);
   g_holdout = 0.0f;
 
-#if defined(GPU_FRAGMENT_SHADER) && defined(MAT_LIGHT_ITER)
-  g_diffuse_light = float3(0.0f);
-  g_diffuse_color = float3(0.0f);
-  g_glossy_light = float3(0.0f);
-  g_glossy_color = float3(0.0f);
-  g_transmission_light = float3(0.0f);
-  g_transmission_color = float3(0.0f);
-  g_light_accumulation_count = 0;
+#if defined(GPU_FRAGMENT_SHADER) || defined(GLSL_CPP_STUBS)
+  /* clang-format off */ /* Multiline macros would break line count. */
+  [[resource_table]] const eevee::PipelineConstants &pipe = resource_table_get(eevee::PipelineConstants);
+  /* clang-format on */
+  if (pipe.use_lighting_nodes) [[static_branch]] {
+    g_diffuse_light = float3(0.0f);
+    g_diffuse_color = float3(0.0f);
+    g_glossy_light = float3(0.0f);
+    g_glossy_color = float3(0.0f);
+    g_transmission_light = float3(0.0f);
+    g_transmission_color = float3(0.0f);
+    g_light_accumulation_count = 0;
+  }
 #endif
 }
