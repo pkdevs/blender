@@ -135,53 +135,102 @@ bool object_eevee_shader_nodes_poll(const bContext *C)
 static void nodestack_get_vec(float *in, short type_in, bNodeStack *ns)
 {
   const float *from = ns->vec;
-  const bool ns_is_scalar = ELEM(ns->sockettype, SOCK_FLOAT, SOCK_INT, SOCK_BOOLEAN);
 
   switch (type_in) {
     case SOCK_FLOAT:
-    case SOCK_INT:
-      *in = ns_is_scalar ? from[0] : (from[0] + from[1] + from[2]) / 3.0f;
-      break;
-    case SOCK_BOOLEAN: {
-      if (ns_is_scalar) {
-        *in = from[0];
-      }
-      else if (ns->sockettype == SOCK_RGBA) {
-        *in = IMB_colormanagement_get_luminance(from);
-      }
-      else {
-        *in = !is_zero_v3(from);
+    case SOCK_INT: {
+      switch (ns->sockettype) {
+        case SOCK_FLOAT:
+        case SOCK_INT:
+        case SOCK_BOOLEAN:
+          *in = from[0];
+          break;
+        case SOCK_RGBA:
+          *in = IMB_colormanagement_get_luminance(from);
+          break;
+        case SOCK_VECTOR:
+          *in = (from[0] + from[1] + from[2]) / 3.0f;
+          break;
+        case SOCK_ROTATION:
+          *in = (from[0] + from[1] + from[2] + from[3]) / 4.0f;
+          break;
+        case SOCK_SHADER:
+          break;
+        default:
+          BLI_assert_unreachable();
+          break;
       }
       break;
     }
-    case SOCK_VECTOR:
-      if (ns_is_scalar) {
-        in[0] = from[0];
-        in[1] = from[0];
-        in[2] = from[0];
-      }
-      else {
-        copy_v3_v3(in, from);
+    case SOCK_BOOLEAN: {
+      switch (ns->sockettype) {
+        case SOCK_FLOAT:
+        case SOCK_INT:
+        case SOCK_BOOLEAN:
+          *in = from[0];
+          break;
+        case SOCK_RGBA:
+          *in = IMB_colormanagement_get_luminance(from);
+          break;
+        case SOCK_VECTOR:
+          *in = !is_zero_v3(from);
+          break;
+        case SOCK_ROTATION:
+          *in = !is_zero_v4(from);
+          break;
+        case SOCK_SHADER:
+          break;
+        default:
+          BLI_assert_unreachable();
+          break;
       }
       break;
-    case SOCK_ROTATION:
-      copy_v4_v4(in, from);
+    }
+    case SOCK_VECTOR: {
+      switch (ns->sockettype) {
+        case SOCK_FLOAT:
+        case SOCK_INT:
+        case SOCK_BOOLEAN:
+          copy_v4_fl(in, from[0]);
+          break;
+        case SOCK_VECTOR:
+        case SOCK_RGBA:
+        case SOCK_ROTATION:
+          copy_v4_v4(in, from);
+          break;
+        case SOCK_SHADER:
+          break;
+        default:
+          BLI_assert_unreachable();
+          break;
+      }
       break;
+    }
     case SOCK_RGBA:
-      if (ns->sockettype == SOCK_RGBA) {
-        copy_v4_v4(in, from);
-      }
-      else if (ns_is_scalar) {
-        in[0] = from[0];
-        in[1] = from[0];
-        in[2] = from[0];
-        in[3] = 1.0f;
-      }
-      else {
-        copy_v3_v3(in, from);
-        in[3] = 1.0f;
+    case SOCK_ROTATION: {
+      switch (ns->sockettype) {
+        case SOCK_FLOAT:
+        case SOCK_INT:
+        case SOCK_BOOLEAN:
+          copy_v3_fl(in, from[0]);
+          in[3] = 1.0f;
+          break;
+        case SOCK_VECTOR:
+          copy_v3_v3(in, from);
+          in[3] = 1.0f;
+          break;
+        case SOCK_RGBA:
+        case SOCK_ROTATION:
+          copy_v4_v4(in, from);
+          break;
+        case SOCK_SHADER:
+          break;
+        default:
+          BLI_assert_unreachable();
+          break;
       }
       break;
+    }
     case SOCK_SHADER:
       break;
     default:
