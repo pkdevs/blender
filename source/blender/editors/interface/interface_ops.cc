@@ -136,7 +136,6 @@ static bool copy_data_path_button_poll(bContext *C)
 
 static wmOperatorStatus copy_data_path_button_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
   PointerRNA ptr;
   PropertyRNA *prop;
   int index;
@@ -225,7 +224,6 @@ static bool copy_as_driver_button_poll(bContext *C)
 
 static wmOperatorStatus copy_as_driver_button_exec(bContext *C, wmOperator *op)
 {
-  Main *bmain = CTX_data_main(C);
   PointerRNA ptr;
   PropertyRNA *prop;
   int index;

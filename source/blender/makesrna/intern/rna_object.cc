@@ -1128,7 +1128,7 @@ static void rna_Object_active_material_set(PointerRNA *ptr,
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
 
   DEG_id_tag_update(static_cast<ID *>(value.data), 0);
-  BKE_object_material_assign(ob->id.owner_main_for_write(),
+  BKE_object_material_assign(ob->id.owner_bmain_for_write(),
                              ob,
                              static_cast<Material *>(value.data),
                              ob->actcol,
@@ -1375,7 +1375,7 @@ static void rna_MaterialSlot_material_set(PointerRNA *ptr,
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
   int index = rna_MaterialSlot_index(ptr);
 
-  BKE_object_material_assign(ob->id.owner_main_for_write(),
+  BKE_object_material_assign(ob->id.owner_bmain_for_write(),
                              ob,
                              static_cast<Material *>(value.data),
                              index + 1,
