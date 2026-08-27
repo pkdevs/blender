@@ -426,6 +426,7 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
         copy_v4_v4(&materials.gp_style->gradient->data[1].r, materials.gp_style->mix_rgba);
       }
 
+      /* This flag is now deprecated. */
       materials.gp_style->flag &= ~GP_MATERIAL_FLIP_FILL;
     }
   }
