@@ -29,6 +29,8 @@
 
 #include "ED_sequencer.hh"
 
+#include "SEQ_sequencer.hh"
+
 #include "transform.hh"
 #include "transform_convert.hh"
 #include "transform_mode.hh"
@@ -44,6 +46,19 @@ struct SeqSlideParams {
   bool use_restore_handle_selection;
 };
 
+static const char *seq_slide_overlap_mode_name(const eSeqOverlapMode overlap_mode)
+{
+  switch (overlap_mode) {
+    case SEQ_OVERLAP_RIPPLE:
+      return IFACE_("Ripple");
+    case SEQ_OVERLAP_OVERWRITE:
+      return IFACE_("Overwrite");
+    case SEQ_OVERLAP_SHUFFLE:
+      return IFACE_("Shuffle");
+  }
+  return "";
+}
+
 static void headerSeqSlide(TransInfo *t, const float val[2], char str[UI_MAX_DRAW_STR])
 {
   Scene *scene = CTX_data_sequencer_scene(t->context);
@@ -58,7 +73,12 @@ static void headerSeqSlide(TransInfo *t, const float val[2], char str[UI_MAX_DRA
   }
 
   ofs += BLI_snprintf_utf8_rlen(
-      str + ofs, UI_MAX_DRAW_STR - ofs, IFACE_("Sequence Slide: %s%s"), &tvec[0], t->con.text);
+      str + ofs,
+      UI_MAX_DRAW_STR - ofs,
+      IFACE_("Sequence Slide: %s%s | %s"),
+      &tvec[0],
+      t->con.text,
+      seq_slide_overlap_mode_name(seq::tool_settings_overlap_mode_get(scene)));
 }
 
 static void applySeqSlideValue(TransInfo *t, const float val[2])
@@ -157,6 +177,21 @@ static void seq_slide_status(TransInfo *t)
                         TFM_MODAL_STRIP_CLAMP,
                         t->modifiers & MOD_STRIP_CLAMP_HOLDS);
   }
+
+  const eSeqOverlapMode overlap_mode = seq::tool_settings_overlap_mode_get(
+      CTX_data_sequencer_scene(t->context));
+  status.opmodal(IFACE_("Ripple"),
+                 op->type,
+                 TFM_MODAL_STRIP_OVERLAP_RIPPLE,
+                 overlap_mode == SEQ_OVERLAP_RIPPLE);
+  status.opmodal(IFACE_("Overwrite"),
+                 op->type,
+                 TFM_MODAL_STRIP_OVERLAP_OVERWRITE,
+                 overlap_mode == SEQ_OVERLAP_OVERWRITE);
+  status.opmodal(IFACE_("Shuffle"),
+                 op->type,
+                 TFM_MODAL_STRIP_OVERLAP_SHUFFLE,
+                 overlap_mode == SEQ_OVERLAP_SHUFFLE);
 }
 
 static void initSeqSlide(TransInfo *t, wmOperator *op)

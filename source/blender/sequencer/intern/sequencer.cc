@@ -431,6 +431,12 @@ void tool_settings_fit_method_set(Scene *scene, eSeqImageFitMethod fit_method)
   tool_settings->fit_method = fit_method;
 }
 
+void tool_settings_overlap_mode_set(Scene *scene, eSeqOverlapMode overlap_mode)
+{
+  SequencerToolSettings *tool_settings = tool_settings_ensure(scene);
+  tool_settings->overlap_mode = overlap_mode;
+}
+
 eSeqOverlapMode tool_settings_overlap_mode_get(Scene *scene)
 {
   const SequencerToolSettings *tool_settings = tool_settings_ensure(scene);

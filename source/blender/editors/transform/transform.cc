@@ -30,6 +30,7 @@
 
 #include "ANIM_keyframing.hh"
 
+#include "SEQ_sequencer.hh"
 #include "SEQ_transform.hh"
 
 #include "WM_api.hh"
@@ -818,6 +819,16 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
         return false;
       }
       break;
+    case TFM_MODAL_STRIP_OVERLAP_SHUFFLE:
+    case TFM_MODAL_STRIP_OVERLAP_RIPPLE:
+    case TFM_MODAL_STRIP_OVERLAP_OVERWRITE: {
+      if (t->spacetype != SPACE_SEQ || t->mode != TFM_SEQ_SLIDE ||
+          t->data_type != &TransConvertType_Sequencer)
+      {
+        return false;
+      }
+      break;
+    }
   }
   return true;
 }
@@ -875,6 +886,9 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
       {TFM_MODAL_PASSTHROUGH_NAVIGATE, "PASSTHROUGH_NAVIGATE", 0, "Navigate", ""},
       {TFM_MODAL_NODE_FRAME, "NODE_FRAME", 0, "Attach/Detach Frame", ""},
       {TFM_MODAL_STRIP_CLAMP, "STRIP_CLAMP_TOGGLE", 0, "Clamp Strips", ""},
+      {TFM_MODAL_STRIP_OVERLAP_SHUFFLE, "STRIP_OVERLAP_SHUFFLE", 0, "Shuffle", ""},
+      {TFM_MODAL_STRIP_OVERLAP_RIPPLE, "STRIP_OVERLAP_RIPPLE", 0, "Ripple", ""},
+      {TFM_MODAL_STRIP_OVERLAP_OVERWRITE, "STRIP_OVERLAP_OVERWRITE", 0, "Overwrite", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -1433,6 +1447,21 @@ wmOperatorStatus transformEvent(TransInfo *t, wmOperator *op, const wmEvent *eve
         t->modifiers ^= MOD_STRIP_CLAMP_HOLDS;
         t->redraw |= TREDRAW_HARD;
         break;
+      case TFM_MODAL_STRIP_OVERLAP_SHUFFLE:
+      case TFM_MODAL_STRIP_OVERLAP_RIPPLE:
+      case TFM_MODAL_STRIP_OVERLAP_OVERWRITE: {
+        eSeqOverlapMode overlap_mode = SEQ_OVERLAP_SHUFFLE;
+        if (event->val == TFM_MODAL_STRIP_OVERLAP_RIPPLE) {
+          overlap_mode = SEQ_OVERLAP_RIPPLE;
+        }
+        else if (event->val == TFM_MODAL_STRIP_OVERLAP_OVERWRITE) {
+          overlap_mode = SEQ_OVERLAP_OVERWRITE;
+        }
+        seq::tool_settings_overlap_mode_set(CTX_data_sequencer_scene(t->context), overlap_mode);
+        ED_area_tag_redraw(t->area);
+        t->redraw |= TREDRAW_HARD;
+        break;
+      }
       default:
         break;
     }

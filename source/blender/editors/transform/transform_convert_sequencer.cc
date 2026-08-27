@@ -329,6 +329,10 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
   }
 
   if (t->state == TRANS_CANCEL) {
+    TransSeq *ts_cancel = static_cast<TransSeq *>(tc->custom.type.data);
+    if (ts_cancel != nullptr) {
+      seq::tool_settings_overlap_mode_set(scene, ts_cancel->overlap_mode_orig);
+    }
     seq_transform_cancel(t, transformed_strips);
     free_transform_custom_data(custom_data);
     return;
@@ -617,6 +621,8 @@ static void createTransSeqData(bContext *C, TransInfo *t)
   create_trans_seq_clamp_data(t, scene);
 
   query_time_dependent_strips_strips(t, ts->time_dependent_strips);
+
+  ts->overlap_mode_orig = seq::tool_settings_overlap_mode_get(scene);
 }
 
 /** \} */
