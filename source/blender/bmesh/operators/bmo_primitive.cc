@@ -864,6 +864,68 @@ static const float cube_faces_uv[6][2] = {
     {0.625f, 0.5f},
 };
 
+/**
+ * Map a location on the surface of a cube (each axis in [-1, 1]) onto a sphere,
+ * with an equal `angle` between vertices.
+ *
+ * Each vertex steps by `angle` about the axis it's measured from,
+ * the tangent converts that angle back into a location on the cube face.
+ * Scaling by `angle_scale` (`1 / tan(angle)`) keeps one mapping to itself,
+ * without this adjacent faces would not meet.
+ *
+ * Each axis depends only on itself, so a single pass is exact.
+ *
+ * \param co: The location on the cube, at least one axis must be on a face.
+ * \param on_face: For each axis, true when `co` is on the face perpendicular to it.
+ * \param angle: The angle between vertices.
+ * \param angle_scale: `1 / tan(angle)`, passed in so it isn't recalculated per vertex.
+ * \return The direction on the sphere, the caller scales it to the radius.
+ */
+static float3 quadsphere_co_from_cube_equi_angular(const float3 &co,
+                                                   const bool on_face[3],
+                                                   const float angle,
+                                                   const float angle_scale)
+{
+  BLI_assert(on_face[0] || on_face[1] || on_face[2]);
+  BLI_assert(std::abs(angle_scale - (1.0f / std::tan(angle))) < 1e-6f);
+  float3 co_sphere;
+  for (int axis = 0; axis < 3; axis++) {
+    /* An axis on a face maps to itself, take it directly rather than relying on
+     * the warp returning exactly one, so vertices shared between faces stay exact. */
+    co_sphere[axis] = on_face[axis] ? co[axis] : (std::tan(co[axis] * angle) * angle_scale);
+  }
+  return co_sphere;
+}
+
+/**
+ * Map a location on the surface of a cube onto a sphere using `method`.
+ *
+ * \note Arguments & return match #quadsphere_co_from_cube_equi_angular.
+ */
+static float3 quadsphere_co_from_cube(const float3 &co,
+                                      const bool on_face[3],
+                                      const QuadSphereMethod method)
+{
+  switch (method) {
+    case QUADSPHERE_METHOD_EQUI_ANGULAR_EVEN_AREA: {
+      /* Around 49.7728 degrees, solved to minimize area distortion,
+       * see #QUADSPHERE_METHOD_EQUI_ANGULAR_EVEN_AREA. */
+      const float angle = 0.8687f;
+      /* `1 / tan(angle)`. */
+      const float angle_scale = 0.845878184f;
+      return quadsphere_co_from_cube_equi_angular(co, on_face, angle, angle_scale);
+    }
+    case QUADSPHERE_METHOD_EQUI_ANGULAR: {
+      const float angle = float(M_PI_4);
+      /* `tan(M_PI_4)` is one. */
+      const float angle_scale = 1.0f;
+      return quadsphere_co_from_cube_equi_angular(co, on_face, angle, angle_scale);
+    }
+  }
+  BLI_assert_unreachable();
+  return co;
+}
+
 void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
 {
   BMOpSlot *slot_verts_out = BMO_slot_get(op->slots_out, "verts.out");
@@ -873,12 +935,8 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   const int seg = max_ii(1, BMO_slot_int_get(op->slots_in, "segments"));
   /* Vertices along each cube edge. */
   const int seg_vert = seg + 1;
-  /* Optimal angle for the tangent wrap
-   See https://jcgt.org/published/0007/02/01/ by Matt Zucker and Yosuke Higashi - Swarthmore
-   College
-  */
-  const float theta = 0.8687f;
-  const float tan_theta = std::tan(theta);
+  /* Mapping from the cube onto the sphere. */
+  const QuadSphereMethod method = QuadSphereMethod(BMO_slot_int_get(op->slots_in, "method"));
   const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_PROP_FLOAT2);
   const bool calc_uvs = (cd_loop_uv_offset != -1) && BMO_slot_bool_get(op->slots_in, "calc_uvs");
 
@@ -925,10 +983,17 @@ void bmo_create_quadsphere_exec(BMesh *bm, BMOperator *op)
   /* Location on the cube for a single axis, in [-1, 1]. */
   auto cube_co_from_grid_fn = [seg](const int i) { return float((i * 2) - seg) / float(seg); };
 
+  /* Warp for each axis spanning a cube face, shared by every axis & face.
+   * Only the first spanning axis is read, each depends only on itself. */
   Array<float> wrap_table(seg_vert);
-  for (int i = 0; i <= seg; i++) {
-    const float co = cube_co_from_grid_fn(i);
-    wrap_table[i] = std::tan(co * theta) / tan_theta;
+  {
+    bool on_face[3] = {true, false, false};
+    float3 co = {1.0f, 0.0f, 0.0f};
+    for (int i = 0; i <= seg; i++) {
+      on_face[1] = ELEM(i, 0, seg);
+      co[1] = cube_co_from_grid_fn(i);
+      wrap_table[i] = quadsphere_co_from_cube(co, on_face, method)[1];
+    }
   }
 
   /* Direction on the sphere, the caller scales it to the radius. */

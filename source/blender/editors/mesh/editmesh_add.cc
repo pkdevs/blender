@@ -703,6 +703,20 @@ void MESH_OT_primitive_monkey_add(wmOperatorType *ot)
   ed::object::add_generic_props(ot, true);
 }
 
+static const EnumPropertyItem quadsphere_method_items[] = {
+    {QUADSPHERE_METHOD_EQUI_ANGULAR_EVEN_AREA,
+     "EVEN_AREA",
+     0,
+     "Even Area",
+     "Distribute the area evenly between faces"},
+    {QUADSPHERE_METHOD_EQUI_ANGULAR,
+     "EVEN_ANGLE",
+     0,
+     "Even Angle",
+     "Distribute vertices at an even angle, spacing each axis as an exact circle"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static wmOperatorStatus add_primitive_quadsphere_exec(bContext *C, wmOperator *op)
 {
   MakePrimitiveData creation_data;
@@ -729,9 +743,10 @@ static wmOperatorStatus add_primitive_quadsphere_exec(bContext *C, wmOperator *o
                                obedit,
                                &creation_data,
                                calc_uvs,
-                               "create_quadsphere segments=%i "
+                               "create_quadsphere segments=%i method=%i "
                                "radius=%f matrix=%m4 calc_uvs=%b",
                                RNA_int_get(op->ptr, "segments"),
+                               RNA_enum_get(op->ptr, "method"),
                                RNA_float_get(op->ptr, "radius"),
                                creation_data.mat,
                                calc_uvs))
@@ -760,6 +775,12 @@ void MESH_OT_primitive_quad_sphere_add(wmOperatorType *ot)
 
   /* props */
   RNA_def_int(ot->srna, "segments", 4, 1, 500, "Segments", "", 1, 200);
+  RNA_def_enum(ot->srna,
+               "method",
+               quadsphere_method_items,
+               QUADSPHERE_METHOD_EQUI_ANGULAR_EVEN_AREA,
+               "Method",
+               "Mapping from the cube onto the sphere");
   ed::object::add_unit_props_radius(ot);
   ed::object::add_mesh_props(ot);
   ed::object::add_generic_props(ot, true);

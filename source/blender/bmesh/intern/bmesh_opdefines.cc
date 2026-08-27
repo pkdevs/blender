@@ -2212,6 +2212,12 @@ static BMOpDefine bmo_create_grid_def = {
     /*type_flag*/ (BMO_OPTYPE_FLAG_NORMALS_CALC | BMO_OPTYPE_FLAG_SELECT_FLUSH),
 };
 
+static BMO_FlagSet bmo_enum_quadsphere_method[] = {
+    {QUADSPHERE_METHOD_EQUI_ANGULAR_EVEN_AREA, "EVEN_AREA"},
+    {QUADSPHERE_METHOD_EQUI_ANGULAR, "EVEN_ANGLE"},
+    {0, nullptr},
+};
+
 /*
  * Create Quad Sphere.
  *
@@ -2223,6 +2229,11 @@ static BMOpDefine bmo_create_quadsphere_def = {
     {
         /* Number of quads along each edge of the cube the sphere is made from. */
         {"segments", BMO_OP_SLOT_INT},
+        /* Mapping from the cube onto the sphere. */
+        {"method",
+         BMO_OP_SLOT_INT,
+         to_subtype_union(BMO_OP_SLOT_SUBTYPE_INT_ENUM),
+         bmo_enum_quadsphere_method},
         /* Radius. */
         {"radius", BMO_OP_SLOT_FLT},
         /* Matrix to multiply the new geometry with. */
