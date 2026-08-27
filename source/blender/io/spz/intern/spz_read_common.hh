@@ -240,6 +240,8 @@ template<class ReaderType> bool read_sh(ReaderType &reader, const Span<MutableSp
   return true;
 }
 
-void convert_axis_to_blender(gsplat::GsplatMutableAttributeAccessor &accessor);
+void convert_axis_to_blender(MutableSpan<float3> positions,
+                             MutableSpan<math::Quaternion> rotations,
+                             Span<MutableSpan<float3>> sh_attrs);
 
 }  // namespace blender::io::spz

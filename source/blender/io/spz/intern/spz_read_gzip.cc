@@ -181,12 +181,15 @@ PointCloud *read_spz_gzip_compressed_file(FILE *file, ReportList *reports)
   PointCloud *point_cloud = BKE_pointcloud_new_nomain(header.num_points, PT_RENDER_AS_SPLATS);
   gsplat::GsplatMutableAttributeAccessor accessor(*point_cloud, header.sh_degree);
 
-  if (!read_positions(reader, header.fractional_bits, accessor.positions_for_write()) ||
+  const MutableSpan<float3> positions = accessor.positions_for_write();
+  const MutableSpan<math::Quaternion> rotations = accessor.rotations_for_write();
+  const Span<MutableSpan<float3>> sh_attrs = accessor.sh_for_write();
+
+  if (!read_positions(reader, header.fractional_bits, positions) ||
       !read_alphas(reader, accessor.radiance_base_for_write()) ||
       !read_colors(reader, accessor.radiance_base_for_write()) ||
       !read_scales(reader, accessor.scales_for_write()) ||
-      !read_rotations(reader, header.version, accessor.rotations_for_write()) ||
-      !read_sh(reader, accessor.sh_for_write()))
+      !read_rotations(reader, header.version, rotations) || !read_sh(reader, sh_attrs))
   {
     accessor.finish();
     BKE_id_free(nullptr, &point_cloud->id);
@@ -197,7 +200,7 @@ PointCloud *read_spz_gzip_compressed_file(FILE *file, ReportList *reports)
 
   /* TODO(sergey): Handle extensions. */
 
-  convert_axis_to_blender(accessor);
+  convert_axis_to_blender(positions, rotations, sh_attrs);
 
   accessor.finish();
 

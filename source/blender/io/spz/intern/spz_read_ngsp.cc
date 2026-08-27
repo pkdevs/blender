@@ -271,6 +271,10 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
 
   bool ok = true;
 
+  const MutableSpan<float3> positions = accessor.positions_for_write();
+  const MutableSpan<math::Quaternion> rotations = accessor.rotations_for_write();
+  const Span<MutableSpan<float3>> sh_attrs = accessor.sh_for_write();
+
   /* Positions. */
   if (ok) {
     StreamedZstdReader reader(file, stream_infos[0]);
@@ -279,7 +283,7 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
       ok = false;
     }
     else {
-      ok = read_positions(reader, header.fractional_bits, accessor.positions_for_write());
+      ok = read_positions(reader, header.fractional_bits, positions);
       if (!ok) {
         BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading positions");
       }
@@ -337,7 +341,7 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
       ok = false;
     }
     else {
-      ok = read_rotations(reader, header.version, accessor.rotations_for_write());
+      ok = read_rotations(reader, header.version, rotations);
       if (!ok) {
         BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading rotations");
       }
@@ -352,7 +356,7 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
       ok = false;
     }
     else {
-      ok = read_sh(reader, accessor.sh_for_write());
+      ok = read_sh(reader, sh_attrs);
       if (!ok) {
         BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading spherical harmonics");
       }
@@ -367,7 +371,7 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
 
   /* TODO(sergey): Handle extensions. */
 
-  convert_axis_to_blender(accessor);
+  convert_axis_to_blender(positions, rotations, sh_attrs);
 
   accessor.finish();
 
