@@ -23,6 +23,7 @@
 #include "BKE_file_handler.hh"
 #include "BKE_image.hh"
 #include "BKE_main.hh"
+#include "BKE_mask.hh"
 #include "BKE_movieclip.hh"
 
 #include "SEQ_add.hh"
@@ -173,6 +174,16 @@ static bool scene_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
       WM_drag_get_local_ID(drag, ID_SCE) != &sequencer_scene->id)
   {
     generic_poll_operations(C, event, TH_SEQ_SCENE);
+    return true;
+  }
+
+  return false;
+}
+
+static bool mask_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
+{
+  if (WM_drag_is_ID_type(drag, ID_MSK)) {
+    generic_poll_operations(C, event, TH_SEQ_MASK);
     return true;
   }
 
@@ -348,6 +359,10 @@ static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
     else if (id_type == ID_SCE) {
       Main *bmain = CTX_data_main(C);
       RNA_enum_set(drop->ptr, "scene", BLI_findindex(&bmain->scenes, id));
+    }
+    else if (id_type == ID_MSK) {
+      Main *bmain = CTX_data_main(C);
+      RNA_enum_set(drop->ptr, "mask", BLI_findindex(&bmain->masks, id));
     }
     else if (id_type == ID_SO) {
       bSound *sound = id_cast<bSound *>(id);
@@ -745,6 +760,22 @@ static void scene_drop_on_enter(wmDropBox *drop, wmDrag *drag)
   coords->only_audio = false;
 }
 
+static void mask_drop_on_enter(wmDropBox *drop, wmDrag *drag)
+{
+  if (generic_drop_draw_handling(drop)) {
+    return;
+  }
+
+  SeqDropCoords *coords = static_cast<SeqDropCoords *>(drop->draw_data);
+  ID *id = WM_drag_get_local_ID(drag, ID_MSK);
+  coords->strip_length = id ? BKE_mask_get_duration(id_cast<Mask *>(id)) :
+                              seq::DEFAULT_STRIP_LENGTH;
+  coords->num_channels = 1;
+  coords->num_audio = 0;
+  coords->playback_rate = 0.0f;
+  coords->only_audio = false;
+}
+
 static void sequencer_drop_on_exit(wmDropBox *drop, wmDrag * /*drag*/)
 {
   SeqDropCoords *coords = static_cast<SeqDropCoords *>(drop->draw_data);
@@ -806,6 +837,13 @@ static void sequencer_dropboxes_add_to_lb(ListBaseT<wmDropBox> *lb)
   drop->on_exit = sequencer_drop_on_exit;
 
   drop = WM_dropbox_add(
+      lb, "SEQUENCER_OT_mask_strip_add", mask_drop_poll, sequencer_drop_copy, nullptr, nullptr);
+  drop->draw_droptip = nop_draw_droptip_fn;
+  drop->draw_in_view = draw_strip_in_view;
+  drop->on_enter = mask_drop_on_enter;
+  drop->on_exit = sequencer_drop_on_exit;
+
+  drop = WM_dropbox_add(
       lb, "SEQUENCER_OT_sound_strip_add", sound_drop_poll, sequencer_drop_copy, nullptr, nullptr);
   drop->draw_droptip = nop_draw_droptip_fn;
   drop->draw_in_view = draw_strip_in_view;
@@ -853,6 +891,11 @@ static bool scene_drop_preview_poll(bContext *C, wmDrag *drag, const wmEvent * /
          WM_drag_get_local_ID(drag, ID_SCE) != &sequencer_scene->id;
 }
 
+static bool mask_drop_preview_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
+{
+  return WM_drag_is_ID_type(drag, ID_MSK);
+}
+
 static bool sound_drop_preview_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
   if (drag->type == WM_DRAG_PATH) {
@@ -891,6 +934,13 @@ static void sequencer_preview_dropboxes_add_to_lb(ListBaseT<wmDropBox> *lb)
   WM_dropbox_add(lb,
                  "SEQUENCER_OT_scene_strip_add",
                  scene_drop_preview_poll,
+                 sequencer_drop_copy,
+                 nullptr,
+                 nullptr);
+
+  WM_dropbox_add(lb,
+                 "SEQUENCER_OT_mask_strip_add",
+                 mask_drop_preview_poll,
                  sequencer_drop_copy,
                  nullptr,
                  nullptr);

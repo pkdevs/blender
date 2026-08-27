@@ -1137,8 +1137,12 @@ static wmOperatorStatus sequencer_add_mask_strip_invoke(bContext *C,
     return WM_enum_search_invoke(C, op, event);
   }
 
-  sequencer_generic_invoke_xy__internal(C, op, 0, STRIP_TYPE_MASK, event);
-  return sequencer_add_mask_strip_exec(C, op);
+  sequencer_add_init(C, op);
+  sequencer_generic_invoke_xy__internal(
+      C, op, is_drag_and_drop(op, event) ? SEQPROP_NOPATHS : 0, STRIP_TYPE_MASK, event);
+  const wmOperatorStatus retval = sequencer_add_mask_strip_exec(C, op);
+  sequencer_add_free(C, op);
+  return retval;
 }
 
 void SEQUENCER_OT_mask_strip_add(wmOperatorType *ot)
