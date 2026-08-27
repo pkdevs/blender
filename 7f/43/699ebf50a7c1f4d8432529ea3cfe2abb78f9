@@ -3,3 +3,4 @@ Referenced by issue #124217, Blender crash when importing EXR from other DDC (e.
 Referenced by issue #121265, Normals of faceless vertices are not displayed anymore
 Referenced by issue #118744, GPU: Shaders fail to compile on NVIDIA
 Referenced by issue #118550, Vertical Scrollbar sensitivity and difference to Horizontal Scrollbar
+Referenced by pull request #163200, Fix #158954: Knife breaks under certain conditions
