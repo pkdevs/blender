@@ -15,9 +15,9 @@
 #include "DNA_meta_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_action.hh"
 #include "BKE_armature.hh"
@@ -118,6 +118,8 @@ bool calc_active_center_for_editmode(Object *obedit, const bool select_only, flo
       mul_m4_v3(obedit->world_to_object().ptr(), r_center);
       return true;
     }
+    default:
+      break;
   }
 
   return false;

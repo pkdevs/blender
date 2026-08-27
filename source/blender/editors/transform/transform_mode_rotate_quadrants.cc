@@ -5,14 +5,14 @@
 /** \file
  * \ingroup edtransform
  *
- * Used to apply 90 degree rotations directly, without imprecisions from radian angles,
+ * Used to apply 90 degree rotations directly, without imprecision from radian angles,
  * see #150900.
  */
 
 #include <optional>
 
 #include "BLI_math_base.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 
 #include "ED_numinput.hh"
 

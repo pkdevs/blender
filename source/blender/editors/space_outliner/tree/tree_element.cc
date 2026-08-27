@@ -29,6 +29,7 @@
 #include "tree_element_gpencil_layer.hh"
 #include "tree_element_grease_pencil_node.hh"
 #include "tree_element_id.hh"
+#include "tree_element_id_base.hh"
 #include "tree_element_label.hh"
 #include "tree_element_layer_collection.hh"
 #include "tree_element_linked_node_tree.hh"
@@ -41,6 +42,7 @@
 #include "tree_element_rna.hh"
 #include "tree_element_scene_objects.hh"
 #include "tree_element_seq.hh"
+#include "tree_element_shapekey.hh"
 #include "tree_element_view_collection.hh"
 #include "tree_element_view_layer.hh"
 
@@ -54,7 +56,7 @@ std::unique_ptr<AbstractTreeElement> AbstractTreeElement::create_from_type(const
                                                                            ID *owner_id,
                                                                            void *create_data)
 {
-  if (owner_id == nullptr && create_data == nullptr) {
+  if (owner_id == nullptr && create_data == nullptr && type != TSE_ID_BASE) {
     return nullptr;
   }
 
@@ -204,7 +206,14 @@ std::unique_ptr<AbstractTreeElement> AbstractTreeElement::create_from_type(const
     case TSE_ACTION_SLOT:
       return std::make_unique<TreeElementActionSlot>(
           legacy_te, *reinterpret_cast<animrig::Slot *>(create_data));
-
+    case TSE_SHAPE_KEY_BLOCK:
+      return std::make_unique<TreeElementShapeKey>(legacy_te,
+                                                   *static_cast<KeyBlock *>(create_data));
+    case TSE_SHAPE_KEY_BASE:
+      return std::make_unique<TreeElementShapeKeyBase>(legacy_te,
+                                                       *reinterpret_cast<Key *>(owner_id));
+    case TSE_ID_BASE:
+      return std::make_unique<TreeElementIDBase>(legacy_te);
     default:
       break;
   }

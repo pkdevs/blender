@@ -564,14 +564,19 @@ struct [[host_shared]] ObjectAttribute {
   /**
    * Go through all possible source of the given object uniform attribute.
    * Returns true if the attribute was correctly filled.
+   *
+   * \param instance_index: The index of synced the instance within the ObjectRef::duplis_,
+   *                        or just 0 if the ObjectRef doesn't contain any instances.
    */
-  bool sync(const draw::ObjectRef &ref, const GPUUniformAttr &attr);
+  bool sync(const draw::ObjectRef &ref, const GPUUniformAttr &attr, int instance_index);
 #endif
 };
 #pragma pack(pop)
 /** \note we only align to 4 bytes and fetch data manually so make sure
  * C++ compiler gives us the same size. */
+#ifndef GPU_SHADER
 BLI_STATIC_ASSERT_ALIGN(ObjectAttribute, 20)
+#endif
 
 struct [[host_shared]] LayerAttribute {
   float4 data;

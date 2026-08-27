@@ -40,7 +40,7 @@ static metadata::Source scan_external_symbols(const std::vector<std::string> &fi
                                               const std::string &file_name)
 {
   Language language = language_from_filename(file_name);
-  SourceProcessor processor(file_buffer, file_name, language);
+  SourceProcessor processor(file_buffer, file_name, language, file_list);
 
   metadata::Source include_data = processor.parse_include_and_symbols();
 
@@ -169,7 +169,7 @@ int main(int argc, char **argv)
   std::stringstream buffer;
   buffer << input_file.rdbuf();
 
-  std::string filename(output_file_name);
+  std::string filename(input_file_name);
   const bool is_info = filename.ends_with("infos.hh") || filename.ends_with(".bsl.hh");
 
   using namespace gpu::shader;
@@ -179,6 +179,13 @@ int main(int argc, char **argv)
   if (language == Language::GLSL) {
     /* All build-time GLSL files should be considered blender-GLSL. */
     language = Language::BLENDER_GLSL;
+  }
+
+  if (language == Language::BSL) {
+    /* Until the new BSL compiler is fully working, use the legacy one. */
+    if (/* Add ported files here. */ true) {
+      language = Language::BLENDER_GLSL;
+    }
   }
 
   metadata::Source external_symbols;
@@ -203,7 +210,7 @@ int main(int argc, char **argv)
   }
   dep_file << "\n";
 
-  SourceProcessor processor(buffer.str(), input_file_name, language);
+  SourceProcessor processor(buffer.str(), input_file_name, language, file_list);
 
   auto [result, metadata, error] = processor.convert(external_symbols);
 
@@ -213,7 +220,7 @@ int main(int argc, char **argv)
   size_t last_slash = filename.find_last_of('/');
   std::string name = (last_slash == std::string::npos) ? filename :
                                                          filename.substr(last_slash + 1);
-  std::string metadata_function_name = "metadata_" + name;
+  std::string metadata_function_name = "metadata_" + name + "_tmp";
   std::ranges::replace(metadata_function_name, '.', '_');
 
   metadata_file << metadata.serialize(metadata_function_name);

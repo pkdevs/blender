@@ -11,11 +11,12 @@
 #include "BKE_sound_types.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_map.hh"
-#include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 #include "DNA_session_uid_types.h"
+
+#include <optional>
 
 namespace blender {
 
@@ -23,9 +24,9 @@ struct BlendDataReader;
 struct BlendWriter;
 struct Depsgraph;
 struct Editing;
+struct IDProperty;
 struct Main;
 struct MetaStack;
-struct MovieReader;
 struct Scene;
 struct SeqTimelineChannel;
 struct Strip;
@@ -37,6 +38,7 @@ class CompositorCache;
 struct FinalImageCache;
 struct IntraFrameCache;
 struct MediaPresence;
+struct MovieReaderCache;
 struct PrefetchJob;
 struct PreviewCache;
 struct SourceImageCache;
@@ -45,14 +47,13 @@ struct ThumbnailCache;
 
 constexpr int MAX_CHANNELS = 128;
 
-/* RNA enums, just to be more readable */
-enum {
-  SIDE_MOUSE = -1,
-  SIDE_NONE = 0,
-  SIDE_LEFT,
-  SIDE_RIGHT,
-  SIDE_BOTH,
-  SIDE_NO_CHANGE,
+enum class Side : int {
+  Mouse = -1,
+  None = 0,
+  Left,
+  Right,
+  Both,
+  NoChange,
 };
 
 /* strip_duplicate' flags */
@@ -88,23 +89,19 @@ struct StripRuntime {
   AUD_Sound sound_time_stretch;
   float sound_time_stretch_fps = 0.0f;
 
-  Vector<MovieReader *, 1> movie_readers;
+  /* A null pointer can mean either not loaded yet or that the movie has no metadata. */
+  IDProperty *movie_metadata = nullptr;
+  bool movie_metadata_is_loaded = false;
+
   /* To detect the removal of a sound modifier. */
   int sound_modifiers_count = 0;
-
-  [[nodiscard]] MovieReader *movie_reader_get(int64_t index = 0) const
-  {
-    if (index < 0 || index >= movie_readers.size()) {
-      return nullptr;
-    }
-    return movie_readers[index];
-  }
 
   void clear_sound_time_stretch();
   void remove_scene_sound(Scene *scene);
 };
 
 struct EditingRuntime {
+  EditingRuntime();
   ~EditingRuntime();
 
   StripLookup *strip_lookup = nullptr;
@@ -113,9 +110,14 @@ struct EditingRuntime {
   IntraFrameCache *intra_frame_cache = nullptr;
   SourceImageCache *source_image_cache = nullptr;
   FinalImageCache *final_image_cache = nullptr;
+  MovieReaderCache *movie_reader_cache = nullptr;
   PreviewCache *preview_cache = nullptr;
   PrefetchJob *prefetch_job = nullptr;
   CompositorCache *compositor_cache = nullptr;
+
+  /* Frame index that was rendered with a temporary, unkeyed value
+   * of an animated property. */
+  std::optional<float> temporary_animation_frame;
 
   /** Used for rendering a different frame using sequencer_draw_get_transform_preview from the box
    * blade tool. */
@@ -157,7 +159,7 @@ MetaStack *meta_stack_active_get(const Editing *ed);
 /**
  * Open Meta strip content for editing.
  *
- * \param ed: sequence editor data
+ * \param scene: Scene containing the sequence editor data.
  * \param dst: meta strip or NULL for top level view
  */
 void meta_stack_set(const Scene *scene, Strip *dst);
@@ -239,6 +241,13 @@ Map<const Scene *, VectorSet<Strip *>> &lookup_strips_by_scene_map_get(Editing *
 Span<Strip *> lookup_strips_by_compositor_node_group(Editing *ed, const bNodeTree *key);
 
 /**
+ * Find effect strips, that use strip `key` as one of inputs.
+ * If lookup hash doesn't exist, it will be created. If hash is tagged as invalid, it will be
+ * rebuilt.
+ */
+Span<Strip *> lookup_effects_by_strip(Editing *ed, const Strip *key);
+
+/**
  * Find which meta strip the given timeline channel belongs to. Returns nullptr if it is a global
  * channel.
  */
@@ -262,6 +271,11 @@ void strip_lookup_free(Editing *ed);
  * Mark strip lookup as invalid (i.e. will need rebuilding).
  */
 void strip_lookup_invalidate(const Editing *ed);
+
+/** Return movie metadata copied into the strip runtime, reading the source lazily if needed. */
+IDProperty *movie_metadata_ensure(Scene &scene, Strip &strip);
+/** Discard metadata copied from the movie source. */
+void movie_metadata_invalidate(Strip &strip);
 
 }  // namespace seq
 }  // namespace blender

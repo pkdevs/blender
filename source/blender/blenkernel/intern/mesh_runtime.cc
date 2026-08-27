@@ -7,7 +7,7 @@
  */
 
 #include "BLI_array_utils.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 
 #include "BKE_bake_data_block_id.hh"
 #include "BKE_bvhutils.hh"
@@ -55,6 +55,7 @@ static void free_bvh_caches(MeshRuntime &mesh_runtime)
   mesh_runtime.bvh_cache_loose_verts_no_hidden.tag_dirty();
   mesh_runtime.bvh_cache_loose_edges.tag_dirty();
   mesh_runtime.bvh_cache_loose_edges_no_hidden.tag_dirty();
+  mesh_runtime.bvh_embree_cache.tag_dirty();
 }
 
 MeshRuntime::MeshRuntime() = default;

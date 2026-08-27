@@ -14,7 +14,7 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 
 #include "ED_image.hh"
 #include "ED_view3d.hh"
@@ -317,8 +317,12 @@ class Grid : Overlay {
                          1.0f - abs(drw_view_forward.z));
     }
     else if (bool(grid_flag_ & GRID_ALIGNED) || bool(axis_flag_ & GRID_ALIGNED)) {
-      /* #155497: mirror `ED_view3d_grid_view_scale` for axis-aligned orthographic views. */
+      /* #155497: use the same zoom-derived distance as `ED_view3d_grid_view_scale()` for
+       * axis-aligned orthographic views. */
       dist = 10.0f * 12.0f / (state.region->sizex * rv3d->winmat[0][0]);
+      /* Keep the selected level from going below the smallest available grid step. */
+      const float min_step = std::min(grid_ubo_.steps[0].x, grid_ubo_.steps[0].y);
+      dist = std::max(dist, min_step);
     }
     else {
       /* Scale is simply specified by orthographic view. */
@@ -340,9 +344,17 @@ class Grid : Overlay {
       grid_ubo_.offset = camera_offs.xy();
     }
     else { /* Orthographic. */
-      float3 camera_offs = drw_view_position -
-                           drw_view_forward * dot(drw_view_position, drw_view_forward);
-      grid_ubo_.offset = camera_offs.xy();
+      const float forward_z = drw_view_forward.z;
+      constexpr float eps = 1e-6f;
+      if (abs(forward_z) > eps) {
+        /* Center the grid on the intersection of the orthographic view ray with the XY plane. */
+        float3 camera_offs = drw_view_position -
+                             drw_view_forward * safe_divide(drw_view_position.z, forward_z);
+        grid_ubo_.offset = camera_offs.xy();
+      }
+      else {
+        grid_ubo_.offset = drw_view_position.xy();
+      }
     }
 
     /* Find the lowest relevant grid level for the above distance. */
@@ -377,9 +389,12 @@ class Grid : Overlay {
       /* WATCH(not_mark): This appears to function in ortho/VR, but I'm not convinced. */
       bool use_clip_end = rv3d->is_persp ||
                           ((v3d->flag & (V3D_XR_SESSION_SURFACE | V3D_XR_SESSION_MIRROR)) != 0);
-      float clip_dist = use_clip_end ? v3d->clip_end :
-                                       (4.0f / max(rv3d->winmat[0][0], rv3d->winmat[1][1]));
-      grid_ubo_.clip_rect = float2(clip_dist);
+      if (use_clip_end) {
+        grid_ubo_.clip_rect = float2(v3d->clip_end);
+      }
+      else {
+        grid_ubo_.clip_rect = float2(4.0f / rv3d->winmat[0][0], 4.0f / rv3d->winmat[1][1]);
+      }
     }
 
     /* This suffices for most cases, and in others we fade to hide it. */

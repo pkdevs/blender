@@ -11,8 +11,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_duplilist.hh"
@@ -249,7 +249,7 @@ static wmOperatorStatus ptcache_bake_modal(bContext *C, wmOperator *op, const wm
   Scene *scene = static_cast<Scene *>(op->customdata);
 
   /* no running blender, remove handler and pass through */
-  if (0 == WM_jobs_test(CTX_wm_manager(C), scene, WM_JOB_TYPE_POINTCACHE)) {
+  if (!WM_jobs_has_running(CTX_wm_manager(C), scene, WM_JOB_TYPE_POINTCACHE)) {
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
   }
 
@@ -277,7 +277,7 @@ static wmOperatorStatus ptcache_free_bake_all_exec(bContext *C, wmOperator * /*o
       ptcache_free_bake(pid.cache);
     }
 
-    BLI_freelistN(&pidlist);
+    pidlist.free_no_destruct();
 
     WM_event_add_notifier(C, NC_OBJECT | ND_POINTCACHE, ob);
   }

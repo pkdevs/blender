@@ -23,7 +23,7 @@ CCL_NAMESPACE_BEGIN
 
 static Geometry::Type determine_geom_type(BObjectInfo &b_ob_info, bool use_particle_hair)
 {
-  if (GS(b_ob_info.object_data->name) == blender::ID_LA) {
+  if (b_ob_info.object_data->id_type() == blender::ID_LA) {
     blender::Light &b_light = *blender::id_cast<blender::Light *>(b_ob_info.object_data);
     switch (b_light.type) {
       case blender::LA_LOCAL:
@@ -41,15 +41,15 @@ static Geometry::Type determine_geom_type(BObjectInfo &b_ob_info, bool use_parti
     }
   }
 
-  if (GS(b_ob_info.object_data->name) == blender::ID_CV || use_particle_hair) {
+  if (b_ob_info.object_data->id_type() == blender::ID_CV || use_particle_hair) {
     return Geometry::HAIR;
   }
 
-  if (GS(b_ob_info.object_data->name) == blender::ID_PT) {
+  if (b_ob_info.object_data->id_type() == blender::ID_PT) {
     return Geometry::POINTCLOUD;
   }
 
-  if (GS(b_ob_info.object_data->name) == blender::ID_VO ||
+  if (b_ob_info.object_data->id_type() == blender::ID_VO ||
       (b_ob_info.object_data ==
            object_get_data(*b_ob_info.real_object, b_ob_info.use_adaptive_subdivision) &&
        object_fluid_gas_domain_find(*b_ob_info.real_object)))
@@ -114,7 +114,7 @@ Geometry *BlenderSync::sync_geometry(BObjectInfo &b_ob_info,
   /* Ensure we only sync instanced geometry once. */
   Geometry *geom = geometry_map.find(key);
   if (geom) {
-    if (geometry_synced.find(geom) != geometry_synced.end()) {
+    if (geometry_synced.contains(geom)) {
       return geom;
     }
   }
@@ -239,9 +239,7 @@ void BlenderSync::sync_geometry_motion(BObjectInfo &b_ob_info,
   /* Ensure we only sync instanced geometry once. */
   Geometry *geom = object->get_geometry();
 
-  if (geometry_motion_synced.find(geom) != geometry_motion_synced.end() ||
-      geometry_motion_attribute_synced.find(geom) != geometry_motion_attribute_synced.end())
-  {
+  if (geometry_motion_synced.contains(geom) || geometry_motion_attribute_synced.contains(geom)) {
     return;
   }
 
@@ -249,7 +247,7 @@ void BlenderSync::sync_geometry_motion(BObjectInfo &b_ob_info,
 
   /* Ensure we only motion sync geometry that also had geometry synced, to avoid
    * unnecessary work and to ensure that its attributes were clear. */
-  if (geometry_synced.find(geom) == geometry_synced.end()) {
+  if (!geometry_synced.contains(geom)) {
     return;
   }
 
@@ -283,16 +281,16 @@ void BlenderSync::sync_geometry_motion(BObjectInfo &b_ob_info,
       return;
     }
 
-    if (GS(b_ob_info.object_data->name) == blender::ID_CV || use_particle_hair) {
+    if (b_ob_info.object_data->id_type() == blender::ID_CV || use_particle_hair) {
       Hair *hair = static_cast<Hair *>(geom);
       sync_hair_motion(b_ob_info, hair, motion_step);
     }
-    else if (GS(b_ob_info.object_data->name) == blender::ID_VO ||
+    else if (b_ob_info.object_data->id_type() == blender::ID_VO ||
              object_fluid_gas_domain_find(*b_ob_info.real_object))
     {
       /* No volume motion blur support yet. */
     }
-    else if (GS(b_ob_info.object_data->name) == blender::ID_PT) {
+    else if (b_ob_info.object_data->id_type() == blender::ID_PT) {
       PointCloud *pointcloud = static_cast<PointCloud *>(geom);
       sync_pointcloud_motion(pointcloud, b_ob_info, motion_step);
     }

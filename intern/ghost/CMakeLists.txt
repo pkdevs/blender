@@ -88,9 +88,13 @@ if(WITH_VULKAN_BACKEND)
 
     intern/GHOST_ContextVK.hh
   )
+  list(APPEND INC_SYS
+    PUBLIC ${VULKAN_INCLUDE_DIRS}
+  )
   list(APPEND LIB
     PUBLIC bf::dependencies::optional::vulkan
     PRIVATE bf::extern::vulkan_memory_allocator
+    PRIVATE bf::extern::volk
   )
 
   add_definitions(-DWITH_VULKAN_BACKEND)
@@ -137,14 +141,19 @@ if(WITH_HEADLESS)
   add_definitions(-DWITH_HEADLESS)
 elseif(WITH_GHOST_SDL)
   list(APPEND SRC
-    intern/GHOST_ContextSDL.cc
     intern/GHOST_SystemSDL.cc
     intern/GHOST_WindowSDL.cc
 
-    intern/GHOST_ContextSDL.hh
     intern/GHOST_SystemSDL.hh
     intern/GHOST_WindowSDL.hh
   )
+  # SDL/OpenGL uses ContextSDL, while SDL/Vulkan uses the common ContextVK.
+  if(WITH_OPENGL_BACKEND)
+    list(APPEND SRC
+      intern/GHOST_ContextSDL.cc
+      intern/GHOST_ContextSDL.hh
+    )
+  endif()
   add_definitions(-DWITH_GHOST_SDL)
 
   list(APPEND LIB
@@ -288,11 +297,6 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
       add_definitions(-DHAVE_MEMFD_CREATE)
     endif()
 
-    check_symbol_exists(poll "poll.h" HAVE_POLL)
-    if(HAVE_POLL)
-      add_definitions(-DHAVE_POLL)
-    endif()
-
     list(APPEND SRC
       intern/GHOST_SystemWayland.cc
       intern/GHOST_WindowWayland.cc
@@ -309,7 +313,7 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
     # - `SRC`: appended with generated protocol source and header files.
     function(generate_protocol_bindings PROT_DEF)
       # File name without directory or extension (use for header name).
-      get_filename_component(_name ${PROT_DEF} NAME_WLE)
+      cmake_path(GET PROT_DEF STEM LAST_ONLY _name)
       add_custom_command(
         OUTPUT ${INC_DST}/${_name}-client-protocol.h
         COMMAND ${CMAKE_COMMAND} -E make_directory ${INC_DST}
@@ -365,6 +369,10 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
     generate_protocol_bindings(
       "${WAYLAND_PROTOCOLS_DIR}/stable/viewporter/viewporter.xml"
     )
+    # Color management (HDR properties)
+    generate_protocol_bindings(
+      "${WAYLAND_PROTOCOLS_DIR}/staging/color-management/color-management-v1.xml"
+    )
     # Pointer-constraints.
     generate_protocol_bindings(
       "${WAYLAND_PROTOCOLS_DIR}/unstable/pointer-constraints/pointer-constraints-unstable-v1.xml"
@@ -416,11 +424,6 @@ elseif(WITH_GHOST_X11 OR WITH_GHOST_WAYLAND)
     )
   endif()
 
-  if(NOT WITH_INSTALL_PORTABLE)
-    add_definitions(-DPREFIX="${CMAKE_INSTALL_PREFIX}")
-  endif()
-
-
 elseif(WIN32)
   # # Warnings as errors, this is too strict!
   # if(MSVC)
@@ -446,6 +449,10 @@ elseif(WIN32)
     intern/GHOST_TrackpadWin32.hh
     intern/GHOST_WindowWin32.hh
     intern/GHOST_Wintab.hh
+
+    # Without these files listed, they aren't known to CMake.
+    ../../extern/wintab/include/pktdef.h
+    ../../extern/wintab/include/wintab.h
   )
 
   list(APPEND SRC
@@ -503,8 +510,31 @@ elseif(UNIX)
     intern/GHOST_SystemPathsUnix.hh
   )
 
+  # System-wide (non-portable) installs locate architecture-dependent libraries under `lib`
+  # (typically `/usr/lib`), following the FHS convention - alongside `share/`.
   if(NOT WITH_INSTALL_PORTABLE)
     add_definitions(-DPREFIX="${CMAKE_INSTALL_PREFIX}")
+
+    # NOTE: A Python module is itself a library: its wrapper libraries are bundled in the package
+    # beside the add-on, so it doesn't need a separate system libraries path.
+    if(NOT WITH_PYTHON_MODULE)
+      # The standard variable for this path is `CMAKE_INSTALL_LIBDIR` (typically `lib` or `lib64`).
+      # It isn't set by default, but systems that build packages may define it.
+      #
+      # NOTE: `include(GNUInstallDirs)` could auto-detect this path.
+      # Since default builds aren't system-wide, leave it to the
+      # package-build scripts to pass in the correct directory.
+      set(_lib "lib")
+      if(DEFINED CMAKE_INSTALL_LIBDIR)
+        if(CMAKE_INSTALL_LIBDIR)
+          set(_lib "${CMAKE_INSTALL_LIBDIR}")
+        endif()
+      endif()
+
+      add_definitions(-DBLENDER_INSTALL_LIBDIR="${_lib}")
+
+      unset(_lib)
+    endif()
   endif()
 
 elseif(WIN32)
