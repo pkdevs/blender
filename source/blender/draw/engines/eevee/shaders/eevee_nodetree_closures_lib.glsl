@@ -178,6 +178,8 @@ void closure_weights_reset(float closure_rand)
   g_diffuse_color = float3(0.0f);
   g_glossy_light = float3(0.0f);
   g_glossy_color = float3(0.0f);
+  g_transmission_light = float3(0.0f);
+  g_transmission_color = float3(0.0f);
   g_light_accumulation_count = 0;
 #endif
 }
