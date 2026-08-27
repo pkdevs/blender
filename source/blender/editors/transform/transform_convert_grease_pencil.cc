@@ -299,6 +299,7 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
                                                 affected_strokes,
                                                 use_connected_only,
                                                 bezier_curves[layer_offset],
+                                                key,
                                                 &drawing_falloff);
       curves::create_aligned_handles_masks(
           curves, points_to_transform_per_attribute[layer_offset], drawing, tc.custom.type);
@@ -376,39 +377,63 @@ static void recalcData_grease_pencil(TransInfo *t)
         if (key && actkb && tc.obedit->shapenr != 1) {
           OffsetIndices<int> tran_offsets{transform_data.layer_offsets};
 
-          for (MutableSpan<float3> positions : positions_per_selection_attr) {
-            UNUSED_VARS(positions);
+          const IndexMask &selection = transform_data.selection_by_layer[layer_i];
 
-            const IndexMask &selection = transform_data.selection_by_layer[layer_i];
+          Span<float3> trans_positions = transform_data.positions.as_span().slice(
+              tran_offsets[layer_i]);
 
-            bke::SpanAttributeWriter<float3> key_positions =
-                attributes.lookup_or_add_for_write_span<float3>(
-                    bke::greasepencil::shapekey_attribute_name_position(actkb->name),
-                    bke::AttrDomain::Point);
+          Array<float3> trans_positions_full(curves.points_num());
 
-            Span<float3> trans_positions = transform_data.positions.as_span().slice(
-                tran_offsets[layer_i]);
+          selection.foreach_index([&](const int point_i, const int pos) {
+            trans_positions_full[point_i] = trans_positions[pos];
+          });
 
-            selection.foreach_index([&](const int point_i, const int pos) {
-              key_positions.span[point_i] = (trans_positions[pos] - deformation_offsets[point_i] -
-                                             src_positions[point_i]) /
-                                            keyblock_influence;
-            });
+          bke::greasepencil::shapekey_set_applied_position(
+              key, actkb, selection, trans_positions_full, attributes);
 
-            key_positions.finish();
+          layer_i++;
 
-            layer_i++;
+          if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
+            {
+              const IndexMask &selection = transform_data.selection_by_layer[layer_i];
+
+              Span<float3> trans_positions = transform_data.positions.as_span().slice(
+                  tran_offsets[layer_i]);
+
+              Array<float3> trans_positions_full(curves.points_num());
+
+              selection.foreach_index([&](const int point_i, const int pos) {
+                trans_positions_full[point_i] = trans_positions[pos];
+              });
+
+              bke::greasepencil::shapekey_set_applied_handle_left(
+                  key, actkb, selection, trans_positions_full, attributes);
+
+              layer_i++;
+            }
+            {
+              const IndexMask &selection = transform_data.selection_by_layer[layer_i];
+
+              Span<float3> trans_positions = transform_data.positions.as_span().slice(
+                  tran_offsets[layer_i]);
+
+              Array<float3> trans_positions_full(curves.points_num());
+
+              selection.foreach_index([&](const int point_i, const int pos) {
+                trans_positions_full[point_i] = trans_positions[pos];
+              });
+
+              bke::greasepencil::shapekey_set_applied_handle_right(
+                  key, actkb, selection, trans_positions_full, attributes);
+
+              layer_i++;
+            }
           }
         }
         else {
           for (MutableSpan<float3> positions : positions_per_selection_attr) {
-            const IndexMask &selection = transform_data.selection_by_layer[layer_i];
-
             curves::copy_positions_from_curves_transform_custom_data(
                 tc.custom.type, layer_i++, positions);
-
-            selection.foreach_index(
-                [&](const int point_i) { positions[point_i] -= deformation_offsets[point_i]; });
           }
         }
 

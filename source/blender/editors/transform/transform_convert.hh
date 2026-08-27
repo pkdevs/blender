@@ -223,6 +223,7 @@ void curve_populate_trans_data_structs(const TransInfo &t,
                                        const IndexMask &affected_curves,
                                        bool use_connected_only,
                                        const IndexMask &bezier_curves,
+                                       const Key *key,
                                        void *extra = nullptr);
 
 CurvesTransformData *create_curves_transform_custom_data(TransCustomData &custom_data);

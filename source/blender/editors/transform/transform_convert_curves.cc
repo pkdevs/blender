@@ -402,7 +402,8 @@ static void createTransCurvesVerts(bContext *C, TransInfo *t)
                                       points_to_transform_per_attribute[i],
                                       curves.curves_range(),
                                       use_connected_only,
-                                      bezier_curves[i]);
+                                      bezier_curves[i],
+                                      nullptr);
     create_aligned_handles_masks(curves, points_to_transform_per_attribute[i], 0, tc.custom.type);
 
     /* TODO: This is wrong. The attribute writer should live at least as long as the span. */
@@ -542,6 +543,7 @@ void curve_populate_trans_data_structs(const TransInfo &t,
                                        const IndexMask &affected_curves,
                                        bool use_connected_only,
                                        const IndexMask &bezier_curves,
+                                       const Key *key,
                                        void *extra)
 {
   const std::array<Span<float3>, 3> src_positions_per_selection_attr = {
@@ -555,7 +557,8 @@ void curve_populate_trans_data_structs(const TransInfo &t,
   const bool use_individual_origin = (t.around == V3D_AROUND_LOCAL_ORIGINS);
   const Span<float3> point_positions = curves.positions();
   const VArray<bool> cyclic = curves.cyclic();
-  const VArray<bool> point_selection = *curves.attributes().lookup_or_default<bool>(
+  const bke::AttributeAccessor attributes = curves.attributes();
+  const VArray<bool> point_selection = *attributes.lookup_or_default<bool>(
       ".selection", bke::AttrDomain::Point, true);
   const VArray<int8_t> curve_types = curves.curve_types();
 
@@ -565,12 +568,30 @@ void curve_populate_trans_data_structs(const TransInfo &t,
         points_to_transform_per_attr[selection_i],
         src_positions_per_selection_attr[selection_i],
         tc.custom.type);
+  }
 
-    if (selection_i == 0 && !deformation.positions.is_empty()) {
-      points_to_transform_per_attr[selection_i].foreach_index(
-          [&](const int point_i, const int pos) {
-            positions_per_selection_attr[selection_i][pos] = deformation.positions[point_i];
-          });
+  if (key) {
+    Array<float3> offset_position(curves.points_num(), float3(0.0f));
+
+    bke::greasepencil::shapekey_get_applied_position(key, attributes, offset_position);
+
+    points_to_transform_per_attr[0].foreach_index([&](const int point_i, const int pos) {
+      positions_per_selection_attr[0][pos] += offset_position[point_i];
+    });
+
+    if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
+      Array<float3> offset_handle_left(curves.points_num(), float3(0.0f));
+      Array<float3> offset_handle_right(curves.points_num(), float3(0.0f));
+
+      bke::greasepencil::shapekey_get_applied_handle_left(key, attributes, offset_handle_left);
+      bke::greasepencil::shapekey_get_applied_handle_right(key, attributes, offset_handle_right);
+
+      points_to_transform_per_attr[1].foreach_index([&](const int point_i, const int pos) {
+        positions_per_selection_attr[1][pos] += offset_handle_left[point_i];
+      });
+      points_to_transform_per_attr[2].foreach_index([&](const int point_i, const int pos) {
+        positions_per_selection_attr[2][pos] += offset_handle_right[point_i];
+      });
     }
   }
 
@@ -607,7 +628,7 @@ void curve_populate_trans_data_structs(const TransInfo &t,
           }
           float3 center(0.0f);
           selection.foreach_index_optimized<int64_t>(
-              [&](const int64_t point_i) { center += deformation.positions[point_i]; });
+              [&](const int64_t point_i) { center += points_to_transform_per_attr[0][point_i]; });
           center /= selection.size();
           mean_center_point_per_curve[curve_i] = center;
         },
@@ -640,7 +661,7 @@ void curve_populate_trans_data_structs(const TransInfo &t,
             center = mean_center_point_per_curve[curve_i];
           }
           else if (use_local_center) {
-            center = deformation.positions[domain_i];
+            center = point_positions[domain_i];
           }
           else {
             center = *elem;
@@ -666,8 +687,16 @@ void curve_populate_trans_data_structs(const TransInfo &t,
             td.val = nullptr;
           }
 
-          copy_m3_m3(td.smtx, smtx_base.ptr());
-          copy_m3_m3(td.mtx, mtx_base.ptr());
+          if (deformation.deform_mats.is_empty()) {
+            copy_m3_m3(td.smtx, smtx_base.ptr());
+            copy_m3_m3(td.mtx, mtx_base.ptr());
+          }
+          else {
+            const float3x3 mtx = deformation.deform_mats[domain_i] * mtx_base;
+            const float3x3 smtx = math::pseudo_invert(mtx);
+            copy_m3_m3(td.smtx, smtx.ptr());
+            copy_m3_m3(td.mtx, mtx.ptr());
+          }
         },
         exec_mode::grain_size(1024));
   }
