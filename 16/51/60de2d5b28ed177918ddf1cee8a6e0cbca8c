@@ -8,3 +8,4 @@ Referenced by pull request #160617, Fix #160588: EEVEE sampling does not converg
 Referenced by commit c2f4d4219f7eba809bdc53bc50b4b8a2682e19fe, Fix #160588: EEVEE sampling does not converge with missing image texture
 Referenced by issue #162957, Regression: Grease Pencil not rendering
 Referenced by pull request #163178, Fix #162957: Grease pencil missing in displayed render result
+Referenced by commit 984c1f3dc13a895a704b478234a7c0c50212ab4d, Fix #162957: Grease pencil missing in displayed render result
