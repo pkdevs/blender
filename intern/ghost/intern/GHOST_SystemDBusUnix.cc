@@ -19,6 +19,8 @@
 #    include <dbus/dbus.h>
 #  endif
 
+#  include <array>
+#  include <cerrno>
 #  include <chrono>
 #  include <condition_variable>
 #  include <cstdlib>
@@ -26,7 +28,10 @@
 #  include <utility>
 #  include <vector>
 
+#  include <fcntl.h>
+#  include <poll.h>
 #  include <sys/stat.h>
+#  include <unistd.h>
 
 static constexpr const char *PORTAL_SERVICE = "org.freedesktop.portal.Desktop";
 static constexpr const char *PORTAL_PATH = "/org/freedesktop/portal/desktop";
@@ -40,8 +45,52 @@ static constexpr const char *PORTAL_SETTINGS_CHANGED = "SettingChanged";
  */
 static constexpr int SETTING_READ_TIMEOUT_MS = 5000;
 
-/** How long the destructor waits for the background thread, see the note there. */
-static constexpr int THREAD_EXIT_TIMEOUT_MS = 250;
+/**
+ * Owns the pair of descriptors behind #Data::stop_pipe, closing whichever are still open when
+ * #Data is released. Since #Data is shared between this object and its thread and outlives
+ * both, neither has to work out which of them is responsible for tidying up.
+ */
+class StopPipe {
+  int fds_[2] = {-1, -1};
+
+ public:
+  StopPipe() = default;
+  ~StopPipe()
+  {
+    this->close_write();
+    if (fds_[0] != -1) {
+      close(fds_[0]);
+      fds_[0] = -1;
+    }
+  }
+
+  StopPipe(const StopPipe &) = delete;
+  StopPipe &operator=(const StopPipe &) = delete;
+
+  bool open()
+  {
+    if (pipe2(fds_, O_CLOEXEC) != 0) {
+      fds_[0] = fds_[1] = -1;
+      return false;
+    }
+    return true;
+  }
+
+  /** The end #poll waits on, -1 when #open was never called or failed (#poll ignores it). */
+  int read_fd() const
+  {
+    return fds_[0];
+  }
+
+  /** Wakes the thread: a closed write end reports #POLLHUP on #read_fd. */
+  void close_write()
+  {
+    if (fds_[1] != -1) {
+      close(fds_[1]);
+      fds_[1] = -1;
+    }
+  }
+};
 
 struct GHOST_SystemDBusUnix::Data {
   struct Setting {
@@ -58,18 +107,24 @@ struct GHOST_SystemDBusUnix::Data {
    * on no callback running (or starting) once it has set #stop.
    */
   std::mutex mutex;
-  std::condition_variable finished_cond;
   /** Signalled once #initial_done is set, see #GHOST_SystemDBusUnix::wait_initial. */
   std::condition_variable initial_cond;
   bool stop = false;
-  bool finished = false;
   /**
    * Whether the initial read of every setting has been delivered to its callback. Also set when
    * there is nothing to deliver (the bus couldn't be reached, the thread was stopped), so a
    * waiter is never left hanging.
    */
   bool initial_done = false;
-  DBusConnection *connection = nullptr;
+
+  /**
+   * Pipe used to wake the thread out of #poll when the destructor wants it to stop, mirroring
+   * `GWL_Display::events_pipe`.
+   *
+   * A pipe is used because closing the DBUS connection does *not* interrupt a #poll another
+   * thread is already blocked in, so there is no way to signal through `libdbus` itself.
+   */
+  StopPipe stop_pipe;
 
   /**
    * Values received from the bus but not passed to their callback yet, as indices into
@@ -327,56 +382,108 @@ static bool thread_should_stop(WatcherData *data)
   return data->stop;
 }
 
+/**
+ * Dispatch signals until the destructor asks to stop or the connection goes away.
+ *
+ * #poll is used directly rather than letting `dbus_connection_read_write_dispatch` block:
+ * it can then watch #Data::stop_pipe alongside the bus, which is the only way to wake this
+ * thread promptly.
+ */
+static void thread_dispatch_loop(WatcherData *data, DBusConnection *connection)
+{
+  int connection_fd = -1;
+  if (!dbus_connection_get_unix_fd(connection, &connection_fd)) {
+    return;
+  }
+
+  for (;;) {
+    /* Process everything already queued. A single read can yield several messages, and the
+     * extra ones don't make the socket readable again, so they have to be drained before
+     * blocking or they would remain unprocessed until the next change arrived. */
+    do {
+      if (!dbus_connection_read_write_dispatch(connection, 0)) {
+        return;
+      }
+      settings_changed_flush(data);
+    } while (dbus_connection_get_dispatch_status(connection) == DBUS_DISPATCH_DATA_REMAINS);
+
+    if (thread_should_stop(data)) {
+      return;
+    }
+
+    /* Wait for something to do. This call makes watching cheap; the thread spends virtually its
+     * whole life waiting here.
+     *
+     * Two descriptors are watched, with either ending the wait:
+     * 1. The bus, once a signal has arrived for the drain above to dispatch.
+     * 2. #Data::stop_pipe. The destructor closing this shows as #POLLHUP.
+     *
+     * The -1 timeout blocks indefinitely. */
+    std::array<pollfd, 2> fds = {{
+        {connection_fd, POLLIN | POLLPRI, 0},
+        {data->stop_pipe.read_fd(), POLLIN, 0},
+    }};
+    if (poll(fds.data(), fds.size(), -1) == -1) {
+      /* Interrupted by a signal before anything was ready, simply wait again. */
+      if (errno == EINTR) {
+        continue;
+      }
+      return;
+    }
+    if (fds[1].revents != 0) {
+      /* The destructor asked this thread to stop. */
+      return;
+    }
+    if (fds[0].revents & (POLLHUP | POLLERR | POLLNVAL)) {
+      /* The bus is no longer available. */
+      return;
+    }
+  }
+}
+
+/**
+ * Read each setting's current value once, then watch for changes until asked to stop.
+ * The caller owns `connection`, see #thread_run.
+ */
+static void thread_watch(WatcherData *data, DBusConnection *connection)
+{
+  /* Subscribe before reading, otherwise a change made in between would be missed. */
+  if (!settings_subscribe(data, connection)) {
+    return;
+  }
+
+  for (size_t i = 0; i < data->settings.size(); i++) {
+    if (thread_should_stop(data)) {
+      return;
+    }
+    GHOST_DBusValue value;
+    if (setting_read(connection, data->settings[i], value)) {
+      data->pending.emplace_back(i, std::move(value));
+    }
+  }
+  settings_changed_flush(data);
+  initial_done_set(data);
+
+  thread_dispatch_loop(data, connection);
+}
+
 static void thread_run(std::shared_ptr<GHOST_SystemDBusUnix::Data> data_ptr)
 {
   WatcherData *data = data_ptr.get();
 
   DBusConnection *connection = bus_connect();
-  if (connection) {
-    {
-      /* Published so the destructor can close the connection to wake this thread up. */
-      std::lock_guard lock{data->mutex};
-      data->connection = connection;
-    }
-
-    /* Subscribe before reading, otherwise a change made in between would be missed. */
-    if (settings_subscribe(data, connection)) {
-      for (size_t i = 0; i < data->settings.size(); i++) {
-        if (thread_should_stop(data)) {
-          break;
-        }
-        GHOST_DBusValue value;
-        if (setting_read(connection, data->settings[i], value)) {
-          data->pending.emplace_back(i, std::move(value));
-        }
-      }
-      settings_changed_flush(data);
-      initial_done_set(data);
-
-      /* Blocks until a message arrives (dispatching it through #filter_func) or the connection
-       * is closed, so watching costs nothing while nothing changes. */
-      while (!thread_should_stop(data) && dbus_connection_read_write_dispatch(connection, -1)) {
-        settings_changed_flush(data);
-      }
-    }
+  if (!connection) {
+    initial_done_set(data);
+    return;
   }
 
-  /* Also covers the paths that returned before reading anything, so #wait_initial can't block
-   * for its full timeout when there was never going to be a value. */
+  thread_watch(data, connection);
+
+  /* A private connection must be closed before its last reference is dropped. */
+  dbus_connection_close(connection);
+  dbus_connection_unref(connection);
+
   initial_done_set(data);
-
-  {
-    std::lock_guard lock{data->mutex};
-    if (data->connection) {
-      /* A private connection must be closed before its last reference is dropped. Closing twice
-       * (the destructor may have done so already) is harmless. */
-      dbus_connection_close(data->connection);
-      dbus_connection_unref(data->connection);
-      data->connection = nullptr;
-    }
-    data->finished = true;
-  }
-  data->finished_cond.notify_all();
 }
 
 GHOST_SystemDBusUnix::GHOST_SystemDBusUnix() : data_(std::make_shared<Data>()) {}
@@ -388,31 +495,24 @@ GHOST_SystemDBusUnix::~GHOST_SystemDBusUnix()
   }
 
   {
-    std::unique_lock lock{data_->mutex};
+    std::lock_guard lock{data_->mutex};
     data_->stop = true;
-    if (data_->connection) {
-      /* Unblocks the thread's `dbus_connection_read_write_dispatch`, completingany in-flight
-       * blocking calls with an error. Safe to do while the thread reads from the same connection,
-       * `DBusConnection` is internally thread-safe. */
-      dbus_connection_close(data_->connection);
-    }
-
-    /* Nothing can interrupt `dbus_bus_get_private` though, and a session bus that never
-     * completes authentication could possibly hang. Rather than hold up Blender's exit, give the
-     * thread a short time and then leave it to finish on its own: `data_` is shared with it and
-     * `stop` (checked under `mutex` before every callback) keeps it from calling back into memory
-     * that may be freed. */
-    data_->finished_cond.wait_for(lock, std::chrono::milliseconds(THREAD_EXIT_TIMEOUT_MS), [this] {
-      return data_->finished;
-    });
-    if (!data_->finished) {
-      lock.unlock();
-      thread_.detach();
-      return;
-    }
+    /* Wakes the thread's #poll, see #Data::stop_pipe. */
+    data_->stop_pipe.close_write();
   }
 
-  thread_.join();
+  /* The connection is deliberately left for the thread to close. Doing it from here could end the
+   * initial #setting_read sooner, but tearing a connection down from a thread other than the one
+   * dispatching it is reported by ThreadSanitizer as a potential deadlock. Since this doesn't
+   * wait for the thread anyway, there is nothing to gain from it. */
+
+  /* Detached rather than joined: the thread stops on its own moments after the wake above, but
+   * neither `dbus_bus_get_private` nor a blocking #setting_read can be interrupted from here,
+   * so a dbus session that goes quiet mid-exchange would hold up Blender's exit for as long as
+   * `libdbus` waits on it, which is unnecessary: `data_` is shared with the thread and outlives
+   * this object, and `stop` (checked under `mutex` before every callback) keeps it from reaching
+   * into memory owned by this object. */
+  thread_.detach();
 }
 
 bool GHOST_SystemDBusUnix::wait_initial(const int timeout_ms)
@@ -449,6 +549,12 @@ bool GHOST_SystemDBusUnix::start()
 #  endif
 
   if (!session_bus_is_available()) {
+    return false;
+  }
+
+  /* Created here rather than on the thread so the destructor can always rely on it, even if it
+   * runs before the thread starts. */
+  if (!data_->stop_pipe.open()) {
     return false;
   }
 

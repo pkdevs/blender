@@ -22,6 +22,8 @@ DBUS_DYNLOAD_FN(dbus_message_is_signal)
 DBUS_DYNLOAD_FN(dbus_message_unref)
 DBUS_DYNLOAD_FN(dbus_connection_send_with_reply_and_block)
 DBUS_DYNLOAD_FN(dbus_connection_read_write_dispatch)
+DBUS_DYNLOAD_FN(dbus_connection_get_dispatch_status)
+DBUS_DYNLOAD_FN(dbus_connection_get_unix_fd)
 DBUS_DYNLOAD_FN(dbus_connection_set_exit_on_disconnect)
 DBUS_DYNLOAD_FN(dbus_connection_add_filter)
 DBUS_DYNLOAD_FN(dbus_connection_flush)
@@ -76,6 +78,8 @@ struct DBusDynload {
                                                                       DBusError *error);
   dbus_bool_t DBUS_DYN_FN(dbus_connection_read_write_dispatch)(DBusConnection *connection,
                                                                int timeout_milliseconds);
+  DBusDispatchStatus DBUS_DYN_FN(dbus_connection_get_dispatch_status)(DBusConnection *connection);
+  dbus_bool_t DBUS_DYN_FN(dbus_connection_get_unix_fd)(DBusConnection *connection, int *fd);
   void DBUS_DYN_FN(dbus_connection_set_exit_on_disconnect)(DBusConnection *connection,
                                                            dbus_bool_t exit_on_disconnect);
   dbus_bool_t DBUS_DYN_FN(dbus_connection_add_filter)(DBusConnection *connection,
@@ -113,6 +117,10 @@ struct DBusDynload {
         (*dbus_dynload.dbus_connection_send_with_reply_and_block)(__VA_ARGS__)
 #      define dbus_connection_read_write_dispatch(...) \
         (*dbus_dynload.dbus_connection_read_write_dispatch)(__VA_ARGS__)
+#      define dbus_connection_get_dispatch_status(...) \
+        (*dbus_dynload.dbus_connection_get_dispatch_status)(__VA_ARGS__)
+#      define dbus_connection_get_unix_fd(...) \
+        (*dbus_dynload.dbus_connection_get_unix_fd)(__VA_ARGS__)
 #      define dbus_connection_set_exit_on_disconnect(...) \
         (*dbus_dynload.dbus_connection_set_exit_on_disconnect)(__VA_ARGS__)
 #      define dbus_connection_add_filter(...) \
