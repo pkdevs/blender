@@ -18,8 +18,8 @@ import argparse
 import dataclasses
 import sys
 
-from datetime import date
-from gitea_utils import gitea_json_issues_search
+from datetime import date, datetime, timedelta
+from gitea_utils import gitea_json_issues_search, gitea_json_issue_events_filter
 
 IS_ATTY = sys.stdout.isatty()
 
@@ -149,6 +149,62 @@ def compile_list(severity: str) -> None:
             print(f"{buglist_full_str}")
 
 
+def get_activity_since_yesterday(severity: str) -> None:
+    # TODO: Check with reviewers on how they want this date to be set.
+    # - Just use yesterday?
+    # - Use yesterday on weekdays, except Mondays where last Friday should be used?
+    # - Allow the user to input the date as a launch argument?
+    yesterday = datetime.now().astimezone() - timedelta(days=1)
+
+    label = f"Severity/{severity}"
+    issues_json = gitea_json_issues_search(
+        type="issues",
+        since=yesterday.isoformat(),
+        state="all",
+        labels=label,
+        verbose=True,
+    )
+
+    open_issues = [issue for issue in issues_json if issue["state"] == "open"]
+    closed_issues = [issue for issue in issues_json if issue["state"] == "closed"]
+
+    pull_requests_opened = 0
+    for issue in open_issues:
+        issue_number = issue["number"]
+        full_issue_path = f"blender/blender/issues/{issue_number}"
+
+        # "pull_ref" event types are when a pull request title or body reference a issue.
+        # Comments on pull requests that reference a issue are "comment_ref" events.
+        # So "pull_ref" is a good indicator that a issue has a pull request for it.
+        pull_request_references = gitea_json_issue_events_filter(
+            full_issue_path, date_start=yesterday, event_type="pull_ref")
+        if pull_request_references:
+            for reference in pull_request_references:
+                pr_info = reference["ref_issue"]
+                # Double check to see if the pull request still references the issue.
+                # Just in case it was changed due to testing pointing to the PR not resolving the issue.
+                if str(issue_number) in (pr_info["title"] + pr_info["body"]):
+                    pull_requests_opened += 1
+                    break
+
+    # Idea: Expand this to detect why a issue was closed (Fixed by commit, )
+    issues_closed = 0
+    for issue in closed_issues:
+        issue_number = issue["number"]
+        full_issue_path = f"blender/blender/issues/{issue_number}"
+
+        # Checking for "close" events helps filter between closed bug reports that had activity (E.g. A user thanking developers)
+        # and a bug report that was actually closed.
+        issue_closed_references = gitea_json_issue_events_filter(
+            full_issue_path, date_start=yesterday, event_type="close")
+        if issue_closed_references:
+            issues_closed += 1
+
+    print(f"Since {yesterday.strftime("%Y-%m-%d")}:")
+    print(f"- Pull requests created for {severity} severity issues: {pull_requests_opened}")
+    print(f"- {severity} severity issues closed: {issues_closed}")
+
+
 def main() -> None:
 
     parser = argparse.ArgumentParser(
@@ -169,6 +225,7 @@ def main() -> None:
     args = parser.parse_args()
 
     compile_list(args.severity)
+    get_activity_since_yesterday(args.severity)
 
 
 if __name__ == "__main__":
