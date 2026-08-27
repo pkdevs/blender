@@ -333,8 +333,9 @@ GPUNodeLink *GPU_constant(const GPUNodeStack &stack)
       [](const auto &value) -> GPUNodeLink * {
         using T = std::decay_t<decltype(value)>;
         if constexpr (std::is_same_v<T, std::monostate>) {
-          BLI_assert_unreachable();
-          return nullptr;
+          /* Use fallback for sockets with no constant representation. */
+          static const float4 dummy(0.0f);
+          return GPU_constant(dummy);
         }
         else if constexpr (std::is_arithmetic_v<T>) {
           return GPU_constant(&value);
@@ -355,8 +356,9 @@ GPUNodeLink *GPU_uniform(const GPUNodeStack &stack)
       [](const auto &value) -> GPUNodeLink * {
         using T = std::decay_t<decltype(value)>;
         if constexpr (std::is_same_v<T, std::monostate>) {
-          BLI_assert_unreachable();
-          return nullptr;
+          /* Use fallback for sockets with no constant representation. */
+          static const float4 dummy(0.0f);
+          return GPU_uniform(dummy);
         }
         else if constexpr (std::is_arithmetic_v<T>) {
           return GPU_uniform(&value);

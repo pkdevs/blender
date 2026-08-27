@@ -244,7 +244,6 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
         gs->value = vec;
         break;
       default:
-        BLI_assert_unreachable();
         gs->value = std::monostate{};
         break;
     }
@@ -276,7 +275,6 @@ void node_data_from_gpu_stack(bNodeStack *ns, GPUNodeStack *gs)
       vec = std::get<float4>(gs->value);
       break;
     default:
-      BLI_assert_unreachable();
       break;
   }
   copy_v4_v4(ns->vec, vec);

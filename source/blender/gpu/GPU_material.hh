@@ -463,14 +463,17 @@ struct GPUNodeStack {
    * This is a conservative heuristic that allows for optimization. */
   bool might_be_tinted() const
   {
+    if (this->link) {
+      return true;
+    }
     switch (this->type) {
       case GPU_VEC3: {
         const float3 &vec = std::get<float3>(this->value);
-        return this->link || (vec[0] != vec[1]) || (vec[1] != vec[2]);
+        return (vec[0] != vec[1]) || (vec[1] != vec[2]);
       }
       case GPU_VEC4: {
         const float4 &vec = std::get<float4>(this->value);
-        return this->link || (vec[0] != vec[1]) || (vec[1] != vec[2]);
+        return (vec[0] != vec[1]) || (vec[1] != vec[2]);
       }
       default:
         break;
@@ -481,26 +484,35 @@ struct GPUNodeStack {
 
   bool socket_not_zero() const
   {
-    return this->link || (saturate_f(std::get<float>(this->value)) > near_zero);
+    if (this->link) {
+      return true;
+    }
+    return saturate_f(std::get<float>(this->value)) > near_zero;
   }
 
   bool socket_not_one() const
   {
-    return this->link || (saturate_f(std::get<float>(this->value)) < near_one);
+    if (this->link) {
+      return true;
+    }
+    return saturate_f(std::get<float>(this->value)) < near_one;
   }
 
   bool socket_not_black() const
   {
+    if (this->link) {
+      return true;
+    }
     switch (this->type) {
       case GPU_VEC3: {
         const float3 &vec = std::get<float3>(this->value);
-        return this->link || (saturate_f(vec[0]) > near_zero) ||
-               (saturate_f(vec[1]) > near_zero) || (saturate_f(vec[2]) > near_zero);
+        return saturate_f(vec[0]) > near_zero || saturate_f(vec[1]) > near_zero ||
+               saturate_f(vec[2]) > near_zero;
       }
       case GPU_VEC4: {
         const float4 &vec = std::get<float4>(this->value);
-        return this->link || (saturate_f(vec[0]) > near_zero) ||
-               (saturate_f(vec[1]) > near_zero) || (saturate_f(vec[2]) > near_zero);
+        return saturate_f(vec[0]) > near_zero || saturate_f(vec[1]) > near_zero ||
+               saturate_f(vec[2]) > near_zero;
       }
       default:
         break;
@@ -511,16 +523,19 @@ struct GPUNodeStack {
 
   bool socket_not_white() const
   {
+    if (this->link) {
+      return true;
+    }
     switch (this->type) {
       case GPU_VEC3: {
         const float3 &vec = std::get<float3>(this->value);
-        return this->link || (saturate_f(vec[0]) < near_one) || (saturate_f(vec[1]) < near_one) ||
-               (saturate_f(vec[2]) < near_one);
+        return saturate_f(vec[0]) < near_one || saturate_f(vec[1]) < near_one ||
+               saturate_f(vec[2]) < near_one;
       }
       case GPU_VEC4: {
         const float4 &vec = std::get<float4>(this->value);
-        return this->link || (saturate_f(vec[0]) < near_one) || (saturate_f(vec[1]) < near_one) ||
-               (saturate_f(vec[2]) < near_one);
+        return saturate_f(vec[0]) < near_one || saturate_f(vec[1]) < near_one ||
+               saturate_f(vec[2]) < near_one;
       }
       default:
         break;
