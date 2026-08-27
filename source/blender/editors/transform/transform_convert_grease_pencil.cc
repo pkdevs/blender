@@ -94,8 +94,6 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
     const Span<ed::greasepencil::MutableDrawingInfo> drawings =
         curves_transform_data.drawings.as_span();
     curves_transform_data.grease_pencil_falloffs.reinitialize(drawings.size());
-    curves_transform_data.deformation_offsets.reinitialize(drawings.size());
-    curves_transform_data.src_positions.reinitialize(drawings.size());
     curves_transform_data.value_attribute.reinitialize(drawings.size());
 
     for (ed::greasepencil::MutableDrawingInfo info : drawings) {
@@ -261,32 +259,6 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
                                                  *object, info.drawing, info.layer_index, memory) :
                                              IndexMask();
 
-      curves_transform_data.deformation_offsets[drawing] = Array<float3>(deformation.positions);
-      curves_transform_data.src_positions[drawing] = Array<float3>(curves.positions());
-
-      for (const int point_i : deformation.positions.index_range()) {
-        curves_transform_data.deformation_offsets[drawing][point_i] -=
-            curves_transform_data.src_positions[drawing][point_i];
-      }
-
-      if (key && actkb && tc.obedit->shapenr != 1) {
-        bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-
-        if (!(actkb->flag & KEYBLOCK_MUTE)) {
-          const float keyblock_influence = actkb->curval;
-
-          const VArray<float3> key_positions = *attributes.lookup_or_default<float3>(
-              bke::greasepencil::shapekey_attribute_name_position(actkb->name),
-              bke::AttrDomain::Point,
-              float3(0.0f));
-
-          for (const int point_i : deformation.positions.index_range()) {
-            curves_transform_data.deformation_offsets[drawing][point_i] -= key_positions[point_i] *
-                                                                           keyblock_influence;
-          }
-        }
-      }
-
       curves_transform_data.grease_pencil_falloffs[drawing] = info.multi_frame_falloff;
       float &drawing_falloff = curves_transform_data.grease_pencil_falloffs[drawing];
       curves::curve_populate_trans_data_structs(*t,
@@ -342,8 +314,6 @@ static void recalcData_grease_pencil(TransInfo *t)
       ed::greasepencil::MutableDrawingInfo info = drawings[i];
       bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
       bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-      const Span<float3> deformation_offsets = transform_data.deformation_offsets[i];
-      const Span<float3> src_positions = transform_data.src_positions[i];
 
       if (t->mode == TFM_CURVE_SHRINKFATTEN) {
         if (key && actkb && tc.obedit->shapenr != 1) {

@@ -130,13 +130,7 @@ struct CurvesTransformData {
    */
   Array<float3> positions;
 
-  /* Copy of the deformations for each layer to unapply at the end. */
-  Array<Array<float3>> deformation_offsets;
-
-  /* Copy of the source positions for each layer to unapply at the end. */
-  Array<Array<float3>> src_positions;
-
-  /* Copy of the values (Radius or Opacity) being transformed. */
+  /* Copy of the values (Radius or Opacity) being transformed per curve. */
   Array<Array<float>> value_attribute;
 };
 
