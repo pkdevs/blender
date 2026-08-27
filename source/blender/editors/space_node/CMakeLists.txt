@@ -75,7 +75,6 @@ set(LIB
   PRIVATE bf::render
   PRIVATE bf::windowmanager
   PRIVATE bf::sequencer
-  PRIVATE bf::extern::md4c
 )
 
 if(WITH_OPENIMAGEDENOISE)

@@ -413,6 +413,12 @@ struct Layout : public Item, NonCopyable, NonMovable {
                        int max_lines = 0);
 
   /**
+   * Adds a markdown label that displays formatted markdown text in the layout.
+   * Links remain clickable.
+   */
+  void label_markdown(StringRef text);
+
+  /**
    * Adds link item, displays a url that can be clicked in the layout.
    */
   void link(StringRef url, StringRef name, int icon);

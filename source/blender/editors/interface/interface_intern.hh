@@ -377,6 +377,37 @@ struct TextWrapCache {
   Vector<StringRef> wrapped_lines;
 };
 
+enum class MarkdownSpanType {
+  Text,
+  Bullet,
+  OrderedMarker,
+};
+
+struct MarkdownSpan {
+  /** Position relative to the label button's top-left corner, in block space. */
+  float x = 0.0f;
+  float y = 0.0f;
+  float size = 0.0f;
+  int fontid = 0;
+  int weight = 0;
+  bool italic = false;
+  MarkdownSpanType type = MarkdownSpanType::Text;
+  /** Used when #type is #MarkdownSpanType::Text. References #MarkdownLayoutCache::text. */
+  StringRef text;
+  /** Used when #type is #MarkdownSpanType::OrderedMarker. */
+  int list_number = 0;
+  /** Optional URL for link spans. References #MarkdownLayoutCache::text. */
+  std::optional<StringRef> url;
+};
+
+struct MarkdownLayoutCache {
+  int wrap_width = 0;
+  float aspect = 0.0f;
+  std::string text;
+  Vector<MarkdownSpan> spans;
+  float content_height = 0.0f;
+};
+
 /** Derived struct for #ButtonType::Text */
 struct ButtonText : public Button {
   std::function<void(bContext &, StringRefNull)> rename_func = nullptr;
@@ -496,13 +527,19 @@ struct ButtonSeparatorLine : public Button {
   bool is_vertical;
 };
 
+enum class ButtonLabelType {
+  Standard,
+  Multiline,
+  Markdown,
+};
+
 /** Derived struct for #ButtonType::Label. */
 struct ButtonLabel : public Button {
   float alpha_factor = 1.0f;
   /** When the button draws an icon, also draw a mono-colored border for it. */
   bool draw_icon_border = false;
 
-  bool is_multiline = false;
+  ButtonLabelType label_type = ButtonLabelType::Standard;
   /**
    * Wrap cache from last layout pass.
    * This is also referenced in the button owning #Block so it can be looked up and reused in
@@ -510,6 +547,8 @@ struct ButtonLabel : public Button {
    * copied/moved around.
    */
   std::shared_ptr<TextWrapCache> wrap_cache;
+  /** Layout cache for markdown labels. */
+  std::shared_ptr<MarkdownLayoutCache> markdown_cache;
   /** Maximum lines to be drawn in multi-line labels, 0 means all. */
   int max_lines = 0;
   FontStyleAlign text_align = UI_STYLE_TEXT_LEFT;
@@ -688,6 +727,7 @@ struct Block {
 
   Vector<std::unique_ptr<Button>> buttons_ptrs;
   Vector<std::shared_ptr<TextWrapCache>> text_wrap_cache;
+  Vector<std::shared_ptr<MarkdownLayoutCache>> markdown_layout_cache;
 
   Panel *panel = nullptr;
   Block *oldblock = nullptr;

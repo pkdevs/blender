@@ -47,6 +47,7 @@
 #include "WM_types.hh"
 
 #include "buttons/interface_label.hh"
+#include "buttons/interface_label_markdown.hh"
 #include "buttons/interface_textbox.hh"
 #include "interface_intern.hh"
 
@@ -3392,8 +3393,25 @@ void Layout::label_multiline(StringRefNull text, int icon, FontStyleAlign align,
   this->root_->use_dynamic_height = true;
   ButtonLabel *label = static_cast<ButtonLabel *>(button);
   label->text_align = align;
-  label->is_multiline = true;
+  label->label_type = ButtonLabelType::Multiline;
   label->max_lines = max_lines;
+  if (this->red_alert()) {
+    button_flag_enable(button, BUT_REDALERT);
+  }
+}
+
+void Layout::label_markdown(StringRef text)
+{
+  block_layout_set_current(this->block(), this);
+  /* Use a dummy non-empty string for initial width estimation; wrapping is done on resolve. */
+  const int width = text_icon_width_ex(
+      this, "non-empty text", ICON_NONE, text_pad_none, UI_FSTYLE_WIDGET);
+  Button *button = uiDefBut(
+      this->block(), ButtonType::Label, text, 0, 0, width, UI_UNIT_Y, nullptr, 0, 0, std::nullopt);
+  this->root_->use_dynamic_height = true;
+  ButtonLabel *label = static_cast<ButtonLabel *>(button);
+  label->label_type = ButtonLabelType::Markdown;
+  button->emboss = EmbossType::None;
   if (this->red_alert()) {
     button_flag_enable(button, BUT_REDALERT);
   }
@@ -5753,6 +5771,11 @@ static void resolve_label_multiline(ButtonLabel *button)
   button->rect.ymin = button->rect.ymax - std::max<float>(UI_UNIT_Y, height);
 }
 
+static void resolve_label_markdown(ButtonLabel *button)
+{
+  label_markdown_resolve(button);
+}
+
 void Layout::resolve_dynamic_height()
 {
   if (this->items().is_empty()) {
@@ -5812,6 +5835,9 @@ void Layout::resolve_dynamic_height()
         const auto *sub_bitem = static_cast<const ButtonItem *>(subitem);
         if (button_label_is_multiline(sub_bitem->but)) {
           resolve_label_multiline(static_cast<ButtonLabel *>(sub_bitem->but));
+        }
+        else if (button_label_is_markdown(sub_bitem->but)) {
+          resolve_label_markdown(static_cast<ButtonLabel *>(sub_bitem->but));
         }
       }
       else {
@@ -6083,6 +6109,10 @@ int2 block_layout_resolve(Block *block)
   }
 
   block->layouts.clear_no_delete();
+
+  /* Link hit-targets need final button positions from layout resolve. */
+  label_markdown_create_link_buttons(block);
+
   return block_size;
 }
 bool block_layout_needs_resolving(const Block *block)
