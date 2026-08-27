@@ -2025,7 +2025,7 @@ void rna_ViewLayer_name_set(PointerRNA *ptr, const char *value)
 {
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
   ViewLayer *view_layer = static_cast<ViewLayer *>(ptr->data);
-  BKE_view_layer_rename(const_cast<Main *>(scene->id.owner_bmain()), scene, view_layer, value);
+  BKE_view_layer_rename(scene->id.owner_bmain_for_write(), scene, view_layer, value);
 }
 
 static void rna_SceneRenderView_name_set(PointerRNA *ptr, const char *value)

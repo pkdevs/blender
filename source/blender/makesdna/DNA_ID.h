@@ -550,6 +550,11 @@ struct ID {
    * time. This is null for e.g. evaluated data.
    */
   const Main *owner_bmain() const;
+  /**
+   * Same as above but returns a non-const pointer. Using a different method name helps with
+   * finding places where a mutable bmain is accessed through an ID.
+   */
+  Main *owner_bmain_for_write();
 #endif
 };
 

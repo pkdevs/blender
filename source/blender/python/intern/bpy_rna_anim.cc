@@ -444,7 +444,7 @@ PyObject *pyrna_struct_keyframe_insert(BPy_StructRNA *self, PyObject *args, PyOb
                                                                     std::nullopt;
     PointerRNA id_pointer = RNA_id_pointer_create(self->ptr->owner_id);
     CombinedKeyingResult combined_result = insert_keyframes(
-        const_cast<Main *>(self->ptr->owner_id->owner_bmain()),
+        self->ptr->owner_id->owner_bmain_for_write(),
         &id_pointer,
         channel_group,
         {{path_full, {}, index}},

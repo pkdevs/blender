@@ -1391,7 +1391,7 @@ static PyObject *bpy_bmesh_to_mesh(BPy_BMesh *self, PyObject *args)
      * anything in this case. */
   }
   else {
-    bmain = const_cast<Main *>(mesh->id.owner_bmain());
+    bmain = mesh->id.owner_bmain_for_write();
     params.calc_object_remap = true;
   }
 

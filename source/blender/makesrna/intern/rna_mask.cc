@@ -200,8 +200,7 @@ static void rna_MaskLayer_name_set(PointerRNA *ptr, const char *value)
   STRNCPY(oldname, masklay->name);
   STRNCPY_UTF8(newname, value);
 
-  BKE_mask_layer_rename(
-      *const_cast<Main *>(mask->id.owner_bmain()), mask, masklay, oldname, newname);
+  BKE_mask_layer_rename(*mask->id.owner_bmain_for_write(), mask, masklay, oldname, newname);
 }
 
 static PointerRNA rna_MaskLayer_active_spline_get(PointerRNA *ptr)

@@ -2129,12 +2129,8 @@ static void rna_SpaceImageEditor_image_set(PointerRNA *ptr,
                                            PointerRNA value,
                                            ReportList * /*reports*/)
 {
-  Image *ima = static_cast<Image *>(value.data);
-  bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
-  Main *bmain = const_cast<Main *>(ima ? ima->id.owner_bmain() : screen->id.owner_bmain());
-  BLI_assert(bmain != nullptr);
   SpaceImage *sima = static_cast<SpaceImage *>(ptr->data);
-  ED_space_image_set(bmain, sima, ima, false);
+  ED_space_image_set(ptr->owner_id->owner_bmain(), sima, static_cast<Image *>(value.data), false);
 }
 
 static void rna_SpaceImageEditor_mask_set(PointerRNA *ptr,

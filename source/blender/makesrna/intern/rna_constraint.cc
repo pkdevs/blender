@@ -447,7 +447,7 @@ static void rna_Constraint_name_set(PointerRNA *ptr, const char *value)
                          RNA_path_name_to_infix(oldname),
                          RNA_path_name_to_infix(con->name),
                          /*verify_paths=*/true,
-                         *const_cast<Main *>(ptr->owner_id->owner_bmain()));
+                         *ptr->owner_id->owner_bmain_for_write());
 }
 
 static std::optional<std::string> rna_Constraint_do_compute_path(Object *ob, bConstraint *con)

@@ -110,8 +110,7 @@ static void rna_Image_source_set(PointerRNA *ptr, int value)
 
   if (value != ima->source) {
     ima->source = eImageSource(value);
-    Main *bmain = const_cast<Main *>(ima->id.owner_bmain());
-    BLI_assert(bmain != nullptr);
+    Main *bmain = ima->id.owner_bmain_for_write();
     BKE_image_signal(bmain, ima, nullptr, IMA_SIGNAL_SRC_CHANGE);
     if (ima->source == IMA_SRC_TILED) {
       BKE_image_signal(bmain, ima, nullptr, IMA_SIGNAL_RELOAD);

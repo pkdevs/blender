@@ -305,7 +305,7 @@ static void rna_grease_pencil_layer_mask_name_set(PointerRNA *ptr, const char *v
 
   const std::string oldname(mask->layer_name);
   if (bke::greasepencil::TreeNode *node = grease_pencil->find_node_by_name(oldname)) {
-    grease_pencil->rename_node(*const_cast<Main *>(grease_pencil->id.owner_bmain()), *node, value);
+    grease_pencil->rename_node(*grease_pencil->id.owner_bmain_for_write(), *node, value);
   }
 }
 
@@ -387,8 +387,7 @@ static void rna_GreasePencilTreeNode_name_set(PointerRNA *ptr, const char *value
   GreasePencil *grease_pencil = rna_grease_pencil(ptr);
   GreasePencilLayerTreeNode *node = static_cast<GreasePencilLayerTreeNode *>(ptr->data);
 
-  grease_pencil->rename_node(
-      *const_cast<Main *>(grease_pencil->id.owner_bmain()), node->wrap(), value);
+  grease_pencil->rename_node(*grease_pencil->id.owner_bmain_for_write(), node->wrap(), value);
 }
 
 static PointerRNA rna_GreasePencilTreeNode_parent_layer_group_get(PointerRNA *ptr)

@@ -1419,6 +1419,11 @@ const Main *ID::owner_bmain() const
   return this->runtime->owner_bmain;
 }
 
+Main *ID::owner_bmain_for_write()
+{
+  return const_cast<Main *>(this->runtime->owner_bmain);
+}
+
 size_t BKE_libblock_get_alloc_info(short type, const char **r_name)
 {
   const IDTypeInfo *id_type = BKE_idtype_get_info_from_idcode(type);

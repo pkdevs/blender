@@ -562,8 +562,7 @@ static void rna_Object_data_set(PointerRNA *ptr, PointerRNA value, ReportList *r
     }
   }
   else if (ob->type == OB_MESH) {
-    BKE_mesh_assign_object(
-        const_cast<Main *>(ob->id.owner_bmain()), ob, reinterpret_cast<Mesh *>(id));
+    BKE_mesh_assign_object(ob->id.owner_bmain_for_write(), ob, reinterpret_cast<Mesh *>(id));
   }
   else {
     if (ob->data) {
@@ -575,14 +574,13 @@ static void rna_Object_data_set(PointerRNA *ptr, PointerRNA value, ReportList *r
     id_us_plus(id);
 
     ob->data = id;
-    BKE_object_materials_sync_length(const_cast<Main *>(ob->id.owner_bmain()), ob, id);
+    BKE_object_materials_sync_length(ob->id.owner_bmain_for_write(), ob, id);
 
     if (GS(id->name) == ID_CU_LEGACY) {
       BKE_curve_type_test(ob, true);
     }
     else if (ob->type == OB_ARMATURE) {
-      BKE_pose_rebuild(
-          const_cast<Main *>(ob->id.owner_bmain()), ob, id_cast<bArmature *>(ob->data), true);
+      BKE_pose_rebuild(ob->id.owner_bmain_for_write(), ob, id_cast<bArmature *>(ob->data), true);
     }
   }
 }
@@ -1128,13 +1126,13 @@ static void rna_Object_active_material_set(PointerRNA *ptr,
                                            ReportList * /*reports*/)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
-  Main *bmain = const_cast<Main *>(ob->id.owner_main());
-  Material *material = value.data_as<Material *>();
 
   DEG_id_tag_update(static_cast<ID *>(value.data), 0);
-  BLI_assert(bmain == material->id.owner_id());
-  BKE_object_material_assign(
-      bmain, ob, static_cast<Material *>(value.data), ob->actcol, BKE_MAT_ASSIGN_EXISTING);
+  BKE_object_material_assign(ob->id.owner_main_for_write(),
+                             ob,
+                             static_cast<Material *>(value.data),
+                             ob->actcol,
+                             BKE_MAT_ASSIGN_EXISTING);
 }
 
 static int rna_Object_active_material_editable(const PointerRNA *ptr, const char ** /*r_info*/)
@@ -1375,12 +1373,13 @@ static void rna_MaterialSlot_material_set(PointerRNA *ptr,
                                           ReportList * /*reports*/)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
-  Main *bmain = const_cast<Main *>(ob->id.owner_id());
-  Material *material = value.data_as<Material *>();
   int index = rna_MaterialSlot_index(ptr);
 
-  BLI_assert(material->id.owner_id() == bmain);
-  BKE_object_material_assign(bmain, ob, material, index + 1, BKE_MAT_ASSIGN_EXISTING);
+  BKE_object_material_assign(ob->id.owner_main_for_write(),
+                             ob,
+                             static_cast<Material *>(value.data),
+                             index + 1,
+                             BKE_MAT_ASSIGN_EXISTING);
 }
 
 static bool rna_MaterialSlot_material_poll(PointerRNA *ptr, PointerRNA value)

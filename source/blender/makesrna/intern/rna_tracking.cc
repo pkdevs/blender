@@ -283,7 +283,7 @@ static void rna_trackingTrack_name_set(PointerRNA *ptr, const char *value)
                          RNA_path_name_to_infix(old_name),
                          RNA_path_name_to_infix(track->name),
                          /* verify_paths= */ true,
-                         *const_cast<Main *>(clip->id.owner_bmain()));
+                         *clip->id.owner_bmain_for_write());
 }
 
 static bool rna_trackingTrack_select_get(PointerRNA *ptr)
@@ -372,7 +372,7 @@ static void rna_trackingPlaneTrack_name_set(PointerRNA *ptr, const char *value)
                          RNA_path_name_to_infix(old_name),
                          RNA_path_name_to_infix(plane_track->name),
                          /* verify_paths= */ true,
-                         *const_cast<Main *>(clip->id.owner_bmain()));
+                         *clip->id.owner_bmain_for_write());
 }
 
 static std::optional<std::string> rna_trackingCamera_path(const PointerRNA * /*ptr*/)

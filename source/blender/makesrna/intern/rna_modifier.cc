@@ -934,7 +934,7 @@ static void rna_Modifier_name_set(PointerRNA *ptr, const char *value)
                            RNA_path_name_to_infix(oldname),
                            RNA_path_name_to_infix(md->name),
                            /*verify_paths=*/true,
-                           *const_cast<Main *>(ob->id.owner_bmain()));
+                           *ob->id.owner_bmain_for_write());
   }
 }
 
@@ -2532,7 +2532,7 @@ static void rna_GreasePencilDashModifierSegment_name_set(PointerRNA *ptr, const 
                          RNA_path_name_to_infix(oldname),
                          RNA_path_name_to_infix(dash_segment->name),
                          /*verify_paths=*/true,
-                         *const_cast<Main *>(ptr->owner_id->owner_bmain()));
+                         *ptr->owner_id->owner_bmain_for_write());
 }
 
 static void rna_GreasePencilDashModifier_segments_begin(CollectionPropertyIterator *iter,
@@ -2641,7 +2641,7 @@ static void rna_GreasePencilTimeModifierSegment_name_set(PointerRNA *ptr, const 
                          RNA_path_name_to_infix(oldname),
                          RNA_path_name_to_infix(segment->name),
                          /*verify_paths=*/true,
-                         *const_cast<Main *>(ptr->owner_id->owner_bmain()));
+                         *ptr->owner_id->owner_bmain_for_write());
 }
 
 static void rna_GreasePencilTimeModifier_segments_begin(CollectionPropertyIterator *iter,

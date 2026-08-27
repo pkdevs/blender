@@ -332,8 +332,7 @@ void rna_ID_name_set(PointerRNA *ptr, const char *value)
 {
   ID *id = static_cast<ID *>(ptr->data);
 
-  rna_ID_rename(
-      id, const_cast<Main *>(id->owner_bmain()), value, int(IDNewNameMode::RenameExistingNever));
+  rna_ID_rename(id, id->owner_bmain_for_write(), value, int(IDNewNameMode::RenameExistingNever));
 }
 
 static int rna_ID_name_editable(const PointerRNA *ptr, const char **r_info)
@@ -364,7 +363,7 @@ static int rna_ID_name_editable(const PointerRNA *ptr, const char **r_info)
       return 0;
     }
   }
-  else if (id->owner_bmain() == nullptr) {
+  else if (!id->owner_bmain()) {
     if (r_info) {
       *r_info = N_("Data-blocks not in a Main data-base cannot be renamed");
     }
@@ -1227,9 +1226,7 @@ bool rna_IDMaterials_assign_int(PointerRNA *ptr, int key, const PointerRNA *assi
   short *totcol = BKE_id_material_len_p(id);
   Material *mat_id = id_cast<Material *>(assign_ptr->owner_id);
   if (totcol && (key >= 0 && key < *totcol)) {
-    BLI_assert(id->owner_bmain() != nullptr);
-    BLI_assert(mat_id->id.owner_bmain() != nullptr);
-    BKE_id_material_assign(const_cast<Main *>(id->owner_bmain()), id, mat_id, key + 1);
+    BKE_id_material_assign(id->owner_bmain_for_write(), id, mat_id, key + 1);
     return true;
   }
   else {
@@ -1285,8 +1282,7 @@ static void rna_IDMaterials_clear_id(ID *id, Main *bmain)
 static void rna_Library_filepath_set(PointerRNA *ptr, const char *value)
 {
   Library *lib = static_cast<Library *>(ptr->data);
-  BLI_assert(lib->id.owner_bmain() != nullptr);
-  BKE_library_filepath_set(const_cast<Main *>(lib->id.owner_bmain()), lib, value);
+  BKE_library_filepath_set(lib->id.owner_bmain_for_write(), lib, value);
 }
 
 /* ***** ImagePreview ***** */
