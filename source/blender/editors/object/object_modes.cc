@@ -205,6 +205,13 @@ bool mode_set_ex(bContext *C, eObjectMode mode, bool use_undo, ReportList *repor
   }
 
   const char *opstring = object_mode_op_string((mode == OB_MODE_OBJECT) ? ob->mode : mode);
+  if (opstring == nullptr) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Unable to set invalid object mode %d",
+                int((mode == OB_MODE_OBJECT) ? ob->mode : mode));
+    return false;
+  }
   wmOperatorType *ot = WM_operatortype_find(opstring, false);
 
   if (!use_undo) {
@@ -442,10 +449,7 @@ static void object_transfer_mode_reposition_view_pivot(ARegion *region,
   if (!ED_view3d_autodist_simple(region, mval, global_loc, 0, nullptr)) {
     return;
   }
-  bke::PaintRuntime *paint_runtime = paint->runtime;
-  copy_v3_v3(paint_runtime->average_stroke_accum, global_loc);
-  paint_runtime->average_stroke_counter = 1;
-  paint_runtime->last_stroke_valid = true;
+  bke::paint::stroke_set_location(*paint, float3(global_loc));
 }
 
 constexpr float mode_transfer_flash_length = 0.55f;

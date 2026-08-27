@@ -79,7 +79,8 @@ static SpaceLink *sequencer_create(const ScrArea * /*area*/, const Scene *scene)
   sseq->view = SEQ_VIEW_SEQUENCE;
   sseq->mainb = SEQ_DRAW_IMG_IMBUF;
   sseq->flag = SEQ_USE_ALPHA | SEQ_SHOW_MARKERS | SEQ_ZOOM_TO_FIT | SEQ_SHOW_OVERLAY;
-  sseq->preview_overlay.flag = SEQ_PREVIEW_SHOW_GPENCIL | SEQ_PREVIEW_SHOW_OUTLINE_SELECTED;
+  sseq->preview_overlay.flag = SEQ_PREVIEW_SHOW_GPENCIL | SEQ_PREVIEW_SHOW_OUTLINE_SELECTED |
+                               SEQ_PREVIEW_SHOW_METADATA | SEQ_PREVIEW_SHOW_COMPOSITION_GUIDES;
   sseq->timeline_overlay.flag = SEQ_TIMELINE_SHOW_STRIP_NAME | SEQ_TIMELINE_SHOW_STRIP_SOURCE |
                                 SEQ_TIMELINE_SHOW_STRIP_DURATION | SEQ_TIMELINE_SHOW_GRID |
                                 SEQ_TIMELINE_SHOW_FCURVES | SEQ_TIMELINE_SHOW_STRIP_COLOR_TAG |
@@ -517,13 +518,12 @@ static void sequencer_main_clamp_view(const bContext *C, ARegion *region)
    */
   float pad_top, pad_bottom;
   SEQ_get_timeline_region_padding(C, &pad_top, &pad_bottom);
-  const float pixel_view_size_y = BLI_rctf_size_y(&v2d->cur) / (BLI_rcti_size_y(&v2d->mask) + 1);
   /* Add padding to be able to scroll the view so that the collapsed redo panel doesn't occlude any
    * strips. */
-  float bottom_channel_padding = UI_MARKER_MARGIN_Y * pixel_view_size_y;
+  float bottom_channel_padding = UI_MARKER_MARGIN_Y * ui::view2d_pixel_size_get_y(v2d);
   bottom_channel_padding = std::max(bottom_channel_padding, 1.0f);
   /* Add the padding and make sure we have a margin of one channel in each direction. */
-  strip_boundbox.ymax += 1.0f + pad_top * pixel_view_size_y;
+  strip_boundbox.ymax += 1.0f + pad_top * ui::view2d_pixel_size_get_y(v2d);
   strip_boundbox.ymin -= bottom_channel_padding;
 
   /* If a strip has been deleted, don't move the view automatically, keep current range until it is
@@ -883,6 +883,39 @@ static void sequencer_preview_region_view2d_changed(const bContext *C, ARegion *
   SpaceSeq *sseq = CTX_wm_space_seq(C);
   sseq->flag &= ~SEQ_ZOOM_TO_FIT;
 }
+
+#ifdef WITH_INPUT_IME
+static std::optional<ARegionIMECursorState> sequencer_preview_region_cursor_ime(
+    wmWindow *win, const ScrArea * /*area*/, const ARegion *region, ARegionIMECursor *r_cursor)
+{
+  const WorkSpace *workspace = WM_window_get_active_workspace(win);
+  const Scene *scene = workspace->sequencer_scene;
+  if (!scene) {
+    return std::nullopt;
+  }
+  const Strip *strip = sequencer_text_editing_cursor_strip_get(scene);
+  if (strip == nullptr) {
+    return std::nullopt;
+  }
+  const std::optional<blender::int2> xy = sequencer_text_editing_cursor_region_xy_get(
+      scene, region, strip);
+  if (!xy) {
+    /* Text editing can be active without a position,
+     * e.g. the current-frame moved outside the strip.
+     * Keep the session pending rather than canceling the composition. */
+    return ARegionIMECursorState::PositionPending;
+  }
+
+  r_cursor->rect = {
+      .xmin = xy->x,
+      .xmax = xy->x,
+      .ymin = xy->y,
+      .ymax = xy->y + int(UI_UNIT_Y),
+  };
+  r_cursor->font_size = UI_UNIT_Y;
+  return ARegionIMECursorState::PositionSet;
+}
+#endif
 
 static void sequencer_preview_region_listener(const wmRegionListenerParams *params)
 {
@@ -1250,6 +1283,9 @@ void ED_spacetype_sequencer()
   art->layout = sequencer_preview_region_layout;
   art->on_view2d_changed = sequencer_preview_region_view2d_changed;
   art->draw = sequencer_preview_region_draw;
+#ifdef WITH_INPUT_IME
+  art->cursor_ime = sequencer_preview_region_cursor_ime;
+#endif
   art->listener = sequencer_preview_region_listener;
   art->keymapflag = ED_KEYMAP_TOOL | ED_KEYMAP_GIZMO | ED_KEYMAP_GPENCIL;
   BLI_addhead(&st->regiontypes, art);

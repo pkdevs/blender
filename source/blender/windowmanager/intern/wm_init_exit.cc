@@ -47,6 +47,7 @@
 #include "BKE_mball_tessellate.hh"
 #include "BKE_preferences.h"
 #include "BKE_preview_image.hh"
+#include "BKE_recents.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
 #include "BKE_sound.hh"
@@ -146,12 +147,20 @@ void WM_init_state_start_with_console_set(bool value)
  */
 static bool gpu_is_init = false;
 
-void WM_init_gpu()
+void WM_init_gpu_backend()
+{
+  GPU_backend_type_selection_detect();
+}
+
+void WM_init_gpu_offscreen()
 {
   /* Must be called only once. */
   BLI_assert(gpu_is_init == false);
 
   if (G.background) {
+    /* Init on demand for background mode, already done for foreground mode. */
+    WM_init_gpu_backend();
+
     /* Ghost is still not initialized elsewhere in background mode. */
     wm_ghost_init_background();
   }
@@ -234,6 +243,10 @@ void WM_init(bContext *C, int argc, const char **argv)
 
   BLF_init();
 
+  if (!G.background) {
+    recents::init_async();
+  }
+
   BLT_lang_init();
   /* Must call first before doing any `.blend` file reading,
    * since versioning code may create new IDs. See #57066. */
@@ -312,7 +325,7 @@ void WM_init(bContext *C, int argc, const char **argv)
     /* Sets 3D mouse dead-zone. */
     WM_ndof_deadzone_set(U.ndof_deadzone);
 #endif
-    WM_init_gpu();
+    WM_init_gpu_offscreen();
 
     if (!WM_platform_support_perform_checks()) {
       WM_exit(C, -1);
@@ -641,6 +654,10 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
   WM_uilisttype_free();
 
   BLF_exit();
+
+  if (!G.background && do_user_exit_actions) {
+    recents::save();
+  }
 
   BLT_lang_free();
 

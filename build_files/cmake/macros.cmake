@@ -96,7 +96,10 @@ function(file_suffix
   get_filename_component(_file_name_PATH ${file_name} PATH)
   get_filename_component(_file_name_NAME_WE ${file_name} NAME_WE)
   get_filename_component(_file_name_EXT ${file_name} EXT)
-  set(${file_name_new} "${_file_name_PATH}/${_file_name_NAME_WE}${file_suffix}${_file_name_EXT}" PARENT_SCOPE)
+  set(${file_name_new}
+    "${_file_name_PATH}/${_file_name_NAME_WE}${file_suffix}${_file_name_EXT}"
+    PARENT_SCOPE
+  )
 endfunction()
 
 # useful for adding debug suffix to library lists:
@@ -424,6 +427,21 @@ function(blender_link_libraries
   target_link_libraries(${target} ${dependency_libraries})
 endfunction()
 
+function(is_c_or_cxx_source file variable)
+  set(result FALSE)
+  cmake_path(GET file EXTENSION LAST_ONLY _ext)
+  # Files without an extension are not sources.
+  if(_ext)
+    # Strip the leading dot.
+    string(SUBSTRING "${_ext}" 1 -1 _ext)
+    if(("${_ext}" IN_LIST CMAKE_C_SOURCE_FILE_EXTENSIONS) OR
+       ("${_ext}" IN_LIST CMAKE_CXX_SOURCE_FILE_EXTENSIONS))
+      set(result TRUE)
+    endif()
+  endif()
+  set(${variable} ${result} PARENT_SCOPE)
+endfunction()
+
 function(blender_add_lib__impl
   name
   sources
@@ -434,7 +452,25 @@ function(blender_add_lib__impl
 
   # message(STATUS "Configuring library ${name}")
 
-  add_library(${name} ${sources})
+  # Check if all sources are header-only (not C/C++ sources).
+  set(_all_headers TRUE)
+  foreach(_src ${sources})
+    is_c_or_cxx_source("${_src}" _is_source)
+    if(_is_source)
+      set(_all_headers FALSE)
+      break()
+    endif()
+  endforeach()
+  unset(_src)
+  unset(_is_source)
+
+  if(_all_headers)
+    add_library(${name} INTERFACE)
+    target_sources(${name} PRIVATE ${sources})
+  else()
+    add_library(${name} ${sources})
+  endif()
+  unset(_all_headers)
 
   # On windows vcpkg goes out of its way to make its libs the preferred
   # libs, and needs to be explicitly be told not to do that.
@@ -1133,7 +1169,9 @@ function(glsl_to_c
   add_custom_command(
     OUTPUT  ${_file_tmp} ${_file_meta} ${_file_info} ${_file_dep}
     DEPFILE ${_file_dep}
-    COMMAND "$<TARGET_FILE:shader_tool>" ${_file_from} ${_file_tmp} ${_file_meta} ${_file_info} ${_file_dep} ${_inc_list}
+    COMMAND
+      "$<TARGET_FILE:shader_tool>"
+      ${_file_from} ${_file_tmp} ${_file_meta} ${_file_info} ${_file_dep} ${_inc_list}
     DEPENDS ${_file_from} shader_tool)
 
   add_custom_command(
@@ -1320,7 +1358,12 @@ function(find_python_module_file
   endif()
 
   path_strip_trailing_slash(_python_root "${PYTHON_LIBPATH}")
-  set(_python_base "${_python_root}/python${PYTHON_VERSION}")
+  if(WIN32)
+    # MS-Windows has no `python${PYTHON_VERSION}` directory, `site-packages` is directly in `lib`.
+    set(_python_base "${_python_root}")
+  else()
+    set(_python_base "${_python_root}/python${PYTHON_VERSION}")
+  endif()
   # This always moves up one level (even if there is a trailing slash).
   get_filename_component(_python_root "${_python_root}" DIRECTORY)
   path_ensure_trailing_slash(_python_root "${_python_root}")
