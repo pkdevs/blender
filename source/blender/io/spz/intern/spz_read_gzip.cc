@@ -165,11 +165,11 @@ PointCloud *read_spz_gzip_compressed_file(FILE *file, ReportList *reports)
   CLOG_DEBUG(&LOG, "SPZ header flags: %d", header.flags);
 
   if (header.flags & SPZ_HEADER_ANTIALIASED) {
-    // TODO(sergey): Support antialiased data.
+    /* TODO(sergey): Support antialiased data. */
     CLOG_WARN(&LOG, "SPZ data was trained with antialiasing which is not fully supported");
   }
   if (header.flags & SPZ_HEADER_HAS_EXTENSIONS) {
-    // TODO(sergey): Support extensions.
+    /* TODO(sergey): Support extensions. */
     CLOG_WARN(&LOG, "SPZ file contains extensions that are not yet supported");
   }
 

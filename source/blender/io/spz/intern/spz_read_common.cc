@@ -13,15 +13,15 @@ void convert_axis_to_blender(gsplat::GsplatMutableAttributeAccessor &accessor)
   /* By default, SPZ stores data in an RUB (Right, Up, Back) coordinate system following the OpenGL
    * and three.js convention. Blender is RFU (Right, Forward, Up). */
 
-  // TODO(sergey): Handle extensions that define coordinate system.
-  // Example: SPZ_ADOBE_coordinate_system.
+  /* TODO(sergey): Handle extensions that define coordinate system. */
+  /* Example: SPZ_ADOBE_coordinate_system. */
 
   MutableSpan<float3> positions = accessor.positions_for_write();
   for (float3 &position : positions) {
     position = {position.x, -position.z, position.y};
   }
 
-  // TODO(sergey): Convert rotation and SH.
+  /* TODO(sergey): Convert rotation and SH. */
 }
 
 }  // namespace blender::io::spz
