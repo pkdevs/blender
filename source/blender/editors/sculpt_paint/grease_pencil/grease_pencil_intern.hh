@@ -226,6 +226,14 @@ class GreasePencilStrokeOperationCommon : public GreasePencilStrokeOperation {
   void foreach_editable_drawing(const bContext &C,
                                 FunctionRef<bool(const GreasePencilStrokeParams &params)> fn,
                                 const exec_mode::Mode &mode = exec_mode::serial) const;
+
+  bool drawing_apply_delta_function_to_positions(
+      const GreasePencilStrokeParams &params,
+      const IndexMask &points,
+      const Key *key,
+      const KeyBlock *actkb,
+      const FunctionRef<float3(const int64_t point_i, const float2 co, const int pos_type)>
+          &delta_fn);
 };
 
 /* Operations */

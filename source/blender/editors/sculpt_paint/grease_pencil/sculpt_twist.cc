@@ -53,6 +53,7 @@ void TwistOperation::on_stroke_extended(const bContext &C, const InputSample &ex
   Paint &paint = *BKE_paint_get_active_from_context(&C);
   const Brush &brush = *BKE_paint_brush(&paint);
   const bool invert = this->is_inverted(brush);
+  const float2 mouse_pos = extension_sample.mouse_position;
 
   this->foreach_editable_drawing_with_automask(
       C,
@@ -60,169 +61,27 @@ void TwistOperation::on_stroke_extended(const bContext &C, const InputSample &ex
           const IndexMask &point_mask,
           const DeltaProjectionFunc &projection_fn) {
         bke::crazyspace::GeometryDeformation deformation = get_drawing_deformation(params);
-        const Array<float2> view_positions = view_positions_from_point_mask(params, point_mask);
-        bke::CurvesGeometry &curves = params.drawing.strokes_for_write();
-        MutableSpan<float3> positions = curves.positions_for_write();
 
-        const float2 mouse_pos = extension_sample.mouse_position;
+        return this->drawing_apply_delta_function_to_positions(
+            params,
+            point_mask,
+            key,
+            actkb,
+            [&](const int64_t point_i, const float2 co, const int /*pos_type*/) {
+              const float influence = brush_point_influence(
+                  paint, brush, co, extension_sample, params.multi_frame_falloff);
+              if (influence <= 0.0f) {
+                return float3(0.0f);
+              }
 
-        if (key && actkb && object.shapenr != 1) {
-          const float keyblock_influence = actkb->curval;
+              const float angle = DEG2RADF(invert ? -1.0f : 1.0f) * influence;
+              const float2 radial_offset = co - mouse_pos;
 
-          if (keyblock_influence == 0.0f) {
-            return false;
-          }
-
-          bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-          bke::SpanAttributeWriter<float3> key_positions =
-              attributes.lookup_or_add_for_write_span<float3>(
-                  bke::greasepencil::shapekey_attribute_name_position(actkb->name),
-                  bke::AttrDomain::Point);
-
-          Array<float3> delta(point_mask.size(), float3(0.0f));
-
-          point_mask.foreach_index(
-              [&](const int64_t point_i, const int64_t pos) {
-                const float2 &co = view_positions[point_i];
-                const float influence = brush_point_influence(
-                    paint, brush, co, extension_sample, params.multi_frame_falloff);
-                if (influence <= 0.0f) {
-                  return;
-                }
-
-                const float angle = DEG2RADF(invert ? -1.0f : 1.0f) * influence;
-                const float2 radial_offset = co - mouse_pos;
-
-                delta[pos] = compute_orig_delta(projection_fn,
-                                                deformation,
-                                                point_i,
-                                                rotate_by_angle(radial_offset, angle) -
-                                                    radial_offset) /
-                             keyblock_influence;
-
-                key_positions.span[point_i] += delta[pos];
-              },
-              exec_mode::grain_size(4096));
-
-          key_positions.finish();
-
-          if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
-            bke::SpanAttributeWriter<float3> key_handle_left =
-                attributes.lookup_or_add_for_write_span<float3>(
-                    bke::greasepencil::shapekey_attribute_name_handle_left(actkb->name),
-                    bke::AttrDomain::Point);
-            bke::SpanAttributeWriter<float3> key_handle_right =
-                attributes.lookup_or_add_for_write_span<float3>(
-                    bke::greasepencil::shapekey_attribute_name_handle_right(actkb->name),
-                    bke::AttrDomain::Point);
-
-            Array<float3> handle_left(curves.points_num());
-            Array<float3> handle_right(curves.points_num());
-            array_utils::copy(*curves.handle_positions_left(), handle_left.as_mutable_span());
-            array_utils::copy(*curves.handle_positions_right(), handle_right.as_mutable_span());
-
-            bke::greasepencil::shapekey_get_applied_handle_left(key, attributes, handle_left);
-            bke::greasepencil::shapekey_get_applied_handle_right(key, attributes, handle_right);
-
-            const Array<float2> view_positions_left = view_positions_from_span_point_mask(
-                params, handle_left, point_mask);
-            const Array<float2> view_positions_right = view_positions_from_span_point_mask(
-                params, handle_right, point_mask);
-
-            point_mask.foreach_index(
-                [&](const int64_t point_i, const int64_t pos) {
-                  const float2 co_left = view_positions_left[point_i];
-                  const float2 co_right = view_positions_right[point_i];
-                  const float influence_left = brush_point_influence(
-                      paint, brush, co_left, extension_sample, params.multi_frame_falloff);
-                  const float influence_right = brush_point_influence(
-                      paint, brush, co_right, extension_sample, params.multi_frame_falloff);
-
-                  const float angle_left = DEG2RADF(invert ? -1.0f : 1.0f) * influence_left;
-                  const float angle_right = DEG2RADF(invert ? -1.0f : 1.0f) * influence_right;
-                  const float2 radial_offset_left = co_left - mouse_pos;
-                  const float2 radial_offset_right = co_right - mouse_pos;
-                  key_handle_left.span[point_i] += compute_orig_delta(
-                      projection_fn,
-                      deformation,
-                      point_i,
-                      rotate_by_angle(radial_offset_left, angle_left) - radial_offset_left);
-                  key_handle_right.span[point_i] += compute_orig_delta(
-                      projection_fn,
-                      deformation,
-                      point_i,
-                      rotate_by_angle(radial_offset_right, angle_right) - radial_offset_right);
-                  key_handle_left.span[point_i] -= delta[pos];
-                  key_handle_right.span[point_i] -= delta[pos];
-                },
-                exec_mode::grain_size(4096));
-
-            key_handle_left.finish();
-            key_handle_right.finish();
-          }
-        }
-        else {
-          point_mask.foreach_index(
-              [&](const int64_t point_i) {
-                const float2 &co = view_positions[point_i];
-                const float influence = brush_point_influence(
-                    paint, brush, co, extension_sample, params.multi_frame_falloff);
-                if (influence <= 0.0f) {
-                  return;
-                }
-
-                const float angle = DEG2RADF(invert ? -1.0f : 1.0f) * influence;
-                const float2 radial_offset = co - mouse_pos;
-                positions[point_i] += compute_orig_delta(projection_fn,
-                                                         deformation,
-                                                         point_i,
-                                                         rotate_by_angle(radial_offset, angle) -
-                                                             radial_offset);
-              },
-              exec_mode::grain_size(4096));
-
-          if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
-            MutableSpan<float3> handle_positions_left = curves.handle_positions_left_for_write();
-            MutableSpan<float3> handle_positions_right = curves.handle_positions_right_for_write();
-
-            const Array<float2> view_positions_left = view_positions_left_from_point_mask(
-                params, point_mask);
-            const Array<float2> view_positions_right = view_positions_right_from_point_mask(
-                params, point_mask);
-
-            point_mask.foreach_index(
-                [&](const int64_t point_i) {
-                  const float2 co_left = view_positions_left[point_i];
-                  const float2 co_right = view_positions_right[point_i];
-                  const float influence_left = brush_point_influence(
-                      paint, brush, co_left, extension_sample, params.multi_frame_falloff);
-                  const float influence_right = brush_point_influence(
-                      paint, brush, co_right, extension_sample, params.multi_frame_falloff);
-
-                  const float angle_left = DEG2RADF(invert ? -1.0f : 1.0f) * influence_left;
-                  const float angle_right = DEG2RADF(invert ? -1.0f : 1.0f) * influence_right;
-                  const float2 radial_offset_left = co_left - mouse_pos;
-                  const float2 radial_offset_right = co_right - mouse_pos;
-                  handle_positions_left[point_i] += compute_orig_delta(
-                      projection_fn,
-                      deformation,
-                      point_i,
-                      rotate_by_angle(radial_offset_left, angle_left) - radial_offset_left);
-                  handle_positions_right[point_i] += compute_orig_delta(
-                      projection_fn,
-                      deformation,
-                      point_i,
-                      rotate_by_angle(radial_offset_right, angle_right) - radial_offset_right);
-                },
-                exec_mode::grain_size(4096));
-
-            curves.calculate_bezier_auto_handles();
-            curves.calculate_bezier_aligned_handles();
-          }
-        }
-
-        params.drawing.tag_positions_changed();
-        return true;
+              return compute_orig_delta(projection_fn,
+                                        deformation,
+                                        point_i,
+                                        rotate_by_angle(radial_offset, angle) - radial_offset);
+            });
       });
   this->stroke_extended(extension_sample);
 }
