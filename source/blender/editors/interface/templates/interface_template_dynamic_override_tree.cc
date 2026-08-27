@@ -7,7 +7,6 @@
  */
 
 #include "BLI_listbase.hh"
-#include "BLI_ustring.hh"
 
 #include "BKE_context.hh"
 #include "BKE_dynamic_override.hh"
@@ -29,7 +28,6 @@
 #include "ED_undo.hh"
 
 #include "WM_api.hh"
-#include "WM_message.hh"
 
 #include <fmt/format.h>
 
