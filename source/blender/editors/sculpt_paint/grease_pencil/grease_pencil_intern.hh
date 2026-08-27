@@ -229,10 +229,13 @@ class GreasePencilStrokeOperationCommon : public GreasePencilStrokeOperation {
 
   bool drawing_apply_delta_function_to_positions(
       const GreasePencilStrokeParams &params,
-      const IndexMask &points,
+      const IndexMask &mask,
+      const IndexMask &mask_left,
+      const IndexMask &mask_right,
       const Key *key,
       const KeyBlock *actkb,
-      const FunctionRef<float3(const int64_t point_i, const float2 co, const int pos_type)>
+      const FunctionRef<
+          float3(const int64_t point_i, const int64_t pos, const float2 co, const int pos_type)>
           &delta_fn);
 };
 

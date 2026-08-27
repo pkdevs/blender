@@ -56,9 +56,14 @@ void PinchOperation::on_stroke_extended(const bContext &C, const InputSample &ex
         return this->drawing_apply_delta_function_to_positions(
             params,
             point_mask,
+            point_mask,
+            point_mask,
             key,
             actkb,
-            [&](const int64_t point_i, const float2 co, const int /*pos_type*/) {
+            [&](const int64_t point_i,
+                const int64_t /*pos*/,
+                const float2 co,
+                const int /*pos_type*/) {
               const float influence = brush_point_influence(
                   paint, brush, co, extension_sample, params.multi_frame_falloff);
               if (influence <= 0.0f) {

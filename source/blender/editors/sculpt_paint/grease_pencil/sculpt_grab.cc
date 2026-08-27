@@ -240,6 +240,9 @@ void GrabOperation::on_stroke_extended(const bContext &C, const InputSample &ext
   Key *key = grease_pencil.key;
   KeyBlock *actkb = BKE_keyblock_find_by_index(key, object.shapenr - 1);
 
+  /* Transform mouse delta into layer space. */
+  const float2 mouse_delta_win = this->mouse_delta(extension_sample);
+
   this->foreach_grabbed_drawing(
       C,
       [&](const GreasePencilStrokeParams &params,
@@ -250,102 +253,35 @@ void GrabOperation::on_stroke_extended(const bContext &C, const InputSample &ext
           const Span<float> weights,
           const Span<float> weights_left,
           const Span<float> weights_right) {
-        /* Transform mouse delta into layer space. */
-        const float2 mouse_delta_win = this->mouse_delta(extension_sample);
-
-        bke::CurvesGeometry &curves = params.drawing.strokes_for_write();
         bke::crazyspace::GeometryDeformation deformation = get_drawing_deformation(params);
 
-        if (key && actkb && object.shapenr != 1) {
-          const float keyblock_influence = actkb->curval;
+        return this->drawing_apply_delta_function_to_positions(
+            params,
+            mask,
+            mask_left,
+            mask_right,
+            key,
+            actkb,
+            [&](const int64_t point_i,
+                const int64_t pos,
+                const float2 /*co*/,
+                const int pos_type) {
+              if (pos_type == 0) {
+                return compute_orig_delta(
+                    projection_fn, deformation, point_i, mouse_delta_win * weights[pos]);
+              }
+              else if (pos_type == 1) {
+                return compute_orig_delta(
+                    projection_fn, deformation, point_i, mouse_delta_win * weights_left[pos]);
+              }
+              else if (pos_type == 2) {
+                return compute_orig_delta(
+                    projection_fn, deformation, point_i, mouse_delta_win * weights_right[pos]);
+              }
 
-          if (keyblock_influence == 0.0f) {
-            return false;
-          }
-
-          bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-          bke::SpanAttributeWriter<float3> key_positions =
-              attributes.lookup_or_add_for_write_span<float3>(
-                  bke::greasepencil::shapekey_attribute_name_position(actkb->name),
-                  bke::AttrDomain::Point);
-
-          Array<float3> delta(curves.points_num(), float3(0.0f));
-
-          mask.foreach_index(
-              [&](const int point_i, const int index) {
-                /* Translate the point with the influence factor. */
-                delta[point_i] = compute_orig_delta(projection_fn,
-                                                    deformation,
-                                                    point_i,
-                                                    mouse_delta_win * weights[index]) /
-                                 keyblock_influence;
-
-                key_positions.span[point_i] += delta[point_i];
-              },
-              exec_mode::grain_size(4096));
-
-          key_positions.finish();
-
-          if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
-            bke::SpanAttributeWriter<float3> key_handle_left =
-                attributes.lookup_or_add_for_write_span<float3>(
-                    bke::greasepencil::shapekey_attribute_name_handle_left(actkb->name),
-                    bke::AttrDomain::Point);
-            bke::SpanAttributeWriter<float3> key_handle_right =
-                attributes.lookup_or_add_for_write_span<float3>(
-                    bke::greasepencil::shapekey_attribute_name_handle_right(actkb->name),
-                    bke::AttrDomain::Point);
-
-            mask_left.foreach_index(
-                [&](const int64_t point_i, const int index) {
-                  key_handle_left.span[point_i] += compute_orig_delta(
-                      projection_fn, deformation, point_i, mouse_delta_win * weights_left[index]);
-                  key_handle_left.span[point_i] -= delta[point_i];
-                },
-                exec_mode::grain_size(4096));
-            mask_right.foreach_index(
-                [&](const int64_t point_i, const int index) {
-                  key_handle_right.span[point_i] += compute_orig_delta(
-                      projection_fn, deformation, point_i, mouse_delta_win * weights_right[index]);
-                  key_handle_right.span[point_i] -= delta[point_i];
-                },
-                exec_mode::grain_size(4096));
-
-            key_handle_left.finish();
-            key_handle_right.finish();
-          }
-        }
-        else {
-          MutableSpan<float3> positions = curves.positions_for_write();
-          mask.foreach_index(
-              [&](const int point_i, const int index) {
-                /* Translate the point with the influence factor. */
-                positions[point_i] += compute_orig_delta(
-                    projection_fn, deformation, point_i, mouse_delta_win * weights[index]);
-              },
-              exec_mode::grain_size(4096));
-
-          if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
-            MutableSpan<float3> handle_positions_left = curves.handle_positions_left_for_write();
-            MutableSpan<float3> handle_positions_right = curves.handle_positions_right_for_write();
-
-            mask_left.foreach_index(
-                [&](const int64_t point_i, const int index) {
-                  handle_positions_left[point_i] += compute_orig_delta(
-                      projection_fn, deformation, point_i, mouse_delta_win * weights_left[index]);
-                },
-                exec_mode::grain_size(4096));
-            mask_right.foreach_index(
-                [&](const int64_t point_i, const int index) {
-                  handle_positions_right[point_i] += compute_orig_delta(
-                      projection_fn, deformation, point_i, mouse_delta_win * weights_right[index]);
-                },
-                exec_mode::grain_size(4096));
-
-            curves.calculate_bezier_auto_handles();
-            curves.calculate_bezier_aligned_handles();
-          }
-        }
+              BLI_assert_unreachable();
+              return float3(0.0f);
+            });
 
         params.drawing.tag_positions_changed();
         return true;
