@@ -9,6 +9,10 @@
 #include "util/types_base.h"
 #include "util/types_float3.h"
 
+#if !defined(__KERNEL_GPU__)
+#  include <cstring>  /* for memset(). */
+#endif
+
 CCL_NAMESPACE_BEGIN
 
 /* A packed representation of spherical harmonics.
