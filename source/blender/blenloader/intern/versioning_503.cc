@@ -15,18 +15,24 @@
 #include "DNA_mesh_types.h"
 #include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_sequence_types.h"
 
 #include "BLI_listbase_iterator.hh"
+#include "BLI_string_ref.hh"
 #include "BLI_sys_types.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
+#include "BKE_compositor.hh"
 #include "BKE_main.hh"
 #include "BKE_mesh_legacy_convert.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
+
+#include "SEQ_iterator.hh"
+#include "SEQ_sequencer.hh"
 
 #include "readfile.hh"
 
@@ -72,11 +78,49 @@ static void do_version_merge_layers_options_to_inputs(bNodeTree &ntree, bNode &n
   socket.default_value_typed<bNodeSocketValueMenu>()->value = storage.mode;
 }
 
+static void compositing_node_group_to_effect(Main &main, Scene &scene)
+{
+  bNodeTree *node_group = version_get_scene_compositor_node_tree(&main, &scene);
+  if (!node_group) {
+    return;
+  }
+
+  SceneCompositorEffect &effect = bke::compositor::new_effect(scene, "Effect");
+  effect.node_group = node_group;
+  if (!node_group->compositor_node_asset_traits) {
+    node_group->compositor_node_asset_traits = MEM_new<CompositorNodeAssetTraits>(__func__);
+  }
+  node_group->compositor_node_asset_traits->flag |= COMPOSIT_NODE_ASSET_SCENE_EFFECT;
+  bke::node_update_asset_metadata(*node_group);
+  scene.compositing_node_group = nullptr;
+}
+
 void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 8)) {
     version_node_socket_index_animdata(
         bmain, NTREE_GEOMETRY, "GeometryNodeSetGreasePencilColor", 5, 1, 6);
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 15)) {
+    for (Scene &scene : bmain->scenes) {
+      compositing_node_group_to_effect(*bmain, scene);
+    }
+  }
+  else {
+    /* The now deprecated compositing_node_group is always written on file writes for forward
+     * compatibility, so it has to be reset to nullptr if no versioning was needed.
+     *
+     * Todo(#140111): Forward compatibility support will be removed in 6.0, and this loop can then
+     * be placed behind a `MAIN_VERSION_FILE_OLDER(bmain, 600, xxx)` check . */
+    for (Scene &scene : bmain->scenes) {
+      scene.compositing_node_group = nullptr;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 16)) {
+    /* Shift animation data to accommodate the new dispersion inputs. */
+    version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfPrincipled", 20, 2, 33);
   }
 
   /**
@@ -311,6 +355,54 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       }
     }
   }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 16)) {
+    for (Brush &brush : bmain->brushes) {
+      if (ELEM(brush.ob_mode,
+               OB_MODE_SCULPT,
+               OB_MODE_VERTEX_PAINT,
+               OB_MODE_TEXTURE_PAINT,
+               OB_MODE_SCULPT_GREASE_PENCIL,
+               OB_MODE_VERTEX_GREASE_PENCIL))
+      {
+        brush.unified_paint_flags |= BRUSH_USE_UNIFIED_PAINT_SIZE | BRUSH_USE_UNIFIED_PAINT_COLOR;
+      }
+      if (ELEM(brush.ob_mode,
+               OB_MODE_SCULPT_CURVES,
+               OB_MODE_WEIGHT_PAINT,
+               OB_MODE_WEIGHT_GREASE_PENCIL))
+      {
+        brush.unified_paint_flags |= BRUSH_USE_UNIFIED_PAINT_SIZE;
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 17)) {
+    for (Scene &scene : bmain->scenes) {
+      if (Editing *ed = seq::editing_get(&scene)) {
+        seq::foreach_strip(&ed->seqbase, [&](Strip *strip) {
+          switch (strip->type) {
+            case STRIP_TYPE_IMAGE:
+              /* Every image in the sequence has its own #StripElem. Content trimming
+               * (#anim_startofs, #anim_endofs) hides elements at both ends without shrinking the
+               * array, so the full array is always this many elements long. */
+              strip->data->stripdata_num = strip->anim_startofs + strip->len + strip->anim_endofs;
+              break;
+            case STRIP_TYPE_MOVIE:
+            case STRIP_TYPE_SOUND:
+              /* Single #StripElem storing the file path. */
+              strip->data->stripdata_num = strip->data->stripdata ? 1 : 0;
+              break;
+            default:
+              strip->data->stripdata_num = 0;
+              break;
+          }
+          return true;
+        });
+      }
+    }
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
