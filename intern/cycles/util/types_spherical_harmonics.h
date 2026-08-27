@@ -10,7 +10,7 @@
 #include "util/types_float3.h"
 
 #if !defined(__KERNEL_GPU__)
-#  include <cstring>  /* for memset(). */
+#  include <cstring> /* for memset(). */
 #endif
 
 CCL_NAMESPACE_BEGIN
