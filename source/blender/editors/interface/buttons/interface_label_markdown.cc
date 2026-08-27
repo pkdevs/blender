@@ -257,6 +257,13 @@ class MarkdownLayouter {
     const MdBlock &new_block = block_stack_.last();
     // const MdBlock &last_block = *last_left_block_;
 
+    if (std::holds_alternative<UnorderedListBlock>(new_block) ||
+        std::holds_alternative<OrderedListBlock>(new_block))
+    {
+      /* The spacing for lists is done around the individual list items, not the list itself.*/
+      return 0.0f;
+    }
+
     if (const auto *md_header = std::get_if<HeaderBlock>(&new_block)) {
       const MdHeaderStyle &style = header_styles[md_header->level - 1];
       return main_font_.default_line_height * style.size_factor;
