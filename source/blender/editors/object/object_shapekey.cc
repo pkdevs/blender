@@ -77,6 +77,10 @@ bool shape_key_report_if_locked(const Object *obedit, ReportList *reports)
     case OB_LATTICE:
       key_block = ED_lattice_get_edit_shape_key(id_cast<Lattice *>(obedit->data));
       break;
+    case OB_GREASE_PENCIL:
+      key_block = BKE_keyblock_find_by_index((id_cast<GreasePencil *>(obedit->data))->key,
+                                             obedit->shapenr - 1);
+      break;
     default:
       return false;
   }

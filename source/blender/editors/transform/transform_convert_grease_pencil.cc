@@ -22,6 +22,7 @@
 
 #include "ED_curves.hh"
 #include "ED_grease_pencil.hh"
+#include "ED_object.hh"
 
 #include "transform.hh"
 #include "transform_convert.hh"
@@ -90,6 +91,11 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
     TransDataContainer &tc = trans_data_contrainers[i];
     CurvesTransformData &curves_transform_data = *all_curves_transform_data[i];
     tc.data_len = 0;
+
+    /* Avoid editing locked shapes. */
+    if (t->mode != TFM_DUMMY && object::shape_key_report_if_locked(tc.obedit, t->reports)) {
+      continue;
+    }
 
     const Span<ed::greasepencil::MutableDrawingInfo> drawings =
         curves_transform_data.drawings.as_span();
