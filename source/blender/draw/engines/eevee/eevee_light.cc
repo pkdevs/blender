@@ -190,7 +190,8 @@ void Light::shape_parameters_set(const blender::Light *la,
     LightLocalData &l_local = this->local();
     const float max_power = reduce_max(BKE_light_color(*la)) *
                             fabsf(BKE_light_power(*la) / 100.0f);
-    const float surface_max_power = max(la->diff_fac, la->spec_fac) * max_power;
+    const float surface_max_power = max(max(la->diff_fac, la->spec_fac), la->transmission_fac) *
+                                    max_power;
     const float volume_max_power = la->volume_fac * max_power;
 
     float influence_radius_surface = attenuation_radius_get(la, threshold, surface_max_power);
