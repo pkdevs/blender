@@ -197,15 +197,6 @@ wmOperatorStatus WM_gesture_box_invoke(bContext *C, wmOperator *op, const wmEven
       gesture->edge_pan_data = MEM_new<ui::View2DEdgePanData>(__func__);
       ui::view2d_edge_pan_init(C, gesture->edge_pan_data, 2, 0, 1, 10, 0.5f, 0.5f);
 
-      const ScrArea &area = *CTX_wm_area(C);
-      if (area.spacetype == SPACE_ACTION) {
-        /* `SPACE_ACTION` clamps view at draw-time (footgun, draw code should probably be
-         * read-only...), so prevent panning past that. We shouldn't limit horizontal range to
-         * `tot`, however, because for timelines it is the scene playback range. */
-        gesture->edge_pan_data->limit.ymin = region->v2d.tot.ymin;
-        gesture->edge_pan_data->limit.ymax = region->v2d.tot.ymax;
-      }
-
       const rcti *rect = static_cast<const rcti *>(gesture->customdata);
       gesture_init_mval_set(gesture, int2(rect->xmin, rect->ymin));
     }
