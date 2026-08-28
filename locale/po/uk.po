@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'af9ba6af7621')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'09417042a1fa')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-03 07:24+0000\n"
+"POT-Creation-Date: 2026-08-24 07:38+0000\n"
 "PO-Revision-Date: 2026-07-22 11:12+0000\n"
 "Last-Translator: Gamfid <gamfid@users.noreply.translate.blender.org>\n"
 "Language-Team: Ukrainian <https://translate.blender.org/projects/blender-ui/ui/uk/>\n"
@@ -2389,10 +2389,6 @@ msgstr "Частинки"
 
 msgid "Particle data-blocks"
 msgstr "Блоки даних частинок"
-
-
-msgid "Project"
-msgstr "Проєктування"
 
 
 msgid "Scene data-blocks"
@@ -5384,10 +5380,6 @@ msgid "Color management specific to display device"
 msgstr "Керування кольором для пристроїв відображення"
 
 
-msgid "Display"
-msgstr "Показати"
-
-
 msgid "Input color space settings"
 msgstr "Параметри колірного простору вводу"
 
@@ -5398,10 +5390,6 @@ msgstr "Є Даними"
 
 msgid "Treat image as non-color data without color management, like normal or displacement maps"
 msgstr "Обробляти зображення як не-колірні дані без управління кольором, як розкладки нормалей або зміщення"
-
-
-msgid "Input Color Space"
-msgstr "Ввідний колірний простір"
 
 
 msgid "Color space in the image file, to convert to and from when saving and loading the image"
@@ -5436,10 +5424,6 @@ msgid "Gamma"
 msgstr "Гамма"
 
 
-msgid "Look"
-msgstr "Вигляд"
-
-
 msgid "Additional transform applied before view transform for artistic needs"
 msgstr "Додаткова трансформа застосована перед трансформою огляду для мистецьких потреб"
 
@@ -5454,10 +5438,6 @@ msgstr "Вжити криві"
 
 msgid "Use RGB curved for pre-display transformation"
 msgstr "Вжити криві RGB для трансформації перед-показу"
-
-
-msgid "View"
-msgstr "Огляд"
 
 
 msgid "View used when converting image to a display space"
@@ -7262,6 +7242,10 @@ msgid "Shrink the location to the nearest target surface"
 msgstr "Змістити положення до найближчої цільової поверхні"
 
 
+msgid "Project"
+msgstr "Проєктування"
+
+
 msgid "Shrink the location to the nearest target surface along a given axis"
 msgstr "Змістити положення до найближчої цільової поверхні уздовж заданої осі"
 
@@ -8072,6 +8056,10 @@ msgstr "Площина"
 
 msgid "Plane for projected stroke"
 msgstr "Площина для проєктованого штриха"
+
+
+msgid "View"
+msgstr "Огляд"
 
 
 msgid "Detect Corners"
@@ -15755,6 +15743,18 @@ msgid "Automatically adjust strength to give consistent results for different sp
 msgstr "Автоматично наладнувати силу, щоб узгодити результати для різних інтервалів"
 
 
+msgid "Use Unified Color"
+msgstr "Вжити єдиний колір"
+
+
+msgid "Use Unified Strength"
+msgstr "Вжити єдину силу"
+
+
+msgid "Use Unified Weight"
+msgstr "Вжити єдину вагомість"
+
+
 msgid "Use Pressure for Wet Mix"
 msgstr "Вжити Натиск для Мішання Вологості"
 
@@ -20037,6 +20037,10 @@ msgstr "Величина згасання"
 
 msgid "Display Color"
 msgstr "Колір Показу"
+
+
+msgid "Display"
+msgstr "Показати"
 
 
 msgid "Percentage of particles to display in 3D view"
@@ -26356,78 +26360,6 @@ msgid "Material slot name"
 msgstr "Назва гнізда матеріалу"
 
 
-msgid "Toggle Bone Options"
-msgstr "Перемкнути параметри кісток"
-
-
-msgid "Enable Bone Options"
-msgstr "Увімкнути параметри кісток"
-
-
-msgid "Disable Bone Options"
-msgstr "Відключити параметри кісток"
-
-
-msgid "Mesh Select Mode"
-msgstr "Режим Вибору Сіті"
-
-
-msgid "Face Data"
-msgstr "Дані граней"
-
-
-msgid "Select by Face Strength"
-msgstr "Вибрати за Силою Грані"
-
-
-msgid "Set Face Strength"
-msgstr "Задати Силу Грані"
-
-
-msgid "Clean Up"
-msgstr "Вичищення"
-
-
-msgid "Merge"
-msgstr "Об'єднання"
-
-
-msgid "Show/Hide"
-msgstr "Показати/приховати"
-
-
-msgid "Special Characters"
-msgstr "Спеціальні символи"
-
-
-msgid "Kerning"
-msgstr "Кернінг"
-
-
-msgid "Metaball"
-msgstr "Метакуля"
-
-
-msgid "Names"
-msgstr "Назви"
-
-
-msgid "Bone Roll"
-msgstr "Прокручення Кістки"
-
-
-msgid "Math"
-msgstr "Математика"
-
-
-msgid "Utilities"
-msgstr "Утиліти"
-
-
-msgid "Pivot Point"
-msgstr "Точка Опертя"
-
-
 msgid "Snap"
 msgstr "Підхоп"
 
@@ -26480,6 +26412,10 @@ msgid "Viewpoint"
 msgstr "Точка зору"
 
 
+msgid "Utilities"
+msgstr "Утиліти"
+
+
 msgid "Navigation"
 msgstr "Навігація"
 
@@ -26500,12 +26436,16 @@ msgid "Select More/Less"
 msgstr "Вибрати більше/менше"
 
 
-msgid "Select Similar"
-msgstr "Вибрати подібні"
+msgid "Math"
+msgstr "Математика"
 
 
 msgid "UV"
 msgstr "UV"
+
+
+msgid "Select Similar"
+msgstr "Вибрати подібні"
 
 
 msgid "Select All by Trait"
@@ -26522,6 +26462,10 @@ msgstr "Виділити петлі"
 
 msgid "Assign Material"
 msgstr "Призначити Матеріал"
+
+
+msgid "Metaball"
+msgstr "Метакуля"
 
 
 msgid "Light"
@@ -26556,6 +26500,22 @@ msgid "Quick Effects"
 msgstr "Швидкі ефекти"
 
 
+msgid "Show/Hide"
+msgstr "Показати/приховати"
+
+
+msgid "Linked"
+msgstr "Пов'язане"
+
+
+msgid "Clean Up"
+msgstr "Вичищення"
+
+
+msgid "Layout"
+msgstr "Розстановка"
+
+
 msgid "Asset"
 msgstr "Актив"
 
@@ -26568,16 +26528,8 @@ msgid "Convert"
 msgstr "Конвертування"
 
 
-msgid "Linked"
-msgstr "Пов'язане"
-
-
 msgid "Link/Transfer Data"
 msgstr "Пов'язати/Перенести Дані"
-
-
-msgid "Layout"
-msgstr "Розстановка"
 
 
 msgid "Hooks"
@@ -26596,6 +26548,10 @@ msgid "Keying"
 msgstr "Ключування"
 
 
+msgid "Tracking"
+msgstr "Стеження"
+
+
 msgid "Clear Transform"
 msgstr "Зчистити трансформації"
 
@@ -26604,12 +26560,60 @@ msgid "In-Betweens"
 msgstr "У проміжках"
 
 
-msgid "Tracking"
-msgstr "Стеження"
-
-
 msgid "Propagate"
 msgstr "Поширити"
+
+
+msgid "Names"
+msgstr "Назви"
+
+
+msgid "Toggle Bone Options"
+msgstr "Перемкнути параметри кісток"
+
+
+msgid "Enable Bone Options"
+msgstr "Увімкнути параметри кісток"
+
+
+msgid "Disable Bone Options"
+msgstr "Відключити параметри кісток"
+
+
+msgid "Mesh Select Mode"
+msgstr "Режим Вибору Сіті"
+
+
+msgid "Face Data"
+msgstr "Дані граней"
+
+
+msgid "Select by Face Strength"
+msgstr "Вибрати за Силою Грані"
+
+
+msgid "Set Face Strength"
+msgstr "Задати Силу Грані"
+
+
+msgid "Merge"
+msgstr "Об'єднання"
+
+
+msgid "Special Characters"
+msgstr "Спеціальні символи"
+
+
+msgid "Kerning"
+msgstr "Кернінг"
+
+
+msgid "Bone Roll"
+msgstr "Прокручення Кістки"
+
+
+msgid "Pivot Point"
+msgstr "Точка Опертя"
 
 
 msgid "Basic"
@@ -33904,10 +33908,6 @@ msgstr "ITU 601"
 
 msgid "ITU 709"
 msgstr "ITU 709"
-
-
-msgid "To"
-msgstr "До"
 
 
 msgid "Corner Pin"
@@ -61864,10 +61864,6 @@ msgid "Clone from Paint Slot"
 msgstr "Клонувати з гнізда малювання"
 
 
-msgid "Front-Face Falloff"
-msgstr "Спад Передніх Граней"
-
-
 msgid "Normal Falloff"
 msgstr "Спад Нормалі"
 
@@ -65040,10 +65036,6 @@ msgid "Filter Glossy"
 msgstr "Фільтр глянцю"
 
 
-msgid "Adaptively blur glossy shaders after blurry bounces, to reduce noise at the cost of accuracy"
-msgstr "Адаптивно розмивати відтінювачі глянцю після розмитих відбиттів, щоб зменшити шум за рахунок точності"
-
-
 msgid "Camera Cull Margin"
 msgstr "Межа відкиду для камери"
 
@@ -65290,10 +65282,6 @@ msgstr "Частота Нарізання Оглядвікна"
 
 msgid "Pause Preview"
 msgstr "Пауза Передогляду"
-
-
-msgid "Pause all viewport preview renders"
-msgstr "Призупинити передогляд рендерів в усіх вікнах огляду"
 
 
 msgid "Viewport Samples"
@@ -67440,6 +67428,10 @@ msgid "How much the spring has to be stretched/compressed in order to change its
 msgstr "Наскільки пружина має бути розтягнута/стиснута, щоб змінилась її довжина спокою"
 
 
+msgid "Use effect during render"
+msgstr "Вжити ефект у ході рендера"
+
+
 msgid "Light Direction"
 msgstr "Напрям Освітлювача"
 
@@ -67974,10 +67966,6 @@ msgstr "Задати поширення ефекту в інтерфейсі к�
 
 msgid "Display effect in Edit mode"
 msgstr "Показувати ефект у режимі Редагування"
-
-
-msgid "Use effect during render"
-msgstr "Вжити ефект у ході рендера"
 
 
 msgid "Display effect in viewport"
@@ -74061,24 +74049,12 @@ msgid "Overrides for some of the active brush's settings"
 msgstr "Перевизначення деяких параметрів активного пензля"
 
 
-msgid "Use Unified Color"
-msgstr "Вжити єдиний колір"
-
-
 msgid "Instead of per-brush color, the color is shared across brushes"
 msgstr "Замість окремого кольору для кожного пензля, колір є спільним для всіх пензлів"
 
 
-msgid "Use Unified Strength"
-msgstr "Вжити єдину силу"
-
-
 msgid "Instead of per-brush strength, the strength is shared across brushes"
 msgstr "Сила є спільною для всіх пензлів, а не окремою для кожного"
-
-
-msgid "Use Unified Weight"
-msgstr "Вжити єдину вагомість"
 
 
 msgid "Instead of per-brush weight, the weight is shared across brushes"
@@ -75745,16 +75721,6 @@ msgstr "Засіб Редактора Зображень: UV, Обертання
 msgctxt "WindowManager"
 msgid "Image Editor Tool: Uv, Scale"
 msgstr "Засіб Редактора Зображень: UV, Масштабування"
-
-
-msgctxt "WindowManager"
-msgid "UV Sculpt"
-msgstr "Ліплення UV"
-
-
-msgctxt "WindowManager"
-msgid "Image View"
-msgstr "Огляд Зображення"
 
 
 msgctxt "WindowManager"
@@ -83003,6 +82969,10 @@ msgid "Manual Scale"
 msgstr "Масштаб Вручну"
 
 
+msgid "Look"
+msgstr "Вигляд"
+
+
 msgid "Sort By:"
 msgstr "Сортувати За:"
 
@@ -84907,14 +84877,6 @@ msgstr "Неможливо малювати по упакованих багат
 
 msgid "Image requires 4 color channels to paint"
 msgstr "Зображення потребує для малювання 4 колірних канали"
-
-
-msgid "Image requires 4 color channels to paint: %s"
-msgstr "Зображення потребує для малювання 4 колірних канали: %s"
-
-
-msgid "Packed MultiLayer files cannot be painted: %s"
-msgstr "Неможливо малювати по упакованих багатошарових файлах: %s"
 
 
 msgid "Image could not be found"
@@ -87315,10 +87277,6 @@ msgid "Object '%s' has no evaluated mesh data"
 msgstr "Об'єкт '%s' немає жодних обчислених даних сіті"
 
 
-msgid "Object '%s' could not create internal data for finding nearest point"
-msgstr "об'єкт '%s' не може створити внутрішніх даних для пошуку найближчої точки"
-
-
 msgid "Palette '%s' does not contain color given"
 msgstr "Палітра '%s' не містить даного кольору"
 
@@ -88502,28 +88460,4 @@ msgstr "Усі додатки, встановлені користувачем"
 
 msgid "Import-Export"
 msgstr "Імпорт-експорт"
-
-
-msgid "Apple"
-msgstr "Apple"
-
-
-msgid "ARRI"
-msgstr "ARRI"
-
-
-msgid "Canon"
-msgstr "Canon"
-
-
-msgid "DJI"
-msgstr "DJI"
-
-
-msgid "Panasonic"
-msgstr "Panasonic"
-
-
-msgid "Sony"
-msgstr "Sony"
 

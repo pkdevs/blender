@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'af9ba6af7621')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'09417042a1fa')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-03 07:24+0000\n"
+"POT-Creation-Date: 2026-08-24 07:38+0000\n"
 "PO-Revision-Date: 2026-07-31 17:12+0000\n"
 "Last-Translator: Ye Gui <ziweidao@foxmail.com>\n"
 "Language-Team: Chinese (Traditional Han script) <https://translate.blender.org/projects/blender-ui/ui/zh_Hant/>\n"
@@ -3415,10 +3415,6 @@ msgid "Point cloud data-blocks"
 msgstr "點雲數據組塊"
 
 
-msgid "Project"
-msgstr "投影"
-
-
 msgid "Scene data-blocks"
 msgstr "場景數據組塊"
 
@@ -3807,32 +3803,16 @@ msgid "A color space, view or display was not found, which likely means the Open
 msgstr "找不到色域、視圖或顯示，這可能意味著遺失了當初建立此 .blend 檔案時所使用的 OpenColorIO 配置"
 
 
-msgid "Working Space"
-msgstr "工作空間"
-
-
 msgid "Color space used for all scene linear colors in this file, and for compositing, shader and geometry nodes processing"
 msgstr "此檔案中所有場景線性顏色，以及合成、著色器與幾何節點處理時所使用的色域"
-
-
-msgid "Linear Rec.709"
-msgstr "線性 Rec.709"
 
 
 msgid "Linear BT.709 with illuminant D65 white point"
 msgstr "線性 BT.709，搭配 D65 標準光源白點"
 
 
-msgid "Linear Rec.2020"
-msgstr "線性 Rec.2020"
-
-
 msgid "Linear BT.2020 with illuminant D65 white point"
 msgstr "線性 BT.2020，搭配 D65 標準光源白點"
-
-
-msgid "ACEScg"
-msgstr "ACEScg"
 
 
 msgid "Linear AP1 with ACES white point"
@@ -6681,10 +6661,6 @@ msgid "Color management specific to display device"
 msgstr "針對指定顯示裝置的色彩管理"
 
 
-msgid "Display"
-msgstr "顯示"
-
-
 msgid "Display Emulation"
 msgstr "顯示模擬"
 
@@ -6697,84 +6673,8 @@ msgid "Is Data"
 msgstr "有資料"
 
 
-msgid "Input Color Space"
-msgstr "輸入色彩空間"
-
-
-msgid "ACES 1.3 sRGB"
-msgstr "ACES 1.3 sRGB"
-
-
-msgid "ACES 2.0 sRGB"
-msgstr "ACES 2.0 sRGB"
-
-
-msgid "ACES2065-1"
-msgstr "ACES2065-1"
-
-
-msgid "ACEScc"
-msgstr "ACEScc"
-
-
-msgid "ACEScct"
-msgstr "ACEScct"
-
-
-msgid "AgX Base sRGB"
-msgstr "AgX Base sRGB"
-
-
-msgid "AgX Log"
-msgstr "AgX Log"
-
-
-msgid "Display P3"
-msgstr "Display P3"
-
-
 msgid "Apple's Display P3 with sRGB compound (piece-wise) encoding transfer function, common on Mac devices"
 msgstr "Apple 的 Display P3 搭配 sRGB 複合 (分段函數) 編碼轉換函式，常見於 Mac 裝置"
-
-
-msgid "Filmic Log"
-msgstr "Filmic Log"
-
-
-msgid "Filmic sRGB"
-msgstr "Filmic sRGB"
-
-
-msgid "Linear CIE-XYZ D65"
-msgstr "線性 CIE-XYZ D65"
-
-
-msgid "Linear CIE-XYZ E"
-msgstr "線性 CIE-XYZ E"
-
-
-msgid "Linear DCI-P3 D65"
-msgstr "線性 DCI-P3 D65"
-
-
-msgid "Non-Color"
-msgstr "無色彩"
-
-
-msgid "Rec.1886"
-msgstr "Rec.1886"
-
-
-msgid "Rec.2020"
-msgstr "Rec.2020"
-
-
-msgid "Rec.2100-HLG"
-msgstr "Rec.2100-HLG"
-
-
-msgid "Rec.2100-PQ"
-msgstr "Rec.2100-PQ"
 
 
 msgid "Do not perform any color transform on load, treat colors as in scene linear space already"
@@ -6809,10 +6709,6 @@ msgid "Is HDR"
 msgstr "是 HDR"
 
 
-msgid "Look"
-msgstr "風格"
-
-
 msgid "Do not modify image in an artistic manner"
 msgstr "依藝術師手法不修改影像"
 
@@ -6827,10 +6723,6 @@ msgstr "為預顯示轉換使用 RGB 曲線"
 
 msgid "Use White Balance"
 msgstr "使用白平衡"
-
-
-msgid "View"
-msgstr "檢視"
 
 
 msgid "View used when converting image to a display space"
@@ -8593,6 +8485,10 @@ msgid "Shrink the location to the nearest target surface"
 msgstr "將位置收縮至最近的目標表面"
 
 
+msgid "Project"
+msgstr "投影"
+
+
 msgid "Shrink the location to the nearest target surface along a given axis"
 msgstr "將位置沿給定的軸收縮至最近的目標表面"
 
@@ -9229,6 +9125,10 @@ msgstr "法向對齊表面"
 
 msgid "Tangent to Surface"
 msgstr "切線對齊表面"
+
+
+msgid "View"
+msgstr "檢視"
 
 
 msgid "Detect Corners"
@@ -16155,6 +16055,22 @@ msgid "Automatically adjust strength to give consistent results for different sp
 msgstr "自動調整強度以給予不同間隔一致的結果"
 
 
+msgid "Use Unified Color"
+msgstr "使用統一色彩"
+
+
+msgid "Use Unified Size"
+msgstr "使用統一大小"
+
+
+msgid "Use Unified Strength"
+msgstr "使用統一長度"
+
+
+msgid "Use Unified Weight"
+msgstr "使用統一權重"
+
+
 msgid "Value Jitter"
 msgstr "明度抖動"
 
@@ -20127,6 +20043,10 @@ msgid "Axis"
 msgstr "軸"
 
 
+msgid "Display"
+msgstr "顯示"
+
+
 msgid "Percentage of particles to display in 3D view"
 msgstr "在 3D 檢視中顯示的粒子百分比"
 
@@ -20936,10 +20856,6 @@ msgstr "背景設定場景"
 
 msgid "Active camera, used for rendering the scene"
 msgstr "作用中攝影機，用於算繪場景"
-
-
-msgid "Compositor Nodes"
-msgstr "合成器節點"
 
 
 msgid "3D Cursor"
@@ -26372,78 +26288,6 @@ msgid "Material slot name"
 msgstr "材質槽名稱"
 
 
-msgid "Creative"
-msgstr "創意"
-
-
-msgid "Toggle Bone Options"
-msgstr "開關骨骼選項"
-
-
-msgid "Enable Bone Options"
-msgstr "啟用骨骼設定"
-
-
-msgid "Disable Bone Options"
-msgstr "停用骨骼設定"
-
-
-msgid "Mesh Select Mode"
-msgstr "網格選取模式"
-
-
-msgid "Face Data"
-msgstr "面資料"
-
-
-msgid "Set Face Strength"
-msgstr "設定面強度"
-
-
-msgid "Clean Up"
-msgstr "清理"
-
-
-msgid "Merge"
-msgstr "合併"
-
-
-msgid "Show/Hide"
-msgstr "顯示/隱藏"
-
-
-msgid "Special Characters"
-msgstr "特殊字元"
-
-
-msgid "Kerning"
-msgstr "字間微調"
-
-
-msgid "Metaball"
-msgstr "變幻球"
-
-
-msgid "Names"
-msgstr "名稱"
-
-
-msgid "Bone Roll"
-msgstr "骨骼滾動"
-
-
-msgid "Math"
-msgstr "數學公式"
-
-
-msgid "Utilities"
-msgstr "效用"
-
-
-msgid "Pivot Point"
-msgstr "樞紐點"
-
-
 msgid "Snap"
 msgstr "吸附"
 
@@ -26492,12 +26336,12 @@ msgid "Instances"
 msgstr "實例化"
 
 
-msgid "Render Preview"
-msgstr "算繪預覽"
-
-
 msgid "Import"
 msgstr "匯入"
+
+
+msgid "Render Preview"
+msgstr "算繪預覽"
 
 
 msgid "Mirror"
@@ -26516,16 +26360,20 @@ msgid "Viewpoint"
 msgstr "視點"
 
 
+msgid "Utilities"
+msgstr "效用"
+
+
 msgid "Navigation"
 msgstr "導覽"
 
 
-msgid "Align View"
-msgstr "對齊檢視"
-
-
 msgid "Deprecated"
 msgstr "已棄用"
+
+
+msgid "Align View"
+msgstr "對齊檢視"
 
 
 msgid "Align View to Active"
@@ -26540,12 +26388,16 @@ msgid "Select More/Less"
 msgstr "選取更多/更少"
 
 
-msgid "Select Similar"
-msgstr "選取相似者"
+msgid "Math"
+msgstr "數學公式"
 
 
 msgid "UV"
 msgstr "UV"
+
+
+msgid "Select Similar"
+msgstr "選取相似者"
 
 
 msgid "Select All by Trait"
@@ -26562,6 +26414,10 @@ msgstr "選取迴圈"
 
 msgid "Assign Material"
 msgstr "指派材質"
+
+
+msgid "Metaball"
+msgstr "變幻球"
 
 
 msgid "Light"
@@ -26596,6 +26452,22 @@ msgid "Quick Effects"
 msgstr "快速效果"
 
 
+msgid "Show/Hide"
+msgstr "顯示/隱藏"
+
+
+msgid "Linked"
+msgstr "已連結"
+
+
+msgid "Clean Up"
+msgstr "清理"
+
+
+msgid "Layout"
+msgstr "配置"
+
+
 msgid "Asset"
 msgstr "素材"
 
@@ -26608,16 +26480,8 @@ msgid "Convert"
 msgstr "轉換"
 
 
-msgid "Linked"
-msgstr "已連結"
-
-
 msgid "Link/Transfer Data"
 msgstr "連結/傳輸資料"
-
-
-msgid "Layout"
-msgstr "配置"
 
 
 msgid "Hooks"
@@ -26626,6 +26490,10 @@ msgstr "鉤"
 
 msgid "Trim/Add"
 msgstr "修剪/增加"
+
+
+msgid "Adjust"
+msgstr "調整"
 
 
 msgid "Sculpt Set Pivot"
@@ -26640,12 +26508,12 @@ msgid "Random Mask"
 msgstr "隨機遮罩"
 
 
-msgid "Adjust"
-msgstr "調整"
-
-
 msgid "Keying"
 msgstr "鍵處理"
+
+
+msgid "Tracking"
+msgstr "跟蹤"
 
 
 msgid "Clear Transform"
@@ -26656,16 +26524,64 @@ msgid "In-Betweens"
 msgstr "內部之間"
 
 
-msgid "Tracking"
-msgstr "跟蹤"
-
-
 msgid "Propagate"
 msgstr "增生"
 
 
 msgid "Bone Collections"
 msgstr "骨骼集盒"
+
+
+msgid "Names"
+msgstr "名稱"
+
+
+msgid "Creative"
+msgstr "創意"
+
+
+msgid "Toggle Bone Options"
+msgstr "開關骨骼選項"
+
+
+msgid "Enable Bone Options"
+msgstr "啟用骨骼設定"
+
+
+msgid "Disable Bone Options"
+msgstr "停用骨骼設定"
+
+
+msgid "Mesh Select Mode"
+msgstr "網格選取模式"
+
+
+msgid "Face Data"
+msgstr "面資料"
+
+
+msgid "Set Face Strength"
+msgstr "設定面強度"
+
+
+msgid "Merge"
+msgstr "合併"
+
+
+msgid "Special Characters"
+msgstr "特殊字元"
+
+
+msgid "Kerning"
+msgstr "字間微調"
+
+
+msgid "Bone Roll"
+msgstr "骨骼滾動"
+
+
+msgid "Pivot Point"
+msgstr "樞紐點"
 
 
 msgid "Keyframe Insert Pie"
@@ -33228,14 +33144,6 @@ msgstr "JPEG"
 
 msgid "Convert Colorspace"
 msgstr "轉換色彩空間"
-
-
-msgid "From"
-msgstr "從"
-
-
-msgid "To"
-msgstr "到"
 
 
 msgid "Convert to Display"
@@ -61190,22 +61098,6 @@ msgid "Palette Splines"
 msgstr "調色盤雲型線"
 
 
-msgid "glTF Variants"
-msgstr "glTF 變體"
-
-
-msgid "glTF Material Variants"
-msgstr "glTF 材質變體"
-
-
-msgid "glTF"
-msgstr "glTF"
-
-
-msgid "glTF Animations"
-msgstr "glTF 動畫"
-
-
 msgid "Active Tool"
 msgstr "作用中工具"
 
@@ -61308,6 +61200,22 @@ msgstr "VR"
 
 msgid "VR Info"
 msgstr "VR 資訊"
+
+
+msgid "glTF Variants"
+msgstr "glTF 變體"
+
+
+msgid "glTF Material Variants"
+msgstr "glTF 材質變體"
+
+
+msgid "glTF"
+msgstr "glTF"
+
+
+msgid "glTF Animations"
+msgstr "glTF 動畫"
 
 
 msgid "Import Settings"
@@ -62074,6 +61982,10 @@ msgid "White Balance Presets"
 msgstr "白平衡預設集"
 
 
+msgid "Working Space"
+msgstr "工作空間"
+
+
 msgid "Denoising"
 msgstr "降噪"
 
@@ -62211,10 +62123,6 @@ msgstr "尋找與取代"
 
 msgid "Auto Keying"
 msgstr "自動插入關鍵影格"
-
-
-msgid "Time Jump"
-msgstr "時間跳躍"
 
 
 msgid "Keyframing"
@@ -62819,10 +62727,6 @@ msgstr "修剪"
 msgctxt "Operator"
 msgid "Selection Paint"
 msgstr "選取繪製"
-
-
-msgid "Front-Face Falloff"
-msgstr "正面衰減"
 
 
 msgid "Normal Falloff"
@@ -66478,10 +66382,6 @@ msgid "Filter Glossy"
 msgstr "過濾光澤"
 
 
-msgid "Adaptively blur glossy shaders after blurry bounces, to reduce noise at the cost of accuracy"
-msgstr "適應性地讓光澤著色器在模糊反彈之後變得模糊，可犧牲精確度以換取噪訊的降低"
-
-
 msgid "Camera Cull Margin"
 msgstr "攝影機剔除邊距"
 
@@ -66736,10 +66636,6 @@ msgstr "起始去除噪訊"
 
 msgid "Pause Preview"
 msgstr "暫停預覽"
-
-
-msgid "Pause all viewport preview renders"
-msgstr "暫停所有視圖區的預覽算繪"
 
 
 msgid "Viewport Samples"
@@ -75415,24 +75311,8 @@ msgid "Overrides for some of the active brush's settings"
 msgstr "對一些作用中筆刷設定凌駕"
 
 
-msgid "Use Unified Color"
-msgstr "使用統一色彩"
-
-
-msgid "Use Unified Size"
-msgstr "使用統一大小"
-
-
-msgid "Use Unified Strength"
-msgstr "使用統一長度"
-
-
 msgid "Instead of per-brush strength, the strength is shared across brushes"
 msgstr "不管各筆刷長度，長度在筆刷之間互相共用"
-
-
-msgid "Use Unified Weight"
-msgstr "使用統一權重"
 
 
 msgid "Instead of per-brush weight, the weight is shared across brushes"
@@ -77978,16 +77858,6 @@ msgstr "影像編輯器工具：UV，套索選取（備用）"
 
 
 msgctxt "WindowManager"
-msgid "UV Sculpt"
-msgstr "UV 雕塑"
-
-
-msgctxt "WindowManager"
-msgid "Image View"
-msgstr "影像檢視"
-
-
-msgctxt "WindowManager"
 msgid "Image Generic"
 msgstr "影像通用"
 
@@ -80440,6 +80310,11 @@ msgstr "集盒遮罩"
 
 
 msgctxt "Operator"
+msgid "Search..."
+msgstr "搜尋..."
+
+
+msgctxt "Operator"
 msgid "Add Object Constraint"
 msgstr "新增物體約束"
 
@@ -80902,11 +80777,6 @@ msgstr "影響閾值"
 
 msgid "Update on Edit"
 msgstr "編輯時更新"
-
-
-msgctxt "Operator"
-msgid "Search..."
-msgstr "搜尋..."
 
 
 msgid "Curve to Tube"
@@ -88596,6 +88466,10 @@ msgid "Manual Scale"
 msgstr "手動縮放"
 
 
+msgid "Look"
+msgstr "風格"
+
+
 msgid "Sort By:"
 msgstr "排序方式:"
 
@@ -89145,6 +89019,10 @@ msgstr "停止動畫播放"
 
 msgid "Canceling..."
 msgstr "取消中..."
+
+
+msgid "Warnings"
+msgstr "警告"
 
 
 msgid "Split/Dock"
@@ -91398,6 +91276,10 @@ msgstr "選單未定義"
 
 msgid "Subtype"
 msgstr "子類型"
+
+
+msgid "Compositor Nodes"
+msgstr "合成器節點"
 
 
 msgid "Could not add a mask node"
@@ -95997,10 +95879,6 @@ msgid "Mask Input"
 msgstr "遮罩輸入"
 
 
-msgid "Warnings"
-msgstr "警告"
-
-
 msgid "Bake Path"
 msgstr "烘焙路徑"
 
@@ -96023,10 +95901,6 @@ msgstr "\"{}\" 來自 {}"
 
 msgid "Reference Set"
 msgstr "參照集"
-
-
-msgid "No Output"
-msgstr "無輸出"
 
 
 msgid "Wrong Output Type"
@@ -97786,70 +97660,6 @@ msgid "network"
 msgstr "網路"
 
 
-msgid "ACES 1.3"
-msgstr "ACES 1.3"
-
-
-msgid "ACES 2.0"
-msgstr "ACES 2.0"
-
-
-msgid "AgX"
-msgstr "AgX"
-
-
-msgid "Filmic"
-msgstr "Filmic"
-
-
-msgid "ACES 1.3 - SDR"
-msgstr "ACES 1.3 - SDR"
-
-
-msgid "ACES 2.0 - SDR"
-msgstr "ACES 2.0 - SDR"
-
-
-msgid "AgX - SDR"
-msgstr "AgX - SDR"
-
-
-msgid "Very High Contrast"
-msgstr "極高對比"
-
-
-msgid "High Contrast"
-msgstr "高對比"
-
-
-msgid "Medium Contrast"
-msgstr "中對比"
-
-
-msgid "Low Contrast"
-msgstr "低對比"
-
-
-msgid "Very Low Contrast"
-msgstr "極低對比"
-
-
-msgid "Punchy"
-msgstr "強烈"
-
-
-msgid "Greyscale"
-msgstr "灰階"
-
-
-msgid "Base Contrast"
-msgstr "基礎對比"
-
-
-msgid "Utility"
-msgstr "公用程式"
-
-
 msgid "Add & Subtract"
 msgstr "加 & 減"
 
@@ -97876,6 +97686,10 @@ msgstr "網格頂點繪製"
 
 msgid "Mesh Weight Paint"
 msgstr "網格權重繪製"
+
+
+msgid "Utility"
+msgstr "公用程式"
 
 
 msgid "Phi"
