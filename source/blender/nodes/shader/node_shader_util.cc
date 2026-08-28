@@ -197,7 +197,7 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
 
     switch (socket->type) {
       case SOCK_FLOAT:
-      case SOCK_INT: /* HACK: Support as float. */
+      case SOCK_INT:     /* HACK: Support as float. */
       case SOCK_BOOLEAN: /* HACK: Support as float. */
         gs->type = GPU_FLOAT;
         gs->value = vec.x;
