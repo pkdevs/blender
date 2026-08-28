@@ -8,7 +8,6 @@
 
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
-#include "DNA_view3d_types.h"
 
 #include "BKE_context.hh"
 #include "BKE_editmesh.hh"
