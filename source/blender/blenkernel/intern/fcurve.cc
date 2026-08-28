@@ -889,7 +889,7 @@ bool BKE_fcurve_are_keyframes_usable(const FCurve &fcu)
   }
 
   /* If it has modifiers, none of these should "drastically" alter the curve. */
-  if (fcu.modifiers.first_) {
+  if (fcu.modifiers.first()) {
     /* Check modifiers from last to first, as last will be more influential. */
     /* TODO: optionally, only check modifier if it is the active one... (Joshua Leung 2010) */
     for (const FModifier &fcm : fcu.modifiers.items_reversed()) {

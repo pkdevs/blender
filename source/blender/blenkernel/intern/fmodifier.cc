@@ -1337,7 +1337,7 @@ void free_fmodifiers(ListBaseT<FModifier> *modifiers)
 FModifier *find_active_fmodifier(ListBaseT<FModifier> *modifiers)
 {
   /* sanity checks */
-  if (ELEM(nullptr, modifiers, modifiers->first_)) {
+  if (ELEM(nullptr, modifiers, modifiers->first())) {
     return nullptr;
   }
 
@@ -1355,7 +1355,7 @@ FModifier *find_active_fmodifier(ListBaseT<FModifier> *modifiers)
 void set_active_fmodifier(ListBaseT<FModifier> *modifiers, FModifier *fcm)
 {
   /* sanity checks */
-  if (ELEM(nullptr, modifiers, modifiers->first_)) {
+  if (ELEM(nullptr, modifiers, modifiers->first())) {
     return;
   }
 
@@ -1374,11 +1374,11 @@ bool list_has_suitable_fmodifier(const ListBaseT<FModifier> *modifiers, int mtyp
 {
   /* if there are no specific filtering criteria, just skip */
   if ((mtype == 0) && (acttype == 0)) {
-    return (modifiers && modifiers->first_);
+    return (modifiers && modifiers->first());
   }
 
   /* sanity checks */
-  if (ELEM(nullptr, modifiers, modifiers->first_)) {
+  if (ELEM(nullptr, modifiers, modifiers->first())) {
     return false;
   }
 
@@ -1546,7 +1546,7 @@ void evaluate_value_fmodifiers(FModifiersStackStorage *storage,
   FModifier *fcm;
 
   /* sanity checks */
-  if (ELEM(nullptr, modifiers, modifiers->first_)) {
+  if (ELEM(nullptr, modifiers, modifiers->first())) {
     return;
   }
 
@@ -1592,7 +1592,7 @@ void fcurve_bake_modifiers(FCurve *fcu, int start, int end)
 
   /* sanity checks */
   /* TODO: make these tests report errors using reports not CLOG's */
-  if (ELEM(nullptr, fcu, fcu->modifiers.first_)) {
+  if (ELEM(nullptr, fcu, fcu->modifiers.first())) {
     CLOG_ERROR(&LOG, "No F-Curve with F-Curve Modifiers to Bake");
     return;
   }

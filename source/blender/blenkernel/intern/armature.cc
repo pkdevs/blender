@@ -3191,7 +3191,7 @@ void BKE_pose_where_is_bone(Depsgraph *depsgraph,
 
   if (do_extra) {
     /* Do constraints */
-    if (pchan->constraints.first_) {
+    if (pchan->constraints.first()) {
       bConstraintOb *cob;
       float vec[3];
 

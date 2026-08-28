@@ -638,7 +638,7 @@ void txt_clean_text(Text *text)
 {
   TextLine **top, **bot;
 
-  if (!text->lines.first_) {
+  if (!text->lines.first()) {
     if (text->lines.last()) {
       text->lines.first_ = text->lines.last();
     }

@@ -5376,8 +5376,8 @@ bNodeTree *node_tree_localize(bNodeTree *ntree, std::optional<ID *> new_owner_id
   /* Ensures only a single output node is enabled. */
   node_tree_set_output(*ntree);
 
-  bNode *node_src = reinterpret_cast<bNode *>(ntree->nodes.first_);
-  bNode *node_local = reinterpret_cast<bNode *>(ltree->nodes.first_);
+  bNode *node_src = ntree->nodes.first();
+  bNode *node_local = ltree->nodes.first();
   while (node_src != nullptr) {
     node_local->runtime->original = node_src;
     node_src = node_src->next;

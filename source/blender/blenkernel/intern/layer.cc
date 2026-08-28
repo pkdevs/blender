@@ -131,7 +131,7 @@ ViewLayer *BKE_view_layer_default_view(const Scene *scene)
     }
   }
 
-  BLI_assert(scene->view_layers.first_);
+  BLI_assert(scene->view_layers.first());
   return scene->view_layers.first();
 }
 
@@ -143,7 +143,7 @@ ViewLayer *BKE_view_layer_default_render(const Scene *scene)
     }
   }
 
-  BLI_assert(scene->view_layers.first_);
+  BLI_assert(scene->view_layers.first());
   return scene->view_layers.first();
 }
 
@@ -160,7 +160,7 @@ ViewLayer *BKE_view_layer_find(const Scene *scene, const char *layer_name)
 
 ViewLayer *BKE_view_layer_context_active_PLACEHOLDER(const Scene *scene)
 {
-  BLI_assert(scene->view_layers.first_);
+  BLI_assert(scene->view_layers.first());
   return scene->view_layers.first();
 }
 
@@ -181,8 +181,7 @@ static ViewLayer *view_layer_add(const char *name)
 
 static void layer_collection_exclude_all(LayerCollection *layer_collection)
 {
-  LayerCollection *sub_collection = static_cast<LayerCollection *>(
-      layer_collection->layer_collections.first_);
+  LayerCollection *sub_collection = layer_collection->layer_collections.first();
   for (; sub_collection != nullptr; sub_collection = sub_collection->next) {
     sub_collection->flag |= LAYER_COLLECTION_EXCLUDE;
     layer_collection_exclude_all(sub_collection);
@@ -465,8 +464,7 @@ static void layer_lightgroup_copy_data(ViewLayer *view_layer_dst,
   }
 
   ViewLayerLightgroup *lightgroup_dst = lightgroups_dst->first();
-  const ViewLayerLightgroup *lightgroup_src = static_cast<const ViewLayerLightgroup *>(
-      lightgroups_src->first_);
+  const ViewLayerLightgroup *lightgroup_src = lightgroups_src->first();
 
   while (lightgroup_dst != nullptr) {
     BLI_assert(lightgroup_src);
@@ -486,10 +484,8 @@ static void layer_collections_copy_data(ViewLayer *view_layer_dst,
 {
   BLI_duplicatelist(layer_collections_dst, layer_collections_src);
 
-  LayerCollection *layer_collection_dst = static_cast<LayerCollection *>(
-      layer_collections_dst->first_);
-  const LayerCollection *layer_collection_src = static_cast<const LayerCollection *>(
-      layer_collections_src->first_);
+  LayerCollection *layer_collection_dst = layer_collections_dst->first();
+  const LayerCollection *layer_collection_src = layer_collections_src->first();
 
   while (layer_collection_dst != nullptr) {
     layer_collections_copy_data(view_layer_dst,
@@ -547,8 +543,7 @@ void BKE_view_layer_copy_data(Scene *scene_dst,
                               &view_layer_dst->layer_collections,
                               &view_layer_src->layer_collections);
 
-  LayerCollection *lc_scene_dst = static_cast<LayerCollection *>(
-      view_layer_dst->layer_collections.first_);
+  LayerCollection *lc_scene_dst = view_layer_dst->layer_collections.first();
   lc_scene_dst->collection = scene_dst->master_collection;
 
   view_layer_dst->aovs.clear_no_delete();
@@ -660,8 +655,7 @@ static bool layer_collection_hidden(ViewLayer *view_layer, LayerCollection *lc)
   }
 
   /* Restriction flags stay set, so we need to check parents */
-  CollectionParent *parent = static_cast<CollectionParent *>(
-      lc->collection->runtime->parents.first_);
+  CollectionParent *parent = lc->collection->runtime->parents.first();
 
   if (parent) {
     lc = BKE_layer_collection_first_from_scene_collection(view_layer, parent->collection);
@@ -695,8 +689,7 @@ bool BKE_layer_collection_activate(ViewLayer *view_layer, LayerCollection *lc)
 
 LayerCollection *BKE_layer_collection_activate_parent(ViewLayer *view_layer, LayerCollection *lc)
 {
-  CollectionParent *parent = static_cast<CollectionParent *>(
-      lc->collection->runtime->parents.first_);
+  CollectionParent *parent = lc->collection->runtime->parents.first();
 
   if (parent) {
     lc = BKE_layer_collection_first_from_scene_collection(view_layer, parent->collection);
@@ -1123,7 +1116,7 @@ static void layer_collection_objects_sync(ViewLayer *view_layer,
            * been moved to the new base list and the first/last test ensure that
            * case also works. */
           Base *base = *base_p;
-          if (!ELEM(base, r_lb_new_object_bases->first_, r_lb_new_object_bases->last())) {
+          if (!ELEM(base, r_lb_new_object_bases->first(), r_lb_new_object_bases->last())) {
             BLI_remlink(&view_layer->object_bases, base);
             BLI_addtail(r_lb_new_object_bases, base);
           }
@@ -1360,8 +1353,7 @@ static bool view_layer_objects_base_cache_validate(ViewLayer * /*view_layer*/,
 
 void BKE_layer_collection_doversion_2_80(const Scene *scene, ViewLayer *view_layer)
 {
-  LayerCollection *first_layer_collection = static_cast<LayerCollection *>(
-      view_layer->layer_collections.first_);
+  LayerCollection *first_layer_collection = view_layer->layer_collections.first();
   if (BLI_listbase_count_at_most(&view_layer->layer_collections, 2) > 1 ||
       first_layer_collection->collection != scene->master_collection)
   {
@@ -1401,8 +1393,7 @@ bool BKE_layer_collection_sync(const Main &bmain, const Scene *scene, ViewLayer 
                    "ViewLayer's first level of children layer collections should always have "
                    "exactly one item");
 
-    LayerCollection *first_layer_collection = static_cast<LayerCollection *>(
-        view_layer->layer_collections.first_);
+    LayerCollection *first_layer_collection = view_layer->layer_collections.first();
     BLI_assert_msg(first_layer_collection->collection == scene->master_collection,
                    "ViewLayer's first layer collection should always be the one for the scene's "
                    "master collection");
@@ -1482,8 +1473,7 @@ bool BKE_layer_collection_sync(const Main &bmain, const Scene *scene, ViewLayer 
     BKE_layer_collection_activate_parent(view_layer, active);
   }
   else if (active == nullptr) {
-    view_layer->active_collection = static_cast<LayerCollection *>(
-        view_layer->layer_collections.first_);
+    view_layer->active_collection = view_layer->layer_collections.first();
   }
 
   return true;
@@ -2562,8 +2552,7 @@ void BKE_view_layer_blend_read_data(BlendDataReader *reader, ViewLayer *view_lay
 
   if (!active_collection_found) {
     /* Ensure pointer is valid, in case of corrupt blend file. */
-    view_layer->active_collection = static_cast<LayerCollection *>(
-        view_layer->layer_collections.first_);
+    view_layer->active_collection = view_layer->layer_collections.first();
   }
 
   BLO_read_struct(reader, IDProperty, &view_layer->id_properties);

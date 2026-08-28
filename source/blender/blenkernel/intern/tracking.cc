@@ -1067,7 +1067,7 @@ static bGPDlayer *track_mask_gpencil_layer_get(const MovieTrackingTrack *track)
       bool ok = false;
 
       while (frame) {
-        if (frame->strokes.first_) {
+        if (frame->strokes.first()) {
           ok = true;
           break;
         }

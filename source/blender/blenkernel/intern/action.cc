@@ -156,7 +156,7 @@ static void action_copy_data(Main * /*bmain*/,
       if (fcurve_src->grp == group_src) {
         fcurve_dst->grp = group_dst;
 
-        if (group_dst->channels.first_ == fcurve_src) {
+        if (group_dst->channels.first() == fcurve_src) {
           group_dst->channels.first_ = fcurve_dst;
         }
         if (group_dst->channels.last() == fcurve_src) {
@@ -1075,7 +1075,7 @@ void BKE_pose_copy_data_ex(bPose **dst,
    * BUT this will have the penalty that the ghash will be built twice
    * if BKE_pose_rebuild() gets called after this...
    */
-  if (outPose->chanbase.first_ != outPose->chanbase.last()) {
+  if (outPose->chanbase.first() != outPose->chanbase.last()) {
     BKE_pose_channels_hash_ensure(outPose);
   }
 
@@ -1416,7 +1416,7 @@ void BKE_pose_free_data_ex(bPose *pose, bool do_id_user)
   BKE_pose_channels_free_ex(pose, do_id_user);
 
   /* free pose-groups */
-  if (pose->agroups.first_) {
+  if (pose->agroups.first()) {
     pose->agroups.free_no_destruct();
   }
 
@@ -1814,7 +1814,7 @@ void what_does_obaction(Object *ob,
      * For such cases it makes no sense to create hash since it'll only waste CPU ticks on memory
      * allocation and also will make lookup slower.
      */
-    if (pose->chanbase.first_ != pose->chanbase.last()) {
+    if (pose->chanbase.first() != pose->chanbase.last()) {
       BKE_pose_channels_hash_ensure(pose);
     }
     if (pose->flag & POSE_CONSTRAINTS_NEED_UPDATE_FLAGS) {

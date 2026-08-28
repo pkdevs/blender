@@ -100,8 +100,7 @@ static void greasepencil_copy_data(Main * /*bmain*/,
         loc_eul_size_to_mat4(
             gpl_dst->layer_mat, gpl_dst->location, gpl_dst->rotation, gpl_dst->scale);
         bool do_onion = ((gpl_dst->onion_flag & GP_LAYER_ONIONSKIN) != 0);
-        bGPDframe *init_gpf = static_cast<bGPDframe *>((do_onion) ? gpl_dst->frames.first_ :
-                                                                    gpl_dst->actframe);
+        bGPDframe *init_gpf = do_onion ? gpl_dst->frames.first() : gpl_dst->actframe;
         for (bGPDframe *gpf = init_gpf; gpf; gpf = gpf->next) {
           for (bGPDstroke &gps : gpf->strokes) {
             bGPDspoint *pt;
@@ -208,7 +207,7 @@ void BKE_gpencil_blend_read_data(BlendDataReader *reader, bGPdata *gpd)
 
   /* Relink palettes (old palettes deprecated, only to convert old files). */
   BLO_read_struct_list(reader, bGPDpalette, &gpd->palettes);
-  if (gpd->palettes.first_ != nullptr) {
+  if (gpd->palettes.first() != nullptr) {
     for (bGPDpalette &palette : gpd->palettes) {
       BLO_read_struct_list(reader, PaletteColor, &palette.colors);
     }
@@ -471,7 +470,7 @@ bGPDframe *BKE_gpencil_frame_addnew(bGPDlayer *gpl, int cframe)
   gpf->framenum = cframe;
 
   /* find appropriate place to add frame */
-  if (gpl->frames.first_) {
+  if (gpl->frames.first()) {
     for (gf = gpl->frames.first(); gf; gf = gf->next) {
       /* check if frame matches one that is supposed to be added */
       if (gf->framenum == cframe) {
@@ -959,7 +958,7 @@ bGPDframe *BKE_gpencil_layer_frame_get(bGPDlayer *gpl, int cframe, eGP_GetFrame_
       }
     }
   }
-  else if (gpl->frames.first_) {
+  else if (gpl->frames.first()) {
     /* check which of the ends to start checking from */
     const int first = (gpl->frames.first())->framenum;
     const int last = (gpl->frames.last())->framenum;
@@ -997,7 +996,7 @@ bGPDframe *BKE_gpencil_layer_frame_get(bGPDlayer *gpl, int cframe, eGP_GetFrame_
     }
     else {
       /* If delete first frame, need to find one. */
-      if (gpl->frames.first_ != nullptr) {
+      if (gpl->frames.first() != nullptr) {
         gpl->actframe = gpl->frames.first();
       }
       else {
@@ -1019,7 +1018,7 @@ bGPDframe *BKE_gpencil_layer_frame_get(bGPDlayer *gpl, int cframe, eGP_GetFrame_
   }
 
   /* Don't select first frame if greater than current frame. */
-  if ((gpl->actframe != nullptr) && (gpl->actframe == gpl->frames.first_) &&
+  if ((gpl->actframe != nullptr) && (gpl->actframe == gpl->frames.first()) &&
       (gpl->actframe->framenum > cframe))
   {
     gpl->actframe = nullptr;
@@ -1089,7 +1088,7 @@ void BKE_gpencil_layer_frames_sort(bGPDlayer *gpl, bool *r_has_duplicate_frames)
 bGPDlayer *BKE_gpencil_layer_active_get(bGPdata *gpd)
 {
   /* error checking */
-  if (ELEM(nullptr, gpd, gpd->layers.first_)) {
+  if (ELEM(nullptr, gpd, gpd->layers.first())) {
     return nullptr;
   }
 
@@ -1107,7 +1106,7 @@ bGPDlayer *BKE_gpencil_layer_active_get(bGPdata *gpd)
 void BKE_gpencil_layer_active_set(bGPdata *gpd, bGPDlayer *active)
 {
   /* error checking */
-  if (ELEM(nullptr, gpd, gpd->layers.first_, active)) {
+  if (ELEM(nullptr, gpd, gpd->layers.first(), active)) {
     return;
   }
 

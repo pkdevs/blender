@@ -883,7 +883,7 @@ void BKE_pose_eval_bone(Depsgraph *depsgraph, Scene *scene, Object *object, int 
   else {
     /* TODO(sergey): Currently if there are constraints full transform is
      * being evaluated in BKE_pose_constraints_evaluate. */
-    if (pchan->constraints.first_ == nullptr) {
+    if (pchan->constraints.first() == nullptr) {
       if (pchan->flag & POSE_IKTREE || pchan->flag & POSE_IKSPLINE) {
         /* pass */
       }

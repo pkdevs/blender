@@ -413,7 +413,7 @@ MaskLayer *BKE_mask_layer_copy(const MaskLayer *masklay)
   }
 
   /* correct animation */
-  if (masklay->splines_shapes.first_) {
+  if (masklay->splines_shapes.first()) {
     for (MaskLayerShape &masklay_shape : masklay->splines_shapes) {
       MaskLayerShape *masklay_shape_new = MEM_new<MaskLayerShape>("new mask layer shape");
 
@@ -547,7 +547,7 @@ void BKE_mask_spline_direction_switch(MaskLayer *masklay, MaskSpline *spline)
   }
 
   /* correct animation */
-  if (masklay->splines_shapes.first_) {
+  if (masklay->splines_shapes.first()) {
     const int spline_index = BKE_mask_layer_shape_spline_to_index(masklay, spline);
 
     for (MaskLayerShape &masklay_shape : masklay->splines_shapes) {

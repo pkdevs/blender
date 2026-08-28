@@ -1177,8 +1177,7 @@ static bool foreach_object_modifier_ptcache(Object *object, PointCacheIdFn callb
     else if (md->type == eModifierType_DynamicPaint) {
       DynamicPaintModifierData *pmd = reinterpret_cast<DynamicPaintModifierData *>(md);
       if (pmd->canvas) {
-        DynamicPaintSurface *surface = static_cast<DynamicPaintSurface *>(
-            pmd->canvas->surfaces.first_);
+        DynamicPaintSurface *surface = pmd->canvas->surfaces.first();
         for (; surface; surface = surface->next) {
           BKE_ptcache_id_from_dynamicpaint(&pid, object, surface);
           if (!callback(pid, md)) {
@@ -1854,7 +1853,7 @@ static void ptcache_find_frames_around(PTCacheID *pid, uint frame, int *r_fra1, 
       *r_fra2 = cfra2;
     }
   }
-  else if (pid->cache->mem_cache.first_) {
+  else if (pid->cache->mem_cache.first()) {
     PTCacheMem *pm = pid->cache->mem_cache.first();
     PTCacheMem *pm2 = pid->cache->mem_cache.last();
 
@@ -1995,7 +1994,7 @@ static int ptcache_mem_frame_to_disk(PTCacheID *pid, PTCacheMem *pm)
   pf->type = pid->type;
   pf->flag = 0;
 
-  if (pm->extradata.first_) {
+  if (pm->extradata.first()) {
     pf->flag |= PTCACHE_TYPEFLAG_EXTRADATA;
   }
 
@@ -2013,7 +2012,7 @@ static int ptcache_mem_frame_to_disk(PTCacheID *pid, PTCacheMem *pm)
     }
   }
 
-  if (!error && pm->extradata.first_) {
+  if (!error && pm->extradata.first()) {
     PTCacheExtra *extra = pm->extradata.first();
 
     for (; extra; extra = extra->next) {
@@ -2130,7 +2129,7 @@ static int ptcache_read(PTCacheID *pid, int cfra)
       BKE_ptcache_mem_pointers_incr(cur);
     }
 
-    if (pid->read_extra_data && pm->extradata.first_) {
+    if (pid->read_extra_data && pm->extradata.first()) {
       pid->read_extra_data(pid->calldata, pm, float(pm->frame));
     }
 
@@ -2187,7 +2186,7 @@ static int ptcache_interpolate(PTCacheID *pid, float cfra, int cfra1, int cfra2)
       BKE_ptcache_mem_pointers_incr(cur);
     }
 
-    if (pid->interpolate_extra_data && pm->extradata.first_) {
+    if (pid->interpolate_extra_data && pm->extradata.first()) {
       pid->interpolate_extra_data(pid->calldata, pm, cfra, float(cfra1), float(cfra2));
     }
 
@@ -2899,8 +2898,7 @@ int BKE_ptcache_object_reset(Scene *scene, Object *ob, int mode)
     if (md.type == eModifierType_DynamicPaint) {
       DynamicPaintModifierData *pmd = reinterpret_cast<DynamicPaintModifierData *>(&md);
       if (pmd->canvas) {
-        DynamicPaintSurface *surface = static_cast<DynamicPaintSurface *>(
-            pmd->canvas->surfaces.first_);
+        DynamicPaintSurface *surface = pmd->canvas->surfaces.first();
 
         for (; surface; surface = surface->next) {
           BKE_ptcache_id_from_dynamicpaint(&pid, ob, surface);
@@ -3840,7 +3838,7 @@ void BKE_ptcache_blend_read_data(BlendDataReader *reader,
                                  PointCache **ocache,
                                  int force_disk)
 {
-  if (ptcaches->first_) {
+  if (ptcaches->first()) {
     BLO_read_struct_list(reader, PointCache, ptcaches);
     for (PointCache &cache : *ptcaches) {
       direct_link_pointcache(reader, &cache);

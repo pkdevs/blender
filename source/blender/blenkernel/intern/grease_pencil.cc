@@ -2026,8 +2026,7 @@ bool LayerGroup::unlink_node(TreeNode &link, const bool keep_children)
     /* Take ownership of the children of `link` by replacing the node with the listbase of its
      * children. */
     ListBaseT<GreasePencilLayerTreeNode> link_children = link.as_group().children;
-    GreasePencilLayerTreeNode *first = static_cast<GreasePencilLayerTreeNode *>(
-        link_children.first_);
+    GreasePencilLayerTreeNode *first = link_children.first();
     GreasePencilLayerTreeNode *last = link_children.last();
 
     /* Rewrite the parent pointers. */
@@ -2049,7 +2048,7 @@ bool LayerGroup::unlink_node(TreeNode &link, const bool keep_children)
     if (this->children.last() == &link) {
       this->children.last_ = last;
     }
-    if (this->children.first_ == &link) {
+    if (this->children.first() == &link) {
       this->children.first_ = first;
     }
 

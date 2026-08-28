@@ -387,7 +387,7 @@ static void image_blend_write(BlendWriter *writer, ID *id, const void *id_addres
     }
     else {
       /* Some trickery to keep forward compatibility of packed images. */
-      if (ima->packedfiles.first_ != nullptr) {
+      if (ima->packedfiles.first() != nullptr) {
         imapf = ima->packedfiles.first();
         ima->packedfile = imapf->packedfile;
       }
@@ -435,7 +435,7 @@ static void image_blend_read_data(BlendDataReader *reader, ID *id)
   BLO_read_struct_list(reader, ImageView, &(ima->views));
   BLO_read_struct_list(reader, ImagePackedFile, &(ima->packedfiles));
 
-  if (ima->packedfiles.first_) {
+  if (ima->packedfiles.first()) {
     for (ImagePackedFile &imapf : ima->packedfiles.items_mutable()) {
       BKE_packedfile_blend_read(reader, &imapf.packedfile, imapf.filepath);
       if (!imapf.packedfile) {
@@ -450,7 +450,7 @@ static void image_blend_read_data(BlendDataReader *reader, ID *id)
   }
 
   BLO_read_struct_list(reader, ImagePackedFile, &ima->autosave_packedfiles);
-  if (ima->autosave_packedfiles.first_) {
+  if (ima->autosave_packedfiles.first()) {
     for (ImagePackedFile &imapf : ima->autosave_packedfiles.items_mutable()) {
       BKE_packedfile_blend_read(reader, &imapf.packedfile, imapf.filepath);
       if (!imapf.packedfile) {
@@ -935,7 +935,7 @@ bool BKE_image_scale(Image *image, int width, int height, ImageUser *iuser)
 
 static int image_get_tile_number_from_iuser(const Image *ima, const ImageUser *iuser)
 {
-  BLI_assert(ima != nullptr && ima->tiles.first_);
+  BLI_assert(ima != nullptr && ima->tiles.first());
   ImageTile *tile = ima->tiles.first();
   return (iuser && iuser->tile) ? iuser->tile : tile->tile_number;
 }
@@ -4042,7 +4042,7 @@ void BKE_image_backup_render(Scene *scene, Image *ima, bool free_current_slot)
   Render *re = RE_GetSceneRender(scene);
 
   /* Ensure we always have a valid render slot. */
-  if (!ima->renderslots.first_) {
+  if (!ima->renderslots.first()) {
     BKE_image_add_renderslot(ima, nullptr);
     ima->render_slot = 0;
     ima->last_render_slot = 0;
@@ -4667,7 +4667,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_loc
   else if (pass_ibuf && pass_ibuf->byte_data() && layer == 0) {
     /* pass */
   }
-  else if (rres.layers.first_) {
+  else if (rres.layers.first()) {
     RenderLayer *rl = static_cast<RenderLayer *>(
         BLI_findlink(&rres.layers, layer - (rres.have_combined ? 1 : 0)));
     if (rl) {

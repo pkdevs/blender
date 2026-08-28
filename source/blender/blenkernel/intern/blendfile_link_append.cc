@@ -2154,7 +2154,7 @@ static void blendfile_relocate_postprocess_cleanup(BlendfileLinkAppendContext &l
           ViewLayer *new_view_layer = BKE_view_layer_find(
               new_scene, lapp_context.params->context.view_layer->name);
           lapp_context.params->context.view_layer = static_cast<ViewLayer *>(
-              (new_view_layer != nullptr) ? new_view_layer : new_scene->view_layers.first_);
+               (new_view_layer != nullptr) ? new_view_layer : new_scene->view_layers.first());
         }
         /* lapp_context->params->context.v3d should never be made invalid by newly linked data
          * here, as it is UI data, ultimately owned by a #bScreen ID, which is not linkable. */

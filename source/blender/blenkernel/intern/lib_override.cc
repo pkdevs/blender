@@ -228,10 +228,8 @@ void BKE_lib_override_library_copy(ID *dst_id, const ID *src_id, const bool do_f
   if (do_full_copy) {
     BLI_duplicatelist(&dst_id->override_library->properties,
                       &src_id->override_library->properties);
-    for (IDOverrideLibraryProperty *op_dst = static_cast<IDOverrideLibraryProperty *>(
-                                       dst_id->override_library->properties.first_),
-                                   *op_src = static_cast<IDOverrideLibraryProperty *>(
-                                       src_id->override_library->properties.first_);
+    for (IDOverrideLibraryProperty *op_dst = dst_id->override_library->properties.first(),
+                                   *op_src = src_id->override_library->properties.first();
          op_dst;
          op_dst = op_dst->next, op_src = op_src->next)
     {
@@ -2616,10 +2614,8 @@ static bool lib_override_library_resync(Main *bmain,
           /* Copy over overrides rules from old override ID to new one. */
           BLI_duplicatelist(&id_override_new->override_library->properties,
                             &id_override_old->override_library->properties);
-          IDOverrideLibraryProperty *op_new = static_cast<IDOverrideLibraryProperty *>(
-              id_override_new->override_library->properties.first_);
-          IDOverrideLibraryProperty *op_old = static_cast<IDOverrideLibraryProperty *>(
-              id_override_old->override_library->properties.first_);
+          IDOverrideLibraryProperty *op_new = id_override_new->override_library->properties.first();
+          IDOverrideLibraryProperty *op_old = id_override_old->override_library->properties.first();
           for (; op_new; op_new = op_new->next, op_old = op_old->next) {
             lib_override_library_property_copy(op_new, op_old);
           }

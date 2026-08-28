@@ -240,7 +240,7 @@ void BKE_object_handle_data_update(Depsgraph *depsgraph, Scene *scene, Object *o
   }
 
   /* particles */
-  if (!(ob->mode & OB_MODE_EDIT) && ob->particlesystem.first_) {
+  if (!(ob->mode & OB_MODE_EDIT) && ob->particlesystem.first()) {
     const bool use_render_params = (DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
     ParticleSystem *tpsys, *psys;
     ob->transflag &= ~OB_DUPLIPARTS;

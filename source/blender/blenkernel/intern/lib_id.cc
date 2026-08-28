@@ -1889,7 +1889,7 @@ void id_sort_by_name(ListBaseT<ID> *lb, ID *id, ID *id_sorting_hint)
   ID *idtest;
 
   /* insert alphabetically */
-  if (lb->first_ == lb->last()) {
+  if (lb->first() == lb->last()) {
     return;
   }
 

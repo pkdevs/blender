@@ -874,7 +874,7 @@ static void view3d_data_consistency_ensure(wmWindow *win, Scene *scene, ViewLaye
       v3d->local_view_uid = 0;
 
       /* Region-base storage is different depending on whether the space is active or not. */
-      ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first_) ? &area.regionbase :
+      ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first()) ? &area.regionbase :
                                                                         &sl.regionbase;
       for (ARegion &region : *regionbase) {
         if (region.regiontype != RGN_TYPE_WINDOW) {
@@ -1073,7 +1073,7 @@ static void setup_app_data(bContext *C,
     win = CTX_wm_window(C);
     curscreen = CTX_wm_screen(C);
 
-    track_undo_scene = (mode == LOAD_UNDO && curscreen && curscene && bfd->main->wm.first_);
+    track_undo_scene = (mode == LOAD_UNDO && curscreen && curscene && bfd->main->wm.first());
 
     if (track_undo_scene) {
       /* Keep the old (to-be-freed) scene, remapping below will ensure it's remapped to the

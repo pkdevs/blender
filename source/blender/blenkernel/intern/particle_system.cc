@@ -1114,7 +1114,7 @@ void reset_particle(ParticleSimulationData *sim, ParticleData *pa, float dtime, 
   pa->dietime = pa->time + pa->lifetime;
 
   if ((sim->psys->pointcache) && (sim->psys->pointcache->flag & PTCACHE_BAKED) &&
-      (sim->psys->pointcache->mem_cache.first_))
+      (sim->psys->pointcache->mem_cache.first()))
   {
     float dietime = psys_get_dietime_from_cache(sim->psys->pointcache, p);
     pa->dietime = std::min(pa->dietime, dietime);
@@ -1271,8 +1271,7 @@ static void set_keyed_keys(ParticleSimulationData *sim)
 
     ksim.psys->flag |= keyed_flag;
 
-    pt = static_cast<ParticleTarget *>(
-        (pt->next && pt->next->flag & PTARGET_VALID) ? pt->next : psys->targets.first_);
+    pt = (pt->next && pt->next->flag & PTARGET_VALID) ? pt->next : psys->targets.first();
   }
 
   psys->flag |= PSYS_KEYED;

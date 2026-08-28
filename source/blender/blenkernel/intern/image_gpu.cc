@@ -257,10 +257,10 @@ static gpu::Texture *gpu_texture_create_tile_array(Image *ima, ImBuf *main_ibuf)
   BLI_listbase_sort(&boxes, compare_packtile);
   int arraylayers = 0;
   /* Keep adding layers until all tiles are packed. */
-  while (boxes.first_ != nullptr) {
+  while (boxes.first() != nullptr) {
     ListBaseT<FixedSizeBoxPack> packed = {nullptr};
     BLI_box_pack_2d_fixedarea(&boxes, arraywidth, arrayheight, &packed);
-    BLI_assert(packed.first_ != nullptr);
+    BLI_assert(packed.first() != nullptr);
 
     for (const FixedSizeBoxPack &fixedpack : packed) {
       const PackTile *packtile = reinterpret_cast<const PackTile *>(&fixedpack);

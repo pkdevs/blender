@@ -130,7 +130,7 @@ void BKE_nla_tracks_free(ListBaseT<NlaTrack> *tracks, bool do_id_user)
   NlaTrack *nlt, *nltn;
 
   /* sanity checks */
-  if (ELEM(nullptr, tracks, tracks->first_)) {
+  if (ELEM(nullptr, tracks, tracks->first())) {
     return;
   }
 
@@ -890,7 +890,7 @@ void BKE_nlastrips_sort_strips(ListBaseT<NlaStrip> *strips)
   NlaStrip *strip, *stripn;
 
   /* sanity checks */
-  if (ELEM(nullptr, strips, strips->first_)) {
+  if (ELEM(nullptr, strips, strips->first())) {
     return;
   }
 
@@ -923,7 +923,7 @@ void BKE_nlastrips_sort_strips(ListBaseT<NlaStrip> *strips)
   }
 
   /* reassign the start and end points of the strips */
-  strips->first_ = tmp.first_;
+  strips->first_ = tmp.first();
   strips->last_ = tmp.last();
 }
 
@@ -971,7 +971,7 @@ void BKE_nlastrips_make_metas(ListBaseT<NlaStrip> *strips, bool is_temp)
   NlaStrip *strip, *stripn;
 
   /* sanity checks */
-  if (ELEM(nullptr, strips, strips->first_)) {
+  if (ELEM(nullptr, strips, strips->first())) {
     return;
   }
 
@@ -1045,7 +1045,7 @@ void BKE_nlastrips_clear_metas(ListBaseT<NlaStrip> *strips, bool only_sel, bool 
   NlaStrip *strip, *stripn;
 
   /* sanity checks */
-  if (ELEM(nullptr, strips, strips->first_)) {
+  if (ELEM(nullptr, strips, strips->first())) {
     return;
   }
 
@@ -1123,7 +1123,7 @@ void BKE_nlameta_flush_transforms(NlaStrip *mstrip)
    * - strip must exist
    * - strip must be a meta-strip with some contents
    */
-  if (ELEM(nullptr, mstrip, mstrip->strips.first_)) {
+  if (ELEM(nullptr, mstrip, mstrip->strips.first())) {
     return;
   }
   if (mstrip->type != NLASTRIP_TYPE_META) {
@@ -1210,7 +1210,7 @@ void BKE_nlameta_flush_transforms(NlaStrip *mstrip)
 NlaTrack *BKE_nlatrack_find_active(ListBaseT<NlaTrack> *tracks)
 {
   /* sanity check */
-  if (ELEM(nullptr, tracks, tracks->first_)) {
+  if (ELEM(nullptr, tracks, tracks->first())) {
     return nullptr;
   }
 
@@ -1257,7 +1257,7 @@ NlaTrack *BKE_nlatrack_find_tweaked(AnimData *adt)
 void BKE_nlatrack_solo_toggle(AnimData *adt, NlaTrack *nlt)
 {
   /* sanity check */
-  if (ELEM(nullptr, adt, adt->nla_tracks.first_)) {
+  if (ELEM(nullptr, adt, adt->nla_tracks.first())) {
     return;
   }
 
@@ -1289,7 +1289,7 @@ void BKE_nlatrack_solo_toggle(AnimData *adt, NlaTrack *nlt)
 void BKE_nlatrack_set_active(ListBaseT<NlaTrack> *tracks, NlaTrack *nlt_a)
 {
   /* sanity check */
-  if (ELEM(nullptr, tracks, tracks->first_)) {
+  if (ELEM(nullptr, tracks, tracks->first())) {
     return;
   }
 
@@ -1345,7 +1345,7 @@ bool BKE_nlatrack_has_strips(ListBaseT<NlaTrack> *tracks)
 void BKE_nlatrack_sort_strips(NlaTrack *nlt)
 {
   /* sanity checks */
-  if (ELEM(nullptr, nlt, nlt->strips.first_)) {
+  if (ELEM(nullptr, nlt, nlt->strips.first())) {
     return;
   }
 
@@ -1392,7 +1392,7 @@ bool BKE_nlatrack_get_bounds(NlaTrack *nlt, float bounds[2])
   }
 
   /* sanity checks */
-  if (ELEM(nullptr, nlt, nlt->strips.first_)) {
+  if (ELEM(nullptr, nlt, nlt->strips.first())) {
     return false;
   }
 
@@ -1782,13 +1782,13 @@ void BKE_nlastrip_recalculate_blend(NlaStrip *strip)
 bool BKE_nlatrack_has_animated_strips(NlaTrack *nlt)
 {
   /* sanity checks */
-  if (ELEM(nullptr, nlt, nlt->strips.first_)) {
+  if (ELEM(nullptr, nlt, nlt->strips.first())) {
     return false;
   }
 
   /* check each strip for F-Curves only (don't care about whether the flags are set) */
   for (NlaStrip &strip : nlt->strips) {
-    if (strip.fcurves.first_) {
+    if (strip.fcurves.first()) {
       return true;
     }
   }
@@ -1800,7 +1800,7 @@ bool BKE_nlatrack_has_animated_strips(NlaTrack *nlt)
 bool BKE_nlatracks_have_animated_strips(ListBaseT<NlaTrack> *tracks)
 {
   /* sanity checks */
-  if (ELEM(nullptr, tracks, tracks->first_)) {
+  if (ELEM(nullptr, tracks, tracks->first())) {
     return false;
   }
 
@@ -2124,7 +2124,7 @@ static bool nlastrip_validate_transition_start_end(ListBaseT<NlaStrip> *strips, 
 void BKE_nla_validate_state(AnimData *adt)
 {
   /* sanity checks */
-  if (ELEM(nullptr, adt, adt->nla_tracks.first_)) {
+  if (ELEM(nullptr, adt, adt->nla_tracks.first())) {
     return;
   }
 
@@ -2350,7 +2350,7 @@ bool BKE_nla_tweakmode_enter(const OwnedAnimData owned_adt)
   AnimData &adt = owned_adt.adt;
 
   /* verify that data is valid */
-  if (ELEM(nullptr, adt.nla_tracks.first_)) {
+  if (ELEM(nullptr, adt.nla_tracks.first())) {
     return false;
   }
 

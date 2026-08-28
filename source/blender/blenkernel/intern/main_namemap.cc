@@ -758,7 +758,7 @@ static bool main_namemap_validate_and_fix(Main &bmain, const bool do_fix)
       }
     }
 
-    lib = static_cast<Library *>((lib == nullptr) ? bmain.libraries.first_ : lib->id.next);
+    lib = static_cast<Library *>((lib == nullptr) ? bmain.libraries.first() : lib->id.next);
     name_map = (lib != nullptr) ? lib->runtime->name_map : nullptr;
   } while (lib != nullptr);
 

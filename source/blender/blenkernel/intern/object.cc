@@ -1030,7 +1030,7 @@ static void object_blend_read_data(BlendDataReader *reader, ID *id)
   BKE_constraint_blend_read_data(reader, &ob->id, &ob->constraints);
 
   BLO_read_struct_list(reader, ObHook, &ob->hooks);
-  while (ob->hooks.first_) {
+  while (ob->hooks.first()) {
     ObHook *hook = ob->hooks.first();
     HookModifierData *hmd = reinterpret_cast<HookModifierData *>(
         BKE_modifier_new(eModifierType_Hook));
@@ -1853,7 +1853,7 @@ void BKE_object_free_caches(Object *object)
   short update_flag = 0;
 
   /* Free particle system caches holding paths. */
-  if (object->particlesystem.first_) {
+  if (object->particlesystem.first()) {
     for (ParticleSystem &psys : object->particlesystem) {
       psys_free_path_cache(&psys, psys.edit);
       update_flag |= ID_RECALC_PSYS_REDO;
@@ -2068,7 +2068,7 @@ int BKE_object_visibility(const Object *ob, const int dag_eval_mode)
 
   /* Test which components the object has. */
   int visibility = OB_VISIBLE_SELF;
-  if (ob->particlesystem.first_) {
+  if (ob->particlesystem.first()) {
     visibility |= OB_VISIBLE_INSTANCES | OB_VISIBLE_PARTICLES;
   }
   else if (ob->transflag & OB_DUPLI) {
@@ -3327,7 +3327,7 @@ static void give_parvert(const Object *par, int nr, float vec[3], const bool use
 
     /* It is possible that a cycle in the dependency graph was resolved in a way that caused this
      * object to be evaluated before its dependencies. In this case the curve cache may be null. */
-    if (par->runtime->curve_cache && par->runtime->curve_cache->deformed_nurbs.first_ != nullptr) {
+    if (par->runtime->curve_cache && par->runtime->curve_cache->deformed_nurbs.first() != nullptr) {
       nurb = &par->runtime->curve_cache->deformed_nurbs;
     }
     else {
@@ -3501,7 +3501,7 @@ static void object_where_is_calc_ex(Depsgraph *depsgraph,
   BKE_rigidbody_sync_transforms(rbw, ob, ctime);
 
   /* solve constraints */
-  if (ob->constraints.first_ && !(ob->transflag & OB_NO_CONSTRAINTS)) {
+  if (ob->constraints.first() && !(ob->transflag & OB_NO_CONSTRAINTS)) {
     bConstraintOb *cob;
     cob = BKE_constraints_make_evalob(depsgraph, scene, ob, nullptr, CONSTRAINT_OBTYPE_OBJECT);
     BKE_constraints_solve(depsgraph, &ob->constraints, cob, ctime);
@@ -4035,7 +4035,7 @@ void BKE_object_foreach_display_point(Object *ob,
       }
     }
   }
-  else if (ob->runtime->curve_cache && ob->runtime->curve_cache->disp.first_) {
+  else if (ob->runtime->curve_cache && ob->runtime->curve_cache->disp.first()) {
     for (DispList &dl : ob->runtime->curve_cache->disp) {
       const float *v3 = dl.verts;
       int totvert = dl.nr;

@@ -407,8 +407,7 @@ void BKE_workspace_instance_hook_free(const Main *bmain, WorkSpaceInstanceHook *
   for (WorkSpace *workspace = bmain->workspaces.first(); workspace;
        workspace = static_cast<WorkSpace *>(workspace->id.next))
   {
-    for (WorkSpaceDataRelation *relation = static_cast<WorkSpaceDataRelation *>(
-                                   workspace->hook_layout_relations.first_),
+    for (WorkSpaceDataRelation *relation = workspace->hook_layout_relations.first(),
                                *relation_next;
          relation;
          relation = relation_next)

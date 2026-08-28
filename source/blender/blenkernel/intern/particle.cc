@@ -372,7 +372,7 @@ static void particle_settings_blend_read_after_liblink(BlendLibReader * /*reader
 {
   ParticleSettings *part = reinterpret_cast<ParticleSettings *>(id);
 
-  if (part->instance_weights.first_ && !part->instance_collection) {
+  if (part->instance_weights.first() && !part->instance_collection) {
     part->instance_weights.free_no_destruct();
   }
 }
@@ -1232,7 +1232,7 @@ static void get_pointcache_keys_for_time(Object * /*ob*/,
         BKE_ptcache_make_particle_key(key1, index1, pm->prev->data, float(pm->prev->frame));
       }
     }
-    else if (cache->mem_cache.first_) {
+    else if (cache->mem_cache.first()) {
       pm = cache->mem_cache.first();
       index2 = BKE_ptcache_mem_index_find(pm, index);
       if (index2 < 0) {
@@ -3299,7 +3299,7 @@ void psys_cache_paths(ParticleSimulationData *sim, float cfra, const bool use_re
   }
 
   keyed = psys->flag & PSYS_KEYED;
-  baked = psys->pointcache->mem_cache.first_ && psys->part->type != PART_HAIR;
+  baked = psys->pointcache->mem_cache.first() && psys->part->type != PART_HAIR;
 
   /* clear out old and create new empty path cache */
   psys_free_path_cache(psys, psys->edit);
@@ -4084,7 +4084,7 @@ void object_remove_particle_system(Main *bmain,
   }
   psys_free(ob, psys);
 
-  if (ob->particlesystem.first_) {
+  if (ob->particlesystem.first()) {
     (ob->particlesystem.first())->flag |= PSYS_CURRENT;
   }
   else {

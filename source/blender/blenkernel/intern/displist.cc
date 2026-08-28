@@ -782,7 +782,7 @@ static void curve_to_filledpoly(const Curve *cu, ListBaseT<DispList> *dispbase)
     return;
   }
 
-  if (dispbase->first_ && (dispbase->first())->type == DL_SURF) {
+  if (dispbase->first() && (dispbase->first())->type == DL_SURF) {
     bevels_to_filledpoly(cu, dispbase);
   }
   else {
@@ -1657,7 +1657,7 @@ static bke::GeometrySet evaluate_curve_type_object(Depsgraph *depsgraph,
           displist_surf_indices(dl);
         }
 
-        if (bottom_capbase.first_) {
+        if (bottom_capbase.first()) {
           BKE_displist_fill(&bottom_capbase,
                             r_dispbase,
                             bottom_no,
@@ -1666,7 +1666,7 @@ static bke::GeometrySet evaluate_curve_type_object(Depsgraph *depsgraph,
                             CurveFillRuleType(cu->fill_rule));
           BKE_displist_free(&bottom_capbase);
         }
-        if (top_capbase.first_) {
+        if (top_capbase.first()) {
           BKE_displist_fill(&top_capbase,
                             r_dispbase,
                             top_no,

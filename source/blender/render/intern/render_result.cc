@@ -52,7 +52,7 @@ namespace blender {
 
 static void render_result_views_free(RenderResult *rr)
 {
-  while (rr->views.first_) {
+  while (rr->views.first()) {
     RenderView *rv = rr->views.first();
     BLI_remlink(&rr->views, rv);
 
@@ -79,10 +79,10 @@ void render_result_free(RenderResult *rr)
     return;
   }
 
-  while (rr->layers.first_) {
+  while (rr->layers.first()) {
     RenderLayer *rl = rr->layers.first();
 
-    while (rl->passes.first_) {
+    while (rl->passes.first()) {
       RenderPass *rpass = rl->passes.first();
 
       IMB_freeImBuf(rpass->ibuf);
@@ -163,7 +163,7 @@ void render_result_views_shallowdelete(RenderResult *rr)
     return;
   }
 
-  while (rr->views.first_) {
+  while (rr->views.first()) {
     RenderView *rv = rr->views.first();
     BLI_remlink(&rr->views, rv);
     MEM_delete(rv);
