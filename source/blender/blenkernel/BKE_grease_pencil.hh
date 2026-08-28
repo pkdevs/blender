@@ -999,6 +999,10 @@ void shapekey_get_applied_handle_left(const Key *key,
 void shapekey_get_applied_handle_right(const Key *key,
                                        const bke::AttributeAccessor &attributes,
                                        MutableSpan<float3> position);
+void shapekey_get_applied_generic_position(const Key *key,
+                                           const bke::AttributeAccessor &attributes,
+                                           const StringRef &data_name,
+                                           MutableSpan<float3> data);
 
 void shapekey_set_applied_position(const Key *key,
                                    const KeyBlock *actkb,
@@ -1025,6 +1029,12 @@ void shapekey_set_applied_handle_right(const Key *key,
                                        const IndexMask &selection,
                                        const Span<float3> new_position,
                                        bke::MutableAttributeAccessor &attributes);
+void shapekey_set_applied_generic_position(const Key *key,
+                                           const KeyBlock *actkb,
+                                           const IndexMask &selection,
+                                           const StringRef &data_name,
+                                           const Span<float3> new_data,
+                                           bke::MutableAttributeAccessor &attributes);
 
 }  // namespace greasepencil
 

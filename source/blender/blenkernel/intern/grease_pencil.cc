@@ -2409,10 +2409,10 @@ static void shapekey_get_applied_generic_float(const Key *key,
       });
 }
 
-static void shapekey_get_applied_generic_position(const Key *key,
-                                                  const bke::AttributeAccessor &attributes,
-                                                  const StringRef &data_name,
-                                                  MutableSpan<float3> data)
+void shapekey_get_applied_generic_position(const Key *key,
+                                           const bke::AttributeAccessor &attributes,
+                                           const StringRef &data_name,
+                                           MutableSpan<float3> data)
 {
   shapekey_get_applied_generic_float3(key, attributes, "position", data);
 
@@ -2474,12 +2474,12 @@ void shapekey_get_applied_handle_right(const Key *key,
   shapekey_get_applied_generic_position(key, attributes, "handle_right", position);
 }
 
-static void shapekey_set_applied_generic_position(const Key *key,
-                                                  const KeyBlock *actkb,
-                                                  const IndexMask &selection,
-                                                  const StringRef &data_name,
-                                                  const Span<float3> new_data,
-                                                  bke::MutableAttributeAccessor &attributes)
+void shapekey_set_applied_generic_position(const Key *key,
+                                           const KeyBlock *actkb,
+                                           const IndexMask &selection,
+                                           const StringRef &data_name,
+                                           const Span<float3> new_data,
+                                           bke::MutableAttributeAccessor &attributes)
 {
   const float keyblock_influence = actkb->curval;
 
