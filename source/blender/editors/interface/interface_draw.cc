@@ -1613,8 +1613,15 @@ static void draw_but_curve_grid(const uint pos,
   immEnd();
 }
 
-void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, const rcti *rect)
+void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, const rcti *rect_but)
 {
+  rcti _rect {
+    rect_but->xmin + 10,
+    rect_but->xmax - 10,
+    rect_but->ymin + 10,
+    rect_but->ymax - 10,
+  };
+  rcti *rect = &_rect;
   ButtonCurveMapping *but_cumap = static_cast<ButtonCurveMapping *>(but);
   CurveMapping *cumap = (but_cumap->edit_cumap == nullptr) ?
                             reinterpret_cast<CurveMapping *>(but->poin) :
@@ -1850,6 +1857,17 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
   GPU_blend(GPU_BLEND_ALPHA);
   immUnbindProgram();
 
+
+  /* outline */
+  format = immVertexFormat();
+  pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+
+  immUniformColor3ubv(wcol->outline);
+  imm_draw_box_wire_2d(pos, rect->xmin, rect->ymin, rect->xmax, rect->ymax);
+
+  immUnbindProgram();
+
   /* The points, use aspect to make them visible on edges. */
   format = immVertexFormat();
   pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
@@ -1882,6 +1900,18 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
       active = i;
     }
   }
+
+  int scissor_for_points[4];
+  GPU_scissor_get(scissor_for_points);
+  rcti scissor_tmp {};
+  scissor_tmp.xmin = std::max(0, scissor_for_points[0] - 20);
+  scissor_tmp.ymin = std::max(0, scissor_for_points[1] - 20);
+  scissor_tmp.xmax = scissor_for_points[2] + 40;
+  scissor_tmp.ymax = scissor_for_points[3] + 40;
+  GPU_scissor(scissor_tmp.xmin,
+              scissor_tmp.ymin,
+              scissor_tmp.xmax,
+              scissor_tmp.ymax);
 
   /* Curve widgets using a gradient background (such as Hue Correct), draw
    * an additional point in the back, forming an outline so they stand out. */
@@ -1960,22 +1990,14 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
     immEnd();
   }
 
+  GPU_scissor(scissor_for_points[0], scissor_for_points[1], scissor_for_points[2], scissor_for_points[3]);
+
   immUnbindProgram();
   GPU_blend(GPU_BLEND_NONE);
 
   /* Restore scissor-test. */
   GPU_scissor_test(false);
   GPU_scissor(scissor[0], scissor[1], scissor[2], scissor[3]);
-
-  /* outline */
-  format = immVertexFormat();
-  pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
-  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-
-  immUniformColor3ubv(wcol->outline);
-  imm_draw_box_wire_2d(pos, rect->xmin, rect->ymin, rect->xmax, rect->ymax);
-
-  immUnbindProgram();
 }
 
 /**
