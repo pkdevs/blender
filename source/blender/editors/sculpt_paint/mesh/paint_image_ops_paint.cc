@@ -583,7 +583,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
 
   bke::pbvh::build_pixels(depsgraph, ob, *ss.cache->image_data->image, *ss.cache->image_data->image_user);
 
-  const IndexMask node_mask = gather_brush_nodes(ob, brush, memory);
+  const IndexMask node_mask = gather_brush_nodes(ob, brush, memory, node_fully_masked_or_hidden);
 
   /* Only act if some verts are inside the brush area. */
   if (node_mask.is_empty()) {
@@ -676,13 +676,26 @@ void ExperimentalTexturePaintStroke::done(bool is_cancel, bool stroke_started)
   /* DEG_id_tag_update(&ob.id, ID); */
 }
 
+static bool experimental_brush_supported(bContext *C)
+{
+  const Paint *paint = BKE_paint_get_active_from_context(C);
+  const Brush *brush = BKE_paint_brush_for_read(paint);
+
+  switch (brush->image_brush_type) {
+    case IMAGE_PAINT_BRUSH_TYPE_DRAW:
+      return true;
+    default:
+      return false;
+  }
+}
+
 static PaintStroke *create_paint_stroke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   if (CTX_wm_region_view3d(C)) {
     auto stroke_mode = BrushStrokeMode(RNA_enum_get(op->ptr, "mode"));
     auto switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
 
-    if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint) &&
+    if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint) && experimental_brush_supported(C) &&
         stroke_mode == BrushStrokeMode::Normal && switch_mode == BrushSwitchMode::None)
     {
       return MEM_new<ExperimentalTexturePaintStroke>(__func__, C, op, event);
@@ -695,6 +708,14 @@ static PaintStroke *create_paint_stroke(bContext *C, wmOperator *op, const wmEve
 static PaintStroke *get_paint_stroke(bContext *C, wmOperator *op)
 {
   if (CTX_wm_region_view3d(C)) {
+    auto stroke_mode = BrushStrokeMode(RNA_enum_get(op->ptr, "mode"));
+    auto switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
+
+    if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint) && experimental_brush_supported(C) &&
+        stroke_mode == BrushStrokeMode::Normal && switch_mode == BrushSwitchMode::None)
+    {
+      return static_cast<ExperimentalTexturePaintStroke *>(op->customdata);
+    }
     return static_cast<TexturePaintStroke *>(op->customdata);
   }
   return static_cast<ImagePaintStroke *>(op->customdata);
