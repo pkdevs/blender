@@ -1408,9 +1408,10 @@ void BKE_libblock_runtime_ensure(ID &id)
   }
 }
 
-void BKE_libblock_owner_bmain_set(ID &id, Main *bmain)
+void BKE_libblock_owner_bmain_set(ID &id, Main *bmain, const bool assert_contained)
 {
   BKE_libblock_runtime_ensure(id);
+  BLI_assert(!assert_contained || !bmain || BKE_id_is_in_main(bmain, &id));
   id.runtime->owner_bmain = bmain;
 }
 

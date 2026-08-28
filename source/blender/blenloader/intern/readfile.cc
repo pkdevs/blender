@@ -378,7 +378,7 @@ static void add_main_to_main(Main *mainvar, Main *from)
   int a = fromarray.size();
   while (a--) {
     for (ID &id : *fromarray[a]) {
-      BKE_libblock_owner_bmain_set(id, mainvar);
+      BKE_libblock_owner_bmain_set(id, mainvar, false);
     }
     BLI_movelisttolist(lbarray[a], fromarray[a]);
   }
@@ -2999,7 +2999,7 @@ static void read_undo_reuse_noundo_local_ids(FileData *fd)
     ListBaseT<ID> *new_lb = which_libbase(new_bmain, id_type->id_code);
     BLI_assert(new_lb->is_empty());
     for (ID &id_iter : *lbarray[i]) {
-      BKE_libblock_owner_bmain_set(id_iter, new_bmain);
+      BKE_libblock_owner_bmain_set(id_iter, new_bmain, false);
     }
     BLI_movelisttolist(new_lb, lbarray[i]);
 
