@@ -641,7 +641,7 @@ ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
     INTEGRATOR_STATE_WRITE(state, medium, sigma_a) = fresnel->sigma_a * bsdf->weight;
     INTEGRATOR_STATE_WRITE(state, medium, sigma_s) = fresnel->sigma_s * bsdf->weight;
     INTEGRATOR_STATE_WRITE(state, medium, anisotropy) = fresnel->anisotropy;
-    sd->shader |= SHADER_HAS_MEDIUM;
+    sd->runtime_flag |= SR_HAS_MEDIUM;
   }
 
   return label;

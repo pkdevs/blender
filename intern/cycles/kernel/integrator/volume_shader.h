@@ -446,7 +446,7 @@ ccl_device_inline void volume_medium_eval(ConstIntegratorBakeState /* state */,
 ccl_device_inline void volume_medium_eval(ConstIntegratorState state,
                                           ccl_private ShaderData *ccl_restrict sd)
 {
-  if (!(sd->shader & SHADER_HAS_MEDIUM)) {
+  if (!(sd->runtime_flag & SR_HAS_MEDIUM)) {
     return;
   }
 
