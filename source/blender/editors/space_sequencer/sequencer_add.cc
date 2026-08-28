@@ -2446,7 +2446,7 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
       /* Strips that overlap in time on different channels get old type transition effects. */
       /* If the input order is ambiguous, sort by channel to prevent adding twice. */
       const bool horizontal_overlap = first_left_handle == second_left_handle &&
-                                      second_right_handle == first_left_handle &&
+                                      first_right_handle == second_right_handle &&
                                       left_strip->channel < right_strip->channel;
       /* Don't add transitions if one input's frame range is inside that of the other's. */
       const bool strips_in_order = first_right_handle > second_left_handle &&
