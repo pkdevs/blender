@@ -247,7 +247,7 @@ static void calc_curve_input_chains_from_bm(BMesh *bm, Vector<CurveChainData> &r
   BMIter iter;
   BMVert *v;
   BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-    if (BM_elem_flag_test(v, BM_ELEM_SELECT) && !BM_elem_flag_test(v, BM_ELEM_HIDDEN)) {
+    if (BM_elem_flag_test(v, BM_ELEM_TAG) && !BM_elem_flag_test(v, BM_ELEM_HIDDEN)) {
       selected_verts.append(v);
     }
   }
@@ -273,7 +273,7 @@ static void calc_curve_input_chains_from_bm(BMesh *bm, Vector<CurveChainData> &r
 
       int num_selected = 0;
       for (BMVert *chain_vert : chain.verts) {
-        if (BM_elem_flag_test(chain_vert, BM_ELEM_SELECT)) {
+        if (BM_elem_flag_test(chain_vert, BM_ELEM_TAG)) {
           num_selected++;
         }
       }
@@ -302,7 +302,7 @@ static void find_longest_unselected_gap(const Span<BMVert *> verts,
   Vector<int> selected_indices;
 
   for (const int i : verts.index_range()) {
-    if (BM_elem_flag_test(verts[i], BM_ELEM_SELECT)) {
+    if (BM_elem_flag_test(verts[i], BM_ELEM_TAG)) {
       selected_indices.append(i);
     }
   }
@@ -350,7 +350,7 @@ static void trim_chains_to_boundaries(Vector<CurveChainData> &chains)
     int first_selected = -1;
     int last_selected = -1;
     for (const int i : chain.verts.index_range()) {
-      if (BM_elem_flag_test(chain.verts[i], BM_ELEM_SELECT)) {
+      if (BM_elem_flag_test(chain.verts[i], BM_ELEM_TAG)) {
         if (first_selected == -1) {
           first_selected = i;
         }
@@ -486,7 +486,7 @@ static void execute_curve_chain(const Span<BMVert *> input_chain,
     }
     else {
       for (const int i : input_chain.index_range()) {
-        if (BM_elem_flag_test(input_chain[i], BM_ELEM_SELECT)) {
+        if (BM_elem_flag_test(input_chain[i], BM_ELEM_TAG)) {
           new_start_index = i;
           break;
         }
@@ -501,7 +501,7 @@ static void execute_curve_chain(const Span<BMVert *> input_chain,
 
   Vector<int> knot_indices;
   for (const int i : IndexRange(verts_num)) {
-    if (BM_elem_flag_test(verts[i], BM_ELEM_SELECT)) {
+    if (BM_elem_flag_test(verts[i], BM_ELEM_TAG)) {
       knot_indices.append(i);
     }
   }
@@ -621,7 +621,7 @@ void bmo_fit_edge_loops_to_curve_exec(BMesh *bm, BMOperator *op)
   const CurveInterpolation interpolation = static_cast<CurveInterpolation>(
       BMO_slot_int_get(op->slots_in, "interpolation"));
 
-  BMO_slot_buffer_hflag_enable(bm, op->slots_in, "geom", BM_VERT, BM_ELEM_SELECT, false);
+  BMO_slot_buffer_hflag_enable(bm, op->slots_in, "geom", BM_VERT, BM_ELEM_TAG, false);
 
   Vector<CurveChainData> chains;
   calc_curve_input_chains_from_bm(bm, chains);
