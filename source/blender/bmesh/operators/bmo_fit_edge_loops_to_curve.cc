@@ -571,7 +571,7 @@ static void execute_curve_chain(const Span<BMVert *> input_chain,
     const float3 delta = new_pos - old_pos;
 
     if (restriction != CURVE_RESTRICT_NONE) {
-      if (math::length_squared(delta) > CURVE_EPSILON) {
+      if (math::length_squared(delta) > math::square(CURVE_EPSILON)) {
         const float3 normal(vert->no);
         const float dot_val = math::dot(delta, normal);
 
