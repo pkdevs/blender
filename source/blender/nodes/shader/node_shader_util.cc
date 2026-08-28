@@ -156,6 +156,10 @@ static void nodestack_get_vec(float *in, short type_in, bNodeStack *ns)
           *in = (from[0] + from[1] + from[2] + from[3]) / 4.0f;
           break;
         case SOCK_SHADER:
+        case SOCK_STRING:
+        case SOCK_MENU:
+        case SOCK_BUNDLE:
+        case SOCK_CLOSURE:
           break;
         default:
           BLI_assert_unreachable();
@@ -180,6 +184,10 @@ static void nodestack_get_vec(float *in, short type_in, bNodeStack *ns)
           *in = !is_zero_v4(from);
           break;
         case SOCK_SHADER:
+        case SOCK_STRING:
+        case SOCK_MENU:
+        case SOCK_BUNDLE:
+        case SOCK_CLOSURE:
           break;
         default:
           BLI_assert_unreachable();
@@ -200,6 +208,10 @@ static void nodestack_get_vec(float *in, short type_in, bNodeStack *ns)
           copy_v4_v4(in, from);
           break;
         case SOCK_SHADER:
+        case SOCK_STRING:
+        case SOCK_MENU:
+        case SOCK_BUNDLE:
+        case SOCK_CLOSURE:
           break;
         default:
           BLI_assert_unreachable();
@@ -224,6 +236,10 @@ static void nodestack_get_vec(float *in, short type_in, bNodeStack *ns)
           copy_v4_v4(in, from);
           break;
         case SOCK_SHADER:
+        case SOCK_STRING:
+        case SOCK_MENU:
+        case SOCK_BUNDLE:
+        case SOCK_CLOSURE:
           break;
         default:
           BLI_assert_unreachable();
@@ -248,6 +264,10 @@ static void nodestack_get_vec(float *in, short type_in, bNodeStack *ns)
           copy_v4_v4(in, from);
           break;
         case SOCK_SHADER:
+        case SOCK_STRING:
+        case SOCK_MENU:
+        case SOCK_BUNDLE:
+        case SOCK_CLOSURE:
           break;
         default:
           BLI_assert_unreachable();
@@ -256,6 +276,10 @@ static void nodestack_get_vec(float *in, short type_in, bNodeStack *ns)
       break;
     }
     case SOCK_SHADER:
+    case SOCK_STRING:
+    case SOCK_MENU:
+    case SOCK_BUNDLE:
+    case SOCK_CLOSURE:
       break;
     default:
       BLI_assert_unreachable();
