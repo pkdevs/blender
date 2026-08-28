@@ -2292,6 +2292,25 @@ std::string shapekey_attribute_name_handle_right(const char *name)
   return std::string(attr_name);
 }
 
+static std::string shapekey_attribute_name_generic(const char *key_name,
+                                                   const StringRef &data_name)
+{
+  if (data_name == "position") {
+    return shapekey_attribute_name_position(key_name);
+  }
+  if (data_name == "radius") {
+    return shapekey_attribute_name_radius(key_name);
+  }
+  if (data_name == "opacity") {
+    return shapekey_attribute_name_opacity(key_name);
+  }
+  if (data_name == "handle_left") {
+    return shapekey_attribute_name_handle_left(key_name);
+  }
+  BLI_assert(data_name == "handle_right");
+  return shapekey_attribute_name_handle_right(key_name);
+}
+
 Vector<std::string> shapekey_all_attribute_names(const char *name)
 {
   Vector<std::string> all_names;
@@ -2340,46 +2359,70 @@ static void shapekey_foreach_keyblock(
   }
 }
 
+static void shapekey_get_applied_generic_float3(const Key *key,
+                                                const bke::AttributeAccessor &attributes,
+                                                const StringRef &data_name,
+                                                MutableSpan<float3> data)
+{
+
+  shapekey_foreach_keyblock(
+      key,
+      [&](const float keyblock_influence, const KeyBlock &keyblock, const KeyBlock &ref_keyblock) {
+        const VArray<float3> key_data = *attributes.lookup_or_default<float3>(
+            shapekey_attribute_name_generic(keyblock.name, data_name),
+            bke::AttrDomain::Point,
+            float3(0.0f));
+        const VArray<float3> ref_key_data = *attributes.lookup_or_default<float3>(
+            shapekey_attribute_name_generic(ref_keyblock.name, data_name),
+            bke::AttrDomain::Point,
+            float3(0.0f));
+
+        threading::parallel_for(IndexRange(data.size()), 4096, [&](const IndexRange range) {
+          for (const int i : range) {
+            data[i] += (key_data[i] - ref_key_data[i]) * keyblock_influence;
+          }
+        });
+      });
+}
+
+static void shapekey_get_applied_generic_float(const Key *key,
+                                               const bke::AttributeAccessor &attributes,
+                                               const StringRef &data_name,
+                                               MutableSpan<float> data)
+{
+
+  shapekey_foreach_keyblock(
+      key,
+      [&](const float keyblock_influence, const KeyBlock &keyblock, const KeyBlock &ref_keyblock) {
+        const VArray<float> key_data = *attributes.lookup_or_default<float>(
+            shapekey_attribute_name_generic(keyblock.name, data_name),
+            bke::AttrDomain::Point,
+            0.0f);
+        const VArray<float> ref_key_data = *attributes.lookup_or_default<float>(
+            shapekey_attribute_name_generic(ref_keyblock.name, data_name),
+            bke::AttrDomain::Point,
+            0.0f);
+
+        threading::parallel_for(IndexRange(data.size()), 4096, [&](const IndexRange range) {
+          for (const int i : range) {
+            data[i] += (key_data[i] - ref_key_data[i]) * keyblock_influence;
+          }
+        });
+      });
+}
+
 void shapekey_get_applied_position(const Key *key,
                                    const bke::AttributeAccessor &attributes,
                                    MutableSpan<float3> position)
 {
-  shapekey_foreach_keyblock(
-      key,
-      [&](const float keyblock_influence, const KeyBlock &keyblock, const KeyBlock &ref_keyblock) {
-        const VArray<float3> key_position = *attributes.lookup_or_default<float3>(
-            shapekey_attribute_name_position(keyblock.name), bke::AttrDomain::Point, float3(0.0f));
-        const VArray<float3> ref_key_position = *attributes.lookup_or_default<float3>(
-            shapekey_attribute_name_position(ref_keyblock.name),
-            bke::AttrDomain::Point,
-            float3(0.0f));
-
-        threading::parallel_for(position.index_range(), 4096, [&](const IndexRange range) {
-          for (const int i : range) {
-            position[i] += (key_position[i] - ref_key_position[i]) * keyblock_influence;
-          }
-        });
-      });
+  shapekey_get_applied_generic_float3(key, attributes, "position", position);
 }
 
 void shapekey_get_applied_radius(const Key *key,
                                  const bke::AttributeAccessor &attributes,
                                  MutableSpan<float> radius)
 {
-  shapekey_foreach_keyblock(
-      key,
-      [&](const float keyblock_influence, const KeyBlock &keyblock, const KeyBlock &ref_keyblock) {
-        const VArray<float> key_radius = *attributes.lookup_or_default<float>(
-            shapekey_attribute_name_radius(keyblock.name), bke::AttrDomain::Point, 0.0f);
-        const VArray<float> ref_key_radius = *attributes.lookup_or_default<float>(
-            shapekey_attribute_name_radius(ref_keyblock.name), bke::AttrDomain::Point, 0.0f);
-
-        threading::parallel_for(radius.index_range(), 4096, [&](const IndexRange range) {
-          for (const int i : range) {
-            radius[i] += (key_radius[i] - ref_key_radius[i]) * keyblock_influence;
-          }
-        });
-      });
+  shapekey_get_applied_generic_float(key, attributes, "radius", radius);
 
   threading::parallel_for(radius.index_range(), 4096, [&](const IndexRange range) {
     for (const int i : range) {
@@ -2393,20 +2436,7 @@ void shapekey_get_applied_opacity(const Key *key,
                                   const bke::AttributeAccessor &attributes,
                                   MutableSpan<float> opacity)
 {
-  shapekey_foreach_keyblock(
-      key,
-      [&](const float keyblock_influence, const KeyBlock &keyblock, const KeyBlock &ref_keyblock) {
-        const VArray<float> key_opacity = *attributes.lookup_or_default<float>(
-            shapekey_attribute_name_opacity(keyblock.name), bke::AttrDomain::Point, 0.0f);
-        const VArray<float> ref_key_opacity = *attributes.lookup_or_default<float>(
-            shapekey_attribute_name_opacity(ref_keyblock.name), bke::AttrDomain::Point, 0.0f);
-
-        threading::parallel_for(opacity.index_range(), 4096, [&](const IndexRange range) {
-          for (const int i : range) {
-            opacity[i] += (key_opacity[i] - ref_key_opacity[i]) * keyblock_influence;
-          }
-        });
-      });
+  shapekey_get_applied_generic_float(key, attributes, "opacity", opacity);
 
   threading::parallel_for(opacity.index_range(), 4096, [&](const IndexRange range) {
     for (const int i : range) {
@@ -2423,24 +2453,7 @@ void shapekey_get_applied_handle_left(const Key *key,
   /* The handles are offset by the main position attributes. */
   shapekey_get_applied_position(key, attributes, position);
 
-  shapekey_foreach_keyblock(
-      key,
-      [&](const float keyblock_influence, const KeyBlock &keyblock, const KeyBlock &ref_keyblock) {
-        const VArray<float3> key_position_left = *attributes.lookup_or_default<float3>(
-            shapekey_attribute_name_handle_left(keyblock.name),
-            bke::AttrDomain::Point,
-            float3(0.0f));
-        const VArray<float3> ref_key_position_left = *attributes.lookup_or_default<float3>(
-            shapekey_attribute_name_handle_left(ref_keyblock.name),
-            bke::AttrDomain::Point,
-            float3(0.0f));
-
-        threading::parallel_for(position.index_range(), 4096, [&](const IndexRange range) {
-          for (const int i : range) {
-            position[i] += (key_position_left[i] - ref_key_position_left[i]) * keyblock_influence;
-          }
-        });
-      });
+  shapekey_get_applied_generic_float3(key, attributes, "handle_left", position);
 }
 
 void shapekey_get_applied_handle_right(const Key *key,
@@ -2450,25 +2463,7 @@ void shapekey_get_applied_handle_right(const Key *key,
   /* The handles are offset by the main position attributes. */
   shapekey_get_applied_position(key, attributes, position);
 
-  shapekey_foreach_keyblock(
-      key,
-      [&](const float keyblock_influence, const KeyBlock &keyblock, const KeyBlock &ref_keyblock) {
-        const VArray<float3> key_position_right = *attributes.lookup_or_default<float3>(
-            shapekey_attribute_name_handle_right(keyblock.name),
-            bke::AttrDomain::Point,
-            float3(0.0f));
-        const VArray<float3> ref_key_position_right = *attributes.lookup_or_default<float3>(
-            shapekey_attribute_name_handle_right(ref_keyblock.name),
-            bke::AttrDomain::Point,
-            float3(0.0f));
-
-        threading::parallel_for(position.index_range(), 4096, [&](const IndexRange range) {
-          for (const int i : range) {
-            position[i] += (key_position_right[i] - ref_key_position_right[i]) *
-                           keyblock_influence;
-          }
-        });
-      });
+  shapekey_get_applied_generic_float3(key, attributes, "handle_right", position);
 }
 
 void shapekey_set_applied_position(const Key *key,
