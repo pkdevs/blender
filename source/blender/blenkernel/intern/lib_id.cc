@@ -2775,6 +2775,7 @@ bool BKE_id_is_in_main(Main *bmain, ID *id)
 
 bool BKE_id_is_in_global_main(ID *id)
 {
+  BLI_assert(BKE_id_is_in_main(G_MAIN, id));
   return id->owner_bmain() == G_MAIN;
 }
 
