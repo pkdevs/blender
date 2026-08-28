@@ -1146,6 +1146,54 @@ class USDExportTest(AbstractUSDTest):
         weight_samples = anim.GetBlendShapeWeightsAttr().GetTimeSamples()
         self.assertEqual(weight_samples, [1.0, 2.0, 3.0, 4.0, 5.0])
 
+    def test_export_animation_missing_geo(self):
+        """Test that animated geometry export handles frames containing no data."""
+        bpy.ops.wm.open_mainfile(filepath=str(self.testdir / "usd_anim_missing_geo.blend"))
+        export_path = self.tempdir / "usd_anim_missing_geo.usda"
+        self.export_and_validate(filepath=str(export_path), export_animation=True, evaluation_mode="RENDER")
+
+        stage = Usd.Stage.Open(str(export_path))
+        mesh_prim = UsdGeom.Mesh(stage.GetPrimAtPath("/root/Plane/Plane"))
+        curve_prim = UsdGeom.BasisCurves(stage.GetPrimAtPath("/root/Curves/Curves"))
+
+        # Frames 1-3 and 7-9 contain no data. Frames 4-6 contain data. The USD writer should encode
+        # this sequence with data for frames 3, 4, 6, and 7.
+        expected_time_samples = [3.0, 4.0, 6.0, 7.0]
+
+        # Validate mesh data
+        self.assertEqual(mesh_prim.GetPointsAttr().GetTimeSamples(), expected_time_samples)
+        self.assertEqual(mesh_prim.GetFaceVertexCountsAttr().GetTimeSamples(), expected_time_samples)
+        self.assertEqual(mesh_prim.GetFaceVertexIndicesAttr().GetTimeSamples(), expected_time_samples)
+        self.assertEqual(mesh_prim.GetNormalsAttr().GetTimeSamples(), expected_time_samples)
+
+        self.assertEqual(
+            [len(mesh_prim.GetPointsAttr().Get(frame)) for frame in range(1, 10)],
+            [0, 0, 0, 4, 4, 4, 0, 0, 0])
+        self.assertEqual(
+            [len(mesh_prim.GetFaceVertexCountsAttr().Get(frame)) for frame in range(1, 10)],
+            [0, 0, 0, 1, 1, 1, 0, 0, 0])
+        self.assertEqual(
+            [len(mesh_prim.GetFaceVertexIndicesAttr().Get(frame)) for frame in range(1, 10)],
+            [0, 0, 0, 4, 4, 4, 0, 0, 0])
+        self.assertEqual(
+            [len(mesh_prim.GetNormalsAttr().Get(frame)) for frame in range(1, 10)],
+            [0, 0, 0, 4, 4, 4, 0, 0, 0])
+
+        # Validate curve data
+        self.assertEqual(curve_prim.GetPointsAttr().GetTimeSamples(), expected_time_samples)
+        self.assertEqual(curve_prim.GetCurveVertexCountsAttr().GetTimeSamples(), expected_time_samples)
+        self.assertEqual(curve_prim.GetWidthsAttr().GetTimeSamples(), expected_time_samples)
+
+        self.assertEqual(
+            [len(curve_prim.GetPointsAttr().Get(frame)) for frame in range(1, 10)],
+            [0, 0, 0, 3, 3, 3, 0, 0, 0])
+        self.assertEqual(
+            [len(curve_prim.GetCurveVertexCountsAttr().Get(frame)) for frame in range(1, 10)],
+            [0, 0, 0, 1, 1, 1, 0, 0, 0])
+        self.assertEqual(
+            [len(curve_prim.GetWidthsAttr().Get(frame)) for frame in range(1, 10)],
+            [0, 0, 0, 3, 3, 3, 0, 0, 0])
+
     def test_export_text(self):
         """Test various forms of Text/Font export."""
 
