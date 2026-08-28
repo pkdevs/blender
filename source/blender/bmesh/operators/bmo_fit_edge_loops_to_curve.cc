@@ -282,7 +282,7 @@ static void calc_curve_input_chains_from_bm(BMesh *bm, Vector<CurveChainData> &r
       if (num_selected == chain.verts.size()) {
         get_perpendicular_chains(chain, r_chains, visited_edges);
       }
-      else if (num_selected >= 2) {
+      else if (num_selected >= 1) {
         r_chains.append(std::move(chain));
       }
     }
@@ -357,11 +357,6 @@ static void trim_chains_to_boundaries(Vector<CurveChainData> &chains)
       }
     }
 
-    if (first_selected == -1) {
-      chain.verts.clear();
-      continue;
-    }
-
     if (first_selected > 0 || last_selected < chain.verts.size() - 1) {
       Vector<BMVert *> trimmed;
       for (int i = first_selected; i <= last_selected; i++) {
@@ -369,6 +364,7 @@ static void trim_chains_to_boundaries(Vector<CurveChainData> &chains)
       }
       chain.verts = std::move(trimmed);
     }
+    BLI_assert(!chain.verts.is_empty());
   }
 }
 
