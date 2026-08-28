@@ -241,7 +241,7 @@ static void get_perpendicular_chains(const CurveChainData chain,
   }
 }
 
-static void get_curve_input_chains(BMesh *bm, Vector<CurveChainData> &r_chains)
+static void calc_curve_input_chains_from_bm(BMesh *bm, Vector<CurveChainData> &r_chains)
 {
   Vector<BMVert *> selected_verts;
   BMIter iter;
@@ -624,7 +624,7 @@ void bmo_fit_edge_loops_to_curve_exec(BMesh *bm, BMOperator *op)
   BMO_slot_buffer_hflag_enable(bm, op->slots_in, "geom", BM_VERT, BM_ELEM_SELECT, false);
 
   Vector<CurveChainData> chains;
-  get_curve_input_chains(bm, chains);
+  calc_curve_input_chains_from_bm(bm, chains);
 
   if (!extend) {
     trim_chains_to_boundaries(chains);
