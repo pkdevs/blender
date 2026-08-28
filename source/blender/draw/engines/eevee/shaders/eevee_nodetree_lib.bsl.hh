@@ -1034,6 +1034,51 @@ float4 node_attribute_light_impl(const int light_index, uint attr_hash)
   return float4(0.0f);
 }
 
+bool node_attribute_light_is_sun_impl(const int light_index)
+{
+  /* clang-format off */ /* Multiline macros would break line count. */
+  [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
+  /* clang-format on */
+  LightData light = lrd.light_buf[light_index];
+  return is_sun_light(light.type);
+}
+
+bool node_attribute_light_is_point_impl(const int light_index)
+{
+  /* clang-format off */ /* Multiline macros would break line count. */
+  [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
+  /* clang-format on */
+  LightData light = lrd.light_buf[light_index];
+  return is_point_light(light.type);
+}
+
+bool node_attribute_light_is_spot_impl(const int light_index)
+{
+  /* clang-format off */ /* Multiline macros would break line count. */
+  [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
+  /* clang-format on */
+  LightData light = lrd.light_buf[light_index];
+  return is_spot_light(light.type);
+}
+
+bool node_attribute_light_is_area_impl(const int light_index)
+{
+  /* clang-format off */ /* Multiline macros would break line count. */
+  [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
+  /* clang-format on */
+  LightData light = lrd.light_buf[light_index];
+  return is_area_light(light.type);
+}
+
+float node_attribute_light_cutoff_distance_impl(const int light_index)
+{
+  /* clang-format off */ /* Multiline macros would break line count. */
+  [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
+  /* clang-format on */
+  LightData light = lrd.light_buf[light_index];
+  return inversesqrt(light.local().local.influence_radius_invsqr_surface);
+}
+
 void node_light_accumulation_impl([[maybe_unused]] const int light_index,
                                   [[maybe_unused]] float3 diffuse_light,
                                   [[maybe_unused]] float3 diffuse_color,

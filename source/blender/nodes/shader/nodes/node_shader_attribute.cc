@@ -56,48 +56,68 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
                                      GPUNodeStack *out)
 {
   NodeShaderAttribute *attr = static_cast<NodeShaderAttribute *>(node->storage);
-  bool is_varying = attr->type == SHD_ATTRIBUTE_GEOMETRY;
   float attr_hash = 0.0f;
-
-  if (attr->type == SHD_ATTRIBUTE_LIGHT) {
-    GPU_material_flag_set(mat, GPU_MATFLAG_LIGHT_ATTRIBUTE);
-    const bool use_dupli = false;
-    /* Mimic gpu_node_graph_add_uniform_attribute */
-    uint hash_code = BLI_ghashutil_strhash_p(attr->name) << 1 | (use_dupli ? 0 : 1);
-
-    attr_hash = *reinterpret_cast<float *>(&hash_code);
-    GPU_stack_link(mat, node, "node_attribute_light", in, out, GPU_uniform(&attr_hash));
-    return 1;
-  }
 
   GPUNodeLink *cd_attr;
 
-  if (is_varying) {
-    cd_attr = GPU_attribute(mat, CD_AUTO_FROM_NAME, attr->name);
+  switch (attr->type) {
+    case SHD_ATTRIBUTE_LIGHT: {
+      if (STREQ(attr->name, "is_sun")) {
+        GPU_link(mat, "node_attribute_light_is_sun", in[0].link, &cd_attr);
+      }
+      else if (STREQ(attr->name, "is_point")) {
+        GPU_link(mat, "node_attribute_light_is_point", in[0].link, &cd_attr);
+      }
+      else if (STREQ(attr->name, "is_spot")) {
+        GPU_link(mat, "node_attribute_light_is_spot", in[0].link, &cd_attr);
+      }
+      else if (STREQ(attr->name, "is_area")) {
+        GPU_link(mat, "node_attribute_light_is_area", in[0].link, &cd_attr);
+      }
+      else if (STREQ(attr->name, "cutoff_distance")) {
+        GPU_link(mat, "node_attribute_light_cutoff_distance", in[0].link, &cd_attr);
+      }
+      else {
+        GPU_material_flag_set(mat, GPU_MATFLAG_LIGHT_ATTRIBUTE);
+        const bool use_dupli = false;
+        /* Mimic gpu_node_graph_add_uniform_attribute */
+        uint hash_code = BLI_ghashutil_strhash_p(attr->name) << 1 | (use_dupli ? 0 : 1);
 
-    if (STREQ(attr->name, "color")) {
-      GPU_link(mat, "node_attribute_color", cd_attr, &cd_attr);
+        attr_hash = *reinterpret_cast<float *>(&hash_code);
+        GPU_link(mat, "node_attribute_light", in[0].link, GPU_uniform(&attr_hash), &cd_attr);
+      }
+      break;
     }
-    else if (STREQ(attr->name, "temperature")) {
-      GPU_link(mat, "node_attribute_temperature", cd_attr, &cd_attr);
-    }
-  }
-  else if (attr->type == SHD_ATTRIBUTE_VIEW_LAYER) {
-    cd_attr = GPU_layer_attribute(mat, attr->name);
-  }
-  else {
-    cd_attr = GPU_uniform_attribute(mat,
-                                    attr->name,
-                                    attr->type == SHD_ATTRIBUTE_INSTANCER,
-                                    reinterpret_cast<uint32_t *>(&attr_hash));
+    case SHD_ATTRIBUTE_GEOMETRY: {
+      cd_attr = GPU_attribute(mat, CD_AUTO_FROM_NAME, attr->name);
 
-    GPU_link(mat, "node_attribute_uniform", cd_attr, GPU_constant(&attr_hash), &cd_attr);
+      if (STREQ(attr->name, "color")) {
+        GPU_link(mat, "node_attribute_color", cd_attr, &cd_attr);
+      }
+      else if (STREQ(attr->name, "temperature")) {
+        GPU_link(mat, "node_attribute_temperature", cd_attr, &cd_attr);
+      }
+      break;
+    }
+    case SHD_ATTRIBUTE_VIEW_LAYER: {
+      cd_attr = GPU_layer_attribute(mat, attr->name);
+      break;
+    }
+    case SHD_ATTRIBUTE_OBJECT:
+    case SHD_ATTRIBUTE_INSTANCER: {
+      cd_attr = GPU_uniform_attribute(mat,
+                                      attr->name,
+                                      attr->type == SHD_ATTRIBUTE_INSTANCER,
+                                      reinterpret_cast<uint32_t *>(&attr_hash));
+
+      GPU_link(mat, "node_attribute_uniform", cd_attr, GPU_constant(&attr_hash), &cd_attr);
+      break;
+    }
   }
 
   GPU_link(mat, "node_attribute", cd_attr, &out[0].link, &out[1].link, &out[2].link, &out[3].link);
 
-  if (is_varying) {
-
+  if (attr->type == SHD_ATTRIBUTE_GEOMETRY) {
     for (const auto [i, sock] : node->outputs.enumerate()) {
       node_shader_gpu_bump_tex_coord(mat, node, &out[i].link);
     }
