@@ -11,7 +11,6 @@
 #include "BLI_math_vector_c.hh"
 
 #include "BLI_length_parameterize.hh"
-#include "BLI_map.hh"
 #include "BLI_math_solvers.hh"
 #include "BLI_set.hh"
 #include "BLI_vector.hh"
