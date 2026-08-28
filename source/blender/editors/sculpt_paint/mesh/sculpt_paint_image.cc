@@ -755,13 +755,13 @@ bool SCULPT_use_image_paint_brush(PaintModeSettings &settings, Object &ob)
   return BKE_paint_canvas_image_get(&settings, &ob, &image, &image_user);
 }
 
-void SCULPT_do_paint_brush_image(const Depsgraph &depsgraph,
-                                 const Sculpt &sd,
-                                 Object &ob,
-                                 const IndexMask &node_mask)
+void do_3d_image_paint_brush(const Depsgraph &depsgraph,
+                             const Paint &paint,
+                             const Brush &brush,
+                             Object &ob,
+                             const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Editor);
-  const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
   ed::sculpt_paint::StrokeCache &cache = *ob.runtime->sculpt_session->cache;
 
   if (!cache.image_data) {
@@ -784,7 +784,7 @@ void SCULPT_do_paint_brush_image(const Depsgraph &depsgraph,
 
   node_mask.foreach_index(
       [&](const int i) {
-        do_paint_pixels(depsgraph, ob, sd.paint, *brush, image_data, nodes[i], pixel_nodes[i]);
+        do_paint_pixels(depsgraph, ob, paint, brush, image_data, nodes[i], pixel_nodes[i]);
       },
       exec_mode::grain_size(1));
 

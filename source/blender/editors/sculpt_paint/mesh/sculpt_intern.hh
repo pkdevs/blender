@@ -978,10 +978,11 @@ float object_space_radius_get(const ViewContext &vc,
 /** \name 3D Texture Paint (Experimental)
  * \{ */
 
-void SCULPT_do_paint_brush_image(const Depsgraph &depsgraph,
-                                 const Sculpt &sd,
-                                 Object &ob,
-                                 const IndexMask &node_mask);
+void do_3d_image_paint_brush(const Depsgraph &depsgraph,
+                             const Paint &paint,
+                             const Brush &brush,
+                             Object &ob,
+                             const IndexMask &node_mask);
 bool SCULPT_use_image_paint_brush(PaintModeSettings &settings, Object &ob);
 
 /** \} */

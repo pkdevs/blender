@@ -526,7 +526,7 @@ bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
   return true;
 };
 
-static void stroke_cache_update(ViewContext &vc, Paint &paint, Object &object, PointerRNA *ptr)
+static void stroke_cache_update(ViewContext &/*vc*/, Paint &paint, Object &object, PointerRNA *ptr)
 {
   SculptSession &ss = *object.runtime->sculpt_session;
   StrokeCache &cache = *ss.cache;
@@ -576,14 +576,14 @@ static void do_brush_action(const Depsgraph &depsgraph,
                             PaintModeData * /*paint_mode_data*/)
 {
   PRF_scope(ProfileCategory::Editor);
-  PRF_scope_set_dynamic_name("%s", sculpt_brush_type_name(brush));
+  /* TODO: Dynamic brush name */
   ImagePaintSettings &image_paint_settings = scene.toolsettings->imapaint;
   SculptSession &ss = *ob.runtime->sculpt_session;
   IndexMaskMemory memory;
 
   bke::pbvh::build_pixels(depsgraph, ob, *ss.cache->image_data->image, *ss.cache->image_data->image_user);
 
-  const IndexMask node_mask = pbvh_gather_texpaint(ob, brush, false, 1.0f, memory);
+  const IndexMask node_mask = gather_brush_nodes(ob, brush, memory);
 
   /* Only act if some verts are inside the brush area. */
   if (node_mask.is_empty()) {
@@ -605,6 +605,15 @@ static void do_brush_action(const Depsgraph &depsgraph,
   /* TODO: Cube tip */
 
   /* Main brush action */
+  switch (brush.image_brush_type) {
+    case IMAGE_PAINT_BRUSH_TYPE_DRAW:
+      do_3d_image_paint_brush(depsgraph, image_paint_settings.paint, brush, ob, node_mask);
+      break;
+    default:
+      BLI_assert(0);
+      break;
+      /* TODO: Implement the rest of them... */
+  }
 
   /* Update average stroke position. */
   const float3 world_location = math::project_point(ob.object_to_world(), ss.cache->location);
@@ -612,7 +621,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
   bke::paint::stroke_track_location(image_paint_settings.paint, world_location);
 }
 
-void ExperimentalTexturePaintStroke::update_step(wmOperator *op, PointerRNA *itemptr)
+void ExperimentalTexturePaintStroke::update_step(wmOperator * /*op*/, PointerRNA *itemptr)
 {
   Object &object = *this->object;
   SculptSession &ss = *object.runtime->sculpt_session;
@@ -670,6 +679,14 @@ void ExperimentalTexturePaintStroke::done(bool is_cancel, bool stroke_started)
 static PaintStroke *create_paint_stroke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   if (CTX_wm_region_view3d(C)) {
+    auto stroke_mode = BrushStrokeMode(RNA_enum_get(op->ptr, "mode"));
+    auto switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
+
+    if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint) &&
+        stroke_mode == BrushStrokeMode::Normal && switch_mode == BrushSwitchMode::None)
+    {
+      return MEM_new<ExperimentalTexturePaintStroke>(__func__, C, op, event);
+    }
     return MEM_new<TexturePaintStroke>(__func__, C, op, event);
   }
   return MEM_new<ImagePaintStroke>(__func__, C, op, event);
