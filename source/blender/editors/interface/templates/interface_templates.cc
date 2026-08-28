@@ -103,6 +103,9 @@ void template_add_button_search_menu(const bContext *C,
                          tip,
                          func_argN_free_fn,
                          func_argN_copy_fn);
+    if (int users = id ? ID_REAL_USERS(id) : 0; users > 1) {
+      button_icon_indicator_number_set(but, users);
+    }
     if (use_preview_icon) {
       const int icon = id ? id_icon_get(C, id, use_big_size) : RNA_struct_ui_icon(type);
       def_but_icon(but, icon, UI_HAS_ICON | BUT_ICON_PREVIEW);
@@ -126,12 +129,14 @@ void template_add_button_search_menu(const bContext *C,
                          "",
                          0,
                          0,
-                         UI_UNIT_X * 1.6,
+                         UI_UNIT_X * 1.7,
                          UI_UNIT_Y,
                          tip,
                          func_argN_free_fn,
                          func_argN_copy_fn);
-
+    if (int users = id ? ID_REAL_USERS(id) : 0; users > 1) {
+      button_icon_indicator_number_set(but, users);
+    }
     if (live_icon) {
       const int icon = id ? id_icon_get(C, id, false) : RNA_struct_ui_icon(type);
       def_but_icon(but, icon, UI_HAS_ICON | BUT_ICON_PREVIEW);

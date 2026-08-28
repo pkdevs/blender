@@ -6769,4 +6769,9 @@ std::string button_get_link(const Button *button, bContext *C)
 #endif
 }
 
+void menutypes_ui()
+{
+  template_id_menu();
+}
+
 }  // namespace blender::ui
