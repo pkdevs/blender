@@ -14,6 +14,7 @@
 
 #include "BLI_listbase_iterator.hh"
 #include "BLI_math_color_c.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_vector_c.hh"
 
 #include "BKE_brush.hh"
@@ -42,6 +43,7 @@
 #include "WM_types.hh"
 
 #include "mesh_paint.hh"
+#include "sculpt_automask.hh"
 #include "sculpt_intern.hh"
 
 #include "../paint_intern.hh"
@@ -575,29 +577,28 @@ static void do_brush_action(const Depsgraph &depsgraph,
 {
   PRF_scope(ProfileCategory::Editor);
   PRF_scope_set_dynamic_name("%s", sculpt_brush_type_name(brush));
-  sculpt_pbvh_update_pixels(depsgraph, ob);
+  ImagePaintSettings &image_paint_settings = scene.toolsettings->imapaint;
+  SculptSession &ss = *ob.runtime->sculpt_session;
+  IndexMaskMemory memory;
 
-  IndexMask texnode_mask = pbvh_gather_texpaint(ob, brush, use_original, 1.0f, memory);
+  bke::pbvh::build_pixels(depsgraph, ob, *ss.cache->image_data->image, *ss.cache->image_data->image_user);
 
-  if (texnode_mask.is_empty()) {
-    return;
-  }
-
-  const brushes::CursorSampleResult cursor_sample_result = calc_brush_node_mask(
-      depsgraph, sd, ob, brush, memory);
-  const IndexMask node_mask = cursor_sample_result.node_mask;
+  const IndexMask node_mask = pbvh_gather_texpaint(ob, brush, false, 1.0f, memory);
 
   /* Only act if some verts are inside the brush area. */
   if (node_mask.is_empty()) {
     return;
   }
 
-  if (auto_mask::is_enabled(sd.paint, ob, &brush)) {
-    auto_mask::Cache &cache = auto_mask::stroke_cache_ensure(depsgraph, sd.paint, &brush, ob);
+  /* TODO: Automasking support */
+  /*
+  if (auto_mask::is_enabled(image_paint_settings.paint, ob, &brush)) {
+    auto_mask::Cache &cache = auto_mask::stroke_cache_ensure(depsgraph, image_paint_settings.paint, &brush, ob);
     if (cache.settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
       cache.calc_cavity_factor(depsgraph, ob, node_mask);
     }
   }
+  */
 
   /* TODO: Sculpt normal */
   /* TODO: Brush local mat */
@@ -608,7 +609,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
   /* Update average stroke position. */
   const float3 world_location = math::project_point(ob.object_to_world(), ss.cache->location);
 
-  bke::paint::stroke_track_location(sd.paint, world_location);
+  bke::paint::stroke_track_location(image_paint_settings.paint, world_location);
 }
 
 void ExperimentalTexturePaintStroke::update_step(wmOperator *op, PointerRNA *itemptr)
@@ -627,7 +628,7 @@ void ExperimentalTexturePaintStroke::update_step(wmOperator *op, PointerRNA *ite
   cache.base_brush_strength = cache.pressure * cache.pressure * overlap;
 
   do_symmetrical_brush_actions_with_tiling_and_feathering(
-      depsgraph, scene, paint, object, do_brush_action, nullptr);
+      *this->depsgraph, *this->scene, *this->paint, object, do_brush_action, nullptr);
 }
 void ExperimentalTexturePaintStroke::redraw(bool /*final*/) {}
 bool ExperimentalTexturePaintStroke::test_cancel()
