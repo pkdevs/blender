@@ -136,22 +136,22 @@ static void calculate_splines_axis(const Span<float> distances,
  * Starts at a specific edge and walks continuosly in one direction along quad edges until it
  * loops back into itself in a circle or hits the end of the edge loop.
  */
-static void traverse_edge_loop(BMVert *start_vert,
-                               BMEdge *start_edge,
+static void traverse_edge_loop(BMVert *v_start,
+                               BMEdge *e_start,
                                Set<BMEdge *> &visited_edges,
                                Vector<BMVert *> &r_loop,
                                bool &r_circular)
 {
-  BMVert *curr_vert = start_vert;
-  BMEdge *curr_edge = start_edge;
+  BMVert *v_curr = v_start;
+  BMEdge *e_curr = e_start;
 
-  visited_edges.add(curr_edge);
+  visited_edges.add(e_curr);
 
   while (true) {
-    BMVert *next_vert = BM_edge_other_vert(curr_edge, curr_vert);
-    r_loop.append(next_vert);
+    BMVert *v_next = BM_edge_other_vert(e_curr, v_curr);
+    r_loop.append(v_next);
 
-    if (next_vert == start_vert) {
+    if (v_next == v_start) {
       r_circular = true;
       r_loop.pop_last();
       break;
@@ -160,9 +160,9 @@ static void traverse_edge_loop(BMVert *start_vert,
     int edge_count = 0;
     BMIter iter;
     BMEdge *e;
-    BMEdge *next_edge = nullptr;
+    BMEdge *e_next = nullptr;
 
-    BM_ITER_ELEM (e, &iter, next_vert, BM_EDGES_OF_VERT) {
+    BM_ITER_ELEM (e, &iter, v_next, BM_EDGES_OF_VERT) {
       if (!BM_elem_flag_test(e, BM_ELEM_HIDDEN)) {
         edge_count++;
       }
@@ -171,23 +171,23 @@ static void traverse_edge_loop(BMVert *start_vert,
     if (edge_count < 3 || edge_count > 4) {
       break;
     }
-    BM_ITER_ELEM (e, &iter, next_vert, BM_EDGES_OF_VERT) {
-      if (e == curr_edge || BM_elem_flag_test(e, BM_ELEM_HIDDEN)) {
+    BM_ITER_ELEM (e, &iter, v_next, BM_EDGES_OF_VERT) {
+      if (e == e_curr || BM_elem_flag_test(e, BM_ELEM_HIDDEN)) {
         continue;
       }
 
-      if (!BM_edge_share_quad_check(curr_edge, e)) {
-        next_edge = e;
+      if (!BM_edge_share_quad_check(e_curr, e)) {
+        e_next = e;
         break;
       }
     }
 
-    if (!next_edge) {
+    if (!e_next) {
       break;
     }
-    curr_edge = next_edge;
-    curr_vert = next_vert;
-    visited_edges.add(curr_edge);
+    e_curr = e_next;
+    v_curr = v_next;
+    visited_edges.add(e_curr);
   }
 }
 
