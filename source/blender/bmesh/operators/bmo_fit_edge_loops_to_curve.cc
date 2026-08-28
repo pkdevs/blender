@@ -246,7 +246,7 @@ static void calc_curve_input_chains_from_bm(BMesh *bm, Vector<CurveChainData> &r
   BMIter iter;
   BMVert *v;
   BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-    if (BM_elem_flag_test(v, BM_ELEM_TAG) && !BM_elem_flag_test(v, BM_ELEM_HIDDEN)) {
+    if (BM_elem_flag_test(v, BM_ELEM_TAG)) {
       selected_verts.append(v);
     }
   }
