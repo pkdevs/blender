@@ -135,6 +135,10 @@ void VKIndexBuffer::copy_sub(IndexBuf &source_buf,
   BLI_assert_msg(buffer_.is_allocated(), "GPU_indexbuf_use() not called on this buffer");
   BLI_assert_msg(src.buffer_.is_allocated(), "GPU_indexbuf_use() not called on the source buffer");
 
+  if (index_len == 0) {
+    return;
+  }
+
   VKContext &context = *VKContext::get();
   render_graph::VKCopyBufferNode::CreateInfo copy_buffer = {};
   copy_buffer.src_buffer = src.buffer_.resource();
