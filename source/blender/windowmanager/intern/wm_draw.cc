@@ -447,7 +447,7 @@ static bool wm_draw_region_stereo_set(Main *bmain,
     }
     case SPACE_VIEW3D: {
       if (region->regiontype == RGN_TYPE_WINDOW) {
-        View3D *v3d = static_cast<View3D *>(area->spacedata.first_);
+        View3D *v3d = area->spacedata.first_as<View3D>();
         if (v3d->camera && v3d->camera->type == OB_CAMERA) {
           RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
           RenderEngine *engine = rv3d->view_render ? RE_view_engine_get(rv3d->view_render) :
@@ -541,7 +541,7 @@ static void wm_region_test_render_do_draw(const Scene *scene,
     GPUViewport *viewport = WM_draw_region_get_viewport(region);
 
     if (engine && (engine->flag & RE_ENGINE_DO_DRAW)) {
-      View3D *v3d = static_cast<View3D *>(area->spacedata.first_);
+      View3D *v3d = area->spacedata.first_as<View3D>();
       rcti border_rect;
 
       /* Do partial redraw when possible. */

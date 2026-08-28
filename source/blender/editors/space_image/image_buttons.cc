@@ -260,7 +260,7 @@ static void ui_imageuser_pass_menu(bContext * /*C*/, ui::Layout *layout, void *r
 
   /* rendered results don't have a Combined pass */
   /* multiview: the ordering must be ascending, so the left-most pass is always the one picked */
-  for (rpass = static_cast<RenderPass *>(rl ? rl->passes.first_ : nullptr); rpass;
+  for (rpass = rl ? rl->passes.first() : nullptr; rpass;
        rpass = rpass->next, nr++)
   {
     /* just show one pass of each kind */

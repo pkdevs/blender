@@ -593,7 +593,7 @@ static int gizmo_find_intersected_3d_intern(wmGizmo **visible_gizmos,
   const wmWindowManager *wm = CTX_wm_manager(C);
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first_);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   rcti rect;
   /* Almost certainly overkill, but allow for many custom gizmos. */

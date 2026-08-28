@@ -286,7 +286,7 @@ std::string WM_operator_pystring_ex(bContext *C,
     wmOperator *opm;
     bool first_op = true;
 
-    opm = static_cast<wmOperator *>(macro_args ? op->macro.first_ : nullptr);
+    opm = macro_args ? op->macro.first() : nullptr;
 
     for (; opm; opm = opm->next) {
       PointerRNA *opmptr = opm->ptr;

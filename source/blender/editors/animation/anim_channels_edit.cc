@@ -1548,7 +1548,7 @@ static void rearrange_nla_tracks(bAnimContext *ac, AnimData *adt, eRearrangeAnim
   /* Add back non-local NLA tracks at the beginning of the animation data's list. */
   if (!extracted_nonlocal_nla_tracks.is_empty()) {
     BLI_assert(is_liboverride);
-    extracted_nonlocal_nla_tracks.last()->next = static_cast<NlaTrack *>(adt->nla_tracks.first_);
+    extracted_nonlocal_nla_tracks.last()->next = adt->nla_tracks.first();
     adt->nla_tracks.first()->prev = extracted_nonlocal_nla_tracks.last();
     adt->nla_tracks.first_ = extracted_nonlocal_nla_tracks.first_;
   }
