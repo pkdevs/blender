@@ -959,6 +959,7 @@ static bool paint_use_2d_cursor(PaintMode mode)
     case PaintMode::Weight:
       return false;
     case PaintMode::Texture3D:
+      return !USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint);
     case PaintMode::Texture2D:
     case PaintMode::VertexGPencil:
     case PaintMode::SculptGPencil:
@@ -1148,7 +1149,9 @@ static void paint_cursor_draw_3D_view_brush_cursor(PaintCursorContext &pcontext)
                   PaintMode::Texture3D));
   /* These paint tools are not using the SculptSession, so they need to use the default 2D brush
    * cursor in the 3D view. */
-  if (pcontext.mode == PaintMode::Texture3D) {
+  if (!USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint) &&
+      pcontext.mode == PaintMode::Texture3D)
+  {
     paint_draw_legacy_3D_view_brush_cursor(pcontext);
     return;
   }

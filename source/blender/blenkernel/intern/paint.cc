@@ -2367,7 +2367,7 @@ static void sculptsession_update(Depsgraph *depsgraph,
     /* Painting doesn't need crazyspace, use already evaluated mesh coordinates if possible. */
     bool used_me_eval = false;
 
-    if (ob->mode & (OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT)) {
+    if (ob->mode & (OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT | OB_MODE_TEXTURE_PAINT)) {
       const Mesh *me_eval_deform = BKE_object_get_mesh_deform_eval(ob_eval);
       BLI_assert(me_eval_deform != nullptr);
       /* If the fully evaluated mesh has the same topology as the deform-only version, use it.
@@ -2428,8 +2428,9 @@ static void sculptsession_update(Depsgraph *depsgraph,
       }
     }
 
+    /* TODO: It's odd that this is not guarded behind the experimental test */
     /* We could be more precise when we have access to the active tool. */
-    const bool use_paint_slots = (ob->mode & OB_MODE_SCULPT) != 0;
+    const bool use_paint_slots = (ob->mode & OB_MODE_TEXTURE_PAINT) != 0;
     if (use_paint_slots) {
       BKE_texpaint_slots_refresh_object(scene, ob);
     }

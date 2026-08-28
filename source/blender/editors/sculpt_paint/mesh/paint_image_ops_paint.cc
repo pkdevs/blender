@@ -465,11 +465,14 @@ bool TexturePaintStroke::test_start(wmOperator *op, const float2 mouse)
 
 struct ExperimentalTexturePaintStroke final : public PaintStroke {
   Base *base_;
+  PaintModeSettings *paint_mode_settings_;
 
   ExperimentalTexturePaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
       : PaintStroke(C, op, event)
   {
     base_ = CTX_data_active_base(C);
+    ToolSettings *tool_settings = CTX_data_tool_settings(C);
+    paint_mode_settings_ = &tool_settings->paint_mode;
 
     if (!G.background) {
       view3d_operator_needs_gpu(C);
@@ -511,7 +514,12 @@ bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
     return false;
   }
 
+  SculptSession &ss = *this->object->runtime->sculpt_session;
+  StrokeCache &cache = *ss.cache;
   stroke_cache_common_init(this->vc, *this->paint, *this->brush, *this->object, mouse);
+  cache.accum = true;
+  cache.image_data = sculpt_paint::paint::image::ImageData::init_active_image(
+      *this->object, *paint_mode_settings_);
 
   if (brush_type_is_paint(this->brush->sculpt_brush_type)) {
     BKE_curvemapping_init(this->brush->curve_rand_hue);
@@ -526,7 +534,10 @@ bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
   return true;
 };
 
-static void stroke_cache_update(ViewContext &/*vc*/, Paint &paint, Object &object, PointerRNA *ptr)
+static void stroke_cache_update(ViewContext & /*vc*/,
+                                Paint &paint,
+                                Object &object,
+                                PointerRNA *ptr)
 {
   SculptSession &ss = *object.runtime->sculpt_session;
   StrokeCache &cache = *ss.cache;
@@ -581,7 +592,8 @@ static void do_brush_action(const Depsgraph &depsgraph,
   SculptSession &ss = *ob.runtime->sculpt_session;
   IndexMaskMemory memory;
 
-  bke::pbvh::build_pixels(depsgraph, ob, *ss.cache->image_data->image, *ss.cache->image_data->image_user);
+  bke::pbvh::build_pixels(
+      depsgraph, ob, *ss.cache->image_data->image, *ss.cache->image_data->image_user);
 
   const IndexMask node_mask = gather_brush_nodes(ob, brush, memory, node_fully_masked_or_hidden);
 
@@ -593,8 +605,8 @@ static void do_brush_action(const Depsgraph &depsgraph,
   /* TODO: Automasking support */
   /*
   if (auto_mask::is_enabled(image_paint_settings.paint, ob, &brush)) {
-    auto_mask::Cache &cache = auto_mask::stroke_cache_ensure(depsgraph, image_paint_settings.paint, &brush, ob);
-    if (cache.settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
+    auto_mask::Cache &cache = auto_mask::stroke_cache_ensure(depsgraph, image_paint_settings.paint,
+  &brush, ob); if (cache.settings.flags & BRUSH_AUTOMASKING_CAVITY_ALL) {
       cache.calc_cavity_factor(depsgraph, ob, node_mask);
     }
   }
@@ -610,9 +622,9 @@ static void do_brush_action(const Depsgraph &depsgraph,
       do_3d_image_paint_brush(depsgraph, image_paint_settings.paint, brush, ob, node_mask);
       break;
     default:
+      /* TODO: Implement the rest of them... */
       BLI_assert(0);
       break;
-      /* TODO: Implement the rest of them... */
   }
 
   /* Update average stroke position. */
@@ -638,6 +650,12 @@ void ExperimentalTexturePaintStroke::update_step(wmOperator * /*op*/, PointerRNA
 
   do_symmetrical_brush_actions_with_tiling_and_feathering(
       *this->depsgraph, *this->scene, *this->paint, object, do_brush_action, nullptr);
+
+  if (this->vc.rv3d) {
+    /* Mark for faster 3D viewport redraws. */
+    this->vc.rv3d->rflag |= RV3D_PAINTING;
+  }
+  ED_region_tag_redraw(this->vc.region);
 }
 void ExperimentalTexturePaintStroke::redraw(bool /*final*/) {}
 bool ExperimentalTexturePaintStroke::test_cancel()
@@ -652,6 +670,10 @@ void ExperimentalTexturePaintStroke::done(bool is_cancel, bool stroke_started)
   if (!ss.cache) {
     /* exit tex */
     return;
+  }
+
+  if (this->vc.rv3d) {
+    this->vc.rv3d->rflag &= ~RV3D_PAINTING;
   }
 
   MEM_delete(ss.cache);
