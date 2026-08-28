@@ -10,6 +10,7 @@
 
 #include "BLI_enum_flags.hh"
 #include "BLI_function_ref.hh"
+#include "BLI_map.hh"
 #include "BLI_vector_set.hh"
 #include "DNA_listBase.h"
 
@@ -161,6 +162,8 @@ Vector<Strip *> query_rendered_strips_sorted(const Scene *scene,
  * \note: Take care when changing the logic of this function since order matters.
  * */
 bool must_render_strip(const VectorSet<Strip *> &strip_stack, Strip *target_strip);
+
+Map<int, Vector<Strip *>> query_strips_by_channels(ListBaseT<Strip> *seqbase);
 
 /** \} */
 

@@ -2310,17 +2310,12 @@ static bool calculate_overlap_transition_load_data(const Scene *scene,
   return true; /* No errors. */
 }
 
-// unnecessary looping through seqbase. using this to test ideas
 static bool test_overlap(const Scene *scene,
-                         ListBaseT<Strip> *seqbase,
-                         std::pair<int, int> handles,
-                         int channel)
+                         Vector<Strip *> &channel_strips,
+                         std::pair<int, int> handles)
 {
-  for (Strip &strip : *seqbase) {
-    if (strip.channel != channel) {
-      continue;
-    }
-    if (strip.right_handle(scene) > handles.first && strip.left_handle() < handles.second) {
+  for (Strip *strip : channel_strips) {
+    if (strip->right_handle(scene) > handles.first && strip->left_handle() < handles.second) {
       return true;
     }
   }
@@ -2334,31 +2329,54 @@ static bool calculate_effect_transition_load_data(const Scene *scene,
   Editing *ed = seq::editing_get(scene);
   ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
 
-  // Set<int> used_channels;
-  /* Check if the channel is free. */
+  Map<int, Vector<Strip *>> strips = seq::query_strips_by_channels(ed->current_strips());
+
+  /* Find free channel. */
+  // for (TransitionLoadData *transition = load_data.begin(); transition != load_data.end();
+  //      ++transition)
+  // {
+  //   for (TransitionLoadData *ready_transition = load_data.begin(); ready_transition !=
+  //   transition; ++ready_transition) {
+
+  //   }
+  // }
+  bool shuffled = false;
   for (TransitionLoadData &transition : load_data) {
     if (transition.channel > seq::MAX_CHANNELS) {
-      BKE_reportf(reports, RPT_ERROR, "Not enough free channels for transition(s)");
+      BKE_reportf(reports, RPT_ERROR, "No channels above input strip(s)");
       return false;
     }
 
-    SeqTimelineChannel *channel = seq::channel_get_by_index(channels, transition.channel);
-
-    // this is temporary. figure out the correct behavior
-    // probably it should shuffle but just be a warning
-    if (channel->is_muted() || channel->is_locked() ||
-        test_overlap(scene, ed->current_strips(), transition.handles, transition.channel))
+    std::optional<int> free_channel{};
+    for (int channel : IndexRange::from_begin_end_inclusive(transition.channel, seq::MAX_CHANNELS))
     {
-      BKE_report(reports, RPT_ERROR, "Transition channel is taken");
-      return false;
+      /* Don't add strips on muted or locked channels. */
+      SeqTimelineChannel *timeline_channel = seq::channel_get_by_index(channels, channel);
+      if (timeline_channel->is_muted() || timeline_channel->is_locked()) {
+        continue;
+      }
+      /* Check that there's no overlap with existing strips. */
+      Vector<Strip *> *channel_strips = strips.lookup_ptr(channel);
+      if (channel_strips != nullptr && test_overlap(scene, *channel_strips, transition.handles)) {
+        continue;
+      }
+      /* Check that there's no overlap with other new transitions. */
+      // also need to check for overlap against TransitionLoadData
+
+      free_channel = channel;
+      break;
     }
 
-    // for (int channel :
-    //      IndexRange::from_begin_end_inclusive(transition.channel, seq::MAX_CHANNELS))
-    // {
-    // }
+    if (!free_channel) {
+      BKE_reportf(reports, RPT_ERROR, "No free channels for transition(s)");
+      return false;
+    }
+    shuffled |= transition.channel != *free_channel;
+    transition.channel = *free_channel;
   }
-
+  if (shuffled) {
+    BKE_reportf(reports, RPT_WARNING, "Shuffling transition(s)");
+  }
   // find_unlocked_unmuted_channel, sequencer_generic_invoke_xy_guess_channel,
   // have_free_channels lookup by channel
 

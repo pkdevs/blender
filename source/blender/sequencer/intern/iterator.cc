@@ -285,4 +285,13 @@ VectorSet<Strip *> query_unselected_strips(ListBaseT<Strip> *seqbase)
   return strips;
 }
 
+Map<int, Vector<Strip *>> query_strips_by_channels(ListBaseT<Strip> *seqbase)
+{
+  Map<int, Vector<Strip *>> strip_map;
+  for (Strip &strip : *seqbase) {
+    strip_map.lookup_or_add_default(strip.channel).append(&strip);
+  }
+  return strip_map;
+}
+
 }  // namespace blender::seq
