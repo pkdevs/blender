@@ -6,4 +6,4 @@ Referenced by commit f2b4c325957b1ef98770ebe445c43e112411ffbe, Fix #156268: Cycl
 Referenced by pull request #144147, Cycles: Support automatic differentiation of shader nodes in SVM
 Referenced by issue #159895, Barbershop interior renders differently with OSL enabled
 Referenced by issue #160108, Cycles: HIP GPU rendering does not work if the GPU is installed in the second PCIe slot while on Linux
-Referenced by issue #161943, Rendering with HIP causes pthread_create crash when using ROCm runtime 7.14
+Referenced by issue #161943, Rendering with HIP causes pthread_create crash when using ROCm runtime 7.14 and 10.0.0
