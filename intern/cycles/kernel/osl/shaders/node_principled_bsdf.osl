@@ -206,11 +206,6 @@ shader node_principled_bsdf(string distribution = "multi_ggx",
 
   if (coat_weight > CLOSURE_WEIGHT_CUTOFF) {
     float coat_ior = max(CoatIOR, 1.0);
-     /* NOTE: Since the dielectric_bsdf does implicit IOR inversion for backfacing and our current
-     * coating model did not do IOR inversion we need to add an explicit IOR inversion to
-     * counter this. In a future redesign of our coating we should consider correct coating
-     * including layer order and IOR inversion. */
-    coat_ior = is_backfacing ? 1.0 / coat_ior : coat_ior;
     float coat_alpha = clamp(CoatRoughness, 0.0, 1.0);
     closure color CoatBSDF = coat_bsdf(CoatTint, coat_ior, coat_alpha, CoatNormal);
     BSDF = layer(coat_weight * CoatBSDF, BSDF);
