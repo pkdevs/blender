@@ -319,8 +319,6 @@ void VKShaderInterface::init(const shader::ShaderCreateInfo &info)
 {
   InitContext ctx{info};
 
-  id = next_id_++;
-
   shader_builtins_ = info.builtins_combined();
 
   compute_resource_counts(ctx);

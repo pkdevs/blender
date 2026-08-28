@@ -21,6 +21,7 @@ namespace blender::gpu {
 /* TODO(fclem): add unique ID for debugging. */
 ShaderInterface::ShaderInterface()
 {
+  id = next_id_++;
   image_formats_.fill(TextureWriteFormat::Invalid);
 }
 
