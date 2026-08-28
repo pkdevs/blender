@@ -45,7 +45,7 @@ inline constexpr std::array<void (*)(MutableSpan<float3>), 4>
           BLI_assert(p.size() == 5);
           std::array<float3, 5> s;
           MutableSpan(s).copy_from(p);
-          const float s3 = std::sqrt(30.0f);
+          const float s3 = std::sqrt(3.0f);
           p[0] = s[3];
           p[1] = -s[1];
           p[2] = -0.5f * s[2] - (s3 / 20.0f) * s[4];
