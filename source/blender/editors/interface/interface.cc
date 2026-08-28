@@ -74,6 +74,7 @@
 
 #include "CLG_log.h"
 
+#include "buttons/interface_label.hh"
 #include "interface_intern.hh"
 
 namespace blender::ui {
@@ -854,6 +855,10 @@ static bool but_equals_old(const Button *but, const Button *oldbut)
     }
   }
 
+  if (but->type == ButtonType::Label) {
+    return button_label_is_multiline(but) == button_label_is_multiline(oldbut);
+  }
+
   return true;
 }
 
@@ -987,8 +992,13 @@ static void but_update_old_active_from_new(Button *oldbut, Button *but)
     ButtonSearch *search_oldbut = static_cast<ButtonSearch *>(oldbut),
                  *search_but = static_cast<ButtonSearch *>(but);
 
-    std::swap(search_oldbut->arg_free_fn, search_but->arg_free_fn);
     std::swap(search_oldbut->arg, search_but->arg);
+  }
+  if (oldbut->type == ButtonType::Label) {
+    auto *label_oldbut = static_cast<ButtonLabel *>(oldbut);
+    auto *label_but = static_cast<ButtonLabel *>(but);
+    std::swap(label_oldbut->wrap_cache, label_but->wrap_cache);
+    std::swap(label_oldbut->max_lines, label_but->max_lines);
   }
 
   /* copy hardmin for list rows to prevent 'sticking' highlight to mouse position
@@ -1265,7 +1275,7 @@ static bool but_is_rna_undo(const Button *but)
 
   /* No owner or type known. Assume we do not undo push as it may be a property from
    * the preferences stored outside datablocks. */
-  if (but->rnapoin.owner_id == nullptr || but->rnapoin.type == nullptr) {
+  if (!but->rnapoin.has_owner_id() || !but->rnapoin.has_type()) {
     return false;
   }
 
@@ -2078,18 +2088,6 @@ bool button_context_poll_operator(bContext *C, wmOperatorType *ot, const Button 
   return button_context_poll_operator_ex(C, but, &params);
 }
 
-void block_post_layout_callbacks_exec(const bContext *C, ARegion *region, Block *block)
-{
-  if (const Vector<std::function<void(const bContext &C)>> *callbacks =
-          region->runtime->post_block_layout_fns.lookup_ptr_as(block->name))
-  {
-    for (const std::function<void(const bContext &C)> &callback : *callbacks) {
-      callback(*C);
-    }
-  }
-  region->runtime->post_block_layout_fns.remove_as(block->name);
-}
-
 void block_end_ex(const bContext *C,
                   Main *bmain,
                   wmWindow *window,
@@ -2098,8 +2096,7 @@ void block_end_ex(const bContext *C,
                   Depsgraph *depsgraph,
                   Block *block,
                   const int xy[2],
-                  int r_xy[2],
-                  bool postpone_callbacks)
+                  int r_xy[2])
 {
   BLI_assert(block->active);
 
@@ -2204,12 +2201,9 @@ void block_end_ex(const bContext *C,
   update_flexible_spacing(region, block);
 
   block->endblock = true;
-  if (!postpone_callbacks) {
-    block_post_layout_callbacks_exec(C, region, block);
-  }
 }
 
-void block_end(const bContext *C, Block *block, bool postpone_callbacks)
+void block_end(const bContext *C, Block *block)
 {
   wmWindow *window = CTX_wm_window(C);
 
@@ -2221,8 +2215,7 @@ void block_end(const bContext *C, Block *block, bool postpone_callbacks)
                CTX_data_depsgraph_pointer(C),
                block,
                window->runtime->eventstate->xy,
-               nullptr,
-               postpone_callbacks);
+               nullptr);
 }
 
 /* ************** BLOCK DRAWING FUNCTION ************* */
@@ -2797,7 +2790,7 @@ double button_value_get(Button *but)
   if (but->editval) {
     return *(but->editval);
   }
-  if (but->poin == nullptr && but->rnapoin.data == nullptr) {
+  if (but->poin == nullptr && !but->rnapoin) {
     return 0.0;
   }
 
@@ -3423,7 +3416,7 @@ bool button_string_eval_number(bContext *C, const Button *but, const char *str, 
 
 bool button_string_set(bContext *C, Button *but, const char *str)
 {
-  if (but->rnaprop && but->rnapoin.data &&
+  if (but->rnaprop && but->rnapoin &&
       ELEM(but->type, ButtonType::Text, ButtonType::TextBox, ButtonType::SearchMenu))
   {
     if (RNA_property_editable(&but->rnapoin, but->rnaprop)) {
@@ -3445,7 +3438,7 @@ bool button_string_set(bContext *C, Button *but, const char *str)
 
       if (type == PROP_POINTER) {
         if (str[0] == '\0') {
-          RNA_property_pointer_set(&but->rnapoin, but->rnaprop, PointerRNA_NULL, nullptr);
+          RNA_property_pointer_set(&but->rnapoin, but->rnaprop, {}, nullptr);
           return true;
         }
 
@@ -3735,10 +3728,6 @@ static void but_free_type_specific(Button *but)
       ButtonSearch *search_but = static_cast<ButtonSearch *>(but);
       MEM_SAFE_DELETE(search_but->item_active_str);
 
-      if (search_but->arg_free_fn) {
-        search_but->arg_free_fn(search_but->arg);
-        search_but->arg = nullptr;
-      }
       break;
     }
     default:
@@ -4668,8 +4657,7 @@ static void def_but_rna__menu(bContext *C, Layout *layout, void *but_p)
     rows = totitems;
   }
 
-  const char *title = RNA_property_ui_name(
-      but->rnaprop, RNA_pointer_is_null(&but->rnapoin) ? nullptr : &but->rnapoin);
+  const char *title = RNA_property_ui_name(but->rnaprop, but->rnapoin ? &but->rnapoin : nullptr);
 
   /* Is there a non-blank label before this button on the same row? */
   Button *but_prev = but->block->prev_but(but);
@@ -5060,7 +5048,7 @@ static Button *def_but_rna(Block *block,
   }
 
   const char *info;
-  if (but->rnapoin.data && !RNA_property_editable_info(&but->rnapoin, prop, &info)) {
+  if (but->rnapoin && !RNA_property_editable_info(&but->rnapoin, prop, &info)) {
     button_disable(but, info);
   }
 
@@ -5068,7 +5056,7 @@ static Button *def_but_rna(Block *block,
     /* If the button shows an ID, automatically set it as focused in context so operators can
      * access it. */
     const PointerRNA pptr = RNA_property_pointer_get(ptr, prop);
-    if (pptr.data && RNA_struct_is_ID(pptr.type)) {
+    if (pptr && RNA_struct_is_ID(pptr.type)) {
       but->context = CTX_store_add(block->contexts, "id", &pptr);
     }
   }
@@ -5201,7 +5189,7 @@ Button *uiDefButAlert(Block *block, AlertIcon icon, int x, int y, short width, s
       theme::get_color_4ubv(TH_ERROR, color);
       return uiDefButImage(block, ibuf, x, y, ibuf->x, ibuf->y, color);
     }
-    bTheme *btheme = theme::theme_get();
+    const bTheme *btheme = theme::theme_get();
     return uiDefButImage(block, ibuf, x, y, ibuf->x, ibuf->y, btheme->tui.wcol_menu_back.text);
   }
   return nullptr;
@@ -6162,17 +6150,18 @@ void button_func_search_set(Button *but,
     search_create_fn = searchbox_create_generic;
   }
 
-  if (search_but->arg_free_fn != nullptr) {
-    search_but->arg_free_fn(search_but->arg);
-    search_but->arg = nullptr;
-  }
-
   search_but->popup_create_fn = search_create_fn;
   search_but->items_update_fn = search_update_fn;
   search_but->item_active = active;
 
-  search_but->arg = arg;
-  search_but->arg_free_fn = search_arg_free_fn;
+  if (free_arg && !search_arg_free_fn) {
+    search_arg_free_fn = MEM_delete_void;
+  }
+  search_but->arg = std::shared_ptr<void>(
+      arg,
+      search_arg_free_fn ?
+          search_arg_free_fn :
+          [](void *) { /* Pointer does not need freeing, do nothing in the deleter callback. */ });
 
   if (search_exec_fn) {
 #ifndef NDEBUG
@@ -6184,10 +6173,15 @@ void button_func_search_set(Button *but,
 #endif
     /* Handling will pass the active item as arg2 later, so keep it nullptr here. */
     if (free_arg) {
-      button_funcN_set(but, search_exec_fn, search_but->arg, nullptr);
+      /* XXX This is only done so `but_equals_old()` can recognize this button over redraws,
+       * otherwise interaction breaks entirely. Unlike #button_funcN_set(), #button_func_set() sets
+       * arg1, which takes part in the comparison, so the pointer needs to be stable over redraws.
+       * #button_funcN_set() doesn't set it, but takes ownership of the memory and frees it later.
+       * So give it a duplicate of the memory. */
+      button_funcN_set(but, search_exec_fn, MEM_dupalloc_void(search_but->arg.get()), nullptr);
     }
     else {
-      button_func_set(but, search_exec_fn, search_but->arg, nullptr);
+      button_func_set(but, search_exec_fn, search_but->arg.get(), nullptr);
     }
   }
 
@@ -6522,7 +6516,7 @@ std::string button_string_get_rna_property_identifier(const Button &but)
 
 std::string button_string_get_rna_struct_identifier(const Button &but)
 {
-  if (but.rnaprop && but.rnapoin.data) {
+  if (but.rnaprop && but.rnapoin) {
     return RNA_struct_identifier(but.rnapoin.type);
   }
   if (but.optype) {

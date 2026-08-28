@@ -736,14 +736,19 @@ void draw_widget_scroll(uiWidgetColors *wcol, const rcti *rect, const rcti *slid
  *
  * \param clip_right_if_tight: In case this middle clipping would just remove a few chars, or there
  * are less than 10 characters before the clipping, it rather clips right, which is more readable.
+ *
+ * \param shorten_template_variables: When true, shortens template variable expressions
+ * as needed starting from the left. NOTE: this should only be set to true if the text
+ * field being clipped supports template variables!
  */
 float text_clip_middle_ex(const uiFontStyle *fstyle,
                           char *str,
                           float okwidth,
                           float minwidth,
-                          size_t max_len,
+                          size_t str_maxncpy,
                           char rpart_sep,
-                          bool clip_right_if_tight = true);
+                          bool clip_right_if_tight = true,
+                          bool shorten_template_variables = false);
 
 Vector<StringRef> text_clip_multiline_middle(const uiFontStyle *fstyle,
                                              const char *str,
@@ -1071,14 +1076,6 @@ Block *block_begin(const bContext *C,
                    ARegion *region,
                    std::string name,
                    EmbossType emboss);
-
-/** Execute every block's after layout callback. */
-void block_post_layout_callbacks_exec(const bContext *C, ARegion *region, Block *block);
-
-/**
- * \param postpone_callbacks: After block layout callbacks are not executed, caller should execute
- * them with #block_post_layout_callbacks_exec.
- */
 void block_end_ex(const bContext *C,
                   Main *bmain,
                   wmWindow *window,
@@ -1087,9 +1084,8 @@ void block_end_ex(const bContext *C,
                   Depsgraph *depsgraph,
                   Block *block,
                   const int xy[2] = nullptr,
-                  int r_xy[2] = nullptr,
-                  bool postpone_callbacks = false);
-void block_end(const bContext *C, Block *block, bool postpone_callbacks = false);
+                  int r_xy[2] = nullptr);
+void block_end(const bContext *C, Block *block);
 /**
  * Uses local copy of style, to scale things down, and allow widgets to change stuff.
  */
@@ -2095,18 +2091,10 @@ void button_tooltip_refresh(bContext *C, Button *but);
  */
 void button_tooltip_timer_remove(bContext *C, Button *but);
 
-/**
- * Attempt to activate an button referencing an RNA property in the \a region.
- * \param block_name: targets a block in the \a region, if \a block_name is not set it will test
- * any block in the \a region.
- * \returns `true` if the button gets activated.
- */
 bool textbutton_activate_rna(const bContext *C,
                              ARegion *region,
                              const void *rna_poin_data,
-                             const char *rna_prop_id,
-                             std::optional<StringRefNull> block_name = std::nullopt);
-
+                             const char *rna_prop_id);
 bool textbutton_activate_but(const bContext *C, Button *actbut);
 
 /**
@@ -2539,6 +2527,8 @@ void template_path_builder(Layout *layout,
                            std::optional<StringRefNull> text);
 void template_modifiers(Layout *layout, bContext *C);
 void template_strip_modifiers(Layout *layout, bContext *C);
+void template_scene_compositor_effects(Layout *layout, bContext *C);
+
 /**
  * Check if the shader effect panels don't match the data and rebuild the panels if so.
  */
@@ -2794,6 +2784,11 @@ void template_tree_interface(Layout *layout, const bContext *C, PointerRNA *ptr)
  */
 void template_node_inputs(Layout *layout, bContext *C, PointerRNA *ptr);
 
+/**
+ * Draw the node group inputs for a compositor effect strip.
+ */
+void template_compositor_strip_inputs(Layout *layout, bContext *C, PointerRNA *ptr);
+
 void template_collection_importer(Layout *layout, bContext *C);
 void template_collection_exporters(Layout *layout, bContext *C);
 }  // namespace ui
@@ -2899,13 +2894,6 @@ Block *region_block_find_mouse_over(const ARegion *region, const int xy[2], bool
  * Try to find a search-box region opened from a button in \a button_region.
  */
 ARegion *region_searchbox_region_get(const ARegion *button_region);
-
-/** #uiFontStyle.align */
-enum FontStyleAlign {
-  UI_STYLE_TEXT_LEFT = 0,
-  UI_STYLE_TEXT_CENTER = 1,
-  UI_STYLE_TEXT_RIGHT = 2,
-};
 
 struct FontStyleDrawParams {
   FontStyleAlign align;
@@ -3172,5 +3160,30 @@ AbstractViewItem *region_views_find_active_item(const ARegion *region, const Abs
 Button *region_views_find_active_item_but(const ARegion *region);
 void region_views_clear_search_highlight(const ARegion *region);
 
+void register_scene_compositor_effects_panel(ARegionType *region_type);
+
+enum class ActivationButtonState : int8_t {
+  Highlight,
+  WaitKeyEvent,
+  NumEditing,
+  TextEditing,
+};
+
+/**
+ * Attempt to activate an button referencing an RNA property. If any other button in the screen is
+ * active, it will be deactivated.
+ * \param state: Activation state for the button. Some states are specific to certain button types;
+ * when an incompatible state is provided, the button will be activated with the
+ * #ActivationButtonState::Highlight state.
+ * \param index: Index of the button that references the RNA property.
+ * \return The center point of the button in window coordinates when successfully activated.
+ */
+std::optional<int2> try_activate_rna_button(bContext *C,
+                                            ARegion *region,
+                                            ActivationButtonState target_state,
+                                            PointerRNA *ptr,
+                                            PropertyRNA *prop,
+                                            bool warp_cursor_at_button = false,
+                                            int index = 0);
 }  // namespace ui
 }  // namespace blender

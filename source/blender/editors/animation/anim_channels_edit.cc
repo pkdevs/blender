@@ -2726,7 +2726,7 @@ void ED_anim_ale_fcurve_delete(bAnimContext &ac, bAnimListElem &ale)
       FCurve *fcu = static_cast<FCurve *>(ale.data);
       if (!BKE_nlastrip_controlcurve_remove(strip, fcu)) {
         printf("ERROR: Trying to delete NLA Control Curve for unknown property '%s'\n",
-               fcu->rna_path);
+               fcu->rna_path().c_str());
       }
       break;
     }
@@ -3457,11 +3457,14 @@ static bool animchannels_select_filter_poll(bContext *C)
 }
 
 static wmOperatorStatus animchannels_select_filter_invoke(bContext *C,
-                                                          wmOperator * /*op*/,
+                                                          wmOperator *op,
                                                           const wmEvent * /*event*/)
 {
   ScrArea *area = CTX_wm_area(C);
+  ARegion *region_ctx = CTX_wm_region(C);
   ARegion *region_channels = BKE_area_find_region_type(area, RGN_TYPE_CHANNELS);
+
+  CTX_wm_region_set(C, region_channels);
 
   /* Show the channel region if it's hidden. This means that direct activation of the input field
    * is impossible, as it may not exist yet. For that reason, the actual activation is deferred to
@@ -3471,13 +3474,27 @@ static wmOperatorStatus animchannels_select_filter_invoke(bContext *C,
     ED_region_toggle_hidden(C, region_channels);
     ED_region_tag_redraw(region_channels);
   }
+
+  WM_event_add_modal_handler(C, op);
+
+  CTX_wm_region_set(C, region_ctx);
+  return OPERATOR_RUNNING_MODAL;
+}
+
+static wmOperatorStatus animchannels_select_filter_modal(bContext *C,
+                                                         wmOperator * /*op*/,
+                                                         const wmEvent * /*event*/)
+{
   bAnimContext ac;
   if (ANIM_animdata_get_context(C, &ac) == 0) {
     return OPERATOR_CANCELLED;
   }
 
-  ED_region_activate_rna_prop(
-      C, region_channels, ac.ads, "filter_text", "ED_time_scrub_channel_search_draw");
+  ARegion *region = CTX_wm_region(C);
+  if (ui::textbutton_activate_rna(C, region, ac.ads, "filter_text")) {
+    /* Redraw to make sure it shows the cursor after activating */
+    WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, nullptr);
+  }
 
   return OPERATOR_FINISHED;
 }
@@ -3493,6 +3510,7 @@ static void ANIM_OT_channels_select_filter(wmOperatorType *ot)
 
   /* callbacks */
   ot->invoke = animchannels_select_filter_invoke;
+  ot->modal = animchannels_select_filter_modal;
   ot->poll = animchannels_select_filter_poll;
 }
 
@@ -5204,6 +5222,7 @@ static void ANIM_OT_channels_bake(wmOperatorType *ot)
 static wmOperatorStatus slot_channels_move_to_new_action_exec(bContext *C, wmOperator *op)
 {
   using namespace blender::animrig;
+  using animrig::Strip;
   bAnimContext ac;
 
   /* Get editor data. */
@@ -5297,6 +5316,7 @@ static void ANIM_OT_slot_channels_move_to_new_action(wmOperatorType *ot)
 static wmOperatorStatus separate_slots_exec(bContext *C, wmOperator *op)
 {
   using namespace blender::animrig;
+  using animrig::Strip;
   Object *active_object = CTX_data_active_object(C);
   /* Checked by the poll function. */
   BLI_assert(active_object != nullptr);

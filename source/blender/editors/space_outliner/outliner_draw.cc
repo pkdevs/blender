@@ -984,7 +984,7 @@ static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldnam
           bArmature *arm = id_cast<bArmature *>(tselem->id);
           BoneCollection *bcoll = static_cast<BoneCollection *>(te->directdata);
 
-          ANIM_armature_bonecoll_name_set(arm, bcoll, bcoll->name);
+          ANIM_armature_bonecoll_name_set(*bmain, arm, bcoll, bcoll->name);
           WM_msg_publish_rna_prop(mbus, &arm->id, bcoll, BoneCollection, name);
           WM_event_add_notifier(C, NC_OBJECT | ND_BONE_COLLECTION, arm);
           DEG_id_tag_update(&arm->id, ID_RECALC_SYNC_TO_EVAL);
@@ -998,14 +998,14 @@ static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldnam
           break;
         }
         case TSE_SHAPE_KEY_BLOCK: {
-          const Key *key = id_cast<Key *>(tselem->id);
+          Key *key = id_cast<Key *>(tselem->id);
           KeyBlock *keyblock = static_cast<KeyBlock *>(te->directdata);
           /* Outliner renaming already sets the new name to the KeyBlock. Restore the old name
           before calling rename function which will ensure unique name. */
           char newname[sizeof(keyblock->name)];
           STRNCPY_UTF8(newname, keyblock->name);
           STRNCPY_UTF8(keyblock->name, oldname);
-          BKE_keyblock_rename(key, keyblock, newname);
+          BKE_keyblock_rename(*bmain, key, keyblock, newname);
           WM_event_add_notifier(C, NC_ID | NA_RENAME, nullptr);
           DEG_id_tag_update(tselem->id, ID_RECALC_SYNC_TO_EVAL);
           undo_str = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Rename Shape Key");
@@ -1924,7 +1924,9 @@ static void outliner_draw_userbuts(ui::Block *block,
                            tip);
 
       if (is_linked) {
-        button_flag_enable(bt, ui::BUT_DISABLED);
+        blender::ui::button_disable(bt,
+                                    "Cannot edit fake user on a linked datablock, consider "
+                                    "referencing it through a Custom Property");
       }
       else {
         button_func_set(bt, restrictbutton_id_user_toggle, id, nullptr);
@@ -2353,7 +2355,7 @@ static void outliner_draw_mode_column_toggle(ui::Block *block,
   }
   block_emboss_set(block, ui::EmbossType::NoneOrStatus);
   ui::Button *but = uiDefIconBut(block,
-                                 ui::ButtonType::IconToggle,
+                                 ui::ButtonType::ButToggle,
                                  icon,
                                  x_pad,
                                  te->ys,
@@ -2364,6 +2366,10 @@ static void outliner_draw_mode_column_toggle(ui::Block *block,
                                  0.0,
                                  tip);
   button_func_set(but, outliner_mode_toggle_fn, tselem, nullptr);
+  /* To make drag toggle work, though it only works as expected when Control is held.
+   * Otherwise it doesn't really work as expected and only leaves one object in this mode. */
+  button_func_pushed_state_set(
+      but, [draw_active_icon](const ui::Button &) { return draw_active_icon; });
   button_flag_enable(but, ui::BUT_DRAG_LOCK);
   /* Mode toggling handles its own undo state because undo steps need to be grouped. */
   button_flag_disable(but, ui::BUT_UNDO);
@@ -2695,7 +2701,7 @@ static bool tselem_draw_icon(ui::Block *block,
     float aspect = (0.8f * UI_UNIT_Y) / ICON_DEFAULT_HEIGHT;
     x += 2.0f * aspect;
     y += 2.0f * aspect;
-    bTheme *btheme = ui::theme::theme_get();
+    const bTheme *btheme = ui::theme::theme_get();
 
     if (is_collection) {
       Collection *collection = outliner_collection_from_tree_element(te);
@@ -3230,15 +3236,17 @@ static void outliner_draw_tree_element(ui::Block *block,
 
       if (tselem->type == TSE_LAYER_COLLECTION) {
         const Collection *collection = id_cast<Collection *>(tselem->id);
-        if (collection->importer) {
-          ui::icon_draw_alpha(
-              float(startx) + offsx + 2 * ufac, float(*starty) + 2 * ufac, ICON_IMPORT, alpha_fac);
-          offsx += UI_UNIT_X + 4 * ufac;
-        }
+        const bool has_importer = collection->importer != nullptr;
+        const bool has_exporters = !collection->exporters.is_empty();
 
-        if (!collection->exporters.is_empty()) {
+        if (has_importer || has_exporters) {
+          const int icon_io = (has_importer && has_exporters) ? ICON_IMPORT_EXPORT :
+                              (has_importer)                  ? ICON_IMPORT :
+                              (has_exporters)                 ? ICON_EXPORT :
+                                                                ICON_NONE;
+
           ui::icon_draw_alpha(
-              float(startx) + offsx + 2 * ufac, float(*starty) + 2 * ufac, ICON_EXPORT, alpha_fac);
+              float(startx) + offsx + 2 * ufac, float(*starty) + 2 * ufac, icon_io, alpha_fac);
           offsx += UI_UNIT_X + 4 * ufac;
         }
       }
@@ -3357,7 +3365,7 @@ static void outliner_draw_hierarchy_lines_recursive(uint pos,
                                                     bool draw_grayed_out,
                                                     int *starty)
 {
-  bTheme *btheme = ui::theme::theme_get();
+  const bTheme *btheme = ui::theme::theme_get();
   int y = *starty;
 
   /* Draw vertical lines between collections */
