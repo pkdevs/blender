@@ -452,7 +452,7 @@ inline GPUNodeStackValue GPU_node_stack_default_value(const GPUType type)
 
 struct GPUNodeStack {
   GPUType type = GPU_NONE;
-  GPUNodeStackValue value{};
+  GPUNodeStackValue value{std::monostate{}};
   GPUNodeLink *link = nullptr;
   bool hasinput = false;
   bool hasoutput = false;
