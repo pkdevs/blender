@@ -921,6 +921,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
     light
     light_group
     light_linking
+    lighting_nodes
     lightprobe
     mesh
     node_inlining
