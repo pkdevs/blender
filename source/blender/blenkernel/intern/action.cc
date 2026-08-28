@@ -1804,7 +1804,7 @@ void what_does_obaction(Object *ob,
   workob->par2 = ob->par2;
   workob->par3 = ob->par3;
 
-  workob->constraints.first_ = ob->constraints.first_;
+  workob->constraints.first_ = ob->constraints.first();
   workob->constraints.last_ = ob->constraints.last();
 
   /* Need to set pose too, since this is used for both types of Action Constraint. */

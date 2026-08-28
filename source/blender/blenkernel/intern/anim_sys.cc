@@ -2345,13 +2345,13 @@ static void nlaeval_fmodifiers_join_stacks(ListBaseT<FModifier> *result,
   /* if list1 is invalid... */
   if (ELEM(nullptr, list1, list1->first())) {
     if (list2 && list2->first()) {
-      result->first_ = list2->first_;
+      result->first_ = list2->first();
       result->last_ = list2->last();
     }
   }
   /* if list 2 is invalid... */
   else if (ELEM(nullptr, list2, list2->first())) {
-    result->first_ = list1->first_;
+    result->first_ = list1->first();
     result->last_ = list1->last();
   }
   else {
@@ -2359,7 +2359,7 @@ static void nlaeval_fmodifiers_join_stacks(ListBaseT<FModifier> *result,
      * with the endpoints of these being the endpoints for result
      * - the original lists must be left unchanged though, as we need that fact for restoring.
      */
-    result->first_ = list1->first_;
+    result->first_ = list1->first();
     result->last_ = list2->last();
 
     fcm1 = list1->last();
