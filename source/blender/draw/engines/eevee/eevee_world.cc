@@ -107,6 +107,13 @@ void World::sync()
     has_update = true;
   }
 
+  /* The world used by the viewport can change when switching shading modes. */
+  if (inst_.is_viewport() && inst_.v3d && inst_.v3d->shading.type == OB_RENDER &&
+      inst_.v3d->shading.prev_type != OB_RENDER)
+  {
+    has_update = true;
+  }
+
   inst_.light_probes.sync_world(bl_world, has_update);
 
   if (inst_.is_viewport() && has_update) {
