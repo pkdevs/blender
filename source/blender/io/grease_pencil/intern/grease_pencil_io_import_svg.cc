@@ -16,6 +16,8 @@
 #include "BLI_path_utils.hh"
 #include "BLI_string.hh"
 
+#include "BKE_colorband.hh"
+#include "BKE_context.hh"
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_report.hh"
@@ -93,10 +95,7 @@ static ColorGeometry4f average_gradient_color(const NSVGgradient &svg_gradient)
   return ColorGeometry4f(avg_color);
 }
 
-/* TODO Gradients are not yet supported (will output magenta placeholder color).
- * This is because gradients for fill materials in particular can only be defined by materials.
- * Since each path can have a unique gradient it potentially requires a material per curve.
- * Stroke gradients could be baked into vertex colors. */
+/* TODO: Stroke gradients could be baked into vertex colors. */
 static ColorGeometry4f convert_svg_color(const NSVGpaint &svg_paint)
 {
   switch (NSVGpaintType(svg_paint.type)) {
@@ -216,7 +215,11 @@ static void shape_attributes_to_curves(bke::CurvesGeometry &curves,
       "opacity", bke::AttrDomain::Point);
 
   materials.span.slice(curves_range).fill(material_index);
-  const ColorGeometry4f shape_color = convert_svg_color(shape.fill);
+  ColorGeometry4f shape_color = convert_svg_color(shape.fill);
+  if (ELEM(shape.fill.type, NSVG_PAINT_LINEAR_GRADIENT, NSVG_PAINT_RADIAL_GRADIENT)) {
+    shape_color = ColorGeometry4f(0.0f, 0.0f, 0.0f, 1.0f);
+  }
+
   if (fill_colors) {
     fill_colors.span.slice(curves_range).fill(shape_color);
   }
@@ -352,6 +355,72 @@ static void shift_to_bounds_center(GreasePencil &grease_pencil)
   }
 }
 
+static int create_gradient_material(const bContext *C, Object *object, const NSVGpaint &fill)
+{
+  const ColorGeometry4f default_stroke_color = {0.0f, 0.0f, 0.0f, 1.0f};
+  const ColorGeometry4f default_fill_color = {0.5f, 0.5f, 0.5f, 1.0f};
+
+  Main *bmain = CTX_data_main(C);
+  int new_idx;
+  Material *mat_gp = BKE_grease_pencil_object_material_new(bmain, object, "gradient", &new_idx);
+
+  MaterialGPencilStyle *gp_style = mat_gp->gp_style;
+
+  copy_v4_v4(gp_style->stroke_rgba, default_stroke_color);
+  copy_v4_v4(gp_style->fill_rgba, default_fill_color);
+
+  if (fill.type == NSVG_PAINT_RADIAL_GRADIENT) {
+    gp_style->gradient_type = GP_MATERIAL_GRADIENT_RADIAL;
+  }
+
+  gp_style->fill_style = GP_MATERIAL_FILL_STYLE_GRADIENT;
+  copy_v2_v2(gp_style->texture_offset, float2(0.0f));
+
+  NSVGgradient *svg_gradient = fill.gradient;
+
+  if (!svg_gradient) {
+    return new_idx;
+  }
+
+  gp_style->gradient = BKE_colorband_add(true);
+
+  const Span<NSVGgradientStop> stops = {svg_gradient->stops,
+                                        std::min(svg_gradient->nstops, MAXCOLORBAND)};
+
+  if (stops.is_empty()) {
+    return new_idx;
+  }
+
+  for (const int i : stops.index_range()) {
+    copy_v4_v4(&gp_style->gradient->data[i].r, unpack_nano_color(stops[i].color));
+    gp_style->gradient->data[i].pos = stops[i].offset;
+  }
+
+  gp_style->gradient->tot = stops.size();
+
+  return new_idx;
+}
+
+static float4x3 expand_4x2_mat(float4x2 strokemat)
+{
+  float4x3 strokemat4x3 = float4x3(strokemat);
+
+  /*
+   * We need the diagonal of ones to start from the bottom right instead top left to properly
+   * apply the two matrices.
+   *
+   * i.e.
+   *          # # # #              # # # #
+   * We need  # # # #  Instead of  # # # #
+   *          0 0 0 1              0 0 1 0
+   *
+   */
+  strokemat4x3[2][2] = 0.0f;
+  strokemat4x3[3][2] = 1.0f;
+
+  return strokemat4x3;
+}
+
 bool SVGImporter::read(StringRefNull filepath)
 {
   /* Fixed SVG unit for scaling. */
@@ -395,9 +464,6 @@ bool SVGImporter::read(StringRefNull filepath)
   const float4x4 transform = math::scale(
       math::from_rotation<float4x4>(math::EulerXYZ(DEG2RAD(-90), 0, 0)), float3(svg_scale));
 
-  /* True if any shape has a color gradient, which are not fully supported. */
-  bool has_color_gradient = false;
-
   /* Loop all shapes. */
   std::string prv_id = "*";
   int prefix = 0;
@@ -431,34 +497,36 @@ bool SVGImporter::read(StringRefNull filepath)
       }
     }
 
-    /* Find or create materials. */
-    const bool is_fill = bool(shape->fill.type);
-    const bool is_stroke = bool(shape->stroke.type) || !is_fill;
     int material_index;
-    if (is_stroke && is_fill) {
-      if (!mat_index_both) {
-        mat_index_both = create_material("Both");
-      }
-
-      material_index = *mat_index_both;
-    }
-    else if (is_stroke) {
-      if (!mat_index_stroke) {
-        mat_index_stroke = create_material("Stroke");
-      }
-
-      material_index = *mat_index_stroke;
-    }
-    else if (is_fill) {
-      if (!mat_index_fill) {
-        mat_index_fill = create_material("Fill");
-      }
-
-      material_index = *mat_index_fill;
-    }
 
     if (ELEM(shape->fill.type, NSVG_PAINT_LINEAR_GRADIENT, NSVG_PAINT_RADIAL_GRADIENT)) {
-      has_color_gradient = true;
+      material_index = create_gradient_material(&context_.C, object_, shape->fill);
+    }
+    else {
+      /* Find or create materials. */
+      const bool is_fill = bool(shape->fill.type);
+      const bool is_stroke = bool(shape->stroke.type) || !is_fill;
+      if (is_stroke && is_fill) {
+        if (!mat_index_both) {
+          mat_index_both = create_material("Both");
+        }
+
+        material_index = *mat_index_both;
+      }
+      else if (is_stroke) {
+        if (!mat_index_stroke) {
+          mat_index_stroke = create_material("Stroke");
+        }
+
+        material_index = *mat_index_stroke;
+      }
+      else if (is_fill) {
+        if (!mat_index_fill) {
+          mat_index_fill = create_material("Fill");
+        }
+
+        material_index = *mat_index_fill;
+      }
     }
 
     bke::CurvesGeometry &curves = drawing->strokes_for_write();
@@ -469,7 +537,35 @@ bool SVGImporter::read(StringRefNull filepath)
 
     shape_attributes_to_curves(
         curves, *shape, new_curves_range, transform, shape_index, material_index);
-    drawing->strokes_for_write() = std::move(curves);
+
+    drawing->tag_topology_changed();
+
+    if (ELEM(shape->fill.type, NSVG_PAINT_LINEAR_GRADIENT, NSVG_PAINT_RADIAL_GRADIENT)) {
+      const NSVGgradient *svg_gradient = shape->fill.gradient;
+      const float *t = svg_gradient->xform;
+
+      texture_matrix[0][0] = t[0];
+      texture_matrix[0][1] = t[1];
+      texture_matrix[2][0] = -t[2];
+      texture_matrix[2][1] = -t[3];
+      texture_matrix *= 1.0f / svg_scale;
+
+      texture_matrix[3][0] = t[4];
+      texture_matrix[3][1] = t[5];
+
+      if (shape->fill.type == NSVG_PAINT_RADIAL_GRADIENT) {
+        texture_matrix *= 0.5f;
+      }
+      else {
+        const float3x2 offset_matrix = float3x2(
+            float2(0.0f, -1.0f), float2(1.0f, 0.0f), float2(-0.5f, 0.5f));
+
+        texture_matrix = offset_matrix * expand_4x2_mat(texture_matrix);
+      }
+
+      const Array<float4x2> texture_matrices(new_curves_range.size(), texture_matrix);
+      drawing->set_texture_matrices(texture_matrices, new_curves_range);
+    }
 
     shape_index++;
   }
@@ -480,12 +576,6 @@ bool SVGImporter::read(StringRefNull filepath)
   /* Calculate bounding box and move all points to new origin center. */
   if (params_.recenter_bounds) {
     shift_to_bounds_center(grease_pencil);
-  }
-
-  if (has_color_gradient) {
-    BKE_report(context_.reports,
-               RPT_WARNING,
-               "SVG has gradients, Grease Pencil color will be approximated");
   }
 
   return true;
