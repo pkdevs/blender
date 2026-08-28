@@ -98,10 +98,10 @@ ccl_device_inline float3 gsplat_normal(
   const int rotation_offset = kernel_data_fetch(objects, object).gsplat.rotation_offset;
 
   float3 scale;
-  float4 rotation;
+  Quaternion rotation;
   if ((primitive_type & PRIMITIVE_MOTION) == 0) {
     scale = kernel_data_fetch(attributes_float3, scale_offset + prim);
-    rotation = kernel_data_fetch(attributes_float4, rotation_offset + prim);
+    rotation = kernel_data_fetch(attributes_quaternion, rotation_offset + prim);
   }
   else {
     /* Get motion info. */
@@ -119,9 +119,9 @@ ccl_device_inline float3 gsplat_normal(
                                                 scale_offset + offset_for_next_step);
     scale = (1.0f - t) * scale + t * next_scale;
 
-    rotation = kernel_data_fetch(attributes_float4, rotation_offset + offset_for_step);
-    const float4 next_rotation = kernel_data_fetch(attributes_float4,
-                                                   rotation_offset + offset_for_next_step);
+    rotation = kernel_data_fetch(attributes_quaternion, rotation_offset + offset_for_step);
+    const Quaternion next_rotation = kernel_data_fetch(attributes_quaternion,
+                                                       rotation_offset + offset_for_next_step);
     rotation = motion_gsplat_rotation_interpolate(rotation, next_rotation, t);
   }
 

@@ -43,30 +43,30 @@ ccl_device_forceinline void motion_gsplat_compute_info(KernelGlobals kg,
   *t = time * max_step - *step;
 }
 
-ccl_device_inline float4 motion_gsplat_rotation_for_step(KernelGlobals kg,
-                                                         int offset,
-                                                         const int num_verts,
-                                                         const int num_steps,
-                                                         const int step,
-                                                         const int prim)
+ccl_device_inline Quaternion motion_gsplat_rotation_for_step(KernelGlobals kg,
+                                                             int offset,
+                                                             const int num_verts,
+                                                             const int num_steps,
+                                                             const int step,
+                                                             const int prim)
 {
   offset += motion_point_offset_for_step(num_verts, num_steps, step);
-  return kernel_data_fetch(attributes_float4, offset + prim);
+  return kernel_data_fetch(attributes_quaternion, offset + prim);
 }
 
-ccl_device_forceinline float4 motion_gsplat_rotation_interpolate(const float4 r1,
-                                                                 const float4 r2,
-                                                                 const float t)
+ccl_device_forceinline Quaternion motion_gsplat_rotation_interpolate(const Quaternion r1,
+                                                                     const Quaternion r2,
+                                                                     const float t)
 {
   /* Use linear interpolation which is cheap and wors good enough. This is also what
    * quat_interpolate() does for HW-RT. */
-  return normalize((1.0f - t) * r1 + t * r2);
+  return lerp(r1, r2, t);
 }
 
-ccl_device_inline float4 motion_gsplat_rotation(KernelGlobals kg,
-                                                const int object,
-                                                const int prim,
-                                                const float time)
+ccl_device_inline Quaternion motion_gsplat_rotation(KernelGlobals kg,
+                                                    const int object,
+                                                    const int prim,
+                                                    const float time)
 {
   /* Get motion info. */
   const int num_verts = kernel_data_fetch(objects, object).numverts;
@@ -76,9 +76,9 @@ ccl_device_inline float4 motion_gsplat_rotation(KernelGlobals kg,
 
   /* Fetch key rotations. */
   const int offset = kernel_data_fetch(objects, object).gsplat.rotation_offset;
-  const float4 rotation = motion_gsplat_rotation_for_step(
+  const Quaternion rotation = motion_gsplat_rotation_for_step(
       kg, offset, num_verts, num_steps, step, prim);
-  const float4 next_rotation = motion_gsplat_rotation_for_step(
+  const Quaternion next_rotation = motion_gsplat_rotation_for_step(
       kg, offset, num_verts, num_steps, step + 1, prim);
 
   /* Interpolate between steps. */

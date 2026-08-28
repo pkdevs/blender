@@ -93,6 +93,7 @@ ccl_device float4 volume_attribute_float4(KernelGlobals kg,
       case NODE_ATTR_RGBA:
         return kernel_data_fetch(attributes_float4, desc.offset);
       case NODE_ATTR_MATRIX:
+      case NODE_ATTR_QUATERNION:
       case NODE_ATTR_SPHERICAL_HARMONICS:
         return zero_float4();
     }

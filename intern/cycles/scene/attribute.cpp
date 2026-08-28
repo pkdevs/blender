@@ -27,7 +27,7 @@ Attribute::Attribute(ustring name,
   /* String is not supported! */
   assert(type == TypeFloat || type == TypeColor || type == TypePoint || type == TypeVector ||
          type == TypeNormal || type == TypeMatrix || type == TypeFloat2 || type == TypeFloat4 ||
-         type == TypeRGBA || type == TypePackedSphericalHarmonics);
+         type == TypeRGBA || type == TypeQuaternion || type == TypePackedSphericalHarmonics);
 
   if (element & ATTR_ELEMENT_VOXEL) {
     auto *data = GuardedAllocator<ImageHandle>().allocate(1);
@@ -350,6 +350,9 @@ size_t Attribute::data_sizeof() const
   if (type == TypeRGBA) {
     return sizeof(float4);
   }
+  if (type == TypeQuaternion) {
+    return sizeof(Quaternion);
+  }
   if (type == TypePackedSphericalHarmonics) {
     return sizeof(PackedSphericalHarmonics);
   }
@@ -612,6 +615,10 @@ AttrKernelDataType Attribute::kernel_type(const Attribute &attr)
     return AttrKernelDataType::FLOAT4;
   }
 
+  if (attr.type == TypeQuaternion) {
+    return AttrKernelDataType::QUATERNION;
+  }
+
   if (attr.type == TypePackedSphericalHarmonics) {
     return AttrKernelDataType::SPHERICAL_HARMONICS;
   }
@@ -843,7 +850,7 @@ static bool standard_type_element(const Geometry *geometry,
         element = ATTR_ELEMENT_VERTEX;
         return true;
       case ATTR_STD_GSPLAT_ROTATION:
-        type = TypeFloat4;
+        type = TypeQuaternion;
         element = ATTR_ELEMENT_VERTEX;
         return true;
       default:

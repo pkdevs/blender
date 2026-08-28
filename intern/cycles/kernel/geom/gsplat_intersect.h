@@ -45,7 +45,7 @@ CCL_NAMESPACE_BEGIN
 /* Parameters of the gaussian splat that are needed for intersection. */
 struct GSplatIsectParams {
   float3 scale;
-  float4 rotation;
+  Quaternion rotation;
   float4 radiance_base;
 };
 
@@ -62,7 +62,7 @@ ccl_device_forceinline GSplatIsectParams gsplat_intersect_get_params(
 
   if ((primitive_type & PRIMITIVE_MOTION) == 0) {
     params.scale = kernel_data_fetch(attributes_float3, scale_offset + prim);
-    params.rotation = kernel_data_fetch(attributes_float4, rotation_offset + prim);
+    params.rotation = kernel_data_fetch(attributes_quaternion, rotation_offset + prim);
     params.radiance_base = kernel_data_fetch(attributes_float4, radiance_base_offset + prim);
     return params;
   }
@@ -81,9 +81,10 @@ ccl_device_forceinline GSplatIsectParams gsplat_intersect_get_params(
   const float3 next_scale = kernel_data_fetch(attributes_float3,
                                               scale_offset + offset_for_next_step);
 
-  const float4 rotation = kernel_data_fetch(attributes_float4, rotation_offset + offset_for_step);
-  const float4 next_rotation = kernel_data_fetch(attributes_float4,
-                                                 rotation_offset + offset_for_next_step);
+  const Quaternion rotation = kernel_data_fetch(attributes_quaternion,
+                                                rotation_offset + offset_for_step);
+  const Quaternion next_rotation = kernel_data_fetch(attributes_quaternion,
+                                                     rotation_offset + offset_for_next_step);
 
   const float4 radiance_base = kernel_data_fetch(attributes_float4,
                                                  radiance_base_offset + offset_for_step);

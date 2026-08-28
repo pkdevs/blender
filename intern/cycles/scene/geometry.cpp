@@ -331,6 +331,10 @@ static void update_device_flags_attribute(uint32_t &device_update_flags,
         device_update_flags |= ATTR_NORMAL_MODIFIED;
         break;
       }
+      case AttrKernelDataType::QUATERNION: {
+        device_update_flags |= ATTR_QUATERNION_MODIFIED;
+        break;
+      }
       case AttrKernelDataType::SPHERICAL_HARMONICS: {
         device_update_flags |= ATTR_SPHERICAL_HARMONICS_MODIFIED;
         break;
@@ -362,6 +366,9 @@ static void update_attribute_realloc_flags(uint32_t &device_update_flags,
   }
   if (attributes.modified(AttrKernelDataType::NORMAL)) {
     device_update_flags |= ATTR_NORMAL_NEEDS_REALLOC;
+  }
+  if (attributes.modified(AttrKernelDataType::QUATERNION)) {
+    device_update_flags |= ATTR_QUATERNION_NEEDS_REALLOC;
   }
   if (attributes.modified(AttrKernelDataType::SPHERICAL_HARMONICS)) {
     device_update_flags |= ATTR_SPHERICAL_HARMONICS_NEEDS_REALLOC;

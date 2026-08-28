@@ -162,6 +162,11 @@ svm_node_attr_surface_eval(KernelGlobals kg,
     }
   }
 
+  /* Unsupported data types. */
+  if (desc.type == NODE_ATTR_QUATERNION) {
+    return make_float3(FloatType(0.0f));
+  }
+
   Float3Type f = primitive_surface_attribute<Float3Type>(kg, sd, desc);
   if (type == NODE_ATTR_OUTPUT_FLOAT) {
     return make_float3(average(f));

@@ -44,14 +44,15 @@ enum class AttrKernelDataType {
   FLOAT4 = 3,
   UCHAR4 = 4,
   NORMAL = 5,
-  SPHERICAL_HARMONICS = 6,
-  NUM = 7
+  QUATERNION = 6,
+  SPHERICAL_HARMONICS = 7,
+  NUM = 8
 };
 
 /* Attribute
  *
  * Arbitrary data layers on meshes.
- * Supported types: Float, Color, Vector, Normal, Point */
+ * Supported types: Float, Color, Vector, Normal, Point, Quaternion, Spherical Harmonics. */
 
 class Attribute {
  public:
