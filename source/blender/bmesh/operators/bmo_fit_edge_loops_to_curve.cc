@@ -224,7 +224,7 @@ static CurveChainData build_curve_chain_from_edge(BMEdge *start_edge, Set<BMEdge
   return chain;
 }
 
-static void get_perpendicular_chains(const CurveChainData chain,
+static void get_perpendicular_chains(const CurveChainData &chain,
                                      Vector<CurveChainData> &r_chains,
                                      Set<BMEdge *> &visited_edges)
 {
