@@ -10,12 +10,15 @@
 #pragma once
 
 #include "BLI_function_ref.hh"
+#include "BLI_index_mask.hh"
+#include "BLI_math_vector_types.hh"
 
 #include "DEG_depsgraph.hh"
 
 #include "DNA_object_enums.h"
 
 namespace blender {
+struct ViewContext;
 struct Paint;
 namespace ed::sculpt_paint {
 struct StrokeCache;
@@ -59,5 +62,18 @@ void do_symmetrical_brush_actions_with_tiling_and_feathering(const Depsgraph &de
                                                              Object &object,
                                                              BrushActionFn action_fn,
                                                              PaintModeData *paint_mode_data);
+
+/**
+ * Initialize common `StrokeCache` values that do not change over the course of the stroke
+ */
+void stroke_cache_common_init(
+    ViewContext &vc, const Paint &paint, const Brush &brush, Object &object, float2 mval);
+
+/**
+ * Query the BVH based on the current brush being used.
+ *
+ * TODO: Merge this implementation with #pbvh_gather_generic
+ */
+IndexMask gather_brush_nodes(const Object &ob, const Brush &brush, IndexMaskMemory &memory);
 
 }  // namespace blender::ed::sculpt_paint
