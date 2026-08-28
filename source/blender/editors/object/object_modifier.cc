@@ -3576,7 +3576,7 @@ static wmOperatorStatus geometry_node_tree_copy_assign_exec(bContext *C, wmOpera
   Main *bmain = CTX_data_main(C);
   Object *ob = context_active_object(C);
   PointerRNA ctx_ptr = CTX_data_pointer_get_type(C, "modifier", RNA_Modifier);
-  ModifierData *md = static_cast<ModifierData *>(ctx_ptr.data);
+  ModifierData *md = ctx_ptr.data_as<ModifierData>();
   if (!md) {
     md = BKE_object_active_modifier(ob);
   }
