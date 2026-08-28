@@ -176,6 +176,7 @@ IDTypeInfo IDType_ID_PT = {
     .init_data = pointcloud_init_data,
     .copy_data = pointcloud_copy_data,
     .free_data = pointcloud_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = pointcloud_foreach_id,
     .foreach_cache = nullptr,

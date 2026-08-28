@@ -298,6 +298,7 @@ IDTypeInfo IDType_ID_SO = {
     .init_data = nullptr,
     .copy_data = sound_copy_data,
     .free_data = sound_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = nullptr,
     .foreach_cache = sound_foreach_cache,

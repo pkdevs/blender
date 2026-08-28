@@ -304,6 +304,7 @@ IDTypeInfo IDType_ID_MC = {
     .init_data = movie_clip_init_data,
     .copy_data = movie_clip_copy_data,
     .free_data = movie_clip_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = movie_clip_foreach_id,
     .foreach_cache = movie_clip_foreach_cache,

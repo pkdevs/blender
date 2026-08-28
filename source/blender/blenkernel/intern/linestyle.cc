@@ -718,6 +718,7 @@ IDTypeInfo IDType_ID_LS = {
     .init_data = linestyle_init_data,
     .copy_data = linestyle_copy_data,
     .free_data = linestyle_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = linestyle_foreach_id,
     .foreach_cache = nullptr,

@@ -136,6 +136,7 @@ IDTypeInfo IDType_ID_CF = {
     .init_data = cache_file_init_data,
     .copy_data = cache_file_copy_data,
     .free_data = cache_file_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = nullptr,
     .foreach_cache = nullptr,

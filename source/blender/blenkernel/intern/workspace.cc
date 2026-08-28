@@ -239,6 +239,7 @@ IDTypeInfo IDType_ID_WS = {
     .init_data = workspace_init_data,
     .copy_data = workspace_copy_data,
     .free_data = workspace_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = workspace_foreach_id,
     .foreach_cache = nullptr,

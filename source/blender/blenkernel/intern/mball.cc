@@ -151,6 +151,7 @@ IDTypeInfo IDType_ID_MB = {
     .init_data = metaball_init_data,
     .copy_data = metaball_copy_data,
     .free_data = metaball_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = metaball_foreach_id,
     .foreach_cache = nullptr,

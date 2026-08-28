@@ -28,6 +28,7 @@ struct BlendLibReader;
 struct BlendWriter;
 struct LibraryForeachIDData;
 struct Main;
+struct ReportList;
 
 /** IDTypeInfo.flags. */
 enum {
@@ -94,6 +95,9 @@ using IDTypeCopyDataFunction = void (*)(
     Main *bmain, std::optional<Library *> owner_library, ID *id_dst, const ID *id_src, int flag);
 
 using IDTypeFreeDataFunction = void (*)(ID *id);
+
+/** \param reports: May be null. */
+using IDTypeSanitizeDataFunction = void (*)(ID *id, ReportList *reports);
 
 /** \param flags: See BKE_lib_id.hh's LIB_ID_MAKELOCAL_... flags. */
 using IDTypeMakeLocalFunction = void (*)(Main *bmain, ID *id, int flags);
@@ -218,6 +222,18 @@ struct IDTypeInfo {
    * Free the data of the data-block (NOT the ID itself). May be NULL if there is nothing to do.
    */
   IDTypeFreeDataFunction free_data = InvalidPointer<IDTypeFreeDataFunction>();
+
+  /**
+   * Optional support for repairing an invalid data-block's data.
+   * Any changes should report a warning.
+   *
+   * This may be slow, only run it on request, see #G_DEBUG_BLEND_SANITIZE.
+   *
+   * \note Part of the intent of this feature is for developers to be able to
+   * easily detect of a bug is caused by corrupt blend-file data.
+   * It shouldn't be used as a way to side-step fixing underlying bugs.
+   */
+  IDTypeSanitizeDataFunction sanitize_data = InvalidPointer<IDTypeSanitizeDataFunction>();
 
   /**
    * Make a linked data-block local. May be NULL if default behavior from

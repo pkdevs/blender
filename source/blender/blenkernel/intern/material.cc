@@ -261,6 +261,7 @@ IDTypeInfo IDType_ID_MA = {
     .init_data = material_init_data,
     .copy_data = material_copy_data,
     .free_data = material_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = material_foreach_id,
     .foreach_cache = nullptr,

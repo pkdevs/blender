@@ -201,6 +201,7 @@ IDTypeInfo IDType_ID_WO = {
     .init_data = world_init_data,
     .copy_data = world_copy_data,
     .free_data = world_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = world_foreach_id,
     .foreach_cache = nullptr,

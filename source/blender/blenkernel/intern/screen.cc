@@ -271,6 +271,7 @@ IDTypeInfo IDType_ID_SCR = {
     .init_data = screen_init_data,
     .copy_data = screen_copy_data,
     .free_data = screen_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = screen_foreach_id,
     .foreach_cache = nullptr,

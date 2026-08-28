@@ -179,6 +179,7 @@ IDTypeInfo IDType_ID_LT = {
     .init_data = lattice_init_data,
     .copy_data = lattice_copy_data,
     .free_data = lattice_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = lattice_foreach_id,
     .foreach_cache = nullptr,

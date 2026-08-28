@@ -1287,6 +1287,7 @@ IDTypeInfo IDType_ID_OB = {
     .init_data = object_init_data,
     .copy_data = object_copy_data,
     .free_data = object_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = object_foreach_id,
     .foreach_cache = object_foreach_cache,

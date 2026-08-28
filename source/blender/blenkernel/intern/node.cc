@@ -2530,6 +2530,7 @@ IDTypeInfo IDType_ID_NT = {
     .init_data = bke::ntree_init_data,
     .copy_data = bke::ntree_copy_data,
     .free_data = bke::ntree_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = bke::node_foreach_id,
     .foreach_cache = nullptr,

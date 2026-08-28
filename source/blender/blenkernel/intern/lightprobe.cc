@@ -65,6 +65,7 @@ IDTypeInfo IDType_ID_LP = {
     .init_data = lightprobe_init_data,
     .copy_data = nullptr,
     .free_data = nullptr,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = lightprobe_foreach_id,
     .foreach_cache = nullptr,

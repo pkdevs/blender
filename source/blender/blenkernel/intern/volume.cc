@@ -306,6 +306,7 @@ IDTypeInfo IDType_ID_VO = {
     .init_data = volume_init_data,
     .copy_data = volume_copy_data,
     .free_data = volume_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = volume_foreach_id,
     .foreach_cache = volume_foreach_cache,

@@ -392,6 +392,7 @@ IDTypeInfo IDType_ID_PA = {
     .init_data = particle_settings_init,
     .copy_data = particle_settings_copy_data,
     .free_data = particle_settings_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = particle_settings_foreach_id,
     .foreach_cache = nullptr,

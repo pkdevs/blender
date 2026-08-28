@@ -1965,7 +1965,9 @@ static void write_file_main_validate_pre(Main &bmain,
     return;
   }
 
-  if (G.debug & G_DEBUG_IO) {
+  const bool do_validate = (G.debug & (G_DEBUG_IO | G_DEBUG_BLEND_SANITIZE)) != 0;
+
+  if (do_validate) {
     BKE_report(
         reports, RPT_DEBUG, "Checking validity of current .blend file *BEFORE* save to disk");
   }
@@ -1978,7 +1980,7 @@ static void write_file_main_validate_pre(Main &bmain,
                "(see console for details)");
   }
 
-  if (G.debug & G_DEBUG_IO) {
+  if (do_validate) {
     BLO_main_validate_libraries(&bmain, reports);
   }
 
@@ -2009,7 +2011,7 @@ static void write_file_main_validate_post(Main *bmain, ReportList *reports)
     return;
   }
 
-  if (G.debug & G_DEBUG_IO) {
+  if (G.debug & (G_DEBUG_IO | G_DEBUG_BLEND_SANITIZE)) {
     BKE_report(
         reports, RPT_DEBUG, "Checking validity of current .blend file *AFTER* save to disk");
     BLO_main_validate_libraries(bmain, reports);

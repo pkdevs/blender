@@ -312,6 +312,7 @@ IDTypeInfo IDType_ID_CU_LEGACY = {
     .init_data = curve_init_data,
     .copy_data = curve_copy_data,
     .free_data = curve_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = curve_foreach_id,
     .foreach_cache = nullptr,

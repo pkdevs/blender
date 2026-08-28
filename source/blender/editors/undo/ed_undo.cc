@@ -175,7 +175,7 @@ static void ed_undo_step_pre(bContext *C,
   ED_preview_kill_jobs_for_undo(wm, bmain);
   WM_jobs_kill_all(wm);
 
-  if (G.debug & G_DEBUG_IO) {
+  if (G.debug & (G_DEBUG_IO | G_DEBUG_BLEND_SANITIZE)) {
     if (bmain->lock != nullptr) {
       BKE_report(
           reports, RPT_DEBUG, "Checking validity of current .blend file *BEFORE* undo step");
@@ -217,7 +217,7 @@ static void ed_undo_step_post(bContext *C,
     wm->op_undo_depth--;
   }
 
-  if (G.debug & G_DEBUG_IO) {
+  if (G.debug & (G_DEBUG_IO | G_DEBUG_BLEND_SANITIZE)) {
     if (bmain->lock != nullptr) {
       BKE_report(reports, RPT_INFO, "Checking validity of current .blend file *AFTER* undo step");
       BLO_main_validate_libraries(bmain, reports);

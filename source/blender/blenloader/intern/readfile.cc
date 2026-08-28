@@ -2054,6 +2054,13 @@ static void after_liblink_id_process(BlendLibReader *reader, ID *id)
   if (id_type->blend_read_after_liblink != nullptr) {
     id_type->blend_read_after_liblink(reader, id);
   }
+
+  if (G.debug & G_DEBUG_BLEND_SANITIZE) {
+    if ((id_type->sanitize_data != nullptr) && !BLO_read_lib_is_undo(reader)) {
+      BlendFileReadReport *reports = BLO_read_lib_reports(reader);
+      id_type->sanitize_data(id, reports ? reports->reports : nullptr);
+    }
+  }
 }
 
 static void direct_link_id_override_property(BlendDataReader *reader,

@@ -62,6 +62,7 @@ IDTypeInfo IDType_ID_SPK = {
     .init_data = speaker_init_data,
     .copy_data = nullptr,
     .free_data = nullptr,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = speaker_foreach_id,
     .foreach_cache = nullptr,

@@ -101,6 +101,7 @@ IDTypeInfo IDType_ID_LINK_PLACEHOLDER = {
     .init_data = nullptr,
     .copy_data = nullptr,
     .free_data = nullptr,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = nullptr,
     .foreach_cache = nullptr,

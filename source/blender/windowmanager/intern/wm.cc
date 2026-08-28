@@ -233,6 +233,7 @@ IDTypeInfo IDType_ID_WM = {
     .init_data = nullptr,
     .copy_data = nullptr,
     .free_data = window_manager_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = window_manager_foreach_id,
     .foreach_cache = nullptr,

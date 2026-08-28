@@ -185,6 +185,7 @@ IDTypeInfo IDType_ID_KE = {
     .init_data = nullptr,
     .copy_data = shapekey_copy_data,
     .free_data = shapekey_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = shapekey_foreach_id,
     .foreach_cache = nullptr,

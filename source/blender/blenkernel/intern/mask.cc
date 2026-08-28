@@ -205,6 +205,7 @@ IDTypeInfo IDType_ID_MSK = {
     .init_data = nullptr,
     .copy_data = mask_copy_data,
     .free_data = mask_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = mask_foreach_id,
     .foreach_cache = nullptr,

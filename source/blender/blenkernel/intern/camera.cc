@@ -265,6 +265,7 @@ IDTypeInfo IDType_ID_CA = {
     .init_data = camera_init_data,
     .copy_data = camera_copy_data,
     .free_data = camera_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = camera_foreach_id,
     .foreach_cache = nullptr,

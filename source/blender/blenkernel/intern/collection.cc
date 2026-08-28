@@ -428,6 +428,7 @@ IDTypeInfo IDType_ID_GR = {
     .init_data = collection_init_data,
     .copy_data = collection_copy_data,
     .free_data = collection_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = collection_foreach_id,
     .foreach_cache = nullptr,

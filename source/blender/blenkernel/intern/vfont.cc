@@ -179,6 +179,7 @@ IDTypeInfo IDType_ID_VF = {
     .init_data = vfont_init_data,
     .copy_data = vfont_copy_data,
     .free_data = vfont_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = nullptr,
     .foreach_cache = nullptr,

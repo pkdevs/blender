@@ -753,6 +753,7 @@ IDTypeInfo IDType_ID_AC = {
     .init_data = bke::action_init_data,
     .copy_data = bke::action_copy_data,
     .free_data = bke::action_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = bke::action_foreach_id,
     .foreach_cache = nullptr,

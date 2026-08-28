@@ -363,6 +363,7 @@ IDTypeInfo IDType_ID_GP = {
     .init_data = grease_pencil_init_data,
     .copy_data = grease_pencil_copy_data,
     .free_data = grease_pencil_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = grease_pencil_foreach_id,
     .foreach_cache = nullptr,

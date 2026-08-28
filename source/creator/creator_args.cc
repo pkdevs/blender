@@ -790,6 +790,7 @@ static void print_help(bArgs *ba, bool all)
   }
   BLI_args_print_arg_doc(ba, "--debug-all");
   BLI_args_print_arg_doc(ba, "--debug-io");
+  BLI_args_print_arg_doc(ba, "--debug-blend-sanitize");
 
   PRINT("\n");
   BLI_args_print_arg_doc(ba, "--debug-fpe");
@@ -1449,6 +1450,12 @@ static const char arg_handle_debug_mode_generic_set_doc_gpu_force_vulkan_local_r
 static const char arg_handle_debug_mode_generic_set_doc_gpu_device_no_fallback[] =
     "\n\t"
     "Fail instead of falling back when '--gpu-device' does not match a usable Vulkan device.";
+static const char arg_handle_debug_mode_generic_set_doc_blend_sanitize[] =
+    "\n\t"
+    "Enable additional blend-file IO checks, repairing certain kinds of invalid data.\n"
+    "\tIntended to help troubleshoot files created by bugs with add-ons or Blender itself,\n"
+    "\ttoo slow for typical usage.\n"
+    "\tAny issues found will be reported as warnings.";
 
 static int arg_handle_debug_mode_generic_set(int /*argc*/, const char ** /*argv*/, void *data)
 {
@@ -3246,6 +3253,12 @@ void main_args_setup(bContext *C, bArgs *ba, bool all)
   BLI_args_add(ba, nullptr, "--debug-all", CB(arg_handle_debug_mode_all), nullptr);
 
   BLI_args_add(ba, nullptr, "--debug-io", CB(arg_handle_debug_mode_io), nullptr);
+
+  BLI_args_add(ba,
+               nullptr,
+               "--debug-blend-sanitize",
+               CB_EX(arg_handle_debug_mode_generic_set, blend_sanitize),
+               reinterpret_cast<void *>(G_DEBUG_BLEND_SANITIZE));
 
   BLI_args_add(ba, nullptr, "--debug-fpe", CB(arg_handle_debug_fpe_set), nullptr);
 

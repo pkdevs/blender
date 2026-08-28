@@ -1661,6 +1661,7 @@ IDTypeInfo IDType_ID_SCE = {
     .init_data = scene_init_data,
     .copy_data = scene_copy_data,
     .free_data = scene_free_data,
+    .sanitize_data = nullptr,
     /* For now default `BKE_lib_id_make_local_generic()` should work, may need more work though to
      * support all possible corner cases. */
     .make_local = nullptr,

@@ -242,6 +242,7 @@ IDTypeInfo IDType_ID_TXT = {
     .init_data = text_init_data,
     .copy_data = text_copy_data,
     .free_data = text_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = nullptr,
     .foreach_cache = nullptr,

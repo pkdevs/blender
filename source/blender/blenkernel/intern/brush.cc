@@ -603,6 +603,7 @@ IDTypeInfo IDType_ID_BR = {
     .init_data = brush_init_data,
     .copy_data = brush_copy_data,
     .free_data = brush_free_data,
+    .sanitize_data = nullptr,
     .make_local = brush_make_local,
     .foreach_id = brush_foreach_id,
     .foreach_cache = nullptr,

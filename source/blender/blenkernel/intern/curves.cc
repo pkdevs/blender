@@ -159,6 +159,7 @@ IDTypeInfo IDType_ID_CV = {
     .init_data = curves_init_data,
     .copy_data = curves_copy_data,
     .free_data = curves_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = curves_foreach_id,
     .foreach_cache = nullptr,

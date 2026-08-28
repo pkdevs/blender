@@ -195,6 +195,7 @@ IDTypeInfo IDType_ID_TE = {
     .init_data = texture_init_data,
     .copy_data = texture_copy_data,
     .free_data = texture_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = texture_foreach_id,
     .foreach_cache = nullptr,

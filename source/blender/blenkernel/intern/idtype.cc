@@ -82,6 +82,9 @@ static bool id_type_is_valid(const IDTypeInfo &id_type)
   if (id_type.free_data == id_type.InvalidPointer<IDTypeFreeDataFunction>()) {
     return false;
   }
+  if (id_type.sanitize_data == id_type.InvalidPointer<IDTypeSanitizeDataFunction>()) {
+    return false;
+  }
   if (id_type.make_local == id_type.InvalidPointer<IDTypeMakeLocalFunction>()) {
     return false;
   }

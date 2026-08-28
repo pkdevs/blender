@@ -67,6 +67,7 @@
 #include "BKE_multires.hh"
 #include "BKE_object.hh"
 #include "BKE_paint_bvh.hh"
+#include "BKE_report.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
@@ -274,6 +275,14 @@ static void mesh_free_data(ID *id)
   MEM_SAFE_DELETE(mesh->mselect);
   MEM_SAFE_DELETE(mesh->mat);
   delete mesh->runtime;
+}
+
+static void mesh_sanitize_data(ID *id, ReportList *reports)
+{
+  Mesh *mesh = reinterpret_cast<Mesh *>(id);
+  if (!bke::mesh_validate(*mesh, true)) {
+    BKE_reportf(reports, RPT_WARNING, "Corrected invalid mesh data in '%s'", BKE_id_name(*id));
+  }
 }
 
 static void mesh_foreach_id(ID *id, LibraryForeachIDData *data)
@@ -516,6 +525,7 @@ IDTypeInfo IDType_ID_ME = {
     .init_data = mesh_init_data,
     .copy_data = mesh_copy_data,
     .free_data = mesh_free_data,
+    .sanitize_data = mesh_sanitize_data,
     .make_local = nullptr,
     .foreach_id = mesh_foreach_id,
     .foreach_cache = nullptr,

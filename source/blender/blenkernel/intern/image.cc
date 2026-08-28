@@ -505,6 +505,7 @@ IDTypeInfo IDType_ID_IM = {
     .init_data = image_init_data,
     .copy_data = image_copy_data,
     .free_data = image_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = nullptr,
     .foreach_cache = image_foreach_cache,

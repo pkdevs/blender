@@ -182,6 +182,7 @@ IDTypeInfo IDType_ID_LA = {
     .init_data = light_init_data,
     .copy_data = light_copy_data,
     .free_data = light_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = light_foreach_id,
     .foreach_cache = nullptr,

@@ -226,6 +226,7 @@ IDTypeInfo IDType_ID_LI = {
     .init_data = library_init_data,
     .copy_data = library_copy_data,
     .free_data = library_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = library_foreach_id,
     .foreach_cache = nullptr,

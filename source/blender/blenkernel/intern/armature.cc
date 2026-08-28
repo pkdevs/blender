@@ -596,6 +596,7 @@ IDTypeInfo IDType_ID_AR = {
     .init_data = armature_init_data,
     .copy_data = armature_copy_data,
     .free_data = armature_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = armature_foreach_id,
     .foreach_cache = nullptr,

@@ -282,6 +282,7 @@ IDTypeInfo IDType_ID_GD_LEGACY = {
     .init_data = nullptr,
     .copy_data = greasepencil_copy_data,
     .free_data = greasepencil_free_data,
+    .sanitize_data = nullptr,
     .make_local = nullptr,
     .foreach_id = greasepencil_foreach_id,
     .foreach_cache = nullptr,

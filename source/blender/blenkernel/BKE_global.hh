@@ -243,6 +243,7 @@ enum {
 /** #Global.debug */
 enum {
   G_DEBUG = (1 << 0),                 /* general debug flag, print more info in unexpected cases */
+  G_DEBUG_BLEND_SANITIZE = (1 << 1),  /* validate & repair ID data on blend-file IO */
   G_DEBUG_PYTHON = (1 << 2),          /* extra python info */
   G_DEBUG_EVENTS = (1 << 3),          /* input/window/screen events */
   G_DEBUG_HANDLERS = (1 << 4),        /* events handling */
