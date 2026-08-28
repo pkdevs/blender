@@ -31,7 +31,7 @@ static int node_gpu_material(GPUMaterial *mat,
                              GPUNodeStack *in,
                              GPUNodeStack *out)
 {
-  return GPU_stack_link(mat, node, "node_vector_component", in, out);
+  return GPU_stack_link(mat, node, "node_get_vector_component", in, out);
 }
 
 NODE_SHADER_MATERIALX_BEGIN
