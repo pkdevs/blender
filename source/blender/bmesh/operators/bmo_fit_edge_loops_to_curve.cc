@@ -317,13 +317,13 @@ static void find_longest_unselected_gap(const Span<BMVert *> verts,
   int best_gap_start = -1;
 
   for (const int i : selected_indices.index_range()) {
-    int curr_index = selected_indices[i];
-    int next_index = selected_indices[math::mod_periodic(i + 1, int(selected_indices.size()))];
-    int gap_size = math::mod_periodic(next_index - curr_index - 1, verts_num);
+    int i_curr = selected_indices[i];
+    int i_next = selected_indices[math::mod_periodic(i + 1, int(selected_indices.size()))];
+    int gap_size = math::mod_periodic(i_next - i_curr - 1, verts_num);
 
     if (gap_size > longest_gap) {
       longest_gap = gap_size;
-      best_gap_start = math::mod_periodic(curr_index + 1, verts_num);
+      best_gap_start = math::mod_periodic(i_curr + 1, verts_num);
     }
   }
 
