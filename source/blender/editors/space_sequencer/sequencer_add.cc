@@ -2231,12 +2231,14 @@ void SEQUENCER_OT_effect_strip_add(wmOperatorType *ot)
 /** \name Add Transition
  * \{ */
 
+using Handles = std::pair<int, int>;
+
 struct TransitionLoadData {
   Strip *left_input;
   Strip *right_input;
   int channel;
-  int cutpoint = 0;            /* Only for overlap transitions. */
-  std::pair<int, int> handles; /* left handle, right handle */
+  int cutpoint = 0; /* Only for overlap transitions. */
+  Handles handles;  /* left handle, right handle */
 };
 
 static bool calculate_overlap_transition_load_data(const Scene *scene,
@@ -2310,12 +2312,10 @@ static bool calculate_overlap_transition_load_data(const Scene *scene,
   return true; /* No errors. */
 }
 
-static bool test_overlap(const Scene *scene,
-                         Vector<Strip *> &channel_strips,
-                         std::pair<int, int> handles)
+static bool test_overlap(std::ranges::input_range auto &&channel_handles, Handles test_handles)
 {
-  for (Strip *strip : channel_strips) {
-    if (strip->right_handle(scene) > handles.first && strip->left_handle() < handles.second) {
+  for (auto [left, right] : channel_handles) {
+    if (right > test_handles.first && left < test_handles.second) {
       return true;
     }
   }
@@ -2331,23 +2331,11 @@ static bool calculate_effect_transition_load_data(const Scene *scene,
 
   Map<int, Vector<Strip *>> strips = seq::query_strips_by_channels(ed->current_strips());
 
-  /* Find free channel. */
-  // for (TransitionLoadData *transition = load_data.begin(); transition != load_data.end();
-  //      ++transition)
-  // {
-  //   for (TransitionLoadData *ready_transition = load_data.begin(); ready_transition !=
-  //   transition; ++ready_transition) {
-
-  //   }
-  // }
   bool shuffled = false;
+  /* Find free channel. */
   for (TransitionLoadData &transition : load_data) {
-    if (transition.channel > seq::MAX_CHANNELS) {
-      BKE_reportf(reports, RPT_ERROR, "No channels above input strip(s)");
-      return false;
-    }
-
     std::optional<int> free_channel{};
+
     for (int channel : IndexRange::from_begin_end_inclusive(transition.channel, seq::MAX_CHANNELS))
     {
       /* Don't add strips on muted or locked channels. */
@@ -2355,13 +2343,29 @@ static bool calculate_effect_transition_load_data(const Scene *scene,
       if (timeline_channel->is_muted() || timeline_channel->is_locked()) {
         continue;
       }
+
       /* Check that there's no overlap with existing strips. */
       Vector<Strip *> *channel_strips = strips.lookup_ptr(channel);
-      if (channel_strips != nullptr && test_overlap(scene, *channel_strips, transition.handles)) {
+      if (channel_strips != nullptr &&
+          test_overlap(*channel_strips |
+                           std::views::transform([&scene](const Strip *strip) -> Handles {
+                             return {strip->left_handle(), strip->right_handle(scene)};
+                           }),
+                       transition.handles))
+      {
         continue;
       }
-      /* Check that there's no overlap with other new transitions. */
-      // also need to check for overlap against TransitionLoadData
+
+      /* Check that there's no overlap with other new already shuffled transitions. */
+      if (test_overlap(
+              std::views::take_while(load_data,
+                                     [&](const auto &other) { return &other != &transition; }) |
+                  std::views::filter([&](const auto &other) { return other.channel == channel; }) |
+                  std::views::transform([](const auto &data) { return data.handles; }),
+              transition.handles))
+      {
+        continue;
+      }
 
       free_channel = channel;
       break;
@@ -2374,9 +2378,11 @@ static bool calculate_effect_transition_load_data(const Scene *scene,
     shuffled |= transition.channel != *free_channel;
     transition.channel = *free_channel;
   }
+
   if (shuffled) {
     BKE_reportf(reports, RPT_WARNING, "Shuffling transition(s)");
   }
+
   // find_unlocked_unmuted_channel, sequencer_generic_invoke_xy_guess_channel,
   // have_free_channels lookup by channel
 
@@ -2433,8 +2439,7 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
         }
 
         const int cutpoint = right_strip->left_handle();
-        const std::pair<int, int> handles{cutpoint - floor(length / 2.0),
-                                          cutpoint + ceil(length / 2.0)};
+        const Handles handles{cutpoint - floor(length / 2.0), cutpoint + ceil(length / 2.0)};
         overlap_transitions.append(
             {left_strip, right_strip, left_strip->channel, cutpoint, handles});
       }
