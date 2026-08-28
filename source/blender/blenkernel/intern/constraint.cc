@@ -6920,9 +6920,7 @@ void BKE_constraint_blend_read_data(BlendDataReader *reader,
 
         /* Clamp spline IK chain lengths to a value that will not crash older Blender versions,
          * which may be encountered when opening future versions' .blend files. */
-        if (data->chainlen > 255) {
-          data->chainlen = 255;
-        }
+        CLAMP_MAX(data->chainlen, 255);
         break;
       }
       case CONSTRAINT_TYPE_KINEMATIC: {
