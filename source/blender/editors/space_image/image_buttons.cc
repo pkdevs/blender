@@ -260,9 +260,7 @@ static void ui_imageuser_pass_menu(bContext * /*C*/, ui::Layout *layout, void *r
 
   /* rendered results don't have a Combined pass */
   /* multiview: the ordering must be ascending, so the left-most pass is always the one picked */
-  for (rpass = rl ? rl->passes.first() : nullptr; rpass;
-       rpass = rpass->next, nr++)
-  {
+  for (rpass = rl ? rl->passes.first() : nullptr; rpass; rpass = rpass->next, nr++) {
     /* just show one pass of each kind */
     if (BLI_findstring_ptr(&added_passes, rpass->name, offsetof(LinkData, data))) {
       continue;
