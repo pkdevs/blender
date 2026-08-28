@@ -2364,7 +2364,6 @@ static void shapekey_get_applied_generic_float3(const Key *key,
                                                 const StringRef &data_name,
                                                 MutableSpan<float3> data)
 {
-
   shapekey_foreach_keyblock(
       key,
       [&](const float keyblock_influence, const KeyBlock &keyblock, const KeyBlock &ref_keyblock) {
@@ -2390,7 +2389,6 @@ static void shapekey_get_applied_generic_float(const Key *key,
                                                const StringRef &data_name,
                                                MutableSpan<float> data)
 {
-
   shapekey_foreach_keyblock(
       key,
       [&](const float keyblock_influence, const KeyBlock &keyblock, const KeyBlock &ref_keyblock) {
@@ -2409,6 +2407,22 @@ static void shapekey_get_applied_generic_float(const Key *key,
           }
         });
       });
+}
+
+static void shapekey_get_applied_generic_position(const Key *key,
+                                                  const bke::AttributeAccessor &attributes,
+                                                  const StringRef &data_name,
+                                                  MutableSpan<float3> data)
+{
+  shapekey_get_applied_generic_float3(key, attributes, "position", data);
+
+  if (data_name == "position") {
+    return;
+  }
+  BLI_assert(ELEM(data_name, "handle_left", "handle_right"));
+
+  /* The handles are offset by the main position attributes. */
+  shapekey_get_applied_generic_float3(key, attributes, data_name, data);
 }
 
 void shapekey_get_applied_position(const Key *key,
@@ -2450,20 +2464,64 @@ void shapekey_get_applied_handle_left(const Key *key,
                                       const bke::AttributeAccessor &attributes,
                                       MutableSpan<float3> position)
 {
-  /* The handles are offset by the main position attributes. */
-  shapekey_get_applied_position(key, attributes, position);
-
-  shapekey_get_applied_generic_float3(key, attributes, "handle_left", position);
+  shapekey_get_applied_generic_position(key, attributes, "handle_left", position);
 }
 
 void shapekey_get_applied_handle_right(const Key *key,
                                        const bke::AttributeAccessor &attributes,
                                        MutableSpan<float3> position)
 {
-  /* The handles are offset by the main position attributes. */
-  shapekey_get_applied_position(key, attributes, position);
+  shapekey_get_applied_generic_position(key, attributes, "handle_right", position);
+}
 
-  shapekey_get_applied_generic_float3(key, attributes, "handle_right", position);
+static void shapekey_set_applied_generic_position(const Key *key,
+                                                  const KeyBlock *actkb,
+                                                  const IndexMask &selection,
+                                                  const StringRef &data_name,
+                                                  const Span<float3> new_data,
+                                                  bke::MutableAttributeAccessor &attributes)
+{
+  const float keyblock_influence = actkb->curval;
+
+  const VArray<float3> data = *attributes.lookup<float3>(data_name, bke::AttrDomain::Point);
+
+  Array<float3> old_data(data.size());
+  array_utils::copy(data, old_data.as_mutable_span());
+  shapekey_get_applied_generic_position(key, attributes, data_name, old_data.as_mutable_span());
+
+  bke::SpanAttributeWriter<float3> key_data = attributes.lookup_or_add_for_write_span<float3>(
+      shapekey_attribute_name_generic(actkb->name, data_name), bke::AttrDomain::Point);
+
+  selection.foreach_index([&](const int point_i) {
+    key_data.span[point_i] += (new_data[point_i] - old_data[point_i]) / keyblock_influence;
+  });
+
+  key_data.finish();
+}
+
+static void shapekey_set_applied_generic_float(const Key *key,
+                                               const KeyBlock *actkb,
+                                               const IndexMask &selection,
+                                               const StringRef &data_name,
+                                               const Span<float> new_data,
+                                               bke::MutableAttributeAccessor &attributes)
+{
+  const float keyblock_influence = actkb->curval;
+
+  const VArray<float> data = *attributes.lookup<float>(data_name, bke::AttrDomain::Point);
+
+  Array<float> old_data(data.size());
+  array_utils::copy(data, old_data.as_mutable_span());
+  shapekey_get_applied_generic_float(key, attributes, data_name, old_data.as_mutable_span());
+
+  bke::SpanAttributeWriter<float> key_data = attributes.lookup_or_add_for_write_span<float>(
+      shapekey_attribute_name_generic(actkb->name, data_name), bke::AttrDomain::Point);
+
+  selection.foreach_index([&](const int point_i) {
+    key_data.span[point_i] += (new_data[point_i] - old_data[point_i]) / keyblock_influence;
+  });
+
+  key_data.finish();
 }
 
 void shapekey_set_applied_position(const Key *key,
@@ -2472,23 +2530,8 @@ void shapekey_set_applied_position(const Key *key,
                                    const Span<float3> new_position,
                                    bke::MutableAttributeAccessor &attributes)
 {
-  const float keyblock_influence = actkb->curval;
-
-  const VArray<float3> position = *attributes.lookup<float3>("position", bke::AttrDomain::Point);
-
-  Array<float3> old_position(position.size());
-  array_utils::copy(position, old_position.as_mutable_span());
-  shapekey_get_applied_position(key, attributes, old_position.as_mutable_span());
-
-  bke::SpanAttributeWriter<float3> key_position = attributes.lookup_or_add_for_write_span<float3>(
-      shapekey_attribute_name_position(actkb->name), bke::AttrDomain::Point);
-
-  selection.foreach_index([&](const int point_i) {
-    key_position.span[point_i] += (new_position[point_i] - old_position[point_i]) /
-                                  keyblock_influence;
-  });
-
-  key_position.finish();
+  shapekey_set_applied_generic_position(
+      key, actkb, selection, "position", new_position, attributes);
 }
 
 void shapekey_set_applied_radius(const Key *key,
@@ -2497,22 +2540,7 @@ void shapekey_set_applied_radius(const Key *key,
                                  const Span<float> new_radius,
                                  bke::MutableAttributeAccessor &attributes)
 {
-  const float keyblock_influence = actkb->curval;
-
-  const VArray<float> radius = *attributes.lookup<float>("radius", bke::AttrDomain::Point);
-
-  Array<float> old_radius(radius.size());
-  array_utils::copy(radius, old_radius.as_mutable_span());
-  shapekey_get_applied_radius(key, attributes, old_radius.as_mutable_span());
-
-  bke::SpanAttributeWriter<float> key_radius = attributes.lookup_or_add_for_write_span<float>(
-      shapekey_attribute_name_radius(actkb->name), bke::AttrDomain::Point);
-
-  selection.foreach_index([&](const int point_i) {
-    key_radius.span[point_i] += (new_radius[point_i] - old_radius[point_i]) / keyblock_influence;
-  });
-
-  key_radius.finish();
+  shapekey_set_applied_generic_float(key, actkb, selection, "radius", new_radius, attributes);
 }
 
 void shapekey_set_applied_opacity(const Key *key,
@@ -2521,23 +2549,7 @@ void shapekey_set_applied_opacity(const Key *key,
                                   const Span<float> new_opacity,
                                   bke::MutableAttributeAccessor &attributes)
 {
-  const float keyblock_influence = actkb->curval;
-
-  const VArray<float> opacity = *attributes.lookup<float>("opacity", bke::AttrDomain::Point);
-
-  Array<float> old_opacity(opacity.size());
-  array_utils::copy(opacity, old_opacity.as_mutable_span());
-  shapekey_get_applied_opacity(key, attributes, old_opacity.as_mutable_span());
-
-  bke::SpanAttributeWriter<float> key_opacity = attributes.lookup_or_add_for_write_span<float>(
-      shapekey_attribute_name_opacity(actkb->name), bke::AttrDomain::Point);
-
-  selection.foreach_index([&](const int point_i) {
-    key_opacity.span[point_i] += (new_opacity[point_i] - old_opacity[point_i]) /
-                                 keyblock_influence;
-  });
-
-  key_opacity.finish();
+  shapekey_set_applied_generic_float(key, actkb, selection, "opacity", new_opacity, attributes);
 }
 
 void shapekey_set_applied_handle_left(const Key *key,
@@ -2546,24 +2558,8 @@ void shapekey_set_applied_handle_left(const Key *key,
                                       const Span<float3> new_position,
                                       bke::MutableAttributeAccessor &attributes)
 {
-  const float keyblock_influence = actkb->curval;
-
-  const VArray<float3> position = *attributes.lookup<float3>("handle_left",
-                                                             bke::AttrDomain::Point);
-
-  Array<float3> old_position(position.size());
-  array_utils::copy(position, old_position.as_mutable_span());
-  shapekey_get_applied_handle_left(key, attributes, old_position.as_mutable_span());
-
-  bke::SpanAttributeWriter<float3> key_position = attributes.lookup_or_add_for_write_span<float3>(
-      shapekey_attribute_name_handle_left(actkb->name), bke::AttrDomain::Point);
-
-  selection.foreach_index([&](const int point_i) {
-    key_position.span[point_i] += (new_position[point_i] - old_position[point_i]) /
-                                  keyblock_influence;
-  });
-
-  key_position.finish();
+  shapekey_set_applied_generic_position(
+      key, actkb, selection, "handle_left", new_position, attributes);
 }
 
 void shapekey_set_applied_handle_right(const Key *key,
@@ -2572,24 +2568,8 @@ void shapekey_set_applied_handle_right(const Key *key,
                                        const Span<float3> new_position,
                                        bke::MutableAttributeAccessor &attributes)
 {
-  const float keyblock_influence = actkb->curval;
-
-  const VArray<float3> position = *attributes.lookup<float3>("handle_right",
-                                                             bke::AttrDomain::Point);
-
-  Array<float3> old_position(position.size());
-  array_utils::copy(position, old_position.as_mutable_span());
-  shapekey_get_applied_handle_right(key, attributes, old_position.as_mutable_span());
-
-  bke::SpanAttributeWriter<float3> key_position = attributes.lookup_or_add_for_write_span<float3>(
-      shapekey_attribute_name_handle_right(actkb->name), bke::AttrDomain::Point);
-
-  selection.foreach_index([&](const int point_i) {
-    key_position.span[point_i] += (new_position[point_i] - old_position[point_i]) /
-                                  keyblock_influence;
-  });
-
-  key_position.finish();
+  shapekey_set_applied_generic_position(
+      key, actkb, selection, "handle_right", new_position, attributes);
 }
 
 }  // namespace bke::greasepencil
