@@ -291,11 +291,11 @@ void node_gpu_stack_from_data(GPUNodeStack *gs, bNodeSocket *socket, bNodeStack 
         break;
       case SOCK_INT:
         gs->type = GPU_INT;
-        gs->value = vec.x;
+        gs->value = int(vec.x);
         break;
       case SOCK_BOOLEAN:
         gs->type = GPU_BOOL;
-        gs->value = vec.x;
+        gs->value = vec.x > 0.0f;
         break;
       case SOCK_VECTOR:
         switch (socket->default_value_typed<bNodeSocketValueVector>()->dimensions) {
