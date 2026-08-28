@@ -218,11 +218,11 @@ static bool actedit_get_context(bAnimContext *ac, SpaceAction *saction)
       ac->data = &saction->ads;
       return true;
 
-    case SACTCONT_CACHEFILE: /* Cache File */ /* XXX review how this mode is handled... */
+    case SACTCONT_CACHEFILE: /* Cache File */
       /* update scene-pointer (no need to check for pinning yet, as not implemented) */
       saction->ads.source = reinterpret_cast<ID *>(ac->scene);
 
-      ac->datatype = ANIMCONT_CHANNEL;
+      ac->datatype = ANIMCONT_CACHEFILE;
       ac->data = &saction->ads;
       return true;
 
@@ -2820,6 +2820,14 @@ static void animfilter_modifier_idpoin_cb(void *afm_ptr,
         afm->items += animdata_filter_ds_nodetree(
             afm->ac, &afm->tmp_data, owner_id, node_tree, afm->filter_mode);
       }
+      break;
+    }
+    case ID_CF: {
+      CacheFile *cache_file = id_cast<CacheFile *>(id);
+      BLI_assert(afm->ac->ads == afm->ads);
+      afm->items += animdata_filter_ds_cachefile(
+          afm->ac, &afm->tmp_data, cache_file, afm->filter_mode);
+      break;
     }
 
     /* TODO: images? */
@@ -3432,7 +3440,6 @@ static size_t animdata_filter_dopesheet_scene(bAnimContext *ac,
 
   /* filter data contained under object first */
   BEGIN_ANIMFILTER_SUBCHANNELS (EXPANDED_SCEC(sce)) {
-    bNodeTree *ntree = sce->compositing_node_group;
     World *wo = sce->world;
     Editing *ed = sce->ed;
 
@@ -3447,9 +3454,18 @@ static size_t animdata_filter_dopesheet_scene(bAnimContext *ac,
     }
 
     /* nodetree */
-    if ((ntree) && !(ac->filters.flag & ADS_FILTER_NONTREE)) {
-      tmp_items += animdata_filter_ds_nodetree(
-          ac, &tmp_data, reinterpret_cast<ID *>(sce), ntree, filter_mode);
+    if (!(ac->filters.flag & ADS_FILTER_NONTREE)) {
+      VectorSet<bNodeTree *> node_trees;
+      for (SceneCompositorEffect &effect : sce->compositor_effects) {
+        if (!effect.node_group || ID_MISSING(effect.node_group)) {
+          continue;
+        }
+        node_trees.add(effect.node_group);
+      }
+      for (bNodeTree *node_tree : node_trees) {
+        tmp_items += animdata_filter_ds_nodetree(
+            ac, &tmp_data, reinterpret_cast<ID *>(sce), node_tree, filter_mode);
+      }
     }
 
     /* VSE strip node trees. */
@@ -4018,6 +4034,14 @@ size_t ANIM_animdata_filter(bAnimContext *ac,
     case ANIMCONT_MASK: {
       if (animdata_filter_dopesheet_summary(ac, anim_data, filter_mode, &items)) {
         items = animdata_filter_mask(ac, anim_data, data, filter_mode);
+      }
+      break;
+    }
+    case ANIMCONT_CACHEFILE: {
+      if (animdata_filter_dopesheet_summary(ac, anim_data, filter_mode, &items)) {
+        for (CacheFile &cache_file : ac->bmain->cachefiles) {
+          items += animdata_filter_ds_cachefile(ac, anim_data, &cache_file, filter_mode);
+        }
       }
       break;
     }

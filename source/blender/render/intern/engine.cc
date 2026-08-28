@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "BKE_compositor.hh"
 #include "MEM_guardedalloc.h"
 
 #include "BLI_listbase.hh"
@@ -21,6 +22,7 @@
 #include "DNA_object_types.h"
 
 #include "BKE_camera.h"
+#include "BKE_compositor.hh"
 #include "BKE_global.hh"
 #include "BKE_node.hh"
 #include "BKE_report.hh"
@@ -310,7 +312,9 @@ static void render_result_to_bake(RenderEngine *engine, RenderResult *rr)
     float *bake_result = result + bake_offset * channels_num;
 
     for (int tx = 0; tx < w; tx++) {
-      if (bake_pixel->object_id == engine->bake.object_id) {
+      if (bake_pixel->object_id == engine->bake.object_id && bake_pixel->primitive_id != -1 &&
+          !bake_pixel->is_margin)
+      {
         memcpy(bake_result, pass_rect, channels_size);
       }
       pass_rect += channels_num;
@@ -866,7 +870,11 @@ static bool possibly_using_gpu_compositor(const Render *re)
   /* Note a secondary Render instance from a Render Layers node has a null pipeline scene,
    * but no compositing is performed for it so we can return false. */
   const Scene *scene = re->pipeline_scene_eval;
-  return scene && scene->compositing_node_group && (scene->r.scemode & R_DOCOMP);
+  if (!scene) {
+    return false;
+  }
+
+  return bke::compositor::is_enabled(*scene, bke::compositor::ExecutionMode::Render);
 }
 
 static void engine_render_view_layer(Render *re,

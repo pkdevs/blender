@@ -630,6 +630,11 @@ const EnumPropertyItem buttons_context_items[] = {
      ICON_SEQ_STRIP_MODIFIER,
      "Strip Modifiers",
      "Strip Modifier Properties"},
+    {BCONTEXT_COMPOSITOR,
+     "COMPOSITOR",
+     ICON_NODE_COMPOSITING,
+     "Compositor & Effects",
+     "Procedural scene post-processing"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -3014,7 +3019,7 @@ static const EnumPropertyItem *rna_SpaceNodeEditor_node_tree_sub_type_itemf(
        "SCENE",
        ICON_SCENE_DATA,
        N_("Scene"),
-       N_("Edit compositing node group for the current scene")},
+       N_("Edit compositor node group for the active scene compositor effect")},
       {SNODE_COMPOSITOR_SEQUENCER,
        "SEQUENCER",
        ICON_SEQUENCE,
@@ -3157,7 +3162,7 @@ static void rna_SpaceNodeEditor_path_pop(SpaceNode *snode, bContext *C)
 
 static void rna_SpaceNodeEditor_show_backdrop_update(Main * /*bmain*/,
                                                      Scene *scene,
-                                                     PointerRNA * /*ptr*/)
+                                                     PointerRNA * /*space_node_ptr*/)
 {
   DEG_id_tag_update(&scene->id, ID_RECALC_COMPOSITOR);
   WM_main_add_notifier(NC_NODE | NA_EDITED, nullptr);
@@ -3389,7 +3394,7 @@ static const EnumPropertyItem *rna_FileSelectParams_sort_method_itemf(bContext *
   return items;
 }
 
-static void rna_FileSelectPrams_filter_glob_set(PointerRNA *ptr, const char *value)
+static void rna_FileSelectParams_filter_glob_set(PointerRNA *ptr, const char *value)
 {
   FileSelectParams *params = static_cast<FileSelectParams *>(ptr->data);
 
@@ -6292,6 +6297,7 @@ static void rna_def_space_properties_filter(StructRNA *srna)
       "show_properties_effects",
       "show_properties_strip",
       "show_properties_strip_modifier",
+      "show_properties_compositor",
   };
 
   for (const int i : IndexRange(BCONTEXT_TOT)) {
@@ -8047,7 +8053,7 @@ static void rna_def_fileselect_params(BlenderRNA *brna)
                            "Extension Filter",
                            "UNIX shell-like filename patterns matching, supports wildcards ('*') "
                            "and list of patterns separated by ';'");
-  RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_FileSelectPrams_filter_glob_set");
+  RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_FileSelectParams_filter_glob_set");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_FILE_LIST, nullptr);
 
   prop = RNA_def_property(srna, "filter_search", PROP_STRING, PROP_NONE);

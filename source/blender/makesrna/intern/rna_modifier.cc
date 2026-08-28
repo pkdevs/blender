@@ -1982,8 +1982,8 @@ static nodes::eval_log::NodeTreeLog *get_nodes_modifier_log(const Object &object
   return &nmd.runtime->eval_log->get_tree_log(modifier_context.hash());
 }
 
-static Span<nodes::eval_log::NodeWarning> get_node_modifier_warnings(const Object &object,
-                                                                     NodesModifierData &nmd)
+static Span<nodes::NodeWarning> get_node_modifier_warnings(const Object &object,
+                                                           NodesModifierData &nmd)
 {
   if (auto *log = get_nodes_modifier_log(object, nmd)) {
     log->ensure_node_warnings(nmd);
@@ -2027,19 +2027,19 @@ static int rna_NodesModifier_node_warnings_length(PointerRNA *ptr)
 
 static void rna_NodesModifierWarning_message_get(PointerRNA *ptr, char *r_value)
 {
-  const auto *warning = static_cast<const nodes::eval_log::NodeWarning *>(ptr->data);
+  const auto *warning = static_cast<const nodes::NodeWarning *>(ptr->data);
   strcpy(r_value, warning->message.c_str());
 }
 
 static int rna_NodesModifierWarning_message_length(PointerRNA *ptr)
 {
-  const auto *warning = static_cast<const nodes::eval_log::NodeWarning *>(ptr->data);
+  const auto *warning = static_cast<const nodes::NodeWarning *>(ptr->data);
   return warning->message.size();
 }
 
 static int rna_NodesModifierWarning_type_get(PointerRNA *ptr)
 {
-  const auto *warning = static_cast<const nodes::eval_log::NodeWarning *>(ptr->data);
+  const auto *warning = static_cast<const nodes::NodeWarning *>(ptr->data);
   return int(warning->type);
 }
 
@@ -6685,7 +6685,7 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
                            "values preserve finer details.");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-  prop = RNA_def_property(srna, "adaptivity", PROP_FLOAT, PROP_DISTANCE);
+  prop = RNA_def_property(srna, "adaptivity", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "adaptivity");
   RNA_def_property_ui_range(prop, 0, 1, 0.1, 3);
   RNA_def_property_ui_text(
