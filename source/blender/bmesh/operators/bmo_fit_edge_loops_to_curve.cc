@@ -171,7 +171,7 @@ static void traverse_edge_loop(BMVert *v_start,
       break;
     }
     BM_ITER_ELEM (e, &iter, v_next, BM_EDGES_OF_VERT) {
-      if (e == e_curr || BM_elem_flag_test(e, BM_ELEM_HIDDEN)) {
+      if (e == e_curr || BM_elem_flag_test(e, BM_ELEM_HIDDEN) || visited_edges.contains(e)) {
         continue;
       }
 
