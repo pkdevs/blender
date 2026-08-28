@@ -9,6 +9,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
+#include <ranges>
 
 #include "AS_asset_representation.hh"
 
@@ -2242,6 +2243,10 @@ static bool calculate_overlap_transition_load_data(const Scene *scene,
                                                    ReportList *reports,
                                                    Vector<TransitionLoadData> &load_data)
 {
+  if (load_data.is_empty()) {
+    return true; /* No errors. */
+  }
+
   bool clamped = false;
 
   /* Clamp new transitions to existing strip / transition bounds. */
@@ -2301,6 +2306,61 @@ static bool calculate_overlap_transition_load_data(const Scene *scene,
   if (no_space_count > 0) {
     BKE_report(reports, RPT_WARNING, "Some transition(s) were not added due to lack of space");
   }
+
+  return true; /* No errors. */
+}
+
+// unnecessary looping through seqbase. using this to test ideas
+static bool test_overlap(const Scene *scene,
+                         ListBaseT<Strip> *seqbase,
+                         std::pair<int, int> handles,
+                         int channel)
+{
+  for (Strip &strip : *seqbase) {
+    if (strip.channel != channel) {
+      continue;
+    }
+    if (strip.right_handle(scene) > handles.first && strip.left_handle() < handles.second) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool calculate_effect_transition_load_data(const Scene *scene,
+                                                  ReportList *reports,
+                                                  Vector<TransitionLoadData> &load_data)
+{
+  Editing *ed = seq::editing_get(scene);
+  ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
+
+  // Set<int> used_channels;
+  /* Check if the channel is free. */
+  for (TransitionLoadData &transition : load_data) {
+    if (transition.channel > seq::MAX_CHANNELS) {
+      BKE_reportf(reports, RPT_ERROR, "Not enough free channels for transition(s)");
+      return false;
+    }
+
+    SeqTimelineChannel *channel = seq::channel_get_by_index(channels, transition.channel);
+
+    // this is temporary. figure out the correct behavior
+    // probably it should shuffle but just be a warning
+    if (channel->is_muted() || channel->is_locked() ||
+        test_overlap(scene, ed->current_strips(), transition.handles, transition.channel))
+    {
+      BKE_report(reports, RPT_ERROR, "Transition channel is taken");
+      return false;
+    }
+
+    // for (int channel :
+    //      IndexRange::from_begin_end_inclusive(transition.channel, seq::MAX_CHANNELS))
+    // {
+    // }
+  }
+
+  // find_unlocked_unmuted_channel, sequencer_generic_invoke_xy_guess_channel,
+  // have_free_channels lookup by channel
 
   return true; /* No errors. */
 }
@@ -2377,14 +2437,18 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
     }
   }
 
-  if (!calculate_overlap_transition_load_data(scene, op->reports, overlap_transitions)) {
+  if (!calculate_overlap_transition_load_data(scene, op->reports, overlap_transitions) ||
+      !calculate_effect_transition_load_data(scene, op->reports, effect_transitions))
+  {
     return OPERATOR_CANCELLED;
   }
 
+  /* All possible errors should be checked at this point. Now add all the transitions at once. */
   deselect_all_strips(scene);
 
-  /* Finally do the actual adding. */
-  for (TransitionLoadData &transition_data : overlap_transitions) {
+  /* Iterate through both overlap and effect data without unnecessary copies. */
+  auto all_transitions = {overlap_transitions.as_span(), effect_transitions.as_span()};
+  for (const TransitionLoadData &transition_data : std::views::join(all_transitions)) {
     /* Zero-initialize other values. */
     seq::LoadData load_data{};
     load_data.start_frame = transition_data.handles.first;
@@ -2393,11 +2457,14 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
     load_data.effect.input1 = transition_data.left_input;
     load_data.effect.input2 = transition_data.right_input;
     load_data.channel = transition_data.channel;
+
     Strip *transition = seq::add_effect_strip(
         scene, ed->current_strips(), &load_data, op->reports);
     BLI_assert(transition);
+
     seq::select_active_set(scene, transition);
   }
+  /* Free channels are found earlier. No need to shuffle. */
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   sequencer_select_do_updates(C, scene);
