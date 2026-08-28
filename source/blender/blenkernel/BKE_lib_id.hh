@@ -96,7 +96,7 @@ struct ID_Runtime {
    * #Main data-base containing this ID. Each ID can be in at most one #Main at the same time. This
    * is null for e.g. evaluated data.
    */
-  const Main *owner_bmain = nullptr;
+  Main *owner_bmain = nullptr;
 };
 
 }  // namespace bke::id
@@ -155,7 +155,7 @@ void BKE_libblock_runtime_ensure(ID &id);
  * Set the #Main currently containing this ID, or null if it is not in any Main. Must be called
  * whenever an ID is added to, removed from, or moved between Mains.
  */
-void BKE_libblock_owner_bmain_set(ID &id, const Main *bmain);
+void BKE_libblock_owner_bmain_set(ID &id, Main *bmain);
 
 /**
  * Reset the runtime counters used by ID remapping.

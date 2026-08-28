@@ -1408,7 +1408,7 @@ void BKE_libblock_runtime_ensure(ID &id)
   }
 }
 
-void BKE_libblock_owner_bmain_set(ID &id, const Main *bmain)
+void BKE_libblock_owner_bmain_set(ID &id, Main *bmain)
 {
   BKE_libblock_runtime_ensure(id);
   id.runtime->owner_bmain = bmain;
