@@ -119,6 +119,7 @@ void node_operatortypes()
   WM_operatortype_append(NODE_OT_cryptomatte_layer_remove);
 
   WM_operatortype_append(NODE_OT_sockets_sync);
+  WM_operatortype_append(NODE_OT_socket_enum_set);
 
   WM_operatortype_append(NODE_OT_link_drag_operation_test);
 

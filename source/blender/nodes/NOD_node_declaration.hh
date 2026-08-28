@@ -206,6 +206,12 @@ class SocketDeclaration : public ItemDeclaration {
   bool is_volume_grid_name = false;
   bool is_anonymous_attribute_output = false;
 
+  /**
+   * Optional fixed set of choices for this socket. When non-null the socket renders as a
+   * dropdown menu instead of its native widget.
+   */
+  const EnumPropertyItem *enum_choices = nullptr;
+
   /** Index in the list of inputs or outputs of the node. */
   int index = -1;
 
@@ -329,6 +335,8 @@ class BaseSocketDeclarationBuilder {
   BaseSocketDeclarationBuilder &available(bool value = true);
 
   BaseSocketDeclarationBuilder &is_attribute_name(bool value = true);
+
+  BaseSocketDeclarationBuilder &enum_choices(const EnumPropertyItem *items);
 
   BaseSocketDeclarationBuilder &is_default_link_socket(bool value = true);
 

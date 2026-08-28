@@ -176,6 +176,13 @@ if(WITH_MATERIALX)
   endif()
 endif()
 
+if(WITH_CYCLES_OSL)
+  add_definitions(-DWITH_OSL)
+  list(APPEND LIB
+    PRIVATE bf::dependencies::optional::osl
+  )
+endif()
+
 if(WITH_FREESTYLE)
   add_definitions(-DWITH_FREESTYLE)
 endif()

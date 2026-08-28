@@ -385,6 +385,10 @@ float2 node_from_view(const float2 &co);
 void node_operatortypes();
 void node_keymap(wmKeyConfig *keyconf);
 
+/* node_socket_enum.cc */
+
+void NODE_OT_socket_enum_set(wmOperatorType *ot);
+
 /* `node_select.cc` */
 
 rctf node_frame_rect_inside(const SpaceNode &snode, const bNode &node);

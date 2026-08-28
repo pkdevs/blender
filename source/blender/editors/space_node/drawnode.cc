@@ -9,6 +9,7 @@
 
 #include "BLI_color_types.hh"
 #include "BLI_listbase.hh"
+#include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
 #include "BLI_threads.hh"
 
@@ -1242,6 +1243,60 @@ static void std_node_socket_draw(
   /* Some socket types draw the gizmo icon in a special way to look better. All others use a
    * fallback default code path. */
   bool gizmo_handled = false;
+
+  /* Enum overlay mainly for MaterialX. Any socket type can have a fixed set of choices expressed
+   * via the enum_choices pointer in the declaration. When present, always draw as a dropdown. */
+  if (socket_decl && socket_decl->enum_choices) {
+    /* Find the display label matching the socket's current typed value. */
+    const EnumPropertyItem *choices = socket_decl->enum_choices;
+    const char *cur_label = "";
+    if (sock->default_value) {
+      char id_buf[64];
+      id_buf[0] = '\0';
+      switch (sock->type) {
+        case SOCK_STRING:
+          BLI_strncpy(id_buf,
+                      static_cast<const bNodeSocketValueString *>(sock->default_value)->value,
+                      sizeof(id_buf));
+          break;
+        case SOCK_FLOAT:
+          BLI_snprintf(id_buf,
+                       sizeof(id_buf),
+                       "%g",
+                       static_cast<const bNodeSocketValueFloat *>(sock->default_value)->value);
+          break;
+        case SOCK_INT:
+          BLI_snprintf(id_buf,
+                       sizeof(id_buf),
+                       "%d",
+                       static_cast<const bNodeSocketValueInt *>(sock->default_value)->value);
+          break;
+        default:
+          break;
+      }
+      for (const EnumPropertyItem *it = choices; it->identifier; it++) {
+        if (StringRef(it->identifier) == StringRef(id_buf)) {
+          cur_label = it->name;
+          break;
+        }
+      }
+    }
+
+    PointerRNA sock_ptr = RNA_pointer_create_discrete(ptr->owner_id, RNA_NodeSocket, sock);
+    layout->context_ptr_set("active_socket", &sock_ptr);
+    if (optional_label) {
+      layout->op_menu_enum(C, "NODE_OT_socket_enum_set", "value", cur_label, ICON_NONE);
+    }
+    else {
+      ui::Layout *row = &layout->split(0.4f, false);
+      row->label(label, ICON_NONE);
+      row->op_menu_enum(C, "NODE_OT_socket_enum_set", "value", cur_label, ICON_NONE);
+    }
+    if (has_gizmo) {
+      draw_gizmo_pin_icon(layout, ptr);
+    }
+    return;
+  }
 
   switch (type) {
     case SOCK_FLOAT:

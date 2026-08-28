@@ -685,6 +685,13 @@ BaseSocketDeclarationBuilder &BaseSocketDeclarationBuilder::available(bool value
   return *this;
 }
 
+BaseSocketDeclarationBuilder &BaseSocketDeclarationBuilder::enum_choices(
+    const EnumPropertyItem *items)
+{
+  decl_base_->enum_choices = items;
+  return *this;
+}
+
 BaseSocketDeclarationBuilder &BaseSocketDeclarationBuilder::is_attribute_name(bool value)
 {
   decl_base_->is_attribute_name = value;

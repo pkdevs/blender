@@ -25,70 +25,6 @@ def osl_compile(input_path, report):
     return ok, output_path
 
 
-def shader_param_type_default(param, is_bool):
-    if param.isclosure:
-        return 'NodeSocketShader', None
-    elif param.type.vecsemantics == param.type.vecsemantics.COLOR:
-        return 'NodeSocketColor', (param.value[0], param.value[1], param.value[2], 1.0)
-    elif param.type.vecsemantics in [
-        param.type.vecsemantics.POINT,
-        param.type.vecsemantics.VECTOR,
-        param.type.vecsemantics.NORMAL,
-    ]:
-        return 'NodeSocketVector', param.value
-    elif param.type.aggregate == param.type.aggregate.SCALAR:
-        if param.type.basetype == param.type.basetype.INT:
-            if is_bool:
-                return 'NodeSocketBool', bool(param.value)
-            else:
-                return 'NodeSocketInt', int(param.value)
-        elif param.type.basetype == param.type.basetype.FLOAT:
-            return 'NodeSocketFloat', float(param.value)
-        elif param.type.basetype == param.type.basetype.STRING:
-            return 'NodeSocketString', str(param.value)
-
-    return None, None
-
-
-def shader_param_ensure(node, param):
-    # Skip unsupported types
-    if param.varlenarray or param.isstruct or param.type.arraylen > 1:
-        return None
-
-    metadata = {meta.name: meta.value for meta in param.metadata}
-
-    is_bool = metadata.get('widget') in ['boolean', 'checkBox']
-    hide_value = (param.value is None) or (metadata.get('widget') == 'null')
-    label = metadata.get('label', param.name)
-
-    socket_type, default = shader_param_type_default(param, is_bool)
-    if not socket_type:
-        return None
-
-    sockets = node.outputs if param.isoutput else node.inputs
-    if param.name in sockets:
-        sock = sockets[param.name]
-
-        if sock.bl_idname != socket_type:
-            # Type doesn't match, delete the socket and recreate it below
-            sockets.remove(sock)
-        else:
-            # Update properties if needed
-            if sock.name != label:
-                sock.name = label
-            if not param.isoutput and sock.hide_value != hide_value:
-                sock.hide_value = hide_value
-
-            # We have a matching socket, no need to create one
-            return sock
-
-    sock = sockets.new(type=socket_type, name=label, identifier=param.name)
-    if default is not None:
-        sock.default_value = default
-    sock.hide_value = hide_value
-    return sock
-
-
 def osl_param_ensure_property(ccam, param):
     import idprop
 
@@ -271,17 +207,12 @@ def update_internal_script(report, script):
 def update_script_node(node, report):
     """compile and update shader script node"""
     import os
-    import oslquery
 
     oso_file_remove = False
 
     if node.mode == 'EXTERNAL':
         # compile external script file
         ok, oso_path, oso_file_remove = update_external_script(report, node.filepath, node.id_data.library)
-        if ok:
-            # Clear old internal bytecode, and also trigger node update if it was already cleared.
-            node.bytecode = ""
-            node.bytecode_hash = ""
 
     elif node.mode == 'INTERNAL' and node.script:
         # internal script, we will store bytecode in the node
@@ -295,23 +226,12 @@ def update_script_node(node, report):
         return
 
     if ok:
-        if query := oslquery.OSLQuery(oso_path):
-            # Ensure that all parameters have a matching socket
-            used_sockets = set()
-            for param in query.parameters:
-                if sock := shader_param_ensure(node, param):
-                    used_sockets.add(sock)
-
-            # Remove unused sockets
-            for sockets in (node.inputs, node.outputs):
-                for identifier in [sock.identifier for sock in sockets]:
-                    if sockets[identifier] not in used_sockets:
-                        sockets.remove(sockets[identifier])
-        else:
-            ok = False
+        ok = _cycles.osl_rebuild_node_sockets(
+            node.id_data.as_pointer(),
+            node.as_pointer(),
+            oso_path if node.mode == 'EXTERNAL' else "")
+        if not ok:
             report({'ERROR'}, rpt_("OSL query failed to open %s") % oso_path)
-    else:
-        report({'ERROR'}, "OSL script compilation failed, see console for errors")
 
     # remove temporary oso file
     if oso_file_remove:

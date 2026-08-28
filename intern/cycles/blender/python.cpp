@@ -30,6 +30,8 @@
 
 #include "DNA_screen_types.h"
 
+#include "NOD_script_node.hh"
+
 #include "scene/osl.h"
 
 #ifdef WITH_METAL
@@ -506,6 +508,23 @@ static PyObject *available_devices_func(PyObject * /*self*/, PyObject *args)
 
 #ifdef WITH_OSL
 
+static PyObject *osl_rebuild_node_sockets_func(PyObject * /*self*/, PyObject *args)
+{
+  PyObject *pyntree, *pynode;
+  const char *oso_path;
+  if (!PyArg_ParseTuple(args, "OOs", &pyntree, &pynode, &oso_path)) {
+    return nullptr;
+  }
+
+  blender::bNodeTree *ntree = reinterpret_cast<blender::bNodeTree *>(PyLong_AsVoidPtr(pyntree));
+  blender::bNode *node = reinterpret_cast<blender::bNode *>(PyLong_AsVoidPtr(pynode));
+
+  bool ok = blender::nodes::node_shader_script_cc::node_shader_script_rebuild_sockets(
+      *blender::G.main, *ntree, *node, oso_path, nullptr);
+
+  return PyBool_FromLong(ok);
+}
+
 static PyObject *osl_compile_func(PyObject * /*self*/, PyObject *args)
 {
   const char *inputfile = nullptr;
@@ -908,6 +927,7 @@ static PyMethodDef methods[] = {
     {"reset", reset_func, METH_VARARGS, ""},
 #ifdef WITH_OSL
     {"osl_compile", osl_compile_func, METH_VARARGS, ""},
+    {"osl_rebuild_node_sockets", osl_rebuild_node_sockets_func, METH_VARARGS, ""},
 #endif
     {"available_devices", available_devices_func, METH_VARARGS, ""},
     {"system_info", system_info_func, METH_NOARGS, ""},
