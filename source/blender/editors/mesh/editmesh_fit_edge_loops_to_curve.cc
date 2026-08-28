@@ -42,9 +42,9 @@ static const EnumPropertyItem prop_restriction_items[] = {
     {CURVE_RESTRICT_EXTRUDE,
      "EXTRUDE",
      0,
-     "Extrude only",
+     "Extrude Only",
      "Only allow extrusions (no indentations)"},
-    {CURVE_RESTRICT_INDENT, "INDENT", 0, "Indent only", "Only allow indentation (no extrusions)"},
+    {CURVE_RESTRICT_INDENT, "INDENT", 0, "Indent Only", "Only allow indentation (no extrusions)"},
     {0, nullptr},
 };
 
