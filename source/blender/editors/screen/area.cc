@@ -37,6 +37,7 @@
 
 #include "ED_asset_shelf.hh"
 #include "ED_buttons.hh"
+#include "ED_ime.hh"
 #include "ED_screen.hh"
 #include "ED_screen_types.hh"
 #include "ED_space_api.hh"
@@ -225,7 +226,10 @@ static void draw_azone_arrow(float x1, float y1, float x2, float y2, AZEdge edge
 
   GPU_blend(GPU_BLEND_ALPHA);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-  immUniformColor4f(0.8f, 0.8f, 0.8f, 0.4f);
+  float color[4];
+  ui::theme::get_color_4fv(TH_TEXT, color);
+  color[3] = 0.6f;
+  immUniformColor4fv(color);
 
   immBegin(GPU_PRIM_TRI_FAN, 6);
   for (int i = 0; i < 6; i++) {
@@ -264,7 +268,10 @@ static void region_draw_azone_tab_arrow(ScrArea *area, ARegion *region, AZone *a
 
   /* Workaround for different color spaces between normal areas and the ones using GPUViewports. */
   float alpha = WM_region_use_viewport(area, region) ? 0.6f : 0.4f;
-  const float color[4] = {0.05f, 0.05f, 0.05f, alpha};
+  float color[4];
+  ui::theme::get_color_4fv(TH_HEADER, color);
+  color[3] = std::max(color[3], alpha);
+
   rctf rect{};
   /* Hit size is a bit larger than visible background. */
   rect.xmin = float(az->x1) + U.pixelsize;
@@ -518,14 +525,17 @@ void ED_region_do_draw(bContext *C, ARegion *region)
   }
 
 #ifdef WITH_INPUT_IME
-  /* Manage the IME candidate window for the active region based on `cursor_ime`:
-   * - Position returned: start (if no session) or reposition IME.
-   * - nullopt returned: end any active IME session (e.g. exited edit mode).
+  /* Evaluated by the refresh below, reused by the preview so `cursor_ime` runs once per draw. */
+  ARegionIMECursor ime_cursor;
+  bool ime_cursor_is_set = false;
+
+  /* Manage the IME candidate window for the active region based on `cursor_ime`,
+   * see #ARegionIMECursorState for how each result is handled.
    * Deferred during animation playback, keeping `do_ime` set for when it stops. */
   if (at->cursor_ime && region->runtime->do_ime) {
     const bScreen *screen = WM_window_get_active_screen(win);
     if (!screen->animtimer && !screen->scrubbing && region == screen->active_region) {
-      WM_window_IME_region_refresh(win, area, region);
+      ime_cursor_is_set = WM_window_IME_region_refresh(win, area, region, true, &ime_cursor);
       region->runtime->do_ime = false;
     }
   }
@@ -538,6 +548,14 @@ void ED_region_do_draw(bContext *C, ARegion *region)
   /* Remove sRGB override by rebinding the framebuffer. */
   gpu::FrameBuffer *fb = GPU_framebuffer_active_get();
   GPU_framebuffer_bind(fb);
+
+#ifdef WITH_INPUT_IME
+  /* Draw over the region contents, using the pixel space set up above.
+   * Skipped whenever the refresh above was, e.g. during animation playback. */
+  if (ime_cursor_is_set) {
+    ed::ime::region_overlay_draw(win, region, U.pixelsize, ime_cursor);
+  }
+#endif
 
   ED_region_draw_cb_draw(C, region, REGION_DRAW_POST_PIXEL);
 
@@ -4378,27 +4396,32 @@ static void region_visible_rect_calc(ARegion *region, rcti *rect)
   /* check if a region overlaps with the current one */
   for (; region_iter; region_iter = region_iter->next) {
     if (region != region_iter && region_iter->overlap) {
-      if (BLI_rcti_isect(rect, &region_iter->winrct, nullptr)) {
+      /* Use the region's animated rect so the visible area tracks its slide/fade animation instead
+       * of jumping to the final size at the start or end of the animation. */
+      rcti sibling_rect;
+      ED_region_blend_rect(region_iter, &sibling_rect);
+
+      if (BLI_rcti_isect(rect, &sibling_rect, nullptr)) {
         int alignment = RGN_ALIGN_ENUM_FROM_MASK(region_iter->alignment);
 
         if (ELEM(alignment, RGN_ALIGN_LEFT, RGN_ALIGN_RIGHT)) {
           /* Overlap left, also check 1 pixel offset (2 regions on one side). */
-          if (abs(rect->xmin - region_iter->winrct.xmin) < 2) {
-            rect->xmin = region_iter->winrct.xmax;
+          if (abs(rect->xmin - sibling_rect.xmin) < 2) {
+            rect->xmin = sibling_rect.xmax;
           }
 
           /* Overlap right. */
-          if (abs(rect->xmax - region_iter->winrct.xmax) < 2) {
-            rect->xmax = region_iter->winrct.xmin;
+          if (abs(rect->xmax - sibling_rect.xmax) < 2) {
+            rect->xmax = sibling_rect.xmin;
           }
         }
         else if (ELEM(alignment, RGN_ALIGN_TOP, RGN_ALIGN_BOTTOM)) {
           /* Same logic as above for vertical regions. */
-          if (abs(rect->ymin - region_iter->winrct.ymin) < 2) {
-            rect->ymin = region_iter->winrct.ymax;
+          if (abs(rect->ymin - sibling_rect.ymin) < 2) {
+            rect->ymin = sibling_rect.ymax;
           }
-          if (abs(rect->ymax - region_iter->winrct.ymax) < 2) {
-            rect->ymax = region_iter->winrct.ymin;
+          if (abs(rect->ymax - sibling_rect.ymax) < 2) {
+            rect->ymax = sibling_rect.ymin;
           }
         }
         else if (alignment == RGN_ALIGN_FLOAT) {

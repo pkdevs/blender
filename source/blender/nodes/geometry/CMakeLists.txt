@@ -45,6 +45,7 @@ set(SRC
   nodes/node_geo_collection_children.cc
   nodes/node_geo_collection_info.cc
   nodes/node_geo_combine_bundle.cc
+  nodes/node_geo_combine_list.cc
   nodes/node_geo_common.cc
   nodes/node_geo_convex_hull.cc
   nodes/node_geo_cube_grid_topology.cc
@@ -98,6 +99,7 @@ set(SRC
   nodes/node_geo_filter_list.cc
   nodes/node_geo_flip_faces.cc
   nodes/node_geo_foreach_geometry_element.cc
+  nodes/node_geo_geometry_materials.cc
   nodes/node_geo_geometry_to_instance.cc
   nodes/node_geo_get_attribute_names.cc
   nodes/node_geo_get_bundle_item.cc
@@ -229,6 +231,7 @@ set(SRC
   nodes/node_geo_points_to_vertices.cc
   nodes/node_geo_points_to_volume.cc
   nodes/node_geo_proximity.cc
+  nodes/node_geo_rasterize_points.cc
   nodes/node_geo_raycast.cc
   nodes/node_geo_realize_instances.cc
   nodes/node_geo_remove_attribute.cc
@@ -320,6 +323,7 @@ set(SRC
   include/NOD_geo_foreach_geometry_element.hh
   include/NOD_geo_index_switch.hh
   include/NOD_geo_menu_switch.hh
+  include/NOD_geo_rasterize_points.hh
   include/NOD_geo_repeat.hh
   include/NOD_geo_simulation.hh
   include/NOD_geo_tag_filter.hh
