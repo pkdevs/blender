@@ -364,7 +364,8 @@ static void grow_factors_mesh(const ePaintSymmetryFlags symm,
                               const MutableSpan<float> pose_factor,
                               PoseGrowFactorData &gftd)
 {
-  const Span<int> verts = hide::node_visible_verts(node, hide_vert, tls.vert_indices);
+  Vector<int, bke::pbvh::MESH_LEAF_LIMIT> index_data;
+  const Span<int> verts = hide::node_visible_verts(node, hide_vert, index_data);
 
   calc_vert_neighbors(faces,
                       corner_verts,

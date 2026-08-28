@@ -509,7 +509,6 @@ void ensure_nodes_constraints(const Sculpt &sd,
 
   IndexMaskMemory memory;
   Set<OrderedEdge> created_length_constraints;
-  Vector<int> vert_indices;
   Vector<int> neighbor_offsets;
   Vector<int> neighbor_data;
   switch (pbvh.type()) {
@@ -543,6 +542,7 @@ void ensure_nodes_constraints(const Sculpt &sd,
         init_positions = persistent_position;
       }
       uninitialized_nodes.foreach_index([&](const int i) {
+        Vector<int, bke::pbvh::MESH_LEAF_LIMIT> vert_indices;
         const Span<int> verts = hide::node_visible_verts(nodes[i], hide_vert, vert_indices);
         const GroupedSpan<int> neighbors = calc_vert_neighbors(faces,
                                                                corner_verts,
@@ -588,6 +588,7 @@ void ensure_nodes_constraints(const Sculpt &sd,
       else {
         init_positions = persistent_position;
       }
+      Vector<int> vert_indices;
       uninitialized_nodes.foreach_index([&](const int i) {
         const Span<int> verts = calc_visible_vert_indices_grids(
             key, grid_hidden, nodes[i].grids(), vert_indices);
@@ -615,6 +616,7 @@ void ensure_nodes_constraints(const Sculpt &sd,
           });
       BMesh &bm = *ss.bm;
       vert_random_access_ensure(object);
+      Vector<int> vert_indices;
       uninitialized_nodes.foreach_index([&](const int i) {
         const Set<BMVert *, 0> &bm_verts = BKE_pbvh_bmesh_node_unique_verts(&nodes[i]);
         const Span<int> verts = calc_visible_vert_indices_bmesh(bm_verts, vert_indices);
