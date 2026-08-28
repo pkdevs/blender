@@ -11,6 +11,7 @@
 #include "DNA_node_types.h"
 #include "DNA_space_types.h"
 
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_string.hh"
 
@@ -206,8 +207,7 @@ static void nodestack_get_vec(float *in, short type_in, bNodeStack *ns)
       }
       break;
     }
-    case SOCK_RGBA:
-    case SOCK_ROTATION: {
+    case SOCK_RGBA: {
       switch (ns->sockettype) {
         case SOCK_FLOAT:
         case SOCK_INT:
@@ -218,6 +218,30 @@ static void nodestack_get_vec(float *in, short type_in, bNodeStack *ns)
         case SOCK_VECTOR:
           copy_v3_v3(in, from);
           in[3] = 1.0f;
+          break;
+        case SOCK_RGBA:
+        case SOCK_ROTATION:
+          copy_v4_v4(in, from);
+          break;
+        case SOCK_SHADER:
+          break;
+        default:
+          BLI_assert_unreachable();
+          break;
+      }
+      break;
+    }
+    case SOCK_ROTATION: {
+      switch (ns->sockettype) {
+        case SOCK_FLOAT:
+        case SOCK_INT:
+        case SOCK_BOOLEAN: {
+          const float eul[3] = {from[0], from[0], from[0]};
+          eul_to_quat(in, eul);
+          break;
+        }
+        case SOCK_VECTOR:
+          eul_to_quat(in, from);
           break;
         case SOCK_RGBA:
         case SOCK_ROTATION:
