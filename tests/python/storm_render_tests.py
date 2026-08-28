@@ -28,10 +28,6 @@ BLOCKLIST = [
     # Currently, image_mipmap tests are not enabled for storm-usd
     "image_cache_evict.blend",
     "image_mipmap_.*.blend",
-    # Not supported
-    "light_eval.blend",
-    "light_info.blend",
-    "shadow_cast.blend",
 ]
 
 # Unsupported or broken scenarios for the Storm render engine

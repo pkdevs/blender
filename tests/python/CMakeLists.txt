@@ -921,7 +921,6 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
     light
     light_group
     light_linking
-    lighting_nodes
     lightprobe
     mesh
     node_inlining
@@ -988,6 +987,13 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
   endif()
 
   list(SORT render_tests)
+  
+  set(eevee_tests
+    ${render_tests}
+    lighting_nodes
+  )
+  list(SORT eevee_tests)
+
   list(SORT workbench_tests)
 
   # Cycles
@@ -1099,7 +1105,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
       endif()
     endfunction()
 
-    add_gpu_render_tests(eevee "eevee_render_tests.py" "${gpu_render_tests}")
+    add_gpu_render_tests(eevee "eevee_render_tests.py" "${eevee_tests}")
     add_gpu_render_tests(workbench "workbench_render_tests.py" "${workbench_tests}")
     if(WITH_GPU_RENDER_TESTS_HEADED)
       add_gpu_render_tests(overlay "overlay_render_tests.py" "overlay")

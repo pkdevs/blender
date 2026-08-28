@@ -31,9 +31,6 @@ BLOCKLIST_ALL = [
     "shadow_resolution_scale.blend",
     "shader_to_rgb_transparent.blend",
     "subsurface_shader_to_rgb.blend",
-    "light_eval.blend",
-    "light_info.blend",
-    "shadow_cast.blend",
     "lightprobe_planar.blend"
 ]
 
