@@ -133,7 +133,6 @@ bool DEG_id_is_user_modified(const Depsgraph *graph, const ID *id)
   const deg::Depsgraph *deg_graph = reinterpret_cast<const deg::Depsgraph *>(graph);
   const deg::IDNode *id_node = deg_graph->find_id_node(deg::get_original_id(id));
   if (id_node == nullptr) {
-    BLI_assert_unreachable();
     return false;
   }
   return id_node->is_user_modified;
@@ -146,13 +145,11 @@ bool DEG_scene_component_is_user_modified(const Depsgraph *graph,
   const deg::Depsgraph *deg_graph = reinterpret_cast<const deg::Depsgraph *>(graph);
   const deg::IDNode *id_node = deg_graph->find_id_node(deg::get_original_id(&scene->id));
   if (id_node == nullptr) {
-    BLI_assert_unreachable();
     return false;
   }
   const deg::ComponentNode *component_node = id_node->find_component(
       deg::nodeTypeFromSceneComponent(component_type));
   if (component_node == nullptr) {
-    BLI_assert_unreachable();
     return false;
   }
   return component_node->is_user_modified;
