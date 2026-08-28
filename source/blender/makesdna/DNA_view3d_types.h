@@ -666,6 +666,9 @@ struct View3DOverlay {
   float sculpt_mode_mask_opacity = 0.75f;
   float sculpt_mode_face_sets_opacity = 1.0f;
   float viewer_attribute_opacity = 1.0f;
+  float sculpt_debug_opacity = 0.4f;
+
+  char _pad_sculpt_debug[4] = {};
 
   /** Armature edit/pose mode settings. */
   float xray_alpha_bone = 0.5f;

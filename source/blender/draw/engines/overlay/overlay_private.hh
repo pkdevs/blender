@@ -278,6 +278,11 @@ struct State {
   {
     return (this->overlay.flag & V3D_OVERLAY_SCULPT_CURVES_CAGE);
   }
+  bool show_sculpt_pbvh_debug() const
+  {
+    return this->scene->toolsettings->sculpt != nullptr &&
+           this->scene->toolsettings->sculpt->paint.debug_flags & PAINT_DEBUG_SHOW_BVH_NODES;
+  }
   bool show_light_colors() const
   {
     return (this->overlay.flag & V3D_OVERLAY_SHOW_LIGHT_COLORS);
@@ -507,6 +512,7 @@ class ShaderModule {
   StaticShader sculpt_curves = shader_clippable("overlay_sculpt_curves_selection");
   StaticShader sculpt_curves_cage = shader_clippable("overlay_sculpt_curves_cage");
   StaticShader sculpt_mesh = shader_clippable("overlay_sculpt_mask");
+  StaticShader sculpt_debug = shader_clippable("overlay_sculpt_debug");
   StaticShader uniform_color = shader_clippable("overlay_uniform_color");
   StaticShader uv_analysis_stretch_angle = {"overlay_edit_uv_stretching_angle"};
   StaticShader uv_analysis_stretch_area = {"overlay_edit_uv_stretching_area"};

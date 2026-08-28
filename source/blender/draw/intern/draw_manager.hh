@@ -156,6 +156,15 @@ class Manager {
   ResourceHandleRange unique_handle_for_sculpt(const ObjectRef &ref);
 
   /**
+   * Create one resource handle per PBVH leaf node for a sculpted object. Every node gets its own
+   * entry in the matrices / bounds / infos buffers, where the bounds are the node's local
+   * bounding box. This allows each node to be culled independently on the GPU.
+   * \note The handle `k` corresponds to the k-th leaf node (in node-index order) of the PBVH, so
+   * `range.sub_handle(k)` selects node `k`.
+   */
+  ResourceHandleRange sculpt_node_handles(const ObjectRef &ref);
+
+  /**
    * Create a new resource handle for the given object.
    */
   ResourceHandleRange resource_handle(const ObjectRef &ref, float inflate_bounds = 0.0f);

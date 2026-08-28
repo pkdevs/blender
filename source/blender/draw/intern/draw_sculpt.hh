@@ -12,6 +12,9 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_vector.hh"
 
+#include "DRW_pbvh.hh"
+#include "draw_handle.hh"
+
 namespace blender {
 
 struct GPUMaterial;
@@ -19,15 +22,9 @@ struct Object;
 namespace gpu {
 class Batch;
 }
-
 namespace draw {
-
-struct SculptBatch {
-  gpu::Batch *batch;
-  int material_slot;
-  int debug_index;
-  float3 debug_color();
-};
+using pbvh::SculptBatch;
+}  // namespace draw
 
 enum SculptBatchFeature {
   SCULPT_BATCH_DEFAULT = 0,
@@ -39,12 +36,27 @@ enum SculptBatchFeature {
 };
 ENUM_OPERATORS(SculptBatchFeature);
 
-/** Used by engines that don't use GPUMaterials, like the Workbench and Overlay engines. */
-Vector<SculptBatch> sculpt_batches_get(const Object *ob, SculptBatchFeature features);
+namespace draw {
 
-/** Used by EEVEE. */
+/**
+ * Used by engines that don't use GPUMaterials (Workbench, Overlay, External).
+ * Returns one shared batch with one record per visible leaf node.
+ * `node_handles` is obtained from `Manager::sculpt_node_handles(ref)`.
+ */
+SculptBatch sculpt_batches_get(const Object *ob,
+                               SculptBatchFeature features,
+                               const ResourceHandleRange &node_handles,
+                               Span<int> slot_to_custom = {});
+
+/**
+ * Used by EEVEE. Returns one SculptBatch per material slot (index = slot).
+ * `shared_batch` is nullptr for slots with no visible geometry.
+ * `node_handles` is obtained from `Manager::sculpt_node_handles(ref)`.
+ */
 Vector<SculptBatch> sculpt_batches_per_material_get(const Object *ob,
-                                                    Span<const GPUMaterial *> materials);
+                                                    Span<const GPUMaterial *> materials,
+                                                    const ResourceHandleRange &node_handles,
+                                                    Span<int> slot_to_custom = {});
 
 }  // namespace draw
 }  // namespace blender

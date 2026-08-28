@@ -16,6 +16,8 @@
 #include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
+#include "DNA_space_types.h"
+#include "DNA_view3d_types.h"
 
 #include "BLI_listbase_iterator.hh"
 #include "BLI_string_ref.hh"
@@ -399,6 +401,20 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
           }
           return true;
         });
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 18)) {
+    /* Set the new "sculpt debug opacity" overlay value, which did not exist in older files. */
+    for (bScreen &screen : bmain->screens) {
+      for (ScrArea &area : screen.areabase) {
+        for (SpaceLink &sl : area.spacedata) {
+          if (sl.spacetype == SPACE_VIEW3D) {
+            View3D *v3d = reinterpret_cast<View3D *>(&sl);
+            v3d->overlay.sculpt_debug_opacity = 0.4f;
+          }
+        }
       }
     }
   }

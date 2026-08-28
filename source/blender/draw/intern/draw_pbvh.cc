@@ -183,13 +183,14 @@ class DrawCacheImpl : public DrawCache {
   Map<AttributeRequest, AttributeData> attribute_vbos_;
 
   /**
-   * \brief Cached batches for a given setup.
+   * \brief Cached shared batch for a given setup.
    *
-   * Batches hold raw pointers to the shared attribute VBOs and index subranges. Those pointers
-   * become stale when the underlying buffers are reallocated.
+   * The batch points at the shared attribute VBOs and the full index buffer. The `dirty` flag
+   * is set by `ensure_node_infos` when any of those buffers need to be reallocated, and the
+   * batch is rebuilt lazily on the next access.
    */
   struct BatchCache {
-    Vector<gpu::Batch *> batches;
+    gpu::Batch *shared = nullptr;
     bool dirty = false;
   };
 
@@ -224,13 +225,13 @@ class DrawCacheImpl : public DrawCache {
   void tag_masks_changed(const IndexMask &node_mask) override;
   void tag_attribute_changed(const IndexMask &node_mask, StringRef attribute_name) override;
 
-  Span<gpu::Batch *> ensure_tris_batches(const Object &object,
-                                         const ViewportRequest &request,
-                                         const IndexMask &nodes_to_update) override;
+  SculptBatch ensure_tris_batch(const Object &object,
+                                const ViewportRequest &request,
+                                const IndexMask &leaf_nodes) override;
 
-  Span<gpu::Batch *> ensure_lines_batches(const Object &object,
-                                          const ViewportRequest &request,
-                                          const IndexMask &nodes_to_update) override;
+  SculptBatch ensure_lines_batch(const Object &object,
+                                 const ViewportRequest &request,
+                                 const IndexMask &leaf_nodes) override;
 
   Span<int> ensure_material_indices(const Object &object) override;
   Span<NodeInfo> ensure_node_infos(const Object &object, const IndexMask &all_leaf_nodes) override;
@@ -266,6 +267,17 @@ class DrawCacheImpl : public DrawCache {
                                               const OrigMeshData &orig_mesh_data,
                                               const IndexMask &node_mask,
                                               bool coarse);
+
+  /**
+   * Return (and rebuild if necessary) the shared batch for a given cache entry.
+   *
+   * The shared batch uses the full shared index buffer and all attribute vertex buffers.
+   * It is rebuilt when the `dirty` flag is set (buffers were reallocated).
+   */
+  void ensure_batch(BatchCache &cache,
+                    GPUPrimType prim_type,
+                    gpu::IndexBuf *ibo,
+                    Span<gpu::VertBuf *> vbos);
 };
 
 void DrawCacheImpl::AttributeData::tag_dirty(const IndexMask &node_mask)
@@ -356,13 +368,6 @@ static void update_ibos_subrange(gpu::IndexBuf &ibo_shared,
                           uint(range.offset) * sizeof(uint32_t),
                           uint(range.len) * sizeof(uint32_t),
                           host_data);
-}
-
-BLI_NOINLINE static void free_batches(const MutableSpan<gpu::Batch *> batches)
-{
-  for (gpu::Batch *&batch : batches) {
-    GPU_BATCH_DISCARD_SAFE(batch);
-  }
 }
 
 static const GPUVertFormat &position_format()
@@ -689,10 +694,10 @@ static NodeIndexCounts count_node_indices(const Object &object,
 
 DrawCacheImpl::~DrawCacheImpl()
 {
-  free_batches(lines_batches_.batches);
-  free_batches(lines_batches_coarse_.batches);
+  GPU_BATCH_DISCARD_SAFE(lines_batches_.shared);
+  GPU_BATCH_DISCARD_SAFE(lines_batches_coarse_.shared);
   for (BatchCache &batch_cache : tris_batches_.values()) {
-    free_batches(batch_cache.batches);
+    GPU_BATCH_DISCARD_SAFE(batch_cache.shared);
   }
 }
 
@@ -3203,9 +3208,31 @@ void DrawCacheImpl::IBOFamily::ensure_capacity()
   ibo.swap(new_ibo);
 }
 
-Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
-                                                      const ViewportRequest &request,
-                                                      const IndexMask &nodes_to_update)
+void DrawCacheImpl::ensure_batch(BatchCache &cache,
+                                 GPUPrimType prim_type,
+                                 gpu::IndexBuf *ibo,
+                                 Span<gpu::VertBuf *> vbos)
+{
+  /* The raw batch pointer is captured by drawing passes during sync and used at submit, so it
+   * must stay valid for the entire frame. A rebuild therefore reconfigures the batch in place
+   * rather than discarding and reallocating it. */
+  if (cache.shared == nullptr) {
+    cache.shared = GPU_batch_calloc();
+    cache.dirty = true;
+  }
+  if (cache.dirty) {
+    GPU_batch_clear(cache.shared);
+    GPU_batch_init(cache.shared, prim_type, nullptr, ibo);
+    for (gpu::VertBuf *vbo : vbos) {
+      GPU_batch_vertbuf_add(cache.shared, vbo, false);
+    }
+    cache.dirty = false;
+  }
+}
+
+SculptBatch DrawCacheImpl::ensure_tris_batch(const Object &object,
+                                             const ViewportRequest &request,
+                                             const IndexMask &leaf_nodes)
 {
   PRF_scope(ProfileCategory::Draw);
   const Object &object_orig = *DEG_get_original(&object);
@@ -3218,15 +3245,13 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
   IBOFamily &ibo_family = (coarse ? ibo_tris_coarse_ : ibo_tris_);
   ibo_family.ensure_capacity();
 
-  const Span<gpu::IndexBufPtr> ibos = this->ensure_tri_indices(
-      object, orig_mesh_data, nodes_to_update, request.use_coarse_grids);
+  ensure_tri_indices(object, orig_mesh_data, leaf_nodes, coarse);
 
   for (const AttributeRequest &attr : request.attributes) {
-    this->ensure_attribute_data(object, orig_mesh_data, attr, nodes_to_update);
+    ensure_attribute_data(object, orig_mesh_data, attr, leaf_nodes);
   }
 
-  /* Collect VBO spans in a different loop because #ensure_attribute_data invalidates the allocated
-   * arrays when its map is changed. */
+  /* Collect VBO pointers in a second pass because #ensure_attribute_data may resize the map. */
   Vector<gpu::VertBuf *> attr_vbos;
   for (const AttributeRequest &attr : request.attributes) {
     if (const AttributeData *attr_data = attribute_vbos_.lookup_ptr(attr)) {
@@ -3234,42 +3259,39 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
     }
   }
 
-  /* Except for the first iteration of the draw loop, we only need to rebuild batches for nodes
-   * with changed topology (visible triangle count). Rebuilds reconfigure the batch in place (the
-   * passes that draw them cache the raw batch pointers until submit, so freeing them mid-frame
-   * would leave those passes with dangling pointers). */
   BatchCache &batch_cache = tris_batches_.lookup_or_add_default(request);
-  Vector<gpu::Batch *> &batches = batch_cache.batches;
-  batches.resize(pbvh.nodes_num(), nullptr);
-  nodes_to_update.foreach_index(
-      [&](const int i) {
-        const bool has_ibo = !ibos.is_empty() && ibos[i] != nullptr;
-        if (!batches[i] || batch_cache.dirty ||
-            batches[i]->elem_() != (has_ibo ? ibos[i].get() : nullptr))
-        {
-          if (!has_ibo) {
-            /* No geometry for this node. */
-            return;
-          }
-          if (!batches[i]) {
-            batches[i] = GPU_batch_calloc();
-          }
-          GPU_batch_clear(batches[i]);
-          GPU_batch_init(batches[i], GPU_PRIM_TRIS, nullptr, ibos[i].get());
-          for (gpu::VertBuf *vbo : attr_vbos) {
-            GPU_batch_vertbuf_add(batches[i], vbo, false);
-          }
-        }
-      },
-      exec_mode::grain_size(64));
-  batch_cache.dirty = false;
+  ensure_batch(batch_cache, GPU_PRIM_TRIS, ibo_family.ibo.get(), attr_vbos.as_span());
 
-  return batches;
+  /* Build one record per leaf node so that `records[k]` corresponds to `leaves[k]`. Nodes without
+   * visible geometry get `vertex_len == 0` and are discarded by `append_records`. `res_id` and
+   * `custom_id` are left at 0 and expected to be stamped by the caller (draw_sculpt). */
+  SculptBatch result;
+  result.shared_batch = batch_cache.shared;
+  result.records.reserve(leaf_nodes.size());
+
+  leaf_nodes.foreach_index([&](const int node_index) {
+    const NodeInfo::BufferRange &range = coarse ? node_infos_[node_index].ibo_tris_coarse :
+                                                  node_infos_[node_index].ibo_tris;
+    command::DrawRecord rec{};
+    rec.instance_len = 1;
+    /* `vertex_first` is the first index element of the node inside the shared IBO; `base_index`
+     * (vertexOffset / baseVertex) stays 0 because the shared IBO stores absolute vertex indices
+     * into the shared VBO. Empty nodes keep `vertex_len == 0` and are not drawn. */
+    rec.vertex_len = (range.len > 0) ? uint(range.len) : 0;
+    rec.vertex_first = (range.len > 0) ? uint(range.offset) : 0;
+    rec.base_index = 0;
+    rec.instance_first = 0;
+    rec.res_id = 0;
+    rec.custom_id = 0;
+    result.records.append(rec);
+  });
+
+  return result;
 }
 
-Span<gpu::Batch *> DrawCacheImpl::ensure_lines_batches(const Object &object,
-                                                       const ViewportRequest &request,
-                                                       const IndexMask &nodes_to_update)
+SculptBatch DrawCacheImpl::ensure_lines_batch(const Object &object,
+                                              const ViewportRequest &request,
+                                              const IndexMask &leaf_nodes)
 {
   PRF_scope(ProfileCategory::Draw);
   const Object &object_orig = *DEG_get_original(&object);
@@ -3282,33 +3304,39 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_lines_batches(const Object &object,
   IBOFamily &ibo_family = (coarse ? ibo_lines_coarse_ : ibo_lines_);
   ibo_family.ensure_capacity();
 
-  const AttributeData &position = this->ensure_attribute_data(
-      object, orig_mesh_data, CustomRequest::Position, nodes_to_update);
-  const Span<gpu::IndexBufPtr> lines = this->ensure_lines_indices(
-      object, orig_mesh_data, nodes_to_update, request.use_coarse_grids);
+  AttributeData &pos_attr = this->ensure_attribute_data(
+      object, orig_mesh_data, CustomRequest::Position, leaf_nodes);
+  ensure_lines_indices(object, orig_mesh_data, leaf_nodes, coarse);
 
-  /* See the note on #ensure_tris_batches for why the batches are reconfigured in place. */
-  BatchCache &batch_cache = request.use_coarse_grids ? lines_batches_coarse_ : lines_batches_;
-  Vector<gpu::Batch *> &batches = batch_cache.batches;
-  batches.resize(pbvh.nodes_num(), nullptr);
-  nodes_to_update.foreach_index(
-      [&](const int i) {
-        if (lines[i] == nullptr) {
-          return;
-        }
-        if (!batches[i] || batch_cache.dirty || batches[i]->elem_() != lines[i].get()) {
-          if (!batches[i]) {
-            batches[i] = GPU_batch_calloc();
-          }
-          GPU_batch_clear(batches[i]);
-          GPU_batch_init(batches[i], GPU_PRIM_LINES, nullptr, lines[i].get());
-          GPU_batch_vertbuf_add(batches[i], position.vbo.get(), false);
-        }
-      },
-      exec_mode::grain_size(64));
-  batch_cache.dirty = false;
+  gpu::VertBuf *position_vbo = pos_attr.vbo.get();
+  BLI_assert(position_vbo != nullptr);
+  Span<gpu::VertBuf *> position_span{&position_vbo, 1};
 
-  return batches;
+  BatchCache &batch_cache = coarse ? lines_batches_coarse_ : lines_batches_;
+  ensure_batch(batch_cache, GPU_PRIM_LINES, ibo_family.ibo.get(), position_span);
+
+  SculptBatch result;
+  result.shared_batch = batch_cache.shared;
+  result.records.reserve(leaf_nodes.size());
+
+  leaf_nodes.foreach_index([&](const int node_index) {
+    const NodeInfo::BufferRange &range = coarse ? node_infos_[node_index].ibo_lines_coarse :
+                                                  node_infos_[node_index].ibo_lines;
+    if (range.len <= 0) {
+      return;
+    }
+    command::DrawRecord rec{};
+    rec.vertex_len = uint(range.len);
+    rec.instance_len = 1;
+    rec.vertex_first = uint(range.offset);
+    rec.base_index = 0;
+    rec.instance_first = 0;
+    rec.res_id = 0;
+    rec.custom_id = 0;
+    result.records.append(rec);
+  });
+
+  return result;
 }
 
 Span<int> DrawCacheImpl::ensure_material_indices(const Object &object)

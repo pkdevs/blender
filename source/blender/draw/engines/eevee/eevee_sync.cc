@@ -286,15 +286,18 @@ bool SyncModule::sync_sculpt(const ObjectRef &ob_ref)
 
   Vector<Material *, 8> synced_materials;
 
-  for (SculptBatch &batch :
-       sculpt_batches_per_material_get(ob_ref.object, material_array.gpu_materials))
-  {
-    gpu::Batch *geom = batch.batch;
-    if (geom == nullptr) {
+  const ResourceHandleRange node_handles = inst_.manager->sculpt_node_handles(ob_ref);
+  const Vector<SculptBatch> batches = sculpt_batches_per_material_get(
+      ob_ref.object, material_array.gpu_materials, node_handles);
+
+  for (uint slot = 0; slot < batches.size(); slot++) {
+    const SculptBatch &batch = batches[slot];
+    if (batch.shared_batch == nullptr || batch.records.is_empty()) {
       continue;
     }
 
-    Material &material = material_array.materials[batch.material_slot];
+    gpu::Batch *geom = batch.shared_batch;
+    Material &material = material_array.materials[slot];
     synced_materials.append(&material);
 
     if (material.has_volume) {

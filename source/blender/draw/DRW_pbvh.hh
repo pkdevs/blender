@@ -18,6 +18,8 @@
 
 #include "DNA_customdata_types.h"
 
+#include "draw_command_shared.hh"
+
 namespace blender {
 
 namespace gpu {
@@ -56,6 +58,17 @@ struct ViewportRequest {
 };
 
 /**
+ * A sculpt batch is one shared batch plus one draw record per PBVH leaf node.
+ * `records[k]` corresponds to the k-th leaf node (in `all_leaf_nodes` order); its
+ * `vertex_len` is 0 if the node has no visible geometry (discarded by append_records).
+ * The records are left unstampet: `res_id` and `custom_id` are set by the caller.
+ */
+struct SculptBatch {
+  gpu::Batch *shared_batch = nullptr;
+  Vector<command::DrawRecord> records;
+};
+
+/**
  * \brief Information on where each node stores its data in the vertex/index buffers.
  */
 struct NodeInfo {
@@ -83,19 +96,19 @@ class DrawCache : public bke::pbvh::DrawCache {
  public:
   ~DrawCache() override = default;
   /**
-   * Recalculate and copy data as necessary to prepare batches for drawing triangles for a
-   * specific combination of attributes.
+   * Recalculate and copy data as necessary to prepare a shared batch and per-node draw records
+   * for drawing triangles for a specific combination of attributes.
    */
-  virtual Span<gpu::Batch *> ensure_tris_batches(const Object &object,
-                                                 const ViewportRequest &request,
-                                                 const IndexMask &nodes_to_update) = 0;
+  virtual SculptBatch ensure_tris_batch(const Object &object,
+                                        const ViewportRequest &request,
+                                        const IndexMask &leaf_nodes) = 0;
   /**
-   * Recalculate and copy data as necessary to prepare batches for drawing wireframe geometry for a
-   * specific combination of attributes.
+   * Recalculate and copy data as necessary to prepare a shared batch and per-node draw records
+   * for drawing wireframe geometry.
    */
-  virtual Span<gpu::Batch *> ensure_lines_batches(const Object &object,
-                                                  const ViewportRequest &request,
-                                                  const IndexMask &nodes_to_update) = 0;
+  virtual SculptBatch ensure_lines_batch(const Object &object,
+                                         const ViewportRequest &request,
+                                         const IndexMask &leaf_nodes) = 0;
 
   /**
    * Return the material index for each node (all faces in a node should have the same material

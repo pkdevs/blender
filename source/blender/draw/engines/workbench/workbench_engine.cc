@@ -280,6 +280,36 @@ class Instance : public DrawEngine {
     });
   }
 
+  void draw_sculpt_mesh(ObjectRef &ob_ref,
+                        Material &material,
+                        ResourceHandleRange handle,
+                        const SculptBatch &batch,
+                        const MaterialTexture *texture = nullptr,
+                        bool show_missing_texture = false)
+  {
+    BLI_assert(batch.shared_batch != nullptr);
+    resources_.material_buf.append(material);
+    const int material_index = resources_.material_buf.size() - 1;
+
+    if (show_missing_texture && (!texture || !texture->gpu.texture)) {
+      texture = &resources_.missing_texture;
+    }
+
+    /* The material is selected via `custom_id`, which for this engine is the index into
+     * `resources_.material_buf`. Re-stamp every record before drawing. */
+    auto records = batch.records;
+    for (auto &rec : records) {
+      rec.custom_id = uint(material_index);
+    }
+
+    this->draw_to_mesh_pass(ob_ref, material.is_transparent(), [&](MeshPass &mesh_pass) {
+      PassMain::Sub &pass =
+          mesh_pass.get_subpass(eGeometryType::MESH, texture).sub("Sculpt SubPass");
+      pass.push_constant("sculpt_object_id", int(handle.raw()) + 1);
+      pass.draw_multi(batch.shared_batch, records.as_span());
+    });
+  }
+
   void mesh_sync(Manager &manager,
                  ObjectRef &ob_ref,
                  ResourceHandleRange handle,
@@ -363,30 +393,39 @@ class Instance : public DrawEngine {
     }
 
     if (object_state.use_per_material_batches) {
-      for (SculptBatch &batch : sculpt_batches_get(ob_ref.object, features)) {
-        Material mat = this->get_material(ob_ref, object_state.color_type, batch.material_slot);
-        if (scene_state_.show_paint_bvh_debug) {
-          mat.base_color = batch.debug_color();
+      const int material_count = BKE_object_material_used_with_fallback_eval(*ob_ref.object);
+      Span<const GPUMaterial *> materials = this->get_dummy_gpu_materials(material_count);
+
+      const Vector<SculptBatch> batches = sculpt_batches_per_material_get(
+          ob_ref.object, materials, manager.sculpt_node_handles(ob_ref));
+
+      for (uint slot = 0; slot < batches.size(); slot++) {
+        const SculptBatch &batch = batches[slot];
+        if (batch.shared_batch == nullptr || batch.records.is_empty()) {
+          continue;
         }
+
+        Material mat = this->get_material(ob_ref, object_state.color_type, slot);
 
         MaterialTexture texture;
         if (object_state.color_type == V3D_SHADING_TEXTURE_COLOR) {
-          texture = MaterialTexture(manager, ob_ref.object, batch.material_slot);
+          texture = MaterialTexture(manager, ob_ref.object, slot);
         }
 
-        this->draw_mesh(
-            ob_ref, mat, batch.batch, handle, &texture, object_state.show_missing_texture);
+        this->draw_sculpt_mesh(
+            ob_ref, mat, handle, batch, &texture, object_state.show_missing_texture);
       }
     }
     else {
       Material mat = this->get_material(ob_ref, object_state.color_type);
-      for (SculptBatch &batch : sculpt_batches_get(ob_ref.object, features)) {
-        if (scene_state_.show_paint_bvh_debug) {
-          mat.base_color = batch.debug_color();
-        }
 
-        this->draw_mesh(ob_ref, mat, batch.batch, handle, &object_state.image_paint_override);
+      const SculptBatch batch = sculpt_batches_get(
+          ob_ref.object, features, manager.sculpt_node_handles(ob_ref));
+      if (batch.shared_batch == nullptr || batch.records.is_empty()) {
+        return;
       }
+
+      this->draw_sculpt_mesh(ob_ref, mat, handle, batch, &object_state.image_paint_override);
     }
   }
 

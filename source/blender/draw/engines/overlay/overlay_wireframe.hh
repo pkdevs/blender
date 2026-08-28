@@ -180,11 +180,9 @@ class Wireframe : Overlay {
 
         if (show_surface_wire) {
           if (BKE_sculptsession_use_pbvh_draw(ob_ref.object, state.rv3d)) {
-            ResourceHandleRange handle = manager.unique_handle(ob_ref);
-
-            for (SculptBatch &batch : sculpt_batches_get(ob_ref.object, SCULPT_BATCH_WIREFRAME)) {
-              coloring.mesh_all_edges_ps_->draw(batch.batch, handle);
-            }
+            SculptBatch batch = sculpt_batches_get(
+                ob_ref.object, SCULPT_BATCH_WIREFRAME, manager.sculpt_node_handles(ob_ref));
+            coloring.mesh_all_edges_ps_->draw_multi(batch.shared_batch, batch.records.as_span());
           }
           else if (!in_edit_mode || bypass_mode_check) {
             /* Only draw the wireframe in edit mode if object has edit cage.

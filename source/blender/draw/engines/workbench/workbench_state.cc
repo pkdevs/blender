@@ -253,11 +253,6 @@ void SceneState::init(const DRWContext *context,
     reset_taa = true;
   }
 
-  show_paint_bvh_debug = scene->toolsettings->sculpt ?
-                             (scene->toolsettings->sculpt->paint.debug_flags &
-                              PAINT_DEBUG_SHOW_BVH_NODES) != 0 :
-                             false;
-
   if (reset_taa || samples_len <= 1) {
     sample = 0;
   }

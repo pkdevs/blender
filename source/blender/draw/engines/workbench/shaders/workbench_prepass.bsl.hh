@@ -118,6 +118,9 @@ struct Mesh {
   /** WORKAROUND: This exact compilation constant is checked in Metal backend to enable clip
    * distances. */
   [[compilation_constant]] const bool use_clipping;
+
+  /** Object identity used by outline/curvature. 0 = "not sculpt". */
+  [[push_constant]] const int sculpt_object_id;
 };
 
 [[vertex]] void vert_mesh([[resource_table]] Mesh &mesh,
@@ -147,7 +150,8 @@ struct Mesh {
 
   v_out.normal = normalize(obj.normal_object_to_view(view, v_in.nor));
 
-  v_out.object_id = int(id.resource_id<1>() & 0xFFFFu) + 1;
+  v_out.object_id = (mesh.sculpt_object_id > 0) ? mesh.sculpt_object_id :
+                                                  int(id.resource_id<1>() & 0xFFFFu) + 1;
 
   materials.material_data_get(
       custom_id, v_in.ac.rgb, v_out.color, v_out.alpha, v_out.roughness, v_out.metallic);

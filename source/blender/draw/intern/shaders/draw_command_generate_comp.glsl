@@ -207,7 +207,8 @@ void generate_record_command(uint record_id)
     if (visibility_word_per_draw > 0) {
       for (uint v = 0; v < uint(view_len); v++) {
         for (uint i = 0u; i < per_view; i++) {
-          set_resource_id(base + v * per_view + i, v | (res_id << uint(view_shift)), rec.custom_id);
+          set_resource_id(
+              base + v * per_view + i, v | (res_id << uint(view_shift)), rec.custom_id);
         }
       }
     }

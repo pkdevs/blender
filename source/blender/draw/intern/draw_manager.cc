@@ -234,6 +234,45 @@ ResourceHandleRange Manager::unique_handle_for_sculpt(const ObjectRef &ref)
   return ref.sculpt_handle_;
 }
 
+ResourceHandleRange Manager::sculpt_node_handles(const ObjectRef &ref)
+{
+  /* One handle per leaf node, so each node can be culled independently on the GPU. */
+  const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(*ref.object);
+  IndexMaskMemory memory;
+  const IndexMask leaves = bke::pbvh::all_leaf_nodes(pbvh, memory);
+  const uint leaf_count = uint(leaves.size());
+
+  BLI_assert(!ref.duplis_);
+  const bool is_active_object = ref.is_active(object_active);
+  const bool is_active_edit_mode =
+      object_active &&
+      (DRW_object_is_in_edit_mode(object_active) ||
+       ELEM(object_active->mode, OB_MODE_TEXTURE_PAINT, OB_MODE_SCULPT)) &&
+      ref.object->mode == object_active->mode;
+
+  const uint start = resource_len_;
+  const uint inverted = (ref.object->transflag & OB_NEG_SCALE) != 0;
+
+  ObjectMatrices matrices;
+  matrices.sync(*ref.object);
+
+  leaves.foreach_index([&](const int node_index, const int slot) {
+    matrix_buf.current().get_or_resize(start + slot) = matrices;
+
+    const Bounds<float3> bounds = std::visit(
+        [&](const auto &nodes) { return nodes[node_index].bounds_; }, pbvh.nodes_);
+    const float3 center = math::midpoint(bounds.min, bounds.max);
+    bounds_buf.current().get_or_resize(start + slot).sync(center, bounds.max - center);
+
+    infos_buf.current()
+        .get_or_resize(start + slot)
+        .sync(ref, is_active_object, is_active_edit_mode);
+  });
+  resource_len_ += leaf_count;
+
+  return ResourceHandleRange(ResourceHandle(start, inverted), leaf_count);
+}
+
 void Manager::compute_visibility(View &view)
 {
   bool freeze_culling = (USER_DEVELOPER_TOOL_TEST(&U, use_viewport_debug) && drw_get().v3d &&

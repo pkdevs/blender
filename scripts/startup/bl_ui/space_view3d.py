@@ -7613,7 +7613,10 @@ class VIEW3D_PT_overlay_sculpt(Panel):
         use_debug = prefs.experimental.use_paint_debug and prefs.view.show_developer_ui
         if use_debug:
             row = layout.row(align=True)
-            row.prop(sculpt, "show_bvh_nodes")
+            row.prop(sculpt, "show_bvh_nodes", text="")
+            sub = row.row()
+            sub.active = sculpt.show_bvh_nodes
+            sub.prop(overlay, "sculpt_debug_opacity", text="Sculpt BVH")
 
 
 class VIEW3D_PT_overlay_sculpt_curves(Panel):

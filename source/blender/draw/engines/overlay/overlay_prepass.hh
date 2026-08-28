@@ -178,19 +178,47 @@ class Prepass : Overlay {
 
   void sculpt_sync(Manager &manager, const ObjectRef &ob_ref, Resources &res)
   {
-    ResourceHandleRange handle = manager.unique_handle_for_sculpt(ob_ref);
+    const ResourceHandleRange node_handles = manager.sculpt_node_handles(ob_ref);
 
-    for (SculptBatch &batch : sculpt_batches_get(ob_ref.object, SCULPT_BATCH_DEFAULT)) {
-      select::ID select_id = use_material_slot_selection_ ?
-                                 res.select_id(ob_ref, (batch.material_slot + 1) << 16) :
-                                 res.select_id(ob_ref);
+    /* For per-material-slot selection, encode (slot+1)<<16 in custom_id so each node
+     * carries its own select ID. */
+    Vector<int> slot_to_custom;
+    if (use_material_slot_selection_) {
+      const int n_mat = std::max(0, BKE_object_material_count_eval(ob_ref.object) - 1);
+      for (int slot = 0; slot <= n_mat; slot++) {
+        slot_to_custom.append((slot + 1) << 16);
+      }
+    }
+    const uint const_select_id = res.select_id(ob_ref).get();
 
+    SculptBatch batch = sculpt_batches_get(
+        ob_ref.object, SCULPT_BATCH_DEFAULT, node_handles, slot_to_custom.as_span());
+    if (batch.shared_batch == nullptr || batch.records.is_empty()) {
+      return;
+    }
+
+    for (int k = 0; k < int(batch.records.size()); k++) {
+      const auto &rec = batch.records[k];
+      if (rec.vertex_len == 0) {
+        continue;
+      }
+      const ResourceHandleRange node_handle{node_handles.sub_handle(k)};
+      const uint select_id = use_material_slot_selection_ ? (uint(rec.custom_id) >> 16) :
+                                                            const_select_id;
       if (res.is_selection()) {
-        /* Conservative shader needs expanded draw-call. */
-        mesh_ps_->draw_expand(batch.batch, GPU_PRIM_TRIS, 1, 1, handle, select_id.get());
+        /* Conservative shader needs an expanded draw-call. */
+        mesh_ps_->draw_expand(batch.shared_batch,
+                              GPU_PRIM_TRIS,
+                              1,
+                              1,
+                              rec.vertex_len,
+                              rec.vertex_first,
+                              node_handle,
+                              select_id);
       }
       else {
-        mesh_ps_->draw(batch.batch, handle, select_id.get());
+        mesh_ps_->draw(
+            batch.shared_batch, 1, rec.vertex_len, rec.vertex_first, node_handle, select_id);
       }
     }
   }

@@ -35,3 +35,23 @@ ADDITIONAL_INFO(draw_globals)
 GPU_SHADER_CREATE_END()
 
 CREATE_INFO_VARIANT(overlay_sculpt_mask_clipped, overlay_sculpt_mask, drw_clipped)
+
+GPU_SHADER_INTERFACE_INFO(overlay_sculpt_debug_iface)
+FLAT(float4, debug_color)
+GPU_SHADER_INTERFACE_END()
+
+GPU_SHADER_CREATE_INFO(overlay_sculpt_debug)
+DO_STATIC_COMPILATION()
+PUSH_CONSTANT(float, debug_opacity)
+VERTEX_IN(0, float3, pos)
+VERTEX_IN(1, float3, nor)
+VERTEX_OUT(overlay_sculpt_debug_iface)
+VERTEX_SOURCE("overlay_sculpt_debug_vert.glsl")
+FRAGMENT_SOURCE("overlay_sculpt_debug_frag.glsl")
+FRAGMENT_OUT(0, float4, frag_color)
+ADDITIONAL_INFO(draw_view)
+ADDITIONAL_INFO(draw_modelmat)
+ADDITIONAL_INFO(draw_globals)
+GPU_SHADER_CREATE_END()
+
+CREATE_INFO_VARIANT(overlay_sculpt_debug_clipped, overlay_sculpt_debug, drw_clipped)

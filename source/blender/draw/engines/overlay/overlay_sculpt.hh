@@ -34,15 +34,17 @@ namespace blender::draw::overlay {
 class Sculpts : Overlay {
 
  private:
-  PassSimple sculpt_mask_ = {"SculptMaskAndFaceSet"};
-  PassSimple::Sub *mesh_ps_ = nullptr;
-  PassSimple::Sub *curves_ps_ = nullptr;
+  PassMain sculpt_mask_ = {"SculptMaskAndFaceSet"};
+  PassMain::Sub *mesh_ps_ = nullptr;
+  PassMain::Sub *sculpt_debug_ps_ = nullptr;
+  PassMain::Sub *curves_ps_ = nullptr;
 
   PassSimple sculpt_curve_cage_ = {"SculptCage"};
 
   bool show_curves_cage_ = false;
   bool show_face_set_ = false;
   bool show_mask_ = false;
+  bool show_sculpt_pbvh_debug_ = false;
 
  public:
   void begin_sync(Resources &res, const State &state) final
@@ -50,11 +52,12 @@ class Sculpts : Overlay {
     show_curves_cage_ = state.show_sculpt_curves_cage();
     show_face_set_ = state.show_sculpt_face_sets();
     show_mask_ = state.show_sculpt_mask();
+    show_sculpt_pbvh_debug_ = state.show_sculpt_pbvh_debug();
 
     enabled_ = state.is_space_v3d() && !state.is_wire() && !res.is_selection() &&
                !state.is_depth_only_drawing &&
                ELEM(state.object_mode, OB_MODE_SCULPT_CURVES, OB_MODE_SCULPT) &&
-               (show_curves_cage_ || show_face_set_ || show_mask_);
+               (show_curves_cage_ || show_face_set_ || show_mask_ || show_sculpt_pbvh_debug_);
 
     if (!enabled_) {
       /* Not used. But release the data. */
@@ -79,6 +82,15 @@ class Sculpts : Overlay {
         sub.push_constant("mask_opacity", mask_opacity);
         sub.push_constant("face_sets_opacity", face_set_opacity);
         mesh_ps_ = &sub;
+      }
+      if (show_sculpt_pbvh_debug_) {
+        /* Debug: color each PBVH leaf so the BVH split is visible. */
+        PassMain::Sub &sub = sculpt_mask_.sub("SculptDebug");
+        sub.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_ALPHA,
+                      state.clipping_plane_count);
+        sub.shader_set(res.shaders->sculpt_debug.get());
+        sub.push_constant("debug_opacity", state.overlay.sculpt_debug_opacity);
+        sculpt_debug_ps_ = &sub;
       }
       {
         auto &sub = sculpt_mask_.sub("Curves");
@@ -160,7 +172,7 @@ class Sculpts : Overlay {
 
   void mesh_sync(Manager &manager, const ObjectRef &ob_ref, const State &state)
   {
-    if (!show_face_set_ && !show_mask_) {
+    if (!show_face_set_ && !show_mask_ && !show_sculpt_pbvh_debug_) {
       /* Nothing to display. */
       return;
     }
@@ -186,46 +198,52 @@ class Sculpts : Overlay {
       return;
     }
 
-    switch (pbvh->type()) {
-      case bke::pbvh::Type::Mesh: {
-        const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*object_orig);
-        if (!mesh.attributes().contains(".sculpt_face_set") &&
-            !mesh.attributes().contains(".sculpt_mask"))
-        {
-          return;
+    if (!show_sculpt_pbvh_debug_) {
+      switch (pbvh->type()) {
+        case bke::pbvh::Type::Mesh: {
+          const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*object_orig);
+          if (!mesh.attributes().contains(".sculpt_face_set") &&
+              !mesh.attributes().contains(".sculpt_mask"))
+          {
+            return;
+          }
+          break;
         }
-        break;
-      }
-      case bke::pbvh::Type::Grids: {
-        const SubdivCCG &subdiv_ccg = *sculpt_session->subdiv_ccg;
-        const Mesh &base_mesh = DRW_object_get_data_for_drawing<Mesh>(*object_orig);
-        if (subdiv_ccg.masks.is_empty() && !base_mesh.attributes().contains(".sculpt_face_set")) {
-          return;
+        case bke::pbvh::Type::Grids: {
+          const SubdivCCG &subdiv_ccg = *sculpt_session->subdiv_ccg;
+          const Mesh &base_mesh = DRW_object_get_data_for_drawing<Mesh>(*object_orig);
+          if (subdiv_ccg.masks.is_empty() && !base_mesh.attributes().contains(".sculpt_face_set"))
+          {
+            return;
+          }
+          break;
         }
-        break;
-      }
-      case bke::pbvh::Type::BMesh: {
-        const BMesh &bm = *sculpt_session->bm;
-        if (!CustomData_has_layer_named(&bm.pdata, CD_PROP_FLOAT, ".sculpt_face_set") &&
-            !CustomData_has_layer_named(&bm.vdata, CD_PROP_FLOAT, ".sculpt_mask"))
-        {
-          return;
+        case bke::pbvh::Type::BMesh: {
+          const BMesh &bm = *sculpt_session->bm;
+          if (!CustomData_has_layer_named(&bm.pdata, CD_PROP_FLOAT, ".sculpt_face_set") &&
+              !CustomData_has_layer_named(&bm.vdata, CD_PROP_FLOAT, ".sculpt_mask"))
+          {
+            return;
+          }
+          break;
         }
-        break;
       }
     }
 
     const bool use_pbvh = BKE_sculptsession_use_pbvh_draw(ob_ref.object, state.rv3d);
     if (use_pbvh) {
-      ResourceHandleRange handle = manager.unique_handle_for_sculpt(ob_ref);
-
       SculptBatchFeature sculpt_batch_features_ = (show_face_set_ ? SCULPT_BATCH_FACE_SET :
                                                                     SCULPT_BATCH_DEFAULT) |
                                                   (show_mask_ ? SCULPT_BATCH_MASK :
                                                                 SCULPT_BATCH_DEFAULT);
 
-      for (SculptBatch &batch : sculpt_batches_get(ob_ref.object, sculpt_batch_features_)) {
-        mesh_ps_->draw(batch.batch, handle);
+      SculptBatch batch = sculpt_batches_get(
+          ob_ref.object, sculpt_batch_features_, manager.sculpt_node_handles(ob_ref));
+      if (show_sculpt_pbvh_debug_ && sculpt_debug_ps_) {
+        sculpt_debug_ps_->draw_multi(batch.shared_batch, batch.records.as_span());
+      }
+      else if (mesh_ps_) {
+        mesh_ps_->draw_multi(batch.shared_batch, batch.records.as_span());
       }
     }
     else {
