@@ -133,7 +133,7 @@ static void calculate_splines_axis(const Span<float> distances,
 }
 
 /**
- * Starts at a specific edge and walks continuosly in one direction along quad edges until it
+ * Starts at a specific edge and walks continuously in one direction along quad edges until it
  * loops back into itself in a circle or hits the end of the edge loop.
  */
 static void traverse_edge_loop(BMVert *v_start,
