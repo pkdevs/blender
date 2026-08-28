@@ -326,6 +326,10 @@ static void recalcData_grease_pencil(TransInfo *t)
         curves.tag_radii_changed();
 
         layer_i++;
+
+        if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
+          layer_i += 2;
+        }
       }
       else if (t->mode == TFM_GPENCIL_OPACITY) {
         if (key && actkb && tc.obedit->shapenr != 1) {
@@ -336,6 +340,10 @@ static void recalcData_grease_pencil(TransInfo *t)
         }
 
         layer_i++;
+
+        if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
+          layer_i += 2;
+        }
       }
       else if (t->mode == TFM_TILT) {
         curves.tag_normals_changed();
