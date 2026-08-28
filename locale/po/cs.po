@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'bf67fb078da0')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'09417042a1fa')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-27 09:52+0000\n"
+"POT-Creation-Date: 2026-08-24 07:38+0000\n"
 "PO-Revision-Date: 2025-12-01 09:17+0000\n"
 "Last-Translator: Matt Mitacek <mattmitacek@gmail.com>\n"
 "Language-Team: Czech <https://translate.blender.org/projects/blender-ui/ui/cs/>\n"
@@ -2400,10 +2400,6 @@ msgid "Point cloud data-blocks"
 msgstr "Datové bloky bodových mraků"
 
 
-msgid "Project"
-msgstr "Projekce"
-
-
 msgid "Scene data-blocks"
 msgstr "Datové bloky scén"
 
@@ -4284,10 +4280,6 @@ msgid "Color management specific to display device"
 msgstr "Správa barev specifická pro zobrazovací zařízení"
 
 
-msgid "Display"
-msgstr "Zobrazit"
-
-
 msgid "Input color space settings"
 msgstr "Nastavení vstupního barevného prostoru"
 
@@ -4298,10 +4290,6 @@ msgstr "Jsou data"
 
 msgid "Treat image as non-color data without color management, like normal or displacement maps"
 msgstr "Zacházejte s obrazem jako s nebarevnými daty bez správy barev, jako jsou normální mapy nebo mapy posunutí"
-
-
-msgid "Input Color Space"
-msgstr "Vstupní barevný prostor"
 
 
 msgid "Color space that the sequencer operates in"
@@ -4324,10 +4312,6 @@ msgid "Gamma"
 msgstr "Gama"
 
 
-msgid "Look"
-msgstr "Pohled"
-
-
 msgid "Additional transform applied before view transform for artistic needs"
 msgstr "Další transformace použitá před transformací pohledu pro umělecké potřeby"
 
@@ -4342,10 +4326,6 @@ msgstr "Použít křivky"
 
 msgid "Use RGB curved for pre-display transformation"
 msgstr "Použití zakřiveného RGB pro transformaci před zobrazením"
-
-
-msgid "View"
-msgstr "Pohled"
 
 
 msgid "Temperature"
@@ -5586,6 +5566,10 @@ msgid "Shrink the location to the nearest target surface"
 msgstr "Odstranit označené Objekt(y)"
 
 
+msgid "Project"
+msgstr "Projekce"
+
+
 msgid "Shrink the location to the nearest target surface along a given axis"
 msgstr "Odstranit označené Objekt(y)"
 
@@ -5876,6 +5860,10 @@ msgstr "Rozdělit"
 
 msgid "Plane"
 msgstr "Plocha"
+
+
+msgid "View"
+msgstr "Pohled"
 
 
 msgid "Only First"
@@ -8834,6 +8822,18 @@ msgid "Smooth Stroke"
 msgstr "Hladký Tah"
 
 
+msgid "Use Unified Color"
+msgstr "Použít sjednocenou barvu"
+
+
+msgid "Use Unified Strength"
+msgstr "Použít Sjednocenou Sílu"
+
+
+msgid "Use Unified Weight"
+msgstr "Použít Sjednocenou Hmotnost"
+
+
 msgid "Vertex weight when brush is applied"
 msgstr "Žádné skupiny vertexů"
 
@@ -10840,6 +10840,10 @@ msgstr "Vlhkost"
 
 msgid "Amount of damping"
 msgstr "Historie vracení"
+
+
+msgid "Display"
+msgstr "Zobrazit"
 
 
 msgid "Percentage of particles to display in 3D view"
@@ -13807,58 +13811,6 @@ msgid "Material slot name"
 msgstr "Název okénka materiálu"
 
 
-msgid "Names"
-msgstr "Názvy"
-
-
-msgid "Show/Hide"
-msgstr "Zobrazit/skrýt"
-
-
-msgid "Apply"
-msgstr "Použít"
-
-
-msgid "Mesh Select Mode"
-msgstr "Síťový mód výběru"
-
-
-msgid "Face Data"
-msgstr "Data Ploch"
-
-
-msgid "Clean Up"
-msgstr "Vyčistit"
-
-
-msgid "Merge"
-msgstr "Sloučit"
-
-
-msgid "Special Characters"
-msgstr "Speciální Znaky"
-
-
-msgid "Math"
-msgstr "Matematika"
-
-
-msgid "Metaball"
-msgstr "Meta objekt"
-
-
-msgid "Utilities"
-msgstr "Nástroje"
-
-
-msgid "Bone Roll"
-msgstr "Kost"
-
-
-msgid "Pivot Point"
-msgstr "Bod pro pivot"
-
-
 msgid "Snap"
 msgstr "Přichytit"
 
@@ -13887,6 +13839,10 @@ msgid "Local View"
 msgstr "Lokální pohled"
 
 
+msgid "Utilities"
+msgstr "Nástroje"
+
+
 msgid "Navigation"
 msgstr "Navigace"
 
@@ -13895,12 +13851,20 @@ msgid "Align View"
 msgstr "Zarovnat pohled"
 
 
+msgid "Math"
+msgstr "Matematika"
+
+
 msgid "Select Linked"
 msgstr "Vybrat Propojené"
 
 
 msgid "Assign Material"
 msgstr "Přiřadit Materiál"
+
+
+msgid "Metaball"
+msgstr "Meta objekt"
 
 
 msgid "Light"
@@ -13915,20 +13879,32 @@ msgid "Rigid Body"
 msgstr "Tuhé Těleso"
 
 
+msgid "Apply"
+msgstr "Použít"
+
+
 msgid "Track"
 msgstr "Sledování"
+
+
+msgid "Quick Effects"
+msgstr "Rychlé Efekty"
+
+
+msgid "Show/Hide"
+msgstr "Zobrazit/skrýt"
 
 
 msgid "Linked"
 msgstr "Propojené"
 
 
+msgid "Clean Up"
+msgstr "Vyčistit"
+
+
 msgid "Layout"
 msgstr "Rozložení"
-
-
-msgid "Quick Effects"
-msgstr "Rychlé Efekty"
 
 
 msgid "Make Single User"
@@ -13953,6 +13929,34 @@ msgstr "Vyčistit transformaci"
 
 msgid "Propagate"
 msgstr "Vložit"
+
+
+msgid "Names"
+msgstr "Názvy"
+
+
+msgid "Mesh Select Mode"
+msgstr "Síťový mód výběru"
+
+
+msgid "Face Data"
+msgstr "Data Ploch"
+
+
+msgid "Merge"
+msgstr "Sloučit"
+
+
+msgid "Special Characters"
+msgstr "Speciální Znaky"
+
+
+msgid "Bone Roll"
+msgstr "Kost"
+
+
+msgid "Pivot Point"
+msgstr "Bod pro pivot"
 
 
 msgid "Basic"
@@ -16772,10 +16776,6 @@ msgid "Color Spill"
 msgstr "Sada barev"
 
 
-msgid "To"
-msgstr "K"
-
-
 msgid "Placeholder"
 msgstr "Filtry"
 
@@ -17631,6 +17631,10 @@ msgstr "Výstup uzlu"
 
 msgid "Value to Normal"
 msgstr "Hodnota k Normále"
+
+
+msgid "Scalar"
+msgstr "Změna velikosti"
 
 
 msgid "Node Inputs"
@@ -18567,11 +18571,6 @@ msgstr "Chvění"
 
 msgid "Generated"
 msgstr "Oddělit"
-
-
-msgctxt "Operator"
-msgid "Make Markers Local"
-msgstr "Vytvořit lokální"
 
 
 msgctxt "Operator"
@@ -19598,10 +19597,6 @@ msgstr "Přesunout modifikátor"
 
 msgid "Move boid state up in the list"
 msgstr "Odstraní duplicity označených vertexů"
-
-
-msgid "Scalar"
-msgstr "Změna velikosti"
 
 
 msgctxt "Operator"
@@ -36307,18 +36302,6 @@ msgid "Compact Layout"
 msgstr "Vzhled"
 
 
-msgid "Use Unified Color"
-msgstr "Použít sjednocenou barvu"
-
-
-msgid "Use Unified Strength"
-msgstr "Použít Sjednocenou Sílu"
-
-
-msgid "Use Unified Weight"
-msgstr "Použít Sjednocenou Hmotnost"
-
-
 msgid "Length Unit"
 msgstr "Jednotky Délky"
 
@@ -36813,11 +36796,6 @@ msgstr "Obrázek"
 msgctxt "WindowManager"
 msgid "UV Editor"
 msgstr "UV Editor"
-
-
-msgctxt "WindowManager"
-msgid "Image View"
-msgstr "Zobrazení Obrázku"
 
 
 msgctxt "WindowManager"
@@ -38851,12 +38829,12 @@ msgid "Jump to Next Marker"
 msgstr "Skončit na Další Značku"
 
 
-msgid "Active Editor"
-msgstr "Aktivní editor"
-
-
 msgid "Only Active Keying Set"
 msgstr "Pouze Aktivní Klíčová Sestava"
+
+
+msgid "Active Editor"
+msgstr "Aktivní editor"
 
 
 msgid "Intersections"
@@ -40573,6 +40551,10 @@ msgid "Drag"
 msgstr "Přesun"
 
 
+msgid "Look"
+msgstr "Pohled"
+
+
 msgid "Sort By:"
 msgstr "Seřadit podle:"
 
@@ -42103,10 +42085,6 @@ msgstr "Perspektiva Uživatele"
 
 msgid " (Local)"
 msgstr " (Místní)"
-
-
-msgid "Cannot fly an object with constraints"
-msgstr "Vyčistit vazby objektu"
 
 
 msgid "Depth too large"
