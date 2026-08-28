@@ -6,6 +6,9 @@
 
 #include "BKE_camera.h"
 
+#include "BLI_math_base.hh"
+#include "BLI_math_vector_types.hh"
+
 #include "DNA_camera_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -68,14 +71,37 @@ static pxr::GfCamera gf_camera(const CameraParams &params,
 
   pxr::GfVec2f b_pos(border[0], border[1]), b_size(border[2], border[3]);
   float sensor_size = BKE_camera_sensor_size(params.sensor_fit, params.sensor_x, params.sensor_y);
-  pxr::GfVec2f sensor_scale = (BKE_camera_sensor_fit(params.sensor_fit, res[0], res[1]) ==
-                               CAMERA_SENSOR_FIT_HOR) ?
-                                  pxr::GfVec2f(1.0f, float(res[1]) / res[0]) :
-                                  pxr::GfVec2f(float(res[0]) / res[1], 1.0f);
+
+  bool horizontal_fit = params.sensor_fit == CAMERA_SENSOR_FIT_HOR;
+  if (params.sensor_fit == CAMERA_SENSOR_FIT_AUTO) {
+    horizontal_fit = params.use_aspect_override ? (params.aspect_override <= 1.0f) :
+                                                  (res[0] >= res[1]);
+  }
+
+  float zoom = params.zoom;
+
+  /* Match the camera frame to `BKE_camera_params_compute_viewplane()`. */
+  if (params.use_aspect_override) {
+    const float fasp = params.aspect_override;
+    float2 frame_size;
+    frame_size.x = math::min(float(res[0]), float(res[1]) / fasp);
+    frame_size.y = frame_size.x * fasp;
+
+    if (horizontal_fit) {
+      zoom *= float(res[0]) / frame_size.x;
+    }
+    else {
+      zoom *= float(res[1]) / frame_size.y;
+    }
+  }
+
+  pxr::GfVec2f sensor_scale = (horizontal_fit) ? pxr::GfVec2f(1.0f, float(res[1]) / res[0]) :
+                                                 pxr::GfVec2f(float(res[0]) / res[1], 1.0f);
+
   pxr::GfVec2f aperture = pxr::GfVec2f((params.is_ortho) ? params.ortho_scale : sensor_size);
   aperture = pxr::GfCompMult(aperture, sensor_scale);
   aperture = pxr::GfCompMult(aperture, b_size);
-  aperture *= params.zoom;
+  aperture *= zoom;
   if (params.is_ortho) {
     /* Use tenths of a world unit according to USD docs
      * https://graphics.pixar.com/usd/docs/api/class_gf_camera.html */
