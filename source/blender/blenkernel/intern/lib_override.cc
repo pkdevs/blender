@@ -2614,8 +2614,10 @@ static bool lib_override_library_resync(Main *bmain,
           /* Copy over overrides rules from old override ID to new one. */
           BLI_duplicatelist(&id_override_new->override_library->properties,
                             &id_override_old->override_library->properties);
-          IDOverrideLibraryProperty *op_new = id_override_new->override_library->properties.first();
-          IDOverrideLibraryProperty *op_old = id_override_old->override_library->properties.first();
+          IDOverrideLibraryProperty *op_new =
+              id_override_new->override_library->properties.first();
+          IDOverrideLibraryProperty *op_old =
+              id_override_old->override_library->properties.first();
           for (; op_new; op_new = op_new->next, op_old = op_old->next) {
             lib_override_library_property_copy(op_new, op_old);
           }

@@ -875,7 +875,7 @@ static void view3d_data_consistency_ensure(wmWindow *win, Scene *scene, ViewLaye
 
       /* Region-base storage is different depending on whether the space is active or not. */
       ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first()) ? &area.regionbase :
-                                                                        &sl.regionbase;
+                                                                         &sl.regionbase;
       for (ARegion &region : *regionbase) {
         if (region.regiontype != RGN_TYPE_WINDOW) {
           continue;

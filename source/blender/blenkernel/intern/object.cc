@@ -3327,7 +3327,8 @@ static void give_parvert(const Object *par, int nr, float vec[3], const bool use
 
     /* It is possible that a cycle in the dependency graph was resolved in a way that caused this
      * object to be evaluated before its dependencies. In this case the curve cache may be null. */
-    if (par->runtime->curve_cache && par->runtime->curve_cache->deformed_nurbs.first() != nullptr) {
+    if (par->runtime->curve_cache && par->runtime->curve_cache->deformed_nurbs.first() != nullptr)
+    {
       nurb = &par->runtime->curve_cache->deformed_nurbs;
     }
     else {
