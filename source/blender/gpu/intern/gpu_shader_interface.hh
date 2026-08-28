@@ -48,7 +48,6 @@ struct ShaderInput {
  */
 class ShaderInterface {
   friend shader::ShaderCreateInfo;
-  /* TODO(fclem): should be protected. */
  public:
   using Key = uint64_t;
 
@@ -57,6 +56,8 @@ class ShaderInterface {
    * Blender.
    */
   Key id = 0;
+
+  /* TODO(fclem): should be protected. */
   static std::atomic<Key> next_id_;
 
   /** Flat array. In this order: Attributes, Ubos, Uniforms, SSBOs, Constants. */
