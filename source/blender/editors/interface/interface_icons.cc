@@ -1266,7 +1266,7 @@ void icon_ensure_deferred(const bContext *C, const int icon_id, const bool big)
                                       CTX_wm_window(C),
                                       icon,
                                       "Generating StudioLight icon...",
-                                      eWM_JobFlag(0),
+                                      WM_JOB_BACKGROUND,
                                       WM_JOB_TYPE_STUDIOLIGHT);
           Icon **tmp = MEM_new_zeroed<Icon *>(__func__);
           *tmp = icon;
@@ -2017,7 +2017,7 @@ int icon_from_rnaptr(const bContext *C, PointerRNA *ptr, int rnaicon, const bool
 {
   ID *id = nullptr;
 
-  if (!ptr->data) {
+  if (!*ptr) {
     return rnaicon;
   }
 
