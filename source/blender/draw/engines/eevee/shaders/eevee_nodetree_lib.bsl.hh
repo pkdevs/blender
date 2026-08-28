@@ -1076,6 +1076,9 @@ float node_attribute_light_cutoff_distance_impl(const int light_index)
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
   /* clang-format on */
   LightData light = lrd.light_buf[light_index];
+  if (is_sun_light(light.type)) {
+    return 1e20;
+  }
   return inversesqrt(light.local().local.influence_radius_invsqr_surface);
 }
 
