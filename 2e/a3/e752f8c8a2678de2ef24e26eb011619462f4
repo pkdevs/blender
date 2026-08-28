@@ -1,0 +1,1 @@
+Referenced by issue #163193, Regression 5.2.1: crash in Texture Paint on Vulkan / freeze on OpenGL (worked in 5.1.1)
