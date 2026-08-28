@@ -201,7 +201,7 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
     g_glossy_light *= alpha_rcp;
     g_transmission_color *= light_sample_rcp;
     g_transmission_light *= alpha_rcp;
-    // TODO: Write as fragment output?
+
     if (uni.uniform_buf.render_pass.diffuse_light_id >= 0 &&
         uni.uniform_buf.render_pass.diffuse_color_id >= 0)
     {

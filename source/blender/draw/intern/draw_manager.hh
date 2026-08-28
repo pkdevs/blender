@@ -548,7 +548,7 @@ inline void Manager::extract_object_attributes(ResourceHandleRange handle,
 inline void Manager::extract_all_object_attributes(ResourceHandleRange handle,
                                                    const ObjectRef &ref)
 {
-  // TODO: This is terrible.
+  /* TODO: Make find_property_rgba public and call it directly. */
   Vector<const char *, 8> attrs;
 
   PointerRNA ob_ptr = RNA_id_pointer_create(&ref.object->id);

@@ -951,7 +951,7 @@ void node_light_evaluation_with_factor_impl(const int light_index,
   ltc_data.Minv = ltc_data.Minv * transpose(T);
   factor = light_ltc(util_tx.utility_tx, light, ltc_data, lv, light_shape_vertices);
 
-  const bool is_transmission = false;  // TODO: Expose.
+  const bool is_transmission = false; /* TODO: Expose? */
   factor *= light_attenuation_facing(light, lv.L, lv.dist, normal, is_transmission);
 
   factor *= light.shape_power;

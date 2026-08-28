@@ -146,7 +146,6 @@ void surf_forward([[resource_table]] PipelineConstants &pipe,
       view, resource_id, g_thickness_forward, gl_FragCoord.xy, radiance, transmittance);
 
   if (pipe.use_lighting_nodes) [[static_branch]] {
-    // TODO: Why is this darker than hybrid?
     radiance += g_diffuse_light;
     radiance += g_glossy_light;
     radiance += g_transmission_light;
