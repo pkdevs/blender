@@ -120,7 +120,7 @@ static void edbm_fit_edge_loops_to_curve_ui(bContext * /*C*/, wmOperator *op)
 void MESH_OT_fit_edge_loops_to_curve(wmOperatorType *ot)
 {
   ot->name = "To Curve";
-  ot->description = "Fits the unselected edge loops to a curve defined by the selected vertices.";
+  ot->description = "Fits the unselected edge loops to a curve defined by the selected vertices";
   ot->idname = "MESH_OT_fit_edge_loops_to_curve";
 
   ot->exec = edbm_fit_edge_loops_to_curve_exec;
