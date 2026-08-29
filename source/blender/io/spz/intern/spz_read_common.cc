@@ -59,7 +59,7 @@ inline constexpr std::array<void (*)(MutableSpan<float3>), 4>
           const float s3 = std::sqrt(3.0f);
           p[0] = s[3];
           p[1] = -s[1];
-          p[2] = -0.5f * s[2] - (s3 / 20.0f) * s[4];
+          p[2] = -0.5f * s[2] - (s3 / 2.0f) * s[4];
           p[3] = -s[0];
           p[4] = -(s3 / 2.0f) * s[2] + 0.5f * s[4];
         },
