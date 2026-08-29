@@ -52,7 +52,6 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
   }
 
   if (@available(macos 26.0, *)) {
-    
     auto usable_devices = MetalInfo::get_usable_devices();
     id<MTLDevice> device = usable_devices[denoiser_device_->info.num];
     
@@ -65,10 +64,10 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     desc.denoiseStrengthMaskTextureEnabled = false;
     // TODO: This aux texture may be one we could (somewhat easily) implement to improve quality
     desc.specularHitDistanceTextureEnabled = false;
-    desc.inputWidth = buffer_params.width;
-    desc.inputHeight = buffer_params.height;
-    desc.outputWidth = buffer_params.width;
-    desc.outputHeight = buffer_params.height;
+    desc.inputWidth = context.render_buffers->params.width;
+    desc.inputHeight = context.render_buffers->params.height;
+    desc.outputWidth = context.render_buffers->params.width;
+    desc.outputHeight = context.render_buffers->params.height;
 
     desc.colorTextureFormat = MTLPixelFormatRGBA16Float;
     desc.depthTextureFormat = MTLPixelFormatDepth32Float;
@@ -76,7 +75,7 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     
     desc.normalTextureFormat = MTLPixelFormatRGBA16Float;
     desc.roughnessTextureFormat = MTLPixelFormatR16Float;
-    desc.diffuseAlbedoTextureFormat = MTLPixelFormatRGBA8Unorm;
+    desc.diffuseAlbedoTextureFormat = MTLPixelFormatRGBA16Float;
     desc.specularAlbedoTextureFormat = MTLPixelFormatRGBA16Float;
 
     desc.outputTextureFormat = MTLPixelFormatRGBA16Float;
@@ -117,7 +116,26 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     
     // After textures are created, load the shader libraries for texture processing.
     
-    return true;
+    NSError *error = nil;
+    id<MTLLibrary> library = [device newLibraryWithSource: @(texture_process_kernels)
+                                                  options: nil
+                                                    error: &error];
+    
+    if (error) NSLog(@"%@", error);
+    if (!library) NSLog(@"%@", error);
+    
+    color_pre_fn = (id<MTLFunction>) [library newFunctionWithName: @"filter_color_preprocess"];
+    color_pre_pso = [device newComputePipelineStateWithFunction: (id<MTLFunction>) color_pre_fn error: &error];
+    
+    NSCAssert(!error, @"Pipeline state creation failed: %@", error);
+    
+//    guiding_pre_fn = (id<MTLFunction>) [library newFunctionWithName: @"filter_guiding_preprocess"];
+//    guiding_pre_pso = [device newComputePipelineStateWithFunction: (id<MTLFunction>) guiding_pre_fn error: &error];
+//    
+//    color_post_fn = (id<MTLFunction>) [library newFunctionWithName: @"filter_color_postprocess"];
+//    color_post_pso = [device newComputePipelineStateWithFunction: (id<MTLFunction>) color_post_fn error: &error];
+    
+    return !error;
   }
   
   return false;
@@ -130,7 +148,49 @@ bool MetalFXDenoiser::denoise_configure_if_needed(DenoiseContext &context)
 
 bool MetalFXDenoiser::denoise_filter_color_preprocess(const DenoiseContext &context, const DenoisePass &pass)
 {
-  return false;
+  id<MTLCommandQueue> queue = (id<MTLCommandQueue>) denoiser_queue_->native_queue();
+  id<MTLCommandBuffer> cmd = [queue commandBuffer];
+  id<MTLComputeCommandEncoder> encoder = [cmd computeCommandEncoder];
+  
+  [encoder setComputePipelineState: (id<MTLComputePipelineState>) color_pre_pso];
+  
+  BufferParams buffer_params = context.render_buffers->params;
+  
+  KernelParams params = {
+    buffer_params.full_x,
+    buffer_params.full_y,
+    buffer_params.width,
+    buffer_params.height,
+    buffer_params.offset,
+    buffer_params.stride,
+    buffer_params.pass_stride,
+    pass.denoised_offset,
+  };
+  
+  id<MTLBuffer> render_buffer = (id<MTLBuffer>) denoiser_device_->get_native_buffer(context.render_buffers->buffer.device_pointer);
+  
+  [encoder setBuffer: render_buffer offset: 0 atIndex: 0];
+  [encoder setTexture: (id<MTLTexture>) color_texture atIndex: 0];
+  [encoder setBytes: &params length: sizeof(params) atIndex: 1];
+  
+  MTLSize gridSize = MTLSizeMake(params.width, params.height, 1);
+  id<MTLComputePipelineState> pso = (id<MTLComputePipelineState>) color_pre_pso;
+  MTLSize threadSize = MTLSizeMake(pso.threadExecutionWidth, pso.maxTotalThreadsPerThreadgroup / pso.threadExecutionWidth, 1);
+  
+  [encoder dispatchThreads: gridSize threadsPerThreadgroup: threadSize];
+  [encoder endEncoding];
+  
+  // TODO: these may not be needed in the future
+  [cmd commit];
+  [cmd waitUntilCompleted];
+  
+  // TODO: return true only if the kernel succeeded.
+  return true;
+}
+
+bool MetalFXDenoiser::denoise_filter_guiding_preprocess(const DenoiseContext &context)
+{
+  return true;
 }
 
 bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &context, const DenoisePass &pass)
@@ -138,19 +198,22 @@ bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &con
   return false;
 }
 
-bool MetalFXDenoiser::denoise_filter_guiding_preprocess(const DenoiseContext &context)
-{
-  return false;
-}
-
 bool MetalFXDenoiser::denoise_run(const DenoiseContext &context, const DenoisePass &pass)
 {
-  // TODO: Add proper textures to enable denoising, right now this crashes blender.
-  // encode and denoise
+  id<MTLFXTemporalDenoisedScaler> denoiser = (id<MTLFXTemporalDenoisedScaler>) mtlfx_denoiser;
   id<MTLCommandQueue> queue = (id<MTLCommandQueue>) denoiser_queue_->native_queue();
   id<MTLCommandBuffer> command_buffer = [queue commandBuffer];
+
+  denoiser.colorTexture          = (id<MTLTexture>) color_texture;
+  denoiser.depthTexture          = (id<MTLTexture>) depth_texture;
+  denoiser.motionTexture         = (id<MTLTexture>) motion_texture;
+  denoiser.normalTexture         = (id<MTLTexture>) normal_texture;
+  denoiser.roughnessTexture      = (id<MTLTexture>) roughness_texture;
+  denoiser.diffuseAlbedoTexture  = (id<MTLTexture>) diffuse_albedo_texture;
+  denoiser.specularAlbedoTexture = (id<MTLTexture>) specular_albedo_texture;
+  denoiser.outputTexture         = (id<MTLTexture>) output_texture;
   
-  [(id<MTLFXTemporalDenoisedScaler>) mtlfx_denoiser encodeToCommandBuffer:command_buffer];
+  [denoiser encodeToCommandBuffer: command_buffer];
     
   [command_buffer commit];
   [command_buffer waitUntilCompleted];

@@ -440,6 +440,9 @@ bool DenoiserGPU::denoise_pass(DenoiseContext &context, PassType pass_type)
 
   /* Read and preprocess noisy color input pass. */
   denoise_color_read(context, pass);
+  // TODO: this is a small workaround to make the timing of MetalFX denoising work with different command buffers.
+  // In the future, I'd like to hook into the denoiser queue/buffer so that we don't have to do this. 
+  denoiser_queue_->synchronize();
   if (!denoise_filter_color_preprocess(context, pass)) {
     LOG_ERROR << "Error converting denoising passes to RGB buffer.";
     return false;
