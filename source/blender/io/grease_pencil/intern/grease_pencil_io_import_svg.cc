@@ -544,6 +544,8 @@ bool SVGImporter::read(StringRefNull filepath)
       const NSVGgradient *svg_gradient = shape->fill.gradient;
       const float *t = svg_gradient->xform;
 
+      float4x2 texture_matrix = float4x2::zero();
+
       texture_matrix[0][0] = t[0];
       texture_matrix[0][1] = t[1];
       texture_matrix[2][0] = -t[2];
