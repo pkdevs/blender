@@ -521,6 +521,10 @@ bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
   cache.image_data = sculpt_paint::paint::image::ImageData::init_active_image(
       *this->object, *paint_mode_settings_);
 
+  if (!cache.image_data) {
+    return false;
+  }
+
   if (brush_type_is_paint(this->brush->sculpt_brush_type)) {
     BKE_curvemapping_init(this->brush->curve_rand_hue);
     BKE_curvemapping_init(this->brush->curve_rand_saturation);

@@ -464,6 +464,7 @@ struct StrokeCache {
   float4x4 stroke_local_mat = float4x4::identity();
   float multiplane_scrape_angle = 0.0f;
 
+  /* TODO: Migrate this to `PaintStroke#mode_data_` */
   std::unique_ptr<paint::image::ImageData> image_data;
 
   StrokeCache();
