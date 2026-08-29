@@ -698,26 +698,16 @@ void ExperimentalTexturePaintStroke::done(bool is_cancel, bool stroke_started)
   /* DEG_id_tag_update(&ob.id, ID); */
 }
 
-static bool experimental_brush_supported(bContext *C)
-{
-  const Paint *paint = BKE_paint_get_active_from_context(C);
-  const Brush *brush = BKE_paint_brush_for_read(paint);
-
-  switch (brush->image_brush_type) {
-    case IMAGE_PAINT_BRUSH_TYPE_DRAW:
-      return true;
-    default:
-      return false;
-  }
-}
-
 static PaintStroke *create_paint_stroke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   if (CTX_wm_region_view3d(C)) {
     auto stroke_mode = BrushStrokeMode(RNA_enum_get(op->ptr, "mode"));
     auto switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
 
-    if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint) && experimental_brush_supported(C) &&
+    const Paint &paint = *BKE_paint_get_active_from_context(C);
+    const Brush &brush = *BKE_paint_brush_for_read(&paint);
+    if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint) &&
+        bke::brush::implements_3d_texture_paint(brush) &&
         stroke_mode == BrushStrokeMode::Normal && switch_mode == BrushSwitchMode::None)
     {
       return MEM_new<ExperimentalTexturePaintStroke>(__func__, C, op, event);
@@ -733,7 +723,9 @@ static PaintStroke *get_paint_stroke(bContext *C, wmOperator *op)
     auto stroke_mode = BrushStrokeMode(RNA_enum_get(op->ptr, "mode"));
     auto switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
 
-    if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint) && experimental_brush_supported(C) &&
+    const Paint &paint = *BKE_paint_get_active_from_context(C);
+    const Brush &brush = *BKE_paint_brush_for_read(&paint);
+    if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint) && bke::brush::implements_3d_texture_paint(brush) &&
         stroke_mode == BrushStrokeMode::Normal && switch_mode == BrushSwitchMode::None)
     {
       return static_cast<ExperimentalTexturePaintStroke *>(op->customdata);
