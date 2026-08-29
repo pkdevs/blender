@@ -306,7 +306,9 @@ void PathTraceWorkGPU::alloc_integrator_path_split()
   }
 }
 
-/* Terminal tile dispatch. */
+/* Dispatch the terminal GPU ReSTIR pass for the currently queued paths.
+ * ReSTIR states are processed from the reusable work tiles and must all
+ * terminate before the next spatial iteration can begin. */
 bool PathTraceWorkGPU::run_restir_phase(const DeviceKernel kernel)
 {
   DCHECK_EQ(kernel, DEVICE_KERNEL_INTEGRATOR_RESTIR);
@@ -330,6 +332,9 @@ bool PathTraceWorkGPU::run_restir_phase(const DeviceKernel kernel)
   return qc->num_queued[DEVICE_KERNEL_INTEGRATOR_RESTIR] == 0;
 }
 
+/* Drain the complete GPU final-evaluation chain.
+ * Final evaluation may generate shadow and ReSTIR PT work, so keep
+ * dispatching queued kernels until all dependent work is exhausted. */
 bool PathTraceWorkGPU::run_restir_final_evaluation()
 {
   while (true) {
@@ -364,6 +369,7 @@ bool PathTraceWorkGPU::run_restir_final_evaluation()
       return false;
     }
 
+    /* Brings the GPU's newly generated queue state back to the host. */
     if (!update_queue_counter_and_cache()) {
       return false;
     }
@@ -427,6 +433,8 @@ void PathTraceWorkGPU::reset_work_tile_scheduler(const int start_sample,
                              device_scene_->data.integrator.scrambling_distance);
 }
 
+
+// TODO(Tri): Do a validity check and a cleanup
 void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
                                       const int start_sample,
                                       const int samples_num,
@@ -512,9 +520,8 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
 
         if (enqueue_work_tiles(finished)) {
           if (!update_queue_counter_and_cache()) {
-
+            // return; // !!!: would cause right half of the screen to go to regular pt!
             break;
-            // return;
           }
         }
 
@@ -523,8 +530,7 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
         }
 
         if (is_cancel_requested()) {
-          break;
-          // return;
+          return;
         }
 
         /* Drain the complete RESTIR chain for those paths. */
@@ -546,14 +552,12 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
 
       if (enqueue_work_tiles(finished)) {
         if (!update_queue_counter_and_cache()) {
-          // return; // !!!: Shouldn't be break?
-          break;
+          return;
         }
       }
 
       if (is_cancel_requested()) {
-        // return; // !!!: Shouldn't be break?
-        break;
+        return;
       }
 
       if (finished) {
@@ -720,7 +724,7 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
       const int num_path_indices = work_size;
       device_ptr null_tiles = 0;
       int zero = 0;
-      const DeviceKernelArguments args(&null_tiles,
+      const DeviceKernelArguments args(&null_tiles, // TODO: cleanup and merge the `enqueue_restir_work_tiles()` here?
                                        &zero,
                                        &buffers_->buffer.device_pointer,
                                        &zero,
@@ -1139,6 +1143,47 @@ void PathTraceWorkGPU::enqueue_work_tiles(DeviceKernel kernel,
   }
 }
 
+/*
+TODO(Tri): Read:
+You save:
+restir_num_work_tiles_
+restir_max_tile_work_size_
+
+so later you can say:
+
+"Now run the RESTIR kernel over the exact tile layout that initialized this batch."
+
+And this is why the argument ordering mattered so much.
+
+The RESTIR wrapper expects:
+```
+path_index_array
+tiles
+num_tiles
+render_buffer
+max_tile_work_size
+num_active_paths
+```
+
+but the normal tile dispatch had a different arrangement.
+
+So enqueue_restir_work_tiles() explicitly constructs the correct ABI.
+```
+INIT_FROM_CAMERA dispatch
+        │
+        └── creates RESTIR states
+        │
+        └── remembers tile geometry
+                     │
+                     ▼
+             RESTIR dispatch
+                     │
+                     └── same tiles → RESTIR states
+```
+So, 
+TODO: Do I remove enqueue_restir_work_tiles() by normalizing restir's argument order and merge it with normal tile dispatch?
+*/
+
 void PathTraceWorkGPU::enqueue_restir_work_tiles()
 {
   const device_ptr d_work_tiles = work_tiles_.device_pointer;
@@ -1158,7 +1203,8 @@ void PathTraceWorkGPU::enqueue_restir_work_tiles()
     &restir_max_tile_work_size_,       // max_tile_work_size
     &zero);                            // num_active_paths
 
-  queue_->enqueue(DEVICE_KERNEL_INTEGRATOR_RESTIR, restir_max_tile_work_size_ * restir_num_work_tiles_, args);
+  queue_->enqueue(DEVICE_KERNEL_INTEGRATOR_RESTIR, 
+                  restir_max_tile_work_size_ * restir_num_work_tiles_, args);
 }
 
 int PathTraceWorkGPU::num_active_main_paths_paths()

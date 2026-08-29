@@ -504,7 +504,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         name="Samples",
         description="Number of samples to render for each pixel",
         min=1, max=(1 << 24),
-        default=4096,
+        default=32,
     )
     preview_samples: IntProperty(
         name="Viewport Samples",
@@ -512,7 +512,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         min=0,
         soft_min=1,
         max=(1 << 24),
-        default=1024,
+        default=4,
     )
 
     use_sample_subset: BoolProperty(

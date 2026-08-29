@@ -961,6 +961,7 @@ ccl_device
 //     (double)ls.eval_fac,
 //     (double)ls.pdf);
 
+// TODO(Tri): Seperate ReSTIR path properly!
     /* Compute the NEE MIS weight and divide by the light PDF in the appropriate measure. */
     reservoir_add_light_sample(&reservoir, ls, reference, radiance, bsdf_pdf, rand_pick, use_restir); // !!!
   }
@@ -1331,6 +1332,7 @@ ccl_device int integrate_surface(KernelGlobals kg,
       /* Write emission. */
       if (sd.flag & SD_EMISSION) {
         integrate_surface_emission(kg, state, &sd, &rng_state, render_buffer);
+        // integrate_surface_emission(kg, state, &sd, render_buffer); // !!!: OG
 
         // /* TODO(weizhen): `min_bounce` is only for debugging, revert after finishing the branch. */
         // if (INTEGRATOR_STATE(state, path, bounce) >= kernel_data.integrator.min_bounce) {
@@ -1456,7 +1458,7 @@ ccl_device_forceinline void integrator_shade_surface(KernelGlobals kg,
 #endif
 
   if (continue_path_label == LABEL_NONE) {
-    integrator_finalize_reservoir(kg, state, render_buffer); // !!!
+    integrator_finalize_reservoir(kg, state, render_buffer);
     integrator_path_terminate(kg, state, render_buffer, current_kernel);
     return;
   }

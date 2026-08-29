@@ -231,6 +231,7 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
     const int shader = (hit_surface) ? intersection_get_shader(kg, isect) : SHADER_NONE;
     const int flags = (hit_surface) ? kernel_data_fetch(shaders, shader).flags : 0;
 
+    // TODO(Tri): Properly separate ReSTIR Path!
     if (!integrator_intersect_terminate(kg, state, flags)) {
       if (kernel_data.integrator.volume_ray_marching) {
         integrator_path_next(
@@ -287,11 +288,16 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
     }
   }
   else {
+// TODO(Tri): Remove
+    // if (integrator_intersect_skip_lights(kg, state) ||
+    //     (INTEGRATOR_STATE(state, path, bounce) < kernel_data.integrator.min_bounce))
+    // {
+    //   /* TODO(weizhen): `min_bounce` is only for debugging, revert after finishing the branch. */
+    //   integrator_finalize_reservoir(kg, state, render_buffer);
+    //   integrator_path_terminate(kg, state, render_buffer, current_kernel);
+
     /* Nothing hit, continue with background kernel. */
-    if (integrator_intersect_skip_lights(kg, state) ||
-        (INTEGRATOR_STATE(state, path, bounce) < kernel_data.integrator.min_bounce))
-    {
-      /* TODO(weizhen): `min_bounce` is only for debugging, revert after finishing the branch. */
+    if (integrator_intersect_skip_lights(kg, state)) {
       integrator_finalize_reservoir(kg, state, render_buffer);
       integrator_path_terminate(kg, state, render_buffer, current_kernel);
     }
