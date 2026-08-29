@@ -218,18 +218,15 @@ static PixelOperation *create_pixel_operation(Context &context,
                                               CompileState &compile_state,
                                               const ComputeContext &compute_context)
 {
-  const Schedule &schedule = compile_state.get_schedule();
-  PixelCompileUnit &compile_unit = compile_state.get_pixel_compile_unit();
-
   /* Use multi-function procedure to execute the pixel compile unit for CPU contexts or if the
    * compile unit is single value and would thus be more efficient to execute on the CPU. */
   const bool is_single_value = compile_state.is_pixel_compile_unit_single_value();
   if (!context.use_gpu() || is_single_value) {
     return new MultiFunctionProcedureOperation(
-        context, compile_unit, schedule, is_single_value, compute_context);
+        context, compile_state, is_single_value, compute_context);
   }
 
-  return new ShaderOperation(context, compile_unit, schedule, compute_context);
+  return new ShaderOperation(context, compile_state, compute_context);
 }
 
 void NodeGroupOperation::evaluate_pixel_compile_unit(CompileState &compile_state)
@@ -246,8 +243,9 @@ void NodeGroupOperation::evaluate_pixel_compile_unit(CompileState &compile_state
    * we might have to split the compile unit into smaller units to workaround this limitation. In
    * practice, splitting will almost always never happen due to the scheduling strategy we use, so
    * the base case remains fast. */
-  if (compile_state.pixel_compile_unit_has_too_many_outputs(are_node_previews_needed) ||
-      compile_state.pixel_compile_unit_has_too_many_inputs())
+  if (compile_unit.size() > 1 &&
+      (compile_state.pixel_compile_unit_has_too_many_outputs(are_node_previews_needed) ||
+       compile_state.pixel_compile_unit_has_too_many_inputs()))
   {
     const int split_index = compile_unit.size() / 2;
     const PixelCompileUnit start_compile_unit(compile_unit.as_span().take_front(split_index));

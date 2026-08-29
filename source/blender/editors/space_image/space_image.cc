@@ -40,6 +40,7 @@
 #include "ED_image.hh"
 #include "ED_mask.hh"
 #include "ED_node.hh"
+#include "ED_paint.hh"
 #include "ED_render.hh"
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
@@ -329,7 +330,6 @@ static void image_listener(const wmSpaceTypeListenerParams *params)
         case ND_COMPO_RESULT:
           if (ED_space_image_show_render(sima)) {
             image_scopes_tag_refresh(area);
-            BKE_image_partial_update_mark_full_update(sima->image);
           }
           ED_area_tag_redraw(area);
           const ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);

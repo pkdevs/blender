@@ -428,6 +428,19 @@ BLI_INLINE GlyphBLF *blf_glyph_from_utf8_and_step(FontBLF *font,
 }
 
 /**
+ * A combining character, drawn over the previous base glyph.
+ *
+ * Check the code-point as well as the advance since some fonts use
+ * zero-width glyphs for spacing characters (the "." in LCD style digit fonts for e.g.)
+ * which must not be drawn over the previous character, see #162036.
+ * See also: `vfont_char_is_combining` which also uses this logic.
+ */
+BLI_INLINE bool blf_glyph_is_combining(const GlyphBLF *g)
+{
+  return (g->advance_x == 0) && (BLI_wcwidth_or_error(char32_t(g->c)) == 0);
+}
+
+/**
  * State for stepping through glyphs in a UTF8 string.
  * Handles combining character positioning and kerning.
  */
@@ -463,7 +476,7 @@ BLI_INLINE bool blf_glyph_step(
   step.g = blf_glyph_from_utf8_and_step(
       font, gc, step.g_kerning, str, str_len, &step.i, &step.pen_x_right);
   if (step.g != nullptr) {
-    if (step.g->advance_x != 0) {
+    if (!blf_glyph_is_combining(step.g)) {
       /* Common case, advancing to the next character. */
       step.pen_x_base = step.pen_x_right;
       step.pen_x = step.pen_x_right;
@@ -619,13 +632,16 @@ void blf_font_draw(FontBLF *font, const char *str, const size_t str_len, ResultB
   blf_glyph_cache_release(font);
 }
 
-int blf_font_draw_mono(
-    FontBLF *font, const char *str, const size_t str_len, const int cwidth, const int tab_columns)
+int blf_font_draw_mono(FontBLF *font,
+                       const char *str,
+                       const size_t str_len,
+                       const int char_width,
+                       const int tab_columns)
 {
   GlyphBLF *g;
   int columns = 0;
   ft_pix pen_x = 0, pen_y = 0;
-  ft_pix cwidth_fpx = ft_pix_from_int(cwidth);
+  ft_pix char_width_fpx = ft_pix_from_int(char_width);
 
   size_t i = 0;
 
@@ -645,7 +661,7 @@ int blf_font_draw_mono(
     const int col = UNLIKELY(g->c == '\t') ? (tab_columns - (columns % tab_columns)) :
                                              BLI_wcwidth_safe(char32_t(g->c));
     columns += col;
-    pen_x += cwidth_fpx * col;
+    pen_x += char_width_fpx * col;
   }
 
   blf_batch_draw_end();
@@ -1029,7 +1045,8 @@ size_t blf_font_width_to_rstrlen(
                (blf_str_is_utf8_valid_lazy_init(str, str_len, is_utf8_valid) == 0));
 
     /* Skip kerning when the left-neighbor is a combining character. */
-    const GlyphBLF *g_prev_kerning = (g_prev && g_prev->advance_x != 0) ? g_prev : nullptr;
+    const GlyphBLF *g_prev_kerning = (g_prev && !blf_glyph_is_combining(g_prev)) ? g_prev :
+                                                                                   nullptr;
     if (blf_font_width_to_strlen_glyph_process(font, gc, g_prev_kerning, g, &pen_x, width)) {
       break;
     }
@@ -1225,7 +1242,7 @@ void blf_font_boundbox_foreach_glyph(FontBLF *font,
     if (!blf_glyph_step(font, gc, step, str, str_len)) {
       continue;
     }
-    if (step.g->advance_x == 0) [[unlikely]] {
+    if (blf_glyph_is_combining(step.g)) [[unlikely]] {
       /* Ignore combining characters like diacritical marks. */
       continue;
     }

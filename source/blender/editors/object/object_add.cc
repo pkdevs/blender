@@ -2361,7 +2361,7 @@ static NodesModifierData *add_essential_asset_modifier(bContext &C,
   if (!asset_id) {
     return nullptr;
   }
-  if (GS(asset_id->name) != ID_NT) {
+  if (asset_id->id_type() != ID_NT) {
     return nullptr;
   }
   bNodeTree *node_group = id_cast<bNodeTree *>(asset_id);
@@ -2371,7 +2371,7 @@ static NodesModifierData *add_essential_asset_modifier(bContext &C,
   id_us_plus(&node_group->id);
   nmd->flag |= NODES_MODIFIER_HIDE_DATABLOCK_SELECTOR;
   BKE_modifier_unique_name(&object.modifiers, &nmd->modifier);
-  MOD_nodes_update_interface(&object, nmd);
+  MOD_nodes_update_interface(bmain, &object, nmd);
   DEG_id_tag_update(&object.id, ID_RECALC_GEOMETRY);
   return nmd;
 }
@@ -2595,7 +2595,7 @@ static wmOperatorStatus object_delete_exec(bContext *C, wmOperator *op)
   }
   CTX_DATA_END;
 
-  if (has_volume_lightprobe && WM_jobs_test(wm, scene, WM_JOB_TYPE_LIGHT_BAKE)) {
+  if (has_volume_lightprobe && WM_jobs_has_running(wm, scene, WM_JOB_TYPE_LIGHT_BAKE)) {
     WM_jobs_stop_type(wm, scene, WM_JOB_TYPE_LIGHT_BAKE);
     BKE_report(op->reports,
                RPT_WARNING,

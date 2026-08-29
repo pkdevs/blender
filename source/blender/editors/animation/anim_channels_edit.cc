@@ -2065,6 +2065,7 @@ static void rearrange_grease_pencil_channels(bAnimContext *ac, eRearrangeAnimCha
       Layer *layer = static_cast<Layer *>(ale.data);
       if (layer->is_selected()) {
         grease_pencil.move_node_top(layer->as_node());
+        DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
       }
     }
   }
@@ -2096,6 +2097,7 @@ static void rearrange_grease_pencil_channels(bAnimContext *ac, eRearrangeAnimCha
           /* Handled separately before the switch case. */
           break;
       }
+      DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
     }
   }
 
@@ -2724,7 +2726,7 @@ void ED_anim_ale_fcurve_delete(bAnimContext &ac, bAnimListElem &ale)
       FCurve *fcu = static_cast<FCurve *>(ale.data);
       if (!BKE_nlastrip_controlcurve_remove(strip, fcu)) {
         printf("ERROR: Trying to delete NLA Control Curve for unknown property '%s'\n",
-               fcu->rna_path);
+               fcu->rna_path().c_str());
       }
       break;
     }
@@ -5220,6 +5222,7 @@ static void ANIM_OT_channels_bake(wmOperatorType *ot)
 static wmOperatorStatus slot_channels_move_to_new_action_exec(bContext *C, wmOperator *op)
 {
   using namespace blender::animrig;
+  using animrig::Strip;
   bAnimContext ac;
 
   /* Get editor data. */
@@ -5313,6 +5316,7 @@ static void ANIM_OT_slot_channels_move_to_new_action(wmOperatorType *ot)
 static wmOperatorStatus separate_slots_exec(bContext *C, wmOperator *op)
 {
   using namespace blender::animrig;
+  using animrig::Strip;
   Object *active_object = CTX_data_active_object(C);
   /* Checked by the poll function. */
   BLI_assert(active_object != nullptr);

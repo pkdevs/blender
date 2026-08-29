@@ -936,6 +936,7 @@ void tree_element_type_active_set(bContext *C,
       break;
     case TSE_SHAPE_KEY_BLOCK:
       tree_elemment_shapekey_active_set(C, te);
+      break;
     default:
       break;
   }
@@ -1494,7 +1495,7 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
     }
   }
 
-  if (ptr.data) {
+  if (ptr) {
     outliner_sync_to_properties_editors(C, &ptr, context);
   }
 }
