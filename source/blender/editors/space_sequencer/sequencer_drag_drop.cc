@@ -86,18 +86,24 @@ struct SeqDropCoords {
  */
 static SeqDropCoords g_drop_coords{};
 
-static void generic_poll_operations(const bContext *C, const wmEvent *event, uint8_t type)
+static bool generic_poll_operations(const bContext *C, const wmEvent *event, uint8_t type)
 {
+  const Scene *sequencer_scene = CTX_data_sequencer_scene(C);
+  if (sequencer_scene == nullptr) {
+    return false;
+  }
+
   const Scene *scene = CTX_data_scene(C);
   const ToolSettings *ts = scene->toolsettings;
 
-  g_drop_coords.fps = CTX_data_sequencer_scene(C)->frames_per_second();
+  g_drop_coords.fps = sequencer_scene->frames_per_second();
   g_drop_coords.type = type;
   /* Ideally we would reuse the transform modal keymap for snapping, but drag and drop doesn't have
    * access to transform engine, so just hard-code the invert key to a sane default. */
   const bool do_invert = event->modifier & KM_CTRL;
   g_drop_coords.use_snapping = do_invert ? (ts->snap_flag_seq & SCE_SNAP) == 0 :
                                            (ts->snap_flag_seq & SCE_SNAP) != 0;
+  return true;
 }
 
 /* While drag-and-drop in the sequencer, the internal drop-box implementation allows to have a drop
@@ -119,14 +125,12 @@ static bool image_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
     if (file_type == FILE_TYPE_IMAGE &&
         test_single_file_handler_poll(C, drag, "SEQUENCER_FH_image_strip"))
     {
-      generic_poll_operations(C, event, TH_SEQ_IMAGE);
-      return true;
+      return generic_poll_operations(C, event, TH_SEQ_IMAGE);
     }
   }
 
   if (WM_drag_is_ID_type(drag, ID_IM)) {
-    generic_poll_operations(C, event, TH_SEQ_IMAGE);
-    return true;
+    return generic_poll_operations(C, event, TH_SEQ_IMAGE);
   }
 
   return false;
@@ -148,8 +152,7 @@ static bool movie_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
   if (is_movie(drag) && (drag->type != WM_DRAG_PATH ||
                          test_single_file_handler_poll(C, drag, "SEQUENCER_FH_movie_strip")))
   {
-    generic_poll_operations(C, event, TH_SEQ_MOVIE);
-    return true;
+    return generic_poll_operations(C, event, TH_SEQ_MOVIE);
   }
 
   return false;
@@ -158,8 +161,7 @@ static bool movie_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 static bool movieclip_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 {
   if (WM_drag_is_ID_type(drag, ID_MC)) {
-    generic_poll_operations(C, event, TH_SEQ_MOVIECLIP);
-    return true;
+    return generic_poll_operations(C, event, TH_SEQ_MOVIECLIP);
   }
 
   return false;
@@ -175,8 +177,7 @@ static bool scene_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
   if (WM_drag_is_ID_type(drag, ID_SCE) &&
       WM_drag_get_local_ID(drag, ID_SCE) != &sequencer_scene->id)
   {
-    generic_poll_operations(C, event, TH_SEQ_SCENE);
-    return true;
+    return generic_poll_operations(C, event, TH_SEQ_SCENE);
   }
 
   return false;
@@ -185,8 +186,7 @@ static bool scene_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 static bool mask_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 {
   if (WM_drag_is_ID_type(drag, ID_MSK)) {
-    generic_poll_operations(C, event, TH_SEQ_MASK);
-    return true;
+    return generic_poll_operations(C, event, TH_SEQ_MASK);
   }
 
   return false;
@@ -211,8 +211,7 @@ static bool sound_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
   if (is_sound(drag) && (drag->type != WM_DRAG_PATH ||
                          test_single_file_handler_poll(C, drag, "SEQUENCER_FH_sound_strip")))
   {
-    generic_poll_operations(C, event, TH_SEQ_AUDIO);
-    return true;
+    return generic_poll_operations(C, event, TH_SEQ_AUDIO);
   }
 
   return false;
