@@ -129,7 +129,6 @@ enum class UpdateType {
   Mask,
   Visibility,
   Color,
-  Image,
   FaceSet,
 };
 
@@ -984,8 +983,6 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                              const Brush &brush,
                              Object &ob,
                              const IndexMask &node_mask);
-bool SCULPT_use_image_paint_brush(PaintModeSettings &settings, Object &ob);
-
 /** \} */
 
 /* -------------------------------------------------------------------- */

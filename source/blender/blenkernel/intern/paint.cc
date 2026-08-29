@@ -2426,12 +2426,7 @@ static void sculptsession_update(Depsgraph *depsgraph,
         ss.last_paint_canvas_key = paint_canvas_key;
         BKE_pbvh_mark_rebuild_pixels(pbvh);
       }
-    }
-
-    /* TODO: It's odd that this is not guarded behind the experimental test */
-    /* We could be more precise when we have access to the active tool. */
-    const bool use_paint_slots = (ob->mode & OB_MODE_TEXTURE_PAINT) != 0;
-    if (use_paint_slots) {
+      /* TODO: It's odd that this was not guarded behind the experimental test */
       BKE_texpaint_slots_refresh_object(scene, ob);
     }
   }

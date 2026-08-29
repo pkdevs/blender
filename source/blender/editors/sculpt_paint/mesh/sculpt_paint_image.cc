@@ -742,19 +742,6 @@ static void fix_non_manifold_seam_bleeding(Object &ob,
 
 using namespace blender::ed::sculpt_paint::paint::image;
 
-bool SCULPT_use_image_paint_brush(PaintModeSettings &settings, Object &ob)
-{
-  if (!USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint)) {
-    return false;
-  }
-  if (ob.type != OB_MESH) {
-    return false;
-  }
-  Image *image;
-  ImageUser *image_user;
-  return BKE_paint_canvas_image_get(&settings, &ob, &image, &image_user);
-}
-
 void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                              const Paint &paint,
                              const Brush &brush,
