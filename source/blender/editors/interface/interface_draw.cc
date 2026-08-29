@@ -1615,11 +1615,11 @@ static void draw_but_curve_grid(const uint pos,
 
 void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, const rcti *rect_but)
 {
-  rcti _rect {
-    rect_but->xmin + 10,
-    rect_but->xmax - 10,
-    rect_but->ymin + 10,
-    rect_but->ymax - 10,
+  rcti _rect{
+      rect_but->xmin + 10,
+      rect_but->xmax - 10,
+      rect_but->ymin + 10,
+      rect_but->ymax - 10,
   };
   rcti *rect = &_rect;
   ButtonCurveMapping *but_cumap = static_cast<ButtonCurveMapping *>(but);
@@ -1857,7 +1857,6 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
   GPU_blend(GPU_BLEND_ALPHA);
   immUnbindProgram();
 
-
   /* outline */
   format = immVertexFormat();
   pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
@@ -1903,15 +1902,12 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
 
   int scissor_for_points[4];
   GPU_scissor_get(scissor_for_points);
-  rcti scissor_tmp {};
+  rcti scissor_tmp{};
   scissor_tmp.xmin = std::max(0, scissor_for_points[0] - 20);
   scissor_tmp.ymin = std::max(0, scissor_for_points[1] - 20);
   scissor_tmp.xmax = scissor_for_points[2] + 40;
   scissor_tmp.ymax = scissor_for_points[3] + 40;
-  GPU_scissor(scissor_tmp.xmin,
-              scissor_tmp.ymin,
-              scissor_tmp.xmax,
-              scissor_tmp.ymax);
+  GPU_scissor(scissor_tmp.xmin, scissor_tmp.ymin, scissor_tmp.xmax, scissor_tmp.ymax);
 
   /* Curve widgets using a gradient background (such as Hue Correct), draw
    * an additional point in the back, forming an outline so they stand out. */
@@ -1990,7 +1986,8 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
     immEnd();
   }
 
-  GPU_scissor(scissor_for_points[0], scissor_for_points[1], scissor_for_points[2], scissor_for_points[3]);
+  GPU_scissor(
+      scissor_for_points[0], scissor_for_points[1], scissor_for_points[2], scissor_for_points[3]);
 
   immUnbindProgram();
   GPU_blend(GPU_BLEND_NONE);
