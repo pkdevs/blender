@@ -1151,9 +1151,13 @@ class USDExportTest(AbstractUSDTest):
         self.ensure_simulation_frame_range(1, 9)
 
         export_path = self.tempdir / "usd_anim_missing_geo.usda"
-        self.export_and_validate(filepath=str(export_path), export_animation=True, evaluation_mode="RENDER")
+        self.export_and_validate(
+            filepath=str(export_path), convert_world_material=False, export_animation=True, evaluation_mode="RENDER")
 
         stage = Usd.Stage.Open(str(export_path))
+        stats = UsdUtils.ComputeUsdStageStats(stage)
+        self.assertEqual(stats["primary"]["primCountsByType"], {'BasisCurves': 1, 'Mesh': 1, 'Xform': 3})
+
         mesh_prim = UsdGeom.Mesh(stage.GetPrimAtPath("/root/Plane/Plane"))
         curve_prim = UsdGeom.BasisCurves(stage.GetPrimAtPath("/root/Curves/Curves"))
 
