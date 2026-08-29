@@ -589,6 +589,7 @@ class USERPREF_PT_edit_sequence_editor(EditingPanel, CenterAlignMixIn, Panel):
         prefs = context.preferences
         edit = prefs.edit
 
+        layout.prop(edit, "default_strip_length")
         layout.prop(edit, "connect_strips_by_default")
         layout.prop(edit, "clamp_strips_by_default")
 

@@ -63,6 +63,7 @@
 namespace blender::ed::vse {
 
 struct SeqDropCoords {
+  double fps = 0.0;
   float start_frame, channel;
   int num_channels;
   int num_audio = 0;
@@ -90,6 +91,7 @@ static void generic_poll_operations(const bContext *C, const wmEvent *event, uin
   const Scene *scene = CTX_data_scene(C);
   const ToolSettings *ts = scene->toolsettings;
 
+  g_drop_coords.fps = CTX_data_sequencer_scene(C)->frames_per_second();
   g_drop_coords.type = type;
   /* Ideally we would reuse the transform modal keymap for snapping, but drag and drop doesn't have
    * access to transform engine, so just hard-code the invert key to a sane default. */
@@ -724,7 +726,7 @@ static void image_drop_on_enter(wmDropBox *drop, wmDrag * /*drag*/)
   }
 
   SeqDropCoords *coords = static_cast<SeqDropCoords *>(drop->draw_data);
-  coords->strip_length = seq::DEFAULT_STRIP_LENGTH;
+  coords->strip_length = seq::default_strip_length(coords->fps);
   coords->num_channels = 1;
 }
 
@@ -737,7 +739,7 @@ static void movieclip_drop_on_enter(wmDropBox *drop, wmDrag *drag)
   SeqDropCoords *coords = static_cast<SeqDropCoords *>(drop->draw_data);
   ID *id = WM_drag_get_local_ID(drag, ID_MC);
   coords->strip_length = id ? BKE_movieclip_get_duration(id_cast<MovieClip *>(id)) :
-                              seq::DEFAULT_STRIP_LENGTH;
+                              seq::default_strip_length(coords->fps);
   coords->num_channels = 1;
   coords->num_audio = 0;
   coords->playback_rate = 0.0f;
@@ -753,7 +755,8 @@ static void scene_drop_on_enter(wmDropBox *drop, wmDrag *drag)
   SeqDropCoords *coords = static_cast<SeqDropCoords *>(drop->draw_data);
   ID *id = WM_drag_get_local_ID(drag, ID_SCE);
   const Scene *scene = id_cast<Scene *>(id);
-  coords->strip_length = scene ? scene->r.efra - scene->r.sfra + 1 : seq::DEFAULT_STRIP_LENGTH;
+  coords->strip_length = scene ? scene->r.efra - scene->r.sfra + 1 :
+                                 seq::default_strip_length(coords->fps);
   coords->num_channels = 1;
   coords->num_audio = 0;
   coords->playback_rate = 0.0f;
@@ -769,7 +772,7 @@ static void mask_drop_on_enter(wmDropBox *drop, wmDrag *drag)
   SeqDropCoords *coords = static_cast<SeqDropCoords *>(drop->draw_data);
   ID *id = WM_drag_get_local_ID(drag, ID_MSK);
   coords->strip_length = id ? BKE_mask_get_duration(id_cast<Mask *>(id)) :
-                              seq::DEFAULT_STRIP_LENGTH;
+                              seq::default_strip_length(coords->fps);
   coords->num_channels = 1;
   coords->num_audio = 0;
   coords->playback_rate = 0.0f;
