@@ -163,6 +163,7 @@ def generate_monkey(backend):
         bpy.ops.object.subdivision_set(level=2, relative=False, ensure_modifier=True)
         bpy.ops.object.modifier_apply(modifier="Subdivision")
 
+    # TODO: Both of these calls are a bit hacky
     bpy.ops.ed.undo_push()
     bpy.ops.sculpt.sculptmode_toggle()
 

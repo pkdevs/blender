@@ -44,6 +44,7 @@ class MeshBrushTests(unittest.TestCase):
         bpy.context.preferences.experimental.use_sculpt_texture_paint = True
         bpy.ops.ed.undo_push()
         generate_monkey(BackendType.MESH)
+        bpy.ops.paint.texture_paint_toggle()
 
         bpy.ops.paint.add_texture_paint_slot(
             type='BASE_COLOR',
@@ -63,7 +64,7 @@ class MeshBrushTests(unittest.TestCase):
     def _activate_brush(self, brush):
         result = bpy.ops.brush.asset_activate(
             asset_library_type='ESSENTIALS',
-            relative_asset_identifier='brushes/essentials_brushes-mesh_sculpt.blend/Brush/{}'.format(brush))
+            relative_asset_identifier='brushes/essentials_brushes-mesh_texture.blend/Brush/{}'.format(brush))
         self.assertEqual({'FINISHED'}, result)
 
     def _check_paint_stroke(self):
@@ -72,7 +73,7 @@ class MeshBrushTests(unittest.TestCase):
         context_override = bpy.context.copy()
         set_view3d_context_override(context_override)
         with bpy.context.temp_override(**context_override):
-            bpy.ops.sculpt.brush_stroke(stroke=generate_stroke(context_override), override_location=True)
+            bpy.ops.paint.image_paint(stroke=generate_stroke(context_override), override_location=True)
 
         new_data = get_image_data()
 

@@ -42,6 +42,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+#include "RNA_define.hh"
 #include "mesh_paint.hh"
 #include "sculpt_automask.hh"
 #include "sculpt_intern.hh"
@@ -823,6 +824,13 @@ void PAINT_OT_image_paint(wmOperatorType *ot)
   ot->flag = OPTYPE_BLOCKING;
 
   paint_stroke_operator_properties(ot);
+  RNA_def_boolean(
+      ot->srna,
+      "override_location",
+      false,
+      "Override Location",
+      "Override the given \"location\" array by recalculating object space positions from the "
+      "provided \"mouse_event\" positions");
 }
 
 }  // namespace blender
