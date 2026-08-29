@@ -4467,7 +4467,6 @@ static bool mesh_separate_loose(
   /* Without this, we duplicate the object mode mesh for each loose part.
    * This can get very slow especially for large meshes with many parts
    * which would duplicate the mesh on entering edit-mode. */
-  const bool clear_object_data = true;
 
   bool result = false;
 
@@ -4483,9 +4482,7 @@ static bool mesh_separate_loose(
     return false;
   }
 
-  if (clear_object_data) {
-    ED_mesh_geometry_clear(id_cast<Mesh *>(base_old->object->data));
-  }
+  ED_mesh_geometry_clear(id_cast<Mesh *>(base_old->object->data));
 
   BM_custom_loop_normals_to_vector_layer(bm_old);
 
@@ -4513,11 +4510,9 @@ static bool mesh_separate_loose(
   Mesh *me_old = id_cast<Mesh *>(base_old->object->data);
   BM_mesh_elem_hflag_disable_all(bm_old, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
 
-  if (clear_object_data) {
-    BMeshToMeshParams to_mesh_params{};
-    to_mesh_params.update_shapekey_indices = true;
-    BM_mesh_bm_to_me(nullptr, bm_old, me_old, &to_mesh_params);
-  }
+  BMeshToMeshParams to_mesh_params{};
+  to_mesh_params.update_shapekey_indices = true;
+  BM_mesh_bm_to_me(nullptr, bm_old, me_old, &to_mesh_params);
 
   MEM_delete(groups);
   return result;
