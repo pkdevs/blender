@@ -2243,17 +2243,35 @@ struct TransitionLoadData {
 
 static bool calculate_overlap_transition_load_data(const Scene *scene,
                                                    ReportList *reports,
-                                                   Vector<TransitionLoadData> &load_data)
+                                                   Vector<TransitionLoadData> &load_data,
+                                                   bool clamp_to_offsets)
 {
   if (load_data.is_empty()) {
     return true; /* No errors. */
   }
 
   bool clamped = false;
-
-  /* Clamp new transitions to existing strip / transition bounds. */
+  /* Clamping against existing strips. */
   for (TransitionLoadData &transition : load_data) {
-    const auto clamped_handles = seq::transition_handles_clamp(
+    /* Offset clamping is explicitly enabled by the user, so don't show a warning when clamping. */
+    if (clamp_to_offsets) {
+      if (!transition.left_input->is_effect()) {
+        transition.handles.second = math::min(
+            transition.handles.second, int(floor(transition.left_input->content_end(scene))));
+      }
+      if (!transition.right_input->is_effect()) {
+        transition.handles.first = math::max(transition.handles.first,
+                                             int(ceil(transition.right_input->content_start())));
+      }
+      if (transition.handles.first >= transition.cutpoint ||
+          transition.handles.second <= transition.cutpoint)
+      {
+        BKE_report(reports, RPT_ERROR, "Input strip(s) do not have offsets for the transition(s)");
+        return false;
+      }
+    }
+    /* Clamp new transitions to existing strip / transition bounds. */
+    const Handles clamped_handles = seq::transition_handles_clamp(
         scene, transition.left_input, transition.right_input, transition.handles);
     clamped |= transition.handles != clamped_handles;
     transition.handles = clamped_handles;
@@ -2386,6 +2404,7 @@ static bool calculate_effect_transition_load_data(const Scene *scene,
 
 static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOperator *op)
 {
+  // TODO: maybe just remove transitions from the add effect operator?
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_ensure(scene);
 
@@ -2404,7 +2423,7 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
 
   const int length = RNA_int_get(op->ptr, "length");
   const auto type = StripType(RNA_enum_get(op->ptr, "type"));
-  // add the "clamp" option
+  const bool clamp = RNA_boolean_get(op->ptr, "offset_clamp");
 
   Vector<TransitionLoadData> overlap_transitions{};
   /* Transitions that apppear on a different channel than their inputs. */
@@ -2455,7 +2474,7 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
     }
   }
 
-  if (!calculate_overlap_transition_load_data(scene, op->reports, overlap_transitions) ||
+  if (!calculate_overlap_transition_load_data(scene, op->reports, overlap_transitions, clamp) ||
       !calculate_effect_transition_load_data(scene, op->reports, effect_transitions))
   {
     return OPERATOR_CANCELLED;
@@ -2545,6 +2564,12 @@ void SEQUENCER_OT_transition_strip_add(wmOperatorType *ot)
               "Length of the transition(s) in frames",
               2,
               MAXFRAME);
+  RNA_def_boolean(ot->srna,
+                  "offset_clamp",
+                  false,
+                  "Clamp to offsets",
+                  "Clamp transition length so that there are content frames for the entire "
+                  "transition duration");
 }
 /** \} */
 
