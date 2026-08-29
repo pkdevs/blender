@@ -43,6 +43,7 @@
 #include "WM_types.hh"
 
 #include "RNA_define.hh"
+#include "image_paint_intern.hh"
 #include "mesh_paint.hh"
 #include "sculpt_automask.hh"
 #include "sculpt_intern.hh"
@@ -464,6 +465,10 @@ bool TexturePaintStroke::test_start(wmOperator *op, const float2 mouse)
   return true;
 }
 
+struct TexturePaintData : public PaintModeData {
+  std::unique_ptr<ImageData> image_data;
+};
+
 struct ExperimentalTexturePaintStroke final : public PaintStroke {
   Base *base_;
   PaintModeSettings *paint_mode_settings_;
@@ -527,12 +532,14 @@ bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
   StrokeCache &cache = *ss.cache;
   stroke_cache_common_init(this->vc, *this->paint, *this->brush, *this->object, mouse);
   cache.accum = true;
-  cache.image_data = sculpt_paint::paint::image::ImageData::init_active_image(
-      *this->object, *paint_mode_settings_);
 
-  if (!cache.image_data) {
+  std::unique_ptr<TexturePaintData> texture_paint_data = std::make_unique<TexturePaintData>();
+  texture_paint_data->image_data = ImageData::init_active_image(*this->object,
+                                                                *paint_mode_settings_);
+  if (!texture_paint_data->image_data) {
     return false;
   }
+  mode_data_ = std::move(texture_paint_data);
 
   if (brush_type_is_paint(this->brush->sculpt_brush_type)) {
     BKE_curvemapping_init(this->brush->curve_rand_hue);
@@ -597,16 +604,17 @@ static void do_brush_action(const Depsgraph &depsgraph,
                             const Scene &scene,
                             const Brush &brush,
                             Object &ob,
-                            PaintModeData * /*paint_mode_data*/)
+                            PaintModeData *paint_mode_data)
 {
   PRF_scope(ProfileCategory::Editor);
   /* TODO: Dynamic brush name */
   ImagePaintSettings &image_paint_settings = scene.toolsettings->imapaint;
+  TexturePaintData *mode_data = static_cast<TexturePaintData *>(paint_mode_data);
   SculptSession &ss = *ob.runtime->sculpt_session;
   IndexMaskMemory memory;
 
   bke::pbvh::build_pixels(
-      depsgraph, ob, *ss.cache->image_data->image, *ss.cache->image_data->image_user);
+      depsgraph, ob, *mode_data->image_data->image, *mode_data->image_data->image_user);
 
   const IndexMask node_mask = gather_brush_nodes(ob, brush, memory, node_fully_masked_or_hidden);
 
@@ -632,7 +640,8 @@ static void do_brush_action(const Depsgraph &depsgraph,
   /* Main brush action */
   switch (brush.image_brush_type) {
     case IMAGE_PAINT_BRUSH_TYPE_DRAW:
-      do_3d_image_paint_brush(depsgraph, image_paint_settings.paint, brush, ob, node_mask);
+      do_3d_image_paint_brush(
+          depsgraph, image_paint_settings.paint, brush, ob, *mode_data->image_data, node_mask);
       break;
     default:
       /* TODO: Implement the rest of them... */
@@ -651,6 +660,7 @@ void ExperimentalTexturePaintStroke::update_step(wmOperator * /*op*/, PointerRNA
   Object &object = *this->object;
   SculptSession &ss = *object.runtime->sculpt_session;
   StrokeCache &cache = *ss.cache;
+  TexturePaintData &mode_data = *static_cast<TexturePaintData *>(mode_data_.get());
 
   cache.stroke_distance = this->stroke_distance();
   stroke_cache_update(this->vc, *this->paint, object, itemptr);
@@ -662,7 +672,7 @@ void ExperimentalTexturePaintStroke::update_step(wmOperator * /*op*/, PointerRNA
   cache.base_brush_strength = cache.pressure * cache.pressure * overlap;
 
   do_symmetrical_brush_actions_with_tiling_and_feathering(
-      *this->depsgraph, *this->scene, *this->paint, object, do_brush_action, nullptr);
+      *this->depsgraph, *this->scene, *this->paint, object, do_brush_action, &mode_data);
 
   if (this->vc.rv3d) {
     /* Mark for faster 3D viewport redraws. */

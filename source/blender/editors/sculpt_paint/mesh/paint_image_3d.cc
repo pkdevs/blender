@@ -40,12 +40,13 @@
 #include "mesh_brush_common.hh"
 #include "sculpt_automask.hh"
 #include "sculpt_intern.hh"
+#include "image_paint_intern.hh"
 
 #include <atomic>
 
 namespace blender {
 
-namespace ed::sculpt_paint::paint::image {
+namespace ed::sculpt_paint::image {
 
 using namespace blender::bke::pbvh::pixels;
 using namespace blender::bke::image;
@@ -738,24 +739,14 @@ static void fix_non_manifold_seam_bleeding(Object &ob,
 
 /** \} */
 
-}  // namespace ed::sculpt_paint::paint::image
-
-using namespace blender::ed::sculpt_paint::paint::image;
-
 void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                              const Paint &paint,
                              const Brush &brush,
                              Object &ob,
+                             ImageData &image_data,
                              const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Editor);
-  ed::sculpt_paint::StrokeCache &cache = *ob.runtime->sculpt_session->cache;
-
-  if (!cache.image_data) {
-    return;
-  }
-
-  ImageData &image_data = *cache.image_data;
 
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
   MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
@@ -782,5 +773,5 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
         nodes[i], pixel_nodes[i], *image_data.image, image_data.image_buffers);
   });
 }
-
+}  // namespace ed::sculpt_paint::image
 }  // namespace blender
