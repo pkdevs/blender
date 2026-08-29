@@ -17,7 +17,7 @@ namespace blender::io::spz {
 
 namespace {
 
-/* SH rotation matrices for R_x(+pi/2).
+/* Spherical harmonics rotation matrices for R_x(+pi/2).
  * Each entry operates on the 2l+1 coefficients of band l (l = 1..4).
  *
  * The table is adopted from the SPZ Library project:
@@ -25,15 +25,26 @@ namespace {
  *   MIT License
  *   Copyright (c) 2024 Niantic Labs
  *
+ * There are modifications in the code to use Blender utilities, and also to operate on float3
+ * elements rather than on scalars.
+ *
  * The matrices structure seems to match description given in the
  *
  *   Didier Pinchon1 and Philip E. Hoggan
- *    "Rotation matrices for real spherical harmonics:  general rotations of atomic orbitals in
- *    space-fixed axes" (2007)
- *    Journal of Physics A: Mathematical and Theoretical.
- *    DOI:10.1088/1751-8113/40/7/011  */
+ *   "Rotation matrices for real spherical harmonics:  general rotations of atomic orbitals in
+ *   space-fixed axes" (2007)
+ *   Journal of Physics A: Mathematical and Theoretical.
+ *   DOI:10.1088/1751-8113/40/7/011
+ *
+ * This could also be confirmed by checking against a naive implementation of the Wigner D-matrix
+ * [WignerDMatrix]. When doing so a basis conversion needs to be applied to convert complex
+ * spherical harmonics to real [SphericalRealForm].
+ *
+ * References:
+ *   [WignerDMatrix]     https://en.wikipedia.org/wiki/Wigner_D-matrix
+ *   [SphericalRealForm] https://en.wikipedia.org/wiki/Spherical_harmonics#Real_form */
 inline constexpr std::array<void (*)(MutableSpan<float3>), 4>
-    kAnalyticRotatePlusPiHalfAboutXTable = {
+    ANALYTIC_ROTATE_PLUS_PI_HALF_ABOUT_X_TABLE = {
         [](const MutableSpan<float3> p) {
           BLI_assert(p.size() == 3);
           const float3 t0 = p[0], t1 = p[1], t2 = p[2];
@@ -123,7 +134,7 @@ void convert_axis_to_blender(const MutableSpan<float3> positions,
       MutableSpan<float3> sh_data = tls.sh_data;
       gsplat::get_spherical_harmonics(sh_attrs, i, sh_data);
       for (int band = 0; band < sh_degrees; ++band) {
-        kAnalyticRotatePlusPiHalfAboutXTable[band](
+        ANALYTIC_ROTATE_PLUS_PI_HALF_ABOUT_X_TABLE[band](
             sh_data.slice(band * (band + 2), 2 * (band + 1) + 1));
       }
       gsplat::set_spherical_harmonics(sh_attrs, i, sh_data);
