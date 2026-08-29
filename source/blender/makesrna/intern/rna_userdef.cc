@@ -260,8 +260,10 @@ static const EnumPropertyItem rna_enum_preferences_extension_repo_source_type_it
 #  include "BKE_main.hh"
 #  include "BKE_mesh_runtime.hh"
 #  include "BKE_object.hh"
+#  include "BKE_object_types.hh"
 #  include "BKE_paint.hh"
 #  include "BKE_preferences.h"
+#  include "BKE_scene.hh"
 #  include "BKE_screen.hh"
 #  include "BKE_sound.hh"
 
@@ -1745,6 +1747,30 @@ static void rna_experimental_no_data_block_packing_update(bContext *C, PointerRN
   rna_userdef_update(bmain, scene, ptr);
   AS_asset_library_import_method_ensure_valid(*bmain);
   rna_userdef_asset_libraries_refresh(C, ptr);
+}
+
+static void rna_experimental_use_3d_texture_paint_update(bContext *C, PointerRNA *ptr)
+{
+  /* TODO: Is it possible to have no depsgraph? */
+  Main *bmain = CTX_data_main(C);
+  Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
+  Object *object = CTX_data_active_object(C);
+  if (!object || (object->mode & OB_MODE_TEXTURE_PAINT) == 0) {
+    return;
+  }
+
+  PropertyRNA *prop = RNA_struct_find_property(ptr, "use_sculpt_texture_paint");
+  const bool new_value = RNA_property_boolean_get(ptr, prop);
+
+  if (new_value) {
+    BKE_object_sculpt_data_create(object);
+    DEG_id_tag_update(&object->id, ID_RECALC_GEOMETRY);
+    BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
+    BKE_sculptsession_update_for_edit(depsgraph, object, true);
+  }
+  else {
+    BKE_sculptsession_free(object);
+  }
 }
 
 }  // namespace blender
@@ -7769,7 +7795,9 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_sculpt_texture_paint", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "use_sculpt_texture_paint", 1);
-  RNA_def_property_ui_text(prop, "Sculpt Texture Paint", "Use texture painting in Sculpt Mode");
+  RNA_def_property_ui_text(prop, "3D Texture Paint", "Use experimental 3D texture painting");
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_update(prop, 0, "rna_experimental_use_3d_texture_paint_update");
 
   prop = RNA_def_property(srna, "use_extended_asset_browser", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_ui_text(prop,

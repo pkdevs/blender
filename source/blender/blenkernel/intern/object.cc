@@ -1149,7 +1149,7 @@ static void object_blend_read_after_liblink(BlendLibReader *reader, ID *id)
   /* When loading undo steps, for objects in modes that use `sculpt_session`, recreate the mode
    * runtime data. For regular non-undo reading, this is currently handled by mode switching after
    * the initial file read. */
-  if (BLO_read_lib_is_undo(reader) && ob->mode & OB_MODE_ALL_SCULPT) {
+  if (BLO_read_lib_is_undo(reader) && BKE_object_use_sculptsession(ob)) {
     /* The runtime may have been created in a non-matching mode and should be deleted here. */
     if (ob->runtime->sculpt_session != nullptr &&
         ob->runtime->sculpt_session->mode_type != ob->mode)
@@ -4297,9 +4297,18 @@ void BKE_object_handle_update(Depsgraph *depsgraph, Scene *scene, Object *ob)
   BKE_object_handle_update_ex(depsgraph, scene, ob, nullptr);
 }
 
+bool BKE_object_use_sculptsession(Object *ob)
+{
+  eObjectMode allowed_modes = OB_MODE_ALL_SCULPT;
+  if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint)) {
+    allowed_modes |= OB_MODE_TEXTURE_PAINT;
+  }
+  return ob->mode & allowed_modes;
+}
+
 void BKE_object_sculpt_data_create(Object *ob)
 {
-  BLI_assert((ob->runtime->sculpt_session == nullptr) && (ob->mode & OB_MODE_ALL_SCULPT));
+  BLI_assert((ob->runtime->sculpt_session == nullptr) && BKE_object_use_sculptsession(ob));
   ob->runtime->sculpt_session = MEM_new<SculptSession>(__func__);
   ob->runtime->sculpt_session->mode_type = ob->mode;
 }
