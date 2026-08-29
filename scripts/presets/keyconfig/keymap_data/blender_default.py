@@ -3280,6 +3280,7 @@ def km_sequencer(params):
         op_menu("SEQUENCER_MT_retiming", {"type": 'I', "value": 'PRESS'}),
         ("sequencer.retiming_segment_speed_set", {"type": 'R', "value": 'PRESS'}, None),
         ("sequencer.retiming_show", {"type": 'R', "value": 'PRESS', "ctrl": True}, None),
+        ("sequencer.transition_strip_add", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
     ])
 
     return keymap
