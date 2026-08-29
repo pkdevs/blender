@@ -196,8 +196,6 @@ PointCloud *read_spz_gzip_compressed_file(FILE *file, ReportList *reports)
     return nullptr;
   }
 
-  point_cloud->render_as = PT_RENDER_AS_SPLATS;
-
   /* TODO(sergey): Handle extensions. */
 
   convert_axis_to_blender(positions, rotations, sh_attrs);

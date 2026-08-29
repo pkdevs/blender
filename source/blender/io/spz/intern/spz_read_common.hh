@@ -22,7 +22,7 @@
 
 namespace blender::io::spz {
 
-enum HeaderFLag {
+enum HeaderFlag {
   SPZ_HEADER_ANTIALIASED = 0x01,
   SPZ_HEADER_HAS_EXTENSIONS = 0x02,
 };
