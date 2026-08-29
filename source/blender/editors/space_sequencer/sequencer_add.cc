@@ -2241,6 +2241,13 @@ struct TransitionLoadData {
   Handles handles;  /* left handle, right handle */
 };
 
+enum class TransitionKind {
+  None = 0,
+  Overlap = 1 << 0,
+  Effect = 1 << 1,
+};
+ENUM_OPERATORS(TransitionKind);
+
 static bool calculate_overlap_transition_load_data(const Scene *scene,
                                                    ReportList *reports,
                                                    Vector<TransitionLoadData> &load_data,
@@ -2334,6 +2341,10 @@ static bool calculate_effect_transition_load_data(const Scene *scene,
                                                   ReportList *reports,
                                                   Vector<TransitionLoadData> &load_data)
 {
+  if (load_data.is_empty()) {
+    return true; /* No errors. */
+  }
+
   Editing *ed = seq::editing_get(scene);
   ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
 
@@ -2424,6 +2435,7 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
   const int length = RNA_int_get(op->ptr, "length");
   const auto type = StripType(RNA_enum_get(op->ptr, "type"));
   const bool clamp = RNA_boolean_get(op->ptr, "offset_clamp");
+  const auto kind = TransitionKind(RNA_enum_get(op->ptr, "kind"));
 
   Vector<TransitionLoadData> overlap_transitions{};
   /* Transitions that apppear on a different channel than their inputs. */
@@ -2441,7 +2453,9 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
       const int second_right_handle = right_strip->right_handle(scene);
 
       /* Adjacent strips on the same channel get overlap transitions. */
-      if (first_right_handle == second_left_handle && left_strip->channel == right_strip->channel)
+      if (flag_is_set(kind, TransitionKind::Overlap) &&
+          (first_right_handle == second_left_handle &&
+           left_strip->channel == right_strip->channel))
       {
         /* It's clear what the user intends so these aren't errors. */
         const bool has_transition_already = seq::get_transition_between(
@@ -2454,9 +2468,12 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
 
         const int cutpoint = right_strip->left_handle();
         const Handles handles{cutpoint - floor(length / 2.0), cutpoint + ceil(length / 2.0)};
+
         overlap_transitions.append(
             {left_strip, right_strip, left_strip->channel, cutpoint, handles});
+        continue;
       }
+
       /* Strips that overlap in time on different channels get old type transition effects. */
       /* If the input order is ambiguous, sort by channel to prevent adding twice. */
       const bool horizontal_overlap = first_left_handle == second_left_handle &&
@@ -2465,13 +2482,21 @@ static wmOperatorStatus sequencer_add_transition_strip_exec(bContext *C, wmOpera
       /* Don't add transitions if one input's frame range is inside that of the other's. */
       const bool strips_in_order = first_right_handle > second_left_handle &&
                                    first_right_handle < second_right_handle;
-      if (strips_in_order || horizontal_overlap) {
+
+      if (flag_is_set(kind, TransitionKind::Effect) && (strips_in_order || horizontal_overlap)) {
         const int channel = math::max(left_strip->channel, right_strip->channel) + 1;
+
         effect_transitions.append(
             {left_strip, right_strip, channel, 0, {second_left_handle, first_right_handle}});
-        // check that there's a free channel in #calculate_overlap_transition_load_data
+        continue;
       }
     }
+  }
+
+  if (overlap_transitions.is_empty() && effect_transitions.is_empty()) {
+    /* Nothing to add. This is #OPERATOR_FINISHED so adjusting the last operator works as expected
+     * when changing the kind. */
+    return OPERATOR_FINISHED;
   }
 
   if (!calculate_overlap_transition_load_data(scene, op->reports, overlap_transitions, clamp) ||
@@ -2570,6 +2595,19 @@ void SEQUENCER_OT_transition_strip_add(wmOperatorType *ot)
                   "Clamp to offsets",
                   "Clamp transition length so that there are content frames for the entire "
                   "transition duration");
+
+  // not sure what to call this / these
+  static const EnumPropertyItem rna_enum_kind[] = {
+      {int(TransitionKind::Overlap), "OVERLAP", 0, "Overlap", ""},
+      {int(TransitionKind::Effect), "EFFECT", 0, "Effect", ""},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+  RNA_def_enum_flag(ot->srna,
+                    "kind",
+                    rna_enum_kind,
+                    int(TransitionKind::Overlap),
+                    "Transition kind",
+                    "Overlap input strips or use a separate channel for the transition");
 }
 /** \} */
 
