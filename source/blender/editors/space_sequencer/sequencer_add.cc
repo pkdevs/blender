@@ -2312,16 +2312,6 @@ static bool calculate_overlap_transition_load_data(const Scene *scene,
   return true; /* No errors. */
 }
 
-static bool test_overlap(std::ranges::input_range auto &&channel_handles, Handles test_handles)
-{
-  for (auto [left, right] : channel_handles) {
-    if (right > test_handles.first && left < test_handles.second) {
-      return true;
-    }
-  }
-  return false;
-}
-
 static bool calculate_effect_transition_load_data(const Scene *scene,
                                                   ReportList *reports,
                                                   Vector<TransitionLoadData> &load_data)
@@ -2336,6 +2326,13 @@ static bool calculate_effect_transition_load_data(const Scene *scene,
   for (TransitionLoadData &transition : load_data) {
     std::optional<int> free_channel{};
 
+    const auto test_overlap{[&transition](auto &&channel_handles) -> bool {
+      return std::ranges::find_if(channel_handles, [&transition](auto &&existing) {
+               return existing.second > transition.handles.first &&
+                      existing.first < transition.handles.second;
+             }) != channel_handles.end();
+    }};
+
     for (int channel : IndexRange::from_begin_end_inclusive(transition.channel, seq::MAX_CHANNELS))
     {
       /* Don't add strips on muted or locked channels. */
@@ -2347,22 +2344,20 @@ static bool calculate_effect_transition_load_data(const Scene *scene,
       /* Check that there's no overlap with existing strips. */
       Vector<Strip *> *channel_strips = strips.lookup_ptr(channel);
       if (channel_strips != nullptr &&
-          test_overlap(*channel_strips |
-                           std::views::transform([&scene](const Strip *strip) -> Handles {
-                             return {strip->left_handle(), strip->right_handle(scene)};
-                           }),
-                       transition.handles))
+          test_overlap(*channel_strips | std::views::transform([&scene](const Strip *strip) {
+            return Handles(strip->left_handle(), strip->right_handle(scene));
+          })))
       {
         continue;
       }
 
-      /* Check that there's no overlap with other new already shuffled transitions. */
+      /* Check that there's no overlap with other new already shuffled transitions
+       * (the previous vector elements). */
       if (test_overlap(
-              std::views::take_while(load_data,
-                                     [&](const auto &other) { return &other != &transition; }) |
-                  std::views::filter([&](const auto &other) { return other.channel == channel; }) |
-                  std::views::transform([](const auto &data) { return data.handles; }),
-              transition.handles))
+              load_data |
+              std::views::take_while([&](const auto &other) { return &other != &transition; }) |
+              std::views::filter([&](const auto &other) { return other.channel == channel; }) |
+              std::views::transform([](const auto &data) { return data.handles; })))
       {
         continue;
       }
