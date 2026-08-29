@@ -292,7 +292,7 @@ struct MaterialGPencilStyle {
   /** Color that should be used for drawing "fills" for strokes (alpha included). */
   float fill_rgba[4] = {};
   /** Secondary color used for gradients and other stuff. */
-  DNA_DEPRECATED float mix_rgba[4] = {};
+  float mix_rgba[4] = {};
   /** Settings. */
   eMaterialGPencilStyle_Flag flag = {};
   /** Pass index (only used for modifiers to restrict their influence). */
