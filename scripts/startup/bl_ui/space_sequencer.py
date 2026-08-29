@@ -1346,7 +1346,7 @@ class SEQUENCER_MT_context_menu(Menu):
 
         if has_selection:
             layout.separator()
-            if total == 2 and nonsound == 2:
+            if nonsound >= 2:
                 layout.menu("SEQUENCER_MT_add_transitions", text="Add Transition")
             elif total == 2 and nonsound == 0:
                 layout.operator("sequencer.crossfade_sounds", text="Crossfade Sounds")
