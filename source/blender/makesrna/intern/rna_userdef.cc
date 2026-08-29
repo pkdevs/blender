@@ -13,11 +13,11 @@
 #include "DNA_sequence_types.h"
 #include "DNA_userdef_types.h"
 
-#include "BLI_math_base.h"
-#include "BLI_math_rotation.h"
-#include "BLI_string_utf8_symbols.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_string_utf8_symbols.hh"
 #ifdef WIN32
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 #include "BLT_date_string.hh"
@@ -32,6 +32,8 @@
 #include "GPU_platform.hh"
 
 #include "rna_internal.hh"
+
+#include "UI_interface_c.hh"
 
 #include "WM_api.hh"
 #include "WM_keymap.hh"
@@ -81,7 +83,7 @@ static const EnumPropertyItem rna_enum_date_format_items[] = {
      "DEFAULT",
      0,
      "Default",
-     "Default date formating based on output language"},
+     "Default date formatting based on output language"},
     {int(date_string::DateFormat::LE_Slash),
      "LE_SLASH",
      0,
@@ -228,41 +230,18 @@ static const EnumPropertyItem rna_enum_preferences_extension_repo_source_type_it
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static const EnumPropertyItem rna_enum_preferences_asset_import_method_items[] = {
-    {ASSET_IMPORT_LINK, "LINK", ICON_LINK_BLEND, "Link", "Import the assets as linked data-block"},
-    {ASSET_IMPORT_APPEND,
-     "APPEND",
-     ICON_APPEND_BLEND,
-     "Append",
-     "Import the assets as copied data-block, with no link to the original asset data-block"},
-    {ASSET_IMPORT_APPEND_REUSE,
-     "APPEND_REUSE",
-     ICON_APPEND_BLEND,
-     "Append (Reuse Data)",
-     "Import the assets as copied data-block while avoiding multiple copies of nested, "
-     "typically heavy data. For example the textures of a material asset, or the mesh of an "
-     "object asset, don't have to be copied every time this asset is imported. The instances of "
-     "the asset share the data instead."},
-    {ASSET_IMPORT_PACK,
-     "PACK",
-     ICON_PACKAGE,
-     "Pack",
-     "Import the asset as linked data-block, and pack it in the current file (ensures that it "
-     "remains unchanged in case the library data is modified, is not available anymore, etc.)"},
-    {0, nullptr, 0, nullptr, nullptr},
-};
-
 }  // namespace blender
 
 #ifdef RNA_RUNTIME
 
 #  include "AS_remote_library.hh"
 
-#  include "BLI_listbase.h"
-#  include "BLI_math_vector.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_math_vector_c.hh"
 #  include "BLI_memory_cache.hh"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_rand_c.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 #  include "BLI_string_utils.hh"
 
 #  include "DNA_object_types.h"
@@ -271,11 +250,13 @@ static const EnumPropertyItem rna_enum_preferences_asset_import_method_items[] =
 #  include "BKE_addon.h"
 #  include "BKE_appdir.hh"
 #  include "BKE_blender.hh"
+#  include "BKE_blender_project.hh"
 #  include "BKE_blender_version.h"
 #  include "BKE_callbacks.hh"
 #  include "BKE_global.hh"
 #  include "BKE_idprop.hh"
 #  include "BKE_image.hh"
+#  include "BKE_image_gpu.hh"
 #  include "BKE_main.hh"
 #  include "BKE_mesh_runtime.hh"
 #  include "BKE_object.hh"
@@ -300,6 +281,7 @@ static const EnumPropertyItem rna_enum_preferences_asset_import_method_items[] =
 #  include "ED_asset_library.hh"
 #  include "ED_asset_list.hh"
 #  include "ED_screen.hh"
+#  include "ED_userpref.hh"
 
 #  include "UI_interface.hh"
 
@@ -346,6 +328,19 @@ static void rna_userdef_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *
   USERDEF_TAG_DIRTY;
 }
 
+static void rna_userdef_update_compact_tabs(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  rna_userdef_update(bmain, scene, ptr);
+  auto *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  if (!wm) {
+    return;
+  }
+  for (wmWindow &win : wm->windows) {
+    /* Notify regions so they can update its category tab width when showing only tabs. */
+    WM_event_add_notifier_ex(wm, &win, NC_SCREEN | NA_EDITED, nullptr);
+  }
+}
+
 static void rna_userdef_theme_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
   /* Recreate gizmos when changing themes. */
@@ -382,7 +377,6 @@ static void rna_userdef_gpu_update(Main * /*bmain*/, Scene * /*scene*/, PointerR
 
   WM_main_add_notifier(NC_WINDOW, nullptr);             /* full redraw */
   WM_main_add_notifier(NC_SCREEN | NA_EDITED, nullptr); /* refresh region sizes */
-  WM_main_add_notifier(NC_UI | ND_UI_FONT, nullptr);
   USERDEF_TAG_DIRTY;
 }
 
@@ -430,7 +424,7 @@ static void rna_userdef_language_update(Main *bmain, Scene * /*scene*/, PointerR
   }
 
   BKE_callback_exec_null(bmain, BKE_CB_EVT_TRANSLATION_UPDATE_POST);
-  WM_main_add_notifier(NC_UI, nullptr);
+  WM_main_add_notifier(NC_UI | ND_UI_LANG, nullptr);
   USERDEF_TAG_DIRTY;
 }
 
@@ -464,6 +458,17 @@ int rna_userdef_asset_library_path_editable(const PointerRNA *ptr, const char **
   return PROP_EDITABLE;
 }
 
+static void rna_userdef_asset_libraries_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  if (RNA_struct_is_a(ptr->type, RNA_ProjectAssetLibrary)) {
+    bke::BlenderProject *project = BKE_blender_project_get(bmain);
+    bke::with_blender_project_write_lock([&] { project->is_dirty = true; });
+    WM_main_add_notifier(NC_WINDOW, nullptr);
+    return;
+  }
+  rna_userdef_update(bmain, scene, ptr);
+}
+
 static void rna_userdef_asset_libraries_refresh(bContext *C, PointerRNA *ptr)
 {
   ed::asset::list::clear_all_library(C);
@@ -471,10 +476,23 @@ static void rna_userdef_asset_libraries_refresh(bContext *C, PointerRNA *ptr)
   /* Trigger refresh for the Asset Browser. */
   WM_event_add_notifier(C, NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
 
+  if (RNA_struct_is_a(ptr->type, RNA_ProjectAssetLibrary)) {
+    Main *bmain = CTX_data_main(C);
+    bke::BlenderProject *project = BKE_blender_project_get(bmain);
+    bke::with_blender_project_write_lock([&] { project->is_dirty = true; });
+    WM_main_add_notifier(NC_WINDOW, nullptr);
+    return;
+  }
   rna_userdef_update(CTX_data_main(C), CTX_data_scene(C), ptr);
 }
 
-static void rna_userdef_asset_library_remote_sync_update(bContext *C, PointerRNA *ptr)
+static void rna_userdef_asset_library_remote_url_set(PointerRNA *ptr, const char *value)
+{
+  bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
+  BKE_preferences_remote_asset_library_url_set(library, value);
+}
+
+static void rna_userdef_asset_library_remote_url_update(bContext *C, PointerRNA *ptr)
 {
   bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
   AssetLibraryReference library_ref = blender::ed::asset::user_library_to_library_ref(*library);
@@ -482,6 +500,78 @@ static void rna_userdef_asset_library_remote_sync_update(bContext *C, PointerRNA
   blender::ed::asset::list::clear(&library_ref, C);
   blender::asset_system::remote_library_request_download(*library);
   rna_userdef_asset_libraries_refresh(C, ptr);
+}
+
+static void rna_userdef_asset_library_uuid_get(PointerRNA *ptr, char *value)
+{
+  const bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
+  if (!library->invalid_uuid) {
+    BLI_uuid_format(value, library->uuid);
+  }
+  else {
+    value[0] = '\0';
+  }
+}
+
+static int rna_userdef_asset_library_uuid_length(PointerRNA *ptr)
+{
+  const bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
+  /* UUID_STRING_SIZE - 1 as we exclude the null terminator. */
+  return (!library->invalid_uuid) ? UUID_STRING_SIZE - 1 : 0;
+}
+
+static void rna_userdef_asset_libraries_use_online_essentials_update(bContext *C, PointerRNA *ptr)
+{
+  const AssetLibraryReference essentials = asset_system::essentials_library_reference();
+  ed::asset::list::clear(&essentials, C);
+  rna_userdef_update(CTX_data_main(C), CTX_data_scene(C), ptr);
+}
+
+static void rna_userdef_asset_library_auth_token_get(PointerRNA *ptr, char *value)
+{
+  bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
+  if (library->auth_token) {
+    strcpy(value, library->auth_token);
+  }
+  else {
+    value[0] = '\0';
+  }
+}
+
+static int rna_userdef_asset_library_auth_token_length(PointerRNA *ptr)
+{
+  bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
+  return (library->auth_token) ? strlen(library->auth_token) : 0;
+}
+
+static void rna_userdef_asset_library_auth_token_set(PointerRNA *ptr, const char *value)
+{
+  bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
+
+  if (library->auth_token) {
+    /* Replace the existing token with random characters to avoid leaving it in memory. */
+    RNG *rng = BLI_rng_new_srandom(uint(intptr_t(library->auth_token)));
+    BLI_rng_get_char_n(rng, library->auth_token, strlen(library->auth_token));
+    BLI_rng_free(rng);
+    /* Now we can more comfortably delete the token. */
+    MEM_delete(library->auth_token);
+    library->auth_token = nullptr;
+  }
+
+  if (value[0]) {
+    BKE_preferences_remote_asset_library_auth_token_set(library, value);
+  }
+}
+
+static void rna_userdef_asset_library_use_auth_token_update(bContext * /*C*/, PointerRNA *ptr)
+{
+  bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
+  const bool use_auth_token = (library->flag & ASSET_LIBRARY_USE_AUTH_TOKEN) != 0;
+
+  if (!use_auth_token && library->auth_token) {
+    /* Make sure the token is wiped if we are not using it. */
+    rna_userdef_asset_library_auth_token_set(ptr, "");
+  }
 }
 
 /**
@@ -624,6 +714,8 @@ static void rna_userdef_use_online_access_set(PointerRNA *ptr, bool value)
     }
   }
 
+  const eUserPref_Flag old_flag = userdef->flag;
+
   if (value) {
     userdef->flag |= USER_INTERNET_ALLOW;
     G.f |= G_FLAG_INTERNET_ALLOW;
@@ -631,6 +723,12 @@ static void rna_userdef_use_online_access_set(PointerRNA *ptr, bool value)
   else {
     userdef->flag &= ~USER_INTERNET_ALLOW;
     G.f &= ~G_FLAG_INTERNET_ALLOW;
+  }
+
+  if (old_flag != userdef->flag) {
+    /* Also clear the "User pressed 'Continue Offline' once"-flag when toggling internet access.
+     * Otherwise users are forever stuck with the 'Continue Offline' choice. */
+    userdef->extension_flag &= ~USER_EXTENSION_FLAG_ONLINE_ACCESS_HANDLED;
   }
 
   /* Once the user edits this option (even to set it to the value it was)
@@ -700,13 +798,14 @@ static bUserAssetLibrary *rna_userdef_asset_library_new(const bContext *C,
                                                         const char *name,
                                                         const char *directory)
 {
-  bUserAssetLibrary *new_library = BKE_preferences_asset_library_add(
-      &U, name ? name : "", directory ? directory : "");
-
-  ed::asset::list::clear_all_library(C);
-
-  /* Trigger refresh for the Asset Browser. */
-  WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
+  bUserAssetLibrary *new_library;
+  new_library = ED_userpref_asset_library_new(C,
+                                              name ? name : "",
+                                              directory ? directory : "",
+                                              bUserAssetLibraryAddType::Local,
+                                              false,
+                                              {},
+                                              {});
 
   USERDEF_TAG_DIRTY;
   return new_library;
@@ -721,15 +820,7 @@ static void rna_userdef_asset_library_remove(bContext *C, ReportList *reports, P
     return;
   }
 
-  BKE_preferences_asset_library_remove(&U, library);
-  ed::asset::list::clear_all_library(C);
-
-  /* Update active library index to be in range. */
-  const int count_remaining = BLI_listbase_count(&U.asset_libraries);
-  CLAMP(U.active_asset_library, 0, count_remaining - 1);
-
-  /* Trigger refresh for the Asset Browser. */
-  WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
+  ED_userpref_asset_library_remove(C, library);
 
   ptr->invalidate();
   USERDEF_TAG_DIRTY;
@@ -805,7 +896,7 @@ static void rna_userdef_window_csd_params_update(Main *bmain, Scene *scene, Poin
 
 static void rna_userdef_gl_texture_limit_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-  BKE_image_free_all_gputextures(bmain);
+  BKE_image_free_all_gpu_texture_caches(bmain);
   rna_userdef_update(bmain, scene, ptr);
 }
 
@@ -925,39 +1016,7 @@ static const EnumPropertyItem *rna_UseDef_active_section_itemf(bContext * /*C*/,
                                                                bool *r_free)
 {
   UserDef *userdef = static_cast<UserDef *>(ptr->data);
-
-  const bool use_developer_ui = (userdef->flag & USER_DEVELOPER_UI) != 0;
-  const bool is_alpha = BKE_blender_version_is_alpha();
-
-  if (use_developer_ui && is_alpha) {
-    *r_free = false;
-    return rna_enum_preference_section_items;
-  }
-
-  EnumPropertyItem *items = nullptr;
-  int totitem = 0;
-
-  for (const EnumPropertyItem *it = rna_enum_preference_section_items; it->identifier != nullptr;
-       it++)
-  {
-    if (it->value == USER_SECTION_EXPERIMENTAL) {
-      if (is_alpha == false) {
-        continue;
-      }
-    }
-    else if (it->value == USER_SECTION_DEVELOPER_TOOLS) {
-      if (use_developer_ui == false) {
-        continue;
-      }
-    }
-
-    RNA_enum_item_add(&items, &totitem, it);
-  }
-
-  RNA_enum_item_end(&items, &totitem);
-
-  *r_free = true;
-  return items;
+  return BKE_preferences_active_section_itemf(userdef, r_free);
 }
 
 static PointerRNA rna_UserDef_view_get(PointerRNA *ptr)
@@ -983,6 +1042,11 @@ static PointerRNA rna_UserDef_keymap_get(PointerRNA *ptr)
 static PointerRNA rna_UserDef_filepaths_get(PointerRNA *ptr)
 {
   return RNA_pointer_create_with_parent(*ptr, RNA_PreferencesFilePaths, ptr->data);
+}
+
+static PointerRNA rna_UserDef_asset_libraries_get(PointerRNA *ptr)
+{
+  return RNA_pointer_create_with_parent(*ptr, RNA_PreferencesAssetLibraries, ptr->data);
 }
 
 static PointerRNA rna_UserDef_extensions_get(PointerRNA *ptr)
@@ -1240,7 +1304,7 @@ static void rna_Addon_module_set(PointerRNA *ptr, const char *value)
    * In practice this is something only add-on developers should run into,
    * so it's more of a paper cut for developers. */
   const size_t submodule_len_limit = sizeof(bAddon::module) / 2;
-  if (UNLIKELY(module_len >= submodule_len_limit)) {
+  if (module_len >= submodule_len_limit) [[unlikely]] {
     char *submodule_end = addon->module + module_len;
     char *submodule_beg = addon->module;
     for (size_t i = module_len - 1; i > 0; i--) {
@@ -1278,18 +1342,18 @@ static PointerRNA rna_Addon_preferences_get(PointerRNA *ptr)
     return RNA_pointer_create_with_parent(*ptr, apt->rna_ext.srna, addon->prop);
   }
   else {
-    return PointerRNA_NULL;
+    return {};
   }
 }
 
-static bool rna_AddonPref_unregister(Main * /*bmain*/, StructRNA *type)
+static bool rna_AddonPref_unregister(Main *bmain, StructRNA *type)
 {
   bAddonPrefType *apt = static_cast<bAddonPrefType *>(RNA_struct_blender_type_get(type));
 
   if (!apt) {
     return false;
   }
-
+  ui::refresh_for_srna_unregister(bmain, type);
   RNA_struct_free_extension(type, &apt->rna_ext);
   RNA_struct_free(&RNA_blender_rna_get(), type);
 
@@ -1633,9 +1697,7 @@ static const EnumPropertyItem *rna_preference_asset_libray_import_method_itemf(
 
   EnumPropertyItem *items = nullptr;
   int items_num = 0;
-  for (const EnumPropertyItem *item = rna_enum_preferences_asset_import_method_items;
-       item->identifier;
-       item++)
+  for (const EnumPropertyItem *item = rna_enum_asset_import_method_items; item->identifier; item++)
   {
     if ((library->flag & ASSET_LIBRARY_USE_REMOTE_URL) != 0) {
       if (item->value == ASSET_IMPORT_LINK) {
@@ -1668,8 +1730,11 @@ static const EnumPropertyItem *rna_preference_asset_libray_import_method_itemf(
   return items;
 }
 
-int rna_preference_asset_libray_import_method_default(PointerRNA * /*ptr*/, PropertyRNA * /*prop*/)
+int rna_preference_asset_libray_import_method_default(PointerRNA *ptr, PropertyRNA * /*prop*/)
 {
+  if (RNA_struct_is_a(ptr->type, RNA_ProjectAssetLibrary)) {
+    return ASSET_IMPORT_LINK;
+  }
   return U.experimental.no_data_block_packing ? ASSET_IMPORT_APPEND_REUSE : ASSET_IMPORT_PACK;
 }
 
@@ -2747,10 +2812,11 @@ static void rna_def_userdef_theme_space_common(StructRNA *srna)
 {
   PropertyRNA *prop;
 
-  prop = RNA_def_property(srna, "title", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_array(prop, 3);
-  RNA_def_property_ui_text(prop, "Title", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+  /* header */
+  prop = RNA_def_property(srna, "header", PROP_FLOAT, PROP_COLOR_GAMMA);
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_ui_text(prop, "Header", "");
+  RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
 
   prop = RNA_def_property(srna, "text", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 3);
@@ -2760,22 +2826,6 @@ static void rna_def_userdef_theme_space_common(StructRNA *srna)
   prop = RNA_def_property(srna, "text_hi", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 3);
   RNA_def_property_ui_text(prop, "Text Highlight", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
-
-  /* header */
-  prop = RNA_def_property(srna, "header", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_array(prop, 4);
-  RNA_def_property_ui_text(prop, "Header", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
-
-  prop = RNA_def_property(srna, "header_text", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_array(prop, 3);
-  RNA_def_property_ui_text(prop, "Header Text", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
-
-  prop = RNA_def_property(srna, "header_text_hi", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_array(prop, 3);
-  RNA_def_property_ui_text(prop, "Header Text Highlight", "");
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 }
 
@@ -2966,6 +3016,13 @@ static void rna_def_userdef_theme_space_view3d(BlenderRNA *brna)
   prop = RNA_def_property(srna, "grid_major", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 4);
   RNA_def_property_ui_text(prop, "Major Grid Lines", "");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+
+  prop = RNA_def_property(srna, "grid_axis_brightness", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_float_sdna(prop, nullptr, "grid_axis_brightness");
+  RNA_def_property_float_default(prop, 0.46);
+  RNA_def_property_ui_text(prop, "Grid Axis Brightness", "Brightness of the grid axis lines");
+  RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
   prop = RNA_def_property(srna, "clipping_border_3d", PROP_FLOAT, PROP_COLOR_GAMMA);
@@ -3269,12 +3326,6 @@ static void rna_def_userdef_theme_space_file(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Theme File Browser", "Theme settings for the File Browser");
 
   rna_def_userdef_theme_spaces_main(srna);
-
-  prop = RNA_def_property(srna, "selected_file", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_float_sdna(prop, nullptr, "hilite");
-  RNA_def_property_array(prop, 3);
-  RNA_def_property_ui_text(prop, "Selected File", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
   prop = RNA_def_property(srna, "row_alternate", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 4);
@@ -4076,19 +4127,19 @@ static void rna_def_userdef_theme_space_action(BlenderRNA *brna)
   RNA_def_property_array(prop, 4);
   RNA_def_property_ui_text(
       prop, "Linear Interpolation", "Color of lines showing linear interpolation mode");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
 
   prop = RNA_def_property(srna, "anim_interpolation_constant", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 4);
   RNA_def_property_ui_text(
       prop, "Constant Interpolation", "Color of lines showing constant interpolation mode");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
 
   prop = RNA_def_property(srna, "anim_interpolation_other", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 4);
   RNA_def_property_ui_text(
       prop, "Other Interpolation", "Color of lines showing easings & dynamic interpolation mode");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
 
   prop = RNA_def_property(srna, "simulated_frames", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_float_sdna(prop, nullptr, "simulated_frames");
@@ -4671,6 +4722,7 @@ static void rna_def_userdef_studiolights(BlenderRNA *brna)
       "Path to the file that will contain the lighting info (without extension)");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(func, "studio_light", "StudioLight", "", "Newly created StudioLight");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_StudioLights_remove");
@@ -5329,12 +5381,10 @@ static void rna_def_userdef_view(BlenderRNA *brna)
                            "manually if Auto-Save Preferences is disabled");
   RNA_def_property_update(prop, 0, "rna_userdef_update");
 
-  prop = RNA_def_property(srna, "show_online_assets", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "uiflag2", USER_UIFLAG2_SHOW_ONLINE_ASSETS);
+  prop = RNA_def_property(srna, "asset_access", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_asset_access_items);
   RNA_def_property_ui_text(
-      prop,
-      "Show Online Assets",
-      "When internet access is enabled, load and display online assets in asset shelves");
+      prop, "Asset Access", "Choose the visibility of online and offline assets");
   RNA_def_property_update(prop, 0, "rna_userdef_update");
 
   static const EnumPropertyItem header_align_items[] = {
@@ -5823,6 +5873,7 @@ static void rna_def_userdef_edit(BlenderRNA *brna)
   prop = RNA_def_property(srna, "keyframe_new_handle_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_keyframe_handle_type_items);
   RNA_def_property_enum_sdna(prop, nullptr, "keyhandles_new");
+  RNA_def_property_enum_default(prop, HD_AUTO_ANIM);
   RNA_def_property_ui_text(prop, "New Handles Type", "Handle type for handles of new keyframes");
 
   /* frame numbers */
@@ -5899,6 +5950,15 @@ static void rna_def_userdef_edit(BlenderRNA *brna)
       prop,
       "Connect Movie Strips by Default",
       "Connect newly added movie strips by default if they have multiple channels");
+
+  prop = RNA_def_property(srna, "clamp_strips_by_default", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "sequencer_editor_flag", USER_SEQ_ED_CLAMP_STRIPS_BY_DEFAULT);
+  RNA_def_property_ui_text(
+      prop,
+      "Clamp Strips by Default",
+      "When slipping or adjusting handles, clamp movement to the underlying content bounds by "
+      "default to avoid producing extra hold frames or silence");
 
   /* duplication linking */
   prop = RNA_def_property(srna, "use_duplicate_mesh", PROP_BOOLEAN, PROP_NONE);
@@ -6187,16 +6247,17 @@ static void rna_def_userdef_system(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Memory Cache Limit", "Memory cache limit (in megabytes)");
   RNA_def_property_update(prop, 0, "rna_Userdef_memcache_update");
 
-  /* Geometry Nodes. */
+  /* Nodes. */
 
-  prop = RNA_def_property(srna, "geometry_nodes_stack_limit", PROP_INT, PROP_NONE);
+  prop = RNA_def_property(srna, "nodes_stack_limit", PROP_INT, PROP_NONE);
   RNA_def_property_range(prop, 1, INT32_MAX);
-  RNA_def_property_ui_text(prop,
-                           "Geometry Nodes Stack Limit",
-                           "Approximate maximum size of the call stack used by Geometry Nodes. "
-                           "For example, this corresponds to the number of allowed nested node "
-                           "groups. Setting this too high can result in crashes caused by "
-                           "running out of stack memory.");
+  RNA_def_property_ui_text(
+      prop,
+      "Nodes Stack Limit",
+      "Approximate maximum size of the call stack used by node group evaluation. "
+      "For example, this corresponds to the number of allowed nested node "
+      "groups. Setting this too high can result in crashes caused by "
+      "running out of stack memory.");
   RNA_def_property_update(prop, 0, "rna_userdef_update");
 
   /* Sequencer proxy setup */
@@ -6230,6 +6291,14 @@ static void rna_def_userdef_system(BlenderRNA *brna)
       "Enable edit mode edge smoothing, reducing aliasing (requires restart)");
   RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
 
+  prop = RNA_def_property(srna, "use_rt_shadows", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "gpu_flag", USER_GPU_FLAG_WORKBENCH_RT_SHADOWS);
+  RNA_def_property_ui_text(
+      prop,
+      "Raytraced Shadows",
+      "Enable raytraced shadows. Requires Vulkan and a GPU with hardware raytracing support");
+  RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
+
   prop = RNA_def_property(srna, "use_region_overlap", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "uiflag2", USER_REGION_OVERLAP);
   RNA_def_property_ui_text(
@@ -6242,7 +6311,7 @@ static void rna_def_userdef_system(BlenderRNA *brna)
       prop,
       "Compact Sidebar Tabs",
       "Display sidebar tabs in a compact size that shows icons when available");
-  RNA_def_property_update(prop, 0, "rna_userdef_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_update_compact_tabs");
 
   prop = RNA_def_property(srna, "viewport_aa", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_userdef_viewport_aa_items);
@@ -6974,7 +7043,7 @@ static void rna_def_userdef_filepaths_asset_library(BlenderRNA *brna)
       prop, "Name", "Identifier (not necessarily unique) for the asset library");
   RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_userdef_asset_library_name_set");
   RNA_def_struct_name_property(srna, prop);
-  RNA_def_property_update(prop, 0, "rna_userdef_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_asset_libraries_update");
 
   prop = RNA_def_property(srna, "path", PROP_STRING, PROP_DIRPATH);
   RNA_def_property_string_sdna(prop, nullptr, "dirpath");
@@ -6994,12 +7063,14 @@ static void rna_def_userdef_filepaths_asset_library(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "remote_url", PROP_STRING, PROP_NONE);
   RNA_def_property_string_sdna(prop, nullptr, "remote_url");
+  RNA_def_property_string_funcs(
+      prop, nullptr, nullptr, "rna_userdef_asset_library_remote_url_set");
   RNA_def_property_ui_text(prop, "URL", "Remote URL to the asset library");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
-  RNA_def_property_update(prop, 0, "rna_userdef_asset_library_remote_sync_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_asset_library_remote_url_update");
 
   prop = RNA_def_property(srna, "import_method", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_items(prop, rna_enum_preferences_asset_import_method_items);
+  RNA_def_property_enum_items(prop, rna_enum_asset_import_method_items);
   RNA_def_property_enum_funcs(
       prop, nullptr, nullptr, "rna_preference_asset_libray_import_method_itemf");
   RNA_def_property_enum_default_func(prop, "rna_preference_asset_libray_import_method_default");
@@ -7014,10 +7085,50 @@ static void rna_def_userdef_filepaths_asset_library(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", ASSET_LIBRARY_RELATIVE_PATH);
   RNA_def_property_ui_text(
       prop, "Relative Path", "Use relative path when linking assets from this asset library");
+  RNA_def_property_update(prop, 0, "rna_userdef_asset_libraries_update");
 
   prop = RNA_def_property(srna, "use_remote_url", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", ASSET_LIBRARY_USE_REMOTE_URL);
   RNA_def_property_ui_text(prop, "Use Remote", "Synchronize the asset library with a remote URL");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+  prop = RNA_def_property(srna, "use_auth_token", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", ASSET_LIBRARY_USE_AUTH_TOKEN);
+  RNA_def_property_ui_text(
+      prop, "Requires Access Token", "Asset library requires an authentication token");
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_update(prop, 0, "rna_userdef_asset_library_use_auth_token_update");
+
+  prop = RNA_def_property(srna, "auth_token", PROP_STRING, PROP_PASSWORD);
+  RNA_def_property_ui_text(
+      prop,
+      "Access Token",
+      "Personal authentication token, may be required by some asset libraries");
+  RNA_def_property_string_funcs(prop,
+                                "rna_userdef_asset_library_auth_token_get",
+                                "rna_userdef_asset_library_auth_token_length",
+                                "rna_userdef_asset_library_auth_token_set");
+
+  prop = RNA_def_property(srna, "is_project_defined", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", ASSET_LIBRARY_PROJECT_DEFINED);
+  RNA_def_property_ui_text(
+      prop, "Project Defined", "Signifies if the asset library is defined by a project");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+  prop = RNA_def_property(srna, "uuid", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_userdef_asset_library_uuid_get",
+                                "rna_userdef_asset_library_uuid_length",
+                                nullptr);
+  RNA_def_property_ui_text(prop, "UUID", "The unique identifier for the asset library");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+  prop = RNA_def_property(srna, "invalid_uuid", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "invalid_uuid");
+  RNA_def_property_ui_text(
+      prop,
+      "Invalid UUID",
+      "If the UUID is invalid for the asset, the invalid string will be available here.");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 }
 
@@ -7184,6 +7295,7 @@ static void rna_def_userdef_script_directory_collection(BlenderRNA *brna, Proper
   RNA_def_function_ui_description(func, "Add a new Python script directory");
   /* return type */
   parm = RNA_def_pointer(func, "script_directory", "ScriptDirectory", "", "");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_userdef_script_directory_remove");
@@ -7211,6 +7323,7 @@ static void rna_def_userdef_asset_library_collection(BlenderRNA *brna, PropertyR
   RNA_def_string(func, "directory", nullptr, sizeof(bUserAssetLibrary::dirpath), "Directory", "");
   /* return type */
   parm = RNA_def_pointer(func, "library", "UserAssetLibrary", "", "Newly added asset library");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_userdef_asset_library_remove");
@@ -7255,6 +7368,7 @@ static void rna_def_userdef_extension_repos_collection(BlenderRNA *brna, Propert
 
   /* return type */
   parm = RNA_def_pointer(func, "repo", "UserExtensionRepo", "", "Newly added repository");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_userdef_extension_repo_remove");
@@ -7528,6 +7642,26 @@ static void rna_def_userdef_filepaths(BlenderRNA *brna)
                            "Index of the asset library being edited in the Preferences UI");
 }
 
+static void rna_def_userdef_asset_libraries(BlenderRNA *brna)
+{
+  StructRNA *srna = RNA_def_struct(brna, "PreferencesAssetLibraries", nullptr);
+  RNA_def_struct_sdna(srna, "UserDef");
+  RNA_def_struct_nested(brna, srna, "Preferences");
+  RNA_def_struct_ui_text(srna, "Asset Libraries", "");
+
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "use_online_essentials", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "asset_flag", USER_ASSETS_USE_ONLINE_ESSENTIALS);
+  RNA_def_property_ui_text(
+      prop,
+      "Online Essentials",
+      "Include remote assets in the Essentials asset library. Downloading requires Online Access "
+      "to be enabled under System > Network in the Preferences");
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_update(prop, 0, "rna_userdef_asset_libraries_use_online_essentials_update");
+}
+
 static void rna_def_userdef_extensions(BlenderRNA *brna)
 {
   PropertyRNA *prop;
@@ -7693,12 +7827,8 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
       prop, "Shader Node Previews", "Enables previews in the shader node editor");
   RNA_def_property_update(prop, 0, "rna_userdef_ui_update");
 
-  prop = RNA_def_property(srna, "use_geometry_bundle", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_ui_text(prop,
-                           "Bundle in Geometry",
-                           "Support storing custom bundles in a geometry in Geometry Nodes");
-
   prop = RNA_def_property(srna, "use_remote_asset_libraries", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_ui_text(
       prop, "Remote Asset Libraries", "Enable asset libraries served over HTTP/HTTPS");
 
@@ -7706,10 +7836,6 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Collection Import", "Enables a file importer to be configured on a Collection");
   RNA_def_property_update(prop, 0, "rna_userdef_ui_update");
-
-  prop = RNA_def_property(srna, "use_geometry_nodes_hair_dynamics", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_ui_text(
-      prop, "Geometry Nodes Hair Dynamics", "Enable hair dynamics simulation in geometry nodes");
 
   prop = RNA_def_property(srna, "use_extensions_debug", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_ui_text(
@@ -7748,6 +7874,7 @@ static void rna_def_userdef_addon_collection(BlenderRNA *brna, PropertyRNA *cpro
   RNA_def_function_ui_description(func, "Add a new add-on");
   /* return type */
   parm = RNA_def_pointer(func, "addon", "Addon", "", "Add-on data");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_userdef_addon_remove");
@@ -7773,6 +7900,7 @@ static void rna_def_userdef_autoexec_path_collection(BlenderRNA *brna, PropertyR
   RNA_def_function_ui_description(func, "Add a new path");
   /* return type */
   parm = RNA_def_pointer(func, "pathcmp", "PathCompare", "", "");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_userdef_pathcompare_remove");
@@ -7873,6 +8001,14 @@ void RNA_def_userdef(BlenderRNA *brna)
   RNA_def_property_pointer_funcs(prop, "rna_UserDef_filepaths_get", nullptr, nullptr, nullptr);
   RNA_def_property_ui_text(prop, "File Paths", "Default paths for external files");
 
+  prop = RNA_def_property(srna, "asset_libraries", PROP_POINTER, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_NEVER_NULL);
+  RNA_def_property_struct_type(prop, "PreferencesAssetLibraries");
+  RNA_def_property_pointer_funcs(
+      prop, "rna_UserDef_asset_libraries_get", nullptr, nullptr, nullptr);
+  RNA_def_property_ui_text(
+      prop, "Asset Libraries", "Setup for custom and builtin asset libraries");
+
   prop = RNA_def_property(srna, "extensions", PROP_POINTER, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NEVER_NULL);
   RNA_def_property_struct_type(prop, "PreferencesExtensions");
@@ -7937,6 +8073,14 @@ void RNA_def_userdef(BlenderRNA *brna)
                            "Save preferences on exit when modified "
                            "(unless factory settings have been loaded)");
 
+  prop = RNA_def_property(srna, "use_project_auto_save", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "pref_flag", USER_PREF_FLAG_PROJECT_SAVE);
+  RNA_def_property_ui_text(
+      prop,
+      "Auto-save Project",
+      "Save projects automatically on exit and when saving or switching blend files");
+  RNA_def_property_update(prop, 0, "rna_userdef_update");
+
   prop = RNA_def_property(srna, "is_dirty", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "runtime.is_dirty", 0);
   RNA_def_property_ui_text(prop, "Dirty", "Preferences have changed");
@@ -7947,6 +8091,7 @@ void RNA_def_userdef(BlenderRNA *brna)
   rna_def_userdef_input(brna);
   rna_def_userdef_keymap(brna);
   rna_def_userdef_filepaths(brna);
+  rna_def_userdef_asset_libraries(brna);
   rna_def_userdef_extensions(brna);
   rna_def_userdef_system(brna);
   rna_def_userdef_addon(brna);

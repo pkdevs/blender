@@ -15,17 +15,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_array_utils.h"
-#include "BLI_ghash.h"
+#include "BLI_array_utils_c.hh"
+#include "BLI_ghash.hh"
 #include "BLI_listbase_wrapper.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -595,6 +595,12 @@ static void calc_keyHandles(ListBaseT<Nurb> *nurb, float *key)
 
   for (Nurb &nu : *nurb) {
     if (nu.bezt) {
+      if (nu.pntsu < 2) {
+        /* Single point, no need to calculate handles, proceed to th next Nurb. */
+        fp += nu.pntsu * KEYELEM_FLOAT_LEN_BEZTRIPLE;
+        continue;
+      }
+
       BezTriple *prevp, *nextp;
       BezTriple cur, prev, next;
       float *startfp, *prevfp, *nextfp;
@@ -612,14 +618,8 @@ static void calc_keyHandles(ListBaseT<Nurb> *nurb, float *key)
         prevfp = nullptr;
       }
 
-      if (nu.pntsu > 1) {
-        nextp = bezt + 1;
-        nextfp = fp + KEYELEM_FLOAT_LEN_BEZTRIPLE;
-      }
-      else {
-        nextp = nullptr;
-        nextfp = nullptr;
-      }
+      nextp = bezt + 1;
+      nextfp = fp + KEYELEM_FLOAT_LEN_BEZTRIPLE;
 
       while (a--) {
         key_to_bezt(fp, bezt, &cur);
@@ -939,16 +939,15 @@ static void fcurve_path_rename(const char *orig_rna_path,
     if (processed_fcurves.contains(fcu)) {
       continue;
     }
-    if (!STREQLEN(fcu->rna_path, orig_rna_path, len)) {
+    if (!STREQLEN(fcu->rna_path().c_str(), orig_rna_path, len)) {
       continue;
     }
 
     processed_fcurves.add(fcu);
 
-    const char *suffix = fcu->rna_path + len;
+    const char *suffix = fcu->rna_path().c_str() + len;
     char *new_rna_path = BLI_sprintfN("%s%s", rna_path, suffix);
-    MEM_SAFE_DELETE(fcu->rna_path);
-    fcu->rna_path = new_rna_path;
+    fcu->rna_path_set_move(new_rna_path);
   }
 }
 
@@ -1062,8 +1061,8 @@ static void fcurve_path_rename(const char *orig_rna_path,
       continue;
     }
 
-    if (STRPREFIX(fcu->rna_path, "splines")) {
-      const char *ch = strchr(fcu->rna_path, '.');
+    if (STRPREFIX(fcu->rna_path().c_str(), "splines")) {
+      const char *ch = strchr(fcu->rna_path().c_str(), '.');
 
       if (ch && (STRPREFIX(ch, ".bezier_points") || STRPREFIX(ch, ".points"))) {
         fcurves_to_remove.append(fcu);
@@ -1096,7 +1095,7 @@ static void fcurve_path_rename(const char *orig_rna_path,
     if (processed_fcurves.contains(fcu)) {
       continue;
     }
-    if (STRPREFIX(fcu->rna_path, "splines")) {
+    if (STRPREFIX(fcu->rna_path().c_str(), "splines")) {
       fcurves_to_remove.append(fcu);
       /* Not strictly necessary, because `orig_curves` shouldn't contain any duplicates, and this
        * is the last loop that can add anything to `fcurves_to_remove`. However, the line below
@@ -1433,7 +1432,7 @@ static wmOperatorStatus separate_exec(bContext *C, wmOperator *op)
     /* 1. Duplicate geometry and check for valid selection for separate. */
     adduplicateflagNurb(oldob, v3d, &newnurb, BEZT_FLAG_SELECT, true);
 
-    if (BLI_listbase_is_empty(&newnurb)) {
+    if (newnurb.is_empty()) {
       status.error_generic++;
       continue;
     }
@@ -1550,16 +1549,16 @@ static wmOperatorStatus curve_split_exec(bContext *C, wmOperator *op)
 
     adduplicateflagNurb(obedit, v3d, &newnurb, BEZT_FLAG_SELECT, true);
 
-    if (BLI_listbase_is_empty(&newnurb)) {
+    if (newnurb.is_empty()) {
       count_failed += 1;
       continue;
     }
 
     ListBaseT<Nurb> *editnurb = object_editcurve_get(obedit);
-    const int len_orig = BLI_listbase_count(editnurb);
+    const int len_orig = editnurb->count();
 
     curve_delete_segments(obedit, v3d, true);
-    cu->actnu -= len_orig - BLI_listbase_count(editnurb);
+    cu->actnu -= len_orig - editnurb->count();
     BLI_movelisttolist(editnurb, &newnurb);
 
     if (ED_curve_updateAnimPaths(bmain, id_cast<Curve *>(obedit->data))) {
@@ -2127,8 +2126,11 @@ bool ed_editnurb_extrude_flag(EditNurb *editnurb, const eBezTriple_Flag flag)
       is_first_sel_v = false;
     }
     else {
-      sel_to_copy_ints(
+      const int selected_vs = sel_to_copy_ints(
           nu.bp, nu.pntsu, nu.pntsv, 1, nu.pntsu, flag, intvls_v, &intvl_cnt_v, &is_first_sel_v);
+      if (selected_vs == -1) {
+        continue;
+      }
     }
 
     const int new_pntsu = nu.pntsu + intvl_cnt_u - 1;
@@ -2164,6 +2166,7 @@ bool ed_editnurb_extrude_flag(EditNurb *editnurb, const eBezTriple_Flag flag)
       nu.orderv = 2;
     }
     nu.pntsv = new_pntsv;
+    BLI_assert(nu.pntsu >= 1 && nu.pntsv >= 1);
     BKE_nurb_knot_calc_u(&nu);
     BKE_nurb_knot_calc_v(&nu);
 
@@ -2178,7 +2181,7 @@ static void calc_duplicate_actnurb(const ListBaseT<Nurb> *editnurb,
                                    const ListBaseT<Nurb> *newnurb,
                                    Curve *cu)
 {
-  cu->actnu = BLI_listbase_count(editnurb) + BLI_listbase_count(newnurb);
+  cu->actnu = editnurb->count() + newnurb->count();
 }
 
 static bool calc_duplicate_actvert(const ListBaseT<Nurb> *editnurb,
@@ -2583,7 +2586,7 @@ static void adduplicateflagNurb(Object *obedit,
     }
   }
 
-  if (BLI_listbase_is_empty(newnurb) == false) {
+  if (newnurb->is_empty() == false) {
     for (Nurb &nu : *newnurb) {
       if (nu.type == CU_BEZIER) {
         if (split) {
@@ -3029,7 +3032,7 @@ static void curve_smooth_value(ListBaseT<Nurb> *editnurb,
             if (start_sel > 0) {
               start_rad = BEZT_VALUE(&nu.bezt[start_sel - 1]);
             }
-            if (end_sel != -1 && end_sel < nu.pntsu) {
+            if (start_sel + 1 < nu.pntsu) {
               end_rad = BEZT_VALUE(&nu.bezt[start_sel + 1]);
             }
 
@@ -3110,7 +3113,7 @@ static void curve_smooth_value(ListBaseT<Nurb> *editnurb,
             if (start_sel > 0) {
               start_rad = BP_VALUE(&nu.bp[start_sel - 1]);
             }
-            if (end_sel != -1 && end_sel < nu.pntsu) {
+            if (start_sel + 1 < nu.pntsu) {
               end_rad = BP_VALUE(&nu.bp[start_sel + 1]);
             }
 
@@ -4505,7 +4508,7 @@ static int merge_nurb(View3D *v3d, Object *obedit)
   make_selection_list_nurb(v3d, editnurb, &nsortbase);
 
   if (nsortbase.first == nsortbase.last) {
-    BLI_freelistN(&nsortbase);
+    nsortbase.free_no_destruct();
     return CURVE_MERGE_ERR_FEW_SELECTION;
   }
 
@@ -4540,7 +4543,7 @@ static int merge_nurb(View3D *v3d, Object *obedit)
   }
 
   if (ok == false) {
-    BLI_freelistN(&nsortbase);
+    nsortbase.free_no_destruct();
     return CURVE_MERGE_ERR_RESOLUTION_ALL;
   }
 
@@ -4551,7 +4554,7 @@ static int merge_nurb(View3D *v3d, Object *obedit)
     nus2 = nus2->next;
   }
 
-  BLI_freelistN(&nsortbase);
+  nsortbase.free_no_destruct();
   BKE_curve_nurb_active_set(id_cast<Curve *>(obedit->data), nullptr);
 
   return ok ? CURVE_MERGE_OK : CURVE_MERGE_ERR_RESOLUTION_SOME;
@@ -4888,7 +4891,7 @@ bool ED_curve_editnurb_select_pick(bContext *C,
 
   if (params.sel_op == SEL_OP_SET) {
     if ((found && params.select_passthrough) &&
-        (((bezt ? (&bezt->f1)[hand] : bp->f1) & SELECT) != 0))
+        (((bezt ? uint8_t((&bezt->f1)[hand]) : bp->f1) & SELECT) != 0))
     {
       found = false;
     }
@@ -5271,7 +5274,7 @@ static bool ed_editcurve_extrude(Curve *cu, EditNurb *editnurb, View3D *v3d)
     void *p;
   } cu_actvert;
 
-  if (BLI_listbase_is_empty(&editnurb->nurbs)) {
+  if (editnurb->nurbs.is_empty()) {
     return changed;
   }
 
@@ -6067,7 +6070,7 @@ static wmOperatorStatus duplicate_exec(bContext *C, wmOperator *op)
     ListBaseT<Nurb> newnurb = {nullptr, nullptr};
     adduplicateflagNurb(obedit, v3d, &newnurb, BEZT_FLAG_SELECT, false);
 
-    if (BLI_listbase_is_empty(&newnurb)) {
+    if (newnurb.is_empty()) {
       count_failed += 1;
       continue;
     }
@@ -6997,7 +7000,7 @@ wmOperatorStatus ED_curve_join_objects_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  BLI_listbase_clear(&tempbase);
+  tempbase.clear_no_delete();
   /* Inverse transform for all selected curves in this object,
    * See object_join_exec for detailed comment on why the safe version is used. */
   invert_m4_m4_safe_ortho(imat, ob_active->object_to_world().ptr());

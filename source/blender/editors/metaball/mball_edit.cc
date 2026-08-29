@@ -11,14 +11,15 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_ghash.hh"
 #include "BLI_kdtree.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rand.h"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rand_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_meta_types.h"
 #include "DNA_object_types.h"
@@ -219,8 +220,11 @@ static const EnumPropertyItem prop_similar_types[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static void mball_select_similar_type_get(
-    Object *obedit, MetaBall *mb, int type, KDTree_1d *tree_1d, KDTree_3d *tree_3d)
+static void mball_select_similar_type_get(Object *obedit,
+                                          MetaBall *mb,
+                                          int type,
+                                          Map<float, int> &points_1d,
+                                          Map<float3, int> &points_3d)
 {
   float tree_entry[3] = {0.0f, 0.0f, 0.0f};
   int tree_index = 0;
@@ -252,11 +256,15 @@ static void mball_select_similar_type_get(
           break;
         }
       }
-      if (tree_1d) {
-        kdtree_1d_insert(tree_1d, tree_index++, tree_entry);
-      }
-      else {
-        kdtree_3d_insert(tree_3d, tree_index++, tree_entry);
+
+      switch (type) {
+        case SIMMBALL_RADIUS:
+        case SIMMBALL_STIFFNESS:
+          points_1d.add(tree_entry[0], tree_index++);
+          break;
+        case SIMMBALL_ROTATION:
+          points_3d.add(tree_entry, tree_index++);
+          break;
       }
     }
   }
@@ -265,8 +273,8 @@ static void mball_select_similar_type_get(
 static bool mball_select_similar_type(Object *obedit,
                                       MetaBall *mb,
                                       int type,
-                                      const KDTree_1d *tree_1d,
-                                      const KDTree_3d *tree_3d,
+                                      const KDTree<float> *tree_1d,
+                                      const KDTree<float3> *tree_3d,
                                       const float thresh)
 {
   bool changed = false;
@@ -304,8 +312,8 @@ static bool mball_select_similar_type(Object *obedit,
 
         float thresh_cos = cosf(thresh * float(M_PI_2));
 
-        KDTreeNearest_3d nearest;
-        if (kdtree_3d_find_nearest(tree_3d, dir, &nearest) != -1) {
+        KDTreeNearest<float3> nearest;
+        if (kdtree_find_nearest<float3>(tree_3d, dir, &nearest) != -1) {
           float orient = angle_normalized_v3v3(dir, nearest.co);
           /* Map to 0-1 to compare orientation. */
           float delta = thresh_cos - fabsf(cosf(orient));
@@ -329,7 +337,6 @@ static wmOperatorStatus mball_select_similar_exec(bContext *C, wmOperator *op)
 {
   const int type = RNA_enum_get(op->ptr, "type");
   const float thresh = RNA_float_get(op->ptr, "threshold");
-  int tot_mball_selected_all = 0;
 
   const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
@@ -337,21 +344,10 @@ static wmOperatorStatus mball_select_similar_exec(bContext *C, wmOperator *op)
   Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
       *bmain, scene, view_layer, CTX_wm_view3d(C));
 
-  tot_mball_selected_all = BKE_mball_select_count_multi(bases);
+  Map<float, int> points_1d;
+  Map<float3, int> points_3d;
 
   short type_ref = 0;
-  KDTree_1d *tree_1d = nullptr;
-  KDTree_3d *tree_3d = nullptr;
-
-  switch (type) {
-    case SIMMBALL_RADIUS:
-    case SIMMBALL_STIFFNESS:
-      tree_1d = kdtree_1d_new(tot_mball_selected_all);
-      break;
-    case SIMMBALL_ROTATION:
-      tree_3d = kdtree_3d_new(tot_mball_selected_all);
-      break;
-  }
 
   /* Get type of selected MetaBall */
   for (Base *base : bases) {
@@ -371,7 +367,7 @@ static wmOperatorStatus mball_select_similar_exec(bContext *C, wmOperator *op)
       case SIMMBALL_RADIUS:
       case SIMMBALL_STIFFNESS:
       case SIMMBALL_ROTATION:
-        mball_select_similar_type_get(obedit, mb, type, tree_1d, tree_3d);
+        mball_select_similar_type_get(obedit, mb, type, points_1d, points_3d);
         break;
       default:
         BLI_assert(0);
@@ -379,14 +375,29 @@ static wmOperatorStatus mball_select_similar_exec(bContext *C, wmOperator *op)
     }
   }
 
-  if (tree_1d != nullptr) {
-    kdtree_1d_deduplicate(tree_1d);
-    kdtree_1d_balance(tree_1d);
+  KDTree<float> *tree_1d = nullptr;
+  KDTree<float3> *tree_3d = nullptr;
+
+  switch (type) {
+    case SIMMBALL_RADIUS:
+    case SIMMBALL_STIFFNESS: {
+      tree_1d = kdtree_new<float>(points_1d.size());
+      for (const auto &[pos, index] : points_1d.items()) {
+        kdtree_insert(tree_1d, index, pos);
+      }
+      kdtree_balance<float>(tree_1d);
+      break;
+    }
+    case SIMMBALL_ROTATION: {
+      tree_3d = kdtree_new<float3>(points_3d.size());
+      for (const auto &[pos, index] : points_3d.items()) {
+        kdtree_insert(tree_3d, index, pos);
+      }
+      kdtree_balance<float3>(tree_3d);
+      break;
+    }
   }
-  if (tree_3d != nullptr) {
-    kdtree_3d_deduplicate(tree_3d);
-    kdtree_3d_balance(tree_3d);
-  }
+
   /* Select MetaBalls with desired type. */
   for (Base *base : bases) {
     Object *obedit = base->object;
@@ -421,10 +432,10 @@ static wmOperatorStatus mball_select_similar_exec(bContext *C, wmOperator *op)
   }
 
   if (tree_1d != nullptr) {
-    kdtree_1d_free(tree_1d);
+    kdtree_free<float>(tree_1d);
   }
   if (tree_3d != nullptr) {
-    kdtree_3d_free(tree_3d);
+    kdtree_free<float3>(tree_3d);
   }
   return OPERATOR_FINISHED;
 }

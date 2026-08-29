@@ -76,9 +76,7 @@ ccl_device bool svm_raycast(KernelGlobals kg,
     isect = local_isect.hits[0];
   }
   else {
-    /* Ray-trace, leaving out shadow opaque to avoid early exit. */
-    const uint visibility = PATH_RAY_ALL_VISIBILITY - PATH_RAY_SHADOW_OPAQUE;
-    if (!scene_intersect(kg, &ray, visibility, &isect)) {
+    if (!scene_intersect(kg, &ray, PATH_RAY_VISIBILITY_RAYCAST, &isect)) {
       return false;
     }
   }
@@ -101,7 +99,7 @@ ccl_device_inline void svm_raycast_attr_eval_and_store(
   svm_node_attr_store(type, stack, attribute_node.out_offset, data);
 }
 
-template<uint node_feature_mask, typename ConstIntegratorGenericState>
+template<uint64_t node_feature_mask, typename ConstIntegratorGenericState>
 #  if defined(__KERNEL_OPTIX__)
 ccl_device_inline
 #  else

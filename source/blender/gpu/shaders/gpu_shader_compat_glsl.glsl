@@ -174,6 +174,11 @@ RESHAPE(float3x3, mat3x3, mat3x4)
 #define sampler_get(create_info, _res) _res
 #define image_get(create_info, _res) _res
 #define srt_access(create_info, _res) access_##create_info##_##_res()
+/**
+ * WORKAROUND(fclem): Only used for cases when passing down the resource_table is impractical.
+ * Note that this placeholder is just for the code to compile.
+ */
+#define resource_table_get(table_type) table_type##_ctor_()
 
 /* Incompatible keywords. */
 #define static
@@ -217,7 +222,7 @@ float4 texelFetchExtend(sampler2D samp, int2 texel, int lvl)
 
 /* For assert support. */
 #if defined(GPU_VERTEX_SHADER)
-#  define GPU_THREAD uint3(gl_VertexID, gl_InstanceID, 0)
+#  define GPU_THREAD uint3(gl_VertexID, gpu_InstanceIndex, 0)
 #elif defined(GPU_FRAGMENT_SHADER)
 #  define GPU_THREAD uint3(gl_FragCoord.x, gl_FragCoord.y, 0)
 #elif defined(GPU_COMPUTE_SHADER)
@@ -231,8 +236,13 @@ float4 texelFetchExtend(sampler2D samp, int2 texel, int lvl)
  * Make sure builtin functions are stubbed when used in an invalid stage. */
 #ifdef GPU_FRAGMENT_SHADER
 #  define gpu_discard_fragment() discard
-#  define gpu_dfdx(x) dFdx(x)
-#  define gpu_dfdy(x) dFdy(x)
+#  ifdef GPU_ARB_derivative_control
+#    define gpu_dfdx(x) dFdxFine(x)
+#    define gpu_dfdy(x) dFdyFine(x)
+#  else
+#    define gpu_dfdx(x) dFdx(x)
+#    define gpu_dfdy(x) dFdy(x)
+#  endif
 #  define gpu_fwidth(x) fwidth(x)
 #else
 #  define gpu_discard_fragment()

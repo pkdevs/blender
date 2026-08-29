@@ -203,6 +203,13 @@ class ShadowModule {
   /* Used to call caster_update_ps_ only once per sync (Initialized on begin_sync). */
   bool update_casters_ = false;
 
+  /* When rendering shadows in a loop, we only tag for usage once and setup multiple times.
+   * In this case `run_tagging_` is set to false after the first iteration. */
+  bool32_t run_tagging_ = false;
+
+  /* Number of shadow view needed until we have finished the shadow updates. Render only. */
+  int needed_views_ = 0;
+
   /* -------------------------------------------------------------------- */
   /** \name Tile-map Management
    * \{ */
@@ -343,17 +350,19 @@ class ShadowModule {
   /** Register a shadow caster or receiver. */
   void sync_object(const ObjectHandle &ob_handle,
                    bool is_alpha_blend,
-                   bool has_transparent_shadows);
+                   bool has_transparent_shadows,
+                   bool has_time_dependent_shadows);
   void end_sync();
 
   void set_lights_data();
 
+  void set_view(View &view, int2 extent);
+
   /* Update all shadow regions visible inside the view.
    * If called multiple time for the same view, it will only do the depth buffer scanning
    * to check any new opaque surfaces.
-   * Expect the HiZ buffer to be up to date.
-   * Needs to be called after `LightModule::set_view();`. */
-  void set_view(View &view, int2 extent);
+   * Needs to be called after `LightModule::set_view();` and after `ShadowModule::set_view();`. */
+  void render(View &view, int2 extent);
 
   void debug_end_sync();
   void debug_draw(View &view, gpu::FrameBuffer *view_fb);
@@ -379,11 +388,6 @@ class ShadowModule {
   {
     do_full_update_ = true;
   }
-
-  /** Compute approximate screen pixel space radius (as world space radius). */
-  static float screen_pixel_radius(const float4x4 &wininv,
-                                   bool is_perspective,
-                                   const int2 &extent);
 
  private:
   void remove_unused();

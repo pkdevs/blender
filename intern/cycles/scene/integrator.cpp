@@ -118,7 +118,7 @@ NODE_DEFINE(Integrator)
 
   SOCKET_BOOLEAN(caustics_reflective, "Reflective Caustics", true);
   SOCKET_BOOLEAN(caustics_refractive, "Refractive Caustics", true);
-  SOCKET_FLOAT(filter_glossy, "Filter Glossy", 0.0f);
+  SOCKET_FLOAT(filter_glossy, "Filter Glossy", 1.0f);
 
   SOCKET_BOOLEAN(use_direct_light, "Use Direct Light", true);
   SOCKET_BOOLEAN(use_indirect_light, "Use Indirect Light", true);
@@ -158,6 +158,9 @@ NODE_DEFINE(Integrator)
   SOCKET_FLOAT(scrambling_distance, "Scrambling Distance", 1.0f);
 
   SOCKET_BOOLEAN(use_pixel_jitter, "Use Pixel Jitter", false);
+  SOCKET_BOOLEAN(use_custom_pixel_jitter_sample, "Use custom pixel jitter sample value", false);
+  SOCKET_FLOAT_ARRAY(
+      custom_pixel_jitter_sample, "Custom pixel jitter sample overwrite value", array<float>());
 
   static NodeEnum denoiser_type_enum;
   denoiser_type_enum.insert("none", DENOISER_NONE);
@@ -264,6 +267,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   kintegrator->caustics_reflective = caustics_reflective;
   kintegrator->caustics_refractive = caustics_refractive;
   kintegrator->filter_glossy = (filter_glossy == 0.0f) ? FLT_MAX : 1.0f / filter_glossy;
+  kintegrator->differential_widen_scale = min(1.0f, filter_glossy);
 
   kintegrator->filter_closures = 0;
   if (!use_direct_light) {
@@ -329,7 +333,12 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 
   /* Randomize the seed every frame when applying pixel jitter. */
   if (use_pixel_jitter) {
-    kintegrator->seed = hash_uint3(seed, pixel_jitter_state.a2, pixel_jitter_state.a3);
+    if (use_custom_pixel_jitter_sample) {
+      kintegrator->seed = hash_uint2(seed, pixel_jitter_frame);
+    }
+    else {
+      kintegrator->seed = hash_uint3(seed, pixel_jitter_state.a2, pixel_jitter_state.a3);
+    }
   }
   /* The blue-noise sampler needs a randomized seed to scramble properly, providing e.g. 0 won't
    * work properly. Therefore, hash the seed in those cases. */
@@ -380,7 +389,14 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   kintegrator->has_shadow_catcher = scene->has_shadow_catcher();
 
   if (use_pixel_jitter) {
-    kintegrator->pixel_jitter = pixel_jitter_state.next();
+    if (use_custom_pixel_jitter_sample) {
+      kintegrator->pixel_jitter = make_float2(custom_pixel_jitter_sample[0],
+                                              custom_pixel_jitter_sample[1]);
+      ++pixel_jitter_frame;
+    }
+    else {
+      kintegrator->pixel_jitter = pixel_jitter_state.next();
+    }
   }
   else {
     kintegrator->pixel_jitter = make_float2(FLT_MAX);
@@ -434,9 +450,9 @@ void Integrator::tag_update(Scene *scene, const uint32_t flag)
   }
 }
 
-uint Integrator::get_kernel_features() const
+uint64_t Integrator::get_kernel_features() const
 {
-  uint kernel_features = 0;
+  uint64_t kernel_features = 0;
 
   if (ao_additive_factor != 0.0f) {
     kernel_features |= KERNEL_FEATURE_AO_ADDITIVE;

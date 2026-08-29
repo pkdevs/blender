@@ -18,17 +18,19 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_kdopbvh.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_quaternion.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
+
 #include "BLT_translation.hh"
 
 #include "DNA_action_types.h"
@@ -49,8 +51,9 @@
 
 #include "BKE_action.hh"
 #include "BKE_anim_path.h"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_armature.hh"
+#include "BKE_bvh.hh"
 #include "BKE_bvhutils.hh"
 #include "BKE_cachefile.hh"
 #include "BKE_camera.h"
@@ -2511,7 +2514,7 @@ static void armdef_free(bConstraint *con)
   bArmatureConstraint *data = static_cast<bArmatureConstraint *>(con->data);
 
   /* Target list. */
-  BLI_freelistN(&data->targets);
+  data->targets.free_no_destruct();
 }
 
 static void armdef_copy(bConstraint *con, bConstraint *srccon)
@@ -2529,7 +2532,7 @@ static int armdef_get_tars(bConstraint *con, ListBaseT<bConstraintTarget> *list)
 
     *list = data->targets;
 
-    return BLI_listbase_count(&data->targets);
+    return data->targets.count();
   }
 
   return 0;
@@ -2918,6 +2921,7 @@ static bool actcon_get_tarmat(Depsgraph *depsgraph,
   else if (cob->type == CONSTRAINT_OBTYPE_BONE) {
     Object workob;
     bPose pose = {{nullptr}};
+    pose.runtime = MEM_new<bke::bPoseRuntime>(__func__);
     bPoseChannel *pchan, *tchan;
 
     /* make a copy of the bone of interest in the temp pose before evaluating action,
@@ -3649,7 +3653,7 @@ static void stretchto_evaluate(bConstraint *con,
         copy_v3_v3(cob->matrix[1], vec);
 
         /* Build new Z vector. */
-        /* Orthogonal to "new Y" "old X! plane. */
+        /* Orthogonal to "new Y" "old X"! plane. */
         cross_v3_v3v3(orth, xx, vec);
         normalize_v3(orth);
 
@@ -3665,7 +3669,7 @@ static void stretchto_evaluate(bConstraint *con,
         copy_v3_v3(cob->matrix[1], vec);
 
         /* Build new X vector. */
-        /* Orthogonal to "new Y" "old Z! plane. */
+        /* Orthogonal to "new Y" "old Z"! plane. */
         cross_v3_v3v3(orth, zz, vec);
         normalize_v3(orth);
 
@@ -5157,27 +5161,15 @@ static void followtrack_project_to_depth_object_if_needed(FollowTrackContext *co
    * since this isn't typically used in edit-mode. */
   BKE_mesh_wrapper_ensure_mdata(const_cast<Mesh *>(depth_mesh));
 
-  bke::BVHTreeFromMesh tree_data = depth_mesh->bvh_corner_tris();
-
-  /* Can happen when the mesh has no faces. */
-  if (tree_data.tree == nullptr) {
+  if (depth_mesh->faces_num == 0) {
     return;
   }
 
-  BVHTreeRayHit hit;
-  hit.dist = BVH_RAYCAST_DIST_MAX;
-  hit.index = -1;
-
-  const int result = BLI_bvhtree_ray_cast(tree_data.tree,
-                                          ray_start,
-                                          ray_direction,
-                                          0.0f,
-                                          &hit,
-                                          tree_data.raycast_callback,
-                                          &tree_data);
-
-  if (result != -1) {
-    mul_v3_m4v3(cob->matrix[3], depth_object->object_to_world().ptr(), hit.co);
+  const bke::bvh::Tree &tree = depth_mesh->bvh_tris();
+  const bke::bvh::Ray ray(ray_start, ray_direction);
+  const std::optional<bke::bvh::RayHit> hit = tree.ray_intersect(ray);
+  if (hit) {
+    mul_v3_m4v3(cob->matrix[3], depth_object->object_to_world().ptr(), hit->position(ray));
   }
 }
 
@@ -5586,7 +5578,7 @@ static void value_attribute_to_matrix(float r_matrix[4][4],
       copy_v3_v3(r_matrix[3], *value.get<float3>());
       return;
     case CON_ATTRIBUTE_QUATERNION:
-      quat_to_mat4(r_matrix, *value.get<float4>());
+      quat_to_mat4(r_matrix, float4(math::normalize(*value.get<math::Quaternion>())));
       return;
     case CON_ATTRIBUTE_4X4MATRIX:
       copy_m4_m4(r_matrix, value.get<float4x4>()->ptr());
@@ -5976,7 +5968,7 @@ void BKE_constraints_free_ex(ListBaseT<bConstraint> *list, bool do_id_user)
   }
 
   /* Free the whole list */
-  BLI_freelistN(list);
+  list->free_no_destruct();
 }
 
 void BKE_constraints_free(ListBaseT<bConstraint> *list)
@@ -6379,7 +6371,7 @@ void BKE_constraints_copy_ex(ListBaseT<bConstraint> *dst,
 {
   bConstraint *con, *srccon;
 
-  BLI_listbase_clear(dst);
+  dst->clear_no_delete();
   BLI_duplicatelist(dst, src);
 
   for (con = static_cast<bConstraint *>(dst->first),
@@ -6437,6 +6429,17 @@ void BKE_constraints_active_set(ListBaseT<bConstraint> *list, bConstraint *con)
       }
     }
   }
+}
+
+bool BKE_constraint_has_influence(const bConstraint *con)
+{
+  if (con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF)) {
+    return false;
+  }
+  if (con->enforce == 0.0f) {
+    return false;
+  }
+  return true;
 }
 
 static bConstraint *constraint_list_find_from_target(ListBaseT<bConstraint> *constraints,
@@ -6564,7 +6567,7 @@ bool BKE_constraint_is_nonlocal_in_liboverride(const Object *ob, const bConstrai
 
 int BKE_constraint_targets_get(bConstraint *con, ListBaseT<bConstraintTarget> *r_targets)
 {
-  BLI_listbase_clear(r_targets);
+  r_targets->clear_no_delete();
 
   const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
 
@@ -6768,15 +6771,11 @@ void BKE_constraints_solve(Depsgraph *depsgraph,
     if (cti == nullptr) {
       continue;
     }
-    if (con.flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF)) {
+    if (!BKE_constraint_has_influence(&con)) {
       continue;
     }
     /* these constraints can't be evaluated anyway */
     if (cti->evaluate_constraint == nullptr) {
-      continue;
-    }
-    /* influence == 0 should be ignored */
-    if (con.enforce == 0.0f) {
       continue;
     }
 
@@ -6914,7 +6913,7 @@ void BKE_constraint_blend_read_data(BlendDataReader *reader,
       case CONSTRAINT_TYPE_SPLINEIK: {
         bSplineIKConstraint *data = static_cast<bSplineIKConstraint *>(con.data);
 
-        BLO_read_float_array(reader, data->numpoints, &data->points);
+        BLO_read_array_and_validate_size(reader, &data->points, &data->numpoints);
         break;
       }
       case CONSTRAINT_TYPE_KINEMATIC: {

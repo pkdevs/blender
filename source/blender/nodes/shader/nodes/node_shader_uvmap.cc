@@ -11,6 +11,8 @@
 
 #include "DEG_depsgraph_query.hh"
 
+#include "ED_node.hh"
+
 #include "RNA_access.hh"
 
 #include "UI_interface_layout.hh"
@@ -30,8 +32,7 @@ static void node_shader_buts_uvmap(ui::Layout &layout, bContext *C, PointerRNA *
   layout.prop(ptr, "from_instancer", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
 
   if (!RNA_boolean_get(ptr, "from_instancer")) {
-    PointerRNA obptr = CTX_data_pointer_get(C, "active_object");
-    Object *object = static_cast<Object *>(obptr.data);
+    Object *object = ed::space_node::get_space_editor_object(C);
 
     if (object && object->type == OB_MESH) {
       Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
@@ -102,7 +103,7 @@ void register_node_type_sh_uvmap()
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = file_ns::node_declare;
   ntype.draw_buttons = file_ns::node_shader_buts_uvmap;
-  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Middle);
+  ntype.default_width = bke::NodeWidth::_160;
   ntype.initfunc = file_ns::node_shader_init_uvmap;
   bke::node_type_storage(
       ntype, "NodeShaderUVMap", node_free_standard_storage, node_copy_standard_storage);

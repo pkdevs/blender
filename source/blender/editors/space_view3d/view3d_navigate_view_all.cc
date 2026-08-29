@@ -17,9 +17,9 @@
 #include "BKE_screen.hh"
 
 #include "BLI_bounds.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -101,7 +101,7 @@ static void view3d_from_minmax(bContext *C,
   float dist_new;
 
   sub_v3_v3v3(afm, max, min);
-  size = max_fff(afm[0], afm[1], afm[2]);
+  size = std::max({afm[0], afm[1], afm[2]});
 
   if (do_zoom) {
     eRegionView3D_Persp persp;
@@ -361,7 +361,7 @@ std::optional<Bounds<float3>> view3d_calc_minmax_selected(Depsgraph *depsgraph,
       mode = PaintMode::Texture3D;
     }
     Paint *paint = BKE_paint_get_active_from_paintmode(scene, mode);
-    BKE_paint_stroke_get_average(paint, ob_eval, min);
+    min = bke::paint::stroke_get_average(paint, ob_eval);
     copy_v3_v3(max, min);
     changed = true;
     *r_do_zoom = false;

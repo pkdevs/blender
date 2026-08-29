@@ -10,12 +10,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
@@ -916,7 +916,7 @@ static wmOperatorStatus slide_point_modal(bContext *C, wmOperator *op, const wmE
         /* Don't key sliding feather UW's. */
         if ((data->action == SLIDE_ACTION_FEATHER && data->uw) == false) {
           if (animrig::is_autokey_on(scene)) {
-            ED_mask_layer_shape_auto_key(data->mask_layer, scene->r.cfra);
+            ED_mask_layer_shape_auto_key(C, data->mask_layer, scene->r.cfra);
           }
         }
 
@@ -1333,7 +1333,7 @@ static wmOperatorStatus slide_spline_curvature_modal(bContext *C,
       if (event->type == slide_data->event_invoke_type && event->val == KM_RELEASE) {
         /* Don't key sliding feather UW's. */
         if (animrig::is_autokey_on(scene)) {
-          ED_mask_layer_shape_auto_key(slide_data->mask_layer, scene->r.cfra);
+          ED_mask_layer_shape_auto_key(C, slide_data->mask_layer, scene->r.cfra);
         }
 
         WM_event_add_notifier(C, NC_MASK | NA_EDITED, slide_data->mask);
@@ -1547,7 +1547,7 @@ static wmOperatorStatus delete_exec(bContext *C, wmOperator * /*op*/)
 
     /* Not essential but confuses users when there are keys with no data!
      * Assume if they delete all data from the layer they also don't care about keys. */
-    if (BLI_listbase_is_empty(&mask_layer.splines)) {
+    if (mask_layer.splines.is_empty()) {
       BKE_mask_layer_free_shapes(&mask_layer);
     }
   }
@@ -1620,7 +1620,7 @@ static wmOperatorStatus mask_switch_direction_exec(bContext *C, wmOperator * /*o
 
     if (changed_layer) {
       if (animrig::is_autokey_on(scene)) {
-        ED_mask_layer_shape_auto_key(&mask_layer, scene->r.cfra);
+        ED_mask_layer_shape_auto_key(C, &mask_layer, scene->r.cfra);
       }
     }
   }
@@ -1682,7 +1682,7 @@ static wmOperatorStatus mask_normals_make_consistent_exec(bContext *C, wmOperato
 
     if (changed_layer) {
       if (animrig::is_autokey_on(scene)) {
-        ED_mask_layer_shape_auto_key(&mask_layer, scene->r.cfra);
+        ED_mask_layer_shape_auto_key(C, &mask_layer, scene->r.cfra);
       }
     }
   }

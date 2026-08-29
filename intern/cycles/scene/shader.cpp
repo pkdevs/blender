@@ -104,6 +104,8 @@ Shader::Shader() : Node(get_node_type())
   prev_volume_step_rate = 0.0f;
   has_light_path_node = false;
   has_aov_output_node = false;
+  has_time_dependency = false;
+  has_dispersion = false;
 
   emission_estimate = zero_float3();
   emission_sampling = EMISSION_SAMPLING_NONE;
@@ -564,10 +566,12 @@ void ShaderManager::device_update_pre(Device * /*device*/,
       shader->has_volume_attribute_dependency = false;
       shader->has_displacement = output->input("Displacement")->link != nullptr;
       shader->has_bump_from_surface = false;
+      shader->has_dispersion = false;
 
       /* Determine both properties. */
       shader->has_light_path_node = false;
       shader->has_aov_output_node = false;
+      shader->has_time_dependency = false;
       for (ShaderNode *node : shader->graph->nodes) {
         if (node->special_type == SHADER_SPECIAL_TYPE_LIGHT_PATH) {
           /* TODO: check if the light path node is linked to the volume output. */
@@ -575,6 +579,9 @@ void ShaderManager::device_update_pre(Device * /*device*/,
         }
         else if (node->special_type == SHADER_SPECIAL_TYPE_OUTPUT_AOV) {
           shader->has_aov_output_node = true;
+        }
+        else if (node->special_type == SHADER_SPECIAL_TYPE_SCENE_TIME) {
+          shader->has_time_dependency = true;
         }
       }
     }
@@ -689,6 +696,9 @@ void ShaderManager::device_update_common(Device * /*device*/,
 
     if (shader->has_light_path_node) {
       flag |= SD_HAS_LIGHT_PATH_NODE;
+    }
+    if (shader->has_dispersion) {
+      flag |= SD_REQUIRES_WAVELENGTH;
     }
 
     const uint32_t cryptomatte_id = util_murmur_hash3(
@@ -831,9 +841,9 @@ void ShaderManager::add_default(Scene *scene)
   }
 }
 
-uint ShaderManager::get_graph_kernel_features(ShaderGraph *graph)
+uint64_t ShaderManager::get_graph_kernel_features(ShaderGraph *graph)
 {
-  uint kernel_features = 0;
+  uint64_t kernel_features = 0;
 
   for (ShaderNode *node : graph->nodes) {
     kernel_features |= node->get_feature();
@@ -854,9 +864,9 @@ uint ShaderManager::get_graph_kernel_features(ShaderGraph *graph)
   return kernel_features;
 }
 
-uint ShaderManager::get_kernel_features(Scene *scene)
+uint64_t ShaderManager::get_kernel_features(Scene *scene)
 {
-  uint kernel_features = KERNEL_FEATURE_NODE_BSDF | KERNEL_FEATURE_NODE_EMISSION;
+  uint64_t kernel_features = KERNEL_FEATURE_NODE_BSDF | KERNEL_FEATURE_NODE_EMISSION;
   for (int i = 0; i < scene->shaders.size(); i++) {
     Shader *shader = scene->shaders[i];
     if (!shader->reference_count()) {

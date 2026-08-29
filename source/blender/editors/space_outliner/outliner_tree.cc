@@ -13,12 +13,12 @@
 
 #include "DNA_collection_types.h"
 
-#include "BLI_fnmatch.h"
-#include "BLI_listbase.h"
-#include "BLI_mempool.h"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_fnmatch.hh"
+#include "BLI_listbase.hh"
+#include "BLI_mempool.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
@@ -36,7 +36,7 @@
 #include "tree/tree_element.hh"
 
 #ifdef WIN32
-#  include "BLI_math_base.h" /* M_PI */
+#  include "BLI_math_base_c.hh" /* M_PI */
 #endif
 
 namespace blender::ed::outliner {
@@ -186,39 +186,6 @@ bool outliner_requires_rebuild_on_select_or_active_change(const SpaceOutliner *s
   return exclude_flags & (SO_FILTER_OB_STATE_SELECTED | SO_FILTER_OB_STATE_ACTIVE);
 }
 
-#ifdef WITH_FREESTYLE
-static void outliner_add_line_styles(SpaceOutliner *space_outliner,
-                                     ListBaseT<TreeElement> *lb,
-                                     Scene *sce,
-                                     TreeElement *te)
-{
-  ViewLayer *view_layer;
-  FreestyleLineSet *lineset;
-
-  for (view_layer = sce->view_layers.first; view_layer; view_layer = view_layer->next) {
-    for (lineset = view_layer->freestyle_config.linesets.first; lineset; lineset = lineset->next) {
-      FreestyleLineStyle *linestyle = lineset->linestyle;
-      if (linestyle) {
-        linestyle->id.tag |= ID_TAG_DOIT;
-      }
-    }
-  }
-  for (view_layer = sce->view_layers.first; view_layer; view_layer = view_layer->next) {
-    for (lineset = view_layer->freestyle_config.linesets.first; lineset; lineset = lineset->next) {
-      FreestyleLineStyle *linestyle = lineset->linestyle;
-      if (linestyle) {
-        if (!(linestyle->id.tag & ID_TAG_DOIT)) {
-          continue;
-        }
-        linestyle->id.tag &= ~ID_TAG_DOIT;
-        AbstractTreeDisplay::add_element(
-            space_outliner, lb, reinterpret_cast<ID *>(linestyle), nullptr, te, TSE_SOME_ID, 0);
-      }
-    }
-  }
-}
-#endif
-
 TreeElement *AbstractTreeDisplay::add_element(SpaceOutliner *space_outliner,
                                               ListBaseT<TreeElement> *lb,
                                               ID *owner_id,
@@ -353,6 +320,9 @@ TreeElement *AbstractTreeDisplay::add_element(ListBaseT<TreeElement> *lb,
   else if (type == TSE_LINKED_OB) {
     /* pass */
   }
+  else if (type == TSE_SHAPE_KEY_BLOCK) {
+    /* pass */
+  }
   else if (type == TSE_SOME_ID) {
     BLI_assert_msg(te->abstract_element != nullptr,
                    "Expected this ID type to be ported to new Outliner tree-element design");
@@ -383,8 +353,7 @@ TreeElement *AbstractTreeDisplay::add_element(ListBaseT<TreeElement> *lb,
   else if (te->abstract_element) {
     tree_element_expand(*te->abstract_element, space_outliner_);
   }
-  /* Only #TSE_ID_BASE isn't ported to use the abstract elements design yet. */
-  else if (!ELEM(type, TSE_ID_BASE)) {
+  else {
     BLI_assert_msg(false, "Element type should use `AbstractTreeElement`");
   }
 
@@ -587,7 +556,7 @@ static void outliner_sort(ListBaseT<TreeElement> *lb)
   if (inside_armature_data || ELEM(last_tselem->type, TSE_DEFGROUP, TSE_ID_BASE) ||
       ((last_tselem->type == TSE_SOME_ID) && (last_te->idcode == ID_OB)))
   {
-    int totelem = BLI_listbase_count(lb);
+    int totelem = lb->count();
 
     if (totelem > 1) {
       tTreeSort *tear = MEM_new_array_uninitialized<tTreeSort>(totelem, "tree sort array");
@@ -630,7 +599,7 @@ static void outliner_sort(ListBaseT<TreeElement> *lb)
         }
       }
 
-      BLI_listbase_clear(lb);
+      lb->clear_no_delete();
       tp = tear;
       while (totelem--) {
         BLI_addtail(lb, tp->te);
@@ -655,7 +624,7 @@ static void outliner_collections_children_sort(ListBaseT<TreeElement> *lb)
 
   /* Sorting rules: only object lists. */
   if ((last_tselem->type == TSE_SOME_ID) && (last_te->idcode == ID_OB)) {
-    int totelem = BLI_listbase_count(lb);
+    int totelem = lb->count();
 
     if (totelem > 1) {
       tTreeSort *tear = MEM_new_array_uninitialized<tTreeSort>(totelem, "tree sort array");
@@ -672,7 +641,7 @@ static void outliner_collections_children_sort(ListBaseT<TreeElement> *lb)
 
       qsort(tear, totelem, sizeof(tTreeSort), treesort_child_not_in_collection);
 
-      BLI_listbase_clear(lb);
+      lb->clear_no_delete();
       tp = tear;
       while (totelem--) {
         BLI_addtail(lb, tp->te);
@@ -1132,7 +1101,7 @@ static int outliner_filter_subtree(SpaceOutliner *space_outliner,
   }
 
   /* if there are still items in the list, that means that there were still some matches */
-  return (BLI_listbase_is_empty(lb) == false);
+  return (lb->is_empty() == false);
 }
 
 static void outliner_filter_tree(const Main &bmain,

@@ -32,7 +32,7 @@
 
 #include <optional>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_set.hh"
 #include "BLI_string_ref.hh"
@@ -134,8 +134,6 @@ void *BKE_libblock_alloc_in_lib(Main *bmain,
 /**
  * Initialize an ID of given type, such that it has valid 'empty' data.
  * ID is assumed to be just calloc'ed.
- *
- * \params bmain The Main data-base containing the \a id to initialize. May be null.
  */
 void BKE_libblock_init_empty(ID *id) ATTR_NONNULL(1);
 
@@ -604,6 +602,14 @@ struct BKEIDDeleteOptions {
    * IDs. Useful e.g. for ID deletion within liboverride resync process and the like.
    */
   bool prevent_liboverride_hierarchy_root_ensure = false;
+
+  /**
+   * Do not update invariants after deletion.
+   *
+   * This is required when deleting data in cases where there is no fully valid Main available
+   * (e.g. from readfile code).
+   */
+  bool prevent_invariants_update = false;
 };
 
 /**
@@ -671,11 +677,19 @@ void BKE_libblock_management_usercounts_clear(Main *bmain, void *idv);
  *
  * This is a no-op when `id` is `nullptr` or not linked.
  *
+ * \param enforce_fix if true, unconditionally set the linked data as extern (even if it was
+ * already defined as such, or if it was in a broken state with e.g. no direct/indirect status
+ * defined).
+ *
  * This status is rechecked for the whole Main data-base as a step of pre-blend-file writing
  * (see #write_id_direct_linked_data_process_cb() and its usage in #write_file_handle).
  * This ensures that no reference to indirectly used IDs are kept in the written blend-file.
  */
-void id_lib_extern(ID *id);
+void id_lib_extern(ID *id, bool enforce_fix = false);
+/**
+ * Same as #id_lib_extern, but defines the ID as indirectly linked instead.
+ */
+void id_lib_indirect(ID *id, bool enforce_fix = false);
 void id_lib_indirect_weak_link(ID *id);
 /**
  * Ensure we have a real user
@@ -929,6 +943,15 @@ void BKE_main_id_flag_all(Main *bmain, int flag, bool value);
 void BKE_main_id_newptr_and_tag_clear(Main *bmain);
 
 void BKE_main_id_refcount_recompute(Main *bmain, bool do_linked_only);
+
+/**
+ * Update the ID_TAG_INDIRECT flag for all non-local IDs.
+ *
+ * \param local_ids: Optionally, provide a list of IDs that are considered local. If not provided,
+ * all local IDs from the given main are used.
+ */
+void BKE_main_id_indirect_linked_update(Main &bmain,
+                                        std::optional<Span<ID *>> local_ids = std::nullopt);
 
 void BKE_main_lib_objects_recalc_all(Main *bmain);
 

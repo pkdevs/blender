@@ -6,10 +6,10 @@
 
 #include "BLF_api.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_listbase_iterator.hh"
-#include "BLI_rect.h"
-#include "BLI_string.h"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
 
 #include "DNA_screen_types.h"
 
@@ -23,13 +23,17 @@ namespace blender::ui {
 void invalidate_text_wrap_cache(const ARegion &region)
 {
   for (Block &block : region.runtime->uiblocks) {
+    block.text_wrap_cache.clear();
     for (Button &button : block.buttons()) {
-      if (button.type != ButtonType::TextBox) {
-        continue;
+      if (button.type == ButtonType::TextBox) {
+        auto &textbox = static_cast<ButtonTextBox &>(button);
+        textbox.wrap_cache.reset();
+        textbox.placeholder_wrap_cache.reset();
       }
-      ButtonTextBox &textbox = static_cast<ButtonTextBox &>(button);
-      textbox.wrap_cache.reset();
-      textbox.placeholder_wrap_cache.reset();
+      if (button.type == ButtonType::Label) {
+        auto &label = static_cast<ButtonLabel &>(button);
+        label.wrap_cache.reset();
+      }
     }
   }
 }
@@ -48,7 +52,7 @@ void textbox_scroll_to_cursor(ButtonTextBox *textbox)
 #ifdef WITH_INPUT_IME
   /* Include the ime composition string when scrolling to the cursor. */
   const wmIMEData *ime_data = button_ime_data_get(textbox);
-  if (ime_data && ime_data->composite.size() && ime_data->cursor_pos != -1) {
+  if (ime_data && !ime_data->composite.empty() && ime_data->cursor_pos != -1) {
     but_pos += ime_data->cursor_pos;
   }
 #endif
@@ -78,15 +82,15 @@ void textbox_textedit_set_cursor_pos(ButtonTextBox *textbox,
                                      const float2 xy)
 {
 
-  /* Don't include grip bounds when selecting text with the mouse.*/
+  /* Don't include grip bounds when selecting text with the mouse. */
   float2 start = {textbox->rect.xmin, textbox->rect.ymin};
   float2 end = {textbox->rect.xmax, textbox->rect.ymax};
 
   block_to_window_fl(region, textbox->block, &start.x, &start.y);
   block_to_window_fl(region, textbox->block, &end.x, &end.y);
 
-  start.y += textbox_padding_bottom() / textbox->block->aspect;
-  end.y -= textbox_padding_top() / textbox->block->aspect;
+  start.y += textbox_vertical_padding() / textbox->block->aspect;
+  end.y -= textbox_vertical_padding() / textbox->block->aspect;
 
   const Vector<StringRef> lines = textbox_wrap_lines(textbox);
   uiFontStyle fstyle = style_get()->widget;
@@ -110,9 +114,8 @@ void textbox_textedit_set_cursor_pos(ButtonTextBox *textbox,
       fstyle.uifont_id, line.data(), line.size(), int(xy.x - start.x));
   int position = line.begin() - lines[0].data() + offset;
 #ifdef WITH_INPUT_IME
-  /* Textbox text wrap includes the IME composition string, remove the ime string pad from the
-   * selection.
-   */
+  /* Text-box text wrap includes the IME composition string, remove the IME string pad from the
+   * selection. */
   const wmIMEData *ime_data = button_ime_data_get(textbox);
   if (ime_data && position > int(textbox->pos)) {
     position = std::max<int>(int(textbox->pos), position - int(ime_data->composite.size()));
@@ -208,7 +211,7 @@ Vector<StringRef> textbox_wrap_lines(ButtonTextBox *textbox)
   StringRef text = textbox->drawstr;
 #ifdef WITH_INPUT_IME
   const wmIMEData *ime_data = button_ime_data_get(textbox);
-  if (ime_data && ime_data->composite.size() > 0) {
+  if (ime_data && !ime_data->composite.empty()) {
     StringRef edit_str = textbox->editstr;
     StringRef l = edit_str.is_empty() ? StringRef("") : edit_str.substr(0, textbox->pos);
     StringRef r = edit_str.is_empty() ? StringRef("") : edit_str.substr(textbox->pos);
@@ -248,8 +251,8 @@ Vector<StringRef> textbox_wrap_lines(ButtonTextBox *textbox)
   }
   textbox->last_total_lines = lines.size();
 
-  /* WORKAROUND: Textbox event handling and drawing requires lines to not include line breaks, but
-   * sometimes text wrap adds them and other times not. */
+  /* WORKAROUND: Text-box event handling and drawing requires lines to not include line breaks,
+   * but sometimes text wrap adds them and other times not. */
   for (int i : lines.index_range()) {
     if (lines[i].endswith("\n")) {
       lines[i] = lines[i].drop_suffix(1);
@@ -304,17 +307,15 @@ void ButtonTextBox::line_scroll_set(int line_scroll)
   this->state->scroll = this->line_scroll();
 }
 
-float textbox_padding_top()
+float textbox_vertical_padding()
 {
-  return U.pixelsize + 2.0f * UI_SCALE_FAC;
+  /* Allow aligning text buttons with single line text-box buttons. */
+  return float(UI_UNIT_Y - fontstyle_height_max(UI_FSTYLE_WIDGET)) / 2.0f;
 }
 
-float textbox_padding_bottom()
-{
-  return textbox_grip_height() + 0.25f * UI_SCALE_FAC;
-}
-
-TextboxState *textbox_ensure_state(ARegion *region, StringRefNull idname)
+TextboxState *textbox_ensure_state(ARegion *region,
+                                   StringRefNull idname,
+                                   const int initial_visible_lines)
 {
   for (uiTextboxStateLink &link : region->textbox_states) {
     if (link.idname == idname) {
@@ -323,7 +324,7 @@ TextboxState *textbox_ensure_state(ARegion *region, StringRefNull idname)
   }
   uiTextboxStateLink *link = MEM_new<uiTextboxStateLink>(__func__);
   link->idname = BLI_strdupn(idname.data(), idname.size());
-  link->state.visible_lines = textbox_minimum_visible_lines;
+  link->state.visible_lines = std::max(initial_visible_lines, textbox_minimum_visible_lines);
   BLI_addtail(&region->textbox_states, link);
   return &link->state;
 }
@@ -336,7 +337,7 @@ int ButtonTextBox::line_scroll() const
 
 int ButtonTextBox::visible_lines() const
 {
-  return std::max<int>(this->state->visible_lines, 3);
+  return std::max<int>(this->state->visible_lines, textbox_minimum_visible_lines);
 }
 
 }  // namespace blender::ui

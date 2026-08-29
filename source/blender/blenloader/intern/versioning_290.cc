@@ -10,13 +10,13 @@
 
 #include <algorithm>
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 /* Define macros in `DNA_genfile.h`. */
 #define DNA_GENFILE_VERSIONING_MACROS
@@ -407,7 +407,7 @@ static void version_node_socket_duplicate(bNodeTree *ntree,
   for (bNodeLink &link : ntree->links.items_mutable()) {
     if (link.tonode->type_legacy == node_type) {
       bNode *node = link.tonode;
-      bNodeSocket *dest_socket = bke::node_find_socket(*node, SOCK_IN, new_name);
+      bNodeSocket *dest_socket = bke::node_find_socket(*node, SOCK_IN, UString(new_name));
       BLI_assert(dest_socket);
       if (STREQ(link.tosock->name, old_name)) {
         bke::node_add_link(*ntree, *link.fromnode, *link.fromsock, *node, *dest_socket);
@@ -418,8 +418,8 @@ static void version_node_socket_duplicate(bNodeTree *ntree,
   /* Duplicate the default value from the old socket and assign it to the new socket. */
   for (bNode &node : ntree->nodes) {
     if (node.type_legacy == node_type) {
-      bNodeSocket *source_socket = bke::node_find_socket(node, SOCK_IN, old_name);
-      bNodeSocket *dest_socket = bke::node_find_socket(node, SOCK_IN, new_name);
+      bNodeSocket *source_socket = bke::node_find_socket(node, SOCK_IN, UString(old_name));
+      bNodeSocket *dest_socket = bke::node_find_socket(node, SOCK_IN, UString(new_name));
       BLI_assert(source_socket && dest_socket);
       if (dest_socket->default_value) {
         MEM_delete_void(dest_socket->default_value);
@@ -1199,24 +1199,6 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
           bmd->flag = eBooleanModifierFlag_Object;
         }
       }
-    }
-  }
-
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 291, 4) && MAIN_VERSION_FILE_ATLEAST(bmain, 291, 1)) {
-    /* Due to a48d78ce07f4f, CustomData.totlayer and CustomData.maxlayer has been written
-     * incorrectly. Fortunately, the size of the layers array has been written to the .blend file
-     * as well, so we can reconstruct totlayer and maxlayer from that. */
-    for (Mesh &mesh : bmain->meshes) {
-      mesh.vert_data.totlayer = mesh.vert_data.maxlayer = MEM_allocN_len(mesh.vert_data.layers) /
-                                                          sizeof(CustomDataLayer);
-      mesh.edge_data.totlayer = mesh.edge_data.maxlayer = MEM_allocN_len(mesh.edge_data.layers) /
-                                                          sizeof(CustomDataLayer);
-      /* We can be sure that mesh->fdata is empty for files written by 2.90. */
-      mesh.corner_data.totlayer = mesh.corner_data.maxlayer = MEM_allocN_len(
-                                                                  mesh.corner_data.layers) /
-                                                              sizeof(CustomDataLayer);
-      mesh.face_data.totlayer = mesh.face_data.maxlayer = MEM_allocN_len(mesh.face_data.layers) /
-                                                          sizeof(CustomDataLayer);
     }
   }
 

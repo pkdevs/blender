@@ -11,7 +11,6 @@
 #include "GPU_debug.hh"
 
 #include "eevee_instance.hh"
-#include <iostream>
 
 #include "eevee_raytrace.hh"
 
@@ -449,6 +448,30 @@ void RayTraceModule::debug_pass_sync() {}
 
 void RayTraceModule::debug_draw(View & /*view*/, gpu::FrameBuffer * /*view_fb*/) {}
 
+void RayTraceModule::thickness_parameters_setup(const float4x4 &winmat, const int2 extent)
+{
+  bool is_persp = winmat[3][3] == 0.0f;
+
+  float left, right, bottom, top, near, far;
+  projmat_dimensions(winmat.ptr(), &left, &right, &bottom, &top, &near, &far);
+
+  float avg_pixel_radius_far = length(abs(float2(left - right, bottom - top)) / float2(extent));
+
+  /* Average pixel radius at unit Z plane from the camera. */
+  const float avg_pixel_radius_unit = is_persp ? avg_pixel_radius_far / near :
+                                                 avg_pixel_radius_far;
+
+  data_.ray_thickness = ScreenThicknessParameters::build(
+      winmat, avg_pixel_radius_unit, 3.0f, data_.thickness);
+
+  data_.fast_gi_thickness = ScreenThicknessParameters::build(
+      winmat,
+      avg_pixel_radius_unit,
+      /* Eyeballed for 64 samples and scaled for lower step count. */
+      4.0f * sqrtf(64.0f / float(fast_gi_step_count_)),
+      inst_.uniform_data.data.ao.thickness_near);
+}
+
 RayTraceResult RayTraceModule::render(RayTraceBuffer &rt_buffer,
                                       gpu::Texture *screen_radiance_back_tx,
                                       eClosureBits active_closures,
@@ -510,6 +533,9 @@ RayTraceResult RayTraceModule::render(RayTraceBuffer &rt_buffer,
   raytrace_tracing_tiles_buf_.resize(ceil_to_multiple_u(raytrace_tile_count, 512));
   raytrace_denoise_tiles_buf_.resize(ceil_to_multiple_u(denoise_tile_count, 512));
 
+  data_.use_backface_hit = (options.flag & RAYTRACE_EEVEE_USE_BACKFACE) != 0;
+  data_.backface_hit_scale = data_.use_backface_hit ? options.backface_radiance_scale : 0.0f;
+
   /* Data for tile classification. */
   float roughness_mask_start = options.trace_max_roughness;
   float roughness_mask_fade = 0.2f;
@@ -528,9 +554,10 @@ RayTraceResult RayTraceModule::render(RayTraceBuffer &rt_buffer,
   data_.fast_gi_resolution_scale = fast_gi_resolution_scale;
   data_.fast_gi_resolution_bias = int2(
       random_in_tile(inst_.sampling.sample_index(), fast_gi_resolution_scale));
+
   /* TODO(fclem): Eventually all uniform data is setup here. */
 
-  inst_.uniform_data.push_update();
+  inst_.uniform_data.raytrace.push_update();
 
   RayTraceResult result;
 
@@ -565,14 +592,14 @@ RayTraceResult RayTraceModule::render(RayTraceBuffer &rt_buffer,
         downsampled_in_normal_tx_ptr_[i] = downsampled_in_normal_tx_.mip_view(i);
       }
 
-      fast_gi_radiance_tx_[0].acquire(
+      fast_gi_radiance_tx_[0].acquire_2d(
           tracing_res_fast_gi, gpu::TextureFormat::SFLOAT_16_16_16_16, usage_rw);
-      fast_gi_radiance_denoised_tx_[0].acquire(
+      fast_gi_radiance_denoised_tx_[0].acquire_2d(
           tracing_res_fast_gi, gpu::TextureFormat::SFLOAT_16_16_16_16, usage_rw);
       for (int i : IndexRange(1, 3)) {
-        fast_gi_radiance_tx_[i].acquire(
+        fast_gi_radiance_tx_[i].acquire_2d(
             tracing_res_fast_gi, gpu::TextureFormat::UNORM_8_8_8_8, usage_rw);
-        fast_gi_radiance_denoised_tx_[i].acquire(
+        fast_gi_radiance_denoised_tx_[i].acquire_2d(
             tracing_res_fast_gi, gpu::TextureFormat::UNORM_8_8_8_8, usage_rw);
       }
       for (int i : IndexRange(3)) {
@@ -614,8 +641,8 @@ RayTraceResultTexture RayTraceModule::trace(int closure_index,
 
   if (!active_layer) {
     /* Early out. Release persistent buffers. Still acquire one dummy resource for validation. */
-    denoise_buf->denoised_spatial_tx.acquire(int2(1),
-                                             gpu::TextureFormat::RAYTRACE_RADIANCE_FORMAT);
+    denoise_buf->denoised_spatial_tx.acquire_2d(int2(1),
+                                                gpu::TextureFormat::RAYTRACE_RADIANCE_FORMAT);
     denoise_buf->radiance_history_tx.release();
     denoise_buf->variance_history_tx.release();
     denoise_buf->tilemask_history_tx.free();
@@ -656,7 +683,7 @@ RayTraceResultTexture RayTraceModule::trace(int closure_index,
   data_.full_resolution_inv = 1.0f / float2(extent);
   data_.skip_denoise = !use_spatial_denoise;
   data_.closure_index = closure_index;
-  inst_.uniform_data.push_update();
+  inst_.uniform_data.raytrace.push_update();
 
   /* Ray setup. */
   raytrace_tracing_dispatch_buf_.clear_to_zero();
@@ -665,9 +692,9 @@ RayTraceResultTexture RayTraceModule::trace(int closure_index,
 
   {
     /* Tracing rays. */
-    ray_data_tx_.acquire(tracing_res, gpu::TextureFormat::SFLOAT_16_16_16_16);
-    ray_time_tx_.acquire(tracing_res, gpu::TextureFormat::RAYTRACE_RAYTIME_FORMAT);
-    ray_radiance_tx_.acquire(tracing_res, gpu::TextureFormat::RAYTRACE_RADIANCE_FORMAT);
+    ray_data_tx_.acquire_2d(tracing_res, gpu::TextureFormat::SFLOAT_16_16_16_16);
+    ray_time_tx_.acquire_2d(tracing_res, gpu::TextureFormat::RAYTRACE_RAYTIME_FORMAT);
+    ray_radiance_tx_.acquire_2d(tracing_res, gpu::TextureFormat::RAYTRACE_RADIANCE_FORMAT);
 
     inst_.manager->submit(generate_ps_, render_view);
     if (tracing_method_ == RAYTRACE_EEVEE_METHOD_SCREEN) {
@@ -685,10 +712,12 @@ RayTraceResultTexture RayTraceModule::trace(int closure_index,
 
   /* Spatial denoise pass is required to resolve at least one ray per pixel. */
   {
-    denoise_buf->denoised_spatial_tx.acquire(extent, gpu::TextureFormat::RAYTRACE_RADIANCE_FORMAT);
-    hit_variance_tx_.acquire(use_temporal_denoise ? extent : int2(1),
-                             gpu::TextureFormat::RAYTRACE_VARIANCE_FORMAT);
-    hit_depth_tx_.acquire(use_temporal_denoise ? extent : int2(1), gpu::TextureFormat::SFLOAT_32);
+    denoise_buf->denoised_spatial_tx.acquire_2d(extent,
+                                                gpu::TextureFormat::RAYTRACE_RADIANCE_FORMAT);
+    hit_variance_tx_.acquire_2d(use_temporal_denoise ? extent : int2(1),
+                                gpu::TextureFormat::RAYTRACE_VARIANCE_FORMAT);
+    hit_depth_tx_.acquire_2d(use_temporal_denoise ? extent : int2(1),
+                             gpu::TextureFormat::SFLOAT_32);
     denoised_spatial_tx_ = denoise_buf->denoised_spatial_tx;
 
     inst_.manager->submit(denoise_spatial_ps_, render_view);
@@ -701,21 +730,21 @@ RayTraceResultTexture RayTraceModule::trace(int closure_index,
   ray_radiance_tx_.release();
 
   if (use_temporal_denoise) {
-    denoise_buf->denoised_temporal_tx.acquire(
+    denoise_buf->denoised_temporal_tx.acquire_2d(
         extent, gpu::TextureFormat::RAYTRACE_RADIANCE_FORMAT, usage_rw);
 
     int2 variance_size = use_bilateral_denoise ? extent : int2(1);
     gpu::TextureFormat variance_format = gpu::TextureFormat::RAYTRACE_VARIANCE_FORMAT;
 
-    denoise_variance_tx_.acquire(variance_size, variance_format, usage_rw);
-    denoise_buf->variance_history_tx.acquire(variance_size, variance_format, usage_rw);
+    denoise_variance_tx_.acquire_2d(variance_size, variance_format, usage_rw);
+    denoise_buf->variance_history_tx.acquire_2d(variance_size, variance_format, usage_rw);
 
     denoise_buf->tilemask_history_tx.ensure_2d_array(gpu::TextureFormat::RAYTRACE_TILEMASK_FORMAT,
                                                      tile_raytrace_denoise_tx_.size().xy(),
                                                      tile_raytrace_denoise_tx_.size().z,
                                                      usage_rw);
 
-    if (denoise_buf->radiance_history_tx.acquire(
+    if (denoise_buf->radiance_history_tx.acquire_2d(
             extent, gpu::TextureFormat::RAYTRACE_RADIANCE_FORMAT, usage_rw) ||
         denoise_buf->valid_history == false)
     {
@@ -749,7 +778,7 @@ RayTraceResultTexture RayTraceModule::trace(int closure_index,
   hit_depth_tx_.release();
 
   if (use_bilateral_denoise) {
-    denoise_buf->denoised_bilateral_tx.acquire(
+    denoise_buf->denoised_bilateral_tx.acquire_2d(
         extent, gpu::TextureFormat::RAYTRACE_RADIANCE_FORMAT, usage_rw);
     denoised_bilateral_tx_ = denoise_buf->denoised_bilateral_tx;
 
@@ -785,7 +814,7 @@ RayTraceResult RayTraceModule::alloc_only(RayTraceBuffer &rt_buffer)
   RayTraceResult result;
   for (int i = 0; i < 3; i++) {
     RayTraceBuffer::DenoiseBuffer *denoise_buf = &rt_buffer.closures[i];
-    denoise_buf->denoised_bilateral_tx.acquire(
+    denoise_buf->denoised_bilateral_tx.acquire_2d(
         extent, gpu::TextureFormat::RAYTRACE_RADIANCE_FORMAT, usage_rw);
     result.closures[i] = {denoise_buf->denoised_bilateral_tx};
   }
@@ -799,7 +828,7 @@ RayTraceResult RayTraceModule::alloc_dummy(RayTraceBuffer &rt_buffer)
   RayTraceResult result;
   for (int i = 0; i < 3; i++) {
     RayTraceBuffer::DenoiseBuffer *denoise_buf = &rt_buffer.closures[i];
-    denoise_buf->denoised_bilateral_tx.acquire(
+    denoise_buf->denoised_bilateral_tx.acquire_2d(
         int2(1), gpu::TextureFormat::RAYTRACE_RADIANCE_FORMAT, usage_rw);
     result.closures[i] = {denoise_buf->denoised_bilateral_tx};
   }

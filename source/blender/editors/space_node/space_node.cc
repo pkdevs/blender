@@ -9,11 +9,11 @@
 #include "AS_asset_representation.hh"
 
 #include "BKE_node_socket_value.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_stack.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_ID.h"
 #include "DNA_gpencil_legacy_types.h"
@@ -28,6 +28,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BKE_asset.hh"
+#include "BKE_compositor.hh"
 #include "BKE_compute_context_cache.hh"
 #include "BKE_compute_contexts.hh"
 #include "BKE_context.hh"
@@ -80,7 +81,7 @@ void ED_node_tree_start(ARegion *region, SpaceNode *snode, bNodeTree *ntree, ID 
   for (bNodeTreePath &path : snode->treepath.items_mutable()) {
     MEM_delete(&path);
   }
-  BLI_listbase_clear(&snode->treepath);
+  snode->treepath.clear_no_delete();
 
   if (ntree) {
     bNodeTreePath *path = MEM_new<bNodeTreePath>("node tree path");
@@ -199,7 +200,7 @@ void ED_node_tree_pop(ARegion *region, SpaceNode *snode)
 
 int ED_node_tree_depth(SpaceNode *snode)
 {
-  return BLI_listbase_count(&snode->treepath);
+  return snode->treepath.count();
 }
 
 bNodeTree *ED_node_tree_get(SpaceNode *snode, int level)
@@ -336,7 +337,21 @@ std::optional<nodes::FoundNestedNodeID> find_nested_node_id_in_root(
   return found;
 }
 
-std::optional<ObjectAndModifier> get_modifier_for_node_editor(const SpaceNode &snode)
+Object *get_space_editor_object(const bContext *C)
+{
+  SpaceNode *snode = CTX_wm_space_node(C);
+
+  if (snode && snode->from) {
+    if (snode->from->id_type() == ID_OB) {
+      return id_cast<Object *>(snode->from);
+    }
+  }
+
+  return static_cast<Object *>(CTX_data_pointer_get(C, "object").data);
+}
+
+std::optional<ObjectAndModifier> get_geometry_nodes_modifier_for_node_editor(
+    const SpaceNode &snode)
 {
   if (snode.node_tree_sub_type != SNODE_GEOMETRY_MODIFIER) {
     return std::nullopt;
@@ -384,7 +399,8 @@ bool node_editor_is_for_geometry_nodes_modifier(const SpaceNode &snode,
                                                 const Object &object,
                                                 const NodesModifierData &nmd)
 {
-  const std::optional<ObjectAndModifier> object_and_modifier = get_modifier_for_node_editor(snode);
+  const std::optional<ObjectAndModifier> object_and_modifier =
+      get_geometry_nodes_modifier_for_node_editor(snode);
   if (!object_and_modifier) {
     return false;
   }
@@ -393,6 +409,43 @@ bool node_editor_is_for_geometry_nodes_modifier(const SpaceNode &snode,
     return false;
   }
   return object_and_modifier->nmd->modifier.persistent_uid == nmd.modifier.persistent_uid;
+}
+
+struct SceneAndCompositorEffect {
+  const Scene *scene = nullptr;
+  const SceneCompositorEffect *effect = nullptr;
+};
+
+static std::optional<SceneAndCompositorEffect> get_scene_compositor_effect_for_node_editor(
+    const SpaceNode &space_node)
+{
+  if (space_node.node_tree_sub_type != SNODE_COMPOSITOR_SCENE) {
+    return std::nullopt;
+  }
+
+  if (!space_node.id) {
+    return std::nullopt;
+  }
+
+  if (GS(space_node.id->name) != ID_SCE) {
+    return std::nullopt;
+  }
+
+  const Scene *scene = id_cast<Scene *>(space_node.id);
+  if (space_node.flag & SNODE_PIN) {
+    for (const SceneCompositorEffect &effect : scene->compositor_effects) {
+      if (effect.node_group == space_node.nodetree) {
+        return SceneAndCompositorEffect(scene, &effect);
+      }
+    }
+    return std::nullopt;
+  }
+
+  const SceneCompositorEffect *active_effect = bke::compositor::get_active_effect(*scene);
+  if (!active_effect) {
+    return std::nullopt;
+  }
+  return SceneAndCompositorEffect(scene, active_effect);
 }
 
 const ComputeContext *compute_context_for_zone(const bke::bNodeTreeZone &zone,
@@ -494,16 +547,36 @@ static const ComputeContext *get_node_editor_root_compute_context(
     switch (SpaceNodeGeometryNodesType(snode.node_tree_sub_type)) {
       case SNODE_GEOMETRY_MODIFIER: {
         std::optional<ed::space_node::ObjectAndModifier> object_and_modifier =
-            ed::space_node::get_modifier_for_node_editor(snode);
+            ed::space_node::get_geometry_nodes_modifier_for_node_editor(snode);
         if (!object_and_modifier) {
           return nullptr;
         }
         const bke::DataBlockComputeContext &object_context = compute_context_cache.for_data_block(
             nullptr, object_and_modifier->object->id);
-        return &compute_context_cache.for_modifier(&object_context, *object_and_modifier->nmd);
+        return &compute_context_cache.for_geometry_nodes_modifier(&object_context,
+                                                                  *object_and_modifier->nmd);
       }
       case SNODE_GEOMETRY_TOOL: {
         return &compute_context_cache.for_operator(nullptr);
+      }
+    }
+    return nullptr;
+  }
+  if (snode.nodetree->type == NTREE_COMPOSIT) {
+    switch (SpaceNodeCompositorNodesType(snode.node_tree_sub_type)) {
+      case SNODE_COMPOSITOR_SCENE: {
+        std::optional<SceneAndCompositorEffect> scene_and_effect =
+            ed::space_node::get_scene_compositor_effect_for_node_editor(snode);
+        if (!scene_and_effect) {
+          return nullptr;
+        }
+        const bke::DataBlockComputeContext &scene_context = compute_context_cache.for_data_block(
+            nullptr, scene_and_effect->scene->id);
+        return &compute_context_cache.for_scene_compositor_effect(&scene_context,
+                                                                  *scene_and_effect->effect);
+      }
+      case SNODE_COMPOSITOR_SEQUENCER: {
+        return nullptr;
       }
     }
     return nullptr;
@@ -520,7 +593,7 @@ static const ComputeContext *get_node_editor_root_compute_context(
   if (!snode.edittree) {
     return nullptr;
   }
-  if (!ELEM(snode.edittree->type, NTREE_GEOMETRY, NTREE_SHADER)) {
+  if (!ELEM(snode.edittree->type, NTREE_GEOMETRY, NTREE_SHADER, NTREE_COMPOSIT)) {
     return nullptr;
   }
   const ComputeContext *root_context = get_node_editor_root_compute_context(snode,
@@ -660,7 +733,7 @@ static SpaceLink *node_create(const ScrArea * /*area*/, const Scene * /*scene*/)
 static void node_free(SpaceLink *sl)
 {
   SpaceNode *snode = reinterpret_cast<SpaceNode *>(sl);
-  BLI_freelistN(&snode->treepath);
+  snode->treepath.free_no_destruct();
   MEM_delete(snode->runtime);
 }
 
@@ -815,6 +888,8 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
             node_area_tag_tree_recalc(snode, area);
           }
         }
+
+        ED_area_tag_redraw(area);
       }
       break;
 
@@ -1030,16 +1105,21 @@ static bool node_import_file_drop_poll(bContext *C, wmDrag *drag, const wmEvent 
   if (!snode->edittree) {
     return false;
   }
-  if (snode->edittree->type != NTREE_GEOMETRY) {
+  if (!ELEM(snode->edittree->type, NTREE_GEOMETRY, NTREE_COMPOSIT)) {
     return false;
   }
   if (drag->type != WM_DRAG_PATH) {
     return false;
   }
+  const bool is_geometry_tree = snode->edittree->type == NTREE_GEOMETRY;
   const Span<std::string> paths = WM_drag_get_paths(drag);
   for (const StringRef path : paths) {
-    if (path.endswith(".csv") || path.endswith(".obj") || path.endswith(".ply") ||
-        path.endswith(".stl") || path.endswith(".txt") || path.endswith(".vdb"))
+    if (path.endswith(".txt")) {
+      return true;
+    }
+    if (is_geometry_tree &&
+        (path.endswith(".csv") || path.endswith(".obj") || path.endswith(".ply") ||
+         path.endswith(".stl") || path.endswith(".vdb")))
     {
       return true;
     }
@@ -1300,7 +1380,7 @@ static void node_region_listener(const wmRegionListenerParams *params)
       ED_region_tag_redraw(region);
       break;
     case NC_OBJECT:
-      if (wmn->data == ND_OB_SHADING) {
+      if (ELEM(wmn->data, ND_OB_SHADING, ND_TRANSFORM)) {
         ED_region_tag_redraw(region);
       }
       break;
@@ -1347,7 +1427,8 @@ static int /*eContextResult*/ node_context(const bContext *C,
     if (snode->edittree) {
       for (bNode *node : snode->edittree->all_nodes()) {
         if (node->flag & NODE_SELECT) {
-          CTX_data_list_add(result, &snode->edittree->id, RNA_Node, node);
+          PointerRNA ptr = RNA_pointer_create_id_subdata(snode->edittree->id, RNA_Node, node);
+          CTX_data_list_add_ptr(result, &ptr);
         }
       }
     }
@@ -1357,16 +1438,8 @@ static int /*eContextResult*/ node_context(const bContext *C,
   if (CTX_data_equals(member, "active_node")) {
     if (snode->edittree) {
       bNode *node = bke::node_get_active(*snode->edittree);
-      CTX_data_pointer_set(result, &snode->edittree->id, RNA_Node, node);
-    }
-
-    CTX_data_type_set(result, ContextDataType::Pointer);
-    return CTX_RESULT_OK;
-  }
-  if (CTX_data_equals(member, "node_previews")) {
-    if (snode->nodetree) {
-      CTX_data_pointer_set(
-          result, &snode->nodetree->id, RNA_NodeInstanceHash, &snode->nodetree->runtime->previews);
+      PointerRNA ptr = RNA_pointer_create_id_subdata(snode->edittree->id, RNA_Node, node);
+      CTX_data_pointer_set_ptr(result, &ptr);
     }
 
     CTX_data_type_set(result, ContextDataType::Pointer);
@@ -1394,9 +1467,10 @@ static int /*eContextResult*/ node_context(const bContext *C,
     if (snode->edittree != nullptr) {
       if (bNode *node = bke::node_get_active(*snode->edittree)) {
         if (ELEM(node->type_legacy, SH_NODE_TEX_IMAGE, SH_NODE_TEX_ENVIRONMENT)) {
-          Image *image = id_cast<Image *>(node->id);
-          CTX_data_id_pointer_set(result, &image->id);
-          return CTX_RESULT_OK;
+          if (Image *image = id_cast<Image *>(node->id)) {
+            CTX_data_id_pointer_set(result, &image->id);
+            return CTX_RESULT_OK;
+          }
         }
       }
     }
@@ -1424,7 +1498,7 @@ static void node_id_remap(ID *old_id, ID *new_id, SpaceNode *snode)
     /* nasty DNA logic for SpaceNode:
      * ideally should be handled by editor code, but would be bad level call
      */
-    BLI_freelistN(&snode->treepath);
+    snode->treepath.free_no_destruct();
 
     /* XXX Untested in case new_id != nullptr... */
     snode->id = new_id;

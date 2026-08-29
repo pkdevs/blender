@@ -42,6 +42,7 @@ const EnumPropertyItem rna_enum_region_type_items[] = {
     {RGN_TYPE_FOOTER, "FOOTER", 0, "Footer", ""},
     {RGN_TYPE_TOOL_HEADER, "TOOL_HEADER", 0, "Tool Header", ""},
     {RGN_TYPE_XR, "XR", 0, "XR", ""},
+    {RGN_TYPE_SCRUBBING, "SCRUBBING", 0, "Scrubbing", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -54,7 +55,7 @@ const EnumPropertyItem rna_enum_region_panel_category_items[] = {
 
 #ifdef RNA_RUNTIME
 
-#  include "BLI_listbase.h"
+#  include "BLI_listbase.hh"
 
 #  include "RNA_access.hh"
 
@@ -240,7 +241,7 @@ static int rna_Area_ui_type_get(PointerRNA *ptr)
 {
   ScrArea *area = static_cast<ScrArea *>(ptr->data);
   /* This is for the Python API which may inspect empty areas. */
-  if (UNLIKELY(area->spacetype == SPACE_EMPTY)) {
+  if (area->spacetype == SPACE_EMPTY) [[unlikely]] {
     return SPACE_EMPTY;
   }
   const int area_type = rna_Area_type_get(ptr);
@@ -295,7 +296,6 @@ static void rna_Area_ui_type_update(bContext *C, PointerRNA *ptr)
 
 static PointerRNA rna_Region_data_get(PointerRNA *ptr)
 {
-  bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
   ARegion *region = static_cast<ARegion *>(ptr->data);
 
   if (region->regiondata != nullptr) {
@@ -304,17 +304,17 @@ static PointerRNA rna_Region_data_get(PointerRNA *ptr)
       SpaceType *st = BKE_spacetype_from_id(SPACE_VIEW3D);
       if (region->runtime->type == BKE_regiontype_from_id(st, region->regiontype)) {
         PointerRNA newptr = RNA_pointer_create_discrete(
-            &screen->id, RNA_RegionView3D, region->regiondata);
+            ptr->owner_id, RNA_RegionView3D, region->regiondata);
         return newptr;
       }
     }
   }
-  return PointerRNA_NULL;
+  return {};
 }
 
 static int rna_region_has_panel_categories(const ARegion *region)
 {
-  return !BLI_listbase_is_empty(&region->runtime->panels_category);
+  return !region->runtime->panels_category.is_empty();
 }
 
 static int rna_Region_active_panel_category_editable_get(const PointerRNA *ptr,
@@ -459,7 +459,7 @@ static void rna_def_area(BlenderRNA *brna)
 
   srna = RNA_def_struct(brna, "Area", nullptr);
   RNA_def_struct_ui_text(srna, "Area", "Area in a subdivided screen, containing an editor");
-  RNA_def_struct_path_func(srna, "BKE_screen_path_from_screen_to_area");
+  RNA_def_struct_path_func(srna, "BKE_screen_path_to_area");
   RNA_def_struct_sdna(srna, "ScrArea");
 
   prop = RNA_def_property(srna, "spaces", PROP_COLLECTION, PROP_NONE);
@@ -711,7 +711,7 @@ static void rna_def_screen(BlenderRNA *brna)
   PropertyRNA *parm;
 
   srna = RNA_def_struct(brna, "Screen", "ID");
-  RNA_def_struct_sdna(srna, "Screen"); /* Actually #bScreen but for 2.5 the DNA is patched! */
+  RNA_def_struct_sdna(srna, "bScreen");
   RNA_def_struct_ui_text(
       srna, "Screen", "Screen data-block, defining the layout of areas in a window");
   RNA_def_struct_ui_icon(srna, ICON_WORKSPACE);

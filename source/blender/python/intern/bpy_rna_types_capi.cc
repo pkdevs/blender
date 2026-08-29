@@ -17,7 +17,7 @@
 #include <Python.h>
 #include <descrobject.h>
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "bpy_library.hh"
 #include "bpy_rna.hh"
@@ -199,7 +199,7 @@ static PyMethodDef pyrna_space_methods[] = {
 /** \name Public API
  * \{ */
 
-void BPY_rna_types_extend_capi()
+void BPY_rna_types_extend_capi(PyObject *bpy_types)
 {
   /* BlendData */
   ARRAY_SET_ITEMS(pyrna_blenddata_methods,
@@ -254,7 +254,7 @@ void BPY_rna_types_extend_capi()
   pyrna_struct_type_extend_capi(RNA_Window, pyrna_window_methods, nullptr);
 
   /* Context */
-  bpy_rna_context_types_init();
+  bpy_rna_context_types_init(bpy_types);
 
   ARRAY_SET_ITEMS(pyrna_context_methods, BPY_rna_context_temp_override_method_def);
   pyrna_struct_type_extend_capi(RNA_Context, pyrna_context_methods, nullptr);

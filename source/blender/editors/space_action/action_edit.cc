@@ -11,11 +11,11 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_base.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -30,7 +30,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_global.hh"
@@ -71,6 +71,7 @@ namespace blender {
  * 2) that the set of markers being shown are the scene markers, not the list we're merging
  * 3) that the mode will have an active action available
  * 4) that there are some selected markers
+ * 5) that the markers are not locked
  */
 static bool act_markers_make_local_poll(bContext *C)
 {
@@ -95,7 +96,13 @@ static bool act_markers_make_local_poll(bContext *C)
   }
 
   /* 4) */
-  return ED_markers_get_first_selected(ED_context_get_markers(C)) != nullptr;
+  if (ED_markers_get_first_selected(ED_context_get_markers(C)) == nullptr) {
+    return false;
+  }
+
+  /* 5) */
+  ToolSettings *ts = CTX_data_tool_settings(C);
+  return !ts->lock_markers;
 }
 
 static wmOperatorStatus act_markers_make_local_exec(bContext *C, wmOperator * /*op*/)
@@ -138,9 +145,9 @@ static wmOperatorStatus act_markers_make_local_exec(bContext *C, wmOperator * /*
 void ACTION_OT_markers_make_local(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Make Markers Local";
+  ot->name = "Convert to Pose Markers";
   ot->idname = "ACTION_OT_markers_make_local";
-  ot->description = "Move selected scene markers to the active Action as local 'pose' markers";
+  ot->description = "Move selected scene markers to the active action as pose markers";
 
   /* callbacks */
   ot->exec = act_markers_make_local_exec;
@@ -166,7 +173,7 @@ static bool get_keyframe_extents(bAnimContext *ac, float *min, float *max, const
   /* Get data to filter, from Action or Dope-sheet. */
   /* XXX: what is sel doing here?!
    *      Commented it, was breaking things (eg. the "auto preview range" tool). */
-  filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE /*| ANIMFILTER_SEL */ |
+  filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE /* | ANIMFILTER_SEL */ |
             ANIMFILTER_NODUPLIS);
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, eAnimCont_Types(ac->datatype));
 
@@ -460,7 +467,7 @@ void ACTION_OT_view_all(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = actkeys_viewall_exec;
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
 
   /* flags */
   ot->flag = 0;
@@ -475,7 +482,7 @@ void ACTION_OT_view_selected(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = actkeys_viewsel_exec;
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
 
   /* flags */
   ot->flag = 0;
@@ -882,7 +889,7 @@ static void insert_fcurve_key(bAnimContext *ac,
     CombinedKeyingResult result = insert_keyframes(ac->bmain,
                                                    &id_rna_pointer,
                                                    channel_group,
-                                                   {{fcu->rna_path, {}, fcu->array_index}},
+                                                   {{fcu->rna_path(), {}, fcu->array_index}},
                                                    std::nullopt,
                                                    anim_eval_context,
                                                    eBezTriple_KeyframeType(ts->keyframe_type),
@@ -1057,7 +1064,7 @@ static bool duplicate_action_keys(bAnimContext *ac)
           static_cast<GreasePencilLayer *>(ale.data)->wrap());
     }
     else if (ale.type == ANIMTYPE_MASKLAYER) {
-      changed |= ED_masklayer_frames_duplicate(static_cast<MaskLayer *>(ale.data));
+      changed |= ED_masklayer_frames_duplicate(ac->bmain, static_cast<MaskLayer *>(ale.data));
     }
     else {
       BLI_assert(0);
@@ -1143,7 +1150,7 @@ static bool delete_action_keys(bAnimContext *ac)
       }
     }
     else if (ale.type == ANIMTYPE_MASKLAYER) {
-      changed = ED_masklayer_frames_delete(static_cast<MaskLayer *>(ale.data));
+      changed = ED_masklayer_frames_delete(ac->bmain, static_cast<MaskLayer *>(ale.data));
     }
     else {
       FCurve *fcu = static_cast<FCurve *>(ale.key_data);
@@ -2080,16 +2087,17 @@ static const EnumPropertyItem prop_actkeys_mirror_types[] = {
      0,
      "By Times Over Current Frame",
      "Flip times of selected keyframes using the current frame as the mirror line"},
-    {ACTKEYS_MIRROR_XAXIS,
-     "XAXIS",
-     0,
-     "By Values Over Zero Value",
-     "Flip values of selected keyframes (i.e. negative values become positive, and vice versa)"},
     {ACTKEYS_MIRROR_MARKER,
      "MARKER",
      0,
      "By Times Over First Selected Marker",
      "Flip times of selected keyframes using the first selected marker as the reference point"},
+    RNA_ENUM_ITEM_SEPR,
+    {ACTKEYS_MIRROR_XAXIS,
+     "XAXIS",
+     0,
+     "By Values Over Zero Value",
+     "Flip values of selected keyframes (i.e. negative values become positive, and vice versa)"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 

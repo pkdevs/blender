@@ -13,22 +13,22 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_alloca.h"
-#include "BLI_expr_pylike_eval.h"
-#include "BLI_listbase.h"
-#include "BLI_math_base_safe.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_alloca.hh"
+#include "BLI_expr_pylike_eval.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_safe.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_mutex.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
 #include "BKE_action.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_armature.hh"
 #include "BKE_constraint.h"
 #include "BKE_fcurve_driver.h"
@@ -123,7 +123,7 @@ static bool driver_get_target_context_property(const DriverTargetContext *driver
   /* Reset to a nullptr RNA pointer.
    * This allows to more gracefully handle issues with unsupported configuration (forward
    * compatibility. for example). */
-  *r_property_ptr = PointerRNA_NULL;
+  *r_property_ptr = {};
 
   return false;
 }
@@ -283,7 +283,6 @@ eDriverVariablePropertyResult driver_get_variable_property(
     ChannelDriver *driver,
     DriverVar *dvar,
     DriverTarget *dtar,
-    const bool allow_no_index,
     PointerRNA *r_ptr,
     PropertyRNA **r_prop,
     int *r_index)
@@ -315,7 +314,7 @@ eDriverVariablePropertyResult driver_get_variable_property(
 
   /* Get property to read from, and get value as appropriate. */
   if (dtar->rna_path == nullptr || dtar->rna_path[0] == '\0') {
-    ptr = PointerRNA_NULL;
+    ptr = {};
     prop = nullptr; /* OK. */
   }
   else if (RNA_path_resolve_full(&target_ptr, dtar->rna_path, &ptr, &prop, &index)) {
@@ -323,7 +322,7 @@ eDriverVariablePropertyResult driver_get_variable_property(
   }
   else {
     if (dtar_try_use_fallback(dtar)) {
-      ptr = PointerRNA_NULL;
+      ptr = {};
       *r_prop = nullptr;
       *r_index = -1;
       return DRIVER_VAR_PROPERTY_FALLBACK;
@@ -337,7 +336,7 @@ eDriverVariablePropertyResult driver_get_variable_property(
                  dtar->rna_path);
     }
 
-    ptr = PointerRNA_NULL;
+    ptr = {};
     *r_prop = nullptr;
     *r_index = -1;
 
@@ -349,6 +348,7 @@ eDriverVariablePropertyResult driver_get_variable_property(
   *r_ptr = ptr;
   *r_prop = prop;
   *r_index = index;
+  const bool allow_no_index = true;
 
   /* Verify the array index and apply fallback if appropriate. */
   if (prop && RNA_property_array_check(prop)) {
@@ -696,7 +696,7 @@ static float dvar_eval_transChan(const AnimationEvalContext * /*anim_eval_contex
      *     a) decompose transform matrix as required, then try to make eulers from
      *        there compatible with original values
      *     b) [NOT USED] directly use the original values (no decomposition)
-     *         - only an option for "transform space", if quality is really bad with a)
+     *         - only an option for "transform space", if quality is really bad with "a".
      */
     float quat[4];
     int channel;
@@ -842,7 +842,7 @@ static DriverVarTypeInfo dvar_types[MAX_DVAR_TYPES] = {
 static const DriverVarTypeInfo *get_dvar_typeinfo(eDriverVar_Types type)
 {
   /* Check if valid type. */
-  if ((int(type) >= 0) && (type < MAX_DVAR_TYPES)) {
+  if (uint32_t(type) < MAX_DVAR_TYPES) {
     return &dvar_types[type];
   }
 
@@ -890,7 +890,7 @@ void driver_free_variable_ex(ChannelDriver *driver, DriverVar *dvar)
 
 void driver_variables_copy(ListBaseT<DriverVar> *dst_vars, const ListBaseT<DriverVar> *src_vars)
 {
-  BLI_assert(BLI_listbase_is_empty(dst_vars));
+  BLI_assert(dst_vars->is_empty());
   BLI_duplicatelist(dst_vars, src_vars);
 
   for (DriverVar &dvar : *dst_vars) {
@@ -1089,7 +1089,7 @@ ChannelDriver *fcurve_copy_driver(const ChannelDriver *driver)
   /* Copy variables. */
 
   /* To get rid of refs to non-copied data (that's still used on original). */
-  BLI_listbase_clear(&ndriver->variables);
+  ndriver->variables.clear_no_delete();
   driver_variables_copy(&ndriver->variables, &driver->variables);
 
   /* Return the new driver. */
@@ -1113,7 +1113,7 @@ enum {
 static ExprPyLike_Parsed *driver_compile_simple_expr_impl(ChannelDriver *driver)
 {
   /* Prepare parameter names. */
-  int names_len = BLI_listbase_count(&driver->variables);
+  int names_len = driver->variables.count();
   const char **names = static_cast<const char **>(
       BLI_array_alloca(names, names_len + VAR_INDEX_CUSTOM));
   int i = VAR_INDEX_CUSTOM;
@@ -1140,7 +1140,7 @@ static bool driver_evaluate_simple_expr(const AnimationEvalContext *anim_eval_co
                                         float time)
 {
   /* Prepare parameter values. */
-  int vars_len = BLI_listbase_count(&driver->variables);
+  int vars_len = driver->variables.count();
   double *vars = static_cast<double *>(BLI_array_alloca(vars, vars_len + VAR_INDEX_CUSTOM));
   int i = VAR_INDEX_CUSTOM;
 
@@ -1317,7 +1317,7 @@ static void evaluate_driver_sum(const AnimationEvalContext *anim_eval_context,
   DriverVar *dvar;
 
   /* Check how many variables there are first (i.e. just one?). */
-  if (BLI_listbase_is_single(&driver->variables)) {
+  if (driver->variables.is_single()) {
     /* Just one target, so just use that. */
     dvar = static_cast<DriverVar *>(driver->variables.first);
     driver->curval = driver_get_variable_value(anim_eval_context, driver, dvar);

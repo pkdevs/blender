@@ -28,6 +28,9 @@ ustring u_colorspace_scene_linear_srgb("scene_linear_srgb");
 ustring u_colorspace_srgb("__builtin_srgb");
 
 /* Cached data. */
+static thread_mutex cache_xyz_to_scene_linear_mutex;
+static string cache_xyz_to_scene_linear_hash;
+
 #ifdef WITH_OCIO
 static thread_mutex cache_processors_mutex;
 static unordered_map<ustring, OCIO::ConstProcessorRcPtr> cache_processors;
@@ -75,12 +78,13 @@ static void check_invalidate_caches()
       cache_scene_linear_interop_id = "";
       cache_scene_linear_srgb_interop_id = "";
     }
+    {
+      const thread_scoped_lock cache_lock(cache_xyz_to_scene_linear_mutex);
+      cache_xyz_to_scene_linear_hash.clear();
+    }
   }
 }
 #endif
-
-static thread_mutex cache_xyz_to_scene_linear_mutex;
-static string cache_xyz_to_scene_linear_hash;
 
 ColorSpaceProcessor *ColorSpaceManager::get_processor(ustring colorspace)
 {
@@ -260,9 +264,17 @@ const char *ColorSpaceManager::colorspace_interop_id(ustring colorspace)
                                    "srgb_p3d65_scene",
                                    "g22_adobergb_scene"};
       for (const char *interop_id : interop_ids) {
+#  if OCIO_VERSION_MAJOR == 2 && OCIO_VERSION_MINOR == 2
+        for (int i = 0; i < space->getNumAliases(); i++) {
+          if (string_iequals(space->getAlias(i), interop_id)) {
+            return interop_id;
+          }
+        }
+#  else
         if (space->hasAlias(interop_id)) {
           return interop_id;
         }
+#  endif
       }
     }
   }
@@ -295,9 +307,37 @@ ustring ColorSpaceManager::detect_known_colorspace(ustring colorspace,
       colorspace = file_colorspace;
     }
     else {
-      const char *role_colorspace = (is_float) ? config->getRoleColorSpace("default_float") :
-                                                 config->getRoleColorSpace("default_byte");
-      role_colorspace = (role_colorspace) ? role_colorspace : config->getRoleColorSpace("default");
+#  if OCIO_VERSION_MAJOR == 2 && OCIO_VERSION_MINOR == 2
+      /* Roles are looked up by index, where -1 means the role is not defined in the config. */
+      int default_float_id = -1;
+      int default_byte_id = -1;
+      int default_id = -1;
+      for (int i = 0; i < config->getNumRoles(); i++) {
+        const char *role_name = config->getRoleName(i);
+        if (strcmp(role_name, "default_float") == 0) {
+          default_float_id = i;
+        }
+        else if (strcmp(role_name, "default_byte") == 0) {
+          default_byte_id = i;
+        }
+        else if (strcmp(role_name, "default") == 0) {
+          default_id = i;
+        }
+      }
+      const int role_id = (is_float) ? default_float_id : default_byte_id;
+      const char *role_colorspace = (role_id != -1) ? config->getRoleColorSpace(role_id) : nullptr;
+      if (role_colorspace == nullptr && default_id != -1) {
+        role_colorspace = config->getRoleColorSpace(default_id);
+      }
+#  else
+      const char *role_name = (is_float) ? "default_float" : "default_byte";
+      const char *role_colorspace = config->hasRole(role_name) ?
+                                        config->getRoleColorSpace(role_name) :
+                                        nullptr;
+      if (role_colorspace == nullptr && config->hasRole("default")) {
+        role_colorspace = config->getRoleColorSpace("default");
+      }
+#  endif
       if (role_colorspace) {
         colorspace = role_colorspace;
       }
@@ -305,7 +345,7 @@ ustring ColorSpaceManager::detect_known_colorspace(ustring colorspace,
   }
 #endif
 
-  /* Fall back to simple guess if we don't have OpenColorIO .*/
+  /* Fall back to simple guess if we don't have OpenColorIO. */
   if (colorspace == u_colorspace_auto) {
     colorspace = (is_float && !(strcmp(file_colorspace, "srgb_rec709_scene") == 0 ||
                                 strcmp(file_colorspace, "srgb_rec709_display") == 0)) ?
@@ -343,12 +383,12 @@ ustring ColorSpaceManager::detect_known_colorspace(ustring colorspace,
 
   const thread_scoped_lock cache_lock(cache_colorspaces_mutex);
   if (is_scene_linear) {
-    LOG_INFO << "Colorspace " << colorspace.string() << " is no-op";
+    LOG_DEBUG << "Colorspace " << colorspace.string() << " is no-op";
     cached_colorspaces[colorspace] = u_colorspace_scene_linear;
     return u_colorspace_scene_linear;
   }
   if (is_scene_linear_srgb) {
-    LOG_INFO << "Colorspace " << colorspace.string() << " is scene linear sRGB";
+    LOG_DEBUG << "Colorspace " << colorspace.string() << " is scene linear sRGB";
     cached_colorspaces[colorspace] = u_colorspace_scene_linear_srgb;
     return u_colorspace_scene_linear_srgb;
   }
@@ -368,7 +408,7 @@ ustring ColorSpaceManager::detect_known_colorspace(ustring colorspace,
   }
 
   /* Convert to/from colorspace with OpenColorIO. */
-  LOG_INFO << "Colorspace " << colorspace.string() << " handled through OpenColorIO";
+  LOG_DEBUG << "Colorspace " << colorspace.string() << " handled through OpenColorIO";
   cached_colorspaces[colorspace] = colorspace;
   return colorspace;
 #else
@@ -630,6 +670,7 @@ void ColorSpaceManager::to_scene_linear(ustring colorspace,
   (void)y_stride;
   (void)is_rgba;
   (void)compress_as_srgb;
+  (void)ignore_alpha;
 #endif
 }
 
@@ -787,8 +828,13 @@ Transform ColorSpaceManager::get_xyz_to_scene_linear_rgb()
   return xyz_to_rgb;
 }
 
-const std::string &ColorSpaceManager::get_xyz_to_scene_linear_rgb_string()
+std::string ColorSpaceManager::get_xyz_to_scene_linear_rgb_string()
 {
+#ifdef WITH_OCIO
+  /* Clear the cached hash if the scene linear colorspace changed. */
+  check_invalidate_caches();
+#endif
+
   /* NOTE: Be careful not to change existing hashes if at all possible, as this
    * will cause all texture files to be regenerated with significantly increased
    * disk usage. */
@@ -818,6 +864,7 @@ const std::string &ColorSpaceManager::get_xyz_to_scene_linear_rgb_string()
 
 const char *ColorSpaceManager::get_scene_linear_interop_id(const bool srgb_encoded)
 {
+#ifdef WITH_OCIO
   check_invalidate_caches();
 
   const thread_scoped_lock cache_lock(cache_scene_linear_interop_id_mutex);
@@ -846,6 +893,10 @@ const char *ColorSpaceManager::get_scene_linear_interop_id(const bool srgb_encod
   }
 
   return (srgb_encoded) ? cache_scene_linear_srgb_interop_id : cache_scene_linear_interop_id;
+#else
+  (void)srgb_encoded;
+  return "lin_rec709_scene";
+#endif
 }
 
 /* Template instantiations so we don't have to inline functions. */
