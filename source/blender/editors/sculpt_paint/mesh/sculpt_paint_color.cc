@@ -557,11 +557,9 @@ static void do_sample_wet_paint_task(const Depsgraph &depsgraph,
 }
 
 void do_paint_brush(const Depsgraph &depsgraph,
-                    PaintModeSettings &paint_mode_settings,
                     const Sculpt &sd,
                     Object &ob,
-                    const IndexMask &node_mask,
-                    const IndexMask &texnode_mask)
+                    const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Editor);
 

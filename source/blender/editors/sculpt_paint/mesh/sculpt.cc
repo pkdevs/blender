@@ -3735,7 +3735,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
       brushes::do_displacement_smear_brush(depsgraph, sd, ob, node_mask);
       break;
     case SCULPT_BRUSH_TYPE_PAINT:
-      color::do_paint_brush(depsgraph, paint_mode_settings, sd, ob, node_mask, texnode_mask);
+      color::do_paint_brush(depsgraph, sd, ob, node_mask);
       break;
     case SCULPT_BRUSH_TYPE_SMEAR:
       color::do_smear_brush(depsgraph, sd, ob, node_mask);
