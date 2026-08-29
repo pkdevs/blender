@@ -2475,7 +2475,6 @@ int BM_mesh_calc_edge_groups_as_arrays(
   STACK_DECLARE(groups);
   STACK_INIT(groups, bm->totvert);
 
-  /* Clear all selected vertices */
   BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_TAG, false);
 
   BMVert **stack = MEM_new_array_uninitialized<BMVert *>(bm->totvert, __func__);
