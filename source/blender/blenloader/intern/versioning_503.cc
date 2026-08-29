@@ -15,7 +15,6 @@
 #include "DNA_mesh_types.h"
 #include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
-#include "DNA_screen_types.h"
 #include "DNA_sequence_types.h"
 
 #include "BLI_listbase_iterator.hh"
@@ -31,7 +30,6 @@
 #include "BKE_node_runtime.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
-#include "BKE_screen.hh"
 
 #include "SEQ_iterator.hh"
 #include "SEQ_sequencer.hh"
@@ -401,28 +399,6 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
           }
           return true;
         });
-      }
-    }
-  }
-
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 18)) {
-    /* The Timeline previously disabled the footer, which leaks to the Dope Sheet.
-     * This block unhides the Timeline footer, which doesn't affect the Timeline as it has no
-     * footer.
-     * A space that started as a Timeline now shows the footer once it is switched to the
-     * Dope Sheet, as is the default. */
-    for (bScreen &screen : bmain->screens) {
-      for (ScrArea &area : screen.areabase) {
-        for (SpaceLink &sl : area.spacedata) {
-          if (sl.spacetype != SPACE_ACTION) {
-            continue;
-          }
-          ListBaseT<ARegion> *regionbase = (&sl == area.spacedata.first) ? &area.regionbase :
-                                                                           &sl.regionbase;
-          if (ARegion *footer = BKE_region_find_in_listbase_by_type(regionbase, RGN_TYPE_FOOTER)) {
-            footer->flag &= ~RGN_FLAG_HIDDEN;
-          }
-        }
       }
     }
   }
