@@ -142,13 +142,9 @@ static void gizmo2d_pivot_point_message_subscribe(wmGizmoGroup *gzgroup,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Arrow / Cage Gizmo Group
+/** \name Arrow / Cage Gizmo Group Defines
  *
- * Defines public functions, not the gizmo itself:
- *
- * - #ED_widgetgroup_gizmo2d_xform_callbacks_set
- * - #ED_widgetgroup_gizmo2d_xform_no_cage_callbacks_set
- *
+ * Shared by the cage and no-cage variants of the transform gizmo group.
  * \{ */
 
 /* Axes as index. */
@@ -172,7 +168,11 @@ struct GizmoGroup2D {
   bool no_cage;
 };
 
-/* **************** Utilities **************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Utilities
+ * \{ */
 
 static void gizmo2d_get_axis_color(const int axis_idx, float *r_col, float *r_col_hi)
 {
@@ -463,6 +463,12 @@ static wmOperatorStatus gizmo2d_modal(bContext *C,
 
   return OPERATOR_RUNNING_MODAL;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Gizmo Group
+ * \{ */
 
 static void gizmo2d_xform_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 {
@@ -774,6 +780,12 @@ void ED_widgetgroup_gizmo2d_xform_callbacks_set(wmGizmoGroupType *gzgt)
   gzgt->draw_prepare = gizmo2d_xform_draw_prepare;
   gzgt->invoke_prepare = gizmo2d_xform_invoke_prepare;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Gizmo Group (No Cage)
+ * \{ */
 
 static void gizmo2d_xform_setup_no_cage(const bContext *C, wmGizmoGroup *gzgroup)
 {
