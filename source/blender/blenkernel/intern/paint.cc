@@ -1958,7 +1958,7 @@ static float paint_rake_rotation_spacing(const Paint & /*paint*/,
   }
   else if (is_first_dab) {
     /* Use a smaller limit if the stroke hasn't started to prevent excessive pre-roll. */
-    return std::min(rotation_spacing, 1.0f);
+    return std::min(rotation_spacing, 4.0f);
   }
   else {
     return rotation_spacing;
