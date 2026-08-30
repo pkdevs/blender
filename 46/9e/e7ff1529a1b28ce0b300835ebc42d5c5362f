@@ -1,2 +1,3 @@
 Referenced by issue #98267, Python API issue: attributes.active_color vs vertex_colors.active
 Referenced by issue #68926, Color Management Improvements
+Referenced by pull request #163288, WIP: Fix #140432: Color space conversions return zeros for wrapped colors
