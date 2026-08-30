@@ -742,8 +742,10 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
         return t->data_type == &TransConvertType_Tracking;
       }
       if (value == TFM_MODAL_VERT_EDGE_SLIDE &&
-          (!(transform_mode_edge_slide_is_supported(t) ||
-             transform_mode_vert_slide_is_supported(t)) ||
+          (!ELEM(t->data_type,
+                 &TransConvertType_Mesh,
+                 &TransConvertType_MeshUV,
+                 &TransConvertType_EditArmature) ||
            /* WORKAROUND: Avoid repeated keys in status bar.
             *
             * Previously, `Vert/Edge Slide` and `Move` were triggered by the same modal key.
@@ -1189,8 +1191,8 @@ wmOperatorStatus transformEvent(TransInfo *t, wmOperator *op, const wmEvent *eve
           transform_mode_init(t, nullptr, TFM_RESIZE);
         }
         else {
-          /* First try Edge Slide. */
-          if (transform_mode_edge_slide_is_supported(t)) {
+          /* First try Edge Slide. Armatures slide bone joints, which only Vert Slide handles. */
+          if (t->obedit_type != OB_ARMATURE) {
             transform_mode_init(t, op, TFM_EDGE_SLIDE);
           }
           else {

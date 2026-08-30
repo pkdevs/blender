@@ -12,8 +12,6 @@
 #include "BLI_string_utf8.hh"
 
 #include "BKE_report.hh"
-
-#include "BKE_report.hh"
 #include "BKE_unit.hh"
 
 #include "GPU_immediate.hh"
@@ -659,8 +657,9 @@ static void vert_slide_transform_matrix_fn(TransInfo *t, float mat_xform[4][4])
 static void initVertSlide_ex(
     TransInfo *t, wmOperator *op, bool use_even, bool flipped, bool use_clamp)
 {
-  if ((t->flag & T_EDIT) == 0 || (t->obedit_type != OB_MESH)) {
-    BKE_report(t->reports, RPT_ERROR, "'Vertex Slide' is only supported in mesh edit mode");
+  if ((t->flag & T_EDIT) == 0 || !ELEM(t->obedit_type, OB_MESH, OB_ARMATURE)) {
+    BKE_report(
+        t->reports, RPT_ERROR, "'Vertex Slide' is only supported in mesh and armature edit modes");
     t->state = TRANS_CANCEL;
     return;
   }

@@ -22,7 +22,6 @@
 #include "BLI_multi_value_map.hh"
 #include "BLI_set.hh"
 
-
 #include "BKE_action.hh"
 #include "BKE_armature.hh"
 #include "BKE_constraint.h"

@@ -83,16 +83,6 @@ bool transform_mode_is_changeable(const int mode)
               TFM_NORMAL_ROTATION);
 }
 
-bool transform_mode_vert_slide_is_supported(const TransInfo *t)
-{
-  return (t->flag & T_EDIT) && t->data_type->vert_slide_data_create != nullptr;
-}
-
-bool transform_mode_edge_slide_is_supported(const TransInfo *t)
-{
-  return (t->flag & T_EDIT) && t->data_type->edge_slide_data_create != nullptr;
-}
-
 bool transform_mode_affect_only_locations(const TransInfo *t)
 {
   return (t->flag & T_V3D_ALIGN) && (t->options & CTX_OBJECT) &&

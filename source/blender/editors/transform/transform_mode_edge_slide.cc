@@ -16,7 +16,6 @@
 #include "BKE_editmesh.hh"
 #include "BKE_editmesh_bvh.hh"
 #include "BKE_report.hh"
-#include "BKE_report.hh"
 #include "BKE_unit.hh"
 
 #include "GPU_immediate.hh"

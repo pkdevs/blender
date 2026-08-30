@@ -100,8 +100,7 @@ struct TransConvertTypeInfo {
 
   /**
    * Enumerate the locations each selected element can slide toward, for Vert Slide.
-   * Null when the type has no notion of connected neighbors, which is what
-   * #transform_mode_vert_slide_is_supported tests.
+   * Null when the type has no notion of connected neighbors.
    */
   Array<TransDataVertSlideVert> (*vert_slide_data_create)(const TransInfo *t,
                                                           TransDataContainer *tc,
