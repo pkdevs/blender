@@ -804,6 +804,30 @@ class ColorTesting(unittest.TestCase):
     def test_buffer_protocol(self):
         _test_flat_buffer_protocol(self, Color, 3)
 
+    def test_color_space_conversions_wrapped(self):
+        # See #140432: conversions on a wrapped color (one which accesses internal
+        # data through callbacks, e.g. `PaletteColor.color`) read stale data
+        # and returned `(0, 0, 0)`.
+        import bpy
+        palette = bpy.data.palettes.new("test_palette")
+        try:
+            value = (0.5, 0.2, 0.7)
+            palette_color = palette.colors.new()
+            palette_color.color = value
+            color_plain = Color(value)
+            conversions = [attr for attr in dir(Color) if attr.startswith("from_")]
+            self.assertNotEqual(conversions, [])
+            for attr in conversions:
+                with self.subTest(conversion=attr):
+                    # Access `color` anew each time: the returned wrapper reads the
+                    # palette data lazily, which is the code path being tested.
+                    self.assertEqual(
+                        tuple(getattr(palette_color.color, attr)()),
+                        tuple(getattr(color_plain, attr)()),
+                    )
+        finally:
+            bpy.data.palettes.remove(palette)
+
 
 class ColorTestingSlice(GenericSliceMixIn, unittest.TestCase):
     generic_len = 3

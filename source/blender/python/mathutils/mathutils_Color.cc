@@ -127,6 +127,10 @@ static PyObject *Color_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
  */
 static PyObject *color_convert(ColorObject *self, void (*convert)(float[3], const float[3]))
 {
+  if (BaseMath_ReadCallback(self) == -1) {
+    return nullptr;
+  }
+
   float col[3];
   convert(col, self->col);
   return Color_CreatePyObject(col, Py_TYPE(self));
