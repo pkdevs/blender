@@ -31,23 +31,30 @@ bool button_label_is_markdown(const Button *button)
          static_cast<const ButtonLabel *>(button)->label_type == ButtonLabelType::Markdown;
 }
 
-static void markdown_apply_item_font(const MarkdownItemText &item, const float aspect)
+static void markdown_apply_font(const int fontid,
+                                const float size_px,
+                                const int weight,
+                                const bool italic)
 {
-  BLF_enable(item.fontid, BLF_ASPECT);
-  BLF_aspect(item.fontid, aspect, aspect, 1.0f);
-  BLF_size(item.fontid, item.size);
-  BLF_character_weight(item.fontid, item.weight);
-  if (item.italic) {
-    BLF_enable(item.fontid, BLF_ITALIC);
+  BLF_disable(fontid, BLF_ASPECT);
+  BLF_size(fontid, size_px);
+  BLF_character_weight(fontid, weight);
+  if (italic) {
+    BLF_enable(fontid, BLF_ITALIC);
   }
   else {
-    BLF_disable(item.fontid, BLF_ITALIC);
+    BLF_disable(fontid, BLF_ITALIC);
   }
+}
+
+static void markdown_apply_item_font(const MarkdownItemText &item)
+{
+  markdown_apply_font(item.fontid, item.size_px, item.weight, item.italic);
 }
 
 static void markdown_disable_item_font(const MarkdownItemText &item)
 {
-  BLF_disable(item.fontid, BLF_ASPECT | BLF_ITALIC);
+  BLF_disable(item.fontid, BLF_ITALIC);
 }
 
 struct MdHeaderStyle {
@@ -78,8 +85,9 @@ class MarkdownLayouter {
   struct FontConfig {
     int fontid;
     float default_size;
-    float default_weight;
-    float bold_weight;
+    int default_weight;
+    int bold_weight;
+    /** Line height in pixels. */
     float default_line_height;
   };
 
@@ -143,15 +151,18 @@ class MarkdownLayouter {
  public:
   MarkdownLayouter(MarkdownLayoutCache &cache_) : cache_(cache_)
   {
-    main_font_ = make_font_config(style_get()->widget.uifont_id, 12.0f, 400, 700);
-    mono_font_ = make_font_config(blf_mono_font, 12.0f, 400, 700);
+    const uiFontStyle &widget_style = style_get()->widget;
+    main_font_ = this->make_font_config(
+        widget_style.uifont_id, widget_style.points, widget_style.character_weight, 700);
+    mono_font_ = this->make_font_config(
+        blf_mono_font, widget_style.points, widget_style.character_weight, 700);
     x_ = 0.0f;
     y_ = 0.0f;
   }
 
   FontConfig make_font_config(const int fontid,
                               const float default_size,
-                              const float default_weight,
+                              const int default_weight,
                               const int bold_weight)
   {
     FontConfig config;
@@ -159,8 +170,7 @@ class MarkdownLayouter {
     config.default_size = default_size;
     config.default_weight = default_weight;
     config.bold_weight = bold_weight;
-    BLF_size(fontid, default_size);
-    BLF_character_weight(fontid, default_weight);
+    markdown_apply_font(fontid, default_size * cache_.key.pixels_per_point, default_weight, false);
     config.default_line_height = BLF_height_max(fontid);
     return config;
   }
@@ -435,7 +445,10 @@ class MarkdownLayouter {
   {
     const ContextFontSettings settings = this->get_context_font_settings();
     const float start_x = this->context_block_start_x();
-    BLF_size(settings.fontid, settings.size);
+    markdown_apply_font(settings.fontid,
+                        settings.size * cache_.key.pixels_per_point,
+                        settings.weight,
+                        settings.italic);
     const float line_height = BLF_height_max(settings.fontid);
     while (!text.is_empty()) {
       /* Literal newlines should be taken into account in code. */
@@ -469,7 +482,7 @@ class MarkdownLayouter {
 
   struct ContextFontSettings {
     int fontid;
-    float weight;
+    int weight;
     bool italic;
     float size;
     std::optional<StringRef> url;
@@ -520,19 +533,19 @@ class MarkdownLayouter {
                            const float start_x)
   {
     MarkdownItemText item_template;
-    item_template.size = size;
+    item_template.size_px = size * cache_.key.pixels_per_point;
     item_template.fontid = fontid;
     item_template.weight = weight;
     item_template.italic = italic;
     item_template.url = url;
 
-    markdown_apply_item_font(item_template, cache_.key.aspect);
+    markdown_apply_item_font(item_template);
     BLI_SCOPED_DEFER([&]() { markdown_disable_item_font(item_template); });
 
-    const int line_height = BLF_height_max(fontid);
+    const float line_height = BLF_height_max(fontid);
 
     while (!text.is_empty()) {
-      const float remaining_width = cache_.key.wrap_width - x_;
+      const float remaining_width = cache_.key.wrap_width_px - x_;
       float needed_width = 0.0f;
       const int64_t last_fit_char_i = int64_t(BLF_width_to_strlen(
           fontid, text.data(), size_t(text.size()), remaining_width, &needed_width));
@@ -590,12 +603,13 @@ class MarkdownLayouter {
   float context_block_start_x() const
   {
     float indentation = 0.0f;
+    const float level = 18.0f * cache_.key.pixels_per_point;
     for (const auto &md_block : block_stack_) {
       if (std::holds_alternative<QuoteBlock>(md_block)) {
-        indentation += UI_UNIT_X;
+        indentation += level;
       }
       if (std::holds_alternative<ListItemBlock>(md_block)) {
-        indentation += UI_UNIT_X;
+        indentation += level;
       }
     }
     return indentation;
@@ -603,7 +617,6 @@ class MarkdownLayouter {
 
   void finalize_vertical_positions()
   {
-    const float aspect = cache_.key.aspect;
     constexpr float first_line_y = 0.0f;
     float max_ascender = -FLT_MAX;
     for (const MarkdownItem &item : cache_.md_layout.items) {
@@ -614,9 +627,8 @@ class MarkdownLayouter {
       if (text_item->y != first_line_y) {
         break;
       }
-      markdown_apply_item_font(*text_item, aspect);
-      const float ascender = BLF_ascender(text_item->fontid);
-      max_ascender = std::max(max_ascender, ascender * aspect);
+      markdown_apply_item_font(*text_item);
+      max_ascender = std::max(max_ascender, float(BLF_ascender(text_item->fontid)));
       markdown_disable_item_font(*text_item);
     }
     if (max_ascender != -FLT_MAX) {
@@ -627,23 +639,24 @@ class MarkdownLayouter {
     float bottom_y = FLT_MAX;
     for (const MarkdownItem &item : cache_.md_layout.items) {
       if (const auto *text_item = std::get_if<MarkdownItemText>(&item)) {
-        markdown_apply_item_font(*text_item, aspect);
-        bottom_y = std::min(bottom_y, text_item->y + BLF_descender(text_item->fontid) * aspect);
+        markdown_apply_item_font(*text_item);
+        bottom_y = std::min(bottom_y, text_item->y + BLF_descender(text_item->fontid));
         markdown_disable_item_font(*text_item);
       }
       else if (const auto *bullet_item = std::get_if<MarkdownItemBullet>(&item)) {
         const int fontid = main_font_.fontid;
-        BLF_aspect(main_font_.fontid, aspect, aspect, 1.0f);
-        BLF_size(fontid, main_font_.default_size);
-        BLF_character_weight(fontid, main_font_.default_weight);
-        bottom_y = std::min(bottom_y, bullet_item->y + BLF_descender(fontid) * aspect);
+        markdown_apply_font(fontid,
+                            main_font_.default_size * cache_.key.pixels_per_point,
+                            main_font_.default_weight,
+                            false);
+        bottom_y = std::min(bottom_y, bullet_item->y + BLF_descender(fontid));
       }
     }
     if (bottom_y != FLT_MAX) {
       cache_.md_layout.content_height = -bottom_y;
     }
     else {
-      cache_.md_layout.content_height = UI_UNIT_Y;
+      cache_.md_layout.content_height = 18.0f * cache_.key.pixels_per_point;
     }
   }
 };
@@ -667,21 +680,21 @@ static void create_link_buttons_for_label(ButtonLabel *button)
 
   for (const MarkdownItem &item : cache.md_layout.items) {
     const auto *text_item_ptr = std::get_if<MarkdownItemText>(&item);
-    if (!text_item_ptr->url) {
+    if (!text_item_ptr || !text_item_ptr->url) {
       continue;
     }
     const MarkdownItemText &text_item = *text_item_ptr;
 
-    markdown_apply_item_font(text_item, aspect);
+    markdown_apply_item_font(text_item);
 
     const StringRef text = text_item.text;
-    const float descender = BLF_descender(text_item.fontid) * aspect;
-    const float ascender = BLF_ascender(text_item.fontid) * aspect;
-    const float font_height = ascender - descender;
-    const float width = BLF_width(text_item.fontid, text.data(), text.size());
+    const float descender_px = BLF_descender(text_item.fontid);
+    const float ascender_px = BLF_ascender(text_item.fontid);
+    const float font_height = (ascender_px - descender_px) * aspect;
+    const float width = BLF_width(text_item.fontid, text.data(), text.size()) * aspect;
 
-    const float x = button->rect.xmin + text_item.x;
-    const float y = button->rect.ymax + text_item.y + descender;
+    const float x = button->rect.xmin + text_item.x * aspect;
+    const float y = button->rect.ymax + (text_item.y + descender_px) * aspect;
 
     const EmbossType previous_emboss = block_emboss_get(block);
     block_emboss_set(block, EmbossType::None);
@@ -735,16 +748,26 @@ void label_markdown_create_link_buttons(Block *block)
   }
 }
 
+static MarkdownLayoutCacheKey markdown_layout_key_for_button(const ButtonLabel &button)
+{
+  const float aspect = button.block->aspect;
+  MarkdownLayoutCacheKey key;
+  key.text = button.str;
+  key.wrap_width_px = std::max<int>(std::ceil(BLI_rctf_size_x(&button.rect) / aspect), 0);
+  key.pixels_per_point = UI_SCALE_FAC / aspect;
+  return key;
+}
+
+static void markdown_apply_button_height(ButtonLabel &button)
+{
+  button.rect.ymin = button.rect.ymax -
+                     button.markdown_cache->md_layout.content_height * button.block->aspect;
+}
+
 void label_markdown_resolve(ButtonLabel *button)
 {
-  const int wrap_width = std::max<int>(std::ceil(BLI_rctf_size_x(&button->rect)), 0);
-  const float aspect = button->block->aspect;
+  const MarkdownLayoutCacheKey cache_lookup_key = markdown_layout_key_for_button(*button);
   {
-    MarkdownLayoutCacheKey cache_lookup_key;
-    cache_lookup_key.text = button->str;
-    cache_lookup_key.wrap_width = wrap_width;
-    cache_lookup_key.aspect = aspect;
-
     /* Try to reuse an already attached cache. */
     if (button->markdown_cache) {
       const MarkdownLayoutCache &cache = *button->markdown_cache;
@@ -771,23 +794,22 @@ void label_markdown_resolve(ButtonLabel *button)
     }
     if (button->markdown_cache) {
       button->block->markdown_layout_cache.append(button->markdown_cache);
-      button->rect.ymin = button->rect.ymax - button->markdown_cache->md_layout.content_height;
+      markdown_apply_button_height(*button);
       return;
     }
   }
 
   button->markdown_cache = std::make_shared<MarkdownLayoutCache>();
   MarkdownLayoutCache &cache = *button->markdown_cache;
-  cache.key.aspect = aspect;
-  cache.key.wrap_width = wrap_width;
+  cache.key = cache_lookup_key;
   /* Copy the string to the cache so that references into it can be preserved. */
-  cache.key.text = cache.scope.allocator().copy_string(button->str);
+  cache.key.text = cache.scope.allocator().copy_string(cache.key.text);
   button->block->markdown_layout_cache.append(button->markdown_cache);
 
   MarkdownLayouter layouter(cache);
   layouter.compute_layout();
 
-  button->rect.ymin = button->rect.ymax - cache.md_layout.content_height;
+  markdown_apply_button_height(*button);
 }
 
 void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const rcti *rect)
@@ -796,7 +818,6 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
     return;
   }
 
-  const float aspect = button->block->aspect;
   const MarkdownLayoutCache &cache = *button->markdown_cache;
 
   uchar link_color[4];
@@ -805,21 +826,22 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
 
   for (const MarkdownItem &item : cache.md_layout.items) {
     if (const auto *text_item = std::get_if<MarkdownItemText>(&item)) {
-      markdown_apply_item_font(*text_item, cache.key.aspect);
+      markdown_apply_item_font(*text_item);
       if (text_item->url) {
         BLF_color4ubv(text_item->fontid, link_color);
       }
       else {
         BLF_color4ubv(text_item->fontid, color);
       }
-      const float x = rect->xmin + text_item->x / aspect;
-      const float y = rect->ymax + text_item->y / aspect;
+      const float x = rect->xmin + text_item->x;
+      const float y = rect->ymax + text_item->y;
       BLF_position(text_item->fontid, x, y, 0.0f);
       BLF_draw(text_item->fontid, text_item->text.data(), text_item->text.size());
       markdown_disable_item_font(*text_item);
     }
     else if (const auto *bullet_item = std::get_if<MarkdownItemBullet>(&item)) {
       // TODO
+      UNUSED_VARS(bullet_item);
     }
   }
 }

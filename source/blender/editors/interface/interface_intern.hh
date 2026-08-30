@@ -386,12 +386,11 @@ enum class MarkdownSpanType {
 
 struct MarkdownItemText {
   /**
-   * Position relative to the label button's top-left corner, in block space.
-   * This is the baseline position of the text.
+   * Baseline position of the text in pixels.
    */
   float x = 0.0f;
   float y = 0.0f;
-  float size = 12.0f;
+  float size_px = 0.0f;
   int fontid = 0;
   int weight = 400;
   bool italic = false;
@@ -409,13 +408,14 @@ using MarkdownItem = std::variant<MarkdownItemText, MarkdownItemBullet>;
 
 struct MarkdownLayoutCacheKey {
   StringRef text;
-  int wrap_width = 0;
-  float aspect = 0.0f;
+  int wrap_width_px = 0;
+  float pixels_per_point = 0.0f;
 
   bool operator==(const MarkdownLayoutCacheKey &other) const = default;
 };
 struct MarkdownLayout {
   Vector<MarkdownItem> items;
+  /** Height of laid-out content in pixels. */
   float content_height = 0.0f;
 };
 
