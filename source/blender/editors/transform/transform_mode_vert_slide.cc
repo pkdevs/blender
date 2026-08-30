@@ -392,14 +392,11 @@ static void drawVertSlide(TransInfo *t)
 
       immUnbindProgram();
 
-      immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_COLOR);
 
-      GPU_point_size(ctrl_size);
-
-      /* Mark every joint being slid: a slide moves several at once, and unlike mesh vertices
-       * they are hard to pick out against the bones themselves. The active one draws over its
-       * own dot below. */
       if (show_all_paths) {
+        GPU_program_point_size(true);
+        immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
+        immUniform1f("size", 5.5f * U.pixelsize);
         immUniformThemeColorShadeAlpha(TH_VERTEX_SELECT, 50, alpha_shade);
 
         immBegin(GPU_PRIM_POINTS, sld->sv.size());
@@ -407,7 +404,14 @@ static void drawVertSlide(TransInfo *t)
           immVertex3fv(shdr_pos, sv.co_orig_3d());
         }
         immEnd();
+
+        immUnbindProgram();
+        GPU_program_point_size(false);
       }
+
+      immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_COLOR);
+
+      GPU_point_size(ctrl_size);
 
       immUniformThemeColorShadeAlpha(TH_VERTEX_ACTIVE, 80, alpha_shade);
 
