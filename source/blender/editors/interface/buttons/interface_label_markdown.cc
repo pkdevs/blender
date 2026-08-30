@@ -126,7 +126,9 @@ class MarkdownLayouter {
 
   struct CodeBlock {};
 
-  struct QuoteBlock {};
+  struct QuoteBlock {
+    float start_y = 0.0f;
+  };
 
   struct HorizontalRuleBlock {};
 
@@ -276,11 +278,23 @@ class MarkdownLayouter {
     const float margin = this->get_space_above_new_block();
     y_ -= margin;
     x_ = this->context_block_start_x();
-    if (block_type == MD_BLOCK_LI) {
-      this->append_list_marker();
-    }
-    else if (block_type == MD_BLOCK_HR) {
-      this->append_horizontal_rule();
+
+    switch (block_type) {
+      case MD_BLOCK_LI: {
+        this->append_list_marker();
+        break;
+      }
+      case MD_BLOCK_HR: {
+        this->append_horizontal_rule();
+        break;
+      }
+      case MD_BLOCK_QUOTE: {
+        std::get<QuoteBlock>(block_stack_.last()).start_y = y_;
+        break;
+      }
+      default: {
+        break;
+      }
     }
   }
 
@@ -325,6 +339,7 @@ class MarkdownLayouter {
     item.fontid = main_font_.fontid;
     item.weight = main_font_.default_weight;
     item.italic = false;
+    item.is_in_quote = this->is_in_quote();
     item.y = y_;
 
     if (list_item->number) {
@@ -365,6 +380,34 @@ class MarkdownLayouter {
     y_ -= half_space;
   }
 
+  void append_quote_line()
+  {
+    const auto *quote = std::get_if<QuoteBlock>(&block_stack_.last());
+    BLI_assert(quote);
+    if (!quote) {
+      return;
+    }
+    const float height = quote->start_y - y_;
+    if (height <= 0.0f) {
+      return;
+    }
+    MarkdownItemQuoteLine line;
+    line.x = this->context_block_start_x() - this->list_indent_px() * 0.5f;
+    line.y = quote->start_y;
+    line.height = height;
+    cache_.md_layout.items.append(line);
+  }
+
+  bool is_in_quote() const
+  {
+    for (const auto &md_block : block_stack_) {
+      if (std::holds_alternative<QuoteBlock>(md_block)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   float get_space_above_new_block() const
   {
     if (!last_left_block_) {
@@ -398,6 +441,7 @@ class MarkdownLayouter {
     switch (block_type) {
       case MD_BLOCK_QUOTE: {
         BLI_assert(std::holds_alternative<QuoteBlock>(md_block));
+        this->append_quote_line();
         break;
       }
       case MD_BLOCK_UL: {
@@ -648,6 +692,7 @@ class MarkdownLayouter {
     item_template.fontid = fontid;
     item_template.weight = weight;
     item_template.italic = italic;
+    item_template.is_in_quote = this->is_in_quote();
     item_template.url = url;
 
     markdown_apply_item_font(item_template);
@@ -756,6 +801,9 @@ class MarkdownLayouter {
       }
       else if (const auto *rule_item = std::get_if<MarkdownItemHorizontalRule>(&item)) {
         bottom_y = std::min(bottom_y, rule_item->y - 0.5f * main_font_.default_line_height);
+      }
+      else if (const auto *quote_line = std::get_if<MarkdownItemQuoteLine>(&item)) {
+        bottom_y = std::min(bottom_y, quote_line->y - quote_line->height);
       }
     }
     if (bottom_y != FLT_MAX) {
@@ -930,14 +978,27 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
   theme::get_color_4ubv(TH_LINK, link_color);
   link_color[3] = color[3];
 
+  uchar dimmed_color[4] = {
+      uchar((int(color[0]) * 2) / 3),
+      uchar((int(color[1]) * 2) / 3),
+      uchar((int(color[2]) * 2) / 3),
+      color[3],
+  };
+  uchar dimmed_link_color[4] = {
+      uchar((int(link_color[0]) * 2) / 3),
+      uchar((int(link_color[1]) * 2) / 3),
+      uchar((int(link_color[2]) * 2) / 3),
+      link_color[3],
+  };
+
   for (const MarkdownItem &item : cache.md_layout.items) {
     if (const auto *text_item = std::get_if<MarkdownItemText>(&item)) {
       markdown_apply_item_font(*text_item);
       if (text_item->url) {
-        BLF_color4ubv(text_item->fontid, link_color);
+        BLF_color4ubv(text_item->fontid, text_item->is_in_quote ? dimmed_link_color : link_color);
       }
       else {
-        BLF_color4ubv(text_item->fontid, color);
+        BLF_color4ubv(text_item->fontid, text_item->is_in_quote ? dimmed_color : color);
       }
       const float x = rect->xmin + text_item->x;
       const float y = rect->ymax + text_item->y;
@@ -958,6 +1019,25 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
       immBegin(GPU_PRIM_LINES, 2);
       immVertex2f(pos, rect->xmin, y);
       immVertex2f(pos, rect->xmax, y);
+      immEnd();
+      GPU_blend(GPU_BLEND_NONE);
+      immUnbindProgram();
+    }
+    else if (const auto *quote_line = std::get_if<MarkdownItemQuoteLine>(&item)) {
+      const uchar line_color[4] = {color[0], color[1], color[2], 80};
+      const float x = rect->xmin + quote_line->x;
+      const float y_top = rect->ymax + quote_line->y;
+      const float y_bottom = y_top - quote_line->height;
+
+      const uint pos = GPU_vertformat_attr_add(
+          immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
+      immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+      GPU_blend(GPU_BLEND_ALPHA);
+      immUniformColor4ubv(line_color);
+      GPU_line_width(2.0f);
+      immBegin(GPU_PRIM_LINES, 2);
+      immVertex2f(pos, x, y_top);
+      immVertex2f(pos, x, y_bottom);
       immEnd();
       GPU_blend(GPU_BLEND_NONE);
       immUnbindProgram();

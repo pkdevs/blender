@@ -389,6 +389,7 @@ struct MarkdownItemText {
   int fontid = 0;
   int weight = 400;
   bool italic = false;
+  bool is_in_quote = false;
   StringRef text;
   std::optional<StringRef> url;
 };
@@ -398,7 +399,16 @@ struct MarkdownItemHorizontalRule {
   float y = 0.0f;
 };
 
-using MarkdownItem = std::variant<MarkdownItemText, MarkdownItemHorizontalRule>;
+struct MarkdownItemQuoteLine {
+  /** Top position of the bar in pixels. */
+  float x = 0.0f;
+  float y = 0.0f;
+  /** Length of the bar extending downward. */
+  float height = 0.0f;
+};
+
+using MarkdownItem =
+    std::variant<MarkdownItemText, MarkdownItemHorizontalRule, MarkdownItemQuoteLine>;
 
 struct MarkdownLayoutCacheKey {
   StringRef text;
