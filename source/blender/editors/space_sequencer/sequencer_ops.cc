@@ -41,7 +41,6 @@ void sequencer_operatortypes()
   WM_operatortype_append(SEQUENCER_OT_offset_clear);
   WM_operatortype_append(SEQUENCER_OT_images_separate);
   WM_operatortype_append(SEQUENCER_OT_meta_toggle);
-  WM_operatortype_append(SEQUENCER_OT_compositor_input_toggle);
   WM_operatortype_append(SEQUENCER_OT_meta_make);
   WM_operatortype_append(SEQUENCER_OT_meta_separate);
 

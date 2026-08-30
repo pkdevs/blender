@@ -247,6 +247,9 @@ Span<Strip *> lookup_strips_by_compositor_node_group(Editing *ed, const bNodeTre
  */
 Span<Strip *> lookup_effects_by_strip(Editing *ed, const Strip *key);
 
+/** Find compositor effects and modifiers that use `key` as an exposed color input. */
+Span<Strip *> lookup_compositor_users_by_strip(Editing *ed, const Strip *key);
+
 /**
  * Find which meta strip the given timeline channel belongs to. Returns nullptr if it is a global
  * channel.

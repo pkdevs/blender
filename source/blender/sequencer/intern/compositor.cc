@@ -33,7 +33,11 @@
 
 #include "RNA_access.hh"
 
+#include "SEQ_iterator.hh"
+#include "SEQ_sequencer.hh"
+
 #include "compositor.hh"
+#include "render.hh"
 
 namespace blender::seq {
 
@@ -192,6 +196,60 @@ static void set_input_result_from_rna_value(PointerRNA &inputs_ptr,
       &input_props_ptr, socket_type, result, get_socket_dimension(&socket, socket_type));
 }
 
+CompositorContext::~CompositorContext()
+{
+  for (ImBuf *image : strip_input_buffers_) {
+    IMB_freeImBuf(image);
+  }
+}
+
+CompositorContext::InputStripStatus CompositorContext::fill_color_input_from_rna_strip(
+    PointerRNA &inputs_ptr, const bNodeTreeInterfaceSocket &socket, compositor::Result &result)
+{
+  using namespace nodes;
+  PointerRNA input_props_ptr = RNA_pointer_get(&inputs_ptr, socket.identifier);
+  if (CompositorNodesInputType(RNA_enum_get(&input_props_ptr, "type")) !=
+      CompositorNodesInputType::Strip)
+  {
+    return InputStripStatus::NotStrip;
+  }
+
+  Editing *ed = editing_get(render_data_.scene);
+  const std::string strip_name = RNA_string_get(&input_props_ptr, "strip_name");
+  Strip *input_strip = ed ? lookup_strip_by_name(ed, strip_name.c_str()) : nullptr;
+  if (input_strip == nullptr || input_strip == strip_ || !input_strip->has_image_output() ||
+      !input_strip->intersects_frame(render_data_.scene, timeline_frame_) ||
+      lookup_meta_by_strip(ed, input_strip) != lookup_meta_by_strip(ed, strip_))
+  {
+    return InputStripStatus::Unavailable;
+  }
+
+  /* Reject strips that use the owner through their regular effect inputs. The render-state checks
+   * also catch custom strip-input cycles and indirect cycles through other strip relations. */
+  VectorSet<Strip *> input_dependencies;
+  input_dependencies.add(input_strip);
+  expand_strips(ed, input_dependencies, StripRelation::Inputs);
+  if (input_dependencies.contains(const_cast<Strip *>(strip_)) ||
+      render_state_.strips_in_progress.contains(const_cast<Strip *>(strip_)) ||
+      render_state_.strips_in_progress.contains(input_strip))
+  {
+    return InputStripStatus::Unavailable;
+  }
+
+  const bool owner_added = render_state_.strips_in_progress.add(const_cast<Strip *>(strip_));
+  SeqResult input = seq_render_strip(&render_data_, &render_state_, input_strip, timeline_frame_);
+  if (owner_added) {
+    render_state_.strips_in_progress.remove(const_cast<Strip *>(strip_));
+  }
+  if (input.image == nullptr) {
+    return InputStripStatus::Unavailable;
+  }
+
+  strip_input_buffers_.append(input.image);
+  create_result_from_input(result, *input.image);
+  return InputStripStatus::Loaded;
+}
+
 CompositorContext::InputImageStatus CompositorContext::fill_color_input_from_rna_image(
     PointerRNA &inputs_ptr, const bNodeTreeInterfaceSocket &socket, compositor::Result &result)
 {
@@ -225,6 +283,15 @@ void CompositorContext::set_input_result_from_rna(PointerRNA &inputs_ptr,
                                                   compositor::Result &result)
 {
   if (socket_type == SOCK_RGBA) {
+    const InputStripStatus strip_status = this->fill_color_input_from_rna_strip(
+        inputs_ptr, socket, result);
+    if (strip_status == InputStripStatus::Loaded) {
+      return;
+    }
+    if (strip_status == InputStripStatus::Unavailable) {
+      result.allocate_invalid();
+      return;
+    }
     const InputImageStatus image_status = this->fill_color_input_from_rna_image(
         inputs_ptr, socket, result);
     if (image_status == InputImageStatus::Loaded) {

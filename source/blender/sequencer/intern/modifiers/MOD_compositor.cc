@@ -69,6 +69,7 @@ void compositor_modifier_nodes_update_interface(Main &bmain,
       &sequencer_scene.id, RNA_SequencerCompositorModifierProperties, &cmd);
   RNA_ensure_and_sync_system_properties(bmain, properties_ptr, *cmd.modifier.system_properties);
   nodes::compositor_nodes_reset_invalid_input_types(properties_ptr, *cmd.node_group);
+  strip_lookup_invalidate(editing_get(&sequencer_scene));
 
   DEG_id_tag_update(&sequencer_scene.id, ID_RECALC_SEQUENCER_STRIPS);
 }
@@ -81,7 +82,6 @@ class CompositorModifierContext : public CompositorContext {
   ImBuf *image_buffer_;
   compositor::Result mask_;
   ImBuf *mask_buffer_ = nullptr;
-  int timeline_frame_;
 
   /* The hash of the active compute context. */
   const ComputeContextHash active_compute_context_hash_;
@@ -93,12 +93,15 @@ class CompositorModifierContext : public CompositorContext {
   CompositorModifierContext(const ModifierApplyContext &mod_context,
                             compositor::StaticCacheManager &cache_manager,
                             SequencerCompositorModifierData *modifier_data)
-      : CompositorContext(cache_manager, mod_context.render_data, mod_context.strip),
+      : CompositorContext(cache_manager,
+                          mod_context.render_data,
+                          mod_context.render_state,
+                          mod_context.strip,
+                          mod_context.timeline_frame),
         mod_context_(mod_context),
         modifier_data_(modifier_data),
         image_buffer_(mod_context.result.image),
         mask_(*this, compositor::ResultType::Color, compositor::ResultPrecision::Full),
-        timeline_frame_(mod_context.timeline_frame),
         active_compute_context_hash_(bke::compositor::compute_active_compute_context_hash(
             *render_data_.scene, *modifier_data_->node_group))
   {

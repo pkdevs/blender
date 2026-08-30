@@ -18,7 +18,8 @@ namespace nodes {
 enum class CompositorNodesInputType {
   Fallback = 0,
   Value = 1,
-  Image = 2,
+  Strip = 2,
+  Image = 3,
 };
 
 extern const EnumPropertyItem compositor_nodes_input_type_items_fallback[];

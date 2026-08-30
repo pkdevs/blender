@@ -31,7 +31,6 @@
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
-#include "RNA_path.hh"
 #include "RNA_prototypes.hh"
 
 #include "UI_interface.hh"
@@ -154,18 +153,22 @@ static void draw_property_for_socket(DrawGroupInputsContext &ctx,
       break;
     }
     case SOCK_RGBA: {
-      /* A flat color or an image. */
+      /* Color input can come from several different places. */
       const auto input_type = CompositorNodesInputType(RNA_enum_get(socket_props_ptr, "type"));
+      const bool show_strip = input_type == CompositorNodesInputType::Strip;
       const bool show_image = input_type == CompositorNodesInputType::Image;
       bool unsupported_image = false;
 
-      /* Use shared property split for both color and image types, to make sure the label
-       * and control bounds stay the same between the two cases. */
+      /* Use a shared property split for all source types so the label and control bounds stay the
+       * same between cases. */
       ui::PropertySplitWrapper split = uiItemPropertySplitWrapperCreate(&row);
       split.label_column->label(name, ICON_NONE);
       ui::Layout &prop_row = *split.property_row;
       prop_row.use_property_split_set(false);
-      if (show_image) {
+      if (show_strip) {
+        prop_row.prop(socket_props_ptr, "strip_name", UI_ITEM_NONE, "", ICON_NONE);
+      }
+      else if (show_image) {
         template_id(&prop_row,
                     &ctx.C,
                     socket_props_ptr,
@@ -182,21 +185,14 @@ static void draw_property_for_socket(DrawGroupInputsContext &ctx,
       else {
         prop_row.prop(socket_props_ptr, "value", UI_ITEM_NONE, "", ICON_NONE);
       }
-      PropertyRNA *type_prop = RNA_struct_find_property(socket_props_ptr, "type");
-      std::optional<std::string> type_path;
-      if (type_prop) {
-        type_path = RNA_path_from_ID_to_property(socket_props_ptr, type_prop);
-      }
-      if (type_path.has_value()) {
-        PointerRNA props = prop_row.op("sequencer.compositor_input_toggle",
-                                       "",
-                                       ICON_IMAGE_DATA,
-                                       wm::OpCallContext::InvokeDefault,
-                                       UI_ITEM_NONE);
-        RNA_string_set(&props, "data_path", type_path->c_str());
-      }
+
+      const int source_icon = show_strip ? ICON_SEQ_SEQUENCER :
+                              show_image ? ICON_IMAGE_DATA :
+                                           ICON_COLOR;
+      prop_row.prop(socket_props_ptr, "type", ui::ITEM_R_ICON_ONLY, "", source_icon);
+
       BLI_assert(split.decorate_column != nullptr);
-      if (show_image) {
+      if (show_strip || show_image) {
         split.decorate_column->label("", ICON_BLANK1);
       }
       else {

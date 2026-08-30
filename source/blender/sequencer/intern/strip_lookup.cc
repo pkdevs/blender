@@ -6,6 +6,7 @@
  * \ingroup sequencer
  */
 
+#include "SEQ_iterator.hh"
 #include "SEQ_sequencer.hh"
 #include "sequencer.hh"
 
@@ -16,6 +17,10 @@
 
 #include "BLI_listbase.hh"
 #include "BLI_mutex.hh"
+
+#include "BKE_idprop.hh"
+
+#include "NOD_compositor_nodes_srna.hh"
 
 #include <cstring>
 
@@ -31,6 +36,7 @@ struct StripLookup {
   Map<const bNodeTree *, VectorSet<Strip *>> strips_by_compositor_node_group;
   Map<const Strip *, Strip *> meta_by_strip;
   Map<const Strip *, VectorSet<Strip *>> effects_by_strip;
+  Map<const Strip *, VectorSet<Strip *>> compositor_users_by_strip;
   Map<const SeqTimelineChannel *, Strip *> owner_by_channel;
   bool is_valid = false;
 };
@@ -119,6 +125,45 @@ static void strip_lookup_build_from_seqbase(Strip *parent_meta,
 static void strip_lookup_build(const Editing *ed, StripLookup *lookup)
 {
   strip_lookup_build_from_seqbase(nullptr, &ed->seqbase, lookup);
+
+  const auto add_compositor_inputs = [&](Strip *user, const IDProperty *properties) {
+    const IDProperty *inputs = properties ? IDP_GetPropertyFromGroup(properties, "inputs") :
+                                            nullptr;
+    if (inputs == nullptr || inputs->type != IDP_GROUP) {
+      return;
+    }
+    for (const IDProperty &input : inputs->data.group) {
+      if (input.type != IDP_GROUP) {
+        continue;
+      }
+      const IDProperty *type = IDP_GetPropertyFromGroup(&input, "type");
+      const IDProperty *strip_name = IDP_GetPropertyFromGroup(&input, "strip_name");
+      if (type == nullptr || type->type != IDP_INT ||
+          IDP_int_get(type) != int(nodes::CompositorNodesInputType::Strip) ||
+          strip_name == nullptr || strip_name->type != IDP_STRING)
+      {
+        continue;
+      }
+      Strip *input_strip = lookup->strip_by_name.lookup_default(IDP_string_get(strip_name),
+                                                                nullptr);
+      if (input_strip != nullptr) {
+        lookup->compositor_users_by_strip.lookup_or_add_default(input_strip).add(user);
+      }
+    }
+  };
+
+  for (Strip *strip : query_all_strips_recursive(&ed->seqbase)) {
+    if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata != nullptr) {
+      const CompositorEffectVars *effect = static_cast<const CompositorEffectVars *>(
+          strip->effectdata);
+      add_compositor_inputs(strip, effect->system_properties);
+    }
+    for (const StripModifierData &modifier : strip->modifiers) {
+      if (modifier.type == eSeqModifierType_Compositor) {
+        add_compositor_inputs(strip, modifier.system_properties);
+      }
+    }
+  }
   lookup->is_valid = true;
 }
 
@@ -217,6 +262,15 @@ Span<Strip *> lookup_effects_by_strip(Editing *ed, const Strip *key)
   StripLookup *lookup = ed->runtime->strip_lookup;
   VectorSet<Strip *> &effects = lookup->effects_by_strip.lookup_or_add_default(key);
   return effects.as_span();
+}
+
+Span<Strip *> lookup_compositor_users_by_strip(Editing *ed, const Strip *key)
+{
+  BLI_assert(ed != nullptr);
+  std::lock_guard lock(lookup_lock);
+  strip_lookup_update_if_needed(ed, &ed->runtime->strip_lookup);
+  StripLookup *lookup = ed->runtime->strip_lookup;
+  return lookup->compositor_users_by_strip.lookup_or_add_default(key).as_span();
 }
 
 Strip *lookup_strip_by_channel_owner(Editing *ed, const SeqTimelineChannel *channel)

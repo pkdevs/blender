@@ -820,6 +820,7 @@ static bke::bNodeSocketType *make_socket_type_virtual()
 }
 
 static void set_common_sequencer_update_function(PropertyRNA *prop);
+static void set_common_sequencer_relation_update_function(PropertyRNA *prop);
 
 static void make_common_type_prop(StructRNA &srna,
                                   const bNodeTreeInterfaceSocket &socket,
@@ -844,7 +845,8 @@ static void make_common_type_prop(StructRNA &srna,
                                   const EnumPropertyItem *items,
                                   const nodes::CompositorNodesInputType default_type,
                                   nodes::GeneratedTreeSrnaData &r_generated,
-                                  const char *description = "")
+                                  const char *description = "",
+                                  const bool affects_strip_relations = false)
 {
   PropertyRNA *prop = RNA_def_enum(
       &srna,
@@ -854,8 +856,14 @@ static void make_common_type_prop(StructRNA &srna,
       r_generated.scope.add_value(fmt::format("{} {}", TIP_("Type for"), socket.name)).c_str(),
       description);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  /* Switching the input type (color vs image) must re-render the strip. */
-  set_common_sequencer_update_function(prop);
+  /* Switching an input type must re-render the strip. Color source types also change strip
+   * relations. */
+  if (affects_strip_relations) {
+    set_common_sequencer_relation_update_function(prop);
+  }
+  else {
+    set_common_sequencer_update_function(prop);
+  }
 }
 
 /* Find the strip that owns the compositor properties an input value belongs to. Works both
@@ -903,6 +911,44 @@ static Strip *find_compositor_properties_strip(PointerRNA *ptr, Editing *ed)
   return nullptr;
 }
 
+static void sequencer_strip_input_visit_for_search(
+    const bContext * /*C*/,
+    PointerRNA *ptr,
+    PropertyRNA * /*prop*/,
+    const char * /*edit_text*/,
+    FunctionRef<void(StringPropertySearchVisitParams)> visit_fn)
+{
+  Scene *sequencer_scene = reinterpret_cast<Scene *>(ptr->owner_id);
+  Editing *ed = seq::editing_get(sequencer_scene);
+  if (ed == nullptr) {
+    return;
+  }
+  Strip *owner = find_compositor_properties_strip(ptr, ed);
+  if (owner == nullptr) {
+    return;
+  }
+
+  Strip *owner_meta = seq::lookup_meta_by_strip(ed, owner);
+  ListBaseT<Strip> &seqbase = owner_meta ? owner_meta->seqbase : ed->seqbase;
+  for (Strip &candidate : seqbase) {
+    if (&candidate == owner || !candidate.has_image_output()) {
+      continue;
+    }
+    VectorSet<Strip *> candidate_inputs;
+    candidate_inputs.add(&candidate);
+    seq::expand_strips(ed, candidate_inputs, seq::StripRelation::Inputs);
+    if (candidate_inputs.contains(owner)) {
+      continue;
+    }
+    if (candidate.right_handle(sequencer_scene) <= owner->left_handle() ||
+        candidate.left_handle() >= owner->right_handle(sequencer_scene))
+    {
+      continue;
+    }
+    visit_fn(StringPropertySearchVisitParams{candidate.name + 2, std::nullopt, std::nullopt});
+  }
+}
+
 static void sequencer_compositor_property_update(Main * /*bmain*/,
                                                  Scene * /*scene*/,
                                                  PointerRNA *ptr)
@@ -918,9 +964,24 @@ static void sequencer_compositor_property_update(Main * /*bmain*/,
   }
 }
 
+static void sequencer_compositor_relation_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  Scene *sequencer_scene = reinterpret_cast<Scene *>(ptr->owner_id);
+  if (Editing *ed = seq::editing_get(sequencer_scene)) {
+    seq::strip_lookup_invalidate(ed);
+  }
+  sequencer_compositor_property_update(bmain, scene, ptr);
+}
+
 static void set_common_sequencer_update_function(PropertyRNA *prop)
 {
   RNA_def_property_update_runtime(prop, sequencer_compositor_property_update);
+  RNA_def_property_update_notifier(prop, NC_SCENE | ND_SEQUENCER);
+}
+
+static void set_common_sequencer_relation_update_function(PropertyRNA *prop)
+{
+  RNA_def_property_update_runtime(prop, sequencer_compositor_relation_update);
   RNA_def_property_update_notifier(prop, NC_SCENE | ND_SEQUENCER);
 }
 
@@ -1586,7 +1647,18 @@ static bke::bNodeSocketType *make_socket_type_rgba()
                                             0.0f,
                                             1.0f);
     set_common_sequencer_update_function(prop);
-    /* Color inputs can also sample an image data-block. */
+    /* Color inputs can also sample another sequencer strip. Store its name because strips are not
+     * ID data-blocks and cannot be referenced by an IDProperty pointer. */
+    PropertyRNA *strip_prop = RNA_def_string(
+        &srna,
+        "strip_name",
+        nullptr,
+        0,
+        r_generated.scope.add_value(fmt::format("{} {}", TIP_("Strip for"), socket.name)).c_str(),
+        socket.description);
+    RNA_def_property_string_search_func_runtime(
+        strip_prop, sequencer_strip_input_visit_for_search, PROP_STRING_SEARCH_SORT);
+    set_common_sequencer_relation_update_function(strip_prop);
     PropertyRNA *image_prop = RNA_def_pointer_runtime(
         &srna, "image", RNA_Image, socket.name, socket.description);
     set_common_sequencer_id_update_function(image_prop);
@@ -1595,7 +1667,8 @@ static bke::bNodeSocketType *make_socket_type_rgba()
                           nodes::compositor_nodes_input_type_items_color,
                           nodes::CompositorNodesInputType::Value,
                           r_generated,
-                          "Switch between a single color and an image");
+                          "Use a single color, another sequencer strip, or an image",
+                          true);
   };
   socktype->make_scene_compositor_effect_input_srna =
       [](const bNodeTree & /*tree*/,

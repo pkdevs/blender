@@ -15,6 +15,7 @@
 #include "BLI_listbase.hh"
 #include "BLI_math_base_c.hh"
 #include "BLI_session_uid.hh"
+#include "BLI_set.hh"
 #include "BLI_string.hh"
 
 #include "BKE_idprop.hh"
@@ -24,6 +25,8 @@
 #include "BKE_scene.hh"
 
 #include "DEG_depsgraph.hh"
+
+#include "NOD_compositor_nodes_srna.hh"
 
 #include "SEQ_iterator.hh"
 #include "SEQ_prefetch.hh"
@@ -130,20 +133,30 @@ bool evict_caches_if_full(Scene *scene)
   return !(evicted_final || evicted_source);
 }
 
-static void update_range_with_effects(const Scene *scene, const Strip *strip, int2 &r_range)
+static void update_range_with_users(const Scene *scene,
+                                    const Strip *strip,
+                                    int2 &r_range,
+                                    Set<const Strip *> &r_visited)
 {
+  if (!r_visited.add(strip)) {
+    return;
+  }
   r_range.x = std::min(r_range.x, strip->left_handle());
   r_range.y = std::max(r_range.y, strip->right_handle(scene) - 1);
   Span<Strip *> effects = lookup_effects_by_strip(scene->ed, strip);
   for (Strip *effect : effects) {
-    update_range_with_effects(scene, effect, r_range);
+    update_range_with_users(scene, effect, r_range, r_visited);
+  }
+  for (Strip *user : lookup_compositor_users_by_strip(scene->ed, strip)) {
+    update_range_with_users(scene, user, r_range, r_visited);
   }
 }
 
 static void invalidate_final_cache_strip_range(Scene *scene, const Strip *strip)
 {
   int2 range{MAXFRAME, -MAXFRAME};
-  update_range_with_effects(scene, strip, range);
+  Set<const Strip *> visited;
+  update_range_with_users(scene, strip, range, visited);
   final_image_cache_invalidate_frame_range(scene, range.x, range.y);
 }
 
@@ -259,15 +272,28 @@ void relations_invalidate_compositor_users(const Main *bmain, const bNodeTree *n
   }
 }
 
-static bool idproperties_use_id(IDProperty *properties, const ID *target_id)
+static bool compositor_properties_use_id(const IDProperty *properties, const ID *target_id)
 {
-  bool used = false;
-  IDP_foreach_property(properties, IDP_TYPE_FILTER_ID, [&](IDProperty *property) {
-    if (IDP_ID_get(property) == target_id) {
-      used = true;
+  const IDProperty *inputs = properties ? IDP_GetPropertyFromGroup(properties, "inputs") : nullptr;
+  if (inputs == nullptr || inputs->type != IDP_GROUP) {
+    return false;
+  }
+  for (const IDProperty &input : inputs->data.group) {
+    if (input.type != IDP_GROUP) {
+      continue;
     }
-  });
-  return used;
+    const IDProperty *type = IDP_GetPropertyFromGroup(&input, "type");
+    if (type == nullptr || type->type != IDP_INT ||
+        IDP_int_get(type) != int(nodes::CompositorNodesInputType::Image))
+    {
+      continue;
+    }
+    const IDProperty *image = IDP_GetPropertyFromGroup(&input, "image");
+    if (image != nullptr && image->type == IDP_ID && IDP_ID_get(image) == target_id) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void relations_invalidate_image_users(const Main *bmain, const Image *image)
@@ -280,13 +306,16 @@ void relations_invalidate_image_users(const Main *bmain, const Image *image)
     foreach_strip(&scene.ed->seqbase, [&](Strip *strip) {
       bool used = false;
       if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata) {
-        const CompositorEffectVars *effect = static_cast<CompositorEffectVars *>(
+        const CompositorEffectVars *effect = static_cast<const CompositorEffectVars *>(
             strip->effectdata);
-        used = idproperties_use_id(effect->system_properties, image_id);
+        used = compositor_properties_use_id(effect->system_properties, image_id);
       }
-      for (StripModifierData &modifier : strip->modifiers) {
-        if (modifier.type == eSeqModifierType_Compositor) {
-          used |= idproperties_use_id(modifier.system_properties, image_id);
+      for (const StripModifierData &modifier : strip->modifiers) {
+        if (modifier.type == eSeqModifierType_Compositor &&
+            compositor_properties_use_id(modifier.system_properties, image_id))
+        {
+          used = true;
+          break;
         }
       }
       if (used) {

@@ -53,13 +53,15 @@ class CompositorEffectContext : public CompositorContext {
  public:
   CompositorEffectContext(compositor::StaticCacheManager &cache_manager,
                           const RenderData &render_data,
+                          SeqRenderState &render_state,
                           bNodeTree *node_tree,
                           ImBuf *input_1,
                           ImBuf *input_2,
                           ImBuf *output,
                           float factor,
-                          const Strip &strip)
-      : CompositorContext(cache_manager, render_data, strip),
+                          const Strip &strip,
+                          const float timeline_frame)
+      : CompositorContext(cache_manager, render_data, render_state, strip, timeline_frame),
         node_group_(node_tree),
         input_1_(input_1),
         input_2_(input_2),
@@ -151,9 +153,9 @@ class CompositorEffectContext : public CompositorContext {
 };
 
 static SeqResult do_compositor_effect(const RenderData *context,
-                                      SeqRenderState * /*state*/,
+                                      SeqRenderState *state,
                                       Strip *strip,
-                                      float /*timeline_frame*/,
+                                      float timeline_frame,
                                       float fac,
                                       const SeqResult &src1,
                                       const SeqResult &src2)
@@ -176,12 +178,14 @@ static SeqResult do_compositor_effect(const RenderData *context,
     CompositorCache &com_cache = context->scene->ed->runtime->ensure_compositor_cache();
     CompositorEffectContext com_context(com_cache.get_cache_manager(),
                                         *context,
+                                        *state,
                                         data->node_group,
                                         src1.image,
                                         src2.image,
                                         out.image,
                                         fac,
-                                        *strip);
+                                        *strip,
+                                        timeline_frame);
 
     GpuContextState gpu_state = GpuContextState::Unsupported;
     if (com_context.use_gpu()) {
@@ -261,6 +265,7 @@ void compositor_effect_nodes_update_interface(Main &bmain, Scene &sequencer_scen
       &sequencer_scene.id, RNA_SequencerCompositorEffectProperties, comp);
   RNA_ensure_and_sync_system_properties(bmain, properties_ptr, *comp->system_properties);
   nodes::compositor_nodes_reset_invalid_input_types(properties_ptr, *comp->node_group);
+  strip_lookup_invalidate(editing_get(&sequencer_scene));
 
   DEG_id_tag_update(&sequencer_scene.id, ID_RECALC_SEQUENCER_STRIPS);
 }

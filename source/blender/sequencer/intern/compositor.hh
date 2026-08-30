@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "BLI_vector.hh"
+
 #include "COM_context.hh"
 #include "COM_node_group_operation.hh"
 #include "SEQ_render.hh"
@@ -18,11 +20,16 @@ enum eNodeSocketDatatype : short;
 
 namespace blender::seq {
 
+struct SeqRenderState;
+
 class CompositorContext : public compositor::Context {
  protected:
   const RenderData &render_data_;
+  SeqRenderState &render_state_;
   const Strip *strip_ = nullptr;
+  float timeline_frame_ = 0.0f;
   float2 result_translation_ = float2(0, 0);
+  Vector<ImBuf *> strip_input_buffers_;
 
   /* True if GPU compute is supported and can be used, if false, we fallback to CPU. */
   bool gpu_supported_ = true;
@@ -30,10 +37,17 @@ class CompositorContext : public compositor::Context {
  public:
   CompositorContext(compositor::StaticCacheManager &cache_manager,
                     const RenderData &render_data,
-                    const Strip &strip)
-      : compositor::Context(cache_manager), render_data_(render_data), strip_(&strip)
+                    SeqRenderState &render_state,
+                    const Strip &strip,
+                    const float timeline_frame)
+      : compositor::Context(cache_manager),
+        render_data_(render_data),
+        render_state_(render_state),
+        strip_(&strip),
+        timeline_frame_(timeline_frame)
   {
   }
+  ~CompositorContext();
   const Main &get_main() const override
   {
     return *render_data_.bmain;
@@ -66,6 +80,11 @@ class CompositorContext : public compositor::Context {
   }
 
  protected:
+  enum class InputStripStatus {
+    NotStrip,
+    Loaded,
+    Unavailable,
+  };
   enum class InputImageStatus {
     NotImage,
     Loaded,
@@ -82,15 +101,18 @@ class CompositorContext : public compositor::Context {
 
   void create_result_from_input(compositor::Result &result, ImBuf &input);
   /**
-   * If the given color input is set to an  image data-block, load that image through
-   * the image cache and share into result.
+   * If the given color input is set to another sequencer strip, render that strip at the current
+   * timeline frame and share its image into the result.
    */
+  InputStripStatus fill_color_input_from_rna_strip(PointerRNA &inputs_ptr,
+                                                   const bNodeTreeInterfaceSocket &socket,
+                                                   compositor::Result &result);
+  /** Load an Image data-block selected as the source of the given color input. */
   InputImageStatus fill_color_input_from_rna_image(PointerRNA &inputs_ptr,
                                                    const bNodeTreeInterfaceSocket &socket,
                                                    compositor::Result &result);
   /**
-   * Allocate result as a single value (or potentially an image for Image inputs), and fill it
-   * from the RNA property of the given input.
+   * Allocate result as a single value or image, and fill it from the selected input source.
    */
   void set_input_result_from_rna(PointerRNA &inputs_ptr,
                                  const bNodeTreeInterfaceSocket &socket,

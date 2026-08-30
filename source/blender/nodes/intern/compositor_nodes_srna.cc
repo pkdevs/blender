@@ -31,6 +31,8 @@ static constexpr EnumPropertyItem input_type_item_fallback = {
     int(CompositorNodesInputType::Fallback), "FALLBACK", 0, "Fallback", "Fallback"};
 static constexpr EnumPropertyItem input_type_item_value = {
     int(CompositorNodesInputType::Value), "VALUE", 0, "Value", "Pass a single value"};
+static constexpr EnumPropertyItem input_type_item_strip = {
+    int(CompositorNodesInputType::Strip), "STRIP", 0, "Strip", "Sample another sequencer strip"};
 static constexpr EnumPropertyItem input_type_item_image = {
     int(CompositorNodesInputType::Image),
     "IMAGE",
@@ -50,6 +52,7 @@ const EnumPropertyItem compositor_nodes_input_type_items_value[] = {
 
 const EnumPropertyItem compositor_nodes_input_type_items_color[] = {
     input_type_item_value,
+    input_type_item_strip,
     input_type_item_image,
     {0},
 };

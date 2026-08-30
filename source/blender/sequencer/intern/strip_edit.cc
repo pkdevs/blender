@@ -509,9 +509,17 @@ bool edit_remove_gaps(Scene *scene,
 
 void edit_strip_name_set(Scene *scene, Strip *strip, const char *new_name)
 {
+  /* Compositor inputs refer to strips by name. Invalidate their cached results while the lookup
+   * still contains the old name-to-strip relation. */
+  Editing *ed = editing_get(scene);
+  if (strip->name[2] != '\0' && !STREQ(strip->name + 2, new_name) && ed != nullptr &&
+      !lookup_compositor_users_by_strip(ed, strip).is_empty())
+  {
+    relations_invalidate_cache(scene, strip);
+  }
   BLI_strncpy_utf8(strip->name + 2, new_name, MAX_NAME - 2);
   BLI_str_utf8_invalid_strip(strip->name + 2, strlen(strip->name + 2));
-  strip_lookup_invalidate(scene->ed);
+  strip_lookup_invalidate(ed);
 }
 
 }  // namespace blender::seq

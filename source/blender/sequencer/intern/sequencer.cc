@@ -1371,6 +1371,25 @@ int Strip::effect_num_inputs_get() const
   return blender::seq::effect_type_get_min_num_inputs(this->type);
 }
 
+bool Strip::has_image_output() const
+{
+  if (this->type == STRIP_TYPE_META) {
+    for (const Strip &child : this->seqbase) {
+      if (child.has_image_output()) {
+        return true;
+      }
+    }
+    return false;
+  }
+  return this->is_effect() || ELEM(this->type,
+                                   STRIP_TYPE_IMAGE,
+                                   STRIP_TYPE_SCENE,
+                                   STRIP_TYPE_MOVIE,
+                                   STRIP_TYPE_MOVIECLIP,
+                                   STRIP_TYPE_MASK,
+                                   STRIP_TYPE_TEXT);
+}
+
 bool StripModifierData::is_type_sound() const
 {
   return ELEM(

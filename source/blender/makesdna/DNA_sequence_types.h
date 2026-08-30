@@ -481,6 +481,7 @@ struct Strip {
 #ifdef __cplusplus
   bool is_effect() const;
   int effect_num_inputs_get() const;
+  bool has_image_output() const;
   bool is_effect_with_inputs() const
   {
     return this->effect_num_inputs_get() != 0;

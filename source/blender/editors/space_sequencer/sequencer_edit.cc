@@ -24,8 +24,6 @@
 
 #include "BLT_translation.hh"
 
-#include "NOD_compositor_nodes_srna.hh"
-
 #include "DNA_anim_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
@@ -64,7 +62,6 @@
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
-#include "RNA_path.hh"
 #include "RNA_prototypes.hh"
 
 #include "ED_fileselect.hh"
@@ -91,56 +88,6 @@
 namespace blender::ed::vse {
 
 static CLG_LogRef LOG = {"seq.edit"};
-
-/* Toggle compositor input source: direct toggle for the input source enum, similar
- * to geometry nodes value/attribute toggle. */
-static wmOperatorStatus sequencer_compositor_input_toggle_exec(bContext *C, wmOperator *op)
-{
-  Scene *scene = CTX_data_sequencer_scene(C);
-  if (scene == nullptr) {
-    return OPERATOR_CANCELLED;
-  }
-
-  const std::string data_path = RNA_string_get(op->ptr, "data_path");
-  PointerRNA scene_ptr = RNA_id_pointer_create(&scene->id);
-  PointerRNA input_ptr;
-  PropertyRNA *type_prop = nullptr;
-  const bool resolved = RNA_path_resolve_property(
-      &scene_ptr, data_path.c_str(), &input_ptr, &type_prop);
-  if (!resolved || RNA_property_type(type_prop) != PROP_ENUM) {
-    return OPERATOR_CANCELLED;
-  }
-
-  int type = RNA_property_enum_get(&input_ptr, type_prop);
-  if (type == int(nodes::CompositorNodesInputType::Image)) {
-    type = int(nodes::CompositorNodesInputType::Value);
-  }
-  else {
-    type = int(nodes::CompositorNodesInputType::Image);
-  }
-  EnumPropertyItem type_item;
-  if (!RNA_property_enum_item_from_value(nullptr, &input_ptr, type_prop, type, &type_item)) {
-    return OPERATOR_CANCELLED;
-  }
-
-  RNA_property_enum_set(&input_ptr, type_prop, type);
-  RNA_property_update(C, &input_ptr, type_prop);
-  return OPERATOR_FINISHED;
-}
-
-void SEQUENCER_OT_compositor_input_toggle(wmOperatorType *ot)
-{
-  ot->name = "Compositor Input Source Toggle";
-  ot->description = "Switch between a single color and an image";
-  ot->idname = "SEQUENCER_OT_compositor_input_toggle";
-
-  ot->exec = sequencer_compositor_input_toggle_exec;
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
-
-  RNA_def_string(ot->srna, "data_path", nullptr, 0, "Data Path", "");
-}
-
-/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Public Context Checks
