@@ -560,6 +560,7 @@ PaintMode BKE_paintmode_get_active_from_context(const bContext *C)
     }
     else {
       /* default to image paint */
+      /* TODO: This default doesn't make sense, use Invalid instead */
       return PaintMode::Texture2D;
     }
   }

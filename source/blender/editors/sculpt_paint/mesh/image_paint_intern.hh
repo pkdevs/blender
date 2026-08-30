@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include "BKE_image_wrappers.hh"
+
+#include "IMB_colormanagement.hh"
+
 namespace blender::ed::sculpt_paint::image {
 /* -------------------------------------------------------------------- */
 /** \name 3D Texture Paint (Experimental)

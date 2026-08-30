@@ -1763,10 +1763,12 @@ static void rna_experimental_use_3d_texture_paint_update(bContext *C, PointerRNA
   const bool new_value = RNA_property_boolean_get(ptr, prop);
 
   if (new_value) {
-    BKE_object_sculpt_data_create(object);
-    DEG_id_tag_update(&object->id, ID_RECALC_GEOMETRY);
-    BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
-    BKE_sculptsession_update_for_edit(depsgraph, object, true);
+    if (object->runtime->sculpt_session == nullptr) {
+      BKE_object_sculpt_data_create(object);
+      DEG_id_tag_update(&object->id, ID_RECALC_GEOMETRY);
+      BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
+      BKE_sculptsession_update_for_edit(depsgraph, object, true);
+    }
   }
   else {
     BKE_sculptsession_free(object);

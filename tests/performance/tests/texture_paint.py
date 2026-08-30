@@ -76,7 +76,7 @@ def prepare_scene(context: any, object: MeshType, image_dimension: int, data_typ
     with context.temp_override(**context_override):
         bpy.ops.view3d.view_axis(type='FRONT')
         bpy.ops.view3d.view_selected()
-    bpy.ops.object.mode_set(mode='TEXTURE_PAINT')
+    bpy.ops.paint.texture_paint_toggle()
 
     is_float_image = data_type == DataType.FLOAT
 
@@ -159,7 +159,11 @@ def _run_brush_test(args: dict):
     # Create an undo stack explicitly. This isn't created by default in background mode.
     bpy.ops.ed.undo_push()
 
-    prepare_brush()
+    context_override = context.copy()
+    set_view3d_context_override(context_override)
+    with context.temp_override(**context_override):
+        # This needs to run in a View3D context to work correctly for texture paint
+        prepare_brush()
 
     min_measurements = 5
     max_measurements = 100
