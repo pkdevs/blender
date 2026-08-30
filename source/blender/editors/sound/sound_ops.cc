@@ -190,38 +190,19 @@ static void SOUND_OT_open_mono(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "mono", true, "Mono", "Mixdown the sound to mono");
 }
 
-static wmOperatorStatus sound_update_animation_flags_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus sound_update_animation_flags_exec(bContext * /*C*/, wmOperator * /*op*/)
 {
-  Scene *scene = CTX_data_scene(C);
-
-  if (BKE_sound_update_animation_flags(CTX_data_main(C), scene)) {
-    DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  }
   return OPERATOR_FINISHED;
 }
 
 static void SOUND_OT_update_animation_flags(wmOperatorType *ot)
 {
-  /*
-   * This operator is needed to set a correct state of the sound animation
-   * System. Unfortunately there's no really correct place to call the exec
-   * function, that's why I made it an operator that's only visible in the
-   * search menu. Apart from that the bake animation operator calls it too.
-   */
-
-  /* identifiers */
   ot->name = "Update Animation";
-  ot->description = "Update animation flags";
+  ot->description = "Update animation flags. Deprecated. Has no effect.";
   ot->idname = "SOUND_OT_update_animation_flags";
-
-  /* API callbacks. */
   ot->exec = sound_update_animation_flags_exec;
-
-  /* flags */
   ot->flag = OPTYPE_REGISTER;
 }
-
-/* ******************************************************* */
 
 static wmOperatorStatus sound_bake_animation_exec(bContext *C, wmOperator * /*op*/)
 {
@@ -229,7 +210,7 @@ static wmOperatorStatus sound_bake_animation_exec(bContext *C, wmOperator * /*op
   Scene *scene = CTX_data_scene(C);
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
 
-  BKE_sound_bake_animation(bmain, scene, depsgraph);
+  BKE_sound_bake_animation(bmain, scene, depsgraph, scene->r.sfra, scene->r.efra);
 
   return OPERATOR_FINISHED;
 }

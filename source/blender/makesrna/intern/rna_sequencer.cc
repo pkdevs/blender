@@ -19,7 +19,6 @@
 
 #include "BKE_animsys.hh"
 #include "BKE_layer.hh"
-#include "BKE_sound.hh"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
@@ -541,7 +540,7 @@ static void rna_Strip_retiming_key_remove(ID *id, SeqRetimingKey *key)
     return;
   }
 
-  seq::retiming_remove_key(scene, strip, key);
+  seq::retiming_remove_key(strip, key);
 
   seq::relations_invalidate_cache_raw(scene, strip);
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, nullptr);
@@ -1264,7 +1263,6 @@ static int rna_Strip_proxy_filepath_length(PointerRNA *ptr)
 
 static void rna_Strip_audio_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
-  BKE_sound_mark_scene_audio_animation_stale(id_cast<Scene *>(ptr->owner_id));
   DEG_id_tag_update(ptr->owner_id, ID_RECALC_SEQUENCER_STRIPS | ID_RECALC_AUDIO);
 }
 
@@ -1369,7 +1367,6 @@ static void rna_Strip_filepath_update(Main *bmain, Scene * /*scene*/, PointerRNA
 static void rna_Strip_sound_update(Main *bmain, Scene * /*active_scene*/, PointerRNA *ptr)
 {
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
-  BKE_sound_mark_scene_audio_animation_stale(scene);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS | ID_RECALC_AUDIO);
   DEG_relations_tag_update(bmain);
 }

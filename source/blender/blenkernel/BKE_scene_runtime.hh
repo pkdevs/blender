@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 #include "BKE_compositor.hh"
 #include "BKE_sound_types.hh"
@@ -52,16 +53,28 @@ class SequencerRuntime {
 };
 
 /* Audio runtime data. */
+enum class AudioAnimationWriteState {
+  Normal,
+  Bake,
+  Preserve,
+};
+
 struct SceneAudioRuntime {
   AUD_Sequence sound_scene;
   AUD_Handle playback_handle;
   AUD_Handle sound_scrub_handle;
   Set<AUD_SequenceEntry> speaker_handles;
   bool volume_update_needed = false;
-  /* Generation of the source audio animation on the original Scene. */
-  uint64_t animation_data_generation = 1;
-  /* Generation currently stored in this evaluated Scene's audio cache. */
-  uint64_t cached_animation_data_generation = 0;
+  /* Set by the depsgraph when an input to this evaluated #Scene's animation cache changes. */
+  bool animation_cache_dirty = true;
+  /* Controls how evaluated audio updates write to Audaspace. */
+  AudioAnimationWriteState animation_write_state = AudioAnimationWriteState::Normal;
+  /* Identity of the frame-change handler lists associated with the current audio cache state.
+   * An empty value means that no frame-change handlers were present. */
+  std::optional<uint64_t> animation_cache_frame_change_handlers_hash;
+  /* Inclusive frame range currently stored in the evaluated Scene's audio cache. */
+  int cached_animation_frame_start = 1;
+  int cached_animation_frame_end = 0;
 };
 
 class SceneRuntime : NonCopyable, NonMovable {

@@ -256,8 +256,8 @@ FCurve *id_data_find_fcurve(
     *r_driven = false;
   }
 
-  /* Drivers can exist without an assigned Action. */
-  if (adt == nullptr) {
+  /* Only use the current action ??? */
+  if (ELEM(nullptr, adt, adt->action)) {
     return nullptr;
   }
 

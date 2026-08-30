@@ -27,13 +27,11 @@ int right_fake_key_frame_get(const Scene *scene, const Strip *strip);
 Map<SeqRetimingKey *, Strip *> retiming_selection_get(const Editing *ed);
 int retiming_keys_count(const Strip *strip);
 bool retiming_has_keys(const Strip *strip);
-bool retiming_strip_has_audio(const Strip *strip);
 void retiming_data_ensure(Strip *strip);
 SeqRetimingKey *ensure_left_and_right_keys(const Scene *scene, Strip *strip);
 void realize_fake_keys(const Scene *scene, Strip *strip);
 SeqRetimingKey fake_retiming_key_init(const Scene *scene, const Strip *strip, int frame);
 void retiming_data_clear(Strip *strip);
-void retiming_data_clear(const Scene *scene, Strip *strip);
 void retiming_reset(Scene *scene, Strip *strip);
 bool retiming_is_allowed(const Strip *strip);
 
@@ -57,7 +55,7 @@ SeqRetimingKey *retiming_add_freeze_frame(const Scene *scene,
                                           const int offset);
 bool retiming_is_last_key(const Strip *strip, const SeqRetimingKey *key);
 SeqRetimingKey *retiming_last_key_get(const Strip *strip);
-void retiming_remove_key(const Scene *scene, Strip *strip, SeqRetimingKey *key);
+void retiming_remove_key(Strip *strip, SeqRetimingKey *key);
 void retiming_transition_key_frame_set(const Scene *scene,
                                        const Strip *strip,
                                        SeqRetimingKey *key,
@@ -82,9 +80,7 @@ bool retiming_selection_clear(const Editing *ed);
 void retiming_selection_append(SeqRetimingKey *key);
 void retiming_selection_remove(SeqRetimingKey *key);
 void retiming_selection_copy(SeqRetimingKey *dst, const SeqRetimingKey *src);
-void retiming_remove_multiple_keys(const Scene *scene,
-                                   Strip *strip,
-                                   Vector<SeqRetimingKey *> &keys_to_remove);
+void retiming_remove_multiple_keys(Strip *strip, Vector<SeqRetimingKey *> &keys_to_remove);
 bool retiming_selection_contains(const Editing *ed, const SeqRetimingKey *key);
 bool retiming_selection_has_whole_transition(const Editing *ed, SeqRetimingKey *key);
 bool retiming_show_keys(const Strip *strip);

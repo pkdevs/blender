@@ -702,7 +702,7 @@ static void rna_Strip_retiming_keys_reset(ID *id, Strip *strip)
 {
   Scene *scene = id_cast<Scene *>(id);
 
-  seq::retiming_data_clear(scene, strip);
+  seq::retiming_data_clear(strip);
 
   seq::relations_invalidate_cache_raw(scene, strip);
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, nullptr);

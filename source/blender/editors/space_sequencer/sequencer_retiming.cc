@@ -517,7 +517,7 @@ static wmOperatorStatus sequencer_retiming_key_delete_exec(bContext *C, wmOperat
       keys_to_delete.append(item.key);
     }
 
-    seq::retiming_remove_multiple_keys(scene, strip, keys_to_delete);
+    seq::retiming_remove_multiple_keys(strip, keys_to_delete);
   }
 
   for (Strip *strip : strips_to_handle) {

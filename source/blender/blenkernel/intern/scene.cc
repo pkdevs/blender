@@ -2720,42 +2720,10 @@ static void prepare_mesh_for_viewport_render(Main *bmain,
   }
 }
 
-static void mark_scene_audio_animation_stale_for_action_edits(Depsgraph *depsgraph, Main *bmain)
-{
-  if (!DEG_id_type_updated(depsgraph, ID_AC)) {
-    return;
-  }
-
-  for (bAction &dna_action : bmain->actions) {
-    if (!DEG_id_is_user_modified(depsgraph, &dna_action.id)) {
-      continue;
-    }
-
-    const animrig::Action &action = dna_action.wrap();
-    for (const animrig::Slot *slot : action.slots()) {
-      for (ID *user : slot->users(*bmain)) {
-        if (user->id_type() != ID_SCE) {
-          continue;
-        }
-        Scene *scene = id_cast<Scene *>(DEG_get_evaluated_id(depsgraph, user));
-        BKE_sound_mark_scene_audio_animation_stale(scene);
-      }
-    }
-  }
-}
-
 void BKE_scene_update_sound(Depsgraph *depsgraph, Main *bmain)
 {
-  mark_scene_audio_animation_stale_for_action_edits(depsgraph, bmain);
-
   Scene *scene = DEG_get_evaluated_scene(depsgraph);
   const int recalc = scene->id.recalc;
-  const bool parameters_user_modified = (recalc & ID_RECALC_PARAMETERS) != 0 &&
-                                        DEG_id_is_user_modified(depsgraph, &scene->id);
-  if (parameters_user_modified) {
-    /* Driver changes are flushed to the Scene parameters operation. */
-    BKE_sound_mark_scene_audio_animation_stale(scene);
-  }
   const bool volume_update_needed = (recalc & ID_RECALC_AUDIO_VOLUME) != 0 ||
                                     scene->runtime->audio.volume_update_needed;
   BKE_sound_ensure_scene(scene);
