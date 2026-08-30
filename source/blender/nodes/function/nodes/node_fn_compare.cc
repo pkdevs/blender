@@ -1009,7 +1009,7 @@ static void node_rna(StructRNA *srna)
       "",
       rna_enum_node_compare_operation_items,
       NOD_storage_enum_accessors(operation),
-      NODE_COMPARE_EQUAL,
+      NODE_COMPARE_GREATER_THAN,
       [](bContext * /*C*/, PointerRNA *ptr, PropertyRNA * /*prop*/, bool *r_free) {
         *r_free = true;
         bNode *node = static_cast<bNode *>(ptr->data);
