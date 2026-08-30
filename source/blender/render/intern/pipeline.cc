@@ -58,6 +58,7 @@
 #include "BKE_pointcache.h"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
+#include "BKE_scene_runtime.hh"
 #include "BKE_sound.hh"
 
 #include "NOD_composite.hh"
@@ -1903,15 +1904,24 @@ void RE_SetReports(Render *re, ReportList *reports)
   re->reports = reports;
 }
 
-static void render_update_depsgraph(Render *re)
+static void render_update_depsgraph(Render *re, const int frame_start, const int frame_end)
 {
   Scene *scene = re->scene;
   BKE_scene_camera_switch_update(re->scene);
   DEG_evaluate_on_framechange(re->pipeline_depsgraph, BKE_scene_frame_get(scene));
   BKE_scene_update_sound(re->pipeline_depsgraph, re->main);
+
+  Scene *scene_eval = DEG_get_evaluated_scene(re->pipeline_depsgraph);
+  if (!re->movie_writers.is_empty() &&
+      re->r.ffcodecdata.audio_codec_id_get() != FFMPEG_CODEC_ID_NONE && scene_eval != nullptr &&
+      scene_eval->runtime->audio.animation_cache_dirty)
+  {
+    BKE_sound_ensure_scene_audio_animation(
+        re->main, scene, re->pipeline_depsgraph, frame_start, frame_end);
+  }
 }
 
-static void render_init_depsgraph(Render *re)
+static void render_init_depsgraph(Render *re, const int frame_start, const int frame_end)
 {
   Scene *scene = re->scene;
   ViewLayer *view_layer = BKE_view_layer_default_render(re->scene);
@@ -1923,7 +1933,7 @@ static void render_init_depsgraph(Render *re)
   DEG_graph_build_for_render_pipeline(re->pipeline_depsgraph);
 
   /* Update immediately so we have proper evaluated scene. */
-  render_update_depsgraph(re);
+  render_update_depsgraph(re, frame_start, frame_end);
 
   re->pipeline_scene_eval = DEG_get_evaluated_scene(re->pipeline_depsgraph);
 }
@@ -1981,7 +1991,7 @@ void RE_RenderFrame(Render *re,
     /* Reduce GPU memory usage so renderer has more space. */
     RE_FreeGPUTextureCaches();
 
-    render_init_depsgraph(re);
+    render_init_depsgraph(re, frame, frame);
 
     do_render_full_pipeline(re);
 
@@ -2406,18 +2416,11 @@ void RE_RenderAnim(Render *re,
                               (re_type->flag & RE_USE_POSTPROCESS)) &&
                              write_anim;
 
-  if (is_movie && do_write_file && re->r.ffcodecdata.audio_codec_id_get() != FFMPEG_CODEC_ID_NONE)
-  {
-    /* Updating flags can tag depsgraph relations. Do this before the render pipeline depsgraph is
-     * built, so it contains the current audio relations from its initial build. */
-    BKE_sound_update_animation_flags(bmain, scene);
-  }
-
-  render_init_depsgraph(re);
+  render_init_depsgraph(re, sfra, efra);
 
   if (is_movie && do_write_file) {
     if (re->r.ffcodecdata.audio_codec_id_get() != FFMPEG_CODEC_ID_NONE) {
-      BKE_sound_ensure_scene_audio_animation(bmain, scene, re->pipeline_depsgraph);
+      BKE_sound_ensure_scene_audio_animation(bmain, scene, re->pipeline_depsgraph, sfra, efra);
       re->pipeline_scene_eval = DEG_get_evaluated_scene(re->pipeline_depsgraph);
     }
 
@@ -2491,7 +2494,7 @@ void RE_RenderAnim(Render *re,
       BKE_animsys_evaluate_animdata(&scene->id, adt, &anim_eval_context, ADT_RECALC_ALL, false);
     }
 
-    render_update_depsgraph(re);
+    render_update_depsgraph(re, sfra, efra);
 
     /* Only border now, TODO(ton): camera lens. */
     render_init_from_main(re, &rd, bmain, scene, single_layer, camera_override, true, false);
