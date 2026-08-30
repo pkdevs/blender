@@ -3587,14 +3587,6 @@ static void do_brush_action(const Depsgraph &depsgraph,
 
   update_brush_local_mat(sd, ob);
 
-  /* Cube tipped brushes cannot run on the first brush step due to needing the screen delta to
-   * calculate tip alignment. */
-  if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt) &&
-      stroke_is_first_brush_step_of_symmetry_pass(*ss.cache))
-  {
-    return;
-  }
-
   if (brush.deform_target == BRUSH_DEFORM_TARGET_CLOTH_SIM) {
     if (!ss.cache->cloth_sim) {
       ss.cache->cloth_sim = cloth::brush_simulation_create(
@@ -4263,33 +4255,32 @@ static void brush_delta_update(const Depsgraph &depsgraph,
   mul_v3_m4v3(loc, ob.object_to_world().ptr(), cache->orig_grab_location);
   ED_view3d_win_to_3d(cache->vc->v3d, cache->vc->region, loc, mval, grab_location);
 
-  /* Compute delta to move verts by. */
-  if (!stroke_is_first_brush_step_of_symmetry_pass(*ss.cache)) {
-    if (need_delta_from_anchored_origin(brush)) {
-      sub_v3_v3v3(delta, grab_location, cache->old_grab_location);
-      invert_m4_m4(imat, ob.object_to_world().ptr());
-      mul_mat3_m4_v3(imat, delta);
-      add_v3_v3(cache->grab_delta, delta);
-    }
-    else if (need_delta_for_tip_orientation(brush)) {
-      if (brush.stroke_method == BRUSH_STROKE_ANCHORED) {
-        float orig[3];
-        mul_v3_m4v3(orig, ob.object_to_world().ptr(), cache->orig_grab_location);
-        sub_v3_v3v3(cache->grab_delta, grab_location, orig);
-      }
-      else {
-        sub_v3_v3v3(cache->grab_delta, grab_location, cache->old_grab_location);
-      }
-      invert_m4_m4(imat, ob.object_to_world().ptr());
-      mul_mat3_m4_v3(imat, cache->grab_delta);
+  if (stroke_is_first_brush_step_of_symmetry_pass(*ss.cache)) {
+    ED_view3d_win_to_3d(
+        cache->vc->v3d, cache->vc->region, loc, cache->initial_mouse, cache->old_grab_location);
+  }
+
+  if (need_delta_from_anchored_origin(brush)) {
+    sub_v3_v3v3(delta, grab_location, cache->old_grab_location);
+    invert_m4_m4(imat, ob.object_to_world().ptr());
+    mul_mat3_m4_v3(imat, delta);
+    add_v3_v3(cache->grab_delta, delta);
+  }
+  else if (need_delta_for_tip_orientation(brush)) {
+    if (brush.stroke_method == BRUSH_STROKE_ANCHORED) {
+      float orig[3];
+      mul_v3_m4v3(orig, ob.object_to_world().ptr(), cache->orig_grab_location);
+      sub_v3_v3v3(cache->grab_delta, grab_location, orig);
     }
     else {
-      /* Use for 'Brush.topology_rake_factor'. */
       sub_v3_v3v3(cache->grab_delta, grab_location, cache->old_grab_location);
     }
+    invert_m4_m4(imat, ob.object_to_world().ptr());
+    mul_mat3_m4_v3(imat, cache->grab_delta);
   }
   else {
-    zero_v3(cache->grab_delta);
+    /* Use for 'Brush.topology_rake_factor'. */
+    sub_v3_v3v3(cache->grab_delta, grab_location, cache->old_grab_location);
   }
 
   if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
