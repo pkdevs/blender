@@ -15,6 +15,8 @@
 
 #include "BLI_listbase.hh"
 
+#include "intern/depsgraph_relation.hh"
+
 namespace blender::deg {
 
 void DepsgraphRelationBuilder::build_scene_render(Scene *scene, ViewLayer *view_layer)
@@ -30,19 +32,30 @@ void DepsgraphRelationBuilder::build_scene_render(Scene *scene, ViewLayer *view_
   }
   if (build_sequencer) {
     build_scene_sequencer(scene);
-    build_scene_speakers(scene, view_layer);
+    build_scene_speakers(scene, view_layer, scene);
   }
   build_scene_camera(scene);
 }
 
 void DepsgraphRelationBuilder::build_scene_camera(Scene *scene)
 {
+  OperationKey scene_cache_key(&scene->id, NodeType::CACHE, OperationCode::AUDIO_CACHE_INVALIDATE);
   if (scene->camera != nullptr) {
     build_object(scene->camera);
+    ComponentKey camera_transform_key(&scene->camera->id, NodeType::TRANSFORM);
+    add_relation(camera_transform_key,
+                 scene_cache_key,
+                 "Camera Transform -> Audio Cache",
+                 RELATION_FLAG_FLUSH_USER_EDIT_ONLY | RELATION_CHECK_BEFORE_ADD);
   }
   for (TimeMarker &marker : scene->markers) {
     if (!ELEM(marker.camera, nullptr, scene->camera)) {
       build_object(marker.camera);
+      ComponentKey camera_transform_key(&marker.camera->id, NodeType::TRANSFORM);
+      add_relation(camera_transform_key,
+                   scene_cache_key,
+                   "Marker Camera Transform -> Audio Cache",
+                   RELATION_FLAG_FLUSH_USER_EDIT_ONLY | RELATION_CHECK_BEFORE_ADD);
     }
   }
 }

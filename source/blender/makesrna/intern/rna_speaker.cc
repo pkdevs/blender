@@ -23,8 +23,20 @@
 
 #  include "BKE_main.hh"
 
+#  include "DEG_depsgraph.hh"
+
 #  include "WM_api.hh"
 #  include "WM_types.hh"
+
+namespace blender {
+
+static void rna_Speaker_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
+{
+  Speaker *speaker = id_cast<Speaker *>(ptr->owner_id);
+  DEG_id_tag_update(&speaker->id, ID_RECALC_AUDIO);
+}
+
+}  // namespace blender
 
 #else
 
@@ -149,19 +161,13 @@ static void rna_def_speaker(BlenderRNA *brna)
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_text(prop, "Volume", "How loud the sound is");
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_SOUND);
-#  if 0
-  RNA_def_property_float_funcs(prop, nullptr, "rna_Speaker_volume_set", nullptr);
   RNA_def_property_update(prop, 0, "rna_Speaker_update");
-#  endif
 
   prop = RNA_def_property(srna, "pitch", PROP_FLOAT, PROP_NONE);
   RNA_def_property_range(prop, 0.1f, 10.0f);
   RNA_def_property_ui_text(prop, "Pitch", "Playback pitch of the sound");
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_SOUND);
-#  if 0
-  RNA_def_property_float_funcs(prop, nullptr, "rna_Speaker_pitch_set", nullptr);
   RNA_def_property_update(prop, 0, "rna_Speaker_update");
-#  endif
 
   /* common */
   rna_def_animdata_common(srna);

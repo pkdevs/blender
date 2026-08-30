@@ -1104,6 +1104,7 @@ static void ed_marker_move_apply(bContext *C, wmOperator *op)
   MarkerMove *mm = static_cast<MarkerMove *>(op->customdata);
   TimeMarker *marker;
   int a, ofs;
+  bool camera_marker_moved = false;
 
   ofs = RNA_int_get(op->ptr, "frames");
   for (a = 0, marker = static_cast<TimeMarker *>(mm->markers->first); marker;
@@ -1111,8 +1112,13 @@ static void ed_marker_move_apply(bContext *C, wmOperator *op)
   {
     if (marker->flag & SELECT) {
       marker->frame = mm->oldframe[a] + ofs;
+      camera_marker_moved |= marker->camera != nullptr;
       a++;
     }
+  }
+
+  if (camera_marker_moved) {
+    DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_LISTENER);
   }
 
   WM_event_add_notifier(C, NC_SCENE | ND_MARKERS, nullptr);
@@ -1838,8 +1844,10 @@ static wmOperatorStatus ed_marker_delete_exec(bContext *C, wmOperator * /*op*/)
   const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
   ListBaseT<TimeMarker> *markers = is_sequencer ? ED_sequencer_context_get_markers(C) :
                                                   ED_context_get_markers(C);
+  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
   TimeMarker *marker, *nmarker;
   bool changed = false;
+  bool camera_marker_deleted = false;
 
   if (markers == nullptr) {
     return OPERATOR_CANCELLED;
@@ -1848,6 +1856,7 @@ static wmOperatorStatus ed_marker_delete_exec(bContext *C, wmOperator * /*op*/)
   for (marker = static_cast<TimeMarker *>(markers->first); marker; marker = nmarker) {
     nmarker = marker->next;
     if (marker->flag & SELECT) {
+      camera_marker_deleted |= marker->camera != nullptr;
       if (marker->prop != nullptr) {
         IDP_FreeProperty(marker->prop);
       }
@@ -1857,6 +1866,9 @@ static wmOperatorStatus ed_marker_delete_exec(bContext *C, wmOperator * /*op*/)
   }
 
   if (changed) {
+    if (camera_marker_deleted) {
+      DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_LISTENER);
+    }
     WM_event_add_notifier(C, NC_SCENE | ND_MARKERS, nullptr);
     WM_event_add_notifier(C, NC_ANIMATION | ND_MARKERS, nullptr);
   }

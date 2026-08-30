@@ -261,7 +261,9 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_sound(bSound *sound);
   virtual void build_scene_sequencer(Scene *scene);
   virtual void build_scene_audio(Scene *scene);
-  virtual void build_scene_speakers(Scene *scene, ViewLayer *view_layer);
+  /* Build Speakers from #scene and connect them to the cache owned by #audio_cache_scene. */
+  virtual void build_scene_speakers(Scene *scene, ViewLayer *view_layer, Scene *audio_cache_scene);
+  void build_speaker_audio_cache_relation(Object *object, Scene *audio_cache_scene);
   virtual void build_vfont(VFont *vfont);
 
   virtual void build_nested_datablock(ID *owner, ID *id, bool flush_cow_changes);
@@ -283,6 +285,7 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_copy_on_write_relations(IDNode *id_node);
   virtual void build_driver_relations();
   virtual void build_driver_relations(IDNode *id_node);
+  virtual void build_scene_audio_cache_invalidation_relations();
 
   template<typename KeyType> OperationNode *find_operation_node(const KeyType &key);
 

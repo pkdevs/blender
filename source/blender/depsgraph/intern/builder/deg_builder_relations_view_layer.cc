@@ -14,6 +14,7 @@
 #include <cstring> /* required for STREQ later on. */
 
 #include "DNA_collection_types.h"
+#include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
 #include "BLI_listbase.hh"
@@ -31,6 +32,8 @@
 #include "intern/node/deg_node_component.hh"
 #include "intern/node/deg_node_id.hh"
 #include "intern/node/deg_node_operation.hh"
+
+#include "intern/depsgraph_relation.hh"
 
 namespace blender::deg {
 
@@ -102,6 +105,9 @@ void DepsgraphRelationBuilder::build_view_layer(Scene *scene,
   for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
     if (need_pull_base_into_graph(&base)) {
       build_object_from_view_layer_base(base.object);
+      if (base.object->type == OB_SPEAKER) {
+        build_speaker_audio_cache_relation(base.object, scene);
+      }
     }
   }
 
@@ -161,6 +167,14 @@ void DepsgraphRelationBuilder::build_view_layer(Scene *scene,
   if (scene->set != nullptr) {
     ViewLayer *set_view_layer = BKE_view_layer_default_render(scene->set);
     build_view_layer(scene->set, set_view_layer, DEG_ID_LINKED_VIA_SET);
+    OperationKey scene_cache_key(
+        &scene->id, NodeType::CACHE, OperationCode::AUDIO_CACHE_INVALIDATE);
+    OperationKey set_scene_cache_key(
+        &scene->set->id, NodeType::CACHE, OperationCode::AUDIO_CACHE_INVALIDATE);
+    add_relation(set_scene_cache_key,
+                 scene_cache_key,
+                 "Set Scene Audio Cache",
+                 RELATION_FLAG_FLUSH_USER_EDIT_ONLY | RELATION_CHECK_BEFORE_ADD);
   }
 }
 

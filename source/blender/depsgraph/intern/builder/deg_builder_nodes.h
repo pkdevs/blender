@@ -289,7 +289,9 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_sound(bSound *sound);
   virtual void build_scene_sequencer(Scene *scene);
   virtual void build_scene_audio(Scene *scene);
-  virtual void build_scene_speakers(Scene *scene, ViewLayer *view_layer);
+  virtual void build_scene_audio_cache(Scene *scene);
+  /* Build Speakers from #scene and connect their dependencies to #audio_cache_scene. */
+  virtual void build_scene_speakers(Scene *scene, ViewLayer *view_layer, Scene *audio_cache_scene);
   virtual void build_vfont(VFont *vfont);
 
   virtual Set<const ID *> get_built_ids() const;

@@ -6,6 +6,7 @@
  * \ingroup RNA
  */
 
+#include <algorithm>
 #include <cstdlib>
 
 #include "DNA_curve_types.h"
@@ -24,7 +25,6 @@
 #include "BLT_translation.hh"
 
 #include "BKE_paint.hh"
-#include "BKE_sound.hh"
 
 #include "ED_object.hh"
 #include "ED_sequencer.hh"
@@ -1019,7 +1019,6 @@ static void rna_Scene_listener_update(Main * /*bmain*/, Scene * /*scene*/, Point
 static void rna_Scene_volume_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
-  BKE_sound_mark_scene_audio_animation_stale(scene);
   DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_VOLUME | ID_RECALC_SEQUENCER_STRIPS);
 }
 
@@ -1180,7 +1179,6 @@ static void rna_Scene_frame_update(Main * /*bmain*/, Scene * /*current_scene*/, 
 static void rna_Scene_frame_range_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
 {
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
-  BKE_sound_mark_scene_audio_animation_stale(scene);
   seq::relations_invalidate_scene_strips(bmain, scene);
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
 }
@@ -2514,6 +2512,10 @@ static void rna_TimeLine_remove(Scene *scene, ReportList *reports, PointerRNA *m
     return;
   }
 
+  if (marker->camera != nullptr) {
+    DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_LISTENER);
+  }
+
   MEM_delete(marker);
   marker_ptr->invalidate();
 
@@ -2523,7 +2525,15 @@ static void rna_TimeLine_remove(Scene *scene, ReportList *reports, PointerRNA *m
 
 static void rna_TimeLine_clear(Scene *scene)
 {
+  const bool had_camera_marker = std::any_of(
+      scene->markers.begin(), scene->markers.end(), [](const TimeMarker &marker) {
+        return marker.camera != nullptr;
+      });
   scene->markers.free_no_destruct();
+
+  if (had_camera_marker) {
+    DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_LISTENER);
+  }
 
   WM_main_add_notifier(NC_SCENE | ND_MARKERS, nullptr);
   WM_main_add_notifier(NC_ANIMATION | ND_MARKERS, nullptr);

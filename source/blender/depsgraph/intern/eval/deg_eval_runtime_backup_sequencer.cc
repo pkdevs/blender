@@ -11,7 +11,6 @@
 #include "intern/eval/deg_eval_runtime_backup_sequencer.h"
 
 #include "DNA_scene_types.h"
-#include "DNA_sequence_types.h"
 
 #include "BLI_assert.hh"
 

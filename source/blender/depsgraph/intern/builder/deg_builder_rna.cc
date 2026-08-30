@@ -301,6 +301,11 @@ RNANodeIdentifier RNANodeQuery::construct_node_identifier(const PointerRNA *ptr,
     }
     return node_identifier;
   }
+  else if (ptr->type == RNA_Scene && STREQ(prop_identifier, "audio_volume")) {
+    node_identifier.type = NodeType::AUDIO;
+    node_identifier.operation_code = OperationCode::AUDIO_VOLUME;
+    return node_identifier;
+  }
   else if (ptr->type == RNA_Object) {
     /* Transforms props? */
     if (prop != nullptr) {
