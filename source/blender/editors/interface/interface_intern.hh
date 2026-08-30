@@ -11,6 +11,7 @@
 #include <functional>
 #include <optional>
 #include <ranges>
+#include <variant>
 
 #include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
@@ -378,12 +379,6 @@ struct TextWrapCache {
   Vector<StringRef> wrapped_lines;
 };
 
-enum class MarkdownSpanType {
-  Text,
-  Bullet,
-  OrderedMarker,
-};
-
 struct MarkdownItemText {
   /**
    * Baseline position of the text in pixels.
@@ -398,13 +393,8 @@ struct MarkdownItemText {
   std::optional<StringRef> url;
 };
 
-struct MarkdownItemBullet {
-  float x = 0.0f;
-  float y = 0.0f;
-  int level = 0;
-};
-
-using MarkdownItem = std::variant<MarkdownItemText, MarkdownItemBullet>;
+/** Additional item types (e.g. horizontal rules) can be added here later. */
+using MarkdownItem = std::variant<MarkdownItemText>;
 
 struct MarkdownLayoutCacheKey {
   StringRef text;

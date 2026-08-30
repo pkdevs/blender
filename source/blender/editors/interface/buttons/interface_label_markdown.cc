@@ -111,10 +111,12 @@ class MarkdownLayouter {
   struct OrderedListBlock {
     bool is_tight = false;
     int next_number = 1;
+    char mark_delimiter = '.';
   };
 
   struct ListItemBlock {
-    std::optional<int> number = 0;
+    /** Set for ordered list items; unset for unordered. */
+    std::optional<int> number;
   };
 
   struct ParagraphBlock {};
@@ -212,16 +214,24 @@ class MarkdownLayouter {
         break;
       }
       case MD_BLOCK_UL: {
-        block_stack_.append(UnorderedListBlock{});
+        const auto *ul_detail = static_cast<const MD_BLOCK_UL_DETAIL *>(detail);
+        block_stack_.append(UnorderedListBlock{bool(ul_detail->is_tight)});
         break;
       }
       case MD_BLOCK_OL: {
         const auto *ol_detail = static_cast<const MD_BLOCK_OL_DETAIL *>(detail);
-        block_stack_.append(OrderedListBlock{bool(ol_detail->is_tight), int(ol_detail->start)});
+        block_stack_.append(OrderedListBlock{
+            bool(ol_detail->is_tight), int(ol_detail->start), char(ol_detail->mark_delimiter)});
         break;
       }
       case MD_BLOCK_LI: {
-        block_stack_.append(ListItemBlock{});
+        ListItemBlock list_item;
+        if (!block_stack_.is_empty()) {
+          if (auto *ol = std::get_if<OrderedListBlock>(&block_stack_.last())) {
+            list_item.number = ol->next_number++;
+          }
+        }
+        block_stack_.append(list_item);
         break;
       }
       case MD_BLOCK_H: {
@@ -257,6 +267,82 @@ class MarkdownLayouter {
     const float margin = this->get_space_above_new_block();
     y_ -= margin;
     x_ = this->context_block_start_x();
+    if (block_type == MD_BLOCK_LI) {
+      this->append_list_marker();
+    }
+  }
+
+  float list_indent_px() const
+  {
+    return 18.0f * cache_.key.pixels_per_point;
+  }
+
+  int get_unordered_list_level() const
+  {
+    int level = 0;
+    for (const auto &md_block : block_stack_) {
+      if (std::holds_alternative<UnorderedListBlock>(md_block)) {
+        level++;
+      }
+    }
+    return std::max(level - 1, 0);
+  }
+
+  static StringRef unordered_bullet_for_level(const int level)
+  {
+    switch (level % 3) {
+      case 1:
+        return "◦";
+      case 2:
+        return "▪";
+      default:
+        return "•";
+    }
+  }
+
+  void append_list_marker()
+  {
+    const auto *list_item = std::get_if<ListItemBlock>(&block_stack_.last());
+    BLI_assert(list_item);
+    if (!list_item) {
+      return;
+    }
+
+    MarkdownItemText item;
+    item.size_px = main_font_.default_size * cache_.key.pixels_per_point;
+    item.fontid = main_font_.fontid;
+    item.weight = main_font_.default_weight;
+    item.italic = false;
+    item.y = y_;
+
+    if (list_item->number) {
+      char delimiter = '.';
+      if (block_stack_.size() >= 2) {
+        if (const auto *ol = std::get_if<OrderedListBlock>(&block_stack_[block_stack_.size() - 2]))
+        {
+          delimiter = ol->mark_delimiter;
+        }
+      }
+      item.text = cache_.scope.allocator().copy_string(
+          fmt::format("{}{}", *list_item->number, delimiter));
+    }
+    else {
+      item.text = unordered_bullet_for_level(this->get_unordered_list_level());
+    }
+
+    markdown_apply_item_font(item);
+    const float marker_width = BLF_width(item.fontid, item.text.data(), item.text.size());
+    markdown_disable_item_font(item);
+
+    if (list_item->number) {
+      /* Right-align the number towards the content. */
+      item.x = x_ - marker_width - 4.0f * cache_.key.pixels_per_point;
+    }
+    else {
+      /* Center the bullet in the list-item indent gutter. */
+      item.x = x_ - this->list_indent_px() * 0.5f - marker_width * 0.5f;
+    }
+    cache_.md_layout.items.append(item);
   }
 
   float get_space_above_new_block() const
@@ -603,13 +689,13 @@ class MarkdownLayouter {
   float context_block_start_x() const
   {
     float indentation = 0.0f;
-    const float level = 18.0f * cache_.key.pixels_per_point;
+    const float indent = this->list_indent_px();
     for (const auto &md_block : block_stack_) {
       if (std::holds_alternative<QuoteBlock>(md_block)) {
-        indentation += level;
+        indentation += indent;
       }
       if (std::holds_alternative<ListItemBlock>(md_block)) {
-        indentation += level;
+        indentation += indent;
       }
     }
     return indentation;
@@ -642,14 +728,6 @@ class MarkdownLayouter {
         markdown_apply_item_font(*text_item);
         bottom_y = std::min(bottom_y, text_item->y + BLF_descender(text_item->fontid));
         markdown_disable_item_font(*text_item);
-      }
-      else if (const auto *bullet_item = std::get_if<MarkdownItemBullet>(&item)) {
-        const int fontid = main_font_.fontid;
-        markdown_apply_font(fontid,
-                            main_font_.default_size * cache_.key.pixels_per_point,
-                            main_font_.default_weight,
-                            false);
-        bottom_y = std::min(bottom_y, bullet_item->y + BLF_descender(fontid));
       }
     }
     if (bottom_y != FLT_MAX) {
@@ -838,10 +916,6 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
       BLF_position(text_item->fontid, x, y, 0.0f);
       BLF_draw(text_item->fontid, text_item->text.data(), text_item->text.size());
       markdown_disable_item_font(*text_item);
-    }
-    else if (const auto *bullet_item = std::get_if<MarkdownItemBullet>(&item)) {
-      // TODO
-      UNUSED_VARS(bullet_item);
     }
   }
 }
