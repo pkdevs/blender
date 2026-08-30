@@ -10,6 +10,9 @@
  * functions into (called via blenders generic BLI_cb API)
  */
 
+#include <cstdint>
+#include <optional>
+
 #include "BLI_utildefines.hh"
 #include <Python.h>
 
@@ -373,12 +376,28 @@ PyObject *BPY_app_handlers_struct()
   return ret;
 }
 
-bool BPY_app_handlers_has_frame_change()
+std::optional<uint64_t> BPY_app_handlers_frame_change_identity()
 {
-  return (py_cb_array[BKE_CB_EVT_FRAME_CHANGE_PRE] != nullptr &&
-          PyList_GET_SIZE(py_cb_array[BKE_CB_EVT_FRAME_CHANGE_PRE]) != 0) ||
-         (py_cb_array[BKE_CB_EVT_FRAME_CHANGE_POST] != nullptr &&
-          PyList_GET_SIZE(py_cb_array[BKE_CB_EVT_FRAME_CHANGE_POST]) != 0);
+  const PyGILState_STATE gilstate = PyGILState_Ensure();
+  uint64_t hash = 1469598103934665603ULL;
+  const auto hash_value = [&hash](const uint64_t value) {
+    hash ^= value;
+    hash *= 1099511628211ULL;
+  };
+
+  bool has_frame_change = false;
+  for (const int event : {BKE_CB_EVT_FRAME_CHANGE_PRE, BKE_CB_EVT_FRAME_CHANGE_POST}) {
+    PyObject *list = py_cb_array[event];
+    const Py_ssize_t size = list != nullptr ? PyList_GET_SIZE(list) : 0;
+    has_frame_change |= size != 0;
+    hash_value(uint64_t(size));
+    for (Py_ssize_t i = 0; i < size; i++) {
+      hash_value(uint64_t(uintptr_t(PyList_GET_ITEM(list, i))));
+    }
+  }
+
+  PyGILState_Release(gilstate);
+  return has_frame_change ? std::optional<uint64_t>(hash) : std::nullopt;
 }
 
 void BPY_app_handlers_reset(const bool do_all)
