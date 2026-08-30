@@ -668,8 +668,15 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
      * comes with deformed position in object space, or if we transform
      * the shading point in world space. */
     if (!(flag & SD_OBJECT_HAS_VERTEX_MOTION)) {
-      tfm_pre = tfm_pre * itfm;
-      tfm_post = tfm_post * itfm;
+      if (ob->use_motion()) {
+        tfm_pre = tfm_pre * itfm;
+        tfm_post = tfm_post * itfm;
+      }
+      else {
+        /* Use identity to avoid numerical inaccuracy of tfm * transform_inverse(tfm). */
+        tfm_pre = transform_identity();
+        tfm_post = transform_identity();
+      }
     }
 
     const int motion_pass_offset = ob->index * OBJECT_MOTION_PASS_SIZE;
@@ -774,7 +781,7 @@ void ObjectManager::device_update_prim_offsets(Device *device, DeviceScene *dsce
     uint32_t prim_offset = 0;
     if (Geometry *const geom = ob->geometry) {
       if (geom->is_hair()) {
-        prim_offset = ((Hair *const)geom)->curve_segment_offset;
+        prim_offset = ((Hair *)geom)->curve_segment_offset;
       }
       else {
         prim_offset = geom->prim_offset;

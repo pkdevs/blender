@@ -11,8 +11,8 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_colortools.hh"
 #include "BKE_context.hh"
@@ -425,9 +425,6 @@ bool ED_image_slot_cycle(Image *image, int direction)
     image->render_slot = ((cur == 1) ? 0 : 1);
   }
 
-  if (cur != image->render_slot) {
-    BKE_image_partial_update_mark_full_update(image);
-  }
   return (cur != image->render_slot);
 }
 
@@ -578,6 +575,15 @@ bool ED_space_image_cursor_poll(bContext *C)
 {
   return ED_operator_uvedit_space_image(C) || ED_space_image_maskedit_poll(C) ||
          ED_space_image_paint_curve(C);
+}
+
+bool ED_space_image_region_cursor_poll(bContext *C)
+{
+  const ARegion *region = CTX_wm_region(C);
+  if (!(region && region->regiontype == RGN_TYPE_WINDOW)) {
+    return false;
+  }
+  return ED_space_image_cursor_poll(C);
 }
 
 }  // namespace blender

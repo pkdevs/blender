@@ -11,7 +11,7 @@
 #include "DNA_key_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
@@ -45,11 +45,12 @@ const EnumPropertyItem rna_enum_keyblock_type_items[] = {
 #  include "DNA_mesh_types.h"
 #  include "DNA_object_types.h"
 
-#  include "BLI_listbase.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 #  include "BLI_string_utils.hh"
 
+#  include "BKE_global.hh"
 #  include "BKE_key.hh"
 #  include "BKE_main.hh"
 
@@ -84,8 +85,8 @@ static void rna_ShapeKey_name_set(PointerRNA *ptr, const char *value)
 
   BLI_assert(ptr->owner_id);
   /* make sure the name is truly unique */
-  const Key *key = rna_ShapeKey_find_key(ptr->owner_id);
-  BKE_keyblock_rename(key, kb, value);
+  Key *key = rna_ShapeKey_find_key(ptr->owner_id);
+  BKE_keyblock_rename(*G_MAIN, key, kb, value);
 }
 
 static float rna_ShapeKey_frame_get(PointerRNA *ptr)
@@ -1011,7 +1012,7 @@ static void rna_def_keyblock(BlenderRNA *brna)
   prop = RNA_def_property(srna, "mute", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", KEYBLOCK_MUTE);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
-  RNA_def_property_ui_text(prop, "Mute", "Toggle this shape key");
+  RNA_def_property_ui_text(prop, "Mute", "Toggle the effect of the shape key");
   RNA_def_property_ui_icon(prop, ICON_CHECKBOX_HLT, -1);
   RNA_def_property_update(prop, 0, "rna_Key_update_data");
 
@@ -1027,7 +1028,7 @@ static void rna_def_keyblock(BlenderRNA *brna)
   RNA_def_property_range(prop, -10.0f, 10.0f);
   RNA_def_property_float_funcs(
       prop, nullptr, "rna_ShapeKey_slider_min_set", "rna_ShapeKey_slider_min_range");
-  RNA_def_property_ui_text(prop, "Slider Min", "Minimum for slider");
+  RNA_def_property_ui_text(prop, "Slider Min", "Lowest value allowed by the shape key slider");
   RNA_def_property_update(prop, 0, "rna_ShapeKey_update_minmax");
 
   prop = RNA_def_property(srna, "slider_max", PROP_FLOAT, PROP_NONE);
@@ -1036,7 +1037,7 @@ static void rna_def_keyblock(BlenderRNA *brna)
   RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_float_funcs(
       prop, nullptr, "rna_ShapeKey_slider_max_set", "rna_ShapeKey_slider_max_range");
-  RNA_def_property_ui_text(prop, "Slider Max", "Maximum for slider");
+  RNA_def_property_ui_text(prop, "Slider Max", "Highest value allowed by the shape key slider");
   RNA_def_property_update(prop, 0, "rna_ShapeKey_update_minmax");
 
   prop = RNA_def_property(srna, "data", PROP_COLLECTION, PROP_NONE);

@@ -61,10 +61,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_alloca.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_alloca.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
@@ -194,7 +194,7 @@ static bool actedit_get_context(bAnimContext *ac, SpaceAction *saction)
       ac->datatype = ANIMCONT_ACTION;
       ac->data = ac->active_action;
 
-      if (saction->flag & SACTION_POSEMARKERS_SHOW) {
+      if (ac->active_action && (saction->flag & SACTION_POSEMARKERS_SHOW)) {
         ac->markers = &ac->active_action->markers;
       }
 
@@ -204,7 +204,7 @@ static bool actedit_get_context(bAnimContext *ac, SpaceAction *saction)
       ac->datatype = ANIMCONT_SHAPEKEY;
       ac->data = actedit_get_shapekeys(ac);
 
-      if (saction->flag & SACTION_POSEMARKERS_SHOW) {
+      if (ac->active_action && (saction->flag & SACTION_POSEMARKERS_SHOW)) {
         ac->markers = &ac->active_action->markers;
       }
 
@@ -398,6 +398,7 @@ bool ANIM_animdata_context_getdata(bAnimContext *ac)
       case SPACE_TOPBAR:
       case SPACE_STATUSBAR:
       case SPACE_SPREADSHEET:
+      case SPACE_PROJECT:
         break;
     }
   }
@@ -1025,8 +1026,8 @@ static bool skip_fcurve_selected_data(bAnimContext *ac,
     char bone_name[sizeof(pchan->name)];
 
     /* Only consider if F-Curve involves `pose.bones`. */
-    if (fcu->rna_path &&
-        BLI_str_quoted_substr(fcu->rna_path, "pose.bones[", bone_name, sizeof(bone_name)))
+    if (BLI_str_quoted_substr(
+            fcu->rna_path().c_str(), "pose.bones[", bone_name, sizeof(bone_name)))
     {
       /* Get bone-name, and check if this bone is selected. */
       pchan = BKE_pose_channel_find_name(ob->pose, bone_name);
@@ -1059,8 +1060,8 @@ static bool skip_fcurve_selected_data(bAnimContext *ac,
     char strip_name[sizeof(strip->name)];
 
     /* Only consider if F-Curve involves `sequence_editor.strips`. */
-    if (fcu->rna_path &&
-        BLI_str_quoted_substr(fcu->rna_path, "strips_all[", strip_name, sizeof(strip_name)))
+    if (BLI_str_quoted_substr(
+            fcu->rna_path().c_str(), "strips_all[", strip_name, sizeof(strip_name)))
     {
       /* Get strip name, and check if this strip is selected. */
       Editing *ed = seq::editing_get(scene);
@@ -1102,9 +1103,7 @@ static bool skip_fcurve_selected_data(bAnimContext *ac,
     char node_name[sizeof(node->name)];
 
     /* Check for selected nodes. */
-    if (fcu->rna_path &&
-        BLI_str_quoted_substr(fcu->rna_path, "nodes[", node_name, sizeof(node_name)))
-    {
+    if (BLI_str_quoted_substr(fcu->rna_path().c_str(), "nodes[", node_name, sizeof(node_name))) {
       /* Get strip name, and check if this strip is selected. */
       node = bke::node_find_node_by_name(*ntree, node_name);
 
@@ -1347,7 +1346,7 @@ static size_t animfilter_fcurves(bAnimContext *ac,
        (fcu = animfilter_fcurve_next(ac, fcu, fcurve_type, filter_mode, owner, owner_id));
        fcu = fcu->next)
   {
-    if (UNLIKELY(fcurve_type == ANIMTYPE_NLACURVE)) {
+    if (fcurve_type == ANIMTYPE_NLACURVE) [[unlikely]] {
       /* NLA Control Curve - Basically the same as normal F-Curves,
        * except we need to set some stuff differently */
       ANIMCHANNEL_NEW_CHANNEL_FULL(ac->bmain, fcu, ANIMTYPE_NLACURVE, owner_id, fcurve_owner_id, {
@@ -1819,7 +1818,9 @@ static size_t animfilter_nla(bAnimContext *ac,
 
             if (track_ok == false) {
               for (NlaStrip &strip : nlt->strips) {
-                if (name_matches_dopesheet_filter(ac->ads, strip.name)) {
+                if (name_matches_dopesheet_filter(ac->ads, strip.name) ||
+                    (strip.flag & NLASTRIP_FLAG_TEMP_META))
+                {
                   strip_ok = true;
                   break;
                 }
@@ -2016,8 +2017,8 @@ static size_t animdata_filter_shapekey(bAnimContext *ac,
 
       Vector<FCurve *> key_fcurves;
       for (FCurve *fcurve : fcurves_for_action_slot(action, key->adt->slot_handle)) {
-        if (STREQ(fcurve->rna_path, "eval_time") ||
-            BLI_str_endswith(fcurve->rna_path, ".interpolation"))
+        if (fcurve->rna_path() == "eval_time" ||
+            BLI_str_endswith(fcurve->rna_path().c_str(), ".interpolation"))
         {
           key_fcurves.append(fcurve);
         }
@@ -3963,9 +3964,9 @@ size_t ANIM_animdata_filter(bAnimContext *ac,
 
       /* specially check for AnimData filter, see #36687. */
       /* TODO: see how this interacts with the new layered Actions. */
-      if (UNLIKELY(filter_mode & ANIMFILTER_ANIMDATA)) {
+      if (filter_mode & ANIMFILTER_ANIMDATA) [[unlikely]] {
         /* all channels here are within the same AnimData block, hence this special case */
-        if (LIKELY(obact->adt)) {
+        if (obact->adt) [[likely]] {
           ANIMCHANNEL_NEW_CHANNEL(
               ac->bmain, obact->adt, ANIMTYPE_ANIMDATA, reinterpret_cast<ID *>(obact), nullptr);
         }
@@ -3992,9 +3993,9 @@ size_t ANIM_animdata_filter(bAnimContext *ac,
       Key *key = static_cast<Key *>(data);
 
       /* specially check for AnimData filter, see #36687. */
-      if (UNLIKELY(filter_mode & ANIMFILTER_ANIMDATA)) {
+      if (filter_mode & ANIMFILTER_ANIMDATA) [[unlikely]] {
         /* all channels here are within the same AnimData block, hence this special case */
-        if (LIKELY(key->adt)) {
+        if (key->adt) [[likely]] {
           ANIMCHANNEL_NEW_CHANNEL(
               ac->bmain, key->adt, ANIMTYPE_ANIMDATA, reinterpret_cast<ID *>(key), nullptr);
         }

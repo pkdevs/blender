@@ -83,9 +83,9 @@ class RENDER_PT_color_management(RenderButtonsPanel, Panel):
             row.label()
 
             if gpu.platform.backend_type_get() == 'OPENGL':
-                row.label(text="HDR not supported with OpenGL backend", icon='INFO')
+                row.label(text="HDR not supported with OpenGL backend", icon='STATUS_INFO')
             else:
-                row.label(text="HDR display not supported", icon='INFO')
+                row.label(text="HDR display not supported", icon='STATUS_INFO')
 
         col = flow.column()
         col.prop(view, "exposure")
@@ -728,6 +728,7 @@ class RENDER_PT_eevee_sampling_render(RenderButtonsPanel, Panel):
 
         col = layout.column(align=True)
         col.prop(props, "taa_render_samples", text="Samples")
+        col.prop(props, "time_limit")
 
         # Add SSS sample count here.
 

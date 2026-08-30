@@ -24,10 +24,10 @@
 
 #undef DNA_GENFILE_VERSIONING_MACROS
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_anim_data.hh"
 #include "BKE_colortools.hh"
@@ -60,15 +60,14 @@ namespace blender {
  */
 static void version_bonecollection_anim(FCurve *fcurve)
 {
-  const StringRef rna_path(fcurve->rna_path);
+  const StringRef rna_path = fcurve->rna_path();
   constexpr char const *rna_path_prefix = "collections[";
   if (!rna_path.startswith(rna_path_prefix)) {
     return;
   }
 
   const std::string path_remainder(rna_path.drop_known_prefix(rna_path_prefix));
-  MEM_delete(fcurve->rna_path);
-  fcurve->rna_path = BLI_sprintfN("collections_all[%s", path_remainder.c_str());
+  fcurve->rna_path_set_move(BLI_sprintfN("collections_all[%s", path_remainder.c_str()));
 }
 
 static void versioning_eevee_shadow_settings(Object *object)

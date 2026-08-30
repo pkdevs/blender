@@ -31,15 +31,15 @@
 #include "CLG_log.h"
 
 #include "BLI_enum_flags.hh"
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_system.h"
-#include "BLI_time.h"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_system.hh"
+#include "BLI_time.hh"
 
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
@@ -125,7 +125,7 @@ static bool buffer_from_filepath(const char *filepath,
 {
   errno = 0;
   const int file = BLI_open(filepath, O_BINARY | O_RDONLY, 0);
-  if (UNLIKELY(file == -1)) {
+  if (file == -1) [[unlikely]] {
     *r_error_message = BLI_sprintfN("failure '%s' to open file", strerror(errno));
     return false;
   }
@@ -134,7 +134,7 @@ static bool buffer_from_filepath(const char *filepath,
   uchar *mem = nullptr;
   const size_t size = BLI_file_descriptor_size(file);
   int64_t size_read;
-  if (UNLIKELY(size == size_t(-1))) {
+  if (size == size_t(-1)) [[unlikely]] {
     *r_error_message = BLI_sprintfN("failure '%s' to access size", strerror(errno));
   }
   else if (r_mem && UNLIKELY(!(mem = MEM_new_array_uninitialized<uchar>(size, __func__)))) {
@@ -377,6 +377,10 @@ static void playanim_window_csd_params_update(GhostData &ghost_data)
 
       /*cursor_drag_threshold*/ 6 /* NOTE: `U.drag_threshold_mouse` isn't initialized. */,
       /*cursor_double_click_ms*/ 350 /* NOTE: `U.dbl_click_time` isn't initialized. */,
+      /*resize_margin_size*/ WM_WINDOW_CSD_RESIZE_MARGIN_SIZE,
+      /* Square corners to avoid window transparency and because they won't be expected here
+       * anyway. */
+      /*corner_radius*/ 0,
   };
   ghost_data.system->setWindowCSD(csd_params);
 }
@@ -1971,7 +1975,7 @@ static std::optional<int> wm_main_playanim_intern(int argc, const char **argv, P
 
       GHOST_ISystem::createSystem();
       ps.ghost_data.system = GHOST_ISystem::getSystem();
-      if (UNLIKELY(ps.ghost_data.system == nullptr)) {
+      if (ps.ghost_data.system == nullptr) [[unlikely]] {
         /* GHOST will have reported the back-ends that failed to load. */
         fprintf(stderr, "%s: unable to initialize GHOST, exiting!\n", message_prefix);
         return EXIT_FAILURE;
@@ -1995,7 +1999,7 @@ static std::optional<int> wm_main_playanim_intern(int argc, const char **argv, P
                                                   ibuf->x,
                                                   ibuf->y);
 
-      if (UNLIKELY(ps.ghost_data.window == nullptr)) {
+      if (ps.ghost_data.window == nullptr) [[unlikely]] {
         fprintf(stderr, "%s: unable to create window, exiting!\n", message_prefix);
         return EXIT_FAILURE;
       }
@@ -2022,7 +2026,8 @@ static std::optional<int> wm_main_playanim_intern(int argc, const char **argv, P
   // GHOST_ActivateWindowDrawingContext(ps.ghost_data.window);
 
   /* Init Blender GPU context. */
-  ps.ghost_data.gpu_context = GPU_context_create(ps.ghost_data.window, nullptr);
+  ps.ghost_data.gpu_context = GPU_context_create(ps.ghost_data.window,
+                                                 ps.ghost_data.window->getDrawingContext());
   GPU_init();
 
   /* Initialize the font. */

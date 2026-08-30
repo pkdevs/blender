@@ -83,10 +83,10 @@
 
 #include "BLI_array.hh"
 #include "BLI_index_range.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_task.hh"
 #include "BLI_vector.hh"
@@ -304,6 +304,12 @@ static CustomData get_mesh_to_bm_custom_data(const Mesh &mesh,
     }
     CustomData_add_layer_named(
         &custom_data, eCustomDataType(layer.type), CD_SET_DEFAULT, 0, layer.name);
+    if (layer.type == CD_MDISPS && layer.flag & CD_FLAG_EXTERNAL) {
+      const int new_layer_i = CustomData_get_layer_index(&custom_data, layer.type);
+      BLI_assert(new_layer_i != -1);
+      CustomDataLayer &new_layer = custom_data.layers[new_layer_i];
+      new_layer.flag = layer.flag;
+    }
   }
   return custom_data;
 }
@@ -326,6 +332,11 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
   CustomData mesh_pdata = get_mesh_to_bm_custom_data(*mesh, bke::AttrDomain::Face, mask.pmask);
   CustomData mesh_ldata = get_mesh_to_bm_custom_data(*mesh, bke::AttrDomain::Corner, mask.lmask);
 
+  const CustomData &mesh_data = get_mesh_custom_data(*mesh, AttrDomain::Corner);
+  if (mesh_data.external) {
+    mesh_ldata.external = MEM_dupalloc(mesh_data.external);
+  }
+
   Vector<std::string> temporary_layers_to_delete;
 
   for (const int layer_index :
@@ -347,6 +358,8 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
     for (const std::string &name : temporary_layers_to_delete) {
       CustomData_free_layer_named(&mesh_ldata, name);
     }
+
+    MEM_SAFE_DELETE(mesh_ldata.external);
 
     MEM_SAFE_DELETE(mesh_vdata.layers);
     MEM_SAFE_DELETE(mesh_edata.layers);
@@ -615,7 +628,7 @@ void BM_mesh_bm_from_me(BMesh *bm, const Mesh *mesh, const BMeshFromMeshParams *
       ftable[i] = f;
     }
 
-    if (UNLIKELY(f == nullptr)) {
+    if (f == nullptr) [[unlikely]] {
       printf(
           "%s: Warning! Bad face in mesh"
           " \"%s\" at index %d!, skipping\n",
@@ -1606,6 +1619,12 @@ static void add_bm_cd_to_mesh(const BMesh &bm,
         continue;
       }
       CustomData_add_layer_named(&mesh_data, cd_type, CD_CONSTRUCT, domain_size, layer.name);
+      if (layer.type == CD_MDISPS && layer.flag & CD_FLAG_EXTERNAL) {
+        const int new_layer_i = CustomData_get_layer_index(&mesh_data, layer.type);
+        BLI_assert(new_layer_i != -1);
+        CustomDataLayer &new_layer = mesh_data.layers[new_layer_i];
+        new_layer.flag = layer.flag;
+      }
     }
   }
 }
@@ -1650,6 +1669,15 @@ static void bm_to_mesh_loops(Mesh &mesh,
 void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParams *params)
 {
   const int old_verts_num = mesh->verts_num;
+  AttributeOwner owner = AttributeOwner::from_id(&mesh->id);
+  const std::string attributes_active_name = BKE_attributes_active_name_get(owner).value_or("");
+
+  /* Override (wrong) DNA default of 0 for attributes_active_index. See comments on the
+   * Mesh.attributes_active_index declaration. */
+  if (attributes_active_name.empty()) {
+    BLI_assert(ELEM(mesh->attributes_active_index, 0, -1));
+    mesh->attributes_active_index = -1;
+  }
 
   BKE_mesh_clear_geometry(mesh);
 
@@ -1712,6 +1740,13 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
   {
     CustomData_MeshMasks mask = CD_MASK_MESH;
     CustomData_MeshMasks_update(&mask, &params->cd_mask_extra);
+
+    const CustomData &bm_data = get_bm_custom_data(*bm, AttrDomain::Corner);
+    CustomData &mesh_data = get_mesh_custom_data(*mesh, AttrDomain::Corner);
+    if (bm_data.external) {
+      mesh_data.external = MEM_dupalloc(bm_data.external);
+    }
+
     add_bm_cd_to_mesh(*bm, bke::AttrDomain::Point, mask.vmask, *mesh);
     add_bm_cd_to_mesh(*bm, bke::AttrDomain::Edge, mask.emask, *mesh);
     add_bm_cd_to_mesh(*bm, bke::AttrDomain::Face, mask.pmask, *mesh);
@@ -1923,6 +1958,23 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *mesh, const BMeshToMeshParam
   edge_single_checker.optimize_storage();
   face_single_checker.optimize_storage();
   corner_single_checker.optimize_storage();
+
+  /* Conversion to edit-mesh may have modified the attribute layers.
+   * Re-resolve the active attribute by name to keep it stable. */
+  if (!attributes_active_name.empty()) {
+    /* Invalid active attributes can happen because of wrong DNA default, see comment
+     * on the Mesh.attributes_active_index declaration. */
+    if (bke::allow_procedural_attribute_access(attributes_active_name)) {
+      BKE_attributes_active_set(owner, attributes_active_name);
+    }
+    else {
+      mesh->attributes_active_index = -1;
+    }
+  }
+  else {
+    BLI_assert(ELEM(mesh->attributes_active_index, 0, -1));
+    mesh->attributes_active_index = -1;
+  }
 }
 
 void BM_mesh_bm_to_me_compact(BMesh &bm,
@@ -1935,6 +1987,12 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
 
   /* Must be an empty mesh. */
   BLI_assert(mesh.verts_num == 0);
+
+  /* New Mesh is created with this at 0, but if the conversion from BMesh potentially adds
+   * some attributes we should make sure it is at -1 or it might point to an invalid internal
+   * attribute. */
+  mesh.attributes_active_index = -1;
+
   /* Just in case, clear the derived geometry caches from the input mesh. */
   BKE_mesh_runtime_clear_geometry(&mesh);
 
@@ -2003,6 +2061,13 @@ void BM_mesh_bm_to_me_compact(BMesh &bm,
 
   if (add_mesh_attributes) {
     const CustomData_MeshMasks &mask_final = mask ? *mask : CD_MASK_DERIVEDMESH;
+
+    const CustomData &bm_data = get_bm_custom_data(bm, AttrDomain::Corner);
+    CustomData &mesh_data = get_mesh_custom_data(mesh, AttrDomain::Corner);
+    if (bm_data.external) {
+      mesh_data.external = MEM_dupalloc(bm_data.external);
+    }
+
     add_bm_cd_to_mesh(bm, bke::AttrDomain::Point, mask_final.vmask, mesh);
     add_bm_cd_to_mesh(bm, bke::AttrDomain::Edge, mask_final.emask, mesh);
     add_bm_cd_to_mesh(bm, bke::AttrDomain::Face, mask_final.pmask, mesh);

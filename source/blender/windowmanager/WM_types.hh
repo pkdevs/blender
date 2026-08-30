@@ -96,7 +96,7 @@
 #include <memory>
 #include <string>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_vector.hh"
 
@@ -218,6 +218,8 @@ enum {
    * - As tools in the toolbar.
    *
    * Even so, accessing from the menu should behave usefully.
+   * \note Operators which set this flag will be skipped by the repeat last
+   * action operator.
    */
   OPTYPE_DEPENDS_ON_CURSOR = (1 << 11),
 
@@ -1248,10 +1250,23 @@ struct wmIMEData {
 
 /* **************** Paint Cursor ******************* */
 
+using wmPaintCursorPoll = bool (*)(bContext *C);
 using wmPaintCursorDraw = void (*)(bContext *C,
                                    const int2 &xy,
                                    const float2 &tilt,
                                    void *customdata);
+
+struct wmPaintCursor {
+  wmPaintCursor *next, *prev;
+
+  void *customdata;
+
+  wmPaintCursorPoll poll;
+  wmPaintCursorDraw draw;
+
+  short space_type;
+  short region_type;
+};
 
 /* *************** Drag and drop *************** */
 

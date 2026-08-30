@@ -9,7 +9,7 @@
 #ifndef WIN32
 #  include <unistd.h> /* for read close */
 #else
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include "winsock2.h"
 #  include <io.h> /* for open close read */
 #endif
@@ -43,15 +43,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_anim_data.hh"
 #include "BKE_anim_visualization.h"
@@ -1218,7 +1218,7 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
     /* anim viz changes */
     for (Object &ob : bmain->objects) {
       /* initialize object defaults */
-      animviz_settings_init(&ob.avs);
+      bke::animviz::settings_init(&ob.avs);
 
       /* if armature, copy settings for pose from armature data
        * performing initialization where appropriate
@@ -1262,7 +1262,7 @@ void blo_do_versions_250(FileData *fd, Library * /*lib*/, Main *bmain)
           avs->path_step = 1;
         }
         else {
-          animviz_settings_init(&ob.pose->avs);
+          bke::animviz::settings_init(&ob.pose->avs);
         }
       }
     }
@@ -2122,16 +2122,16 @@ void do_versions_after_linking_250(Main *bmain)
       if (adt != nullptr) {
         /* Fix actions' id-roots (i.e. if they come from a pre 2.57 .blend file). */
         if ((adt->action) && (adt->action->idroot == 0)) {
-          adt->action->idroot = GS(id->name);
+          adt->action->idroot = id->id_type();
         }
         if ((adt->tmpact) && (adt->tmpact->idroot == 0)) {
-          adt->tmpact->idroot = GS(id->name);
+          adt->tmpact->idroot = id->id_type();
         }
 
         for (NlaTrack &nla_track : adt->nla_tracks) {
           for (NlaStrip &nla_strip : nla_track.strips) {
             if ((nla_strip.act) && (nla_strip.act->idroot == 0)) {
-              nla_strip.act->idroot = GS(id->name);
+              nla_strip.act->idroot = id->id_type();
             }
           }
         }

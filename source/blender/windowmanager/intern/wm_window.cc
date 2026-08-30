@@ -35,15 +35,15 @@
 #include "GHOST_Types.hh"
 
 #include "BLI_enum_flags.hh"
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_system.h"
-#include "BLI_time.h"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_system.hh"
+#include "BLI_time.hh"
 
 #include "BLT_translation.hh"
 
@@ -103,7 +103,7 @@
 
 /* For assert. */
 #ifndef NDEBUG
-#  include "BLI_threads.h"
+#  include "BLI_threads.hh"
 #endif
 
 namespace blender {
@@ -243,7 +243,7 @@ static void wm_window_check_size(rcti *rect)
 
 static void wm_ghostwindow_destroy(wmWindowManager *wm, wmWindow *win)
 {
-  if (UNLIKELY(!win->runtime->ghostwin)) {
+  if (!win->runtime->ghostwin) [[unlikely]] {
     return;
   }
 
@@ -482,6 +482,9 @@ static rctf *stored_window_bounds(eSpace_Type space_type)
   }
   if (space_type == SPACE_FILE) {
     return &U.stored_bounds.file;
+  }
+  if (space_type == SPACE_PROJECT) {
+    return &U.stored_bounds.project;
   }
 
   return nullptr;
@@ -830,13 +833,10 @@ void WM_window_decoration_style_flags_set(const wmWindow *win,
       static_cast<GHOST_TWindowDecorationStyleFlags>(ghost_style_flags));
 }
 
-static void wm_window_decoration_style_set_from_theme(const wmWindow *win, const bScreen *screen)
+void wm_window_titlebar_theme_context_set(const wmWindow *win, const bScreen *screen)
 {
-  /* Set the decoration style settings from the current theme colors.
-   * NOTE: screen may be null. In which case, only the window is used as a theme provider. */
-  GHOST_WindowDecorationStyleSettings decoration_settings = {};
+  /* NOTE: screen may be null. In which case, only the window is used as a theme provider. */
 
-  /* Colored TitleBar Decoration. */
   /* For main windows, use the top-bar color. */
   if (WM_window_is_main_top_level(win)) {
     ui::theme::theme_set(SPACE_TOPBAR, RGN_TYPE_HEADER);
@@ -850,6 +850,15 @@ static void wm_window_decoration_style_set_from_theme(const wmWindow *win, const
   else {
     ui::theme::theme_set(0, RGN_TYPE_WINDOW);
   }
+}
+
+static void wm_window_decoration_style_set_from_theme(const wmWindow *win, const bScreen *screen)
+{
+  /* Set the decoration style settings from the current theme colors. */
+  GHOST_WindowDecorationStyleSettings decoration_settings = {};
+
+  /* Colored TitleBar Decoration. */
+  wm_window_titlebar_theme_context_set(win, screen);
 
   float titlebar_bg_color[3];
   ui::theme::get_color_3fv(TH_BACK, titlebar_bg_color);
@@ -1042,7 +1051,7 @@ static void wm_window_ghostwindow_add(wmWindowManager *wm,
       static_cast<GHOST_IWindow *>((win->parent) ? win->parent->runtime->ghostwin : nullptr));
 
   if (ghost_window) {
-    win->runtime->gpuctx = GPU_context_create(ghost_window, nullptr);
+    win->runtime->gpuctx = GPU_context_create(ghost_window, ghost_window->getDrawingContext());
     GPU_render_begin();
 
     /* Needed so we can detect the graphics card below. */
@@ -1083,10 +1092,24 @@ static void wm_window_ghostwindow_add(wmWindowManager *wm,
     /* Needed here, because it's used before it reads #UserDef. */
     WM_window_dpi_set_userdef(win);
 
+#ifdef WITH_GHOST_CSD
+    /* This background is presented before anything else is drawn, so it needs its corners cut
+     * away too. Without this the window opens as a hard edged rectangle and visibly rounds off
+     * once the editors first draw. */
+    if (WM_window_is_csd(win)) {
+      WM_window_csd_draw_corner_mask(win);
+    }
+#endif
+
     wm_window_swap_buffer_release(win);
 
     /* Clear double buffer to avoids flickering of new windows on certain drivers, see #97600. */
     GPU_clear_color(window_bg_color[0], window_bg_color[1], window_bg_color[2], 1.0f);
+#ifdef WITH_GHOST_CSD
+    if (WM_window_is_csd(win)) {
+      WM_window_csd_draw_corner_mask(win);
+    }
+#endif
 
     GPU_render_end();
   }
@@ -1202,7 +1225,7 @@ void wm_window_ghostwindows_ensure(wmWindowManager *wm)
    * when there is no startup.blend yet.
    */
   if (wm_init_state.size[0] == 0) {
-    if (UNLIKELY(!wm_get_screensize(wm_init_state.size))) {
+    if (!wm_get_screensize(wm_init_state.size)) [[unlikely]] {
       /* Use fallback values. */
       wm_init_state.size = int2(0);
     }
@@ -1592,7 +1615,7 @@ void wm_cursor_position_to_ghost_screen_coords(wmWindow *win, int *x, int *y)
 
 bool wm_cursor_position_get(wmWindow *win, int *r_x, int *r_y)
 {
-  if (UNLIKELY(G.f & G_FLAG_EVENT_SIMULATE)) {
+  if (G.f & G_FLAG_EVENT_SIMULATE) [[unlikely]] {
     *r_x = win->runtime->eventstate->xy[0];
     *r_y = win->runtime->eventstate->xy[1];
     return true;
@@ -1629,14 +1652,15 @@ static void wm_window_set_drawable(wmWindowManager *wm, wmWindow *win, bool acti
   if (activate) {
     GHOST_IWindow *ghost_window = static_cast<GHOST_IWindow *>(win->runtime->ghostwin);
     ghost_window->activateDrawingContext();
+    GPU_context_active_set(static_cast<GPUContext *>(win->runtime->gpuctx));
   }
-  GPU_context_active_set(static_cast<GPUContext *>(win->runtime->gpuctx));
 }
 
 void wm_window_clear_drawable(wmWindowManager *wm)
 {
   if (wm->runtime->windrawable) {
     wm->runtime->windrawable = nullptr;
+    GPU_context_active_set(nullptr);
   }
 }
 
@@ -2255,6 +2279,8 @@ void WM_window_csd_params_update()
 
       /*cursor_drag_threshold*/ U.drag_threshold_mouse,
       /*cursor_double_click_ms*/ U.dbl_click_time,
+      /*resize_margin_size*/ WM_WINDOW_CSD_RESIZE_MARGIN_SIZE,
+      /*corner_radius*/ WM_WINDOW_CSD_CORNER_RADIUS,
   };
   g_system->setWindowCSD(csd_params);
 }
@@ -2284,7 +2310,7 @@ void wm_ghost_init(bContext *C)
   g_system = GHOST_ISystem::getSystem();
   GPU_backend_ghost_system_set(g_system);
 
-  if (UNLIKELY(g_system == nullptr)) {
+  if (g_system == nullptr) [[unlikely]] {
     /* GHOST will have reported the back-ends that failed to load. */
     CLOG_STR_ERROR(&LOG_GHOST_SYSTEM, "Unable to initialize GHOST, exiting!");
     /* This will leak memory, it's preferable to crashing. */
@@ -2650,7 +2676,7 @@ void wm_clipboard_free()
 
 static char *wm_clipboard_text_get_impl(bool selection)
 {
-  if (UNLIKELY(G.f & G_FLAG_EVENT_SIMULATE)) {
+  if (G.f & G_FLAG_EVENT_SIMULATE) [[unlikely]] {
     if (g_wm_clipboard_text_simulate == nullptr) {
       return nullptr;
     }
@@ -2669,7 +2695,7 @@ static char *wm_clipboard_text_get_impl(bool selection)
 
 static void wm_clipboard_text_set_impl(const char *buf, bool selection)
 {
-  if (UNLIKELY(G.f & G_FLAG_EVENT_SIMULATE)) {
+  if (G.f & G_FLAG_EVENT_SIMULATE) [[unlikely]] {
     if (g_wm_clipboard_text_simulate == nullptr) {
       g_wm_clipboard_text_simulate =
           MEM_new_zeroed<std::remove_pointer_t<decltype(g_wm_clipboard_text_simulate)>>(__func__);
@@ -3033,7 +3059,7 @@ void WM_init_native_pixels(bool do_it)
 
 void WM_init_input_devices()
 {
-  if (UNLIKELY(!g_system)) {
+  if (!g_system) [[unlikely]] {
     return;
   }
 
@@ -3136,6 +3162,15 @@ static void wm_window_csd_title_redraw_tag(wmWindowManager *wm, wmWindow *win)
   }
 #else
   UNUSED_VARS(wm, win);
+#endif
+}
+
+bool WM_window_csd_is_active()
+{
+#ifdef WITH_GHOST_CSD
+  return g_system_use_csd;
+#else
+  return false;
 #endif
 }
 
@@ -3423,9 +3458,9 @@ bool WM_window_is_temp_screen(const wmWindow *win)
  * \{ */
 
 #ifdef WITH_INPUT_IME
-void wm_window_IME_begin(wmWindow *win, int x, int y, int w, int h, bool complete)
+void WM_window_IME_begin(wmWindow *win, int x, int y, int w, int h, bool complete)
 {
-  /* NOTE: Keep in mind #wm_window_IME_begin is also used to reposition the IME window. */
+  /* NOTE: Keep in mind #WM_window_IME_begin is also used to reposition the IME window. */
 
   BLI_assert(win);
   if ((WM_capabilities_flag() & WM_CAPABILITY_INPUT_IME) == 0) {
@@ -3437,10 +3472,12 @@ void wm_window_IME_begin(wmWindow *win, int x, int y, int w, int h, bool complet
   const float fac = ghost_window->getNativePixelSize();
   x /= fac;
   y /= fac;
+  w /= fac;
+  h /= fac;
   ghost_window->beginIME(x, win->sizey - y, w, h, complete);
 }
 
-void wm_window_IME_end(wmWindow *win)
+void WM_window_IME_end(wmWindow *win)
 {
   if ((WM_capabilities_flag() & WM_CAPABILITY_INPUT_IME) == 0) {
     return;
@@ -3451,7 +3488,12 @@ void wm_window_IME_end(wmWindow *win)
    * Even if no IME events were generated (which assigned `ime_data`).
    * TODO: check if #GHOST_EndIME can run on APPLE without causing problems. */
 #  ifdef __APPLE__
-  BLI_assert(win->runtime->ime_data);
+  /* Null when no IME events occurred since the last "end",
+   * common as callers end without checking an IME editor exists,
+   * see #WM_window_IME_region_refresh. */
+  if (win->runtime->ime_data == nullptr) {
+    return;
+  }
 #  endif
 
   GHOST_IWindow *ghost_window = static_cast<GHOST_IWindow *>(win->runtime->ghostwin);
@@ -3460,6 +3502,29 @@ void wm_window_IME_end(wmWindow *win)
   MEM_delete(win->runtime->ime_data);
   win->runtime->ime_data = nullptr;
   win->runtime->ime_data_is_composing = false;
+}
+
+void WM_window_IME_region_refresh(wmWindow *win, const ScrArea *area, const ARegion *region)
+{
+  WM_window_IME_end(win);
+
+  if (!region || !region->runtime->type->cursor_ime) {
+    return;
+  }
+
+  const std::optional<rcti> rect = region->runtime->type->cursor_ime(win, area, region);
+  if (rect) {
+    /* Clamp the caret origin to the region bounds so a cursor scrolled out of view keeps the
+     * IME window at the region edge instead of placing it outside the region. */
+    const int x = region->winrct.xmin +
+                  std::clamp(rect->xmin, 0, BLI_rcti_size_x(&region->winrct));
+    const int y = region->winrct.ymin +
+                  std::clamp(rect->ymin, 0, BLI_rcti_size_y(&region->winrct));
+    const int w = BLI_rcti_size_x(&*rect);
+    const int h = BLI_rcti_size_y(&*rect);
+    /* `WM_window_IME_end` above always ends any session, so this is always a fresh begin. */
+    WM_window_IME_begin(win, x, y, w, h, true);
+  }
 }
 #endif /* WITH_INPUT_IME */
 

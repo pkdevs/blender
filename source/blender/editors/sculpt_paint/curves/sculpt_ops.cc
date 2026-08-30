@@ -5,10 +5,10 @@
 #include <algorithm>
 
 #include "BLI_kdtree.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_rand.hh"
 #include "BLI_task.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector_set.hh"
 
 #include "BKE_attribute.hh"
@@ -30,8 +30,8 @@
 
 #include "ED_curves.hh"
 #include "ED_curves_sculpt.hh"
-#include "ED_image.hh"
 #include "ED_object.hh"
+#include "ED_paint.hh"
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
 #include "ED_view3d.hh"
@@ -169,14 +169,16 @@ static std::unique_ptr<CurvesSculptStrokeOperation> start_brush_operation(
       return new_density_operation(mode, scene, depsgraph, region, v3d, object, stroke_start);
     case CURVES_SCULPT_BRUSH_TYPE_SLIDE:
       return new_slide_operation();
+    case CURVES_SCULPT_BRUSH_TYPE_CUT:
+      return new_cut_operation();
   }
   BLI_assert_unreachable();
   return {};
 }
 
 struct SculptCurvesBrushStroke final : public PaintStroke {
-  SculptCurvesBrushStroke(bContext *C, wmOperator *op, const int event_type)
-      : PaintStroke(C, op, event_type)
+  SculptCurvesBrushStroke(bContext *C, wmOperator *op, const wmEvent *event)
+      : PaintStroke(C, op, event)
   {
   }
 
@@ -251,8 +253,7 @@ static wmOperatorStatus sculpt_curves_stroke_invoke(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  SculptCurvesBrushStroke *op_data = MEM_new<SculptCurvesBrushStroke>(
-      __func__, C, op, event->type);
+  SculptCurvesBrushStroke *op_data = MEM_new<SculptCurvesBrushStroke>(__func__, C, op, event);
   op->customdata = op_data;
 
   const wmOperatorStatus retval = op->type->modal(C, op, event);

@@ -12,9 +12,6 @@
 #include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
-FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree)
-FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info)
-
 #include "eevee_attributes_world_lib.glsl"
 #include "eevee_colorspace_lib.bsl.hh"
 #include "eevee_lightprobe.bsl.hh"
@@ -25,7 +22,9 @@ FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info)
 
 float4 closure_to_rgba_world(Closure /*cl*/)
 {
-  return float4(0.0f);
+  float3 transmittance = g_transmittance;
+  closure_weights_reset(0.0f);
+  return float4(0.0f, 0.0f, 0.0f, saturate(1.0f - average(transmittance)));
 }
 
 namespace eevee {
@@ -54,6 +53,8 @@ void surf_world([[resource_table]] PipelineConstants & /*pipe*/,
                 [[out]] SurfWorldFragOut &frag_out,
                 [[front_facing]] const bool front_face)
 {
+  FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info);
+
   const ViewMatrices view = views.get(0);
   init_globals(uni, view, front_face);
   /* View position is passed to keep accuracy. */

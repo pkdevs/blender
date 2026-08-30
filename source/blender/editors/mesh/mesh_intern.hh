@@ -13,7 +13,7 @@
 #include <cstdarg>
 
 #include "BLI_span.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 namespace blender {
 
@@ -147,6 +147,10 @@ void MESH_OT_circularize(wmOperatorType *ot);
 /* *** `editmesh_flatten.cc` *** */
 
 void MESH_OT_flatten(wmOperatorType *ot);
+
+/* *** `editmesh_relax_edge_loops.cc` *** */
+
+void MESH_OT_relax_edge_loops(wmOperatorType *ot);
 
 /* *** `editmesh_extrude.cc` *** */
 

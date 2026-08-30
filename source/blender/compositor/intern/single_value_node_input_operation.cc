@@ -4,7 +4,7 @@
 
 #include <string>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_math_euler.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -148,6 +148,9 @@ void SingleValueNodeInputOperation::execute()
       result.set_single_value(value);
       break;
     }
+    case SOCK_CUSTOM:
+      /* An undefined socket, its value does not matter. */
+      break;
     default:
       BLI_assert_unreachable();
       break;

@@ -86,7 +86,7 @@
 
 /* Fragment shader color input index for subpass input.
  * `sampler_type` is the type of image to bind to this (e.g. usampler2DArray).
- * It must be compatible with the framebuffer attachment type. */
+ * It must be compatible with the frame-buffer attachment type. */
 #  define subpass_input(index, sampler_type) maybe_unused
 
 /* Fragment shader output. */
@@ -116,6 +116,8 @@
 #  define storage(slot, qualifiers) maybe_unused
 /* Declare a storage buffer at the given slot. */
 #  define image(slot, qualifiers, format) maybe_unused
+/* Declare an acceleration structure at the given slot. */
+#  define acceleration_structure(slot) maybe_unused
 #  define compilation_constant maybe_unused
 #  define specialization_constant(default_value) maybe_unused
 #  define push_constant maybe_unused

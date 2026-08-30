@@ -23,7 +23,7 @@
 #include "ANIM_action.hh"
 #include "ANIM_action_iterators.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_stack.hh"
 
 namespace blender::nodes {
@@ -870,12 +870,12 @@ class SocketValueInferencerImpl {
     if (tree.adt->action) {
       animrig::foreach_fcurve_in_action_slot(
           tree.adt->action->wrap(), tree.adt->slot_handle, [&](const FCurve &fcurve) {
-            handle_rna_path(fcurve.rna_path);
+            handle_rna_path(fcurve.rna_path().c_str());
           });
     }
     /* Gather all inputs controlled by drivers. */
     for (const FCurve &driver : tree.adt->drivers) {
-      handle_rna_path(driver.rna_path);
+      handle_rna_path(driver.rna_path().c_str());
     }
 
     /* Actually find the #bNodeSocket for each controlled input. */
