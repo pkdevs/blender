@@ -57,6 +57,7 @@ using volume_grid::VolumeGrid;
   X(ColorGeometry4f) \
   X(ColorGeometry4b) \
   X(math::Quaternion) \
+  X(float3x3) \
   X(float4x4) \
   X(nodes::MenuValue) \
   X(std::string) \

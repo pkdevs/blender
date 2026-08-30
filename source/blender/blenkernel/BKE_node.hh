@@ -1071,11 +1071,19 @@ inline bool socket_data_to_static_type(const eNodeSocketDatatype type, Fn &&fn)
     case SOCK_ROTATION:
       fn.template operator()<bNodeSocketValueRotation>();
       return true;
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4:
     case SOCK_VECTOR:
       fn.template operator()<bNodeSocketValueVector>();
       return true;
+    case SOCK_RGB:
+      fn.template operator()<bNodeSocketValueRGB>();
+      return true;
     case SOCK_RGBA:
       fn.template operator()<bNodeSocketValueRGBA>();
+      return true;
+    case SOCK_FILENAME:
+      fn.template operator()<bNodeSocketValueFilename>();
       return true;
     case SOCK_STRING:
       fn.template operator()<bNodeSocketValueString>();
@@ -1120,8 +1128,16 @@ inline bool socket_data_to_static_type(const eNodeSocketDatatype type, Fn &&fn)
     case SOCK_CUSTOM:
     case SOCK_SHADER:
     case SOCK_MATRIX:
+    case SOCK_MATRIX3X3:
     case SOCK_GEOMETRY:
     case SOCK_BUNDLE:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_EDF:
+    case SOCK_VDF:
     case SOCK_CLOSURE:
       return true;
   }

@@ -2867,15 +2867,26 @@ static int get_main_socket_priority(const bNodeSocket *socket)
     case SOCK_FLOAT:
       return 4;
     case SOCK_VECTOR:
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4:
       return 5;
+    case SOCK_RGB:
     case SOCK_RGBA:
       return 6;
     case SOCK_INT_VECTOR:
     case SOCK_STRING:
     case SOCK_SHADER:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_EDF:
+    case SOCK_VDF:
     case SOCK_OBJECT:
     case SOCK_IMAGE:
     case SOCK_ROTATION:
+    case SOCK_MATRIX3X3:
     case SOCK_MATRIX:
     case SOCK_GEOMETRY:
     case SOCK_COLLECTION:
@@ -2886,6 +2897,7 @@ static int get_main_socket_priority(const bNodeSocket *socket)
     case SOCK_TEXT_ID:
     case SOCK_MASK:
     case SOCK_SOUND:
+    case SOCK_FILENAME:
     case SOCK_BUNDLE:
     case SOCK_CLOSURE:
       return 7;

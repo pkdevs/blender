@@ -71,6 +71,8 @@ static void set_single_input_from_rna_value(PointerRNA *input_props_ptr,
       result.set_single_value(value);
       break;
     }
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4:
     case SOCK_VECTOR: {
       switch (dimensions.value_or(3)) {
         case 2: {
@@ -90,6 +92,7 @@ static void set_single_input_from_rna_value(PointerRNA *input_props_ptr,
       }
       break;
     }
+    case SOCK_RGB:
     case SOCK_RGBA: {
       ColorGeometry4f value;
       RNA_float_get_array(input_props_ptr, "value", value);
@@ -118,6 +121,7 @@ static void set_single_input_from_rna_value(PointerRNA *input_props_ptr,
       result.set_single_value(value);
       break;
     }
+    case SOCK_FILENAME:
     case SOCK_STRING: {
       const std::string value = RNA_string_get(input_props_ptr, "value");
       result.set_single_value(value);
@@ -157,10 +161,18 @@ static void set_single_input_from_rna_value(PointerRNA *input_props_ptr,
     case SOCK_MASK:
     case SOCK_SOUND:
     case SOCK_GEOMETRY:
+    case SOCK_MATRIX3X3:
     case SOCK_MATRIX:
     case SOCK_BUNDLE:
     case SOCK_CLOSURE:
     case SOCK_SHADER:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_EDF:
+    case SOCK_VDF:
     case SOCK_CUSTOM:
       break;
   }

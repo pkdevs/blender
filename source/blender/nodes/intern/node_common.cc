@@ -301,6 +301,25 @@ static BaseSocketDeclarationBuilder &build_interface_socket_declaration(
                     .max(value.max);
         break;
       }
+      case SOCK_VECTOR2: {
+        const auto &value = node_interface::get_socket_data_as<bNodeSocketValueVector>(io_socket);
+        decl = &b.add_socket<decl::Vector2>(name, identifier, in_out)
+                    .subtype(PropertySubType(value.subtype))
+                    .default_value(float2(value.value[0], value.value[1]))
+                    .min(value.min)
+                    .max(value.max);
+        break;
+      }
+      case SOCK_VECTOR4: {
+        const auto &value = node_interface::get_socket_data_as<bNodeSocketValueVector>(io_socket);
+        decl = &b.add_socket<decl::Vector4>(name, identifier, in_out)
+                    .subtype(PropertySubType(value.subtype))
+                    .default_value(
+                        float4(value.value[0], value.value[1], value.value[2], value.value[3]))
+                    .min(value.min)
+                    .max(value.max);
+        break;
+      }
       case SOCK_INT_VECTOR: {
         const auto &value = node_interface::get_socket_data_as<bNodeSocketValueIntVector>(
             io_socket);
@@ -312,9 +331,43 @@ static BaseSocketDeclarationBuilder &build_interface_socket_declaration(
                     .max(value.max);
         break;
       }
+      case SOCK_RGB: {
+        const auto &value = node_interface::get_socket_data_as<bNodeSocketValueRGB>(io_socket);
+        decl = &b.add_socket<decl::Color3>(name, identifier, in_out)
+                    .default_value(ColorGeometry4f(value.value));
+        break;
+      }
       case SOCK_RGBA: {
         const auto &value = node_interface::get_socket_data_as<bNodeSocketValueRGBA>(io_socket);
         decl = &b.add_socket<decl::Color>(name, identifier, in_out).default_value(value.value);
+        break;
+      }
+      case SOCK_SURF_SHADER: {
+        decl = &b.add_socket<decl::SurfaceShader>(name, identifier, in_out);
+        break;
+      }
+      case SOCK_VOL_SHADER: {
+        decl = &b.add_socket<decl::VolumeShader>(name, identifier, in_out);
+        break;
+      }
+      case SOCK_DISP_SHADER: {
+        decl = &b.add_socket<decl::DisplacementShader>(name, identifier, in_out);
+        break;
+      }
+      case SOCK_LIGHT_SHADER: {
+        decl = &b.add_socket<decl::LightShader>(name, identifier, in_out);
+        break;
+      }
+      case SOCK_BSDF: {
+        decl = &b.add_socket<decl::BSDF>(name, identifier, in_out);
+        break;
+      }
+      case SOCK_EDF: {
+        decl = &b.add_socket<decl::EDF>(name, identifier, in_out);
+        break;
+      }
+      case SOCK_VDF: {
+        decl = &b.add_socket<decl::VDF>(name, identifier, in_out);
         break;
       }
       case SOCK_SHADER: {
@@ -331,6 +384,10 @@ static BaseSocketDeclarationBuilder &build_interface_socket_declaration(
             io_socket);
         decl = &b.add_socket<decl::Rotation>(name, identifier, in_out)
                     .default_value(math::EulerXYZ(float3(value.value_euler)));
+        break;
+      }
+      case SOCK_MATRIX3X3: {
+        decl = &b.add_socket<decl::Matrix3x3>(name, identifier, in_out);
         break;
       }
       case SOCK_MATRIX: {
@@ -350,6 +407,14 @@ static BaseSocketDeclarationBuilder &build_interface_socket_declaration(
         const auto &value = node_interface::get_socket_data_as<bNodeSocketValueString>(io_socket);
         decl = &b.add_socket<decl::String>(name, identifier, in_out)
                     .subtype(PropertySubType(value.subtype))
+                    .default_value(value.value);
+        break;
+      }
+      case SOCK_FILENAME: {
+        const auto &value = node_interface::get_socket_data_as<bNodeSocketValueFilename>(
+            io_socket);
+        decl = &b.add_socket<decl::String>(name, identifier, in_out)
+                    .subtype(PropertySubType(PROP_FILEPATH))
                     .default_value(value.value);
         break;
       }

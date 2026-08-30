@@ -761,18 +761,30 @@ static std::optional<ID_Type> socket_type_to_id_type(const eNodeSocketDatatype s
     case SOCK_CUSTOM:
     case SOCK_FLOAT:
     case SOCK_VECTOR:
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4:
     case SOCK_INT_VECTOR:
+    case SOCK_RGB:
     case SOCK_RGBA:
     case SOCK_SHADER:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_EDF:
+    case SOCK_VDF:
     case SOCK_BOOLEAN:
     case SOCK_INT:
     case SOCK_STRING:
     case SOCK_GEOMETRY:
     case SOCK_ROTATION:
     case SOCK_MENU:
+    case SOCK_MATRIX3X3:
     case SOCK_MATRIX:
     case SOCK_BUNDLE:
     case SOCK_CLOSURE:
+    case SOCK_FILENAME:
       return std::nullopt;
     case SOCK_OBJECT:
       return ID_OB;

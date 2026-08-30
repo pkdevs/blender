@@ -327,8 +327,38 @@ static bool socket_type_to_static_decl_type(const eNodeSocketDatatype socket_typ
     case SOCK_VECTOR:
       fn.template operator()<decl::Vector>();
       return true;
+    case SOCK_VECTOR2:
+      fn.template operator()<decl::Vector2>();
+      return true;
+    case SOCK_VECTOR4:
+      fn.template operator()<decl::Vector4>();
+      return true;
+    case SOCK_RGB:
+      fn.template operator()<decl::Color3>();
+      return true;
     case SOCK_RGBA:
       fn.template operator()<decl::Color>();
+      return true;
+    case SOCK_SURF_SHADER:
+      fn.template operator()<decl::SurfaceShader>();
+      return true;
+    case SOCK_VOL_SHADER:
+      fn.template operator()<decl::VolumeShader>();
+      return true;
+    case SOCK_DISP_SHADER:
+      fn.template operator()<decl::DisplacementShader>();
+      return true;
+    case SOCK_LIGHT_SHADER:
+      fn.template operator()<decl::LightShader>();
+      return true;
+    case SOCK_BSDF:
+      fn.template operator()<decl::BSDF>();
+      return true;
+    case SOCK_EDF:
+      fn.template operator()<decl::EDF>();
+      return true;
+    case SOCK_VDF:
+      fn.template operator()<decl::VDF>();
       return true;
     case SOCK_SHADER:
       fn.template operator()<decl::Shader>();
@@ -338,6 +368,9 @@ static bool socket_type_to_static_decl_type(const eNodeSocketDatatype socket_typ
       return true;
     case SOCK_ROTATION:
       fn.template operator()<decl::Rotation>();
+      return true;
+    case SOCK_MATRIX3X3:
+      fn.template operator()<decl::Matrix3x3>();
       return true;
     case SOCK_MATRIX:
       fn.template operator()<decl::Matrix>();
@@ -389,6 +422,9 @@ static bool socket_type_to_static_decl_type(const eNodeSocketDatatype socket_typ
       return true;
     case SOCK_INT_VECTOR:
       fn.template operator()<decl::IntVector>();
+      return true;
+    case SOCK_FILENAME:
+      fn.template operator()<decl::Filename>();
       return true;
     default:
       return false;
