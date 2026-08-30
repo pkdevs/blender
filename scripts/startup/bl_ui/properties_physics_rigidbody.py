@@ -242,7 +242,9 @@ class PHYSICS_PT_rigid_body_collisions_collections(PHYSICS_PT_rigidbody_panel, P
         ob = context.object
         rbo = ob.rigid_body
 
-        layout.prop(rbo, "collision_collections", text="")
+        col = layout.column(align=True)
+        col.prop(rbo, "collision_collections", text="Collision Groups")
+        col.prop(rbo, "non_collision_collections", text="Ignore Groups")
 
 
 class PHYSICS_PT_rigid_body_dynamics(PHYSICS_PT_rigidbody_panel, Panel):

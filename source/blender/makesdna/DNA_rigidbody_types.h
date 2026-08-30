@@ -279,7 +279,8 @@ struct RigidBodyOb {
   float orn[4] = {};
   /** Rigid body position. */
   float pos[3] = {};
-  char _pad1[4] = {};
+  /** Non-collision groups that determine which rigid bodies to ignore for collision. */
+  int non_col_groups = 0;
 
   /** This pointer is shared between all evaluated copies. */
   struct RigidBodyOb_Shared *shared = nullptr;

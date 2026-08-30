@@ -777,7 +777,8 @@ static void rigidbody_validate_sim_object(RigidBodyWorld *rbw, Object *ob, bool 
   if (rbw && rbw->shared->runtime->physics_world && rbo->shared->physics_object) {
     RB_dworld_add_body(rbw->shared->runtime->physics_world,
                        static_cast<rbRigidBody *>(rbo->shared->physics_object),
-                       rbo->col_groups);
+                       rbo->col_groups,
+                       rbo->non_col_groups);
   }
 }
 
@@ -1243,6 +1244,7 @@ RigidBodyOb *BKE_rigidbody_create_object(Scene *scene, Object *ob, eRigidBodyOb_
   rbo->ang_damping = 0.1f;
 
   rbo->col_groups = 1;
+  rbo->non_col_groups = 0;
 
   /* use triangle meshes for passive objects
    * use convex hulls for active objects since dynamic triangle meshes are very unstable

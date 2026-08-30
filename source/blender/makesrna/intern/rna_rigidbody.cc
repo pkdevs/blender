@@ -356,6 +356,22 @@ static void rna_RigidBodyOb_collision_collections_set(PointerRNA *ptr, const boo
   rbo->flag |= RBO_FLAG_NEEDS_VALIDATE;
 }
 
+static void rna_RigidBodyOb_non_collision_collections_set(PointerRNA *ptr, const bool *values)
+{
+  RigidBodyOb *rbo = static_cast<RigidBodyOb *>(ptr->data);
+  int i;
+
+  for (i = 0; i < 20; i++) {
+    if (values[i]) {
+      rbo->non_col_groups |= (1 << i);
+    }
+    else {
+      rbo->non_col_groups &= ~(1 << i);
+    }
+  }
+  rbo->flag |= RBO_FLAG_NEEDS_VALIDATE;
+}
+
 static void rna_RigidBodyOb_kinematic_state_set(PointerRNA *ptr, bool value)
 {
   RigidBodyOb *rbo = static_cast<RigidBodyOb *>(ptr->data);
@@ -1217,6 +1233,16 @@ static void rna_def_rigidbody_object(BlenderRNA *brna)
   RNA_def_property_boolean_funcs(prop, nullptr, "rna_RigidBodyOb_collision_collections_set");
   RNA_def_property_ui_text(
       prop, "Collision Collections", "Collision collections rigid body belongs to");
+  RNA_def_property_update(prop, NC_OBJECT | ND_POINTCACHE, "rna_RigidBodyOb_reset");
+  RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
+
+  prop = RNA_def_property(srna, "non_collision_collections", PROP_BOOLEAN, PROP_LAYER_MEMBER);
+  RNA_def_property_boolean_bitset_array_sdna(prop, nullptr, "non_col_groups", 1 << 0, 20);
+  RNA_def_property_boolean_funcs(prop, nullptr, "rna_RigidBodyOb_non_collision_collections_set");
+  RNA_def_property_ui_text(
+      prop,
+      "Ignore Collision Groups",
+      "Rigid body will not collide with objects belonging to these collision groups");
   RNA_def_property_update(prop, NC_OBJECT | ND_POINTCACHE, "rna_RigidBodyOb_reset");
   RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
 }

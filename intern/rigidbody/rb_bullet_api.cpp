@@ -63,6 +63,7 @@ struct rbDynamicsWorld {
 struct rbRigidBody {
   btRigidBody *body;
   int col_groups;
+  int non_col_groups;
 };
 
 struct rbVert {
@@ -97,6 +98,8 @@ struct rbFilterCallback : public btOverlapFilterCallback {
     collides = (proxy0->m_collisionFilterGroup & proxy1->m_collisionFilterMask) != 0;
     collides = collides && (proxy1->m_collisionFilterGroup & proxy0->m_collisionFilterMask);
     collides = collides && (rb0->col_groups & rb1->col_groups);
+    collides = collides && !((rb0->non_col_groups & rb1->col_groups) ||
+                             (rb1->non_col_groups & rb0->col_groups));
 
     return collides;
   }
@@ -227,10 +230,11 @@ void RB_dworld_export(rbDynamicsWorld *world, const char *filename)
 
 /* Setup ---------------------------- */
 
-void RB_dworld_add_body(rbDynamicsWorld *world, rbRigidBody *object, int col_groups)
+void RB_dworld_add_body(rbDynamicsWorld *world, rbRigidBody *object, int col_groups, int non_col_groups)
 {
   btRigidBody *body = object->body;
   object->col_groups = col_groups;
+  object->non_col_groups = non_col_groups;
 
   world->dynamicsWorld->addRigidBody(body);
 }
