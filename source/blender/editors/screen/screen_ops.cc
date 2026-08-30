@@ -50,6 +50,7 @@
 #include "BKE_object.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
+#include "BKE_scene_runtime.hh"
 #include "BKE_screen.hh"
 #include "BKE_sound.hh"
 #include "BKE_workspace.hh"
@@ -6694,6 +6695,13 @@ static wmOperatorStatus screen_animation_step_invoke(bContext *C,
         }
         else {
           sad->flag &= ~ANIMPLAY_FLAG_REVERSE;
+          if (depsgraph != nullptr && scene_eval != nullptr &&
+              scene_eval->runtime->audio.animation_cache_dirty)
+          {
+            BKE_sound_ensure_scene_audio_animation(
+                bmain, scene, depsgraph, start_frame, end_frame);
+            scene_eval = DEG_get_evaluated_scene(depsgraph);
+          }
           BKE_sound_play_scene(scene_eval);
           scene->r.cfra = start_frame + 1;
         }
@@ -6734,6 +6742,13 @@ static wmOperatorStatus screen_animation_step_invoke(bContext *C,
      * being removed. For example, calling `screen.animation_cancel` inside `frame_change_post`. */
     if (wt->flags & WM_TIMER_TAGGED_FOR_REMOVAL) {
       return OPERATOR_FINISHED;
+    }
+
+    scene_eval = DEG_get_evaluated_scene(depsgraph);
+    if ((sad->flag & ANIMPLAY_FLAG_REVERSE) == 0 && scene_eval != nullptr &&
+        scene_eval->runtime->audio.animation_cache_dirty)
+    {
+      BKE_sound_ensure_scene_audio_animation(bmain, scene, depsgraph, start_frame, end_frame);
     }
   }
 
@@ -6990,7 +7005,8 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
 
   /* Only play sound when playing forward. Reverse sound playback is not implemented. */
   if (mode == 1) {
-    BKE_sound_ensure_scene_audio_animation(bmain, scene, depsgraph);
+    BKE_sound_ensure_scene_audio_animation(
+        bmain, scene, depsgraph, scene->playback_start(), scene->playback_end());
     scene_eval = DEG_get_evaluated_scene(depsgraph);
     BKE_sound_play_scene(scene_eval);
   }
