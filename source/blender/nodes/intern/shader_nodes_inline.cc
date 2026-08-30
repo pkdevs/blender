@@ -45,8 +45,8 @@ struct NodeAndSocket {
 };
 
 struct PrimitiveSocketValue {
-  std::variant<int, float, bool, ColorGeometry4f, float3, MenuValue, std::string> value;
-
+  std::variant<int, float, bool, ColorGeometry4f, float2, float3, float4, MenuValue, std::string>
+      value;
   const void *buffer() const
   {
     return std::visit([](auto &&value) -> const void * { return &value; }, value);
@@ -72,8 +72,14 @@ struct PrimitiveSocketValue {
     if (type.is<ColorGeometry4f>()) {
       return {*static_cast<const ColorGeometry4f *>(value.get())};
     }
+    if (type.is<float2>()) {
+      return {*static_cast<const float2 *>(value.get())};
+    }
     if (type.is<float3>()) {
       return {*static_cast<const float3 *>(value.get())};
+    }
+    if (type.is<float4>()) {
+      return {*static_cast<const float4 *>(value.get())};
     }
     if (type.is<MenuValue>()) {
       return {*static_cast<const MenuValue *>(value.get())};
@@ -145,12 +151,24 @@ struct SocketValue {
         case SOCK_BOOLEAN:
           return PrimitiveSocketValue{
               bool(socket.default_value_typed<bNodeSocketValueBoolean>()->value)};
-        case SOCK_VECTOR:
+        case SOCK_VECTOR2: {
+          const float *value = socket.default_value_typed<bNodeSocketValueVector>()->value;
+          return PrimitiveSocketValue{float2(value[0], value[1])};
+        }
+        case SOCK_VECTOR: {
           return PrimitiveSocketValue{
               float3(socket.default_value_typed<bNodeSocketValueVector>()->value)};
+        }
+        case SOCK_VECTOR4: {
+          const float *value = socket.default_value_typed<bNodeSocketValueVector>()->value;
+          return PrimitiveSocketValue{float4(value[0], value[1], value[2], value[3])};
+        }
         case SOCK_RGBA:
           return PrimitiveSocketValue{
               ColorGeometry4f(socket.default_value_typed<bNodeSocketValueRGBA>()->value)};
+        case SOCK_RGB:
+          return PrimitiveSocketValue{
+              ColorGeometry4f(socket.default_value_typed<bNodeSocketValueRGB>()->value)};
         case SOCK_MENU:
           return PrimitiveSocketValue{
               MenuValue(socket.default_value_typed<bNodeSocketValueMenu>()->value)};
@@ -165,8 +183,11 @@ struct SocketValue {
       switch (type.type) {
         case SOCK_INT:
         case SOCK_BOOLEAN:
+        case SOCK_VECTOR2:
+        case SOCK_VECTOR4:
         case SOCK_VECTOR:
         case SOCK_RGBA:
+        case SOCK_RGB:
         case SOCK_FLOAT:
         case SOCK_STRING:
         case SOCK_MENU:
@@ -1839,11 +1860,25 @@ class ShaderNodesInliner {
       storage.boolean = int(*value_bool);
       return {node, node->outputs.first()};
     }
+    if (const float2 *value_float2 = std::get_if<float2>(&value.value)) {
+      bNode *node = this->add_node("FunctionNodeInputVector"_ustr);
+      auto &storage = *static_cast<NodeInputVector *>(node->storage);
+      copy_v3_v3(storage.vector, *value_float2);
+      storage.dimensions = 2;
+      return {node, node->outputs.first()};
+    }
     if (const float3 *value_float3 = std::get_if<float3>(&value.value)) {
       bNode *node = this->add_node("FunctionNodeInputVector"_ustr);
       auto &storage = *static_cast<NodeInputVector *>(node->storage);
       copy_v3_v3(storage.vector, *value_float3);
       storage.dimensions = 3;
+      return {node, node->outputs.first()};
+    }
+    if (const float4 *value_float4 = std::get_if<float4>(&value.value)) {
+      bNode *node = this->add_node("FunctionNodeInputVector"_ustr);
+      auto &storage = *static_cast<NodeInputVector *>(node->storage);
+      copy_v4_v4(storage.vector, *value_float4);
+      storage.dimensions = 4;
       return {node, node->outputs.first()};
     }
     if (const ColorGeometry4f *value_color = std::get_if<ColorGeometry4f>(&value.value)) {
@@ -1888,9 +1923,26 @@ class ShaderNodesInliner {
                    std::get<float3>(value.value));
         break;
       }
+      case SOCK_VECTOR2: {
+        copy_v2_v2(socket.default_value_typed<bNodeSocketValueVector>()->value,
+                   std::get<float2>(value.value));
+        break;
+      }
+      case SOCK_VECTOR4: {
+        copy_v4_v4(socket.default_value_typed<bNodeSocketValueVector>()->value,
+                   std::get<float4>(value.value));
+        break;
+      }
       case SOCK_RGBA: {
         copy_v4_v4(socket.default_value_typed<bNodeSocketValueRGBA>()->value,
                    std::get<ColorGeometry4f>(value.value));
+        break;
+      }
+      case SOCK_RGB: {
+        const ColorGeometry4f &color = std::get<ColorGeometry4f>(value.value);
+        float3 rgb(color.r, color.g, color.b);
+
+        copy_v3_v3(socket.default_value_typed<bNodeSocketValueRGB>()->value, rgb);
         break;
       }
       case SOCK_MENU: {

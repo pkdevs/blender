@@ -124,6 +124,68 @@ class VectorBuilder : public SocketDeclarationBuilder<Vector> {
   VectorBuilder &try_copy_ui_data(const SocketDeclaration &other_decl) override;
 };
 
+class Vector2Builder;
+
+class Vector2 : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_VECTOR2;
+
+  float2 default_value = {0.0f, 0.0f};
+  float soft_min_value = -FLT_MAX;
+  float soft_max_value = FLT_MAX;
+  PropertySubType subtype = PROP_NONE;
+
+  friend Vector2Builder;
+
+  using Builder = Vector2Builder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bNodeSocket &update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class Vector2Builder : public SocketDeclarationBuilder<Vector2> {
+ public:
+  Vector2Builder &default_value(const float2 value);
+  Vector2Builder &subtype(PropertySubType subtype);
+  Vector2Builder &min(float min);
+  Vector2Builder &max(float max);
+  Vector2Builder &compact();
+  Vector2Builder &try_copy_ui_data(const SocketDeclaration &other_decl) override;
+};
+
+class Vector4Builder;
+
+class Vector4 : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_VECTOR4;
+
+  float4 default_value = {0.0f, 0.0f, 0.0f, 0.0f};
+  float soft_min_value = -FLT_MAX;
+  float soft_max_value = FLT_MAX;
+  PropertySubType subtype = PROP_NONE;
+
+  friend Vector4Builder;
+
+  using Builder = Vector4Builder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bNodeSocket &update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class Vector4Builder : public SocketDeclarationBuilder<Vector4> {
+ public:
+  Vector4Builder &default_value(const float4 value);
+  Vector4Builder &subtype(PropertySubType subtype);
+  Vector4Builder &min(float min);
+  Vector4Builder &max(float max);
+  Vector4Builder &compact();
+  Vector4Builder &try_copy_ui_data(const SocketDeclaration &other_decl) override;
+};
+
 class IntVectorBuilder;
 
 class IntVector : public SocketDeclaration {
@@ -204,6 +266,30 @@ class ColorBuilder : public SocketDeclarationBuilder<Color> {
   ColorBuilder &try_copy_ui_data(const SocketDeclaration &other_decl) override;
 };
 
+class Color3Builder;
+
+class Color3 : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_RGB;
+
+  ColorGeometry4f default_value{0.8f, 0.8f, 0.8f, 1.0f};
+
+  friend Color3Builder;
+
+  using Builder = Color3Builder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bNodeSocket &update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class Color3Builder : public SocketDeclarationBuilder<Color3> {
+ public:
+  Color3Builder &default_value(const ColorGeometry4f value);
+  Color3Builder &try_copy_ui_data(const SocketDeclaration &other_decl) override;
+};
+
 class RotationBuilder;
 
 class Rotation : public SocketDeclaration {
@@ -227,6 +313,24 @@ class RotationBuilder : public SocketDeclarationBuilder<Rotation> {
   RotationBuilder &default_value(const math::EulerXYZ &value);
   RotationBuilder &try_copy_ui_data(const SocketDeclaration &other_decl) override;
 };
+
+class Matrix3x3Builder;
+
+class Matrix3x3 : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_MATRIX3X3;
+
+  friend Matrix3x3Builder;
+
+  using Builder = Matrix3x3Builder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bNodeSocket &update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class Matrix3x3Builder : public SocketDeclarationBuilder<Matrix3x3> {};
 
 class MatrixBuilder;
 
@@ -498,6 +602,125 @@ class Shader : public SocketDeclaration {
 
 class ShaderBuilder : public SocketDeclarationBuilder<Shader> {};
 
+class SurfaceShaderBuilder;
+
+class SurfaceShader : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_SURF_SHADER;
+
+  friend SurfaceShaderBuilder;
+
+  using Builder = SurfaceShaderBuilder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class SurfaceShaderBuilder : public SocketDeclarationBuilder<SurfaceShader> {};
+
+class VolumeShaderBuilder;
+
+class VolumeShader : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_VOL_SHADER;
+
+  friend VolumeShaderBuilder;
+
+  using Builder = VolumeShaderBuilder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class VolumeShaderBuilder : public SocketDeclarationBuilder<VolumeShader> {};
+
+class DisplacementShaderBuilder;
+
+class DisplacementShader : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_DISP_SHADER;
+
+  friend DisplacementShaderBuilder;
+
+  using Builder = DisplacementShaderBuilder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class DisplacementShaderBuilder : public SocketDeclarationBuilder<DisplacementShader> {};
+
+class LightShaderBuilder;
+
+class LightShader : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_LIGHT_SHADER;
+
+  friend LightShaderBuilder;
+
+  using Builder = LightShaderBuilder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class LightShaderBuilder : public SocketDeclarationBuilder<LightShader> {};
+
+class BSDFBuilder;
+
+class BSDF : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_BSDF;
+
+  friend BSDFBuilder;
+
+  using Builder = BSDFBuilder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class BSDFBuilder : public SocketDeclarationBuilder<BSDF> {};
+
+class EDFBuilder;
+
+class EDF : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_EDF;
+
+  friend EDFBuilder;
+
+  using Builder = EDFBuilder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class EDFBuilder : public SocketDeclarationBuilder<EDF> {};
+
+class VDFBuilder;
+
+class VDF : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_VDF;
+
+  friend VDFBuilder;
+
+  using Builder = VDFBuilder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class VDFBuilder : public SocketDeclarationBuilder<VDF> {};
+
 class ExtendBuilder;
 
 class Extend : public SocketDeclaration {
@@ -516,6 +739,45 @@ class Extend : public SocketDeclaration {
 };
 
 class ExtendBuilder : public SocketDeclarationBuilder<Extend> {};
+
+class FilenameBuilder;
+
+class Filename : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_FILENAME;
+
+  std::string default_value;
+  PropertySubType subtype = PROP_FILEPATH;  // Sets up fallback file handling
+  std::optional<std::string> path_filter;   // For extensions like .png, .abc
+
+  friend FilenameBuilder;
+  using Builder = FilenameBuilder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bNodeSocket &update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class FilenameBuilder : public SocketDeclarationBuilder<Filename> {
+ public:
+  FilenameBuilder &default_value(const std::string value)
+  {
+    decl_->default_value = std::move(value);
+    return *this;
+  }
+  FilenameBuilder &subtype(PropertySubType subtype)
+  {
+    decl_->subtype = subtype;
+    return *this;
+  }
+  FilenameBuilder &path_filter(std::string filter)
+  {
+    decl_->path_filter = std::move(filter);
+    return *this;
+  }
+  FilenameBuilder &try_copy_ui_data(const SocketDeclaration &other_decl) override;
+};
 
 class CustomTypeBuilder;
 
@@ -664,6 +926,78 @@ inline VectorBuilder &VectorBuilder::compact()
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name #Vector2Builder Inline Methods
+ * \{ */
+
+inline Vector2Builder &Vector2Builder::default_value(const float2 value)
+{
+  decl_->default_value = value;
+  return *this;
+}
+
+inline Vector2Builder &Vector2Builder::subtype(PropertySubType subtype)
+{
+  decl_->subtype = subtype;
+  return *this;
+}
+
+inline Vector2Builder &Vector2Builder::min(const float min)
+{
+  decl_->soft_min_value = min;
+  return *this;
+}
+
+inline Vector2Builder &Vector2Builder::max(const float max)
+{
+  decl_->soft_max_value = max;
+  return *this;
+}
+
+inline Vector2Builder &Vector2Builder::compact()
+{
+  decl_->compact = true;
+  return *this;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #Vector4Builder Inline Methods
+ * \{ */
+
+inline Vector4Builder &Vector4Builder::default_value(const float4 value)
+{
+  decl_->default_value = value;
+  return *this;
+}
+
+inline Vector4Builder &Vector4Builder::subtype(PropertySubType subtype)
+{
+  decl_->subtype = subtype;
+  return *this;
+}
+
+inline Vector4Builder &Vector4Builder::min(const float min)
+{
+  decl_->soft_min_value = min;
+  return *this;
+}
+
+inline Vector4Builder &Vector4Builder::max(const float max)
+{
+  decl_->soft_max_value = max;
+  return *this;
+}
+
+inline Vector4Builder &Vector4Builder::compact()
+{
+  decl_->compact = true;
+  return *this;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name #IntVectorBuilder Inline Methods
  * \{ */
 
@@ -729,6 +1063,18 @@ inline BoolBuilder &BoolBuilder::default_value(const bool value)
  * \{ */
 
 inline ColorBuilder &ColorBuilder::default_value(const ColorGeometry4f value)
+{
+  decl_->default_value = value;
+  return *this;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #Color3Builder Inline Methods
+ * \{ */
+
+inline Color3Builder &Color3Builder::default_value(const ColorGeometry4f value)
 {
   decl_->default_value = value;
   return *this;

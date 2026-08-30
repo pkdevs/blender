@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <optional>
 
 /* Allow using deprecated functionality for .blend file I/O. */
@@ -384,18 +385,30 @@ static void library_foreach_node_socket(bNodeSocket *sock, LibraryForeachIDData 
     }
     case SOCK_FLOAT:
     case SOCK_VECTOR:
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4:
+    case SOCK_RGB:
     case SOCK_RGBA:
     case SOCK_BOOLEAN:
     case SOCK_ROTATION:
+    case SOCK_MATRIX3X3:
     case SOCK_MATRIX:
     case SOCK_INT:
     case SOCK_STRING:
     case SOCK_CUSTOM:
     case SOCK_SHADER:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_EDF:
+    case SOCK_VDF:
     case SOCK_GEOMETRY:
     case SOCK_MENU:
     case SOCK_BUNDLE:
     case SOCK_CLOSURE:
+    case SOCK_FILENAME:
     case SOCK_INT_VECTOR:
       break;
   }
@@ -1164,7 +1177,12 @@ static void write_node_socket_default_value(BlendWriter *writer, const bNodeSock
       writer->write_struct_cast<bNodeSocketValueFloat>(sock->default_value);
       break;
     case SOCK_VECTOR:
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4:
       writer->write_struct_cast<bNodeSocketValueVector>(sock->default_value);
+      break;
+    case SOCK_RGB:
+      writer->write_struct_cast<bNodeSocketValueRGB>(sock->default_value);
       break;
     case SOCK_RGBA:
       writer->write_struct_cast<bNodeSocketValueRGBA>(sock->default_value);
@@ -1208,6 +1226,9 @@ static void write_node_socket_default_value(BlendWriter *writer, const bNodeSock
     case SOCK_SOUND:
       writer->write_struct_cast<bNodeSocketValueSound>(sock->default_value);
       break;
+    case SOCK_FILENAME:
+      writer->write_struct_cast<bNodeSocketValueFilename>(sock->default_value);
+      break;
     case SOCK_ROTATION:
       writer->write_struct_cast<bNodeSocketValueRotation>(sock->default_value);
       break;
@@ -1217,6 +1238,7 @@ static void write_node_socket_default_value(BlendWriter *writer, const bNodeSock
     case SOCK_INT_VECTOR:
       writer->write_struct_cast<bNodeSocketValueIntVector>(sock->default_value);
       break;
+    case SOCK_MATRIX3X3:
     case SOCK_MATRIX:
       /* Matrix sockets currently have no default value. */
       break;
@@ -1224,6 +1246,13 @@ static void write_node_socket_default_value(BlendWriter *writer, const bNodeSock
       /* Custom node sockets where default_value is defined use custom properties for storage. */
       break;
     case SOCK_SHADER:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_EDF:
+    case SOCK_VDF:
     case SOCK_GEOMETRY:
     case SOCK_BUNDLE:
     case SOCK_CLOSURE:
@@ -1300,9 +1329,13 @@ static void node_blend_write_storage(BlendWriter *writer, bNodeTree *ntree, bNod
                SOCK_FLOAT,
                SOCK_INT,
                SOCK_VECTOR,
+               SOCK_VECTOR2,
+               SOCK_VECTOR4,
+               SOCK_RGB,
                SOCK_RGBA,
                SOCK_BOOLEAN,
                SOCK_ROTATION,
+               SOCK_MATRIX3X3,
                SOCK_MATRIX))
       {
         storage.data_type_legacy = *socket_type_to_custom_data_type(item.socket_type);
@@ -1460,12 +1493,22 @@ static bool is_node_socket_supported(const bNodeSocket *sock)
   switch (sock->type) {
     case SOCK_FLOAT:
     case SOCK_VECTOR:
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4:
+    case SOCK_RGB:
     case SOCK_RGBA:
     case SOCK_BOOLEAN:
     case SOCK_INT:
     case SOCK_STRING:
     case SOCK_CUSTOM:
     case SOCK_SHADER:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_EDF:
+    case SOCK_VDF:
     case SOCK_GEOMETRY:
     case SOCK_OBJECT:
     case SOCK_IMAGE:
@@ -1477,9 +1520,11 @@ static bool is_node_socket_supported(const bNodeSocket *sock)
     case SOCK_TEXT_ID:
     case SOCK_MASK:
     case SOCK_SOUND:
+    case SOCK_FILENAME:
     case SOCK_ROTATION:
     case SOCK_MENU:
     case SOCK_MATRIX:
+    case SOCK_MATRIX3X3:
     case SOCK_BUNDLE:
     case SOCK_CLOSURE:
     case SOCK_INT_VECTOR:
@@ -1639,10 +1684,15 @@ static void direct_link_node_socket_default_value(BlendDataReader *reader, bNode
         BLO_read_struct(reader, bNodeSocketValueFloat, &sock->default_value);
         break;
       case SOCK_VECTOR:
+      case SOCK_VECTOR2:
+      case SOCK_VECTOR4:
         BLO_read_struct(reader, bNodeSocketValueVector, &sock->default_value);
         break;
       case SOCK_RGBA:
         BLO_read_struct(reader, bNodeSocketValueRGBA, &sock->default_value);
+        break;
+      case SOCK_RGB:
+        BLO_read_struct(reader, bNodeSocketValueRGB, &sock->default_value);
         break;
       case SOCK_BOOLEAN:
         BLO_read_struct(reader, bNodeSocketValueBoolean, &sock->default_value);
@@ -1683,6 +1733,9 @@ static void direct_link_node_socket_default_value(BlendDataReader *reader, bNode
       case SOCK_SOUND:
         BLO_read_struct(reader, bNodeSocketValueSound, &sock->default_value);
         break;
+      case SOCK_FILENAME:
+        BLO_read_struct(reader, bNodeSocketValueFilename, &sock->default_value);
+        break;
       case SOCK_ROTATION:
         BLO_read_struct(reader, bNodeSocketValueRotation, &sock->default_value);
         break;
@@ -1692,11 +1745,19 @@ static void direct_link_node_socket_default_value(BlendDataReader *reader, bNode
       case SOCK_INT_VECTOR:
         BLO_read_struct(reader, bNodeSocketValueIntVector, &sock->default_value);
         break;
+      case SOCK_MATRIX3X3:
       case SOCK_MATRIX:
         /* Matrix sockets currently have no default value. */
       case SOCK_CUSTOM:
         /* Custom node sockets where default_value is defined use custom properties for storage. */
       case SOCK_SHADER:
+      case SOCK_SURF_SHADER:
+      case SOCK_VOL_SHADER:
+      case SOCK_DISP_SHADER:
+      case SOCK_LIGHT_SHADER:
+      case SOCK_BSDF:
+      case SOCK_EDF:
+      case SOCK_VDF:
       case SOCK_GEOMETRY:
       case SOCK_BUNDLE:
       case SOCK_CLOSURE:
@@ -1728,6 +1789,8 @@ static void direct_link_node_socket_default_value(BlendDataReader *reader, bNode
             });
         break;
       case SOCK_VECTOR:
+      case SOCK_VECTOR2:
+      case SOCK_VECTOR4:
         versioning_internal::direct_link_node_socket_legacy_data_version_do<
             bNodeSocketValueVector,
             versioning_internal::bNodeSocketValueVector_404>(
@@ -1749,6 +1812,16 @@ static void direct_link_node_socket_default_value(BlendDataReader *reader, bNode
             &temp_data,
             [](bNodeSocketValueRGBA &dest, versioning_internal::bNodeSocketValueRGBA_404 &src) {
               copy_v4_v4(dest.value, src.value);
+            });
+        break;
+      case SOCK_RGB:
+        versioning_internal::direct_link_node_socket_legacy_data_version_do<
+            bNodeSocketValueRGB,
+            versioning_internal::bNodeSocketValueRGBA_404>(
+            &sock->default_value,
+            &temp_data,
+            [](bNodeSocketValueRGB &dest, versioning_internal::bNodeSocketValueRGBA_404 &src) {
+              copy_v3_v3(dest.value, src.value);
             });
         break;
       case SOCK_BOOLEAN:
@@ -1857,7 +1930,23 @@ static void direct_link_node_socket_default_value(BlendDataReader *reader, bNode
               /* Other members are runtime-only. */
             });
         break;
+      case SOCK_FILENAME:
+        versioning_internal::direct_link_node_socket_legacy_data_version_do<
+            bNodeSocketValueFilename,
+            versioning_internal::bNodeSocketValueString_404>(  // Uses the string layout from older
+                                                               // files
+            &sock->default_value,
+            &temp_data,
+            [](bNodeSocketValueFilename &dest,
+               versioning_internal::bNodeSocketValueString_404 &src) {
+              /* Filename forces PROP_FILEPATH automatically */
+              dest.subtype = PROP_FILEPATH;
+              STRNCPY(dest.value, src.value);
+            });
+        break;
+
       case SOCK_MATRIX:
+      case SOCK_MATRIX3X3:
         /* Matrix sockets had no default value. */
       case SOCK_CUSTOM:
         /* Custom node sockets where default_value is defined were using custom properties for
@@ -1869,6 +1958,13 @@ static void direct_link_node_socket_default_value(BlendDataReader *reader, bNode
       case SOCK_SOUND:
         /* Those data-block types did not exist in the older version. */
       case SOCK_SHADER:
+      case SOCK_SURF_SHADER:
+      case SOCK_VOL_SHADER:
+      case SOCK_DISP_SHADER:
+      case SOCK_LIGHT_SHADER:
+      case SOCK_BSDF:
+      case SOCK_EDF:
+      case SOCK_VDF:
       case SOCK_GEOMETRY:
       case SOCK_BUNDLE:
       case SOCK_CLOSURE:
@@ -2249,10 +2345,12 @@ static std::unique_ptr<IDProperty, idprop::IDPropertyDeleter> create_socket_meta
       }
       break;
     }
-    case SOCK_VECTOR: {
+    case SOCK_VECTOR:
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4: {
       const auto &value = node_interface::get_socket_data_as<bNodeSocketValueVector>(socket);
       IDP_AddToGroup(socket_prop.get(), idprop::create("subtype", value.subtype).release());
-      if (value.dimensions != 3) {
+      if (base_typeinfo->type == SOCK_VECTOR && value.dimensions != 3) {
         IDP_AddToGroup(socket_prop.get(),
                        idprop::create("dimensions", value.dimensions).release());
       }
@@ -2283,6 +2381,19 @@ static std::unique_ptr<IDProperty, idprop::IDPropertyDeleter> create_socket_meta
         IDP_AddToGroup(
             socket_prop.get(),
             idprop::create("default_value", Span(value.value, value.dimensions)).release());
+        if (socket.default_attribute_name) {
+          IDP_AddToGroup(
+              socket_prop.get(),
+              idprop::create("default_attribute_name", socket.default_attribute_name).release());
+        }
+      }
+      break;
+    }
+    case SOCK_RGB: {
+      const auto &value = node_interface::get_socket_data_as<bNodeSocketValueRGB>(socket);
+      if (create_default_value_properties) {
+        IDP_AddToGroup(socket_prop.get(),
+                       idprop::create("default_value", Span(value.value, 3)).release());
         if (socket.default_attribute_name) {
           IDP_AddToGroup(
               socket_prop.get(),
@@ -2354,6 +2465,15 @@ static std::unique_ptr<IDProperty, idprop::IDPropertyDeleter> create_socket_meta
       }
       break;
     }
+    case SOCK_FILENAME: {
+      const auto &value = node_interface::get_socket_data_as<bNodeSocketValueFilename>(socket);
+      IDP_AddToGroup(socket_prop.get(), idprop::create("subtype", value.subtype).release());
+
+      if (create_default_value_properties) {
+        IDP_AddToGroup(socket_prop.get(), idprop::create("default_value", value.value).release());
+      }
+      break;
+    }
     case SOCK_MENU: {
       const auto &value = node_interface::get_socket_data_as<bNodeSocketValueMenu>(socket);
       if (value.enum_items) {
@@ -2380,6 +2500,14 @@ static std::unique_ptr<IDProperty, idprop::IDPropertyDeleter> create_socket_meta
       break;
     }
     case SOCK_SHADER:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_EDF:
+    case SOCK_VDF:
+    case SOCK_MATRIX3X3:
     case SOCK_MATRIX:
     case SOCK_OBJECT:
     case SOCK_IMAGE:
@@ -3197,6 +3325,7 @@ template<> void socket_value_init_impl(bNodeSocketValueRGBA &data, const int /*s
   static float default_value[] = {0.0f, 0.0f, 0.0f, 1.0f};
   copy_v4_v4(data.value, default_value);
 }
+
 template<> void socket_value_init_impl(bNodeSocketValueString &data, const int subtype)
 {
   data.subtype = subtype;
@@ -3390,6 +3519,8 @@ void node_modify_socket_type(bNodeTree &ntree,
           sock.default_value_typed<bNodeSocketValueFloat>()->subtype = socktype->subtype;
           break;
         }
+        case SOCK_VECTOR2:
+        case SOCK_VECTOR4:
         case SOCK_VECTOR: {
           sock.default_value_typed<bNodeSocketValueVector>()->subtype = socktype->subtype;
           break;
@@ -3402,11 +3533,24 @@ void node_modify_socket_type(bNodeTree &ntree,
           sock.default_value_typed<bNodeSocketValueString>()->subtype = socktype->subtype;
           break;
         }
+        case SOCK_FILENAME: {
+          sock.default_value_typed<bNodeSocketValueFilename>()->subtype = socktype->subtype;
+          break;
+        }
+        case SOCK_RGB:
         case SOCK_RGBA:
         case SOCK_SHADER:
+        case SOCK_SURF_SHADER:
+        case SOCK_VOL_SHADER:
+        case SOCK_DISP_SHADER:
+        case SOCK_LIGHT_SHADER:
+        case SOCK_BSDF:
+        case SOCK_EDF:
+        case SOCK_VDF:
         case SOCK_BOOLEAN:
         case SOCK_ROTATION:
         case SOCK_MATRIX:
+        case SOCK_MATRIX3X3:
         case SOCK_CUSTOM:
         case SOCK_OBJECT:
         case SOCK_IMAGE:
@@ -3431,7 +3575,6 @@ void node_modify_socket_type(bNodeTree &ntree,
   idname.copy_utf8_truncated(sock.idname);
   node_socket_set_typeinfo(&ntree, &sock, socktype);
 }
-
 void node_modify_socket_type_static(
     bNodeTree *ntree, bNode *node, bNodeSocket *sock, const int type, const int subtype)
 {
@@ -3480,7 +3623,9 @@ std::optional<StringRefNull> node_static_socket_type(const int type,
                                                      const int subtype,
                                                      const std::optional<int> dimensions)
 {
-  BLI_assert(!(dimensions.has_value() && !ELEM(type, SOCK_VECTOR, SOCK_INT_VECTOR)));
+  BLI_assert(
+      !(dimensions.has_value() &&
+        !ELEM(type, SOCK_VECTOR, SOCK_VECTOR2, SOCK_VECTOR4, SOCK_INT_VECTOR)));
 
   switch (type) {
     case SOCK_FLOAT:
@@ -3531,6 +3676,8 @@ std::optional<StringRefNull> node_static_socket_type(const int type,
       return "NodeSocketBool";
     case SOCK_ROTATION:
       return "NodeSocketRotation";
+    case SOCK_MATRIX3X3:
+      return "NodeSocketMatrix3x3";
     case SOCK_MATRIX:
       return "NodeSocketMatrix";
     case SOCK_VECTOR:
@@ -3613,6 +3760,54 @@ std::optional<StringRefNull> node_static_socket_type(const int type,
         BLI_assert_unreachable();
         return "NodeSocketVector";
       }
+    case SOCK_VECTOR2:
+      switch (PropertySubType(subtype)) {
+        case PROP_FACTOR:
+          return "NodeSocketVector2Factor";
+        case PROP_PERCENTAGE:
+          return "NodeSocketVector2Percentage";
+        case PROP_TRANSLATION:
+          return "NodeSocketVector2Translation";
+        case PROP_DIRECTION:
+          return "NodeSocketVector2Direction";
+        case PROP_VELOCITY:
+          return "NodeSocketVector2Velocity";
+        case PROP_ACCELERATION:
+          return "NodeSocketVector2Acceleration";
+        case PROP_EULER:
+          return "NodeSocketVector2Euler";
+        case PROP_XYZ:
+          return "NodeSocketVector2XYZ";
+        case PROP_PIXEL:
+          return "NodeSocketVector2Pixel";
+        case PROP_NONE:
+        default:
+          return "NodeSocketVector2";
+      }
+    case SOCK_VECTOR4:
+      switch (PropertySubType(subtype)) {
+        case PROP_FACTOR:
+          return "NodeSocketVector4Factor";
+        case PROP_PERCENTAGE:
+          return "NodeSocketVector4Percentage";
+        case PROP_TRANSLATION:
+          return "NodeSocketVector4Translation";
+        case PROP_DIRECTION:
+          return "NodeSocketVector4Direction";
+        case PROP_VELOCITY:
+          return "NodeSocketVector4Velocity";
+        case PROP_ACCELERATION:
+          return "NodeSocketVector4Acceleration";
+        case PROP_EULER:
+          return "NodeSocketVector4Euler";
+        case PROP_XYZ:
+          return "NodeSocketVector4XYZ";
+        case PROP_PIXEL:
+          return "NodeSocketVector4Pixel";
+        case PROP_NONE:
+        default:
+          return "NodeSocketVector4";
+      }
     case SOCK_INT_VECTOR:
       if (!dimensions.has_value() || dimensions.value() == 3) {
         switch (PropertySubType(subtype)) {
@@ -3648,6 +3843,8 @@ std::optional<StringRefNull> node_static_socket_type(const int type,
         BLI_assert_unreachable();
         return "NodeSocketIntVector3D";
       }
+    case SOCK_RGB:
+      return "NodeSocketColor3";
     case SOCK_RGBA:
       return "NodeSocketColor";
     case SOCK_STRING:
@@ -3659,6 +3856,20 @@ std::optional<StringRefNull> node_static_socket_type(const int type,
       }
     case SOCK_SHADER:
       return "NodeSocketShader";
+    case SOCK_SURF_SHADER:
+      return "NodeSocketSurfaceShader";
+    case SOCK_VOL_SHADER:
+      return "NodeSocketVolumeShader";
+    case SOCK_DISP_SHADER:
+      return "NodeSocketDisplacementShader";
+    case SOCK_LIGHT_SHADER:
+      return "NodeSocketLightShader";
+    case SOCK_BSDF:
+      return "NodeSocketBSDF";
+    case SOCK_EDF:
+      return "NodeSocketEDF";
+    case SOCK_VDF:
+      return "NodeSocketVDF";
     case SOCK_OBJECT:
       return "NodeSocketObject";
     case SOCK_IMAGE:
@@ -3681,6 +3892,8 @@ std::optional<StringRefNull> node_static_socket_type(const int type,
       return "NodeSocketMask";
     case SOCK_SOUND:
       return "NodeSocketSound";
+    case SOCK_FILENAME:
+      return "NodeSocketFilename";
     case SOCK_MENU:
       return "NodeSocketMenu";
     case SOCK_BUNDLE:
@@ -3745,6 +3958,8 @@ std::optional<StringRefNull> node_static_socket_interface_type_new(
       return "NodeTreeInterfaceSocketBool";
     case SOCK_ROTATION:
       return "NodeTreeInterfaceSocketRotation";
+    case SOCK_MATRIX3X3:
+      return "NodeTreeInterfaceSocketMatrix3x3";
     case SOCK_MATRIX:
       return "NodeTreeInterfaceSocketMatrix";
     case SOCK_VECTOR:
@@ -3827,6 +4042,54 @@ std::optional<StringRefNull> node_static_socket_interface_type_new(
         BLI_assert_unreachable();
         return "NodeTreeInterfaceSocketVector";
       }
+    case SOCK_VECTOR2:
+      switch (PropertySubType(subtype)) {
+        case PROP_FACTOR:
+          return "NodeTreeInterfaceSocketVector2Factor";
+        case PROP_PERCENTAGE:
+          return "NodeTreeInterfaceSocketVector2Percentage";
+        case PROP_TRANSLATION:
+          return "NodeTreeInterfaceSocketVector2Translation";
+        case PROP_DIRECTION:
+          return "NodeTreeInterfaceSocketVector2Direction";
+        case PROP_VELOCITY:
+          return "NodeTreeInterfaceSocketVector2Velocity";
+        case PROP_ACCELERATION:
+          return "NodeTreeInterfaceSocketVector2Acceleration";
+        case PROP_EULER:
+          return "NodeTreeInterfaceSocketVector2Euler";
+        case PROP_XYZ:
+          return "NodeTreeInterfaceSocketVector2XYZ";
+        case PROP_PIXEL:
+          return "NodeTreeInterfaceSocketVector2Pixel";
+        case PROP_NONE:
+        default:
+          return "NodeTreeInterfaceSocketVector2";
+      }
+    case SOCK_VECTOR4:
+      switch (PropertySubType(subtype)) {
+        case PROP_FACTOR:
+          return "NodeTreeInterfaceSocketVector4Factor";
+        case PROP_PERCENTAGE:
+          return "NodeTreeInterfaceSocketVector4Percentage";
+        case PROP_TRANSLATION:
+          return "NodeTreeInterfaceSocketVector4Translation";
+        case PROP_DIRECTION:
+          return "NodeTreeInterfaceSocketVector4Direction";
+        case PROP_VELOCITY:
+          return "NodeTreeInterfaceSocketVector4Velocity";
+        case PROP_ACCELERATION:
+          return "NodeTreeInterfaceSocketVector4Acceleration";
+        case PROP_EULER:
+          return "NodeTreeInterfaceSocketVector4Euler";
+        case PROP_XYZ:
+          return "NodeTreeInterfaceSocketVector4XYZ";
+        case PROP_PIXEL:
+          return "NodeTreeInterfaceSocketVector4Pixel";
+        case PROP_NONE:
+        default:
+          return "NodeTreeInterfaceSocketVector4";
+      }
     case SOCK_INT_VECTOR:
       if (!dimensions.has_value() || dimensions.value() == 3) {
         switch (PropertySubType(subtype)) {
@@ -3862,6 +4125,8 @@ std::optional<StringRefNull> node_static_socket_interface_type_new(
         BLI_assert_unreachable();
         return "NodeTreeInterfaceSocketIntVector3D";
       }
+    case SOCK_RGB:
+      return "NodeTreeInterfaceSocketColor3";
     case SOCK_RGBA:
       return "NodeTreeInterfaceSocketColor";
     case SOCK_STRING:
@@ -3871,6 +4136,20 @@ std::optional<StringRefNull> node_static_socket_interface_type_new(
         default:
           return "NodeTreeInterfaceSocketString";
       }
+    case SOCK_SURF_SHADER:
+      return "NodeTreeInterfaceSocketSurfaceShader";
+    case SOCK_VOL_SHADER:
+      return "NodeTreeInterfaceSocketVolumeShader";
+    case SOCK_DISP_SHADER:
+      return "NodeTreeInterfaceSocketDisplacementShader";
+    case SOCK_LIGHT_SHADER:
+      return "NodeTreeInterfaceSocketLightShader";
+    case SOCK_BSDF:
+      return "NodeTreeInterfaceSocketBSDF";
+    case SOCK_EDF:
+      return "NodeTreeInterfaceSocketEDF";
+    case SOCK_VDF:
+      return "NodeTreeInterfaceSocketVDF";
     case SOCK_SHADER:
       return "NodeTreeInterfaceSocketShader";
     case SOCK_OBJECT:
@@ -3895,6 +4174,8 @@ std::optional<StringRefNull> node_static_socket_interface_type_new(
       return "NodeTreeInterfaceSocketMask";
     case SOCK_SOUND:
       return "NodeTreeInterfaceSocketSound";
+    case SOCK_FILENAME:
+      return "NodeTreeInterfaceSocketFilename";
     case SOCK_MENU:
       return "NodeTreeInterfaceSocketMenu";
     case SOCK_BUNDLE:
@@ -3918,14 +4199,36 @@ std::optional<StringRefNull> node_static_socket_label(const int type, const int 
       return "Boolean";
     case SOCK_ROTATION:
       return "Rotation";
+    case SOCK_MATRIX3X3:
+      return "Matrix 3x3";
     case SOCK_MATRIX:
       return "Matrix";
     case SOCK_VECTOR:
       return "Vector";
+    case SOCK_VECTOR2:
+      return "Vector 2D";
+    case SOCK_VECTOR4:
+      return "Vector 4D";
     case SOCK_RGBA:
       return "Color";
+    case SOCK_RGB:
+      return "Color 3";
     case SOCK_STRING:
       return "String";
+    case SOCK_SURF_SHADER:
+      return "Surface Shader";
+    case SOCK_VOL_SHADER:
+      return "Volume Shader";
+    case SOCK_DISP_SHADER:
+      return "Displacement Shader";
+    case SOCK_LIGHT_SHADER:
+      return "Light Shader";
+    case SOCK_BSDF:
+      return "BSDF";
+    case SOCK_EDF:
+      return "EDF";
+    case SOCK_VDF:
+      return "VDF";
     case SOCK_SHADER:
       return "Shader";
     case SOCK_OBJECT:
@@ -3950,6 +4253,8 @@ std::optional<StringRefNull> node_static_socket_label(const int type, const int 
       return "Mask";
     case SOCK_SOUND:
       return "Sound";
+    case SOCK_FILENAME:
+      return "Filename";
     case SOCK_MENU:
       return "Menu";
     case SOCK_BUNDLE:
@@ -4486,7 +4791,10 @@ bNode *node_copy_with_mapping(bNodeTree *dst_tree,
     case SOCK_BOOLEAN:
     case SOCK_INT:
     case SOCK_FLOAT:
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4:
     case SOCK_VECTOR:
+    case SOCK_RGB:
     case SOCK_RGBA:
     case SOCK_IMAGE:
     case SOCK_TEXTURE:
@@ -4503,13 +4811,22 @@ bNode *node_copy_with_mapping(bNodeTree *dst_tree,
     case SOCK_INT_VECTOR:
       socket.typeinfo->get_base_cpp_value(socket.default_value, buffer);
       return true;
+    case SOCK_MATRIX3X3:
     case SOCK_MATRIX:
       /* Matrix sockets currently have no default value. */
       return false;
+    case SOCK_FILENAME:
     case SOCK_STRING:
       /* Handled separately for string copies. */
       return false;
     case SOCK_CUSTOM:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_VDF:
+    case SOCK_EDF:
     case SOCK_SHADER:
     case SOCK_GEOMETRY:
     case SOCK_BUNDLE:
@@ -4554,7 +4871,7 @@ void node_socket_move_default_value(Main & /*bmain*/,
   }
 
   /* Special handling for strings because the generic code below can't handle them. */
-  if (src.type == SOCK_STRING && dst.type == SOCK_STRING &&
+  if (ELEM(src.type, SOCK_STRING, SOCK_FILENAME) && dst.type == SOCK_STRING &&
       dst_node.is_type("FunctionNodeInputString"_ustr))
   {
     auto *src_value = static_cast<bNodeSocketValueString *>(src.default_value);
@@ -5907,14 +6224,20 @@ std::optional<eCustomDataType> socket_type_to_custom_data_type(eNodeSocketDataty
   switch (type) {
     case SOCK_FLOAT:
       return CD_PROP_FLOAT;
+    case SOCK_VECTOR2:
+      return CD_PROP_FLOAT2;
     case SOCK_VECTOR:
       return CD_PROP_FLOAT3;
+    case SOCK_VECTOR4:
+      return CD_PROP_FLOAT4;
+    case SOCK_RGB:
     case SOCK_RGBA:
       return CD_PROP_COLOR;
     case SOCK_BOOLEAN:
       return CD_PROP_BOOL;
     case SOCK_ROTATION:
       return CD_PROP_QUATERNION;
+    case SOCK_MATRIX3X3:
     case SOCK_MATRIX:
       return CD_PROP_FLOAT4X4;
     case SOCK_INT:
@@ -5970,6 +6293,7 @@ const CPPType *socket_type_to_geo_nodes_base_cpp_type(const eNodeSocketDatatype 
     case SOCK_INT:
       cpp_type = &CPPType::get<int>();
       break;
+    case SOCK_RGB:
     case SOCK_RGBA:
       cpp_type = &CPPType::get<ColorGeometry4f>();
       break;
@@ -5979,8 +6303,17 @@ const CPPType *socket_type_to_geo_nodes_base_cpp_type(const eNodeSocketDatatype 
     case SOCK_VECTOR:
       cpp_type = &CPPType::get<float3>();
       break;
+    case SOCK_VECTOR2:
+      cpp_type = &CPPType::get<float2>();
+      break;
+    case SOCK_VECTOR4:
+      cpp_type = &CPPType::get<float4>();
+      break;
     case SOCK_ROTATION:
       cpp_type = &CPPType::get<math::Quaternion>();
+      break;
+    case SOCK_MATRIX3X3:
+      cpp_type = &CPPType::get<float3x3>();
       break;
     case SOCK_MATRIX:
       cpp_type = &CPPType::get<float4x4>();
@@ -6067,7 +6400,9 @@ std::optional<eNodeSocketDatatype> geo_nodes_base_cpp_type_to_socket_type(const 
   if (type.is<bSound *>()) {
     return SOCK_SOUND;
   }
-
+  if (type.is<std::filesystem::path *>()) {
+    return SOCK_FILENAME;
+  }
   return std::nullopt;
 }
 

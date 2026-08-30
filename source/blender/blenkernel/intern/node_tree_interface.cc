@@ -161,6 +161,10 @@ inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueRGBA &da
 {
   writer->write_struct(&data);
 }
+inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueRGB &data)
+{
+  writer->write_struct(&data);
+}
 inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueString &data)
 {
   writer->write_struct(&data);
@@ -205,6 +209,12 @@ inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueSound &d
 {
   writer->write_struct(&data);
 }
+
+inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueFilename &data)
+{
+  writer->write_struct(&data);
+}
+
 inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueMenu &data)
 {
   writer->write_struct(&data);
@@ -314,6 +324,10 @@ template<> StringRefNull socket_type_from_data_impl(const bNodeSocketValueRGBA &
 {
   return *bke::node_static_socket_type(SOCK_RGBA, PROP_NONE);
 }
+template<> StringRefNull socket_type_from_data_impl(const bNodeSocketValueRGB & /*data*/)
+{
+  return *bke::node_static_socket_type(SOCK_RGB, PROP_NONE);
+}
 template<> StringRefNull socket_type_from_data_impl(const bNodeSocketValueString &data)
 {
   return *bke::node_static_socket_type(SOCK_STRING, data.subtype);
@@ -358,6 +372,11 @@ template<> StringRefNull socket_type_from_data_impl(const bNodeSocketValueSound 
 {
   return *bke::node_static_socket_type(SOCK_SOUND, PROP_NONE);
 }
+template<> StringRefNull socket_type_from_data_impl(const bNodeSocketValueFilename & /*value*/)
+{
+  return *bke::node_static_socket_type(SOCK_FILENAME, PROP_NONE);
+  ;
+}
 template<> StringRefNull socket_type_from_data_impl(const bNodeSocketValueMenu & /*data*/)
 {
   return *bke::node_static_socket_type(SOCK_MENU, PROP_NONE);
@@ -369,6 +388,12 @@ template<> StringRefNull socket_type_from_data_impl(const bNodeSocketValueIntVec
 
 static StringRefNull socket_type_from_data(const bNodeTreeInterfaceSocket &socket)
 {
+  const bke::bNodeSocketType *typeinfo = bke::node_socket_type_find(socket.socket_type);
+  if (typeinfo && ELEM(typeinfo->type, SOCK_VECTOR2, SOCK_VECTOR4)) {
+    const bNodeSocketValueVector &data = get_socket_data_as<bNodeSocketValueVector>(socket);
+    return *bke::node_static_socket_type(typeinfo->type, data.subtype);
+  }
+
   StringRefNull socket_type;
   socket_data_to_static_type(socket.socket_type, [&]<typename SocketDataType>() {
     socket_type = socket_type_from_data_impl(get_socket_data_as<SocketDataType>(socket));
@@ -1389,15 +1414,25 @@ bNode *create_proxy_const_input_node(const eNodeSocketDatatype socket_type,
   switch (socket_type) {
     case SOCK_CUSTOM:
     case SOCK_SHADER:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_EDF:
+    case SOCK_VDF:
     case SOCK_GEOMETRY:
     case SOCK_TEXTURE:
+    case SOCK_FILENAME:
     case SOCK_MATRIX:
+    case SOCK_MATRIX3X3:
     case SOCK_BUNDLE:
     case SOCK_CLOSURE:
     case SOCK_SCENE:
     case SOCK_TEXT_ID:
     case SOCK_MASK:
     case SOCK_SOUND:
+    case SOCK_RGB:
       return nullptr;
 
     case SOCK_FLOAT: {
@@ -1408,6 +1443,8 @@ bNode *create_proxy_const_input_node(const eNodeSocketDatatype socket_type,
           {src_property_path, get_socket_property_path(dst_tree, *socket, "default_value")});
       return node;
     }
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4:
     case SOCK_VECTOR: {
       bNode *node = bke::node_add_node(&C, dst_tree, "FunctionNodeInputVector"_ustr);
       auto &node_storage = *static_cast<NodeInputVector *>(node->storage);
@@ -1574,11 +1611,19 @@ bNode *create_proxy_implicit_input_node(const eNodeSocketDatatype socket_type,
 {
   switch (socket_type) {
     case SOCK_CUSTOM:
+    case SOCK_RGB:
     case SOCK_RGBA:
     case SOCK_INT_VECTOR:
     case SOCK_BOOLEAN:
     case SOCK_STRING:
     case SOCK_SHADER:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_EDF:
+    case SOCK_VDF:
     case SOCK_GEOMETRY:
     case SOCK_TEXTURE:
     case SOCK_IMAGE:
@@ -1590,6 +1635,7 @@ bNode *create_proxy_implicit_input_node(const eNodeSocketDatatype socket_type,
     case SOCK_TEXT_ID:
     case SOCK_MASK:
     case SOCK_SOUND:
+    case SOCK_FILENAME:
     case SOCK_ROTATION:
     case SOCK_MENU:
     case SOCK_FONT:
@@ -1607,6 +1653,8 @@ bNode *create_proxy_implicit_input_node(const eNodeSocketDatatype socket_type,
       }
       return nullptr;
     }
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4:
     case SOCK_VECTOR:
       if (default_input == NODE_DEFAULT_INPUT_NORMAL_FIELD) {
         bNode *node = bke::node_add_node(&C, tree, "GeometryNodeInputNormal"_ustr);
@@ -1642,6 +1690,7 @@ bNode *create_proxy_implicit_input_node(const eNodeSocketDatatype socket_type,
       }
       return nullptr;
 
+    case SOCK_MATRIX3X3:
     case SOCK_MATRIX:
       if (default_input == NODE_DEFAULT_INPUT_INSTANCE_TRANSFORM_FIELD) {
         return bke::node_add_node(&C, tree, "GeometryNodeInstanceTransform"_ustr);

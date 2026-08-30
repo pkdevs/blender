@@ -12,6 +12,7 @@
 #include "BLI_math_euler.hh"
 #include "BLI_string.hh"
 
+#include "DNA_node_types.h"
 #include "PRF_profile.hh"
 
 #include "NOD_geometry.hh"
@@ -152,6 +153,8 @@ static bke::SocketValueVariant init_socket_cpp_value(const GeoNodesCallData *cal
       }
       break;
     }
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4:
     case SOCK_VECTOR: {
       const GeometryNodesInputType type = get_effective_input_type(
           input_props_ptr, ntree, io_socket);
@@ -171,6 +174,7 @@ static bke::SocketValueVariant init_socket_cpp_value(const GeoNodesCallData *cal
       }
       break;
     }
+    case SOCK_RGB:
     case SOCK_RGBA: {
       const GeometryNodesInputType type = get_effective_input_type(
           input_props_ptr, ntree, io_socket);
@@ -343,9 +347,18 @@ static bke::SocketValueVariant init_socket_cpp_value(const GeoNodesCallData *cal
     }
     case SOCK_GEOMETRY:
     case SOCK_MATRIX:
+    case SOCK_FILENAME:
+    case SOCK_MATRIX3X3:
     case SOCK_BUNDLE:
     case SOCK_CLOSURE:
     case SOCK_SHADER:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_EDF:
+    case SOCK_VDF:
     case SOCK_CUSTOM:
     case SOCK_INT_VECTOR:
       break;

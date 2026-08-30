@@ -110,6 +110,19 @@ enum eNodeSocketDatatype : short {
   SOCK_MASK = 22,
   SOCK_SOUND = 23,
   SOCK_INT_VECTOR = 24,
+  /* MaterialX Specific Types */
+  SOCK_FILENAME = 25,
+  SOCK_VECTOR2 = 26,
+  SOCK_VECTOR4 = 27,
+  SOCK_RGB = 28,
+  SOCK_MATRIX3X3 = 29,
+  SOCK_SURF_SHADER = 30,
+  SOCK_VOL_SHADER = 31,
+  SOCK_DISP_SHADER = 32,
+  SOCK_LIGHT_SHADER = 33,
+  SOCK_BSDF = 34,
+  SOCK_EDF = 35,
+  SOCK_VDF = 36,
 };
 
 /** Socket shape. */
@@ -2125,6 +2138,10 @@ struct bNodeSocketValueRotation {
   float value_euler[3] = {};
 };
 
+struct bNodeSocketValueRGB {
+  float value[3] = {};
+};
+
 struct bNodeSocketValueRGBA {
   float value[4] = {};
 };
@@ -2175,6 +2192,11 @@ struct bNodeSocketValueSound {
   struct bSound *value = nullptr;
 };
 
+struct bNodeSocketValueFilename {
+  int subtype = 0;
+  char _pad[4];
+  char value[/* FILE_MAX */ 1024] = "";
+};
 struct bNodeSocketValueMenu {
   /* Default input enum identifier. */
   int value = 0;

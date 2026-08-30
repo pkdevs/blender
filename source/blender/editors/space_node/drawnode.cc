@@ -1050,6 +1050,18 @@ static const float std_node_socket_colors[][4] = {
     {0, 0, 0, 1},            /* SOCK_MASK */
     {0.39, 0.34, 0.26, 1},   /* SOCK_SOUND */
     {0.36, 0.47, 0.61, 1.0}, /* SOCK_INT_VECTOR */
+    {0.36, 0.47, 0.61, 1.0}, /* SOCK_FILENAME */
+    {0.52, 0.56, 0.84, 1.0}, /* SOCK_VECTOR2 */
+    {0.3, 0.32, 0.5, 1.0},   /* SOCK_VECTOR4 */
+    {0.74, 0.84, 0.24, 1.0}, /* SOCK_RGB */
+    {0.8, 0.30, 0.72, 1.0},  /* SOCK_MATRIX3X3 */
+    {0.34, 0.78, 0.44, 1.0}, /* SOCK_SURF_SHADER */
+    {0.24, 0.60, 0.66, 1.0}, /* SOCK_VOL_SHADER */
+    {0.64, 0.58, 0.30, 1.0}, /* SOCK_DISP_SHADER */
+    {0.55, 0.55, 0.55, 1.0}, /* SOCK_LIGHT_SHADER */
+    {0.55, 0.80, 0.24, 1.0}, /* SOCK_BSDF */
+    {0.82, 0.70, 0.20, 1.0}, /* SOCK_EDF */
+    {0.64, 0.58, 0.30, 1.0}, /* SOCK_VDF */
 };
 
 void std_node_socket_colors_get(int socket_type, float *r_color)
@@ -1077,19 +1089,25 @@ static void std_node_socket_color_simple_fn(const bke::bNodeSocketType *type, fl
 using SocketColorFn = void (*)(bContext *C, PointerRNA *ptr, PointerRNA *node_ptr, float *r_color);
 /* Callbacks for all built-in socket types. */
 static const SocketColorFn std_node_socket_color_funcs[] = {
-    std_node_socket_color_fn<SOCK_FLOAT>,      std_node_socket_color_fn<SOCK_VECTOR>,
-    std_node_socket_color_fn<SOCK_RGBA>,       std_node_socket_color_fn<SOCK_SHADER>,
-    std_node_socket_color_fn<SOCK_BOOLEAN>,    nullptr /* UNUSED. */,
-    std_node_socket_color_fn<SOCK_INT>,        std_node_socket_color_fn<SOCK_STRING>,
-    std_node_socket_color_fn<SOCK_OBJECT>,     std_node_socket_color_fn<SOCK_IMAGE>,
-    std_node_socket_color_fn<SOCK_GEOMETRY>,   std_node_socket_color_fn<SOCK_COLLECTION>,
-    std_node_socket_color_fn<SOCK_TEXTURE>,    std_node_socket_color_fn<SOCK_MATERIAL>,
-    std_node_socket_color_fn<SOCK_ROTATION>,   std_node_socket_color_fn<SOCK_MENU>,
-    std_node_socket_color_fn<SOCK_MATRIX>,     std_node_socket_color_fn<SOCK_BUNDLE>,
-    std_node_socket_color_fn<SOCK_CLOSURE>,    std_node_socket_color_fn<SOCK_FONT>,
-    std_node_socket_color_fn<SOCK_SCENE>,      std_node_socket_color_fn<SOCK_TEXT_ID>,
-    std_node_socket_color_fn<SOCK_MASK>,       std_node_socket_color_fn<SOCK_SOUND>,
-    std_node_socket_color_fn<SOCK_INT_VECTOR>,
+    std_node_socket_color_fn<SOCK_FLOAT>,        std_node_socket_color_fn<SOCK_VECTOR>,
+    std_node_socket_color_fn<SOCK_RGBA>,         std_node_socket_color_fn<SOCK_SHADER>,
+    std_node_socket_color_fn<SOCK_BOOLEAN>,      nullptr /* UNUSED. */,
+    std_node_socket_color_fn<SOCK_INT>,          std_node_socket_color_fn<SOCK_STRING>,
+    std_node_socket_color_fn<SOCK_OBJECT>,       std_node_socket_color_fn<SOCK_IMAGE>,
+    std_node_socket_color_fn<SOCK_GEOMETRY>,     std_node_socket_color_fn<SOCK_COLLECTION>,
+    std_node_socket_color_fn<SOCK_TEXTURE>,      std_node_socket_color_fn<SOCK_MATERIAL>,
+    std_node_socket_color_fn<SOCK_ROTATION>,     std_node_socket_color_fn<SOCK_MENU>,
+    std_node_socket_color_fn<SOCK_MATRIX>,       std_node_socket_color_fn<SOCK_BUNDLE>,
+    std_node_socket_color_fn<SOCK_CLOSURE>,      std_node_socket_color_fn<SOCK_FONT>,
+    std_node_socket_color_fn<SOCK_SCENE>,        std_node_socket_color_fn<SOCK_TEXT_ID>,
+    std_node_socket_color_fn<SOCK_MASK>,         std_node_socket_color_fn<SOCK_SOUND>,
+    std_node_socket_color_fn<SOCK_INT_VECTOR>,   std_node_socket_color_fn<SOCK_FILENAME>,
+    std_node_socket_color_fn<SOCK_VECTOR2>,      std_node_socket_color_fn<SOCK_VECTOR4>,
+    std_node_socket_color_fn<SOCK_RGB>,          std_node_socket_color_fn<SOCK_MATRIX3X3>,
+    std_node_socket_color_fn<SOCK_SURF_SHADER>,  std_node_socket_color_fn<SOCK_VOL_SHADER>,
+    std_node_socket_color_fn<SOCK_DISP_SHADER>,  std_node_socket_color_fn<SOCK_LIGHT_SHADER>, 
+    std_node_socket_color_fn<SOCK_BSDF>,         std_node_socket_color_fn<SOCK_EDF>,          
+    std_node_socket_color_fn<SOCK_VDF>,
 };
 
 /** \} */
@@ -1250,6 +1268,8 @@ static void std_node_socket_draw(
       layout->prop(ptr, "default_value", DEFAULT_FLAGS, label_or_empty, ICON_NONE);
       break;
     case SOCK_VECTOR:
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4:
       if (socket_decl && socket_decl->compact) {
         template_component_menu(layout, ptr, "default_value", label_or_empty);
       }
@@ -1318,6 +1338,24 @@ static void std_node_socket_draw(
         ui::Layout *color_layout = &row->column(true);
         color_layout->prop(ptr, "default_value", DEFAULT_FLAGS, "", ICON_NONE);
         /* Keep color layout active to avoid darkened color appearance when inactive. */
+        if (sock->is_inactive()) {
+          layout->active_set(true);
+          label_layout->active_set(false);
+          color_layout->active_set(true);
+        }
+      }
+      break;
+    }
+    case SOCK_RGB: {
+      if (optional_label) {
+        layout->prop(ptr, "default_value", DEFAULT_FLAGS, "", ICON_NONE);
+      }
+      else {
+        ui::Layout *row = &layout->split(0.4f, false);
+        ui::Layout *label_layout = &row->column(true);
+        label_layout->label(label, ICON_NONE);
+        ui::Layout *color_layout = &row->column(true);
+        color_layout->prop(ptr, "default_value", DEFAULT_FLAGS, "", ICON_NONE);
         if (sock->is_inactive()) {
           layout->active_set(true);
           label_layout->active_set(false);
@@ -1514,6 +1552,25 @@ static void std_node_socket_draw(
 
       break;
     }
+    case SOCK_FILENAME: {
+      /* PROP_FILEPATH subtype makes this render as a text field + folder button automatically. */
+      if (optional_label) {
+        layout->prop(ptr,
+                     RNA_struct_find_property(ptr, "default_value"),
+                     -1,
+                     0,
+                     UI_ITEM_NONE,
+                     "",
+                     ICON_NONE,
+                     label);
+      }
+      else {
+        ui::Layout *row = &layout->split(0.4f, false);
+        row->label(label, ICON_NONE);
+        row->prop(ptr, "default_value", DEFAULT_FLAGS, "", ICON_NONE);
+      }
+      break;
+    }
     default:
       draw_node_socket_without_value(layout, sock, label_or_empty);
       break;
@@ -1567,6 +1624,15 @@ static void std_node_socket_interface_draw(ID *id,
       sub->prop(&ptr, "max_value", DEFAULT_FLAGS, IFACE_("Max"), ICON_NONE);
       break;
     }
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4: {
+      col->prop(&ptr, "subtype", DEFAULT_FLAGS, IFACE_("Subtype"), ICON_NONE);
+      col->prop(&ptr, "default_value", ui::ITEM_R_EXPAND, IFACE_("Default"), ICON_NONE);
+      ui::Layout *sub = &col->column(true);
+      sub->prop(&ptr, "min_value", DEFAULT_FLAGS, IFACE_("Min"), ICON_NONE);
+      sub->prop(&ptr, "max_value", DEFAULT_FLAGS, IFACE_("Max"), ICON_NONE);
+      break;
+    }
     case SOCK_INT_VECTOR: {
       col->prop(&ptr, "subtype", DEFAULT_FLAGS, IFACE_("Subtype"), ICON_NONE);
       col->prop(&ptr,
@@ -1588,6 +1654,7 @@ static void std_node_socket_interface_draw(ID *id,
     case SOCK_BOOLEAN:
     case SOCK_ROTATION:
     case SOCK_RGBA:
+    case SOCK_RGB:
     case SOCK_OBJECT:
     case SOCK_COLLECTION:
     case SOCK_IMAGE:
@@ -1601,13 +1668,25 @@ static void std_node_socket_interface_draw(ID *id,
       col->prop(&ptr, "default_value", DEFAULT_FLAGS, IFACE_("Default"), ICON_NONE);
       break;
     }
+    case SOCK_FILENAME: {
+      col->prop(&ptr, "default_value", DEFAULT_FLAGS, IFACE_("Default"), ICON_NONE);
+      break;
+    }
     case SOCK_MENU: {
       col->prop(&ptr, "default_value", DEFAULT_FLAGS, IFACE_("Default"), ICON_NONE);
       col->prop(&ptr, "menu_expanded", DEFAULT_FLAGS, IFACE_("Expanded"), ICON_NONE);
       break;
     }
     case SOCK_SHADER:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_EDF:
+    case SOCK_VDF:
     case SOCK_GEOMETRY:
+    case SOCK_MATRIX3X3:
     case SOCK_MATRIX:
     case SOCK_BUNDLE:
     case SOCK_CLOSURE:
@@ -1624,7 +1703,14 @@ static void std_node_socket_interface_draw(ID *id,
   if (interface_socket->flag & NODE_INTERFACE_SOCKET_INPUT &&
       ELEM(node_tree->type, NTREE_GEOMETRY, NTREE_COMPOSIT))
   {
-    if (ELEM(type, SOCK_INT, SOCK_FLOAT, SOCK_VECTOR, SOCK_MATRIX) ||
+    if (ELEM(type,
+             SOCK_INT,
+             SOCK_FLOAT,
+             SOCK_VECTOR,
+             SOCK_VECTOR2,
+             SOCK_VECTOR4,
+             SOCK_MATRIX,
+             SOCK_MATRIX3X3) ||
         (node_tree->type == NTREE_GEOMETRY && type == SOCK_OBJECT))
     {
       col->prop(&ptr, "default_input", DEFAULT_FLAGS, std::nullopt, ICON_NONE);

@@ -68,6 +68,9 @@ static bool basic_types_can_connect(const SocketDeclaration & /*socket_decl*/,
               SOCK_INT,
               SOCK_BOOLEAN,
               SOCK_VECTOR,
+              SOCK_VECTOR2,
+              SOCK_VECTOR4,
+              SOCK_RGB,
               SOCK_RGBA,
               SOCK_INT_VECTOR);
 }
@@ -342,6 +345,184 @@ VectorBuilder &VectorBuilder::try_copy_ui_data(const SocketDeclaration &other_de
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name #Vector2
+ * \{ */
+
+bNodeSocket &Vector2::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *bke::node_add_static_socket(ntree,
+                                                     node,
+                                                     this->in_out,
+                                                     SOCK_VECTOR2,
+                                                     this->subtype,
+                                                     this->identifier.ref(),
+                                                     this->name.ref());
+  this->set_common_flags(socket);
+  bNodeSocketValueVector &value = *static_cast<bNodeSocketValueVector *>(socket.default_value);
+  value.value[0] = this->default_value.x;
+  value.value[1] = this->default_value.y;
+  value.value[2] = 0.0f;
+  value.value[3] = 0.0f;
+  value.dimensions = 2;
+  value.min = this->soft_min_value;
+  value.max = this->soft_max_value;
+  return socket;
+}
+
+bool Vector2::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_VECTOR2) {
+    return false;
+  }
+  if (socket.typeinfo->subtype != this->subtype) {
+    return false;
+  }
+  const bNodeSocketValueVector &value = *static_cast<const bNodeSocketValueVector *>(
+      socket.default_value);
+  if (value.dimensions != 2) {
+    return false;
+  }
+  if (value.min != this->soft_min_value) {
+    return false;
+  }
+  if (value.max != this->soft_max_value) {
+    return false;
+  }
+  return true;
+}
+
+bool Vector2::can_connect(const bNodeSocket &socket) const
+{
+  if (!sockets_can_connect(*this, socket)) {
+    return false;
+  }
+  return basic_types_can_connect(*this, socket);
+}
+
+bNodeSocket &Vector2::update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const
+{
+  if (socket.type != SOCK_VECTOR2) {
+    BLI_assert(socket.in_out == this->in_out);
+    return this->build(ntree, node);
+  }
+  if (socket.typeinfo->subtype != this->subtype) {
+    modify_subtype_except_for_storage(socket, this->subtype);
+  }
+  this->set_common_flags(socket);
+  bNodeSocketValueVector &value = *static_cast<bNodeSocketValueVector *>(socket.default_value);
+  value.subtype = this->subtype;
+  value.dimensions = 2;
+  value.min = this->soft_min_value;
+  value.max = this->soft_max_value;
+  return socket;
+}
+
+Vector2Builder &Vector2Builder::try_copy_ui_data(const SocketDeclaration &other_decl)
+{
+  if (const Vector2 *other = dynamic_cast<const Vector2 *>(&other_decl)) {
+    this->decl_->default_value = other->default_value;
+    this->decl_->soft_min_value = other->soft_min_value;
+    this->decl_->soft_max_value = other->soft_max_value;
+    this->decl_->subtype = other->subtype;
+  }
+  return *this;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #Vector4
+ * \{ */
+
+bNodeSocket &Vector4::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *bke::node_add_static_socket(ntree,
+                                                     node,
+                                                     this->in_out,
+                                                     SOCK_VECTOR4,
+                                                     this->subtype,
+                                                     this->identifier.ref(),
+                                                     this->name.ref());
+  this->set_common_flags(socket);
+  bNodeSocketValueVector &value = *static_cast<bNodeSocketValueVector *>(socket.default_value);
+  value.value[0] = this->default_value.x;
+  value.value[1] = this->default_value.y;
+  value.value[2] = this->default_value.z;
+  value.value[3] = this->default_value.w;
+  value.dimensions = 4;
+  value.min = this->soft_min_value;
+  value.max = this->soft_max_value;
+  return socket;
+}
+
+bool Vector4::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_VECTOR4) {
+    return false;
+  }
+  if (socket.typeinfo->subtype != this->subtype) {
+    return false;
+  }
+  const bNodeSocketValueVector &value = *static_cast<const bNodeSocketValueVector *>(
+      socket.default_value);
+  if (value.dimensions != 4) {
+    return false;
+  }
+  if (value.min != this->soft_min_value) {
+    return false;
+  }
+  if (value.max != this->soft_max_value) {
+    return false;
+  }
+  return true;
+}
+
+bool Vector4::can_connect(const bNodeSocket &socket) const
+{
+  if (!sockets_can_connect(*this, socket)) {
+    return false;
+  }
+  return basic_types_can_connect(*this, socket);
+}
+
+bNodeSocket &Vector4::update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const
+{
+  if (socket.type != SOCK_VECTOR4) {
+    BLI_assert(socket.in_out == this->in_out);
+    return this->build(ntree, node);
+  }
+  if (socket.typeinfo->subtype != this->subtype) {
+    modify_subtype_except_for_storage(socket, this->subtype);
+  }
+  this->set_common_flags(socket);
+  bNodeSocketValueVector &value = *static_cast<bNodeSocketValueVector *>(socket.default_value);
+  value.subtype = this->subtype;
+  value.dimensions = 4;
+  value.min = this->soft_min_value;
+  value.max = this->soft_max_value;
+  return socket;
+}
+
+Vector4Builder &Vector4Builder::try_copy_ui_data(const SocketDeclaration &other_decl)
+{
+  if (const Vector4 *other = dynamic_cast<const Vector4 *>(&other_decl)) {
+    this->decl_->default_value = other->default_value;
+    this->decl_->soft_min_value = other->soft_min_value;
+    this->decl_->soft_max_value = other->soft_max_value;
+    this->decl_->subtype = other->subtype;
+  }
+  return *this;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name #IntVector
  * \{ */
 
@@ -529,6 +710,58 @@ ColorBuilder &ColorBuilder::try_copy_ui_data(const SocketDeclaration &other_decl
 
 /** \} */
 /* -------------------------------------------------------------------- */
+/** \name #Color3
+ * \{ */
+
+bNodeSocket &Color3::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *bke::node_add_static_socket(
+      ntree, node, this->in_out, SOCK_RGB, PROP_NONE, this->identifier.ref(), this->name.ref());
+  this->set_common_flags(socket);
+  bNodeSocketValueRGB &value = *static_cast<bNodeSocketValueRGB *>(socket.default_value);
+  copy_v3_v3(value.value, this->default_value);
+  return socket;
+}
+
+bool Color3::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_RGB) {
+    return false;
+  }
+  return true;
+}
+
+bool Color3::can_connect(const bNodeSocket &socket) const
+{
+  if (!sockets_can_connect(*this, socket)) {
+    return false;
+  }
+  return basic_types_can_connect(*this, socket);
+}
+
+bNodeSocket &Color3::update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const
+{
+  if (socket.type != SOCK_RGB) {
+    BLI_assert(socket.in_out == this->in_out);
+    return this->build(ntree, node);
+  }
+  this->set_common_flags(socket);
+  return socket;
+}
+
+Color3Builder &Color3Builder::try_copy_ui_data(const SocketDeclaration &other_decl)
+{
+  if (const Color3 *other = dynamic_cast<const Color3 *>(&other_decl)) {
+    this->decl_->default_value = other->default_value;
+  }
+  return *this;
+}
+
+/** \} */
+/* -------------------------------------------------------------------- */
 /** \name #Rotation
  * \{ */
 
@@ -593,6 +826,57 @@ RotationBuilder &RotationBuilder::try_copy_ui_data(const SocketDeclaration &othe
 /** \name #Matrix
  * \{ */
 
+bNodeSocket &Matrix3x3::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *bke::node_add_static_socket(ntree,
+                                                     node,
+                                                     this->in_out,
+                                                     SOCK_MATRIX3X3,
+                                                     PROP_NONE,
+                                                     this->identifier.ref(),
+                                                     this->name.ref());
+  this->set_common_flags(socket);
+  return socket;
+}
+
+bool Matrix3x3::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_MATRIX3X3) {
+    return false;
+  }
+  return true;
+}
+
+bool Matrix3x3::can_connect(const bNodeSocket &socket) const
+{
+  if (!sockets_can_connect(*this, socket)) {
+    return false;
+  }
+  if (this->in_out == SOCK_IN) {
+    return ELEM(socket.type, SOCK_MATRIX3X3, SOCK_FLOAT, SOCK_VECTOR, SOCK_MATRIX);
+  }
+  return ELEM(socket.type, SOCK_MATRIX3X3, SOCK_VECTOR, SOCK_MATRIX);
+}
+
+bNodeSocket &Matrix3x3::update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const
+{
+  if (socket.type != SOCK_MATRIX3X3) {
+    BLI_assert(socket.in_out == this->in_out);
+    return this->build(ntree, node);
+  }
+  this->set_common_flags(socket);
+  return socket;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #Matrix
+ * \{ */
+
 bNodeSocket &Matrix::build(bNodeTree &ntree, bNode &node) const
 {
   bNodeSocket &socket = *bke::node_add_static_socket(
@@ -618,14 +902,14 @@ bool Matrix::can_connect(const bNodeSocket &socket) const
     return false;
   }
   if (this->in_out == SOCK_IN) {
-    return ELEM(socket.type, SOCK_MATRIX, SOCK_FLOAT, SOCK_VECTOR, SOCK_MATRIX);
+    return ELEM(socket.type, SOCK_MATRIX, SOCK_MATRIX3X3, SOCK_FLOAT, SOCK_VECTOR);
   }
-  return ELEM(socket.type, SOCK_MATRIX, SOCK_VECTOR, SOCK_MATRIX);
+  return ELEM(socket.type, SOCK_MATRIX, SOCK_MATRIX3X3, SOCK_VECTOR);
 }
 
 bNodeSocket &Matrix::update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const
 {
-  if (socket.type != SOCK_MATRIX) {
+  if (!ELEM(socket.type, SOCK_MATRIX, SOCK_MATRIX3X3)) {
     BLI_assert(socket.in_out == this->in_out);
     return this->build(ntree, node);
   }
@@ -900,6 +1184,77 @@ void ClosureBuilder::create_signature(
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name #Filename
+ * \{ */
+
+bNodeSocket &Filename::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *bke::node_add_static_socket(ntree,
+                                                     node,
+                                                     this->in_out,
+                                                     SOCK_FILENAME,
+                                                     this->subtype,
+                                                     this->identifier.ref(),
+                                                     this->name.ref());
+
+  bNodeSocketValueFilename *value = static_cast<bNodeSocketValueFilename *>(socket.default_value);
+  BLI_strncpy(value->value, this->default_value.c_str(), sizeof(value->value));
+  value->subtype = this->subtype;
+
+  this->set_common_flags(socket);
+  return socket;
+}
+
+bool Filename::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_FILENAME) {
+    return false;
+  }
+  if (socket.typeinfo->subtype != this->subtype) {
+    return false;
+  }
+  return true;
+}
+
+bool Filename::can_connect(const bNodeSocket &socket) const
+{
+  /* Allow connections to other filename sockets natively,
+   * or implicitly serialize into basic string input sockets */
+  return sockets_can_connect(*this, socket) && ELEM(socket.type, SOCK_FILENAME, SOCK_STRING);
+}
+
+bNodeSocket &Filename::update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const
+{
+  if (socket.type != SOCK_FILENAME) {
+    BLI_assert(socket.in_out == this->in_out);
+    return this->build(ntree, node);
+  }
+  if (socket.typeinfo->subtype != this->subtype) {
+    modify_subtype_except_for_storage(socket, this->subtype);
+  }
+  this->set_common_flags(socket);
+
+  bNodeSocketValueFilename &value = *static_cast<bNodeSocketValueFilename *>(socket.default_value);
+  value.subtype = this->subtype;
+  return socket;
+}
+
+FilenameBuilder &FilenameBuilder::try_copy_ui_data(const SocketDeclaration &other_decl)
+{
+  if (const Filename *other = dynamic_cast<const Filename *>(&other_decl)) {
+    this->decl_->default_value = other->default_value;
+    this->decl_->subtype = other->subtype;
+    this->decl_->path_filter = other->path_filter;
+  }
+  return *this;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name #IDSocketDeclaration
  * \{ */
 
@@ -1019,6 +1374,274 @@ GeometryBuilder &GeometryBuilder::only_instances(bool value)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name #SurfaceShader
+ * \{ */
+
+bNodeSocket &SurfaceShader::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *bke::node_add_socket(ntree,
+                                              node,
+                                              this->in_out,
+                                              "NodeSocketSurfaceShader",
+                                              this->identifier.ref(),
+                                              this->name.ref());
+  this->set_common_flags(socket);
+  return socket;
+}
+
+bool SurfaceShader::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_SURF_SHADER) {
+    return false;
+  }
+  return true;
+}
+
+bool SurfaceShader::can_connect(const bNodeSocket &socket) const
+{
+  if (!sockets_can_connect(*this, socket)) {
+    return false;
+  }
+  if (this->in_out == SOCK_IN) {
+    return ELEM(socket.type, SOCK_SURF_SHADER, SOCK_SHADER);
+  }
+  return socket.type == SOCK_SURF_SHADER;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #VolumeShader
+ * \{ */
+
+bNodeSocket &VolumeShader::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *bke::node_add_socket(ntree,
+                                              node,
+                                              this->in_out,
+                                              "NodeSocketVolumeShader",
+                                              this->identifier.ref(),
+                                              this->name.ref());
+  this->set_common_flags(socket);
+  return socket;
+}
+
+bool VolumeShader::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_VOL_SHADER) {
+    return false;
+  }
+  return true;
+}
+
+bool VolumeShader::can_connect(const bNodeSocket &socket) const
+{
+  if (!sockets_can_connect(*this, socket)) {
+    return false;
+  }
+  if (this->in_out == SOCK_IN) {
+    return ELEM(socket.type, SOCK_VOL_SHADER, SOCK_SHADER);
+  }
+  return socket.type == SOCK_VOL_SHADER;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #DisplacementShader
+ * \{ */
+
+bNodeSocket &DisplacementShader::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *bke::node_add_socket(ntree,
+                                              node,
+                                              this->in_out,
+                                              "NodeSocketDisplacementShader",
+                                              this->identifier.ref(),
+                                              this->name.ref());
+  this->set_common_flags(socket);
+  return socket;
+}
+
+bool DisplacementShader::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_DISP_SHADER) {
+    return false;
+  }
+  return true;
+}
+
+bool DisplacementShader::can_connect(const bNodeSocket &socket) const
+{
+  if (!sockets_can_connect(*this, socket)) {
+    return false;
+  }
+  if (this->in_out == SOCK_IN) {
+    return ELEM(socket.type, SOCK_DISP_SHADER);
+  }
+  return socket.type == SOCK_DISP_SHADER;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #LightShader
+ * \{ */
+
+bNodeSocket &LightShader::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *bke::node_add_socket(ntree,
+                                              node,
+                                              this->in_out,
+                                              "NodeSocketLightShader",
+                                              this->identifier.ref(),
+                                              this->name.ref());
+  this->set_common_flags(socket);
+  return socket;
+}
+
+bool LightShader::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_LIGHT_SHADER) {
+    return false;
+  }
+  return true;
+}
+
+bool LightShader::can_connect(const bNodeSocket &socket) const
+{
+  if (!sockets_can_connect(*this, socket)) {
+    return false;
+  }
+  if (this->in_out == SOCK_IN) {
+    return ELEM(socket.type, SOCK_LIGHT_SHADER);
+  }
+  return socket.type == SOCK_LIGHT_SHADER;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #BSDF
+ * \{ */
+
+bNodeSocket &BSDF::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *bke::node_add_socket(
+      ntree, node, this->in_out, "NodeSocketBSDF", this->identifier.ref(), this->name.ref());
+  this->set_common_flags(socket);
+  return socket;
+}
+
+bool BSDF::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_BSDF) {
+    return false;
+  }
+  return true;
+}
+
+bool BSDF::can_connect(const bNodeSocket &socket) const
+{
+  if (!sockets_can_connect(*this, socket)) {
+    return false;
+  }
+  if (this->in_out == SOCK_IN) {
+    return ELEM(socket.type, SOCK_SHADER, SOCK_BSDF);
+  }
+  return socket.type == SOCK_BSDF;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #EDF
+ * \{ */
+
+bNodeSocket &EDF::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *bke::node_add_socket(
+      ntree, node, this->in_out, "NodeSocketEDF", this->identifier.ref(), this->name.ref());
+  this->set_common_flags(socket);
+  return socket;
+}
+
+bool EDF::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_EDF) {
+    return false;
+  }
+  return true;
+}
+
+bool EDF::can_connect(const bNodeSocket &socket) const
+{
+  if (!sockets_can_connect(*this, socket)) {
+    return false;
+  }
+  if (this->in_out == SOCK_IN) {
+    return ELEM(socket.type, SOCK_SHADER, SOCK_EDF);
+  }
+  return socket.type == SOCK_EDF;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #VDF
+ * \{ */
+
+bNodeSocket &VDF::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *bke::node_add_socket(
+      ntree, node, this->in_out, "NodeSocketVDF", this->identifier.ref(), this->name.ref());
+  this->set_common_flags(socket);
+  return socket;
+}
+
+bool VDF::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_VDF) {
+    return false;
+  }
+  return true;
+}
+
+bool VDF::can_connect(const bNodeSocket &socket) const
+{
+  if (!sockets_can_connect(*this, socket)) {
+    return false;
+  }
+  if (this->in_out == SOCK_IN) {
+    return ELEM(socket.type, SOCK_SHADER, SOCK_VDF);
+  }
+  return socket.type == SOCK_VDF;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name #Shader
  * \{ */
 
@@ -1048,8 +1671,15 @@ bool Shader::can_connect(const bNodeSocket &socket) const
   }
   /* Basic types can convert to shaders, but not the other way around. */
   if (this->in_out == SOCK_IN) {
-    return ELEM(
-        socket.type, SOCK_VECTOR, SOCK_RGBA, SOCK_FLOAT, SOCK_INT, SOCK_BOOLEAN, SOCK_SHADER);
+    return ELEM(socket.type,
+                SOCK_VECTOR,
+                SOCK_VECTOR2,
+                SOCK_VECTOR4,
+                SOCK_RGBA,
+                SOCK_FLOAT,
+                SOCK_INT,
+                SOCK_BOOLEAN,
+                SOCK_SHADER);
   }
   return socket.type == SOCK_SHADER;
 }

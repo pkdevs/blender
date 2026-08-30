@@ -53,6 +53,8 @@ static Result *get_effect_input(Context &context,
       result->set_single_value(value);
       break;
     }
+    case SOCK_VECTOR2:
+    case SOCK_VECTOR4:
     case SOCK_VECTOR: {
       switch (static_cast<bNodeSocketValueVector *>(input_socket.socket_data)->dimensions) {
         case 2: {
@@ -76,6 +78,12 @@ static Result *get_effect_input(Context &context,
         default:
           BLI_assert_unreachable();
       }
+      break;
+    }
+    case SOCK_RGB: {
+      ColorGeometry4f value;
+      RNA_float_get_array(&input_ptr, "value", value);
+      result->set_single_value(value);
       break;
     }
     case SOCK_RGBA: {
@@ -107,6 +115,11 @@ static Result *get_effect_input(Context &context,
       break;
     }
     case SOCK_STRING: {
+      const std::string value = RNA_string_get(&input_ptr, "value");
+      result->set_single_value(value);
+      break;
+    }
+    case SOCK_FILENAME: {
       const std::string value = RNA_string_get(&input_ptr, "value");
       result->set_single_value(value);
       break;
@@ -150,9 +163,17 @@ static Result *get_effect_input(Context &context,
     case SOCK_SOUND:
     case SOCK_GEOMETRY:
     case SOCK_MATRIX:
+    case SOCK_MATRIX3X3:
     case SOCK_BUNDLE:
     case SOCK_CLOSURE:
     case SOCK_SHADER:
+    case SOCK_SURF_SHADER:
+    case SOCK_VOL_SHADER:
+    case SOCK_DISP_SHADER:
+    case SOCK_LIGHT_SHADER:
+    case SOCK_BSDF:
+    case SOCK_EDF:
+    case SOCK_VDF:
     case SOCK_CUSTOM:
       break;
   }
