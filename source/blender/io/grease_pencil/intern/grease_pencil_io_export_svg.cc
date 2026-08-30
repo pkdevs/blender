@@ -10,8 +10,10 @@
 
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_material.hh"
 #include "BKE_scene.hh"
 
+#include "DNA_material_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
@@ -38,7 +40,7 @@
 namespace blender::io::grease_pencil {
 
 constexpr const char *svg_exporter_name = "SVG Export for Grease Pencil";
-constexpr const char *svg_exporter_version = "v2.1";
+constexpr const char *svg_exporter_version = "v2.2";
 
 static std::string rgb_to_hexstr(const float color[3])
 {
@@ -83,13 +85,20 @@ static void write_stroke_color_attribute(pugi::xml_node node,
 
 static void write_fill_color_attribute(pugi::xml_node node,
                                        const ColorGeometry4f &fill_color,
-                                       const float layer_opacity)
+                                       const float layer_opacity,
+                                       const std::optional<StringRef> &gradient_id)
 {
   ColorGeometry4f color;
   linearrgb_to_srgb_v3_v3(color, fill_color);
   std::string stroke_hex = rgb_to_hexstr(color);
 
-  node.append_attribute("fill").set_value(stroke_hex.c_str());
+  if (gradient_id) {
+    std::string url = "url(#" + *gradient_id + ")";
+    node.append_attribute("fill").set_value(url.c_str());
+  }
+  else {
+    node.append_attribute("fill").set_value(stroke_hex.c_str());
+  }
   node.append_attribute("stroke").set_value("none");
   node.append_attribute("fill-opacity").set_value(fill_color.a * layer_opacity);
 }
@@ -123,6 +132,12 @@ class SVGExporter : public GreasePencilExporter {
   using GreasePencilExporter::GreasePencilExporter;
 
   pugi::xml_document main_doc_;
+
+  std::optional<std::string> create_gradient(pugi::xml_node layer_node,
+                                             const float4x4 &transform,
+                                             const bke::greasepencil::Drawing &drawing,
+                                             const Span<int> shape,
+                                             const MaterialGPencilStyle *gp_style);
 
   ExportStatus export_scene(Scene &scene, StringRefNull filepath);
   void export_grease_pencil_objects(pugi::xml_node node, int frame_number);
@@ -322,6 +337,95 @@ void SVGExporter::export_grease_pencil_objects(pugi::xml_node node, const int fr
   }
 }
 
+std::optional<std::string> SVGExporter::create_gradient(pugi::xml_node layer_node,
+                                                        const float4x4 &transform,
+                                                        const bke::greasepencil::Drawing &drawing,
+                                                        const Span<int> shape,
+                                                        const MaterialGPencilStyle *gp_style)
+{
+  if (!gp_style || gp_style->fill_style != GP_MATERIAL_FILL_STYLE_GRADIENT) {
+    return std::nullopt;
+  }
+
+  const ColorBand *cb_gradient = gp_style->gradient;
+
+  if (!cb_gradient) {
+    return std::nullopt;
+  }
+
+  std::string gradient_id = "gradient" + this->get_node_uuid_string();
+
+  std::string gradient_type = gp_style->gradient_type == GP_MATERIAL_GRADIENT_RADIAL ?
+                                  "radialGradient" :
+                                  "linearGradient";
+
+  pugi::xml_node gradient = layer_node.append_child(gradient_type.c_str());
+  gradient.append_attribute("id").set_value(gradient_id.c_str());
+  gradient.append_attribute("gradientUnits").set_value("userSpaceOnUse");
+
+  for (const int i : IndexRange(cb_gradient->tot)) {
+    ColorGeometry4f color;
+    linearrgb_to_srgb_v3_v3(color, &gp_style->gradient->data[i].r);
+    std::string stop_hex = rgb_to_hexstr(color);
+
+    pugi::xml_node stop = gradient.append_child("stop");
+    stop.append_attribute("offset").set_value(std::to_string(cb_gradient->data[i].pos).c_str());
+    stop.append_attribute("stop-color").set_value(stop_hex.c_str());
+    stop.append_attribute("stop-opacity")
+        .set_value(std::to_string(gp_style->gradient->data[i].a).c_str());
+  }
+
+  /* TODO. */
+  if (gp_style->gradient_type == GP_MATERIAL_GRADIENT_RADIAL) {
+    gradient.append_attribute("cx").set_value("0.0");
+    gradient.append_attribute("cy").set_value("0.0");
+    gradient.append_attribute("r").set_value("0.5");
+  }
+  else {
+    gradient.append_attribute("x1").set_value("-0.5");
+    gradient.append_attribute("y1").set_value("0.0");
+    gradient.append_attribute("x2").set_value("0.5");
+    gradient.append_attribute("y2").set_value("0.0");
+  }
+
+  {
+    const Span<float4x2> texture_matrices = drawing.texture_matrices();
+    const float4x2 texture_matrix = texture_matrices[shape.first()];
+
+    /* TODO. */
+    const float3 pos_0 = float3(0.0f, 0.0f, 0.0f);
+    const float3 pos_1 = float3(1.0f, 0.0f, 0.0f);
+    const float3 pos_2 = float3(0.0f, 0.0f, 1.0f);
+
+    const float2 screen_co_0 = this->coord_to_svg(this->project_to_screen(transform, pos_0));
+    const float2 screen_co_1 = this->coord_to_svg(this->project_to_screen(transform, pos_1));
+    const float2 screen_co_2 = this->coord_to_svg(this->project_to_screen(transform, pos_2));
+
+    const float3x4 space_3x4 = float3x4(
+        float4(pos_0, 1.0f), float4(pos_1, 1.0f), float4(pos_2, 1.0f));
+
+    const float3x2 uv_3x2 = texture_matrix * space_3x4;
+    const float3x3 uv_3x3 = float3x3(
+        float3(uv_3x2[0], 1.0f), float3(uv_3x2[1], 1.0f), float3(uv_3x2[2], 1.0f));
+
+    const float3x2 co_3x2 = float3x2(screen_co_0, screen_co_1, screen_co_2);
+
+    /* We want to solve for `uv_mat_3x2` in co_3x2 = uv_mat_3x2 * uv_3x3 */
+    const float3x2 uv_mat_3x2 = co_3x2 * math::invert(uv_3x3);
+
+    std::string gradientTransform = "matrix(" + std::to_string(uv_mat_3x2[0][0]) + " " +
+                                    std::to_string(uv_mat_3x2[0][1]) + " " +
+                                    std::to_string(uv_mat_3x2[1][0]) + " " +
+                                    std::to_string(uv_mat_3x2[1][1]) + " " +
+                                    std::to_string(uv_mat_3x2[2][0]) + " " +
+                                    std::to_string(uv_mat_3x2[2][1]) + ")";
+
+    gradient.append_attribute("gradientTransform").set_value(gradientTransform.c_str());
+  }
+
+  return gradient_id;
+}
+
 void SVGExporter::export_grease_pencil_layer(pugi::xml_node layer_node,
                                              const Object &object,
                                              const bke::greasepencil::Layer &layer,
@@ -343,7 +447,8 @@ void SVGExporter::export_grease_pencil_layer(pugi::xml_node layer_node,
                          const std::optional<float> width,
                          const std::optional<float> miter_limit_angle,
                          const bool round_cap,
-                         const bool is_outline) {
+                         const bool is_outline,
+                         const MaterialGPencilStyle *gp_style) {
     pugi::xml_node element_node = write_path(layer_node,
                                              layer_to_world,
                                              positions,
@@ -356,7 +461,7 @@ void SVGExporter::export_grease_pencil_layer(pugi::xml_node layer_node,
                                              width);
 
     if (is_outline) {
-      write_fill_color_attribute(element_node, color, opacity);
+      write_fill_color_attribute(element_node, color, opacity, std::nullopt);
       /* Outlines might self-overlap which creates visual holes with the `even-odd` fill rule. */
       element_node.append_attribute("fill-rule").set_value("nonzero");
     }
@@ -366,7 +471,10 @@ void SVGExporter::export_grease_pencil_layer(pugi::xml_node layer_node,
         write_stroke_color_attribute(element_node, color, opacity, miter_limit_angle, round_cap);
       }
       else {
-        write_fill_color_attribute(element_node, color, opacity);
+        const std::optional<std::string> gradient_id = this->create_gradient(
+            layer_node, layer_to_world, drawing, shape, gp_style);
+
+        write_fill_color_attribute(element_node, color, opacity, gradient_id);
       }
     }
   };

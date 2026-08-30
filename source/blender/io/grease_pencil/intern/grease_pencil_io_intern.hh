@@ -95,7 +95,8 @@ class GreasePencilExporter {
                                         std::optional<float> width,
                                         std::optional<float> miter_limit_angle,
                                         bool round_cap,
-                                        bool is_outline)>;
+                                        bool is_outline,
+                                        const MaterialGPencilStyle *gp_style)>;
 
   void foreach_shape_in_layer(const Object &object,
                               const bke::greasepencil::Layer &layer,
@@ -106,6 +107,7 @@ class GreasePencilExporter {
 
   bool is_selected_frame(const GreasePencil &grease_pencil, int frame_number) const;
 
+  float2 coord_to_svg(const float2 &screen_co) const;
   std::string coord_to_svg_string(const float2 &screen_co) const;
 
  private:

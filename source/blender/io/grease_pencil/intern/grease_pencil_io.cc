@@ -423,8 +423,8 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
       "miter_angle", bke::AttrDomain::Point, GP_STROKE_MITER_ANGLE_ROUND);
   /* Point attributes. */
   const Span<float3> positions = curves.positions();
-  const Span<float3> positions_left = *curves.handle_positions_left();
-  const Span<float3> positions_right = *curves.handle_positions_right();
+  const Span<float3> positions_left = curves.handle_positions_left().value_or(Span<float3>());
+  const Span<float3> positions_right = curves.handle_positions_right().value_or(Span<float3>());
   const VArray<int8_t> types = curves.curve_types();
   const std::optional<GroupedSpan<int>> fills = drawing.fills();
   const VArraySpan<float> radii = drawing.radii();
@@ -481,8 +481,10 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
       return material;
     }();
 
-    BLI_assert(material->gp_style != nullptr);
-    if (material->gp_style->flag & GP_MATERIAL_HIDE) {
+    const MaterialGPencilStyle *gp_style = material->gp_style;
+
+    BLI_assert(gp_style != nullptr);
+    if (gp_style->flag & GP_MATERIAL_HIDE) {
       continue;
     }
 
@@ -490,7 +492,7 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
     if (active_filled && params_.export_fill_materials) {
       const Span<int> fill = (*fills)[fill_index];
 
-      const ColorGeometry4f material_fill_color = ColorGeometry4f(material->gp_style->fill_rgba);
+      const ColorGeometry4f material_fill_color = ColorGeometry4f(gp_style->fill_rgba);
       const ColorGeometry4f fill_color = math::interpolate(
           material_fill_color, fill_colors[i_curve], fill_colors[i_curve].a);
       shape_fn(positions,
@@ -505,7 +507,8 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
                std::nullopt,
                std::nullopt,
                false,
-               false);
+               false,
+               gp_style);
     }
 
     /* Stroke. */
@@ -543,7 +546,8 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
                  uniform_width,
                  miter_limit_angle,
                  round_cap,
-                 false);
+                 false,
+                 gp_style);
       }
       else {
         const IndexMask single_curve_mask = IndexRange::from_single(i_curve);
@@ -570,8 +574,10 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
         const OffsetIndices outline_points_by_curve = outline.points_by_curve();
         const VArray<bool> outline_cyclic = outline.cyclic();
         const Span<float3> outline_positions = outline.positions();
-        const Span<float3> outline_positions_left = *outline.handle_positions_left();
-        const Span<float3> outline_positions_right = *outline.handle_positions_right();
+        const Span<float3> outline_positions_left = outline.handle_positions_left().value_or(
+            Span<float3>());
+        const Span<float3> outline_positions_right = outline.handle_positions_right().value_or(
+            Span<float3>());
         const VArray<int8_t> outline_types = outline.curve_types();
 
         Array<int> outline_shape(outline.curves_num());
@@ -590,7 +596,8 @@ void GreasePencilExporter::foreach_shape_in_layer(const Object &object,
                  std::nullopt,
                  std::nullopt,
                  false,
-                 true);
+                 true,
+                 gp_style);
       }
     }
   }
@@ -636,13 +643,19 @@ bool GreasePencilExporter::is_selected_frame(const GreasePencil &grease_pencil,
   return false;
 }
 
-std::string GreasePencilExporter::coord_to_svg_string(const float2 &screen_co) const
+float2 GreasePencilExporter::coord_to_svg(const float2 &screen_co) const
 {
   /* SVG has inverted Y axis. */
   if (camera_persmat_) {
-    return fmt::format("{},{}", screen_co.x, camera_rect_.size().y - screen_co.y);
+    return float2(screen_co.x, camera_rect_.size().y - screen_co.y);
   }
-  return fmt::format("{},{}", screen_co.x, screen_rect_.size().y - screen_co.y);
+  return float2(screen_co.x, screen_rect_.size().y - screen_co.y);
+}
+
+std::string GreasePencilExporter::coord_to_svg_string(const float2 &screen_co) const
+{
+  const float2 svg_co = this->coord_to_svg(screen_co);
+  return fmt::format("{},{}", svg_co.x, svg_co.y);
 }
 
 }  // namespace blender::io::grease_pencil

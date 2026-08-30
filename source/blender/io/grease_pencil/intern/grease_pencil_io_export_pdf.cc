@@ -184,7 +184,8 @@ void PDFExporter::export_grease_pencil_layer(const Object &object,
                          const std::optional<float> width,
                          const std::optional<float> miter_limit_angle,
                          const bool /*round_cap*/,
-                         const bool /*is_outline*/) {
+                         const bool /*is_outline*/,
+                         const MaterialGPencilStyle * /*gp_style*/) {
     write_path(layer_to_world,
                positions,
                points_by_curve,
