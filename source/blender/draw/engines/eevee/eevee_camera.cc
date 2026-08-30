@@ -46,9 +46,10 @@ constexpr PanoramicViewBits PANORAMIC_VIEW_SIDES = PanoramicViewBits::POS_X |
                                                    PanoramicViewBits::POS_Y |
                                                    PanoramicViewBits::NEG_Y;
 
-static PanoramicViewBits panoramic_view_mask_from_half_fov(float half_fov)
+static PanoramicViewBits panoramic_fisheye_view_mask_get(const CameraData &cam)
 {
   constexpr float angle_epsilon = 1.0e-4f;
+  const float half_fov = cam.fisheye_fov * 0.5f;
   PanoramicViewBits mask = PanoramicViewBits::FRONT;
   if (half_fov >= float(M_PI_4) - angle_epsilon) {
     mask |= PANORAMIC_VIEW_SIDES;
@@ -57,11 +58,6 @@ static PanoramicViewBits panoramic_view_mask_from_half_fov(float half_fov)
     mask |= PanoramicViewBits::BACK;
   }
   return mask;
-}
-
-static PanoramicViewBits panoramic_fisheye_view_mask_get(const CameraData &cam)
-{
-  return panoramic_view_mask_from_half_fov(cam.fisheye_fov * 0.5f);
 }
 
 /* True if `tan(theta) >= 1` somewhere in `[theta_lo, theta_hi]`. */
