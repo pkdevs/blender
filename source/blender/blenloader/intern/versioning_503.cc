@@ -10,19 +10,26 @@
 
 #include "DNA_ID.h"
 #include "DNA_brush_types.h"
+#include "DNA_camera_types.h"
 #include "DNA_curves_types.h"
 #include "DNA_grease_pencil_types.h"
 #include "DNA_mesh_types.h"
+#include "DNA_object_types.h"
 #include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_screen_types.h"
 #include "DNA_sequence_types.h"
+#include "DNA_view3d_types.h"
+#include "DNA_windowmanager_types.h"
 
 #include "BLI_listbase_iterator.hh"
+#include "BLI_math_base.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_sys_types.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
+#include "BKE_camera.h"
 #include "BKE_compositor.hh"
 #include "BKE_main.hh"
 #include "BKE_mesh_legacy_convert.hh"
@@ -30,6 +37,7 @@
 #include "BKE_node_runtime.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
+#include "BKE_screen.hh"
 
 #include "SEQ_iterator.hh"
 #include "SEQ_sequencer.hh"
@@ -95,6 +103,87 @@ static void compositing_node_group_to_effect(Main &main, Scene &scene)
   scene.compositing_node_group = nullptr;
 }
 
+static float version_503_camera_view_viewfac(const int sensor_fit,
+                                             const int winx,
+                                             const int winy,
+                                             const float frame_aspect)
+{
+  const float frame_width = (float(winy) / frame_aspect <= float(winx)) ?
+                                float(winy) / frame_aspect :
+                                float(winx);
+  const float frame_height = frame_width * frame_aspect;
+
+  return (BKE_camera_sensor_fit(sensor_fit, 1.0f, frame_aspect) == CAMERA_SENSOR_FIT_HOR) ?
+             frame_width :
+             frame_height;
+}
+
+static void do_versioning_camera_view_zoom(Main *bmain)
+{
+  for (bScreen &screen : bmain->screens) {
+    Scene *scene = nullptr;
+    for (wmWindowManager &wm : bmain->wm) {
+      for (wmWindow &win : wm.windows) {
+        if (win.winid == screen.winid) {
+          scene = win.scene;
+        }
+      }
+    }
+    if (scene == nullptr) {
+      continue;
+    }
+    const float render_aspect = (float(scene->r.ysch) * scene->r.yasp) /
+                                (float(scene->r.xsch) * scene->r.xasp);
+
+    for (ScrArea &area : screen.areabase) {
+      for (SpaceLink &space : area.spacedata) {
+        if (space.spacetype != SPACE_VIEW3D) {
+          continue;
+        }
+        View3D *v3d = reinterpret_cast<View3D *>(&space);
+
+        const int sensor_fit = (v3d->camera != nullptr && v3d->camera->type == OB_CAMERA &&
+                                v3d->camera->data != nullptr) ?
+                                   id_cast<Camera *>(v3d->camera->data)->sensor_fit :
+                                   CAMERA_SENSOR_FIT_AUTO;
+
+        ListBaseT<ARegion> *regions = (area.spacedata.first == &space) ? &area.regionbase :
+                                                                         &space.regionbase;
+        for (ARegion &region : *regions) {
+          if (region.regiontype != RGN_TYPE_WINDOW) {
+            continue;
+          }
+          RegionView3D *rv3d = static_cast<RegionView3D *>(region.regiondata);
+          if (rv3d == nullptr) {
+            continue;
+          }
+          if ((rv3d->persp != RV3D_CAMOB) && (rv3d->camzoom == 0.0f) && (rv3d->camdx == 0.0f) &&
+              (rv3d->camdy == 0.0f))
+          {
+            continue;
+          }
+          const int winx = region.winx;
+          const int winy = region.winy;
+          if ((winx <= 1) || (winy <= 1)) {
+            continue;
+          }
+
+          const float viewfac_old = version_503_camera_view_viewfac(
+              sensor_fit, winx, winy, float(winy) / float(winx));
+          const float viewfac_new = version_503_camera_view_viewfac(
+              sensor_fit, winx, winy, render_aspect);
+
+          const float zoomfac = BKE_screen_view3d_zoom_to_fac(rv3d->camzoom) *
+                                (viewfac_old / viewfac_new);
+          rv3d->camzoom = math::clamp(BKE_screen_view3d_zoom_from_fac(zoomfac),
+                                      float(RV3D_CAMZOOM_MIN),
+                                      float(RV3D_CAMZOOM_MAX));
+        }
+      }
+    }
+  }
+}
+
 void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 8)) {
@@ -121,6 +210,12 @@ void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 16)) {
     /* Shift animation data to accommodate the new dispersion inputs. */
     version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfPrincipled", 20, 2, 33);
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 18)) {
+    /* Runs here instead of `blo_do_versions_503`, since screen datablocks are not fully linked
+     * (e.g. `#View3D.camera`) until after linking. */
+    do_versioning_camera_view_zoom(bmain);
   }
 
   /**
