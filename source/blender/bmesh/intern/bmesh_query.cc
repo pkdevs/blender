@@ -2553,6 +2553,48 @@ int BM_mesh_calc_edge_groups_as_arrays(
   return STACK_SIZE(groups);
 }
 
+void BM_mesh_selection_as_arrays(
+    BMesh *bm, BMVert **verts, BMEdge **edges, BMFace **faces, int (*lengths)[3])
+{
+  BMIter iter;
+
+  // Verts
+  STACK_DECLARE(verts);
+  STACK_INIT(verts, bm->totvert);
+
+  BMVert *vert;
+  BM_ITER_MESH (vert, &iter, bm, BM_VERTS_OF_MESH) {
+    if (BM_elem_flag_test(vert, BM_ELEM_SELECT)) {
+      STACK_PUSH(verts, vert);
+    }
+  }
+  (*lengths)[0] = STACK_SIZE(verts);
+
+  // Edges
+  STACK_DECLARE(edges);
+  STACK_INIT(edges, bm->totedge);
+
+  BMEdge *edge;
+  BM_ITER_MESH (edge, &iter, bm, BM_EDGES_OF_MESH) {
+    if (BM_elem_flag_test(edge, BM_ELEM_SELECT)) {
+      STACK_PUSH(edges, edge);
+    }
+  }
+  (*lengths)[1] = STACK_SIZE(edges);
+
+  // Faces
+  STACK_DECLARE(faces);
+  STACK_INIT(faces, bm->totface);
+
+  BMFace *face;
+  BM_ITER_MESH (face, &iter, bm, BM_FACES_OF_MESH) {
+    if (BM_elem_flag_test(face, BM_ELEM_SELECT)) {
+      STACK_PUSH(faces, face);
+    }
+  }
+  (*lengths)[2] = STACK_SIZE(faces);
+}
+
 float bmesh_subd_falloff_calc(const int falloff, float val)
 {
   switch (falloff) {

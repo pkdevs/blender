@@ -4319,8 +4319,9 @@ static Base *mesh_separate_arrays(Main *bmain,
     BM_custom_loop_normals_from_vector_layer(bm_new, false);
   }
 
-  for (uint i = 0; i < verts_len; i++) {
-    BM_vert_kill(bm_old, verts[i]);
+  // Delete faces because verts and edges may be reused in seperate by selection and by material
+  for (uint i = 0; i < faces_len; i++) {
+    BM_face_kill_loose(bm_old, faces[i]);
   }
   BMeshToMeshParams to_mesh_params{};
   BM_mesh_bm_to_me(bmain, bm_new, id_cast<Mesh *>(base_new->object->data), &to_mesh_params);
@@ -4334,20 +4335,43 @@ static Base *mesh_separate_arrays(Main *bmain,
 static bool mesh_separate_selected(
     Main *bmain, Scene *scene, ViewLayer *view_layer, Base *base_old, BMesh *bm_old)
 {
+  Array<BMVert *> vert_selection(bm_old->totvert);
+  Array<BMEdge *> edge_selection(bm_old->totedge);
+  Array<BMFace *> face_selection(bm_old->totface);
+
+  int lengths[3];
+  BM_mesh_selection_as_arrays(
+      bm_old, vert_selection.data(), edge_selection.data(), face_selection.data(), &lengths);
+
+  if (lengths[0] == 0) {  // No selected verts
+    return false;
+  }
+
+  ED_mesh_geometry_clear(id_cast<Mesh *>(base_old->object->data));
+
   BM_custom_loop_normals_to_vector_layer(bm_old);
 
-  /* we may have tags from previous operators */
-  BM_mesh_elem_hflag_disable_all(bm_old, BM_FACE | BM_EDGE | BM_VERT, BM_ELEM_TAG, false);
+  Base *base_new = mesh_separate_arrays(bmain,
+                                        scene,
+                                        view_layer,
+                                        base_old,
+                                        bm_old,
+                                        vert_selection.data(),
+                                        lengths[0],
+                                        edge_selection.data(),
+                                        lengths[1],
+                                        face_selection.data(),
+                                        lengths[2]);
 
-  /* sel -> tag */
-  BM_mesh_elem_hflag_enable_test(
-      bm_old, BM_FACE | BM_EDGE | BM_VERT, BM_ELEM_TAG, true, false, BM_ELEM_SELECT);
+  bool result = (base_new != nullptr);
 
-  Base *base_new = mesh_separate_tagged(bmain, scene, view_layer, base_old, bm_old);
+  Mesh *me_old = id_cast<Mesh *>(base_old->object->data);
 
-  BM_custom_loop_normals_from_vector_layer(bm_old, false);
+  BMeshToMeshParams to_mesh_params{};
+  to_mesh_params.update_shapekey_indices = true;
+  BM_mesh_bm_to_me(nullptr, bm_old, me_old, &to_mesh_params);
 
-  return (base_new != nullptr);
+  return result;
 }
 
 /**

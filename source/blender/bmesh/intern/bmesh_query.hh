@@ -791,6 +791,12 @@ int BM_mesh_calc_edge_groups_as_arrays(BMesh *bm,
                                        int (**r_groups)[3]) ATTR_WARN_UNUSED_RESULT
     ATTR_NONNULL(1, 2, 3, 4, 5);
 
+void BM_mesh_selection_as_arrays(BMesh *bm,
+                                 BMVert **verts,
+                                 BMEdge **edges,
+                                 BMFace **faces,
+                                 int (*lengths)[3]) ATTR_NONNULL(1, 2, 3, 4, 5);
+
 /* Not really any good place to put this. */
 float bmesh_subd_falloff_calc(int falloff, float val) ATTR_WARN_UNUSED_RESULT;
 
