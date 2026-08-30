@@ -46,10 +46,9 @@ constexpr PanoramicViewBits PANORAMIC_VIEW_SIDES = PanoramicViewBits::POS_X |
                                                    PanoramicViewBits::POS_Y |
                                                    PanoramicViewBits::NEG_Y;
 
-static PanoramicViewBits panoramic_fisheye_view_mask_get(const CameraData &cam)
+static PanoramicViewBits panoramic_view_mask_from_half_fov(float half_fov)
 {
   constexpr float angle_epsilon = 1.0e-4f;
-  const float half_fov = cam.fisheye_fov * 0.5f;
   PanoramicViewBits mask = PanoramicViewBits::FRONT;
   if (half_fov >= float(M_PI_4) - angle_epsilon) {
     mask |= PANORAMIC_VIEW_SIDES;
@@ -60,11 +59,64 @@ static PanoramicViewBits panoramic_fisheye_view_mask_get(const CameraData &cam)
   return mask;
 }
 
+static PanoramicViewBits panoramic_fisheye_view_mask_get(const CameraData &cam)
+{
+  return panoramic_view_mask_from_half_fov(cam.fisheye_fov * 0.5f);
+}
+
+/* True if `tan(theta) >= 1` somewhere in `[theta_lo, theta_hi]`. */
+static bool tan_range_reaches_one(float theta_lo, float theta_hi)
+{
+  BLI_assert(theta_lo <= theta_hi);
+  constexpr float inv_period = 1.0f / (2.0f * float(M_PI_2));
+  float min_k = ceilf((theta_lo - float(M_PI_2)) * inv_period);
+  float max_k = floorf((theta_hi - float(M_PI_4)) * inv_period);
+  return min_k <= max_k;
+}
+
+/* Same as `tan_range_reaches_one` but for `tan(theta) <= -1`. */
+static bool tan_range_reaches_minus_one(float theta_lo, float theta_hi)
+{
+  return tan_range_reaches_one(-theta_hi, -theta_lo);
+}
+
+/* Shifting or zooming push the sampled UV out of the front face so we need to include the faces
+ * it spills into. Note that `tan` is cyclical so a wide shift wraps around and needs the
+ * opposite neighbor face */
+static PanoramicViewBits panoramic_equiangular_cubemap_face_view_mask_get(const CameraData &cam)
+{
+  const float2 lo = math::min(cam.uv_bias, cam.uv_bias + cam.uv_scale);
+  const float2 hi = math::max(cam.uv_bias, cam.uv_bias + cam.uv_scale);
+
+  /* see `equiangular_cubemap_face_to_direction` in eevee_camera_lib.bsl.hh */
+  const float alpha_lo = (0.5f - hi.x) * float(M_PI_2);
+  const float alpha_hi = (0.5f - lo.x) * float(M_PI_2);
+  const float beta_lo = (lo.y - 0.5f) * float(M_PI_2);
+  const float beta_hi = (hi.y - 0.5f) * float(M_PI_2);
+
+  PanoramicViewBits mask = PanoramicViewBits::FRONT;
+  /* direction.x = -tan(alpha). */
+  if (tan_range_reaches_one(alpha_lo, alpha_hi)) {
+    mask |= PanoramicViewBits::NEG_X;
+  }
+  if (tan_range_reaches_minus_one(alpha_lo, alpha_hi)) {
+    mask |= PanoramicViewBits::POS_X;
+  }
+  /* direction.y = tan(beta). */
+  if (tan_range_reaches_one(beta_lo, beta_hi)) {
+    mask |= PanoramicViewBits::POS_Y;
+  }
+  if (tan_range_reaches_minus_one(beta_lo, beta_hi)) {
+    mask |= PanoramicViewBits::NEG_Y;
+  }
+  return mask;
+}
+
 static PanoramicViewBits panoramic_view_mask_get(const CameraData &cam)
 {
   switch (cam.type) {
     case CAMERA_PANO_EQUIANGULAR_CUBEMAP_FACE:
-      return PanoramicViewBits::FRONT;
+      return panoramic_equiangular_cubemap_face_view_mask_get(cam);
     case CAMERA_PANO_EQUIDISTANT:
     case CAMERA_PANO_EQUISOLID:
     case CAMERA_PANO_FISHEYE_LENS_POLYNOMIAL:
@@ -72,7 +124,8 @@ static PanoramicViewBits panoramic_view_mask_get(const CameraData &cam)
     case CAMERA_PANO_EQUIRECT:
     case CAMERA_PANO_CENTRAL_CYLINDRICAL:
     case CAMERA_PANO_MIRROR:
-      /* No face can be analytically excluded for these projections. */
+      /* TODO(L3GiaBao): Can exclude faces when longitude/latitude (or u/v for central cylindrical)
+       * is restricted. */
       return PANORAMIC_VIEW_ALL;
     default:
       return PanoramicViewBits::FRONT;
