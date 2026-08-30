@@ -797,7 +797,7 @@ int PaintStroke::space_stroke(bContext *C,
       this->vc, &paint, &brush, last_world_space_position_, zoom_2d_);
   int count = 0;
   while (length > 0.0f) {
-    const float spacing = rake_started_ && !(brush.flag & BRUSH_SMOOTH_STROKE) ?
+    const float spacing = rake_started_ || (brush.flag & BRUSH_SMOOTH_STROKE) ?
                               paint_space_stroke_spacing_variable(this->vc,
                                                                   &paint,
                                                                   &brush,
