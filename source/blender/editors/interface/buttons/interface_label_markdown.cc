@@ -11,6 +11,9 @@
 #include "BLI_rect.hh"
 #include "BLI_string_utf8.hh"
 
+#include "GPU_immediate.hh"
+#include "GPU_state.hh"
+
 #include "RNA_access.hh"
 
 #include "UI_resources.hh"
@@ -125,6 +128,8 @@ class MarkdownLayouter {
 
   struct QuoteBlock {};
 
+  struct HorizontalRuleBlock {};
+
   struct UnknownBlock {};
 
   struct EmSpan {};
@@ -143,6 +148,7 @@ class MarkdownLayouter {
                                ParagraphBlock,
                                CodeBlock,
                                QuoteBlock,
+                               HorizontalRuleBlock,
                                UnknownBlock>;
   using MdSpan = std::variant<EmSpan, StrongSpan, LinkSpan, CodeSpan, UnknownSpan>;
 
@@ -251,7 +257,10 @@ class MarkdownLayouter {
         block_stack_.append(DocBlock{});
         break;
       }
-      case MD_BLOCK_HR:
+      case MD_BLOCK_HR: {
+        block_stack_.append(HorizontalRuleBlock{});
+        break;
+      }
       case MD_BLOCK_HTML:
       case MD_BLOCK_TABLE:
       case MD_BLOCK_THEAD:
@@ -269,6 +278,9 @@ class MarkdownLayouter {
     x_ = this->context_block_start_x();
     if (block_type == MD_BLOCK_LI) {
       this->append_list_marker();
+    }
+    else if (block_type == MD_BLOCK_HR) {
+      this->append_horizontal_rule();
     }
   }
 
@@ -345,6 +357,14 @@ class MarkdownLayouter {
     cache_.md_layout.items.append(item);
   }
 
+  void append_horizontal_rule()
+  {
+    const float half_space = 0.5f * main_font_.default_line_height;
+    y_ -= half_space;
+    cache_.md_layout.items.append(MarkdownItemHorizontalRule{y_});
+    y_ -= half_space;
+  }
+
   float get_space_above_new_block() const
   {
     if (!last_left_block_) {
@@ -364,7 +384,9 @@ class MarkdownLayouter {
       const MdHeaderStyle &style = header_styles[md_header->level - 1];
       return main_font_.default_line_height * style.size_factor;
     }
-    if (std::holds_alternative<ParagraphBlock>(new_block)) {
+    if (std::holds_alternative<ParagraphBlock>(new_block) ||
+        std::holds_alternative<HorizontalRuleBlock>(new_block))
+    {
       return main_font_.default_line_height * 1.5f;
     }
     return main_font_.default_line_height * 1.5f;
@@ -406,7 +428,10 @@ class MarkdownLayouter {
         BLI_assert(std::holds_alternative<DocBlock>(md_block));
         break;
       }
-      case MD_BLOCK_HR:
+      case MD_BLOCK_HR: {
+        BLI_assert(std::holds_alternative<HorizontalRuleBlock>(md_block));
+        break;
+      }
       case MD_BLOCK_HTML:
       case MD_BLOCK_TABLE:
       case MD_BLOCK_THEAD:
@@ -729,6 +754,9 @@ class MarkdownLayouter {
         bottom_y = std::min(bottom_y, text_item->y + BLF_descender(text_item->fontid));
         markdown_disable_item_font(*text_item);
       }
+      else if (const auto *rule_item = std::get_if<MarkdownItemHorizontalRule>(&item)) {
+        bottom_y = std::min(bottom_y, rule_item->y - 0.5f * main_font_.default_line_height);
+      }
     }
     if (bottom_y != FLT_MAX) {
       cache_.md_layout.content_height = -bottom_y;
@@ -916,6 +944,23 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
       BLF_position(text_item->fontid, x, y, 0.0f);
       BLF_draw(text_item->fontid, text_item->text.data(), text_item->text.size());
       markdown_disable_item_font(*text_item);
+    }
+    else if (const auto *rule_item = std::get_if<MarkdownItemHorizontalRule>(&item)) {
+      const uchar line_color[4] = {color[0], color[1], color[2], 30};
+      const float y = rect->ymax + rule_item->y;
+
+      const uint pos = GPU_vertformat_attr_add(
+          immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
+      immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+      GPU_blend(GPU_BLEND_ALPHA);
+      immUniformColor4ubv(line_color);
+      GPU_line_width(1.0f);
+      immBegin(GPU_PRIM_LINES, 2);
+      immVertex2f(pos, rect->xmin, y);
+      immVertex2f(pos, rect->xmax, y);
+      immEnd();
+      GPU_blend(GPU_BLEND_NONE);
+      immUnbindProgram();
     }
   }
 }

@@ -393,8 +393,12 @@ struct MarkdownItemText {
   std::optional<StringRef> url;
 };
 
-/** Additional item types (e.g. horizontal rules) can be added here later. */
-using MarkdownItem = std::variant<MarkdownItemText>;
+struct MarkdownItemHorizontalRule {
+  /** Vertical center of the line in pixels. */
+  float y = 0.0f;
+};
+
+using MarkdownItem = std::variant<MarkdownItemText, MarkdownItemHorizontalRule>;
 
 struct MarkdownLayoutCacheKey {
   StringRef text;
