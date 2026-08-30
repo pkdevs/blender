@@ -121,6 +121,17 @@ static PyObject *Color_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
 #ifndef MATH_STANDALONE
 
+/**
+ * Shared implementation of the color space conversion methods,
+ * `convert` writes the converted color into its first argument.
+ */
+static PyObject *color_convert(ColorObject *self, void (*convert)(float[3], const float[3]))
+{
+  float col[3];
+  convert(col, self->col);
+  return Color_CreatePyObject(col, Py_TYPE(self));
+}
+
 PyDoc_STRVAR(
     /* Wrap. */
     Color_from_scene_linear_to_srgb_doc,
@@ -132,9 +143,7 @@ PyDoc_STRVAR(
     "   :rtype: :class:`Color`\n");
 static PyObject *Color_from_scene_linear_to_srgb(ColorObject *self)
 {
-  float col[3];
-  IMB_colormanagement_scene_linear_to_srgb_v3(col, self->col);
-  return Color_CreatePyObject(col, Py_TYPE(self));
+  return color_convert(self, IMB_colormanagement_scene_linear_to_srgb_v3);
 }
 
 PyDoc_STRVAR(
@@ -148,9 +157,7 @@ PyDoc_STRVAR(
     "   :rtype: :class:`Color`\n");
 static PyObject *Color_from_srgb_to_scene_linear(ColorObject *self)
 {
-  float col[3];
-  IMB_colormanagement_srgb_to_scene_linear_v3(col, self->col);
-  return Color_CreatePyObject(col, Py_TYPE(self));
+  return color_convert(self, IMB_colormanagement_srgb_to_scene_linear_v3);
 }
 
 PyDoc_STRVAR(
@@ -164,9 +171,7 @@ PyDoc_STRVAR(
     "   :rtype: :class:`Color`\n");
 static PyObject *Color_from_scene_linear_to_xyz_d65(ColorObject *self)
 {
-  float col[3];
-  IMB_colormanagement_scene_linear_to_xyz(col, self->col);
-  return Color_CreatePyObject(col, Py_TYPE(self));
+  return color_convert(self, IMB_colormanagement_scene_linear_to_xyz);
 }
 
 PyDoc_STRVAR(
@@ -180,9 +185,7 @@ PyDoc_STRVAR(
     "   :rtype: :class:`Color`\n");
 static PyObject *Color_from_xyz_d65_to_scene_linear(ColorObject *self)
 {
-  float col[3];
-  IMB_colormanagement_xyz_to_scene_linear(col, self->col);
-  return Color_CreatePyObject(col, Py_TYPE(self));
+  return color_convert(self, IMB_colormanagement_xyz_to_scene_linear);
 }
 
 PyDoc_STRVAR(
@@ -196,9 +199,7 @@ PyDoc_STRVAR(
     "   :rtype: :class:`Color`\n");
 static PyObject *Color_from_scene_linear_to_aces(ColorObject *self)
 {
-  float col[3];
-  IMB_colormanagement_scene_linear_to_aces(col, self->col);
-  return Color_CreatePyObject(col, Py_TYPE(self));
+  return color_convert(self, IMB_colormanagement_scene_linear_to_aces);
 }
 
 PyDoc_STRVAR(
@@ -212,9 +213,7 @@ PyDoc_STRVAR(
     "   :rtype: :class:`Color`\n");
 static PyObject *Color_from_aces_to_scene_linear(ColorObject *self)
 {
-  float col[3];
-  IMB_colormanagement_aces_to_scene_linear(col, self->col);
-  return Color_CreatePyObject(col, Py_TYPE(self));
+  return color_convert(self, IMB_colormanagement_aces_to_scene_linear);
 }
 
 PyDoc_STRVAR(
@@ -228,9 +227,7 @@ PyDoc_STRVAR(
     "   :rtype: :class:`Color`\n");
 static PyObject *Color_from_scene_linear_to_acescg(ColorObject *self)
 {
-  float col[3];
-  IMB_colormanagement_scene_linear_to_acescg(col, self->col);
-  return Color_CreatePyObject(col, Py_TYPE(self));
+  return color_convert(self, IMB_colormanagement_scene_linear_to_acescg);
 }
 
 PyDoc_STRVAR(
@@ -244,9 +241,7 @@ PyDoc_STRVAR(
     "   :rtype: :class:`Color`\n");
 static PyObject *Color_from_acescg_to_scene_linear(ColorObject *self)
 {
-  float col[3];
-  IMB_colormanagement_acescg_to_scene_linear(col, self->col);
-  return Color_CreatePyObject(col, Py_TYPE(self));
+  return color_convert(self, IMB_colormanagement_acescg_to_scene_linear);
 }
 
 PyDoc_STRVAR(
@@ -260,9 +255,7 @@ PyDoc_STRVAR(
     "   :rtype: :class:`Color`\n");
 static PyObject *Color_from_scene_linear_to_rec709_linear(ColorObject *self)
 {
-  float col[3];
-  IMB_colormanagement_scene_linear_to_rec709(col, self->col);
-  return Color_CreatePyObject(col, Py_TYPE(self));
+  return color_convert(self, IMB_colormanagement_scene_linear_to_rec709);
 }
 
 PyDoc_STRVAR(
@@ -276,9 +269,7 @@ PyDoc_STRVAR(
     "   :rtype: :class:`Color`\n");
 static PyObject *Color_from_rec709_linear_to_scene_linear(ColorObject *self)
 {
-  float col[3];
-  IMB_colormanagement_rec709_to_scene_linear(col, self->col);
-  return Color_CreatePyObject(col, Py_TYPE(self));
+  return color_convert(self, IMB_colormanagement_rec709_to_scene_linear);
 }
 
 PyDoc_STRVAR(
@@ -292,9 +283,7 @@ PyDoc_STRVAR(
     "   :rtype: :class:`Color`\n");
 static PyObject *Color_from_scene_linear_to_rec2020_linear(ColorObject *self)
 {
-  float col[3];
-  IMB_colormanagement_scene_linear_to_rec2020(col, self->col);
-  return Color_CreatePyObject(col, Py_TYPE(self));
+  return color_convert(self, IMB_colormanagement_scene_linear_to_rec2020);
 }
 
 PyDoc_STRVAR(
@@ -308,9 +297,7 @@ PyDoc_STRVAR(
     "   :rtype: :class:`Color`\n");
 static PyObject *Color_from_rec2020_linear_to_scene_linear(ColorObject *self)
 {
-  float col[3];
-  IMB_colormanagement_rec2020_to_scene_linear(col, self->col);
-  return Color_CreatePyObject(col, Py_TYPE(self));
+  return color_convert(self, IMB_colormanagement_rec2020_to_scene_linear);
 }
 
 #endif /* !MATH_STANDALONE */
