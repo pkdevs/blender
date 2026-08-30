@@ -392,7 +392,6 @@ static void drawVertSlide(TransInfo *t)
 
       immUnbindProgram();
 
-
       if (show_all_paths) {
         GPU_program_point_size(true);
         immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
