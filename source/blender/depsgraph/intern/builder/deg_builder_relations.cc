@@ -69,6 +69,7 @@
 #include "BKE_key.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_query.hh"
+#include "BKE_mask.hh"
 #include "BKE_material.hh"
 #include "BKE_mball.hh"
 #include "BKE_modifier.hh"
@@ -987,9 +988,7 @@ void DepsgraphRelationBuilder::build_object_modifiers(Object *object)
 
 void DepsgraphRelationBuilder::build_object_data(Object *object)
 {
-  if (object->type == OB_EMPTY &&
-      (!BLI_listbase_is_empty(&object->modifiers) || object->instance_collection))
-  {
+  if (object->type == OB_EMPTY && !BLI_listbase_is_empty(&object->modifiers)) {
     build_object_data_empty(object);
     return;
   }
@@ -1901,7 +1900,7 @@ void DepsgraphRelationBuilder::build_driver_data(ID *id, FCurve *fcu)
   }
   /* Parse the RNA path to find the target property pointer. */
   RNAPathKey property_entry_key(id, rna_path.c_str(), RNAPointerSource::ENTRY);
-  if (RNA_pointer_is_null(&property_entry_key.ptr)) {
+  if (!property_entry_key.ptr) {
     /* TODO(sergey): This would only mean that driver is broken.
      * so we can't create relation anyway. However, we need to avoid
      * adding drivers which are known to be buggy to a dependency
@@ -2140,7 +2139,7 @@ void DepsgraphRelationBuilder::build_driver_rna_path_variable(const OperationKey
                                                               const char *rna_path)
 {
   RNAPathKey variable_exit_key(target_prop, rna_path, RNAPointerSource::EXIT);
-  if (RNA_pointer_is_null(&variable_exit_key.ptr)) {
+  if (!variable_exit_key.ptr) {
     return;
   }
   if (is_same_bone_dependency(variable_exit_key, self_key) ||
@@ -3371,8 +3370,10 @@ void DepsgraphRelationBuilder::build_mask(Mask *mask)
   build_parameters(mask_id);
   /* Own mask animation. */
   OperationKey mask_animation_key(mask_id, NodeType::ANIMATION, OperationCode::MASK_ANIMATION);
-  TimeSourceKey time_src_key;
-  add_relation(time_src_key, mask_animation_key, "TimeSrc -> Mask Animation");
+  if (BKE_mask_is_animated(*mask)) {
+    TimeSourceKey time_src_key;
+    add_relation(time_src_key, mask_animation_key, "TimeSrc -> Mask Animation");
+  }
   /* Final mask evaluation. */
   OperationKey mask_eval_key(mask_id, NodeType::PARAMETERS, OperationCode::MASK_EVAL);
   add_relation(mask_animation_key, mask_eval_key, "Mask Animation -> Mask Eval");
