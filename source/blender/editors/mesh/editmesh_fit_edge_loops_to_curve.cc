@@ -63,11 +63,17 @@ static wmOperatorStatus edbm_fit_edge_loops_to_curve_exec(bContext *C, wmOperato
   const int interpolation = RNA_enum_get(op->ptr, "interpolation");
   bool lock[3];
   RNA_boolean_get_array(op->ptr, "lock", lock);
-
+  bool has_verts_selected = false;
   bool changed_multi = false;
 
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
+
+    if (em->bm->totvertsel == 0) {
+      continue;
+    }
+
+    has_verts_selected = true;
 
     if (!EDBM_op_callf(
             em,
@@ -92,6 +98,11 @@ static wmOperatorStatus edbm_fit_edge_loops_to_curve_exec(bContext *C, wmOperato
     params.calc_looptris = true;
     params.calc_normals = true;
     EDBM_update(id_cast<Mesh *>(obedit->data), &params);
+  }
+
+  if (!has_verts_selected) {
+    BKE_report(op->reports, RPT_WARNING, "No vertices selected");
+    return OPERATOR_CANCELLED;
   }
 
   return changed_multi ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
