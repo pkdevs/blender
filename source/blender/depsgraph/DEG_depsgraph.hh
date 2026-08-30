@@ -195,6 +195,18 @@ void DEG_evaluate_on_framechange(
     DepsgraphEvaluateSyncWriteback sync_writeback = DEG_EVALUATE_SYNC_WRITEBACK_NO);
 
 /**
+ * Exact-time frame-change evaluation.
+ *
+ * Unlike #DEG_evaluate_on_framechange, this does not add the input Scene's subframe to the
+ * requested frame. The graph is evaluated at exactly #frame, with the normal Scene framelen
+ * scaling applied to its CTime.
+ */
+void DEG_evaluate_on_framechange_exact(
+    Depsgraph *graph,
+    float frame,
+    DepsgraphEvaluateSyncWriteback sync_writeback = DEG_EVALUATE_SYNC_WRITEBACK_NO);
+
+/**
  * Data changed recalculation entry point.
  * Evaluate all nodes tagged for updating.
  */
