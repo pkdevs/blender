@@ -102,7 +102,8 @@ public:
 	int getCount() const;
 
 	/**
-	 * Clears animation data and marks the property non-animated.
+	 * Clears animation data after the first value, preserves that value and marks the property
+	 * non-animated.
 	 */
 	void reset();
 
@@ -119,6 +120,15 @@ public:
 	 * \param count The count of frames to write.
 	 */
 	void write(const float* data, int position, int count);
+
+	/**
+	 * Writes a framed value when animation is forced or already present, otherwise writes a static
+	 * value. The animation mode check and write are performed atomically.
+	 * \param data The new value.
+	 * \param position The position in the animation in frames.
+	 * \param force_animated Whether to force a framed animated write when the position is valid.
+	 */
+	void writePreserveAnimation(const float* data, int position, bool force_animated);
 
 	/**
 	 * Fills the properties frame range with constant value and marks it animated.

@@ -77,6 +77,8 @@ void AnimateableProperty::write(const float* data)
 
 void AnimateableProperty::writeConstantRange(const float* data, int position_start, int position_end)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
 	int pos = getSize() / (sizeof(float) * m_count);
 
 	assureSize(position_end * m_count * sizeof(float), true);
@@ -118,6 +120,25 @@ void AnimateableProperty::write(const float* data, int position, int count)
 	std::memcpy(buf + position * m_count, data, count * m_count * sizeof(float));
 	
 	updateUnknownAfterWrite(pos, position, count);
+}
+
+void AnimateableProperty::writePreserveAnimation(const float* data,
+	                                              int position,
+	                                              bool force_animated)
+{
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
+	if (force_animated || m_isAnimated)
+	{
+		if (position >= 0)
+		{
+			write(data, position, 1);
+		}
+	}
+	else
+	{
+		write(data);
+	}
 }
 
 void AnimateableProperty::updateUnknownAfterWrite(int pos, int position, int count)
