@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'af9ba6af7621')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'09417042a1fa')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-03 07:24+0000\n"
+"POT-Creation-Date: 2026-08-24 07:38+0000\n"
 "PO-Revision-Date: 2026-06-02 05:12+0000\n"
 "Last-Translator: Fadli Birdie Zeinda <justbirdie00@gmail.com>\n"
 "Language-Team: Indonesian <https://translate.blender.org/projects/blender-ui/ui/id/>\n"
@@ -3283,10 +3283,6 @@ msgid "Point cloud data-blocks"
 msgstr "Data-blok awan titik"
 
 
-msgid "Project"
-msgstr "Proyek"
-
-
 msgid "Scene data-blocks"
 msgstr "Adegan data-blok"
 
@@ -3661,10 +3657,6 @@ msgstr "Dunia Utama"
 
 msgid "Collection of worlds"
 msgstr "Koleksi dunia"
-
-
-msgid "ACEScg"
-msgstr "ACEScg"
 
 
 msgid "Blendfile Import Context"
@@ -6657,10 +6649,6 @@ msgid "Color management specific to display device"
 msgstr "Manajemen warna spesifik ke perangkat tampilan"
 
 
-msgid "Display"
-msgstr "Tampilkan"
-
-
 msgid "Input color space settings"
 msgstr "Pengaturan spasi warna masukan"
 
@@ -6673,28 +6661,8 @@ msgid "Treat image as non-color data without color management, like normal or di
 msgstr "Perlakukan gabar sebagai data non-warna tanpa manajemen warna, seperti normal atau peta perpindahan"
 
 
-msgid "Input Color Space"
-msgstr "Memasukkan Ruang Warna"
-
-
 msgid "Color space in the image file, to convert to and from when saving and loading the image"
 msgstr "Ruang warna dalam dokumen gambar, untuk mengubahnya ke dan dari saat menyimpan atau memuat gambar"
-
-
-msgid "ACES2065-1"
-msgstr "ACES2065-1"
-
-
-msgid "Non-Color"
-msgstr "Non-Warna"
-
-
-msgid "Rec.1886"
-msgstr "Rec.1886"
-
-
-msgid "Rec.2020"
-msgstr "Rec.2020"
 
 
 msgid "Do not perform any color transform on load, treat colors as in scene linear space already"
@@ -6725,10 +6693,6 @@ msgid "Gamma"
 msgstr "Gamma"
 
 
-msgid "Look"
-msgstr "Lihat"
-
-
 msgid "Additional transform applied before view transform for artistic needs"
 msgstr "Transfromasi tambahan diterapkan sebelum tampilan transformasi untuk kebutuhan artistik"
 
@@ -6739,10 +6703,6 @@ msgstr "Gunakan Kurva"
 
 msgid "Use RGB curved for pre-display transformation"
 msgstr "Gunakan RGB kurva untuk pra-tampilkan transformasi"
-
-
-msgid "View"
-msgstr "Pandangan"
 
 
 msgid "View used when converting image to a display space"
@@ -8019,6 +7979,10 @@ msgid "Nearest Surface Point"
 msgstr "Titik Permukaan Terdekat"
 
 
+msgid "Project"
+msgstr "Proyek"
+
+
 msgid "Shrink the location to the nearest target surface along a given axis"
 msgstr "Kecilkan lokasi ke permukaan target terdekat di sepanjang sumbu tertentu"
 
@@ -8573,6 +8537,10 @@ msgstr "Normal ke Permukaan"
 
 msgid "Tangent to Surface"
 msgstr "Tangen ke Permukaan"
+
+
+msgid "View"
+msgstr "Pandangan"
 
 
 msgid "Project the strokes only onto selected objects"
@@ -12343,6 +12311,10 @@ msgid "Show texture in viewport"
 msgstr "Tampilkan tekstur di jendela tampilan"
 
 
+msgid "Use Unified Weight"
+msgstr "Partikel"
+
+
 msgid "Use this brush in Grease Pencil vertex color mode"
 msgstr "Gunakan kuas ini di mode warna titik sudut Pensil Grease"
 
@@ -13460,6 +13432,10 @@ msgstr "Jumlah damping"
 
 msgid "Display Color"
 msgstr "Tampilkan Warna"
+
+
+msgid "Display"
+msgstr "Tampilkan"
 
 
 msgid "Steps"
@@ -15700,26 +15676,6 @@ msgid "Use Material Mask"
 msgstr "Gunakan Masker Bahan"
 
 
-msgid "Merge"
-msgstr "Menggabungkan"
-
-
-msgid "Metaball"
-msgstr "Metabola"
-
-
-msgid "Names"
-msgstr "Nama"
-
-
-msgid "Math"
-msgstr "Matematika"
-
-
-msgid "Utilities"
-msgstr "Utilitas"
-
-
 msgid "Snap"
 msgstr "Jepret"
 
@@ -15744,8 +15700,16 @@ msgid "Mirror"
 msgstr "Cermin"
 
 
+msgid "Utilities"
+msgstr "Utilitas"
+
+
 msgid "Navigation"
 msgstr "Navigasi"
+
+
+msgid "Math"
+msgstr "Matematika"
 
 
 msgid "UV"
@@ -15758,6 +15722,10 @@ msgstr "Seleksi yang Terhubung"
 
 msgid "Assign Material"
 msgstr "Tugaskan Bahan"
+
+
+msgid "Metaball"
+msgstr "Metabola"
 
 
 msgid "Light"
@@ -15780,10 +15748,6 @@ msgid "Track"
 msgstr "Lacak"
 
 
-msgid "Asset"
-msgstr "Aset"
-
-
 msgid "Linked"
 msgstr "Terkoleksi"
 
@@ -15792,12 +15756,24 @@ msgid "Layout"
 msgstr "Tata Letak"
 
 
+msgid "Asset"
+msgstr "Aset"
+
+
 msgid "Hooks"
 msgstr "Kait"
 
 
 msgid "Tracking"
 msgstr "Pelacakan"
+
+
+msgid "Names"
+msgstr "Nama"
+
+
+msgid "Merge"
+msgstr "Menggabungkan"
 
 
 msgid "Animals"
@@ -18018,10 +17994,6 @@ msgstr "YCbCr"
 
 msgid "Color space used for YCbCrA processing"
 msgstr "Ruang warna yang digunakan untuk pemrosesan YCbCrA"
-
-
-msgid "To"
-msgstr "Ke"
 
 
 msgid "Cryptomatte (Legacy)"
@@ -26397,10 +26369,6 @@ msgid "AO Bounces Render"
 msgstr "AO Memantul Render"
 
 
-msgid "Adaptively blur glossy shaders after blurry bounces, to reduce noise at the cost of accuracy"
-msgstr "Secara adaptif blur shader glossy setelah blur memantul, untuk mengurangi noise dengan mengorbankan akurasi"
-
-
 msgid "GPU Compute"
 msgstr "Tipe"
 
@@ -26686,6 +26654,10 @@ msgid "SPH Solver"
 msgstr "Kamera"
 
 
+msgid "Use effect during render"
+msgstr "Gunakan efek saat render"
+
+
 msgid "Max Size"
 msgstr "Ukuran Maks"
 
@@ -26816,10 +26788,6 @@ msgstr "Nama efek"
 
 msgid "Set effect expansion in the user interface"
 msgstr "Set ekspansi efek di antarmuka pengguna"
-
-
-msgid "Use effect during render"
-msgstr "Gunakan efek saat render"
 
 
 msgid "Gaussian Blur Effect"
@@ -27836,10 +27804,6 @@ msgid "Diameter of the brush"
 msgstr "Diameter kuas"
 
 
-msgid "Use Unified Weight"
-msgstr "Partikel"
-
-
 msgid "The unit system to use for user interface controls"
 msgstr "Sistem unit digunakan untuk kontrol antarmuka pengguna"
 
@@ -28246,16 +28210,6 @@ msgstr "Gambar"
 msgctxt "WindowManager"
 msgid "UV Editor"
 msgstr "Editor UV"
-
-
-msgctxt "WindowManager"
-msgid "UV Sculpt"
-msgstr "Pahat UV"
-
-
-msgctxt "WindowManager"
-msgid "Image View"
-msgstr "Lihat Gambar"
 
 
 msgctxt "WindowManager"
@@ -28858,6 +28812,11 @@ msgstr "Sebelum"
 
 
 msgctxt "Operator"
+msgid "Search..."
+msgstr "Telusuri..."
+
+
+msgctxt "Operator"
 msgid "Animate Path"
 msgstr "Menganimasi Jalur"
 
@@ -29025,11 +28984,6 @@ msgstr "Balik"
 
 msgid "Update on Edit"
 msgstr "Perbarui di Edit"
-
-
-msgctxt "Operator"
-msgid "Search..."
-msgstr "Telusuri..."
 
 
 msgid "Distance Reference"
@@ -31555,6 +31509,10 @@ msgstr "Nilai: {}"
 
 msgid "File not found"
 msgstr "Berkas tidak ditemukan"
+
+
+msgid "Look"
+msgstr "Lihat"
 
 
 msgid "Zoom in"
