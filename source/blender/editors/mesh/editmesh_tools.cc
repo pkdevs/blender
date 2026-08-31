@@ -32,6 +32,7 @@
 #include "BLI_math_vector_c.hh"
 #include "BLI_rand_c.hh"
 #include "BLI_sort_utils.hh"
+#include "BLI_utildefines_stack.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_context.hh"
@@ -4373,57 +4374,99 @@ static void mesh_separate_material_assign_mat_nr(Main *bmain, Object *ob, const 
   }
 }
 
+static short isolate_single_material(
+    BMesh *bm, BMVert **verts, BMEdge **edges, BMFace **faces, int (*lengths)[3])
+{
+  STACK_DECLARE(verts);
+  STACK_INIT(verts, bm->totvert);
+
+  STACK_DECLARE(edges);
+  STACK_INIT(edges, bm->totedge);
+
+  STACK_DECLARE(faces);
+  STACK_INIT(faces, bm->totface);
+
+  BMFace *f = static_cast<BMFace *>(BM_iter_at_index(bm, BM_FACES_OF_MESH, nullptr, 0));
+  const short mat_nr = f->mat_nr;
+
+  BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE, BM_ELEM_TAG, false);
+
+  BMIter iter;
+  BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
+    if (f->mat_nr == mat_nr) {
+      STACK_PUSH(faces, f);
+
+      BMLoop *l_iter;
+      BMLoop *l_first;
+
+      l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+      do {
+        if (!BM_elem_flag_test(l_iter->v, BM_ELEM_TAG)) {
+          BM_elem_flag_enable(l_iter->v, BM_ELEM_TAG);
+          STACK_PUSH(verts, l_iter->v);
+        }
+        if (!BM_elem_flag_test(l_iter->e, BM_ELEM_TAG)) {
+          BM_elem_flag_enable(l_iter->e, BM_ELEM_TAG);
+          STACK_PUSH(edges, l_iter->e);
+        }
+      } while ((l_iter = l_iter->next) != l_first);
+    }
+  }
+
+  (*lengths)[0] = STACK_SIZE(verts);
+  (*lengths)[1] = STACK_SIZE(edges);
+  (*lengths)[2] = STACK_SIZE(faces);
+
+  return mat_nr;
+}
+
 static bool mesh_separate_material(
     Main *bmain, Scene *scene, ViewLayer *view_layer, Base *base_old, BMesh *bm_old)
 {
   bool result = false;
 
-  // Verts and edges can be resued in multiple material slots hence totloop not totvert/totedge
-  Array<BMVert *> vert_groups(bm_old->totloop);
-  Array<BMEdge *> edge_groups(bm_old->totloop);
-  Array<BMFace *> face_groups(bm_old->totface);
-
-  int (*groups)[3] = nullptr;
-  int groups_len = BM_mesh_calc_materials_as_arrays(
-      bm_old, vert_groups.data(), edge_groups.data(), face_groups.data(), &groups);
-  if (groups_len <= 1) {
-    MEM_SAFE_DELETE(groups);
+  if (bm_old->totface == 0) {
     return false;
   }
+
+  Array<BMVert *> verts(bm_old->totvert);
+  Array<BMEdge *> edges(bm_old->totedge);
+  Array<BMFace *> faces(bm_old->totface);
+
+  int lengths[3];
+  short mat_nr;
 
   ED_mesh_geometry_clear(id_cast<Mesh *>(base_old->object->data));
 
   BM_custom_loop_normals_to_vector_layer(bm_old);
 
-  /* Separate out all groups except the first. */
-  uint group_ofs[3] = {uint(groups[0][0]), uint(groups[0][1]), uint(groups[0][2])};
-  for (int i = 1; i < groups_len; i++) {
-    short mat_nr = (*(face_groups.data() + group_ofs[2]))->mat_nr;
+  while (true) {
+    mat_nr = isolate_single_material(bm_old, verts.data(), edges.data(), faces.data(), &lengths);
+
+    if (lengths[2] == bm_old->totface) {
+      break;
+    }
 
     Base *base_new = mesh_separate_arrays(bmain,
                                           scene,
                                           view_layer,
                                           base_old,
                                           bm_old,
-                                          vert_groups.data() + group_ofs[0],
-                                          groups[i][0],
-                                          edge_groups.data() + group_ofs[1],
-                                          groups[i][1],
-                                          face_groups.data() + group_ofs[2],
-                                          groups[i][2]);
+                                          verts.data(),
+                                          lengths[0],
+                                          edges.data(),
+                                          lengths[1],
+                                          faces.data(),
+                                          lengths[2]);
 
     result |= (base_new != nullptr);
 
     if (base_new) {
       mesh_separate_material_assign_mat_nr(bmain, base_new->object, mat_nr);
     }
-
-    group_ofs[0] += groups[i][0];
-    group_ofs[1] += groups[i][1];
-    group_ofs[2] += groups[i][2];
   }
 
-  mesh_separate_material_assign_mat_nr(bmain, base_old->object, (*face_groups.data())->mat_nr);
+  mesh_separate_material_assign_mat_nr(bmain, base_old->object, mat_nr);
 
   /* since we're in editmode, must set faces here */
   BMIter iter;
@@ -4439,7 +4482,6 @@ static bool mesh_separate_material(
   to_mesh_params.update_shapekey_indices = true;
   BM_mesh_bm_to_me(nullptr, bm_old, me_old, &to_mesh_params);
 
-  MEM_delete(groups);
   return result;
 }
 
@@ -4885,10 +4927,10 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
     /* end span calc */
     int start = 0;
 
-    /* The algorithm needs to iterate the shorter distance, between the best and second best vert.
-     * If the second best vert is near the beginning of the loop, it starts at 0 and walks forward.
-     * If, instead, the second best vert is near the end of the loop, then it starts at the second
-     * best vertex and walks to the end of the loop. */
+    /* The algorithm needs to iterate the shorter distance, between the best and second best
+     * vert. If the second best vert is near the beginning of the loop, it starts at 0 and walks
+     * forward. If, instead, the second best vert is near the end of the loop, then it starts at
+     * the second best vertex and walks to the end of the loop. */
     if (span > verts_len / 2) {
       span = (verts_len)-span;
       start = (verts_len / 2) - span;
@@ -5007,9 +5049,9 @@ static FillGridSplitJoin *edbm_fill_grid_split_join_init(BMEditMesh *em)
   BMO_op_exec(em->bm, &split_op);
 
   /* Setup the weld op that will undo the split.
-   * Switch the selection to the corresponding edges on the island instead of the edges around the
-   * hole, so fill_grid will interpolate using the face and loop data from the island.
-   * Also create a new map for the weld, which maps pairs of verts instead of pairs of edges. */
+   * Switch the selection to the corresponding edges on the island instead of the edges around
+   * the hole, so fill_grid will interpolate using the face and loop data from the island. Also
+   * create a new map for the weld, which maps pairs of verts instead of pairs of edges. */
   BMO_op_init(em->bm, &split_join->weld_op, 0, "weld_verts");
   BMOpSlot *weld_target_map = BMO_slot_get(split_join->weld_op.slots_in, "targetmap");
   BMOIter siter;
@@ -5027,8 +5069,9 @@ static FillGridSplitJoin *edbm_fill_grid_split_join_init(BMEditMesh *em)
       BM_elem_flag_disable(e, BM_ELEM_SELECT);
 
       /* For verts, flip the selection from the edge of the hole to the edge of the island.
-       * Also add it to the weld map. But check selection first. Don't try to add the same vert to
-       * the map more than once. If the selection was changed false, it's already been processed.
+       * Also add it to the weld map. But check selection first. Don't try to add the same vert
+       * to the map more than once. If the selection was changed false, it's already been
+       * processed.
        */
       if (BM_elem_flag_test(e->v1, BM_ELEM_SELECT)) {
         BM_elem_flag_disable(e->v1, BM_ELEM_SELECT);
@@ -6426,17 +6469,17 @@ static wmOperatorStatus edbm_dissolve_limited_exec(bContext *C, wmOperator *op)
       dissolve_flag = BM_ELEM_SELECT;
     }
 
-    EDBM_op_call_and_selectf(
-        em,
-        op,
-        "region.out",
-        true,
-        "dissolve_limit edges=%he verts=%hv angle_limit=%f use_dissolve_boundaries=%b delimit=%i",
-        dissolve_flag,
-        dissolve_flag,
-        angle_limit,
-        use_dissolve_boundaries,
-        delimit);
+    EDBM_op_call_and_selectf(em,
+                             op,
+                             "region.out",
+                             true,
+                             "dissolve_limit edges=%he verts=%hv angle_limit=%f "
+                             "use_dissolve_boundaries=%b delimit=%i",
+                             dissolve_flag,
+                             dissolve_flag,
+                             angle_limit,
+                             use_dissolve_boundaries,
+                             delimit);
 
     BM_custom_loop_normals_from_vector_layer(em->bm, false);
 
@@ -8436,8 +8479,8 @@ void MESH_OT_mark_freestyle_face(wmOperatorType *ot)
  * \{ */
 
 /* NOTE: these defines are saved in keymap files, do not change values but just add new ones */
-/* NOTE: We could add more here, like e.g. a switch between local or global coordinates of target,
- *       use number-input to type in explicit vector values. */
+/* NOTE: We could add more here, like e.g. a switch between local or global coordinates of
+ * target, use number-input to type in explicit vector values. */
 enum {
   /* Generic commands. */
   EDBM_CLNOR_MODAL_CANCEL = 1,
@@ -9172,7 +9215,8 @@ static wmOperatorStatus normals_split_merge(bContext *C, const bool do_merge)
     BKE_editmesh_lnorspace_update(em);
 
     /* Note that we need temp lnor editing data for all loops of all affected vertices, since by
-     * setting some faces/edges as smooth we are going to change clnors spaces... See also #65809.
+     * setting some faces/edges as smooth we are going to change clnors spaces... See also
+     * #65809.
      */
     BMLoopNorEditDataArray *lnors_ed_arr = do_merge ?
                                                BM_loop_normal_editdata_array_init(bm, true) :
