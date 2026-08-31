@@ -1654,16 +1654,10 @@ static void mesh_set_custom_normals(Mesh &mesh,
                                     const bool use_vertices)
 {
   MutableAttributeAccessor attributes = mesh.attributes_for_write();
-  SpanAttributeWriter custom_normals = attributes.lookup_or_add_for_write_span<short2>(
+  SpanAttributeWriter custom_normals = attributes.convert_or_add_for_write_span<short2>(
       "custom_normal", AttrDomain::Corner);
-  if (!custom_normals) {
-    return;
-  }
-  SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
+  SpanAttributeWriter<bool> sharp_edges = attributes.convert_or_add_for_write_span<bool>(
       "sharp_edge", AttrDomain::Edge);
-  if (!sharp_edges) {
-    return;
-  }
 
   const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", AttrDomain::Face);
 

@@ -186,11 +186,8 @@ static void transfer_attributes(
       }
     }
 
-    GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+    GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_only_span(
         name, out_domain, data_type);
-    if (!dst) {
-      continue;
-    }
 
     switch (src.domain) {
       case AttrDomain::Point:

@@ -46,11 +46,7 @@ static void read_face_display_color(Mesh *mesh,
   }
 
   bke::SpanAttributeWriter<ColorGeometry4f> color_data =
-      attributes.lookup_or_add_for_write_only_span<ColorGeometry4f>(attr_name, color_domain);
-  if (!color_data) {
-    CLOG_WARN(&LOG, "Primvar '%s' could not be added to Blender", primvar.GetBaseName().GetText());
-    return;
-  }
+      attributes.convert_or_add_for_write_only_span<ColorGeometry4f>(attr_name, color_domain);
 
   const OffsetIndices faces = mesh->faces();
   for (const int i : faces.index_range()) {

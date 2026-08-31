@@ -699,11 +699,8 @@ static void gather_attributes_with_check(const bke::AttributeAccessor src_attrib
       dst_attributes.add(iter.name, iter.domain, iter.data_type, init);
       return;
     }
-    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+    bke::GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_only_span(
         iter.name, dst_domain, iter.data_type);
-    if (!dst) {
-      return;
-    }
     copy_attribute_using_map(GVArraySpan(*src), dst_to_src_map, dst.span);
     dst.finish();
   });

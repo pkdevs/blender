@@ -490,11 +490,8 @@ static void interpolate_curve_attributes(bke::CurvesGeometry &child_curves,
     const GVArraySpan src_generic = src_attr;
 
     if (iter.domain == AttrDomain::Curve) {
-      GSpanAttributeWriter dst_generic = children_attributes.lookup_or_add_for_write_only_span(
+      GSpanAttributeWriter dst_generic = children_attributes.convert_or_add_for_write_only_span(
           iter.name, AttrDomain::Curve, type);
-      if (!dst_generic) {
-        return;
-      }
       bke::attribute_math::to_static_type(type, [&]<typename T>() {
         if constexpr (!std::is_void_v<bke::attribute_math::DefaultMixer<T>>) {
           const Span<T> src = src_generic.typed<T>();
@@ -517,11 +514,8 @@ static void interpolate_curve_attributes(bke::CurvesGeometry &child_curves,
     }
     else {
       BLI_assert(iter.domain == AttrDomain::Point);
-      GSpanAttributeWriter dst_generic = children_attributes.lookup_or_add_for_write_only_span(
+      GSpanAttributeWriter dst_generic = children_attributes.convert_or_add_for_write_only_span(
           iter.name, AttrDomain::Point, type);
-      if (!dst_generic) {
-        return;
-      }
 
       bke::attribute_math::to_static_type(type, [&]<typename T>() {
         if constexpr (!std::is_void_v<bke::attribute_math::DefaultMixer<T>>) {
@@ -640,12 +634,12 @@ static void store_output_attributes(bke::CurvesGeometry &child_curves,
   SpanAttributeWriter<float> weight_attribute;
   if (weight_attribute_id) {
     weight_attribute =
-        child_curves.attributes_for_write().lookup_or_add_for_write_only_span<float>(
+        child_curves.attributes_for_write().convert_or_add_for_write_only_span<float>(
             *weight_attribute_id, AttrDomain::Curve);
   }
   SpanAttributeWriter<int> index_attribute;
   if (index_attribute_id) {
-    index_attribute = child_curves.attributes_for_write().lookup_or_add_for_write_only_span<int>(
+    index_attribute = child_curves.attributes_for_write().convert_or_add_for_write_only_span<int>(
         *index_attribute_id, AttrDomain::Curve);
   }
   threading::parallel_for(child_curves.curves_range(), 512, [&](const IndexRange range) {
@@ -667,20 +661,12 @@ static void store_output_attributes(bke::CurvesGeometry &child_curves,
         closest_index = neighbor_indices[max_index];
         closest_weight = neighbor_weights[max_index];
       }
-      if (index_attribute) {
-        index_attribute.span[child_curve_i] = closest_index;
-      }
-      if (weight_attribute) {
-        weight_attribute.span[child_curve_i] = closest_weight;
-      }
+      index_attribute.span[child_curve_i] = closest_index;
+      weight_attribute.span[child_curve_i] = closest_weight;
     }
   });
-  if (index_attribute) {
-    index_attribute.finish();
-  }
-  if (weight_attribute) {
-    weight_attribute.finish();
-  }
+  index_attribute.finish();
+  weight_attribute.finish();
 }
 
 static GeometrySet generate_interpolated_curves(

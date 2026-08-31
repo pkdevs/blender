@@ -500,12 +500,10 @@ static void store_computed_output_attributes(
       continue;
     }
 
-    bke::GAttributeWriter attribute = attributes.lookup_or_add_for_write(
+    bke::GAttributeWriter attribute = attributes.convert_or_add_for_write(
         store.name, store.domain, data_type);
-    if (attribute) {
-      attribute.varray.set_all(store.data.data());
-      attribute.finish();
-    }
+    attribute.varray.set_all(store.data.data());
+    attribute.finish();
 
     /* We were unable to reuse the data, so it must be destructed and freed. */
     store.data.type().destruct_n(store.data.data(), store.data.size());

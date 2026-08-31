@@ -366,11 +366,8 @@ BLI_NOINLINE static void propagate_attributes(const Mesh &mesh,
         return;
       }
     }
-    GSpanAttributeWriter dst = point_attributes.lookup_or_add_for_write_only_span(
+    GSpanAttributeWriter dst = point_attributes.convert_or_add_for_write_only_span(
         dst_name, AttrDomain::Point, iter.data_type);
-    if (!dst) {
-      return;
-    }
     interpolate_attribute(mesh, bary_coords, tri_indices, src.domain, src.varray, dst.span);
     dst.finish();
   });

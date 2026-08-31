@@ -688,11 +688,8 @@ void resize_curves(bke::CurvesGeometry &curves,
         return;
       }
     }
-    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+    bke::GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_only_span(
         iter.name, iter.domain, iter.data_type);
-    if (!dst) {
-      return;
-    }
     const GVArraySpan src_span(src);
     curves_to_resize.foreach_index(
         [&](const int curve_i) {

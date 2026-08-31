@@ -153,11 +153,8 @@ static void copy_stable_id_point(const OffsetIndices<int> offsets,
   if (!src_attribute.varray.type().is<int>()) {
     return;
   }
-  SpanAttributeWriter dst_attribute = dst_attributes.lookup_or_add_for_write_only_span<int>(
+  SpanAttributeWriter dst_attribute = dst_attributes.convert_or_add_for_write_only_span<int>(
       "id", AttrDomain::Point);
-  if (!dst_attribute) {
-    return;
-  }
 
   VArraySpan<int> src{src_attribute.varray.typed<int>()};
   MutableSpan<int> dst = dst_attribute.span;
@@ -240,11 +237,8 @@ static void copy_stable_id_curves(const bke::CurvesGeometry &src_curves,
   }
 
   SpanAttributeWriter dst_attribute =
-      dst_curves.attributes_for_write().lookup_or_add_for_write_only_span<int>("id",
-                                                                               AttrDomain::Point);
-  if (!dst_attribute) {
-    return;
-  }
+      dst_curves.attributes_for_write().convert_or_add_for_write_only_span<int>("id",
+                                                                                AttrDomain::Point);
 
   VArraySpan<int> src{src_attribute.varray.typed<int>()};
   MutableSpan<int> dst = dst_attribute.span;
@@ -460,11 +454,8 @@ static void copy_stable_id_faces(const Mesh &mesh,
   if (!src_attribute.varray.type().is<int>()) {
     return;
   }
-  SpanAttributeWriter dst_attribute = dst_attributes.lookup_or_add_for_write_only_span<int>(
+  SpanAttributeWriter dst_attribute = dst_attributes.convert_or_add_for_write_only_span<int>(
       "id", AttrDomain::Point);
-  if (!dst_attribute) {
-    return;
-  }
 
   VArraySpan<int> src{src_attribute.varray.typed<int>()};
   MutableSpan<int> dst = dst_attribute.span;
@@ -685,11 +676,8 @@ static void copy_stable_id_edges(const Mesh &mesh,
   if (!src_attribute.varray.type().is<int>()) {
     return;
   }
-  SpanAttributeWriter dst_attribute = dst_attributes.lookup_or_add_for_write_only_span<int>(
+  SpanAttributeWriter dst_attribute = dst_attributes.convert_or_add_for_write_only_span<int>(
       "id", AttrDomain::Point);
-  if (!dst_attribute) {
-    return;
-  }
 
   const Span<int2> edges = mesh.edges();
 

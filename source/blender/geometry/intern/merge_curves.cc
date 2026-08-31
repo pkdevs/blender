@@ -144,11 +144,8 @@ static void reorder_and_flip_attributes_group_to_group(
         return;
       }
     }
-    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+    bke::GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_only_span(
         iter.name, domain, iter.data_type);
-    if (!dst) {
-      return;
-    }
 
     threading::parallel_for(old_by_new_map.index_range(), 1024, [&](const IndexRange range) {
       for (const int new_i : range) {
