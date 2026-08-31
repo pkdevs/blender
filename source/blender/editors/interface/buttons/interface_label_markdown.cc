@@ -71,6 +71,8 @@ struct MdHeaderStyle {
   float size_factor = 1.0f;
   int weight = 400;
   bool italic = false;
+  float margin_top = 1.0f;
+  float margin_bottom = 1.0f;
 };
 
 static int markdown_layout_generation = 0;
@@ -78,12 +80,36 @@ static int markdown_layout_generation = 0;
 namespace md_style {
 
 static std::array<MdHeaderStyle, 6> headers = {
-    MdHeaderStyle{.size_factor = 2.00f, .weight = 700, .italic = false},
-    MdHeaderStyle{.size_factor = 1.50f, .weight = 600, .italic = false},
-    MdHeaderStyle{.size_factor = 1.25f, .weight = 600, .italic = false},
-    MdHeaderStyle{.size_factor = 1.00f, .weight = 600, .italic = false},
-    MdHeaderStyle{.size_factor = 1.00f, .weight = 500, .italic = false},
-    MdHeaderStyle{.size_factor = 1.00f, .weight = 400, .italic = true},
+    MdHeaderStyle{.size_factor = 2.00f,
+                  .weight = 700,
+                  .italic = false,
+                  .margin_top = 1.0f,
+                  .margin_bottom = 1.0f},
+    MdHeaderStyle{.size_factor = 1.50f,
+                  .weight = 600,
+                  .italic = false,
+                  .margin_top = 1.0f,
+                  .margin_bottom = 1.0f},
+    MdHeaderStyle{.size_factor = 1.25f,
+                  .weight = 600,
+                  .italic = false,
+                  .margin_top = 1.0f,
+                  .margin_bottom = 1.0f},
+    MdHeaderStyle{.size_factor = 1.00f,
+                  .weight = 600,
+                  .italic = false,
+                  .margin_top = 1.0f,
+                  .margin_bottom = 1.0f},
+    MdHeaderStyle{.size_factor = 1.00f,
+                  .weight = 500,
+                  .italic = false,
+                  .margin_top = 1.0f,
+                  .margin_bottom = 1.0f},
+    MdHeaderStyle{.size_factor = 1.00f,
+                  .weight = 400,
+                  .italic = true,
+                  .margin_top = 1.0f,
+                  .margin_bottom = 1.0f},
 };
 
 }
@@ -432,7 +458,7 @@ class MarkdownLayouter {
 
     if (const auto *md_header = std::get_if<HeaderBlock>(&new_block)) {
       const MdHeaderStyle &style = md_style::headers[md_header->level - 1];
-      return main_font_.default_line_height * style.size_factor;
+      return main_font_.default_line_height * style.margin_top;
     }
     if (std::holds_alternative<ParagraphBlock>(new_block) ||
         std::holds_alternative<HorizontalRuleBlock>(new_block))
@@ -1068,10 +1094,13 @@ static std::string markdown_md_style_to_source()
   for (const int level : IndexRange(md_style::headers.size())) {
     const MdHeaderStyle &style = md_style::headers[level];
     result += fmt::format(
-        "    MdHeaderStyle{{.size_factor = {:.2f}f, .weight = {}, .italic = {}}},\n",
+        "    MdHeaderStyle{{.size_factor = {:.2f}f, .weight = {}, .italic = {}, .margin_top = "
+        "{:.2f}f, .margin_bottom = {:.2f}f}},\n",
         style.size_factor,
         style.weight,
-        style.italic ? "true" : "false");
+        style.italic ? "true" : "false",
+        style.margin_top,
+        style.margin_bottom);
   }
   result += "};\n\n";
   result += "}\n";
@@ -1084,72 +1113,107 @@ static void label_markdown_copy_style_to_clipboard(bContext & /*C*/)
   WM_clipboard_text_set(text.c_str(), false);
 }
 
+static void label_markdown_dev_config_num(Block *block,
+                                          Layout &col,
+                                          const StringRef label,
+                                          float *value,
+                                          const float min,
+                                          const float max,
+                                          const float step,
+                                          const int precision,
+                                          const StringRef tip)
+{
+  uiItemL_respect_property_split(&col, label, ICON_NONE);
+  Button *but = uiDefButV(block, ButtonType::Num, "", 0, 0, 0, UI_UNIT_Y, value, min, max, tip);
+  button_number_step_size_set(but, step);
+  button_number_precision_set(but, precision);
+  button_func_set(but, label_markdown_dev_config_update);
+}
+
+static void label_markdown_dev_config_int(Block *block,
+                                          Layout &col,
+                                          const StringRef label,
+                                          int *value,
+                                          const float min,
+                                          const float max,
+                                          const float step,
+                                          const int precision,
+                                          const StringRef tip)
+{
+  uiItemL_respect_property_split(&col, label, ICON_NONE);
+  Button *but = uiDefButV(block, ButtonType::Num, "", 0, 0, 0, UI_UNIT_Y, value, min, max, tip);
+  button_number_step_size_set(but, step);
+  button_number_precision_set(but, precision);
+  button_func_set(but, label_markdown_dev_config_update);
+}
+
+static void label_markdown_dev_config_checkbox(
+    Block *block, Layout &col, const StringRef label, bool *value, const StringRef tip)
+{
+  uiItemL_respect_property_split(&col, label, ICON_NONE);
+  Button *but = uiDefButV(block, ButtonType::Checkbox, "", 0, 0, 0, UI_UNIT_Y, value, 0, 0, tip);
+  button_func_set(but, label_markdown_dev_config_update);
+}
+
 void label_markdown_dev_config(Layout &layout)
 {
   Block *block = layout.block();
+  bContext *C = static_cast<bContext *>(block->evil_C);
+  if (!C) {
+    return;
+  }
+
   layout.use_property_split_set(true);
   Layout &col = layout.column(false);
 
-  const int num_width = short(6 * UI_UNIT_X);
-  const int weight_width = short(5 * UI_UNIT_X);
-  const int checkbox_width = short(3 * UI_UNIT_X);
-
   for (const int level : IndexRange(md_style::headers.size())) {
     MdHeaderStyle &style = md_style::headers[level];
+    const std::string panel_id = fmt::format("md_style_h{}", level + 1);
+    const std::string panel_label = fmt::format("H{}", level + 1);
 
-    Layout &row = col.row(true);
-    Layout &split = row.split(0.2f, true);
-    Layout &label_col = split.column(true);
-    label_col.alignment_set(LayoutAlign::Right);
-    label_col.label(fmt::format("H{}", level + 1), ICON_NONE);
+    if (Layout *panel = layout.panel(C, panel_id, level != 0, panel_label)) {
+      Layout &panel_col = panel->column(false);
 
-    Layout &controls = split.row(true);
-
-    block_layout_set_current(block, &controls);
-    Button *size_but = uiDefButV(block,
-                                 ButtonType::Num,
-                                 IFACE_("Size"),
-                                 0,
-                                 0,
-                                 num_width,
-                                 UI_UNIT_Y,
-                                 &style.size_factor,
-                                 0.25f,
-                                 4.0f,
-                                 IFACE_("Size factor relative to body text"));
-    button_number_step_size_set(size_but, 0.05f);
-    button_number_precision_set(size_but, 2);
-    button_func_set(size_but, label_markdown_dev_config_update);
-
-    block_layout_set_current(block, &controls);
-    Button *weight_but = uiDefButV(block,
-                                   ButtonType::Num,
-                                   IFACE_("Weight"),
-                                   0,
-                                   0,
-                                   weight_width,
-                                   UI_UNIT_Y,
-                                   &style.weight,
-                                   100,
-                                   900,
-                                   IFACE_("Font weight"));
-    button_number_step_size_set(weight_but, 100);
-    button_number_precision_set(weight_but, -1);
-    button_func_set(weight_but, label_markdown_dev_config_update);
-
-    block_layout_set_current(block, &controls);
-    Button *italic_but = uiDefButV(block,
-                                   ButtonType::Checkbox,
-                                   IFACE_("Italic"),
-                                   0,
-                                   0,
-                                   checkbox_width,
-                                   UI_UNIT_Y,
-                                   &style.italic,
-                                   0,
-                                   0,
-                                   IFACE_("Use italic style"));
-    button_func_set(italic_but, label_markdown_dev_config_update);
+      label_markdown_dev_config_num(block,
+                                    panel_col,
+                                    IFACE_("Size"),
+                                    &style.size_factor,
+                                    0.25f,
+                                    4.0f,
+                                    0.05f,
+                                    2,
+                                    IFACE_("Size factor relative to body text"));
+      label_markdown_dev_config_int(block,
+                                    panel_col,
+                                    IFACE_("Weight"),
+                                    &style.weight,
+                                    100,
+                                    900,
+                                    100,
+                                    -1,
+                                    IFACE_("Font weight"));
+      label_markdown_dev_config_checkbox(
+          block, panel_col, IFACE_("Italic"), &style.italic, IFACE_("Use italic style"));
+      label_markdown_dev_config_num(block,
+                                    panel_col,
+                                    IFACE_("Top Margin"),
+                                    &style.margin_top,
+                                    0.0f,
+                                    4.0f,
+                                    0.05f,
+                                    2,
+                                    IFACE_("Top margin as a multiple of the default line height"));
+      label_markdown_dev_config_num(
+          block,
+          panel_col,
+          IFACE_("Bottom Margin"),
+          &style.margin_bottom,
+          0.0f,
+          4.0f,
+          0.05f,
+          2,
+          IFACE_("Bottom margin as a multiple of the default line height"));
+    }
   }
 
   col.separator();
