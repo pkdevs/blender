@@ -208,8 +208,9 @@ static bool session_bus_is_available()
 /**
  * Read a setting's current value with `org.freedesktop.portal.Settings.Read`.
  *
- * This is blocking, which is only okay because it runs on the watcher's thread. Closing
- * the connection in the destructor makes it return early.
+ * This is blocking, which is only okay because it runs on the watcher's thread. The blocking call
+ * is not interrupted, so a connection that stops answering keeps the thread here for up to
+ * #SETTING_READ_TIMEOUT_MS, which is part of the reason the destructor doesn't wait for it.
  */
 static bool setting_read(DBusConnection *connection,
                          const WatcherData::Setting &setting,
@@ -251,9 +252,6 @@ static bool setting_read(DBusConnection *connection,
 
 /**
  * Handle `SettingChanged` signals, queuing the value for #settings_changed_flush.
- *
- * \note This runs inside DBUS's own message dispatch (with the connection locked), so it must
- * not call out to #WatcherData::mutex protected code, see #settings_changed_flush.
  */
 static DBusHandlerResult filter_func(DBusConnection * /*connection*/,
                                      DBusMessage *message,
@@ -302,8 +300,8 @@ static DBusHandlerResult filter_func(DBusConnection * /*connection*/,
 /**
  * Pass the values collected by #filter_func to their callbacks.
  *
- * Callbacks intentionally run here instead of from #filter_func so that the connection mutex is no
- * longer locked, allowing the destructor to close the connection.
+ * Callbacks intentionally run here instead of from #filter_func, so that no DBUS lock is held
+ * while calling code that knows nothing about this connection and takes locks of its own.
  */
 static void settings_changed_flush(WatcherData *data)
 {
