@@ -12,6 +12,7 @@
 #include "BLI_math_base.hh"
 #include "BLI_math_base_c.hh"
 #include "BLI_math_interp.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_simd.hh"
@@ -532,6 +533,151 @@ void interpolate_cubic_mitchell_fl(
                                                        InterpWrapMode::Extend,
                                                        InterpWrapMode::Extend);
 }
+
+/***************************************************************************
+ * 2-pass sample filtering.
+ ***************************************************************************/
+
+/* Some macros so code can work with float4 or __m128
+ * In some examples I got a 17% speed increase, others though had zero increase.
+ * I believe the increase is mostly due to having more registers available.
+ */
+#if BLI_HAVE_SSE2
+#  define F4 __m128
+#  define F4ZERO(c) _mm_setzero_ps()
+#  define F4P(p) _mm_loadu_ps(p)
+#  define F4MADD(a, b, c) _mm_add_ps(_mm_mul_ps(a, _mm_set1_ps(b)), c);
+#  define F4DIV(a, b) _mm_div_ps(a, _mm_set1_ps(b))
+#  define F4V(a) *(float4 *)(&a)
+#else
+#  define F4 float4
+#  define F4ZERO(c) float4(0.0f)
+#  define F4P(p) (*(float4 *)(p))
+#  define F4MADD(a, b, c) ((a) * (b) + (c))
+#  define F4DIV(a, b) ((a) / (b))
+#  define F4V(a) a
+#endif
+
+/* Offset from start of row and weight. Names are xy to match BSL code */
+struct Fentry {
+  int32_t x;
+  float y;
+};
+
+template<enum Sampler sampler> BLI_INLINE float weight(float x);
+
+/* Sample orthogonal rectangle of size wh centered on uv.
+ * This is intended to work with any filter function.
+ * This does not integrate the filter function with the pixel, instead it assumes the value
+ * at the center of the pixel is correct. This results in a small sharpening effect that looks
+ * better, and is also simpler to calculate.
+ * todo: fix for filters with radius != 2
+ */
+template<enum Sampler sampler>
+void sample_rect(const float *buffer,
+                 float *output,
+                 int width,
+                 int height,
+                 int components,
+                 const float2 &uv,
+                 const float2 &wh,
+                 InterpWrapMode wrap_u,
+                 InterpWrapMode wrap_v)
+{
+  const float2 w1 = max(wh, 1.0f);
+  const float2 r = 2 * w1;
+  const float2 a = floor(uv - r + 1.0f);
+  const float2 d = ceil(r / 16.0f);
+  /* precompute the horizontal filter so it can be reused */
+  Fentry xfilter[33];
+  float divx = 0.0f;
+  int nx = 0;
+  for (float x = a.x - uv.x; x < r.x; x += d.x) {
+    float wt = weight<sampler>(abs(x / w1.x));
+    divx += wt;
+    const int xi = wrap_coord(x + uv.x + 0.5f, width, wrap_u);
+    if (xi >= 0)
+      xfilter[nx++] = {xi * components, wt};
+  }
+  F4 sum = F4ZERO();
+  float div = 0.0f;
+  for (float y = a.y - uv.y; y < r.y; y += d.y) {
+    float wt = weight<sampler>(abs(y / w1.y));
+    div += wt;
+    const int yi = wrap_coord(y + uv.y + 0.5f, height, wrap_v);
+    if (yi >= 0) {
+      const float *p = buffer + width * components * yi;
+      F4 sumx = F4ZERO();
+      for (int j = 0; j < nx; j++)
+        sumx = F4MADD(F4P(p + xfilter[j].x), xfilter[j].y, sumx);
+      sum = F4MADD(sumx, wt, sum);
+    }
+  }
+  sum = F4DIV(sum, div * divx);
+  memcpy(output, &sum, unsigned(components) * sizeof(float));
+}
+
+/* The Box filter is integrated with the pixel area as otherwise the aliasing is too visible.
+ * Fortunately it is pretty easy to calculate this integration, it results in a trapazoid.
+ */
+template<>
+void sample_rect<Sampler::Box>(const float *buffer,
+                               float *output,
+                               int width,
+                               int height,
+                               int components,
+                               const float2 &uv,
+                               const float2 &wh,
+                               InterpWrapMode wrap_u,
+                               InterpWrapMode wrap_v)
+{
+  const float2 r = max((wh + 1.0f) / 2.0f, 1.0f);
+  const float2 a = floor(uv - r + 1.0f);
+  const float2 d = ceil(r / 8.0f);
+  /* precompute the horizontal filter so it can be reused */
+  Fentry xfilter[33];
+  float divx = 0.0f;
+  int nx = 0;
+  for (float x = a.x - uv.x; x < r.x; x += d.x) {
+    float wt = min(r.x - abs(x), 1.0f);
+    divx += wt;
+    const int x1 = wrap_coord(x + uv.x + 0.5f, width, wrap_u);
+    if (x1 >= 0)
+      xfilter[nx++] = {x1 * components, wt};
+  }
+  F4 sum = F4ZERO();
+  float div = 0.0f;
+  for (float y = a.y - uv.y; y < r.y; y += d.y) {
+    float wt = min(r.y - abs(y), 1.0f);
+    div += wt;
+    const int yi = wrap_coord(y + uv.y + 0.5f, height, wrap_v);
+    if (yi >= 0) {
+      const float *p = buffer + width * components * yi;
+      F4 sumx = F4ZERO();
+      for (int j = 0; j < nx; j++) {
+        sumx = F4MADD(F4P(p + xfilter[j].x), xfilter[j].y, sumx);
+      }
+      sum = F4MADD(sumx, wt, sum);
+    }
+  }
+  sum = F4DIV(sum, div * divx);
+  memcpy(output, &sum, unsigned(components) * sizeof(float));
+}
+
+template<> float weight<Sampler::Bspline>(float x)
+{
+  return x < 1.0f ? (0.5f * x - 1.0f) * x * x + 4.0f / 6.0f :
+                    ((-1.0f / 6.0f * x + 1.0f) * x - 2.0f) * x + 4.0f / 3.0f;
+}
+template void sample_rect<Sampler::Bspline>(const float *buffer,
+                                            float *output,
+                                            int width,
+                                            int height,
+                                            int components,
+                                            const float2 &uv,
+                                            const float2 &wh,
+                                            InterpWrapMode wrap_u,
+                                            InterpWrapMode wrap_v);
 
 }  // namespace math
 

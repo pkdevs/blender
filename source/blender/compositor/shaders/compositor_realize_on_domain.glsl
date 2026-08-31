@@ -4,14 +4,13 @@
 
 #include "infos/compositor_realize_on_domain_infos.hh"
 
-COMPUTE_SHADER_CREATE_INFO(compositor_realize_on_domain_bicubic_float)
+COMPUTE_SHADER_CREATE_INFO(compositor_realize_on_domain_float4)
 
-#include "gpu_shader_bicubic_sampler.bsl.hh"
-#include "gpu_shader_compositor_texture_utilities.glsl"
 #include "gpu_shader_math_matrix_transform.bsl.hh"
+#include "gpu_shader_math_sample_rect.glsl"
 
-#if defined(ENTRY_POINT_realize_on_domain) || defined(GLSL_CPP_STUBS)
-void realize_on_domain()
+#if defined(ENTRY_POINT_realize_on_domain_texture) || defined(GLSL_CPP_STUBS)
+void realize_on_domain_texture()
 {
   const int2 texel = int2(gl_GlobalInvocationID.xy);
   const float2 coordinates = transform_point(to_float3x3(transformation), float2(texel));
@@ -31,13 +30,19 @@ void realize_on_domain_float4x4()
 }
 #endif
 
-#if defined(ENTRY_POINT_realize_on_domain_bicubic) || defined(GLSL_CPP_STUBS)
-void realize_on_domain_bicubic()
+template<enum Sampler sampler> void realize_on_domain()
 {
   const int2 texel = int2(gl_GlobalInvocationID.xy);
   const float2 coordinates = transform_point(to_float3x3(transformation), float2(texel));
-  imageStore(domain_img, texel, texture_bicubic(input_tx, coordinates));
+  imageStore(domain_img, texel, sample_rect<sampler>(input_tx, coordinates, wh));
 }
+
+#if defined(ENTRY_POINT_realize_on_domainTSampler_Box) || defined(GLSL_CPP_STUBS)
+template void realize_on_domain<Sampler::Box>();
+#endif
+
+#if defined(ENTRY_POINT_realize_on_domainTSampler_Bspline) || defined(GLSL_CPP_STUBS)
+template void realize_on_domain<Sampler::Bspline>();
 #endif
 
 #if defined(ENTRY_POINT_realize_on_domain_anisotropic) || defined(GLSL_CPP_STUBS)

@@ -144,13 +144,13 @@ StringRefNull to_string(const Extension &extension)
 GPUSamplerExtendMode map_extension_mode_to_extend_mode(const Extension &mode)
 {
   switch (mode) {
-    case compositor::Extension::Clip:
+    case Extension::Clip:
       return GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER;
 
-    case compositor::Extension::Extend:
+    case Extension::Extend:
       return GPU_SAMPLER_EXTEND_MODE_EXTEND;
 
-    case compositor::Extension::Repeat:
+    case Extension::Repeat:
       return GPU_SAMPLER_EXTEND_MODE_REPEAT;
   }
 

@@ -20,6 +20,7 @@
 GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_shared)
 LOCAL_GROUP_SIZE(16, 16)
 PUSH_CONSTANT(float4x4, transformation)
+PUSH_CONSTANT(float2, wh)
 COMPUTE_SOURCE("compositor_realize_on_domain.glsl")
 GPU_SHADER_CREATE_END()
 
@@ -27,26 +28,10 @@ GPU_SHADER_CREATE_END()
  * Float Nearest/Bilinear.
  * ----------------------- */
 
-GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_nearest_bilinear_float_shared)
+GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_float4)
 ADDITIONAL_INFO(compositor_realize_on_domain_shared)
 SAMPLER(0, sampler2D, input_tx)
-COMPUTE_FUNCTION("realize_on_domain")
-GPU_SHADER_CREATE_END()
-
-GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_float)
-ADDITIONAL_INFO(compositor_realize_on_domain_nearest_bilinear_float_shared)
-IMAGE(0, SFLOAT_16, write, image2D, domain_img)
-DO_STATIC_COMPILATION()
-GPU_SHADER_CREATE_END()
-
-GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_float2)
-ADDITIONAL_INFO(compositor_realize_on_domain_nearest_bilinear_float_shared)
-IMAGE(0, SFLOAT_16_16, write, image2D, domain_img)
-DO_STATIC_COMPILATION()
-GPU_SHADER_CREATE_END()
-
-GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_float4)
-ADDITIONAL_INFO(compositor_realize_on_domain_nearest_bilinear_float_shared)
+COMPUTE_FUNCTION("realize_on_domain_texture")
 IMAGE(0, SFLOAT_16_16_16_16, write, image2D, domain_img)
 DO_STATIC_COMPILATION()
 GPU_SHADER_CREATE_END()
@@ -60,34 +45,6 @@ ADDITIONAL_INFO(compositor_realize_on_domain_shared)
 SAMPLER(0, sampler2DArray, input_tx)
 COMPUTE_FUNCTION("realize_on_domain_float4x4")
 IMAGE(0, SFLOAT_16_16_16_16, write, image2DArray, domain_img)
-DO_STATIC_COMPILATION()
-GPU_SHADER_CREATE_END()
-
-/* --------------
- * Float Bicubic.
- * -------------- */
-
-GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_bicubic_float_shared)
-ADDITIONAL_INFO(compositor_realize_on_domain_shared)
-SAMPLER(0, sampler2D, input_tx)
-COMPUTE_FUNCTION("realize_on_domain_bicubic")
-GPU_SHADER_CREATE_END()
-
-GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_bicubic_float)
-ADDITIONAL_INFO(compositor_realize_on_domain_bicubic_float_shared)
-IMAGE(0, SFLOAT_16, write, image2D, domain_img)
-DO_STATIC_COMPILATION()
-GPU_SHADER_CREATE_END()
-
-GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_bicubic_float2)
-ADDITIONAL_INFO(compositor_realize_on_domain_bicubic_float_shared)
-IMAGE(0, SFLOAT_16_16, write, image2D, domain_img)
-DO_STATIC_COMPILATION()
-GPU_SHADER_CREATE_END()
-
-GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_bicubic_float4)
-ADDITIONAL_INFO(compositor_realize_on_domain_bicubic_float_shared)
-IMAGE(0, SFLOAT_16_16_16_16, write, image2D, domain_img)
 DO_STATIC_COMPILATION()
 GPU_SHADER_CREATE_END()
 
@@ -108,7 +65,7 @@ GPU_SHADER_CREATE_END()
 GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_int_shared)
 ADDITIONAL_INFO(compositor_realize_on_domain_shared)
 SAMPLER(0, isampler2D, input_tx)
-COMPUTE_FUNCTION("realize_on_domain")
+COMPUTE_FUNCTION("realize_on_domain_texture")
 GPU_SHADER_CREATE_END()
 
 GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_int)
@@ -129,14 +86,30 @@ IMAGE(0, SINT_16_16_16_16, write, iimage2D, domain_img)
 DO_STATIC_COMPILATION()
 GPU_SHADER_CREATE_END()
 
-GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_bool)
+GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_sint8)
 ADDITIONAL_INFO(compositor_realize_on_domain_int_shared)
 IMAGE(0, SINT_8, write, iimage2D, domain_img)
 DO_STATIC_COMPILATION()
 GPU_SHADER_CREATE_END()
 
-GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_menu)
-ADDITIONAL_INFO(compositor_realize_on_domain_int_shared)
-IMAGE(0, SINT_8, write, iimage2D, domain_img)
+/* --------------------------------
+ * Rectangular, uv and wh in texels
+ * -------------------------------- */
+
+GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_wh_shared)
+ADDITIONAL_INFO(compositor_realize_on_domain_shared)
+SAMPLER(0, sampler2D, input_tx)
+IMAGE(0, SFLOAT_16_16_16_16, write, image2D, domain_img)
+GPU_SHADER_CREATE_END()
+
+GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_box_float4)
+ADDITIONAL_INFO(compositor_realize_on_domain_wh_shared)
+COMPUTE_FUNCTION("realize_on_domainTSampler_Box")
+DO_STATIC_COMPILATION()
+GPU_SHADER_CREATE_END()
+
+GPU_SHADER_CREATE_INFO(compositor_realize_on_domain_bspline_float4)
+ADDITIONAL_INFO(compositor_realize_on_domain_wh_shared)
+COMPUTE_FUNCTION("realize_on_domainTSampler_Bspline")
 DO_STATIC_COMPILATION()
 GPU_SHADER_CREATE_END()

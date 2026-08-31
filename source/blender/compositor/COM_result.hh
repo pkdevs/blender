@@ -242,6 +242,11 @@ class Result {
   /* Returns the CPP type of the result. */
   const CPPType &get_cpp_type() const;
 
+  /* Returns true if the type can be interpolated. False means Nearest sampling is always used. */
+  bool is_interpolated() const;
+  static bool is_interpolated(ResultType);
+  template<typename T> static constexpr bool is_interpolated();
+
   /* Returns the appropriate texture format based on the result's type and precision. This is
    * identical to the gpu_texture_format static method. This will match the format of the allocated
    * texture, with one exception. Results of type Float3 or Int3 that share external textures might
@@ -670,6 +675,21 @@ static inline void sample_ewa_read_callback(void *userdata, int x, int y, float 
   copy_v4_v4(result, sampled_result);
 }
 
+BLI_INLINE_METHOD bool Result::is_interpolated() const
+{
+  return is_interpolated(type());
+}
+
+BLI_INLINE_METHOD bool Result::is_interpolated(const ResultType type)
+{
+  return type <= ResultType::Color || type == ResultType::Quaternion;
+}
+
+template<typename T> BLI_INLINE_METHOD constexpr bool Result::is_interpolated()
+{
+  return is_same_any_v<T, float, float2, float3, float4, Color, math::Quaternion>;
+}
+
 template<typename T, bool CouldBeSingleValue>
 BLI_INLINE_METHOD T Result::sample(const float2 &coordinates,
                                    const Interpolation &interpolation,
@@ -688,7 +708,7 @@ BLI_INLINE_METHOD T Result::sample(const float2 &coordinates,
 
   const math::InterpWrapMode wrap_mode_x = map_extension_mode_to_wrap_mode(extension_mode_x);
   const math::InterpWrapMode wrap_mode_y = map_extension_mode_to_wrap_mode(extension_mode_y);
-  if constexpr (is_same_any_v<T, float, float2, float3, float4, Color, math::Quaternion>) {
+  if constexpr (is_interpolated<T>()) {
     T pixel_value;
     const float *buffer = static_cast<const float *>(this->cpu_data().data());
     float *output = nullptr;
@@ -712,26 +732,53 @@ BLI_INLINE_METHOD T Result::sample(const float2 &coordinates,
                                               wrap_mode_y);
         break;
       case Interpolation::Bilinear:
-        math::interpolate_bilinear_wrapmode_fl(buffer,
-                                               output,
-                                               size.x,
-                                               size.y,
-                                               sizeof(T) / sizeof(float),
-                                               texel_coordinates.x - 0.5f,
-                                               texel_coordinates.y - 0.5f,
-                                               wrap_mode_x,
-                                               wrap_mode_y);
+        if (jacobian.has_value()) { /* Box filter */
+          math::sample_rect<math::Sampler::Box>(buffer,
+                                                output,
+                                                size.x,
+                                                size.y,
+                                                sizeof(T) / sizeof(float),
+                                                texel_coordinates - 0.5f,
+                                                math::fast_hypot(jacobian.value()) * float2(size),
+                                                wrap_mode_x,
+                                                wrap_mode_y);
+        }
+        else {
+          math::interpolate_bilinear_wrapmode_fl(buffer,
+                                                 output,
+                                                 size.x,
+                                                 size.y,
+                                                 sizeof(T) / sizeof(float),
+                                                 texel_coordinates.x - 0.5f,
+                                                 texel_coordinates.y - 0.5f,
+                                                 wrap_mode_x,
+                                                 wrap_mode_y);
+        }
         break;
       case Interpolation::Bicubic:
-        math::interpolate_cubic_bspline_wrapmode_fl(buffer,
+        if (jacobian.has_value()) {
+          math::sample_rect<math::Sampler::Bspline>(buffer,
                                                     output,
                                                     size.x,
                                                     size.y,
                                                     sizeof(T) / sizeof(float),
-                                                    texel_coordinates.x - 0.5f,
-                                                    texel_coordinates.y - 0.5f,
+                                                    texel_coordinates - 0.5f,
+                                                    math::fast_hypot(jacobian.value()) *
+                                                        float2(size),
                                                     wrap_mode_x,
                                                     wrap_mode_y);
+        }
+        else {
+          math::interpolate_cubic_bspline_wrapmode_fl(buffer,
+                                                      output,
+                                                      size.x,
+                                                      size.y,
+                                                      sizeof(T) / sizeof(float),
+                                                      texel_coordinates.x - 0.5f,
+                                                      texel_coordinates.y - 0.5f,
+                                                      wrap_mode_x,
+                                                      wrap_mode_y);
+        }
         break;
       case Interpolation::Anisotropic:
         BLI_assert(type_ == ResultType::Color);

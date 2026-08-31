@@ -569,16 +569,8 @@ const EnumPropertyItem rna_enum_node_compositor_extension_items[] = {
 
 const EnumPropertyItem rna_enum_node_compositor_interpolation_items[] = {
     {CMP_NODE_INTERPOLATION_NEAREST, "NEAREST", 0, N_("Nearest"), N_("Use Nearest interpolation")},
-    {CMP_NODE_INTERPOLATION_BILINEAR,
-     "BILINEAR",
-     0,
-     N_("Bilinear"),
-     N_("Use Bilinear interpolation")},
-    {CMP_NODE_INTERPOLATION_BICUBIC,
-     "BICUBIC",
-     0,
-     N_("Bicubic"),
-     N_("Use Cubic B-Spline interpolation")},
+    {CMP_NODE_INTERPOLATION_BILINEAR, "BILINEAR", 0, N_("Box"), N_("Use Box filter")},
+    {CMP_NODE_INTERPOLATION_BICUBIC, "BICUBIC", 0, N_("Bspline"), N_("Use Cubic B-Spline filter")},
     {CMP_NODE_INTERPOLATION_ANISOTROPIC,
      "ANISOTROPIC",
      0,

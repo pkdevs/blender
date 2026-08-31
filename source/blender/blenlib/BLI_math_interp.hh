@@ -24,6 +24,7 @@
 
 #include "BLI_math_base.hh"
 #include "BLI_math_base_c.hh"
+#include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_simd.hh"
 
@@ -70,6 +71,25 @@ BLI_INLINE int32_t wrap_coord(float u, int32_t size, InterpWrapMode wrap)
     case InterpWrapMode::Border:
       return -1;
   }
+}
+
+/**
+ * Sampler defines how a value is calculated at a point from surrounding pixels.
+ */
+enum class Sampler { Box, Bspline };
+
+/**
+ * Conversion of jacobian/derivatives to a similar horizontal and vertical
+ * derivative. This is hypot(col0, col1) or length(row0, row1).
+ * A fast approximation of hypot is used.
+ */
+BLI_INLINE float2 fast_hypot(const float2x2 &jacobian)
+{
+  const float a = fabsf(jacobian[0][0]);
+  const float b = fabsf(jacobian[1][0]);
+  const float c = fabsf(jacobian[0][1]);
+  const float d = fabsf(jacobian[1][1]);
+  return float2(a < b ? b + 0.375f * a : a + 0.375f * b, c < d ? d + 0.375f * c : c + 0.375f * d);
 }
 
 /* -------------------------------------------------------------------- */
@@ -482,6 +502,24 @@ void interpolate_cubic_bspline_wrapmode_fl(const float *buffer,
 
 void interpolate_cubic_mitchell_fl(
     const float *buffer, float *output, int width, int height, int components, float u, float v);
+
+/* -------------------------------------------------------------------- */
+
+/**
+ * Samplers that use a rectangle to specify the area.
+ * wh is the size of a box filter (other filters are larger)
+ * Use fast_hypot() to convert two dPdx and dPdy vectors to wh.
+ */
+template<enum Sampler sampler>
+extern void sample_rect(const float *buffer,
+                        float *output,
+                        int width,
+                        int height,
+                        int components,
+                        const float2 &uv,
+                        const float2 &wh,
+                        InterpWrapMode wrap_u,
+                        InterpWrapMode wrap_v);
 
 }  // namespace math
 
