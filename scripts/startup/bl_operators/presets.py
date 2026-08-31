@@ -762,11 +762,16 @@ class ResetTheme(Operator):
     bl_idname = "preferences.reset_theme"
     bl_label = "Reset Theme"
 
-    def execute(self, context):
+    @classmethod
+    def poll(cls, context):
         filepath = context.preferences.active_theme.filepath
         if not filepath:
-            self.report({'ERROR'}, "The active theme has no saved preset to reset to")
-            return {'CANCELLED'}
+            cls.poll_message_set("The active theme has no saved preset to reset to")
+            return False
+        return True
+
+    def execute(self, context):
+        filepath = context.preferences.active_theme.filepath
 
         context.preferences.active_theme.reset_to_baseline()
         # Reset font style as well to allow resetting the default dark theme too.
