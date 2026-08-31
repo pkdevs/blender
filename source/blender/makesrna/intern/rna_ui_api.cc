@@ -173,7 +173,7 @@ static void rna_uiItemR(Layout *layout,
     return;
   }
 
-  else if (icon_value && !icon) {
+  if (icon_value && !icon) {
     icon = icon_value;
   }
 
