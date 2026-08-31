@@ -159,6 +159,8 @@ struct MeshNode : public Node {
   Span<int> faces() const;
   /** Return the "unique" vertices owned by the node, excluding vertices owned by other nodes. */
   Span<int> verts() const;
+  /** Return the vertices used by faces in this node that are owned by another node. */
+  Span<int> shared_verts() const;
   /**
    * Return all vertices used by faces in this node. The same as #verts(), with the shared
    * vertices added at the end of the array.
@@ -644,6 +646,10 @@ inline Span<int> MeshNode::faces() const
 inline Span<int> MeshNode::verts() const
 {
   return vert_indices_.as_span().slice(0, unique_verts_num_);
+}
+inline Span<int> MeshNode::shared_verts() const
+{
+  return vert_indices_.as_span().drop_front(unique_verts_num_);
 }
 inline Span<int> MeshNode::all_verts() const
 {
