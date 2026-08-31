@@ -1,2 +1,3 @@
 Referenced by commit 8825a8e951c, Squashed commit of the following:
 Referenced by issue #49180, Cycles Multiple Importance Map for Animated Environment Texture Movie Doesn't Update on Frame Change
+Referenced by issue #163312, Cycles: Continuous world lighting updates during animation
