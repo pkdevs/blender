@@ -1111,7 +1111,9 @@ static void drw_render_border_mask(const DRWContext &ctx)
   const RegionView3D *rv3d = ctx.rv3d;
 
   /* Check if we need to do any render border masking. */
-  if (v3d == nullptr || rv3d == nullptr || rv3d->persp != RV3D_CAMOB || rv3d->camroll == 0.0f) {
+  if (v3d == nullptr || rv3d == nullptr || rv3d->persp != RV3D_CAMOB || v3d->camera == nullptr ||
+      rv3d->camroll == 0.0f)
+  {
     return;
   }
 
@@ -1349,7 +1351,7 @@ void DRWContext::enable_engines(bool gpencil_engine_needed, RenderEngineType *re
       view_data.grease_pencil.set_used(gpencil_engine_needed);
     }
 
-    view_data.compositor.set_used(is_viewport_compositor_enabled());
+    view_data.compositor.set_used(is_viewport_compositor_used());
 
     view_data.overlay.set_used(true);
 
@@ -2374,13 +2376,14 @@ bool DRWContext::is_transforming() const
   return (G.moving & (G_TRANSFORM_OBJ | G_TRANSFORM_EDIT)) != 0;
 }
 
-bool DRWContext::is_viewport_compositor_enabled() const
+bool DRWContext::is_viewport_compositor_used() const
 {
   if (!this->v3d || !this->rv3d) {
     return false;
   }
 
-  return bke::compositor::is_viewport_compositor_used(*this->scene, *this->v3d, *this->rv3d);
+  return bke::compositor::is_viewport_compositor_enabled(*this->v3d, *this->rv3d) &&
+         bke::compositor::is_enabled(*this->scene, bke::compositor::ExecutionMode::Preview);
 }
 
 /** \} */
