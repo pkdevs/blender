@@ -1049,7 +1049,7 @@ bool node_attribute_light_is_point_impl(const int light_index)
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
   /* clang-format on */
   LightData light = lrd.light_buf[light_index];
-  return is_point_light(light.type);
+  return is_point_light(light.type) && !is_spot_light(light.type);
 }
 
 bool node_attribute_light_is_spot_impl(const int light_index)
