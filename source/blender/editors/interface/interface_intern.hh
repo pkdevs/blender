@@ -390,6 +390,7 @@ struct MarkdownItemText {
   int weight = 400;
   bool italic = false;
   bool is_in_quote = false;
+  bool is_code = false;
   StringRef text;
   std::optional<StringRef> url;
 };

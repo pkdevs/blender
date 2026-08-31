@@ -577,7 +577,7 @@ class MarkdownLayouter {
     return false;
   }
 
-  bool is_in_code_block() const
+  bool is_in_fenced_code_block() const
   {
     for (const MdBlock &md_block : block_stack_) {
       if (std::holds_alternative<CodeBlock>(md_block)) {
@@ -585,6 +585,21 @@ class MarkdownLayouter {
       }
     }
     return false;
+  }
+
+  bool has_code_span() const
+  {
+    for (const MdSpan &md_span : span_stack_) {
+      if (std::holds_alternative<CodeSpan>(md_span)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool is_code() const
+  {
+    return this->is_in_fenced_code_block() || this->has_code_span();
   }
 
   static bool is_list_container_block(const MdBlock &block)
@@ -903,7 +918,7 @@ class MarkdownLayouter {
     settings.size = main_font_.default_size;
     settings.italic = false;
 
-    if (this->is_in_code_block()) {
+    if (this->is_in_fenced_code_block()) {
       settings.fontid = mono_font_.fontid;
       settings.size = mono_font_.default_size;
       settings.weight = mono_font_.default_weight;
@@ -953,6 +968,7 @@ class MarkdownLayouter {
     item_template.weight = weight;
     item_template.italic = italic;
     item_template.is_in_quote = this->is_in_quote();
+    item_template.is_code = this->is_code();
     item_template.url = url;
 
     markdown_apply_item_font(item_template);
@@ -1215,27 +1231,56 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
   theme::get_color_4ubv(TH_LINK, link_color);
   link_color[3] = color[3];
 
-  /* Blend toward the panel background so quote text is muted consistently across themes. */
+  /* Blend toward the panel background so quote and code block text is muted consistently across
+   * themes. */
   uchar back_color[3];
   theme::get_color_3ubv(TH_PANEL_BACK, back_color);
-  constexpr float dimmed_blend = 0.5f;
+  constexpr float quote_dimmed_blend = 0.5f;
+  constexpr float code_block_dimmed_blend = 0.2f;
 
-  uchar dimmed_color[4];
-  theme::get_color_blend_shade_3ubv(color, back_color, dimmed_blend, 0, dimmed_color);
-  dimmed_color[3] = color[3];
+  uchar quote_dimmed_color[4];
+  theme::get_color_blend_shade_3ubv(color, back_color, quote_dimmed_blend, 0, quote_dimmed_color);
+  quote_dimmed_color[3] = color[3];
 
-  uchar dimmed_link_color[4];
-  theme::get_color_blend_shade_3ubv(link_color, back_color, dimmed_blend, 0, dimmed_link_color);
-  dimmed_link_color[3] = link_color[3];
+  uchar code_block_dimmed_color[4];
+  theme::get_color_blend_shade_3ubv(
+      color, back_color, code_block_dimmed_blend, 0, code_block_dimmed_color);
+  code_block_dimmed_color[3] = color[3];
+
+  uchar quote_dimmed_link_color[4];
+  theme::get_color_blend_shade_3ubv(
+      link_color, back_color, quote_dimmed_blend, 0, quote_dimmed_link_color);
+  quote_dimmed_link_color[3] = link_color[3];
+
+  uchar code_block_dimmed_link_color[4];
+  theme::get_color_blend_shade_3ubv(
+      link_color, back_color, code_block_dimmed_blend, 0, code_block_dimmed_link_color);
+  code_block_dimmed_link_color[3] = link_color[3];
 
   for (const MarkdownItem &item : cache.md_layout.items) {
     if (const auto *text_item = std::get_if<MarkdownItemText>(&item)) {
       markdown_apply_item_font(*text_item);
       if (text_item->url) {
-        BLF_color4ubv(text_item->fontid, text_item->is_in_quote ? dimmed_link_color : link_color);
+        if (text_item->is_in_quote) {
+          BLF_color4ubv(text_item->fontid, quote_dimmed_link_color);
+        }
+        else if (text_item->is_code) {
+          BLF_color4ubv(text_item->fontid, code_block_dimmed_link_color);
+        }
+        else {
+          BLF_color4ubv(text_item->fontid, link_color);
+        }
       }
       else {
-        BLF_color4ubv(text_item->fontid, text_item->is_in_quote ? dimmed_color : color);
+        if (text_item->is_in_quote) {
+          BLF_color4ubv(text_item->fontid, quote_dimmed_color);
+        }
+        else if (text_item->is_code) {
+          BLF_color4ubv(text_item->fontid, code_block_dimmed_color);
+        }
+        else {
+          BLF_color4ubv(text_item->fontid, color);
+        }
       }
       const float x = rect->xmin + text_item->x;
       const float y = rect->ymax + text_item->y;
