@@ -354,6 +354,11 @@ add_blender_test(
 )
 
 add_blender_test(
+  edit_smooth
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_edit_smooth.py
+)
+
+add_blender_test(
   imbuf_py_api
   --python ${CMAKE_CURRENT_LIST_DIR}/bl_imbuf_py_api.py
 )
