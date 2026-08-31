@@ -4109,14 +4109,20 @@ static void but_update_ex(Button *but, const bool validate)
 
     case ButtonType::IconToggle:
     case ButtonType::IconToggleN:
+
       if ((but->rnaprop == nullptr) || (RNA_property_flag(but->rnaprop) & PROP_ICONS_CONSECUTIVE))
       {
-        if (but->rnaprop && RNA_property_flag(but->rnaprop) & PROP_ICONS_REVERSE) {
-          but->drawflag |= BUT_ICON_REVERSE;
-        }
 
-        but->iconadd = (but->flag & UI_SELECT) ? 1 : 0;
+        if (but->flag & BUT_ICON_OFFSET) {
+
+          if (but->rnaprop && RNA_property_flag(but->rnaprop) & PROP_ICONS_REVERSE) {
+            but->drawflag |= BUT_ICON_REVERSE;
+          }
+
+          but->iconadd = (but->flag & UI_SELECT) ? 1 : 0;
+        }
       }
+
       break;
 
       /* quiet warnings for unhandled types */

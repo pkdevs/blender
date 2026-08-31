@@ -2295,6 +2295,12 @@ void Layout::prop(PointerRNA *ptr,
                                                      std::nullopt;
     but = uiDefAutoButR(block, ptr, prop, index, name, icon, 0, 0, w, h, button_type);
 
+    if (flag & ITEM_R_ICON_OFFSET) {
+      if (ELEM(but->type, ButtonType::IconToggle, ButtonType::IconToggleN)) {
+        but->flag |= BUT_ICON_OFFSET;
+      }
+    }
+
     if (flag & ITEM_R_CHECKBOX_INVERT) {
       if (ELEM(but->type,
                ButtonType::Checkbox,

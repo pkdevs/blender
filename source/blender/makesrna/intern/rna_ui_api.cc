@@ -155,6 +155,7 @@ static void rna_uiItemR(Layout *layout,
                         bool slider,
                         int toggle,
                         bool icon_only,
+                        bool icon_offset,
                         bool event,
                         bool full_event,
                         bool emboss,
@@ -172,7 +173,7 @@ static void rna_uiItemR(Layout *layout,
     return;
   }
 
-  if (icon_value && !icon) {
+  else if (icon_value && !icon) {
     icon = icon_value;
   }
 
@@ -199,6 +200,11 @@ static void rna_uiItemR(Layout *layout,
   if (icon_only) {
     flag |= ui::ITEM_R_ICON_ONLY;
   }
+  if (icon_offset) {
+
+    flag |= ui::ITEM_R_ICON_OFFSET;
+  }
+
   if (event) {
     flag |= ui::ITEM_R_EVENT;
   }
@@ -1573,6 +1579,8 @@ void RNA_api_ui_layout(StructRNA *srna)
               -1,
               1);
   RNA_def_boolean(func, "icon_only", false, "", "Draw only icons in buttons, no text");
+  RNA_def_boolean(func, "icon_offset", true, "", "Use offset icon.");
+
   RNA_def_boolean(func, "event", false, "", "Use button to input key events");
   RNA_def_boolean(
       func, "full_event", false, "", "Use button to input full events including modifiers");
