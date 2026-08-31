@@ -59,6 +59,8 @@ class Denoiser {
 
   void set_params(const DenoiseParams &params);
   const DenoiseParams &get_params() const;
+  
+  static bool is_device_supported(DenoiserType type, const DeviceInfo &denoise_device_info);
 
   /* Recommended type for viewport denoising. */
   static DenoiserType automatic_viewport_denoiser_type(const DeviceInfo &denoise_device_info);

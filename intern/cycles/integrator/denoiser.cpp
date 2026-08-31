@@ -207,6 +207,30 @@ unique_ptr<Denoiser> Denoiser::create(Device *denoiser_device,
                                    effective_denoiser_params);
 }
 
+bool Denoiser::is_device_supported(DenoiserType type, const DeviceInfo &denoise_device_info)
+{
+  switch (type) {
+  #ifdef WITH_OPTIX
+   case DENOISER_OPTIX:
+     return OptiXDenoiser::is_device_supported(denoise_device_info);
+  #endif
+  #ifdef WITH_OPENIMAGEDENOISE
+   case DENOISER_OPENIMAGEDENOISE:
+     return OIDNDenoiserGPU::is_device_supported(denoise_device_info);
+  #endif
+//  #ifdef WITH_DLSS
+//   case DENOISER_DLSS:
+//     return DLSSDenoiser::is_device_supported(denoise_device_info);
+//  #endif
+  #ifdef WITH_METALFX
+    case DENOISER_MTLFX:
+      return MetalFXDenoiser::is_device_supported(denoise_device_info);
+  #endif
+   default:
+     return false;
+  }
+}
+
 DenoiserType Denoiser::automatic_viewport_denoiser_type(const DeviceInfo &denoise_device_info)
 {
 // Prefer MetalFX over OIDN for automatic viewport denoising on Apple platforms.

@@ -165,6 +165,10 @@ set(PLATFORM_LINKFLAGS "\
 -framework QuartzCore"
 )
 
+if (WITH_METALFX)
+  string(APPEND PLATFORM_LINKFLAGS " -framework MetalFX")
+endif()
+
 if(WITH_CODEC_FFMPEG)
   set(FFMPEG_ROOT_DIR ${LIBDIR}/ffmpeg)
   set(FFMPEG_FIND_COMPONENTS

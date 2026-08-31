@@ -1200,6 +1200,21 @@ DenoiseParams BlenderSync::get_denoise_params(blender::Scene &b_scene,
         denoising.use = false;
       }
     }
+    
+    if (denoising.type == DENOISER_MTLFX) {
+      if (!Denoiser::is_device_supported(denoising.type, denoise_device_info)) {
+        denoising.use = false;
+      }
+      
+      denoising.start_sample = 0;
+      
+      printf("normal pass: %d\n", PASS_NORMAL);
+      
+      denoising.passes = DENOISER_PASS_ALBEDO | DENOISER_PASS_SPECULAR_ALBEDO |
+                         PASS_NORMAL | DENOISER_PASS_ROUGHNESS |
+                         DENOISER_PASS_DEPTH | DENOISER_PASS_MOTION;
+      return denoising;
+    }
   }
 
   switch (input_passes) {
