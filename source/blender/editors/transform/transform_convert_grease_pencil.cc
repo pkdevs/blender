@@ -56,7 +56,8 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
 
     if (animrig::is_autokey_on(scene)) {
       for (const int info_i : curves_transform_data->drawings.index_range()) {
-        bke::greasepencil::Layer &target_layer = grease_pencil.layer(curves_transform_data->drawings[info_i].layer_index);
+        bke::greasepencil::Layer &target_layer = grease_pencil.layer(
+            curves_transform_data->drawings[info_i].layer_index);
         const int current_frame = scene->r.cfra;
         std::optional<int> start_frame = target_layer.start_frame_at(current_frame);
         if (start_frame.has_value() && (start_frame.value() != current_frame)) {
@@ -283,9 +284,8 @@ static void recalcData_grease_pencil(TransInfo *t)
   }
 }
 
-static void special_aftertrans_update__grease_pencil(bContext *C, TransInfo *t)
+static void special_aftertrans_update__grease_pencil(bContext * /*C*/ g, TransInfo *t)
 {
-  Scene *scene = CTX_data_scene(C);
   MutableSpan<TransDataContainer> trans_data_contrainers(t->data_container, t->data_container_len);
 
   /* If the transform operation was cancelled and new keyframes got created, remove them. */
