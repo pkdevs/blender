@@ -107,6 +107,21 @@ static void freeSeqData(TransInfo *t, TransDataContainer *tc, TransCustomData *c
   }
 }
 
+static SeqRetimingKey *retiming_unselected_neighbor_key_get(const Strip *strip,
+                                                            const SeqRetimingKey *key,
+                                                            const int direction)
+{
+  const MutableSpan<SeqRetimingKey> keys = seq::retiming_keys_get(strip);
+  const int key_index = seq::retiming_key_index_get(strip, key);
+
+  for (int i = key_index + direction; i >= 0 && i < keys.size(); i += direction) {
+    if ((keys[i].flag & SEQ_KEY_SELECTED) == 0) {
+      return &keys[i];
+    }
+  }
+  return nullptr;
+}
+
 static void create_trans_seq_clamp_data(TransInfo *t,
                                         const Scene *scene,
                                         const Map<SeqRetimingKey *, Strip *> &selection)
@@ -119,6 +134,7 @@ static void create_trans_seq_clamp_data(TransInfo *t,
 
   for (auto item : selection.items()) {
     SeqRetimingKey *key = item.key;
+    Strip *strip = item.value;
 
     /* Transition retiming key. */
     if (seq::retiming_key_is_transition_type(key) &&
@@ -126,16 +142,25 @@ static void create_trans_seq_clamp_data(TransInfo *t,
     {
       SeqRetimingKey *key_start = seq::retiming_transition_start_get(key);
       SeqRetimingKey *key_end = key_start + 1;
-      SeqRetimingKey *key_prev = key_start - 1;
-      SeqRetimingKey *key_next = key_end + 1;
+      SeqRetimingKey *key_prev = retiming_unselected_neighbor_key_get(strip, key_start, -1);
+      SeqRetimingKey *key_next = retiming_unselected_neighbor_key_get(strip, key_end, 1);
 
       const float midpoint = key_start->original_strip_frame_index;
 
-      /* Ensure start transition key cannot pass the previous key, or linked end transition key
-       * cannot pass the next key. This transform behavior is symmetrical and limited by the
-       * smallest distance between keys. */
-      const int max_offset = min_ii(key_start->strip_frame_index - key_prev->strip_frame_index - 1,
-                                    key_next->strip_frame_index - key_end->strip_frame_index - 1);
+      /* Ensure start transition key cannot pass the previous unselected key, or linked end
+       * transition key cannot pass the next unselected key. This transform behavior is symmetrical
+       * and limited by the smallest distance between keys. */
+      int max_offset_prev = INT_MAX;
+      if (key_prev) {
+        max_offset_prev = key_start->strip_frame_index - key_prev->strip_frame_index - 1;
+      }
+
+      int max_offset_next = INT_MAX;
+      if (key_next) {
+        max_offset_next = key_next->strip_frame_index - key_end->strip_frame_index - 1;
+      }
+
+      const int max_offset = min_ii(max_offset_prev, max_offset_next);
 
       if (key_start->flag & SEQ_KEY_SELECTED) {
         /* Ensure start transition key cannot pass the midpoint. */
@@ -152,18 +177,19 @@ static void create_trans_seq_clamp_data(TransInfo *t,
     }
     /* Non-transition retiming key. */
     else {
-      Strip *strip = item.value;
-      SeqRetimingKey *key_prev = key - 1, *key_next = key + 1;
-      if (!seq::retiming_is_last_key(strip, key)) {
-        /* Ensure that this key cannot pass the next key. */
+      SeqRetimingKey *key_prev = retiming_unselected_neighbor_key_get(strip, key, -1);
+      SeqRetimingKey *key_next = retiming_unselected_neighbor_key_get(strip, key, 1);
+
+      if (key_next) {
+        /* Ensure that this key cannot pass the next unselected key. */
         ts->offset_clamp.xmax = min_ii(key_next->strip_frame_index - key->strip_frame_index - 1,
                                        ts->offset_clamp.xmax);
         /* TODO(john): There is an off-by-one error for the last "fake" key's `strip_frame_index`,
          * which is 1 less than it should be. This is not an immediate issue but should be fixed.
          */
       }
-      if (key->strip_frame_index != 0) {
-        /* Ensure that this key cannot pass the previous key. */
+      if (key_prev) {
+        /* Ensure that this key cannot pass the previous unselected key. */
         ts->offset_clamp.xmin = max_ii(-(key->strip_frame_index - key_prev->strip_frame_index - 1),
                                        ts->offset_clamp.xmin);
       }
