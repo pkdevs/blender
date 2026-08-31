@@ -2674,7 +2674,15 @@ static void rna_struct_update_when_changed(bContext *C,
       case PROP_POINTER: {
         PointerRNA ptr_sub_a = RNA_property_pointer_get(ptr_a, prop);
         PointerRNA ptr_sub_b = RNA_property_pointer_get(ptr_b, prop);
-        rna_struct_update_when_changed(C, bmain, &ptr_sub_a, &ptr_sub_b);
+        if (bool(ptr_sub_a) != bool(ptr_sub_b)) {
+          /* An optional pointer (e.g. Preferences.active_theme_light) that is unset on one
+           * side and set on the other: treat as a change of the pointer property itself. */
+          RNA_property_update(C, ptr_b, prop);
+          break;
+        }
+        if (ptr_sub_a) {
+          rna_struct_update_when_changed(C, bmain, &ptr_sub_a, &ptr_sub_b);
+        }
         break;
       }
       case PROP_COLLECTION:
@@ -2719,6 +2727,15 @@ static wmOperatorStatus wm_userpref_read_exec(bContext *C, wmOperator *op)
   BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_PRE);
 
   UserDef U_backup = dna::shallow_copy(U);
+  /* Make deeper copy of themes to make U_backup fully independent. */
+  bTheme *theme_dark_backup = U_backup.active_theme_dark ?
+                                  MEM_new<bTheme>(__func__, *U_backup.active_theme_dark) :
+                                  nullptr;
+  bTheme *theme_light_backup = U_backup.active_theme_light ?
+                                   MEM_new<bTheme>(__func__, *U_backup.active_theme_light) :
+                                   nullptr;
+  U_backup.active_theme_dark = theme_dark_backup;
+  U_backup.active_theme_light = theme_light_backup;
 
   wmHomeFileRead_Params read_homefile_params{};
   read_homefile_params.use_data = use_data;
@@ -2735,6 +2752,9 @@ static wmOperatorStatus wm_userpref_read_exec(bContext *C, wmOperator *op)
   SET_FLAG_FROM_TEST(G.f, use_factory_settings, G_FLAG_USERPREF_NO_SAVE_ON_EXIT);
 
   wm_userpref_update_when_changed(C, bmain, &U_backup, &U);
+
+  MEM_SAFE_DELETE(theme_dark_backup);
+  MEM_SAFE_DELETE(theme_light_backup);
 
   if (use_factory_settings) {
     U.runtime.is_dirty = true;
