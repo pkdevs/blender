@@ -195,7 +195,7 @@ wmOperatorStatus WM_gesture_box_invoke(bContext *C, wmOperator *op, const wmEven
     gesture->wait_for_input = wait_for_input;
     if (ui::view2d_edge_pan_poll(C)) {
       gesture->edge_pan_data = MEM_new<ui::View2DEdgePanData>(__func__);
-      ui::view2d_edge_pan_init(C, gesture->edge_pan_data, 2, 0, 1, 10, 0.5f, 0.5f);
+      ui::view2d_edge_pan_init(C, gesture->edge_pan_data, 2, 0, 1, 18, 0.5f, 0.0f);
 
       const rcti *rect = static_cast<const rcti *>(gesture->customdata);
       gesture_init_mval_set(gesture, int2(rect->xmin, rect->ymin));
