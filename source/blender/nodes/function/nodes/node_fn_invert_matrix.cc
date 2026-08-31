@@ -15,11 +15,12 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
   b.is_function_node();
-  b.add_input<decl::Matrix>("Matrix");
-  b.add_output<decl::Matrix>("Matrix")
+  b.add_input<decl::Matrix>("Matrix"_ustr);
+  b.add_output<decl::Matrix>("Matrix"_ustr)
       .description("The inverted matrix or the identity matrix if the input is not invertible")
       .align_with_previous();
-  b.add_output<decl::Bool>("Invertible").description("True if the input matrix is invertible");
+  b.add_output<decl::Bool>("Invertible"_ustr)
+      .description("True if the input matrix is invertible");
 }
 
 class InvertMatrixFunction : public mf::MultiFunction {
@@ -76,7 +77,7 @@ static int node_gpu_material(GPUMaterial *material,
 static void node_register()
 {
   static bke::bNodeType ntype;
-  fn_cmp_node_type_base(&ntype, "FunctionNodeInvertMatrix", FN_NODE_INVERT_MATRIX);
+  fn_cmp_node_type_base(&ntype, "FunctionNodeInvertMatrix"_ustr, FN_NODE_INVERT_MATRIX);
   ntype.ui_name = "Invert Matrix";
   ntype.ui_description = "Compute the inverse of the given matrix, if one exists";
   ntype.enum_name_legacy = "INVERT_MATRIX";

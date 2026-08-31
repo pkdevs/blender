@@ -2,20 +2,21 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_solvers.h"
+#include "BLI_math_solvers.hh"
 
 #include "node_function_util.hh"
+#include "node_shader_util.hh"
 
 namespace blender::nodes::node_fn_matrix_svd_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Matrix>("Matrix").description(
-      "Matrix to decompose, only the 3x3 part is used");
-  b.add_output<decl::Matrix>("U").description("Left singular vectors");
-  b.add_output<decl::Vector>("S").description("Singular values");
-  b.add_output<decl::Matrix>("V").description("Right singular vectors");
+  b.add_input<decl::Matrix>("Matrix"_ustr)
+      .description("Matrix to decompose, only the 3x3 part is used");
+  b.add_output<decl::Matrix>("U"_ustr).description("Left singular vectors");
+  b.add_output<decl::Vector>("S"_ustr).description("Singular values");
+  b.add_output<decl::Matrix>("V"_ustr).description("Right singular vectors");
 }
 
 class MatrixSVDFunction : public mf::MultiFunction {
@@ -53,15 +54,25 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
   builder.set_matching_fn(fn);
 }
 
+static int node_gpu_material(GPUMaterial *mat,
+                             bNode *node,
+                             bNodeExecData * /*execdata*/,
+                             GPUNodeStack *in,
+                             GPUNodeStack *out)
+{
+  return GPU_stack_link(mat, node, "matrix_svd", in, out);
+}
+
 static void node_register()
 {
   static bke::bNodeType ntype;
-  fn_node_type_base(&ntype, "FunctionNodeMatrixSVD");
+  fn_cmp_node_type_base(&ntype, "FunctionNodeMatrixSVD"_ustr);
   ntype.ui_name = "Matrix SVD";
   ntype.ui_description = "Compute the singular value decomposition of the 3x3 part of a matrix";
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.declare = node_declare;
   ntype.build_multi_function = node_build_multi_function;
+  ntype.gpu_fn = node_gpu_material;
   bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)

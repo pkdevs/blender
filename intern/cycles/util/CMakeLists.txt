@@ -17,6 +17,7 @@ set(SRC
   ies.cpp
   image_maketx.cpp
   image_metadata.cpp
+  implicit_sharing.cpp
   log.cpp
   math_cdf.cpp
   md5.cpp
@@ -37,17 +38,13 @@ set(SRC
 
 set(LIB
   PUBLIC bf::dependencies::openimageio
-  PRIVATE bf::dependencies::jpeg
   PUBLIC bf::dependencies::optional::tbb
   PUBLIC bf::dependencies::optional::embree
   PUBLIC bf::dependencies::optional::openpgl
   PUBLIC bf::dependencies::optional::openvdb
-  PRIVATE bf::dependencies::optional::opencolorio
+  PRIVATE bf::dependencies::opencolorio
   PRIVATE bf::dependencies::zstd
-  PRIVATE bf::dependencies::optional::openexr
-  # Used by OpenImageIO headers, which fallback to a bundled version. But we
-  # need to use the same version as Blender to avoid symbol conflicts.
-  PRIVATE bf::dependencies::fmt
+  PRIVATE bf::dependencies::openexr
 )
 
 set(SRC_HEADERS
@@ -75,6 +72,7 @@ set(SRC_HEADERS
   image_impl.h
   image_maketx.h
   image_metadata.h
+  implicit_sharing.h
   list.h
   log.h
   map.h
@@ -92,6 +90,7 @@ set(SRC_HEADERS
   math_int4.h
   math_int8.h
   math_dual.h
+  math_float3x3.h
   md5.h
   murmurhash.h
   nanovdb.h
@@ -143,6 +142,7 @@ set(SRC_HEADERS
   types_uint4.h
   types_ushort4.h
   types_dual.h
+  types_float3x3.h
   unique_ptr.h
   unique_ptr_vector.h
   vector.h
@@ -163,7 +163,7 @@ if(WITH_OPENVDB AND MSVC_CLANG)
   set_source_files_properties(openvdb.cpp PROPERTIES COMPILE_FLAGS -fno-delayed-template-parsing)
 endif()
 
-if(WITH_OPENCOLORIO AND WIN32 AND NOT USD_OVERRIDE_OPENCOLORIO)
+if(WIN32 AND NOT USD_OVERRIDE_OPENCOLORIO)
   add_definitions(-DOpenColorIO_SKIP_IMPORTS)
 endif()
 

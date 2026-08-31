@@ -31,14 +31,14 @@
 
 #include "DNA_genfile.h"
 
-#include "BLI_endian_defines.h"
+#include "BLI_endian_defines.hh"
 #include "BLI_fftw.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_system.h"
-#include "BLI_task.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_system.hh"
+#include "BLI_task_c.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 /* Mostly initialization functions. */
 #include "BKE_appdir.hh"
@@ -59,7 +59,7 @@
 #include "BKE_volume.hh"
 
 #ifndef WITH_PYTHON_MODULE
-#  include "BLI_args.h"
+#  include "BLI_args.hh"
 #endif
 
 #include "DEG_depsgraph.hh"
@@ -78,6 +78,8 @@
 #include "WM_api.hh"
 
 #include "RNA_define.hh"
+
+#include "FN_init.hh"
 
 #ifdef WITH_OPENGL_BACKEND
 #  include "GPU_compilation_subprocess.hh"
@@ -177,6 +179,7 @@ namespace blender {
 ApplicationState app_state = []() {
   ApplicationState app_state{};
   app_state.signal.use_crash_handler = true;
+  app_state.signal.use_console_crash_handler = false;
   app_state.signal.use_abort_handler = true;
   app_state.exit_code_on_error.python = 0;
   app_state.main_arg_deferred = nullptr;
@@ -254,8 +257,6 @@ static void callback_main_atexit(void *user_data)
 
     BKE_blender_globals_clear();
     BKE_appdir_exit();
-
-    DNA_sdna_current_free();
 
     CLG_exit();
   }
@@ -359,6 +360,11 @@ int main(int argc,
 
   restore_ld_preload();
 
+  /* Use the v2 Level Zero adapter of the SYCL unified runtime. As a fix for #159584, the v1 Level
+   * Zero adapter is not included. While the Cycles oneAPI device sets this as well, we also need
+   * the environment variable for the use of Open Image Denoise in the compositor. */
+  BLI_setenv_if_new("SYCL_UR_USE_LEVEL_ZERO_V2", "1");
+
 #ifdef WIN32
 #  ifdef USE_WIN32_UNICODE_ARGS
   /* Win32 Unicode Arguments. */
@@ -388,7 +394,7 @@ int main(int argc,
 #endif
 
 #if defined(WITH_TBB_MALLOC) && defined(__linux__)
-  /* Enable huge pages for performance .*/
+  /* Enable huge pages for performance. */
   scalable_allocation_mode(TBBMALLOC_USE_HUGE_PAGES, 1);
 #endif
 
@@ -415,7 +421,7 @@ int main(int argc,
   {
     const time_t temp_time = build_commit_timestamp;
     const tm *tm = gmtime(&temp_time);
-    if (LIKELY(tm)) {
+    if (tm) [[likely]] {
       strftime(build_commit_date, sizeof(build_commit_date), "%Y-%m-%d", tm);
       strftime(build_commit_time, sizeof(build_commit_time), "%H:%M", tm);
     }
@@ -485,11 +491,10 @@ int main(int argc,
 
   BLI_threadapi_init();
 
-  DNA_sdna_current_init();
-
   BKE_blender_globals_init(); /* `blender.cc` */
 
   BKE_cpp_types_init();
+  fn::multi_function::register_common_functions();
   BKE_idtype_init();
   BKE_modifier_init();
   seq::modifiers_init();
@@ -520,8 +525,16 @@ int main(int argc,
    * since they impact `BKE_appdir` behavior. */
   BKE_appdir_init();
 
-  /* After parsing number of threads argument. */
-  BLI_task_scheduler_init();
+  /* After parsing number of threads argument.
+   *
+   * Denormal handling is not enabled for the Python module because just writing `import bpy`
+   * should not change the result of unrelated computations. */
+#ifdef WITH_PYTHON_MODULE
+  const bool use_flush_denormals_to_zero = false;
+#else
+  const bool use_flush_denormals_to_zero = true;
+#endif
+  BLI_task_scheduler_init(use_flush_denormals_to_zero);
 
   /* Initialize FFTW threading support. */
   fftw::initialize_float();
@@ -546,7 +559,12 @@ int main(int argc,
 
 #ifdef WITH_CYCLES
   CCL_log_init();
+  CCL_implicit_sharing_init();
 #endif
+
+  /* Set max open files to better handle production files that may use many
+   * open geometry or texture cache file handles. After logging since it's used .*/
+  BLI_system_max_open_files_ensure();
 
   /* Must be initialized after #BKE_appdir_init to account for color-management paths. */
   IMB_init();

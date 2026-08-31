@@ -17,7 +17,7 @@ static void node_declare(NodeDeclarationBuilder &b)
     const auto &storage = *static_cast<NodeInputIntVector *>(node->storage);
     dimensions = storage.dimensions;
   }
-  b.add_output<decl::IntVector>("Vector")
+  b.add_output<decl::IntVector>("Vector"_ustr)
       .dimensions(dimensions)
       .custom_draw([](CustomSocketDrawParams &params) {
         params.layout.alignment_set(ui::LayoutAlign::Expand);
@@ -77,7 +77,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  fn_cmp_node_type_base(&ntype, "FunctionNodeInputIntVector");
+  fn_cmp_node_type_base(&ntype, "FunctionNodeInputIntVector"_ustr);
   ntype.ui_name = "Integer Vector";
   ntype.ui_description =
       "Provide an integer vector value that can be connected to other nodes in the tree";

@@ -43,6 +43,7 @@ struct LocalData {
 
 BLI_NOINLINE static void clamp_factors(const MutableSpan<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (float &factor : factors) {
     factor = std::clamp(factor, 0.0f, 1.0f);
   }
@@ -411,15 +412,15 @@ void do_surface_smooth_brush(const Depsgraph &depsgraph,
                              Object &object,
                              const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   SculptSession &ss = *object.runtime->sculpt_session;
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
 
   if (ss.cache->surface_smooth_laplacian_disp.is_empty()) {
-    BLI_assert_msg(SCULPT_stroke_is_first_brush_step(*ss.cache),
+    BLI_assert_msg(stroke_is_first_brush_step(*ss.cache),
                    "Should only be allocated on the first step");
-    ss.cache->surface_smooth_laplacian_disp = Array<float3>(SCULPT_vertex_count_get(object),
-                                                            float3(0));
+    ss.cache->surface_smooth_laplacian_disp = Array<float3>(vertex_count_get(object), float3(0));
   }
 
   switch (pbvh.type()) {

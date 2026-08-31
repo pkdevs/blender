@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'ec8c60553753')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'32296898e057')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-23 09:55+0000\n"
+"POT-Creation-Date: 2026-08-31 07:41+0000\n"
 "PO-Revision-Date: 2025-11-19 06:24+0000\n"
 "Last-Translator: \"M. Amin Taheri\" <amintaheri2001@gmail.com>\n"
 "Language-Team: Persian <https://translate.blender.org/projects/blender-ui/ui/fa/>\n"
@@ -1140,6 +1140,18 @@ msgid "Area width"
 msgstr "ﻪﻘﻄﻨﻣ ﯼﺎﻨﻬﭘ"
 
 
+msgid "Link"
+msgstr "ﺪﻧﻮﯿﭘ"
+
+
+msgid "Append"
+msgstr "ﻥﺩﻭﺰﻓﺍ"
+
+
+msgid "Pack"
+msgstr "ﻪﺘﺴﺑ"
+
+
 msgid "Full Path"
 msgstr "ﻞﻣﺎﮐ ﺮﯿﺴﻣ"
 
@@ -1428,6 +1440,10 @@ msgid "Saturation"
 msgstr "ﻉﺎﺒﺷﺍ"
 
 
+msgid "Both"
+msgstr "ﻭﺩ ﺮﻫ"
+
+
 msgctxt "File browser"
 msgid "Path"
 msgstr "ﺮﯿﺴﻣ"
@@ -1647,10 +1663,6 @@ msgstr "ﯽﻨﺤﻨﻣ"
 
 msgid "Gamma"
 msgstr "ﺎﻣﺎﮔ"
-
-
-msgid "View"
-msgstr "ﺶﯾﺎﻤﻧ"
 
 
 msgid "Color mapping settings"
@@ -2021,6 +2033,10 @@ msgid "Plane"
 msgstr "ﻪﺤﻔﺻ"
 
 
+msgid "View"
+msgstr "ﺶﯾﺎﻤﻧ"
+
+
 msgid "Render"
 msgstr "ﺭﺪﻧﺭ"
 
@@ -2301,16 +2317,8 @@ msgid "Operator"
 msgstr "ﻞﻣﺎﻋ"
 
 
-msgid "Link"
-msgstr "ﺪﻧﻮﯿﭘ"
-
-
-msgid "Append"
-msgstr "ﻥﺩﻭﺰﻓﺍ"
-
-
-msgid "Pack"
-msgstr "ﻪﺘﺴﺑ"
+msgid "Unassigned"
+msgstr "ﻩﺪﺸﻧ ﺭﺍﺬﮔﺍﻭ"
 
 
 msgid "Matrix"
@@ -2367,6 +2375,14 @@ msgstr "ﻪﻠﺻﺎﻓ"
 
 msgid "Radial"
 msgstr "ﯽﻋﺎﻌﺷ"
+
+
+msgid "Dynamic"
+msgstr "ﺎﯾﻮﭘ"
+
+
+msgid "Single"
+msgstr "ﯽﮑﺗ"
 
 
 msgid "Window"
@@ -2436,10 +2452,6 @@ msgstr "ﯽﻠﺤﻣ"
 
 msgid "Global"
 msgstr "ﯽﻧﺎﻬﺟ"
-
-
-msgid "Dynamic"
-msgstr "ﺎﯾﻮﭘ"
 
 
 msgid "Add Color"
@@ -2594,6 +2606,10 @@ msgstr "ﺶﺧﺮﭼ"
 msgctxt "Brush"
 msgid "Paint"
 msgstr "ﮓﻧﺭ"
+
+
+msgid "Use Unified Strength"
+msgstr "ﺪﺤﺘﻣ ﺖﻣﻭﺎﻘﻣ ﺯﺍ ﻩﺩﺎﻔﺘﺳﺍ"
 
 
 msgctxt "Unit"
@@ -3078,12 +3094,12 @@ msgid "Mix"
 msgstr "ﻁﻮﻠﺨﻣ"
 
 
-msgid "Mirror"
-msgstr "ﻪﻨﯾﺁ"
-
-
 msgid "Import"
 msgstr "ﻥﺩﺮﮐ ﺩﺭﺍﻭ"
+
+
+msgid "Mirror"
+msgstr "ﻪﻨﯾﺁ"
 
 
 msgid "Math"
@@ -3106,12 +3122,16 @@ msgid "Apply"
 msgstr "ﻝﺎﻤﻋﺍ"
 
 
-msgid "Convert"
-msgstr "ﻞﯾﺪﺒﺗ"
+msgid "Linked"
+msgstr "ﻂﺒﺗﺮﻣ"
 
 
 msgid "Layout"
 msgstr "ﺡﺮﻃ"
+
+
+msgid "Convert"
+msgstr "ﻞﯾﺪﺒﺗ"
 
 
 msgid "Tracking"
@@ -3483,10 +3503,6 @@ msgid "Mirror"
 msgstr "ﺏﺎﺗﺯﺎﺑ"
 
 
-msgid "Single"
-msgstr "ﯽﮑﺗ"
-
-
 msgid "Fill Type"
 msgstr "ﻥﺩﺮﮐ ﺮﭘ ﻉﻮﻧ"
 
@@ -3565,10 +3581,6 @@ msgstr "ﻩﺮﮔ ﯽﺟﻭﺮﺧ"
 
 msgid "Value to Normal"
 msgstr "ﯼﺩﺎﻋ ﺖﻟﺎﺣ ﻪﺑ ﺭﺍﺪﻘﻣ"
-
-
-msgid "Linked"
-msgstr "ﻂﺒﺗﺮﻣ"
 
 
 msgid "Object Constraints"
@@ -3683,6 +3695,10 @@ msgstr "ﺭﻮﯾﺍﺭﺩ ﻑﺬﺣ"
 
 msgid "Flip Names"
 msgstr "ﺎﻫ‌ﻢﺳﺍ ﯼﺯﺎﺳ‌ﻪﻨﯾﺮﻗ"
+
+
+msgid "Search"
+msgstr "ﻮﺠﺘﺴﺟ"
 
 
 msgid "(undocumented operator)"
@@ -3881,10 +3897,6 @@ msgstr "ﻥﺩﺮﮐ‌ﺯﺎﺑ"
 
 msgid "Play"
 msgstr "ﺶﺨﭘ"
-
-
-msgid "Both"
-msgstr "ﻭﺩ ﺮﻫ"
 
 
 msgid "Flat"
@@ -4637,10 +4649,6 @@ msgid "Lock Borders"
 msgstr "ﺯﺮﻣ ﻥﺩﺮﮐ ﻞﻔﻗ"
 
 
-msgid "Use Unified Strength"
-msgstr "ﺪﺤﺘﻣ ﺖﻣﻭﺎﻘﻣ ﺯﺍ ﻩﺩﺎﻔﺘﺳﺍ"
-
-
 msgid "Unit System"
 msgstr "ﺪﺣﺍﻭ ﻢﺘﺴﯿﺳ"
 
@@ -4670,8 +4678,8 @@ msgid "Use linear progression"
 msgstr "ﯽﻄﺧ ﺖﻓﺮﺸﯿﭘ ﺯﺍ ﻩﺩﺎﻔﺘﺳﺍ"
 
 
-msgid "Search"
-msgstr "ﻮﺠﺘﺴﺟ"
+msgid "Cancel"
+msgstr "ﻑﺍﺮﺼﻧﺍ"
 
 
 msgctxt "WindowManager"
@@ -4729,6 +4737,11 @@ msgid "Credits"
 msgstr "ﺕﺍﺭﺎﺒﺘﻋﺍ"
 
 
+msgctxt "Operator"
+msgid "Search..."
+msgstr "...ﻮﺠﺘﺴﺟ"
+
+
 msgid "Extrapolate"
 msgstr "ﻥﺩﺮﮐ ﺱﺎﯿﻗ"
 
@@ -4743,11 +4756,6 @@ msgstr "ﻩﺪﺸﻧ ﺺﺨﺸﻣ"
 
 msgid "Auto Normalize"
 msgstr "ﺭﺎﮐﺩﻮﺧ ﯼﺯﺎﺳ ﯼﺩﺎﻋ"
-
-
-msgctxt "Operator"
-msgid "Search..."
-msgstr "...ﻮﺠﺘﺴﺟ"
 
 
 msgid "Priority"
@@ -4803,13 +4811,13 @@ msgid "Back"
 msgstr "ﺖﺸﮔﺯﺎﺑ"
 
 
+msgid ".blend Files"
+msgstr "blend. ﻞﯾﺎﻓ"
+
+
 msgctxt "Operator"
 msgid "New Folder"
 msgstr "ﺪﯾﺪﺟ ﻪﺷﻮﭘ"
-
-
-msgid ".blend Files"
-msgstr "blend. ﻞﯾﺎﻓ"
 
 
 msgid "Drivers:"
@@ -4899,10 +4907,6 @@ msgid "Out"
 msgstr "ﯽﺟﻭﺮﺧ"
 
 
-msgid "Cancel"
-msgstr "ﻑﺍﺮﺼﻧﺍ"
-
-
 msgid "Nothing selected"
 msgstr "ﻩﺪﺸﻧ ﺏﺎﺨﺘﻧﺍ ﺰﯿﭼ ﭻﯿﻫ"
 
@@ -4966,7 +4970,7 @@ msgstr "ﺪﯿﯾﺄﺗ"
 
 
 msgid "Value: {}"
-msgstr "{} :ﺭﺍﺪﻘﻣ"
+msgstr "‬{}‪ :ﺭﺍﺪﻘﻣ"
 
 
 msgid "Delete the active position"
@@ -5122,7 +5126,7 @@ msgstr "ﺩﺮﮐ ﻑﺬﺣ ﺍﺭ ﺩﺭﺍﺩ ﻢﺴﺟ ﻪﭽﻧﺁ ﺯﺍ �
 
 
 msgid "Cannot add more than %i UV maps"
-msgstr "ﺩﺮﮐ ﻪﻓﺎﺿﺍ UV ﻪﺸﻘﻧ i% ﺯﺍ ﺶﯿﺑ ﻥﺍﻮﺗ‌ﯽﻤﻧ"
+msgstr "ﺩﺮﮐ ﻪﻓﺎﺿﺍ UV ﻪﺸﻘﻧ %i‬‪ ﺯﺍ ﺶﯿﺑ ﻥﺍﻮﺗ‌ﯽﻤﻧ"
 
 
 msgid "%d %s mirrored, %d failed"
@@ -5151,10 +5155,6 @@ msgstr "؟ﺩﻮﺷ ﻑﺬﺣ ﯽﺑﺎﺨﺘﻧﺍ ﻝﺎﺑﺎﺘﻣ ﺮﺻﺎ
 
 msgid "Loading Asset Libraries"
 msgstr "ﯽﯾﺍﺭﺍﺩ ﯼﺎﻫ‌ﻪﻧﺎﺨﺑﺎﺘﮐ ﯼﺮﯿﮔﺭﺎﺑ"
-
-
-msgid "Unassigned"
-msgstr "ﻩﺪﺸﻧ ﺭﺍﺬﮔﺍﻭ"
 
 
 msgid "Delete selected objects?"

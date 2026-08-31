@@ -9,11 +9,11 @@
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_linklist_stack.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_memarena.h"
-#include "BLI_stack.h"
+#include "BLI_linklist_stack.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_memarena.hh"
+#include "BLI_stack_c.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_context.hh"
@@ -183,11 +183,12 @@ static wmOperatorStatus edbm_intersect_exec(bContext *C, wmOperator *op)
     default: /* ISECT_SEPARATE_NONE */
       break;
   }
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   uint isect_len = 0;
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
 
@@ -356,11 +357,12 @@ static wmOperatorStatus edbm_intersect_boolean_exec(bContext *C, wmOperator *op)
   bool has_isect;
 
   test_fn = use_swap ? bm_face_isect_pair_swap : bm_face_isect_pair;
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   uint isect_len = 0;
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
 
@@ -745,8 +747,8 @@ static BMEdge *bm_face_split_edge_find(BMEdge *e_a,
       if ((dist_test_sq < dist_best_sq) || (e_split == nullptr)) {
         bool ok = true;
 
-        if (UNLIKELY(BM_edge_exists(v_pivot, l_iter->e->v1) ||
-                     BM_edge_exists(v_pivot, l_iter->e->v2)))
+        if (BM_edge_exists(v_pivot, l_iter->e->v1) || BM_edge_exists(v_pivot, l_iter->e->v2))
+            [[unlikely]]
         {
           /* very unlikely but will cause complications splicing the verts together,
            * so just skip this case */
@@ -802,10 +804,11 @@ static wmOperatorStatus edbm_face_split_by_edges_exec(bContext *C, wmOperator * 
 
   BLI_SMALLSTACK_DECLARE(loop_stack, BMLoop *);
 
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C));
+      *bmain, scene, view_layer, CTX_wm_view3d(C));
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
     BMesh *bm = em->bm;

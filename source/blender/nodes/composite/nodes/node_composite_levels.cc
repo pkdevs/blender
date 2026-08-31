@@ -27,18 +27,18 @@ static const EnumPropertyItem channel_items[] = {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({0.0f, 0.0f, 0.0f, 1.0f})
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Menu>("Channel")
+  b.add_input<decl::Menu>("Channel"_ustr)
       .default_value(CMP_NODE_LEVLES_LUMINANCE)
       .static_items(channel_items)
       .optional_label();
 
-  b.add_output<decl::Float>("Mean");
-  b.add_output<decl::Float>("Standard Deviation");
-  b.add_output<decl::Float>("Minimum");
-  b.add_output<decl::Float>("Maximum");
+  b.add_output<decl::Float>("Mean"_ustr);
+  b.add_output<decl::Float>("Standard Deviation"_ustr);
+  b.add_output<decl::Float>("Minimum"_ustr);
+  b.add_output<decl::Float>("Maximum"_ustr);
 }
 
 using namespace blender::compositor;
@@ -172,7 +172,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeLevels", CMP_NODE_VIEW_LEVELS);
+  cmp_node_type_base(&ntype, "CompositorNodeLevels"_ustr, CMP_NODE_VIEW_LEVELS);
   ntype.ui_name = "Levels";
   ntype.ui_description = "Compute average and standard deviation of pixel values";
   ntype.enum_name_legacy = "LEVELS";

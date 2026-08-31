@@ -6,6 +6,7 @@
  * \ingroup bke
  */
 
+#include <atomic>
 #include <cerrno>
 #include <cstdarg>
 #include <cstdio>
@@ -14,12 +15,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_dynstr.h"
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_dynstr.hh"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -31,6 +32,12 @@
 namespace blender {
 
 static CLG_LogRef LOG = {"reports"};
+
+static int report_session_uid_counter_get_next()
+{
+  static std::atomic<int> report_session_uid_counter{0};
+  return report_session_uid_counter.fetch_add(1, std::memory_order_relaxed) + 1;
+}
 
 void BKE_report_log(eReportType type, const char *message, CLG_LogRef *log)
 {
@@ -127,7 +134,7 @@ void BKE_reports_clear(ReportList *reports)
     report = report_next;
   }
 
-  BLI_listbase_clear(&reports->list);
+  reports->list.clear_no_delete();
 }
 
 void BKE_reports_lock(ReportList *reports)
@@ -176,6 +183,7 @@ void BKE_report(ReportList *reports, eReportType type, const char *_message)
     memcpy(message_alloc, message, sizeof(char) * (len + 1));
     report->message = message_alloc;
     report->len = len;
+    report->session_uid = report_session_uid_counter_get_next();
     BLI_addtail(&reports->list, report);
   }
 }
@@ -207,6 +215,7 @@ void BKE_reportf(ReportList *reports, eReportType type, const char *_format, ...
     report->len = strlen(report->message);
     report->type = type;
     report->typestr = BKE_report_type_str(type);
+    report->session_uid = report_session_uid_counter_get_next();
 
     BLI_addtail(&reports->list, report);
   }

@@ -10,7 +10,7 @@
  */
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_global.hh"
 #include "BKE_main.hh"
 
@@ -132,30 +132,6 @@ void BKE_animdata_main_cb(Main *bmain, const FunctionRef<void(ID *, AnimData *)>
 
   /* volumes */
   ANIMDATA_IDS_CB(bmain->volumes.first);
-}
-
-void BKE_animdata_fix_paths_rename_all(ID *ref_id,
-                                       const char *prefix,
-                                       const char *oldName,
-                                       const char *newName)
-{
-  Main *bmain = G.main; /* XXX UGLY! */
-  BKE_animdata_fix_paths_rename_all_ex(bmain, ref_id, prefix, oldName, newName, 0, 0, true);
-}
-
-void BKE_animdata_fix_paths_rename_all_ex(Main *bmain,
-                                          ID *ref_id,
-                                          const char *prefix,
-                                          const char *oldName,
-                                          const char *newName,
-                                          const int oldSubscript,
-                                          const int newSubscript,
-                                          const bool verify_paths)
-{
-  BKE_animdata_main_cb(bmain, [&](ID *id, AnimData *adt) {
-    BKE_animdata_fix_paths_rename(
-        id, adt, ref_id, prefix, oldName, newName, oldSubscript, newSubscript, verify_paths);
-  });
 }
 
 }  // namespace blender

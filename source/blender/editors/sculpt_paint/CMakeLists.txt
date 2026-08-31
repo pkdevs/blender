@@ -29,11 +29,13 @@ set(SRC
   paint_stroke.cc
   paint_stroke_roll.cc
   paint_utils.cc
+  palette.cc
   sculpt_uv.cc
 
   curves/sculpt_add.cc
   curves/sculpt_brush.cc
   curves/sculpt_comb.cc
+  curves/sculpt_cut.cc
   curves/sculpt_delete.cc
   curves/sculpt_density.cc
   curves/sculpt_grow_shrink.cc
@@ -75,6 +77,7 @@ set(SRC
   grease_pencil/weight_draw.cc
   grease_pencil/weight_smear.cc
 
+  mesh/mesh_paint.cc
   mesh/paint_canvas.cc
   mesh/paint_cursor.cc
   mesh/paint_hide.cc
@@ -116,8 +119,8 @@ set(SRC
   mesh/sculpt_trim.cc
   mesh/sculpt_undo.cc
 
-  paint_intern.hh
   paint_cursor.hh
+  paint_intern.hh
 
   curves/sculpt_intern.hh
 
@@ -126,6 +129,7 @@ set(SRC
   grease_pencil/weight_paint.hh
 
   mesh/mesh_brush_common.hh
+  mesh/mesh_paint.hh
   mesh/paint_hide.hh
   mesh/paint_mask.hh
   mesh/sculpt_automask.hh
@@ -145,6 +149,7 @@ set(SRC
   mesh/sculpt_pose.hh
   mesh/sculpt_smooth.hh
   mesh/sculpt_undo.hh
+  mesh/vw_paint_intern.hh
 
   mesh/brushes/bmesh_topology_rake.cc
   mesh/brushes/clay.cc

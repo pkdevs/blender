@@ -31,14 +31,14 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_idtype.hh"
@@ -220,12 +220,10 @@ static void tooltip_region_draw_cb(const bContext * /*C*/, ARegion *region)
   /* Wrap most text typographically with hard width limit. */
   BLF_wordwrap(data->fstyle.uifont_id,
                data->wrap_width,
-               BLFWrapMode(int(BLFWrapMode::Typographical) | int(BLFWrapMode::HardLimit)));
+               BLFWrapMode::Typographical | BLFWrapMode::HardLimit);
 
   /* Wrap paths with path-specific wrapping with hard width limit. */
-  BLF_wordwrap(blf_mono_font,
-               data->wrap_width,
-               BLFWrapMode(int(BLFWrapMode::Path) | int(BLFWrapMode::HardLimit)));
+  BLF_wordwrap(blf_mono_font, data->wrap_width, BLFWrapMode::Path | BLFWrapMode::HardLimit);
 
   bbox.xmin += 0.5f * pad_x; /* add padding to the text */
   bbox.ymax -= 0.5f * pad_y;
@@ -306,20 +304,17 @@ static void tooltip_region_draw_cb(const bContext * /*C*/, ARegion *region)
 
       GPU_blend((field->image->premultiplied) ? GPU_BLEND_ALPHA_PREMULT : GPU_BLEND_ALPHA);
 
-      IMMDrawPixelsTexState state = immDrawPixelsTexSetup(GPU_SHADER_3D_IMAGE_COLOR);
-      immDrawPixelsTexScaledFullSize(&state,
-                                     bbox.xmin,
-                                     bbox.ymax,
-                                     field->image->ibuf->x,
-                                     field->image->ibuf->y,
-                                     gpu::TextureFormat::UNORM_8_8_8_8,
-                                     true,
-                                     field->image->ibuf->byte_buffer.data,
-                                     1.0f,
-                                     1.0f,
-                                     float(field->image->width) / float(field->image->ibuf->x),
-                                     float(field->image->height) / float(field->image->ibuf->y),
-                                     (field->image->text_color) ? main_color : nullptr);
+      PixelBitmapDrawer drawer(GPU_SHADER_3D_IMAGE_COLOR);
+      drawer.draw(bbox.xmin,
+                  bbox.ymax,
+                  field->image->ibuf->x,
+                  field->image->ibuf->y,
+                  gpu::TextureFormat::UNORM_8_8_8_8,
+                  true,
+                  field->image->ibuf->byte_data(),
+                  float(field->image->width) / float(field->image->ibuf->x),
+                  float(field->image->height) / float(field->image->ibuf->y),
+                  (field->image->text_color) ? main_color : nullptr);
 
       if (field->image->border) {
         GPU_blend(GPU_BLEND_ALPHA);
@@ -880,7 +875,7 @@ void tooltip_color_field_add(TooltipData &data,
   TooltipImage image_data;
   image_data.width = int(w);
   image_data.height = int(w / (has_alpha ? 4.0f : 3.0f));
-  image_data.ibuf = IMB_allocImBuf(image_data.width, image_data.height, 32, IB_byte_data);
+  image_data.ibuf = IMB_allocImBuf(image_data.width, image_data.height, ImBufFlags::ByteData);
   image_data.border = true;
   image_data.premultiplied = false;
 
@@ -1141,7 +1136,7 @@ static std::unique_ptr<TooltipData> tooltip_data_from_button_or_extra_icon(
                            true);
   }
 
-  if (ELEM(but->type, ButtonType::Text, ButtonType::SearchMenu)) {
+  if (ELEM(but->type, ButtonType::TextBox, ButtonType::Text, ButtonType::SearchMenu)) {
     /* Better not show the value of a password. */
     if ((rnaprop && (RNA_property_subtype(rnaprop) == PROP_PASSWORD)) == 0) {
       /* Full string. */
@@ -1295,11 +1290,7 @@ static std::unique_ptr<TooltipData> tooltip_data_from_button_or_extra_icon(
     }
 
     if (disabled_msg && disabled_msg[0]) {
-      tooltip_text_field_add(*data,
-                             fmt::format(fmt::runtime(TIP_("Disabled: {}")), disabled_msg),
-                             {},
-                             TIP_STYLE_NORMAL,
-                             TIP_LC_ALERT);
+      tooltip_text_field_add(*data, disabled_msg, {}, TIP_STYLE_NORMAL, TIP_LC_ALERT, true);
     }
     if (disabled_msg_free) {
       MEM_delete(disabled_msg_orig);
@@ -1468,10 +1459,8 @@ static ARegion *tooltip_create_with_data(bContext *C,
   BLF_enable(blf_mono_font, font_flag);
   BLF_wordwrap(data->fstyle.uifont_id,
                data->wrap_width,
-               BLFWrapMode(int(BLFWrapMode::Typographical) | int(BLFWrapMode::HardLimit)));
-  BLF_wordwrap(blf_mono_font,
-               data->wrap_width,
-               BLFWrapMode(int(BLFWrapMode::Path) | int(BLFWrapMode::HardLimit)));
+               BLFWrapMode::Typographical | BLFWrapMode::HardLimit);
+  BLF_wordwrap(blf_mono_font, data->wrap_width, BLFWrapMode::Path | BLFWrapMode::HardLimit);
 
   int i, fonth, fontw;
   for (i = 0, fontw = 0, fonth = 0; i < data->fields.size(); i++) {
@@ -1834,7 +1823,7 @@ static void tooltip_from_image(Image &ima, TooltipData &data)
   if (BKE_image_has_anim(&ima)) {
     MovieReader *anim = static_cast<ImageAnim *>(ima.anims.first)->anim;
     if (anim) {
-      int duration = MOV_get_duration_frames(anim, IMB_TC_RECORD_RUN);
+      int duration = MOV_get_duration_frames(anim);
       tooltip_text_field_add(data,
                              fmt::format(fmt::runtime(TIP_("Frames: {}")), duration),
                              {},
@@ -1876,10 +1865,10 @@ static void tooltip_from_clip(MovieClip &clip, TooltipData &data)
 
   std::string image_type;
   switch (clip.source) {
-    case IMA_SRC_SEQUENCE:
+    case MCLIP_SRC_SEQUENCE:
       image_type = TIP_("Image Sequence");
       break;
-    case IMA_SRC_MOVIE:
+    case MCLIP_SRC_MOVIE:
       image_type = TIP_("Movie");
       break;
   }
@@ -1895,12 +1884,12 @@ static void tooltip_from_clip(MovieClip &clip, TooltipData &data)
         TIP_STYLE_NORMAL,
         TIP_LC_NORMAL);
 
-    tooltip_text_field_add(data,
-                           fmt::format(fmt::runtime(TIP_("Frames: {}")),
-                                       MOV_get_duration_frames(anim, IMB_TC_RECORD_RUN)),
-                           {},
-                           TIP_STYLE_NORMAL,
-                           TIP_LC_NORMAL);
+    tooltip_text_field_add(
+        data,
+        fmt::format(fmt::runtime(TIP_("Frames: {}")), MOV_get_duration_frames(anim)),
+        {},
+        TIP_STYLE_NORMAL,
+        TIP_LC_NORMAL);
 
     ImBuf *ibuf = MOV_decode_preview_frame(anim);
 

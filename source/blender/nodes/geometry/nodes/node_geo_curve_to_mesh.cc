@@ -20,19 +20,38 @@ namespace blender::nodes::node_geo_curve_to_mesh_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Curve")
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
+  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all_geometry();
+  b.add_input<decl::Geometry>("Curve"_ustr)
       .supported_type({GeometryComponent::Type::Curve, GeometryComponent::Type::GreasePencil})
       .description("Curve to convert to a mesh using the given profile");
-  b.add_input<decl::Geometry>("Profile Curve")
+  b.add_input<decl::Geometry>("Profile Curve"_ustr)
       .only_realized_data()
       .supported_type(GeometryComponent::Type::Curve)
       .description("Curves that are swept along the main curve");
-  b.add_input<decl::Float>("Scale").default_value(1.0f).min(0.0f).field_on({0}).description(
-      "Scale of the profile at each point");
-  b.add_input<decl::Bool>("Fill Caps")
+  b.add_input<decl::Float>("Scale"_ustr)
+      .default_value(1.0f)
+      .min(0.0f)
+      .evaluated_geometry_field({0})
+      .description("Scale of the profile at each point");
+  b.add_input<decl::Bool>("Fill Caps"_ustr)
       .description(
           "If the profile spline is cyclic, fill the ends of the generated mesh with N-gons");
-  b.add_output<decl::Geometry>("Mesh").propagate_all();
+  {
+    auto &p = b.add_panel("Miter Scale"_ustr).default_closed(true);
+    p.add_input<decl::Bool>("Miter Scale"_ustr)
+        .panel_toggle()
+        .description(
+            "Scale the profile along the axis of the corner's turn to maintain a constant visual "
+            "width");
+    p.add_input<decl::Float>("Miter Scale Limit"_ustr)
+        .min(0.0f)
+        .max(math::AngleRadian::from_degree(180.0f).radian())
+        .default_value(math::AngleRadian::from_degree(135.0f).radian())
+        .subtype(PROP_ANGLE)
+        .description("Angle at which the miter scale stops increasing");
+  }
 }
 
 static Mesh *curve_to_mesh(const bke::CurvesGeometry &curves,
@@ -40,6 +59,7 @@ static Mesh *curve_to_mesh(const bke::CurvesGeometry &curves,
                            const fn::FieldContext &context,
                            const Field<float> &scale_field,
                            const bool fill_caps,
+                           const std::optional<float> miter_limit_angle,
                            const AttributeFilter &attribute_filter)
 {
   Mesh *mesh;
@@ -51,8 +71,12 @@ static Mesh *curve_to_mesh(const bke::CurvesGeometry &curves,
     evaluator.evaluate();
 
     const VArray<float> profile_scales = evaluator.get_evaluated<float>(0);
-    mesh = bke::curve_to_mesh_sweep(
-        curves, profile_curves->geometry.wrap(), profile_scales, fill_caps, attribute_filter);
+    mesh = bke::curve_to_mesh_sweep(curves,
+                                    profile_curves->geometry.wrap(),
+                                    profile_scales,
+                                    fill_caps,
+                                    miter_limit_angle,
+                                    attribute_filter);
   }
   else {
     mesh = bke::curve_to_wire_mesh(curves, attribute_filter);
@@ -65,6 +89,7 @@ static void grease_pencil_to_mesh(GeometrySet &geometry_set,
                                   const GeometrySet &profile_set,
                                   const Field<float> &scale_field,
                                   const bool fill_caps,
+                                  const std::optional<float> miter_limit_angle,
                                   const AttributeFilter &attribute_filter)
 {
   using namespace blender::bke::greasepencil;
@@ -81,7 +106,7 @@ static void grease_pencil_to_mesh(GeometrySet &geometry_set,
     const bke::GreasePencilLayerFieldContext context{
         grease_pencil, bke::AttrDomain::Point, layer_index};
     mesh_by_layer[layer_index] = curve_to_mesh(
-        curves, profile_set, context, scale_field, fill_caps, attribute_filter);
+        curves, profile_set, context, scale_field, fill_caps, miter_limit_angle, attribute_filter);
   }
 
   if (mesh_by_layer.is_empty()) {
@@ -120,21 +145,32 @@ static void grease_pencil_to_mesh(GeometrySet &geometry_set,
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet curve_set = params.extract_input<GeometrySet>("Curve");
-  GeometrySet profile_set = params.extract_input<GeometrySet>("Profile Curve");
-  const Field<float> scale_field = params.extract_input<Field<float>>("Scale");
-  const bool fill_caps = params.extract_input<bool>("Fill Caps");
+  GeometrySet curve_set = params.extract_input<GeometrySet>("Curve"_ustr);
+  GeometrySet profile_set = params.extract_input<GeometrySet>("Profile Curve"_ustr);
+  const Field<float> scale_field = params.extract_input<Field<float>>("Scale"_ustr);
+  const bool fill_caps = params.extract_input<bool>("Fill Caps"_ustr);
+  const bool use_miter_limit_angle = params.extract_input<bool>("Miter Scale"_ustr);
+  const std::optional<float> miter_limit_angle = use_miter_limit_angle ?
+                                                     std::make_optional<float>(
+                                                         std::abs(params.extract_input<float>(
+                                                             "Miter Scale Limit"_ustr))) :
+                                                     std::nullopt;
 
   bke::GeometryComponentEditData::remember_deformed_positions_if_necessary(curve_set);
-  const AttributeFilter &attribute_filter = params.get_attribute_filter("Mesh");
+  const AttributeFilter &attribute_filter = params.get_attribute_filter("Mesh"_ustr);
 
   geometry::foreach_real_geometry(curve_set, [&](GeometrySet &geometry_set) {
     if (geometry_set.has_curves()) {
       const Curves &curves = *geometry_set.get_curves();
 
       const bke::CurvesFieldContext context{curves, bke::AttrDomain::Point};
-      Mesh *mesh = curve_to_mesh(
-          curves.geometry.wrap(), profile_set, context, scale_field, fill_caps, attribute_filter);
+      Mesh *mesh = curve_to_mesh(curves.geometry.wrap(),
+                                 profile_set,
+                                 context,
+                                 scale_field,
+                                 fill_caps,
+                                 miter_limit_angle,
+                                 attribute_filter);
       if (mesh != nullptr) {
         mesh->mat = MEM_dupalloc(curves.mat);
         mesh->totcol = curves.totcol;
@@ -142,21 +178,22 @@ static void node_geo_exec(GeoNodeExecParams params)
       geometry_set.replace_mesh(mesh);
     }
     if (geometry_set.has_grease_pencil()) {
-      grease_pencil_to_mesh(geometry_set, profile_set, scale_field, fill_caps, attribute_filter);
+      grease_pencil_to_mesh(
+          geometry_set, profile_set, scale_field, fill_caps, miter_limit_angle, attribute_filter);
     }
     geometry_set.keep_only({GeometryComponent::Type::Mesh,
                             GeometryComponent::Type::Instance,
                             GeometryComponent::Type::Edit});
   });
 
-  params.set_output("Mesh", std::move(curve_set));
+  params.set_output("Mesh"_ustr, std::move(curve_set));
 }
 
 static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeCurveToMesh", GEO_NODE_CURVE_TO_MESH);
+  geo_node_type_base(&ntype, "GeometryNodeCurveToMesh"_ustr, GEO_NODE_CURVE_TO_MESH);
   ntype.ui_name = "Curve to Mesh";
   ntype.ui_description =
       "Convert curves into a mesh, optionally with a custom profile shape defined by curves";

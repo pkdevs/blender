@@ -248,7 +248,7 @@ WarnFlag check_attribute_warning(Scene &scene, Object &ob)
 
     /* Exception for shape keys because we can edit those. */
     for (; md; md = md->next) {
-      const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
+      const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
       if (!BKE_modifier_is_enabled(&scene, md, eModifierMode_Realtime)) {
         continue;
       }
@@ -305,7 +305,7 @@ void SCULPT_OT_dynamic_topology_toggle(wmOperatorType *ot)
   /* API callbacks. */
   ot->invoke = sculpt_dynamic_topology_toggle_invoke;
   ot->exec = sculpt_dynamic_topology_toggle_exec;
-  ot->poll = SCULPT_mode_poll;
+  ot->poll = sculpt_mode_poll;
 
   ot->flag = OPTYPE_REGISTER;
 }

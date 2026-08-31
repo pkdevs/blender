@@ -16,7 +16,7 @@ CCL_NAMESPACE_BEGIN
 class DeviceQueue;
 
 using OneAPIDeviceIteratorCallback =
-    void (*)(const char *, const char *, const int, bool, bool, bool, void *);
+    void (*)(const char *, const char *, const int, bool, bool, bool, bool, void *);
 
 class OneapiDevice : public GPUDevice {
  private:
@@ -41,22 +41,20 @@ class OneapiDevice : public GPUDevice {
   size_t max_memory_on_device_ = 0;
   std::string oneapi_error_string_;
   bool use_hardware_raytracing = false;
-  unsigned int kernel_features = 0;
+  uint64_t kernel_features = 0;
   int scene_max_shaders_ = 0;
-  /* Currently, there are some functional errors in the different software layers of the DPC++/L0
-   * support regarding several Intel's dGPU executions. As a result, to provide proper
-   * functionality to Blender users, we need to detect such configurations and enable some
-   * workarounds for them. These workarounds don't make sense to enable by default due to a
-   * performance impact - which is not as important for the discussed configuration, as without
-   * workarounds, the configuration with several dGPUs would simply not be functional, making the
-   * performance topic irrelevant anyway. For an example of such issues, see Blender issue #138384.
+  /* On some driver versions, usage of Intel oneAPI extension for host->GPU copy optimization
+   * is causing crashes and failures. As a result, to ensure functionality, we disable
+   * this extension as a workaround. This class member variable is controlling this behavior
+   * and is set appropriately during device enumeration, based on the presented devices
+   * and their driver version (at the moment not checked, no public driver with a fix exists yet).
    */
-  bool is_several_intel_dgpu_devices_detected = false;
+  bool use_intel_copy_optimization = true;
 
   size_t get_free_mem() const;
 
  public:
-  BVHLayoutMask get_bvh_layout_mask(const uint requested_features) const override;
+  BVHLayoutMask get_bvh_layout_mask(const uint64_t requested_features) const override;
 
   OneapiDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler, bool headless);
 
@@ -66,9 +64,9 @@ class OneapiDevice : public GPUDevice {
 #  endif
   bool check_peer_access(Device *peer_device) override;
 
-  bool load_kernels(const uint requested_features) override;
+  bool load_kernels(uint64_t requested_features) override;
 
-  void reserve_private_memory(const uint kernel_features);
+  void reserve_private_memory(uint64_t kernel_features);
 
   string oneapi_error_message();
 
@@ -80,12 +78,15 @@ class OneapiDevice : public GPUDevice {
   void mem_alloc(device_memory &mem) override;
   void mem_copy_to(device_memory &mem) override;
   void mem_move_to_host(device_memory &mem) override;
+  void mem_copy_from(device_memory &mem,
+                     const size_t y,
+                     size_t w,
+                     const size_t h,
+                     size_t elem,
+                     void *host_pointer);
   void mem_copy_from(
       device_memory &mem, const size_t y, size_t w, const size_t h, size_t elem) override;
-  void mem_copy_from(device_memory &mem)
-  {
-    mem_copy_from(mem, 0, 0, 0, 0);
-  }
+  void mem_copy_from(device_memory &mem);
   void mem_zero(device_memory &mem) override;
   void mem_free(device_memory &mem) override;
 
@@ -155,12 +156,12 @@ class OneapiDevice : public GPUDevice {
   SyclQueue *sycl_queue();
 
  protected:
-  bool can_use_hardware_raytracing_for_features(const uint requested_features) const;
+  bool can_use_hardware_raytracing_for_features(uint64_t requested_features) const;
   void check_usm(SyclQueue *queue, const void *usm_ptr, bool allow_host);
   bool create_queue(SyclQueue *&external_queue,
                     const int device_index,
                     void *embree_device,
-                    bool *is_several_intel_dgpu_devices_detected_pointer);
+                    bool *multiple_level_zero_platforms_detected_pointer);
   void free_queue(SyclQueue *queue);
   void *usm_aligned_alloc_host(SyclQueue *queue, const size_t memory_size, const size_t alignment);
   void *usm_alloc_device(SyclQueue *queue, const size_t memory_size);

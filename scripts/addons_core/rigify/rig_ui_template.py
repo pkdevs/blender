@@ -297,11 +297,13 @@ def match_pole_target(view_layer, ik_first, ik_last, pole, match_bone_matrix, le
 ##########
 
 def parse_bone_names(names_string):
+    # If names_string is a string representation of a list of strings,
+    # eg `"['Bone1', 'Bone2']"`, return it as an actual list of strings.
     if names_string[0] == '[' and names_string[-1] == ']':
-        return eval(names_string)
+        import ast
+        return ast.literal_eval(names_string)
     else:
         return names_string
-
 ''']
 
 # noinspection SpellCheckingInspection
@@ -574,10 +576,10 @@ UTILITIES_FUNC_OLD_POLE = ['''
 def rotPoleToggle(rig, limb_type, controls, ik_ctrl, fk_ctrl, parent, pole):
 
     rig_id = rig.data['rig_id']
-    leg_fk2ik = eval('bpy.ops.pose.rigify_leg_fk2ik_' + rig_id)
-    arm_fk2ik = eval('bpy.ops.pose.rigify_arm_fk2ik_' + rig_id)
-    leg_ik2fk = eval('bpy.ops.pose.rigify_leg_ik2fk_' + rig_id)
-    arm_ik2fk = eval('bpy.ops.pose.rigify_arm_ik2fk_' + rig_id)
+    leg_fk2ik = getattr(bpy.ops.pose, 'rigify_leg_fk2ik_' + rig_id)
+    arm_fk2ik = getattr(bpy.ops.pose, 'rigify_arm_fk2ik_' + rig_id)
+    leg_ik2fk = getattr(bpy.ops.pose, 'rigify_leg_ik2fk_' + rig_id)
+    arm_ik2fk = getattr(bpy.ops.pose, 'rigify_arm_ik2fk_' + rig_id)
 
     controls = parse_bone_names(controls)
     ik_ctrl = parse_bone_names(ik_ctrl)
@@ -1353,6 +1355,8 @@ class ScriptGenerator(base_generate.GeneratorPlugin):
         }
 
     def finalize(self):
+        from . import register_usetime_properties, unregister_usetime_properties
+
         metarig = self.generator.metarig
         rig_id = self.generator.rig_id
 
@@ -1397,6 +1401,7 @@ class ScriptGenerator(base_generate.GeneratorPlugin):
         self._write_rna_prop_register_funcs(script)
 
         script.write("\ndef register():\n")
+        script.write(f"    {register_usetime_properties.__name__}()\n")
 
         ui_register = OrderedDict.fromkeys(self.ui_register)
         for s in ui_register:
@@ -1411,6 +1416,7 @@ class ScriptGenerator(base_generate.GeneratorPlugin):
             script.write(f"    bpy.types.{classname} = {text}\n ")
 
         script.write("\ndef unregister():\n")
+        script.write(f"    {unregister_usetime_properties.__name__}()\n")
 
         for s in ui_register_props:
             script.write("    del bpy.types.%s\n" % s[0])
@@ -1431,12 +1437,12 @@ class ScriptGenerator(base_generate.GeneratorPlugin):
         self.obj['rig_ui'] = script
 
     def _write_rna_prop_register_funcs(self, script: bpy.types.Text) -> None:
-        """Inject the (un)register_rna_properties functions into the script."""
+        """Inject the (un)register_use_time_properties functions into the script."""
         import inspect
-        from . import register_rna_properties, unregister_rna_properties
+        from . import register_usetime_properties, unregister_usetime_properties
 
-        register_func_src = inspect.getsource(register_rna_properties)
-        unregister_func_src = inspect.getsource(unregister_rna_properties)
+        register_func_src = inspect.getsource(register_usetime_properties)
+        unregister_func_src = inspect.getsource(unregister_usetime_properties)
 
         script.write("\n\n")
         script.write(register_func_src)

@@ -15,13 +15,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_dial_2d.h"
-#include "BLI_math_base_safe.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_dial_2d.hh"
+#include "BLI_math_base_safe.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
 #include "BKE_context.hh"
 
@@ -1326,7 +1326,9 @@ static wmOperatorStatus gizmo_cage2d_modal(bContext *C,
 
     if (transform_flag & ED_GIZMO_CAGE_XFORM_FLAG_SCALE_UNIFORM) {
       if (constrain_axis[0] == false && constrain_axis[1] == false) {
-        if (draw_style == ED_GIZMO_CAGE2D_STYLE_CIRCLE) {
+        if (draw_style == ED_GIZMO_CAGE2D_STYLE_CIRCLE &&
+            !is_corner_highlighted(gz->highlight_part))
+        {
           /* So that the cursor lies on the circle. */
           scale[1] = scale[0] = len_v2(scale);
         }

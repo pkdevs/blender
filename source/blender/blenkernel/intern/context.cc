@@ -26,9 +26,9 @@
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -45,6 +45,7 @@
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
+#include "RNA_types.hh"
 
 #include "CLG_log.h"
 
@@ -94,6 +95,10 @@ struct bContext {
     Scene *scene;
 
     int recursion;
+
+    /** Flag to disallow using the UI context for data retrieval. */
+    bool ui_data_access_deny;
+
     /** True if python is initialized. */
     bool py_init;
     void *py_context;
@@ -302,12 +307,13 @@ static std::string ctx_result_brief_repr(const bContextDataResult &result)
 {
   switch (result.type) {
     case ContextDataType::Pointer:
-      if (result.ptr.data) {
-        const char *rna_type_name = result.ptr.type ? RNA_struct_identifier(result.ptr.type) :
-                                                      "Unknown";
+      if (result.ptr) {
+        const char *rna_type_name = result.ptr.has_type() ?
+                                        RNA_struct_identifier(result.ptr.type) :
+                                        "Unknown";
         /* Try to get the name property if it exists. */
         std::string member_name;
-        if (result.ptr.type) {
+        if (result.ptr.has_type()) {
           PropertyRNA *name_prop = RNA_struct_name_property(result.ptr.type);
           if (name_prop) {
             char name_buf[256];
@@ -329,14 +335,10 @@ static std::string ctx_result_brief_repr(const bContextDataResult &result)
                              member_name,
                              reinterpret_cast<uintptr_t>(result.ptr.data));
         }
-        else {
-          return fmt::format(
-              "<{} at 0x{:x}>", rna_type_name, reinterpret_cast<uintptr_t>(result.ptr.data));
-        }
+        return fmt::format(
+            "<{} at 0x{:x}>", rna_type_name, reinterpret_cast<uintptr_t>(result.ptr.data));
       }
-      else {
-        return "None";
-      }
+      return "None";
 
     case ContextDataType::Collection:
       return fmt::format("[{} item(s)]", result.list.size());
@@ -350,20 +352,17 @@ static std::string ctx_result_brief_repr(const bContextDataResult &result)
       }
 
     case ContextDataType::Property:
-      if (result.prop && result.ptr.data) {
+      if (result.prop && result.ptr) {
         const char *prop_name = RNA_property_identifier(result.prop);
-        const char *rna_type_name = result.ptr.type ? RNA_struct_identifier(result.ptr.type) :
-                                                      "Unknown";
+        const char *rna_type_name = result.ptr.has_type() ?
+                                        RNA_struct_identifier(result.ptr.type) :
+                                        "Unknown";
         if (result.index >= 0) {
           return fmt::format("<Property({}.{}[{}])>", rna_type_name, prop_name, result.index);
         }
-        else {
-          return fmt::format("<Property({}.{})>", rna_type_name, prop_name);
-        }
+        return fmt::format("<Property({}.{})>", rna_type_name, prop_name);
       }
-      else {
-        return "<Property(None)>";
-      }
+      return "<Property(None)>";
 
     case ContextDataType::Int64:
       if (result.int_value.has_value()) {
@@ -432,12 +431,12 @@ static void *ctx_wm_python_context_get(const bContext *C,
   bool found_member = false;
 
 #ifdef WITH_PYTHON
-  if (UNLIKELY(CTX_py_dict_get(C))) {
+  if (CTX_py_dict_get(C)) [[unlikely]] {
     bContextDataResult result{};
     if (BPY_context_member_get(const_cast<bContext *>(C), member, &result)) {
       found_member = true;
 
-      if (result.ptr.data) {
+      if (result.ptr) {
         if (RNA_struct_is_a(result.ptr.type, member_type)) {
           return_data = result.ptr.data;
         }
@@ -501,8 +500,9 @@ static eContextResult ctx_data_get(bContext *C, const char *member, bContextData
   }
 #endif
 
-  /* Don't allow UI context access from non-main threads. */
-  if (!BLI_thread_is_main()) {
+  /* Don't allow UI context access from non-main threads or when access has been explicitly denied.
+   */
+  if (!BLI_thread_is_main() || C->data.ui_data_access_deny) {
     return CTX_RESULT_MEMBER_NOT_FOUND;
   }
 
@@ -628,9 +628,10 @@ static bool ctx_data_base_collection_get(const bContext *C,
 
   bContextDataResult result{};
 
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
 
   bool ok = false;
 
@@ -656,14 +657,14 @@ PointerRNA CTX_data_pointer_get(const bContext *C, const char *member)
     return result.ptr;
   }
 
-  return PointerRNA_NULL;
+  return {};
 }
 
 PointerRNA CTX_data_pointer_get_type(const bContext *C, const char *member, StructRNA *type)
 {
   PointerRNA ptr = CTX_data_pointer_get(C, member);
 
-  if (ptr.data) {
+  if (ptr) {
     if (RNA_struct_is_a(ptr.type, type)) {
       return ptr;
     }
@@ -675,18 +676,18 @@ PointerRNA CTX_data_pointer_get_type(const bContext *C, const char *member, Stru
               RNA_struct_identifier(type));
   }
 
-  return PointerRNA_NULL;
+  return {};
 }
 
 PointerRNA CTX_data_pointer_get_type_silent(const bContext *C, const char *member, StructRNA *type)
 {
   PointerRNA ptr = CTX_data_pointer_get(C, member);
 
-  if (ptr.data && RNA_struct_is_a(ptr.type, type)) {
+  if (ptr && RNA_struct_is_a(ptr.type, type)) {
     return ptr;
   }
 
-  return PointerRNA_NULL;
+  return {};
 }
 
 Vector<PointerRNA> CTX_data_collection_get(const bContext *C, const char *member)
@@ -1164,6 +1165,15 @@ SpaceSpreadsheet *CTX_wm_space_spreadsheet(const bContext *C)
   return nullptr;
 }
 
+SpaceProject *CTX_wm_space_project(const bContext *C)
+{
+  ScrArea *area = CTX_wm_area(C);
+  if (area && area->spacetype == SPACE_PROJECT) {
+    return static_cast<SpaceProject *>(area->spacedata.first);
+  }
+  return nullptr;
+}
+
 void CTX_wm_manager_set(bContext *C, wmWindowManager *wm)
 {
   C->wm.manager = wm;
@@ -1421,6 +1431,8 @@ enum eContextObjectMode CTX_data_mode_enum_ex(const Object *obedit,
         return CTX_MODE_EDIT_GREASE_PENCIL;
       case OB_POINTCLOUD:
         return CTX_MODE_EDIT_POINTCLOUD;
+      default:
+        break;
     }
   }
   else {
@@ -1480,7 +1492,7 @@ enum eContextObjectMode CTX_data_mode_enum(const bContext *C)
 {
   Object *obedit = CTX_data_edit_object(C);
   Object *obact = obedit ? nullptr : CTX_data_active_object(C);
-  return CTX_data_mode_enum_ex(obedit, obact, obact ? eObjectMode(obact->mode) : OB_MODE_OBJECT);
+  return CTX_data_mode_enum_ex(obedit, obact, obact ? obact->mode : OB_MODE_OBJECT);
 }
 
 /**
@@ -1535,6 +1547,11 @@ void CTX_data_scene_set(bContext *C, Scene *scene)
     BPY_context_dict_clear_members_array(&C->data.py_context, C->data.py_context_orig, members, 1);
   }
 #endif
+}
+
+void CTX_data_ui_context_access_deny(bContext *C, bool deny)
+{
+  C->data.ui_data_access_deny = deny;
 }
 
 ToolSettings *CTX_data_tool_settings(const bContext *C)
@@ -1624,9 +1641,11 @@ Base *CTX_data_active_base(const bContext *C)
   if (ob == nullptr) {
     return nullptr;
   }
+
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   return BKE_view_layer_base_find(view_layer, ob);
 }
 
@@ -1688,6 +1707,11 @@ bool CTX_data_editable_bones(const bContext *C, Vector<PointerRNA> *list)
 bPoseChannel *CTX_data_active_pose_bone(const bContext *C)
 {
   return static_cast<bPoseChannel *>(ctx_data_pointer_get(C, "active_pose_bone"));
+}
+
+PointerRNA CTX_data_active_pose_bone_ptr(const bContext *C)
+{
+  return CTX_data_pointer_get(C, "active_pose_bone");
 }
 
 bool CTX_data_selected_pose_bones(const bContext *C, Vector<PointerRNA> *list)

@@ -8,9 +8,10 @@
 
 #pragma once
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_span.hh"
 
+#include "DNA_armature_types.h"
 #include "DNA_listBase.h"
 #include "DNA_windowmanager_enums.h"
 
@@ -137,6 +138,10 @@ wmOperatorStatus ED_armature_join_objects_exec(bContext *C, wmOperator *op);
 
 /* `armature_select.cc` */
 
+/**
+ * To avoid/skip non-bone hits.
+ */
+bool ED_armature_selectresult_is_bone(const GPUSelectResult &hit_result);
 Base *ED_armature_base_and_ebone_from_select_buffer(Span<Base *> bases,
                                                     unsigned int select_id,
                                                     EditBone **r_ebone);
@@ -160,8 +165,11 @@ bool ED_armature_edit_deselect_all_visible_multi(bContext *C);
 /**
  * \return True when pick finds an element or the selection changed.
  */
-bool ED_armature_edit_select_pick_bone(
-    bContext *C, Base *basact, EditBone *ebone, int selmask, const SelectPick_Params &params);
+bool ED_armature_edit_select_pick_bone(bContext *C,
+                                       Base *basact,
+                                       EditBone *ebone,
+                                       eBone_Flag selmask,
+                                       const SelectPick_Params &params);
 /**
  * Bone selection picking for armature edit-mode in the view3d.
  */
@@ -251,10 +259,10 @@ void ED_armature_ebone_listbase_copy(ListBaseT<EditBone> *lb_dst,
                                      bool do_id_user);
 
 int ED_armature_ebone_selectflag_get(const EditBone *ebone);
-void ED_armature_ebone_selectflag_set(EditBone *ebone, int flag);
+void ED_armature_ebone_selectflag_set(EditBone *ebone, eBone_Flag flag);
 void ED_armature_ebone_select_set(EditBone *ebone, bool select);
-void ED_armature_ebone_selectflag_enable(EditBone *ebone, int flag);
-void ED_armature_ebone_selectflag_disable(EditBone *ebone, int flag);
+void ED_armature_ebone_selectflag_enable(EditBone *ebone, eBone_Flag flag);
+void ED_armature_ebone_selectflag_disable(EditBone *ebone, eBone_Flag flag);
 
 /* `pose_edit.cc` */
 
@@ -265,45 +273,41 @@ bool ED_object_posemode_exit(bContext *C, Object *ob);
 bool ED_object_posemode_enter_ex(Main *bmain, Object *ob);
 bool ED_object_posemode_enter(bContext *C, Object *ob);
 
-/** Corresponds to #eAnimvizCalcRange. */
-enum ePosePathCalcRange {
-  POSE_PATH_CALC_RANGE_CURRENT_FRAME,
-  POSE_PATH_CALC_RANGE_CHANGED,
-  POSE_PATH_CALC_RANGE_FULL,
-};
 /**
  * For the object with pose/action: update paths for those that have got them
  * This should selectively update paths that exist...
  *
  * To be called from various tools that do incremental updates.
  */
-void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, ePosePathCalcRange range);
+void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob);
 
 /* `pose_select.cc` */
 
 /**
  * \return True when pick finds an element or the selection changed.
  */
-bool ED_armature_pose_select_pick_bone(const Scene *scene,
+bool ED_armature_pose_select_pick_bone(const Main &bmain,
+                                       const Scene *scene,
                                        ViewLayer *view_layer,
                                        View3D *v3d,
                                        Object *ob,
                                        bPoseChannel *pchan,
-                                       const SelectPick_Params &params) ATTR_NONNULL(1, 2, 3, 4);
+                                       const SelectPick_Params &params) ATTR_NONNULL(2, 3, 4, 5);
 /**
  * Called for mode-less pose selection.
  * assumes the active object is still on old situation.
  *
  * \return True when pick finds an element or the selection changed.
  */
-bool ED_armature_pose_select_pick_with_buffer(const Scene *scene,
+bool ED_armature_pose_select_pick_with_buffer(const Main &bmain,
+                                              const Scene *scene,
                                               ViewLayer *view_layer,
                                               View3D *v3d,
                                               Base *base,
                                               const GPUSelectResult *hit_results,
                                               int hits,
                                               const SelectPick_Params &params,
-                                              bool do_nearest) ATTR_NONNULL(1, 2, 3, 4, 5);
+                                              bool do_nearest) ATTR_NONNULL(2, 3, 4, 5, 6);
 /**
  * While in weight-paint mode, a single pose may be active as well.
  * While not common, it's possible we have multiple armatures deforming a mesh.
@@ -312,7 +316,8 @@ bool ED_armature_pose_select_pick_with_buffer(const Scene *scene,
  * It can't be set to the active object because we need
  * to keep this set to the weight paint object.
  */
-void ED_armature_pose_select_in_wpaint_mode(const Scene *scene,
+void ED_armature_pose_select_in_wpaint_mode(const Main &bmain,
+                                            const Scene *scene,
                                             ViewLayer *view_layer,
                                             Base *base_select);
 bool ED_pose_deselect_all_multi_ex(Span<Base *> bases, int select_mode, bool ignore_visibility);

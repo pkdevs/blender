@@ -46,6 +46,7 @@ BLI_NOINLINE static void offset_displacement_factors(const MutableSpan<float> di
                                                      const Span<float> factors,
                                                      const float strength)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : displacement_factors.index_range()) {
     displacement_factors[i] += factors[i] * strength * (1.05f - std::abs(displacement_factors[i]));
   }
@@ -63,6 +64,7 @@ BLI_NOINLINE static void reset_displacement_factors(const MutableSpan<float> dis
                                                     const Span<float> factors,
                                                     const float strength)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : displacement_factors.index_range()) {
     displacement_factors[i] += std::abs(factors[i] * strength * displacement_factors[i]) *
                                (displacement_factors[i] > 0.0f ? -1.0f : 1.0f);
@@ -72,6 +74,7 @@ BLI_NOINLINE static void reset_displacement_factors(const MutableSpan<float> dis
 BLI_NOINLINE static void clamp_displacement_factors(const MutableSpan<float> displacement_factors,
                                                     const Span<float> masks)
 {
+  PRF_scope(ProfileCategory::Editor);
   if (masks.is_empty()) {
     for (const int i : displacement_factors.index_range()) {
       displacement_factors[i] = std::clamp(displacement_factors[i], -1.0f, 1.0f);
@@ -93,6 +96,7 @@ BLI_NOINLINE static void calc_translations(const Span<float3> orig_positions,
                                            const float height,
                                            const MutableSpan<float3> r_translations)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : positions.index_range()) {
     const float3 offset = orig_normals[i] * height * displacement_factors[i];
     const float3 translation = orig_positions[i] + offset - positions[i];
@@ -109,6 +113,7 @@ BLI_NOINLINE static void calc_translations(const Span<float3> base_positions,
                                            const float height,
                                            const MutableSpan<float3> r_translations)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : positions.index_range()) {
     const float3 offset = base_normals[verts[i]] * height * displacement_factors[i];
     const float3 translation = base_positions[verts[i]] + offset - positions[i];
@@ -171,7 +176,7 @@ static void calc_faces(const Depsgraph &depsgraph,
   gather_data_mesh(layer_displacement_factor.as_span(), verts, displacement_factors);
 
   if (use_persistent_base) {
-    if (cache.invert) {
+    if (cache.toggle_settings.invert) {
       reset_displacement_factors(displacement_factors, tls.factors, cache.bstrength);
     }
     else {
@@ -268,7 +273,7 @@ static void calc_grids(const Depsgraph &depsgraph,
       subdiv_ccg, layer_displacement_factor.as_span(), grids, tls.displacement_factors);
 
   if (use_persistent_base) {
-    if (cache.invert) {
+    if (cache.toggle_settings.invert) {
       reset_displacement_factors(displacement_factors, tls.factors, cache.bstrength);
     }
     else {
@@ -386,6 +391,7 @@ void do_layer_brush(const Depsgraph &depsgraph,
                     Object &object,
                     const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   SculptSession &ss = *object.runtime->sculpt_session;
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
@@ -420,8 +426,7 @@ void do_layer_brush(const Depsgraph &depsgraph,
 
       if (displacement.is_empty()) {
         if (ss.cache->layer_displacement_factor.is_empty()) {
-          ss.cache->layer_displacement_factor = Array<float>(SCULPT_vertex_count_get(object),
-                                                             0.0f);
+          ss.cache->layer_displacement_factor = Array<float>(vertex_count_get(object), 0.0f);
         }
         displacement = ss.cache->layer_displacement_factor;
       }
@@ -498,7 +503,7 @@ void do_layer_brush(const Depsgraph &depsgraph,
     }
     case bke::pbvh::Type::BMesh: {
       if (ss.cache->layer_displacement_factor.is_empty()) {
-        ss.cache->layer_displacement_factor = Array<float>(SCULPT_vertex_count_get(object), 0.0f);
+        ss.cache->layer_displacement_factor = Array<float>(vertex_count_get(object), 0.0f);
       }
       const MutableSpan<float> displacement = ss.cache->layer_displacement_factor;
       MutableSpan<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();

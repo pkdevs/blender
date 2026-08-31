@@ -14,7 +14,8 @@
 
 #include <string>
 
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
+#include "BLI_bit_span.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_index_range.hh"
 
@@ -128,7 +129,7 @@ enum class TextureFormat : uint8_t {
 #undef DECLARE
 };
 
-inline constexpr DataFormat to_data_format(TextureFormat format)
+constexpr DataFormat to_data_format(TextureFormat format)
 {
   return DataFormat(int(format));
 }
@@ -199,7 +200,7 @@ enum class TextureTargetFormat : uint8_t {
 #undef DECLARE
 };
 
-inline constexpr TextureFormat to_texture_format(TextureTargetFormat format)
+constexpr TextureFormat to_texture_format(TextureTargetFormat format)
 {
   return TextureFormat(int(format));
 }
@@ -264,7 +265,7 @@ enum class TextureWriteFormat : uint8_t {
 #undef DECLARE
 };
 
-inline constexpr TextureFormat to_texture_format(TextureWriteFormat format)
+constexpr TextureFormat to_texture_format(TextureWriteFormat format)
 {
   return TextureFormat(int(format));
 }
@@ -1013,18 +1014,53 @@ void GPU_texture_clear(gpu::Texture *texture, eGPUDataFormat data_format, const 
 void GPU_texture_copy(gpu::Texture *dst, gpu::Texture *src);
 
 /**
+ * Returns the texture usage flags needed for generating a mipmap.
+ */
+eGPUTextureUsage GPU_texture_mipmap_usage(gpu::TextureFormat format);
+
+/**
  * Update the mip-map levels using the mip 0 data.
+ *
  * \note this doesn't work on depth or compressed textures.
+ * \note post-condition: All bound images could be unbound.
  */
 void GPU_texture_update_mipmap_chain(gpu::Texture *texture);
 
+/** Chunk size for partial updates of the mipmaps, must match #MIPMAP_UPDATE_CHUNK_SIZE in
+ * GPU_shader_shared.hh. */
+constexpr int GPU_TEXTURE_MIPMAP_UPDATE_CHUNK_SIZE = 256;
+
 /**
- * Read the content of a \a mip_level from a \a tex and returns a copy of its data.
+ * Like #GPU_texture_update_mipmap_chain, but regenerate only modified chunks.
+ *
+ * \a modified_chunks is a bit mask that covers the texture split into
+ * MIPMAP_UPDATE_CHUNK_SIZE x MIPMAP_UPDATE_CHUNK_SIZE chunks.
+ */
+void GPU_texture_update_mipmap_chain_partial(gpu::Texture *texture,
+                                             int layer,
+                                             BitSpan modified_chunks);
+
+/**
+ * Read the content of a \a mip_level from a \a texture and returns a copy of its data.
+ * Use #MEM_delete to free the data.
+ *
  * \warning the texture must have been created using GPU_TEXTURE_USAGE_HOST_READ.
  * \note synchronization of shader writes via `imageStore()` needs to be explicitly done using
  * `GPU_memory_barrier(GPU_BARRIER_TEXTURE_FETCH)`.
  */
 void *GPU_texture_read(gpu::Texture *texture, eGPUDataFormat data_format, int mip_level);
+
+/**
+ * Read the content of a \a mip_level from a \a texture into user-provided memory buffer \a dst.
+ */
+void GPU_texture_read(gpu::Texture *texture, eGPUDataFormat data_format, int mip_level, void *dst);
+
+/**
+ * Calculate memory size in bytes needed to read a \a mip_level from a \a texture.
+ */
+size_t GPU_texture_read_size_get(const gpu::Texture *texture,
+                                 eGPUDataFormat data_format,
+                                 int mip_level);
 
 /** \} */
 
@@ -1195,6 +1231,11 @@ bool GPU_texture_is_array(const gpu::Texture *texture);
 bool GPU_texture_is_cube(const gpu::Texture *texture);
 
 /**
+ * Return true if the texture was created with GPU_texture_create_view.
+ */
+bool GPU_texture_is_view(const gpu::Texture *texture);
+
+/**
  * Return true if the texture format has a depth component.
  */
 bool GPU_texture_has_depth_format(const gpu::Texture *texture);
@@ -1223,6 +1264,11 @@ bool GPU_texture_has_normalized_format(const gpu::Texture *texture);
  * Return true if the texture format is a signed type.
  */
 bool GPU_texture_has_signed_format(const gpu::Texture *texture);
+
+/**
+ * Return true if the texture format is a compressed type.
+ */
+bool GPU_texture_has_compressed_format(const gpu::Texture *texture);
 
 /**
  * Returns the pixel dimensions of a texture's mip-map level.

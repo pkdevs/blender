@@ -15,11 +15,11 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_kdopbvh.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -240,7 +240,7 @@ void BKE_texture_mapping_default(TexMapping *texmap, int type)
   texmap->projy = PROJ_Y;
   texmap->projz = PROJ_Z;
   texmap->mapping = MTEX_FLAT;
-  texmap->type = type;
+  texmap->type = eTexMapping_Type(type);
 }
 
 void BKE_texture_mapping_init(TexMapping *texmap)
@@ -357,7 +357,7 @@ void BKE_texture_default(Tex *tex)
   texture_init_data(&tex->id);
 }
 
-void BKE_texture_type_set(Tex *tex, int type)
+void BKE_texture_type_set(Tex *tex, eTex_Type type)
 {
   tex->type = type;
 }
@@ -587,6 +587,8 @@ bool BKE_texture_is_image_user(const Tex *tex)
     case TEX_IMAGE: {
       return true;
     }
+    default:
+      break;
   }
 
   return false;

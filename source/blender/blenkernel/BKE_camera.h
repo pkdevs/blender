@@ -48,6 +48,7 @@ struct CameraParams {
   float lens = 0.0f;
   float ortho_scale = 1.0f;
   float zoom = 1.0f;
+  float roll = 0.0f;
 
   float shiftx = 0.0f;
   float shifty = 0.0f;
@@ -95,6 +96,29 @@ void BKE_camera_params_crop_viewplane(rctf *viewplane, int winx, int winy, const
  */
 void BKE_camera_params_compute_matrix(CameraParams *params);
 
+/* Camera Border in Viewport */
+
+/** Camera frame within a viewport of the given size, in viewport pixels. */
+rctf BKE_camera_view_border(const struct Scene *scene,
+                            const struct Depsgraph *depsgraph,
+                            const struct View3D *v3d,
+                            const struct RegionView3D *rv3d,
+                            int winx,
+                            int winy,
+                            bool no_shift,
+                            bool no_zoom,
+                            bool no_roll);
+
+/** Border to render within a viewport of the given size, in viewport pixels. */
+bool BKE_camera_view_render_border(const struct Scene *scene,
+                                   const struct Depsgraph *depsgraph,
+                                   const struct View3D *v3d,
+                                   const struct RegionView3D *rv3d,
+                                   int winx,
+                                   int winy,
+                                   rctf *r_border,
+                                   rctf *r_unrolled_border);
+
 /* Camera View Frame */
 
 void BKE_camera_view_frame_ex(const struct Scene *scene,
@@ -134,7 +158,8 @@ bool BKE_camera_view_frame_fit_to_coords(const struct Depsgraph *depsgraph,
 /**
  * Returns the camera to be used for render.
  */
-struct Object *BKE_camera_multiview_render(const struct Scene *scene,
+struct Object *BKE_camera_multiview_render(const Main &bmain,
+                                           const struct Scene *scene,
                                            struct Object *camera,
                                            const char *viewname);
 /**
@@ -173,7 +198,7 @@ struct CameraBGImage *BKE_camera_background_image_new(struct Camera *cam);
 /**
  * Duplicate a background image, in a ID management compatible way.
  *
- * \param copy_flag: The usual ID copying flags, see `LIB_ID_CREATE_`/`LIB_ID_COPY_` enums in
+ * \param flag: The usual ID copying flags, see `LIB_ID_CREATE_`/`LIB_ID_COPY_` enums in
  * `BKE_lib_id.hh`.
  */
 struct CameraBGImage *BKE_camera_background_image_copy(const struct CameraBGImage *bgpic_src,

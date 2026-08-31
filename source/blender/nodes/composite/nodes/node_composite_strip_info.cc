@@ -21,11 +21,11 @@ namespace blender::nodes::node_composite_strip_info_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Int>("Start Frame");
-  b.add_output<decl::Int>("End Frame");
-  b.add_output<decl::Vector>("Location").dimensions(2);
-  b.add_output<decl::Float>("Rotation");
-  b.add_output<decl::Vector>("Scale").dimensions(2);
+  b.add_output<decl::Int>("Start Frame"_ustr);
+  b.add_output<decl::Int>("End Frame"_ustr);
+  b.add_output<decl::Vector>("Location"_ustr).dimensions(2);
+  b.add_output<decl::Float>("Rotation"_ustr);
+  b.add_output<decl::Vector>("Scale"_ustr).dimensions(2);
 }
 
 using namespace blender::compositor;
@@ -83,7 +83,7 @@ static void node_extra_info(NodeExtraInfoParams &parameters)
     NodeExtraInfoRow row;
     row.text = RPT_("Node Unsupported");
     row.tooltip = TIP_("The Strip Info node is only supported for sequencer compositing");
-    row.icon = ICON_ERROR;
+    row.icon = ICON_STATUS_ERROR;
     parameters.rows.append(std::move(row));
   }
 }
@@ -97,7 +97,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeSequencerStripInfo");
+  cmp_node_type_base(&ntype, "CompositorNodeSequencerStripInfo"_ustr);
   ntype.ui_name = "Sequencer Strip Info";
   ntype.ui_description = "Returns information about the active strip of the modifier";
   ntype.nclass = NODE_CLASS_INPUT;

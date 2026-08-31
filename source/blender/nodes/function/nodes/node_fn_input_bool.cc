@@ -14,7 +14,7 @@ namespace blender::nodes::node_fn_input_bool_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Bool>("Boolean").custom_draw([](CustomSocketDrawParams &params) {
+  b.add_output<decl::Bool>("Boolean"_ustr).custom_draw([](CustomSocketDrawParams &params) {
     params.layout.alignment_set(ui::LayoutAlign::Expand);
     ui::Layout &row = params.layout.row(true);
     row.prop(
@@ -32,7 +32,7 @@ static int gpu_shader_bool(GPUMaterial *mat,
                            GPUNodeStack *out)
 {
   NodeInputBool *node_storage = static_cast<NodeInputBool *>(node->storage);
-  float value = static_cast<float>(node_storage->boolean);
+  float value = float(node_storage->boolean);
   return GPU_link(mat, "set_value", GPU_uniform(&value), &out->link);
 }
 
@@ -62,7 +62,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "FunctionNodeInputBool", FN_NODE_INPUT_BOOL);
+  common_node_type_base(&ntype, "FunctionNodeInputBool"_ustr, FN_NODE_INPUT_BOOL);
   ntype.ui_name = "Boolean";
   ntype.ui_description =
       "Provide a True/False value that can be connected to other nodes in the tree";

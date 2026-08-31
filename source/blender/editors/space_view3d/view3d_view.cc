@@ -8,12 +8,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_action.hh"
 #include "BKE_context.hh"
@@ -77,7 +77,8 @@ static wmOperatorStatus view3d_camera_to_view_exec(bContext *C, wmOperator * /*o
 
   BKE_object_tfm_protected_backup(v3d->camera, &obtfm);
 
-  ED_view3d_to_object(depsgraph, v3d->camera, rv3d->ofs, rv3d->viewquat, rv3d->dist);
+  ED_view3d_to_object(depsgraph, v3d->camera, rv3d->ofs, rv3d->viewquat, rv3d->dist, 0.0f);
+  rv3d->camroll = 0.0f;
 
   BKE_object_tfm_protected_restore(v3d->camera, &obtfm, v3d->camera->protectflag);
 
@@ -384,6 +385,10 @@ static void obmat_to_viewmat(RegionView3D *rv3d, Object *ob)
   rv3d->view = RV3D_VIEW_USER; /* don't show the grid */
 
   normalize_m4_m4(bmat, ob->object_to_world().ptr());
+  /* Apply roll. */
+  if (rv3d->camroll != 0.0f) {
+    rotate_m4(bmat, 'Z', -rv3d->camroll);
+  }
   invert_m4_m4(rv3d->viewmat, bmat);
 
   /* view quat calculation, needed for add object */
@@ -522,16 +527,62 @@ static bool drw_select_loop_pass(eDRWSelectStage stage, void *user_data)
   return continue_pass;
 }
 
-eV3DSelectObjectFilter ED_view3d_select_filter_from_mode(const Scene *scene, const Object *obact)
+/** When the mode is locked, optionally override the filter (a special case). */
+static std::optional<eV3DSelectObjectFilter> view3d_select_filter_from_mode_lock_override(
+    const View3D *v3d, const Object *obact)
 {
-  if (scene->toolsettings->object_flag & SCE_OBJECT_MODE_LOCK) {
-    if (obact && (obact->mode & OB_MODE_ALL_WEIGHT_PAINT) &&
-        BKE_object_pose_armature_get(const_cast<Object *>(obact)))
+  /* The caller ensures this only runs when #SCE_OBJECT_MODE_LOCK is set.
+   * Only restrict selection to bones when the user turns on "Lock Object Modes".
+   * If the lock is off, skip this so other objects can still be selected, see #66950 & #125822. */
+
+  if (v3d->flag2 & V3D_HIDE_OVERLAYS) {
+    return std::nullopt;
+  }
+
+  /* NOTE: don't use #BKE_object_pose_armature_get as it doesn't check for weight-paint mode
+   * when using the deforming armature (breaking selection outside weight paint mode). */
+  if (const Object *obpose = OBPOSE_FROM_OBACT(obact)) {
+    if (obpose->mode == OB_MODE_POSE) {
+      /* This check only makes sense in pose-mode,
+       * where this "X-ray" options gives pose-bones a priority over other objects.
+       *
+       * Must not be used in weight-paint mode as it prevents pose
+       * selection *unless* X-ray is enabled. see: #158045. */
+      if ((v3d->overlay.flag & V3D_OVERLAY_BONE_SELECT) == 0) {
+        return std::nullopt;
+      }
+      return VIEW3D_SELECT_FILTER_OBJECT_MODE_LOCK_SAME_TYPE;
+    }
+  }
+  else if (const Object *obweight = OBWEIGHTPAINT_ALL_FROM_OBACT(obact)) {
+    /* Only use Armature pose selection, when connected armature is in pose mode. */
+    if (const Object *ob_armature = BKE_modifiers_is_deformed_by_armature(
+            const_cast<Object *>(obweight)))
     {
-      return VIEW3D_SELECT_FILTER_WPAINT_POSE_MODE_LOCK;
+      if (ob_armature->mode == OB_MODE_POSE) {
+        return VIEW3D_SELECT_FILTER_WPAINT_POSE_MODE_LOCK;
+      }
+    }
+  }
+
+  /* No pose override. */
+  return std::nullopt;
+}
+
+eV3DSelectObjectFilter ED_view3d_select_filter_from_mode(const Scene *scene,
+                                                         const View3D *v3d,
+                                                         const Object *obact)
+{
+  const ToolSettings *ts = scene->toolsettings;
+  if (ts->object_flag & SCE_OBJECT_MODE_LOCK) {
+    if (std::optional<eV3DSelectObjectFilter> filter_override =
+            view3d_select_filter_from_mode_lock_override(v3d, obact))
+    {
+      return *filter_override;
     }
     return VIEW3D_SELECT_FILTER_OBJECT_MODE_LOCK;
   }
+
   return VIEW3D_SELECT_FILTER_NOP;
 }
 
@@ -539,14 +590,14 @@ eV3DSelectObjectFilter ED_view3d_select_filter_from_mode(const Scene *scene, con
 static bool drw_select_filter_object_mode_lock(Object *ob, void *user_data)
 {
   const Object *obact = static_cast<const Object *>(user_data);
-  return BKE_object_is_mode_compat(ob, eObjectMode(obact->mode));
+  return BKE_object_is_mode_compat(ob, obact->mode);
 }
 
 /** Implement #VIEW3D_SELECT_FILTER_OBJECT_MODE_LOCK_SAME_TYPE. */
 static bool drw_select_filter_object_mode_lock_same_type(Object *ob, void *user_data)
 {
   const Object *obact = static_cast<const Object *>(user_data);
-  return (obact->type == ob->type) && BKE_object_is_mode_compat(ob, eObjectMode(obact->mode));
+  return (obact->type == ob->type) && BKE_object_is_mode_compat(ob, obact->mode);
 }
 
 /**
@@ -575,9 +626,7 @@ int view3d_gpu_select_ex(const ViewContext *vc,
   ARegion *region = vc->region;
   rcti rect;
   int hits = 0;
-  BKE_view_layer_synced_ensure(scene, vc->view_layer);
-  const bool use_obedit_skip = (BKE_view_layer_edit_object_get(vc->view_layer) != nullptr) &&
-                               (vc->obedit == nullptr);
+  BKE_view_layer_synced_ensure(*vc->bmain, scene, vc->view_layer);
   const bool use_nearest = select_mode == VIEW3D_SELECT_PICK_NEAREST;
   bool draw_surface = true;
 
@@ -703,7 +752,6 @@ int view3d_gpu_select_ex(const ViewContext *vc,
     DRW_draw_select_loop(depsgraph,
                          region,
                          v3d,
-                         use_obedit_skip,
                          draw_surface,
                          use_nearest,
                          do_material_slot_selection,
@@ -734,7 +782,6 @@ int view3d_gpu_select_ex(const ViewContext *vc,
     DRW_draw_select_loop(depsgraph,
                          region,
                          v3d,
-                         use_obedit_skip,
                          draw_surface,
                          use_nearest,
                          do_material_slot_selection,
@@ -861,14 +908,14 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
     changed = false;
   }
   else {
-    BKE_view_layer_synced_ensure(scene, view_layer);
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     Object *obedit = BKE_view_layer_edit_object_get(view_layer);
     if (obedit) {
-      BKE_view_layer_synced_ensure(scene, view_layer);
+      BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
       for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
         base.local_view_bits &= ~local_view_bit;
       }
-      FOREACH_BASE_IN_EDIT_MODE_BEGIN (scene, view_layer, v3d, base_iter) {
+      FOREACH_BASE_IN_EDIT_MODE_BEGIN (bmain, scene, view_layer, v3d, base_iter) {
         Object *ob_eval = DEG_get_evaluated(depsgraph, base_iter->object);
         BKE_object_minmax(ob_eval ? ob_eval : base_iter->object, min, max);
         base_iter->local_view_bits |= local_view_bit;
@@ -877,7 +924,7 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
       FOREACH_BASE_IN_EDIT_MODE_END;
     }
     else {
-      BKE_view_layer_synced_ensure(scene, view_layer);
+      BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
       for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
         if (BASE_SELECTED(v3d, &base)) {
           Object *ob_eval = DEG_get_evaluated(depsgraph, base.object);
@@ -892,7 +939,7 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
     }
 
     sub_v3_v3v3(box, max, min);
-    size = max_fff(box[0], box[1], box[2]);
+    size = std::max({box[0], box[1], box[2]});
   }
 
   if (changed == false) {
@@ -930,9 +977,14 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
         negate_v3_v3(ofs_new, mid);
 
         if (rv3d->persp == RV3D_CAMOB) {
+          rv3d->persp = RV3D_PERSP;
           camera_old = v3d->camera;
-          const Camera &camera = *id_cast<Camera *>(camera_old->data);
-          rv3d->persp = (camera.type == CAM_ORTHO) ? RV3D_ORTHO : RV3D_PERSP;
+          if (camera_old && camera_old->type == OB_CAMERA) {
+            const Camera &camera = *id_cast<Camera *>(camera_old->data);
+            if (camera.type == CAM_ORTHO) {
+              rv3d->persp = RV3D_ORTHO;
+            }
+          }
         }
 
         if (rv3d->persp == RV3D_ORTHO) {
@@ -985,7 +1037,7 @@ static bool view3d_localview_exit(const Depsgraph *depsgraph,
   if (v3d->localvd == nullptr) {
     return changed;
   }
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*DEG_get_bmain(depsgraph), scene, view_layer);
   for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
     if (base.local_view_bits & v3d->local_view_uid) {
       base.local_view_bits &= ~v3d->local_view_uid;
@@ -1071,7 +1123,7 @@ bool ED_localview_exit_if_empty(const Depsgraph *depsgraph,
 
   v3d->localvd->runtime.flag &= ~V3D_RUNTIME_LOCAL_MAYBE_EMPTY;
 
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*DEG_get_bmain(depsgraph), scene, view_layer);
   for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
     if (base.local_view_bits & v3d->local_view_uid) {
       return false;
@@ -1159,7 +1211,7 @@ static wmOperatorStatus localview_remove_from_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   bool changed = false;
-  BKE_view_layer_synced_ensure(scene, view_layer);
+  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
     if (BASE_SELECTED(v3d, &base)) {
       base.local_view_bits &= ~v3d->local_view_uid;
@@ -1344,7 +1396,7 @@ void ED_view3d_local_collections_reset(const bContext *C, const bool reset_all)
     view3d_local_collections_reset(bmain, ~0);
     View3D v3d = {};
     v3d.local_collections_uid = ~0;
-    BKE_layer_collection_local_sync(CTX_data_scene(C), CTX_data_view_layer(C), &v3d);
+    BKE_layer_collection_local_sync(*bmain, CTX_data_scene(C), CTX_data_view_layer(C), &v3d);
     DEG_id_tag_update(&CTX_data_scene(C)->id, ID_RECALC_BASE_FLAGS);
   }
 }
@@ -1393,7 +1445,7 @@ void ED_view3d_xr_shading_update(wmWindowManager *wm, const View3D *v3d, const S
   if (v3d->runtime.flag & V3D_RUNTIME_XR_SESSION_ROOT) {
     View3DShading *xr_shading = &wm->xr.session_settings.shading;
     /* Flags that shouldn't be overridden by the 3D View shading. */
-    int flag_copy = 0;
+    eView3DShading_Flag flag_copy = eView3DShading_Flag{};
     if (v3d->shading.type != OB_SOLID) {
       /* Don't set V3D_SHADING_WORLD_ORIENTATION for solid shading since it results in distorted
        * lighting when the view matrix has a scale factor. */
@@ -1416,7 +1468,7 @@ void ED_view3d_xr_shading_update(wmWindowManager *wm, const View3D *v3d, const S
     }
 
     /* Copy shading from View3D to VR view. */
-    const int old_xr_shading_flag = xr_shading->flag;
+    const eView3DShading_Flag old_xr_shading_flag = xr_shading->flag;
     *xr_shading = v3d->shading;
     xr_shading->flag = (xr_shading->flag & ~flag_copy) | (old_xr_shading_flag & flag_copy);
     if (v3d->shading.prop) {

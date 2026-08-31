@@ -21,10 +21,12 @@
 #include "BKE_main.hh"
 #include "BKE_scene.hh"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_timeit.hh"
+
+#include "ED_util.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -215,6 +217,8 @@ bool ABC_export(Scene *scene,
   job->wm = CTX_wm_manager(C);
   job->export_ok = false;
   STRNCPY(job->filepath, filepath);
+
+  ED_editors_flush_edits(job->bmain);
 
   job->depsgraph = DEG_graph_new(job->bmain, scene, view_layer, params->evaluation_mode);
   job->params = *params;

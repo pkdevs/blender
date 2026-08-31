@@ -16,6 +16,7 @@
 #include "DNA_view3d_enums.h"
 
 #include "GPU_index_buffer.hh"
+#include "GPU_ray_tracing.hh"
 #include "GPU_shader.hh"
 #include "GPU_vertex_buffer.hh"
 
@@ -239,9 +240,11 @@ BLI_STATIC_ASSERT(MBC_BATCH_LEN < 64, "Number of batches exceeded the limit of b
 
 struct MeshExtractLooseGeom {
   /** Indices of all vertices not used by edges in the #Mesh or #BMesh. */
-  Array<int> verts;
+  IndexMask verts;
   /** Indices of all edges not used by faces in the #Mesh or #BMesh. */
-  Array<int> edges;
+  IndexMask edges;
+  /** Used for BMesh which does not cache loose geometry index masks. */
+  std::unique_ptr<LinearAllocator<>> allocator;
 };
 
 struct SortedFaceData {
@@ -284,11 +287,15 @@ struct MeshBatchCache {
   /* Index buffer per material. These are sub-ranges of `ibo.tris`. */
   Array<gpu::IndexBufPtr> tris_per_mat;
   Array<gpu::Batch *> surface_per_mat;
+  gpu::BottomLevelAS *surface_blas;
 
   DRWSubdivCache *subdiv_cache;
 
   DRWBatchFlag batch_requested;
   DRWBatchFlag batch_ready;
+
+  bool surface_blas_requested;
+  bool surface_blas_ready;
 
   /* Settings to determine if cache is invalid. */
   int edge_len;

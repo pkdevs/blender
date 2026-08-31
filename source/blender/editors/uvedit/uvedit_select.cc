@@ -18,20 +18,20 @@
 #include "DNA_space_types.h"
 
 #include "BLI_array.hh"
-#include "BLI_hash.h"
-#include "BLI_heap.h"
+#include "BLI_hash_c.hh"
+#include "BLI_heap.hh"
 #include "BLI_kdopbvh.hh"
 #include "BLI_kdtree.hh"
 #include "BLI_lasso_2d.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_memarena.h"
-#include "BLI_polyfill_2d.h"
-#include "BLI_polyfill_2d_beautify.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_memarena.hh"
+#include "BLI_polyfill_2d.hh"
+#include "BLI_polyfill_2d_beautify.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector_list.hh"
 
 #include "BLT_translation.hh"
@@ -66,6 +66,20 @@
 #include "uvedit_intern.hh"
 
 namespace blender {
+
+enum class UVDelimitMode : int {
+  Seam = 1 << 0,
+  Sharp = 1 << 1,
+  Material = 1 << 2,
+};
+ENUM_OPERATORS(UVDelimitMode)
+
+static const EnumPropertyItem uv_delimit_mode_items[] = {
+    {int(UVDelimitMode::Seam), "SEAM", 0, "Seam", "Delimit by edge seams"},
+    {int(UVDelimitMode::Sharp), "SHARP", 0, "Sharp", "Delimit by sharp edges"},
+    {int(UVDelimitMode::Material), "MATERIAL", 0, "Material", "Delimit by face material"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
 
 static void uv_select_all_perform_multi_ex(const Scene *scene,
                                            Span<Object *> objects,
@@ -2526,6 +2540,53 @@ static int uv_select_edgering(Scene *scene, Object *obedit, UvNearestHit *hit, c
 /** \name Select Linked
  * \{ */
 
+/**
+ * Check if the face linked through `l_vert_step` should be blocked by the delimit mode.
+ *
+ * \param f_src: The current face (source of the flood-fill step).
+ * \param l_vert_step: A loop of `f_src`; the candidate face is linked through `l_vert_step->v`.
+ * \param f_dst: The candidate face to propagate into.
+ * \param delimit_mode: Active delimiter flags.
+ * \return true if propagation should be limited.
+ */
+static bool uv_select_linked_delimit_check(const BMFace *f_src,
+                                           const BMLoop *l_vert_step,
+                                           const BMFace *f_dst,
+                                           const UVDelimitMode delimit_mode)
+{
+  /* Material is a face property, check independently of edges. */
+  if (bool(delimit_mode & UVDelimitMode::Material) && f_src->mat_nr != f_dst->mat_nr) {
+    return true;
+  }
+
+  /* Check edge-based delimiters on the two edges of `f_src` incident on `l_vert_step->v`.
+   * These are the only edges that can be shared with `f_dst`
+   * since the faces are linked through this vertex. */
+  constexpr UVDelimitMode edge_delimit = UVDelimitMode::Seam | UVDelimitMode::Sharp;
+  if (bool(delimit_mode & edge_delimit)) {
+    const BMEdge *edges[] = {l_vert_step->e, l_vert_step->prev->e};
+    bool has_valid_edge = false;
+    for (const BMEdge *e : edges) {
+      if (!BM_edge_in_face(e, f_dst)) {
+        continue;
+      }
+      if (bool(delimit_mode & UVDelimitMode::Seam) && BM_elem_flag_test(e, BM_ELEM_SEAM)) {
+        continue;
+      }
+      if (bool(delimit_mode & UVDelimitMode::Sharp) && !BM_elem_flag_test(e, BM_ELEM_SMOOTH)) {
+        continue;
+      }
+      has_valid_edge = true;
+      break;
+    }
+    if (!has_valid_edge) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 static void uv_select_linked_multi(const Scene *scene,
                                    const Span<Object *> objects,
                                    UvNearestHit *hit,
@@ -2533,6 +2594,7 @@ static void uv_select_linked_multi(const Scene *scene,
                                    bool deselect,
                                    const bool toggle,
                                    const bool select_faces,
+                                   const UVDelimitMode delimit_mode,
                                    const char hflag)
 {
   if (select_faces) {
@@ -2693,6 +2755,12 @@ static void uv_select_linked_multi(const Scene *scene,
             break;
           }
           if (!flag[iterv->face_index]) {
+            if (delimit_mode != UVDelimitMode(0)) {
+              BMFace *iterv_f = BM_face_at_index(bm, iterv->face_index);
+              if (uv_select_linked_delimit_check(efa, l, iterv_f, delimit_mode)) {
+                continue;
+              }
+            }
             flag[iterv->face_index] = 1;
             stack[stacksize] = iterv->face_index;
             stacksize++;
@@ -2908,12 +2976,12 @@ struct UVSelectLinkedHelper : NonCopyable, NonMovable {
   bool face_add(BMFace *efa)
   {
     /* Lazily create the UV vertex map, stack, and face tracking. */
-    if (UNLIKELY(!has_data)) {
+    if (!has_data) [[unlikely]] {
       const ToolSettings *ts = scene->toolsettings;
       const bool uv_select_sync = (ts->uv_flag & UV_FLAG_SELECT_SYNC);
       BM_mesh_elem_table_ensure(bm, BM_FACE);
       vmap_ = BM_uv_vert_map_create(bm, !uv_select_sync, true);
-      if (UNLIKELY(vmap_ == nullptr)) {
+      if (vmap_ == nullptr) [[unlikely]] {
         /* This will keep attempting to allocate on every `face_add` call.
          * This is weak but such a corner case that it's not worth attempting to
          * gracefully handle the code path in the case there is no mapping data to use. */
@@ -3081,6 +3149,7 @@ const float *uvedit_first_selected_uv_from_vertex(Scene *scene,
 
 static wmOperatorStatus uv_select_more_less(bContext *C, const bool select)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
@@ -3090,7 +3159,7 @@ static wmOperatorStatus uv_select_more_less(bContext *C, const bool select)
   const ToolSettings *ts = scene->toolsettings;
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   const bool is_uv_face_selectmode = (ts->uv_flag & UV_FLAG_SELECT_SYNC) ?
                                          (ts->selectmode == SCE_SELECT_FACE) :
@@ -3558,6 +3627,7 @@ static void uv_select_all_perform_multi(const Scene *scene, Span<Object *> objec
 static wmOperatorStatus uv_select_all_exec(bContext *C, wmOperator *op)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   const ToolSettings *ts = scene->toolsettings;
   ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -3565,7 +3635,7 @@ static wmOperatorStatus uv_select_all_exec(bContext *C, wmOperator *op)
   int action = RNA_enum_get(op->ptr, "action");
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   uv_select_all_perform_multi(scene, objects, action);
 
@@ -3759,7 +3829,7 @@ static bool uv_mouse_select_multi(bContext *C,
       /* Current behavior of 'extend'
        * is actually toggling, so pass extend flag as 'toggle' here */
       uv_select_linked_multi(
-          scene, objects, &hit, extend, deselect, toggle, false, BM_ELEM_SELECT);
+          scene, objects, &hit, extend, deselect, toggle, false, UVDelimitMode(0), BM_ELEM_SELECT);
       /* TODO: check if this actually changed. */
       changed = true;
     }
@@ -3880,10 +3950,11 @@ static bool uv_mouse_select_multi(bContext *C,
 }
 static bool uv_mouse_select(bContext *C, const float co[2], const SelectPick_Params &params)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
   bool changed = uv_mouse_select_multi(C, objects, co, params);
   return changed;
 }
@@ -4033,10 +4104,11 @@ static wmOperatorStatus uv_mouse_select_loop_generic(bContext *C,
                                                      const bool extend,
                                                      enum eUVLoopGenericType loop_type)
 {
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
   wmOperatorStatus ret = uv_mouse_select_loop_generic_multi(C, objects, co, extend, loop_type);
   return ret;
 }
@@ -4181,6 +4253,7 @@ static wmOperatorStatus uv_select_linked_internal(bContext *C,
                                                   bool pick)
 {
   const ARegion *region = CTX_wm_region(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   const ToolSettings *ts = scene->toolsettings;
   ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -4196,9 +4269,10 @@ static wmOperatorStatus uv_select_linked_internal(bContext *C,
     extend = RNA_boolean_get(op->ptr, "extend");
     deselect = RNA_boolean_get(op->ptr, "deselect");
   }
+  const UVDelimitMode delimit_mode = UVDelimitMode(RNA_enum_get(op->ptr, "delimit"));
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   if (pick) {
     float co[2];
@@ -4229,6 +4303,7 @@ static wmOperatorStatus uv_select_linked_internal(bContext *C,
                          deselect,
                          false,
                          select_faces,
+                         delimit_mode,
                          BM_ELEM_SELECT);
 
   if (pick) {
@@ -4263,6 +4338,14 @@ void UV_OT_select_linked(wmOperatorType *ot)
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* properties */
+  RNA_def_enum_flag(ot->srna,
+                    "delimit",
+                    uv_delimit_mode_items,
+                    0,
+                    "Delimit",
+                    "Delimit selection when selecting linked UVs");
 }
 
 /** \} */
@@ -4312,6 +4395,12 @@ void UV_OT_select_linked_pick(wmOperatorType *ot)
                          "Deselect",
                          "Deselect linked UV vertices rather than selecting them");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  RNA_def_enum_flag(ot->srna,
+                    "delimit",
+                    uv_delimit_mode_items,
+                    0,
+                    "Delimit",
+                    "Delimit selection when selecting linked UVs");
   prop = RNA_def_float_vector(
       ot->srna,
       "location",
@@ -4341,6 +4430,7 @@ void UV_OT_select_linked_pick(wmOperatorType *ot)
 static wmOperatorStatus uv_select_split_exec(bContext *C, wmOperator *op)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const ToolSettings *ts = scene->toolsettings;
@@ -4363,7 +4453,7 @@ static wmOperatorStatus uv_select_split_exec(bContext *C, wmOperator *op)
   bool changed_multi = false;
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   for (Object *obedit : objects) {
     BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
@@ -4505,58 +4595,6 @@ static void uv_select_tag_update_for_object(Depsgraph *depsgraph,
 }
 
 /**
- * Helper function for #uv_select_flush_from_tag_loop and #uv_select_flush_from_tag_face.
- */
-static void uvedit_uv_select_flush_from_tag_sticky_loc_internal(
-    const Scene *scene, BMesh *bm, BMLoop *l, const bool select, const BMUVOffsets &offsets)
-{
-  uvedit_uv_select_set(scene, bm, l, select);
-
-  BMVert *v = l->v;
-  BLI_assert(v->e);
-  const BMEdge *e_iter, *e_first;
-  e_iter = e_first = v->e;
-  do {
-    if (e_iter->l == nullptr) {
-      continue;
-    }
-    BMLoop *l_first = e_iter->l;
-    BMLoop *l_iter = l_first;
-    do {
-      if (!(l_iter->v == v && l_iter != l)) {
-        continue;
-      }
-      if (!uvedit_face_visible_test(scene, l_iter->f)) {
-        continue;
-      }
-      if (BM_loop_uv_share_vert_check(l, l_iter, offsets.uv)) {
-        uvedit_uv_select_set(scene, bm, l_iter, select);
-      }
-    } while ((l_iter = l_iter->radial_next) != l_first);
-  } while ((e_iter = BM_DISK_EDGE_NEXT(e_iter, v)) != e_first);
-}
-
-/**
- * Helper function for #uv_select_flush_from_tag_face.
- */
-static void uvedit_edge_select_flush_from_tag_sticky_loc_internal(
-    const Scene *scene, BMesh *bm, BMLoop *l, const bool select, const BMUVOffsets &offsets)
-{
-  uvedit_edge_select_set(scene, bm, l, select);
-  if (l->radial_next != l) {
-    BMLoop *l_iter = l->radial_next;
-    do {
-      if (!uvedit_face_visible_test(scene, l_iter->f)) {
-        continue;
-      }
-      if (BM_loop_uv_share_edge_check(l, l_iter, offsets.uv)) {
-        uvedit_edge_select_set(scene, bm, l_iter, select);
-      }
-    } while ((l_iter = l_iter->radial_next) != l);
-  }
-}
-
-/**
  * Flush the selection from face tags based on sticky and selection modes.
  *
  * needed because setting the selection of a face is done in a number of places but it also
@@ -4623,14 +4661,17 @@ static void uv_select_flush_from_tag_face(const Scene *scene, Object *obedit, co
         uvedit_loop_edge_select_set(ts, bm, l, select);
 
         if (select) {
-          uvedit_uv_select_flush_from_tag_sticky_loc_internal(scene, bm, l, select, offsets);
+          uvedit_edge_select_shared_vert(scene, bm, l, select, UV_STICKY_LOCATION, offsets);
         }
         else {
+          /* Match selecting logic, except UV's still used by other selected faces must be kept.
+           * Note that #uvedit_edge_select_shared_vert only de-selects a UV vertex once it's
+           * last selected UV edge is de-selected, see: #161419. */
           if (!uvedit_vert_is_face_select_any_other(ts, bm, l, offsets)) {
-            uvedit_uv_select_flush_from_tag_sticky_loc_internal(scene, bm, l, select, offsets);
+            uvedit_uv_select_shared_vert(scene, bm, l, select, UV_STICKY_LOCATION, offsets);
           }
           if (!uvedit_edge_is_face_select_any_other(ts, bm, l, offsets)) {
-            uvedit_edge_select_flush_from_tag_sticky_loc_internal(scene, bm, l, select, offsets);
+            uvedit_edge_select_shared_vert(scene, bm, l, select, UV_STICKY_LOCATION, offsets);
           }
         }
       }
@@ -4735,7 +4776,7 @@ static void uv_select_flush_from_tag_loop(const Scene *scene, Object *obedit, co
       bool tag_any = false;
       BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
         if (BM_elem_flag_test(l, BM_ELEM_TAG)) {
-          uvedit_uv_select_flush_from_tag_sticky_loc_internal(scene, bm, l, select, offsets);
+          uvedit_uv_select_shared_vert(scene, bm, l, select, UV_STICKY_LOCATION, offsets);
           tag_any = true;
         }
         else {
@@ -4827,8 +4868,8 @@ static void uv_select_flush_from_loop_edge_flag(const Scene *scene, BMesh *bm)
       BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
         /* Select verts based on UV edge flag. */
         if (uvedit_edge_select_get_no_sync(ts, bm, l)) {
-          uvedit_uv_select_flush_from_tag_sticky_loc_internal(scene, bm, l, true, offsets);
-          uvedit_uv_select_flush_from_tag_sticky_loc_internal(scene, bm, l->next, true, offsets);
+          uvedit_uv_select_shared_vert(scene, bm, l, true, UV_STICKY_LOCATION, offsets);
+          uvedit_uv_select_shared_vert(scene, bm, l->next, true, UV_STICKY_LOCATION, offsets);
         }
       }
     }
@@ -4892,6 +4933,7 @@ static wmOperatorStatus uv_box_select_exec(bContext *C, wmOperator *op)
   }
 
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  const Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const ARegion *region = CTX_wm_region(C);
   BMFace *efa;
@@ -4911,7 +4953,7 @@ static wmOperatorStatus uv_box_select_exec(bContext *C, wmOperator *op)
   bool changed_multi = false;
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   if (use_pre_deselect) {
     uv_select_all_perform_multi(scene, objects, SEL_DESELECT);
@@ -5158,6 +5200,7 @@ static wmOperatorStatus uv_circle_select_exec(bContext *C, wmOperator *op)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   SpaceImage *sima = CTX_wm_space_image(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const ToolSettings *ts = scene->toolsettings;
@@ -5201,7 +5244,7 @@ static wmOperatorStatus uv_circle_select_exec(bContext *C, wmOperator *op)
   UVCircleSelectState *state = static_cast<UVCircleSelectState *>(gesture->user_data.data);
   if (state == nullptr) {
     Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-        scene, view_layer, nullptr);
+        *bmain, scene, view_layer, nullptr);
     state = MEM_new<UVCircleSelectState>(__func__, scene, std::move(objects), use_select_linked);
     gesture->user_data.data = state;
     gesture->user_data.free_fn = uv_circle_select_state_free;
@@ -5238,17 +5281,19 @@ static wmOperatorStatus uv_circle_select_exec(bContext *C, wmOperator *op)
     /* do selection */
     if (uv_select_mode == UV_SELECT_FACE) {
       /* Handle face selection (face center). */
-      if (use_select_linked) {
-        BM_mesh_elem_hflag_disable_all(bm, BM_FACE, BM_ELEM_TAG, false);
-      }
       BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
+        /* Clear the tag on hidden faces too, needed for: #uv_select_flush_from_tag_face. */
+        BM_elem_flag_disable(efa, BM_ELEM_TAG);
+
+        if (!uvedit_face_visible_test(scene, efa)) {
+          continue;
+        }
         if (use_select_linked) {
           if (linked_helper->face_check(efa)) {
             continue;
           }
         }
         else {
-          BM_elem_flag_disable(efa, BM_ELEM_TAG);
           if (select == uvedit_face_select_test(scene, bm, efa)) {
             continue;
           }
@@ -5424,6 +5469,7 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   const ARegion *region = CTX_wm_region(C);
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   const ToolSettings *ts = scene->toolsettings;
   ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -5445,7 +5491,7 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
   BLI_lasso_boundbox(&rect, mcoords);
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   if (use_pre_deselect) {
     uv_select_all_perform_multi(scene, objects, SEL_DESELECT);
@@ -5472,17 +5518,18 @@ static bool do_lasso_select_mesh_uv(bContext *C, const Span<int2> mcoords, const
 
     if (uv_select_mode == UV_SELECT_FACE) {
       /* Handle face selection (face center). */
-      if (use_select_linked) {
-        BM_mesh_elem_hflag_disable_all(bm, BM_FACE, BM_ELEM_TAG, false);
-      }
       BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
+        /* Clear the tag on hidden faces too, needed for: #uv_select_flush_from_tag_face. */
+        BM_elem_flag_disable(efa, BM_ELEM_TAG);
+        if (!uvedit_face_visible_test(scene, efa)) {
+          continue;
+        }
         if (use_select_linked) {
           if (linked_helper->face_check(efa)) {
             continue;
           }
         }
         else {
-          BM_elem_flag_disable(efa, BM_ELEM_TAG);
           if (select == uvedit_face_select_test(scene, bm, efa)) {
             continue;
           }
@@ -5669,13 +5716,14 @@ static wmOperatorStatus uv_select_pinned_exec(bContext *C, wmOperator *op)
   }
 
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  const Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   BMFace *efa;
   BMLoop *l;
   BMIter iter, liter;
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   for (Object *obedit : objects) {
     Mesh &mesh = *id_cast<Mesh *>(obedit->data);
@@ -5788,20 +5836,21 @@ static bool overlap_tri_tri_uv_test(const float t1[3][2],
   return false;
 }
 
-static wmOperatorStatus uv_select_overlap(bContext *C, const bool extend)
+static wmOperatorStatus uv_select_overlap(bContext *C, const bool extend, const bool select_island)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
   const ToolSettings *ts = scene->toolsettings;
   const bool uv_select_sync = (ts->uv_flag & UV_FLAG_SELECT_SYNC);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   struct ChangedInfo {
-    uint has_changed : 1;
-    uint has_overlap : 1;
+    uint has_changed : 1 = 0;
+    uint has_overlap : 1 = 0;
   };
 
   struct UVOverlapData {
@@ -5818,7 +5867,7 @@ static wmOperatorStatus uv_select_overlap(bContext *C, const bool extend)
     bool found_overlap;
   };
 
-  Array<ChangedInfo> objects_tag(objects.size(), {false, false});
+  Array<ChangedInfo> objects_tag(objects.size());
 
   /* Calculate maximum number of tree nodes and prepare initial selection. */
   uint uv_tri_len = 0;
@@ -6023,6 +6072,27 @@ static wmOperatorStatus uv_select_overlap(bContext *C, const bool extend)
     BLI_bvhtree_overlap_ex(probe_tree, uv_tree, nullptr, bvh_overlap_fn, &query_data, 1, 0);
   }
 
+  if (select_island) {
+    for (const int i : IndexRange(objects.size())) {
+      if (!objects_tag[i].has_overlap) {
+        continue;
+      }
+
+      Object *obedit = objects[i];
+      BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
+      UVSelectLinkedHelper linked_helper(scene, bm);
+
+      BMFace *efa;
+      BMIter iter;
+      BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
+        if (BM_elem_flag_test(efa, BM_ELEM_TAG)) {
+          linked_helper.face_add(efa);
+        }
+      }
+      linked_helper.tag_all();
+    }
+  }
+
   for (const int i : IndexRange(objects.size())) {
     Object *obedit = objects[i];
     const ChangedInfo &tag_info = objects_tag[i];
@@ -6062,8 +6132,11 @@ static wmOperatorStatus uv_select_overlap(bContext *C, const bool extend)
 
 static wmOperatorStatus uv_select_overlap_exec(bContext *C, wmOperator *op)
 {
+  const ToolSettings *ts = CTX_data_tool_settings(C);
+  const bool use_select_linked = ED_uvedit_select_island_check(ts);
+
   bool extend = RNA_boolean_get(op->ptr, "extend");
-  return uv_select_overlap(C, extend);
+  return uv_select_overlap(C, extend, use_select_linked);
 }
 
 void UV_OT_select_overlap(wmOperatorType *ot)
@@ -6086,7 +6159,101 @@ void UV_OT_select_overlap(wmOperatorType *ot)
                   "Extend selection rather than clearing the existing selection");
 }
 
+enum class UVWinding {
+  Positive = 0,
+  Negative = 1,
+};
+
+static wmOperatorStatus uv_select_by_winding_exec(bContext *C, wmOperator *op)
+{
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  const Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_scene(C);
+  const ToolSettings *ts = scene->toolsettings;
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  const bool extend = RNA_boolean_get(op->ptr, "extend");
+  const int winding = RNA_enum_get(op->ptr, "winding");
+  const float winding_sign = winding == int(UVWinding::Positive) ? -1.0f : 1.0f;
+
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      *bmain, scene, view_layer, nullptr);
+
+  if (!extend) {
+    uv_select_all_perform_multi(scene, objects, SEL_DESELECT);
+  }
+
+  for (Object *obedit : objects) {
+    BMesh *bm = BKE_editmesh_from_object(obedit)->bm;
+    const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
+
+    BM_mesh_elem_hflag_disable_all(bm, BM_FACE, BM_ELEM_TAG, false);
+
+    bool changed = false;
+    BMFace *efa;
+    BMIter iter;
+    BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
+      if (!uvedit_face_visible_test(scene, efa)) {
+        continue;
+      }
+      const float area = BM_face_calc_area_uv_signed(efa, offsets.uv);
+      if (area * winding_sign > 0.0f) {
+        BM_elem_flag_enable(efa, BM_ELEM_TAG);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      uv_select_flush_from_tag_face(scene, obedit, true);
+
+      if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
+        ED_uvedit_select_sync_flush(ts, bm, true);
+      }
+      else {
+        ED_uvedit_selectmode_flush(scene, bm);
+      }
+
+      uv_select_tag_update_for_object(depsgraph, ts, obedit);
+    }
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+void UV_OT_select_by_winding(wmOperatorType *ot)
+{
+  static const EnumPropertyItem prop_winding_types[] = {
+      {int(UVWinding::Positive), "POSITIVE", 0, "Positive", ""},
+      {int(UVWinding::Negative), "NEGATIVE", 0, "Negative", ""},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  /* identifiers */
+  ot->name = "Select by Winding";
+  ot->description = "Select UV faces by their winding";
+  ot->idname = "UV_OT_select_by_winding";
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* API callbacks. */
+  ot->exec = uv_select_by_winding_exec;
+  ot->poll = ED_operator_uvedit;
+
+  /* properties */
+  RNA_def_enum(ot->srna,
+               "winding",
+               prop_winding_types,
+               int(UVWinding::Negative),
+               "Winding",
+               "Select faces with positive or negative winding");
+  RNA_def_boolean(ot->srna,
+                  "extend",
+                  false,
+                  "Extend",
+                  "Extend selection rather than clearing the existing selection");
+}
+
 /** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Select Similar Operator
  * \{ */
 
@@ -6266,6 +6433,7 @@ static float get_uv_island_needle(const eUVSelectSimilar type,
 
 static wmOperatorStatus uv_select_similar_vert_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -6276,24 +6444,10 @@ static wmOperatorStatus uv_select_similar_vert_exec(bContext *C, wmOperator *op)
   const eSimilarCmp compare = eSimilarCmp(RNA_enum_get(op->ptr, "compare"));
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
-
-  int max_verts_selected_all = 0;
-  for (Object *ob : objects) {
-    BMesh *bm = BKE_editmesh_from_object(ob)->bm;
-    BMFace *face;
-    BMIter iter;
-    BM_ITER_MESH (face, &iter, bm, BM_FACES_OF_MESH) {
-      if (!uvedit_face_visible_test(scene, face)) {
-        continue;
-      }
-      max_verts_selected_all += face->len;
-    }
-    /* TODO: Get a tighter bounds */
-  }
+      *bmain, scene, view_layer, nullptr);
 
   int tree_index = 0;
-  KDTree_1d *tree_1d = kdtree_1d_new(max_verts_selected_all);
+  Map<float, int> points_1d;
 
   for (Object *ob : objects) {
     BMesh *bm = BKE_editmesh_from_object(ob)->bm;
@@ -6318,15 +6472,16 @@ static wmOperatorStatus uv_select_similar_vert_exec(bContext *C, wmOperator *op)
           continue;
         }
         float needle = get_uv_vert_needle(type, l->v, ob_m3, l, offsets);
-        kdtree_1d_insert(tree_1d, tree_index++, &needle);
+        points_1d.add(needle, tree_index++);
       }
     }
   }
 
-  if (tree_1d != nullptr) {
-    kdtree_1d_deduplicate(tree_1d);
-    kdtree_1d_balance(tree_1d);
+  KDTree<float> *tree_1d = kdtree_new<float>(points_1d.size());
+  for (const auto &[pos, index] : points_1d.items()) {
+    kdtree_insert(tree_1d, index, pos);
   }
+  kdtree_balance<float>(tree_1d);
 
   for (Object *ob : objects) {
     BMesh *bm = BKE_editmesh_from_object(ob)->bm;
@@ -6384,12 +6539,13 @@ static wmOperatorStatus uv_select_similar_vert_exec(bContext *C, wmOperator *op)
     }
   }
 
-  kdtree_1d_free(tree_1d);
+  kdtree_free<float>(tree_1d);
   return OPERATOR_FINISHED;
 }
 
 static wmOperatorStatus uv_select_similar_edge_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -6400,24 +6556,10 @@ static wmOperatorStatus uv_select_similar_edge_exec(bContext *C, wmOperator *op)
   const eSimilarCmp compare = eSimilarCmp(RNA_enum_get(op->ptr, "compare"));
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
-
-  int max_edges_selected_all = 0;
-  for (Object *ob : objects) {
-    BMesh *bm = BKE_editmesh_from_object(ob)->bm;
-    BMFace *face;
-    BMIter iter;
-    BM_ITER_MESH (face, &iter, bm, BM_FACES_OF_MESH) {
-      if (!uvedit_face_visible_test(scene, face)) {
-        continue;
-      }
-      max_edges_selected_all += face->len;
-    }
-    /* TODO: Get a tighter bounds. */
-  }
+      *bmain, scene, view_layer, nullptr);
 
   int tree_index = 0;
-  KDTree_1d *tree_1d = kdtree_1d_new(max_edges_selected_all);
+  Map<float, int> points_1d;
 
   for (Object *ob : objects) {
     BMesh *bm = BKE_editmesh_from_object(ob)->bm;
@@ -6443,17 +6585,16 @@ static wmOperatorStatus uv_select_similar_edge_exec(bContext *C, wmOperator *op)
         }
 
         float needle = get_uv_edge_needle(type, l->e, ob_m3, l, l->next, offsets);
-        if (tree_1d) {
-          kdtree_1d_insert(tree_1d, tree_index++, &needle);
-        }
+        points_1d.add(needle, tree_index++);
       }
     }
   }
 
-  if (tree_1d != nullptr) {
-    kdtree_1d_deduplicate(tree_1d);
-    kdtree_1d_balance(tree_1d);
+  KDTree<float> *tree_1d = kdtree_new<float>(points_1d.size());
+  for (const auto &[pos, index] : points_1d.items()) {
+    kdtree_insert(tree_1d, index, pos);
   }
+  kdtree_balance<float>(tree_1d);
 
   for (Object *ob : objects) {
     BMesh *bm = BKE_editmesh_from_object(ob)->bm;
@@ -6511,12 +6652,13 @@ static wmOperatorStatus uv_select_similar_edge_exec(bContext *C, wmOperator *op)
     }
   }
 
-  kdtree_1d_free(tree_1d);
+  kdtree_free<float>(tree_1d);
   return OPERATOR_FINISHED;
 }
 
 static wmOperatorStatus uv_select_similar_face_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -6527,7 +6669,7 @@ static wmOperatorStatus uv_select_similar_face_exec(bContext *C, wmOperator *op)
   const eSimilarCmp compare = eSimilarCmp(RNA_enum_get(op->ptr, "compare"));
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   /* Build a global material-to-index map so material indices are shared across all objects. */
   std::optional<Vector<Array<int>>> material_remaps_data;
@@ -6546,15 +6688,8 @@ static wmOperatorStatus uv_select_similar_face_exec(bContext *C, wmOperator *op)
     }
   }
 
-  int max_faces_selected_all = 0;
-  for (Object *ob : objects) {
-    BMesh *bm = BKE_editmesh_from_object(ob)->bm;
-    max_faces_selected_all += bm->totfacesel;
-    /* TODO: Get a tighter bounds */
-  }
-
   int tree_index = 0;
-  KDTree_1d *tree_1d = kdtree_1d_new(max_faces_selected_all);
+  Map<float, int> points_1d;
 
   for (const int ob_index : objects.index_range()) {
     Object *ob = objects[ob_index];
@@ -6582,16 +6717,15 @@ static wmOperatorStatus uv_select_similar_face_exec(bContext *C, wmOperator *op)
       }
 
       float needle = get_uv_face_needle(type, face, ob_index, ob_m3, offsets, material_remap);
-      if (tree_1d) {
-        kdtree_1d_insert(tree_1d, tree_index++, &needle);
-      }
+      points_1d.add(needle, tree_index++);
     }
   }
 
-  if (tree_1d != nullptr) {
-    kdtree_1d_deduplicate(tree_1d);
-    kdtree_1d_balance(tree_1d);
+  KDTree<float> *tree_1d = kdtree_new<float>(points_1d.size());
+  for (const auto &[pos, index] : points_1d.items()) {
+    kdtree_insert(tree_1d, index, pos);
   }
+  kdtree_balance<float>(tree_1d);
 
   for (const int ob_index : objects.index_range()) {
     Object *ob = objects[ob_index];
@@ -6652,7 +6786,7 @@ static wmOperatorStatus uv_select_similar_face_exec(bContext *C, wmOperator *op)
     }
   }
 
-  kdtree_1d_free(tree_1d);
+  kdtree_free<float>(tree_1d);
   return OPERATOR_FINISHED;
 }
 
@@ -6664,6 +6798,7 @@ static bool uv_island_selected(const Scene *scene, const BMesh *bm, FaceIsland *
 
 static wmOperatorStatus uv_select_similar_island_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -6674,7 +6809,7 @@ static wmOperatorStatus uv_select_similar_island_exec(bContext *C, wmOperator *o
   const eSimilarCmp compare = eSimilarCmp(RNA_enum_get(op->ptr, "compare"));
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   ListBaseT<FaceIsland> *island_list_ptr = MEM_new_array_zeroed<ListBaseT<FaceIsland>>(
       objects.size(), __func__);
@@ -6694,7 +6829,7 @@ static wmOperatorStatus uv_select_similar_island_exec(bContext *C, wmOperator *o
   FaceIsland **island_array = MEM_new_array_zeroed<FaceIsland *>(island_list_len, __func__);
 
   int tree_index = 0;
-  KDTree_1d *tree_1d = kdtree_1d_new(island_list_len);
+  Map<float, int> points_1d;
 
   for (const int ob_index : objects.index_range()) {
     Object *obedit = objects[ob_index];
@@ -6709,16 +6844,15 @@ static wmOperatorStatus uv_select_similar_island_exec(bContext *C, wmOperator *o
         continue;
       }
       float needle = get_uv_island_needle(type, &island, ob_m3, island.offsets);
-      if (tree_1d) {
-        kdtree_1d_insert(tree_1d, tree_index++, &needle);
-      }
+      points_1d.add(needle, tree_index++);
     }
   }
 
-  if (tree_1d != nullptr) {
-    kdtree_1d_deduplicate(tree_1d);
-    kdtree_1d_balance(tree_1d);
+  KDTree<float> *tree_1d = kdtree_new<float>(points_1d.size());
+  for (const auto &[pos, index] : points_1d.items()) {
+    kdtree_insert(tree_1d, index, pos);
   }
+  kdtree_balance<float>(tree_1d);
 
   int tot_island_index = 0;
   for (const int ob_index : objects.index_range()) {
@@ -6775,7 +6909,7 @@ static wmOperatorStatus uv_select_similar_island_exec(bContext *C, wmOperator *o
 
   MEM_SAFE_DELETE(island_array);
   MEM_SAFE_DELETE(island_list_ptr);
-  kdtree_1d_free(tree_1d);
+  kdtree_free<float>(tree_1d);
 
   return OPERATOR_FINISHED;
 }
@@ -6794,7 +6928,8 @@ static wmOperatorStatus uv_select_similar_exec(bContext *C, wmOperator *op)
     ts->select_thresh = RNA_property_float_get(op->ptr, prop);
   }
 
-  const int selectmode = (ts->uv_flag & UV_FLAG_SELECT_SYNC) ? ts->selectmode : ts->uv_selectmode;
+  const int selectmode = (ts->uv_flag & UV_FLAG_SELECT_SYNC) ? ts->selectmode :
+                                                               int(ts->uv_selectmode);
   if (use_select_linked) {
     return uv_select_similar_island_exec(C, op);
   }
@@ -6842,7 +6977,7 @@ static const EnumPropertyItem *uv_select_similar_type_itemf(bContext *C,
   if (ts) {
     const bool use_select_linked = ED_uvedit_select_island_check(ts);
     const int selectmode = (ts->uv_flag & UV_FLAG_SELECT_SYNC) ? ts->selectmode :
-                                                                 ts->uv_selectmode;
+                                                                 int(ts->uv_selectmode);
     /* TODO: co-exist with selection modes. */
     if (use_select_linked) {
       RNA_enum_items_add_value(&item, &totitem, uv_select_similar_type_items, UV_SSIM_AREA_UV);
@@ -7123,13 +7258,14 @@ void ED_uvedit_selectmode_clean(const Scene *scene, Object *obedit)
 }
 void ED_uvedit_selectmode_clean_multi(bContext *C)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ToolSettings *ts = scene->toolsettings;
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
 
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
   for (Object *obedit : objects) {
     ED_uvedit_selectmode_clean(scene, obedit);
 
@@ -7149,10 +7285,11 @@ void ED_uvedit_sticky_selectmode_update(bContext *C)
     return;
   }
 
+  const Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
   for (Object *obedit : objects) {
     uv_select_tag_update_for_object(depsgraph, ts, obedit);
   }
@@ -7169,9 +7306,10 @@ void ED_uvedit_select_sync_multi(bContext *C)
     return;
   }
 
+  const Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
   for (Object *obedit : objects) {
     uv_select_sync_update(scene, obedit);
   }
@@ -7181,7 +7319,7 @@ static wmOperatorStatus uv_select_mode_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
   ToolSettings *ts = scene->toolsettings;
-  const char new_uv_selectmode = RNA_enum_get(op->ptr, "type");
+  const eTool_UvSelectMode new_uv_selectmode = eTool_UvSelectMode(RNA_enum_get(op->ptr, "type"));
 
   /* Early exit if no change in current selection mode */
   if (new_uv_selectmode == ts->uv_selectmode) {
@@ -7244,12 +7382,13 @@ void UV_OT_select_mode(wmOperatorType *ot)
 
 static wmOperatorStatus uv_select_tile_exec(bContext *C, wmOperator *op)
 {
+  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const ToolSettings *ts = scene->toolsettings;
   Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, nullptr);
+      *bmain, scene, view_layer, nullptr);
 
   int2 tile;
   RNA_int_get_array(op->ptr, "tile", tile);

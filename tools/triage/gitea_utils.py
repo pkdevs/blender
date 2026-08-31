@@ -32,7 +32,7 @@ BASE_API_URL = "https://projects.blender.org/api/v1"
 
 def url_json_get(url: str, quiet: bool = False) -> dict[str, Any] | list[dict[str, Any]] | None:
     request = urllib.request.Request(url)
-    # If the token evironment variable is set, add the `Authorization` header to the request
+    # If the token environment variable is set, add the `Authorization` header to the request
     token = os.environ.get(API_TOKEN_ENV)
     if token:
         request.add_header('Authorization', "token " + token)
@@ -201,10 +201,16 @@ def gitea_json_issue_events_filter(
     issue_events_url = f"{BASE_API_URL}/repos/{issue_fullname}/timeline"
     if date_start or date_end:
         query_params = {}
+        # Assume that if no timezone is provided, that it's UTC.
+        # Without this, dates passed in that *do* have a timezone aren't handled properly.
         if date_start:
-            query_params["since"] = f"{date_start.isoformat()}Z"
+            if date_start.tzinfo is None:
+                date_start = date_start.replace(tzinfo=datetime.timezone.utc)
+            query_params["since"] = date_start.isoformat()
         if date_end:
-            query_params["before"] = f"{date_end.isoformat()}Z"
+            if date_end.tzinfo is None:
+                date_end = date_end.replace(tzinfo=datetime.timezone.utc)
+            query_params["before"] = date_end.isoformat()
 
         encoded_query_params = urllib.parse.urlencode(query_params)
         issue_events_url = f"{issue_events_url}?{encoded_query_params}"
@@ -233,7 +239,6 @@ def gitea_json_issue_events_filter(
 # However, it provides an option to fetch the configured username from the local Git,
 # in case the user does not explicitly supply the username.
 def git_username_detect() -> str | None:
-    import os
     import subprocess
 
     # Get the repository directory

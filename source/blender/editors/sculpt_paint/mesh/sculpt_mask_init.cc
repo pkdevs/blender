@@ -7,8 +7,8 @@
  */
 
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_hash.h"
-#include "BLI_time.h"
+#include "BLI_hash_c.hh"
+#include "BLI_time.hh"
 
 #include "DNA_object_types.h"
 
@@ -124,7 +124,7 @@ static wmOperatorStatus sculpt_mask_init_exec(bContext *C, wmOperator *op)
   SculptSession &ss = *ob.runtime->sculpt_session;
   Depsgraph &depsgraph = *CTX_data_ensure_evaluated_depsgraph(C);
 
-  BKE_sculpt_update_object_for_edit(&depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(&depsgraph, &ob, false);
 
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
   IndexMaskMemory memory;
@@ -157,7 +157,8 @@ static wmOperatorStatus sculpt_mask_init_exec(bContext *C, wmOperator *op)
 
           write_mask_mesh(depsgraph, ob, node_mask, [&](MutableSpan<float> mask, Span<int> verts) {
             for (const int vert : verts) {
-              const int face_set = face_set::vert_face_set_get(vert_to_face_map, face_sets, vert);
+              const int face_set = face_set::vert_face_set_max_get(
+                  vert_to_face_map, face_sets, vert);
               mask[vert] = BLI_hash_int_01(face_set + seed);
             }
           });
@@ -279,7 +280,7 @@ static wmOperatorStatus sculpt_mask_init_exec(bContext *C, wmOperator *op)
 
   undo::push_end(ob);
 
-  SCULPT_tag_update_overlays(C);
+  tag_update_overlays(C);
   return OPERATOR_FINISHED;
 }
 
@@ -290,7 +291,7 @@ void SCULPT_OT_mask_init(wmOperatorType *ot)
   ot->idname = "SCULPT_OT_mask_init";
 
   ot->exec = sculpt_mask_init_exec;
-  ot->poll = SCULPT_mode_poll;
+  ot->poll = sculpt_mode_poll;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 

@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'ec8c60553753')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'32296898e057')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-23 09:55+0000\n"
+"POT-Creation-Date: 2026-08-31 07:41+0000\n"
 "PO-Revision-Date: 2025-07-31 16:24+0000\n"
 "Last-Translator: leif larsen <linuxdk1978@gmail.com>\n"
 "Language-Team: Danish <https://translate.blender.org/projects/blender-ui/ui/da/>\n"
@@ -747,14 +747,6 @@ msgid "Place the Mix node at the same height as the lowest node"
 msgstr "Placer Mix-noden mellem de to noder"
 
 
-msgid "Show Hotkey List"
-msgstr "Vis genvejsliste"
-
-
-msgid "Expand this box into a list of all the hotkeys for functions in this addon"
-msgstr "Udvid denne boks til en liste over alle genvejstaster til funktioner i denne tilføjelse"
-
-
 msgid "Fribidi Library"
 msgstr "Fribidi bibliotek"
 
@@ -1455,6 +1447,38 @@ msgid "Armatures active edit bone"
 msgstr "Armaturer aktive redigere knogle"
 
 
+msgid "Asset Library"
+msgstr "aktiv bibliotek"
+
+
+msgid "All Libraries"
+msgstr "Alle biblioteker"
+
+
+msgid "Show assets from all of the listed asset libraries"
+msgstr "Vis aktiver fra alle de listede aktivbiblioteker"
+
+
+msgid "Current File"
+msgstr "Nuværende fil"
+
+
+msgid "Show the assets currently available in this Blender session"
+msgstr "Vis de aktiver, der i øjeblikket er tilgængelige i denne Blender-session"
+
+
+msgid "Essentials"
+msgstr "Væsentlige"
+
+
+msgid "Custom"
+msgstr "Brugerdefinerede"
+
+
+msgid "Show assets from the asset libraries configured in the Preferences"
+msgstr "Vis aktiver fra de aktivbiblioteker, der er konfigureret i Indstillinger"
+
+
 msgid "User Asset Libraries"
 msgstr "Bruger Asset Libraries"
 
@@ -1592,44 +1616,8 @@ msgid "Regions for quick access to assets"
 msgstr "Regioner for hurtig adgang til aktiver"
 
 
-msgid "Asset Library"
-msgstr "aktiv bibliotek"
-
-
 msgid "Choose the asset library to display assets from"
 msgstr "Vælg det aktivbibliotek, du vil vise aktiver fra"
-
-
-msgid "All Libraries"
-msgstr "Alle biblioteker"
-
-
-msgid "Show assets from all of the listed asset libraries"
-msgstr "Vis aktiver fra alle de listede aktivbiblioteker"
-
-
-msgid "Current File"
-msgstr "Nuværende fil"
-
-
-msgid "Show the assets currently available in this Blender session"
-msgstr "Vis de aktiver, der i øjeblikket er tilgængelige i denne Blender-session"
-
-
-msgid "Essentials"
-msgstr "Væsentlige"
-
-
-msgid "Show the basic building blocks and utilities coming with Blender"
-msgstr "Vis de grundlæggende byggeklodser og hjælpeprogrammer, der følger med Blender"
-
-
-msgid "Custom"
-msgstr "Brugerdefinerede"
-
-
-msgid "Show assets from the asset libraries configured in the Preferences"
-msgstr "Vis aktiver fra de aktivbiblioteker, der er konfigureret i Indstillinger"
 
 
 msgid "Activate Operator"
@@ -1972,56 +1960,28 @@ msgid "Point"
 msgstr "Punkt"
 
 
-msgid "Attribute on point"
-msgstr "atribut på punkt"
-
-
 msgid "Edge"
 msgstr "kant"
-
-
-msgid "Attribute on mesh edge"
-msgstr "Attribut på meshkant"
 
 
 msgid "Face"
 msgstr "ansigt"
 
 
-msgid "Attribute on mesh faces"
-msgstr "Attribut på overfalde"
-
-
 msgid "Face Corner"
 msgstr "Overflade hjørne"
-
-
-msgid "Attribute on mesh face corner"
-msgstr "Attribut på overflade hjørne"
 
 
 msgid "Spline"
 msgstr "Spline"
 
 
-msgid "Attribute on spline"
-msgstr "Attribut på spline"
-
-
 msgid "Instance"
 msgstr "Forekomst"
 
 
-msgid "Attribute on instance"
-msgstr "atribut på forkomst"
-
-
 msgid "Layer"
 msgstr "Lag"
-
-
-msgid "Attribute on Grease Pencil layer"
-msgstr "atribit på fedt pensel lag"
 
 
 msgid "Is Internal"
@@ -3128,12 +3088,12 @@ msgid "Material"
 msgstr "Materiale"
 
 
-msgid "All"
-msgstr "alle"
-
-
 msgid "Threshold"
 msgstr "Tærskel"
+
+
+msgid "All"
+msgstr "alle"
 
 
 msgid "Object Path"
@@ -3314,10 +3274,6 @@ msgstr "angular"
 
 msgid "Damping"
 msgstr "Dæmpning"
-
-
-msgid "Look"
-msgstr "udseende"
 
 
 msgid "Temperature"
@@ -3509,10 +3465,6 @@ msgid "Blur"
 msgstr "Sløring"
 
 
-msgid "Occlusion"
-msgstr "Okklusion"
-
-
 msgid "Mirror Ball"
 msgstr "Splejlkugle"
 
@@ -3630,6 +3582,10 @@ msgid "File"
 msgstr "Fil"
 
 
+msgid "Occlusion"
+msgstr "Okklusion"
+
+
 msgid "New"
 msgstr "ny"
 
@@ -3660,10 +3616,6 @@ msgstr "Nøglebillede B"
 
 msgid "Starting"
 msgstr "Begynde"
-
-
-msgid "To"
-msgstr "Til"
 
 
 msgid "Layer Weight"
@@ -3838,10 +3790,6 @@ msgid "Continue"
 msgstr "Fortsæt"
 
 
-msgid "2D Texture"
-msgstr "2D struktur"
-
-
 msgid "Legacy Compute Device Type"
 msgstr "Forældere beregningstyrper"
 
@@ -3916,6 +3864,10 @@ msgstr "Skarpere"
 
 msgid "True Normal"
 msgstr "Sand normal"
+
+
+msgid "Look"
+msgstr "udseende"
 
 
 msgid "Keyframe not in F-Curve"

@@ -18,29 +18,35 @@ namespace blender::nodes::node_composite_depth_combin_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("A")
+  b.add_input<decl::Color>("A"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Float>("Depth A").default_value(1.0f).min(0.0f).max(10000.0f).structure_type(
-      StructureType::Dynamic);
-  b.add_input<decl::Color>("B")
+  b.add_input<decl::Float>("Depth A"_ustr)
+      .default_value(1.0f)
+      .min(0.0f)
+      .max(10000.0f)
+      .structure_type(StructureType::Dynamic);
+  b.add_input<decl::Color>("B"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Float>("Depth B").default_value(1.0f).min(0.0f).max(10000.0f).structure_type(
-      StructureType::Dynamic);
-  b.add_input<decl::Bool>("Use Alpha")
+  b.add_input<decl::Float>("Depth B"_ustr)
+      .default_value(1.0f)
+      .min(0.0f)
+      .max(10000.0f)
+      .structure_type(StructureType::Dynamic);
+  b.add_input<decl::Bool>("Use Alpha"_ustr)
       .default_value(false)
       .description(
           "Use the alpha of the first input as mixing factor and return the more opaque alpha of "
           "the two inputs");
-  b.add_input<decl::Bool>("Anti-Alias")
+  b.add_input<decl::Bool>("Anti-Alias"_ustr)
       .default_value(true)
       .description(
           "Anti-alias the generated mask before combining for smoother boundaries at the cost of "
           "more expensive processing");
 
-  b.add_output<decl::Color>("Result").structure_type(StructureType::Dynamic);
-  b.add_output<decl::Float>("Depth").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Result"_ustr).structure_type(StructureType::Dynamic);
+  b.add_output<decl::Float>("Depth"_ustr).structure_type(StructureType::Dynamic);
 }
 
 using namespace blender::compositor;
@@ -129,13 +135,14 @@ class ZCombineOperation : public NodeOperation {
     GPU_shader_uniform_1b(shader, "use_alpha", this->use_alpha());
 
     const Result &first = this->get_input("A");
-    first.bind_as_texture(shader, "first_tx");
+    gpu::Texture *first_texture = first.bind_as_texture_or_single_value(shader, "first_tx");
     const Result &first_z = this->get_input("Depth A");
-    first_z.bind_as_texture(shader, "first_z_tx");
+    gpu::Texture *first_z_texture = first_z.bind_as_texture_or_single_value(shader, "first_z_tx");
     const Result &second = this->get_input("B");
-    second.bind_as_texture(shader, "second_tx");
+    gpu::Texture *second_texture = second.bind_as_texture_or_single_value(shader, "second_tx");
     const Result &second_z = this->get_input("Depth B");
-    second_z.bind_as_texture(shader, "second_z_tx");
+    gpu::Texture *second_z_texture = second_z.bind_as_texture_or_single_value(shader,
+                                                                              "second_z_tx");
 
     Result &combined = this->get_result("Result");
     const Domain domain = this->compute_domain();
@@ -144,10 +151,10 @@ class ZCombineOperation : public NodeOperation {
 
     compute_dispatch_threads_at_least(shader, domain.data_size);
 
-    first.unbind_as_texture();
-    first_z.unbind_as_texture();
-    second.unbind_as_texture();
-    second_z.unbind_as_texture();
+    first.unbind_as_texture_or_single_value(first_texture);
+    first_z.unbind_as_texture_or_single_value(first_z_texture);
+    second.unbind_as_texture_or_single_value(second_texture);
+    second_z.unbind_as_texture_or_single_value(second_z_texture);
     combined.unbind_as_image();
     GPU_shader_unbind();
   }
@@ -158,9 +165,10 @@ class ZCombineOperation : public NodeOperation {
     GPU_shader_bind(shader);
 
     const Result &first_z = this->get_input("Depth A");
-    first_z.bind_as_texture(shader, "first_z_tx");
+    gpu::Texture *first_z_texture = first_z.bind_as_texture_or_single_value(shader, "first_z_tx");
     const Result &second_z = this->get_input("Depth B");
-    second_z.bind_as_texture(shader, "second_z_tx");
+    gpu::Texture *second_z_texture = second_z.bind_as_texture_or_single_value(shader,
+                                                                              "second_z_tx");
 
     Result &combined_z = this->get_result("Depth");
     const Domain domain = this->compute_domain();
@@ -169,8 +177,8 @@ class ZCombineOperation : public NodeOperation {
 
     compute_dispatch_threads_at_least(shader, domain.data_size);
 
-    first_z.unbind_as_texture();
-    second_z.unbind_as_texture();
+    first_z.unbind_as_texture_or_single_value(first_z_texture);
+    second_z.unbind_as_texture_or_single_value(second_z_texture);
     combined_z.unbind_as_image();
     GPU_shader_unbind();
   }
@@ -257,9 +265,9 @@ class ZCombineOperation : public NodeOperation {
     GPU_shader_uniform_1b(shader, "use_alpha", this->use_alpha());
 
     const Result &first = this->get_input("A");
-    first.bind_as_texture(shader, "first_tx");
+    gpu::Texture *first_texture = first.bind_as_texture_or_single_value(shader, "first_tx");
     const Result &second = this->get_input("B");
-    second.bind_as_texture(shader, "second_tx");
+    gpu::Texture *second_texture = second.bind_as_texture_or_single_value(shader, "second_tx");
     mask.bind_as_texture(shader, "mask_tx");
 
     Result &combined = this->get_result("Result");
@@ -269,8 +277,8 @@ class ZCombineOperation : public NodeOperation {
 
     compute_dispatch_threads_at_least(shader, domain.data_size);
 
-    first.unbind_as_texture();
-    second.unbind_as_texture();
+    first.unbind_as_texture_or_single_value(first_texture);
+    second.unbind_as_texture_or_single_value(second_texture);
     mask.unbind_as_texture();
     combined.unbind_as_image();
     GPU_shader_unbind();
@@ -282,9 +290,10 @@ class ZCombineOperation : public NodeOperation {
     GPU_shader_bind(shader);
 
     const Result &first_z = this->get_input("Depth A");
-    first_z.bind_as_texture(shader, "first_z_tx");
+    gpu::Texture *first_z_texture = first_z.bind_as_texture_or_single_value(shader, "first_z_tx");
     const Result &second_z = this->get_input("Depth B");
-    second_z.bind_as_texture(shader, "second_z_tx");
+    gpu::Texture *second_z_texture = second_z.bind_as_texture_or_single_value(shader,
+                                                                              "second_z_tx");
 
     Result &combined_z = this->get_result("Depth");
     const Domain domain = this->compute_domain();
@@ -293,8 +302,8 @@ class ZCombineOperation : public NodeOperation {
 
     compute_dispatch_threads_at_least(shader, domain.data_size);
 
-    first_z.unbind_as_texture();
-    second_z.unbind_as_texture();
+    first_z.unbind_as_texture_or_single_value(first_z_texture);
+    second_z.unbind_as_texture_or_single_value(second_z_texture);
     combined_z.unbind_as_image();
     GPU_shader_unbind();
   }
@@ -358,9 +367,10 @@ class ZCombineOperation : public NodeOperation {
     GPU_shader_bind(shader);
 
     const Result &first_z = get_input("Depth A");
-    first_z.bind_as_texture(shader, "first_z_tx");
+    gpu::Texture *first_z_texture = first_z.bind_as_texture_or_single_value(shader, "first_z_tx");
     const Result &second_z = get_input("Depth B");
-    second_z.bind_as_texture(shader, "second_z_tx");
+    gpu::Texture *second_z_texture = second_z.bind_as_texture_or_single_value(shader,
+                                                                              "second_z_tx");
 
     const Domain domain = compute_domain();
     Result mask = context().create_result(ResultType::Float);
@@ -369,8 +379,8 @@ class ZCombineOperation : public NodeOperation {
 
     compute_dispatch_threads_at_least(shader, domain.data_size);
 
-    first_z.unbind_as_texture();
-    second_z.unbind_as_texture();
+    first_z.unbind_as_texture_or_single_value(first_z_texture);
+    second_z.unbind_as_texture_or_single_value(second_z_texture);
     mask.unbind_as_image();
     GPU_shader_unbind();
 
@@ -416,7 +426,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeZcombine", CMP_NODE_ZCOMBINE);
+  cmp_node_type_base(&ntype, "CompositorNodeZcombine"_ustr, CMP_NODE_ZCOMBINE);
   ntype.ui_name = "Depth Combine";
   ntype.ui_description = "Combine two images using depth maps";
   ntype.enum_name_legacy = "ZCOMBINE";

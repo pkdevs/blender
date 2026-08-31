@@ -14,12 +14,15 @@ namespace blender::image_engine {
 
 ImageSpaceDrawingMode::ImageSpaceDrawingMode(Instance &instance,
                                              gpu::Texture *texture,
-                                             gpu::Texture *tile_mapping_texture)
+                                             gpu::Texture *tile_mapping_texture,
+                                             const bool owned)
     : instance_(instance), texture_(texture), tile_mapping_texture_(tile_mapping_texture)
 {
-  GPU_texture_ref(texture_);
-  if (tile_mapping_texture_) {
-    GPU_texture_ref(tile_mapping_texture_);
+  if (!owned) {
+    GPU_texture_ref(texture_);
+    if (tile_mapping_texture_) {
+      GPU_texture_ref(tile_mapping_texture_);
+    }
   }
 }
 
@@ -42,7 +45,7 @@ void ImageSpaceDrawingMode::draw_viewport() const
   pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_ALWAYS);
   pass.shader_set(tile_mapping_texture_ ? ShaderModule::module_get().image_tiled.get() :
                                           ShaderModule::module_get().image.get());
-  pass.push_constant("image_matrix", math::invert(float4x4(instance_.state.ss_to_texture)));
+  pass.push_constant("image_matrix", float4x4(instance_.state.ss_to_texture));
   pass.push_constant("far_near_distances", instance_.state.sh_params.far_near);
   pass.push_constant("shuffle", instance_.state.sh_params.shuffle);
   pass.push_constant("draw_flags", int32_t(instance_.state.sh_params.flags));

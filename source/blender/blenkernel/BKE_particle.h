@@ -11,7 +11,7 @@
 
 #include <optional>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_map.hh"
 #include "BLI_ordered_edge.hh"
 #include "BLI_vector.hh"
@@ -251,7 +251,7 @@ extern unsigned int PSYS_FRAND_SEED_OFFSET[PSYS_FRAND_COUNT];
 extern unsigned int PSYS_FRAND_SEED_MULTIPLIER[PSYS_FRAND_COUNT];
 extern float PSYS_FRAND_BASE[PSYS_FRAND_COUNT];
 
-void BKE_particle_init_rng(void);
+void BKE_particle_init_rng();
 
 BLI_INLINE float psys_frand(ParticleSystem *psys, unsigned int seed)
 {

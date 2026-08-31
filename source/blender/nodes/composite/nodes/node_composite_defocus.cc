@@ -31,12 +31,12 @@ NODE_STORAGE_FUNCS(NodeDefocus)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>("Image")
+  b.add_input<decl::Color>("Image"_ustr)
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .structure_type(StructureType::Dynamic);
-  b.add_input<decl::Float>("Z").default_value(1.0f).min(0.0f).max(1.0f).structure_type(
+  b.add_input<decl::Float>("Z"_ustr).default_value(1.0f).min(0.0f).max(1.0f).structure_type(
       StructureType::Dynamic);
-  b.add_output<decl::Color>("Image").structure_type(StructureType::Dynamic);
+  b.add_output<decl::Color>("Image"_ustr).structure_type(StructureType::Dynamic);
 }
 
 static void node_init(bNodeTree * /*ntree*/, bNode *node)
@@ -133,7 +133,7 @@ class DefocusOperation : public NodeOperation {
 
     input.bind_as_texture(shader, "input_tx");
 
-    radius.bind_as_texture(shader, "radius_tx");
+    gpu::Texture *radius_texture = radius.bind_as_texture_or_single_value(shader, "radius_tx");
 
     GPU_texture_filter_mode(bokeh_kernel, true);
     bokeh_kernel.bind_as_texture(shader, "weights_tx");
@@ -146,7 +146,7 @@ class DefocusOperation : public NodeOperation {
 
     GPU_shader_unbind();
     input.unbind_as_texture();
-    radius.unbind_as_texture();
+    radius.unbind_as_texture_or_single_value(radius_texture);
     bokeh_kernel.unbind_as_texture();
     output.unbind_as_image();
   }
@@ -517,7 +517,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeDefocus", CMP_NODE_DEFOCUS);
+  cmp_node_type_base(&ntype, "CompositorNodeDefocus"_ustr, CMP_NODE_DEFOCUS);
   ntype.ui_name = "Defocus";
   ntype.ui_description = "Apply depth of field in 2D, using a Z depth map or mask";
   ntype.enum_name_legacy = "DEFOCUS";

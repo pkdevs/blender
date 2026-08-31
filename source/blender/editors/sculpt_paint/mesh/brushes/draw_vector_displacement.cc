@@ -16,8 +16,8 @@
 #include "BKE_subdiv_ccg.hh"
 
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_task.h"
 #include "BLI_task.hh"
+#include "BLI_task_c.hh"
 
 #include "editors/sculpt_paint/mesh/mesh_brush_common.hh"
 #include "editors/sculpt_paint/mesh/sculpt_automask.hh"
@@ -42,6 +42,7 @@ static void calc_brush_texture_colors(SculptSession &ss,
                                       const Span<int> verts,
                                       const MutableSpan<float3> r_colors)
 {
+  PRF_scope(ProfileCategory::Editor);
   BLI_assert(verts.size() == r_colors.size());
 
   const int thread_id = BLI_task_parallel_thread_id(nullptr);
@@ -62,6 +63,7 @@ static void calc_brush_texture_colors(SculptSession &ss,
                                       const Span<float3> positions,
                                       const MutableSpan<float3> r_colors)
 {
+  PRF_scope(ProfileCategory::Editor);
   BLI_assert(positions.size() == r_colors.size());
 
   const int thread_id = BLI_task_parallel_thread_id(nullptr);
@@ -113,7 +115,7 @@ static void calc_faces(const Depsgraph &depsgraph,
   calc_brush_texture_colors(ss, brush, position_data.eval, verts, translations);
   scale_translations(translations, factors);
   for (const int i : verts.index_range()) {
-    SCULPT_calc_vertex_displacement(ss, brush, translations[i]);
+    calc_vertex_displacement(ss, brush, translations[i]);
   }
 
   clip_and_lock_translations(sd, ss, position_data.eval, verts, translations);
@@ -156,7 +158,7 @@ static void calc_grids(const Depsgraph &depsgraph,
   calc_brush_texture_colors(ss, brush, positions, translations);
   scale_translations(translations, factors);
   for (const int i : positions.index_range()) {
-    SCULPT_calc_vertex_displacement(ss, brush, translations[i]);
+    calc_vertex_displacement(ss, brush, translations[i]);
   }
 
   clip_and_lock_translations(sd, ss, positions, translations);
@@ -198,7 +200,7 @@ static void calc_bmesh(const Depsgraph &depsgraph,
   calc_brush_texture_colors(ss, brush, positions, translations);
   scale_translations(translations, factors);
   for (const int i : positions.index_range()) {
-    SCULPT_calc_vertex_displacement(ss, brush, translations[i]);
+    calc_vertex_displacement(ss, brush, translations[i]);
   }
 
   clip_and_lock_translations(sd, ss, positions, translations);
@@ -212,6 +214,7 @@ void do_draw_vector_displacement_brush(const Depsgraph &depsgraph,
                                        Object &object,
                                        const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
 

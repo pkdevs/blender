@@ -10,12 +10,12 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_index_mask.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_time.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_time.hh"
 
 #include "BLT_translation.hh"
 
@@ -84,7 +84,7 @@ static bool sculpt_and_constant_or_manual_detail_poll(bContext *C)
   Object *ob = CTX_data_active_object(C);
   Sculpt *sd = CTX_data_tool_settings(C)->sculpt;
 
-  return SCULPT_mode_poll(C) && ob->runtime->sculpt_session->bm &&
+  return sculpt_mode_poll(C) && ob->runtime->sculpt_session->bm &&
          (sd->flags & (SCULPT_DYNTOPO_DETAIL_CONSTANT | SCULPT_DYNTOPO_DETAIL_MANUAL));
 }
 
@@ -92,7 +92,7 @@ static bool sculpt_and_dynamic_topology_poll(bContext *C)
 {
   Object *ob = CTX_data_active_object(C);
 
-  return SCULPT_mode_poll(C) && ob->runtime->sculpt_session->bm;
+  return sculpt_mode_poll(C) && ob->runtime->sculpt_session->bm;
 }
 
 /** \} */
@@ -216,14 +216,12 @@ static bool sample_detail_voxel(bContext *C, ViewContext *vc, const int mval[2])
   const bke::AttributeAccessor attributes = mesh.attributes();
   const VArraySpan hide_poly = *attributes.lookup<bool>(".hide_poly", bke::AttrDomain::Face);
 
-  CursorGeometryInfo cgi;
-
   /* Update the active vertex. */
   const float mval_fl[2] = {float(mval[0]), float(mval[1])};
-  if (!cursor_geometry_info_update(C, &cgi, mval_fl, false)) {
+  if (!cursor_geometry_info_update(C, mval_fl, false)) {
     return false;
   }
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
 
   /* Average the edge length of the connected edges to the active vertex. */
   const int active_vert = std::get<int>(ss.active_vert());
@@ -259,7 +257,7 @@ static void sample_detail_dyntopo(bContext *C, ViewContext *vc, const int mval[2
   Object &ob = *vc->obact;
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
 
-  SCULPT_stroke_modifiers_check(C, ob, &brush);
+  stroke_modifiers_check(C, ob, &brush);
 
   const float2 mval_fl = {float(mval[0]), float(mval[1])};
   float3 ray_start;
@@ -424,7 +422,7 @@ void SCULPT_OT_sample_detail_size(wmOperatorType *ot)
   ot->invoke = sculpt_sample_detail_size_invoke;
   ot->exec = sculpt_sample_detail_size_exec;
   ot->modal = sculpt_sample_detail_size_modal;
-  ot->poll = SCULPT_mode_poll;
+  ot->poll = sculpt_mode_poll;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 

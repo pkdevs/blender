@@ -10,7 +10,7 @@
 
 #include <cstdio>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_mutex.hh"
 
@@ -71,6 +71,8 @@ struct Report {
   int len;
   const char *typestr;
   const char *message;
+  /** Unique per-session identifier, assigned at creation. */
+  int session_uid;
 };
 
 struct ReportList {

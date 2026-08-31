@@ -22,7 +22,7 @@
  * over other previous ones.
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BKE_node_runtime.hh"
 
@@ -46,7 +46,7 @@ bool tex_node_poll_default(const bke::bNodeType * /*ntype*/,
 }
 
 void tex_node_type_base(bke::bNodeType *ntype,
-                        std::string idname,
+                        UString idname,
                         const std::optional<int16_t> legacy_type)
 {
   bke::node_type_base(*ntype, idname, legacy_type);

@@ -15,6 +15,7 @@
 namespace blender::gpu::shader {
 using namespace std;
 using namespace shader::parser;
+using namespace shader::parser::ast;
 using namespace metadata;
 
 /* `class` -> `struct` */
@@ -36,7 +37,7 @@ void SourceProcessor::lint_constructors(Parser &parser)
         return;
       }
       if (t[0].str() == struct_name.str()) {
-        report_error_(ERROR_TOK(t[0]), "Constructors are not supported.");
+        report_error(t[0], "Constructors are not supported.");
       }
     });
   });
@@ -48,7 +49,7 @@ void SourceProcessor::lint_forward_declared_structs(Parser &parser)
 {
   parser().foreach_match("sA;", [&](const Tokens &t) {
     if (t[0].scope().type() == ScopeType::Global) {
-      report_error_(ERROR_TOK(t[0]), "Forward declaration of types are not supported.");
+      report_error(t[0], "Forward declaration of types are not supported.");
     }
   });
 }
@@ -86,7 +87,7 @@ void SourceProcessor::lower_default_constructors(Parser &parser)
         if (type == "bool") {
           return "false";
         }
-        if (builtin_types.find(string(type)) != builtin_types.end()) {
+        if (builtin_types.contains(string(type))) {
           return string(type) + "(0)";
         }
         return string(type) + "{}";
@@ -143,12 +144,13 @@ void SourceProcessor::lower_implicit_member(Parser &parser)
 
     auto check_shadowing = [&](const Tokens &toks) {
       if (is_class_token(members_tokens, toks[1].str())) {
-        report_error_(ERROR_TOK(toks[1]), "Class member shadowing.");
+        report_error(toks[1], "Class member shadowing.");
       }
     };
 
-    body.foreach_declaration([&](Scope, Token, Token, Scope, Token name, Scope, Token) {
-      if (name.scope() == body) {
+    body.foreach_declaration([&](Scope, Token, Token type, Scope, Token name, Scope, Token) {
+      /* Do not match legacy infos in order to allow resource getter to work. */
+      if (name.scope() == body && type.str() != "ShaderCreateInfo") {
         members_tokens.emplace_back(name);
       }
     });
@@ -174,15 +176,14 @@ void SourceProcessor::lower_implicit_member(Parser &parser)
             /* Reject namespace qualified symbols. */
             (tok.prev() != Colon || tok.prev().prev() != Colon))
         {
-          if (tok.next() == '(') {
-            if (!is_class_token(methods_tokens, tok.str())) {
-              return;
-            }
+          bool is_method = tok.next() == '(';
+          if (tok.next() == '<' && !tok.next().followed_by_whitespace()) {
+            /* Might be templated method call. */
+            is_method = tok.next().scope().back().next() == '(';
           }
-          else {
-            if (!is_class_token(members_tokens, tok.str())) {
-              return;
-            }
+
+          if (!is_class_token(is_method ? methods_tokens : members_tokens, tok.str())) {
+            return;
           }
           parser.insert_before(tok, "this->");
         }
@@ -193,8 +194,7 @@ void SourceProcessor::lower_implicit_member(Parser &parser)
   parser.apply_mutations();
 }
 
-/* Move all method definition outside of struct definition blocks. */
-void SourceProcessor::lower_method_definitions(Parser &parser)
+void SourceProcessor::lower_this_keyword(Parser &parser)
 {
   /* NOTE: We need to avoid the case of `a * this->b` being replaced as 2 dereferences. */
 
@@ -204,21 +204,26 @@ void SourceProcessor::lower_method_definitions(Parser &parser)
   parser().foreach_match("*T;", [&](const Tokens &t) { parser.replace(t[0], t[1], "this_"); });
   /* `this->` -> `this_.` */
   parser().foreach_match("T->", [&](const Tokens &t) { parser.replace(t[0], t[2], "this_."); });
+}
 
+/* Move all method definition outside of struct definition blocks. */
+void SourceProcessor::lower_method_definitions(Parser &parser)
+{
+  lower_this_keyword(parser);
   parser.apply_mutations();
 
   parser().foreach_match("sA:", [&](const Tokens &toks) {
     if (toks[2] == ':') {
-      report_error_(ERROR_TOK(toks[2]), "class inheritance is not supported");
+      report_error(toks[2], "class inheritance is not supported");
       return;
     }
   });
 
   parser().foreach_match("cAA(..)c?{..}", [&](const Tokens &toks) {
-    if (toks[0].prev() == Const) {
-      report_error_(ERROR_TOK(toks[0]),
-                    "function return type is marked `const` but it makes no sense for values "
-                    "and returning reference is not supported");
+    if (toks[0].prev() == TokenType::Const) {
+      report_error(toks[0],
+                   "function return type is marked `const` but it makes no sense for values "
+                   "and returning reference is not supported");
       return;
     }
   });
@@ -242,8 +247,7 @@ void SourceProcessor::lower_method_definitions(Parser &parser)
           const Token const_tok = is_const ? fn_args.back().next() : Token(parser);
 
           if (fn_name.str()[0] == '_') {
-            report_error_(ERROR_TOK(fn_name),
-                          "function name starting with an underscore are reserved");
+            report_error(fn_name, "function name starting with an underscore are reserved");
           }
 
           if (is_static) {
@@ -276,8 +280,7 @@ void SourceProcessor::lower_method_definitions(Parser &parser)
                 (fn_name.str().find_first_not_of("xyzw") == string::npos ||
                  fn_name.str().find_first_not_of("rgba") == string::npos))
             {
-              report_error_(ERROR_TOK(fn_name),
-                            "Method name matching swizzles accessor are forbidden.");
+              report_error(fn_name, "Method name matching swizzles accessor are forbidden.");
             }
           }
         });
@@ -307,7 +310,7 @@ void SourceProcessor::lower_method_definitions(Parser &parser)
 
             string proto_str = parser.substr_range_inclusive(fn_start, fn_args.back());
             proto_str = strip_whitespace(proto_str) + ";\n";
-            Parser proto(proto_str, report_error_);
+            Parser proto(proto_str, error_handler);
 
             parser.insert_after(struct_end, proto.result_get());
           });
@@ -332,8 +335,26 @@ void SourceProcessor::lower_method_definitions(Parser &parser)
   parser.apply_mutations();
 }
 
+void SourceProcessor::lower_constructors(Parser &parser)
+{
+  for (FuncCall call : parser.root().descendants_of_type<FuncCall>()) {
+    if (call.identifier().str() != "_ctor") {
+      continue;
+    }
+    Token comma = call.parameters().child_first().back().next();
+    if (comma != ',') {
+      report_error(comma, "Compiler error: expecting comma");
+    }
+    parser.replace(comma, ")");
+    parser.replace(call.back(), " _rotc()");
+  }
+  if (error_handler.err) {
+    throw ParserException();
+  }
+}
+
 /* Transform `a.fn(b)` into `fn(a, b)`. */
-void SourceProcessor::lower_method_calls(Parser &parser)
+void SourceProcessor::lower_method_calls(Parser &parser, bool with_prefix)
 {
   do {
     parser().foreach_scope(ScopeType::Function, [&](Scope scope) {
@@ -364,14 +385,14 @@ void SourceProcessor::lower_method_calls(Parser &parser)
             /* End of chain. */
             break;
           }
-          report_error_(start_of_this.line_number(),
-                        start_of_this.char_number(),
-                        start_of_this.line_str(),
-                        "lower_method_call parsing error");
+          report_error(start_of_this.line_number(),
+                       start_of_this.char_number(),
+                       start_of_this.line_str(),
+                       "lower_method_call parsing error");
           break;
         }
         string this_str = parser.substr_range_inclusive(start_of_this, end_of_this);
-        string func_str = method_call_prefix + string(func.str());
+        string func_str = (with_prefix ? method_call_prefix : "") + string(func.str());
         const bool has_no_arg = par_open.next() == ')';
         /* `a.fn(b)` -> `_fn(a, b)` */
         parser.replace_try(
@@ -379,6 +400,204 @@ void SourceProcessor::lower_method_calls(Parser &parser)
       });
     });
   } while (parser.apply_mutations());
+}
+
+void SourceProcessor::lower_structured_bindings(Parser &parser)
+{
+  auto get_function_return_type = [&](string_view fn_name) {
+    string return_type;
+    parser().foreach_function([&](bool, Token type, Token name, Scope, bool, Scope) {
+      if (name.str() != fn_name) {
+        return;
+      }
+      return_type = type.str();
+    });
+    return return_type;
+  };
+
+  auto get_argument_type = [&](Scope args, string_view arg_name) {
+    string return_type;
+    args.foreach_scope(ScopeType::FunctionArg, [&](Scope arg) {
+      const Token name = arg.back();
+      if (name == ']') {
+        /* No array support for now. */
+        return;
+      }
+      if (name.str() == arg_name) {
+        Token type = name.prev() == '&' ? name.prev(2) : name.prev();
+        return_type = type.str();
+      }
+    });
+    return return_type;
+  };
+
+  auto get_local_symbol_type = [&](Scope fn_body, Token symbol) {
+    string return_type;
+    string_view symbol_str = symbol.str();
+    fn_body.foreach_token(Word, [&](Token tok) {
+      if (tok != Word || tok.str() != symbol_str || tok.index_ >= symbol.index_) {
+        return;
+      }
+      /* Check if it is in a visible scope. */
+      Scope tok_scope = tok.scope();
+      if (tok_scope != symbol.scope() && !tok_scope.contains(symbol.scope())) {
+        return;
+      }
+      /* Check if it is a definition. */
+      /* TODO(fclem): Comma declaration. */
+      bool is_reference = tok.prev() == Ampersand;
+      if (is_reference ? (tok.next() != '=' || tok.prev(2) != Word) : (tok.prev() != Word)) {
+        return;
+      }
+      Token type_tok = tok.prev(is_reference ? 2 : 1);
+      return_type = type_tok.str();
+    });
+    return return_type;
+  };
+
+  auto get_struct_members = [&](string_view struct_name) {
+    /* Search in symbol table first. */
+    for (const auto &symbol : metadata_.symbol_table) {
+      if (symbol.is_struct && symbol.identifier == struct_name) {
+        return symbol.members;
+      }
+    }
+
+    /* Search symbols inside this file. This can help find instanciated structs. */
+    vector<pair<string, string>> members;
+    parser().foreach_match("sA{", [&](const Tokens &t) {
+      if (t[1].str() != struct_name) {
+        return;
+      }
+      Scope body = t.back().scope();
+      body.foreach_declaration([&](Scope, Token, Token type, Scope, Token name, Scope, Token) {
+        members.emplace_back(type.str(), name.str());
+      });
+    });
+    return members;
+  };
+
+  parser().foreach_function([&](bool, Token, Token, Scope args, bool, Scope body) {
+    /* Unique index per binding to avoid to mess with scopes. */
+    int index = 0;
+    body.foreach_match("A[..]=", [&](const Tokens &t) {
+      if (t[0].str() != "auto") {
+        return;
+      }
+      Token symbol_name = t.back().next(1);
+      /* For now only support expanding form a single function call. */
+      if (symbol_name != Word) {
+        report_error(symbol_name, "Expected either a function call or a single variable");
+        return;
+      }
+
+      Token after_symbol = Token::invalid(&parser);
+      string struct_type;
+      if (symbol_name.next(1) == '(') {
+        after_symbol = symbol_name.next(1).scope().back().next();
+        if (after_symbol != ';') {
+          report_error(after_symbol, "Expected single function call");
+          return;
+        }
+        struct_type = get_function_return_type(symbol_name.str());
+        if (struct_type.empty()) {
+          report_error(symbol_name,
+                       "Couldn't infer function return type. Can be caused by overload.");
+          return;
+        }
+      }
+      else {
+        after_symbol = symbol_name.next(1);
+        if (after_symbol != ';') {
+          report_error(after_symbol, "Expected single symbol to unpack");
+          return;
+        }
+        struct_type = get_local_symbol_type(body, symbol_name);
+
+        if (struct_type.empty()) {
+          struct_type = get_argument_type(args, symbol_name.str());
+        }
+
+        if (struct_type.empty()) {
+          report_error(symbol_name, "Couldn't infer local symbol type.");
+          return;
+        }
+      }
+
+      string struct_var = "_u" + to_string(index);
+
+      parser.replace(t[0], t[4], struct_type + " " + struct_var);
+
+      vector<pair<string, string>> struct_members = get_struct_members(struct_type);
+
+      if (struct_members.empty()) {
+        report_error(symbol_name, "Couldn't find type to unpack.");
+        return;
+      }
+
+      Scope var_list = t[1].scope();
+      string assignments = ";";
+      int member_index = 0;
+      var_list.foreach_token(Word, [&](Token tok) {
+        if (struct_members.size() > member_index) {
+          auto [member_type, member_name] = struct_members[member_index];
+          assignments += member_type + " " + string(tok.str()) + "=" + struct_var + "." +
+                         member_name + ";";
+          member_index++;
+        }
+        else {
+          report_error(tok, "Too many parameters in structured binding");
+        }
+      });
+      if (struct_members.size() != member_index) {
+        report_error(t[4], "Missing parameters in structured binding");
+      }
+      /* Drop trailing semicolon.  */
+      assignments = assignments.substr(0, assignments.size() - 1);
+
+      parser.insert_after(after_symbol.prev(), assignments);
+      index++;
+    });
+  });
+
+  parser.apply_mutations();
+}
+
+void SourceProcessor::lower_method_forward_declaration(Parser &parser)
+{
+  for (Preprocessor directive : parser.root().children_of_type<Preprocessor>()) {
+    if (!directive.str().starts_with("#pragma member_forward_decl")) {
+      continue;
+    }
+    string_view cls_name = directive.back().str();
+    FuncForwardDecl fwd_decl = directive.next();
+    if (!fwd_decl.is_valid()) {
+      report_error(
+          directive.front(),
+          "Compiler error: expecting forward declaration after 'pragma member_forward_decl'");
+    }
+    /* Search for declaration. */
+    ClassDecl cls_decl = {};
+    for (ClassDecl decl : parser.root().children_of_type<ClassDecl>()) {
+      if (decl.identifier().str() == cls_name) {
+        cls_decl = decl;
+        break;
+      }
+    }
+    if (!cls_decl.is_valid()) {
+      report_error(fwd_decl.front(),
+                   "Compiler error: can't locate class instantiation of '" + string(cls_name) +
+                       "'");
+    }
+    /* Move the forward declaration. */
+    parser.insert_after(cls_decl.back(),
+                        "#ifndef GPU_METAL\n" + string(fwd_decl.str()) + "\n#endif\n");
+    parser.replace(directive.front(), fwd_decl.back(), "");
+  }
+  if (error_handler.err) {
+    throw ParserException();
+  }
+  parser.apply_mutations();
 }
 
 }  // namespace blender::gpu::shader

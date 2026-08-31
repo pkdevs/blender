@@ -2,40 +2,28 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_constants.h"
+#include "BLI_math_constants.hh"
 
 #include "ED_anim_api.hh"
 
 #include "DNA_anim_types.h"
 
 #include "BKE_fcurve.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 
 #include "RNA_define.hh"
 
-#include "CLG_log.h"
 #include "testing/testing.h"
 
 namespace blender::animrig::tests {
 
-class AnimDrawTest : public testing::Test {
+class AnimDrawTest : public bke::BlenderGTestBase {
  public:
   Main *bmain;
   Object *object;
-
-  static void SetUpTestSuite()
-  {
-    RNA_init();
-    CLG_init();
-    BKE_idtype_init();
-  }
-
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-  }
 
   void SetUp() override
   {
@@ -52,7 +40,7 @@ class AnimDrawTest : public testing::Test {
 
 TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
 {
-  FCurve *fcurve = MEM_new<FCurve>(__func__);
+  FCurve *fcurve = BKE_fcurve_create();
   fcurve->array_index = 0;
 
   /* Avoid creating a Scene via BKE_id_new<Scene>(this->bmain, "SCTestScene"); as that requires
@@ -63,7 +51,7 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
 
   { /* Rotation: Degrees. */
     scene.unit.system_rotation = 0;
-    BKE_fcurve_rnapath_set(*fcurve, "rotation_euler");
+    fcurve->rna_path_set("rotation_euler");
 
     EXPECT_FLOAT_EQ(RAD2DEGF(1.0f),
                     ANIM_unit_mapping_get_factor(&scene, &this->object->id, fcurve, 0, nullptr));
@@ -74,7 +62,7 @@ TEST_F(AnimDrawTest, anim_unit_mapping_get_factor_not_normalizing)
 
   { /* Rotation: Radians. */
     scene.unit.system_rotation = USER_UNIT_ROT_RADIANS;
-    BKE_fcurve_rnapath_set(*fcurve, "rotation_euler");
+    fcurve->rna_path_set("rotation_euler");
 
     EXPECT_FLOAT_EQ(1.0f,
                     ANIM_unit_mapping_get_factor(&scene, &this->object->id, fcurve, 0, nullptr));

@@ -55,7 +55,7 @@
 #endif
 
 /* hrmf, we need a better include then this */
-#include "../blenlib/BLI_sys_types.h" /* needed for int64_t only! */
+#include "../blenlib/BLI_sys_types.hh" /* needed for int64_t only! */
 
 namespace blender {
 
@@ -88,7 +88,7 @@ template<class T> class ShallowDataConstRef {
  public:
   constexpr explicit ShallowDataConstRef(const T &ref) : ref_(ref) {}
 
-  inline const T *get_pointer() const
+  const T *get_pointer() const
   {
     return &ref_;
   }

@@ -4,6 +4,13 @@
 
 #include "NOD_rna_define.hh"
 
+#include "BKE_curves.hh"
+#include "BKE_grease_pencil.hh"
+#include "BKE_instances.hh"
+
+#include "DNA_mesh_types.h"
+#include "DNA_pointcloud_types.h"
+
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
@@ -15,41 +22,41 @@ namespace blender::nodes::node_geo_attribute_domain_size_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Geometry")
+  b.add_input<decl::Geometry>("Geometry"_ustr)
       .description(
           "Geometry to get the domain sizes of. Only the root geometry is considered, not nested "
           "instances");
-  auto &total_points = b.add_output<decl::Int>("Point Count")
+  auto &total_points = b.add_output<decl::Int>("Point Count"_ustr)
                            .make_available([](bNode &node) {
                              node.custom1 = int16_t(GeometryComponent::Type::Mesh);
                            })
                            .available(false);
-  auto &total_edges = b.add_output<decl::Int>("Edge Count")
+  auto &total_edges = b.add_output<decl::Int>("Edge Count"_ustr)
                           .make_available([](bNode &node) {
                             node.custom1 = int16_t(GeometryComponent::Type::Mesh);
                           })
                           .available(false);
-  auto &total_faces = b.add_output<decl::Int>("Face Count")
+  auto &total_faces = b.add_output<decl::Int>("Face Count"_ustr)
                           .make_available([](bNode &node) {
                             node.custom1 = int16_t(GeometryComponent::Type::Mesh);
                           })
                           .available(false);
-  auto &total_corners = b.add_output<decl::Int>("Face Corner Count")
+  auto &total_corners = b.add_output<decl::Int>("Face Corner Count"_ustr)
                             .make_available([](bNode &node) {
                               node.custom1 = int16_t(GeometryComponent::Type::Mesh);
                             })
                             .available(false);
-  auto &total_curves = b.add_output<decl::Int>("Spline Count")
+  auto &total_curves = b.add_output<decl::Int>("Spline Count"_ustr)
                            .make_available([](bNode &node) {
                              node.custom1 = int16_t(GeometryComponent::Type::Curve);
                            })
                            .available(false);
-  auto &total_instances = b.add_output<decl::Int>("Instance Count")
+  auto &total_instances = b.add_output<decl::Int>("Instance Count"_ustr)
                               .make_available([](bNode &node) {
                                 node.custom1 = int16_t(GeometryComponent::Type::Instance);
                               })
                               .available(false);
-  auto &total_layers = b.add_output<decl::Int>("Layer Count")
+  auto &total_layers = b.add_output<decl::Int>("Layer Count"_ustr)
                            .make_available([](bNode &node) {
                              node.custom1 = int16_t(GeometryComponent::Type::GreasePencil);
                            })
@@ -78,7 +85,7 @@ static void node_declare(NodeDeclarationBuilder &b)
         total_layers.available(true);
         break;
       default:
-        BLI_assert_unreachable();
+        break;
     }
   }
 }
@@ -96,16 +103,16 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
 static void node_geo_exec(GeoNodeExecParams params)
 {
   const GeometryComponent::Type component = GeometryComponent::Type(params.node().custom1);
-  const GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+  const GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry"_ustr);
 
   switch (component) {
     case GeometryComponent::Type::Mesh: {
-      if (const MeshComponent *component = geometry_set.get_component<MeshComponent>()) {
-        const AttributeAccessor attributes = *component->attributes();
-        params.set_output("Point Count", attributes.domain_size(AttrDomain::Point));
-        params.set_output("Edge Count", attributes.domain_size(AttrDomain::Edge));
-        params.set_output("Face Count", attributes.domain_size(AttrDomain::Face));
-        params.set_output("Face Corner Count", attributes.domain_size(AttrDomain::Corner));
+      if (const Mesh *mesh = geometry_set.get_mesh()) {
+        const AttributeAccessor attributes = mesh->attributes();
+        params.set_output("Point Count"_ustr, attributes.domain_size(AttrDomain::Point));
+        params.set_output("Edge Count"_ustr, attributes.domain_size(AttrDomain::Edge));
+        params.set_output("Face Count"_ustr, attributes.domain_size(AttrDomain::Face));
+        params.set_output("Face Corner Count"_ustr, attributes.domain_size(AttrDomain::Corner));
       }
       else {
         params.set_default_remaining_outputs();
@@ -113,10 +120,10 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
     }
     case GeometryComponent::Type::Curve: {
-      if (const CurveComponent *component = geometry_set.get_component<CurveComponent>()) {
-        const AttributeAccessor attributes = *component->attributes();
-        params.set_output("Point Count", attributes.domain_size(AttrDomain::Point));
-        params.set_output("Spline Count", attributes.domain_size(AttrDomain::Curve));
+      if (const Curves *curves_id = geometry_set.get_curves()) {
+        const AttributeAccessor attributes = curves_id->geometry.wrap().attributes();
+        params.set_output("Point Count"_ustr, attributes.domain_size(AttrDomain::Point));
+        params.set_output("Spline Count"_ustr, attributes.domain_size(AttrDomain::Curve));
       }
       else {
         params.set_default_remaining_outputs();
@@ -124,10 +131,9 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
     }
     case GeometryComponent::Type::PointCloud: {
-      if (const PointCloudComponent *component = geometry_set.get_component<PointCloudComponent>())
-      {
-        const AttributeAccessor attributes = *component->attributes();
-        params.set_output("Point Count", attributes.domain_size(AttrDomain::Point));
+      if (const PointCloud *pointcloud = geometry_set.get_pointcloud()) {
+        const AttributeAccessor attributes = pointcloud->attributes();
+        params.set_output("Point Count"_ustr, attributes.domain_size(AttrDomain::Point));
       }
       else {
         params.set_default_remaining_outputs();
@@ -135,9 +141,9 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
     }
     case GeometryComponent::Type::Instance: {
-      if (const InstancesComponent *component = geometry_set.get_component<InstancesComponent>()) {
-        const AttributeAccessor attributes = *component->attributes();
-        params.set_output("Instance Count", attributes.domain_size(AttrDomain::Instance));
+      if (const bke::Instances *instances = geometry_set.get_instances()) {
+        const AttributeAccessor attributes = instances->attributes();
+        params.set_output("Instance Count"_ustr, attributes.domain_size(AttrDomain::Instance));
       }
       else {
         params.set_default_remaining_outputs();
@@ -145,11 +151,9 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
     }
     case GeometryComponent::Type::GreasePencil: {
-      if (const GreasePencilComponent *component =
-              geometry_set.get_component<GreasePencilComponent>())
-      {
-        const AttributeAccessor attributes = *component->attributes();
-        params.set_output("Layer Count", attributes.domain_size(AttrDomain::Layer));
+      if (const GreasePencil *grease_pencil = geometry_set.get_grease_pencil()) {
+        const AttributeAccessor attributes = grease_pencil->attributes();
+        params.set_output("Layer Count"_ustr, attributes.domain_size(AttrDomain::Layer));
       }
       else {
         params.set_default_remaining_outputs();
@@ -157,25 +161,40 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
     }
     default:
-      BLI_assert_unreachable();
+      params.set_default_remaining_outputs();
+      break;
   }
 }
 
 static void node_rna(StructRNA *srna)
 {
-  RNA_def_node_enum(srna,
-                    "component",
-                    "Component",
-                    "",
-                    rna_enum_geometry_component_type_items,
-                    NOD_inline_enum_accessors(custom1),
-                    int(bke::GeometryComponent::Type::Mesh));
+  RNA_def_node_enum(
+      srna,
+      "component",
+      "Component",
+      "",
+      rna_enum_geometry_component_type_items,
+      NOD_inline_enum_accessors(custom1),
+      int(bke::GeometryComponent::Type::Mesh),
+      [](bContext * /*C*/, PointerRNA * /*ptr*/, PropertyRNA * /*prop*/, bool *r_free) {
+        *r_free = true;
+        return enum_items_filter(rna_enum_geometry_component_type_items,
+                                 [](const EnumPropertyItem &item) -> bool {
+                                   return ELEM(item.value,
+                                               int(GeometryComponent::Type::Mesh),
+                                               int(GeometryComponent::Type::Curve),
+                                               int(GeometryComponent::Type::PointCloud),
+                                               int(GeometryComponent::Type::Instance),
+                                               int(GeometryComponent::Type::GreasePencil));
+                                 });
+      });
 }
 
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeAttributeDomainSize", GEO_NODE_ATTRIBUTE_DOMAIN_SIZE);
+  geo_node_type_base(
+      &ntype, "GeometryNodeAttributeDomainSize"_ustr, GEO_NODE_ATTRIBUTE_DOMAIN_SIZE);
   ntype.ui_name = "Domain Size";
   ntype.ui_description = "Retrieve the number of elements in a geometry for each attribute domain";
   ntype.enum_name_legacy = "ATTRIBUTE_DOMAIN_SIZE";

@@ -23,14 +23,10 @@ uint outline_colorid_get()
   if (is_transform) {
     return 0u; /* theme.colors.transform */
   }
-  else if (is_active) {
+  if (is_active) {
     return 3u; /* theme.colors.active */
   }
-  else {
-    return 1u; /* theme.colors.object_select */
-  }
-
-  return 0u;
+  return 1u; /* theme.colors.object_select */
 }
 
 struct VertIn {
@@ -77,8 +73,8 @@ VertOut vertex_main(VertIn v_in)
 
 void geometry_main(VertOut geom_in[4],
                    uint out_vertex_id,
-                   uint out_primitive_id,
-                   uint out_invocation_id)
+                   uint /*out_primitive_id*/,
+                   uint /*out_invocation_id*/)
 {
   float3 view_vec = -drw_view_incident_vector(geom_in[1].vs_P);
 

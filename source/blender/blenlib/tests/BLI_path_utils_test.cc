@@ -6,9 +6,9 @@
 
 #include "IMB_imbuf.hh"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
 
 namespace blender {
@@ -241,6 +241,14 @@ TEST(path_utils, ParentDir_Complex)
   PARENT_DIR("./a", "./");
   PARENT_DIR("../a/", "../");
   PARENT_DIR("../a", "../");
+
+  /* Test unexpanded template variables. */
+  PARENT_DIR("{test_variable}/a", "{test_variable}/");
+  PARENT_DIR("/a/{test_variable}", "/a/");
+  /* While this is not correct in that the template variable could contain a path string,
+   * We just check that the code doesn't error out when it encounters a template variable.
+   */
+  PARENT_DIR("{test_variable}/a/{test_variable}", "{test_variable}/a/");
 }
 
 #undef PARENT_DIR
@@ -903,6 +911,10 @@ TEST(path_utils, FrameStrip)
   PATH_FRAME_STRIP("/abspath/to/somefile.001.abc", "/abspath/to/somefile.###", ".abc");
   PATH_FRAME_STRIP("/ext/longer/somefile.001.alembic", "/ext/longer/somefile.###", ".alembic");
   PATH_FRAME_STRIP("/ext/shorter/somefile.123001.abc", "/ext/shorter/somefile.######", ".abc");
+
+  /* Check int overflow scenario. */
+  PATH_FRAME_STRIP("1234567890.png", "##########", ".png");
+  PATH_FRAME_STRIP("12345678901.png", "12345678901", ".png");
 }
 #undef PATH_FRAME_STRIP
 
@@ -1220,6 +1232,11 @@ TEST(path_utils, FrameGet)
   PATH_FRAME_GET("path/to/frame_2810.dummy_quite_long_extension", 2810, 4, true);
   PATH_FRAME_GET("notframe_7_frame00018.bla", 18, 5, true);
 
+  /* Check int overflow scenario. */
+  PATH_FRAME_GET("1234567890.png", 1234567890, 10, true);
+  PATH_FRAME_GET("12345678901.png", -1, 11, false);
+
+  PATH_FRAME_GET("nonum.abc", -1, 0, false);
   PATH_FRAME_GET("", -1, -1, false);
 }
 #undef PATH_FRAME_GET

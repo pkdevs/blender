@@ -24,6 +24,9 @@ std::string ParsedResource::serialize() const
   if (res_type == "legacy_info") {
     ss << "ADDITIONAL_INFO(" << var_name << ")";
   }
+  else if (res_type == "legacy_iface") {
+    ss << "VERTEX_OUT(" << var_type << "_t)";
+  }
   else if (res_type == "resource_table") {
     if (!res_condition.empty()) {
       ss << ".additional_info_with_condition(\"" << var_type << "\"" << res_condition_lambda
@@ -65,6 +68,12 @@ std::string ParsedResource::serialize() const
     ss << ", Frequency::" << res_frequency;
     ss << res_condition_lambda << ")";
   }
+  else if (res_type == "acceleration_structure") {
+    ss << ".acceleration_structure(" << res_slot;
+    ss << ", \"" << var_name << "\"";
+    ss << ", Frequency::" << res_frequency;
+    ss << res_condition_lambda << ")";
+  }
   else if (res_type == "shared") {
     ss << "GROUP_SHARED(" << var_type << ", " << var_name << var_array << ")";
   }
@@ -74,13 +83,16 @@ std::string ParsedResource::serialize() const
          << var_array.substr(1, var_array.size() - 2) << ")";
     }
     else {
-      ss << "PUSH_CONSTANT(" << var_type << ", " << var_name << ")";
+      ss << ".push_constant(Type::" << var_type << "_t, \"" << var_name << "\", 0"
+         << res_condition_lambda << ")";
     }
   }
   else if (res_type == "compilation_constant") {
     /* Needs to be defined on the shader declaration. */
     /* TODO(fclem): Add check that shader sets an existing compilation constant. */
     // ss << "COMPILATION_CONSTANT(" << var_type << ", " << var_name << ", " << res_value << ")";
+    /* WORKAROUND: Avoid unused expression warning.  */
+    ss << ".noop()\n";
   }
   else if (res_type == "specialization_constant") {
     ss << "SPECIALIZATION_CONSTANT(" << var_type << ", " << var_name << ", " << res_value << ")";
@@ -121,7 +133,7 @@ std::string ParsedFragOuput::serialize() const
   std::stringstream ss;
   if (!dual_source.empty()) {
     ss << "FRAGMENT_OUT_DUAL(" << slot << ", " << var_type << ", " << var_name << ", "
-       << dual_source << ")";
+       << "SRC_" << dual_source << ")";
   }
   else if (!raster_order_group.empty()) {
     ss << "FRAGMENT_OUT_ROG(" << slot << ", " << var_type << ", " << var_name << ", "
@@ -130,6 +142,14 @@ std::string ParsedFragOuput::serialize() const
   else {
     ss << "FRAGMENT_OUT(" << slot << ", " << var_type << ", " << var_name << ")";
   }
+  return ss.str();
+}
+
+std::string ParsedFragInput::serialize() const
+{
+  std::stringstream ss;
+  ss << "SUBPASS_IN(" << slot << ", " << var_type << ", " << image_type << ", " << var_name << ", "
+     << raster_order_group << ")";
   return ss.str();
 }
 
@@ -146,10 +166,32 @@ std::string FragmentOutputs::serialize() const
   return ss.str();
 }
 
-std::string ParsedVertInput::serialize() const
+std::string FragmentInputs::serialize() const
 {
   std::stringstream ss;
-  ss << "VERTEX_IN(" << slot << ", " << var_type << ", " << var_name << ")";
+  ss << "GPU_SHADER_CREATE_INFO(" << name << ")\n";
+
+  for (const auto &res : *this) {
+    ss << res.serialize() << "\n";
+  }
+
+  ss << "GPU_SHADER_CREATE_END()\n";
+  return ss.str();
+}
+
+std::string ParsedVertInput::serialize() const
+{
+  std::string res_condition_lambda;
+
+  if (!res_condition.empty()) {
+    res_condition_lambda = ", [](blender::Span<CompilationConstant> constants) { ";
+    res_condition_lambda += res_condition;
+    res_condition_lambda += "}";
+  }
+
+  std::stringstream ss;
+  ss << ".vertex_in(" << slot << ", Type::" << var_type << "_t, \"" << var_name << "\""
+     << res_condition_lambda << ")";
   return ss.str();
 }
 
@@ -225,6 +267,9 @@ std::string Source::serialize_infos() const
   for (auto frag_outputs : fragment_outputs) {
     ss << frag_outputs.serialize() << "\n";
   }
+  for (auto frag_inputs : fragment_inputs) {
+    ss << frag_inputs.serialize() << "\n";
+  }
   ss << "\n";
   for (auto iface : stage_interfaces) {
     ss << iface.serialize() << "\n";
@@ -232,6 +277,11 @@ std::string Source::serialize_infos() const
   ss << "\n";
   for (auto res_table : resource_tables) {
     ss << "GPU_SHADER_CREATE_INFO(" << res_table.name << ")\n";
+
+    if (res_table.empty()) {
+      /* Add unused define to avoid warning about unused expression. */
+      ss << "DEFINE(\"EMPTY_CREATE_INFO\")\n";
+    }
     for (const auto &res : res_table) {
       ss << res.serialize() << "\n";
     }

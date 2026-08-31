@@ -18,6 +18,7 @@ namespace blender {
 
 struct bContext;
 struct wmGizmo;
+struct wmGizmoGroup;
 namespace ed::transform {
 struct SnapObjectContext;
 }
@@ -49,6 +50,13 @@ void ED_gizmo_draw_preset_circle(const wmGizmo *gz,
                                  const float mat[4][4],
                                  int axis,
                                  int select_id);
+
+/* -------------------------------------------------------------------- */
+/* 2D Button Gizmo */
+
+/* `button2d_gizmo.cc` */
+
+void ED_gizmo_button2d_group_background(const bContext *C, wmGizmoGroup *gzgroup);
 
 /* -------------------------------------------------------------------- */
 /* 3D Arrow Gizmo */
@@ -88,6 +96,11 @@ void ED_gizmo_arrow3d_set_ui_range(wmGizmo *gz, float min, float max);
  * \note Needs to be called before #WM_gizmo_target_property_def_rna!
  */
 void ED_gizmo_arrow3d_set_range_fac(wmGizmo *gz, float range_fac);
+
+/**
+ * Reset the offset of the arrow gizmo.
+ */
+void ED_gizmo_arrow3d_reset_offset(wmGizmo *gz);
 
 /* -------------------------------------------------------------------- */
 /* Cage Gizmo */

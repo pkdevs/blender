@@ -85,7 +85,6 @@ struct View3D;
 struct ViewLayer;
 struct bContext;
 struct bToolRef;
-struct tPaletteColorHSV;
 
 /* overlay invalidation */
 enum ePaintOverlayControlFlags {
@@ -118,8 +117,14 @@ ENUM_OPERATORS(ePaintSymmetryAreas);
 
 #define PAINT_SYMM_AREAS 8
 
-void BKE_paint_invalidate_overlay_tex(Scene *scene, ViewLayer *view_layer, const Tex *tex);
-void BKE_paint_invalidate_cursor_overlay(Scene *scene, ViewLayer *view_layer, CurveMapping *curve);
+void BKE_paint_invalidate_overlay_tex(const Main &bmain,
+                                      Scene *scene,
+                                      ViewLayer *view_layer,
+                                      const Tex *tex);
+void BKE_paint_invalidate_cursor_overlay(const Main &bmain,
+                                         Scene *scene,
+                                         ViewLayer *view_layer,
+                                         CurveMapping *curve);
 void BKE_paint_invalidate_overlay_all();
 ePaintOverlayControlFlags BKE_paint_get_overlay_flags();
 void BKE_paint_reset_overlay_invalid(ePaintOverlayControlFlags flag);
@@ -138,12 +143,6 @@ void BKE_palette_clear(Palette *palette);
 
 void BKE_palette_color_set(PaletteColor *color, const float rgb[3]);
 void BKE_palette_color_sync_legacy(PaletteColor *color);
-
-void BKE_palette_sort_hsv(tPaletteColorHSV *color_array, int totcol);
-void BKE_palette_sort_svh(tPaletteColorHSV *color_array, int totcol);
-void BKE_palette_sort_vhs(tPaletteColorHSV *color_array, int totcol);
-void BKE_palette_sort_luminance(tPaletteColorHSV *color_array, int totcol);
-bool BKE_palette_from_hash(Main *bmain, GHash *color_table, const char *name);
 
 /* Paint curves. */
 
@@ -172,6 +171,8 @@ void BKE_paint_settings_foreach_mode(ToolSettings *ts, FunctionRef<void(Paint *p
 
 void BKE_paint_cavity_curve_preset(Paint *paint, int preset);
 
+void BKE_paint_mesh_automasking_settings_ensure(Paint &paint);
+
 eObjectMode BKE_paint_object_mode_from_paintmode(PaintMode mode);
 bool BKE_paint_ensure_from_paintmode(Scene *sce, PaintMode mode);
 Paint *BKE_paint_get_active_from_paintmode(Scene *sce, PaintMode mode);
@@ -179,13 +180,10 @@ const EnumPropertyItem *BKE_paint_get_tool_enum_from_paintmode(PaintMode mode);
 uint BKE_paint_get_brush_type_offset_from_paintmode(PaintMode mode);
 std::optional<int> BKE_paint_get_brush_type_from_obmode(const Brush *brush, eObjectMode ob_mode);
 std::optional<int> BKE_paint_get_brush_type_from_paintmode(const Brush *brush, PaintMode mode);
-Paint *BKE_paint_get_active(Scene *sce, ViewLayer *view_layer);
+Paint *BKE_paint_get_active(const Main &bmain, Scene *sce, ViewLayer *view_layer);
 Paint *BKE_paint_get_active_from_context(const bContext *C);
 PaintMode BKE_paintmode_get_active_from_context(const bContext *C);
 PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref);
-bool BKE_paint_use_unified_size(const Paint *paint);
-bool BKE_paint_use_unified_strength(const Paint *paint);
-bool BKE_paint_use_unified_color(const Paint *paint);
 
 /* Paint brush retrieval and assignment. */
 
@@ -315,10 +313,16 @@ bool paint_calculate_rake_rotation(Paint &paint,
                                    const Brush &brush,
                                    const float mouse_pos[2],
                                    PaintMode paint_mode,
-                                   bool stroke_has_started);
+                                   bool in_stroke,
+                                   bool is_first_dab);
 void paint_update_brush_rake_rotation(Paint &paint, const Brush &brush, float rotation);
 
-void BKE_paint_stroke_get_average(const Paint *paint, const Object *ob, float stroke[3]);
+namespace bke::paint {
+float3 stroke_get_average(const Paint *paint, const Object *ob);
+void paint_stroke_reset_location(Paint &paint);
+void stroke_track_location(Paint &paint, float3 location);
+void stroke_set_location(Paint &paint, float3 location);
+}  // namespace bke::paint
 
 float3 BKE_paint_randomize_color(const BrushColorJitterSettings &color_jitter,
                                  const float3 &initial_hsv_jitter,
@@ -475,15 +479,16 @@ struct SculptSession : NonCopyable, NonMovable {
 
   /* Transform operator */
   float3 pivot_pos = {};
-  float4 pivot_rot = float4(0.0f, 0.0f, 0.0f, 1.0f);
+  /* TODO: Switch this and other `pivot_rot` to C++, so this can be `Quaternion::identity` */
+  float4 pivot_rot = float4(1.0f, 0.0f, 0.0f, 0.0f);
   float3 pivot_scale = {};
 
   float3 init_pivot_pos = {};
-  float4 init_pivot_rot = float4(0.0f, 0.0f, 0.0f, 1.0f);
+  float4 init_pivot_rot = float4(1.0f, 0.0f, 0.0f, 0.0f);
   float3 init_pivot_scale = {};
 
   float3 prev_pivot_pos = {};
-  float4 prev_pivot_rot = float4(0.0f, 0.0f, 0.0f, 1.0f);
+  float4 prev_pivot_rot = float4(1.0f, 0.0f, 0.0f, 0.0f);
   float3 prev_pivot_scale = {};
 
   eObjectMode mode_type;
@@ -570,20 +575,25 @@ void BKE_sculptsession_free(Object *ob);
 void BKE_sculptsession_free_deformMats(SculptSession *ss);
 void BKE_sculptsession_free_pbvh(Object &object);
 void BKE_sculptsession_bm_to_me(Object *ob);
-void BKE_sculptsession_bm_to_me_for_render(Object *object);
+
+/**
+ * \warning Expects a fully evaluated depsgraph.
+ */
+void BKE_sculptsession_update_for_edit(Depsgraph *depsgraph, Object *ob_orig, bool is_paint_tool);
+void BKE_sculptsession_update_before_eval(Object *ob_eval);
+void BKE_sculptsession_update_after_eval(Depsgraph *depsgraph, Object *ob_eval);
+
+/**
+ * Test if bke::pbvh::Tree can be used directly for drawing, which is faster than
+ * drawing the mesh and all updates that come with it.
+ */
+bool BKE_sculptsession_use_pbvh_draw(const Object *ob, const RegionView3D *rv3d);
 
 /**
  * Create new color layer on object if it doesn't have one and if experimental feature set has
  * sculpt vertex color enabled. Returns truth if new layer has been added, false otherwise.
  */
 void BKE_sculpt_color_layer_create_if_needed(Object *object);
-
-/**
- * \warning Expects a fully evaluated depsgraph.
- */
-void BKE_sculpt_update_object_for_edit(Depsgraph *depsgraph, Object *ob_orig, bool is_paint_tool);
-void BKE_sculpt_update_object_before_eval(Object *ob_eval);
-void BKE_sculpt_update_object_after_eval(Depsgraph *depsgraph, Object *ob_eval);
 
 /**
  * Sculpt mode handles multi-res differently from regular meshes, but only if
@@ -599,21 +609,14 @@ int BKE_sculpt_get_grid_num_faces(const Object &object);
  * then the scene depsgraph will be evaluated to update the runtime
  * subdivision data.
  *
- * \note always call *before* #BKE_sculpt_update_object_for_edit.
+ * \note always call *before* #BKE_sculptsession_update_for_edit.
  */
 void BKE_sculpt_mask_layers_ensure(Depsgraph *depsgraph,
                                    Main *bmain,
                                    Object *ob,
                                    MultiresModifierData *mmd);
-void BKE_sculpt_toolsettings_data_ensure(Main *bmain, Scene *scene);
 
 void BKE_sculpt_sync_face_visibility_to_grids(const Mesh &mesh, SubdivCCG &subdiv_ccg);
-
-/**
- * Test if bke::pbvh::Tree can be used directly for drawing, which is faster than
- * drawing the mesh and all updates that come with it.
- */
-bool BKE_sculptsession_use_pbvh_draw(const Object *ob, const RegionView3D *rv3d);
 
 namespace bke::object {
 
@@ -645,8 +648,8 @@ bool BKE_paint_canvas_image_get(PaintModeSettings *settings,
                                 ImageUser **r_image_user);
 std::optional<StringRef> BKE_paint_canvas_uvmap_name_get(const PaintModeSettings *settings,
                                                          Object *ob);
-void BKE_sculpt_cavity_curves_ensure(Sculpt *sd);
 CurveMapping *BKE_sculpt_default_cavity_curve();
 CurveMapping *BKE_paint_default_curve();
+CurveMapping *BKE_paint_default_curve_inverted();
 
 }  // namespace blender

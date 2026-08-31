@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_array_utils.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_task.hh"
 #include "BLI_vector_set.hh"
 
@@ -27,7 +27,7 @@
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
 
-#include "FN_multi_function_builder.hh"
+#include "FN_multi_function_registry.hh"
 
 #include "node_geometry_util.hh"
 
@@ -37,22 +37,28 @@ NODE_STORAGE_FUNCS(NodeGeometryExtrudeMesh)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Mesh")
+  b.add_input<decl::Geometry>("Mesh"_ustr)
       .supported_type(GeometryComponent::Type::Mesh)
       .description("Mesh to extrude elements of");
-  b.add_input<decl::Bool>("Selection").default_value(true).field_on_all().hide_value();
-  b.add_input<decl::Vector>("Offset")
-      .subtype(PROP_TRANSLATION)
-      .implicit_field_on_all(NODE_DEFAULT_INPUT_NORMAL_FIELD)
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .evaluated_geometry_field()
       .hide_value();
-  b.add_input<decl::Float>("Offset Scale").default_value(1.0f).field_on_all();
-  auto &individual =
-      b.add_input<decl::Bool>("Individual").default_value(true).make_available([](bNode &node) {
-        node_storage(node).mode = GEO_NODE_EXTRUDE_MESH_FACES;
-      });
-  b.add_output<decl::Geometry>("Mesh").propagate_all();
-  b.add_output<decl::Bool>("Top").field_on_all().translation_context(BLT_I18NCONTEXT_ID_NODETREE);
-  b.add_output<decl::Bool>("Side").field_on_all();
+  b.add_input<decl::Vector>("Offset"_ustr)
+      .subtype(PROP_TRANSLATION)
+      .default_input_type(NODE_DEFAULT_INPUT_NORMAL_FIELD)
+      .evaluated_geometry_field();
+  b.add_input<decl::Float>("Offset Scale"_ustr).default_value(1.0f).evaluated_geometry_field();
+  auto &individual = b.add_input<decl::Bool>("Individual"_ustr)
+                         .default_value(true)
+                         .make_available([](bNode &node) {
+                           node_storage(node).mode = GEO_NODE_EXTRUDE_MESH_FACES;
+                         });
+  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all_geometry();
+  b.add_output<decl::Bool>("Top"_ustr)
+      .anonymous_attribute_output()
+      .translation_context(BLT_I18NCONTEXT_ID_NODETREE);
+  b.add_output<decl::Bool>("Side"_ustr).anonymous_attribute_output();
 
   const bNode *node = b.node_or_null();
   if (node != nullptr) {
@@ -113,7 +119,6 @@ static void remove_unsupported_vert_data(Mesh &mesh)
   CustomData_free_layers(&mesh.vert_data, CD_ORCO);
   CustomData_free_layers(&mesh.vert_data, CD_SHAPEKEY);
   CustomData_free_layers(&mesh.vert_data, CD_CLOTH_ORCO);
-  CustomData_free_layers(&mesh.vert_data, CD_MVERT_SKIN);
 }
 
 static void remove_unsupported_corner_data(Mesh &mesh)
@@ -464,7 +469,7 @@ static void extrude_mesh_vertices(Mesh &mesh,
   }
 
   const bool no_loose_vert_hint = mesh.runtime->loose_verts_cache.is_cached() &&
-                                  mesh.runtime->loose_verts_cache.data().count == 0;
+                                  mesh.runtime->loose_verts_cache.data().mask.is_empty();
   const bool no_overlapping_hint = mesh.no_overlapping_topology();
   BKE_mesh_runtime_clear_cache(&mesh);
   if (no_loose_vert_hint) {
@@ -534,21 +539,17 @@ static GroupedSpan<int> build_vert_to_edge_map(const Span<int2> edges,
 
   Array<int> masked_edge_to_edge(edge_mask.size());
   edge_mask.to_indices<int>(masked_edge_to_edge);
-
-  threading::parallel_for(r_indices.index_range(), 4096, [&](const IndexRange range) {
-    for (const int i : range) {
-      r_indices[i] = masked_edge_to_edge[r_indices[i]];
-    }
-  });
+  array_utils::gather(
+      masked_edge_to_edge.as_span(), r_indices.as_span(), r_indices.as_mutable_span());
 
   return {r_offsets.as_span(), r_indices.as_span()};
 }
 static void tag_mesh_added_faces(Mesh &mesh)
 {
   const bool no_loose_vert_hint = mesh.runtime->loose_verts_cache.is_cached() &&
-                                  mesh.runtime->loose_verts_cache.data().count == 0;
+                                  mesh.runtime->loose_verts_cache.data().mask.is_empty();
   const bool no_loose_edge_hint = mesh.runtime->loose_edges_cache.is_cached() &&
-                                  mesh.runtime->loose_edges_cache.data().count == 0;
+                                  mesh.runtime->loose_edges_cache.data().mask.is_empty();
   const bool no_overlapping_hint = mesh.no_overlapping_topology();
   BKE_mesh_runtime_clear_cache(&mesh);
   if (no_loose_vert_hint) {
@@ -1477,30 +1478,27 @@ static void extrude_individual_mesh_faces(Mesh &mesh,
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh");
-  Field<bool> selection = params.extract_input<Field<bool>>("Selection");
-  Field<float3> offset_field = params.extract_input<Field<float3>>("Offset");
-  Field<float> scale_field = params.extract_input<Field<float>>("Offset Scale");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh"_ustr);
+  Field<bool> selection = params.extract_input<Field<bool>>("Selection"_ustr);
+  Field<float3> offset_field = params.extract_input<Field<float3>>("Offset"_ustr);
+  Field<float> scale_field = params.extract_input<Field<float>>("Offset Scale"_ustr);
   const NodeGeometryExtrudeMesh &storage = node_storage(params.node());
   GeometryNodeExtrudeMeshMode mode = GeometryNodeExtrudeMeshMode(storage.mode);
 
   /* Create a combined field from the offset and the scale so the field evaluator
    * can take care of the multiplication and to simplify each extrude function. */
-  static auto multiply_fn = mf::build::SI2_SO<float3, float, float3>(
-      "Scale",
-      [](const float3 &offset, const float scale) { return offset * scale; },
-      mf::build::exec_presets::AllSpanOrSingle());
   const Field<float3> final_offset{
-      FieldOperation::from(multiply_fn, {std::move(offset_field), std::move(scale_field)})};
+      FieldOperation::from(fn::multi_function::registry::lookup("float3 * float"_ustr),
+                           {std::move(offset_field), std::move(scale_field)})};
 
   AttributeOutputs attribute_outputs;
-  attribute_outputs.top_id = params.get_output_anonymous_attribute_id_if_needed("Top");
-  attribute_outputs.side_id = params.get_output_anonymous_attribute_id_if_needed("Side");
+  attribute_outputs.top_id = params.get_output_anonymous_attribute_id_if_needed("Top"_ustr);
+  attribute_outputs.side_id = params.get_output_anonymous_attribute_id_if_needed("Side"_ustr);
 
   const bool extrude_individual = mode == GEO_NODE_EXTRUDE_MESH_FACES &&
-                                  params.extract_input<bool>("Individual");
+                                  params.extract_input<bool>("Individual"_ustr);
 
-  const NodeAttributeFilter &attribute_filter = params.get_attribute_filter("Mesh");
+  const NodeAttributeFilter &attribute_filter = params.get_attribute_filter("Mesh"_ustr);
 
   geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
     if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
@@ -1530,7 +1528,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     }
   });
 
-  params.set_output("Mesh", std::move(geometry_set));
+  params.set_output("Mesh"_ustr, std::move(geometry_set));
 }
 
 static void node_rna(StructRNA *srna)
@@ -1554,7 +1552,7 @@ static void node_rna(StructRNA *srna)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeExtrudeMesh", GEO_NODE_EXTRUDE_MESH);
+  geo_node_type_base(&ntype, "GeometryNodeExtrudeMesh"_ustr, GEO_NODE_EXTRUDE_MESH);
   ntype.ui_name = "Extrude Mesh";
   ntype.ui_description =
       "Generate new vertices, edges, or faces from selected elements and move them based on an "

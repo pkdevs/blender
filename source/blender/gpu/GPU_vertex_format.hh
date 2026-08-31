@@ -10,11 +10,11 @@
 
 #pragma once
 
-#include "BLI_assert.h"
-#include "BLI_compiler_compat.h"
+#include "BLI_assert.hh"
+#include "BLI_compiler_compat.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 #include "GPU_format.hh"
 
@@ -146,7 +146,7 @@ GPU_VERTEX_FORMAT_EXPAND_TYPED(ATTR_TYPE_MAPPING)
 
 #undef ATTR_TYPE_MAPPING
 
-inline constexpr DataFormat to_data_format(VertAttrType format)
+constexpr DataFormat to_data_format(VertAttrType format)
 {
   return DataFormat(int(format));
 }
