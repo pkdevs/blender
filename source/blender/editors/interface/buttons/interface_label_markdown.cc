@@ -577,6 +577,16 @@ class MarkdownLayouter {
     return false;
   }
 
+  bool is_in_code_block() const
+  {
+    for (const MdBlock &md_block : block_stack_) {
+      if (std::holds_alternative<CodeBlock>(md_block)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   static bool is_list_container_block(const MdBlock &block)
   {
     return std::holds_alternative<UnorderedListBlock>(block) ||
@@ -892,6 +902,15 @@ class MarkdownLayouter {
     settings.weight = main_font_.default_weight;
     settings.size = main_font_.default_size;
     settings.italic = false;
+
+    if (this->is_in_code_block()) {
+      settings.fontid = mono_font_.fontid;
+      settings.size = mono_font_.default_size;
+      settings.weight = mono_font_.default_weight;
+      settings.italic = false;
+      return settings;
+    }
+
     for (const auto &md_block : block_stack_) {
       if (const auto *header_block = std::get_if<HeaderBlock>(&md_block)) {
         const MdHeaderStyle &style = md_style::headers[header_block->level - 1];
@@ -900,14 +919,13 @@ class MarkdownLayouter {
         settings.weight = style.weight;
         settings.italic = style.italic;
       }
-      else if (std::holds_alternative<CodeBlock>(md_block)) {
+    }
+    for (const auto &md_span : span_stack_) {
+      if (std::holds_alternative<CodeSpan>(md_span)) {
         settings.fontid = mono_font_.fontid;
-        settings.size = mono_font_.default_size;
         settings.weight = mono_font_.default_weight;
         settings.italic = false;
       }
-    }
-    for (const auto &md_span : span_stack_) {
       if (std::holds_alternative<StrongSpan>(md_span)) {
         settings.weight = main_font_.bold_weight;
       }
