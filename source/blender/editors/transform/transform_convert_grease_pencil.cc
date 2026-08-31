@@ -56,8 +56,7 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
 
     if (animrig::is_autokey_on(scene)) {
       for (const int info_i : curves_transform_data->drawings.index_range()) {
-        const int layer_index = curves_transform_data->drawings[info_i].layer_index;
-        bke::greasepencil::Layer &target_layer = grease_pencil.layer(layer_index);
+        bke::greasepencil::Layer &target_layer = grease_pencil.layer(curves_transform_data->drawings[info_i].layer_index);
         const int current_frame = scene->r.cfra;
         std::optional<int> start_frame = target_layer.start_frame_at(current_frame);
         if (start_frame.has_value() && (start_frame.value() != current_frame)) {
@@ -65,9 +64,7 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
                   target_layer, *target_layer.start_frame_at(current_frame), current_frame, false))
           {
             t->flag |= T_DUPLICATED_KEYFRAMES;
-            bke::greasepencil::Drawing *drawing = grease_pencil.get_editable_drawing_at(target_layer, current_frame);
-            curves_transform_data->duplicate_drawings
-              .append({*drawing, layer_index, current_frame, 1.0f});
+            curves_transform_data->duplicate_layer_keyframes.add(&target_layer, current_frame);
           }
         }
       }
@@ -300,12 +297,12 @@ static void special_aftertrans_update__grease_pencil(bContext *C, TransInfo *t)
     GreasePencil &grease_pencil = *id_cast<GreasePencil *>(tc.obedit->data);
     CurvesTransformData &transform_data = *static_cast<CurvesTransformData *>(tc.custom.type.data);
 
-    for (ed::greasepencil::MutableDrawingInfo &drawinginfo : transform_data.duplicate_drawings) {
-      bke::greasepencil::Layer &layer = *grease_pencil.layers_for_write()[drawinginfo.layer_index];
-      grease_pencil.remove_frames(layer, {drawinginfo.frame_number});
+    for (auto item : transform_data.duplicate_layer_keyframes.items()) {
+      bke::greasepencil::Layer &layer = *static_cast<bke::greasepencil::Layer *>(item.key);
+      grease_pencil.remove_frames(layer, {item.value});
     }
 
-    transform_data.duplicate_drawings.clear();
+    transform_data.duplicate_layer_keyframes.clear();
   }
 }
 

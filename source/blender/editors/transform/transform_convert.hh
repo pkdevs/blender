@@ -101,7 +101,7 @@ struct TransDataVertSlideVert {
  */
 struct CurvesTransformData {
   Vector<ed::greasepencil::MutableDrawingInfo> drawings;
-  Vector<ed::greasepencil::MutableDrawingInfo> duplicate_drawings;
+  Map<GreasePencilLayer *, int> duplicate_layer_keyframes;
 
   IndexMaskMemory memory;
   Vector<IndexMask> selection_by_layer;
