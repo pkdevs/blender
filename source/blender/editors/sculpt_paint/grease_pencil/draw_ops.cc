@@ -104,9 +104,9 @@ std::optional<float3> GreasePencilPaintStroke::get_location(const float2 mouse,
 static std::unique_ptr<GreasePencilStrokeOperation> get_stroke_operation(bContext &C,
                                                                          wmOperator *op)
 {
-  const Paint *paint = BKE_paint_get_active_from_context(&C);
+  const Paint *paint = BKE_paint_get_from_active_object(&C);
   const Brush &brush = *BKE_paint_brush_for_read(paint);
-  const PaintMode mode = BKE_paintmode_get_active_from_context(&C);
+  const PaintMode mode = paint->runtime->paint_mode;
   const auto stroke_mode = BrushStrokeMode(RNA_enum_get(op->ptr, "mode"));
   const auto brush_switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
 
@@ -261,9 +261,9 @@ static wmOperatorStatus grease_pencil_brush_stroke_invoke(bContext *C,
   }
 
   const bool use_duplicate_previous_key = [&]() -> bool {
-    const Paint *paint = BKE_paint_get_active_from_context(C);
+    const Paint *paint = BKE_paint_get_from_active_object(C);
     const Brush &brush = *BKE_paint_brush_for_read(paint);
-    const PaintMode mode = BKE_paintmode_get_active_from_context(C);
+    const PaintMode mode = paint->runtime->paint_mode;
     const auto brush_switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
 
     if (mode == PaintMode::GPencil) {
@@ -374,7 +374,7 @@ static wmOperatorStatus grease_pencil_sculpt_paint_invoke(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  const Paint *paint = BKE_paint_get_active_from_context(C);
+  const Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(C), PaintMode::SculptGPencil);
   const Brush *brush = BKE_paint_brush_for_read(paint);
   if (brush == nullptr) {
     return OPERATOR_CANCELLED;
@@ -482,7 +482,7 @@ static wmOperatorStatus grease_pencil_weight_brush_stroke_invoke(bContext *C,
   }
 
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object->data);
-  const Paint *paint = BKE_paint_get_active_from_context(C);
+  const Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(C), PaintMode::WeightGPencil);
   const Brush *brush = BKE_paint_brush_for_read(paint);
   if (brush == nullptr) {
     return OPERATOR_CANCELLED;
@@ -585,7 +585,7 @@ static wmOperatorStatus grease_pencil_vertex_brush_stroke_invoke(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  const Paint *paint = BKE_paint_get_active_from_context(C);
+  const Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(C), PaintMode::VertexGPencil);
   const Brush *brush = BKE_paint_brush_for_read(paint);
   if (brush == nullptr) {
     return OPERATOR_CANCELLED;

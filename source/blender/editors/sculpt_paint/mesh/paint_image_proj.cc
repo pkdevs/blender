@@ -6106,7 +6106,7 @@ static void project_state_init(bContext *C,
   /* brush */
   ps->mode = mode;
   ps->brush_switch_mode = brush_switch_mode;
-  ps->paint = BKE_paint_get_active_from_context(C);
+  ps->paint = BKE_paint_get_from_paintmode(scene, PaintMode::Texture3D);
   ps->brush = BKE_paint_brush(&settings->imapaint.paint);
   if (ps->brush) {
     Brush *brush = ps->brush;
@@ -6223,7 +6223,7 @@ void *paint_proj_new_stroke(bContext *C,
 
   ps_handle = MEM_new<ProjStrokeHandle>("ProjStrokeHandle");
   ps_handle->scene = scene;
-  ps_handle->paint = BKE_paint_get_active_from_context(C);
+  ps_handle->paint = BKE_paint_get_from_paintmode(scene, PaintMode::Texture3D);
   ps_handle->brush = BKE_paint_brush(&settings->imapaint.paint);
 
   if (BKE_brush_color_jitter_get_settings(&settings->imapaint.paint, ps_handle->brush)) {

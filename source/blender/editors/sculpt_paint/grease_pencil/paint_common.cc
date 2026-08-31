@@ -717,7 +717,7 @@ void GreasePencilStrokeOperationCommon::foreach_editable_drawing(
 void GreasePencilStrokeOperationCommon::init_stroke(const bContext &C,
                                                     const InputSample &start_sample)
 {
-  Paint &paint = *BKE_paint_get_active_from_context(&C);
+  Paint &paint = *BKE_paint_get_from_active_object(&C);
   Brush &brush = *BKE_paint_brush(&paint);
 
   init_brush(brush);

@@ -117,7 +117,7 @@ struct ImagePaintStroke final : public PaintStroke {
 
 void ImagePaintStroke::update_step(wmOperator *op, PointerRNA *itemptr)
 {
-  Paint *paint = BKE_paint_get_active_from_context(this->evil_C);
+  Paint *paint = this->paint;
   bke::PaintRuntime *paint_runtime = paint->runtime;
   Brush *brush = BKE_paint_brush(paint);
 
@@ -175,7 +175,7 @@ void ImagePaintStroke::done(const bool is_cancel, const bool /*stroke_started*/)
   Scene *scene = CTX_data_scene(this->evil_C);
   ToolSettings *toolsettings = scene->toolsettings;
 
-  const Paint *paint = BKE_paint_get_active_from_context(this->evil_C);
+  const Paint *paint = this->paint;
   Brush *brush = BKE_paint_brush(&toolsettings->imapaint.paint);
 
   if (stroke_handle_ == nullptr) {
@@ -293,7 +293,7 @@ struct TexturePaintStroke final : public PaintStroke {
 
 void TexturePaintStroke::update_step(wmOperator *op, PointerRNA *itemptr)
 {
-  Paint *paint = BKE_paint_get_active_from_context(this->evil_C);
+  Paint *paint = this->paint;
   bke::PaintRuntime *paint_runtime = paint->runtime;
   Brush *brush = BKE_paint_brush(paint);
 
@@ -357,8 +357,7 @@ void TexturePaintStroke::done(const bool is_cancel, const bool /*stroke_started*
   Scene *scene = CTX_data_scene(this->evil_C);
   ToolSettings *toolsettings = scene->toolsettings;
 
-  const Paint *paint = BKE_paint_get_active_from_context(this->evil_C);
-  Brush *brush = BKE_paint_brush(&toolsettings->imapaint.paint);
+  const Paint *paint = this->paint Brush *brush = BKE_paint_brush(&toolsettings->imapaint.paint);
 
   if (stroke_handle_ == nullptr) {
     paint_brush_exit_tex(brush);

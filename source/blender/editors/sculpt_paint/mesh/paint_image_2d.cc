@@ -1647,7 +1647,7 @@ void *paint_2d_new_stroke(bContext *C, wmOperator *op, const BrushStrokeMode mod
   Scene *scene = CTX_data_scene(C);
   SpaceImage *sima = CTX_wm_space_image(C);
   ToolSettings *settings = scene->toolsettings;
-  const Paint *paint = BKE_paint_get_active_from_context(C);
+  const Paint *paint = BKE_paint_get_from_paintmode(scene, PaintMode::Texture2D);
   Brush *brush = BKE_paint_brush(&settings->imapaint.paint);
 
   ImagePaintState *s = MEM_new_zeroed<ImagePaintState>(__func__);
@@ -1873,7 +1873,7 @@ void paint_2d_bucket_fill(const bContext *C,
                           void *ps)
 {
   SpaceImage *sima = CTX_wm_space_image(C);
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(C), PaintMode::Texture2D);
   Image *ima = sima->image;
 
   ImagePaintState *s = static_cast<ImagePaintState *>(ps);

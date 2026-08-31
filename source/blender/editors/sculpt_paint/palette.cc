@@ -215,7 +215,7 @@ static bool palette_from_hash(Main *bmain, const Set<uint> &color_table, const c
 
 static wmOperatorStatus palette_new_exec(bContext *C, wmOperator * /*op*/)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_context(C);
   Main *bmain = CTX_data_main(C);
   Palette *palette;
 
@@ -242,7 +242,7 @@ void PALETTE_OT_new(wmOperatorType *ot)
 
 static bool palette_poll(bContext *C)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_context(C);
 
   if (paint && paint->palette != nullptr && ID_IS_EDITABLE(paint->palette) &&
       !ID_IS_OVERRIDE_LIBRARY(paint->palette))
@@ -255,8 +255,8 @@ static bool palette_poll(bContext *C)
 
 static wmOperatorStatus palette_color_add_exec(bContext *C, wmOperator * /*op*/)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
-  PaintMode mode = BKE_paintmode_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_context(C);
+  PaintMode mode = paint->runtime->paint_mode;
   Palette *palette = paint->palette;
   PaletteColor *color;
 
@@ -301,7 +301,7 @@ void PALETTE_OT_color_add(wmOperatorType *ot)
 
 static wmOperatorStatus palette_color_delete_exec(bContext *C, wmOperator * /*op*/)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_context(C);
   Palette *palette = paint->palette;
   PaletteColor *color = static_cast<PaletteColor *>(
       BLI_findlink(&palette->colors, palette->active_color));
@@ -411,7 +411,7 @@ static wmOperatorStatus palette_sort_exec(bContext *C, wmOperator *op)
 {
   const int type = RNA_enum_get(op->ptr, "type");
 
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_context(C);
   Palette *palette = paint->palette;
 
   if (palette == nullptr) {
@@ -505,7 +505,7 @@ void PALETTE_OT_sort(wmOperatorType *ot)
 /* Move colors in palette. */
 static wmOperatorStatus palette_color_move_exec(bContext *C, wmOperator *op)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_context(C);
   Palette *palette = paint->palette;
   PaletteColor *palcolor = static_cast<PaletteColor *>(
       BLI_findlink(&palette->colors, palette->active_color));
@@ -552,7 +552,7 @@ void PALETTE_OT_color_move(wmOperatorType *ot)
 static wmOperatorStatus palette_join_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_context(C);
   Palette *palette = paint->palette;
   Palette *palette_join = nullptr;
   bool done = false;

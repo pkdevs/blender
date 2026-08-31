@@ -277,7 +277,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     if ((object_mode & OB_MODE_ALL_PAINT) ||
         (object_mode & (OB_MODE_SCULPT_CURVES | OB_MODE_SCULPT_GREASE_PENCIL)))
     {
-      Paint *paint = BKE_paint_get_active_from_context(C);
+      Paint *paint = BKE_paint_get_from_active_object_or_space(C);
       Brush *brush = (paint) ? BKE_paint_brush(paint) : nullptr;
       if (brush && (brush->stroke_method == BRUSH_STROKE_CURVE)) {
         t->options |= CTX_PAINT_CURVE;
@@ -1126,7 +1126,7 @@ bool calculateCenterActive(TransInfo *t, bool select_only, float r_center[3])
     }
   }
   else if (t->options & CTX_PAINT_CURVE) {
-    Paint *paint = BKE_paint_get_active(*t->bmain, t->scene, t->view_layer);
+    Paint *paint = BKE_paint_get_from_active_object(*t->bmain, t->scene, t->view_layer);
     Brush *br = BKE_paint_brush(paint);
     PaintCurve *pc = br->paint_curve;
     copy_v3_v3(r_center, pc->points[pc->add_index - 1].bez.vec[1]);

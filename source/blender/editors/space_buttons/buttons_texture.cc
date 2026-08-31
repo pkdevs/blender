@@ -279,7 +279,7 @@ static void buttons_texture_users_from_context(ListBaseT<ButsTextureUser> *users
     ViewLayer *view_layer = (win->scene == scene) ? WM_window_get_active_view_layer(win) :
                                                     BKE_view_layer_default_view(scene);
 
-    brush = BKE_paint_brush(BKE_paint_get_active_from_context(C));
+    brush = BKE_paint_brush(BKE_paint_get_from_context(C));
     linestyle = BKE_linestyle_active_from_view_layer(view_layer);
     BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
     ob = BKE_view_layer_active_object_get(view_layer);

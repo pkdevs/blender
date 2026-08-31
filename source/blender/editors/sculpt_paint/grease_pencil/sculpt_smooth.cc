@@ -53,7 +53,7 @@ class SmoothOperation : public GreasePencilStrokeOperationCommon {
 
 void SmoothOperation::toggle_smooth_brush_on(const bContext &C)
 {
-  Paint *paint = BKE_paint_get_active_from_context(&C);
+  Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(&C), PaintMode::SculptGPencil);
   Main *bmain = CTX_data_main(&C);
   Brush *current_brush = BKE_paint_brush(paint);
 
@@ -73,7 +73,7 @@ void SmoothOperation::toggle_smooth_brush_on(const bContext &C)
 
 void SmoothOperation::toggle_smooth_brush_off(const bContext &C)
 {
-  Paint *paint = BKE_paint_get_active_from_context(&C);
+  Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(&C), PaintMode::SculptGPencil);
   Brush &brush = *BKE_paint_brush(paint);
 
   /* If saved_active_brush is not set, brush was not switched/affected in
@@ -100,7 +100,7 @@ void SmoothOperation::on_stroke_begin(const bContext &C, const InputSample &star
 
 void SmoothOperation::on_stroke_extended(const bContext &C, const InputSample &extension_sample)
 {
-  Paint &paint = *BKE_paint_get_active_from_context(&C);
+  Paint &paint = *BKE_paint_get_from_paintmode(CTX_data_scene(&C), PaintMode::SculptGPencil);
   const Brush &brush = [&]() -> const Brush & {
     if (temp_smooth_) {
       const Brush *brush = BKE_paint_brush_from_essentials(

@@ -175,14 +175,23 @@ void BKE_paint_mesh_automasking_settings_ensure(Paint &paint);
 
 eObjectMode BKE_paint_object_mode_from_paintmode(PaintMode mode);
 bool BKE_paint_ensure_from_paintmode(Scene *sce, PaintMode mode);
-Paint *BKE_paint_get_active_from_paintmode(Scene *sce, PaintMode mode);
+Paint *BKE_paint_get_from_paintmode(const Scene *sce, PaintMode mode);
 const EnumPropertyItem *BKE_paint_get_tool_enum_from_paintmode(PaintMode mode);
 uint BKE_paint_get_brush_type_offset_from_paintmode(PaintMode mode);
 std::optional<int> BKE_paint_get_brush_type_from_obmode(const Brush *brush, eObjectMode ob_mode);
 std::optional<int> BKE_paint_get_brush_type_from_paintmode(const Brush *brush, PaintMode mode);
-Paint *BKE_paint_get_active(const Main &bmain, Scene *sce, ViewLayer *view_layer);
-Paint *BKE_paint_get_active_from_context(const bContext *C);
-PaintMode BKE_paintmode_get_active_from_context(const bContext *C);
+Paint *BKE_paint_get_from_active_object(const bContext *C);
+Paint *BKE_paint_get_from_active_object(const Main &bmain, Scene *sce, ViewLayer *view_layer);
+PaintMode BKE_paintmode_get_from_active_object(const Object &object);
+PaintMode BKE_paintmode_get_from_active_object_or_space(const bContext *C);
+Paint *BKE_paint_get_from_active_object_or_space(const bContext *C);
+/**
+ * \warning Retrieving the #Paint or #PaintMode from the context should be avoided in favor of
+ * alternative methods due to the ambiguity of needing to return Texture2D to support certain
+ * editors / operators (e.g. Properties Editor).
+ */
+PaintMode BKE_paintmode_get_from_context(const bContext *C);
+Paint *BKE_paint_get_from_context(const bContext *C);
 PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref);
 
 /* Paint brush retrieval and assignment. */

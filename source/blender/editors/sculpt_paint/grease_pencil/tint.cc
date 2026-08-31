@@ -9,6 +9,7 @@
 #include "BKE_grease_pencil.hh"
 #include "BKE_material.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 
 #include "BLI_bounds.hh"
 #include "BLI_math_color_c.hh"
@@ -71,7 +72,7 @@ void TintOperation::on_stroke_begin(const bContext &C, const InputSample & /*sta
 {
   using namespace blender::bke::greasepencil;
   Scene *scene = CTX_data_scene(&C);
-  Paint *paint = BKE_paint_get_active_from_context(&C);
+  Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(&C), PaintMode::GPencil);
   Brush *brush = BKE_paint_brush(paint);
 
   BKE_curvemapping_init(brush->gpencil_settings->curve_sensitivity);

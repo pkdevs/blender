@@ -245,7 +245,7 @@ static wmOperatorStatus sculpt_curves_stroke_invoke(bContext *C,
                                                     const wmEvent *event)
 {
   Scene *scene = CTX_data_scene(C);
-  Paint *paint = BKE_paint_get_active_from_paintmode(scene, PaintMode::SculptCurves);
+  Paint *paint = BKE_paint_get_from_paintmode(scene, PaintMode::SculptCurves);
   const Brush *brush = paint ? BKE_paint_brush_for_read(paint) : nullptr;
   if (brush == nullptr) {
     return OPERATOR_CANCELLED;
@@ -324,7 +324,7 @@ static void curves_sculptmode_enter(bContext *C)
 
   ob->mode = OB_MODE_SCULPT_CURVES;
 
-  Paint *paint = BKE_paint_get_active_from_paintmode(scene, PaintMode::SculptCurves);
+  Paint *paint = BKE_paint_get_from_paintmode(scene, PaintMode::SculptCurves);
 
   BKE_paint_brushes_ensure(CTX_data_main(C), paint);
 
@@ -893,7 +893,7 @@ struct MinDistanceEditData {
 
 static int calculate_points_per_side(bContext *C, MinDistanceEditData &op_data)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(C), PaintMode::SculptCurves);
   ARegion *region = op_data.region;
 
   const float min_distance = op_data.brush->curves_sculpt_settings->minimum_distance;
@@ -940,7 +940,7 @@ static void min_distance_edit_draw(bContext *C,
                                    const float2 & /*tilt*/,
                                    void *customdata)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(C), PaintMode::SculptCurves);
   MinDistanceEditData &op_data = *static_cast<MinDistanceEditData *>(customdata);
 
   const float min_distance = op_data.brush->curves_sculpt_settings->minimum_distance;

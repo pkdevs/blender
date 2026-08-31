@@ -17,6 +17,7 @@
 #include "BKE_library.hh"
 #include "BKE_material.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 
@@ -1719,7 +1720,7 @@ wmOperatorStatus grease_pencil_draw_operator_invoke(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  const Paint *paint = BKE_paint_get_active_from_context(C);
+  const Paint *paint = BKE_paint_get_from_paintmode(scene, PaintMode::GPencil);
   const Brush *brush = BKE_paint_brush_for_read(paint);
   if (brush == nullptr) {
     return OPERATOR_CANCELLED;

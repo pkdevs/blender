@@ -262,7 +262,7 @@ void BKE_paint_invalidate_overlay_tex(const Main &bmain,
                                       ViewLayer *view_layer,
                                       const Tex *tex)
 {
-  Paint *paint = BKE_paint_get_active(bmain, scene, view_layer);
+  Paint *paint = BKE_paint_get_from_active_object(bmain, scene, view_layer);
   if (!paint) {
     return;
   }
@@ -285,7 +285,7 @@ void BKE_paint_invalidate_cursor_overlay(const Main &bmain,
                                          ViewLayer *view_layer,
                                          CurveMapping *curve)
 {
-  Paint *paint = BKE_paint_get_active(bmain, scene, view_layer);
+  Paint *paint = BKE_paint_get_from_active_object(bmain, scene, view_layer);
   if (paint == nullptr) {
     return;
   }
@@ -378,7 +378,7 @@ bool BKE_paint_ensure_from_paintmode(Scene *sce, PaintMode mode)
   return false;
 }
 
-Paint *BKE_paint_get_active_from_paintmode(Scene *sce, PaintMode mode)
+Paint *BKE_paint_get_from_paintmode(const Scene *sce, const PaintMode mode)
 {
   if (sce) {
     ToolSettings *ts = sce->toolsettings;
@@ -405,8 +405,6 @@ Paint *BKE_paint_get_active_from_paintmode(Scene *sce, PaintMode mode)
         return &ts->curves_sculpt->paint;
       case PaintMode::Invalid:
         return nullptr;
-      default:
-        return &ts->imapaint.paint;
     }
   }
 
@@ -441,7 +439,13 @@ const EnumPropertyItem *BKE_paint_get_tool_enum_from_paintmode(const PaintMode m
   return nullptr;
 }
 
-Paint *BKE_paint_get_active(const Main &bmain, Scene *sce, ViewLayer *view_layer)
+Paint *BKE_paint_get_from_active_object(const bContext *C)
+{
+  return BKE_paint_get_from_active_object(
+      *CTX_data_main(C), CTX_data_scene(C), CTX_data_view_layer(C));
+}
+
+Paint *BKE_paint_get_from_active_object(const Main &bmain, Scene *sce, ViewLayer *view_layer)
 {
   if (sce && view_layer) {
     ToolSettings *ts = sce->toolsettings;
@@ -472,45 +476,39 @@ Paint *BKE_paint_get_active(const Main &bmain, Scene *sce, ViewLayer *view_layer
           break;
       }
     }
-
-    /* default to image paint */
-    return &ts->imapaint.paint;
   }
 
   return nullptr;
 }
 
-Paint *BKE_paint_get_active_from_context(const bContext *C)
+PaintMode BKE_paintmode_get_from_active_object(const Object &object)
 {
-  const Main *bmain = CTX_data_main(C);
-  Scene *sce = CTX_data_scene(C);
-  ViewLayer *view_layer = CTX_data_view_layer(C);
-
-  if (sce && view_layer) {
-    ToolSettings *ts = sce->toolsettings;
-    BKE_view_layer_synced_ensure(*bmain, sce, view_layer);
-    Object *obact = BKE_view_layer_active_object_get(view_layer);
-
-    SpaceImage *sima = CTX_wm_space_image(C);
-    if (sima != nullptr) {
-      if (obact && obact->mode == OB_MODE_EDIT) {
-        if (sima->mode == SI_MODE_PAINT) {
-          return &ts->imapaint.paint;
-        }
-      }
-      else {
-        return &ts->imapaint.paint;
-      }
-    }
-    else {
-      return BKE_paint_get_active(*bmain, sce, view_layer);
-    }
+  switch (object.mode) {
+    case OB_MODE_SCULPT:
+      return PaintMode::Sculpt;
+    case OB_MODE_SCULPT_GREASE_PENCIL:
+      return PaintMode::SculptGPencil;
+    case OB_MODE_PAINT_GREASE_PENCIL:
+      return PaintMode::GPencil;
+    case OB_MODE_WEIGHT_GREASE_PENCIL:
+      return PaintMode::WeightGPencil;
+    case OB_MODE_VERTEX_GREASE_PENCIL:
+      return PaintMode::VertexGPencil;
+    case OB_MODE_VERTEX_PAINT:
+      return PaintMode::Vertex;
+    case OB_MODE_WEIGHT_PAINT:
+      return PaintMode::Weight;
+    case OB_MODE_TEXTURE_PAINT:
+      return PaintMode::Texture3D;
+    case OB_MODE_SCULPT_CURVES:
+      return PaintMode::SculptCurves;
+    default:
+      break;
   }
-
-  return nullptr;
+  return PaintMode::Invalid;
 }
 
-PaintMode BKE_paintmode_get_active_from_context(const bContext *C)
+PaintMode BKE_paintmode_get_from_active_object_or_space(const bContext *C)
 {
   const Main *bmain = CTX_data_main(C);
   Scene *sce = CTX_data_scene(C);
@@ -521,25 +519,15 @@ PaintMode BKE_paintmode_get_active_from_context(const bContext *C)
     Object *obact = BKE_view_layer_active_object_get(view_layer);
 
     SpaceImage *sima = CTX_wm_space_image(C);
-    if (sima != nullptr) {
-      if (obact && obact->mode == OB_MODE_EDIT) {
-        if (sima->mode == SI_MODE_PAINT) {
-          return PaintMode::Texture2D;
-        }
-      }
-      else {
-        return PaintMode::Texture2D;
-      }
+    if (sima != nullptr && sima->mode == SI_MODE_PAINT) {
+      return PaintMode::Texture2D;
     }
-    else if (obact) {
+    if (obact) {
       switch (obact->mode) {
         case OB_MODE_SCULPT:
           return PaintMode::Sculpt;
         case OB_MODE_SCULPT_GREASE_PENCIL:
-          if (obact->type == OB_GREASE_PENCIL) {
-            return PaintMode::SculptGPencil;
-          }
-          return PaintMode::Invalid;
+          return PaintMode::SculptGPencil;
         case OB_MODE_PAINT_GREASE_PENCIL:
           return PaintMode::GPencil;
         case OB_MODE_WEIGHT_GREASE_PENCIL:
@@ -555,16 +543,67 @@ PaintMode BKE_paintmode_get_active_from_context(const bContext *C)
         case OB_MODE_SCULPT_CURVES:
           return PaintMode::SculptCurves;
         default:
-          return PaintMode::Texture2D;
+          break;
       }
-    }
-    else {
-      /* default to image paint */
-      return PaintMode::Texture2D;
     }
   }
 
   return PaintMode::Invalid;
+}
+
+Paint *BKE_paint_get_from_active_object_or_space(const bContext *C)
+{
+  return BKE_paint_get_from_paintmode(CTX_data_scene(C),
+                                      BKE_paintmode_get_from_active_object_or_space(C));
+}
+
+PaintMode BKE_paintmode_get_from_context(const bContext *C)
+{
+  const Main *bmain = CTX_data_main(C);
+  Scene *sce = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+
+  if (sce && view_layer) {
+    BKE_view_layer_synced_ensure(*bmain, sce, view_layer);
+    Object *obact = BKE_view_layer_active_object_get(view_layer);
+
+    SpaceImage *sima = CTX_wm_space_image(C);
+    if (sima != nullptr && sima->mode == SI_MODE_PAINT) {
+      return PaintMode::Texture2D;
+    }
+    if (obact) {
+      switch (obact->mode) {
+        case OB_MODE_SCULPT:
+          return PaintMode::Sculpt;
+        case OB_MODE_SCULPT_GREASE_PENCIL:
+          return PaintMode::SculptGPencil;
+        case OB_MODE_PAINT_GREASE_PENCIL:
+          return PaintMode::GPencil;
+        case OB_MODE_WEIGHT_GREASE_PENCIL:
+          return PaintMode::WeightGPencil;
+        case OB_MODE_VERTEX_GREASE_PENCIL:
+          return PaintMode::VertexGPencil;
+        case OB_MODE_VERTEX_PAINT:
+          return PaintMode::Vertex;
+        case OB_MODE_WEIGHT_PAINT:
+          return PaintMode::Weight;
+        case OB_MODE_TEXTURE_PAINT:
+          return PaintMode::Texture3D;
+        case OB_MODE_SCULPT_CURVES:
+          return PaintMode::SculptCurves;
+        default:
+          break;
+      }
+    }
+  }
+
+  /* Default to Texture2D to handle support for editors which have no corresponding SpaceImage */
+  return PaintMode::Texture2D;
+}
+
+Paint *BKE_paint_get_from_context(const bContext *C)
+{
+  return BKE_paint_get_from_paintmode(CTX_data_scene(C), BKE_paintmode_get_from_context(C));
 }
 
 PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref)
@@ -1527,7 +1566,7 @@ void BKE_paint_mesh_automasking_settings_ensure(Paint &paint)
 void BKE_paint_init(Main *bmain, Scene *sce, PaintMode mode, const bool ensure_brushes)
 {
   BKE_paint_ensure_from_paintmode(sce, mode);
-  Paint *paint = BKE_paint_get_active_from_paintmode(sce, mode);
+  Paint *paint = BKE_paint_get_from_paintmode(sce, mode);
 
   if (ensure_brushes) {
     BKE_paint_brushes_ensure(bmain, paint);

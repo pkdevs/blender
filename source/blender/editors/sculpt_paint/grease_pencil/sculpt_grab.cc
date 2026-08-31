@@ -7,6 +7,7 @@
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 
 #include "BLI_index_mask.hh"
 #include "BLI_task.hh"
@@ -139,7 +140,7 @@ void GrabOperation::on_stroke_begin(const bContext &C, const InputSample &start_
   const ARegion &region = *CTX_wm_region(&C);
   const RegionView3D &rv3d = *CTX_wm_region_view3d(&C);
   const Scene &scene = *CTX_data_scene(&C);
-  Paint &paint = *BKE_paint_get_active_from_context(&C);
+  Paint &paint = *BKE_paint_get_from_paintmode(&scene, PaintMode::SculptGPencil);
   Brush &brush = *BKE_paint_brush(&paint);
   const Depsgraph &depsgraph = *CTX_data_depsgraph_pointer(&C);
   Object &ob_orig = *CTX_data_active_object(&C);

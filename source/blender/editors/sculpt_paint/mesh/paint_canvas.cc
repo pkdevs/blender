@@ -51,7 +51,7 @@ static bool paint_tool_uses_canvas(StringRef idname)
 
 static bool paint_brush_uses_canvas(bContext *C)
 {
-  const Paint *paint = BKE_paint_get_active_from_context(C);
+  const Paint *paint = BKE_paint_get_from_context(C);
   const Brush *brush = BKE_paint_brush_for_read(paint);
   if (brush == nullptr) {
     return false;

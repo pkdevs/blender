@@ -309,7 +309,7 @@ static float3 paint_sample_color(bContext *C,
   const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   const PaintMode mode = paint->runtime->paint_mode;
 
   SpaceImage *sima = CTX_wm_space_image(C);
@@ -402,7 +402,7 @@ static wmOperatorStatus sample_color_exec(bContext *C, wmOperator *op)
   Scene &scene = *CTX_data_scene(C);
   Object &object = *CTX_data_active_object(C);
   SampleColorData *data = static_cast<SampleColorData *>(op->customdata);
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *brush = BKE_paint_brush(paint);
   ARegion *region = CTX_wm_region(C);
   wmWindow *win = CTX_wm_window(C);
@@ -446,7 +446,7 @@ static wmOperatorStatus sample_color_invoke(bContext *C, wmOperator *op, const w
 {
   Scene &scene = *CTX_data_scene(C);
   Object &object = *CTX_data_active_object(C);
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *brush = BKE_paint_brush(paint);
   ARegion *region = CTX_wm_region(C);
   wmWindow *win = CTX_wm_window(C);
@@ -498,7 +498,7 @@ static wmOperatorStatus sample_color_invoke(bContext *C, wmOperator *op, const w
 static wmOperatorStatus sample_color_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   SampleColorData *data = static_cast<SampleColorData *>(op->customdata);
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *brush = BKE_paint_brush(paint);
   Main &bmain = *CTX_data_main(C);
 

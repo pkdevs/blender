@@ -2960,7 +2960,7 @@ static void radial_control_paint_cursor(bContext *C,
   {
     const Brush *br = static_cast<const Brush *>(rc->image_id_ptr.data);
     if (br) {
-      const PaintMode paint_mode = BKE_paintmode_get_active_from_context(C);
+      const PaintMode paint_mode = BKE_paintmode_get_from_context(C);
       draw_rounded_box = BKE_brush_has_cube_tip(br, paint_mode);
       roundness = br->tip_roundness;
       tip_scale_x = br->tip_scale_x;

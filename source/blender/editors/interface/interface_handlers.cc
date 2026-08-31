@@ -1091,7 +1091,7 @@ static void apply_but_undo(Button *but, bool use_undo_grouped = false)
   if (undo_hints_or_none.has_value()) {
     /* XXX: disable all undo pushes from UI changes from sculpt mode as they cause memfile undo
      * steps to be written which cause lag: #71434. */
-    if (BKE_paintmode_get_active_from_context(static_cast<bContext *>(but->block->evil_C)) ==
+    if (BKE_paintmode_get_from_context(static_cast<bContext *>(but->block->evil_C)) ==
         PaintMode::Sculpt)
     {
       undo_hints_or_none = std::nullopt;
@@ -7272,7 +7272,7 @@ static int do_but_COLOR(bContext *C, Button *but, HandleButtonData *data, const 
       if (color_but->is_pallete_color) {
         if ((event->modifier & KM_CTRL) == 0) {
           float color[3];
-          Paint *paint = BKE_paint_get_active_from_context(C);
+          Paint *paint = BKE_paint_get_from_context(C);
           if (paint != nullptr) {
             Brush *brush = BKE_paint_brush(paint);
 

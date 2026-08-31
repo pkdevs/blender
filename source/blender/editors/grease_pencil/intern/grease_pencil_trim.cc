@@ -18,6 +18,7 @@
 #include "BKE_crazyspace.hh"
 #include "BKE_curves.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -90,7 +91,7 @@ static wmOperatorStatus stroke_trim_execute(const bContext *C, const Span<int2> 
 
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(obact->data);
 
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(C), PaintMode::GPencil);
   Brush *brush = BKE_paint_brush(paint);
   if (brush->gpencil_settings == nullptr) {
     BKE_brush_init_gpencil_settings(brush);

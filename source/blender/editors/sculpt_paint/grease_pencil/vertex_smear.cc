@@ -5,6 +5,7 @@
 #include "BKE_context.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 
 #include "BLI_index_mask.hh"
 #include "BLI_math_color.hh"
@@ -67,7 +68,7 @@ class VertexSmearOperation : public GreasePencilStrokeOperationCommon {
 void VertexSmearOperation::init_color_grid(const bContext &C, const float2 start_position)
 {
   const Scene &scene = *CTX_data_scene(&C);
-  Paint &paint = *BKE_paint_get_active_from_context(&C);
+  Paint &paint = *BKE_paint_get_from_paintmode(CTX_data_scene(&C), PaintMode::VertexGPencil);
   const Brush &brush = *BKE_paint_brush(&paint);
   const bool use_selection_masking = ED_grease_pencil_any_vertex_mask_selection(
       scene.toolsettings);
@@ -149,7 +150,7 @@ void VertexSmearOperation::on_stroke_extended(const bContext &C,
                                               const InputSample &extension_sample)
 {
   const Scene &scene = *CTX_data_scene(&C);
-  Paint &paint = *BKE_paint_get_active_from_context(&C);
+  Paint &paint = *BKE_paint_get_from_paintmode(CTX_data_scene(&C), PaintMode::VertexGPencil);
   const Brush &brush = *BKE_paint_brush(&paint);
   const float radius = brush_radius(paint, brush, extension_sample.pressure);
 

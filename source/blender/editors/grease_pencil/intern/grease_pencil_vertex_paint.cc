@@ -15,6 +15,7 @@
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -370,7 +371,7 @@ static wmOperatorStatus grease_pencil_vertex_paint_set_exec(bContext *C, wmOpera
 {
   const Scene &scene = *CTX_data_scene(C);
   Object &object = *CTX_data_active_object(C);
-  Paint &paint = *BKE_paint_get_active_from_context(C);
+  Paint &paint = *BKE_paint_get_from_paintmode(scene, PaintMode::VertexGPencil);
   const Brush &brush = *BKE_paint_brush(&paint);
   GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
   const VertexColorMode mode = VertexColorMode(RNA_enum_get(op->ptr, "mode"));

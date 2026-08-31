@@ -2457,11 +2457,11 @@ void register_type(UndoType *ut)
 
 static bool use_multires_mesh(bContext *C)
 {
-  if (BKE_paintmode_get_active_from_context(C) != PaintMode::Sculpt) {
+  const Object *object = CTX_data_active_object(C);
+  if (BKE_paintmode_get_from_active_object(*object) != PaintMode::Sculpt) {
     return false;
   }
 
-  const Object *object = CTX_data_active_object(C);
   const SculptSession *sculpt_session = object->runtime->sculpt_session;
 
   return sculpt_session->multires_modifier;

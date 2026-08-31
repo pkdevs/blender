@@ -13,6 +13,7 @@
 #include "BKE_curves.hh"
 #include "BKE_grease_pencil.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 
 #include "grease_pencil_intern.hh"
 
@@ -37,7 +38,7 @@ void VertexPaintOperation::on_stroke_extended(const bContext &C,
                                               const InputSample &extension_sample)
 {
   const Scene &scene = *CTX_data_scene(&C);
-  Paint &paint = *BKE_paint_get_active_from_context(&C);
+  Paint &paint = *BKE_paint_get_from_paintmode(CTX_data_scene(&C), PaintMode::VertexGPencil);
   const Brush &brush = *BKE_paint_brush(&paint);
   const bool invert = this->is_inverted(brush);
 

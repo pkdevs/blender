@@ -236,7 +236,7 @@ static bool brush_type_matches_active_tool(bContext *C, const int brush_type)
     return false;
   }
 
-  BLI_assert(BKE_paintmode_get_active_from_context(C) == BKE_paintmode_get_from_tool(active_tool));
+  BLI_assert(BKE_paintmode_get_from_context(C) == BKE_paintmode_get_from_tool(active_tool));
   return active_tool->runtime->brush_type == brush_type;
 }
 
@@ -301,7 +301,7 @@ static void toolsystem_brush_type_binding_update(Paint *paint,
 bool WM_toolsystem_activate_brush_and_tool(bContext *C, Paint *paint, Brush *brush)
 {
   const bToolRef *active_tool = toolsystem_active_tool_from_context_or_view3d(C);
-  const PaintMode paint_mode = BKE_paintmode_get_active_from_context(C);
+  const PaintMode paint_mode = BKE_paintmode_get_from_tool(active_tool);
 
   if (!BKE_paint_can_use_brush(paint, brush)) {
     /* Avoid switching tool when brush isn't valid for this mode anyway. */
@@ -368,7 +368,7 @@ static void toolsystem_brush_activate_from_toolref_for_object_particle(const Mai
 std::optional<AssetWeakReference> WM_toolsystem_last_brush_asset_from_brush_type(
     Scene *scene, const int brush_type, const PaintMode paint_mode)
 {
-  Paint *paint = BKE_paint_get_active_from_paintmode(scene, paint_mode);
+  Paint *paint = BKE_paint_get_from_paintmode(scene, paint_mode);
   if (!paint) {
     return {};
   }
@@ -405,7 +405,7 @@ static void toolsystem_brush_activate_from_toolref_for_object_paint(Main *bmain,
     }
     Scene *scene = WM_window_get_active_scene(&win);
     BKE_paint_ensure_from_paintmode(scene, paint_mode);
-    Paint *paint = BKE_paint_get_active_from_paintmode(scene, paint_mode);
+    Paint *paint = BKE_paint_get_from_paintmode(scene, paint_mode);
 
     /* Attempt to re-activate a brush remembered for this brush type, as stored in a brush
      * binding. */
@@ -489,7 +489,7 @@ static void toolsystem_brush_clear_paint_reference(Main *bmain,
       continue;
     }
     Scene *scene = WM_window_get_active_scene(&win);
-    if (Paint *paint = BKE_paint_get_active_from_paintmode(scene, paint_mode)) {
+    if (Paint *paint = BKE_paint_get_from_paintmode(scene, paint_mode)) {
       BKE_paint_previous_asset_reference_clear(paint);
     }
   }

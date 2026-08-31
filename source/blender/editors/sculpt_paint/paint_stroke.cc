@@ -63,9 +63,9 @@ static void paint_draw_smooth_cursor(bContext *C,
 {
   PaintStroke *data = static_cast<PaintStroke *>(customdata);
 
-  const Paint *paint = BKE_paint_get_active_from_context(C);
+  const Paint *paint = data->paint;
   const Brush *brush = BKE_paint_brush_for_read(paint);
-  const PaintMode mode = BKE_paintmode_get_active_from_context(C);
+  const PaintMode mode = paint->runtime->paint_mode;
   ARegion *region = CTX_wm_region(C);
 
   if ((mode == PaintMode::GPencil) && (paint->flags & PAINT_SHOW_BRUSH) == 0) {
@@ -235,7 +235,7 @@ bool PaintStroke::update(bContext *C,
 {
   PRF_scope(ProfileCategory::Editor);
   Scene *scene = CTX_data_scene(C);
-  Paint *paint = BKE_paint_get_active_from_paintmode(scene, mode);
+  Paint *paint = BKE_paint_get_from_paintmode(scene, mode);
   bke::PaintRuntime &paint_runtime = *paint->runtime;
   bool location_sampled = false;
   bool location_success = false;
@@ -475,7 +475,7 @@ float2 paint_stroke_jitter_pos(Paint *paint,
 void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float pressure)
 {
   PRF_scope(ProfileCategory::Editor);
-  const PaintMode mode = BKE_paintmode_get_active_from_context(C);
+  const PaintMode mode = this->paint->runtime->paint_mode;
   const Brush &brush = *BKE_paint_brush_for_read(this->paint);
   bke::PaintRuntime *paint_runtime = this->paint->runtime;
 
@@ -761,9 +761,9 @@ int PaintStroke::space_stroke(bContext *C,
 {
   PRF_scope(ProfileCategory::Editor);
   const ARegion *region = CTX_wm_region(C);
+  const Paint &paint = *this->paint;
   bke::PaintRuntime *paint_runtime = this->paint->runtime;
-  const Paint &paint = *BKE_paint_get_active_from_context(C);
-  const PaintMode mode = BKE_paintmode_get_active_from_context(C);
+  const PaintMode mode = paint_runtime->paint_mode;
   const Brush &brush = *BKE_paint_brush_for_read(&paint);
 
   float2 mouse_delta = final_mouse - this->last_mouse_position;
@@ -854,7 +854,7 @@ static bool print_pressure_status_enabled()
 PaintStroke::PaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   this->depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  this->paint = BKE_paint_get_active_from_context(C);
+  this->paint = BKE_paint_get_from_active_object_or_space(C);
   this->ups = &paint->unified_paint_settings;
   bke::PaintRuntime *paint_runtime = this->paint->runtime;
   this->brush = BKE_paint_brush(this->paint);
@@ -878,8 +878,7 @@ PaintStroke::PaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
   stroke_mode_ = BrushStrokeMode(RNA_enum_get(op->ptr, "mode"));
   brush_switch_mode_ = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
 
-  original_ = paint_brush_type_raycast_original(*this->brush,
-                                                BKE_paintmode_get_active_from_context(C));
+  original_ = paint_brush_type_raycast_original(*this->brush, paint->runtime->paint_mode);
 
   float zoomx;
   float zoomy;
@@ -1158,10 +1157,10 @@ void PaintStroke::lines_spacing(bContext *C,
                                 const float2 new_pos)
 {
   PRF_scope(ProfileCategory::Editor);
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = this->paint;
   bke::PaintRuntime *paint_runtime = paint->runtime;
   const Brush &brush = *BKE_paint_brush(paint);
-  const PaintMode mode = BKE_paintmode_get_active_from_context(C);
+  const PaintMode mode = paint_runtime->paint_mode;
   const ARegion *region = CTX_wm_region(C);
 
   const bool use_scene_spacing = paint_stroke_use_scene_spacing(brush, mode);
@@ -1262,7 +1261,7 @@ bool PaintStroke::curve_end(bContext *C, wmOperator *op)
     return false;
   }
 
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = this->paint;
   bke::PaintRuntime *paint_runtime = paint->runtime;
   const PaintMode mode = paint_runtime->paint_mode;
   const float no_pressure_spacing = paint_space_stroke_spacing_no_pressure(
@@ -1377,7 +1376,7 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
   /* TODO: Temporary, used to facilitate removing bContext usage in subclasses */
   this->evil_C = C;
 
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = this->paint;
   const Brush *br = this->brush = BKE_paint_brush(paint);
   if (paint == nullptr || br == nullptr) {
     /* In some circumstances, the context may change during modal execution. In this case,
@@ -1385,8 +1384,8 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
     this->done(C, true);
     return OPERATOR_CANCELLED;
   }
-  const PaintMode mode = BKE_paintmode_get_active_from_context(C);
   bke::PaintRuntime &paint_runtime = *paint->runtime;
+  const PaintMode mode = paint_runtime.paint_mode;
   bool first_dab = false;
   bool first_modal = false;
   bool needs_redraw = false;
@@ -1622,7 +1621,7 @@ wmOperatorStatus PaintStroke::exec(bContext *C, wmOperator *op)
   /* TODO: Temporary, used to facilitate removing bContext usage in subclasses */
   this->evil_C = C;
 
-  const PaintMode mode = BKE_paintmode_get_active_from_context(C);
+  const PaintMode mode = this->paint->runtime->paint_mode;
   PropertyRNA *prop = RNA_struct_find_property(op->ptr, "override_location");
   const bool override_location = prop && RNA_property_boolean_get(op->ptr, prop) &&
                                  mode != PaintMode::Texture2D;
@@ -1697,7 +1696,7 @@ static const bToolRef *brush_tool_get(const ScrArea *area, const ARegion *region
 
 bool paint_brush_tool_poll(bContext *C)
 {
-  const Paint *paint = BKE_paint_get_active_from_context(C);
+  const Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   const Object *ob = CTX_data_active_object(C);
   const ScrArea *area = CTX_wm_area(C);
   const ARegion *region = CTX_wm_region(C);
@@ -1732,7 +1731,7 @@ bool paint_brush_tool_poll(const ScrArea *area,
 
 bool paint_brush_cursor_poll(bContext *C)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
 
   if (!paint) {
     return false;

@@ -1044,7 +1044,7 @@ struct EraseOperationExecutor {
 
 void EraseOperation::on_stroke_begin(const bContext &C, const InputSample & /*start_sample*/)
 {
-  Paint *paint = BKE_paint_get_active_from_context(&C);
+  Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(&C), PaintMode::GPencil);
   Brush *brush = BKE_paint_brush(paint);
 
   eraser_brush_ = brush;

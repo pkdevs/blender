@@ -69,7 +69,7 @@ static wmOperatorStatus paintmode_toggle_exec(bContext *C, wmOperator *op)
   if (!is_mode_set) {
     Scene *scene = CTX_data_scene(C);
     BKE_paint_init(bmain, scene, PaintMode::GPencil);
-    Paint *paint = BKE_paint_get_active_from_paintmode(scene, PaintMode::GPencil);
+    Paint *paint = BKE_paint_get_from_paintmode(scene, PaintMode::GPencil);
     ED_paint_cursor_start(paint, brush_cursor_poll);
     mode = OB_MODE_PAINT_GREASE_PENCIL;
   }
@@ -181,7 +181,7 @@ static wmOperatorStatus sculptmode_toggle_exec(bContext *C, wmOperator *op)
   else {
     Scene *scene = CTX_data_scene(C);
     BKE_paint_init(bmain, scene, PaintMode::SculptGPencil);
-    Paint *paint = BKE_paint_get_active_from_paintmode(scene, PaintMode::SculptGPencil);
+    Paint *paint = BKE_paint_get_from_paintmode(scene, PaintMode::SculptGPencil);
     ED_paint_cursor_start(paint, sculpt_poll_view3d);
     mode = OB_MODE_SCULPT_GREASE_PENCIL;
   }
@@ -283,7 +283,7 @@ static wmOperatorStatus weightmode_toggle_exec(bContext *C, wmOperator *op)
   if (mode == OB_MODE_WEIGHT_GREASE_PENCIL) {
     /* Be sure we have brushes. */
     BKE_paint_ensure(ts, reinterpret_cast<Paint **>(&ts->gp_weightpaint));
-    Paint *weight_paint = BKE_paint_get_active_from_paintmode(scene, PaintMode::WeightGPencil);
+    Paint *weight_paint = BKE_paint_get_from_paintmode(scene, PaintMode::WeightGPencil);
 
     ED_paint_cursor_start(weight_paint, grease_pencil_poll_weight_cursor);
 
@@ -375,8 +375,8 @@ static wmOperatorStatus vertexmode_toggle_exec(bContext *C, wmOperator *op)
      * Need Draw as well (used for Palettes). */
     BKE_paint_ensure(ts, reinterpret_cast<Paint **>(&ts->gp_paint));
     BKE_paint_ensure(ts, reinterpret_cast<Paint **>(&ts->gp_vertexpaint));
-    Paint *gp_paint = BKE_paint_get_active_from_paintmode(scene, PaintMode::GPencil);
-    Paint *vertex_paint = BKE_paint_get_active_from_paintmode(scene, PaintMode::VertexGPencil);
+    Paint *gp_paint = BKE_paint_get_from_paintmode(scene, PaintMode::GPencil);
+    Paint *vertex_paint = BKE_paint_get_from_paintmode(scene, PaintMode::VertexGPencil);
 
     BKE_paint_brushes_ensure(bmain, gp_paint);
     BKE_paint_brushes_ensure(bmain, vertex_paint);

@@ -16,6 +16,7 @@
 #include "BKE_lib_id.hh"
 #include "BKE_material.hh"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 #include "BKE_scene.hh"
 
 #include "BLI_bounds.hh"
@@ -1128,7 +1129,7 @@ IndexRange PaintOperation::interpolate_stroke_depth(std::optional<int> start_poi
 
 void PaintOperation::toggle_fill_guides_brush_on(const bContext &C)
 {
-  Paint *paint = BKE_paint_get_active_from_context(&C);
+  Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(&C), PaintMode::GPencil);
   Brush *current_brush = BKE_paint_brush(paint);
 
   fill_guides_brush_ = create_fill_guide_brush();
@@ -1140,7 +1141,7 @@ void PaintOperation::toggle_fill_guides_brush_on(const bContext &C)
 
 void PaintOperation::toggle_fill_guides_brush_off(const bContext &C)
 {
-  Paint *paint = BKE_paint_get_active_from_context(&C);
+  Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(&C), PaintMode::GPencil);
   BLI_assert(saved_active_brush_ != nullptr);
   BKE_paint_brush_set(paint, saved_active_brush_);
   saved_active_brush_ = nullptr;

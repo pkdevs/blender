@@ -63,7 +63,7 @@ bool paint_curve_poll(bContext *C)
     return false;
   }
 
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *brush = (paint) ? BKE_paint_brush(paint) : nullptr;
 
   if (brush && (brush->stroke_method == BRUSH_STROKE_CURVE)) {
@@ -160,7 +160,7 @@ static PaintCurve *paintcurve_for_brush_add(Main *bmain, const char *name, const
 
 static wmOperatorStatus paintcurve_new_exec(bContext *C, wmOperator * /*op*/)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *brush = (paint) ? BKE_paint_brush(paint) : nullptr;
   Main *bmain = CTX_data_main(C);
 
@@ -191,7 +191,7 @@ void PAINTCURVE_OT_new(wmOperatorType *ot)
 
 static void paintcurve_point_add(bContext *C, wmOperator *op, const int loc[2])
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *br = BKE_paint_brush(paint);
   Main *bmain = CTX_data_main(C);
   wmWindow *window = CTX_wm_window(C);
@@ -304,7 +304,7 @@ void PAINTCURVE_OT_add_point(wmOperatorType *ot)
 
 static wmOperatorStatus paintcurve_delete_point_exec(bContext *C, wmOperator *op)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *br = BKE_paint_brush(paint);
   PaintCurve *pc;
   PaintCurvePoint *pcp;
@@ -387,7 +387,7 @@ static bool paintcurve_point_select(
 {
   wmWindow *window = CTX_wm_window(C);
   ARegion *region = CTX_wm_region(C);
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *br = BKE_paint_brush(paint);
   PaintCurve *pc;
   int i;
@@ -560,7 +560,7 @@ struct PointSlideData {
 
 static wmOperatorStatus paintcurve_slide_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   const float loc_fl[2] = {float(event->mval[0]), float(event->mval[1])};
   char select;
   int i;
@@ -687,7 +687,7 @@ void PAINTCURVE_OT_slide(wmOperatorType *ot)
 
 static wmOperatorStatus paintcurve_draw_exec(bContext *C, wmOperator * /*op*/)
 {
-  PaintMode mode = BKE_paintmode_get_active_from_context(C);
+  PaintMode mode = BKE_paintmode_get_from_context(C);
   const char *name;
 
   switch (mode) {
@@ -739,7 +739,7 @@ static wmOperatorStatus paintcurve_cursor_invoke(bContext *C,
                                                  wmOperator * /*op*/,
                                                  const wmEvent *event)
 {
-  PaintMode mode = BKE_paintmode_get_active_from_context(C);
+  PaintMode mode = BKE_paintmode_get_from_context(C);
 
   switch (mode) {
     case PaintMode::Texture2D: {

@@ -56,7 +56,7 @@ namespace blender {
 
 static wmOperatorStatus brush_scale_size_exec(bContext *C, wmOperator *op)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *brush = BKE_paint_brush(paint);
   float scalar = RNA_float_get(op->ptr, "scalar");
 
@@ -199,7 +199,7 @@ static void stencil_set_target(StencilControlData *scd)
 
 static wmOperatorStatus stencil_control_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *br = BKE_paint_brush(paint);
   const float mvalf[2] = {float(event->mval[0]), float(event->mval[1])};
   ARegion *region = CTX_wm_region(C);
@@ -363,7 +363,7 @@ static wmOperatorStatus stencil_control_modal(bContext *C, wmOperator *op, const
 
 static bool stencil_control_poll(bContext *C)
 {
-  PaintMode mode = BKE_paintmode_get_active_from_context(C);
+  PaintMode mode = BKE_paintmode_get_from_context(C);
 
   Paint *paint;
   Brush *br;
@@ -372,7 +372,7 @@ static bool stencil_control_poll(bContext *C)
     return false;
   }
 
-  paint = BKE_paint_get_active_from_context(C);
+  paint = BKE_paint_get_from_active_object_or_space(C);
   br = BKE_paint_brush(paint);
   return (br && (br->mtex.brush_map_mode == MTEX_MAP_MODE_STENCIL ||
                  br->mask_mtex.brush_map_mode == MTEX_MAP_MODE_STENCIL));
@@ -415,7 +415,7 @@ static void BRUSH_OT_stencil_control(wmOperatorType *ot)
 
 static wmOperatorStatus stencil_fit_image_aspect_exec(bContext *C, wmOperator *op)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *br = BKE_paint_brush(paint);
   bool use_scale = RNA_boolean_get(op->ptr, "use_scale");
   bool use_repeat = RNA_boolean_get(op->ptr, "use_repeat");
@@ -493,7 +493,7 @@ static void BRUSH_OT_stencil_fit_image_aspect(wmOperatorType *ot)
 
 static wmOperatorStatus stencil_reset_transform_exec(bContext *C, wmOperator *op)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *br = BKE_paint_brush(paint);
   bool do_mask = RNA_boolean_get(op->ptr, "mask");
 

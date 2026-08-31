@@ -95,7 +95,7 @@ static void finish_pivot_change(bContext *C, Object &ob)
   ARegion *region = CTX_wm_region(C);
 
   /* Update the viewport navigation rotation origin. */
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object(C);
   bke::paint::stroke_set_location(*paint, ss.pivot_pos);
 
   ED_region_tag_redraw(region);

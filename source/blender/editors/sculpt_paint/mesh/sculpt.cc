@@ -3895,7 +3895,7 @@ bool sculpt_mode_and_brush_poll(bContext *C)
  */
 static bool is_brush_related_tool(bContext *C)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object(C);
   Object *ob = CTX_data_active_object(C);
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = CTX_wm_region(C);
@@ -5005,7 +5005,7 @@ std::optional<float3> stroke_get_location_bvh(bContext *C,
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
   const Sculpt &sd = *CTX_data_tool_settings(C)->sculpt;
-  const Brush *brush = BKE_paint_brush(BKE_paint_get_active_from_context(C));
+  const Brush *brush = BKE_paint_brush(&sd.paint);
 
   return stroke_get_location_bvh(*depsgraph, vc, sd, brush, mval, force_original);
 }

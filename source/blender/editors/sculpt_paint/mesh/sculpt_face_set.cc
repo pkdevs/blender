@@ -1084,7 +1084,7 @@ static wmOperatorStatus change_visibility_exec(bContext *C, wmOperator *op)
   /* For modes that use the cursor active vertex, update the rotation origin for viewport
    * navigation. */
   if (ELEM(mode, VisibilityMode::Toggle, VisibilityMode::ShowActive)) {
-    Paint *paint = BKE_paint_get_active_from_context(C);
+    Paint *paint = BKE_paint_get_from_active_object(C);
     bke::PaintRuntime *paint_runtime = paint->runtime;
     if (std::holds_alternative<std::monostate>(ss.active_vert())) {
       paint_runtime->last_stroke_valid = false;

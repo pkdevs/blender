@@ -14,6 +14,7 @@
 #include "BKE_modifier.hh"
 #include "BKE_object_deform.h"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 #include "BKE_scene.hh"
 
 #include "DEG_depsgraph_query.hh"
@@ -127,7 +128,7 @@ class WeightPaintOperation : public GreasePencilStrokeOperation {
 
     this->object = CTX_data_active_object(&C);
     this->grease_pencil = id_cast<GreasePencil *>(this->object->data);
-    Paint *paint = BKE_paint_get_active_from_context(&C);
+    Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(&C), PaintMode::VertexGPencil);
     Brush *brush = BKE_paint_brush(paint);
 
     this->brush = brush;

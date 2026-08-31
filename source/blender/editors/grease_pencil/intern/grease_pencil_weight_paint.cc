@@ -15,6 +15,7 @@
 #include "BKE_modifier.hh"
 #include "BKE_object_deform.h"
 #include "BKE_paint.hh"
+#include "BKE_paint_types.hh"
 #include "BKE_report.hh"
 
 #include "BLI_listbase.hh"
@@ -560,7 +561,7 @@ static void GREASE_PENCIL_OT_weight_sample(wmOperatorType *ot)
 
 static wmOperatorStatus toggle_weight_tool_direction_exec(bContext *C, wmOperator * /*op*/)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(C), PaintMode::WeightGPencil);
   Brush *brush = BKE_paint_brush(paint);
 
   /* Toggle direction flag. */
@@ -579,7 +580,7 @@ static bool toggle_weight_tool_direction_poll(bContext *C)
     return false;
   }
 
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_paintmode(CTX_data_scene(C), PaintMode::WeightGPencil);
   if (paint == nullptr) {
     return false;
   }

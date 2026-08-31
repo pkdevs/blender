@@ -766,7 +766,7 @@ void PAINT_OT_texture_paint_toggle(wmOperatorType *ot)
 
 static wmOperatorStatus brush_colors_flip_exec(bContext *C, wmOperator * /*op*/)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *br = BKE_paint_brush(paint);
 
   if (BKE_brush_use_unified_color(paint, br)) {

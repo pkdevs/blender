@@ -81,21 +81,21 @@ void mode_enter_generic(
     const PaintMode paint_mode = PaintMode::Vertex;
 
     BKE_paint_init(&bmain, &scene, paint_mode);
-    paint = BKE_paint_get_active_from_paintmode(&scene, paint_mode);
+    paint = BKE_paint_get_from_paintmode(&scene, paint_mode);
     ED_paint_cursor_start(paint, vertex_paint_poll);
   }
   else if (mode_flag == OB_MODE_WEIGHT_PAINT) {
     const PaintMode paint_mode = PaintMode::Weight;
 
     BKE_paint_init(&bmain, &scene, paint_mode);
-    paint = BKE_paint_get_active_from_paintmode(&scene, paint_mode);
+    paint = BKE_paint_get_from_paintmode(&scene, paint_mode);
     ED_paint_cursor_start(paint, weight_paint_poll);
   }
   else if (mode_flag == OB_MODE_SCULPT) {
     const PaintMode paint_mode = PaintMode::Sculpt;
 
     BKE_paint_init(&bmain, &scene, paint_mode);
-    paint = BKE_paint_get_active_from_paintmode(&scene, paint_mode);
+    paint = BKE_paint_get_from_paintmode(&scene, paint_mode);
     ED_paint_cursor_start(paint, brush_cursor_poll);
   }
   else {

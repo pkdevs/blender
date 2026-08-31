@@ -31,6 +31,7 @@
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_bvh.hh"
+#include "BKE_paint_types.hh"
 #include "BKE_report.hh"
 #include "BKE_subdiv_ccg.hh"
 
@@ -2822,7 +2823,7 @@ static void cache_initial_config_set(bContext *C, wmOperator *op, Cache &expand_
   expand_cache.brush_gradient = false;
 
   /* Texture and color data from the active Brush. */
-  const Paint *paint = BKE_paint_get_active_from_context(C);
+  const Paint *paint = BKE_paint_get_from_paintmode(C, PaintMode::Sculpt);
   const Sculpt &sd = *CTX_data_tool_settings(C)->sculpt;
   expand_cache.paint = paint;
   expand_cache.brush = BKE_paint_brush_for_read(&sd.paint);

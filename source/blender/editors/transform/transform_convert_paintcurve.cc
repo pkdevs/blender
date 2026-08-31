@@ -112,7 +112,7 @@ static void PaintCurvePointToTransData(PaintCurvePoint *pcp,
 
 static void createTransPaintCurveVerts(bContext *C, TransInfo *t)
 {
-  Paint *paint = BKE_paint_get_active_from_context(C);
+  Paint *paint = BKE_paint_get_from_active_object_or_space(C);
   Brush *br = (paint) ? BKE_paint_brush(paint) : nullptr;
   PaintCurve *pc;
   PaintCurvePoint *pcp;
@@ -204,7 +204,7 @@ static void flushTransPaintCurve(TransInfo *t)
   }
 
   if (t->context) {
-    Paint *paint = BKE_paint_get_active_from_context(t->context);
+    Paint *paint = BKE_paint_get_from_active_object_or_space(t->context);
     Brush *br = (paint) ? BKE_paint_brush(paint) : nullptr;
     BKE_brush_tag_unsaved_changes(br);
   }

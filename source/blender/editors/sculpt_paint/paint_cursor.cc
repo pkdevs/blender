@@ -990,7 +990,7 @@ static bool paint_cursor_context_init(bContext *C,
   pcontext.depsgraph = CTX_data_depsgraph_pointer(C);
   pcontext.scene = CTX_data_scene(C);
   pcontext.object = CTX_data_active_object(C);
-  pcontext.paint = BKE_paint_get_active_from_context(C);
+  pcontext.paint = BKE_paint_get_from_active_object_or_space(C);
   if (pcontext.paint == nullptr) {
     return false;
   }
@@ -999,7 +999,7 @@ static bool paint_cursor_context_init(bContext *C,
   if (pcontext.brush == nullptr) {
     return false;
   }
-  pcontext.mode = BKE_paintmode_get_active_from_context(C);
+  pcontext.mode = BKE_paintmode_get_from_context(C);
   if (pcontext.mode == PaintMode::Sculpt) {
     pcontext.sd = CTX_data_tool_settings(C)->sculpt;
   }
