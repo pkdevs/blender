@@ -857,6 +857,14 @@ static void rna_def_collection_importer_data(BlenderRNA *brna)
   RNA_def_struct_sdna(srna, "CollectionImport");
   RNA_def_struct_ui_text(srna, "Collection Import Data", "Importer configured for the collection");
 
+  prop = RNA_def_property(srna, "archive_library", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "Library");
+  RNA_def_property_ui_text(prop,
+                           "Imported Library",
+                           "Archive library owning all imported data from this collection "
+                           "importer (None if no data has been imported yet)");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
   prop = RNA_def_property(srna, "is_open", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", IO_HANDLER_PANEL_OPEN);
   RNA_def_property_ui_text(prop, "Is Open", "Whether the panel is expanded or closed");
