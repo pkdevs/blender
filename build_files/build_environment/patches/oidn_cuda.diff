@@ -6,7 +6,7 @@ diff --git a/devices/cuda/CMakeLists.txt b/devices/cuda/CMakeLists.txt
  if(OIDN_DEVICE_CUDA_API STREQUAL "Driver")
    add_library(curtn STATIC curtn.cpp)
 -  target_link_libraries(curtn PUBLIC CUDA::cuda_driver)
-+  if(WIN32)
++  if(WIN32 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64" AND (CMAKE_VERSION VERSION_LESS "4.4" OR NOT EXISTS ${CUDAToolkit_LIBRARY_DIR}))
 +    find_program(LIB_EXE NAMES lib llvm-lib REQUIRED)
 +    add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/cuda.lib" COMMAND "${LIB_EXE}" /nologo /def:"${CMAKE_CURRENT_SOURCE_DIR}/cuda_driver.def" /out:"${CMAKE_CURRENT_BINARY_DIR}/cuda.lib" DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/cuda_driver.def")
 +    add_library(cuda_driver INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/cuda.lib")
@@ -22,7 +22,7 @@ diff --git a/devices/cuda/CMakeLists.txt b/devices/cuda/CMakeLists.txt
 diff --git a/devices/cuda/cuda_driver.def b/devices/cuda/cuda_driver.def
 --- /dev/null
 +++ b/devices/cuda/cuda_driver.def
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,52 @@
 +LIBRARY nvcuda
 +EXPORTS
 +  cuGetErrorString
@@ -40,6 +40,7 @@ diff --git a/devices/cuda/cuda_driver.def b/devices/cuda/cuda_driver.def
 +  cuCtxPushCurrent_v2
 +  cuCtxPopCurrent_v2
 +  cuCtxGetCurrent
++  cuCtxGetDevice
 +  cuCtxGetId
 +  cuModuleLoadFatBinary
 +  cuModuleUnload
@@ -62,7 +63,11 @@ diff --git a/devices/cuda/cuda_driver.def b/devices/cuda/cuda_driver.def
 +  cuStreamAddCallback
 +  cuStreamSynchronize
 +  cuFuncSetAttribute
++  cuKernelSetAttribute
 +  cuLaunchKernel
++  cuLibraryGetKernel
++  cuLibraryLoadData
++  cuLibraryUnload
 +  cuImportExternalMemory
 +  cuExternalMemoryGetMappedBuffer
 +  cuDestroyExternalMemory
