@@ -5589,8 +5589,7 @@ bool SculptPaintStroke::test_start(wmOperator *op, const float2 mouse)
       }
     }
 
-    stroke_cache_init(
-        this->vc, *sculpt_, *this->brush, *this->object, mouse);
+    stroke_cache_init(this->vc, *sculpt_, *this->brush, *this->object, mouse);
     if (brush_type_is_paint(brush.sculpt_brush_type)) {
       BKE_curvemapping_init(brush.curve_rand_hue);
       BKE_curvemapping_init(brush.curve_rand_saturation);
@@ -5599,7 +5598,7 @@ bool SculptPaintStroke::test_start(wmOperator *op, const float2 mouse)
 
     cursor_geometry_info_update(*this->depsgraph, *paint, sculpt_, this->vc, base_, mouse, false);
 
-    undo::push_begin_ex(*this->scene, *this->object, sculpt_brush_type_name(*brush));
+    undo::push_begin_ex(*this->scene, *this->object, sculpt_brush_type_name(brush));
 
     return true;
   }
