@@ -648,7 +648,7 @@ void ED_object_texture_paint_mode_enter_ex(Main &bmain,
     ED_space_image_sync(&bmain, ima, false);
   }
 
-  if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint)) {
+  if (USER_EXPERIMENTAL_TEST(&U, use_3d_texture_paint)) {
     ed::sculpt_paint::mode_enter_generic(bmain, depsgraph, scene, ob, OB_MODE_TEXTURE_PAINT);
   }
   else {
@@ -684,7 +684,7 @@ void ED_object_texture_paint_mode_enter(bContext *C)
 
 void ED_object_texture_paint_mode_exit_ex(Main & /*bmain*/, Scene &scene, Object &ob)
 {
-  if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint)) {
+  if (USER_EXPERIMENTAL_TEST(&U, use_3d_texture_paint)) {
     ed::sculpt_paint::mode_exit_generic(ob, OB_MODE_TEXTURE_PAINT);
   }
   else {

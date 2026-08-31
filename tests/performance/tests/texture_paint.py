@@ -48,7 +48,7 @@ def prepare_scene(context: any, object: MeshType, image_dimension: int, data_typ
     """
     import bpy
 
-    bpy.context.preferences.experimental.use_sculpt_texture_paint = True
+    bpy.context.preferences.experimental.use_3d_texture_paint = True
 
     # Ensure the current mode is object, as it might not be always the case
     # if the benchmark script is run from a non-clean state of the .blend file.

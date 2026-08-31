@@ -37,10 +37,10 @@
 #include "BKE_paint_bvh.hh"
 #include "BKE_paint_bvh_pixels.hh"
 
+#include "image_paint_intern.hh"
 #include "mesh_brush_common.hh"
 #include "sculpt_automask.hh"
 #include "sculpt_intern.hh"
-#include "image_paint_intern.hh"
 
 #include <atomic>
 

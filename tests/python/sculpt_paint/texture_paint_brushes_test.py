@@ -41,7 +41,7 @@ class MeshBrushTests(unittest.TestCase):
 
     def _initialize(self, data_type: DataType):
         bpy.ops.wm.read_factory_settings(use_empty=True)
-        bpy.context.preferences.experimental.use_sculpt_texture_paint = True
+        bpy.context.preferences.experimental.use_3d_texture_paint = True
         bpy.ops.ed.undo_push()
         generate_monkey(BackendType.MESH)
         bpy.ops.paint.texture_paint_toggle()

@@ -959,7 +959,7 @@ static bool paint_use_2d_cursor(PaintMode mode, const Brush &brush)
     case PaintMode::Weight:
       return false;
     case PaintMode::Texture3D:
-      if (!USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint)) {
+      if (!USER_EXPERIMENTAL_TEST(&U, use_3d_texture_paint)) {
         return true;
       }
       return !bke::brush::implements_3d_texture_paint(brush);
@@ -1152,9 +1152,7 @@ static void paint_cursor_draw_3D_view_brush_cursor(PaintCursorContext &pcontext)
                   PaintMode::Texture3D));
   /* These paint tools are not using the SculptSession, so they need to use the default 2D brush
    * cursor in the 3D view. */
-  if (!USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint) &&
-      pcontext.mode == PaintMode::Texture3D)
-  {
+  if (!USER_EXPERIMENTAL_TEST(&U, use_3d_texture_paint) && pcontext.mode == PaintMode::Texture3D) {
     paint_draw_legacy_3D_view_brush_cursor(pcontext);
     return;
   }

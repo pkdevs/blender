@@ -1,5 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Blender Authors
-*
+ *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
@@ -53,4 +53,4 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                              ImageData &image_data,
                              const IndexMask &node_mask);
 /** \} */
-}
+}  // namespace blender::ed::sculpt_paint::image

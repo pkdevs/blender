@@ -5600,7 +5600,7 @@ bool SculptPaintStroke::test_start(wmOperator *op, const float2 mouse)
     Brush *brush = this->brush;
 
     /* NOTE: This should be removed when paint mode is available. Paint mode can force based on the
-     * canvas it is painting on. (ref. use_sculpt_texture_paint). */
+     * canvas it is painting on. (ref. use_3d_texture_paint). */
     if (brush && brush_type_is_paint(brush->sculpt_brush_type)) {
       View3D *v3d = this->vc.v3d;
       if (v3d->shading.type == OB_SOLID) {

@@ -1759,7 +1759,7 @@ static void rna_experimental_use_3d_texture_paint_update(bContext *C, PointerRNA
     return;
   }
 
-  PropertyRNA *prop = RNA_struct_find_property(ptr, "use_sculpt_texture_paint");
+  PropertyRNA *prop = RNA_struct_find_property(ptr, "use_3d_texture_paint");
   const bool new_value = RNA_property_boolean_get(ptr, prop);
 
   if (new_value) {
@@ -7795,8 +7795,8 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "EEVEE Debug", "Enable EEVEE debugging options for developers");
   RNA_def_property_update(prop, 0, "rna_userdef_update");
 
-  prop = RNA_def_property(srna, "use_sculpt_texture_paint", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "use_sculpt_texture_paint", 1);
+  prop = RNA_def_property(srna, "use_3d_texture_paint", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "use_3d_texture_paint", 1);
   RNA_def_property_ui_text(prop, "3D Texture Paint", "Use experimental 3D texture painting");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, 0, "rna_experimental_use_3d_texture_paint_update");

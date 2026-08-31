@@ -4300,7 +4300,7 @@ void BKE_object_handle_update(Depsgraph *depsgraph, Scene *scene, Object *ob)
 bool BKE_object_use_sculptsession(Object *ob)
 {
   eObjectMode allowed_modes = OB_MODE_ALL_SCULPT;
-  if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint)) {
+  if (USER_EXPERIMENTAL_TEST(&U, use_3d_texture_paint)) {
     allowed_modes |= OB_MODE_TEXTURE_PAINT;
   }
   return ob->mode & allowed_modes;

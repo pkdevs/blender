@@ -728,7 +728,7 @@ static PaintStroke *create_paint_stroke(bContext *C, wmOperator *op, const wmEve
 
     const Paint &paint = *BKE_paint_get_active_from_context(C);
     const Brush &brush = *BKE_paint_brush_for_read(&paint);
-    if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint) &&
+    if (USER_EXPERIMENTAL_TEST(&U, use_3d_texture_paint) &&
         bke::brush::implements_3d_texture_paint(brush) && switch_mode == BrushSwitchMode::None)
     {
       return MEM_new<ExperimentalTexturePaintStroke>(__func__, C, op, event);
@@ -745,7 +745,7 @@ static PaintStroke *get_paint_stroke(bContext *C, wmOperator *op)
 
     const Paint &paint = *BKE_paint_get_active_from_context(C);
     const Brush &brush = *BKE_paint_brush_for_read(&paint);
-    if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint) &&
+    if (USER_EXPERIMENTAL_TEST(&U, use_3d_texture_paint) &&
         bke::brush::implements_3d_texture_paint(brush) && switch_mode == BrushSwitchMode::None)
     {
       return static_cast<ExperimentalTexturePaintStroke *>(op->customdata);
