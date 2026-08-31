@@ -78,17 +78,11 @@ static int markdown_layout_generation = 0;
 namespace md_style {
 
 static std::array<MdHeaderStyle, 6> headers = {
-    /* H1: Main Title - Largest & Boldest. */
     MdHeaderStyle{.size_factor = 2.00f, .weight = 700, .italic = false},
-    /* H2: Major Section. */
     MdHeaderStyle{.size_factor = 1.50f, .weight = 600, .italic = false},
-    /* H3: Subsection. */
     MdHeaderStyle{.size_factor = 1.25f, .weight = 600, .italic = false},
-    /* H4: Sub-subsection. */
     MdHeaderStyle{.size_factor = 1.00f, .weight = 600, .italic = false},
-    /* H5: Small Heading (Same size as body text, but medium-bold). */
     MdHeaderStyle{.size_factor = 1.00f, .weight = 500, .italic = false},
-    /* H6: Micro Heading (Same size as body text, but styled with italics). */
     MdHeaderStyle{.size_factor = 1.00f, .weight = 400, .italic = true},
 };
 
@@ -1067,6 +1061,29 @@ static void label_markdown_dev_config_update(bContext &C)
   }
 }
 
+static std::string markdown_md_style_to_source()
+{
+  std::string result = "namespace md_style {\n\n";
+  result += "static std::array<MdHeaderStyle, 6> headers = {\n";
+  for (const int level : IndexRange(md_style::headers.size())) {
+    const MdHeaderStyle &style = md_style::headers[level];
+    result += fmt::format(
+        "    MdHeaderStyle{{.size_factor = {:.2f}f, .weight = {}, .italic = {}}},\n",
+        style.size_factor,
+        style.weight,
+        style.italic ? "true" : "false");
+  }
+  result += "};\n\n";
+  result += "}\n";
+  return result;
+}
+
+static void label_markdown_copy_style_to_clipboard(bContext & /*C*/)
+{
+  const std::string text = markdown_md_style_to_source();
+  WM_clipboard_text_set(text.c_str(), false);
+}
+
 void label_markdown_dev_config(Layout &layout)
 {
   Block *block = layout.block();
@@ -1134,6 +1151,22 @@ void label_markdown_dev_config(Layout &layout)
                                    IFACE_("Use italic style"));
     button_func_set(italic_but, label_markdown_dev_config_update);
   }
+
+  col.separator();
+  Layout &copy_row = col.row(false);
+  block_layout_set_current(block, &copy_row);
+  Button *copy_but = uiDefBut(block,
+                              ButtonType::But,
+                              IFACE_("Copy Style to Clipboard"),
+                              0,
+                              0,
+                              short(15 * UI_UNIT_X),
+                              UI_UNIT_Y,
+                              nullptr,
+                              0,
+                              0,
+                              IFACE_("Copy md_style namespace source to the clipboard"));
+  button_func_set(copy_but, label_markdown_copy_style_to_clipboard);
 }
 
 }  // namespace blender::ui
