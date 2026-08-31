@@ -141,6 +141,10 @@ static void markdown_disable_item_font(const MarkdownItemText &item)
   BLF_disable(item.fontid, BLF_ITALIC);
 }
 
+/**
+ * Utility class used to take raw markdown as input and turn it into positions for text and other
+ * elements. A class is used to simplify state management during the parsing process.
+ */
 class MarkdownLayouter {
  private:
   MarkdownLayoutCache &cache_;
@@ -150,8 +154,7 @@ class MarkdownLayouter {
     float default_size;
     int default_weight;
     int bold_weight;
-    /** Line height in pixels. */
-    float default_line_height;
+    float default_line_height_px;
   };
 
   FontConfig main_font_;
@@ -267,7 +270,7 @@ class MarkdownLayouter {
     config.default_weight = default_weight;
     config.bold_weight = bold_weight;
     markdown_apply_font(fontid, default_size * cache_.key.pixels_per_point, default_weight, false);
-    config.default_line_height = BLF_height_max(fontid);
+    config.default_line_height_px = BLF_height_max(fontid);
     return config;
   }
 
@@ -321,7 +324,7 @@ class MarkdownLayouter {
       return;
     }
     const float top = flow_bottom_.value_or(0.0f) - pending_spacing_;
-    flow_bottom_ = top - main_font_.default_line_height;
+    flow_bottom_ = top - main_font_.default_line_height_px;
     pending_spacing_ = 0.0f;
   }
 
@@ -547,7 +550,7 @@ class MarkdownLayouter {
     float top;
     float bottom;
     if (quote->content_top != -FLT_MAX) {
-      const float padding = md_style::quote_bar_padding * main_font_.default_line_height;
+      const float padding = md_style::quote_bar_padding * main_font_.default_line_height_px;
       top = quote->content_top + padding;
       bottom = quote->content_bottom - padding;
     }
@@ -618,7 +621,7 @@ class MarkdownLayouter {
 
   float spacing_px(const float multiplier) const
   {
-    return main_font_.default_line_height * multiplier;
+    return main_font_.default_line_height_px * multiplier;
   }
 
   float block_margin_top(const MdBlock &block) const
@@ -1053,7 +1056,7 @@ class MarkdownLayouter {
   {
     this->line_box_end();
     if (!flow_bottom_) {
-      cache_.md_layout.content_height = main_font_.default_line_height;
+      cache_.md_layout.content_height = main_font_.default_line_height_px;
       return;
     }
 
@@ -1335,23 +1338,27 @@ static void label_markdown_dev_config_update(bContext & /*C*/)
 
 static std::string markdown_md_style_to_source()
 {
-  std::string result = "namespace md_style {\n\n";
-  result += "static std::array<MdHeaderStyle, 6> headers = {\n";
+  fmt::memory_buffer buf;
+  fmt::appender dst{buf};
+
+  fmt::format_to(dst, "namespace md_style {{\n\n");
+  fmt::format_to(dst, "static std::array<MdHeaderStyle, 6> headers = {{\n");
   for (const int level : IndexRange(md_style::headers.size())) {
     const MdHeaderStyle &style = md_style::headers[level];
-    result += fmt::format(
-        "    MdHeaderStyle{{.size_factor = {:.2f}f, .weight = {}, .italic = {}, .margin_top = "
-        "{:.2f}f, .margin_bottom = {:.2f}f}},\n",
-        style.size_factor,
-        style.weight,
-        style.italic ? "true" : "false",
-        style.margin_top,
-        style.margin_bottom);
+    fmt::format_to(dst,
+                   "    MdHeaderStyle{{.size_factor = {:.2f}f, .weight = {}, .italic = {}, "
+                   ".margin_top = {:.2f}f, .margin_bottom = {:.2f}f}},\n",
+                   style.size_factor,
+                   style.weight,
+                   style.italic ? "true" : "false",
+                   style.margin_top,
+                   style.margin_bottom);
   }
-  result += "};\n\n";
+  fmt::format_to(dst, "}};\n\n");
 
   auto append_block_spacing = [&](const char *name, const MdBlockSpacing &spacing) {
-    result += fmt::format(
+    fmt::format_to(
+        dst,
         "static MdBlockSpacing {} = {{.margin_top = {:.2f}f, .margin_bottom = {:.2f}f}};\n",
         name,
         spacing.margin_top,
@@ -1359,34 +1366,33 @@ static std::string markdown_md_style_to_source()
   };
   append_block_spacing("paragraph", md_style::paragraph);
   append_block_spacing("quote", md_style::quote);
-  result += fmt::format("static float quote_bar_padding = {:.2f}f;\n",
-                        md_style::quote_bar_padding);
+  fmt::format_to(dst, "static float quote_bar_padding = {:.2f}f;\n", md_style::quote_bar_padding);
   append_block_spacing("code_block", md_style::code_block);
   append_block_spacing("horizontal_rule", md_style::horizontal_rule);
-  result += "\n";
+  fmt::format_to(dst, "\n");
 
   auto append_list_spacing = [&](const char *name, const MdListSpacing &spacing) {
-    result += fmt::format(
-        "static MdListSpacing {} = {{.margin_top = {:.2f}f, .margin_bottom = {:.2f}f, "
-        ".item_spacing_loose = {:.2f}f, .item_spacing_tight = {:.2f}f, .nested_margin_top = "
-        "{:.2f}f}};\n",
-        name,
-        spacing.margin_top,
-        spacing.margin_bottom,
-        spacing.item_spacing_loose,
-        spacing.item_spacing_tight,
-        spacing.nested_margin_top);
+    fmt::format_to(dst,
+                   "static MdListSpacing {} = {{.margin_top = {:.2f}f, .margin_bottom = {:.2f}f, "
+                   ".item_spacing_loose = {:.2f}f, .item_spacing_tight = {:.2f}f, "
+                   ".nested_margin_top = {:.2f}f}};\n",
+                   name,
+                   spacing.margin_top,
+                   spacing.margin_bottom,
+                   spacing.item_spacing_loose,
+                   spacing.item_spacing_tight,
+                   spacing.nested_margin_top);
   };
   append_list_spacing("list", md_style::list);
-  result += "\n";
+  fmt::format_to(dst, "\n");
 
-  result += fmt::format("static float list_indent_px = {:.2f}f;\n", md_style::list_indent_px);
-  result += fmt::format("static float list_marker_padding_px = {:.2f}f;\n",
-                        md_style::list_marker_padding_px);
-  result += fmt::format("static float horizontal_rule_padding = {:.2f}f;\n",
-                        md_style::horizontal_rule_padding);
-  result += "\n};\n";
-  return result;
+  fmt::format_to(dst, "static float list_indent_px = {:.2f}f;\n", md_style::list_indent_px);
+  fmt::format_to(
+      dst, "static float list_marker_padding_px = {:.2f}f;\n", md_style::list_marker_padding_px);
+  fmt::format_to(
+      dst, "static float horizontal_rule_padding = {:.2f}f;\n", md_style::horizontal_rule_padding);
+  fmt::format_to(dst, "\n}};\n");
+  return fmt::to_string(buf);
 }
 
 static void label_markdown_copy_style_to_clipboard(bContext & /*C*/)
