@@ -189,6 +189,8 @@ static bool value_from_variant(DBusMessageIter *iter, GHOST_DBusValue &r_value)
  * Whether connecting to a session bus can be attempted without `libdbus` falling back to
  * auto-starting one. Auto-launch spawns a `dbus-daemon` (and involves X11): on a machine with
  * no desktop session that's both pointless and a known way to hang, so don't go near it.
+ *
+ * DBUS has not necessarily been dynamically loaded at this point, but that should be fine.
  */
 static bool session_bus_is_available()
 {
@@ -540,15 +542,15 @@ bool GHOST_SystemDBusUnix::start()
     return false;
   }
 
+  if (!session_bus_is_available()) {
+    return false;
+  }
+
 #  ifdef WITH_GHOST_DBUS_DYNLOAD
   if (!dbus_dynload_init(false)) {
     return false;
   }
 #  endif
-
-  if (!session_bus_is_available()) {
-    return false;
-  }
 
   /* Created here rather than on the thread so the destructor can always rely on it, even if it
    * runs before the thread starts. */
