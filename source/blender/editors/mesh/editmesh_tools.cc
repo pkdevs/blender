@@ -4252,9 +4252,20 @@ static Base *mesh_separate_arrays(Main *bmain,
     BM_custom_loop_normals_from_vector_layer(bm_new, false);
   }
 
-  // Delete faces because verts and edges may be reused in seperate by selection and by material
+  // Some edges and verts may be used in both meshes but loose wires in the new mesh should be
+  // deleted in old mesh
   for (uint i = 0; i < faces_len; i++) {
-    BM_face_kill_loose(bm_old, faces[i]);
+    BM_face_kill(bm_old, faces[i]);
+  }
+  for (uint i = 0; i < edges_len; i++) {
+    if (edges[i]->l == nullptr) {
+      BM_edge_kill(bm_old, edges[i]);
+    }
+  }
+  for (uint i = 0; i < verts_len; i++) {
+    if (verts[i]->e == nullptr) {
+      BM_vert_kill(bm_old, verts[i]);
+    }
   }
   BMeshToMeshParams to_mesh_params{};
   BM_mesh_bm_to_me(bmain, bm_new, id_cast<Mesh *>(base_new->object->data), &to_mesh_params);
@@ -4299,6 +4310,7 @@ static bool mesh_separate_selected(
   bool result = (base_new != nullptr);
 
   Mesh *me_old = id_cast<Mesh *>(base_old->object->data);
+  BM_mesh_elem_hflag_disable_all(bm_old, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
 
   BMeshToMeshParams to_mesh_params{};
   to_mesh_params.update_shapekey_indices = true;

@@ -2605,7 +2605,7 @@ int BM_mesh_calc_materials_as_arrays(
   STACK_DECLARE(groups);
   STACK_INIT(groups, bm->totface);
 
-  // Verts and edges can be resued in multiple material slots hence totloop no totvert/totedge
+  // Verts and edges sometimes need to be duplicated hence totloop no totvert/totedge
   STACK_DECLARE(verts);
   STACK_INIT(verts, bm->totloop);
 
@@ -2616,6 +2616,9 @@ int BM_mesh_calc_materials_as_arrays(
   STACK_INIT(faces, bm->totface);
 
   short mat_idx = 0;
+  // Python can set mat_nr to arbitrary values, keep track of next lowest value
+  short mat_idx_next = 0;
+
   while (STACK_SIZE(faces) < bm->totface) {
     // Use tag to avoid double adding verts and edges
     BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE, BM_ELEM_TAG, false);
@@ -2643,6 +2646,9 @@ int BM_mesh_calc_materials_as_arrays(
           }
         } while ((l_iter = l_iter->next) != l_first);
       }
+      else if (f->mat_nr > mat_idx && (mat_idx_next <= mat_idx || f->mat_nr < mat_idx_next)) {
+        mat_idx_next = f->mat_nr;
+      }
     }
 
     if (STACK_SIZE(faces) > faces_init) {
@@ -2651,7 +2657,7 @@ int BM_mesh_calc_materials_as_arrays(
       g[1] = STACK_SIZE(edges) - edges_init;
       g[2] = STACK_SIZE(faces) - faces_init;
     }
-    mat_idx++;
+    mat_idx = mat_idx_next;
   }
 
   /* Reduce alloc to required size. */
