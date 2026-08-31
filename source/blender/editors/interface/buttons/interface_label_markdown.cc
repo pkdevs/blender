@@ -1391,9 +1391,38 @@ static void label_markdown_copy_style_to_clipboard(bContext & /*C*/)
   WM_clipboard_text_set(text.c_str(), false);
 }
 
+static short md_dev_config_h_col_width()
+{
+  return short(2.0f * UI_UNIT_X);
+}
+
+static short md_dev_config_name_col_width()
+{
+  return short(7.0f * UI_UNIT_X);
+}
+
+static short md_dev_config_num_width()
+{
+  return short(3.5f * UI_UNIT_X);
+}
+
+static short md_dev_config_detail_label_width()
+{
+  return short(5.0f * UI_UNIT_X);
+}
+
+static void label_markdown_dev_config_col_label(Block *block,
+                                                Layout &col,
+                                                const StringRef label,
+                                                const short width)
+{
+  block_layout_set_current(block, &col);
+  uiDefBut(
+      block, ButtonType::Label, label, 0, 0, width, UI_UNIT_Y, nullptr, 0.0f, 0.0f, std::nullopt);
+}
+
 static void label_markdown_dev_config_num(Block *block,
                                           Layout &col,
-                                          const StringRef label,
                                           float *value,
                                           const float min,
                                           const float max,
@@ -1401,8 +1430,18 @@ static void label_markdown_dev_config_num(Block *block,
                                           const int precision,
                                           const StringRef tip)
 {
-  uiItemL_respect_property_split(&col, label, ICON_NONE);
-  Button *but = uiDefButV(block, ButtonType::Num, "", 0, 0, 0, UI_UNIT_Y, value, min, max, tip);
+  block_layout_set_current(block, &col);
+  Button *but = uiDefButV(block,
+                          ButtonType::Num,
+                          "",
+                          0,
+                          0,
+                          md_dev_config_num_width(),
+                          UI_UNIT_Y,
+                          value,
+                          min,
+                          max,
+                          tip);
   button_number_step_size_set(but, step);
   button_number_precision_set(but, precision);
   button_func_set(but, label_markdown_dev_config_update);
@@ -1410,7 +1449,6 @@ static void label_markdown_dev_config_num(Block *block,
 
 static void label_markdown_dev_config_int(Block *block,
                                           Layout &col,
-                                          const StringRef label,
                                           int *value,
                                           const float min,
                                           const float max,
@@ -1418,94 +1456,245 @@ static void label_markdown_dev_config_int(Block *block,
                                           const int precision,
                                           const StringRef tip)
 {
-  uiItemL_respect_property_split(&col, label, ICON_NONE);
-  Button *but = uiDefButV(block, ButtonType::Num, "", 0, 0, 0, UI_UNIT_Y, value, min, max, tip);
+  block_layout_set_current(block, &col);
+  Button *but = uiDefButV(block,
+                          ButtonType::Num,
+                          "",
+                          0,
+                          0,
+                          md_dev_config_num_width(),
+                          UI_UNIT_Y,
+                          value,
+                          min,
+                          max,
+                          tip);
   button_number_step_size_set(but, step);
   button_number_precision_set(but, precision);
   button_func_set(but, label_markdown_dev_config_update);
 }
 
-static void label_markdown_dev_config_checkbox(
-    Block *block, Layout &col, const StringRef label, bool *value, const StringRef tip)
+static void label_markdown_dev_config_checkbox(Block *block,
+                                               Layout &col,
+                                               bool *value,
+                                               const StringRef tip)
 {
-  uiItemL_respect_property_split(&col, label, ICON_NONE);
-  Button *but = uiDefButV(block, ButtonType::Checkbox, "", 0, 0, 0, UI_UNIT_Y, value, 0, 0, tip);
+  block_layout_set_current(block, &col);
+  Button *but = uiDefButV(
+      block, ButtonType::Checkbox, "", 0, 0, UI_UNIT_X, UI_UNIT_Y, value, 0, 0, tip);
   button_func_set(but, label_markdown_dev_config_update);
 }
 
-static void label_markdown_dev_config_block_spacing(Block *block,
-                                                    Layout &col,
-                                                    MdBlockSpacing &spacing)
+static void label_markdown_dev_config_headers_table(Block *block, Layout &panel_col)
 {
-  label_markdown_dev_config_num(block,
-                                col,
-                                IFACE_("Top Margin"),
-                                &spacing.margin_top,
-                                0.0f,
-                                4.0f,
-                                0.05f,
-                                2,
-                                IFACE_("Top margin as a multiple of the default line height"));
-  label_markdown_dev_config_num(block,
-                                col,
-                                IFACE_("Bottom Margin"),
-                                &spacing.margin_bottom,
-                                0.0f,
-                                4.0f,
-                                0.05f,
-                                2,
-                                IFACE_("Bottom margin as a multiple of the default line height"));
+  Layout &table = panel_col.row(false);
+  table.alignment_set(LayoutAlign::Left);
+
+  Layout &col_h = table.column(true);
+  Layout &col_size = table.column(true);
+  Layout &col_weight = table.column(true);
+  Layout &col_it = table.column(true);
+  Layout &col_top = table.column(true);
+  Layout &col_bottom = table.column(true);
+
+  const short num_w = md_dev_config_num_width();
+  label_markdown_dev_config_col_label(block, col_h, "", md_dev_config_h_col_width());
+  label_markdown_dev_config_col_label(block, col_size, IFACE_("Size"), num_w);
+  label_markdown_dev_config_col_label(block, col_weight, IFACE_("Weight"), num_w);
+  label_markdown_dev_config_col_label(block, col_it, IFACE_("It"), UI_UNIT_X);
+  label_markdown_dev_config_col_label(block, col_top, IFACE_("Top"), num_w);
+  label_markdown_dev_config_col_label(block, col_bottom, IFACE_("Bottom"), num_w);
+
+  for (const int level : IndexRange(md_style::headers.size())) {
+    MdHeaderStyle &style = md_style::headers[level];
+    const std::string h_label = fmt::format("H{}", level + 1);
+    label_markdown_dev_config_col_label(block, col_h, h_label, md_dev_config_h_col_width());
+    label_markdown_dev_config_num(block,
+                                  col_size,
+                                  &style.size_factor,
+                                  0.25f,
+                                  4.0f,
+                                  0.05f,
+                                  2,
+                                  IFACE_("Size factor relative to body text"));
+    label_markdown_dev_config_int(
+        block, col_weight, &style.weight, 100, 900, 100, -1, IFACE_("Font weight"));
+    label_markdown_dev_config_checkbox(block, col_it, &style.italic, IFACE_("Use italic style"));
+    label_markdown_dev_config_num(block,
+                                  col_top,
+                                  &style.margin_top,
+                                  0.0f,
+                                  4.0f,
+                                  0.05f,
+                                  2,
+                                  IFACE_("Top margin as a multiple of the default line height"));
+    label_markdown_dev_config_num(
+        block,
+        col_bottom,
+        &style.margin_bottom,
+        0.0f,
+        4.0f,
+        0.05f,
+        2,
+        IFACE_("Bottom margin as a multiple of the default line height"));
+  }
 }
 
-static void label_markdown_dev_config_list_spacing(Block *block,
-                                                   Layout &col,
-                                                   MdListSpacing &spacing)
+static void label_markdown_dev_config_block_margins_table(Block *block, Layout &panel_col)
 {
+  Layout &table = panel_col.row(false);
+  table.alignment_set(LayoutAlign::Left);
+
+  Layout &col_name = table.column(true);
+  Layout &col_top = table.column(true);
+  Layout &col_bottom = table.column(true);
+
+  const short num_w = md_dev_config_num_width();
+  const short name_w = md_dev_config_name_col_width();
+  label_markdown_dev_config_col_label(block, col_name, "", name_w);
+  label_markdown_dev_config_col_label(block, col_top, IFACE_("Top"), num_w);
+  label_markdown_dev_config_col_label(block, col_bottom, IFACE_("Bottom"), num_w);
+
+  struct BlockMarginRow {
+    const char *label;
+    float &margin_top;
+    float &margin_bottom;
+  };
+
+  const BlockMarginRow rows[] = {
+      {IFACE_("Paragraph"), md_style::paragraph.margin_top, md_style::paragraph.margin_bottom},
+      {IFACE_("Quote"), md_style::quote.margin_top, md_style::quote.margin_bottom},
+      {IFACE_("Code Block"), md_style::code_block.margin_top, md_style::code_block.margin_bottom},
+      {IFACE_("Horizontal Rule"),
+       md_style::horizontal_rule.margin_top,
+       md_style::horizontal_rule.margin_bottom},
+      {IFACE_("List"), md_style::list.margin_top, md_style::list.margin_bottom},
+  };
+
+  for (const BlockMarginRow &row : rows) {
+    label_markdown_dev_config_col_label(block, col_name, row.label, name_w);
+    label_markdown_dev_config_num(block,
+                                  col_top,
+                                  &row.margin_top,
+                                  0.0f,
+                                  4.0f,
+                                  0.05f,
+                                  2,
+                                  IFACE_("Top margin as a multiple of the default line height"));
+    label_markdown_dev_config_num(
+        block,
+        col_bottom,
+        &row.margin_bottom,
+        0.0f,
+        4.0f,
+        0.05f,
+        2,
+        IFACE_("Bottom margin as a multiple of the default line height"));
+  }
+}
+
+static void label_markdown_dev_config_list_spacing_table(Block *block, Layout &panel_col)
+{
+  Layout &table = panel_col.row(false);
+  table.alignment_set(LayoutAlign::Left);
+
+  Layout &col_name = table.column(true);
+  Layout &col_loose = table.column(true);
+  Layout &col_tight = table.column(true);
+  Layout &col_nested = table.column(true);
+
+  const short num_w = md_dev_config_num_width();
+  label_markdown_dev_config_col_label(block, col_name, "", md_dev_config_h_col_width());
+  label_markdown_dev_config_col_label(block, col_loose, IFACE_("Loose"), num_w);
+  label_markdown_dev_config_col_label(block, col_tight, IFACE_("Tight"), num_w);
+  label_markdown_dev_config_col_label(block, col_nested, IFACE_("Nested"), num_w);
+
+  label_markdown_dev_config_col_label(
+      block, col_name, IFACE_("Items"), md_dev_config_h_col_width());
   label_markdown_dev_config_num(block,
-                                col,
-                                IFACE_("Top Margin"),
-                                &spacing.margin_top,
-                                0.0f,
-                                4.0f,
-                                0.05f,
-                                2,
-                                IFACE_("Margin above the first list item"));
-  label_markdown_dev_config_num(block,
-                                col,
-                                IFACE_("Bottom Margin"),
-                                &spacing.margin_bottom,
-                                0.0f,
-                                4.0f,
-                                0.05f,
-                                2,
-                                IFACE_("Margin below the last list item"));
-  label_markdown_dev_config_num(block,
-                                col,
-                                IFACE_("Loose Item Spacing"),
-                                &spacing.item_spacing_loose,
+                                col_loose,
+                                &md_style::list.item_spacing_loose,
                                 0.0f,
                                 4.0f,
                                 0.05f,
                                 2,
                                 IFACE_("Spacing between items in loose lists"));
   label_markdown_dev_config_num(block,
-                                col,
-                                IFACE_("Tight Item Spacing"),
-                                &spacing.item_spacing_tight,
+                                col_tight,
+                                &md_style::list.item_spacing_tight,
                                 0.0f,
                                 4.0f,
                                 0.05f,
                                 2,
                                 IFACE_("Spacing between items in tight lists"));
   label_markdown_dev_config_num(block,
-                                col,
-                                IFACE_("Nested Top Margin"),
-                                &spacing.nested_margin_top,
+                                col_nested,
+                                &md_style::list.nested_margin_top,
                                 0.0f,
                                 4.0f,
                                 0.05f,
                                 2,
                                 IFACE_("Margin above the first item in a nested list"));
+}
+
+static void label_markdown_dev_config_details_table(Block *block, Layout &panel_col)
+{
+  Layout &table = panel_col.row(false);
+  table.alignment_set(LayoutAlign::Left);
+
+  struct DetailColumn {
+    const char *label;
+    float *value;
+    float min;
+    float max;
+    float step;
+    int precision;
+    const char *tip;
+  };
+
+  const DetailColumn columns[] = {
+      {IFACE_("Quote Bar"),
+       &md_style::quote_bar_padding,
+       0.0f,
+       1.0f,
+       0.025f,
+       3,
+       IFACE_("Vertical padding around quote text for the quote bar")},
+      {IFACE_("HR Pad"),
+       &md_style::horizontal_rule_padding,
+       0.0f,
+       4.0f,
+       0.05f,
+       2,
+       IFACE_("Vertical padding around the horizontal rule line")},
+      {IFACE_("Indent"),
+       &md_style::list_indent_px,
+       4.0f,
+       40.0f,
+       1.0f,
+       1,
+       IFACE_("Horizontal indent per list level in pixels at 1x scale")},
+      {IFACE_("Marker"),
+       &md_style::list_marker_padding_px,
+       0.0f,
+       20.0f,
+       0.5f,
+       1,
+       IFACE_("Padding between ordered list markers and item text in pixels at 1x scale")},
+  };
+
+  for (const DetailColumn &column : columns) {
+    Layout &col = table.column(true);
+    label_markdown_dev_config_col_label(
+        block, col, column.label, md_dev_config_detail_label_width());
+    label_markdown_dev_config_num(block,
+                                  col,
+                                  column.value,
+                                  column.min,
+                                  column.max,
+                                  column.step,
+                                  column.precision,
+                                  column.tip);
+  }
 }
 
 void label_markdown_dev_config(Layout &layout)
@@ -1516,117 +1705,23 @@ void label_markdown_dev_config(Layout &layout)
     return;
   }
 
-  layout.use_property_split_set(true);
+  layout.use_property_split_set(false);
   Layout &col = layout.column(false);
 
-  for (const int level : IndexRange(md_style::headers.size())) {
-    MdHeaderStyle &style = md_style::headers[level];
-    const std::string panel_id = fmt::format("md_style_h{}", level + 1);
-    const std::string panel_label = fmt::format("H{}", level + 1);
-
-    if (Layout *panel = layout.panel(C, panel_id, level != 0, panel_label)) {
-      Layout &panel_col = panel->column(false);
-
-      label_markdown_dev_config_num(block,
-                                    panel_col,
-                                    IFACE_("Size"),
-                                    &style.size_factor,
-                                    0.25f,
-                                    4.0f,
-                                    0.05f,
-                                    2,
-                                    IFACE_("Size factor relative to body text"));
-      label_markdown_dev_config_int(block,
-                                    panel_col,
-                                    IFACE_("Weight"),
-                                    &style.weight,
-                                    100,
-                                    900,
-                                    100,
-                                    -1,
-                                    IFACE_("Font weight"));
-      label_markdown_dev_config_checkbox(
-          block, panel_col, IFACE_("Italic"), &style.italic, IFACE_("Use italic style"));
-      label_markdown_dev_config_num(block,
-                                    panel_col,
-                                    IFACE_("Top Margin"),
-                                    &style.margin_top,
-                                    0.0f,
-                                    4.0f,
-                                    0.05f,
-                                    2,
-                                    IFACE_("Top margin as a multiple of the default line height"));
-      label_markdown_dev_config_num(
-          block,
-          panel_col,
-          IFACE_("Bottom Margin"),
-          &style.margin_bottom,
-          0.0f,
-          4.0f,
-          0.05f,
-          2,
-          IFACE_("Bottom margin as a multiple of the default line height"));
-    }
+  if (Layout *panel = layout.panel(C, "md_style_headers", false, IFACE_("Headers"))) {
+    label_markdown_dev_config_headers_table(block, panel->column(false));
   }
 
-  if (Layout *panel = layout.panel(C, "md_style_paragraph", true, IFACE_("Paragraph"))) {
-    label_markdown_dev_config_block_spacing(block, panel->column(false), md_style::paragraph);
+  if (Layout *panel = layout.panel(C, "md_style_block_margins", false, IFACE_("Block Margins"))) {
+    label_markdown_dev_config_block_margins_table(block, panel->column(false));
   }
-  if (Layout *panel = layout.panel(C, "md_style_quote", true, IFACE_("Quote"))) {
-    Layout &panel_col = panel->column(false);
-    label_markdown_dev_config_block_spacing(block, panel_col, md_style::quote);
-    label_markdown_dev_config_num(block,
-                                  panel_col,
-                                  IFACE_("Bar Padding"),
-                                  &md_style::quote_bar_padding,
-                                  0.0f,
-                                  1.0f,
-                                  0.025f,
-                                  3,
-                                  IFACE_("Vertical padding around quote text for the quote bar"));
+
+  if (Layout *panel = layout.panel(C, "md_style_list_spacing", false, IFACE_("List Spacing"))) {
+    label_markdown_dev_config_list_spacing_table(block, panel->column(false));
   }
-  if (Layout *panel = layout.panel(C, "md_style_code_block", true, IFACE_("Code Block"))) {
-    label_markdown_dev_config_block_spacing(block, panel->column(false), md_style::code_block);
-  }
-  if (Layout *panel = layout.panel(C, "md_style_horizontal_rule", true, IFACE_("Horizontal Rule")))
-  {
-    Layout &panel_col = panel->column(false);
-    label_markdown_dev_config_block_spacing(block, panel_col, md_style::horizontal_rule);
-    label_markdown_dev_config_num(block,
-                                  panel_col,
-                                  IFACE_("Padding"),
-                                  &md_style::horizontal_rule_padding,
-                                  0.0f,
-                                  4.0f,
-                                  0.05f,
-                                  2,
-                                  IFACE_("Vertical padding around the horizontal rule line"));
-  }
-  if (Layout *panel = layout.panel(C, "md_style_list", true, IFACE_("List"))) {
-    label_markdown_dev_config_list_spacing(block, panel->column(false), md_style::list);
-  }
-  if (Layout *panel = layout.panel(C, "md_style_layout", true, IFACE_("Layout"))) {
-    Layout &panel_col = panel->column(false);
-    label_markdown_dev_config_num(
-        block,
-        panel_col,
-        IFACE_("List Indent"),
-        &md_style::list_indent_px,
-        4.0f,
-        40.0f,
-        1.0f,
-        1,
-        IFACE_("Horizontal indent per list level in pixels at 1x scale"));
-    label_markdown_dev_config_num(
-        block,
-        panel_col,
-        IFACE_("List Marker Padding"),
-        &md_style::list_marker_padding_px,
-        0.0f,
-        20.0f,
-        0.5f,
-        1,
-        IFACE_("Padding between ordered list markers and item text in pixels at 1x scale"));
+
+  if (Layout *panel = layout.panel(C, "md_style_details", true, IFACE_("Details"))) {
+    label_markdown_dev_config_details_table(block, panel->column(false));
   }
 
   col.separator();
