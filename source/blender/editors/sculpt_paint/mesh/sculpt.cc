@@ -4432,7 +4432,7 @@ void stroke_modifiers_check(const bContext *C, Object &ob, const Brush *brush)
   stroke_modifiers_check(*depsgraph, rv3d, sd, ob, brush);
 }
 
-static void sculpt_raycast_cb(bke::pbvh::Node &node, RaycastData &rd, float *tmin)
+static void sculpt_raycast_cb(bke::pbvh::Node &node, RaycastData &rd, float *distance)
 {
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(*rd.object);
   bool use_origco = false;
@@ -4526,7 +4526,7 @@ static void sculpt_raycast_cb(bke::pbvh::Node &node, RaycastData &rd, float *tmi
 
   if (hit) {
     rd.hit = true;
-    *tmin = rd.depth;
+    *distance = rd.depth;
   }
 }
 
@@ -4766,7 +4766,7 @@ std::optional<CursorGeometryInfo> cursor_geometry_info_update(Depsgraph &depsgra
   isect_ray_tri_watertight_v3_precalc(&srd.isect_precalc, ray_normal);
   bke::pbvh::raycast(
       *pbvh,
-      [&](bke::pbvh::Node &node, float *tmin) { sculpt_raycast_cb(node, srd, tmin); },
+      [&](bke::pbvh::Node &node, float *distance) { sculpt_raycast_cb(node, srd, distance); },
       ray_start,
       ray_normal,
       srd.use_original);
