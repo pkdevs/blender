@@ -2427,7 +2427,10 @@ static void sculptsession_update(Depsgraph *depsgraph,
         ss.last_paint_canvas_key = paint_canvas_key;
         BKE_pbvh_mark_rebuild_pixels(pbvh);
       }
-      /* TODO: It's odd that this was not guarded behind the experimental test */
+    }
+
+    /* Ensure attributes are correctly updated in the UI. */
+    if (ob->mode & OB_MODE_SCULPT) {
       BKE_texpaint_slots_refresh_object(scene, ob);
     }
   }
