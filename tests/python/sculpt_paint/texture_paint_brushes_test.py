@@ -36,7 +36,7 @@ def get_image_data(image_name):
 
 class ExperimentalBrushTests(unittest.TestCase):
     """
-    Test that none of the included brushes create NaN or inf valued vertices
+    Test that none of the included brushes create NaN or inf valued pixels
     """
 
     def _initialize(self, data_type: DataType):
@@ -95,7 +95,7 @@ class ExperimentalBrushTests(unittest.TestCase):
 
 class BrushTests(unittest.TestCase):
     """
-    Test that none of the included brushes create NaN or inf valued vertices
+    Test that none of the included brushes create NaN or inf valued pixels
     """
 
     def _initialize(self, data_type: DataType):
