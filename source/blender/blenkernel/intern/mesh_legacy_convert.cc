@@ -1757,6 +1757,7 @@ void BKE_mesh_legacy_convert_uvs_to_generic(Mesh *mesh)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
 /** \name Selection Attribute and Legacy Flag Conversion
  * \{ */
 
