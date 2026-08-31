@@ -1422,7 +1422,7 @@ static void label_markdown_dev_config_checkbox(Block *block,
 static void label_markdown_dev_config_headers_table(Block *block, Layout &panel_col)
 {
   Layout &table = panel_col.row(false);
-  table.alignment_set(LayoutAlign::Left);
+  table.alignment_set(LayoutAlign::Expand);
 
   Layout &col_h = table.column(true);
   Layout &col_size = table.column(true);
@@ -1477,7 +1477,7 @@ static void label_markdown_dev_config_headers_table(Block *block, Layout &panel_
 static void label_markdown_dev_config_block_margins_table(Block *block, Layout &panel_col)
 {
   Layout &table = panel_col.row(false);
-  table.alignment_set(LayoutAlign::Left);
+  table.alignment_set(LayoutAlign::Expand);
 
   Layout &col_name = table.column(true);
   Layout &col_top = table.column(true);
@@ -1530,7 +1530,7 @@ static void label_markdown_dev_config_block_margins_table(Block *block, Layout &
 static void label_markdown_dev_config_list_spacing_table(Block *block, Layout &panel_col)
 {
   Layout &table = panel_col.row(false);
-  table.alignment_set(LayoutAlign::Left);
+  table.alignment_set(LayoutAlign::Expand);
 
   Layout &col_name = table.column(true);
   Layout &col_loose = table.column(true);
@@ -1574,7 +1574,7 @@ static void label_markdown_dev_config_list_spacing_table(Block *block, Layout &p
 static void label_markdown_dev_config_details_table(Block *block, Layout &panel_col)
 {
   Layout &table = panel_col.row(false);
-  table.alignment_set(LayoutAlign::Left);
+  table.alignment_set(LayoutAlign::Expand);
 
   struct DetailColumn {
     const char *label;
