@@ -41,6 +41,13 @@
 
 #include "RNA_access.hh"
 
+#define GESTURE_EDGE_PAN_INSIDE_PAD 2
+#define GESTURE_EDGE_PAN_OUTSIDE_PAD 0
+#define GESTURE_EDGE_PAN_SPEED_RAMP 1
+#define GESTURE_EDGE_PAN_MAX_SPEED 18
+#define GESTURE_EDGE_PAN_DELAY 0.5f
+#define GESTURE_EDGE_PAN_ZOOM_INFLUENCE 0.0f
+
 namespace blender {
 
 /* -------------------------------------------------------------------- */
@@ -195,7 +202,14 @@ wmOperatorStatus WM_gesture_box_invoke(bContext *C, wmOperator *op, const wmEven
     gesture->wait_for_input = wait_for_input;
     if (ui::view2d_edge_pan_poll(C)) {
       gesture->edge_pan_data = MEM_new<ui::View2DEdgePanData>(__func__);
-      ui::view2d_edge_pan_init(C, gesture->edge_pan_data, 2, 0, 1, 18, 0.5f, 0.0f);
+      ui::view2d_edge_pan_init(C,
+                               gesture->edge_pan_data,
+                               GESTURE_EDGE_PAN_INSIDE_PAD,
+                               GESTURE_EDGE_PAN_OUTSIDE_PAD,
+                               GESTURE_EDGE_PAN_SPEED_RAMP,
+                               GESTURE_EDGE_PAN_MAX_SPEED,
+                               GESTURE_EDGE_PAN_DELAY,
+                               GESTURE_EDGE_PAN_ZOOM_INFLUENCE);
 
       const rcti *rect = static_cast<const rcti *>(gesture->customdata);
       gesture_init_mval_set(gesture, int2(rect->xmin, rect->ymin));
