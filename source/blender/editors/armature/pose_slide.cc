@@ -544,7 +544,7 @@ static void pose_slide_apply_quat(tPoseSlideOp *pso, SlideSubject *slide_subject
 
       if (pso->mode == POSESLIDE_PUSH) {
         transformable->set_rotation(breakdown);
-        transformable->blend_rotation_to(current, factor, ed::AXIS_MUTABLE_ALL);
+        transformable->blend_rotation_to(current, factor + 1, ed::AXIS_MUTABLE_ALL);
       }
       else {
         BLI_assert(pso->mode == POSESLIDE_RELAX);
