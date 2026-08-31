@@ -1197,12 +1197,18 @@ int ShaderGraph::get_num_closures()
       continue;
     }
     if (CLOSURE_IS_BSSRDF(closure_type)) {
-      num_closures += 3;
-    }
-    else if (CLOSURE_IS_BSDF_MULTISCATTER(closure_type)) {
+      /* 1 for BSSRDF + 1 for diffuse fallback when any radius is too small. */
       num_closures += 2;
     }
-    else if (CLOSURE_IS_PRINCIPLED(closure_type)) {
+    else if (closure_type == CLOSURE_BSDF_PRINCIPLED_ID) {
+      /* Transparent: 1
+       * Sheen: 1
+       * Coat: 1
+       * Metal: 2
+       * Transmission: 2
+       * Specular: 2
+       * Subsurface: 2
+       * Diffuse: 1. */
       num_closures += 12;
     }
     else if (CLOSURE_IS_VOLUME(closure_type)) {
@@ -1211,12 +1217,15 @@ int ShaderGraph::get_num_closures()
       num_closures += MAX_VOLUME_STACK_SIZE;
     }
     else if (closure_type == CLOSURE_BSDF_PHYSICAL_CONDUCTOR ||
-             closure_type == CLOSURE_BSDF_F82_CONDUCTOR ||
-             closure_type == CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID ||
-             closure_type == CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID ||
-             closure_type == CLOSURE_BSDF_HAIR_CHIANG_ID ||
+             closure_type == CLOSURE_BSDF_F82_CONDUCTOR || CLOSURE_IS_GLASS(closure_type))
+    {
+      /* One extra closure for fresnel. */
+      num_closures += 2;
+    }
+    else if (closure_type == CLOSURE_BSDF_HAIR_CHIANG_ID ||
              closure_type == CLOSURE_BSDF_HAIR_HUANG_ID)
     {
+      /* Extra space to store hair parameters. */
       num_closures += 2;
     }
     else {
