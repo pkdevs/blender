@@ -35,10 +35,15 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
   /* Advance ray to new start distance. */
   INTEGRATOR_STATE_WRITE(state, ray, tmin) = intersection_t_offset(isect.t);
 
+  // TODO(Tri): Change to `light_sample_from_intersection()`? No
   LightEval light_eval = light_eval_from_intersection(kg, &isect, ray_P, ray_D, N, path_flag);
   if (light_eval.eval_fac == 0.0f) {
     return SHADER_EVAL_EMPTY;
   }
+
+
+printf("\n=== integrate_light_forward ENTER ===\n");
+printf("bounce=%d\n", INTEGRATOR_STATE(state, path, bounce));
 
   /* Use visibility flag to skip lights. */
 #ifdef __PASSES__
@@ -54,13 +59,63 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
   Spectrum shader_eval;
   const ShaderEvalResult eval_result = light_sample_shader_eval_forward(
       kg, state, isect.prim, ray_P, ray_D, isect.t, ray_time, shader_eval);
-  if (eval_result == SHADER_EVAL_CACHE_MISS) {
-    return SHADER_EVAL_CACHE_MISS;
-  }
-  const float3 eval = shader_eval * light_eval.eval_fac;
-  if (is_zero(eval)) {
+
+  // ???: Don't we require light_sample_shader_eval() here? NO
+  // TODO(Tri): Remove the mess
+
+// !!!: >>> Old school light_sample_shader_eval() tests
+  LightSample ls_ ccl_optional_struct_init;
+  // const bool use_light_sample = light_sample_from_intersection(
+  //     kg, &isect, ray_P, ray_D, N, path_flag, &ls);
+
+  // !!!: Just an empty ref for light_sample_from_intersection
+  ReSTIRLightSampleReference ref_ = restir_light_reference_empty();
+
+  const bool use_light_sample = light_sample_from_intersection(
+      kg, &isect, ray_P, ray_D, N, path_flag, &ls_, &ref_);
+
+  if (!use_light_sample) {
     return SHADER_EVAL_EMPTY;
   }
+
+  ShaderDataCausticsStorage emission_sd_storage;
+  ccl_private ShaderData *emission_sd = AS_SHADER_DATA(&emission_sd_storage);
+
+  PROFILING_INIT(kg, PROFILING_RESTIR_LIGHT_EVAL);
+  Spectrum light_eval_ = zero_spectrum();
+  float time = 0.0f; // !!!: sd->time
+  const ShaderEvalResult shader_result = light_sample_shader_eval(
+      kg, state, emission_sd, &ls_, time, light_eval_, nullptr, nullptr, false);
+
+    // if (shader_result == SHADER_EVAL_CACHE_MISS) {
+    //   /* TODO: Propagate or reschedule the cache miss according to the kernel containing
+    //    * this ReSTIR candidate evaluation.
+    //    */
+    //   // return SHADER_EVAL_CACHE_MISS;
+    //   return 0.0f; // !!!
+    // }
+  if (shader_result != SHADER_EVAL_OK) {
+    printf("integrate_light_forward() early returned; light_sample_shader_eval() != SHADER_EVAL_OK\n\n");
+    return SHADER_EVAL_EMPTY;
+  }
+// <<<
+
+
+  if (eval_result == SHADER_EVAL_CACHE_MISS) {
+    printf("integrate_light_forward() early returned; eval_result == SHADER_EVAL_CACHE_MISS\n\n");
+    return SHADER_EVAL_CACHE_MISS;
+  }
+
+  const float3 eval = shader_eval * light_eval.eval_fac;
+  // if (is_zero(eval)) {
+  //   return SHADER_EVAL_EMPTY;
+  // }
+
+printf("integrate_light_forward: light_sample_shader_eval_forward()'s eval=(%f,%f,%f)\n"
+       "light_sample_shader_eval()'s light_eval=(%f,%f,%f)\n\n",
+       (double)eval.x, (double)eval.y, (double)eval.z,
+       (double)light_eval_.x, (double)light_eval_.y, (double)light_eval_.z);
+      
 
   /* MIS weighting. */
   const float forward_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
@@ -73,7 +128,8 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
                                               ray_P);
   const float mis_weight = light_sample_mis_weight_forward(kg, forward_pdf, nee_pdf); // !!!: check against old PR
 
-  guiding_record_surface_emission(kg, state, eval, mis_weight);
+  // guiding_record_surface_emission(kg, state, eval, mis_weight);
+  guiding_record_surface_emission(kg, state, light_eval_, mis_weight);
 
   /* Write to render buffer. */
   if (path_use_restir(kg, state)) {
@@ -87,7 +143,7 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
       LightSample ls ccl_optional_struct_init;
       ReSTIRLightSampleReference ref = restir_light_reference_empty();
 
-      /** 
+      /* 
        * Construct LightSample and its persistent reference together. The reference
        * retains emitter-local parameters formerly stored in LightSample::u/v and is
        * the authoritative representation serialized into the ReSTIR reservoir. */
@@ -96,20 +152,44 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
         ls.pdf = nee_pdf;
 
         /* Add to DI Reservoir. */
-        film_add_reservoir_di(kg, state, eval, ls, ref, &rng_state, render_buffer);
+        /* TODO(weizhen): this has artifacts when `num_hits > 1` due to transparent lights. */
+        // film_add_reservoir_di(kg, state, eval, ls, ref, &rng_state, render_buffer);
+        film_add_reservoir_di(kg, state, light_eval_, ls, ref, &rng_state, render_buffer);
       }
     }
+    /* film_add_reservoir_pt() handles the path → ray → emissive-geometry here.
+     * path → ray → miss → World/background is contained inside integrate_background(). */
     else {
-      const Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * eval * mis_weight;
+printf("integrate_light_forward: ABOUT TO PT INSERT, bounce=%d\n",
+       INTEGRATOR_STATE(state, path, bounce));
+
+      // !!!: eval = shader_eval * light_eval.eval_fac; is most likely wrong here!
+      // const Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * eval * mis_weight; // !!!: use Old PR's light_eval instead?
+      const Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * light_eval_ * mis_weight; // TODO: Check this possiblity
+
+// !!!: integrate_light_forward() insertion is evidently operating on a buffer 
+// whose address does not map to the pixel that the later integrator_restir() pass considers pixel 234.
+// See Buffer of `film_write_direct_light()`...
+// !!!: film_write_surface_emission() is for none-restir...
+
       ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer); // !!!
+      /* Add to GI Reservoir. */
       film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer);
+
+// printf("integrate_light_forward: PT INSERT RETURNED\n");
+printf("integrate_light_forward: PT INSERT pixel=%u buffer=%p ptr not accessible\n",
+       INTEGRATOR_STATE(state, path, render_pixel_index),
+       buffer);
     }
   }
   else {
   /* None-ReSTIR Path. */
     const ccl_global KernelLight *klight = &kernel_data_fetch(lights, isect.prim);
+
+    // film_write_surface_emission(
+    //     kg, state, eval, mis_weight, render_buffer, object_lightgroup(kg, klight->object_id));
     film_write_surface_emission(
-        kg, state, eval, mis_weight, render_buffer, object_lightgroup(kg, klight->object_id));
+        kg, state, light_eval_, mis_weight, render_buffer, object_lightgroup(kg, klight->object_id));
   }
 
   return SHADER_EVAL_OK;
@@ -139,7 +219,7 @@ ccl_device void integrator_shade_light_forward(KernelGlobals kg,
   INTEGRATOR_STATE_WRITE(state, path, transparent_bounce) = transparent_bounce;
 
   if (transparent_bounce >= kernel_data.integrator.transparent_max_bounce) {
-    integrator_finalize_reservoir(kg, state, render_buffer);
+    integrator_finalize_reservoir(kg, state, render_buffer); // !!!: DI Only!
 
     integrator_path_terminate(
         kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD);
@@ -158,6 +238,8 @@ ccl_device void integrator_shade_light_forward(KernelGlobals kg,
 ccl_device ShaderEvalResult integrate_light_nee(KernelGlobals kg, IntegratorShadowState state)
 {
   /* Read intersection and ray. */
+  printf("integrate_light_nee() ran!\n\n\n");
+
   Ray ray ccl_optional_struct_init;
   integrator_state_read_shadow_ray(state, &ray);
   integrator_state_read_shadow_ray_self(state, &ray);
@@ -191,7 +273,7 @@ ccl_device ShaderEvalResult integrate_light_nee(KernelGlobals kg, IntegratorShad
 #else
       const float ray_dD = 0.0f;
 #endif
-      shader_setup_from_background(kg, emission_sd, ray.P, ray.D, ray_dD, ray.time);
+      shader_setup_from_background(kg, emission_sd, ray.P, ray.D, ray_dD, ray.time); // !!!
       is_background = true;
     }
     else {

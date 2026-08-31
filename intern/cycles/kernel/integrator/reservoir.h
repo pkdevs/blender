@@ -93,7 +93,7 @@ ccl_device_inline bool reservoir_finalize(ccl_private Reservoir *reservoir, // !
   //   return false;
   // }
   if (reservoir_is_empty(reservoir)) {
-    printf("reservoir_finalize() returned false! reservoir_is_empty=true\n"); // !!!: almost Always returning! 
+    // printf("reservoir_finalize() returned false! reservoir_is_empty=true\n");
     // reservoir_clear(reservoir);
     return false;
   }
@@ -168,25 +168,25 @@ ccl_device_inline void reservoir_add_sample( // !!!
   const float candidate_luminance = reservoir_compute_luminance(reservoir, candidate_radiance);
   const float weight = candidate_luminance * mis_weight;
 
-printf(
-    "\n=== RESERVOIR ADD SAMPLE ===\n"
-    "candidate: type=%d prim=%d object=%d flags=%u param=(%f,%f)\n"
-    "candidate_luminance=%f mis_weight=%f weight=%f rand=%f\n"
-    "BEFORE: total_weight=%f selected_prim=%d selected_object=%d\n"
-    "============================\n\n",
-    candidate_reference.type,
-    candidate_reference.prim,
-    candidate_reference.object,
-    candidate_reference.flags,
-    (double)candidate_reference.param.x,
-    (double)candidate_reference.param.y,
-    (double)candidate_luminance,
-    (double)mis_weight,
-    (double)weight,
-    (double)rand,
-    (double)reservoir->total_weight,
-    reservoir->reference.prim,
-    reservoir->reference.object);
+// printf(
+//     "\n=== RESERVOIR ADD SAMPLE ===\n"
+//     "candidate: type=%d prim=%d object=%d flags=%u param=(%f,%f)\n"
+//     "candidate_luminance=%f mis_weight=%f weight=%f rand=%f\n"
+//     "BEFORE: total_weight=%f selected_prim=%d selected_object=%d\n"
+//     "============================\n\n",
+//     candidate_reference.type,
+//     candidate_reference.prim,
+//     candidate_reference.object,
+//     candidate_reference.flags,
+//     (double)candidate_reference.param.x,
+//     (double)candidate_reference.param.y,
+//     (double)candidate_luminance,
+//     (double)mis_weight,
+//     (double)weight,
+//     (double)rand,
+//     (double)reservoir->total_weight,
+//     reservoir->reference.prim,
+//     reservoir->reference.object);
 
   // if ((require_valid_reference && !restir_light_reference_is_valid(&candidate_reference)) || // !!!: zero-radius; suspicious
   //     !(isfinite(candidate_luminance) && candidate_luminance > 0.0f) ||
@@ -220,7 +220,7 @@ printf(
     reservoir->radiance = candidate_radiance;
     reservoir->luminance = candidate_luminance;
 
-    printf("\nreservoir_add_sample() res replacement! total_weight=%f\n", (double)reservoir->total_weight);
+    // printf("\nreservoir_add_sample() res replacement! total_weight=%f\n", (double)reservoir->total_weight);
   }
 }
 
@@ -248,23 +248,23 @@ ccl_device_inline void reservoir_add_light_sample(
     jacobian = ls.jacobian_solid_angle_to_area(); // !!!
   }
 
-printf(
-    "\n=== ADD LIGHT SAMPLE ===\n"
-    "type=%d prim=%d object=%d\n"
-    "ls.pdf=%f\n"
-    "bsdf_pdf=%f\n"
-    "jacobian=%f\n"
-    "========================\n",
-    ls.type,
-    ls.prim,
-    ls.object,
-    (double)ls.pdf,
-    (double)bsdf_pdf,
-    (double)jacobian);
+// printf(
+//     "\n=== ADD LIGHT SAMPLE ===\n"
+//     "type=%d prim=%d object=%d\n"
+//     "ls.pdf=%f\n"
+//     "bsdf_pdf=%f\n"
+//     "jacobian=%f\n"
+//     "========================\n",
+//     ls.type,
+//     ls.prim,
+//     ls.object,
+//     (double)ls.pdf,
+//     (double)bsdf_pdf,
+//     (double)jacobian);
 
   if (jacobian > 0.0f) {
     light_pdf_in_area *= jacobian;
-    printf("reservoir_add_light_sample() updated light_pdf_in_area=%f\n", (double)light_pdf_in_area);
+    // printf("reservoir_add_light_sample() updated light_pdf_in_area=%f\n", (double)light_pdf_in_area);
   }
 
   // if (!(isfinite(light_pdf_in_area) && light_pdf_in_area > 0.0f)) { // !!!: zero-radius; suspicious
@@ -283,7 +283,7 @@ printf(
 //     (double)candidate_radiance.sum.y,
 //     (double)candidate_radiance.sum.z,
 //     (double)jacobian);
-  printf("reservoir_add_light_sample() updated (mis_weight / light_pdf_in_area)=%f\n", (double)(mis_weight / light_pdf_in_area));
+  // printf("reservoir_add_light_sample() updated (mis_weight / light_pdf_in_area)=%f\n", (double)(mis_weight / light_pdf_in_area));
 
   reservoir_add_sample(reservoir,
                        ls,
@@ -450,16 +450,16 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
   reservoir_clear(reservoir); // !!!: Cause of crash in render mode? No
 
 
-printf(
-    "ZERO RESERVOIR BEFORE WRITE: "
-    "total_weight=%f luminance=%f "
-    "flags=%u type=%d prim=%d object=%d\n",
-    (double)reservoir->total_weight,
-    (double)reservoir->luminance,
-    reservoir->reference.flags,
-    reservoir->reference.type,
-    reservoir->reference.prim, // If -1 here, the bug is reservoir selection/finalization/addition before film writing.
-    reservoir->reference.object);
+// printf(
+//     "ZERO RESERVOIR BEFORE WRITE: "
+//     "total_weight=%f luminance=%f "
+//     "flags=%u type=%d prim=%d object=%d\n",
+//     (double)reservoir->total_weight,
+//     (double)reservoir->luminance,
+//     reservoir->reference.flags,
+//     reservoir->reference.type,
+//     reservoir->reference.prim, // If -1 here, the bug is reservoir selection/finalization/addition before film writing.
+//     reservoir->reference.object);
 
   int i = 0;
 
@@ -480,21 +480,22 @@ printf(
 
   // printf("restir_unpack_reservoir() entered; object=%f, prim=%f, total_weight=%f\n\n\n",
   //   (double)reservoir->reference.object, (double)reservoir->reference.prim, (double)reservoir->total_weight);
-printf( // Rejected candidates
-    "ZERO RESERVOIR AFTER READ: "
-    "total_weight=%f luminance=%f "
-    "flags=%u type=%d prim=%d object=%d\n"
-    "===================================\n",
-    (double)reservoir->total_weight,
-    (double)reservoir->luminance,
-    reservoir->reference.flags,
-    reservoir->reference.type,
-    reservoir->reference.prim,
-    reservoir->reference.object);
+// printf( // Rejected candidates
+//     "ZERO RESERVOIR AFTER READ: "
+//     "total_weight=%f luminance=%f "
+//     "flags=%u type=%d prim=%d object=%d\n"
+//     "===================================\n",
+//     (double)reservoir->total_weight,
+//     (double)reservoir->luminance,
+//     reservoir->reference.flags,
+//     reservoir->reference.type,
+//     reservoir->reference.prim,
+//     reservoir->reference.object);
 
-  // return !reservoir_is_empty(reservoir); // TODO: Uncomment :)
+  return !reservoir_is_empty(reservoir); // TODO: Uncomment :)
 
 
+// !!!: DEBUG ONLY
   /* No selected sample exists in an empty reservoir.
    * Do not attempt to restore/reconstruct its light reference.
    */
@@ -548,23 +549,6 @@ struct GlobalReservoir {
   int rcv_index;
 
   float3 rgb_to_y;
-
-
-/*
-  LightSample light;
-  ReSTIRLightSampleReference reference;
-
-  BsdfEval radiance;
-  float luminance;
-  float total_weight = 0.0f;
-
-  int num_light_samples;
-  int num_bsdf_samples = 1;
-  int max_samples;
-  float3 rgb_to_y;
-
-  int direct_sampling_method;
-*/
 };
 
 ccl_device_inline void global_reservoir_init(KernelGlobals kg,
@@ -585,25 +569,38 @@ ccl_device_inline float global_reservoir_compute_luminance(
   return dot(spectrum_to_rgb(radiance), reservoir->rgb_to_y);
 }
 
+// !!!: LOGGED
 ccl_device_inline bool global_reservoir_add_sample(ccl_private GlobalReservoir *reservoir,
                                                    const ccl_private Spectrum &radiance,
                                                    const float rand)
 {
-  const float weight = global_reservoir_compute_luminance(reservoir, radiance);
+// printf("====== global_reservoir_add_sample() ======\n");
 
-  if (!(weight > 0.0f)) {
+  const float weight = global_reservoir_compute_luminance(reservoir, radiance);
+  if (!(weight > 0.0f)) { // !!!:
+printf("global_reservoir_add_sample() early returned false, 1!\n");
     /* Should be theoretically captured by the following condition, but we can not trust floating
      * point precision. */
     return false;
   }
 
+printf("global_reservoir_add_sample() ADD: radiance=(%f,%f,%f) weight=%f total_before=%f rand=%f\n",
+       (double)radiance.x, (double)radiance.y, (double)radiance.z,
+       (double)weight, (double)reservoir->total_weight, (double)rand);
+
   reservoir->total_weight += weight;
 
   if (rand * reservoir->total_weight > weight) {
+printf("global_reservoir_add_sample() early returned false, 2!\n");
     return false;
   }
 
   reservoir->radiance = radiance;
+
+
+// !!!: just enough to establish whether the path is entering it.
+printf("global_reservoir_add_sample() TOTAL=%f path_flag=%d\n\n\n",
+       (double)reservoir->total_weight, reservoir->path_flag);
 
   return true;
 }
@@ -612,16 +609,26 @@ ccl_device_inline bool global_reservoir_is_empty(
     ccl_private const GlobalReservoir *reservoir)
 {
   return reservoir->total_weight == 0.0f;
+  // return !(reservoir->total_weight > 0.0f);
 }
 
 ccl_device_inline bool global_reservoir_finalize(ccl_private GlobalReservoir *reservoir)
 {
+// printf("====== global_reservoir_finalize() ENTER ======\n");
+
   if (global_reservoir_is_empty(reservoir)) {
+printf("global_reservoir_finalize() early returned; reservoir is empty\n");
     return false;
   }
+
   /* Apply unbiased contribution weight. */
   reservoir->total_weight /= global_reservoir_compute_luminance(reservoir, reservoir->radiance);
   reservoir->radiance *= reservoir->total_weight;
+
+printf("global_reservoir_finalize(): total=%f radiance=(%f, %f, %f)\n",
+       (double)reservoir->total_weight, // Would be 1.0
+       (double)reservoir->radiance.x, (double)reservoir->radiance.y, (double)reservoir->radiance.z);
+
   return true;
 }
 
@@ -631,6 +638,7 @@ ccl_device_inline void global_reservoir_add_reservoir(
     const float rand)
 {
   if (global_reservoir_is_empty(&other)) {
+    printf("global_reservoir_add_reservoir() early returned! other res is empty!\n\n");
     return;
   }
 
@@ -640,16 +648,26 @@ ccl_device_inline void global_reservoir_add_reservoir(
   }
 }
 
+// TODO: Compare against restir_unpack_reservoir() for BackGround
 ccl_device_inline bool restir_unpack_reservoir_pt(KernelGlobals kg,
                                                   ccl_private GlobalReservoir *reservoir,
                                                   ccl_global float *buffer)
 {
+// printf("====== restir_unpack_reservoir_pt() ENTER ======\n");
+
   PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
 
   reservoir->total_weight = kernel_read_pass_float(buffer);
   reservoir->path_flag = (uint32_t)kernel_read_pass_float(buffer + 1);
   reservoir->rcv_index = (int)kernel_read_pass_float(buffer + 2);
   reservoir->radiance = kernel_read_pass_float3(buffer + 3);
+
+// !!!: If this isn't logged, The reservoir is being written but never consumed.
+printf("restir_unpack_reservoir_pt(): weight=%f flag=%u rcv=%d rad=(%f,%f,%f)\n\n",
+       (double)reservoir->total_weight,
+       reservoir->path_flag,
+       reservoir->rcv_index,
+       (double)reservoir->radiance.x, (double)reservoir->radiance.y, (double)reservoir->radiance.z);
 
   return !global_reservoir_is_empty(reservoir);
 }

@@ -251,7 +251,9 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
 
   if (hit) {
     /* Hit a surface, continue with light or surface kernel. */
-    if (isect->type & PRIMITIVE_LAMP) {
+    if (isect->type & PRIMITIVE_LAMP) { // !!!: PRIMITIVE_LAMP and not a LIGHT_BACKGROUND
+printf("integrator_intersect_next_kernel()!\n:Entring integrate_light_forward()!\n\n\n\n\n");
+      /* SHADE_LIGHT_FORWARD is fundamentally the emissive-surface-hit path. */
       integrator_path_next(state, current_kernel, DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD);
     }
     else {
@@ -287,6 +289,7 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
       }
     }
   }
+  /* Miss. Global Illumination. */
   else {
 // TODO(Tri): Remove
     // if (integrator_intersect_skip_lights(kg, state) ||
@@ -298,6 +301,7 @@ ccl_device_forceinline void integrator_intersect_next_kernel(
 
     /* Nothing hit, continue with background kernel. */
     if (integrator_intersect_skip_lights(kg, state)) {
+printf("integrator_intersect_next_kernel(); supposedly entring Background Kernel through integrator_finalize_reservoir()\n\n");
       integrator_finalize_reservoir(kg, state, render_buffer);
       integrator_path_terminate(kg, state, render_buffer, current_kernel);
     }
@@ -353,6 +357,7 @@ ccl_device_forceinline void integrator_intersect_next_kernel_after_volume(
   }
   /* Nothing hit, continue with background kernel. */
   if (integrator_intersect_skip_lights(kg, state)) {
+printf("integrator_intersect_next_kernel_after_volume(); supposedly entring Background Kernel through integrator_finalize_reservoir()\n\n");
     integrator_finalize_reservoir(kg, state, render_buffer);
     integrator_path_terminate(kg, state, render_buffer, current_kernel);
   }

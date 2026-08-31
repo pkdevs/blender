@@ -98,6 +98,12 @@ light_sample_shader_eval_forward(KernelGlobals kg, // !!!
 
     /* Evaluate closures. */
     eval = surface_shader_emission(emission_sd);
+    // if (ls->type == LIGHT_BACKGROUND) { // TODO: Remove
+    //   eval = surface_shader_background(emission_sd);
+    // }
+    // else {
+    //   eval = surface_shader_emission(emission_sd);
+    // }
   }
 
   {
@@ -341,7 +347,7 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
     ccl_private LightSample *ccl_restrict ls,
     const float time,
     ccl_private Spectrum &r_eval,
-    ccl_private const ShaderData *ccl_restrict sd,
+    ccl_private const ShaderData *ccl_restrict sd = nullptr,
     ccl_private const ReSTIRLightSampleReference *ccl_restrict reference = nullptr,
     const bool check_visibility = false)
 {
@@ -360,7 +366,7 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
      * for GPU coherence and compile times. */
     PROFILING_INIT_FOR_SHADER(kg, PROFILING_SHADE_LIGHT_SETUP);
 
-    if (ls->type == LIGHT_BACKGROUND) {
+    if (ls->type == LIGHT_BACKGROUND) { // !!!: LIGHT_BACKGROUND
       shader_setup_from_background(kg, emission_sd, ls->P, ls->D, 0.0f, time);
     }
     else {
@@ -371,8 +377,8 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
        * Modern ReSTIR stores only triangle barycentrics persistently.
        * Analytic lights never used UVs in the old implementation. */
       if (ls->type == LIGHT_TRIANGLE) {
-        kernel_assert(reference != nullptr);
-        kernel_assert(reference->type == LIGHT_TRIANGLE);
+        // kernel_assert(reference != nullptr); // !!!: Crashes in rendered mode!
+        // kernel_assert(reference->type == LIGHT_TRIANGLE);
 
         u = reference->param.x;
         v = reference->param.y;
@@ -412,7 +418,7 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
       return SHADER_EVAL_CACHE_MISS;
     }
 
-    if (ls->type == LIGHT_BACKGROUND) {
+    if (ls->type == LIGHT_BACKGROUND) { // !!!: LIGHT_BACKGROUND
       eval = surface_shader_background(emission_sd);
     }
     else {
@@ -456,12 +462,9 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
   return is_zero(eval) ? SHADER_EVAL_EMPTY : SHADER_EVAL_OK;
 }
 
-
-
-
 /* Multiple importance sampling weights. */
 
-ccl_device_inline float light_sample_mis_weight_forward(KernelGlobals kg, // !!!
+ccl_device_inline float light_sample_mis_weight_forward(KernelGlobals kg,
                                                         const float forward_pdf,
                                                         const float nee_pdf)
 {

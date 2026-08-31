@@ -155,7 +155,7 @@ ccl_device_forceinline bool integrate_surface_holdout(KernelGlobals kg,
 //       kg, state, L, mis_weight, render_buffer, object_lightgroup(kg, sd->object));
 // }
 
-ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
+ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg, // !!!: Not cause of the BG blackout
                                                        IntegratorState state,
                                                        const ccl_private ShaderData *sd,
                                                        const ccl_private RNGState *rng_state,
@@ -217,7 +217,7 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
       // !!!: ReSTIR PT lifecycle must be active, otherwise, dark multipass shadings will occur
       const Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * L * mis_weight;
       ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
-      film_add_reservoir_pt(kg, path_flag, contribution, rng_state, buffer);
+      film_add_reservoir_pt(kg, path_flag, contribution, rng_state, buffer); // !!!: GI?
     }
   }
   else {
@@ -250,7 +250,7 @@ ccl_device_forceinline float radiance_eval(KernelGlobals kg,
 
   PROFILING_INIT(kg, PROFILING_RESTIR_LIGHT_EVAL);
   Spectrum light_eval = zero_spectrum();
-  const ShaderEvalResult shader_result = light_sample_shader_eval(
+  const ShaderEvalResult shader_result = light_sample_shader_eval( // !!!: BG Blackout? No
       kg, state, emission_sd, ls, sd->time, light_eval, sd, reference, check_visibility);
 
     // if (shader_result == SHADER_EVAL_CACHE_MISS) {
@@ -919,8 +919,10 @@ ccl_device
       // !!!: One contributor of the darkness in DI (not all types are supported; current support might have issues)
       // !!!: restir_light_reference_from_sample() may have problem populating reference
       if (!restir_light_reference_from_sample(kg, &ls, sd->time, &reference)) {
-        printf("integrate_surface_direct_light() returned!; !restir_light_reference_from_sample()=%u\n\n\n\n",
-               (!restir_light_reference_from_sample(kg, &ls, sd->time, &reference)));
+
+// DEBUG ONLY; alwasy returns for GI/PT of course!        
+        // printf("integrate_surface_direct_light() returned!; !restir_light_reference_from_sample()=%u\n\n\n\n",
+              //  (!restir_light_reference_from_sample(kg, &ls, sd->time, &reference)));
         continue;
         // break; // !!!: Break or continue?
       }
@@ -1334,6 +1336,7 @@ ccl_device int integrate_surface(KernelGlobals kg,
         integrate_surface_emission(kg, state, &sd, &rng_state, render_buffer);
         // integrate_surface_emission(kg, state, &sd, render_buffer); // !!!: OG
 
+// TODO(Tri): Remove
         // /* TODO(weizhen): `min_bounce` is only for debugging, revert after finishing the branch. */
         // if (INTEGRATOR_STATE(state, path, bounce) >= kernel_data.integrator.min_bounce) {
         //   integrate_surface_emission(kg, state, &sd, &rng_state, render_buffer);
@@ -1376,6 +1379,7 @@ ccl_device int integrate_surface(KernelGlobals kg,
       return LABEL_CACHE_MISS;
     }
 
+// TODO(Tri): Remove
     // if (INTEGRATOR_STATE(state, path, bounce) + 1 >= kernel_data.integrator.min_bounce) {
     //   /* TODO(weizhen): `min_bounce` is only for debugging, revert after finishing the branch. */
     //   integrate_surface_direct_light<node_feature_mask>(kg, state, &sd, &rng_state, render_buffer);
@@ -1458,7 +1462,7 @@ ccl_device_forceinline void integrator_shade_surface(KernelGlobals kg,
 #endif
 
   if (continue_path_label == LABEL_NONE) {
-    integrator_finalize_reservoir(kg, state, render_buffer);
+    integrator_finalize_reservoir(kg, state, render_buffer); // !!!: BG Blackout?
     integrator_path_terminate(kg, state, render_buffer, current_kernel);
     return;
   }

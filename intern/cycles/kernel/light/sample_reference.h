@@ -167,8 +167,6 @@ printf("\nSUN PRODUCER: ls object=%d prim=%d -> ref object=%d prim=%d\n",
   return true;
 }
 
-// BACKGROUND
-
 /** TODO: Investigate whether light_normal_uv_from_position() can be used
  * as a common producer-side *canonicalization* path for emitter-local references.
  * It currently provides the exact area-light UV we need, but other light types
@@ -373,9 +371,9 @@ ccl_device_inline bool restir_light_reference_from_sample( // !!!: DI Blackout
     case LIGHT_SUN:
       return restir_sun_light_reference_from_sample(kg, ls, reference);
 
-    case LIGHT_BACKGROUND:
-      break;
-      // return restir_background_light_reference_from_sample(kg, ls, reference);
+    // case LIGHT_BACKGROUND:
+    //   break;
+    //   // return restir_background_light_reference_from_sample(kg, ls, reference);
 
     case LIGHT_AREA:
       return restir_area_light_reference_from_sample(kg, ls, reference);
@@ -386,6 +384,7 @@ ccl_device_inline bool restir_light_reference_from_sample( // !!!: DI Blackout
     case LIGHT_TRIANGLE:
       return restir_triangle_light_reference_from_sample(kg, ls, time, reference);
 
+    /* Includes LIGHT_BACKGROUND. */
     default:
       *reference = restir_light_reference_empty();
       return false;
@@ -569,8 +568,6 @@ ccl_device_inline bool restir_sun_light_sample_from_reference(
 
   return isfinite(ls->pdf) && ls->pdf > 0.0f;
 }
-
-// BACKGROUND
 
 /**
  * reconstructs exactly the two pieces that matter:
@@ -973,13 +970,13 @@ ccl_device_inline bool restir_light_sample_from_reference(
     const uint32_t path_flag,
     ccl_private LightSample *ls)
 {
-printf("RECONSTRUCT DISPATCH: flags=%u type=%d prim=%d object=%d param=(%f,%f)\n",
-       reference->flags,
-       reference->type,
-       reference->prim,
-       reference->object,
-       (double)reference->param.x,
-       (double)reference->param.y);
+// printf("RECONSTRUCT DISPATCH: flags=%u type=%d prim=%d object=%d param=(%f,%f)\n",
+//        reference->flags,
+//        reference->type,
+//        reference->prim,
+//        reference->object,
+//        (double)reference->param.x,
+//        (double)reference->param.y);
 
   if (!restir_light_reference_is_valid(reference)) {
     *ls = {};
@@ -996,10 +993,10 @@ printf("RECONSTRUCT DISPATCH: flags=%u type=%d prim=%d object=%d param=(%f,%f)\n
       return restir_sun_light_sample_from_reference(
           kg, reference, P, N, shader_flags, path_flag, ls);
 
-    case LIGHT_BACKGROUND:
-      break;
-      // return restir_background_light_sample_from_reference(
-      //     kg, reference, P, N, shader_flags, path_flag, ls);
+    // case LIGHT_BACKGROUND:
+    //   break;
+    //   // return restir_background_light_sample_from_reference(
+    //   //     kg, reference, P, N, shader_flags, path_flag, ls);
 
     case LIGHT_AREA:
       return restir_area_light_sample_from_reference(
@@ -1013,6 +1010,7 @@ printf("RECONSTRUCT DISPATCH: flags=%u type=%d prim=%d object=%d param=(%f,%f)\n
       return restir_triangle_light_sample_from_reference(
           kg, reference, P, time, ls);
 
+    /* Includes LIGHT_BACKGROUND. */
     default:
       *ls = {};
       return false;

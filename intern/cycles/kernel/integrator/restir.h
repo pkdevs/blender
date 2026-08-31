@@ -120,7 +120,7 @@ ccl_device_inline bool integrator_restir_unpack_shader(KernelGlobals kg,
   return integrator_restir_unpack_shader(sd, &discard, buffer);
 }
 
-ccl_device_inline bool integrator_restir_unpack_reservoir(
+ccl_device_inline bool integrator_restir_unpack_reservoir( // !!!: DI
     KernelGlobals kg,
     ccl_private Reservoir *reservoir,
     uint32_t render_pixel_index,
@@ -137,7 +137,7 @@ ccl_device_inline bool integrator_restir_unpack_reservoir(
   return restir_unpack_reservoir(kg, reservoir, buffer);
 }
 
-ccl_device_inline bool integrator_restir_unpack_reservoir(KernelGlobals kg,
+ccl_device_inline bool integrator_restir_unpack_reservoir(KernelGlobals kg, // !!!: GI
                                                           ccl_private GlobalReservoir *reservoir,
                                                           uint32_t render_pixel_index,
                                                           ccl_global float *ccl_restrict
@@ -148,6 +148,14 @@ ccl_device_inline bool integrator_restir_unpack_reservoir(KernelGlobals kg,
   ccl_global float *buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
                              (read_prev ? kernel_data.film.pass_restir_pt_previous_reservoir :
                                           kernel_data.film.pass_restir_pt_reservoir);
+
+printf("integrator_restir_unpack_reservoir() GI called restir_unpack_reservoir_pt()\n");
+// Write is correct in film_add_reservoir_pt(); This is to ensure the read!
+printf("PT READ pixel=%u read_prev=%d ptr=%p weight=%f\n",
+       render_pixel_index,
+       (int)read_prev,
+       buffer,
+       (double)buffer[0]);
 
   return restir_unpack_reservoir_pt(kg, reservoir, buffer);
 }
@@ -230,7 +238,7 @@ ccl_device_inline bool restir_unpack_neighbor(KernelGlobals kg,
   return false;
 }
 
-ccl_device_inline bool restir_unpack_neighbor(KernelGlobals kg,
+ccl_device_inline bool restir_unpack_neighbor(KernelGlobals kg, // !!!: GI
                                               const ccl_private SpatialResampling *resampling,
                                               ccl_private GlobalReservoir *current,
                                               ccl_private GlobalReservoir *neighbor,
@@ -286,7 +294,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
 
   Reservoir canonical = current->reservoir;
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
-  if (integrator_restir_unpack_reservoir(
+  if (integrator_restir_unpack_reservoir( // !!!: Re-Constructs DI analytic lights only
           kg, &canonical, render_pixel_index, render_buffer, read_prev))
   {
     // light_sample_from_uv(kg, &current->sd, current->path_flag, &canonical.ls); // !!!
@@ -336,7 +344,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
 
       /* Evaluate current sample from the neighbor shading point. */
       // light_sample_from_uv(kg, &neighbor.sd, neighbor.path_flag, &canonical_ls); // !!!
-      restir_light_sample_from_reference(
+      restir_light_sample_from_reference( // !!!: Re-Constructs DI analytic lights only
           kg,
           &canonical.reference,
           neighbor.sd.P,
@@ -359,7 +367,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
     }
 
     // light_sample_from_uv(kg, &neighbor.sd, neighbor.path_flag, &neighbor.reservoir.ls); // !!!
-    restir_light_sample_from_reference(kg,
+    restir_light_sample_from_reference(kg, // !!!: Re-Constructs DI analytic lights only
                                        &neighbor.reservoir.reference, // !!!: Ensure
                                        neighbor.sd.P,
                                        neighbor.sd.N,
@@ -376,7 +384,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
 
     /* Evaluate neighbor sample from the current shading point. */
     // light_sample_from_uv(kg, &current->sd, current->path_flag, &neighbor.reservoir.light); // !!!
-    restir_light_sample_from_reference(
+    restir_light_sample_from_reference( // !!!: Re-Constructs DI analytic lights only
         kg,
         &neighbor.reservoir.reference, // !!!: Ensure
         current->sd.P,
@@ -452,7 +460,7 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
   shader_data_setup_from_restir(kg, state, &current, render_buffer); // !!!: 
 
   // light_sample_from_uv(kg, &current.sd, current.path_flag, &reservoir.ls); // !!!
-  restir_light_sample_from_reference(
+  restir_light_sample_from_reference( // !!!: Re-Constructs DI analytic lights only
       kg,
       &reservoir.reference,
       current.sd.P,
@@ -489,7 +497,7 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
                        DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION);
 }
 
-ccl_device_inline void streaming_pt_samples(KernelGlobals kg,
+ccl_device_inline void streaming_pt_samples(KernelGlobals kg, // !!!: GI
                                             IntegratorState state,
                                             const ccl_private SpatialResampling *resampling,
                                             ccl_private GlobalReservoir *reservoir,
@@ -506,9 +514,13 @@ ccl_device_inline void streaming_pt_samples(KernelGlobals kg,
   GlobalReservoir canonical;
   global_reservoir_init(kg, &canonical);
 
-  integrator_restir_unpack_reservoir(kg, &canonical, render_pixel_index, render_buffer, read_prev);
+  // TODO: Do not ignore the return value.
+  integrator_restir_unpack_reservoir(kg, &canonical, render_pixel_index, render_buffer, read_prev); // !!!
   integrator_restir_unpack_shader(kg, &canonical.sd, render_pixel_index, render_buffer);
+  
+// !!!: BasedOnDebugs: canonical is valid reservoir
   if (global_reservoir_finalize(&canonical)) {
+
     /* TODO(weizhen): should use rand_pick but it doesn't matter when the reservoir is empty. */
     global_reservoir_add_reservoir(reservoir, canonical, 0.0f);
   }
@@ -532,19 +544,64 @@ ccl_device_inline void streaming_pt_samples(KernelGlobals kg,
     GlobalReservoir neighbor;
     global_reservoir_init(kg, &neighbor);
 
-    if (!restir_unpack_neighbor(
-            kg, resampling, &canonical, &neighbor, i, rand_neighbor, render_buffer, read_prev))
+    const bool is_unpacked = restir_unpack_neighbor(
+            kg, resampling, &canonical, &neighbor, i, rand_neighbor, render_buffer, read_prev);
+    if (!is_unpacked)
     {
+      printf("streaming_pt_samples() is_unpacked=%d\n", is_unpacked);
       continue;
     }
 
+printf(
+    "\n=== streaming_pt_samples: PT CANONICAL ===\n"
+    "pixel=%u read_prev=%d\n"
+    "canonical BEFORE finalize: W=%f flag=%u rcv=%d rad=(%f,%f,%f)\n\n",
+    render_pixel_index,
+    (int)read_prev,
+    (double)canonical.total_weight, // !!!: Always W=0
+    canonical.path_flag,
+    canonical.rcv_index,
+    (double)canonical.radiance.x, // !!!: Always rad=0
+    (double)canonical.radiance.y,
+    (double)canonical.radiance.z);
+
     valid_neighbors++;
     if (global_reservoir_finalize(&neighbor)) {
+printf(
+    "streaming_pt_samples: canonical AFTER finalize: W=%f flag=%u rcv=%d rad=(%f,%f,%f)\n",
+    (double)canonical.total_weight,
+    canonical.path_flag,
+    canonical.rcv_index,
+    (double)canonical.radiance.x,
+    (double)canonical.radiance.y,
+    (double)canonical.radiance.z);
+
       global_reservoir_add_reservoir(reservoir, neighbor, rand_pick);
+
+printf(
+    "streaming_pt_samples: current_pt AFTER CANONICAL: W=%f flag=%u rcv=%d rad=(%f,%f,%f)\n",
+    (double)reservoir->total_weight,
+    reservoir->path_flag,
+    reservoir->rcv_index,
+    (double)reservoir->radiance.x,
+    (double)reservoir->radiance.y,
+    (double)reservoir->radiance.z);
+
     }
   }
 
   reservoir->total_weight /= valid_neighbors;
+
+
+printf(
+    "streaming_pt_samples: PT CURRENT FINAL: pixel=%u valid_neighbors=%d W=%f "
+    "rad=(%f,%f,%f)\n",
+    render_pixel_index,
+    valid_neighbors,
+    (double)reservoir->total_weight,
+    (double)reservoir->radiance.x,
+    (double)reservoir->radiance.y,
+    (double)reservoir->radiance.z);
 }
 
 // !!!: Has kernel calls
@@ -552,7 +609,7 @@ ccl_device_inline void streaming_pt_samples(KernelGlobals kg,
 /* TODO(weizhen): merge with restir DI. */
 ccl_device void integrator_evaluate_restir_pt(KernelGlobals kg, // DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION
                                               IntegratorState state,
-                                              ccl_global float *ccl_restrict render_buffer)
+                                              ccl_global float *ccl_restrict render_buffer) // !!!: GI
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_SPATIAL_RESAMPLING);
 
@@ -630,9 +687,11 @@ ccl_device bool integrator_restir(KernelGlobals kg,
   streaming_pt_samples(
       kg, state, &spatial_resampling, &current_pt, &rng_state, samples, render_buffer);
 
-  const bool write_prev = (INTEGRATOR_STATE(state, path, spatial_iteration) + 1) % 2;
+  const bool write_prev = (INTEGRATOR_STATE(state, path, spatial_iteration) + 1) % 2; // !!!: Read uses const bool read_prev = spatial_iteration % 2;
+// !!!: Does film_add_reservoir_pt() execute against the same buffer that the subsequent spatial iteration expects to read? Yes
 
   film_write_pass_reservoir(kg, state, &current.reservoir, render_buffer, write_prev);
+  // !!!: film_finalize_reservoir_pt not needed
   film_write_pass_reservoir_pt(kg, state, &current_pt, render_buffer, write_prev); // light_pass
 
   /* Spatial RESTIR is a terminal GPU pass.
