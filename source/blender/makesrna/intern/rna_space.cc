@@ -603,6 +603,11 @@ const EnumPropertyItem buttons_context_items[] = {
     {BCONTEXT_OUTPUT, "OUTPUT", ICON_OUTPUT, "Output", "Output Properties"},
     {BCONTEXT_SCENE, "SCENE", ICON_SCENE_DATA, "Scene", "Scene Properties"},
     {BCONTEXT_VIEW_LAYER, "VIEW_LAYER", ICON_RENDER_RESULT, "View Layer", "View Layer Properties"},
+    {BCONTEXT_COMPOSITOR,
+     "COMPOSITOR",
+     ICON_NODE_COMPOSITING,
+     "Compositor & Effects",
+     "Procedural scene post-processing"},
     {BCONTEXT_WORLD, "WORLD", ICON_WORLD, "World", "World Properties"},
     {BCONTEXT_COLLECTION, "COLLECTION", ICON_GROUP, "Collection", "Collection Properties"},
     {BCONTEXT_OBJECT, "OBJECT", ICON_OBJECT_DATA, "Object", "Object Properties"},
@@ -630,11 +635,6 @@ const EnumPropertyItem buttons_context_items[] = {
      ICON_SEQ_STRIP_MODIFIER,
      "Strip Modifiers",
      "Strip Modifier Properties"},
-    {BCONTEXT_COMPOSITOR,
-     "COMPOSITOR",
-     ICON_NODE_COMPOSITING,
-     "Compositor & Effects",
-     "Procedural scene post-processing"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
