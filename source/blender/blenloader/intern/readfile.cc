@@ -1548,7 +1548,9 @@ static FileData *change_ID_link_filedata_get(Main *bmain, FileData *basefd)
   return basefd;
 }
 
-static void change_link_placeholder_to_real_ID_pointer(FileData *basefd, void *old, void *newp)
+static void change_link_placeholder_to_real_ID_pointer(FileData *basefd,
+                                                       const void *old,
+                                                       void *newp)
 {
   for (Main *mainptr : *basefd->bmain->split_mains) {
     FileData *fd = change_ID_link_filedata_get(mainptr, basefd);
@@ -1558,7 +1560,7 @@ static void change_link_placeholder_to_real_ID_pointer(FileData *basefd, void *o
   }
 }
 
-static void change_ID_pointer_to_real_ID_pointer(FileData *basefd, void *old, void *newp)
+static void change_ID_pointer_to_real_ID_pointer(FileData *basefd, const void *old, void *newp)
 {
   for (Main *mainptr : *basefd->bmain->split_mains) {
     FileData *fd = change_ID_link_filedata_get(mainptr, basefd);
@@ -2504,9 +2506,12 @@ static void library_filedata_release(Library *lib)
  *
  * - If `lib` is `nullptr`, create a new Library ID, otherwise only create a new Main for the given
  * library.
+ *   - If a new library is created, and `bheadlib` is not `nullptr`, add a remapping from this
+ *     `BHead::old` value to the newly created Library.
  * - `reference_lib` is the 'archive parent' of an archive (packed) library, can be null and will
  * be ignored otherwise. */
 static Main *blo_add_main_for_library(FileData *fd,
+                                      const BHead *bheadlib,
                                       Library *lib,
                                       Library *reference_lib,
                                       const char *lib_filepath,
@@ -2524,6 +2529,11 @@ static Main *blo_add_main_for_library(FileData *fd,
     lib = BKE_id_new<Library>(fd->bmain,
                               reference_lib ? BKE_id_name(reference_lib->id) :
                                               BLI_path_basename(lib_filepath));
+    /* When a lib ID is created based on data from a BHead, ensure that this library BHead's old
+     * pointer value is remapped to the actual new library. */
+    if (bheadlib) {
+      change_ID_pointer_to_real_ID_pointer(fd, bheadlib->old, lib);
+    }
 
     /* Important, consistency with main ID reading code from read_libblock(). */
     lib->id.us = ID_FAKE_USERS(lib);
@@ -2656,7 +2666,7 @@ static void direct_link_library(FileData *fd, Library *lib, Main *main)
                        lib->runtime->filepath_abs);
 
       Main *parent_lib_bmain = blo_add_main_for_library(
-          fd, nullptr, nullptr, lib->filepath, lib->runtime->filepath_abs, false, false);
+          fd, nullptr, nullptr, nullptr, lib->filepath, lib->runtime->filepath_abs, false, false);
       parent_lib = parent_lib_bmain->curlib;
       BLI_assert(parent_lib);
       oldnewmap_lib_insert(fd, lib->archive_parent_library, &parent_lib->id, ID_LI);
@@ -3294,6 +3304,7 @@ static void read_libblock_undo_restore_identical(
        * needs to be created to contain its packed IDs. */
       const bool is_external_lib = lib->flag & LIBRARY_FLAG_IS_EXTERNAL;
       blo_add_main_for_library(fd,
+                               nullptr,
                                lib,
                                lib->archive_parent_library,
                                lib->filepath,
@@ -4902,10 +4913,17 @@ struct BlendExpander {
 /* Find the existing Main matching the given blendfile library filepath, or create a new one (with
  * the matching Library ID) if needed.
  *
+ * If there is a known BHead referencing/source for this library, it should be passed as
+ * `bheadlib`. This allows the code to generate the correct remapping for this BHead::old pointer.
+ * This is not critical currently, but once libraries are actually 'used' like other IDs, this
+ * become necessary to ensure these usages are properly 'remapped' to the new data on read (e.g.
+ * for upcoming changes to `CollectionImport`).
+ *
  * NOTE: The process is a bit more complex for packed linked IDs and their archive libraries, as
  * in this case, this function also needs to find or create a new suitable archive library, i.e.
  * one which does not contain yet the given ID (from its name & type). */
 static Main *blo_find_main_for_library_and_idname(FileData *fd,
+                                                  const BHead *bheadlib,
                                                   const char *lib_filepath,
                                                   const char *relabase,
                                                   const BHead *id_bhead,
@@ -5010,7 +5028,7 @@ static Main *blo_find_main_for_library_and_idname(FileData *fd,
       /* An archive library requires an existing parent library, create an empty, 'virtual' one if
        * needed. */
       Main *reference_bmain = blo_add_main_for_library(
-          fd, nullptr, nullptr, lib_filepath, filepath_abs, false, false);
+          fd, bheadlib, nullptr, nullptr, lib_filepath, filepath_abs, false, false);
       parent_lib = reference_bmain->curlib;
       CLOG_DEBUG(&LOG,
                  "Added new parent library '%s' for file path '%s'",
@@ -5020,8 +5038,14 @@ static Main *blo_find_main_for_library_and_idname(FileData *fd,
   }
   BLI_assert(parent_lib || !is_packed_id);
 
-  Main *bmain = blo_add_main_for_library(
-      fd, nullptr, parent_lib, lib_filepath, filepath_abs, is_packed_id, is_external_lib);
+  Main *bmain = blo_add_main_for_library(fd,
+                                         bheadlib,
+                                         nullptr,
+                                         parent_lib,
+                                         lib_filepath,
+                                         filepath_abs,
+                                         is_packed_id,
+                                         is_external_lib);
 
   read_file_version_and_colorspace(fd, bmain);
 
@@ -5170,7 +5194,7 @@ static void expand_doit_library(void *fdhandle,
     Library *lib = reinterpret_cast<Library *>(
         read_id_struct(fd, bheadlib, "Data for Library ID type", INDEX_ID_NULL));
     Main *libmain = blo_find_main_for_library_and_idname(
-        fd, lib->filepath, fd->relabase, nullptr, nullptr, false, false);
+        fd, bheadlib, lib->filepath, fd->relabase, nullptr, nullptr, false, false);
     MEM_delete(lib);
 
     if (libmain->curlib == nullptr) {
@@ -5213,7 +5237,7 @@ static void expand_doit_library(void *fdhandle,
     const bool is_external_lib = bool(lib->flag & LIBRARY_FLAG_IS_EXTERNAL);
 
     Main *libmain = blo_find_main_for_library_and_idname(
-        fd, lib->filepath, fd->relabase, bhead, id_name, is_packed_id, is_external_lib);
+        fd, bheadlib, lib->filepath, fd->relabase, bhead, id_name, is_packed_id, is_external_lib);
     MEM_delete(lib);
 
     if (libmain->curlib == nullptr) {
@@ -5432,7 +5456,7 @@ static Main *library_link_begin(Main *mainvar,
   /* Find or create a Main matching the current library filepath. */
   /* Note: Directly linking packed IDs is not supported currently. */
   mainl = blo_find_main_for_library_and_idname(
-      fd, filepath, BKE_main_blendfile_path(mainvar), nullptr, nullptr, false, false);
+      fd, nullptr, filepath, BKE_main_blendfile_path(mainvar), nullptr, nullptr, false, false);
   fd->fd_bmain = mainl;
   if (mainl->curlib) {
     mainl->curlib->runtime->filedata = fd;
