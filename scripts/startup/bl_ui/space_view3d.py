@@ -287,7 +287,7 @@ class _draw_tool_settings_context_mode:
             layout.prop(brush, "blend", text="", expand=False)
 
         size = "size"
-        size_owner = ups if ups.use_unified_size else brush
+        size_owner = ups if brush.use_unified_size else brush
         if size_owner.use_locked_size == 'SCENE':
             size = "unprojected_size"
 
@@ -421,7 +421,7 @@ class _draw_tool_settings_context_mode:
         ups = paint.unified_paint_settings
 
         size = "size"
-        size_owner = ups if ups.use_unified_size else brush
+        size_owner = ups if brush.use_unified_size else brush
         if size_owner.use_locked_size == 'SCENE':
             size = "unprojected_size"
 
@@ -490,7 +490,7 @@ class _draw_tool_settings_context_mode:
         if brush.gpencil_vertex_brush_type not in {'BLUR', 'AVERAGE', 'SMEAR'}:
             layout.separator(factor=0.4)
             ups = paint.unified_paint_settings
-            prop_owner = ups if ups.use_unified_color else brush
+            prop_owner = ups if brush.use_unified_color else brush
             layout.prop_with_popover(prop_owner, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
             if brush.gpencil_settings.vertex_mode == 'BOTH' and brush.gpencil_settings.split_colors:
                 layout.prop_with_popover(brush, "secondary_color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
@@ -8661,16 +8661,16 @@ class VIEW3D_PT_greasepencil_sculpt_context_menu(Panel):
         layout = self.layout
 
         ups = paint.unified_paint_settings
-        size_owner = ups if ups.use_unified_size else brush
-        strength_owner = ups if ups.use_unified_strength else brush
+        size_owner = ups if brush.use_unified_size else brush
+        strength_owner = ups if brush.use_unified_strength else brush
         row = layout.row(align=True)
         row.prop(size_owner, "size", text="")
         row.prop(brush, "use_pressure_size", text="", icon='STYLUS_PRESSURE')
-        row.prop(ups, "use_unified_size", text="", icon='BRUSHES_ALL')
+        row.prop(brush, "use_unified_size", text="", icon='BRUSHES_ALL')
         row = layout.row(align=True)
         row.prop(strength_owner, "strength", text="")
         row.prop(brush, "use_pressure_strength", text="", icon='STYLUS_PRESSURE')
-        row.prop(ups, "use_unified_strength", text="", icon='BRUSHES_ALL')
+        row.prop(brush, "use_unified_strength", text="", icon='BRUSHES_ALL')
 
         layer = context.object.data.layers.active
 
@@ -8701,7 +8701,7 @@ class VIEW3D_PT_greasepencil_vertex_paint_context_menu(Panel):
         if brush.gpencil_vertex_brush_type in {'DRAW', 'REPLACE'}:
             split = layout.split(factor=0.1)
             ups = settings.unified_paint_settings
-            prop_owner = ups if ups.use_unified_color else brush
+            prop_owner = ups if brush.use_unified_color else brush
             split.prop(prop_owner, "color", text="")
             split.template_color_picker(prop_owner, "color", value_slider=True)
 
@@ -8718,11 +8718,11 @@ class VIEW3D_PT_greasepencil_vertex_paint_context_menu(Panel):
 
         if brush.gpencil_vertex_brush_type in {'DRAW', 'BLUR', 'SMEAR'}:
             ups = settings.unified_paint_settings
-            strength_owner = ups if ups.use_unified_strength else brush
+            strength_owner = ups if brush.use_unified_strength else brush
             row = layout.row(align=True)
             row.prop(strength_owner, "strength", text="")
             row.prop(brush, "use_pressure_strength", text="", icon='STYLUS_PRESSURE')
-            row.prop(ups, "use_unified_strength", text="", icon='BRUSHES_ALL')
+            row.prop(brush, "use_unified_strength", text="", icon='BRUSHES_ALL')
 
         layer = context.object.data.layers.active
 
@@ -8948,7 +8948,7 @@ class VIEW3D_PT_sculpt_context_menu(Panel):
 
         ups = paint.unified_paint_settings
         size = "size"
-        size_owner = ups if ups.use_unified_size else brush
+        size_owner = ups if brush.use_unified_size else brush
         if size_owner.use_locked_size == 'SCENE':
             size = "unprojected_size"
 
@@ -8957,6 +8957,7 @@ class VIEW3D_PT_sculpt_context_menu(Panel):
             context,
             brush,
             size,
+            unified_paint_settings_override=ups,
             unified_name="use_unified_size",
             pressure_name="use_pressure_size",
             text="Size",
@@ -8967,6 +8968,7 @@ class VIEW3D_PT_sculpt_context_menu(Panel):
             context,
             brush,
             "strength",
+            unified_paint_settings_override=ups,
             unified_name="use_unified_strength",
             pressure_name="use_pressure_strength",
             slider=True,
@@ -9032,7 +9034,7 @@ class TOPBAR_PT_grease_pencil_vertex_color(Panel):
 
         ups = paint.unified_paint_settings
         brush = paint.brush
-        prop_owner = ups if use_unified_paint and ups.use_unified_color else brush
+        prop_owner = ups if use_unified_paint and brush.use_unified_color else brush
 
         col = layout.column()
         col.template_color_picker(prop_owner, "color", value_slider=True)
