@@ -69,6 +69,7 @@
 #include "BKE_key.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_query.hh"
+#include "BKE_mask.hh"
 #include "BKE_material.hh"
 #include "BKE_mball.hh"
 #include "BKE_modifier.hh"
@@ -521,7 +522,7 @@ void DepsgraphRelationBuilder::build_id(ID *id)
     return;
   }
 
-  const ID_Type id_type = GS(id->name);
+  const ID_Type id_type = id->id_type();
   switch (id_type) {
     case ID_AC:
       build_action(id_cast<bAction *>(id));
@@ -987,9 +988,7 @@ void DepsgraphRelationBuilder::build_object_modifiers(Object *object)
 
 void DepsgraphRelationBuilder::build_object_data(Object *object)
 {
-  if (object->type == OB_EMPTY &&
-      (!BLI_listbase_is_empty(&object->modifiers) || object->instance_collection))
-  {
+  if (object->type == OB_EMPTY && !BLI_listbase_is_empty(&object->modifiers)) {
     build_object_data_empty(object);
     return;
   }
@@ -1804,7 +1803,7 @@ void DepsgraphRelationBuilder::build_animation_images(ID *id)
 {
   /* See #DepsgraphNodeBuilder::build_animation_images. */
   bool has_image_animation = false;
-  if (ELEM(GS(id->name), ID_MA, ID_WO)) {
+  if (ELEM(id->id_type(), ID_MA, ID_WO)) {
     bNodeTree *ntree = *bke::node_tree_ptr_from_id(id);
     if (ntree != nullptr && ntree->runtime->runtime_flag & NTREE_RUNTIME_FLAG_HAS_IMAGE_ANIMATION)
     {
@@ -1820,15 +1819,15 @@ void DepsgraphRelationBuilder::build_animation_images(ID *id)
 
     /* The image users of these ids may change during evaluation. Make sure that the image
      * animation update happens after evaluation. */
-    if (GS(id->name) == ID_MA) {
+    if (id->id_type() == ID_MA) {
       OperationKey material_update_key(id, NodeType::SHADING, OperationCode::MATERIAL_UPDATE);
       add_relation(material_update_key, image_animation_key, "Material Update -> Image Animation");
     }
-    else if (GS(id->name) == ID_WO) {
+    else if (id->id_type() == ID_WO) {
       OperationKey world_update_key(id, NodeType::SHADING, OperationCode::WORLD_UPDATE);
       add_relation(world_update_key, image_animation_key, "World Update -> Image Animation");
     }
-    else if (GS(id->name) == ID_NT) {
+    else if (id->id_type() == ID_NT) {
       OperationKey ntree_output_key(id, NodeType::NTREE_OUTPUT, OperationCode::NTREE_OUTPUT);
       add_relation(ntree_output_key, image_animation_key, "NTree Output -> Image Animation");
     }
@@ -1837,7 +1836,7 @@ void DepsgraphRelationBuilder::build_animation_images(ID *id)
 
 void DepsgraphRelationBuilder::build_animdata_force(ID *id)
 {
-  if (GS(id->name) != ID_OB) {
+  if (id->id_type() != ID_OB) {
     return;
   }
 
@@ -1901,7 +1900,7 @@ void DepsgraphRelationBuilder::build_driver_data(ID *id, FCurve *fcu)
   }
   /* Parse the RNA path to find the target property pointer. */
   RNAPathKey property_entry_key(id, rna_path.c_str(), RNAPointerSource::ENTRY);
-  if (RNA_pointer_is_null(&property_entry_key.ptr)) {
+  if (!property_entry_key.ptr) {
     /* TODO(sergey): This would only mean that driver is broken.
      * so we can't create relation anyway. However, we need to avoid
      * adding drivers which are known to be buggy to a dependency
@@ -1919,10 +1918,10 @@ void DepsgraphRelationBuilder::build_driver_data(ID *id, FCurve *fcu)
   bool is_bone = id_ptr && property_entry_key.ptr.type == RNA_Bone;
   /* If the Bone property is referenced via obj.pose.bones[].bone,
    * the RNA pointer refers to the Object ID, so skip to data. */
-  if (is_bone && GS(id_ptr->name) == ID_OB) {
+  if (is_bone && id_ptr->id_type() == ID_OB) {
     id_ptr = (id_cast<Object *>(id_ptr))->data;
   }
-  if (is_bone && GS(id_ptr->name) == ID_AR) {
+  if (is_bone && id_ptr->id_type() == ID_AR) {
     /* Drivers on armature-level bone settings (i.e. bbone stuff),
      * which will affect the evaluation of corresponding pose bones. */
     Bone *bone = static_cast<Bone *>(property_entry_key.ptr.data);
@@ -1937,7 +1936,7 @@ void DepsgraphRelationBuilder::build_driver_data(ID *id, FCurve *fcu)
 
     /* Find objects which use this, and make their eval callbacks depend on this. */
     for (IDNode *to_node : graph_->id_nodes) {
-      if (GS(to_node->id_orig->name) != ID_OB) {
+      if (to_node->id_orig->id_type() != ID_OB) {
         continue;
       }
 
@@ -2001,7 +2000,7 @@ void DepsgraphRelationBuilder::build_driver_data(ID *id, FCurve *fcu)
   /* Assume drivers on a node tree affect the evaluated output of the node tree. In theory we could
    * check if the driven value actually affects the output, i.e. if it drives a node that is linked
    * to the output. */
-  if (GS(id_ptr->name) == ID_NT) {
+  if (id_ptr->id_type() == ID_NT) {
     ComponentKey ntree_output_key(id_ptr, NodeType::NTREE_OUTPUT);
     add_relation(driver_key, ntree_output_key, "Drivers -> NTree Output");
     if (reinterpret_cast<bNodeTree *>(id_ptr)->type == NTREE_GEOMETRY) {
@@ -2043,7 +2042,7 @@ void DepsgraphRelationBuilder::build_driver_variables(ID *id, FCurve *fcu)
       build_driver_id_property(target_prop, dtar->rna_path);
 
       Object *object = nullptr;
-      if (GS(target_id->name) == ID_OB) {
+      if (target_id->id_type() == ID_OB) {
         object = id_cast<Object *>(target_id);
       }
       /* Special handling for directly-named bones. */
@@ -2140,7 +2139,7 @@ void DepsgraphRelationBuilder::build_driver_rna_path_variable(const OperationKey
                                                               const char *rna_path)
 {
   RNAPathKey variable_exit_key(target_prop, rna_path, RNAPointerSource::EXIT);
-  if (RNA_pointer_is_null(&variable_exit_key.ptr)) {
+  if (!variable_exit_key.ptr) {
     return;
   }
   if (is_same_bone_dependency(variable_exit_key, self_key) ||
@@ -2182,8 +2181,8 @@ void DepsgraphRelationBuilder::build_driver_rna_path_variable(const OperationKey
    * Thus scene has to be excluded as a special case; this is OK because changes to
    * scene.camera not caused by animation should actually force a dependency graph rebuild.
    */
-  if (target_id != variable_exit_key.ptr.owner_id && GS(target_id->name) != ID_SCE) {
-    if (deg_eval_copy_is_needed(GS(target_id->name))) {
+  if (target_id != variable_exit_key.ptr.owner_id && target_id->id_type() != ID_SCE) {
+    if (deg_eval_copy_is_needed(target_id->id_type())) {
       ComponentKey target_id_key(target_id, NodeType::COPY_ON_EVAL);
       add_relation(target_id_key, driver_key, "Target ID -> Driver");
     }
@@ -2739,7 +2738,7 @@ void DepsgraphRelationBuilder::build_object_data_geometry_datablock(ID *obdata)
   add_relation(parameters_key, obdata_geom_eval_key, "ObData Geom Params");
 
   /* Type-specific links. */
-  const ID_Type id_type = GS(obdata->name);
+  const ID_Type id_type = obdata->id_type();
   switch (id_type) {
     case ID_ME:
       break;
@@ -3115,7 +3114,7 @@ void DepsgraphRelationBuilder::build_nodetree(bNodeTree *ntree)
     if (id == nullptr) {
       continue;
     }
-    ID_Type id_type = GS(id->name);
+    ID_Type id_type = id->id_type();
     if (id_type == ID_MA) {
       build_material(id_cast<Material *>(id));
       ComponentKey material_key(id, NodeType::SHADING);
@@ -3371,8 +3370,10 @@ void DepsgraphRelationBuilder::build_mask(Mask *mask)
   build_parameters(mask_id);
   /* Own mask animation. */
   OperationKey mask_animation_key(mask_id, NodeType::ANIMATION, OperationCode::MASK_ANIMATION);
-  TimeSourceKey time_src_key;
-  add_relation(time_src_key, mask_animation_key, "TimeSrc -> Mask Animation");
+  if (BKE_mask_is_animated(*mask)) {
+    TimeSourceKey time_src_key;
+    add_relation(time_src_key, mask_animation_key, "TimeSrc -> Mask Animation");
+  }
   /* Final mask evaluation. */
   OperationKey mask_eval_key(mask_id, NodeType::PARAMETERS, OperationCode::MASK_EVAL);
   add_relation(mask_animation_key, mask_eval_key, "Mask Animation -> Mask Eval");
@@ -3655,7 +3656,7 @@ void DepsgraphRelationBuilder::build_copy_on_write_relations(IDNode *id_node)
 {
   ID *id_orig = id_node->id_orig;
 
-  const ID_Type id_type = GS(id_orig->name);
+  const ID_Type id_type = id_orig->id_type();
 
   if (!deg_eval_copy_is_needed(id_type)) {
     return;
@@ -3755,7 +3756,7 @@ void DepsgraphRelationBuilder::build_copy_on_write_relations(IDNode *id_node)
   }
   /* TODO(sergey): This solves crash for now, but causes too many
    * updates potentially. */
-  if (GS(id_orig->name) == ID_OB) {
+  if (id_orig->id_type() == ID_OB) {
     Object *object = id_cast<Object *>(id_orig);
     ID *object_data_id = object->data;
     if (object_data_id != nullptr) {

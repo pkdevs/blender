@@ -730,14 +730,14 @@ static void create_legacy_geometry_nodes_properties(Object &ob)
         const int type = IDP_int_get(type_prop);
         if (type == int(nodes::GeometryNodesInputType::Layer)) {
           if (const IDProperty *name = IDP_GetPropertyFromGroup(&prop, "layer_name")) {
-            IDProperty *legacy_prop = IDP_CopyProperty(name);
+            IDProperty *legacy_prop = IDP_CopyProperty_ex(name, LIB_ID_CREATE_NO_USER_REFCOUNT);
             STRNCPY(legacy_prop->name, identifier.c_str());
             IDP_AddToGroup(legacy_props, legacy_prop);
           }
         }
         else {
           if (const IDProperty *value = IDP_GetPropertyFromGroup(&prop, "value")) {
-            IDProperty *legacy_prop = IDP_CopyProperty(value);
+            IDProperty *legacy_prop = IDP_CopyProperty_ex(value, LIB_ID_CREATE_NO_USER_REFCOUNT);
             STRNCPY(legacy_prop->name, identifier.c_str());
             IDP_AddToGroup(legacy_props, legacy_prop);
           }
@@ -748,7 +748,8 @@ static void create_legacy_geometry_nodes_properties(Object &ob)
               bke::idprop::create(identifier + "_use_attribute", int(use_attribute)).release());
 
           if (const IDProperty *name = IDP_GetPropertyFromGroup(&prop, "attribute_name")) {
-            IDProperty *legacy_attr_prop = IDP_CopyProperty(name);
+            IDProperty *legacy_attr_prop = IDP_CopyProperty_ex(name,
+                                                               LIB_ID_CREATE_NO_USER_REFCOUNT);
             SNPRINTF(legacy_attr_prop->name, "%s_attribute_name", identifier.c_str());
             IDP_AddToGroup(legacy_props, legacy_attr_prop);
           }
@@ -764,7 +765,7 @@ static void create_legacy_geometry_nodes_properties(Object &ob)
         }
         const StringRefNull identifier = prop.name;
         if (const IDProperty *name = IDP_GetPropertyFromGroup(&prop, "attribute_name")) {
-          IDProperty *legacy_prop = IDP_CopyProperty(name);
+          IDProperty *legacy_prop = IDP_CopyProperty_ex(name, LIB_ID_CREATE_NO_USER_REFCOUNT);
           SNPRINTF(legacy_prop->name, "%s_attribute_name", identifier.c_str());
           IDP_AddToGroup(legacy_props, legacy_prop);
         }
@@ -1148,10 +1149,16 @@ static void object_blend_read_after_liblink(BlendLibReader *reader, ID *id)
   /* When loading undo steps, for objects in modes that use `sculpt_session`, recreate the mode
    * runtime data. For regular non-undo reading, this is currently handled by mode switching after
    * the initial file read. */
-  if (BLO_read_lib_is_undo(reader) && ob->mode & OB_MODE_ALL_SCULPT &&
-      ob->runtime->sculpt_session == nullptr)
-  {
-    BKE_object_sculpt_data_create(ob);
+  if (BLO_read_lib_is_undo(reader) && ob->mode & OB_MODE_ALL_SCULPT) {
+    /* The runtime may have been created in a non-matching mode and should be deleted here. */
+    if (ob->runtime->sculpt_session != nullptr &&
+        ob->runtime->sculpt_session->mode_type != ob->mode)
+    {
+      BKE_sculptsession_free(ob);
+    }
+    if (ob->runtime->sculpt_session == nullptr) {
+      BKE_object_sculpt_data_create(ob);
+    }
   }
 }
 
@@ -1709,16 +1716,21 @@ static void object_update_from_subsurf_ccg(Object *object)
   if (object->type != OB_MESH) {
     return;
   }
-  /* If object does not own evaluated mesh we can not access it since it might be freed already
-   * (happens on dependency graph free where order of evaluated IDs free is undefined).
-   *
-   * Good news is: such mesh does not have modifiers applied, so no need to worry about CCG. */
-  if (!object->runtime->is_data_eval_owned) {
+  const bke::GeometrySet *geometry_set_eval = object->runtime->geometry_set_eval;
+  if (geometry_set_eval == nullptr) {
+    /* Object was never evaluated, so can not have CCG subdivision surface. */
     return;
   }
-  /* Object was never evaluated, so can not have CCG subdivision surface. If it were evaluated, do
-   * not try to compute OpenSubDiv on the CPU as it is not needed here. */
-  Mesh *mesh_eval = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(object);
+  /* Check for owns_direct_data() which may reference the original mesh from before modifier
+   * evaluation. In that case the mesh can't be read, because it's a separately owned ID that most
+   * likely comes from the object's copy-on-eval modifier input mesh which the depsgraph free
+   * destroys in an undefined order. For non read-only ownership types, the GeometrySet will have a
+   * user for the mesh, so it can be safely read here. */
+  const auto *mesh_component = geometry_set_eval->get_component<bke::MeshComponent>();
+  if (mesh_component == nullptr || !mesh_component->owns_direct_data()) {
+    return;
+  }
+  const Mesh *mesh_eval = mesh_component->get();
   if (mesh_eval == nullptr) {
     return;
   }
@@ -1787,7 +1799,7 @@ void BKE_object_eval_assign_data(Object *object_eval, ID *data_eval, bool is_own
 
   /* Overwrite data of evaluated object, if the data-block types match. */
   ID *data = object_eval->data;
-  if (GS(data->name) == GS(data_eval->name)) {
+  if (data->id_type() == data_eval->id_type()) {
     /* NOTE: we are not supposed to invoke evaluation for original objects,
      * but some areas are still being ported, so we play safe here. */
     if (object_eval->id.tag & ID_TAG_COPIED_ON_EVAL) {
@@ -1808,7 +1820,7 @@ void BKE_object_free_derived_caches(Object *ob)
   if (ob->runtime->data_eval != nullptr) {
     if (ob->runtime->is_data_eval_owned) {
       ID *data_eval = ob->runtime->data_eval;
-      if (GS(data_eval->name) == ID_ME) {
+      if (data_eval->id_type() == ID_ME) {
         BKE_id_free(nullptr, id_cast<Mesh *>(data_eval));
       }
       else {
@@ -1923,7 +1935,7 @@ bool BKE_object_is_in_editmode_vgroup(const Object *ob)
 
 bool BKE_object_data_is_in_editmode(const Object *ob, const ID *id)
 {
-  const short type = GS(id->name);
+  const short type = id->id_type();
   BLI_assert(OB_DATA_SUPPORT_EDITMODE(type));
   switch (type) {
     case ID_ME:
@@ -1952,7 +1964,7 @@ bool BKE_object_data_is_in_editmode(const Object *ob, const ID *id)
 
 char *BKE_object_data_editmode_flush_ptr_get(ID *id)
 {
-  const short type = GS(id->name);
+  const short type = id->id_type();
   switch (type) {
     case ID_ME: {
       if (BMEditMesh *em = (id_cast<Mesh *>(id))->runtime->edit_mesh.get()) {
@@ -2222,7 +2234,7 @@ void *BKE_object_obdata_add_from_type(Main *bmain, ObjectType type, const char *
 int BKE_object_obdata_to_type(const ID *id)
 {
   /* Keep in sync with #OB_DATA_SUPPORT_ID macro. */
-  switch (GS(id->name)) {
+  switch (id->id_type()) {
     case ID_ME:
       return OB_MESH;
     case ID_CU_LEGACY:
@@ -4301,7 +4313,7 @@ bool BKE_object_obdata_texspace_get(Object *ob,
     return false;
   }
 
-  switch (GS(ob->data->name)) {
+  switch (ob->data->id_type()) {
     case ID_ME: {
       BKE_mesh_texspace_get_reference(
           id_cast<Mesh *>(ob->data), r_texspace_flag, r_texspace_location, r_texspace_size);
@@ -4360,7 +4372,7 @@ Mesh *BKE_object_get_evaluated_mesh_no_subsurf_unchecked(const Object *object)
    * not support evaluating to multiple data types. Eventually this should be removed, when all
    * object types use #geometry_set_eval. */
   ID *data_eval = object->runtime->data_eval;
-  if (data_eval && GS(data_eval->name) == ID_ME) {
+  if (data_eval && data_eval->id_type() == ID_ME) {
     return reinterpret_cast<Mesh *>(data_eval);
   }
 
@@ -4400,7 +4412,7 @@ const Mesh *BKE_object_get_pre_modified_mesh(const Object *object)
     BLI_assert(object->id.orig_id != nullptr);
     BLI_assert(data_orig->orig_id == ((const Object *)object->id.orig_id)->data);
     BLI_assert((data_orig->tag & ID_TAG_COPIED_ON_EVAL) != 0);
-    if (GS(data_orig->name) != ID_ME) {
+    if (data_orig->id_type() != ID_ME) {
       return nullptr;
     }
     return reinterpret_cast<const Mesh *>(data_orig);
@@ -4496,7 +4508,7 @@ const Mesh *BKE_object_get_mesh_deform_eval(const Object *object)
 Lattice *BKE_object_get_lattice(const Object *object)
 {
   ID *data = object->data;
-  if (data == nullptr || GS(data->name) != ID_LT) {
+  if (data == nullptr || data->id_type() != ID_LT) {
     return nullptr;
   }
 
@@ -4512,7 +4524,7 @@ Lattice *BKE_object_get_evaluated_lattice(const Object *object)
 {
   ID *data_eval = object->runtime->data_eval;
 
-  if (data_eval == nullptr || GS(data_eval->name) != ID_LT) {
+  if (data_eval == nullptr || data_eval->id_type() != ID_LT) {
     return nullptr;
   }
 

@@ -915,6 +915,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
     image_colorspace
     image_data_types
     image_mapping
+    image_mipmap
     image_texture_limit
     integrator
     light
@@ -998,7 +999,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
             "Supported devices are: ${_cycles_all_test_devices}")
       endif()
       string(TOLOWER "${_cycles_device}" _cycles_device_lower)
-      set(_cycles_render_tests bake;bake_raytrace;${render_tests};osl;image_mipmap;updates)
+      set(_cycles_render_tests bake;bake_raytrace;${render_tests};osl;updates)
 
       set(_cycles_osl_test_type none)
       if(WITH_CYCLES_OSL)
@@ -1280,6 +1281,10 @@ if(TEST_SRC_DIR_EXISTS)
     utilities
     vector
   )
+
+  if(WITH_AUDASPACE AND WITH_FFTW3)
+    list(APPEND geo_node_tests sound)
+  endif()
 
   if(WITH_GMP)
     list(APPEND geo_node_tests mesh/boolean)
@@ -1707,11 +1712,14 @@ if(WITH_UI_TESTS)
   # `"${TEST_PYTHON_EXE}" "${CMAKE_CURRENT_LIST_DIR}/ui_simulate/run.py" --list-tests`
   # list explicitly so changes bisecting/updated are sure to re-run CMake.
   set(_ui_tests
+    test_editor_types.test_open_editor_types
     test_search_in_editors.test_properties_search
     test_search_in_editors.test_outliner_search
     test_search_in_editors.test_dopesheet_search
     test_search_in_editors.test_graph_editor_search
     test_search_in_editors.test_file_browser_search
+    test_operator_poll.test_operator_search_poll_gating
+    test_operator_poll.test_operator_poll_sweep
     test_sculpt.asset_shelf_brush_selection
     test_sculpt.face_set_expand
     test_sculpt.face_set_gestures
@@ -1725,7 +1733,10 @@ if(WITH_UI_TESTS)
     test_undo.text_editor_edit_mode_mix
     test_undo.text_editor_simple
     test_undo.view3d_edit_mode_multi_window
+    test_undo.view3d_font_edit_mode_object_mix
     test_undo.view3d_font_edit_mode_simple
+    test_undo.view3d_mesh_edit_mode_object_mix
+    test_undo.view3d_mesh_edit_shape_key
     test_undo.view3d_mesh_edit_separate
     test_undo.view3d_mesh_particle_edit_mode_simple
     test_undo.view3d_multi_mode_multi_window
@@ -1757,7 +1768,24 @@ if(WITH_UI_TESTS)
     test_render.interactive_rendering_eevee
     test_render.animation_rendering_and_player
     test_bpy_types.unregister_referenced_type
+    test_drag_interactions.view3d_object_drag
+    test_drag_interactions.viewport_navigation_drags
+    test_drag_interactions.node_single_drag
+    test_drag_interactions.node_multiple_drag
+    test_drag_interactions.dopesheet_keyframe_drag
+    test_drag_interactions.graph_editor_drag
+    test_drag_interactions.uv_editor_drag
+    test_drag_interactions.image_editor_pan
     test_sequencer.compositor_modifier_mask_with_single_input
+    test_menu_search_and_exec.view3d_add
+    test_menu_search_and_exec.modifier_add
+    test_menu_search_and_exec.sequencer_add
+    test_menu_search_and_exec.sequencer_modifier_add
+    test_menu_search_and_exec.shader_node_add
+    test_menu_search_and_exec.compositor_node_add
+    test_menu_search_and_exec.geometry_node_add
+    test_menu_search_and_exec.node_swap_search
+    test_menu_search_and_exec.grease_pencil_layer_search
     test_pie_menus.test_object_mode_pie_edit
     test_pie_menus.test_snap_pie_cursor_to_world_origin
     test_pie_menus.test_pivot_pie_cursor
