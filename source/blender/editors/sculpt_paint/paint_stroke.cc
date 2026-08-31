@@ -906,16 +906,32 @@ int PaintStroke::space_stroke(bContext *C,
    * size_pressure on.  Cap at a large but finite number — for any
    * realistic brush this is well above the dab count of a normal stroke. */
   constexpr int max_dabs_per_event = 10000;
+
+  /* Roll dabs are expensive — each rebuilds the strip grid and UV LUT.
+   * While pen lift-off pressure ramps toward zero with size-pressure
+   * enabled, the pressure-scaled spacing shrinks toward zero with it,
+   * spawning hundreds of micro-spaced dabs per event and stalling the
+   * stroke end.  Floor the spacing at its value for MIN_ROLL_PRESSURE,
+   * the same clamp applied to recorded roll points. */
+  float roll_min_spacing = 0.0f;
+  if (need_roll_mapping_ && BKE_brush_use_size_pressure(&brush)) {
+    const float min_size_factor = BKE_curvemapping_evaluateF(
+        brush.curve_size, 0, MIN_ROLL_PRESSURE);
+    roll_min_spacing = paint_space_stroke_spacing(
+        this->vc, &paint, &brush, last_world_space_position_, zoom_2d_, min_size_factor, 0.5f);
+  }
+
   while (length > 0.0f && count < max_dabs_per_event) {
-    const float spacing = paint_space_stroke_spacing_variable(this->vc,
-                                                              &paint,
-                                                              &brush,
-                                                              last_world_space_position_,
-                                                              zoom_2d_,
-                                                              last_pressure_,
-                                                              pressure,
-                                                              pressure_delta,
-                                                              length);
+    float spacing = paint_space_stroke_spacing_variable(this->vc,
+                                                        &paint,
+                                                        &brush,
+                                                        last_world_space_position_,
+                                                        zoom_2d_,
+                                                        last_pressure_,
+                                                        pressure,
+                                                        pressure_delta,
+                                                        length);
+    spacing = max_ff(spacing, roll_min_spacing);
     BLI_assert(spacing >= 0.0f);
 
     if (length >= spacing) {

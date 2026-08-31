@@ -49,8 +49,9 @@
 
 namespace blender::ed::sculpt_paint {
 
-/* Shared tuning constants for roll texture mapping. */
-static constexpr float MIN_ROLL_PRESSURE = 0.05f;
+/* Shared tuning constants for roll texture mapping.
+ * MIN_ROLL_PRESSURE lives in paint_intern.hh — it is also used by
+ * space_stroke() to floor the dab spacing. */
 static constexpr float PRESSURE_RATIO_MIN = 0.5f;
 static constexpr float PRESSURE_RATIO_MAX = 2.0f;
 static constexpr int VIRTUAL_EXTENSION_POINTS = 6;

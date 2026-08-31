@@ -100,6 +100,13 @@ struct PaintSample {
 };
 
 /**
+ * Minimum pen pressure for roll texture mapping.  Pen touch-down and
+ * lift-off report near-zero pressure values; recorded roll points and the
+ * dab spacing floor in space_stroke() both clamp to this.
+ */
+inline constexpr float MIN_ROLL_PRESSURE = 0.05f;
+
+/**
  * Polyline-based arc-length parameterized spline for roll texture mapping.
  * Uses raw stroke knots as the polyline — smoothing is handled by the
  * subdivided grid + Laplacian smoothing in compute_roll_center().
