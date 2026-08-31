@@ -232,7 +232,7 @@ void TintOperation::tint_fills(const bke::CurvesGeometry &strokes,
       }
       else {
         const ColorGeometry4f &fill_color =
-            (!((brush->gpencil_settings->flag2 & GP_BRUSH_USE_SINGLE_COLOR) != 0) &&
+            (((brush->gpencil_settings->flag2 & GP_BRUSH_USE_SINGLE_COLOR) == 0) &&
              (brush->gpencil_settings->vertex_mode == GPPAINT_MODE_BOTH)) ?
                 secondary_color_ :
                 main_color_;

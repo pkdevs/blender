@@ -51,7 +51,7 @@ void VertexPaintOperation::on_stroke_extended(const bContext &C,
 
   const float3 color_linear_stroke = BKE_brush_color_get(&paint, &brush);
   float3 color_linear_fill;
-  if (!((brush.gpencil_settings->flag2 & GP_BRUSH_USE_SINGLE_COLOR) != 0) &&
+  if (((brush.gpencil_settings->flag2 & GP_BRUSH_USE_SINGLE_COLOR) == 0) &&
       (brush.gpencil_settings->vertex_mode == GPPAINT_MODE_BOTH))
   {
     color_linear_fill = BKE_brush_secondary_color_get(&paint, &brush);
