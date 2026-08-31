@@ -211,7 +211,7 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
           out_texel, uni.uniform_buf.render_pass.diffuse_color_id, float4(g_diffuse_color, 1.0f));
     }
     else {
-      g_emission += g_diffuse_color * g_diffuse_light;
+      g_emission += g_diffuse_light;
     }
 
     if (uni.uniform_buf.render_pass.specular_light_id >= 0 &&
@@ -226,8 +226,8 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
                                 float4(g_glossy_color + g_transmission_color, 1.0f));
     }
     else {
-      g_emission += g_glossy_color * g_glossy_light;
-      g_emission += g_transmission_color * g_transmission_light;
+      g_emission += g_glossy_light;
+      g_emission += g_transmission_light;
     }
 
 #if 0 /* TODO Transmission pass */
@@ -242,7 +242,7 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
                                 float4(g_transmission_color, 1.0f));
     }
     else {
-      g_emission += g_transmission_color * g_transmission_light;
+      g_emission += g_transmission_light;
     }
 #endif
   }
