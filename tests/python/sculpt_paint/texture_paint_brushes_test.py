@@ -159,6 +159,7 @@ class BrushTests(unittest.TestCase):
 
                 self._activate_brush("Blur")
                 self._check_paint_stroke()
+
     def test_paint_hard_brush_creates_valid_data(self):
         for data_type in DataType:
             with self.subTest(data_type):
@@ -252,6 +253,7 @@ class BrushTests(unittest.TestCase):
 
                 self._activate_brush("Clone")
                 self._check_paint_stroke()
+
 
 def main():
     global args
