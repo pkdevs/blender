@@ -1482,7 +1482,7 @@ static void set_fill_attributes(bke::CurvesGeometry &fill_curves,
   const bool use_vertex_color = ed::sculpt_paint::greasepencil::brush_using_vertex_color(
       scene.toolsettings->gp_paint, &brush);
   if (use_vertex_color) {
-    if (((brush.gpencil_settings->flag2 & GP_BRUSH_USE_SPLIT_COLORS) != 0) &&
+    if (!((brush.gpencil_settings->flag2 & GP_BRUSH_USE_SINGLE_COLOR) != 0) &&
         (brush.gpencil_settings->flag2 & GP_BRUSH_USE_STROKE) &&
         (brush.gpencil_settings->flag2 & GP_BRUSH_USE_FILL))
     {

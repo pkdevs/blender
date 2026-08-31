@@ -1835,7 +1835,7 @@ def brush_basic__draw_color_selector(context, layout, brush, gp_settings):
             sub_row.enabled = show_vertex_color
             sub_row.scale_x = 0.8
             sub_row.prop_with_popover(brush, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
-            if gp_settings.stroke_type == 'BOTH' and gp_settings.split_colors:
+            if gp_settings.stroke_type == 'BOTH' and not gp_settings.single_color:
                 sub_row.prop_with_popover(brush, "secondary_color", text="",
                                           panel="TOPBAR_PT_grease_pencil_vertex_color")
         row.prop(gp_settings, "pin_draw_mode", text="")
@@ -1908,7 +1908,7 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
         else:
             row.prop(brush.gpencil_settings, "stroke_type")
             if gp_settings.stroke_type == 'BOTH':
-                layout.prop(gp_settings, "split_colors")
+                layout.prop(gp_settings, "single_color")
 
         row = layout.row(align=True)
         if context.region.type == 'TOOL_HEADER':
@@ -1941,7 +1941,7 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
         else:
             row.prop(brush.gpencil_settings, "stroke_type")
             if gp_settings.stroke_type == 'BOTH':
-                layout.prop(gp_settings, "split_colors")
+                layout.prop(gp_settings, "single_color")
 
         row = layout.row(align=True)
         if compact:
@@ -1987,7 +1987,7 @@ def brush_basic_grease_pencil_paint_settings(layout, context, brush, props, *, c
         else:
             layout.prop(gp_settings, "vertex_mode", text="Stroke Mode")
             if gp_settings.vertex_mode == 'BOTH':
-                layout.prop(gp_settings, "split_colors")
+                layout.prop(gp_settings, "single_color")
 
         layout.popover("VIEW3D_PT_tools_brush_falloff")
         layout.prop(gp_settings, "use_active_layer_only")
@@ -2072,7 +2072,7 @@ def brush_basic_grease_pencil_vertex_settings(layout, context, brush, *, compact
         else:
             layout.prop(gp_settings, "vertex_mode", text="Stroke Mode")
             if gp_settings.vertex_mode == 'BOTH':
-                layout.prop(gp_settings, "split_colors")
+                layout.prop(gp_settings, "single_color")
 
 
 classes = (

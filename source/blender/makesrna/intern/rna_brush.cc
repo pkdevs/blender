@@ -1901,9 +1901,10 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_BrushGpencilSettings_update");
 
-  prop = RNA_def_property(srna, "split_colors", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag2", GP_BRUSH_USE_SPLIT_COLORS);
-  RNA_def_property_ui_text(prop, "Split Colors", "Use different colors for the fill and stroke");
+  prop = RNA_def_property(srna, "single_color", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag2", GP_BRUSH_USE_SINGLE_COLOR);
+  RNA_def_property_ui_text(
+      prop, "Use single color", "Use the same color for both the fill and stroke");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, "rna_BrushGpencilSettings_update");
 

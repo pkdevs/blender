@@ -98,7 +98,7 @@ enum eGPDbrush_Flag2 : int {
   /* Brush creates curves that use the fill. */
   GP_BRUSH_USE_FILL = (1 << 13),
   /* Use the main color for strokes and second color for fills. */
-  GP_BRUSH_USE_SPLIT_COLORS = (1 << 14),
+  GP_BRUSH_USE_SINGLE_COLOR = (1 << 14),
 };
 ENUM_OPERATORS(eGPDbrush_Flag2)
 

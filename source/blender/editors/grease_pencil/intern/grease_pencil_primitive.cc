@@ -825,7 +825,7 @@ static wmOperatorStatus grease_pencil_primitive_invoke(bContext *C,
   const bool use_vertex_color = (vc.scene->toolsettings->gp_paint->mode ==
                                  GPPAINT_FLAG_USE_VERTEXCOLOR);
   if (use_vertex_color) {
-    if (((ptd.settings->flag2 & GP_BRUSH_USE_SPLIT_COLORS) != 0) &&
+    if (((ptd.settings->flag2 & GP_BRUSH_USE_SINGLE_COLOR) != 0) &&
         (ptd.settings->flag2 & GP_BRUSH_USE_STROKE) && (ptd.settings->flag2 & GP_BRUSH_USE_FILL))
     {
       ColorGeometry4f main_color;
