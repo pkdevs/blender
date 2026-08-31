@@ -57,14 +57,25 @@ def create_argparse():
     return parser
 
 
+BLOCKLIST_OPENGL_AMD_LINUX = [
+    # Unknown failure than can not be reproduced locally.
+    "node_integer_math.blend",
+]
+
+
 def main():
     parser = create_argparse()
     args = parser.parse_args()
 
+    blocklist = []
     from modules import render_report
+    gpu_vendor = render_report.get_gpu_device_vendor(args.blender, args.gpu_backend)
+    if args.gpu_backend == "opengl" and gpu_vendor == "AMD" and sys.platform == "linux":
+        blocklist += BLOCKLIST_OPENGL_AMD_LINUX
+
     backend = args.gpu_backend if args.gpu_backend else "CPU"
     report_title = f"Compositor {backend.upper()}"
-    report = render_report.Report(report_title, args.outdir, args.oiiotool)
+    report = render_report.Report(report_title, args.outdir, args.oiiotool, variation=None, blocklist=blocklist)
     report.set_pixelated(True)
     report.set_reference_dir("compositor_renders")
 
