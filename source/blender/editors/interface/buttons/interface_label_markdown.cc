@@ -33,38 +33,6 @@
 
 namespace blender::ui {
 
-bool button_label_is_markdown(const Button *button)
-{
-  return button->type == ButtonType::Label &&
-         static_cast<const ButtonLabel *>(button)->label_type == ButtonLabelType::Markdown;
-}
-
-static void markdown_apply_font(const int fontid,
-                                const float size_px,
-                                const int weight,
-                                const bool italic)
-{
-  BLF_disable(fontid, BLF_ASPECT);
-  BLF_size(fontid, size_px);
-  BLF_character_weight(fontid, weight);
-  if (italic) {
-    BLF_enable(fontid, BLF_ITALIC);
-  }
-  else {
-    BLF_disable(fontid, BLF_ITALIC);
-  }
-}
-
-static void markdown_apply_item_font(const MarkdownItemText &item)
-{
-  markdown_apply_font(item.fontid, item.size_px, item.weight, item.italic);
-}
-
-static void markdown_disable_item_font(const MarkdownItemText &item)
-{
-  BLF_disable(item.fontid, BLF_ITALIC);
-}
-
 struct MdBlockSpacing {
   float margin_top = 0.0f;
   float margin_bottom = 0.0f;
@@ -140,6 +108,38 @@ static float list_marker_padding_px = 4.00f;
 static float horizontal_rule_padding = 0.00f;
 
 };  // namespace md_style
+
+bool button_label_is_markdown(const Button *button)
+{
+  return button->type == ButtonType::Label &&
+         static_cast<const ButtonLabel *>(button)->label_type == ButtonLabelType::Markdown;
+}
+
+static void markdown_apply_font(const int fontid,
+                                const float size_px,
+                                const int weight,
+                                const bool italic)
+{
+  BLF_disable(fontid, BLF_ASPECT);
+  BLF_size(fontid, size_px);
+  BLF_character_weight(fontid, weight);
+  if (italic) {
+    BLF_enable(fontid, BLF_ITALIC);
+  }
+  else {
+    BLF_disable(fontid, BLF_ITALIC);
+  }
+}
+
+static void markdown_apply_item_font(const MarkdownItemText &item)
+{
+  markdown_apply_font(item.fontid, item.size_px, item.weight, item.italic);
+}
+
+static void markdown_disable_item_font(const MarkdownItemText &item)
+{
+  BLF_disable(item.fontid, BLF_ITALIC);
+}
 
 class MarkdownLayouter {
  private:
