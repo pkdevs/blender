@@ -1751,7 +1751,6 @@ static void rna_experimental_no_data_block_packing_update(bContext *C, PointerRN
 
 static void rna_experimental_use_3d_texture_paint_update(bContext *C, PointerRNA *ptr)
 {
-  /* TODO: Is it possible to have no depsgraph? */
   Main *bmain = CTX_data_main(C);
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   Object *object = CTX_data_active_object(C);

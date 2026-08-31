@@ -5039,7 +5039,6 @@ static StrokeToggleSettings create_toggle_settings(const wmOperator &op, Main &b
   return toggle_settings;
 }
 
-/* TODO: Move this to the constructor? */
 static void brush_stroke_init(bContext *C, const wmOperator *op)
 {
   Object &ob = *CTX_data_active_object(C);
@@ -5596,7 +5595,6 @@ bool SculptPaintStroke::test_start(wmOperator *op, const float2 mouse)
 {
   /* Don't start the stroke until `mouse` goes over the mesh. */
   if (over_mesh(*this->depsgraph, this->vc, *sculpt_, this->brush, op, mouse)) {
-    /* TODO: I think brush is guaranteed to be non-null here */
     Brush *brush = this->brush;
 
     /* NOTE: This should be removed when paint mode is available. Paint mode can force based on the
@@ -5632,10 +5630,8 @@ static void stroke_cache_update(
   bke::PaintRuntime &paint_runtime = *paint.runtime;
   SculptSession &ss = *object.runtime->sculpt_session;
   StrokeCache &cache = *ss.cache;
-  /* TODO: We should pass in the brush */
   Brush &brush = *BKE_paint_brush(&paint);
 
-  /* TODO: These ptr values feel like they should be passed into `update_step` */
   if (stroke_is_first_brush_step_of_symmetry_pass(cache) ||
       !((brush.stroke_method == BRUSH_STROKE_ANCHORED) ||
         (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_SNAKE_HOOK) ||
@@ -5801,7 +5797,6 @@ void SculptPaintStroke::done(bool is_cancel, bool stroke_started)
   bke::PaintRuntime *paint_runtime = sd.paint.runtime;
   Brush *brush = BKE_paint_brush(&sd.paint);
 
-  /* TODO: Is this needed...? */
   paint_runtime->draw_inverted = false;
 
   stroke_modifiers_check(*this->depsgraph, this->vc.rv3d, sd, ob, brush);
@@ -5879,7 +5874,6 @@ static wmOperatorStatus sculpt_brush_stroke_invoke(bContext *C,
   Sculpt &sd = *CTX_data_tool_settings(C)->sculpt;
   Brush &brush = *BKE_paint_brush(&sd.paint);
 
-  /* TODO: move these into `brush_stroke_init` */
   if (brush_type_is_paint(brush.sculpt_brush_type) &&
       !color_supported_check(scene, ob, op->reports))
   {
