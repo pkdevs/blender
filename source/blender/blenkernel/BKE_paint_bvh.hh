@@ -328,11 +328,13 @@ class Tree {
 void build_pixels(const Depsgraph &depsgraph, Object &object, Image &image, ImageUser &image_user);
 void pixels_free(bke::pbvh::Tree *pbvh);
 
-/* Ray-cast
+/**
+ * Ray-cast
  * the hit callback is called for all leaf nodes intersecting the ray;
  * it's up to the callback to find the primitive within the leaves that is
- * hit first */
-
+ * hit first
+ * \todo Return distance by value from hit_fn.
+ */
 void raycast(Tree &pbvh,
              FunctionRef<void(Node &node, float *tmin)> hit_fn,
              const float3 &ray_start,

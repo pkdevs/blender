@@ -734,6 +734,7 @@ static Node *pbvh_iter_next(PBVHIter *iter, Node::Flags leaf_flag)
   return nullptr;
 }
 
+/** \todo Return distance by value from hit_fn. */
 static void search_callback_occluded(Tree &pbvh,
                                      const FunctionRef<std::optional<float>(const Node &)> scb,
                                      const FunctionRef<void(Node &node, float *distance)> hit_fn)
