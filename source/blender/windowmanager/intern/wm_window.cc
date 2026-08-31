@@ -1211,9 +1211,9 @@ static void system_appearance_update(bContext *C, const int blocking_timeout_ms 
     return;
   }
 
-  const UserPrefThemeType theme_type = color_scheme == GHOST_kColorSchemePreferDark ?
-                                           UserPrefThemeType::Dark :
-                                           UserPrefThemeType::Light;
+  const UserPrefThemeType theme_type = color_scheme == GHOST_kColorSchemePreferLight ?
+                                           UserPrefThemeType::Light :
+                                           UserPrefThemeType::Dark;
   bool changed = U.runtime.system_theme_type != theme_type;
   U.runtime.system_theme_type = theme_type;
 

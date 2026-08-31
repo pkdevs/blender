@@ -8979,17 +8979,12 @@ static void gwl_display_event_thread_destroy(GWL_Display *display)
  * \{ */
 
 #ifdef WITH_GHOST_DBUS
-/**
- * #GHOST_TColorScheme intentionally uses the same values as the XDG Desktop Portal
- * `org.freedesktop.appearance` `color-scheme` setting, anything outside that range is a
- * value this version of Blender doesn't know about.
- */
 static GHOST_TColorScheme ghost_color_scheme_from_portal_value(const uint32_t value)
 {
   switch (value) {
-    case GHOST_kColorSchemePreferDark:
+    case 1:
       return GHOST_kColorSchemePreferDark;
-    case GHOST_kColorSchemePreferLight:
+    case 0:
       return GHOST_kColorSchemePreferLight;
   }
   return GHOST_kColorSchemeNoPreference;
