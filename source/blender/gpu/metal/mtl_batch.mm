@@ -233,6 +233,10 @@ id<MTLRenderCommandEncoder> MTLBatch::bind()
     return nil;
   }
 
+  if (ctx->active_pipeline_ != nullptr) {
+    ctx->active_pipeline_->prepare_draw(this->prim_type);
+  }
+
   /* Fetch bound shader from context. */
   active_shader_ = static_cast<MTLShader *>(ctx->shader);
 

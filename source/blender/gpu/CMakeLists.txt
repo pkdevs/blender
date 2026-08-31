@@ -85,6 +85,7 @@ set(SRC
   intern/gpu_matrix.cc
   intern/gpu_node_graph.cc
   intern/gpu_pass.cc
+  intern/gpu_pipeline.cc
   intern/gpu_platform.cc
   intern/gpu_query.cc
   intern/gpu_ray_tracing.cc
@@ -164,6 +165,7 @@ set(SRC
   GPU_material.hh
   GPU_matrix.hh
   GPU_pass.hh
+  GPU_pipeline.hh
   GPU_platform.hh
   GPU_platform_backend_enum.h
   GPU_primitive.hh
@@ -242,6 +244,7 @@ set(OPENGL_SRC
   opengl/gl_framebuffer.cc
   opengl/gl_immediate.cc
   opengl/gl_index_buffer.cc
+  opengl/gl_pipeline.cc
   opengl/gl_query.cc
   opengl/gl_shader.cc
   opengl/gl_shader_interface.cc
@@ -264,6 +267,7 @@ set(OPENGL_SRC
   opengl/gl_framebuffer.hh
   opengl/gl_immediate.hh
   opengl/gl_index_buffer.hh
+  opengl/gl_pipeline.hh
   opengl/gl_primitive.hh
   opengl/gl_query.hh
   opengl/gl_shader.hh
@@ -299,6 +303,7 @@ set(VULKAN_SRC
   vulkan/vk_index_buffer.cc
   vulkan/vk_memory_layout.cc
   vulkan/vk_memory_pool.cc
+  vulkan/vk_pipeline.cc
   vulkan/vk_pipeline_pool.cc
   vulkan/vk_pixel_buffer.cc
   vulkan/vk_push_constants.cc
@@ -352,6 +357,7 @@ set(VULKAN_SRC
   vulkan/vk_image_view.hh
   vulkan/vk_immediate.hh
   vulkan/vk_index_buffer.hh
+  vulkan/vk_pipeline.hh
   vulkan/vk_memory.hh
   vulkan/vk_memory_layout.hh
   vulkan/vk_memory_pool.hh
@@ -427,6 +433,7 @@ set(METAL_SRC
   metal/mtl_immediate.mm
   metal/mtl_index_buffer.mm
   metal/mtl_memory.mm
+  metal/mtl_pipeline.mm
   metal/mtl_push_constant.cc
   metal/mtl_query.mm
   metal/mtl_ray_tracing.mm
@@ -453,6 +460,7 @@ set(METAL_SRC
   metal/mtl_framebuffer.hh
   metal/mtl_immediate.hh
   metal/mtl_index_buffer.hh
+  metal/mtl_pipeline.hh
   metal/mtl_memory.hh
   metal/mtl_primitive.hh
   metal/mtl_pso_descriptor_state.hh
@@ -951,6 +959,7 @@ if(WITH_GTESTS)
       tests/immediate_test.cc
       tests/index_buffer_test.cc
       tests/mipmap_test.cc
+      tests/pipeline_test.cc
       tests/push_constants_test.cc
       tests/ray_tracing_test.cc
       tests/shader_create_info_test.cc

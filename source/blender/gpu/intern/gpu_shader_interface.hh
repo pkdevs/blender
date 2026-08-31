@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstring> /* required for STREQ later on. */
 
 #include "BLI_hash_c.hh"
@@ -99,6 +100,10 @@ class ShaderInterface {
 
   void debug_print() const;
 
+ private:
+  static std::atomic<Key> next_id_;
+
+ public:
   const ShaderInput *attr_get(const StringRefNull name) const
   {
     return input_lookup(inputs_, attr_len_, name);

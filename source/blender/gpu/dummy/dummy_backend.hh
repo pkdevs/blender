@@ -97,6 +97,10 @@ class DummyBackend : public GPUBackend {
   {
     return new DummyVertexBuffer;
   }
+  Pipeline *pipeline_alloc() override
+  {
+    return nullptr;
+  }
   TopLevelAS *tlas_alloc(const char * /*name*/) override
   {
     return nullptr;

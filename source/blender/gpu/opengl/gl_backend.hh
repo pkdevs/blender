@@ -29,6 +29,7 @@
 #include "gl_context.hh"
 #include "gl_framebuffer.hh"
 #include "gl_index_buffer.hh"
+#include "gl_pipeline.hh"
 #include "gl_query.hh"
 #include "gl_shader.hh"
 #include "gl_storage_buffer.hh"
@@ -150,6 +151,11 @@ class GLBackend : public GPUBackend {
   {
     return new GLShader(name);
   };
+
+  Pipeline *pipeline_alloc() override
+  {
+    return new GLPipeline();
+  }
 
   Texture *texture_alloc(const char *name) override
   {

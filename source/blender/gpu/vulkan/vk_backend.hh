@@ -18,6 +18,7 @@
 
 #include "vk_common.hh"
 #include "vk_device.hh"
+#include "vk_pipeline.hh"
 #include "vk_shader_compiler.hh"
 
 namespace blender::gpu {
@@ -78,6 +79,10 @@ class VKBackend : public GPUBackend {
   PixelBuffer *pixelbuf_alloc(size_t size) override;
   QueryPool *querypool_alloc() override;
   Shader *shader_alloc(const char *name) override;
+  Pipeline *pipeline_alloc() override
+  {
+    return new VKPipeline();
+  }
   Texture *texture_alloc(const char *name) override;
   TexturePool *texturepool_alloc() override;
   UniformBuf *uniformbuf_alloc(size_t size, const char *name) override;

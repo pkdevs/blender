@@ -22,6 +22,7 @@
 namespace blender::gpu {
 
 class Context;
+class Pipeline;
 
 class Batch;
 class Fence;
@@ -76,6 +77,7 @@ class GPUBackend {
   virtual TexturePool *texturepool_alloc() = 0;
   virtual UniformBuf *uniformbuf_alloc(size_t size, const char *name) = 0;
   virtual StorageBuf *storagebuf_alloc(size_t size, GPUUsageType usage, const char *name) = 0;
+  virtual Pipeline *pipeline_alloc() = 0;
   virtual VertBuf *vertbuf_alloc() = 0;
   virtual TopLevelAS *tlas_alloc(const char *name) = 0;
   virtual BottomLevelAS *blas_alloc(const char *name) = 0;

@@ -238,7 +238,13 @@ GLuint GLVaoCache::vao_get(Batch *batch)
 
 void GLBatch::bind()
 {
-  GLContext::get()->state_manager->apply_state();
+  Context *ctx = Context::get();
+  if (ctx->active_pipeline_ != nullptr) {
+    ctx->active_pipeline_->prepare_draw(this->prim_type);
+  }
+  else {
+    ctx->state_manager->apply_state();
+  }
 
   if (flag & GPU_BATCH_DIRTY) {
     flag &= ~GPU_BATCH_DIRTY;

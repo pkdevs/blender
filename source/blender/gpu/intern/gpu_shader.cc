@@ -408,6 +408,16 @@ void GPU_shader_bind(gpu::Shader *gpu_shader,
       GPU_matrix_bind(gpu_shader);
     }
   }
+
+  /* Keep the active pipeline (if any) in sync with the bound shader. */
+  if (Pipeline *active_pipeline = ctx->active_pipeline_) {
+    if (active_pipeline->shader_get() != shader) {
+      active_pipeline->shader_set(shader);
+      if (constants_state) {
+        active_pipeline->specialization_set(constants_state);
+      }
+    }
+  }
 #if GPU_SHADER_PRINTF_ENABLE
   if (!ctx->printf_buf.is_empty()) {
     GPU_storagebuf_bind(ctx->printf_buf.last(), GPU_SHADER_PRINTF_SLOT);

@@ -37,6 +37,9 @@ void VKBatch::draw(int vertex_first, int vertex_count, int instance_first, int i
   ensure_data_uploaded();
 
   VKContext &context = *VKContext::get();
+  if (context.active_pipeline_ != nullptr) {
+    context.active_pipeline_->prepare_draw(prim_type);
+  }
   render_graph::VKRenderGraph &graph = context.render_graph();
   render_graph::VKResourceAccessInfo &resource_access_info = context.reset_and_get_access_info();
 
@@ -103,6 +106,9 @@ void VKBatch::multi_draw_indirect(const VKStorageBuffer &indirect_buffer,
   ensure_data_uploaded();
 
   VKContext &context = *VKContext::get();
+  if (context.active_pipeline_ != nullptr) {
+    context.active_pipeline_->prepare_draw(prim_type);
+  }
   render_graph::VKRenderGraph &graph = context.render_graph();
   render_graph::VKResourceAccessInfo &resource_access_info = context.reset_and_get_access_info();
 

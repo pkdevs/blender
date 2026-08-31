@@ -14,6 +14,7 @@
 
 #include "GPU_batch.hh"
 #include "GPU_context.hh"
+#include "GPU_pipeline.hh"
 #include "GPU_texture_pool.hh"
 
 #include "gpu_debug_private.hh"
@@ -36,6 +37,7 @@ class Context {
  public:
   /** State management */
   Shader *shader = nullptr;
+  Pipeline *active_pipeline_ = nullptr;
   FrameBuffer *active_fb = nullptr;
   GPUMatrixState *matrix_state = nullptr;
   StateManager *state_manager = nullptr;

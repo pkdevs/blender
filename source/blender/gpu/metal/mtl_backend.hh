@@ -13,6 +13,7 @@
 #include "gpu_backend.hh"
 #include "gpu_shader_private.hh"
 #include "mtl_capabilities.hh"
+#include "mtl_pipeline.hh"
 
 namespace blender::gpu {
 
@@ -65,6 +66,10 @@ class MTLBackend : public GPUBackend {
   PixelBuffer *pixelbuf_alloc(size_t size) override;
   QueryPool *querypool_alloc() override;
   Shader *shader_alloc(const char *name) override;
+  Pipeline *pipeline_alloc() override
+  {
+    return new MTLPipeline();
+  }
   Texture *texture_alloc(const char *name) override;
   TexturePool *texturepool_alloc() override;
   UniformBuf *uniformbuf_alloc(size_t size, const char *name) override;
