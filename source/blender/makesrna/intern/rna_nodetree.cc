@@ -4557,7 +4557,6 @@ static const EnumPropertyItem *rna_NodeShaderAttribute_type_itemf(bContext *C,
 {
   *r_free = true;
 
-  const bNodeTree *ntree = reinterpret_cast<const bNodeTree *>(ptr->owner_id);
   bool supports_light_attributes = !STREQ(CTX_data_scene(C)->r.engine, RE_engine_id_CYCLES) &&
                                    CTX_wm_space_node(C)->shaderfrom == SNODE_SHADER_OBJECT;
   return itemf_function_check(
