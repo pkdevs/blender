@@ -82,6 +82,16 @@ void wm_window_close_request(bContext *C, wmWindowManager *wm, wmWindow *win);
 void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win);
 
 /**
+ * Resolve the system's light/dark preference into #UserDef::runtime, loading the built-in light
+ * theme if that slot has never been filled in. Repeat calls that give the current value do
+ * nothing.
+ *
+ * \param blocking_timeout_ms: Passed to #GHOST_ISystem::getSystemColorScheme, for callers that
+ * need the preference now rather than whenever the system gets around to reporting it.
+ */
+void wm_system_appearance_update(bContext *C, const int blocking_timeout_ms = 0);
+
+/**
  * Initialize #wmWindow without `ghostwin`, open these and clear.
  *
  * Window size is read from window, if 0 it uses prefsize
@@ -93,7 +103,7 @@ void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win);
  * but better not since caller may continue to use.
  * Instead, caller needs to handle the error case and cleanup.
  */
-void wm_window_ghostwindows_ensure(bContext *C, wmWindowManager *wm);
+void wm_window_ghostwindows_ensure(wmWindowManager *wm);
 /**
  * Call after #wm_window_ghostwindows_ensure or #WM_check
  * (after loading a new file) in the unlikely event a window couldn't be created.

@@ -498,7 +498,18 @@ void WM_check(bContext *C)
     WM_init_gpu_backend();
 
     /* Case: no open windows at all, for old file reads. */
-    wm_window_ghostwindows_ensure(C, wm);
+
+    /* A window takes its colors from the theme as it is created, so the system's light/dark
+     * preference should be resolved before that, not once the window is already on screen.
+     *
+     * Reading it is asynchronous and starts before this in #wm_ghost_init, so by the time the
+     * first window is created it has normally arrived and this doesn't wait at all. The timeout
+     * bounds the cost on a desktop that is slow to answer (or never does), where the preference is
+     * picked up later through #GHOST_kEventSystemAppearanceChanged instead. */
+    constexpr int system_color_scheme_timeout_ms = 100;
+    wm_system_appearance_update(C, system_color_scheme_timeout_ms);
+
+    wm_window_ghostwindows_ensure(wm);
   }
 
   /* Case: file-read. */

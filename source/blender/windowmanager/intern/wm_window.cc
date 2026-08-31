@@ -1194,15 +1194,7 @@ static void wm_window_ghostwindow_ensure(wmWindowManager *wm, wmWindow *win, boo
   ED_screen_global_areas_refresh(win);
 }
 
-/**
- * Resolve the system's light/dark preference into #UserDef::runtime, loading the built-in light
- * theme if that slot has never been filled in. Repeat calls that give the current value do
- * nothing.
- *
- * \param blocking_timeout_ms: Passed to #GHOST_ISystem::getSystemColorScheme, for callers that
- * need the preference now rather than whenever the system gets around to reporting it.
- */
-static void system_appearance_update(bContext *C, const int blocking_timeout_ms = 0)
+void wm_system_appearance_update(bContext *C, const int blocking_timeout_ms)
 {
   const GHOST_TColorScheme color_scheme = g_system->getSystemColorScheme(blocking_timeout_ms);
   if (color_scheme == GHOST_kColorSchemeUnknown) {
@@ -1241,19 +1233,9 @@ static void system_appearance_update(bContext *C, const int blocking_timeout_ms 
   }
 }
 
-void wm_window_ghostwindows_ensure(bContext *C, wmWindowManager *wm)
+void wm_window_ghostwindows_ensure(wmWindowManager *wm)
 {
   BLI_assert(G.background == false);
-
-  /* A window takes its colors from the theme as it is created, so the system's light/dark
-   * preference should be resolved before that, not once the window is already on screen.
-   *
-   * Reading it is asynchronous and starts before this in #wm_ghost_init, so by the time the first
-   * window is created it has normally arrived and this doesn't wait at all. The timeout bounds
-   * the cost on a desktop that is slow to answer (or never does), where the preference is picked
-   * up later through #GHOST_kEventSystemAppearanceChanged instead. */
-  constexpr int system_color_scheme_timeout_ms = 100;
-  system_appearance_update(C, system_color_scheme_timeout_ms);
 
   /* No command-line prefsize? then we set this.
    * Note that these values will be used only
@@ -1860,7 +1842,7 @@ static bool ghost_event_proc(const GHOST_IEvent *ghost_event, GHOST_TUserDataPtr
   }
 
   if (type == GHOST_kEventSystemAppearanceChanged) {
-    system_appearance_update(C);
+    wm_system_appearance_update(C);
     return true;
   }
 
