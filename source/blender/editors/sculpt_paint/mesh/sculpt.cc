@@ -5097,13 +5097,20 @@ static StrokeToggleSettings create_toggle_settings(const wmOperator &op, Main &b
   return toggle_settings;
 }
 
-static void brush_stroke_init(bContext *C, const wmOperator *op)
+/**
+ * \return Returns nullptr if stroke is otherwise invalid
+ */
+static SculptPaintStroke *brush_stroke_init(bContext *C, const wmOperator *op, const wmEvent *event)
 {
   Object &ob = *CTX_data_active_object(C);
-  ToolSettings *tool_settings = CTX_data_tool_settings(C);
-  Sculpt &sd = *tool_settings->sculpt;
+  Scene &scene = *CTX_data_scene(C);
+  ToolSettings &tool_settings = *CTX_data_tool_settings(C);
+  Sculpt &sd = *tool_settings.sculpt;
   SculptSession &ss = *CTX_data_active_object(C)->runtime->sculpt_session;
-  const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
+
+  if (!BKE_paint_brush_for_read(&sd.paint)) {
+    return nullptr;
+  }
 
   if (!G.background) {
     view3d_operator_needs_gpu(C);
@@ -5114,10 +5121,11 @@ static void brush_stroke_init(bContext *C, const wmOperator *op)
     ss.cache->toggle_settings = create_toggle_settings(*op, *CTX_data_main(C), sd.paint);
   }
 
+  const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
   brush_init_tex(sd, ss);
 
-  const bool needs_colors = brush_type_is_paint(brush->sculpt_brush_type) &&
-                            !SCULPT_use_image_paint_brush(tool_settings->paint_mode, ob);
+  const bool needs_colors = brush_type_is_paint(brush.sculpt_brush_type) &&
+                            !SCULPT_use_image_paint_brush(tool_settings.paint_mode, ob);
 
   if (needs_colors) {
     BKE_sculpt_color_layer_create_if_needed(&ob);
@@ -5126,9 +5134,41 @@ static void brush_stroke_init(bContext *C, const wmOperator *op)
   /* CTX_data_ensure_evaluated_depsgraph should be used at the end to include the updates of
    * earlier steps modifying the data. */
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  BKE_sculptsession_update_for_edit(depsgraph, &ob, brush_type_is_paint(brush->sculpt_brush_type));
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, brush_type_is_paint(brush.sculpt_brush_type));
 
   ED_paint_brush_type_update_sticky_shading_color(C, &ob);
+
+  if (brush_type_is_paint(brush.sculpt_brush_type) &&
+      !color_supported_check(scene, ob, op->reports))
+  {
+    return nullptr;
+  }
+  if (!brush_type_is_attribute_only(brush.sculpt_brush_type) && !shape_key_check(ob, op->reports))
+  {
+    return nullptr;
+  }
+  if (ELEM(brush.sculpt_brush_type,
+           SCULPT_BRUSH_TYPE_DISPLACEMENT_SMEAR,
+           SCULPT_BRUSH_TYPE_DISPLACEMENT_ERASER))
+  {
+    const bke::pbvh::Tree *pbvh = bke::object::pbvh_get(ob);
+    if (!pbvh || pbvh->type() != bke::pbvh::Type::Grids) {
+      BKE_report(op->reports, RPT_ERROR, "Only supported in multiresolution mode");
+      return nullptr;
+    }
+  }
+
+  if (brush_type_is_mask(brush.sculpt_brush_type)) {
+    MultiresModifierData *mmd = BKE_sculpt_multires_active(&scene, &ob);
+    BKE_sculpt_mask_layers_ensure(CTX_data_depsgraph_pointer(C), CTX_data_main(C), &ob, mmd);
+
+    mask_overlay_check(*C, *op);
+  }
+  if (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_DRAW_FACE_SETS) {
+    face_set_overlay_check(*C, *op);
+  }
+
+  return MEM_new<SculptPaintStroke>(__func__, C, op, event);
 }
 
 static void restore_from_undo_step_if_necessary(const Depsgraph &depsgraph,
@@ -5996,10 +6036,6 @@ static wmOperatorStatus sculpt_brush_stroke_invoke(bContext *C,
                                                    wmOperator *op,
                                                    const wmEvent *event)
 {
-  SculptPaintStroke *stroke;
-  int ignore_background_click;
-  Object &ob = *CTX_data_active_object(C);
-  Scene &scene = *CTX_data_scene(C);
   const View3D *v3d = CTX_wm_view3d(C);
   const Base *base = CTX_data_active_base(C);
   /* Test that ob is visible; otherwise we won't be able to get evaluated data
@@ -6013,64 +6049,25 @@ static wmOperatorStatus sculpt_brush_stroke_invoke(bContext *C,
   bool pen_flip;
   WM_event_tablet_data(event, &pen_flip, nullptr);
 
-  stroke = MEM_new<SculptPaintStroke>(__func__, C, op, event);
-  brush_stroke_init(C, op);
+  /* For tablet rotation. */
+  bool ignore_background_click = RNA_boolean_get(op->ptr, "ignore_background_click");
+  const float mval[2] = {float(event->mval[0]), float(event->mval[1])};
+  if (ignore_background_click && !over_mesh(C, op, mval)) {
+    return OPERATOR_PASS_THROUGH;
+  }
 
-  Sculpt &sd = *CTX_data_tool_settings(C)->sculpt;
-  Brush &brush = *BKE_paint_brush(&sd.paint);
-
-  if (brush_type_is_paint(brush.sculpt_brush_type) &&
-      !color_supported_check(scene, ob, op->reports))
-  {
-    stroke->cancel(C);
-    MEM_delete(stroke);
+  SculptPaintStroke *stroke = brush_stroke_init(C, op, event);
+  if (stroke == nullptr) {
     return OPERATOR_CANCELLED;
-  }
-  if (!brush_type_is_attribute_only(brush.sculpt_brush_type) && !shape_key_check(ob, op->reports))
-  {
-    stroke->cancel(C);
-    MEM_delete(stroke);
-    return OPERATOR_CANCELLED;
-  }
-  if (ELEM(brush.sculpt_brush_type,
-           SCULPT_BRUSH_TYPE_DISPLACEMENT_SMEAR,
-           SCULPT_BRUSH_TYPE_DISPLACEMENT_ERASER))
-  {
-    const bke::pbvh::Tree *pbvh = bke::object::pbvh_get(ob);
-    if (!pbvh || pbvh->type() != bke::pbvh::Type::Grids) {
-      BKE_report(op->reports, RPT_ERROR, "Only supported in multiresolution mode");
-      stroke->cancel(C);
-      MEM_delete(stroke);
-      return OPERATOR_CANCELLED;
-    }
-  }
-
-  if (brush_type_is_mask(brush.sculpt_brush_type)) {
-    MultiresModifierData *mmd = BKE_sculpt_multires_active(&scene, &ob);
-    BKE_sculpt_mask_layers_ensure(CTX_data_depsgraph_pointer(C), CTX_data_main(C), &ob, mmd);
-
-    mask_overlay_check(*C, *op);
-  }
-  if (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_DRAW_FACE_SETS) {
-    face_set_overlay_check(*C, *op);
   }
 
   op->customdata = stroke;
-
-  /* For tablet rotation. */
-  ignore_background_click = RNA_boolean_get(op->ptr, "ignore_background_click");
-  const float mval[2] = {float(event->mval[0]), float(event->mval[1])};
-  if (ignore_background_click && !over_mesh(C, op, mval)) {
-    stroke->cancel(C);
-    MEM_delete(stroke);
-    return OPERATOR_PASS_THROUGH;
-  }
 
   const wmOperatorStatus retval = op->type->modal(C, op, event);
   OPERATOR_RETVAL_CHECK(retval);
 
   if (ELEM(retval, OPERATOR_FINISHED, OPERATOR_CANCELLED)) {
-    SculptPaintStroke *stroke = static_cast<SculptPaintStroke *>(op->customdata);
+    stroke = static_cast<SculptPaintStroke *>(op->customdata);
     if (stroke) {
       if (retval == OPERATOR_FINISHED) {
         stroke->finish(C);
@@ -6092,9 +6089,11 @@ static wmOperatorStatus sculpt_brush_stroke_invoke(bContext *C,
 
 static wmOperatorStatus sculpt_brush_stroke_exec(bContext *C, wmOperator *op)
 {
-  brush_stroke_init(C, op);
+  SculptPaintStroke *stroke = brush_stroke_init(C, op, nullptr);
+  if (stroke == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
 
-  SculptPaintStroke *stroke = MEM_new<SculptPaintStroke>(__func__, C, op, nullptr);
   op->customdata = stroke;
 
   stroke->exec(C, op);
@@ -8616,7 +8615,7 @@ void filter_above_plane_factors(const Span<float3> positions,
   }
 }
 
-void mask_overlay_check(bContext &C, wmOperator &op)
+void mask_overlay_check(bContext &C, const wmOperator &op)
 {
   View3D *v3d = CTX_wm_view3d(&C);
   if (!v3d) {
@@ -8638,7 +8637,7 @@ void mask_overlay_check(bContext &C, wmOperator &op)
   }
 }
 
-void face_set_overlay_check(bContext &C, wmOperator &op)
+void face_set_overlay_check(bContext &C, const wmOperator &op)
 {
   View3D *v3d = CTX_wm_view3d(&C);
   if (!v3d) {
