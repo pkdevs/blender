@@ -898,8 +898,8 @@ void node_light_info_impl(const int light_index, float4 &color, float &power, fl
   position = models.get(light.resource_id).model[3].xyz;
 }
 
-void node_light_evaluation_impl(
-    const int light_index, float3 position, float3 &direction, float &distance, float &mask)
+void node_light_evaluation_common_impl(
+    int light_index, float3 position, float3 &direction, float &distance, float &mask)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
@@ -914,21 +914,14 @@ void node_light_evaluation_impl(
   mask = light_attenuation_surface(light, is_directional, lv);
 }
 
-void node_light_evaluation_with_factor_impl(const int light_index,
-                                            float3 position,
-                                            float3 normal,
-                                            float roughness,
-                                            float3 &direction,
-                                            float &distance,
-                                            float &mask,
-                                            float &factor)
+template<bool use_diffuse>
+void node_light_evaluation_impl(
+    int light_index, float3 position, float3 normal, float roughness, float &factor)
 {
   /* clang-format off */ /* Multiline macros would break line count. */
   [[resource_table]] const eevee::LightRenderData &lrd = resource_table_get(eevee::LightRenderData);
   /* clang-format on */
   [[resource_table]] UtilityTexture &util_tx = resource_table_get(UtilityTexture);
-
-  node_light_evaluation_impl(light_index, position, direction, distance, mask);
 
   LightData light = lrd.light_buf[light_index];
   const bool is_directional = (light.type == LIGHT_SUN) || (light.type == LIGHT_SUN_ORTHO);
@@ -941,7 +934,7 @@ void node_light_evaluation_with_factor_impl(const int light_index,
   /* TODO(not_mark): remove, and update tests as this causes precision change. */
   /* Load LTC matrix and rotate into orthonormal basis around N. */
   eevee::LTCData ltc_data;
-  if (roughness == 1.0f) {
+  if constexpr (use_diffuse) {
     ltc_data = eevee::LTCData::identity(normal, V);
   }
   else {
@@ -959,6 +952,10 @@ void node_light_evaluation_with_factor_impl(const int light_index,
    * The goal is to get a somewhat normalized factor. */
   factor /= (light.point_power * M_1_PI);
 }
+
+template void node_light_evaluation_impl<true>(int, float3, float3, float, float &);
+
+template void node_light_evaluation_impl<false>(int, float3, float3, float, float &);
 
 void node_shadow_raycast_impl([[maybe_unused]] const int light_index,
                               [[maybe_unused]] float3 position,

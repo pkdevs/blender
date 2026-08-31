@@ -21,12 +21,18 @@ static void node_declare(NodeDeclarationBuilder &b)
       .hide_value()
       .description("Evaluation normal. Surface normal by default");
   b.add_input<decl::Float>("Roughness"_ustr)
-      .default_value(1.0f)
+      .default_value(0.5f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
       .description("Evaluation roughness. Used for reflection factor");
 
+  b.add_output<decl::Float>("Factor"_ustr).description("Shading reflection factor, scaled by PI");
+  b.add_output<decl::Float>("Mask"_ustr)
+      .description(
+          "All local lights: Mask to smooth the light cutoff.\n"
+          "Spot lights: Cutoff mask and spot attenuation.\n"
+          "Sun lights: 1.0");
   b.add_output<decl::Vector>("Direction"_ustr)
       .description(
           "Local lights: Normalized direction from evaluation position to light position.\n"
@@ -35,12 +41,22 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description(
           "Local lights: Distance from evaluation position to light position.\n"
           "Sun lights: 1.0");
-  b.add_output<decl::Float>("Mask"_ustr)
-      .description(
-          "All local lights: Mask to smooth the light cutoff.\n"
-          "Spot lights: Cutoff mask and spot attenuation.\n"
-          "Sun lights: 1.0");
-  b.add_output<decl::Float>("Factor"_ustr).description("Shading reflection factor, scaled by PI");
+}
+
+static void node_shader_buts_light_evaluation(ui::Layout &layout,
+                                              bContext * /*C*/,
+                                              PointerRNA *ptr)
+{
+  layout.prop(ptr, "mode", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+}
+
+static void node_shader_update_light_evaluation(bNodeTree *ntree, bNode *node)
+{
+  const int mode = node->custom1;
+
+  bke::node_set_socket_availability(*ntree,
+                                    *bke::node_find_socket(*node, SOCK_IN, "Roughness"_ustr),
+                                    mode == SHD_LIGHT_EVAL_GLOSSY);
 }
 
 static int node_shader_gpu_light_evaluation(GPUMaterial *mat,
@@ -49,6 +65,13 @@ static int node_shader_gpu_light_evaluation(GPUMaterial *mat,
                                             GPUNodeStack *in,
                                             GPUNodeStack *out)
 {
+  const int mode = node->custom1;
+
+  if (!in[0].link) {
+    /* Error: not linked to a light accumulation node */
+    return false;
+  }
+
   if (!in[1].link) {
     GPU_link(mat, "world_position_get", &in[1].link);
   }
@@ -56,12 +79,26 @@ static int node_shader_gpu_light_evaluation(GPUMaterial *mat,
     GPU_link(mat, "world_normals_get", &in[2].link);
   }
 
-  return GPU_stack_link(mat,
-                        node,
-                        out[3].hasoutput ? "node_light_evaluation_with_factor" :
-                                           "node_light_evaluation",
-                        in,
-                        out);
+  if (out[0].hasoutput) {
+    if (mode == SHD_LIGHT_EVAL_GLOSSY) {
+      GPU_stack_link(mat, node, "node_light_evaluation_glossy", in, out);
+    }
+    else {
+      GPU_stack_link(mat, node, "node_light_evaluation_diffuse", in, out);
+    }
+  }
+  else {
+    /* Simple path that doesn't compute LTC. */
+    GPU_link(mat,
+             "node_light_evaluation_common",
+             in[0].link,
+             in[1].link,
+             &out[1].link,
+             &out[2].link,
+             &out[3].link);
+  }
+
+  return true;
 }
 
 }  // namespace nodes::node_shader_light_evaluation_cc
@@ -79,8 +116,10 @@ void register_node_type_sh_light_evaluation()
   ntype.enum_name_legacy = "LIGHT EVALUATION";
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = file_ns::node_declare;
+  ntype.draw_buttons = file_ns::node_shader_buts_light_evaluation;
   ntype.gather_link_search_ops = search_link_ops_for_shader_material_lighting_node;
   ntype.gpu_fn = file_ns::node_shader_gpu_light_evaluation;
+  ntype.updatefunc = file_ns::node_shader_update_light_evaluation;
   // ntype.materialx_fn = file_ns::node_shader_materialx;
 
   bke::node_register_type(ntype);
