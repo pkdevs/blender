@@ -104,12 +104,9 @@ void mode_enter_generic(
   else if (mode_flag == OB_MODE_TEXTURE_PAINT) {
     const PaintMode paint_mode = PaintMode::Texture3D;
 
-    const bool result = BKE_paint_ensure_from_paintmode(&scene, paint_mode);
-    BLI_assert(result);
-    UNUSED_VARS_NDEBUG(result);
+    BKE_paint_init(&bmain, &scene, paint_mode);
     paint = BKE_paint_get_active_from_paintmode(&scene, paint_mode);
     ED_paint_cursor_start(paint, ED_image_tools_paint_poll);
-    BKE_paint_init(&bmain, &scene, paint_mode);
   }
   else {
     BLI_assert(0);
