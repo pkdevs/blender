@@ -491,9 +491,11 @@ class _draw_tool_settings_context_mode:
             layout.separator(factor=0.4)
             ups = paint.unified_paint_settings
             prop_owner = ups if brush.use_unified_color else brush
-            layout.prop_with_popover(prop_owner, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
+            row = layout.row(align=True)
+            row.prop_with_popover(prop_owner, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
             if brush.gpencil_settings.vertex_mode == 'BOTH' and not brush.gpencil_settings.single_color:
-                layout.prop_with_popover(brush, "secondary_color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
+                row.prop_with_popover(prop_owner, "secondary_color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
+                row.scale_x = 0.5
 
         brush_basic_grease_pencil_vertex_settings(layout, context, brush, compact=True)
 
@@ -667,9 +669,11 @@ class _draw_tool_settings_context_mode:
 
         if grease_pencil_tool == 'TINT':
             row.separator(factor=0.4)
-            row.prop_with_popover(brush, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
+            sub_row = row.row(align=True)
+            sub_row.prop_with_popover(brush, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
             if brush.gpencil_settings.vertex_mode == 'BOTH' and not brush.gpencil_settings.single_color:
-                row.prop_with_popover(brush, "secondary_color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
+                sub_row.prop_with_popover(brush, "secondary_color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
+                sub_row.scale_x = 0.5
 
         from bl_ui.properties_paint_common import (
             brush_basic_grease_pencil_paint_settings,
