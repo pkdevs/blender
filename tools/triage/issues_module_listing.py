@@ -19,7 +19,7 @@ import dataclasses
 import sys
 
 from datetime import date
-from gitea_utils import gitea_json_issues_search
+from gitea_utils import gitea_json_repo_issues_search
 
 IS_ATTY = sys.stdout.isatty()
 
@@ -72,7 +72,8 @@ severity_labelid = {
 def compile_list(severity: str) -> None:
 
     label = f"Severity/{severity}"
-    issues_json = gitea_json_issues_search(
+    issues_json = gitea_json_repo_issues_search(
+        repo="blender/blender",
         type="issues",
         state="open",
         labels=label,
