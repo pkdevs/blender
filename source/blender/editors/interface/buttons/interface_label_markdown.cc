@@ -405,7 +405,9 @@ class MarkdownLayouter {
       this->line_box_end();
     }
 
-    this->add_pending_spacing(this->block_margin_top(block_stack_.last()));
+    if (flow_bottom_) {
+      this->add_pending_spacing(this->block_margin_top(block_stack_.last()));
+    }
     if (is_list_container_block(block_stack_.last()) && this->is_direct_child_of_list_item()) {
       this->add_pending_spacing(md_style::list.nested_margin_top);
     }
