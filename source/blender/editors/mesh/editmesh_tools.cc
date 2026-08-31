@@ -4277,6 +4277,75 @@ static Base *mesh_separate_arrays(Main *bmain,
   return base_new;
 }
 
+static bool isolate_selection(
+    BMesh *bm, BMVert **verts, BMEdge **edges, BMFace **faces, int (*lengths)[3])
+{
+  STACK_DECLARE(verts);
+  STACK_INIT(verts, bm->totvert);
+
+  STACK_DECLARE(edges);
+  STACK_INIT(edges, bm->totedge);
+
+  STACK_DECLARE(faces);
+  STACK_INIT(faces, bm->totface);
+
+  BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE, BM_ELEM_TAG, false);
+
+  // Selection may not be synchronized
+  BMIter iter;
+  BMFace *f;
+  BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
+    if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
+      STACK_PUSH(faces, f);
+
+      BMLoop *l_iter;
+      BMLoop *l_first;
+
+      l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+      do {
+        if (!BM_elem_flag_test(l_iter->v, BM_ELEM_TAG)) {
+          BM_elem_flag_enable(l_iter->v, BM_ELEM_TAG);
+          STACK_PUSH(verts, l_iter->v);
+        }
+        if (!BM_elem_flag_test(l_iter->e, BM_ELEM_TAG)) {
+          BM_elem_flag_enable(l_iter->e, BM_ELEM_TAG);
+          STACK_PUSH(edges, l_iter->e);
+        }
+      } while ((l_iter = l_iter->next) != l_first);
+    }
+  }
+
+  BMEdge *e;
+  BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
+    if (BM_elem_flag_test(e, BM_ELEM_SELECT) && !BM_elem_flag_test(e, BM_ELEM_TAG)) {
+      BM_elem_flag_enable(e, BM_ELEM_TAG);
+      STACK_PUSH(edges, e);
+      if (!BM_elem_flag_test(e->v1, BM_ELEM_TAG)) {
+        BM_elem_flag_enable(e->v1, BM_ELEM_TAG);
+        STACK_PUSH(verts, e->v1);
+      }
+      if (!BM_elem_flag_test(e->v2, BM_ELEM_TAG)) {
+        BM_elem_flag_enable(e->v2, BM_ELEM_TAG);
+        STACK_PUSH(verts, e->v2);
+      }
+    }
+  }
+
+  BMVert *v;
+  BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
+    if (BM_elem_flag_test(v, BM_ELEM_SELECT) && !BM_elem_flag_test(v, BM_ELEM_TAG)) {
+      BM_elem_flag_enable(v, BM_ELEM_TAG);
+      STACK_PUSH(verts, v);
+    }
+  }
+
+  (*lengths)[0] = STACK_SIZE(verts);
+  (*lengths)[1] = STACK_SIZE(edges);
+  (*lengths)[2] = STACK_SIZE(faces);
+
+  return (*lengths)[0] || (*lengths)[1] || (*lengths)[2];
+}
+
 static bool mesh_separate_selected(
     Main *bmain, Scene *scene, ViewLayer *view_layer, Base *base_old, BMesh *bm_old)
 {
@@ -4285,10 +4354,9 @@ static bool mesh_separate_selected(
   Array<BMFace *> face_selection(bm_old->totface);
 
   int lengths[3];
-  BM_mesh_selection_as_arrays(
-      bm_old, vert_selection.data(), edge_selection.data(), face_selection.data(), &lengths);
-
-  if (lengths[0] == 0) {  // No selected verts
+  if (!isolate_selection(
+          bm_old, vert_selection.data(), edge_selection.data(), face_selection.data(), &lengths))
+  {
     return false;
   }
 
