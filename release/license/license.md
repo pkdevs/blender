@@ -2586,7 +2586,6 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 | [sse2neon](https://github.com/DLTcollab/sse2neon) | 227cc413fb2 | `Copyright sse2neon contributors` |
 | [Thorvg](https://www.thorvg.org/) | v1.0.3 | `Copyright (c) 2020 - 2026 ThorVG Project` |
 | [TinyGLTF](https://github.com/syoyo/tinygltf) | 2.8.21, 4bf | `Copyright (c) 2017 Syoyo Fujita, Aurélien Chatelain and many contributors` |
-| [toml11](https://github.com/ToruNiina/toml11) | b32a2fff0d2 | `Copyright (c) 2017 Toru Niina` |
 | [ufbx - Single source file FBX loader](https://github.com/ufbx/ufbx) | v0.20.0 (a6 | `Copyright (c) 2020 Samuli Raivio` |
 | [VC Intrinsics](https://github.com/intel/vc-intrinsics) | 0.25.0 | `Copyright (C) 2020-2021 Intel Corporation` |
 | [Vcintrinsics](https://github.com/intel/vc-intrinsics) | 60cea7590bd | `Copyright (c) 2019-2024 Intel Corporation` |
