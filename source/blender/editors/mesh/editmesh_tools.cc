@@ -4493,8 +4493,6 @@ static short isolate_single_material(
 static bool mesh_separate_material(
     Main *bmain, Scene *scene, ViewLayer *view_layer, Base *base_old, BMesh *bm_old)
 {
-  bool result = false;
-
   if (bm_old->totface == 0) {
     return false;
   }
@@ -4504,19 +4502,26 @@ static bool mesh_separate_material(
   Array<BMFace *> faces(bm_old->totface);
 
   int lengths[3];
-  short mat_nr;
+  short mat_nr = isolate_single_material(
+      bm_old, verts.data(), edges.data(), faces.data(), &lengths);
+
+  if (lengths[2] == bm_old->totface) {
+    mesh_separate_material_assign_mat_nr(bmain, base_old->object, mat_nr);
+
+    /* since we're in editmode, must set faces here */
+    BMIter iter;
+    BMFace *f;
+    BM_ITER_MESH (f, &iter, bm_old, BM_FACES_OF_MESH) {
+      f->mat_nr = 0;
+    }
+    return false;
+  }
 
   ED_mesh_geometry_clear(id_cast<Mesh *>(base_old->object->data));
-
   BM_custom_loop_normals_to_vector_layer(bm_old);
 
+  bool result = false;
   while (true) {
-    mat_nr = isolate_single_material(bm_old, verts.data(), edges.data(), faces.data(), &lengths);
-
-    if (lengths[2] == bm_old->totface) {
-      break;
-    }
-
     Base *base_new = mesh_separate_arrays(bmain,
                                           scene,
                                           view_layer,
@@ -4533,6 +4538,11 @@ static bool mesh_separate_material(
 
     if (base_new) {
       mesh_separate_material_assign_mat_nr(bmain, base_new->object, mat_nr);
+    }
+
+    mat_nr = isolate_single_material(bm_old, verts.data(), edges.data(), faces.data(), &lengths);
+    if (lengths[2] == bm_old->totface) {
+      break;
     }
   }
 
