@@ -4113,21 +4113,17 @@ static void but_update_ex(Button *but, const bool validate)
       if ((but->rnaprop == nullptr) || (RNA_property_flag(but->rnaprop) & PROP_ICONS_CONSECUTIVE))
       {
 
-        if(but->flag & BUT_NO_ICON_OFFSET)
-        {
+        if (but->flag & BUT_NO_ICON_OFFSET) {
           but->iconadd = 0;
         }
-        else
-        {
+        else {
           if (but->rnaprop && RNA_property_flag(but->rnaprop) & PROP_ICONS_REVERSE) {
             but->drawflag |= BUT_ICON_REVERSE;
           }
 
           but->iconadd = (but->flag & UI_SELECT) ? 1 : 0;
         }
-       
       }
-
 
       break;
 
