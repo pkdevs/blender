@@ -4431,57 +4431,70 @@ static void mesh_separate_material_assign_mat_nr(Main *bmain, Object *ob, const 
 static bool mesh_separate_material(
     Main *bmain, Scene *scene, ViewLayer *view_layer, Base *base_old, BMesh *bm_old)
 {
-  BMFace *f_cmp, *f;
-  BMIter iter;
   bool result = false;
+
+  // Verts and edges can be resued in multiple material slots hence totloop not totvert/totedge
+  Array<BMVert *> vert_groups(bm_old->totloop);
+  Array<BMEdge *> edge_groups(bm_old->totloop);
+  Array<BMFace *> face_groups(bm_old->totface);
+
+  int (*groups)[3] = nullptr;
+  int groups_len = BM_mesh_calc_materials_as_arrays(
+      bm_old, vert_groups.data(), edge_groups.data(), face_groups.data(), &groups);
+  if (groups_len <= 1) {
+    MEM_SAFE_DELETE(groups);
+    return false;
+  }
+
+  ED_mesh_geometry_clear(id_cast<Mesh *>(base_old->object->data));
 
   BM_custom_loop_normals_to_vector_layer(bm_old);
 
-  while ((f_cmp = static_cast<BMFace *>(BM_iter_at_index(bm_old, BM_FACES_OF_MESH, nullptr, 0)))) {
-    Base *base_new;
-    const short mat_nr = f_cmp->mat_nr;
-    int tot = 0;
+  /* Separate out all groups except the first. */
+  uint group_ofs[3] = {uint(groups[0][0]), uint(groups[0][1]), uint(groups[0][2])};
+  for (int i = 1; i < groups_len; i++) {
+    short mat_nr = (*(face_groups.data() + group_ofs[2]))->mat_nr;
 
-    BM_mesh_elem_hflag_disable_all(bm_old, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_TAG, false);
+    Base *base_new = mesh_separate_arrays(bmain,
+                                          scene,
+                                          view_layer,
+                                          base_old,
+                                          bm_old,
+                                          vert_groups.data() + group_ofs[0],
+                                          groups[i][0],
+                                          edge_groups.data() + group_ofs[1],
+                                          groups[i][1],
+                                          face_groups.data() + group_ofs[2],
+                                          groups[i][2]);
 
-    BM_ITER_MESH (f, &iter, bm_old, BM_FACES_OF_MESH) {
-      if (f->mat_nr == mat_nr) {
-        BMLoop *l_iter;
-        BMLoop *l_first;
+    result |= (base_new != nullptr);
 
-        BM_elem_flag_enable(f, BM_ELEM_TAG);
-        l_iter = l_first = BM_FACE_FIRST_LOOP(f);
-        do {
-          BM_elem_flag_enable(l_iter->v, BM_ELEM_TAG);
-          BM_elem_flag_enable(l_iter->e, BM_ELEM_TAG);
-        } while ((l_iter = l_iter->next) != l_first);
-
-        tot++;
-      }
-    }
-
-    /* leave the current object with some materials */
-    if (tot == bm_old->totface) {
-      mesh_separate_material_assign_mat_nr(bmain, base_old->object, mat_nr);
-
-      /* since we're in editmode, must set faces here */
-      BM_ITER_MESH (f, &iter, bm_old, BM_FACES_OF_MESH) {
-        f->mat_nr = 0;
-      }
-      break;
-    }
-
-    /* Move selection into a separate object */
-    base_new = mesh_separate_tagged(bmain, scene, view_layer, base_old, bm_old);
     if (base_new) {
       mesh_separate_material_assign_mat_nr(bmain, base_new->object, mat_nr);
     }
 
-    result |= (base_new != nullptr);
+    group_ofs[0] += groups[i][0];
+    group_ofs[1] += groups[i][1];
+    group_ofs[2] += groups[i][2];
   }
 
-  BM_custom_loop_normals_from_vector_layer(bm_old, false);
+  mesh_separate_material_assign_mat_nr(bmain, base_old->object, (*face_groups.data())->mat_nr);
 
+  /* since we're in editmode, must set faces here */
+  BMIter iter;
+  BMFace *f;
+  BM_ITER_MESH (f, &iter, bm_old, BM_FACES_OF_MESH) {
+    f->mat_nr = 0;
+  }
+
+  Mesh *me_old = id_cast<Mesh *>(base_old->object->data);
+  BM_mesh_elem_hflag_disable_all(bm_old, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
+
+  BMeshToMeshParams to_mesh_params{};
+  to_mesh_params.update_shapekey_indices = true;
+  BM_mesh_bm_to_me(nullptr, bm_old, me_old, &to_mesh_params);
+
+  MEM_delete(groups);
   return result;
 }
 

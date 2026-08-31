@@ -2595,6 +2595,72 @@ void BM_mesh_selection_as_arrays(
   (*lengths)[2] = STACK_SIZE(faces);
 }
 
+int BM_mesh_calc_materials_as_arrays(
+    BMesh *bm, BMVert **verts, BMEdge **edges, BMFace **faces, int (**r_groups)[3])
+{
+  BMFace *f;
+  BMIter iter;
+
+  int (*groups)[3] = MEM_new_array_uninitialized<int[3]>(bm->totface, __func__);
+  STACK_DECLARE(groups);
+  STACK_INIT(groups, bm->totface);
+
+  // Verts and edges can be resued in multiple material slots hence totloop no totvert/totedge
+  STACK_DECLARE(verts);
+  STACK_INIT(verts, bm->totloop);
+
+  STACK_DECLARE(edges);
+  STACK_INIT(edges, bm->totloop);
+
+  STACK_DECLARE(faces);
+  STACK_INIT(faces, bm->totface);
+
+  short mat_idx = 0;
+  while (STACK_SIZE(faces) < bm->totface) {
+    // Use tag to avoid double adding verts and edges
+    BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE, BM_ELEM_TAG, false);
+
+    const uint verts_init = STACK_SIZE(verts);
+    const uint edges_init = STACK_SIZE(edges);
+    const uint faces_init = STACK_SIZE(faces);
+
+    BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
+      if (f->mat_nr == mat_idx) {
+        STACK_PUSH(faces, f);
+
+        BMLoop *l_iter;
+        BMLoop *l_first;
+
+        l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+        do {
+          if (!BM_elem_flag_test(l_iter->v, BM_ELEM_TAG)) {
+            BM_elem_flag_enable(l_iter->v, BM_ELEM_TAG);
+            STACK_PUSH(verts, l_iter->v);
+          }
+          if (!BM_elem_flag_test(l_iter->e, BM_ELEM_TAG)) {
+            BM_elem_flag_enable(l_iter->e, BM_ELEM_TAG);
+            STACK_PUSH(edges, l_iter->e);
+          }
+        } while ((l_iter = l_iter->next) != l_first);
+      }
+    }
+
+    if (STACK_SIZE(faces) > faces_init) {
+      int *g = STACK_PUSH_RET(groups);
+      g[0] = STACK_SIZE(verts) - verts_init;
+      g[1] = STACK_SIZE(edges) - edges_init;
+      g[2] = STACK_SIZE(faces) - faces_init;
+    }
+    mat_idx++;
+  }
+
+  /* Reduce alloc to required size. */
+  groups = static_cast<int (*)[3]>(
+      MEM_realloc_uninitialized(groups, sizeof(*groups) * STACK_SIZE(groups)));
+  *r_groups = groups;
+  return STACK_SIZE(groups);
+}
+
 float bmesh_subd_falloff_calc(const int falloff, float val)
 {
   switch (falloff) {
