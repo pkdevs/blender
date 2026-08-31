@@ -7590,7 +7590,6 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Paint Debug", "Enable paint & sculpt debugging options for developers");
   RNA_def_property_update(prop, 0, "rna_userdef_update");
-
 }
 
 static void rna_def_userdef_addon_collection(BlenderRNA *brna, PropertyRNA *cprop)

@@ -20,8 +20,9 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
-#include "BLI_length_parameterize.hh"
 #include "BLI_utildefines.h"
+
+#include "BLI_length_parameterize.hh"
 
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -65,11 +66,8 @@ static constexpr int EVAL_ROW_MARGIN = 3;
  * \param farthest_first: if true, step count decreases with index (backward ext).
  * \param r_pressures: output vector to append to.
  */
-static void extrapolate_pressures(float base_p,
-                                  float ratio,
-                                  int n_points,
-                                  bool farthest_first,
-                                  Vector<float> &r_pressures)
+static void extrapolate_pressures(
+    float base_p, float ratio, int n_points, bool farthest_first, Vector<float> &r_pressures)
 {
   for (int i = 0; i < n_points; i++) {
     const int steps = farthest_first ? (n_points - i) : (i + 1);
@@ -259,10 +257,8 @@ void PaintStroke::add_roll_point(const float2 &mouse_in,
         /* Normalized distance: use the average pressure of the consumed
          * segment's two endpoints, matching the grid V computation. */
         if (roll_initial_radius_ > 0.0f) {
-          const float p0 = (!roll_spline_.pressures.is_empty()) ?
-                               roll_spline_.pressures[0] : 1.0f;
-          const float p1 = (roll_spline_.pressures.size() > 1) ?
-                               roll_spline_.pressures[1] : p0;
+          const float p0 = (!roll_spline_.pressures.is_empty()) ? roll_spline_.pressures[0] : 1.0f;
+          const float p1 = (roll_spline_.pressures.size() > 1) ? roll_spline_.pressures[1] : p0;
           const float p_avg = std::max((p0 + p1) * 0.5f, 0.01f);
           stroke_distance_normalized_ += seg_len / (roll_initial_radius_ * p_avg);
         }
@@ -418,8 +414,7 @@ static void generate_virtual_extension(const float2 &anchor_2d,
     if (a2 != 0.0f) {
       const float c = cosf(a2);
       const float s = sinf(a2);
-      cur_2d = float2(cur_2d.x * c - cur_2d.y * s,
-                      cur_2d.x * s + cur_2d.y * c);
+      cur_2d = float2(cur_2d.x * c - cur_2d.y * s, cur_2d.x * s + cur_2d.y * c);
     }
     if (has_rot_3d) {
       const float a3 = sign * angle_3d;
@@ -581,8 +576,7 @@ void PaintStroke::make_roll_spline(bContext * /*C*/)
     if (roll_initial_radius_ > 0.0f) {
       const Span<float> pres = roll_spline_.pressures.as_span();
       float accum = 0.0f;
-      for (int i = 1; i <= n_virtual_poly_points_ - 1 &&
-                       i < int(roll_spline_.lengths_3d.size());
+      for (int i = 1; i <= n_virtual_poly_points_ - 1 && i < int(roll_spline_.lengths_3d.size());
            i++)
       {
         const float seg = roll_spline_.segment_length_3d(i);
@@ -634,9 +628,15 @@ void PaintStroke::finish_roll_stroke(bContext *C,
     const float3 last_sn = (num_points_ > 0) ? points_[last_idx].surface_normal : float3(0, 0, 1);
 
     if (is_location_is_set) {
-      add_roll_point(
-          mouse_up, mouse_out, location, last_sn, paint_runtime->pixel_radius, pressure,
-          pen_flip_, tilt_.x, tilt_.y);
+      add_roll_point(mouse_up,
+                     mouse_out,
+                     location,
+                     last_sn,
+                     paint_runtime->pixel_radius,
+                     pressure,
+                     pen_flip_,
+                     tilt_.x,
+                     tilt_.y);
     }
     else if (num_points_ > 0) {
       /* Fallback: use last known location so the spline still extends. */
@@ -803,10 +803,8 @@ static void bspline_subdivide_rows(Vector<float3> &grid_pos,
   for (int c = 0; c < cols; c++) {
     /* Inserted rows: midpoints. */
     for (int r = 0; r < oR - 1; r++) {
-      np[(2 * r + 1) * cols + c] = 0.5f *
-                                   (grid_pos[r * cols + c] + grid_pos[(r + 1) * cols + c]);
-      nu[(2 * r + 1) * cols + c] = 0.5f *
-                                   (grid_uv[r * cols + c] + grid_uv[(r + 1) * cols + c]);
+      np[(2 * r + 1) * cols + c] = 0.5f * (grid_pos[r * cols + c] + grid_pos[(r + 1) * cols + c]);
+      nu[(2 * r + 1) * cols + c] = 0.5f * (grid_uv[r * cols + c] + grid_uv[(r + 1) * cols + c]);
     }
     /* Existing rows: 1/8 vertex rule, ends pinned. */
     np[c] = grid_pos[c];
@@ -920,8 +918,8 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
      * a curved surface (where sculpt_normal changes per dab). */
     if (math::length_squared(roll_proj_normal_) < 1e-8f) {
       roll_proj_normal_ = (math::length_squared(cache.sculpt_normal) > 1e-8f) ?
-                               math::normalize(cache.sculpt_normal) :
-                               math::normalize(cache.view_normal);
+                              math::normalize(cache.sculpt_normal) :
+                              math::normalize(cache.view_normal);
     }
     const float3 proj_normal = roll_proj_normal_;
     cache.roll_proj_normal = proj_normal;
@@ -957,8 +955,8 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
       }
       cache.roll_binormals[k] = B;
       const float Rk = (use_pressure_width && vi < int(roll_spline_.pressures.size())) ?
-                            std::max(R * roll_spline_.pressures[vi], R * 0.01f) :
-                            R;
+                           std::max(R * roll_spline_.pressures[vi], R * 0.01f) :
+                           R;
       cache.roll_border_left[k] = poly[vi] + B * Rk;
       cache.roll_border_right[k] = poly[vi] - B * Rk;
     }
@@ -1040,13 +1038,11 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
                 const float3 ab = poly[m + 1] - poly[m];
                 const float ab_dot = math::dot(ab, ab);
                 const float tp = (ab_dot > 1e-12f) ?
-                                     std::clamp(math::dot(orig[k] - poly[m], ab) / ab_dot,
-                                                0.0f,
-                                                1.0f) :
+                                     std::clamp(
+                                         math::dot(orig[k] - poly[m], ab) / ab_dot, 0.0f, 1.0f) :
                                      0.0f;
                 const float3 proj = math::interpolate(poly[m], poly[m + 1], tp);
-                min_dist_sq = std::min(min_dist_sq,
-                                       math::distance_squared(orig[k], proj));
+                min_dist_sq = std::min(min_dist_sq, math::distance_squared(orig[k], proj));
               }
               if (min_dist_sq >= R_sq) {
                 all_inside = false;
@@ -1111,13 +1107,17 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
                 const bool can_hi = (collapse_hi < j) && (arc_hi <= arc_lo);
                 if (can_lo) {
                   const float seg = math::distance(poly[collapse_lo - 1], poly[collapse_lo]);
-                  if (arc_lo + seg > half_arc) { break; }
+                  if (arc_lo + seg > half_arc) {
+                    break;
+                  }
                   collapse_lo--;
                   arc_lo += seg;
                 }
                 else if (can_hi) {
                   const float seg = math::distance(poly[collapse_hi], poly[collapse_hi + 1]);
-                  if (arc_hi + seg > half_arc) { break; }
+                  if (arc_hi + seg > half_arc) {
+                    break;
+                  }
                   collapse_hi++;
                   arc_hi += seg;
                 }
@@ -1189,8 +1189,7 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
        * applied in spline_uv() to keep the texture continuous as the
        * polyline shrinks. */
       const Span<float> pressures = roll_spline_.pressures.as_span();
-      const bool have_pressures = use_pressure_width &&
-                                  int(pressures.size()) >= count;
+      const bool have_pressures = use_pressure_width && int(pressures.size()) >= count;
       Vector<float> v_coords(init_rows);
       v_coords[0] = 0.0f;
       for (int k = 1; k < init_rows; k++) {
@@ -1251,14 +1250,12 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
           for (int r = 1; r < cur_rows - 1; r++) {
             for (int c = 1; c < cur_cols - 1; c++) {
               const int idx = r * cur_cols + c;
-              float3 avg_p = 0.25f * (src_p[(r - 1) * cur_cols + c] +
-                                       src_p[(r + 1) * cur_cols + c] +
-                                       src_p[r * cur_cols + c - 1] +
-                                       src_p[r * cur_cols + c + 1]);
-              float2 avg_u = 0.25f * (src_u[(r - 1) * cur_cols + c] +
-                                       src_u[(r + 1) * cur_cols + c] +
-                                       src_u[r * cur_cols + c - 1] +
-                                       src_u[r * cur_cols + c + 1]);
+              float3 avg_p = 0.25f *
+                             (src_p[(r - 1) * cur_cols + c] + src_p[(r + 1) * cur_cols + c] +
+                              src_p[r * cur_cols + c - 1] + src_p[r * cur_cols + c + 1]);
+              float2 avg_u = 0.25f *
+                             (src_u[(r - 1) * cur_cols + c] + src_u[(r + 1) * cur_cols + c] +
+                              src_u[r * cur_cols + c - 1] + src_u[r * cur_cols + c + 1]);
               dst_p[idx] = (1.0f - mix) * src_p[idx] + mix * avg_p;
               dst_u[idx] = (1.0f - mix) * src_u[idx] + mix * avg_u;
             }
@@ -1289,8 +1286,7 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
       Vector<float2> grid_pos_2d(total);
       {
         for (int i = 0; i < total; i++) {
-          grid_pos_2d[i] = float2(math::dot(grid_pos[i], view_x),
-                                  math::dot(grid_pos[i], view_y));
+          grid_pos_2d[i] = float2(math::dot(grid_pos[i], view_x), math::dot(grid_pos[i], view_y));
         }
       }
 
@@ -1313,8 +1309,7 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
         length_parameterize::sample_at_length(lengths, eval_s_hi, eval_seg_hi, fac_unused);
 
         const int arc_row_lo = std::max(0, eval_seg_lo * 4 - EVAL_ROW_MARGIN);
-        const int arc_row_hi = std::min(cur_rows - 1,
-                                        (eval_seg_hi + 1) * 4 + EVAL_ROW_MARGIN);
+        const int arc_row_hi = std::min(cur_rows - 1, (eval_seg_hi + 1) * 4 + EVAL_ROW_MARGIN);
 
         /* Within the arc-length window, keep rows spatially near the dab. */
         const float2 dab_2d = float2(math::dot(cache.location, view_x),
@@ -1324,9 +1319,7 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
 
         int eval_lo = cur_rows - 1, eval_hi = 0;
         for (int r = arc_row_lo; r <= arc_row_hi; r++) {
-          if (math::distance_squared(dab_2d, grid_pos_2d[r * cur_cols + center_c]) <=
-              eval_r_sq)
-          {
+          if (math::distance_squared(dab_2d, grid_pos_2d[r * cur_cols + center_c]) <= eval_r_sq) {
             eval_lo = std::min(eval_lo, r);
             eval_hi = std::max(eval_hi, r);
           }
@@ -1516,9 +1509,9 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
 }
 
 void PaintStroke::spline_uv(const StrokeCache &cache,
-                             const float co[3],
-                             float r_out[3],
-                             float r_tan[3]) const
+                            const float co[3],
+                            float r_out[3],
+                            float r_tan[3]) const
 {
   /* LUT-based UV lookup (O(1) per vertex).
    *
@@ -1536,9 +1529,8 @@ void PaintStroke::spline_uv(const StrokeCache &cache,
    * distance so this result loses the mirror-symmetry comparison.  Without
    * this, edge-clamped LUT values at mirrored positions can produce bogus
    * near-zero U that incorrectly wins. */
-  if (UNLIKELY(!std::isfinite(fc.x) || !std::isfinite(fc.y) ||
-               fc.x < -0.5f || fc.x > float(RES) - 0.5f ||
-               fc.y < -0.5f || fc.y > float(RES) - 0.5f))
+  if (UNLIKELY(!std::isfinite(fc.x) || !std::isfinite(fc.y) || fc.x < -0.5f ||
+               fc.x > float(RES) - 0.5f || fc.y < -0.5f || fc.y > float(RES) - 0.5f))
   {
     r_out[0] = FLT_MAX;
     r_out[1] = r_out[2] = 0.0f;
@@ -1584,10 +1576,22 @@ void PaintStroke::spline_uv(const StrokeCache &cache,
     /* Find any valid neighbor to clone from. */
     const float2 fill_uv = !b00 ? uv00 : !b10 ? uv10 : !b01 ? uv01 : uv11;
     const float3 fill_t = !b00 ? t00 : !b10 ? t10 : !b01 ? t01 : t11;
-    if (b00) { uv00 = fill_uv; t00 = fill_t; }
-    if (b10) { uv10 = fill_uv; t10 = fill_t; }
-    if (b01) { uv01 = fill_uv; t01 = fill_t; }
-    if (b11) { uv11 = fill_uv; t11 = fill_t; }
+    if (b00) {
+      uv00 = fill_uv;
+      t00 = fill_t;
+    }
+    if (b10) {
+      uv10 = fill_uv;
+      t10 = fill_t;
+    }
+    if (b01) {
+      uv01 = fill_uv;
+      t01 = fill_t;
+    }
+    if (b11) {
+      uv11 = fill_uv;
+      t11 = fill_t;
+    }
   }
 
   /* Detect overlap discontinuity: at sharp turns, multiple grid quads
@@ -1618,15 +1622,26 @@ void PaintStroke::spline_uv(const StrokeCache &cache,
     float best_d = d00;
     uv_result = uv00;
     t_result = t00;
-    if (d10 < best_d) { best_d = d10; uv_result = uv10; t_result = t10; }
-    if (d01 < best_d) { best_d = d01; uv_result = uv01; t_result = t01; }
-    if (d11 < best_d) {                uv_result = uv11; t_result = t11; }
+    if (d10 < best_d) {
+      best_d = d10;
+      uv_result = uv10;
+      t_result = t10;
+    }
+    if (d01 < best_d) {
+      best_d = d01;
+      uv_result = uv01;
+      t_result = t01;
+    }
+    if (d11 < best_d) {
+      uv_result = uv11;
+      t_result = t11;
+    }
   }
   else {
-    uv_result = (1 - tx) * (1 - ty) * uv00 + tx * (1 - ty) * uv10 +
-                (1 - tx) * ty * uv01 + tx * ty * uv11;
-    t_result = (1 - tx) * (1 - ty) * t00 + tx * (1 - ty) * t10 +
-               (1 - tx) * ty * t01 + tx * ty * t11;
+    uv_result = (1 - tx) * (1 - ty) * uv00 + tx * (1 - ty) * uv10 + (1 - tx) * ty * uv01 +
+                tx * ty * uv11;
+    t_result = (1 - tx) * (1 - ty) * t00 + tx * (1 - ty) * t10 + (1 - tx) * ty * t01 +
+               tx * ty * t11;
   }
 
   r_out[0] = -uv_result.x;
@@ -1732,8 +1747,8 @@ void PaintStroke::draw_debug_roll(bContext *C) const
 
   Object *ob = CTX_data_active_object(C);
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
-  if (ob && ob->runtime && ob->runtime->sculpt_session &&
-      ob->runtime->sculpt_session->cache && rv3d)
+  if (ob && ob->runtime && ob->runtime->sculpt_session && ob->runtime->sculpt_session->cache &&
+      rv3d)
   {
     const StrokeCache &cache = *ob->runtime->sculpt_session->cache;
     if (cache.roll_surface_ready && cache.roll_subdiv_rows > 1) {
@@ -1822,7 +1837,7 @@ void PaintStroke::draw_debug_roll(bContext *C) const
       immUniformColor4ub(255, 0, 0, 255);
       for (int side = 0; side < 2; side++) {
         const Vector<float3> &border = (side == 0) ? cache.roll_border_left :
-                                                      cache.roll_border_right;
+                                                     cache.roll_border_right;
         const int bcount = int(border.size());
         for (int k = 2; k < bcount - 1; k++) {
           if (math::distance_squared(border[k - 1], border[k]) < 1e-10f &&

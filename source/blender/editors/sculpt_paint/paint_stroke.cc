@@ -28,12 +28,12 @@
 #include "RNA_access.hh"
 
 #include "BKE_brush.hh"
-#include "BKE_object_types.hh"
 #include "BKE_colortools.hh"
 #include "BKE_context.hh"
 #include "BKE_curve.hh"
 #include "BKE_global.hh"
 #include "BKE_image.hh"
+#include "BKE_object_types.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
 
@@ -61,7 +61,6 @@
 #endif
 
 namespace blender::ed::sculpt_paint {
-
 
 /*** Cursors ***/
 static void paint_draw_smooth_cursor(bContext *C,
@@ -547,9 +546,9 @@ void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float
      * the real mouse-down position. */
     if (need_roll_mapping_ && is_location_is_set) {
       const float3 sn = (vc.obact && vc.obact->runtime->sculpt_session &&
-                          vc.obact->runtime->sculpt_session->cache) ?
-                             vc.obact->runtime->sculpt_session->cache->sculpt_normal :
-                             float3(0);
+                         vc.obact->runtime->sculpt_session->cache) ?
+                            vc.obact->runtime->sculpt_session->cache->sculpt_normal :
+                            float3(0);
       add_roll_point(mval,
                      mouse_out,
                      location,
@@ -565,9 +564,9 @@ void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float
 
   {
     const float3 sn = (vc.obact && vc.obact->runtime->sculpt_session &&
-                        vc.obact->runtime->sculpt_session->cache) ?
-                           vc.obact->runtime->sculpt_session->cache->sculpt_normal :
-                           float3(0);
+                       vc.obact->runtime->sculpt_session->cache) ?
+                          vc.obact->runtime->sculpt_session->cache->sculpt_normal :
+                          float3(0);
     add_roll_point(mval,
                    mouse_out,
                    location,
@@ -1700,9 +1699,9 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
       this->line_end(C, op, mouse);
       /* For smooth stroke, finalize at the last smoothed position,
        * not the raw cursor position. */
-      const float2 roll_mouse =
-          paint_supports_smooth_stroke(*br, mode, brush_switch_mode_) ?
-              last_smoothed_mouse_ : mouse;
+      const float2 roll_mouse = paint_supports_smooth_stroke(*br, mode, brush_switch_mode_) ?
+                                    last_smoothed_mouse_ :
+                                    mouse;
       this->finish_roll_stroke(C, op, roll_mouse, pressure);
       this->stroke_done(C, op, false);
       return OPERATOR_FINISHED;
@@ -1710,9 +1709,9 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
   }
   else if (ELEM(event->type, EVT_RETKEY, EVT_SPACEKEY)) {
     this->line_end(C, op, sample_average.mouse);
-    const float2 roll_mouse2 =
-        paint_supports_smooth_stroke(*br, mode, brush_switch_mode_) ?
-            last_smoothed_mouse_ : sample_average.mouse;
+    const float2 roll_mouse2 = paint_supports_smooth_stroke(*br, mode, brush_switch_mode_) ?
+                                   last_smoothed_mouse_ :
+                                   sample_average.mouse;
     this->finish_roll_stroke(C, op, roll_mouse2, pressure);
     this->stroke_done(C, op, false);
     return OPERATOR_FINISHED;

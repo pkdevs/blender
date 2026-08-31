@@ -208,25 +208,25 @@ struct PaintStroke : NonCopyable, NonMovable {
 
   /* Roll texture mapping */
   bool need_roll_mapping_ = false;
-  bool roll_virtual_prepended_ = false;     /* true after virtual backward segments are prepended */
-  int n_virtual_poly_points_ = 0;          /* polyline points in virtual backward extension */
-  float roll_virtual_length_ = 0.0f;       /* arc length of virtual extension (subtracted from V) */
-  float roll_initial_radius_ = 0.0f;       /* cache.initial_radius, captured on first dab */
-  float3 roll_proj_normal_ = float3(0);   /* projection normal, frozen on first dab */
+  bool roll_virtual_prepended_ = false; /* true after virtual backward segments are prepended */
+  int n_virtual_poly_points_ = 0;       /* polyline points in virtual backward extension */
+  float roll_virtual_length_ = 0.0f;    /* arc length of virtual extension (subtracted from V) */
+  float roll_initial_radius_ = 0.0f;    /* cache.initial_radius, captured on first dab */
+  float3 roll_proj_normal_ = float3(0); /* projection normal, frozen on first dab */
   float stroke_distance_normalized_ = 0.0f; /* pressure-normalized V offset for consumed knots */
   float roll_virtual_length_normalized_ = 0.0f; /* normalized arc length of virtual extension */
-  int initial_backward_ext_count_ = 0;     /* backward_ext knot count at creation, for budget */
-  void *roll_cursor_ = nullptr;           /* always-on preview of unflushed spline portion */
+  int initial_backward_ext_count_ = 0; /* backward_ext knot count at creation, for budget */
+  void *roll_cursor_ = nullptr;        /* always-on preview of unflushed spline portion */
   void *debug_cursor_ = nullptr;
   int stroke_sample_index_ = 0;
-  int last_painted_roll_idx_ = -1;       /* ring buffer index of the last deferred dab placed */
+  int last_painted_roll_idx_ = -1; /* ring buffer index of the last deferred dab placed */
   float spacing_raw_ = 0.0f;
   PaintStrokePoint points_[PAINT_MAX_INPUT_SAMPLES];
   int num_points_ = 0;
   int cur_point_ = 0;
   RollSpline roll_spline_;
-  Vector<float2> backward_ext_2d_;       /* virtual backward extension knots (screen space) */
-  Vector<float3> backward_ext_3d_;       /* virtual backward extension knots (world space) */
+  Vector<float2> backward_ext_2d_; /* virtual backward extension knots (screen space) */
+  Vector<float3> backward_ext_3d_; /* virtual backward extension knots (world space) */
 
   /* Set whether any stroke step has yet occurred
    * e.g. in sculpt mode, stroke doesn't start until cursor
@@ -310,9 +310,9 @@ struct PaintStroke : NonCopyable, NonMovable {
    * \param r_tan: Output: tangent at the closest spline point.
    */
   void spline_uv(const StrokeCache &cache,
-                  const float co[3],
-                  float r_out[3],
-                  float r_tan[3]) const;
+                 const float co[3],
+                 float r_out[3],
+                 float r_tan[3]) const;
 
   float spline_length() const;
 
@@ -390,7 +390,10 @@ struct PaintStroke : NonCopyable, NonMovable {
   void stroke_done(bContext *C, wmOperator *op, bool is_cancel);
 
   int roll_max_points() const;
-  int roll_half_points() const { return (roll_max_points() * 3) / 5 + 2; }
+  int roll_half_points() const
+  {
+    return (roll_max_points() * 3) / 5 + 2;
+  }
   void add_roll_point(const float2 &mouse_in,
                       const float2 &mouse_out,
                       const float3 &loc,

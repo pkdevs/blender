@@ -24,9 +24,9 @@
 #include "BLI_math_axis_angle.hh"
 #include "BLI_math_geom.h"
 #include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_rect.h"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
@@ -2490,7 +2490,8 @@ void sculpt_apply_texture(const SculptSession &ss,
       float3 final_pt;
       rotate_v2_v2fl(final_pt, point_3d, angle);
 
-      paint_get_tex_pixel(mtex, final_pt[0], -final_pt[1], ss.tex_pool, thread_id, r_value, r_rgba);
+      paint_get_tex_pixel(
+          mtex, final_pt[0], -final_pt[1], ss.tex_pool, thread_id, r_value, r_rgba);
       *r_value += brush.texture_sample_bias;
     }
     else {
@@ -3725,7 +3726,6 @@ static void do_radial_symmetry(const Depsgraph &depsgraph,
     SCULPT_cache_calc_brushdata_symm(*ss.cache, symm, axis, angle);
     do_tiled(depsgraph, scene, sd, ob, brush, paint_mode_settings, action);
   }
-
 }
 
 /**
