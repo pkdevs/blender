@@ -22,6 +22,7 @@
 #include "BLI_enum_flags.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_string_ref.hh"
+#include "BLI_ustring.hh"
 
 namespace blender {
 
@@ -110,8 +111,6 @@ PointerRNA RNA_pointer_create_id_subdata(ID &id, StructRNA *type, void *data);
  */
 PointerRNA RNA_pointer_create_from_ancestor(const PointerRNA &ptr, const int ancestor_idx);
 
-bool RNA_pointer_is_null(const PointerRNA *ptr);
-
 bool RNA_path_resolved_create(PointerRNA *ptr,
                               PropertyRNA *prop,
                               int prop_index,
@@ -194,6 +193,17 @@ bool RNA_struct_system_idprops_unset(PointerRNA *ptr, const char *identifier);
 bool RNA_struct_in_public_namespace(const StructRNA *type);
 
 PropertyRNA *RNA_struct_find_property(PointerRNA *ptr, const char *identifier);
+
+/**
+ * Find a struct's RNA property by its identifier.
+ *
+ * This is equivalent to RNA_property_collection_lookup_string searching the "rna_properties"
+ * collection. Calling this function directly is more purposeful and more efficient because it can
+ * avoid UString construction.
+ *
+ * \warning Does not handle ["name"] style lookup.
+ */
+PropertyRNA *RNA_struct_find_property(PointerRNA *ptr, UString identifier);
 
 /**
  * Same as `RNA_struct_find_property` but returns `nullptr` if the property type is no same to
