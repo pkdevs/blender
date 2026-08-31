@@ -1202,8 +1202,9 @@ int ShaderGraph::get_num_closures()
     else if (CLOSURE_IS_BSDF_MULTISCATTER(closure_type)) {
       num_closures += 2;
     }
-    // TODO (OpenPBR): Need to define number of closures for OpenPBR as well
-    else if (CLOSURE_IS_PRINCIPLED(closure_type)) {
+    else if (closure_type == CLOSURE_BSDF_PRINCIPLED_ID ||
+             closure_type == CLOSURE_BSDF_OPEN_PBR_ID)
+    {
       num_closures += 12;
     }
     else if (CLOSURE_IS_VOLUME(closure_type)) {
