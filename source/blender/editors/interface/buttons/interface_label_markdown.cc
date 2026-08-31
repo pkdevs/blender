@@ -16,8 +16,6 @@
 
 #include "BLT_translation.hh"
 
-#include "ED_screen.hh"
-
 #include "GPU_immediate.hh"
 #include "GPU_state.hh"
 
@@ -67,12 +65,25 @@ static void markdown_disable_item_font(const MarkdownItemText &item)
   BLF_disable(item.fontid, BLF_ITALIC);
 }
 
+struct MdBlockSpacing {
+  float margin_top = 0.75f;
+  float margin_bottom = 0.5f;
+};
+
 struct MdHeaderStyle {
   float size_factor = 1.0f;
   int weight = 400;
   bool italic = false;
   float margin_top = 1.0f;
-  float margin_bottom = 1.0f;
+  float margin_bottom = 0.35f;
+};
+
+struct MdListSpacing {
+  float margin_top = 0.5f;
+  float margin_bottom = 0.5f;
+  float item_spacing_loose = 0.35f;
+  float item_spacing_tight = 0.125f;
+  float nested_margin_top = 0.25f;
 };
 
 static int markdown_layout_generation = 0;
@@ -80,39 +91,55 @@ static int markdown_layout_generation = 0;
 namespace md_style {
 
 static std::array<MdHeaderStyle, 6> headers = {
-    MdHeaderStyle{.size_factor = 2.00f,
+    MdHeaderStyle{.size_factor = 1.75f,
                   .weight = 700,
                   .italic = false,
-                  .margin_top = 1.0f,
-                  .margin_bottom = 1.0f},
-    MdHeaderStyle{.size_factor = 1.50f,
+                  .margin_top = 1.50f,
+                  .margin_bottom = 0.35f},
+    MdHeaderStyle{.size_factor = 1.40f,
                   .weight = 600,
                   .italic = false,
-                  .margin_top = 1.0f,
-                  .margin_bottom = 1.0f},
-    MdHeaderStyle{.size_factor = 1.25f,
+                  .margin_top = 1.25f,
+                  .margin_bottom = 0.30f},
+    MdHeaderStyle{.size_factor = 1.20f,
                   .weight = 600,
                   .italic = false,
-                  .margin_top = 1.0f,
-                  .margin_bottom = 1.0f},
+                  .margin_top = 1.00f,
+                  .margin_bottom = 0.25f},
+    MdHeaderStyle{.size_factor = 1.10f,
+                  .weight = 600,
+                  .italic = false,
+                  .margin_top = 0.85f,
+                  .margin_bottom = 0.20f},
     MdHeaderStyle{.size_factor = 1.00f,
                   .weight = 600,
                   .italic = false,
-                  .margin_top = 1.0f,
-                  .margin_bottom = 1.0f},
+                  .margin_top = 0.75f,
+                  .margin_bottom = 0.20f},
     MdHeaderStyle{.size_factor = 1.00f,
                   .weight = 500,
-                  .italic = false,
-                  .margin_top = 1.0f,
-                  .margin_bottom = 1.0f},
-    MdHeaderStyle{.size_factor = 1.00f,
-                  .weight = 400,
                   .italic = true,
-                  .margin_top = 1.0f,
-                  .margin_bottom = 1.0f},
+                  .margin_top = 0.75f,
+                  .margin_bottom = 0.20f},
 };
 
-}
+static MdBlockSpacing paragraph = {.margin_top = 1.50f, .margin_bottom = 1.50f};
+static MdBlockSpacing quote = {.margin_top = 1.00f, .margin_bottom = 0.50f};
+static float quote_bar_padding = 0.10f;
+static MdBlockSpacing code_block = {.margin_top = 1.00f, .margin_bottom = 1.00f};
+static MdBlockSpacing horizontal_rule = {.margin_top = 0.50f, .margin_bottom = 0.50f};
+
+static MdListSpacing list = {.margin_top = 1.00f,
+                             .margin_bottom = 1.00f,
+                             .item_spacing_loose = 1.50f,
+                             .item_spacing_tight = 1.00f,
+                             .nested_margin_top = 1.00f};
+
+static float list_indent_px = 18.00f;
+static float list_marker_padding_px = 4.00f;
+static float horizontal_rule_padding = 0.76f;
+
+};  // namespace md_style
 
 class MarkdownLayouter {
  private:
@@ -161,6 +188,8 @@ class MarkdownLayouter {
 
   struct QuoteBlock {
     float start_y = 0.0f;
+    float content_top = -FLT_MAX;
+    float content_bottom = FLT_MAX;
   };
 
   struct HorizontalRuleBlock {};
@@ -333,7 +362,7 @@ class MarkdownLayouter {
 
   float list_indent_px() const
   {
-    return 18.0f * cache_.key.pixels_per_point;
+    return md_style::list_indent_px * cache_.key.pixels_per_point;
   }
 
   int get_unordered_list_level() const
@@ -396,21 +425,41 @@ class MarkdownLayouter {
 
     if (list_item->number) {
       /* Right-align the number towards the content. */
-      item.x = x_ - marker_width - 4.0f * cache_.key.pixels_per_point;
+      item.x = x_ - marker_width - md_style::list_marker_padding_px * cache_.key.pixels_per_point;
     }
     else {
       /* Center the bullet in the list-item indent gutter. */
       item.x = x_ - this->list_indent_px() * 0.5f - marker_width * 0.5f;
     }
     cache_.md_layout.items.append(item);
+    this->track_quote_text_bounds(item);
   }
 
   void append_horizontal_rule()
   {
-    const float half_space = 0.5f * main_font_.default_line_height;
-    y_ -= half_space;
+    const float padding = md_style::horizontal_rule_padding * main_font_.default_line_height;
+    y_ -= padding;
     cache_.md_layout.items.append(MarkdownItemHorizontalRule{y_});
-    y_ -= half_space;
+    y_ -= padding;
+  }
+
+  void track_quote_text_bounds(const MarkdownItemText &item)
+  {
+    if (!this->is_in_quote()) {
+      return;
+    }
+
+    markdown_apply_item_font(item);
+    const float top = item.y + BLF_ascender(item.fontid);
+    const float bottom = item.y + BLF_descender(item.fontid);
+    markdown_disable_item_font(item);
+
+    for (MdBlock &md_block : block_stack_) {
+      if (auto *quote = std::get_if<QuoteBlock>(&md_block)) {
+        quote->content_top = std::max(quote->content_top, top);
+        quote->content_bottom = std::min(quote->content_bottom, bottom);
+      }
+    }
   }
 
   void append_quote_line()
@@ -420,13 +469,26 @@ class MarkdownLayouter {
     if (!quote) {
       return;
     }
-    const float height = quote->start_y - y_;
+
+    float top;
+    float bottom;
+    if (quote->content_top != -FLT_MAX) {
+      const float padding = md_style::quote_bar_padding * main_font_.default_line_height;
+      top = quote->content_top + padding;
+      bottom = quote->content_bottom - padding;
+    }
+    else {
+      top = quote->start_y;
+      bottom = y_;
+    }
+
+    const float height = top - bottom;
     if (height <= 0.0f) {
       return;
     }
     MarkdownItemQuoteLine line;
     line.x = this->context_block_start_x() - this->list_indent_px() * 0.5f;
-    line.y = quote->start_y;
+    line.y = top;
     line.height = height;
     cache_.md_layout.items.append(line);
   }
@@ -441,31 +503,210 @@ class MarkdownLayouter {
     return false;
   }
 
+  static bool is_list_container_block(const MdBlock &block)
+  {
+    return std::holds_alternative<UnorderedListBlock>(block) ||
+           std::holds_alternative<OrderedListBlock>(block);
+  }
+
+  bool is_direct_child_of_list_item() const
+  {
+    if (block_stack_.size() < 2) {
+      return false;
+    }
+    return std::holds_alternative<ListItemBlock>(block_stack_[block_stack_.size() - 2]);
+  }
+
+  bool is_direct_child_of_quote() const
+  {
+    if (block_stack_.size() < 2) {
+      return false;
+    }
+    return std::holds_alternative<QuoteBlock>(block_stack_[block_stack_.size() - 2]);
+  }
+
+  bool is_nested_list_item() const
+  {
+    if (block_stack_.size() < 3) {
+      return false;
+    }
+    return std::holds_alternative<ListItemBlock>(block_stack_[block_stack_.size() - 3]);
+  }
+
+  bool current_list_is_tight() const
+  {
+    if (block_stack_.size() < 2) {
+      return false;
+    }
+    const MdBlock &parent = block_stack_[block_stack_.size() - 2];
+    if (const auto *ul = std::get_if<UnorderedListBlock>(&parent)) {
+      return ul->is_tight;
+    }
+    if (const auto *ol = std::get_if<OrderedListBlock>(&parent)) {
+      return ol->is_tight;
+    }
+    return false;
+  }
+
+  bool are_sibling_list_items() const
+  {
+    if (!last_left_block_) {
+      return false;
+    }
+    if (!std::holds_alternative<ListItemBlock>(block_stack_.last())) {
+      return false;
+    }
+    if (!std::holds_alternative<ListItemBlock>(*last_left_block_)) {
+      return false;
+    }
+    if (block_stack_.size() < 2) {
+      return false;
+    }
+    return is_list_container_block(block_stack_[block_stack_.size() - 2]);
+  }
+
+  float spacing_px(const float multiplier) const
+  {
+    return main_font_.default_line_height * multiplier;
+  }
+
+  float collapsed_spacing_px(const float bottom, const float top) const
+  {
+    return this->spacing_px(std::max(bottom, top));
+  }
+
+  float block_margin_top(const MdBlock &block) const
+  {
+    if (const auto *header = std::get_if<HeaderBlock>(&block)) {
+      return md_style::headers[header->level - 1].margin_top;
+    }
+    if (std::holds_alternative<ParagraphBlock>(block)) {
+      return md_style::paragraph.margin_top;
+    }
+    if (std::holds_alternative<QuoteBlock>(block)) {
+      return md_style::quote.margin_top;
+    }
+    if (std::holds_alternative<CodeBlock>(block)) {
+      return md_style::code_block.margin_top;
+    }
+    if (std::holds_alternative<HorizontalRuleBlock>(block)) {
+      return md_style::horizontal_rule.margin_top;
+    }
+    if (std::holds_alternative<UnorderedListBlock>(block) ||
+        std::holds_alternative<OrderedListBlock>(block))
+    {
+      return md_style::list.margin_top;
+    }
+    return 0.0f;
+  }
+
+  float block_margin_bottom(const MdBlock &block) const
+  {
+    if (const auto *header = std::get_if<HeaderBlock>(&block)) {
+      return md_style::headers[header->level - 1].margin_bottom;
+    }
+    if (std::holds_alternative<ParagraphBlock>(block)) {
+      return md_style::paragraph.margin_bottom;
+    }
+    if (std::holds_alternative<QuoteBlock>(block)) {
+      return md_style::quote.margin_bottom;
+    }
+    if (std::holds_alternative<CodeBlock>(block)) {
+      return md_style::code_block.margin_bottom;
+    }
+    if (std::holds_alternative<HorizontalRuleBlock>(block)) {
+      return md_style::horizontal_rule.margin_bottom;
+    }
+    if (std::holds_alternative<UnorderedListBlock>(block) ||
+        std::holds_alternative<OrderedListBlock>(block))
+    {
+      return md_style::list.margin_bottom;
+    }
+    return 0.0f;
+  }
+
   float get_space_above_new_block() const
   {
+    const MdBlock &new_block = block_stack_.last();
+
+    if (is_list_container_block(new_block)) {
+      /* List spacing is applied around list items, not list containers. */
+      return 0.0f;
+    }
+
+    if (this->is_direct_child_of_list_item()) {
+      /* Blocks inside a list item share the item's line without extra block margins. */
+      if (!std::holds_alternative<QuoteBlock>(new_block)) {
+        return 0.0f;
+      }
+    }
+
+    if (!std::holds_alternative<QuoteBlock>(new_block) && this->is_direct_child_of_quote()) {
+      /* Quote top spacing is applied when the quote block is entered. */
+      return 0.0f;
+    }
+
+    if (std::holds_alternative<QuoteBlock>(new_block)) {
+      if (this->is_direct_child_of_list_item()) {
+        return this->spacing_px(md_style::quote.margin_top);
+      }
+      if (last_left_block_ && is_list_container_block(*last_left_block_) &&
+          block_stack_.size() >= 2 &&
+          std::holds_alternative<QuoteBlock>(block_stack_[block_stack_.size() - 2]))
+      {
+        /* Nested quote after a list within the same parent quote: use quote top margin only,
+         * without also stacking the list bottom margin. */
+        return this->spacing_px(md_style::quote.margin_top);
+      }
+    }
+
+    if (std::holds_alternative<ListItemBlock>(new_block)) {
+      const MdListSpacing &list_spacing = md_style::list;
+
+      if (!last_left_block_) {
+        if (this->is_nested_list_item()) {
+          return this->spacing_px(list_spacing.nested_margin_top);
+        }
+        return 0.0f;
+      }
+
+      const MdBlock &last_block = *last_left_block_;
+
+      if (is_list_container_block(last_block)) {
+        return this->spacing_px(list_spacing.margin_top);
+      }
+      if (this->are_sibling_list_items()) {
+        const float item_spacing = this->current_list_is_tight() ?
+                                       list_spacing.item_spacing_tight :
+                                       list_spacing.item_spacing_loose;
+        return this->spacing_px(item_spacing);
+      }
+      if (this->is_nested_list_item()) {
+        return this->spacing_px(list_spacing.nested_margin_top);
+      }
+      return this->collapsed_spacing_px(this->block_margin_bottom(last_block),
+                                        this->block_margin_top(new_block));
+    }
+
+    if (std::holds_alternative<HorizontalRuleBlock>(new_block)) {
+      if (!last_left_block_) {
+        return 0.0f;
+      }
+      /* After a quote, horizontal rule padding alone provides enough separation. */
+      if (std::holds_alternative<QuoteBlock>(*last_left_block_)) {
+        return 0.0f;
+      }
+      return this->collapsed_spacing_px(this->block_margin_bottom(*last_left_block_),
+                                        md_style::horizontal_rule.margin_top);
+    }
+
     if (!last_left_block_) {
       return 0.0f;
     }
-    const MdBlock &new_block = block_stack_.last();
-    // const MdBlock &last_block = *last_left_block_;
 
-    if (std::holds_alternative<UnorderedListBlock>(new_block) ||
-        std::holds_alternative<OrderedListBlock>(new_block))
-    {
-      /* The spacing for lists is done around the individual list items, not the list itself.*/
-      return 0.0f;
-    }
-
-    if (const auto *md_header = std::get_if<HeaderBlock>(&new_block)) {
-      const MdHeaderStyle &style = md_style::headers[md_header->level - 1];
-      return main_font_.default_line_height * style.margin_top;
-    }
-    if (std::holds_alternative<ParagraphBlock>(new_block) ||
-        std::holds_alternative<HorizontalRuleBlock>(new_block))
-    {
-      return main_font_.default_line_height * 1.5f;
-    }
-    return main_font_.default_line_height * 1.5f;
+    const MdBlock &last_block = *last_left_block_;
+    return this->collapsed_spacing_px(this->block_margin_bottom(last_block),
+                                      this->block_margin_top(new_block));
   }
 
   void md_leave_block(const MD_BLOCKTYPE block_type, void * /*detail*/)
@@ -778,6 +1019,7 @@ class MarkdownLayouter {
         item_template.x = x_;
         item_template.y = y_;
         cache_.md_layout.items.append(item_template);
+        this->track_quote_text_bounds(item_template);
       }
       if (wrap_to_next_line) {
         y_ -= line_height;
@@ -833,7 +1075,9 @@ class MarkdownLayouter {
         markdown_disable_item_font(*text_item);
       }
       else if (const auto *rule_item = std::get_if<MarkdownItemHorizontalRule>(&item)) {
-        bottom_y = std::min(bottom_y, rule_item->y - 0.5f * main_font_.default_line_height);
+        bottom_y = std::min(bottom_y,
+                            rule_item->y - md_style::horizontal_rule_padding *
+                                               main_font_.default_line_height);
       }
       else if (const auto *quote_line = std::get_if<MarkdownItemQuoteLine>(&item)) {
         bottom_y = std::min(bottom_y, quote_line->y - quote_line->height);
@@ -1079,12 +1323,10 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
   }
 }
 
-static void label_markdown_dev_config_update(bContext &C)
+static void label_markdown_dev_config_update(bContext & /*C*/)
 {
   markdown_layout_generation++;
-  if (ScrArea *area = CTX_wm_area(&C)) {
-    ED_area_tag_redraw(area);
-  }
+  WM_main_add_notifier(NC_WINDOW, nullptr);
 }
 
 static std::string markdown_md_style_to_source()
@@ -1103,7 +1345,43 @@ static std::string markdown_md_style_to_source()
         style.margin_bottom);
   }
   result += "};\n\n";
-  result += "}\n";
+
+  auto append_block_spacing = [&](const char *name, const MdBlockSpacing &spacing) {
+    result += fmt::format(
+        "static MdBlockSpacing {} = {{.margin_top = {:.2f}f, .margin_bottom = {:.2f}f}};\n",
+        name,
+        spacing.margin_top,
+        spacing.margin_bottom);
+  };
+  append_block_spacing("paragraph", md_style::paragraph);
+  append_block_spacing("quote", md_style::quote);
+  result += fmt::format("static float quote_bar_padding = {:.2f}f;\n",
+                        md_style::quote_bar_padding);
+  append_block_spacing("code_block", md_style::code_block);
+  append_block_spacing("horizontal_rule", md_style::horizontal_rule);
+  result += "\n";
+
+  auto append_list_spacing = [&](const char *name, const MdListSpacing &spacing) {
+    result += fmt::format(
+        "static MdListSpacing {} = {{.margin_top = {:.2f}f, .margin_bottom = {:.2f}f, "
+        ".item_spacing_loose = {:.2f}f, .item_spacing_tight = {:.2f}f, .nested_margin_top = "
+        "{:.2f}f}};\n",
+        name,
+        spacing.margin_top,
+        spacing.margin_bottom,
+        spacing.item_spacing_loose,
+        spacing.item_spacing_tight,
+        spacing.nested_margin_top);
+  };
+  append_list_spacing("list", md_style::list);
+  result += "\n";
+
+  result += fmt::format("static float list_indent_px = {:.2f}f;\n", md_style::list_indent_px);
+  result += fmt::format("static float list_marker_padding_px = {:.2f}f;\n",
+                        md_style::list_marker_padding_px);
+  result += fmt::format("static float horizontal_rule_padding = {:.2f}f;\n",
+                        md_style::horizontal_rule_padding);
+  result += "\n};\n";
   return result;
 }
 
@@ -1153,6 +1431,81 @@ static void label_markdown_dev_config_checkbox(
   uiItemL_respect_property_split(&col, label, ICON_NONE);
   Button *but = uiDefButV(block, ButtonType::Checkbox, "", 0, 0, 0, UI_UNIT_Y, value, 0, 0, tip);
   button_func_set(but, label_markdown_dev_config_update);
+}
+
+static void label_markdown_dev_config_block_spacing(Block *block,
+                                                    Layout &col,
+                                                    MdBlockSpacing &spacing)
+{
+  label_markdown_dev_config_num(block,
+                                col,
+                                IFACE_("Top Margin"),
+                                &spacing.margin_top,
+                                0.0f,
+                                4.0f,
+                                0.05f,
+                                2,
+                                IFACE_("Top margin as a multiple of the default line height"));
+  label_markdown_dev_config_num(block,
+                                col,
+                                IFACE_("Bottom Margin"),
+                                &spacing.margin_bottom,
+                                0.0f,
+                                4.0f,
+                                0.05f,
+                                2,
+                                IFACE_("Bottom margin as a multiple of the default line height"));
+}
+
+static void label_markdown_dev_config_list_spacing(Block *block,
+                                                   Layout &col,
+                                                   MdListSpacing &spacing)
+{
+  label_markdown_dev_config_num(block,
+                                col,
+                                IFACE_("Top Margin"),
+                                &spacing.margin_top,
+                                0.0f,
+                                4.0f,
+                                0.05f,
+                                2,
+                                IFACE_("Margin above the first list item"));
+  label_markdown_dev_config_num(block,
+                                col,
+                                IFACE_("Bottom Margin"),
+                                &spacing.margin_bottom,
+                                0.0f,
+                                4.0f,
+                                0.05f,
+                                2,
+                                IFACE_("Margin below the last list item"));
+  label_markdown_dev_config_num(block,
+                                col,
+                                IFACE_("Loose Item Spacing"),
+                                &spacing.item_spacing_loose,
+                                0.0f,
+                                4.0f,
+                                0.05f,
+                                2,
+                                IFACE_("Spacing between items in loose lists"));
+  label_markdown_dev_config_num(block,
+                                col,
+                                IFACE_("Tight Item Spacing"),
+                                &spacing.item_spacing_tight,
+                                0.0f,
+                                4.0f,
+                                0.05f,
+                                2,
+                                IFACE_("Spacing between items in tight lists"));
+  label_markdown_dev_config_num(block,
+                                col,
+                                IFACE_("Nested Top Margin"),
+                                &spacing.nested_margin_top,
+                                0.0f,
+                                4.0f,
+                                0.05f,
+                                2,
+                                IFACE_("Margin above the first item in a nested list"));
 }
 
 void label_markdown_dev_config(Layout &layout)
@@ -1214,6 +1567,66 @@ void label_markdown_dev_config(Layout &layout)
           2,
           IFACE_("Bottom margin as a multiple of the default line height"));
     }
+  }
+
+  if (Layout *panel = layout.panel(C, "md_style_paragraph", true, IFACE_("Paragraph"))) {
+    label_markdown_dev_config_block_spacing(block, panel->column(false), md_style::paragraph);
+  }
+  if (Layout *panel = layout.panel(C, "md_style_quote", true, IFACE_("Quote"))) {
+    Layout &panel_col = panel->column(false);
+    label_markdown_dev_config_block_spacing(block, panel_col, md_style::quote);
+    label_markdown_dev_config_num(block,
+                                  panel_col,
+                                  IFACE_("Bar Padding"),
+                                  &md_style::quote_bar_padding,
+                                  0.0f,
+                                  1.0f,
+                                  0.025f,
+                                  3,
+                                  IFACE_("Vertical padding around quote text for the quote bar"));
+  }
+  if (Layout *panel = layout.panel(C, "md_style_code_block", true, IFACE_("Code Block"))) {
+    label_markdown_dev_config_block_spacing(block, panel->column(false), md_style::code_block);
+  }
+  if (Layout *panel = layout.panel(C, "md_style_horizontal_rule", true, IFACE_("Horizontal Rule")))
+  {
+    Layout &panel_col = panel->column(false);
+    label_markdown_dev_config_block_spacing(block, panel_col, md_style::horizontal_rule);
+    label_markdown_dev_config_num(block,
+                                  panel_col,
+                                  IFACE_("Padding"),
+                                  &md_style::horizontal_rule_padding,
+                                  0.0f,
+                                  4.0f,
+                                  0.05f,
+                                  2,
+                                  IFACE_("Vertical padding around the horizontal rule line"));
+  }
+  if (Layout *panel = layout.panel(C, "md_style_list", true, IFACE_("List"))) {
+    label_markdown_dev_config_list_spacing(block, panel->column(false), md_style::list);
+  }
+  if (Layout *panel = layout.panel(C, "md_style_layout", true, IFACE_("Layout"))) {
+    Layout &panel_col = panel->column(false);
+    label_markdown_dev_config_num(
+        block,
+        panel_col,
+        IFACE_("List Indent"),
+        &md_style::list_indent_px,
+        4.0f,
+        40.0f,
+        1.0f,
+        1,
+        IFACE_("Horizontal indent per list level in pixels at 1x scale"));
+    label_markdown_dev_config_num(
+        block,
+        panel_col,
+        IFACE_("List Marker Padding"),
+        &md_style::list_marker_padding_px,
+        0.0f,
+        20.0f,
+        0.5f,
+        1,
+        IFACE_("Padding between ordered list markers and item text in pixels at 1x scale"));
   }
 
   col.separator();
