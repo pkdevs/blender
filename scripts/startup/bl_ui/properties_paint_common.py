@@ -746,7 +746,6 @@ class ShapePanel(BrushPanel):
         settings = cls.paint_settings_from_active_tool(context)
         if not settings:
             return False
-        mode = cls.get_brush_mode(context)
         brush = settings.brush
 
         if not (brush and brush.curve_distance_falloff):
