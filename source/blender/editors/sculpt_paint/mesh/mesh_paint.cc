@@ -104,9 +104,9 @@ void mode_enter_generic(
   else if (mode_flag == OB_MODE_TEXTURE_PAINT) {
     const PaintMode paint_mode = PaintMode::Texture3D;
 
-    /* TODO: This pattern is very odd, find some way to fix */
-    Paint *paint_tmp = reinterpret_cast<Paint *>(&scene.toolsettings->imapaint);
-    BKE_paint_ensure(scene.toolsettings, &paint_tmp);
+    const bool result = BKE_paint_ensure_from_paintmode(&scene, paint_mode);
+    BLI_assert(result);
+    UNUSED_VARS_NDEBUG(result);
     paint = BKE_paint_get_active_from_paintmode(&scene, paint_mode);
     ED_paint_cursor_start(paint, ED_image_tools_paint_poll);
     BKE_paint_init(&bmain, &scene, paint_mode);
