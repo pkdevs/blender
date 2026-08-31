@@ -57,12 +57,17 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
 {
   NodeShaderAttribute *attr = static_cast<NodeShaderAttribute *>(node->storage);
   float attr_hash = 0.0f;
+  float error_attr[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
   GPUNodeLink *cd_attr;
 
   switch (attr->type) {
     case SHD_ATTRIBUTE_LIGHT: {
-      if (STREQ(attr->name, "is_sun")) {
+      if (!in[0].link) {
+        /* Error: Attribute node is not linked to a light accumulation node. */
+        cd_attr = GPU_constant(error_attr);
+      }
+      else if (STREQ(attr->name, "is_sun")) {
         GPU_link(mat, "node_attribute_light_is_sun", in[0].link, &cd_attr);
       }
       else if (STREQ(attr->name, "is_point")) {
