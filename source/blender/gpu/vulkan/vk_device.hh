@@ -67,11 +67,6 @@ struct VKExtensions {
   bool maintenance4 = false;
 
   /**
-   * Does the device support logic ops.
-   */
-  bool logic_ops = false;
-
-  /**
    * Does the device support VK_EXT_memory_priority
    */
   bool memory_priority = false;
@@ -102,9 +97,20 @@ struct VKExtensions {
   bool vertex_input_dynamic_state = false;
 
   /**
+   * Does the device support VK_EXT_provoking_vertex
+   */
+  bool provoking_vertex = false;
+
+  /**
    * Does the device support VK_EXT_host_image_copy
    */
   bool host_image_copy = false;
+
+  /**
+   * Does the device support VkPhysicalDeviceFeatures::multiDrawIndirect.
+   * When false, multi_draw_indirect is emulated with individual draw calls.
+   */
+  bool multi_draw_indirect = false;
 
   /** Log enabled features and extensions. */
   void log() const;
@@ -384,6 +390,7 @@ class VKDevice : public NonCopyable {
   std::string glsl_fragment_patch_get(bool use_ray_query) const;
   std::string glsl_compute_patch_get(bool use_ray_query) const;
   shader::GeneratedSource extensions_define(StringRefNull stage_define, bool use_ray_query) const;
+  uint32_t glsl_patch_version_get(bool use_ray_query) const;
 
   /* -------------------------------------------------------------------- */
   /** \name Render graph

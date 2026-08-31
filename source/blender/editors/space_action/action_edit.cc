@@ -145,9 +145,9 @@ static wmOperatorStatus act_markers_make_local_exec(bContext *C, wmOperator * /*
 void ACTION_OT_markers_make_local(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Make Markers Local";
+  ot->name = "Convert to Pose Markers";
   ot->idname = "ACTION_OT_markers_make_local";
-  ot->description = "Move selected scene markers to the active Action as local 'pose' markers";
+  ot->description = "Move selected scene markers to the active action as pose markers";
 
   /* callbacks */
   ot->exec = act_markers_make_local_exec;
@@ -889,7 +889,7 @@ static void insert_fcurve_key(bAnimContext *ac,
     CombinedKeyingResult result = insert_keyframes(ac->bmain,
                                                    &id_rna_pointer,
                                                    channel_group,
-                                                   {{fcu->rna_path, {}, fcu->array_index}},
+                                                   {{fcu->rna_path(), {}, fcu->array_index}},
                                                    std::nullopt,
                                                    anim_eval_context,
                                                    eBezTriple_KeyframeType(ts->keyframe_type),
@@ -1064,7 +1064,7 @@ static bool duplicate_action_keys(bAnimContext *ac)
           static_cast<GreasePencilLayer *>(ale.data)->wrap());
     }
     else if (ale.type == ANIMTYPE_MASKLAYER) {
-      changed |= ED_masklayer_frames_duplicate(static_cast<MaskLayer *>(ale.data));
+      changed |= ED_masklayer_frames_duplicate(ac->bmain, static_cast<MaskLayer *>(ale.data));
     }
     else {
       BLI_assert(0);
@@ -1150,7 +1150,7 @@ static bool delete_action_keys(bAnimContext *ac)
       }
     }
     else if (ale.type == ANIMTYPE_MASKLAYER) {
-      changed = ED_masklayer_frames_delete(static_cast<MaskLayer *>(ale.data));
+      changed = ED_masklayer_frames_delete(ac->bmain, static_cast<MaskLayer *>(ale.data));
     }
     else {
       FCurve *fcu = static_cast<FCurve *>(ale.key_data);
