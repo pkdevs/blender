@@ -978,18 +978,18 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
   theme::get_color_4ubv(TH_LINK, link_color);
   link_color[3] = color[3];
 
-  uchar dimmed_color[4] = {
-      uchar((int(color[0]) * 2) / 3),
-      uchar((int(color[1]) * 2) / 3),
-      uchar((int(color[2]) * 2) / 3),
-      color[3],
-  };
-  uchar dimmed_link_color[4] = {
-      uchar((int(link_color[0]) * 2) / 3),
-      uchar((int(link_color[1]) * 2) / 3),
-      uchar((int(link_color[2]) * 2) / 3),
-      link_color[3],
-  };
+  /* Blend toward the panel background so quote text is muted consistently across themes. */
+  uchar back_color[3];
+  theme::get_color_3ubv(TH_PANEL_BACK, back_color);
+  constexpr float dimmed_blend = 0.5f;
+
+  uchar dimmed_color[4];
+  theme::get_color_blend_shade_3ubv(color, back_color, dimmed_blend, 0, dimmed_color);
+  dimmed_color[3] = color[3];
+
+  uchar dimmed_link_color[4];
+  theme::get_color_blend_shade_3ubv(link_color, back_color, dimmed_blend, 0, dimmed_link_color);
+  dimmed_link_color[3] = link_color[3];
 
   for (const MarkdownItem &item : cache.md_layout.items) {
     if (const auto *text_item = std::get_if<MarkdownItemText>(&item)) {
