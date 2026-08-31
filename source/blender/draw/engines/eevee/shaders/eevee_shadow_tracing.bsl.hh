@@ -123,8 +123,8 @@ bool shadow_map_trace([[resource_table]] ShadowRenderData &srd,
                       float step_offset)
 {
   ShadowMapTracingState state = shadow_map_trace_init(sample_count, step_offset);
-  for (int i = 0; (i <= sample_count) && (i <= SHADOW_MAX_STEP) && (state.hit == false);
-       i++) { /* Saturate to always cover the shading point position when i == sample_count. */
+  for (int i = 0; (i <= sample_count) && (i <= SHADOW_MAX_STEP) && (state.hit == false); i++) {
+    /* Saturate to always cover the shading point position when i == sample_count. */
     state.ray_time = square(saturate(float(i) * state.ray_step_mul + state.ray_step_bias));
 
     ShadowTracingSample samp = shadow_map_trace_sample(srd, state, ray);
