@@ -148,12 +148,11 @@ void MESH_OT_fit_edge_loops_to_curve(wmOperatorType *ot)
                CURVE_RESTRICT_NONE,
                "Restriction",
                "Restrictions on how the vertices can be moved");
-  RNA_def_boolean(
-      ot->srna,
-      "extend",
-      true,
-      "Extend",
-      "Limits the tool to work within the boundaries of the selected vertices if false");
+  RNA_def_boolean(ot->srna,
+                  "extend",
+                  false,
+                  "Extend",
+                  "Extends the tool to work beyond the boundaries of the selected vertices");
   RNA_def_boolean(ot->srna,
                   "regular",
                   true,
