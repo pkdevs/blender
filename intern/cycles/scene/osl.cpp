@@ -1461,6 +1461,9 @@ void OSLCompiler::generate_nodes(const ShaderNodeSet &nodes)
             if (node->has_bump()) {
               current_shader->has_bump_from_surface = true;
             }
+            if (node->has_dispersion()) {
+              current_shader->has_dispersion = true;
+            }
           }
           else if (current_type == SHADER_TYPE_VOLUME) {
             if (node->has_spatial_varying()) {
@@ -1636,6 +1639,8 @@ void OSLCompiler::parameter_color_array(const char * /*name*/, const array<packe
 }
 
 void OSLCompiler::parameter_string_array(const char * /*name*/, const array<ustring> & /*a*/) {}
+
+void OSLCompiler::parameter_attribute(const char * /*name*/, ustring /*s*/) {}
 
 void OSLCompiler::parameter_texture(const char * /*name*/, const ImageHandle & /*handle*/) {}
 
