@@ -262,6 +262,10 @@ static void collection_foreach_id(ID *id, LibraryForeachIDData *data)
     BKE_LIB_FOREACHID_PROCESS_IDSUPER(
         data, parent.collection, IDWALK_CB_NEVER_SELF | IDWALK_CB_LOOPBACK | cb_flag);
   }
+
+  if (collection->importer) {
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, collection->importer->archive_library, IDWALK_CB_NOP);
+  }
 }
 
 static ID **collection_owner_pointer_get(ID *id, const bool debug_relationship_assert)
