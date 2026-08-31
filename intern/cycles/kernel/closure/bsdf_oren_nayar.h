@@ -71,7 +71,7 @@ ccl_device Spectrum bsdf_oren_nayar_get_intensity(const ccl_private OrenNayarBsd
   const float El = param.a * M_PI_F + param.b * bsdf_oren_nayar_G(nl);
   const Spectrum multi_scatter = param.multiscatter_term * (1.0f - El);
 
-  return nl * (make_spectrum(single_scatter) + multi_scatter);
+  return max(nl * (make_spectrum(single_scatter) + multi_scatter), zero_float3());
 }
 
 ccl_device_inline OrenNayarParam bsdf_oren_nayar_param(const Spectrum color,
