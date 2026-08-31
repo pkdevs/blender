@@ -1780,6 +1780,32 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->asset_flag |= USER_ASSETS_USE_ONLINE_ESSENTIALS;
   }
 
+  if (!USER_VERSION_ATLEAST(502, 45)) {
+    const char *remapped_paths[][2] = {
+        {"Camera & Lens Effects", "Compositing/Camera & Lens Effects"},
+        {"Creative", "Compositing/Creative"},
+        {"Utilities", "Compositing/Utilities"},
+        {"Mask", "Compositing/Mask"},
+    };
+    for (const auto &remap : remapped_paths) {
+      if (BKE_preferences_asset_shelf_settings_disable_catalog_path(
+              userdef, "NODE_AST_compositor", remap[0]))
+      {
+        BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+            userdef, "NODE_AST_compositor", remap[1]);
+      }
+    }
+  }
+
+  /* Make Vulkan default on Linux/Windows x64. Keep existing option for Apple and Windows on ARM.*/
+#ifdef __APPLE__
+#elif defined(WIN32) && (defined(_M_ARM64) || defined(__aarch64__))
+#else
+  if (!USER_VERSION_ATLEAST(503, 10)) {
+    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
+  }
+#endif
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.
