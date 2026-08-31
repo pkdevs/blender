@@ -319,7 +319,7 @@ struct MTex {
   eMTex_BrushAngleMode brush_angle_mode = {};
   /** When set, roll-mapped texture scales with pressure-driven dab radius. */
   char roll_pressure_scale = 1;
-  char _pad_roll[1] = {};
+  char _pad_roll[7] = {};
 
   /**
    * Match against the texture node (#TEX_NODE_OUTPUT, #bNode::custom1 value).
