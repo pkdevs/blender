@@ -4313,6 +4313,8 @@ static bool mesh_separate_selected(
   Mesh *me_old = id_cast<Mesh *>(base_old->object->data);
   BM_mesh_elem_hflag_disable_all(bm_old, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
 
+  BM_custom_loop_normals_from_vector_layer(bm_old, false);
+
   BMeshToMeshParams to_mesh_params{};
   to_mesh_params.update_shapekey_indices = true;
   BM_mesh_bm_to_me(nullptr, bm_old, me_old, &to_mesh_params);
@@ -4477,6 +4479,8 @@ static bool mesh_separate_material(
 
   Mesh *me_old = id_cast<Mesh *>(base_old->object->data);
   BM_mesh_elem_hflag_disable_all(bm_old, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
+
+  BM_custom_loop_normals_from_vector_layer(bm_old, false);
 
   BMeshToMeshParams to_mesh_params{};
   to_mesh_params.update_shapekey_indices = true;
