@@ -75,7 +75,9 @@ struct MdHeaderStyle {
 
 static int markdown_layout_generation = 0;
 
-static std::array<MdHeaderStyle, 6> header_styles = {
+namespace md_style {
+
+static std::array<MdHeaderStyle, 6> headers = {
     /* H1: Main Title - Largest & Boldest. */
     MdHeaderStyle{.size_factor = 2.00f, .weight = 700, .italic = false},
     /* H2: Major Section. */
@@ -89,6 +91,8 @@ static std::array<MdHeaderStyle, 6> header_styles = {
     /* H6: Micro Heading (Same size as body text, but styled with italics). */
     MdHeaderStyle{.size_factor = 1.00f, .weight = 400, .italic = true},
 };
+
+}
 
 class MarkdownLayouter {
  private:
@@ -433,7 +437,7 @@ class MarkdownLayouter {
     }
 
     if (const auto *md_header = std::get_if<HeaderBlock>(&new_block)) {
-      const MdHeaderStyle &style = header_styles[md_header->level - 1];
+      const MdHeaderStyle &style = md_style::headers[md_header->level - 1];
       return main_font_.default_line_height * style.size_factor;
     }
     if (std::holds_alternative<ParagraphBlock>(new_block) ||
@@ -661,7 +665,7 @@ class MarkdownLayouter {
     settings.italic = false;
     for (const auto &md_block : block_stack_) {
       if (const auto *header_block = std::get_if<HeaderBlock>(&md_block)) {
-        const MdHeaderStyle &style = header_styles[header_block->level - 1];
+        const MdHeaderStyle &style = md_style::headers[header_block->level - 1];
         settings.fontid = main_font_.fontid;
         settings.size = main_font_.default_size * style.size_factor;
         settings.weight = style.weight;
@@ -1073,8 +1077,8 @@ void label_markdown_dev_config(Layout &layout)
   const int weight_width = short(5 * UI_UNIT_X);
   const int checkbox_width = short(3 * UI_UNIT_X);
 
-  for (const int level : IndexRange(header_styles.size())) {
-    MdHeaderStyle &style = header_styles[level];
+  for (const int level : IndexRange(md_style::headers.size())) {
+    MdHeaderStyle &style = md_style::headers[level];
 
     Layout &row = col.row(true);
     Layout &split = row.split(0.2f, true);
