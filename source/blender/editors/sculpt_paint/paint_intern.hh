@@ -102,7 +102,7 @@ struct PaintSample {
 /**
  * Polyline-based arc-length parameterized spline for roll texture mapping.
  * Uses raw stroke knots as the polyline — smoothing is handled by the
- * CC subdivision grid + Laplacian smoothing in compute_roll_center().
+ * subdivided grid + Laplacian smoothing in compute_roll_center().
  */
 struct RollSpline {
   Vector<float2> poly_2d;

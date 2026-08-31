@@ -8,8 +8,8 @@
  * Roll texture mapping for paint strokes.
  *
  * This file implements the arc-length-parameterized spline (RollSpline),
- * virtual extension points, the surface-interpolation grid (CC subdivision,
- * Laplacian smoothing, LUT rasterization), and the UV lookup used by
+ * virtual extension points, the surface-interpolation grid (B-spline
+ * subdivision, Laplacian smoothing, LUT rasterization), and the UV lookup used by
  * sculpt_apply_texture() when the brush map mode is MTEX_MAP_MODE_ROLL.
  */
 
@@ -779,128 +779,83 @@ void PaintStroke::finish_roll_stroke(bContext *C,
 }
 
 /**
- * Standard Catmull-Clark subdivision on a rows × cols quad grid.
- * Produces (2*rows-1) × (2*cols-1) output.
- * Border columns (c=0, c=cols-1) are pinned to preserve self-intersection
- * collapse geometry.  All other vertices use standard CC rules:
- *   - Interior: full CC vertex rule (Q + 2R + V) / 4
- *   - Boundary rows: 1/8 cubic B-spline rule along the row
+ * Subdivide the grid along the stroke direction (rows) with cubic B-spline
+ * (Lane-Riesenfeld) refinement: inserted rows are midpoints, existing rows
+ * are repositioned with the 1/8 vertex rule (prev + 6*self + next) / 8.
+ * Repeated passes approach the cubic B-spline limit curve per column,
+ * giving smooth borders and center between knots.  First/last rows stay
+ * pinned, and runs of identical vertices (self-intersection collapses)
+ * are invariant under the vertex rule, so collapse geometry is preserved.
+ * Produces (2*rows-1) × cols output.
  */
-static void catmull_clark_subdivide_grid(Vector<float3> &grid_pos,
-                                         Vector<float2> &grid_uv,
-                                         int &rows,
-                                         int &cols)
+static void bspline_subdivide_rows(Vector<float3> &grid_pos,
+                                   Vector<float2> &grid_uv,
+                                   int &rows,
+                                   const int cols)
 {
-  const int oR = rows, oC = cols;
+  const int oR = rows;
   const int nR = 2 * oR - 1;
-  const int nC = 2 * oC - 1;
-  const int fR = oR - 1;
-  const int fC = oC - 1;
 
-  auto oi = [oC](int r, int c) { return r * oC + c; };
-  auto ni = [nC](int r, int c) { return r * nC + c; };
+  Vector<float3> np(nR * cols);
+  Vector<float2> nu(nR * cols);
 
-  /* Face points (avg of 4 quad corners). */
-  Vector<float3> fp(fR * fC);
-  Vector<float2> fu(fR * fC);
-  for (int r = 0; r < fR; r++) {
-    for (int c = 0; c < fC; c++) {
-      fp[r * fC + c] = 0.25f * (grid_pos[oi(r, c)] + grid_pos[oi(r, c + 1)] +
-                                 grid_pos[oi(r + 1, c)] + grid_pos[oi(r + 1, c + 1)]);
-      fu[r * fC + c] = 0.25f * (grid_uv[oi(r, c)] + grid_uv[oi(r, c + 1)] +
-                                 grid_uv[oi(r + 1, c)] + grid_uv[oi(r + 1, c + 1)]);
+  for (int c = 0; c < cols; c++) {
+    /* Inserted rows: midpoints. */
+    for (int r = 0; r < oR - 1; r++) {
+      np[(2 * r + 1) * cols + c] = 0.5f *
+                                   (grid_pos[r * cols + c] + grid_pos[(r + 1) * cols + c]);
+      nu[(2 * r + 1) * cols + c] = 0.5f *
+                                   (grid_uv[r * cols + c] + grid_uv[(r + 1) * cols + c]);
     }
-  }
-
-  Vector<float3> np(nR * nC);
-  Vector<float2> nu(nR * nC);
-
-  /* Place face points at odd,odd positions. */
-  for (int r = 0; r < fR; r++) {
-    for (int c = 0; c < fC; c++) {
-      np[ni(2 * r + 1, 2 * c + 1)] = fp[r * fC + c];
-      nu[ni(2 * r + 1, 2 * c + 1)] = fu[r * fC + c];
-    }
-  }
-
-  /* Horizontal edge points (even row, odd col).
-   * Boundary rows: midpoint.  Interior: avg of endpoints + face points. */
-  for (int r = 0; r < oR; r++) {
-    for (int c = 0; c < fC; c++) {
-      if (r == 0 || r == oR - 1) {
-        np[ni(2 * r, 2 * c + 1)] = 0.5f * (grid_pos[oi(r, c)] + grid_pos[oi(r, c + 1)]);
-        nu[ni(2 * r, 2 * c + 1)] = 0.5f * (grid_uv[oi(r, c)] + grid_uv[oi(r, c + 1)]);
-      }
-      else {
-        np[ni(2 * r, 2 * c + 1)] = 0.25f * (grid_pos[oi(r, c)] + grid_pos[oi(r, c + 1)] +
-                                              fp[(r - 1) * fC + c] + fp[r * fC + c]);
-        nu[ni(2 * r, 2 * c + 1)] = 0.25f * (grid_uv[oi(r, c)] + grid_uv[oi(r, c + 1)] +
-                                              fu[(r - 1) * fC + c] + fu[r * fC + c]);
-      }
-    }
-  }
-
-  /* Vertical edge points (odd row, even col).
-   * Border columns: midpoint (preserves border polyline).
-   * Interior: avg of endpoints + face points. */
-  for (int r = 0; r < fR; r++) {
-    for (int c = 0; c < oC; c++) {
-      if (c == 0 || c == oC - 1) {
-        np[ni(2 * r + 1, 2 * c)] = 0.5f * (grid_pos[oi(r, c)] + grid_pos[oi(r + 1, c)]);
-        nu[ni(2 * r + 1, 2 * c)] = 0.5f * (grid_uv[oi(r, c)] + grid_uv[oi(r + 1, c)]);
-      }
-      else {
-        np[ni(2 * r + 1, 2 * c)] = 0.25f * (grid_pos[oi(r, c)] + grid_pos[oi(r + 1, c)] +
-                                              fp[r * fC + c - 1] + fp[r * fC + c]);
-        nu[ni(2 * r + 1, 2 * c)] = 0.25f * (grid_uv[oi(r, c)] + grid_uv[oi(r + 1, c)] +
-                                              fu[r * fC + c - 1] + fu[r * fC + c]);
-      }
-    }
-  }
-
-  /* Vertex points (even row, even col).
-   * Border cols: pinned.  Boundary rows: 1/8 rule.  Interior: full CC. */
-  for (int r = 0; r < oR; r++) {
-    for (int c = 0; c < oC; c++) {
-      if (c == 0 || c == oC - 1) {
-        /* Border column: pinned (preserves self-intersection collapse). */
-        np[ni(2 * r, 2 * c)] = grid_pos[oi(r, c)];
-        nu[ni(2 * r, 2 * c)] = grid_uv[oi(r, c)];
-      }
-      else if (r == 0 || r == oR - 1) {
-        /* Boundary row, interior col: 1/8 rule along row. */
-        np[ni(2 * r, 2 * c)] = (1.0f / 8.0f) *
-                                (grid_pos[oi(r, c - 1)] + 6.0f * grid_pos[oi(r, c)] +
-                                 grid_pos[oi(r, c + 1)]);
-        nu[ni(2 * r, 2 * c)] = (1.0f / 8.0f) *
-                                (grid_uv[oi(r, c - 1)] + 6.0f * grid_uv[oi(r, c)] +
-                                 grid_uv[oi(r, c + 1)]);
-      }
-      else {
-        /* Interior: full CC vertex rule.  n=4: V_new = (Q + 2R + V) / 4. */
-        const float3 Q = 0.25f * (fp[(r - 1) * fC + (c - 1)] + fp[(r - 1) * fC + c] +
-                                   fp[r * fC + (c - 1)] + fp[r * fC + c]);
-        const float2 Qu = 0.25f * (fu[(r - 1) * fC + (c - 1)] + fu[(r - 1) * fC + c] +
-                                    fu[r * fC + (c - 1)] + fu[r * fC + c]);
-        const float3 R = 0.25f *
-                         (0.5f * (grid_pos[oi(r, c - 1)] + grid_pos[oi(r, c)]) +
-                          0.5f * (grid_pos[oi(r, c + 1)] + grid_pos[oi(r, c)]) +
-                          0.5f * (grid_pos[oi(r - 1, c)] + grid_pos[oi(r, c)]) +
-                          0.5f * (grid_pos[oi(r + 1, c)] + grid_pos[oi(r, c)]));
-        const float2 Ru = 0.25f *
-                          (0.5f * (grid_uv[oi(r, c - 1)] + grid_uv[oi(r, c)]) +
-                           0.5f * (grid_uv[oi(r, c + 1)] + grid_uv[oi(r, c)]) +
-                           0.5f * (grid_uv[oi(r - 1, c)] + grid_uv[oi(r, c)]) +
-                           0.5f * (grid_uv[oi(r + 1, c)] + grid_uv[oi(r, c)]));
-        np[ni(2 * r, 2 * c)] = (Q + 2.0f * R + grid_pos[oi(r, c)]) / 4.0f;
-        nu[ni(2 * r, 2 * c)] = (Qu + 2.0f * Ru + grid_uv[oi(r, c)]) / 4.0f;
-      }
+    /* Existing rows: 1/8 vertex rule, ends pinned. */
+    np[c] = grid_pos[c];
+    nu[c] = grid_uv[c];
+    np[(nR - 1) * cols + c] = grid_pos[(oR - 1) * cols + c];
+    nu[(nR - 1) * cols + c] = grid_uv[(oR - 1) * cols + c];
+    for (int r = 1; r < oR - 1; r++) {
+      np[(2 * r) * cols + c] = (1.0f / 8.0f) *
+                               (grid_pos[(r - 1) * cols + c] + 6.0f * grid_pos[r * cols + c] +
+                                grid_pos[(r + 1) * cols + c]);
+      nu[(2 * r) * cols + c] = (1.0f / 8.0f) *
+                               (grid_uv[(r - 1) * cols + c] + 6.0f * grid_uv[r * cols + c] +
+                                grid_uv[(r + 1) * cols + c]);
     }
   }
 
   grid_pos = std::move(np);
   grid_uv = std::move(nu);
   rows = nR;
+}
+
+/**
+ * Expand the strip across the stroke by linear interpolation between
+ * adjacent columns: cols → 4*cols-3 (3 border/center/border → 9).
+ * U coordinates and cross-stroke positions vary linearly across the strip;
+ * the Laplacian pass afterwards bows the interior near collapse points.
+ */
+static void expand_grid_columns(Vector<float3> &grid_pos,
+                                Vector<float2> &grid_uv,
+                                const int rows,
+                                int &cols)
+{
+  const int oC = cols;
+  const int nC = 4 * oC - 3;
+
+  Vector<float3> np(rows * nC);
+  Vector<float2> nu(rows * nC);
+
+  for (int r = 0; r < rows; r++) {
+    for (int c = 0; c < nC; c++) {
+      const float fc = float(c) * float(oC - 1) / float(nC - 1);
+      const int i = std::min(int(fc), oC - 2);
+      const float s = fc - float(i);
+      np[r * nC + c] = math::interpolate(grid_pos[r * oC + i], grid_pos[r * oC + i + 1], s);
+      nu[r * nC + c] = math::interpolate(grid_uv[r * oC + i], grid_uv[r * oC + i + 1], s);
+    }
+  }
+
+  grid_pos = std::move(np);
+  grid_uv = std::move(nu);
   cols = nC;
 }
 
@@ -1204,7 +1159,7 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
 
     /* Build subdivided poly-strip over the full stroke polyline.
      *
-     * The grid covers the entire recorded polyline so that CC subdivision
+     * The grid covers the entire recorded polyline so that subdivision
      * and Laplacian smoothing produce consistent results regardless of
      * which dab is being evaluated.  Only the LUT rasterization is
      * restricted to the dab neighborhood (via eval_row_lo/hi). */
@@ -1261,123 +1216,20 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
         grid_uv[k * 3 + 2] = float2(1.0f, v_coords[k]);
       }
 
-      /* Catmull-Clark subdivision: N rows × 3 cols → (2N-1) rows × 5 cols.
+      /* Refine the strip: two cubic B-spline subdivision passes along the
+       * stroke, then linear expansion across it.  N rows × 3 cols →
+       * (4N-3) rows × 9 cols.
        *
-       * Uses CC face/edge point rules so that cross-stroke segments curve
-       * smoothly near collapse points (subsurf effect).  All original
-       * vertices are PINNED (no vertex rule) so the borders are not
-       * smoothed along the stroke direction — only the NEW intermediate
-       * positions get CC-averaged.  The center column is inherently
-       * preserved because all its original vertices are pinned and its
-       * vertical edge points use simple midpoints. */
-      int cur_rows, cur_cols;
-      {
-        const int oR = init_rows;
-        const int oC = init_cols; /* 3 */
-        const int nR = 2 * oR - 1;
-        const int nC = 2 * oC - 1; /* 5 */
-        const int fR = oR - 1; /* face-point row count */
-        const int fC = oC - 1; /* face-point col count = 2 */
-
-        auto oi = [oC](int r, int c) { return r * oC + c; };
-        auto ni = [nC](int r, int c) { return r * nC + c; };
-
-        /* Step 1: Face points (odd row, odd col in new grid).
-         * F = average of the 4 corners of each quad. */
-        Vector<float3> fp(fR * fC);
-        Vector<float2> fu(fR * fC);
-        for (int r = 0; r < fR; r++) {
-          for (int c = 0; c < fC; c++) {
-            fp[r * fC + c] = 0.25f * (grid_pos[oi(r, c)] + grid_pos[oi(r, c + 1)] +
-                                       grid_pos[oi(r + 1, c)] + grid_pos[oi(r + 1, c + 1)]);
-            fu[r * fC + c] = 0.25f * (grid_uv[oi(r, c)] + grid_uv[oi(r, c + 1)] +
-                                       grid_uv[oi(r + 1, c)] + grid_uv[oi(r + 1, c + 1)]);
-          }
-        }
-
-        Vector<float3> np(nR * nC);
-        Vector<float2> nu(nR * nC);
-
-        /* Step 2: Fill face points. */
-        for (int r = 0; r < fR; r++) {
-          for (int c = 0; c < fC; c++) {
-            np[ni(2 * r + 1, 2 * c + 1)] = fp[r * fC + c];
-            nu[ni(2 * r + 1, 2 * c + 1)] = fu[r * fC + c];
-          }
-        }
-
-        /* Step 3: Horizontal edge points (even row, odd col).
-         * Interior: average of endpoints + adjacent face points.
-         * Boundary (first/last row): simple midpoint. */
-        for (int r = 0; r < oR; r++) {
-          for (int c = 0; c < fC; c++) {
-            if (r == 0 || r == oR - 1) {
-              np[ni(2 * r, 2 * c + 1)] = 0.5f * (grid_pos[oi(r, c)] +
-                                                    grid_pos[oi(r, c + 1)]);
-              nu[ni(2 * r, 2 * c + 1)] = 0.5f * (grid_uv[oi(r, c)] +
-                                                    grid_uv[oi(r, c + 1)]);
-            }
-            else {
-              np[ni(2 * r, 2 * c + 1)] = 0.25f * (grid_pos[oi(r, c)] +
-                                                     grid_pos[oi(r, c + 1)] +
-                                                     fp[(r - 1) * fC + c] + fp[r * fC + c]);
-              nu[ni(2 * r, 2 * c + 1)] = 0.25f * (grid_uv[oi(r, c)] +
-                                                     grid_uv[oi(r, c + 1)] +
-                                                     fu[(r - 1) * fC + c] + fu[r * fC + c]);
-            }
-          }
-        }
-
-        /* Step 4: Vertical edge points (odd row, even col).
-         * Border columns (C=0,2) and center column (C=1): simple midpoint.
-         * (Center vertical edges stay on the stroke polyline.) */
-        for (int r = 0; r < fR; r++) {
-          for (int c = 0; c < oC; c++) {
-            np[ni(2 * r + 1, 2 * c)] = 0.5f * (grid_pos[oi(r, c)] +
-                                                  grid_pos[oi(r + 1, c)]);
-            nu[ni(2 * r + 1, 2 * c)] = 0.5f * (grid_uv[oi(r, c)] +
-                                                  grid_uv[oi(r + 1, c)]);
-          }
-        }
-
-        /* Step 5: Original vertex points (even row, even col).
-         * Center column (C=1): CC boundary rule (1D smoothing along stroke)
-         * so cross-stroke segments can curve near merge points.
-         * Border columns + first/last rows: pinned. */
-        for (int r = 0; r < oR; r++) {
-          for (int c = 0; c < oC; c++) {
-            if (c == 1 && r > 0 && r < oR - 1) {
-              /* Center column interior: smooth along the stroke direction.
-               * V_new = (1/8)(V_above + 6V + V_below) — the CC boundary
-               * vertex rule.  This shifts the center along the stroke,
-               * allowing cross-segments to curve at merge points. */
-              np[ni(2 * r, 2 * c)] = (1.0f / 8.0f) *
-                                      (grid_pos[oi(r - 1, c)] +
-                                       6.0f * grid_pos[oi(r, c)] +
-                                       grid_pos[oi(r + 1, c)]);
-              nu[ni(2 * r, 2 * c)] = (1.0f / 8.0f) *
-                                      (grid_uv[oi(r - 1, c)] +
-                                       6.0f * grid_uv[oi(r, c)] +
-                                       grid_uv[oi(r + 1, c)]);
-            }
-            else {
-              /* Corners, boundary rows, border columns: pinned. */
-              np[ni(2 * r, 2 * c)] = grid_pos[oi(r, c)];
-              nu[ni(2 * r, 2 * c)] = grid_uv[oi(r, c)];
-            }
-          }
-        }
-
-        grid_pos = std::move(np);
-        grid_uv = std::move(nu);
-        cur_rows = nR;
-        cur_cols = nC;
-      }
-
-      /* Second CC pass: standard rules for additional smoothing.
-       * Border columns remain pinned; interior vertices get the full
-       * CC vertex rule, producing smoother cross-stroke curvature. */
-      catmull_clark_subdivide_grid(grid_pos, grid_uv, cur_rows, cur_cols);
+       * The B-spline vertex rule curves borders and center between knots —
+       * along-stroke smoothing the Laplacian pass below cannot provide,
+       * since it pins the border columns.  Across the strip only linear
+       * interpolation is needed (U must map linearly to ±1 anyway); the
+       * Laplacian bows the interior near collapse points. */
+      int cur_rows = init_rows;
+      int cur_cols = init_cols;
+      bspline_subdivide_rows(grid_pos, grid_uv, cur_rows, cur_cols);
+      bspline_subdivide_rows(grid_pos, grid_uv, cur_rows, cur_cols);
+      expand_grid_columns(grid_pos, grid_uv, cur_rows, cur_cols);
 
       /* 2D Laplacian smoothing: pin border columns, smooth everything
        * between them (including center).  This curves the cross-stroke
@@ -1448,7 +1300,7 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
        * alone might be too tight.  Forward range is more generous to
        * include the trailing segment and its self-intersection merges.
        *
-       * After two CC subdivision passes, original polyline vertex `vi`
+       * After two row-subdivision passes, original polyline vertex `vi`
        * maps to grid row `4 * vi`. */
       {
         const float eval_s_lo = std::max(0.0f, raw_s - R * 2.0f);
