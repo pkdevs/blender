@@ -11,6 +11,7 @@
 #include "BLI_math_vector_c.hh"
 #include "BLI_rect.hh"
 
+#include "BKE_camera.h"
 #include "BKE_context.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_global.hh"
@@ -84,7 +85,9 @@ bool transdata_check_local_islands(TransInfo *t, short around)
 
 /** \} */
 
-/* ************************** SPACE DEPENDENT CODE **************************** */
+/* -------------------------------------------------------------------- */
+/** \name Space Dependent Utilities
+ * \{ */
 
 void setTransformViewMatrices(TransInfo *t)
 {
@@ -264,8 +267,15 @@ void projectFloatViewCenterFallback(TransInfo *t, float adr[2])
              * for a 3D point that couldn't be projected. */
             const bool no_shift = true;
             rctf viewborder = {0};
-            ED_view3d_calc_camera_border(
-                t->scene, t->depsgraph, region, v3d, rv3d, no_shift, true, &viewborder);
+            viewborder = BKE_camera_view_border(t->scene,
+                                                t->depsgraph,
+                                                v3d,
+                                                rv3d,
+                                                region->winx,
+                                                region->winy,
+                                                no_shift,
+                                                false,
+                                                true);
             adr[0] = BLI_rctf_cent_x(&viewborder);
             adr[1] = BLI_rctf_cent_y(&viewborder);
             changed = true;
@@ -625,7 +635,11 @@ static void viewRedrawPost(bContext *C, TransInfo *t)
   }
 }
 
-/* ************************************************* */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Modal Keymap
+ * \{ */
 
 static bool transform_modal_item_poll(const wmOperator *op, int value)
 {
@@ -945,6 +959,12 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
 
   return keymap;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Event Handling
+ * \{ */
 
 static bool transform_event_modal_constraint(TransInfo *t, short modal_type)
 {
@@ -1519,6 +1539,12 @@ wmOperatorStatus transformEvent(TransInfo *t, wmOperator *op, const wmEvent *eve
   return OPERATOR_PASS_THROUGH;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Center
+ * \{ */
+
 bool calculateTransformCenter(bContext *C, int centerMode, float cent3d[3], float cent2d[2])
 {
   TransInfo *t = MEM_new_zeroed<TransInfo>("TransInfo data");
@@ -1569,6 +1595,12 @@ bool calculateTransformCenter(bContext *C, int centerMode, float cent3d[3], floa
 
   return success;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Overlay Drawing
+ * \{ */
 
 static bool transinfo_show_overlay(TransInfo *t, ARegion *region)
 {
@@ -1746,6 +1778,12 @@ static void drawTransformPixel(const bContext * /*C*/, ARegion *region, void *ar
     }
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Init / Apply / End
+ * \{ */
 
 void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
 {
@@ -2301,6 +2339,12 @@ wmOperatorStatus transformEnd(bContext *C, TransInfo *t)
   return exit_code;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Public Utilities
+ * \{ */
+
 bool checkUseAxisMatrix(TransInfo *t)
 {
   /* Currently only checks for editmode. */
@@ -2340,5 +2384,7 @@ void view_vector_calc(const TransInfo *t, const float focus[3], float r_vec[3])
   }
   normalize_v3(r_vec);
 }
+
+/** \} */
 
 }  // namespace blender::ed::transform

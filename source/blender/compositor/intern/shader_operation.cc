@@ -216,6 +216,7 @@ static const char *get_set_function_name(const ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
@@ -233,27 +234,8 @@ void ShaderOperation::link_node_input_unavailable(const bNodeSocket &input)
 
   /* Create a constant link with some zero value. The value is arbitrary and ignored. See the
    * method description. */
-  GPUNodeLink *link = nullptr;
-
-  switch (input.type) {
-    case SOCK_INT:
-    case SOCK_MENU:
-      stack.integer_data.x = 0;
-      link = GPU_constant(&stack.integer_data.x);
-      break;
-    case SOCK_INT_VECTOR:
-      stack.integer_data = int4(0);
-      link = GPU_constant(&stack.integer_data.x);
-      break;
-    case SOCK_BOOLEAN:
-      stack.boolean_data = false;
-      link = GPU_constant(&stack.boolean_data);
-      break;
-    default:
-      zero_v4(stack.vec);
-      link = GPU_constant(stack.vec);
-      break;
-  }
+  stack.value = GPU_node_stack_default_value(stack.type);
+  GPUNodeLink *link = GPU_constant(stack);
 
   const ResultType type = get_node_socket_result_type(&input);
   GPU_link(material_, get_set_function_name(type), link, &stack.link);
@@ -267,58 +249,63 @@ static GPUNodeLink *get_input_value_link(const bNodeSocket &input, GPUNodeStack 
    * uniform for socket types that might change a lot to avoid excessive shader recompilation. */
   switch (input.type) {
     case SOCK_INT: {
-      stack.integer_data.x = input.default_value_typed<bNodeSocketValueInt>()->value;
-      return GPU_uniform(&stack.integer_data.x);
+      stack.value = input.default_value_typed<bNodeSocketValueInt>()->value;
+      return GPU_uniform(stack);
     }
     case SOCK_MENU: {
-      stack.integer_data.x = input.default_value_typed<bNodeSocketValueMenu>()->value;
-      return GPU_constant(&stack.integer_data.x);
+      stack.value = input.default_value_typed<bNodeSocketValueMenu>()->value;
+      return GPU_constant(stack);
     }
     case SOCK_INT_VECTOR: {
       const bNodeSocketValueIntVector *storage =
           input.default_value_typed<bNodeSocketValueIntVector>();
       switch (storage->dimensions) {
-        case 2: {
-          const int2 value = int2(storage->value);
-          copy_v2_v2_int(&stack.integer_data.x, &value.x);
-          return GPU_uniform(&stack.integer_data.x);
-        }
-        case 3: {
-          const int3 value = int3(storage->value);
-          copy_v3_v3_int(&stack.integer_data.x, &value.x);
-          return GPU_uniform(&stack.integer_data.x);
-        }
+        case 2:
+          stack.value = int2(storage->value);
+          return GPU_uniform(stack);
+        case 3:
+          stack.value = int3(storage->value);
+          return GPU_uniform(stack);
         default:
           break;
       }
       break;
     }
     case SOCK_BOOLEAN: {
-      stack.boolean_data = input.default_value_typed<bNodeSocketValueBoolean>()->value;
-      return GPU_constant(&stack.boolean_data);
+      stack.value = bool(input.default_value_typed<bNodeSocketValueBoolean>()->value);
+      return GPU_constant(stack);
     }
     case SOCK_FLOAT: {
-      const float value = input.default_value_typed<bNodeSocketValueFloat>()->value;
-      stack.vec[0] = value;
-      return GPU_uniform(stack.vec);
+      stack.value = input.default_value_typed<bNodeSocketValueFloat>()->value;
+      return GPU_uniform(stack);
     }
     case SOCK_VECTOR: {
-      const float4 value = float4(input.default_value_typed<bNodeSocketValueVector>()->value);
-      copy_v4_v4(stack.vec, value);
-      return GPU_uniform(stack.vec);
+      const bNodeSocketValueVector *storage = input.default_value_typed<bNodeSocketValueVector>();
+      switch (storage->dimensions) {
+        case 2:
+          stack.value = float2(storage->value);
+          return GPU_uniform(stack);
+        case 3:
+          stack.value = float3(storage->value);
+          return GPU_uniform(stack);
+        case 4:
+          stack.value = float4(storage->value);
+          return GPU_uniform(stack);
+        default:
+          break;
+      }
+      break;
     }
     case SOCK_RGBA: {
-      const Color value = Color(input.default_value_typed<bNodeSocketValueRGBA>()->value);
-      copy_v4_v4(stack.vec, value);
-      return GPU_uniform(stack.vec);
+      stack.value = float4(Color(input.default_value_typed<bNodeSocketValueRGBA>()->value));
+      return GPU_uniform(stack);
     }
     case SOCK_ROTATION: {
       const bNodeSocketValueRotation *rotation =
           input.default_value_typed<bNodeSocketValueRotation>();
       const math::EulerXYZ euler(float3(rotation->value_euler));
-      const math::Quaternion value = math::to_quaternion(euler);
-      copy_v4_v4(stack.vec, float4(value));
-      return GPU_uniform(stack.vec);
+      stack.value = float4(math::to_quaternion(euler));
+      return GPU_uniform(stack);
     }
     case SOCK_MATRIX:
       /* Matrix sockets do not have default values. */
@@ -330,6 +317,7 @@ static GPUNodeLink *get_input_value_link(const bNodeSocket &input, GPUNodeStack 
     case SOCK_SCENE:
     case SOCK_TEXT_ID:
     case SOCK_MASK:
+    case SOCK_BUNDLE:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(get_node_socket_result_type(&input)));
       break;
@@ -461,6 +449,7 @@ static GPUNodeLink *get_result_single_value_link(const Result &result)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(result.type()));
       BLI_assert_unreachable();
@@ -482,6 +471,13 @@ void ShaderOperation::link_node_input_external(const bNodeSocket &input_socket,
    * referenced by the operation. */
   Result &result = compile_state_.get_result_from_output_socket(output_socket);
   if (result.is_single_value()) {
+    /* Single only types do not support GPU code path. */
+    if (Result::is_single_value_only_type(result.type())) {
+      this->link_node_input_unavailable(input_socket);
+      result.release();
+      return;
+    }
+
     GPUNodeLink *link = get_result_single_value_link(result);
     const char *function_name = get_set_function_name(result.type());
     GPU_link(material_, function_name, link, &stack.link);
@@ -624,6 +620,7 @@ static const char *get_store_function_name(ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
@@ -691,6 +688,7 @@ static GPUNodeLink *get_default_input_value_link(const ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
@@ -850,6 +848,7 @@ static const char *glsl_store_expression_from_result_type(ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
@@ -886,6 +885,7 @@ static ImageType gpu_image_type_from_result_type(const ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
@@ -1027,6 +1027,7 @@ std::string ShaderOperation::generate_code_for_outputs(ShaderCreateInfo &shader_
       case ResultType::Scene:
       case ResultType::Text:
       case ResultType::Mask:
+      case ResultType::Bundle:
         /* Single only types do not support GPU code path. */
         BLI_assert(Result::is_single_value_only_type(result.type()));
         BLI_assert_unreachable();
@@ -1093,6 +1094,7 @@ static const char *glsl_type_from_result_type(ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
@@ -1141,6 +1143,7 @@ static const char *glsl_swizzle_from_result_type(ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();

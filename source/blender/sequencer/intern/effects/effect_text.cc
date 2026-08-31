@@ -77,9 +77,11 @@ struct SeqFontMap {
 };
 
 static SeqFontMap g_font_map;
+static int g_fallback_font_id = -1;
 
 void fontmap_clear()
 {
+  std::lock_guard lock(g_font_map.mutex);
   for (const auto &item : g_font_map.path_to_file_font_id.items()) {
     BLF_unload_id(item.value);
   }
@@ -88,6 +90,11 @@ void fontmap_clear()
     BLF_unload_id(item.value);
   }
   g_font_map.name_to_mem_font_id.clear();
+
+  if (g_fallback_font_id >= 0) {
+    BLF_unload_id(g_fallback_font_id);
+    g_fallback_font_id = -1;
+  }
 }
 
 static int strip_load_font_file(const std::string &path)
@@ -800,7 +807,7 @@ static int text_effect_line_size_get(const RenderData *context, const TextVars &
 
 int text_effect_font_get(TextVars &text)
 {
-  int font = blf_mono_font_render;
+  int font = -1;
   /* In case font got unloaded behind our backs: mark it as needing a load. */
   if (text.text_blf_id >= 0 && !BLF_is_loaded_id(text.text_blf_id)) {
     text.text_blf_id = STRIP_FONT_NOT_LOADED;
@@ -813,6 +820,18 @@ int text_effect_font_get(TextVars &text)
 
   if (text.text_blf_id >= 0) {
     font = text.text_blf_id;
+  }
+
+  if (font < 0) {
+    /* Try to fallback to the default Blender monospaced font. */
+    std::lock_guard lock(g_font_map.mutex);
+    if (g_fallback_font_id >= 0 && !BLF_is_loaded_id(g_fallback_font_id)) {
+      g_fallback_font_id = -1;
+    }
+    if (g_fallback_font_id < 0) {
+      g_fallback_font_id = BLF_load_mono_default(true);
+    }
+    font = g_fallback_font_id;
   }
   return font;
 }
@@ -1100,8 +1119,8 @@ static SeqResult do_text_effect(const RenderData *context,
   TextVars *data = static_cast<TextVars *>(strip->effectdata);
 
   /* Guard against parallel accesses to the fonts map. */
-  std::lock_guard font_map_lock(g_font_map.mutex);
   std::lock_guard text_runtime_lock(text_runtime_mutex);
+  std::lock_guard font_map_lock(g_font_map.mutex);
 
   text_effect_update_runtime(context, *data, {out.image->x, out.image->y});
   const int font = data->runtime->font;
