@@ -3402,6 +3402,8 @@ void Layout::label_multiline(StringRefNull text, int icon, FontStyleAlign align,
 
 void Layout::label_markdown(const StringRef text)
 {
+  this->label_markdown_dev_config();
+
   block_layout_set_current(this->block(), this);
   ButtonLabel *button = static_cast<ButtonLabel *>(
       uiDefBut(this->block(), ButtonType::Label, text, 0, 0, 0, 0, nullptr, 0, 0, std::nullopt));
@@ -3412,6 +3414,11 @@ void Layout::label_markdown(const StringRef text)
   if (this->red_alert()) {
     button_flag_enable(button, BUT_REDALERT);
   }
+}
+
+void Layout::label_markdown_dev_config()
+{
+  ::blender::ui::label_markdown_dev_config(*this);
 }
 
 void Layout::link(const StringRef url, const StringRef name, int icon)

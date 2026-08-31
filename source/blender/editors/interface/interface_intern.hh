@@ -414,6 +414,7 @@ struct MarkdownLayoutCacheKey {
   StringRef text;
   int wrap_width_px = 0;
   float pixels_per_point = 0.0f;
+  int markdown_layout_generation = 0;
 
   bool operator==(const MarkdownLayoutCacheKey &other) const = default;
 };

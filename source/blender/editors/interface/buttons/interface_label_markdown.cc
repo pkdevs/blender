@@ -5,11 +5,18 @@
 #include <cfloat>
 #include <md4c.h>
 
+#include "BKE_context.hh"
+
 #include "BLF_api.hh"
 
+#include "BLI_index_range.hh"
 #include "BLI_math_base.hh"
 #include "BLI_rect.hh"
 #include "BLI_string_utf8.hh"
+
+#include "BLT_translation.hh"
+
+#include "ED_screen.hh"
 
 #include "GPU_immediate.hh"
 #include "GPU_state.hh"
@@ -66,7 +73,9 @@ struct MdHeaderStyle {
   bool italic = false;
 };
 
-constexpr std::array<MdHeaderStyle, 6> header_styles = {
+static int markdown_layout_generation = 0;
+
+static std::array<MdHeaderStyle, 6> header_styles = {
     /* H1: Main Title - Largest & Boldest. */
     MdHeaderStyle{.size_factor = 2.00f, .weight = 700, .italic = false},
     /* H2: Major Section. */
@@ -909,6 +918,7 @@ static MarkdownLayoutCacheKey markdown_layout_key_for_button(const ButtonLabel &
   key.text = button.str;
   key.wrap_width_px = std::max<int>(std::ceil(BLI_rctf_size_x(&button.rect) / aspect), 0);
   key.pixels_per_point = UI_SCALE_FAC / aspect;
+  key.markdown_layout_generation = markdown_layout_generation;
   return key;
 }
 
@@ -1042,6 +1052,83 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
       GPU_blend(GPU_BLEND_NONE);
       immUnbindProgram();
     }
+  }
+}
+
+static void label_markdown_dev_config_update(bContext &C)
+{
+  markdown_layout_generation++;
+  if (ScrArea *area = CTX_wm_area(&C)) {
+    ED_area_tag_redraw(area);
+  }
+}
+
+void label_markdown_dev_config(Layout &layout)
+{
+  Block *block = layout.block();
+  layout.use_property_split_set(true);
+  Layout &col = layout.column(false);
+
+  const int num_width = short(6 * UI_UNIT_X);
+  const int weight_width = short(5 * UI_UNIT_X);
+  const int checkbox_width = short(3 * UI_UNIT_X);
+
+  for (const int level : IndexRange(header_styles.size())) {
+    MdHeaderStyle &style = header_styles[level];
+
+    Layout &row = col.row(true);
+    Layout &split = row.split(0.2f, true);
+    Layout &label_col = split.column(true);
+    label_col.alignment_set(LayoutAlign::Right);
+    label_col.label(fmt::format("H{}", level + 1), ICON_NONE);
+
+    Layout &controls = split.row(true);
+
+    block_layout_set_current(block, &controls);
+    Button *size_but = uiDefButV(block,
+                                 ButtonType::Num,
+                                 IFACE_("Size"),
+                                 0,
+                                 0,
+                                 num_width,
+                                 UI_UNIT_Y,
+                                 &style.size_factor,
+                                 0.25f,
+                                 4.0f,
+                                 IFACE_("Size factor relative to body text"));
+    button_number_step_size_set(size_but, 0.05f);
+    button_number_precision_set(size_but, 2);
+    button_func_set(size_but, label_markdown_dev_config_update);
+
+    block_layout_set_current(block, &controls);
+    Button *weight_but = uiDefButV(block,
+                                   ButtonType::Num,
+                                   IFACE_("Weight"),
+                                   0,
+                                   0,
+                                   weight_width,
+                                   UI_UNIT_Y,
+                                   &style.weight,
+                                   100,
+                                   900,
+                                   IFACE_("Font weight"));
+    button_number_step_size_set(weight_but, 100);
+    button_number_precision_set(weight_but, -1);
+    button_func_set(weight_but, label_markdown_dev_config_update);
+
+    block_layout_set_current(block, &controls);
+    Button *italic_but = uiDefButV(block,
+                                   ButtonType::Checkbox,
+                                   IFACE_("Italic"),
+                                   0,
+                                   0,
+                                   checkbox_width,
+                                   UI_UNIT_Y,
+                                   &style.italic,
+                                   0,
+                                   0,
+                                   IFACE_("Use italic style"));
+    button_func_set(italic_but, label_markdown_dev_config_update);
   }
 }
 

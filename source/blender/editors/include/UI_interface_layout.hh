@@ -419,6 +419,11 @@ struct Layout : public Item, NonCopyable, NonMovable {
   void label_markdown(StringRef text);
 
   /**
+   * Draw various settings for markdown rendering.
+   */
+  void label_markdown_dev_config();
+
+  /**
    * Adds link item, displays a url that can be clicked in the layout.
    */
   void link(StringRef url, StringRef name, int icon);

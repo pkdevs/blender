@@ -14,6 +14,7 @@ namespace blender::ui {
 struct Block;
 struct Button;
 struct ButtonLabel;
+struct Layout;
 
 bool button_label_is_markdown(const Button *button);
 
@@ -31,5 +32,7 @@ void label_markdown_create_link_buttons(Block *block);
 
 /** Draws markdown label contents into \a rect (pixel space). */
 void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const rcti *rect);
+
+void label_markdown_dev_config(Layout &layout);
 
 }  // namespace blender::ui
