@@ -344,12 +344,14 @@ if(UNIX AND NOT (APPLE OR HAIKU))
   option(WITH_GHOST_WAYLAND "Enable building Blender against Wayland for windowing" ON)
   mark_as_advanced(WITH_GHOST_WAYLAND)
 
-  option(WITH_GHOST_DBUS "\
+  if(WITH_GHOST_WAYLAND)
+    option(WITH_GHOST_DBUS "\
 Enable reading desktop settings over DBUS, such as the light/dark theme preference. \
 Requires the `dbus-1` headers at build time."
-    ON
-  )
-  mark_as_advanced(WITH_GHOST_DBUS)
+      ON
+    )
+    mark_as_advanced(WITH_GHOST_DBUS)
+  endif()
 
   option(WITH_GHOST_DBUS_DYNLOAD "\
 Enable runtime dynamic loading of `libdbus` (avoids a link time dependency)"
