@@ -5,7 +5,7 @@
 #include "BKE_theme.hh"
 
 #include "BLI_listbase.hh"
-#include "BLI_string_utf8.hh"
+#include "BLI_string.hh"
 #include "BLI_utildefines.hh"
 
 #include "BLO_userdef_default.h"
@@ -53,7 +53,7 @@ bTheme &ensure_theme(StringRefNull filepath, UserPrefThemeType slot)
   if (!btheme) {
     btheme = MEM_new<bTheme>(__func__);
     BLI_addtail(&U.themes, btheme);
-    STRNCPY_UTF8(btheme->filepath, filepath.c_str());
+    STRNCPY(btheme->filepath, filepath.c_str());
     /* A theme that already exists is otherwise left untouched, so switching which preset is
      * active doesn't discard live edits made to a theme still in #UserDef::themes. */
     reset_theme(*btheme);
