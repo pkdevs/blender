@@ -2063,6 +2063,10 @@ def brush_basic_grease_pencil_vertex_settings(layout, context, brush, *, compact
             layout.prop(gp_settings, "vertex_mode", text="Stroke Mode")
 
 
+def supports_shape_panel(mode):
+    return mode in {'SCULPT', 'PAINT_VERTEX', 'PAINT_WEIGHT', 'PAINT_TEXTURE'}
+
+
 classes = (
     VIEW3D_MT_tools_projectpaint_clone,
 )

@@ -30,6 +30,7 @@ from bl_ui.properties_paint_common import (
     brush_settings,
     brush_settings_advanced,
     draw_color_settings,
+    supports_shape_panel,
 )
 from bl_ui.utils import PresetPanel
 
@@ -872,7 +873,7 @@ class VIEW3D_PT_tools_brush_shape(Panel, View3DPaintPanel, ShapePanel):
         if not super().poll(context):
             return False
         mode = cls.get_brush_mode(context)
-        return mode not in {'SCULPT_GREASE_PENCIL', 'SCULPT_CURVES'}
+        return supports_shape_panel(mode)
 
 
 class VIEW3D_PT_tools_brush_falloff(Panel, View3DPaintPanel, FalloffPanel):
@@ -886,7 +887,7 @@ class VIEW3D_PT_tools_brush_falloff(Panel, View3DPaintPanel, FalloffPanel):
         if not super().poll(context):
             return False
         mode = cls.get_brush_mode(context)
-        return mode in {'SCULPT_GREASE_PENCIL', 'SCULPT_CURVES'}
+        return not supports_shape_panel(mode)
 
 
 class VIEW3D_PT_tools_brush_falloff_normal(View3DPaintPanel, Panel):
