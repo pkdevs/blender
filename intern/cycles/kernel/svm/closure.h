@@ -324,8 +324,9 @@ ccl_device
             if (bsdf && fresnel) {
               const bool backfacing = (sd->runtime_flag & SR_BACKFACING);
               bsdf->N = valid_reflection_N;
-              bsdf->T = zero_float3();
-              bsdf->alpha_x = bsdf->alpha_y = sqr(roughness);
+              bsdf->T = T;
+              bsdf->alpha_x = alpha_x;
+              bsdf->alpha_y = alpha_y;
 
               const float dispersion_scale = saturatef(
                   stack_load(stack, data.transmission_dispersion_scale));
