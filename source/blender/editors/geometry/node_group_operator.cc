@@ -144,6 +144,8 @@ struct OperatorTypeData : public wmOperatorType::TypeData {
   Vector<StructRNA *> generated_structs;
   Vector<Array<EnumPropertyItem, 0>> enum_item_storage;
   Array<EnumPropertyItem, 0> modal_keymap_items;
+  /** Owns the identifier strings referenced by #modal_keymap_items. */
+  Array<std::string, 0> modal_keymap_item_identifiers;
 
   struct LocalRef {
     uint32_t session_uid;
@@ -1008,11 +1010,12 @@ static std::optional<StringRef> modal_event_name_for_event(const wmOperatorType 
     return std::nullopt;
   }
   const auto *items = static_cast<const EnumPropertyItem *>(ot.modalkeymap->modal_items);
-  const char *identifier = nullptr;
-  if (!RNA_enum_identifier(items, event.val, &identifier)) {
+  /* The UI name rather than the identifier, since that's the name the Modal Event nodes store. */
+  const char *name = nullptr;
+  if (!RNA_enum_name(items, event.val, &name)) {
     return std::nullopt;
   }
-  return StringRef(identifier);
+  return StringRef(name);
 }
 
 class NodeOperatorSimulationParams : public nodes::GeoNodesSimulationParams {
@@ -1765,43 +1768,61 @@ static StructRNA *create_panels_srna(const IDProperty &properties,
  * properties are part of #OperatorTypeData::hash, the modal keymap is only rebuilt when the events
  * or their defaults actually changed.
  */
-static bool is_valid_identifier(const StringRef name)
+static std::string identifier_from_event_name(const StringRef name)
 {
-  if (name.is_empty()) {
-    return false;
+  std::string identifier;
+  identifier.reserve(name.size());
+  for (const char c : name) {
+    identifier.push_back(std::isalnum(uchar(c)) ? c : '_');
   }
-  if (!ELEM(name[0], '_') && !std::isalpha(uchar(name[0]))) {
-    return false;
+  if (!identifier.empty() && std::isdigit(uchar(identifier[0]))) {
+    identifier.insert(identifier.begin(), '_');
   }
-  return std::all_of(
-      name.begin(), name.end(), [](const char c) { return c == '_' || std::isalnum(uchar(c)); });
+  return identifier;
 }
 
 /** Build the modal keymap's item array from the events listed in the meta-data properties. */
-static Vector<EnumPropertyItem> modal_keymap_items_from_meta_data(const IDProperty &properties)
+static void ensure_modal_keymap_items(OperatorTypeData &type_data)
 {
-  Vector<EnumPropertyItem> items;
-  const IDProperty *events = IDP_GetPropertyFromGroup(&properties, "modal_events");
+  const IDProperty *events = IDP_GetPropertyFromGroup(type_data.asset_meta_data_properties.get(),
+                                                      "modal_events");
   if (!events || events->type != IDP_GROUP) {
-    return items;
+    return;
   }
+  Vector<const IDProperty *> event_props;
+  Vector<std::string> identifiers;
   for (const IDProperty &event : events->data.group) {
     if (event.type != IDP_STRING) {
       continue;
     }
-    if (!is_valid_identifier(event.name)) {
-      /* The name is used as a modal keymap item identifier, so it has to be a valid identifier.
-       * Events with other names simply can't be bound to a key. */
+    std::string identifier = identifier_from_event_name(event.name);
+    if (identifier.empty()) {
       continue;
     }
-    /* The strings stay owned by the meta-data properties. Those live as long as the operator type
-     * and therefore as long as the keymap that references this array. */
-    items.append({int(items.size()), event.name, 0, event.name, IDP_string_get(&event)});
+    if (identifiers.contains(identifier)) {
+      /* Two names that only differ in characters that aren't part of an identifier end up with
+       * the same identifier. Only the first of them can be bound to a key. */
+      continue;
+    }
+    identifiers.append(std::move(identifier));
+    event_props.append(&event);
   }
-  if (!items.is_empty()) {
-    items.append({0, nullptr, 0, nullptr, nullptr});
+  if (identifiers.is_empty()) {
+    return;
   }
-  return items;
+
+  type_data.modal_keymap_item_identifiers = Array<std::string, 0>(identifiers.as_span());
+
+  Vector<EnumPropertyItem> items;
+  for (const int i : event_props.index_range()) {
+    items.append({i,
+                  type_data.modal_keymap_item_identifiers[i].c_str(),
+                  0,
+                  event_props[i]->name,
+                  IDP_string_get(event_props[i])});
+  }
+  items.append({0, nullptr, 0, nullptr, nullptr});
+  type_data.modal_keymap_items = Array<EnumPropertyItem, 0>(items.as_span());
 }
 
 static void add_default_modal_keymap_items(wmKeyMap &keymap,
@@ -1823,8 +1844,9 @@ static void add_default_modal_keymap_items(wmKeyMap &keymap,
     }
     /* The default keymap can be out of date when the Modal Event node that defined an event has
      * been removed or renamed. That's not an error, the binding is just skipped. */
+    const std::string identifier = identifier_from_event_name(*event_name);
     int propvalue;
-    if (!RNA_enum_value_from_id(items.data(), event_name->c_str(), &propvalue)) {
+    if (!RNA_enum_value_from_id(items.data(), identifier.c_str(), &propvalue)) {
       continue;
     }
     KeyMapItem_Params params{};
@@ -1863,12 +1885,10 @@ static void node_tool_modal_keymap_ensure(wmOperatorType *ot, wmKeyConfig *keyco
 {
   auto &type_data = static_cast<OperatorTypeData &>(*ot->custom_data);
   if (type_data.modal_keymap_items.is_empty()) {
-    const Vector<EnumPropertyItem> items = modal_keymap_items_from_meta_data(
-        *type_data.asset_meta_data_properties);
-    if (items.is_empty()) {
+    ensure_modal_keymap_items(type_data);
+    if (type_data.modal_keymap_items.is_empty()) {
       return;
     }
-    type_data.modal_keymap_items = Array<EnumPropertyItem, 0>(items.as_span());
   }
   /* The keymap name is its identity, so the operator identifier is used rather than the tool name,
    * which isn't unique. */
