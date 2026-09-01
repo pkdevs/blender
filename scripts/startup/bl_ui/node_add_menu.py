@@ -496,6 +496,17 @@ class SwapNodeMenu(NodeMenu):
         if cls.draw_assets:
             layout.template_node_asset_menu_items(catalog_path=catalog_path, operator='SWAP')
 
+EFFECT_MENU_BLACKLIST = (
+    # Color
+    "CompositorNodeZCombine"
+    "ShaderNodeValToRGB",
+
+    # Filter
+    "CompositorNodeMaskToSDF",
+
+    # Distort
+    "CompositorNodeMovieDistortion",
+)
 
 class CompositorEffectMenu(NodeMenu):
     #todo(habib): docstring
@@ -521,7 +532,7 @@ class CompositorEffectMenu(NodeMenu):
         # todo(habib): doc
         # todo(habib): could do without it?
         # return bpy.types.Node.is_compositor_usage_allowed(node_type, 'SCENE_EFFECT')
-        return True
+        return node_type not in EFFECT_MENU_BLACKLIST
 
     @classmethod
     def draw_assets_for_catalog(cls, _layout, _catalog_path):
