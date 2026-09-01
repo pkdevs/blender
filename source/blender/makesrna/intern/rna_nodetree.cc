@@ -4551,7 +4551,7 @@ static const EnumPropertyItem *rna_NodeRaycastSampleAttributeItem_data_type_item
 }
 
 static const EnumPropertyItem *rna_NodeShaderAttribute_type_itemf(bContext *C,
-                                                                  PointerRNA *ptr,
+                                                                  PointerRNA * /*ptr*/,
                                                                   PropertyRNA * /*prop*/,
                                                                   bool *r_free)
 {
