@@ -584,8 +584,7 @@ ccl_device_forceinline void rgba_to_nchannels(const float4 rgba,
   }
 }
 
-ccl_device_forceinline float4 get_missingcolor(const float *missingcolor,
-                                               const int nchannels)
+ccl_device_forceinline float4 get_missingcolor(const float *missingcolor, const int nchannels)
 {
   if (!missingcolor) {
     return IMAGE_MISSING_RGBA;
@@ -759,7 +758,7 @@ ccl_device bool osl_shared_texture(KernelGlobals kg,
     case OSLTextureHandleType::IMAGE: {
       const dual2 uv({s, t}, {dsdx, dtdx}, {dsdy, dtdy});
       const float4 rgba = kernel_image_interp_with_udim(
-        kg, sd, image_texture_or_udim_id, uv, get_missingcolor(opt->missingcolor, nchannels));
+          kg, sd, image_texture_or_udim_id, uv, get_missingcolor(opt->missingcolor, nchannels));
 
       rgba_to_nchannels(rgba, nchannels, result);
 
@@ -890,7 +889,8 @@ ccl_device bool osl_shared_environment(KernelGlobals kg,
     const dual3 R_dual(R, dRdx, dRdy);
     /* Environment call is always equirectangular. */
     const dual2 uv(direction_to_equirectangular(R_dual.val));
-    const float4 rgba = kernel_image_interp_with_udim(kg, sd, image_texture_or_udim_id, uv, get_missingcolor(opt->missingcolor, nchannels));
+    const float4 rgba = kernel_image_interp_with_udim(
+        kg, sd, image_texture_or_udim_id, uv, get_missingcolor(opt->missingcolor, nchannels));
     rgba_to_nchannels(rgba, nchannels, result);
     return true;
   }

@@ -18,7 +18,7 @@ shader node_attribute(string bump_offset = "center",
   float data[4] = {0.0, 0.0, 0.0, 0.0};
   int success = getattribute(name, data);
   if (!success) {
-    if(name == "geom:generated") {
+    if (name == "geom:generated") {
       /* No generated attribute, fall back to object coordinates. */
       Color = transform("object", P);
       data[3] = 1.0;

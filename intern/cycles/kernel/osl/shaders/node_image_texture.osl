@@ -56,8 +56,19 @@ color image_texture_lookup(string filename,
                            color Missing,
                            float MissingAlpha)
 {
-  color rgb = (color)texture(
-      filename, u, v, "wrap", extension, "interp", interpolation, "alpha", Alpha, "missingcolor", Missing, "missingalpha", MissingAlpha);
+  color rgb = (color)texture(filename,
+                             u,
+                             v,
+                             "wrap",
+                             extension,
+                             "interp",
+                             interpolation,
+                             "alpha",
+                             Alpha,
+                             "missingcolor",
+                             Missing,
+                             "missingalpha",
+                             MissingAlpha);
 
   if (ignore_alpha) {
     Alpha = 1.0;

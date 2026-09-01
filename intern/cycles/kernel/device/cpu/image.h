@@ -401,11 +401,8 @@ ccl_device float4 kernel_image_interp(KernelGlobals kg,
   }
 }
 
-ccl_device_forceinline float4 kernel_image_interp_with_udim(KernelGlobals kg,
-                                                            ShaderData *sd,
-                                                            const int udim_id,
-                                                            dual2 uv,
-                                                            const float4 missing_rgba)
+ccl_device_forceinline float4 kernel_image_interp_with_udim(
+    KernelGlobals kg, ShaderData *sd, const int udim_id, dual2 uv, const float4 missing_rgba)
 {
   const int image_texture_id = kernel_image_udim_map(kg, udim_id, uv.val);
   if (image_texture_id == KERNEL_IMAGE_NONE) {
