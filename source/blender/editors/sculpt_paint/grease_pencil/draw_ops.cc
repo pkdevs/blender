@@ -1160,27 +1160,29 @@ static void grease_pencil_fill_status_indicators(bContext &C,
   WorkspaceStatus status(&C);
   status.item(IFACE_("Cancel"), ICON_EVENT_ESC);
   status.item(IFACE_("Fill"), ICON_MOUSE_LMB);
-  status.item(
-      fmt::format("{} ({})", IFACE_("Mode"), (is_extend ? IFACE_("Extend") : IFACE_("Radius"))),
-      ICON_EVENT_S);
-  status.item(fmt::format("{} ({:.3f})",
-                          is_extend ? IFACE_("Length") : IFACE_("Radius"),
-                          op_data.extension_length),
-              ICON_MOUSE_MMB_SCROLL);
-  if (is_extend) {
-    status.item_bool(IFACE_("Collision"), op_data.extension_cut, ICON_EVENT_D);
+
+  if (!op_data.is_delaunay) {
+    status.item(
+        fmt::format("{} ({})", IFACE_("Mode"), (is_extend ? IFACE_("Extend") : IFACE_("Radius"))),
+        ICON_EVENT_S);
+    status.item(fmt::format("{} ({:.3f})",
+                            is_extend ? IFACE_("Length") : IFACE_("Radius"),
+                            op_data.extension_length),
+                ICON_MOUSE_MMB_SCROLL);
+    if (is_extend) {
+      status.item_bool(IFACE_("Collision"), op_data.extension_cut, ICON_EVENT_D);
+    }
   }
 }
 
-/* Draw callback for fill tool overlay. */
-static void grease_pencil_fill_overlay_cb(const bContext *C, ARegion * /*region*/, void *arg)
+static void grease_pencil_fill_overlay_pixel_cb(const bContext &C,
+                                                const GreasePencilFillOpData &op_data)
 {
-  const ARegion &region = *CTX_wm_region(C);
-  const RegionView3D &rv3d = *CTX_wm_region_view3d(C);
-  const Scene &scene = *CTX_data_scene(C);
-  const Object &object = *CTX_data_active_object(C);
+  const ARegion &region = *CTX_wm_region(&C);
+  const RegionView3D &rv3d = *CTX_wm_region_view3d(&C);
+  const Scene &scene = *CTX_data_scene(&C);
+  const Object &object = *CTX_data_active_object(&C);
   const GreasePencil &grease_pencil = *id_cast<const GreasePencil *>(object.data);
-  auto &op_data = *static_cast<GreasePencilFillOpData *>(arg);
 
   const float4x4 world_to_view = float4x4(rv3d.viewmat);
   /* Note; the initial view matrix is already set, clear to draw in view space. */
@@ -1219,7 +1221,7 @@ static void grease_pencil_fill_overlay_cb(const bContext *C, ARegion * /*region*
 
   if (op_data.show_extension) {
     const ed::greasepencil::ExtensionData extensions = grease_pencil_fill_get_extension_data(
-        *C, op_data);
+        C, op_data);
 
     const float line_width = 2.0f;
 
@@ -1253,10 +1255,57 @@ static void grease_pencil_fill_overlay_cb(const bContext *C, ARegion * /*region*
   }
 }
 
+static void grease_pencil_fill_overlay_delaunay_cb(const bContext &C,
+                                                   const GreasePencilFillOpData &op_data)
+{
+  const ARegion &region = *CTX_wm_region(&C);
+  const RegionView3D &rv3d = *CTX_wm_region_view3d(&C);
+  const View3D &view3d = *CTX_wm_view3d(&C);
+
+  const float4x4 world_to_view = float4x4(rv3d.viewmat);
+  /* Note; the initial view matrix is already set, clear to draw in view space. */
+  ed::greasepencil::image_render::clear_view_matrix();
+
+  const ColorGeometry4f extension_lines_color = ColorGeometry4f(0, 1, 1, 1);
+
+  const float line_width = 2.0f;
+
+  Array<float3> line_position(op_data.mouse_path.size());
+  for (const int i : op_data.mouse_path.index_range()) {
+    const float2 co = op_data.mouse_path[i];
+
+    ED_view3d_win_to_3d(&view3d, &region, float3(0.0f), co, line_position[i]);
+  }
+
+  if (line_position.size() < 2) {
+    return;
+  }
+
+  const VArray<ColorGeometry4f> line_colors = VArray<ColorGeometry4f>::from_single(
+      extension_lines_color, line_position.size());
+
+  ed::greasepencil::image_render::draw_polyline(
+      world_to_view, line_position.index_range(), line_position, line_colors, false, line_width);
+}
+
+/* Draw callback for fill tool overlay. */
+static void grease_pencil_fill_overlay_cb(const bContext *C, ARegion * /*region*/, void *arg)
+{
+  auto &op_data = *static_cast<GreasePencilFillOpData *>(arg);
+
+  if (op_data.is_delaunay) {
+    grease_pencil_fill_overlay_delaunay_cb(*C, op_data);
+  }
+  else {
+    grease_pencil_fill_overlay_pixel_cb(*C, op_data);
+  }
+}
+
 static void grease_pencil_fill_update_overlay(const ARegion &region,
                                               GreasePencilFillOpData &op_data)
 {
-  const bool needs_overlay = op_data.show_boundaries || op_data.show_extension;
+  const bool needs_overlay = op_data.show_boundaries || op_data.show_extension ||
+                             op_data.is_delaunay;
 
   if (needs_overlay) {
     if (op_data.overlay_cb_handle == nullptr) {
@@ -1942,6 +1991,8 @@ static wmOperatorStatus grease_pencil_fill_modal(bContext *C, wmOperator *op, co
   if (op_data.is_delaunay) {
     op_data.mouse_path.append(float2(event->mval));
     estate = OPERATOR_RUNNING_MODAL;
+
+    grease_pencil_update_extend(*C, op_data);
 
     if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
       estate = (grease_pencil_apply_fill(*C, *op, *event) ? OPERATOR_FINISHED :
