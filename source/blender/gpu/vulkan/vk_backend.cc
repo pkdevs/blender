@@ -582,7 +582,7 @@ void VKBackend::detect_workarounds(VKDevice &device)
   }
 
   extensions.shader_clip_distance = device.physical_device_features_get().shaderClipDistance ==
-                                     VK_TRUE;
+                                    VK_TRUE;
 
   /* During testing graphics pipeline library feature it was detected that it would crash on
    * official AMD drivers.
