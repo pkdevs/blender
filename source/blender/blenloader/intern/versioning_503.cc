@@ -108,14 +108,42 @@ static float version_503_camera_view_viewfac(const int sensor_fit,
                                              const int winy,
                                              const float frame_aspect)
 {
-  const float frame_width = (float(winy) / frame_aspect <= float(winx)) ?
-                                float(winy) / frame_aspect :
-                                float(winx);
-  const float frame_height = frame_width * frame_aspect;
+  const float2 frame_size = BKE_camera_frame_size(winx, winy, frame_aspect);
 
   return (BKE_camera_sensor_fit(sensor_fit, 1.0f, frame_aspect) == CAMERA_SENSOR_FIT_HOR) ?
-             frame_width :
-             frame_height;
+             frame_size.x :
+             frame_size.y;
+}
+
+static void version_503_camera_view_fit(RegionView3D *rv3d,
+                                        const int sensor_fit,
+                                        const int winx,
+                                        const int winy,
+                                        const float render_aspect)
+{
+  /* The camera frame is now automatically fitted to the viewport, taking into count
+   * the render aspect ratio. Here we version existing camera views to match. */
+  if ((rv3d->persp != RV3D_CAMOB) && (rv3d->camzoom == 0.0f) && (rv3d->camdx == 0.0f) &&
+      (rv3d->camdy == 0.0f))
+  {
+    return;
+  }
+
+  const float viewfac_old = version_503_camera_view_viewfac(
+      sensor_fit, winx, winy, float(winy) / float(winx));
+  const float viewfac_new = version_503_camera_view_viewfac(sensor_fit, winx, winy, render_aspect);
+
+  /* Adjust zoom factor. */
+  const float zoomfac_old = BKE_screen_view3d_zoom_to_fac(rv3d->camzoom);
+  rv3d->camzoom = math::clamp(
+      BKE_screen_view3d_zoom_from_fac(zoomfac_old * viewfac_old / viewfac_new),
+      float(RV3D_CAMZOOM_MIN),
+      float(RV3D_CAMZOOM_MAX));
+
+  /* Adjust panning. */
+  const float zoomfac_new = BKE_screen_view3d_zoom_to_fac(rv3d->camzoom);
+  rv3d->camdx = math::clamp(rv3d->camdx * zoomfac_old / zoomfac_new, -1.0f, 1.0f);
+  rv3d->camdy = math::clamp(rv3d->camdy * zoomfac_old / zoomfac_new, -1.0f, 1.0f);
 }
 
 static void do_versioning_camera_view_zoom(Main *bmain)
@@ -142,9 +170,10 @@ static void do_versioning_camera_view_zoom(Main *bmain)
         }
         View3D *v3d = reinterpret_cast<View3D *>(&space);
 
-        const int sensor_fit = (v3d->camera != nullptr && v3d->camera->type == OB_CAMERA &&
-                                v3d->camera->data != nullptr) ?
-                                   id_cast<Camera *>(v3d->camera->data)->sensor_fit :
+        const Object *camera = (v3d->camera != nullptr) ? v3d->camera : scene->camera;
+        const int sensor_fit = (camera != nullptr && camera->type == OB_CAMERA &&
+                                camera->data != nullptr) ?
+                                   id_cast<const Camera *>(camera->data)->sensor_fit :
                                    CAMERA_SENSOR_FIT_AUTO;
 
         ListBaseT<ARegion> *regions = (area.spacedata.first == &space) ? &area.regionbase :
@@ -157,27 +186,15 @@ static void do_versioning_camera_view_zoom(Main *bmain)
           if (rv3d == nullptr) {
             continue;
           }
-          if ((rv3d->persp != RV3D_CAMOB) && (rv3d->camzoom == 0.0f) && (rv3d->camdx == 0.0f) &&
-              (rv3d->camdy == 0.0f))
-          {
-            continue;
-          }
-          const int winx = region.winx;
-          const int winy = region.winy;
-          if ((winx <= 1) || (winy <= 1)) {
+          if ((region.winx <= 1) || (region.winy <= 1)) {
             continue;
           }
 
-          const float viewfac_old = version_503_camera_view_viewfac(
-              sensor_fit, winx, winy, float(winy) / float(winx));
-          const float viewfac_new = version_503_camera_view_viewfac(
-              sensor_fit, winx, winy, render_aspect);
-
-          const float zoomfac = BKE_screen_view3d_zoom_to_fac(rv3d->camzoom) *
-                                (viewfac_old / viewfac_new);
-          rv3d->camzoom = math::clamp(BKE_screen_view3d_zoom_from_fac(zoomfac),
-                                      float(RV3D_CAMZOOM_MIN),
-                                      float(RV3D_CAMZOOM_MAX));
+          version_503_camera_view_fit(rv3d, sensor_fit, region.winx, region.winy, render_aspect);
+          if (rv3d->localvd != nullptr) {
+            version_503_camera_view_fit(
+                rv3d->localvd, sensor_fit, region.winx, region.winy, render_aspect);
+          }
         }
       }
     }
