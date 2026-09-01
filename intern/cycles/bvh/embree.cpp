@@ -645,8 +645,20 @@ static void gsplat_bounds_func(const RTCBoundsFunctionArguments *args)
   const auto *pointcloud = reinterpret_cast<const PointCloud *>(args->geometryUserPtr);
 
   /* TODO(sergey): Somehow avoid attribute lookup on every gsplat. */
-  const packed_float3 point = pointcloud->get_position()[args->primID];
-  const float radius = pointcloud->get_radius()[args->primID];
+  const Attribute *attr_P = pointcloud->attributes.find(ATTR_STD_POSITION);
+  const Attribute *attr_R = pointcloud->attributes.find(ATTR_STD_RADIUS);
+
+  size_t num_motion_steps = 1;
+  if (pointcloud->has_motion_blur()) {
+    if (attr_P->has_motion()) {
+      num_motion_steps = pointcloud->get_motion_steps();
+    }
+  }
+
+  const packed_float3 point = attr_P->data_at_time_step<packed_float3>(
+      args->timeStep, num_motion_steps)[args->primID];
+  const float radius = attr_R->data_at_time_step<float>(args->timeStep,
+                                                        num_motion_steps)[args->primID];
 
   RTCBounds *bounds_o = args->bounds_o;
   bounds_o->lower_x = point.x - radius;
@@ -659,6 +671,14 @@ static void gsplat_bounds_func(const RTCBoundsFunctionArguments *args)
 
 void BVHEmbree::add_gsplats(const Object *ob, const PointCloud *pointcloud, const int i)
 {
+  size_t num_motion_steps = 1;
+  if (pointcloud->has_motion_blur()) {
+    const Attribute *attr_P = pointcloud->attributes.find(ATTR_STD_POSITION);
+    if (attr_P->has_motion()) {
+      num_motion_steps = pointcloud->get_motion_steps();
+    }
+  }
+
   RTCGeometry geom_id = rtcNewGeometry(rtc_device, RTC_GEOMETRY_TYPE_USER);
 
   rtcSetGeometryBuildQuality(geom_id, build_quality);
@@ -667,6 +687,7 @@ void BVHEmbree::add_gsplats(const Object *ob, const PointCloud *pointcloud, cons
   rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
 
   rtcSetGeometryUserPrimitiveCount(geom_id, pointcloud->num_points());
+  rtcSetGeometryTimeStepCount(geom_id, num_motion_steps);
   rtcSetGeometryBoundsFunction(geom_id, gsplat_bounds_func, nullptr);
 
   rtcCommitGeometry(geom_id);
