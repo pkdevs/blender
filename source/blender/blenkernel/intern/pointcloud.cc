@@ -8,6 +8,8 @@
 
 #include <optional>
 
+#include <fmt/format.h>
+
 #include "BLI_function_ref.hh"
 #include "MEM_guardedalloc.h"
 
@@ -214,6 +216,49 @@ MutableSpan<float> PointCloud::radius_for_write()
 {
   return bke::get_mutable_attribute<float>(
       this->attribute_storage.wrap(), bke::AttrDomain::Point, "radius", this->totpoint, 0.01f);
+}
+
+Span<float3> PointCloud::gsplat_scale() const
+{
+  return bke::get_span_attribute<float3>(
+             this->attribute_storage.wrap(), bke::AttrDomain::Point, "scale", this->totpoint)
+      .value_or(Span<float3>());
+}
+
+Span<math::Quaternion> PointCloud::gsplat_rotation() const
+{
+  return bke::get_span_attribute<math::Quaternion>(
+             this->attribute_storage.wrap(), bke::AttrDomain::Point, "rotation", this->totpoint)
+      .value_or(Span<math::Quaternion>());
+}
+
+Span<float4> PointCloud::radiance_base() const
+{
+  return bke::get_span_attribute<float4>(this->attribute_storage.wrap(),
+                                         bke::AttrDomain::Point,
+                                         "radiance:base",
+                                         this->totpoint)
+      .value_or(Span<float4>());
+}
+
+Vector<VArraySpan<float3>> PointCloud::radiance_sh() const
+{
+  constexpr uint n_spans_max = 3 + 5 + 7 + 9;
+
+  const bke::AttributeAccessor attributes = this->attributes();
+
+  /* Attempt to load up to `n_spans_max` coefficients. */
+  Vector<VArraySpan<float3>> spans;
+  for (uint32_t i = 0; i < n_spans_max; ++i) {
+    VArraySpan<float3> span_i = attributes.lookup<float3>(fmt::format("radiance:sh_{}", i)).varray;
+    if (span_i.is_empty()) {
+      /* If a coefficient does not exist, we can stop reading. */
+      break;
+    }
+    spans.append(std::move(span_i));
+  }
+
+  return spans;
 }
 
 PointCloud *BKE_pointcloud_add(Main *bmain, const char *name)
