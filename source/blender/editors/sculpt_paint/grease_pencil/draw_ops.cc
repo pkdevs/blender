@@ -1261,12 +1261,25 @@ static void grease_pencil_fill_overlay_delaunay_cb(const bContext &C,
   const ARegion &region = *CTX_wm_region(&C);
   const RegionView3D &rv3d = *CTX_wm_region_view3d(&C);
   const View3D &view3d = *CTX_wm_view3d(&C);
+  const ToolSettings &ts = *CTX_data_tool_settings(&C);
+  Main &bmain = *CTX_data_main(&C);
+  Object &object = *CTX_data_active_object(&C);
+  Paint &paint = ts.gp_paint->paint;
+  Brush &brush = *BKE_paint_brush(&paint);
 
   const float4x4 world_to_view = float4x4(rv3d.viewmat);
   /* Note; the initial view matrix is already set, clear to draw in view space. */
   ed::greasepencil::image_render::clear_view_matrix();
 
-  const ColorGeometry4f extension_lines_color = ColorGeometry4f(0, 1, 1, 1);
+  float4 color;
+  if (ed::sculpt_paint::greasepencil::brush_using_vertex_color(ts.gp_paint, &brush)) {
+    color = float4(BKE_brush_color_get(&paint, &brush), 1.0f);
+  }
+  else {
+    Material *material = BKE_grease_pencil_object_material_ensure_from_brush(
+        &bmain, &object, &brush);
+    color = float4(material->gp_style->fill_rgba);
+  }
 
   const float line_width = 2.0f;
 
@@ -1282,7 +1295,7 @@ static void grease_pencil_fill_overlay_delaunay_cb(const bContext &C,
   }
 
   const VArray<ColorGeometry4f> line_colors = VArray<ColorGeometry4f>::from_single(
-      extension_lines_color, line_position.size());
+      ColorGeometry4f(color), line_position.size());
 
   ed::greasepencil::image_render::draw_polyline(
       world_to_view, line_position.index_range(), line_position, line_colors, false, line_width);
