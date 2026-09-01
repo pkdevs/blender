@@ -38,6 +38,7 @@
 #include "WM_api.hh"
 #include "WM_keymap.hh"
 #include "WM_types.hh"
+#include "wm_window.hh"
 
 namespace blender {
 
@@ -348,6 +349,12 @@ static void rna_userdef_theme_update(Main *bmain, Scene *scene, PointerRNA *ptr)
   WM_reinit_gizmomap_all(bmain);
 
   rna_userdef_update(bmain, scene, ptr);
+}
+
+static void rna_userdef_active_theme_type_update(bContext *C, PointerRNA *ptr)
+{
+  wm_theme_ensure_active(C);
+  rna_userdef_theme_update(CTX_data_main(C), CTX_data_scene(C), ptr);
 }
 
 static void rna_userdef_theme_text_style_update(Main *bmain, Scene *scene, PointerRNA *ptr)
@@ -8118,7 +8125,8 @@ void RNA_def_userdef(BlenderRNA *brna)
   prop = RNA_def_property(srna, "active_theme_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, active_theme_type_items);
   RNA_def_property_ui_text(prop, "Active Theme Type", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_update(prop, 0, "rna_userdef_active_theme_type_update");
 
   prop = RNA_def_property(srna, "active_theme_type_resolved", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, active_theme_type_items);

@@ -82,6 +82,15 @@ void wm_window_close_request(bContext *C, wmWindowManager *wm, wmWindow *win);
 void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win);
 
 /**
+ * Ensure the active theme slot is initialized when it has not been populated yet.
+ *
+ * \param C: Context used to execute the Python theme preset operator, may be null when Python is
+ *           not initialized yet.
+ * \return true when the active theme slot was initialized.
+ */
+bool wm_theme_ensure_active(bContext *C);
+
+/**
  * Resolve the system's light/dark preference into #UserDef::runtime, loading the built-in light
  * theme if that slot has never been filled in. Repeat calls that give the current value do
  * nothing.

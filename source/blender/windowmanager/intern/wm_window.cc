@@ -1194,6 +1194,25 @@ static void wm_window_ghostwindow_ensure(wmWindowManager *wm, wmWindow *win, boo
   ED_screen_global_areas_refresh(win);
 }
 
+bool wm_theme_ensure_active(bContext *C)
+{
+  if (C == nullptr || bke::theme::resolve_active_type() != UserPrefThemeType::Light ||
+      U.active_theme_light != nullptr)
+  {
+    return false;
+  }
+
+  if (wmOperatorType *ot = WM_operatortype_find("preferences.reset_default_theme", true)) {
+    PointerRNA props_ptr = WM_operator_properties_create_ptr(ot);
+    RNA_boolean_set(&props_ptr, "force_reset", false);
+    WM_operator_name_call_ptr(C, ot, wm::OpCallContext::ExecDefault, &props_ptr, nullptr);
+    WM_operator_properties_free(&props_ptr);
+    return true;
+  }
+
+  return false;
+}
+
 void wm_system_appearance_update(bContext *C, const int blocking_timeout_ms)
 {
   const GHOST_TColorScheme color_scheme = g_system->getSystemColorScheme(blocking_timeout_ms);
@@ -1217,14 +1236,8 @@ void wm_system_appearance_update(bContext *C, const int blocking_timeout_ms)
    *
    * `force_reset=False` so this only ever fills in a theme slot that's never been loaded,
    * it must never reset a theme the user has already loaded or customized. */
-  if (bke::theme::resolve_active_type() == UserPrefThemeType::Light && !U.active_theme_light) {
-    if (wmOperatorType *ot = WM_operatortype_find("preferences.reset_default_theme", true)) {
-      PointerRNA props_ptr = WM_operator_properties_create_ptr(ot);
-      RNA_boolean_set(&props_ptr, "force_reset", false);
-      WM_operator_name_call_ptr(C, ot, wm::OpCallContext::ExecDefault, &props_ptr, nullptr);
-      WM_operator_properties_free(&props_ptr);
-      changed = true;
-    }
+  if (wm_theme_ensure_active(C)) {
+    changed = true;
   }
 
   if (changed) {

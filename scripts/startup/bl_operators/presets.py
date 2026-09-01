@@ -762,16 +762,12 @@ class ResetTheme(Operator):
     bl_idname = "preferences.reset_theme"
     bl_label = "Reset Theme"
 
-    @classmethod
-    def poll(cls, context):
-        filepath = context.preferences.active_theme.filepath
-        if not filepath:
-            cls.poll_message_set("The active theme has no saved preset to reset to")
-            return False
-        return True
-
     def execute(self, context):
         filepath = context.preferences.active_theme.filepath
+        if not filepath:
+            # The compiled-in startup theme is not backed by a preset yet. Treat it as Blender's
+            # default so the reset action remains useful before a theme preset has been selected.
+            return bpy.ops.preferences.reset_default_theme()
 
         context.preferences.active_theme.reset_to_baseline()
         # Reset font style as well to allow resetting the default dark theme too.
