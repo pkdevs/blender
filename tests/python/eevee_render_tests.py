@@ -67,6 +67,8 @@ BLOCKLIST = [
     "light_path_is_camera_ray.blend",
     # Exhibit non-deterministic (to be fixed).
     "background_scene.blend",
+    # EEVEE doesnt have adaptive dicing.
+    "panorama_dicing.blend",
 
     ### Cycles only tests go here ###
 ]
