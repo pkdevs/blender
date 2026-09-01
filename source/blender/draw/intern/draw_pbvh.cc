@@ -2994,6 +2994,7 @@ static void create_tri_index_grids(const CCGKey &key,
   BLI_assert(uint(ibo_info.len) == 2 * visible_quad_len * 3);
 
   MutableSpan<uint3> data = MutableSpan<uint32_t>(host_data, ibo_info.len).cast<uint3>();
+  data.fill(uint3(0));
 
   int tri_count;
   if (use_flat_layout) {
