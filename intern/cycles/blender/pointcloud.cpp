@@ -378,9 +378,11 @@ static void export_pointcloud_motion(PointCloud *pointcloud,
     if (!size_matches || !have_motion) {
       attr_P->remove_motion();
       attr_R->remove_motion();
-      attr_radiance_base->remove_motion();
-      attr_scale->remove_motion();
-      attr_rotation->remove_motion();
+      if (is_gsplat) {
+        attr_radiance_base->remove_motion();
+        attr_scale->remove_motion();
+        attr_rotation->remove_motion();
+      }
     }
     else if (motion_step > 0) {
       /* Motion, fill up previous steps that we might have skipped because
