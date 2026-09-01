@@ -1843,6 +1843,25 @@ static void gizmo_operator_set_properties(PointerRNA *ptr, const bool constraint
   RNA_STRUCT_END;
 }
 
+/**
+ * Assign a transform operator constrained to the plane perpendicular to the handle's axis.
+ */
+static void gizmo_action_plane_operator_set(wmGizmo *axis,
+                                            const eWM_GizmoOpActionSlot action_slot,
+                                            wmOperatorType *ot,
+                                            const bool plane_axis[3])
+{
+  PointerRNA *ptr = WM_gizmo_action_operator_set(axis, action_slot, ot, nullptr);
+  if (ptr == nullptr) {
+    return;
+  }
+  PropertyRNA *prop = RNA_struct_find_property(ptr, "constraint_axis");
+  if (prop) {
+    RNA_property_boolean_set_array(ptr, prop, plane_axis);
+  }
+  RNA_boolean_set(ptr, "release_confirm", true);
+}
+
 static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGroup *gzgroup)
 {
   struct {
@@ -2020,14 +2039,20 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
         ot_plane = ot_store.resize;
       }
       if (ot_plane) {
-        PointerRNA *ptr_plane = WM_gizmo_action_operator_set(
-            axis, WM_GIZMO_OP_ACTION_CONSTRAIN_PLANE, ot_plane, nullptr);
         const bool plane_axis[3] = {!constraint_axis[0], !constraint_axis[1], !constraint_axis[2]};
-        PropertyRNA *prop = RNA_struct_find_property(ptr_plane, "constraint_axis");
-        if (prop) {
-          RNA_property_boolean_set_array(ptr_plane, prop, plane_axis);
+        gizmo_action_plane_operator_set(
+            axis, WM_GIZMO_OP_ACTION_CONSTRAIN_PLANE, ot_plane, plane_axis);
+
+        /* Modes that define no duplicate/extrude action (pose, edit curve, edit armature, ...)
+         * would otherwise fall back to the handle's own axis-constrained transform, silently
+         * dropping the long-standing behavior of this modifier excluding the handle's axis.
+         * Keep that behavior by giving them the plane constraint on the same slot. */
+        const wmGizmoOpElem *gzop_dup = WM_gizmo_action_operator_get(axis,
+                                                                     WM_GIZMO_OP_ACTION_DUPLICATE);
+        if (gzop_dup && gzop_dup->type == nullptr) {
+          gizmo_action_plane_operator_set(
+              axis, WM_GIZMO_OP_ACTION_DUPLICATE, ot_plane, plane_axis);
         }
-        RNA_boolean_set(ptr_plane, "release_confirm", true);
       }
     }
 
