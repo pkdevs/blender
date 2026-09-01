@@ -1386,7 +1386,7 @@ static Vector<FillToolTargetInfo> ensure_editable_drawings(const Scene &scene,
         }
       }
 
-      bool is_new_keyframe = new_keyframes.contains(frame_number);
+      const bool is_new_keyframe = new_keyframes.contains(frame_number);
       drawings.append({std::move(target), std::move(sources), is_new_keyframe});
     }
   }
