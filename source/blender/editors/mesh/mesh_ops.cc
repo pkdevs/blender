@@ -293,7 +293,7 @@ void ED_operatormacros_mesh()
 
   ot = WM_operatortype_append_macro("MESH_OT_extrude_context_rotate",
                                     "Extrude Region and Rotate",
-                                    "Extrude region together along the average normal",
+                                    "Extrude region and rotate result",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   otmacro = WM_operatortype_macro_define(ot, "MESH_OT_extrude_context");
   otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_rotate");
@@ -302,7 +302,7 @@ void ED_operatormacros_mesh()
 
   ot = WM_operatortype_append_macro("MESH_OT_extrude_context_trackball",
                                     "Extrude Region and Rotate (Trackball)",
-                                    "Extrude region together along the average normal",
+                                    "Extrude region and rotate result using trackball",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   otmacro = WM_operatortype_macro_define(ot, "MESH_OT_extrude_context");
   otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_trackball");
@@ -311,7 +311,7 @@ void ED_operatormacros_mesh()
 
   ot = WM_operatortype_append_macro("MESH_OT_extrude_context_resize",
                                     "Extrude Region and Resize",
-                                    "Extrude region together along the average normal",
+                                    "Extrude region and scale result",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   otmacro = WM_operatortype_macro_define(ot, "MESH_OT_extrude_context");
   otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_resize");
@@ -391,27 +391,27 @@ void ED_operatormacros_mesh()
   RNA_boolean_set(otmacro->ptr, "use_proportional_edit", false);
   RNA_boolean_set(otmacro->ptr, "mirror", false);
 
-  ot = WM_operatortype_append_macro("MESH_OT_context_duplicate_rotate",
-                                    "Duplicate Region and Rotate",
-                                    nullptr,
+  ot = WM_operatortype_append_macro("MESH_OT_duplicate_rotate",
+                                    "Duplicate and Rotate",
+                                    "Duplicate mesh and rotate",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   otmacro = WM_operatortype_macro_define(ot, "MESH_OT_duplicate");
   otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_rotate");
   RNA_boolean_set(otmacro->ptr, "use_proportional_edit", false);
   RNA_boolean_set(otmacro->ptr, "mirror", false);
 
-  ot = WM_operatortype_append_macro("MESH_OT_context_duplicate_trackball",
-                                    "Duplicate Region and Rotate(Trackball)",
-                                    nullptr,
+  ot = WM_operatortype_append_macro("MESH_OT_duplicate_trackball",
+                                    "Duplicate and Rotate (Trackball)",
+                                    "Duplicate mesh and rotate using trackball",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   otmacro = WM_operatortype_macro_define(ot, "MESH_OT_duplicate");
   otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_trackball");
   RNA_boolean_set(otmacro->ptr, "use_proportional_edit", false);
   RNA_boolean_set(otmacro->ptr, "mirror", false);
 
-  ot = WM_operatortype_append_macro("MESH_OT_context_duplicate_scale",
-                                    "Duplicate Region and Scale",
-                                    nullptr,
+  ot = WM_operatortype_append_macro("MESH_OT_duplicate_resize",
+                                    "Duplicate and Resize",
+                                    "Duplicate mesh and scale",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   otmacro = WM_operatortype_macro_define(ot, "MESH_OT_duplicate");
   otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_resize");

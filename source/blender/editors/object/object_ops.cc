@@ -315,7 +315,7 @@ void operatormacros_object()
 
   ot = WM_operatortype_append_macro("OBJECT_OT_duplicate_rotate",
                                     "Duplicate Objects and Rotate",
-                                    "Duplicate selected objects and rotate them",
+                                    "Duplicate the selected objects and rotate them",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   if (ot) {
     WM_operatortype_macro_define(ot, "OBJECT_OT_duplicate");
@@ -325,7 +325,7 @@ void operatormacros_object()
 
   ot = WM_operatortype_append_macro("OBJECT_OT_duplicate_trackball",
                                     "Duplicate Objects and Rotate (Trackball)",
-                                    "Duplicate selected objects and rotate them",
+                                    "Duplicate the selected objects and rotate them",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   if (ot) {
     WM_operatortype_macro_define(ot, "OBJECT_OT_duplicate");
@@ -335,7 +335,7 @@ void operatormacros_object()
 
   ot = WM_operatortype_append_macro("OBJECT_OT_duplicate_resize",
                                     "Duplicate Objects and Scale",
-                                    "Duplicate selected objects and scale them",
+                                    "Duplicate the selected objects and scale them",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   if (ot) {
     WM_operatortype_macro_define(ot, "OBJECT_OT_duplicate");
@@ -357,7 +357,8 @@ void operatormacros_object()
 
   ot = WM_operatortype_append_macro("OBJECT_OT_duplicate_rotate_linked",
                                     "Duplicate Linked and Rotate",
-                                    "Duplicate Linked selected objects and rotate them",
+                                    "Duplicate the selected objects, but not their object data, "
+                                    "and rotate them",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   if (ot) {
     otmacro = WM_operatortype_macro_define(ot, "OBJECT_OT_duplicate");
@@ -368,7 +369,8 @@ void operatormacros_object()
 
   ot = WM_operatortype_append_macro("OBJECT_OT_duplicate_trackball_linked",
                                     "Duplicate Linked and Rotate (Trackball)",
-                                    "Duplicate linked selected objects and rotate them",
+                                    "Duplicate the selected objects, but not their object data, "
+                                    "and rotate them",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   if (ot) {
     otmacro = WM_operatortype_macro_define(ot, "OBJECT_OT_duplicate");
@@ -379,7 +381,8 @@ void operatormacros_object()
 
   ot = WM_operatortype_append_macro("OBJECT_OT_duplicate_resize_linked",
                                     "Duplicate Linked and Scale",
-                                    "Duplicate linked selected objects and scale them",
+                                    "Duplicate the selected objects, but not their object data, "
+                                    "and scale them",
                                     OPTYPE_UNDO | OPTYPE_REGISTER);
   if (ot) {
     otmacro = WM_operatortype_macro_define(ot, "OBJECT_OT_duplicate");

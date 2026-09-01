@@ -159,6 +159,8 @@ struct GizmoGroup {
   int twtype_prev;
   int use_twtype_refresh;
 
+  eContextObjectMode mode_prev;
+
   /* Only for view orientation. */
   struct {
     float viewinv_m3[3][3];
@@ -1760,6 +1762,18 @@ static wmOperatorStatus gizmo_modal(bContext *C,
         break;
       }
     }
+    if (op == nullptr) {
+      for (const wmGizmoOpElem &gzop : widget->action_op_data) {
+        op = WM_operator_find_modal_by_type(win, gzop.type);
+        if (op != nullptr) {
+          break;
+        }
+      }
+    }
+
+    if (op != nullptr && op->opm != nullptr) {
+      op = op->opm;
+    }
 
     if (op != nullptr) {
       GizmoGroup *ggd = static_cast<GizmoGroup *>(gzgroup->customdata);
@@ -1816,14 +1830,14 @@ static void gizmo_operator_set_properties(PointerRNA *ptr, const bool constraint
     if (!propptr.data || !RNA_struct_is_a(propptr.type, RNA_OperatorProperties)) {
       continue;
     }
-    PropertyRNA *constr = nullptr;
     if (ELEM(true, UNPACK3(constraint_axis))) {
-      if ((constr = RNA_struct_find_property(&propptr, "constraint_axis"))) {
+      PropertyRNA *constr = RNA_struct_find_property(&propptr, "constraint_axis");
+      if (constr) {
         RNA_property_boolean_set_array(&propptr, constr, constraint_axis);
       }
     }
-    if (constr) {
-      RNA_boolean_set(&propptr, "release_confirm", 1);
+    if (RNA_struct_find_property(&propptr, "release_confirm")) {
+      RNA_boolean_set(&propptr, "release_confirm", true);
     }
   }
   RNA_STRUCT_END;
@@ -1839,6 +1853,7 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
   GizmoGroup *ggd = static_cast<GizmoGroup *>(gzgroup->customdata);
 
   const eContextObjectMode mode = CTX_data_mode_enum(C);
+  ggd->mode_prev = mode;
 
   MAN_ITER_AXES_BEGIN (axis, axis_idx) {
     const short axis_type = gizmo_get_axis_type(axis_idx);
@@ -1851,6 +1866,8 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
     WM_gizmo_set_fn_custom_modal(axis, gizmo_modal);
 
     gizmo_3d_setup_draw_from_twtype(axis, axis_idx, ggd->twtype);
+
+    WM_gizmo_action_operators_clear(axis);
 
     switch (axis_type) {
       case MAN_AXES_TRANSLATE:
@@ -1875,12 +1892,12 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
         }
 
         if (ot_store.action1_translate) {
-          WM_gizmo_operator_set(
-              axis, WM_GIZMO_OP_SLOT_ACTION_1, ot_store.action1_translate, nullptr);
+          WM_gizmo_action_operator_set(
+              axis, WM_GIZMO_OP_ACTION_DUPLICATE, ot_store.action1_translate, nullptr);
         }
         if (ot_store.action2_translate) {
-          WM_gizmo_operator_set(
-              axis, WM_GIZMO_OP_SLOT_ACTION_2, ot_store.action2_translate, nullptr);
+          WM_gizmo_action_operator_set(
+              axis, WM_GIZMO_OP_ACTION_DUPLICATE_LINKED, ot_store.action2_translate, nullptr);
         }
         ptr = WM_gizmo_operator_set(axis, 0, ot_store.translate, nullptr);
         break;
@@ -1905,8 +1922,8 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
               case CTX_MODE_EDIT_MESH:
                 ot_store.action1_trackball = WM_operatortype_find(
                     "MESH_OT_extrude_context_trackball", true);
-                ot_store.action2_trackball = WM_operatortype_find(
-                    "MESH_OT_context_duplicate_trackball", true);
+                ot_store.action2_trackball = WM_operatortype_find("MESH_OT_duplicate_trackball",
+                                                                  true);
                 break;
             }
           }
@@ -1930,8 +1947,7 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
               case CTX_MODE_EDIT_MESH:
                 ot_store.action1_rotate = WM_operatortype_find("MESH_OT_extrude_context_rotate",
                                                                true);
-                ot_store.action2_rotate = WM_operatortype_find("MESH_OT_context_duplicate_rotate",
-                                                               true);
+                ot_store.action2_rotate = WM_operatortype_find("MESH_OT_duplicate_rotate", true);
                 break;
             }
           }
@@ -1941,10 +1957,12 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
         }
 
         if (ot_rotate_action1) {
-          WM_gizmo_operator_set(axis, WM_GIZMO_OP_SLOT_ACTION_1, ot_rotate_action1, nullptr);
+          WM_gizmo_action_operator_set(
+              axis, WM_GIZMO_OP_ACTION_DUPLICATE, ot_rotate_action1, nullptr);
         }
         if (ot_rotate_action2) {
-          WM_gizmo_operator_set(axis, WM_GIZMO_OP_SLOT_ACTION_2, ot_rotate_action2, nullptr);
+          WM_gizmo_action_operator_set(
+              axis, WM_GIZMO_OP_ACTION_DUPLICATE_LINKED, ot_rotate_action2, nullptr);
         }
         ptr = WM_gizmo_operator_set(axis, 0, ot_rotate, nullptr);
         break;
@@ -1965,25 +1983,32 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
             case CTX_MODE_EDIT_MESH:
               ot_store.action1_resize = WM_operatortype_find("MESH_OT_extrude_context_resize",
                                                              true);
-              ot_store.action2_resize = WM_operatortype_find("MESH_OT_context_duplicate_scale",
-                                                             true);
+              ot_store.action2_resize = WM_operatortype_find("MESH_OT_duplicate_resize", true);
               break;
           }
         }
         if (ot_store.action1_resize) {
-          WM_gizmo_operator_set(axis, WM_GIZMO_OP_SLOT_ACTION_1, ot_store.action1_resize, nullptr);
+          WM_gizmo_action_operator_set(
+              axis, WM_GIZMO_OP_ACTION_DUPLICATE, ot_store.action1_resize, nullptr);
         }
         if (ot_store.action2_resize) {
-          WM_gizmo_operator_set(axis, WM_GIZMO_OP_SLOT_ACTION_2, ot_store.action2_resize, nullptr);
+          WM_gizmo_action_operator_set(
+              axis, WM_GIZMO_OP_ACTION_DUPLICATE_LINKED, ot_store.action2_resize, nullptr);
         }
         ptr = WM_gizmo_operator_set(axis, 0, ot_store.resize, nullptr);
         break;
       }
     }
 
-    /* Plane-constrain action: run the same transform operator as the primary slot, but on the
-     * plane perpendicular to the handle. Only meaningful for single-axis translate/scale handles;
-     * a plane flip makes no sense for rotation or for handles that already span a plane. */
+    for (const int action_slot :
+         {WM_GIZMO_OP_ACTION_DUPLICATE, WM_GIZMO_OP_ACTION_DUPLICATE_LINKED})
+    {
+      wmGizmoOpElem *gzop = WM_gizmo_action_operator_get(axis, action_slot);
+      if (gzop && gzop->type) {
+        gizmo_operator_set_properties(&gzop->ptr, constraint_axis);
+      }
+    }
+
     const bool is_single_axis = (int(constraint_axis[0]) + int(constraint_axis[1]) +
                                  int(constraint_axis[2])) == 1;
     if (is_single_axis) {
@@ -1995,34 +2020,14 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
         ot_plane = ot_store.resize;
       }
       if (ot_plane) {
-        WM_gizmo_operator_set(axis, WM_GIZMO_OP_SLOT_ACTION_3, ot_plane, nullptr);
-      }
-    }
-
-    /* Re-fetch the action operator slots rather than reusing the pointers returned by
-     * #WM_gizmo_operator_set above: each call may resize #wmGizmo.op_data, invalidating the
-     * pointers returned by earlier calls. */
-    for (const int slot : {WM_GIZMO_OP_SLOT_ACTION_1, WM_GIZMO_OP_SLOT_ACTION_2}) {
-      if (wmGizmoOpElem *gzop = WM_gizmo_operator_get(axis, slot)) {
-        if (gzop->type != nullptr) {
-          gizmo_operator_set_properties(&gzop->ptr, constraint_axis);
-        }
-      }
-    }
-
-    /* The plane-constrain slot runs the plain transform operator (not a macro), so set its
-     * top-level "constraint_axis" directly like the primary slot below, rather than via
-     * #gizmo_operator_set_properties which only reaches a macro's nested operator. The constraint
-     * is inverted: the single-axis handle now drives the perpendicular plane. */
-    if (wmGizmoOpElem *gzop = WM_gizmo_operator_get(axis, WM_GIZMO_OP_SLOT_ACTION_3)) {
-      if (gzop->type != nullptr) {
-        const bool plane_axis[3] = {
-            !constraint_axis[0], !constraint_axis[1], !constraint_axis[2]};
-        PropertyRNA *prop = RNA_struct_find_property(&gzop->ptr, "constraint_axis");
+        PointerRNA *ptr_plane = WM_gizmo_action_operator_set(
+            axis, WM_GIZMO_OP_ACTION_CONSTRAIN_PLANE, ot_plane, nullptr);
+        const bool plane_axis[3] = {!constraint_axis[0], !constraint_axis[1], !constraint_axis[2]};
+        PropertyRNA *prop = RNA_struct_find_property(ptr_plane, "constraint_axis");
         if (prop) {
-          RNA_property_boolean_set_array(&gzop->ptr, prop, plane_axis);
+          RNA_property_boolean_set_array(ptr_plane, prop, plane_axis);
         }
-        RNA_boolean_set(&gzop->ptr, "release_confirm", true);
+        RNA_boolean_set(ptr_plane, "release_confirm", true);
       }
     }
 
@@ -2180,6 +2185,10 @@ static void WIDGETGROUP_gizmo_refresh(const bContext *C, wmGizmoGroup *gzgroup)
       ggd->twtype_prev = ggd->twtype;
       gizmogroup_init_properties_from_twtype(C, gzgroup);
     }
+  }
+
+  if (ggd->mode_prev != CTX_data_mode_enum(C)) {
+    gizmogroup_init_properties_from_twtype(C, gzgroup);
   }
 
   const int orient_index = BKE_scene_orientation_get_index_from_flag(scene, ggd->twtype_init);
@@ -2345,6 +2354,34 @@ static void gizmo_3d_draw_invoke(wmGizmoGroup *gzgroup,
   }
 }
 
+/** Set (or unset) the "orient_type" of an operator's properties, macro members included. */
+static void gizmo_operator_orient_type_set(PointerRNA *ptr,
+                                           const int orient_index,
+                                           const bool use_default)
+{
+  PropertyRNA *prop_orient_type = RNA_struct_find_property(ptr, "orient_type");
+  if (prop_orient_type) {
+    if (use_default) {
+      RNA_property_unset(ptr, prop_orient_type);
+    }
+    else {
+      RNA_property_enum_set(ptr, prop_orient_type, orient_index);
+    }
+  }
+
+  RNA_STRUCT_BEGIN (ptr, prop) {
+    if (RNA_property_type(prop) != PROP_POINTER) {
+      continue;
+    }
+    PointerRNA propptr = RNA_property_pointer_get(ptr, prop);
+    if (!propptr.data || !RNA_struct_is_a(propptr.type, RNA_OperatorProperties)) {
+      continue;
+    }
+    gizmo_operator_orient_type_set(&propptr, orient_index, use_default);
+  }
+  RNA_STRUCT_END;
+}
+
 static void WIDGETGROUP_gizmo_invoke_prepare(const bContext *C,
                                              wmGizmoGroup *gzgroup,
                                              wmGizmo *gz,
@@ -2361,32 +2398,23 @@ static void WIDGETGROUP_gizmo_invoke_prepare(const bContext *C,
     Scene *scene = CTX_data_scene(C);
     const TransformOrientationSlot *orient_slot = BKE_scene_orientation_slot_get_from_flag(
         scene, ggd->twtype_init);
-    /* #MAN_AXIS_ROT_C always uses the #V3D_ORIENT_VIEW orientation,
-     * optionally we could set this orientation instead of unset the property. */
     const bool use_default = (gz == ggd->gizmos[MAN_AXIS_ROT_C]) ||
                              (orient_slot == &scene->orientation_slots[SCE_ORIENT_DEFAULT]);
 
-    /* Apply to the primary slot and to the plane-constrain action slot (when present): the latter
-     * runs the same transform operator and interprets its constraint relative to this
-     * orientation, so it must match. */
-    for (const int slot : {0, WM_GIZMO_OP_SLOT_ACTION_3}) {
-      wmGizmoOpElem *gzop = WM_gizmo_operator_get(gz, slot);
+    /* TODO: API function. */
+    const int orient_index = BKE_scene_orientation_slot_get_index(orient_slot);
+
+    wmGizmoOpElem *gzop_all[] = {
+        WM_gizmo_operator_get(gz, 0),
+        WM_gizmo_action_operator_get(gz, WM_GIZMO_OP_ACTION_DUPLICATE),
+        WM_gizmo_action_operator_get(gz, WM_GIZMO_OP_ACTION_DUPLICATE_LINKED),
+        WM_gizmo_action_operator_get(gz, WM_GIZMO_OP_ACTION_CONSTRAIN_PLANE),
+    };
+    for (wmGizmoOpElem *gzop : gzop_all) {
       if (gzop == nullptr || gzop->type == nullptr) {
         continue;
       }
-      PointerRNA *ptr = &gzop->ptr;
-      PropertyRNA *prop_orient_type = RNA_struct_find_property(ptr, "orient_type");
-      if (prop_orient_type == nullptr) {
-        continue;
-      }
-      if (use_default) {
-        RNA_property_unset(ptr, prop_orient_type);
-      }
-      else {
-        /* TODO: API function. */
-        int index = BKE_scene_orientation_slot_get_index(orient_slot);
-        RNA_property_enum_set(ptr, prop_orient_type, index);
-      }
+      gizmo_operator_orient_type_set(&gzop->ptr, orient_index, use_default);
     }
   }
 }

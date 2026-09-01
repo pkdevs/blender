@@ -405,10 +405,10 @@ struct GizmoTweakData {
 };
 
 static bool gizmo_tweak_start(
-    bContext *C, wmGizmoMap *gzmap, wmGizmo *gz, const wmEvent *event, int operator_slot)
+    bContext *C, wmGizmoMap *gzmap, wmGizmo *gz, const wmEvent *event, int action_slot)
 {
   /* Activate highlighted gizmo. */
-  wm_gizmomap_modal_set(gzmap, C, gz, event, true, operator_slot);
+  wm_gizmomap_modal_set(gzmap, C, gz, event, true, action_slot);
 
   return (gz->state & WM_GIZMO_STATE_MODAL);
 }
@@ -417,10 +417,10 @@ static bool gizmo_tweak_start_and_finish(bContext *C,
                                          wmGizmoMap *gzmap,
                                          wmGizmo *gz,
                                          const wmEvent *event,
-                                         int operator_slot,
+                                         int action_slot,
                                          bool *r_is_modal)
 {
-  wmGizmoOpElem *gzop = WM_gizmo_operator_get(gz, gz->highlight_part);
+  wmGizmoOpElem *gzop = wm_gizmo_tweak_operator_get(gz, action_slot);
   if (r_is_modal) {
     *r_is_modal = false;
   }
@@ -444,7 +444,7 @@ static bool gizmo_tweak_start_and_finish(bContext *C,
      * conflicting with modal operator attached to gizmo. */
     if (gzop->type->modal) {
       /* Activate highlighted gizmo. */
-      wm_gizmomap_modal_set(gzmap, C, gz, event, true, operator_slot);
+      wm_gizmomap_modal_set(gzmap, C, gz, event, true, action_slot);
       if (r_is_modal) {
         *r_is_modal = true;
       }
@@ -599,14 +599,13 @@ static wmOperatorStatus gizmo_tweak_invoke(bContext *C, wmOperator *op, const wm
     }
   }
 
-  /* Operator slot selected by the invoking key-map item, see the "action" property. */
-  const int operator_slot = RNA_enum_get(op->ptr, "action");
+  const int action_slot = RNA_enum_get(op->ptr, "action");
 
-  if (gizmo_tweak_start_and_finish(C, gzmap, gz, event, operator_slot, nullptr)) {
+  if (gizmo_tweak_start_and_finish(C, gzmap, gz, event, action_slot, nullptr)) {
     return OPERATOR_FINISHED;
   }
 
-  if (!gizmo_tweak_start(C, gzmap, gz, event, operator_slot)) {
+  if (!gizmo_tweak_start(C, gzmap, gz, event, action_slot)) {
     /* Failed to start. */
     gz->highlight_part = highlight_part_init;
     return OPERATOR_PASS_THROUGH;
@@ -644,35 +643,26 @@ static wmOperatorStatus gizmo_tweak_invoke(bContext *C, wmOperator *op, const wm
   return OPERATOR_RUNNING_MODAL;
 }
 
-/* Default "action": run the gizmo's highlighted part (its primary operator).
- * Negative so it never aliases a real operator slot, see #WM_GIZMO_OP_SLOT_ACTION_1. */
-static constexpr int GIZMO_TWEAK_ACTION_DEFAULT = -1;
-
 void GIZMOGROUP_OT_gizmo_tweak(wmOperatorType *ot)
 {
-  /* This property lets a key-map item choose which operator a gizmo tweak runs, keeping the
-   * duplicate/extrude modifier remappable instead of hard-coded. Each enum value is the gizmo
-   * operator slot to run (see #WM_gizmo_operator_set), passed straight through as the slot index;
-   * #GIZMO_TWEAK_ACTION_DEFAULT (-1) means the highlighted part. Gizmos that don't populate these
-   * slots fall back to the default action. */
   static const EnumPropertyItem tweak_action_items[] = {
       {GIZMO_TWEAK_ACTION_DEFAULT,
        "DEFAULT",
        0,
        "Default",
        "Run the gizmo's primary operator (transform)"},
-      {WM_GIZMO_OP_SLOT_ACTION_1,
+      {WM_GIZMO_OP_ACTION_DUPLICATE,
        "DUPLICATE",
        0,
        "Duplicate / Extrude",
        "Duplicate the selection (object mode) or extrude it (edit mesh) before transforming"},
-      {WM_GIZMO_OP_SLOT_ACTION_2,
+      {WM_GIZMO_OP_ACTION_DUPLICATE_LINKED,
        "DUPLICATE_LINKED",
        0,
        "Duplicate Linked",
        "Make a linked duplicate (object mode) or a plain duplicate (edit mesh) before "
        "transforming"},
-      {WM_GIZMO_OP_SLOT_ACTION_3,
+      {WM_GIZMO_OP_ACTION_CONSTRAIN_PLANE,
        "CONSTRAIN_PLANE",
        0,
        "Constrain to Plane",
@@ -705,8 +695,6 @@ void GIZMOGROUP_OT_gizmo_tweak(wmOperatorType *ot)
       "Action",
       "Operator to run when tweaking the gizmo, allowing a key-map item to invoke "
       "alternatives such as duplicate or extrude");
-  /* The action comes solely from the invoking key-map item. Without #PROP_SKIP_SAVE the last-used
-   * value would persist, so a plain tweak after a Shift-tweak would keep duplicating. */
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 

@@ -106,8 +106,6 @@ def _template_items_animation():
 
 def _template_items_gizmo_tweak_value_drag():
     return [
-        # Duplicate/extrude variants, see #GIZMOGROUP_OT_gizmo_tweak. The modifier stays remappable
-        # since it lives in the key-map; specific items must precede the default (first-match).
         ("gizmogroup.gizmo_tweak", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG', "shift": True, "alt": True},
          {"properties": [("action", 'DUPLICATE_LINKED')]}),
         ("gizmogroup.gizmo_tweak", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG', "shift": True},

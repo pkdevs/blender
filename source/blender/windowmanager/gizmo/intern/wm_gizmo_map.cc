@@ -1096,7 +1096,7 @@ void wm_gizmomap_modal_set(wmGizmoMap *gzmap,
                            wmGizmo *gz,
                            const wmEvent *event,
                            bool enable,
-                           int operator_slot)
+                           int action_slot)
 {
   bool do_refresh = false;
 
@@ -1135,15 +1135,7 @@ void wm_gizmomap_modal_set(wmGizmoMap *gzmap,
       gzmap->gzmap_context.event_xy[0] = INT_MAX;
     }
 
-    /* Run the operator slot the tweak's "action" selected (see #GIZMOGROUP_OT_gizmo_tweak),
-     * falling back to the highlighted part when unset or empty. */
-    wmGizmoOpElem *gzop = nullptr;
-    if (operator_slot >= 0) {
-      gzop = WM_gizmo_operator_get(gz, operator_slot);
-    }
-    if (!gzop) {
-      gzop = WM_gizmo_operator_get(gz, gz->highlight_part);
-    }
+    wmGizmoOpElem *gzop = wm_gizmo_tweak_operator_get(gz, action_slot);
     if (gzop && gzop->type) {
       const wmOperatorStatus retval = WM_gizmo_operator_invoke(C, gz, gzop, event);
       OPERATOR_RETVAL_CHECK(retval);

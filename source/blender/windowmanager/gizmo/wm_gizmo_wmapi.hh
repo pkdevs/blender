@@ -26,12 +26,17 @@ struct wmEventHandler_Op;
 struct wmGizmo;
 struct wmGizmoGroup;
 struct wmGizmoMap;
+struct wmGizmoOpElem;
 struct wmKeyConfig;
 struct wmOperatorType;
 
 /* -------------------------------------------------------------------- */
 /** \name #wmGizmo
  * \{ */
+
+constexpr int GIZMO_TWEAK_ACTION_DEFAULT = -1;
+
+wmGizmoOpElem *wm_gizmo_tweak_operator_get(wmGizmo *gz, int action_slot);
 
 /* `wm_gizmo_type.cc`, for init/exit. */
 
@@ -96,17 +101,16 @@ wmGizmo *wm_gizmomap_highlight_get(wmGizmoMap *gzmap);
 /**
  * Caller should call exit when (enable == False).
  *
- * \param operator_slot: When >= 0 and the gizmo has an operator in that slot, invoke it instead
- * of the gizmo's highlighted part. Used by #GIZMOGROUP_OT_gizmo_tweak to run alternative
- * operators (e.g. duplicate/extrude) selected via a remappable key-map property. Pass -1 for the
- * default behavior.
+ * \param action_slot: Action operator to invoke instead of the gizmo's highlighted part
+ * (resolved with #wm_gizmo_tweak_operator_get). Used by #GIZMOGROUP_OT_gizmo_tweak to run
+ * alternative operators (e.g. duplicate/extrude) selected via a remappable key-map property.
  */
 void wm_gizmomap_modal_set(wmGizmoMap *gzmap,
                            bContext *C,
                            wmGizmo *gz,
                            const wmEvent *event,
                            bool enable,
-                           int operator_slot = -1);
+                           int action_slot = GIZMO_TWEAK_ACTION_DEFAULT);
 
 wmGizmo *wm_gizmomap_modal_get(wmGizmoMap *gzmap);
 wmGizmo **wm_gizmomap_selected_get(wmGizmoMap *gzmap, int *r_selected_len);

@@ -51,20 +51,6 @@ struct wmWindowManager;
 /* -------------------------------------------------------------------- */
 /* #wmGizmo. */
 
-/**
- * Extra operator slots for gizmos that offer alternative actions, selected by a key-map item
- * (via #GIZMOGROUP_OT_gizmo_tweak's "action" property) rather than by the hovered part. The
- * transform gizmos use them to expose duplicate/extrude variants.
- *
- * Unlike a normal gizmo operator slot, these are NOT part (handle) indices: they are placed
- * above the part-index range used by any gizmo (the 2D cage, the busiest, tops out near 10) so
- * they can never alias a real #wmGizmo.highlight_part. The values are referenced directly by
- * that operator's "action" enum, keep them in sync.
- */
-constexpr int WM_GIZMO_OP_SLOT_ACTION_1 = 15;
-constexpr int WM_GIZMO_OP_SLOT_ACTION_2 = 16;
-constexpr int WM_GIZMO_OP_SLOT_ACTION_3 = 17;
-
 wmGizmo *WM_gizmo_new_ptr(const wmGizmoType *gzt, wmGizmoGroup *gzgroup, PointerRNA *properties);
 /**
  * \param idname: Must be a valid gizmo type name,
@@ -111,14 +97,16 @@ void WM_gizmo_modal_set_while_modal(wmGizmoMap *gzmap,
                                     const wmEvent *event);
 
 wmGizmoOpElem *WM_gizmo_operator_get(wmGizmo *gz, int part_index);
-/**
- * Assign an operator to one of the gizmo's operator slots.
- *
- * \warning The returned pointer references storage inside #wmGizmo.op_data, which may be
- * reallocated by a later #WM_gizmo_operator_set call on the same gizmo (it grows to fit
- * `part_index`). Do not hold the returned pointer across further `set` calls; re-fetch with
- * #WM_gizmo_operator_get once all slots are assigned.
- */
+
+wmGizmoOpElem *WM_gizmo_action_operator_get(wmGizmo *gz, int action_slot);
+
+PointerRNA *WM_gizmo_action_operator_set(wmGizmo *gz,
+                                         eWM_GizmoOpActionSlot action_slot,
+                                         wmOperatorType *ot,
+                                         IDProperty *properties);
+
+void WM_gizmo_action_operators_clear(wmGizmo *gz);
+
 PointerRNA *WM_gizmo_operator_set(wmGizmo *gz,
                                   int part_index,
                                   wmOperatorType *ot,
