@@ -7,6 +7,9 @@
 
 #include "BKE_context.hh"
 
+#include "DNA_theme_types.h"
+#include "DNA_userdef_types.h"
+
 #include "BLF_api.hh"
 
 #include "BLI_index_range.hh"
@@ -94,7 +97,10 @@ static std::array<MdHeaderStyle, 6> headers = {
 static MdBlockSpacing paragraph = {.margin_top = 0.25f, .margin_bottom = 0.50f};
 static MdBlockSpacing quote = {.margin_top = 0.50f, .margin_bottom = 0.75f};
 static float quote_bar_padding = 0.10f;
-static MdBlockSpacing code_block = {.margin_top = 0.00f, .margin_bottom = 0.00f};
+static MdBlockSpacing code_block = {.margin_top = 0.50f, .margin_bottom = 0.75f};
+static float code_block_padding_x = 10.00f;
+static float code_block_padding_y = 8.00f;
+static float code_box_corner_radius = 3.00f;
 static MdBlockSpacing horizontal_rule = {.margin_top = 0.50f, .margin_bottom = 0.50f};
 
 static MdListSpacing list = {.margin_top = 0.50f,
@@ -212,7 +218,9 @@ class MarkdownLayouter {
 
   struct ParagraphBlock {};
 
-  struct CodeBlock {};
+  struct CodeBlock {
+    rctf bounds;
+  };
 
   struct QuoteBlock {
     float start_y = 0.0f;
@@ -376,7 +384,9 @@ class MarkdownLayouter {
         break;
       }
       case MD_BLOCK_CODE: {
-        block_stack_.append(CodeBlock{});
+        CodeBlock code_block;
+        BLI_rctf_init_minmax(&code_block.bounds);
+        block_stack_.append(code_block);
         break;
       }
       case MD_BLOCK_P: {
@@ -411,6 +421,9 @@ class MarkdownLayouter {
     if (flow_bottom_) {
       this->add_pending_spacing(this->block_margin_top(block_stack_.last()));
     }
+    if (std::holds_alternative<CodeBlock>(block_stack_.last())) {
+      pending_spacing_ += this->code_block_padding_y_px();
+    }
     if (is_list_container_block(block_stack_.last()) && this->is_direct_child_of_list_item()) {
       this->add_pending_spacing(md_style::list.nested_margin_top);
     }
@@ -435,6 +448,49 @@ class MarkdownLayouter {
   float list_indent_px() const
   {
     return md_style::list_indent_px * cache_.key.pixels_per_point;
+  }
+
+  float code_block_padding_x_px() const
+  {
+    return md_style::code_block_padding_x * cache_.key.pixels_per_point;
+  }
+
+  float code_block_padding_y_px() const
+  {
+    return md_style::code_block_padding_y * cache_.key.pixels_per_point;
+  }
+
+  float context_block_start_x() const
+  {
+    float indentation = 0.0f;
+    const float indent = this->list_indent_px();
+    for (const auto &md_block : block_stack_) {
+      if (std::holds_alternative<QuoteBlock>(md_block)) {
+        indentation += indent;
+      }
+      if (std::holds_alternative<ListItemBlock>(md_block)) {
+        indentation += indent;
+      }
+    }
+    return indentation;
+  }
+
+  float context_content_start_x() const
+  {
+    float x = this->context_block_start_x();
+    if (this->is_in_fenced_code_block()) {
+      x += this->code_block_padding_x_px();
+    }
+    return x;
+  }
+
+  float context_content_end_x() const
+  {
+    float x = float(cache_.key.wrap_width_px);
+    if (this->is_in_fenced_code_block()) {
+      x -= this->code_block_padding_x_px();
+    }
+    return x;
   }
 
   static StringRef unordered_bullet_for_level(const int level)
@@ -537,6 +593,57 @@ class MarkdownLayouter {
         quote->content_bottom = std::min(quote->content_bottom, bottom);
       }
     }
+  }
+
+  void track_code_text_bounds(const MarkdownItemText &item)
+  {
+    if (!this->is_in_fenced_code_block()) {
+      return;
+    }
+
+    markdown_apply_item_font(item);
+    const float top = item.y + BLF_ascender(item.fontid);
+    const float bottom = item.y + BLF_descender(item.fontid);
+    const float right = item.x + BLF_width(item.fontid, item.text.data(), item.text.size());
+    markdown_disable_item_font(item);
+
+    for (MdBlock &md_block : block_stack_) {
+      if (auto *code_block = std::get_if<CodeBlock>(&md_block)) {
+        const rctf part{.xmin = item.x, .xmax = right, .ymin = bottom, .ymax = top};
+        BLI_rctf_union(&code_block->bounds, &part);
+      }
+    }
+  }
+
+  void extend_flow_bottom_for_code_block(const CodeBlock &code_block)
+  {
+    if (BLI_rctf_is_empty(&code_block.bounds)) {
+      return;
+    }
+
+    const float box_bottom = code_block.bounds.ymin - this->code_block_padding_y_px();
+    if (!flow_bottom_) {
+      flow_bottom_ = box_bottom;
+      return;
+    }
+    flow_bottom_ = std::min(*flow_bottom_, box_bottom);
+  }
+
+  void append_code_block_box()
+  {
+    const auto *code_block = std::get_if<CodeBlock>(&block_stack_.last());
+    if (!code_block || BLI_rctf_is_empty(&code_block->bounds)) {
+      return;
+    }
+
+    const float padding_y = this->code_block_padding_y_px();
+
+    MarkdownItemCodeBox box;
+    box.rect.xmin = this->context_block_start_x();
+    box.rect.xmax = float(cache_.key.wrap_width_px);
+    box.rect.ymax = code_block->bounds.ymax + padding_y;
+    box.rect.ymin = code_block->bounds.ymin - padding_y;
+    cache_.md_layout.items.append(box);
   }
 
   void append_quote_line()
@@ -717,6 +824,8 @@ class MarkdownLayouter {
       }
       case MD_BLOCK_CODE: {
         BLI_assert(std::holds_alternative<CodeBlock>(md_block));
+        this->extend_flow_bottom_for_code_block(std::get<CodeBlock>(md_block));
+        this->append_code_block_box();
         break;
       }
       case MD_BLOCK_P: {
@@ -826,7 +935,7 @@ class MarkdownLayouter {
       case MD_TEXT_BR:
       case MD_TEXT_SOFTBR: {
         this->add_line_break();
-        x_ = this->context_block_start_x();
+        x_ = this->context_content_start_x();
         break;
       }
       case MD_TEXT_NULLCHAR:
@@ -842,7 +951,7 @@ class MarkdownLayouter {
   void md_text_normal(const StringRef text)
   {
     const ContextFontSettings settings = this->get_context_font_settings();
-    const float start_x = this->context_block_start_x();
+    const float start_x = this->context_content_start_x();
     this->output_wrapped_text(text,
                               settings.size,
                               settings.fontid,
@@ -855,7 +964,7 @@ class MarkdownLayouter {
   void md_text_code(StringRef text)
   {
     const ContextFontSettings settings = this->get_context_font_settings();
-    const float start_x = this->context_block_start_x();
+    const float start_x = this->context_content_start_x();
     markdown_apply_font(settings.fontid,
                         settings.size * cache_.key.pixels_per_point,
                         settings.weight,
@@ -909,7 +1018,7 @@ class MarkdownLayouter {
     current_line_box_ = LineBox{flow_bottom_.value_or(0.0f) - pending_spacing_, line_height};
     y_ = current_line_box_->top - BLF_ascender(fontid);
     pending_spacing_ = 0.0f;
-    x_ = this->context_block_start_x();
+    x_ = this->context_content_start_x();
     this->append_pending_list_marker();
   }
 
@@ -981,7 +1090,7 @@ class MarkdownLayouter {
       this->ensure_line_box(fontid);
       /* A list marker uses the body font and may have changed the active font settings. */
       markdown_apply_item_font(item_template);
-      const float remaining_width = cache_.key.wrap_width_px - x_;
+      const float remaining_width = this->context_content_end_x() - x_;
       float needed_width = 0.0f;
       const int64_t last_fit_char_i = int64_t(BLF_width_to_strlen(
           fontid, text.data(), size_t(text.size()), remaining_width, &needed_width));
@@ -1026,6 +1135,7 @@ class MarkdownLayouter {
         item_template.y = y_;
         cache_.md_layout.items.append(item_template);
         this->track_quote_text_bounds(item_template);
+        this->track_code_text_bounds(item_template);
       }
       if (wrap_to_next_line) {
         this->line_box_end();
@@ -1035,21 +1145,6 @@ class MarkdownLayouter {
         x_ += needed_width;
       }
     }
-  }
-
-  float context_block_start_x() const
-  {
-    float indentation = 0.0f;
-    const float indent = this->list_indent_px();
-    for (const auto &md_block : block_stack_) {
-      if (std::holds_alternative<QuoteBlock>(md_block)) {
-        indentation += indent;
-      }
-      if (std::holds_alternative<ListItemBlock>(md_block)) {
-        indentation += indent;
-      }
-    }
-    return indentation;
   }
 
   void finalize_vertical_positions()
@@ -1064,6 +1159,9 @@ class MarkdownLayouter {
     for (const MarkdownItem &item : cache_.md_layout.items) {
       if (const auto *quote_line = std::get_if<MarkdownItemQuoteLine>(&item)) {
         bottom_y = std::min(bottom_y, quote_line->y - quote_line->height);
+      }
+      if (const auto *code_box = std::get_if<MarkdownItemCodeBox>(&item)) {
+        bottom_y = std::min(bottom_y, code_box->rect.ymin);
       }
     }
     cache_.md_layout.content_height = -bottom_y;
@@ -1234,12 +1332,15 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
   theme::get_color_4ubv(TH_LINK, link_color);
   link_color[3] = color[3];
 
-  /* Blend toward the panel background so quote and code block text is muted consistently across
-   * themes. */
+  /* Blend toward the panel background so quote text is muted consistently across themes. */
   uchar back_color[3];
   theme::get_color_3ubv(TH_PANEL_BACK, back_color);
   constexpr float quote_dimmed_blend = 0.5f;
   constexpr float code_block_dimmed_blend = 0.2f;
+
+  const bTheme *btheme = theme::theme_get();
+  const uchar *code_box_fill_color = btheme->tui.wcol_box.inner;
+  const uchar *code_box_border_color = btheme->tui.wcol_box.outline;
 
   uchar quote_dimmed_color[4];
   theme::get_color_blend_shade_3ubv(color, back_color, quote_dimmed_blend, 0, quote_dimmed_color);
@@ -1247,7 +1348,7 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
 
   uchar code_block_dimmed_color[4];
   theme::get_color_blend_shade_3ubv(
-      color, back_color, code_block_dimmed_blend, 0, code_block_dimmed_color);
+      color, code_box_fill_color, code_block_dimmed_blend, 0, code_block_dimmed_color);
   code_block_dimmed_color[3] = color[3];
 
   uchar quote_dimmed_link_color[4];
@@ -1257,8 +1358,36 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
 
   uchar code_block_dimmed_link_color[4];
   theme::get_color_blend_shade_3ubv(
-      link_color, back_color, code_block_dimmed_blend, 0, code_block_dimmed_link_color);
+      link_color, code_box_fill_color, code_block_dimmed_blend, 0, code_block_dimmed_link_color);
   code_block_dimmed_link_color[3] = link_color[3];
+
+  const float corner_radius = md_style::code_box_corner_radius * cache.key.pixels_per_point;
+
+  for (const MarkdownItem &item : cache.md_layout.items) {
+    const auto *code_box = std::get_if<MarkdownItemCodeBox>(&item);
+    if (!code_box) {
+      continue;
+    }
+
+    rctf box_rect = code_box->rect;
+    box_rect.xmin += rect->xmin;
+    box_rect.xmax += rect->xmin;
+    box_rect.ymax += rect->ymax;
+    box_rect.ymin += rect->ymax;
+
+    const float fill_col[4] = {float(code_box_fill_color[0]) / 255.0f,
+                               float(code_box_fill_color[1]) / 255.0f,
+                               float(code_box_fill_color[2]) / 255.0f,
+                               float(code_box_fill_color[3]) / 255.0f};
+    const float border_col[4] = {float(code_box_border_color[0]) / 255.0f,
+                                 float(code_box_border_color[1]) / 255.0f,
+                                 float(code_box_border_color[2]) / 255.0f,
+                                 float(code_box_border_color[3]) / 255.0f};
+
+    draw_roundbox_corner_set(CNR_ALL);
+    draw_roundbox_4fv_ex(
+        &box_rect, fill_col, nullptr, 1.0f, border_col, U.pixelsize, corner_radius);
+  }
 
   for (const MarkdownItem &item : cache.md_layout.items) {
     if (const auto *text_item = std::get_if<MarkdownItemText>(&item)) {
@@ -1368,6 +1497,12 @@ static std::string markdown_md_style_to_source()
   append_block_spacing("quote", md_style::quote);
   fmt::format_to(dst, "static float quote_bar_padding = {:.2f}f;\n", md_style::quote_bar_padding);
   append_block_spacing("code_block", md_style::code_block);
+  fmt::format_to(
+      dst, "static float code_block_padding_x = {:.2f}f;\n", md_style::code_block_padding_x);
+  fmt::format_to(
+      dst, "static float code_block_padding_y = {:.2f}f;\n", md_style::code_block_padding_y);
+  fmt::format_to(
+      dst, "static float code_box_corner_radius = {:.2f}f;\n", md_style::code_box_corner_radius);
   append_block_spacing("horizontal_rule", md_style::horizontal_rule);
   fmt::format_to(dst, "\n");
 
@@ -1690,6 +1825,27 @@ static void label_markdown_dev_config_details_table(Block *block, Layout &panel_
        0.5f,
        1,
        IFACE_("Padding between ordered list markers and item text in pixels at 1x scale")},
+      {IFACE_("Code Block X"),
+       &md_style::code_block_padding_x,
+       0.0f,
+       20.0f,
+       0.5f,
+       1,
+       IFACE_("Horizontal padding around fenced code blocks in pixels at 1x scale")},
+      {IFACE_("Code Block Y"),
+       &md_style::code_block_padding_y,
+       0.0f,
+       20.0f,
+       0.5f,
+       1,
+       IFACE_("Vertical padding around fenced code blocks in pixels at 1x scale")},
+      {IFACE_("Code Radius"),
+       &md_style::code_box_corner_radius,
+       0.0f,
+       12.0f,
+       0.5f,
+       1,
+       IFACE_("Corner radius for code boxes in pixels at 1x scale")},
   };
 
   for (const DetailColumn &column : columns) {

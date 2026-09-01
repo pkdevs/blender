@@ -408,8 +408,14 @@ struct MarkdownItemQuoteLine {
   float height = 0.0f;
 };
 
-using MarkdownItem =
-    std::variant<MarkdownItemText, MarkdownItemHorizontalRule, MarkdownItemQuoteLine>;
+struct MarkdownItemCodeBox {
+  rctf rect = {};
+};
+
+using MarkdownItem = std::variant<MarkdownItemText,
+                                  MarkdownItemHorizontalRule,
+                                  MarkdownItemQuoteLine,
+                                  MarkdownItemCodeBox>;
 
 struct MarkdownLayoutCacheKey {
   StringRef text;
