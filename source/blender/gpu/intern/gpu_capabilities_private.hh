@@ -42,6 +42,7 @@ struct GPUCapabilities {
   int extensions_len = 0;
   const char *(*extension_get)(int);
 
+  bool multi_viewport_support = false;
   bool mem_stats_support = false;
   bool geometry_shader_support = false;
   bool hdr_viewport_support = false;

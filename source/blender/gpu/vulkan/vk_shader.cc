@@ -10,6 +10,7 @@
 
 #include "vk_shader.hh"
 
+#include "GPU_capabilities.hh"
 #include "vk_backend.hh"
 #include "vk_framebuffer.hh"
 #include "vk_shader_interface.hh"
@@ -905,7 +906,12 @@ std::string VKShader::vertex_interface_declare(const shader::ShaderCreateInfo &i
       ss << "#define gpu_Layer gl_Layer\n";
     }
     if (do_viewport_output) {
-      ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
+      if (VKBackend::get().device.physical_device_features_get().multiViewport) {
+        ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
+      }
+      else {
+        ss << "int gpu_ViewportIndex;\n";
+      }
     }
   }
   ss << "\n";
@@ -1000,7 +1006,12 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
     ss << "#define gpu_Layer gl_Layer\n";
   }
   if (flag_is_set(info.builtins_combined(), BuiltinBits::VIEWPORT_INDEX)) {
-    ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
+    if (VKBackend::get().device.physical_device_features_get().multiViewport) {
+      ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
+    }
+    else {
+      ss << "int gpu_ViewportIndex;\n";
+    }
   }
 
   if (!extensions.fragment_shader_barycentric &&
@@ -1275,7 +1286,9 @@ std::string VKShader::workaround_geometry_shader_source_create(
       ss << "  gl_Layer = gpu_Layer[" << i << "];\n";
     }
     if (do_viewport_output) {
-      ss << "  gl_ViewportIndex = gpu_ViewportIndex[" << i << "];\n";
+      if (VKBackend::get().device.physical_device_features_get().multiViewport) {
+        ss << "  gl_ViewportIndex = gpu_ViewportIndex[" << i << "];\n";
+      }
     }
     ss << "  gpu_EmitVertex();\n";
   }

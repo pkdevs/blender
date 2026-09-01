@@ -224,6 +224,8 @@ class VKDevice : public NonCopyable {
           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR};
   /** Features support. */
   VkPhysicalDeviceFeatures vk_physical_device_features_ = {};
+  VkPhysicalDeviceVulkan11Properties vk_physical_device_vulkan_11_properties_ = {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES};
   VkPhysicalDeviceVulkan11Features vk_physical_device_vulkan_11_features_ = {};
   VkPhysicalDeviceVulkan12Features vk_physical_device_vulkan_12_features_ = {};
   VkPhysicalDeviceAccelerationStructureFeaturesKHR
@@ -309,7 +311,10 @@ class VKDevice : public NonCopyable {
   {
     return vk_physical_device_vulkan_11_features_;
   }
-
+  const VkPhysicalDeviceVulkan11Properties &physical_device_vulkan_11_properties_get() const
+  {
+    return vk_physical_device_vulkan_11_properties_;
+  }
   const VkPhysicalDeviceVulkan12Features &physical_device_vulkan_12_features_get() const
   {
     return vk_physical_device_vulkan_12_features_;

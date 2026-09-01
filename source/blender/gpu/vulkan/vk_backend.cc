@@ -159,9 +159,6 @@ static Vector<StringRefNull> missing_capabilities_get(VkPhysicalDevice vk_physic
     missing_capabilities.append("geometry shaders");
   }
 #endif
-  if (features.features.multiViewport == VK_FALSE) {
-    missing_capabilities.append("multi viewport");
-  }
   if (features.features.fragmentStoresAndAtomics == VK_FALSE) {
     missing_capabilities.append("fragment stores and atomics");
   }
@@ -540,6 +537,7 @@ void VKBackend::detect_workarounds(VKDevice &device)
   extensions.shader_output_viewport_index =
       device.physical_device_vulkan_12_features_get().shaderOutputViewportIndex;
   extensions.wide_lines = device.physical_device_features_get().wideLines;
+
   extensions.fragment_shader_barycentric = device.supports_extension(
       VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
   extensions.dynamic_rendering_local_read = device.supports_extension(
@@ -865,6 +863,15 @@ void VKBackend::capabilities_init(VKDevice &device)
       device.physical_device_acceleration_structure_properties_get().maxInstanceCount > 0;
 
   GCaps.srgb_write_view_support = true;
+
+  if (device.physical_device_features_get().multiViewport) {
+    uint32_t multiview_limit =
+        device.physical_device_vulkan_11_properties_get().maxMultiviewViewCount;
+    GCaps.multi_viewport_support = (multiview_limit >= GPU_MAX_VIEWPORTS);
+  }
+  else {
+    GCaps.multi_viewport_support = false;
+  }
 
   GCaps.max_texture_size = max_ii(limits.maxImageDimension1D, limits.maxImageDimension2D);
   GCaps.max_texture_3d_size = min_uu(limits.maxImageDimension3D, INT_MAX);

@@ -194,6 +194,11 @@ int GPU_minimum_per_vertex_stride()
   return GCaps.minimum_per_vertex_stride;
 }
 
+bool GPU_multi_viewport_support()
+{
+  return GCaps.multi_viewport_support;
+}
+
 size_t GPU_max_uniform_buffer_size()
 {
   return GCaps.max_uniform_buffer_size;

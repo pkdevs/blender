@@ -32,6 +32,7 @@ int GPU_max_vertex_attribs();
 int GPU_max_varying_floats();
 int GPU_max_shader_storage_buffer_bindings();
 int GPU_max_compute_shader_storage_blocks();
+bool GPU_multi_viewport_support();
 size_t GPU_max_uniform_buffer_size();
 size_t GPU_max_storage_buffer_size();
 /* Used when binding subrange of SSBOs. In bytes.

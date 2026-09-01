@@ -7,6 +7,7 @@
  */
 
 #include "vk_framebuffer.hh"
+#include "GPU_capabilities.hh"
 #include "vk_backend.hh"
 #include "vk_context.hh"
 #include "vk_state_manager.hh"

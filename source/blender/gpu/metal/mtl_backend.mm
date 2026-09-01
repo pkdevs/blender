@@ -527,6 +527,8 @@ void MTLBackend::capabilities_init(MTLContext *ctx)
   MTLBackend::capabilities.num_efficiency_cores = get_num_efficiency_cpu_cores(ctx->device);
 
   /* Common Global Capabilities. */
+  GCaps.multi_viewport_support = true;
+
   GCaps.max_texture_size = ([device supportsFamily:MTLGPUFamilyApple3] ||
                             MTLBackend::capabilities.supports_family_mac1) ?
                                16384 :

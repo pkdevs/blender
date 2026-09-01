@@ -200,6 +200,7 @@ void VKDevice::init_physical_device_properties()
   vk_physical_device_id_properties_.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
   vk_physical_device_properties.pNext = &vk_physical_device_driver_properties_;
   vk_physical_device_driver_properties_.pNext = &vk_physical_device_id_properties_;
+  vk_physical_device_id_properties_.pNext = &vk_physical_device_vulkan_11_properties_;
 
   if (supports_extension(VK_KHR_MAINTENANCE_4_EXTENSION_NAME)) {
     vk_physical_device_maintenance4_properties_.pNext = vk_physical_device_properties.pNext;

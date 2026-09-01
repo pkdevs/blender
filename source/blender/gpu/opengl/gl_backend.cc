@@ -633,6 +633,10 @@ void GLBackend::capabilities_init()
 {
   BLI_assert(epoxy_gl_version() >= 33);
   /* Common Capabilities. */
+  GCaps.srgb_write_view_support = true;
+
+  GCaps.multi_viewport_support = true;
+
   glGetIntegerv(GL_MAX_TEXTURE_SIZE, &GCaps.max_texture_size);
   glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &GCaps.max_texture_layers);
   glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &GCaps.max_textures);
