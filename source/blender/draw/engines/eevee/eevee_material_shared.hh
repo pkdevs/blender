@@ -63,6 +63,9 @@ enum eMaterialGeometry {
   MAT_GEOM_CURVES,
   MAT_GEOM_VOLUME,
 
+  /* Special case: GSplats are pointclouds, but have their own shader. */
+  MAT_GEOM_GSPLAT,
+
   /* Special case: The world background / HDRI environment shader. */
   MAT_GEOM_WORLD,
 };

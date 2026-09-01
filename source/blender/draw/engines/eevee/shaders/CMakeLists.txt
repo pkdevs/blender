@@ -28,6 +28,7 @@ set(SRC_GLSL_LIB
   eevee_attributes_curves_lib.glsl
   eevee_attributes_mesh_lib.glsl
   eevee_attributes_pointcloud_lib.glsl
+  eevee_attributes_gsplat_lib.glsl
   eevee_attributes_volume_lib.glsl
   eevee_attributes_world_lib.glsl
 )

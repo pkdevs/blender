@@ -10,7 +10,9 @@
 #include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
-#include "draw_curves_lib.glsl" /* IWYU pragma: export. For nodetree functions. */
+#include "draw_curves_lib.glsl"   /* IWYU pragma: export. For nodetree functions. */
+#include "draw_gsplat_lib.bsl.hh" /* IWYU pragma: export. For nodetree functions. */
+
 #include "eevee_nodetree_frag_lib.glsl"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
@@ -79,11 +81,19 @@ void surf_depth([[resource_table]] PipelineConstants &pipe,
     float threshold = hashed_transparency::alpha_threshold(
         uni.pipeline_buf.alpha_hash_scale, noise_offset, g_data.P);
 
+#ifdef MAT_GEOM_GSPLAT
+    float alpha = draw::gsplat::evaluate_gaussian(gsplat_interp.lP, gsplat_interp_flat.opacity);
+    if (alpha <= max(threshold, 1.0f / 255.0f)) {
+      gpu_discard_fragment();
+      return;
+    }
+#else
     float transparency = average(g_transmittance);
     if (transparency > threshold) {
       gpu_discard_fragment();
       return;
     }
+#endif
   }
 
   if (pipe.use_clip_plane) [[static_branch]] {

@@ -16,6 +16,8 @@
 #include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
+#include "draw_gsplat_lib.bsl.hh" /* IWYU pragma: export. For nodetree functions. */
+
 #include "eevee_nodetree_frag_lib.glsl"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_shadow_shared.hh"
@@ -70,11 +72,19 @@ void surf_shadow([[resource_table]] PipelineConstants &pipe,
     float noise_offset = sampling.rng_1D_get(SAMPLING_TRANSPARENCY);
     float random_threshold = pcg4d(float4(g_data.P, noise_offset)).x;
 
+#ifdef MAT_GEOM_GSPLAT
+    float alpha = draw::gsplat::evaluate_gaussian(gsplat_interp.lP, gsplat_interp_flat.opacity);
+    if (alpha <= max(random_threshold, 1.0f / 255.0f)) {
+      gpu_discard_fragment();
+      return;
+    }
+#else
     float transparency = average(g_transmittance);
     if (transparency > random_threshold) {
       gpu_discard_fragment();
       return;
     }
+#endif
   }
 
   int2 texel_co = int2(frag_co.xy);

@@ -364,6 +364,7 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_attributes_curves_lib.glsl
   engines/eevee/shaders/eevee_attributes_mesh_lib.glsl
   engines/eevee/shaders/eevee_attributes_pointcloud_lib.glsl
+  engines/eevee/shaders/eevee_attributes_gsplat_lib.glsl
   engines/eevee/shaders/eevee_attributes_volume_lib.glsl
   engines/eevee/shaders/eevee_attributes_world_lib.glsl
   engines/eevee/shaders/eevee_bxdf.bsl.hh
@@ -402,6 +403,7 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_gbuffer_write.bsl.hh
   engines/eevee/shaders/eevee_geom_curves.bsl.hh
   engines/eevee/shaders/eevee_geom_mesh.bsl.hh
+  engines/eevee/shaders/eevee_geom_gsplat.bsl.hh
   engines/eevee/shaders/eevee_geom_pointcloud.bsl.hh
   engines/eevee/shaders/eevee_geom_types_lib.bsl.hh
   engines/eevee/shaders/eevee_geom_volume.bsl.hh

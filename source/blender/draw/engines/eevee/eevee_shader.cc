@@ -901,6 +901,15 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
       info.vertex_source("eevee_geom_curves.bsl.hh");
       info.vertex_function("eevee_geom_curves");
       break;
+    case MAT_GEOM_GSPLAT:
+      geometry_info_name = "eevee_geom_gsplat_infos_";
+      info.name_ += "_gsplat";
+      info.define("MAT_GEOM_GSPLAT");
+      /* Until every vertex shader are ported, we need to bridge the gap here by defining the
+       * pipeline. */
+      info.vertex_source("eevee_geom_gsplat.bsl.hh");
+      info.vertex_function("eevee_geom_gsplat");
+      break;
     case MAT_GEOM_MESH:
       geometry_info_name = "eevee_geom_mesh_infos_";
       info.name_ += "_mesh";
@@ -997,7 +1006,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   }
 
   bool use_transparency = false;
-  if (GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT)) {
+  if (GPU_material_flag_get(gpumat, GPU_MATFLAG_TRANSPARENT) || geometry_type == MAT_GEOM_GSPLAT) {
     if (pipeline_type != MAT_PIPE_SHADOW || transparent_shadows) {
       info.define("MAT_TRANSPARENT");
       use_transparency = true;
@@ -1203,6 +1212,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
       }
       break;
     case MAT_GEOM_POINTCLOUD:
+    case MAT_GEOM_GSPLAT:
     case MAT_GEOM_CURVES:
       /** Hair attributes come from sampler buffer. Transfer attributes to sampler. */
       for (auto &input : vertex_inputs) {
@@ -1275,6 +1285,11 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
       domain_type_frag = (pipeline_type == MAT_PIPE_VOLUME_MATERIAL) ? "VolumePoint" :
                                                                        "MeshVertex";
       domain_type_vert = "MeshVertex";
+      break;
+    case MAT_GEOM_GSPLAT:
+      domain_type_frag = (pipeline_type == MAT_PIPE_VOLUME_MATERIAL) ? "VolumePoint" :
+                                                                       "GSplatPoint";
+      domain_type_vert = "GSplatPoint";
       break;
     case MAT_GEOM_POINTCLOUD:
       domain_type_frag = (pipeline_type == MAT_PIPE_VOLUME_MATERIAL) ? "VolumePoint" :
