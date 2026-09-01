@@ -3280,6 +3280,9 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
+  IBOFamily *ibo_family = (pbvh.type() == bke::pbvh::Type::Grids && coarse) ? &ibo_tris_coarse_ :
+                                                                        &ibo_tris_;
+  ibo_family->ensure_capacity();
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
       const Span<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
@@ -3474,10 +3477,6 @@ Span<gpu::Batch *> DrawCacheImpl::ensure_tris_batches(const Object &object,
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
 
   this->free_nodes_with_changed_topology(pbvh);
-
-  const bool coarse = request.use_coarse_grids;
-  IBOFamily &ibo_family = (coarse ? ibo_tris_coarse_ : ibo_tris_);
-  ibo_family.ensure_capacity();
 
   const Span<gpu::IndexBufPtr> ibos = this->ensure_tri_indices(
       object, orig_mesh_data, nodes_to_update, request.use_coarse_grids);
