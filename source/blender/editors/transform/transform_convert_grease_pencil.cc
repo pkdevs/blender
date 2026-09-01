@@ -56,14 +56,17 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
 
     if (animrig::is_autokey_on(scene)) {
       for (const int info_i : curves_transform_data->drawings.index_range()) {
-        bke::greasepencil::Layer &target_layer = grease_pencil.layer(
-            curves_transform_data->drawings[info_i].layer_index);
+        const int layer_index = curves_transform_data->drawings[info_i].layer_index;
+        bke::greasepencil::Layer &target_layer = grease_pencil.layer(layer_index);
         const int current_frame = scene->r.cfra;
         std::optional<int> start_frame = target_layer.start_frame_at(current_frame);
         if (start_frame.has_value() && (start_frame.value() != current_frame)) {
           if (grease_pencil.insert_duplicate_frame(
                   target_layer, *target_layer.start_frame_at(current_frame), current_frame, false))
           {
+            // kep track of new keyframes (so they can be removed upon canceling again
+            curves_transform_data->new_keyframes.append(
+                std::pair<int, int>(layer_index, current_frame));
             t->flag |= T_DUPLICATED_KEYFRAMES;
           }
         }
@@ -296,13 +299,18 @@ static void special_aftertrans_update__grease_pencil(bContext *C, TransInfo *t)
   for (TransDataContainer &tc : trans_data_contrainers) {
     GreasePencil &grease_pencil = *id_cast<GreasePencil *>(tc.obedit->data);
 
-    Vector<ed::greasepencil::MutableDrawingInfo> drawings =
-        ed::greasepencil::retrieve_editable_drawings_with_falloff(*scene, grease_pencil);
+    CurvesTransformData &transform_data = *static_cast<CurvesTransformData *>(tc.custom.type.data);
+    Vector<ed::greasepencil::MutableDrawingInfo> drawings = transform_data.drawings;
 
     if (animrig::is_autokey_on(scene)) {
       for (ed::greasepencil::MutableDrawingInfo &info : drawings) {
-        bke::greasepencil::Layer &layer = grease_pencil.layer(info.layer_index);
-        grease_pencil.remove_frames(layer, {scene->r.cfra});
+        for (std::pair<int, int> keyframe : transform_data.new_keyframes) {
+          if (keyframe.first == info.layer_index && keyframe.second == info.frame_number) {
+            bke::greasepencil::Layer &layer = grease_pencil.layer(info.layer_index);
+            grease_pencil.remove_frames(layer, {info.frame_number});
+            break;
+          }
+        }
       }
     }
   }

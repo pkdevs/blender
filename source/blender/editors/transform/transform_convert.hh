@@ -101,7 +101,9 @@ struct TransDataVertSlideVert {
  */
 struct CurvesTransformData {
   Vector<ed::greasepencil::MutableDrawingInfo> drawings;
-
+  /* Keep track of possible created new keyframes {layer index, frame} so they can be removed if
+   * transform is cancelled. */
+  Vector<std::pair<int, int>> new_keyframes;
   IndexMaskMemory memory;
   Vector<IndexMask> selection_by_layer;
 
