@@ -10,6 +10,7 @@
 
 #include "BKE_grease_pencil.hh"
 
+#include "DNA_material_types.h"
 #include "DNA_outliner_types.h"
 
 #include "../outliner_intern.hh"
@@ -42,13 +43,13 @@ void TreeElementIDGreasePencil::expand_layer_tree() const
 
 void TreeElementIDGreasePencil::expand_materials() const
 {
-  for (int a = 0; a < grease_pencil_.material_array_num; a++) {
+  for (const int i : IndexRange(grease_pencil_.material_array_num)) {
     add_element(&legacy_te_.subtree,
-                reinterpret_cast<ID *>(grease_pencil_.material_array[a]),
+                &grease_pencil_.material_array[i]->id,
                 nullptr,
                 &legacy_te_,
                 TSE_SOME_ID,
-                a);
+                i);
   }
 }
 
