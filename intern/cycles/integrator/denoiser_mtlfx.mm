@@ -217,8 +217,9 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(const DenoiseContext &co
   PassParams passParams = {
     context.pass_sample_count,
     context.buffer_params.get_pass_offset(PASS_DENOISING_DEPTH),
-    context.buffer_params.get_pass_offset(PASS_MOTION),
-    context.buffer_params.get_pass_offset(PASS_NORMAL),
+    context.buffer_params.get_pass_offset(PASS_DENOISING_BACKWARD_MOTION),
+    // TODO: This normal texture is in view space instead of world space, which MTLFX expects.
+    context.buffer_params.get_pass_offset(PASS_DENOISING_NORMAL),
     context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
     context.buffer_params.get_pass_offset(PASS_DENOISING_ALBEDO),
     context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_ALBEDO),

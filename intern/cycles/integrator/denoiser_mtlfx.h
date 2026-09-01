@@ -118,8 +118,10 @@ private:
       device const float *output = render_buffer + pixel_index * params.pass_stride + params.pass_denoised;
       
       float4 color = float4(output[0], output[1], output[2], 1.0f);
+  
+      uint2 flip_tid = uint2(tid.x, params.height - 1 - tid.y);
       
-      color_tex.write(color, tid);
+      color_tex.write(color, flip_tid);
     }
 
     kernel void filter_guiding_preprocess(
@@ -142,13 +144,15 @@ private:
       
       int PASS_UNUSED = -1;
       
-      float pixelScale = 1.0f;
+      float pixelScale;
       
-//      if (pass.render_pass_sample_count == PASS_UNUSED) {
-//        pixelScale = 1.0f / pass.num_samples;
-//      } else {
-//        pixelScale = 1.0f / buffer[pass.render_pass_sample_count];
-//      }
+      if (pass.render_pass_sample_count == PASS_UNUSED) {
+        pixelScale = 1.0f / pass.num_samples;
+      } else {
+        pixelScale = 1.0f / buffer[pass.render_pass_sample_count];
+      }
+  
+      uint2 flip_tid = uint2(tid.x, params.height - 1 - tid.y);
       
       // MARK: Depth pass
       
@@ -156,7 +160,7 @@ private:
         const device float *depth = buffer + pass.render_pass_depth;
         float color = depth[0] * pixelScale;
         
-        depth_tex.write(float4(color, 0.0f, 0.0f, 1.0f), tid);
+        depth_tex.write(float4(color, 0.0f, 0.0f, 1.0f), flip_tid);
       }
       
       // MARK: Motion pass
@@ -168,7 +172,7 @@ private:
         color.x = motion[0] * pixelScale;
         color.y = motion[1] * pixelScale;
         
-        motion_tex.write(float4(color.x, color.y, 0.0f, 1.0f), tid);
+        motion_tex.write(float4(color.x, color.y, 0.0f, 1.0f), flip_tid);
       }
       
       // MARK: Normal Pass
@@ -182,7 +186,7 @@ private:
         normalColor.z = normal[2] * pixelScale;
         normalColor.w = 1.0f;
         
-        normal_tex.write(normalColor, tid);
+        normal_tex.write(normalColor, flip_tid);
       }
       
       // MARK: Roughness pass
@@ -193,7 +197,7 @@ private:
         
         rough.x = roughness[0] * pixelScale;
         
-        roughness_tex.write(float4(rough.x, 0.0f, 0.0f, 1.0f), tid);
+        roughness_tex.write(float4(rough.x, 0.0f, 0.0f, 1.0f), flip_tid);
       }
       
       // MARK: Diffuse albedo pass
@@ -213,7 +217,7 @@ private:
         albedo.y = clamp(albedo.y / (1.0f + albedo.y), 0.0f, 1.0f);
         albedo.z = clamp(albedo.z / (1.0f + albedo.z), 0.0f, 1.0f);
         
-        diffuse_albedo_tex.write(albedo, tid);
+        diffuse_albedo_tex.write(albedo, flip_tid);
       }
       
       // MARK: Specular Albedo Pass
@@ -227,7 +231,7 @@ private:
         albedo.z = specular[2] * pixelScale;
         albedo.w = 1.0f;
         
-        specular_albedo_tex.write(albedo, tid);
+        specular_albedo_tex.write(albedo, flip_tid);
       }
     }
   )";
