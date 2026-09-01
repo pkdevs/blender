@@ -59,8 +59,13 @@ ccl_device_forceinline Quaternion motion_gsplat_rotation_interpolate(const Quate
                                                                      const float t)
 {
   /* Use linear interpolation which is cheap and wors good enough. This is also what
-   * quat_interpolate() does for HW-RT. */
-  return lerp(r1, r2, t);
+   * quat_interpolate() does for HW-RT.
+   * Note that interpolation is supposed to happen on normalized quaternions, and currently no
+   * normalization is enforced on the gsplat attributes. */
+  /* TODO(sergey): Investigate whether normalizing ahead of time brings performance improvement.
+   * The tricky part with doing it ahead of time is that it could would mean data could no longer
+   * be implicitly shared with the host application. */
+  return lerp(normalized(r1), normalized(r2), t);
 }
 
 ccl_device_inline Quaternion motion_gsplat_rotation(KernelGlobals kg,
