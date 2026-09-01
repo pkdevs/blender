@@ -1244,7 +1244,7 @@ class MarkdownLayouter {
       return;
     }
 
-    float bottom_y = *flow_bottom_ - pending_spacing_;
+    float bottom_y = *flow_bottom_;
     for (const MarkdownItem &item : cache_.md_layout.items) {
       if (const auto *quote_line = std::get_if<MarkdownItemQuoteLine>(&item)) {
         bottom_y = std::min(bottom_y, quote_line->y - quote_line->height);
