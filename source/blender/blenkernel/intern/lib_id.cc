@@ -1426,7 +1426,7 @@ const Main *ID::owner_bmain() const
 
 Main *ID::owner_bmain_for_write()
 {
-  return const_cast<Main *>(this->runtime->owner_bmain);
+  return this->runtime->owner_bmain;
 }
 
 size_t BKE_libblock_get_alloc_info(short type, const char **r_name)
