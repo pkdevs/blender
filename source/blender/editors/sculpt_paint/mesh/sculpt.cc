@@ -5005,7 +5005,7 @@ std::optional<float3> stroke_get_location_bvh(bContext *C,
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
   const Sculpt &sd = *CTX_data_tool_settings(C)->sculpt;
-  const Brush *brush = BKE_paint_brush(&sd.paint);
+  const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
 
   return stroke_get_location_bvh(*depsgraph, vc, sd, brush, mval, force_original);
 }

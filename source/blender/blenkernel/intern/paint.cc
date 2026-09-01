@@ -257,43 +257,35 @@ IDTypeInfo IDType_ID_PC = {
 
 static ePaintOverlayControlFlags overlay_flags = ePaintOverlayControlFlags{};
 
-void BKE_paint_invalidate_overlay_tex(const Main &bmain,
-                                      Scene *scene,
-                                      ViewLayer *view_layer,
-                                      const Tex *tex)
+void BKE_paint_invalidate_overlay_tex(Scene *scene, const Tex *tex)
 {
-  Paint *paint = BKE_paint_get_from_active_object(bmain, scene, view_layer);
-  if (!paint) {
-    return;
-  }
+  BKE_paint_settings_foreach_mode(scene->toolsettings, [&](Paint *paint) {
+    Brush *br = BKE_paint_brush(paint);
+    if (!br) {
+      return;
+    }
 
-  Brush *br = BKE_paint_brush(paint);
-  if (!br) {
-    return;
-  }
-
-  if (br->mtex.tex == tex) {
-    overlay_flags |= PAINT_OVERLAY_INVALID_TEXTURE_PRIMARY;
-  }
-  if (br->mask_mtex.tex == tex) {
-    overlay_flags |= PAINT_OVERLAY_INVALID_TEXTURE_SECONDARY;
-  }
+    if (br->mtex.tex == tex) {
+      overlay_flags |= PAINT_OVERLAY_INVALID_TEXTURE_PRIMARY;
+    }
+    if (br->mask_mtex.tex == tex) {
+      overlay_flags |= PAINT_OVERLAY_INVALID_TEXTURE_SECONDARY;
+    }
+  });
 }
 
-void BKE_paint_invalidate_cursor_overlay(const Main &bmain,
-                                         Scene *scene,
-                                         ViewLayer *view_layer,
-                                         CurveMapping *curve)
+void BKE_paint_invalidate_cursor_overlay(Scene *scene, CurveMapping *curve)
 {
-  Paint *paint = BKE_paint_get_from_active_object(bmain, scene, view_layer);
-  if (paint == nullptr) {
-    return;
-  }
+  BKE_paint_settings_foreach_mode(scene->toolsettings, [&](Paint *paint) {
+    Brush *br = BKE_paint_brush(paint);
+    if (!br) {
+      return;
+    }
 
-  Brush *br = BKE_paint_brush(paint);
-  if (br && br->curve_distance_falloff == curve) {
-    overlay_flags |= PAINT_OVERLAY_INVALID_CURVE;
-  }
+    if (br && br->curve_distance_falloff == curve) {
+      overlay_flags |= PAINT_OVERLAY_INVALID_CURVE;
+    }
+  });
 }
 
 void BKE_paint_invalidate_overlay_all()

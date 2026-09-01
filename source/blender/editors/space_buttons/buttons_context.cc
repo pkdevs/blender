@@ -480,11 +480,7 @@ static bool buttons_context_path_brush(const bContext *C, ButsContextPath *path)
 
     Brush *br = nullptr;
     if (scene) {
-      const Main *bmain = CTX_data_main(C);
-      wmWindow *window = CTX_wm_window(C);
-      ViewLayer *view_layer = WM_window_get_active_view_layer(window);
-      Paint *paint = BKE_paint_get_from_active_object(*bmain, scene, view_layer);
-      br = BKE_paint_brush(BKE_paint_get_from_active_object(*bmain, scene, view_layer));
+      br = BKE_paint_brush(BKE_paint_get_from_context(C));
     }
 
     if (br) {

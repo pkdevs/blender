@@ -215,7 +215,7 @@ const EnumPropertyItem *rna_WorkSpaceTool_brush_type_itemf(bContext *C,
       const bToolRef *tref = static_cast<bToolRef *>(ptr->data);
       return BKE_paintmode_get_from_tool(tref);
     }
-    return C ? BKE_paintmode_get_active_from_context(C) : PaintMode::Invalid;
+    return C ? BKE_paintmode_get_from_context(C) : PaintMode::Invalid;
   }();
 
   EnumPropertyItem *items = nullptr;

@@ -117,14 +117,8 @@ ENUM_OPERATORS(ePaintSymmetryAreas);
 
 #define PAINT_SYMM_AREAS 8
 
-void BKE_paint_invalidate_overlay_tex(const Main &bmain,
-                                      Scene *scene,
-                                      ViewLayer *view_layer,
-                                      const Tex *tex);
-void BKE_paint_invalidate_cursor_overlay(const Main &bmain,
-                                         Scene *scene,
-                                         ViewLayer *view_layer,
-                                         CurveMapping *curve);
+void BKE_paint_invalidate_overlay_tex(Scene *scene, const Tex *tex);
+void BKE_paint_invalidate_cursor_overlay(Scene *scene, CurveMapping *curve);
 void BKE_paint_invalidate_overlay_all();
 ePaintOverlayControlFlags BKE_paint_get_overlay_flags();
 void BKE_paint_reset_overlay_invalid(ePaintOverlayControlFlags flag);

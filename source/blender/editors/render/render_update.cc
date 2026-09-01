@@ -318,10 +318,7 @@ static void texture_changed(Main *bmain, Tex *tex)
   for (scene = static_cast<Scene *>(bmain->scenes.first); scene;
        scene = static_cast<Scene *>(scene->id.next))
   {
-    /* paint overlays */
-    for (ViewLayer &view_layer : scene->view_layers) {
-      BKE_paint_invalidate_overlay_tex(*bmain, scene, &view_layer, tex);
-    }
+    BKE_paint_invalidate_overlay_tex(scene, tex);
   }
 
   for (Brush &brush : bmain->brushes) {

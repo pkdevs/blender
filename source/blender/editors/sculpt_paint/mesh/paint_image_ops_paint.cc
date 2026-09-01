@@ -357,7 +357,8 @@ void TexturePaintStroke::done(const bool is_cancel, const bool /*stroke_started*
   Scene *scene = CTX_data_scene(this->evil_C);
   ToolSettings *toolsettings = scene->toolsettings;
 
-  const Paint *paint = this->paint Brush *brush = BKE_paint_brush(&toolsettings->imapaint.paint);
+  const Paint *paint = this->paint;
+  Brush *brush = BKE_paint_brush(&toolsettings->imapaint.paint);
 
   if (stroke_handle_ == nullptr) {
     paint_brush_exit_tex(brush);

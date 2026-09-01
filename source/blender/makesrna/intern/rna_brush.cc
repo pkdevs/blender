@@ -737,9 +737,8 @@ static void rna_Brush_main_tex_update(bContext *C, PointerRNA *ptr)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
-  ViewLayer *view_layer = CTX_data_view_layer(C);
   Brush *br = static_cast<Brush *>(ptr->data);
-  BKE_paint_invalidate_overlay_tex(*bmain, scene, view_layer, br->mtex.tex);
+  BKE_paint_invalidate_overlay_tex(scene, br->mtex.tex);
   rna_Brush_update(bmain, scene, ptr);
 }
 
@@ -747,9 +746,8 @@ static void rna_Brush_secondary_tex_update(bContext *C, PointerRNA *ptr)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
-  ViewLayer *view_layer = CTX_data_view_layer(C);
   Brush *br = static_cast<Brush *>(ptr->data);
-  BKE_paint_invalidate_overlay_tex(*bmain, scene, view_layer, br->mask_mtex.tex);
+  BKE_paint_invalidate_overlay_tex(scene, br->mask_mtex.tex);
   rna_Brush_update(bmain, scene, ptr);
 }
 
@@ -767,13 +765,11 @@ static void rna_Brush_stroke_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 
 static void rna_TextureSlot_brush_angle_update(bContext *C, PointerRNA *ptr)
 {
-  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   MTex *mtex = static_cast<MTex *>(ptr->data);
   /* skip invalidation of overlay for stencil mode */
   if (mtex->brush_map_mode != MTEX_MAP_MODE_STENCIL) {
-    ViewLayer *view_layer = CTX_data_view_layer(C);
-    BKE_paint_invalidate_overlay_tex(*bmain, scene, view_layer, mtex->tex);
+    BKE_paint_invalidate_overlay_tex(scene, mtex->tex);
   }
 
   rna_TextureSlot_update(C, ptr);
@@ -822,7 +818,7 @@ static const EnumPropertyItem *rna_Brush_direction_itemf(bContext *C,
     return rna_enum_dummy_DEFAULT_items;
   }
 
-  PaintMode mode = BKE_paintmode_get_active_from_context(C);
+  PaintMode mode = BKE_paintmode_get_from_context(C);
 
   /* sculpt mode */
   static const EnumPropertyItem prop_smooth_direction_items[] = {
@@ -992,7 +988,7 @@ static const EnumPropertyItem *rna_Brush_stroke_itemf(bContext *C,
                                                       PropertyRNA * /*prop*/,
                                                       bool * /*r_free*/)
 {
-  PaintMode mode = (C) ? BKE_paintmode_get_active_from_context(C) : PaintMode::Invalid;
+  PaintMode mode = (C) ? BKE_paintmode_get_from_context(C) : PaintMode::Invalid;
 
   static const EnumPropertyItem brush_stroke_method_items[] = {
       {BRUSH_STROKE_DOTS, "DOTS", 0, "Dots", "Apply paint on each mouse move step"},
@@ -1140,7 +1136,7 @@ static const EnumPropertyItem *rna_BrushTextureSlot_map_mode_itemf(bContext *C,
 #  define rna_enum_brush_texture_slot_map_sculpt_mode_items \
     rna_enum_brush_texture_slot_map_all_mode_items;
 
-  const PaintMode mode = BKE_paintmode_get_active_from_context(C);
+  const PaintMode mode = BKE_paintmode_get_from_context(C);
   if (mode == PaintMode::Sculpt) {
     return rna_enum_brush_texture_slot_map_sculpt_mode_items;
   }
