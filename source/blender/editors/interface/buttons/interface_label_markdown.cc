@@ -1320,17 +1320,24 @@ void label_markdown_resolve(ButtonLabel *button)
   markdown_apply_button_height(*button);
 }
 
-void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const rcti *rect)
+struct MarkdownDrawColors {
+  uchar link[4];
+  uchar quote_dimmed[4];
+  uchar code_block_dimmed[4];
+  uchar quote_dimmed_link[4];
+  uchar code_block_dimmed_link[4];
+  float code_box_fill[4];
+  float code_box_border[4];
+  uchar horizontal_rule[4];
+  uchar quote_line[4];
+};
+
+static MarkdownDrawColors markdown_draw_colors_init(const uchar color[4])
 {
-  if (!button->markdown_cache || button->markdown_cache->md_layout.items.is_empty()) {
-    return;
-  }
+  MarkdownDrawColors colors;
 
-  const MarkdownLayoutCache &cache = *button->markdown_cache;
-
-  uchar link_color[4];
-  theme::get_color_4ubv(TH_LINK, link_color);
-  link_color[3] = color[3];
+  theme::get_color_4ubv(TH_LINK, colors.link);
+  colors.link[3] = color[3];
 
   /* Blend toward the panel background so quote text is muted consistently across themes. */
   uchar back_color[3];
@@ -1342,24 +1349,47 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
   const uchar *code_box_fill_color = btheme->tui.wcol_box.inner;
   const uchar *code_box_border_color = btheme->tui.wcol_box.outline;
 
-  uchar quote_dimmed_color[4];
-  theme::get_color_blend_shade_3ubv(color, back_color, quote_dimmed_blend, 0, quote_dimmed_color);
-  quote_dimmed_color[3] = color[3];
+  theme::get_color_blend_shade_3ubv(color, back_color, quote_dimmed_blend, 0, colors.quote_dimmed);
+  colors.quote_dimmed[3] = color[3];
 
-  uchar code_block_dimmed_color[4];
   theme::get_color_blend_shade_3ubv(
-      color, code_box_fill_color, code_block_dimmed_blend, 0, code_block_dimmed_color);
-  code_block_dimmed_color[3] = color[3];
+      color, code_box_fill_color, code_block_dimmed_blend, 0, colors.code_block_dimmed);
+  colors.code_block_dimmed[3] = color[3];
 
-  uchar quote_dimmed_link_color[4];
   theme::get_color_blend_shade_3ubv(
-      link_color, back_color, quote_dimmed_blend, 0, quote_dimmed_link_color);
-  quote_dimmed_link_color[3] = link_color[3];
+      colors.link, back_color, quote_dimmed_blend, 0, colors.quote_dimmed_link);
+  colors.quote_dimmed_link[3] = colors.link[3];
 
-  uchar code_block_dimmed_link_color[4];
   theme::get_color_blend_shade_3ubv(
-      link_color, code_box_fill_color, code_block_dimmed_blend, 0, code_block_dimmed_link_color);
-  code_block_dimmed_link_color[3] = link_color[3];
+      colors.link, code_box_fill_color, code_block_dimmed_blend, 0, colors.code_block_dimmed_link);
+  colors.code_block_dimmed_link[3] = colors.link[3];
+
+  for (const int i : IndexRange(4)) {
+    colors.code_box_fill[i] = float(code_box_fill_color[i]) / 255.0f;
+    colors.code_box_border[i] = float(code_box_border_color[i]) / 255.0f;
+  }
+
+  colors.horizontal_rule[0] = color[0];
+  colors.horizontal_rule[1] = color[1];
+  colors.horizontal_rule[2] = color[2];
+  colors.horizontal_rule[3] = 30;
+
+  colors.quote_line[0] = color[0];
+  colors.quote_line[1] = color[1];
+  colors.quote_line[2] = color[2];
+  colors.quote_line[3] = 80;
+
+  return colors;
+}
+
+void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const rcti *rect)
+{
+  if (!button->markdown_cache || button->markdown_cache->md_layout.items.is_empty()) {
+    return;
+  }
+
+  const MarkdownLayoutCache &cache = *button->markdown_cache;
+  const MarkdownDrawColors colors = markdown_draw_colors_init(color);
 
   const float corner_radius = md_style::code_box_corner_radius * cache.key.pixels_per_point;
 
@@ -1375,18 +1405,14 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
     box_rect.ymax += rect->ymax;
     box_rect.ymin += rect->ymax;
 
-    const float fill_col[4] = {float(code_box_fill_color[0]) / 255.0f,
-                               float(code_box_fill_color[1]) / 255.0f,
-                               float(code_box_fill_color[2]) / 255.0f,
-                               float(code_box_fill_color[3]) / 255.0f};
-    const float border_col[4] = {float(code_box_border_color[0]) / 255.0f,
-                                 float(code_box_border_color[1]) / 255.0f,
-                                 float(code_box_border_color[2]) / 255.0f,
-                                 float(code_box_border_color[3]) / 255.0f};
-
     draw_roundbox_corner_set(CNR_ALL);
-    draw_roundbox_4fv_ex(
-        &box_rect, fill_col, nullptr, 1.0f, border_col, U.pixelsize, corner_radius);
+    draw_roundbox_4fv_ex(&box_rect,
+                         colors.code_box_fill,
+                         nullptr,
+                         1.0f,
+                         colors.code_box_border,
+                         U.pixelsize,
+                         corner_radius);
   }
 
   for (const MarkdownItem &item : cache.md_layout.items) {
@@ -1394,21 +1420,21 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
       markdown_apply_item_font(*text_item);
       if (text_item->url) {
         if (text_item->is_in_quote) {
-          BLF_color4ubv(text_item->fontid, quote_dimmed_link_color);
+          BLF_color4ubv(text_item->fontid, colors.quote_dimmed_link);
         }
         else if (text_item->is_code) {
-          BLF_color4ubv(text_item->fontid, code_block_dimmed_link_color);
+          BLF_color4ubv(text_item->fontid, colors.code_block_dimmed_link);
         }
         else {
-          BLF_color4ubv(text_item->fontid, link_color);
+          BLF_color4ubv(text_item->fontid, colors.link);
         }
       }
       else {
         if (text_item->is_in_quote) {
-          BLF_color4ubv(text_item->fontid, quote_dimmed_color);
+          BLF_color4ubv(text_item->fontid, colors.quote_dimmed);
         }
         else if (text_item->is_code) {
-          BLF_color4ubv(text_item->fontid, code_block_dimmed_color);
+          BLF_color4ubv(text_item->fontid, colors.code_block_dimmed);
         }
         else {
           BLF_color4ubv(text_item->fontid, color);
@@ -1421,14 +1447,13 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
       markdown_disable_item_font(*text_item);
     }
     else if (const auto *rule_item = std::get_if<MarkdownItemHorizontalRule>(&item)) {
-      const uchar line_color[4] = {color[0], color[1], color[2], 30};
       const float y = rect->ymax + rule_item->y;
 
       const uint pos = GPU_vertformat_attr_add(
           immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
       immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
       GPU_blend(GPU_BLEND_ALPHA);
-      immUniformColor4ubv(line_color);
+      immUniformColor4ubv(colors.horizontal_rule);
       GPU_line_width(1.0f);
       immBegin(GPU_PRIM_LINES, 2);
       immVertex2f(pos, rect->xmin, y);
@@ -1438,7 +1463,6 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
       immUnbindProgram();
     }
     else if (const auto *quote_line = std::get_if<MarkdownItemQuoteLine>(&item)) {
-      const uchar line_color[4] = {color[0], color[1], color[2], 80};
       const float x = rect->xmin + quote_line->x;
       const float y_top = rect->ymax + quote_line->y;
       const float y_bottom = y_top - quote_line->height;
@@ -1447,7 +1471,7 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
           immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
       immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
       GPU_blend(GPU_BLEND_ALPHA);
-      immUniformColor4ubv(line_color);
+      immUniformColor4ubv(colors.quote_line);
       GPU_line_width(2.0f);
       immBegin(GPU_PRIM_LINES, 2);
       immVertex2f(pos, x, y_top);
