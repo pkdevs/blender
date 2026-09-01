@@ -62,6 +62,7 @@ set(SRC
   intern/draw_cache_impl_curves.cc
   intern/draw_cache_impl_grease_pencil.cc
   intern/draw_cache_impl_lattice.cc
+  intern/draw_cache_impl_gsplat.cc
   intern/draw_cache_impl_mesh.cc
   intern/draw_cache_impl_particles.cc
   intern/draw_cache_impl_pointcloud.cc
@@ -74,6 +75,7 @@ set(SRC
   intern/draw_debug.cc
   intern/draw_fluid.cc
   intern/draw_gpu_context.cc
+  intern/draw_gsplat.cc
   intern/draw_hair.cc
   intern/draw_manager.cc
   intern/draw_manager_text.cc
@@ -169,6 +171,7 @@ set(SRC
   intern/draw_context_private.hh
   intern/draw_curves_private.hh
   intern/draw_debug.hh
+  intern/draw_gsplat_private.hh
   intern/draw_hair_private.hh
   intern/draw_handle.hh
   intern/draw_manager.hh
@@ -573,6 +576,8 @@ set(GLSL_SRC
   intern/shaders/draw_debug_draw_display_frag.glsl
   intern/shaders/draw_debug_draw_display_vert.glsl
   intern/shaders/draw_grease_pencil_lib.glsl
+  intern/shaders/draw_gsplat_lib.bsl.hh
+  intern/shaders/draw_gsplat.bsl.hh
   intern/shaders/draw_intersect_lib.glsl
   intern/shaders/draw_math_geom_lib.glsl
   intern/shaders/draw_model_lib.glsl

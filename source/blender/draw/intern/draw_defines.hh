@@ -36,6 +36,13 @@
 #define DRW_FINALIZE_GROUP_SIZE 64
 /* Must be multiple of 32. Set to 32 for shader simplicity. */
 #define DRW_VISIBILITY_GROUP_SIZE 32
+#define DRW_GSPLAT_GROUP_SIZE 128
+
+/* Only during gsplat rendering. */
+#define DRW_GSPLAT_SHAPE_DATA_SLOT 20
+#define DRW_GSPLAT_RADIANCE_DATA_SLOT 21
+#define DRW_GSPLAT_ELLIPSE_COMP_SLOT 22
+#define DRW_GSPLAT_RADIANCE_COMP_SLOT 23
 
 /**
  * The maximum of indexable views is dictated by:
@@ -45,6 +52,7 @@
 #define DRW_VIEW_MAX 64
 
 #define DRW_POINTCLOUD_STRIP_TILE_SIZE 8
+#define DRW_GSPLAT_STRIP_TILE_SIZE 6
 
 /* TODO(fclem): Move to overlay. */
 #define OVERLAY_GLOBALS_SLOT 7

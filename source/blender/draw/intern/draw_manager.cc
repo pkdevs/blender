@@ -20,6 +20,7 @@
 #include "GPU_shader.hh"
 #include "GPU_texture.hh"
 
+#include "draw_common.hh"
 #include "draw_context_private.hh"
 #include "draw_debug.hh"
 #include "draw_defines.hh"
@@ -86,6 +87,8 @@ void Manager::begin_sync(Object *object_active)
 
   /* Init the 0 resource. */
   resource_handle(float4x4::identity());
+
+  DRW_gsplat_begin_sync();
 }
 
 void Manager::sync_layer_attributes()

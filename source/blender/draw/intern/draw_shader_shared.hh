@@ -252,6 +252,11 @@ struct [[host_shared]] ViewMatrices {
     return (winmat * float4(vP, 1.0f));
   }
 
+  float3 point_homogeneous_to_view(float4 hP) const
+  {
+    return (wininv * hP).xyz();
+  }
+
   float3 point_view_to_ndc(float3 vP) const
   {
     return perspective_divide(point_view_to_homogenous(vP));
@@ -265,6 +270,11 @@ struct [[host_shared]] ViewMatrices {
   float4 point_world_to_homogenous(float3 P) const
   {
     return (winmat * (viewmat * float4(P, 1.0f)));
+  }
+
+  float3 point_homogeneous_to_world(float4 hP) const
+  {
+    return point_view_to_world(point_homogeneous_to_view(hP));
   }
 
   float3 point_world_to_ndc(float3 P) const
@@ -716,6 +726,18 @@ struct [[host_shared]] DRWDebugDrawBuffer {
  * This is needed because we bind the whole buffer as a `DRWDebugVertPair` array.
  */
 #define drw_debug_draw_offset 1
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name GSplat shared types.
+ * \{ */
+
+struct [[host_shared]] GSplatBoundsInfos {
+  float4 mean[2];
+  float4 log_scale[2];
+  float4 radiance_sh[2];
+};
 
 /** \} */
 
