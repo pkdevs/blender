@@ -144,51 +144,59 @@ ccl_device_inline ShaderEvalResult integrate_background(
     const float mis_weight = light_sample_mis_weight_forward_background(
         kg, state, path_visibility, path_flag);
 
-// TODO(Tri): ReSTIR GI insertion! film_add_reservoir_pt() here
+/* TODO(Tri): ReSTIR-GI radiance is currently written only to Combined via
+   integrator_evaluate_restir_pt() -> film_write_combined_pass(). It is NOT
+   decomposed into pass_diffuse_indirect / pass_glossy_indirect.
 
-// >>> New
-    // if (path_use_restir(kg, state)) { // !!!: Fails for some reason!
+ * Reason: that decomposition requires the diffuse/glossy lobe weight of the
+ * *candidate-generating* bounce, but GlobalReservoir intentionally does not
+ * store per-lobe weights (would add 2x float3 / ~50% size increase to a
+ * struct that must stay compact for spatial-reuse performance). The
+ * INTEGRATOR_STATE(...)-based weights available at final-evaluation time
+ * belong to a different, unrelated path state and cannot be substituted.
+ *
+ * Deferred until reconnection-vertex shading data (rcv_index -> sd) is
+ * wired up, at which point the lobe weight can be *recomputed* at
+ * reconstruction time in integrator_evaluate_restir_pt() instead of being
+ * carried in the reservoir. Until then, Combined is correct but
+ * diffuse_indirect/glossy_indirect AOVs will undercount ReSTIR-GI
+ * contributions for affected pixels. */
 
-    // Spectrum contribution = throughput * L * mis_weight;
-    Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * L * mis_weight;
+// TODO(Tri): Change this, So the relevant distinction should eventually be something like: "Is this a PT candidate vertex?"
+    const bool use_restir = kernel_data.integrator.use_restir &&
+                            (INTEGRATOR_STATE(state, path, bounce) > 0);
+
+    if (use_restir) {
+      /* candidate = already-integrated final pixel contribution. */
+      Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * L * mis_weight;
 
 // What bounce should we regard as the first PT candidate?
-// TODO: Consider bounce > 1?
-    printf("BACKGROUND PT CANDIDATE pixel=%u bounce=%d L=(%f, %f, %f)\n" 
-           "contribution=(%f, %f, %f)\n\n",
-           INTEGRATOR_STATE(state, path, render_pixel_index), 0, // !!!: Prints for every pixel!
-           (double)L.x, (double)L.y, (double)L.z, 
-           (double)contribution.x, (double)contribution.y, (double)contribution.z);
+printf("BACKGROUND PT CANDIDATE pixel=%u bounce=%d L=(%f, %f, %f)\n" 
+        "contribution=(%f, %f, %f)\n\n",
+        INTEGRATOR_STATE(state, path, render_pixel_index), 0, // !!!: Prints for every pixel!
+        (double)L.x, (double)L.y, (double)L.z, 
+        (double)contribution.x, (double)contribution.y, (double)contribution.z);
 
-    /* The actual first background candidate at bounce == 0 is deliberately not inserted. */
-    if (INTEGRATOR_STATE(state, path, bounce) > 1) {
-/*
-> 1 is not "initial path" sampling:
-!!!: If "A primary camera ray misses the scene->environment radiance is the initial ReSTIR-PT candidate"
-then bounce 0 should be eligible here...
-*/
+      RNGState rng_state;
+      path_state_rng_load(state, &rng_state);
 
-        RNGState rng_state;
-        path_state_rng_load(state, &rng_state);
-
-        ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+      ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
 printf("integrate_background() running film_add_reservoir_pt()!\n\n");
-        film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer);
+      film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer);
+
+      guiding_record_background(kg, state, L, mis_weight);
+      // !!!: Wrong
+      // /* This bounce's radiance is now owned by the PT reservoir; it must not
+      //  * also be deposited directly into Combined/background below, or the
+      //  * energy is counted twice once integrator_evaluate_restir_pt() runs. */
+      // L = zero_spectrum();
     }
-/*
-And importantly, it agrees with what ReSTIR PT itself requires: initial path tracing has 
-to explicitly register environment-map contributions when the ray misses; they don't magically 
-pass through the emissive-light intersection path.
-https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/RestirPT.md?utm_source=chatgpt.com
-*/
-    // }
 // <<<
-
-    guiding_record_background(kg, state, L, mis_weight);
-// !!!: ordinary Cycles background contribution is essentially: throughput × background radiance × MIS
-    L *= mis_weight;
+    else {
+      guiding_record_background(kg, state, L, mis_weight);
+      L *= mis_weight;
+    }
   }
-
 
   /* Write to render buffer. */
   film_write_background(kg, state, L, transparent, is_transparent_background_ray, render_buffer);
@@ -255,7 +263,7 @@ ccl_device_inline ShaderEvalResult integrate_sun_lights(
 
     /* Evaluate light shader. */
     Spectrum shader_eval;
-    const ShaderEvalResult eval_result = light_sample_shader_eval_forward( // !!!
+    const ShaderEvalResult eval_result = light_sample_shader_eval_forward(
         kg, state, lamp, zero_float3(), ray_D, FLT_MAX, ray_time, shader_eval);
 
     if (eval_result == SHADER_EVAL_CACHE_MISS) {
@@ -287,8 +295,6 @@ ccl_device void integrator_shade_background(KernelGlobals kg,
 {
   PROFILING_INIT(kg, PROFILING_SHADE_LIGHT_SETUP);
 
-  // printf("integrator_shade_background() Entered!\n\n");
-
   /* TODO: unify these in a single loop to only have a single shader evaluation call. */
   ShaderEvalResult result = integrate_sun_lights(kg, state, render_buffer);
   if (result == SHADER_EVAL_CACHE_MISS) {
@@ -312,10 +318,6 @@ ccl_device void integrator_shade_background(KernelGlobals kg,
   }
 #endif
 
-// ???: What object is supposed to be finalized at the end of the initial path?
-// !!!: Wrong: finalizing the DI reservoir at a point where the PT path has reached its terminal state.
-  // integrator_finalize_reservoir(kg, state, render_buffer); // ???: Isn't it DI only? Use `global_reservoir_finalize()` instead?
-  integrator_finalize_reservoir_pt(kg, state, render_buffer); // New // TODO(Tri): Remove?
   integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND);
 }
 

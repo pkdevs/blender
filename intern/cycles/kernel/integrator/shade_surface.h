@@ -155,7 +155,8 @@ ccl_device_forceinline bool integrate_surface_holdout(KernelGlobals kg,
 //       kg, state, L, mis_weight, render_buffer, object_lightgroup(kg, sd->object));
 // }
 
-ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg, // !!!: Not cause of the BG blackout
+// TODO(Tri): Debug maybe
+ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
                                                        IntegratorState state,
                                                        const ccl_private ShaderData *sd,
                                                        const ccl_private RNGState *rng_state,
@@ -214,14 +215,15 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg, // !!!:
       film_add_reservoir_di(kg, state, L, ls, ref, rng_state, render_buffer);
     }
     else {
+      // !!!: Compare against the GI
       // !!!: ReSTIR PT lifecycle must be active, otherwise, dark multipass shadings will occur
       const Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * L * mis_weight;
       ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
-      film_add_reservoir_pt(kg, path_flag, contribution, rng_state, buffer); // !!!: GI?
+      film_add_reservoir_pt(kg, path_flag, contribution, rng_state, buffer); // ???: GI or basically for emitters?
     }
   }
   else {
-    film_write_surface_emission(
+    film_write_surface_emission( // ???: GI or basically for emitters?
         kg, state, L, mis_weight, render_buffer, object_lightgroup(kg, sd->object));
   }
 }
@@ -250,7 +252,7 @@ ccl_device_forceinline float radiance_eval(KernelGlobals kg,
 
   PROFILING_INIT(kg, PROFILING_RESTIR_LIGHT_EVAL);
   Spectrum light_eval = zero_spectrum();
-  const ShaderEvalResult shader_result = light_sample_shader_eval( // !!!: BG Blackout? No
+  const ShaderEvalResult shader_result = light_sample_shader_eval(
       kg, state, emission_sd, ls, sd->time, light_eval, sd, reference, check_visibility);
 
     // if (shader_result == SHADER_EVAL_CACHE_MISS) {
@@ -557,8 +559,6 @@ ccl_device_inline void integrate_direct_light_create_shadow_path(
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, flag) = shadow_flag;
 }
 
-/* TODO(weizhen): split function to direct/indirect illumination and rename this to NEE. */
-
 
 
 
@@ -739,7 +739,7 @@ ccl_device_inline void integrate_direct_light_create_shadow_path(
 // }
 
 
-
+/* TODO(weizhen): split function to direct/indirect illumination and rename this to NEE. */
 /**
  * existing MNEE sample:
     retain MNEE evaluation and shadow setup
@@ -1462,7 +1462,7 @@ ccl_device_forceinline void integrator_shade_surface(KernelGlobals kg,
 #endif
 
   if (continue_path_label == LABEL_NONE) {
-    integrator_finalize_reservoir(kg, state, render_buffer); // !!!: BG Blackout?
+    integrator_finalize_reservoir(kg, state, render_buffer);
     integrator_path_terminate(kg, state, render_buffer, current_kernel);
     return;
   }

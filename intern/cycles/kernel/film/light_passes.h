@@ -395,7 +395,7 @@ ccl_device_inline void film_write_combined_transparent_pass(
 }
 
 /* Write background or emission to appropriate pass. */
-ccl_device_inline void film_write_emission_or_background_pass(
+ccl_device_inline void film_write_emission_or_background_pass( // !!!
     KernelGlobals kg,
     ConstIntegratorState state,
     Spectrum contribution,
@@ -446,6 +446,11 @@ ccl_device_inline void film_write_emission_or_background_pass(
       const Spectrum diffuse_weight = INTEGRATOR_STATE(state, path, pass_diffuse_weight);
       const Spectrum glossy_weight = INTEGRATOR_STATE(state, path, pass_glossy_weight);
 
+/* TODO(Tri): Write a small film_write_indirect_light() mirroring branch below,
+  and call it from the finalize step in integrator_finalize_reservoir_pt() with shading_copy.radiance,
+  writing to pass_diffuse_indirect/pass_glossy_indirect + Combined — 
+  not through the emission/background pass helper at all.
+*/
       /* Glossy */
       const int glossy_pass_offset = ((INTEGRATOR_STATE(state, path, bounce) == 1) ?
                                           kernel_data.film.pass_glossy_direct :
@@ -490,11 +495,54 @@ ccl_device_inline void film_write_emission_or_background_pass(
 #endif /* __PASSES__ */
 }
 
+/* GI/PT counterpart of film_write_emission_or_background_pass().
+ * A finalized ReSTIR-PT reservoir radiance is, by construction, indirect
+ * light (bounce > 0) reaching a diffuse/glossy surface — never emission,
+ * never direct, so this bypasses that helper entirely. */
+ccl_device_inline void film_write_indirect_light(KernelGlobals kg,
+                                                 ConstIntegratorState state,
+                                                 const PathRayVisibility path_visibility,
+                                                 const uint32_t path_flag,
+                                                 const int sample,
+                                                 const Spectrum contribution,
+                                                 ccl_global float *ccl_restrict buffer)
+{
+  film_write_combined_pass(kg, path_visibility, path_flag, sample, contribution, buffer);
+
+#ifdef __PASSES__
+  if (!(kernel_data.film.light_pass_flag & PASS_ANY) ||
+      !(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES))
+  {
+    return;
+  }
+
+  const Spectrum diffuse_weight = INTEGRATOR_STATE(state, path, pass_diffuse_weight);
+  const Spectrum glossy_weight = INTEGRATOR_STATE(state, path, pass_glossy_weight);
+
+  if (kernel_data.film.pass_glossy_indirect != PASS_UNUSED) {
+    film_write_pass_spectrum(buffer + kernel_data.film.pass_glossy_indirect,
+                             glossy_weight * contribution);
+  }
+
+  if (kernel_data.film.pass_transmission_indirect != PASS_UNUSED) {
+    const Spectrum transmission_weight = one_spectrum() - diffuse_weight - glossy_weight;
+    film_write_pass_spectrum(buffer + kernel_data.film.pass_transmission_indirect,
+                             transmission_weight * contribution);
+  }
+
+  if (kernel_data.film.pass_diffuse_indirect != PASS_UNUSED) {
+    film_write_pass_spectrum(buffer + kernel_data.film.pass_diffuse_indirect,
+                             diffuse_weight * contribution);
+  }
+#endif
+}
+
 // MARK: - 
 
 /* GI/PT counterpart of film_add_reservoir_di().
  * Merges a newly produced path throughput into the persistent PT reservoir. */
 // !!!: Logged and seems to be fine...
+// !!!: Doesn't require the geometry_term...
 ccl_device_inline void film_add_reservoir_pt(KernelGlobals kg,
                                              const uint32_t path_flag,
                                              const ccl_private Spectrum &throughput,
@@ -544,14 +592,6 @@ printf("film_add_reservoir_pt after add_sample selected=%d total=%f\n",
        (int)selected,
        (double)reservoir.total_weight);
 
-/*
-Low total = 0.000027 
-and then
-restir_unpack_reservoir_pt():
-    weight=0.000000
-!!!: That means the value is being lost between insertion & the later read, or the later read is looking at a different buffer/slot.
-*/
-
   /* throughput arriving here is already the appropriately weighted PT candidate. */
   // if (global_reservoir_add_sample(&reservoir, throughput, rand)) { // TODO(Tri): Uncomment
   if (selected) {
@@ -560,7 +600,7 @@ restir_unpack_reservoir_pt():
     film_overwrite_pass_float3(ptr + 3, reservoir.radiance); // !!!: Not serializing sd & rcv_index
   }
 
-  film_overwrite_pass_float(ptr, reservoir.total_weight); // !!!: Why do we get total_weigth of zero?
+  film_overwrite_pass_float(ptr, reservoir.total_weight);
 
 printf("film_add_reservoir_pt returned: PT AFTER FILM WRITE ptr=%p stored=%f\n",
       //  INTEGRATOR_STATE(state, path, render_pixel_index), // No state here
@@ -582,50 +622,21 @@ ccl_device_inline void film_write_pass_reservoir_pt(KernelGlobals kg,
                                         kernel_data.film.pass_restir_pt_previous_reservoir :
                                         kernel_data.film.pass_restir_pt_reservoir);
 
-// printf(
-//     "\n=== film_write_pass_reservoir_pt() PT FILM WRITE ===\n"
-//     "pixel=%u write_prev=%d\n"
-//     "ptr=%p\n"
-//     "BEFORE buffer: W=%f flag=%u rcv=%d rad=(%f,%f,%f)\n"
-//     "RESERVOIR:     W=%f flag=%u rcv=%d rad=(%f,%f,%f)\n",
-//     INTEGRATOR_STATE(state, path, render_pixel_index),
-//     (int)write_prev,
-//     ptr,
-//     (double)ptr[0],
-//     (uint32_t)ptr[1],
-//     (int)ptr[2],
-//     (double)ptr[3],
-//     (double)ptr[4],
-//     (double)ptr[5],
-//     (double)reservoir->total_weight,
-//     reservoir->path_flag,
-//     reservoir->rcv_index,
-//     (double)reservoir->radiance.x,
-//     (double)reservoir->radiance.y,
-//     (double)reservoir->radiance.z);
-
-  film_overwrite_pass_float(ptr, reservoir->total_weight); // !!!: Rewrites values? No
+  film_overwrite_pass_float(ptr, reservoir->total_weight);
   film_overwrite_pass_float(ptr + 1, (float)reservoir->path_flag);
   film_overwrite_pass_float(ptr + 2, (float)reservoir->rcv_index);
   film_overwrite_pass_float3(ptr + 3, reservoir->radiance);
 
-// // // This tells us whether spatial resampling itself is replacing the valid initial reservoir with an empty one.
-// // printf("film_write_pass_reservoir_pt: PT SPATIAL WRITE pixel=%u write_prev=%d ptr=%p weight=%f\n",
-// //        INTEGRATOR_STATE(state, path, render_pixel_index),
-// //        (int)write_prev,
-// //        ptr,
-// //        (double)reservoir->total_weight);
+// // This tells us whether spatial resampling itself is replacing the valid initial reservoir with an empty one.
+// printf("film_write_pass_reservoir_pt: PT SPATIAL WRITE pixel=%u write_prev=%d ptr=%p weight=%f\n",
+//        INTEGRATOR_STATE(state, path, render_pixel_index),
+//        (int)write_prev,
+//        ptr,
+//        (double)reservoir->total_weight);
 
-// printf("AFTER buffer: W=%f flag=%u rcv=%d rad=(%f,%f,%f)\n"
-//        "--- ---\n\n\n",
-//     (double)ptr[0],
-//     (uint32_t)ptr[1],
-//     (int)ptr[2],
-//     (double)ptr[3],
-//     (double)ptr[4],
-//     (double)ptr[5]);
 }
 
+// !!!: GI written into combine pass here? probably not
 /* Write light contribution to render buffer. */
 ccl_device_inline void film_write_direct_light(KernelGlobals kg,
                                                ConstIntegratorShadowState state,
@@ -634,7 +645,7 @@ ccl_device_inline void film_write_direct_light(KernelGlobals kg,
   /* The throughput for shadow paths already contains the light shader evaluation. */
   Spectrum contribution = INTEGRATOR_STATE(state, shadow_path, throughput);
 
-  // film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, shadow_path, bounce)); // TODO: Remove when ReSTIR's integrated
+  film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, shadow_path, bounce)); // TODO: Remove when ReSTIR's integrated
 
   /* Explicitly derived from the shadow state. */
   ccl_global float *buffer = film_pass_pixel_render_buffer_shadow(kg, state, render_buffer);
@@ -644,32 +655,32 @@ ccl_device_inline void film_write_direct_light(KernelGlobals kg,
   const int sample = INTEGRATOR_STATE(state, shadow_path, sample);
 
 printf("\n\n--- film_write_direct_light() prior to GI/PT insertion ---\n\n");
-// ???: Wrong? GI/PT reservoir insertion point? Do inside `film_write_background()` instead?
-// !!!: >>> TEMPORARILY DISABLED
-  // TODO: Move before AO for benchmark parity?
-  // TODO(weizhen): bounce number probably doesn't work for volume.
-  if (kernel_data.integrator.use_restir && INTEGRATOR_STATE(state, shadow_path, bounce) > 0)
-  {
-    printf("film_write_direct_light() Entered ReSTIR Path\n");
+// // ???: Wrong? GI/PT reservoir insertion point? Do inside `film_write_background()` instead?
+// // !!!: >>> TEMPORARILY DISABLED
+//   // TODO: Move before AO for benchmark parity?
+//   // TODO(weizhen): bounce number probably doesn't work for volume.
+//   if (kernel_data.integrator.use_restir && INTEGRATOR_STATE(state, shadow_path, bounce) > 0)
+//   {
+//     printf("film_write_direct_light() Entered ReSTIR Path\n");
 
-    RNGState rng_state;
-    shadow_path_state_rng_load(state, &rng_state);
+//     RNGState rng_state;
+//     shadow_path_state_rng_load(state, &rng_state);
 
-    // ???: Don't need film_clamp_light() here?
+//     // ???: Don't need film_clamp_light() here?
 
-    /* TODO(weizhen): does this result in correlated samples in ReSTIR PT if branched version is
-     * used in DI? */
-// !!!: We've got another hook in integrate_light_forward() as well!!!
-    film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer); // !!!: Internally calls restir_unpack_reservoir_pt()
-  }
-  else {
-    printf("film_write_direct_light() Entered None-ReSTIR Path\n");
-    // !!!: would call `integrate_light_forward()`:
+//     /* TODO(weizhen): does this result in correlated samples in ReSTIR PT if branched version is
+//      * used in DI? */
+// // !!!: We've got another hook in integrate_light_forward() as well!!!
+//     film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer); // !!!: Internally calls restir_unpack_reservoir_pt()
+//   }
+//   else {
+//     printf("film_write_direct_light() Entered None-ReSTIR Path\n");
+//     // !!!: would call `integrate_light_forward()`:
 
-    film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, shadow_path, bounce));
-    /* Direct light shadow. */
-    film_write_combined_pass(kg, path_visibility, path_flag, sample, contribution, buffer);
-  }
+//     film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, shadow_path, bounce));
+//     /* Direct light shadow. */
+//     film_write_combined_pass(kg, path_visibility, path_flag, sample, contribution, buffer);
+//   }
 // !!!: <<<
 
   /* Ambient occlusion. */
@@ -687,7 +698,7 @@ printf("\n\n--- film_write_direct_light() prior to GI/PT insertion ---\n\n");
     return;
   }
 
-  // film_write_combined_pass(kg, path_visibility, path_flag, sample, contribution, buffer); // TODO: Remove when ReSTIR's integrated
+  film_write_combined_pass(kg, path_visibility, path_flag, sample, contribution, buffer); // TODO: Remove when ReSTIR's integrated
 
 #ifdef __PASSES__
   if (kernel_data.film.light_pass_flag & PASS_ANY) {
@@ -795,6 +806,7 @@ ccl_device_inline void film_write_holdout(KernelGlobals kg,
   film_write_transparent(kg, path_flag, transparent, buffer);
 }
 
+// !!!: Should it be the insertion point for GI? film_add_reservoir_pt() inserted here?
 /* Write background contribution to render buffer.
  *
  * Includes transparency, matching film_write_transparent. */
@@ -879,6 +891,7 @@ ccl_device_inline void film_write_pass_reservoir(
   film_overwrite_pass_float(ptr, reservoir->luminance);
 }
 
+// !!!: Called in init_from_camera; Don't we need a `film_clear_pass_reservoir_pt()` as well?
 // !!!: It does not clear object prim, u, v, luminance
 /* TODO(weizhen): clear data properly. */
 ccl_device_inline void film_clear_pass_reservoir(KernelGlobals kg,
@@ -913,7 +926,6 @@ ccl_device_inline void film_clear_pass_reservoir(KernelGlobals kg,
 
 // MARK: - 
 
-// !!!: Don't we need a integrator_finalize_reservoir for GI?
 /* TODO(weizhen): this function is called before terminating the path. Better to move this function
    inside of `integrator_path_terminate()`. And what if multiple threads render the same pixel? */
 ccl_device_inline void integrator_finalize_reservoir(KernelGlobals kg, // !!!: DI only
@@ -935,7 +947,7 @@ ccl_device_inline void integrator_finalize_reservoir(KernelGlobals kg, // !!!: D
   const bool unpack_ok = restir_unpack_reservoir(kg, &reservoir, buffer); // !!!: DI; 
 
   // printf(
-  //     "\n=== integrator_finalize_reservoir(); FINALIZE: AFTER UNPACK ===\n"
+  //     "\n=== DI integrator_finalize_reservoir(); FINALIZE: AFTER UNPACK ===\n"
   //     "unpack_ok=%d\n"
   //     "total_weight=%f\n"
   //     "luminance=%f\n"
@@ -951,7 +963,7 @@ ccl_device_inline void integrator_finalize_reservoir(KernelGlobals kg, // !!!: D
   const bool finalize_ok = reservoir_finalize(&reservoir, use_restir);
 
   printf(
-      "\n=== DI integrator_finalize_reservoir(); FINALIZE: AFTER FINALIZE ===\n"
+      "\n=== DI integrator_finalize_reservoir(); FINALIZE: AFTER FINALIZE ===\n\n"
       "finalize_ok=%d\n"
       "total_weight=%f\n"
       "luminance=%f\n"
@@ -969,13 +981,11 @@ ccl_device_inline void integrator_finalize_reservoir(KernelGlobals kg, // !!!: D
   /* buffer[4] = safe_divide(buffer[4], buffer[5]); */
 }
 
-// TODO(Tri): integrator_finalize_reservoir_pt()?
-
+// TODO(Tri): Compare against integrator_evaluate_restir_pt() to see if this is actually required
 // New;
-// !!!: Demoware
 // !!!: streaming_pt_samples() is already doing the conceptual transition:
 // read candidate reservoirs -> current_pt -> finalize current_pt -> write ping-pong reservoir
-ccl_device_inline void integrator_finalize_reservoir_pt(KernelGlobals kg, // !!!: GI only
+ccl_device_inline void integrator_finalize_reservoir_pt_(KernelGlobals kg, // !!!: GI only
                                                         IntegratorState state,
                                                         ccl_global float *ccl_restrict render_buffer)
 {
@@ -991,7 +1001,7 @@ ccl_device_inline void integrator_finalize_reservoir_pt(KernelGlobals kg, // !!!
   GlobalReservoir reservoir;
   global_reservoir_init(kg, &reservoir);
 
-  const bool unpack_ok = restir_unpack_reservoir_pt(kg, &reservoir, buffer); // !!!: GI 
+  const bool unpack_ok = restir_unpack_reservoir_pt(kg, &reservoir, buffer); // reads "previous" state as a raw candidate
 
 
   printf(
@@ -1008,11 +1018,11 @@ ccl_device_inline void integrator_finalize_reservoir_pt(KernelGlobals kg, // !!!
       (double)reservoir.rgb_to_y.x, (double)reservoir.rgb_to_y.y, (double)reservoir.rgb_to_y.z);
 
 
-  const bool finalize_ok = global_reservoir_finalize(&reservoir);
+  const bool finalize_ok = global_reservoir_finalize(&reservoir); // rescales radiance to the FINAL answer
 
 
   printf(
-      "\n=== GI integrator_finalize_reservoir_pt(); AFTER FINALIZE ===\n"
+      "\n=== GI integrator_finalize_reservoir_pt(); AFTER FINALIZE ===\n\n"
       "finalize_ok=%d\n"
       "total_weight=%f\n"
       "radiance=(%f, %f, %f)\n"
@@ -1024,32 +1034,38 @@ ccl_device_inline void integrator_finalize_reservoir_pt(KernelGlobals kg, // !!!
       reservoir.rcv_index, (double)reservoir.path_flag,
       (double)reservoir.rgb_to_y.x, (double)reservoir.rgb_to_y.y, (double)reservoir.rgb_to_y.z);
 
-  film_write_pass_reservoir_pt(kg, state, &reservoir, render_buffer);
+// !!!: Wrong: Next frame, that already-finalized (rescaled) radiance gets read back by film_add_reservoir_pt and merged again as if it were a fresh, unweighted candidate.
+  film_write_pass_reservoir_pt(kg, state, &reservoir, render_buffer); // writes FINAL answer back into the SAME slot
 
   /* buffer[4] = safe_divide(buffer[4], buffer[5]); */
 }
 
-// /* may ultimately not need this helper at all, depending on where the PT reservoir is finalized in the actual ReSTIR-PT algorithm. */
-// ccl_device_inline bool integrator_finalize_reservoir_pt(
-//     KernelGlobals kg,
-//     ConstIntegratorState state,
-//     ccl_private GlobalReservoir *reservoir,
-//     ccl_global float *render_buffer)
-// {
-//   if (!kernel_data.integrator.use_restir) {
-//     return false;
-//   }
+ccl_device_inline void integrator_finalize_reservoir_pt(KernelGlobals kg, // !!!: GI only
+                                                        IntegratorState state,
+                                                        ccl_global float *ccl_restrict render_buffer)
+{
+  const bool use_restir = kernel_data.integrator.use_restir;
 
-//   if (!global_reservoir_finalize(reservoir)) {
-// printf("film_finalize_reservoir_pt() early returned! reservoir is empty!\n\n");
-//     return false;
-//   }
+  if (!use_restir) {
+    return;
+  }
 
-//   film_write_pass_reservoir_pt(kg, state, reservoir, render_buffer);
+  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer) +
+                             kernel_data.film.pass_restir_pt_reservoir;
 
-//   return true;
-// }
+  GlobalReservoir reservoir;
+  global_reservoir_init(kg, &reservoir);
 
+  GlobalReservoir raw;
+  restir_unpack_reservoir_pt(kg, &raw, buffer); // persistent, never finalized in place
+  // ... merge new candidate via global_reservoir_add_sample(&raw, ...) ...
+  film_write_pass_reservoir_pt(kg, state, &raw, render_buffer); // store RAW back
+
+  GlobalReservoir shading_copy = raw;
+  if (global_reservoir_finalize(&shading_copy)) {
+      // TODO: deposit shading_copy.radiance into passes/Combined here, this frame only
+  }
+}
 
 // MARK: - 
 
@@ -1084,14 +1100,13 @@ ccl_device_inline void film_write_surface_emission(KernelGlobals kg, // !!!: GI
   film_clamp_light(kg, &contribution, INTEGRATOR_STATE(state, path, bounce) - 1);
 
 // !!!:‌ Ensure it's the right buffer!
-  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer); // !!!:
   const PathRayVisibility path_visibility = INTEGRATOR_STATE(state, path, visibility);
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   const int sample = INTEGRATOR_STATE(state, path, sample);
 
 printf("film_write_surface_emission: pixel=%u buffer=%p\n",
-       INTEGRATOR_STATE(state, path, render_pixel_index),
-       buffer);
+       INTEGRATOR_STATE(state, path, render_pixel_index), buffer);
 
   film_write_combined_pass(kg, path_visibility, path_flag, sample, contribution, buffer); // !!!
   film_write_emission_or_background_pass(
@@ -1148,7 +1163,7 @@ ccl_device_inline void film_add_reservoir_di(
   reservoir_add_bsdf_sample(
       &reservoir, ls, candidate_reference, radiance, bsdf_pdf, rand_pick, use_restir);
 
-/**
+/*
  * because film_write_pass_reservoir() writes only the serialized reference, weight, and luminance, 
  * the Reservoir must contain the candidate reference selected by reservoir_add_sample(). 
  * The function must therefore receive the candidate reference explicitly

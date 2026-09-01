@@ -137,6 +137,7 @@ ccl_device_inline bool integrator_restir_unpack_reservoir( // !!!: DI
   return restir_unpack_reservoir(kg, reservoir, buffer);
 }
 
+// TODO(Tri): Complete
 ccl_device_inline bool integrator_restir_unpack_reservoir(KernelGlobals kg, // !!!: GI
                                                           ccl_private GlobalReservoir *reservoir,
                                                           uint32_t render_pixel_index,
@@ -635,7 +636,11 @@ ccl_device void integrator_evaluate_restir_pt(KernelGlobals kg, // DEVICE_KERNEL
     // !!!: PathRayVisibility path_visibility
     const PathRayVisibility path_visibility = INTEGRATOR_STATE(state, path, visibility);
 
+    // TODO(Tri): Change this maybe?
     film_write_combined_pass(kg, path_visibility, reservoir.path_flag, sample, reservoir.radiance, buffer);
+    // !!!: Wrong!!!
+    // film_write_indirect_light(
+    //     kg, state, path_visibility, reservoir.path_flag, sample, reservoir.radiance, buffer);
   }
 
   integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION);
