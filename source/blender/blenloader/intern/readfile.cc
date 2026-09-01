@@ -2544,16 +2544,16 @@ static Main *blo_add_main_for_library(FileData *fd,
     STRNCPY(lib->filepath, lib_filepath);
     STRNCPY(lib->runtime->filepath_abs, filepath_abs);
 
+    if (is_external_lib) {
+      lib->flag |= LIBRARY_FLAG_IS_EXTERNAL;
+    }
+
     if (is_packed_library) {
       /* FIXME: This logic is very similar to the code in BKE_library dealing with archived
        * libraries (e.g. #add_archive_library). Might be good to try to factorize it. */
       lib->archive_parent_library = reference_lib;
       constexpr uint16_t copy_flag = ~LIBRARY_FLAG_IS_ARCHIVE;
       lib->flag = (reference_lib->flag & copy_flag) | LIBRARY_FLAG_IS_ARCHIVE;
-
-      if (is_external_lib) {
-        lib->flag |= LIBRARY_FLAG_IS_EXTERNAL;
-      }
 
       lib->runtime->parent = reference_lib->runtime->parent;
       /* Only copy a subset of the reference library tags. E.g. an archive library should never be
@@ -2665,8 +2665,15 @@ static void direct_link_library(FileData *fd, Library *lib, Main *main)
                        lib->filepath,
                        lib->runtime->filepath_abs);
 
-      Main *parent_lib_bmain = blo_add_main_for_library(
-          fd, nullptr, nullptr, nullptr, lib->filepath, lib->runtime->filepath_abs, false, false);
+      Main *parent_lib_bmain = blo_add_main_for_library(fd,
+                                                        nullptr,
+                                                        nullptr,
+                                                        nullptr,
+                                                        lib->filepath,
+                                                        lib->runtime->filepath_abs,
+                                                        false,
+                                                        (lib->flag & LIBRARY_FLAG_IS_EXTERNAL) !=
+                                                            0);
       parent_lib = parent_lib_bmain->curlib;
       BLI_assert(parent_lib);
       oldnewmap_lib_insert(fd, lib->archive_parent_library, &parent_lib->id, ID_LI);
@@ -5028,7 +5035,7 @@ static Main *blo_find_main_for_library_and_idname(FileData *fd,
       /* An archive library requires an existing parent library, create an empty, 'virtual' one if
        * needed. */
       Main *reference_bmain = blo_add_main_for_library(
-          fd, bheadlib, nullptr, nullptr, lib_filepath, filepath_abs, false, false);
+          fd, bheadlib, nullptr, nullptr, lib_filepath, filepath_abs, false, is_external_lib);
       parent_lib = reference_bmain->curlib;
       CLOG_DEBUG(&LOG,
                  "Added new parent library '%s' for file path '%s'",
@@ -5178,7 +5185,62 @@ static void expand_doit_library(void *fdhandle,
                  "A link placeholder ID (aka reference to some ID linked from another library) "
                  "should never be packed.");
 
-  if (bhead->code == ID_LINK_PLACEHOLDER) {
+  if (bhead->code == ID_LI) {
+    /* Currently, we do no support expanding library usages/pointers in linked IDs.
+     * This can happen e.g. with some data-block custom property referencing a library, or when
+     * linking a collection import referencing its external archive library.
+     *
+     * This is a dangerous thing to try in general, as unlike almos any other ID types, libraries
+     * are more of a runtime ID than anything (they are always local, only written on disk as file
+     * reference & namespace, and are deduplicated on load - such that if a same library is used by
+     * several other dependencies, there is still only one ID for it in the final Main).
+     *
+     * Supporting expanding of non-archive library should be fairly straightforward (based on their
+     * absolute filepath), whether they are regular blendfile ones, new or external ones.
+     *
+     * Supporting expanding of archive libraries however is much much more complex:
+     *   - Archive libraries for packed data are essentially purely runtime data. They are only
+     *     used as namesapce, and there is not even any guarantee that packed IDs end up in the
+     *     same archive library namespace, depending on linking order etc.
+     *   - External archive libraries are more of an actual 'real container', their IDs are not
+     *     expected to move between them, even after a save & reload cycle. So we _could_ assign
+     *     some form of unique identifier to them, maybe abusing the 'deep hash' of packed IDs for
+     *     that (since libraries themselves are never packed)... not convinced that this would be
+     *     worth the complexity though.
+     *
+     * Note: Commented below is some initial attempt at supporting library expanding, not working
+     * with archive ones though.
+     */
+    return;
+#if 0
+    if (library_id_is_yet_read(fd, mainvar, bhead)) {
+      return;
+    }
+
+    Library *lib = reinterpret_cast<Library *>(
+        read_id_struct(fd, bhead, "Data for Library ID type", INDEX_ID_NULL));
+    if (lib->flag & LIBRARY_FLAG_IS_ARCHIVE) {
+      BLI_assert_unreachable();
+      MEM_delete(lib);
+      return;
+    }
+    const bool is_external_lib = bool(lib->flag & LIBRARY_FLAG_IS_EXTERNAL);
+
+    Main *libmain = blo_find_main_for_library_and_idname(
+        fd, bhead, lib->filepath, fd->relabase, nullptr, nullptr, false, is_external_lib);
+    MEM_delete(lib);
+
+    if (libmain->curlib == nullptr) {
+      BLO_reportf_wrap(fd->reports,
+                       RPT_WARNING,
+                       RPT_("LIB: Data refers to main .blend file: '%s' from %s"),
+                       id_name ? id_name : "<InvalidIDName>",
+                       mainvar->curlib->runtime->filepath_abs);
+      return;
+    }
+#endif
+  }
+  else if (bhead->code == ID_LINK_PLACEHOLDER) {
     /* Placeholder link to data-block in another library. */
     BHead *bheadlib = find_previous_lib(fd, bhead);
     if (bheadlib == nullptr) {
@@ -5193,8 +5255,9 @@ static void expand_doit_library(void *fdhandle,
 
     Library *lib = reinterpret_cast<Library *>(
         read_id_struct(fd, bheadlib, "Data for Library ID type", INDEX_ID_NULL));
+    const bool is_external_lib = bool(lib->flag & LIBRARY_FLAG_IS_EXTERNAL);
     Main *libmain = blo_find_main_for_library_and_idname(
-        fd, bheadlib, lib->filepath, fd->relabase, nullptr, nullptr, false, false);
+        fd, bheadlib, lib->filepath, fd->relabase, nullptr, nullptr, false, is_external_lib);
     MEM_delete(lib);
 
     if (libmain->curlib == nullptr) {
