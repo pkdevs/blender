@@ -980,6 +980,7 @@ struct DataPerZone {
 
 struct NodeOperatorCustomData {
   double last_time;
+  bool initialized = false;
   Array<bke::GeometrySet> geometry_orig;
   Array<Map<int, std::unique_ptr<DataPerZone>>> simulation_data_by_zone;
   wmTimer *timer = nullptr;
@@ -1210,13 +1211,14 @@ static wmOperatorStatus run_node_group_execute(bContext *C,
   /* May be null if operator called from outside 3D view context. */
   Vector<MeshState> orig_mesh_states;
 
-  if (is_invoke) {
+  if (!op_data.initialized) {
     op_data.geometry_orig.reinitialize(objects.size());
     for (const int object_i : objects.index_range()) {
       op_data.geometry_orig[object_i] = get_original_geometry_eval_copy(
           *depsgraph_active, *objects[object_i], orig_mesh_states);
     }
     op_data.simulation_data_by_zone.reinitialize(objects.size());
+    op_data.initialized = true;
   }
 
   const double now = BLI_time_now_seconds();
