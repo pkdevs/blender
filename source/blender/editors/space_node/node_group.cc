@@ -654,10 +654,15 @@ static bNode *node_group_make_from_nodes(const bContext &C,
   return gnode;
 }
 
-static bNode *node_group_make_from_node_declaration(bContext &C,
-                                                    bNodeTree &ntree,
-                                                    bNode &src_node,
-                                                    const UString node_idname)
+// todo(habib): static or move to header
+// todo(habib): doc
+struct WrapperGroup {
+  bNodeTree *tree;
+  NodeTreeInterfaceMapping io_mapping;
+  NodeSetCopy copied_nodes;
+};
+
+static WrapperGroup make_wrapper_group(const bContext &C, bNodeTree &ntree, bNode &src_node)
 {
   Main &bmain = *CTX_data_main(&C);
 
@@ -673,14 +678,33 @@ static bNode *node_group_make_from_node_declaration(bContext &C,
   params.skip_hidden = false;
   /* Expose all sockets even if unconnected. */
   params.skip_unconnected = false;
-  const NodeTreeInterfaceMapping io_mapping = build_node_declaration_interface(
+  NodeTreeInterfaceMapping io_mapping = build_node_declaration_interface(
       params, src_node, *wrapper_group);
 
-  const NodeSetCopy copied_nodes = NodeSetCopy::from_nodes(
-      bmain, ntree, {&src_node}, *wrapper_group);
+  NodeSetCopy copied_nodes = NodeSetCopy::from_nodes(bmain, ntree, {&src_node}, *wrapper_group);
   connect_copied_nodes_to_interface(C, copied_nodes, io_mapping);
 
   BKE_main_ensure_invariants(bmain, wrapper_group->id);
+
+  return {wrapper_group, std::move(io_mapping), std::move(copied_nodes)};
+}
+
+bNodeTree *node_wrapper_group_create(const bContext &C, bNodeTree &ntree, bNode &src_node)
+{
+  return make_wrapper_group(C, ntree, src_node).tree;
+}
+
+static bNode *node_group_make_from_node_declaration(bContext &C,
+                                                    bNodeTree &ntree,
+                                                    bNode &src_node,
+                                                    const UString node_idname)
+{
+  Main &bmain = *CTX_data_main(&C);
+
+  const WrapperGroup wrapper = make_wrapper_group(C, ntree, src_node);
+  bNodeTree *wrapper_group = wrapper.tree;
+  const NodeTreeInterfaceMapping &io_mapping = wrapper.io_mapping;
+  const NodeSetCopy &copied_nodes = wrapper.copied_nodes;
 
   /* Create a group node. */
   bNode *gnode = bke::node_add_node(&C, ntree, node_idname);

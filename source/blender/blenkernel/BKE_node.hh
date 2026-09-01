@@ -256,6 +256,14 @@ struct NodeWidth {
   static constexpr int GroupMin = 60;
 };
 
+// todo(habib): move from here
+enum class NodeCompositorUsage : uint8_t {
+  None = 0,
+  SceneEffect = (1 << 0),
+  StripModifier = (1 << 1),
+};
+ENUM_OPERATORS(NodeCompositorUsage);
+
 /**
  * \brief Defines a node type.
  *
@@ -280,6 +288,10 @@ struct bNodeType {
   float height = 0.0f, minheight = 0.0f, maxheight = 0.0f;
   short nclass = 0;
   eNode_Flag flag = {};
+
+  // todo(habib): Decide if necessary. Alternative: remove whole submenus
+  NodeCompositorUsage compositor_usage = NodeCompositorUsage::SceneEffect |
+                                         NodeCompositorUsage::StripModifier;
 
   /* templates for static sockets */
   bNodeSocketTemplate *inputs = nullptr, *outputs = nullptr;

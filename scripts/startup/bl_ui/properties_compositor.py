@@ -26,6 +26,7 @@ class SCENE_MT_add_compositor_effect(Menu):
 
         layout.operator_context = 'INVOKE_REGION_WIN'
 
+        layout.menu_contents("NODE_MT_compositor_node_effect_all")
         layout.menu_contents("SCENE_MT_add_compositor_effect_root_catalogs")
         layout.separator()
         layout.operator("scene.add_compositor_effect", text="Effect", icon='NODE_COMPOSITING')

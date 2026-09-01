@@ -174,6 +174,12 @@ std::optional<Bounds<float2>> node_location_bounds(Span<const bNode *> nodes);
 /** Find the top-most parent shared by all the nodes, or null if no parent contains all nodes. */
 bNode *find_common_parent_node(Span<bNode *> nodes);
 
+/**
+ * Create a node group which contains a copy of the given node of the given tree. This is the same
+ * node group the Make Group operator creates for a single node.
+ */
+bNodeTree *node_wrapper_group_create(const bContext &C, bNodeTree &ntree, bNode &src_node);
+
 }  // namespace ed::space_node
 
 }  // namespace blender

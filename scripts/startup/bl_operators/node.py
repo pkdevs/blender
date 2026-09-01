@@ -791,6 +791,51 @@ class NODE_OT_swap_empty_group(NodeSwapOperator, bpy.types.Operator):
         return group
 
 
+class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Operator):
+    """Add a node as a scene compositor effect"""
+    bl_idname = "scene.add_compositor_effect_node"
+    bl_label = "Add Compositor Effect Node"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    type: StringProperty(
+        name="Node Type",
+        description="Node type",
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene is not None
+
+    def create_effect_group(self, node_type):
+        # todo(habib): doc
+        source_group = bpy.data.node_groups.new(name=".effect_source", type="CompositorNodeTree")
+        node = source_group.nodes.new(type=node_type)
+        self.apply_node_settings(node)
+        group = source_group.new_group_from_node(node)
+        if group is None:
+            return None
+
+        # todo(habib): Can node creation of built-in nodes fail?
+        bpy.data.node_groups.remove(source_group)
+
+        # group.allow_usage_in_scene_compositor_effect = True
+
+        return group
+
+    def execute(self, context):
+        if not self.properties.is_property_set("type"):
+            return {'CANCELLED'}
+
+        group = self.create_effect_group(self.type)
+        if group is None:
+            return {'CANCELLED'}
+
+        effect = context.scene.compositor_effects.new(name=group.name)
+        effect.node_group = group
+
+        return {'FINISHED'}
+
+
 class NODE_OT_add_typed_bundle(NodeAddOperator, bpy.types.Operator):
     bl_idname = "node.add_typed_bundle"
     bl_label = "Add Typed Bundle"
@@ -1602,6 +1647,7 @@ classes = (
     NODE_OT_add_closure_zone,
     NODE_OT_add_typed_bundle,
     NODE_OT_swap_typed_bundle,
+    SCENE_OT_add_compositor_effect_node,
     NODE_OT_collapse_hide_unused_toggle,
     NODE_OT_interface_item_new,
     NODE_OT_interface_item_new_panel_toggle,

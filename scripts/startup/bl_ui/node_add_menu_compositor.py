@@ -25,7 +25,7 @@ class NODE_MT_compositor_node_input_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeImportText")
         self.node_operator(layout, "CompositorNodeMask")
         self.node_operator(layout, "CompositorNodeMovieClip")
-        if context.space_data.node_tree_sub_type == 'SEQUENCER':
+        if self.tree_sub_type(context) == 'SEQUENCER':
             self.node_operator(layout, "CompositorNodeSequencerStripInfo")
         self.node_operator(layout, "CompositorNodeStringToImage")
 
@@ -69,7 +69,7 @@ class NODE_MT_compositor_node_input_scene_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeCameraInfo")
         self.node_operator(layout, "GeometryNodeIsViewport")
         self.node_operator(layout, "GeometryNodeObjectInfo")
-        if context.space_data.node_tree_sub_type == 'SCENE':
+        if self.tree_sub_type(context) == 'SCENE':
             self.node_operator(layout, "CompositorNodeRLayers")
         self.node_operator_with_outputs(context, layout, "CompositorNodeSceneTime", ["Frame", "Seconds"])
         self.node_operator(layout, "CompositorNodeTime")
@@ -86,7 +86,7 @@ class NODE_MT_compositor_node_output_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "NodeGroupOutput")
         self.node_operator(layout, "CompositorNodeViewer")
         self.node_operator_with_searchable_enum(context, layout, "GeometryNodeWarning", "warning_type")
-        if context.space_data.node_tree_sub_type == 'SCENE':
+        if self.tree_sub_type(context) == 'SCENE':
             layout.separator()
             self.node_operator(layout, "CompositorNodeOutputFile")
 
@@ -582,9 +582,42 @@ swap_menus = node_add_menu.generate_menus(
 )
 
 
+effect_menus = {
+    # menu bl_idname: baseclass
+    # "NODE_MT_compositor_node_input_effect": NODE_MT_compositor_node_input_base,
+    # "NODE_MT_compositor_node_input_constant_effect": NODE_MT_compositor_node_input_constant_base,
+    "NODE_MT_compositor_node_input_scene_effect": NODE_MT_compositor_node_input_scene_base,
+    # "NODE_MT_compositor_node_output_effect": NODE_MT_compositor_node_output_base,
+    "NODE_MT_compositor_node_color_effect": NODE_MT_compositor_node_color_base,
+    "NODE_MT_compositor_node_color_adjust_effect": NODE_MT_compositor_node_color_adjust_base,
+    "NODE_MT_compositor_node_filter_effect": NODE_MT_compositor_node_filter_base,
+    "NODE_MT_compositor_node_filter_blur_effect": NODE_MT_compositor_node_filter_blur_base,
+    "NODE_MT_compositor_node_creative_effect": NODE_MT_compositor_node_creative_base,
+    # "NODE_MT_compositor_node_texture_effect": NODE_MT_compositor_node_texture_base,
+    "NODE_MT_compositor_node_keying_effect": NODE_MT_compositor_node_keying_base,
+    # "NODE_MT_compositor_node_mask_effect": NODE_MT_compositor_node_mask_base,
+    # "NODE_MT_compositor_node_tracking_effect": NODE_MT_compositor_node_tracking_base,
+    "NODE_MT_compositor_node_transform_effect": NODE_MT_compositor_node_transform_base,
+    # "NODE_MT_compositor_node_utilities_effect": NODE_MT_compositor_node_utilities_base,
+    "NODE_MT_compositor_node_vector_effect": NODE_MT_compositor_node_vector_base,
+    "NODE_MT_compositor_node_math_effect": NODE_MT_compositor_node_math_base,
+    "NODE_MT_compositor_node_text_effect": NODE_MT_compositor_node_text_base,
+    # "NODE_MT_compositor_node_matrix_effect": NODE_MT_compositor_utilities_matrix_base,
+    # "NODE_MT_compositor_node_bundle_effect": NODE_MT_compositor_utilities_bundle_base,
+    # "NODE_MT_compositor_node_rotation_effect": NODE_MT_compositor_node_rotation_base,
+    "NODE_MT_compositor_node_effect_all": NODE_MT_compositor_node_all_base,
+}
+effect_menus = node_add_menu.generate_menus(
+    effect_menus,
+    template=node_add_menu.CompositorEffectMenu,
+    base_dict=node_add_menu.effect_base_pathing_dict
+)
+
+
 classes = (
     *add_menus,
     *swap_menus,
+    *effect_menus,
 )
 
 if __name__ == "__main__":  # only for live edit.

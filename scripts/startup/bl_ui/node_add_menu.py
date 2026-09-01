@@ -77,7 +77,8 @@ def set_vector_math_node_defaults(enum_identifier, props):
 
 
 class NodeMenu(Menu):
-    """A base-class defining the shared methods for AddNodeMenu and SwapNodeMenu."""
+    """A base-class defining the shared methods for add menus such as AddNodeMenu, SwapNodeMenu and
+    CompositorEffectMenu."""
     draw_assets: bool
     use_transform: bool
 
@@ -93,32 +94,44 @@ class NodeMenu(Menu):
         return context.space_data.type == 'NODE_EDITOR'
 
     @classmethod
+    def tree_sub_type(cls, context):
+        return context.space_data.node_tree_sub_type
+
+    @classmethod
+    def node_type_supported(cls, node_type):
+        # todo(habib): decide if necessary
+        del node_type
+        return True
+
+    @classmethod
     def node_operator(cls, layout, node_type, *, label=None, poll=None, search_weight=0.0, translate=True):
         """The main operator defined for the node menu.
         \n(e.g. 'Add Node' for AddNodeMenu, or 'Swap Node' for SwapNodeMenu)."""
+
+        if poll is not True and poll is not None:
+            return None
+        if not cls.node_type_supported(node_type):
+            return None
 
         bl_rna = bpy.types.Node.bl_rna_get_subclass(node_type)
         if not label:
             label = bl_rna.name if bl_rna else n_("Unknown")
             translate = True
 
-        if poll is True or poll is None:
-            translation_context = bl_rna.translation_context if bl_rna else i18n_contexts.default
-            props = layout.operator(
-                cls.main_operator_id,
-                text=label,
-                text_ctxt=translation_context,
-                translate=translate,
-                search_weight=search_weight,
-            )
-            props.type = node_type
+        translation_context = bl_rna.translation_context if bl_rna else i18n_contexts.default
+        props = layout.operator(
+            cls.main_operator_id,
+            text=label,
+            text_ctxt=translation_context,
+            translate=translate,
+            search_weight=search_weight,
+        )
+        props.type = node_type
 
-            if hasattr(props, "use_transform"):
-                props.use_transform = cls.use_transform
+        if hasattr(props, "use_transform"):
+            props.use_transform = cls.use_transform
 
-            return props
-
-        return None
+        return props
 
     @classmethod
     def node_operator_with_searchable_enum(
@@ -130,8 +143,10 @@ class NodeMenu(Menu):
             search_weight=0.0,
             defaults_callback=None):
         """Similar to `node_operator`, but with extra entries based on a enum property while in search."""
-        operators = []
-        operators.append(cls.node_operator(layout, node_idname, search_weight=search_weight))
+        props = cls.node_operator(layout, node_idname, search_weight=search_weight)
+        if props is None:
+            return []
+        operators = [props]
 
         if getattr(context, "is_menu_search", False):
             node_type = getattr(bpy.types, node_idname)
@@ -171,8 +186,10 @@ class NodeMenu(Menu):
             search_weight=0.0,
     ):
         """Similar to `node_operator`, but with extra entries based on a enum socket while in search."""
-        operators = []
-        operators.append(cls.node_operator(layout, node_idname, search_weight=search_weight))
+        props = cls.node_operator(layout, node_idname, search_weight=search_weight)
+        if props is None:
+            return []
+        operators = [props]
         if getattr(context, "is_menu_search", False):
             node_type = getattr(bpy.types, node_idname)
             for enum_name in enum_names:
@@ -205,8 +222,10 @@ class NodeMenu(Menu):
         if poll is not None and poll is False:
             return None
 
-        operators = []
-        operators.append(cls.node_operator(layout, node_type, label=label, search_weight=search_weight))
+        props = cls.node_operator(layout, node_type, label=label, search_weight=search_weight)
+        if props is None:
+            return None
+        operators = [props]
 
         if getattr(context, "is_menu_search", False):
             for subname in subnames:
@@ -226,8 +245,10 @@ class NodeMenu(Menu):
         """The 'Mix Color' node, with its different blend modes available while in search."""
         label = iface_("Mix Color")
 
-        operators = []
         props = cls.node_operator(layout, "ShaderNodeMix", label=label, translate=False, search_weight=search_weight)
+        if props is None:
+            return []
+        operators = []
         ops = props.settings.add()
         ops.name = "data_type"
         ops.value = "'RGBA'"
@@ -356,6 +377,9 @@ class NodeMenu(Menu):
             label=group.name,
             search_weight=search_weight,
         )
+        if props is None:
+            return
+
         ops = props.settings.add()
         ops.name = "node_tree"
         ops.value = "bpy.data.node_groups[{!r}]".format(group.name)
@@ -378,7 +402,12 @@ class NodeMenu(Menu):
         if cls.pathing_dict is None:
             raise ValueError("`pathing_dict` was not set for {!s}".format(cls))
 
-        layout.menu(cls.pathing_dict[path])
+        menu_idname = cls.pathing_dict.get(path)
+        if menu_idname is None:
+            # todo(habib): Handle with an extra flag?
+            return
+
+        layout.menu(menu_idname)
 
     @classmethod
     def simulation_zone(cls, layout, label):
@@ -468,6 +497,49 @@ class SwapNodeMenu(NodeMenu):
             layout.template_node_asset_menu_items(catalog_path=catalog_path, operator='SWAP')
 
 
+class CompositorEffectMenu(NodeMenu):
+    #todo(habib): docstring
+
+    # Node group assets are listed by `SCENE_MT_add_compositor_effect_root_catalogs` instead.
+    # NOTE: `template_node_asset_menu_items` requires a node editor, it can't be used here.
+    draw_assets = False
+
+    main_operator_id = "scene.add_compositor_effect_node"
+
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        return space and (space.type == 'PROPERTIES') and (space.context == 'COMPOSITOR')
+
+    @classmethod
+    def tree_sub_type(cls, _context):
+        # todo(habib): need better solution. Properties currently has no tree sub type.
+        return 'SCENE'
+
+    @classmethod
+    def node_type_supported(cls, node_type):
+        # todo(habib): doc
+        # todo(habib): could do without it?
+        return bpy.types.Node.is_compositor_usage_allowed(node_type, 'SCENE_EFFECT')
+
+    @classmethod
+    def draw_assets_for_catalog(cls, _layout, _catalog_path):
+        del _layout, _catalog_path
+        return None
+
+    # todo(habib): won't be needed if we decide against node usage.
+    @classmethod
+    def new_empty_group(cls, _layout):
+        del _layout
+        return None
+
+    # todo(habib): won't be needed if we decide against node usage.
+    @classmethod
+    def typed_bundle(cls, _layout, _label):
+        del _label, _layout
+        return None
+
+
 class NODE_MT_group_base(NodeMenu):
     bl_label = "Group"
 
@@ -509,6 +581,9 @@ swap_base_pathing_dict = {
     "Group/Linked": "NODE_MT_linked_group_swap",
     "Layout": "NODE_MT_layout_swap",
 }
+
+
+effect_base_pathing_dict = {}
 
 
 def generate_menu(bl_idname: str, template: Menu, layout_base: Menu, pathing_dict: dict = None):
