@@ -526,7 +526,7 @@ void CUDADevice::reserve_local_memory(const uint64_t kernel_features)
 
 void *CUDADevice::host_alloc(const MemoryType type, const size_t size)
 {
-  if (integrated_gpu && type != MEM_IMAGE_TEXTURE) {
+  if (integrated_gpu && (type == MEM_READ_ONLY || type == MEM_READ_WRITE)) {
     const CUDAContextScope scope(this);
 
     int host_alloc_type = 2;
@@ -548,7 +548,7 @@ void *CUDADevice::host_alloc(const MemoryType type, const size_t size)
         extended_param.Type = MemExtendedParameterAddressRequirements;
         extended_param.Pointer = &address_requirements;
 
-        void *host_pointer = VirtualAlloc2(GetCurrentProcess(),
+        void *host_pointer = VirtualAlloc2(nullptr,
                                            nullptr,
                                            size,
                                            MEM_RESERVE | MEM_COMMIT,
@@ -583,7 +583,7 @@ void *CUDADevice::host_alloc(const MemoryType type, const size_t size)
 
 void CUDADevice::host_free(const MemoryType type, void *host_pointer, const size_t size)
 {
-  if (integrated_gpu && type != MEM_IMAGE_TEXTURE) {
+  if (integrated_gpu && (type == MEM_READ_ONLY || type == MEM_READ_WRITE)) {
     const CUDAContextScope scope(this);
 
 #  ifdef _WIN32
