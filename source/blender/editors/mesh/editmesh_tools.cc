@@ -4569,10 +4569,6 @@ static bool mesh_separate_material(
 static bool mesh_separate_loose(
     Main *bmain, Scene *scene, ViewLayer *view_layer, Base *base_old, BMesh *bm_old)
 {
-  /* Without this, we duplicate the object mode mesh for each loose part.
-   * This can get very slow especially for large meshes with many parts
-   * which would duplicate the mesh on entering edit-mode. */
-
   bool result = false;
 
   Array<BMVert *> vert_groups(bm_old->totvert);
@@ -4586,6 +4582,10 @@ static bool mesh_separate_loose(
     MEM_SAFE_DELETE(groups);
     return false;
   }
+
+  /* Without this, we duplicate the object mode mesh for each loose part.
+   * This can get very slow especially for large meshes with many parts
+   * which would duplicate the mesh on entering edit-mode. */
 
   ED_mesh_geometry_clear(id_cast<Mesh *>(base_old->object->data));
 
