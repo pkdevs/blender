@@ -1,3 +1,4 @@
 Referenced by issue #161868, Crash when deleting invalid shapekey on blendfile read
 Referenced by commit 4ba6f3e4a2462fccd74a63d14819ebf9f0784753, Fix #161868: Crash when deleting invalid shapekey on blendfile read.
 Referenced by issue #163372, Deleting a Material used by Geometry Nodes "Set Material" Node
+Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
