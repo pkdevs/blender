@@ -1314,8 +1314,8 @@ static VArray<bool> get_fill_boundary_layers(const GreasePencil &grease_pencil,
 struct FillToolTargetInfo {
   ed::greasepencil::MutableDrawingInfo target;
   Vector<ed::greasepencil::DrawingInfo> sources;
-  /* Used for removing newly created (auto)keyframes again [in case the tool does not create fills
-   * and thus makes no changes]. */
+  /* Used for removing newly created (auto)keyframes again in case the tool does not create fills
+   * and thus makes no changes. */
   bool is_new_keyframe = false;
 };
 
