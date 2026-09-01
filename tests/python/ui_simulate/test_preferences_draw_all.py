@@ -39,13 +39,25 @@ def test_preferences_draw_all():
     t.assertIsNotNone(prefs_area, "Preferences area was not found")
 
     prefs = bpy.context.preferences
+    wm = bpy.context.window_manager
     original_save = prefs.use_preferences_save
+    original_addon_filter = wm.addon_filter
+    original_addon_search = wm.addon_search
+    original_show_addons_enabled_only = prefs.view.show_addons_enabled_only
     prefs.use_preferences_save = False
+    prefs.view.show_addons_enabled_only = False
+    wm.addon_filter = "All"
+    wm.addon_search = ""
 
     try:
         for item in prefs.bl_rna.properties["active_section"].enum_items:
             with bpy.context.temp_override(window=prefs_window, area=prefs_area):
                 prefs.active_section = item.identifier
             yield
+            if item.identifier == "ADDONS":
+                yield from ui.expand_preferences_addons(prefs_window, prefs_area)
     finally:
         prefs.use_preferences_save = original_save
+        prefs.view.show_addons_enabled_only = original_show_addons_enabled_only
+        wm.addon_filter = original_addon_filter
+        wm.addon_search = original_addon_search
