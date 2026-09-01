@@ -1797,15 +1797,6 @@ void blo_do_versions_userdef(UserDef *userdef)
     }
   }
 
-  /* Make Vulkan default on Linux/Windows x64. Keep existing option for Apple and Windows on ARM.*/
-#ifdef __APPLE__
-#elif defined(WIN32) && (defined(_M_ARM64) || defined(__aarch64__))
-#else
-  if (!USER_VERSION_ATLEAST(503, 10)) {
-    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
-  }
-#endif
-
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.
