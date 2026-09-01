@@ -12,6 +12,7 @@
 
 // Constants
 #define FLT_MAX 3.402823466e+38  // max value
+#define OPENPBR_SPEC_COMPLIANT
 
 /* Default offset of coordinates for evaluating bump node. Unit in pixel. */
 #define BUMP_FILTER_WIDTH 0.1

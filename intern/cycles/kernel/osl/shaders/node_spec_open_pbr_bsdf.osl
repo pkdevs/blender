@@ -1,0 +1,415 @@
+/* SPDX-FileCopyrightText: 2026 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
+
+#include "stdcycles.h"
+
+#include "node_fresnel.h"
+#include "node_math.h"
+
+#define BSDF_T closure color
+#define VDF_T closure color
+#define EDF_T closure color
+
+#define CLOSURE_WEIGHT_CUTOFF 1e-5
+
+struct ThinFilm {
+  float weight;
+  float thickness;
+  float ior;
+};
+
+struct Subsurface {
+  float weight;
+  color tint;
+  color radius;
+  float anisotropy;
+};
+
+struct Transmission {
+  float weight;
+  color tint;
+  float depth;
+  color scatter;
+  float anisotropy;
+  float dispersion_scale;
+  float dispersion_abbe_number;
+};
+
+struct Coat {
+  color tint;
+  float ior;
+  normal N;
+  float roughness;
+  float weight;
+  normal T;
+  float anisotropy;
+  float darkening;
+};
+
+struct Specular {
+  float weight;
+  float roughness;
+  float anisotropy;
+  float ior;
+  color tint;
+};
+
+/* OpenPBR Surface Specification v1.1.1, Eq. (11). */
+closure color layer(closure color top, closure color base, float weight)
+{
+  return layer(weight * top, base);
+}
+
+/* Anisotropic roughness. OpenPBR Surface Specification v1.1.1, Eq. (21). */
+vector2 openpbr_anisotropic_roughness(float roughness, float anisotropy)
+{
+  float roughness_sq = sqr(roughness);
+  vector2 alpha = vector2(roughness_sq, roughness_sq);
+
+  if (anisotropy > 0.0) {
+    alpha.x *= sqrt(2.0 / (1.0 + sqr(1.0 - anisotropy)));
+    alpha.y = (1.0 - anisotropy) * alpha.x;
+  }
+
+  return alpha;
+}
+
+float openpbr_specular_ior(float ior, float weight, float coat_weight, float coat_ior)
+{
+  float specular_ior = ior;
+  if (coat_weight > CLOSURE_WEIGHT_CUTOFF) {
+    /* Fixing the ratio to compensate for total internal reflections (TIR),
+     * OpenPBR Surface Specification v1.1.1, Eq. (74) */
+    float tir_fixed_ratio = (coat_ior > specular_ior) ? (coat_ior / specular_ior) :
+                                                        (specular_ior / coat_ior);
+
+    /* TODO(OpenPBR): we assume that the ambient ior is 1.0. */
+    float ambient_ior = 1.0;
+    /* OpenPBR Surface Specification v1.1.1, Eq. (60) */
+    specular_ior = mix(specular_ior / ambient_ior, tir_fixed_ratio, coat_weight);
+  }
+
+  if (weight == 1.0) {
+    return specular_ior;
+  }
+
+  float modulated_ior = ior_from_F0(weight * F0_from_ior(specular_ior));
+  return (specular_ior < 1.0) ? 1.0 / modulated_ior : modulated_ior;
+}
+
+vector2 openpbr_specular_roughness(float roughness, float anisotropy, Coat coat)
+{
+  float specular_roughness = roughness;
+  if ((coat.weight > CLOSURE_WEIGHT_CUTOFF) && (coat.roughness > 0.0)) {
+    /* Coat roughening, OpenPBR Surface specification v1.1.1, Eq. (73). */
+    float min_coated_roughness = min(
+        1.0, pow(sqr(sqr(specular_roughness)) + 2.0 * sqr(sqr(coat.roughness)), 0.25));
+    specular_roughness = mix(specular_roughness, min_coated_roughness, coat.weight);
+  }
+
+  return openpbr_anisotropic_roughness(specular_roughness, anisotropy);
+}
+
+/* Diffuse. OpenPBR Surface Specification v1.1.1, Section 3.2.2. */
+BSDF_T openpbr_diffuse(color weighted_base_color, float roughness, normal N)
+{
+  if (roughness > CLOSURE_WEIGHT_CUTOFF) {
+    return oren_nayar_diffuse_bsdf(N, weighted_base_color, roughness);
+  }
+  return weighted_base_color * diffuse(N);
+}
+
+/* Gloss. OpenPBR Surface Specification v1.1.1, Section 3.2. */
+BSDF_T openpbr_gloss(color specular_color,
+                     vector2 roughness,
+                     float specular_ior,
+                     ThinFilm thin_film,
+                     normal N,
+                     normal T)
+{
+  BSDF_T F_dielectric_film = dielectric_bsdf(N,
+                                             T,
+                                             specular_color,
+                                             color(0.0),
+                                             roughness.x,
+                                             roughness.y,
+                                             specular_ior,
+                                             "multi_ggx",
+                                             "thinfilm_thickness",
+                                             thin_film.thickness,
+                                             "thinfilm_ior",
+                                             thin_film.ior);
+  BSDF_T F_dielectric = dielectric_bsdf(
+      N, T, specular_color, color(0.0), roughness.x, roughness.y, specular_ior, "multi_ggx");
+  return mix(F_dielectric, F_dielectric_film, thin_film.weight);
+}
+
+/* Metal. OpenPBR Surface Specification v1.1.1, Section 3.2.1. */
+BSDF_T openpbr_metal(color weighted_base_color,
+                     float specular_weight,
+                     color specular_color,
+                     vector2 roughness,
+                     ThinFilm thin_film,
+                     normal N,
+                     normal T)
+{
+  BSDF_T F_metal_film = microfacet_f82_tint("multi_ggx",
+                                            N,
+                                            T,
+                                            roughness.x,
+                                            roughness.y,
+                                            weighted_base_color,
+                                            specular_color,
+                                            "thinfilm_thickness",
+                                            thin_film.thickness,
+                                            "thinfilm_ior",
+                                            thin_film.ior);
+  BSDF_T F_metal = microfacet_f82_tint(
+      "multi_ggx", N, T, roughness.x, roughness.y, weighted_base_color, specular_color);
+
+  return specular_weight * mix(F_metal, F_metal_film, thin_film.weight);
+}
+
+/* Subsurface. */
+BSDF_T openpbr_subsurface(Subsurface sss, int thin_walled, float roughness, normal N)
+{
+  if (thin_walled) {
+    /* OpenPBR Surface Specification v1.1.1, Section 3.9. */
+    return sss.tint * thin_subsurface(N, vector(0.0), sss.tint, sss.anisotropy, roughness);
+  }
+
+  /* FIXME(OpenPBR): subsurface seems different than SVM, according to Sebastian's test. */
+  /* OpenPBR Surface Specification v1.1.1, Section 3.2.3. */
+#if OSL_VERSION >= 11401
+  return subsurface_bssrdf(N, sss.tint, sss.radius, sss.anisotropy);
+#else
+  return subsurface_bssrdf(N, sss.tint, 1.0, sss.radius, sss.anisotropy);
+#endif
+}
+
+/* Translucent base. OpenPBR Surface Specification, Section 3.2.4. */
+BSDF_T openpbr_translucent(color reflection_color,
+                           Transmission transmission,
+                           vector2 roughness,
+                           float ior,
+                           ThinFilm thin_film,
+                           int thin_walled,
+                           normal N,
+                           normal T)
+{
+  /* TODO(OpenPBR): anisotropic roughness. */
+  if (thin_walled) {
+    /* OpenPBR Surface Specification v1.1.1, Section 3.9. */
+    BSDF_T ThinGlass = thin_glass(
+        N, reflection_color, transmission.tint, ior, roughness.x, 0.0, 1.0, 1);
+    BSDF_T ThinGlass_film = thin_glass(N,
+                                       reflection_color,
+                                       transmission.tint,
+                                       ior,
+                                       roughness.x,
+                                       thin_film.thickness,
+                                       thin_film.ior,
+                                       1);
+    return mix(ThinGlass, ThinGlass_film, thin_film.weight);
+  }
+
+  /* TODO(OpenPBR): thin film. */
+  color transmission_tint = (transmission.depth == 0.0) ? transmission.tint : color(1.0);
+  color specular_tint = backfacing() ? color(1.0) : reflection_color;
+  float inv_abbe = transmission.dispersion_scale / transmission.dispersion_abbe_number;
+  BSDF_T Glass = dielectric_bsdf(N,
+                                 T,
+                                 specular_tint,
+                                 transmission_tint,
+                                 roughness.x,
+                                 roughness.y,
+                                 ior,
+                                 "multi_ggx",
+                                 "inv_abbe",
+                                 inv_abbe);
+
+  if (transmission.depth > 0.0) {
+    /* OpenPBR Surface Specification v1.1.1, Eq. (50-53). */
+    color sigma_s = transmission.scatter / transmission.depth;
+    color sigma_t = -log(transmission.tint) / transmission.depth;
+    float sigma_a_min = reduce_min(sigma_t - sigma_s);
+    if (sigma_a_min < 0.0) {
+      sigma_t -= sigma_a_min;
+    }
+    color albedo = safe_divide(sigma_s, sigma_t);
+    VDF_T Medium = anisotropic_vdf(albedo, sigma_t, transmission.anisotropy);
+
+    Glass = layer(Glass, Medium);
+  }
+
+  return Glass;
+}
+
+BSDF_T openpbr_coat(Coat coat)
+{
+  /* FIXME(OpenPBR): simply invert ior is incorrect, probably should do the same as thin film?
+   * Didn't find in the spec how to address backface. Principled BSDF uses original coat IOR
+   * without modification. */
+  // float coat_ior = backfacing() ? 1.0 / coat.ior : coat.ior;
+  float coat_ior = coat.ior;
+  /* TODO(weizhen): darkening. */
+  return coat_bsdf(
+      coat.tint, coat_ior, coat.roughness, coat.anisotropy, coat.darkening, coat.N, coat.T);
+}
+
+BSDF_T openpbr_fuzz(
+    float coat_weight, normal coat_N, color fuzz_color, float fuzz_roughness, normal N)
+{
+  normal fuzz_normal = normalize(mix(N, coat_N, coat_weight));
+  return sheen_bsdf(fuzz_normal, fuzz_color, fuzz_roughness);
+}
+
+float closure_weight_cutoff(float weight)
+{
+  if (weight > CLOSURE_WEIGHT_CUTOFF) {
+    return weight;
+  }
+  return 0.0;
+}
+
+closure color node_spec_open_pbr_bsdf(float BaseWeight,
+                                      color BaseColor,
+                                      float BaseDiffuseRoughness,
+                                      float BaseMetalness,
+                                      float SpecularWeight,
+                                      color SpecularColor,
+                                      float SpecularRoughness,
+                                      float SpecularRoughnessAnisotropy,
+                                      float SpecularIOR,
+                                      float TransmissionWeight,
+                                      color TransmissionColor,
+                                      float TransmissionDepth,
+                                      color TransmissionScatter,
+                                      float TransmissionScatterAnisotropy,
+                                      float TransmissionDispersionScale,
+                                      float TransmissionDispersionAbbeNumber,
+                                      float SubsurfaceWeight,
+                                      color SubsurfaceColor,
+                                      float SubsurfaceRadius,
+                                      color SubsurfaceRadiusScale,
+                                      float SubsurfaceScatterAnisotropy,
+                                      float CoatWeight,
+                                      color CoatColor,
+                                      float CoatRoughness,
+                                      float CoatRoughnessAnisotropy,
+                                      float CoatIOR,
+                                      float CoatDarkening,
+                                      float FuzzWeight,
+                                      color FuzzColor,
+                                      float FuzzRoughness,
+                                      float EmissionLuminance,
+                                      color EmissionColor,
+                                      float ThinFilmWeight,
+                                      float ThinFilmThickness,
+                                      float ThinFilmIOR,
+                                      float GeometryOpacity,
+                                      int GeometryThinWalled,
+                                      normal GeometryNormal,
+                                      normal GeometryTangent,
+                                      normal GeometryCoatNormal,
+                                      normal GeometryCoatTangent)
+{
+  closure color BSDF = 0;
+
+  /* Clamp parameters. OpenPBR Surface Specification v1.1.1, Section 5. */
+  /* Base. */
+  float base_weight = saturate(BaseWeight);
+  color base_color = saturate(BaseColor);
+  float base_metalness = saturate(BaseMetalness);
+  float base_diffuse_roughness = saturate(BaseDiffuseRoughness);
+  /* Specular. */
+  Specular specular;
+  specular.weight = max(SpecularWeight, 0.0);
+  specular.tint = saturate(SpecularColor);
+  specular.roughness = saturate(SpecularRoughness);
+  specular.anisotropy = saturate(SpecularRoughnessAnisotropy);
+  specular.ior = max(SpecularIOR, 0.0);
+  /* Transmission. */
+  Transmission transmission;
+  transmission.weight = saturate(TransmissionWeight);
+  /* To avoid numerical problems when a color channel is 0 we clamp it to a minimum of 1e-5 */
+  transmission.tint = clamp(TransmissionColor, color(1e-5), color(1.0));
+  transmission.depth = max(TransmissionDepth, 0.0);
+  transmission.scatter = saturate(TransmissionScatter);
+  transmission.anisotropy = clamp(TransmissionScatterAnisotropy, -1.0, 1.0);
+  transmission.dispersion_scale = saturate(TransmissionDispersionScale);
+  transmission.dispersion_abbe_number = max(TransmissionDispersionAbbeNumber, 0.0);
+  /* Subsurface. */
+  Subsurface sss;
+  sss.weight = saturate(SubsurfaceWeight);
+  sss.tint = saturate(SubsurfaceColor);
+  sss.radius = max(SubsurfaceRadius, 0.0) * saturate(SubsurfaceRadiusScale);
+  sss.anisotropy = clamp(SubsurfaceScatterAnisotropy, -1.0, 1.0);
+  /* Coat. */
+  Coat coat;
+  coat.weight = saturate(CoatWeight);
+  coat.tint = saturate(CoatColor);
+  coat.roughness = saturate(CoatRoughness);
+  coat.anisotropy = saturate(CoatRoughnessAnisotropy);
+  coat.ior = max(CoatIOR, 0.0);
+  coat.darkening = saturate(CoatDarkening);
+  /* Fuzz. */
+  float fuzz_weight = saturate(FuzzWeight);
+  color fuzz_color = saturate(FuzzColor);
+  float fuzz_roughness = saturate(FuzzRoughness);
+  /* Emission */
+  float emission_luminance = max(EmissionLuminance, 0.0);
+  color emission_color = max(EmissionColor, color(0.0));
+  /* Thin film. */
+  ThinFilm thin_film;
+  thin_film.weight = saturate(ThinFilmWeight);
+  thin_film.thickness = max(ThinFilmThickness, 0.0) * 1000.0;
+  thin_film.ior = max(ThinFilmIOR, 0.0);
+  /* Geometry. */
+  float geometry_opacity = saturate(GeometryOpacity);
+  int thin_walled = GeometryThinWalled;
+  normal T = GeometryTangent;
+  coat.N = GeometryCoatNormal;
+  coat.T = GeometryCoatTangent;
+
+  /* Remove closures with low weight. */
+  base_metalness = closure_weight_cutoff(base_metalness);
+  transmission.weight = closure_weight_cutoff(transmission.weight);
+  /* TODO(weizhen): in SVM specular weight is only clamp for the gloss component, should make the
+   * two behave the same. */
+  specular.weight = closure_weight_cutoff(specular.weight);
+  sss.weight = closure_weight_cutoff(sss.weight);
+  base_weight = closure_weight_cutoff(base_weight);
+
+  /* Adjust parameters. */
+  if (!thin_walled && backfacing()) {
+    specular.ior = 1.0 / specular.ior;
+    thin_film.ior *= specular.ior;
+  }
+  specular.ior = openpbr_specular_ior(specular.ior, specular.weight, coat.weight, coat.ior);
+  color weighted_base_color = base_weight * base_color;
+  vector2 alpha = openpbr_specular_roughness(specular.roughness, specular.anisotropy, coat);
+
+  /* Slabs. */
+  BSDF_T S_diffuse = openpbr_diffuse(weighted_base_color, base_diffuse_roughness, GeometryNormal);
+  BSDF_T S_gloss = openpbr_gloss(specular.tint, alpha, specular.ior, thin_film, GeometryNormal, T);
+  BSDF_T S_subsurface = openpbr_subsurface(
+      sss, thin_walled, base_diffuse_roughness, GeometryNormal);
+  BSDF_T S_translucent_base = openpbr_translucent(
+      specular.tint, transmission, alpha, specular.ior, thin_film, thin_walled, GeometryNormal, T);
+  BSDF_T S_metal = openpbr_metal(
+      weighted_base_color, specular.weight, specular.tint, alpha, thin_film, GeometryNormal, T);
+  BSDF_T S_coat = openpbr_coat(coat);
+  BSDF_T S_emission = uniform_edf(emission_luminance * emission_color);
+  BSDF_T S_fuzz = openpbr_fuzz(coat.weight, coat.N, fuzz_color, fuzz_roughness, GeometryNormal);
+
+  /* Final material composition. OpenPBR Surface Specification v1.1.1, Section 3. */
+  BSDF_T M_opaque_base = layer(S_gloss, mix(S_subsurface, S_diffuse, 1.0 - sss.weight));
+  BSDF_T M_dielectric_base = mix(M_opaque_base, S_translucent_base, transmission.weight);
+  BSDF_T M_base_substrate = mix(S_metal, M_dielectric_base, 1.0 - base_metalness) + S_emission;
+  BSDF_T M_coated_base = layer(S_coat, M_base_substrate, coat.weight);
+  BSDF_T M_surface = layer(S_fuzz, M_coated_base, fuzz_weight);
+
+  return mix(transparent(), M_surface, geometry_opacity);
+}

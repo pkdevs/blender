@@ -2,13 +2,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
-/* FIXME(weizhen): we have two versions of `vector2.h` in osl and materialx libraries?? */
-#ifndef VECTOR2_H
-#  include "vector2.h"
-#endif
-#ifndef VECTOR4_H
-#  include "vector4.h"
-#endif
+#include "vector2.h"
+#include "vector4.h"
 
 #define vector3 point
 

@@ -144,7 +144,8 @@ principled_bsdf_emission(KernelGlobals kg,
   const float sheen_weight = fmaxf(stack_load(stack, data.sheen_weight), 0.0f);
 
   if (sheen_weight > CLOSURE_WEIGHT_CUTOFF) {
-    const float3 sheen_tint = max(stack_load(stack, data.sheen_tint), zero_float3());
+    const Spectrum sheen_tint = rgb_to_spectrum(
+        max(stack_load(stack, data.sheen_tint), zero_float3()));
     const float sheen_roughness = saturatef(stack_load(stack, data.sheen_roughness));
     const float3 coat_normal = safe_normalize_fallback(
         stack_load_float3_default(stack, data.coat_normal_offset, *N), sd->N);
