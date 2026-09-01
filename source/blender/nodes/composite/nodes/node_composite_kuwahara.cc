@@ -846,7 +846,6 @@ static void node_register()
       ntype, "NodeKuwaharaData", node_free_standard_storage, node_copy_standard_storage);
   ntype.get_compositor_operation = get_compositor_operation;
   ntype.default_width = bke::NodeWidth::_160;
-  // ntype.compositor_usage = bke::NodeCompositorUsage::None;
 
   bke::node_register_type(ntype);
 }

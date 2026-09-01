@@ -586,21 +586,6 @@ const EnumPropertyItem rna_enum_node_compositor_interpolation_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-/** Matches #bke::NodeCompositorUsage. */
-static const EnumPropertyItem rna_enum_node_compositor_usage_items[] = {
-    {int(bke::NodeCompositorUsage::SceneEffect),
-     "SCENE_EFFECT",
-     0,
-     "Scene Effect",
-     "The node can be used as a scene compositor effect"},
-    {int(bke::NodeCompositorUsage::StripModifier),
-     "STRIP_MODIFIER",
-     0,
-     "Strip Modifier",
-     "The node can be used as a sequencer strip modifier"},
-    {0, nullptr, 0, nullptr, nullptr},
-};
-
 const EnumPropertyItem rna_enum_node_grease_pencil_merge_mode_items[] = {
     {GEO_NODE_MERGE_LAYERS_BY_NAME,
      "MERGE_BY_NAME",
@@ -2043,17 +2028,6 @@ static void rna_Node_draw_label(const bNodeTree *ntree,
 static bool rna_Node_is_registered_node_type(StructRNA *type)
 {
   return (RNA_struct_blender_type_get(type) != nullptr);
-}
-
-static bool rna_Node_is_compositor_usage_allowed(const char *type, const int usage)
-{
-  /* If the given idname is an alias, translate it to the proper idname. */
-  const bke::bNodeType *ntype = bke::node_type_find(bke::node_type_find_alias(UString(type)));
-  if (ntype == nullptr) {
-    return false;
-  }
-  return (ntype->compositor_usage & bke::NodeCompositorUsage(usage)) !=
-         bke::NodeCompositorUsage::None;
 }
 
 static bool rna_Node_is_builtin(bke::bNodeType *nt)
@@ -9882,25 +9856,6 @@ static void rna_def_node(BlenderRNA *brna)
   func = RNA_def_function(srna, "is_registered_node_type", "rna_Node_is_registered_node_type");
   RNA_def_function_ui_description(func, "True if a registered node type");
   RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_SELF_TYPE);
-  parm = RNA_def_boolean(func, "result", false, "Result", "");
-  RNA_def_function_return(func, parm);
-
-  func = RNA_def_function(
-      srna, "is_compositor_usage_allowed", "rna_Node_is_compositor_usage_allowed");
-  RNA_def_function_ui_description(func,
-                                  "True if the node type can be used in the given way, false for "
-                                  "node types which opted out of it or which are not registered");
-  RNA_def_function_flag(func, FUNC_NO_SELF);
-  parm = RNA_def_string(
-      func, "type", nullptr, MAX_NAME, "Type", "Identifier of the node type to check");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_enum(func,
-                      "usage",
-                      rna_enum_node_compositor_usage_items,
-                      int(bke::NodeCompositorUsage::SceneEffect),
-                      "Usage",
-                      "The way the node would be used");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_boolean(func, "result", false, "Result", "");
   RNA_def_function_return(func, parm);
 

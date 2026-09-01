@@ -222,7 +222,6 @@ static void node_register()
   ntype.nclass = NODE_CLASS_OP_FILTER;
   ntype.declare = node_declare;
   ntype.get_compositor_operation = get_compositor_operation;
-  ntype.compositor_usage = bke::NodeCompositorUsage::None;
 
   blender::bke::node_register_type(ntype);
 }

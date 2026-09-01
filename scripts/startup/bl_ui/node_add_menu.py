@@ -520,7 +520,8 @@ class CompositorEffectMenu(NodeMenu):
     def node_type_supported(cls, node_type):
         # todo(habib): doc
         # todo(habib): could do without it?
-        return bpy.types.Node.is_compositor_usage_allowed(node_type, 'SCENE_EFFECT')
+        # return bpy.types.Node.is_compositor_usage_allowed(node_type, 'SCENE_EFFECT')
+        return True
 
     @classmethod
     def draw_assets_for_catalog(cls, _layout, _catalog_path):
