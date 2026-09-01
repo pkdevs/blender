@@ -54,8 +54,9 @@ static void version_update_draw_body(const bke::VersionUpdate &update,
   ui::Button *button = uiDefBut(
       layout.block(),
       ui::ButtonType::But,
-      is_unique_update ? IFACE_("Skip This Version") :
-                         fmt::format(fmt::runtime(IFACE_("Skip {}")), update.version_str).c_str(),
+      is_unique_update ?
+          IFACE_("Skip This Version") :
+          fmt::format(fmt::runtime(IFACE_("Skip {}")), update.version.to_string()).c_str(),
       0,
       0,
       5.0f * UI_UNIT_X,
@@ -67,7 +68,7 @@ static void version_update_draw_body(const bke::VersionUpdate &update,
   ui::button_func_set(button, [update_info = &update, block = layout.block()](bContext &C) {
     bke::ignore_update(C, update_info);
     WM_event_add_notifier(&C, NC_WINDOW, nullptr);
-    if (!bke::have_available_updates(C) && ui::block_is_popup(block)) {
+    if (!bke::have_available_updates() && ui::block_is_popup(block)) {
       ui::popup_block_close(&C, CTX_wm_window(&C), block);
     }
   });
@@ -94,7 +95,7 @@ static void panel_blender_updates_draw(const bContext *C, Panel *panel)
                                    "New release available {} - {}" :
                                    "New bugfix release available: {} - {}";
     header.label(fmt::format(fmt::runtime(IFACE_(release_text)),
-                             update.version_str + (update.is_lts ? " LTS" : ""),
+                             update.version.to_string() + (update.is_lts ? " LTS" : ""),
                              update.date()),
                  ICON_NONE);
     ui::Layout &sub = header.row(false);
@@ -129,16 +130,17 @@ static void panel_blender_updates_draw(const bContext *C, Panel *panel)
   });
   ui::button_drawflag_disable(button, ui::BUT_TEXT_RIGHT);
   for (const bke::VersionUpdate *update : available_updates) {
-    ui::PanelLayout panel_layout = layout.panel(C, "Update_" + update->version_str, false);
+    ui::PanelLayout panel_layout = layout.panel(C, "Update_" + update->version.to_string(), false);
     std::string version_type = update->ui_track_type == bke::TrackType::CurrentRelease ?
                                    "current release" :
                                    (update->ui_track_type == bke::TrackType::LatestLTS ?
                                         "latest LTS" :
                                         "latest");
-    panel_layout.header->label(
-        fmt::format(
-            "Blender {} ({}) - {}", update->version_str, IFACE_(version_type), update->date()),
-        ICON_NONE);
+    panel_layout.header->label(fmt::format("Blender {} ({}) - {}",
+                                           update->version.to_string(),
+                                           IFACE_(version_type),
+                                           update->date()),
+                               ICON_NONE);
     /* Avoid default layout panels spacing, to prevent last panel not matching popover bounds. */
     if (update != available_updates.last()) {
       layout.separator(0.25f);

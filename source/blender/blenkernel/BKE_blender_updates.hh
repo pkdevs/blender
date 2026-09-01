@@ -23,11 +23,20 @@ struct BlenderVersion {
   int version;
   int patch;
   friend auto operator<=>(const BlenderVersion &a, const BlenderVersion &b) = default;
+  std::string to_string() const;
 };
+
 enum class TrackType {
   Latest,
   LatestLTS,
   CurrentRelease,
+};
+
+enum class CycleType {
+  Release,
+  Alpha,
+  Beta,
+  RC,
 };
 
 /** Version update notification. */
@@ -37,12 +46,11 @@ struct VersionUpdate {
   std::string commit_hash;
   std::string description;
   std::string download_url;
-  std::string cycle;
+  CycleType cycle;
   bool is_lts;
   std::string platform;
   std::string release_notes_url;
   std::string timestamp;
-  std::string version_str;
   std::time_t time;
 
   BlenderVersion version;
@@ -58,7 +66,7 @@ struct VersionUpdate {
  */
 void check_for_available_updates(bContext &C);
 
-bool have_available_updates(bContext &C);
+bool have_available_updates();
 
 /** Loads available updates notifications from the cache file, it may check for updates if the
  * cache is expired. */
@@ -85,9 +93,15 @@ void check_for_updates_set_finished();
 void blender_updates_clear_tracks(bContext *C);
 void blender_updates_add_update_track(bContext *C,
                                       BlenderVersion version,
-                                      bool is_lts,
-                                      StringRefNull download_url,
+                                      int64_t build_size,
+                                      StringRefNull checksum_hash,
+                                      StringRefNull commit_hash,
                                       StringRefNull description,
+                                      StringRefNull download_url,
+                                      CycleType cycle,
+                                      bool is_lts,
+                                      StringRefNull platform,
+                                      StringRefNull release_notes_url,
                                       StringRefNull timestamp,
                                       TrackType track_type);
 void blender_updates_set_ignored_version(bContext *C,

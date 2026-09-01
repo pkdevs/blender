@@ -63,9 +63,15 @@ def _update_blender_tracks():
         bpy.types.WindowManager.blender_updates_add_update_track(
             version_number=track.version.version,
             version_patch=track.version.patch,
-            is_lts=track.is_lts,
-            download_url=track.download_url,
+            build_size=track.build_size,
+            checksum_hash=track.checksum_hash,
+            commit_hash=track.commit_hash,
             description=track.description,
+            download_url=track.download_url,
+            cycle=track.cycle,
+            is_lts=track.is_lts,
+            platform=track.platform,
+            release_notes_url=track.release_notes_url,
             timestamp=track.timestamp.strftime(_timestamp_format()),
             track_type=track_type
         )

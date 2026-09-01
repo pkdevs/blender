@@ -937,17 +937,29 @@ static void rna_blender_updates_clear_tracks(bContext *C)
 static void rna_blender_updates_add_update_track(bContext *C,
                                                  int version_number,
                                                  int version_patch,
-                                                 bool is_lts,
-                                                 const char *download_url,
+                                                 int build_size,
+                                                 const char *checksum_hash,
+                                                 const char *commit_hash,
                                                  const char *description,
+                                                 const char *download_url,
+                                                 int cycle,
+                                                 bool is_lts,
+                                                 const char *platform,
+                                                 const char *release_notes_url,
                                                  const char *timestamp,
                                                  int track_type)
 {
   bke::blender_updates_add_update_track(C,
                                         {version_number, version_patch},
-                                        is_lts,
-                                        download_url,
+                                        build_size,
+                                        checksum_hash,
+                                        commit_hash,
                                         description,
+                                        download_url,
+                                        bke::CycleType(cycle),
+                                        is_lts,
+                                        platform,
+                                        release_notes_url,
                                         timestamp,
                                         bke::TrackType(track_type));
 }
@@ -1989,6 +2001,15 @@ void RNA_api_asset_library_loading_status(StructRNA *srna)
       {int(bke::TrackType::CurrentRelease), "CURRENT_RELEASE", 0, "Current Release", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
+
+  static EnumPropertyItem update_cycle_type[] = {
+      {int(bke::CycleType::Release), "release", 0, "Release", ""},
+      {int(bke::CycleType::Alpha), "alpha", 0, "Alpha", ""},
+      {int(bke::CycleType::Beta), "beta", 0, "Beta", ""},
+      {int(bke::CycleType::RC), "rc", 0, "Release Candidate", ""},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
   func = RNA_def_function(
       srna, "blender_updates_add_update_track", "rna_blender_updates_add_update_track");
   RNA_def_function_ui_description(func, "Loads ignored update versions");
@@ -2005,11 +2026,23 @@ void RNA_api_asset_library_loading_status(StructRNA *srna)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_int(func, "version_patch", 0, 0, INT_MAX, "", "", 0, INT_MAX);
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_boolean(func, "is_lts", false, "", "");
+  parm = RNA_def_int(func, "build_size", 0, 0, INT_MAX, "", "", 0, INT_MAX);
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(func, "checksum_hash", nullptr, 0, "", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(func, "commit_hash", nullptr, 0, "", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(func, "description", nullptr, 0, "", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_string(func, "download_url", nullptr, 0, "", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
-  parm = RNA_def_string(func, "description", nullptr, 0, "", "");
+  parm = RNA_def_enum(func, "cycle", update_cycle_type, int(bke::CycleType::Release), "", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_boolean(func, "is_lts", false, "", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(func, "platform", nullptr, 0, "", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(func, "release_notes_url", nullptr, 0, "", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_string(func, "timestamp", nullptr, 0, "", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);

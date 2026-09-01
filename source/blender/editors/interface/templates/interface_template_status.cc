@@ -518,7 +518,7 @@ void uiTemplateStatusInfo(Layout *layout, bContext *C)
     }
 #ifdef WITH_BLENDER_UPDATES_NOTIFICATIONS
     if (U.statusbar_flag & STATUSBAR_SHOW_BLENDER_UPDATES_DIALOG) {
-      if (bke::have_available_updates(*C)) {
+      if (bke::have_available_updates()) {
         if (has_status_info) {
           row.separator(-0.5f);
           row.label("|", ICON_NONE);
@@ -530,7 +530,8 @@ void uiTemplateStatusInfo(Layout *layout, bContext *C)
         std::string update_text;
         if (updates.size() == 1) {
           update_text = fmt::format(fmt::runtime(IFACE_("Update to {}")),
-                                    updates[0]->version_str + (updates[0]->is_lts ? " LTS" : ""));
+                                    updates[0]->version.to_string() +
+                                        (updates[0]->is_lts ? " LTS" : ""));
         }
         else {
           update_text = IFACE_("Updates Available");

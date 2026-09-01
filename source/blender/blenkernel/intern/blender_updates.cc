@@ -55,6 +55,11 @@ std::string VersionUpdate::date() const
   return date_string::date(local_time, BLT_lang_get(), date_string::DateFormat(U.date_format));
 }
 
+std::string BlenderVersion::to_string() const
+{
+  return fmt::format("{}.{}.{}", this->version / 100, this->version % 100, this->patch);
+}
+
 /** Parses `%Y-%m-%dT%H:%M:%SZ` formatted timestamps strings as #std::chrono::sys_seconds. */
 static std::optional<std::chrono::sys_seconds> parse_timestamp_to_sys_seconds(
     StringRefNull timestamp)
@@ -101,19 +106,29 @@ void blender_updates_clear_tracks(bContext *C)
 
 void blender_updates_add_update_track(bContext *C,
                                       BlenderVersion version,
-                                      bool is_lts,
-                                      StringRefNull download_url,
+                                      int64_t build_size,
+                                      StringRefNull checksum_hash,
+                                      StringRefNull commit_hash,
                                       StringRefNull description,
+                                      StringRefNull download_url,
+                                      CycleType cycle,
+                                      bool is_lts,
+                                      StringRefNull platform,
+                                      StringRefNull release_notes_url,
                                       StringRefNull timestamp,
                                       TrackType track_type)
 {
   VersionUpdate update = {};
-  update.version_str = fmt::format(
-      "{}.{}.{}", version.version / 100, version.version % 100, version.patch);
   update.version = version;
-  update.is_lts = is_lts;
-  update.download_url = download_url;
+  update.build_size = build_size;
+  update.checksum_hash = checksum_hash;
+  update.commit_hash = commit_hash;
   update.description = description;
+  update.download_url = download_url;
+  update.cycle = cycle;
+  update.is_lts = is_lts;
+  update.platform = platform;
+  update.release_notes_url = release_notes_url;
   update.timestamp = timestamp;
 
   std::optional<std::chrono::sys_seconds> time = parse_timestamp_to_sys_seconds(timestamp);
@@ -274,7 +289,7 @@ void check_for_available_updates(bContext &C)
   download_available_updates_list(C);
 }
 
-bool have_available_updates(bContext &C)
+bool have_available_updates()
 {
   if (!updates_notifications_flags()) {
     return false;

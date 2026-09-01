@@ -3760,7 +3760,7 @@ static wmOperatorStatus check_for_updates_modal(bContext *C, wmOperator *op, con
                 RPT_ERROR,
                 "Something went wrong when looking for new updates, please try again later.");
   }
-  else if (bke::have_available_updates(*C)) {
+  else if (bke::have_available_updates()) {
     wmOperatorType *ot = WM_operatortype_find("WM_OT_call_panel", false);
     PointerRNA op_ptr = WM_operator_properties_create_ptr(ot);
     RNA_string_set(&op_ptr, "name", "STATUS_PT_blender_updates");
