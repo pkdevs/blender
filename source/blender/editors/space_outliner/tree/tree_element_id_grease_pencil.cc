@@ -29,6 +29,7 @@ void TreeElementIDGreasePencil::expand(SpaceOutliner & /*space_outliner*/) const
   expand_animation_data(grease_pencil_.adt);
 
   expand_layer_tree();
+  expand_materials();
 }
 
 void TreeElementIDGreasePencil::expand_layer_tree() const
@@ -36,6 +37,18 @@ void TreeElementIDGreasePencil::expand_layer_tree() const
   for (GreasePencilLayerTreeNode &child : grease_pencil_.root_group().children.items_reversed()) {
     add_element(
         &legacy_te_.subtree, &grease_pencil_.id, &child, &legacy_te_, TSE_GREASE_PENCIL_NODE, 0);
+  }
+}
+
+void TreeElementIDGreasePencil::expand_materials() const
+{
+  for (int a = 0; a < grease_pencil_.material_array_num; a++) {
+    add_element(&legacy_te_.subtree,
+                reinterpret_cast<ID *>(grease_pencil_.material_array[a]),
+                nullptr,
+                &legacy_te_,
+                TSE_SOME_ID,
+                a);
   }
 }
 
