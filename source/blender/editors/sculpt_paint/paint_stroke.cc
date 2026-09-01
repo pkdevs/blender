@@ -544,14 +544,9 @@ void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float
      * this, the first recorded roll point ends up one spacing step away from
      * the real mouse-down position. */
     if (need_roll_mapping_ && is_location_is_set) {
-      const float3 sn = (vc.obact && vc.obact->runtime->sculpt_session &&
-                         vc.obact->runtime->sculpt_session->cache) ?
-                            vc.obact->runtime->sculpt_session->cache->sculpt_normal :
-                            float3(0);
       add_roll_point(mval,
                      mouse_out,
                      location,
-                     sn,
                      paint_runtime->pixel_radius,
                      pressure,
                      pen_flip_,
@@ -561,21 +556,14 @@ void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float
     return;
   }
 
-  {
-    const float3 sn = (vc.obact && vc.obact->runtime->sculpt_session &&
-                       vc.obact->runtime->sculpt_session->cache) ?
-                          vc.obact->runtime->sculpt_session->cache->sculpt_normal :
-                          float3(0);
-    add_roll_point(mval,
-                   mouse_out,
-                   location,
-                   sn,
-                   paint_runtime->pixel_radius,
-                   pressure,
-                   pen_flip_,
-                   tilt_.x,
-                   tilt_.y);
-  }
+  add_roll_point(mval,
+                 mouse_out,
+                 location,
+                 paint_runtime->pixel_radius,
+                 pressure,
+                 pen_flip_,
+                 tilt_.x,
+                 tilt_.y);
 
   if (need_roll_mapping_) {
     make_roll_spline(C);
@@ -607,7 +595,7 @@ void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float
 
   if (need_roll_mapping_) {
     constexpr int buf_cap = PAINT_MAX_INPUT_SAMPLES;
-    const int half = (roll_max_points() * 3) / 5 + 2;
+    const int half = roll_half_points();
 
     /* Wait until there are enough real spline segments ahead of the dab
      * position to cover the full brush footprint (≈1 brush radius forward).

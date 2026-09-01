@@ -114,19 +114,15 @@ inline constexpr float MIN_ROLL_PRESSURE = 0.05f;
 struct RollSpline {
   Vector<float2> poly_2d;
   Vector<float3> poly_3d;
-  Vector<float> lengths_2d;
+  /** Cumulative 3D arc length at the end of each segment. */
   Vector<float> lengths_3d;
   /** Smooth tangents at each polyline vertex (central-difference). */
   Vector<float3> tangents_3d;
   /** Per-vertex pen pressure (0..1). Used to compute variable strip width. */
   Vector<float> pressures;
-  /** Per-vertex surface normal (frozen at recording time). */
-  Vector<float3> normals;
 
   void clear();
   bool is_empty() const;
-  float total_length_2d() const;
-  float total_length_3d() const;
   void update_lengths();
 
   /** Length of segment `seg_idx` (difference of consecutive cumulative lengths). */
@@ -135,18 +131,16 @@ struct RollSpline {
     return lengths_3d[seg_idx] - (seg_idx > 0 ? lengths_3d[seg_idx - 1] : 0.0f);
   }
 
-  float3 evaluate_3d(float s) const;
   float2 tangent_2d_at_index(int poly_idx) const;
 
-  /** Find closest point on the 3D polyline. */
-  void closest_point_3d(const float3 &query, float &r_s, float3 &r_tan, float &r_dis) const;
+  /** Arc length of the closest point on the 3D polyline to `query`. */
+  float closest_point_arc_length(const float3 &query) const;
 };
 
 struct PaintStrokePoint {
   float2 mouse_in;
   float2 mouse_out;
   float3 location;
-  float3 surface_normal = float3(0, 0, 1); /* sculpt_normal at recording time */
   float pressure = 0.0f;
   float x_tilt = 0.0f;
   float y_tilt = 0.0f;
@@ -310,18 +304,22 @@ struct PaintStroke : NonCopyable, NonMovable {
   }
 
   /**
-   * Compute roll-mapping UV coordinates for a 3D point along the stroke spline.
-   * \param cache: The sculpt stroke cache (for view_normal).
-   * \param co: Object-space position to project.
-   * \param r_out: Output: [distance_to_spline, arc_length_along_spline, 0].
-   * \param r_tan: Output: tangent at the closest spline point.
+   * Sample the roll-mapping UV for an object-space position by projecting it
+   * onto the per-dab LUT built by compute_roll_center().
+   * \param cache: The sculpt stroke cache holding the LUT.
+   * \param co: Object-space position to sample.
+   * \param r_out: [0]: across-strip U, normalized so the strip borders are at
+   * ±1 (sign flipped for texture X); FLT_MAX when the position cannot be
+   * mapped (outside the LUT, or LUT not built). [1]: along-stroke V — raw arc
+   * length, or pressure-normalized when roll_pressure_scale is active —
+   * including the continuity offsets for consumed knots and the virtual
+   * extension. [2]: always 0.
+   * \param r_tan: Strip tangent (along-stroke direction) at the sample.
    */
   void spline_uv(const StrokeCache &cache,
                  const float co[3],
                  float r_out[3],
                  float r_tan[3]) const;
-
-  float spline_length() const;
 
   /** Returns true when roll texture mapping is active for this stroke. */
   bool need_roll_mapping() const
@@ -330,9 +328,10 @@ struct PaintStroke : NonCopyable, NonMovable {
   }
 
   /**
-   * Precompute the arc-length, position and tangent on the world spline for the
-   * brush center. Call this once per dab (single-threaded) before the per-vertex
-   * parallel loop. Stores results into StrokeCache for use by spline_uv().
+   * Build the roll strip surface for the current dab: border curves with
+   * self-intersection collapse, the subdivided + smoothed grid, and the UV
+   * lookup table used by spline_uv(). Call once per dab (single-threaded)
+   * before the per-vertex parallel loop.
    */
   void compute_roll_center(StrokeCache &cache);
 
@@ -402,7 +401,6 @@ struct PaintStroke : NonCopyable, NonMovable {
   void add_roll_point(const float2 &mouse_in,
                       const float2 &mouse_out,
                       const float3 &loc,
-                      const float3 &surface_normal,
                       float size,
                       float pressure,
                       bool pen_flip,

@@ -5940,9 +5940,9 @@ void SculptPaintStroke::update_step(wmOperator * /*op*/, PointerRNA *itemptr)
   stroke_cache_update(this->vc, depsgraph, sd.paint, ob, itemptr);
   restore_from_undo_step_if_necessary(depsgraph, sd, ob);
 
-  /* Precompute roll-mapping center data once per dab (single-threaded) so
-   * that the per-vertex parallel loop in sculpt_apply_texture can use the
-   * fast Newton projection path instead of a full closest-point search. */
+  /* Build the roll-mapping strip grid and UV lookup table once per dab
+   * (single-threaded) so the per-vertex parallel loop in
+   * sculpt_apply_texture() can sample UVs with O(1) LUT lookups. */
   if (cache->stroke && cache->stroke->need_roll_mapping()) {
     cache->stroke->compute_roll_center(*cache);
   }

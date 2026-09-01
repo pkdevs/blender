@@ -83,11 +83,9 @@ void RollSpline::clear()
 {
   poly_2d.clear();
   poly_3d.clear();
-  lengths_2d.clear();
   lengths_3d.clear();
   tangents_3d.clear();
   pressures.clear();
-  normals.clear();
 }
 
 bool RollSpline::is_empty() const
@@ -95,27 +93,9 @@ bool RollSpline::is_empty() const
   return poly_3d.size() < 2;
 }
 
-float RollSpline::total_length_2d() const
-{
-  return lengths_2d.is_empty() ? 0.0f : lengths_2d.last();
-}
-
-float RollSpline::total_length_3d() const
-{
-  return lengths_3d.is_empty() ? 0.0f : lengths_3d.last();
-}
-
 void RollSpline::update_lengths()
 {
-  const int n2d = int(poly_2d.size());
   const int n3d = int(poly_3d.size());
-  if (n2d >= 2) {
-    lengths_2d.reinitialize(length_parameterize::segments_num(n2d, false));
-    length_parameterize::accumulate_lengths(poly_2d.as_span(), false, lengths_2d);
-  }
-  else {
-    lengths_2d.clear();
-  }
   if (n3d >= 2) {
     lengths_3d.reinitialize(length_parameterize::segments_num(n3d, false));
     length_parameterize::accumulate_lengths(poly_3d.as_span(), false, lengths_3d);
@@ -147,18 +127,7 @@ float2 RollSpline::tangent_2d_at_index(int idx) const
   return (len > 1e-7f) ? d / len : float2(1, 0);
 }
 
-float3 RollSpline::evaluate_3d(float s) const
-{
-  int seg_idx;
-  float factor;
-  length_parameterize::sample_at_length(lengths_3d, s, seg_idx, factor);
-  return math::interpolate(poly_3d[seg_idx], poly_3d[seg_idx + 1], factor);
-}
-
-void RollSpline::closest_point_3d(const float3 &query,
-                                  float &r_s,
-                                  float3 &r_tan,
-                                  float &r_dis) const
+float RollSpline::closest_point_arc_length(const float3 &query) const
 {
   float best_dist_sq = FLT_MAX;
   int best_seg = 0;
@@ -181,10 +150,7 @@ void RollSpline::closest_point_3d(const float3 &query,
 
   const float seg_start = (best_seg > 0) ? lengths_3d[best_seg - 1] : 0.0f;
   const float seg_end = lengths_3d[best_seg];
-  r_s = seg_start + best_t * (seg_end - seg_start);
-  r_dis = sqrtf(best_dist_sq);
-  r_tan = math::normalize(
-      math::interpolate(tangents_3d[best_seg], tangents_3d[best_seg + 1], best_t));
+  return seg_start + best_t * (seg_end - seg_start);
 }
 
 /** \} */
@@ -212,7 +178,6 @@ int PaintStroke::roll_max_points() const
 void PaintStroke::add_roll_point(const float2 &mouse_in,
                                  const float2 &mouse_out,
                                  const float3 &loc,
-                                 const float3 &surface_normal,
                                  float size,
                                  float pressure,
                                  bool pen_flip,
@@ -292,9 +257,6 @@ void PaintStroke::add_roll_point(const float2 &mouse_in,
     point->pen_flip = pen_flip;
 
     point->location = loc;
-    point->surface_normal = (math::length_squared(surface_normal) > 1e-8f) ?
-                                math::normalize(surface_normal) :
-                                float3(0, 0, 1);
     /* Clamp pressure — pen touch-down and lift-off report near-zero values
      * that would create an extreme width spike in the roll strip. */
     point->pressure = std::max(pressure, MIN_ROLL_PRESSURE);
@@ -518,8 +480,8 @@ void PaintStroke::make_roll_spline(bContext * /*C*/)
   const int oldest = (cur_point_ - num_points_ + buf_cap) % buf_cap;
 
   /* Combine backward extension + real knots directly as polyline.
-   * No curve evaluation — the grid/CC/LUT surface algorithm handles
-   * smoothing at a higher level. */
+   * No curve evaluation — smoothing happens later on the strip grid
+   * (B-spline subdivision + Laplacian in compute_roll_center()). */
   roll_spline_.clear();
   roll_spline_.poly_2d.extend(backward_ext_2d_);
   roll_spline_.poly_3d.extend(backward_ext_3d_);
@@ -541,18 +503,12 @@ void PaintStroke::make_roll_spline(bContext * /*C*/)
       }
     }
     extrapolate_pressures(base_p, ratio, n_back, true, roll_spline_.pressures);
-    /* Virtual backward extension: use oldest real point's surface normal. */
-    const float3 back_n = (num_points_ > 0) ? points_[oldest].surface_normal : float3(0, 0, 1);
-    for (int i = 0; i < n_back; i++) {
-      roll_spline_.normals.append(back_n);
-    }
   }
   for (int i = 0; i < num_points_; i++) {
     const int idx = (oldest + i) % buf_cap;
     roll_spline_.poly_2d.append(points_[idx].mouse_out);
     roll_spline_.poly_3d.append(points_[idx].location);
     roll_spline_.pressures.append(points_[idx].pressure);
-    roll_spline_.normals.append(points_[idx].surface_normal);
   }
 
   n_virtual_poly_points_ = int(backward_ext_2d_.size());
@@ -623,15 +579,12 @@ void PaintStroke::finish_roll_stroke(bContext *C,
     float3 location;
     bool is_location_is_set;
     update(C, brush, mode, mouse_up, mouse_out, pressure, location, &is_location_is_set);
-    /* Use last point's surface normal for the finish point. */
     const int last_idx = (cur_point_ - 1 + PAINT_MAX_INPUT_SAMPLES) % PAINT_MAX_INPUT_SAMPLES;
-    const float3 last_sn = (num_points_ > 0) ? points_[last_idx].surface_normal : float3(0, 0, 1);
 
     if (is_location_is_set) {
       add_roll_point(mouse_up,
                      mouse_out,
                      location,
-                     last_sn,
                      paint_runtime->pixel_radius,
                      pressure,
                      pen_flip_,
@@ -643,7 +596,6 @@ void PaintStroke::finish_roll_stroke(bContext *C,
       add_roll_point(mouse_up,
                      mouse_out,
                      points_[last_idx].location,
-                     last_sn,
                      points_[last_idx].size,
                      pressure,
                      pen_flip_,
@@ -715,10 +667,6 @@ void PaintStroke::finish_roll_stroke(bContext *C,
         }
         extrapolate_pressures(p_new, ratio, n_forward, false, roll_spline_.pressures);
       }
-      /* Forward extension: use newest point's surface normal. */
-      for (int i = 0; i < n_forward; i++) {
-        roll_spline_.normals.append(points_[newest].surface_normal);
-      }
 
       roll_spline_.update_lengths();
     }
@@ -758,7 +706,10 @@ void PaintStroke::finish_roll_stroke(bContext *C,
   const int newest = (cur_point_ - 1 + buf_cap) % buf_cap;
   int idx = (flush_start + 1) % buf_cap;
 
-  while (idx != newest) {
+  /* Bounded by the number of recorded points as a safety net — a stale
+   * flush_start must never make the walk loop around the ring buffer. */
+  int remaining = num_points_;
+  while (idx != newest && remaining-- > 0) {
     PaintStrokePoint *point = &points_[idx];
 
     PointerRNA itemptr;
@@ -861,35 +812,13 @@ static void expand_grid_columns(Vector<float3> &grid_pos,
 void PaintStroke::compute_roll_center(StrokeCache &cache)
 {
   if (roll_spline_.is_empty()) {
-    cache.roll_center_s = -1.0f;
     return;
   }
-  float raw_s, dis;
-  float3 tan;
-  /* Full closest-point search, called once per dab on the main thread. */
-  roll_spline_.closest_point_3d(cache.location, raw_s, tan, dis);
-  cache.roll_center_s = raw_s;
-  cache.roll_center_pos = roll_spline_.evaluate_3d(raw_s);
-  cache.roll_tangent = tan;
-
-  /* Precompute polyline segment search range for per-vertex UV lookups. */
+  /* Arc length of the dab center on the spline — anchors the LUT evaluation
+   * window.  Full closest-point search, called once per dab on the main
+   * thread. */
+  const float raw_s = roll_spline_.closest_point_arc_length(cache.location);
   const Span<float> lengths = roll_spline_.lengths_3d.as_span();
-  const int n_segs = int(roll_spline_.poly_3d.size()) - 1;
-
-  const float search_r = cache.initial_radius * 3.0f;
-  const float s_lo = std::max(0.0f, raw_s - search_r);
-  /* Extend forward to include the newest stroke points (trailing segment).
-   * This ensures the grid covers the area between the dab and the mouse,
-   * which is needed for proper self-intersection detection and UV mapping
-   * near the stroke tip. */
-  const float s_hi = std::min(lengths.last(), raw_s + search_r * 2.0f);
-
-  float fac;
-  length_parameterize::sample_at_length(lengths, s_lo, cache.roll_seg_lo, fac);
-  length_parameterize::sample_at_length(lengths, s_hi, cache.roll_seg_hi, fac);
-  cache.roll_seg_hi = std::min(cache.roll_seg_hi, n_segs - 1);
-
-  length_parameterize::sample_at_length(lengths, raw_s, cache.roll_center_seg, fac);
 
   /* Surface interpolation: precompute border curves for the search range.
    * Each polyline vertex gets a binormal (perpendicular to tangent in the
@@ -912,26 +841,22 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
       roll_initial_radius_ = R;
     }
 
-    /* Use a stable projection normal for binormal computation and 2D
-     * projection.  Frozen on the first dab so that border positions and
-     * self-intersection merges don't flicker as the brush moves across
-     * a curved surface (where sculpt_normal changes per dab). */
+    /* Fallback normal, frozen on the first dab (sculpt or view normal),
+     * for the rare dabs where sculpt_normal is degenerate. */
     if (math::length_squared(roll_proj_normal_) < 1e-8f) {
       roll_proj_normal_ = (math::length_squared(cache.sculpt_normal) > 1e-8f) ?
                               math::normalize(cache.sculpt_normal) :
                               math::normalize(cache.view_normal);
     }
-    const float3 proj_normal = roll_proj_normal_;
-    cache.roll_proj_normal = proj_normal;
 
-    cache.roll_binormals.reinitialize(count);
     cache.roll_border_left.reinitialize(count);
     cache.roll_border_right.reinitialize(count);
 
-    /* dab_normal: per-dab surface normal for the LUT projection. */
+    /* dab_normal: per-dab surface normal for the strip binormals and the
+     * LUT projection. */
     const float3 dab_normal = (math::length_squared(cache.sculpt_normal) > 1e-8f) ?
                                   math::normalize(cache.sculpt_normal) :
-                                  proj_normal;
+                                  roll_proj_normal_;
 
     for (int k = 0; k < count; k++) {
       const int vi = lo + k; /* polyline vertex index */
@@ -953,7 +878,6 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
           B = math::normalize(math::cross(T, float3(1, 0, 0)));
         }
       }
-      cache.roll_binormals[k] = B;
       const float Rk = (use_pressure_width && vi < int(roll_spline_.pressures.size())) ?
                            std::max(R * roll_spline_.pressures[vi], R * 0.01f) :
                            R;
@@ -973,9 +897,7 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
     /* Find border polyline self-intersections via 2D segment tests.
      *
      * Uses the per-dab surface normal for projection so the merge
-     * detection is view-independent and aligned with the LUT.  Border
-     * stability comes from the per-vertex frozen surface normals used
-     * for binormal computation, not from the merge projection normal. */
+     * detection is view-independent and aligned with the LUT. */
     float3 merge_x = math::cross(dab_normal, float3(0, 0, 1));
     if (math::length_squared(merge_x) < 1e-6f) {
       merge_x = math::cross(dab_normal, float3(1, 0, 0));
@@ -1497,9 +1419,8 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
         cache.roll_lut_ready = true;
       }
 
+      /* 3D grid kept only for the debug overlay. */
       cache.roll_subdiv_pos = std::move(grid_pos);
-      cache.roll_subdiv_pos_2d = std::move(grid_pos_2d);
-      cache.roll_subdiv_uv = std::move(grid_uv);
       cache.roll_view_x = view_x;
       cache.roll_view_y = view_y;
     }
@@ -1517,8 +1438,13 @@ void PaintStroke::spline_uv(const StrokeCache &cache,
    *
    * The grid's bilinear inverse is pre-rasterized into a 2D lookup table
    * once per dab.  Per-vertex evaluation is a simple 2D projection +
-   * bilinear sample of the LUT — no per-quad search needed.
-   * compute_roll_center() guarantees the LUT is ready before any dab. */
+   * bilinear sample of the LUT — no per-quad search needed. */
+  if (UNLIKELY(!cache.roll_lut_ready)) {
+    r_out[0] = FLT_MAX;
+    r_out[1] = r_out[2] = 0.0f;
+    zero_v3(r_tan);
+    return;
+  }
 
   constexpr int RES = StrokeCache::ROLL_LUT_RES;
   const float2 query = float2(math::dot(float3(co), cache.roll_view_x),
@@ -1660,11 +1586,6 @@ void PaintStroke::spline_uv(const StrokeCache &cache,
   else {
     r_out[1] += stroke_distance_world_ - roll_virtual_length_;
   }
-}
-
-float PaintStroke::spline_length() const
-{
-  return roll_spline_.total_length_3d();
 }
 
 void PaintStroke::draw_debug_roll(bContext *C) const

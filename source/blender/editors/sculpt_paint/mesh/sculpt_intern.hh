@@ -261,38 +261,23 @@ struct StrokeCache {
   /* Reference to the PaintStroke for roll texture mapping. */
   PaintStroke *stroke = nullptr;
 
-  /* Precomputed per-dab for fast roll texture mapping. Set by
+  /* Roll texture mapping strip, rebuilt per dab by
    * PaintStroke::compute_roll_center() in update_step() before the
-   * per-vertex parallel loop. When roll_center_s < 0 the fast path
-   * is disabled and spline_uv() falls back to the full closest_point(). */
-  float roll_center_s = -1.0f; /* raw arc-length on world_spline at brush center */
-  float3 roll_center_pos = {}; /* spline position at roll_center_s */
-  float3 roll_tangent = {};    /* normalized tangent at roll_center_s */
-  int roll_seg_lo = 0;         /* polyline segment search range (precomputed) */
-  int roll_seg_hi = 0;
-  int roll_center_seg = 0; /* segment index at roll_center_s */
-
-  /* Surface interpolation: border curves for quad-patch UV mapping.
-   * Computed per-dab in compute_roll_center() when the preference is enabled.
-   * Each vector has the same size as the polyline in [seg_lo, seg_hi+1]. */
+   * per-vertex parallel loop.  Border curves (with self-intersection
+   * collapse applied) and the subdivided grid are kept for the developer
+   * debug overlay; per-vertex sampling in spline_uv() only uses the LUT. */
   bool roll_surface_ready = false;
-  Vector<float3> roll_binormals;    /* binormal at each polyline vertex in search range */
   Vector<float3> roll_border_left;  /* center + binormal * radius */
   Vector<float3> roll_border_right; /* center - binormal * radius */
 
-  /** Subdivided poly-strip for smooth UV mapping.
-   * A quad strip (right_border → center → left_border) subdivided with
-   * linear column interpolation, stored as a regular grid [rows * cols],
-   * row-major. */
+  /** Subdivided strip grid (right border → center → left border),
+   * stored row-major as [rows * cols].  Used by the debug overlay. */
   int roll_subdiv_rows = 0;
   int roll_subdiv_cols = 0;
-  Vector<float3> roll_subdiv_pos;    /* 3D object-space grid (for tangent, debug draw) */
-  Vector<float2> roll_subdiv_pos_2d; /* 2D view-plane projection (for UV search) */
-  Vector<float2> roll_subdiv_uv;
-  float3 roll_proj_normal = {}; /* projection normal (sculpt_normal or view_normal fallback) */
-  float3 roll_view_x = {};      /* projection-plane X axis for 2D projection */
-  float3 roll_view_y = {};      /* projection-plane Y axis for 2D projection */
-  int roll_eval_row_lo = 0;     /* grid row range near dab for per-vertex search */
+  Vector<float3> roll_subdiv_pos; /* 3D object-space grid */
+  float3 roll_view_x = {};        /* projection-plane X axis for 2D projection */
+  float3 roll_view_y = {};        /* projection-plane Y axis for 2D projection */
+  int roll_eval_row_lo = 0;       /* grid row range rasterized into the LUT */
   int roll_eval_row_hi = 0;
 
   /* Pre-rasterized UV lookup table for fast per-vertex evaluation.
