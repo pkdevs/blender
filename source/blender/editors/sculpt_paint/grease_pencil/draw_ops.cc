@@ -688,6 +688,8 @@ struct GreasePencilFillOpData {
   bool show_boundaries;
   /* Draw extension lines overlay. */
   bool show_extension;
+  /* Is the method Delaunay. */
+  bool is_delaunay;
 
   /* Mouse position where fill was initialized */
   float2 fill_mouse_pos;
@@ -695,6 +697,9 @@ struct GreasePencilFillOpData {
   bool is_extension_drag_active = false;
   /* Mouse position where the extension mode was enabled. */
   float2 extension_mouse_pos;
+
+  /* All the points the mouse has been. Only used for the Delaunay method */
+  Vector<float2> mouse_path;
 
   /* Overlay draw callback for helper lines, etc. */
   void *overlay_cb_handle;
@@ -732,7 +737,8 @@ struct GreasePencilFillOpData {
             extension_length,
             extension_cut,
             show_boundaries,
-            show_extension};
+            show_extension,
+            is_delaunay};
   }
 };
 
@@ -1586,12 +1592,10 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
                                                              keep_images));
     }
     else {
-      /* TODO: For now only create a single point for the source of the fill algorithm. This should
-       * take multiple points in the future. */
-      const Array<int> fill_point_offset = {0, 1};
-      const Array<float2> fill_point_data = {mouse_position};
+      /* Take the full mouse path. */
+      const Array<int> fill_point_offset = {0, int(op_data.mouse_path.size())};
       const GroupedSpan<float2> fill_points = GroupedSpan<float2>(
-          OffsetIndices<int>(fill_point_offset), fill_point_data);
+          OffsetIndices<int>(fill_point_offset), op_data.mouse_path);
 
       const bool internal_gaps = (brush.gpencil_settings->flag & GP_BRUSH_FILL_INTERNAL_GAPS) != 0;
       const float gap_factor = brush.gpencil_settings->fill_gap_factor;
@@ -1935,41 +1939,53 @@ static wmOperatorStatus grease_pencil_fill_modal(bContext *C, wmOperator *op, co
   auto &op_data = *static_cast<GreasePencilFillOpData *>(op->customdata);
 
   wmOperatorStatus estate = OPERATOR_CANCELLED;
-  if (!op_data.show_extension) {
-    /* Apply fill immediately if "Visual Aids" (aka. extension lines) is disabled. */
-    op_data.fill_mouse_pos = float2(event->mval);
-    estate = (grease_pencil_apply_fill(*C, *op, *event) ? OPERATOR_FINISHED : OPERATOR_CANCELLED);
+  if (op_data.is_delaunay) {
+    op_data.mouse_path.append(float2(event->mval));
+    estate = OPERATOR_RUNNING_MODAL;
+
+    if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
+      estate = (grease_pencil_apply_fill(*C, *op, *event) ? OPERATOR_FINISHED :
+                                                            OPERATOR_CANCELLED);
+    }
   }
   else {
-    estate = OPERATOR_RUNNING_MODAL;
-    switch (event->type) {
-      case EVT_MODAL_MAP:
-        estate = grease_pencil_fill_event_modal_map(C, op, event);
-        break;
-      case MOUSEMOVE: {
-        if (!op_data.is_extension_drag_active) {
+    if (!op_data.show_extension) {
+      /* Apply fill immediately if "Visual Aids" (aka. extension lines) is disabled. */
+      op_data.fill_mouse_pos = float2(event->mval);
+      estate = (grease_pencil_apply_fill(*C, *op, *event) ? OPERATOR_FINISHED :
+                                                            OPERATOR_CANCELLED);
+    }
+    else {
+      estate = OPERATOR_RUNNING_MODAL;
+      switch (event->type) {
+        case EVT_MODAL_MAP:
+          estate = grease_pencil_fill_event_modal_map(C, op, event);
+          break;
+        case MOUSEMOVE: {
+          if (!op_data.is_extension_drag_active) {
+            break;
+          }
+
+          const Object &ob = *CTX_data_active_object(C);
+          const float pixel_size = ED_view3d_pixel_size(&rv3d, ob.loc);
+          const float2 mouse_pos = float2(event->mval);
+          const float initial_dist = math::distance(op_data.extension_mouse_pos,
+                                                    op_data.fill_mouse_pos);
+          const float current_dist = math::distance(mouse_pos, op_data.fill_mouse_pos);
+
+          float delta = (current_dist - initial_dist) * pixel_size * 0.5f;
+          op_data.extension_length = std::max(op_data.extension_length + delta, 0.0f);
+
+          /* Update cursor line and extend lines. */
+          WM_main_add_notifier(NC_GEOM | ND_DATA, nullptr);
+          WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
+
+          grease_pencil_update_extend(*C, op_data);
           break;
         }
-
-        const Object &ob = *CTX_data_active_object(C);
-        const float pixel_size = ED_view3d_pixel_size(&rv3d, ob.loc);
-        const float2 mouse_pos = float2(event->mval);
-        const float initial_dist = math::distance(op_data.extension_mouse_pos,
-                                                  op_data.fill_mouse_pos);
-        const float current_dist = math::distance(mouse_pos, op_data.fill_mouse_pos);
-
-        float delta = (current_dist - initial_dist) * pixel_size * 0.5f;
-        op_data.extension_length = std::max(op_data.extension_length + delta, 0.0f);
-
-        /* Update cursor line and extend lines. */
-        WM_main_add_notifier(NC_GEOM | ND_DATA, nullptr);
-        WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, nullptr);
-
-        grease_pencil_update_extend(*C, op_data);
-        break;
+        default:
+          break;
       }
-      default:
-        break;
     }
   }
 

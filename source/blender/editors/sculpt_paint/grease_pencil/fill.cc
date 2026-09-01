@@ -1700,12 +1700,13 @@ std::optional<bke::CurvesGeometry> delaunay_fill_strokes(
   Array<int> tri_hint_index(result.face.size(), NULL_INDEX);
   Array<float> tri_weights(result.face.size(), 0.0f);
 
-  Vector<float2> pos_hint = {fill_points[0].first()};
+  /* TODO: Currently only one fill path is supported. */
+  const Span<float2> fill_path = fill_points[0];
 
   /* Each `hint` is the source of a fill region. The `hint_index` is the index of the triangle this
    * hint is within. */
   int hint_index = 0;
-  int first_tri_index = get_tri_for_point(pos_hint[hint_index]);
+  int first_tri_index = get_tri_for_point(fill_path.first());
 
   /* Get the first triangle that is touching the bounding box. */
   auto get_first_boundary_tri = [&]() {
@@ -1805,18 +1806,29 @@ std::optional<bke::CurvesGeometry> delaunay_fill_strokes(
     hint_index++;
   }
 
+  Set<int> indices_to_fill;
+
   if (!invert) {
-    /* Add the mouse fill again to make sure it as highest priority. */
-    add_weights_for_tri(tri_adjacency.as_span(),
-                        tri_edges.as_span(),
-                        edge_weights.as_span(),
-                        tri_max_weight.as_span(),
-                        is_source_edge.as_span(),
-                        first_tri_index,
-                        hint_index,
-                        tri_hint_index.as_mutable_span(),
-                        tri_weights.as_mutable_span());
+    Set<int> tris_for_hint;
+    for (const int i : fill_path.index_range()) {
+      tris_for_hint.add(get_tri_for_point(fill_path[i]));
+    }
+
+    for (const int tri_index : tris_for_hint) {
+      /* Add the mouse fill again to make sure it as highest priority. */
+      add_weights_for_tri(tri_adjacency.as_span(),
+                          tri_edges.as_span(),
+                          edge_weights.as_span(),
+                          tri_max_weight.as_span(),
+                          is_source_edge.as_span(),
+                          tri_index,
+                          hint_index,
+                          tri_hint_index.as_mutable_span(),
+                          tri_weights.as_mutable_span());
+    }
   }
+
+  indices_to_fill.add(hint_index);
 
   Array<bool> tri_to_fill(result.face.size(), false);
 
@@ -1832,7 +1844,7 @@ std::optional<bke::CurvesGeometry> delaunay_fill_strokes(
   else {
     threading::parallel_for(result.face.index_range(), 512, [&](const IndexRange range) {
       for (const int64_t tri_index : range) {
-        if (tri_hint_index[tri_index] == hint_index) {
+        if (indices_to_fill.contains(tri_hint_index[tri_index])) {
           tri_to_fill[tri_index] = true;
         }
       }
