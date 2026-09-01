@@ -491,6 +491,8 @@ enum FilterClosures {
 enum ShaderFlag {
   SHADER_SMOOTH_NORMAL = (1 << 31),
   SHADER_CAST_SHADOW = (1 << 30),
+  /* TODO(weizhen): move medium to runtime_flag. */
+  SHADER_HAS_MEDIUM = (1 << 29),
   SHADER_USE_MIS = (1 << 28),
   SHADER_EXCLUDE_DIFFUSE = (1 << 27),
   SHADER_EXCLUDE_GLOSSY = (1 << 26),
@@ -502,7 +504,8 @@ enum ShaderFlag {
                         SHADER_EXCLUDE_CAMERA | SHADER_EXCLUDE_SCATTER |
                         SHADER_EXCLUDE_SHADOW_CATCHER),
 
-  SHADER_MASK = ~(SHADER_SMOOTH_NORMAL | SHADER_CAST_SHADOW | SHADER_USE_MIS | SHADER_EXCLUDE_ANY)
+  SHADER_MASK = ~(SHADER_HAS_MEDIUM | SHADER_SMOOTH_NORMAL | SHADER_CAST_SHADOW | SHADER_USE_MIS |
+                  SHADER_EXCLUDE_ANY)
 };
 
 enum EmissionSampling {
@@ -937,8 +940,6 @@ enum ShaderRuntimeFlag {
   SR_RAY_PORTAL = (1 << 12),
   /* BSDF has dispersion. */
   SR_BSDF_HAS_DISPERSION = (1 << 13),
-  /* Shader has an internal medium. */
-  SR_HAS_MEDIUM = (1 << 14),
 
   /* Flags that indicate the presence of closures. */
   SR_CLOSURE_FLAG = (SR_EMISSION | SR_BSDF | SR_BSDF_HAS_EVAL | SR_BSSRDF | SR_HOLDOUT |
