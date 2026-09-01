@@ -1912,22 +1912,40 @@ static void label_markdown_dev_config_list_spacing_table(Block *block, Layout &p
                                 IFACE_("Margin above the first item in a nested list"));
 }
 
-static void label_markdown_dev_config_details_table(Block *block, Layout &panel_col)
+struct MarkdownDevConfigDetailColumn {
+  const char *label;
+  float *value;
+  float min;
+  float max;
+  float step;
+  int precision;
+  const char *tip;
+};
+
+static void label_markdown_dev_config_details_row(
+    Block *block, Layout &panel_col, const Span<MarkdownDevConfigDetailColumn> columns)
 {
   Layout &table = panel_col.row(false);
   table.alignment_set(LayoutAlign::Expand);
 
-  struct DetailColumn {
-    const char *label;
-    float *value;
-    float min;
-    float max;
-    float step;
-    int precision;
-    const char *tip;
-  };
+  for (const MarkdownDevConfigDetailColumn &column : columns) {
+    Layout &col = table.column(true);
+    label_markdown_dev_config_col_label(
+        block, col, column.label, md_dev_config_detail_label_width());
+    label_markdown_dev_config_num(block,
+                                  col,
+                                  column.value,
+                                  column.min,
+                                  column.max,
+                                  column.step,
+                                  column.precision,
+                                  column.tip);
+  }
+}
 
-  const DetailColumn columns[] = {
+static void label_markdown_dev_config_details_table(Block *block, Layout &panel_col)
+{
+  const MarkdownDevConfigDetailColumn general_columns[] = {
       {IFACE_("Quote Bar"),
        &md_style::quote_bar_padding,
        0.0f,
@@ -1956,6 +1974,9 @@ static void label_markdown_dev_config_details_table(Block *block, Layout &panel_
        0.5f,
        1,
        IFACE_("Padding between ordered list markers and item text in pixels at 1x scale")},
+  };
+
+  const MarkdownDevConfigDetailColumn code_block_columns[] = {
       {IFACE_("Code Block X"),
        &md_style::code_block_padding_x,
        0.0f,
@@ -1970,6 +1991,9 @@ static void label_markdown_dev_config_details_table(Block *block, Layout &panel_
        0.5f,
        1,
        IFACE_("Vertical padding around fenced code blocks in pixels at 1x scale")},
+  };
+
+  const MarkdownDevConfigDetailColumn code_span_columns[] = {
       {IFACE_("Code Span X"),
        &md_style::code_span_padding_x,
        0.0f,
@@ -1993,19 +2017,12 @@ static void label_markdown_dev_config_details_table(Block *block, Layout &panel_
        IFACE_("Corner radius for code boxes in pixels at 1x scale")},
   };
 
-  for (const DetailColumn &column : columns) {
-    Layout &col = table.column(true);
-    label_markdown_dev_config_col_label(
-        block, col, column.label, md_dev_config_detail_label_width());
-    label_markdown_dev_config_num(block,
-                                  col,
-                                  column.value,
-                                  column.min,
-                                  column.max,
-                                  column.step,
-                                  column.precision,
-                                  column.tip);
-  }
+  label_markdown_dev_config_details_row(
+      block, panel_col, Span(general_columns, std::size(general_columns)));
+  label_markdown_dev_config_details_row(
+      block, panel_col, Span(code_block_columns, std::size(code_block_columns)));
+  label_markdown_dev_config_details_row(
+      block, panel_col, Span(code_span_columns, std::size(code_span_columns)));
 }
 
 void label_markdown_dev_config(Layout &layout)
