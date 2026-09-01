@@ -1043,7 +1043,6 @@ static void but_update_old_active_from_new(Button *oldbut, Button *but)
       ButtonLabel *label_oldbut = static_cast<ButtonLabel *>(oldbut);
       ButtonLabel *label_but = static_cast<ButtonLabel *>(but);
       label_oldbut->alpha_factor = label_but->alpha_factor;
-      label_oldbut->label_type = label_but->label_type;
       break;
     }
     case ButtonType::Scroll: {
