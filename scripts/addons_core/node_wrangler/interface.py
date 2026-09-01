@@ -329,7 +329,6 @@ class NWAttributeMenuBase:
 
     def draw(self, context):
         l = self.layout
-        nodes, links = get_nodes_links(context)
         mat = context.space_data.id
 
         objs = []
@@ -411,7 +410,6 @@ def save_viewer_menu_func(self, context):
 
 def reset_nodes_button(self, context):
     layout = self.layout
-    node_active = context.active_node
     node_selected = context.selected_nodes
 
     # Check if active node is in the selection, ignore some node types
