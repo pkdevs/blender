@@ -427,7 +427,8 @@ void BKE_camera_params_from_view3d(CameraParams *params,
     const Object *ob_camera_eval = DEG_get_evaluated(depsgraph, v3d->camera);
     BKE_camera_params_from_object(params, ob_camera_eval);
 
-    /* Override the aspect, so change in viewport framing is minimized when camera parameters. */
+    /* Override the aspect, so change in viewport framing is minimized when camera parameters
+     * change. */
     const Scene *scene = DEG_get_evaluated_scene(depsgraph);
     params->use_aspect_override = true;
     params->aspect_override = (float(scene->r.ysch) * scene->r.yasp) /
