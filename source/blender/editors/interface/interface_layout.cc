@@ -1944,8 +1944,8 @@ void Layout::prop(PointerRNA *ptr,
                   const std::optional<StringRef> placeholder)
 {
 
-  const bool no_custom_icon = (icon==0);
-  
+  const bool no_custom_icon = (icon == 0);
+
   Block *block = this->block();
   char namestr[UI_MAX_NAME_STR];
   const bool use_prop_sep = this->use_property_split();
@@ -2297,10 +2297,7 @@ void Layout::prop(PointerRNA *ptr,
                                                      std::nullopt;
     but = uiDefAutoButR(block, ptr, prop, index, name, icon, 0, 0, w, h, button_type);
 
-
-
-
-    if (!no_custom_icon) {      
+    if (!no_custom_icon) {
 
       if (ELEM(but->type, ButtonType::IconToggle, ButtonType::IconToggleN)) {
         but->flag |= BUT_NO_ICON_OFFSET;
