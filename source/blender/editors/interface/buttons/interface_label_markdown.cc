@@ -59,16 +59,16 @@ static int markdown_layout_generation = 0;
 namespace md_style {
 
 static std::array<MdHeaderStyle, 6> headers = {
-    MdHeaderStyle{.size_factor = 1.75f,
+    MdHeaderStyle{.size_factor = 1.50f,
                   .weight = 700,
                   .italic = false,
-                  .margin_top = 0.50f,
-                  .margin_bottom = 0.25f},
+                  .margin_top = 1.00f,
+                  .margin_bottom = 0.50f},
     MdHeaderStyle{.size_factor = 1.40f,
                   .weight = 600,
                   .italic = false,
                   .margin_top = 0.50f,
-                  .margin_bottom = 0.25f},
+                  .margin_bottom = 0.50f},
     MdHeaderStyle{.size_factor = 1.20f,
                   .weight = 600,
                   .italic = false,
@@ -86,26 +86,26 @@ static std::array<MdHeaderStyle, 6> headers = {
                   .margin_bottom = 0.25f},
     MdHeaderStyle{.size_factor = 1.00f,
                   .weight = 500,
-                  .italic = true,
+                  .italic = false,
                   .margin_top = 0.50f,
                   .margin_bottom = 0.25f},
 };
 
-static MdBlockSpacing paragraph = {.margin_top = 0.25f, .margin_bottom = 0.25f};
-static MdBlockSpacing quote = {.margin_top = 0.50f, .margin_bottom = 0.50f};
+static MdBlockSpacing paragraph = {.margin_top = 0.25f, .margin_bottom = 0.50f};
+static MdBlockSpacing quote = {.margin_top = 0.50f, .margin_bottom = 0.75f};
 static float quote_bar_padding = 0.10f;
 static MdBlockSpacing code_block = {.margin_top = 0.00f, .margin_bottom = 0.00f};
 static MdBlockSpacing horizontal_rule = {.margin_top = 0.50f, .margin_bottom = 0.50f};
 
 static MdListSpacing list = {.margin_top = 0.50f,
-                             .margin_bottom = 0.50f,
+                             .margin_bottom = 1.00f,
                              .item_spacing_loose = 0.50f,
                              .item_spacing_tight = 0.25f,
                              .nested_margin_top = 0.25f};
 
 static float list_indent_px = 18.00f;
 static float list_marker_padding_px = 4.00f;
-static float horizontal_rule_padding = 0.00f;
+static float horizontal_rule_padding = 0.25f;
 
 };  // namespace md_style
 
