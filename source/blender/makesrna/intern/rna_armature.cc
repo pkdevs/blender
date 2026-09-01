@@ -1403,6 +1403,7 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
   RNA_def_property_string_sdna(prop, nullptr, "name");
   RNA_def_property_ui_text(prop, "Name", "");
   RNA_def_struct_name_property(srna, prop);
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   if (editbone) {
     RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_EditBone_name_set");
   }
@@ -2364,6 +2365,7 @@ static void rna_def_bonecollection(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Name", "Unique within the Armature");
   RNA_def_struct_name_property(srna, prop);
   RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_BoneCollection_name_set");
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_update(prop, NC_OBJECT | ND_BONE_COLLECTION, nullptr);
 
   prop = RNA_def_property(srna, "is_expanded", PROP_BOOLEAN, PROP_NONE);

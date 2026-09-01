@@ -235,15 +235,19 @@ static Base *rna_Object_local_view_property_helper(bScreen *screen,
     BKE_report(reports, RPT_ERROR, "Viewport not in local view");
     return nullptr;
   }
+  const Main *bmain = screen->id.owner_bmain();
+  if (!bmain) {
+    BKE_report(reports, RPT_ERROR, "Can not call this function on non-original data");
+    return nullptr;
+  }
 
   if (view_layer == nullptr) {
-    win = ED_screen_window_find(
-        screen, static_cast<wmWindowManager *>(screen->id.owner_bmain()->wm.first));
+    win = ED_screen_window_find(screen, static_cast<wmWindowManager *>(bmain->wm.first));
     view_layer = WM_window_get_active_view_layer(win);
   }
 
   BKE_view_layer_synced_ensure(
-      *ob->id.owner_bmain(), win ? WM_window_get_active_scene(win) : nullptr, view_layer);
+      *bmain, win ? WM_window_get_active_scene(win) : nullptr, view_layer);
   Base *base = BKE_view_layer_base_find(view_layer, ob);
   if (base == nullptr) {
     BKE_reportf(

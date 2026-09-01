@@ -335,6 +335,28 @@ void rna_ID_name_set(PointerRNA *ptr, const char *value)
   rna_ID_rename(id, id->owner_bmain_for_write(), value, int(IDNewNameMode::RenameExistingNever));
 }
 
+static const char *rna_ID_not_in_bmain_editable_error = N_(
+    "Cannot edit data on non-original data");
+
+static bool rna_ID_editable_if_in_bmain(const ID *id, const char **r_info)
+{
+  if (!id->owner_bmain()) {
+    if (r_info) {
+      *r_info = rna_ID_not_in_bmain_editable_error;
+    }
+    return false;
+  }
+  return true;
+}
+
+int rna_ID_owner_editable_if_in_bmain(const PointerRNA *ptr, const char **r_info)
+{
+  if (!rna_ID_editable_if_in_bmain(ptr->owner_id, r_info)) {
+    return 0;
+  }
+  return PROP_EDITABLE;
+}
+
 static int rna_ID_name_editable(const PointerRNA *ptr, const char **r_info)
 {
   ID *id = static_cast<ID *>(ptr->data);
@@ -363,10 +385,7 @@ static int rna_ID_name_editable(const PointerRNA *ptr, const char **r_info)
       return 0;
     }
   }
-  else if (!id->owner_bmain()) {
-    if (r_info) {
-      *r_info = N_("Data-blocks not in a Main data-base cannot be renamed");
-    }
+  else if (!rna_ID_editable_if_in_bmain(id, r_info)) {
     return 0;
   }
 

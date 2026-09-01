@@ -948,6 +948,7 @@ static void rna_def_grease_pencil_layer_mask(BlenderRNA *brna)
                                 "rna_grease_pencil_layer_mask_name_get",
                                 "rna_grease_pencil_layer_mask_name_length",
                                 "rna_grease_pencil_layer_mask_name_set");
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_struct_name_property(srna, prop);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA | NA_RENAME, nullptr);
@@ -1004,6 +1005,7 @@ static void rna_def_grease_pencil_tree_node(BlenderRNA *brna)
                                 "rna_GreasePencilTreeNode_name_get",
                                 "rna_GreasePencilTreeNode_name_length",
                                 "rna_GreasePencilTreeNode_name_set");
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_struct_name_property(srna, prop);
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA | NA_RENAME, "rna_grease_pencil_update");
 

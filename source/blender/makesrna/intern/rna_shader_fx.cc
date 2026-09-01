@@ -683,6 +683,7 @@ void RNA_def_shader_fx(BlenderRNA *brna)
   /* strings */
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ShaderFx_name_set");
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_ui_text(prop, "Name", "Effect name");
   RNA_def_property_update(prop, NC_OBJECT | ND_SHADERFX | NA_RENAME, nullptr);
   RNA_def_struct_name_property(srna, prop);

@@ -1138,8 +1138,10 @@ static void rna_Object_active_material_set(PointerRNA *ptr,
 static int rna_Object_active_material_editable(const PointerRNA *ptr, const char ** /*r_info*/)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
+  if (!ob->id.owner_bmain()) {
+    return false;
+  }
   bool is_editable;
-
   if ((ob->matbits == nullptr) || (ob->actcol == 0) || ob->matbits[ob->actcol - 1]) {
     is_editable = ID_IS_EDITABLE(ob);
   }
@@ -1341,6 +1343,9 @@ static int rna_MaterialSlot_material_editable(const PointerRNA *ptr, const char 
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
   const int index = rna_MaterialSlot_index(ptr);
+  if (!ob->id.owner_bmain()) {
+    return false;
+  }
   bool is_editable;
 
   if ((ob->matbits == nullptr) || ob->matbits[index]) {
@@ -3025,6 +3030,7 @@ static void rna_def_object(BlenderRNA *brna)
   RNA_def_property_struct_type(prop, "ID");
   RNA_def_property_pointer_funcs(
       prop, "rna_Object_data_get", "rna_Object_data_set", "rna_Object_data_typef", nullptr);
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_UNLINK);
   RNA_def_property_ui_text(prop, "Data", "Object data");
   RNA_def_property_update(prop, 0, "rna_Object_data_update");

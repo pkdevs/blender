@@ -471,7 +471,9 @@ static PyObject *pygpu_offscreen_draw_view3d(BPyGPUOffScreen *self, PyObject *ar
     return nullptr;
   }
 
-  depsgraph = BKE_scene_ensure_depsgraph(scene->id.owner_bmain_for_write(), scene, view_layer);
+  Main *bmain = scene->id.owner_bmain_for_write();
+  BLI_assert(bmain);
+  depsgraph = BKE_scene_ensure_depsgraph(bmain, scene, view_layer);
 
   GPU_offscreen_bind(self->ofs, true);
 

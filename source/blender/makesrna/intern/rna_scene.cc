@@ -4571,6 +4571,7 @@ static void rna_def_tool_settings(BlenderRNA *brna)
                          /* Tracked by edit-mode undo. */
                          PROP_FORCE_UNDO));
   RNA_def_property_boolean_funcs(prop, nullptr, "rna_Scene_editmesh_select_mode_set");
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_ui_text(prop, "Mesh Selection Mode", "Which mesh elements selection works on");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, 0, "rna_Scene_editmesh_select_mode_update");
@@ -5223,6 +5224,7 @@ void rna_def_view_layer_common(BlenderRNA *brna, StructRNA *srna, const bool sce
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   if (scene) {
     RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ViewLayer_name_set");
+    RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   }
   else {
     RNA_def_property_string_sdna(prop, nullptr, "name");

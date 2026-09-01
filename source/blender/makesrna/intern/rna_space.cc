@@ -1582,8 +1582,12 @@ static Scene *rna_3DViewShading_scene(PointerRNA *ptr)
   }
   else {
     bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
-    return WM_windows_scene_get_from_screen(
-        static_cast<wmWindowManager *>(screen->id.owner_bmain()->wm.first), screen);
+    const Main *bmain = screen->id.owner_bmain();
+    if (!bmain) {
+      return nullptr;
+    }
+    return WM_windows_scene_get_from_screen(static_cast<wmWindowManager *>(bmain->wm.first),
+                                            screen);
   }
 }
 
@@ -2098,6 +2102,9 @@ static bool rna_SpaceImageEditor_show_uvedit_get(PointerRNA *ptr)
   SpaceImage *sima = static_cast<SpaceImage *>(ptr->data);
   bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
   const Main *bmain = screen->id.owner_bmain();
+  if (!bmain) {
+    return false;
+  }
   Object *obedit = nullptr;
   wmWindow *win = ED_screen_window_find(screen, static_cast<wmWindowManager *>(bmain->wm.first));
   if (win != nullptr) {
@@ -5978,6 +5985,7 @@ static void rna_def_space_view3d(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_local_camera", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "scenelock", 1);
   RNA_def_property_boolean_funcs(prop, nullptr, "rna_SpaceView3D_use_local_camera_set");
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_ui_text(prop,
                            "Use Local Camera",
                            "Use a local camera in this view, rather than scene's active camera");
@@ -6461,6 +6469,7 @@ static void rna_def_space_image(BlenderRNA *brna)
   prop = RNA_def_property(srna, "image", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_funcs(
       prop, nullptr, "rna_SpaceImageEditor_image_set", nullptr, nullptr);
+  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_ui_text(prop, "Image", "Image displayed and edited in this space");
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_clear_flag(prop, PROP_ID_REFCOUNT);
