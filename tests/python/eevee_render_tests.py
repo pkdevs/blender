@@ -69,6 +69,17 @@ BLOCKLIST = [
     "background_scene.blend",
     # EEVEE doesnt have adaptive dicing.
     "panorama_dicing.blend",
+    # Currently, the only image_mipmap test enabled for EEVEE is image_mipmap_large_tex.blend.
+    "image_cache_evict.blend",
+    "image_mipmap_area_light.blend",
+    "image_mipmap_filter_glossy.blend",
+    "image_mipmap_incomplete_derivs.blend",
+    "image_mipmap_light_tree.blend",
+    "image_mipmap_transparent_shadow.blend",
+    "image_mipmap_volume.blend",
+    "image_mipmap_working_space.blend",
+    "image_mipmap_world.blend",
+    "image_mipmap_world_sun.blend",
 
     ### Cycles only tests go here ###
 ]
@@ -307,7 +318,7 @@ def get_arguments(filepath, output_filepath, gpu_backend):
         "--debug-exit-on-error"]
 
     if gpu_backend:
-        arguments.extend(["--gpu-backend", gpu_backend])
+        arguments.extend(["--gpu-backend", gpu_backend, "--debug-gpu-backend-no-fallback"])
 
     arguments.extend([
         filepath,
@@ -386,6 +397,10 @@ def main():
         elif test_dir_name in {"texture"}:
             report.set_fail_percent(0.14)
             report.set_fail_threshold(6.0 / 255.0)
+        elif test_dir_name.startswith('image_mipmap'):
+            # Reference images on the CI worker seem to differ slightly from images on
+            # an NVIDIA RTX 4060 Ti with driver 610.74
+            report.set_fail_threshold(6.0 / 255.0)
     elif test_dir_name.startswith('camera'):
         # camera_stereo_panoramic have some platform specific small differences
         report.set_fail_percent(0.14)
@@ -420,6 +435,9 @@ def main():
         # principled_bsdf_thinfilm_metallic has some weird behavior in reflection of
         # black surfaces. to be investigated
         report.set_fail_percent(0.09)
+        # principled_bsdf_dispersion has some difference in the highlights
+        if gpu_vendor == "AMD":
+            report.set_fail_threshold(6.0 / 255.0)
     elif test_dir_name.startswith('integrator'):
         # Noise difference in transparent materials (mostly transparent_spatial_splits)
         report.set_fail_threshold(8.0 / 255.0)
@@ -476,6 +494,13 @@ def main():
         # Some shadow difference, to be investigated
         report.set_fail_percent(0.09)
         report.set_fail_threshold(6.0 / 255.0)
+    elif test_dir_name.startswith('image_mipmap'):
+        # Texture interpolation can look slightly different.
+        if gpu_vendor == "AMD":
+            report.set_fail_percent(0.39)
+        else:
+            report.set_fail_percent(0.08)
+        report.set_fail_threshold(8.0 / 255.0)
 
     ok = report.run(args.testdir, args.blender, get_arguments, batch=args.batch)
     sys.exit(not ok)

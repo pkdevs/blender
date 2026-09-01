@@ -23,11 +23,8 @@
 
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
-#include "DNA_screen_types.h"
-#include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
 #include "DNA_view3d_types.h"
-#include "DNA_windowmanager_types.h"
 
 #include "BKE_callbacks.hh"
 #include "BKE_colortools.hh"
@@ -246,6 +243,8 @@ static wmOperatorStatus screen_render_exec(bContext *C, wmOperator *op)
 
   RE_SetReports(re, op->reports);
 
+  ED_render_view3d_auto_pause(mainp, true);
+
   if (is_animation) {
     RE_RenderAnim(re,
                   mainp,
@@ -268,6 +267,8 @@ static wmOperatorStatus screen_render_exec(bContext *C, wmOperator *op)
   }
 
   RE_SetReports(re, nullptr);
+
+  ED_render_view3d_auto_pause(mainp, false);
 
   const bool cancelled = G.is_break;
 
@@ -688,7 +689,7 @@ static void render_endjob(void *rjv)
   }
 
   /* Resume viewport render engines now that the final render is complete. */
-  ED_render_view3d_pause_resume(G_MAIN, false);
+  ED_render_view3d_auto_pause(G_MAIN, false);
 }
 
 /* called by render, check job 'stop' value or the global */
@@ -735,7 +736,7 @@ static wmOperatorStatus screen_render_modal(bContext *C, wmOperator *op, const w
   Scene *scene = static_cast<Scene *>(op->customdata);
 
   /* no running blender, remove handler and pass through */
-  if (0 == WM_jobs_test(CTX_wm_manager(C), scene, WM_JOB_TYPE_RENDER)) {
+  if (!WM_jobs_has_running(CTX_wm_manager(C), scene, WM_JOB_TYPE_RENDER)) {
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
   }
 
@@ -855,7 +856,7 @@ static wmOperatorStatus screen_render_invoke(bContext *C, wmOperator *op, const 
   }
 
   /* only one render job at a time */
-  if (WM_jobs_test(CTX_wm_manager(C), scene, WM_JOB_TYPE_RENDER)) {
+  if (WM_jobs_has_running(CTX_wm_manager(C), scene, WM_JOB_TYPE_RENDER)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1001,7 +1002,7 @@ static wmOperatorStatus screen_render_invoke(bContext *C, wmOperator *op, const 
   op->customdata = scene;
 
   /* Pause viewport render engines for the duration of the final render. */
-  ED_render_view3d_pause_resume(bmain, true);
+  ED_render_view3d_auto_pause(bmain, true);
 
   WM_jobs_start(CTX_wm_manager(C), wm_job);
 
