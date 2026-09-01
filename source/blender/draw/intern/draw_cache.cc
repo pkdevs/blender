@@ -117,8 +117,8 @@ gpu::Batch *DRW_cache_object_face_wireframe_get(const Scene *scene, Object *ob)
     case OB_MESH:
       return DRW_cache_mesh_face_wireframe_get(ob);
     case OB_POINTCLOUD:
-      return DRW_pointcloud_is_gsplat(ob) ? DRW_gsplat_batch_cache_get_dots(ob) :
-                                            DRW_pointcloud_batch_cache_get_dots(ob);
+      return pointcloud_is_gsplat(ob) ? DRW_gsplat_batch_cache_get_dots(ob) :
+                                        DRW_pointcloud_batch_cache_get_dots(ob);
     case OB_VOLUME:
       return DRW_cache_volume_face_wireframe_get(ob);
     case OB_GREASE_PENCIL:

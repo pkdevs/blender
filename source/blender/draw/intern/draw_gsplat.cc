@@ -210,7 +210,7 @@ void DRW_gsplat_ensure_ellipses_radiance_full(draw::Manager &manager, draw::View
   module.update(manager, view, GSplatEvalShader::EllipsesRadianceFull);
 }
 
-bool DRW_pointcloud_is_gsplat(Object *object)
+bool pointcloud_is_gsplat(Object *object)
 {
   /* GSplats and pointclouds share the base DNA type. We treat them separately
    * in draw engines as the implementations are quite different. This check is

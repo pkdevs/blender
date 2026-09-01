@@ -59,7 +59,7 @@ void DRW_gsplat_module_free(draw::GSplatModule *module);
 void DRW_gsplat_ensure_ellipses(draw::Manager &manager, draw::View &view);
 void DRW_gsplat_ensure_ellipses_radiance_base(draw::Manager &manager, draw::View &view);
 void DRW_gsplat_ensure_ellipses_radiance_full(draw::Manager &manager, draw::View &view);
-bool DRW_pointcloud_is_gsplat(Object *ob);
+bool pointcloud_is_gsplat(Object *ob);
 
 /* draw_volume.cc */
 

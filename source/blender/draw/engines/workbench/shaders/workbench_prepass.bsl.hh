@@ -7,6 +7,7 @@
 #include "draw_view_infos.hh"  // IWYU pragma: export
 
 #include "draw_curves_lib.glsl"
+#include "draw_gsplat_lib.bsl.hh"
 #include "draw_model.bsl.hh"
 #include "draw_pointcloud_lib.glsl"
 #include "draw_view.bsl.hh"
@@ -288,8 +289,60 @@ struct PointCloud {
   v_out.object_id = int(id.resource_id<1>() & 0xFFFFu) + 1;
 }
 
-struct Resources {
+struct GSplat {
+  [[legacy_info]] ShaderCreateInfo drw_clipped;
 
+  /** WORKAROUND: This exact compilation constant is checked in Metal backend to enable clip
+   * distances. */
+  [[compilation_constant]] const bool use_clipping;
+};
+
+[[vertex]] void vert_gsplat([[resource_table]] GSplat &gsplat,
+                            [[resource_table]] const color::Materials &materials,
+                            [[resource_table]] const draw::gsplat::ShapeResource &shape,
+                            [[resource_table]] const draw::View &views,
+                            [[resource_table]] const draw::Model &models,
+                            [[resource_table]] const draw::ResourceCustomID &resources,
+                            [[instance_index]] const int inst_id,
+                            [[vertex_id]] const int vert_id,
+                            [[out]] VertOut &v_out,
+                            [[position]] float4 &out_position)
+{
+  int custom_id = int(resources.get_custom_id(inst_id));
+
+  draw::ID id = resources.get(inst_id);
+  uint res_id = id.resource_id<1>();
+
+  ViewMatrices view = views.get(id.view_id<1>());
+  ObjectMatrices obj = models.get(res_id);
+
+  const draw::gsplat::SplatShape gs = shape.get_splat(uint(vert_id), obj, view);
+  if (gs.is_culled()) {
+    out_position = float4(NAN_FLT);
+    return;
+  }
+
+  v_out.normal = normalize(view.normal_world_to_view(gs.wN));
+  v_out.uv = gs.shape_offset;
+  v_out.object_id = int(id.resource_id<1>() & 0xFFFFu) + 1;
+
+  out_position = gs.hP;
+
+  if (gsplat.use_clipping) [[static_branch]] {
+    view_clipping_distances(gs.wP);
+  }
+
+  materials.material_data_get(
+      custom_id, float3(1.0f), v_out.color, v_out.alpha, v_out.roughness, v_out.metallic);
+
+  /* GSplats being special again, they ignore material settings for now. */
+  /* TODO(not_mark): determine to handle this disconnect. */
+  float4 color_opacity = shape.get_radiance(gs.id);
+  v_out.color = color_opacity.rgb;
+  v_out.alpha = color_opacity.a;
+}
+
+struct Resources {
   [[compilation_constant]] const int lighting_mode;
   [[compilation_constant]] const bool use_texture;
 
@@ -375,6 +428,28 @@ struct TransparentOut {
   frag_out.object_id = uint(v_out.object_id);
 }
 
+/* NOTE(not_mark): uncertain how to implement this using regular fragment pass,
+ * bring up during review. */
+[[fragment]] void frag_transparent_gsplat([[resource_table]] Resources &srt,
+                                          [[resource_table]] World &world,
+                                          [[resource_table]] draw::View &views,
+                                          [[frag_coord]] const float4 frag_co,
+                                          [[in]] const VertOut &v_out,
+                                          [[out]] TransparentOut &frag_out)
+{
+  const ViewMatrices view = views.get(0);
+
+  float alpha = draw::gsplat::evaluate_gaussian(v_out.uv, v_out.alpha);
+  if (world.world_data.xray_mode) {
+    alpha *= world.world_data.xray_alpha;
+  }
+  float weight = calculate_transparent_weight(frag_co.z, view.winmat) * alpha;
+
+  frag_out.transparent_accum = float4(v_out.color * weight, alpha);
+  frag_out.revealage_accum = float4(weight);
+  frag_out.object_id = uint(v_out.object_id);
+}
+
 /* clang-format off */
 PipelineGraphic mesh_opaque_studio_material_clip(       vert_mesh,       frag_opaque, Resources{.lighting_mode = 0 /* WORKBENCH_LIGHTING_STUDIO */, .use_texture = false}, Mesh{.use_clipping = true });
 PipelineGraphic mesh_opaque_studio_material_no_clip(    vert_mesh,       frag_opaque, Resources{.lighting_mode = 0 /* WORKBENCH_LIGHTING_STUDIO */, .use_texture = false}, Mesh{.use_clipping = false});
@@ -412,6 +487,18 @@ PipelineGraphic ptcloud_opaque_flat_material_clip(      vert_pointcloud, frag_op
 PipelineGraphic ptcloud_opaque_flat_material_no_clip(   vert_pointcloud, frag_opaque, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = false}, PointCloud{.use_clipping = false});
 PipelineGraphic ptcloud_opaque_flat_texture_clip(       vert_pointcloud, frag_opaque, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = true }, PointCloud{.use_clipping = true });
 PipelineGraphic ptcloud_opaque_flat_texture_no_clip(    vert_pointcloud, frag_opaque, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = true }, PointCloud{.use_clipping = false});
+PipelineGraphic gsplat_opaque_studio_material_clip(     vert_gsplat, frag_opaque, Resources{.lighting_mode = 0 /* WORKBENCH_LIGHTING_STUDIO */, .use_texture = false}, GSplat{.use_clipping = true });
+PipelineGraphic gsplat_opaque_studio_material_no_clip(  vert_gsplat, frag_opaque, Resources{.lighting_mode = 0 /* WORKBENCH_LIGHTING_STUDIO */, .use_texture = false}, GSplat{.use_clipping = false});
+PipelineGraphic gsplat_opaque_studio_texture_clip(      vert_gsplat, frag_opaque, Resources{.lighting_mode = 0 /* WORKBENCH_LIGHTING_STUDIO */, .use_texture = true }, GSplat{.use_clipping = true });
+PipelineGraphic gsplat_opaque_studio_texture_no_clip(   vert_gsplat, frag_opaque, Resources{.lighting_mode = 0 /* WORKBENCH_LIGHTING_STUDIO */, .use_texture = true }, GSplat{.use_clipping = false});
+PipelineGraphic gsplat_opaque_matcap_material_clip(     vert_gsplat, frag_opaque, Resources{.lighting_mode = 1 /* WORKBENCH_LIGHTING_MATCAP */, .use_texture = false}, GSplat{.use_clipping = true });
+PipelineGraphic gsplat_opaque_matcap_material_no_clip(  vert_gsplat, frag_opaque, Resources{.lighting_mode = 1 /* WORKBENCH_LIGHTING_MATCAP */, .use_texture = false}, GSplat{.use_clipping = false});
+PipelineGraphic gsplat_opaque_matcap_texture_clip(      vert_gsplat, frag_opaque, Resources{.lighting_mode = 1 /* WORKBENCH_LIGHTING_MATCAP */, .use_texture = true }, GSplat{.use_clipping = true });
+PipelineGraphic gsplat_opaque_matcap_texture_no_clip(   vert_gsplat, frag_opaque, Resources{.lighting_mode = 1 /* WORKBENCH_LIGHTING_MATCAP */, .use_texture = true }, GSplat{.use_clipping = false});
+PipelineGraphic gsplat_opaque_flat_material_clip(       vert_gsplat, frag_opaque, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = false}, GSplat{.use_clipping = true });
+PipelineGraphic gsplat_opaque_flat_material_no_clip(    vert_gsplat, frag_opaque, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = false}, GSplat{.use_clipping = false});
+PipelineGraphic gsplat_opaque_flat_texture_clip(        vert_gsplat, frag_opaque, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = true }, GSplat{.use_clipping = true });
+PipelineGraphic gsplat_opaque_flat_texture_no_clip(     vert_gsplat, frag_opaque, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = true }, GSplat{.use_clipping = false});
 PipelineGraphic mesh_transparent_studio_material_clip(       vert_mesh,       frag_transparent, Resources{.lighting_mode = 0 /* WORKBENCH_LIGHTING_STUDIO */, .use_texture = false}, Mesh{.use_clipping = true });
 PipelineGraphic mesh_transparent_studio_material_no_clip(    vert_mesh,       frag_transparent, Resources{.lighting_mode = 0 /* WORKBENCH_LIGHTING_STUDIO */, .use_texture = false}, Mesh{.use_clipping = false});
 PipelineGraphic mesh_transparent_studio_texture_clip(        vert_mesh,       frag_transparent, Resources{.lighting_mode = 0 /* WORKBENCH_LIGHTING_STUDIO */, .use_texture = true }, Mesh{.use_clipping = true });
@@ -448,6 +535,18 @@ PipelineGraphic ptcloud_transparent_flat_material_clip(      vert_pointcloud, fr
 PipelineGraphic ptcloud_transparent_flat_material_no_clip(   vert_pointcloud, frag_transparent, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = false}, PointCloud{.use_clipping = false});
 PipelineGraphic ptcloud_transparent_flat_texture_clip(       vert_pointcloud, frag_transparent, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = true }, PointCloud{.use_clipping = true });
 PipelineGraphic ptcloud_transparent_flat_texture_no_clip(    vert_pointcloud, frag_transparent, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = true }, PointCloud{.use_clipping = false});
+PipelineGraphic gsplat_transparent_studio_material_clip(     vert_gsplat, frag_transparent_gsplat, Resources{.lighting_mode = 0 /* WORKBENCH_LIGHTING_STUDIO */, .use_texture = false}, GSplat{.use_clipping = true });
+PipelineGraphic gsplat_transparent_studio_material_no_clip(  vert_gsplat, frag_transparent_gsplat, Resources{.lighting_mode = 0 /* WORKBENCH_LIGHTING_STUDIO */, .use_texture = false}, GSplat{.use_clipping = false});
+PipelineGraphic gsplat_transparent_studio_texture_clip(      vert_gsplat, frag_transparent_gsplat, Resources{.lighting_mode = 0 /* WORKBENCH_LIGHTING_STUDIO */, .use_texture = true }, GSplat{.use_clipping = true });
+PipelineGraphic gsplat_transparent_studio_texture_no_clip(   vert_gsplat, frag_transparent_gsplat, Resources{.lighting_mode = 0 /* WORKBENCH_LIGHTING_STUDIO */, .use_texture = true }, GSplat{.use_clipping = false});
+PipelineGraphic gsplat_transparent_matcap_material_clip(     vert_gsplat, frag_transparent_gsplat, Resources{.lighting_mode = 1 /* WORKBENCH_LIGHTING_MATCAP */, .use_texture = false}, GSplat{.use_clipping = true });
+PipelineGraphic gsplat_transparent_matcap_material_no_clip(  vert_gsplat, frag_transparent_gsplat, Resources{.lighting_mode = 1 /* WORKBENCH_LIGHTING_MATCAP */, .use_texture = false}, GSplat{.use_clipping = false});
+PipelineGraphic gsplat_transparent_matcap_texture_clip(      vert_gsplat, frag_transparent_gsplat, Resources{.lighting_mode = 1 /* WORKBENCH_LIGHTING_MATCAP */, .use_texture = true }, GSplat{.use_clipping = true });
+PipelineGraphic gsplat_transparent_matcap_texture_no_clip(   vert_gsplat, frag_transparent_gsplat, Resources{.lighting_mode = 1 /* WORKBENCH_LIGHTING_MATCAP */, .use_texture = true }, GSplat{.use_clipping = false});
+PipelineGraphic gsplat_transparent_flat_material_clip(       vert_gsplat, frag_transparent_gsplat, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = false}, GSplat{.use_clipping = true });
+PipelineGraphic gsplat_transparent_flat_material_no_clip(    vert_gsplat, frag_transparent_gsplat, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = false}, GSplat{.use_clipping = false});
+PipelineGraphic gsplat_transparent_flat_texture_clip(        vert_gsplat, frag_transparent_gsplat, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = true }, GSplat{.use_clipping = true });
+PipelineGraphic gsplat_transparent_flat_texture_no_clip(     vert_gsplat, frag_transparent_gsplat, Resources{.lighting_mode = 2 /* WORKBENCH_LIGHTING_FLAT */,   .use_texture = true }, GSplat{.use_clipping = false});
 /* clang-format on */
 
 }  // namespace workbench::prepass
