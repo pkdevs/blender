@@ -4109,7 +4109,6 @@ static void but_update_ex(Button *but, const bool validate)
 
     case ButtonType::IconToggle:
     case ButtonType::IconToggleN:
-
       if ((but->rnaprop == nullptr) || (RNA_property_flag(but->rnaprop) & PROP_ICONS_CONSECUTIVE))
       {
 
@@ -4124,7 +4123,6 @@ static void but_update_ex(Button *but, const bool validate)
           but->iconadd = (but->flag & UI_SELECT) ? 1 : 0;
         }
       }
-
       break;
 
       /* quiet warnings for unhandled types */

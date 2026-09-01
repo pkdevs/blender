@@ -199,7 +199,6 @@ static void rna_uiItemR(Layout *layout,
   if (icon_only) {
     flag |= ui::ITEM_R_ICON_ONLY;
   }
-
   if (event) {
     flag |= ui::ITEM_R_EVENT;
   }

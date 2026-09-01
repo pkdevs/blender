@@ -179,11 +179,9 @@ int button_icon(const Button *but)
   }
 
   /* Consecutive icons can be toggle between. */
-
   if (but->drawflag & BUT_ICON_REVERSE) {
     return but->icon - but->iconadd;
   }
-
   return but->icon + but->iconadd;
 }
 

@@ -1942,14 +1942,12 @@ void Layout::prop(PointerRNA *ptr,
                   const std::optional<StringRef> name_opt,
                   int icon,
                   const std::optional<StringRef> placeholder)
-{
-
-  const bool no_custom_icon = (icon == 0);
-
+{ 
   Block *block = this->block();
   char namestr[UI_MAX_NAME_STR];
   const bool use_prop_sep = this->use_property_split();
   const bool inside_prop_sep = flag_is_set(flag_, ItemInternalFlag::InsidePropSep);
+  const bool no_custom_icon = (icon == 0);
   /* Columns can define a heading to insert. If the first item added to a split layout doesn't have
    * a label to display in the first column, the heading is inserted there. Otherwise it's inserted
    * as a new row before the first item. */
