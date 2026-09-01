@@ -187,7 +187,6 @@ void forward_lighting_eval(const ViewMatrices view,
       }
     }
   }
-
   /* Light clamping. */
   float clamp_direct = uni.uniform_buf.clamp.surface_direct;
   float clamp_indirect = uni.uniform_buf.clamp.surface_indirect;
