@@ -548,13 +548,8 @@ void *CUDADevice::host_alloc(const MemoryType type, const size_t size)
         extended_param.Type = MemExtendedParameterAddressRequirements;
         extended_param.Pointer = &address_requirements;
 
-        void *host_pointer = VirtualAlloc2(nullptr,
-                                           nullptr,
-                                           size,
-                                           MEM_RESERVE | MEM_COMMIT,
-                                           PAGE_READWRITE,
-                                           &extended_param,
-                                           1);
+        void *host_pointer = VirtualAlloc2(
+            nullptr, nullptr, size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE, &extended_param, 1);
         if (host_pointer != nullptr) {
           if (cuMemHostRegister(host_pointer, size, CU_MEMHOSTREGISTER_DEVICEMAP) == CUDA_SUCCESS)
           {
@@ -609,12 +604,12 @@ GPUDevice::Mem *CUDADevice::generic_alloc(device_memory &mem, const size_t pitch
     CUDAContextScope scope(this);
 
     /* Can just use shared allocation with devices that have a unified memory architecture. */
-    device_ptr device_pointer = 0;
-    cuMemHostGetDevicePointer(&device_pointer, mem.host_pointer, 0);
+    void *device_pointer = nullptr;
+    cuMemHostGetDevicePointer((CUdeviceptr *)&device_pointer, mem.host_pointer, 0);
     if (device_pointer) {
       mem.shared_pointer = mem.host_pointer;
       mem.shared_counter++;
-      mem.device_pointer = device_pointer;
+      mem.device_pointer = (device_ptr)device_pointer;
 
       const thread_scoped_lock lock(device_mem_map_mutex);
       Mem *cmem = &device_mem_map[&mem];
