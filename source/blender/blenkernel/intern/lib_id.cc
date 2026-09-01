@@ -2780,8 +2780,9 @@ bool BKE_id_is_in_main(Main *bmain, ID *id)
 
 bool BKE_id_is_in_global_main(ID *id)
 {
-  BLI_assert(BKE_id_is_in_main(G_MAIN, id));
-  return id->owner_bmain() == G_MAIN;
+  const bool is_in_global_main = id->owner_bmain() == G_MAIN;
+  BLI_assert(is_in_global_main == BKE_id_is_in_main(G_MAIN, id));
+  return is_in_global_main;
 }
 
 bool BKE_id_can_be_asset(const ID *id)
