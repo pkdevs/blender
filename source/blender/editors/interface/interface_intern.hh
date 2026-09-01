@@ -380,6 +380,12 @@ struct TextWrapCache {
 };
 
 struct MarkdownItemText {
+  enum class CodeContext {
+    None,
+    CodeSpan,
+    CodeBlock,
+  };
+
   /**
    * Baseline position of the text in pixels.
    */
@@ -390,7 +396,7 @@ struct MarkdownItemText {
   int weight = 400;
   bool italic = false;
   bool is_in_quote = false;
-  bool is_code = false;
+  CodeContext code_context = CodeContext::None;
   StringRef text;
   std::optional<StringRef> url;
 };

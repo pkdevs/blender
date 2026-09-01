@@ -1080,7 +1080,11 @@ class MarkdownLayouter {
     item_template.weight = weight;
     item_template.italic = italic;
     item_template.is_in_quote = this->is_in_quote();
-    item_template.is_code = this->is_code();
+    item_template.code_context = this->is_in_fenced_code_block() ?
+                                     MarkdownItemText::CodeContext::CodeBlock :
+                                     (this->has_code_span() ?
+                                          MarkdownItemText::CodeContext::CodeSpan :
+                                          MarkdownItemText::CodeContext::None);
     item_template.url = url;
 
     markdown_apply_item_font(item_template);
@@ -1422,7 +1426,7 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
         if (text_item->is_in_quote) {
           BLF_color4ubv(text_item->fontid, colors.quote_dimmed_link);
         }
-        else if (text_item->is_code) {
+        else if (text_item->code_context == MarkdownItemText::CodeContext::CodeSpan) {
           BLF_color4ubv(text_item->fontid, colors.code_block_dimmed_link);
         }
         else {
@@ -1433,7 +1437,7 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
         if (text_item->is_in_quote) {
           BLF_color4ubv(text_item->fontid, colors.quote_dimmed);
         }
-        else if (text_item->is_code) {
+        else if (text_item->code_context == MarkdownItemText::CodeContext::CodeSpan) {
           BLF_color4ubv(text_item->fontid, colors.code_block_dimmed);
         }
         else {
