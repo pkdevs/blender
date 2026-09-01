@@ -1943,7 +1943,7 @@ void Layout::prop(PointerRNA *ptr,
                   int icon,
                   const std::optional<StringRef> placeholder)
 {
-   
+
   Block *block = this->block();
   char namestr[UI_MAX_NAME_STR];
   const bool use_prop_sep = this->use_property_split();
