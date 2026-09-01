@@ -518,7 +518,7 @@ void VKShader::init(const shader::ShaderCreateInfo &info, bool /*is_codegen_only
   for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
     max_input_attachment_index_ = max_uu(max_input_attachment_index_, uint32_t(input.index));
   }
-  use_ray_query_ = bool(info.builtins_ & BuiltinBits::RAY_QUERY);
+  use_ray_query_ = bool(info.builtins_combined() & BuiltinBits::RAY_QUERY);
 }
 
 VKShader::~VKShader()
@@ -868,7 +868,7 @@ std::string VKShader::vertex_interface_declare(const shader::ShaderCreateInfo &i
   std::string post_main;
 
   const VKExtensions &extensions = VKBackend::get().device.extensions_get();
-  bool uses_clip_distances = flag_is_set(info.builtins_, BuiltinBits::CLIP_DISTANCES);
+  bool uses_clip_distances = flag_is_set(info.builtins_combined(), BuiltinBits::CLIP_DISTANCES);
 
   /* Inputs. */
   for (const ShaderCreateInfo::VertIn &attr : info.vertex_inputs_) {
@@ -889,8 +889,9 @@ std::string VKShader::vertex_interface_declare(const shader::ShaderCreateInfo &i
 
   const bool has_geometry_stage = do_geometry_shader_injection(&info) ||
                                   !info.geometry_source_.is_empty();
-  const bool do_layer_output = flag_is_set(info.builtins_, BuiltinBits::LAYER);
-  const bool do_viewport_output = flag_is_set(info.builtins_, BuiltinBits::VIEWPORT_INDEX);
+  const bool do_layer_output = flag_is_set(info.builtins_combined(), BuiltinBits::LAYER);
+  const bool do_viewport_output = flag_is_set(info.builtins_combined(),
+                                              BuiltinBits::VIEWPORT_INDEX);
   if (has_geometry_stage) {
     if (do_layer_output) {
       ss << "layout(location=" << (location++) << ") out int gpu_Layer;\n ";
@@ -974,7 +975,7 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
   std::stringstream ss;
   std::string pre_main;
   const VKExtensions &extensions = VKBackend::get().device.extensions_get();
-  bool uses_clip_distances = flag_is_set(info.builtins_, BuiltinBits::CLIP_DISTANCES);
+  bool uses_clip_distances = flag_is_set(info.builtins_combined(), BuiltinBits::CLIP_DISTANCES);
 
   if (uses_clip_distances && !extensions.shader_clip_distance) {
     pre_main += "  for (int i = 0; i < 6; i++) {\n";
@@ -983,28 +984,27 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
   }
 
   /* Interfaces. */
-  const Span<StageInterfaceInfo *> in_interfaces = info.geometry_source_.is_empty() ?
-                                                       info.vertex_out_interfaces_ :
-                                                       info.geometry_out_interfaces_;
+  const Span<ShaderCreateInfo::StageInterfaceInfoHandle> in_interfaces =
+      info.geometry_source_.is_empty() ? info.vertex_out_interfaces_ :
+                                         info.geometry_out_interfaces_;
   int location = 0;
   for (const StageInterfaceInfo *iface : in_interfaces) {
     print_interface(ss, "in", *iface, location);
   }
-
   if (uses_clip_distances && !extensions.shader_clip_distance) {
     ss << "layout(location=" << location << ") in float vk_ClipDistance[6];\n";
     location += 6;
   }
 
-  if (flag_is_set(info.builtins_, BuiltinBits::LAYER)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::LAYER)) {
     ss << "#define gpu_Layer gl_Layer\n";
   }
-  if (flag_is_set(info.builtins_, BuiltinBits::VIEWPORT_INDEX)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::VIEWPORT_INDEX)) {
     ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
   }
 
   if (!extensions.fragment_shader_barycentric &&
-      flag_is_set(info.builtins_, BuiltinBits::BARYCENTRIC_COORD))
+      flag_is_set(info.builtins_combined(), BuiltinBits::BARYCENTRIC_COORD))
   {
     ss << "layout(location=" << (location++) << ") smooth in vec3 gpu_BaryCoord;\n";
     ss << "layout(location=" << (location++) << ") noperspective in vec3 gpu_BaryCoordNoPersp;\n";
@@ -1069,7 +1069,7 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
 
       /* IMPORTANT: We assume that the frame-buffer will be layered or not based on the layer
        * built-in flag. */
-      bool is_layered_fb = flag_is_set(info.builtins_, BuiltinBits::LAYER);
+      bool is_layered_fb = flag_is_set(info.builtins_combined(), BuiltinBits::LAYER);
       bool is_layered_input = ELEM(
           input.img_type, ImageType::Uint2DArray, ImageType::Int2DArray, ImageType::Float2DArray);
       /* Declare image. */
@@ -1147,10 +1147,10 @@ std::string VKShader::geometry_interface_declare(const shader::ShaderCreateInfo 
   return ss.str();
 }
 
-static StageInterfaceInfo *find_interface_by_name(const Span<StageInterfaceInfo *> ifaces,
-                                                  const StringRefNull name)
+static StageInterfaceInfo *find_interface_by_name(
+    const Span<ShaderCreateInfo::StageInterfaceInfoHandle> ifaces, const StringRefNull name)
 {
-  for (StageInterfaceInfo *iface : ifaces) {
+  for (auto [iface, cond] : ifaces) {
     if (iface->instance_name == name) {
       return iface;
     }
@@ -1218,10 +1218,11 @@ std::string VKShader::workaround_geometry_shader_source_create(
   std::stringstream ss;
   const VKExtensions &extensions = VKBackend::get().device.extensions_get();
 
-  const bool do_layer_output = flag_is_set(info.builtins_, BuiltinBits::LAYER);
-  const bool do_viewport_output = flag_is_set(info.builtins_, BuiltinBits::VIEWPORT_INDEX);
+  const bool do_layer_output = flag_is_set(info.builtins_combined(), BuiltinBits::LAYER);
+  const bool do_viewport_output = flag_is_set(info.builtins_combined(),
+                                              BuiltinBits::VIEWPORT_INDEX);
   const bool do_barycentric_workaround = !extensions.fragment_shader_barycentric &&
-                                         flag_is_set(info.builtins_,
+                                         flag_is_set(info.builtins_combined(),
                                                      BuiltinBits::BARYCENTRIC_COORD);
 
   shader::ShaderCreateInfo info_modified = info;
@@ -1285,7 +1286,7 @@ std::string VKShader::workaround_geometry_shader_source_create(
 bool VKShader::do_geometry_shader_injection(const shader::ShaderCreateInfo *info) const
 {
   const VKExtensions &extensions = VKBackend::get().device.extensions_get();
-  BuiltinBits builtins = info->builtins_;
+  BuiltinBits builtins = info->builtins_combined();
   if (!extensions.fragment_shader_barycentric &&
       flag_is_set(builtins, BuiltinBits::BARYCENTRIC_COORD))
   {
