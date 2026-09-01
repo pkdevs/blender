@@ -23,6 +23,10 @@
 /** Workaround to forward-declare C++ type in C header. */
 #include "BLI_vector.hh"
 
+#ifdef hyper /* MSVC defines. */
+#  undef hyper
+#endif
+
 namespace blender {
 
 template<typename T> class Span;
