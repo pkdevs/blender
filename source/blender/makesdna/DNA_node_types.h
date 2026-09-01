@@ -4045,4 +4045,9 @@ struct NodeStoreBundleItem {
   char _pad = {};
 };
 
+struct NodeShaderMaterialXGroup {
+  char name[64];
+  char active_variant[64];
+};
+
 }  // namespace blender

@@ -27,7 +27,7 @@ void ntreeShaderEndExecTree(struct bNodeTreeExec *exec);
  * can change in the future and make it a generic function, but for now it stays
  * private here.
  */
-struct bNode *ntreeShaderOutputNode(struct bNodeTree *ntree, int target);
+struct bNode *ntreeShaderOutputNode(struct bNodeTree *ntree, int target, bool skip_mtlx = true);
 
 /**
  * This one needs to work on a local tree.

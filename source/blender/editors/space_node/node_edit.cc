@@ -48,6 +48,7 @@
 #include "DEG_depsgraph_debug.hh"
 #include "DEG_depsgraph_query.hh"
 
+#include "NOD_materialx.hh"
 #include "NOD_shader_nodes_inline.hh"
 #include "RE_compositor.hh"
 #include "RE_engine.h"
@@ -266,12 +267,14 @@ void ED_node_set_active(
 
   /* Tree specific activate calls. */
   if (ntree->type == NTREE_SHADER) {
-    if (ELEM(node->type_legacy,
-             SH_NODE_OUTPUT_MATERIAL,
-             SH_NODE_OUTPUT_WORLD,
-             SH_NODE_OUTPUT_LIGHT,
-             SH_NODE_OUTPUT_LINESTYLE))
-    {
+    const bool is_output = ELEM(node->type_legacy,
+                                SH_NODE_OUTPUT_MATERIAL,
+                                SH_NODE_OUTPUT_WORLD,
+                                SH_NODE_OUTPUT_LIGHT,
+                                SH_NODE_OUTPUT_LINESTYLE) ||
+                           is_materialx_output_node(*node);
+
+    if (is_output) {
       for (bNode *node_iter : ntree->all_nodes()) {
         if (node_iter->type_legacy == node->type_legacy) {
           node_iter->flag &= ~NODE_DO_OUTPUT;

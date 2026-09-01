@@ -321,6 +321,7 @@ def fake_main():
     bpy.app.build_options.alembic = True
     bpy.app.build_options.bullet = True
     bpy.app.build_options.usd = True
+    bpy.app.build_options.materialx = True
 
     bpy.app.translations = module_add("bpy.app.translations")
     bpy.app.translations.pgettext_iface = lambda s, context="": s

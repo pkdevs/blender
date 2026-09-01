@@ -20,6 +20,7 @@
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
 
+#include "NOD_materialx.hh"
 #include "NOD_menu_value.hh"
 #include "NOD_multi_function.hh"
 #include "NOD_node_declaration.hh"
@@ -373,10 +374,13 @@ class ShaderNodesInliner {
     };
 
     Vector<SocketInContext> output_sockets;
-    auto add_output_type = [&](const UString output_type) {
+    auto add_output_type = [&](const UString output_type, auto node_filter) {
       for (const TreeInContext &tree : trees) {
         const bke::bNodeTreeZones &zones = *tree->zones();
         for (const bNode *node : tree->nodes_by_type(output_type)) {
+          if (!node_filter(*node)) {
+            continue;
+          }
           if (!ELEM(get_engine_target(node), SHD_OUTPUT_ALL, params_.target_engine_)) {
             continue;
           }
@@ -388,30 +392,43 @@ class ShaderNodesInliner {
             continue;
           }
           for (const bNodeSocket *socket : node->input_sockets()) {
+            if (!socket->is_available()) {
+              continue;
+            }
             output_sockets.append({tree.context, socket});
           }
         }
       }
     };
 
+    const auto always = [](const bNode & /*node*/) { return true; };
+
     /* owner_id can be null for DefaultSurfaceNodeTree. */
     ID_Type tree_type = src_tree_.owner_id ? src_tree_.owner_id->id_type() : ID_MA;
 
+    const bool &allow_mtlx_output = !params_.skip_mtlx_outputs;
+
     switch (tree_type) {
       case ID_MA:
-        add_output_type("ShaderNodeOutputMaterial"_ustr);
-        add_output_type("ShaderNodeOutputLight"_ustr);
-        add_output_type("ShaderNodeOutputAOV"_ustr);
+        add_output_type("ShaderNodeOutputMaterial"_ustr, always);
+        add_output_type("ShaderNodeOutputLight"_ustr, always);
+        add_output_type("ShaderNodeOutputAOV"_ustr, always);
+        add_output_type("ShaderNodeMaterialX"_ustr, [&allow_mtlx_output](const bNode &node) {
+          return allow_mtlx_output && is_materialx_output_node(node);
+        });
         break;
       case ID_WO:
-        add_output_type("ShaderNodeOutputWorld"_ustr);
-        add_output_type("ShaderNodeOutputAOV"_ustr);
+        add_output_type("ShaderNodeOutputWorld"_ustr, always);
+        add_output_type("ShaderNodeOutputAOV"_ustr, always);
         break;
       case ID_LA:
-        add_output_type("ShaderNodeOutputLight"_ustr);
+        add_output_type("ShaderNodeOutputLight"_ustr, always);
+        add_output_type("ShaderNodeMaterialX"_ustr, [&allow_mtlx_output](const bNode &node) {
+          return allow_mtlx_output && is_materialx_output_node(node);
+        });
         break;
       case ID_LS:
-        add_output_type("ShaderNodeOutputLineStyle"_ustr);
+        add_output_type("ShaderNodeOutputLineStyle"_ustr, always);
         break;
       default:
         BLI_assert_unreachable();

@@ -27,6 +27,7 @@
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 
+#include "NOD_materialx.hh"
 #include "NOD_shader.h"
 #include "NOD_shader_nodes_inline.hh"
 #include "NOD_shader_raycast.hh"
@@ -1349,7 +1350,8 @@ static void add_nodes_inlined(Scene *scene,
   PtrOutputMap output_map;
 
   /* find the node to use for output if there are multiple */
-  const blender::bNode *output_node = ntreeShaderOutputNode(&b_ntree, blender::SHD_OUTPUT_CYCLES);
+  const blender::bNode *output_node = ntreeShaderOutputNode(
+      &b_ntree, blender::SHD_OUTPUT_CYCLES, false);
 
   /* add nodes */
   for (blender::bNode *b_node : b_ntree.all_nodes()) {
@@ -1451,7 +1453,7 @@ static void add_nodes_inlined(Scene *scene,
     else {
       ShaderNode *node = nullptr;
 
-      if (b_node == output_node) {
+      if (b_node == output_node && !blender::is_materialx_output_node(*b_node)) {
         node = graph->output();
       }
       else {

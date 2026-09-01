@@ -30,6 +30,9 @@ struct InlineShaderNodeTreeParams {
    */
   bool allow_preserving_repeat_zones = false;
 
+  /* Whether to consider materialx output nodes */
+  bool skip_mtlx_outputs = true;
+
   /* Allow processing only the outputs relevant to specific engines. */
   NodeShaderOutputTarget target_engine_ = SHD_OUTPUT_ALL;
 

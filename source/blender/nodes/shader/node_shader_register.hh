@@ -65,6 +65,7 @@ void register_node_type_sh_light_path();
 void register_node_type_sh_map_range();
 void register_node_type_sh_mapping();
 void register_node_type_sh_math();
+void register_node_type_sh_materialx();
 void register_node_type_sh_mix_rgb();
 void register_node_type_sh_mix_shader();
 void register_node_type_sh_mix();

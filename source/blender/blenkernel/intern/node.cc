@@ -105,6 +105,7 @@
 #include "NOD_geometry_nodes_gizmos.hh"
 #include "NOD_geometry_nodes_lazy_function.hh"
 #include "NOD_geometry_nodes_srna.hh"
+#include "NOD_materialx.hh"
 #include "NOD_menu_value.hh"
 #include "NOD_node_declaration.hh"
 #include "NOD_register.hh"
@@ -5545,34 +5546,46 @@ void node_tree_set_output(bNodeTree &ntree)
 {
   const bool is_compositor = ntree.type == NTREE_COMPOSIT;
   const bool is_geometry = ntree.type == NTREE_GEOMETRY;
-  /* find the active outputs, might become tree type dependent handler */
+  const bool is_shader = ntree.type == NTREE_SHADER;
+
   for (bNode &node : ntree.nodes) {
-    if (node.typeinfo->nclass == NODE_CLASS_OUTPUT) {
-      /* we need a check for which output node should be tagged like this, below an exception */
+    const bool node_is_regular_output = node.typeinfo->nclass == NODE_CLASS_OUTPUT;
+    const bool node_is_shader_terminal = is_shader &&
+                                         (node.type_legacy == SH_NODE_OUTPUT_MATERIAL ||
+                                          is_materialx_output_node(node));
+
+    /* Though MaterialX terminals are NODE_CLASS_OUTPUT this is done
+     dynamically, so they need their own way in here */
+    if (node_is_regular_output || node_is_shader_terminal) {
       if (node.is_type("CompositorNodeOutputFile"_ustr)) {
         continue;
       }
-      const bool node_is_output = node.is_type("CompositorNodeViewer"_ustr) ||
+
+      const bool node_is_viewer = node.is_type("CompositorNodeViewer"_ustr) ||
                                   node.is_type("GeometryNodeViewer"_ustr);
 
       int output = 0;
       /* there is more types having output class, each one is checked */
 
       for (bNode &tnode : ntree.nodes) {
-        if (tnode.typeinfo->nclass != NODE_CLASS_OUTPUT) {
+        const bool tnode_is_regular_output = tnode.typeinfo->nclass == NODE_CLASS_OUTPUT;
+        const bool tnode_is_shader_terminal = is_shader &&
+                                              (tnode.type_legacy == SH_NODE_OUTPUT_MATERIAL ||
+                                               is_materialx_output_node(tnode));
+        if (!tnode_is_regular_output && !tnode_is_shader_terminal) {
           continue;
         }
 
-        /* same type, exception for viewer */
-        const bool tnode_is_output = tnode.is_type("CompositorNodeViewer"_ustr) ||
+        const bool tnode_is_viewer = tnode.is_type("CompositorNodeViewer"_ustr) ||
                                      tnode.is_type("GeometryNodeViewer"_ustr);
-        const bool viewer_case = (is_compositor || is_geometry) && tnode_is_output &&
-                                 node_is_output;
+        const bool viewer_case = (is_compositor || is_geometry) && tnode_is_viewer &&
+                                 node_is_viewer;
+        const bool shader_terminal_case = node_is_shader_terminal && tnode_is_shader_terminal;
         const bool has_same_shortcut = viewer_case && &node != &tnode &&
                                        tnode.custom1 == node.custom1 &&
                                        tnode.custom1 != NODE_VIEWER_SHORTCUT_NONE;
 
-        if (tnode.type_legacy == node.type_legacy || viewer_case) {
+        if (tnode.type_legacy == node.type_legacy || viewer_case || shader_terminal_case) {
           if (tnode.flag & NODE_DO_OUTPUT) {
             output++;
             if (output > 1) {
@@ -5585,13 +5598,11 @@ void node_tree_set_output(bNodeTree &ntree)
         }
       }
 
-      /* Only geometry nodes is allowed to have no active output in the node tree. */
       if (output == 0 && !is_geometry) {
         node.flag |= NODE_DO_OUTPUT;
       }
     }
 
-    /* group node outputs use this flag too */
     if (node.is_group_output()) {
       int output = 0;
       for (bNode &tnode : ntree.nodes) {

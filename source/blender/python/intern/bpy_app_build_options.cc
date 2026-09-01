@@ -58,6 +58,7 @@ static PyStructSequence_Field app_builtopts_info_fields[] = {
     {"openvdb", nullptr},
     {"alembic", nullptr},
     {"usd", nullptr},
+    {"materialx", nullptr},
     {"fluid", nullptr},
     {"xr_openxr", nullptr},
     {"potrace", nullptr},
@@ -290,6 +291,12 @@ static PyObject *make_builtopts_info()
 #endif
 
 #ifdef WITH_USD
+  SetObjIncref(Py_True);
+#else
+  SetObjIncref(Py_False);
+#endif
+
+#ifdef WITH_MATERIALX
   SetObjIncref(Py_True);
 #else
   SetObjIncref(Py_False);

@@ -156,6 +156,17 @@ if(WITH_USD)
 endif()
 
 # -----------------------------------------------------------------------------
+# Configure MaterialX
+
+add_library(bf_deps_optional_materialx INTERFACE)
+add_library(bf::dependencies::optional::materialx ALIAS bf_deps_optional_materialx)
+
+if(WITH_MATERIALX)
+  target_compile_definitions(bf_deps_optional_materialx INTERFACE WITH_MATERIALX)
+  target_link_libraries(bf_deps_optional_materialx INTERFACE MaterialXCore MaterialXFormat)
+endif()
+
+# -----------------------------------------------------------------------------
 # Configure Alembic
 
 add_library(bf_deps_optional_alembic INTERFACE)

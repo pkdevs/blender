@@ -22,6 +22,7 @@
 
 #include "node_shader_util.hh"
 
+#include "NOD_materialx.hh"
 #include "NOD_socket_search_link.hh"
 
 #include "RE_engine.h"
@@ -532,7 +533,7 @@ void ntreeExecGPUNodes(bNodeTreeExec *exec,
 
     do_it = false;
     /* for groups, only execute outputs for edited group */
-    if (node->typeinfo->nclass == NODE_CLASS_OUTPUT) {
+    if (node->typeinfo->nclass == NODE_CLASS_OUTPUT || is_materialx_output_node(*node)) {
       if ((output_node != nullptr) && (node == output_node)) {
         do_it = true;
       }

@@ -219,7 +219,7 @@ set(LIB
 
 if(WITH_MATERIALX)
   add_definitions(-DWITH_MATERIALX)
-  list(APPEND LIB MaterialXCore)
+  list(APPEND LIB bf::dependencies::optional::materialx)
 endif()
 
 blender_add_lib(bf_io_usd "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

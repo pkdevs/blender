@@ -10827,6 +10827,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("ShaderNode", "ShaderNodeVolumeCoefficients", def_volume_coefficients);
   define("ShaderNode", "ShaderNodeWavelength");
   define("ShaderNode", "ShaderNodeWireframe", def_sh_tex_wireframe);
+  define("ShaderNode", "ShaderNodeMaterialX");
 
   define("CompositorNode", "CompositorNodeAlphaOver");
   define("CompositorNode", "CompositorNodeAntiAliasing");

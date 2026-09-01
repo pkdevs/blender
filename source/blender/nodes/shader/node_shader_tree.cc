@@ -43,6 +43,7 @@
 
 #include "UI_resources.hh"
 
+#include "NOD_materialx.hh"
 #include "NOD_shader.h"
 
 #include "node_common.h"
@@ -164,6 +165,10 @@ static bool shader_validate_link(eNodeSocketDatatype from, eNodeSocketDatatype t
   {
     return from == to;
   }
+  if (ELEM(to, SOCK_STRING, SOCK_FILENAME) || ELEM(from, SOCK_STRING, SOCK_FILENAME)) {
+    return from == to;
+  }
+
   return true;
 }
 
@@ -212,7 +217,7 @@ void register_node_tree_type_sh()
 
 /* GPU material from shader nodes */
 
-bNode *ntreeShaderOutputNode(bNodeTree *ntree, int target)
+bNode *ntreeShaderOutputNode(bNodeTree *ntree, int target, bool skip_mtlx)
 {
   /* Make sure we only have single node tagged as output. */
   bke::node_tree_set_output(*ntree);
@@ -222,9 +227,14 @@ bNode *ntreeShaderOutputNode(bNodeTree *ntree, int target)
   bNode *output_node = nullptr;
 
   for (bNode &node : ntree->nodes) {
-    if (!ELEM(
-            node.type_legacy, SH_NODE_OUTPUT_MATERIAL, SH_NODE_OUTPUT_WORLD, SH_NODE_OUTPUT_LIGHT))
-    {
+    const bool is_mtlx_output = is_materialx_output_node(node);
+    const bool is_output = ELEM(node.type_legacy,
+                                SH_NODE_OUTPUT_MATERIAL,
+                                SH_NODE_OUTPUT_WORLD,
+                                SH_NODE_OUTPUT_LIGHT) ||
+                           is_mtlx_output;
+
+    if (!is_output || (skip_mtlx && is_mtlx_output)) {
       continue;
     }
 
@@ -472,7 +482,8 @@ static bool ntree_weight_tree_tag_nodes(bNode *fromnode, bNode *tonode, void *us
                                        SH_NODE_MIX_SHADER,
                                        SH_NODE_OUTPUT_WORLD,
                                        SH_NODE_OUTPUT_MATERIAL,
-                                       SH_NODE_SHADERTORGB);
+                                       SH_NODE_SHADERTORGB) ||
+                                  is_materialx_output_node(*tonode);
   if (tonode->runtime->tmp_flag == -1 && to_node_from_weight_tree) {
     tonode->runtime->tmp_flag = *node_count;
     *node_count += (tonode->type_legacy == SH_NODE_MIX_SHADER) ? 4 : 1;
@@ -628,6 +639,13 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
           case SH_NODE_ADD_SHADER: {
             tonode = nodes_copy[node.runtime->tmp_flag];
             tosock = ntree_shader_node_output_get(tonode, 0);
+            break;
+          }
+          case SH_NODE_MATERIALX: {
+            if (is_materialx_output_node(node)) {
+              tonode = nodes_copy[node.runtime->tmp_flag];
+              tosock = ntree_shader_node_output_get(tonode, 0);
+            }
             break;
           }
           case SH_NODE_MIX_SHADER: {

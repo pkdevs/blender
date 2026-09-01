@@ -45,6 +45,7 @@
 #include "NOD_geometry_nodes_gizmos.hh"
 #include "NOD_geometry_nodes_lazy_function.hh"
 #include "NOD_geometry_nodes_srna.hh"
+#include "NOD_materialx.hh"
 #include "NOD_node_declaration.hh"
 #include "NOD_scene_compositor_effect_inputs_srna.hh"
 #include "NOD_shader.h"
@@ -1839,7 +1840,7 @@ class NodeTreeMainUpdater {
 
   bool is_output_node(const bNode &node) const
   {
-    if (node.typeinfo->nclass == NODE_CLASS_OUTPUT) {
+    if (node.typeinfo->nclass == NODE_CLASS_OUTPUT || is_materialx_output_node(node)) {
       return true;
     }
     if (node.is_group_output()) {

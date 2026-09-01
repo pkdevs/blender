@@ -67,6 +67,7 @@ void register_shader_nodes()
   register_node_type_sh_map_range();
   register_node_type_sh_mapping();
   register_node_type_sh_math();
+  register_node_type_sh_materialx();
   register_node_type_sh_mix_rgb();
   register_node_type_sh_mix_shader();
   register_node_type_sh_mix();

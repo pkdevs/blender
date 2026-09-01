@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import bpy
+
 from bl_ui import node_add_menu
 from bpy.app.translations import (
     contexts as i18n_contexts,
@@ -536,6 +538,129 @@ class NODE_MT_shader_node_utilities_base(node_add_menu.NodeMenu):
         self.draw_assets_for_catalog(layout, self.bl_label)
 
 
+def _materialx_library_path():
+    import sys
+    import os
+    prog_dir = os.path.dirname(bpy.app.binary_path)
+    if sys.platform == "darwin":
+        return os.path.normpath(os.path.join(prog_dir, "..", "Resources", "lib", "materialx"))
+    return os.path.normpath(os.path.join(prog_dir, "lib", "materialx"))
+
+
+_materialx_nodedefs_cache: dict[str, dict[str, str]] = None
+
+
+def _materialx_get_nodedefs(force=False):
+    global _materialx_nodedefs_cache
+    if _materialx_nodedefs_cache is not None and not force:
+        return _materialx_nodedefs_cache
+
+    groups = {}
+    try:
+        import MaterialX as mx
+
+        search_path = mx.FileSearchPath(_materialx_library_path())
+        env_path = mx.getEnvironmentPath()
+        if env_path:
+            search_path.append(env_path)
+
+        library_folders = [mx.FilePath("libraries")]
+
+        doc = mx.createDocument()
+        mx.loadLibraries(library_folders, search_path, doc)
+
+        for nd in doc.getNodeDefs():
+            version = nd.getVersionString()
+            if version and not nd.getDefaultVersion():
+                continue  # only default versions
+
+            node_string = nd.getNodeString()
+            base_name = node_string if node_string else nd.getName()
+            nodegroup = nd.getAttribute("nodegroup") or "other"
+
+            group = groups.setdefault(base_name, {"nodegroup": nodegroup, "doc": nd.getDocString()})
+            if not group["nodegroup"]:
+                group["nodegroup"] = nodegroup
+    except Exception as ex:
+        print(f"MaterialX menu: could not query nodedefs ({ex})")
+
+    _materialx_nodedefs_cache = groups
+    return groups
+
+
+def _materialx_display_name(base_name):
+    name = base_name[3:] if base_name.startswith("ND_") else base_name
+    # return name.replace("_", " ").title()
+    return name
+
+
+class NODE_MT_shader_node_materialx_base(node_add_menu.NodeMenu):
+    bl_label = "MaterialX"
+
+    def draw(self, _context):
+        layout = self.layout
+        nodedefs = _materialx_get_nodedefs()
+
+        if not nodedefs:
+            # Just add the raw node if the python binding are unavailable
+            self.node_operator(layout, "ShaderNodeMaterialX")
+            return
+
+        categories = sorted({info["nodegroup"] for info in nodedefs.values()})
+        for category in categories:
+            self.draw_menu(layout, f"MaterialX/{category}")
+
+
+def _materialx_category_draw(self, _context):
+    layout = self.layout
+    nodedefs = _materialx_get_nodedefs()
+    names = sorted(
+        (n for n, info in nodedefs.items() if info["nodegroup"] == self.materialx_category),
+        key=_materialx_display_name,
+    )
+    for base_name in names:
+        props = self.node_operator(
+            layout, "ShaderNodeMaterialX", label=_materialx_display_name(base_name)
+        )
+        setting = props.settings.add()
+        setting.name = "materialx_name"
+        setting.value = repr(base_name)  # e.g. "'ND_add_float'"
+
+
+def _materialx_build_category_menus():
+    nodedefs = _materialx_get_nodedefs()
+    categories = sorted({info["nodegroup"] for info in nodedefs.values()})
+
+    menus = {}
+    for category in categories:
+        base_name = f"NODE_MT_shader_node_materialx_{category}_base"
+        menus[category] = type(
+            base_name,
+            (node_add_menu.NodeMenu,),
+            {
+                # "bl_label": category.replace("_", " ").title(),
+                "bl_label": category,
+                "menu_path": f"MaterialX/{category}",
+                "materialx_category": category,
+                "draw": _materialx_category_draw,
+            },
+        )
+    return menus
+
+
+_materialx_category_base_classes = _materialx_build_category_menus()
+
+_materialx_add_category_menus = {
+    f"NODE_MT_category_shader_materialx_{category}": cls
+    for category, cls in _materialx_category_base_classes.items()
+}
+
+_materialx_swap_category_menus = {
+    f"NODE_MT_shader_node_materialx_{category}_swap": cls
+    for category, cls in _materialx_category_base_classes.items()
+}
+
+
 class NODE_MT_shader_node_all_base(node_add_menu.NodeMenu):
     bl_label = ""
     menu_path = "Root"
@@ -558,11 +683,15 @@ class NODE_MT_shader_node_all_base(node_add_menu.NodeMenu):
         self.draw_menu(layout, "Texture")
         self.draw_menu(layout, "Utilities")
         layout.separator()
+        self.draw_menu(layout, "MaterialX")
+        layout.separator()
         self.draw_root_assets(layout)
         layout.separator()
         self.draw_menu(layout, "Group")
         self.draw_menu(layout, "Layout")
 
+
+_materialx_category_menus = _materialx_build_category_menus()
 
 add_menus = {
     # menu `bl_idname`: base-class.
@@ -577,6 +706,8 @@ add_menus = {
     "NODE_MT_category_shader_math": NODE_MT_shader_node_math_base,
     "NODE_MT_category_shader_text": NODE_MT_shader_node_text_base,
     "NODE_MT_category_shader_utilities": NODE_MT_shader_node_utilities_base,
+    "NODE_MT_category_shader_materialx": NODE_MT_shader_node_materialx_base,
+    **_materialx_add_category_menus,
     "NODE_MT_shader_node_add_all": NODE_MT_shader_node_all_base,
 }
 add_menus = node_add_menu.generate_menus(
@@ -599,6 +730,8 @@ swap_menus = {
     "NODE_MT_shader_node_math_swap": NODE_MT_shader_node_math_base,
     "NODE_MT_shader_node_text_swap": NODE_MT_shader_node_text_base,
     "NODE_MT_shader_node_utilities_swap": NODE_MT_shader_node_utilities_base,
+    "NODE_MT_shader_node_materialx_swap": NODE_MT_shader_node_materialx_base,
+    **_materialx_swap_category_menus,
     "NODE_MT_shader_node_swap_all": NODE_MT_shader_node_all_base,
 }
 swap_menus = node_add_menu.generate_menus(

@@ -1,3 +1,4 @@
+
 # SPDX-FileCopyrightText: 2021 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -65,6 +66,7 @@ set(SRC
   nodes/node_shader_map_range.cc
   nodes/node_shader_mapping.cc
   nodes/node_shader_math.cc
+  nodes/node_shader_materialx.cc
   nodes/node_shader_mix.cc
   nodes/node_shader_mix_rgb.cc
   nodes/node_shader_mix_shader.cc
@@ -164,8 +166,7 @@ if(WITH_MATERIALX)
     materialx/node_parser.h
   )
   list(APPEND LIB
-    MaterialXCore
-    MaterialXFormat
+    bf::dependencies::optional::materialx
   )
 
   if(WITH_USD)
