@@ -5008,10 +5008,10 @@ static bool edbm_fill_grid_prepare(BMesh *bm, int offset, int *span_p, const boo
     /* end span calc */
     int start = 0;
 
-    /* The algorithm needs to iterate the shorter distance, between the best and second best
-     * vert. If the second best vert is near the beginning of the loop, it starts at 0 and walks
-     * forward. If, instead, the second best vert is near the end of the loop, then it starts at
-     * the second best vertex and walks to the end of the loop. */
+    /* The algorithm needs to iterate the shorter distance, between the best and second best vert.
+     * If the second best vert is near the beginning of the loop, it starts at 0 and walks forward.
+     * If, instead, the second best vert is near the end of the loop, then it starts at the second
+     * best vertex and walks to the end of the loop. */
     if (span > verts_len / 2) {
       span = (verts_len)-span;
       start = (verts_len / 2) - span;
@@ -5130,9 +5130,9 @@ static FillGridSplitJoin *edbm_fill_grid_split_join_init(BMEditMesh *em)
   BMO_op_exec(em->bm, &split_op);
 
   /* Setup the weld op that will undo the split.
-   * Switch the selection to the corresponding edges on the island instead of the edges around
-   * the hole, so fill_grid will interpolate using the face and loop data from the island. Also
-   * create a new map for the weld, which maps pairs of verts instead of pairs of edges. */
+   * Switch the selection to the corresponding edges on the island instead of the edges around the
+   * hole, so fill_grid will interpolate using the face and loop data from the island.
+   * Also create a new map for the weld, which maps pairs of verts instead of pairs of edges. */
   BMO_op_init(em->bm, &split_join->weld_op, 0, "weld_verts");
   BMOpSlot *weld_target_map = BMO_slot_get(split_join->weld_op.slots_in, "targetmap");
   BMOIter siter;
@@ -5150,9 +5150,8 @@ static FillGridSplitJoin *edbm_fill_grid_split_join_init(BMEditMesh *em)
       BM_elem_flag_disable(e, BM_ELEM_SELECT);
 
       /* For verts, flip the selection from the edge of the hole to the edge of the island.
-       * Also add it to the weld map. But check selection first. Don't try to add the same vert
-       * to the map more than once. If the selection was changed false, it's already been
-       * processed.
+       * Also add it to the weld map. But check selection first. Don't try to add the same vert to
+       * the map more than once. If the selection was changed false, it's already been processed.
        */
       if (BM_elem_flag_test(e->v1, BM_ELEM_SELECT)) {
         BM_elem_flag_disable(e->v1, BM_ELEM_SELECT);
@@ -6550,17 +6549,17 @@ static wmOperatorStatus edbm_dissolve_limited_exec(bContext *C, wmOperator *op)
       dissolve_flag = BM_ELEM_SELECT;
     }
 
-    EDBM_op_call_and_selectf(em,
-                             op,
-                             "region.out",
-                             true,
-                             "dissolve_limit edges=%he verts=%hv angle_limit=%f "
-                             "use_dissolve_boundaries=%b delimit=%i",
-                             dissolve_flag,
-                             dissolve_flag,
-                             angle_limit,
-                             use_dissolve_boundaries,
-                             delimit);
+    EDBM_op_call_and_selectf(
+        em,
+        op,
+        "region.out",
+        true,
+        "dissolve_limit edges=%he verts=%hv angle_limit=%f use_dissolve_boundaries=%b delimit=%i",
+        dissolve_flag,
+        dissolve_flag,
+        angle_limit,
+        use_dissolve_boundaries,
+        delimit);
 
     BM_custom_loop_normals_from_vector_layer(em->bm, false);
 
@@ -8560,8 +8559,8 @@ void MESH_OT_mark_freestyle_face(wmOperatorType *ot)
  * \{ */
 
 /* NOTE: these defines are saved in keymap files, do not change values but just add new ones */
-/* NOTE: We could add more here, like e.g. a switch between local or global coordinates of
- * target, use number-input to type in explicit vector values. */
+/* NOTE: We could add more here, like e.g. a switch between local or global coordinates of target,
+ *       use number-input to type in explicit vector values. */
 enum {
   /* Generic commands. */
   EDBM_CLNOR_MODAL_CANCEL = 1,
@@ -9296,8 +9295,7 @@ static wmOperatorStatus normals_split_merge(bContext *C, const bool do_merge)
     BKE_editmesh_lnorspace_update(em);
 
     /* Note that we need temp lnor editing data for all loops of all affected vertices, since by
-     * setting some faces/edges as smooth we are going to change clnors spaces... See also
-     * #65809.
+     * setting some faces/edges as smooth we are going to change clnors spaces... See also #65809.
      */
     BMLoopNorEditDataArray *lnors_ed_arr = do_merge ?
                                                BM_loop_normal_editdata_array_init(bm, true) :
