@@ -17,11 +17,11 @@
 #include "DNA_scene_types.h"
 #include "DNA_world_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_main.hh"
 #include "BKE_material.hh"
@@ -171,7 +171,9 @@ GPUMaterialFromNodeTreeResult GPU_material_from_nodetree(
   nodes::inline_shader_node_tree(*ntree, *localtree, inline_params);
 
   for (nodes::InlineShaderNodeTreeParams::ErrorMessage &error : inline_params.r_error_messages) {
-    result.errors.append({error.node, std::move(error.message)});
+    result.errors.append({error.node,
+                          std::move(error.message),
+                          GPUMaterialFromNodeTreeResult::WarningType(error.type)});
   }
 
   ntreeGPUMaterialNodes(localtree, mat);
@@ -217,6 +219,14 @@ GPUMaterialFromNodeTreeResult GPU_material_from_nodetree(
 
   return result;
 }
+
+/* Make sure the two enums are actually the same. */
+static_assert(int(GPUMaterialFromNodeTreeResult::WarningType::Error) ==
+              int(nodes::NodeWarningType::Error));
+static_assert(int(GPUMaterialFromNodeTreeResult::WarningType::Warning) ==
+              int(nodes::NodeWarningType::Warning));
+static_assert(int(GPUMaterialFromNodeTreeResult::WarningType::Info) ==
+              int(nodes::NodeWarningType::Info));
 
 GPUMaterial *GPU_material_from_callbacks(eGPUMaterialEngine engine,
                                          ConstructGPUMaterialFn construct_function_cb,

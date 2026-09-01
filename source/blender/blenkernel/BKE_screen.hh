@@ -8,9 +8,10 @@
  */
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "BLI_compiler_attrs.h"
+#include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_map.hh"
 #include "BLI_math_vector_types.hh"
@@ -246,6 +247,40 @@ enum ARegionDrawLockFlags {
   REGION_DRAW_LOCK_ALL = (REGION_DRAW_LOCK_RENDER | REGION_DRAW_LOCK_BAKING)
 };
 
+/**
+ * Result of #ARegionType::cursor_ime, describing what should happen to the region's IME session.
+ * Ending a session cancels composition, discarding text the user has entered but not committed,
+ * so a temporary lack of position must *not* end it.
+ *
+ * A `std::nullopt` result means the region isn't editing text, end the session.
+ */
+enum class ARegionIMECursorState : int8_t {
+  /**
+   * The callback filled in its #ARegionIMECursor, (re)position the IME popup.
+   */
+  PositionSet,
+  /**
+   * No usable position right now, e.g. scrolling or the current-frame off a text strip:
+   * keep the session until it returns.
+   */
+  PositionPending,
+};
+
+/**
+ * The cursor position & size to display.
+ * See #ARegionType::cursor_ime for details.
+ */
+struct ARegionIMECursor {
+  /**
+   * Region relative, positions the candidate window & the composition preview.
+   *
+   * The width may be zero but the height should match the cursor size.
+   */
+  rcti rect = {0, 0, 0, 0};
+  /** The size the editor draws text at, so the preview matches it. */
+  int font_size = 0;
+};
+
 struct ARegionType {
   ARegionType *next, *prev;
   /** Unique identifier within this space, defines `RGN_TYPE_xxxx`. */
@@ -314,6 +349,21 @@ struct ARegionType {
    * when the `v2d->tot` is changed and `cur` is adopted accordingly).
    */
   void (*on_view2d_changed)(const bContext *C, ARegion *region);
+
+  /**
+   * Report the IME cursor so the candidate window can be positioned,
+   * see #ARegionIMECursorState for the results.
+   *
+   * On #ARegionIMECursorState::PositionSet, `r_cursor->rect` is the region-relative cursor:
+   * used to position the IME popup. Otherwise `r_cursor` is left untouched.
+   *
+   * Called on region activation and after each draw (when `ARegionRuntime::do_ime` is set)
+   * to position the IME candidate window.
+   */
+  std::optional<ARegionIMECursorState> (*cursor_ime)(wmWindow *win,
+                                                     const ScrArea *area,
+                                                     const ARegion *region,
+                                                     ARegionIMECursor *r_cursor);
 
   ARegionTypeFlag flag;
 
@@ -509,6 +559,12 @@ enum class ARegionQuadviewIndex : uint8_t {
   TopRight = 4,
 };
 
+enum ARegionRuntimeFlag : uint8_t {
+  /** Move redo panel in +Y direction to avoid overlapping with other UI elements, see: #62258 */
+  HUD_PADDING = (1 << 0),
+};
+ENUM_OPERATORS(ARegionRuntimeFlag)
+
 struct ARegionRuntime {
   /** Callbacks for this region type. */
   struct ARegionType *type;
@@ -563,10 +619,14 @@ struct ARegionRuntime {
   /** Private, cached notifier events. */
   short do_draw_paintcursor;
 
+  /** Tag for IME cursor position refresh on next draw. */
+  bool do_ime = false;
+
   ARegionQuadviewIndex quadview_index = ARegionQuadviewIndex::None;
 
   /** Dummy panel used in popups so they can support layout panels. */
   Panel *popup_block_panel = nullptr;
+  ARegionRuntimeFlag flag = {};
 };
 
 }  // namespace bke
@@ -883,9 +943,13 @@ ARegion *BKE_screen_find_region_in_space(const bScreen *screen,
     ATTR_NONNULL(1, 2);
 /**
  * \note used to get proper RNA paths for spaces (editors).
+ * \note This handles both normal screen areas, and global areas that are owned by the window.
  */
-std::optional<std::string> BKE_screen_path_from_screen_to_space(const PointerRNA *ptr);
-std::optional<std::string> BKE_screen_path_from_screen_to_area(const PointerRNA *ptr);
+std::optional<std::string> BKE_screen_path_to_space(const PointerRNA *ptr);
+/**
+ * \note This handles both normal screen areas, and global areas that are owned by the window.
+ */
+std::optional<std::string> BKE_screen_path_to_area(const PointerRNA *ptr);
 /**
  * \note Using this function is generally a last resort, you really want to be
  * using the context when you can - campbell
@@ -936,8 +1000,12 @@ void BKE_screen_area_map_free(ScrAreaMap *area_map) ATTR_NONNULL();
  */
 void BKE_screen_copy_data(bScreen *screen_dst, const bScreen *screen_src);
 
+/** \return True if the edge defined by a1 and a2 is equal to the edge defined by b1 and b2. */
+bool BKE_screen_scredge_equals(const ScrVert *a1,
+                               const ScrVert *a2,
+                               const ScrVert *b1,
+                               const ScrVert *b2);
 ScrEdge *BKE_screen_find_edge(const bScreen *screen, ScrVert *v1, ScrVert *v2);
-void BKE_screen_sort_scrvert(ScrVert **v1, ScrVert **v2);
 void BKE_screen_remove_double_scrverts(bScreen *screen);
 void BKE_screen_remove_double_scredges(bScreen *screen);
 void BKE_screen_remove_unused_scredges(bScreen *screen);

@@ -10,8 +10,8 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_string.h"
-#include "BLI_time.h"
+#include "BLI_string.hh"
+#include "BLI_time.hh"
 
 #include <algorithm>
 #include <fmt/format.h>
@@ -170,7 +170,7 @@ const shader::ShaderCreateInfo &MTLShader::patch_create_info(
     if (patched_info_ == nullptr) {
       patched_info_ = std::make_unique<PatchedShaderCreateInfo>(original_info);
     }
-    patched_info_->info.builtins_ |= BuiltinBits::USE_SAMPLER_ARG_BUFFER;
+    patched_info_->info.builtins(BuiltinBits::USE_SAMPLER_ARG_BUFFER);
   }
 
   return patched_info_ != nullptr ? patched_info_->info : original_info;
@@ -207,7 +207,8 @@ std::string MTLShader::entry_point_name_get(const ShaderStage stage)
 
 /* Note: returns a retained object. */
 static ::MTLCompileOptions *get_compile_options(const bool use_subpass_input,
-                                                const bool use_texture_atomic)
+                                                const bool use_texture_atomic,
+                                                const bool use_ray_query)
 {
   ::MTLCompileOptions *options = [[MTLCompileOptions alloc] init];
   options.languageVersion = MTLLanguageVersion2_2;
@@ -220,6 +221,14 @@ static ::MTLCompileOptions *get_compile_options(const bool use_subpass_input,
   if (use_subpass_input) {
     options.languageVersion = MTLLanguageVersion2_3;
   }
+#if defined(MAC_OS_VERSION_13_0)
+  if (@available(macOS 13.0, *)) {
+    /* Inline ray queries require Metal 3.0. */
+    if (use_ray_query) {
+      options.languageVersion = MTLLanguageVersion3_0;
+    }
+  }
+#endif
 #if defined(MAC_OS_VERSION_14_0)
   if (@available(macOS 14.00, *)) {
     /* Texture atomics require Metal 3.1. */
@@ -246,14 +255,19 @@ id<MTLLibrary> MTLShader::create_shader_library(const shader::ShaderCreateInfo &
     ss << "#define MTL_WORKGROUP_SIZE_X " << info.compute_layout_.local_size_x << "\n";
     ss << "#define MTL_WORKGROUP_SIZE_Y " << info.compute_layout_.local_size_y << "\n";
     ss << "#define MTL_WORKGROUP_SIZE_Z " << info.compute_layout_.local_size_z << "\n";
-    if (flag_is_set(info.builtins_, BuiltinBits::USE_SAMPLER_ARG_BUFFER)) {
+    ss << "#define GPU_PROVOKING_VERTEX_LAST\n";
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::USE_SAMPLER_ARG_BUFFER)) {
       ss << "#define MTL_USE_SAMPLER_ARGUMENT_BUFFER\n";
     }
 
-    if (flag_is_set(info.builtins_, BuiltinBits::TEXTURE_ATOMIC) &&
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::TEXTURE_ATOMIC) &&
         MTLBackend::get_capabilities().supports_texture_atomics)
     {
       ss << "#define MTL_SUPPORTS_TEXTURE_ATOMICS 1\n";
+    }
+
+    if (flag_is_set(info.builtins_combined(), BuiltinBits::RAY_QUERY)) {
+      ss << "#define MTL_USE_RAY_QUERY\n";
     }
 
     shader::GeneratedSource defines_src{"gpu_shader_msl_defines.msl", {}, ss.str()};
@@ -287,9 +301,17 @@ id<MTLLibrary> MTLShader::create_shader_library(const shader::ShaderCreateInfo &
     processed_source = original_source;
   }
 
+  /* Ray-query shaders need the Metal raytracing header prepended to the final source. */
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::RAY_QUERY)) {
+    processed_source = "#include <metal_raytracing>\nusing namespace metal::raytracing;\n" +
+                       processed_source;
+  }
+
   {
     ::MTLCompileOptions *options = get_compile_options(
-        !info.subpass_inputs_.is_empty(), bool(info.builtins_ & BuiltinBits::TEXTURE_ATOMIC));
+        !info.subpass_inputs_.is_empty(),
+        flag_is_set(info.builtins_combined(), BuiltinBits::TEXTURE_ATOMIC),
+        flag_is_set(info.builtins_combined(), BuiltinBits::RAY_QUERY));
 
     NSError *error = nullptr;
     id<MTLLibrary> library = [context_->device

@@ -12,8 +12,8 @@
 
 #include "CLG_log.h"
 
-#include "BLI_array_utils.h"
-#include "BLI_listbase.h"
+#include "BLI_array_utils_c.hh"
+#include "BLI_listbase.hh"
 
 #include "DNA_layer_types.h"
 #include "DNA_meta_types.h"
@@ -250,7 +250,7 @@ static void mball_undosys_foreach_ID_ref(UndoStep *us_p,
 
 void ED_mball_undosys_type(UndoType *ut)
 {
-  ut->name = "Edit MBall";
+  ut->identifier = "EDIT_MBALL";
   ut->poll = mball_undosys_poll;
   ut->step_encode = mball_undosys_step_encode;
   ut->step_decode = mball_undosys_step_decode;
@@ -258,7 +258,7 @@ void ED_mball_undosys_type(UndoType *ut)
 
   ut->step_foreach_ID_ref = mball_undosys_foreach_ID_ref;
 
-  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE;
+  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE | UNDOTYPE_FLAG_ENCODE_PRE_MEMFILE_SUPPORTED;
 
   ut->step_size = sizeof(MBallUndoStep);
 }

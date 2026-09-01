@@ -11,6 +11,7 @@
 #include "RNA_enum_types.hh"
 
 #include "BKE_attribute_legacy_convert.hh"
+#include "BKE_grease_pencil.hh"
 #include "BKE_instances.hh"
 #include "BKE_mesh.hh"
 #include "BKE_type_conversions.hh"
@@ -83,6 +84,32 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
         node_storage(node).data_type = *type;
         params.update_and_connect_available_socket(node, "Value"_ustr);
       });
+    }
+  }
+}
+
+/* Need to tag the drawings because it's not handled by try_capture_field_on_geometry
+ * automatically yet.*/
+static void grease_pencil_add_missing_update_tags(const std::string &name,
+                                                  GeometrySet &geometry_set)
+{
+  GreasePencil &grease_pencil = *geometry_set.get_grease_pencil_for_write();
+  if (name == "fill_id") {
+    for (GreasePencilDrawingBase *base : grease_pencil.drawings()) {
+      if (base->type != GP_DRAWING) {
+        continue;
+      }
+      bke::greasepencil::Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
+      drawing.tag_fills_changed();
+    }
+  }
+  else if (ELEM(name, "uv_rotation", "uv_translation", "uv_scale", "uv_shear")) {
+    for (GreasePencilDrawingBase *base : grease_pencil.drawings()) {
+      if (base->type != GP_DRAWING) {
+        continue;
+      }
+      bke::greasepencil::Drawing &drawing = reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
+      drawing.tag_texture_matrices_changed();
     }
   }
 }
@@ -169,6 +196,9 @@ static void node_geo_exec(GeoNodeExecParams params)
               bke::mesh_ensure_default_color_attribute_on_add(mesh, name, domain, data_type);
               bke::mesh_ensure_default_uv_attribute_on_add(mesh, name, domain, data_type);
             }
+            if (component.type() == GeometryComponent::Type::GreasePencil) {
+              grease_pencil_add_missing_update_tags(name, geometry_set);
+            }
           }
           else if (component.attribute_domain_size(domain) != 0) {
             failure.store(true);
@@ -185,10 +215,10 @@ static void node_geo_exec(GeoNodeExecParams params)
     RNA_enum_name_from_value(rna_enum_attribute_type_items, cd_type, &type_name);
     const std::string message = fmt::format(
         fmt::runtime(
-            TIP_("Failed to write to attribute \"{}\" with domain \"{}\" and type \"{}\"")),
+            RPT_("Failed to write to attribute \"{}\" with domain \"{}\" and type \"{}\"")),
         name,
-        TIP_(domain_name),
-        TIP_(type_name));
+        RPT_(domain_name),
+        RPT_(type_name));
     params.error_message_add(NodeWarningType::Warning, message);
   }
 

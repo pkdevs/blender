@@ -12,10 +12,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_context.hh"
@@ -48,6 +48,7 @@
 
 #include "BLO_read_write.hh"
 
+#include "file_banner.hh"
 #include "file_indexer.hh"
 #include "file_intern.hh" /* own include */
 #include "filelist.hh"
@@ -239,8 +240,19 @@ static void file_refresh(const bContext *C, ScrArea *area)
   filelist_settype(sfile->files, params->type);
   filelist_setdir(sfile->files, params->dir);
   filelist_setrecursion(sfile->files, params->recursion_level);
+  filelist_setglob(sfile->files, params->filter_glob);
   filelist_setsorting(sfile->files, params->sort, params->flag & FILE_SORT_INVERT);
-  filelist_setlibrary(sfile->files, asset_params ? &asset_params->asset_library_ref : nullptr);
+  filelist_setlibrary(
+      sfile->files, asset_params ? &asset_params->asset_library_ref : nullptr, [&]() {
+        /* When switching to the essentials library and the "Unassigned" catalog is active, switch
+         * to the "All" library instead. The "Unassigned" catalog should be empty for the
+         * essentials library and isn't shown in the UI. */
+        if ((asset_params->asset_library_ref.type == ASSET_LIBRARY_ESSENTIALS) &&
+            asset_params->asset_catalog_visibility == FILE_SHOW_ASSETS_WITHOUT_CATALOG)
+        {
+          asset_params->asset_catalog_visibility = FILE_SHOW_ASSETS_ALL_CATALOGS;
+        }
+      });
 
   const bool show_assets_online = asset_params && ELEM(asset_params->asset_access,
                                                        AssetAccess::OnlineAndOffline,
@@ -258,7 +270,6 @@ static void file_refresh(const bContext *C, ScrArea *area)
       (params->flag & FILE_ASSETS_ONLY) != 0,
       /*filter_assets_hide_online=*/!show_assets_online,
       /*filter_assets_hide_offline=*/!show_assets_offline,
-      params->filter_glob,
       params->filter_search);
   if (asset_params) {
     filelist_set_asset_include_online(sfile->files, show_assets_online);
@@ -380,7 +391,7 @@ static void file_listener(const wmSpaceTypeListenerParams *listener_params)
   /* context changes */
   switch (wmn->category) {
     case NC_UI:
-      if (sfile) {
+      if (wmn->data == ND_UI_LANG && sfile) {
         filelist_tag_force_reset(sfile->files);
       }
       break;
@@ -562,7 +573,8 @@ static void file_main_region_message_subscribe(const wmRegionMessageSubscribePar
         if (blender::asset_system::is_or_contains_remote_libraries(
                 asset_params->asset_library_ref))
         {
-          ED_fileselect_clear(CTX_wm_manager(C), sfile);
+          /* Calls #ED_fileselect_clear() for all open asset browsers. */
+          ed::asset::list::clear(&asset_params->asset_library_ref, C);
         }
       }
     };
@@ -646,6 +658,7 @@ static void file_main_region_draw(const bContext *C, ARegion *region)
     file_highlight_set(sfile, region, event->xy[0], event->xy[1]);
   }
 
+  file_banners_update(*sfile);
   ED_fileselect_init_layout(sfile, region);
 
   if (!file_draw_hint_if_invalid(C, sfile, region)) {
@@ -655,6 +668,8 @@ static void file_main_region_draw(const bContext *C, ARegion *region)
     ui::view2d_view_ortho(v2d);
 
     file_draw_list(C, region);
+    /* After the list, so it draws on top. */
+    file_draw_banner(C, sfile, region);
   }
 
   /* reset view matrix */

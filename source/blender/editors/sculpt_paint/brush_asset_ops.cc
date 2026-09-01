@@ -2,10 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_brush_types.h"
 #include "DNA_scene_types.h"
@@ -74,7 +74,7 @@ static wmOperatorStatus brush_asset_activate_exec(bContext *C, wmOperator *op)
     BKE_reportf(op->reports, RPT_ERROR, "Asset '%s' is not a brush", asset->get_name().c_str());
     return OPERATOR_CANCELLED;
   }
-  if (asset->is_online()) {
+  if (asset->is_online_only()) {
     BKE_reportf(op->reports,
                 RPT_ERROR,
                 "Brush '%s' needs downloading before it can be used (check context menu)",

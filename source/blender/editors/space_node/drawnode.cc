@@ -8,9 +8,9 @@
  */
 
 #include "BLI_color_types.hh"
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-#include "BLI_threads.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_threads.hh"
 
 #include "DNA_node_types.h"
 #include "DNA_screen_types.h"
@@ -76,7 +76,9 @@ namespace ed::space_node {
 /* Default flags for Layout::prop(). Name is kept short since this is used a lot in this file. */
 #define DEFAULT_FLAGS ui::ITEM_R_SPLIT_EMPTY_NAME
 
-/* ****************** SOCKET BUTTON DRAW FUNCTIONS ***************** */
+/* -------------------------------------------------------------------- */
+/** \name Socket Button Draw Callbacks
+ * \{ */
 
 static void node_socket_button_label(bContext * /*C*/,
                                      ui::Layout *layout,
@@ -87,7 +89,11 @@ static void node_socket_button_label(bContext * /*C*/,
   layout->label(text, ICON_NONE);
 }
 
-/* ****************** BUTTON CALLBACKS FOR ALL TREES ***************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Button Callbacks for All Trees
+ * \{ */
 
 static void node_buts_mix_rgb(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
@@ -195,6 +201,12 @@ static void node_buts_combsep_color(ui::Layout &layout, bContext * /*C*/, Pointe
   layout.prop(ptr, "mode", DEFAULT_FLAGS, "", ICON_NONE);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Node Resize Direction
+ * \{ */
+
 NodeResizeDirection node_get_resize_direction(const SpaceNode &snode,
                                               const bNode *node,
                                               const int x,
@@ -253,7 +265,11 @@ NodeResizeDirection node_get_resize_direction(const SpaceNode &snode,
   return dir;
 }
 
-/* ****************** BUTTON CALLBACKS FOR COMMON NODES ***************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Button Callbacks for Common Nodes
+ * \{ */
 
 static void node_draw_buttons_group(ui::Layout &layout, bContext *C, PointerRNA *ptr)
 {
@@ -279,7 +295,11 @@ static void node_common_set_butfunc(bke::bNodeType *ntype)
   }
 }
 
-/* ****************** BUTTON CALLBACKS FOR SHADER NODES ***************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Button Callbacks for Shader Nodes
+ * \{ */
 
 static void node_buts_image_user(ui::Layout &layout,
                                  bContext *C,
@@ -481,14 +501,18 @@ static void node_shader_set_butfunc(bke::bNodeType *ntype)
   }
 }
 
-/* ****************** BUTTON CALLBACKS FOR COMPOSITE NODES ***************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Button Callbacks for Composite Nodes
+ * \{ */
 
 static void node_buts_image_views(ui::Layout &layout,
                                   bContext * /*C*/,
                                   PointerRNA *ptr,
                                   PointerRNA *imaptr)
 {
-  if (!imaptr->data) {
+  if (!*imaptr) {
     return;
   }
 
@@ -649,7 +673,11 @@ static void node_composit_set_butfunc(bke::bNodeType *ntype)
   }
 }
 
-/* ****************** BUTTON CALLBACKS FOR TEXTURE NODES ***************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Button Callbacks for Texture Nodes
+ * \{ */
 
 static void node_texture_buts_bricks(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
@@ -858,6 +886,8 @@ static void node_texture_set_butfunc(bke::bNodeType *ntype)
   }
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Init Draw Callbacks For All Tree Types
  *
@@ -905,7 +935,7 @@ static void node_socket_undefined_draw(bContext * /*C*/,
                                        PointerRNA * /*node_ptr*/,
                                        StringRef /*text*/)
 {
-  layout->label(IFACE_("Undefined Socket Type"), ICON_ERROR);
+  layout->label(IFACE_("Undefined Socket Type"), ICON_STATUS_ERROR);
 }
 
 static void node_socket_undefined_draw_color(bContext * /*C*/,
@@ -933,12 +963,16 @@ static void node_socket_undefined_interface_draw(ID * /*id*/,
                                                  bContext * /*C*/,
                                                  ui::Layout *layout)
 {
-  layout->label(IFACE_("Undefined Socket Type"), ICON_ERROR);
+  layout->label(IFACE_("Undefined Socket Type"), ICON_STATUS_ERROR);
 }
 
 /** \} */
 
 }  // namespace ed::space_node
+
+/* -------------------------------------------------------------------- */
+/** \name Init Draw Callbacks
+ * \{ */
 
 void ED_node_init_butfuncs()
 {
@@ -979,7 +1013,13 @@ void ED_init_custom_node_socket_type(bke::bNodeSocketType *stype)
   stype->draw = ed::space_node::node_socket_button_label;
 }
 
+/** \} */
+
 namespace ed::space_node {
+
+/* -------------------------------------------------------------------- */
+/** \name Standard Socket Colors
+ * \{ */
 
 static const float virtual_node_socket_color[4] = {0.2, 0.2, 0.2, 1.0};
 
@@ -1052,6 +1092,12 @@ static const SocketColorFn std_node_socket_color_funcs[] = {
     std_node_socket_color_fn<SOCK_INT_VECTOR>,
 };
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Standard Socket Drawing
+ * \{ */
+
 static bool socket_needs_attribute_search(bNode &node, bNodeSocket &socket)
 {
   const nodes::NodeDeclaration *node_decl = node.declaration();
@@ -1123,7 +1169,8 @@ static void draw_node_socket_name_editable(ui::Layout *layout,
       layout->emboss_set(ui::EmbossType::None);
       layout->prop((&sock->runtime->declaration->socket_name_rna->owner),
                    sock->runtime->declaration->socket_name_rna->property_name,
-                   sock->in_out == SOCK_OUT ? ui::eUI_Item_Flag::ITEM_R_TEXT_RIGHT : UI_ITEM_NONE,
+                   ui::ITEM_R_TEXT_BUT_LABEL_STYLE |
+                       (sock->in_out == SOCK_OUT ? ui::ITEM_R_TEXT_RIGHT : UI_ITEM_NONE),
                    "",
                    ICON_NONE);
       return;
@@ -1378,7 +1425,7 @@ static void std_node_socket_draw(
         }
       }
       else if (default_value->has_conflict()) {
-        layout->label(IFACE_("Menu Error"), ICON_ERROR);
+        layout->label(IFACE_("Menu Error"), ICON_STATUS_ERROR);
       }
       else {
         layout->label(IFACE_("Menu Undefined"), ICON_QUESTION);
@@ -1593,14 +1640,19 @@ static void std_node_socket_interface_draw(ID *id,
     sub->prop(&ptr, "hide_value", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
   }
 
-  if (interface_socket->flag & NODE_INTERFACE_SOCKET_INPUT && node_tree->type == NTREE_GEOMETRY) {
-    if (type == SOCK_BOOLEAN) {
-      col->prop(&ptr, "layer_selection_field", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
+  if (interface_socket->flag & NODE_INTERFACE_SOCKET_INPUT) {
+    if (node_tree->type == NTREE_GEOMETRY) {
+      if (type == SOCK_BOOLEAN) {
+        col->prop(&ptr, "layer_selection_field", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
+      }
+      ui::Layout *sub = &col->column(false);
+      sub->active_set(!is_layer_selection_field(*interface_socket));
+      sub->prop(&ptr, "hide_in_modifier", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
+      sub->prop(&ptr, "structure_type", DEFAULT_FLAGS, IFACE_("Shape"), ICON_NONE);
     }
-    ui::Layout *sub = &col->column(false);
-    sub->active_set(!is_layer_selection_field(*interface_socket));
-    sub->prop(&ptr, "hide_in_modifier", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
-    sub->prop(&ptr, "structure_type", DEFAULT_FLAGS, IFACE_("Shape"), ICON_NONE);
+    else if (node_tree->type == NTREE_COMPOSIT) {
+      col->prop(&ptr, "hide_in_modifier", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
+    }
   }
 }
 
@@ -1618,7 +1670,13 @@ static void node_socket_virtual_draw_color_simple(const bke::bNodeSocketType * /
   copy_v4_v4(r_color, virtual_node_socket_color);
 }
 
+/** \} */
+
 }  // namespace ed::space_node
+
+/* -------------------------------------------------------------------- */
+/** \name Socket Type Init
+ * \{ */
 
 void ED_init_standard_node_socket_type(bke::bNodeSocketType *stype)
 {
@@ -1654,9 +1712,13 @@ void ED_node_type_draw_color(const char *idname, float *r_color)
   copy_v4_v4(r_color, std_node_socket_colors[typeinfo->type]);
 }
 
+/** \} */
+
 namespace ed::space_node {
 
-/* ************** Generic drawing ************** */
+/* -------------------------------------------------------------------- */
+/** \name Generic Drawing
+ * \{ */
 
 void draw_nodespace_back_pix(const bContext &C,
                              ARegion &region,
@@ -1783,10 +1845,10 @@ static std::array<float2, 4> node_link_bezier_points(const bNodeLink &link)
 
 static bool node_link_draw_is_visible(const View2D &v2d, const std::array<float2, 4> &points)
 {
-  if (min_ffff(points[0].x, points[1].x, points[2].x, points[3].x) > v2d.cur.xmax) {
+  if (std::min({points[0].x, points[1].x, points[2].x, points[3].x}) > v2d.cur.xmax) {
     return false;
   }
-  if (max_ffff(points[0].x, points[1].x, points[2].x, points[3].x) < v2d.cur.xmin) {
+  if (std::max({points[0].x, points[1].x, points[2].x, points[3].x}) < v2d.cur.xmin) {
     return false;
   }
   return true;
@@ -1813,6 +1875,8 @@ void node_link_bezier_points_evaluated(const bNodeLink &link,
                                 NODE_LINK_RESOL,
                                 sizeof(float2));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Node Socket Drawing
@@ -2287,7 +2351,7 @@ static NodeLinkDrawConfig nodelink_get_draw_config(const bContext &C,
 
   draw_config.dim_factor = selected ? 1.0f : node_link_dim_factor(v2d, link);
 
-  bTheme *btheme = ui::theme::theme_get();
+  const bTheme *btheme = ui::theme::theme_get();
   draw_config.dash_alpha = btheme->space_node.dash_alpha;
 
   const bool field_link = node_link_is_field_link(snode, link);

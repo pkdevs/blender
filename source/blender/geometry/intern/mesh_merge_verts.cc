@@ -7,11 +7,12 @@
 
 #include "BKE_attribute_math.hh"
 #include "BLI_array.hh"
+#include "BLI_array_utils.hh"
 #include "BLI_bit_vector.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_kdtree.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_vector.hh"
 
@@ -1232,6 +1233,7 @@ static void weld_mesh_context_create(const Mesh &mesh,
                                      const bool get_doubles,
                                      WeldMesh *r_weld_mesh)
 {
+  PRF_scope(ProfileCategory::Default);
   const Span<int2> edges = mesh.edges();
   const OffsetIndices faces = mesh.faces();
   const Span<int> corner_verts = mesh.corner_verts();
@@ -1350,6 +1352,7 @@ static void merge_customdata_all(Span<int> dest_map,
                                  Vector<int> &r_src_index_data,
                                  Array<int> &r_final_map)
 {
+  PRF_scope(ProfileCategory::Default);
   const int source_size = dest_map.size();
   r_src_index_offsets.reserve(dest_size + 1);
   r_src_index_data.reserve(source_size);
@@ -1508,6 +1511,7 @@ static Mesh *create_merged_mesh(const Mesh &mesh,
                                 const int removed_vertex_count,
                                 const bool do_mix_data)
 {
+  PRF_scope(ProfileCategory::Default);
 #ifdef USE_WELD_DEBUG_TIME
   SCOPED_TIMER(__func__);
 #endif
@@ -1565,29 +1569,6 @@ static Mesh *create_merged_mesh(const Mesh &mesh,
                     result->verts_num);
     copy_first_from_src(src, dst_to_src_verts, dst);
   }
-  if (CustomData_has_layer(&mesh.vert_data, CD_MVERT_SKIN)) {
-    const Span src(
-        static_cast<const MVertSkin *>(CustomData_get_layer(&mesh.vert_data, CD_MVERT_SKIN)),
-        mesh.verts_num);
-    MutableSpan dst(static_cast<MVertSkin *>(CustomData_add_layer(
-                        &result->vert_data, CD_MVERT_SKIN, CD_CONSTRUCT, result->verts_num)),
-                    result->verts_num);
-    threading::parallel_for(dst.index_range(), 2048, [&](const IndexRange range) {
-      for (const int dst_vert : range) {
-        const Span<int> src_verts = dst_to_src_verts[dst_vert];
-        if (src_verts.size() == 1) {
-          dst[dst_vert] = src[src_verts.first()];
-          continue;
-        }
-        const float src_num_inv = math::rcp(float(src_verts.size()));
-        for (const int src_vert : src_verts) {
-          madd_v3_v3fl(dst[dst_vert].radius, src[src_vert].radius, src_num_inv);
-          dst[dst_vert].flag |= src[src_vert].flag;
-        }
-      }
-    });
-  }
-
   /* Edges. */
 
   Array<int> edge_final_map;
@@ -1843,7 +1824,7 @@ std::optional<Mesh *> mesh_merge_by_distance_connected(const Mesh &mesh,
   }
   const float merge_dist_sq = square_f(merge_distance);
 
-  range_vn_i(vert_dest_map.data(), mesh.verts_num, 0);
+  array_utils::fill_index_range(vert_dest_map.as_mutable_span());
 
   /* Collapse Edges that are shorter than the threshold. */
 

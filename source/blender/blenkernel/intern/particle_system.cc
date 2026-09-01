@@ -29,21 +29,21 @@
 
 #include "BLI_kdopbvh.hh"
 #include "BLI_kdtree.hh"
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_base_safe.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rand.h"
-#include "BLI_string.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_safe.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rand_c.hh"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_task.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_task_c.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_boids.h"
 #include "BKE_collision.h"
 #include "BKE_colortools.hh"
@@ -5035,7 +5035,7 @@ void BKE_particlesystem_id_loop(ParticleSystem *psys, ParticleSystemIDFunc func,
   func(psys, reinterpret_cast<ID **>(&psys->parent), userdata, IDWALK_CB_NOP);
 
   if (psys->clmd != nullptr) {
-    const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(psys->clmd->modifier.type));
+    const ModifierTypeInfo *mti = BKE_modifier_get_info(psys->clmd->modifier.type);
 
     if (mti->foreach_ID_link != nullptr) {
       ParticleSystemIDLoopForModifier data{};

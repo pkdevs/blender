@@ -8,12 +8,9 @@
  * \ingroup sequencer
  */
 
-#include "BLF_enums.hh"
-
 #include "BLI_array.hh"
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_mutex.hh"
 #include "BLI_task.hh"
 
 #include "IMB_imbuf_types.hh"
@@ -114,7 +111,7 @@ StripEarlyOut early_out_fade(const Strip * /*strip*/, float fac);
 
 EffectHandle effect_handle_get(StripType strip_type);
 
-float effect_fader_calc(Scene *scene, Strip *strip, float timeline_frame);
+float effect_fader_calc(Scene *scene, Strip *strip, float timeline_frame, bool is_current_frame);
 
 void add_effect_get_handle(EffectHandle &rval);
 void adjustment_effect_get_handle(EffectHandle &rval);
@@ -171,9 +168,6 @@ static void apply_effect_op(const OpT &op, const ImBuf *src1, const ImBuf *src2,
     }
   });
 }
-
-std::unique_lock<Mutex> text_runtime_scoped_lock_get();
-int text_effect_font_init(const RenderData *context, const Strip *strip, FontFlags font_flags);
 
 }  // namespace seq
 }  // namespace blender

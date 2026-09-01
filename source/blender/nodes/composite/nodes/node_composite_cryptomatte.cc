@@ -9,13 +9,13 @@
 
 #include "node_composite_util.hh"
 
-#include "BLI_assert.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "IMB_imbuf_types.hh"
@@ -529,7 +529,7 @@ class BaseCryptoMatteOperation : public NodeOperation {
     GPU_shader_bind(shader);
 
     Result &input_image = get_input_image();
-    input_image.bind_as_texture(shader, "input_tx");
+    gpu::Texture *input_texture = input_image.bind_as_texture_or_single_value(shader, "input_tx");
 
     matte.bind_as_texture(shader, "matte_tx");
 
@@ -541,7 +541,7 @@ class BaseCryptoMatteOperation : public NodeOperation {
     compute_dispatch_threads_at_least(shader, domain.data_size);
 
     GPU_shader_unbind();
-    input_image.unbind_as_texture();
+    input_image.unbind_as_texture_or_single_value(input_texture);
     matte.unbind_as_texture();
     image_output.unbind_as_image();
   }
@@ -625,7 +625,7 @@ static void node_extra_info(NodeExtraInfoParams &parameters)
     row.text = RPT_("Node Unsupported");
     row.tooltip = TIP_(
         "The Cryptomatte node in render mode is only supported for scene compositing");
-    row.icon = ICON_ERROR;
+    row.icon = ICON_STATUS_ERROR;
     parameters.rows.append(std::move(row));
     return;
   }
@@ -643,7 +643,7 @@ static void node_extra_info(NodeExtraInfoParams &parameters)
   NodeExtraInfoRow row;
   row.text = RPT_("Passes Not Supported");
   row.tooltip = TIP_("Render passes in the Viewport compositor are only supported in EEVEE");
-  row.icon = ICON_ERROR;
+  row.icon = ICON_STATUS_ERROR;
   parameters.rows.append(std::move(row));
 }
 

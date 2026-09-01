@@ -69,7 +69,7 @@ bool BlenderSync::object_is_geometry(BObjectInfo &b_ob_info)
     return false;
   }
 
-  const blender::ObjectType type = blender::ObjectType(b_ob_info.iter_object->type);
+  const blender::ObjectType type = b_ob_info.iter_object->type;
 
   if (type == blender::OB_VOLUME || type == blender::OB_CURVES || type == blender::OB_POINTCLOUD ||
       type == blender::OB_LAMP)
@@ -78,12 +78,12 @@ bool BlenderSync::object_is_geometry(BObjectInfo &b_ob_info)
     return true;
   }
 
-  return GS(b_ob_data->name) == blender::ID_ME;
+  return b_ob_data->id_type() == blender::ID_ME;
 }
 
 bool BlenderSync::object_can_have_geometry(blender::Object &b_ob)
 {
-  const blender::ObjectType type = blender::ObjectType(b_ob.type);
+  const blender::ObjectType type = b_ob.type;
   switch (type) {
     case blender::OB_MESH:
     case blender::OB_CURVES_LEGACY:
@@ -104,14 +104,14 @@ bool BlenderSync::object_is_light(blender::Object &b_ob)
 {
   blender::ID *b_ob_data = object_get_data(b_ob, true);
 
-  return (b_ob_data && GS(b_ob_data->name) == blender::ID_LA);
+  return (b_ob_data && b_ob_data->id_type() == blender::ID_LA);
 }
 
 bool BlenderSync::object_is_camera(blender::Object &b_ob)
 {
   blender::ID *b_ob_data = object_get_data(b_ob, true);
 
-  return (b_ob_data && GS(b_ob_data->name) == blender::ID_CA);
+  return (b_ob_data && b_ob_data->id_type() == blender::ID_CA);
 }
 
 void BlenderSync::sync_object_motion_init(blender::Object &b_parent,

@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 Alpha (b'24a58e1403ac')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'32296898e057')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-25 07:25+0000\n"
+"POT-Creation-Date: 2026-08-31 07:41+0000\n"
 "PO-Revision-Date: 2025-07-23 15:20+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Kyrgyz <https://translate.blender.org/projects/blender-ui/ui/ky/>\n"
@@ -438,10 +438,6 @@ msgid "Use Curves"
 msgstr "Ийрилерди колдонуу"
 
 
-msgid "View"
-msgstr "Көрүнүш"
-
-
 msgid "RGB"
 msgstr "RGB"
 
@@ -537,6 +533,10 @@ msgstr "Метод"
 
 msgid "Plane"
 msgstr "Тегиздик"
+
+
+msgid "View"
+msgstr "Көрүнүш"
 
 
 msgid "Render"
@@ -1298,20 +1298,20 @@ msgid "Mask Layers"
 msgstr "Маска каттары"
 
 
-msgid "Mirror"
-msgstr "Чагылтуу"
-
-
-msgid "Apply"
-msgstr "Колдонуу"
-
-
 msgid "Import"
 msgstr "Импорттоо"
 
 
+msgid "Mirror"
+msgstr "Чагылтуу"
+
+
 msgid "UV"
 msgstr "UV"
+
+
+msgid "Apply"
+msgstr "Колдонуу"
 
 
 msgid "Tracking"
@@ -1525,10 +1525,6 @@ msgid "ITU 709"
 msgstr "ITU 709"
 
 
-msgid "To"
-msgstr "Кимге"
-
-
 msgid "Render Layers"
 msgstr "Визуалдаштыруу каттары"
 
@@ -1651,8 +1647,8 @@ msgstr "Бөлүү"
 
 
 msgctxt "Operator"
-msgid "Accept"
-msgstr "Кабыл алуу"
+msgid "Select Directory"
+msgstr "Каталогду тандоо"
 
 
 msgctxt "Operator"
@@ -1865,11 +1861,6 @@ msgstr "Кийинки папка"
 msgctxt "Operator"
 msgid "Previous Folder"
 msgstr "Мурунку папка"
-
-
-msgctxt "Operator"
-msgid "Select Directory"
-msgstr "Каталогду тандоо"
 
 
 msgid "Previous"
@@ -2339,6 +2330,10 @@ msgid "Refresh Sequencer"
 msgstr "Секвенсорду жаңылоо"
 
 
+msgid "Movie"
+msgstr "Тасма"
+
+
 msgid "Effect"
 msgstr "Эффект"
 
@@ -2605,10 +2600,6 @@ msgid "Development"
 msgstr "Иштетүү"
 
 
-msgid "Styles"
-msgstr "Стилдер"
-
-
 msgctxt "Operator"
 msgid "Draw"
 msgstr "Тартуу"
@@ -2622,6 +2613,10 @@ msgstr "Тегерек"
 msgctxt "Operator"
 msgid "Line"
 msgstr "Түз сызык"
+
+
+msgid "Styles"
+msgstr "Стилдер"
 
 
 msgid "Add/Replace"
@@ -2849,10 +2844,6 @@ msgid "Selected Marker"
 msgstr "Тандалган маркер"
 
 
-msgid "Selected File"
-msgstr "Тандалган файл"
-
-
 msgid "Font Style"
 msgstr "Арип стили"
 
@@ -2891,6 +2882,10 @@ msgstr "Империялык"
 
 msgid "Radians"
 msgstr "Радиандар"
+
+
+msgid "Cancel"
+msgstr "Жокко чыгаруу"
 
 
 msgctxt "WindowManager"
@@ -3003,6 +2998,11 @@ msgid "Report a Bug"
 msgstr "Ката жөнүндө маалымдоо"
 
 
+msgctxt "Operator"
+msgid "Clear"
+msgstr "Тазалоо"
+
+
 msgid "Description:"
 msgstr "Баяндамасы:"
 
@@ -3026,11 +3026,6 @@ msgstr "Документация"
 
 msgid "File:"
 msgstr "Файлы:"
-
-
-msgctxt "Operator"
-msgid "Apply"
-msgstr "Колдонуу"
 
 
 msgid "Options:"
@@ -3072,11 +3067,6 @@ msgstr "Тартуу:"
 
 msgid "Transform:"
 msgstr "Өзгөртүү:"
-
-
-msgctxt "Operator"
-msgid "Clear"
-msgstr "Тазалоо"
 
 
 msgctxt "Operator"
@@ -3298,6 +3288,11 @@ msgid "Quick Edit"
 msgstr "Тез оңдоо"
 
 
+msgctxt "Operator"
+msgid "Apply"
+msgstr "Колдонуу"
+
+
 msgid "Untitled"
 msgstr "Аты жок"
 
@@ -3305,10 +3300,6 @@ msgstr "Аты жок"
 msgctxt "Key"
 msgid "Key"
 msgstr "Ачкыч"
-
-
-msgid "Cancel"
-msgstr "Жокко чыгаруу"
 
 
 msgctxt "Curve"
@@ -3326,10 +3317,6 @@ msgstr "Hex"
 
 msgid "OK"
 msgstr "ООБА"
-
-
-msgid "Movie"
-msgstr "Тасма"
 
 
 msgid "Zoom in"

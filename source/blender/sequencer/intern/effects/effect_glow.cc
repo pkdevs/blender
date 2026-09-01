@@ -15,6 +15,8 @@
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 
+#include "PRF_profile.hh"
+
 #include "SEQ_render.hh"
 
 #include "effects.hh"
@@ -205,6 +207,7 @@ static SeqResult do_glow_effect(const RenderData *context,
                                 const SeqResult &ibuf1,
                                 const SeqResult & /*ibuf2*/)
 {
+  PRF_scope_with_name("SeqFxGlow", ProfileCategory::Draw);
   SeqResult out = prepare_effect_imbufs(context, ibuf1, {});
 
   int render_size = 100 * context->rectx / context->scene->r.xsch;

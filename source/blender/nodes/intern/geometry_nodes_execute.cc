@@ -8,9 +8,11 @@
 
 #include <cfloat>
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_euler.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
+
+#include "PRF_profile.hh"
 
 #include "NOD_geometry.hh"
 #include "NOD_geometry_nodes_bundle.hh"
@@ -111,6 +113,10 @@ static GeometryNodesInputType get_effective_input_type(PointerRNA *input_props_p
                                                        const bNodeTree &ntree,
                                                        const bNodeTreeInterfaceSocket &io_socket)
 {
+  if (ntree.type == NTREE_COMPOSIT) {
+    return GeometryNodesInputType::Value;
+  }
+
   const int input_index = ntree.interface_input_index(io_socket);
   if (PropertyRNA *prop = RNA_struct_find_property(input_props_ptr, "type")) {
     if (nodes::input_has_attribute_toggle(ntree, input_index)) {
@@ -118,6 +124,7 @@ static GeometryNodesInputType get_effective_input_type(PointerRNA *input_props_p
     }
     return GeometryNodesInputType::Value;
   }
+
   return GeometryNodesInputType::Fallback;
 }
 
@@ -149,9 +156,11 @@ static bke::SocketValueVariant init_socket_cpp_value(const GeoNodesCallData *cal
       const GeometryNodesInputType type = get_effective_input_type(
           input_props_ptr, ntree, io_socket);
       if (type == GeometryNodesInputType::Value) {
-        float3 value;
+        /* Vector can have variable length. Use a large enough value to read all components.
+         * Zero initialize to in case length is below 3. */
+        float4 value = float4(0.0f);
         RNA_float_get_array(input_props_ptr, "value", value);
-        return bke::SocketValueVariant(value);
+        return bke::SocketValueVariant(float3(value));
       }
       if (type == GeometryNodesInputType::Attribute) {
         if (std::optional<bke::SocketValueVariant> value = load_attribute_field_input<float3>(
@@ -552,6 +561,7 @@ bke::GeometrySet execute_geometry_nodes_on_geometry(const bNodeTree &btree,
                                                     GeoNodesCallData &call_data,
                                                     bke::GeometrySet input_geometry)
 {
+  PRF_scope(ProfileCategory::Default);
   const GeometryNodesLazyFunctionGraphInfo &lf_graph_info =
       *ensure_geometry_nodes_lazy_function_graph(btree);
   const GeometryNodesGroupFunction &function = lf_graph_info.function;
@@ -571,7 +581,7 @@ bke::GeometrySet execute_geometry_nodes_on_geometry(const bNodeTree &btree,
       .slice(function.outputs.input_usages)
       .fill(lf::ValueUsage::Unused);
 
-  call_data.call_depth_limit = U.geometry_nodes_stack_limit;
+  call_data.call_depth_limit = U.nodes_stack_limit;
 
   GeoNodesUserData user_data;
   user_data.call_data = &call_data;

@@ -80,7 +80,7 @@ class AssetBlenderVersionsV1:
     This is a half-open interval: Blender shows the asset if `min <= blender < until`.
     """
 
-    min: str | None = None
+    min: str
     """Minimum version of Blender that should show this asset."""
 
     until: str | None = None
@@ -269,6 +269,7 @@ class AssetMetadataV1:
     author: str | None = None
     description: str | None = None
     license: str | None = None
+    webpage: str | None = None
     copyright: str | None = None
     properties: CustomPropertiesV1 | None = None
 

@@ -12,10 +12,10 @@
 #include "DNA_modifier_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 
 #include "BKE_armature.hh"
 #include "BKE_constraint.h"
@@ -25,6 +25,7 @@
 #include "BKE_editmesh.hh"
 #include "BKE_grease_pencil.h"
 #include "BKE_grease_pencil.hh"
+#include "BKE_instances.hh"
 #include "BKE_lattice.hh"
 #include "BKE_layer.hh"
 #include "BKE_mball.hh"
@@ -144,7 +145,7 @@ static void empty_object_apply_modifiers(Depsgraph *depsgraph,
 
   /* Evaluate modifiers. */
   for (; md; md = md->next) {
-    const ModifierTypeInfo *mti = BKE_modifier_get_info(ModifierType(md->type));
+    const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
 
     if (!BKE_modifier_is_enabled(scene, md, required_mode)) {
       continue;
@@ -160,8 +161,16 @@ static void empty_object_update(Depsgraph *depsgraph, Scene *scene, Object *obje
 {
   BKE_object_free_derived_caches(object);
 
-  /* Evaluate modifiers. */
   bke::GeometrySet geometry_set;
+  /* If the empty is instancing a collection, create an input geometry set of this collection. */
+  if (object->instance_collection != nullptr) {
+    Collection &collection = *object->instance_collection;
+    auto instances = std::make_unique<bke::Instances>(1);
+    instances->reference_handles_for_write().first() = instances->add_reference(collection);
+    instances->transforms_for_write().first() = float4x4::identity();
+    geometry_set = bke::GeometrySet::from_instances(std::move(instances));
+  }
+  /* Evaluate modifiers. */
   empty_object_apply_modifiers(depsgraph, scene, object, geometry_set);
 
   object->runtime->geometry_set_eval = new bke::GeometrySet(std::move(geometry_set));
@@ -437,10 +446,8 @@ void BKE_object_eval_eval_base_flags(Depsgraph *depsgraph,
   ViewLayer *view_layer = static_cast<ViewLayer *>(
       BLI_findlink(&scene->view_layers, view_layer_index));
   BLI_assert(view_layer != nullptr);
-  BLI_assert(view_layer->object_bases_array != nullptr);
   BLI_assert(base_index >= 0);
-  BLI_assert(base_index < MEM_allocN_len(view_layer->object_bases_array) / sizeof(Base *));
-  Base *base = view_layer->object_bases_array[base_index];
+  Base *base = view_layer->object_bases_array()[base_index];
   BLI_assert(base->object == object);
 
   DEG_debug_print_eval(depsgraph, __func__, object->id.name, object);

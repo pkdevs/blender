@@ -15,6 +15,8 @@
 
 #include "IMB_imbuf.hh"
 
+#include "PRF_profile.hh"
+
 #include "SEQ_render.hh"
 
 #include "effects.hh"
@@ -213,6 +215,7 @@ static SeqResult do_wipe_effect(const RenderData *context,
                                 const SeqResult &ibuf1,
                                 const SeqResult &ibuf2)
 {
+  PRF_scope_with_name("SeqFxWipe", ProfileCategory::Draw);
   SeqResult out = prepare_effect_imbufs(context, ibuf1, ibuf2);
 
   if (out.image->float_data()) {

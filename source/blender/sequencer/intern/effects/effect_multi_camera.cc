@@ -9,6 +9,8 @@
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 
+#include "PRF_profile.hh"
+
 #include "SEQ_channels.hh"
 #include "SEQ_render.hh"
 #include "SEQ_utils.hh"
@@ -31,6 +33,7 @@ static SeqResult do_multicam(const RenderData *context,
                              const SeqResult & /*ibuf1*/,
                              const SeqResult & /*ibuf2*/)
 {
+  PRF_scope_with_name("SeqFxMultiCam", ProfileCategory::Draw);
   if (strip->multicam_source == 0 || strip->multicam_source >= strip->channel) {
     return {};
   }

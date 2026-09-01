@@ -13,7 +13,7 @@
 #include "BLI_map.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_ustring.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh" /* IWYU pragma: export */
@@ -132,7 +132,7 @@ class ItemDeclaration {
 using ItemDeclarationPtr = std::unique_ptr<ItemDeclaration>;
 
 struct SocketNameRNA {
-  PointerRNA owner = PointerRNA_NULL;
+  PointerRNA owner = {};
   std::string property_name;
 };
 
@@ -152,7 +152,7 @@ struct CustomSocketDrawParams {
 };
 
 using CustomSocketDrawFn = std::function<void(CustomSocketDrawParams &params)>;
-using CustomSocketLabelFn = std::function<StringRefNull(bNode node)>;
+using CustomSocketLabelFn = std::function<StringRefNull(const bNode &node)>;
 using SocketUsageInferenceFn =
     std::function<std::optional<bool>(const socket_usage_inference::SocketUsageParams &params)>;
 
@@ -171,7 +171,7 @@ struct OutputStructureTypeDependency {
 class SocketDeclaration : public ItemDeclaration {
  public:
   UString name;
-  std::string short_label;
+  UString short_label;
   UString identifier;
   std::string description;
   std::optional<std::string> translation_context;
@@ -198,6 +198,7 @@ class SocketDeclaration : public ItemDeclaration {
   bool is_panel_toggle = false;
   bool is_layer_name = false;
   bool is_volume_grid_name = false;
+  bool is_anonymous_attribute_output = false;
 
   /** Index in the list of inputs or outputs of the node. */
   int index = -1;
@@ -304,7 +305,7 @@ class BaseSocketDeclarationBuilder {
 
   BaseSocketDeclarationBuilder &compact(bool value = true);
 
-  BaseSocketDeclarationBuilder &short_label(std::string value = "");
+  BaseSocketDeclarationBuilder &short_label(UString value);
 
   BaseSocketDeclarationBuilder &description(std::string value = "");
 
@@ -337,6 +338,13 @@ class BaseSocketDeclarationBuilder {
    */
   BaseSocketDeclarationBuilder &anonymous_attribute_output();
   BaseSocketDeclarationBuilder &anonymous_attribute_output(Span<int> geometry_output_indices);
+
+  /**
+   * The output might reference data (anonymous attributes) on other outputs that does not exist on
+   * the inputs already. Use the more specific #anonymous_attribute_output() if applicable.
+   */
+  BaseSocketDeclarationBuilder &references_other_outputs();
+  BaseSocketDeclarationBuilder &references_other_outputs(Span<int> output_indices);
 
   /** The output has a dynamic structure type which is automatically inferred from inputs. */
   BaseSocketDeclarationBuilder &inferred_structure_type();

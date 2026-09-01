@@ -4,11 +4,8 @@
 
 #pragma once
 
-#include "draw_view_infos.hh"
-
-FRAGMENT_SHADER_CREATE_INFO(draw_view)
-
-#include "draw_view_lib.glsl"
+#include "draw_view.bsl.hh"
+#include "eevee_closure.bsl.hh"
 #include "eevee_colorspace_lib.bsl.hh"
 #include "eevee_gbuffer_read.bsl.hh"
 #include "eevee_hiz.bsl.hh"
@@ -19,14 +16,18 @@ FRAGMENT_SHADER_CREATE_INFO(draw_view)
 namespace eevee::deferred {
 
 struct Combine {
-  [[legacy_info]] ShaderCreateInfo draw_view;
-
   /* NOTE: Both light IDs have a valid specialized assignment of '-1' so only when default is
    * present will we instead dynamically look-up ID from the uniform buffer. */
   [[specialization_constant(false)]] bool render_pass_diffuse_light_enabled;
   [[specialization_constant(false)]] bool render_pass_specular_light_enabled;
   [[specialization_constant(false)]] bool render_pass_normal_enabled;
   [[specialization_constant(false)]] bool render_pass_position_enabled;
+  [[specialization_constant(false)]] bool render_passes_denoising_depth_enabled;
+  [[specialization_constant(false)]] bool render_passes_denoising_normal_enabled;
+  [[specialization_constant(false)]] bool render_passes_denoising_roughness_enabled;
+  [[specialization_constant(false)]] bool render_passes_denoising_diffuse_albedo_enabled;
+  [[specialization_constant(false)]] bool render_passes_denoising_specular_albedo_enabled;
+  [[specialization_constant(false)]] bool use_albedo_roughness_weighting;
   [[specialization_constant(false)]] bool use_radiance_feedback;
   [[specialization_constant(true)]] bool use_split_radiance;
 
@@ -99,6 +100,7 @@ struct CombineFragOut {
 [[fragment, early_fragment_tests]]
 void combine_frag([[resource_table]] Combine &srt,
                   [[resource_table]] RenderPassOutput &render_passes,
+                  [[resource_table]] const draw::View &views,
                   [[resource_table]] const Uniform &uni,
                   [[resource_table]] const HiZ &hiz,
                   [[resource_table]] const ::gbuffer::Reader &reader,
@@ -112,6 +114,7 @@ void combine_frag([[resource_table]] Combine &srt,
   const uchar closure_count = gbuf.header.closure_len();
   const uint3 bin_indices = gbuf.header.bin_index_per_layer();
 
+  float sum_weight = 0.0f;
   float3 diffuse_color = float3(0.0f);
   float3 diffuse_direct = float3(0.0f);
   float3 diffuse_indirect = float3(0.0f);
@@ -121,6 +124,10 @@ void combine_frag([[resource_table]] Combine &srt,
   float3 out_direct = float3(0.0f);
   float3 out_indirect = float3(0.0f);
   float3 average_normal = float3(0.0f);
+  /* Denoising render pass data. */
+  float average_roughness = 0.0f;
+  float3 diffuse_albedo = float3(0.0f);
+  float3 specular_albedo = float3(0.0f);
 
   /* Unroll needed for gbuf.layer access. */
   for (int i = 0; i < 3 /* GBUFFER_LAYER_MAX */; i++) [[unroll]] {
@@ -136,22 +143,52 @@ void combine_frag([[resource_table]] Combine &srt,
           closure_indirect_light = srt.load_radiance_indirect(texel, layer_index);
         }
 
-        average_normal += cl.N * reduce_add(cl.color);
+        float closure_weight = reduce_add(cl.color);
+        sum_weight += closure_weight;
+
+        average_normal += cl.N * closure_weight;
+
+        if (srt.render_passes_denoising_diffuse_albedo_enabled ||
+            srt.render_passes_denoising_specular_albedo_enabled ||
+            srt.render_passes_denoising_roughness_enabled)
+        {
+          /* These two values are equivalent between Cycles and EEVEE:
+           * - Cycles: sqrtf(bsdf_get_specular_roughness_squared(sc))
+           * - EEVEE: square(closure_apparent_roughness_get(cl)) */
+          float closure_roughness = closure_apparent_roughness_get(cl);
+          average_roughness += closure_roughness * closure_weight;
+          if (srt.use_albedo_roughness_weighting) {
+            float roughness_sq = square(closure_roughness);
+            float diffuse_weight = smoothstep(0.0f, 0.15f, roughness_sq);
+            diffuse_albedo += diffuse_weight * cl.color;
+            specular_albedo += (1.0 - diffuse_weight) * cl.color;
+          }
+        }
 
         switch (cl.type) {
           case CLOSURE_BSDF_TRANSLUCENT_ID:
           case CLOSURE_BSSRDF_BURLEY_ID:
           case CLOSURE_BSDF_DIFFUSE_ID:
             diffuse_color += cl.color;
-            diffuse_direct += closure_direct_light;
-            diffuse_indirect += closure_indirect_light;
+            diffuse_direct += closure_direct_light * cl.color;
+            diffuse_indirect += closure_indirect_light * cl.color;
+            if (srt.render_passes_denoising_diffuse_albedo_enabled &&
+                !srt.use_albedo_roughness_weighting)
+            {
+              diffuse_albedo += cl.color;
+            }
             break;
           case CLOSURE_BSDF_MICROFACET_GGX_REFLECTION_ID:
           case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
           case CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID:
             specular_color += cl.color;
-            specular_direct += closure_direct_light;
-            specular_indirect += closure_indirect_light;
+            specular_direct += closure_direct_light * cl.color;
+            specular_indirect += closure_indirect_light * cl.color;
+            if (srt.render_passes_denoising_specular_albedo_enabled &&
+                !srt.use_albedo_roughness_weighting)
+            {
+              specular_albedo += cl.color;
+            }
             break;
           case CLOSURE_NONE_ID:
             assert(false);
@@ -216,17 +253,45 @@ void combine_frag([[resource_table]] Combine &srt,
     render_passes.store_color(
         texel, uni.uniform_buf.render_pass.specular_light_id, float4(specular_light, 1.0f));
   }
-  if (srt.render_pass_normal_enabled) {
+  if (srt.render_pass_normal_enabled || srt.render_passes_denoising_normal_enabled) {
     float normal_len = length(average_normal);
     /* Normalize or fallback to default normal. */
     average_normal = (normal_len < 1e-5f) ? gbuf.surface_N() : (average_normal / normal_len);
+  }
+  if (srt.render_pass_normal_enabled) {
     render_passes.store_color(
         texel, uni.uniform_buf.render_pass.normal_id, float4(average_normal, 1.0f));
   }
   if (srt.render_pass_position_enabled) {
+    const ViewMatrices view = views.get(0);
     float depth = texelFetch(hiz.hiz_tx, texel, 0).r;
-    float3 P = drw_point_screen_to_world(float3(v_out.screen_uv, depth));
+    float3 P = view.point_screen_to_world(float3(v_out.screen_uv, depth));
     render_passes.store_color(texel, uni.uniform_buf.render_pass.position_id, float4(P, 1.0f));
+  }
+  if (srt.render_passes_denoising_normal_enabled) {
+    const ViewMatrices view = views.get(0);
+    average_normal = view.normal_world_to_view(average_normal);
+    /* For compatibility with Cycles */
+    average_normal.z *= -1.0f;
+    render_passes.store_color(
+        texel, uni.uniform_buf.render_pass.denoising_normal_id, float4(average_normal, 1.0f));
+  }
+  if (srt.render_passes_denoising_diffuse_albedo_enabled) {
+    render_passes.store_color(texel,
+                              uni.uniform_buf.render_pass.denoising_diffuse_albedo_id,
+                              float4(diffuse_albedo, 1.0f));
+  }
+  if (srt.render_passes_denoising_specular_albedo_enabled) {
+    render_passes.store_color(texel,
+                              uni.uniform_buf.render_pass.denoising_specular_albedo_id,
+                              float4(specular_albedo, 1.0f));
+  }
+  if (srt.render_passes_denoising_roughness_enabled) {
+    if (sum_weight > 0.0f) {
+      average_roughness /= sum_weight;
+    }
+    render_passes.store_value(
+        texel, uni.uniform_buf.render_pass.denoising_roughness_id, average_roughness);
   }
 
   frag_out.combined = float4(out_direct + out_indirect, 0.0f);

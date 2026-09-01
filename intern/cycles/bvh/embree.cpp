@@ -85,23 +85,13 @@ static bool rtc_progress_func(void *user_ptr, const double n)
   return !progress->get_cancel();
 }
 
-/* A work-around for Embree GPU builder that crashes on specific configuration of visibility flags
- * and instancing. Apply to both CPU and GPU to keep behavior consistent to help with potential
- * platform-specific visibility behavior. See #158123. */
-static uint get_visibility_for_tracing(const Object *object)
-{
-  /* Set the MSB to workaround the crash in Embree GPU. The bit is essentially ignored during
-   * rendering as none of the ray visibility flags (even with shadow linking shift applied)
-   * collides with it. */
-  return object->visibility_for_tracing() | (1U << 31U);
-}
-
 BVHEmbree::BVHEmbree(const BVHParams &params_,
                      const vector<Geometry *> &geometry_,
                      const vector<Object *> &objects_)
     : BVH(params_, geometry_, objects_),
       scene(nullptr),
       rtc_device(nullptr),
+      rtc_device_is_sycl(false),
       build_quality(RTC_BUILD_QUALITY_REFIT)
 {
   SIMD_SET_FLUSH_TO_ZERO;
@@ -145,6 +135,22 @@ void BVHEmbree::build(Progress &progress,
   build_quality = dynamic ? RTC_BUILD_QUALITY_LOW :
                             (params.use_spatial_split ? RTC_BUILD_QUALITY_HIGH :
                                                         RTC_BUILD_QUALITY_MEDIUM);
+  if (build_quality == RTC_BUILD_QUALITY_HIGH && rtc_device_is_sycl) {
+    /* To work around a known issue in the Intel GPU driver regarding the High
+     * quality BVH build option, we reduce it to Medium. There is no impact on
+     * render quality from this change. There is a small expected performance
+     * impact on intersection speed and BVH building speed, but this is
+     * unavoidable at the moment - using High quality leads to crashes, so we
+     * have no choice. This workaround can be removed once the fix appears in
+     * public drivers and we raise the minimum oneAPI backend driver version
+     * accordingly. */
+    /* This workaround is applied only to GPU, per Sergey. See #158123. */
+    LOG_INFO
+        << "Due to a known issue in Intel GPU drivers, overriding RTC_BUILD_QUALITY_HIGH to "
+           "RTC_BUILD_QUALITY_MEDIUM to prevent crashes. This workaround will be removed only "
+           "in a future Blender release.";
+    build_quality = RTC_BUILD_QUALITY_MEDIUM;
+  }
   rtcSetSceneBuildQuality(scene, build_quality);
 
   int i = 0;
@@ -297,7 +303,7 @@ void BVHEmbree::add_instance(Object *ob, const int i)
 #  endif
   );
 
-  rtcSetGeometryMask(geom_id, get_visibility_for_tracing(ob));
+  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
   rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
 
   rtcCommitGeometry(geom_id);
@@ -307,8 +313,6 @@ void BVHEmbree::add_instance(Object *ob, const int i)
 
 void BVHEmbree::add_triangles(const Object *ob, const Mesh *mesh, const int i)
 {
-  const size_t prim_offset = mesh->prim_offset;
-
   const Attribute *attr_P = nullptr;
   size_t num_motion_steps = 1;
   if (mesh->has_motion_blur()) {
@@ -369,8 +373,7 @@ void BVHEmbree::add_triangles(const Object *ob, const Mesh *mesh, const int i)
   }
   set_tri_vertex_buffer(geom_id, mesh, false);
 
-  rtcSetGeometryUserData(geom_id, (void *)prim_offset);
-  rtcSetGeometryMask(geom_id, get_visibility_for_tracing(ob));
+  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
   rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
 
   rtcCommitGeometry(geom_id);
@@ -607,8 +610,6 @@ void BVHEmbree::set_point_vertex_buffer(RTCGeometry geom_id,
 
 void BVHEmbree::add_points(const Object *ob, const PointCloud *pointcloud, const int i)
 {
-  const size_t prim_offset = pointcloud->prim_offset;
-
   size_t num_motion_steps = 1;
   if (pointcloud->has_motion_blur()) {
     const Attribute *attr_P = pointcloud->attributes.find(ATTR_STD_POSITION);
@@ -626,8 +627,7 @@ void BVHEmbree::add_points(const Object *ob, const PointCloud *pointcloud, const
 
   set_point_vertex_buffer(geom_id, pointcloud, false);
 
-  rtcSetGeometryUserData(geom_id, (void *)prim_offset);
-  rtcSetGeometryMask(geom_id, get_visibility_for_tracing(ob));
+  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
   rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
 
   rtcCommitGeometry(geom_id);
@@ -637,8 +637,6 @@ void BVHEmbree::add_points(const Object *ob, const PointCloud *pointcloud, const
 
 void BVHEmbree::add_curves(const Object *ob, const Hair *hair, const int i)
 {
-  const size_t prim_offset = hair->curve_segment_offset;
-
   const Attribute *attr_P = hair->attributes.find(ATTR_STD_POSITION);
   size_t num_motion_steps = 1;
   if (hair->has_motion_blur() && attr_P->has_motion()) {
@@ -702,8 +700,7 @@ void BVHEmbree::add_curves(const Object *ob, const Hair *hair, const int i)
 
   set_curve_vertex_buffer(geom_id, hair, false);
 
-  rtcSetGeometryUserData(geom_id, (void *)prim_offset);
-  rtcSetGeometryMask(geom_id, get_visibility_for_tracing(ob));
+  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
   rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
 
   rtcCommitGeometry(geom_id);
@@ -726,7 +723,6 @@ void BVHEmbree::refit(Progress &progress)
         if (mesh->num_triangles() > 0) {
           RTCGeometry geom = rtcGetGeometry(scene, geom_id);
           set_tri_vertex_buffer(geom, mesh, true);
-          rtcSetGeometryUserData(geom, (void *)mesh->prim_offset);
           rtcCommitGeometry(geom);
         }
       }
@@ -735,7 +731,6 @@ void BVHEmbree::refit(Progress &progress)
         if (hair->is_traceable()) {
           RTCGeometry geom = rtcGetGeometry(scene, geom_id + 1);
           set_curve_vertex_buffer(geom, hair, true);
-          rtcSetGeometryUserData(geom, (void *)hair->curve_segment_offset);
           rtcCommitGeometry(geom);
         }
       }

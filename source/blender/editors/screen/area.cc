@@ -14,14 +14,14 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_rand.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_global.hh"
@@ -37,6 +37,7 @@
 
 #include "ED_asset_shelf.hh"
 #include "ED_buttons.hh"
+#include "ED_ime.hh"
 #include "ED_screen.hh"
 #include "ED_screen_types.hh"
 #include "ED_space_api.hh"
@@ -64,7 +65,9 @@
 
 namespace blender {
 
-/* general area and region code */
+/* -------------------------------------------------------------------- */
+/** \name Region & Area Listen/Refresh
+ * \{ */
 
 static void region_draw_gradient(const ARegion *region)
 {
@@ -148,6 +151,12 @@ void ED_area_do_refresh(bContext *C, ScrArea *area)
   area->do_refresh = false;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Action Zone & Status Text Drawing
+ * \{ */
+
 /**
  * \brief Corner widget use for quitting full-screen.
  */
@@ -225,7 +234,10 @@ static void draw_azone_arrow(float x1, float y1, float x2, float y2, AZEdge edge
 
   GPU_blend(GPU_BLEND_ALPHA);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-  immUniformColor4f(0.8f, 0.8f, 0.8f, 0.4f);
+  float color[4];
+  ui::theme::get_color_4fv(TH_TEXT, color);
+  color[3] = 0.6f;
+  immUniformColor4fv(color);
 
   immBegin(GPU_PRIM_TRI_FAN, 6);
   for (int i = 0; i < 6; i++) {
@@ -264,7 +276,10 @@ static void region_draw_azone_tab_arrow(ScrArea *area, ARegion *region, AZone *a
 
   /* Workaround for different color spaces between normal areas and the ones using GPUViewports. */
   float alpha = WM_region_use_viewport(area, region) ? 0.6f : 0.4f;
-  const float color[4] = {0.05f, 0.05f, 0.05f, alpha};
+  float color[4];
+  ui::theme::get_color_4fv(TH_HEADER, color);
+  color[3] = std::max(color[3], alpha);
+
   rctf rect{};
   /* Hit size is a bit larger than visible background. */
   rect.xmin = float(az->x1) + U.pixelsize;
@@ -367,6 +382,12 @@ static void region_draw_status_text(ScrArea * /*area*/, ARegion *region)
   BLF_draw(fontid, region->runtime->headerstr, BLF_DRAW_STR_DUMMY_MAX);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Message Bus Notify & Subscribe
+ * \{ */
+
 void ED_region_do_msg_notify_tag_redraw(
     /* Follow wmMsgNotifyFn spec */
     bContext * /*C*/,
@@ -451,6 +472,12 @@ void ED_area_do_mgs_subscribe_for_tool_ui(const wmRegionMessageSubscribeParams *
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Region Layout & Draw
+ * \{ */
+
 /**
  * Although there's no general support for minimizing areas, the status-bar can
  * be snapped to be only a few pixels high. A few pixels rather than 0 so it
@@ -517,6 +544,23 @@ void ED_region_do_draw(bContext *C, ARegion *region)
     at->draw(C, region);
   }
 
+#ifdef WITH_INPUT_IME
+  /* Evaluated by the refresh below, reused by the preview so `cursor_ime` runs once per draw. */
+  ARegionIMECursor ime_cursor;
+  bool ime_cursor_is_set = false;
+
+  /* Manage the IME candidate window for the active region based on `cursor_ime`,
+   * see #ARegionIMECursorState for how each result is handled.
+   * Deferred during animation playback, keeping `do_ime` set for when it stops. */
+  if (at->cursor_ime && region->runtime->do_ime) {
+    const bScreen *screen = WM_window_get_active_screen(win);
+    if (!screen->animtimer && !screen->scrubbing && region == screen->active_region) {
+      ime_cursor_is_set = WM_window_IME_region_refresh(win, area, region, true, &ime_cursor);
+      region->runtime->do_ime = false;
+    }
+  }
+#endif
+
   /* XXX test: add convention to end regions always in pixel space,
    * for drawing of borders/gestures etc */
   ED_region_pixelspace(region);
@@ -524,6 +568,14 @@ void ED_region_do_draw(bContext *C, ARegion *region)
   /* Remove sRGB override by rebinding the framebuffer. */
   gpu::FrameBuffer *fb = GPU_framebuffer_active_get();
   GPU_framebuffer_bind(fb);
+
+#ifdef WITH_INPUT_IME
+  /* Draw over the region contents, using the pixel space set up above.
+   * Skipped whenever the refresh above was, e.g. during animation playback. */
+  if (ime_cursor_is_set) {
+    ed::ime::region_overlay_draw(win, region, U.pixelsize, ime_cursor);
+  }
+#endif
 
   ED_region_draw_cb_draw(C, region, REGION_DRAW_POST_PIXEL);
 
@@ -618,10 +670,13 @@ void ED_region_do_draw(bContext *C, ARegion *region)
   }
 }
 
-/* **********************************
- * maybe silly, but let's try for now
- * to keep these tags protected
- * ********************************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Redraw & Refresh Tagging
+ * \{ */
+
+/* Maybe silly, but let's try for now to keep these tags protected. */
 
 void ED_region_tag_redraw(ARegion *region)
 {
@@ -632,6 +687,8 @@ void ED_region_tag_redraw(ARegion *region)
     region->runtime->do_draw &= ~(RGN_DRAW_PARTIAL | RGN_DRAW_NO_REBUILD |
                                   RGN_DRAW_EDITOR_OVERLAYS);
     region->runtime->do_draw |= RGN_DRAW;
+    /* Also refresh the IME cursor position on the next draw. */
+    region->runtime->do_ime = true;
     region->runtime->drawrct = rcti{};
   }
 }
@@ -648,6 +705,8 @@ void ED_region_tag_redraw_no_rebuild(ARegion *region)
   if (region && !(region->runtime->do_draw & (RGN_DRAWING | RGN_DRAW))) {
     region->runtime->do_draw &= ~(RGN_DRAW_PARTIAL | RGN_DRAW_EDITOR_OVERLAYS);
     region->runtime->do_draw |= RGN_DRAW_NO_REBUILD;
+    /* Also refresh the IME cursor position on the next draw. */
+    region->runtime->do_ime = true;
     region->runtime->drawrct = rcti{};
   }
 }
@@ -765,7 +824,27 @@ void ED_area_tag_region_size_update(ScrArea *area, ARegion *changed_region)
   }
 }
 
-/* *************************************************************** */
+void ED_area_hud_region_set_padding_flag(ScrArea *area,
+                                         ARegion *changed_region,
+                                         const bool set_padding)
+{
+  ARegion *hud_region = BKE_area_find_region_type(area, RGN_TYPE_HUD);
+  if (hud_region == nullptr) {
+    return;
+  }
+
+  if (set_padding != bool(hud_region->runtime->flag & bke::ARegionRuntimeFlag::HUD_PADDING)) {
+    SET_FLAG_FROM_TEST(
+        hud_region->runtime->flag, set_padding, bke::ARegionRuntimeFlag::HUD_PADDING);
+    ED_area_tag_region_size_update(area, changed_region);
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Region Size & Search Filter
+ * \{ */
 
 int ED_area_max_regionsize(const ScrArea *area, const ARegion *scale_region, const AZEdge edge)
 {
@@ -859,7 +938,11 @@ void ED_region_search_filter_update(const ScrArea *area, ARegion *region)
                      RGN_FLAG_SEARCH_FILTER_ACTIVE);
 }
 
-/* *************************************************************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Workspace Status Helpers
+ * \{ */
 
 void ED_area_status_text(ScrArea *area, const char *str)
 {
@@ -896,8 +979,6 @@ void ED_area_status_text(ScrArea *area, const char *str)
   }
 }
 
-/* *************************************************************** */
-
 static void ed_workspace_status_item(WorkSpace *workspace,
                                      std::string text,
                                      const int icon,
@@ -932,10 +1013,6 @@ WorkspaceStatus::WorkspaceStatus(bContext *C)
   ED_area_tag_redraw(WM_window_status_area_find(CTX_wm_window(C), CTX_wm_screen(C)));
 }
 
-/* -------------------------------------------------------------------- */
-/** \name Private helper functions to help ensure consistent spacing
- * \{ */
-
 static constexpr float STATUS_BEFORE_TEXT = 0.17f;
 static constexpr float STATUS_AFTER_TEXT = 0.90f;
 static constexpr float STATUS_MOUSE_ICON_PAD = -0.68f;
@@ -965,7 +1042,7 @@ static void ed_workspace_status_icon_item(WorkSpace *workspace,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Public Functions
+/** \name Workspace Status Public API
  * \{ */
 
 void WorkspaceStatus::item(std::string text, const int icon1, const int icon2)
@@ -1042,7 +1119,9 @@ void ED_workspace_status_text(bContext *C, const char *str)
 
 /** \} */
 
-/* ************************************************************ */
+/* -------------------------------------------------------------------- */
+/** \name Action Zone Initialization
+ * \{ */
 
 static void area_azone_init(const wmWindow *win, const bScreen *screen, ScrArea *area)
 {
@@ -1366,7 +1445,6 @@ static void region_azones_scrollbars_init(ScrArea *area, ARegion *region)
   }
 }
 
-/* *************************************************************** */
 static void region_azones_add_edge(ScrArea *area,
                                    ARegion *region,
                                    const int alignment,
@@ -1421,6 +1499,12 @@ static void region_azones_add(const bScreen *screen, ScrArea *area, ARegion *reg
   region_azones_scrollbars_init(area, region);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Region Rect Layout
+ * \{ */
+
 /* dir is direction to check, not the splitting edge direction! */
 static int rct_fits(const rcti *rect, const eScreenAxis dir_axis, int size)
 {
@@ -1430,8 +1514,6 @@ static int rct_fits(const rcti *rect, const eScreenAxis dir_axis, int size)
   /* Vertical. */
   return BLI_rcti_size_y(rect) + 1 - size;
 }
-
-/* *************************************************************** */
 
 /* Only for internal area management functions that act before #ARegionRuntime.visible is
  * updated. */
@@ -1549,7 +1631,7 @@ bool ED_region_is_overlap(const int spacetype, const int regiontype)
     case SPACE_VIEW3D:
       if (regiontype == RGN_TYPE_HEADER) {
         /* Only treat as overlapped if there is transparency. */
-        bTheme *theme = ui::theme::theme_get();
+        const bTheme *theme = ui::theme::theme_get();
         return theme->space_view3d.header[3] != 255;
       }
       return ELEM(regiontype,
@@ -1679,6 +1761,9 @@ static void region_rect_recursive(
                     max_ii(0, BLI_rcti_size_y(overlap_remainder) - UI_UNIT_Y / 2));
     region->winrct.xmin = overlap_remainder_margin.xmin + region->runtime->offset_x;
     region->winrct.ymin = overlap_remainder_margin.ymin + region->runtime->offset_y;
+    if (region->runtime->flag & bke::ARegionRuntimeFlag::HUD_PADDING) {
+      region->winrct.ymin += UI_UNIT_Y;
+    }
     region->winrct.xmax = region->winrct.xmin + prefsizex - 1;
     region->winrct.ymax = region->winrct.ymin + prefsizey - 1;
 
@@ -1747,8 +1832,11 @@ static void region_rect_recursive(
       region->flag |= RGN_FLAG_TOO_SMALL;
     }
     else if (width < prefsizex) {
-      const float aspect = BLI_rctf_size_y(&region->v2d.cur) /
-                           (BLI_rcti_size_y(&region->v2d.mask) + 1);
+      const float aspect = (region->v2d.flag & V2D_IS_INIT) ?
+                               (BLI_rctf_size_y(&region->v2d.cur) /
+                                (BLI_rcti_size_y(&region->v2d.mask) + 1)) :
+                               1.0f;
+
       const bool has_tabs = BKE_regiontype_uses_category_tabs(region->runtime->type);
       const int min = int(UI_SCALE_FAC *
                           (has_tabs ? UI_PANEL_CATEGORY_MIN_SNAP_WIDTH : UI_TOOLBAR_WIDTH) /
@@ -1775,6 +1863,18 @@ static void region_rect_recursive(
       }
     }
     else {
+      if (BKE_regiontype_uses_category_tabs(region->runtime->type)) {
+        /* Update category tab width when #USER_UIFLAG2_PANEL_TABS_COMPACT flag is set/unset. */
+        const float aspect = (region->v2d.flag & V2D_IS_INIT) ?
+                                 (BLI_rctf_size_y(&region->v2d.cur) /
+                                  (BLI_rcti_size_y(&region->v2d.mask) + 1)) :
+                                 1.0f;
+        const int tab_auto_snap_width = (UI_PANEL_CATEGORY_MIN_WIDTH + ui::PANEL_MIN_DRAW_WIDTH) *
+                                        UI_SCALE_FAC / aspect;
+        if (prefsizex < tab_auto_snap_width) {
+          prefsizex = UI_PANEL_CATEGORY_MIN_WIDTH * UI_SCALE_FAC / aspect;
+        }
+      }
       int fac = rct_fits(winrct, SCREEN_AXIS_H, prefsizex);
 
       if (fac < 0) {
@@ -2028,6 +2128,12 @@ static void region_evaluate_visibility(ARegion *region)
   region->runtime->visible = !hidden;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Area & Region Initialization
+ * \{ */
+
 /**
  * \param region: Region, may be nullptr when adding handlers for \a area.
  */
@@ -2204,7 +2310,7 @@ static void area_init_type_fallback(ScrArea *area, eSpace_Type space_type)
   }
   if (sl) {
     SpaceLink *sl_old = static_cast<SpaceLink *>(area->spacedata.first);
-    if (LIKELY(sl != sl_old)) {
+    if (sl != sl_old) [[likely]] {
       BLI_remlink(&area->spacedata, sl);
       BLI_addhead(&area->spacedata, sl);
 
@@ -2495,6 +2601,8 @@ void ED_area_data_swap(ScrArea *area_dst, ScrArea *area_src)
   std::swap(area_dst->regionbase, area_src->regionbase);
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Region Alignment Syncing for Space Switching
  * \{ */
@@ -2736,7 +2844,9 @@ static void region_align_info_to_area(
 
 /** \} */
 
-/* *********** Space switching code *********** */
+/* -------------------------------------------------------------------- */
+/** \name Space Switching
+ * \{ */
 
 void ED_area_swapspace(bContext *C, ScrArea *sa1, ScrArea *sa2)
 {
@@ -2808,6 +2918,14 @@ void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_regi
     }
 
     ED_area_exit(C, area);
+
+#ifdef WITH_INPUT_IME
+    /* Will be null for newly opened windows (file selector for e.g.). */
+    if (win->runtime && win->runtime->ghostwin) {
+      /* End any active IME session - the old space type's cursor_ime is no longer valid. */
+      WM_window_IME_end(win);
+    }
+#endif
 
     /* restore old area exit callback */
     if (skip_region_exit && area->type) {
@@ -2992,7 +3110,11 @@ int ED_area_header_switchbutton(const bContext *C, ui::Block *block, int yco)
   return xco + 1.7 * U.widget_unit;
 }
 
-/************************ standard UI regions ************************/
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Region Clearing
+ * \{ */
 
 static ThemeColorID region_background_color_id(const bContext * /*C*/, const ARegion *region)
 {
@@ -3029,6 +3151,12 @@ static void region_clear_fully_transparent(const bContext *C)
 
   GPU_clear_color(0, 0, 0, 0);
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Region Panels
+ * \{ */
 
 BLI_INLINE bool streq_array_any(const char *s, const char *arr[])
 {
@@ -3256,7 +3384,7 @@ static bool panel_add_check(const bContext *C,
     }
   }
 
-  if (LIKELY(panel_type->draw)) {
+  if (panel_type->draw) [[likely]] {
     if (panel_type->poll && !panel_type->poll(C, panel_type)) {
       return false;
     }
@@ -3625,8 +3753,10 @@ void ED_region_panels_draw(const bContext *C, ARegion *region)
 
   /* draw panels if they are large enough. */
   const bool has_category_tabs = ui::panel_category_tabs_is_visible(region);
-  const short min_draw_size = has_category_tabs ? short(UI_PANEL_CATEGORY_MIN_WIDTH) + 20 :
-                                                  std::min(region->runtime->type->prefsizex, 20);
+  const short min_draw_size = has_category_tabs ?
+                                  short(UI_PANEL_CATEGORY_MIN_WIDTH + ui::PANEL_MIN_DRAW_WIDTH) :
+                                  std::min(region->runtime->type->prefsizex,
+                                           ui::PANEL_MIN_DRAW_WIDTH);
   if (region->winx >= (min_draw_size * UI_SCALE_FAC / aspect)) {
     ui::panels_draw(C, region);
   }
@@ -3636,7 +3766,7 @@ void ED_region_panels_draw(const bContext *C, ARegion *region)
 
   /* Set in layout. */
   if (has_category_tabs && region->runtime->category) {
-    ui::panel_category_tabs_draw_all(region, region->runtime->category);
+    ui::panel_category_tabs_draw_all(C, region, region->runtime->category);
   }
 
   /* scrollers */
@@ -3707,6 +3837,12 @@ void ED_region_panels_init(wmWindowManager *wm, ARegion *region)
   WM_event_add_keymap_handler(&region->runtime->handlers, keymap);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Panel Property Search
+ * \{ */
+
 /**
  * Check whether any of the buttons generated by the \a panel_type's
  * layout callbacks match the \a search_filter.
@@ -3745,7 +3881,7 @@ static bool panel_property_search(const bContext *C,
         block, ui::LayoutDirection::Horizontal, ui::LayoutType::Header, 0, 0, 0, 0, 0, style);
     panel_type->draw_header(C, panel);
   }
-  if (LIKELY(panel->type->draw != nullptr)) {
+  if (panel->type->draw != nullptr) [[likely]] {
     panel->layout = &ui::block_layout(
         block, ui::LayoutDirection::Vertical, ui::LayoutType::Panel, 0, 0, 0, 0, 0, style);
     panel_type->draw(C, panel);
@@ -3851,6 +3987,12 @@ bool ED_region_property_search(const bContext *C,
 
   return has_result;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Region Headers
+ * \{ */
 
 void ED_region_header_layout(const bContext *C, ARegion *region)
 {
@@ -4007,6 +4149,12 @@ void ED_region_header_init(ARegion *region)
   region->flag |= RGN_FLAG_INDICATE_OVERFLOW;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Area & Region Sizes
+ * \{ */
+
 int ED_area_headersize()
 {
   /* Accommodate widget and padding. */
@@ -4033,6 +4181,12 @@ int ED_area_global_max_size_y(const ScrArea *area)
   BLI_assert(ED_area_is_global(area));
   return round_fl_to_int(area->global->size_max * UI_SCALE_FAC);
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Area & Region Queries
+ * \{ */
 
 bool ED_area_is_global(const ScrArea *area)
 {
@@ -4102,6 +4256,12 @@ int ED_region_global_size_y()
 {
   return ED_area_headersize(); /* same size as header */
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Region Info & Metadata Drawing
+ * \{ */
 
 void ED_region_info_draw_multiline(ARegion *region,
                                    const char *text_array[],
@@ -4207,6 +4367,12 @@ void ED_region_image_metadata_panel_draw(ImBuf *ibuf, ui::Layout *layout)
   IMB_metadata_foreach(ibuf, metadata_panel_draw_field, &ctx);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Region Grid Drawing
+ * \{ */
+
 void ED_region_grid_draw(ARegion *region, float zoomx, float zoomy, float x0, float y0)
 {
   /* the image is located inside (x0, y0), (x0+1, y0+1) as set by view2d */
@@ -4300,6 +4466,12 @@ void ED_region_grid_draw(ARegion *region, float zoomx, float zoomy, float x0, fl
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Region Visible Rectangle
+ * \{ */
+
 /* If the area has overlapping regions, it returns visible rect for Region *region */
 /* rect gets returned in local region coordinates */
 static void region_visible_rect_calc(ARegion *region, rcti *rect)
@@ -4316,27 +4488,32 @@ static void region_visible_rect_calc(ARegion *region, rcti *rect)
   /* check if a region overlaps with the current one */
   for (; region_iter; region_iter = region_iter->next) {
     if (region != region_iter && region_iter->overlap) {
-      if (BLI_rcti_isect(rect, &region_iter->winrct, nullptr)) {
+      /* Use the region's animated rect so the visible area tracks its slide/fade animation instead
+       * of jumping to the final size at the start or end of the animation. */
+      rcti sibling_rect;
+      ED_region_blend_rect(region_iter, &sibling_rect);
+
+      if (BLI_rcti_isect(rect, &sibling_rect, nullptr)) {
         int alignment = RGN_ALIGN_ENUM_FROM_MASK(region_iter->alignment);
 
         if (ELEM(alignment, RGN_ALIGN_LEFT, RGN_ALIGN_RIGHT)) {
           /* Overlap left, also check 1 pixel offset (2 regions on one side). */
-          if (abs(rect->xmin - region_iter->winrct.xmin) < 2) {
-            rect->xmin = region_iter->winrct.xmax;
+          if (abs(rect->xmin - sibling_rect.xmin) < 2) {
+            rect->xmin = sibling_rect.xmax;
           }
 
           /* Overlap right. */
-          if (abs(rect->xmax - region_iter->winrct.xmax) < 2) {
-            rect->xmax = region_iter->winrct.xmin;
+          if (abs(rect->xmax - sibling_rect.xmax) < 2) {
+            rect->xmax = sibling_rect.xmin;
           }
         }
         else if (ELEM(alignment, RGN_ALIGN_TOP, RGN_ALIGN_BOTTOM)) {
           /* Same logic as above for vertical regions. */
-          if (abs(rect->ymin - region_iter->winrct.ymin) < 2) {
-            rect->ymin = region_iter->winrct.ymax;
+          if (abs(rect->ymin - sibling_rect.ymin) < 2) {
+            rect->ymin = sibling_rect.ymax;
           }
-          if (abs(rect->ymax - region_iter->winrct.ymax) < 2) {
-            rect->ymax = region_iter->winrct.ymin;
+          if (abs(rect->ymax - sibling_rect.ymax) < 2) {
+            rect->ymax = sibling_rect.ymin;
           }
         }
         else if (alignment == RGN_ALIGN_FLOAT) {
@@ -4360,7 +4537,11 @@ const rcti *ED_region_visible_rect(ARegion *region)
   return rect;
 }
 
-/* Cache display helpers */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Region Cache Drawing
+ * \{ */
 
 void ED_region_cache_draw_background(ARegion *region)
 {
@@ -4405,7 +4586,7 @@ void ED_region_cache_draw_curfra_label(const int framenr, const float x, const f
       &rect, bg_color, nullptr, 1.0f, outline_color, U.pixelsize, 3 * UI_SCALE_FAC);
 
   /* Text label. */
-  ui::theme::font_theme_color_set(fontid, TH_HEADER_TEXT_HI);
+  ui::theme::font_theme_color_set(fontid, TH_TEXT_HI);
   BLF_position(fontid, x - text_dims.x * 0.5f, y + padding, 0.0f);
   BLF_draw(fontid, numstr, sizeof(numstr));
 }
@@ -4434,6 +4615,12 @@ void ED_region_cache_draw_cached_segments(
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Message Bus Subscription
+ * \{ */
+
 void ED_region_message_subscribe(wmRegionMessageSubscribeParams *params)
 {
   ARegion *region = params->region;
@@ -4452,6 +4639,12 @@ void ED_region_message_subscribe(wmRegionMessageSubscribeParams *params)
     region->runtime->type->message_subscribe(params);
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Region Snap Size
+ * \{ */
 
 int ED_region_snap_size_test(const ARegion *region)
 {
@@ -4487,5 +4680,7 @@ bool ED_region_snap_size_apply(ARegion *region, int snap_flag)
   }
   return changed;
 }
+
+/** \} */
 
 }  // namespace blender

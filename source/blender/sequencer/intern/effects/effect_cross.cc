@@ -10,6 +10,8 @@
 
 #include "IMB_imbuf.hh"
 
+#include "PRF_profile.hh"
+
 #include "SEQ_render.hh"
 
 #include "effects.hh"
@@ -52,6 +54,7 @@ static SeqResult do_cross_effect(const RenderData *context,
                                  const SeqResult &src1,
                                  const SeqResult &src2)
 {
+  PRF_scope_with_name("SeqFxCross", ProfileCategory::Draw);
   SeqResult dst = prepare_effect_imbufs(context, src1, src2);
   CrossEffectOp op;
   op.factor = fac;
@@ -68,7 +71,7 @@ static SeqResult do_cross_effect(const RenderData *context,
 
 static float gammaCorrect(float c)
 {
-  if (UNLIKELY(c < 0)) {
+  if (c < 0) [[unlikely]] {
     return -(c * c);
   }
   return c * c;
@@ -108,6 +111,7 @@ static SeqResult do_gammacross_effect(const RenderData *context,
                                       const SeqResult &src1,
                                       const SeqResult &src2)
 {
+  PRF_scope_with_name("SeqFxGammaCross", ProfileCategory::Draw);
   SeqResult dst = prepare_effect_imbufs(context, src1, src2);
   GammaCrossEffectOp op;
   op.factor = fac;

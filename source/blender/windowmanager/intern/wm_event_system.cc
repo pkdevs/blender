@@ -30,12 +30,12 @@
 #include "GHOST_ISystem.hh"
 
 #include "BLI_enum_flags.hh"
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_timer.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_timer.hh"
 
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
@@ -66,6 +66,8 @@
 #include "ED_view3d.hh"
 
 #include "GPU_context.hh"
+
+#include "PRF_profile.hh"
 
 #include "RNA_access.hh"
 
@@ -370,7 +372,7 @@ static void wm_event_add_notifier_intern(wmWindowManager *wm,
   BLI_assert(!wm_notifier_is_clear(&note_test));
 
   wm->runtime->notifier_queue_set.lookup_key_or_add_cb(&note_test, [&]() {
-    wmNotifier *note = MEM_new<wmNotifier>(__func__);
+    wmNotifier *note = MEM_new<wmNotifier>("wm_event_add_notifier_intern");
     *note = note_test;
     BLI_addtail(&wm->runtime->notifier_queue, note);
     return note;
@@ -564,7 +566,7 @@ void wm_event_do_refresh_wm_and_depsgraph(bContext *C)
 static void wm_event_timers_execute(bContext *C)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
-  if (UNLIKELY(wm == nullptr)) {
+  if (wm == nullptr) [[unlikely]] {
     return;
   }
 
@@ -593,6 +595,7 @@ static bool notifier_refreshes_node_group_operators(const wmNotifier &note)
 
 void wm_event_do_notifiers(bContext *C)
 {
+  PRF_scope(ProfileCategory::Core);
   /* Ensure inside render boundary. */
   GPU_render_begin();
 
@@ -1109,6 +1112,8 @@ static intptr_t wm_operator_register_active_id(const wmWindowManager *wm)
 
 bool WM_operator_poll(bContext *C, wmOperatorType *ot)
 {
+  PRF_scope_with_name("Operator Call (poll)", ProfileCategory::Default);
+  PRF_scope_set_dynamic_name("Op: %s", ot->idname);
 
   for (wmOperatorTypeMacro &otmacro : ot->macro) {
     wmOperatorType *ot_macro = WM_operatortype_find(otmacro.idname, false);
@@ -1603,7 +1608,7 @@ static void wm_region_tag_draw_on_gizmo_delay_refresh_for_tweak(wmWindow *win)
 
   bScreen *screen = WM_window_get_active_screen(win);
   /* Unlikely but not impossible as this runs after events have been handled. */
-  if (UNLIKELY(screen == nullptr)) {
+  if (screen == nullptr) [[unlikely]] {
     return;
   }
   ED_screen_areas_iter (win, screen, area) {
@@ -1652,6 +1657,8 @@ static wmOperatorStatus wm_operator_invoke(bContext *C,
   }
 
   if (WM_operator_poll(C, ot)) {
+    PRF_scope_with_name("Operator Call (exec/invoke)", ProfileCategory::Default);
+    PRF_scope_set_dynamic_name("Op: %s", ot->idname);
     wmWindowManager *wm = CTX_wm_manager(C);
     const intptr_t undo_id_prev = wm_operator_undo_active_id(wm);
     const intptr_t register_id_prev = wm_operator_register_active_id(wm);
@@ -2036,7 +2043,7 @@ static void ui_handler_wait_for_input_remove(bContext *C, void *userdata)
 {
   OperatorWaitForInput *opwait = static_cast<OperatorWaitForInput *>(userdata);
   if (opwait->optype_params.opptr) {
-    if (opwait->optype_params.opptr->data) {
+    if (*opwait->optype_params.opptr) {
       IDP_FreeProperty(static_cast<IDProperty *>(opwait->optype_params.opptr->data));
     }
     MEM_delete(opwait->optype_params.opptr);
@@ -2404,6 +2411,11 @@ BLI_INLINE bool wm_eventmatch(const wmEvent *winevent, const wmKeyMapItem *kmi)
 
   /* The matching rules. */
   if (kmitype == KM_TEXTINPUT) {
+#ifdef WITH_INPUT_IME
+    if (IS_EVENT_IME_ANY(winevent->type)) {
+      return true;
+    }
+#endif
     if (winevent->val == KM_PRESS) { /* Prevent double clicks. */
       if (ISKEYBOARD(winevent->type) && winevent->utf8_buf[0]) {
         return true;
@@ -2620,9 +2632,18 @@ static void wm_handler_operator_insert(wmWindow *win, wmEventHandler_Op *handler
         if (handler_iter_op->op != nullptr) {
           if (handler_iter_op->op->type->flag & OPTYPE_MODAL_PRIORITY) {
             last_priority_handler = &handler_iter;
+            continue;
           }
         }
       }
+
+      /* Stop at other UI handlers like popups. We don't want to disturb the relative order
+       * of modal operators from those popups, e.g. dragging in the color picker. See #162498.
+       * Otherwise the popup UI handler may free data used by the modal operator.
+       *
+       * This means modal operator priority order is only preserved relative to other modal
+       * operators, to prevent them from interfering with menus and popups. */
+      break;
     }
 
     if (last_priority_handler) {
@@ -2659,6 +2680,8 @@ static eHandlerActionFlag wm_handler_operator_call(bContext *C,
        * nothing to do in this case. */
     }
     else if (ot->modal) {
+      PRF_scope_with_name("Operator Call (modal)", ProfileCategory::Default);
+      PRF_scope_set_dynamic_name("Op: %s", ot->idname);
       /* We set context to where modal handler came from. */
       wmWindowManager *wm = CTX_wm_manager(C);
       wmWindow *win = CTX_wm_window(C);
@@ -3556,7 +3579,7 @@ static eHandlerActionFlag wm_handlers_do_intern(bContext *C,
                 }
 
                 if (wmDragAsset *asset_data = WM_drag_get_asset_data(&drag, 0)) {
-                  if (asset_data->asset->is_online()) {
+                  if (asset_data->asset->is_online_only()) {
                     BKE_reportf(CTX_wm_reports(C),
                                 RPT_ERROR,
                                 "Asset '%s' is still downloading",
@@ -4207,6 +4230,7 @@ static eHandlerActionFlag wm_event_do_handlers_area_regions(bContext *C,
 
 void wm_event_do_handlers(bContext *C)
 {
+  PRF_scope(ProfileCategory::Core);
   wmWindowManager *wm = CTX_wm_manager(C);
   BLI_assert(ED_undo_is_state_valid(C));
 
@@ -6031,7 +6055,7 @@ void wm_event_add_ghostevent(wmWindowManager *wm,
                              const void *customdata,
                              const uint64_t event_time_ms)
 {
-  if (UNLIKELY(G.f & G_FLAG_EVENT_SIMULATE)) {
+  if (G.f & G_FLAG_EVENT_SIMULATE) [[unlikely]] {
     return;
   }
 
@@ -6250,7 +6274,7 @@ void wm_event_add_ghostevent(wmWindowManager *wm,
     case GHOST_kEventKeyUp: {
       const GHOST_TEventKeyData *kd = static_cast<const GHOST_TEventKeyData *>(customdata);
       event.type = wm_event_type_from_ghost_key(kd->key);
-      if (UNLIKELY(event.type == EVENT_NONE)) {
+      if (event.type == EVENT_NONE) [[unlikely]] {
         break;
       }
 
@@ -6690,6 +6714,43 @@ bool WM_event_match(const wmEvent *winevent, const wmKeyMapItem *kmi)
   return wm_eventmatch(winevent, kmi);
 }
 
+bool WM_event_modifier_flag_match_kmi_press(const wmEventModifierFlag event_modifier,
+                                            const wmKeyMapItem *kmi)
+{
+  /* The caller is expected to skip. */
+  BLI_assert((kmi->flag & KMI_INACTIVE) == 0);
+
+  if (event_modifier == 0) {
+    return false;
+  }
+  if (kmi->val != KM_PRESS) {
+    return false;
+  }
+  switch (kmi->type) {
+    case EVT_LEFTCTRLKEY:
+    case EVT_RIGHTCTRLKEY: {
+      return event_modifier & KM_CTRL;
+    }
+    case EVT_LEFTSHIFTKEY:
+    case EVT_RIGHTSHIFTKEY: {
+      return event_modifier & KM_SHIFT;
+    }
+    case EVT_LEFTALTKEY:
+    case EVT_RIGHTALTKEY: {
+      return event_modifier & KM_ALT;
+    }
+    case EVT_OSKEY: {
+      return event_modifier & KM_OSKEY;
+    }
+    case EVT_HYPER: {
+      return event_modifier & KM_HYPER;
+    }
+    default: {
+      return false;
+    }
+  }
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -6790,7 +6851,7 @@ void WM_window_cursor_keymap_status_refresh(bContext *C, wmWindow *win)
   }
 
   CursorKeymapInfo *cd;
-  if (UNLIKELY(win->runtime->cursor_keymap_status == nullptr)) {
+  if (win->runtime->cursor_keymap_status == nullptr) [[unlikely]] {
     win->runtime->cursor_keymap_status = MEM_new<CursorKeymapInfo>(__func__);
   }
   cd = static_cast<CursorKeymapInfo *>(win->runtime->cursor_keymap_status);

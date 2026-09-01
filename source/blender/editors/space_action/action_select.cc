@@ -14,8 +14,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_lasso_2d.hh"
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_anim_types.h"
 #include "DNA_gpencil_legacy_types.h"
@@ -577,8 +577,13 @@ static void box_select_action(bAnimContext *ac,
       /* if channel is mapped in NLA, apply correction */
       if (ANIM_nla_mapping_allowed(ale)) {
         sel_data.ked.iterflags &= ~(KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP);
-        sel_data.ked.f1 = ANIM_nla_tweakedit_remap(ale, rectf.xmin, NLATIME_CONVERT_UNMAP);
-        sel_data.ked.f2 = ANIM_nla_tweakedit_remap(ale, rectf.xmax, NLATIME_CONVERT_UNMAP);
+        const float f1 = ANIM_nla_tweakedit_remap(ale, rectf.xmin, NLATIME_CONVERT_UNMAP);
+        const float f2 = ANIM_nla_tweakedit_remap(ale, rectf.xmax, NLATIME_CONVERT_UNMAP);
+
+        /* Make sure f1 & f2 are in order (e.g. in case of NLASTRIP_FLAG_REVERSE). Note: will still
+         * fail for the Summary (since that is excluded from NLA remapping). */
+        sel_data.ked.f1 = math::min(f1, f2);
+        sel_data.ked.f2 = math::max(f1, f2);
       }
       else {
         sel_data.ked.iterflags |= (KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP); /* for summary tracks */
@@ -685,7 +690,7 @@ void ACTION_OT_select_box(wmOperatorType *ot)
   ot->modal = WM_gesture_box_modal;
   ot->cancel = WM_gesture_box_cancel;
 
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
 
   /* flags */
   ot->flag = OPTYPE_UNDO;
@@ -869,8 +874,13 @@ static void region_select_action_keys(bAnimContext *ac,
      */
     if (ANIM_nla_mapping_allowed(ale)) {
       sel_data.ked.iterflags &= ~(KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP);
-      sel_data.ked.f1 = ANIM_nla_tweakedit_remap(ale, rectf.xmin, NLATIME_CONVERT_UNMAP);
-      sel_data.ked.f2 = ANIM_nla_tweakedit_remap(ale, rectf.xmax, NLATIME_CONVERT_UNMAP);
+      const float f1 = ANIM_nla_tweakedit_remap(ale, rectf.xmin, NLATIME_CONVERT_UNMAP);
+      const float f2 = ANIM_nla_tweakedit_remap(ale, rectf.xmax, NLATIME_CONVERT_UNMAP);
+
+      /* Make sure f1 & f2 are in order (e.g. in case of NLASTRIP_FLAG_REVERSE). Note: will still
+       * fail for the Summary (since that is excluded from NLA remapping). */
+      sel_data.ked.f1 = math::min(f1, f2);
+      sel_data.ked.f2 = math::max(f1, f2);
     }
     else {
       sel_data.ked.iterflags |= (KED_F1_NLA_UNMAP | KED_F2_NLA_UNMAP); /* for summary tracks */
@@ -951,7 +961,7 @@ void ACTION_OT_select_lasso(wmOperatorType *ot)
   ot->invoke = WM_gesture_lasso_invoke;
   ot->modal = WM_gesture_lasso_modal;
   ot->exec = actkeys_lassoselect_exec;
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
   ot->cancel = WM_gesture_lasso_cancel;
 
   /* flags */
@@ -1018,7 +1028,7 @@ void ACTION_OT_select_circle(wmOperatorType *ot)
   ot->invoke = WM_gesture_circle_invoke;
   ot->modal = WM_gesture_circle_modal;
   ot->exec = action_circle_select_exec;
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
   ot->cancel = WM_gesture_circle_cancel;
   ot->get_name = ED_select_circle_get_name;
 
@@ -2096,7 +2106,7 @@ void ACTION_OT_clickselect(wmOperatorType *ot)
   ot->description = "Select keyframes by clicking on them";
 
   /* callbacks */
-  ot->poll = ED_operator_action_active;
+  ot->poll = ED_operator_region_action_active;
   ot->exec = actkeys_clickselect_exec;
   ot->invoke = WM_generic_select_invoke;
   ot->modal = WM_generic_select_modal;

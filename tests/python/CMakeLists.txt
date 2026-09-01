@@ -653,6 +653,14 @@ if(TEST_SRC_DIR_EXISTS)
     --run-all-tests
   )
 
+  if(WITH_MOD_FLUID)
+    add_blender_test(
+      physics_fluid_cache
+      ${TEST_SRC_DIR}/render/motion_blur/fluid_motion_blur.blend
+      --python ${TEST_PYTHON_DIR}/physics_fluid_cache.py
+    )
+  endif()
+
   add_blender_test(
     deform_modifiers
     ${TEST_SRC_DIR}/modeling/deform_modifiers.blend
@@ -677,6 +685,12 @@ if(TEST_SRC_DIR_EXISTS)
     --python ${TEST_PYTHON_DIR}/physics_particle_system.py
     --
     --run-all-tests
+  )
+
+  add_blender_test(
+    physics_particle_legacy_texture_uv
+    ${TEST_SRC_DIR}/physics/particle_legacy_texture_uv.blend
+    --python ${TEST_PYTHON_DIR}/physics_particle_legacy_texture_uv.py
   )
 
   add_blender_test(
@@ -768,6 +782,13 @@ if(TEST_SRC_DIR_EXISTS)
     --
     --testdir "${TEST_SRC_DIR}/animation"
     --output-dir "${TEST_OUT_DIR}/bl_animation_action"
+  )
+
+  add_blender_test(
+    bl_animation_convert
+    --python ${CMAKE_CURRENT_LIST_DIR}/bl_animation_convert.py
+    --
+    --testdir "${TEST_SRC_DIR}/animation"
   )
 
   add_blender_test(
@@ -894,6 +915,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
     image_colorspace
     image_data_types
     image_mapping
+    image_mipmap
     image_texture_limit
     integrator
     light
@@ -977,7 +999,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
             "Supported devices are: ${_cycles_all_test_devices}")
       endif()
       string(TOLOWER "${_cycles_device}" _cycles_device_lower)
-      set(_cycles_render_tests bake;bake_raytrace;${render_tests};osl;image_mipmap)
+      set(_cycles_render_tests bake;bake_raytrace;${render_tests};osl;updates)
 
       set(_cycles_osl_test_type none)
       if(WITH_CYCLES_OSL)
@@ -1061,7 +1083,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
         endforeach()
       endif()
 
-      if(WITH_VULKAN_BACKEND AND WITH_GPU_RENDER_TESTS_VULKAN
+      if(WITH_VULKAN_BACKEND
           AND (NOT (name STREQUAL "storm_hydra" OR name STREQUAL "storm_usd") OR WITH_STORM_TESTS_VULKAN))
         foreach(render_test ${render_tests})
           add_render_test(
@@ -1249,14 +1271,20 @@ if(TEST_SRC_DIR_EXISTS)
     repeat_zone
     mesh_primitives
     mesh
+    mesh/bevel
     mesh/extrude
     mesh/split_edges
     mesh/triangulate
     points
+    simulation
     texture
     utilities
     vector
   )
+
+  if(WITH_AUDASPACE AND WITH_FFTW3)
+    list(APPEND geo_node_tests sound)
+  endif()
 
   if(WITH_GMP)
     list(APPEND geo_node_tests mesh/boolean)
@@ -1282,15 +1310,6 @@ if(TEST_SRC_DIR_EXISTS)
     endforeach()
   endforeach()
 
-  file(GLOB files "${TEST_SRC_DIR}/modeling/geometry_nodes/simulation/*.blend")
-  foreach(file ${files})
-    get_filename_component(filename ${file} NAME_WE)
-    add_blender_test(
-      geo_node_simulation_test_${filename}
-      ${file}
-      --python ${TEST_PYTHON_DIR}/geo_node_sim_test.py
-    )
-  endforeach()
 endif()
 
 # ------------------------------------------------------------------------------
@@ -1362,6 +1381,14 @@ if(WITH_USD AND TEST_SRC_DIR_EXISTS)
     --
     --testdir "${TEST_SRC_DIR}/usd"
     --outdir "${TEST_OUT_DIR}/io_usd"
+  )
+
+  # The collection IO tests need USD
+  add_blender_test(
+    io_collections
+    --python ${CMAKE_CURRENT_LIST_DIR}/io_collections_test.py
+    --
+    --testdir "${TEST_SRC_DIR}/io_tests/io_collections"
   )
 endif()
 
@@ -1526,6 +1553,11 @@ if(TEST_SRC_DIR_EXISTS)
   )
 
   add_blender_test(
+    sequencer_strip_naming
+    --python ${CMAKE_CURRENT_LIST_DIR}/sequencer_strip_naming.py
+  )
+
+  add_blender_test(
     sequencer_load_meta_stack
     ${TEST_SRC_DIR}/sequence_editing/vse_load_meta_stack.blend
     --python ${TEST_PYTHON_DIR}/sequencer_load_meta_stack.py
@@ -1680,6 +1712,14 @@ if(WITH_UI_TESTS)
   # `"${TEST_PYTHON_EXE}" "${CMAKE_CURRENT_LIST_DIR}/ui_simulate/run.py" --list-tests`
   # list explicitly so changes bisecting/updated are sure to re-run CMake.
   set(_ui_tests
+    test_editor_types.test_open_editor_types
+    test_search_in_editors.test_properties_search
+    test_search_in_editors.test_outliner_search
+    test_search_in_editors.test_dopesheet_search
+    test_search_in_editors.test_graph_editor_search
+    test_search_in_editors.test_file_browser_search
+    test_operator_poll.test_operator_search_poll_gating
+    test_operator_poll.test_operator_poll_sweep
     test_sculpt.asset_shelf_brush_selection
     test_sculpt.face_set_expand
     test_sculpt.face_set_gestures
@@ -1693,15 +1733,20 @@ if(WITH_UI_TESTS)
     test_undo.text_editor_edit_mode_mix
     test_undo.text_editor_simple
     test_undo.view3d_edit_mode_multi_window
+    test_undo.view3d_font_edit_mode_object_mix
     test_undo.view3d_font_edit_mode_simple
+    test_undo.view3d_mesh_edit_mode_object_mix
+    test_undo.view3d_mesh_edit_shape_key
     test_undo.view3d_mesh_edit_separate
     test_undo.view3d_mesh_particle_edit_mode_simple
     test_undo.view3d_multi_mode_multi_window
     test_undo.view3d_multi_mode_select
+    test_undo.view3d_particle_edit_undo_from_texture_paint
     test_undo.view3d_sculpt_dyntopo_and_edit
     test_undo.view3d_sculpt_dyntopo_simple
     test_undo.view3d_sculpt_dyntopo_stroke_toggle
     test_undo.view3d_sculpt_with_memfile_step
+    test_undo.view3d_sculpt_with_empty_memfile_step
     test_undo.view3d_sculpt_trim
     test_undo.view3d_simple
     test_undo.view3d_texture_paint_complex
@@ -1722,6 +1767,56 @@ if(WITH_UI_TESTS)
     test_render.interactive_rendering_cycles
     test_render.interactive_rendering_eevee
     test_render.animation_rendering_and_player
+    test_bpy_types.unregister_referenced_type
+    test_drag_interactions.view3d_object_drag
+    test_drag_interactions.viewport_navigation_drags
+    test_drag_interactions.node_single_drag
+    test_drag_interactions.node_multiple_drag
+    test_drag_interactions.dopesheet_keyframe_drag
+    test_drag_interactions.graph_editor_drag
+    test_drag_interactions.uv_editor_drag
+    test_drag_interactions.image_editor_pan
+    test_sequencer.compositor_modifier_mask_with_single_input
+    test_menu_search_and_exec.view3d_add
+    test_menu_search_and_exec.modifier_add
+    test_menu_search_and_exec.sequencer_add
+    test_menu_search_and_exec.sequencer_modifier_add
+    test_menu_search_and_exec.shader_node_add
+    test_menu_search_and_exec.compositor_node_add
+    test_menu_search_and_exec.geometry_node_add
+    test_menu_search_and_exec.node_swap_search
+    test_menu_search_and_exec.grease_pencil_layer_search
+    test_pie_menus.test_object_mode_pie_edit
+    test_pie_menus.test_snap_pie_cursor_to_world_origin
+    test_pie_menus.test_pivot_pie_cursor
+    test_pie_menus.test_orientation_pie_cursor
+    test_pie_menus.test_shading_pie_solid
+    test_pie_menus.test_view_pie_camera
+    test_pie_menus.test_transform_gizmo_pie_show_gizmos
+    test_pie_menus.test_shading_ex_pie_toggle_overlays
+    test_pie_menus.test_proportional_editing_falloff_pie_sphere
+    test_pie_menus.test_sculpt_automasking_pie_topology
+    test_pie_menus.test_graph_editor_pivot_pie_cursor
+    test_pie_menus.test_graph_editor_view_pie_view_all
+    test_pie_menus.test_dopesheet_snap_pie_current_frame
+    test_pie_menus.test_dopesheet_view_pie_view_all
+    test_pie_menus.test_sequencer_pivot_pie_cursor
+    test_pie_menus.test_nla_snap_pie_current_frame
+    test_pie_menus.test_nla_view_pie_view_all
+    test_pie_menus.test_image_pivot_pie_cursor
+    test_pie_menus.test_image_view_pie_view_all
+    test_pie_menus.test_filebrowser_view_pie_list_horizontal
+    test_pie_menus.test_clip_pivot_pie_cursor
+    test_pie_menus.test_clip_marker_pie_affine
+    test_pie_menus.test_clip_solving_pie_tripod_solver
+    test_pie_menus.test_clip_view_pie_view_all
+    test_pie_menus.test_anim_keyframe_insert_pie_location
+    test_pie_menus.test_weight_paint_vgroup_lock_pie
+    test_button_input.test_string_buttons_interactions
+    test_tool_activation.view3d
+    test_tool_activation.image_editor
+    test_tool_activation.node_editor
+    test_tool_activation.sequencer
   )
   foreach(ui_test ${_ui_tests})
     add_blender_test_ui(

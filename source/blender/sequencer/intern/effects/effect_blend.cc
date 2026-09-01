@@ -6,11 +6,13 @@
  * \ingroup sequencer
  */
 
-#include "BLI_math_color_blend.h"
+#include "BLI_math_color_blend.hh"
 
 #include "DNA_sequence_types.h"
 
 #include "IMB_imbuf.hh"
+
+#include "PRF_profile.hh"
 
 #include "SEQ_render.hh"
 
@@ -51,8 +53,9 @@ struct AlphaOverEffectOp {
     }
 
     for (int64_t idx = 0; idx < size; idx++) {
-      if (src1[3] <= 0.0f) {
-        /* Alpha of zero. No color addition will happen as the colors are pre-multiplied. */
+      if (std::is_same_v<T, uchar> && src1[3] == 0) {
+        /* Optimization for fully transparent pixels: copy src2. Only do this for byte images;
+         * in floats alpha=0 can still have pure emissive color. */
         memcpy(dst, src2, sizeof(T) * 4);
       }
       else if (fac == 1.0f && alpha_opaque(src1[3])) {
@@ -83,6 +86,7 @@ static SeqResult do_alphaover_effect(const RenderData *context,
                                      const SeqResult &src1,
                                      const SeqResult &src2)
 {
+  PRF_scope_with_name("SeqFxOver", ProfileCategory::Draw);
   SeqResult dst = prepare_effect_imbufs(context, src1, src2);
   AlphaOverEffectOp op;
   op.factor = fac;
@@ -133,6 +137,7 @@ static SeqResult do_alphaunder_effect(const RenderData *context,
                                       const SeqResult &src1,
                                       const SeqResult &src2)
 {
+  PRF_scope_with_name("SeqFxUnder", ProfileCategory::Draw);
   SeqResult dst = prepare_effect_imbufs(context, src1, src2);
   AlphaUnderEffectOp op;
   op.factor = fac;
@@ -334,6 +339,7 @@ static SeqResult do_blend_mode_effect(const RenderData *context,
                                       const SeqResult &src1,
                                       const SeqResult &src2)
 {
+  PRF_scope_with_name("SeqFxBlend", ProfileCategory::Draw);
   SeqResult dst = prepare_effect_imbufs(context, src1, src2);
   BlendModeEffectOp op;
   op.factor = fac;
@@ -369,6 +375,7 @@ static SeqResult do_colormix_effect(const RenderData *context,
                                     const SeqResult &src1,
                                     const SeqResult &src2)
 {
+  PRF_scope_with_name("SeqFxColorMix", ProfileCategory::Draw);
   SeqResult dst = prepare_effect_imbufs(context, src1, src2);
   const ColorMixVars *data = static_cast<const ColorMixVars *>(strip->effectdata);
   BlendModeEffectOp op;

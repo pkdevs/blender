@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_array_utils.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_task.hh"
 #include "BLI_vector_set.hh"
 
@@ -119,7 +119,6 @@ static void remove_unsupported_vert_data(Mesh &mesh)
   CustomData_free_layers(&mesh.vert_data, CD_ORCO);
   CustomData_free_layers(&mesh.vert_data, CD_SHAPEKEY);
   CustomData_free_layers(&mesh.vert_data, CD_CLOTH_ORCO);
-  CustomData_free_layers(&mesh.vert_data, CD_MVERT_SKIN);
 }
 
 static void remove_unsupported_corner_data(Mesh &mesh)

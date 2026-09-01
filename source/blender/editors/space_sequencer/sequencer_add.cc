@@ -16,12 +16,12 @@
 #include "DNA_sound_types.h"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -128,6 +128,18 @@ static const EnumPropertyItem rna_enum_image_import_type_items[] = {
 /** \name Generic Add Functions
  * \{ */
 
+static bool is_drag_and_drop(const wmOperator *op, const wmEvent *event)
+{
+  if (event != nullptr && event->type == EVT_DROP) {
+    return true;
+  }
+  /* TAKE NOTICE, footgun! Dragging and dropping *multiple* files will not emit `EVT_DROP`,
+   * so we can't check for that alone. */
+  return (RNA_struct_property_is_set(op->ptr, "files") &&
+          !RNA_collection_is_empty(op->ptr, "files")) ||
+         RNA_struct_property_is_set(op->ptr, "filepath");
+}
+
 static void sequencer_add_init(bContext * /*C*/, wmOperator *op)
 {
   op->customdata = MEM_new<SequencerAddData>(__func__);
@@ -199,14 +211,16 @@ static void sequencer_add_ui(bContext * /*C*/, wmOperator *op)
     layout.prop(op->ptr, "length", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  layout.separator();
+  if (RNA_struct_find_property(op->ptr, "show_multiview")) {
+    layout.separator();
 
-  /* Image template. */
-  PointerRNA imf_ptr = RNA_pointer_create_discrete(nullptr, RNA_ImageFormatSettings, imf);
+    /* Image template. */
+    PointerRNA imf_ptr = RNA_pointer_create_discrete(nullptr, RNA_ImageFormatSettings, imf);
 
-  /* Multiview template. */
-  if (RNA_boolean_get(op->ptr, "show_multiview")) {
-    uiTemplateImageFormatViews(&layout, &imf_ptr, op->ptr);
+    /* Multiview template. */
+    if (RNA_boolean_get(op->ptr, "show_multiview")) {
+      uiTemplateImageFormatViews(&layout, &imf_ptr, op->ptr);
+    }
   }
 }
 
@@ -418,9 +432,7 @@ static void sequencer_file_drop_channel_frame_set(bContext *C,
                                                   wmOperator *op,
                                                   const wmEvent *event)
 {
-  BLI_assert((RNA_struct_property_is_set(op->ptr, "files") &&
-              !RNA_collection_is_empty(op->ptr, "files")) ||
-             RNA_struct_property_is_set(op->ptr, "filepath"));
+  BLI_assert(is_drag_and_drop(op, event));
 
   if (RNA_struct_property_is_set(op->ptr, "channel") ||
       RNA_struct_property_is_set(op->ptr, "frame_start"))
@@ -479,7 +491,7 @@ static void sequencer_generic_invoke_xy__internal(
   }
 
   if ((flag & SEQPROP_LENGTH) && !RNA_struct_property_is_set(op->ptr, "length")) {
-    RNA_int_set(op->ptr, "length", DEFAULT_IMG_STRIP_LENGTH);
+    RNA_int_set(op->ptr, "length", seq::DEFAULT_STRIP_LENGTH);
   }
 
   if (!(flag & SEQPROP_NOPATHS)) {
@@ -632,8 +644,6 @@ static bool load_data_init_from_operator(seq::LoadData *load_data, bContext *C, 
 
     load_data->start_frame = std::trunc(mouse_view.x);
     load_data->channel = std::trunc(mouse_view.y);
-    load_data->image.length = DEFAULT_IMG_STRIP_LENGTH;
-    load_data->effect.length = load_data->image.length;
   }
   return true;
 }
@@ -779,8 +789,12 @@ static wmOperatorStatus sequencer_add_scene_strip_invoke(bContext *C,
     return WM_enum_search_invoke(C, op, event);
   }
 
-  sequencer_generic_invoke_xy__internal(C, op, 0, STRIP_TYPE_SCENE, event);
-  return sequencer_add_scene_strip_exec(C, op);
+  sequencer_add_init(C, op);
+  sequencer_generic_invoke_xy__internal(
+      C, op, is_drag_and_drop(op, event) ? SEQPROP_NOPATHS : 0, STRIP_TYPE_SCENE, event);
+  const wmOperatorStatus retval = sequencer_add_scene_strip_exec(C, op);
+  sequencer_add_free(C, op);
+  return retval;
 }
 
 void SEQUENCER_OT_scene_strip_add(wmOperatorType *ot)
@@ -1047,8 +1061,12 @@ static wmOperatorStatus sequencer_add_movieclip_strip_invoke(bContext *C,
     return WM_enum_search_invoke(C, op, event);
   }
 
-  sequencer_generic_invoke_xy__internal(C, op, 0, STRIP_TYPE_MOVIECLIP, event);
-  return sequencer_add_movieclip_strip_exec(C, op);
+  sequencer_add_init(C, op);
+  sequencer_generic_invoke_xy__internal(
+      C, op, is_drag_and_drop(op, event) ? SEQPROP_NOPATHS : 0, STRIP_TYPE_MOVIECLIP, event);
+  const wmOperatorStatus retval = sequencer_add_movieclip_strip_exec(C, op);
+  sequencer_add_free(C, op);
+  return retval;
 }
 
 void SEQUENCER_OT_movieclip_strip_add(wmOperatorType *ot)
@@ -1119,8 +1137,12 @@ static wmOperatorStatus sequencer_add_mask_strip_invoke(bContext *C,
     return WM_enum_search_invoke(C, op, event);
   }
 
-  sequencer_generic_invoke_xy__internal(C, op, 0, STRIP_TYPE_MASK, event);
-  return sequencer_add_mask_strip_exec(C, op);
+  sequencer_add_init(C, op);
+  sequencer_generic_invoke_xy__internal(
+      C, op, is_drag_and_drop(op, event) ? SEQPROP_NOPATHS : 0, STRIP_TYPE_MASK, event);
+  const wmOperatorStatus retval = sequencer_add_mask_strip_exec(C, op);
+  sequencer_add_free(C, op);
+  return retval;
 }
 
 void SEQUENCER_OT_mask_strip_add(wmOperatorType *ot)
@@ -1228,7 +1250,7 @@ static void sequencer_add_movie_sync_strip(Scene *scene,
   /* Expand missing sound data in the underlying container to fill the movie strip's length. To the
    * user, this missing data is the same as complete silence, so we pretend like it is. */
   if (strip->type == STRIP_TYPE_SOUND) {
-    strip->len = std::max(anchor->len, strip->len);
+    strip->content_length_set(std::max(anchor->content_length(), strip->content_length()));
   }
 
   /* Match the strip length to the anchor to have all streams align on the timeline. */
@@ -1278,6 +1300,22 @@ static void sequencer_add_movie_strips_single_file(bContext *C,
   Vector<StripEntry> entries;
   const int base_channel = std::max(1, load_data->channel);
 
+  /* Video streams. We must load these first since they can change scene FPS as a side effect. */
+  for (const int video_index : IndexRange(video_count)) {
+    load_data->stream_index = video_index;
+    load_data->channel = base_channel + sound_count + video_index;
+    Strip *strip = seq::add_movie_strip(bmain, scene, ed->current_strips(), load_data);
+    if (strip == nullptr) {
+      if (video_index == 0) {
+        BKE_reportf(op->reports, RPT_ERROR, "File '%s' could not be loaded", load_data->path);
+      }
+      return;
+    }
+    /* To standardize behavior, only let the first video stream among all files change FPS. */
+    load_data->flags &= ~seq::SEQ_LOAD_MOVIE_SYNC_FPS;
+    entries.append({strip, load_data->video_stream_start});
+  }
+
   /* Audio streams. */
   for (const int sound_index : IndexRange(sound_count)) {
     load_data->stream_index = sound_index;
@@ -1294,28 +1332,12 @@ static void sequencer_add_movie_strips_single_file(bContext *C,
     entries.append({strip, stream_start});
   }
 
-  /* Video streams. */
-  for (const int video_index : IndexRange(video_count)) {
-    load_data->stream_index = video_index;
-    load_data->channel = base_channel + sound_count + video_index;
-    Strip *strip = seq::add_movie_strip(bmain, scene, ed->current_strips(), load_data);
-    if (strip == nullptr) {
-      if (video_index == 0) {
-        BKE_reportf(op->reports, RPT_ERROR, "File '%s' could not be loaded", load_data->path);
-      }
-      return;
-    }
-    entries.append({strip, load_data->video_stream_start});
-  }
-
   if (entries.is_empty()) {
     return;
   }
 
-  /* Sync all strips' start times using a reference stream as an anchor (the first video
-   * stream, which appears after all sound streams in the list of entries). */
-  const int anchor_index = video_count > 0 ? sound_count : 0;
-  const StripEntry &anchor_entry = entries[anchor_index];
+  /* Sync all strip start times using a reference stream as an anchor (the first video stream). */
+  const StripEntry &anchor_entry = entries.first();
   for (const StripEntry &entry : entries) {
     if (entry.strip == anchor_entry.strip) {
       continue;
@@ -1455,11 +1477,7 @@ static wmOperatorStatus sequencer_add_movie_strip_invoke(bContext *C,
   RNA_enum_set(op->ptr, "fit_method", seq::tool_settings_fit_method_get(scene));
   RNA_boolean_set(op->ptr, "adjust_playback_rate", true);
 
-  /* This is for drag and drop. */
-  if ((RNA_struct_property_is_set(op->ptr, "files") &&
-       !RNA_collection_is_empty(op->ptr, "files")) ||
-      RNA_struct_property_is_set(op->ptr, "filepath"))
-  {
+  if (is_drag_and_drop(op, event)) {
     sequencer_generic_invoke_xy__internal(C, op, SEQPROP_NOPATHS, STRIP_TYPE_MOVIE, event);
 
     const char *error_msg;
@@ -1610,11 +1628,7 @@ static wmOperatorStatus sequencer_add_sound_strip_invoke(bContext *C,
 {
   sequencer_add_init(C, op);
 
-  /* This is for drag and drop. */
-  if ((RNA_struct_property_is_set(op->ptr, "files") &&
-       !RNA_collection_is_empty(op->ptr, "files")) ||
-      RNA_struct_property_is_set(op->ptr, "filepath"))
-  {
+  if (is_drag_and_drop(op, event)) {
     sequencer_generic_invoke_xy__internal(C, op, SEQPROP_NOPATHS, STRIP_TYPE_SOUND, event);
 
     const char *error_msg;
@@ -1669,74 +1683,16 @@ void SEQUENCER_OT_sound_strip_add(wmOperatorType *ot)
 /** \name Add Image Strip
  * \{ */
 
-int sequencer_image_strip_get_minmax_frame(wmOperator *op,
-                                           int sfra,
-                                           int *r_minframe,
-                                           int *r_numdigits)
+void frame_filename_set(char *dst,
+                        size_t dst_maxncpy,
+                        const char *filename_stripped,
+                        const int frame,
+                        const int numdigits,
+                        const char *ext)
 {
-  int minframe = INT32_MAX, maxframe = INT32_MIN;
-  int numdigits = 0;
-
-  RNA_BEGIN (op->ptr, itemptr, "files") {
-    int frame;
-    std::string filename = RNA_string_get(&itemptr, "name");
-
-    if (!filename.empty()) {
-      if (BLI_path_frame_get(filename.c_str(), &frame, &numdigits)) {
-        minframe = min_ii(minframe, frame);
-        maxframe = max_ii(maxframe, frame);
-      }
-    }
-  }
-  RNA_END;
-
-  if (minframe == INT32_MAX) {
-    minframe = sfra;
-    maxframe = minframe + 1;
-  }
-
-  *r_minframe = minframe;
-  *r_numdigits = numdigits;
-
-  return maxframe - minframe + 1;
-}
-
-void sequencer_image_strip_reserve_frames(
-    wmOperator *op, StripElem *se, int len, int minframe, int numdigits)
-{
-  char *filename = nullptr;
-  RNA_BEGIN (op->ptr, itemptr, "files") {
-    filename = RNA_string_get_alloc(&itemptr, "name", nullptr, 0, nullptr);
-    break;
-  }
-  RNA_END;
-
-  if (filename) {
-    char ext[FILE_MAX];
-    char filename_stripped[FILE_MAX];
-    /* Strip the frame from filename and substitute with `#`. */
-    BLI_path_frame_strip(filename, ext, sizeof(ext));
-
-    for (int i = 0; i < len; i++, se++) {
-      STRNCPY(filename_stripped, filename);
-      BLI_path_frame(filename_stripped, sizeof(filename_stripped), minframe + i, numdigits);
-      SNPRINTF(se->filename, "%s%s", filename_stripped, ext);
-    }
-
-    MEM_delete(filename);
-  }
-}
-
-static void frame_filename_set(char *dst,
-                               size_t dst_len,
-                               const char *filename_stripped,
-                               const int frame,
-                               const int numdigits,
-                               const char *ext)
-{
-  BLI_strncpy(dst, filename_stripped, dst_len);
-  BLI_path_frame(dst, dst_len, frame, numdigits);
-  BLI_path_extension_ensure(dst, dst_len, ext);
+  BLI_strncpy(dst, filename_stripped, dst_maxncpy);
+  BLI_path_frame(dst, dst_maxncpy, frame, numdigits);
+  BLI_path_extension_ensure(dst, dst_maxncpy, ext);
 }
 
 static void sequencer_add_image_strip_load_files(wmOperator *op,
@@ -1915,7 +1871,7 @@ static wmOperatorStatus sequencer_add_image_strip_invoke(bContext *C,
   RNA_enum_set(op->ptr, "fit_method", seq::tool_settings_fit_method_get(scene));
 
   /* Name set already by drag and drop. */
-  if (RNA_struct_property_is_set(op->ptr, "files") && !RNA_collection_is_empty(op->ptr, "files")) {
+  if (is_drag_and_drop(op, event)) {
     sequencer_generic_invoke_xy__internal(
         C, op, SEQPROP_LENGTH | SEQPROP_NOPATHS, STRIP_TYPE_IMAGE, event);
 
@@ -2005,12 +1961,14 @@ static wmOperatorStatus sequencer_add_effect_strip_exec(bContext *C, wmOperator 
   StripType effect_type = StripType(RNA_enum_get(op->ptr, "type"));
   const int min_inputs = seq::effect_type_get_min_num_inputs(effect_type);
 
-  VectorSet<Strip *> inputs = strip_effect_get_new_inputs(
-      scene, effect_type == STRIP_TYPE_COMPOSITOR ? 2 : min_inputs);
-  if (effect_type != STRIP_TYPE_COMPOSITOR) {
-    const char *error_msg = effect_inputs_validate(inputs.size(), min_inputs);
-    if (error_msg != nullptr) {
-      BKE_report(op->reports, RPT_ERROR, error_msg);
+  VectorSet<Strip *> inputs;
+  if (min_inputs != 0 || effect_type == STRIP_TYPE_COMPOSITOR) {
+    inputs = strip_effect_get_new_inputs(scene, effect_type);
+    /* Compositor strips can have up to 2 inputs. */
+    const int target_count = effect_type == STRIP_TYPE_COMPOSITOR ?
+                                 math::min(int(inputs.size()), 2) :
+                                 min_inputs;
+    if (!effect_inputs_validate(inputs.size(), target_count, op->reports)) {
       return OPERATOR_CANCELLED;
     }
   }
@@ -2042,11 +2000,16 @@ static wmOperatorStatus sequencer_add_effect_strip_exec(bContext *C, wmOperator 
   if (strip->type == STRIP_TYPE_COLOR) {
     SolidColorVars *colvars = static_cast<SolidColorVars *>(strip->effectdata);
     RNA_float_get_array(op->ptr, "color", colvars->col);
+    colvars->width = RNA_struct_property_is_set(op->ptr, "width") ? RNA_int_get(op->ptr, "width") :
+                                                                    scene->r.xsch;
+    colvars->height = RNA_struct_property_is_set(op->ptr, "height") ?
+                          RNA_int_get(op->ptr, "height") :
+                          scene->r.ysch;
   }
   else if (strip->type == STRIP_TYPE_TEXT) {
     TextVars *textvars = static_cast<TextVars *>(strip->effectdata);
-    textvars->runtime = seq::text_effect_calc_runtime(
-        strip, textvars->text_blf_id, int2(scene->r.xsch, scene->r.ysch));
+    textvars->runtime = MEM_new<seq::TextVarsRuntime>(__func__);
+    seq::text_effect_update_runtime(nullptr, *textvars, int2(scene->r.xsch, scene->r.ysch));
   }
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
@@ -2111,7 +2074,7 @@ static bool sequencer_add_effect_strip_poll_property(const bContext *C,
       return false;
     }
   }
-  if ((type != STRIP_TYPE_COLOR) && STREQ(prop_id, "color")) {
+  if (type != STRIP_TYPE_COLOR && STR_ELEM(prop_id, "color", "width", "height")) {
     return false;
   }
 
@@ -2200,7 +2163,19 @@ void SEQUENCER_OT_effect_strip_add(wmOperatorType *ot)
                       "Sequencer effect type");
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_SEQUENCE);
   sequencer_generic_props__internal(ot, SEQPROP_STARTFRAME | SEQPROP_LENGTH | SEQPROP_MOVE);
-  /* Only used when strip is of the Color type. */
+
+  /* The following properties are only used when strip is of the Color type. */
+  RNA_def_int(
+      ot->srna, "width", 0, 1, INT_MAX, "Width", "Width of the color strip in pixels", 1, INT_MAX);
+  RNA_def_int(ot->srna,
+              "height",
+              0,
+              1,
+              SHRT_MAX,
+              "Height",
+              "Height of the color strip in pixels",
+              1,
+              SHRT_MAX);
   prop = RNA_def_float_color(ot->srna,
                              "color",
                              3,

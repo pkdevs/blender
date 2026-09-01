@@ -52,6 +52,13 @@ enum class ViewScrollDirection {
   DOWN,
 };
 
+enum class PageScrollDirection {
+  Up,
+  Down,
+  Top,
+  Bottom,
+};
+
 struct Layout;
 
 class AbstractView {
@@ -163,7 +170,9 @@ class AbstractView {
   virtual AbstractViewItem *navigate_up(AbstractViewItem *from) = 0;
   virtual AbstractViewItem *navigate_down(AbstractViewItem *from) = 0;
 
-  virtual void scroll_active_into_view(bContext *C) = 0;
+  virtual void scroll_active_into_view(bContext *C, bool scroll_active_to_center = false) = 0;
+
+  virtual void page_scroll(bContext *C, PageScrollDirection direction) = 0;
 
  protected:
   AbstractView() = default;

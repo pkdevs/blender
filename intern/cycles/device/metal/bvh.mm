@@ -161,14 +161,12 @@ void BVHMetal::set_accel_struct(id<MTLAccelerationStructure> new_accel_struct)
 {
   if (@available(macos 12.0, *)) {
     if (accel_struct) {
-      device->stats.mem_free(accel_struct.allocatedSize);
       [accel_struct release];
       accel_struct = nil;
     }
 
     if (new_accel_struct) {
       accel_struct = new_accel_struct;
-      device->stats.mem_alloc(accel_struct.allocatedSize);
     }
   }
 }
@@ -1391,7 +1389,8 @@ bool BVHMetal::build(Progress &progress,
         refit = false;
       }
       else if (!accel_struct) {
-        assert(!"Can't refit non-existing Metal BVH");
+        /* It is possible that the acceleration structure does not exist here: for example, when
+         * new points were added to a previously empty geometry. */
         refit = false;
       }
     }

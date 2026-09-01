@@ -6,7 +6,7 @@
  * \ingroup spoutliner
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_listbase_wrapper.hh"
 
 #include "BKE_main.hh"
@@ -82,7 +82,6 @@ ListBaseT<TreeElement> TreeDisplayOverrideLibraryProperties::add_library_content
 
     if (!filter_id_type) {
       id_base_te = add_element(&tree, nullptr, lbarray[a], nullptr, TSE_ID_BASE, 0);
-      id_base_te->directdata = lbarray[a];
       id_base_te->name = outliner_idcode_to_plural(GS(id->name));
 
       lb_to_expand = &id_base_te->subtree;

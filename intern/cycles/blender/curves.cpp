@@ -24,9 +24,9 @@
 #include "DNA_modifier_types.h"
 #include "DNA_particle_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_curves.hh"
@@ -1076,17 +1076,17 @@ static void export_hair_curves_motion(Hair *hair,
         for (const int i : points.index_range()) {
           const int point = points[i];
 
-          if (point < num_keys) {
+          if (num_motion_keys < num_keys) {
             const float4 cv = curve_point_as_float4(b_positions, b_radius, point);
             mP[num_motion_keys] = make_float3(cv);
             mR[num_motion_keys] = cv.w;
-            num_motion_keys++;
 
             if (!have_motion) {
-              float4 curve_key = make_float4(hair->get_position()[point]);
-              curve_key.w = hair->get_radius()[point];
+              float4 curve_key = make_float4(hair->get_position()[num_motion_keys]);
+              curve_key.w = hair->get_radius()[num_motion_keys];
               have_motion = !(cv == curve_key);
             }
+            num_motion_keys++;
           }
         }
       }
@@ -1152,7 +1152,7 @@ void BlenderSync::sync_hair(BObjectInfo &b_ob_info, Hair *hair)
   new_hair.set_used_shaders(used_shaders);
 
   if (view_layer.use_hair) {
-    if (GS(b_ob_info.object_data->name) == blender::ID_CV) {
+    if (b_ob_info.object_data->id_type() == blender::ID_CV) {
       /* Hair object. */
       sync_hair(&new_hair, b_ob_info, false);
     }
@@ -1215,7 +1215,7 @@ void BlenderSync::sync_hair_motion(BObjectInfo &b_ob_info, Hair *hair, const int
 
   /* Export deformed coordinates. */
   if (ccl::BKE_object_is_deform_modified(b_ob_info, *b_scene, preview)) {
-    if (GS(b_ob_info.object_data->name) == blender::ID_CV) {
+    if (b_ob_info.object_data->id_type() == blender::ID_CV) {
       /* Hair object. */
       sync_hair(hair, b_ob_info, true, motion_step);
       return;

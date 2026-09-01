@@ -15,17 +15,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLI_array.hh"
-#include "BLI_hash.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_hash_c.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_rand.h"
+#include "BLI_rand_c.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
@@ -309,7 +309,7 @@ static DupliObject *make_dupli(const DupliContext *ctx,
   /* Meta-balls never draw in duplis, they are instead merged into one by the basis
    * meta-ball outside of the group. this does mean that if that meta-ball is not in the
    * scene, they will not show up at all, limitation that should be solved once. */
-  if (object_data && GS(object_data->name) == ID_MB) {
+  if (object_data && object_data->id_type() == ID_MB) {
     dob->no_draw = true;
   }
 
@@ -880,7 +880,7 @@ static void make_duplis_font(const DupliContext *ctx)
 
       copy_m4_m4(obmat, par->object_to_world().ptr());
 
-      if (UNLIKELY(ct->rotate != 0.0f)) {
+      if (ct->rotate != 0.0f) [[unlikely]] {
         float rmat[4][4];
 
         zero_v3(obmat[3]);
@@ -1766,6 +1766,14 @@ static const DupliGenerator *get_dupli_generator(const DupliContext *ctx)
     }
   }
 
+  /* Collection instances could also use #gen_dupli_geometry_set but since it is more general, it
+   * has an additional instance layer compared to #gen_dupli_collection. For
+   * backward-compatibility, use #gen_dupli_collection when there are no modifiers. */
+  if (ctx->object->type == OB_EMPTY && (transflag & OB_DUPLICOLLECTION) &&
+      ctx->object->modifiers.is_empty())
+  {
+    return &gen_dupli_collection;
+  }
   if (ctx->object->runtime->geometry_set_eval != nullptr) {
     if (bke::object_has_geometry_set_instances(*ctx->object)) {
       return &gen_dupli_geometry_set;
@@ -1976,7 +1984,7 @@ static bool find_geonode_attribute_rgba(const DupliObject *dupli,
 /** Lookup an arbitrary Custom or RNA property and convert it to RGBA if possible. */
 static bool find_property_rgba(PointerRNA *id_ptr, const char *name, float r_data[4])
 {
-  if (id_ptr->data == nullptr) {
+  if (!*id_ptr) {
     return false;
   }
 
