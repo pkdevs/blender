@@ -2542,7 +2542,7 @@ static wmOperatorStatus sculpt_expand_modal(bContext *C, wmOperator *op, const w
 
   /* Update SculptSession data. */
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
   ensure_sculptsession_data(ob);
 
   /* Update and get the active vertex (and face) from the cursor. */
@@ -2811,7 +2811,6 @@ static void cache_initial_config_set(bContext *C, wmOperator *op, Cache &expand_
   expand_cache.normal_falloff_blur_steps = RNA_int_get(op->ptr, "normal_falloff_smooth");
   expand_cache.invert = RNA_boolean_get(op->ptr, "invert");
   expand_cache.preserve = RNA_boolean_get(op->ptr, "use_mask_preserve");
-  expand_cache.auto_mask = RNA_boolean_get(op->ptr, "use_auto_mask");
   expand_cache.falloff_gradient = RNA_boolean_get(op->ptr, "use_falloff_gradient");
   expand_cache.target = TargetType(RNA_enum_get(op->ptr, "target"));
   expand_cache.modify_active_face_set = RNA_boolean_get(op->ptr, "use_modify_active");
@@ -2947,7 +2946,7 @@ static wmOperatorStatus sculpt_expand_invoke(bContext *C, wmOperator *op, const 
     }
   }
 
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, needs_colors);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, needs_colors);
 
   if (ss.expand_cache->target == TargetType::Mask) {
     ed::sculpt_paint::mask_overlay_check(*C, *op);

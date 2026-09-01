@@ -285,7 +285,7 @@ static void version_principled_bsdf_update_animdata(Main *bmain, bNodeTree *ntre
                              prefix,
                              RNA_path_number_to_infix(entry.first),
                              RNA_path_number_to_infix(entry.second),
-                             /* verify_paths=*/false,
+                             /*verify_paths=*/false,
                              driver_map);
     }
   }
@@ -541,6 +541,9 @@ static void version_mesh_crease_generic(Main &bmain)
               reinterpret_cast<NodesModifierData *>(&md)->settings_legacy.properties)
       {
         for (IDProperty &prop : settings->data.group) {
+          if (prop.type != IDP_STRING) {
+            continue;
+          }
           if (StringRef(prop.name).endswith("_attribute_name")) {
             if (STREQ(IDP_string_get(&prop), "crease")) {
               IDP_AssignString(&prop, "crease_edge");

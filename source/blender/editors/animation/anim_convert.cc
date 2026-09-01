@@ -74,7 +74,7 @@ FCurve *SortedFCurveBuffer::get_fcurve_by_array_index(const int array_index) con
  * one entry with the starting mode. */
 static Vector<std::pair<float, eRotationModes>> get_rotation_mode_ranges(const FCurve &fcurve)
 {
-  BLI_assert(StringRefNull(fcurve.rna_path).endswith("rotation_mode"));
+  BLI_assert(fcurve.rna_path().endswith("rotation_mode"));
   if (!fcurve.bezt) {
     return {};
   }
@@ -124,8 +124,8 @@ class KeyframeIterator {
 
  public:
   /**
-   * \param fcurves is allowed to have nullptr entries.
-   * \param range is interpreted as inclusive/exclusive.
+   * \param fcurves: Allowed to have nullptr entries.
+   * \param range: Interpreted as inclusive/exclusive.
    */
   KeyframeIterator(Span<const FCurve *> fcurves, const Bounds<float> range) : range_(range)
   {
@@ -231,13 +231,13 @@ class KeyframeIterator {
  * For all keyframes in the `evaluation_buffer` in the given range, insert values into
  * `insertion_buffer` that represent the same rotation but in the given rotation mode.
  *
- * \param evaluation_buffer It is assumed that those FCurves match the rotation mode `from_mode`.
+ * \param evaluation_buffer: It is assumed that those FCurves match the rotation mode `from_mode`.
  * They will be read for keyframe values. It is allowed to have nullptr FCurves in here.
- * \param insertion_buffer The FCurves relating to `to_mode`. Keyframes for the converted rotation
+ * \param insertion_buffer: The FCurves relating to `to_mode`. Keyframes for the converted rotation
  * mode will be inserted here. None of the FCurves shall be a nullptr.
- * \param range Start and end frames to limit the range in which to convert and insert rotation
+ * \param range: Start and end frames to limit the range in which to convert and insert rotation
  * keys. Interpreted inclusive at the start and exclusive at the end and in FCurve time.
- * \param ensure_range_start_key if set to true a key will be set at `range.min` regardless of a
+ * \param ensure_range_start_key: If set to true a key will be set at `range.min` regardless of a
  * key existing on that frame in the evaluation buffer.
  */
 static void convert_rotation_mode_range(const Span<const FCurve *> evaluation_buffer,
@@ -314,6 +314,7 @@ static void remove_rotation_fcurves(const ed::AnimTransformable &transformable,
     channelbag.fcurve_remove(*fcurve);
   }
   rotation_fcurves->clear();
+  fcu_map.remove(rna_path);
 }
 
 static bool convert_rotation_mode_channelbag(animrig::Channelbag &channelbag,
@@ -445,8 +446,10 @@ ChannelbagFCurveMap build_rotation_fcurve_map(animrig::Action &action,
   for (animrig::Channelbag *channelbag : channelbags_for_action_slot(action, slot_handle)) {
     RNAFCurveMap &curves = rotation_map.lookup_or_add(channelbag, {});
     for (FCurve *fcurve : channelbag->fcurves()) {
-      StringRefNull rna_path(fcurve->rna_path);
-      if (!animrig::is_rotation_path(rna_path) && !is_rotation_mode_path(rna_path)) {
+      StringRefNull rna_path = fcurve->rna_path();
+      if (!animrig::is_rotation_path(fcurve->rna_path_parsed()) &&
+          !is_rotation_mode_path(rna_path))
+      {
         continue;
       }
       SortedFCurveBuffer &fcurve_buffer = curves.lookup_or_add(rna_path, {});
