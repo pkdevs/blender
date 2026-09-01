@@ -149,7 +149,7 @@ static void version_503_camera_view_fit(RegionView3D *rv3d,
 static void do_versioning_camera_view_zoom(Main *bmain)
 {
   for (bScreen &screen : bmain->screens) {
-    Scene *scene = nullptr;
+    Scene *scene = static_cast<Scene *>(bmain->scenes.first);
     for (wmWindowManager &wm : bmain->wm) {
       for (wmWindow &win : wm.windows) {
         if (win.winid == screen.winid) {
