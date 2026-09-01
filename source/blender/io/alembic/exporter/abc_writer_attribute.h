@@ -60,6 +60,10 @@ class AttributeParamMaps {
   }
   ENUMERATE_EXPORTED_TYPES(ENSURE_PARAM_FUNC)
 #undef ENSURE_PARAM_FUNC
+
+  /* Write empty samples so that the current number of samples matches the number of geometry
+   * samples. */
+  void write_empty_samples(const size_t num_geom_samples);
 };
 
 /* Create a TypedGeomParam for the given AttributeIter.

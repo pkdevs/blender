@@ -309,7 +309,7 @@ void ABCGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
 
   abc_poly_mesh_schema_.set(mesh_sample);
 
-  write_arb_geo_params(mesh, context.object);
+  write_arb_geo_params(mesh, context.object, abc_poly_mesh_schema_.getNumSamples());
 }
 
 void ABCGenericMeshWriter::write_subd(HierarchyContext &context, Mesh *mesh)
@@ -414,7 +414,7 @@ void ABCGenericMeshWriter::write_subd(HierarchyContext &context, Mesh *mesh)
   subdiv_sample.setSelfBounds(bounding_box_);
   abc_subdiv_schema_.set(subdiv_sample);
 
-  write_arb_geo_params(mesh, context.object);
+  write_arb_geo_params(mesh, context.object, abc_subdiv_schema_.getNumSamples());
 }
 
 template<typename Schema>
@@ -432,7 +432,9 @@ void ABCGenericMeshWriter::write_face_sets(Object *object, Mesh *mesh, Schema &s
   }
 }
 
-void ABCGenericMeshWriter::write_arb_geo_params(Mesh *mesh, const Object *object)
+void ABCGenericMeshWriter::write_arb_geo_params(Mesh *mesh,
+                                                const Object *object,
+                                                const size_t num_geom_samples)
 {
   OCompoundProperty arb_geom_params;
   if (is_subd_) {
@@ -443,6 +445,12 @@ void ABCGenericMeshWriter::write_arb_geo_params(Mesh *mesh, const Object *object
   }
 
   const bke::AttributeAccessor attributes = mesh->attributes();
+
+  if (attribute_maps_) {
+    /* Write empty samples for attributes up until this frame, so everything lines up. */
+    BLI_assert(num_geom_samples >= 1);
+    attribute_maps_->write_empty_samples(num_geom_samples - 1);
+  }
 
   attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
     /* Skip "internal" Blender properties and attributes dealt with elsewhere.
@@ -483,6 +491,11 @@ void ABCGenericMeshWriter::write_arb_geo_params(Mesh *mesh, const Object *object
                                     mesh->faces(),
                                     BKE_id_name(object->id));
   });
+
+  if (attribute_maps_) {
+    /* If an attribute was missing this frame, write an empty sample for it. */
+    attribute_maps_->write_empty_samples(num_geom_samples);
+  }
 }
 
 AttributeParamMaps &ABCGenericMeshWriter::get_attribute_param_maps()

@@ -172,6 +172,17 @@ static GeometryScope get_scope_for_attribute_domain(bke::AttrDomain domain)
   return kUnknownScope;
 }
 
+void AttributeParamMaps::write_empty_samples(const size_t num_geom_samples)
+{
+  for (auto &iter : this->float_params) {
+    for (size_t i = iter.second.getNumSamples(); i < num_geom_samples; i++) {
+      OFloatGeomParam::Sample sample;
+      sample.setVals({});
+      iter.second.set(sample);
+    }
+  }
+}
+
 template<typename BlenderDataType>
 static void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop,
                                             AttributeParamMaps &param_maps,
@@ -254,9 +265,6 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
   }
 
   const GVArray attribute = *attr.get();
-  if (attribute.is_empty()) {
-    return;
-  }
 
   switch (attr.data_type) {
     case bke::AttrType::Bool:
