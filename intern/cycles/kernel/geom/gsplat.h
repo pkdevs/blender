@@ -142,10 +142,10 @@ ccl_device_inline float3 gsplat_normal(
   const float normalizer = 1.0f / (rotation.x * rotation.x + rotation.y * rotation.y +
                                    rotation.z * rotation.z + rotation.w * rotation.w);
 
-  const float a = rotation.x;  // w
-  const float b = rotation.y;  // x
-  const float c = rotation.z;  // y
-  const float d = rotation.w;  // z
+  const float a = rotation.w;
+  const float b = rotation.x;
+  const float c = rotation.y;
+  const float d = rotation.z;
 
   if ((scale.x <= scale.y) && (scale.x <= scale.z)) {
     return make_float3(
