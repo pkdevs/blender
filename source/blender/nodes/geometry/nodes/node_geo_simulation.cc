@@ -110,29 +110,29 @@ static void node_layout_ex(ui::Layout &layout, bContext *C, PointerRNA *current_
   }
   bNode &output_node = const_cast<bNode &>(*zone->output_node());
 
+  draw_simulation_state(C, layout, ntree, output_node);
+
   BakeDrawContext ctx;
   if (!get_bake_draw_context(C, output_node, ctx)) {
     return;
   }
-  layout.active_set(ctx.is_bakeable_in_current_context);
 
-  draw_simulation_state(C, layout, ntree, output_node);
-
-  layout.use_property_split_set(true);
-  layout.use_property_decorate_set(false);
-
-  layout.enabled_set(ID_IS_EDITABLE(ctx.object));
+  ui::Layout &bake_layout = layout.column(false);
+  bake_layout.active_set(ctx.is_bakeable_in_current_context);
+  bake_layout.enabled_set(ID_IS_EDITABLE(ctx.object));
+  bake_layout.use_property_split_set(true);
+  bake_layout.use_property_decorate_set(false);
 
   {
-    ui::Layout &col = layout.column(false);
+    ui::Layout &col = bake_layout.column(false);
     draw_bake_button_row(ctx, col, true);
     if (const std::optional<std::string> bake_state_str = get_bake_state_string(ctx)) {
       ui::Layout &row = col.row(true);
       row.label(*bake_state_str, ICON_NONE);
     }
   }
-  draw_common_bake_settings(C, ctx, layout);
-  draw_data_blocks(C, layout, ctx.bake_rna);
+  draw_common_bake_settings(C, ctx, bake_layout);
+  draw_data_blocks(C, bake_layout, ctx.bake_rna);
 }
 
 namespace sim_input_node {
