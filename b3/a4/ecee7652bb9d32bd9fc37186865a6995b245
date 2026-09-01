@@ -1,2 +1,3 @@
 Referenced by issue #162848, Regression: Compositor tests fail with Vulkan
 Referenced by pull request #163337, Fix #162848: Compositor single values are zero in Vulkan
+Referenced by commit 1ec608b26a22704f43fcf0f0507f3419e2b39106, Fix #162848: Compositor single values are zero in Vulkan
