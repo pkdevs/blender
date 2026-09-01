@@ -1411,6 +1411,10 @@ void BKE_libblock_runtime_ensure(ID &id)
 void BKE_libblock_owner_bmain_set(ID &id, Main *bmain, const bool assert_contained)
 {
   BKE_libblock_runtime_ensure(id);
+  /* Assert that the ID is actually in the given bmain by scanning it. This is fairly expensive and
+   * could slow down debug builds. If this turns out to be a problem, the assert can be removed.
+   * Until then, it's good to have the check to be more confindent that the owner-bmain is set
+   * correctly. */
   BLI_assert(!assert_contained || !bmain || BKE_id_is_in_main(bmain, &id));
   id.runtime->owner_bmain = bmain;
 }
