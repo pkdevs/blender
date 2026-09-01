@@ -10,6 +10,7 @@
 #include "eevee_spherical_harmonics.bsl.hh"
 #include "gpu_shader_math_base.bsl.hh"
 #include "gpu_shader_math_matrix_normalize.bsl.hh"
+#include "gpu_shader_math_spherical_harmonics_lib.bsl.hh"
 
 namespace eevee::lightprobe::volume {
 

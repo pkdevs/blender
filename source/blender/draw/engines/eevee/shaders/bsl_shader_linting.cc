@@ -105,7 +105,6 @@
 #include "eevee_shadow_tilemap_lib.bsl.hh"           /* IWYU pragma: export */
 #include "eevee_shadow_tracing.bsl.hh"               /* IWYU pragma: export */
 #include "eevee_shadow_visibility.bsl.hh"            /* IWYU pragma: export */
-#include "eevee_spherical_harmonics.bsl.hh"          /* IWYU pragma: export */
 #include "eevee_subsurface.bsl.hh"                   /* IWYU pragma: export */
 #include "eevee_subsurface_lib.bsl.hh"               /* IWYU pragma: export */
 #include "eevee_surf_capture.bsl.hh"                 /* IWYU pragma: export */

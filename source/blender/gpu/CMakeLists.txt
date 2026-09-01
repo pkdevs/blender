@@ -594,6 +594,7 @@ set(GLSL_SRC
   shaders/common/gpu_shader_math_rotation.bsl.hh
   shaders/common/gpu_shader_math_rotation_conversion.bsl.hh
   shaders/common/gpu_shader_math_safe.bsl.hh
+  shaders/common/gpu_shader_math_spherical_harmonics_lib.bsl.hh
   shaders/common/gpu_shader_math_vector.bsl.hh
   shaders/common/gpu_shader_math_vector_compare.bsl.hh
   shaders/common/gpu_shader_math_vector_reduce.bsl.hh
