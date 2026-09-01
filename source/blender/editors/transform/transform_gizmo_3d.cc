@@ -1913,6 +1913,15 @@ static const GizmoModeActionOps gizmo_mode_action_ops[] = {
          {"MESH_OT_extrude_context_trackball", "MESH_OT_duplicate_trackball"},
          {"MESH_OT_extrude_context_resize", "MESH_OT_duplicate_resize"},
      }},
+    /* Extruding a bone creates a zero-length child with only its tip selected, so extrude is
+     * only useful with the translate handles: rotating or scaling would act on a single point. */
+    {CTX_MODE_EDIT_ARMATURE,
+     {
+         {"ARMATURE_OT_extrude_move", "ARMATURE_OT_duplicate_move"},
+         {nullptr, "ARMATURE_OT_duplicate_rotate"},
+         {nullptr, "ARMATURE_OT_duplicate_trackball"},
+         {nullptr, "ARMATURE_OT_duplicate_resize"},
+     }},
 };
 
 /** \} */
