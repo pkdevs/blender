@@ -16,7 +16,6 @@ __all__ = (
     "idle_until",
     "keep_open",
     "poll_sweep",
-    "expand_preferences_addons",
     "test_window",
 )
 
@@ -133,23 +132,6 @@ def keep_open():
     """
     import bpy
     bpy.app.use_event_simulate = False
-
-
-def expand_preferences_addons(window, area):
-    """
-    Expand every add-on entry in the Preferences editor.
-    """
-    import bpy
-    import addon_utils
-
-    for mod in addon_utils.modules(refresh=False):
-        bl_info = addon_utils.module_bl_info(mod)
-        if bl_info["show_expanded"]:
-            continue
-
-        with bpy.context.temp_override(window=window, area=area):
-            bpy.ops.preferences.addon_expand(module=mod.__name__)
-        yield
 
 
 def cursor_motion_data_x(window, margin=0.2):

@@ -24,6 +24,7 @@ def _find_preferences_window():
 def test_preferences_draw_all():
     """Test that all Preferences sections draw correctly."""
     import bpy
+    import addon_utils
 
     _, t, window = ui.test_window()
 
@@ -44,13 +45,23 @@ def test_preferences_draw_all():
     prefs.use_preferences_save = False
     prefs.view.show_addons_enabled_only = False
 
+    def expand_addons():
+        for mod in addon_utils.modules(refresh=False):
+            bl_info = addon_utils.module_bl_info(mod)
+            if bl_info["show_expanded"]:
+                continue
+
+            with bpy.context.temp_override(window=prefs_window, area=prefs_area):
+                bpy.ops.preferences.addon_expand(module=mod.__name__)
+            yield
+
     try:
         for item in prefs.bl_rna.properties["active_section"].enum_items:
             with bpy.context.temp_override(window=prefs_window, area=prefs_area):
                 prefs.active_section = item.identifier
             yield
             if item.identifier == "ADDONS":
-                yield from ui.expand_preferences_addons(prefs_window, prefs_area)
+                yield from expand_addons()
     finally:
         prefs.use_preferences_save = original_save
         prefs.view.show_addons_enabled_only = original_show_addons_enabled_only
