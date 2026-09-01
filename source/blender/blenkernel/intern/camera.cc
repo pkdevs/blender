@@ -346,6 +346,13 @@ int BKE_camera_sensor_fit(int sensor_fit, float sizex, float sizey)
   return sensor_fit;
 }
 
+float2 BKE_camera_frame_size(const float winx, const float winy, const float frame_aspect)
+{
+  const float frame_x = math::min(winx, winy / frame_aspect);
+
+  return float2(frame_x, frame_x * frame_aspect);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -478,11 +485,10 @@ void BKE_camera_params_compute_viewplane(
 
   params->ycor = aspy / aspx;
 
-  const float fasp = params->use_aspect_override ? params->aspect_override :
-                                                   (params->ycor * float(winy)) / float(winx);
-  float2 frame_size;
-  frame_size.x = math::min(float(winx), params->ycor * float(winy) / fasp);
-  frame_size.y = frame_size.x * fasp;
+  const float winy_cor = params->ycor * float(winy);
+  const float frame_aspect = params->use_aspect_override ? params->aspect_override :
+                                                           winy_cor / float(winx);
+  const float2 frame_size = BKE_camera_frame_size(float(winx), winy_cor, frame_aspect);
 
   if (params->is_ortho) {
     /* orthographic camera */
@@ -496,7 +502,7 @@ void BKE_camera_params_compute_viewplane(
   }
 
   /* determine sensor fit */
-  sensor_fit = BKE_camera_sensor_fit(params->sensor_fit, 1.0f, fasp);
+  sensor_fit = BKE_camera_sensor_fit(params->sensor_fit, 1.0f, frame_aspect);
 
   viewfac = (sensor_fit == CAMERA_SENSOR_FIT_HOR) ? frame_size.x : frame_size.y;
 

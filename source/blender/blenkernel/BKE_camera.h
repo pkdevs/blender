@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "BLI_math_vector_types.hh"
+
 #include "DNA_vec_types.h"
 
 namespace blender {
@@ -35,6 +37,12 @@ float BKE_camera_object_dof_distance(const struct Object *ob);
 
 int BKE_camera_sensor_fit(int sensor_fit, float sizex, float sizey);
 float BKE_camera_sensor_size(int sensor_fit, float sensor_x, float sensor_y);
+
+/**
+ * Size in pixels of the camera frame fitted inside a viewport.
+ * \param frame_aspect: Aspect ratio of the camera frame (y over x).
+ */
+float2 BKE_camera_frame_size(float winx, float winy, float frame_aspect);
 
 /**
  * Camera Parameters:

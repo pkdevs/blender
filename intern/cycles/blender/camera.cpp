@@ -393,7 +393,9 @@ static Transform blender_camera_matrix(const Transform &tfm,
   return transform_clear_scale(result);
 }
 
-static bool blender_camera_horizontal_fit(BlenderCamera *bcam, const int width, const int height)
+static bool blender_camera_horizontal_fit(const BlenderCamera *bcam,
+                                          const int width,
+                                          const int height)
 {
   if (bcam->sensor_fit == BlenderCamera::AUTO) {
     const float xratio = (float)width * bcam->pixelaspect.x;
@@ -402,6 +404,16 @@ static bool blender_camera_horizontal_fit(BlenderCamera *bcam, const int width, 
   }
 
   return bcam->sensor_fit == BlenderCamera::HORIZONTAL;
+}
+
+static float blender_camera_frame_fit(const BlenderCamera *bcam, const int width, const int height)
+{
+  const float frame_aspect = bcam->use_aspect_override ? bcam->aspect_override :
+                                                         float(height) / float(width);
+  const blender::float2 frame_size = blender::BKE_camera_frame_size(width, height, frame_aspect);
+
+  return blender_camera_horizontal_fit(bcam, width, height) ? width / frame_size.x :
+                                                              height / frame_size.y;
 }
 
 static void blender_camera_viewplane(BlenderCamera *bcam,
@@ -559,23 +571,6 @@ static void blender_camera_sync(Camera *cam,
 {
   float aspectratio;
   float sensor_size;
-
-  /* Match the camera frame to `BKE_camera_params_compute_viewplane()`. */
-  if (bcam->use_aspect_override &&
-      (bcam->type == CAMERA_PERSPECTIVE || bcam->type == CAMERA_ORTHOGRAPHIC))
-  {
-    const float fasp = bcam->aspect_override;
-    blender::float2 frame_size;
-    frame_size.x = blender::math::min(float(width), float(height) / fasp);
-    frame_size.y = frame_size.x * fasp;
-
-    if (blender_camera_horizontal_fit(bcam, width, height)) {
-      bcam->zoom *= width / frame_size.x;
-    }
-    else {
-      bcam->zoom *= height / frame_size.y;
-    }
-  }
 
   /* viewplane */
   BoundBox2D viewplane;
@@ -964,7 +959,8 @@ static void blender_camera_from_view(BlenderCamera *bcam,
       blender_camera_from_object(
           bcam, b_engine, b_render, b_v3d, b_rv3d, *b_ob, b_data, skip_panorama);
 
-      /* Override the aspect, so change in viewport framing is minimized when camera parameters. */
+      /* Override the aspect, so change in viewport framing is minimized when camera parameters
+       * change. */
       bcam->use_aspect_override = true;
       bcam->aspect_override = (float(b_render.ysch) * b_render.yasp) /
                               (float(b_render.xsch) * b_render.xasp);
@@ -1000,6 +996,11 @@ static void blender_camera_from_view(BlenderCamera *bcam,
 
         /* offset */
         bcam->offset = make_float2(b_rv3d->camdx, b_rv3d->camdy);
+
+        /* Zoom to fit the camera frame. */
+        const float frame_fit = blender_camera_frame_fit(bcam, width, height);
+        bcam->zoom *= frame_fit;
+        bcam->offset *= frame_fit;
       }
     }
   }
