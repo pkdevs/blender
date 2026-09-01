@@ -1922,6 +1922,20 @@ static const GizmoModeActionOps gizmo_mode_action_ops[] = {
          {nullptr, "ARMATURE_OT_duplicate_trackball"},
          {nullptr, "ARMATURE_OT_duplicate_resize"},
      }},
+    {CTX_MODE_EDIT_CURVE,
+     {
+         {"CURVE_OT_extrude_move", "CURVE_OT_duplicate_move"},
+         {"CURVE_OT_extrude_rotate", "CURVE_OT_duplicate_rotate"},
+         {"CURVE_OT_extrude_trackball", "CURVE_OT_duplicate_trackball"},
+         {"CURVE_OT_extrude_resize", "CURVE_OT_duplicate_resize"},
+     }},
+    {CTX_MODE_EDIT_CURVES,
+     {
+         {"CURVES_OT_extrude_move", "CURVES_OT_duplicate_move"},
+         {"CURVES_OT_extrude_rotate", "CURVES_OT_duplicate_rotate"},
+         {"CURVES_OT_extrude_trackball", "CURVES_OT_duplicate_trackball"},
+         {"CURVES_OT_extrude_resize", "CURVES_OT_duplicate_resize"},
+     }},
 };
 
 /** \} */
