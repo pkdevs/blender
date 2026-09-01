@@ -4559,6 +4559,13 @@ static const EnumPropertyItem *rna_NodeShaderAttribute_type_itemf(bContext *C,
     return rna_enum_shader_attribute_type_items;
   }
 
+  Scene *scene = CTX_data_scene(C);
+  SpaceNode *space_node = CTX_wm_space_node(C);
+
+  if (scene == nullptr || space_node == nullptr) {
+    return rna_enum_shader_attribute_type_items;
+  }
+
   *r_free = true;
 
   bool supports_light_attributes = !STREQ(CTX_data_scene(C)->r.engine, RE_engine_id_CYCLES) &&
