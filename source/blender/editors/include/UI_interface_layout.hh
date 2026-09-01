@@ -86,7 +86,7 @@ struct Item {
   friend struct ItemInternal;
 };
 
-enum eUI_Item_Flag : uint32_t;
+enum eUI_Item_Flag : uint16_t;
 
 enum class LayoutSeparatorType : int8_t {
   Auto,
@@ -895,7 +895,7 @@ bool block_layout_needs_resolving(const Block *block);
  */
 void block_layout_free(Block *block);
 
-enum eUI_Item_Flag : uint32_t {
+enum eUI_Item_Flag : uint16_t {
   /** Align text input to the right. */
   ITEM_R_TEXT_RIGHT = 1 << 0,
   ITEM_R_EXPAND = 1 << 1,
@@ -930,8 +930,7 @@ enum eUI_Item_Flag : uint32_t {
    * Only for text buttons (for now): Force the button as active in a semi-modal state (capturing
    * text input while leaving the remaining UI interactive).
    */
-  ITEM_R_TEXT_BUT_FORCE_SEMI_MODAL_ACTIVE = 1 << 15,
-  ITEM_R_NO_ICON_OFFSET = 1 << 16
+  ITEM_R_TEXT_BUT_FORCE_SEMI_MODAL_ACTIVE = 1 << 15
 };
 ENUM_OPERATORS(eUI_Item_Flag)
 #define UI_ITEM_NONE ui::eUI_Item_Flag(0)
