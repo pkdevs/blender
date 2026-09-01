@@ -2485,7 +2485,6 @@ static void lib_link_scenes_check_set(Main *bmain)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-
 /** \name Read ID: Library
  * \{ */
 
