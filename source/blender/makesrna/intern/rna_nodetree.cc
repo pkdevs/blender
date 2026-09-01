@@ -4555,6 +4555,10 @@ static const EnumPropertyItem *rna_NodeShaderAttribute_type_itemf(bContext *C,
                                                                   PropertyRNA * /*prop*/,
                                                                   bool *r_free)
 {
+  if (C == nullptr) {
+    return rna_enum_shader_attribute_type_items;
+  }
+
   *r_free = true;
 
   bool supports_light_attributes = !STREQ(CTX_data_scene(C)->r.engine, RE_engine_id_CYCLES) &&
