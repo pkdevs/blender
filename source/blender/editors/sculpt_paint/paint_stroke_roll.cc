@@ -809,624 +809,735 @@ static void expand_grid_columns(Vector<float3> &grid_pos,
   cols = nC;
 }
 
+/* -------------------------------------------------------------------- */
+/** \name Roll Strip Surface — per-dab pipeline stages
+ *
+ * compute_roll_center() runs these stages in order on a contiguous window
+ * of the stroke polyline (currently the full polyline):
+ *
+ *   1. build_roll_borders(): left/right border curves at +-radius along
+ *      per-vertex binormals.
+ *   2. collapse_border_self_intersections(): collapse inner-border loops
+ *      at sharp turns so the strip never overlaps itself.
+ *   3. build_strip_grid(): 3-column grid (right border, center, left
+ *      border) with per-row V texture coordinates.
+ *   4. bspline_subdivide_rows() x2 + expand_grid_columns(): refine to a
+ *      smooth (4N-3) x 9 grid.
+ *   5. laplacian_smooth_grid(): bow the interior near collapse points.
+ *   6. compute_lut_eval_rows() + rasterize_lut(): project the grid to 2D
+ *      and rasterize the dab neighborhood into the UV lookup table that
+ *      spline_uv() samples per vertex.
+ * \{ */
+
+/**
+ * Build the strip border curves: for each polyline vertex, offset the
+ * center by ±R (or the pressure-scaled radius) along the binormal.
+ *
+ * The binormal is cross(tangent, dab_normal).  Using the per-dab surface
+ * normal (same as the LUT projection) keeps the grid aligned with the
+ * local surface at the current dab position, and is view-independent —
+ * the same stroke from any camera angle produces the same borders.
+ *
+ * \param pressures: Per-vertex pressures for pressure-scaled width;
+ * pass an empty span for constant width.
+ */
+static void build_roll_borders(const Span<float3> poly,
+                               const Span<float3> tangents,
+                               const Span<float> pressures,
+                               const float3 &dab_normal,
+                               const float R,
+                               Vector<float3> &r_border_left,
+                               Vector<float3> &r_border_right)
+{
+  const int count = int(poly.size());
+  r_border_left.reinitialize(count);
+  r_border_right.reinitialize(count);
+
+  for (int k = 0; k < count; k++) {
+    const float3 &T = tangents[k];
+    float3 B = math::cross(T, dab_normal);
+    const float blen = math::length(B);
+    if (blen > 1e-7f) {
+      B /= blen;
+    }
+    else {
+      /* Degenerate: tangent parallel to dab_normal. */
+      B = math::normalize(math::cross(T, float3(0, 0, 1)));
+      if (math::length_squared(B) < 1e-12f) {
+        B = math::normalize(math::cross(T, float3(1, 0, 0)));
+      }
+    }
+    const float Rk = (!pressures.is_empty()) ? std::max(R * pressures[k], R * 0.01f) : R;
+    r_border_left[k] = poly[k] + B * Rk;
+    r_border_right[k] = poly[k] - B * Rk;
+  }
+}
+
+/**
+ * Fix inner-border self-intersections at sharp turns.
+ *
+ * The border curves (at distance R from center) may self-intersect on the
+ * inner side of tight turns where the radius of curvature < R.
+ * We find where the border polyline actually crosses itself (segment vs
+ * segment test), then collapse all loop vertices to that crossing point.
+ * This turns overlapping quads into degenerate triangles that fan from
+ * the crossing point — the cross-lines rotate to point toward it.
+ *
+ * \param merge_x, merge_y: 2D projection axes (perpendicular to the dab
+ * normal) so the merge detection is view-independent and aligned with
+ * the LUT.
+ */
+static void collapse_border_self_intersections(const Span<float3> poly,
+                                               const float3 &merge_x,
+                                               const float3 &merge_y,
+                                               const float R,
+                                               Vector<float3> &border)
+{
+  const int count = int(border.size());
+  if (count < 4) {
+    return;
+  }
+
+  Vector<float2> b2d(count);
+  for (int k = 0; k < count; k++) {
+    b2d[k] = float2(math::dot(border[k], merge_x), math::dot(border[k], merge_y));
+  }
+
+  const int max_loop = count - 1;
+  Vector<float3> orig(border);
+  int skip_until = -1;
+
+  for (int i = 0; i < count - 1; i++) {
+    if (i <= skip_until) {
+      continue;
+    }
+    const float2 d1 = b2d[i + 1] - b2d[i];
+    if (math::dot(d1, d1) < 1e-8f) {
+      continue;
+    }
+
+    const int j_max = std::min(count - 2, i + max_loop);
+    for (int j = j_max; j >= i + 2; j--) {
+      const float2 d2 = b2d[j + 1] - b2d[j];
+      if (math::dot(d2, d2) < 1e-8f) {
+        continue;
+      }
+
+      const float2 ac = b2d[j] - b2d[i];
+      const float denom = d1.x * d2.y - d1.y * d2.x;
+      if (std::abs(denom) < 1e-8f) {
+        continue;
+      }
+      const float s = (ac.x * d2.y - ac.y * d2.x) / denom;
+      const float t = (ac.x * d1.y - ac.y * d1.x) / denom;
+
+      if (s >= 0.0f && s <= 1.0f && t >= 0.0f && t <= 1.0f) {
+        bool all_inside = true;
+        const int m_lo = std::max(0, i - 2);
+        const int m_hi = std::min(count - 2, j + 2);
+        const float R_sq = (R * 1.2f) * (R * 1.2f); /* 20% margin for inclined borders */
+        /* Validate all loop vertices are within R of center.
+         * Also find the apex = vertex with sharpest curvature on the
+         * border (largest turning angle between consecutive segments). */
+        int apex_idx = (i + 1 + j) / 2; /* default to midpoint */
+        float max_turn_angle = -1.0f;
+        for (int k = i + 1; k <= j; k++) {
+          float min_dist_sq = FLT_MAX;
+          for (int m = m_lo; m <= m_hi; m++) {
+            const float3 ab = poly[m + 1] - poly[m];
+            const float ab_dot = math::dot(ab, ab);
+            const float tp = (ab_dot > 1e-12f) ?
+                                 std::clamp(
+                                     math::dot(orig[k] - poly[m], ab) / ab_dot, 0.0f, 1.0f) :
+                                 0.0f;
+            const float3 proj = math::interpolate(poly[m], poly[m + 1], tp);
+            min_dist_sq = std::min(min_dist_sq, math::distance_squared(orig[k], proj));
+          }
+          if (min_dist_sq >= R_sq) {
+            all_inside = false;
+            break;
+          }
+          /* Curvature: angle between incoming and outgoing border segments
+           * at vertex k (in 2D projection).  Higher = sharper turn. */
+          if (k > i + 1 && k < j) {
+            const float2 seg_prev = b2d[k] - b2d[k - 1];
+            const float2 seg_next = b2d[k + 1] - b2d[k];
+            const float lp = math::length(seg_prev);
+            const float ln = math::length(seg_next);
+            if (lp > 1e-7f && ln > 1e-7f) {
+              const float cos_a = math::dot(seg_prev, seg_next) / (lp * ln);
+              const float turn = 1.0f - std::clamp(cos_a, -1.0f, 1.0f);
+              if (turn > max_turn_angle) {
+                max_turn_angle = turn;
+                apex_idx = k;
+              }
+            }
+          }
+        }
+        if (!all_inside) {
+          continue;
+        }
+
+        /* Standard merge point from segment intersection. */
+        const float3 pa = orig[i] + (orig[i + 1] - orig[i]) * s;
+        const float3 pb = orig[j] + (orig[j + 1] - orig[j]) * t;
+        const float3 cross_pt = (pa + pb) * 0.5f;
+
+        /* If the span is too long, only collapse the sharpest portion
+         * (centered on the apex vertex).  This prevents long gentle
+         * turns from collapsing the entire inner border.  The merge
+         * point for partial collapses is the midpoint of the first
+         * and last border vertices in the trimmed range. */
+        int collapse_lo = i + 1;
+        int collapse_hi = j;
+        float3 merge_pt = cross_pt;
+
+        /* If the intersection loop arc length exceeds 3R along the
+         * center polyline, only collapse the sharpest portion centered
+         * on the apex.  Remaining overlap vertices are linearly
+         * interpolated between the intersection endpoints and the
+         * merge point. */
+        const float max_collapse_arc = 3.0f * R;
+        float span_arc = 0.0f;
+        for (int k = i; k < j; k++) {
+          span_arc += math::distance(poly[k], poly[k + 1]);
+        }
+        const bool is_partial = span_arc > max_collapse_arc && (j - i) > 3;
+        if (is_partial) {
+          /* Center the window on the apex using arc-length balance:
+           * grow outward from the apex in both directions, spending
+           * half the budget on each side. */
+          const float half_arc = max_collapse_arc * 0.5f;
+          collapse_lo = apex_idx;
+          collapse_hi = apex_idx;
+          float arc_lo = 0.0f, arc_hi = 0.0f;
+          while (collapse_lo > i + 1 || collapse_hi < j) {
+            const bool can_lo = (collapse_lo > i + 1) && (arc_lo <= arc_hi);
+            const bool can_hi = (collapse_hi < j) && (arc_hi <= arc_lo);
+            if (can_lo) {
+              const float seg = math::distance(poly[collapse_lo - 1], poly[collapse_lo]);
+              if (arc_lo + seg > half_arc) {
+                break;
+              }
+              collapse_lo--;
+              arc_lo += seg;
+            }
+            else if (can_hi) {
+              const float seg = math::distance(poly[collapse_hi], poly[collapse_hi + 1]);
+              if (arc_hi + seg > half_arc) {
+                break;
+              }
+              collapse_hi++;
+              arc_hi += seg;
+            }
+            else {
+              break;
+            }
+          }
+          merge_pt = (orig[collapse_lo] + orig[collapse_hi]) * 0.5f;
+        }
+
+        for (int k = collapse_lo; k <= collapse_hi; k++) {
+          border[k] = merge_pt;
+        }
+        if (is_partial) {
+          /* Linearly interpolate border vertices between the real
+           * intersection endpoints and the merge point.  This evenly
+           * spaces the overlap zone instead of leaving it overlapping. */
+          const int n_before = collapse_lo - (i + 1);
+          for (int k = 0; k < n_before; k++) {
+            const float t = float(k + 1) / float(n_before + 1);
+            border[i + 1 + k] = math::interpolate(orig[i + 1], merge_pt, t);
+          }
+          const int n_after = j - collapse_hi;
+          for (int k = 0; k < n_after; k++) {
+            const float t = float(k + 1) / float(n_after + 1);
+            border[collapse_hi + 1 + k] = math::interpolate(merge_pt, orig[j], t);
+          }
+        }
+        /* Skip the entire original intersection span so the uncollapsed
+         * outer portions are not re-tested by later iterations. */
+        skip_until = j;
+        break;
+      }
+    }
+  }
+}
+
+/**
+ * Assemble the initial 3-column strip grid (right border, center, left
+ * border) with per-row V texture coordinates.
+ *
+ * Without pressure-scale: V = raw arc length.  sculpt_apply_texture()
+ * later divides by initial_radius to normalize.
+ *
+ * With pressure-scale (non-empty \a pressures): V = sum of
+ * (seg_len / (R * p_avg)).  Dividing each segment by its local
+ * pressure-scaled radius makes narrow sections advance the texture
+ * faster, so the texture tiles at the same density relative to the strip
+ * width — preserving its aspect ratio regardless of pressure.  This is
+ * baked per-vertex so that overlapping dabs at different pressures see
+ * the same V for the same mesh vertex (no blurriness).  The matching
+ * offset (stroke_distance_normalized_) is accumulated in add_roll_point()
+ * using the same (p0+p1)/2 averaging, and applied in spline_uv() to keep
+ * the texture continuous as the polyline shrinks.
+ *
+ * \param v_start: V coordinate of the first row (non-zero when the grid
+ * covers a window that does not start at the polyline start).
+ */
+static void build_strip_grid(const Span<float3> poly,
+                             const Span<float3> border_left,
+                             const Span<float3> border_right,
+                             const Span<float> pressures,
+                             const float R,
+                             const float v_start,
+                             Vector<float3> &r_grid_pos,
+                             Vector<float2> &r_grid_uv)
+{
+  const int rows = int(poly.size());
+  r_grid_pos.reinitialize(rows * 3);
+  r_grid_uv.reinitialize(rows * 3);
+
+  Vector<float> v_coords(rows);
+  v_coords[0] = v_start;
+  for (int k = 1; k < rows; k++) {
+    const float seg_len = math::distance(poly[k - 1], poly[k]);
+    if (!pressures.is_empty()) {
+      const float p_avg = std::max((pressures[k] + pressures[k - 1]) * 0.5f, 0.01f);
+      v_coords[k] = v_coords[k - 1] + seg_len / (R * p_avg);
+    }
+    else {
+      v_coords[k] = v_coords[k - 1] + seg_len;
+    }
+  }
+
+  for (int k = 0; k < rows; k++) {
+    /* Col 0 = right border, col 1 = center, col 2 = left border. */
+    r_grid_pos[k * 3 + 0] = border_right[k];
+    r_grid_pos[k * 3 + 1] = poly[k];
+    r_grid_pos[k * 3 + 2] = border_left[k];
+    r_grid_uv[k * 3 + 0] = float2(-1.0f, v_coords[k]);
+    r_grid_uv[k * 3 + 1] = float2(0.0f, v_coords[k]);
+    r_grid_uv[k * 3 + 2] = float2(1.0f, v_coords[k]);
+  }
+}
+
+/**
+ * 2D Laplacian smoothing: pin border columns and first/last rows, smooth
+ * everything between them (including the center column).  This curves the
+ * cross-stroke segments near collapse points — the perpendicular lines
+ * bow toward the merge point like a subdivision surface.
+ * Uses double-buffering to avoid per-iteration allocation.
+ */
+static void laplacian_smooth_grid(Vector<float3> &grid_pos,
+                                  Vector<float2> &grid_uv,
+                                  const int rows,
+                                  const int cols)
+{
+  constexpr int smooth_iters = 10;
+  constexpr float mix = 0.5f;
+  const int grid_total = rows * cols;
+  Vector<float3> buf_p(grid_total);
+  Vector<float2> buf_u(grid_total);
+  float3 *src_p = grid_pos.data(), *dst_p = buf_p.data();
+  float2 *src_u = grid_uv.data(), *dst_u = buf_u.data();
+  for (int iter = 0; iter < smooth_iters; iter++) {
+    memcpy(dst_p, src_p, sizeof(float3) * grid_total);
+    memcpy(dst_u, src_u, sizeof(float2) * grid_total);
+    for (int r = 1; r < rows - 1; r++) {
+      for (int c = 1; c < cols - 1; c++) {
+        const int idx = r * cols + c;
+        float3 avg_p = 0.25f * (src_p[(r - 1) * cols + c] + src_p[(r + 1) * cols + c] +
+                                src_p[r * cols + c - 1] + src_p[r * cols + c + 1]);
+        float2 avg_u = 0.25f * (src_u[(r - 1) * cols + c] + src_u[(r + 1) * cols + c] +
+                                src_u[r * cols + c - 1] + src_u[r * cols + c + 1]);
+        dst_p[idx] = (1.0f - mix) * src_p[idx] + mix * avg_p;
+        dst_u[idx] = (1.0f - mix) * src_u[idx] + mix * avg_u;
+      }
+    }
+    std::swap(src_p, dst_p);
+    std::swap(src_u, dst_u);
+  }
+  /* Ensure results end up in grid_pos/grid_uv. */
+  if (src_p != grid_pos.data()) {
+    memcpy(grid_pos.data(), src_p, sizeof(float3) * grid_total);
+    memcpy(grid_uv.data(), src_u, sizeof(float2) * grid_total);
+  }
+}
+
+/**
+ * Compute the grid row range to rasterize into the LUT: intersect an
+ * arc-length window around the dab with a spatial distance check.  The
+ * arc-length constraint prevents old segments on the far side of a
+ * self-crossing stroke from polluting the LUT.  The spatial check ensures
+ * coverage on sharp curves where arc-length alone might be too tight.
+ * Forward range is more generous to include the trailing segment and its
+ * self-intersection merges.
+ *
+ * After two row-subdivision passes, polyline vertex `vi` maps to grid row
+ * `(vi - win_lo) * 4`.
+ *
+ * \param lengths: Cumulative arc lengths of the FULL polyline.
+ * \param win_lo: First polyline vertex covered by the grid.
+ */
+static void compute_lut_eval_rows(const Span<float2> grid_pos_2d,
+                                  const int rows,
+                                  const int cols,
+                                  const Span<float> lengths,
+                                  const float raw_s,
+                                  const float R,
+                                  const int win_lo,
+                                  const float2 &dab_2d,
+                                  int &r_row_lo,
+                                  int &r_row_hi)
+{
+  const float eval_s_lo = std::max(0.0f, raw_s - R * 2.0f);
+  const float eval_s_hi = std::min(lengths.last(), raw_s + R * 3.0f);
+
+  int eval_seg_lo, eval_seg_hi;
+  float fac_unused;
+  length_parameterize::sample_at_length(lengths, eval_s_lo, eval_seg_lo, fac_unused);
+  length_parameterize::sample_at_length(lengths, eval_s_hi, eval_seg_hi, fac_unused);
+
+  const int arc_row_lo = std::max(0, (eval_seg_lo - win_lo) * 4 - EVAL_ROW_MARGIN);
+  const int arc_row_hi = std::min(rows - 1, (eval_seg_hi - win_lo + 1) * 4 + EVAL_ROW_MARGIN);
+
+  /* Within the arc-length window, keep rows spatially near the dab. */
+  const float eval_r_sq = (R * 2.0f) * (R * 2.0f);
+  const int center_c = cols / 2;
+
+  int eval_lo = rows - 1, eval_hi = 0;
+  for (int r = arc_row_lo; r <= arc_row_hi; r++) {
+    if (math::distance_squared(dab_2d, grid_pos_2d[r * cols + center_c]) <= eval_r_sq) {
+      eval_lo = std::min(eval_lo, r);
+      eval_hi = std::max(eval_hi, r);
+    }
+  }
+  r_row_lo = std::max(0, eval_lo - EVAL_ROW_MARGIN);
+  r_row_hi = std::min(rows - 2, eval_hi + EVAL_ROW_MARGIN);
+}
+
+/**
+ * Rasterize the eval-range grid quads into the UV lookup table so
+ * per-vertex UV lookup is O(1) instead of O(rows x cols).  On high-poly
+ * meshes this is the dominant cost — the LUT amortizes the bilinear
+ * inverse across a fixed-size image.
+ *
+ * For each quad (P00, P10, P01, P11), and for each pixel in its bounding
+ * box, we solve: "given a 2D point Q, find (u,v) such that
+ * Q = (1-u)(1-v)P00 + u(1-v)P10 + (1-u)v*P01 + uv*P11".
+ *
+ * Rearranging gives a quadratic in v (A*v^2 + B*v + C = 0) using
+ * cross-products of the quad's edge vectors.  Once v is found, u follows
+ * from a linear solve.  If (u,v) is inside [0,1]^2 the pixel is inside
+ * the quad, and we bilinearly interpolate the UV + tangent.
+ *
+ * When multiple quads overlap (at self-intersection collapses), the quad
+ * whose bilinear solution is closest to the pixel center wins
+ * (roll_lut_dist_sq comparison).
+ */
+static void rasterize_lut(const Span<float3> grid_pos,
+                          const Span<float2> grid_pos_2d,
+                          const Span<float2> grid_uv,
+                          const int rows,
+                          const int cols,
+                          const int eval_row_lo,
+                          const int eval_row_hi,
+                          StrokeCache &cache)
+{
+  constexpr int RES = StrokeCache::ROLL_LUT_RES;
+
+  /* 2D bounding box of eval-range grid. */
+  float2 bb_min(FLT_MAX), bb_max(-FLT_MAX);
+  for (int r = eval_row_lo; r <= std::min(eval_row_hi + 1, rows - 1); r++) {
+    for (int c = 0; c < cols; c++) {
+      bb_min = math::min(bb_min, grid_pos_2d[r * cols + c]);
+      bb_max = math::max(bb_max, grid_pos_2d[r * cols + c]);
+    }
+  }
+  const float2 extent = bb_max - bb_min;
+  const float2 margin = extent * 0.1f;
+  bb_min -= margin;
+  bb_max += margin;
+  const float2 ext = bb_max - bb_min;
+  const float2 inv_ext(ext.x > 1e-10f ? float(RES) / ext.x : 0.0f,
+                       ext.y > 1e-10f ? float(RES) / ext.y : 0.0f);
+
+  const int lut_total = RES * RES;
+  cache.roll_lut_uv.reinitialize(lut_total);
+  cache.roll_lut_dist_sq.reinitialize(lut_total);
+  cache.roll_lut_tan.reinitialize(lut_total);
+  cache.roll_lut_row.reinitialize(lut_total);
+  for (int i = 0; i < lut_total; i++) {
+    cache.roll_lut_uv[i] = float2(FLT_MAX, 0.0f);
+    cache.roll_lut_dist_sq[i] = FLT_MAX;
+    cache.roll_lut_row[i] = -1;
+  }
+
+  auto cross2d = [](float2 a, float2 b) { return a.x * b.y - a.y * b.x; };
+
+  for (int r = eval_row_lo; r <= eval_row_hi; r++) {
+    for (int c = 0; c < cols - 1; c++) {
+      const float2 P00 = grid_pos_2d[r * cols + c];
+      const float2 P10 = grid_pos_2d[r * cols + c + 1];
+      const float2 P01 = grid_pos_2d[(r + 1) * cols + c];
+      const float2 P11 = grid_pos_2d[(r + 1) * cols + c + 1];
+
+      /* Pixel bounding box of this quad. */
+      float2 qmin = math::min(math::min(P00, P10), math::min(P01, P11));
+      float2 qmax = math::max(math::max(P00, P10), math::max(P01, P11));
+      int px_lo = std::max(0, int((qmin.x - bb_min.x) * inv_ext.x));
+      int px_hi = std::min(RES - 1, int((qmax.x - bb_min.x) * inv_ext.x) + 1);
+      int py_lo = std::max(0, int((qmin.y - bb_min.y) * inv_ext.y));
+      int py_hi = std::min(RES - 1, int((qmax.y - bb_min.y) * inv_ext.y) + 1);
+
+      /* Bilinear basis vectors for the quadratic solve. */
+      const float2 a = P10 - P00;
+      const float2 b = P01 - P00;
+      const float2 tw = P11 - P10 - P01 + P00; /* twist term */
+      const float A_coeff = cross2d(b, tw);
+
+      for (int py = py_lo; py <= py_hi; py++) {
+        for (int px = px_lo; px <= px_hi; px++) {
+          const float2 query = bb_min + float2(px + 0.5f, py + 0.5f) / float(RES) * ext;
+          const float2 d = query - P00;
+
+          const float B_coeff = cross2d(b, a) - cross2d(d, tw);
+          const float C_coeff = -cross2d(d, a);
+
+          float v;
+          if (std::abs(A_coeff) < 1e-8f) {
+            v = (std::abs(B_coeff) > 1e-8f) ? -C_coeff / B_coeff : 0.5f;
+          }
+          else {
+            const float disc = B_coeff * B_coeff - 4.0f * A_coeff * C_coeff;
+            if (disc < 0.0f) {
+              continue;
+            }
+            const float sq = sqrtf(disc);
+            const float v1 = (-B_coeff + sq) / (2.0f * A_coeff);
+            const float v2 = (-B_coeff - sq) / (2.0f * A_coeff);
+            const float e1 = std::max(0.0f, std::max(-v1, v1 - 1.0f));
+            const float e2 = std::max(0.0f, std::max(-v2, v2 - 1.0f));
+            v = (e1 <= e2) ? v1 : v2;
+          }
+          if (v < -0.01f || v > 1.01f) {
+            continue;
+          }
+          v = std::clamp(v, 0.0f, 1.0f);
+
+          const float2 dv = a + v * tw;
+          float u;
+          if (std::abs(dv.x) > std::abs(dv.y)) {
+            u = (std::abs(dv.x) > 1e-8f) ? (d.x - v * b.x) / dv.x : 0.5f;
+          }
+          else {
+            u = (std::abs(dv.y) > 1e-8f) ? (d.y - v * b.y) / dv.y : 0.5f;
+          }
+          if (u < -0.01f || u > 1.01f) {
+            continue;
+          }
+          u = std::clamp(u, 0.0f, 1.0f);
+
+          const float2 pnt = (1 - u) * (1 - v) * P00 + u * (1 - v) * P10 + (1 - u) * v * P01 +
+                             u * v * P11;
+          const float dsq = math::distance_squared(query, pnt);
+
+          const int li = py * RES + px;
+          /* Prefer older rows on overlap to keep the LUT stable.
+           *
+           * The loop iterates rows low-to-high, so a non-empty pixel was
+           * written by a row <= r.  Cases:
+           *   - empty: write
+           *   - same/adjacent row (within 2): use dsq (better fit wins)
+           *   - far row (existing < r - 2): keep older (don't write)
+           * This way overlapping branches at sharp turns get a stable
+           * single stroke position rather than flickering between
+           * competing branches based on tiny float distances. */
+          const int existing_row = cache.roll_lut_row[li];
+          bool write = false;
+          if (existing_row < 0) {
+            write = true;
+          }
+          else if (r - existing_row <= 2) {
+            write = (dsq < cache.roll_lut_dist_sq[li]);
+          }
+          if (write) {
+            cache.roll_lut_dist_sq[li] = dsq;
+            cache.roll_lut_row[li] = r;
+            /* Interpolate UV. */
+            const float2 &UV00 = grid_uv[r * cols + c];
+            const float2 &UV10 = grid_uv[r * cols + c + 1];
+            const float2 &UV01 = grid_uv[(r + 1) * cols + c];
+            const float2 &UV11 = grid_uv[(r + 1) * cols + c + 1];
+            cache.roll_lut_uv[li] = (1 - u) * (1 - v) * UV00 + u * (1 - v) * UV10 +
+                                    (1 - u) * v * UV01 + u * v * UV11;
+            /* Interpolate tangent from 3D grid. */
+            const float3 &Q00 = grid_pos[r * cols + c];
+            const float3 &Q10 = grid_pos[r * cols + c + 1];
+            const float3 &Q01 = grid_pos[(r + 1) * cols + c];
+            const float3 &Q11 = grid_pos[(r + 1) * cols + c + 1];
+            const float3 dPdv = (1 - u) * (Q01 - Q00) + u * (Q11 - Q10);
+            cache.roll_lut_tan[li] = math::normalize(dPdv);
+          }
+        }
+      }
+    }
+  }
+
+  cache.roll_lut_min = bb_min;
+  cache.roll_lut_inv_extent = inv_ext;
+  cache.roll_lut_ready = true;
+}
+
+/** \} */
+
 void PaintStroke::compute_roll_center(StrokeCache &cache)
 {
   if (roll_spline_.is_empty()) {
     return;
   }
-  /* Arc length of the dab center on the spline — anchors the LUT evaluation
-   * window.  Full closest-point search, called once per dab on the main
-   * thread. */
+  /* Arc length of the dab center on the spline — anchors the LUT
+   * evaluation window.  Full closest-point search, called once per dab on
+   * the main thread. */
   const float raw_s = roll_spline_.closest_point_arc_length(cache.location);
   const Span<float> lengths = roll_spline_.lengths_3d.as_span();
+  const Span<float3> poly_full = roll_spline_.poly_3d.as_span();
+  const float R = cache.initial_radius;
 
-  /* Surface interpolation: precompute border curves for the search range.
-   * Each polyline vertex gets a binormal (perpendicular to tangent in the
-   * view plane) and left/right border points at ±brush_radius. */
-  cache.roll_surface_ready = false;
-  {
-    const Span<float3> poly = roll_spline_.poly_3d.as_span();
-    const Span<float3> tangents = roll_spline_.tangents_3d.as_span();
-    /* Build the grid over the FULL stored polyline so that self-intersections
-     * anywhere on the stroke are properly detected.  The per-vertex search
-     * in spline_uv() is limited to rows near the dab for performance. */
-    const int lo = 0;
-    const int count = int(poly.size());
-    const bool use_pressure_width = brush && brush->mtex.roll_pressure_scale &&
-                                    BKE_brush_use_size_pressure(brush);
-    const float R = cache.initial_radius;
-
-    /* Capture initial_radius for normalized distance tracking. */
-    if (roll_initial_radius_ == 0.0f && R > 0.0f) {
-      roll_initial_radius_ = R;
-    }
-
-    /* Fallback normal, frozen on the first dab (sculpt or view normal),
-     * for the rare dabs where sculpt_normal is degenerate. */
-    if (math::length_squared(roll_proj_normal_) < 1e-8f) {
-      roll_proj_normal_ = (math::length_squared(cache.sculpt_normal) > 1e-8f) ?
-                              math::normalize(cache.sculpt_normal) :
-                              math::normalize(cache.view_normal);
-    }
-
-    cache.roll_border_left.reinitialize(count);
-    cache.roll_border_right.reinitialize(count);
-
-    /* dab_normal: per-dab surface normal for the strip binormals and the
-     * LUT projection. */
-    const float3 dab_normal = (math::length_squared(cache.sculpt_normal) > 1e-8f) ?
-                                  math::normalize(cache.sculpt_normal) :
-                                  roll_proj_normal_;
-
-    for (int k = 0; k < count; k++) {
-      const int vi = lo + k; /* polyline vertex index */
-      const float3 &T = tangents[vi];
-      /* Binormal = cross(tangent, dab_normal).  Using the per-dab
-       * surface normal (same as LUT projection) ensures the grid is
-       * aligned with the local surface at the current dab position.
-       * This is view-independent — the same stroke from any camera
-       * angle produces the same borders. */
-      float3 B = math::cross(T, dab_normal);
-      const float blen = math::length(B);
-      if (blen > 1e-7f) {
-        B /= blen;
-      }
-      else {
-        /* Degenerate: tangent parallel to dab_normal. */
-        B = math::normalize(math::cross(T, float3(0, 0, 1)));
-        if (math::length_squared(B) < 1e-12f) {
-          B = math::normalize(math::cross(T, float3(1, 0, 0)));
-        }
-      }
-      const float Rk = (use_pressure_width && vi < int(roll_spline_.pressures.size())) ?
-                           std::max(R * roll_spline_.pressures[vi], R * 0.01f) :
-                           R;
-      cache.roll_border_left[k] = poly[vi] + B * Rk;
-      cache.roll_border_right[k] = poly[vi] - B * Rk;
-    }
-
-    /* Fix inner-border self-intersections at sharp turns.
-     *
-     * The border curves (at distance R from center) may self-intersect on the
-     * inner side of tight turns where the radius of curvature < R.
-     * We find where the border polyline actually crosses itself (segment vs
-     * segment test), then collapse all loop vertices to that crossing point.
-     * This turns overlapping quads into degenerate triangles that fan from
-     * the crossing point — the cross-lines rotate to point toward it. */
-
-    /* Find border polyline self-intersections via 2D segment tests.
-     *
-     * Uses the per-dab surface normal for projection so the merge
-     * detection is view-independent and aligned with the LUT. */
-    float3 merge_x = math::cross(dab_normal, float3(0, 0, 1));
-    if (math::length_squared(merge_x) < 1e-6f) {
-      merge_x = math::cross(dab_normal, float3(1, 0, 0));
-    }
-    merge_x = math::normalize(merge_x);
-    const float3 merge_y = math::normalize(math::cross(dab_normal, merge_x));
-
-    auto fix_border_self_intersections = [count, &merge_x, &merge_y, &poly, R](
-                                             Vector<float3> &border) {
-      if (count < 4) {
-        return;
-      }
-
-      Vector<float2> b2d(count);
-      for (int k = 0; k < count; k++) {
-        b2d[k] = float2(math::dot(border[k], merge_x), math::dot(border[k], merge_y));
-      }
-
-      const int max_loop = count - 1;
-      Vector<float3> orig(border);
-      int skip_until = -1;
-
-      for (int i = 0; i < count - 1; i++) {
-        if (i <= skip_until) {
-          continue;
-        }
-        const float2 d1 = b2d[i + 1] - b2d[i];
-        if (math::dot(d1, d1) < 1e-8f) {
-          continue;
-        }
-
-        const int j_max = std::min(count - 2, i + max_loop);
-        for (int j = j_max; j >= i + 2; j--) {
-          const float2 d2 = b2d[j + 1] - b2d[j];
-          if (math::dot(d2, d2) < 1e-8f) {
-            continue;
-          }
-
-          const float2 ac = b2d[j] - b2d[i];
-          const float denom = d1.x * d2.y - d1.y * d2.x;
-          if (std::abs(denom) < 1e-8f) {
-            continue;
-          }
-          const float s = (ac.x * d2.y - ac.y * d2.x) / denom;
-          const float t = (ac.x * d1.y - ac.y * d1.x) / denom;
-
-          if (s >= 0.0f && s <= 1.0f && t >= 0.0f && t <= 1.0f) {
-            bool all_inside = true;
-            const int m_lo = std::max(0, i - 2);
-            const int m_hi = std::min(count - 2, j + 2);
-            const float R_sq = (R * 1.2f) * (R * 1.2f); /* 20% margin for inclined borders */
-            /* Validate all loop vertices are within R of center.
-             * Also find the apex = vertex with sharpest curvature on the
-             * border (largest turning angle between consecutive segments). */
-            int apex_idx = (i + 1 + j) / 2; /* default to midpoint */
-            float max_turn_angle = -1.0f;
-            for (int k = i + 1; k <= j; k++) {
-              float min_dist_sq = FLT_MAX;
-              for (int m = m_lo; m <= m_hi; m++) {
-                const float3 ab = poly[m + 1] - poly[m];
-                const float ab_dot = math::dot(ab, ab);
-                const float tp = (ab_dot > 1e-12f) ?
-                                     std::clamp(
-                                         math::dot(orig[k] - poly[m], ab) / ab_dot, 0.0f, 1.0f) :
-                                     0.0f;
-                const float3 proj = math::interpolate(poly[m], poly[m + 1], tp);
-                min_dist_sq = std::min(min_dist_sq, math::distance_squared(orig[k], proj));
-              }
-              if (min_dist_sq >= R_sq) {
-                all_inside = false;
-                break;
-              }
-              /* Curvature: angle between incoming and outgoing border segments
-               * at vertex k (in 2D projection).  Higher = sharper turn. */
-              if (k > i + 1 && k < j) {
-                const float2 seg_prev = b2d[k] - b2d[k - 1];
-                const float2 seg_next = b2d[k + 1] - b2d[k];
-                const float lp = math::length(seg_prev);
-                const float ln = math::length(seg_next);
-                if (lp > 1e-7f && ln > 1e-7f) {
-                  const float cos_a = math::dot(seg_prev, seg_next) / (lp * ln);
-                  const float turn = 1.0f - std::clamp(cos_a, -1.0f, 1.0f);
-                  if (turn > max_turn_angle) {
-                    max_turn_angle = turn;
-                    apex_idx = k;
-                  }
-                }
-              }
-            }
-            if (!all_inside) {
-              continue;
-            }
-
-            /* Standard merge point from segment intersection. */
-            const float3 pa = orig[i] + (orig[i + 1] - orig[i]) * s;
-            const float3 pb = orig[j] + (orig[j + 1] - orig[j]) * t;
-            const float3 cross_pt = (pa + pb) * 0.5f;
-
-            /* If the span is too long, only collapse the sharpest portion
-             * (centered on the apex vertex).  This prevents long gentle
-             * turns from collapsing the entire inner border.  The merge
-             * point for partial collapses is the midpoint of the first
-             * and last border vertices in the trimmed range. */
-            int collapse_lo = i + 1;
-            int collapse_hi = j;
-            float3 merge_pt = cross_pt;
-
-            /* If the intersection loop arc length exceeds 3R along the
-             * center polyline, only collapse the sharpest portion centered
-             * on the apex.  Remaining overlap vertices are linearly
-             * interpolated between the intersection endpoints and the
-             * merge point. */
-            const float max_collapse_arc = 3.0f * R;
-            float span_arc = 0.0f;
-            for (int k = i; k < j; k++) {
-              span_arc += math::distance(poly[k], poly[k + 1]);
-            }
-            const bool is_partial = span_arc > max_collapse_arc && (j - i) > 3;
-            if (is_partial) {
-              /* Center the window on the apex using arc-length balance:
-               * grow outward from the apex in both directions, spending
-               * half the budget on each side. */
-              const float half_arc = max_collapse_arc * 0.5f;
-              collapse_lo = apex_idx;
-              collapse_hi = apex_idx;
-              float arc_lo = 0.0f, arc_hi = 0.0f;
-              while (collapse_lo > i + 1 || collapse_hi < j) {
-                const bool can_lo = (collapse_lo > i + 1) && (arc_lo <= arc_hi);
-                const bool can_hi = (collapse_hi < j) && (arc_hi <= arc_lo);
-                if (can_lo) {
-                  const float seg = math::distance(poly[collapse_lo - 1], poly[collapse_lo]);
-                  if (arc_lo + seg > half_arc) {
-                    break;
-                  }
-                  collapse_lo--;
-                  arc_lo += seg;
-                }
-                else if (can_hi) {
-                  const float seg = math::distance(poly[collapse_hi], poly[collapse_hi + 1]);
-                  if (arc_hi + seg > half_arc) {
-                    break;
-                  }
-                  collapse_hi++;
-                  arc_hi += seg;
-                }
-                else {
-                  break;
-                }
-              }
-              merge_pt = (orig[collapse_lo] + orig[collapse_hi]) * 0.5f;
-            }
-
-            for (int k = collapse_lo; k <= collapse_hi; k++) {
-              border[k] = merge_pt;
-            }
-            if (is_partial) {
-              /* Linearly interpolate border vertices between the real
-               * intersection endpoints and the merge point.  This evenly
-               * spaces the overlap zone instead of leaving it overlapping. */
-              const int n_before = collapse_lo - (i + 1);
-              for (int k = 0; k < n_before; k++) {
-                const float t = float(k + 1) / float(n_before + 1);
-                border[i + 1 + k] = math::interpolate(orig[i + 1], merge_pt, t);
-              }
-              const int n_after = j - collapse_hi;
-              for (int k = 0; k < n_after; k++) {
-                const float t = float(k + 1) / float(n_after + 1);
-                border[collapse_hi + 1 + k] = math::interpolate(merge_pt, orig[j], t);
-              }
-            }
-            /* Skip the entire original intersection span so the uncollapsed
-             * outer portions are not re-tested by later iterations. */
-            skip_until = j;
-            break;
-          }
-        }
-      }
-    };
-
-    fix_border_self_intersections(cache.roll_border_left);
-    fix_border_self_intersections(cache.roll_border_right);
-
-    /* Build subdivided poly-strip over the full stroke polyline.
-     *
-     * The grid covers the entire recorded polyline so that subdivision
-     * and Laplacian smoothing produce consistent results regardless of
-     * which dab is being evaluated.  Only the LUT rasterization is
-     * restricted to the dab neighborhood (via eval_row_lo/hi). */
-    {
-      const int grid_lo = 0;
-      const int init_rows = count;
-      const int init_cols = 3;
-      Vector<float3> grid_pos(init_rows * init_cols);
-      Vector<float2> grid_uv(init_rows * init_cols);
-
-      /* Precompute V (along-stroke) texture coordinates.
-       *
-       * Without pressure-scale: V = raw arc length.  sculpt_apply_texture()
-       * later divides by initial_radius to normalize.
-       *
-       * With pressure-scale: V = sum of (seg_len / (R * p_avg)).  Dividing
-       * each segment by its local pressure-scaled radius makes narrow
-       * sections advance the texture faster, so the texture tiles at the
-       * same density relative to the strip width — preserving its aspect
-       * ratio regardless of pressure.  This is baked per-vertex so that
-       * overlapping dabs at different pressures see the same V for the
-       * same mesh vertex (no blurriness).
-       *
-       * The matching offset (stroke_distance_normalized_) is accumulated
-       * in add_roll_point() using the same (p0+p1)/2 averaging, and
-       * applied in spline_uv() to keep the texture continuous as the
-       * polyline shrinks. */
-      const Span<float> pressures = roll_spline_.pressures.as_span();
-      const bool have_pressures = use_pressure_width && int(pressures.size()) >= count;
-      Vector<float> v_coords(init_rows);
-      v_coords[0] = 0.0f;
-      for (int k = 1; k < init_rows; k++) {
-        const int vi = grid_lo + k;
-        const float seg_len = roll_spline_.segment_length_3d(vi - 1);
-        if (have_pressures) {
-          const float p_avg = std::max((pressures[vi] + pressures[vi - 1]) * 0.5f, 0.01f);
-          v_coords[k] = v_coords[k - 1] + seg_len / (R * p_avg);
-        }
-        else {
-          v_coords[k] = v_coords[k - 1] + seg_len;
-        }
-      }
-
-      for (int k = 0; k < init_rows; k++) {
-        const int bi = grid_lo + k; /* index into border arrays */
-        const int vi = bi;          /* polyline vertex index (lo=0) */
-        /* Col 0 = right border, col 1 = center, col 2 = left border. */
-        grid_pos[k * 3 + 0] = cache.roll_border_right[bi];
-        grid_pos[k * 3 + 1] = poly[vi];
-        grid_pos[k * 3 + 2] = cache.roll_border_left[bi];
-        grid_uv[k * 3 + 0] = float2(-1.0f, v_coords[k]);
-        grid_uv[k * 3 + 1] = float2(0.0f, v_coords[k]);
-        grid_uv[k * 3 + 2] = float2(1.0f, v_coords[k]);
-      }
-
-      /* Refine the strip: two cubic B-spline subdivision passes along the
-       * stroke, then linear expansion across it.  N rows × 3 cols →
-       * (4N-3) rows × 9 cols.
-       *
-       * The B-spline vertex rule curves borders and center between knots —
-       * along-stroke smoothing the Laplacian pass below cannot provide,
-       * since it pins the border columns.  Across the strip only linear
-       * interpolation is needed (U must map linearly to ±1 anyway); the
-       * Laplacian bows the interior near collapse points. */
-      int cur_rows = init_rows;
-      int cur_cols = init_cols;
-      bspline_subdivide_rows(grid_pos, grid_uv, cur_rows, cur_cols);
-      bspline_subdivide_rows(grid_pos, grid_uv, cur_rows, cur_cols);
-      expand_grid_columns(grid_pos, grid_uv, cur_rows, cur_cols);
-
-      /* 2D Laplacian smoothing: pin border columns, smooth everything
-       * between them (including center).  This curves the cross-stroke
-       * segments near collapse points — the perpendicular lines bow
-       * toward the merge point like a subdivision surface.
-       * Uses double-buffering to avoid per-iteration allocation. */
-      {
-        constexpr int smooth_iters = 10;
-        constexpr float mix = 0.5f;
-        const int grid_total = cur_rows * cur_cols;
-        Vector<float3> buf_p(grid_total);
-        Vector<float2> buf_u(grid_total);
-        float3 *src_p = grid_pos.data(), *dst_p = buf_p.data();
-        float2 *src_u = grid_uv.data(), *dst_u = buf_u.data();
-        for (int iter = 0; iter < smooth_iters; iter++) {
-          memcpy(dst_p, src_p, sizeof(float3) * grid_total);
-          memcpy(dst_u, src_u, sizeof(float2) * grid_total);
-          for (int r = 1; r < cur_rows - 1; r++) {
-            for (int c = 1; c < cur_cols - 1; c++) {
-              const int idx = r * cur_cols + c;
-              float3 avg_p = 0.25f *
-                             (src_p[(r - 1) * cur_cols + c] + src_p[(r + 1) * cur_cols + c] +
-                              src_p[r * cur_cols + c - 1] + src_p[r * cur_cols + c + 1]);
-              float2 avg_u = 0.25f *
-                             (src_u[(r - 1) * cur_cols + c] + src_u[(r + 1) * cur_cols + c] +
-                              src_u[r * cur_cols + c - 1] + src_u[r * cur_cols + c + 1]);
-              dst_p[idx] = (1.0f - mix) * src_p[idx] + mix * avg_p;
-              dst_u[idx] = (1.0f - mix) * src_u[idx] + mix * avg_u;
-            }
-          }
-          std::swap(src_p, dst_p);
-          std::swap(src_u, dst_u);
-        }
-        /* Ensure results end up in grid_pos/grid_uv. */
-        if (src_p != grid_pos.data()) {
-          memcpy(grid_pos.data(), src_p, sizeof(float3) * grid_total);
-          memcpy(grid_uv.data(), src_u, sizeof(float2) * grid_total);
-        }
-      }
-
-      /* LUT projection uses the per-dab sculpt normal — the direction
-       * the brush "stamps" from.  This ensures the texture maps at
-       * correct density on slopes (combined with the inclination-narrowed
-       * borders).  The per-dab normal adapts to the local surface as
-       * the stroke progresses across curved geometry. */
-      float3 view_x = math::cross(dab_normal, float3(0, 0, 1));
-      if (math::length_squared(view_x) < 1e-6f) {
-        view_x = math::cross(dab_normal, float3(1, 0, 0));
-      }
-      view_x = math::normalize(view_x);
-      const float3 view_y = math::normalize(math::cross(dab_normal, view_x));
-
-      const int total = cur_rows * cur_cols;
-      Vector<float2> grid_pos_2d(total);
-      {
-        for (int i = 0; i < total; i++) {
-          grid_pos_2d[i] = float2(math::dot(grid_pos[i], view_x), math::dot(grid_pos[i], view_y));
-        }
-      }
-
-      /* Compute eval row range: intersect arc-length window with spatial
-       * distance.  The arc-length constraint prevents old segments on the
-       * far side of a self-crossing stroke from polluting the LUT.  The
-       * spatial check ensures coverage on sharp curves where arc-length
-       * alone might be too tight.  Forward range is more generous to
-       * include the trailing segment and its self-intersection merges.
-       *
-       * After two row-subdivision passes, original polyline vertex `vi`
-       * maps to grid row `4 * vi`. */
-      {
-        const float eval_s_lo = std::max(0.0f, raw_s - R * 2.0f);
-        const float eval_s_hi = std::min(lengths.last(), raw_s + R * 3.0f);
-
-        int eval_seg_lo, eval_seg_hi;
-        float fac_unused;
-        length_parameterize::sample_at_length(lengths, eval_s_lo, eval_seg_lo, fac_unused);
-        length_parameterize::sample_at_length(lengths, eval_s_hi, eval_seg_hi, fac_unused);
-
-        const int arc_row_lo = std::max(0, eval_seg_lo * 4 - EVAL_ROW_MARGIN);
-        const int arc_row_hi = std::min(cur_rows - 1, (eval_seg_hi + 1) * 4 + EVAL_ROW_MARGIN);
-
-        /* Within the arc-length window, keep rows spatially near the dab. */
-        const float2 dab_2d = float2(math::dot(cache.location, view_x),
-                                     math::dot(cache.location, view_y));
-        const float eval_r_sq = (R * 2.0f) * (R * 2.0f);
-        const int center_c = cur_cols / 2;
-
-        int eval_lo = cur_rows - 1, eval_hi = 0;
-        for (int r = arc_row_lo; r <= arc_row_hi; r++) {
-          if (math::distance_squared(dab_2d, grid_pos_2d[r * cur_cols + center_c]) <= eval_r_sq) {
-            eval_lo = std::min(eval_lo, r);
-            eval_hi = std::max(eval_hi, r);
-          }
-        }
-        cache.roll_eval_row_lo = std::max(0, eval_lo - EVAL_ROW_MARGIN);
-        cache.roll_eval_row_hi = std::min(cur_rows - 2, eval_hi + EVAL_ROW_MARGIN);
-      }
-
-      cache.roll_subdiv_rows = cur_rows;
-      cache.roll_subdiv_cols = cur_cols;
-
-      /* Build UV lookup table: rasterize eval-range grid quads into a 2D
-       * texture so per-vertex UV lookup is O(1) instead of O(rows×cols).
-       * On high-poly meshes this is the dominant cost — the LUT amortizes
-       * the bilinear inverse across a fixed-size image. */
-      {
-        constexpr int RES = StrokeCache::ROLL_LUT_RES;
-        const int el = cache.roll_eval_row_lo;
-        const int eh = cache.roll_eval_row_hi;
-
-        /* 2D bounding box of eval-range grid. */
-        float2 bb_min(FLT_MAX), bb_max(-FLT_MAX);
-        for (int r = el; r <= std::min(eh + 1, cur_rows - 1); r++) {
-          for (int c = 0; c < cur_cols; c++) {
-            bb_min = math::min(bb_min, grid_pos_2d[r * cur_cols + c]);
-            bb_max = math::max(bb_max, grid_pos_2d[r * cur_cols + c]);
-          }
-        }
-        const float2 extent = bb_max - bb_min;
-        const float2 margin = extent * 0.1f;
-        bb_min -= margin;
-        bb_max += margin;
-        const float2 ext = bb_max - bb_min;
-        const float2 inv_ext(ext.x > 1e-10f ? float(RES) / ext.x : 0.0f,
-                             ext.y > 1e-10f ? float(RES) / ext.y : 0.0f);
-
-        const int lut_total = RES * RES;
-        cache.roll_lut_uv.reinitialize(lut_total);
-        cache.roll_lut_dist_sq.reinitialize(lut_total);
-        cache.roll_lut_tan.reinitialize(lut_total);
-        cache.roll_lut_row.reinitialize(lut_total);
-        for (int i = 0; i < lut_total; i++) {
-          cache.roll_lut_uv[i] = float2(FLT_MAX, 0.0f);
-          cache.roll_lut_dist_sq[i] = FLT_MAX;
-          cache.roll_lut_row[i] = -1;
-        }
-
-        auto cross2d = [](float2 a, float2 b) { return a.x * b.y - a.y * b.x; };
-
-        /* Rasterize each eval-range quad into the LUT via bilinear inverse.
-         *
-         * For each quad (P00, P10, P01, P11), and for each pixel in its
-         * bounding box, we solve: "given a 2D point Q, find (u,v) such that
-         * Q = (1-u)(1-v)P00 + u(1-v)P10 + (1-u)v*P01 + uv*P11."
-         *
-         * Rearranging gives a quadratic in v (A*v^2 + B*v + C = 0) using
-         * cross-products of the quad's edge vectors.  Once v is found, u
-         * follows from a linear solve.  If (u,v) is inside [0,1]^2 the pixel
-         * is inside the quad, and we bilinearly interpolate the UV + tangent.
-         *
-         * When multiple quads overlap (at self-intersection collapses), the
-         * quad whose bilinear solution is closest to the pixel center wins
-         * (roll_lut_dist_sq comparison). */
-        for (int r = el; r <= eh; r++) {
-          for (int c = 0; c < cur_cols - 1; c++) {
-            const float2 P00 = grid_pos_2d[r * cur_cols + c];
-            const float2 P10 = grid_pos_2d[r * cur_cols + c + 1];
-            const float2 P01 = grid_pos_2d[(r + 1) * cur_cols + c];
-            const float2 P11 = grid_pos_2d[(r + 1) * cur_cols + c + 1];
-
-            /* Pixel bounding box of this quad. */
-            float2 qmin = math::min(math::min(P00, P10), math::min(P01, P11));
-            float2 qmax = math::max(math::max(P00, P10), math::max(P01, P11));
-            int px_lo = std::max(0, int((qmin.x - bb_min.x) * inv_ext.x));
-            int px_hi = std::min(RES - 1, int((qmax.x - bb_min.x) * inv_ext.x) + 1);
-            int py_lo = std::max(0, int((qmin.y - bb_min.y) * inv_ext.y));
-            int py_hi = std::min(RES - 1, int((qmax.y - bb_min.y) * inv_ext.y) + 1);
-
-            /* Bilinear basis vectors for the quadratic solve. */
-            const float2 a = P10 - P00;
-            const float2 b = P01 - P00;
-            const float2 tw = P11 - P10 - P01 + P00; /* twist term */
-            const float A_coeff = cross2d(b, tw);
-
-            for (int py = py_lo; py <= py_hi; py++) {
-              for (int px = px_lo; px <= px_hi; px++) {
-                const float2 query = bb_min + float2(px + 0.5f, py + 0.5f) / float(RES) * ext;
-                const float2 d = query - P00;
-
-                const float B_coeff = cross2d(b, a) - cross2d(d, tw);
-                const float C_coeff = -cross2d(d, a);
-
-                float v;
-                if (std::abs(A_coeff) < 1e-8f) {
-                  v = (std::abs(B_coeff) > 1e-8f) ? -C_coeff / B_coeff : 0.5f;
-                }
-                else {
-                  const float disc = B_coeff * B_coeff - 4.0f * A_coeff * C_coeff;
-                  if (disc < 0.0f) {
-                    continue;
-                  }
-                  const float sq = sqrtf(disc);
-                  const float v1 = (-B_coeff + sq) / (2.0f * A_coeff);
-                  const float v2 = (-B_coeff - sq) / (2.0f * A_coeff);
-                  const float e1 = std::max(0.0f, std::max(-v1, v1 - 1.0f));
-                  const float e2 = std::max(0.0f, std::max(-v2, v2 - 1.0f));
-                  v = (e1 <= e2) ? v1 : v2;
-                }
-                if (v < -0.01f || v > 1.01f) {
-                  continue;
-                }
-                v = std::clamp(v, 0.0f, 1.0f);
-
-                const float2 dv = a + v * tw;
-                float u;
-                if (std::abs(dv.x) > std::abs(dv.y)) {
-                  u = (std::abs(dv.x) > 1e-8f) ? (d.x - v * b.x) / dv.x : 0.5f;
-                }
-                else {
-                  u = (std::abs(dv.y) > 1e-8f) ? (d.y - v * b.y) / dv.y : 0.5f;
-                }
-                if (u < -0.01f || u > 1.01f) {
-                  continue;
-                }
-                u = std::clamp(u, 0.0f, 1.0f);
-
-                const float2 pnt = (1 - u) * (1 - v) * P00 + u * (1 - v) * P10 +
-                                   (1 - u) * v * P01 + u * v * P11;
-                const float dsq = math::distance_squared(query, pnt);
-
-                const int li = py * RES + px;
-                /* Prefer older rows on overlap to keep the LUT stable.
-                 *
-                 * The loop iterates rows low→high, so a non-empty pixel
-                 * was written by a row ≤ r.  Cases:
-                 *   - empty: write
-                 *   - same/adjacent row (within 2): use dsq (better fit wins)
-                 *   - far row (existing < r - 2): keep older (don't write)
-                 * This way overlapping branches at sharp turns get a stable
-                 * single stroke position rather than flickering between
-                 * competing branches based on tiny float distances. */
-                const int existing_row = cache.roll_lut_row[li];
-                bool write = false;
-                if (existing_row < 0) {
-                  write = true;
-                }
-                else if (r - existing_row <= 2) {
-                  write = (dsq < cache.roll_lut_dist_sq[li]);
-                }
-                if (write) {
-                  cache.roll_lut_dist_sq[li] = dsq;
-                  cache.roll_lut_row[li] = r;
-                  /* Interpolate UV. */
-                  const float2 &UV00 = grid_uv[r * cur_cols + c];
-                  const float2 &UV10 = grid_uv[r * cur_cols + c + 1];
-                  const float2 &UV01 = grid_uv[(r + 1) * cur_cols + c];
-                  const float2 &UV11 = grid_uv[(r + 1) * cur_cols + c + 1];
-                  cache.roll_lut_uv[li] = (1 - u) * (1 - v) * UV00 + u * (1 - v) * UV10 +
-                                          (1 - u) * v * UV01 + u * v * UV11;
-                  /* Interpolate tangent from 3D grid. */
-                  const float3 &Q00 = grid_pos[r * cur_cols + c];
-                  const float3 &Q10 = grid_pos[r * cur_cols + c + 1];
-                  const float3 &Q01 = grid_pos[(r + 1) * cur_cols + c];
-                  const float3 &Q11 = grid_pos[(r + 1) * cur_cols + c + 1];
-                  const float3 dPdv = (1 - u) * (Q01 - Q00) + u * (Q11 - Q10);
-                  cache.roll_lut_tan[li] = math::normalize(dPdv);
-                }
-              }
-            }
-          }
-        }
-
-        cache.roll_lut_min = bb_min;
-        cache.roll_lut_inv_extent = inv_ext;
-        cache.roll_lut_ready = true;
-      }
-
-      /* 3D grid kept only for the debug overlay. */
-      cache.roll_subdiv_pos = std::move(grid_pos);
-      cache.roll_view_x = view_x;
-      cache.roll_view_y = view_y;
-    }
-
-    cache.roll_surface_ready = true;
+  /* Capture initial_radius for normalized distance tracking. */
+  if (roll_initial_radius_ == 0.0f && R > 0.0f) {
+    roll_initial_radius_ = R;
   }
+
+  /* Fallback normal, frozen on the first dab (sculpt or view normal),
+   * for the rare dabs where sculpt_normal is degenerate. */
+  if (math::length_squared(roll_proj_normal_) < 1e-8f) {
+    roll_proj_normal_ = (math::length_squared(cache.sculpt_normal) > 1e-8f) ?
+                            math::normalize(cache.sculpt_normal) :
+                            math::normalize(cache.view_normal);
+  }
+
+  /* dab_normal: per-dab surface normal for the strip binormals and the
+   * LUT projection.  It adapts to the local surface as the stroke
+   * progresses across curved geometry, so the texture maps at correct
+   * density on slopes. */
+  const float3 dab_normal = (math::length_squared(cache.sculpt_normal) > 1e-8f) ?
+                                math::normalize(cache.sculpt_normal) :
+                                roll_proj_normal_;
+
+  const bool use_pressure_width = brush && brush->mtex.roll_pressure_scale &&
+                                  BKE_brush_use_size_pressure(brush);
+  const Span<float> pressures_full = (use_pressure_width &&
+                                      roll_spline_.pressures.size() >= poly_full.size()) ?
+                                         roll_spline_.pressures.as_span() :
+                                         Span<float>();
+
+  /* The grid covers the entire recorded polyline so that self-intersection
+   * collapse anywhere on the stroke is detected; only the LUT rasterization
+   * is restricted to the dab neighborhood (via the eval row range). */
+  const int win_lo = 0;
+  const int win_count = int(poly_full.size());
+  const float v_start = 0.0f;
+
+  const Span<float3> poly = poly_full.slice(win_lo, win_count);
+  const Span<float3> tangents = roll_spline_.tangents_3d.as_span().slice(win_lo, win_count);
+  const Span<float> pressures = pressures_full.is_empty() ?
+                                    pressures_full :
+                                    pressures_full.slice(win_lo, win_count);
+
+  cache.roll_surface_ready = false;
+
+  /* 1-2. Border curves, then collapse their self-intersection loops. */
+  build_roll_borders(
+      poly, tangents, pressures, dab_normal, R, cache.roll_border_left, cache.roll_border_right);
+
+  float3 merge_x = math::cross(dab_normal, float3(0, 0, 1));
+  if (math::length_squared(merge_x) < 1e-6f) {
+    merge_x = math::cross(dab_normal, float3(1, 0, 0));
+  }
+  merge_x = math::normalize(merge_x);
+  const float3 merge_y = math::normalize(math::cross(dab_normal, merge_x));
+
+  collapse_border_self_intersections(poly, merge_x, merge_y, R, cache.roll_border_left);
+  collapse_border_self_intersections(poly, merge_x, merge_y, R, cache.roll_border_right);
+
+  /* 3. Initial 3-column grid with V coordinates. */
+  Vector<float3> grid_pos;
+  Vector<float2> grid_uv;
+  build_strip_grid(poly,
+                   cache.roll_border_left,
+                   cache.roll_border_right,
+                   pressures,
+                   R,
+                   v_start,
+                   grid_pos,
+                   grid_uv);
+
+  /* 4. Refine the strip: two cubic B-spline subdivision passes along the
+   * stroke, then linear expansion across it.  N rows x 3 cols ->
+   * (4N-3) rows x 9 cols.
+   *
+   * The B-spline vertex rule curves borders and center between knots —
+   * along-stroke smoothing the Laplacian pass below cannot provide, since
+   * it pins the border columns.  Across the strip only linear
+   * interpolation is needed (U must map linearly to ±1 anyway). */
+  int cur_rows = win_count;
+  int cur_cols = 3;
+  bspline_subdivide_rows(grid_pos, grid_uv, cur_rows, cur_cols);
+  bspline_subdivide_rows(grid_pos, grid_uv, cur_rows, cur_cols);
+  expand_grid_columns(grid_pos, grid_uv, cur_rows, cur_cols);
+
+  /* 5. Bow the interior near collapse points. */
+  laplacian_smooth_grid(grid_pos, grid_uv, cur_rows, cur_cols);
+
+  /* 6. Project to 2D and rasterize the dab neighborhood into the LUT.
+   * The projection uses the per-dab sculpt normal — the direction the
+   * brush "stamps" from. */
+  float3 view_x = math::cross(dab_normal, float3(0, 0, 1));
+  if (math::length_squared(view_x) < 1e-6f) {
+    view_x = math::cross(dab_normal, float3(1, 0, 0));
+  }
+  view_x = math::normalize(view_x);
+  const float3 view_y = math::normalize(math::cross(dab_normal, view_x));
+
+  const int total = cur_rows * cur_cols;
+  Vector<float2> grid_pos_2d(total);
+  for (int i = 0; i < total; i++) {
+    grid_pos_2d[i] = float2(math::dot(grid_pos[i], view_x), math::dot(grid_pos[i], view_y));
+  }
+
+  const float2 dab_2d = float2(math::dot(cache.location, view_x),
+                               math::dot(cache.location, view_y));
+  compute_lut_eval_rows(grid_pos_2d,
+                        cur_rows,
+                        cur_cols,
+                        lengths,
+                        raw_s,
+                        R,
+                        win_lo,
+                        dab_2d,
+                        cache.roll_eval_row_lo,
+                        cache.roll_eval_row_hi);
+
+  cache.roll_subdiv_rows = cur_rows;
+  cache.roll_subdiv_cols = cur_cols;
+
+  rasterize_lut(grid_pos,
+                grid_pos_2d,
+                grid_uv,
+                cur_rows,
+                cur_cols,
+                cache.roll_eval_row_lo,
+                cache.roll_eval_row_hi,
+                cache);
+
+  /* 3D grid kept only for the debug overlay. */
+  cache.roll_subdiv_pos = std::move(grid_pos);
+  cache.roll_view_x = view_x;
+  cache.roll_view_y = view_y;
+
+  cache.roll_surface_ready = true;
 }
 
 void PaintStroke::spline_uv(const StrokeCache &cache,
