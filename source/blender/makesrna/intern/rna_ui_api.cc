@@ -200,10 +200,6 @@ static void rna_uiItemR(Layout *layout,
     flag |= ui::ITEM_R_ICON_ONLY;
   }
 
-  // if (icon_value || icon) {
-  //   flag |= ui::ITEM_R_NO_ICON_OFFSET;
-  // }
-
   if (event) {
     flag |= ui::ITEM_R_EVENT;
   }
