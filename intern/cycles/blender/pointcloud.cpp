@@ -213,8 +213,8 @@ static void export_pointcloud_motion_gsplat_attributes(
                                                  b_attributes.lookup<blender::math::Quaternion>(
                                                      "rotation", blender::bke::AttrDomain::Point)))
     {
-      float4 *motion_rotation = attr_rotation->data_for_write<float4>(attr_step);
-      std::fill_n(motion_rotation, num_points, make_float4(1.0f, 0.0f, 0.0f, 0.0f));
+      Quaternion *motion_rotation = attr_rotation->data_for_write<Quaternion>(attr_step);
+      std::fill_n(motion_rotation, num_points, identity_quaternion());
     }
     return;
   }
@@ -228,15 +228,21 @@ static void export_pointcloud_motion_gsplat_attributes(
       "rotation", blender::bke::AttrDomain::Point);
   float4 *motion_radiance_base = attr_radiance_base->data_for_write<float4>(attr_step);
   packed_float3 *motion_scale = attr_scale->data_for_write<packed_float3>(attr_step);
-  float4 *motion_rotation = attr_rotation->data_for_write<float4>(attr_step);
+  Quaternion *motion_rotation = attr_rotation->data_for_write<Quaternion>(attr_step);
   for (int i = 0; i < std::min<int>(num_points, b_positions.size()); i++) {
-    motion_radiance_base[i] = make_float4(b_radiance_base[i][0],
-                                          b_radiance_base[i][1],
-                                          b_radiance_base[i][2],
-                                          b_radiance_base[i][3]);
-    motion_scale[i] = make_float3(b_scale[i][0], b_scale[i][1], b_scale[i][2]);
-    motion_rotation[i] = make_float4(
-        b_rotation[i][0], b_rotation[i][1], b_rotation[i][2], b_rotation[i][3]);
+    motion_radiance_base[i] = b_radiance_base.is_empty() ? zero_float4() :
+                                                           make_float4(b_radiance_base[i][0],
+                                                                       b_radiance_base[i][1],
+                                                                       b_radiance_base[i][2],
+                                                                       b_radiance_base[i][3]);
+    motion_scale[i] = b_scale.is_empty() ?
+                          zero_float3() :
+                          make_float3(b_scale[i][0], b_scale[i][1], b_scale[i][2]);
+    motion_rotation[i] = b_rotation.is_empty() ? identity_quaternion() :
+                                                 make_quaternion(b_rotation[i][0],
+                                                                 b_rotation[i][1],
+                                                                 b_rotation[i][2],
+                                                                 b_rotation[i][3]);
   }
 }
 
@@ -345,16 +351,6 @@ static void export_pointcloud_motion(PointCloud *pointcloud,
       std::fill(mR, mR + num_points, 0.01f);
     }
 
-    if (is_gsplat && has_gsplat_attributes) {
-      export_pointcloud_motion_gsplat_attributes(pointcloud,
-                                                 attr_radiance_base,
-                                                 attr_scale,
-                                                 attr_rotation,
-                                                 b_pointcloud,
-                                                 b_attributes,
-                                                 attr_step);
-    }
-
     /* If the buffer is shared from Blender and unchanged across frames, the
      * pointer matches the center step's, so the memcmp is skipped. */
     const packed_float3 *motion_P = attr_P->data<packed_float3>(attr_step);
@@ -372,6 +368,16 @@ static void export_pointcloud_motion(PointCloud *pointcloud,
       mP[i] = make_float3(b_positions[i][0], b_positions[i][1], b_positions[i][2]);
       mR[i] = b_radius.is_empty() ? 0.01f : b_radius[i];
     }
+  }
+
+  if (is_gsplat && has_gsplat_attributes) {
+    export_pointcloud_motion_gsplat_attributes(pointcloud,
+                                               attr_radiance_base,
+                                               attr_scale,
+                                               attr_rotation,
+                                               b_pointcloud,
+                                               b_attributes,
+                                               attr_step);
   }
 
   /* In case of new attribute, verify if there really was any motion. */
