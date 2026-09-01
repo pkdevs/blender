@@ -5174,6 +5174,11 @@ static void rna_def_userdef_view(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", USER_TOOLTIPS_PYTHON);
   RNA_def_property_ui_text(prop, "Python Tooltips", "Show Python references in tooltips");
 
+  prop = RNA_def_property(srna, "tooltips_delay", PROP_FLOAT, PROP_TIME_ABSOLUTE);
+  RNA_def_property_range(prop, 0.1f, 10.0f);
+  RNA_def_property_ui_range(prop, 0.2f, 2.0f, 10, 2);
+  RNA_def_property_ui_text(prop, "Tooltip Delay", "Time in seconds until the tooltip shows");
+
   prop = RNA_def_property(srna, "show_developer_ui", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", USER_DEVELOPER_UI);
   RNA_def_property_ui_text(

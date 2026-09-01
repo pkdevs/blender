@@ -3064,9 +3064,10 @@ ARegion *tooltip_create_from_search_item_generic(bContext *C,
                                                  const rcti *item_rect,
                                                  ID *id);
 
-/* How long before a tool-tip shows. */
-#define UI_TOOLTIP_DELAY 0.5
-#define UI_TOOLTIP_DELAY_QUICK 0.2
+/* Preference for how long before a tooltip shows. */
+#define UI_TOOLTIP_DELAY U.tooltips_delay
+/* Quick tooltips take half the user preference time, capped at a minimum 100ms. */
+#define UI_TOOLTIP_DELAY_QUICK std::max(0.1f, U.tooltips_delay * 0.5f)
 
 /* Float precision helpers */
 

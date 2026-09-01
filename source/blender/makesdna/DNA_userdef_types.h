@@ -1268,6 +1268,9 @@ struct UserDef {
   /** Pie menu distance from center before a direction is set. */
   short pie_menu_threshold = 12;
 
+  float tooltips_delay = 1.0f;
+  char _pad4[4] = {};
+
   eUserpref_SeqEditorFlags sequencer_editor_flag = USER_SEQ_ED_CONNECT_STRIPS_BY_DEFAULT;
 
   eUserpref_FactorDisplay factor_display_type = USER_FACTOR_AS_FACTOR;

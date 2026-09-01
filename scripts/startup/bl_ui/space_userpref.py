@@ -236,7 +236,11 @@ class USERPREF_PT_interface_display(InterfacePanel, CenterAlignMixIn, Panel):
         col.separator()
 
         col = layout.column(heading="Tooltips", align=True)
-        col.prop(view, "show_tooltips", text="User Tooltips")
+        row = col.row()
+        row.prop(view, "show_tooltips", text="")
+        sub = row.row()
+        sub.prop(view, "tooltips_delay", text="")
+
         sub = col.column()
         sub.active = view.show_tooltips
         sub.prop(view, "show_tooltips_python")
