@@ -2544,16 +2544,16 @@ static Main *blo_add_main_for_library(FileData *fd,
     STRNCPY(lib->filepath, lib_filepath);
     STRNCPY(lib->runtime->filepath_abs, filepath_abs);
 
+    if (is_external_lib) {
+      lib->flag |= LIBRARY_FLAG_IS_EXTERNAL;
+    }
+
     if (is_packed_library) {
       /* FIXME: This logic is very similar to the code in BKE_library dealing with archived
        * libraries (e.g. #add_archive_library). Might be good to try to factorize it. */
       lib->archive_parent_library = reference_lib;
       constexpr uint16_t copy_flag = ~LIBRARY_FLAG_IS_ARCHIVE;
       lib->flag = (reference_lib->flag & copy_flag) | LIBRARY_FLAG_IS_ARCHIVE;
-
-      if (is_external_lib) {
-        lib->flag |= LIBRARY_FLAG_IS_EXTERNAL;
-      }
 
       lib->runtime->parent = reference_lib->runtime->parent;
       /* Only copy a subset of the reference library tags. E.g. an archive library should never be
@@ -2665,8 +2665,15 @@ static void direct_link_library(FileData *fd, Library *lib, Main *main)
                        lib->filepath,
                        lib->runtime->filepath_abs);
 
-      Main *parent_lib_bmain = blo_add_main_for_library(
-          fd, nullptr, nullptr, nullptr, lib->filepath, lib->runtime->filepath_abs, false, false);
+      Main *parent_lib_bmain = blo_add_main_for_library(fd,
+                                                        nullptr,
+                                                        nullptr,
+                                                        nullptr,
+                                                        lib->filepath,
+                                                        lib->runtime->filepath_abs,
+                                                        false,
+                                                        (lib->flag & LIBRARY_FLAG_IS_EXTERNAL) !=
+                                                            0);
       parent_lib = parent_lib_bmain->curlib;
       BLI_assert(parent_lib);
       oldnewmap_lib_insert(fd, lib->archive_parent_library, &parent_lib->id, ID_LI);
@@ -5028,7 +5035,7 @@ static Main *blo_find_main_for_library_and_idname(FileData *fd,
       /* An archive library requires an existing parent library, create an empty, 'virtual' one if
        * needed. */
       Main *reference_bmain = blo_add_main_for_library(
-          fd, bheadlib, nullptr, nullptr, lib_filepath, filepath_abs, false, false);
+          fd, bheadlib, nullptr, nullptr, lib_filepath, filepath_abs, false, is_external_lib);
       parent_lib = reference_bmain->curlib;
       CLOG_DEBUG(&LOG,
                  "Added new parent library '%s' for file path '%s'",
@@ -5193,8 +5200,9 @@ static void expand_doit_library(void *fdhandle,
 
     Library *lib = reinterpret_cast<Library *>(
         read_id_struct(fd, bheadlib, "Data for Library ID type", INDEX_ID_NULL));
+    const bool is_external_lib = bool(lib->flag & LIBRARY_FLAG_IS_EXTERNAL);
     Main *libmain = blo_find_main_for_library_and_idname(
-        fd, bheadlib, lib->filepath, fd->relabase, nullptr, nullptr, false, false);
+        fd, bheadlib, lib->filepath, fd->relabase, nullptr, nullptr, false, is_external_lib);
     MEM_delete(lib);
 
     if (libmain->curlib == nullptr) {
