@@ -5185,7 +5185,62 @@ static void expand_doit_library(void *fdhandle,
                  "A link placeholder ID (aka reference to some ID linked from another library) "
                  "should never be packed.");
 
-  if (bhead->code == ID_LINK_PLACEHOLDER) {
+  if (bhead->code == ID_LI) {
+    /* Currently, we do no support expanding library usages/pointers in linked IDs.
+     * This can happen e.g. with some data-block custom property referencing a library, or when
+     * linking a collection import referencing its external archive library.
+     *
+     * This is a dangerous thing to try in general, as unlike almos any other ID types, libraries
+     * are more of a runtime ID than anything (they are always local, only written on disk as file
+     * reference & namespace, and are deduplicated on load - such that if a same library is used by
+     * several other dependencies, there is still only one ID for it in the final Main).
+     *
+     * Supporting expanding of non-archive library should be fairly straightforward (based on their
+     * absolute filepath), whether they are regular blendfile ones, new or external ones.
+     *
+     * Supporting expanding of archive libraries however is much much more complex:
+     *   - Archive libraries for packed data are essentially purely runtime data. They are only
+     *     used as namesapce, and there is not even any guarantee that packed IDs end up in the
+     *     same archive library namespace, depending on linking order etc.
+     *   - External archive libraries are more of an actual 'real container', their IDs are not
+     *     expected to move between them, even after a save & reload cycle. So we _could_ assign
+     *     some form of unique identifier to them, maybe abusing the 'deep hash' of packed IDs for
+     *     that (since libraries themselves are never packed)... not convinced that this would be
+     *     worth the complexity though.
+     *
+     * Note: Commented below is some initial attempt at supporting library expanding, not working
+     * with archive ones though.
+     */
+    return;
+#if 0
+    if (library_id_is_yet_read(fd, mainvar, bhead)) {
+      return;
+    }
+
+    Library *lib = reinterpret_cast<Library *>(
+        read_id_struct(fd, bhead, "Data for Library ID type", INDEX_ID_NULL));
+    if (lib->flag & LIBRARY_FLAG_IS_ARCHIVE) {
+      BLI_assert_unreachable();
+      MEM_delete(lib);
+      return;
+    }
+    const bool is_external_lib = bool(lib->flag & LIBRARY_FLAG_IS_EXTERNAL);
+
+    Main *libmain = blo_find_main_for_library_and_idname(
+        fd, bhead, lib->filepath, fd->relabase, nullptr, nullptr, false, is_external_lib);
+    MEM_delete(lib);
+
+    if (libmain->curlib == nullptr) {
+      BLO_reportf_wrap(fd->reports,
+                       RPT_WARNING,
+                       RPT_("LIB: Data refers to main .blend file: '%s' from %s"),
+                       id_name ? id_name : "<InvalidIDName>",
+                       mainvar->curlib->runtime->filepath_abs);
+      return;
+    }
+#endif
+  }
+  else if (bhead->code == ID_LINK_PLACEHOLDER) {
     /* Placeholder link to data-block in another library. */
     BHead *bheadlib = find_previous_lib(fd, bhead);
     if (bheadlib == nullptr) {
