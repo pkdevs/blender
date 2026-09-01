@@ -2494,6 +2494,7 @@ IDProperty *node_create_asset_meta_data_properties(const bNodeTree &node_tree)
       IDP_AddToGroup(item_props.get(), idprop::create("alt", int(item.alt)).release());
       IDP_AddToGroup(item_props.get(), idprop::create("oskey", int(item.oskey)).release());
       IDP_AddToGroup(item_props.get(), idprop::create("hyper", int(item.hyper)).release());
+      IDP_AddToGroup(item_props.get(), idprop::create("repeat", int(item.repeat)).release());
       IDP_AddToGroup(keymap.get(), item_props.release());
     }
     IDP_AddToGroup(properties.get(), keymap.release());

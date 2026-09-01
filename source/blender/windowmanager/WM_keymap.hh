@@ -219,6 +219,7 @@ void WM_keymap_restore_to_default(wmKeyMap *keymap, wmWindowManager *wm);
  */
 void WM_keymap_item_properties_reset(wmKeyMapItem *kmi, IDProperty *properties);
 void WM_keymap_item_restore_to_default(wmWindowManager *wm, wmKeyMap *keymap, wmKeyMapItem *kmi);
+eKMI_MapType WM_keymap_map_type_from_event_type(short type);
 int WM_keymap_item_map_type_get(const wmKeyMapItem *kmi);
 
 /* Key Event. */

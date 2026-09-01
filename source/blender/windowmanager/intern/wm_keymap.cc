@@ -224,27 +224,32 @@ void WM_keymap_item_properties_reset(wmKeyMapItem *kmi, IDProperty *properties)
   wm_keymap_item_properties_set(kmi);
 }
 
-int WM_keymap_item_map_type_get(const wmKeyMapItem *kmi)
+eKMI_MapType WM_keymap_map_type_from_event_type(const short type)
 {
-  if (ISTIMER(kmi->type)) {
+  if (ISTIMER(type)) {
     return KMI_TYPE_TIMER;
   }
-  if (ISKEYBOARD(kmi->type)) {
+  if (ISKEYBOARD(type)) {
     return KMI_TYPE_KEYBOARD;
   }
-  if (ISMOUSE(kmi->type)) {
+  if (ISMOUSE(type)) {
     return KMI_TYPE_MOUSE;
   }
-  if (ISNDOF(kmi->type)) {
+  if (ISNDOF(type)) {
     return KMI_TYPE_NDOF;
   }
-  if (kmi->type == KM_TEXTINPUT) {
+  if (type == KM_TEXTINPUT) {
     return KMI_TYPE_TEXTINPUT;
   }
-  if (ELEM(kmi->type, TABLET_STYLUS, TABLET_ERASER)) {
+  if (ELEM(type, TABLET_STYLUS, TABLET_ERASER)) {
     return KMI_TYPE_MOUSE;
   }
   return KMI_TYPE_KEYBOARD;
+}
+
+int WM_keymap_item_map_type_get(const wmKeyMapItem *kmi)
+{
+  return WM_keymap_map_type_from_event_type(kmi->type);
 }
 
 /** \} */

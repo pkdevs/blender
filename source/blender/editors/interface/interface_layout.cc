@@ -1100,6 +1100,52 @@ static void item_enum_expand_tabs(Layout *layout,
   }
 }
 
+/**
+ * The properties that #ITEM_R_FULL_EVENT needs, which #KeyMapItem has but other structs may have
+ * as well, like the default modal keymap items that node tools define.
+ */
+static bool ui_rna_struct_supports_full_event(PointerRNA &ptr)
+{
+  for (const UString name : {"type"_ustr,
+                             "value"_ustr,
+                             "key_modifier"_ustr,
+                             "shift"_ustr,
+                             "ctrl"_ustr,
+                             "alt"_ustr,
+                             "oskey"_ustr,
+                             "hyper"_ustr})
+  {
+    if (!RNA_struct_find_property(&ptr, name)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Modifier keys are a three-state integer in #KeyMapItem (to support #KM_ANY) but a simple boolean
+ * in structs that don't need that. Both are supported.
+ */
+static int8_t ui_event_modifier_prop_get(PointerRNA &ptr, const char *name)
+{
+  PropertyRNA *prop = RNA_struct_find_property(&ptr, name);
+  if (RNA_property_type(prop) == PROP_BOOLEAN) {
+    return RNA_property_boolean_get(&ptr, prop) ? KM_MOD_HELD : KM_NOTHING;
+  }
+  return RNA_property_int_get(&ptr, prop);
+}
+
+static void ui_event_modifier_prop_set(PointerRNA &ptr, const char *name, const bool is_held)
+{
+  PropertyRNA *prop = RNA_struct_find_property(&ptr, name);
+  if (RNA_property_type(prop) == PROP_BOOLEAN) {
+    RNA_property_boolean_set(&ptr, prop, is_held);
+  }
+  else {
+    RNA_property_int_set(&ptr, prop, is_held ? KM_MOD_HELD : KM_NOTHING);
+  }
+}
+
 /* callback for keymap item change button */
 static void keymap_but_cb(bContext * /*C*/, void *but_v, void * /*key_v*/)
 {
@@ -1107,16 +1153,11 @@ static void keymap_but_cb(bContext * /*C*/, void *but_v, void * /*key_v*/)
   BLI_assert(but->type == ButtonType::HotkeyEvent);
   const ButtonHotkeyEvent *hotkey_but = static_cast<ButtonHotkeyEvent *>(but);
 
-  RNA_int_set(
-      &but->rnapoin, "shift", (hotkey_but->modifier_key & KM_SHIFT) ? KM_MOD_HELD : KM_NOTHING);
-  RNA_int_set(
-      &but->rnapoin, "ctrl", (hotkey_but->modifier_key & KM_CTRL) ? KM_MOD_HELD : KM_NOTHING);
-  RNA_int_set(
-      &but->rnapoin, "alt", (hotkey_but->modifier_key & KM_ALT) ? KM_MOD_HELD : KM_NOTHING);
-  RNA_int_set(
-      &but->rnapoin, "oskey", (hotkey_but->modifier_key & KM_OSKEY) ? KM_MOD_HELD : KM_NOTHING);
-  RNA_int_set(
-      &but->rnapoin, "hyper", (hotkey_but->modifier_key & KM_HYPER) ? KM_MOD_HELD : KM_NOTHING);
+  ui_event_modifier_prop_set(but->rnapoin, "shift", hotkey_but->modifier_key & KM_SHIFT);
+  ui_event_modifier_prop_set(but->rnapoin, "ctrl", hotkey_but->modifier_key & KM_CTRL);
+  ui_event_modifier_prop_set(but->rnapoin, "alt", hotkey_but->modifier_key & KM_ALT);
+  ui_event_modifier_prop_set(but->rnapoin, "oskey", hotkey_but->modifier_key & KM_OSKEY);
+  ui_event_modifier_prop_set(but->rnapoin, "hyper", hotkey_but->modifier_key & KM_HYPER);
 }
 
 /**
@@ -1152,8 +1193,9 @@ static Button *item_with_label(Layout *layout,
                                  !ItemInternal::use_property_decorate_no_pad(layout);
 #endif
 
-  const bool is_keymapitem_ptr = RNA_struct_is_a(ptr->type, RNA_KeyMapItem);
-  if ((flag & ITEM_R_FULL_EVENT) && !is_keymapitem_ptr) {
+  const bool use_full_event = (flag & ITEM_R_FULL_EVENT) &&
+                              ui_rna_struct_supports_full_event(*ptr);
+  if ((flag & ITEM_R_FULL_EVENT) && !use_full_event) {
     RNA_warning_bare("%s: Data is not a keymap item struct: %s. Ignoring 'full_event' option.",
                      caller_fn_name,
                      RNA_struct_identifier(ptr->type));
@@ -1253,9 +1295,18 @@ static Button *item_with_label(Layout *layout,
                          0,
                          std::nullopt);
   }
-  else if ((flag & ITEM_R_FULL_EVENT) && is_keymapitem_ptr) {
-    std::string kmi_str =
-        WM_keymap_item_to_string(static_cast<const wmKeyMapItem *>(ptr->data), false).value_or("");
+  else if (use_full_event) {
+    const std::string kmi_str = WM_keymap_item_raw_to_string(
+                                    ui_event_modifier_prop_get(*ptr, "shift"),
+                                    ui_event_modifier_prop_get(*ptr, "ctrl"),
+                                    ui_event_modifier_prop_get(*ptr, "alt"),
+                                    ui_event_modifier_prop_get(*ptr, "oskey"),
+                                    ui_event_modifier_prop_get(*ptr, "hyper"),
+                                    RNA_enum_get(ptr, "key_modifier"),
+                                    RNA_enum_get(ptr, "value"),
+                                    RNA_enum_get(ptr, "type"),
+                                    false)
+                                    .value_or("");
 
     but = uiDefButR_prop(block,
                          ButtonType::HotkeyEvent,

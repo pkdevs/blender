@@ -2204,7 +2204,9 @@ struct GeometryNodeModalKeymapItem {
   int8_t alt;
   int8_t oskey;
   int8_t hyper;
-  char _pad[5];
+  /** Opposite of #KMI_REPEAT_IGNORE: run the tool again for every key-repeat event. */
+  int8_t repeat;
+  char _pad[4];
 };
 
 struct GeometryNodeAssetTraits {

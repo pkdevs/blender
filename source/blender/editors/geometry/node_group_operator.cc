@@ -1872,7 +1872,10 @@ static void add_default_modal_keymap_items(wmKeyMap &keymap,
     params.keymodifier = IDP_group_lookup_int(item_props, "keymodifier").value_or(0);
     /* Not #WM_modalkeymap_add_item_str: that stores the name for #wm_user_modal_keymap_set_items
      * to resolve later, but it only does that for keymaps that don't have their items yet. */
-    WM_modalkeymap_add_item(&keymap, &params, propvalue);
+    wmKeyMapItem &kmi = *WM_modalkeymap_add_item(&keymap, &params, propvalue);
+    if (!IDP_group_lookup_int(item_props, "repeat").value_or(0)) {
+      kmi.flag |= KMI_REPEAT_IGNORE;
+    }
   }
 }
 

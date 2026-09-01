@@ -222,6 +222,15 @@ const EnumPropertyItem rna_enum_wm_job_type_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+const EnumPropertyItem rna_enum_keymap_item_map_type_items[] = {
+    {KMI_TYPE_KEYBOARD, "KEYBOARD", 0, "Keyboard", ""},
+    {KMI_TYPE_MOUSE, "MOUSE", 0, "Mouse", ""},
+    {KMI_TYPE_NDOF, "NDOF", 0, "NDOF", ""},
+    {KMI_TYPE_TEXTINPUT, "TEXTINPUT", 0, "Text Input", ""},
+    {KMI_TYPE_TIMER, "TIMER", 0, "Timer", ""},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 const EnumPropertyItem rna_enum_event_type_items[] = {
     /* - Note we abuse 'tooltip' message here to store a 'compact' form of some (too) long names.
      * - Intentionally excluded: #CAPSLOCKKEY, #UNKNOWNKEY.
@@ -3127,15 +3136,6 @@ static void rna_def_keyconfig(BlenderRNA *brna)
   StructRNA *srna;
   PropertyRNA *prop;
 
-  static const EnumPropertyItem map_type_items[] = {
-      {KMI_TYPE_KEYBOARD, "KEYBOARD", 0, "Keyboard", ""},
-      {KMI_TYPE_MOUSE, "MOUSE", 0, "Mouse", ""},
-      {KMI_TYPE_NDOF, "NDOF", 0, "NDOF", ""},
-      {KMI_TYPE_TEXTINPUT, "TEXTINPUT", 0, "Text Input", ""},
-      {KMI_TYPE_TIMER, "TIMER", 0, "Timer", ""},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
   /* KeyConfig */
   srna = RNA_def_struct(brna, "KeyConfig", nullptr);
   RNA_def_struct_sdna(srna, "wmKeyConfig");
@@ -3282,7 +3282,7 @@ static void rna_def_keyconfig(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "map_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "maptype");
-  RNA_def_property_enum_items(prop, map_type_items);
+  RNA_def_property_enum_items(prop, rna_enum_keymap_item_map_type_items);
   RNA_def_property_enum_funcs(
       prop, "rna_wmKeyMapItem_map_type_get", "rna_wmKeyMapItem_map_type_set", nullptr);
   RNA_def_property_ui_text(prop, "Map Type", "Type of event mapping");

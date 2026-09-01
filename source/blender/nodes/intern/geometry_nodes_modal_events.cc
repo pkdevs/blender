@@ -28,7 +28,7 @@ bool operator==(const ModalBinding &a, const ModalBinding &b)
          a.item.val == b.item.val && a.item.keymodifier == b.item.keymodifier &&
          a.item.direction == b.item.direction && a.item.shift == b.item.shift &&
          a.item.ctrl == b.item.ctrl && a.item.alt == b.item.alt && a.item.oskey == b.item.oskey &&
-         a.item.hyper == b.item.hyper;
+         a.item.hyper == b.item.hyper && a.item.repeat == b.item.repeat;
 }
 
 static bool compare_binding(const ModalBinding &a, const ModalBinding &b)
@@ -64,7 +64,10 @@ static bool compare_binding(const ModalBinding &a, const ModalBinding &b)
   if (a.item.oskey != b.item.oskey) {
     return a.item.oskey < b.item.oskey;
   }
-  return a.item.hyper < b.item.hyper;
+  if (a.item.hyper != b.item.hyper) {
+    return a.item.hyper < b.item.hyper;
+  }
+  return a.item.repeat < b.item.repeat;
 }
 
 void ModalEventsInfo::deduplicate_and_sort()

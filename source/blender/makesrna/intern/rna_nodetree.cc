@@ -711,6 +711,7 @@ static const EnumPropertyItem node_cryptomatte_layer_name_items[] = {
 #  include "DNA_text_types.h"
 
 #  include "WM_api.hh"
+#  include "WM_keymap.hh"
 
 #  include "DEG_depsgraph_query.hh"
 
@@ -1245,6 +1246,43 @@ static void rna_GeometryNodeModalKeymapItem_update(Main *bmain, Scene *scene, Po
   bNodeTree *ntree = reinterpret_cast<bNodeTree *>(ptr->owner_id);
   BKE_ntree_update_tag_modal_keymap(ntree);
   rna_NodeTree_update_asset(bmain, scene, ptr);
+}
+
+static int rna_GeometryNodeModalKeymapItem_map_type_get(PointerRNA *ptr)
+{
+  const auto &item = *static_cast<const GeometryNodeModalKeymapItem *>(ptr->data);
+  return WM_keymap_map_type_from_event_type(item.type);
+}
+
+/** Mirrors #rna_wmKeyMapItem_map_type_set: the map type is derived from the event type. */
+static void rna_GeometryNodeModalKeymapItem_map_type_set(PointerRNA *ptr, const int value)
+{
+  auto &item = *static_cast<GeometryNodeModalKeymapItem *>(ptr->data);
+  if (value == WM_keymap_map_type_from_event_type(item.type)) {
+    return;
+  }
+  switch (value) {
+    case KMI_TYPE_KEYBOARD:
+      item.type = EVT_AKEY;
+      item.val = KM_PRESS;
+      break;
+    case KMI_TYPE_MOUSE:
+      item.type = LEFTMOUSE;
+      item.val = KM_PRESS;
+      break;
+    case KMI_TYPE_TEXTINPUT:
+      item.type = wmEventType(KM_TEXTINPUT);
+      item.val = KM_NOTHING;
+      break;
+    case KMI_TYPE_TIMER:
+      item.type = TIMER;
+      item.val = KM_NOTHING;
+      break;
+    case KMI_TYPE_NDOF:
+      item.type = NDOF_MOTION;
+      item.val = KM_NOTHING;
+      break;
+  }
 }
 
 static const EnumPropertyItem *rna_NodeTree_color_tag_itemf(bContext * /*C*/,
@@ -9339,6 +9377,15 @@ static void rna_def_geometry_node_modal_keymap_item(BlenderRNA *brna)
       prop, "Name", "Name of the event, matching the name of a Modal Event node");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
 
+  prop = RNA_def_property(srna, "map_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_keymap_item_map_type_items);
+  RNA_def_property_enum_funcs(prop,
+                              "rna_GeometryNodeModalKeymapItem_map_type_get",
+                              "rna_GeometryNodeModalKeymapItem_map_type_set",
+                              nullptr);
+  RNA_def_property_ui_text(prop, "Map Type", "Type of event mapping");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
+
   prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "type");
   RNA_def_property_enum_items(prop, rna_enum_event_type_items);
@@ -9358,6 +9405,12 @@ static void rna_def_geometry_node_modal_keymap_item(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, rna_enum_event_type_items);
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_UI_EVENTS);
   RNA_def_property_ui_text(prop, "Key Modifier", "Regular key pressed as a modifier");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
+
+  prop = RNA_def_property(srna, "repeat", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "repeat", 1);
+  RNA_def_property_ui_text(
+      prop, "Repeat", "Run the tool again for every key-repeat event while the key is held");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
 
   struct {

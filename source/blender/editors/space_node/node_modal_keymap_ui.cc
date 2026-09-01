@@ -32,7 +32,6 @@
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
-#include "RNA_enum_types.hh"
 #include "RNA_prototypes.hh"
 
 #include "UI_interface_layout.hh"
@@ -40,6 +39,7 @@
 #include "UI_tree_view.hh"
 
 #include "WM_api.hh"
+#include "WM_keymap.hh"
 #include "WM_types.hh"
 
 #include "ED_screen.hh"
@@ -166,26 +166,18 @@ void NODE_OT_modal_keymap_item_remove(wmOperatorType *ot)
 /** \name Tree View
  * \{ */
 
-static std::string binding_to_string(const nodes::ModalBinding &binding)
+static std::string binding_to_string(const GeometryNodeModalKeymapItem &item)
 {
-  std::string str;
-  if (binding.item.shift) {
-    str += IFACE_("Shift ");
-  }
-  if (binding.item.ctrl) {
-    str += IFACE_("Ctrl ");
-  }
-  if (binding.item.alt) {
-    str += IFACE_("Alt ");
-  }
-  if (binding.item.oskey) {
-    str += IFACE_("OS ");
-  }
-  const char *type_name = nullptr;
-  if (RNA_enum_name(rna_enum_event_type_items, binding.item.type, &type_name)) {
-    str += IFACE_(type_name);
-  }
-  return str;
+  return WM_keymap_item_raw_to_string(item.shift,
+                                      item.ctrl,
+                                      item.alt,
+                                      item.oskey,
+                                      item.hyper,
+                                      item.keymodifier,
+                                      item.val,
+                                      item.type,
+                                      false)
+      .value_or("");
 }
 
 /**
@@ -197,20 +189,27 @@ class ModalBindingItem : public ui::AbstractTreeViewItem {
   bNodeTree &tree_;
   /** Index into the node group's own bindings, or -1 for a binding from a nested group. */
   int local_index_ = -1;
+  /** The key binding in a readable form, since the row is only a label. */
+  std::string binding_str_;
   /** Name of the defining node group, for bindings from nested groups. */
   std::string group_name_;
 
  public:
   ModalBindingItem(bNodeTree &tree, const int local_index) : tree_(tree), local_index_(local_index)
   {
+    /* The label identifies the item in the tree, so it has to stay the same while the binding is
+     * edited. */
     label_ = std::to_string(local_index);
+    binding_str_ = binding_to_string(
+        tree.geometry_node_asset_traits->modal_keymap_default[local_index]);
   }
 
   ModalBindingItem(bNodeTree &tree, const nodes::ModalBinding &binding, Main &bmain) : tree_(tree)
   {
     const ID *group = BKE_libblock_find_session_uid(&bmain, ID_NT, binding.group_session_uid);
     group_name_ = group ? BKE_id_name(*group) : "";
-    label_ = binding_to_string(binding);
+    binding_str_ = binding_to_string(binding.item);
+    label_ = binding_str_;
   }
 
   bool is_local() const
@@ -221,18 +220,16 @@ class ModalBindingItem : public ui::AbstractTreeViewItem {
   void build_row(ui::Layout &row) override
   {
     if (!this->is_local()) {
+      /* Bindings from nested groups are only shown for reference, they are edited in the node
+       * editor of the group that defines them. */
       ui::Layout &sub = row.row(true);
-      sub.active_set(false);
-      sub.label(label_, ICON_NONE);
+      sub.enabled_set(false);
+      sub.label(binding_str_, ICON_NONE);
       sub.alignment_set(ui::LayoutAlign::Right);
       sub.label(group_name_, ICON_NODETREE);
       return;
     }
-    GeometryNodeAssetTraits &traits = *tree_.geometry_node_asset_traits;
-    GeometryNodeModalKeymapItem &item = traits.modal_keymap_default[local_index_];
-    PointerRNA item_ptr = RNA_pointer_create_discrete(
-        &tree_.id, RNA_GeometryNodeModalKeymapItem, &item);
-    row.prop(&item_ptr, "type", UI_ITEM_NONE, "", ICON_NONE);
+    row.label(binding_str_, ICON_NONE);
     PointerRNA op_ptr = row.op("node.modal_keymap_item_remove", "", ICON_X);
     RNA_int_set(&op_ptr, "index", local_index_);
   }
@@ -381,15 +378,30 @@ static void modal_keymap_panel_draw(const bContext *C, Panel *panel)
 
   layout.use_property_split_set(true);
   layout.use_property_decorate_set(false);
-  layout.prop(&item_ptr, "type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  /* Same options as the keymap editor, see `rna_keymap_ui.py`. */
+  layout.prop(&item_ptr, "map_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  switch (WM_keymap_map_type_from_event_type(item.type)) {
+    case KMI_TYPE_KEYBOARD:
+    case KMI_TYPE_MOUSE:
+    case KMI_TYPE_NDOF:
+      layout.prop(&item_ptr, "type", ui::ITEM_R_FULL_EVENT, std::nullopt, ICON_NONE);
+      break;
+    default:
+      layout.prop(&item_ptr, "type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      break;
+  }
   layout.prop(&item_ptr, "value", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(&item_ptr, "key_modifier", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  ui::Layout &repeat_row = layout.row(true);
+  repeat_row.active_set(ELEM(item.val, KM_ANY, KM_PRESS));
+  repeat_row.prop(&item_ptr, "repeat", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   ui::Layout &col = layout.column(true);
   col.prop(&item_ptr, "shift", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   col.prop(&item_ptr, "ctrl", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   col.prop(&item_ptr, "alt", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   col.prop(&item_ptr, "oskey", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col.prop(&item_ptr, "hyper", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 void node_modal_keymap_panel_register(ARegionType *art)
