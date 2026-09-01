@@ -1691,23 +1691,6 @@ std::optional<bke::CurvesGeometry> delaunay_fill_strokes(
     return NULL_INDEX;
   };
 
-  Array<float> tri_max_weight = get_tri_max_weight(result.face.size(),
-                                                   tri_adjacency.as_span(),
-                                                   tri_edges.as_span(),
-                                                   edge_weights.as_span(),
-                                                   is_source_edge.as_span());
-
-  Array<int> tri_hint_index(result.face.size(), NULL_INDEX);
-  Array<float> tri_weights(result.face.size(), 0.0f);
-
-  /* TODO: Currently only one fill path is supported. */
-  const Span<float2> fill_path = fill_points[0];
-
-  /* Each `hint` is the source of a fill region. The `hint_index` is the index of the triangle this
-   * hint is within. */
-  int hint_index = 0;
-  int first_tri_index = get_tri_for_point(fill_path.first());
-
   /* Get the first triangle that is touching the bounding box. */
   auto get_first_boundary_tri = [&]() {
     for (const int tri_index : result.face.index_range()) {
@@ -1723,24 +1706,49 @@ std::optional<bke::CurvesGeometry> delaunay_fill_strokes(
     return NULL_INDEX;
   };
 
+  Array<float> tri_max_weight = get_tri_max_weight(result.face.size(),
+                                                   tri_adjacency.as_span(),
+                                                   tri_edges.as_span(),
+                                                   edge_weights.as_span(),
+                                                   is_source_edge.as_span());
+
+  Array<int> tri_hint_index(result.face.size(), NULL_INDEX);
+  Array<float> tri_weights(result.face.size(), 0.0f);
+
+  /* TODO: Currently only one fill hint is supported. */
+  const Span<float2> hint_points = fill_points[0];
+
+  /* Each `hint` is the source of a fill region, each `hint` can have multiple points in it. */
+  int hint_index = 0;
+
+  Set<int> tris_for_hint;
+  for (const int i : hint_points.index_range()) {
+    const int hint_tri_index = get_tri_for_point(hint_points[i]);
+    if (hint_tri_index != NULL_INDEX) {
+      tris_for_hint.add(hint_tri_index);
+    }
+  }
+
   /* Check if the user clicked outside of the bounding box. */
-  if (first_tri_index == NULL_INDEX) {
+  if (tris_for_hint.is_empty()) {
     if (!invert) {
       return std::nullopt;
     }
-    first_tri_index = get_first_boundary_tri();
+    tris_for_hint.add(get_first_boundary_tri());
   }
 
   if (internal_gaps && gap_factor > 0.0f) {
-    add_weights_for_tri(tri_adjacency.as_span(),
-                        tri_edges.as_span(),
-                        edge_weights.as_span(),
-                        tri_max_weight.as_span(),
-                        is_source_edge.as_span(),
-                        first_tri_index,
-                        hint_index,
-                        tri_hint_index.as_mutable_span(),
-                        tri_weights.as_mutable_span());
+    for (const int hint_tri_index : tris_for_hint) {
+      add_weights_for_tri(tri_adjacency.as_span(),
+                          tri_edges.as_span(),
+                          edge_weights.as_span(),
+                          tri_max_weight.as_span(),
+                          is_source_edge.as_span(),
+                          hint_tri_index,
+                          hint_index,
+                          tri_hint_index.as_mutable_span(),
+                          tri_weights.as_mutable_span());
+    }
 
     /* Create segmentation of the geometry until all triangles have full or nearly full weights.
      * the `gap_factor` is the factor that a triangle can be within and be considered full. */
@@ -1806,28 +1814,22 @@ std::optional<bke::CurvesGeometry> delaunay_fill_strokes(
     hint_index++;
   }
 
-  Set<int> indices_to_fill;
-
   if (!invert) {
-    Set<int> tris_for_hint;
-    for (const int i : fill_path.index_range()) {
-      tris_for_hint.add(get_tri_for_point(fill_path[i]));
-    }
-
-    for (const int tri_index : tris_for_hint) {
+    for (const int hint_tri_index : tris_for_hint) {
       /* Add the mouse fill again to make sure it as highest priority. */
       add_weights_for_tri(tri_adjacency.as_span(),
                           tri_edges.as_span(),
                           edge_weights.as_span(),
                           tri_max_weight.as_span(),
                           is_source_edge.as_span(),
-                          tri_index,
+                          hint_tri_index,
                           hint_index,
                           tri_hint_index.as_mutable_span(),
                           tri_weights.as_mutable_span());
     }
   }
 
+  Set<int> indices_to_fill;
   indices_to_fill.add(hint_index);
 
   Array<bool> tri_to_fill(result.face.size(), false);
