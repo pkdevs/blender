@@ -48,8 +48,9 @@ ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private Sha
    * requires direction to be normalized.
    *
    * Use safe_normalize() to avoid possible NaN values appearing in color channels. */
-  float3 direction = safe_normalize(-sd.wi);
+  float3 direction = -sd.wi;
   object_inverse_dir_transform(kg, &sd, &direction);
+  direction = safe_normalize(direction);
   kernel_assert((kernel_data_fetch(object_flag, sd.object) & SD_OBJECT_TRANSFORM_APPLIED) == 0);
 
   float3 color_srgb = spherical_harmonics_evaluate_band_L0(direction, make_float3(radiance_base));
