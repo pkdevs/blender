@@ -229,7 +229,7 @@ void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
     version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfPrincipled", 20, 2, 33);
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 18)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 19)) {
     /* Runs here instead of `blo_do_versions_503`, since screen datablocks are not fully linked
      * (e.g. `#View3D.camera`) until after linking. */
     do_versioning_camera_view_zoom(bmain);
