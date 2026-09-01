@@ -1,1 +1,1 @@
-Referenced by issue #97909, Some icons cannot be overriden from python (e.g. 'Constraint.mute', 'use_fake_user')
+Referenced by issue #97909, Undesired icon value offsets (e.g. 'Constraint.mute', 'use_fake_user')
