@@ -122,6 +122,9 @@ static int node_shader_gpu_attribute(GPUMaterial *mat,
       GPU_link(mat, "node_attribute_uniform", cd_attr, GPU_constant(&attr_hash), &cd_attr);
       break;
     }
+    else if (STREQ(attr->name, "radiance")) {
+      GPU_link(mat, "node_attribute_radiance", cd_attr, &cd_attr);
+    }
   }
 
   GPU_link(mat, "node_attribute", cd_attr, &out[0].link, &out[1].link, &out[2].link, &out[3].link);
