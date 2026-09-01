@@ -307,12 +307,13 @@ static void export_pointcloud_motion(PointCloud *pointcloud,
   Attribute *attr_scale = is_gsplat ? pointcloud->attributes.find(ATTR_STD_GSPLAT_SCALE) : nullptr;
   Attribute *attr_rotation = is_gsplat ? pointcloud->attributes.find(ATTR_STD_GSPLAT_ROTATION) :
                                          nullptr;
+  const bool has_gsplat_attributes = (attr_radiance_base && attr_scale && attr_rotation);
   bool new_attribute = false;
 
   if (!attr_P->has_motion()) {
     attr_P->add_motion(pointcloud);
     attr_R->add_motion(pointcloud);
-    if (is_gsplat) {
+    if (is_gsplat && has_gsplat_attributes) {
       attr_radiance_base->add_motion(pointcloud);
       attr_scale->add_motion(pointcloud);
       attr_rotation->add_motion(pointcloud);
@@ -344,7 +345,7 @@ static void export_pointcloud_motion(PointCloud *pointcloud,
       std::fill(mR, mR + num_points, 0.01f);
     }
 
-    if (is_gsplat) {
+    if (is_gsplat && has_gsplat_attributes) {
       export_pointcloud_motion_gsplat_attributes(pointcloud,
                                                  attr_radiance_base,
                                                  attr_scale,
@@ -378,7 +379,7 @@ static void export_pointcloud_motion(PointCloud *pointcloud,
     if (!size_matches || !have_motion) {
       attr_P->remove_motion();
       attr_R->remove_motion();
-      if (is_gsplat) {
+      if (is_gsplat && has_gsplat_attributes) {
         attr_radiance_base->remove_motion();
         attr_scale->remove_motion();
         attr_rotation->remove_motion();
