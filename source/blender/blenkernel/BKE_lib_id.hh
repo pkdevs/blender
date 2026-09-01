@@ -93,8 +93,10 @@ struct ID_Runtime {
   ID_Readfile_Data *readfile_data = nullptr;
 
   /**
-   * #Main data-base containing this ID. Each ID can be in at most one #Main at the same time. This
-   * is null for e.g. evaluated data.
+   * #Main data-base containing this ID. Each ID can be in at most one #Main at the same time.
+   * - This is null for e.g. evaluated data.
+   * - For embedded data-blocks (e.g. material node trees), it is set to the same bmain as the
+   *   owner ID.
    */
   Main *owner_bmain = nullptr;
 };

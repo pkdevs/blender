@@ -1417,6 +1417,17 @@ void BKE_libblock_owner_bmain_set(ID &id, Main *bmain, const bool assert_contain
    * correctly. */
   BLI_assert(!assert_contained || !bmain || BKE_id_is_in_main(bmain, &id));
   id.runtime->owner_bmain = bmain;
+
+  bNodeTree *ntree = bke::node_tree_from_id(&id);
+  if (ntree != nullptr) {
+    BKE_libblock_owner_bmain_set(ntree->id, bmain, false);
+  }
+  if (id.id_type() == ID_SCE) {
+    Collection *master_collection = id_cast<Scene &>(id).master_collection;
+    if (master_collection != nullptr) {
+      BKE_libblock_owner_bmain_set(master_collection->id, bmain, false);
+    }
+  }
 }
 
 const Main *ID::owner_bmain() const
