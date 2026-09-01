@@ -1072,6 +1072,7 @@ static bool foreach_libblock_link_append_common_processing(
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
 /** \name Library packing code.
  * \{ */
 
@@ -1144,6 +1145,7 @@ void BKE_blendfile_link_pack(BlendfileLinkAppendContext *lapp_context, ReportLis
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
 /** \name Library append code.
  * \{ */
 
@@ -1650,6 +1652,7 @@ void BKE_blendfile_append(BlendfileLinkAppendContext *lapp_context, ReportList *
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
 /** \name Library link code.
  * \{ */
 
@@ -1938,6 +1941,7 @@ void BKE_blendfile_override(BlendfileLinkAppendContext *lapp_context,
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
 /** \name Library relocating code.
  * \{ */
 
