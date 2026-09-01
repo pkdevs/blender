@@ -2823,7 +2823,7 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
   auto add_labeled_field =
       [&](const StringRef label, const bool active, FunctionRef<ui::Button *()> add_button) {
         ui::Layout &row = bcol.row(true);
-        ui::Layout &split = row.split(0.4, true);
+        ui::Layout &split = row.split(ui::Layout::property_split_factor, true);
         ui::Layout &col = split.column(true);
         col.alignment_set(ui::LayoutAlign::Right);
         col.label(label, ICON_NONE);

@@ -1526,6 +1526,11 @@ static float rna_UILayout_units_y_get(PointerRNA *ptr)
   return ptr->data_as<const Layout>()->ui_units_y();
 }
 
+static float rna_UIlayout_property_split_factor_get(PointerRNA * /*ptr*/)
+{
+  return Layout::property_split_factor;
+}
+
 static void rna_UILayout_units_y_set(PointerRNA *ptr, float value)
 {
   ptr->data_as<Layout>()->ui_units_y_set(value);
@@ -1803,6 +1808,17 @@ static void rna_def_ui_layout(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_property_split", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(
       prop, "rna_UILayout_property_split_get", "rna_UILayout_property_split_set");
+  prop = RNA_def_float(srna,
+                       "property_split_factor",
+                       ui::Layout::property_split_factor,
+                       ui::Layout::property_split_factor,
+                       ui::Layout::property_split_factor,
+                       "",
+                       "",
+                       ui::Layout::property_split_factor,
+                       ui::Layout::property_split_factor);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_float_funcs(prop, "rna_UIlayout_property_split_factor_get", nullptr, nullptr);
 
   prop = RNA_def_property(srna, "use_property_decorate", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(
