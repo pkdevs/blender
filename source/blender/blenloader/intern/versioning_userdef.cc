@@ -1811,7 +1811,7 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 #endif
 
-  if (!USER_VERSION_ATLEAST(503, 18)) {
+  if (!USER_VERSION_ATLEAST(503, 19)) {
     userdef->active_theme_type = UserPrefThemeChoice::Dark;
     /* Adding dark/light theme split: Update dark theme to the previous active theme. The light
      * slot is left unset, falling back to the dark theme until the user picks one, see
