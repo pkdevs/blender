@@ -630,8 +630,8 @@ static NlaStrip *rna_NlaStrip_new(ID *id,
                                   ReportList *reports,
                                   const char *name,
                                   int start,
-                                  int type,
-                                  bAction *action)
+                                  bAction *action,
+                                  int type)
 {
   BLI_assert(id);
 
@@ -650,7 +650,7 @@ static NlaStrip *rna_NlaStrip_new(ID *id,
       Object *const ob = blender::id_cast<Object *>(id);
       if (ob->type != OB_SPEAKER) {
         BKE_report(
-            reports, RPT_ERROR, "You can only create 'SOUND' NLA Strips on Speaker anim data");
+            reports, RPT_ERROR, "Only Speaker objects support NLA strips of type 'SOUND'");
         return nullptr;
       }
       strip = BKE_nla_add_soundstrip(
@@ -1202,18 +1202,18 @@ static void rna_api_nlatrack_strips(BlenderRNA *brna, PropertyRNA *cprop)
                      INT_MIN,
                      INT_MAX);
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_pointer(func,
+                         "action",
+                         "Action",
+                         "",
+                         "Action to assign to this strip. Required when type is 'CLIP'");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
   parm = RNA_def_enum(func,
                       "type",
                       prop_type_items,
                       NLASTRIP_TYPE_CLIP,
                       "",
                       "Type of NLA Strip to add. When unspecified, defaults to 'CLIP'");
-  RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
-  parm = RNA_def_pointer(func,
-                         "action",
-                         "Action",
-                         "",
-                         "Action to assign to this strip. Required when type is 'CLIP'");
   RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
   /* return type */
   parm = RNA_def_pointer(func, "strip", "NlaStrip", "", "New NLA Strip");
