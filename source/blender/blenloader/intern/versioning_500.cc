@@ -2625,7 +2625,7 @@ static void sequencer_substitute_transform_effects(Main &bmain, Scene *scene)
       GaussianBlurVars *gv = static_cast<GaussianBlurVars *>(strip->effectdata);
       gv->size_x = gv->size_y = 0.0f;
       seq::edit_strip_name_set(scene, strip, "Transform Placeholder (Migrated)");
-      seq::ensure_unique_name(bmain, strip, scene);
+      seq::ensure_unique_name(&bmain, strip, scene);
     }
     return true;
   });

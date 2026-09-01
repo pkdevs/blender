@@ -409,18 +409,19 @@ void set_scale_to_fit(const Strip *strip,
   }
 }
 
-void ensure_unique_name(Main &bmain, Strip *strip, Scene *scene)
+void ensure_unique_name(Main *bmain, Strip *strip, Scene *scene)
 {
   char name[STRIP_NAME_MAXSTR];
 
   STRNCPY_UTF8(name, strip->name + 2);
   strip_unique_name_set(scene, &scene->ed->seqbase, strip);
+  const DriverMap driver_map = bmain ? BKE_animdata_build_driver_target_map(*bmain) : DriverMap();
   BKE_animdata_fix_paths(scene->id,
                          "sequence_editor.strips_all",
                          RNA_path_name_to_infix(name),
                          RNA_path_name_to_infix(strip->name + 2),
                          /*verify_paths=*/false,
-                         bmain);
+                         driver_map);
 
   if (strip->type == STRIP_TYPE_META) {
     for (Strip &strip_child : strip->seqbase) {
