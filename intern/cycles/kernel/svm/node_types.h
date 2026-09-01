@@ -1094,7 +1094,7 @@ struct SVMNodeGlassBsdfData {
   SVMInputFloat thin_film_ior;
   SVMStackOffset normal_offset;
   SVMStackOffset tangent_offset;
-  uint8_t _pad[3];
+  uint8_t _pad[2];
 };
 static_assert(alignof(SVMNodeGlassBsdfData) <= alignof(uint));
 static_assert(sizeof(SVMNodeGlassBsdfData) % sizeof(uint) == 0);

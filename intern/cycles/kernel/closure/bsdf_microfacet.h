@@ -935,14 +935,11 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
   /* Half vector. */
   float3 H;
   /* Needed for anisotropic microfacets later. */
-  float3 local_H;
-  float3 local_I;
+  float3 local_H, local_I, X, Y;
   if (m_singular) {
     H = N;
   }
   else {
-    float3 X;
-    float3 Y;
     if (alpha_x == alpha_y) {
       make_orthonormals(N, &X, &Y);
     }
@@ -1026,7 +1023,7 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
     }
     else {
       /* Anisotropic. */
-      const float3 local_O = 2.0f * cos_HI * local_H - local_I;
+      const float3 local_O = make_float3(dot(X, *wo), dot(Y, *wo), cos_NO);
 
       D = bsdf_aniso_D<m_type>(alpha_x, alpha_y, local_H);
 
@@ -1162,9 +1159,7 @@ ccl_device void bsdf_microfacet_setup_fresnel_dielectric(KernelGlobals kg,
  *
  * Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs
  * E. Heitz, Research Report 2014
- *
- * Anisotropy is only supported for reflection currently, but adding it for
- * transmission is just a matter of copying code from reflection if needed. */
+ */
 
 ccl_device int bsdf_microfacet_ggx_setup(ccl_private MicrofacetBsdf *bsdf)
 {

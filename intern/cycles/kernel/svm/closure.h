@@ -635,7 +635,7 @@ ccl_device
       else {
         bsdf->T = stack_load_float3(stack, bsdf_data.tangent_offset);
 
-        /* rotate tangent */
+        /* Rotate tangent. */
         const float rotation = stack_load(stack, bsdf_data.rotation);
         if (rotation != 0.0f) {
           bsdf->T = rotate_around_axis(bsdf->T, bsdf->N, rotation * M_2PI_F);
@@ -754,7 +754,7 @@ ccl_device
         else {
           bsdf->T = stack_load_float3(stack, bsdf_data.tangent_offset);
 
-          /* rotate tangent */
+          /* Rotate tangent. */
           const float rotation = stack_load(stack, bsdf_data.rotation);
           if (rotation != 0.0f) {
             bsdf->T = rotate_around_axis(bsdf->T, bsdf->N, rotation * M_2PI_F);
