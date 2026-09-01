@@ -977,6 +977,20 @@ static void ntree_shader_pruned_unused(bNodeTree *ntree, bNode *output_node)
 
 static void ntree_shader_setup_custom_lighting_zone(bNodeTree *ntree)
 {
+  /* Safeguard to not emit a LIGHT_ITER_INTERNAL_INPUT without a LIGHT_ITER_INTERNAL_OUTPUT raising
+   * an assert in the shader dead code optimization. */
+  bool has_light_accumulation = false;
+  for (bNode &node : ntree->nodes) {
+    if (node.type_legacy == SH_NODE_LIGHT_ACCUMULATION) {
+      has_light_accumulation = true;
+      break;
+    }
+  }
+
+  if (!has_light_accumulation) {
+    return;
+  }
+
   bNode *zone_input = nullptr;
   bNode *zone_output = nullptr;
 
