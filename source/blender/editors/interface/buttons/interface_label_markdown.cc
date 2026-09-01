@@ -100,6 +100,8 @@ static float quote_bar_padding = 0.10f;
 static MdBlockSpacing code_block = {.margin_top = 0.50f, .margin_bottom = 0.75f};
 static float code_block_padding_x = 10.00f;
 static float code_block_padding_y = 8.00f;
+static float code_span_padding_x = 4.00f;
+static float code_span_padding_y = 2.00f;
 static float code_box_corner_radius = 3.00f;
 static MdBlockSpacing horizontal_rule = {.margin_top = 0.50f, .margin_bottom = 0.50f};
 
@@ -237,7 +239,11 @@ class MarkdownLayouter {
   struct LinkSpan {
     StringRef url;
   };
-  struct CodeSpan {};
+  struct CodeSpan {
+    Vector<rctf, 2> line_bounds;
+    rctf current_bounds;
+    bool padding_left_applied = false;
+  };
   struct UnknownSpan {};
 
   using MdBlock = std::variant<DocBlock,
@@ -460,6 +466,27 @@ class MarkdownLayouter {
     return md_style::code_block_padding_y * cache_.key.pixels_per_point;
   }
 
+  float code_span_padding_x_px() const
+  {
+    return md_style::code_span_padding_x * cache_.key.pixels_per_point;
+  }
+
+  float code_span_padding_y_px() const
+  {
+    return md_style::code_span_padding_y * cache_.key.pixels_per_point;
+  }
+
+  CodeSpan *mutable_current_code_span()
+  {
+    for (const int i : span_stack_.index_range()) {
+      MdSpan &md_span = span_stack_[span_stack_.size() - 1 - i];
+      if (auto *code_span = std::get_if<CodeSpan>(&md_span)) {
+        return code_span;
+      }
+    }
+    return nullptr;
+  }
+
   float context_block_start_x() const
   {
     float indentation = 0.0f;
@@ -597,21 +624,66 @@ class MarkdownLayouter {
 
   void track_code_text_bounds(const MarkdownItemText &item)
   {
-    if (!this->is_in_fenced_code_block()) {
-      return;
-    }
-
     markdown_apply_item_font(item);
     const float top = item.y + BLF_ascender(item.fontid);
     const float bottom = item.y + BLF_descender(item.fontid);
     const float right = item.x + BLF_width(item.fontid, item.text.data(), item.text.size());
     markdown_disable_item_font(item);
 
-    for (MdBlock &md_block : block_stack_) {
-      if (auto *code_block = std::get_if<CodeBlock>(&md_block)) {
-        const rctf part{.xmin = item.x, .xmax = right, .ymin = bottom, .ymax = top};
-        BLI_rctf_union(&code_block->bounds, &part);
+    const rctf part{.xmin = item.x, .xmax = right, .ymin = bottom, .ymax = top};
+
+    if (this->is_in_fenced_code_block()) {
+      for (MdBlock &md_block : block_stack_) {
+        if (auto *code_block = std::get_if<CodeBlock>(&md_block)) {
+          BLI_rctf_union(&code_block->bounds, &part);
+        }
       }
+    }
+
+    if (item.code_context == MarkdownItemText::CodeContext::CodeSpan) {
+      if (CodeSpan *code_span = this->mutable_current_code_span()) {
+        BLI_rctf_union(&code_span->current_bounds, &part);
+      }
+    }
+  }
+
+  void apply_code_span_left_padding()
+  {
+    CodeSpan *code_span = this->mutable_current_code_span();
+    if (!code_span || code_span->padding_left_applied) {
+      return;
+    }
+    x_ += this->code_span_padding_x_px();
+    code_span->padding_left_applied = true;
+  }
+
+  void finalize_code_span_line_bounds()
+  {
+    CodeSpan *code_span = this->mutable_current_code_span();
+    if (!code_span || BLI_rctf_is_empty(&code_span->current_bounds)) {
+      return;
+    }
+    code_span->line_bounds.append(code_span->current_bounds);
+    BLI_rctf_init_minmax(&code_span->current_bounds);
+  }
+
+  void append_code_span_boxes(const CodeSpan &code_span)
+  {
+    const float padding_x = this->code_span_padding_x_px();
+    const float padding_y = this->code_span_padding_y_px();
+
+    for (const rctf &bounds : code_span.line_bounds) {
+      if (BLI_rctf_is_empty(&bounds)) {
+        continue;
+      }
+
+      MarkdownItemCodeBox box;
+      box.kind = MarkdownItemCodeBox::Kind::Inline;
+      box.rect.xmin = bounds.xmin - padding_x;
+      box.rect.xmax = bounds.xmax + padding_x;
+      box.rect.ymax = bounds.ymax + padding_y;
+      box.rect.ymin = bounds.ymin - padding_y;
+      cache_.md_layout.items.append(box);
     }
   }
 
@@ -639,6 +711,7 @@ class MarkdownLayouter {
     const float padding_y = this->code_block_padding_y_px();
 
     MarkdownItemCodeBox box;
+    box.kind = MarkdownItemCodeBox::Kind::Block;
     box.rect.xmin = this->context_block_start_x();
     box.rect.xmax = float(cache_.key.wrap_width_px);
     box.rect.ymax = code_block->bounds.ymax + padding_y;
@@ -872,7 +945,9 @@ class MarkdownLayouter {
         break;
       }
       case MD_SPAN_CODE: {
-        span_stack_.append(CodeSpan{});
+        CodeSpan code_span;
+        BLI_rctf_init_minmax(&code_span.current_bounds);
+        span_stack_.append(code_span);
         break;
       }
       case MD_SPAN_IMG:
@@ -906,6 +981,9 @@ class MarkdownLayouter {
       }
       case MD_SPAN_CODE: {
         BLI_assert(std::holds_alternative<CodeSpan>(md_span));
+        this->finalize_code_span_line_bounds();
+        this->append_code_span_boxes(std::get<CodeSpan>(md_span));
+        x_ += this->code_span_padding_x_px();
         break;
       }
       case MD_SPAN_IMG:
@@ -1009,14 +1087,15 @@ class MarkdownLayouter {
 
   void ensure_line_box(const int fontid)
   {
-    const float line_height = BLF_height_max(fontid);
+    const float padding_y = this->has_code_span() ? this->code_span_padding_y_px() : 0.0f;
+    const float line_height = BLF_height_max(fontid) + 2.0f * padding_y;
     if (current_line_box_) {
       current_line_box_->height = std::max(current_line_box_->height, line_height);
       return;
     }
 
     current_line_box_ = LineBox{flow_bottom_.value_or(0.0f) - pending_spacing_, line_height};
-    y_ = current_line_box_->top - BLF_ascender(fontid);
+    y_ = current_line_box_->top - BLF_ascender(fontid) - padding_y;
     pending_spacing_ = 0.0f;
     x_ = this->context_content_start_x();
     this->append_pending_list_marker();
@@ -1092,6 +1171,9 @@ class MarkdownLayouter {
 
     while (!text.is_empty()) {
       this->ensure_line_box(fontid);
+      if (item_template.code_context == MarkdownItemText::CodeContext::CodeSpan) {
+        this->apply_code_span_left_padding();
+      }
       /* A list marker uses the body font and may have changed the active font settings. */
       markdown_apply_item_font(item_template);
       const float remaining_width = this->context_content_end_x() - x_;
@@ -1142,6 +1224,9 @@ class MarkdownLayouter {
         this->track_code_text_bounds(item_template);
       }
       if (wrap_to_next_line) {
+        if (item_template.code_context == MarkdownItemText::CodeContext::CodeSpan) {
+          this->finalize_code_span_line_bounds();
+        }
         this->line_box_end();
         x_ = start_x;
       }
@@ -1332,6 +1417,7 @@ struct MarkdownDrawColors {
   uchar code_block_dimmed_link[4];
   float code_box_fill[4];
   float code_box_border[4];
+  float code_span_fill[4];
   uchar horizontal_rule[4];
   uchar quote_line[4];
 };
@@ -1347,7 +1433,8 @@ static MarkdownDrawColors markdown_draw_colors_init(const uchar color[4])
   uchar back_color[3];
   theme::get_color_3ubv(TH_PANEL_BACK, back_color);
   constexpr float quote_dimmed_blend = 0.5f;
-  constexpr float code_block_dimmed_blend = 0.2f;
+  constexpr float code_block_dimmed_blend = 0.1f;
+  constexpr float code_span_fill_blend = 0.88f;
 
   const bTheme *btheme = theme::theme_get();
   const uchar *code_box_fill_color = btheme->tui.wcol_box.inner;
@@ -1368,9 +1455,15 @@ static MarkdownDrawColors markdown_draw_colors_init(const uchar color[4])
       colors.link, code_box_fill_color, code_block_dimmed_blend, 0, colors.code_block_dimmed_link);
   colors.code_block_dimmed_link[3] = colors.link[3];
 
+  uchar code_span_fill_color[4];
+  theme::get_color_blend_shade_3ubv(
+      color, back_color, code_span_fill_blend, 0, code_span_fill_color);
+  code_span_fill_color[3] = color[3];
+
   for (const int i : IndexRange(4)) {
     colors.code_box_fill[i] = float(code_box_fill_color[i]) / 255.0f;
     colors.code_box_border[i] = float(code_box_border_color[i]) / 255.0f;
+    colors.code_span_fill[i] = float(code_span_fill_color[i]) / 255.0f;
   }
 
   colors.horizontal_rule[0] = color[0];
@@ -1410,13 +1503,19 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
     box_rect.ymin += rect->ymax;
 
     draw_roundbox_corner_set(CNR_ALL);
-    draw_roundbox_4fv_ex(&box_rect,
-                         colors.code_box_fill,
-                         nullptr,
-                         1.0f,
-                         colors.code_box_border,
-                         U.pixelsize,
-                         corner_radius);
+    if (code_box->kind == MarkdownItemCodeBox::Kind::Block) {
+      draw_roundbox_4fv_ex(&box_rect,
+                           colors.code_box_fill,
+                           nullptr,
+                           1.0f,
+                           colors.code_box_border,
+                           U.pixelsize,
+                           corner_radius);
+    }
+    else {
+      draw_roundbox_4fv_ex(
+          &box_rect, colors.code_span_fill, nullptr, 1.0f, nullptr, 0.0f, corner_radius);
+    }
   }
 
   for (const MarkdownItem &item : cache.md_layout.items) {
@@ -1529,6 +1628,10 @@ static std::string markdown_md_style_to_source()
       dst, "static float code_block_padding_x = {:.2f}f;\n", md_style::code_block_padding_x);
   fmt::format_to(
       dst, "static float code_block_padding_y = {:.2f}f;\n", md_style::code_block_padding_y);
+  fmt::format_to(
+      dst, "static float code_span_padding_x = {:.2f}f;\n", md_style::code_span_padding_x);
+  fmt::format_to(
+      dst, "static float code_span_padding_y = {:.2f}f;\n", md_style::code_span_padding_y);
   fmt::format_to(
       dst, "static float code_box_corner_radius = {:.2f}f;\n", md_style::code_box_corner_radius);
   append_block_spacing("horizontal_rule", md_style::horizontal_rule);
@@ -1867,6 +1970,20 @@ static void label_markdown_dev_config_details_table(Block *block, Layout &panel_
        0.5f,
        1,
        IFACE_("Vertical padding around fenced code blocks in pixels at 1x scale")},
+      {IFACE_("Code Span X"),
+       &md_style::code_span_padding_x,
+       0.0f,
+       20.0f,
+       0.5f,
+       1,
+       IFACE_("Horizontal padding around inline code spans in pixels at 1x scale")},
+      {IFACE_("Code Span Y"),
+       &md_style::code_span_padding_y,
+       0.0f,
+       20.0f,
+       0.5f,
+       1,
+       IFACE_("Vertical padding around inline code spans in pixels at 1x scale")},
       {IFACE_("Code Radius"),
        &md_style::code_box_corner_radius,
        0.0f,

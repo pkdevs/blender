@@ -415,7 +415,13 @@ struct MarkdownItemQuoteLine {
 };
 
 struct MarkdownItemCodeBox {
+  enum class Kind {
+    Block,
+    Inline,
+  };
+
   rctf rect = {};
+  Kind kind = Kind::Block;
 };
 
 using MarkdownItem = std::variant<MarkdownItemText,
