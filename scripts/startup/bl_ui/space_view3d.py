@@ -494,7 +494,8 @@ class _draw_tool_settings_context_mode:
             row = layout.row(align=True)
             row.prop_with_popover(prop_owner, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
             if brush.gpencil_settings.vertex_mode == 'BOTH' and not brush.gpencil_settings.single_color:
-                row.prop_with_popover(prop_owner, "secondary_color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
+                row.prop_with_popover(prop_owner, "secondary_color", text="",
+                                      panel="TOPBAR_PT_grease_pencil_vertex_color")
                 row.scale_x = 0.5
 
         brush_basic_grease_pencil_vertex_settings(layout, context, brush, compact=True)
@@ -672,7 +673,8 @@ class _draw_tool_settings_context_mode:
             sub_row = row.row(align=True)
             sub_row.prop_with_popover(brush, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
             if brush.gpencil_settings.vertex_mode == 'BOTH' and not brush.gpencil_settings.single_color:
-                sub_row.prop_with_popover(brush, "secondary_color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
+                sub_row.prop_with_popover(brush, "secondary_color", text="",
+                                          panel="TOPBAR_PT_grease_pencil_vertex_color")
                 sub_row.scale_x = 0.5
 
         from bl_ui.properties_paint_common import (
