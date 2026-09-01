@@ -4253,8 +4253,7 @@ static Base *mesh_separate_arrays(Main *bmain,
     BM_custom_loop_normals_from_vector_layer(bm_new, false);
   }
 
-  // Some edges and verts may be used in both meshes but loose wires in the new mesh should be
-  // deleted in old mesh
+  /* Some edges and verts may be used in both meshes but loose wires in the new mesh should be deleted in old mesh */
   for (uint i = 0; i < faces_len; i++) {
     BM_face_kill(bm_old, faces[i]);
   }
@@ -4291,7 +4290,7 @@ static bool isolate_selection(
 
   BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE, BM_ELEM_TAG, false);
 
-  // Selection may not be synchronized
+  /* Selection may not be synchronized */ 
   BMIter iter;
   BMFace *f;
   BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
