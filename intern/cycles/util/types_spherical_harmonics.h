@@ -40,7 +40,7 @@ struct PackedSphericalHarmonics {
    * `this`. */
 };
 
-/* Set all spherical harmonics vaelues to 0. */
+/* Set all spherical harmonics values to 0. */
 ccl_device_forceinline void spherical_harmonics_fill_zero(
     ccl_global PackedSphericalHarmonics &packed_spherical_harmonics)
 {
@@ -83,7 +83,7 @@ ccl_device_forceinline float3 spherical_harmonics_get_coefficient(
          127.0f;
 }
 
-/* Get unquentized spherical harmonics coefficient by the band L and the basis function M. */
+/* Get unquantized spherical harmonics coefficient by the band L and the basis function M. */
 template<int L, int M>
 ccl_device_inline float3
 spherical_harmonics_get(const ccl_global PackedSphericalHarmonics &packed_spherical_harmonics);

@@ -42,6 +42,8 @@ TEST_F(PackedSphericalHarmonicsTest, PackUnpack)
 {
   PackedSphericalHarmonics sh;
 
+  spherical_harmonics_fill_zero(sh);
+
   spherical_harmonics_set_coefficient(sh, 1, make_float3(0.1f, -0.2f, 0.3f));
   EXPECT_THAT(spherical_harmonics_get_coefficient(sh, 1),
               IsNearFloat3(make_float3(0.1f, -0.2f, 0.3f), 1.0f / 127.0f));
