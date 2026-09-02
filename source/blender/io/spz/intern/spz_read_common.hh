@@ -10,14 +10,22 @@
 
 #include <cmath>
 
+#include "BLI_array.hh"
 #include "BLI_math_constants.hh"
+#include "BLI_math_quaternion_types.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_span.hh"
 #include "BLI_unroll.hh"
 
 #include "IO_gsplat.hh"
 
-namespace blender ::io::spz {
+namespace blender::io::spz {
+
+enum HeaderFlag {
+  SPZ_HEADER_ANTIALIASED = 0x01,
+  SPZ_HEADER_HAS_EXTENSIONS = 0x02,
+};
 
 namespace internal {
 
@@ -57,7 +65,8 @@ bool read_positions(ReaderType &reader,
    *   Positions are represented as (x, y, z) coordinates, each as a 24-bit fixed point signed
    *   integer. The number of fractional bits is determined by the fractionalBits field in the
    *   header. */
-  const float scale = 1.0 / (1 << fractional_bits);
+  BLI_assert(fractional_bits >= 0 && fractional_bits < 24);
+  const float scale = 1.0f / (1 << fractional_bits);
   for (float3 &position : positions) {
     int3 fixed;
     if (!internal::read_single_position_as_fixed(reader, fixed)) {
@@ -76,8 +85,17 @@ bool read_alphas(ReaderType &reader, const MutableSpan<float4> radiance_base)
     if (!reader.read(alpha)) {
       return false;
     }
-    base.w = internal::inv_sigmoid(float(alpha) / 255.0f);
-    base.w = gsplat::OriginalActivationFunctions::decode_opacity(base.w);
+    if (false) {
+      /* The naive implementation.
+       * The inv_sigmoid() and decode_opacity() are actually canceling each other.
+       * Code kept for the reference and possible situation when other activation functions are
+       * used in the future. */
+      base.w = internal::inv_sigmoid(float(alpha) / 255.0f);
+      base.w = gsplat::OriginalActivationFunctions::decode_opacity(base.w);
+    }
+    else {
+      base.w = float(alpha) / 255.0f;
+    }
   }
   return true;
 }
@@ -178,7 +196,7 @@ bool read_rotations(ReaderType &reader,
         sum_sq += spz_rotation[i] * spz_rotation[i];
         packed = packed >> 10;
       }
-      spz_rotation[largest_index] = sqrt(1.0f - sum_sq);
+      spz_rotation[largest_index] = sqrt(math::max(1.0f - sum_sq, 0.0f));
       /* Convert to Blender's (w, x, y, z). */
       rotation = math::Quaternion(
           spz_rotation[3], spz_rotation[0], spz_rotation[1], spz_rotation[2]);
@@ -221,5 +239,9 @@ template<class ReaderType> bool read_sh(ReaderType &reader, const Span<MutableSp
 
   return true;
 }
+
+void convert_axis_to_blender(MutableSpan<float3> positions,
+                             MutableSpan<math::Quaternion> rotations,
+                             Span<MutableSpan<float3>> sh_attrs);
 
 }  // namespace blender::io::spz

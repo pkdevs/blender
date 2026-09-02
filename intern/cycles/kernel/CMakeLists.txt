@@ -252,6 +252,7 @@ set(SRC_KERNEL_UTIL_HEADERS
 )
 
 set(SRC_KERNEL_TYPES_HEADERS
+  constants.h
   data_arrays.h
   data_template.h
   features.h
@@ -298,8 +299,8 @@ set(SRC_UTIL_HEADERS
   ../util/math_int8.h
   ../util/math_dual.h
   ../util/math_float3x3.h
-  ../util/math_spherical_harmonics.h
   ../util/math_quaternion.h
+  ../util/math_spherical_harmonics.h
   ../util/projection.h
   ../util/projection_inverse.h
   ../util/rect.h

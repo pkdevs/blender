@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "BLI_array.hh"
+#include "BLI_fileops.hh"
 #include "BLI_math_base.hh"
 
 #include "BKE_lib_id.hh"
@@ -21,6 +22,7 @@
 #include "BKE_report.hh"
 
 #include "IO_gsplat.hh"
+#include "IO_validate.hh"
 
 #include "CLG_log.h"
 
@@ -72,7 +74,7 @@ class BufferedStreamReader {
 
   bool initialize()
   {
-    return fseek(file_, stream_info_.compressed_offset, SEEK_SET) != -1;
+    return BLI_fseek(file_, int64_t(stream_info_.compressed_offset), SEEK_SET) != -1;
   }
 
   std::optional<Span<uint8_t>> read()
@@ -179,7 +181,7 @@ static bool read_toc(FILE *file, const NgspFileHeader &header, Array<StreamInfo>
     return true;
   }
 
-  if (fseek(file, header.toc_byte_offset, SEEK_SET) == -1) {
+  if (BLI_fseek(file, header.toc_byte_offset, SEEK_SET) == -1) {
     return false;
   }
 
@@ -233,6 +235,15 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
   CLOG_DEBUG(&LOG, "SPZ header num_streams: %d", int(header.num_streams));
   CLOG_DEBUG(&LOG, "SPZ header toc_byte_offset: %u", header.toc_byte_offset);
 
+  if (header.flags & SPZ_HEADER_ANTIALIASED) {
+    /* TODO(sergey): Support antialiased data. */
+    CLOG_WARN(&LOG, "SPZ data was trained with antialiasing which is not fully supported");
+  }
+  if (header.flags & SPZ_HEADER_HAS_EXTENSIONS) {
+    /* TODO(sergey): Support extensions. */
+    CLOG_WARN(&LOG, "SPZ file contains extensions that are not yet supported");
+  }
+
   if (header.toc_byte_offset < sizeof(NgspFileHeader)) {
     BKE_report(
         reports, RPT_ERROR, "SPZ Read: TOC byte offset is less than the size of the header");
@@ -250,10 +261,19 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
     return nullptr;
   }
 
-  PointCloud *point_cloud = BKE_pointcloud_new_nomain(header.num_points);
+  if (!validate::size_fits_in_int(header.num_points)) {
+    BKE_report(reports, RPT_ERROR, "SPZ Read: Too many points");
+    return nullptr;
+  }
+
+  PointCloud *point_cloud = BKE_pointcloud_new_nomain(PT_TYPE_GSPLAT, header.num_points);
   gsplat::GsplatMutableAttributeAccessor accessor(*point_cloud, header.sh_degree);
 
   bool ok = true;
+
+  const MutableSpan<float3> positions = accessor.positions_for_write();
+  const MutableSpan<math::Quaternion> rotations = accessor.rotations_for_write();
+  const Span<MutableSpan<float3>> sh_attrs = accessor.sh_for_write();
 
   /* Positions. */
   if (ok) {
@@ -263,7 +283,7 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
       ok = false;
     }
     else {
-      ok = read_positions(reader, header.fractional_bits, accessor.positions_for_write());
+      ok = read_positions(reader, header.fractional_bits, positions);
       if (!ok) {
         BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading positions");
       }
@@ -321,7 +341,7 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
       ok = false;
     }
     else {
-      ok = read_rotations(reader, header.version, accessor.rotations_for_write());
+      ok = read_rotations(reader, header.version, rotations);
       if (!ok) {
         BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading rotations");
       }
@@ -336,23 +356,24 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
       ok = false;
     }
     else {
-      ok = read_sh(reader, accessor.sh_for_write());
+      ok = read_sh(reader, sh_attrs);
       if (!ok) {
         BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading spherical harmonics");
       }
     }
   }
 
-  accessor.finish();
-
-  point_cloud->render_as = PT_RENDER_AS_SPLATS;
-
   if (!ok) {
+    accessor.finish();
     BKE_id_free(nullptr, &point_cloud->id);
-    point_cloud = nullptr;
+    return nullptr;
   }
 
-  // TODO(sergey): Handle extensions?
+  /* TODO(sergey): Handle extensions. */
+
+  convert_axis_to_blender(positions, rotations, sh_attrs);
+
+  accessor.finish();
 
   return point_cloud;
 }

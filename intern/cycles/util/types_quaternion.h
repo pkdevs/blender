@@ -4,10 +4,6 @@
 
 #pragma once
 
-/**
- * Quaternion representation of rotation or orientation.
- */
-
 #include "util/types_base.h"
 
 CCL_NAMESPACE_BEGIN

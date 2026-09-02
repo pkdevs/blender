@@ -91,8 +91,8 @@ set(SRC_HEADERS
   math_int8.h
   math_dual.h
   math_float3x3.h
-  math_spherical_harmonics.h
   math_quaternion.h
+  math_spherical_harmonics.h
   md5.h
   murmurhash.h
   nanovdb.h

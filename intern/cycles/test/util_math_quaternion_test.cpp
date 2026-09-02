@@ -22,7 +22,7 @@ using testing::Not;
 /* Use as:
  * Quaternion q1;
  * Quaternion q2;
- * EXPECT_THAT(q1, IsNearQuaternion(q2)); */
+ * EXPECT_THAT(q1, IsNearQuaternion(q2, eps)); */
 MATCHER_P2(IsNearQuaternion, expected, eps, "")
 {
   if (fabsf(arg.w - expected.w) > eps) {
@@ -38,7 +38,7 @@ MATCHER_P2(IsNearQuaternion, expected, eps, "")
     return false;
   }
   if (fabsf(arg.z - expected.z) > eps) {
-    *result_listener << "component w should be " << expected.z;
+    *result_listener << "component z should be " << expected.z;
     return false;
   }
   return true;
@@ -70,6 +70,12 @@ TEST_F(QuaternionTest, IsNearQuaternion)
   EXPECT_THAT(other, Not(IsNearQuaternion(identity, 1e-6f)));
 }
 
+TEST_F(QuaternionTest, Negate)
+{
+  EXPECT_THAT(-make_quaternion(1.0f, -2.0f, 3.0f, -4.0f),
+              IsNearQuaternion(make_quaternion(-1.0f, 2.0f, -3.0f, 4.0), 1e-6f));
+}
+
 TEST_F(QuaternionTest, MultiplyScalar)
 {
   EXPECT_THAT(make_quaternion(1.0f, -2.0f, 3.0f, -4.0f) * 0.5f,
@@ -83,6 +89,25 @@ TEST_F(QuaternionTest, Add)
   EXPECT_THAT(make_quaternion(1.0f, -2.0f, 3.0f, -4.0f) +
                   make_quaternion(0.1f, -0.2f, 0.3f, -0.4f),
               IsNearQuaternion(make_quaternion(1.1f, -2.2f, 3.3f, -4.4f), 1e-6f));
+
+  {
+    Quaternion a = make_quaternion(1.0f, -2.0f, 3.0f, -4.0f);
+    a += make_quaternion(0.1f, -0.2f, 0.3f, -0.4f);
+    EXPECT_THAT(a, IsNearQuaternion(make_quaternion(1.1f, -2.2f, 3.3f, -4.4f), 1e-6f));
+  }
+}
+
+TEST_F(QuaternionTest, Subtract)
+{
+  EXPECT_THAT(make_quaternion(1.1f, -2.2f, 3.3f, -4.4f) -
+                  make_quaternion(0.1f, -0.2f, 0.3f, -0.4f),
+              IsNearQuaternion(make_quaternion(1.0f, -2.0f, 3.0f, -4.0f), 1e-6f));
+
+  {
+    Quaternion a = make_quaternion(1.1f, -2.2f, 3.3f, -4.4f);
+    a -= make_quaternion(0.1f, -0.2f, 0.3f, -0.4f);
+    EXPECT_THAT(a, IsNearQuaternion(make_quaternion(1.0f, -2.0f, 3.0f, -4.0f), 1e-6f));
+  }
 }
 
 TEST_F(QuaternionTest, dot)
@@ -107,6 +132,10 @@ TEST_F(QuaternionTest, lerp)
 {
   EXPECT_THAT(
       lerp(make_quaternion(1.2f, 2.3f, 3.4f, 4.5f), make_quaternion(6.7f, 8.9f, 1.0f, 2.3f), 0.2f),
+      IsNearQuaternion(make_quaternion(0.349109f, 0.549467f, 0.443217f, 0.616253f), 1e-5f));
+  EXPECT_THAT(
+      lerp(
+          make_quaternion(1.2f, 2.3f, 3.4f, 4.5f), -make_quaternion(6.7f, 8.9f, 1.0f, 2.3f), 0.2f),
       IsNearQuaternion(make_quaternion(0.349109f, 0.549467f, 0.443217f, 0.616253f), 1e-5f));
 }
 

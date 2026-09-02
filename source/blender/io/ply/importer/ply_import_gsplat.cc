@@ -29,13 +29,6 @@ static std::optional<Span<float>> find_custom_attribute(const PlyData &data,
   return std::nullopt;
 }
 
-static Span<float> get_custom_attribute(const PlyData &data, const StringRefNull name)
-{
-  std::optional<Span<float>> attr = find_custom_attribute(data, name);
-  BLI_assert(attr.has_value());
-  return *attr;
-}
-
 /* Get f_rest_<i> attributes from the PLY data.
  * The result is indexed by <i>. */
 static Vector<Span<float>> get_rest_custom_attributes(const PlyData &data)
@@ -55,56 +48,82 @@ static Vector<Span<float>> get_rest_custom_attributes(const PlyData &data)
   return result;
 }
 
-static int degree_for_dim(const int dimension)
+static bool is_builtin_gsplat_attribute(StringRefNull name)
 {
-  if (dimension < 3) {
-    return 0;
+  if (name == "f_dc_0" || name == "f_dc_1" || name == "f_dc_2") {
+    return true;
   }
-  if (dimension < 8) {
-    return 1;
+
+  if (name == "opacity") {
+    return true;
   }
-  if (dimension < 15) {
-    return 2;
+
+  if (name == "scale_0" || name == "scale_1" || name == "scale_2") {
+    return true;
   }
-  if (dimension < 24) {
-    return 3;
+
+  if (name == "rot_0" || name == "rot_1" || name == "rot_2" || name == "rot_3") {
+    return true;
   }
-  return 4;
+
+  if (name.startswith("f_rest_")) {
+    return true;
+  }
+
+  return false;
 }
 
-PointCloud *convert_gsplat_ply_to_point_cloud(const PlyData &data,
-                                              const PLYImportParams & /*params*/)
+PointCloud *convert_gsplat_ply_to_point_cloud(const PlyData &data, const PLYImportParams &params)
 {
   if (!validate::size_fits_in_int(data.vertices.size())) {
-    return BKE_pointcloud_new_nomain(0);
+    return BKE_pointcloud_new_nomain(PT_TYPE_GSPLAT, 0);
   }
-
-  PointCloud *point_cloud = BKE_pointcloud_new_nomain(data.vertices.size());
-
-  point_cloud->positions_for_write().copy_from(data.vertices);
 
   /* Radiance base attributes in the PLY (r, g, b stored as a DC component of SH), and opacity.
    * Despite the name it seems to be alpha (at least according to the conversion in SPZ. */
-  const Span<float> ply_f_dc_0_attr = get_custom_attribute(data, "f_dc_0");
-  const Span<float> ply_f_dc_1_attr = get_custom_attribute(data, "f_dc_1");
-  const Span<float> ply_f_dc_2_attr = get_custom_attribute(data, "f_dc_2");
-  const Span<float> ply_opacity_attr = get_custom_attribute(data, "opacity");
+  const std::optional<Span<float>> ply_f_dc_0_attr = find_custom_attribute(data, "f_dc_0");
+  const std::optional<Span<float>> ply_f_dc_1_attr = find_custom_attribute(data, "f_dc_1");
+  const std::optional<Span<float>> ply_f_dc_2_attr = find_custom_attribute(data, "f_dc_2");
+  if (!ply_f_dc_0_attr || !ply_f_dc_1_attr || !ply_f_dc_2_attr) {
+    return nullptr;
+  }
+  Span<float> ply_f_dc[3] = {*ply_f_dc_0_attr, *ply_f_dc_1_attr, *ply_f_dc_2_attr};
+
+  const std::optional<Span<float>> ply_opacity_attr = find_custom_attribute(data, "opacity");
+  if (!ply_opacity_attr) {
+    return nullptr;
+  }
+  Span<float> ply_opacity = *ply_opacity_attr;
 
   /* Scale. */
-  const Span<float> ply_scale_0_attr = get_custom_attribute(data, "scale_0");
-  const Span<float> ply_scale_1_attr = get_custom_attribute(data, "scale_1");
-  const Span<float> ply_scale_2_attr = get_custom_attribute(data, "scale_2");
+  const std::optional<Span<float>> ply_scale_0_attr = find_custom_attribute(data, "scale_0");
+  const std::optional<Span<float>> ply_scale_1_attr = find_custom_attribute(data, "scale_1");
+  const std::optional<Span<float>> ply_scale_2_attr = find_custom_attribute(data, "scale_2");
+  if (!ply_scale_0_attr || !ply_scale_1_attr || !ply_scale_2_attr) {
+    return nullptr;
+  }
+  const Span<float> ply_scale[3] = {*ply_scale_0_attr, *ply_scale_1_attr, *ply_scale_2_attr};
 
   /* Rotation (w, x, y, z). */
-  const Span<float> ply_rot_0_attr = get_custom_attribute(data, "rot_0");
-  const Span<float> ply_rot_1_attr = get_custom_attribute(data, "rot_1");
-  const Span<float> ply_rot_2_attr = get_custom_attribute(data, "rot_2");
-  const Span<float> ply_rot_3_attr = get_custom_attribute(data, "rot_3");
+  const std::optional<Span<float>> ply_rot_0_attr = find_custom_attribute(data, "rot_0");
+  const std::optional<Span<float>> ply_rot_1_attr = find_custom_attribute(data, "rot_1");
+  const std::optional<Span<float>> ply_rot_2_attr = find_custom_attribute(data, "rot_2");
+  const std::optional<Span<float>> ply_rot_3_attr = find_custom_attribute(data, "rot_3");
+  if (!ply_rot_0_attr || !ply_rot_1_attr || !ply_rot_2_attr || !ply_rot_3_attr) {
+    return nullptr;
+  }
+  Span<float> ply_rot[4] = {*ply_rot_0_attr, *ply_rot_1_attr, *ply_rot_2_attr, *ply_rot_3_attr};
+
+  PointCloud *point_cloud = BKE_pointcloud_new_nomain(PT_TYPE_GSPLAT, data.vertices.size());
+
+  point_cloud->positions_for_write().copy_from(data.vertices);
 
   /* f_rest_<i> */
   const Vector<Span<float>> f_rest = get_rest_custom_attributes(data);
-  const int num_sh_dimensions = static_cast<int>(f_rest.size() / 3);
-  const int sh_degree = degree_for_dim(num_sh_dimensions);
+  const int sh_degree = (f_rest.size() % 3 == 0) ?
+                            gsplat::degree_for_dimension(f_rest.size() / 3) :
+                            0;
+  const int num_sh_dimensions = gsplat::dimension_for_degree(sh_degree);
 
   gsplat::GsplatMutableAttributeAccessor accessor(*point_cloud, sh_degree);
   MutableSpan<float4> radiance_base = accessor.radiance_base_for_write();
@@ -113,11 +132,9 @@ PointCloud *convert_gsplat_ply_to_point_cloud(const PlyData &data,
   Span<MutableSpan<float3>> sh_attrs = accessor.sh_for_write();
 
   for (int i = 0; i < data.vertices.size(); i++) {
-    radiance_base[i] = float4(
-        ply_f_dc_0_attr[i], ply_f_dc_1_attr[i], ply_f_dc_2_attr[i], ply_opacity_attr[i]);
-    scale[i] = float3(ply_scale_0_attr[i], ply_scale_1_attr[i], ply_scale_2_attr[i]);
-    rotation[i] = math::Quaternion(
-        ply_rot_0_attr[i], ply_rot_1_attr[i], ply_rot_2_attr[i], ply_rot_3_attr[i]);
+    radiance_base[i] = float4(ply_f_dc[0][i], ply_f_dc[1][i], ply_f_dc[2][i], ply_opacity[i]);
+    scale[i] = float3(ply_scale[0][i], ply_scale[1][i], ply_scale[2][i]);
+    rotation[i] = math::Quaternion(ply_rot[0][i], ply_rot[1][i], ply_rot[2][i], ply_rot[3][i]);
 
     radiance_base[i].w = gsplat::OriginalActivationFunctions::decode_opacity(radiance_base[i].w);
     scale[i] = gsplat::OriginalActivationFunctions::decode_scale(scale[i]);
@@ -129,13 +146,25 @@ PointCloud *convert_gsplat_ply_to_point_cloud(const PlyData &data,
     }
   }
 
-  // TODO(sergey): Handle conversion denoted in the params.
+  /* TODO(sergey): Handle coordinate system conversion denoted in the params. */
+  /* For "regular" import (via UI, using File -> Import or by dropping PLY file onto the viewport)
+   * this is handled via object matrix in `importer_main()`. However, some code paths might use
+   * this code directly: for example, geometry nodes. Currently geometry nodes do not provide axis
+   * control for import nodes, so handling coordinate system conversion here is not required. */
 
   accessor.finish();
 
-  point_cloud->render_as = PT_RENDER_AS_SPLATS;
-
-  // TODO(sergey): Handle params.import_attributes.
+  if (params.import_attributes) {
+    bke::MutableAttributeAccessor attributes = point_cloud->attributes_for_write();
+    for (const PlyCustomAttribute &attr : data.vertex_custom_attr) {
+      if (is_builtin_gsplat_attribute(attr.name)) {
+        continue;
+      }
+      attributes.add<float>(attr.name,
+                            bke::AttrDomain::Point,
+                            bke::AttributeInitVArray(VArray<float>::from_span(attr.data)));
+    }
+  }
 
   return point_cloud;
 }

@@ -31,10 +31,14 @@ using OIIO::TypeUnknown;
 using OIIO::TypeVector;
 
 static constexpr TypeDesc TypeRGBA(TypeDesc::FLOAT, TypeDesc::VEC4, TypeDesc::COLOR);
+/* Consider quaternion an array of scalars to differentiate the type from TypeFloat4 and TypeRGBA.
+ */
 static constexpr TypeDesc TypeQuaternion(TypeDesc::FLOAT,
                                          TypeDesc::SCALAR,
                                          TypeDesc::NOSEMANTICS,
                                          4);
+static_assert(TypeQuaternion != TypeFloat4);
+static_assert(TypeQuaternion != TypeRGBA);
 static constexpr TypeDesc TypePackedSphericalHarmonics(TypeDesc::INT8,
                                                        TypeDesc::VEC3,
                                                        PackedSphericalHarmonics::MAX_COEFFICIENTS);

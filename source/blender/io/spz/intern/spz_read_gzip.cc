@@ -25,6 +25,7 @@
 #include "CLG_log.h"
 
 #include "IO_gsplat.hh"
+#include "IO_validate.hh"
 
 #include "spz_read_common.hh"
 #include "spz_types.hh"
@@ -108,16 +109,20 @@ class StreamedGzipReader {
 
       const int ret = inflate(&stream_, Z_NO_FLUSH);
       BLI_assert(ret != Z_STREAM_ERROR);
-      switch (ret) {
-        case Z_NEED_DICT:
-        case Z_DATA_ERROR:
-        case Z_MEM_ERROR:
-          // TODO(sergey): Report error?
+      if (ret == Z_STREAM_END) {
+        if (stream_.avail_out != 0) {
           return false;
+        }
+        break;
+      }
+      if (ret != Z_OK) {
+        /* TODO(sergey): Report error. */
+        return false;
       }
     } while (stream_.avail_out != 0);
 
-    // TODO(sergey): Investigate whether decompressing more data ahead of time helps performance.
+    /* TODO(sergey): Investigate whether decompressing more data ahead of time helps performance.
+     */
 
     return true;
   }
@@ -162,29 +167,43 @@ PointCloud *read_spz_gzip_compressed_file(FILE *file, ReportList *reports)
   CLOG_DEBUG(&LOG, "SPZ header fractional_bits: %d", int(header.fractional_bits));
   CLOG_DEBUG(&LOG, "SPZ header flags: %d", header.flags);
 
-  PointCloud *point_cloud = BKE_pointcloud_new_nomain(header.num_points);
+  if (header.flags & SPZ_HEADER_ANTIALIASED) {
+    /* TODO(sergey): Support antialiased data. */
+    CLOG_WARN(&LOG, "SPZ data was trained with antialiasing which is not fully supported");
+  }
+  if (header.flags & SPZ_HEADER_HAS_EXTENSIONS) {
+    /* TODO(sergey): Support extensions. */
+    CLOG_WARN(&LOG, "SPZ file contains extensions that are not yet supported");
+  }
+
+  if (!validate::size_fits_in_int(header.num_points)) {
+    BKE_report(reports, RPT_ERROR, "SPZ Read: Too many points");
+    return nullptr;
+  }
+
+  PointCloud *point_cloud = BKE_pointcloud_new_nomain(PT_TYPE_GSPLAT, header.num_points);
   gsplat::GsplatMutableAttributeAccessor accessor(*point_cloud, header.sh_degree);
 
-  if (!read_positions(reader, header.fractional_bits, accessor.positions_for_write()) ||
+  const MutableSpan<float3> positions = accessor.positions_for_write();
+  const MutableSpan<math::Quaternion> rotations = accessor.rotations_for_write();
+  const Span<MutableSpan<float3>> sh_attrs = accessor.sh_for_write();
+
+  if (!read_positions(reader, header.fractional_bits, positions) ||
       !read_alphas(reader, accessor.radiance_base_for_write()) ||
       !read_colors(reader, accessor.radiance_base_for_write()) ||
       !read_scales(reader, accessor.scales_for_write()) ||
-      !read_rotations(reader, header.version, accessor.rotations_for_write()) ||
-      !read_sh(reader, accessor.sh_for_write()))
+      !read_rotations(reader, header.version, rotations) || !read_sh(reader, sh_attrs))
   {
     accessor.finish();
     BKE_id_free(nullptr, &point_cloud->id);
-    point_cloud = nullptr;
-  }
-  else {
-    accessor.finish();
+    return nullptr;
   }
 
-  if (point_cloud) {
-    point_cloud->render_as = PT_RENDER_AS_SPLATS;
-  }
+  /* TODO(sergey): Handle extensions. */
 
-  // TODO(sergey): Handle extensions?
+  convert_axis_to_blender(positions, rotations, sh_attrs);
+
+  accessor.finish();
 
   return point_cloud;
 }
