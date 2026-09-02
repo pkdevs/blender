@@ -1906,7 +1906,8 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
   scissor_for_points[1] = std::max(0, scissor_new.ymin - 20);
   scissor_for_points[2] = BLI_rcti_size_x(&scissor_new) + 40;
   scissor_for_points[3] = BLI_rcti_size_y(&scissor_new) + 40;
-  GPU_scissor(scissor_for_points[0], scissor_for_points[1], scissor_for_points[2], scissor_for_points[3]);
+  GPU_scissor(
+      scissor_for_points[0], scissor_for_points[1], scissor_for_points[2], scissor_for_points[3]);
 
   /* Curve widgets using a gradient background (such as Hue Correct), draw
    * an additional point in the back, forming an outline so they stand out. */
@@ -1985,8 +1986,10 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
     immEnd();
   }
 
-  GPU_scissor(
-      scissor_new.xmin, scissor_new.ymin, BLI_rcti_size_x(&scissor_new), BLI_rcti_size_y(&scissor_new));
+  GPU_scissor(scissor_new.xmin,
+              scissor_new.ymin,
+              BLI_rcti_size_x(&scissor_new),
+              BLI_rcti_size_y(&scissor_new));
 
   immUnbindProgram();
   GPU_blend(GPU_BLEND_NONE);
