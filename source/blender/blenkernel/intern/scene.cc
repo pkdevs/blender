@@ -191,6 +191,10 @@ static void scene_init_data(ID *id)
                      CurveMapSlopeType::PositiveNegative);
 
   scene->toolsettings = MEM_new<ToolSettings>(__func__);
+  /* Unlike other Paint structs, the `ImagePaintSettings` is default allocated, so it needs to be
+   * explicitly initialized when a new scene is created to ensure runtime data is in a consistent
+   * state */
+  BKE_paint_init(nullptr, scene, PaintMode::Texture2D, false);
 
   scene->toolsettings->autokey_mode = U.autokey_mode;
 
