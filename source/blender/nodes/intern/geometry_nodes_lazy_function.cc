@@ -514,10 +514,10 @@ static void execute_multi_function_on_value_variant__field(
     if (value.is_context_dependent_field()) {
       any_input_is_field = true;
     }
-    else if (value.get().is_type<bke::GVolumeGrid>()) {
+    else if (value.is_volume_grid()) {
       any_input_is_volume_grid = true;
     }
-    else if (value.get().is_type<nodes::GListPtr>()) {
+    else if (value.is_list()) {
       any_input_is_list = true;
     }
   }

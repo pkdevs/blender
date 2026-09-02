@@ -344,11 +344,27 @@ bool SocketValueVariantTypeInfo::is_interpretable_as_fn(const CPPType &dst_type,
 SOCKET_VALUE_SINGLE_TYPES
 #undef X
 
+/**
+ * Even though #Field<T>, #ListPtr<T> and #VolumeGrid<T> are never stored directly (they are
+ * always redirected to their generic storage type, see #to_storage_type), #SocketValueVariant's
+ * templated accessors (#get_if, #try_convert, #ensure_type) still instantiate their function
+ * bodies for these compile-time types.
+ */
+#define X(TYPE) \
+  DEFINE_TYPE(Field<TYPE>) \
+  DEFINE_TYPE(ListPtr<TYPE>)
+SOCKET_VALUE_FIELD_AND_LIST_TYPES
+#undef X
+
 DEFINE_TYPE(GField)
 DEFINE_TYPE(GListPtr)
 
 #ifdef WITH_OPENVDB
 DEFINE_TYPE(volume_grid::GVolumeGrid)
+DEFINE_TYPE(VolumeGrid<float>)
+DEFINE_TYPE(VolumeGrid<int>)
+DEFINE_TYPE(VolumeGrid<float3>)
+DEFINE_TYPE(VolumeGrid<bool>)
 #endif
 
 }  // namespace detail
@@ -512,7 +528,11 @@ bool SocketValueVariant::is_list() const
 }
 bool SocketValueVariant::is_volume_grid() const
 {
+#ifdef WITH_OPENVDB
   return this->get().type()->is<bke::GVolumeGrid>();
+#else
+  return false;
+#endif
 }
 
 bool SocketValueVariant::is_context_dependent_field() const
@@ -565,7 +585,7 @@ bool SocketValueVariant::owns_direct_data() const
     const GeometrySet &geometry = value_.get<GeometrySet>();
     return geometry.owns_direct_data();
   }
-  return false;
+  return true;
 }
 
 void SocketValueVariant::count_memory(MemoryCounter &memory) const

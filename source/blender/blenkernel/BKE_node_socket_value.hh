@@ -81,7 +81,8 @@ class SocketValueVariant {
 
   template<typename T>
   explicit SocketValueVariant(T &&value)
-    requires(std::is_trivial_v<std::decay_t<T>> || std::is_same_v<std::decay_t<T>, std::string>);
+      /* Required to avoid overriding the copy/move-constructors. */
+    requires(std::is_trivial_v<std::decay_t<T>> || is_same_any_v<std::decay_t<T>, std::string>);
 
   /** Construct a #SocketValueVariant at the given pointer from the given value. */
   template<typename T> static SocketValueVariant &ConstructIn(void *ptr, T &&value);
@@ -133,7 +134,7 @@ class SocketValueVariant {
 
 template<typename T>
 inline SocketValueVariant::SocketValueVariant(T &&value)
-  requires(std::is_trivial_v<std::decay_t<T>> || std::is_same_v<std::decay_t<T>, std::string>)
+  requires(std::is_trivial_v<std::decay_t<T>> || is_same_any_v<std::decay_t<T>, std::string>)
 {
   this->emplace<std::decay_t<T>>(std::forward<T>(value));
 }

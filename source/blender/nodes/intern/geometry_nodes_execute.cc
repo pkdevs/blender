@@ -141,7 +141,7 @@ static bke::SocketValueVariant init_socket_cpp_value(const GeoNodesCallData *cal
           input_props_ptr, ntree, io_socket);
       if (type == GeometryNodesInputType::Value) {
         const float value = RNA_float_get(input_props_ptr, "value");
-        return bke::SocketValueVariant::From(value);
+        return bke::SocketValueVariant(value);
       }
       if (type == GeometryNodesInputType::Attribute) {
         if (std::optional<bke::SocketValueVariant> value = load_attribute_field_input<float>(
@@ -177,7 +177,7 @@ static bke::SocketValueVariant init_socket_cpp_value(const GeoNodesCallData *cal
       if (type == GeometryNodesInputType::Value) {
         ColorGeometry4f value;
         RNA_float_get_array(input_props_ptr, "value", value);
-        return bke::SocketValueVariant::From(value);
+        return bke::SocketValueVariant(value);
       }
       if (type == GeometryNodesInputType::Attribute) {
         if (std::optional<bke::SocketValueVariant> value =
@@ -193,7 +193,7 @@ static bke::SocketValueVariant init_socket_cpp_value(const GeoNodesCallData *cal
           input_props_ptr, ntree, io_socket);
       if (type == GeometryNodesInputType::Value) {
         const bool value = RNA_boolean_get(input_props_ptr, "value");
-        return bke::SocketValueVariant::From(value);
+        return bke::SocketValueVariant(value);
       }
       if (type == GeometryNodesInputType::Attribute) {
         if (std::optional<bke::SocketValueVariant> value = load_attribute_field_input<bool>(
@@ -214,7 +214,7 @@ static bke::SocketValueVariant init_socket_cpp_value(const GeoNodesCallData *cal
           input_props_ptr, ntree, io_socket);
       if (type == GeometryNodesInputType::Value) {
         const int value = RNA_int_get(input_props_ptr, "value");
-        return bke::SocketValueVariant::From(value);
+        return bke::SocketValueVariant(value);
       }
       if (type == GeometryNodesInputType::Attribute) {
         if (std::optional<bke::SocketValueVariant> value = load_attribute_field_input<int>(
@@ -232,7 +232,7 @@ static bke::SocketValueVariant init_socket_cpp_value(const GeoNodesCallData *cal
         float3 value_euler;
         RNA_float_get_array(input_props_ptr, "value", value_euler);
         math::Quaternion value_rotation = math::to_quaternion(math::EulerXYZ(value_euler));
-        return bke::SocketValueVariant::From(value_rotation);
+        return bke::SocketValueVariant(value_rotation);
       }
       if (type == GeometryNodesInputType::Attribute) {
         if (std::optional<bke::SocketValueVariant> value =
@@ -257,7 +257,7 @@ static bke::SocketValueVariant init_socket_cpp_value(const GeoNodesCallData *cal
           input_props_ptr, ntree, io_socket);
       if (type == GeometryNodesInputType::Value) {
         const std::string value = RNA_string_get(input_props_ptr, "value");
-        return bke::SocketValueVariant::From(value);
+        return bke::SocketValueVariant(value);
       }
       break;
     }

@@ -70,6 +70,7 @@ void BKE_cpp_types_init()
   BLI_CPP_TYPE_REGISTER(fn::Field<ColorGeometry4b>, CPPTypeFlags::None);
   BLI_CPP_TYPE_REGISTER(fn::Field<math::Quaternion>, CPPTypeFlags::None);
   BLI_CPP_TYPE_REGISTER(fn::Field<float4x4>, CPPTypeFlags::None);
+  BLI_CPP_TYPE_REGISTER(fn::Field<nodes::MenuValue>, CPPTypeFlags::None);
   BLI_CPP_TYPE_REGISTER(fn::Field<std::string>, CPPTypeFlags::None);
 
   BLI_CPP_TYPE_REGISTER(nodes::GListPtr, CPPTypeFlags::None);

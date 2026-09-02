@@ -163,7 +163,7 @@ static void mix_socket_values_same_type(bke::SocketValueVariant &a,
                                         const bke::SocketValueVariant &b,
                                         const float factor)
 {
-  BLI_assert(a.socket_type() == b.socket_type());
+  BLI_assert(a.get().type() == b.get().type());
   if (a.is_single() && b.is_single()) {
     GMutablePointer a_ptr = a.get();
     const GPointer b_ptr = b.get();
@@ -216,6 +216,16 @@ void mix_socket_values(bke::SocketValueVariant &a,
                        const bke::SocketValueVariant &b,
                        const float factor)
 {
+  if (a.is_list()) {
+    if (const nodes::GListPtr &a_list = *a.get_if<nodes::GListPtr>()) {
+      if (a_list->cpp_type().is<std::string>()) {
+        return;
+      }
+    }
+  }
+  else if (a.get().is_type<std::string>()) {
+    return;
+  }
   bke::SocketValueVariant b_converted = b;
   b_converted.ensure_type(*a.get().type());
   mix_socket_values_same_type(a, b_converted, factor);

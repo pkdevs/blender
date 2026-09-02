@@ -117,7 +117,6 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   bke::VolumeTreeAccessToken tree_token;
   openvdb::GridBase &grid_base = grid.get_for_write().grid_for_write(tree_token);
-
   bke::volume_grid::set_grid_background(grid_base, background);
 
   if (update_inactive) {
