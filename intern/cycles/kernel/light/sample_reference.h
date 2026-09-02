@@ -7,14 +7,11 @@
 
 #pragma once
 
-#include "kernel/light/common.h"
-
 #include "kernel/light/area.h"
 #include "kernel/light/background.h"
 #include "kernel/light/point.h"
 #include "kernel/light/spot.h"
 #include "kernel/light/sun.h"
-// #include "kernel/light/triangle.h" // !!!: Not possible to import
 #include "kernel/sample/lcg.h"
 #include "kernel/types.h"
 
@@ -269,75 +266,6 @@ ccl_device_inline bool restir_spot_light_reference_from_sample(
 
     return true;
   }
-}
-
-ccl_device_inline bool restir_triangle_light_reference_from_sample(
-    KernelGlobals kg,
-    const ccl_private LightSample *ls,
-    const float time,
-    ccl_private LightSampleReference *reference)
-{
-  *reference = restir_light_reference_empty();
-
-  if (ls->type != LIGHT_TRIANGLE || ls->object < 0 || ls->prim < 0) {
-    return false;
-  }
-
-  float3 V[3];
-  triangle_world_space_vertices(kg, ls->object, ls->prim, time, V);
-
-  /*
-   * The persistent parameterization is the triangle's barycentric
-   * coordinates:
-   *     P = (1 - u - v) * V0 + u * V1 + v * V2
-   *
-   * These coordinates are emitter-local and therefore independent of
-   * the current shading target.
-   */
-  const float3 e0 = V[1] - V[0];
-  const float3 e1 = V[2] - V[0];
-  const float3 p = ls->P - V[0];
-
-  const float d00 = dot(e0, e0);
-  const float d01 = dot(e0, e1);
-  const float d11 = dot(e1, e1);
-  const float d20 = dot(p, e0);
-  const float d21 = dot(p, e1);
-
-  const float denom = d00 * d11 - d01 * d01;
-
-  if (!(isfinite(denom) && denom > 0.0f)) {
-    return false;
-  }
-
-  const float u = (d11 * d20 - d01 * d21) / denom;
-  const float v = (d00 * d21 - d01 * d20) / denom;
-
-  if (!(isfinite(u) && isfinite(v))) {
-    return false;
-  }
-
-  /*
-   * The sampled point must lie on the triangle.
-   *
-   * A small tolerance is allowed for floating-point reconstruction,
-   * particularly for samples produced through solid-angle sampling.
-   */
-  const float w = 1.0f - u - v;
-  constexpr float epsilon = 1e-5f;
-
-  if (u < -epsilon || v < -epsilon || w < -epsilon) {
-    return false;
-  }
-
-  reference->type = LIGHT_TRIANGLE;
-  reference->object = ls->object;
-  reference->prim = ls->prim;
-  reference->flags = RESTIR_LIGHT_REFERENCE_VALID |
-                     RESTIR_LIGHT_REFERENCE_HAS_PARAM;
-  reference->param = make_float2(u, v);
-
-  return true;
 }
 
 /* MARK: - Consumption */
@@ -803,128 +731,6 @@ ccl_device_inline bool restir_spot_light_sample_from_reference(
           isfinite(ls->eval_fac) &&
           ls->eval_fac >= 0.0f;
   }
-}
-
-ccl_device_inline bool restir_triangle_light_sample_from_reference(
-    KernelGlobals kg,
-    const ccl_private LightSampleReference *reference,
-    const float3 P,
-    const float time,
-    ccl_private LightSample *ls)
-{
-  *ls = {};
-
-  if (!restir_light_reference_is_valid(reference) ||
-      reference->type != LIGHT_TRIANGLE ||
-      reference->object < 0 || reference->prim < 0 ||
-      !(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM))
-  {
-    return false;
-  }
-
-  float3 V[3];
-  triangle_world_space_vertices(kg, reference->object, reference->prim, time, V); // !!!
-
-  const float3 e0 = V[1] - V[0];
-  const float3 e1 = V[2] - V[0];
-
-  ls->object = reference->object;
-  ls->prim = reference->prim;
-
-  ls->Ng = safe_normalize(cross(e0, e1));
-
-
-  // printf("restir_triangle_light_sample_from_reference(); ran! TRI RECON: object=%d prim=%d\n", 
-  //   ls->object, ls->prim);
-
-  /* Flip normal if necessary. */
-  const int object_flag = kernel_data_fetch(object_flag, ls->object); // !!!: Crash site?
-
-  // printf("TRI RECON: object_flag=%d\n", object_flag);
-
-  if (object_flag & SD_OBJECT_NEGATIVE_SCALE) {
-    ls->Ng = -ls->Ng;
-  }
-
-  ls->eval_fac = 1.0f;
-
-/*
-TODO: Full reconstruction of tri invariants?
-object done
-prim done
-Ng (Kinda done)
-shader Done
-type Done
-group Done
-pdf_selection
-pdf Done
-P Done
-D Done
-t
-*/
-
-  // /* Belongs in distribution.h but can reuse computations here. */
-  // if (!kernel_data.integrator.use_light_tree) {
-  //   float distribution_area = area;
-
-  //   if (has_motion && area != 0.0f) {
-  //     /* For motion blur need area of triangle at fixed time as used in the CDF. */
-  //     triangle_world_space_vertices(kg, object, prim, -1.0f, V);
-  //     distribution_area = triangle_area(V[0], V[1], V[2]);
-  //   }
-
-  //   ls->pdf_selection = distribution_area * kernel_data.integrator.distribution_pdf_triangles;
-  // }
-
-// printf("D: before tri_shader, prim=%d\n", ls->prim);
-
-  /* Restore triangle light metadata. */
-  ls->shader = kernel_data_fetch(tri_shader, ls->prim) | SHADER_USE_MIS; // !!!: Crash site?
-
-// printf("E: tri_shader OK, shader=%d\n", ls->shader);
-  
-  ls->type = LIGHT_TRIANGLE;
-  ls->group = object_lightgroup(kg, ls->object);
-
-// printf("F: after ls->object=%d\n", ls->object);
-
-  /* Reconstruct the emitter position from the persistent barycentric coords */
-  const float u = reference->param.x;
-  const float v = reference->param.y;
-  const float w = 1.0f - u - v;
-
-  if (!(isfinite(u) && isfinite(v) && isfinite(w)) ||
-      u < 0.0f || v < 0.0f || w < 0.0f)
-  {
-    // printf("restir_triangle_light_sample_from_reference(); returned false!, u=%f, v=%f, w=%f\n",
-    //        (double)u, (double)v, (double)w);
-    return false;
-  }
-
-  ls->P = w * V[0] + u * V[1] + v * V[2];
-
-  /* Target-dependent direction and distance. */
-  ls->D = safe_normalize_len(ls->P - P, &ls->t);
-
-  if (!isfinite(ls->t) || ls->t <= 0.0f) {
-    return false;
-  }
-
-// printf("G: before ls->pdf is assigned!\n");
-
-  const float area = 0.5f * len(cross(e0, e1));
-
-  if (area == 0.0f) {
-    // printf("restir_triangle_light_sample_from_reference(); returned false! area == 0.0f\n");
-    return false;
-  }
-
-  ls->pdf = triangle_light_pdf_area_sampling(
-      ls->Ng, -ls->D, ls->t) / area;
-
-// printf("H: After ls->pdf=%f!\n", (double)ls->pdf);
-
-  return isfinite(ls->pdf) && ls->pdf > 0.0f;
 }
 
 

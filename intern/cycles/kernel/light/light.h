@@ -572,7 +572,7 @@ ccl_device_inline bool light_reference_from_sample(
       return restir_spot_light_reference_from_sample(kg, ls, reference);
 
     case LIGHT_TRIANGLE:
-      return restir_triangle_light_reference_from_sample(kg, ls, time, reference);
+      return triangle_light_reference_from_sample(kg, ls, time, reference);
 
     /* Includes LIGHT_BACKGROUND. */
     default:
@@ -624,7 +624,7 @@ ccl_device_inline bool light_sample_from_reference(
           kg, reference, P, N, shader_flags, path_flag, ls);
 
     case LIGHT_TRIANGLE:
-      return restir_triangle_light_sample_from_reference(
+      return triangle_light_sample_from_reference(
           kg, reference, P, time, ls);
 
     /* Includes LIGHT_BACKGROUND. */
