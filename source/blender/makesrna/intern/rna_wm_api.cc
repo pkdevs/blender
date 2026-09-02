@@ -1414,19 +1414,6 @@ void RNA_api_operator(StructRNA *srna)
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
   parm = RNA_def_pointer(func, "properties", "OperatorProperties", "", "");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
-
-  /* label */
-  func = RNA_def_function(srna, "label", nullptr);
-  RNA_def_function_ui_description(func, "Compute a label string that depends on parameters");
-  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_REGISTER_OPTIONAL);
-  parm = RNA_def_string(func, "result", nullptr, 4096, "result", "");
-  RNA_def_parameter_clear_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
-  RNA_def_parameter_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
-  RNA_def_function_output(func, parm);
-  parm = RNA_def_pointer(func, "context", "Context", "", "");
-  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
-  parm = RNA_def_pointer(func, "properties", "OperatorProperties", "", "");
-  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
 }
 
 void RNA_api_macro(StructRNA *srna)
