@@ -319,11 +319,11 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   MutableSpan<int> corner_edges = result->corner_edges_for_write();
   bke::MutableAttributeAccessor attributes = result->attributes_for_write();
   bke::SpanAttributeWriter mloopcols_index =
-      attributes.convert_or_add_for_write_span<ColorGeometry4b>(pimd->index_layer_name,
-                                                                bke::AttrDomain::Corner);
+      attributes.lookup_or_add_for_write_span<ColorGeometry4b>(pimd->index_layer_name,
+                                                               bke::AttrDomain::Corner);
   bke::SpanAttributeWriter mloopcols_value =
-      attributes.convert_or_add_for_write_span<ColorGeometry4b>(pimd->value_layer_name,
-                                                                bke::AttrDomain::Corner);
+      attributes.lookup_or_add_for_write_span<ColorGeometry4b>(pimd->value_layer_name,
+                                                               bke::AttrDomain::Corner);
 
   bke::LegacyMeshInterpolator vert_interp(*mesh, *result, bke::AttrDomain::Point);
   bke::LegacyMeshInterpolator edge_interp(*mesh, *result, bke::AttrDomain::Edge);
@@ -332,8 +332,12 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
 
   int *vert_part_index = nullptr;
   float *vert_part_value = nullptr;
-  vert_part_index = MEM_new_array_zeroed<int>(maxvert, "vertex part index array");
-  vert_part_value = MEM_new_array_zeroed<float>(maxvert, "vertex part value array");
+  if (mloopcols_index) {
+    vert_part_index = MEM_new_array_zeroed<int>(maxvert, "vertex part index array");
+  }
+  if (mloopcols_value) {
+    vert_part_value = MEM_new_array_zeroed<float>(maxvert, "vertex part value array");
+  }
 
   for (p = part_start, p_skip = 0; p < part_end; p++) {
     float prev_dir[3];

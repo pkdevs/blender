@@ -1878,8 +1878,11 @@ void BKE_mesh_material_remap(Mesh *mesh, const uint *remap, uint remap_len)
   }
   else {
     MutableAttributeAccessor attributes = mesh->attributes_for_write();
-    SpanAttributeWriter<int> material_indices = attributes.convert_or_add_for_write_span<int>(
+    SpanAttributeWriter<int> material_indices = attributes.lookup_or_add_for_write_span<int>(
         "material_index", AttrDomain::Face);
+    if (!material_indices) {
+      return;
+    }
     for (const int i : material_indices.span.index_range()) {
       MAT_NR_REMAP(material_indices.span[i]);
     }

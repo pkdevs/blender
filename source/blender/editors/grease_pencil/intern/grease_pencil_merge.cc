@@ -350,8 +350,11 @@ void merge_layers(const GreasePencil &src_grease_pencil,
       }
     }
 
-    bke::GSpanAttributeWriter dst_attribute = dst_attributes.convert_or_add_for_write_only_span(
+    bke::GSpanAttributeWriter dst_attribute = dst_attributes.lookup_or_add_for_write_only_span(
         iter.name, bke::AttrDomain::Layer, iter.data_type);
+    if (!dst_attribute) {
+      return;
+    }
 
     const GVArraySpan src_span(src_attribute.varray);
     bke::attribute_math::mix_groups(src_span, src_layers_by_dst, dst_attribute.span);

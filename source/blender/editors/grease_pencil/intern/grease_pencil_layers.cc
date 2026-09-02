@@ -1121,12 +1121,14 @@ static void copy_layer_and_frames_to_target_object(GreasePencil &dst_grease_penc
     }
     bke::GAttributeReader reader = src_attributes.lookup(iter.name, iter.domain, iter.data_type);
     BLI_assert(reader);
-    bke::GAttributeWriter writer = dst_attributes.convert_or_add_for_write(
+    bke::GAttributeWriter writer = dst_attributes.lookup_or_add_for_write(
         iter.name, iter.domain, iter.data_type);
-    const CPPType &cpptype = bke::attribute_type_to_cpp_type(iter.data_type);
-    BUFFER_FOR_CPP_TYPE_VALUE(cpptype, buffer);
-    reader.varray.get(src_layer_index, buffer);
-    writer.varray.set_by_copy(dst_layer_index, buffer);
+    if (writer) {
+      const CPPType &cpptype = bke::attribute_type_to_cpp_type(iter.data_type);
+      BUFFER_FOR_CPP_TYPE_VALUE(cpptype, buffer);
+      reader.varray.get(src_layer_index, buffer);
+      writer.varray.set_by_copy(dst_layer_index, buffer);
+    }
     writer.finish();
   });
 

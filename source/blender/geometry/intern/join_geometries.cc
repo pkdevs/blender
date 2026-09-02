@@ -124,8 +124,11 @@ static void join_attributes(const Span<const GeometryComponent *> src_components
       continue;
     }
 
-    bke::GSpanAttributeWriter write_attribute = dst_attributes.convert_or_add_for_write_only_span(
+    bke::GSpanAttributeWriter write_attribute = dst_attributes.lookup_or_add_for_write_only_span(
         name, meta_data.domain, meta_data.data_type);
+    if (!write_attribute) {
+      continue;
+    }
     fill_new_attribute(
         src_components, name, meta_data.data_type, meta_data.domain, write_attribute.span);
     write_attribute.finish();

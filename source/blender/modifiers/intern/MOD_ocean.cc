@@ -267,14 +267,16 @@ static Mesh *generate_ocean_geometry(OceanModifierData *omd, Mesh *mesh_orig, co
     bke::MutableAttributeAccessor attributes = result->attributes_for_write();
     std::string name = BKE_attribute_calc_unique_name(AttributeOwner::from_id(&result->id),
                                                       "UVMap");
-    bke::SpanAttributeWriter<float2> uv_map = attributes.convert_or_add_for_write_span<float2>(
+    bke::SpanAttributeWriter<float2> uv_map = attributes.lookup_or_add_for_write_span<float2>(
         name, bke::AttrDomain::Corner);
 
-    gogd.uv_map = uv_map.span;
-    gogd.ix = 1.0 / gogd.rx;
-    gogd.iy = 1.0 / gogd.ry;
+    if (uv_map) { /* unlikely to fail */
+      gogd.uv_map = uv_map.span;
+      gogd.ix = 1.0 / gogd.rx;
+      gogd.iy = 1.0 / gogd.ry;
 
-    BLI_task_parallel_range(0, gogd.res_y, &gogd, generate_ocean_geometry_uvs, &settings);
+      BLI_task_parallel_range(0, gogd.res_y, &gogd, generate_ocean_geometry_uvs, &settings);
+    }
 
     uv_map.finish();
   }
@@ -350,60 +352,63 @@ static Mesh *doOcean(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mes
     AttributeOwner owner = AttributeOwner::from_id(&result->id);
     bke::MutableAttributeAccessor attributes = result->attributes_for_write();
     const Span<int> corner_verts = result->corner_verts();
-    bke::SpanAttributeWriter mloopcols = attributes.convert_or_add_for_write_span<ColorGeometry4b>(
+    bke::SpanAttributeWriter mloopcols = attributes.lookup_or_add_for_write_span<ColorGeometry4b>(
         BKE_attribute_calc_unique_name(owner, omd->foamlayername), bke::AttrDomain::Corner);
 
     bke::SpanAttributeWriter<ColorGeometry4b> mloopcols_spray;
     if (omd->flag & MOD_OCEAN_GENERATE_SPRAY) {
-      mloopcols_spray = attributes.convert_or_add_for_write_span<ColorGeometry4b>(
+      mloopcols_spray = attributes.lookup_or_add_for_write_span<ColorGeometry4b>(
           BKE_attribute_calc_unique_name(owner, omd->spraylayername), bke::AttrDomain::Corner);
     }
 
-    for (const int i : faces.index_range()) {
-      const IndexRange face = faces[i];
-      const int *corner_vert = &corner_verts[face.start()];
-      ColorGeometry4b *mlcol = &mloopcols.span[face.start()];
+    if (mloopcols) { /* unlikely to fail */
 
-      ColorGeometry4b *mlcolspray = nullptr;
-      if ((omd->flag & MOD_OCEAN_GENERATE_SPRAY)) {
-        mlcolspray = &mloopcols_spray.span[face.start()];
-      }
+      for (const int i : faces.index_range()) {
+        const IndexRange face = faces[i];
+        const int *corner_vert = &corner_verts[face.start()];
+        ColorGeometry4b *mlcol = &mloopcols.span[face.start()];
 
-      for (j = face.size(); j--; corner_vert++, mlcol++) {
-        const float *vco = positions[*corner_vert];
-        const float u = OCEAN_CO(size_co_inv, vco[0]);
-        const float v = OCEAN_CO(size_co_inv, vco[1]);
-        float foam;
-
-        if (omd->oceancache && omd->cached) {
-          BKE_ocean_cache_eval_uv(omd->oceancache, &ocr, cfra_for_cache, u, v);
-          foam = ocr.foam;
-          CLAMP(foam, 0.0f, 1.0f);
-        }
-        else {
-          BKE_ocean_eval_uv(omd->ocean, &ocr, u, v);
-          foam = BKE_ocean_jminus_to_foam(ocr.Jminus, omd->foam_coverage);
+        ColorGeometry4b *mlcolspray = nullptr;
+        if ((omd->flag & MOD_OCEAN_GENERATE_SPRAY) && mloopcols_spray) {
+          mlcolspray = &mloopcols_spray.span[face.start()];
         }
 
-        mlcol->r = mlcol->g = mlcol->b = char(foam * 255);
-        /* This needs to be set (render engine uses) */
-        mlcol->a = 255;
+        for (j = face.size(); j--; corner_vert++, mlcol++) {
+          const float *vco = positions[*corner_vert];
+          const float u = OCEAN_CO(size_co_inv, vco[0]);
+          const float v = OCEAN_CO(size_co_inv, vco[1]);
+          float foam;
 
-        if ((omd->flag & MOD_OCEAN_GENERATE_SPRAY) && mlcolspray != nullptr) {
-          if (omd->flag & MOD_OCEAN_INVERT_SPRAY) {
-            mlcolspray->r = ocr.Eminus[0] * 255;
+          if (omd->oceancache && omd->cached) {
+            BKE_ocean_cache_eval_uv(omd->oceancache, &ocr, cfra_for_cache, u, v);
+            foam = ocr.foam;
+            CLAMP(foam, 0.0f, 1.0f);
           }
           else {
-            mlcolspray->r = ocr.Eplus[0] * 255;
+            BKE_ocean_eval_uv(omd->ocean, &ocr, u, v);
+            foam = BKE_ocean_jminus_to_foam(ocr.Jminus, omd->foam_coverage);
           }
-          mlcolspray->g = 0;
-          if (omd->flag & MOD_OCEAN_INVERT_SPRAY) {
-            mlcolspray->b = ocr.Eminus[2] * 255;
+
+          mlcol->r = mlcol->g = mlcol->b = char(foam * 255);
+          /* This needs to be set (render engine uses) */
+          mlcol->a = 255;
+
+          if ((omd->flag & MOD_OCEAN_GENERATE_SPRAY) && mlcolspray != nullptr) {
+            if (omd->flag & MOD_OCEAN_INVERT_SPRAY) {
+              mlcolspray->r = ocr.Eminus[0] * 255;
+            }
+            else {
+              mlcolspray->r = ocr.Eplus[0] * 255;
+            }
+            mlcolspray->g = 0;
+            if (omd->flag & MOD_OCEAN_INVERT_SPRAY) {
+              mlcolspray->b = ocr.Eminus[2] * 255;
+            }
+            else {
+              mlcolspray->b = ocr.Eplus[2] * 255;
+            }
+            mlcolspray->a = 255;
           }
-          else {
-            mlcolspray->b = ocr.Eplus[2] * 255;
-          }
-          mlcolspray->a = 255;
         }
       }
     }

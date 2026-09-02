@@ -125,8 +125,12 @@ static void subdiv_mesh_ctx_cache_uv_layers(SubdivMeshContext *ctx)
   Mesh *subdiv_mesh = ctx->subdiv_mesh;
   bke::MutableAttributeAccessor attributes = subdiv_mesh->attributes_for_write();
   for (const StringRef name : coarse_mesh.uv_map_names()) {
-    SpanAttributeWriter uv_map = attributes.convert_or_add_for_write_only_span<float2>(
+    SpanAttributeWriter uv_map = attributes.lookup_or_add_for_write_only_span<float2>(
         name, AttrDomain::Corner);
+    if (!uv_map) {
+      /* Attribute lookup can fail because of name collisions with vertex groups. */
+      continue;
+    }
     ctx->uv_maps.append(std::move(uv_map));
   }
 }
@@ -790,8 +794,12 @@ static void create_attrs_and_retrieve_interp_spans(const AttributeAccessor src_a
         }
       }
     }
-    GSpanAttributeWriter dst = dst_attrs.convert_or_add_for_write_only_span(
+    GSpanAttributeWriter dst = dst_attrs.lookup_or_add_for_write_only_span(
         iter.name, domain, iter.data_type);
+    if (!dst) {
+      /* Attribute creation can fail with a vertex group name conflict. */
+      return;
+    }
     coarse_varray_spans.append(std::move(src));
     coarse_spans.append(coarse_varray_spans.last());
     dst_writers.append(std::move(dst));

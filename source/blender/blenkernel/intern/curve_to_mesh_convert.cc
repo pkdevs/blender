@@ -673,8 +673,11 @@ static void copy_main_point_domain_attribute_to_mesh(const CurvesInfo &curves_in
       return;
     }
   }
-  GSpanAttributeWriter dst_attribute = mesh_attributes.convert_or_add_for_write_only_span(
+  GSpanAttributeWriter dst_attribute = mesh_attributes.lookup_or_add_for_write_only_span(
       name, dst_domain, bke::cpp_type_to_attribute_type(src_attribute.varray.type()));
+  if (!dst_attribute) {
+    return;
+  }
   if (dst_domain == AttrDomain::Point) {
     if (try_direct_evaluate_point_data(curves_info.main, src_attribute, dst_attribute.span)) {
       dst_attribute.finish();
@@ -1018,10 +1021,12 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
           curves_info, iter.name, offsets, dst_domain, src, eval_buffer, mesh_attributes);
     }
     else if (src_domain == AttrDomain::Curve) {
-      GSpanAttributeWriter dst = mesh_attributes.convert_or_add_for_write_only_span(
+      GSpanAttributeWriter dst = mesh_attributes.lookup_or_add_for_write_only_span(
           iter.name, dst_domain, type);
-      copy_curve_domain_attribute_to_mesh(
-          offsets, offsets.main_indices, dst_domain, *src, dst.span);
+      if (dst) {
+        copy_curve_domain_attribute_to_mesh(
+            offsets, offsets.main_indices, dst_domain, *src, dst.span);
+      }
       dst.finish();
     }
   });
@@ -1054,8 +1059,11 @@ Mesh *curve_to_mesh_sweep(const CurvesGeometry &main,
       }
     }
 
-    GSpanAttributeWriter dst = mesh_attributes.convert_or_add_for_write_only_span(
+    GSpanAttributeWriter dst = mesh_attributes.lookup_or_add_for_write_only_span(
         iter.name, dst_domain, type);
+    if (!dst) {
+      return;
+    }
 
     if (src_domain == AttrDomain::Point) {
       copy_profile_point_domain_attribute_to_mesh(curves_info,

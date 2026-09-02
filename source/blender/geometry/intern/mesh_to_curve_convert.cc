@@ -88,8 +88,11 @@ BLI_NOINLINE bke::CurvesGeometry create_curve_from_vert_indices(
       }
     }
 
-    bke::GSpanAttributeWriter dst = curves_attributes.convert_or_add_for_write_only_span(
+    bke::GSpanAttributeWriter dst = curves_attributes.lookup_or_add_for_write_only_span(
         iter.name, bke::AttrDomain::Point, iter.data_type);
+    if (!dst) {
+      return;
+    }
     bke::attribute_math::gather(*src, vert_indices, dst.span);
     dst.finish();
   });
@@ -322,8 +325,11 @@ bke::CurvesGeometry mesh_faces_to_curves_convert(const Mesh &mesh,
       return;
     }
     const GVArray src = *iter.get(bke::AttrDomain::Point);
-    bke::GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_only_span(
+    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
         iter.name, bke::AttrDomain::Point, iter.data_type);
+    if (!dst) {
+      return;
+    }
     bke::attribute_math::gather(src, point_to_vert_map, dst.span);
     dst.finish();
   });

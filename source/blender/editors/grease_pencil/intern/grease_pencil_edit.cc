@@ -1450,29 +1450,39 @@ static wmOperatorStatus grease_pencil_caps_set_exec(bContext *C, wmOperator *op)
     if (ELEM(mode, CapsMode::ROUND, CapsMode::FLAT)) {
       const int8_t flag_set = (mode == CapsMode::ROUND) ? int8_t(GP_STROKE_CAP_TYPE_ROUND) :
                                                           int8_t(GP_STROKE_CAP_TYPE_FLAT);
-      bke::SpanAttributeWriter<int8_t> start_caps =
-          attributes.convert_or_add_for_write_span<int8_t>("start_cap", bke::AttrDomain::Curve);
-      index_mask::masked_fill(start_caps.span, flag_set, strokes);
-      start_caps.finish();
-      bke::SpanAttributeWriter<int8_t> end_caps = attributes.convert_or_add_for_write_span<int8_t>(
-          "end_cap", bke::AttrDomain::Curve);
-      index_mask::masked_fill(end_caps.span, flag_set, strokes);
-      end_caps.finish();
+      if (bke::SpanAttributeWriter<int8_t> start_caps =
+              attributes.lookup_or_add_for_write_span<int8_t>("start_cap", bke::AttrDomain::Curve))
+      {
+        index_mask::masked_fill(start_caps.span, flag_set, strokes);
+        start_caps.finish();
+      }
+      if (bke::SpanAttributeWriter<int8_t> end_caps =
+              attributes.lookup_or_add_for_write_span<int8_t>("end_cap", bke::AttrDomain::Curve))
+      {
+        index_mask::masked_fill(end_caps.span, flag_set, strokes);
+        end_caps.finish();
+      }
     }
     else {
       switch (mode) {
         case CapsMode::START: {
-          bke::SpanAttributeWriter<int8_t> caps = attributes.convert_or_add_for_write_span<int8_t>(
-              "start_cap", bke::AttrDomain::Curve);
-          toggle_caps(caps.span, strokes);
-          caps.finish();
+          if (bke::SpanAttributeWriter<int8_t> caps =
+                  attributes.lookup_or_add_for_write_span<int8_t>("start_cap",
+                                                                  bke::AttrDomain::Curve))
+          {
+            toggle_caps(caps.span, strokes);
+            caps.finish();
+          }
           break;
         }
         case CapsMode::END: {
-          bke::SpanAttributeWriter<int8_t> caps = attributes.convert_or_add_for_write_span<int8_t>(
-              "end_cap", bke::AttrDomain::Curve);
-          toggle_caps(caps.span, strokes);
-          caps.finish();
+          if (bke::SpanAttributeWriter<int8_t> caps =
+                  attributes.lookup_or_add_for_write_span<int8_t>("end_cap",
+                                                                  bke::AttrDomain::Curve))
+          {
+            toggle_caps(caps.span, strokes);
+            caps.finish();
+          }
           break;
         }
         case CapsMode::ROUND:
@@ -2814,12 +2824,14 @@ static IndexRange clipboard_paste_strokes_ex(Main &bmain,
   if (!clipboard_material_remap.is_empty()) {
     /* Remap the material indices of the pasted curves to the target object material indices. */
     bke::MutableAttributeAccessor attributes = drawing.strokes_for_write().attributes_for_write();
-    bke::SpanAttributeWriter<int> material_indices = attributes.convert_or_add_for_write_span<int>(
+    bke::SpanAttributeWriter<int> material_indices = attributes.lookup_or_add_for_write_span<int>(
         "material_index", bke::AttrDomain::Curve);
-    for (const int i : pasted_curves_range) {
-      material_indices.span[i] = clipboard_material_remap[material_indices.span[i]];
+    if (material_indices) {
+      for (const int i : pasted_curves_range) {
+        material_indices.span[i] = clipboard_material_remap[material_indices.span[i]];
+      }
+      material_indices.finish();
     }
-    material_indices.finish();
   }
 
   drawing.tag_topology_changed();
@@ -5000,13 +5012,16 @@ static wmOperatorStatus grease_pencil_set_corner_type_exec(bContext *C, wmOperat
       return;
     }
 
-    bke::SpanAttributeWriter<float> miter_angles = attributes.convert_or_add_for_write_span<float>(
-        "miter_angle",
-        bke::AttrDomain::Point,
-        bke::AttributeInitValue(GP_STROKE_MITER_ANGLE_ROUND));
-    index_mask::masked_fill(miter_angles.span, miter_angle, selection);
-    miter_angles.finish();
-    changed.store(true, std::memory_order_relaxed);
+    if (bke::SpanAttributeWriter<float> miter_angles =
+            attributes.lookup_or_add_for_write_span<float>(
+                "miter_angle",
+                bke::AttrDomain::Point,
+                bke::AttributeInitValue(GP_STROKE_MITER_ANGLE_ROUND)))
+    {
+      index_mask::masked_fill(miter_angles.span, miter_angle, selection);
+      miter_angles.finish();
+      changed.store(true, std::memory_order_relaxed);
+    }
   });
 
   if (changed) {
