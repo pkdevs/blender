@@ -78,7 +78,8 @@ svm_node_attr_surface_eval(KernelGlobals kg,
    * It is stored as PackedSphericalHarmonics that does not have a float or float3 representation.
    */
   if (desc.type == NODE_ATTR_SPHERICAL_HARMONICS) {
-    return make_float3(FloatType(0.0f));
+    const float value = (type == NODE_ATTR_OUTPUT_FLOAT_ALPHA) ? 1.0f : 0.0f;
+    return make_float3(FloatType(value));
   }
 
   if (sd->type == PRIMITIVE_LAMP && node.attr == ATTR_STD_UV) {
