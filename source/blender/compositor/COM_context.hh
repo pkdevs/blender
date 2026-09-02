@@ -4,16 +4,15 @@
 
 #pragma once
 
-#include "BLI_bounds_types.hh"
-#include "BLI_math_vector_types.hh"
+#include <cstdint>
+
+#include "BLI_enum_flags.hh"
 #include "BLI_string_ref.hh"
 
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 
 #include "GPU_shader.hh"
-
-#include "BKE_compute_context_cache.hh"
 
 #include "COM_domain.hh"
 #include "COM_meta_data.hh"
@@ -23,6 +22,7 @@
 
 namespace blender {
 struct Main;
+struct ComputeContextHash;
 }  // namespace blender
 
 namespace blender::nodes::eval_log {
@@ -30,6 +30,16 @@ class NodesEvalLog;
 }  // namespace blender::nodes::eval_log
 
 namespace blender::compositor {
+
+/* Enumerates the possible node group outputs can be computed. Those can be combined into a bit
+ * flag. */
+enum class OutputTypes : uint8_t {
+  None = 0,
+  ViewerNode = 1 << 0,
+  FileOutputNode = 1 << 1,
+  NodePreviews = 1 << 2,
+};
+ENUM_OPERATORS(OutputTypes)
 
 /* ------------------------------------------------------------------------------------------------
  * Context
@@ -61,6 +71,9 @@ class Context {
 
   /* True if the compositor should use GPU acceleration. */
   virtual bool use_gpu() const = 0;
+
+  /* Returns the output types that needs to be computed. */
+  virtual OutputTypes needed_output_types() const = 0;
 
   /* Returns the hash of the currently active compute context. */
   virtual const ComputeContextHash &get_active_compute_context_hash() const = 0;

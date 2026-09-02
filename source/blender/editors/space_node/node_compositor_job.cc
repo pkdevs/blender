@@ -2,7 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_compositor.hh"
 #include "BLI_listbase.hh"
 
 #include "GPU_capabilities.hh"
@@ -10,6 +9,7 @@
 #include "IMB_imbuf.hh"
 
 #include "BKE_callbacks.hh"
+#include "BKE_compositor.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_image.hh"
@@ -33,7 +33,7 @@
 #include "ED_node.hh"
 #include "ED_screen.hh"
 
-#include "COM_node_group_operation.hh"
+#include "COM_context.hh"
 
 namespace blender {
 
@@ -43,7 +43,7 @@ struct CompositorJob {
   Scene *scene;
   ViewLayer *view_layer;
   Render *render;
-  compositor::NodeGroupOutputTypes needed_outputs;
+  compositor::OutputTypes needed_outputs;
   /* Identifies if the compositor is executing due to the user making a modification or if it is
    * executing due to playback or rendering. */
   bool triggered_by_user = false;
@@ -198,14 +198,13 @@ static bool is_compositing_possible(const Scene *scene)
 
 /* Returns the compositor outputs that need to be computed because their result is visible to the
  * user or required by the render pipeline. */
-static compositor::NodeGroupOutputTypes get_compositor_needed_outputs(
-    const wmWindowManager *window_manager)
+static compositor::OutputTypes get_compositor_needed_outputs(const wmWindowManager *window_manager)
 {
   if (G.background) {
-    return compositor::NodeGroupOutputTypes::None;
+    return compositor::OutputTypes::None;
   }
 
-  compositor::NodeGroupOutputTypes needed_outputs = compositor::NodeGroupOutputTypes::None;
+  compositor::OutputTypes needed_outputs = compositor::OutputTypes::None;
 
   for (wmWindow &window : window_manager->windows) {
     bScreen *screen = WM_window_get_active_screen(&window);
@@ -217,23 +216,23 @@ static compositor::NodeGroupOutputTypes get_compositor_needed_outputs(
       if (space_link->spacetype == SPACE_NODE) {
         const SpaceNode *space_node = reinterpret_cast<const SpaceNode *>(space_link);
         if (space_node->flag & SNODE_BACKDRAW) {
-          needed_outputs |= compositor::NodeGroupOutputTypes::ViewerNode;
+          needed_outputs |= compositor::OutputTypes::ViewerNode;
         }
         if (space_node->overlay.flag & SN_OVERLAY_SHOW_PREVIEWS) {
-          needed_outputs |= compositor::NodeGroupOutputTypes::NodePreviews;
+          needed_outputs |= compositor::OutputTypes::NodePreviews;
         }
       }
       else if (space_link->spacetype == SPACE_IMAGE) {
         const SpaceImage *space_image = reinterpret_cast<const SpaceImage *>(space_link);
         Image *image = ED_space_image(space_image);
         if (image && image->source == IMA_SRC_VIEWER && image->type == IMA_TYPE_COMPOSITE) {
-          needed_outputs |= compositor::NodeGroupOutputTypes::ViewerNode;
+          needed_outputs |= compositor::OutputTypes::ViewerNode;
         }
       }
 
       /* All possible outputs are already needed, return early. */
-      if (needed_outputs == (compositor::NodeGroupOutputTypes::ViewerNode |
-                             compositor::NodeGroupOutputTypes::NodePreviews))
+      if (needed_outputs ==
+          (compositor::OutputTypes::ViewerNode | compositor::OutputTypes::NodePreviews))
       {
         return needed_outputs;
       }
@@ -242,8 +241,8 @@ static compositor::NodeGroupOutputTypes get_compositor_needed_outputs(
 
   /* None of the outputs are needed except node previews but they are a secondary output that needs
    * another output to be computed with, so this is practically none. */
-  if (needed_outputs == compositor::NodeGroupOutputTypes::NodePreviews) {
-    return compositor::NodeGroupOutputTypes::None;
+  if (needed_outputs == compositor::OutputTypes::NodePreviews) {
+    return compositor::OutputTypes::None;
   }
 
   return needed_outputs;
@@ -269,9 +268,8 @@ void ED_node_compositor_job(Main *bmain,
   }
 
   wmWindowManager *window_manager = static_cast<wmWindowManager *>(bmain->wm.first);
-  const compositor::NodeGroupOutputTypes needed_outputs = get_compositor_needed_outputs(
-      window_manager);
-  if (needed_outputs == compositor::NodeGroupOutputTypes::None) {
+  const compositor::OutputTypes needed_outputs = get_compositor_needed_outputs(window_manager);
+  if (needed_outputs == compositor::OutputTypes::None) {
     return;
   }
 

@@ -1361,11 +1361,10 @@ static void do_render_compositor(Render *re)
           /* If we have consistent depsgraph now would be a time to update them. */
         }
 
-        compositor::NodeGroupOutputTypes needed_outputs =
-            compositor::NodeGroupOutputTypes::FileOutputNode;
+        compositor::OutputTypes needed_outputs = compositor::OutputTypes::FileOutputNode;
         if (!G.background) {
-          needed_outputs |= compositor::NodeGroupOutputTypes::ViewerNode |
-                            compositor::NodeGroupOutputTypes::NodePreviews;
+          needed_outputs |= compositor::OutputTypes::ViewerNode |
+                            compositor::OutputTypes::NodePreviews;
         }
 
         CLOG_STR_INFO(&LOG, "Executing compositor");

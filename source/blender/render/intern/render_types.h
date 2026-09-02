@@ -30,7 +30,7 @@ namespace blender {
 
 namespace compositor {
 class RenderContext;
-enum class NodeGroupOutputTypes : uint8_t;
+enum class OutputTypes : uint8_t;
 }  // namespace compositor
 
 struct bNodeTree;
