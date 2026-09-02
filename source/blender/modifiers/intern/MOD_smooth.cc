@@ -6,9 +6,6 @@
  * \ingroup modifiers
  */
 
-#include <algorithm>
-#include <cmath>
-
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
@@ -26,6 +23,7 @@
 
 #include "BKE_attribute.hh"
 #include "BKE_deform.hh"
+#include "BKE_mesh_frequency_smooth.hh"
 #include "BKE_mesh_mapping.hh"
 #include "BKE_modifier.hh"
 
@@ -39,8 +37,6 @@
 #include "MOD_modifiertypes.hh"
 #include "MOD_ui_common.hh"
 #include "MOD_util.hh"
-
-#include "eigen_capi.h"
 
 namespace blender {
 
@@ -268,123 +264,7 @@ static void hc_correction_pass(MutableSpan<float3> p,
   });
 }
 
-static LinearSolver *frequency_solver_create(const Span<int2> edges,
-                                             const GroupedSpan<int> vert_to_edge_map,
-                                             const Span<float> edge_weights,
-                                             const Span<bool> pinned,
-                                             const Span<float> inverse_weight_sums,
-                                             const float cutoff,
-                                             const Span<float3> positions)
-{
-  const int verts_num = positions.size();
-  LinearSolver *solver = EIG_linear_least_squares_solver_new(2 * verts_num, verts_num, 3);
-  const bool has_pin = !pinned.is_empty();
-  for (const int i : positions.index_range()) {
-    for (const int axis : IndexRange(3)) {
-      EIG_linear_solver_variable_set(solver, axis, i, positions[i][axis]);
-    }
-    if (has_pin && pinned[i]) {
-      EIG_linear_solver_variable_lock(solver, i);
-    }
-  }
 
-  const bool weighted = !edge_weights.is_empty();
-  const double laplacian_scale = 1.0 / double(std::max(cutoff, 1e-6f));
-  for (const int i : positions.index_range()) {
-    EIG_linear_solver_matrix_add(solver, i, i, 1.0);
-    if (inverse_weight_sums[i] == 0.0f) {
-      continue;
-    }
-
-    const int row = verts_num + i;
-    EIG_linear_solver_matrix_add(solver, row, i, laplacian_scale);
-    for (const int e : vert_to_edge_map[i]) {
-      const int2 edge = edges[e];
-      const int other = (edge[0] == i) ? edge[1] : edge[0];
-      const float weight = weighted ? edge_weights[e] : 1.0f;
-      EIG_linear_solver_matrix_add(
-          solver, row, other, -laplacian_scale * double(weight * inverse_weight_sums[i]));
-    }
-  }
-  return solver;
-}
-
-static bool frequency_solve(LinearSolver *solver,
-                            const Span<bool> pinned,
-                            const short smooth_flags,
-                            const Span<float3> right_hand_side,
-                            MutableSpan<float3> positions)
-{
-  for (const int i : right_hand_side.index_range()) {
-    for (const int axis : IndexRange(3)) {
-      EIG_linear_solver_right_hand_side_add(solver, axis, i, right_hand_side[i][axis]);
-    }
-  }
-  if (!EIG_linear_solver_solve(solver)) {
-    return false;
-  }
-
-  const bool has_pin = !pinned.is_empty();
-  for (const int i : positions.index_range()) {
-    if (has_pin && pinned[i]) {
-      continue;
-    }
-    for (const int axis : IndexRange(3)) {
-      if (smooth_flags & (MOD_SMOOTH_X << axis)) {
-        const double value = EIG_linear_solver_variable_get(solver, axis, i);
-        const float position = float(value);
-        if (!std::isfinite(position)) {
-          return false;
-        }
-        positions[i][axis] = position;
-      }
-    }
-  }
-  return true;
-}
-
-static bool frequency_filter(const Span<int2> edges,
-                             const GroupedSpan<int> vert_to_edge_map,
-                             const Span<float> edge_weights,
-                             const Span<bool> pinned,
-                             const float cutoff,
-                             const int iterations,
-                             const short smooth_flags,
-                             MutableSpan<float3> positions)
-{
-  const int verts_num = positions.size();
-  if (verts_num == 0 || iterations == 0) {
-    return true;
-  }
-
-  const bool weighted = !edge_weights.is_empty();
-  Array<float> inverse_weight_sums(verts_num, 0.0f);
-  threading::parallel_for(positions.index_range(), 1024, [&](const IndexRange range) {
-    for (const int i : range) {
-      float weight_sum = 0.0f;
-      for (const int e : vert_to_edge_map[i]) {
-        weight_sum += weighted ? edge_weights[e] : 1.0f;
-      }
-      if (weight_sum > 0.0f) {
-        inverse_weight_sums[i] = 1.0f / weight_sum;
-      }
-    }
-  });
-
-  Array<float3> right_hand_side(verts_num);
-  LinearSolver *solver = frequency_solver_create(
-      edges, vert_to_edge_map, edge_weights, pinned, inverse_weight_sums, cutoff, positions);
-  bool success = true;
-  for (int iteration = 0; iteration < iterations; iteration++) {
-    right_hand_side.as_mutable_span().copy_from(positions);
-    if (!frequency_solve(solver, pinned, smooth_flags, right_hand_side, positions)) {
-      success = false;
-      break;
-    }
-  }
-  EIG_linear_solver_delete(solver);
-  return success;
-}
 
 static void smoothModifier_do(SmoothModifierData *smd,
                               Object *ob,
@@ -490,14 +370,17 @@ static void smoothModifier_do(SmoothModifierData *smd,
     }
     case MOD_SMOOTH_METHOD_FREQUENCY: {
       Array<float3> filtered_positions(vertexCos.as_span());
-      if (!frequency_filter(edges,
-                            vert_to_edge_map,
-                            weights_span,
-                            pinned_span,
-                            smd->frequency_cutoff,
-                            smd->repeat,
-                            smd->flag,
-                            filtered_positions))
+      const bool axis_enabled[3] = {(smd->flag & MOD_SMOOTH_X) != 0,
+                                    (smd->flag & MOD_SMOOTH_Y) != 0,
+                                    (smd->flag & MOD_SMOOTH_Z) != 0};
+      if (!bke::mesh_frequency_smooth_filter(edges,
+                                             vert_to_edge_map,
+                                             weights_span,
+                                             pinned_span,
+                                             smd->frequency_cutoff,
+                                             smd->repeat,
+                                             axis_enabled,
+                                             filtered_positions))
       {
         BKE_modifier_set_error(
             ob, &smd->modifier, "Frequency smoothing could not solve the filter system");

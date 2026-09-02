@@ -194,6 +194,7 @@ set(SRC
   intern/mesh_debug.cc
   intern/mesh_evaluate.cc
   intern/mesh_fair.cc
+  intern/mesh_frequency_smooth.cc
   intern/mesh_flip_faces.cc
   intern/mesh_iterators.cc
   intern/mesh_legacy_convert.cc
@@ -459,6 +460,7 @@ set(SRC
   BKE_mesh.h
   BKE_mesh.hh
   BKE_mesh_fair.hh
+  BKE_mesh_frequency_smooth.hh
   BKE_mesh_iterators.hh
   BKE_mesh_legacy_convert.hh
   BKE_mesh_mapping.hh
