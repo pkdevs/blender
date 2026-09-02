@@ -346,10 +346,10 @@ class LazyFunctionForMenuSwitchNode : public LazyFunction {
   {
     SocketValueVariant condition_variant = params.get_input<SocketValueVariant>(0);
     if (condition_variant.is_context_dependent_field() && can_be_field_) {
-      this->execute_field(condition_variant.get<Field<MenuValue>>(), params);
+      this->execute_field(condition_variant.ensure_type<Field<MenuValue>>(), params);
     }
     else {
-      this->execute_single(condition_variant.get<MenuValue>(), params);
+      this->execute_single(condition_variant.ensure_type<MenuValue>(), params);
     }
   }
 
@@ -441,7 +441,7 @@ class LazyFunctionMenuSwitchBooleanOutputs : public LazyFunction {
     GeoNodesUserData *user_data = dynamic_cast<GeoNodesUserData *>(context.user_data);
     SocketValueVariant condition_variant = params.get_input<SocketValueVariant>(0);
     if (condition_variant.is_single()) {
-      this->execute_single(condition_variant.get<MenuValue>(), params);
+      this->execute_single(condition_variant.ensure_type<MenuValue>(), params);
       return;
     }
 
@@ -505,7 +505,7 @@ class LazyFunctionForMenuSwitchSocketUsage : public lf::LazyFunction {
       }
     }
     else {
-      const MenuValue value = condition_variant.get<MenuValue>();
+      const MenuValue value = SocketValueVariant(condition_variant).ensure_type<MenuValue>();
       for (const int i : IndexRange(enum_def_.items_num)) {
         const NodeEnumItem &enum_item = enum_def_.items()[i];
         params.set_output(i, value.value == enum_item.identifier);

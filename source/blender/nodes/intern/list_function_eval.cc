@@ -145,8 +145,8 @@ static void add_list_to_params(mf::ParamsBuilder &params,
   for (const int input_i : input_values.index_range()) {
     const SocketValueVariant &input_variant = *input_values[input_i];
     if (input_variant.is_context_dependent_field()) {
-      fields_as_lists[input_i] = evaluate_field_to_list(input_variant.get<fn::GField>(),
-                                                        output_size);
+      fields_as_lists[input_i] = evaluate_field_to_list(
+          SocketValueVariant(input_variant).ensure_type<fn::GField>(), output_size);
     }
   }
 
@@ -169,34 +169,37 @@ static void add_list_to_params(mf::ParamsBuilder &params,
         const mf::ParamType param_type = fn.param_type(input_i);
         const CPPType &cpp_type = param_type.data_type().single_type();
         const SocketValueVariant &input_variant = *input_values[input_i];
-        const eNodeSocketDatatype socket_type =
-            bke::geo_nodes_base_cpp_type_to_socket_type(cpp_type).value();
         SocketValueVariant &elem_input = inputs[input_i];
+
+        auto store_default_single = [&]() {
+          void *ptr = elem_input.allocate_single(cpp_type);
+          cpp_type.copy_construct(cpp_type.default_value(), ptr);
+        };
 
         auto handle_input_list = [&](const GListPtr &list) {
           if (list) {
             if (list->size() == 0) {
-              elem_input.store_single(socket_type, cpp_type.default_value());
+              store_default_single();
             }
             else if (list->cpp_type().is<SocketValueVariant>()) {
               elem_input = list->typed<SocketValueVariant>().varray()[iter_i % list->size()];
             }
             else if (list->cpp_type() == cpp_type) {
-              void *ptr = elem_input.allocate_single(socket_type);
+              void *ptr = elem_input.allocate_single(cpp_type);
               list->varray().get_to_uninitialized(iter_i % list->size(), ptr);
             }
             else {
-              elem_input.store_single(socket_type, cpp_type.default_value());
+              store_default_single();
               BLI_assert_unreachable();
             }
           }
           else {
-            elem_input.store_single(socket_type, cpp_type.default_value());
+            store_default_single();
           }
         };
 
         if (input_variant.is_list()) {
-          handle_input_list(input_variant.get<GListPtr>());
+          handle_input_list(*input_variant.get_if<GListPtr>());
         }
         else if (input_variant.is_context_dependent_field()) {
           handle_input_list(fields_as_lists[input_i]);
@@ -234,7 +237,8 @@ static void add_list_to_params(mf::ParamsBuilder &params,
   }
   for (const int output_i : output_values.index_range()) {
     if (output_values[output_i]) {
-      output_values[output_i]->set(GList::from_container(std::move(output_lists[output_i])));
+      output_values[output_i]->emplace<GListPtr>(
+          GList::from_container(std::move(output_lists[output_i])));
     }
   }
   return true;

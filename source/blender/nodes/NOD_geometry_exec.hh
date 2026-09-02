@@ -217,7 +217,7 @@ class GeoNodeExecParams {
       params_.set_output(index, std::forward<T>(value));
     }
     else {
-      params_.set_output(index, SocketValueVariant(std::forward<T>(value)));
+      params_.set_output(index, SocketValueVariant::From(std::forward<T>(value)));
     }
   }
 

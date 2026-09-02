@@ -1331,7 +1331,7 @@ class LazyFunctionForSwitchSocketUsage : public lf::LazyFunction {
       params.set_output(1, true);
     }
     else {
-      const bool value = *condition_variant.get().get<bool>();
+      const bool value = SocketValueVariant(condition_variant).ensure_type<bool>();
       params.set_output(0, !value);
       params.set_output(1, value);
     }
@@ -1351,7 +1351,7 @@ class LazyFunctionForEnableOutputSocketUsage : public lf::LazyFunction {
   {
     const SocketValueVariant &keep_variant = params.get_input<SocketValueVariant>(0);
     if (keep_variant.is_single()) {
-      if (*keep_variant.get().get<bool>() == true) {
+      if (SocketValueVariant(keep_variant).ensure_type<bool>() == true) {
         params.set_output(0, true);
         return;
       }
@@ -1384,7 +1384,7 @@ class LazyFunctionForIndexSwitchSocketUsage : public lf::LazyFunction {
       }
     }
     else {
-      const int value = *index_variant.get().get<int>();
+      const int value = SocketValueVariant(index_variant).ensure_type<int>();
       for (const int i : outputs_.index_range()) {
         params.set_output(i, i == value);
       }

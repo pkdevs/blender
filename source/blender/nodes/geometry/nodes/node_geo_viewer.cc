@@ -380,7 +380,7 @@ static void log_viewer_attribute(const bNode &node, eval_log::ViewerNodeLog &r_l
     if (!(value.is_single() || value.is_field())) {
       continue;
     }
-    const GField field = value.get<GField>();
+    const GField field = bke::SocketValueVariant(value).ensure_type<GField>();
     const auto domain_or_auto = bke::AttrDomainSelection(storage.domain);
     if (domain_or_auto == bke::AttrDomainSelection::Instance) {
       if (geometry.has_instances()) {

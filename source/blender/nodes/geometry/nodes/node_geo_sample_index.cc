@@ -103,8 +103,9 @@ static void node_geo_exec(GeoNodeExecParams params)
       index = std::clamp(index, 0, domain_size - 1);
     }
     const eNodeSocketDatatype socket_type = params.node().output_socket(0).typeinfo->type;
+    const CPPType &output_cpp_type = *bke::socket_type_to_geo_nodes_base_cpp_type(socket_type);
     SocketValueVariant output_value;
-    void *buffer = output_value.allocate_single(socket_type);
+    void *buffer = output_value.allocate_single(output_cpp_type);
     if (index >= 0 && index < domain_size) {
       const IndexMask mask = IndexRange(index, 1);
       const bke::GeometryFieldContext geometry_context(*component, domain);

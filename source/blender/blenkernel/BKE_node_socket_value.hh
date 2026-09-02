@@ -81,7 +81,7 @@ class SocketValueVariant {
 
   template<typename T>
   explicit SocketValueVariant(T &&value)
-    requires(std::is_trivial_v<T> || std::is_same_v<T, std::string>);
+    requires(std::is_trivial_v<std::decay_t<T>> || std::is_same_v<std::decay_t<T>, std::string>);
 
   /** Construct a #SocketValueVariant at the given pointer from the given value. */
   template<typename T> static SocketValueVariant &ConstructIn(void *ptr, T &&value);
@@ -110,6 +110,7 @@ class SocketValueVariant {
   void *allocate_single(const CPPType &type);
 
   bool is_single() const;
+  bool is_field() const;
   bool is_list() const;
   bool is_volume_grid() const;
   bool is_context_dependent_field() const;
@@ -132,7 +133,7 @@ class SocketValueVariant {
 
 template<typename T>
 inline SocketValueVariant::SocketValueVariant(T &&value)
-  requires(std::is_trivial_v<T> || std::is_same_v<T, std::string>)
+  requires(std::is_trivial_v<std::decay_t<T>> || std::is_same_v<std::decay_t<T>, std::string>)
 {
   this->emplace<std::decay_t<T>>(std::forward<T>(value));
 }
@@ -181,7 +182,7 @@ template<typename T> T *SocketValueVariant::try_convert()
   return &reinterpret_cast<T &>(value_.get<StorageT>());
 }
 
-void *SocketValueVariant::try_convert(const CPPType &type)
+inline void *SocketValueVariant::try_convert(const CPPType &type)
 {
   if (!value_.has_value()) {
     return nullptr;

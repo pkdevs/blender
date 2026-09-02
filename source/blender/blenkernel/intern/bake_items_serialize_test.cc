@@ -81,7 +81,7 @@ TEST_F(BakeItemsSerializeTest, nested_bundle_with_geometry_and_bundle_lists)
   const BakeValues::Item *item = bake_values->values_by_id().lookup_ptr(0);
   ASSERT_NE(item, nullptr);
 
-  nodes::BundlePtr restored_bundle = item->value.get<nodes::BundlePtr>();
+  nodes::BundlePtr restored_bundle = *item->value.get_if<nodes::BundlePtr>();
   ASSERT_TRUE(restored_bundle);
 
   std::optional<nodes::GListPtr> restored_geometries = restored_bundle->lookup<nodes::GListPtr>(

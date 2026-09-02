@@ -481,7 +481,7 @@ class LazyFunctionForForeachGeometryElementZone : public LazyFunction {
             params
                 .get_input<SocketValueVariant>(
                     zone_info_.indices.inputs.main[indices_.inputs.lf_outer[item_i]])
-                .get<GField>();
+                .ensure_type<GField>();
         component_info.field_evaluator->add(item_field);
       }
 
@@ -497,7 +497,7 @@ class LazyFunctionForForeachGeometryElementZone : public LazyFunction {
       /* Prepare indices that are passed into each iteration. */
       component_info.index_values.reinitialize(mask.size());
       mask.foreach_index_optimized<int>(
-          [&](const int i, const int pos) { component_info.index_values[pos].set(i); });
+          [&](const int i, const int pos) { component_info.index_values[pos].emplace<int>(i); });
 
       if (create_element_geometries) {
         if (std::optional<Array<GeometrySet>> element_geometries =
@@ -520,12 +520,13 @@ class LazyFunctionForForeachGeometryElementZone : public LazyFunction {
       for (const int item_i : IndexRange(node_storage.input_items.items_num)) {
         const NodeForeachGeometryElementInputItem &item = node_storage.input_items.items[item_i];
         const eNodeSocketDatatype socket_type = item.socket_type;
+        const CPPType &base_cpp_type = *bke::socket_type_to_geo_nodes_base_cpp_type(socket_type);
         component_info.item_input_values[item_i].reinitialize(mask.size());
         const GVArray &values = component_info.field_evaluator->get_evaluated(item_i);
         mask.foreach_index(
             [&](const int i, const int pos) {
               SocketValueVariant &value_variant = component_info.item_input_values[item_i][pos];
-              void *buffer = value_variant.allocate_single(socket_type);
+              void *buffer = value_variant.allocate_single(base_cpp_type);
               values.get_to_uninitialized(i, buffer);
             },
             exec_mode::grain_size(1024));

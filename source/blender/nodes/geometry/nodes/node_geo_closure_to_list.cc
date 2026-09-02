@@ -207,7 +207,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       GArray<> array(type, count, NoInitialization());
       threading::parallel_for(IndexRange(count), 128, [&](const IndexRange range) {
         for (const int list_i : range) {
-          void *closure_result = const_cast<void *>(values[list_i].get_single_ptr_raw());
+          void *closure_result = values[list_i].get_if(type);
           type.move_construct(closure_result, array[list_i]);
         }
       });

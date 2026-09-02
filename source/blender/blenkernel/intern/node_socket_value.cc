@@ -13,19 +13,86 @@
 #include "BKE_volume_grid_multi_function_eval.hh"
 
 #include "NOD_geometry_nodes_bundle.hh"
+#include "NOD_geometry_nodes_closure.hh"
 #include "NOD_geometry_nodes_list.hh"
 #include "NOD_menu_value.hh"
+
+#include "BLI_color_types.hh"
+#include "BLI_math_quaternion_types.hh"
+#include "BLI_math_vector_types.hh"
+#include "BLI_memory_counter.hh"
+
+struct Object;
+struct VFont;
+struct bSound;
+struct Text;
+struct Mask;
 
 namespace blender::bke {
 
 using fn::Field;
 using fn::GField;
 using nodes::BundlePtr;
+using nodes::ClosurePtr;
 using nodes::GList;
 using nodes::GListPtr;
 using nodes::List;
 using nodes::ListPtr;
 using volume_grid::GVolumeGrid;
+using volume_grid::VolumeGrid;
+
+/**
+ * All types that can be stored as a "single" value in a #SocketValueVariant.
+ */
+#define SOCKET_VALUE_SINGLE_TYPES \
+  X(float) \
+  X(int) \
+  X(float2) \
+  X(float3) \
+  X(float4) \
+  X(int2) \
+  X(bool) \
+  X(int8_t) \
+  X(short2) \
+  X(ColorGeometry4f) \
+  X(ColorGeometry4b) \
+  X(math::Quaternion) \
+  X(float4x4) \
+  X(nodes::MenuValue) \
+  X(std::string) \
+  X(BundlePtr) \
+  X(ClosurePtr) \
+  X(GeometrySet) \
+  X(Object *) \
+  X(Material *) \
+  X(Image *) \
+  X(VFont *) \
+  X(Scene *) \
+  X(bSound *) \
+  X(Collection *) \
+  X(Tex *) \
+  X(Text *) \
+  X(Mask *)
+
+/**
+ * The subset of #SOCKET_VALUE_SINGLE_TYPES that also support #Field<T> and #ListPtr<T>.
+ */
+#define SOCKET_VALUE_FIELD_AND_LIST_TYPES \
+  X(float) \
+  X(int) \
+  X(float2) \
+  X(float3) \
+  X(float4) \
+  X(int2) \
+  X(bool) \
+  X(int8_t) \
+  X(short2) \
+  X(ColorGeometry4f) \
+  X(ColorGeometry4b) \
+  X(math::Quaternion) \
+  X(float4x4) \
+  X(nodes::MenuValue) \
+  X(std::string)
 
 namespace detail {
 
@@ -273,11 +340,12 @@ bool SocketValueVariantTypeInfo::is_interpretable_as_fn(const CPPType &dst_type,
   template bool SocketValueVariantTypeInfo::is_interpretable_as_fn<TYPE>( \
       const CPPType &dst_type, const SocketValueVariantAny &value);
 
-DEFINE_TYPE(int)
-DEFINE_TYPE(float)
+#define X(TYPE) DEFINE_TYPE(TYPE)
+SOCKET_VALUE_SINGLE_TYPES
+#undef X
+
 DEFINE_TYPE(GField)
 DEFINE_TYPE(GListPtr)
-DEFINE_TYPE(std::string)
 
 #ifdef WITH_OPENVDB
 DEFINE_TYPE(volume_grid::GVolumeGrid)
@@ -318,37 +386,56 @@ inline T &SocketValueVariant::init_default(detail::SocketValueVariantAny &value)
   }
 }
 
+/** Explicit instantiations. */
+#define DEFINE_INIT_DEFAULT(TYPE) \
+  template TYPE &SocketValueVariant::init_default<TYPE>(detail::SocketValueVariantAny & value);
+
+#define X(TYPE) DEFINE_INIT_DEFAULT(TYPE)
+SOCKET_VALUE_SINGLE_TYPES
+#undef X
+
+#define X(TYPE) \
+  DEFINE_INIT_DEFAULT(Field<TYPE>) \
+  DEFINE_INIT_DEFAULT(ListPtr<TYPE>)
+SOCKET_VALUE_FIELD_AND_LIST_TYPES
+#undef X
+
+DEFINE_INIT_DEFAULT(GField)
+DEFINE_INIT_DEFAULT(GListPtr)
+#ifdef WITH_OPENVDB
+DEFINE_INIT_DEFAULT(GVolumeGrid)
+DEFINE_INIT_DEFAULT(VolumeGrid<float>)
+DEFINE_INIT_DEFAULT(VolumeGrid<int>)
+DEFINE_INIT_DEFAULT(VolumeGrid<float3>)
+DEFINE_INIT_DEFAULT(VolumeGrid<bool>)
+#endif
+
+#undef DEFINE_INIT_DEFAULT
+
 void *SocketValueVariant::init_default(const CPPType &type, detail::SocketValueVariantAny &value)
 {
-  if (type.is<float>()) {
-    return &SocketValueVariant::init_default<float>(value);
+#define X(TYPE) \
+  if (type.is<TYPE>()) { \
+    return &SocketValueVariant::init_default<TYPE>(value); \
   }
-  if (type.is<int>()) {
-    return &SocketValueVariant::init_default<int>(value);
+  SOCKET_VALUE_SINGLE_TYPES
+#undef X
+
+#define X(TYPE) \
+  if (type.is<Field<TYPE>>()) { \
+    return &SocketValueVariant::init_default<Field<TYPE>>(value); \
+  } \
+  if (type.is<ListPtr<TYPE>>()) { \
+    return &SocketValueVariant::init_default<ListPtr<TYPE>>(value); \
   }
-  if (type.is<std::string>()) {
-    return &SocketValueVariant::init_default<std::string>(value);
-  }
-  if (type.is<BundlePtr>()) {
-    return &SocketValueVariant::init_default<BundlePtr>(value);
-  }
+  SOCKET_VALUE_FIELD_AND_LIST_TYPES
+#undef X
+
   if (type.is<GField>()) {
     return &SocketValueVariant::init_default<GField>(value);
   }
-  if (type.is<Field<int>>()) {
-    return &SocketValueVariant::init_default<Field<int>>(value);
-  }
-  if (type.is<Field<float>>()) {
-    return &SocketValueVariant::init_default<Field<float>>(value);
-  }
   if (type.is<GListPtr>()) {
     return &SocketValueVariant::init_default<GListPtr>(value);
-  }
-  if (type.is<ListPtr<int>>()) {
-    return &SocketValueVariant::init_default<ListPtr<int>>(value);
-  }
-  if (type.is<ListPtr<float>>()) {
-    return &SocketValueVariant::init_default<ListPtr<float>>(value);
   }
 #ifdef WITH_OPENVDB
   if (type.is<GVolumeGrid>()) {
@@ -360,18 +447,25 @@ void *SocketValueVariant::init_default(const CPPType &type, detail::SocketValueV
   if (type.is<VolumeGrid<int>>()) {
     return &SocketValueVariant::init_default<VolumeGrid<int>>(value);
   }
+  if (type.is<VolumeGrid<float3>>()) {
+    return &SocketValueVariant::init_default<VolumeGrid<float3>>(value);
+  }
+  if (type.is<VolumeGrid<bool>>()) {
+    return &SocketValueVariant::init_default<VolumeGrid<bool>>(value);
+  }
 #endif
   return nullptr;
 }
 
 void *SocketValueVariant::allocate(const CPPType &type, detail::SocketValueVariantAny &value)
 {
-  if (type.is<int>()) {
-    return value.allocate<int>();
+#define X(TYPE) \
+  if (type.is<TYPE>()) { \
+    return value.allocate<TYPE>(); \
   }
-  if (type.is<float>()) {
-    return value.allocate<float>();
-  }
+  SOCKET_VALUE_SINGLE_TYPES
+#undef X
+
   if (type.is<GField>()) {
     return value.allocate<GField>();
   }
@@ -387,34 +481,29 @@ void *SocketValueVariant::allocate(const CPPType &type, detail::SocketValueVaria
   return nullptr;
 }
 
+void *SocketValueVariant::allocate_single(const CPPType &type)
+{
+  return SocketValueVariant::allocate(type, value_);
+}
+
 bool SocketValueVariant::is_single() const
 {
-  return this->get()
-      .type()
-      ->is_any<float,
-               float2,
-               float3,
-               float4,
-               int,
-               int2,
-               bool,
-               int8_t,
-               short2,
-               ColorGeometry4f,
-               ColorGeometry4b,
-               math::Quaternion,
-               float4x4,
-               nodes::MenuValue,
-               std::string,
-               nodes::BundlePtr,
-               nodes::ClosurePtr,
-               GeometrySet,
-               Material *,
-               Object *,
-               Image *,
-               VFont *,
-               Scene *,
-               bSound *>();
+  const CPPType *type = this->get().type();
+  if (!type) {
+    return false;
+  }
+#define X(TYPE) \
+  if (type->is<TYPE>()) { \
+    return true; \
+  }
+  SOCKET_VALUE_SINGLE_TYPES
+#undef X
+  return false;
+}
+
+bool SocketValueVariant::is_field() const
+{
+  return this->get().type()->is<fn::GField>();
 }
 
 bool SocketValueVariant::is_list() const
@@ -477,6 +566,36 @@ bool SocketValueVariant::owns_direct_data() const
     return geometry.owns_direct_data();
   }
   return false;
+}
+
+void SocketValueVariant::count_memory(MemoryCounter &memory) const
+{
+  if (!value_.has_value()) {
+    return;
+  }
+  const GPointer value = this->get();
+  const CPPType &cpp_type = *value.type();
+  memory.add(cpp_type.size);
+  if (cpp_type.is<GeometrySet>()) {
+    value.get<GeometrySet>()->count_memory(memory);
+  }
+  else if (cpp_type.is<nodes::BundlePtr>()) {
+    if (const nodes::BundlePtr &bundle_ptr = *value.get<nodes::BundlePtr>()) {
+      bundle_ptr->count_memory(memory);
+    }
+  }
+  else if (cpp_type.is<nodes::GListPtr>()) {
+    if (const nodes::GListPtr &list = *value.get<nodes::GListPtr>()) {
+      list->count_memory(memory);
+    }
+  }
+#ifdef WITH_OPENVDB
+  else if (cpp_type.is<GVolumeGrid>()) {
+    if (const GVolumeGrid &grid = *value.get<GVolumeGrid>()) {
+      grid->count_memory(memory);
+    }
+  }
+#endif
 }
 
 }  // namespace blender::bke

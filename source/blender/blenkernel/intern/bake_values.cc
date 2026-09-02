@@ -19,6 +19,7 @@
 #include "BKE_node_socket_value_iter.hh"
 #include "BKE_pointcloud.hh"
 #include "BKE_volume.hh"
+#include "BKE_volume_grid.hh"
 
 #include "DNA_curves_types.h"
 #include "DNA_grease_pencil_types.h"
@@ -644,6 +645,28 @@ BakeValues BakeValues::from_runtime_values(Vector<InputValue> runtime_values,
   return bake_values;
 }
 
+static bool value_variant_valid_for_socket(const SocketValueVariant &value,
+                                           const CPPType &base_cpp_type)
+{
+  if (value.is_field()) {
+    return value.get_if<fn::GField>()->cpp_type() == base_cpp_type;
+  }
+  if (value.is_list()) {
+    const nodes::GListPtr &list = *value.get_if<nodes::GListPtr>();
+    return !list || list->cpp_type() == base_cpp_type;
+  }
+#ifdef WITH_OPENVDB
+  if (value.is_volume_grid()) {
+    const volume_grid::GVolumeGrid &grid = *value.get_if<volume_grid::GVolumeGrid>();
+    return !grid || grid->cpp_type() == &base_cpp_type;
+  }
+#endif
+  if (value.is_single()) {
+    return value.get().type() == &base_cpp_type;
+  }
+  return false;
+}
+
 Vector<SocketValueVariant> BakeValues::to_runtime_values(const Span<OutputKey> keys,
                                                          const ComputeContext &compute_context,
                                                          BakeDataBlockMap *data_block_map) const
@@ -669,7 +692,9 @@ Vector<SocketValueVariant> BakeValues::to_runtime_values(const Span<OutputKey> k
     }
     output_value = item->value;
     bake_to_runtime_op.bake_to_runtime(output_value, item->name.value_or(""));
-    output_value.ensure_type(*stype->base_cpp_type);
+    if (!value_variant_valid_for_socket(output_value, *stype->base_cpp_type)) {
+      output_value = *stype->geometry_nodes_default_value;
+    }
   }
   return output_values;
 }

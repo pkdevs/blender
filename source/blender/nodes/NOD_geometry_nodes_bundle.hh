@@ -359,6 +359,26 @@ template<typename T> inline std::optional<T> Bundle::lookup_path(const StringRef
   return item->as<T>();
 }
 
+inline eNodeSocketDatatype socket_type_for_value_variant(const bke::SocketValueVariant &value)
+{
+  const CPPType *base_type;
+  if (value.is_field()) {
+    base_type = &value.get_if<fn::GField>()->cpp_type();
+  }
+  else if (value.is_list()) {
+    const GListPtr &list = *value.get_if<GListPtr>();
+    BLI_assert(list);
+    base_type = &list->cpp_type();
+  }
+  else {
+    base_type = value.get().type();
+  }
+  const std::optional<eNodeSocketDatatype> socket_type =
+      bke::geo_nodes_base_cpp_type_to_socket_type(*base_type);
+  BLI_assert(socket_type);
+  return *socket_type;
+}
+
 template<typename T, typename Fn> inline void to_stored_type(T &&value, Fn &&fn)
 {
   using DecayT = std::decay_t<T>;
@@ -372,7 +392,7 @@ template<typename T, typename Fn> inline void to_stored_type(T &&value, Fn &&fn)
     fn(BundleItemValue{std::forward<T>(value)});
   }
   else if constexpr (std::is_same_v<DecayT, bke::SocketValueVariant>) {
-    const eNodeSocketDatatype socket_type = value.socket_type();
+    const eNodeSocketDatatype socket_type = socket_type_for_value_variant(value);
     const bke::bNodeSocketType *socket_type_info = bke::node_socket_type_find_static(socket_type);
     fn(BundleItemValue{BundleItemSocketValue{socket_type_info, std::forward<T>(value)}});
   }
@@ -384,7 +404,7 @@ template<typename T, typename Fn> inline void to_stored_type(T &&value, Fn &&fn)
     fn(BundleItemValue{BundleItemInternalValue{ImplicitSharingPtr{sharing_info}}});
   }
   else if (const bke::bNodeSocketType *socket_type = socket_type_info_by_static_type<DecayT>()) {
-    auto value_variant = bke::SocketValueVariant(std::forward<T>(value));
+    auto value_variant = bke::SocketValueVariant::From(std::forward<T>(value));
     fn(BundleItemValue{BundleItemSocketValue{socket_type, value_variant}});
   }
   else {
