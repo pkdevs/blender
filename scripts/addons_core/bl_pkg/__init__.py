@@ -766,6 +766,9 @@ def monkeypatch_extensions_repos_update_post_impl():
 
     _monkeypatch_extensions_repos_update_dirs.clear()
 
+    # Repositories may have been added, removed or toggled.
+    bl_extension_ops.extension_asset_libraries_sync(repo_cache_store, error_fn=print)
+
     # Based on changes, the statistics may need to be re-calculated.
     repo_stats_calc()
 
@@ -1044,6 +1047,9 @@ def register():
     cli_commands.append(bpy.utils.register_cli_command("asset_listing", remote_library.asset_listing_main))
 
     monkeypatch_install()
+
+    # The preferences may have been reset or extensions changed while Blender wasn't running.
+    bl_extension_ops.extension_asset_libraries_sync_if_dirty(repo_cache_store_ensure(), error_fn=print)
 
     _remote_asset_library_restore_backups()
 

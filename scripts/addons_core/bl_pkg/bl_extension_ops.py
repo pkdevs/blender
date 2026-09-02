@@ -760,7 +760,7 @@ def _preferences_install_post_enable_on_install(
         pkg_id_sequence,
         # These were already installed and an attempt to enable them will have already been made.
         pkg_id_sequence_upgrade,
-        # Skip to avoid double-registration.
+        # Upgraded packages restore their enabled state instead of enabling.
         pkg_id_sequence_asset_library_upgrade,
         handle_error,
 ):
@@ -793,45 +793,12 @@ def _preferences_install_post_enable_on_install(
         elif item_local.type == "asset-library":
             if pkg_id in pkg_id_sequence_asset_library_upgrade:
                 continue
-            extension_asset_library_install(item_local, enable=True)
+            extension_asset_library_ensure_from_item(item_local, repo_item.module, pkg_id, enable=True)
         elif item_local.type == "theme":
             if has_theme:
                 continue
             extension_theme_enable(directory, pkg_id)
             has_theme = True
-
-
-def _preferences_install_post_disable_on_install(
-        *,
-        pkg_manifest_local,
-        pkg_id_sequence,
-        # Skip to avoid double-registration.
-        pkg_id_sequence_asset_library_upgrade,
-):
-    # A post install action when we did "NOT" select enable-on-install.
-    # Register asset-library entries as disabled so they appear in preferences
-    # without being active.
-    for pkg_id in pkg_id_sequence:
-        if pkg_id in pkg_id_sequence_asset_library_upgrade:
-            continue
-        item_local = pkg_manifest_local.get(pkg_id)
-        if item_local is None or item_local.type != "asset-library":
-            continue
-        extension_asset_library_install(item_local, enable=False)
-
-
-def _preferences_uninstall_pre_remove_asset_libraries(
-        *,
-        repo_directory,
-        pkg_id_sequence,
-        pkg_manifest_local,
-):
-    for pkg_id in pkg_id_sequence:
-        item_local = pkg_manifest_local.get(pkg_id)
-        if item_local is None:
-            continue
-        if item_local.type == "asset-library":
-            extension_asset_library_remove(repo_directory, pkg_id, item_local)
 
 
 def _preferences_ui_redraw():
@@ -981,6 +948,13 @@ def _pkg_marked_by_repo(repo_cache_store, pkg_manifest_all):
 # -----------------------------------------------------------------------------
 # Asset Library Handling
 #
+# Asset-library extensions register entries in `preferences.filepaths.asset_libraries`,
+# identified by `extension_id` ("{repo_module}.{pkg_id}"). User defined libraries are never touched.
+
+
+def extension_asset_library_id(repo_module, pkg_id):
+    return "{:s}.{:s}".format(repo_module, pkg_id)
+
 
 def extension_asset_library_remote_url_from_item(item_local):
     # Registered libraries always store a trailing slash, strip it so URLs compare equal.
@@ -989,130 +963,145 @@ def extension_asset_library_remote_url_from_item(item_local):
     return asset_library.remote_url.rstrip("/")
 
 
-def extension_asset_library_enabled_remote_url_set(asset_libraries):
-    # Set of `remote_url` values for enabled remote asset-library entries.
-    return {
-        lib.remote_url.rstrip("/") for lib in asset_libraries
-        if lib.use_remote_url and lib.enabled and lib.remote_url
-    }
-
-
-def _extension_asset_library_remote_url_is_referenced(
-        remote_url, *, exclude_repo_directory, exclude_pkg_idname,
-):
-    # Returns True if any installed asset-library extension (other than
-    # `(exclude_repo_directory, exclude_pkg_idname)`) declares the given `remote_url`.
-    # Used on uninstall to avoid removing a library entry that another installed
-    # extension still references (shared remote URL).
-    #
-    # Only enabled repos are consulted - disabled-repo extensions are never user-visible.
-    repo_cache_store = repo_cache_store_ensure()
-    for repo in extension_repos_read():
-        pkg_manifest_local = next(iter(repo_cache_store.pkg_manifest_from_local_ensure(
-            error_fn=print,
-            directory_subset={repo.directory},
-        )), None)
-        if pkg_manifest_local is None:
-            continue
-        for pkg_idname, item_local in pkg_manifest_local.items():
-            if repo.directory == exclude_repo_directory and pkg_idname == exclude_pkg_idname:
-                continue
-            if extension_asset_library_remote_url_from_item(item_local) == remote_url:
-                return True
-    return False
-
-
-def extension_asset_library_find(asset_libraries, remote_url):
-    # Match the remote asset-library entry with the given `remote_url`.
-    if not remote_url:
-        return None
-    remote_url = remote_url.rstrip("/")
+def extension_asset_library_find(asset_libraries, extension_id):
     for lib in asset_libraries:
-        if lib.use_remote_url and lib.remote_url.rstrip("/") == remote_url:
+        if lib.extension_id == extension_id:
             return lib
     return None
 
 
-def _extension_asset_library_entry_drop_if_unreferenced(
-        remote_url, *, exclude_repo_directory, exclude_pkg_idname,
-):
-    # Drop the library entry for `remote_url` unless another installed extension
-    # still references it (shared remote URL).
-    # No-op when `remote_url` is empty or when no matching library entry exists.
+def extension_asset_library_enabled_id_set(asset_libraries):
+    # Set of `extension_id` values for enabled extension defined entries.
+    return {lib.extension_id for lib in asset_libraries if lib.extension_id and lib.enabled}
+
+
+def extension_asset_library_ensure(extension_id, *, name, remote_url, enable):
+    # Ensure the preferences entry for this extension exists and set its enabled state.
     if not remote_url:
         return
     asset_libraries = bpy.context.preferences.filepaths.asset_libraries
-    library = extension_asset_library_find(asset_libraries, remote_url)
-    if library is None:
-        return
-    if _extension_asset_library_remote_url_is_referenced(
-            remote_url,
-            exclude_repo_directory=exclude_repo_directory,
-            exclude_pkg_idname=exclude_pkg_idname,
-    ):
-        return
-    asset_libraries.remove(library)
-
-
-def extension_asset_library_ensure(item_local, *, enable):
-    # Ensures the preferences entry exists, then sets its enabled state.
-    # When the entry is newly created the operator syncs automatically.
-    remote_url = extension_asset_library_remote_url_from_item(item_local)
-    if not remote_url:
-        return
-    asset_libraries = bpy.context.preferences.filepaths.asset_libraries
-    if extension_asset_library_find(asset_libraries, remote_url) is None:
+    lib = extension_asset_library_find(asset_libraries, extension_id)
+    if lib is None:
         if not bpy.context.preferences.experimental.use_remote_asset_libraries:
             return
-        bpy.ops.preferences.asset_library_add(type='REMOTE', name=item_local.name, remote_url=remote_url)
-    if (library := extension_asset_library_find(asset_libraries, remote_url)) is not None:
-        library.enabled = enable
+        lib = asset_libraries.new(name=name, remote_url=remote_url, extension_id=extension_id)
+    else:
+        # Apply changes from the manifest.
+        if lib.name != name:
+            lib.name = name
+        if lib.remote_url.rstrip("/") != remote_url:
+            lib.remote_url = remote_url
+    if lib.enabled != enable:
+        lib.enabled = enable
 
 
-def extension_asset_library_enable(item_local):
-    # "Enable" UI toggle. Idempotent.
-    extension_asset_library_ensure(item_local, enable=True)
-
-
-def extension_asset_library_install(item_local, *, enable):
-    # Install-time registration. Currently equivalent to `extension_asset_library_enable`
-    # but kept separate so install-specific behavior can diverge later if needed.
-    extension_asset_library_ensure(item_local, enable=enable)
-
-
-def extension_asset_library_disable(item_local):
-    # "Disable" UI toggle - preserves the entry for re-enable (unlike `extension_asset_library_remove`).
-    remote_url = extension_asset_library_remote_url_from_item(item_local)
-    asset_libraries = bpy.context.preferences.filepaths.asset_libraries
-    if (library := extension_asset_library_find(asset_libraries, remote_url)) is not None:
-        library.enabled = False
-
-
-def extension_asset_library_remove(repo_directory, pkg_idname, item_local):
-    # Uninstall - drops the preferences entry. The install directory itself is
-    # removed by the extension uninstall that triggered this call.
-    _extension_asset_library_entry_drop_if_unreferenced(
-        extension_asset_library_remote_url_from_item(item_local),
-        exclude_repo_directory=repo_directory,
-        exclude_pkg_idname=pkg_idname,
+def extension_asset_library_ensure_from_item(item_local, repo_module, pkg_id, *, enable):
+    extension_asset_library_ensure(
+        extension_asset_library_id(repo_module, pkg_id),
+        name=item_local.name,
+        remote_url=extension_asset_library_remote_url_from_item(item_local),
+        enable=enable,
     )
 
 
-def extension_asset_library_upgrade(repo_directory, pkg_idname, *, old_item_local, new_item_local, enabled):
-    # Called after an upgrade refreshes the local cache.
-    # Registers the new URL, applies the captured pre-upgrade `enabled` state
-    # (preserved across URL change), and drops the old entry when no other extension references it.
-    # NOTE: `extension_asset_library_ensure` is used here for correctness - upgrade must
-    # restore the pre-upgrade `enabled` state rather than unconditionally enabling.
-    new_url = extension_asset_library_remote_url_from_item(new_item_local)
-    extension_asset_library_ensure(new_item_local, enable=enabled)
-    old_url = extension_asset_library_remote_url_from_item(old_item_local)
-    if old_url and old_url != new_url:
-        _extension_asset_library_entry_drop_if_unreferenced(
-            old_url,
-            exclude_repo_directory=repo_directory,
-            exclude_pkg_idname=pkg_idname,
-        )
+def extension_asset_library_disable(repo_module, pkg_id):
+    # Keep the entry so it can be re-enabled.
+    asset_libraries = bpy.context.preferences.filepaths.asset_libraries
+    lib = extension_asset_library_find(asset_libraries, extension_asset_library_id(repo_module, pkg_id))
+    if lib is not None and lib.enabled:
+        lib.enabled = False
+
+
+def _extension_asset_library_name_and_url_from_manifest(filepath, pkg_id, *, error_fn):
+    # Return `(name, remote_url)` when the manifest at `filepath` defines an asset library, else None.
+    # Avoid the cache store which loads every manifest of the repository.
+    from .bl_extension_utils import toml_from_filepath
+    try:
+        manifest_dict = toml_from_filepath(filepath)
+    except Exception as ex:
+        error_fn(ex)
+        return None
+    if manifest_dict is None:
+        return None
+    if manifest_dict.get("type") != "asset-library":
+        return None
+    # Match the cache store which ignores packages whose ID doesn't match their directory.
+    if manifest_dict.get("id") != pkg_id:
+        return None
+    name = manifest_dict.get("name")
+    asset_library = manifest_dict.get("asset_library")
+    remote_url = asset_library.get("remote_url") if isinstance(asset_library, dict) else None
+    if not (isinstance(name, str) and isinstance(remote_url, str) and remote_url):
+        return None
+    return name, remote_url.rstrip("/")
+
+
+def _extension_asset_libraries_installed():
+    # Package directories of enabled repositories from directory listings only, no manifests are read.
+    # Repositories that can't be listed (not created yet or on a disconnected drive) are skipped,
+    # keeping their entries.
+    installed = {}
+    for repo_item in extension_repos_read():
+        try:
+            names = os.listdir(repo_item.directory)
+        except OSError:
+            continue
+        # Match `repository_iter_package_dirs`.
+        installed[repo_item.module] = (repo_item.directory, {
+            name for name in names
+            if not name.startswith((".", "_")) and name.isidentifier() and
+            os.path.isdir(os.path.join(repo_item.directory, name))
+        })
+    return installed
+
+
+def extension_asset_libraries_sync(repo_cache_store, *, error_fn):
+    # Sync entries with the asset-library extensions of enabled repositories.
+    # Entries of disabled repositories are left as-is, so their settings survive toggling a repository.
+    from .bl_extension_utils import PKG_MANIFEST_FILENAME_TOML
+    repo_cache_store.asset_libraries_dirty_clear()
+    asset_libraries = bpy.context.preferences.filepaths.asset_libraries
+    installed = _extension_asset_libraries_installed()
+
+    libraries_remove = []
+    ids_known = set()
+    for lib in asset_libraries:
+        repo_module, sep, pkg_id = lib.extension_id.partition(".")
+        if not sep:
+            continue
+        if (repo_installed := installed.get(repo_module)) is None:
+            continue
+        _directory, pkg_id_set = repo_installed
+        if pkg_id not in pkg_id_set:
+            # Uninstalled, by this or another Blender instance.
+            libraries_remove.append(lib)
+            continue
+        ids_known.add(lib.extension_id)
+    for lib in libraries_remove:
+        asset_libraries.remove(lib)
+
+    # Enabled add-ons are known not to be asset libraries.
+    ids_known.update(
+        extension_asset_library_id(repo_module, pkg_id)
+        for repo_module, pkg_id in _extensions_enabled(pkg_type="add-on")
+    )
+    for repo_module, (directory, pkg_id_set) in installed.items():
+        for pkg_id in pkg_id_set:
+            extension_id = extension_asset_library_id(repo_module, pkg_id)
+            if extension_id in ids_known:
+                continue
+            manifest_filepath = os.path.join(directory, pkg_id, PKG_MANIFEST_FILENAME_TOML)
+            result = _extension_asset_library_name_and_url_from_manifest(manifest_filepath, pkg_id, error_fn=error_fn)
+            if result is None:
+                continue
+            name, remote_url = result
+            # Create disabled, as add-ons are after resetting the preferences.
+            extension_asset_library_ensure(extension_id, name=name, remote_url=remote_url, enable=False)
+
+
+def extension_asset_libraries_sync_if_dirty(repo_cache_store, *, error_fn):
+    if repo_cache_store.is_asset_libraries_dirty():
+        extension_asset_libraries_sync(repo_cache_store, error_fn=error_fn)
 
 
 # -----------------------------------------------------------------------------
@@ -1384,11 +1373,11 @@ def _extensions_repo_refresh_on_change(
         stats_calc,  # `bool`
         error_fn,  # `Callable[[Exception], None]`
 ):  # `-> None`
-    # Add-on only: `extensions_enabled` drives wheel pre-extraction (asset-libraries have no wheels)
-    # and Python import-compatibility refresh (asset-libraries have no module).
-    # Asset-library (un)registration is a synchronous RNA operation and needs no
-    # pending-set tracking or post-change refresh here.
     import addon_utils
+
+    extension_asset_libraries_sync_if_dirty(repo_cache_store, error_fn=error_fn)
+
+    # `extensions_enabled` only applies to add-ons: wheels & import compatibility.
     if extensions_enabled is not None:
         _extensions_repo_sync_wheels(
             repo_cache_store,
@@ -1485,62 +1474,45 @@ def _preferences_theme_state_restore(state):
         extension_theme_enable_filepath(state_update[1])
 
 
-def _extension_asset_library_enabled_state_for_item(item_local):
-    # Return the preferences-side `enabled` bool for an asset-library extension, or `None`
-    # if no library entry is registered (e.g., the original install was `enable_on_install=False`,
-    # or the user manually removed the entry).
-    remote_url = extension_asset_library_remote_url_from_item(item_local)
-    library = extension_asset_library_find(
-        bpy.context.preferences.filepaths.asset_libraries, remote_url,
-    )
-    return library.enabled if library is not None else None
+def _extension_asset_library_enabled_state(extension_id):
+    # The `enabled` state of the asset-library extension's entry or None when there is no entry.
+    lib = extension_asset_library_find(bpy.context.preferences.filepaths.asset_libraries, extension_id)
+    return lib.enabled if lib is not None else None
 
 
 def _preferences_asset_library_state_capture(repo_directory, pkg_id_sequence, *, error_fn):
-    # Snapshot pre-install `(item_local, enabled_before)` for asset-library entries in
-    # `pkg_id_sequence`. Non-asset-library entries and not-yet-installed entries are skipped.
-    # `enabled_before` is the current library entry's `enabled` flag, or `None` if no entry
-    # was registered - used by `_preferences_asset_library_state_restore` to preserve the
-    # user's prior enabled/disabled choice across upgrade.
+    # Snapshot `{(repo_directory, pkg_id): enabled}` for asset-library extensions in `pkg_id_sequence`
+    # with an entry, so upgrading preserves the user's enabled/disabled choice.
     pkg_manifest_local = next(iter(repo_cache_store_ensure().pkg_manifest_from_local_ensure(
         error_fn=error_fn,
         directory_subset={repo_directory},
     )), None) or {}
+    repo_module = _extension_repos_directory_to_module_map()[repo_directory]
     state = {}
     for pkg_id in pkg_id_sequence:
         item_local = pkg_manifest_local.get(pkg_id)
         if item_local is not None and item_local.type == "asset-library":
-            state[repo_directory, pkg_id] = (
-                item_local,
-                _extension_asset_library_enabled_state_for_item(item_local),
-            )
+            enabled = _extension_asset_library_enabled_state(extension_asset_library_id(repo_module, pkg_id))
+            if enabled is not None:
+                state[repo_directory, pkg_id] = enabled
     return state
 
 
 def _preferences_asset_library_state_restore(state, *, error_fn):
-    # Re-register asset-library extensions against the refreshed local cache. Preserves
-    # each library entry's pre-upgrade `enabled` state; if an upgrade changes
-    # `[asset_library].remote_url`, drops the old entry when no other installed extension
-    # still references it. Skips entries whose library wasn't registered pre-upgrade.
-    #
-    # `state` is a dict of `(repo_directory, pkg_idname) -> (pre_upgrade_item_local, enabled_before)`.
+    # Apply the captured `enabled` state after upgrading, see `_preferences_asset_library_state_capture`.
+    # Entries which didn't exist before upgrading are created (disabled) by the sync.
     repo_cache_store = repo_cache_store_ensure()
-    for (repo_directory, pkg_idname), (old_item_local, enabled_before) in state.items():
-        if enabled_before is None:
-            # No library entry existed pre-upgrade; don't register one unbidden.
-            continue
+    repo_directory_to_module_map = _extension_repos_directory_to_module_map()
+    for (repo_directory, pkg_id), enabled_before in state.items():
         pkg_manifest_local = next(iter(repo_cache_store.pkg_manifest_from_local_ensure(
             error_fn=error_fn,
             directory_subset={repo_directory},
         )), None) or {}
-        new_item_local = pkg_manifest_local.get(pkg_idname)
-        if new_item_local is None:
+        item_local = pkg_manifest_local.get(pkg_id)
+        if item_local is None:
             continue
-        extension_asset_library_upgrade(
-            repo_directory, pkg_idname,
-            old_item_local=old_item_local,
-            new_item_local=new_item_local,
-            enabled=enabled_before,
+        extension_asset_library_ensure_from_item(
+            item_local, repo_directory_to_module_map[repo_directory], pkg_id, enable=enabled_before,
         )
 
 
@@ -2045,6 +2017,11 @@ class EXTENSIONS_OT_repo_refresh_all(Operator):
                 error_fn=lambda ex: self._exceptions_as_report(repo_item.name, ex),
             )
 
+        extension_asset_libraries_sync_if_dirty(
+            repo_cache_store,
+            error_fn=lambda ex: self.report({'WARNING'}, str(ex)),
+        )
+
         # Ensure module cache is removed, especially module cache that has marked a module as missing.
         # This is necessary for extension repositories that:
         # - Did not exist on startup.
@@ -2265,9 +2242,7 @@ class EXTENSIONS_OT_package_upgrade_all(Operator, _ExtCmdMixIn):
         self._addon_restore = []
         # pylint: disable-next=attribute-defined-outside-init
         self._theme_restore = _preferences_theme_state_create()
-        # Pre-upgrade manifests for asset-library extensions, keyed by
-        # `(repo_directory, pkg_idname)`. Used in `exec_command_finish` to detect
-        # `remote_url` changes and re-register the preferences entry.
+        # See `_preferences_asset_library_state_capture`.
         # pylint: disable-next=attribute-defined-outside-init
         self._asset_library_restore = {}
 
@@ -2333,10 +2308,11 @@ class EXTENSIONS_OT_package_upgrade_all(Operator, _ExtCmdMixIn):
                     packages_to_upgrade[repo_index].append(pkg_id)
                     package_count += 1
                     if item_local.type == "asset-library":
-                        self._asset_library_restore[repo_item.directory, pkg_id] = (
-                            item_local,
-                            _extension_asset_library_enabled_state_for_item(item_local),
+                        enabled = _extension_asset_library_enabled_state(
+                            extension_asset_library_id(repo_item.module, pkg_id),
                         )
+                        if enabled is not None:
+                            self._asset_library_restore[repo_item.directory, pkg_id] = enabled
 
             if (pkg_id_sequence_upgrade := _preferences_pkg_id_sequence_filter_enabled(
                     repo_item,
@@ -2595,13 +2571,6 @@ class EXTENSIONS_OT_package_install_marked(Operator, _ExtCmdMixIn):
                     pkg_id_sequence_asset_library_upgrade=set(),
                     handle_error=handle_error,
                 )
-            else:
-                _preferences_install_post_disable_on_install(
-                    pkg_manifest_local=pkg_manifest_local,
-                    pkg_id_sequence=pkg_id_sequence,
-                    # `install_marked` filters out already-installed packages, so no upgrades occur here.
-                    pkg_id_sequence_asset_library_upgrade=set(),
-                )
 
             _extensions_repo_temp_files_make_stale(directory)
             _extensions_repo_install_stale_package_clear(directory, pkg_id_sequence)
@@ -2651,7 +2620,7 @@ class EXTENSIONS_OT_package_uninstall_marked(Operator, _ExtCmdMixIn):
         # pylint: disable-next=attribute-defined-outside-init
         self._pkg_id_sequence_from_directory = {}
 
-        pre_uninstall_info = []
+        handle_addons_info = []
 
         cmd_batch = []
         for repo_index, pkg_id_sequence in sorted(repo_pkg_map.items()):
@@ -2680,7 +2649,7 @@ class EXTENSIONS_OT_package_uninstall_marked(Operator, _ExtCmdMixIn):
             self._repo_directories.add(repo_item.directory)
             package_count += len(pkg_id_sequence)
 
-            pre_uninstall_info.append((repo_item, pkg_id_sequence, pkg_manifest_local))
+            handle_addons_info.append((repo_item, pkg_id_sequence))
 
             self._pkg_id_sequence_from_directory[repo_item.directory] = pkg_id_sequence
 
@@ -2697,19 +2666,13 @@ class EXTENSIONS_OT_package_uninstall_marked(Operator, _ExtCmdMixIn):
         if lock_result_any_failed_with_report(self, self.repo_lock.acquire()):
             return None
 
-        for repo_item, pkg_id_sequence, pkg_manifest_local in pre_uninstall_info:
-            # Disable add-ons and unregister asset-libraries before the uninstall batch runs.
-            # No need to store the disable result - these packages aren't going to be enabled again.
+        for repo_item, pkg_id_sequence in handle_addons_info:
+            # No need to store the result because the add-ons aren't going to be enabled again.
             _preferences_ensure_disabled(
                 repo_item=repo_item,
                 pkg_id_sequence=pkg_id_sequence,
                 default_set=True,
                 error_fn=lambda ex: self.report({'ERROR'}, str(ex)),
-            )
-            _preferences_uninstall_pre_remove_asset_libraries(
-                repo_directory=repo_item.directory,
-                pkg_id_sequence=pkg_id_sequence,
-                pkg_manifest_local=pkg_manifest_local,
             )
 
         return bl_extension_utils.CommandBatch(
@@ -3022,15 +2985,6 @@ class EXTENSIONS_OT_package_install_files(Operator, _ExtCmdMixIn):
                     if repo_dir == self.repo_directory
                 },
                 handle_error=handle_error,
-            )
-        else:
-            _preferences_install_post_disable_on_install(
-                pkg_manifest_local=pkg_manifest_local,
-                pkg_id_sequence=self.pkg_id_sequence,
-                pkg_id_sequence_asset_library_upgrade={
-                    pkg_id for (repo_dir, pkg_id) in self._asset_library_restore
-                    if repo_dir == self.repo_directory
-                },
             )
 
         if self.enable_on_install:
@@ -3438,15 +3392,6 @@ class EXTENSIONS_OT_package_install(Operator, _ExtCmdMixIn):
                 },
                 handle_error=handle_error,
             )
-        else:
-            _preferences_install_post_disable_on_install(
-                pkg_manifest_local=pkg_manifest_local,
-                pkg_id_sequence=(self.pkg_id,),
-                pkg_id_sequence_asset_library_upgrade={
-                    pkg_id for (repo_dir, pkg_id) in self._asset_library_restore
-                    if repo_dir == self.repo_directory
-                },
-            )
 
         if self.enable_on_install:
             if (extensions_enabled_test := _extensions_enabled(pkg_type="add-on")) != extensions_enabled:
@@ -3843,18 +3788,6 @@ class EXTENSIONS_OT_package_uninstall(Operator, _ExtCmdMixIn):
             error_fn=lambda ex: self.report({'ERROR'}, str(ex)),
         )
 
-        # Use cached manifest (disk state hasn't changed yet; the uninstall batch runs later).
-        pkg_manifest_local = next(iter(repo_cache_store_ensure().pkg_manifest_from_local_ensure(
-            error_fn=lambda ex: self.report({'ERROR'}, str(ex)),
-            directory_subset={repo_item.directory},
-        )), None)
-        if pkg_manifest_local is not None:
-            _preferences_uninstall_pre_remove_asset_libraries(
-                repo_directory=repo_item.directory,
-                pkg_id_sequence=(pkg_id,),
-                pkg_manifest_local=pkg_manifest_local,
-            )
-
         # Lock repositories.
         # pylint: disable-next=attribute-defined-outside-init
         self.repo_lock = bl_extension_utils.RepoLock(
@@ -3991,19 +3924,6 @@ class EXTENSIONS_OT_package_theme_disable(Operator):
         return {'FINISHED'}
 
 
-def _extension_asset_library_item_local_for_op(repo_index, pkg_idname):
-    # Resolve `item_local` for the asset-library enable/disable operators. The UI draws
-    # these buttons from the same cache, so the entry is expected to be present.
-    repo_item = extension_repos_read_index(repo_index)
-    if repo_item is None:
-        return None
-    pkg_manifest_local = next(iter(repo_cache_store_ensure().pkg_manifest_from_local_ensure(
-        error_fn=print,
-        directory_subset={repo_item.directory},
-    )), None) or {}
-    return pkg_manifest_local.get(pkg_idname)
-
-
 class EXTENSIONS_OT_package_asset_library_enable(Operator):
     """Enable this asset library in Preferences"""
     bl_idname = "extensions.package_asset_library_enable"
@@ -4013,9 +3933,16 @@ class EXTENSIONS_OT_package_asset_library_enable(Operator):
     repo_index: rna_prop_repo_index
 
     def execute(self, _context):
-        item_local = _extension_asset_library_item_local_for_op(self.repo_index, self.pkg_id)
-        if item_local is not None:
-            extension_asset_library_enable(item_local)
+        repo_item = extension_repos_read_index(self.repo_index)
+        if repo_item is None:
+            return {'CANCELLED'}
+        pkg_manifest_local = next(iter(repo_cache_store_ensure().pkg_manifest_from_local_ensure(
+            error_fn=lambda ex: self.report({'ERROR'}, str(ex)),
+            directory_subset={repo_item.directory},
+        )), None) or {}
+        if (item_local := pkg_manifest_local.get(self.pkg_id)) is None:
+            return {'CANCELLED'}
+        extension_asset_library_ensure_from_item(item_local, repo_item.module, self.pkg_id, enable=True)
         return {'FINISHED'}
 
 
@@ -4028,9 +3955,10 @@ class EXTENSIONS_OT_package_asset_library_disable(Operator):
     repo_index: rna_prop_repo_index
 
     def execute(self, _context):
-        item_local = _extension_asset_library_item_local_for_op(self.repo_index, self.pkg_id)
-        if item_local is not None:
-            extension_asset_library_disable(item_local)
+        repo_item = extension_repos_read_index(self.repo_index)
+        if repo_item is None:
+            return {'CANCELLED'}
+        extension_asset_library_disable(repo_item.module, self.pkg_id)
         return {'FINISHED'}
 
 

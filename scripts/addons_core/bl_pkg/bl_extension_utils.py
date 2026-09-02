@@ -2157,6 +2157,8 @@ class RepoCacheStore:
         "_repos",
         "_filter_params",
         "_is_init",
+        # Set when local manifests may have changed, cleared by the asset library sync.
+        "_asset_libraries_dirty",
     )
 
     def __init__(
@@ -2172,9 +2174,16 @@ class RepoCacheStore:
             python_version=python_version,
         )
         self._is_init = False
+        self._asset_libraries_dirty = True
 
     def is_init(self) -> bool:
         return self._is_init
+
+    def is_asset_libraries_dirty(self) -> bool:
+        return self._asset_libraries_dirty
+
+    def asset_libraries_dirty_clear(self) -> None:
+        self._asset_libraries_dirty = False
 
     def refresh_from_repos(
             self, *,
@@ -2196,6 +2205,7 @@ class RepoCacheStore:
                 repo_entry_test = _RepoCacheEntry(directory, remote_url, self._filter_params)
             self._repos.append(repo_entry_test)
         self._is_init = True
+        self._asset_libraries_dirty = True
 
     def refresh_remote_from_directory(
             self,
@@ -2221,6 +2231,7 @@ class RepoCacheStore:
             if directory == repo_entry.directory:
                 # Force refresh.
                 repo_entry.force_local_refresh()
+                self._asset_libraries_dirty = True
                 return repo_entry.pkg_manifest_from_local_ensure(
                     ignore_missing=ignore_missing,
                     error_fn=error_fn,
@@ -2274,6 +2285,7 @@ class RepoCacheStore:
     def clear(self) -> None:
         self._repos.clear()
         self._is_init = False
+        self._asset_libraries_dirty = True
 
     def assetlib_auth_method_from_directory(
             self,

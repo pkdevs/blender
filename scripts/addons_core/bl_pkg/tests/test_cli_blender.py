@@ -1824,9 +1824,8 @@ class TestRemoteAssetLibrary(TestWithTempBlenderUser_MixIn, unittest.TestCase):
 
     def test_install_two_remote_asset_libraries_sharing_one_url(self) -> None:
         """
-        Two distinct asset-library extensions with the same `remote_url` should share
-        a single registered library. Uninstalling one must not remove the shared entry
-        while the other still references it.
+        Two distinct asset-library extensions with the same `remote_url` each register
+        their own library. Uninstalling one must not remove the other's entry.
         """
         repo_id = "test_repo_install_shared_url"
         repo_name = "MyTestRepoSharedURL"
@@ -1850,28 +1849,23 @@ class TestRemoteAssetLibrary(TestWithTempBlenderUser_MixIn, unittest.TestCase):
         run_blender_extensions_no_errors(("install", "ext_alpha", "--enable"))
         run_blender_extensions_no_errors(("install", "ext_beta", "--enable"))
 
-        # Exactly one library entry for the shared URL (not two).
+        # One library entry per extension, both with the shared URL.
         remote_info = self._blender_remote_asset_library_info()
-        matching = [(n, u, e) for (n, u, e) in remote_info if u == url]
-        self.assertEqual(
-            len(matching), 1,
-            "Expected exactly one shared library for URL {!r}, got {!r}".format(url, remote_info),
-        )
+        matching = sorted(n for (n, u, _e) in remote_info if u == url)
+        self.assertEqual(matching, ["Ext Alpha", "Ext Beta"], repr(remote_info))
 
-        # Uninstall alpha: beta still references the URL, so the entry must remain.
+        # Uninstall alpha: beta's entry must remain.
         run_blender_extensions_no_errors(("remove", "ext_alpha"))
         remote_info_mid = self._blender_remote_asset_library_info()
-        self.assertTrue(
-            any(u == url for (_n, u, _e) in remote_info_mid),
-            "Library was removed while beta still references URL {!r}, got {!r}".format(url, remote_info_mid),
-        )
+        matching = sorted(n for (n, u, _e) in remote_info_mid if u == url)
+        self.assertEqual(matching, ["Ext Beta"], repr(remote_info_mid))
 
-        # Uninstall beta: no references remain, the entry should be removed.
+        # Uninstall beta: no entries remain.
         run_blender_extensions_no_errors(("remove", "ext_beta"))
         remote_info_end = self._blender_remote_asset_library_info()
         self.assertFalse(
             any(u == url for (_n, u, _e) in remote_info_end),
-            "Expected library with URL {!r} to be gone after both uninstalls, got {!r}".format(url, remote_info_end),
+            "Expected libraries with URL {!r} to be gone after both uninstalls, got {!r}".format(url, remote_info_end),
         )
 
 

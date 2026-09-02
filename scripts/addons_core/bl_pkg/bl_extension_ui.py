@@ -849,7 +849,7 @@ class ExtensionUI_FilterParams:
         "tags_exclude",
         "filter_by_type",
         "addons_enabled",
-        "asset_libraries_enabled_remote_urls",
+        "asset_libraries_enabled_ids",
         "active_theme_info",
         "repos_all",
 
@@ -872,7 +872,7 @@ class ExtensionUI_FilterParams:
             tags_exclude,
             filter_by_type,
             addons_enabled,
-            asset_libraries_enabled_remote_urls,
+            asset_libraries_enabled_ids,
             active_theme_info,
             repos_all,
             repo_filter,
@@ -884,7 +884,7 @@ class ExtensionUI_FilterParams:
         self.tags_exclude = tags_exclude
         self.filter_by_type = filter_by_type
         self.addons_enabled = addons_enabled
-        self.asset_libraries_enabled_remote_urls = asset_libraries_enabled_remote_urls
+        self.asset_libraries_enabled_ids = asset_libraries_enabled_ids
         self.active_theme_info = active_theme_info
         self.repos_all = repos_all
         self.repo_filter = None if repo_filter == '_ALL_' else repo_filter
@@ -900,7 +900,7 @@ class ExtensionUI_FilterParams:
     def default_from_context(context):
         from .bl_extension_ops import (
             blender_filter_by_type_map,
-            extension_asset_library_enabled_remote_url_set,
+            extension_asset_library_enabled_id_set,
             extension_repos_read,
         )
 
@@ -920,11 +920,11 @@ class ExtensionUI_FilterParams:
             addons_enabled = None  # Unused.
 
         if show_assets:
-            asset_libraries_enabled_remote_urls = extension_asset_library_enabled_remote_url_set(
+            asset_libraries_enabled_ids = extension_asset_library_enabled_id_set(
                 prefs.filepaths.asset_libraries,
             )
         else:
-            asset_libraries_enabled_remote_urls = None  # Unused.
+            asset_libraries_enabled_ids = None  # Unused.
 
         if show_themes:
             active_theme_info = pkg_repo_and_id_from_theme_path(repos_all, prefs.themes[0].filepath)
@@ -944,7 +944,7 @@ class ExtensionUI_FilterParams:
             tags_exclude=extension_tags_exclude,
             filter_by_type=filter_by_type,
             addons_enabled=addons_enabled,
-            asset_libraries_enabled_remote_urls=asset_libraries_enabled_remote_urls,
+            asset_libraries_enabled_ids=asset_libraries_enabled_ids,
             active_theme_info=active_theme_info,
             repos_all=repos_all,
             repo_filter=repo_filter,
@@ -962,7 +962,7 @@ class ExtensionUI_FilterParams:
             pkg_manifest_remote,  # `dict[str, PkgManifest_Normalized]`
     ):
         from .bl_extension_ops import (
-            extension_asset_library_remote_url_from_item,
+            extension_asset_library_id,
             pkg_info_check_exclude_filter,
         )
 
@@ -1014,13 +1014,8 @@ class ExtensionUI_FilterParams:
                     is_enabled = False
                     addon_module_name = None
             elif is_asset_library:
-                # `is_installed` guarantees `item_local is not None`; `show_assets` invariant
-                # guarantees `self.asset_libraries_enabled_remote_urls` is a set (not None).
-                is_enabled = (
-                    is_installed
-                    and extension_asset_library_remote_url_from_item(item_local)
-                    in self.asset_libraries_enabled_remote_urls
-                )
+                extension_id = extension_asset_library_id(self.repos_all[repo_index].module, pkg_id)
+                is_enabled = is_installed and (extension_id in self.asset_libraries_enabled_ids)
                 addon_module_name = None
             elif is_theme:
                 is_enabled = (repo_index, pkg_id) == self.active_theme_info
@@ -1921,7 +1916,7 @@ class USERPREF_MT_extensions_item(Menu):
         from . import repo_cache_store_ensure
         from .bl_extension_ops import (
             extension_asset_library_find,
-            extension_asset_library_remote_url_from_item,
+            extension_asset_library_id,
             extension_repos_read,
         )
 
@@ -1964,7 +1959,7 @@ class USERPREF_MT_extensions_item(Menu):
                 case "asset-library":
                     library = extension_asset_library_find(
                         prefs.filepaths.asset_libraries,
-                        extension_asset_library_remote_url_from_item(item_local),
+                        extension_asset_library_id(repo.module, pkg_id),
                     )
                     is_enabled = library is not None and library.enabled
                 case "theme":
@@ -2260,7 +2255,7 @@ def tags_exclude_match(
 def tags_current(wm, tags_attr):
     from .bl_extension_ops import (
         blender_filter_by_type_map,
-        extension_asset_library_enabled_remote_url_set,
+        extension_asset_library_enabled_id_set,
         extension_repos_read,
         repo_cache_store_refresh_from_prefs,
     )
@@ -2291,13 +2286,13 @@ def tags_current(wm, tags_attr):
 
     addons_enabled = None
     active_theme_info = None
-    asset_libraries_enabled_remote_urls = None
+    asset_libraries_enabled_ids = None
 
     # Currently only add-ons can make use of enabled by type (usefully) for tags.
     if filter_by_type in {"", "add-on"}:
         addons_enabled = {addon.module for addon in prefs.addons}
     if filter_by_type in {"", "asset-library"}:
-        asset_libraries_enabled_remote_urls = extension_asset_library_enabled_remote_url_set(
+        asset_libraries_enabled_ids = extension_asset_library_enabled_id_set(
             prefs.filepaths.asset_libraries,
         )
     if filter_by_type in {"", "theme"}:
@@ -2310,7 +2305,7 @@ def tags_current(wm, tags_attr):
         tags_exclude=set(),  # Tags are being generated, ignore them.
         filter_by_type=filter_by_type,
         addons_enabled=addons_enabled,
-        asset_libraries_enabled_remote_urls=asset_libraries_enabled_remote_urls,
+        asset_libraries_enabled_ids=asset_libraries_enabled_ids,
         active_theme_info=active_theme_info,
         repos_all=repos_all,
         repo_filter=repo_filter,
