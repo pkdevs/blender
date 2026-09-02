@@ -250,8 +250,8 @@ bool ShaderCache::should_load_kernel(DeviceKernel device_kernel,
     return false;
   }
 
-  if (device_kernel == DEVICE_KERNEL_INTEGRATOR_MEGAKERNEL) {
-    /* Skip megakernel. */
+  if (!device_kernel_has_gpu_function(device_kernel)) {
+    /* Skip megakernel and other markers without a GPU function. */
     return false;
   }
 
@@ -262,9 +262,9 @@ bool ShaderCache::should_load_kernel(DeviceKernel device_kernel,
     }
   }
 
-  if (device_kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE) {
+  if (device_kernel == DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE) {
     if ((device->kernel_features & KERNEL_FEATURE_MNEE) == 0) {
-      /* Skip shade_surface_mnee kernel if the scene doesn't require it. */
+      /* Skip the MNEE kernel if the scene doesn't require it. */
       return false;
     }
   }
@@ -462,9 +462,20 @@ static MTLFunctionConstantValues *GetConstantValues(const KernelData *data = nul
 
 #  include "kernel/data_template.h"
 
-  [constant_values setConstantValue:&data->kernel_features
-                               type:MTLDataTypeInt
-                            atIndex:KernelData_kernel_features];
+  const uint32_t kernel_features_hi = data->kernel_features >> 32;
+  const uint32_t kernel_features_lo = data->kernel_features & 0xffffffff;
+  [constant_values setConstantValue:&kernel_features_hi
+                               type:MTLDataTypeUInt
+                            atIndex:KernelData_kernel_features_hi];
+  [constant_values setConstantValue:&kernel_features_lo
+                               type:MTLDataTypeUInt
+                            atIndex:KernelData_kernel_features_lo];
+
+  if (@available(macOS 12.0, *)) {
+    [constant_values setConstantValue:&data->kernel_features
+                                 type:MTLDataTypeULong
+                              atIndex:KernelData_kernel_features_64bit];
+  }
 
   return constant_values;
 }
@@ -473,7 +484,8 @@ void MetalDispatchPipeline::free_intersection_function_tables()
 {
   for (int table = 0; table < METALRT_TABLE_NUM; table++) {
     if (intersection_func_table[table]) {
-      [intersection_func_table[table] release];
+      /* Add the table to the delayed free list of the device that created it. */
+      metal_device->metal_mem_free(intersection_func_table[table]);
       intersection_func_table[table] = nil;
     }
   }
@@ -486,6 +498,7 @@ MetalDispatchPipeline::~MetalDispatchPipeline()
 
 bool MetalDispatchPipeline::update(MetalDevice *metal_device, DeviceKernel kernel)
 {
+  this->metal_device = metal_device;
   const MetalKernelPipeline *best_pipeline = MetalDeviceKernels::get_best_pipeline(metal_device,
                                                                                    kernel);
   if (!best_pipeline) {
@@ -520,6 +533,15 @@ bool MetalDispatchPipeline::update(MetalDevice *metal_device, DeviceKernel kerne
               functionHandleWithFunction:best_pipeline->table_functions[table][i]];
           [intersection_func_table[table] setFunction:handle atIndex:i];
         }
+
+        /* Bind launch_params into the intersection function table once, when the table is
+         * (re)created. launch_params_buffer is allocated once and never moves, and the binding
+         * persists on the table, so there's no need to rebind it on every dispatch. */
+        [intersection_func_table[table] setBuffer:metal_device->launch_params_buffer
+                                           offset:0
+                                          atIndex:1];
+
+        metal_device->metal_mem_alloc(intersection_func_table[table]);
       }
     }
   }

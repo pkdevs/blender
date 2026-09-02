@@ -94,8 +94,8 @@ function(cycles_external_libraries_append libraries)
     bf::dependencies::pthreads
     bf::dependencies::zlib
     bf::dependencies::optional::embree
-    bf::dependencies::optional::opencolorio
-    bf::dependencies::optional::openexr
+    bf::dependencies::opencolorio
+    bf::dependencies::openexr
     bf::dependencies::optional::openimagedenoise
     bf::dependencies::optional::openpgl
     bf::dependencies::optional::opensubdiv
@@ -103,7 +103,6 @@ function(cycles_external_libraries_append libraries)
     bf::dependencies::optional::osl
     bf::dependencies::optional::pugixml
     bf::dependencies::optional::python
-    bf::dependencies::optional::webp
     ${CMAKE_DL_LIBS}
     ${PLATFORM_LINKLIBS}
   )
@@ -114,10 +113,9 @@ function(cycles_external_libraries_append libraries)
     if(WITH_USD)
       list(APPEND ${libraries} "-framework CoreVideo -framework Cocoa -framework OpenGL")
     endif()
-    if(WITH_OPENCOLORIO)
-      list(APPEND ${libraries} "-framework IOKit")
-      list(APPEND ${libraries} "-framework Carbon")
-    endif()
+    # OpenColorIO
+    list(APPEND ${libraries} "-framework IOKit")
+    list(APPEND ${libraries} "-framework Carbon")
     if(WITH_OPENIMAGEDENOISE)
       if("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "arm64")
         list(APPEND ${libraries} "-framework Accelerate")
@@ -145,7 +143,7 @@ function(cycles_external_libraries_append libraries)
     list(APPEND ${libraries} extern_hipew)
   endif()
 
-  if(WITH_CYCLES_DEVICE_ONEAPI AND WITH_CYCLES_EMBREE  AND EMBREE_SYCL_SUPPORT)
+  if(WITH_CYCLES_DEVICE_ONEAPI AND WITH_EMBREE  AND EMBREE_SYCL_SUPPORT)
     list(APPEND ${libraries} ${SYCL_LIBRARIES})
   endif()
 

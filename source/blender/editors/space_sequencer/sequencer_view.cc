@@ -7,10 +7,10 @@
  */
 
 #include "BLI_bounds_types.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "DNA_scene_types.h"
 #include "DNA_space_enums.h"
@@ -179,7 +179,7 @@ rctf SEQ_view_frame_fit(const SpaceSeq *sseq, const ARegion *region, rctf v2d_re
   const float region_w = std::max(float(BLI_rcti_size_x(&region->winrct)), 1.0f);
   const float region_h = std::max(float(BLI_rcti_size_y(&region->winrct)), 1.0f);
 
-  if (sseq->mainb == SEQ_DRAW_IMG_VECTORSCOPE) {
+  if (sseq->scope & SEQ_DRAW_IMG_VECTORSCOPE) {
     /* The vector-scope circle uses min(width, height) as its diameter.
      * Adjust the framing to match the region aspect ratio so the circle
      * fits tightly regardless of whether the region is wide or tall. */
@@ -194,11 +194,8 @@ rctf SEQ_view_frame_fit(const SpaceSeq *sseq, const ARegion *region, rctf v2d_re
   }
 
   /* Add fixed pixel padding on all sides for scopes. */
-  if (ELEM(sseq->mainb,
-           SEQ_DRAW_IMG_HISTOGRAM,
-           SEQ_DRAW_IMG_WAVEFORM,
-           SEQ_DRAW_IMG_RGBPARADE,
-           SEQ_DRAW_IMG_VECTORSCOPE))
+  if (sseq->scope & (SEQ_DRAW_IMG_HISTOGRAM | SEQ_DRAW_IMG_WAVEFORM | SEQ_DRAW_IMG_RGBPARADE |
+                     SEQ_DRAW_IMG_VECTORSCOPE))
   {
     const float PAD_PX = 10.0f * UI_SCALE_FAC;
     const float pad_x = PAD_PX * BLI_rctf_size_x(&v2d_rect) / region_w;
@@ -237,7 +234,7 @@ static bool view_frame_preview_scope(bContext *C,
       /* Optionally limit X range to max nits of the view transform. */
       const Scene *scene = CTX_data_sequencer_scene(C);
       const ocio::ScopeInfo scope_info = IMB_colormanagement_get_scope_info(
-          &scene->display_settings, scene->view_settings.view_transform);
+          &scene->display_settings, &scene->view_settings);
       if (scope_info.view_transform_max_nits > 0) {
         max_nits_scale = scope_info.view_transform_max_nits_value;
       }

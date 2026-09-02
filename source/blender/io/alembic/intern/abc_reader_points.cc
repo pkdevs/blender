@@ -21,6 +21,10 @@
 
 #include "BLI_color_types.hh"
 
+#include "IO_validate.hh"
+
+#include "CLG_log.h"
+
 #include <algorithm>
 
 namespace blender {
@@ -29,11 +33,32 @@ using namespace Alembic::AbcGeom;
 
 namespace io::alembic {
 
+static CLG_LogRef LOG = {"io.alembic"};
+
+/* Specialization of #has_animations() as defined in abc_reader_object.h. */
+template<> bool has_animations(Alembic::AbcGeom::IPointsSchema &schema, ImportSettings *settings)
+{
+  if (settings->is_sequence || !schema.isConstant()) {
+    return true;
+  }
+
+  IFloatGeomParam widths_param = schema.getWidthsParam();
+  if (widths_param.valid() && !widths_param.isConstant()) {
+    return true;
+  }
+
+  IV3fArrayProperty velocities_prop = schema.getVelocitiesProperty();
+  if (velocities_prop.valid() && !velocities_prop.isConstant()) {
+    return true;
+  }
+
+  return false;
+}
+
 AbcPointsReader::AbcPointsReader(const AbcReaderConstructorArgs &args) : AbcObjectReader(args)
 {
   IPoints ipoints(m_iobject, kWrapExisting);
   m_schema = ipoints.getSchema();
-  get_min_max_time(m_iobject, m_schema, m_min_time, m_max_time);
 }
 
 bool AbcPointsReader::valid() const
@@ -209,11 +234,12 @@ void AbcPointsReader::read_geometry(bke::GeometrySet &geometry_set,
   }
   catch (Alembic::Util::Exception &ex) {
     *r_err_str = RPT_("Error reading points sample; more detail on the console");
-    printf("Alembic: error reading points sample for '%s/%s' at time %f: %s\n",
-           m_iobject.getFullName().c_str(),
-           m_schema.getName().c_str(),
-           sample_sel.getRequestedTime(),
-           ex.what());
+    CLOG_WARN(&LOG,
+              "Error reading points sample for '%s/%s' at time %f: %s",
+              m_iobject.getFullName().c_str(),
+              m_schema.getName().c_str(),
+              sample_sel.getRequestedTime(),
+              ex.what());
     return;
   }
 
@@ -228,6 +254,15 @@ void AbcPointsReader::read_geometry(bke::GeometrySet &geometry_set,
   if (widths_param.valid()) {
     IFloatGeomParam::Sample wsample = widths_param.getExpandedValue(sample_sel);
     widths = wsample.getVals();
+  }
+
+  if (!validate::size_fits_in_int(positions->size())) {
+    CLOG_WARN(&LOG,
+              "Point cloud too large to import for '%s/%s' at time %f, exceeds max int size",
+              m_iobject.getFullName().c_str(),
+              m_schema.getName().c_str(),
+              sample_sel.getRequestedTime());
+    return;
   }
 
   if (pointcloud->totpoint != positions->size()) {
@@ -253,7 +288,7 @@ void AbcPointsReader::read_geometry(bke::GeometrySet &geometry_set,
 
   read_point_arb_geom_params(m_schema, sample_sel, attribute_accessor);
 
-  if (read_params.velocity_name != "" && read_params.velocity_scale != 0.0f) {
+  if (!read_params.velocity_name.empty() && read_params.velocity_scale != 0.0f) {
     V3fArraySamplePtr velocities = get_velocity_prop(
         m_schema, sample_sel, read_params.velocity_name);
     if (velocities && pointcloud->totpoint == int(velocities->size())) {

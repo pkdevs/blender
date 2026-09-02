@@ -8,10 +8,10 @@
  * Debug features of OpenGL.
  */
 
-#include "BLI_compiler_attrs.h"
-#include "BLI_string.h"
-#include "BLI_system.h"
-#include "BLI_utildefines.h"
+#include "BLI_compiler_attrs.hh"
+#include "BLI_string.hh"
+#include "BLI_system.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_global.hh"
 
@@ -127,6 +127,12 @@ bool MTLContext::debug_capture_begin(const char * /*title*/)
   MTLCaptureManager *capture_manager = [MTLCaptureManager sharedCaptureManager];
   if (!capture_manager) {
     /* Early exit if frame capture is disabled. */
+    return false;
+  }
+  /* MTLCaptureManager always exists but capture only works when running under Xcode with GPU
+   * Frame Capture enabled, or with MTL_CAPTURE_ENABLED=1. Check before attempting to avoid
+   * a noisy error log in normal command-line runs. */
+  if (![capture_manager supportsDestination:MTLCaptureDestinationDeveloperTools]) {
     return false;
   }
   MTLCaptureDescriptor *capture_descriptor = [[MTLCaptureDescriptor alloc] init];

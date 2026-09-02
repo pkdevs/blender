@@ -20,7 +20,7 @@
  *
  * \param t: factor in [0..1]
  * \param cosom: dot product from normalized vectors/quaternions.
- * \param r_w: calculated weights.
+ * \return calculated weights.
  */
 float2 interpolate_dot_slerp(float t, float cosom)
 {
@@ -46,6 +46,14 @@ Quaternion interpolate(Quaternion a, Quaternion b, float t)
   float2 w = interpolate_dot_slerp(t, cosom);
   quat = w.x * quat + w.y * b.as_float4();
   return Quaternion{UNPACK4(quat)};
+}
+
+/* Assumes a and b are unit vectors. */
+float3 spherical_interpolate(float3 a, float3 b, float t)
+{
+  float cosom = dot(a, b);
+  float2 w = interpolate_dot_slerp(t, cosom);
+  return w.x * a + w.y * b;
 }
 
 /** \} */

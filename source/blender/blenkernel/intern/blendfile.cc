@@ -23,15 +23,15 @@
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_function_ref.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_system.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_system.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 
@@ -337,8 +337,8 @@ static bool reuse_bmain_move_id(ReuseOldBMainData *reuse_data,
 
   Main *new_bmain = reuse_data->new_bmain;
   Main *old_bmain = reuse_data->old_bmain;
-  ListBaseT<ID> *new_lb = which_libbase(new_bmain, GS(id->name));
-  ListBaseT<ID> *old_lb = which_libbase(old_bmain, GS(id->name));
+  ListBaseT<ID> *new_lb = which_libbase(new_bmain, id->id_type());
+  ListBaseT<ID> *old_lb = which_libbase(old_bmain, id->id_type());
 
   if (reuse_existing) {
     /* A 'new' version of the same data may already exist in new_bmain, in the rare case
@@ -444,7 +444,7 @@ static int reuse_editable_asset_bmain_data_dependencies_process_cb(
     return IDWALK_RET_NOP;
   }
 
-  if (GS(id->name) == ID_LI) {
+  if (id->id_type() == ID_LI) {
     /* Libraries are handled separately. */
     return IDWALK_RET_STOP_RECURSION;
   }
@@ -465,7 +465,7 @@ static int reuse_editable_asset_bmain_data_dependencies_process_cb(
   }
 
   /* Only preserve specific datablock types. */
-  if (!ID_TYPE_SUPPORTS_ASSET_EDITABLE(GS(id->name))) {
+  if (!ID_TYPE_SUPPORTS_ASSET_EDITABLE(id->id_type())) {
     remapper.add(id, nullptr);
     return IDWALK_RET_STOP_RECURSION;
   }
@@ -596,8 +596,8 @@ static void swap_old_bmain_data_for_blendfile(ReuseOldBMainData *reuse_data, con
 
   /* NOTE: Full swapping is only supported for ID types that are assumed to be only local
    * data-blocks (like UI-like ones). Otherwise, the swapping could fail in many funny ways. */
-  BLI_assert(BLI_listbase_is_empty(old_lb) || !ID_IS_LINKED(static_cast<ID *>(old_lb->last)));
-  BLI_assert(BLI_listbase_is_empty(new_lb) || !ID_IS_LINKED(static_cast<ID *>(new_lb->last)));
+  BLI_assert(old_lb->is_empty() || !ID_IS_LINKED(static_cast<ID *>(old_lb->last)));
+  BLI_assert(new_lb->is_empty() || !ID_IS_LINKED(static_cast<ID *>(new_lb->last)));
 
   std::swap(*new_lb, *old_lb);
 
@@ -1200,8 +1200,12 @@ static void setup_app_data(bContext *C,
      * and/or needs to operate over the whole Main data-base
      * (versioning done in file reading code only operates on a per-library basis). */
     BLO_read_do_version_after_setup(bmain, nullptr, reports);
-    BLO_readfile_id_runtime_data_free_all(*bmain);
   }
+
+  /* Always clear readfile runtime data, keeping this beyond the readfile scope can have unexpected
+   * side-effects, especially on next readfile call when considering IDs from the old Main
+   * data-base, see e.g. #157387. */
+  BLO_readfile_id_runtime_data_free_all(*bmain);
 
   bmain->recovered = false;
 
@@ -1287,7 +1291,7 @@ static void setup_app_data(bContext *C,
         BLO_reportf_wrap(reports,
                          RPT_INFO,
                          RPT_("LIB: %s: '%s' missing from '%s', parent '%s'"),
-                         BKE_idtype_idcode_to_name(GS(id_iter->name)),
+                         BKE_idtype_idcode_to_name(id_iter->id_type()),
                          id_iter->name + 2,
                          id_iter->lib->runtime->filepath_abs,
                          id_iter->lib->runtime->parent ?
@@ -1430,7 +1434,7 @@ void BKE_blendfile_read_make_empty(bContext *C)
 
   FOREACH_MAIN_LISTBASE_BEGIN (bmain, lb) {
     FOREACH_MAIN_LISTBASE_ID_BEGIN (lb, id) {
-      if (ELEM(GS(id->name), ID_SCE, ID_SCR, ID_WM, ID_WS)) {
+      if (ELEM(id->id_type(), ID_SCE, ID_SCR, ID_WM, ID_WS)) {
         break;
       }
       BKE_id_delete(bmain, id);
@@ -1621,6 +1625,15 @@ UserDef *BKE_blendfile_userdef_from_defaults()
         userdef, "NODE_AST_compositor", "Creative");
     BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
         userdef, "NODE_AST_compositor", "Utilities");
+
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "NODE_AST_compositor", "Compositing/Camera & Lens Effects");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "NODE_AST_compositor", "Compositing/Creative");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "NODE_AST_compositor", "Compositing/Utilities");
+    /* Note: "Compositing/Mask" is not enabled by default because it only contains online assets,
+     * which are not available because online access is disabled by default.*/
   }
 
   return userdef;
@@ -1779,10 +1792,7 @@ namespace bke::blendfile {
 PartialWriteContext::PartialWriteContext(Main &reference_main)
     : reference_root_filepath_(BKE_main_blendfile_path(&reference_main))
 {
-  if (!reference_root_filepath_.empty()) {
-    STRNCPY(this->bmain.filepath, reference_root_filepath_.c_str());
-  }
-  this->bmain.colorspace = reference_main.colorspace;
+  BKE_main_init_from_reference(this->bmain, reference_main);
   /* Only for IDs matching existing data in current G_MAIN. */
   matching_uid_map_ = BKE_main_idmap_create(&this->bmain, false, nullptr, MAIN_IDMAP_TYPE_UID);
   /* For all IDs existing in the context. */
@@ -2280,10 +2290,10 @@ bool PartialWriteContext::is_valid()
   return is_valid;
 }
 
-bool PartialWriteContext::write(const char *write_filepath,
-                                const int write_flags,
-                                const int remap_mode,
-                                ReportList &reports)
+bool PartialWriteContext::write_impl(const char *write_filepath,
+                                     const int write_flags,
+                                     const BlendFileWriteParams &blend_file_write_params,
+                                     ReportList &reports)
 {
   BLI_assert_msg(write_filepath != reference_root_filepath_,
                  "A library blendfile should not overwrite currently edited blendfile");
@@ -2313,15 +2323,32 @@ bool PartialWriteContext::write(const char *write_filepath,
 
   BLI_assert(this->is_valid());
 
-  BlendFileWriteParams blend_file_write_params{};
-  blend_file_write_params.remap_mode = eBLO_WritePathRemap(remap_mode);
   return BLO_write_file(
       &this->bmain, write_filepath, write_flags, &blend_file_write_params, &reports);
+}
+
+bool PartialWriteContext::write(const char *write_filepath,
+                                const int write_flags,
+                                const int remap_mode,
+                                ReportList &reports)
+{
+  BlendFileWriteParams blend_file_write_params{};
+  blend_file_write_params.remap_mode = eBLO_WritePathRemap(remap_mode);
+  return this->write_impl(write_filepath, write_flags, blend_file_write_params, reports);
 }
 
 bool PartialWriteContext::write(const char *write_filepath, ReportList &reports)
 {
   return this->write(write_filepath, 0, BLO_WRITE_PATH_REMAP_RELATIVE, reports);
+}
+
+bool PartialWriteContext::write_as_copypaste_buffer(const char *write_filepath,
+                                                    ReportList &reports)
+{
+  BlendFileWriteParams blend_file_write_params{};
+  blend_file_write_params.remap_mode = BLO_WRITE_PATH_REMAP_RELATIVE;
+  blend_file_write_params.is_copypaste_buffer = true;
+  return this->write_impl(write_filepath, 0, blend_file_write_params, reports);
 }
 
 }  // namespace bke::blendfile

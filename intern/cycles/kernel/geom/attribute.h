@@ -21,6 +21,11 @@ CCL_NAMESPACE_BEGIN
  * Lookup of attributes is different between OSL and SVM, as OSL is ustring
  * based while for SVM we use integer ids. */
 
+ccl_device_forceinline bool is_attribute_found(const ccl_private AttributeDescriptor &desc)
+{
+  return desc.offset != ATTR_STD_NOT_FOUND;
+}
+
 ccl_device_inline AttributeDescriptor attribute_not_found()
 {
   const AttributeDescriptor desc = {ATTR_ELEMENT_NONE, (NodeAttributeType)0, ATTR_STD_NOT_FOUND};
@@ -247,6 +252,13 @@ ccl_device_template_spec Transform attribute_data_fetch(KernelGlobals kg,
   tfm.z = kernel_data_fetch(attributes_float4, offset + 2);
 
   return tfm;
+}
+
+ccl_device_template_spec Quaternion attribute_data_fetch(KernelGlobals kg,
+                                                         AttributeElement /*element*/,
+                                                         const int offset)
+{
+  return kernel_data_fetch(attributes_quaternion, offset);
 }
 
 /* Transform matrix attribute on meshes */

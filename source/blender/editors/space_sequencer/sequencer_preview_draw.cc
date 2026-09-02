@@ -15,10 +15,10 @@
 #include "BLI_index_range.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_scene_types.h"
@@ -38,6 +38,8 @@
 
 #include "OCIO_scope.hh"
 
+#include "PRF_profile.hh"
+
 #include "GPU_compute.hh"
 #include "GPU_debug.hh"
 #include "GPU_framebuffer.hh"
@@ -53,6 +55,7 @@
 #include "ED_screen.hh"
 #include "ED_sequencer.hh"
 #include "ED_space_api.hh"
+#include "ED_time_scrub_ui.hh"
 #include "ED_util.hh"
 #include "ED_view3d.hh"
 
@@ -228,20 +231,29 @@ static void sequencer_draw_borders_overlay(const SpaceSeq &sseq,
 
   imm_draw_box_wire_2d(shdr_pos, x1 - 0.5f, y1 - 0.5f, x2 + 0.5f, y2 + 0.5f);
 
+  rctf rect;
+  rect.xmin = x1;
+  rect.xmax = x2;
+  rect.ymin = y1;
+  rect.ymax = y2;
+
   /* Draw safety border. */
   if (sseq.preview_overlay.flag & SEQ_PREVIEW_SHOW_SAFE_MARGINS) {
     immUniformThemeColorBlend(TH_VIEW_OVERLAY, TH_BACK, 0.25f);
-    rctf rect;
-    rect.xmin = x1;
-    rect.xmax = x2;
-    rect.ymin = y1;
-    rect.ymax = y2;
     ui::draw_safe_areas(shdr_pos, &rect, scene->safe_areas.title, scene->safe_areas.action);
 
     if (sseq.preview_overlay.flag & SEQ_PREVIEW_SHOW_SAFE_CENTER) {
       ui::draw_safe_areas(
           shdr_pos, &rect, scene->safe_areas.title_center, scene->safe_areas.action_center);
     }
+  }
+
+  /* Draw composition guides. */
+  if (sseq.preview_overlay.flag & SEQ_PREVIEW_SHOW_COMPOSITION_GUIDES) {
+    ED_draw_composition_guides(shdr_pos,
+                               sseq.preview_overlay.composition_guide_flags,
+                               &rect,
+                               sseq.preview_overlay.composition_guide_color);
   }
 
   immUnbindProgram();
@@ -402,8 +414,8 @@ static void draw_histogram(ARegion &region,
     return;
   }
 
-  const ocio::ScopeInfo scope_info = IMB_colormanagement_get_scope_info(
-      display_settings, view_settings->view_transform);
+  const ocio::ScopeInfo scope_info = IMB_colormanagement_get_scope_info(display_settings,
+                                                                        view_settings);
 
   /* Grid lines from scope info graticules, with labels centered on each line. */
   const uchar col_grid[4] = {128, 128, 128, 128};
@@ -413,7 +425,7 @@ static void draw_histogram(ARegion &region,
    * measurements are accurate. */
   const int font_id = BLF_set_default();
   float text_scale_x, text_scale_y;
-  ui::view2d_scale_get_inverse(&region.v2d, &text_scale_x, &text_scale_y);
+  ui::view2d_pixel_size_get(&region.v2d, &text_scale_x, &text_scale_y);
 
   float prev_label_right = -FLT_MAX;
 
@@ -494,8 +506,8 @@ static void draw_waveform_graticule(ARegion *region,
                                     const ColorManagedDisplaySettings *display_settings,
                                     bool skip_border)
 {
-  const ocio::ScopeInfo scope_info = IMB_colormanagement_get_scope_info(
-      display_settings, view_settings->view_transform);
+  const ocio::ScopeInfo scope_info = IMB_colormanagement_get_scope_info(display_settings,
+                                                                        view_settings);
 
   const uchar col_grid[4] = {128, 128, 128, 128};
   const float x0 = area.xmin;
@@ -504,7 +516,7 @@ static void draw_waveform_graticule(ARegion *region,
 
   const int font_id = BLF_set_default();
   float text_scale_x, text_scale_y;
-  ui::view2d_scale_get_inverse(&region->v2d, &text_scale_x, &text_scale_y);
+  ui::view2d_pixel_size_get(&region->v2d, &text_scale_x, &text_scale_y);
 
   float prev_label_top = -FLT_MAX;
 
@@ -675,7 +687,7 @@ static void draw_vectorscope_graticule(ARegion *region,
   /* Calculate size of single text letter. */
   char buf[2] = {'M', 0};
   float text_scale_x, text_scale_y;
-  ui::view2d_scale_get_inverse(&region->v2d, &text_scale_x, &text_scale_y);
+  ui::view2d_pixel_size_get(&region->v2d, &text_scale_x, &text_scale_y);
   float text_width, text_height;
   BLF_width_and_height(BLF_default(), buf, 1, &text_width, &text_height);
   text_width *= text_scale_x;
@@ -742,10 +754,14 @@ static void sequencer_draw_scopes(Scene *scene,
   /* Get display-space texture for scope values (positions, histogram bins).
    * Falls back to the raw input texture if no color management is needed. */
   gpu::Texture *scope_texture = seq::preview_cache_get_gpu_scope_texture(
-      scene, timeline_frame, 0, image_width, image_height);
+      scene, timeline_frame, space_sequencer.multiview_eye, 0, image_width, image_height);
   if (scope_texture == nullptr) {
-    scope_texture = seq::preview_cache_get_gpu_texture(
-        scene, timeline_frame, space_sequencer.chanshown, image_width, image_height);
+    scope_texture = seq::preview_cache_get_gpu_texture(scene,
+                                                       timeline_frame,
+                                                       space_sequencer.multiview_eye,
+                                                       space_sequencer.chanshown,
+                                                       image_width,
+                                                       image_height);
   }
 
   SeqQuadsBatch quads;
@@ -823,8 +839,8 @@ static void sequencer_draw_scopes(Scene *scene,
       const float point_size = (BLI_rcti_size_x(&region.v2d.mask) + 1) /
                                BLI_rctf_size_x(&region.v2d.cur);
 
-      const ocio::ScopeInfo scope_info = IMB_colormanagement_get_scope_info(
-          &display_settings, view_settings.view_transform);
+      const ocio::ScopeInfo scope_info = IMB_colormanagement_get_scope_info(&display_settings,
+                                                                            &view_settings);
 
       int viewport_size_i[4];
       GPU_viewport_size_get_i(viewport_size_i);
@@ -974,8 +990,8 @@ static void sequencer_draw_scopes(Scene *scene,
 
       case SEQ_DRAW_IMG_VECTORSCOPE: {
         use_blend = true;
-        const ocio::ScopeInfo scope_info = IMB_colormanagement_get_scope_info(
-            &display_settings, view_settings.view_transform);
+        const ocio::ScopeInfo scope_info = IMB_colormanagement_get_scope_info(&display_settings,
+                                                                              &view_settings);
         draw_vectorscope_graticule(&region, quads, area, scope_info);
       } break;
 
@@ -1011,13 +1027,19 @@ static void update_gpu_scopes(const ImBuf *input_ibuf,
                               Scene *scene,
                               int timeline_frame)
 {
+  PRF_scope_with_name("SeqUpdateGPUScopes", ProfileCategory::Draw);
   BLI_assert(input_ibuf && input_texture);
 
   /* Display space GPU texture is already calculated. */
   const int width = GPU_texture_width(input_texture);
   const int height = GPU_texture_height(input_texture);
   gpu::Texture *scope_texture = seq::preview_cache_get_gpu_scope_texture(
-      scene, timeline_frame, space_sequencer.chanshown, width, height);
+      scene,
+      timeline_frame,
+      space_sequencer.multiview_eye,
+      space_sequencer.chanshown,
+      width,
+      height);
   if (scope_texture != nullptr) {
     return;
   }
@@ -1071,8 +1093,11 @@ static void update_gpu_scopes(const ImBuf *input_ibuf,
   GPU_matrix_pop();
   GPU_matrix_pop_projection();
 
-  seq::preview_cache_set_gpu_scope_texture(
-      scene, timeline_frame, space_sequencer.chanshown, scope_texture);
+  seq::preview_cache_set_gpu_scope_texture(scene,
+                                           timeline_frame,
+                                           space_sequencer.multiview_eye,
+                                           space_sequencer.chanshown,
+                                           scope_texture);
 }
 
 static void update_cpu_scopes(const SpaceSeq &space_sequencer,
@@ -1087,6 +1112,8 @@ static void update_cpu_scopes(const SpaceSeq &space_sequencer,
     /* Nothing to do: scopes already calculated for this image/frame. */
     return;
   }
+
+  PRF_scope_with_name("SeqUpdateCPUScopes", ProfileCategory::Draw);
 
   scopes.cleanup();
   if (space_sequencer.scope & SEQ_DRAW_IMG_HISTOGRAM) {
@@ -1222,7 +1249,6 @@ static void text_selection_draw(const bContext *C, const Strip *strip, uint pos)
     const float line_y = character_start.position.y + runtime->font_descender;
 
     const float2 view_offs{-scene->r.xsch / 2.0f, -scene->r.ysch / 2.0f};
-    const float view_aspect = scene->r.xasp / scene->r.yasp;
     float3x3 transform_mat = seq::image_transform_matrix_get(scene, strip);
     float2 selection_quad[4] = {
         {character_start.position.x, line_y},
@@ -1237,7 +1263,6 @@ static void text_selection_draw(const bContext *C, const Strip *strip, uint pos)
     for (int i : IndexRange(0, 4)) {
       selection_quad[i] += view_offs;
       selection_quad[i] = math::transform_point(transform_mat, selection_quad[i]);
-      selection_quad[i].x *= view_aspect;
     }
     for (int i : {0, 1, 2, 2, 3, 0}) {
       immVertex2f(pos, selection_quad[i][0], selection_quad[i][1]);
@@ -1266,7 +1291,6 @@ static void text_edit_draw_cursor(const bContext *C, const Strip *strip, uint po
   const Scene *scene = CTX_data_sequencer_scene(C);
 
   const float2 view_offs{-scene->r.xsch / 2.0f, -scene->r.ysch / 2.0f};
-  const float view_aspect = scene->r.xasp / scene->r.yasp;
   float3x3 transform_mat = seq::image_transform_matrix_get(scene, strip);
   const int2 cursor_position = strip_text_cursor_offset_to_position(runtime, data->cursor_offset);
   const float cursor_width = 10;
@@ -1295,7 +1319,6 @@ static void text_edit_draw_cursor(const bContext *C, const Strip *strip, uint po
   for (int i : IndexRange(0, 4)) {
     cursor_quad[i] += descender_offs + view_offs;
     cursor_quad[i] = math::transform_point(transform_mat, cursor_quad[i]);
-    cursor_quad[i].x *= view_aspect;
   }
   for (int i : {0, 1, 2, 2, 3, 0}) {
     immVertex2f(pos, cursor_quad[i][0], cursor_quad[i][1]);
@@ -1320,6 +1343,7 @@ static void text_edit_draw(const bContext *C)
   GPU_blend(GPU_BLEND_ALPHA);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
+  std::scoped_lock runtime_lock(seq::text_runtime_mutex_get());
   text_selection_draw(C, strip, pos);
   text_edit_draw_cursor(C, strip, pos);
 
@@ -1624,6 +1648,7 @@ static int get_reference_frame_offset(const Editing &editing, const RenderData &
  * If channel configuration is incompatible with the texture nullptr is returned. */
 static gpu::Texture *create_texture(const ImBuf &ibuf)
 {
+  PRF_scope_with_name("SeqPreviewCreateTexture", ProfileCategory::Draw);
   const eGPUTextureUsage texture_usage = GPU_TEXTURE_USAGE_SHADER_READ |
                                          GPU_TEXTURE_USAGE_ATTACHMENT;
 
@@ -1758,6 +1783,7 @@ static void sequencer_preview_draw_overlays(const bContext *C,
                                             gpu::Texture *current_texture,
                                             gpu::Texture *reference_texture,
                                             const ImBuf *input_ibuf,
+                                            gpu::Texture *input_texture,
                                             const int timeline_frame)
 {
   const bool is_playing = ED_screen_animation_playing(&wm);
@@ -1766,7 +1792,7 @@ static void sequencer_preview_draw_overlays(const bContext *C,
   const bool is_scopes_view = ELEM(space_sequencer.view, SEQ_VIEW_SCOPES);
   const bool has_cpu_scope = is_scopes_view && input_ibuf &&
                              (space_sequencer.scope & SEQ_DRAW_IMG_HISTOGRAM);
-  const bool has_gpu_scope = input_ibuf && current_texture &&
+  const bool has_gpu_scope = input_ibuf && input_texture &&
                              ((show_preview_image && space_sequencer.zebra != 0) ||
                               (is_scopes_view && (space_sequencer.scope &
                                                   (SEQ_DRAW_IMG_WAVEFORM | SEQ_DRAW_IMG_RGBPARADE |
@@ -1778,7 +1804,7 @@ static void sequencer_preview_draw_overlays(const bContext *C,
   }
   if (has_gpu_scope) {
     update_gpu_scopes(input_ibuf,
-                      current_texture,
+                      input_texture,
                       view_settings,
                       display_settings,
                       space_sequencer,
@@ -1917,6 +1943,8 @@ void sequencer_preview_region_draw(const bContext *C, ARegion *region)
     return;
   }
 
+  PRF_scope_with_name("SeqPreviewDraw", ProfileCategory::Draw);
+
   const Editing &editing = *scene->ed;
   const RenderData &render_data = scene->r;
   const eSpaceSeq_ScopeType preview_type = (space_sequencer.view == SEQ_VIEW_SCOPES) ?
@@ -1934,9 +1962,8 @@ void sequencer_preview_region_draw(const bContext *C, ARegion *region)
                                   draw_overlay;
   const bool need_current_frame = !(draw_frame_overlay && (space_sequencer.overlay_frame_type ==
                                                            SEQ_OVERLAY_FRAME_TYPE_REFERENCE));
-  const bool need_reference_frame = show_imbuf && draw_frame_overlay &&
-                                    space_sequencer.overlay_frame_type !=
-                                        SEQ_OVERLAY_FRAME_TYPE_CURRENT;
+  const bool need_reference_frame = draw_frame_overlay && space_sequencer.overlay_frame_type !=
+                                                              SEQ_OVERLAY_FRAME_TYPE_CURRENT;
 
   int timeline_frame = render_data.cfra;
   if (sequencer_draw_get_transform_preview(space_sequencer, *scene)) {
@@ -1960,7 +1987,7 @@ void sequencer_preview_region_draw(const bContext *C, ARegion *region)
     const int offset = get_reference_frame_offset(editing, render_data);
     reference_ibuf = sequencer_ibuf_get(
         C, timeline_frame + offset, view_names[space_sequencer.multiview_eye]);
-    if (show_imbuf && reference_ibuf) {
+    if (use_gpu_texture && reference_ibuf) {
       reference_texture = create_texture(*reference_ibuf);
     }
   }
@@ -1968,18 +1995,26 @@ void sequencer_preview_region_draw(const bContext *C, ARegion *region)
     current_ibuf = sequencer_ibuf_get(
         C, timeline_frame, view_names[space_sequencer.multiview_eye]);
     if (use_gpu_texture && current_ibuf) {
-      current_texture = seq::preview_cache_get_gpu_texture(
-          scene, timeline_frame, space_sequencer.chanshown, current_ibuf->x, current_ibuf->y);
+      current_texture = seq::preview_cache_get_gpu_texture(scene,
+                                                           timeline_frame,
+                                                           space_sequencer.multiview_eye,
+                                                           space_sequencer.chanshown,
+                                                           current_ibuf->x,
+                                                           current_ibuf->y);
       if (current_texture == nullptr) {
         current_texture = create_texture(*current_ibuf);
-        seq::preview_cache_set_gpu_texture(
-            scene, timeline_frame, space_sequencer.chanshown, current_texture);
+        seq::preview_cache_set_gpu_texture(scene,
+                                           timeline_frame,
+                                           space_sequencer.multiview_eye,
+                                           space_sequencer.chanshown,
+                                           current_texture);
       }
     }
   }
 
-  /* Image buffer used for overlays: scopes, metadata etc. */
+  /* Image buffer and texture used for overlays: scopes, metadata etc. */
   ImBuf *overlay_ibuf = need_current_frame ? current_ibuf : reference_ibuf;
+  gpu::Texture *overlay_texture = need_current_frame ? current_texture : reference_texture;
 
   /* Draw parts of the preview region to the corresponding frame buffers. */
   sequencer_preview_draw_color_render(space_sequencer,
@@ -2000,6 +2035,7 @@ void sequencer_preview_region_draw(const bContext *C, ARegion *region)
                                   current_texture,
                                   reference_texture,
                                   overlay_ibuf,
+                                  overlay_texture,
                                   timeline_frame);
 
 #if 0
@@ -2017,6 +2053,16 @@ void sequencer_preview_region_draw(const bContext *C, ARegion *region)
   IMB_freeImBuf(reference_ibuf);
 
   preview_draw_end(C);
+}
+
+void sequencer_scrubbing_region_draw(const bContext *C, ARegion *region)
+{
+  const Scene *scene = CTX_data_sequencer_scene(C);
+  const SpaceSeq *sseq = CTX_wm_space_seq(C);
+
+  const int fps = round_db_to_int(scene->frames_per_second());
+  ED_time_scrub_draw(region, scene, !(sseq->flag & SEQ_DRAWFRAMES), true, fps);
+  ED_time_scrub_draw_current_frame(region, scene, !(sseq->flag & SEQ_DRAWFRAMES), false, true);
 }
 
 }  // namespace blender::ed::vse

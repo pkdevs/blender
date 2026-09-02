@@ -115,7 +115,7 @@ class NODE_OT_lazy_connect(Operator, NWBase):
             self.report({'WARNING'}, "Active editor should be a node editor for the operator to run")
             return {'CANCELLED'}
 
-        nodes, links = get_nodes_links(context)
+        nodes, _links = get_nodes_links(context)
         node = node_at_pos(nodes, context, event)
         if node:
             context.scene.NWBusyDrawing = node.name
@@ -145,7 +145,7 @@ class NODE_OT_lazy_connect_call_inputs_menu(Operator, NWBase):
     from_socket: IntProperty()
 
     def execute(self, context):
-        nodes, links = get_nodes_links(context)
+        nodes, _links = get_nodes_links(context)
 
         context.scene.NWSourceSocket = self.from_socket
 
@@ -169,7 +169,7 @@ class NODE_OT_lazy_connect_make_link(Operator, NWBase):
     to_socket: IntProperty()
 
     def execute(self, context):
-        nodes, links = get_nodes_links(context)
+        nodes, _links = get_nodes_links(context)
 
         n1 = nodes[context.scene.NWLazySource]
         n2 = nodes[context.scene.NWLazyTarget]
@@ -189,20 +189,20 @@ class NODE_MT_lazy_connect_outputs(Menu, NWBaseMenu):
 
     def draw(self, context):
         layout = self.layout
-        nodes, links = get_nodes_links(context)
+        nodes, _links = get_nodes_links(context)
 
         layout.label(text="From Socket", icon='RADIOBUT_OFF')
         layout.separator()
 
         n1 = nodes[context.scene.NWLazySource]
-        for index, output in enumerate(n1.outputs):
+        for index, output_socket in enumerate(n1.outputs):
             # Only show sockets that are exposed.
-            if output.enabled:
+            if output_socket.enabled:
                 layout.operator(
                     "node.lazy_connect_call_inputs_menu",
-                    text=output.name,
+                    text=output_socket.name,
                     text_ctxt=i18n_contexts.default,
-                    icon=socket_to_icon(output),
+                    icon=socket_to_icon(output_socket),
                 ).from_socket = index
 
 
@@ -212,23 +212,23 @@ class NODE_MT_lazy_connect_inputs(Menu, NWBaseMenu):
 
     def draw(self, context):
         layout = self.layout
-        nodes, links = get_nodes_links(context)
+        nodes, _links = get_nodes_links(context)
 
         layout.label(text="To Socket", icon='FORWARD')
         layout.separator()
 
         n2 = nodes[context.scene.NWLazyTarget]
 
-        for index, input in enumerate(n2.inputs):
+        for index, input_socket in enumerate(n2.inputs):
             # Only show sockets that are exposed.
             # This prevents, for example, the scale value socket
             # of the vector math node being added to the list when
             # the mode is not 'SCALE'.
-            if input.enabled:
+            if input_socket.enabled:
                 op = layout.operator(
-                    "node.lazy_connect_make_link", text=input.name,
+                    "node.lazy_connect_make_link", text=input_socket.name,
                     text_ctxt=i18n_contexts.default,
-                    icon=socket_to_icon(input),
+                    icon=socket_to_icon(input_socket),
                 )
                 op.from_socket = context.scene.NWSourceSocket
                 op.to_socket = index

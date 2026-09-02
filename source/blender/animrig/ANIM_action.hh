@@ -1578,6 +1578,10 @@ const animrig::Channelbag *channelbag_for_action_slot(const Action &action,
                                                       slot_handle_t slot_handle);
 animrig::Channelbag *channelbag_for_action_slot(Action &action, slot_handle_t slot_handle);
 
+/* Returns all unique channelbags for this action slot combination. */
+Vector<animrig::Channelbag *> channelbags_for_action_slot(Action &action,
+                                                          slot_handle_t slot_handle);
+
 /**
  * Return the F-Curves for this specific slot handle.
  *
@@ -1599,7 +1603,7 @@ Span<const FCurve *> fcurves_for_action_slot(const Action &action, slot_handle_t
  * This function also ensures that there is a layer and a keyframe strip for the
  * channelbag to exist on.
  *
- * \param action: MUST already be assigned to the animated ID.
+ * \param dna_action: MUST already be assigned to the animated ID.
  *
  * \param animated_id: The ID that is animated by this Action. It is used to
  * create and assign an appropriate slot if needed when creating the fcurve, and

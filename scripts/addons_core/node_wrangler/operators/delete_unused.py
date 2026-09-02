@@ -41,8 +41,8 @@ class NODE_OT_delete_unused(Operator, NWBase):
         if node.type in end_types:
             return False
 
-        for output in node.outputs:
-            if output.links:
+        for output_socket in node.outputs:
+            if output_socket.links:
                 return False
         return True
 
@@ -55,7 +55,7 @@ class NODE_OT_delete_unused(Operator, NWBase):
                                         'TextureNodeTree', 'GeometryNodeTree'}))
 
     def execute(self, context):
-        nodes, links = get_nodes_links(context)
+        nodes, _links = get_nodes_links(context)
 
         # Store selection
         selection = []
@@ -122,7 +122,7 @@ class NODE_OT_delete_unused(Operator, NWBase):
             self.report({'INFO'}, message)
 
         # Restore selection
-        nodes, links = get_nodes_links(context)
+        nodes, _links = get_nodes_links(context)
         for node in nodes:
             if node.name in selection:
                 node.select = True

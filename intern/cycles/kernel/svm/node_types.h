@@ -374,6 +374,16 @@ struct SVMNodeCombineVector {
 static_assert(alignof(SVMNodeCombineVector) <= alignof(uint));
 static_assert(sizeof(SVMNodeCombineVector) % sizeof(uint) == 0);
 
+/* NODE_GET_VECTOR_COMPONENT / NODE_GET_VECTOR_COMPONENT_DERIVATIVE */
+struct SVMNodeGetVectorComponent {
+  SVMInputFloat3 vector;
+  SVMInputInt index;
+  SVMStackOffset out_offset;
+  uint8_t _pad[3];
+};
+static_assert(alignof(SVMNodeGetVectorComponent) <= alignof(uint));
+static_assert(sizeof(SVMNodeGetVectorComponent) % sizeof(uint) == 0);
+
 /* NODE_SEPARATE_COLOR */
 struct SVMNodeSeparateColor {
   NodeCombSepColorType color_type;
@@ -1152,6 +1162,9 @@ struct SVMNodePrincipledBsdfData {
   SVMInputFloat specular_ior_level;
   SVMInputFloat anisotropic;
   SVMInputFloat anisotropic_rotation;
+  /* Transmission. */
+  SVMInputFloat transmission_dispersion_scale;
+  SVMInputFloat transmission_dispersion_abbe_number;
   /* Emission. */
   SVMInputFloat3 emission_color;
   SVMInputFloat emission_strength;
@@ -1171,6 +1184,8 @@ struct SVMNodePrincipledBsdfData {
   /* Thin film. */
   SVMInputFloat thin_film_thickness;
   SVMInputFloat thin_film_ior;
+  /* Thin wall. */
+  SVMInputInt thin_wall;
 };
 static_assert(alignof(SVMNodePrincipledBsdfData) <= alignof(uint));
 static_assert(sizeof(SVMNodePrincipledBsdfData) % sizeof(uint) == 0);
@@ -1233,12 +1248,12 @@ struct SVMNodeRaycast {
   SVMInputFloat distance;
   float bump_filter_width;
   uint8_t only_local;
+  uint16_t num_attributes;
   SVMStackOffset is_hit_offset;
   SVMStackOffset is_self_hit_offset;
   SVMStackOffset hit_distance_offset;
   SVMStackOffset hit_position_offset;
   SVMStackOffset hit_normal_offset;
-  uint8_t _pad[2];
 };
 static_assert(alignof(SVMNodeRaycast) <= alignof(uint));
 static_assert(sizeof(SVMNodeRaycast) % sizeof(uint) == 0);
@@ -1294,5 +1309,14 @@ struct SVMNodeMinMax {
 };
 static_assert(alignof(SVMNodeMinMax) <= alignof(uint));
 static_assert(sizeof(SVMNodeMinMax) % sizeof(uint) == 0);
+
+/* NODE_SCENE_TIME */
+struct SVMNodeSceneTime {
+  SVMStackOffset seconds_out;
+  SVMStackOffset frame_out;
+  uint8_t _pad[2];
+};
+static_assert(alignof(SVMNodeSceneTime) <= alignof(uint));
+static_assert(sizeof(SVMNodeSceneTime) % sizeof(uint) == 0);
 
 CCL_NAMESPACE_END

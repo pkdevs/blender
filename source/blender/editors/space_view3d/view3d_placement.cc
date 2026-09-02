@@ -13,9 +13,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
@@ -166,7 +166,7 @@ struct InteractivePlaceData {
   bool wait_for_input;
 
   /* WORKAROUND: We need to remove #SCE_SNAP_TO_GRID temporarily. */
-  short *snap_to_ptr;
+  eSnapMode *snap_to_ptr;
   eSnapMode snap_to_restore;
 };
 
@@ -233,7 +233,7 @@ static bool idp_snap_calc_incremental(
     Scene *scene, View3D *v3d, ARegion *region, const float co_relative[3], float co[3])
 {
   const float grid_size = ED_view3d_grid_view_scale(scene, v3d, region, nullptr);
-  if (UNLIKELY(grid_size == 0.0f)) {
+  if (grid_size == 0.0f) [[unlikely]] {
     return false;
   }
 
@@ -773,10 +773,10 @@ static void view3d_interactive_add_begin(bContext *C, wmOperator *op, const wmEv
   ipd->step_index = STEP_BASE;
 
   ipd->snap_to_ptr = &tool_settings->snap_mode_tools;
-  if (eSnapMode(*ipd->snap_to_ptr) == SCE_SNAP_TO_NONE) {
+  if (*ipd->snap_to_ptr == SCE_SNAP_TO_NONE) {
     ipd->snap_to_ptr = &tool_settings->snap_mode;
   }
-  ipd->snap_to_restore = eSnapMode(*ipd->snap_to_ptr);
+  ipd->snap_to_restore = *ipd->snap_to_ptr;
 
   plane_from_point_normal_v3(ipd->step[0].plane, ipd->co_src, ipd->matrix_orient[plane_axis]);
 

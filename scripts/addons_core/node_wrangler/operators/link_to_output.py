@@ -35,7 +35,7 @@ class NODE_OT_link_to_output(Operator):
                 and nw_check_visible_outputs(cls, context))
 
     def execute(self, context):
-        nodes, links = get_nodes_links(context)
+        nodes, _links = get_nodes_links(context)
         active = nodes.active
         output_index = None
         tree_type = context.space_data.tree_type
@@ -63,12 +63,12 @@ class NODE_OT_link_to_output(Operator):
             output_node.location.y = active.location.y
 
         if active.outputs:
-            for i, output in enumerate(active.outputs):
-                if is_visible_socket(output):
+            for i, output_socket in enumerate(active.outputs):
+                if is_visible_socket(output_socket):
                     output_index = i
                     break
-            for i, output in enumerate(active.outputs):
-                if output.type == output_node.inputs[0].type and is_visible_socket(output):
+            for i, output_socket in enumerate(active.outputs):
+                if output_socket.type == output_node.inputs[0].type and is_visible_socket(output_socket):
                     output_index = i
                     break
 

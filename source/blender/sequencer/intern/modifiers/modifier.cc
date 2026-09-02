@@ -8,10 +8,10 @@
 
 #include "BLI_array.hh"
 #include "BLI_hash.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_rand.hh"
 #include "BLI_set.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_task.hh"
 
@@ -140,7 +140,7 @@ static void modifier_ops_extra_draw(bContext *C, ui::Layout *layout, void *smd_v
                     wm::OpCallContext::InvokeDefault,
                     UI_ITEM_NONE);
     RNA_string_set(&op_ptr, "modifier", smd->name);
-    RNA_int_set(&op_ptr, "index", BLI_listbase_count(&strip->modifiers) - 1);
+    RNA_int_set(&op_ptr, "index", strip->modifiers.count() - 1);
     row.enabled_set(smd->next != nullptr);
   }
 
@@ -173,6 +173,12 @@ static void modifier_panel_header(const bContext * /*C*/, Panel *panel)
    * Count how many buttons are added to the header to check if there is enough space. */
   int buttons_number = 0;
   ui::Layout &name_row = row.row(true);
+
+  if (!smd->is_type_sound()) {
+    sub = &row.row(true);
+    sub->prop(ptr, "show_preview", UI_ITEM_NONE, "", ICON_NONE);
+    buttons_number++;
+  }
 
   sub = &row.row(true);
   sub->prop(ptr, "enable", UI_ITEM_NONE, "", ICON_NONE);
@@ -347,8 +353,11 @@ ImBuf *modifier_render_mask_input(const ModifierApplyContext &context,
 
   if (smd.mask_input_type == STRIP_MASK_INPUT_STRIP) {
     if (smd.mask_strip) {
-      mask = seq_render_strip(
-          &context.render_data, &context.render_state, smd.mask_strip, context.timeline_frame);
+      mask = seq_render_strip(&context.render_data,
+                              &context.render_state,
+                              smd.mask_strip,
+                              context.timeline_frame)
+                 .image;
     }
   }
   else if (smd.mask_input_type == STRIP_MASK_INPUT_ID) {
@@ -404,7 +413,7 @@ void modifiers_init()
   modifier_types_init(modifiersTypes);
 }
 
-const StripModifierTypeInfo *modifier_type_info_get(int type)
+const StripModifierTypeInfo *modifier_type_info_get(eStripModifierType type)
 {
   if (type <= 0 || type >= NUM_STRIP_MODIFIER_TYPES) {
     return nullptr;
@@ -412,7 +421,7 @@ const StripModifierTypeInfo *modifier_type_info_get(int type)
   return modifiersTypes[type];
 }
 
-StripModifierData *modifier_new(Strip *strip, const char *name, int type)
+StripModifierData *modifier_new(Strip *strip, const char *name, eStripModifierType type)
 {
   StripModifierData *smd;
   const StripModifierTypeInfo *smti = modifier_type_info_get(type);
@@ -420,7 +429,7 @@ StripModifierData *modifier_new(Strip *strip, const char *name, int type)
   smd = static_cast<StripModifierData *>(MEM_new_zeroed(smti->struct_size, "sequence modifier"));
 
   smd->type = type;
-  smd->flag |= STRIP_MODIFIER_FLAG_EXPANDED;
+  smd->flag |= STRIP_MODIFIER_FLAG_EXPANDED | STRIP_MODIFIER_FLAG_SHOW_PREVIEW;
   smd->ui_expand_flag |= UI_PANEL_DATA_EXPAND_ROOT;
   smd->runtime = MEM_new<StripModifierDataRuntime>(__func__);
 
@@ -454,6 +463,16 @@ bool modifier_remove(Strip *strip, StripModifierData *smd)
     return false;
   }
 
+  if (smd->flag & STRIP_MODIFIER_FLAG_ACTIVE) {
+    /* Prefer the next modifier but use the previous if this modifier is the last in the list. */
+    if (smd->next != nullptr) {
+      modifier_set_active(strip, smd->next);
+    }
+    else if (smd->prev != nullptr) {
+      modifier_set_active(strip, smd->prev);
+    }
+  }
+
   BLI_remlink(&strip->modifiers, smd);
   modifier_free(smd);
 
@@ -469,7 +488,7 @@ void modifier_clear(Strip *strip)
     modifier_free(smd);
   }
 
-  BLI_listbase_clear(&strip->modifiers);
+  strip->modifiers.clear_no_delete();
 }
 
 void modifier_free(StripModifierData *smd)
@@ -538,8 +557,14 @@ void modifier_apply_stack(ModifierApplyContext &context)
       continue;
     }
 
-    /* modifier is muted, do nothing */
-    if (smd.flag & STRIP_MODIFIER_FLAG_MUTE) {
+    const bool show_preview = (smd.flag & STRIP_MODIFIER_FLAG_SHOW_PREVIEW) != 0;
+    const bool show_render = (smd.flag & STRIP_MODIFIER_FLAG_MUTE) == 0;
+
+    if (context.render_data.render && !show_render) {
+      continue;
+    }
+
+    if (!context.render_data.render && !show_preview) {
       continue;
     }
 
@@ -553,8 +578,6 @@ StripModifierData *modifier_copy(Strip &strip_dst, StripModifierData *mod_src, c
 {
   const StripModifierTypeInfo *smti = modifier_type_info_get(mod_src->type);
   StripModifierData *mod_new = MEM_dupalloc(mod_src);
-  /* Ensure at most one active modifier at a time. */
-  mod_new->flag &= ~STRIP_MODIFIER_FLAG_ACTIVE;
 
   mod_new->system_properties = nullptr;
   if (mod_src->system_properties) {
@@ -584,7 +607,7 @@ void modifier_list_copy(Strip *strip_new, Strip *strip, const int flag)
   }
 }
 
-int sequence_supports_modifiers(Strip *strip)
+bool strip_supports_modifiers(const Strip *strip)
 {
   return (strip->type != STRIP_TYPE_SOUND);
 }

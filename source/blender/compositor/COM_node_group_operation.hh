@@ -4,10 +4,6 @@
 
 #pragma once
 
-#include <cstdint>
-
-#include "BLI_enum_flags.hh"
-
 #include "DNA_node_types.h"
 
 #include "BKE_node.hh"
@@ -19,18 +15,11 @@
 #include "COM_pixel_operation.hh"
 #include "COM_result.hh"
 
-namespace blender::compositor {
+namespace blender {
+class ComputeContext;
+}  // namespace blender
 
-/* Enumerates the possible node group outputs can be computed. Those can be combined into a bit
- * flag. */
-enum class NodeGroupOutputTypes : uint8_t {
-  None = 0,
-  GroupOutputNode = 1 << 0,
-  ViewerNode = 1 << 1,
-  FileOutputNode = 1 << 2,
-  NodePreviews = 1 << 3,
-};
-ENUM_OPERATORS(NodeGroupOutputTypes)
+namespace blender::compositor {
 
 /* ------------------------------------------------------------------------------------------------
  * Node Group Operation
@@ -101,18 +90,9 @@ class NodeGroupOperation : public Operation {
  private:
   /* The node group that this operation represents. */
   const bNodeTree &node_group_;
-  /* The node group outputs that should be computed. See NodeGroupOutputTypes for more details. */
-  const NodeGroupOutputTypes needed_output_types_;
-  /* A map that associates each node instance identified by its node instance key to its node
-   * preview. This could be nullptr if node previews are not needed. */
-  Map<bNodeInstanceKey, bke::bNodePreview> *node_previews_ = nullptr;
-  /* The node instance key of the active node group. This could be this node group or a child of
-   * it. In case of the former, this will be equal to instance_key_. */
-  const bNodeInstanceKey active_node_group_instance_key_ = bke::NODE_INSTANCE_KEY_BASE;
-  /* A node instance key that identifies the particular group node that uses this node group. If
-   * this node group operation represents a top-level standalone node group with no associated
-   * group node, this will be bke::NODE_INSTANCE_KEY_BASE. */
-  const bNodeInstanceKey instance_key_ = bke::NODE_INSTANCE_KEY_BASE;
+  /* A compute context that identifies the particular group node that uses this node group or the
+   * scene for the top-level compositor node tree. */
+  const ComputeContext &compute_context_;
   /* The compiled operations stream, which contains all compiled operations so far. */
   Vector<std::unique_ptr<Operation>> operations_stream_;
 
@@ -121,13 +101,16 @@ class NodeGroupOperation : public Operation {
    * descriptors based on the node group interface inputs. */
   NodeGroupOperation(Context &context,
                      const bNodeTree &node_group,
-                     const NodeGroupOutputTypes needed_outputs,
-                     Map<bNodeInstanceKey, bke::bNodePreview> *node_previews,
-                     const bNodeInstanceKey active_node_group_instance_key,
-                     const bNodeInstanceKey instance_key);
+                     const ComputeContext &compute_context);
 
   /* Compile and evaluate the node group. */
   void execute() override;
+
+  /* An accessors for node_group_. */
+  const bNodeTree &node_group() const;
+
+  /* An accessors for compute_context_. */
+  const ComputeContext &compute_context() const;
 
  private:
   /* Compile the given node into a node operation, map each input to the result of the output

@@ -129,7 +129,6 @@ def node_at_pos(nodes, context, event):
 
 def store_mouse_cursor(context, event):
     space = context.space_data
-    v2d = context.region.view2d
     tree = space.edit_tree
 
     # convert mouse position to the View2D for later node placement
@@ -273,9 +272,9 @@ def nw_check_viewer_node(cls):
 
 
 def get_first_enabled_output(node):
-    for output in node.outputs:
-        if output.enabled:
-            return output
+    for output_socket in node.outputs:
+        if output_socket.enabled:
+            return output_socket
     else:
         return node.outputs[0]
 

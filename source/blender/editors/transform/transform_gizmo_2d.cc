@@ -12,9 +12,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "DNA_object_types.h"
@@ -142,13 +142,7 @@ static void gizmo2d_pivot_point_message_subscribe(wmGizmoGroup *gzgroup,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Arrow / Cage Gizmo Group
- *
- * Defines public functions, not the gizmo itself:
- *
- * - #ED_widgetgroup_gizmo2d_xform_callbacks_set
- * - #ED_widgetgroup_gizmo2d_xform_no_cage_callbacks_set
- *
+/** \name Arrow / Cage Gizmo Group Defines
  * \{ */
 
 /* Axes as index. */
@@ -172,7 +166,11 @@ struct GizmoGroup2D {
   bool no_cage;
 };
 
-/* **************** Utilities **************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Utilities
+ * \{ */
 
 static void gizmo2d_get_axis_color(const int axis_idx, float *r_col, float *r_col_hi)
 {
@@ -464,6 +462,17 @@ static wmOperatorStatus gizmo2d_modal(bContext *C,
   return OPERATOR_RUNNING_MODAL;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Arrow / Cage Gizmo Group
+ *
+ * Defines public functions, not the gizmo itself:
+ *
+ * - #ED_widgetgroup_gizmo2d_xform_callbacks_set
+ * - #ED_widgetgroup_gizmo2d_xform_no_cage_callbacks_set
+ * \{ */
+
 static void gizmo2d_xform_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 {
   wmOperatorType *ot_translate = WM_operatortype_find("TRANSFORM_OT_translate", true);
@@ -682,15 +691,16 @@ static void gizmo2d_xform_invoke_prepare(const bContext *C,
    * rotating with the gizmo.
    *
    * The coordinates are referred to as their cardinal directions:
-   *       N
-   *       o
-   *NW     |     NE
-   * x-----------x
-   * |           |
-   *W|     C     |E
-   * |           |
-   * x-----------x
-   *SW     S     SE
+   *
+   *        N
+   *        o
+   * NW     |     NE
+   *  x-----------x
+   *  |           |
+   * W|     C     |E
+   *  |           |
+   *  x-----------x
+   * SW     S     SE
    */
   float n[3] = {mid[0], max[1], 0.0f};
   float w[3] = {min[0], mid[1], 0.0f};

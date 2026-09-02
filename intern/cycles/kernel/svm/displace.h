@@ -16,7 +16,7 @@
 CCL_NAMESPACE_BEGIN
 
 /* Bump Node */
-template<uint node_feature_mask>
+template<uint64_t node_feature_mask>
 ccl_device_noinline void svm_node_set_bump(KernelGlobals kg,
                                            ccl_private ShaderData *sd,
                                            ccl_private float *stack,
@@ -99,7 +99,7 @@ ccl_device_noinline void svm_node_set_bump(KernelGlobals kg,
 
 /* Displacement Node */
 
-template<uint node_feature_mask>
+template<uint64_t node_feature_mask>
 ccl_device void svm_node_set_displacement(ccl_private ShaderData *sd,
                                           ccl_private float *stack,
                                           const ccl_global SVMNodeSetDisplacement &node)
@@ -111,7 +111,7 @@ ccl_device void svm_node_set_displacement(ccl_private ShaderData *sd,
   }
 }
 
-template<uint node_feature_mask>
+template<uint64_t node_feature_mask>
 ccl_device_noinline void svm_node_displacement(KernelGlobals kg,
                                                ccl_private ShaderData *sd,
                                                ccl_private float *stack,
@@ -144,7 +144,7 @@ ccl_device_noinline void svm_node_displacement(KernelGlobals kg,
   }
 }
 
-template<uint node_feature_mask>
+template<uint64_t node_feature_mask>
 ccl_device_noinline void svm_node_vector_displacement(
     KernelGlobals kg,
     ccl_private ShaderData *sd,
@@ -165,7 +165,7 @@ ccl_device_noinline void svm_node_vector_displacement(
 
       const AttributeDescriptor attr = find_attribute(kg, sd, node.attr);
       float3 tangent;
-      if (attr.offset != ATTR_STD_NOT_FOUND) {
+      if (is_attribute_found(attr)) {
         tangent = primitive_surface_attribute<float3>(kg, sd, attr);
       }
       else {
@@ -174,7 +174,7 @@ ccl_device_noinline void svm_node_vector_displacement(
 
       float3 bitangent = safe_normalize(cross(normal, tangent));
       const AttributeDescriptor attr_sign = find_attribute(kg, sd, node.attr_sign);
-      if (attr_sign.offset != ATTR_STD_NOT_FOUND) {
+      if (is_attribute_found(attr_sign)) {
         const float sign = primitive_surface_attribute<float>(kg, sd, attr_sign);
         bitangent *= sign;
       }

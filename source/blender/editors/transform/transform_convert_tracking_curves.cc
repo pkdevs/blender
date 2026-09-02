@@ -10,14 +10,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 
+#include "BKE_compositor.hh"
 #include "BKE_context.hh"
 #include "BKE_movieclip.hh"
 #include "BKE_node_tree_update.hh"
 #include "BKE_tracking.hh"
-#include "BLI_math_matrix.h"
+#include "BLI_math_matrix_c.hh"
 
 #include "ED_clip.hh"
 
@@ -29,7 +30,7 @@
 namespace blender::ed::transform {
 
 struct TransDataTrackingCurves {
-  int flag;
+  TrackingMarkerFlag flag;
 
   /* Marker transformation from curves editor. */
   float *prev_pos;
@@ -237,7 +238,6 @@ static void cancelTransTrackingCurves(TransInfo *t)
 
 static void flushTransTrackingCurves(TransInfo *t)
 {
-  TransData *td;
   TransData2D *td2d;
   TransDataTrackingCurves *tdt;
   int td_index;
@@ -250,11 +250,10 @@ static void flushTransTrackingCurves(TransInfo *t)
 
   /* Flush to 2d vector from internally used 3d vector. */
   for (td_index = 0,
-      td = tc->data,
       td2d = tc->data_2d,
       tdt = static_cast<TransDataTrackingCurves *>(tc->custom.type.data);
        td_index < tc->data_len;
-       td_index++, td2d++, td++, tdt++)
+       td_index++, td2d++, tdt++)
   {
     {
       td2d->loc2d[tdt->coord] = tdt->prev_pos[tdt->coord] + td2d->loc[1] * tdt->scale;
@@ -285,7 +284,8 @@ static void special_aftertrans_update__movieclip_for_curves(bContext *C, TransIn
 {
   SpaceClip *sc = static_cast<SpaceClip *>(t->area->spacedata.first);
   MovieClip *clip = ED_space_clip_get_clip(sc);
-  if (t->scene->compositing_node_group != nullptr) {
+
+  if (bke::compositor::is_enabled(*t->scene, bke::compositor::ExecutionMode::Preview)) {
     /* Tracks can be used for stabilization nodes,
      * flush update for such nodes.
      */

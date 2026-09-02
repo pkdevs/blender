@@ -6,8 +6,8 @@
  * \ingroup spseq
  */
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -24,6 +24,7 @@
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
+#include "RNA_prototypes.hh"
 
 #include "SEQ_modifier.hh"
 #include "SEQ_relations.hh"
@@ -36,6 +37,50 @@
 
 namespace blender::ed::vse {
 
+/**
+ * If the "modifier" property is not set, fill the modifier property with the name of the modifier
+ * with a UI panel below the mouse cursor, unless a specific modifier is set with a context
+ * pointer. Used in order to apply modifier operators on hover over their panels.
+ */
+static bool strip_modifier_invoke_properties_with_hover(bContext *C,
+                                                        wmOperator *op,
+                                                        const wmEvent *event,
+                                                        wmOperatorStatus *r_retval)
+{
+  if (RNA_struct_property_is_set(op->ptr, "modifier")) {
+    return true;
+  }
+
+  /* Note that the context pointer is *not* the active modifier, it is set in UI layouts. */
+  PointerRNA ctx_ptr = CTX_data_pointer_get_type(C, "modifier", RNA_StripModifier);
+  if (ctx_ptr) {
+    StripModifierData *smd = static_cast<StripModifierData *>(ctx_ptr.data);
+    RNA_string_set(op->ptr, "modifier", smd->name);
+    return true;
+  }
+
+  PointerRNA *panel_ptr = ui::region_panel_custom_data_under_cursor(C, event);
+  if (panel_ptr == nullptr || !*panel_ptr) {
+    /* The operators using this function can typically be called from UIs that aren't related to
+     * the modifiers UI at all. So include #OPERATOR_PASS_THROUGH to not block events from reaching
+     * other operators/handlers. */
+    *r_retval = (OPERATOR_PASS_THROUGH | OPERATOR_CANCELLED);
+    return false;
+  }
+
+  if (!RNA_struct_is_a(panel_ptr->type, RNA_StripModifier)) {
+    /* Work around multiple operators using the same shortcut. The operators for the other
+     * stacks in the property editor use the same key, and will not run after these return
+     * OPERATOR_CANCELLED. */
+    *r_retval = (OPERATOR_PASS_THROUGH | OPERATOR_CANCELLED);
+    return false;
+  }
+
+  const StripModifierData *smd = static_cast<const StripModifierData *>(panel_ptr->data);
+  RNA_string_set(op->ptr, "modifier", smd->name);
+  return true;
+}
+
 /* -------------------------------------------------------------------- */
 /** \name Add modifier operator
  * \{ */
@@ -44,7 +89,7 @@ static wmOperatorStatus strip_modifier_add_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
   Strip *strip = seq::select_active_get(scene);
-  int type = RNA_enum_get(op->ptr, "type");
+  eStripModifierType type = eStripModifierType(RNA_enum_get(op->ptr, "type"));
 
   StripModifierData *smd = seq::modifier_new(strip, nullptr, type);
   seq::modifier_persistent_uid_init(*strip, *smd);
@@ -117,8 +162,7 @@ static wmOperatorStatus strip_modifier_remove_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  BLI_remlink(&strip->modifiers, smd);
-  seq::modifier_free(smd);
+  seq::modifier_remove(strip, smd);
 
   if (ELEM(strip->type, STRIP_TYPE_SOUND)) {
     DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS | ID_RECALC_AUDIO);
@@ -287,18 +331,23 @@ static wmOperatorStatus strip_modifier_copy_exec(bContext *C, wmOperator *op)
           seq::modifier_free(smd);
           smd = smd_tmp;
         }
-        BLI_listbase_clear(&strip_iter->modifiers);
+        strip_iter->modifiers.clear_no_delete();
       }
     }
 
     if (src_smd) {
       StripModifierData *smd_new = seq::modifier_copy(*strip_iter, src_smd, 0);
       seq::modifier_persistent_uid_init(*strip_iter, *smd_new);
+      seq::modifier_set_active(strip_iter, smd_new);
     }
     else {
       for (StripModifierData &smd : active_strip->modifiers) {
         StripModifierData *smd_new = seq::modifier_copy(*strip_iter, &smd, 0);
         seq::modifier_persistent_uid_init(*strip_iter, *smd_new);
+        /* When appending to an existing stack, ensure at most one is active. */
+        if ((type == SEQ_MODIFIER_COPY_APPEND) && (smd.flag & STRIP_MODIFIER_FLAG_ACTIVE) != 0) {
+          seq::modifier_set_active(strip_iter, smd_new);
+        }
       }
     }
   }
@@ -342,7 +391,13 @@ void SEQUENCER_OT_strip_modifier_copy(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
-  ot->prop = RNA_def_enum(ot->srna, "type", type_items, SEQ_MODIFIER_COPY_REPLACE, "Type", "");
+  ot->prop = RNA_def_enum(ot->srna,
+                          "type",
+                          type_items,
+                          SEQ_MODIFIER_COPY_REPLACE,
+                          "Type",
+                          "Whether to replace all modifiers on the selected strips or append to "
+                          "their existing modifier stack");
   prop = RNA_def_string(ot->srna,
                         "modifier",
                         nullptr,
@@ -362,7 +417,7 @@ static wmOperatorStatus strip_modifier_duplicate_exec(bContext *C, wmOperator *o
 {
   Scene *sequencer_scene = CTX_data_sequencer_scene(C);
   Strip *active_strip = seq::select_active_get(sequencer_scene);
-  if (!active_strip || BLI_listbase_is_empty(&active_strip->modifiers)) {
+  if (!active_strip || active_strip->modifiers.is_empty()) {
     return OPERATOR_CANCELLED;
   }
 
@@ -381,6 +436,7 @@ static wmOperatorStatus strip_modifier_duplicate_exec(bContext *C, wmOperator *o
 
   StripModifierData *smd_new = seq::modifier_copy(*active_strip, smd, 0);
   seq::modifier_persistent_uid_init(*active_strip, *smd_new);
+  seq::modifier_set_active(active_strip, smd_new);
 
   seq::relations_invalidate_cache(sequencer_scene, active_strip);
 
@@ -389,12 +445,24 @@ static wmOperatorStatus strip_modifier_duplicate_exec(bContext *C, wmOperator *o
   return OPERATOR_FINISHED;
 }
 
+static wmOperatorStatus strip_modifier_duplicate_invoke(bContext *C,
+                                                        wmOperator *op,
+                                                        const wmEvent *event)
+{
+  wmOperatorStatus retval;
+  if (strip_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
+    return strip_modifier_duplicate_exec(C, op);
+  }
+  return retval;
+}
+
 void SEQUENCER_OT_strip_modifier_duplicate(wmOperatorType *ot)
 {
   ot->name = "Duplicate Modifier";
   ot->idname = "SEQUENCER_OT_strip_modifier_duplicate";
   ot->description = "Duplicate (active) modifier of the active strip";
 
+  ot->invoke = strip_modifier_duplicate_invoke;
   ot->exec = strip_modifier_duplicate_exec;
   ot->poll = sequencer_strip_editable_poll;
 
@@ -564,10 +632,13 @@ static wmOperatorStatus modifier_set_active_exec(bContext *C, wmOperator *op)
 
 static wmOperatorStatus modifier_set_active_invoke(bContext *C,
                                                    wmOperator *op,
-                                                   const wmEvent * /*event*/)
+                                                   const wmEvent *event)
 {
-  BLI_assert(RNA_struct_property_is_set(op->ptr, "modifier"));
-  return modifier_set_active_exec(C, op);
+  wmOperatorStatus retval;
+  if (strip_modifier_invoke_properties_with_hover(C, op, event, &retval)) {
+    return modifier_set_active_exec(C, op);
+  }
+  return retval;
 }
 
 void SEQUENCER_OT_strip_modifier_set_active(wmOperatorType *ot)

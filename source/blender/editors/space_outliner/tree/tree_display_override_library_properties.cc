@@ -6,7 +6,7 @@
  * \ingroup spoutliner
  */
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_listbase_wrapper.hh"
 
 #include "BKE_main.hh"
@@ -82,7 +82,6 @@ ListBaseT<TreeElement> TreeDisplayOverrideLibraryProperties::add_library_content
 
     if (!filter_id_type) {
       id_base_te = add_element(&tree, nullptr, lbarray[a], nullptr, TSE_ID_BASE, 0);
-      id_base_te->directdata = lbarray[a];
       id_base_te->name = outliner_idcode_to_plural(GS(id->name));
 
       lb_to_expand = &id_base_te->subtree;
@@ -93,7 +92,7 @@ ListBaseT<TreeElement> TreeDisplayOverrideLibraryProperties::add_library_content
         TreeElement *override_tree_element = add_element(
             lb_to_expand, id, nullptr, id_base_te, TSE_LIBRARY_OVERRIDE_BASE, 0);
 
-        if (BLI_listbase_is_empty(&override_tree_element->subtree)) {
+        if (override_tree_element->subtree.is_empty()) {
           outliner_free_tree_element(override_tree_element, lb_to_expand);
         }
       }
@@ -102,7 +101,7 @@ ListBaseT<TreeElement> TreeDisplayOverrideLibraryProperties::add_library_content
 
   /* Remove ID base elements that turn out to be empty. */
   for (TreeElement &te : tree.items_mutable()) {
-    if (BLI_listbase_is_empty(&te.subtree)) {
+    if (te.subtree.is_empty()) {
       outliner_free_tree_element(&te, &tree);
     }
   }

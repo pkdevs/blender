@@ -6,6 +6,8 @@
  * \ingroup spimage
  */
 
+#include <limits>
+
 #include "DNA_gpencil_legacy_types.h"
 #include "DNA_image_types.h"
 #include "DNA_mask_types.h"
@@ -14,9 +16,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-#include "BLI_threads.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_threads.hh"
 
 #include "BKE_colortools.hh"
 #include "BKE_context.hh"
@@ -38,6 +40,7 @@
 #include "ED_image.hh"
 #include "ED_mask.hh"
 #include "ED_node.hh"
+#include "ED_paint.hh"
 #include "ED_render.hh"
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
@@ -278,10 +281,6 @@ static void image_keymap(wmKeyConfig *keyconf)
 /* area+region dropbox definition */
 static void image_dropboxes() {}
 
-/**
- * \note take care not to get into feedback loop here,
- *       calling composite job causes viewer to refresh.
- */
 static void image_refresh(const bContext *C, ScrArea *area)
 {
   Scene *scene = CTX_data_scene(C);
@@ -290,17 +289,6 @@ static void image_refresh(const bContext *C, ScrArea *area)
 
   ima = ED_space_image(sima);
   BKE_image_user_frame_calc(ima, &sima->iuser, scene->r.cfra);
-
-  /* Check if we have to set the image from the edit-mesh. */
-  if (ima && (ima->source == IMA_SRC_VIEWER && sima->mode == SI_MODE_MASK)) {
-    if (scene->compositing_node_group) {
-      Mask *mask = ED_space_image_get_mask(sima);
-      if (mask) {
-        ED_node_compositor_job(
-            CTX_data_main(C), CTX_wm_window(C), CTX_data_scene(C), CTX_data_view_layer(C));
-      }
-    }
-  }
 }
 
 static void image_listener(const wmSpaceTypeListenerParams *params)
@@ -342,7 +330,6 @@ static void image_listener(const wmSpaceTypeListenerParams *params)
         case ND_COMPO_RESULT:
           if (ED_space_image_show_render(sima)) {
             image_scopes_tag_refresh(area);
-            BKE_image_partial_update_mark_full_update(sima->image);
           }
           ED_area_tag_redraw(area);
           const ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
@@ -623,6 +610,20 @@ static void IMAGE_GGT_compositor_split(wmGizmoGroupType *gzgt)
   gzgt->refresh = nodes::gizmos::split_refresh;
 }
 
+static void IMAGE_GGT_compositor_translate(wmGizmoGroupType *gzgt)
+{
+  gzgt->name = "Translate Widget";
+  gzgt->idname = "IMAGE_GGT_compositor_translate";
+
+  gzgt->flag |= WM_GIZMOGROUPTYPE_PERSISTENT;
+
+  gzgt->poll = nodes::gizmos::translate_poll_space_image;
+  gzgt->setup = nodes::gizmos::translate_setup;
+  gzgt->setup_keymap = WM_gizmogroup_setup_keymap_generic_maybe_drag;
+  gzgt->draw_prepare = nodes::gizmos::bbox_draw_prepare_space_image;
+  gzgt->refresh = nodes::gizmos::translate_refresh;
+}
+
 static void image_widgets()
 {
   const wmGizmoMapType_Params params{SPACE_IMAGE, RGN_TYPE_WINDOW};
@@ -641,6 +642,7 @@ static void image_widgets()
   WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_corner_pin);
   WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_ellipse_mask);
   WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_split);
+  WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_translate);
 }
 
 /************************** main region ***************************/
@@ -663,12 +665,6 @@ static void image_main_region_set_view2d(SpaceImage *sima, ARegion *region)
   int winx = BLI_rcti_size_x(&region->winrct) + 1;
   int winy = BLI_rcti_size_y(&region->winrct) + 1;
 
-  /* For region overlap, move center so image doesn't overlap header. */
-  const rcti *visible_rect = ED_region_visible_rect(region);
-  const int visible_winy = BLI_rcti_size_y(visible_rect) + 1;
-  int visible_centerx = 0;
-  int visible_centery = visible_rect->ymin + (visible_winy - winy) / 2;
-
   region->v2d.tot.xmin = 0;
   region->v2d.tot.ymin = 0;
   region->v2d.tot.xmax = w;
@@ -679,11 +675,14 @@ static void image_main_region_set_view2d(SpaceImage *sima, ARegion *region)
   region->v2d.mask.ymax = winy;
 
   /* which part of the image space do we see? */
-  float x1 = region->winrct.xmin + visible_centerx + (winx - sima->zoom * w) / 2.0f;
-  float y1 = region->winrct.ymin + visible_centery + (winy - sima->zoom * h) / 2.0f;
+  float x1 = region->winrct.xmin + (winx - sima->zoom * w) / 2.0f;
+  float y1 = region->winrct.ymin + (winy - sima->zoom * h) / 2.0f;
 
-  x1 -= sima->zoom * sima->xof;
-  y1 -= sima->zoom * sima->yof;
+  /* Add half pixel offsets and corrective translation to match image drawing logic exactly, see
+   * compute_screen_space_to_sampler_space_transformation for reference. */
+  const float2 corrective_translation = float2(std::numeric_limits<float>::epsilon() * 10e3f);
+  x1 -= sima->zoom * (sima->xof + 0.5f - corrective_translation.x);
+  y1 -= sima->zoom * (sima->yof + 0.5f - corrective_translation.y);
 
   /* relative display right */
   region->v2d.cur.xmin = ((region->winrct.xmin - x1) / sima->zoom);
@@ -714,9 +713,6 @@ static void image_main_region_init(wmWindowManager *wm, ARegion *region)
   WM_event_add_keymap_handler_v2d_mask(&region->runtime->handlers, keymap);
 
   /* image paint polls for mode */
-  keymap = WM_keymap_ensure(wm->runtime->defaultconf, "Curve", SPACE_EMPTY, RGN_TYPE_WINDOW);
-  WM_event_add_keymap_handler_v2d_mask(&region->runtime->handlers, keymap);
-
   keymap = WM_keymap_ensure(wm->runtime->defaultconf, "Paint Curve", SPACE_EMPTY, RGN_TYPE_WINDOW);
   WM_event_add_keymap_handler(&region->runtime->handlers, keymap);
 
@@ -1261,7 +1257,7 @@ static void image_space_subtype_set(ScrArea *area, int value)
     if (sima->mode != SI_MODE_UV) {
       sima->mode_prev = sima->mode;
     }
-    sima->mode = value;
+    sima->mode = eSpaceImage_Mode(value);
   }
   else {
     sima->mode = sima->mode_prev;

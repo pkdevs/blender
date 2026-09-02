@@ -12,21 +12,23 @@
 
 #include "BLI_enum_flags.hh"
 #include "BLI_function_ref.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_matrix.h"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_sys_types.h"
-#include "BLI_task.h"
-#include "BLI_threads.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_sys_types.hh"
+#include "BLI_task_c.hh"
+#include "BLI_threads.hh"
 
 #include "BLF_api.hh"
 
 #include "BLT_translation.hh"
 
+#include "BKE_camera.h"
+#include "BKE_compositor.hh"
 #include "BKE_context.hh"
 #include "BKE_curve.hh"
 #include "BKE_curves.h"
@@ -66,6 +68,7 @@
 
 #include "GPU_capabilities.hh"
 #include "GPU_framebuffer.hh"
+#include "GPU_immediate.hh"
 #include "GPU_matrix.hh"
 #include "GPU_platform.hh"
 #include "GPU_shader_shared.hh"
@@ -107,7 +110,7 @@
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
-#include "BLI_time.h"
+#include "BLI_time.hh"
 
 #include "DRW_select_buffer.hh"
 
@@ -143,7 +146,7 @@ DRWContext::DRWContext(Mode mode_,
   /* Active object. Set to nullptr for render (when region is nullptr). */
   this->obact = (this->region) ? BKE_view_layer_active_object_get(this->view_layer) : nullptr;
   /* Object mode. */
-  this->object_mode = (this->obact) ? eObjectMode(this->obact->mode) : OB_MODE_OBJECT;
+  this->object_mode = (this->obact) ? this->obact->mode : OB_MODE_OBJECT;
   /* Edit object. */
   this->object_edit = (this->object_mode & OB_MODE_EDIT) ? this->obact : nullptr;
   /* Pose object. */
@@ -313,6 +316,8 @@ bool DRW_object_use_hide_faces(const Object *ob)
       case OB_MODE_VERTEX_PAINT:
       case OB_MODE_WEIGHT_PAINT:
         return true;
+      default:
+        break;
     }
   }
 
@@ -667,13 +672,13 @@ namespace draw {
 static bool supports_handle_ranges(DupliObject *dupli, Object *parent, const DRWContext &draw_ctx)
 {
   int ob_type = dupli->ob_data ? BKE_object_obdata_to_type(dupli->ob_data) : OB_EMPTY;
-  if (!ELEM(ob_type, OB_MESH, OB_CURVES_LEGACY, OB_SURF, OB_FONT, OB_POINTCLOUD, OB_GREASE_PENCIL))
-  {
+  if (!ELEM(ob_type, OB_MESH, OB_CURVES_LEGACY, OB_SURF, OB_FONT, OB_POINTCLOUD)) {
+    /* TODO: Add Grease Pencil support. */
     return false;
   }
 
   Object *ob = dupli->ob;
-  if (min(ob->dt, parent->dt) == OB_BOUNDBOX) {
+  if (eDrawType(min(int(ob->dt), int(parent->dt))) == OB_BOUNDBOX) {
     return false;
   }
 
@@ -682,21 +687,20 @@ static bool supports_handle_ranges(DupliObject *dupli, Object *parent, const DRW
   }
 
   if (ob_type == OB_MESH) {
-    /* Hair drawing doesn't support handle ranges. */
     for (ParticleSystem &psys : ob->particlesystem) {
       const int draw_as = (psys.part->draw_as == PART_DRAW_REND) ? psys.part->ren_as :
                                                                    psys.part->draw_as;
-      if (draw_as == PART_DRAW_PATH && DRW_object_is_visible_psys_in_active_context(ob, &psys)) {
+      if (!ELEM(draw_as, PART_DRAW_NOT, PART_DRAW_OB, PART_DRAW_GR) &&
+          DRW_object_is_visible_psys_in_active_context(ob, &psys))
+      {
+        /* Particles don't support handle ranges.
+         * Objects and Group particles are the only exceptions,
+         * since they're generated as regular instances by the Depsgraph. */
         return false;
       }
     }
     /* Smoke drawing doesn't support handle ranges. */
     return !BKE_modifiers_findby_type(ob, eModifierType_Fluid);
-  }
-
-  if (ob_type == OB_GREASE_PENCIL) {
-    GreasePencil *grease_pencil = reinterpret_cast<GreasePencil *>(dupli->ob_data);
-    return grease_pencil->flag & GREASE_PENCIL_STROKE_ORDER_3D;
   }
 
   return true;
@@ -763,9 +767,79 @@ struct InstancesKey {
   }
 };
 
-static void foreach_obref_in_scene(DRWContext &draw_ctx,
-                                   FunctionRef<bool(Object &)> should_draw_object_cb,
-                                   FunctionRef<void(ObjectRef &)> draw_object_cb)
+namespace {
+/**
+ * Result of the per-object predicate passed to #foreach_obref_in_scene.
+ * Controls two independent decisions: whether the object itself is drawn, and whether
+ * its duplis (if any) are generated and iterated.
+ */
+enum class DrawFilter {
+  /**
+   * Draw this object. If it is an instancer, its duplis are walked and passed to the
+   * predicate and draw callback in turn.
+   */
+  Draw,
+  /**
+   * Skip drawing this object, but still generate and iterate its duplis (if any).
+   * A dupli may be individually selectable / visible even when its instancer is not.
+   */
+  Skip,
+  /**
+   * Skip drawing this object AND skip its duplis entirely. Used by the select-loop filter
+   * to cull an instancer's entire dupli set in one decision, so #object_duplilist is never
+   * called for a filter-rejected instancer.
+   *
+   * Only meaningful on top-level calls (where `has_duplis = true`); on the dupli path
+   * (`has_duplis = false`) the iterator has no sub-duplis to cull so this is equivalent
+   * to #Skip.
+   */
+  SkipRecursive,
+};
+
+/**
+ * Whether `ob` would spawn duplis on the #foreach_obref_in_scene dupli path.
+ *
+ * Answers "does this object generate instances?"
+ * without checking viewport-visibility of those instances.
+ */
+bool is_object_instancer(const Object &ob)
+{
+  return (ob.transflag & OB_DUPLI) || (ob.runtime->geometry_set_eval != nullptr);
+}
+}  // namespace
+
+/**
+ * Iterate the scene, invoking `draw_object_cb` for objects and duplis that
+ * `should_draw_object_cb` accepts.
+ *
+ * \param draw_ctx: The active draw context; supplies depsgraph, evaluation mode, and
+ * viewport state.
+ *
+ * \param should_draw_object_cb: Per-object predicate.
+ * See #DrawFilter for return-value semantics.
+ *
+ * The `has_duplis` argument is true when the iterator is about to generate and walk this
+ * object's duplis (only meaningful on top-level calls, always false on the dupli path).
+ * Use it to skip work whose result the iterator would discard - for example,
+ * a #SkipRecursive return on an instancer with no visible instances has no effect,
+ * so the filter call isn't needed.
+ *
+ * Invoked:
+ * - Once per top-level scene object,
+ *   but only when the object is either self-visible or has duplis to process;
+ *   fully hidden non-instancers are short-circuited without a call.
+ * - Once per dupli (or for a group of duplis with the same `InstancesKey`) on a temporary #Object
+ *   with #BASE_FROM_DUPLI set on `base_flag`, with `has_duplis = false`. On this path the return
+ *   value controls only whether the dupli is drawn; #SkipRecursive has no extra effect.
+ *
+ * \param draw_object_cb: Callback to sync an `ObjectRef` (populate the engines to prepare for
+ * drawing). A single `ObjectRef` can point to multiple compatible (same `InstancesKey`) `Object`
+ * instances.
+ */
+static void foreach_obref_in_scene(
+    DRWContext &draw_ctx,
+    FunctionRef<DrawFilter(Object &, bool has_duplis)> should_draw_object_cb,
+    FunctionRef<void(ObjectRef &)> draw_object_cb)
 {
   DupliList duplilist;
   Map<InstancesKey, VectorList<DupliObject *>> dupli_map;
@@ -791,31 +865,40 @@ static void foreach_obref_in_scene(DRWContext &draw_ctx,
       continue;
     }
 
-    int visibility = BKE_object_visibility(ob, eval_mode);
-    bool ob_visible = visibility & (OB_VISIBLE_SELF | OB_VISIBLE_PARTICLES);
+    const int visibility = BKE_object_visibility(ob, eval_mode);
+    const bool ob_visible = visibility & (OB_VISIBLE_SELF | OB_VISIBLE_PARTICLES);
+    const bool instances_visible = (visibility & OB_VISIBLE_INSTANCES) && is_object_instancer(*ob);
+    /* Don't create duplis from temporary preview objects, object_duplilist_preview already takes
+     * care of everything. (See #146194, #146211) */
+    const bool is_preview_dupli = data_.dupli_parent && data_.dupli_object_current;
+    const bool process_duplis = instances_visible && !is_preview_dupli;
 
-    if (ob_visible && should_draw_object_cb(*ob)) {
+    /* Fully hidden non-instancers don't need a predicate call: the iterator has nothing
+     * to do with them. Skip them before invoking the predicate. */
+    if (!ob_visible && !process_duplis) {
+      continue;
+    }
+
+    /* Decide drawability for the top-level object, then fall through to the dupli path. */
+    const DrawFilter parent_filter = should_draw_object_cb(*ob, process_duplis);
+
+    if (parent_filter == DrawFilter::Draw && ob_visible) {
       /* NOTE: object_duplilist_preview is still handled by DEG_OBJECT_ITER,
        * dupli_parent and dupli_object_current won't be null for these. */
       ObjectRef ob_ref(ob, data_.dupli_parent, data_.dupli_object_current);
       draw_object_cb(ob_ref);
     }
 
-    bool is_preview_dupli = data_.dupli_parent && data_.dupli_object_current;
-    if (is_preview_dupli) {
-      /* Don't create duplis from temporary preview objects, object_duplilist_preview already takes
-       * care of everything. (See #146194, #146211) */
+    if (!process_duplis) {
       continue;
     }
 
-    bool instances_visible = (visibility & OB_VISIBLE_INSTANCES) &&
-                             ((ob->transflag & OB_DUPLI) ||
-                              ob->runtime->geometry_set_eval != nullptr);
-
-    if (!instances_visible) {
+    if (parent_filter == DrawFilter::SkipRecursive) {
+      /* Filter rejected this instancer; skip its duplis entirely. */
       continue;
     }
 
+    /* Generate and walk this instancer's duplis. */
     duplilist.clear();
     object_duplilist(draw_ctx.depsgraph, ob, deg_iter_settings.included_objects, duplilist);
 
@@ -834,7 +917,7 @@ static void foreach_obref_in_scene(DRWContext &draw_ctx,
        * We can't check the dupli.ob since visibility may be different than the dupli itself.
        * But we should be able to check the dupli visibility without creating a temp object. */
 #if 0
-      if (!should_draw_object_cb(*dupli.ob)) {
+      if (should_draw_object_cb(*dupli.ob, false) != DrawFilter::Draw) {
         continue;
       }
 #endif
@@ -843,7 +926,7 @@ static void foreach_obref_in_scene(DRWContext &draw_ctx,
         /* Sync the dupli as a single object. */
         if (!evil::DEG_iterator_temp_object_from_dupli(
                 ob, &dupli, eval_mode, false, &tmp_object, &tmp_runtime) ||
-            !should_draw_object_cb(tmp_object))
+            should_draw_object_cb(tmp_object, false) != DrawFilter::Draw)
         {
           evil::DEG_iterator_temp_object_free_properties(&dupli, &tmp_object);
           continue;
@@ -878,7 +961,7 @@ static void foreach_obref_in_scene(DRWContext &draw_ctx,
       DupliObject *first_dupli = instances.first();
       if (!evil::DEG_iterator_temp_object_from_dupli(
               ob, first_dupli, eval_mode, false, &tmp_object, &tmp_runtime) ||
-          !should_draw_object_cb(tmp_object))
+          should_draw_object_cb(tmp_object, false) != DrawFilter::Draw)
       {
         evil::DEG_iterator_temp_object_free_properties(first_dupli, &tmp_object);
         continue;
@@ -891,6 +974,9 @@ static void foreach_obref_in_scene(DRWContext &draw_ctx,
       /* Should use DrawInstances data instead. */
       tmp_object.runtime->object_to_world = float4x4();
       tmp_object.runtime->world_to_object = float4x4();
+#ifndef NDEBUG
+      tmp_object.runtime->is_draw_dupli_reference_tmp_object = true;
+#endif
 
       draw::ObjectRef ob_ref(tmp_object, ob, instances);
       draw_object_cb(ob_ref);
@@ -1014,11 +1100,129 @@ void DRWContext::engines_init_and_sync(iter_callback_t iter_callback)
   last_sync_time_ = float(BLI_time_now_seconds() - start_time);
 }
 
+/**
+ * The render border is relative to the camera frame, which is rotated on screen when the camera
+ * view is rolled. Engines can only render an axis aligned region, so they render the expanded
+ * bounds of the rotated border. This masks out the pixels outside the border.
+ */
+static void drw_render_border_mask(const DRWContext &ctx)
+{
+  const View3D *v3d = ctx.v3d;
+  const RegionView3D *rv3d = ctx.rv3d;
+
+  /* Check if we need to do any render border masking. */
+  if (v3d == nullptr || rv3d == nullptr || rv3d->persp != RV3D_CAMOB || v3d->camera == nullptr ||
+      rv3d->camroll == 0.0f)
+  {
+    return;
+  }
+
+  bool uses_render_border = false;
+  ctx.view_data_active->foreach_enabled_engine(
+      [&](DrawEngine &instance) { uses_render_border |= instance.uses_render_border(); });
+  if (!uses_render_border) {
+    return;
+  }
+
+  rctf border, unrolled_border;
+  if (!BKE_camera_view_render_border(ctx.scene,
+                                     ctx.depsgraph,
+                                     v3d,
+                                     rv3d,
+                                     int(ctx.size.x),
+                                     int(ctx.size.y),
+                                     &border,
+                                     &unrolled_border))
+  {
+    return;
+  }
+
+  /* Compute corners of the render border. */
+  const float2 pivot = ctx.size * 0.5f;
+  const float2x2 roll = math::from_rotation<float2x2>(math::AngleRadian(rv3d->camroll));
+  const float2 corner[4] = {
+      pivot + roll * (float2(unrolled_border.xmin, unrolled_border.ymin) - pivot),
+      pivot + roll * (float2(unrolled_border.xmax, unrolled_border.ymin) - pivot),
+      pivot + roll * (float2(unrolled_border.xmax, unrolled_border.ymax) - pivot),
+      pivot + roll * (float2(unrolled_border.xmin, unrolled_border.ymax) - pivot),
+  };
+
+  GPU_debug_group_begin("RenderBorderMask");
+
+  gpu::FrameBuffer *previous_fb = GPU_framebuffer_active_get();
+
+  DefaultFramebufferList *dfbl = ctx.viewport_framebuffer_list_get();
+  GPU_framebuffer_viewport_reset(dfbl->default_fb);
+  GPU_framebuffer_bind(dfbl->default_fb);
+
+  GPU_matrix_push_projection();
+  GPU_matrix_push();
+  GPU_matrix_identity_set();
+  GPU_matrix_ortho_set(0.0f, ctx.size.x, 0.0f, ctx.size.y, -1.0f, 1.0f);
+
+  /* Replace the RGBA and depth pixels without blending. */
+  GPU_blend(GPU_BLEND_NONE);
+  GPU_depth_test(GPU_DEPTH_ALWAYS);
+  GPU_depth_mask(true);
+  GPU_color_mask(true, true, true, true);
+
+  /* Scissor set to the expanded render border bounds. */
+  rcti scissor;
+  const rcti viewport_rect = {0, int(ctx.size.x), 0, int(ctx.size.y)};
+  BLI_rcti_rctf_copy_floor(&scissor, &border);
+  BLI_rcti_isect(&scissor, &viewport_rect, &scissor);
+  GPU_scissor_test(true);
+  GPU_scissor(scissor.xmin, scissor.ymin, BLI_rcti_size_x(&scissor), BLI_rcti_size_y(&scissor));
+
+  GPU_apply_state();
+
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32_32);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+  immUniformColor4f(0.0f, 0.0f, 0.0f, 0.0f);
+
+  /* Draw 4 quads to mask out the area outside the rotated border. */
+  const float extend = 2.0f * (ctx.size.x + ctx.size.y);
+  /* View space forward is -Z, and we have set the far plane at unit length. */
+  const float far_z = -1.0f;
+
+  immBegin(GPU_PRIM_TRIS, 6 * 4);
+  for (const int i : IndexRange(4)) {
+    const float2 v0 = corner[i];
+    const float2 v1 = corner[(i + 1) % 4];
+    const float2 tangent = math::normalize(v1 - v0);
+    const float2 normal = float2(tangent.y, -tangent.x);
+    const float2 quad[4] = {
+        v0 - tangent * extend,
+        v1 + tangent * extend,
+        v1 + tangent * extend + normal * extend,
+        v0 - tangent * extend + normal * extend,
+    };
+    for (const int j : {0, 1, 2, 0, 2, 3}) {
+      immVertex3f(pos, quad[j].x, quad[j].y, far_z);
+    }
+  }
+  immEnd();
+
+  immUnbindProgram();
+
+  GPU_scissor_test(false);
+
+  GPU_matrix_pop();
+  GPU_matrix_pop_projection();
+
+  draw::command::StateSet::set();
+  GPU_framebuffer_bind(previous_fb);
+
+  GPU_debug_group_end();
+}
+
 void DRWContext::engines_draw_scene()
 {
   double start_time = BLI_time_now_seconds();
   /* Start Drawing */
   draw::command::StateSet::set();
+
+  bool render_border_masked = false;
 
   view_data_active->foreach_enabled_engine([&](DrawEngine &instance) {
 #ifdef __APPLE__
@@ -1027,10 +1231,21 @@ void DRWContext::engines_draw_scene()
       GPU_flush();
     }
 #endif
+
+    if (&instance == view_data_active->overlay.instance && this->mode == DRWContext::VIEWPORT) {
+      /* Mask the render result before the overlay engine. */
+      drw_render_border_mask(*this);
+      render_border_masked = true;
+    }
+
     GPU_debug_group_begin(instance.name_get().c_str());
     instance.draw(*DRW_manager_get());
     GPU_debug_group_end();
   });
+
+  if (!render_border_masked && this->mode == DRWContext::VIEWPORT) {
+    drw_render_border_mask(*this);
+  }
 
   /* Reset state after drawing */
   draw::command::StateSet::set();
@@ -1136,7 +1351,7 @@ void DRWContext::enable_engines(bool gpencil_engine_needed, RenderEngineType *re
       view_data.grease_pencil.set_used(gpencil_engine_needed);
     }
 
-    view_data.compositor.set_used(is_viewport_compositor_enabled());
+    view_data.compositor.set_used(is_viewport_compositor_used());
 
     view_data.overlay.set_used(true);
 
@@ -1166,6 +1381,8 @@ static bool gpencil_any_exists(Depsgraph *depsgraph)
   return (DEG_id_type_any_exists(depsgraph, ID_GD_LEGACY) ||
           DEG_id_type_any_exists(depsgraph, ID_GP));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Callbacks
@@ -1461,8 +1678,8 @@ static void drw_draw_render_loop_3d(DRWContext &draw_ctx, RenderEngineType *engi
   const bool do_populate_loop = internal_engine || overlays_on || !draw_type_render ||
                                 gpencil_engine_needed;
 
-  auto should_draw_object = [&](Object &ob) -> bool {
-    return BKE_object_is_visible_in_viewport(v3d, &ob);
+  auto should_draw_object = [&](Object &ob, bool /*has_duplis*/) -> DrawFilter {
+    return BKE_object_is_visible_in_viewport(v3d, &ob) ? DrawFilter::Draw : DrawFilter::Skip;
   };
 
   draw_ctx.enable_engines(gpencil_engine_needed, engine_type);
@@ -1646,7 +1863,7 @@ static bool depsgraph_contains_visible_grease_pencil_geometry(Depsgraph *depsgra
     if (found) {
       return;
     }
-    if (GS(id_eval->name) == ID_OB) {
+    if (id_eval->id_type() == ID_OB) {
       const Object *ob = reinterpret_cast<const Object *>(id_eval);
       const bool is_self_visible = BKE_object_visibility(ob, DAG_EVAL_RENDER) & OB_VISIBLE_SELF;
       const bool contains_grease_pencil_geometry =
@@ -1804,11 +2021,11 @@ void DRW_render_object_iter(
   DRWContext &draw_ctx = drw_get();
   View3D *v3d = draw_ctx.v3d;
 
-  auto should_draw_object = [&](Object &ob) -> bool {
-    if (v3d) {
-      return BKE_object_is_visible_in_viewport(v3d, &ob);
+  auto should_draw_object = [&](Object &ob, bool /*has_duplis*/) -> DrawFilter {
+    if (v3d && !BKE_object_is_visible_in_viewport(v3d, &ob)) {
+      return DrawFilter::Skip;
     }
-    return true;
+    return DrawFilter::Draw;
   };
 
   draw_ctx.sync([&](DupliCacheManager &duplis, ExtractionGraph &extraction) {
@@ -1902,7 +2119,6 @@ static void draw_select_framebuffer_depth_only_setup(const int size[2])
 void DRW_draw_select_loop(Depsgraph *depsgraph,
                           ARegion *region,
                           View3D *v3d,
-                          bool use_obedit_skip,
                           bool draw_surface,
                           bool /*use_nearest*/,
                           const bool do_material_sub_selection,
@@ -1913,61 +2129,9 @@ void DRW_draw_select_loop(Depsgraph *depsgraph,
                           void *object_filter_user_data)
 {
   using namespace blender::draw;
-  Scene *scene = DEG_get_evaluated_scene(depsgraph);
-  ViewLayer *view_layer = DEG_get_evaluated_view_layer(depsgraph);
   const int viewport_size[2] = {BLI_rcti_size_x(rect), BLI_rcti_size_y(rect)};
 
-  Object *obact = BKE_view_layer_active_object_get(view_layer);
-  Object *obedit = use_obedit_skip ? nullptr : OBEDIT_FROM_OBACT(obact);
-
-  bool use_obedit = false;
-  const ToolSettings *ts = scene->toolsettings;
-
-  /* obedit_ctx_mode is used for selecting the right draw engines */
-  // eContextObjectMode obedit_ctx_mode;
-  /* object_mode is used for filtering objects in the depsgraph */
-  eObjectMode object_mode = eObjectMode::OB_MODE_EDIT;
-  int object_type = 0;
-  if (obedit != nullptr) {
-    object_type = obedit->type;
-    object_mode = eObjectMode(obedit->mode);
-    if (obedit->type == OB_ARMATURE) {
-      use_obedit = true;
-      // obedit_ctx_mode = CTX_MODE_EDIT_ARMATURE;
-    }
-  }
-
-  if ((v3d->overlay.flag & V3D_OVERLAY_BONE_SELECT) &&
-      /* Only restrict selection to bones when the user turns on "Lock Object Modes".
-       * If the lock is off, skip this so other objects can still be selected.
-       * See #66950 & #125822. */
-      (ts->object_flag & SCE_OBJECT_MODE_LOCK))
-  {
-    if (!(v3d->flag2 & V3D_HIDE_OVERLAYS)) {
-      /* NOTE: don't use "BKE_object_pose_armature_get" here, it breaks selection. */
-      Object *obpose = OBPOSE_FROM_OBACT(obact);
-      if (obpose == nullptr) {
-        Object *obweight = OBWEIGHTPAINT_FROM_OBACT(obact);
-        if (obweight) {
-          /* Only use Armature pose selection, when connected armature is in pose mode. */
-          Object *ob_armature = BKE_modifiers_is_deformed_by_armature(obweight);
-          if (ob_armature && ob_armature->mode == OB_MODE_POSE) {
-            obpose = ob_armature;
-          }
-        }
-      }
-
-      if (obpose) {
-        use_obedit = true;
-        object_type = obpose->type;
-        object_mode = eObjectMode(obpose->mode);
-        // obedit_ctx_mode = CTX_MODE_POSE;
-      }
-    }
-  }
-
-  bool use_gpencil = !use_obedit && !draw_surface &&
-                     DRW_render_check_grease_pencil(depsgraph, v3d);
+  const bool use_gpencil = !draw_surface && DRW_render_check_grease_pencil(depsgraph, v3d);
 
   DRWContext::Mode mode = do_material_sub_selection ? DRWContext::SELECT_OBJECT_MATERIAL :
                                                       DRWContext::SELECT_OBJECT;
@@ -1977,62 +2141,54 @@ void DRW_draw_select_loop(Depsgraph *depsgraph,
   draw_ctx.enable_engines(use_gpencil);
   draw_ctx.engines_data_validate();
   draw_ctx.engines_init_and_sync([&](DupliCacheManager &duplis, ExtractionGraph &extraction) {
-    if (use_obedit) {
-      FOREACH_OBJECT_IN_MODE_BEGIN (
-          DEG_get_bmain(depsgraph), scene, view_layer, v3d, object_type, object_mode, ob_iter)
-      {
-        /* Depsgraph usually does this, but we use a different iterator.
-         * So we have to do it manually. */
-        ob_iter->runtime->select_id = DEG_get_original(ob_iter)->runtime->select_id;
+    /* When selecting pose-bones in pose mode, check for visibility not select-ability
+     * as pose-bones have their own selection restriction flag. */
+    const bool use_pose_exception = (draw_ctx.object_pose != nullptr);
 
-        draw::ObjectRef ob_ref(ob_iter);
-        drw_engines_cache_populate(ob_ref, duplis, extraction);
+    const int object_type_exclude_select = v3d->object_type_exclude_select;
+
+    auto should_draw_object = [&](Object &ob, const bool has_duplis) -> DrawFilter {
+      const bool is_dupli = (ob.base_flag & BASE_FROM_DUPLI) != 0;
+      const bool is_instancer = !is_dupli && is_object_instancer(ob);
+      /* Duplis reach this predicate only to check draw-ability;
+       * the filter was already checked on their instancer during the top-level iteration. */
+      const bool use_object_filter = !is_dupli && object_filter_fn != nullptr &&
+                                     (object_type_exclude_select & (1 << ob.type)) == 0;
+      /* For an instancer that may spawn duplis the filter controls instance generation,
+       * so check it before the visibility / selectable checks.
+       * Otherwise it only affects self-draw and runs after those checks. */
+      const bool filter_can_exclude_duplis = is_instancer && has_duplis;
+
+      if (use_object_filter && filter_can_exclude_duplis) {
+        if (object_filter_fn(&ob, object_filter_user_data) == false) {
+          return DrawFilter::SkipRecursive;
+        }
       }
-      FOREACH_OBJECT_IN_MODE_END;
-    }
-    else {
-      /* When selecting pose-bones in pose mode, check for visibility not select-ability
-       * as pose-bones have their own selection restriction flag. */
-      const bool use_pose_exception = (draw_ctx.object_pose != nullptr);
 
-      const int object_type_exclude_select = v3d->object_type_exclude_select;
-      bool filter_exclude = false;
+      if (!BKE_object_is_visible_in_viewport(v3d, &ob)) {
+        return DrawFilter::Skip;
+      }
+      if (use_pose_exception && (ob.mode & OB_MODE_POSE)) {
+        if ((ob.base_flag & BASE_ENABLED_AND_VISIBLE_IN_DEFAULT_VIEWPORT) == 0) {
+          return DrawFilter::Skip;
+        }
+      }
+      else if ((ob.base_flag & BASE_SELECTABLE) == 0) {
+        return DrawFilter::Skip;
+      }
 
-      auto should_draw_object = [&](Object &ob) {
-        if (!BKE_object_is_visible_in_viewport(v3d, &ob)) {
-          return false;
+      if (use_object_filter && !filter_can_exclude_duplis) {
+        if (object_filter_fn(&ob, object_filter_user_data) == false) {
+          return DrawFilter::Skip;
         }
-        if (use_pose_exception && (ob.mode & OB_MODE_POSE)) {
-          if ((ob.base_flag & BASE_ENABLED_AND_VISIBLE_IN_DEFAULT_VIEWPORT) == 0) {
-            return false;
-          }
-        }
-        else {
-          if ((ob.base_flag & BASE_SELECTABLE) == 0) {
-            return false;
-          }
-        }
+      }
 
-        if ((object_type_exclude_select & (1 << ob.type)) == 0) {
-          if (object_filter_fn != nullptr) {
-            if (ob.base_flag & BASE_FROM_DUPLI) {
-              /* pass (use previous filter_exclude value) */
-            }
-            else {
-              filter_exclude = (object_filter_fn(&ob, object_filter_user_data) == false);
-            }
-            if (filter_exclude) {
-              return false;
-            }
-          }
-        }
-        return true;
-      };
+      return DrawFilter::Draw;
+    };
 
-      foreach_obref_in_scene(draw_ctx, should_draw_object, [&](ObjectRef &ob_ref) {
-        drw_engines_cache_populate(ob_ref, duplis, extraction);
-      });
-    }
+    foreach_obref_in_scene(draw_ctx, should_draw_object, [&](ObjectRef &ob_ref) {
+      drw_engines_cache_populate(ob_ref, duplis, extraction);
+    });
   });
 
   /* Setup frame-buffer. */
@@ -2085,14 +2241,14 @@ void DRW_draw_depth_loop(Depsgraph *depsgraph,
   draw_ctx.acquire_data();
   draw_ctx.enable_engines(use_gpencil);
   draw_ctx.engines_init_and_sync([&](DupliCacheManager &duplis, ExtractionGraph &extraction) {
-    auto should_draw_object = [&](Object &ob) {
+    auto should_draw_object = [&](Object &ob, bool /*has_duplis*/) -> DrawFilter {
       if (!BKE_object_is_visible_in_viewport(v3d, &ob)) {
-        return false;
+        return DrawFilter::Skip;
       }
       if (use_only_selected && !(ob.base_flag & BASE_SELECTED)) {
-        return false;
+        return DrawFilter::Skip;
       }
-      return true;
+      return DrawFilter::Draw;
     };
 
     if (use_only_active_object) {
@@ -2153,20 +2309,20 @@ void DRW_draw_select_id(Depsgraph *depsgraph, ARegion *region, View3D *v3d)
     }
 
     if (RETOPOLOGY_ENABLED(v3d) && !XRAY_ENABLED(v3d)) {
-      auto should_draw_object = [&](Object &ob) {
+      auto should_draw_object = [&](Object &ob, bool /*has_duplis*/) -> DrawFilter {
         if (ob.type != OB_MESH) {
           /* The iterator has evaluated meshes for all solid objects.
            * It also has non-mesh objects however, which are not supported here. */
-          return false;
+          return DrawFilter::Skip;
         }
         if (DRW_object_is_in_edit_mode(&ob)) {
           /* Only background (non-edit) objects are used for occlusion. */
-          return false;
+          return DrawFilter::Skip;
         }
         if (!BKE_object_is_visible_in_viewport(v3d, &ob)) {
-          return false;
+          return DrawFilter::Skip;
         }
-        return true;
+        return DrawFilter::Draw;
       };
 
       foreach_obref_in_scene(draw_ctx, should_draw_object, [&](ObjectRef &ob_ref) {
@@ -2220,35 +2376,14 @@ bool DRWContext::is_transforming() const
   return (G.moving & (G_TRANSFORM_OBJ | G_TRANSFORM_EDIT)) != 0;
 }
 
-bool DRWContext::is_viewport_compositor_enabled() const
+bool DRWContext::is_viewport_compositor_used() const
 {
-  if (!this->v3d) {
+  if (!this->v3d || !this->rv3d) {
     return false;
   }
 
-  if (this->v3d->shading.use_compositor == V3D_SHADING_USE_COMPOSITOR_DISABLED) {
-    return false;
-  }
-
-  if (!(this->v3d->shading.type >= OB_MATERIAL)) {
-    return false;
-  }
-
-  if (!this->scene->compositing_node_group) {
-    return false;
-  }
-
-  if (!this->rv3d) {
-    return false;
-  }
-
-  if (this->v3d->shading.use_compositor == V3D_SHADING_USE_COMPOSITOR_CAMERA &&
-      this->rv3d->persp != RV3D_CAMOB)
-  {
-    return false;
-  }
-
-  return true;
+  return bke::compositor::is_viewport_compositor_enabled(*this->v3d, *this->rv3d) &&
+         bke::compositor::is_enabled(*this->scene, bke::compositor::ExecutionMode::Preview);
 }
 
 /** \} */
