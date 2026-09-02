@@ -1948,7 +1948,7 @@ void Layout::prop(PointerRNA *ptr,
   char namestr[UI_MAX_NAME_STR];
   const bool use_prop_sep = this->use_property_split();
   const bool inside_prop_sep = flag_is_set(flag_, ItemInternalFlag::InsidePropSep);
-  const bool no_custom_icon = (icon == 0);
+  const bool use_custom_icon = (icon != 0);
   /* Columns can define a heading to insert. If the first item added to a split layout doesn't have
    * a label to display in the first column, the heading is inserted there. Otherwise it's inserted
    * as a new row before the first item. */
@@ -2296,11 +2296,8 @@ void Layout::prop(PointerRNA *ptr,
                                                      std::nullopt;
     but = uiDefAutoButR(block, ptr, prop, index, name, icon, 0, 0, w, h, button_type);
 
-    if (!no_custom_icon) {
-
-      if (ELEM(but->type, ButtonType::IconToggle, ButtonType::IconToggleN)) {
-        but->flag |= BUT_NO_ICON_OFFSET;
-      }
+    if (use_custom_icon && ELEM(but->type, ButtonType::IconToggle, ButtonType::IconToggleN)) {
+      but->flag |= BUT_NO_ICON_OFFSET;
     }
 
     if (flag & ITEM_R_CHECKBOX_INVERT) {
