@@ -1904,14 +1904,22 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
     }
   }
 
-  /* Draw curve points over outline. */
-  int scissor_for_points[4];
-  scissor_for_points[0] = std::max(0, scissor_new.xmin - int(point_size));
-  scissor_for_points[1] = std::max(0, scissor_new.ymin - int(point_size));
-  scissor_for_points[2] = BLI_rcti_size_x(&scissor_new) + 2 * point_size;
-  scissor_for_points[3] = BLI_rcti_size_y(&scissor_new) + 2 * point_size;
-  GPU_scissor(
-      scissor_for_points[0], scissor_for_points[1], scissor_for_points[2], scissor_for_points[3]);
+  /* Draw curve points over outline. Don't change scissor if view is zoomed and not near edges.
+   * Draw clipped points in that case. */
+  rcti scissor_for_points;
+  scissor_for_points.xmin = std::max(
+      0, scissor_new.xmin - int(point_size * ((cumap->clipr.xmin == cumap->curr.xmin) ? 1 : 0)));
+  scissor_for_points.ymin = std::max(
+      0, scissor_new.ymin - int(point_size * ((cumap->clipr.ymin == cumap->curr.ymin) ? 1 : 0)));
+  scissor_for_points.xmax = std::max(
+      0, scissor_new.xmax + int(point_size * ((cumap->clipr.xmax == cumap->curr.xmax) ? 1 : 0)));
+  scissor_for_points.ymax = std::max(
+      0, scissor_new.ymax + int(point_size * ((cumap->clipr.ymax == cumap->curr.ymax) ? 1 : 0)));
+
+  GPU_scissor(scissor_for_points.xmin,
+              scissor_for_points.ymin,
+              BLI_rcti_size_x(&scissor_for_points),
+              BLI_rcti_size_y(&scissor_for_points));
 
   /* Curve widgets using a gradient background (such as Hue Correct), draw
    * an additional point in the back, forming an outline so they stand out. */
@@ -2260,14 +2268,30 @@ void draw_but_CURVEPROFILE(ARegion *region,
     }
   }
 
-  /* Draw curve points over outline. */
-  int scissor_for_points[4];
-  scissor_for_points[0] = std::max(0, scissor_new.xmin - int(point_size));
-  scissor_for_points[1] = std::max(0, scissor_new.ymin - int(point_size));
-  scissor_for_points[2] = BLI_rcti_size_x(&scissor_new) + 2 * point_size;
-  scissor_for_points[3] = BLI_rcti_size_y(&scissor_new) + 2 * point_size;
-  GPU_scissor(
-      scissor_for_points[0], scissor_for_points[1], scissor_for_points[2], scissor_for_points[3]);
+  /* Draw curve points over outline. Don't change scissor if view is zoomed and not near edges.
+   * Draw clipped points in that case. */
+  rcti scissor_for_points;
+  scissor_for_points.xmin = std::max(
+      0,
+      scissor_new.xmin -
+          int(point_size * ((profile->clip_rect.xmin == profile->view_rect.xmin) ? 1 : 0)));
+  scissor_for_points.ymin = std::max(
+      0,
+      scissor_new.ymin -
+          int(point_size * ((profile->clip_rect.ymin == profile->view_rect.ymin) ? 1 : 0)));
+  scissor_for_points.xmax = std::max(
+      0,
+      scissor_new.xmax +
+          int(point_size * ((profile->clip_rect.xmax == profile->view_rect.xmax) ? 1 : 0)));
+  scissor_for_points.ymax = std::max(
+      0,
+      scissor_new.ymax +
+          int(point_size * ((profile->clip_rect.ymax == profile->view_rect.ymax) ? 1 : 0)));
+
+  GPU_scissor(scissor_for_points.xmin,
+              scissor_for_points.ymin,
+              BLI_rcti_size_x(&scissor_for_points),
+              BLI_rcti_size_y(&scissor_for_points));
 
   GPU_line_smooth(false);
   GPU_blend(GPU_BLEND_ALPHA);
