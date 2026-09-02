@@ -270,8 +270,8 @@ bool SocketValueVariantTypeInfo::try_convert_fn(const CPPType &dst_type,
     void *dst_value = SocketValueVariant::allocate(dst_type, value);
     dst_type.move_construct(tmp_buffer, dst_value);
     dst_type.destruct(tmp_buffer);
+    return true;
   }
-  return false;
 }
 
 template<typename CurrentT>
