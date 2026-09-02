@@ -46,13 +46,13 @@
 #include "BKE_lib_id.hh"
 #include "BKE_material.hh"
 #include "BKE_mesh.hh"
+#include "BKE_mesh_frequency_smooth.hh"
+#include "BKE_mesh_mapping.hh"
 #include "BKE_mesh_types.hh"
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
 #include "BKE_report.hh"
-
-#include "eigen_capi.h"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -2852,135 +2852,6 @@ static float3 smooth_neighbor_average(BMVert *v,
   return src[BM_elem_index_get(v)];
 }
 
-static LinearSolver *smooth_frequency_solver_create(BMesh *bm,
-                                                    const Span<float> edge_weights,
-                                                    const Span<bool> pinned,
-                                                    const Span<float> inverse_weight_sums,
-                                                    const float cutoff,
-                                                    const Span<float3> positions)
-{
-  const int verts_num = positions.size();
-  LinearSolver *solver = EIG_linear_least_squares_solver_new(2 * verts_num, verts_num, 3);
-  for (const int i : positions.index_range()) {
-    for (const int axis : IndexRange(3)) {
-      EIG_linear_solver_variable_set(solver, axis, i, positions[i][axis]);
-    }
-    if (pinned[i]) {
-      EIG_linear_solver_variable_lock(solver, i);
-    }
-  }
-
-  const bool weighted = !edge_weights.is_empty();
-  const double laplacian_scale = 1.0 / double(std::max(cutoff, 1e-6f));
-  BMIter iter;
-  BMVert *v;
-  BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-    const int i = BM_elem_index_get(v);
-    EIG_linear_solver_matrix_add(solver, i, i, 1.0);
-    if (inverse_weight_sums[i] == 0.0f) {
-      continue;
-    }
-
-    const int row = verts_num + i;
-    EIG_linear_solver_matrix_add(solver, row, i, laplacian_scale);
-    BMIter eiter;
-    BMEdge *e;
-    BM_ITER_ELEM (e, &eiter, v, BM_EDGES_OF_VERT) {
-      BMVert *other = BM_edge_other_vert(e, v);
-      const float weight = weighted ? edge_weights[BM_elem_index_get(e)] : 1.0f;
-      EIG_linear_solver_matrix_add(solver,
-                                   row,
-                                   BM_elem_index_get(other),
-                                   -laplacian_scale * double(weight * inverse_weight_sums[i]));
-    }
-  }
-  return solver;
-}
-
-static bool smooth_frequency_solve(LinearSolver *solver,
-                                   const Span<bool> pinned,
-                                   const bool xaxis,
-                                   const bool yaxis,
-                                   const bool zaxis,
-                                   const Span<float3> right_hand_side,
-                                   MutableSpan<float3> positions)
-{
-  for (const int i : right_hand_side.index_range()) {
-    for (const int axis : IndexRange(3)) {
-      EIG_linear_solver_right_hand_side_add(solver, axis, i, right_hand_side[i][axis]);
-    }
-  }
-  if (!EIG_linear_solver_solve(solver)) {
-    return false;
-  }
-
-  const bool axis_enabled[3] = {xaxis, yaxis, zaxis};
-  for (const int i : positions.index_range()) {
-    if (pinned[i]) {
-      continue;
-    }
-    for (const int axis : IndexRange(3)) {
-      if (axis_enabled[axis]) {
-        const double value = EIG_linear_solver_variable_get(solver, axis, i);
-        const float position = float(value);
-        if (!std::isfinite(position)) {
-          return false;
-        }
-        positions[i][axis] = position;
-      }
-    }
-  }
-  return true;
-}
-
-static bool smooth_frequency_filter(BMesh *bm,
-                                    const Span<float> edge_weights,
-                                    const Span<bool> pinned,
-                                    const float cutoff,
-                                    const int iterations,
-                                    const bool xaxis,
-                                    const bool yaxis,
-                                    const bool zaxis,
-                                    MutableSpan<float3> positions)
-{
-  const int verts_num = positions.size();
-  if (verts_num == 0 || iterations == 0) {
-    return true;
-  }
-
-  const bool weighted = !edge_weights.is_empty();
-  Array<float> inverse_weight_sums(verts_num, 0.0f);
-  BMIter iter;
-  BMVert *v;
-  BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-    float weight_sum = 0.0f;
-    BMIter eiter;
-    BMEdge *e;
-    BM_ITER_ELEM (e, &eiter, v, BM_EDGES_OF_VERT) {
-      weight_sum += weighted ? edge_weights[BM_elem_index_get(e)] : 1.0f;
-    }
-    if (weight_sum > 0.0f) {
-      inverse_weight_sums[BM_elem_index_get(v)] = 1.0f / weight_sum;
-    }
-  }
-
-  Array<float3> right_hand_side(verts_num);
-  LinearSolver *solver = smooth_frequency_solver_create(
-      bm, edge_weights, pinned, inverse_weight_sums, cutoff, positions);
-  bool success = true;
-  for (int iteration = 0; iteration < iterations; iteration++) {
-    right_hand_side.as_mutable_span().copy_from(positions);
-    if (!smooth_frequency_solve(
-            solver, pinned, xaxis, yaxis, zaxis, right_hand_side, positions))
-    {
-      success = false;
-      break;
-    }
-  }
-  EIG_linear_solver_delete(solver);
-  return success;
-}
-
 static bool edbm_smooth_volume_preserve(BMesh *bm,
                                         const int method,
                                         const float factor,
@@ -2998,7 +2869,8 @@ static bool edbm_smooth_volume_preserve(BMesh *bm,
                                         const bool clipz,
                                         const float clip_dist)
 {
-  BM_mesh_elem_index_ensure(bm, use_cotangent ? (BM_VERT | BM_EDGE) : BM_VERT);
+  const bool need_edge_index = use_cotangent || method == SMOOTH_METHOD_FREQUENCY;
+  BM_mesh_elem_index_ensure(bm, need_edge_index ? (BM_VERT | BM_EDGE) : BM_VERT);
 
   Vector<BMVert *> verts;
   verts.reserve(bm->totvertsel);
@@ -3082,16 +2954,27 @@ static bool edbm_smooth_volume_preserve(BMesh *bm,
           pinned[BM_elem_index_get(v)] = true;
         }
       }
+
+      Array<int2> edges(bm->totedge);
+      BMIter eiter;
+      BMEdge *e;
+      BM_ITER_MESH (e, &eiter, bm, BM_EDGES_OF_MESH) {
+        edges[BM_elem_index_get(e)] = int2(BM_elem_index_get(e->v1), BM_elem_index_get(e->v2));
+      }
+      Array<int> v2e_offsets, v2e_indices;
+      const GroupedSpan<int> vert_to_edge_map = bke::mesh::build_vert_to_edge_map(
+          edges, bm->totvert, v2e_offsets, v2e_indices);
+
       Array<float3> filtered_positions(positions.as_span());
-      if (!smooth_frequency_filter(bm,
-                                   weights_span,
-                                   pinned,
-                                   frequency_cutoff,
-                                   repeat,
-                                   xaxis,
-                                   yaxis,
-                                   zaxis,
-                                   filtered_positions))
+      const bool axis_enabled[3] = {xaxis, yaxis, zaxis};
+      if (!bke::mesh_frequency_smooth_filter(edges,
+                                             vert_to_edge_map,
+                                             weights_span,
+                                             pinned,
+                                             frequency_cutoff,
+                                             repeat,
+                                             axis_enabled,
+                                             filtered_positions))
       {
         return false;
       }
