@@ -449,10 +449,12 @@ static void gather_attributes(const Span<StringRef> names,
   for (const StringRef name : names) {
     const GVArraySpan src = *src_attributes.lookup(name, domain);
     const AttrType type = cpp_type_to_attribute_type(src.type());
-    GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_only_span(
-        name, domain, type);
-    attribute_math::gather(src, index_map, dst.span);
-    dst.finish();
+    if (GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+            name, domain, type))
+    {
+      attribute_math::gather(src, index_map, dst.span);
+      dst.finish();
+    }
   }
 }
 
