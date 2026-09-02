@@ -807,7 +807,9 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
         return context.scene is not None
 
     def create_effect_group(self, node_type):
-        # todo(habib): doc
+        """Create a node group which wraps the given node, so that it can be used as an effect."""
+
+        # Create temporary node group
         source_group = bpy.data.node_groups.new(name=".effect_source", type="CompositorNodeTree")
         node = source_group.nodes.new(type=node_type)
         self.apply_node_settings(node)
@@ -815,10 +817,10 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
         if group is None:
             return None
 
-        # todo(habib): Can node creation of built-in nodes fail?
         bpy.data.node_groups.remove(source_group)
 
-        # group.allow_usage_in_scene_compositor_effect = True
+        # So that the created group doesn't show up in Unassigned.
+        group.allow_usage_in_scene_compositor_effect = False
 
         return group
 
