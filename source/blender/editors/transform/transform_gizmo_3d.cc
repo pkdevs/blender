@@ -1772,7 +1772,20 @@ static wmOperatorStatus gizmo_modal(bContext *C,
     }
 
     if (op != nullptr && op->opm != nullptr) {
+      /* A macro (duplicate or extrude, then transform): only its transform member owns a
+       * #TransInfo. Skip the update while another member is still the active one, instead of
+       * relying on it always finishing inside invoke. */
       op = op->opm;
+      bool is_transform = false;
+      for (const wmGizmoOpElem &gzop : widget->op_data) {
+        if (gzop.type != nullptr && gzop.type == op->type) {
+          is_transform = true;
+          break;
+        }
+      }
+      if (!is_transform) {
+        op = nullptr;
+      }
     }
 
     if (op != nullptr) {
@@ -1836,8 +1849,9 @@ static void gizmo_operator_set_properties(PointerRNA *ptr, const bool constraint
         RNA_property_boolean_set_array(&propptr, constr, constraint_axis);
       }
     }
-    if (RNA_struct_find_property(&propptr, "release_confirm")) {
-      RNA_boolean_set(&propptr, "release_confirm", true);
+    PropertyRNA *prop_release = RNA_struct_find_property(&propptr, "release_confirm");
+    if (prop_release) {
+      RNA_property_boolean_set(&propptr, prop_release, true);
     }
   }
   RNA_STRUCT_END;
