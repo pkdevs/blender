@@ -1615,13 +1615,18 @@ static void draw_but_curve_grid(const uint pos,
 
 void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, const rcti *rect_but)
 {
+  const float point_size = max_ff(U.pixelsize * 2.0f,
+                                  min_ff(UI_SCALE_FAC / but->block->aspect * 6.0f, 20.0f));
+  /* Add padding to button drawing to make corner points selectable. */
+  const int padding = point_size * 0.5;
   rcti _rect{
-      rect_but->xmin + 10,
-      rect_but->xmax - 10,
-      rect_but->ymin + 10,
-      rect_but->ymax - 10,
+      rect_but->xmin + padding,
+      rect_but->xmax - padding,
+      rect_but->ymin + padding,
+      rect_but->ymax - padding,
   };
   rcti *rect = &_rect;
+
   ButtonCurveMapping *but_cumap = static_cast<ButtonCurveMapping *>(but);
   CurveMapping *cumap = (but_cumap->edit_cumap == nullptr) ?
                             reinterpret_cast<CurveMapping *>(but->poin) :
@@ -1886,8 +1891,6 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
   color_point_outline[3] *= fade_factor_float;
 
   cmp = cuma->curve;
-  const float point_size = max_ff(U.pixelsize * 2.0f,
-                                  min_ff(UI_SCALE_FAC / but->block->aspect * 6.0f, 20.0f));
 
   int selected = 0;
   int active = -1;
@@ -1901,11 +1904,12 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
     }
   }
 
+  /* Draw curve points over outline. */
   int scissor_for_points[4];
-  scissor_for_points[0] = std::max(0, scissor_new.xmin - 20);
-  scissor_for_points[1] = std::max(0, scissor_new.ymin - 20);
-  scissor_for_points[2] = BLI_rcti_size_x(&scissor_new) + 40;
-  scissor_for_points[3] = BLI_rcti_size_y(&scissor_new) + 40;
+  scissor_for_points[0] = std::max(0, scissor_new.xmin - int(point_size));
+  scissor_for_points[1] = std::max(0, scissor_new.ymin - int(point_size));
+  scissor_for_points[2] = BLI_rcti_size_x(&scissor_new) + 2 * point_size;
+  scissor_for_points[3] = BLI_rcti_size_y(&scissor_new) + 2 * point_size;
   GPU_scissor(
       scissor_for_points[0], scissor_for_points[1], scissor_for_points[2], scissor_for_points[3]);
 
