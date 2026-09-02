@@ -83,7 +83,6 @@ void register_node_type_sh_light_iter_internal_output()
       &ntype, "ShaderNodeLightIterInternalOutput"_ustr, SH_NODE_LIGHT_ITER_INTERNAL_OUTPUT);
   ntype.ui_name = "Light Iter Internal Output";
   ntype.ui_description = "Light Iter Internal Output";
-  ntype.enum_name_legacy = "LIGHT ITER INTERNAL OUTPUT";
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.declare = file_ns::node_declare;
   ntype.gather_link_search_ops = search_link_ops_for_shader_material_lighting_node;

@@ -46,7 +46,6 @@ void register_node_type_sh_light_info()
   ntype.ui_description =
       "Exposes physical properties of the light being evaluated and computes basic information "
       "relative to the evaluation position";
-  ntype.enum_name_legacy = "LIGHT INFO";
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = file_ns::node_declare;
   ntype.gather_link_search_ops = search_link_ops_for_shader_material_lighting_node;
