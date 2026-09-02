@@ -322,6 +322,20 @@ def extern_fn_asset_auth_token_matches() -> None:
             raise Exception("Expected {:s} token {!r}, found {!r}".format(remote_url, token_expect, token))
 
 
+def extern_fn_repo_use_access_token_for_asset_libraries_matches() -> None:
+    # Fail unless the repository flag mirrored from the listing matches the expected value.
+    # Sync in-process as the CLI doesn't write preferences after syncing.
+    # pylint: disable=reimported,redefined-outer-name
+    import sys
+    import bpy
+
+    repo_name, expect_str = sys.argv[sys.argv.index("--") + 1:]
+    bpy.ops.extensions.repo_sync_all()
+    repo = bpy.context.preferences.extensions.repos[repo_name]
+    if repo.use_access_token_for_asset_libraries != (expect_str == "1"):
+        raise Exception("Expected use_access_token_for_asset_libraries={:s}".format(expect_str))
+
+
 def extern_fn_asset_listing_download() -> None:
     # Download the asset library listing, raising on any resulting error.
     # pylint: disable=reimported,redefined-outer-name
@@ -739,6 +753,13 @@ class TestAssetAuth(unittest.TestCase):
         # The extensions remain available from the repository, they're no longer installed.
         self._assert_extension_listed("")
 
+    def _step_repo_use_access_token_for_asset_libraries(self, expect: bool) -> None:
+        run_blender_python_fn(
+            extern_fn_repo_use_access_token_for_asset_libraries_matches,
+            (REPO_NAME, "1" if expect else "0"),
+            factory_startup=False,
+        )
+
     def _step_asset_auth_tokens(self, *url_token_pairs: tuple[str, str]) -> None:
         """
         Check the token Blender resolves for each asset library, empty for no token.
@@ -838,6 +859,7 @@ class TestAssetAuth(unittest.TestCase):
             self._step_extension_install()
 
             # The repository doesn't share its token, so neither library resolves one.
+            self._step_repo_use_access_token_for_asset_libraries(False)
             self._step_asset_auth_tokens(
                 (PKG_A.asset_library_url, ""),
                 (PKG_B.asset_library_url, ""),
@@ -859,6 +881,7 @@ class TestAssetAuth(unittest.TestCase):
 
             # Only the library whose extension declares authentication uses the token,
             # which is looked up from the URL, not from the repository alone.
+            self._step_repo_use_access_token_for_asset_libraries(True)
             self._step_asset_auth_tokens(
                 (PKG_A.asset_library_url, REPO_TOKEN),
                 (PKG_B.asset_library_url, ""),

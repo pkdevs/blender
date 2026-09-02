@@ -7345,6 +7345,15 @@ static void rna_def_userdef_filepaths_extension_repo(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Requires Access Token", "Repository requires an access token");
   RNA_def_property_update(prop, 0, "rna_userdef_extension_sync_update");
 
+  prop = RNA_def_property(srna, "use_access_token_for_asset_libraries", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "flag", USER_EXTENSION_REPO_FLAG_USE_ACCESS_TOKEN_ASSET_LIBRARIES);
+  RNA_def_property_ui_text(prop,
+                           "Access Token for Asset Libraries",
+                           "Asset libraries installed from this repository use its access token "
+                           "(cached from the repository listing when syncing)");
+  RNA_def_property_update(prop, 0, "rna_userdef_update");
+
   prop = RNA_def_property(srna, "use_custom_directory", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(
       prop, nullptr, "flag", USER_EXTENSION_REPO_FLAG_USE_CUSTOM_DIRECTORY);

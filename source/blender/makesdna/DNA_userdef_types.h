@@ -717,6 +717,14 @@ enum eUserExtensionRepo_Flag : uint8_t {
   USER_EXTENSION_REPO_FLAG_USE_ACCESS_TOKEN = 1 << 5,
   /** Collapse the repository's asset libraries in the preferences list. */
   USER_EXTENSION_REPO_FLAG_ASSET_LIBRARIES_COLLAPSED = 1 << 6,
+  /**
+   * The access token is used by asset libraries from this repository.
+   *
+   * \note This is a cache of `assetlib_auth_method` from the repository listing (`index.json`)
+   * which the extension system updates when syncing, kept for convenience so the UI can
+   * show it without reading the listing.
+   */
+  USER_EXTENSION_REPO_FLAG_USE_ACCESS_TOKEN_ASSET_LIBRARIES = 1 << 7,
 };
 ENUM_OPERATORS(eUserExtensionRepo_Flag)
 

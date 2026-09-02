@@ -1079,11 +1079,30 @@ def _extension_asset_libraries_installed():
     return installed
 
 
+def extension_repos_asset_library_auth_update(repo_cache_store, *, error_fn):
+    # Cache the listings `assetlib_auth_method` in the repository so the UI can show it,
+    # the listing remains the source of truth.
+    from . import repo_paths_or_none
+    for repo in bpy.context.preferences.extensions.repos:
+        if not repo.enabled:
+            continue
+        directory, _remote_url = repo_paths_or_none(repo)
+        if directory is None:
+            continue
+        auth_method = repo_cache_store.assetlib_auth_method_from_directory(
+            directory, error_fn=error_fn, ignore_missing=True,
+        )
+        use_access_token = auth_method == 'FROM_REPOSITORY'
+        if repo.use_access_token_for_asset_libraries != use_access_token:
+            repo.use_access_token_for_asset_libraries = use_access_token
+
+
 def extension_asset_libraries_sync(repo_cache_store, *, error_fn):
     # Sync entries with the asset-library extensions of enabled repositories.
     # Entries of disabled repositories are left as-is, so their settings survive toggling a repository.
     from .bl_extension_utils import PKG_MANIFEST_FILENAME_TOML
     repo_cache_store.asset_libraries_dirty_clear()
+    extension_repos_asset_library_auth_update(repo_cache_store, error_fn=error_fn)
     asset_libraries = bpy.context.preferences.filepaths.asset_libraries
     installed = _extension_asset_libraries_installed()
 
@@ -1912,6 +1931,7 @@ class EXTENSIONS_OT_repo_sync(Operator, _ExtCmdMixIn):
             error_fn=self.error_fn_from_exception,
             force=True,
         )
+        extension_repos_asset_library_auth_update(repo_cache_store, error_fn=self.error_fn_from_exception)
 
         # Unlock repositories.
         lock_result_any_failed_with_report(self, self.repo_lock.release(), report_type='WARNING')
@@ -2013,6 +2033,7 @@ class EXTENSIONS_OT_repo_sync_all(Operator, _ExtCmdMixIn):
                 error_fn=self.error_fn_from_exception,
                 force=True,
             )
+        extension_repos_asset_library_auth_update(repo_cache_store, error_fn=self.error_fn_from_exception)
 
         # Unlock repositories.
         lock_result_any_failed_with_report(self, self.repo_lock.release(), report_type='WARNING')
