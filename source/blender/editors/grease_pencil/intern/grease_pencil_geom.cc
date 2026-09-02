@@ -324,14 +324,16 @@ bke::CurvesGeometry curves_merge_by_distance(const bke::CurvesGeometry &src_curv
       }
     }
 
-    bke::GSpanAttributeWriter dst_attribute = dst_attributes.convert_or_add_for_write_only_span(
-        iter.name, bke::AttrDomain::Point, iter.data_type);
-    bke::attribute_math::mix_groups(GVArraySpan(src_attribute.varray),
-                                    map_offsets,
-                                    merge_map_indices,
-                                    std::nullopt,
-                                    dst_attribute.span);
-    dst_attribute.finish();
+    if (bke::GSpanAttributeWriter dst_attribute = dst_attributes.lookup_or_add_for_write_only_span(
+            iter.name, bke::AttrDomain::Point, iter.data_type))
+    {
+      bke::attribute_math::mix_groups(GVArraySpan(src_attribute.varray),
+                                      map_offsets,
+                                      merge_map_indices,
+                                      std::nullopt,
+                                      dst_attribute.span);
+      dst_attribute.finish();
+    }
   });
 
   if (dst_curves.nurbs_has_custom_knots()) {
