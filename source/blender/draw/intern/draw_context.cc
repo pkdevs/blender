@@ -1685,8 +1685,19 @@ static void drw_draw_render_loop_3d(DRWContext &draw_ctx, RenderEngineType *engi
   const bool gpencil_engine_needed = DRW_render_check_grease_pencil(depsgraph, v3d);
   const bool do_populate_loop = internal_engine || overlays_on || !draw_type_render ||
                                 gpencil_engine_needed;
+  const int object_type_exclude_viewport = v3d->object_type_exclude_viewport;
 
-  auto should_draw_object = [&](Object &ob, bool /*has_duplis*/) -> DrawFilter {
+  auto should_draw_object = [&](Object &ob, bool has_duplis) -> DrawFilter {
+    /* Take into account viewport settings for object type visibility on an instancer that may
+     * spawn duplis. */
+    const bool is_dupli = (ob.base_flag & BASE_FROM_DUPLI) != 0;
+    const bool is_instancer = !is_dupli && is_object_instancer(ob);
+    const bool can_exclude_duplis = is_instancer && has_duplis;
+    const bool use_exclude = !is_dupli && ((object_type_exclude_viewport & (1 << ob.type)) != 0);
+    if (use_exclude && can_exclude_duplis) {
+      return DrawFilter::SkipRecursive;
+    }
+
     return BKE_object_is_visible_in_viewport(v3d, &ob) ? DrawFilter::Draw : DrawFilter::Skip;
   };
 
