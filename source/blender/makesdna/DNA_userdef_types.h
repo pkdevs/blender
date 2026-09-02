@@ -689,6 +689,11 @@ struct bUserAssetLibrary {
    * UUIDs to files. (If it is invalid it is up to the end user to fix it.
    */
   char *invalid_uuid = nullptr;
+  /**
+   * The `{repo_module}.{pkg_id}` of the extension defining this library
+   * (see #bUserExtensionRepo::module), empty for libraries the user defined.
+   */
+  char extension_id[128] = "";
 
   short import_method = ASSET_IMPORT_PACK;  /* eAssetImportMethod */
   short flag = ASSET_LIBRARY_RELATIVE_PATH; /* eAssetLibrary_Flag */

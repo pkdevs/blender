@@ -257,6 +257,31 @@ bUserAssetLibrary *BKE_preferences_remote_asset_library_add(UserDef *userdef,
   return library;
 }
 
+bUserAssetLibraryOwner BKE_preferences_asset_library_owner_get(const bUserAssetLibrary *library)
+{
+  if (library->flag & ASSET_LIBRARY_PROJECT_DEFINED) {
+    return bUserAssetLibraryOwner::Project;
+  }
+  if (library->extension_id[0]) {
+    return bUserAssetLibraryOwner::Extension;
+  }
+  return bUserAssetLibraryOwner::User;
+}
+
+bUserExtensionRepo *BKE_preferences_extension_asset_library_repo_get(
+    const UserDef *userdef, const bUserAssetLibrary *library)
+{
+  /* The repository module is the part before the first `.`, modules never contain one. */
+  char module[sizeof(bUserAssetLibrary::extension_id)];
+  STRNCPY(module, library->extension_id);
+  char *sep = strchr(module, '.');
+  if (sep == nullptr) {
+    return nullptr;
+  }
+  *sep = '\0';
+  return BKE_preferences_extension_repo_find_by_module(userdef, module);
+}
+
 /**
  * Appends a slash to \a str if there isn't one there already. Will do nothing if \a str is empty.
  *
