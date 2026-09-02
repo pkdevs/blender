@@ -197,7 +197,7 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
   if (path_use_restir(kg, state)) {
     /* Evaluate the pdf to sample this light from the previous shading point. */
     LightSample ls ccl_optional_struct_init;
-    LightSampleReference ref = restir_light_reference_empty(); // !!!: triangle_light_sample_from_intersection() should fully populate the ref
+    LightSampleReference ref = light_reference_empty(); // !!!: triangle_light_sample_from_intersection() should fully populate the ref
 
     triangle_light_sample_from_intersection(kg, state, sd, &ls, &ref);
 
@@ -910,7 +910,7 @@ ccl_device
 #endif
 
     LightSampleReference reference;
-    reference = restir_light_reference_empty();
+    reference = light_reference_empty();
 
     // TODO: Fix the comments!
     if (use_restir) {
@@ -928,8 +928,8 @@ ccl_device
     }
 
     // // !!!: DEBUG ONLY
-    // kernel_assert(restir_light_reference_is_valid(&reference)); // !!!: Will fail on invalid lights
-    // if (!restir_light_reference_is_valid(&reference)) {
+    // kernel_assert(light_reference_is_valid(&reference)); // !!!: Will fail on invalid lights
+    // if (!light_reference_is_valid(&reference)) {
     //   kernel_assert(false);
     //   continue;
     // }

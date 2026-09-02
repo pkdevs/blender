@@ -1002,7 +1002,7 @@ ccl_device_inline void film_add_reservoir_di(
   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer) +
                              kernel_data.film.pass_restir_reservoir;
 
-  restir_unpack_reservoir(kg, &reservoir, buffer); // !!!: DI
+  restir_unpack_reservoir(kg, &reservoir, buffer);
 
   /* The caller supplies the persistent reference together with LightSample.
    * Forward light intersections may contain canonical emitter parameters that
@@ -1011,7 +1011,7 @@ ccl_device_inline void film_add_reservoir_di(
    * `light_reference_from_sample()` would duplicate per-light 
    * parameterization logic and would reject light types not supported
    * by `light_reference_from_sample()`. */
-  if (!restir_light_reference_is_valid(&candidate_reference)) { // !!!
+  if (!light_reference_is_valid(&candidate_reference)) {
     return;
   }
 

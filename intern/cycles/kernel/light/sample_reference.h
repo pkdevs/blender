@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "kernel/light/common.h"
+
 #include "kernel/light/area.h"
 #include "kernel/light/background.h"
 #include "kernel/light/point.h"
@@ -47,78 +49,14 @@ ccl_device_inline float3 restir_area_position_decode(const ccl_global KernelLigh
          v * klight->area.len_v * klight->area.axis_v;
 }
 
-
-// MARK: -
-// TODO: Move elsewhere?
-
-// Should be added to ReSTIRReservoir eventually?
-ccl_device_inline LightSampleReference restir_light_reference_empty()
-{
-  LightSampleReference reference{};
-  reference.object = OBJECT_NONE;
-  reference.prim = PRIM_NONE;
-  return reference;
-}
-
-ccl_device_inline bool restir_light_reference_is_valid(
-    const ccl_private LightSampleReference *reference)
-{
-  return (reference->flags & RESTIR_LIGHT_REFERENCE_VALID) != 0;
-}
-
 // MARK: - Producers
-
-ccl_device_inline bool restir_point_light_reference_from_sample(
-    KernelGlobals kg,
-    const ccl_private LightSample *ls,
-    ccl_private LightSampleReference *reference)
-{
-  *reference = restir_light_reference_empty();
-
-  if (ls->type != LIGHT_POINT || ls->prim < 0) {
-    return false;
-  }
-
-  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, ls->prim);
-  if ((LightType)klight->type != LIGHT_POINT) {
-    return false;
-  }
-
-  reference->type = LIGHT_POINT;
-  reference->object = ls->object;
-  reference->prim = ls->prim;
-
-  if (klight->spot.is_sphere) {
-    const Transform itfm = lamp_get_inverse_transform(kg, klight);
-    const float3 local_Ng = normalize(transform_direction(&itfm, ls->Ng));
-
-    reference->param = restir_direction_encode(local_Ng);
-    reference->flags = RESTIR_LIGHT_REFERENCE_VALID |
-                       RESTIR_LIGHT_REFERENCE_HAS_PARAM;
-    return true;
-  }
-  /* None-Spherical Point, i.e. Disk, LA_USE_SOFT_FALLOFF. */
-  else {
-    /*
-     * Non-spherical point light:
-     * The persistent identity is simply the Point emitter itself,
-     * with no additional geometric parameter.
-     */
-    reference->type = LIGHT_POINT;
-    reference->object = ls->object;
-    reference->prim = ls->prim;
-    reference->flags = RESTIR_LIGHT_REFERENCE_VALID;
-
-    return true;
-  }
-}
 
 ccl_device_inline bool restir_sun_light_reference_from_sample(
     KernelGlobals kg,
     const ccl_private LightSample *ls,
     ccl_private LightSampleReference *reference)
 {
-  *reference = restir_light_reference_empty();
+  *reference = light_reference_empty();
 
   if (ls->type != LIGHT_SUN || ls->prim < 0) {
     return false;
@@ -138,7 +76,7 @@ ccl_device_inline bool restir_sun_light_reference_from_sample(
   const Transform itfm = lamp_get_inverse_transform(kg, klight);
   const float3 local_Ng = normalize(transform_direction(&itfm, ls->Ng));
 
-  reference->param = restir_direction_encode(local_Ng);
+  reference->param = map_to_sphere(local_Ng);
   reference->flags = RESTIR_LIGHT_REFERENCE_VALID |
                      RESTIR_LIGHT_REFERENCE_HAS_PARAM;
 
@@ -159,7 +97,7 @@ ccl_device_inline bool restir_area_light_reference_from_sample(
     const ccl_private LightSample *ls,
     ccl_private LightSampleReference *reference)
 {
-  *reference = restir_light_reference_empty();
+  *reference = light_reference_empty();
 
   if (ls->type != LIGHT_AREA || ls->prim < 0) {
     return false;
@@ -187,7 +125,7 @@ ccl_device_inline bool restir_spot_light_reference_from_sample(
     const ccl_private LightSample *ls,
     ccl_private LightSampleReference *reference)
 {
-  *reference = restir_light_reference_empty();
+  *reference = light_reference_empty();
 
   if (ls->type != LIGHT_SPOT || ls->prim < 0) {
     return false;
@@ -233,7 +171,7 @@ ccl_device_inline bool restir_spot_light_reference_from_sample(
       return false;
     }
 
-    const float2 param = restir_direction_encode(local_Ng);
+    const float2 param = map_to_sphere(local_Ng);
 
     if (!isfinite(param.x) || !isfinite(param.y)) {
       return false;
@@ -270,121 +208,6 @@ ccl_device_inline bool restir_spot_light_reference_from_sample(
 
 /* MARK: - Consumption */
 
-/*
-To Check:
-Confirm the forward transform helper name corresponding to lamp_get_inverse_transform().
-Confirm the invalid emitter_id constant.
-Confirm whether packed_float3 accepts direct assignment/conversion as shown.
-Confirm whether zero-radius point lights are expected to use the area-to-solid-angle expression exactly as current sampling does.
-shader_flags is currently unused by reconstruction because the selected sphere point is already fixed. Keep it only if the generic API will need it, or remove it from the point-specific helper.
-path_flag is needed by sphere_light_pdf().
-*/
-ccl_device_inline bool restir_point_light_sample_from_reference(
-    KernelGlobals kg,
-    const ccl_private LightSampleReference *reference,
-    const float3 P,
-    const float3 N,
-    const int shader_flags, // !!!: Unused
-    const uint32_t path_flag,
-    ccl_private LightSample *ls)
-{
-  *ls = {};
-
-  if (!restir_light_reference_is_valid(reference) ||
-      reference->type != LIGHT_POINT || reference->prim < 0)
-  {
-    return false;
-  }
-
-  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, reference->prim);
-
-  if ((LightType)klight->type != LIGHT_POINT) {
-    return false;
-  }
-
-/** TODO: For relocated sphere-light reuse, verify that ls->P is the
- * first valid intersection from target P along ls->D. A persisted point on the
- * far side of the sphere may not be a valid sample from the new target.
- * Use point_light_intersect() with a scale-aware tolerance and reject on mismatch.
- */
-  ls->type = LIGHT_POINT;
-  ls->shader = klight->shader_id;
-  ls->object = klight->object_id;
-  ls->prim = reference->prim;
-  ls->group = object_lightgroup(kg, ls->object);
-  ls->eval_fac = klight->spot.eval_fac;
-
-  /*
-   * These are not available from the current reference contract. Callers must
-   * restore them from emitter-selection state before using the sample for MIS.
-   */
-  ls->pdf_selection = 0.0f;
-  ls->emitter_id = EMITTER_NONE;
-
-  const float r_sq = sqr(klight->spot.radius);
-
-  if (klight->spot.is_sphere) {
-    if (!(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM)) {
-      return false;
-    }
-
-    const float3 local_Ng = restir_direction_decode(reference->param);
-    const Transform itfm = lamp_get_inverse_transform(kg, klight);
-    const Transform tfm = transform_inverse(itfm);
-
-    ls->Ng = normalize(transform_direction(&tfm, local_Ng));
-    ls->P = klight->co + float3(ls->Ng) * klight->spot.radius;
-    ls->D = safe_normalize_len(ls->P - P, &ls->t);
-
-    const float d_sq = len_squared(P - klight->co);
-    ls->pdf = sphere_light_pdf(d_sq, r_sq, N, ls->D, path_flag); // !!!: Deliberately passed N
-    return isfinite(ls->pdf) && ls->pdf > 0.0f && ls->t >= 0.0f;
-  }
-  /* None-Spherical Point, i.e. Disk, LA_USE_SOFT_FALLOFF. */
-  else {
-    /*
-     * Non-spherical point light:
-     * The emitter degenerates to a single point at klight->co.
-     * There is no persistent geometric parameter to decode.
-     *
-     * Therefore:
-     *     ls->P = klight->co
-     *
-     * and all remaining quantities are reconstructed relative
-     * to the current target P.
-     */
-
-    ls->P = klight->co;
-
-    /* Target-dependent direction and distance. */
-    ls->D = safe_normalize_len(ls->P - P, &ls->t);
-
-    if (!isfinite(ls->t) || ls->t < 0.0f) {
-      return false;
-    }
-
-    ls->Ng = -ls->D;
-
-    /* Restore the metadata. */
-    ls->type = LIGHT_POINT;
-    ls->shader = klight->shader_id;
-    ls->object = klight->object_id;
-    ls->prim = reference->prim;
-    ls->group = object_lightgroup(kg, ls->object);
-
-    ls->pdf_selection = 0.0f;
-    ls->emitter_id = EMITTER_NONE;
-
-    /*
-     * Match point_light_sample(): a non-spherical zero-radius
-     * Point light has no finite-area parameterization.
-     */
-    ls->pdf = 1.0f;
-
-    return isfinite(ls->pdf) && ls->pdf > 0.0f && ls->t >= 0.0f;
-  }
-}
-
 ccl_device_inline bool restir_sun_light_sample_from_reference(
     KernelGlobals kg,
     const ccl_private LightSampleReference *reference,
@@ -402,7 +225,7 @@ ccl_device_inline bool restir_sun_light_sample_from_reference(
   (void)shader_flags;
   (void)path_flag;
 
-  if (!restir_light_reference_is_valid(reference) ||
+  if (!light_reference_is_valid(reference) ||
       reference->type != LIGHT_SUN ||
       reference->prim < 0)
   {
@@ -418,7 +241,7 @@ ccl_device_inline bool restir_sun_light_sample_from_reference(
     return false;
   }
 
-  const float3 local_Ng = restir_direction_decode(reference->param);
+  const float3 local_Ng = map_to_sphere(reference->param);
 
   const Transform itfm = lamp_get_inverse_transform(kg, klight);
   const Transform tfm = transform_inverse(itfm);
@@ -487,7 +310,7 @@ ccl_device_inline bool restir_area_light_sample_from_reference(
   (void)shader_flags;
   (void)path_flag;
 
-  if (!restir_light_reference_is_valid(reference) ||
+  if (!light_reference_is_valid(reference) ||
       reference->type != LIGHT_AREA ||
       reference->prim < 0)
   {
@@ -574,7 +397,7 @@ ccl_device_inline bool restir_spot_light_sample_from_reference(
   (void)N;
   (void)shader_flags;
 
-  if (!restir_light_reference_is_valid(reference) ||
+  if (!light_reference_is_valid(reference) ||
       reference->type != LIGHT_SPOT || reference->prim < 0)
   {
     return false;
@@ -596,7 +419,7 @@ ccl_device_inline bool restir_spot_light_sample_from_reference(
     }
 
     /* Decode the canonical sphere-surface normal in emitter-local space. */
-    const float3 local_Ng = restir_direction_decode(reference->param);
+    const float3 local_Ng = map_to_sphere(reference->param);
 
     if (!isfinite(local_Ng.x) ||
         !isfinite(local_Ng.y) ||
@@ -767,7 +590,7 @@ ccl_device_inline bool restir_debug_compare_float(const float a,
 // {
 //   LightSample reconstructed;
 
-//   if (!restir_light_reference_is_valid(reference)) {
+//   if (!light_reference_is_valid(reference)) {
 //     return;
 //   }
 
@@ -825,7 +648,7 @@ ccl_device_inline bool restir_debug_compare_float(const float a,
 //     const int shader_flags,
 //     const uint32_t path_flag)
 // {
-//   LightSampleReference reference = restir_light_reference_empty();
+//   LightSampleReference reference = light_reference_empty();
 
 //   const float time = 0.0f;
 //   const bool encoded = light_reference_from_sample(kg, original, time, &reference);

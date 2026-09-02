@@ -560,7 +560,7 @@ ccl_device_inline bool light_reference_from_sample(
 {
   switch (ls->type) {
     case LIGHT_POINT:
-      return restir_point_light_reference_from_sample(kg, ls, reference);
+      return point_light_reference_from_sample(kg, ls, reference);
 
     case LIGHT_SUN:
       return restir_sun_light_reference_from_sample(kg, ls, reference);
@@ -576,7 +576,7 @@ ccl_device_inline bool light_reference_from_sample(
 
     /* Includes LIGHT_BACKGROUND. */
     default:
-      *reference = restir_light_reference_empty();
+      *reference = light_reference_empty();
       return false;
   }
 }
@@ -600,7 +600,7 @@ ccl_device_inline bool light_sample_from_reference(
 //        (double)reference->param.x,
 //        (double)reference->param.y);
 
-  if (!restir_light_reference_is_valid(reference)) {
+  if (!light_reference_is_valid(reference)) {
     *ls = {};
     return false;
   }
@@ -608,7 +608,7 @@ ccl_device_inline bool light_sample_from_reference(
   // TODO(Tri): Rest of the light types
   switch (reference->type) {
     case LIGHT_POINT:
-      return restir_point_light_sample_from_reference(
+      return point_light_sample_from_reference(
           kg, reference, P, N, shader_flags, path_flag, ls);
 
     case LIGHT_SUN:
@@ -631,97 +631,6 @@ ccl_device_inline bool light_sample_from_reference(
     default:
       *ls = {};
       return false;
-  }
-}
-
-// TODO(Tri): Remove
-/*
- !!!: Dispatch `light_sample_from_uv()` can be removed since `light_sample_from_reference()` handles the job here.
- But internal helpers (such as triangle_light_sample_from_reference()) may remain useful:
- triangle_light_sample_from_reference(...) can literally become:
-    triangle_light_sample_from_uv(kg, reference->object, reference->prim, reference->param, ...);
-*/
-// TODO(Tri): WIP: Will require multiple new features in LS & possibly SD
-/**
- * Does (uv → position); opposite of `light_normal_uv_from_position`
- * Enables light sample relocation!
- */
-ccl_device_inline void light_sample_from_uv(
-    KernelGlobals kg,
-    const ccl_private ShaderData *sd,
-    const uint32_t path_flag,
-    ccl_private LightSample *ls,
-    const float2 uv_) // !!!: This probably should be removed and an allocated `LightSampleReference` in the method's body should handle things...
-{
-  PROFILING_INIT(kg, PROFILING_RESTIR_LIGHT_SETUP);
-
-  if (ls->object == OBJECT_NONE) {
-// !!! analytic light → do NOTHING; we need * a new analytic-light 2D parameterization per lamp type
-      return;
-  }
-
-  ls->pdf = 1.0f;
-
-  /* Analytic light */
-  if (ls->object == OBJECT_NONE) {
-  #if defined(__KERNEL_CPU__) // DEBUG ONLY; double is not availble on Metal
-    printf("reloc analytic: lamp=%d type=%d uv=(%f,%f)\n",
-          ls->prim,
-          (int)kernel_data_fetch(lights, ls->prim).type,
-          (double)uv_.x,
-          (double)uv_.y);
-  #endif
-
-    const int lamp = ls->prim;
-    const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
-
-    if (path_flag & PATH_RAY_SHADOW_CATCHER_PASS) {
-      if (klight->shader_id & SHADER_EXCLUDE_SHADOW_CATCHER) {
-        ls->pdf = 0.0f;
-        return;
-      }
-    }
-
-    const LightType type = (LightType)klight->type;
-
-    ls->type = type;
-    ls->shader = klight->shader_id;
-
-    // ls->group = object_lightgroup(kg, klight->object_id); // Incomplete
-    // lamp_lightgroup(kg, lamp_index) // Deprecated
-    if (ls->object == OBJECT_NONE) {
-        // analytic light
-        const int lamp = ls->prim;
-        ls->group = object_lightgroup(kg, lamp); // !!!
-    }
-    else {
-        // mesh light
-        ls->group = object_lightgroup(kg, ls->object);
-    }
-
-
-    if (type == LIGHT_POINT) {
-      point_light_sample_from_uv(kg, klight, sd->P, uv_, ls);
-    }
-    else if (type == LIGHT_AREA) {
-      area_light_sample_from_uv(klight, sd->P, ls);
-    }
-    else if (type == LIGHT_SUN) {
-      /* Directional light */
-      ls->D = -klight->co;
-      ls->P = ls->D;
-      ls->Ng = ls->D;
-      ls->t = FLT_MAX;
-      ls->eval_fac = 1.0f;
-    }
-    else if (type == LIGHT_BACKGROUND) {
-
-    }
-  }
-  // TODO: Spot...
-  else {
-    /* Mesh light */
-    // triangle_light_sample_from_uv(kg, sd->time, uv_, ls, sd->P); // !!!: 
   }
 }
 

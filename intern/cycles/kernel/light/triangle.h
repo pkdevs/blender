@@ -13,8 +13,6 @@
 #include "util/math_fast.h"
 #include "util/math_intersect.h"
 
-#include "kernel/light/common.h"
-
 CCL_NAMESPACE_BEGIN
 
 /* returns true if the triangle is has motion blur or an instancing transform applied */
@@ -295,7 +293,7 @@ ccl_device_inline void triangle_light_sample_from_intersection(
   ls->type = LIGHT_TRIANGLE;
   ls->group = object_lightgroup(kg, ls->object);
 
-  *reference = restir_light_reference_empty();
+  *reference = light_reference_empty();
   reference->type = LIGHT_TRIANGLE;
   reference->object = sd->object;
   reference->prim = sd->prim;
@@ -396,7 +394,7 @@ ccl_device_inline bool triangle_light_reference_from_sample(
     const float time,
     ccl_private LightSampleReference *reference)
 {
-  *reference = restir_light_reference_empty();
+  *reference = light_reference_empty();
 
   if (ls->type != LIGHT_TRIANGLE || ls->object < 0 || ls->prim < 0) {
     return false;
@@ -468,7 +466,7 @@ ccl_device_inline bool triangle_light_sample_from_reference(
 {
   *ls = {};
 
-  if (!restir_light_reference_is_valid(reference) ||
+  if (!light_reference_is_valid(reference) ||
       reference->type != LIGHT_TRIANGLE ||
       reference->object < 0 || reference->prim < 0 ||
       !(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM))

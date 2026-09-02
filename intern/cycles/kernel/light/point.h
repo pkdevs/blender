@@ -144,8 +144,7 @@ ccl_device_inline bool point_light_intersect(const ccl_global KernelLight *kligh
   }
 
   float3 P;
-  const float3 diskN = normalize(ray->P - klight->co); // !!!: non-spherical spot
-  // [ \boxed{\text{current spot disk normal} = \frac{P-C}{|P-C|}} ]
+  const float3 diskN = normalize(ray->P - klight->co);
   return ray_disk_intersect(
       ray->P, ray->D, ray->tmin, ray->tmax, klight->co, diskN, radius, &P, t);
 }
@@ -189,46 +188,153 @@ ccl_device_inline bool point_light_sample_from_intersection(KernelGlobals kg,
   return true;
 }
 
-// TODO(Tri): Remove
-ccl_device_inline void point_light_sample_from_uv(KernelGlobals kg,
-                                                  const ccl_global KernelLight *klight,
-                                                  const float3 ray_P,
-                                                  const float2 uv_, // swap with LightSampleReference
-                                                  ccl_private LightSample *ccl_restrict ls)
+ccl_device_inline bool point_light_reference_from_sample(
+    KernelGlobals kg,
+    const ccl_private LightSample *ls,
+    ccl_private LightSampleReference *reference)
 {
-  ls->eval_fac = klight->spot.eval_fac;
-  const float radius = klight->spot.radius;
+  *reference = light_reference_empty();
 
-  if (radius == 0.0f) {
-    ls->P = klight->co;
-    ls->D = normalize_len(ls->P - ray_P, &ls->t);
-    ls->Ng = -ls->D;
-    // ls->pdf = 1.0f; // Ensure PDF is set
-
-    /* Recompute texture coordinates from the new direction. */
-    point_light_uv(kg, klight, ls->Ng);
-
-    return;
+  if (ls->type != LIGHT_POINT || ls->prim < 0) {
+    return false;
   }
 
-  const Transform itfm = lamp_get_inverse_transform(kg, klight);
-  const Transform tfm = transform_inverse(itfm);
+  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, ls->prim);
+  if ((LightType)klight->type != LIGHT_POINT) {
+    return false;
+  }
 
-  const float2 uv = make_float2(1.0f - uv_.x - uv_.y, uv_.x);
-  ls->Ng = normalize(transform_direction(&tfm, map_to_sphere(uv)));
+  reference->type = LIGHT_POINT;
+  reference->object = ls->object;
+  reference->prim = ls->prim;
 
   if (klight->spot.is_sphere) {
-    ls->P = klight->co + radius * ls->Ng;
-    ls->D = normalize_len(ls->P - ray_P, &ls->t);
-    // TODO: what if uv is not visible from the new point?
+    const Transform itfm = lamp_get_inverse_transform(kg, klight);
+    const float3 local_Ng = normalize(transform_direction(&itfm, ls->Ng));
+
+    reference->param = map_to_sphere(local_Ng);
+    reference->flags = RESTIR_LIGHT_REFERENCE_VALID |
+                       RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+    return true;
   }
+  /* None-Spherical Point, i.e. Disk, LA_USE_SOFT_FALLOFF. */
   else {
-    ls->D = -ls->Ng;
-    if (!ray_aligned_disk_intersect(
-            ray_P, ls->D, 0.0f, FLT_MAX, klight->co, radius, &ls->P, &ls->t))
-    {
-      ls->pdf = 0.0f; // !!!: See if `pdf` is needed here
+    /*
+     * Non-spherical point light:
+     * The persistent identity is simply the Point emitter itself,
+     * with no additional geometric parameter.
+     */
+    reference->type = LIGHT_POINT;
+    reference->object = ls->object;
+    reference->prim = ls->prim;
+    reference->flags = RESTIR_LIGHT_REFERENCE_VALID;
+
+    return true;
+  }
+}
+
+ccl_device_inline bool point_light_sample_from_reference(
+    KernelGlobals kg,
+    const ccl_private LightSampleReference *reference,
+    const float3 P,
+    const float3 N,
+    const int shader_flags, // !!!(Tri): Unused
+    const uint32_t path_flag,
+    ccl_private LightSample *ls)
+{
+  *ls = {};
+
+  if (!light_reference_is_valid(reference) ||
+      reference->type != LIGHT_POINT || reference->prim < 0)
+  {
+    return false;
+  }
+
+  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, reference->prim);
+
+  if ((LightType)klight->type != LIGHT_POINT) {
+    return false;
+  }
+
+/* TODO(Tri): For relocated sphere-light reuse, verify that ls->P is the
+   first valid intersection from target P along ls->D. A persisted point on the
+   far side of the sphere may not be a valid sample from the new target.
+ * Use point_light_intersect() with a scale-aware tolerance and reject on mismatch.
+ */
+  ls->type = LIGHT_POINT;
+  ls->shader = klight->shader_id;
+  ls->object = klight->object_id;
+  ls->prim = reference->prim;
+  ls->group = object_lightgroup(kg, ls->object);
+  ls->eval_fac = klight->spot.eval_fac;
+
+  /*
+   * These are not available from the current reference contract. Callers must
+   * restore them from emitter-selection state before using the sample for MIS.
+   */
+  ls->pdf_selection = 0.0f;
+  ls->emitter_id = EMITTER_NONE;
+
+  const float r_sq = sqr(klight->spot.radius);
+
+  if (klight->spot.is_sphere) {
+    if (!(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM)) {
+      return false;
     }
+
+    const float3 local_Ng = map_to_sphere(reference->param);
+    const Transform itfm = lamp_get_inverse_transform(kg, klight);
+    const Transform tfm = transform_inverse(itfm);
+
+    ls->Ng = normalize(transform_direction(&tfm, local_Ng));
+    ls->P = klight->co + float3(ls->Ng) * klight->spot.radius;
+    ls->D = safe_normalize_len(ls->P - P, &ls->t);
+
+    const float d_sq = len_squared(P - klight->co);
+    ls->pdf = sphere_light_pdf(d_sq, r_sq, N, ls->D, path_flag); /* Deliberately passed N. */
+
+    return isfinite(ls->pdf) && ls->pdf > 0.0f && ls->t >= 0.0f;
+  }
+  /* None-Spherical Point, i.e. Disk, LA_USE_SOFT_FALLOFF. */
+  else {
+    /*
+     * Non-spherical point light:
+     * The emitter degenerates to a single point at klight->co.
+     * There is no persistent geometric parameter to decode.
+     * Therefore: ls->P = klight->co
+     *
+     * and all remaining quantities are reconstructed relative
+     * to the current target P.
+     */
+
+    ls->P = klight->co;
+
+    /* Target-dependent direction and distance. */
+    ls->D = safe_normalize_len(ls->P - P, &ls->t);
+
+    if (!isfinite(ls->t) || ls->t < 0.0f) {
+      return false;
+    }
+
+    ls->Ng = -ls->D;
+
+    /* Restore the metadata. */
+    ls->type = LIGHT_POINT;
+    ls->shader = klight->shader_id;
+    ls->object = klight->object_id;
+    ls->prim = reference->prim;
+    ls->group = object_lightgroup(kg, ls->object);
+
+    ls->pdf_selection = 0.0f;
+    ls->emitter_id = EMITTER_NONE;
+
+    /*
+     * Match point_light_sample(): a non-spherical zero-radius
+     * Point light has no finite-area parameterization.
+     */
+    ls->pdf = 1.0f;
+
+    return isfinite(ls->pdf) && ls->pdf > 0.0f && ls->t >= 0.0f;
   }
 }
 

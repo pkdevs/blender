@@ -81,4 +81,18 @@ ccl_device_inline bool is_light_shader_visible_to_path(const int shader,
   return true;
 }
 
+ccl_device_inline LightSampleReference light_reference_empty()
+{
+  LightSampleReference reference{};
+  reference.object = OBJECT_NONE;
+  reference.prim = PRIM_NONE;
+  return reference;
+}
+
+ccl_device_inline bool light_reference_is_valid(
+    const ccl_private LightSampleReference *reference)
+{
+  return (reference->flags & RESTIR_LIGHT_REFERENCE_VALID) != 0;
+}
+
 CCL_NAMESPACE_END

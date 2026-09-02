@@ -29,7 +29,7 @@ struct Reservoir {
 ccl_device_inline void reservoir_clear(ccl_private Reservoir *reservoir)
 {
   reservoir->light = {};
-  reservoir->reference = restir_light_reference_empty(); // !!!: Sets `reference.prim = PRIM_NONE;`
+  reservoir->reference = light_reference_empty();
   reservoir->radiance = {};
   reservoir->luminance = 0.0f;
   reservoir->total_weight = 0.0f;
@@ -72,7 +72,7 @@ ccl_device_inline bool reservoir_is_empty(ccl_private const Reservoir *reservoir
 
 ccl_device_inline bool reservoir_has_valid_reference(ccl_private const Reservoir *reservoir)
 {
-  return restir_light_reference_is_valid(&reservoir->reference);
+  return light_reference_is_valid(&reservoir->reference);
 }
 
 ccl_device_inline float reservoir_compute_luminance(
@@ -188,7 +188,7 @@ ccl_device_inline void reservoir_add_sample( // !!!
 //     reservoir->reference.prim,
 //     reservoir->reference.object);
 
-  // if ((require_valid_reference && !restir_light_reference_is_valid(&candidate_reference)) || // !!!: zero-radius; suspicious
+  // if ((require_valid_reference && !light_reference_is_valid(&candidate_reference)) || // !!!: zero-radius; suspicious
   //     !(isfinite(candidate_luminance) && candidate_luminance > 0.0f) ||
   //     !(isfinite(weight) && weight > 0.0f))
   // {
@@ -198,7 +198,7 @@ ccl_device_inline void reservoir_add_sample( // !!!
     printf(
         "=== RESERVOIR ADD REJECTED === "
         "valid_ref=%d luminance=%f weight=%f\n",
-        (int)restir_light_reference_is_valid(&candidate_reference),
+        (int)light_reference_is_valid(&candidate_reference),
         (double)candidate_luminance,
         (double)weight);
     /* Should be theoretically captured by the following condition, but we can not trust floating
