@@ -8,6 +8,20 @@ from bpy.app.translations import (
     contexts as i18n_contexts,
 )
 
+EFFECT_MENU_BLACKLIST = (
+    # Color
+    "CompositorNodeZcombine",
+    "ShaderNodeValToRGB",
+    "CompositorNodeCombineColor",
+    "CompositorNodeSeparateColor",
+
+    # Filter
+    "CompositorNodeMaskToSDF",
+
+    # Distort
+    "CompositorNodeMovieDistortion",
+)
+
 
 class NODE_MT_compositor_node_input_base(node_add_menu.NodeMenu):
     bl_label = "Input"
@@ -518,6 +532,47 @@ class NODE_MT_compositor_node_all_base(node_add_menu.NodeMenu):
         self.draw_menu(layout, "Layout")
 
 
+class CompositorEffectMenu(node_add_menu.NodeMenu):
+    # todo(habib): docstring
+
+    # Node group assets are listed by `SCENE_MT_add_compositor_effect_root_catalogs` instead.
+    # NOTE: `template_node_asset_menu_items` requires a node editor, it can't be used here.
+    draw_assets = False
+
+    main_operator_id = "scene.add_compositor_effect_node"
+
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        return space and (space.type == 'PROPERTIES') and (space.context == 'COMPOSITOR')
+
+    @classmethod
+    def tree_sub_type(cls, _context):
+        # todo(habib): need better solution. Properties currently has no tree sub type.
+        return 'SCENE'
+
+    @classmethod
+    def node_type_supported(cls, node_type):
+        return node_type not in EFFECT_MENU_BLACKLIST
+
+    @classmethod
+    def draw_assets_for_catalog(cls, _layout, _catalog_path):
+        del _layout, _catalog_path
+        return None
+
+    # todo(habib): won't be needed if we decide against node usage.
+    @classmethod
+    def new_empty_group(cls, _layout):
+        del _layout
+        return None
+
+    # todo(habib): won't be needed if we decide against node usage.
+    @classmethod
+    def typed_bundle(cls, _layout, _label):
+        del _label, _layout
+        return None
+
+
 add_menus = {
     # menu bl_idname: baseclass
     "NODE_MT_category_compositor_input": NODE_MT_compositor_node_input_base,
@@ -607,10 +662,12 @@ effect_menus = {
     # "NODE_MT_compositor_node_rotation_effect": NODE_MT_compositor_node_rotation_base,
     "NODE_MT_compositor_node_effect_all": NODE_MT_compositor_node_all_base,
 }
+
+effect_base_pathing_dict = {}
 effect_menus = node_add_menu.generate_menus(
     effect_menus,
-    template=node_add_menu.CompositorEffectMenu,
-    base_dict=node_add_menu.effect_base_pathing_dict
+    template=CompositorEffectMenu,
+    base_dict=effect_base_pathing_dict
 )
 
 

@@ -496,61 +496,6 @@ class SwapNodeMenu(NodeMenu):
         if cls.draw_assets:
             layout.template_node_asset_menu_items(catalog_path=catalog_path, operator='SWAP')
 
-EFFECT_MENU_BLACKLIST = (
-    # Color
-    "CompositorNodeZCombine"
-    "ShaderNodeValToRGB",
-
-    # Filter
-    "CompositorNodeMaskToSDF",
-
-    # Distort
-    "CompositorNodeMovieDistortion",
-)
-
-class CompositorEffectMenu(NodeMenu):
-    #todo(habib): docstring
-
-    # Node group assets are listed by `SCENE_MT_add_compositor_effect_root_catalogs` instead.
-    # NOTE: `template_node_asset_menu_items` requires a node editor, it can't be used here.
-    draw_assets = False
-
-    main_operator_id = "scene.add_compositor_effect_node"
-
-    @classmethod
-    def poll(cls, context):
-        space = context.space_data
-        return space and (space.type == 'PROPERTIES') and (space.context == 'COMPOSITOR')
-
-    @classmethod
-    def tree_sub_type(cls, _context):
-        # todo(habib): need better solution. Properties currently has no tree sub type.
-        return 'SCENE'
-
-    @classmethod
-    def node_type_supported(cls, node_type):
-        # todo(habib): doc
-        # todo(habib): could do without it?
-        # return bpy.types.Node.is_compositor_usage_allowed(node_type, 'SCENE_EFFECT')
-        return node_type not in EFFECT_MENU_BLACKLIST
-
-    @classmethod
-    def draw_assets_for_catalog(cls, _layout, _catalog_path):
-        del _layout, _catalog_path
-        return None
-
-    # todo(habib): won't be needed if we decide against node usage.
-    @classmethod
-    def new_empty_group(cls, _layout):
-        del _layout
-        return None
-
-    # todo(habib): won't be needed if we decide against node usage.
-    @classmethod
-    def typed_bundle(cls, _layout, _label):
-        del _label, _layout
-        return None
-
 
 class NODE_MT_group_base(NodeMenu):
     bl_label = "Group"
@@ -593,9 +538,6 @@ swap_base_pathing_dict = {
     "Group/Linked": "NODE_MT_linked_group_swap",
     "Layout": "NODE_MT_layout_swap",
 }
-
-
-effect_base_pathing_dict = {}
 
 
 def generate_menu(bl_idname: str, template: Menu, layout_base: Menu, pathing_dict: dict = None):
