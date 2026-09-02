@@ -78,6 +78,8 @@ void draw_active_library_settings(const bContext *C,
       if (USER_EXPERIMENTAL_TEST(&U, use_remote_asset_libraries)) {
         ui::Layout &row = layout.row(false);
         row.red_alert_set(!library.user_library->remote_url[0]);
+        /* The URL is defined by the extension. */
+        row.enabled_set(!library.user_library->extension_id[0]);
         row.prop(&library_ptr,
                  RNA_struct_find_property(&library_ptr, "remote_url"),
                  RNA_NO_INDEX,

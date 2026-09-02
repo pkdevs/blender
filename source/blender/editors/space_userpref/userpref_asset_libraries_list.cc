@@ -7,6 +7,7 @@
  */
 
 #include "BKE_global.hh"
+#include "BKE_preferences.h"
 
 #include "BLI_listbase.hh"
 #include "BLT_translation.hh"
@@ -161,15 +162,20 @@ void userpref_asset_libraries_panel_draw(const bContext *C, Panel *panel)
   ui::Layout &sub = col.row(true);
   const bool active_idx_in_range = U.active_asset_library >= 0 &&
                                    U.active_asset_library < libraries.size();
-  const bool is_custom_library = active_idx_in_range &&
-                                 libraries[U.active_asset_library].type == ASSET_LIBRARY_CUSTOM;
-  const bool is_project_library = is_custom_library &&
-                                  (libraries[U.active_asset_library].user_library->flag &
-                                   ASSET_LIBRARY_PROJECT_DEFINED);
-  sub.enabled_set(active_idx_in_range && is_custom_library && !is_project_library);
+  const bUserAssetLibrary *active_library = active_idx_in_range ?
+                                                libraries[U.active_asset_library].user_library :
+                                                nullptr;
+  const bool is_project_library = active_library &&
+                                  (BKE_preferences_asset_library_owner_get(active_library) ==
+                                   bUserAssetLibraryOwner::Project);
+  /* Only user libraries can be removed here, extension libraries are removed by uninstalling
+   * the extension & project libraries from the project setup. */
+  sub.enabled_set(active_library && (BKE_preferences_asset_library_owner_get(active_library) ==
+                                     bUserAssetLibraryOwner::User));
   PointerRNA props = sub.op("preferences.asset_library_remove", "", ICON_REMOVE);
-  /* Convert from UI-items list index to #U.asset_libraries index. */
-  RNA_int_set(&props, "index", U.active_asset_library - FIXED_ITEMS_COUNT);
+  if (active_library) {
+    RNA_int_set(&props, "index", BKE_preferences_asset_library_get_index(&U, active_library));
+  }
 
   if (!active_idx_in_range) {
     return;
