@@ -521,10 +521,12 @@ template<typename T>
 
         if (attributes.contains(*name)) {
           /* If the attribute exists already, copy the values over to the existing array. */
-          GSpanAttributeWriter attribute = attributes.convert_or_add_for_write_only_span(
-              *name, *domain, *custom_data_type_to_attr_type(*data_type));
-          cpp_type->copy_assign_n(attribute_data, attribute.span.data(), domain_size);
-          attribute.finish();
+          if (GSpanAttributeWriter attribute = attributes.lookup_or_add_for_write_only_span(
+                  *name, *domain, *custom_data_type_to_attr_type(*data_type)))
+          {
+            cpp_type->copy_assign_n(attribute_data, attribute.span.data(), domain_size);
+            attribute.finish();
+          }
         }
         else {
           /* Add a new attribute that shares the data. */
