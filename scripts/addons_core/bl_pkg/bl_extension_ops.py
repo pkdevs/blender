@@ -975,6 +975,30 @@ def extension_asset_library_enabled_id_set(asset_libraries):
     return {lib.extension_id for lib in asset_libraries if lib.extension_id and lib.enabled}
 
 
+def extension_asset_library_repo_and_item_from_url(repo_cache_store, remote_url, *, error_fn):
+    # Return `(repo_item, item_local)` of the extension in an enabled repository defining
+    # an entry with `remote_url`, or None.
+    remote_url = remote_url.rstrip("/")
+    repos_by_module = {repo_item.module: repo_item for repo_item in extension_repos_read()}
+    for lib in bpy.context.preferences.filepaths.asset_libraries:
+        repo_module, sep, pkg_id = lib.extension_id.partition(".")
+        if not sep:
+            continue
+        if lib.remote_url.rstrip("/") != remote_url:
+            continue
+        if (repo_item := repos_by_module.get(repo_module)) is None:
+            continue
+        pkg_manifest_local = next(iter(repo_cache_store.pkg_manifest_from_local_ensure(
+            error_fn=error_fn,
+            directory_subset={repo_item.directory},
+        )), None) or {}
+        item_local = pkg_manifest_local.get(pkg_id)
+        if item_local is None or item_local.type != "asset-library":
+            continue
+        return repo_item, item_local
+    return None
+
+
 def extension_asset_library_ensure(extension_id, *, name, remote_url, enable):
     # Ensure the preferences entry for this extension exists and set its enabled state.
     if not remote_url:
