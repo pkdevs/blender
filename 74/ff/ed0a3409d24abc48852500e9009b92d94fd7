@@ -1,1 +1,2 @@
 Referenced by issue #159125, Render crash in 5.2
+Referenced by issue #162908, Denoising Data Pass's red channel is broken, if object shadow catcher and a small tile size
