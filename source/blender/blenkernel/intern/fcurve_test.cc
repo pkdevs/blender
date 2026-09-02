@@ -3,16 +3,25 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "testing/testing.h"
 
+#include "BKE_anim_data.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_gtest_base.hh"
+#include "BKE_main.hh"
+#include "BKE_object.hh"
 
 #include "ANIM_fcurve.hh"
 
 #include "ED_keyframing.hh"
 
 #include "DNA_anim_types.h"
+#include "DNA_object_types.h"
 
+#include "BLI_listbase.hh"
 #include "BLI_math_vector_types.hh"
+
+#include "MEM_guardedalloc.h"
+
+#include "RNA_prototypes.hh"
 
 namespace blender::bke::tests {
 using namespace blender::animrig;
@@ -27,6 +36,27 @@ TEST_F(EvaluateFCurveTest, EmptyFCurve)
   FCurve *fcu = BKE_fcurve_create();
   EXPECT_EQ(evaluate_fcurve(fcu, 47.0f), 0.0f);
   BKE_fcurve_free(fcu);
+}
+
+TEST_F(EvaluateFCurveTest, FindDriverWithoutAction)
+{
+  Main *bmain = BKE_main_new();
+  Object *object = BKE_object_add_only_object(bmain, OB_EMPTY, "DriverOnly");
+  AnimData *adt = BKE_animdata_ensure_id(&object->id);
+
+  FCurve *driver_fcurve = BKE_fcurve_create();
+  driver_fcurve->rna_path_set("location");
+  driver_fcurve->array_index = 0;
+  driver_fcurve->driver = MEM_new<ChannelDriver>(__func__);
+  BLI_addtail(&adt->drivers, driver_fcurve);
+
+  bool driven = false;
+  EXPECT_EQ(id_data_find_fcurve(
+                &object->id, object, RNA_Object, "location", driver_fcurve->array_index, &driven),
+            nullptr);
+  EXPECT_TRUE(driven);
+
+  BKE_main_free(bmain);
 }
 
 TEST_F(EvaluateFCurveTest, OnKeys)
