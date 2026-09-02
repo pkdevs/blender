@@ -69,6 +69,7 @@
 #include "RNA_access.hh"
 
 #include "BLO_read_write.hh"
+#include "BLO_readfile.hh"
 
 #include "atomic_ops.h"
 
@@ -1417,6 +1418,10 @@ void BKE_libblock_owner_bmain_set(ID &id, Main *bmain, const bool assert_contain
    * correctly. */
   BLI_assert(!assert_contained || !bmain || BKE_id_is_in_main(bmain, &id));
   id.runtime->owner_bmain = bmain;
+
+  if (BLO_readfile_id_runtime_tags(id).is_link_placeholder) {
+    return;
+  }
 
   bNodeTree *ntree = bke::node_tree_from_id(&id);
   if (ntree != nullptr) {
