@@ -284,7 +284,7 @@ static void recalcData_grease_pencil(TransInfo *t)
   }
 }
 
-static void special_aftertrans_update__grease_pencil(bContext * /*C*/ g, TransInfo *t)
+static void special_aftertrans_update__grease_pencil(bContext * /*C*/, TransInfo *t)
 {
   MutableSpan<TransDataContainer> trans_data_contrainers(t->data_container, t->data_container_len);
 
@@ -298,7 +298,7 @@ static void special_aftertrans_update__grease_pencil(bContext * /*C*/ g, TransIn
     CurvesTransformData &transform_data = *static_cast<CurvesTransformData *>(tc.custom.type.data);
 
     for (auto item : transform_data.duplicate_layer_keyframes.items()) {
-      bke::greasepencil::Layer &layer = *static_cast<bke::greasepencil::Layer *>(item.key);
+      bke::greasepencil::Layer &layer = *item.key;
       grease_pencil.remove_frames(layer, {item.value});
     }
 
