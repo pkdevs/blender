@@ -31,6 +31,9 @@ AssetLibraryListItemCommon::AssetLibraryListItemCommon(const AnyAssetLibraryDefi
   if (library.user_library) {
     label_ = library.user_library->name;
   }
+  else if (library.is_extension_repo()) {
+    label_ = library.extension_repo->name;
+  }
   else {
     const char *name_cstr;
     RNA_enum_name_gettexted(

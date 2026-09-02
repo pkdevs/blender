@@ -715,6 +715,8 @@ enum eUserExtensionRepo_Flag : uint8_t {
   USER_EXTENSION_REPO_FLAG_USE_REMOTE_URL = 1 << 3,
   USER_EXTENSION_REPO_FLAG_SYNC_ON_STARTUP = 1 << 4,
   USER_EXTENSION_REPO_FLAG_USE_ACCESS_TOKEN = 1 << 5,
+  /** Collapse the repository's asset libraries in the preferences list. */
+  USER_EXTENSION_REPO_FLAG_ASSET_LIBRARIES_COLLAPSED = 1 << 6,
 };
 ENUM_OPERATORS(eUserExtensionRepo_Flag)
 
