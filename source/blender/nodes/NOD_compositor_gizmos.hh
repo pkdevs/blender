@@ -125,5 +125,16 @@ bool transform_poll_space_image(const bContext *C, wmGizmoGroupType *gzgt);
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Scale Gizmo
+ * \{ */
+
+void scale_refresh(const bContext *C, wmGizmoGroup *gzgroup);
+void scale_setup(const bContext *C, wmGizmoGroup *gzgroup);
+bool scale_poll_space_node(const bContext *C, wmGizmoGroupType *gzgt);
+bool scale_poll_space_image(const bContext *C, wmGizmoGroupType *gzgt);
+
+/** \} */
+
 }  // namespace nodes::gizmos
 }  // namespace blender

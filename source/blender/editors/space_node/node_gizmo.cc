@@ -218,4 +218,24 @@ void NODE_GGT_compositor_transform(wmGizmoGroupType *gzgt)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Scale
+ * \{ */
+
+void NODE_GGT_compositor_scale(wmGizmoGroupType *gzgt)
+{
+  gzgt->name = "Scale Widget";
+  gzgt->idname = "NODE_GGT_compositor_scale";
+
+  gzgt->flag |= WM_GIZMOGROUPTYPE_PERSISTENT;
+
+  gzgt->poll = nodes::gizmos::scale_poll_space_node;
+  gzgt->setup = nodes::gizmos::scale_setup;
+  gzgt->setup_keymap = WM_gizmogroup_setup_keymap_generic_maybe_drag;
+  gzgt->draw_prepare = nodes::gizmos::bbox_draw_prepare_space_node;
+  gzgt->refresh = nodes::gizmos::scale_refresh;
+}
+
+/** \} */
+
 }  // namespace blender::ed::space_node
