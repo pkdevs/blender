@@ -2016,9 +2016,22 @@ static bool point_draw_handles(CurveProfilePoint *point)
 void draw_but_CURVEPROFILE(ARegion *region,
                            Button *but,
                            const uiWidgetColors *wcol,
-                           const rcti *rect)
+                           const rcti *rect_but)
 {
   float fx, fy;
+
+  const float point_size = max_ff(U.pixelsize * 2.0f,
+                                  min_ff(UI_SCALE_FAC / but->block->aspect * 6.0f, 20.0f));
+
+  /* Add padding to button drawing to make corner points selectable. */
+  const int padding = point_size * 0.5;
+  rcti _rect{
+      rect_but->xmin + padding,
+      rect_but->xmax - padding,
+      rect_but->ymin + padding,
+      rect_but->ymax - padding,
+  };
+  rcti *rect = &_rect;
 
   ButtonCurveProfile *but_profile = static_cast<ButtonCurveProfile *>(but);
   CurveProfile *profile = (but_profile->edit_profile == nullptr) ?
@@ -2035,6 +2048,15 @@ void draw_but_CURVEPROFILE(ARegion *region,
   if (zoomx <= 0.0f) {
     return;
   }
+
+  /* Outline */
+  GPUVertFormat *format = immVertexFormat();
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+
+  immUniformColor3ubv(static_cast<const uchar *>(wcol->outline));
+  imm_draw_box_wire_2d(pos, rect->xmin, rect->ymin, rect->xmax, rect->ymax);
+  immUnbindProgram();
 
   /* Test needed because path can draw outside of boundary. */
   int scissor[4];
@@ -2055,8 +2077,8 @@ void draw_but_CURVEPROFILE(ARegion *region,
   GPU_line_width(1.0f);
   GPU_scissor_test(true);
 
-  GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+  format = immVertexFormat();
+  pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   /* Draw the backdrop. */
@@ -2238,11 +2260,17 @@ void draw_but_CURVEPROFILE(ARegion *region,
     }
   }
 
-  /* Draw the control points. */
+  /* Draw curve points over outline. */
+  int scissor_for_points[4];
+  scissor_for_points[0] = std::max(0, scissor_new.xmin - int(point_size));
+  scissor_for_points[1] = std::max(0, scissor_new.ymin - int(point_size));
+  scissor_for_points[2] = BLI_rcti_size_x(&scissor_new) + 2 * point_size;
+  scissor_for_points[3] = BLI_rcti_size_y(&scissor_new) + 2 * point_size;
+  GPU_scissor(
+      scissor_for_points[0], scissor_for_points[1], scissor_for_points[2], scissor_for_points[3]);
+
   GPU_line_smooth(false);
   GPU_blend(GPU_BLEND_ALPHA);
-  const float point_size = max_ff(U.pixelsize * 2.0f,
-                                  min_ff(UI_SCALE_FAC / but->block->aspect * 6.0f, 20.0f));
 
   if ((path_len - selected) > 0) {
     /* Unselected control points. */
@@ -2370,18 +2398,15 @@ void draw_but_CURVEPROFILE(ARegion *region,
   }
   immUnbindProgram();
 
+  GPU_scissor(scissor_new.xmin,
+              scissor_new.ymin,
+              BLI_rcti_size_x(&scissor_new),
+              BLI_rcti_size_y(&scissor_new));
+
   /* Restore scissor-test. */
   GPU_scissor_test(false);
   GPU_scissor(scissor[0], scissor[1], scissor[2], scissor[3]);
 
-  /* Outline */
-  format = immVertexFormat();
-  pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
-  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-
-  immUniformColor3ubv(static_cast<const uchar *>(wcol->outline));
-  imm_draw_box_wire_2d(pos, rect->xmin, rect->ymin, rect->xmax, rect->ymax);
-  immUnbindProgram();
   GPU_blend(GPU_BLEND_NONE);
 }
 
