@@ -140,7 +140,8 @@ ccl_device_forceinline T spherical_harmonics_evaluate_band_L3(const float3 direc
          spherical_harmonics_polynomial_form<3, 3>(direction) * Mp3;
 }
 
-ccl_device_inline float3 spherical_harmonics_evaluate(
+/* Evaluate bands L1, L2, and L3. */
+ccl_device_inline float3 spherical_harmonics_evaluate_rest(
     const ccl_global PackedSphericalHarmonics &packed_spherical_harmonics, const float3 direction)
 {
   float3 result;

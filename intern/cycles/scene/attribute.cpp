@@ -1176,12 +1176,12 @@ void AttributeSet::clear_modified()
 void AttributeSet::tag_modified(const Attribute &attr)
 {
   const AttrKernelDataType kernel_type = Attribute::kernel_type(attr);
-  modified_flag |= (1u << int(kernel_type));
+  modified_flag |= (1u << uint(kernel_type));
 }
 
 bool AttributeSet::modified(const AttrKernelDataType kernel_type) const
 {
-  return (modified_flag & (1u << int(kernel_type))) != 0;
+  return (modified_flag & (1u << uint(kernel_type))) != 0;
 }
 
 /* AttributeRequest */

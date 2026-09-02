@@ -41,6 +41,7 @@ static_assert(TypeQuaternion != TypeFloat4);
 static_assert(TypeQuaternion != TypeRGBA);
 static constexpr TypeDesc TypePackedSphericalHarmonics(TypeDesc::INT8,
                                                        TypeDesc::VEC3,
+                                                       TypeDesc::NOSEMANTICS,
                                                        PackedSphericalHarmonics::MAX_COEFFICIENTS);
 
 using OIIO::ustring;

@@ -16,7 +16,8 @@
 CCL_NAMESPACE_BEGIN
 
 /* A packed representation of spherical harmonics.
- * Supports spherical harmonics up to degree of 3.  The values are quantized to 8 bit.
+ * Supports spherical harmonics for degrees 1 to 3. The values are quantized to 8 bit.
+ * Spherical harmonics for degree 0 is stored in the base radiance attribute.
  *
  * The order is: <L=1 M=-1>, <L=1 M=0>, <L=1 M=1>, <L=2 M=-2> ...
  * where L is the band index, M is the  basis function.
@@ -32,7 +33,7 @@ struct PackedSphericalHarmonics {
   ccl_static_constexpr int MAX_DEGREES = 3;
   ccl_static_constexpr int MAX_COEFFICIENTS = 15;
 
-  int8_t coefficients[3 * MAX_COEFFICIENTS];
+  uint8_t coefficients[3 * MAX_COEFFICIENTS];
 
   /* NOTE: Can not have methods here, as the kernel references data from global memory, which makes
    * it tricky on Metal that either doesn't support it or requires some non-trivial way, as calling
@@ -40,7 +41,7 @@ struct PackedSphericalHarmonics {
    * `this`. */
 };
 
-/* Set all spherical harmonics vaelues to 0. */
+/* Set all spherical harmonics values to 0. */
 ccl_device_forceinline void spherical_harmonics_fill_zero(
     ccl_global PackedSphericalHarmonics &packed_spherical_harmonics)
 {
@@ -55,6 +56,22 @@ ccl_device_forceinline void spherical_harmonics_fill_zero(
 #endif
 }
 
+/* Quantize spherical harmonics coefficients from float to uint8_t.
+ * Similar to the float_to_byte(), but deals with input values in the range [-1 .. 1]. */
+ccl_device_forceinline uint8_t quantize_spherical_harmonics(const float value)
+{
+  const float rescaled = saturatef((value + 1.0f) / 2.0f);
+  return ((rescaled <= 0.0f) ? 0 :
+                               ((rescaled > (1.0f - 0.5f / 255.0f)) ?
+                                    255 :
+                                    (uint8_t)((255.0f * rescaled) + 0.5f)));  // NOLINT
+}
+
+ccl_device_forceinline float unquantize_spherical_harmonics(const uint8_t value)
+{
+  return float(value) * (1.0f / 255.0f) * 2.0f - 1.0f;
+}
+
 /* Set the spherical harmonic coefficient by its flat index. */
 ccl_device_forceinline void spherical_harmonics_set_coefficient(
     ccl_global PackedSphericalHarmonics &packed_spherical_harmonics,
@@ -64,10 +81,9 @@ ccl_device_forceinline void spherical_harmonics_set_coefficient(
   util_assert(index >= 0);
   util_assert(index < PackedSphericalHarmonics::MAX_COEFFICIENTS);
   const int i = index * 3;
-  const float3 clamped_scaled = clamp(value, make_float3(-1.0f), make_float3(1.0f)) * 127.0f;
-  packed_spherical_harmonics.coefficients[i + 0] = int8_t(clamped_scaled.x);
-  packed_spherical_harmonics.coefficients[i + 1] = int8_t(clamped_scaled.y);
-  packed_spherical_harmonics.coefficients[i + 2] = int8_t(clamped_scaled.z);
+  packed_spherical_harmonics.coefficients[i + 0] = quantize_spherical_harmonics(value.x);
+  packed_spherical_harmonics.coefficients[i + 1] = quantize_spherical_harmonics(value.y);
+  packed_spherical_harmonics.coefficients[i + 2] = quantize_spherical_harmonics(value.z);
 }
 
 /* Get unquantized spherical harmonics coefficient by its flat index. */
@@ -77,13 +93,13 @@ ccl_device_forceinline float3 spherical_harmonics_get_coefficient(
   util_assert(index >= 0);
   util_assert(index < PackedSphericalHarmonics::MAX_COEFFICIENTS);
   const int i = index * 3;
-  return make_float3(packed_spherical_harmonics.coefficients[i + 0],
-                     packed_spherical_harmonics.coefficients[i + 1],
-                     packed_spherical_harmonics.coefficients[i + 2]) /
-         127.0f;
+  return make_float3(
+      unquantize_spherical_harmonics(packed_spherical_harmonics.coefficients[i + 0]),
+      unquantize_spherical_harmonics(packed_spherical_harmonics.coefficients[i + 1]),
+      unquantize_spherical_harmonics(packed_spherical_harmonics.coefficients[i + 2]));
 }
 
-/* Get unquentized spherical harmonics coefficient by the band L and the basis function M. */
+/* Get unquantized spherical harmonics coefficient by the band L and the basis function M. */
 template<int L, int M>
 ccl_device_inline float3
 spherical_harmonics_get(const ccl_global PackedSphericalHarmonics &packed_spherical_harmonics);
