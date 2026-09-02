@@ -1180,9 +1180,6 @@ class PreferenceThemeWidgetShadePanel:
         self.layout.prop(widget_style, "show_shaded", text="")
 
 
-
-
-
 class USERPREF_PT_theme_interface_panel(ThemePanel, CenterAlignMixIn, Panel):
     bl_label = "Panel"
     bl_options = {'DEFAULT_CLOSED'}
