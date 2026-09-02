@@ -99,7 +99,6 @@ class NodeMenu(Menu):
 
     @classmethod
     def node_type_supported(cls, node_type):
-        # todo(habib): decide if necessary
         del node_type
         return True
 
@@ -404,7 +403,7 @@ class NodeMenu(Menu):
 
         menu_idname = cls.pathing_dict.get(path)
         if menu_idname is None:
-            # todo(habib): Handle with an extra flag?
+            # A missing category is not an error, see #node_add_menu_compositor.effect_menus
             return
 
         layout.menu(menu_idname)

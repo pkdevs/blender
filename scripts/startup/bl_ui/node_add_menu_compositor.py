@@ -533,7 +533,7 @@ class NODE_MT_compositor_node_all_base(node_add_menu.NodeMenu):
 
 
 class CompositorEffectMenu(node_add_menu.NodeMenu):
-    # todo(habib): docstring
+    """Used by the "Add Effect" menu of the scene compositor in the properties editor."""
 
     # Node group assets are listed by `SCENE_MT_add_compositor_effect_root_catalogs` instead.
     # NOTE: `template_node_asset_menu_items` requires a node editor, it can't be used here.
@@ -548,7 +548,9 @@ class CompositorEffectMenu(node_add_menu.NodeMenu):
 
     @classmethod
     def tree_sub_type(cls, _context):
-        # todo(habib): need better solution. Properties currently has no tree sub type.
+        del _context
+        # XXX: Properties Editor has no tree subtype, but we want to draw the same menu
+        # called from the node editor with 'SCENE' subtype
         return 'SCENE'
 
     @classmethod
@@ -560,13 +562,11 @@ class CompositorEffectMenu(node_add_menu.NodeMenu):
         del _layout, _catalog_path
         return None
 
-    # todo(habib): won't be needed if we decide against node usage.
     @classmethod
     def new_empty_group(cls, _layout):
         del _layout
         return None
 
-    # todo(habib): won't be needed if we decide against node usage.
     @classmethod
     def typed_bundle(cls, _layout, _label):
         del _label, _layout

@@ -654,10 +654,10 @@ static bNode *node_group_make_from_nodes(const bContext &C,
   return gnode;
 }
 
-// todo(habib): static or move to header
-// todo(habib): doc
+/** The result of wrapping a single node in a new node group, see #make_wrapper_group. */
 struct WrapperGroup {
   bNodeTree *tree;
+  /** Maps the interface of the group to the sockets of the node it was created from. */
   NodeTreeInterfaceMapping io_mapping;
   NodeSetCopy copied_nodes;
 };
