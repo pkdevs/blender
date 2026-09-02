@@ -55,16 +55,16 @@ ccl_device_inline float3 restir_area_position_decode(const ccl_global KernelLigh
 // TODO: Move elsewhere?
 
 // Should be added to ReSTIRReservoir eventually?
-ccl_device_inline ReSTIRLightSampleReference restir_light_reference_empty()
+ccl_device_inline LightSampleReference restir_light_reference_empty()
 {
-  ReSTIRLightSampleReference reference{};
+  LightSampleReference reference{};
   reference.object = OBJECT_NONE;
   reference.prim = PRIM_NONE;
   return reference;
 }
 
 ccl_device_inline bool restir_light_reference_is_valid(
-    const ccl_private ReSTIRLightSampleReference *reference)
+    const ccl_private LightSampleReference *reference)
 {
   return (reference->flags & RESTIR_LIGHT_REFERENCE_VALID) != 0;
 }
@@ -74,7 +74,7 @@ ccl_device_inline bool restir_light_reference_is_valid(
 ccl_device_inline bool restir_point_light_reference_from_sample(
     KernelGlobals kg,
     const ccl_private LightSample *ls,
-    ccl_private ReSTIRLightSampleReference *reference)
+    ccl_private LightSampleReference *reference)
 {
   *reference = restir_light_reference_empty();
 
@@ -119,7 +119,7 @@ ccl_device_inline bool restir_point_light_reference_from_sample(
 ccl_device_inline bool restir_sun_light_reference_from_sample(
     KernelGlobals kg,
     const ccl_private LightSample *ls,
-    ccl_private ReSTIRLightSampleReference *reference)
+    ccl_private LightSampleReference *reference)
 {
   *reference = restir_light_reference_empty();
 
@@ -160,7 +160,7 @@ printf("\nSUN PRODUCER: ls object=%d prim=%d -> ref object=%d prim=%d\n",
 ccl_device_inline bool restir_area_light_reference_from_sample(
     KernelGlobals kg,
     const ccl_private LightSample *ls,
-    ccl_private ReSTIRLightSampleReference *reference)
+    ccl_private LightSampleReference *reference)
 {
   *reference = restir_light_reference_empty();
 
@@ -188,7 +188,7 @@ ccl_device_inline bool restir_area_light_reference_from_sample(
 ccl_device_inline bool restir_spot_light_reference_from_sample(
     KernelGlobals kg,
     const ccl_private LightSample *ls,
-    ccl_private ReSTIRLightSampleReference *reference)
+    ccl_private LightSampleReference *reference)
 {
   *reference = restir_light_reference_empty();
 
@@ -275,7 +275,7 @@ ccl_device_inline bool restir_triangle_light_reference_from_sample(
     KernelGlobals kg,
     const ccl_private LightSample *ls,
     const float time,
-    ccl_private ReSTIRLightSampleReference *reference)
+    ccl_private LightSampleReference *reference)
 {
   *reference = restir_light_reference_empty();
 
@@ -340,43 +340,6 @@ ccl_device_inline bool restir_triangle_light_reference_from_sample(
   return true;
 }
 
-/* Dispatcher
- * Fallback Conversion API: Available for paths where only an LS exists, such as ordinary NEE samples.
- */
-ccl_device_inline bool restir_light_reference_from_sample( // !!!: DI Blackout
-    KernelGlobals kg,
-    const ccl_private LightSample *ls,
-    const float time,
-    ccl_private ReSTIRLightSampleReference *reference)
-{
-  switch (ls->type) {
-    case LIGHT_POINT:
-      return restir_point_light_reference_from_sample(kg, ls, reference);
-
-    case LIGHT_SUN:
-      return restir_sun_light_reference_from_sample(kg, ls, reference);
-
-    // case LIGHT_BACKGROUND:
-    //   break;
-    //   // return restir_background_light_reference_from_sample(kg, ls, reference);
-
-    case LIGHT_AREA:
-      return restir_area_light_reference_from_sample(kg, ls, reference);
-
-    case LIGHT_SPOT:
-      return restir_spot_light_reference_from_sample(kg, ls, reference);
-
-    case LIGHT_TRIANGLE:
-      return restir_triangle_light_reference_from_sample(kg, ls, time, reference);
-
-    /* Includes LIGHT_BACKGROUND. */
-    default:
-      *reference = restir_light_reference_empty();
-      return false;
-  }
-}
-
-
 /* MARK: - Consumption */
 
 /*
@@ -390,7 +353,7 @@ path_flag is needed by sphere_light_pdf().
 */
 ccl_device_inline bool restir_point_light_sample_from_reference(
     KernelGlobals kg,
-    const ccl_private ReSTIRLightSampleReference *reference,
+    const ccl_private LightSampleReference *reference,
     const float3 P,
     const float3 N,
     const int shader_flags, // !!!: Unused
@@ -496,7 +459,7 @@ ccl_device_inline bool restir_point_light_sample_from_reference(
 
 ccl_device_inline bool restir_sun_light_sample_from_reference(
     KernelGlobals kg,
-    const ccl_private ReSTIRLightSampleReference *reference,
+    const ccl_private LightSampleReference *reference,
     const float3 P,
     const float3 N,
     const int shader_flags,
@@ -583,7 +546,7 @@ ccl_device_inline bool restir_sun_light_sample_from_reference(
  */
 ccl_device_inline bool restir_area_light_sample_from_reference(
     KernelGlobals kg,
-    const ccl_private ReSTIRLightSampleReference *reference,
+    const ccl_private LightSampleReference *reference,
     const float3 P,
     const float3 N,
     const int shader_flags,
@@ -671,7 +634,7 @@ ccl_device_inline bool restir_area_light_sample_from_reference(
 
 ccl_device_inline bool restir_spot_light_sample_from_reference(
     KernelGlobals kg,
-    const ccl_private ReSTIRLightSampleReference *reference,
+    const ccl_private LightSampleReference *reference,
     const float3 P,
     const float3 N,
     const int shader_flags,
@@ -844,7 +807,7 @@ ccl_device_inline bool restir_spot_light_sample_from_reference(
 
 ccl_device_inline bool restir_triangle_light_sample_from_reference(
     KernelGlobals kg,
-    const ccl_private ReSTIRLightSampleReference *reference,
+    const ccl_private LightSampleReference *reference,
     const float3 P,
     const float time,
     ccl_private LightSample *ls)
@@ -964,65 +927,6 @@ t
   return isfinite(ls->pdf) && ls->pdf > 0.0f;
 }
 
-// Dispatcher; restir_light_sample_reconstruct()
-// Basically a replacement for `light_sample_from_uv()`
-ccl_device_inline bool restir_light_sample_from_reference(
-    KernelGlobals kg,
-    const ccl_private ReSTIRLightSampleReference *reference,
-    const float3 P,
-    const float3 N,
-    const float time,
-    const int shader_flags,
-    const uint32_t path_flag,
-    ccl_private LightSample *ls)
-{
-// printf("RECONSTRUCT DISPATCH: flags=%u type=%d prim=%d object=%d param=(%f,%f)\n",
-//        reference->flags,
-//        reference->type,
-//        reference->prim,
-//        reference->object,
-//        (double)reference->param.x,
-//        (double)reference->param.y);
-
-  if (!restir_light_reference_is_valid(reference)) {
-    *ls = {};
-    return false;
-  }
-
-  // TODO(Tri): Rest of the light types
-  switch (reference->type) {
-    case LIGHT_POINT:
-      return restir_point_light_sample_from_reference(
-          kg, reference, P, N, shader_flags, path_flag, ls);
-
-    case LIGHT_SUN:
-      return restir_sun_light_sample_from_reference(
-          kg, reference, P, N, shader_flags, path_flag, ls);
-
-    // case LIGHT_BACKGROUND:
-    //   break;
-    //   // return restir_background_light_sample_from_reference(
-    //   //     kg, reference, P, N, shader_flags, path_flag, ls);
-
-    case LIGHT_AREA:
-      return restir_area_light_sample_from_reference(
-          kg, reference, P, N, shader_flags, path_flag, ls);
-
-    case LIGHT_SPOT:
-      return restir_spot_light_sample_from_reference(
-          kg, reference, P, N, shader_flags, path_flag, ls);
-
-    case LIGHT_TRIANGLE:
-      return restir_triangle_light_sample_from_reference(
-          kg, reference, P, time, ls);
-
-    /* Includes LIGHT_BACKGROUND. */
-    default:
-      *ls = {};
-      return false;
-  }
-}
-
 
 // MARK: --- Debug ---
 
@@ -1046,85 +950,85 @@ ccl_device_inline bool restir_debug_compare_float(const float a,
 }
 
 
-ccl_device_inline void restir_debug_validate_light_reference_roundtrip_from_reference(
-    KernelGlobals kg,
-    const ccl_private LightSample *original,
-    const ccl_private ReSTIRLightSampleReference *reference,
-    const float3 P,
-    const float3 N,
-    const int shader_flags,
-    const uint32_t path_flag)
-{
-  LightSample reconstructed;
+// ccl_device_inline void restir_debug_validate_light_reference_roundtrip_from_reference(
+//     KernelGlobals kg,
+//     const ccl_private LightSample *original,
+//     const ccl_private LightSampleReference *reference,
+//     const float3 P,
+//     const float3 N,
+//     const int shader_flags,
+//     const uint32_t path_flag)
+// {
+//   LightSample reconstructed;
 
-  if (!restir_light_reference_is_valid(reference)) {
-    return;
-  }
+//   if (!restir_light_reference_is_valid(reference)) {
+//     return;
+//   }
 
-  const float time = 0.0f; // TODO: obtain from sd
-  const bool decoded = restir_light_sample_from_reference(
-      kg, reference, P, N, time, shader_flags, path_flag, &reconstructed);
+//   const float time = 0.0f; // TODO: obtain from sd
+//   const bool decoded = light_sample_from_reference(
+//       kg, reference, P, N, time, shader_flags, path_flag, &reconstructed);
 
-  if (!decoded) {
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-    printf("ReSTIR roundtrip decode failed: type=%d prim=%d object=%d\n",
-           (int)original->type, original->prim, original->object);
-#endif
-    return;
-  }
+//   if (!decoded) {
+// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+//     printf("ReSTIR roundtrip decode failed: type=%d prim=%d object=%d\n",
+//            (int)original->type, original->prim, original->object);
+// #endif
+//     return;
+//   }
 
-  const float pos_eps = 1e-4f;
-  const float dir_eps = 1e-4f;
-  const float rel_eps = 1e-4f;
+//   const float pos_eps = 1e-4f;
+//   const float dir_eps = 1e-4f;
+//   const float rel_eps = 1e-4f;
 
-  bool ok = true;
-  ok &= (original->type == reconstructed.type);
-  ok &= (original->prim == reconstructed.prim);
-  ok &= (original->object == reconstructed.object);
-  ok &= (original->shader == reconstructed.shader);
-  ok &= (original->group == reconstructed.group);
+//   bool ok = true;
+//   ok &= (original->type == reconstructed.type);
+//   ok &= (original->prim == reconstructed.prim);
+//   ok &= (original->object == reconstructed.object);
+//   ok &= (original->shader == reconstructed.shader);
+//   ok &= (original->group == reconstructed.group);
 
-  ok &= restir_debug_compare_float3(original->P, reconstructed.P, pos_eps);
-  ok &= restir_debug_compare_float3(original->Ng, reconstructed.Ng, dir_eps);
-  ok &= restir_debug_compare_float3(original->D, reconstructed.D, dir_eps);
-  ok &= restir_debug_compare_float(original->t, reconstructed.t, rel_eps);
-  ok &= restir_debug_compare_float(original->pdf, reconstructed.pdf, rel_eps);
-  ok &= restir_debug_compare_float(original->eval_fac, reconstructed.eval_fac, rel_eps);
+//   ok &= restir_debug_compare_float3(original->P, reconstructed.P, pos_eps);
+//   ok &= restir_debug_compare_float3(original->Ng, reconstructed.Ng, dir_eps);
+//   ok &= restir_debug_compare_float3(original->D, reconstructed.D, dir_eps);
+//   ok &= restir_debug_compare_float(original->t, reconstructed.t, rel_eps);
+//   ok &= restir_debug_compare_float(original->pdf, reconstructed.pdf, rel_eps);
+//   ok &= restir_debug_compare_float(original->eval_fac, reconstructed.eval_fac, rel_eps);
 
-  if (!ok) {
-#if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
-    printf("ReSTIR roundtrip mismatch\n");
+//   if (!ok) {
+// #if !defined(__KERNEL_GPU__) && defined(RESTIR_DI_DEBUG)
+//     printf("ReSTIR roundtrip mismatch\n");
 
-//     printf("  original: type=%d prim=%d object=%d pdf=%f t=%f\n",
-//            (int)original->type, original->prim, original->object,
-//            (double)original->pdf, (double)original->t);
-//     printf("  recon   : type=%d prim=%d object=%d pdf=%f t=%f\n",
-//            (int)reconstructed.type, reconstructed.prim, reconstructed.object,
-//            (double)reconstructed.pdf, (double)reconstructed.t);
-// #else
-//     assert(false);
-#endif
-  }
-}
+// //     printf("  original: type=%d prim=%d object=%d pdf=%f t=%f\n",
+// //            (int)original->type, original->prim, original->object,
+// //            (double)original->pdf, (double)original->t);
+// //     printf("  recon   : type=%d prim=%d object=%d pdf=%f t=%f\n",
+// //            (int)reconstructed.type, reconstructed.prim, reconstructed.object,
+// //            (double)reconstructed.pdf, (double)reconstructed.t);
+// // #else
+// //     assert(false);
+// #endif
+//   }
+// }
 
-ccl_device_inline void restir_debug_validate_light_reference_roundtrip(
-    KernelGlobals kg,
-    const ccl_private LightSample *original,
-    const float3 P,
-    const float3 N,
-    const int shader_flags,
-    const uint32_t path_flag)
-{
-  ReSTIRLightSampleReference reference = restir_light_reference_empty();
+// ccl_device_inline void restir_debug_validate_light_reference_roundtrip(
+//     KernelGlobals kg,
+//     const ccl_private LightSample *original,
+//     const float3 P,
+//     const float3 N,
+//     const int shader_flags,
+//     const uint32_t path_flag)
+// {
+//   LightSampleReference reference = restir_light_reference_empty();
 
-  const float time = 0.0f;
-  const bool encoded = restir_light_reference_from_sample(kg, original, time, &reference);
-  if (!encoded) {
-    return;
-  }
+//   const float time = 0.0f;
+//   const bool encoded = light_reference_from_sample(kg, original, time, &reference);
+//   if (!encoded) {
+//     return;
+//   }
 
-  restir_debug_validate_light_reference_roundtrip_from_reference(
-      kg, original, &reference, P, N, shader_flags, path_flag);
-}
+//   restir_debug_validate_light_reference_roundtrip_from_reference(
+//       kg, original, &reference, P, N, shader_flags, path_flag);
+// }
 
 CCL_NAMESPACE_END

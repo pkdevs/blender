@@ -984,7 +984,7 @@ ccl_device_inline void film_add_reservoir_di(
     ConstIntegratorState state,
     const Spectrum L,
     ccl_private const LightSample &ls,
-    ccl_private const ReSTIRLightSampleReference &candidate_reference,
+    ccl_private const LightSampleReference &candidate_reference,
     ccl_private const RNGState *rng_state,
     ccl_global float *ccl_restrict render_buffer)
 {
@@ -1008,9 +1008,9 @@ ccl_device_inline void film_add_reservoir_di(
    * Forward light intersections may contain canonical emitter parameters that
    * cannot be recovered exactly from LightSample after its u/v fields were
    * removed. In particular, reconstructing the reference here using 
-   * `restir_light_reference_from_sample()` would duplicate per-light 
+   * `light_reference_from_sample()` would duplicate per-light 
    * parameterization logic and would reject light types not supported
-   * by `restir_light_reference_from_sample()`. */
+   * by `light_reference_from_sample()`. */
   if (!restir_light_reference_is_valid(&candidate_reference)) { // !!!
     return;
   }

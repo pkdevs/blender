@@ -602,7 +602,7 @@ enum ReSTIRLightReferenceFlag : uint {
  * Persistent identity and emitter-local parameterization of a selected light sample.
  * Target-dependent LightSample fields are reconstructed when the sample is reused.
  */
-struct ReSTIRLightSampleReference {
+struct LightSampleReference {
   LightType type;     // May eventually need a dedicated ReSTIRLightReferenceType (If KernelLight can't derive some distinctions...)
   uint flags;
 
@@ -658,7 +658,7 @@ struct ReSTIRReservoir {
  */
 struct ReSTIRDIReservoir {
   LightSample light;
-  ReSTIRLightSampleReference reference;
+  LightSampleReference reference;
 
   // TODO: ranking_radiance and ranking_luminance
   BsdfEval radiance;      // Selected ranking payload: BSDF * light_eval * eval_fac.

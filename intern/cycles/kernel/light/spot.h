@@ -235,6 +235,7 @@ ccl_device_inline bool spot_light_sample(KernelGlobals kg,
   ls->eval_fac = klight->spot.eval_fac;
 
   if (klight->spot.is_sphere) {
+    // printf("\n=== SPOT CANONICAL SAMPLE DEBUG (Sphere) ===\n");
     /* Spherical light geometry. */
     float cos_theta;
     ls->t = FLT_MAX;
@@ -314,6 +315,7 @@ ccl_device_inline bool spot_light_sample(KernelGlobals kg,
 // DISK SPOT: will replace its target-dependent disk construction with the canonical local XY disk. NO NEED!
 // !!!: Sampling distribution may depend on the target. Persistent geometry identity must not.
   else {
+    // printf("\n=== SPOT CANONICAL SAMPLE DEBUG (Disk) ===\n");
     /* Point light with ad-hoc radius based on oriented disk. */
     ls->P = klight->co;
     if (r_sq > 0.0f) {
@@ -460,7 +462,7 @@ ccl_device_inline bool spot_light_sample_from_intersection(KernelGlobals kg,
                                                            const float3 N,
                                                            const uint32_t path_flag,
                                                            ccl_private LightSample *ccl_restrict ls,
-                                                           ccl_private ReSTIRLightSampleReference *ref)
+                                                           ccl_private LightSampleReference *ref)
 {
   const float r_sq = sqr(klight->spot.radius);
   const float d_sq = len_squared(ray_P - klight->co);

@@ -348,7 +348,7 @@ ccl_device ShaderEvalResult light_sample_shader_eval(
     const float time,
     ccl_private Spectrum &r_eval,
     ccl_private const ShaderData *ccl_restrict sd = nullptr,
-    ccl_private const ReSTIRLightSampleReference *ccl_restrict reference = nullptr,
+    ccl_private const LightSampleReference *ccl_restrict reference = nullptr,
     const bool check_visibility = false)
 {
   kernel_assert(ls != nullptr);

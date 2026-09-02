@@ -144,7 +144,8 @@ ccl_device_inline bool point_light_intersect(const ccl_global KernelLight *kligh
   }
 
   float3 P;
-  const float3 diskN = normalize(ray->P - klight->co);
+  const float3 diskN = normalize(ray->P - klight->co); // !!!: non-spherical spot
+  // [ \boxed{\text{current spot disk normal} = \frac{P-C}{|P-C|}} ]
   return ray_disk_intersect(
       ray->P, ray->D, ray->tmin, ray->tmax, klight->co, diskN, radius, &P, t);
 }
@@ -156,7 +157,7 @@ ccl_device_inline bool point_light_sample_from_intersection(KernelGlobals kg,
                                                             const float3 N,
                                                             const uint32_t path_flag,
                                                             ccl_private LightSample *ccl_restrict ls,
-                                                            ccl_private ReSTIRLightSampleReference *ref)
+                                                            ccl_private LightSampleReference *ref)
 {
   const float r_sq = sqr(klight->spot.radius);
 
@@ -188,10 +189,11 @@ ccl_device_inline bool point_light_sample_from_intersection(KernelGlobals kg,
   return true;
 }
 
+// TODO(Tri): Remove
 ccl_device_inline void point_light_sample_from_uv(KernelGlobals kg,
                                                   const ccl_global KernelLight *klight,
                                                   const float3 ray_P,
-                                                  const float2 uv_, // swap with ReSTIRLightSampleReference
+                                                  const float2 uv_, // swap with LightSampleReference
                                                   ccl_private LightSample *ccl_restrict ls)
 {
   ls->eval_fac = klight->spot.eval_fac;

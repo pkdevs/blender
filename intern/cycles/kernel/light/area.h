@@ -446,7 +446,7 @@ ccl_device_inline bool area_light_sample_from_intersection(
     const float3 ray_P,
     const float3 ray_D,
     ccl_private LightSample *ccl_restrict ls,
-    ccl_private ReSTIRLightSampleReference *ref)
+    ccl_private LightSampleReference *ref)
 {
   ref->param.x = isect->u;
   ref->param.y = isect->v;

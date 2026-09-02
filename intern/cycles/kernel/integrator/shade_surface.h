@@ -197,7 +197,7 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
   if (path_use_restir(kg, state)) {
     /* Evaluate the pdf to sample this light from the previous shading point. */
     LightSample ls ccl_optional_struct_init;
-    ReSTIRLightSampleReference ref = restir_light_reference_empty(); // !!!: triangle_light_sample_from_intersection() should fully populate the ref
+    LightSampleReference ref = restir_light_reference_empty(); // !!!: triangle_light_sample_from_intersection() should fully populate the ref
 
     triangle_light_sample_from_intersection(kg, state, sd, &ls, &ref);
 
@@ -239,7 +239,7 @@ ccl_device_forceinline float radiance_eval(KernelGlobals kg,
                                            ccl_private ShaderData *sd,
                                            ccl_private LightSample *ls,
                                            ccl_private BsdfEval *radiance,
-                                           ccl_private const ReSTIRLightSampleReference *reference = nullptr, // !!! See if needed here...
+                                           ccl_private const LightSampleReference *reference = nullptr, // !!! See if needed here...
                                            const bool check_visibility = false)
 {
   if (!(ls->pdf > 0.0f)) {
@@ -746,7 +746,7 @@ ccl_device_inline void integrate_direct_light_create_shadow_path(
 
  * ordinary NEE:
     generate Reservoir candidates
-    create a ReSTIRLightSampleReference for every candidate
+    create a LightSampleReference for every candidate
     evaluate through radiance_eval()
     add candidate to Reservoir
 
@@ -772,7 +772,6 @@ ccl_device
                                    IntegratorState state,
                                    ccl_private ShaderData *sd,
                                    ccl_private const RNGState *rng_state,
-                                  //  ccl_private const ReSTIRLightSampleReference *reference, // !!! See if needed here...
                                    ccl_global float *ccl_restrict render_buffer)
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_INITIAL_RESAMPLING);
@@ -910,19 +909,19 @@ ccl_device
 #  endif
 #endif
 
-    ReSTIRLightSampleReference reference;
+    LightSampleReference reference;
     reference = restir_light_reference_empty();
 
     // TODO: Fix the comments!
     if (use_restir) {
       /* Construct the reference from the light sample in ordinary NEE. */
       // !!!: One contributor of the darkness in DI (not all types are supported; current support might have issues)
-      // !!!: restir_light_reference_from_sample() may have problem populating reference
-      if (!restir_light_reference_from_sample(kg, &ls, sd->time, &reference)) {
+      // !!!: light_reference_from_sample() may have problem populating reference
+      if (!light_reference_from_sample(kg, &ls, sd->time, &reference)) {
 
 // DEBUG ONLY; alwasy returns for GI/PT of course!        
-        // printf("integrate_surface_direct_light() returned!; !restir_light_reference_from_sample()=%u\n\n\n\n",
-              //  (!restir_light_reference_from_sample(kg, &ls, sd->time, &reference)));
+        // printf("integrate_surface_direct_light() returned!; !light_reference_from_sample()=%u\n\n\n\n",
+              //  (!light_reference_from_sample(kg, &ls, sd->time, &reference)));
         continue;
         // break; // !!!: Break or continue?
       }

@@ -135,9 +135,9 @@ ccl_device_forceinline bool triangle_light_sample(KernelGlobals kg,
 
     /* compute random point in triangle. From Eric Heitz's "A Low-Distortion Map Between Triangle
      * and Square" */
-    float u = rand.x; // !!!
+    float u = rand.x;
     float v = rand.y;
-    // ???: Expand triangle_light_sample to store u,v in `ReSTIRLightSampleReference` or it's not clean & unnecessary here?
+
     if (v > u) {
       u *= 0.5f;
       v -= u;
@@ -175,7 +175,7 @@ ccl_device_inline void triangle_light_sample_from_intersection(
     IntegratorState state,
     ccl_private const ShaderData *sd,
     ccl_private LightSample *ccl_restrict ls,
-    ccl_private ReSTIRLightSampleReference *ccl_restrict reference)
+    ccl_private LightSampleReference *ccl_restrict reference)
 {
   const float3 ray_D = INTEGRATOR_STATE(state, ray, D);
 

@@ -299,7 +299,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
           kg, &canonical, render_pixel_index, render_buffer, read_prev))
   {
     // light_sample_from_uv(kg, &current->sd, current->path_flag, &canonical.ls); // !!!
-    restir_light_sample_from_reference(
+    light_sample_from_reference(
         kg,
         &canonical.reference,
         current->sd.P,
@@ -345,7 +345,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
 
       /* Evaluate current sample from the neighbor shading point. */
       // light_sample_from_uv(kg, &neighbor.sd, neighbor.path_flag, &canonical_ls); // !!!
-      restir_light_sample_from_reference( // !!!: Re-Constructs DI analytic lights only
+      light_sample_from_reference( // !!!: Re-Constructs DI analytic lights only
           kg,
           &canonical.reference,
           neighbor.sd.P,
@@ -368,7 +368,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
     }
 
     // light_sample_from_uv(kg, &neighbor.sd, neighbor.path_flag, &neighbor.reservoir.ls); // !!!
-    restir_light_sample_from_reference(kg, // !!!: Re-Constructs DI analytic lights only
+    light_sample_from_reference(kg, // !!!: Re-Constructs DI analytic lights only
                                        &neighbor.reservoir.reference, // !!!: Ensure
                                        neighbor.sd.P,
                                        neighbor.sd.N,
@@ -385,7 +385,7 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
 
     /* Evaluate neighbor sample from the current shading point. */
     // light_sample_from_uv(kg, &current->sd, current->path_flag, &neighbor.reservoir.light); // !!!
-    restir_light_sample_from_reference( // !!!: Re-Constructs DI analytic lights only
+    light_sample_from_reference( // !!!: Re-Constructs DI analytic lights only
         kg,
         &neighbor.reservoir.reference, // !!!: Ensure
         current->sd.P,
@@ -461,7 +461,7 @@ ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KE
   shader_data_setup_from_restir(kg, state, &current, render_buffer); // !!!: 
 
   // light_sample_from_uv(kg, &current.sd, current.path_flag, &reservoir.ls); // !!!
-  restir_light_sample_from_reference( // !!!: Re-Constructs DI analytic lights only
+  light_sample_from_reference( // !!!: Re-Constructs DI analytic lights only
       kg,
       &reservoir.reference,
       current.sd.P,

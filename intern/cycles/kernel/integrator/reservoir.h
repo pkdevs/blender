@@ -12,7 +12,7 @@ CCL_NAMESPACE_BEGIN
 
 struct Reservoir {
   LightSample light;
-  ReSTIRLightSampleReference reference;
+  LightSampleReference reference;
 
   BsdfEval radiance;
   float luminance;
@@ -159,7 +159,7 @@ ccl_device_inline float reservoir_mis_weight_forward(ccl_private const Reservoir
 ccl_device_inline void reservoir_add_sample( // !!!
     ccl_private Reservoir *reservoir,
     const ccl_private LightSample &ls,
-    const ccl_private ReSTIRLightSampleReference &candidate_reference,
+    const ccl_private LightSampleReference &candidate_reference,
     const ccl_private BsdfEval &candidate_radiance,
     const float mis_weight,
     const float rand,
@@ -227,7 +227,7 @@ ccl_device_inline void reservoir_add_sample( // !!!
 ccl_device_inline void reservoir_add_light_sample(
     ccl_private Reservoir *reservoir,
     const ccl_private LightSample &ls,
-    const ccl_private ReSTIRLightSampleReference &candidate_reference,
+    const ccl_private LightSampleReference &candidate_reference,
     const ccl_private BsdfEval &candidate_radiance,
     const float bsdf_pdf,
     const float rand,
@@ -297,7 +297,7 @@ ccl_device_inline void reservoir_add_light_sample(
 ccl_device_inline void reservoir_add_bsdf_sample(
     ccl_private Reservoir *reservoir,
     const ccl_private LightSample &ls,
-    const ccl_private ReSTIRLightSampleReference &candidate_reference,
+    const ccl_private LightSampleReference &candidate_reference,
     const ccl_private BsdfEval &candidate_radiance,
     const float bsdf_pdf,
     const float rand,
@@ -438,7 +438,7 @@ ccl_device_inline void spatial_reservoir_add_reservoir(
 }
 
 // !!!: Deserialize the persistent reference, not write identity and parameters into LightSample
-// !!!: Unpacking must produce a fully valid ReSTIRLightSampleReference
+// !!!: Unpacking must produce a fully valid LightSampleReference
 ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
                                                ccl_private Reservoir *reservoir,
                                                const ccl_global float *buffer)

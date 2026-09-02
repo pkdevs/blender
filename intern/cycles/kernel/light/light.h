@@ -18,6 +18,8 @@
 #include "kernel/sample/lcg.h"
 #include "kernel/types.h"
 
+#include "kernel/light/sample_reference.h"
+
 CCL_NAMESPACE_BEGIN
 
 /* Light info. */
@@ -465,7 +467,7 @@ ccl_device bool light_sample_from_intersection(KernelGlobals kg,
                                                const float3 N,
                                                const uint32_t path_flag,
                                                ccl_private LightSample *ccl_restrict ls,
-                                               ccl_private ReSTIRLightSampleReference *ref)
+                                               ccl_private LightSampleReference *ref)
 {
   const ccl_global KernelLight *klight = &kernel_data_fetch(lights, isect->prim);
   const LightType type = (LightType)klight->type;
@@ -474,6 +476,7 @@ ccl_device bool light_sample_from_intersection(KernelGlobals kg,
   ls->object = isect->object;
   ls->prim = isect->prim;
   ls->t = isect->t;
+
   ls->P = ray_P + ray_D * ls->t;
   ls->D = ray_D;
   ls->group = object_lightgroup(kg, ls->object);
@@ -482,8 +485,13 @@ ccl_device bool light_sample_from_intersection(KernelGlobals kg,
   ref->type = type;
   ref->object = ls->object;
   ref->prim = ls->prim;
-  ref->flags = RESTIR_LIGHT_REFERENCE_VALID | RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+  ref->flags = RESTIR_LIGHT_REFERENCE_VALID | RESTIR_LIGHT_REFERENCE_HAS_PARAM; // !!!: Ensure Correctness
 
+  // printf("\nlight_sample_from_intersection(); set reference:\n"
+  //       "ref->type=%u, ref->object=%u, ref->prim=%u, ref->flags=%u\n", 
+  //       ref->type, ref->object, ref->prim, ref->flags);
+
+  // TODO(Tri): Rest of the lights?
   if (type == LIGHT_SPOT) {
     if (!spot_light_sample_from_intersection(kg, klight, ray_P, ray_D, N, path_flag, ls, ref)) {
       return false;
@@ -539,6 +547,94 @@ ccl_device void light_normal_uv_from_position(KernelGlobals kg,
   }
 }
 
+
+/* Reference Sample production dispatch
+ * Fallback Conversion API: Available for paths where only an LS exists, 
+ * such as ordinary NEE samples.
+ */
+ccl_device_inline bool light_reference_from_sample(
+    KernelGlobals kg,
+    const ccl_private LightSample *ls,
+    const float time,
+    ccl_private LightSampleReference *reference)
+{
+  switch (ls->type) {
+    case LIGHT_POINT:
+      return restir_point_light_reference_from_sample(kg, ls, reference);
+
+    case LIGHT_SUN:
+      return restir_sun_light_reference_from_sample(kg, ls, reference);
+
+    case LIGHT_AREA:
+      return restir_area_light_reference_from_sample(kg, ls, reference);
+
+    case LIGHT_SPOT:
+      return restir_spot_light_reference_from_sample(kg, ls, reference);
+
+    case LIGHT_TRIANGLE:
+      return restir_triangle_light_reference_from_sample(kg, ls, time, reference);
+
+    /* Includes LIGHT_BACKGROUND. */
+    default:
+      *reference = restir_light_reference_empty();
+      return false;
+  }
+}
+
+/* Reference Sample consumption dispatch. */
+ccl_device_inline bool light_sample_from_reference(
+    KernelGlobals kg,
+    const ccl_private LightSampleReference *reference,
+    const float3 P,
+    const float3 N,
+    const float time,
+    const int shader_flags,
+    const uint32_t path_flag,
+    ccl_private LightSample *ls)
+{
+// printf("RECONSTRUCT DISPATCH: flags=%u type=%d prim=%d object=%d param=(%f,%f)\n",
+//        reference->flags,
+//        reference->type,
+//        reference->prim,
+//        reference->object,
+//        (double)reference->param.x,
+//        (double)reference->param.y);
+
+  if (!restir_light_reference_is_valid(reference)) {
+    *ls = {};
+    return false;
+  }
+
+  // TODO(Tri): Rest of the light types
+  switch (reference->type) {
+    case LIGHT_POINT:
+      return restir_point_light_sample_from_reference(
+          kg, reference, P, N, shader_flags, path_flag, ls);
+
+    case LIGHT_SUN:
+      return restir_sun_light_sample_from_reference(
+          kg, reference, P, N, shader_flags, path_flag, ls);
+
+    case LIGHT_AREA:
+      return restir_area_light_sample_from_reference(
+          kg, reference, P, N, shader_flags, path_flag, ls);
+
+    case LIGHT_SPOT:
+      return restir_spot_light_sample_from_reference(
+          kg, reference, P, N, shader_flags, path_flag, ls);
+
+    case LIGHT_TRIANGLE:
+      return restir_triangle_light_sample_from_reference(
+          kg, reference, P, time, ls);
+
+    /* Includes LIGHT_BACKGROUND. */
+    default:
+      *ls = {};
+      return false;
+  }
+}
+
+// TODO(Tri): Remove
 /*
  !!!: Dispatch `light_sample_from_uv()` can be removed since `light_sample_from_reference()` handles the job here.
  But internal helpers (such as triangle_light_sample_from_reference()) may remain useful:
@@ -555,7 +651,7 @@ ccl_device_inline void light_sample_from_uv(
     const ccl_private ShaderData *sd,
     const uint32_t path_flag,
     ccl_private LightSample *ls,
-    const float2 uv_) // !!!: This probably should be removed and an allocated `ReSTIRLightSampleReference` in the method's body should handle things...
+    const float2 uv_) // !!!: This probably should be removed and an allocated `LightSampleReference` in the method's body should handle things...
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_LIGHT_SETUP);
 

@@ -95,7 +95,7 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
     if (INTEGRATOR_STATE(state, path, bounce) == 1) {
       /* Reconstruct both LightSample and the ReSTIR reference */
       LightSample ls ccl_optional_struct_init;
-      ReSTIRLightSampleReference ref = restir_light_reference_empty();
+      LightSampleReference ref = restir_light_reference_empty();
 
       /* Construct LightSample and its persistent reference together. The reference
        * retains emitter-local parameters formerly stored in LightSample::u/v and is
