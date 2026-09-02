@@ -1,1 +1,2 @@
 Referenced by issue #163439, Anim: VSE Scrubbing Region playhead text is drawn outside the blue indicator
+Referenced by pull request #163448, Fix #163439: playhead text drawing outside indicator in VSE scrub UI
