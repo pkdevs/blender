@@ -3211,10 +3211,12 @@ static void convert_grease_pencil_drawing_material_stroke_fill_toggle_to_attribu
           layer_name_string.c_str(),
           frame_number);
     }
-    SpanAttributeWriter hide_stroke = attributes.convert_or_add_for_write_only_span<bool>(
-        hide_stroke_name, AttrDomain::Curve);
-    hide_stroke.span.copy_from(material_hides_stroke);
-    hide_stroke.finish();
+    if (SpanAttributeWriter hide_stroke = attributes.lookup_or_add_for_write_only_span<bool>(
+            hide_stroke_name, AttrDomain::Curve))
+    {
+      hide_stroke.span.copy_from(material_hides_stroke);
+      hide_stroke.finish();
+    }
   }
 
   /* Optimization: If no fills are used in this drawing, don't create the attribute. */
