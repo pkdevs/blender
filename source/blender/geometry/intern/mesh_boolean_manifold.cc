@@ -1736,27 +1736,29 @@ static Mesh *meshgl_to_mesh(MeshGL &mgl,
         return;
       }
       const GVArraySpan src_span = src;
-      bke::GSpanAttributeWriter dst = output_attrs.convert_or_add_for_write_only_span(
-          iter.name, iter.domain, iter.data_type);
-      switch (iter.domain) {
-        case bke::AttrDomain::Point: {
-          copy_attribute_using_map(src_span, out_to_in.ensure_vertex_map(), dst.span);
-          break;
+      if (bke::GSpanAttributeWriter dst = output_attrs.lookup_or_add_for_write_only_span(
+              iter.name, iter.domain, iter.data_type))
+      {
+        switch (iter.domain) {
+          case bke::AttrDomain::Point: {
+            copy_attribute_using_map(src_span, out_to_in.ensure_vertex_map(), dst.span);
+            break;
+          }
+          case bke::AttrDomain::Face: {
+            copy_attribute_using_map(src_span, out_to_in.ensure_face_map(), dst.span);
+            break;
+          }
+          case bke::AttrDomain::Edge: {
+            copy_attribute_using_map(src_span, out_to_in.ensure_edge_map(), dst.span);
+            break;
+          }
+          default: {
+            BLI_assert_unreachable();
+            break;
+          }
         }
-        case bke::AttrDomain::Face: {
-          copy_attribute_using_map(src_span, out_to_in.ensure_face_map(), dst.span);
-          break;
-        }
-        case bke::AttrDomain::Edge: {
-          copy_attribute_using_map(src_span, out_to_in.ensure_edge_map(), dst.span);
-          break;
-        }
-        default: {
-          BLI_assert_unreachable();
-          break;
-        }
+        dst.finish();
       }
-      dst.finish();
     });
 
     if (join_attrs.contains("material_index")) {
