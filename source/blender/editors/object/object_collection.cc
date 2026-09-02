@@ -641,7 +641,7 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
 
   /* If there is already a library for this collection importer, then an import has already
    * occurred. */
-  if (data->archive_library) {
+  if (data->runtime->archive_library) {
     BKE_reportf(op->reports,
                 RPT_WARNING,
                 "Collection '%s' has already been imported from '%s'",
@@ -714,7 +714,7 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
 
     BKE_main_id_tag_all(bmain, ID_TAG_PRE_EXISTING, false);
 
-    data->archive_library = external_archive_lib;
+    data->runtime->archive_library = external_archive_lib;
     collection->importer = data;
 
     DEG_id_tag_update(&collection->id, ID_RECALC_SYNC_TO_EVAL);

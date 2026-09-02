@@ -451,6 +451,12 @@ static void rna_CollectionLightLinking_update(Main *bmain, Scene * /*scene*/, Po
   DEG_relations_tag_update(bmain);
 }
 
+static PointerRNA rna_CollectionImport_archive_library_get(PointerRNA *ptr)
+{
+  const CollectionImport *data = reinterpret_cast<CollectionImport *>(ptr->data);
+  return RNA_pointer_create_discrete(ptr->owner_id, RNA_Library, data->runtime->archive_library);
+}
+
 static PointerRNA rna_CollectionImport_import_properties_get(PointerRNA *ptr)
 {
   const CollectionImport *data = reinterpret_cast<CollectionImport *>(ptr->data);
@@ -858,7 +864,10 @@ static void rna_def_collection_importer_data(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Collection Import Data", "Importer configured for the collection");
 
   prop = RNA_def_property(srna, "archive_library", PROP_POINTER, PROP_NONE);
+  RNA_def_property_pointer_sdna(prop, nullptr, "runtime->archive_library");
   RNA_def_property_struct_type(prop, "Library");
+  RNA_def_property_pointer_funcs(
+      prop, "rna_CollectionImport_archive_library_get", nullptr, nullptr, nullptr);
   RNA_def_property_ui_text(prop,
                            "Imported Library",
                            "Archive library owning all imported data from this collection "

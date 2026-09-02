@@ -20,6 +20,7 @@ namespace blender {
 
 namespace bke {
 struct CollectionRuntime;
+struct CollectionImportRuntime;
 }  // namespace bke
 
 struct Collection;
@@ -140,14 +141,13 @@ struct CollectionImport {
   /** Identifier that matches the #FileHandlerType.idname. */
   char fh_idname[64] = "";
 
-  /** The archive library this importer is associated with. Will be null when an import has not
-   * occurred yet or has since been cleared. */
-  Library *archive_library = nullptr;
-
   IDProperty *import_properties = nullptr;
   uint32_t flag = 0;
 
   uint32_t _pad0 = {};
+
+  /* Keep last. */
+  bke::CollectionImportRuntime *runtime = nullptr;
 };
 
 struct CollectionExport {
