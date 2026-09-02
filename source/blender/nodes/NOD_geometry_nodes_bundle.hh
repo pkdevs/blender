@@ -404,7 +404,7 @@ template<typename T, typename Fn> inline void to_stored_type(T &&value, Fn &&fn)
     fn(BundleItemValue{BundleItemInternalValue{ImplicitSharingPtr{sharing_info}}});
   }
   else if (const bke::bNodeSocketType *socket_type = socket_type_info_by_static_type<DecayT>()) {
-    auto value_variant = bke::SocketValueVariant::From(std::forward<T>(value));
+    auto value_variant = bke::SocketValueVariant::from(std::forward<T>(value));
     fn(BundleItemValue{BundleItemSocketValue{socket_type, value_variant}});
   }
   else {

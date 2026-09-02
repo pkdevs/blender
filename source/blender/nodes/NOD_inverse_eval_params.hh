@@ -55,7 +55,7 @@ class InverseEvalParams {
   template<typename T> void set_input(const UString identifier, T value)
   {
     const bNodeSocket &socket = *node.input_by_identifier(identifier);
-    updated_socket_values_.add(&socket, bke::SocketValueVariant::From(std::move(value)));
+    updated_socket_values_.add(&socket, bke::SocketValueVariant::from(std::move(value)));
   }
 };
 

@@ -85,9 +85,9 @@ class SocketValueVariant {
     requires(std::is_trivial_v<std::decay_t<T>> || is_same_any_v<std::decay_t<T>, std::string>);
 
   /** Construct a #SocketValueVariant at the given pointer from the given value. */
-  template<typename T> static SocketValueVariant &ConstructIn(void *ptr, T &&value);
+  template<typename T> static SocketValueVariant &construct_in(void *ptr, T &&value);
 
-  template<typename T> static SocketValueVariant From(T &&value);
+  template<typename T> static SocketValueVariant from(T &&value);
 
   template<typename T, typename... Args> T &emplace(Args &&...args);
 
@@ -140,14 +140,14 @@ inline SocketValueVariant::SocketValueVariant(T &&value)
 }
 
 template<typename T>
-inline SocketValueVariant &SocketValueVariant::ConstructIn(void *ptr, T &&value)
+inline SocketValueVariant &SocketValueVariant::construct_in(void *ptr, T &&value)
 {
   SocketValueVariant *value_variant = new (ptr) SocketValueVariant();
   value_variant->emplace<std::decay_t<T>>(std::forward<T>(value));
   return *value_variant;
 }
 
-template<typename T> inline SocketValueVariant SocketValueVariant::From(T &&value)
+template<typename T> inline SocketValueVariant SocketValueVariant::from(T &&value)
 {
   SocketValueVariant value_variant;
   value_variant.emplace<std::decay_t<T>>(std::forward<T>(value));

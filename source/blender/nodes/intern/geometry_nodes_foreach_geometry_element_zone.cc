@@ -508,7 +508,7 @@ class LazyFunctionForForeachGeometryElementZone : public LazyFunction {
           threading::parallel_for(
               element_geometries->index_range(), 256, [&](const IndexRange range) {
                 for (const int i : range) {
-                  (*component_info.element_geometries)[i] = SocketValueVariant::From(
+                  (*component_info.element_geometries)[i] = SocketValueVariant::from(
                       (*element_geometries)[i]);
                 }
               });
@@ -678,7 +678,7 @@ class LazyFunctionForForeachGeometryElementZone : public LazyFunction {
 
     const bNodeSocket &element_geometry_bsocket = zone_.input_node()->output_socket(1);
 
-    static const SocketValueVariant empty_geometry_value = SocketValueVariant::From(GeometrySet());
+    static const SocketValueVariant empty_geometry_value = SocketValueVariant::from(GeometrySet());
     for (const ForeachElementComponent &component_info : eval_storage.components) {
       for (const int i : component_info.body_nodes_range.index_range()) {
         const int body_i = component_info.body_nodes_range[i];
@@ -923,11 +923,11 @@ void LazyFunctionForReduceForeachGeometryElement::handle_main_items_and_geometry
         *base_cpp_type,
         make_anonymous_attribute_socket_inspection_string(
             parent_.output_bnode_.output_socket(parent_.indices_.main.bsocket_outer[item_i])));
-    params.set_output(1 + item_i, SocketValueVariant::From(std::move(attribute_field)));
+    params.set_output(1 + item_i, SocketValueVariant::from(std::move(attribute_field)));
   }
 
   /* Output the original geometry with potentially additional attributes. */
-  params.set_output(main_geometry_output, SocketValueVariant::From(std::move(output_geometry)));
+  params.set_output(main_geometry_output, SocketValueVariant::from(std::move(output_geometry)));
 }
 
 void LazyFunctionForReduceForeachGeometryElement::handle_generation_items(
@@ -1175,7 +1175,7 @@ void LazyFunctionForReduceForeachGeometryElement::handle_generation_items_group(
 
   /* Output the joined geometry. */
   params.set_output(parent_.indices_.generation.lf_outer[geometry_item_i],
-                    SocketValueVariant::From(std::move(joined_geometry)));
+                    SocketValueVariant::from(std::move(joined_geometry)));
 
   /* Output the anonymous attribute fields. */
   for (const int local_item_i : generation_items_range.index_range()) {
@@ -1191,7 +1191,7 @@ void LazyFunctionForReduceForeachGeometryElement::handle_generation_items_group(
         make_anonymous_attribute_socket_inspection_string(
             parent_.output_bnode_.output_socket(2 + node_storage.main_items.items_num + item_i)));
     params.set_output(parent_.indices_.generation.lf_outer[item_i],
-                      bke::SocketValueVariant::From(std::move(attribute_field)));
+                      bke::SocketValueVariant::from(std::move(attribute_field)));
   }
 }
 

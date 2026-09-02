@@ -131,8 +131,8 @@ static void node_geo_exec(GeoNodeExecParams params)
         [](int value, int min, int max) { return std::clamp(value, min, max); },
         mf::build::exec_presets::SomeSpanOrSingle<0>());
     const int domain_size = component->attribute_domain_size(domain);
-    bke::SocketValueVariant min_value = bke::SocketValueVariant::From(0);
-    bke::SocketValueVariant max_value = bke::SocketValueVariant::From(domain_size - 1);
+    bke::SocketValueVariant min_value = bke::SocketValueVariant::from(0);
+    bke::SocketValueVariant max_value = bke::SocketValueVariant::from(domain_size - 1);
     if (!execute_multi_function_on_value_variant(
             clamp_fn,
             {&index_value_variant_copy, &min_value, &max_value},

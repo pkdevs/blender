@@ -1766,7 +1766,7 @@ static std::optional<SocketValueVariant> deserialize_value_list(
     }
     nodes::GListPtr list = nodes::GList::create(
         cpp_type, nodes::GList::SingleData::ForValue(GPointer{cpp_type, &*value}), num_items);
-    return SocketValueVariant::From(std::move(list));
+    return SocketValueVariant::from(std::move(list));
   }
   const ArrayValue *io_values = io_item.lookup_array("data");
   if (!io_values || io_values->elements().size() != num_items) {
@@ -1785,7 +1785,7 @@ static std::optional<SocketValueVariant> deserialize_value_list(
     }
     values_span[i] = std::move(*value);
   }
-  return SocketValueVariant::From(nodes::GList::from_garray(std::move(values)));
+  return SocketValueVariant::from(nodes::GList::from_garray(std::move(values)));
 }
 
 static void serialize_socket_value_variant(const SocketValueVariant &value_variant,
@@ -1842,7 +1842,7 @@ static std::optional<SocketValueVariant> deserialize_bake_item(const DictionaryV
       return {};
     }
     GeometrySet geometry = load_geometry(*io_geometry, blob_reader, blob_sharing);
-    return SocketValueVariant::From(std::move(geometry));
+    return SocketValueVariant::from(std::move(geometry));
   }
   if (*state_item_type == StringRef("ATTRIBUTE")) {
     const DictionaryValue *io_attribute = &io_item;
@@ -1860,11 +1860,11 @@ static std::optional<SocketValueVariant> deserialize_bake_item(const DictionaryV
       }
     }
     if (field_cpp_type) {
-      return SocketValueVariant::From(AttributeFieldInput::from(*name, *field_cpp_type));
+      return SocketValueVariant::from(AttributeFieldInput::from(*name, *field_cpp_type));
     }
     /* The data type hasn't been written to the bake, it will be derived later from the attribute
      * type. */
-    return SocketValueVariant::From(
+    return SocketValueVariant::from(
         fn::GField::from_input<DeferredTypeAttributeFieldInput>(*name));
   }
 #ifdef WITH_OPENVDB
@@ -1897,7 +1897,7 @@ static std::optional<SocketValueVariant> deserialize_bake_item(const DictionaryV
     }
     std::shared_ptr<openvdb::GridBase> vdb_grid = std::move((*vdb_grids)[0]);
     GVolumeGrid grid{std::move(vdb_grid)};
-    return SocketValueVariant::From(std::move(grid));
+    return SocketValueVariant::from(std::move(grid));
   }
 #endif
   if (*state_item_type == StringRef("STRING")) {
@@ -1907,7 +1907,7 @@ static std::optional<SocketValueVariant> deserialize_bake_item(const DictionaryV
     }
     if (io_data->get()->type() == io::serialize::eValueType::String) {
       const io::serialize::StringValue &io_string = *io_data->get()->as_string_value();
-      return SocketValueVariant::From(std::string(io_string.value()));
+      return SocketValueVariant::from(std::string(io_string.value()));
     }
     if (const io::serialize::DictionaryValue *io_string = io_data->get()->as_dictionary_value()) {
       const std::optional<int64_t> size = io_string->lookup_int("size");
@@ -1919,7 +1919,7 @@ static std::optional<SocketValueVariant> deserialize_bake_item(const DictionaryV
       if (!read_blob_raw_bytes(blob_reader, *io_string, *size, str.data())) {
         return {};
       }
-      return SocketValueVariant::From(std::move(str));
+      return SocketValueVariant::from(std::move(str));
     }
   }
   if (*state_item_type == StringRef("BUNDLE")) {
@@ -1932,7 +1932,7 @@ static std::optional<SocketValueVariant> deserialize_bake_item(const DictionaryV
     if (!deserialize_bundle_items(*io_bundle_items, blob_reader, blob_sharing, bundle)) {
       return {};
     }
-    return SocketValueVariant::From(std::move(bundle_ptr));
+    return SocketValueVariant::from(std::move(bundle_ptr));
   }
   if (*state_item_type == StringRef("LIST")) {
     const std::optional<StringRefNull> io_list_item_type = io_item.lookup_str("item_type");
@@ -1964,7 +1964,7 @@ static std::optional<SocketValueVariant> deserialize_bake_item(const DictionaryV
         }
         values[i] = std::move(*value);
       }
-      return SocketValueVariant::From(nodes::GList::from_container(values));
+      return SocketValueVariant::from(nodes::GList::from_container(values));
     }
     if (io_list_item_type == "GEOMETRY") {
       return deserialize_value_list<GeometrySet>(io_item, *num_items, blob_reader, blob_sharing);
@@ -1988,7 +1988,7 @@ static std::optional<SocketValueVariant> deserialize_bake_item(const DictionaryV
         }
         auto list = nodes::GList::create(
             *cpp_type, nodes::GList::SingleData::ForValue(GPointer{cpp_type, buffer}), *num_items);
-        return SocketValueVariant::From(std::move(list));
+        return SocketValueVariant::from(std::move(list));
       }
       if (const io::serialize::DictionaryValue *io_data = io_item.lookup_dict("data")) {
         GArray<> buffer(*cpp_type, *num_items);
@@ -1997,7 +1997,7 @@ static std::optional<SocketValueVariant> deserialize_bake_item(const DictionaryV
         {
           return {};
         }
-        return SocketValueVariant::From(nodes::GList::from_garray(std::move(buffer)));
+        return SocketValueVariant::from(nodes::GList::from_garray(std::move(buffer)));
       }
     }
   }

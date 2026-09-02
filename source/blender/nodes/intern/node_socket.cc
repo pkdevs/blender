@@ -1168,9 +1168,9 @@ static bke::bNodeSocketType *make_socket_type_bundle()
     new (r_value) nodes::BundlePtr();
   };
   socktype->get_geometry_nodes_cpp_value = [](const void * /*socket_value*/) {
-    return SocketValueVariant::From(nodes::BundlePtr());
+    return SocketValueVariant::from(nodes::BundlePtr());
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(nodes::BundlePtr());
+  static SocketValueVariant default_value = SocketValueVariant::from(nodes::BundlePtr());
   socktype->geometry_nodes_default_value = &default_value;
   socktype->make_geometry_nodes_input_srna = [](const bNodeTree & /*tree*/,
                                                 StructRNA &srna,
@@ -1199,9 +1199,9 @@ static bke::bNodeSocketType *make_socket_type_closure()
     new (r_value) nodes::ClosurePtr();
   };
   socktype->get_geometry_nodes_cpp_value = [](const void * /*socket_value*/) {
-    return SocketValueVariant::From(nodes::ClosurePtr());
+    return SocketValueVariant::from(nodes::ClosurePtr());
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(nodes::ClosurePtr());
+  static SocketValueVariant default_value = SocketValueVariant::from(nodes::ClosurePtr());
   socktype->geometry_nodes_default_value = &default_value;
   socktype->make_geometry_nodes_input_srna = [](const bNodeTree & /*tree*/,
                                                 StructRNA &srna,
@@ -1715,9 +1715,9 @@ static bke::bNodeSocketType *make_socket_type_menu()
   socktype->get_geometry_nodes_cpp_value = [](const void *socket_value) {
     const nodes::MenuValue value{
         (static_cast<bNodeSocketValueMenu *>(const_cast<void *>(socket_value)))->value};
-    return SocketValueVariant::From(value);
+    return SocketValueVariant::from(value);
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(nodes::MenuValue());
+  static SocketValueVariant default_value = SocketValueVariant::from(nodes::MenuValue());
   socktype->geometry_nodes_default_value = &default_value;
   socktype->make_geometry_nodes_input_srna = [](const bNodeTree & /*tree*/,
                                                 StructRNA &srna,
@@ -1788,9 +1788,9 @@ static bke::bNodeSocketType *make_socket_type_object()
   };
   socktype->get_geometry_nodes_cpp_value = [](const void *socket_value) {
     Object *object = static_cast<const bNodeSocketValueObject *>(socket_value)->value;
-    return SocketValueVariant::From(object);
+    return SocketValueVariant::from(object);
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(
+  static SocketValueVariant default_value = SocketValueVariant::from(
       static_cast<Object *>(nullptr));
   socktype->geometry_nodes_default_value = &default_value;
   socktype->make_geometry_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -1853,9 +1853,9 @@ static bke::bNodeSocketType *make_socket_type_geometry()
     new (r_value) bke::GeometrySet();
   };
   socktype->get_geometry_nodes_cpp_value = [](const void * /*socket_value*/) {
-    return SocketValueVariant::From(bke::GeometrySet());
+    return SocketValueVariant::from(bke::GeometrySet());
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(bke::GeometrySet());
+  static SocketValueVariant default_value = SocketValueVariant::from(bke::GeometrySet());
   socktype->geometry_nodes_default_value = &default_value;
   socktype->make_geometry_nodes_input_srna = [](const bNodeTree & /*tree*/,
                                                 StructRNA &srna,
@@ -1886,9 +1886,9 @@ static bke::bNodeSocketType *make_socket_type_collection()
   };
   socktype->get_geometry_nodes_cpp_value = [](const void *socket_value) {
     Collection *collection = static_cast<const bNodeSocketValueCollection *>(socket_value)->value;
-    return SocketValueVariant::From(collection);
+    return SocketValueVariant::from(collection);
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(
+  static SocketValueVariant default_value = SocketValueVariant::from(
       static_cast<Collection *>(nullptr));
   socktype->geometry_nodes_default_value = &default_value;
   socktype->make_geometry_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -1930,9 +1930,9 @@ static bke::bNodeSocketType *make_socket_type_texture()
   };
   socktype->get_geometry_nodes_cpp_value = [](const void *socket_value) {
     Tex *texture = static_cast<const bNodeSocketValueTexture *>(socket_value)->value;
-    return SocketValueVariant::From(texture);
+    return SocketValueVariant::from(texture);
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(static_cast<Tex *>(nullptr));
+  static SocketValueVariant default_value = SocketValueVariant::from(static_cast<Tex *>(nullptr));
   socktype->geometry_nodes_default_value = &default_value;
   socktype->make_geometry_nodes_input_srna = [](const bNodeTree & /*tree*/,
                                                 StructRNA &srna,
@@ -1968,9 +1968,9 @@ static bke::bNodeSocketType *make_socket_type_image()
   };
   socktype->get_geometry_nodes_cpp_value = [](const void *socket_value) {
     Image *image = static_cast<const bNodeSocketValueImage *>(socket_value)->value;
-    return SocketValueVariant::From(image);
+    return SocketValueVariant::from(image);
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(
+  static SocketValueVariant default_value = SocketValueVariant::from(
       static_cast<Image *>(nullptr));
   socktype->geometry_nodes_default_value = &default_value;
   socktype->make_geometry_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -2012,9 +2012,9 @@ static bke::bNodeSocketType *make_socket_type_material()
   };
   socktype->get_geometry_nodes_cpp_value = [](const void *socket_value) {
     Material *material = static_cast<const bNodeSocketValueMaterial *>(socket_value)->value;
-    return SocketValueVariant::From(material);
+    return SocketValueVariant::from(material);
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(
+  static SocketValueVariant default_value = SocketValueVariant::from(
       static_cast<Material *>(nullptr));
   socktype->geometry_nodes_default_value = &default_value;
   socktype->make_geometry_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -2056,9 +2056,9 @@ static bke::bNodeSocketType *make_socket_type_font()
   };
   socktype->get_geometry_nodes_cpp_value = [](const void *socket_value) {
     VFont *font = static_cast<const bNodeSocketValueFont *>(socket_value)->value;
-    return SocketValueVariant::From(font);
+    return SocketValueVariant::from(font);
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(
+  static SocketValueVariant default_value = SocketValueVariant::from(
       static_cast<VFont *>(nullptr));
   socktype->geometry_nodes_default_value = &default_value;
   socktype->make_geometry_nodes_input_srna = [](const bNodeTree & /*tree*/,
@@ -2121,9 +2121,9 @@ static bke::bNodeSocketType *make_socket_type_scene()
   };
   socktype->get_geometry_nodes_cpp_value = [](const void *socket_value) {
     Scene *scene = static_cast<const bNodeSocketValueScene *>(socket_value)->value;
-    return SocketValueVariant::From(scene);
+    return SocketValueVariant::from(scene);
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(
+  static SocketValueVariant default_value = SocketValueVariant::from(
       static_cast<Scene *>(nullptr));
   socktype->geometry_nodes_default_value = &default_value;
   return socktype;
@@ -2139,9 +2139,9 @@ static bke::bNodeSocketType *make_socket_type_text()
   };
   socktype->get_geometry_nodes_cpp_value = [](const void *socket_value) {
     Text *text = static_cast<const bNodeSocketValueText *>(socket_value)->value;
-    return SocketValueVariant::From(text);
+    return SocketValueVariant::from(text);
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(static_cast<Text *>(nullptr));
+  static SocketValueVariant default_value = SocketValueVariant::from(static_cast<Text *>(nullptr));
   socktype->geometry_nodes_default_value = &default_value;
   return socktype;
 }
@@ -2156,9 +2156,9 @@ static bke::bNodeSocketType *make_socket_type_mask()
   };
   socktype->get_geometry_nodes_cpp_value = [](const void *socket_value) {
     Mask *mask = static_cast<const bNodeSocketValueMask *>(socket_value)->value;
-    return SocketValueVariant::From(mask);
+    return SocketValueVariant::from(mask);
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(static_cast<Mask *>(nullptr));
+  static SocketValueVariant default_value = SocketValueVariant::from(static_cast<Mask *>(nullptr));
   socktype->geometry_nodes_default_value = &default_value;
   return socktype;
 }
@@ -2173,9 +2173,9 @@ static bke::bNodeSocketType *make_socket_type_sound()
   };
   socktype->get_geometry_nodes_cpp_value = [](const void *socket_value) {
     bSound *sound = static_cast<const bNodeSocketValueSound *>(socket_value)->value;
-    return SocketValueVariant::From(sound);
+    return SocketValueVariant::from(sound);
   };
-  static SocketValueVariant default_value = SocketValueVariant::From(
+  static SocketValueVariant default_value = SocketValueVariant::from(
       static_cast<bSound *>(nullptr));
   socktype->geometry_nodes_default_value = &default_value;
   socktype->make_geometry_nodes_input_srna = [](const bNodeTree & /*tree*/,

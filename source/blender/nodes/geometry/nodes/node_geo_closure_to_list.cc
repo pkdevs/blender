@@ -174,7 +174,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     for (const int64_t list_i : range) {
       /* Create input value. */
       BLI_assert(list_i < std::numeric_limits<int>::max());
-      closure_params.inputs[0].value = bke::SocketValueVariant::From(int(list_i));
+      closure_params.inputs[0].value = bke::SocketValueVariant::from(int(list_i));
 
       /* Set output locations. */
       for (const int required_i : required_items.index_range()) {

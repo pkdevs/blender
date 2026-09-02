@@ -407,7 +407,7 @@ class LazyFunctionForMenuSwitchNode : public LazyFunction {
     fn::FieldOperationPtr operation = FieldOperation::from(std::move(multi_function),
                                                            std::move(item_fields));
 
-    params.set_output(0, SocketValueVariant::From(GField(operation, 0)));
+    params.set_output(0, SocketValueVariant::from(GField(operation, 0)));
   }
 };
 

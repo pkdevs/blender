@@ -286,7 +286,7 @@ class LazyFunctionForGeometryNode : public LazyFunction {
     std::string socket_inspection_name = make_anonymous_attribute_socket_inspection_string(socket);
 
     void *r_value = params.get_output_data_ptr(lf_index);
-    SocketValueVariant::ConstructIn(
+    SocketValueVariant::construct_in(
         r_value,
         GField::from_input<AttributeFieldInput>(std::move(attribute_name),
                                                 *socket.typeinfo->base_cpp_type,
@@ -489,7 +489,7 @@ static void execute_multi_function_on_value_variant__field(
     if (output_values[i] == nullptr) {
       continue;
     }
-    *output_values[i] = bke::SocketValueVariant::From(GField{operation, i});
+    *output_values[i] = bke::SocketValueVariant::from(GField{operation, i});
   }
 }
 
@@ -837,7 +837,7 @@ class LazyFunctionForImplicitSelfObject : public LazyFunction {
   {
     const GeoNodesUserData &user_data = *static_cast<const GeoNodesUserData *>(context.user_data);
     const Object *self_object = user_data.call_data->self_object();
-    params.set_output(0, SocketValueVariant::From(const_cast<Object *>(self_object)));
+    params.set_output(0, SocketValueVariant::from(const_cast<Object *>(self_object)));
   }
 };
 
@@ -983,7 +983,7 @@ class LazyFunctionForGizmoNode : public LazyFunction {
       edit_data.gizmo_edit_hints_ = std::make_unique<bke::GizmoEditHints>();
       edit_data.gizmo_edit_hints_->gizmo_transforms.add(
           {user_data.compute_context->hash(), bnode_.identifier}, float4x4::identity());
-      params.set_output(0, SocketValueVariant::From(std::move(geometry)));
+      params.set_output(0, SocketValueVariant::from(std::move(geometry)));
     }
 
     /* Request all inputs so that their values can be logged. */

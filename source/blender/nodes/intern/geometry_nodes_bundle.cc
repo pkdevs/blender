@@ -126,7 +126,7 @@ static BundleItemValue create_nested_bundle_item()
   static const bke::bNodeSocketType *bundle_socket_type = bke::node_socket_type_find_static(
       SOCK_BUNDLE);
   return {
-      BundleItemSocketValue{bundle_socket_type, bke::SocketValueVariant::From(Bundle::create())}};
+      BundleItemSocketValue{bundle_socket_type, bke::SocketValueVariant::from(Bundle::create())}};
 }
 
 void Bundle::add_path_override(const Span<BundleKey> path, const BundleItemValue &value)

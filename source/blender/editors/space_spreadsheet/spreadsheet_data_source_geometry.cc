@@ -1098,7 +1098,7 @@ static bke::SocketValueVariant lookup_bundle_path(const nodes::BundlePtr &bundle
     return {};
   }
   if (path.bundle_path_num == 0) {
-    return bke::SocketValueVariant::From(bundle);
+    return bke::SocketValueVariant::from(bundle);
   }
   Vector<nodes::BundleKey> keys;
   for (const int i : IndexRange(path.bundle_path_num)) {
@@ -1128,34 +1128,34 @@ bke::SocketValueVariant root_display_data_get(const SpaceSpreadsheet *sspreadshe
            * is to display the data directly from the bmesh without a conversion, which can be
            * implemented a bit later. */
           BM_mesh_bm_to_me_for_eval(*em->bm, *new_mesh, nullptr);
-          return bke::SocketValueVariant::From(bke::GeometrySet::from_mesh(new_mesh));
+          return bke::SocketValueVariant::from(bke::GeometrySet::from_mesh(new_mesh));
         }
       }
       else {
-        return bke::SocketValueVariant::From(bke::GeometrySet::from_mesh(
+        return bke::SocketValueVariant::from(bke::GeometrySet::from_mesh(
             const_cast<Mesh *>(mesh), bke::GeometryOwnershipType::ReadOnly));
       }
     }
     else if (object_orig->type == OB_POINTCLOUD) {
       const PointCloud *pointcloud = id_cast<const PointCloud *>(object_orig->data);
-      return bke::SocketValueVariant::From(bke::GeometrySet::from_pointcloud(
+      return bke::SocketValueVariant::from(bke::GeometrySet::from_pointcloud(
           const_cast<PointCloud *>(pointcloud), bke::GeometryOwnershipType::ReadOnly));
     }
     else if (object_orig->type == OB_CURVES) {
       const Curves &curves_id = *id_cast<const Curves *>(object_orig->data);
-      return bke::SocketValueVariant::From(bke::GeometrySet::from_curves(
+      return bke::SocketValueVariant::from(bke::GeometrySet::from_curves(
           &const_cast<Curves &>(curves_id), bke::GeometryOwnershipType::ReadOnly));
     }
     else if (object_orig->type == OB_GREASE_PENCIL) {
       const GreasePencil &grease_pencil = *id_cast<const GreasePencil *>(object_orig->data);
-      return bke::SocketValueVariant::From(bke::GeometrySet::from_grease_pencil(
+      return bke::SocketValueVariant::from(bke::GeometrySet::from_grease_pencil(
           &const_cast<GreasePencil &>(grease_pencil), bke::GeometryOwnershipType::ReadOnly));
     }
     return {};
   }
 
   if (sspreadsheet->geometry_id.viewer_path.path.is_single()) {
-    return bke::SocketValueVariant::From(bke::object_get_evaluated_geometry_set(*object_eval));
+    return bke::SocketValueVariant::from(bke::object_get_evaluated_geometry_set(*object_eval));
   }
 
   const nodes::eval_log::ViewerNodeLog *viewer_log =
