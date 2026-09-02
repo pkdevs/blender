@@ -133,13 +133,15 @@ void interpolate_corner_attributes(bke::MutableAttributeAccessor output_attrs,
       output_attrs.add(iter.name, iter.domain, iter.data_type, init);
       return;
     }
-
-    writers.append(
-        output_attrs.convert_or_add_for_write_span(iter.name, iter.domain, iter.data_type));
-    readers.append(input_attrs.lookup_or_default(iter.name, iter.domain, iter.data_type));
-    srcs.append(*readers.last());
-    dsts.append(writers.last().span);
-    is_normal_attribute.append(iter.name == "custom_normal");
+    if (bke::GSpanAttributeWriter writer = output_attrs.lookup_or_add_for_write_span(
+            iter.name, iter.domain, iter.data_type))
+    {
+      writers.append(std::move(writer));
+      readers.append(input_attrs.lookup_or_default(iter.name, iter.domain, iter.data_type));
+      srcs.append(*readers.last());
+      dsts.append(writers.last().span);
+      is_normal_attribute.append(iter.name == "custom_normal");
+    }
   });
 
   if (writers.is_empty()) {
