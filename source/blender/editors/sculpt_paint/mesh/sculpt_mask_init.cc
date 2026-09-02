@@ -59,9 +59,7 @@ void write_mask_mesh(const Depsgraph &depsgraph,
 
   bke::SpanAttributeWriter mask = attributes.convert_or_add_for_write_span<float>(
       ".sculpt_mask", bke::AttrDomain::Point);
-  if (!mask) {
-    return;
-  }
+
   threading::EnumerableThreadSpecific<Vector<int>> all_index_data;
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
