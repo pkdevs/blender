@@ -11,6 +11,8 @@
 #include <OpenImageIO/typedesc.h>
 #include <OpenImageIO/ustring.h>
 
+#include "util/types_spherical_harmonics.h"
+
 CCL_NAMESPACE_BEGIN
 
 using OIIO::ParamValue;
@@ -37,6 +39,9 @@ static constexpr TypeDesc TypeQuaternion(TypeDesc::FLOAT,
                                          4);
 static_assert(TypeQuaternion != TypeFloat4);
 static_assert(TypeQuaternion != TypeRGBA);
+static constexpr TypeDesc TypePackedSphericalHarmonics(TypeDesc::INT8,
+                                                       TypeDesc::VEC3,
+                                                       PackedSphericalHarmonics::MAX_COEFFICIENTS);
 
 using OIIO::ustring;
 using OIIO::ustringhash;
