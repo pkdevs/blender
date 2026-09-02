@@ -1195,25 +1195,29 @@ static void execute_instances_tasks(
       continue;
     }
 
-    bke::GSpanAttributeWriter write_attribute = dst_attributes.convert_or_add_for_write_only_span(
-        name, bke::AttrDomain::Instance, type);
-    GMutableSpan dst_span = write_attribute.span;
-    const CPPType &cpp_type = dst_span.type();
-    for (const int component_index : src_components.index_range()) {
-      const Span<std::optional<GVArray>> src_attributes = attributes_by_component[component_index];
-      const Span<const void *> fallbacks = attribute_fallback[component_index].array;
-      const IndexRange dst_range = offsets[component_index];
+    if (bke::GSpanAttributeWriter write_attribute =
+            dst_attributes.lookup_or_add_for_write_only_span(
+                name, bke::AttrDomain::Instance, type))
+    {
+      GMutableSpan dst_span = write_attribute.span;
+      const CPPType &cpp_type = dst_span.type();
+      for (const int component_index : src_components.index_range()) {
+        const Span<std::optional<GVArray>> src_attributes =
+            attributes_by_component[component_index];
+        const Span<const void *> fallbacks = attribute_fallback[component_index].array;
+        const IndexRange dst_range = offsets[component_index];
 
-      if (src_attributes[attribute_index].has_value()) {
-        threaded_copy(*src_attributes[attribute_index], dst_span.slice(dst_range));
-      }
-      else {
-        const void *fallback = fallbacks[attribute_index] ? fallbacks[attribute_index] :
-                                                            cpp_type.default_value();
-        threaded_fill({cpp_type, fallback}, dst_span.slice(dst_range));
-      }
+        if (src_attributes[attribute_index].has_value()) {
+          threaded_copy(*src_attributes[attribute_index], dst_span.slice(dst_range));
+        }
+        else {
+          const void *fallback = fallbacks[attribute_index] ? fallbacks[attribute_index] :
+                                                              cpp_type.default_value();
+          threaded_fill({cpp_type, fallback}, dst_span.slice(dst_range));
+        }
 
-      write_attribute.finish();
+        write_attribute.finish();
+      }
     }
   }
 
@@ -1449,8 +1453,11 @@ static void execute_realize_pointcloud_tasks(const RealizeInstancesOptions &opti
       dst_attribute_writers.append({});
       continue;
     }
-    dst_attribute_writers.append(dst_attributes.convert_or_add_for_write_only_span(
-        name, bke::AttrDomain::Point, data_type));
+    if (GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+            name, bke::AttrDomain::Point, data_type))
+    {
+      dst_attribute_writers.append(std::move(dst));
+    }
   }
 
   /* Actually execute all tasks. */
@@ -2110,8 +2117,11 @@ static void execute_realize_mesh_tasks(const RealizeInstancesOptions &options,
       dst_attribute_writers.append({});
       continue;
     }
-    dst_attribute_writers.append(
-        dst_attributes.convert_or_add_for_write_only_span(name, domain, data_type));
+    if (GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+            name, domain, data_type))
+    {
+      dst_attribute_writers.append(std::move(dst));
+    }
   }
 
   /* Actually execute all tasks. */
@@ -2549,8 +2559,11 @@ static void execute_realize_curve_tasks(const RealizeInstancesOptions &options,
       dst_attribute_writers.append({});
       continue;
     }
-    dst_attribute_writers.append(
-        dst_attributes.convert_or_add_for_write_only_span(name, domain, data_type));
+    if (GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+            name, domain, data_type))
+    {
+      dst_attribute_writers.append(std::move(dst));
+    }
   }
 
   /* Prepare handle position attributes if necessary. */
@@ -2821,8 +2834,11 @@ static void execute_realize_grease_pencil_tasks(
       dst_attribute_writers.append({});
       continue;
     }
-    dst_attribute_writers.append(dst_attributes.convert_or_add_for_write_only_span(
-        name, bke::AttrDomain::Layer, data_type));
+    if (GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
+            name, bke::AttrDomain::Layer, data_type))
+    {
+      dst_attribute_writers.append(std::move(dst));
+    }
   }
 
   /* Actually execute all tasks. */
