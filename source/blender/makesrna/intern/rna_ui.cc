@@ -1822,7 +1822,7 @@ static void rna_def_ui_layout(BlenderRNA *brna)
                        ui::Layout::PROPERTY_SPLIT_FACTOR,
                        ui::Layout::PROPERTY_SPLIT_FACTOR,
                        "Property Split Factor",
-                       "Factor used by the layout system when porperty split is enabled",
+                       "Factor used by the layout system when property split is enabled",
                        ui::Layout::PROPERTY_SPLIT_FACTOR,
                        ui::Layout::PROPERTY_SPLIT_FACTOR);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
