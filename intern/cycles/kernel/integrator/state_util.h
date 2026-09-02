@@ -366,7 +366,7 @@ ccl_device_forceinline void integrator_state_write_mnee(IntegratorState state,
   INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 0, t) = ls->P.x;
   INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 0, u) = ls->P.y;
   INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 0, v) = ls->P.z;
-  /* When the integrate_surface_direct_light() reads the MNEE state it should read mnee_wo as the
+  /* When the integrate_surface_nee() reads the MNEE state it should read mnee_wo as the
    * light sample direction. */
   INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 1, t) = mnee_wo.x;
   INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 1, u) = mnee_wo.y;

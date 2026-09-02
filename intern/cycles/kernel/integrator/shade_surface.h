@@ -223,7 +223,7 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
     }
   }
   else {
-    film_write_surface_emission( // ???: GI or basically for emitters?
+    film_write_surface_emission( // ???: GI or basically for emitters? 
         kg, state, L, mis_weight, render_buffer, object_lightgroup(kg, sd->object));
   }
 }
@@ -276,7 +276,6 @@ ccl_device_forceinline float radiance_eval(KernelGlobals kg,
     geometry_term = ls->jacobian_solid_angle_to_area();
   }
 
-  // bsdf_eval_mul(radiance, light_eval * geometry_term); // !!!: DI Blackout
   const Spectrum scale = light_eval * geometry_term;
   bsdf_eval_mul(radiance, scale);
 
@@ -421,7 +420,7 @@ integrate_direct_light_shadow_init_common(KernelGlobals kg, // !!!: integrate_di
         state, path, bounce);
   }
 
-  // !!!: Not needed since we've got `INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, visibility) = INTEGRATOR_STATE(state, path, visibility);` in integrate_surface_direct_light()
+  // !!!: Not needed since we've got `INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, visibility) = INTEGRATOR_STATE(state, path, visibility);` in integrate_surface_nee()
   // uint32_t shadow_flag = INTEGRATOR_STATE(state, path, flag);
   // if (light_is_direct_illumination(state)) {
   //   shadow_flag |= PATH_RAY_SURFACE_PASS;
@@ -739,8 +738,53 @@ ccl_device_inline void integrate_direct_light_create_shadow_path(
 // }
 
 
-/* TODO(weizhen): split function to direct/indirect illumination and rename this to NEE. */
-/**
+/* ReSTIR DI epilogue: the winning candidate is written to the persistent
+ * reservoir and its shadow ray is deferred to a later kernel, where it will
+ * be temporally/spatially resampled before being traced. */
+ccl_device_forceinline ShaderEvalResult integrate_surface_nee_write_restir_di(
+    KernelGlobals kg,
+    IntegratorState state,
+    ccl_private Reservoir *reservoir,
+    ccl_global float *ccl_restrict render_buffer)
+{
+  PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
+  /* Write to reservoir and trace shadow ray later. */
+  film_write_pass_reservoir(kg, state, reservoir, render_buffer); // !!!
+  return SHADER_EVAL_OK;
+}
+
+/* Ordinary NEE epilogue: used for every bounce that is not the ReSTIR-DI
+ * primary connection — i.e. Indirect Ullumination, or Direct Illumination
+ * when ReSTIR is disabled entirely. RIS over the sampled candidates is still
+ * used to pick a good light, but the reservoir is finalized and shaded
+ * immediately: no persistent state, no deferred shadow ray, no reuse. */
+ccl_device_forceinline ShaderEvalResult integrate_surface_nee_shade_indirect(
+    KernelGlobals kg,
+    IntegratorState state,
+    ccl_private ShaderData *sd,
+    ccl_private const RNGState *rng_state,
+    const bool use_restir,
+    ccl_private Reservoir *reservoir)
+{
+  reservoir_finalize(reservoir, use_restir);
+  bsdf_eval_mul(&reservoir->radiance, reservoir->total_weight);
+
+  // if (bsdf_eval_is_zero(&reservoir->radiance)) {
+  //   return SHADER_EVAL_EMPTY;
+  // }
+
+  int mnee_vertex_count = 0;
+  integrate_direct_light_create_shadow_path<false>(kg,
+                                                   state,
+                                                   rng_state,
+                                                   sd,
+                                                   &reservoir->light,
+                                                   &reservoir->radiance,
+                                                   mnee_vertex_count);
+  return SHADER_EVAL_OK;
+}
+
+/*
  * existing MNEE sample:
     retain MNEE evaluation and shadow setup
 
@@ -750,16 +794,21 @@ ccl_device_inline void integrate_direct_light_create_shadow_path(
     evaluate through radiance_eval()
     add candidate to Reservoir
 
-    direct ReSTIR DI:
+   * direct ReSTIR DI:
         write Reservoir for later resampling/shadowing
 
-    non-ReSTIR:
+   * non-ReSTIR:
         finalize Reservoir
         apply total_weight
         call integrate_direct_light_create_shadow_path()
+
+ * Next Event Estimation: sample points on lights and evaluate their
+ * contributions via Resampled Importance Sampling. At the primary
+ * (bounce == 1) connection with ReSTIR enabled, the winning candidate is
+ * stored as a persistent ReSTIR DI reservoir for later resampling. At every
+ * other bounce, RIS is used purely as an NEE quality improvement and the
+ * result is shaded immediately.
  */
-/* Path tracing: sample points on lights and evaluate their contributions, then
- * either store the initial ReSTIR DI reservoir or queue the selected shadow ray. */
 template<uint node_feature_mask>
 #if defined(__KERNEL_GPU__)
 ccl_device_forceinline
@@ -768,11 +817,11 @@ ccl_device_forceinline
 ccl_device
 #endif
     ShaderEvalResult
-    integrate_surface_direct_light(KernelGlobals kg,
-                                   IntegratorState state,
-                                   ccl_private ShaderData *sd,
-                                   ccl_private const RNGState *rng_state,
-                                   ccl_global float *ccl_restrict render_buffer)
+    integrate_surface_nee(KernelGlobals kg,
+                          IntegratorState state,
+                          ccl_private ShaderData *sd,
+                          ccl_private const RNGState *rng_state,
+                          ccl_global float *ccl_restrict render_buffer)
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_INITIAL_RESAMPLING);
 
@@ -780,9 +829,6 @@ ccl_device
   if (!(kernel_data.integrator.use_direct_light && (sd->flag & SD_BSDF_HAS_EVAL))) {
     return SHADER_EVAL_EMPTY;
   }
-
-  // LightSample ls ccl_optional_struct_init;
-  // int mnee_vertex_count = 0;  // NOLINT
 
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   const uint bounce = INTEGRATOR_STATE(state, path, bounce);
@@ -792,18 +838,18 @@ ccl_device
   /* TODO(weizhen): add MNEE back? */
   const bool is_direct_light = light_is_direct_illumination(state);
   const bool use_restir = kernel_data.integrator.use_restir;
+
   const bool use_restir_di = is_direct_light && use_restir;
 
-#if 0
+// TODO(Tri): Handle MNEE
+// #if 0
 #  ifdef __MNEE__
-  /*
-   * Temporarily disabled for tests.
-   */
   if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) &&
       (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_SAMPLED))
   {
     LightSample ls ccl_optional_struct_init;
-    int mnee_vertex_count = 0;
+    int mnee_vertex_count = 0; // NOLINT
+
     integrator_state_read_mnee(state, &ls, &mnee_vertex_count);
 
     kernel_assert(ls.pdf != 0.0f);
@@ -841,7 +887,7 @@ ccl_device
     return SHADER_EVAL_OK;
   }
 #  endif
-#endif
+// #endif
 
   /* Sample position on a light. */
   Reservoir reservoir;
@@ -891,7 +937,7 @@ ccl_device
       }
     }
 
-#if 0
+// #if 0
 #  ifdef __MNEE__
     /*
      * Temporarily disabled for tests
@@ -907,32 +953,25 @@ ccl_device
       continue;
     }
 #  endif
-#endif
+// #endif
 
     LightSampleReference reference;
     reference = light_reference_empty();
 
-    // TODO: Fix the comments!
+    // TODO(Tri): Fix the comments!
     if (use_restir) {
       /* Construct the reference from the light sample in ordinary NEE. */
       // !!!: One contributor of the darkness in DI (not all types are supported; current support might have issues)
       // !!!: light_reference_from_sample() may have problem populating reference
-      if (!light_reference_from_sample(kg, &ls, sd->time, &reference)) {
-
-// DEBUG ONLY; alwasy returns for GI/PT of course!        
-        // printf("integrate_surface_direct_light() returned!; !light_reference_from_sample()=%u\n\n\n\n",
-              //  (!light_reference_from_sample(kg, &ls, sd->time, &reference)));
+      if (!light_reference_from_sample(kg, &ls, sd->time, &reference)) {      
+        printf("integrate_surface_nee() returned!; !restir_light_reference_from_sample()=%u\n\n\n\n",
+               (!light_reference_from_sample(kg, &ls, sd->time, &reference)));
         continue;
         // break; // !!!: Break or continue?
       }
     }
 
-    // // !!!: DEBUG ONLY
-    // kernel_assert(light_reference_is_valid(&reference)); // !!!: Will fail on invalid lights
-    // if (!light_reference_is_valid(&reference)) {
-    //   kernel_assert(false);
-    //   continue;
-    // }
+    kernel_assert(light_reference_is_valid(&reference));
 
     /* Evaluate light shader. */
     const bool check_visibility = use_restir && kernel_data.integrator.restir_unbiased; // !!!
@@ -973,42 +1012,18 @@ ccl_device
 
   /* TODO(weizhen): write reconnection vertex. Treat as rough if at least one closure is rough. */
 
-  // !!!: when use_restir_di == true, the function does not create a shadow path.
   /*
    * The selected light and reference remain paired inside Reservoir.
-   * Persistent ReSTIR DI paths store the reservoir and trace it later.
+   * Persistent ReSTIR DI paths store the reservoir and trace it later;
+   * everything else is ordinary NEE, shaded immediately.
    */
   if (use_restir_di) {
-    PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
-    /* Write to reservoir and trace shadow ray later. */
-    film_write_pass_reservoir(kg, state, &reservoir, render_buffer); // !!!
+    return integrate_surface_nee_write_restir_di(kg, state, &reservoir, render_buffer);
   }
   else {
-    reservoir_finalize(&reservoir, use_restir);
-    bsdf_eval_mul(&reservoir.radiance, reservoir.total_weight);
-
-    // if (bsdf_eval_is_zero(&reservoir.radiance)) {
-    //   return SHADER_EVAL_EMPTY;
-    // }
-
-    int mnee_vertex_count = 0;
-    integrate_direct_light_create_shadow_path<false>(kg,
-                                                     state,
-                                                     rng_state,
-                                                     sd,
-                                                     &reservoir.light,
-                                                     &reservoir.radiance,
-                                                     mnee_vertex_count);
+    return integrate_surface_nee_shade_indirect(kg, state, sd, rng_state, use_restir, &reservoir);
   }
-
-  return SHADER_EVAL_OK;
 }
-
-
-
-
-// --- EO SEG 3
-
 
 /* Path tracing: bounce off or through surface with new direction. */
 ccl_device_forceinline int integrate_surface_bsdf_bssrdf_bounce(
@@ -1371,18 +1386,12 @@ ccl_device int integrate_surface(KernelGlobals kg,
     /* Direct light. */
     PROFILING_EVENT(PROFILING_SHADE_SURFACE_DIRECT_LIGHT);
     // !!!: reference for triangle emitters is populated in integrate_surface_emission()
-    const ShaderEvalResult result = integrate_surface_direct_light<node_feature_mask>(
+    const ShaderEvalResult result = integrate_surface_nee<node_feature_mask>(
         kg, state, &sd, &rng_state, render_buffer);
 
     if (result == SHADER_EVAL_CACHE_MISS) {
       return LABEL_CACHE_MISS;
     }
-
-// TODO(Tri): Remove
-    // if (INTEGRATOR_STATE(state, path, bounce) + 1 >= kernel_data.integrator.min_bounce) {
-    //   /* TODO(weizhen): `min_bounce` is only for debugging, revert after finishing the branch. */
-    //   integrate_surface_direct_light<node_feature_mask>(kg, state, &sd, &rng_state, render_buffer);
-    // }
 
 #if defined(__AO__)
     /* Ambient occlusion pass. */
