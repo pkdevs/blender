@@ -493,7 +493,7 @@ class DATA_PT_camera_display_composition_guides(CameraButtonsPanel, Panel):
         col.prop(camera, "show_composition_harmony_tri_b", text="Triangle B")
 
         panel = layout.panel("fulldome_composition_guides_panel", default_closed=True)
-        panel[0].label(text="Dome Guides")
+        panel[0].label(text="Fulldomedome Guides")
 
         if panel[1]:
             panel[1].prop(camera, "show_composition_fulldome_directions", text="Directions")
