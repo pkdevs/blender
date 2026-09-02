@@ -366,7 +366,6 @@ static void gizmo_node_box_mask_foreach_rna_prop(
     const FunctionRef<void(PointerRNA &ptr, PropertyRNA *prop, int index)> callback)
 {
   bNode *node = static_cast<bNode *>(gz_prop->custom_func.user_data);
-  bNodeTree &node_tree = node->owner_tree();
 
   apply_socket_callback(*node, "Position"_ustr, callback, -1);
   apply_socket_callback(*node, "Size"_ustr, callback, -1);
@@ -1073,7 +1072,6 @@ static void gizmo_node_split_foreach_rna_prop(
     const FunctionRef<void(PointerRNA &ptr, PropertyRNA *prop, int index)> callback)
 {
   bNode *node = static_cast<bNode *>(gz_prop->custom_func.user_data);
-  bNodeTree &node_tree = node->owner_tree();
 
   apply_socket_callback(*node, "Position"_ustr, callback, -1);
   apply_socket_callback(*node, "Rotation"_ustr, callback);
@@ -1468,7 +1466,6 @@ static void gizmo_node_translate_foreach_rna_prop(
     const FunctionRef<void(PointerRNA &ptr, PropertyRNA *prop, int index)> callback)
 {
   bNode *node = static_cast<bNode *>(gz_prop->custom_func.user_data);
-  bNodeTree &node_tree = node->owner_tree();
 
   apply_socket_callback(*node, "X"_ustr, callback);
   apply_socket_callback(*node, "Y"_ustr, callback);
