@@ -1811,6 +1811,10 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 #endif
 
+  if (!USER_VERSION_ATLEAST(503, 18)) {
+    userdef->sequencer_default_strip_length = 1.0f;
+  }
+
   if (!USER_VERSION_ATLEAST(503, 19)) {
     userdef->active_theme_type = UserPrefThemeChoice::Dark;
     /* Adding dark/light theme split: Update dark theme to the previous active theme. The light
