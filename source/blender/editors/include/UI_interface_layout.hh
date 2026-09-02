@@ -414,7 +414,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
 
   /**
    * Renders the given text rendered as markdown. Only a subset of markdown is supported:
-   * Bold, italic, code, links, lists.
+   * Bold, italic, code, links, lists, headers, quotes, horizontal rules.
    */
   void label_markdown(StringRef text);
 

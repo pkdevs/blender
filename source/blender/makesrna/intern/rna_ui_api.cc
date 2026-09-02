@@ -1834,7 +1834,9 @@ void RNA_api_ui_layout(StructRNA *srna)
 
   func = RNA_def_function(srna, "label_markdown", "rna_layout_label_markdown");
   RNA_def_function_ui_description(
-      func, "Displays markdown-formatted text in the layout. Links remain clickable.");
+      func,
+      "Displays markdown-formatted text in the layout. Only a subset of markdown is supported "
+      "including headers, lists, bold/italic/code text, links, quotes, horizontal rules.");
   api_ui_item_common_text(func);
 
   func = RNA_def_function(srna, "link", "rna_layout_link");
