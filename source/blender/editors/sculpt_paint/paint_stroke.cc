@@ -1376,14 +1376,16 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
   /* TODO: Temporary, used to facilitate removing bContext usage in subclasses */
   this->evil_C = C;
 
-  Paint *paint = this->paint;
-  const Brush *br = this->brush = BKE_paint_brush(paint);
-  if (paint == nullptr || br == nullptr) {
+  const Paint *paint_check = BKE_paint_get_from_active_object_or_space(C);
+  const Brush *brush_check = BKE_paint_brush_for_read(C);
+  if (paint_check == nullptr || brush_check == nullptr) {
     /* In some circumstances, the context may change during modal execution. In this case,
      * we need to cancel the operator. See #147544 and related issues for further information. */
     this->done(C, true);
     return OPERATOR_CANCELLED;
   }
+  Paint *paint = this->paint;
+  const Brush *br = this->brush;
   bke::PaintRuntime &paint_runtime = *paint->runtime;
   const PaintMode mode = paint_runtime.paint_mode;
   bool first_dab = false;

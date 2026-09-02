@@ -549,17 +549,15 @@ Paint *BKE_paint_get_from_active_object_or_space(const bContext *C)
                                       BKE_paintmode_get_from_active_object_or_space(C));
 }
 
-PaintMode BKE_paintmode_get_from_context(const bContext *C)
+PaintMode BKE_paintmode_get_with_fallback(const Main &bmain,
+                                          Scene *sce,
+                                          ViewLayer *view_layer,
+                                          SpaceImage *sima)
 {
-  const Main *bmain = CTX_data_main(C);
-  Scene *sce = CTX_data_scene(C);
-  ViewLayer *view_layer = CTX_data_view_layer(C);
-
   if (sce && view_layer) {
-    BKE_view_layer_synced_ensure(*bmain, sce, view_layer);
+    BKE_view_layer_synced_ensure(bmain, sce, view_layer);
     Object *obact = BKE_view_layer_active_object_get(view_layer);
 
-    SpaceImage *sima = CTX_wm_space_image(C);
     if (sima != nullptr && sima->mode == SI_MODE_PAINT) {
       return PaintMode::Texture2D;
     }
@@ -591,6 +589,21 @@ PaintMode BKE_paintmode_get_from_context(const bContext *C)
 
   /* Default to Texture2D to handle support for editors which have no corresponding SpaceImage */
   return PaintMode::Texture2D;
+}
+
+PaintMode BKE_paintmode_get_from_context(const bContext *C)
+{
+  return BKE_paintmode_get_with_fallback(
+      *CTX_data_main(C), CTX_data_scene(C), CTX_data_view_layer(C), CTX_wm_space_image(C));
+}
+
+Paint *BKE_paint_get_with_fallback(const Main &bmain,
+                                   Scene *sce,
+                                   ViewLayer *view_layer,
+                                   SpaceImage *sima)
+{
+  return BKE_paint_get_from_paintmode(
+      sce, BKE_paintmode_get_with_fallback(bmain, sce, view_layer, sima));
 }
 
 Paint *BKE_paint_get_from_context(const bContext *C)

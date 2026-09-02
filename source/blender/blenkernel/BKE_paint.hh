@@ -26,6 +26,7 @@
 #include "DNA_brush_enums.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_object_enums.h"
+#include "DNA_space_types.h"
 
 namespace blender {
 
@@ -184,8 +185,17 @@ Paint *BKE_paint_get_from_active_object_or_space(const bContext *C);
  * alternative methods due to the ambiguity of needing to return Texture2D to support certain
  * editors / operators (e.g. Properties Editor).
  */
+PaintMode BKE_paintmode_get_with_fallback(const Main &bmain,
+                                          Scene *sce,
+                                          ViewLayer *view_layer,
+                                          SpaceImage *sima);
+Paint *BKE_paint_get_with_fallback(const Main &bmain,
+                                   Scene *sce,
+                                   ViewLayer *view_layer,
+                                   SpaceImage *sima);
 PaintMode BKE_paintmode_get_from_context(const bContext *C);
 Paint *BKE_paint_get_from_context(const bContext *C);
+
 PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref);
 
 /* Paint brush retrieval and assignment. */

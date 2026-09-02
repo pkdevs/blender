@@ -2458,7 +2458,7 @@ void register_type(UndoType *ut)
 static bool use_multires_mesh(bContext *C)
 {
   const Object *object = CTX_data_active_object(C);
-  if (BKE_paintmode_get_from_active_object(*object) != PaintMode::Sculpt) {
+  if (object == nullptr || BKE_paintmode_get_from_active_object(*object) != PaintMode::Sculpt) {
     return false;
   }
 
