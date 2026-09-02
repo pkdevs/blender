@@ -10,6 +10,7 @@
 #include "GEO_point_merge.hh"
 
 #include "node_geometry_util.hh"
+#include <fmt/format.h>
 
 namespace blender::nodes::node_geo_merge_by_distance_cc {
 
@@ -100,6 +101,44 @@ static std::optional<Mesh *> mesh_merge_by_distance_all(const Mesh &mesh,
   return geometry::mesh_merge_by_distance_all(mesh, selection, merge_distance);
 }
 
+static void add_removed_counts_info(const GeoNodeExecParams &params,
+                                    const bool has_mesh,
+                                    const int verts,
+                                    const bool has_points,
+                                    const int points)
+{
+  /* Always report, including zero, matching edit-mode Merge by Distance. */
+  if (has_mesh && has_points) {
+    const char *message_fmt;
+    if (verts == 1 && points == 1) {
+      message_fmt = TIP_("Removed {} vertex and {} point");
+    }
+    else if (verts == 1) {
+      message_fmt = TIP_("Removed {} vertex and {} points");
+    }
+    else if (points == 1) {
+      message_fmt = TIP_("Removed {} vertices and {} point");
+    }
+    else {
+      message_fmt = TIP_("Removed {} vertices and {} points");
+    }
+    params.error_message_add(NodeWarningType::Info,
+                             fmt::format(fmt::runtime(message_fmt), verts, points));
+  }
+  else if (has_mesh) {
+    params.error_message_add(NodeWarningType::Info,
+                             fmt::format(fmt::runtime(verts == 1 ? TIP_("Removed {} vertex") :
+                                                                   TIP_("Removed {} vertices")),
+                                         verts));
+  }
+  else if (has_points) {
+    params.error_message_add(NodeWarningType::Info,
+                             fmt::format(fmt::runtime(points == 1 ? TIP_("Removed {} point") :
+                                                                    TIP_("Removed {} points")),
+                                         points));
+  }
+}
+
 static void node_geo_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry"_ustr);
@@ -107,17 +146,30 @@ static void node_geo_exec(GeoNodeExecParams params)
   const Field<bool> selection = params.extract_input<Field<bool>>("Selection"_ustr);
   const float merge_distance = params.extract_input<float>("Distance"_ustr);
 
+  std::atomic<int> points_merged = 0;
+  std::atomic<int> verts_merged = 0;
+  std::atomic<bool> has_points = false;
+  std::atomic<bool> has_mesh = false;
+
   geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
     if (const PointCloud *pointcloud = geometry_set.get_pointcloud()) {
       if (mode == GEO_NODE_MERGE_BY_DISTANCE_MODE_ALL) {
+        has_points = true;
+        const int before = pointcloud->totpoint;
+
         PointCloud *result = pointcloud_merge_by_distance(
             *pointcloud, merge_distance, selection, params.get_attribute_filter("Geometry"_ustr));
         if (result) {
           geometry_set.replace_pointcloud(result);
+
+          points_merged += before - result->totpoint;
         }
       }
     }
     if (const Mesh *mesh = geometry_set.get_mesh()) {
+      has_mesh = true;
+      const int before = mesh->verts_num;
+
       std::optional<Mesh *> result;
       switch (mode) {
         case GEO_NODE_MERGE_BY_DISTANCE_MODE_ALL:
@@ -131,11 +183,15 @@ static void node_geo_exec(GeoNodeExecParams params)
       }
       if (result) {
         geometry_set.replace_mesh(*result);
+        verts_merged += before - (*result)->verts_num;
       }
     }
   });
 
   params.set_output("Geometry"_ustr, std::move(geometry_set));
+
+  add_removed_counts_info(
+      params, has_mesh.load(), verts_merged.load(), has_points.load(), points_merged.load());
 }
 
 static void node_register()
