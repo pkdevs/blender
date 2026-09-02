@@ -636,30 +636,21 @@ swap_menus = node_add_menu.generate_menus(
     base_dict=node_add_menu.swap_base_pathing_dict
 )
 
-
+# NOTE: If all nodes within a category are not suitable to be a Scene Effect, the whole category is removed
+# See #EFFECT_MENU_BLACKLIST for filtering nodes within an existing category.
 effect_menus = {
     # menu bl_idname: baseclass
-    # "NODE_MT_compositor_node_input_effect": NODE_MT_compositor_node_input_base,
-    # "NODE_MT_compositor_node_input_constant_effect": NODE_MT_compositor_node_input_constant_base,
     "NODE_MT_compositor_node_input_scene_effect": NODE_MT_compositor_node_input_scene_base,
-    # "NODE_MT_compositor_node_output_effect": NODE_MT_compositor_node_output_base,
     "NODE_MT_compositor_node_color_effect": NODE_MT_compositor_node_color_base,
     "NODE_MT_compositor_node_color_adjust_effect": NODE_MT_compositor_node_color_adjust_base,
     "NODE_MT_compositor_node_filter_effect": NODE_MT_compositor_node_filter_base,
     "NODE_MT_compositor_node_filter_blur_effect": NODE_MT_compositor_node_filter_blur_base,
     "NODE_MT_compositor_node_creative_effect": NODE_MT_compositor_node_creative_base,
-    # "NODE_MT_compositor_node_texture_effect": NODE_MT_compositor_node_texture_base,
     "NODE_MT_compositor_node_keying_effect": NODE_MT_compositor_node_keying_base,
-    # "NODE_MT_compositor_node_mask_effect": NODE_MT_compositor_node_mask_base,
-    # "NODE_MT_compositor_node_tracking_effect": NODE_MT_compositor_node_tracking_base,
     "NODE_MT_compositor_node_transform_effect": NODE_MT_compositor_node_transform_base,
-    # "NODE_MT_compositor_node_utilities_effect": NODE_MT_compositor_node_utilities_base,
     "NODE_MT_compositor_node_vector_effect": NODE_MT_compositor_node_vector_base,
     "NODE_MT_compositor_node_math_effect": NODE_MT_compositor_node_math_base,
     "NODE_MT_compositor_node_text_effect": NODE_MT_compositor_node_text_base,
-    # "NODE_MT_compositor_node_matrix_effect": NODE_MT_compositor_utilities_matrix_base,
-    # "NODE_MT_compositor_node_bundle_effect": NODE_MT_compositor_utilities_bundle_base,
-    # "NODE_MT_compositor_node_rotation_effect": NODE_MT_compositor_node_rotation_base,
     "NODE_MT_compositor_node_effect_all": NODE_MT_compositor_node_all_base,
 }
 

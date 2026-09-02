@@ -678,10 +678,11 @@ static WrapperGroup make_wrapper_group(const bContext &C, bNodeTree &ntree, bNod
   params.skip_hidden = false;
   /* Expose all sockets even if unconnected. */
   params.skip_unconnected = false;
-  NodeTreeInterfaceMapping io_mapping = build_node_declaration_interface(
+  const NodeTreeInterfaceMapping io_mapping = build_node_declaration_interface(
       params, src_node, *wrapper_group);
 
-  NodeSetCopy copied_nodes = NodeSetCopy::from_nodes(bmain, ntree, {&src_node}, *wrapper_group);
+  const NodeSetCopy copied_nodes = NodeSetCopy::from_nodes(
+      bmain, ntree, {&src_node}, *wrapper_group);
   connect_copied_nodes_to_interface(C, copied_nodes, io_mapping);
 
   BKE_main_ensure_invariants(bmain, wrapper_group->id);
