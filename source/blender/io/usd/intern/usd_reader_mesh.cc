@@ -382,7 +382,7 @@ void USDMeshReader::read_uv_data_primvar(Mesh *mesh,
   }
 
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
-  bke::SpanAttributeWriter<float2> uv_data = attributes.convert_or_add_for_write_only_span<float2>(
+  bke::SpanAttributeWriter<float2> uv_data = attributes.lookup_or_add_for_write_only_span<float2>(
       primvar_name, bke::AttrDomain::Corner);
 
   if (!uv_data) {
