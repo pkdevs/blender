@@ -86,6 +86,7 @@ void RollSpline::clear()
   lengths_3d.clear();
   tangents_3d.clear();
   pressures.clear();
+  normals.clear();
 }
 
 bool RollSpline::is_empty() const
@@ -159,32 +160,79 @@ float RollSpline::closest_point_arc_length(const float3 &query) const
 /** \name Roll Texture Mapping Stroke Helpers
  * \{ */
 
+int PaintStroke::roll_points_per_radius() const
+{
+  /* Knots are one dab spacing apart (2R * spacing). */
+  const float s = std::max(spacing_raw_, 0.05f);
+  return std::max(int(std::ceil(1.0f / s)) + 2, 5);
+}
+
 int PaintStroke::roll_max_points() const
 {
   if (!need_roll_mapping_) {
     return 1;
   }
+  /* History kept for the strip, in brush radii.  Long enough that a stroke
+   * turning back on itself still has its earlier branch available for
+   * self-intersection collapse, and for wide loops in the texture path. */
+  constexpr int ROLL_HISTORY_RADII = 20;
+  const int budget = roll_points_per_radius() * ROLL_HISTORY_RADII;
+  /* Leave room in the ring buffer for the virtual backward extension. */
+  return std::min(budget, ROLL_MAX_STROKE_POINTS - VIRTUAL_EXTENSION_POINTS - 2);
+}
 
-  float s = std::max(spacing_raw_, 0.05f);
-  int tot = int(std::ceil(1.0f / s)) + 2;
-  tot = std::max(tot, 5);
-  /* 5× the point budget: keep a long tail for curve history, give more
-   * lookahead for self-intersection detection on the inner side of turns,
-   * and provide extra deferral so dabs are painted on stable spline data. */
-  tot *= 5;
-  return tot;
+bool PaintStroke::roll_texture_pressure_scaled() const
+{
+  if (!brush || !BKE_brush_use_size_pressure(brush)) {
+    return false;
+  }
+  /* Read the option from whichever texture slot uses roll mapping. */
+  const MTex &mt = (brush->mtex.brush_map_mode == MTEX_MAP_MODE_ROLL) ? brush->mtex :
+                                                                        brush->mask_mtex;
+  return mt.roll_pressure_scale != 0;
+}
+
+float3 PaintStroke::roll_sample_surface_normal(bContext *C, const float2 &mouse) const
+{
+  /* Sculpt mode: the geometric normal of the face hit under the pen.
+   *
+   * The face normal is used deliberately instead of the cursor's sampled
+   * area normal: mid-stroke, the area sampling (calc_area_normal) centres
+   * on the stroke cache's dab location — the deferred dab several radii
+   * behind the pen, symmetry-mirrored — so it would freeze the wrong
+   * surface orientation into the point.  The per-face normal is exact at
+   * the pen position; smooth_normals_along_stroke() averages it over a
+   * brush radius of neighbouring knots. */
+  if (vc.obact && (vc.obact->mode & OB_MODE_SCULPT)) {
+    if (const std::optional<CursorGeometryInfo> gi = cursor_geometry_info_update(C, mouse, false))
+    {
+      if (math::length_squared(gi->normal) > 1e-8f) {
+        return math::normalize(gi->normal);
+      }
+    }
+  }
+  /* Fallback: the view direction in object space. */
+  if (vc.obact && vc.rv3d) {
+    const float3 n = math::transform_direction(
+        vc.obact->world_to_object() * float4x4(vc.rv3d->viewinv), float3(0, 0, 1));
+    if (math::length_squared(n) > 1e-8f) {
+      return math::normalize(n);
+    }
+  }
+  return float3(0, 0, 1);
 }
 
 void PaintStroke::add_roll_point(const float2 &mouse_in,
                                  const float2 &mouse_out,
                                  const float3 &loc,
+                                 const float3 &surface_normal,
                                  float size,
                                  float pressure,
                                  bool pen_flip,
                                  float x_tilt,
                                  float y_tilt)
 {
-  constexpr int buf_cap = PAINT_MAX_INPUT_SAMPLES;
+  constexpr int buf_cap = ROLL_MAX_STROKE_POINTS;
 
   if (need_roll_mapping_) {
     /* Budget: total knots (virtual backward + real) capped at
@@ -257,6 +305,9 @@ void PaintStroke::add_roll_point(const float2 &mouse_in,
     point->pen_flip = pen_flip;
 
     point->location = loc;
+    point->surface_normal = (math::length_squared(surface_normal) > 1e-8f) ?
+                                math::normalize(surface_normal) :
+                                float3(0, 0, 1);
     /* Clamp pressure — pen touch-down and lift-off report near-zero values
      * that would create an extreme width spike in the roll strip. */
     point->pressure = std::max(pressure, MIN_ROLL_PRESSURE);
@@ -267,7 +318,7 @@ void PaintStroke::add_roll_point(const float2 &mouse_in,
     }
   }
   else {
-    /* Non-roll: simple ring buffer wrapping at PAINT_MAX_INPUT_SAMPLES. */
+    /* Non-roll: simple ring buffer wrapping at ROLL_MAX_STROKE_POINTS. */
     PaintStrokePoint *point = &points_[cur_point_];
     point->size = size;
     point->mouse_in = mouse_in;
@@ -287,15 +338,123 @@ void PaintStroke::add_roll_point(const float2 &mouse_in,
 }
 
 /**
+ * Stroke direction at one of its ends, in the stroke's forward sense.
+ *
+ * Measured from the end point to the first point at least `min_len` away
+ * (rather than the adjacent point), so a jittery or near-duplicate last
+ * sample cannot hook the extension sideways.
+ *
+ * \param pts_2d, pts_3d: Polyline points in stroke order; the end being
+ *   measured is the first point when \a from_start, else the last.
+ * \return false when the stroke is degenerate at that end.
+ */
+static bool end_direction(const Span<float2> pts_2d,
+                          const Span<float3> pts_3d,
+                          const bool from_start,
+                          const float min_len_2d,
+                          const float min_len_3d,
+                          float2 &r_dir_2d,
+                          float3 &r_dir_3d)
+{
+  const int n = int(pts_2d.size());
+  if (n < 2) {
+    return false;
+  }
+  const int end = from_start ? 0 : n - 1;
+  const int step = from_start ? 1 : -1;
+  float2 d2(0);
+  float3 d3(0);
+  for (int k = end + step; k >= 0 && k < n; k += step) {
+    /* Forward sense: away from the start, or toward the end. */
+    d2 = from_start ? pts_2d[k] - pts_2d[end] : pts_2d[end] - pts_2d[k];
+    d3 = from_start ? pts_3d[k] - pts_3d[end] : pts_3d[end] - pts_3d[k];
+    if (math::length(d2) >= min_len_2d && math::length(d3) >= min_len_3d) {
+      break;
+    }
+  }
+  const float l2 = math::length(d2);
+  const float l3 = math::length(d3);
+  if (l2 < 1e-7f || l3 < 1e-7f) {
+    return false;
+  }
+  r_dir_2d = d2 / l2;
+  r_dir_3d = d3 / l3;
+  return true;
+}
+
+/**
+ * Average signed turning rate of the stroke near one of its ends, used to
+ * continue its curvature with virtual extension points.
+ *
+ * Measured over the polyline within about one dab diameter (`max_arc`) of
+ * the end — or the whole stroke when shorter — instead of just the last
+ * two segments, so a single noisy sample cannot bend the extension.
+ *
+ * \param pts_2d, pts_3d: Polyline points in stroke order; the end being
+ *   extended is the first point when \a from_start, else the last.
+ * \param surface_normal: Frozen surface normal at the end; 3D turning is
+ *   measured about it so the extension stays in the local tangent plane.
+ * \return Curvature in radians per unit length (2D screen and 3D object
+ *   space), signed in the stroke's forward sense.
+ */
+static void estimate_end_curvature(const Span<float2> pts_2d,
+                                   const Span<float3> pts_3d,
+                                   const bool from_start,
+                                   const float3 &surface_normal,
+                                   const float max_arc_2d,
+                                   const float max_arc_3d,
+                                   float &r_curv_2d,
+                                   float &r_curv_3d)
+{
+  r_curv_2d = 0.0f;
+  r_curv_3d = 0.0f;
+  const int n = int(pts_2d.size());
+  if (n < 3) {
+    return;
+  }
+  float sum_a2 = 0.0f, sum_a3 = 0.0f, arc2 = 0.0f, arc3 = 0.0f;
+  int used = 0;
+  for (int step = 0; step < n - 2; step++) {
+    /* Consecutive segments (a, b) in stroke order, walking inward. */
+    const int k = from_start ? step : (n - 3 - step);
+    const float2 a2 = pts_2d[k + 1] - pts_2d[k];
+    const float2 b2 = pts_2d[k + 2] - pts_2d[k + 1];
+    const float3 a3 = pts_3d[k + 1] - pts_3d[k];
+    const float3 b3 = pts_3d[k + 2] - pts_3d[k + 1];
+    const float la2 = math::length(a2), lb2 = math::length(b2);
+    const float la3 = math::length(a3), lb3 = math::length(b3);
+    if (la2 < 1e-7f || lb2 < 1e-7f || la3 < 1e-7f || lb3 < 1e-7f) {
+      continue;
+    }
+    /* Always use the first pair; stop once the window exceeds the limit. */
+    if (used > 0 && (arc3 + lb3 > max_arc_3d || arc2 + lb2 > max_arc_2d)) {
+      break;
+    }
+    sum_a2 += atan2f(a2.x * b2.y - a2.y * b2.x, math::dot(a2, b2));
+    sum_a3 += atan2f(math::dot(math::cross(a3, b3), surface_normal), math::dot(a3, b3));
+    /* Each turn is attributed to the arc between the segment midpoints. */
+    arc2 += 0.5f * (la2 + lb2);
+    arc3 += 0.5f * (la3 + lb3);
+    used++;
+  }
+  if (arc2 > 1e-7f) {
+    r_curv_2d = sum_a2 / arc2;
+  }
+  if (arc3 > 1e-7f) {
+    r_curv_3d = sum_a3 / arc3;
+  }
+}
+
+/**
  * Generate virtual extension points that continue the stroke's curvature
  * beyond its start or end. Used for both backward (pre-stroke) and forward
  * (post-stroke) extensions so the spline has coverage for the full brush
  * footprint at the stroke boundaries.
  *
  * \param anchor_2d, anchor_3d: The point to extend from.
- * \param dir_2d, dir_3d: Unit direction of the stroke at the anchor.
- * \param seg1_2d, seg2_2d, seg1_3d, seg2_3d: Two consecutive segments at the
- *   anchor end, used to measure curvature. May be zero-length if < 3 points.
+ * \param dir_2d, dir_3d: Unit direction of the stroke at the anchor (forward sense).
+ * \param curv_2d, curv_3d: Signed curvature at the end (see estimate_end_curvature).
+ * \param rot_axis: Axis for the 3D turning (the surface normal at the anchor).
  * \param n_points: Number of extension points to generate.
  * \param step_2d, step_3d: Spacing between consecutive extension points.
  * \param sign: +1.0f for forward, -1.0f for backward.
@@ -306,10 +465,9 @@ static void generate_virtual_extension(const float2 &anchor_2d,
                                        const float3 &anchor_3d,
                                        const float2 &dir_2d,
                                        const float3 &dir_3d,
-                                       const float2 &seg1_2d,
-                                       const float2 &seg2_2d,
-                                       const float3 &seg1_3d,
-                                       const float3 &seg2_3d,
+                                       const float curv_2d,
+                                       const float curv_3d,
+                                       const float3 &rot_axis,
                                        const int n_points,
                                        const float step_2d,
                                        const float step_3d,
@@ -317,46 +475,13 @@ static void generate_virtual_extension(const float2 &anchor_2d,
                                        Vector<float2> &r_ext_2d,
                                        Vector<float3> &r_ext_3d)
 {
-  /* Measure curvature from the angle between the two segments.
-   * Each virtual step rotates the direction by a proportional amount so the
-   * extension follows the same arc the user started drawing. */
-  float angle_2d = 0.0f;
-  float angle_3d = 0.0f;
-  float3 rot_axis = float3(0);
-  bool has_rot_3d = false;
-
-  {
-    const float cross2 = seg1_2d.x * seg2_2d.y - seg1_2d.y * seg2_2d.x;
-    const float dot2 = math::dot(seg1_2d, seg2_2d);
-    const float total_a2 = atan2f(cross2, dot2);
-    const float ref_len2 = math::length(seg1_2d);
-    if (ref_len2 > 1e-7f) {
-      angle_2d = total_a2 * (step_2d / ref_len2);
-    }
-
-    const float3 n1 = math::normalize(seg1_3d);
-    const float3 n2 = math::normalize(seg2_3d);
-    const float3 c3 = math::cross(n1, n2);
-    const float c3_len = math::length(c3);
-    const float d3 = math::dot(n1, n2);
-    if (c3_len > 1e-7f) {
-      rot_axis = c3 / c3_len;
-      const float total_a3 = atan2f(c3_len, d3);
-      const float ref_len3 = math::length(seg1_3d);
-      if (ref_len3 > 1e-7f) {
-        angle_3d = total_a3 * (step_3d / ref_len3);
-        has_rot_3d = true;
-      }
-    }
-  }
-
-  /* Clamp per-step angle so total curvature over all extension points
-   * stays within 90°.  Without this, tight turns can spiral into loops. */
+  /* Per-step rotation continuing the measured curvature, clamped so the
+   * total turn over the extension stays within 90°.  Without this, tight
+   * turns can spiral into loops. */
   const float max_per_step = float(M_PI_2) / float(std::max(1, n_points));
-  angle_2d = std::clamp(angle_2d, -max_per_step, max_per_step);
-  if (has_rot_3d) {
-    angle_3d = std::clamp(angle_3d, -max_per_step, max_per_step);
-  }
+  const float angle_2d = std::clamp(curv_2d * step_2d, -max_per_step, max_per_step);
+  const float angle_3d = std::clamp(curv_3d * step_3d, -max_per_step, max_per_step);
+  const bool has_rot_3d = math::length_squared(rot_axis) > 1e-8f && angle_3d != 0.0f;
 
   /* Walk from anchor, rotating direction each step. */
   float2 cur_2d = dir_2d;
@@ -406,22 +531,11 @@ void PaintStroke::prepend_virtual_roll_points()
     return;
   }
 
-  constexpr int cap = PAINT_MAX_INPUT_SAMPLES;
+  constexpr int cap = ROLL_MAX_STROKE_POINTS;
   const int oldest = (cur_point_ - num_points_ + cap) % cap;
-  const int next_oldest = (oldest + 1) % cap;
 
   const float3 p_start = points_[oldest].location;
   const float2 m_start = points_[oldest].mouse_out;
-
-  float3 dir3 = points_[next_oldest].location - p_start;
-  float2 dir2 = points_[next_oldest].mouse_out - m_start;
-  const float len3 = math::length(dir3);
-  const float len2 = math::length(dir2);
-  if (len3 < 1e-7f || len2 < 1e-7f) {
-    return;
-  }
-  dir3 /= len3;
-  dir2 /= len2;
 
   /* Use the full (unpressured) brush radius for step sizes so the virtual
    * extension isn't compressed when the initial pen touch has low pressure. */
@@ -429,20 +543,34 @@ void PaintStroke::prepend_virtual_roll_points()
   const float r_world = paint_calc_object_space_radius(vc, p_start, base_pixel_r);
   const float r_screen = base_pixel_r;
 
+  /* Stroke points from the start inward, about one dab diameter's worth. */
+  const int n_curv = std::min(num_points_, roll_points_per_radius() * 2 + 2);
+  Vector<float2> c2d;
+  Vector<float3> c3d;
+  for (int i = 0; i < n_curv; i++) {
+    const int idx = (oldest + i) % cap;
+    c2d.append(points_[idx].mouse_out);
+    c3d.append(points_[idx].location);
+  }
+
+  float2 dir2;
+  float3 dir3;
+  if (!end_direction(c2d, c3d, true, 0.25f * r_screen, 0.25f * r_world, dir2, dir3)) {
+    return;
+  }
+  float curv_2d, curv_3d;
+  estimate_end_curvature(c2d,
+                         c3d,
+                         true,
+                         points_[oldest].surface_normal,
+                         2.0f * r_screen,
+                         2.0f * r_world,
+                         curv_2d,
+                         curv_3d);
+
   const int n_backward = VIRTUAL_EXTENSION_POINTS;
   const float step_3d = (r_world * 1.5f) / float(n_backward);
   const float step_2d = (r_screen * 1.5f) / float(n_backward);
-
-  /* Curvature segments (zero-length if < 3 points). */
-  float2 seg1_2d(0), seg2_2d(0);
-  float3 seg1_3d(0), seg2_3d(0);
-  if (num_points_ >= 3) {
-    const int third = (oldest + 2) % cap;
-    seg1_2d = points_[next_oldest].mouse_out - m_start;
-    seg2_2d = points_[third].mouse_out - points_[next_oldest].mouse_out;
-    seg1_3d = points_[next_oldest].location - p_start;
-    seg2_3d = points_[third].location - points_[next_oldest].location;
-  }
 
   backward_ext_2d_.clear();
   backward_ext_3d_.clear();
@@ -450,10 +578,9 @@ void PaintStroke::prepend_virtual_roll_points()
                              p_start,
                              dir2,
                              dir3,
-                             seg1_2d,
-                             seg2_2d,
-                             seg1_3d,
-                             seg2_3d,
+                             curv_2d,
+                             curv_3d,
+                             points_[oldest].surface_normal,
                              n_backward,
                              step_2d,
                              step_3d,
@@ -461,6 +588,38 @@ void PaintStroke::prepend_virtual_roll_points()
                              backward_ext_2d_,
                              backward_ext_3d_);
   initial_backward_ext_count_ = n_backward;
+}
+
+/**
+ * Smooth the frozen normal field along the stroke so the strip frame
+ * changes gradually from knot to knot.
+ *
+ * Normals sampled on displaced or noisy surfaces differ per knot; used
+ * raw they zig-zag the borders, which the self-intersection collapse then
+ * "fixes" into pinned runs, skewing the grid.  The kernel spans about one
+ * brush radius of knots on each side — the segments a dab centred on the
+ * vertex touches — and depends only on recorded data, so smoothed normals
+ * of recorded segments stay stable from dab to dab.
+ */
+static void smooth_normals_along_stroke(MutableSpan<float3> normals, const int half_width)
+{
+  const int n = int(normals.size());
+  if (n < 3 || half_width < 1) {
+    return;
+  }
+  Vector<float3> src(normals);
+  for (int pass = 0; pass < 2; pass++) {
+    for (int i = 0; i < n; i++) {
+      const int lo = std::max(0, i - half_width);
+      const int hi = std::min(n - 1, i + half_width);
+      float3 sum(0);
+      for (int k = lo; k <= hi; k++) {
+        sum += src[k];
+      }
+      normals[i] = (math::length_squared(sum) > 1e-8f) ? math::normalize(sum) : src[i];
+    }
+    src.as_mutable_span().copy_from(normals);
+  }
 }
 
 void PaintStroke::make_roll_spline(bContext * /*C*/)
@@ -475,7 +634,7 @@ void PaintStroke::make_roll_spline(bContext * /*C*/)
   }
 
   /* Collect real knots from ring buffer. */
-  constexpr int buf_cap = PAINT_MAX_INPUT_SAMPLES;
+  constexpr int buf_cap = ROLL_MAX_STROKE_POINTS;
 
   const int oldest = (cur_point_ - num_points_ + buf_cap) % buf_cap;
 
@@ -503,13 +662,24 @@ void PaintStroke::make_roll_spline(bContext * /*C*/)
       }
     }
     extrapolate_pressures(base_p, ratio, n_back, true, roll_spline_.pressures);
+    /* Virtual backward extension: continue the oldest real point's frame. */
+    const float3 back_n = (num_points_ > 0) ? points_[oldest].surface_normal : float3(0, 0, 1);
+    for (int i = 0; i < n_back; i++) {
+      roll_spline_.normals.append(back_n);
+    }
   }
   for (int i = 0; i < num_points_; i++) {
     const int idx = (oldest + i) % buf_cap;
     roll_spline_.poly_2d.append(points_[idx].mouse_out);
     roll_spline_.poly_3d.append(points_[idx].location);
     roll_spline_.pressures.append(points_[idx].pressure);
+    roll_spline_.normals.append(points_[idx].surface_normal);
   }
+
+  /* Knots are one dab spacing apart (2R * spacing), so a brush radius spans
+   * about 0.5 / spacing knots. */
+  const int normal_half_width = std::clamp(int(0.5f / std::max(spacing_raw_, 0.05f)), 1, 12);
+  smooth_normals_along_stroke(roll_spline_.normals, normal_half_width);
 
   n_virtual_poly_points_ = int(backward_ext_2d_.size());
 
@@ -579,12 +749,13 @@ void PaintStroke::finish_roll_stroke(bContext *C,
     float3 location;
     bool is_location_is_set;
     update(C, brush, mode, mouse_up, mouse_out, pressure, location, &is_location_is_set);
-    const int last_idx = (cur_point_ - 1 + PAINT_MAX_INPUT_SAMPLES) % PAINT_MAX_INPUT_SAMPLES;
+    const int last_idx = (cur_point_ - 1 + ROLL_MAX_STROKE_POINTS) % ROLL_MAX_STROKE_POINTS;
 
     if (is_location_is_set) {
       add_roll_point(mouse_up,
                      mouse_out,
                      location,
+                     roll_sample_surface_normal(C, mouse_out),
                      paint_runtime->pixel_radius,
                      pressure,
                      pen_flip_,
@@ -596,6 +767,7 @@ void PaintStroke::finish_roll_stroke(bContext *C,
       add_roll_point(mouse_up,
                      mouse_out,
                      points_[last_idx].location,
+                     points_[last_idx].surface_normal,
                      points_[last_idx].size,
                      pressure,
                      pen_flip_,
@@ -609,48 +781,51 @@ void PaintStroke::finish_roll_stroke(bContext *C,
    *    Uses the same curvature-following logic as prepend_virtual_roll_points()
    *    but in the forward direction, appending directly to the polyline. */
   if (num_points_ >= 2 && !roll_spline_.is_empty()) {
-    constexpr int cap = PAINT_MAX_INPUT_SAMPLES;
+    constexpr int cap = ROLL_MAX_STROKE_POINTS;
     const int newest = (cur_point_ - 1 + cap) % cap;
     const int prev_newest = (newest - 1 + cap) % cap;
 
     const float3 p_end = points_[newest].location;
     const float2 m_end = points_[newest].mouse_out;
 
-    float3 dir3 = p_end - points_[prev_newest].location;
-    float2 dir2 = m_end - points_[prev_newest].mouse_out;
-    const float len3 = math::length(dir3);
-    const float len2 = math::length(dir2);
+    const float base_pixel_r = paint ? BKE_brush_radius_get(paint, &brush) : 50.0f;
+    const float r_world = paint_calc_object_space_radius(vc, p_end, base_pixel_r);
+    const float r_screen = base_pixel_r;
 
-    if (len3 > 1e-7f && len2 > 1e-7f) {
-      dir3 /= len3;
-      dir2 /= len2;
+    /* Stroke points ending at the newest, about one dab diameter's worth. */
+    const int n_curv = std::min(num_points_, roll_points_per_radius() * 2 + 2);
+    Vector<float2> c2d;
+    Vector<float3> c3d;
+    for (int i = n_curv - 1; i >= 0; i--) {
+      const int idx = (newest - i + cap) % cap;
+      c2d.append(points_[idx].mouse_out);
+      c3d.append(points_[idx].location);
+    }
 
-      const float base_pixel_r = paint ? BKE_brush_radius_get(paint, &brush) : 50.0f;
-      const float r_world = paint_calc_object_space_radius(vc, p_end, base_pixel_r);
-      const float r_screen = base_pixel_r;
+    float2 dir2;
+    float3 dir3;
+    if (end_direction(c2d, c3d, false, 0.25f * r_screen, 0.25f * r_world, dir2, dir3)) {
+      float curv_2d, curv_3d;
+      estimate_end_curvature(c2d,
+                             c3d,
+                             false,
+                             points_[newest].surface_normal,
+                             2.0f * r_screen,
+                             2.0f * r_world,
+                             curv_2d,
+                             curv_3d);
 
       const int n_forward = VIRTUAL_EXTENSION_POINTS;
       const float step_3d = (r_world * 1.5f) / float(n_forward);
       const float step_2d = (r_screen * 1.5f) / float(n_forward);
 
-      float2 seg1_2d(0), seg2_2d(0);
-      float3 seg1_3d(0), seg2_3d(0);
-      if (num_points_ >= 3) {
-        const int prev2 = (prev_newest - 1 + cap) % cap;
-        seg1_2d = points_[prev_newest].mouse_out - points_[prev2].mouse_out;
-        seg2_2d = m_end - points_[prev_newest].mouse_out;
-        seg1_3d = points_[prev_newest].location - points_[prev2].location;
-        seg2_3d = p_end - points_[prev_newest].location;
-      }
-
       generate_virtual_extension(m_end,
                                  p_end,
                                  dir2,
                                  dir3,
-                                 seg1_2d,
-                                 seg2_2d,
-                                 seg1_3d,
-                                 seg2_3d,
+                                 curv_2d,
+                                 curv_3d,
+                                 points_[newest].surface_normal,
                                  n_forward,
                                  step_2d,
                                  step_3d,
@@ -666,6 +841,10 @@ void PaintStroke::finish_roll_stroke(bContext *C,
           ratio = std::clamp(p_new / p_prev, PRESSURE_RATIO_MIN, PRESSURE_RATIO_MAX);
         }
         extrapolate_pressures(p_new, ratio, n_forward, false, roll_spline_.pressures);
+      }
+      /* Forward extension: continue the newest point's frame. */
+      for (int i = 0; i < n_forward; i++) {
+        roll_spline_.normals.append(points_[newest].surface_normal);
       }
 
       roll_spline_.update_lengths();
@@ -684,7 +863,7 @@ void PaintStroke::finish_roll_stroke(bContext *C,
    *  (b) Very short stroke (num_points <= half) — start from oldest point.
    *  (c) Normal stroke, no dabs placed yet — start from the deferred
    *      position (cur_point_ - half). */
-  constexpr int buf_cap = PAINT_MAX_INPUT_SAMPLES;
+  constexpr int buf_cap = ROLL_MAX_STROKE_POINTS;
   const int half = roll_half_points();
   const int oldest_idx = (cur_point_ - num_points_ + buf_cap) % buf_cap;
 
@@ -843,8 +1022,8 @@ static void expand_grid_columns(Vector<float3> &grid_pos,
  */
 static void build_roll_borders(const Span<float3> poly,
                                const Span<float3> tangents,
+                               const Span<float3> normals,
                                const Span<float> pressures,
-                               const float3 &dab_normal,
                                const float R,
                                Vector<float3> &r_border_left,
                                Vector<float3> &r_border_right)
@@ -855,13 +1034,15 @@ static void build_roll_borders(const Span<float3> poly,
 
   for (int k = 0; k < count; k++) {
     const float3 &T = tangents[k];
-    float3 B = math::cross(T, dab_normal);
+    /* Binormal in the vertex's own frozen tangent plane: the strip tilts
+     * with the surface locally and is independent of the current dab. */
+    float3 B = math::cross(T, normals[k]);
     const float blen = math::length(B);
     if (blen > 1e-7f) {
       B /= blen;
     }
     else {
-      /* Degenerate: tangent parallel to dab_normal. */
+      /* Degenerate: tangent parallel to the surface normal. */
       B = math::normalize(math::cross(T, float3(0, 0, 1)));
       if (math::length_squared(B) < 1e-12f) {
         B = math::normalize(math::cross(T, float3(1, 0, 0)));
@@ -883,13 +1064,12 @@ static void build_roll_borders(const Span<float3> poly,
  * This turns overlapping quads into degenerate triangles that fan from
  * the crossing point — the cross-lines rotate to point toward it.
  *
- * \param merge_x, merge_y: 2D projection axes (perpendicular to the dab
- * normal) so the merge detection is view-independent and aligned with
- * the LUT.
+ * Crossings are tested in 2D, in the tangent plane of the frozen surface
+ * normal at the loop start, so the detection depends only on recorded
+ * data and is view- and dab-independent.
  */
 static void collapse_border_self_intersections(const Span<float3> poly,
-                                               const float3 &merge_x,
-                                               const float3 &merge_y,
+                                               const Span<float3> normals,
                                                const float R,
                                                Vector<float3> &border)
 {
@@ -899,11 +1079,6 @@ static void collapse_border_self_intersections(const Span<float3> poly,
   }
 
   Vector<float2> b2d(count);
-  for (int k = 0; k < count; k++) {
-    b2d[k] = float2(math::dot(border[k], merge_x), math::dot(border[k], merge_y));
-  }
-
-  const int max_loop = count - 1;
   Vector<float3> orig(border);
   int skip_until = -1;
 
@@ -911,13 +1086,33 @@ static void collapse_border_self_intersections(const Span<float3> poly,
     if (i <= skip_until) {
       continue;
     }
+
+    /* Project the border from `i` onward onto the tangent plane of the
+     * frozen surface normal at `i`.  The frame depends only on recorded
+     * data, so the crossing test for a given pair of segments gives the
+     * same answer on every dab. */
+    float3 mx = math::cross(normals[i], float3(0, 0, 1));
+    if (math::length_squared(mx) < 1e-6f) {
+      mx = math::cross(normals[i], float3(1, 0, 0));
+    }
+    mx = math::normalize(mx);
+    const float3 my = math::normalize(math::cross(normals[i], mx));
+    for (int k = i; k < count; k++) {
+      b2d[k] = float2(math::dot(orig[k], mx), math::dot(orig[k], my));
+    }
+
     const float2 d1 = b2d[i + 1] - b2d[i];
     if (math::dot(d1, d1) < 1e-8f) {
       continue;
     }
 
-    const int j_max = std::min(count - 2, i + max_loop);
-    for (int j = j_max; j >= i + 2; j--) {
+    /* Nearest crossing first.  Recorded points never move and crossings
+     * only accumulate as the stroke grows, so the nearest partner of `i`
+     * never changes once it exists — collapsed geometry stays put from dab
+     * to dab.  (Farthest-first would re-pair with every new crossing the
+     * growing tail creates.) */
+    const int j_max = count - 2;
+    for (int j = i + 2; j <= j_max; j++) {
       const float2 d2 = b2d[j + 1] - b2d[j];
       if (math::dot(d2, d2) < 1e-8f) {
         continue;
@@ -932,6 +1127,45 @@ static void collapse_border_self_intersections(const Span<float3> poly,
       const float t = (ac.x * d1.y - ac.y * d1.x) / denom;
 
       if (s >= 0.0f && s <= 1.0f && t >= 0.0f && t <= 1.0f) {
+        /* Merge point from the segment intersection. */
+        const float3 pa = orig[i] + (orig[i + 1] - orig[i]) * s;
+        const float3 pb = orig[j] + (orig[j + 1] - orig[j]) * t;
+        const float3 cross_pt = (pa + pb) * 0.5f;
+
+        /* Only a continuous fold of the strip is a self-intersection.
+         *
+         * Walk the two arms of the loop inward from the crossing in step
+         * (by arc length): a fold — a V or U turn tighter than the brush
+         * radius — keeps the arms within strip overlap (2R) of each other
+         * until they meet at the apex.  When the stroke merely comes back
+         * over itself (a spiral, a figure 8, parallel overlap) the arms
+         * separate right away; the borders cross but nothing folds, and
+         * collapsing that loop would fan the whole turn into one point. */
+        {
+          const float reach_sq = (R * 2.5f) * (R * 2.5f);
+          int a = i + 1, b = j;
+          float arc_a = 0.0f, arc_b = 0.0f;
+          bool continuous = true;
+          while (a < b) {
+            if (math::distance_squared(poly[a], poly[b]) > reach_sq) {
+              continuous = false;
+              break;
+            }
+            /* Advance whichever arm has covered less arc. */
+            if (arc_a <= arc_b) {
+              arc_a += math::distance(poly[a], poly[a + 1]);
+              a++;
+            }
+            else {
+              arc_b += math::distance(poly[b], poly[b - 1]);
+              b--;
+            }
+          }
+          if (!continuous) {
+            continue;
+          }
+        }
+
         bool all_inside = true;
         const int m_lo = std::max(0, i - 2);
         const int m_hi = std::min(count - 2, j + 2);
@@ -977,11 +1211,6 @@ static void collapse_border_self_intersections(const Span<float3> poly,
         if (!all_inside) {
           continue;
         }
-
-        /* Standard merge point from segment intersection. */
-        const float3 pa = orig[i] + (orig[i + 1] - orig[i]) * s;
-        const float3 pb = orig[j] + (orig[j + 1] - orig[j]) * t;
-        const float3 cross_pt = (pa + pb) * 0.5f;
 
         /* If the span is too long, only collapse the sharpest portion
          * (centered on the apex vertex).  This prevents long gentle
@@ -1091,6 +1320,7 @@ static void build_strip_grid(const Span<float3> poly,
                              const Span<float> pressures,
                              const float R,
                              const float v_start,
+                             const bool normalize_v,
                              Vector<float3> &r_grid_pos,
                              Vector<float2> &r_grid_uv)
 {
@@ -1102,7 +1332,7 @@ static void build_strip_grid(const Span<float3> poly,
   v_coords[0] = v_start;
   for (int k = 1; k < rows; k++) {
     const float seg_len = math::distance(poly[k - 1], poly[k]);
-    if (!pressures.is_empty()) {
+    if (normalize_v && !pressures.is_empty()) {
       const float p_avg = std::max((pressures[k] + pressures[k - 1]) * 0.5f, 0.01f);
       v_coords[k] = v_coords[k - 1] + seg_len / (R * p_avg);
     }
@@ -1116,9 +1346,13 @@ static void build_strip_grid(const Span<float3> poly,
     r_grid_pos[k * 3 + 0] = border_right[k];
     r_grid_pos[k * 3 + 1] = poly[k];
     r_grid_pos[k * 3 + 2] = border_left[k];
-    r_grid_uv[k * 3 + 0] = float2(-1.0f, v_coords[k]);
+    /* U at the borders: ±1 when the texture scales with the strip width,
+     * otherwise ±(local width / R) so the texture keeps its base scale. */
+    const float u_border = (normalize_v || pressures.is_empty()) ? 1.0f :
+                                                                   std::max(pressures[k], 0.01f);
+    r_grid_uv[k * 3 + 0] = float2(-u_border, v_coords[k]);
     r_grid_uv[k * 3 + 1] = float2(0.0f, v_coords[k]);
-    r_grid_uv[k * 3 + 2] = float2(1.0f, v_coords[k]);
+    r_grid_uv[k * 3 + 2] = float2(u_border, v_coords[k]);
   }
 }
 
@@ -1418,16 +1652,36 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
                             math::normalize(cache.view_normal);
   }
 
-  /* dab_normal: per-dab surface normal for the strip binormals and the
-   * LUT projection.  It adapts to the local surface as the stroke
-   * progresses across curved geometry, so the texture maps at correct
-   * density on slopes. */
-  const float3 dab_normal = (math::length_squared(cache.sculpt_normal) > 1e-8f) ?
-                                math::normalize(cache.sculpt_normal) :
-                                roll_proj_normal_;
+  /* Frozen per-vertex surface normals, sampled when each point was
+   * recorded.  Borders, collapse and the LUT projection all derive from
+   * them, so the strip geometry of recorded segments never changes from
+   * dab to dab. */
+  const Span<float3> normals_full = roll_spline_.normals.as_span();
+  BLI_assert(normals_full.size() == poly_full.size());
 
-  const bool use_pressure_width = brush && brush->mtex.roll_pressure_scale &&
-                                  BKE_brush_use_size_pressure(brush);
+  /* dab_normal: the frozen normal at the dab's position on the polyline,
+   * used for the LUT projection.  Depends only on where the dab sits on
+   * the stroke, not on the brush's current sculpt_normal (which changes as
+   * the brush straddles edges), so the projection is stable as well. */
+  float3 dab_normal = roll_proj_normal_;
+  {
+    int seg;
+    float fac;
+    length_parameterize::sample_at_length(lengths, raw_s, seg, fac);
+    const float3 n = math::interpolate(normals_full[seg], normals_full[seg + 1], fac);
+    if (math::length_squared(n) > 1e-8f) {
+      dab_normal = math::normalize(n);
+    }
+  }
+
+  /* The strip width always follows the pressure-scaled dab radius when size
+   * pressure is on — the strip must match what the dabs actually paint, or
+   * collapse zones are sized for a strip that is never painted.  The
+   * "Pressure Scale" texture option only decides whether the texture shrinks
+   * with the strip (U/V normalized to the local width) or keeps its base
+   * scale. */
+  const bool use_pressure_width = brush && BKE_brush_use_size_pressure(brush);
+  const bool normalize_v = roll_texture_pressure_scaled();
   const Span<float> pressures_full = (use_pressure_width &&
                                       roll_spline_.pressures.size() >= poly_full.size()) ?
                                          roll_spline_.pressures.as_span() :
@@ -1442,6 +1696,7 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
 
   const Span<float3> poly = poly_full.slice(win_lo, win_count);
   const Span<float3> tangents = roll_spline_.tangents_3d.as_span().slice(win_lo, win_count);
+  const Span<float3> normals = normals_full.slice(win_lo, win_count);
   const Span<float> pressures = pressures_full.is_empty() ?
                                     pressures_full :
                                     pressures_full.slice(win_lo, win_count);
@@ -1450,17 +1705,10 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
 
   /* 1-2. Border curves, then collapse their self-intersection loops. */
   build_roll_borders(
-      poly, tangents, pressures, dab_normal, R, cache.roll_border_left, cache.roll_border_right);
+      poly, tangents, normals, pressures, R, cache.roll_border_left, cache.roll_border_right);
 
-  float3 merge_x = math::cross(dab_normal, float3(0, 0, 1));
-  if (math::length_squared(merge_x) < 1e-6f) {
-    merge_x = math::cross(dab_normal, float3(1, 0, 0));
-  }
-  merge_x = math::normalize(merge_x);
-  const float3 merge_y = math::normalize(math::cross(dab_normal, merge_x));
-
-  collapse_border_self_intersections(poly, merge_x, merge_y, R, cache.roll_border_left);
-  collapse_border_self_intersections(poly, merge_x, merge_y, R, cache.roll_border_right);
+  collapse_border_self_intersections(poly, normals, R, cache.roll_border_left);
+  collapse_border_self_intersections(poly, normals, R, cache.roll_border_right);
 
   /* 3. Initial 3-column grid with V coordinates. */
   Vector<float3> grid_pos;
@@ -1471,6 +1719,7 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
                    pressures,
                    R,
                    v_start,
+                   normalize_v,
                    grid_pos,
                    grid_uv);
 
@@ -1645,8 +1894,7 @@ void PaintStroke::spline_uv(const StrokeCache &cache,
    * In non-pressure mode V is in world units, so 0.5 × radius. */
   const float v_min = std::min({uv00.y, uv10.y, uv01.y, uv11.y});
   const float v_max = std::max({uv00.y, uv10.y, uv01.y, uv11.y});
-  const bool use_norm_v_threshold = brush && brush->mtex.roll_pressure_scale &&
-                                    BKE_brush_use_size_pressure(brush);
+  const bool use_norm_v_threshold = roll_texture_pressure_scaled();
   const float v_threshold = use_norm_v_threshold ? 0.5f : 0.5f * cache.initial_radius;
   float2 uv_result;
   float3 t_result;
@@ -1689,8 +1937,7 @@ void PaintStroke::spline_uv(const StrokeCache &cache,
 
   /* Apply V offset to keep texture continuous as virtual knots are consumed.
    * Use normalized offset when pressure-scaled V is baked into the grid. */
-  const bool use_norm_v = brush && brush->mtex.roll_pressure_scale &&
-                          BKE_brush_use_size_pressure(brush);
+  const bool use_norm_v = roll_texture_pressure_scaled();
   if (use_norm_v) {
     r_out[1] += stroke_distance_normalized_ - roll_virtual_length_normalized_;
   }
@@ -1854,8 +2101,14 @@ void PaintStroke::draw_debug_roll(bContext *C) const
         immEnd();
       }
 
-      /* Cyan markers at eval range boundaries. */
+      /* Point markers need the point shader — the plain uniform-color
+       * shader ignores GPU_point_size() on current GPU backends. */
+      immUnbindProgram();
       GPU_point_size(10.0f);
+      immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
+
+      /* Cyan markers at eval range boundaries. */
+      immUniform1f("size", 10.0f);
       immUniformColor4ub(0, 255, 255, 255);
       for (int boundary_r : {eval_lo, std::min(eval_hi + 1, rows - 1)}) {
         immBegin(GPU_PRIM_POINTS, 1);
@@ -1863,23 +2116,22 @@ void PaintStroke::draw_debug_roll(bContext *C) const
         immEnd();
       }
 
-      /* Red dots at collapsed border vertices (where consecutive border
-       * vertices share the same position = self-intersection collapse). */
+      /* Red dots at self-intersection collapses: the first vertex of each
+       * run of consecutive border vertices sharing one position. */
       GPU_point_size(8.0f);
+      immUniform1f("size", 8.0f);
       immUniformColor4ub(255, 0, 0, 255);
       for (int side = 0; side < 2; side++) {
         const Vector<float3> &border = (side == 0) ? cache.roll_border_left :
                                                      cache.roll_border_right;
         const int bcount = int(border.size());
-        for (int k = 2; k < bcount - 1; k++) {
-          if (math::distance_squared(border[k - 1], border[k]) < 1e-10f &&
-              math::distance_squared(border[k], border[k + 1]) < 1e-10f)
+        for (int k = 1; k < bcount - 1; k++) {
+          if (math::distance_squared(border[k], border[k + 1]) < 1e-10f &&
+              math::distance_squared(border[k - 1], border[k]) > 1e-10f)
           {
-            if (math::distance_squared(border[k - 2], border[k - 1]) > 1e-10f) {
-              immBegin(GPU_PRIM_POINTS, 1);
-              immVertex3fv(pos3d_attr, border[k]);
-              immEnd();
-            }
+            immBegin(GPU_PRIM_POINTS, 1);
+            immVertex3fv(pos3d_attr, border[k]);
+            immEnd();
           }
         }
       }
@@ -1921,7 +2173,7 @@ void PaintStroke::draw_roll_preview(bContext *C) const
 
   /* Determine which polyline index corresponds to the last-painted dab.
    * Points from painted_poly onward are "unflushed" and shown as preview. */
-  constexpr int buf_cap = PAINT_MAX_INPUT_SAMPLES;
+  constexpr int buf_cap = ROLL_MAX_STROKE_POINTS;
   const int half = roll_half_points();
 
   int painted_poly;

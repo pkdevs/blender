@@ -107,6 +107,13 @@ struct PaintSample {
 inline constexpr float MIN_ROLL_PRESSURE = 0.05f;
 
 /**
+ * Capacity of the recorded-point ring buffer used by roll texture mapping.
+ * The stroke history kept for the strip (see PaintStroke::roll_max_points)
+ * plus the virtual extension must fit in it.
+ */
+inline constexpr int ROLL_MAX_STROKE_POINTS = 512;
+
+/**
  * Polyline-based arc-length parameterized spline for roll texture mapping.
  * Uses raw stroke knots as the polyline — smoothing is handled by the
  * subdivided grid + Laplacian smoothing in compute_roll_center().
@@ -120,6 +127,13 @@ struct RollSpline {
   Vector<float3> tangents_3d;
   /** Per-vertex pen pressure (0..1). Used to compute variable strip width. */
   Vector<float> pressures;
+  /**
+   * Per-vertex surface normal, sampled when the point was recorded and
+   * frozen.  The strip borders, the self-intersection collapse and the LUT
+   * projection all derive from these, so the strip geometry of recorded
+   * segments never changes from dab to dab.
+   */
+  Vector<float3> normals;
 
   void clear();
   bool is_empty() const;
@@ -141,6 +155,8 @@ struct PaintStrokePoint {
   float2 mouse_in;
   float2 mouse_out;
   float3 location;
+  /** Object-space surface normal at `location`, frozen at recording time. */
+  float3 surface_normal = float3(0, 0, 1);
   float pressure = 0.0f;
   float x_tilt = 0.0f;
   float y_tilt = 0.0f;
@@ -215,7 +231,7 @@ struct PaintStroke : NonCopyable, NonMovable {
   int stroke_sample_index_ = 0;
   int last_painted_roll_idx_ = -1; /* ring buffer index of the last deferred dab placed */
   float spacing_raw_ = 0.0f;
-  PaintStrokePoint points_[PAINT_MAX_INPUT_SAMPLES];
+  PaintStrokePoint points_[ROLL_MAX_STROKE_POINTS];
   int num_points_ = 0;
   int cur_point_ = 0;
   RollSpline roll_spline_;
@@ -393,19 +409,30 @@ struct PaintStroke : NonCopyable, NonMovable {
               float r_location[3],
               bool *r_location_is_set);
 
+  /** Recorded points per brush radius of stroke (from the brush spacing). */
+  int roll_points_per_radius() const;
+  /** Stroke history kept for the roll strip, in recorded points. */
   int roll_max_points() const;
+  /** True when the roll texture should shrink with the pressure-scaled strip
+   * width (the "Pressure Scale" option with size pressure enabled). */
+  bool roll_texture_pressure_scaled() const;
+  /** Dab deferral: dabs lag this many points behind the pen so the strip
+   * ahead of them is complete (about three radii). */
   int roll_half_points() const
   {
-    return (roll_max_points() * 3) / 5 + 2;
+    return roll_points_per_radius() * 3 + 2;
   }
   void add_roll_point(const float2 &mouse_in,
                       const float2 &mouse_out,
                       const float3 &loc,
+                      const float3 &surface_normal,
                       float size,
                       float pressure,
                       bool pen_flip,
                       float x_tilt,
                       float y_tilt);
+  /** Object-space surface normal under `mouse`, for freezing into a roll point. */
+  float3 roll_sample_surface_normal(bContext *C, const float2 &mouse) const;
   void prepend_virtual_roll_points();
   void make_roll_spline(bContext *C);
   void finish_roll_stroke(bContext *C, wmOperator *op, const float2 &mouse_up, float pressure);

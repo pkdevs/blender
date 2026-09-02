@@ -547,6 +547,7 @@ void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float
       add_roll_point(mval,
                      mouse_out,
                      location,
+                     roll_sample_surface_normal(C, mouse_out),
                      paint_runtime->pixel_radius,
                      pressure,
                      pen_flip_,
@@ -559,6 +560,7 @@ void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float
   add_roll_point(mval,
                  mouse_out,
                  location,
+                 need_roll_mapping_ ? roll_sample_surface_normal(C, mouse_out) : float3(0, 0, 1),
                  paint_runtime->pixel_radius,
                  pressure,
                  pen_flip_,
@@ -594,7 +596,7 @@ void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float
   PaintStrokePoint *point;
 
   if (need_roll_mapping_) {
-    constexpr int buf_cap = PAINT_MAX_INPUT_SAMPLES;
+    constexpr int buf_cap = ROLL_MAX_STROKE_POINTS;
     const int half = roll_half_points();
 
     /* Wait until there are enough real spline segments ahead of the dab
@@ -633,7 +635,7 @@ void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float
     point = &points_[look_back];
   }
   else {
-    constexpr int cap = PAINT_MAX_INPUT_SAMPLES;
+    constexpr int cap = ROLL_MAX_STROKE_POINTS;
     point = &points_[(cur_point_ - 1 + cap) % cap];
   }
 

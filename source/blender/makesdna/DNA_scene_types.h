@@ -1146,7 +1146,7 @@ struct UnifiedPaintSettings {
 /** \name Paint Mode/Tool Data
  * \{ */
 
-#define PAINT_MAX_INPUT_SAMPLES 256
+#define PAINT_MAX_INPUT_SAMPLES 64
 
 struct NamedBrushAssetReference {
   struct NamedBrushAssetReference *next = nullptr, *prev = nullptr;
