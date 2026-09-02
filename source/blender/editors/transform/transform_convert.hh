@@ -101,6 +101,10 @@ struct TransDataVertSlideVert {
  */
 struct CurvesTransformData {
   Vector<ed::greasepencil::MutableDrawingInfo> drawings;
+  /**
+   * Store grease pencil keyframes that are duplicated during transform, later remove them when
+   * operation is cancelled.
+   */
   Map<bke::greasepencil::Layer *, int> duplicate_layer_keyframes;
 
   IndexMaskMemory memory;
