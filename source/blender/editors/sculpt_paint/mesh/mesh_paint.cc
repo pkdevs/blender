@@ -150,7 +150,9 @@ void mode_exit_generic(Scene &scene, Object &ob, const eObjectMode mode_flag)
     BLI_assert(0);
   }
 
-  bke::paint::cursor_delete_textures(*paint);
+  if (paint) {
+    bke::paint::cursor_delete_textures(*paint);
+  }
 
   /* Never leave derived meshes behind. */
   BKE_object_free_derived_caches(&ob);

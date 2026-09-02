@@ -731,8 +731,7 @@ static bool paint_draw_alpha_overlay(
       alpha_overlay_active = paint_draw_tex_overlay(
           paint, brush, vc, x, y, zoom, mode, false, true);
     }
-    if (!flag_is_set(flags, bke::paint::eOverlayControlFlags::OverrideCursor) &&
-        (mode != PaintMode::Weight))
+    if (!flag_is_set(flags, bke::paint::eOverlayControlFlags::OverrideCursor))
     {
       alpha_overlay_active = paint_draw_cursor_overlay(paint, brush, x, y, zoom);
     }
@@ -1300,8 +1299,10 @@ void ED_paint_cursor_start(Paint *paint, bool (*poll)(bContext *C))
         SPACE_TYPE_ANY, RGN_TYPE_ANY, poll, ed::sculpt_paint::paint_draw_cursor, nullptr);
   }
 
-  /* Invalidate the paint cursors. */
-  bke::paint::invalidate_overlay_all(*paint);
+  if (paint) {
+    /* Invalidate the paint cursors. */
+    bke::paint::invalidate_overlay_all(*paint);
+  }
 }
 
 }  // namespace blender
