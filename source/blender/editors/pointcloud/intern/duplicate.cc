@@ -30,7 +30,7 @@ static void duplicate_points(PointCloud &pointcloud, const IndexMask &mask)
         return;
       }
     }
-    if (bke::GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_only_span(
+    if (bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_only_span(
             iter.name, iter.domain, iter.data_type))
     {
       array_utils::copy(src, dst.span.take_front(pointcloud.totpoint));

@@ -325,7 +325,7 @@ static void transfer_attributes(
 
     /* A subset of the indices are transferred, first try to write them into an existing array. */
     if (has_matching_existing_attribute) {
-      if (bke::GSpanAttributeWriter dst_attr = dst_attributes.convert_or_add_for_write_span(
+      if (bke::GSpanAttributeWriter dst_attr = dst_attributes.lookup_or_add_for_write_span(
               item.name, item.domain, item.type))
       {
         BLI_assert(dst_attr);
