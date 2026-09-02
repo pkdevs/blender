@@ -3403,7 +3403,7 @@ void Layout::label_multiline(StringRefNull text, int icon, FontStyleAlign align,
 void Layout::label_markdown(const StringRef text)
 {
   if (G.debug_value == 4002) {
-    ::blender::ui::label_markdown_dev_config(*this);
+    label_markdown_dev_config(*this);
   }
 
   block_layout_set_current(this->block(), this);
