@@ -10,10 +10,10 @@
 
 #include "DNA_ID.h"
 #include "DNA_brush_types.h"
-#include "DNA_object_types.h"
 #include "DNA_curves_types.h"
 #include "DNA_grease_pencil_types.h"
 #include "DNA_mesh_types.h"
+#include "DNA_object_types.h"
 #include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
@@ -23,6 +23,7 @@
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
+#include "BKE_collection.hh"
 #include "BKE_compositor.hh"
 #include "BKE_main.hh"
 #include "BKE_mesh_legacy_convert.hh"
@@ -30,7 +31,6 @@
 #include "BKE_node_runtime.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
-#include "BKE_collection.hh"
 
 #include "SEQ_iterator.hh"
 #include "SEQ_sequencer.hh"
