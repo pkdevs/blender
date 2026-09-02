@@ -1225,7 +1225,7 @@ void retiming_sound_animation_data_set(const Scene *scene, const Strip *strip)
   if (correct_pitch) {
     sound_handle = BKE_sound_ensure_time_stretch_effect(strip, scene_fps);
     BKE_sound_set_scene_sound_pitch_constant_range(
-        scene, strip->runtime->scene_sound, 0, strip->start + strip->content_length(), 1.0f);
+        strip->runtime->scene_sound, 0, strip->start + strip->content_length(), 1.0f);
   }
   else {
     strip->runtime->clear_sound_time_stretch();
@@ -1236,7 +1236,7 @@ void retiming_sound_animation_data_set(const Scene *scene, const Strip *strip)
   if (strip->anim_startofs > 0) {
     const int strip_start = strip->content_start();
     BKE_sound_set_scene_sound_pitch_constant_range(
-        scene, strip->runtime->scene_sound, strip_start - strip->anim_startofs, strip_start, 1.0f);
+        strip->runtime->scene_sound, strip_start - strip->anim_startofs, strip_start, 1.0f);
   }
 
   const int sound_offset = strip->rounded_sound_offset(scene_fps);
@@ -1248,14 +1248,11 @@ void retiming_sound_animation_data_set(const Scene *scene, const Strip *strip)
         const int frame = range.start + i;
         if (correct_pitch) {
           BKE_sound_set_scene_sound_time_stretch_at_frame(
-              scene, sound_handle, frame - strip->start, 1.0 / range.speed_table[i], true);
+              sound_handle, frame - strip->start, 1.0 / range.speed_table[i], true);
         }
         else {
-          BKE_sound_set_scene_sound_pitch_at_frame(scene,
-                                                   strip->runtime->scene_sound,
-                                                   frame + sound_offset,
-                                                   range.speed_table[i],
-                                                   true);
+          BKE_sound_set_scene_sound_pitch_at_frame(
+              strip->runtime->scene_sound, frame + sound_offset, range.speed_table[i], true);
         }
       }
     }
@@ -1263,11 +1260,10 @@ void retiming_sound_animation_data_set(const Scene *scene, const Strip *strip)
       if (correct_pitch) {
         const float speed = range.speed == 0.0f ? 1.0f : 1.0f / range.speed;
         BKE_sound_set_scene_sound_time_stretch_constant_range(
-            scene, sound_handle, range.start - strip->start, range.end - strip->start, speed);
+            sound_handle, range.start - strip->start, range.end - strip->start, speed);
       }
       else {
-        BKE_sound_set_scene_sound_pitch_constant_range(scene,
-                                                       strip->runtime->scene_sound,
+        BKE_sound_set_scene_sound_pitch_constant_range(strip->runtime->scene_sound,
                                                        range.start + sound_offset,
                                                        range.end + sound_offset,
                                                        range.speed);

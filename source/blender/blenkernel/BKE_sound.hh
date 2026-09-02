@@ -117,12 +117,12 @@ void BKE_sound_ensure_scene(Scene *scene);
 /** Mark the evaluated #Scene's audio animation cache dirty. */
 void BKE_sound_invalidate_scene_audio_animation_cache(Scene *scene);
 
-/** Explicitly generate framed audio automation; frame-change handlers are evaluated. */
+/** Explicitly generate framed audio automation with full dependency-graph evaluation. */
 void BKE_sound_bake_animation(
     Main *bmain, Scene *scene, Depsgraph *depsgraph, int frame_start, int frame_end);
 
-/** Lazily prepare automatic framed audio automation without evaluating future frame-change
- * handlers. */
+/** Lazily prepare directly evaluable framed audio automation. Dependency-driven values and
+ * frame-change handlers remain live and are not evaluated at future frames. */
 void BKE_sound_ensure_scene_audio_animation(
     Main *bmain, Scene *scene, Depsgraph *depsgraph, int frame_start, int frame_end);
 
@@ -166,23 +166,35 @@ void BKE_sound_update_sequence_handle(AUD_SequenceEntry handle, AUD_Sound sound_
 
 void BKE_sound_set_scene_volume(Scene *scene, float volume);
 
-void BKE_sound_set_scene_sound_volume_at_frame(
-    const Scene *scene, AUD_SequenceEntry handle, int frame, float volume, bool animated);
+void BKE_sound_set_scene_sound_volume_at_frame(AUD_SequenceEntry handle,
+                                               int frame,
+                                               float volume,
+                                               bool animated);
 
-void BKE_sound_set_scene_sound_pitch_at_frame(
-    const Scene *scene, AUD_SequenceEntry handle, int frame, float pitch, bool animated);
+void BKE_sound_set_scene_sound_pitch_at_frame(AUD_SequenceEntry handle,
+                                              int frame,
+                                              float pitch,
+                                              bool animated);
 
-void BKE_sound_set_scene_sound_pitch_constant_range(
-    const Scene *scene, AUD_SequenceEntry handle, int frame_start, int frame_end, float pitch);
+void BKE_sound_set_scene_sound_pitch_constant_range(AUD_SequenceEntry handle,
+                                                    int frame_start,
+                                                    int frame_end,
+                                                    float pitch);
 
-void BKE_sound_set_scene_sound_time_stretch_at_frame(
-    const Scene *scene, AUD_Sound handle, int frame, float time_stretch, bool animated);
+void BKE_sound_set_scene_sound_time_stretch_at_frame(AUD_Sound handle,
+                                                     int frame,
+                                                     float time_stretch,
+                                                     bool animated);
 
-void BKE_sound_set_scene_sound_time_stretch_constant_range(
-    const Scene *scene, AUD_Sound handle, int frame_start, int frame_end, float time_stretch);
+void BKE_sound_set_scene_sound_time_stretch_constant_range(AUD_Sound handle,
+                                                           int frame_start,
+                                                           int frame_end,
+                                                           float time_stretch);
 
-void BKE_sound_set_scene_sound_pan_at_frame(
-    const Scene *scene, AUD_SequenceEntry handle, int frame, float pan, bool animated);
+void BKE_sound_set_scene_sound_pan_at_frame(AUD_SequenceEntry handle,
+                                            int frame,
+                                            float pan,
+                                            bool animated);
 
 void BKE_sound_update_sequencer(Main *main, bSound *sound);
 

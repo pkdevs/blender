@@ -65,9 +65,10 @@ enum eStripFlag : uint32_t {
   SEQ_USE_EFFECT_DEFAULT_FADE = (1 << 22),
   /* (1 << 23) unused, set to zero by versioning code. */
 
-  /* (1 << 24) unused. */
-  /* (1 << 25) unused. */
-  /* (1 << 26) unused. */
+  /* Flags for whether those properties are animated or not */
+  SEQ_AUDIO_VOLUME_ANIMATED = (1 << 24),
+  SEQ_AUDIO_PITCH_ANIMATED = (1 << 25),
+  SEQ_AUDIO_PAN_ANIMATED = (1 << 26),
   SEQ_AUDIO_DRAW_WAVEFORM = (1 << 27),
 
   /* Don't include annotations in OpenGL previews of Scene strips. */

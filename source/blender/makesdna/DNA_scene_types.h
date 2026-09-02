@@ -228,7 +228,7 @@ enum eAudio_Flag : short {
   AUDIO_MUTE = 1 << 0,
   AUDIO_SYNC = 1 << 1,
   AUDIO_SCRUB = 1 << 2,
-  /* (1 << 3) unused. */
+  AUDIO_VOLUME_ANIMATED = 1 << 3,
 };
 ENUM_OPERATORS(eAudio_Flag)
 

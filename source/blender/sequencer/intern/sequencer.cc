@@ -1158,13 +1158,13 @@ static void strip_update_sound_properties(const Scene *scene, const Strip *strip
     output_volume *= meta->volume;
   }
   const int frame = BKE_scene_frame_get(scene);
-  const bool is_baking = scene->runtime->audio.animation_write_state ==
-                         bke::AudioAnimationWriteState::Bake;
-  BKE_sound_set_scene_sound_volume_at_frame(
-      scene, strip->runtime->scene_sound, frame, output_volume, is_baking);
+  BKE_sound_set_scene_sound_volume_at_frame(strip->runtime->scene_sound,
+                                            frame,
+                                            output_volume,
+                                            (strip->flag & SEQ_AUDIO_VOLUME_ANIMATED) != 0);
   retiming_sound_animation_data_set(scene, strip);
   BKE_sound_set_scene_sound_pan_at_frame(
-      scene, strip->runtime->scene_sound, frame, strip->pan, is_baking);
+      strip->runtime->scene_sound, frame, strip->pan, (strip->flag & SEQ_AUDIO_PAN_ANIMATED) != 0);
 }
 
 static void strip_update_sound_modifiers(Strip *strip)

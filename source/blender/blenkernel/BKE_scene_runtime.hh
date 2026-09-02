@@ -56,7 +56,12 @@ class SequencerRuntime {
 enum class AudioAnimationWriteState {
   Normal,
   Bake,
-  Preserve,
+};
+
+enum class AudioAnimationCacheType {
+  None,
+  Automatic,
+  Explicit,
 };
 
 struct SceneAudioRuntime {
@@ -69,6 +74,9 @@ struct SceneAudioRuntime {
   bool animation_cache_dirty = true;
   /* Controls how evaluated audio updates write to Audaspace. */
   AudioAnimationWriteState animation_write_state = AudioAnimationWriteState::Normal;
+  /* Automatic caches only contain directly evaluable animation. Explicit caches can also contain
+   * dependency-driven values and must be replaced before normal playback or movie rendering. */
+  AudioAnimationCacheType animation_cache_type = AudioAnimationCacheType::None;
   /* Identity of the frame-change handler lists associated with the current audio cache state.
    * An empty value means that no frame-change handlers were present. */
   std::optional<uint64_t> animation_cache_frame_change_handlers_hash;
