@@ -731,8 +731,7 @@ static bool paint_draw_alpha_overlay(
       alpha_overlay_active = paint_draw_tex_overlay(
           paint, brush, vc, x, y, zoom, mode, false, true);
     }
-    if (!flag_is_set(flags, bke::paint::eOverlayControlFlags::OverrideCursor))
-    {
+    if (!flag_is_set(flags, bke::paint::eOverlayControlFlags::OverrideCursor)) {
       alpha_overlay_active = paint_draw_cursor_overlay(paint, brush, x, y, zoom);
     }
   }
