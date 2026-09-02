@@ -526,48 +526,42 @@ void CUDADevice::reserve_local_memory(const uint64_t kernel_features)
 
 void *CUDADevice::host_alloc(const MemoryType type, const size_t size)
 {
-  if (integrated_gpu && (type == MEM_READ_ONLY || type == MEM_READ_WRITE)) {
+  if (integrated_gpu && type == MEM_READ_WRITE) {
     const CUDAContextScope scope(this);
 
-    int host_alloc_type = 2;
-    if (const char *host_alloc_type_str = getenv("CYCLES_CUDA_INTEGRATED_HOST_ALLOC")) {
-      host_alloc_type = atoi(host_alloc_type_str);
-    }
-
+    void *host_pointer = nullptr;
+    /* Register externally allocated memory on integrated GPUs, since that is currently the most
+     * optimal path for performance. */
 #  ifdef _WIN32
-    if (host_alloc_type >= 2) {
-      static const auto VirtualAlloc2 = reinterpret_cast<PVOID (*)(
-          HANDLE, PVOID, SIZE_T, ULONG, ULONG, MEM_EXTENDED_PARAMETER *, ULONG)>(
-          GetProcAddress(GetModuleHandleW(L"KernelBase.dll"), "VirtualAlloc2"));
-      if (VirtualAlloc2 != nullptr) {
-        /* Align memory to 2MiB for optimal GPU access */
-        MEM_ADDRESS_REQUIREMENTS address_requirements = {};
-        address_requirements.Alignment = 2 * 1024 * 1024;
+    static const auto VirtualAlloc2 = reinterpret_cast<PVOID (*)(
+        HANDLE, PVOID, SIZE_T, ULONG, ULONG, MEM_EXTENDED_PARAMETER *, ULONG)>(
+        GetProcAddress(GetModuleHandleW(L"KernelBase.dll"), "VirtualAlloc2"));
+    if (VirtualAlloc2 != nullptr) {
+      /* Align memory to 2MiB boundaries for optimal GPU access */
+      MEM_ADDRESS_REQUIREMENTS address_requirements = {};
+      address_requirements.Alignment = 2 * 1024 * 1024;
 
-        MEM_EXTENDED_PARAMETER extended_param = {};
-        extended_param.Type = MemExtendedParameterAddressRequirements;
-        extended_param.Pointer = &address_requirements;
+      MEM_EXTENDED_PARAMETER extended_param = {};
+      extended_param.Type = MemExtendedParameterAddressRequirements;
+      extended_param.Pointer = &address_requirements;
 
-        void *host_pointer = VirtualAlloc2(
-            nullptr, nullptr, size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE, &extended_param, 1);
-        if (host_pointer != nullptr) {
-          if (cuMemHostRegister(host_pointer, size, CU_MEMHOSTREGISTER_DEVICEMAP) == CUDA_SUCCESS)
-          {
-            return host_pointer;
-          }
-          VirtualFree(host_pointer, 0, MEM_RELEASE);
-        }
-      }
-
-      host_alloc_type = 0;
+      host_pointer = VirtualAlloc2(
+          nullptr, nullptr, size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE, &extended_param, 1);
     }
+#  else
+    host_pointer = util_aligned_malloc(size, MIN_ALIGNMENT_DEVICE_MEMORY);
 #  endif
 
-    if (host_alloc_type >= 1) {
-      void *host_pointer = nullptr;
-      if (cuMemHostAlloc(&host_pointer, size, CU_MEMHOSTALLOC_DEVICEMAP) == CUDA_SUCCESS) {
+    if (host_pointer != nullptr) {
+      if (cuMemHostRegister(host_pointer, size, CU_MEMHOSTREGISTER_DEVICEMAP) == CUDA_SUCCESS) {
         return host_pointer;
       }
+
+#  ifdef _WIN32
+      VirtualFree(host_pointer, 0, MEM_RELEASE);
+#  else
+      util_aligned_free(host_pointer, size);
+#  endif
     }
 
     /* Fall back to normal host allocation. */
@@ -578,17 +572,15 @@ void *CUDADevice::host_alloc(const MemoryType type, const size_t size)
 
 void CUDADevice::host_free(const MemoryType type, void *host_pointer, const size_t size)
 {
-  if (integrated_gpu && (type == MEM_READ_ONLY || type == MEM_READ_WRITE)) {
+  if (integrated_gpu && type == MEM_READ_WRITE) {
     const CUDAContextScope scope(this);
 
-#  ifdef _WIN32
     if (cuMemHostUnregister(host_pointer) == CUDA_SUCCESS) {
+#  ifdef _WIN32
       VirtualFree(host_pointer, 0, MEM_RELEASE);
-      return;
-    }
+#  else
+      util_aligned_free(host_pointer, size);
 #  endif
-
-    if (cuMemFreeHost(host_pointer) == CUDA_SUCCESS) {
       return;
     }
 
@@ -600,10 +592,10 @@ void CUDADevice::host_free(const MemoryType type, void *host_pointer, const size
 
 GPUDevice::Mem *CUDADevice::generic_alloc(device_memory &mem, const size_t pitch_padding)
 {
-  if (integrated_gpu && mem.type != MEM_DEVICE_ONLY && mem.host_pointer != nullptr) {
-    CUDAContextScope scope(this);
+  /* Can simply access the host allocation directly on integrated GPUs. */
+  if (integrated_gpu && mem.type == MEM_READ_WRITE && mem.host_pointer != nullptr) {
+    const CUDAContextScope scope(this);
 
-    /* Can just use shared allocation with devices that have a unified memory architecture. */
     void *device_pointer = nullptr;
     cuMemHostGetDevicePointer((CUdeviceptr *)&device_pointer, mem.host_pointer, 0);
     if (device_pointer) {
@@ -661,9 +653,10 @@ void CUDADevice::shared_free(void *shared_pointer)
 void *CUDADevice::shared_to_device_pointer(const void *shared_pointer)
 {
   CUDAContextScope scope(this);
+
   void *device_pointer = nullptr;
   cuda_assert(
-      cuMemHostGetDevicePointer_v2((CUdeviceptr *)&device_pointer, (void *)shared_pointer, 0));
+      cuMemHostGetDevicePointer((CUdeviceptr *)&device_pointer, (void *)shared_pointer, 0));
   return device_pointer;
 }
 
