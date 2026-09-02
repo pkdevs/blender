@@ -23,8 +23,8 @@
 #include "BKE_mesh_wrapper.hh"
 #include "BKE_object.hh"
 
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
@@ -363,7 +363,7 @@ static int loopcut_tool_preview_cuts_from_toolsettings(const bContext *C)
   }
 
   PointerRNA loopcut_ptr = RNA_pointer_get(&tool_props, "MESH_OT_loopcut");
-  if (loopcut_ptr.data == nullptr) {
+  if (!loopcut_ptr) {
     return default_cuts;
   }
 

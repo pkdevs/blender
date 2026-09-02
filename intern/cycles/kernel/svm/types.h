@@ -18,6 +18,7 @@ using SVMStackOffset = uint8_t;
 struct SVMInputInt {
   int value;
   SVMStackOffset offset;
+  uint8_t _pad[3];
 };
 
 /* Encodes a node float input, as either float value or a stack offset
@@ -66,7 +67,9 @@ enum NodeAttributeType : uint8_t {
   NODE_ATTR_FLOAT3,
   NODE_ATTR_FLOAT4,
   NODE_ATTR_RGBA,
-  NODE_ATTR_MATRIX
+  NODE_ATTR_MATRIX,
+  NODE_ATTR_QUATERNION,
+  NODE_ATTR_SPHERICAL_HARMONICS,
 };
 
 enum NodeGeometry : uint8_t {

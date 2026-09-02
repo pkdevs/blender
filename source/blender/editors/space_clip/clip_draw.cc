@@ -16,12 +16,12 @@
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_math_geom.h"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_image.hh"
@@ -359,9 +359,8 @@ static void draw_stabilization_border(
     const uint shdr_pos = GPU_vertformat_attr_add(
         immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
 
-    /* Exclusive OR allows to get orig value when second operand is 0,
-     * and negative of orig value when second operand is 1. */
-    GPU_logic_op_xor_set(true);
+    /* Use invert blend mode for highly visible border */
+    GPU_blend(GPU_BLEND_INVERT);
 
     GPU_matrix_push();
     GPU_matrix_translate_2f(x, y);
@@ -387,7 +386,7 @@ static void draw_stabilization_border(
 
     GPU_matrix_pop();
 
-    GPU_logic_op_xor_set(false);
+    GPU_blend(GPU_BLEND_NONE);
   }
 }
 
@@ -829,14 +828,15 @@ static void draw_marker_areas(SpaceClip *sc,
       immUniform1f("dash_width", 6.0f);
       immUniform1f("udash_factor", 0.5f);
 
-      GPU_logic_op_xor_set(true);
+      /* Use invert blend mode for highly visible border */
+      GPU_blend(GPU_BLEND_INVERT);
 
       immBegin(GPU_PRIM_LINES, 2);
       immVertex2fv(shdr_pos, pos);
       immVertex2fv(shdr_pos, marker_pos);
       immEnd();
 
-      GPU_logic_op_xor_set(false);
+      GPU_blend(GPU_BLEND_NONE);
       immUnbindProgram();
     }
   }

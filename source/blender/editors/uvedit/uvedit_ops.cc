@@ -24,9 +24,9 @@
 #include "BLI_enum_flags.hh"
 #include "BLI_kdtree.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 
 #include "BLT_translation.hh"
 
@@ -411,7 +411,7 @@ static void UV_OT_move_on_axis(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = uv_move_on_axis_exec;
-  ot->poll = ED_operator_uvedit;
+  ot->poll = ED_operator_uvedit_space_image;
 
   /* properties */
   RNA_def_enum(ot->srna, "type", shift_items, int(UVMoveType::Udim), "Type", "Move Type");
@@ -758,8 +758,10 @@ static wmOperatorStatus uv_arrange_islands_exec(bContext *C, wmOperator *op)
   }
   else if (initial_position == UVAlignInitialPosition::UVTileGrid) {
     /* Leave the minimum at zero. */
-    bounds.max[0] = sima->tile_grid_shape[0];
-    bounds.max[1] = sima->tile_grid_shape[1];
+    if (sima) {
+      bounds.max[0] = sima->tile_grid_shape[0];
+      bounds.max[1] = sima->tile_grid_shape[1];
+    }
   }
   else {
     if (sima) {
@@ -2797,7 +2799,10 @@ static bool uv_copy_mirrored_faces(const Scene *scene,
   for (const auto &[f_dst, f_src] : face_map.items()) {
 
     /* Skip unless both faces have all their UVs selected. */
-    if (!uvedit_face_select_test(scene, bm, f_dst) || !uvedit_face_select_test(scene, bm, f_src)) {
+    if (!uvedit_face_visible_test(scene, f_dst) || !uvedit_face_select_test(scene, bm, f_dst)) {
+      continue;
+    }
+    if (!uvedit_face_visible_test(scene, f_src) || !uvedit_face_select_test(scene, bm, f_src)) {
       continue;
     }
 

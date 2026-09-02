@@ -34,12 +34,12 @@
 #include "BKE_scene_runtime.hh"
 #include "BKE_screen.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -293,11 +293,12 @@ void ED_node_set_active(
           /* Sync to active texpaint slot, otherwise we can end up painting on a different slot
            * than we are looking at. */
           if (ma.texpaintslot) {
-            if (node->id != nullptr && GS(node->id->name) == ID_IM) {
+            if (node->id != nullptr && node->id->id_type() == ID_IM) {
               Image *image = id_cast<Image *>(node->id);
               for (int i = 0; i < ma.tot_slots; i++) {
                 if (ma.texpaintslot[i].ima == image) {
                   ma.paint_active_slot = i;
+                  DEG_id_tag_update(&ma.id, ID_RECALC_SYNC_TO_EVAL);
                 }
               }
             }
@@ -314,7 +315,7 @@ void ED_node_set_active(
       /* Sync to Image Editor under the following conditions:
        * - current image is not pinned
        * - current image is not a Render Result or ViewerNode (want to keep looking at these) */
-      if (node->id != nullptr && GS(node->id->name) == ID_IM) {
+      if (node->id != nullptr && node->id->id_type() == ID_IM) {
         Image *image = id_cast<Image *>(node->id);
         ED_space_image_sync(bmain, image, true);
       }
@@ -516,7 +517,7 @@ float nearest_node_grid_coord(float co)
 {
   /* Size and location of nodes are independent of UI scale, so grid size should be independent of
    * UI scale as well. */
-  float grid_size = grid_size_get() / UI_SCALE_FAC;
+  float grid_size = NODE_GRID_UNIT;
   float rest = fmod(co, grid_size);
   float offset = rest - grid_size / 2 >= 0 ? grid_size : 0;
 
@@ -723,11 +724,13 @@ void node_set_hidden_sockets(bNode *node, int set)
     for (bNodeSocket &sock : node->inputs) {
       if (sock.link == nullptr) {
         sock.flag |= SOCK_HIDDEN;
+        sock.flag &= ~SOCK_SELECT;
       }
     }
     for (bNodeSocket &sock : node->outputs) {
       if ((sock.flag & SOCK_IS_LINKED) == 0) {
         sock.flag |= SOCK_HIDDEN;
+        sock.flag &= ~SOCK_SELECT;
       }
     }
   }
@@ -1171,9 +1174,17 @@ wmOperatorStatus node_render_changed_exec(bContext *C, wmOperator * /*op*/)
    * All the nodes are using same render result, so there is no need to do
    * anything smart about check how exactly scene is used. */
   bNode *node = nullptr;
-  for (bNode *node_iter : sce->compositing_node_group->all_nodes()) {
-    if (node_iter->id == id_cast<ID *>(sce)) {
-      node = node_iter;
+  for (SceneCompositorEffect &effect : sce->compositor_effects) {
+    if (!effect.node_group || ID_MISSING(effect.node_group)) {
+      continue;
+    }
+    for (bNode *node_iter : effect.node_group->all_nodes()) {
+      if (node_iter->id == id_cast<ID *>(sce)) {
+        node = node_iter;
+        break;
+      }
+    }
+    if (node) {
       break;
     }
   }
@@ -1363,7 +1374,7 @@ static wmOperatorStatus node_activate_viewer_exec(bContext *C, wmOperator * /*op
   bNodeTree *ntree = nullptr;
   bNode *node = nullptr;
 
-  if (ptr.data) {
+  if (ptr) {
     node = static_cast<bNode *>(ptr.data);
     ntree = reinterpret_cast<bNodeTree *>(ptr.owner_id);
   }
@@ -1495,7 +1506,7 @@ static wmOperatorStatus node_toggle_viewer_exec(bContext *C, wmOperator * /*op*/
   bNodeTree *ntree = nullptr;
   wmOperatorStatus ret = OPERATOR_FINISHED;
 
-  if (ptr.data) {
+  if (ptr) {
     node = static_cast<bNode *>(ptr.data);
     ntree = reinterpret_cast<bNodeTree *>(ptr.owner_id);
   }
@@ -1694,8 +1705,11 @@ static wmOperatorStatus node_delete_exec(bContext *C, wmOperator * /*op*/)
     }
   }
 
+  WM_event_handling_break(*C);
+
   ED_node_set_active_viewer_key(snode);
   BKE_main_ensure_invariants(*bmain, snode->edittree->id);
+  WM_event_add_notifier(C, NC_WINDOW | NA_REMOVED, nullptr);
 
   return OPERATOR_FINISHED;
 }
@@ -1741,6 +1755,8 @@ static wmOperatorStatus node_delete_reconnect_exec(bContext *C, wmOperator * /*o
       WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, nullptr);
     }
   }
+
+  WM_event_handling_break(*C);
 
   BKE_main_ensure_invariants(*bmain, snode->edittree->id);
 
@@ -1857,7 +1873,7 @@ static wmOperatorStatus node_shader_script_update_exec(bContext *C, wmOperator *
 
   bNodeTree *ntree_base = nullptr;
   bNode *node = nullptr;
-  if (nodeptr.data) {
+  if (nodeptr) {
     ntree_base = id_cast<bNodeTree *>(nodeptr.owner_id);
     node = static_cast<bNode *>(nodeptr.data);
   }
@@ -2028,7 +2044,7 @@ static wmOperatorStatus node_cryptomatte_add_socket_exec(bContext *C, wmOperator
   bNodeTree *ntree = nullptr;
   bNode *node = nullptr;
 
-  if (ptr.data) {
+  if (ptr) {
     node = static_cast<bNode *>(ptr.data);
     ntree = id_cast<bNodeTree *>(ptr.owner_id);
   }
@@ -2077,7 +2093,7 @@ static wmOperatorStatus node_cryptomatte_remove_socket_exec(bContext *C, wmOpera
   bNodeTree *ntree = nullptr;
   bNode *node = nullptr;
 
-  if (ptr.data) {
+  if (ptr) {
     node = static_cast<bNode *>(ptr.data);
     ntree = id_cast<bNodeTree *>(ptr.owner_id);
   }

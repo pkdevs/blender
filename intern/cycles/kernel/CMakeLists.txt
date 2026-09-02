@@ -184,6 +184,7 @@ set(SRC_KERNEL_INTEGRATOR_HEADERS
   integrator/init_from_camera.h
   integrator/intersect_dedicated_light.h
   integrator/intersect_closest.h
+  integrator/intersect_mnee.h
   integrator/intersect_shadow.h
   integrator/intersect_subsurface.h
   integrator/intersect_volume_stack.h
@@ -248,6 +249,7 @@ set(SRC_KERNEL_UTIL_HEADERS
 )
 
 set(SRC_KERNEL_TYPES_HEADERS
+  constants.h
   data_arrays.h
   data_template.h
   features.h
@@ -293,6 +295,9 @@ set(SRC_UTIL_HEADERS
   ../util/math_int4.h
   ../util/math_int8.h
   ../util/math_dual.h
+  ../util/math_float3x3.h
+  ../util/math_quaternion.h
+  ../util/math_spherical_harmonics.h
   ../util/projection.h
   ../util/projection_inverse.h
   ../util/rect.h
@@ -311,6 +316,7 @@ set(SRC_UTIL_HEADERS
   ../util/types_int8.h
   ../util/types_normal.h
   ../util/types_spectrum.h
+  ../util/types_spherical_harmonics.h
   ../util/types_rgbe.h
   ../util/types_uchar2.h
   ../util/types_uchar3.h
@@ -320,6 +326,8 @@ set(SRC_UTIL_HEADERS
   ../util/types_uint4.h
   ../util/types_ushort4.h
   ../util/types_dual.h
+  ../util/types_float3x3.h
+  ../util/types_quaternion.h
 )
 
 set(LIB

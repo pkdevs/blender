@@ -6,13 +6,12 @@
 
 #include "infos/eevee_common_infos.hh"
 
-SHADER_LIBRARY_CREATE_INFO(eevee_global_ubo)
-
 #include "eevee_colorspace_lib.bsl.hh"
 #include "eevee_light_shared.hh"
 #include "eevee_lightprobe_sphere.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_spherical_harmonics.bsl.hh"
+#include "eevee_uniform.bsl.hh"
 #include "gpu_shader_math_base_lib.glsl"
 #include "gpu_shader_math_matrix_construct_lib.glsl"
 #include "gpu_shader_math_vector_safe_lib.glsl"
@@ -21,8 +20,6 @@ SHADER_LIBRARY_CREATE_INFO(eevee_global_ubo)
 namespace eevee::lightprobe::sphere {
 
 struct Remap {
-  [[legacy_info]] ShaderCreateInfo eevee_global_ubo;
-
   [[specialization_constant(true)]] bool extract_sh;
   [[specialization_constant(true)]] bool extract_sun;
 
@@ -115,11 +112,13 @@ float octahedral_texel_solid_angle(int2 local_texel, SphereProbePixelArea write_
 /* Sample cubemap and remap into an octahedral texture. */
 [[compute, local_size(SPHERE_PROBE_REMAP_GROUP_SIZE, SPHERE_PROBE_REMAP_GROUP_SIZE)]]
 void remap_cubemap_to_octahedral([[resource_table]] Remap &srt,
+                                 [[resource_table]] const Uniform &uni,
                                  [[global_invocation_id]] const uint3 global_id,
                                  [[work_group_id]] const uint3 group_id,
+                                 [[num_work_groups]] const uint3 num_groups,
                                  [[local_invocation_index]] const uint local_index)
 {
-  uint work_group_index = SPHERE_PROBE_REMAP_GROUP_SIZE * group_id.y + group_id.x;
+  const uint work_group_index = num_groups.x * group_id.y + group_id.x;
   constexpr uint group_size = SPHERE_PROBE_REMAP_GROUP_SIZE * SPHERE_PROBE_REMAP_GROUP_SIZE;
 
   SphereProbeUvArea world_coord = reinterpret_as_atlas_coord(srt.world_coord_packed);
@@ -144,13 +143,13 @@ void remap_cubemap_to_octahedral([[resource_table]] Remap &srt,
     radiance.rgb = mix(world_radiance.rgb, radiance.rgb, opacity);
   }
 
-  float sun_threshold = uniform_buf.clamp.sun_threshold;
+  float sun_threshold = uni.uniform_buf.clamp.sun_threshold;
   float3 radiance_clamped = colorspace::brightness_clamp_max(radiance, sun_threshold);
   float3 radiance_sun = radiance - radiance_clamped;
   radiance = radiance_clamped;
 
   if (srt.do_remap_mip0 && !any(greaterThanEqual(local_texel, int2(write_coord.extent)))) {
-    float clamp_indirect = uniform_buf.clamp.surface_indirect;
+    float clamp_indirect = uni.uniform_buf.clamp.surface_indirect;
     float3 out_radiance = colorspace::brightness_clamp_max(radiance, clamp_indirect);
 
     int3 texel = int3(local_texel + write_coord.offset, write_coord.layer);
@@ -418,7 +417,7 @@ void irradiance_sum([[resource_table]] IrradianceSum &srt,
   uint valid_data_len = uint(srt.probe_remap_dispatch_size.x * srt.probe_remap_dispatch_size.y);
   constexpr uint iter_count = uint(SPHERE_PROBE_MAX_HARMONIC) / group_size;
   for (uint i = 0; i < iter_count; i++) {
-    uint index = gl_WorkGroupSize.x * i + local_index;
+    uint index = SPHERE_PROBE_SH_GROUP_SIZE * i + local_index;
     if (index >= valid_data_len) {
       break;
     }
@@ -531,10 +530,12 @@ void sun_extraction([[resource_table]] SunExtraction &srt,
     float shape_power = M_1_PI * (1.0f + 1.0f / square(sun_radius));
     float point_power = 1.0f;
 
-    srt.sunlight_buf[srt.sun_id].power[LIGHT_DIFFUSE] = shape_power;
-    srt.sunlight_buf[srt.sun_id].power[LIGHT_SPECULAR] = shape_power;
-    srt.sunlight_buf[srt.sun_id].power[LIGHT_TRANSMISSION] = shape_power;
-    srt.sunlight_buf[srt.sun_id].power[LIGHT_VOLUME] = point_power;
+    srt.sunlight_buf[srt.sun_id].shape_power = shape_power;
+    srt.sunlight_buf[srt.sun_id].point_power = point_power;
+    srt.sunlight_buf[srt.sun_id].power_factor[LIGHT_DIFFUSE] = 1.0f;
+    srt.sunlight_buf[srt.sun_id].power_factor[LIGHT_SPECULAR] = 1.0f;
+    srt.sunlight_buf[srt.sun_id].power_factor[LIGHT_TRANSMISSION] = 1.0f;
+    srt.sunlight_buf[srt.sun_id].power_factor[LIGHT_VOLUME] = 1.0f;
 
     /* NOTE: Use the radius from UI instead of auto sun size for now. */
   }

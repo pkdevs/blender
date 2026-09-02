@@ -33,8 +33,6 @@ struct TilesWrite {
 namespace tile_flatten {
 
 struct Resources {
-  [[legacy_info]] ShaderCreateInfo draw_view;
-
   [[sampler(0)]] sampler2D coc_tx;
 
   /**
@@ -57,7 +55,6 @@ void comp_main([[resource_table]] Resources &srt,
                [[resource_table]] TilesWrite &tiles,
                [[work_group_id]] const uint3 group_id,
                [[global_invocation_id]] const uint3 global_id,
-               [[local_invocation_id]] const uint3 local_id,
                [[local_invocation_index]] const uint local_index)
 {
   if (local_index == 0u) {
@@ -119,8 +116,6 @@ void comp_main([[resource_table]] Resources &srt,
 namespace tile_dilate {
 
 struct Resources {
-  [[legacy_info]] ShaderCreateInfo draw_view;
-
   [[compilation_constant]] const bool dilate_mode_min_max;
 
   [[push_constant]] const int ring_count;
@@ -131,9 +126,7 @@ struct Resources {
 void comp_main([[resource_table]] Resources &srt,
                [[resource_table]] Tiles &in_tiles,
                [[resource_table]] TilesWrite &out_tiles,
-               [[global_invocation_id]] const uint3 global_id,
-               [[local_invocation_id]] const uint3 local_id,
-               [[local_invocation_index]] const uint local_index)
+               [[global_invocation_id]] const uint3 global_id)
 {
   int2 center_tile_pos = int2(global_id.xy);
 

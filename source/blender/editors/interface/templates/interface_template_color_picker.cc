@@ -6,8 +6,8 @@
  * \ingroup edinterface
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_string_ref.hh"
 
 #include "BLT_translation.hh"
@@ -242,7 +242,7 @@ void template_palette(Layout *layout, PointerRNA *ptr, const StringRefNull propn
   }
 
   const PointerRNA cptr = RNA_property_pointer_get(ptr, prop);
-  if (!cptr.data || !RNA_struct_is_a(cptr.type, RNA_Palette)) {
+  if (!cptr || !RNA_struct_is_a(cptr.type, RNA_Palette)) {
     return;
   }
 

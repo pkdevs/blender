@@ -13,7 +13,7 @@
 #include "BLI_function_ref.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_sys_types.h"
+#include "BLI_sys_types.hh"
 
 namespace blender {
 
@@ -122,6 +122,7 @@ enum NodeDefaultInputType : short {
   NODE_DEFAULT_INPUT_HANDLE_RIGHT_FIELD = 7,
   NODE_DEFAULT_INPUT_SCENE_FRAME = 8,
   NODE_DEFAULT_INPUT_UNIFORM_IMAGE_COORDINATES = 9,
+  NODE_DEFAULT_INPUT_SELF_OBJECT = 10,
 };
 
 struct bNodeTreeInterfaceSocket {
@@ -147,7 +148,11 @@ struct bNodeTreeInterfaceSocket {
   struct IDProperty *properties = nullptr;
 
   NodeSocketInterfaceStructureType structure_type = NodeSocketInterfaceStructureType::Auto;
-  char _pad[7] = {};
+
+  /* Needed to ensure forward compatibility of PROP_PIXEL socket subtype. */
+  char is_pixel_socket_forward_compat = false;
+
+  char _pad[6] = {};
 
 #ifdef __cplusplus
   bke::bNodeSocketType *socket_typeinfo() const;

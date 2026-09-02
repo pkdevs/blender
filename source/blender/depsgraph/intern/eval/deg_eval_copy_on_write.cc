@@ -20,8 +20,8 @@
 
 #include <cstring>
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_curve.hh"
 #include "BKE_global.hh"
@@ -59,7 +59,7 @@
 #endif
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_armature.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_lib_query.hh"
@@ -166,7 +166,6 @@ const ID *nested_id_hack_get_discarded_pointers(void *storage, const ID *id)
       Scene *scene = static_cast<Scene *>(storage);
       *scene = dna::shallow_copy(*id_cast<Scene *>(const_cast<ID *>(id)));
       scene->toolsettings = nullptr;
-      scene->nodetree = nullptr;
       return &scene->id;
     }
 
@@ -483,6 +482,9 @@ int foreach_libblock_remap_callback(LibraryIDLinkCallbackData *cb_data)
   if (*id_p == nullptr) {
     return IDWALK_RET_NOP;
   }
+
+  BLI_assert(cb_data->owner_id);
+  BLI_assert(cb_data->owner_id->tag & ID_TAG_COPIED_ON_EVAL);
 
   RemapCallbackUserData *user_data = static_cast<RemapCallbackUserData *>(cb_data->user_data);
   const Depsgraph *depsgraph = user_data->depsgraph;

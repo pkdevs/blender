@@ -8,20 +8,15 @@
 
 #pragma once
 
-#include "draw_object_infos_infos.hh"
-#include "infos/eevee_common_infos.hh"
-
-FRAGMENT_SHADER_CREATE_INFO(draw_view)
-FRAGMENT_SHADER_CREATE_INFO(draw_object_infos)
-FRAGMENT_SHADER_CREATE_INFO(eevee_utility_texture)
-
-#include "draw_view_lib.glsl"
+#include "draw_model.bsl.hh"
+#include "draw_view.bsl.hh"
 #include "eevee_closure.bsl.hh"
 #include "eevee_gbuffer_read.bsl.hh"
 #include "eevee_hiz.bsl.hh"
 #include "eevee_light_eval.bsl.hh"
 #include "eevee_lightprobe.bsl.hh"
 #include "eevee_renderpass.bsl.hh"
+#include "eevee_reverse_z_lib.bsl.hh"
 #include "eevee_subsurface_lib.bsl.hh"
 #include "gpu_shader_codegen_lib.glsl"
 #include "gpu_shader_fullscreen_lib.glsl"
@@ -39,6 +34,7 @@ void fullscreen_vert([[vertex_id]] const int vert_id,
                      [[out]] VertOut &v_out)
 {
   fullscreen_vertex(vert_id, out_position, v_out.screen_uv);
+  out_position = reverse_z::transform(out_position);
 }
 
 struct FragOut {
@@ -59,9 +55,10 @@ struct FragOut {
  */
 [[fragment, early_fragment_tests]]
 void aov_clear_frag([[resource_table]] RenderPassOutput &render_passes,
+                    [[resource_table]] Uniform &uni,
                     [[frag_coord]] const float4 frag_co)
 {
-  render_passes.clear_aovs(int2(frag_co.xy));
+  render_passes.clear_aovs(uni, int2(frag_co.xy));
 }
 
 PipelineGraphic aov_clear(fullscreen_vert, aov_clear_frag);
@@ -73,10 +70,6 @@ PipelineGraphic aov_clear(fullscreen_vert, aov_clear_frag);
  * \{ */
 
 struct LightEval {
-  [[legacy_info]] ShaderCreateInfo eevee_utility_texture;
-  [[legacy_info]] ShaderCreateInfo draw_object_infos;
-  [[legacy_info]] ShaderCreateInfo draw_view;
-
   [[specialization_constant(true)]] bool use_split_indirect;
   [[specialization_constant(true)]] bool use_lightprobe_eval;
   [[specialization_constant(false)]] bool use_transmission;
@@ -128,8 +121,12 @@ struct LightEval {
 [[fragment, early_fragment_tests]]
 void light_eval_frag([[resource_table]] LightEval &srt,
                      [[resource_table]] LightEvalIterator &lights,
+                     [[resource_table]] const draw::View &views,
+                     [[resource_table]] const draw::Infos &infos,
+                     [[resource_table]] const Uniform &uni,
                      [[resource_table]] const LightprobeRenderData &lightprobes,
                      [[resource_table]] const HiZ &hiz,
+                     [[resource_table]] const UtilityTexture &util_tx,
                      [[resource_table]] const gbuffer::Reader &reader,
                      [[resource_table]] RenderPassOutput &render_passes,
                      [[frag_coord]] const float4 frag_co,
@@ -148,16 +145,18 @@ void light_eval_frag([[resource_table]] LightEval &srt,
   const Thickness thickness = reader.read_thickness(gbuf.header, texel);
   const uchar closure_count = gbuf.header.closure_len();
 
-  const float3 P = drw_point_screen_to_world(float3(v_out.screen_uv, depth));
+  const ViewMatrices view = views.get(0);
+
+  const float3 P = view.point_screen_to_world(float3(v_out.screen_uv, depth));
   const float3 Ng = gbuf.header.geometry_normal(gbuf.surface_N());
-  const float3 V = drw_world_incident_vector(P);
-  const float vPz = dot(drw_view_forward(), P) - dot(drw_view_forward(), drw_view_position());
+  const float3 V = view.world_incident_vector(P);
+  const float vPz = dot(view.forward(), P) - dot(view.forward(), view.position());
 
   light::EvalCtx<false> ctx;
   /* Unroll light stack array assignments to avoid non-constant indexing. */
   for (uint i = 0u; i < 3; i++) [[unroll]] {
     if (lrt.light_closure_eval_count_reflect > i) [[static_branch]] {
-      ctx.stack.cl[i] = closure_light_new(gbuf.layer[i], V);
+      ctx.stack.cl[i] = closure_light_new(util_tx, gbuf.layer[i], V);
     }
   }
 
@@ -171,7 +170,7 @@ void light_eval_frag([[resource_table]] LightEval &srt,
   ctx.terminator_geometry_offset = 0.0f;
   if (gbuf.header.use_object_id()) {
     uint object_id = reader.read_object_id(texel);
-    ObjectInfos object_infos = drw_infos[object_id];
+    ObjectInfos object_infos = infos.get(object_id);
     ctx.receiver_light_set = receiver_light_set_get(object_infos);
     ctx.terminator_normal_offset = object_infos.shadow_terminator_normal_offset;
     ctx.terminator_geometry_offset = object_infos.shadow_terminator_geometry_offset;
@@ -185,15 +184,15 @@ void light_eval_frag([[resource_table]] LightEval &srt,
     light::EvalCtx<true> ctx_tr = light::init_from_reflect_ctx(ctx);
 
     ClosureUndetermined cl_transmit = gbuf.layer[0];
-    ctx_tr.stack.cl[0] = closure_light_new(cl_transmit, V, thickness);
+    ctx_tr.stack.cl[0] = closure_light_new(util_tx, cl_transmit, V, thickness);
 
     /* NOTE: Only evaluates `stack.cl[0]`. */
     lights.eval_transmission(ctx_tr, vPz);
 
     if (cl_transmit.type == CLOSURE_BSSRDF_BURLEY_ID) {
       /* Apply transmission profile onto transmitted light and sum with reflected light. */
-      float3 sss_profile = subsurface_transmission(to_closure_subsurface(cl_transmit).sss_radius,
-                                                   thickness.value());
+      float3 sss_profile = subsurface_transmission(
+          util_tx, to_closure_subsurface(cl_transmit).sss_radius, thickness.value());
       ctx.stack.cl[0].light_shadowed += ctx_tr.stack.cl[0].light_shadowed * sss_profile;
       ctx.stack.cl[0].light_unshadowed += ctx_tr.stack.cl[0].light_unshadowed * sss_profile;
     }
@@ -221,7 +220,7 @@ void light_eval_frag([[resource_table]] LightEval &srt,
   if (srt.use_lightprobe_eval) {
     LightProbeSample samp = lightprobes.load(frag_co.xy, P, Ng, V);
 
-    float clamp_indirect = uniform_buf.clamp.surface_indirect;
+    float clamp_indirect = uni.uniform_buf.clamp.surface_indirect;
     samp.volume_irradiance = spherical_harmonics::clamp_energy(samp.volume_irradiance,
                                                                clamp_indirect);
 
@@ -263,20 +262,16 @@ void light_eval_frag([[resource_table]] LightEval &srt,
 /** \name Probe Capture Pipeline
  * \{ */
 
-struct SphereProbeEval {
-  [[legacy_info]] ShaderCreateInfo draw_view;
-  [[legacy_info]] ShaderCreateInfo draw_object_infos;
-  [[legacy_info]] ShaderCreateInfo eevee_utility_texture;
-};
-
 /* Sphere probe evaluate everything as diffuse since they can only rely on volume light-probes
  * being available. */
 [[fragment, early_fragment_tests]]
-void sphere_eval_frag([[resource_table]] SphereProbeEval & /*srt*/,
-                      [[resource_table]] LightEvalIterator &lights,
+void sphere_eval_frag([[resource_table]] LightEvalIterator &lights,
+                      [[resource_table]] const draw::View &views,
+                      [[resource_table]] const draw::Infos &infos,
                       [[resource_table]] const Sampling &sampling,
                       [[resource_table]] const LightprobeVolumeRenderData &lightprobes,
                       [[resource_table]] const HiZ &hiz,
+                      [[resource_table]] const UtilityTexture &util_tx,
                       [[resource_table]] const gbuffer::Reader &reader,
                       [[frag_coord]] const float4 frag_co,
                       [[in]] const VertOut v_out,
@@ -323,10 +318,12 @@ void sphere_eval_frag([[resource_table]] SphereProbeEval & /*srt*/,
     }
   }
 
-  float3 P = drw_point_screen_to_world(float3(v_out.screen_uv, depth));
+  const ViewMatrices view = views.get(0);
+
+  float3 P = view.point_screen_to_world(float3(v_out.screen_uv, depth));
   float3 Ng = gbuf.header.geometry_normal(gbuf.surface_N());
-  float3 V = drw_world_incident_vector(P);
-  float vPz = dot(drw_view_forward(), P) - dot(drw_view_forward(), drw_view_position());
+  float3 V = view.world_incident_vector(P);
+  float vPz = dot(view.forward(), P) - dot(view.forward(), view.position());
 
   ClosureUndetermined cl;
   cl.N = gbuf.surface_N();
@@ -347,21 +344,21 @@ void sphere_eval_frag([[resource_table]] SphereProbeEval & /*srt*/,
   ctx.terminator_geometry_offset = 0.0f;
   if (gbuf.header.use_object_id()) {
     uint object_id = reader.read_object_id(texel);
-    ObjectInfos object_infos = drw_infos[object_id];
+    ObjectInfos object_infos = infos.get(object_id);
     ctx.receiver_light_set = receiver_light_set_get(object_infos);
     ctx.terminator_normal_offset = object_infos.shadow_terminator_normal_offset;
     ctx.terminator_geometry_offset = object_infos.shadow_terminator_geometry_offset;
   }
 
   /* Direct light. */
-  ctx.stack.cl[0] = closure_light_new(cl, V);
+  ctx.stack.cl[0] = closure_light_new(util_tx, cl, V);
   lights.eval_reflection(ctx, vPz);
 
   float3 radiance_front = ctx.stack.cl[0].light_shadowed;
 
   light::EvalCtx<true> ctx_tr = light::init_from_reflect_ctx(ctx);
 
-  ctx_tr.stack.cl[0] = closure_light_new(cl_transmit, V, thickness);
+  ctx_tr.stack.cl[0] = closure_light_new(util_tx, cl_transmit, V, thickness);
   lights.eval_transmission(ctx_tr, vPz);
 
   float3 radiance_back = ctx_tr.stack.cl[0].light_shadowed;
@@ -380,18 +377,17 @@ void sphere_eval_frag([[resource_table]] SphereProbeEval & /*srt*/,
 struct PlanarProbeEval {
   /* TODO(fclem): Workaround waiting for this lib to be ported to BSL.  */
   [[compilation_constant]] bool legacy_sphere_probe_enable;
-
-  [[legacy_info]] ShaderCreateInfo draw_view;
-  [[legacy_info]] ShaderCreateInfo draw_object_infos;
-  [[legacy_info]] ShaderCreateInfo eevee_utility_texture;
 };
 
 [[fragment, early_fragment_tests]]
 void planar_eval_frag([[resource_table]] PlanarProbeEval & /*srt*/,
                       [[resource_table]] LightEvalIterator &lights,
+                      [[resource_table]] const draw::View &views,
+                      [[resource_table]] const draw::Infos &infos,
                       [[resource_table]] const LightprobeRenderData &lightprobes,
                       [[resource_table]] const Sampling &sampling,
                       [[resource_table]] const HiZ &hiz,
+                      [[resource_table]] const UtilityTexture &util_tx,
                       [[resource_table]] const gbuffer::Reader &reader,
                       [[frag_coord]] const float4 frag_co,
                       [[in]] const VertOut v_out,
@@ -469,20 +465,36 @@ void planar_eval_frag([[resource_table]] PlanarProbeEval & /*srt*/,
   }
 
   {
-    float inv_weight = safe_rcp(reflect_weight);
-    cl_reflect.N *= inv_weight;
-    cl_reflect.data *= inv_weight;
+    if (reflect_weight > 1e-6) {
+      float inv_weight = 1.0f / reflect_weight;
+      cl_reflect.N *= inv_weight;
+      cl_reflect.data *= inv_weight;
+    }
+    else {
+      /* This is needed in order to avoid NaN during the lighting evaluation. */
+      cl_reflect.N = gbuf.surface_N();
+      cl_reflect.data.xy = float2(1.0f);
+    }
   }
   {
-    float inv_weight = safe_rcp(refract_weight);
-    cl_refract.N *= inv_weight;
-    cl_refract.data *= inv_weight;
+    if (refract_weight > 1e-6) {
+      float inv_weight = 1.0f / refract_weight;
+      cl_refract.N *= inv_weight;
+      cl_refract.data *= inv_weight;
+    }
+    else {
+      /* This is needed in order to avoid NaN during the lighting evaluation. */
+      cl_refract.N = gbuf.surface_N();
+      cl_refract.data.xy = float2(1.0f);
+    }
   }
 
-  float3 P = drw_point_screen_to_world(float3(v_out.screen_uv, depth));
+  const ViewMatrices view = views.get(0);
+
+  float3 P = view.point_screen_to_world(float3(v_out.screen_uv, depth));
   float3 Ng = gbuf.header.geometry_normal(gbuf.surface_N());
-  float3 V = drw_world_incident_vector(P);
-  float vPz = dot(drw_view_forward(), P) - dot(drw_view_forward(), drw_view_position());
+  float3 V = view.world_incident_vector(P);
+  float vPz = dot(view.forward(), P) - dot(view.forward(), view.position());
 
   ClosureUndetermined cl;
   cl.N = gbuf.surface_N();
@@ -503,23 +515,23 @@ void planar_eval_frag([[resource_table]] PlanarProbeEval & /*srt*/,
   ctx.terminator_geometry_offset = 0.0f;
   if (gbuf.header.use_object_id()) {
     uint object_id = reader.read_object_id(texel);
-    ObjectInfos object_infos = drw_infos[object_id];
+    ObjectInfos object_infos = infos.get(object_id);
     ctx.receiver_light_set = receiver_light_set_get(object_infos);
     ctx.terminator_normal_offset = object_infos.shadow_terminator_normal_offset;
     ctx.terminator_geometry_offset = object_infos.shadow_terminator_geometry_offset;
   }
 
   /* Direct light. */
-  ctx.stack.cl[0] = closure_light_new(cl, V);
-  ctx.stack.cl[1] = closure_light_new(cl_reflect, V);
+  ctx.stack.cl[0] = closure_light_new(util_tx, cl, V);
+  ctx.stack.cl[1] = closure_light_new(util_tx, cl_reflect, V);
   lights.eval_reflection(ctx, vPz);
 
   float3 radiance_front = ctx.stack.cl[0].light_shadowed;
   float3 radiance_reflect = ctx.stack.cl[1].light_shadowed;
 
   light::EvalCtx<true> ctx_tr = light::init_from_reflect_ctx(ctx);
-  ctx_tr.stack.cl[0] = closure_light_new(cl_transmit, V, thickness);
-  ctx_tr.stack.cl[1] = closure_light_new(cl_refract, V, thickness);
+  ctx_tr.stack.cl[0] = closure_light_new(util_tx, cl_transmit, V, thickness);
+  ctx_tr.stack.cl[1] = closure_light_new(util_tx, cl_refract, V, thickness);
   lights.eval_transmission(ctx_tr, vPz);
 
   float3 radiance_back = ctx_tr.stack.cl[0].light_shadowed;

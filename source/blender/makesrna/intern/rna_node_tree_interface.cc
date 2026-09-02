@@ -14,6 +14,8 @@
 
 #include "rna_internal.hh"
 
+#include "UI_interface_c.hh"
+
 #include "WM_types.hh"
 
 namespace blender {
@@ -88,6 +90,11 @@ static const EnumPropertyItem node_default_input_items[] = {
      0,
      "Uniform Image Coordinates",
      "The uniform image coordinates of the compositing space"},
+    {NODE_DEFAULT_INPUT_SELF_OBJECT,
+     "SELF_OBJECT",
+     0,
+     "Self Object",
+     "The object that contains the geometry nodes modifier currently being executed"},
     {0, nullptr, 0, nullptr, nullptr}};
 
 }  // namespace blender
@@ -211,13 +218,16 @@ static int rna_NodeTreeInterfaceItem_index_get(PointerRNA *ptr)
   return ntree->tree_interface.find_item_index(*item);
 }
 
-static bool rna_NodeTreeInterfaceSocket_unregister(Main * /*bmain*/, StructRNA *type)
+static bool rna_NodeTreeInterfaceSocket_unregister(Main *bmain, StructRNA *type)
 {
   bke::bNodeSocketType *st = static_cast<bke::bNodeSocketType *>(
       RNA_struct_blender_type_get(type));
   if (!st) {
     return false;
   }
+  ui::refresh_for_srna_unregister(bmain, type);
+  ui::refresh_for_srna_unregister(bmain, st->ext_interface.srna);
+  ui::refresh_for_srna_unregister(bmain, st->ext_socket.srna);
 
   RNA_struct_free_extension(type, &st->ext_interface);
 
@@ -335,7 +345,7 @@ static void rna_NodeTreeInterfaceSocket_from_socket_custom(
   RNA_parameter_list_free(&list);
 }
 
-static StructRNA *rna_NodeTreeInterfaceSocket_register(Main * /*bmain*/,
+static StructRNA *rna_NodeTreeInterfaceSocket_register(Main *bmain,
                                                        ReportList * /*reports*/,
                                                        void *data,
                                                        const char *identifier,
@@ -373,6 +383,7 @@ static StructRNA *rna_NodeTreeInterfaceSocket_register(Main * /*bmain*/,
 
   /* if RNA type is already registered, unregister first */
   if (st->ext_interface.srna) {
+    ui::refresh_for_srna_unregister(bmain, st->ext_interface.srna);
     StructRNA *srna = st->ext_interface.srna;
     RNA_struct_free_extension(srna, &st->ext_interface);
     RNA_struct_free(&RNA_blender_rna_get(), srna);
@@ -848,6 +859,11 @@ static bNodeTreeInterfaceItem *rna_NodeTreeInterfaceItems_copy(ID *id,
                                                                ReportList *reports,
                                                                bNodeTreeInterfaceItem *item)
 {
+  if (item == &interface->root_panel.item) {
+    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel can not be copied.");
+    return nullptr;
+  }
+
   /* Copy to same parent as the item. */
   bNodeTreeInterfacePanel *parent = interface->find_item_parent(*item);
   return rna_NodeTreeInterfaceItems_copy_to_parent(id, interface, bmain, reports, item, parent);
@@ -856,9 +872,15 @@ static bNodeTreeInterfaceItem *rna_NodeTreeInterfaceItems_copy(ID *id,
 static void rna_NodeTreeInterfaceItems_remove(ID *id,
                                               bNodeTreeInterface *interface,
                                               Main *bmain,
+                                              ReportList *reports,
                                               bNodeTreeInterfaceItem *item,
                                               bool move_content_to_parent)
 {
+  if (item == &interface->root_panel.item) {
+    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel can not be removed.");
+    return;
+  }
+
   interface->remove_item(*item, move_content_to_parent);
 
   bNodeTree *ntree = reinterpret_cast<bNodeTree *>(id);
@@ -878,9 +900,15 @@ static void rna_NodeTreeInterfaceItems_clear(ID *id, bNodeTreeInterface *interfa
 static void rna_NodeTreeInterfaceItems_move(ID *id,
                                             bNodeTreeInterface *interface,
                                             Main *bmain,
+                                            ReportList *reports,
                                             bNodeTreeInterfaceItem *item,
                                             int to_position)
 {
+  if (item == &interface->root_panel.item) {
+    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel can not be moved.");
+    return;
+  }
+
   interface->move_item(*item, to_position);
 
   bNodeTree *ntree = reinterpret_cast<bNodeTree *>(id);
@@ -891,11 +919,16 @@ static void rna_NodeTreeInterfaceItems_move(ID *id,
 static void rna_NodeTreeInterfaceItems_move_to_parent(ID *id,
                                                       bNodeTreeInterface *interface,
                                                       Main *bmain,
-                                                      ReportList * /*reports*/,
+                                                      ReportList *reports,
                                                       bNodeTreeInterfaceItem *item,
                                                       bNodeTreeInterfacePanel *parent,
                                                       int to_position)
 {
+  if (item == &interface->root_panel.item) {
+    BKE_report(reports, RPT_ERROR_INVALID_INPUT, "Root panel can not be moved.");
+    return;
+  }
+
   interface->move_item_to_parent(*item, parent, to_position);
 
   bNodeTree *ntree = reinterpret_cast<bNodeTree *>(id);
@@ -1153,6 +1186,15 @@ static bool rna_NodeTreeInterface_items_lookup_string(PointerRNA *ptr,
     }
   }
   return false;
+}
+
+static PointerRNA rna_NodeTreeInterface_root_panel_get(PointerRNA *ptr)
+{
+  bNodeTree *ntree = id_cast<bNodeTree *>(ptr->owner_id);
+  bNodeTreeInterface *interface = static_cast<bNodeTreeInterface *>(ptr->data);
+  PointerRNA result = RNA_pointer_create_discrete(
+      &ntree->id, RNA_NodeTreeInterfacePanel, &interface->root_panel);
+  return result;
 }
 
 const EnumPropertyItem *RNA_node_tree_interface_socket_menu_itemf(bContext * /*C*/,
@@ -1532,6 +1574,7 @@ static void rna_def_node_tree_interface_items_api(StructRNA *srna)
       func, "parent", "NodeTreeInterfacePanel", "Parent", "Panel to add the socket in");
   /* return value */
   parm = RNA_def_pointer(func, "item", "NodeTreeInterfaceSocket", "Socket", "New socket");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "new_panel", "rna_NodeTreeInterfaceItems_new_panel");
@@ -1544,6 +1587,7 @@ static void rna_def_node_tree_interface_items_api(StructRNA *srna)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   /* return value */
   parm = RNA_def_pointer(func, "item", "NodeTreeInterfacePanel", "Panel", "New panel");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "copy", "rna_NodeTreeInterfaceItems_copy");
@@ -1554,11 +1598,12 @@ static void rna_def_node_tree_interface_items_api(StructRNA *srna)
   /* return value */
   parm = RNA_def_pointer(
       func, "item_copy", "NodeTreeInterfaceItem", "Item Copy", "Copy of the item");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_NodeTreeInterfaceItems_remove");
   RNA_def_function_ui_description(func, "Remove an item from the interface");
-  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN);
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
   parm = RNA_def_pointer(func, "item", "NodeTreeInterfaceItem", "Item", "The item to remove");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
   RNA_def_boolean(
@@ -1574,7 +1619,7 @@ static void rna_def_node_tree_interface_items_api(StructRNA *srna)
 
   func = RNA_def_function(srna, "move", "rna_NodeTreeInterfaceItems_move");
   RNA_def_function_ui_description(func, "Move an item to another position");
-  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN);
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN | FUNC_USE_REPORTS);
   parm = RNA_def_pointer(func, "item", "NodeTreeInterfaceItem", "Item", "The item to move");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
   parm = RNA_def_int(func,
@@ -1631,6 +1676,16 @@ static void rna_def_node_tree_interface(BlenderRNA *brna)
   RNA_def_property_struct_type(prop, "NodeTreeInterfaceItem");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_ui_text(prop, "Items", "Items in the node interface");
+
+  prop = RNA_def_property(srna, "root_panel", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "NodeTreeInterfacePanel");
+  RNA_def_property_pointer_funcs(
+      prop, "rna_NodeTreeInterface_root_panel_get", nullptr, nullptr, nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop,
+      "Root Panel",
+      "Root panel containing all items not directly parented to another panel");
 
   rna_def_node_tree_interface_items_api(srna);
 }

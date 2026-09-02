@@ -8,13 +8,8 @@
 
 #pragma once
 
-#include "eevee_hiz.bsl.hh"
-#include "infos/eevee_common_infos.hh"
-
-SHADER_LIBRARY_CREATE_INFO(draw_view)
-
-#include "draw_view_lib.glsl"
 #include "eevee_gbuffer_types.bsl.hh"
+#include "eevee_hiz.bsl.hh"
 #include "eevee_light_data.bsl.hh"
 #include "eevee_light_iter.bsl.hh"
 #include "eevee_light_lib.bsl.hh"
@@ -34,6 +29,9 @@ struct FromShadowEvalCtx {
 
   void eval([[resource_table]] ShadowRenderData &srd, LightData light, const bool is_directional)
   {
+    [[resource_table]] const Uniform &uni = srd.uniforms;
+    [[resource_table]] const draw::View &views = srd.views;
+
     if (light.tilemap_index == LIGHT_NO_SHADOW) {
       return;
     }
@@ -46,7 +44,7 @@ struct FromShadowEvalCtx {
       return;
     }
 
-    float texel_radius = shadow_texel_radius_at_position(light, is_directional, P);
+    float texel_radius = shadow_texel_radius_at_position(uni, views, light, is_directional, P);
 
     float3 P_offset = P;
     /* Invert all biases to get value inside the surface.
@@ -95,8 +93,6 @@ template void light::foreach_visible<thickness::FromShadowEvalCtx, ShadowRenderD
 namespace eevee {
 
 struct ThicknessAmend {
-  [[legacy_info]] ShaderCreateInfo draw_view;
-
   [[sampler(0)]] usampler2DArray gbuf_header_tx;
   [[image(0, read_write, UNORM_16_16)]] image2DArray gbuf_normal_img;
 };
@@ -117,7 +113,9 @@ void amend_vert([[vertex_id]] const int vert_id,
 [[fragment]] [[early_fragment_tests]]
 void amend_frag([[resource_table]] ThicknessAmend &srt,
                 [[resource_table]] ShadowRenderData &srd,
+                [[resource_table]] const draw::View &views,
                 [[resource_table]] const LightRenderData &lrd,
+                [[resource_table]] const Uniform &uni,
                 [[resource_table]] const HiZ &hiz,
                 [[in]] const VertOut &v_out,
                 [[frag_coord]] const float4 frag_co)
@@ -129,12 +127,14 @@ void amend_frag([[resource_table]] ThicknessAmend &srt,
   constexpr float bias = 2.4e-7f;
   const float depth = texelFetch(hiz.hiz_tx, texel, 0).r - bias;
 
-  const float3 P = drw_point_screen_to_world(float3(v_out.uv, depth));
-  const float vPz = dot(drw_view_forward(), P) - dot(drw_view_forward(), drw_view_position());
+  const ViewMatrices view = views.get(0);
+
+  const float3 P = view.point_screen_to_world(float3(v_out.uv, depth));
+  const float vPz = dot(view.forward(), P) - dot(view.forward(), view.position());
 
   const float3 Ng = gbuffer::normal_unpack(imageLoad(srt.gbuf_normal_img, int3(texel, 0)).rg);
 
-  uchar data_layer = pipeline_buf.gbuffer_additional_data_layer_id;
+  uchar data_layer = uni.pipeline_buf.gbuffer_additional_data_layer_id;
   float2 data_packed = imageLoad(srt.gbuf_normal_img, int3(texel, int(data_layer))).rg;
   Thickness gbuffer_thickness = gbuffer::thickness_unpack(data_packed.x);
   if (gbuffer_thickness.value() == 0.0f) {

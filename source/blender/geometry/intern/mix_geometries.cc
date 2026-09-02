@@ -170,9 +170,6 @@ static void mix_socket_values_same_type(bke::SocketValueVariant &a,
     if (!a_ptr || !b_ptr) {
       return;
     }
-    if (a_ptr.is_type<std::string>()) {
-      return;
-    }
     if (a_ptr.is_type<bke::GeometrySet>()) {
       mix_geometries(*a_ptr.get<bke::GeometrySet>(), *b_ptr.get<bke::GeometrySet>(), factor);
     }

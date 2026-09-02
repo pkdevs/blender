@@ -30,6 +30,19 @@ Vector<float> get_rna_values(PointerRNA *ptr, PropertyRNA *prop);
 StringRefNull get_rotation_mode_path(eRotationModes rotation_mode);
 
 /**
+ * Returns the full pose bone rna path. For example "pose.bones["bone_name"]".
+ */
+std::string get_pose_bone_rna_path(const bPoseChannel &pose_bone);
+
+/**
+ * Returns the name of the pose bone encoded in this rna path.
+ * If the given path is not to a pose bone, `std::nullopt` will be returned.
+ * This function does the unescaping of the string, which is why it has to return
+ * a copy of the string, and not just a StringRef.
+ */
+std::optional<std::string> pose_bone_name_from_rna_path(ParsedRNAPathRef rna_path);
+
+/**
  * Given an RNA path to a rotation property, return the corresponding rotation mode.
  *
  * \returns the rotation mode of the given rna path or a nullopt if the `rna_path` is not for a
@@ -40,7 +53,7 @@ StringRefNull get_rotation_mode_path(eRotationModes rotation_mode);
  *
  * \note that this function assumes that the rna_path is syntactically valid.
  */
-std::optional<eRotationModes> get_rotation_mode_from_path(StringRefNull rna_path);
+std::optional<eRotationModes> get_rotation_mode_from_path(ParsedRNAPathRef rna_path);
 
 /**
  * Given a PointerRNA return the rotation mode of the data it points to.
@@ -55,7 +68,7 @@ std::optional<eRotationModes> get_rotation_mode_from_rna_pointer(const PointerRN
  *
  * \returns true if the given rna path is for a rotation property.
  */
-bool is_rotation_path(StringRefNull rna_path);
+bool is_rotation_path(ParsedRNAPathRef rna_path);
 
 /**
  * Returns a Vector of ID properties on the given pointer that can be animated. Not all pointer

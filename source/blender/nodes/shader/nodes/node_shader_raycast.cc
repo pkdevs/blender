@@ -4,7 +4,7 @@
 
 #include "node_shader_util.hh"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "RNA_prototypes.hh"
 
@@ -133,7 +133,7 @@ static void node_extra_info(NodeExtraInfoParams &parameters)
   NodeExtraInfoRow row;
   row.text = RPT_("Attributes Not Supported");
   row.tooltip = TIP_("Accessing attributes is not supported by EEVEE renderer");
-  row.icon = ICON_ERROR;
+  row.icon = ICON_STATUS_ERROR;
   parameters.rows.append(std::move(row));
 }
 

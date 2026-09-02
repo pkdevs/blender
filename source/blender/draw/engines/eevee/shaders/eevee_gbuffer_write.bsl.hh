@@ -20,8 +20,6 @@
  * without dealing with none-closures.
  */
 
-#include "infos/eevee_common_infos.hh"
-
 #include "eevee_gbuffer_types.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 
@@ -55,7 +53,7 @@ ClosurePacking pack_closure([[resource_table]] const PackParameters &srt, Closur
   ClosurePacking cl_packed;
   cl_packed.mode = gbuffer::closure_type_to_mode(cl.type, gbuffer::color_is_grayscale(cl.color));
 
-  if (cl.weight <= CLOSURE_WEIGHT_CUTOFF) {
+  if (cl.weight() <= CLOSURE_WEIGHT_CUTOFF) {
     cl_packed.mode = GBUF_NONE;
   }
   /* Common to all configs. */

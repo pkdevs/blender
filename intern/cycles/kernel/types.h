@@ -113,6 +113,9 @@ enum PathTraceDimension {
   /* Volume density baking. */
   PRNG_BAKE_VOLUME_DENSITY_EVAL = 0,
 
+  /* Sample wavelength for dispersion. */
+  PRNG_WAVELENGTH = 12,
+
   /* High enough number so we don't need to change it when adding new dimensions,
    * low enough so there is no uint16_t overflow with many bounces. */
   PRNG_BOUNCE_NUM = 16,
@@ -130,114 +133,144 @@ enum SamplingPattern {
   SAMPLING_NUM_PATTERNS,
 };
 
-/* These flags values correspond to `raytypes` in `osl.cpp`, so keep them in sync! */
+/* --------------------------------------------------------------------
+ * Path and ray visibility.
+ *
+ * Path visibility is essentially ray visibility when it comes to ray tracing, but it carries a bit
+ * of extra semantic information in the wavefront state. For example, a path that has visibility
+ * set to PATH_RAY_VISIBILITY_CAMERA means that this is a primary path (comes directly from the
+ * camera or only went through transparency).
+ *
+ * The underlying storage matches PathRayVisibility, to avoid possible narrowing when applying bit
+ * shifts when calculating ray visibility from a path.
+ *
+ * NOTE: State (both main and shadow) stores a limited subset of this enum, limited to bits in
+ * the PATH_RAY_VISIBILITY_ALL (but it is not checked at compile time).
+ *
+ * NOTE: Both PathRayVisibilityFlag and PathRayFlag flags are packed into ShaderGlobals::raytype.
+ * Keep in sync with the raytype mapping in the osl.cpp OSLManager::shading_system_init().
+ *
+ * NOTE: Recalculated after a surface bounce. */
+enum PathRayVisibilityFlag : uint32_t {
+  PATH_RAY_VISIBILITY_NONE = 0,
 
-enum PathRayFlag : uint32_t {
-  /* --------------------------------------------------------------------
-   * Ray visibility.
-   *
-   * NOTE: Recalculated after a surface bounce.
-   */
-
-  PATH_RAY_CAMERA = (1U << 0U),
-  PATH_RAY_REFLECT = (1U << 1U),
-  PATH_RAY_TRANSMIT = (1U << 2U),
-  PATH_RAY_DIFFUSE = (1U << 3U),
-  PATH_RAY_GLOSSY = (1U << 4U),
-  PATH_RAY_SINGULAR = (1U << 5U),
-  PATH_RAY_TRANSPARENT = (1U << 6U),
-  PATH_RAY_VOLUME_SCATTER = (1U << 7U),
-  PATH_RAY_IMPORTANCE_BAKE = (1U << 8U),
+  PATH_RAY_VISIBILITY_CAMERA = (1U << 0U),
+  PATH_RAY_VISIBILITY_TRANSMIT = (1U << 1U),
+  PATH_RAY_VISIBILITY_DIFFUSE = (1U << 2U),
+  PATH_RAY_VISIBILITY_GLOSSY = (1U << 3U),
+  PATH_RAY_VISIBILITY_VOLUME_SCATTER = (1U << 4U),
 
   /* Shadow ray visibility. */
-  PATH_RAY_SHADOW_OPAQUE = (1U << 9U),
-  PATH_RAY_SHADOW_TRANSPARENT = (1U << 10U),
-  PATH_RAY_SHADOW = (PATH_RAY_SHADOW_OPAQUE | PATH_RAY_SHADOW_TRANSPARENT),
+  PATH_RAY_VISIBILITY_SHADOW_OPAQUE = (1U << 5U),
+  PATH_RAY_VISIBILITY_SHADOW_TRANSPARENT = (1U << 6U),
+  PATH_RAY_VISIBILITY_SHADOW = (PATH_RAY_VISIBILITY_SHADOW_OPAQUE |
+                                PATH_RAY_VISIBILITY_SHADOW_TRANSPARENT),
 
-  /* Subset of flags used for ray visibility for intersection.
+  PATH_RAY_VISIBILITY_RAYCAST = (1U << 7U),
+
+  /* Set of flags used for ray visibility for intersection.
    *
-   * NOTE: SHADOW_CATCHER macros below assume there are no more than
-   * 16 visibility bits. */
-  PATH_RAY_ALL_VISIBILITY = ((1U << 11U) - 1U),
+   * NOTE: SHADOW_CATCHER and OSL macros below assume there are no more than 16 visibility bits. */
+  PATH_RAY_VISIBILITY_ALL = ((1U << 8U) - 1U),
 
   /* Special flag to tag unaligned BVH nodes.
    * Only set and used in BVH nodes to distinguish how to interpret bounding box information stored
-   * in the node (either it should be intersected as AABB or as OBBU).
-   * So this can overlap with path flags. */
-  PATH_RAY_NODE_UNALIGNED = (1U << 11U),
+   * in the node (either it should be intersected as AABB or as OBB). */
+  PATH_RAY_VISIBILITY_NODE_UNALIGNED = (1U << 15U),
+};
 
-  /* --------------------------------------------------------------------
-   * Path flags.
-   */
+/* Stored as uint8_t in the integrator state. */
+static_assert(PATH_RAY_VISIBILITY_ALL <= 0xff);
 
-  /* Surface had transmission component at previous bounce. Used for light tree
-   * traversal and culling to be consistent with MIS PDF at the next bounce. */
-  PATH_RAY_MIS_HAD_TRANSMISSION = (1U << 11U),
+/* Type that is used to pass visibility flags around in the kernel.
+ * It is a wider type than the number of bits required by the PathRayVisibilityFlag enum values
+ * due to shadow catcher visibility (see shadow catcher utilities below). */
+using PathRayVisibility = uint32_t;
 
-  /* Don't apply multiple importance sampling weights to emission from
-   * lamp or surface hits, because they were not direct light sampled. */
-  PATH_RAY_MIS_SKIP = (1U << 12U),
+/* --------------------------------------------------------------------
+ * Path flags.
+ */
+enum PathRayFlag : uint32_t {
+  PATH_RAY_FLAG_NONE = 0,
+
+  /* NOTE: These are the bits that have to be packed into the high word of OSL's raytype and that
+   * are actually checked by the OSL integration. */
+
+  PATH_RAY_REFLECT = (1U << 0U),
+  PATH_RAY_SINGULAR = (1U << 1U),
+  PATH_RAY_TRANSPARENT = (1U << 2U),
+  PATH_RAY_IMPORTANCE_BAKE = (1U << 3U),
 
   /* Diffuse bounce earlier in the path, skip SSS to improve performance
    * and avoid branching twice with disk sampling SSS. */
-  PATH_RAY_DIFFUSE_ANCESTOR = (1U << 13U),
+  PATH_RAY_DIFFUSE_ANCESTOR = (1U << 4U),
+
+  /* Path and shader is being evaluated for direct lighting emission. */
+  PATH_RAY_EMISSION = (1U << 5U),
+
+  /* NOTE: Some of these bits might be packed into the OSL's raytype (up to 16 bit in total for the
+   * path flag), but their presence is not important as it is not checked. */
+
+  /* Surface had transmission component at previous bounce. Used for light tree
+   * traversal and culling to be consistent with MIS PDF at the next bounce. */
+  PATH_RAY_MIS_HAD_TRANSMISSION = (1U << 6U),
+
+  /* Don't apply multiple importance sampling weights to emission from
+   * lamp or surface hits, because they were not direct light sampled. */
+  PATH_RAY_MIS_SKIP = (1U << 7U),
 
   /* Single pass has been written. */
-  PATH_RAY_SINGLE_PASS_DONE = (1U << 14U),
+  PATH_RAY_SINGLE_PASS_DONE = (1U << 8U),
 
   /* Zero background alpha, for camera or transparent glass rays. */
-  PATH_RAY_TRANSPARENT_BACKGROUND = (1U << 15U),
+  PATH_RAY_TRANSPARENT_BACKGROUND = (1U << 9U),
 
   /* Terminate ray immediately at next bounce. */
-  PATH_RAY_TERMINATE_ON_NEXT_SURFACE = (1U << 16U),
-  PATH_RAY_TERMINATE_IN_NEXT_VOLUME = (1U << 17U),
+  PATH_RAY_TERMINATE_ON_NEXT_SURFACE = (1U << 10U),
+  PATH_RAY_TERMINATE_IN_NEXT_VOLUME = (1U << 11U),
 
-  /* Ray is to be terminated, but continue with transparent bounces and
-   * emission as long as we encounter them. This is required to make the
-   * MIS between direct and indirect light rays match, as shadow rays go
-   * through transparent surfaces to reach emission too. */
-  PATH_RAY_TERMINATE_AFTER_TRANSPARENT = (1U << 18U),
+  /* Ray is to be terminated, but continue with transparent bounces and emission as long as we
+   * encounter them. This is required to make the MIS between direct and indirect light rays match,
+   * as shadow rays go through transparent surfaces to reach emission too. */
+  PATH_RAY_TERMINATE_AFTER_TRANSPARENT = (1U << 12U),
 
   /* Terminate ray immediately after volume shading. */
-  PATH_RAY_TERMINATE_AFTER_VOLUME = (1U << 19U),
+  PATH_RAY_TERMINATE_AFTER_VOLUME = (1U << 13U),
 
   /* Ray is to be terminated. */
   PATH_RAY_TERMINATE = (PATH_RAY_TERMINATE_ON_NEXT_SURFACE | PATH_RAY_TERMINATE_IN_NEXT_VOLUME |
                         PATH_RAY_TERMINATE_AFTER_TRANSPARENT | PATH_RAY_TERMINATE_AFTER_VOLUME),
 
-  /* Path and shader is being evaluated for direct lighting emission. */
-  PATH_RAY_EMISSION = (1U << 20U),
-
   /* Perform subsurface scattering. */
-  PATH_RAY_SUBSURFACE_RANDOM_WALK = (1U << 21U),
-  PATH_RAY_SUBSURFACE_DISK = (1U << 22U),
-  PATH_RAY_SUBSURFACE_BACKFACING = (1U << 24U),
+  PATH_RAY_SUBSURFACE_RANDOM_WALK = (1U << 14U),
+  PATH_RAY_SUBSURFACE_DISK = (1U << 15U),
+  PATH_RAY_SUBSURFACE_BACKFACING = (1U << 16U),
   PATH_RAY_SUBSURFACE = (PATH_RAY_SUBSURFACE_RANDOM_WALK | PATH_RAY_SUBSURFACE_DISK |
                          PATH_RAY_SUBSURFACE_BACKFACING),
 
   /* Contribute to denoising features. */
-  PATH_RAY_DENOISING_FEATURES = (1U << 25U),
+  PATH_RAY_DENOISING_FEATURES = (1U << 17U),
 
   /* Render pass categories. */
-  PATH_RAY_SURFACE_PASS = (1U << 26U),
-  PATH_RAY_VOLUME_PASS = (1U << 27U),
+  PATH_RAY_SURFACE_PASS = (1U << 18U),
+  PATH_RAY_VOLUME_PASS = (1U << 19U),
   PATH_RAY_ANY_PASS = (PATH_RAY_SURFACE_PASS | PATH_RAY_VOLUME_PASS),
 
   /* Shadow ray is for AO. */
-  PATH_RAY_SHADOW_FOR_AO = (1U << 28U),
+  PATH_RAY_SHADOW_FOR_AO = (1U << 20U),
 
   /* A shadow catcher object was hit and the path was split into two. */
-  PATH_RAY_SHADOW_CATCHER_HIT = (1U << 29U),
+  PATH_RAY_SHADOW_CATCHER_HIT = (1U << 21U),
 
   /* A shadow catcher object was hit and this path traces only shadow catchers, writing them into
    * their dedicated pass for later division.
    *
    * NOTE: Is not covered with `PATH_RAY_ANY_PASS` because shadow catcher does special handling
    * which is separate from the light passes. */
-  PATH_RAY_SHADOW_CATCHER_PASS = (1U << 30U),
+  PATH_RAY_SHADOW_CATCHER_PASS = (1U << 22U),
 
   /* Path is evaluating background for an approximate shadow catcher with non-transparent film. */
-  PATH_RAY_SHADOW_CATCHER_BACKGROUND = (1U << 31U),
+  PATH_RAY_SHADOW_CATCHER_BACKGROUND = (1U << 23U),
 
   /* TODO(weizhen): should add another flag to record only the primary scatter, but then we need to
    * change the flag to 64 bits or split path_flags in two. Right now we also write volume scatter
@@ -245,7 +278,16 @@ enum PathRayFlag : uint32_t {
 
   /* Volume scattering probability guiding. This flag is added to path where the primary ray passed
    * through the volume without scattering. */
-  PATH_RAY_VOLUME_PRIMARY_TRANSMIT = (1U << 23U),
+  PATH_RAY_VOLUME_PRIMARY_TRANSMIT = (1U << 24U),
+
+  /* The current shadow ray is a light linking (forward) and not next-event shadow ray. */
+  PATH_RAY_SHADOW_FOR_LIGHT_LINKING = (1U << 25U),
+
+  /* Path and shader is being evaluated for volume extinction. */
+  PATH_RAY_EXTINCTION = (1U << 26U),
+
+  /* Path has associated wavelength. */
+  PATH_RAY_SPECTRAL = (1U << 27U),
 };
 
 // 8bit enum, just in case we need to move more variables in it
@@ -255,6 +297,9 @@ enum PathRayMNEE {
   PATH_MNEE_VALID = (1U << 0U),
   PATH_MNEE_RECEIVER_ANCESTOR = (1U << 1U),
   PATH_MNEE_CULL_LIGHT_CONNECTION = (1U << 2U),
+
+  /* MNEE path was successfully sampled in intersect_mnee. */
+  PATH_MNEE_SAMPLED = (1U << 3U),
 };
 
 /* Configure ray visibility bits for rays and objects respectively,
@@ -263,14 +308,32 @@ enum PathRayMNEE {
  * On shadow catcher paths we want to ignore any intersections with non-catchers,
  * whereas on regular paths we want to intersect all objects. */
 
-#define SHADOW_CATCHER_VISIBILITY_SHIFT(visibility) ((visibility) << 16)
+static_assert(PATH_RAY_VISIBILITY_ALL <= 0xffff);
+
+#define SHADOW_CATCHER_VISIBILITY_SHIFT(visibility) (uint32_t(visibility) << 16)
 
 #define SHADOW_CATCHER_PATH_VISIBILITY(path_flag, visibility) \
   (((path_flag) & PATH_RAY_SHADOW_CATCHER_PASS) ? SHADOW_CATCHER_VISIBILITY_SHIFT(visibility) : \
-                                                  (visibility))
+                                                  uint32_t(visibility))
 
 #define SHADOW_CATCHER_OBJECT_VISIBILITY(is_shadow_catcher, visibility) \
-  (((is_shadow_catcher) ? SHADOW_CATCHER_VISIBILITY_SHIFT(visibility) : 0) | (visibility))
+  (((is_shadow_catcher) ? SHADOW_CATCHER_VISIBILITY_SHIFT(visibility) : 0) | uint32_t(visibility))
+
+/* Helpers to pack and unpack path information into a single 32bit integer.
+ *
+ * The packed result is stored in the OSL's ShaderGlobals::raytype. It is used by the raytype()
+ * OSL function in shaders, as well as attribute fetching functionality.
+ *
+ * Note that while the entire PathRayVisibilityFlag flags are stored in the rayrtype, only part of
+ * the PathRayFlag is stored. */
+
+static_assert(PATH_RAY_VISIBILITY_ALL <= 0xffff);
+
+#define OSL_RAYTYPE_PACK(visibility, path_flag) \
+  (int((uint32_t((path_flag) & 0xffff) << 16) | uint32_t((visibility) & 0xffff)))
+
+#define OSL_RAYTYPE_TO_VISIBILITY(raytype) ((raytype) & 0xffff)
+#define OSL_RAYTYPE_TO_PARTIAL_PATH_FLAG(raytype) ((raytype) >> 16)
 
 /* Closure Label */
 
@@ -376,6 +439,7 @@ enum PassType {
   PASS_DENOISING_ROUGHNESS,
   PASS_DENOISING_DEPTH,
   PASS_DENOISING_BACKWARD_MOTION,
+  PASS_DENOISING_SPECULAR_MOTION,
   PASS_CATEGORY_DENOISING_END = 95,
 
   PASS_BAKE_PRIMITIVE,
@@ -703,24 +767,18 @@ enum AttributeElement {
 
   /* Only these combinations are supported by the kernel and can be
    * created on geometry. */
-  ATTR_ELEMENT_VERTEX_MOTION = ATTR_ELEMENT_VERTEX | ATTR_ELEMENT_IS_MOTION,
   ATTR_ELEMENT_VERTEX_NORMAL = ATTR_ELEMENT_VERTEX | ATTR_ELEMENT_IS_NORMAL,
-  ATTR_ELEMENT_VERTEX_NORMAL_MOTION = ATTR_ELEMENT_VERTEX | ATTR_ELEMENT_IS_NORMAL |
-                                      ATTR_ELEMENT_IS_MOTION,
 
   ATTR_ELEMENT_CORNER_BYTE = ATTR_ELEMENT_CORNER | ATTR_ELEMENT_IS_BYTE,
   ATTR_ELEMENT_CORNER_NORMAL = ATTR_ELEMENT_CORNER | ATTR_ELEMENT_IS_NORMAL,
-  ATTR_ELEMENT_CORNER_NORMAL_MOTION = ATTR_ELEMENT_CORNER | ATTR_ELEMENT_IS_NORMAL |
-                                      ATTR_ELEMENT_IS_MOTION,
 
-  ATTR_ELEMENT_CURVE_KEY_MOTION = ATTR_ELEMENT_CURVE_KEY | ATTR_ELEMENT_IS_MOTION,
   ATTR_ELEMENT_CURVE_KEY_NORMAL = ATTR_ELEMENT_CURVE_KEY | ATTR_ELEMENT_IS_NORMAL,
-  ATTR_ELEMENT_CURVE_KEY_NORMAL_MOTION = ATTR_ELEMENT_CURVE_KEY | ATTR_ELEMENT_IS_NORMAL |
-                                         ATTR_ELEMENT_IS_MOTION,
 };
 
 enum AttributeStandard : int {
   ATTR_STD_NONE = 0,
+  ATTR_STD_POSITION,
+  ATTR_STD_RADIUS,
   ATTR_STD_VERTEX_NORMAL,
   ATTR_STD_CORNER_NORMAL,
   ATTR_STD_UV,
@@ -734,9 +792,6 @@ enum AttributeStandard : int {
   ATTR_STD_POSITION_UNDEFORMED,
   ATTR_STD_POSITION_UNDISPLACED,
   ATTR_STD_NORMAL_UNDISPLACED,
-  ATTR_STD_MOTION_VERTEX_POSITION,
-  ATTR_STD_MOTION_VERTEX_NORMAL,
-  ATTR_STD_MOTION_CORNER_NORMAL,
   ATTR_STD_PARTICLE,
   ATTR_STD_CURVE_INTERCEPT,
   ATTR_STD_CURVE_LENGTH,
@@ -851,42 +906,48 @@ struct ccl_align(16) ShaderClosure {
  * are in world space.
  */
 
-enum ShaderDataFlag {
-  /* Runtime flags. */
-
+/* Shader runtime flags, determined during rendering. */
+enum ShaderRuntimeFlag {
   /* Set when ray hits backside of surface. */
-  SD_BACKFACING = (1 << 0),
-  /* Shader has non-zero emission. */
-  SD_EMISSION = (1 << 1),
-  /* Shader has BSDF closure. */
-  SD_BSDF = (1 << 2),
-  /* Shader has non-singular BSDF closure. */
-  SD_BSDF_HAS_EVAL = (1 << 3),
-  /* Shader has BSSRDF closure. */
-  SD_BSSRDF = (1 << 4),
-  /* Shader has holdout closure. */
-  SD_HOLDOUT = (1 << 5),
-  /* Shader has non-zero volume extinction. */
-  SD_EXTINCTION = (1 << 6),
-  /* Shader has a volume phase (scatter) closure. */
-  SD_SCATTER = (1 << 7),
-  /* Shader is being evaluated in a volume. */
-  SD_IS_VOLUME_SHADER_EVAL = (1 << 8),
-  /* Shader has transparent closure. */
-  SD_TRANSPARENT = (1 << 9),
-  /* BSDF has a transmissive component. */
-  SD_BSDF_HAS_TRANSMISSION = (1 << 10),
-  /* Shader has ray portal closure. */
-  SD_RAY_PORTAL = (1 << 11),
+  SR_BACKFACING = (1 << 0),
   /* Shader evaluation needs to be redone, because of texture cache miss */
-  SD_CACHE_MISS = (1 << 12),
+  SR_CACHE_MISS = (1 << 1),
 
-  SD_CLOSURE_FLAGS = (SD_EMISSION | SD_BSDF | SD_BSDF_HAS_EVAL | SD_BSSRDF | SD_HOLDOUT |
-                      SD_EXTINCTION | SD_SCATTER | SD_IS_VOLUME_SHADER_EVAL |
-                      SD_BSDF_HAS_TRANSMISSION | SD_RAY_PORTAL | SD_CACHE_MISS),
+  /* Shader has non-zero emission. */
+  SR_EMISSION = (1 << 2),
+  /* Shader has BSDF closure. */
+  SR_BSDF = (1 << 3),
+  /* Shader has non-singular BSDF closure. */
+  SR_BSDF_HAS_EVAL = (1 << 4),
+  /* Shader has BSSRDF closure. */
+  SR_BSSRDF = (1 << 5),
+  /* Shader has holdout closure. */
+  SR_HOLDOUT = (1 << 6),
+  /* Shader has non-zero volume extinction. */
+  SR_EXTINCTION = (1 << 7),
+  /* Shader has a volume phase (scatter) closure. */
+  SR_SCATTER = (1 << 8),
+  /* Shader is being evaluated in a volume. */
+  SR_IS_VOLUME_SHADER_EVAL = (1 << 9),
+  /* Shader has transparent closure. */
+  SR_TRANSPARENT = (1 << 10),
+  /* BSDF has a transmissive component. */
+  SR_BSDF_HAS_TRANSMISSION = (1 << 11),
+  /* Shader has ray portal closure. */
+  SR_RAY_PORTAL = (1 << 12),
+  /* BSDF has dispersion. */
+  SR_BSDF_HAS_DISPERSION = (1 << 13),
 
-  /* Shader flags. */
+  /* Flags that indicate the presence of closures. */
+  SR_CLOSURE_FLAG = (SR_EMISSION | SR_BSDF | SR_BSDF_HAS_EVAL | SR_BSSRDF | SR_HOLDOUT |
+                     SR_EXTINCTION | SR_SCATTER | SR_IS_VOLUME_SHADER_EVAL | SR_TRANSPARENT |
+                     SR_BSDF_HAS_TRANSMISSION | SR_RAY_PORTAL | SR_BSDF_HAS_DISPERSION)
+};
 
+/* Shader flags that are set after compiling the shaders. */
+enum ShaderDataFlag {
+  /* If the shader is wavelength-dependent. */
+  SD_REQUIRES_WAVELENGTH = (1 << 12),
   /* If Light Path Node is present in the shader graph. */
   SD_HAS_LIGHT_PATH_NODE = (1 << 13),
   /* Has bump mapping from BSDF connected to surface socket. */
@@ -926,12 +987,6 @@ enum ShaderDataFlag {
   SD_HAS_RAYTRACE = (1 << 30),
   /* Use back side for direct light sampling. */
   SD_MIS_BACK = (1 << 31),
-
-  SD_SHADER_FLAGS = (SD_MIS_FRONT | SD_HAS_TRANSPARENT_SHADOW | SD_HAS_VOLUME |
-                     SD_HAS_ONLY_VOLUME | SD_HETEROGENEOUS_VOLUME | SD_HAS_BSSRDF_BUMP |
-                     SD_VOLUME_EQUIANGULAR | SD_VOLUME_MIS | SD_VOLUME_CUBIC | SD_HAS_BUMP |
-                     SD_HAS_DISPLACEMENT | SD_HAS_CONSTANT_EMISSION | SD_NEED_VOLUME_ATTRIBUTES |
-                     SD_HAS_EMISSION | SD_HAS_RAYTRACE | SD_MIS_BACK)
 };
 
 /* Object flags. */
@@ -988,8 +1043,10 @@ struct ccl_align(16) ShaderData {
 
   /* shader id */
   int shader;
+  /* booleans describing shader, see ShaderRuntimeFlag */
+  int runtime_flag;
   /* booleans describing shader, see ShaderDataFlag */
-  int flag;
+  int shader_flag;
   /* booleans describing object of the shader, see ShaderDataObjectFlag */
   uint object_flag;
 
@@ -1042,6 +1099,10 @@ struct ccl_align(16) ShaderData {
 
   /* LCG state for closures that require additional random numbers. */
   uint lcg_state;
+#ifdef __SPECTRAL__
+  /* Random number for sampling the wavelength. */
+  float rand_wavelength;
+#endif
 
   /* Closure weights summed directly, so we can evaluate
    * emission and shadow transparency with MAX_CLOSURE 0. */
@@ -1323,7 +1384,7 @@ struct KernelSceneTime {
 
 struct ccl_align(16) KernelData {
   /* Features and limits. */
-  uint kernel_features;
+  uint64_t kernel_features;
   uint max_closures;
   uint max_shaders;
   uint volume_stack_size;
@@ -1387,7 +1448,10 @@ struct KernelObject {
 
   uint attribute_map_offset;
   uint motion_offset;
-  int normal_attr_offset;
+
+  /* Cached offset into attribute arrays, as these are accessed often. */
+  int position_offset;
+  int normal_offset;
 
   float cryptomatte_object;
   float cryptomatte_asset;
@@ -1703,16 +1767,17 @@ enum DeviceKernel : int {
   DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE,
   DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK,
   DEVICE_KERNEL_INTEGRATOR_INTERSECT_DEDICATED_LIGHT,
+  DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE,
   DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND,
   DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE,
   DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD,
   DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE,
   DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE,
-  DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE,
   DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME,
   DEVICE_KERNEL_INTEGRATOR_SHADE_VOLUME_RAY_MARCHING,
   DEVICE_KERNEL_INTEGRATOR_SHADE_SHADOW,
   DEVICE_KERNEL_INTEGRATOR_SHADE_DEDICATED_LIGHT,
+  DEVICE_KERNEL_INTEGRATOR_SHADOW_PATH_MNEE_PENDING,
   DEVICE_KERNEL_INTEGRATOR_MEGAKERNEL,
 
   DEVICE_KERNEL_INTEGRATOR_QUEUED_PATHS_ARRAY,
@@ -1776,7 +1841,8 @@ enum DeviceKernel : int {
 };
 
 enum {
-  DEVICE_KERNEL_INTEGRATOR_NUM = DEVICE_KERNEL_INTEGRATOR_MEGAKERNEL + 1,
+  /* Megakernel is the first kernel not used by GPU integrator. */
+  DEVICE_GPU_KERNEL_INTEGRATOR_NUM = DEVICE_KERNEL_INTEGRATOR_MEGAKERNEL,
 };
 
 CCL_NAMESPACE_END

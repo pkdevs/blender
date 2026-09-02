@@ -10,13 +10,13 @@
 
 #include <algorithm>
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 /* Define macros in `DNA_genfile.h`. */
 #define DNA_GENFILE_VERSIONING_MACROS
@@ -1199,24 +1199,6 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
           bmd->flag = eBooleanModifierFlag_Object;
         }
       }
-    }
-  }
-
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 291, 4) && MAIN_VERSION_FILE_ATLEAST(bmain, 291, 1)) {
-    /* Due to a48d78ce07f4f, CustomData.totlayer and CustomData.maxlayer has been written
-     * incorrectly. Fortunately, the size of the layers array has been written to the .blend file
-     * as well, so we can reconstruct totlayer and maxlayer from that. */
-    for (Mesh &mesh : bmain->meshes) {
-      mesh.vert_data.totlayer = mesh.vert_data.maxlayer = MEM_allocN_len(mesh.vert_data.layers) /
-                                                          sizeof(CustomDataLayer);
-      mesh.edge_data.totlayer = mesh.edge_data.maxlayer = MEM_allocN_len(mesh.edge_data.layers) /
-                                                          sizeof(CustomDataLayer);
-      /* We can be sure that mesh->fdata is empty for files written by 2.90. */
-      mesh.corner_data.totlayer = mesh.corner_data.maxlayer = MEM_allocN_len(
-                                                                  mesh.corner_data.layers) /
-                                                              sizeof(CustomDataLayer);
-      mesh.face_data.totlayer = mesh.face_data.maxlayer = MEM_allocN_len(mesh.face_data.layers) /
-                                                          sizeof(CustomDataLayer);
     }
   }
 

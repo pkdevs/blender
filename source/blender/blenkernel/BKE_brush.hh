@@ -170,6 +170,10 @@ ImBuf *BKE_brush_gen_radial_control_imbuf(Brush *br, bool secondary, bool displa
 
 /* Unified strength size and color. */
 
+bool BKE_brush_use_unified_size(const Paint *paint, const Brush *brush);
+bool BKE_brush_use_unified_strength(const Paint *paint, const Brush *brush);
+bool BKE_brush_use_unified_color(const Paint *paint, const Brush *brush);
+
 struct BrushColorJitterSettings {
   int flag;
   /** Jitter amounts */
@@ -250,6 +254,7 @@ bool supports_accumulate(const Brush &brush);
 bool supports_topology_rake(const Brush &brush);
 bool supports_auto_smooth(const Brush &brush);
 bool supports_normal_radius(const Brush &brush);
+bool supports_tip_roundness(const Brush &brush);
 bool supports_hardness(const Brush &brush);
 bool supports_height(const Brush &brush);
 bool supports_plane_height(const Brush &brush);

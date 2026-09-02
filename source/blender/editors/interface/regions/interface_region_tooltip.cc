@@ -31,14 +31,14 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
-#include "BLI_math_vector.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_idtype.hh"
@@ -1290,11 +1290,7 @@ static std::unique_ptr<TooltipData> tooltip_data_from_button_or_extra_icon(
     }
 
     if (disabled_msg && disabled_msg[0]) {
-      tooltip_text_field_add(*data,
-                             fmt::format(fmt::runtime(TIP_("Disabled: {}")), disabled_msg),
-                             {},
-                             TIP_STYLE_NORMAL,
-                             TIP_LC_ALERT);
+      tooltip_text_field_add(*data, disabled_msg, {}, TIP_STYLE_NORMAL, TIP_LC_ALERT, true);
     }
     if (disabled_msg_free) {
       MEM_delete(disabled_msg_orig);
@@ -1782,22 +1778,6 @@ ARegion *tooltip_create_from_gizmo(bContext *C, wmGizmo *gz)
   }
 
   return tooltip_create_with_data(C, std::move(data), init_position, nullptr);
-}
-
-ARegion *tooltip_create_from_panel_category(bContext *C,
-                                            const std::string &category_name,
-                                            const int x,
-                                            const int y)
-{
-  std::unique_ptr<TooltipData> data = std::make_unique<TooltipData>();
-  tooltip_text_field_add(*data, category_name, {}, TIP_STYLE_HEADER, TIP_LC_VALUE, false);
-  const float init_position[2] = {float(x) + 61.0f * UI_SCALE_FAC,
-                                  float(y) + 32.0f * UI_SCALE_FAC};
-  const rcti overlap_rect_fl = {x - int(25.0f * UI_SCALE_FAC),
-                                x + int(28.0f * UI_SCALE_FAC),
-                                y - int(31.0f * UI_SCALE_FAC),
-                                y + int(round(20.7f * UI_SCALE_FAC))};
-  return tooltip_create_with_data(C, std::move(data), init_position, &overlap_rect_fl);
 }
 
 static void tooltip_from_image(Image &ima, TooltipData &data)
