@@ -1940,7 +1940,7 @@ void scale_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 
   BKE_image_release_ibuf(ima, ibuf, lock);
 }
-void scale_setup(const bContext *C, wmGizmoGroup *gzgroup)
+void scale_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 {
   NodeBBoxWidgetGroup *scale_group = MEM_new<NodeBBoxWidgetGroup>(__func__);
   scale_group->border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
@@ -1974,7 +1974,7 @@ static bool show_scale_gizmo(const SpaceNode &snode)
   return true;
 }
 
-bool scale_poll_space_node(const bContext *C, wmGizmoGroupType *gzgt)
+bool scale_poll_space_node(const bContext *C, wmGizmoGroupType * /*gzgt*/)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
   if (snode == nullptr) {
@@ -1987,7 +1987,7 @@ bool scale_poll_space_node(const bContext *C, wmGizmoGroupType *gzgt)
   return show_scale_gizmo(*snode);
 }
 
-bool scale_poll_space_image(const bContext *C, wmGizmoGroupType *gzgt)
+bool scale_poll_space_image(const bContext *C, wmGizmoGroupType * /*gzgt*/)
 {
   const SpaceImage *sima = CTX_wm_space_image(C);
   if (sima == nullptr) {
