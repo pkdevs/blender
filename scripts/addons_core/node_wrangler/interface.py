@@ -9,7 +9,7 @@ from bpy.app.translations import contexts as i18n_contexts
 from bl_ui.node_add_menu import AddNodeMenu, SwapNodeMenu
 
 from .utils.constants import blend_types, geo_combine_operations, operations
-from .utils.nodes import get_nodes_links, NWBaseMenu
+from .utils.nodes import NWBaseMenu
 
 
 def socket_to_icon(socket):
