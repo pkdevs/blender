@@ -184,10 +184,12 @@ static bool update_auto_handle_types(bke::CurvesGeometry &curves,
     return false;
   }
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-  bke::SpanAttributeWriter handle_types = attributes.convert_or_add_for_write_span<int8_t>(
-      handle_type_name, bke::AttrDomain::Point);
-  index_mask::masked_fill(handle_types.span, int8_t(BEZIER_HANDLE_ALIGN), convert_to_align);
-  handle_types.finish();
+  if (bke::SpanAttributeWriter handle_types = attributes.lookup_or_add_for_write_span<int8_t>(
+          handle_type_name, bke::AttrDomain::Point))
+  {
+    index_mask::masked_fill(handle_types.span, int8_t(BEZIER_HANDLE_ALIGN), convert_to_align);
+    handle_types.finish();
+  }
   return true;
 }
 
