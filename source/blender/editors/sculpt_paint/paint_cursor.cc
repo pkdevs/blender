@@ -88,7 +88,7 @@ CursorSnapshot::~CursorSnapshot()
   }
 }
 
-}
+}  // namespace bke
 
 void paint_cursor_delete_textures(Paint *paint)
 {
