@@ -596,7 +596,7 @@ static int gather_frames_to_render_for_id(LibraryIDLinkCallbackData *cb_data)
   OGLRender *oglrender = static_cast<OGLRender *>(cb_data->user_data);
 
   /* Whitelist of datablocks to follow pointers into. */
-  const ID_Type id_type = GS(id->name);
+  const ID_Type id_type = id->id_type();
   switch (id_type) {
     /* Whitelist: */
     case ID_ME:        /* Mesh */
@@ -728,7 +728,7 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
   }
 
   /* only one render job at a time */
-  if (WM_jobs_test(wm, scene, WM_JOB_TYPE_RENDER)) {
+  if (WM_jobs_has_running(wm, scene, WM_JOB_TYPE_RENDER)) {
     return false;
   }
 
@@ -1284,7 +1284,7 @@ static wmOperatorStatus screen_opengl_render_modal(bContext *C,
   }
 
   /* no running blender, remove handler and pass through */
-  if (0 == WM_jobs_test(CTX_wm_manager(C), oglrender->scene, WM_JOB_TYPE_RENDER)) {
+  if (!WM_jobs_has_running(CTX_wm_manager(C), oglrender->scene, WM_JOB_TYPE_RENDER)) {
     screen_opengl_render_end(oglrender);
     MEM_delete(oglrender);
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;

@@ -34,9 +34,7 @@ else()
   set(FIRST_RUN FALSE)
 endif()
 
-# this starts out unset
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/build_files/cmake/Modules")
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/build_files/cmake/platform")
 
 # Avoid having an empty `CMAKE_BUILD_TYPE`.
 if(NOT DEFINED CMAKE_BUILD_TYPE_INIT)
@@ -89,7 +87,10 @@ include(build_files/cmake/macros.cmake)
 if(EXISTS ${CMAKE_SOURCE_DIR}/release/datafiles/startup.blend)
   file(SIZE ${CMAKE_SOURCE_DIR}/release/datafiles/startup.blend startup_size)
   if(${startup_size} LESS 1024)
-    message(FATAL_ERROR "Detected incomplete startup blend, likely due to missing Git LFS checkout.\nRunning \"make update\" or \"git lfs pull\" may resolve the issue.")
+    message(FATAL_ERROR
+      "Detected incomplete startup blend, likely due to missing Git LFS checkout.\n"
+      "Running \"make update\" or \"git lfs pull\" may resolve the issue."
+    )
   endif()
   unset(startup_size)
 endif()
@@ -544,6 +545,8 @@ if(UNIX AND (NOT APPLE OR WITH_PYTHON_MODULE))
 Install redistributable runtime, otherwise install into CMAKE_INSTALL_PREFIX"
     ON
   )
+else()
+  set(WITH_INSTALL_PORTABLE ON)
 endif()
 
 option(WITH_PYTHON_INSTALL "Copy system Python into the Blender install directory" ON)
@@ -589,14 +592,20 @@ Path to python site-packages or dist-packages containing 'zstandard' module"
   mark_as_advanced(PYTHON_ZSTANDARD_PATH)
 endif()
 
-option(WITH_COMPILER_SIMD "Add the recommended Blender default SIMD flags to the compiler's C_FLAGS/CXX_FLAGS" ON)
+option(WITH_COMPILER_SIMD "\
+Add the recommended Blender default SIMD flags to the compiler's C_FLAGS/CXX_FLAGS"
+  ON
+)
 mark_as_advanced(WITH_COMPILER_SIMD)
+
+
+option(WITH_EMBREE "Build Cycles with Embree support, and use Embree BVH in Blender" ON)
+
 
 # Cycles
 option(WITH_CYCLES "Enable Cycles Render Engine" ON)
 option(WITH_CYCLES_OSL "Build Cycles with OpenShadingLanguage support" ON)
 option(WITH_CYCLES_PATH_GUIDING "Build Cycles with path guiding support" ON)
-option(WITH_CYCLES_EMBREE "Build Cycles with Embree support" ON)
 option(WITH_CYCLES_DEBUG "Build Cycles with options useful for debugging (e.g., MIS)" OFF)
 
 option(WITH_CYCLES_STANDALONE "Build Cycles standalone application" OFF)
@@ -1266,7 +1275,7 @@ endif()
 
 # Apple
 if(APPLE)
-  include(platform_apple_xcode)
+  include(build_files/cmake/platform/platform_apple_xcode.cmake)
 
   option(WITH_LEGACY_MACOS_X64_LINKER "\
 Use legacy macOS linker on x64 platform. Minutes slower, but emits fewer warnings."
@@ -1339,7 +1348,10 @@ endif()
 
 # don't store paths to libs for portable distribution
 if(WITH_INSTALL_PORTABLE)
-  set(CMAKE_SKIP_BUILD_RPATH TRUE)
+  # TODO: match the CMake option, this check is historic.
+  if(UNIX AND (NOT APPLE OR WITH_PYTHON_MODULE))
+    set(CMAKE_SKIP_BUILD_RPATH TRUE)
+  endif()
 endif()
 
 if(UNIX AND NOT (APPLE OR HAIKU))
@@ -1427,7 +1439,8 @@ set(WITH_BINRELOC OFF)
 # MACOSX only, set to avoid uninitialized
 set(EXETYPE "")
 
-# WITH_SDL is uncached, depends on either WITH_SDL_AUDIO, WITH_GHOST_SDL or WITH_CYCLES_STANDALONE_GUI being set.
+# WITH_SDL is uncached, depends on either WITH_SDL_AUDIO, WITH_GHOST_SDL
+# or WITH_CYCLES_STANDALONE_GUI being set.
 set(WITH_SDL OFF)
 if(WITH_SDL_AUDIO OR WITH_GHOST_SDL OR WITH_CYCLES_STANDALONE_GUI)
   set(WITH_SDL ON)
@@ -1535,11 +1548,11 @@ endif()
 # - APPLE
 
 if(UNIX AND NOT APPLE)
-  include(platform_unix)
+  include(build_files/cmake/platform/platform_unix.cmake)
 elseif(WIN32)
-  include(platform_win32)
+  include(build_files/cmake/platform/platform_win32.cmake)
 elseif(APPLE)
-  include(platform_apple)
+  include(build_files/cmake/platform/platform_apple.cmake)
 endif()
 
 
@@ -1563,14 +1576,11 @@ if(SUPPORTS_NEON_BUILD AND SSE2NEON_FOUND)
 endif()
 
 # Test endianness and set the endian define.
-include(TestBigEndian)
-test_big_endian(_SYSTEM_BIG_ENDIAN)
-if(_SYSTEM_BIG_ENDIAN)
+if(CMAKE_CXX_BYTE_ORDER STREQUAL "BIG_ENDIAN")
   message(FATAL_ERROR "Blender does not support building on Big Endian systems" )
 else()
   add_definitions(-D__LITTLE_ENDIAN__)
 endif()
-unset(_SYSTEM_BIG_ENDIAN)
 
 if(WITH_IMAGE_OPENJPEG)
   # Special handling of Windows platform where openjpeg is always static.
@@ -1674,7 +1684,7 @@ endif()
 # -----------------------------------------------------------------------------
 # Common dependency targets
 
-include(dependency_targets)
+include(build_files/cmake/platform/dependency_targets.cmake)
 
 # -----------------------------------------------------------------------------
 # Ninja Job Limiting
@@ -2605,7 +2615,7 @@ if(FIRST_RUN)
   if(WITH_CYCLES)
     info_cfg_text("Rendering (Cycles):")
     info_cfg_option(WITH_CYCLES_OSL)
-    info_cfg_option(WITH_CYCLES_EMBREE)
+    info_cfg_option(WITH_EMBREE)
     info_cfg_option(WITH_CYCLES_PATH_GUIDING)
     if(NOT APPLE)
       info_cfg_option(WITH_CYCLES_DEVICE_OPTIX)

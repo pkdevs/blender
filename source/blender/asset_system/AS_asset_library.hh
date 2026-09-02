@@ -176,6 +176,8 @@ class AssetLibrary {
    */
   virtual std::optional<StringRefNull> remote_url() const;
 
+  virtual std::optional<StringRefNull> auth_token() const;
+
   AssetCatalogService &catalog_service() const;
 
   /**
@@ -358,6 +360,10 @@ void AS_asset_libraries_exit();
  */
 asset_system::AssetLibrary *AS_asset_library_load_from_directory(const char *name,
                                                                  const char *library_dirpath);
+
+/** Return a normalized path string, will also expand project variables that are in the passed path
+ * string. **/
+std::string AS_asset_library_resolve_path(StringRef path);
 
 /** Return whether any loaded AssetLibrary has unsaved changes to its catalogs. */
 bool AS_asset_library_has_any_unsaved_catalogs();
