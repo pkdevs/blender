@@ -807,20 +807,38 @@ static void rna_userdef_script_directory_remove(ReportList *reports, PointerRNA 
 }
 
 static bUserAssetLibrary *rna_userdef_asset_library_new(const bContext *C,
+                                                        ReportList *reports,
                                                         const char *name,
                                                         const char *directory,
-                                                        const char *remote_url)
+                                                        const char *remote_url,
+                                                        const char *extension_id)
 {
   const bool is_remote = remote_url && remote_url[0];
+  const bool is_extension = extension_id && extension_id[0];
+  if (is_extension && !is_remote) {
+    BKE_report(reports, RPT_ERROR, "Extension defined asset libraries require a remote URL");
+    return nullptr;
+  }
   bUserAssetLibrary *new_library;
-  new_library = ED_userpref_asset_library_new(
-      C,
-      name ? name : "",
-      is_remote ? remote_url : (directory ? directory : ""),
-      is_remote ? bUserAssetLibraryAddType::Remote : bUserAssetLibraryAddType::Local,
-      false,
-      {},
-      {});
+  if (is_extension) {
+    /* NOTE: don't use #ED_userpref_asset_library_new which activates the library in the UI
+     * and requests a download, the extension system manages these libraries. */
+    new_library = BKE_preferences_remote_asset_library_add(
+        &U, name ? name : "", remote_url, nullptr);
+    STRNCPY(new_library->extension_id, extension_id);
+    WM_main_add_notifier(NC_WINDOW | ND_SPACE_ASSET_PARAMS, nullptr);
+    ed::asset::list::clear_all_library(C);
+  }
+  else {
+    new_library = ED_userpref_asset_library_new(
+        C,
+        name ? name : "",
+        is_remote ? remote_url : (directory ? directory : ""),
+        is_remote ? bUserAssetLibraryAddType::Remote : bUserAssetLibraryAddType::Local,
+        false,
+        {},
+        {});
+  }
 
   USERDEF_TAG_DIRTY;
   return new_library;
@@ -7414,7 +7432,7 @@ static void rna_def_userdef_asset_library_collection(BlenderRNA *brna, PropertyR
   RNA_def_struct_ui_text(srna, "User Asset Libraries", "Collection of user asset libraries");
 
   func = RNA_def_function(srna, "new", "rna_userdef_asset_library_new");
-  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
+  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
   RNA_def_function_ui_description(func, "Add a new Asset Library");
   RNA_def_string(func, "name", nullptr, sizeof(bUserAssetLibrary::name), "Name", "");
   RNA_def_string(func, "directory", nullptr, sizeof(bUserAssetLibrary::dirpath), "Directory", "");
@@ -7424,9 +7442,15 @@ static void rna_def_userdef_asset_library_collection(BlenderRNA *brna, PropertyR
                  sizeof(bUserAssetLibrary::remote_url),
                  "Remote URL",
                  "When set, add a remote asset library instead of a local directory");
+  RNA_def_string(
+      func,
+      "extension_id",
+      nullptr,
+      sizeof(bUserAssetLibrary::extension_id),
+      "Extension ID",
+      "When set, the library is defined by this extension (repository module and package ID)");
   /* return type */
   parm = RNA_def_pointer(func, "library", "UserAssetLibrary", "", "Newly added asset library");
-  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_userdef_asset_library_remove");
