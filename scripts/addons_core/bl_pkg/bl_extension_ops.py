@@ -1099,6 +1099,36 @@ def extension_asset_libraries_sync(repo_cache_store, *, error_fn):
             extension_asset_library_ensure(extension_id, name=name, remote_url=remote_url, enable=False)
 
 
+def extension_asset_libraries_repos_update(repo_modules_prev):
+    # Follow repositories renamed or removed since `repo_modules_prev` so their entries aren't orphaned.
+    # Entries of removed repositories are removed, renamed repositories keep theirs.
+    prefs = bpy.context.preferences
+    asset_libraries = prefs.filepaths.asset_libraries
+    modules_curr = {repo_item.module for repo_item in prefs.extensions.repos}
+    modules_renamed = {}
+    for repo_item in prefs.extensions.repos:
+        module_prev = repo_modules_prev.get(repo_item.as_pointer())
+        # NOTE: pointers may be reused after reloading preferences, only a module that no longer
+        # exists can have been renamed.
+        if module_prev is not None and module_prev != repo_item.module and module_prev not in modules_curr:
+            modules_renamed[module_prev] = repo_item.module
+    modules_removed = set(repo_modules_prev.values()) - modules_curr - modules_renamed.keys()
+    if not (modules_renamed or modules_removed):
+        return
+
+    libraries_remove = []
+    for lib in asset_libraries:
+        repo_module, sep, pkg_id = lib.extension_id.partition(".")
+        if not sep:
+            continue
+        if repo_module in modules_removed:
+            libraries_remove.append(lib)
+        elif (module_new := modules_renamed.get(repo_module)) is not None:
+            lib.extension_id = extension_asset_library_id(module_new, pkg_id)
+    for lib in libraries_remove:
+        asset_libraries.remove(lib)
+
+
 def extension_asset_libraries_sync_if_dirty(repo_cache_store, *, error_fn):
     if repo_cache_store.is_asset_libraries_dirty():
         extension_asset_libraries_sync(repo_cache_store, error_fn=error_fn)

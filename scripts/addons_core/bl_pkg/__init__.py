@@ -723,13 +723,17 @@ def extension_repos_files_clear(directory, _):
 # Wrap Handlers
 
 _monkeypatch_extensions_repos_update_dirs = set()
+# Map `repo.as_pointer()` to the module before the update, to follow renamed & removed repositories.
+_monkeypatch_extensions_repos_update_modules = {}
 
 
 def monkeypatch_extensions_repos_update_pre_impl():
     _monkeypatch_extensions_repos_update_dirs.clear()
+    _monkeypatch_extensions_repos_update_modules.clear()
 
     extension_repos = bpy.context.preferences.extensions.repos
     for repo_item in extension_repos:
+        _monkeypatch_extensions_repos_update_modules[repo_item.as_pointer()] = repo_item.module
         if not repo_item.enabled:
             continue
         directory, _repo_path = repo_paths_or_none(repo_item)
@@ -766,7 +770,9 @@ def monkeypatch_extensions_repos_update_post_impl():
 
     _monkeypatch_extensions_repos_update_dirs.clear()
 
-    # Repositories may have been added, removed or toggled.
+    # Repositories may have been added, removed, renamed or toggled.
+    bl_extension_ops.extension_asset_libraries_repos_update(_monkeypatch_extensions_repos_update_modules)
+    _monkeypatch_extensions_repos_update_modules.clear()
     bl_extension_ops.extension_asset_libraries_sync(repo_cache_store, error_fn=print)
 
     # Based on changes, the statistics may need to be re-calculated.
