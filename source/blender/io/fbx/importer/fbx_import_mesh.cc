@@ -167,15 +167,18 @@ static void import_uvs(const ufbx_mesh *fmesh,
       mesh->uv_maps_default_set(attr_name);
       set_active_uv = false;
     }
-    bke::SpanAttributeWriter<float2> uvs = attributes.convert_or_add_for_write_only_span<float2>(
-        attr_name, bke::AttrDomain::Corner);
-    BLI_assert(fuv_set.vertex_uv.indices.count == uvs.span.size());
-    for (const int64_t i : uvs.span.index_range()) {
-      const int val_idx = fuv_set.vertex_uv.indices[i];
-      const ufbx_vec2 &uv = fuv_set.vertex_uv.values[val_idx];
-      uvs.span[i] = float2(uv.x, uv.y);
+    if (bke::SpanAttributeWriter<float2> uvs =
+            attributes.convert_or_add_for_write_only_span<float2>(attr_name,
+                                                                  bke::AttrDomain::Corner))
+    {
+      BLI_assert(fuv_set.vertex_uv.indices.count == uvs.span.size());
+      for (const int64_t i : uvs.span.index_range()) {
+        const int val_idx = fuv_set.vertex_uv.indices[i];
+        const ufbx_vec2 &uv = fuv_set.vertex_uv.values[val_idx];
+        uvs.span[i] = float2(uv.x, uv.y);
+      }
+      uvs.finish();
     }
-    uvs.finish();
   }
 }
 
