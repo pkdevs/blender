@@ -404,21 +404,21 @@ class SEQUENCER_FH_image_strip(FileHandler, SequencerFileHandlerBase):
     bl_idname = "SEQUENCER_FH_image_strip"
     bl_label = "Image strip"
     bl_import_operator = "SEQUENCER_OT_image_strip_add"
-    bl_file_extensions = ";".join(bpy.path.extensions_image)
+    bl_file_extensions = "/".join(bpy.path.extensions_image)
 
 
 class SEQUENCER_FH_movie_strip(FileHandler, SequencerFileHandlerBase):
     bl_idname = "SEQUENCER_FH_movie_strip"
     bl_label = "Movie strip"
     bl_import_operator = "SEQUENCER_OT_movie_strip_add"
-    bl_file_extensions = ";".join(bpy.path.extensions_movie)
+    bl_file_extensions = "/".join(bpy.path.extensions_movie)
 
 
 class SEQUENCER_FH_sound_strip(FileHandler, SequencerFileHandlerBase):
     bl_idname = "SEQUENCER_FH_sound_strip"
     bl_label = "Sound strip"
     bl_import_operator = "SEQUENCER_OT_sound_strip_add"
-    bl_file_extensions = ";".join(bpy.path.extensions_audio)
+    bl_file_extensions = "/".join(bpy.path.extensions_audio)
 
 
 classes = (

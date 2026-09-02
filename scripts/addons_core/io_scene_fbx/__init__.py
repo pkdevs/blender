@@ -713,11 +713,13 @@ def export_panel_animation(layout, operator):
 
 
 def menu_func_import(self, context):
-    self.layout.operator(ImportFBX.bl_idname, text="FBX (.fbx) (Legacy)")
+    text = bpy.types.FileHandler.label_with_extensions("IO_FH_fbx") + " (Legacy)"
+    self.layout.operator(ImportFBX.bl_idname, text=text)
 
 
 def menu_func_export(self, context):
-    self.layout.operator(ExportFBX.bl_idname, text="FBX (.fbx)")
+    self.layout.operator(
+        ExportFBX.bl_idname, text=bpy.types.FileHandler.label_with_extensions("IO_FH_fbx"))
 
 
 classes = (

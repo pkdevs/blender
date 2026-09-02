@@ -1571,7 +1571,7 @@ class NODE_FH_image_node(FileHandler):
     bl_idname = "NODE_FH_image_node"
     bl_label = "Image node"
     bl_import_operator = "node.add_image"
-    bl_file_extensions = ";".join((*bpy.path.extensions_image, *bpy.path.extensions_movie))
+    bl_file_extensions = "/".join((*bpy.path.extensions_image, *bpy.path.extensions_movie))
 
     @classmethod
     def poll_drop(cls, context):

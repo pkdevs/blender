@@ -1327,7 +1327,7 @@ void usd_file_handler_add()
   STRNCPY_UTF8(fh->import_operator, "WM_OT_usd_import");
   STRNCPY_UTF8(fh->export_operator, "WM_OT_usd_export");
   STRNCPY_UTF8(fh->label, "Universal Scene Description");
-  STRNCPY_UTF8(fh->file_extensions_str, ".usd;.usda;.usdc;.usdz");
+  STRNCPY_UTF8(fh->file_extensions_str, ".usd*");
   fh->poll_drop = poll_file_object_drop;
   bke::file_handler_add(std::move(fh));
 }

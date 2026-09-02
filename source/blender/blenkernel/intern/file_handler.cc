@@ -140,4 +140,18 @@ std::string FileHandlerType::get_default_filename(const StringRefNull name)
   return filename;
 }
 
+std::string FileHandlerType::label_with_extensions() const
+{
+  if (file_extensions.is_empty()) {
+    return label;
+  }
+
+  std::string extensions = file_extensions.first();
+  for (const std::string &extension : file_extensions.as_span().drop_front(1)) {
+    extensions += "/" + extension;
+  }
+
+  return std::string(label) + " (" + extensions + ")";
+}
+
 }  // namespace blender::bke
