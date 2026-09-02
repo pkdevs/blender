@@ -106,6 +106,7 @@ void BPY_RNA_operator_macro_wrapper(wmOperatorType *ot, void *userdata)
   ot->name = data->name;
   ot->idname = data->idname;
   ot->description = data->description;
+  ot->get_name = data->get_name;
   ot->flag |= data->flag; /* append flags to the one set by registration */
   ot->pyop_poll = data->pyop_poll;
   ot->ui = data->ui;

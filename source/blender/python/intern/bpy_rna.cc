@@ -9883,7 +9883,18 @@ static int bpy_class_validate_recursive(PointerRNA *dummy_ptr,
           }
         }
 
-        if (item == nullptr && ((flag & PROP_REGISTER_OPTIONAL) != PROP_REGISTER_OPTIONAL)) {
+        bool is_optional = (flag & PROP_REGISTER_OPTIONAL) == PROP_REGISTER_OPTIONAL;
+        if (STREQ(identifier, "bl_label")) {
+          PyObject *label_fn = nullptr;
+          if (PyObject_GetOptionalAttrString(py_class, "label", &label_fn) == 1) {
+            if (label_fn != nullptr) {
+              is_optional = true;
+              Py_DECREF(label_fn);
+            }
+          }
+        }
+
+        if (item == nullptr && !is_optional) {
           PyErr_Format(PyExc_AttributeError,
                        "expected %.200s, %.200s class to have an \"%.200s\" attribute",
                        class_type,
