@@ -30,11 +30,13 @@ static void duplicate_points(PointCloud &pointcloud, const IndexMask &mask)
         return;
       }
     }
-    bke::GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_only_span(
-        iter.name, iter.domain, iter.data_type);
-    array_utils::copy(src, dst.span.take_front(pointcloud.totpoint));
-    array_utils::gather(src, mask, dst.span.take_back(mask.size()));
-    dst.finish();
+    if (bke::GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_only_span(
+            iter.name, iter.domain, iter.data_type))
+    {
+      array_utils::copy(src, dst.span.take_front(pointcloud.totpoint));
+      array_utils::gather(src, mask, dst.span.take_back(mask.size()));
+      dst.finish();
+    }
   });
   BKE_pointcloud_nomain_to_pointcloud(new_pointcloud, &pointcloud);
 }
