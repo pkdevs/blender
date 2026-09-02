@@ -85,6 +85,109 @@ ccl_device LightEval sun_light_eval_from_intersection(const ccl_global KernelLig
   return LightEval{klight->sun.eval_fac, klight->sun.pdf};
 }
 
+ccl_device_inline bool sun_light_reference_from_sample(
+    KernelGlobals kg,
+    const ccl_private LightSample *ls,
+    ccl_private LightSampleReference *reference)
+{
+  *reference = light_reference_empty();
+
+  if (ls->type != LIGHT_SUN || ls->prim < 0) {
+    return false;
+  }
+
+  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, ls->prim);
+  if ((LightType)klight->type != LIGHT_SUN) {
+    return false;
+  }
+
+  reference->type = LIGHT_SUN;
+  reference->object = ls->object;
+  reference->prim = ls->prim;
+
+  /* Store light-local cone direction. */
+  const Transform itfm = lamp_get_inverse_transform(kg, klight);
+  const float3 local_Ng = normalize(transform_direction(&itfm, ls->Ng));
+
+  reference->param = map_to_sphere(local_Ng);
+  reference->flags = RESTIR_LIGHT_REFERENCE_VALID |
+                     RESTIR_LIGHT_REFERENCE_HAS_PARAM;
+
+  return true;
+}
+
+ccl_device_inline bool sun_light_sample_from_reference(
+    KernelGlobals kg,
+    const ccl_private LightSampleReference *reference,
+    const float3 P,
+    const float3 N,
+    const int shader_flags,
+    const uint32_t path_flag,
+    ccl_private LightSample *ls)
+{
+  *ls = {};
+
+  /* Unused vars. */
+  (void)P;
+  (void)N;
+  (void)shader_flags;
+  (void)path_flag;
+
+  if (!light_reference_is_valid(reference) ||
+      reference->type != LIGHT_SUN ||
+      reference->prim < 0)
+  {
+    return false;
+  }
+
+  if (!(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM)) {
+    return false;
+  }
+
+  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, reference->prim);
+  if ((LightType)klight->type != LIGHT_SUN) {
+    return false;
+  }
+
+  const float3 local_Ng = map_to_sphere(reference->param);
+
+  const Transform itfm = lamp_get_inverse_transform(kg, klight);
+  const Transform tfm = transform_inverse(itfm);
+
+  const float3 Ng = normalize(transform_direction(&tfm, local_Ng));
+  const float3 D = -Ng;
+
+  /* Allow zero-angle and reconstruct the delta sun direction:
+   * The persisted direction should still lie inside the current sun cone.
+   * This matters for relocated/reused samples and for animated or changed lights.
+   */
+  if (klight->sun.angle != 0.0f &&
+      vector_angle(-klight->co, D) > klight->sun.angle)
+  {
+    return false;
+  }
+
+
+  ls->type = LIGHT_SUN;
+  ls->shader = klight->shader_id;
+  ls->object = klight->object_id;
+  ls->prim = reference->prim;
+  ls->group = object_lightgroup(kg, ls->object);
+
+  ls->Ng = Ng;
+  ls->P = Ng;
+  ls->D = D;
+  ls->t = FLT_MAX;
+
+  ls->pdf = klight->sun.pdf;
+  ls->eval_fac = klight->sun.eval_fac;
+
+  ls->pdf_selection = 0.0f;
+  ls->emitter_id = EMITTER_NONE;
+
+  return isfinite(ls->pdf) && ls->pdf > 0.0f;
+}
+
 template<bool in_volume_segment>
 ccl_device_forceinline bool sun_light_tree_parameters(const float3 centroid,
                                                       const float theta_e,

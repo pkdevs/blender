@@ -51,42 +51,6 @@ ccl_device_inline float3 restir_area_position_decode(const ccl_global KernelLigh
 
 // MARK: - Producers
 
-ccl_device_inline bool restir_sun_light_reference_from_sample(
-    KernelGlobals kg,
-    const ccl_private LightSample *ls,
-    ccl_private LightSampleReference *reference)
-{
-  *reference = light_reference_empty();
-
-  if (ls->type != LIGHT_SUN || ls->prim < 0) {
-    return false;
-  }
-
-  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, ls->prim);
-  if ((LightType)klight->type != LIGHT_SUN) {
-    return false;
-  }
-
-  reference->type = LIGHT_SUN;
-  // reference->object = OBJECT_NONE;
-  reference->object = ls->object;
-  reference->prim = ls->prim;
-
-  // store light-local cone direction
-  const Transform itfm = lamp_get_inverse_transform(kg, klight);
-  const float3 local_Ng = normalize(transform_direction(&itfm, ls->Ng));
-
-  reference->param = map_to_sphere(local_Ng);
-  reference->flags = RESTIR_LIGHT_REFERENCE_VALID |
-                     RESTIR_LIGHT_REFERENCE_HAS_PARAM;
-
-
-printf("\nSUN PRODUCER: ls object=%d prim=%d -> ref object=%d prim=%d\n",
-       ls->object, ls->prim, reference->object, reference->prim);
-
-  return true;
-}
-
 /** TODO: Investigate whether light_normal_uv_from_position() can be used
  * as a common producer-side *canonicalization* path for emitter-local references.
  * It currently provides the exact area-light UV we need, but other light types
@@ -207,87 +171,6 @@ ccl_device_inline bool restir_spot_light_reference_from_sample(
 }
 
 /* MARK: - Consumption */
-
-ccl_device_inline bool restir_sun_light_sample_from_reference(
-    KernelGlobals kg,
-    const ccl_private LightSampleReference *reference,
-    const float3 P,
-    const float3 N,
-    const int shader_flags,
-    const uint32_t path_flag,
-    ccl_private LightSample *ls)
-{
-  *ls = {};
-
-  // Unused vars
-  (void)P;
-  (void)N;
-  (void)shader_flags;
-  (void)path_flag;
-
-  if (!light_reference_is_valid(reference) ||
-      reference->type != LIGHT_SUN ||
-      reference->prim < 0)
-  {
-    return false;
-  }
-
-  if (!(reference->flags & RESTIR_LIGHT_REFERENCE_HAS_PARAM)) {
-    return false;
-  }
-
-  const ccl_global KernelLight *klight = &kernel_data_fetch(lights, reference->prim);
-  if ((LightType)klight->type != LIGHT_SUN) {
-    return false;
-  }
-
-  const float3 local_Ng = map_to_sphere(reference->param);
-
-  const Transform itfm = lamp_get_inverse_transform(kg, klight);
-  const Transform tfm = transform_inverse(itfm);
-
-  const float3 Ng = normalize(transform_direction(&tfm, local_Ng));
-  const float3 D = -Ng;
-
-  // /*
-  //  * The persisted direction should still lie inside the current sun cone.
-  //  * This matters for relocated/reused samples and for animated or changed lights.
-  //  */
-  // if (klight->sun.angle == 0.0f) {
-  //   return false;
-  // }
-
-  // if (vector_angle(-klight->co, D) > klight->sun.angle) {
-  //   return false;
-  // }
-
-  // Allow zero-angle and reconstruct the delta sun direction:
-  if (klight->sun.angle != 0.0f &&
-      vector_angle(-klight->co, D) > klight->sun.angle)
-  {
-    return false;
-  }
-
-
-  ls->type = LIGHT_SUN;
-  ls->shader = klight->shader_id;
-  ls->object = klight->object_id;
-  ls->prim = reference->prim;
-  ls->group = object_lightgroup(kg, ls->object);
-
-  ls->Ng = Ng;
-  ls->P = Ng;
-  ls->D = D;
-  ls->t = FLT_MAX;
-
-  ls->pdf = klight->sun.pdf; // !!!: og sample gets pdf from sample_uniform_cone, should match klight->sun.pdf
-  ls->eval_fac = klight->sun.eval_fac;
-
-  ls->pdf_selection = 0.0f;
-  ls->emitter_id = EMITTER_NONE;
-
-  return isfinite(ls->pdf) && ls->pdf > 0.0f;
-}
 
 /**
  * reconstructs exactly the two pieces that matter:
