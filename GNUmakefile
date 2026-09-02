@@ -12,17 +12,17 @@ define HELP_TEXT
 Blender Convenience Targets
    Provided for building Blender (multiple targets can be used at once).
 
-   * debug:         Build a debug binary.
-   * full:          Enable all supported dependencies & options.
-   * lite:          Disable non essential features for a smaller binary and faster build.
-   * release:       Complete build with all options enabled including CUDA and Optix, matching the releases on blender.org
-   * headless:      Build without an interface (renderfarm or server automation).
-   * cycles:        Build Cycles standalone only, without Blender.
-   * bpy:           Build as a python module which can be loaded from python directly.
-   * developer:     Enable faster builds, error checking and tests, recommended for developers.
-   * ninja:         Use ninja build tool for faster builds.
-   * ccache:        Use ccache for faster rebuilds.
-   * test_gpu_draw: Enable EEVEE, Workbench, Overlay, and GPU module tests.
+   * debug:          Build a debug binary.
+   * full:           Enable all supported dependencies & options.
+   * lite:           Disable non essential features for a smaller binary and faster build.
+   * release:        Complete build with all options enabled including CUDA and Optix, matching the releases on blender.org
+   * headless:       Build without an interface (renderfarm or server automation).
+   * cycles:         Build Cycles standalone only, without Blender.
+   * bpy:            Build as a python module which can be loaded from python directly.
+   * developer:      Enable faster builds, error checking and tests, recommended for developers.
+   * ninja:          Use ninja build tool for faster builds.
+   * ccache:         Use ccache for faster rebuilds.
+   * with_gpu_tests: Enable EEVEE, Workbench, Grease Pencil, Overlay, and GPU module tests.
 
    Note: when passing in multiple targets their order is not important.
    For example, for a fast build you can run 'make lite ccache ninja'.
@@ -321,8 +321,8 @@ ifneq "$(filter ccache, $(MAKECMDGOALS))" ""
 	CMAKE_CONFIG_ARGS:=-DWITH_COMPILER_CCACHE=YES $(CMAKE_CONFIG_ARGS)
 endif
 
-ifneq "$(filter test_gpu_draw, $(MAKECMDGOALS))" ""
-	CMAKE_CONFIG_ARGS:=-C"$(BLENDER_DIR)/build_files/cmake/config/blender_test_gpu_draw.cmake" $(CMAKE_CONFIG_ARGS)
+ifneq "$(filter with_gpu_tests, $(MAKECMDGOALS))" ""
+	CMAKE_CONFIG_ARGS:=-C"$(BLENDER_DIR)/build_files/cmake/config/blender_with_gpu_tests.cmake" $(CMAKE_CONFIG_ARGS)
 endif
 
 # -----------------------------------------------------------------------------
@@ -439,7 +439,7 @@ bpy: all
 developer: all
 ninja: all
 ccache: all
-test_gpu_draw: all
+with_gpu_tests: all
 
 
 # -----------------------------------------------------------------------------

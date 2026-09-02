@@ -5,7 +5,7 @@
 # Configuration for building with EEVEE, Workbench, Overlay, and GPU module tests.
 #
 # Example usage:
-#   cmake -C../blender/build_files/cmake/config/blender_test_gpu_draw.cmake  ../blender
+#   cmake -C../blender/build_files/cmake/config/blender_with_gpu_tests.cmake  ../blender
 #
 
 set(WITH_GTESTS                       ON  CACHE BOOL "" FORCE)
