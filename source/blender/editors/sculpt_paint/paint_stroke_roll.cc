@@ -1433,51 +1433,12 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
                                          roll_spline_.pressures.as_span() :
                                          Span<float>();
 
-  /* Restrict the strip build to a polyline window around the dab.
-   *
-   * The LUT only rasterizes rows within raw_s - 2R .. raw_s + 3R (see
-   * compute_lut_eval_rows), so building borders, collapse, subdivision and
-   * smoothing over the full polyline would make per-dab cost grow with
-   * stroke length for no benefit.  The margins are generous so that
-   * self-intersection loops overlapping the eval range lie fully inside
-   * the window (collapse spans are capped at 3R arc length) and edge
-   * effects of subdivision/smoothing (~10 rows of Laplacian reach) stay
-   * several radii away from any rasterized row. */
-  constexpr float WINDOW_BACK_RADII = 6.0f;
-  constexpr float WINDOW_FWD_RADII = 7.0f;
-  int win_lo = 0;
-  int win_hi = int(poly_full.size()) - 1;
-  {
-    const float s_lo = std::max(0.0f, raw_s - R * WINDOW_BACK_RADII);
-    const float s_hi = std::min(lengths.last(), raw_s + R * WINDOW_FWD_RADII);
-    int seg_lo, seg_hi;
-    float fac;
-    length_parameterize::sample_at_length(lengths, s_lo, seg_lo, fac);
-    length_parameterize::sample_at_length(lengths, s_hi, seg_hi, fac);
-    win_lo = std::max(0, seg_lo);          /* first vertex of the window */
-    win_hi = std::min(win_hi, seg_hi + 1); /* last vertex of the window */
-  }
-  const int win_count = win_hi - win_lo + 1;
-  if (win_count < 2) {
-    return;
-  }
-
-  /* V coordinate at the window start: accumulated from the polyline start
-   * with the same per-segment formula as build_strip_grid(), so windowed V
-   * values match a full-polyline build exactly. */
-  float v_start = 0.0f;
-  if (win_lo > 0) {
-    if (!pressures_full.is_empty()) {
-      for (int i = 1; i <= win_lo; i++) {
-        const float seg = lengths[i - 1] - ((i >= 2) ? lengths[i - 2] : 0.0f);
-        const float p_avg = std::max((pressures_full[i] + pressures_full[i - 1]) * 0.5f, 0.01f);
-        v_start += seg / (R * p_avg);
-      }
-    }
-    else {
-      v_start = lengths[win_lo - 1];
-    }
-  }
+  /* The grid covers the entire recorded polyline so that self-intersection
+   * collapse anywhere on the stroke is detected; only the LUT rasterization
+   * is restricted to the dab neighborhood (via the eval row range). */
+  const int win_lo = 0;
+  const int win_count = int(poly_full.size());
+  const float v_start = 0.0f;
 
   const Span<float3> poly = poly_full.slice(win_lo, win_count);
   const Span<float3> tangents = roll_spline_.tangents_3d.as_span().slice(win_lo, win_count);
