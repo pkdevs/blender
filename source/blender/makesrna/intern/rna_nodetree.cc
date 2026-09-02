@@ -3605,6 +3605,7 @@ static void rna_NodeCryptomatte_source_set(PointerRNA *ptr, int value)
 
 static int rna_NodeCryptomatte_layer_name_get(PointerRNA *ptr)
 {
+
   bNode *node = ptr->data_as<bNode>();
   NodeCryptomatte *storage = static_cast<NodeCryptomatte *>(node->storage);
   for (const auto [index, layer] : storage->runtime.layers.enumerate()) {
