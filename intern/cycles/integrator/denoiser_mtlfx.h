@@ -19,7 +19,6 @@ public:
   static bool is_device_supported(const DeviceInfo &device);
   
 private:
-  // void *denoiser_desc_ = nullptr;
   void *mtlfx_denoiser = nullptr;
   
   void *color_texture = nullptr;
@@ -41,6 +40,7 @@ private:
   
   int last_width = 0;
   int last_height = 0;
+  float last_upscale_factor = 0.0f;
   
   virtual bool denoise_create_if_needed(DenoiseContext &context) override;
   
@@ -76,6 +76,17 @@ private:
     int num_samples;
   };
   
+  struct PostprocessParams {
+    int render_full_x;
+    int render_full_y;
+    int render_offset;
+    int render_stride;
+    int pass_noisy;
+    int use_compositing;
+    int num_components;
+    float upscale_factor;
+  };
+  
   // This is here for testing. Eventually I'd like to load this from a real Metal
   // file or somehow integrate with the Cycles kernel abstraction
   
@@ -105,6 +116,18 @@ private:
       int num_samples;
     };
 
+    struct PostprocessParams {
+      int render_full_x;
+      int render_full_y;
+      int render_offset;
+      int render_stride;
+      int pass_noisy;
+      int use_compositing;
+      int num_components;
+      float upscale_factor;
+    };
+
+    // MARK: Color preprocess
     kernel void filter_color_preprocess(
                                         device const float *render_buffer [[buffer(0)]],
                                         texture2d<float, access::write> color_tex [[texture(0)]],
@@ -118,12 +141,13 @@ private:
       device const float *output = render_buffer + pixel_index * params.pass_stride + params.pass_denoised;
       
       float4 color = float4(output[0], output[1], output[2], 1.0f);
-  
+
       uint2 flip_tid = uint2(tid.x, params.height - 1 - tid.y);
       
       color_tex.write(color, flip_tid);
     }
 
+    // MARK: Guiding preprocess
     kernel void filter_guiding_preprocess(
                                           device const float *render_buffer [[buffer(0)]],
                                           texture2d<float, access::write> depth_tex [[texture(0)]],
@@ -151,7 +175,7 @@ private:
       } else {
         pixelScale = 1.0f / buffer[pass.render_pass_sample_count];
       }
-  
+
       uint2 flip_tid = uint2(tid.x, params.height - 1 - tid.y);
       
       // MARK: Depth pass
@@ -233,6 +257,71 @@ private:
         
         specular_albedo_tex.write(albedo, flip_tid);
       }
+    }
+
+    // MARK: Color postprocess
+    kernel void filter_color_postprocess(
+                                         device float *render_buffer [[buffer(0)]],
+                                         texture2d<float, access::read> output_texture [[texture(0)]],
+                                         constant KernelParams &params [[buffer(1)]],
+                                         constant PassParams &pass [[buffer(2)]],
+                                         constant PostprocessParams &denoise [[buffer(3)]],
+                                         uint2 tid [[thread_position_in_grid]]
+                                         )
+    {
+      if (tid.x >= uint(params.width) || tid.y >= uint(params.height)) return;
+      
+      uint64_t render_pixel_index = denoise.render_offset +
+                                    (int(tid.x / denoise.upscale_factor) + denoise.render_full_x) +
+                                    (int(tid.y / denoise.upscale_factor) + denoise.render_full_y) *
+                                    denoise.render_stride;
+      
+      const device float *buffer = render_buffer + render_pixel_index * params.pass_stride;
+      
+      float pixelScale;
+      
+      const int PASS_UNUSED = -1;
+      
+      if (pass.render_pass_sample_count == PASS_UNUSED) {
+        pixelScale = pass.num_samples;
+      } else {
+        pixelScale = buffer[pass.render_pass_sample_count];
+      }
+      
+      const uint64_t denoised_pixel_index = params.offset + (tid.x + params.full_x) + (tid.y + params.full_y) * params.stride;
+      device float *denoised_pixel = render_buffer + denoised_pixel_index * params.pass_stride + params.pass_denoised;
+      
+      uint2 flip_tid = uint2(tid.x, params.height - 1 - tid.y);
+      
+      float4 color_value = output_texture.read(flip_tid);
+      
+      denoised_pixel[0] = color_value.x;
+      denoised_pixel[1] = color_value.y;
+      denoised_pixel[2] = color_value.z;
+      
+      if (pass.render_pass_sample_count == PASS_UNUSED || denoise.upscale_factor == 1.0f) {
+       denoised_pixel[0] *= pixelScale;
+       denoised_pixel[1] *= pixelScale;
+       denoised_pixel[2] *= pixelScale;
+      }
+      
+      if (denoise.num_components == 3) {
+         /* Pass without alpha channel. */
+       }
+       else if (!denoise.use_compositing) {
+         
+         const device float *noisy_pixel = buffer + denoise.pass_noisy;
+         denoised_pixel[3] = noisy_pixel[3];
+     
+         if (pass.render_pass_sample_count != PASS_UNUSED && denoise.upscale_factor != 1.0f) {
+           denoised_pixel[3] /= pixelScale;
+         }
+       }
+       else {
+         /* Assigning to zero since this is a default alpha value for 3-component passes, and it
+          * is an opaque pixel for 4 component passes. */
+         denoised_pixel[3] = 0;
+       }
     }
   )";
 };
