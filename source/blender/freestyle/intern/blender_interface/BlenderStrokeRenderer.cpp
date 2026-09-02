@@ -638,16 +638,16 @@ void BlenderStrokeRenderer::GenerateStrokeMesh(StrokeGroup *group, bool hasTex)
 
   if (hasTex) {
     // First UV layer
-    if (uv_map_attrs[0] = attributes.lookup_or_add_for_write_span<float2>(uvNames[0],
-                                                                          bke::AttrDomain::Corner))
+    if ((uv_map_attrs[0] = attributes.lookup_or_add_for_write_span<float2>(uvNames[0],
+                                                                          bke::AttrDomain::Corner)))
     {
       loopsuv[0] = uv_map_attrs[0].span.data();
       mesh->uv_maps_active_set(uvNames[0]);
     }
 
     // Second UV layer
-    if (uv_map_attrs[1] = attributes.lookup_or_add_for_write_span<float2>(uvNames[1],
-                                                                          bke::AttrDomain::Corner))
+    if ((uv_map_attrs[1] = attributes.lookup_or_add_for_write_span<float2>(uvNames[1],
+                                                                          bke::AttrDomain::Corner)))
     {
       loopsuv[1] = uv_map_attrs[1].span.data();
       mesh->uv_maps_active_set(uvNames[1]);
