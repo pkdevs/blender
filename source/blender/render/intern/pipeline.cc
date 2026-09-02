@@ -58,7 +58,6 @@
 #include "BKE_pointcache.h"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
-#include "BKE_scene_runtime.hh"
 #include "BKE_sound.hh"
 
 #include "NOD_composite.hh"
@@ -1904,24 +1903,15 @@ void RE_SetReports(Render *re, ReportList *reports)
   re->reports = reports;
 }
 
-static void render_update_depsgraph(Render *re, const int frame_start, const int frame_end)
+static void render_update_depsgraph(Render *re)
 {
   Scene *scene = re->scene;
   BKE_scene_camera_switch_update(re->scene);
   DEG_evaluate_on_framechange(re->pipeline_depsgraph, BKE_scene_frame_get(scene));
   BKE_scene_update_sound(re->pipeline_depsgraph, re->main);
-
-  Scene *scene_eval = DEG_get_evaluated_scene(re->pipeline_depsgraph);
-  if (!re->movie_writers.is_empty() &&
-      re->r.ffcodecdata.audio_codec_id_get() != FFMPEG_CODEC_ID_NONE && scene_eval != nullptr &&
-      scene_eval->runtime->audio.animation_cache_dirty)
-  {
-    BKE_sound_ensure_scene_audio_animation(
-        re->main, scene, re->pipeline_depsgraph, frame_start, frame_end);
-  }
 }
 
-static void render_init_depsgraph(Render *re, const int frame_start, const int frame_end)
+static void render_init_depsgraph(Render *re)
 {
   Scene *scene = re->scene;
   ViewLayer *view_layer = BKE_view_layer_default_render(re->scene);
@@ -1933,9 +1923,28 @@ static void render_init_depsgraph(Render *re, const int frame_start, const int f
   DEG_graph_build_for_render_pipeline(re->pipeline_depsgraph);
 
   /* Update immediately so we have proper evaluated scene. */
-  render_update_depsgraph(re, frame_start, frame_end);
+  render_update_depsgraph(re);
 
   re->pipeline_scene_eval = DEG_get_evaluated_scene(re->pipeline_depsgraph);
+}
+
+void RE_RenderAnimPrepareAudio(
+    Render *re, Main *bmain, Scene *scene, const int sfra, const int efra)
+{
+  if (!(scene->r.mode & R_SAVE_OUTPUT) || !BKE_imtype_is_movie(scene->r.im_format.imtype) ||
+      scene->r.ffcodecdata.audio_codec_id_get() == FFMPEG_CODEC_ID_NONE)
+  {
+    return;
+  }
+
+  re->main = bmain;
+  re->scene = scene;
+  if (re->pipeline_depsgraph == nullptr) {
+    render_init_depsgraph(re);
+  }
+  BKE_sound_ensure_scene_audio_animation(bmain, scene, re->pipeline_depsgraph, sfra, efra);
+  re->pipeline_scene_eval = DEG_get_evaluated_scene(re->pipeline_depsgraph);
+  re->animation_audio_prepared = true;
 }
 
 /* Free data only needed during rendering operation. */
@@ -1955,6 +1964,7 @@ static void render_pipeline_free(Render *re)
     re->pipeline_depsgraph = nullptr;
     re->pipeline_scene_eval = nullptr;
   }
+  re->animation_audio_prepared = false;
 
   /* Destroy the opengl context in the correct thread. */
   RE_display_free(re);
@@ -1991,7 +2001,7 @@ void RE_RenderFrame(Render *re,
     /* Reduce GPU memory usage so renderer has more space. */
     RE_FreeGPUTextureCaches();
 
-    render_init_depsgraph(re, frame, frame);
+    render_init_depsgraph(re);
 
     do_render_full_pipeline(re);
 
@@ -2395,6 +2405,9 @@ void RE_RenderAnim(Render *re,
 
   /* do not fully call for each frame, it initializes & pops output window */
   if (!render_init_from_main(re, &rd, bmain, scene, single_layer, camera_override, false, true)) {
+    if (re->animation_audio_prepared) {
+      render_pipeline_free(re);
+    }
     return;
   }
 
@@ -2416,14 +2429,11 @@ void RE_RenderAnim(Render *re,
                               (re_type->flag & RE_USE_POSTPROCESS)) &&
                              write_anim;
 
-  render_init_depsgraph(re, sfra, efra);
+  if (re->pipeline_depsgraph == nullptr) {
+    render_init_depsgraph(re);
+  }
 
   if (is_movie && do_write_file) {
-    if (re->r.ffcodecdata.audio_codec_id_get() != FFMPEG_CODEC_ID_NONE) {
-      BKE_sound_ensure_scene_audio_animation(bmain, scene, re->pipeline_depsgraph, sfra, efra);
-      re->pipeline_scene_eval = DEG_get_evaluated_scene(re->pipeline_depsgraph);
-    }
-
     size_t width, height;
     get_videos_dimensions(re, &rd, &image_format, &width, &height);
 
@@ -2494,7 +2504,7 @@ void RE_RenderAnim(Render *re,
       BKE_animsys_evaluate_animdata(&scene->id, adt, &anim_eval_context, ADT_RECALC_ALL, false);
     }
 
-    render_update_depsgraph(re, sfra, efra);
+    render_update_depsgraph(re);
 
     /* Only border now, TODO(ton): camera lens. */
     render_init_from_main(re, &rd, bmain, scene, single_layer, camera_override, true, false);

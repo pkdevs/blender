@@ -159,6 +159,7 @@ struct Render : public BaseRender {
    * layer visibility and use for postprocessing (compositor and sequencer). */
   struct Depsgraph *pipeline_depsgraph = nullptr;
   Scene *pipeline_scene_eval = nullptr;
+  bool animation_audio_prepared = false;
 
   /* Compositor.
    * NOTE: Use bare pointer instead of smart pointer because the it is a fully opaque type. */

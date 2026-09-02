@@ -44,7 +44,6 @@
 #include "BKE_main.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
-#include "BKE_scene_runtime.hh"
 #include "BKE_sound.hh"
 
 #include "DEG_depsgraph.hh"
@@ -1180,7 +1179,6 @@ static bool screen_opengl_render_anim_step(const bke::BlenderProject *project,
   const bool view_context = (oglrender->v3d != nullptr);
   bool is_movie;
   RenderResult *rr;
-  Scene *scene_eval = nullptr;
 
   /* go to next frame */
   if (scene->r.cfra < oglrender->nfra) {
@@ -1232,21 +1230,6 @@ static bool screen_opengl_render_anim_step(const bke::BlenderProject *project,
   }
 
   BKE_scene_graph_update_for_newframe(depsgraph);
-
-  scene_eval = DEG_get_evaluated_scene(depsgraph);
-  if (is_movie && scene->r.ffcodecdata.audio_codec_id_get() != FFMPEG_CODEC_ID_NONE &&
-      scene_eval != nullptr && scene_eval->runtime->audio.animation_cache_dirty)
-  {
-    {
-      std::unique_lock lock(oglrender->task_mutex);
-      while (oglrender->num_scheduled_frames > 0) {
-        oglrender->task_condition.wait(lock);
-      }
-    }
-
-    BKE_sound_ensure_scene_audio_animation(
-        oglrender->bmain, scene, depsgraph, scene->playback_start(), scene->playback_end());
-  }
 
   if (view_context) {
     if (oglrender->rv3d->persp == RV3D_CAMOB && oglrender->v3d->camera &&
