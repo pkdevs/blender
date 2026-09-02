@@ -153,11 +153,8 @@ static void copy_stable_id_point(const OffsetIndices<int> offsets,
   if (!src_attribute.varray.type().is<int>()) {
     return;
   }
-  SpanAttributeWriter dst_attribute = dst_attributes.lookup_or_add_for_write_only_span<int>(
+  SpanAttributeWriter dst_attribute = dst_attributes.convert_or_add_for_write_only_span<int>(
       "id", AttrDomain::Point);
-  if (!dst_attribute) {
-    return;
-  }
 
   VArraySpan<int> src{src_attribute.varray.typed<int>()};
   MutableSpan<int> dst = dst_attribute.span;
