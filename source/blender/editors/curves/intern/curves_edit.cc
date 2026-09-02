@@ -237,10 +237,12 @@ void duplicate_points(bke::CurvesGeometry &curves, const IndexMask &mask)
   }
 
   for (const StringRef selection_name : get_curves_selection_attribute_names(curves)) {
-    bke::SpanAttributeWriter<bool> selection = attributes.convert_or_add_for_write_span<bool>(
-        selection_name, bke::AttrDomain::Point);
-    selection.span.take_back(num_points_to_add).fill(true);
-    selection.finish();
+    if (bke::SpanAttributeWriter<bool> selection = attributes.lookup_or_add_for_write_span<bool>(
+            selection_name, bke::AttrDomain::Point))
+    {
+      selection.span.take_back(num_points_to_add).fill(true);
+      selection.finish();
+    }
   }
 }
 
@@ -307,10 +309,12 @@ void duplicate_curves(bke::CurvesGeometry &curves, const IndexMask &mask)
   }
 
   for (const StringRef selection_name : get_curves_selection_attribute_names(curves)) {
-    bke::SpanAttributeWriter<bool> selection = attributes.convert_or_add_for_write_span<bool>(
-        selection_name, bke::AttrDomain::Curve);
-    selection.span.take_back(mask.size()).fill(true);
-    selection.finish();
+    if (bke::SpanAttributeWriter<bool> selection = attributes.lookup_or_add_for_write_span<bool>(
+            selection_name, bke::AttrDomain::Curve))
+    {
+      selection.span.take_back(mask.size()).fill(true);
+      selection.finish();
+    }
   }
 }
 
