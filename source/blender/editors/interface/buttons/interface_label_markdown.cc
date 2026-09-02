@@ -12,6 +12,7 @@
 
 #include "BLF_api.hh"
 
+#include "BLI_color.hh"
 #include "BLI_index_range.hh"
 #include "BLI_math_base.hh"
 #include "BLI_rect.hh"
@@ -1409,17 +1410,17 @@ void label_markdown_resolve(ButtonLabel *button)
 }
 
 struct MarkdownDrawColors {
-  uchar link[4];
-  uchar quote_dimmed[4];
-  uchar code_span_text[4];
-  uchar code_box_text[4];
-  uchar quote_dimmed_link[4];
-  uchar code_span_link[4];
-  float code_box_fill[4];
-  float code_box_border[4];
-  float code_span_fill[4];
-  uchar horizontal_rule[4];
-  uchar quote_line[4];
+  ColorTheme4b link;
+  ColorTheme4b quote_dimmed;
+  ColorTheme4b code_span_text;
+  ColorTheme4b code_box_text;
+  ColorTheme4b quote_dimmed_link;
+  ColorTheme4b code_span_link;
+  ColorTheme4f code_box_fill;
+  ColorTheme4f code_box_border;
+  ColorTheme4f code_span_fill;
+  ColorTheme4b horizontal_rule;
+  ColorTheme4b quote_line;
 };
 
 static MarkdownDrawColors markdown_draw_colors_init(const uchar color[4])
@@ -1427,10 +1428,10 @@ static MarkdownDrawColors markdown_draw_colors_init(const uchar color[4])
   MarkdownDrawColors colors;
 
   theme::get_color_4ubv(TH_LINK, colors.link);
-  colors.link[3] = color[3];
+  colors.link.a = color[3];
 
   /* Blend toward the panel background so quote text is muted consistently across themes. */
-  uchar back_color[3];
+  ColorTheme4b back_color;
   theme::get_color_3ubv(TH_PANEL_BACK, back_color);
   constexpr float quote_dimmed_blend = 0.3f;
   constexpr float code_span_fill_blend = 0.20f;
@@ -1441,41 +1442,30 @@ static MarkdownDrawColors markdown_draw_colors_init(const uchar color[4])
   const uchar *code_box_text_color = btheme->tui.wcol_box.text;
 
   theme::get_color_blend_shade_3ubv(color, back_color, quote_dimmed_blend, 0, colors.quote_dimmed);
-  colors.quote_dimmed[3] = color[3];
+  colors.quote_dimmed.a = color[3];
 
-  for (const int i : IndexRange(4)) {
-    colors.code_span_text[i] = code_box_text_color[i];
-    colors.code_box_text[i] = code_box_text_color[i];
-  }
+  colors.code_span_text = ColorTheme4b(code_box_text_color);
+  colors.code_box_text = ColorTheme4b(code_box_text_color);
 
   theme::get_color_blend_shade_3ubv(
       colors.link, back_color, quote_dimmed_blend, 0, colors.quote_dimmed_link);
-  colors.quote_dimmed_link[3] = colors.link[3];
+  colors.quote_dimmed_link.a = colors.link.a;
 
   theme::get_color_blend_shade_3ubv(
       colors.link, code_box_fill_color, 0.1f, 0, colors.code_span_link);
-  colors.code_span_link[3] = colors.link[3];
+  colors.code_span_link.a = colors.link.a;
 
-  uchar code_span_fill_color[4];
+  ColorTheme4b code_span_fill_color;
   theme::get_color_blend_shade_3ubv(
       back_color, code_box_fill_color, code_span_fill_blend, 0, code_span_fill_color);
-  code_span_fill_color[3] = 255;
+  code_span_fill_color.a = 255;
 
-  for (const int i : IndexRange(4)) {
-    colors.code_box_fill[i] = float(code_box_fill_color[i]) / 255.0f;
-    colors.code_box_border[i] = float(code_box_border_color[i]) / 255.0f;
-    colors.code_span_fill[i] = float(code_span_fill_color[i]) / 255.0f;
-  }
+  colors.code_box_fill = color::to_float(ColorTheme4b(code_box_fill_color));
+  colors.code_box_border = color::to_float(ColorTheme4b(code_box_border_color));
+  colors.code_span_fill = color::to_float(code_span_fill_color);
 
-  colors.horizontal_rule[0] = color[0];
-  colors.horizontal_rule[1] = color[1];
-  colors.horizontal_rule[2] = color[2];
-  colors.horizontal_rule[3] = 30;
-
-  colors.quote_line[0] = color[0];
-  colors.quote_line[1] = color[1];
-  colors.quote_line[2] = color[2];
-  colors.quote_line[3] = 80;
+  colors.horizontal_rule = ColorTheme4b(color[0], color[1], color[2], 30);
+  colors.quote_line = ColorTheme4b(color[0], color[1], color[2], 80);
 
   return colors;
 }
