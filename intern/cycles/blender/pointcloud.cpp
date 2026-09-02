@@ -290,7 +290,7 @@ static void export_pointcloud(Scene *scene,
     }
   }
 
-  if (b_pointcloud.render_as == blender::PT_RENDER_AS_SPLATS) {
+  if (b_pointcloud.type == blender::PT_TYPE_GSPLAT) {
     export_pointcloud_gsplat_attributes(pointcloud, b_attributes);
     pointcloud->set_render_as(PointCloud::RENDER_AS_GSPLATS);
   }
@@ -302,7 +302,7 @@ static void export_pointcloud_motion(PointCloud *pointcloud,
                                      const blender::PointCloud &b_pointcloud,
                                      const int motion_step)
 {
-  const bool is_gsplat = (b_pointcloud.render_as == blender::PT_RENDER_AS_SPLATS);
+  const bool is_gsplat = (b_pointcloud.type == blender::PT_TYPE_GSPLAT);
 
   /* Set motion steps on position and radius attributes. */
   Attribute *attr_P = pointcloud->attributes.find(ATTR_STD_POSITION);
