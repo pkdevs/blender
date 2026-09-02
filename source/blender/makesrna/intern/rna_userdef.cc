@@ -7152,6 +7152,15 @@ static void rna_def_userdef_filepaths_asset_library(BlenderRNA *brna)
       prop, "Project Defined", "Signifies if the asset library is defined by a project");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
+  prop = RNA_def_property(srna, "extension_id", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "extension_id");
+  RNA_def_property_ui_text(
+      prop,
+      "Extension ID",
+      "Identifier of the extension defining this asset library (repository module and package "
+      "ID), empty for user defined libraries");
+  RNA_def_property_update(prop, 0, "rna_userdef_asset_libraries_update");
+
   prop = RNA_def_property(srna, "uuid", PROP_STRING, PROP_NONE);
   RNA_def_property_string_funcs(prop,
                                 "rna_userdef_asset_library_uuid_get",
