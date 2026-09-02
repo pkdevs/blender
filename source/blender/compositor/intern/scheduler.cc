@@ -511,7 +511,7 @@ static Vector<const bNode *> find_dependency_nodes(NodeGroupOperation &node_grou
       continue;
     }
 
-    /* The dependency node was already schedule, so skip it. */
+    /* The dependency node was already scheduled, so skip it. */
     if (schedule.nodes.contains(&output->owner_node())) {
       continue;
     }
@@ -578,7 +578,7 @@ Schedule compute_schedule(NodeGroupOperation &node_group_operation)
 
     /* Push the dependency nodes to the node stack such that the node with the highest number of
      * needed buffers is scheduled first, so we push the nodes in ascending order. */
-    std::ranges::sort(dependency_nodes, [&](const bNode *a, const bNode *b) {
+    std::ranges::stable_sort(dependency_nodes, [&](const bNode *a, const bNode *b) {
       return needed_buffers.lookup(a) < needed_buffers.lookup(b);
     });
     node_stack.push_multiple(dependency_nodes);
