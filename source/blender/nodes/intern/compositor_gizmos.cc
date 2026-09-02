@@ -1887,6 +1887,16 @@ static void gizmo_node_scale_prop_matrix_set(const wmGizmo *gz,
   gizmo_node_bbox_update(scale_group);
 }
 
+static void gizmo_node_scale_foreach_rna_prop(
+    wmGizmoProperty *gz_prop,
+    const FunctionRef<void(PointerRNA &ptr, PropertyRNA *prop, int index)> callback)
+{
+  bNode *node = static_cast<bNode *>(gz_prop->custom_func.user_data);
+
+  apply_socket_callback(*node, "X"_ustr, callback);
+  apply_socket_callback(*node, "Y"_ustr, callback);
+}
+
 void scale_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 {
   Main *bmain = CTX_data_main(C);
@@ -1928,8 +1938,7 @@ void scale_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   params.value_set_fn = gizmo_node_scale_prop_matrix_set;
   params.range_get_fn = nullptr;
   params.user_data = node;
-  // todo(habib): implement
-  // params.foreach_rna_prop_fn = gizmo_node_scale_foreach_rna_prop;
+  params.foreach_rna_prop_fn = gizmo_node_scale_foreach_rna_prop;
   WM_gizmo_target_property_def_func(gz, "matrix", &params);
 
   BKE_image_release_ibuf(ima, ibuf, lock);
