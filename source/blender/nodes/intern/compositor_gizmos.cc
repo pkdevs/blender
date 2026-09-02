@@ -1323,7 +1323,7 @@ static void gizmo_node_backdrop_prop_matrix_set(const wmGizmo *gz,
   snode->yof = matrix[3][1] - offset.y * snode->zoom;
 }
 
-bool transform_poll(const bContext *C, wmGizmoGroupType * /*gzgt*/)
+bool viewer_poll(const bContext *C, wmGizmoGroupType * /*gzgt*/)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
   if (snode == nullptr) {
@@ -1342,7 +1342,7 @@ bool transform_poll(const bContext *C, wmGizmoGroupType * /*gzgt*/)
   return false;
 }
 
-void transform_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
+void viewer_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 {
   NodeTransformWidgetGroup *transform_group = MEM_new<NodeTransformWidgetGroup>(__func__);
 
@@ -1362,7 +1362,7 @@ void transform_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
   };
 }
 
-void transform_refresh(const bContext *C, wmGizmoGroup *gzgroup)
+void viewer_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 {
   Main *bmain = CTX_data_main(C);
   NodeTransformWidgetGroup *transform_group = static_cast<NodeTransformWidgetGroup *>(
@@ -1606,6 +1606,234 @@ bool translate_poll_space_image(const bContext *C, wmGizmoGroupType * /*gzgt*/)
   }
 
   return show_translate_gizmo(*snode);
+}
+
+static bool show_transform_gizmo(const SpaceNode &snode)
+{
+  bNodeTree *node_tree = snode.edittree;
+  BLI_assert(node_tree != nullptr);
+
+  bNode *node = bke::node_get_active(*node_tree);
+
+  if (!node || !node->is_type("CompositorNodeTransform"_ustr)) {
+    return false;
+  }
+
+  node_tree->ensure_topology_cache();
+  for (bNodeSocket &input : node->inputs) {
+    if (STR_ELEM(input.name, "X", "Y", "Angle", "Scale") && input.is_directly_linked()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool transform_poll_space_image(const bContext *C, wmGizmoGroupType *gzgt)
+{
+  const SpaceImage *sima = CTX_wm_space_image(C);
+  if (sima == nullptr) {
+    return false;
+  }
+
+  if (!image_gizmo_is_set_visible(*sima)) {
+    return false;
+  }
+
+  const SpaceNode *snode = find_active_node_editor(C);
+  if (snode == nullptr || snode->edittree == nullptr) {
+    return false;
+  }
+
+  return show_transform_gizmo(*snode);
+}
+
+bool transform_poll_space_node(const bContext *C, wmGizmoGroupType *gzgt)
+{
+  SpaceNode *snode = CTX_wm_space_node(C);
+  if (snode == nullptr) {
+    return false;
+  }
+  if (!node_gizmo_is_set_visible(*snode)) {
+    return false;
+  }
+
+  return show_transform_gizmo(*snode);
+}
+
+void transform_setup(const bContext *C, wmGizmoGroup *gzgroup)
+{
+  NodeBBoxWidgetGroup *transform_group = MEM_new<NodeBBoxWidgetGroup>(__func__);
+  transform_group->border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
+
+  RNA_enum_set(transform_group->border->ptr,
+               "transform",
+               ED_GIZMO_CAGE_XFORM_FLAG_TRANSLATE | ED_GIZMO_CAGE_XFORM_FLAG_ROTATE |
+                   ED_GIZMO_CAGE_XFORM_FLAG_SCALE_UNIFORM);
+
+  RNA_enum_set(transform_group->border->ptr,
+               "draw_options",
+               ED_GIZMO_CAGE_DRAW_FLAG_XFORM_CENTER_HANDLE |
+                   ED_GIZMO_CAGE_DRAW_FLAG_CORNER_HANDLES);
+
+  gzgroup->customdata = transform_group;
+  gzgroup->customdata_free = [](void *customdata) {
+    MEM_delete(static_cast<NodeBBoxWidgetGroup *>(customdata));
+  };
+}
+
+static void gizmo_node_transform_prop_matrix_get(const wmGizmo *gz,
+                                                 wmGizmoProperty *gz_prop,
+                                                 void *value_p)
+{
+  float (*matrix)[4] = static_cast<float (*)[4]>(value_p);
+  BLI_assert(gz_prop->type->array_length == 16);
+  NodeBBoxWidgetGroup *mask_group = static_cast<NodeBBoxWidgetGroup *>(
+      gz->parent_gzgroup->customdata);
+  // const float2 dims = mask_group->state.dims;
+  const float2 offset = mask_group->state.offset;
+  const bNode *node = static_cast<const bNode *>(gz_prop->custom_func.user_data);
+
+  float loc[3], rot[3][3], size[3];
+  mat4_to_loc_rot_size(loc, rot, size, matrix);
+
+  const bNodeSocket *rotation_input = bke::node_find_socket(*node, SOCK_IN, "Angle"_ustr);
+  const float rotation = rotation_input->default_value_typed<bNodeSocketValueFloat>()->value;
+  axis_angle_to_mat3_single(rot, 'Z', rotation);
+
+  const bNodeSocket *x_input = bke::node_find_socket(*node, SOCK_IN, "X"_ustr);
+  const float x = x_input->default_value_typed<bNodeSocketValueFloat>()->value;
+
+  const bNodeSocket *y_input = bke::node_find_socket(*node, SOCK_IN, "Y"_ustr);
+  const float y = y_input->default_value_typed<bNodeSocketValueFloat>()->value;
+  loc[0] = x + offset.x;
+  loc[1] = y + offset.y;
+  loc[2] = 0.0f;
+
+  const bNodeSocket *scale_input = bke::node_find_socket(*node, SOCK_IN, "Scale"_ustr);
+  const float scale = scale_input->default_value_typed<bNodeSocketValueFloat>()->value;
+  size[0] = scale;
+  size[1] = scale;
+  size[2] = 1.0f;
+
+  loc_rot_size_to_mat4(matrix, loc, rot, size);
+}
+
+static void gizmo_node_transform_prop_matrix_set(const wmGizmo *gz,
+                                                 wmGizmoProperty *gz_prop,
+                                                 const void *value_p)
+{
+  const float (*matrix)[4] = static_cast<const float (*)[4]>(value_p);
+  BLI_assert(gz_prop->type->array_length == 16);
+  NodeBBoxWidgetGroup *transform_group = static_cast<NodeBBoxWidgetGroup *>(
+      gz->parent_gzgroup->customdata);
+  const float2 dims = transform_group->state.dims;
+  const float2 offset = transform_group->state.offset;
+  bNode *node = static_cast<bNode *>(gz_prop->custom_func.user_data);
+
+  bNodeSocket *x_input = bke::node_find_socket(*node, SOCK_IN, "X"_ustr);
+  const float x = x_input->default_value_typed<bNodeSocketValueFloat>()->value;
+
+  bNodeSocket *y_input = bke::node_find_socket(*node, SOCK_IN, "Y"_ustr);
+  const float y = y_input->default_value_typed<bNodeSocketValueFloat>()->value;
+
+  bNodeSocket *scale_input = bke::node_find_socket(*node, SOCK_IN, "Scale"_ustr);
+  const float scale = scale_input->default_value_typed<bNodeSocketValueFloat>()->value;
+
+  float loc[3];
+  float rot[3][3];
+  float size[3];
+  mat4_to_loc_rot_size(loc, rot, size, matrix);
+
+  float eul[3];
+
+  /* Rotation can't be extracted from matrix when the gizmo width or height is zero. */
+  if (size[0] != 0 and size[1] != 0) {
+    mat4_to_eul(eul, matrix);
+    bNodeSocket *rotation_input = bke::node_find_socket(*node, SOCK_IN, "Angle"_ustr);
+    rotation_input->default_value_typed<bNodeSocketValueFloat>()->value = eul[2];
+  }
+
+  scale_input->default_value_typed<bNodeSocketValueFloat>()->value = size[0];
+  x_input->default_value_typed<bNodeSocketValueFloat>()->value = loc[0] - offset.x;
+  y_input->default_value_typed<bNodeSocketValueFloat>()->value = loc[1] - offset.y;
+
+  gizmo_node_bbox_update(transform_group);
+}
+
+// todo(habib): unify with other translate function.
+static int2 gizmo_input_dims_from_log(const SpaceNode &snode, const bNode &node)
+{
+  /* Gizmos may be drawn before the node tree is evaluated. */
+  // todo(habib): fix node tree evaluated but gizmo using fallback
+  const int2 fallback{64, 64};
+  const bNodeSocket *image_input = bke::node_find_socket(node, SOCK_IN, "Image"_ustr);
+  if (!image_input) {
+    return fallback;
+  }
+
+  eval_log::ContextualNodeTreeLogs tree_logs = eval_log::NodesEvalLog::get_contextual_tree_logs(
+      snode);
+  eval_log::NodeTreeLog *tree_log = tree_logs.get_main_tree_log(*image_input);
+  if (!tree_log) {
+    return fallback;
+  }
+
+  tree_log->ensure_socket_values();
+  const auto *image_log = dynamic_cast<const eval_log::ImageInfoLog *>(
+      tree_log->find_socket_value_log(*image_input));
+  if (!image_log) {
+    return fallback;
+  }
+
+  /* Logging considers data and display size. */
+  return image_log->data_size;
+}
+
+void transform_refresh(const bContext *C, wmGizmoGroup *gzgroup)
+{
+  Main *bmain = CTX_data_main(C);
+  NodeBBoxWidgetGroup *transform_group = static_cast<NodeBBoxWidgetGroup *>(gzgroup->customdata);
+  wmGizmo *gz = transform_group->border;
+
+  void *lock;
+  Image *ima = BKE_image_ensure_viewer(bmain, IMA_TYPE_COMPOSITE, "Render Result");
+  ImBuf *ibuf = BKE_image_acquire_ibuf(ima, nullptr, &lock);
+
+  if (ibuf == nullptr) [[unlikely]] {
+    WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
+    BKE_image_release_ibuf(ima, ibuf, lock);
+    return;
+  }
+
+  WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
+
+  const SpaceNode *snode = find_active_node_editor(C);
+  BLI_assert(snode != nullptr);
+
+  bNode *node = bke::node_get_active(*snode->edittree);
+
+  transform_group->state.offset = translate_gizmo_input_offset(*snode, *node);
+  transform_group->state.dims = float2(gizmo_input_dims_from_log(*snode, *node));
+  RNA_float_set_array(gz->ptr, "dimensions", transform_group->state.dims);
+
+  transform_group->update_data.context = const_cast<bContext *>(C);
+  bNodeSocket *source_input = bke::node_find_socket(*node, SOCK_IN, "X"_ustr);
+  transform_group->update_data.ptr = RNA_pointer_create_discrete(
+      reinterpret_cast<ID *>(snode->edittree), RNA_NodeSocket, source_input);
+  transform_group->update_data.prop = RNA_struct_find_property(&transform_group->update_data.ptr,
+                                                               "enabled");
+  BLI_assert(transform_group->update_data.prop != nullptr);
+
+  wmGizmoPropertyFnParams params{};
+  params.value_get_fn = gizmo_node_transform_prop_matrix_get;
+  params.value_set_fn = gizmo_node_transform_prop_matrix_set;
+  params.range_get_fn = nullptr;
+  params.user_data = node;
+  // todo(habib): implement autokeying
+  // params.foreach_rna_prop_fn = gizmo_node_transform_foreach_rna_prop;
+  WM_gizmo_target_property_def_func(gz, "matrix", &params);
+
+  BKE_image_release_ibuf(ima, ibuf, lock);
 }
 
 }  // namespace blender::nodes::gizmos
