@@ -477,6 +477,9 @@ void MeshFromGeometry::create_colors(Mesh *mesh)
   AttributeOwner owner = AttributeOwner::from_id(&mesh->id);
   const std::string name = BKE_attribute_calc_unique_name(owner, "Color");
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
+  /* convert_or_add_for_write_span, because with lookup_or_add_for_Write_span we'd need
+   * to handle a null return. Which can't happen because of the guaranteed unique name
+   * but still leeds to warning from code analysis if omitted. */
   bke::SpanAttributeWriter attr = attributes.convert_or_add_for_write_span<ColorGeometry4f>(
       name, bke::AttrDomain::Point);
   BKE_id_attributes_active_color_set(&mesh->id, name);
