@@ -543,16 +543,15 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_SORT_BLOCK_SIZE)
 #  endif
 
 #  ifdef __KERNEL_ONEAPI__
-  /* Metal backend doesn't have these particular ccl_gpu_* defines and current kernel code
-   * uses metal_*, we need the below to be compatible with these kernels. */
   int max_shaders = ((ONEAPIKernelContext *)kg)->__data->max_shaders;
-  int metal_local_id = ccl_gpu_thread_idx_x;
-  int metal_local_size = ccl_gpu_block_dim_x;
-  int metal_grid_id = ccl_gpu_block_idx_x;
   /* There is no difference here between different access decorations, as we are requesting
    * a raw pointer immediately, so the simplest decoration option is used (no decoration). */
   ccl_gpu_shared int *threadgroup_array =
       local_mem.get_multi_ptr<sycl::access::decorated::no>().get();
+#  endif
+
+#  ifdef __KERNEL_CUDA__
+  int max_shaders = kernel_data.max_shaders;
 #  endif
 
   gpu_parallel_sort_bucket_pass(num_states,
@@ -561,11 +560,18 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_SORT_BLOCK_SIZE)
                                 kernel_index,
                                 d_queued_kernel,
                                 d_shader_sort_key,
-                                key_offsets,
-                                (ccl_gpu_shared int *)threadgroup_array,
+                                key_offsets
+#  if defined(__KERNEL_METAL__) || defined(__KERNEL_ONEAPI__)
+                                ,
+                                (ccl_gpu_shared int *)threadgroup_array
+#  endif
+#  if defined(__KERNEL_METAL__)
+                                ,
                                 metal_local_id,
                                 metal_local_size,
-                                metal_grid_id);
+                                metal_grid_id
+#  endif
+  );
 #endif
 }
 ccl_gpu_kernel_postfix
@@ -604,16 +610,15 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_SORT_BLOCK_SIZE)
 #  endif
 
 #  ifdef __KERNEL_ONEAPI__
-  /* Metal backend doesn't have these particular ccl_gpu_* defines and current kernel code
-   * uses metal_*, we need the below to be compatible with these kernels. */
   int max_shaders = ((ONEAPIKernelContext *)kg)->__data->max_shaders;
-  int metal_local_id = ccl_gpu_thread_idx_x;
-  int metal_local_size = ccl_gpu_block_dim_x;
-  int metal_grid_id = ccl_gpu_block_idx_x;
   /* There is no difference here between different access decorations, as we are requesting
    * a raw pointer immediately, so the simplest decoration option is used (no decoration). */
   ccl_gpu_shared int *threadgroup_array =
       local_mem.get_multi_ptr<sycl::access::decorated::no>().get();
+#  endif
+
+#  ifdef __KERNEL_CUDA__
+  int max_shaders = kernel_data.max_shaders;
 #  endif
 
   gpu_parallel_sort_write_pass(num_states,
@@ -624,11 +629,18 @@ ccl_gpu_kernel_threads(GPU_PARALLEL_SORT_BLOCK_SIZE)
                                indices,
                                d_queued_kernel,
                                d_shader_sort_key,
-                               key_offsets,
-                               (ccl_gpu_shared int *)threadgroup_array,
+                               key_offsets
+#  if defined(__KERNEL_METAL__) || defined(__KERNEL_ONEAPI__)
+                               ,
+                               (ccl_gpu_shared int *)threadgroup_array
+#  endif
+#  if defined(__KERNEL_METAL__)
+                               ,
                                metal_local_id,
                                metal_local_size,
-                               metal_grid_id);
+                               metal_grid_id
+#  endif
+  );
 #endif
 }
 ccl_gpu_kernel_postfix

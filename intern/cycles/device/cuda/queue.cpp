@@ -10,6 +10,9 @@
 #  include "device/cuda/graphics_interop.h"
 #  include "device/cuda/kernel.h"
 
+#  include "kernel/device/gpu/block_sizes.h"
+#  include "util/debug.h"
+
 CCL_NAMESPACE_BEGIN
 
 /* CUDADeviceQueue */
@@ -62,6 +65,11 @@ int CUDADeviceQueue::num_concurrent_busy_states(const size_t /*state_size*/) con
   return 4 * max_num_threads;
 }
 
+bool CUDADeviceQueue::supports_local_atomic_sort() const
+{
+  return DebugFlags().cuda.use_local_atomic_sort;
+}
+
 void CUDADeviceQueue::init_execution()
 {
   /* Synchronize all textures and memory copies before executing task.
@@ -102,9 +110,8 @@ bool CUDADeviceQueue::enqueue(DeviceKernel kernel,
 
   /* Compute kernel launch parameters. */
   const CUDADeviceKernel &cuda_kernel = cuda_device_->kernels.get(kernel);
-  const int num_threads_per_block = cuda_kernel.num_threads_per_block;
-  const int num_blocks = divide_up(work_size, num_threads_per_block);
 
+  int num_threads_per_block = cuda_kernel.num_threads_per_block;
   int shared_mem_bytes = 0;
 
   switch (kernel) {
@@ -120,9 +127,17 @@ bool CUDADeviceQueue::enqueue(DeviceKernel kernel,
       shared_mem_bytes = (num_threads_per_block + 1) * sizeof(int);
       break;
 
+    case DEVICE_KERNEL_INTEGRATOR_SORT_BUCKET_PASS:
+    case DEVICE_KERNEL_INTEGRATOR_SORT_WRITE_PASS:
+      num_threads_per_block = GPU_PARALLEL_SORT_BLOCK_SIZE;
+      shared_mem_bytes = cuda_device_->scene_max_shaders_ * sizeof(int);
+      break;
+
     default:
       break;
   }
+
+  const int num_blocks = divide_up(work_size, num_threads_per_block);
 
   /* Launch kernel. */
   assert_success(cuLaunchKernel(cuda_kernel.function,

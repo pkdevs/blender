@@ -25,6 +25,8 @@ class CUDADeviceQueue : public DeviceQueue {
   int num_concurrent_states(const size_t state_size) const override;
   int num_concurrent_busy_states(const size_t state_size) const override;
 
+  bool supports_local_atomic_sort() const override;
+
   void init_execution() override;
   void load_image_info() override;
 

@@ -23,12 +23,29 @@ ccl_device_inline void gpu_parallel_sort_bucket_pass(const uint num_states,
                                                      const uint queued_kernel,
                                                      ccl_global ushort *d_queued_kernel,
                                                      ccl_global uint *d_shader_sort_key,
-                                                     ccl_global int *partition_key_offsets,
-                                                     ccl_gpu_shared int *buckets,
+                                                     ccl_global int *partition_key_offsets
+#  if defined(__KERNEL_METAL__) || defined(__KERNEL_ONEAPI__)
+                                                     ,
+                                                     ccl_gpu_shared int *buckets
+#  endif
+#  if defined(__KERNEL_METAL__)
+                                                     ,
                                                      const ushort local_id,
                                                      const ushort local_size,
-                                                     const uint grid_id)
+                                                     const uint grid_id
+#  endif
+)
 {
+#  ifndef __KERNEL_METAL__
+#    ifndef __KERNEL_ONEAPI__
+  extern ccl_gpu_shared int buckets[];
+#    endif
+
+  const ushort local_id = ccl_gpu_thread_idx_x;
+  const ushort local_size = ccl_gpu_block_dim_x;
+  const uint grid_id = ccl_gpu_block_idx_x;
+#  endif
+
   /* Zero the bucket sizes. */
   for (uint i = local_id; i < max_shaders; i += local_size) {
     atomic_store_local(&buckets[i], 0);
@@ -87,12 +104,29 @@ ccl_device_inline void gpu_parallel_sort_write_pass(const uint num_states,
                                                     ccl_global int *indices,
                                                     ccl_global ushort *d_queued_kernel,
                                                     ccl_global uint *d_shader_sort_key,
-                                                    ccl_global int *partition_key_offsets,
-                                                    ccl_gpu_shared int *local_offset,
+                                                    ccl_global int *partition_key_offsets
+#  if defined(__KERNEL_METAL__) || defined(__KERNEL_ONEAPI__)
+                                                    ,
+                                                    ccl_gpu_shared int *local_offset
+#  endif
+#  if defined(__KERNEL_METAL__)
+                                                    ,
                                                     const ushort local_id,
                                                     const ushort local_size,
-                                                    const uint grid_id)
+                                                    const uint grid_id
+#  endif
+)
 {
+#  ifndef __KERNEL_METAL__
+#    ifndef __KERNEL_ONEAPI__
+  extern ccl_gpu_shared int local_offset[];
+#    endif
+
+  const ushort local_id = ccl_gpu_thread_idx_x;
+  const ushort local_size = ccl_gpu_block_dim_x;
+  const uint grid_id = ccl_gpu_block_idx_x;
+#  endif
+
   /* Calculate each partition's global offset from the prefix sum of the active state counts per
    * partition. */
 

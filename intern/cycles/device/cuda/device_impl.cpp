@@ -688,6 +688,12 @@ void CUDADevice::const_copy_to(const char *name, void *host, const size_t size)
   cuda_assert(cuModuleGetGlobal(&mem, &bytes, cuModule, "kernel_params"));
   assert(bytes == sizeof(KernelParamsCUDA));
 
+  if (strcmp(name, "data") == 0) {
+    /* We need this value for shared memory size when launching integrator_sort_bucket_pass
+     * and integrator_sort_write_pass kernels. */
+    scene_max_shaders_ = static_cast<const KernelData *>(host)->max_shaders;
+  }
+
   /* Update data storage pointers in launch parameters. */
 #  define KERNEL_DATA_ARRAY(data_type, data_name) \
     if (strcmp(name, #data_name) == 0) { \
