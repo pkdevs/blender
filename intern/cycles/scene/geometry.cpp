@@ -1261,6 +1261,7 @@ void GeometryManager::device_update(Device *device,
   dscene->attributes_uchar4.clear_modified();
   dscene->attributes_normal.clear_modified();
   dscene->attributes_quaternion.clear_modified();
+  dscene->attributes_spherical_harmonics.clear_modified();
 }
 
 void GeometryManager::device_free(Device *device, DeviceScene *dscene, bool force_free)
@@ -1289,6 +1290,7 @@ void GeometryManager::device_free(Device *device, DeviceScene *dscene, bool forc
   dscene->attributes_uchar4.free_if_need_realloc(force_free);
   dscene->attributes_normal.free_if_need_realloc(force_free);
   dscene->attributes_quaternion.free_if_need_realloc(force_free);
+  dscene->attributes_spherical_harmonics.free_if_need_realloc(force_free);
 
   /* Signal for shaders like displacement not to do ray tracing. */
   dscene->data.bvh.bvh_layout = BVH_LAYOUT_NONE;
