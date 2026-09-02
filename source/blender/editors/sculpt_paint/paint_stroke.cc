@@ -641,23 +641,17 @@ void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float
 
   /* Add to stroke */
   {
-    PointerRNA itemptr;
-    RNA_collection_add(op->ptr, "stroke", &itemptr);
-    RNA_float_set(&itemptr, "size", point->size);
-    RNA_float_set_array(&itemptr, "location", point->location);
+    StrokeStep step;
+    step.size = point->size;
+    step.location = point->location;
     /* Mouse coordinates modified by the stroke type options. */
-    RNA_float_set_array(&itemptr, "mouse", point->mouse_out);
+    step.mouse = point->mouse_out;
     /* Original mouse coordinates. */
-    RNA_float_set_array(&itemptr, "mouse_event", point->mouse_in);
-    RNA_float_set(&itemptr, "pressure", point->pressure);
-    RNA_float_set(&itemptr, "x_tilt", point->x_tilt);
-    RNA_float_set(&itemptr, "y_tilt", point->y_tilt);
+    step.mouse_event = point->mouse_in;
+    step.pressure = point->pressure;
+    step.tilt = {point->x_tilt, point->y_tilt};
 
-    this->update_step(op, &itemptr);
-
-    /* don't record this for now, it takes up a lot of memory when doing long
-     * strokes with small brush size, and operators have register disabled */
-    RNA_collection_clear(op->ptr, "stroke");
+    this->update_step(op, step);
   }
 
   tot_samples_++;
@@ -1795,24 +1789,31 @@ wmOperatorStatus PaintStroke::exec(bContext *C, wmOperator *op)
     }
 
     /* This mimics `add_step` to update various properties on PaintRuntime. */
-    const float pressure = RNA_float_get(&itemptr, "pressure");
-    float2 mouse_out = paint_stroke_jitter_pos(
-        this->paint, mode, *this->brush, pressure, stroke_mode_, zoom_2d_, mval);
+    StrokeStep step;
+    RNA_float_get_array(&itemptr, "location", step.location);
+    RNA_float_get_array(&itemptr, "mouse_event", step.mouse_event);
+    step.mouse = paint_stroke_jitter_pos(
+        this->paint, mode, *this->brush, step.pressure, stroke_mode_, zoom_2d_, mval);
+    step.pressure = RNA_float_get(&itemptr, "pressure");
+    step.size = RNA_float_get(&itemptr, "size");
+    step.tilt = {RNA_float_get(&itemptr, "x_tilt"), RNA_float_get(&itemptr, "y_tilt")};
+    /* TODO: Note, this misses both `time` and `is_start`, but neither of those systems
+     * (UV / Annotations) use this base class */
 
     /* TODO: This process misses updating some values at the moment, see `add_step` */
     float3 dummy_location;
     bool dummy_is_set;
-    this->update(C, *this->brush, mode, mval, mouse_out, pressure, dummy_location, &dummy_is_set);
-    RNA_float_set_array(&itemptr, "mouse", mouse_out);
+    this->update(
+        C, *this->brush, mode, mval, step.mouse, step.pressure, dummy_location, &dummy_is_set);
 
     if (override_location) {
-      if (std::optional<float3> location = this->get_location(mouse_out, false)) {
-        RNA_float_set_array(&itemptr, "location", *location);
-        this->update_step(op, &itemptr);
+      if (std::optional<float3> location = this->get_location(step.mouse, false)) {
+        step.location = *location;
+        this->update_step(op, step);
       }
     }
     else {
-      this->update_step(op, &itemptr);
+      this->update_step(op, step);
     }
   }
   RNA_END;

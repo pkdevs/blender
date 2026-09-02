@@ -28,8 +28,6 @@
 #include "DNA_scene_types.h"
 #include "DNA_userdef_types.h"
 
-#include "RNA_access.hh"
-
 #include "BKE_brush.hh"
 #include "BKE_context.hh"
 #include "BKE_object_types.hh"
@@ -856,18 +854,15 @@ void PaintStroke::finish_roll_stroke(bContext *C,
   while (idx != newest && remaining-- > 0) {
     PaintStrokePoint *point = &points_[idx];
 
-    PointerRNA itemptr;
-    RNA_collection_add(op->ptr, "stroke", &itemptr);
-    RNA_float_set(&itemptr, "size", point->size);
-    RNA_float_set_array(&itemptr, "location", point->location);
-    RNA_float_set_array(&itemptr, "mouse", point->mouse_out);
-    RNA_float_set_array(&itemptr, "mouse_event", point->mouse_in);
-    RNA_float_set(&itemptr, "pressure", point->pressure);
-    RNA_float_set(&itemptr, "x_tilt", point->x_tilt);
-    RNA_float_set(&itemptr, "y_tilt", point->y_tilt);
+    StrokeStep step;
+    step.size = point->size;
+    step.location = point->location;
+    step.mouse = point->mouse_out;
+    step.mouse_event = point->mouse_in;
+    step.pressure = point->pressure;
+    step.tilt = {point->x_tilt, point->y_tilt};
 
-    this->update_step(op, &itemptr);
-    RNA_collection_clear(op->ptr, "stroke");
+    this->update_step(op, step);
 
     tot_samples_++;
     idx = (idx + 1) % buf_cap;
