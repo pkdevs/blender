@@ -31,14 +31,13 @@ void DepsgraphNodeBuilder::build_scene_render(Scene *scene, ViewLayer *view_laye
   }
   if (build_sequencer) {
     build_scene_sequencer(scene);
-    build_scene_speakers(scene, view_layer, scene);
+    build_scene_speakers(scene, view_layer);
   }
   build_scene_camera(scene);
 }
 
 void DepsgraphNodeBuilder::build_scene_camera(Scene *scene)
 {
-  build_scene_audio_cache(scene);
   if (scene->camera != nullptr) {
     build_object(-1, scene->camera, DEG_ID_LINKED_INDIRECTLY, true);
   }

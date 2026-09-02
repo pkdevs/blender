@@ -3519,6 +3519,7 @@ static bool strip_build_prop_cb(Strip *strip, void *user_data)
     const bool use_child_sequencer = (strip->flag & SEQ_SCENE_STRIPS) &&
                                      strip->scene->ed != nullptr;
     if (use_child_sequencer) {
+      cd->builder->build_animdata(&strip->scene->id);
       cd->builder->build_scene_sequencer(strip->scene);
       ComponentKey sequence_scene_audio_key(&strip->scene->id, NodeType::AUDIO);
       cd->builder->add_relation(
@@ -3536,8 +3537,7 @@ static bool strip_build_prop_cb(Strip *strip, void *user_data)
                                 RELATION_FLAG_FLUSH_USER_EDIT_ONLY | RELATION_CHECK_BEFORE_ADD);
     }
     ViewLayer *strip_view_layer = BKE_view_layer_find(strip->scene, strip->scene_view_layer_name);
-    cd->builder->build_scene_speakers(
-        strip->scene, strip_view_layer, use_child_sequencer ? strip->scene : cd->scene);
+    cd->builder->build_scene_speakers(strip->scene, strip_view_layer);
   }
   if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata) {
     const CompositorEffectVars *comp_data = static_cast<CompositorEffectVars *>(strip->effectdata);
@@ -3610,25 +3610,8 @@ void DepsgraphRelationBuilder::build_scene_audio(Scene *scene)
                RELATION_FLAG_FLUSH_USER_EDIT_ONLY | RELATION_CHECK_BEFORE_ADD);
 }
 
-void DepsgraphRelationBuilder::build_speaker_audio_cache_relation(Object *object,
-                                                                  Scene *audio_cache_scene)
+void DepsgraphRelationBuilder::build_scene_speakers(Scene *scene, ViewLayer *view_layer)
 {
-  ComponentKey speaker_audio_key(&object->id, NodeType::AUDIO);
-  OperationKey scene_cache_key(
-      &audio_cache_scene->id, NodeType::CACHE, OperationCode::AUDIO_CACHE_INVALIDATE);
-  add_relation(speaker_audio_key,
-               scene_cache_key,
-               "Speaker Data -> Audio Cache",
-               RELATION_FLAG_FLUSH_USER_EDIT_ONLY | RELATION_CHECK_BEFORE_ADD);
-}
-
-void DepsgraphRelationBuilder::build_scene_speakers(Scene *scene,
-                                                    ViewLayer *view_layer,
-                                                    Scene *audio_cache_scene)
-{
-  if (scene == audio_cache_scene) {
-    build_scene_camera(scene);
-  }
   BKE_view_layer_synced_ensure(*bmain_, scene, view_layer);
   for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
     Object *object = base.object;
@@ -3636,7 +3619,6 @@ void DepsgraphRelationBuilder::build_scene_speakers(Scene *scene,
       continue;
     }
     build_object(base.object);
-    build_speaker_audio_cache_relation(object, audio_cache_scene);
   }
 }
 
@@ -3664,6 +3646,10 @@ void DepsgraphRelationBuilder::build_scene_audio_cache_invalidation_relations()
         OperationNode *dependency = static_cast<OperationNode *>(relation->from);
         if (dependency->opcode == OperationCode::AUDIO_CACHE_INVALIDATE) {
           /* Nested #Scene cache invalidation propagates through the explicit cache relation. */
+          continue;
+        }
+        if (dependency->opcode == OperationCode::DRIVER) {
+          /* Driver dependencies are evaluated live and are not part of the automatic cache. */
           continue;
         }
         if (dependency->opcode == OperationCode::COPY_ON_EVAL &&

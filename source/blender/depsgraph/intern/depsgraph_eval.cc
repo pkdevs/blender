@@ -76,34 +76,17 @@ void DEG_evaluate_on_refresh(Depsgraph *graph, const DepsgraphEvaluateSyncWriteb
   deg_flush_updates_and_refresh(deg_graph, sync_writeback);
 }
 
-static void deg_evaluate_on_framechange(Depsgraph *graph,
-                                        const float frame,
-                                        const float ctime,
-                                        const DepsgraphEvaluateSyncWriteback sync_writeback)
+void DEG_evaluate_on_framechange(Depsgraph *graph,
+                                 float frame,
+                                 const DepsgraphEvaluateSyncWriteback sync_writeback)
 {
   deg::Depsgraph *deg_graph = reinterpret_cast<deg::Depsgraph *>(graph);
+  const Scene *scene = DEG_get_input_scene(graph);
 
   deg_graph->tag_time_source();
   deg_graph->frame = frame;
-  deg_graph->ctime = ctime;
+  deg_graph->ctime = BKE_scene_frame_to_ctime(scene, frame);
   deg_flush_updates_and_refresh(deg_graph, sync_writeback);
-}
-
-void DEG_evaluate_on_framechange(Depsgraph *graph,
-                                 const float frame,
-                                 const DepsgraphEvaluateSyncWriteback sync_writeback)
-{
-  const Scene *scene = DEG_get_input_scene(graph);
-  deg_evaluate_on_framechange(
-      graph, frame, BKE_scene_frame_to_ctime(scene, frame), sync_writeback);
-}
-
-void DEG_evaluate_on_framechange_exact(Depsgraph *graph,
-                                       const float frame,
-                                       const DepsgraphEvaluateSyncWriteback sync_writeback)
-{
-  const Scene *scene = DEG_get_input_scene(graph);
-  deg_evaluate_on_framechange(graph, frame, frame * scene->r.framelen, sync_writeback);
 }
 
 }  // namespace blender

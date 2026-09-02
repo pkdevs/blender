@@ -2375,15 +2375,9 @@ void DepsgraphNodeBuilder::build_vfont(VFont *vfont)
   build_idproperties(vfont->id.system_properties);
 }
 
-struct Seq_node_build_cb_data {
-  DepsgraphNodeBuilder *builder;
-  Scene *scene;
-};
-
 static bool strip_node_build_cb(Strip *strip, void *user_data)
 {
-  Seq_node_build_cb_data *cd = static_cast<Seq_node_build_cb_data *>(user_data);
-  DepsgraphNodeBuilder *nb = cd->builder;
+  DepsgraphNodeBuilder *nb = static_cast<DepsgraphNodeBuilder *>(user_data);
   nb->build_idproperties(strip->prop);
   nb->build_idproperties(strip->system_properties);
   if (strip->sound != nullptr) {
@@ -2394,14 +2388,12 @@ static bool strip_node_build_cb(Strip *strip, void *user_data)
   }
   if (strip->type == STRIP_TYPE_SCENE && strip->scene != nullptr) {
     BLI_assert(strip->scene_view_layer_name != nullptr);
-    const bool use_child_sequencer = (strip->flag & SEQ_SCENE_STRIPS) &&
-                                     strip->scene->ed != nullptr;
-    if (use_child_sequencer) {
+    if ((strip->flag & SEQ_SCENE_STRIPS) && strip->scene->ed != nullptr) {
+      nb->build_animdata(&strip->scene->id);
       nb->build_scene_sequencer(strip->scene);
     }
     ViewLayer *strip_view_layer = BKE_view_layer_find(strip->scene, strip->scene_view_layer_name);
-    nb->build_scene_speakers(
-        strip->scene, strip_view_layer, use_child_sequencer ? strip->scene : cd->scene);
+    nb->build_scene_speakers(strip->scene, strip_view_layer);
   }
 
   if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata) {
@@ -2443,8 +2435,7 @@ void DepsgraphNodeBuilder::build_scene_sequencer(Scene *scene)
                        seq::eval_strips(depsgraph, scene_cow, &scene_cow->ed->seqbase);
                      });
   /* Make sure data for sequences is in the graph. */
-  Seq_node_build_cb_data cb_data = {this, scene};
-  seq::foreach_strip(&scene->ed->seqbase, strip_node_build_cb, &cb_data);
+  seq::foreach_strip(&scene->ed->seqbase, strip_node_build_cb, this);
 }
 
 void DepsgraphNodeBuilder::build_scene_audio(Scene *scene)
@@ -2489,14 +2480,8 @@ void DepsgraphNodeBuilder::build_scene_audio_cache(Scene *scene)
   operation->tag_update(graph_, DEG_UPDATE_SOURCE_RELATIONS);
 }
 
-void DepsgraphNodeBuilder::build_scene_speakers(Scene *scene,
-                                                ViewLayer *view_layer,
-                                                Scene *audio_cache_scene)
+void DepsgraphNodeBuilder::build_scene_speakers(Scene *scene, ViewLayer *view_layer)
 {
-  build_scene_audio_cache(audio_cache_scene);
-  if (scene == audio_cache_scene) {
-    build_scene_camera(scene);
-  }
   BKE_view_layer_synced_ensure(*bmain_, scene, view_layer);
   for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
     Object *object = base.object;

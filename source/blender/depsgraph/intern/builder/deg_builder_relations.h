@@ -261,9 +261,7 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_sound(bSound *sound);
   virtual void build_scene_sequencer(Scene *scene);
   virtual void build_scene_audio(Scene *scene);
-  /* Build Speakers from #scene and connect them to the cache owned by #audio_cache_scene. */
-  virtual void build_scene_speakers(Scene *scene, ViewLayer *view_layer, Scene *audio_cache_scene);
-  void build_speaker_audio_cache_relation(Object *object, Scene *audio_cache_scene);
+  virtual void build_scene_speakers(Scene *scene, ViewLayer *view_layer);
   virtual void build_vfont(VFont *vfont);
 
   virtual void build_nested_datablock(ID *owner, ID *id, bool flush_cow_changes);
