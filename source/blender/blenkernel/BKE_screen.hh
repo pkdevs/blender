@@ -638,7 +638,6 @@ struct ARegionRuntime {
 
   /** Dummy panel used in popups so they can support layout panels. */
   Panel *popup_block_panel = nullptr;
-
   ARegionRuntimeFlag flag = {};
 
   std::optional<TextCursorOverlay> text_cursor_overlay = std::nullopt;

@@ -1739,9 +1739,8 @@ const ARegion *screen_topmost_active_region(const bScreen *screen)
     if (region.runtime->flag &
         (bke::ARegionRuntimeFlag::SearchSubRegion | bke::ARegionRuntimeFlag::TooltipRegion))
     {
-      /* Search menu buttons shows their content in a sub-region, select the button region as
-       * active region instead, which can be the previous popup region or the active region in the
-       * screen. */
+      /* Search menu buttons shows their content in a sub-region, skip this region since it's just
+       * used by its owning button to for drawing. Also skip tooltip buttons. */
       continue;
     }
     return &region;

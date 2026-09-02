@@ -1096,8 +1096,10 @@ void ED_screen_set_active_region(bContext *C, wmWindow *win, const int xy[2])
     /* Make overlap active when mouse over. */
     for (ARegion &region : area->regionbase) {
       if (ED_region_contains_xy(&region, xy)) {
-        WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_PAUSE, win);
-        WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, win);
+        if (screen->active_region != &region) {
+          WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_PAUSE, win);
+          WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, win);
+        }
         screen->active_region = &region;
         break;
       }
