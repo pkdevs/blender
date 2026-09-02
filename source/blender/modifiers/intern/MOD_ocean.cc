@@ -267,16 +267,14 @@ static Mesh *generate_ocean_geometry(OceanModifierData *omd, Mesh *mesh_orig, co
     bke::MutableAttributeAccessor attributes = result->attributes_for_write();
     std::string name = BKE_attribute_calc_unique_name(AttributeOwner::from_id(&result->id),
                                                       "UVMap");
-    bke::SpanAttributeWriter<float2> uv_map = attributes.lookup_or_add_for_write_span<float2>(
+    bke::SpanAttributeWriter<float2> uv_map = attributes.convert_or_add_for_write_span<float2>(
         name, bke::AttrDomain::Corner);
 
-    if (uv_map) { /* unlikely to fail */
-      gogd.uv_map = uv_map.span;
-      gogd.ix = 1.0 / gogd.rx;
-      gogd.iy = 1.0 / gogd.ry;
+    gogd.uv_map = uv_map.span;
+    gogd.ix = 1.0 / gogd.rx;
+    gogd.iy = 1.0 / gogd.ry;
 
-      BLI_task_parallel_range(0, gogd.res_y, &gogd, generate_ocean_geometry_uvs, &settings);
-    }
+    BLI_task_parallel_range(0, gogd.res_y, &gogd, generate_ocean_geometry_uvs, &settings);
 
     uv_map.finish();
   }
