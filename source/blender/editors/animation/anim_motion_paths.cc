@@ -381,7 +381,7 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
 
     const int start_frame = clamp_i(modified_frame, mpt.mpath->start_frame, mpt.mpath->end_frame);
     int frame = start_frame;
-    Bounds<int> evaluated_range = {frame, frame};
+    Bounds<int> evaluated_range = {start_frame, start_frame};
 
     bool finished_left = false;
     bool finished_right = false;
@@ -417,7 +417,7 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
       if (frame < start_frame) {
         if (stable_result_counter >= stable_result_threshold) {
           finished_left = true;
-          /* This has to reset the counter because we will sweep the range right of the given frame
+          /* This has to reset the counter because we will sweep the range right of the start frame
            * next. */
           stable_result_counter = 0;
         }
