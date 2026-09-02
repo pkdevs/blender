@@ -327,6 +327,14 @@ bool BKE_animsys_write_to_rna_path(PathResolvedRNA *anim_rna,
                                    bool force_write = false);
 
 /**
+ * Evaluate the Action and NLA data for the given ID without evaluating drivers or overrides.
+ */
+void BKE_animsys_evaluate_action_nla(ID *id,
+                                     AnimData *adt,
+                                     const AnimationEvalContext *anim_eval_context,
+                                     bool flush_to_original);
+
+/**
  * Evaluation loop for evaluation animation data
  *
  * This assumes that the animation-data provided belongs to the ID block in question,

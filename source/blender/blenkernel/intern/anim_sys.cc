@@ -3721,6 +3721,34 @@ static void animsys_evaluate_overrides(PointerRNA *ptr, AnimData *adt)
  *   However, the code for this is relatively harmless, so is left in the code for now.
  */
 
+void BKE_animsys_evaluate_action_nla(ID *id,
+                                     AnimData *adt,
+                                     const AnimationEvalContext *anim_eval_context,
+                                     const bool flush_to_original)
+{
+  if (ELEM(nullptr, id, adt)) {
+    return;
+  }
+
+  PointerRNA id_ptr = RNA_id_pointer_create(id);
+
+  /* evaluate NLA data */
+  bool did_nla_evaluate_anything = false;
+  if ((adt->nla_tracks.first) && !(adt->flag & ADT_NLA_EVAL_OFF)) {
+    /* evaluate NLA-stack
+     * - active action is evaluated as part of the NLA stack as the last item
+     */
+    did_nla_evaluate_anything = animsys_calculate_nla(
+        &id_ptr, adt, anim_eval_context, flush_to_original);
+  }
+
+  if (!did_nla_evaluate_anything && adt->action) {
+    animrig::Action &action = adt->action->wrap();
+    animrig::evaluate_and_apply_action(
+        id_ptr, action, adt->slot_handle, *anim_eval_context, flush_to_original);
+  }
+}
+
 void BKE_animsys_evaluate_animdata(ID *id,
                                    AnimData *adt,
                                    const AnimationEvalContext *anim_eval_context,
@@ -3742,21 +3770,7 @@ void BKE_animsys_evaluate_animdata(ID *id,
    */
   /* TODO: need to double check that this all works correctly */
   if (recalc & ADT_RECALC_ANIM) {
-    /* evaluate NLA data */
-    bool did_nla_evaluate_anything = false;
-    if ((adt->nla_tracks.first) && !(adt->flag & ADT_NLA_EVAL_OFF)) {
-      /* evaluate NLA-stack
-       * - active action is evaluated as part of the NLA stack as the last item
-       */
-      did_nla_evaluate_anything = animsys_calculate_nla(
-          &id_ptr, adt, anim_eval_context, flush_to_original);
-    }
-
-    if (!did_nla_evaluate_anything && adt->action) {
-      animrig::Action &action = adt->action->wrap();
-      animrig::evaluate_and_apply_action(
-          id_ptr, action, adt->slot_handle, *anim_eval_context, flush_to_original);
-    }
+    BKE_animsys_evaluate_action_nla(id, adt, anim_eval_context, flush_to_original);
   }
 
   /* recalculate drivers
