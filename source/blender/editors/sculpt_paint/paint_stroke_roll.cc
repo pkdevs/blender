@@ -172,9 +172,8 @@ int PaintStroke::roll_max_points() const
   if (!need_roll_mapping_) {
     return 1;
   }
-  /* History kept for the strip, in brush radii.  Long enough that a stroke
-   * turning back on itself still has its earlier branch available for
-   * self-intersection collapse, and for wide loops in the texture path. */
+  /* About 20 brush radii of history, so turns and overlaps far back are
+   * still available to the strip. */
   constexpr int ROLL_HISTORY_RADII = 20;
   const int budget = roll_points_per_radius() * ROLL_HISTORY_RADII;
   /* Leave room in the ring buffer for the virtual backward extension. */
@@ -194,15 +193,10 @@ bool PaintStroke::roll_texture_pressure_scaled() const
 
 float3 PaintStroke::roll_sample_surface_normal(bContext *C, const float2 &mouse) const
 {
-  /* Sculpt mode: the geometric normal of the face hit under the pen.
-   *
-   * The face normal is used deliberately instead of the cursor's sampled
-   * area normal: mid-stroke, the area sampling (calc_area_normal) centres
-   * on the stroke cache's dab location — the deferred dab several radii
-   * behind the pen, symmetry-mirrored — so it would freeze the wrong
-   * surface orientation into the point.  The per-face normal is exact at
-   * the pen position; smooth_normals_along_stroke() averages it over a
-   * brush radius of neighbouring knots. */
+  /* Sculpt mode: normal of the face under the pen.  Not the cursor's
+   * sampled area normal: mid-stroke that one is computed around the
+   * (deferred) dab rather than the pen and gives the wrong orientation.
+   * Noise is smoothed out along the stroke later. */
   if (vc.obact && (vc.obact->mode & OB_MODE_SCULPT)) {
     if (const std::optional<CursorGeometryInfo> gi = cursor_geometry_info_update(C, mouse, false))
     {
@@ -338,15 +332,9 @@ void PaintStroke::add_roll_point(const float2 &mouse_in,
 }
 
 /**
- * Stroke direction at one of its ends, in the stroke's forward sense.
- *
- * Measured from the end point to the first point at least `min_len` away
- * (rather than the adjacent point), so a jittery or near-duplicate last
- * sample cannot hook the extension sideways.
- *
- * \param pts_2d, pts_3d: Polyline points in stroke order; the end being
- *   measured is the first point when \a from_start, else the last.
- * \return false when the stroke is degenerate at that end.
+ * Stroke direction at one end (forward sense), measured to the first point
+ * at least `min_len` away so one jittery sample cannot tilt it.
+ * \a from_start selects the first point, otherwise the last.
  */
 static bool end_direction(const Span<float2> pts_2d,
                           const Span<float3> pts_3d,
@@ -383,19 +371,10 @@ static bool end_direction(const Span<float2> pts_2d,
 }
 
 /**
- * Average signed turning rate of the stroke near one of its ends, used to
- * continue its curvature with virtual extension points.
- *
- * Measured over the polyline within about one dab diameter (`max_arc`) of
- * the end — or the whole stroke when shorter — instead of just the last
- * two segments, so a single noisy sample cannot bend the extension.
- *
- * \param pts_2d, pts_3d: Polyline points in stroke order; the end being
- *   extended is the first point when \a from_start, else the last.
- * \param surface_normal: Frozen surface normal at the end; 3D turning is
- *   measured about it so the extension stays in the local tangent plane.
- * \return Curvature in radians per unit length (2D screen and 3D object
- *   space), signed in the stroke's forward sense.
+ * Average turning rate near one end of the stroke, over about one dab
+ * diameter (or the whole stroke when shorter).  3D turning is measured
+ * about \a surface_normal so extensions stay on the surface.
+ * Returns radians per unit length, 2D (screen) and 3D (object space).
  */
 static void estimate_end_curvature(const Span<float2> pts_2d,
                                    const Span<float3> pts_3d,
@@ -446,20 +425,12 @@ static void estimate_end_curvature(const Span<float2> pts_2d,
 }
 
 /**
- * Generate virtual extension points that continue the stroke's curvature
- * beyond its start or end. Used for both backward (pre-stroke) and forward
- * (post-stroke) extensions so the spline has coverage for the full brush
- * footprint at the stroke boundaries.
+ * Continue the stroke beyond its start or end with virtual points that
+ * follow its curvature, so the strip covers the full brush footprint there.
  *
- * \param anchor_2d, anchor_3d: The point to extend from.
- * \param dir_2d, dir_3d: Unit direction of the stroke at the anchor (forward sense).
- * \param curv_2d, curv_3d: Signed curvature at the end (see estimate_end_curvature).
- * \param rot_axis: Axis for the 3D turning (the surface normal at the anchor).
- * \param n_points: Number of extension points to generate.
- * \param step_2d, step_3d: Spacing between consecutive extension points.
- * \param sign: +1.0f for forward, -1.0f for backward.
- * \param r_ext_2d, r_ext_3d: Output arrays (appended in walk order, i.e.
- *   nearest-to-anchor first for forward, farthest-from-anchor first for backward).
+ * \param sign: +1 forward, -1 backward.
+ * \param r_ext_2d, r_ext_3d: Appended in walk order (nearest to the anchor
+ *   first for forward, farthest first for backward).
  */
 static void generate_virtual_extension(const float2 &anchor_2d,
                                        const float3 &anchor_3d,
@@ -591,15 +562,9 @@ void PaintStroke::prepend_virtual_roll_points()
 }
 
 /**
- * Smooth the frozen normal field along the stroke so the strip frame
- * changes gradually from knot to knot.
- *
- * Normals sampled on displaced or noisy surfaces differ per knot; used
- * raw they zig-zag the borders, which the self-intersection collapse then
- * "fixes" into pinned runs, skewing the grid.  The kernel spans about one
- * brush radius of knots on each side — the segments a dab centred on the
- * vertex touches — and depends only on recorded data, so smoothed normals
- * of recorded segments stay stable from dab to dab.
+ * Smooth the per-vertex normals along the stroke.  Raw face normals on a
+ * bumpy surface differ from knot to knot and make the borders zig-zag.
+ * The kernel is about one brush radius of knots on each side.
  */
 static void smooth_normals_along_stroke(MutableSpan<float3> normals, const int half_width)
 {
@@ -662,7 +627,7 @@ void PaintStroke::make_roll_spline(bContext * /*C*/)
       }
     }
     extrapolate_pressures(base_p, ratio, n_back, true, roll_spline_.pressures);
-    /* Virtual backward extension: continue the oldest real point's frame. */
+    /* Virtual points reuse the first point's normal. */
     const float3 back_n = (num_points_ > 0) ? points_[oldest].surface_normal : float3(0, 0, 1);
     for (int i = 0; i < n_back; i++) {
       roll_spline_.normals.append(back_n);
@@ -842,7 +807,7 @@ void PaintStroke::finish_roll_stroke(bContext *C,
         }
         extrapolate_pressures(p_new, ratio, n_forward, false, roll_spline_.pressures);
       }
-      /* Forward extension: continue the newest point's frame. */
+      /* Virtual points reuse the last point's normal. */
       for (int i = 0; i < n_forward; i++) {
         roll_spline_.normals.append(points_[newest].surface_normal);
       }
@@ -1009,16 +974,9 @@ static void expand_grid_columns(Vector<float3> &grid_pos,
  * \{ */
 
 /**
- * Build the strip border curves: for each polyline vertex, offset the
- * center by ±R (or the pressure-scaled radius) along the binormal.
- *
- * The binormal is cross(tangent, dab_normal).  Using the per-dab surface
- * normal (same as the LUT projection) keeps the grid aligned with the
- * local surface at the current dab position, and is view-independent —
- * the same stroke from any camera angle produces the same borders.
- *
- * \param pressures: Per-vertex pressures for pressure-scaled width;
- * pass an empty span for constant width.
+ * Left/right border curves: the center offset by ±R (or the pressure-scaled
+ * radius) along each vertex's binormal.  Pass empty \a pressures for a
+ * constant width.
  */
 static void build_roll_borders(const Span<float3> poly,
                                const Span<float3> tangents,
@@ -1034,8 +992,7 @@ static void build_roll_borders(const Span<float3> poly,
 
   for (int k = 0; k < count; k++) {
     const float3 &T = tangents[k];
-    /* Binormal in the vertex's own frozen tangent plane: the strip tilts
-     * with the surface locally and is independent of the current dab. */
+    /* Binormal in the vertex's own tangent plane. */
     float3 B = math::cross(T, normals[k]);
     const float blen = math::length(B);
     if (blen > 1e-7f) {
@@ -1055,18 +1012,9 @@ static void build_roll_borders(const Span<float3> poly,
 }
 
 /**
- * Fix inner-border self-intersections at sharp turns.
- *
- * The border curves (at distance R from center) may self-intersect on the
- * inner side of tight turns where the radius of curvature < R.
- * We find where the border polyline actually crosses itself (segment vs
- * segment test), then collapse all loop vertices to that crossing point.
- * This turns overlapping quads into degenerate triangles that fan from
- * the crossing point — the cross-lines rotate to point toward it.
- *
- * Crossings are tested in 2D, in the tangent plane of the frozen surface
- * normal at the loop start, so the detection depends only on recorded
- * data and is view- and dab-independent.
+ * Collapse inner-border loops at turns tighter than the brush radius: where
+ * the border crosses itself, the loop vertices are pinned to the crossing
+ * point so the quads fan around it instead of overlapping.
  */
 static void collapse_border_self_intersections(const Span<float3> poly,
                                                const Span<float3> normals,
@@ -1087,10 +1035,8 @@ static void collapse_border_self_intersections(const Span<float3> poly,
       continue;
     }
 
-    /* Project the border from `i` onward onto the tangent plane of the
-     * frozen surface normal at `i`.  The frame depends only on recorded
-     * data, so the crossing test for a given pair of segments gives the
-     * same answer on every dab. */
+    /* 2D frame from the surface normal at `i`, so the crossing test does
+     * not depend on the current dab. */
     float3 mx = math::cross(normals[i], float3(0, 0, 1));
     if (math::length_squared(mx) < 1e-6f) {
       mx = math::cross(normals[i], float3(1, 0, 0));
@@ -1106,11 +1052,8 @@ static void collapse_border_self_intersections(const Span<float3> poly,
       continue;
     }
 
-    /* Nearest crossing first.  Recorded points never move and crossings
-     * only accumulate as the stroke grows, so the nearest partner of `i`
-     * never changes once it exists — collapsed geometry stays put from dab
-     * to dab.  (Farthest-first would re-pair with every new crossing the
-     * growing tail creates.) */
+    /* Nearest crossing first: points never move, so a partner found once
+     * stays the same on later dabs. */
     const int j_max = count - 2;
     for (int j = i + 2; j <= j_max; j++) {
       const float2 d2 = b2d[j + 1] - b2d[j];
@@ -1132,15 +1075,10 @@ static void collapse_border_self_intersections(const Span<float3> poly,
         const float3 pb = orig[j] + (orig[j + 1] - orig[j]) * t;
         const float3 cross_pt = (pa + pb) * 0.5f;
 
-        /* Only a continuous fold of the strip is a self-intersection.
-         *
-         * Walk the two arms of the loop inward from the crossing in step
-         * (by arc length): a fold — a V or U turn tighter than the brush
-         * radius — keeps the arms within strip overlap (2R) of each other
-         * until they meet at the apex.  When the stroke merely comes back
-         * over itself (a spiral, a figure 8, parallel overlap) the arms
-         * separate right away; the borders cross but nothing folds, and
-         * collapsing that loop would fan the whole turn into one point. */
+        /* Only collapse a real fold: walking both arms inward from the
+         * crossing, they must stay within strip overlap (2R) until they
+         * meet.  A stroke that leaves and comes back over itself (spiral,
+         * figure 8) merely overlaps — nothing to merge. */
         {
           const float reach_sq = (R * 2.5f) * (R * 2.5f);
           int a = i + 1, b = j;
@@ -1294,25 +1232,12 @@ static void collapse_border_self_intersections(const Span<float3> poly,
 }
 
 /**
- * Assemble the initial 3-column strip grid (right border, center, left
- * border) with per-row V texture coordinates.
- *
- * Without pressure-scale: V = raw arc length.  sculpt_apply_texture()
- * later divides by initial_radius to normalize.
- *
- * With pressure-scale (non-empty \a pressures): V = sum of
- * (seg_len / (R * p_avg)).  Dividing each segment by its local
- * pressure-scaled radius makes narrow sections advance the texture
- * faster, so the texture tiles at the same density relative to the strip
- * width — preserving its aspect ratio regardless of pressure.  This is
- * baked per-vertex so that overlapping dabs at different pressures see
- * the same V for the same mesh vertex (no blurriness).  The matching
- * offset (stroke_distance_normalized_) is accumulated in add_roll_point()
- * using the same (p0+p1)/2 averaging, and applied in spline_uv() to keep
- * the texture continuous as the polyline shrinks.
- *
- * \param v_start: V coordinate of the first row (non-zero when the grid
- * covers a window that does not start at the polyline start).
+ * Initial 3-column grid (right border, center, left border) with V per row.
+ * V is the arc length, or with \a normalize_v the arc length divided by the
+ * local strip width, so the texture keeps its aspect ratio under pressure.
+ * The continuity offsets in add_roll_point()/spline_uv() use the same
+ * per-segment formula.
+ * \param v_start: V of the first row.
  */
 static void build_strip_grid(const Span<float3> poly,
                              const Span<float3> border_left,
@@ -1346,8 +1271,7 @@ static void build_strip_grid(const Span<float3> poly,
     r_grid_pos[k * 3 + 0] = border_right[k];
     r_grid_pos[k * 3 + 1] = poly[k];
     r_grid_pos[k * 3 + 2] = border_left[k];
-    /* U at the borders: ±1 when the texture scales with the strip width,
-     * otherwise ±(local width / R) so the texture keeps its base scale. */
+    /* ±1 when the texture scales with the strip, else ±(width / R). */
     const float u_border = (normalize_v || pressures.is_empty()) ? 1.0f :
                                                                    std::max(pressures[k], 0.01f);
     r_grid_uv[k * 3 + 0] = float2(-u_border, v_coords[k]);
@@ -1652,17 +1576,12 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
                             math::normalize(cache.view_normal);
   }
 
-  /* Frozen per-vertex surface normals, sampled when each point was
-   * recorded.  Borders, collapse and the LUT projection all derive from
-   * them, so the strip geometry of recorded segments never changes from
-   * dab to dab. */
+  /* Per-vertex normals frozen at recording time.  Everything below derives
+   * from them, so recorded segments never change between dabs. */
   const Span<float3> normals_full = roll_spline_.normals.as_span();
   BLI_assert(normals_full.size() == poly_full.size());
 
-  /* dab_normal: the frozen normal at the dab's position on the polyline,
-   * used for the LUT projection.  Depends only on where the dab sits on
-   * the stroke, not on the brush's current sculpt_normal (which changes as
-   * the brush straddles edges), so the projection is stable as well. */
+  /* Normal at the dab's position on the stroke, for the LUT projection. */
   float3 dab_normal = roll_proj_normal_;
   {
     int seg;
@@ -1674,12 +1593,8 @@ void PaintStroke::compute_roll_center(StrokeCache &cache)
     }
   }
 
-  /* The strip width always follows the pressure-scaled dab radius when size
-   * pressure is on — the strip must match what the dabs actually paint, or
-   * collapse zones are sized for a strip that is never painted.  The
-   * "Pressure Scale" texture option only decides whether the texture shrinks
-   * with the strip (U/V normalized to the local width) or keeps its base
-   * scale. */
+  /* The strip width follows the pressure-scaled dab radius; the Pressure
+   * Scale option only decides whether the texture shrinks with it. */
   const bool use_pressure_width = brush && BKE_brush_use_size_pressure(brush);
   const bool normalize_v = roll_texture_pressure_scaled();
   const Span<float> pressures_full = (use_pressure_width &&
@@ -2101,8 +2016,7 @@ void PaintStroke::draw_debug_roll(bContext *C) const
         immEnd();
       }
 
-      /* Point markers need the point shader — the plain uniform-color
-       * shader ignores GPU_point_size() on current GPU backends. */
+      /* Points need the point shader on current GPU backends. */
       immUnbindProgram();
       GPU_point_size(10.0f);
       immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);

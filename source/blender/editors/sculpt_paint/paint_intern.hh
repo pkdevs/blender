@@ -99,18 +99,11 @@ struct PaintSample {
   float pressure = 0.0f;
 };
 
-/**
- * Minimum pen pressure for roll texture mapping.  Pen touch-down and
- * lift-off report near-zero pressure values; recorded roll points and the
- * dab spacing floor in space_stroke() both clamp to this.
- */
+/** Pen touch-down and lift-off report near-zero pressure; roll points and
+ * the dab spacing clamp to this. */
 inline constexpr float MIN_ROLL_PRESSURE = 0.05f;
 
-/**
- * Capacity of the recorded-point ring buffer used by roll texture mapping.
- * The stroke history kept for the strip (see PaintStroke::roll_max_points)
- * plus the virtual extension must fit in it.
- */
+/** Ring buffer size for recorded roll points (history + virtual extension). */
 inline constexpr int ROLL_MAX_STROKE_POINTS = 512;
 
 /**
@@ -127,12 +120,7 @@ struct RollSpline {
   Vector<float3> tangents_3d;
   /** Per-vertex pen pressure (0..1). Used to compute variable strip width. */
   Vector<float> pressures;
-  /**
-   * Per-vertex surface normal, sampled when the point was recorded and
-   * frozen.  The strip borders, the self-intersection collapse and the LUT
-   * projection all derive from these, so the strip geometry of recorded
-   * segments never changes from dab to dab.
-   */
+  /** Surface normal per vertex, frozen when the point was recorded. */
   Vector<float3> normals;
 
   void clear();
@@ -320,17 +308,11 @@ struct PaintStroke : NonCopyable, NonMovable {
   }
 
   /**
-   * Sample the roll-mapping UV for an object-space position by projecting it
-   * onto the per-dab LUT built by compute_roll_center().
-   * \param cache: The sculpt stroke cache holding the LUT.
-   * \param co: Object-space position to sample.
-   * \param r_out: [0]: across-strip U, normalized so the strip borders are at
-   * ±1 (sign flipped for texture X); FLT_MAX when the position cannot be
-   * mapped (outside the LUT, or LUT not built). [1]: along-stroke V — raw arc
-   * length, or pressure-normalized when roll_pressure_scale is active —
-   * including the continuity offsets for consumed knots and the virtual
-   * extension. [2]: always 0.
-   * \param r_tan: Strip tangent (along-stroke direction) at the sample.
+   * Roll UV for an object-space position, sampled from the per-dab LUT.
+   * \param r_out: [0] across-strip U (±1 at the borders, sign flipped for
+   * texture X; FLT_MAX when unmappable), [1] along-stroke V including the
+   * continuity offsets, [2] unused.
+   * \param r_tan: Along-stroke tangent at the sample.
    */
   void spline_uv(const StrokeCache &cache,
                  const float co[3],
@@ -343,12 +325,8 @@ struct PaintStroke : NonCopyable, NonMovable {
     return need_roll_mapping_;
   }
 
-  /**
-   * Build the roll strip surface for the current dab: border curves with
-   * self-intersection collapse, the subdivided + smoothed grid, and the UV
-   * lookup table used by spline_uv(). Call once per dab (single-threaded)
-   * before the per-vertex parallel loop.
-   */
+  /** Build the strip (borders, collapse, grid, LUT) for the current dab.
+   * Once per dab, before the per-vertex loop. */
   void compute_roll_center(StrokeCache &cache);
 
   /** Debug: draw the roll spline overlay in the viewport. */
@@ -413,11 +391,9 @@ struct PaintStroke : NonCopyable, NonMovable {
   int roll_points_per_radius() const;
   /** Stroke history kept for the roll strip, in recorded points. */
   int roll_max_points() const;
-  /** True when the roll texture should shrink with the pressure-scaled strip
-   * width (the "Pressure Scale" option with size pressure enabled). */
+  /** Pressure Scale option: the texture shrinks with the strip width. */
   bool roll_texture_pressure_scaled() const;
-  /** Dab deferral: dabs lag this many points behind the pen so the strip
-   * ahead of them is complete (about three radii). */
+  /** Dabs lag this many points behind the pen (about three radii). */
   int roll_half_points() const
   {
     return roll_points_per_radius() * 3 + 2;
