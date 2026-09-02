@@ -7,6 +7,7 @@
  */
 
 #include "BKE_global.hh"
+#include "BKE_preferences.h"
 
 #include "BLT_translation.hh"
 
@@ -97,20 +98,44 @@ void draw_active_library_settings(const bContext *C,
       if (ui::Layout *panel = layout.panel(C, "advanced", true, IFACE_("Advanced"))) {
         panel->use_property_split_set(true);
         ui::Layout &col = panel->column(true, IFACE_("Authentication"));
-        col.prop(&library_ptr, "use_auth_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-        if (library.user_library->flag & ASSET_LIBRARY_USE_AUTH_TOKEN) {
-          if (!library.user_library->auth_token) {
-            col.red_alert_set(true);
+        bUserExtensionRepo *repo = BKE_preferences_extension_asset_library_repo_get(
+            &U, library.user_library);
+        if (repo && (repo->flag & USER_EXTENSION_REPO_FLAG_USE_ACCESS_TOKEN_ASSET_LIBRARIES)) {
+          /* The repository defines the token for its libraries, show it read-only. */
+          PointerRNA repo_ptr = RNA_pointer_create_discrete(nullptr, RNA_UserExtensionRepo, repo);
+          col.enabled_set(false);
+          col.prop(&repo_ptr, "use_access_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+          if (repo->flag & USER_EXTENSION_REPO_FLAG_USE_ACCESS_TOKEN) {
+            col.prop(&repo_ptr,
+                     RNA_struct_find_property(&repo_ptr, "access_token"),
+                     RNA_NO_INDEX,
+                     0,
+                     UI_ITEM_NONE,
+                     IFACE_("Secret"),
+                     repo->access_token ? ICON_LOCKED : ICON_UNLOCKED,
+                     std::nullopt);
           }
-          col.prop(&library_ptr,
-                   RNA_struct_find_property(&library_ptr, "auth_token"),
-                   RNA_NO_INDEX,
-                   0,
-                   UI_ITEM_NONE,
-                   IFACE_("Secret"),
-                   library.user_library->auth_token ? ICON_LOCKED : ICON_UNLOCKED,
-                   std::nullopt);
+          ui::Layout &row = panel->row(false);
+          row.active_set(false);
+          row.label(IFACE_("Defined by the extension repository"), ICON_INFO);
+        }
+        else {
+          col.prop(&library_ptr, "use_auth_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
+          if (library.user_library->flag & ASSET_LIBRARY_USE_AUTH_TOKEN) {
+            if (!library.user_library->auth_token) {
+              col.red_alert_set(true);
+            }
+            col.prop(&library_ptr,
+                     RNA_struct_find_property(&library_ptr, "auth_token"),
+                     RNA_NO_INDEX,
+                     0,
+                     UI_ITEM_NONE,
+                     IFACE_("Secret"),
+                     library.user_library->auth_token ? ICON_LOCKED : ICON_UNLOCKED,
+                     std::nullopt);
+          }
         }
       }
     }
