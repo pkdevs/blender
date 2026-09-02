@@ -1590,23 +1590,6 @@ static bool rna_NodeTree_contains_tree(bNodeTree *tree, bNodeTree *sub_tree)
   return bke::node_tree_contains_tree(*tree, *sub_tree);
 }
 
-static bNodeTree *rna_NodeTree_new_group_from_node(bNodeTree *ntree,
-                                                   bContext *C,
-                                                   ReportList *reports,
-                                                   bNode *node)
-{
-  if (!rna_NodeTree_check(ntree, reports)) {
-    return nullptr;
-  }
-
-  if (BLI_findindex(&ntree->nodes, node) == -1) {
-    BKE_reportf(reports, RPT_ERROR, "Unable to locate node '%s' in node tree", node->name);
-    return nullptr;
-  }
-
-  return ed::space_node::node_wrapper_group_create(*C, *ntree, *node);
-}
-
 static void rna_NodeTree_bl_idname_get(PointerRNA *ptr, char *value)
 {
   const bNodeTree *node = ptr->data_as<bNodeTree>();
@@ -1743,6 +1726,21 @@ static void rna_NodeTree_debug_zone_lazy_function_graph(
   }
   *r_str = BLI_strdup(dot_str->c_str());
   *r_len = dot_str->size();
+}
+
+static bNodeTree *rna_NodeTree_group_make(ID *tree_id,
+                                          bNode *node,
+                                          bContext *C,
+                                          ReportList *reports)
+{
+  bNodeTree *ntree = reinterpret_cast<bNodeTree *>(tree_id);
+
+  if (BLI_findindex(&ntree->nodes, node) == -1) {
+    BKE_reportf(reports, RPT_ERROR, "Unable to locate node '%s' in node tree", node->name);
+    return nullptr;
+  }
+
+  return ed::space_node::node_wrapper_group_create(*C, *ntree, *node);
 }
 
 static void rna_NodeTree_interface_update(bNodeTree *ntree, bContext *C)
@@ -3607,7 +3605,6 @@ static void rna_NodeCryptomatte_source_set(PointerRNA *ptr, int value)
 
 static int rna_NodeCryptomatte_layer_name_get(PointerRNA *ptr)
 {
-
   bNode *node = ptr->data_as<bNode>();
   NodeCryptomatte *storage = static_cast<NodeCryptomatte *>(node->storage);
   for (const auto [index, layer] : storage->runtime.layers.enumerate()) {
@@ -10036,6 +10033,15 @@ static void rna_def_node(BlenderRNA *brna)
   RNA_def_parameter_flags(parm, PROP_DYNAMIC, ParameterFlag(0));
   RNA_def_parameter_clear_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_output(func, parm);
+
+  func = RNA_def_function(srna, "group_make", "rna_NodeTree_group_make");
+  RNA_def_function_ui_description(func,
+                                  "Create a new node group containing a copy of the given node, "
+                                  "with the sockets of the node exposed as the interface of the "
+                                  "group. Same as the Make Group operator for a single node.");
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
+  parm = RNA_def_pointer(func, "group", "NodeTree", "Group", "The newly created node group");
+  RNA_def_function_return(func, parm);
 }
 
 static void rna_def_node_link(BlenderRNA *brna)
@@ -10325,17 +10331,6 @@ static void rna_def_nodetree(BlenderRNA *brna)
       func, "sub_tree", "NodeTree", "Node Tree", "Node tree for recursive check");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
   parm = RNA_def_property(func, "contained", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_function_return(func, parm);
-
-  func = RNA_def_function(srna, "new_group_from_node", "rna_NodeTree_new_group_from_node");
-  RNA_def_function_ui_description(func,
-                                  "Create a new node group containing a copy of the given node, "
-                                  "with the sockets of the node exposed as the interface of the "
-                                  "group. Same as the Make Group operator for a single node.");
-  RNA_def_function_flag(func, FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
-  parm = RNA_def_pointer(func, "node", "Node", "Node", "Node to copy into the new node group");
-  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
-  parm = RNA_def_pointer(func, "group", "NodeTree", "Group", "The newly created node group");
   RNA_def_function_return(func, parm);
 
   /* registration */

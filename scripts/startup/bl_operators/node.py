@@ -813,11 +813,11 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
         source_group = bpy.data.node_groups.new(name=".effect_source", type="CompositorNodeTree")
         node = source_group.nodes.new(type=node_type)
         self.apply_node_settings(node)
-        group = source_group.new_group_from_node(node)
+        group = node.group_make()
+        bpy.data.node_groups.remove(source_group)
+
         if group is None:
             return None
-
-        bpy.data.node_groups.remove(source_group)
 
         # So that the created group doesn't show up in Unassigned.
         group.allow_usage_in_scene_compositor_effect = False
