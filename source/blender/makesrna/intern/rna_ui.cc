@@ -15,8 +15,6 @@
 #include "BKE_file_handler.hh"
 #include "BKE_screen.hh"
 
-#include "BLI_string.hh"
-
 #include "RNA_define.hh"
 
 #include "RNA_enum_types.hh"
@@ -1678,7 +1676,6 @@ static StructRNA *rna_FileHandler_refine(PointerRNA *file_handler_ptr)
              RNA_FileHandler;
 }
 
-/** Looks up `idname` among all registered file handlers, Python-defined or built-in C ones. */
 static void rna_FileHandler_label_with_extensions(const char *idname, char *result)
 {
   const bke::FileHandlerType *file_handler = bke::file_handler_find(idname);
