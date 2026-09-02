@@ -475,10 +475,11 @@ class DATA_PT_camera_display_composition_guides(CameraButtonsPanel, Panel):
         self.draw_panel(self.layout, context.camera)
 
     @classmethod
-    def draw_panel(cls, layout, camera, test=None):
+    def draw_panel(cls, layout, camera):
         layout.use_property_split = True
 
         layout.prop(camera, "show_composition_thirds")
+
         col = layout.column(heading="Center", align=True)
         col.prop(camera, "show_composition_center")
         col.prop(camera, "show_composition_center_diagonal", text="Diagonal")
@@ -493,7 +494,7 @@ class DATA_PT_camera_display_composition_guides(CameraButtonsPanel, Panel):
         col.prop(camera, "show_composition_harmony_tri_b", text="Triangle B")
 
         panel = layout.panel("fulldome_composition_guides_panel", default_closed=True)
-        panel[0].label(text="Fulldomedome Guides")
+        panel[0].label(text="Fulldome Guides")
 
         if panel[1]:
             panel[1].prop(camera, "show_composition_fulldome_directions", text="Directions")
