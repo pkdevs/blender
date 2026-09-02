@@ -207,13 +207,13 @@ static void shape_attributes_to_curves(bke::CurvesGeometry &curves,
   MutableSpan<float3> handle_positions_right = curves.handle_positions_right_for_write();
   MutableSpan<int8_t> handle_types_left = curves.handle_types_left_for_write();
   MutableSpan<int8_t> handle_types_right = curves.handle_types_right_for_write();
-  bke::SpanAttributeWriter<float> radii = attributes.lookup_or_add_for_write_span<float>(
+  bke::SpanAttributeWriter<float> radii = attributes.convert_or_add_for_write_span<float>(
       "radius", bke::AttrDomain::Point);
   bke::SpanAttributeWriter<ColorGeometry4f> vertex_colors =
-      attributes.lookup_or_add_for_write_span<ColorGeometry4f>("vertex_color",
-                                                               bke::AttrDomain::Point);
-  bke::SpanAttributeWriter<float> point_opacities = attributes.lookup_or_add_for_write_span<float>(
-      "opacity", bke::AttrDomain::Point);
+      attributes.convert_or_add_for_write_span<ColorGeometry4f>("vertex_color",
+                                                                bke::AttrDomain::Point);
+  bke::SpanAttributeWriter<float> point_opacities =
+      attributes.convert_or_add_for_write_span<float>("opacity", bke::AttrDomain::Point);
 
   materials.span.slice(curves_range).fill(material_index);
   const ColorGeometry4f shape_color = convert_svg_color(shape.fill);
@@ -273,12 +273,8 @@ static void shape_attributes_to_curves(bke::CurvesGeometry &curves,
 
       radii.span[points.first()] = shape.strokeWidth * path_width_scale;
 
-      if (vertex_colors) {
-        vertex_colors.span[points.first()] = point_color;
-      }
-      if (point_opacities) {
-        point_opacities.span[points.first()] = point_color.a;
-      }
+      vertex_colors.span[points.first()] = point_color;
+      point_opacities.span[points.first()] = point_color.a;
     }
 
     for (const int i : points.index_range().drop_front(1)) {
