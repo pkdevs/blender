@@ -242,7 +242,7 @@ static void add_layer_name_search_button(DrawGroupInputsContext &ctx,
 
   layout.use_property_decorate_set(false);
 
-  ui::Layout &split = layout.split(ui::Layout::property_split_factor, false);
+  ui::Layout &split = layout.split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
   ui::Layout &name_row = split.row(false);
   name_row.alignment_set(ui::LayoutAlign::Right);
 
@@ -421,7 +421,7 @@ static void add_attribute_search_or_value_buttons(
   /* We're handling this manually in this case. */
   layout.use_property_decorate_set(false);
 
-  ui::Layout &split = layout.split(ui::Layout::property_split_factor, false);
+  ui::Layout &split = layout.split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
   ui::Layout &name_row = split.row(false);
   name_row.alignment_set(ui::LayoutAlign::Right);
 
@@ -741,7 +741,7 @@ static void draw_property_for_output_socket(DrawGroupInputsContext &ctx,
                                             ui::Layout &layout,
                                             const bNodeTreeInterfaceSocket &socket)
 {
-  ui::Layout &split = layout.split(ui::Layout::property_split_factor, false);
+  ui::Layout &split = layout.split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
   ui::Layout &name_row = split.row(false);
   name_row.alignment_set(ui::LayoutAlign::Right);
   name_row.label(socket.name ? socket.name : "", ICON_NONE);
@@ -820,7 +820,7 @@ static void draw_named_attributes_panel(ui::Layout &layout, Object &object, Node
     const eval_log::NamedAttributeUsage usage = attribute.usage;
 
     /* #uiLayoutRowWithHeading doesn't seem to work in this case. */
-    ui::Layout &split = layout.split(ui::Layout::property_split_factor, false);
+    ui::Layout &split = layout.split(ui::Layout::PROPERTY_SPLIT_FACTOR, false);
 
     std::stringstream ss;
     Vector<std::string> usages;

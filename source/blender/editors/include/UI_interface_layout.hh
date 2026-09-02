@@ -114,7 +114,7 @@ enum class EnumTabExpand {
 
 struct Layout : public Item, NonCopyable, NonMovable {
 
-  static constexpr float property_split_factor = 0.4f;
+  static constexpr float PROPERTY_SPLIT_FACTOR = 0.4f;
 
  protected:
   LayoutRoot *root_ = nullptr;

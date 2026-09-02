@@ -2156,7 +2156,7 @@ void Layout::prop(PointerRNA *ptr,
     }
     else {
       Layout *layout_split =
-          &(layout_row ? layout_row : layout)->split(Layout::property_split_factor, true);
+          &(layout_row ? layout_row : layout)->split(Layout::PROPERTY_SPLIT_FACTOR, true);
       bool label_added = false;
       Layout *layout_sub = &layout_split->column(true);
       layout_sub->space_ = 0;
@@ -3480,7 +3480,7 @@ PropertySplitWrapper uiItemPropertySplitWrapperCreate(Layout *parent_layout)
   PropertySplitWrapper split_wrapper = {nullptr};
 
   Layout *layout_row = &parent_layout->row(true);
-  Layout *layout_split = &layout_row->split(Layout::property_split_factor, true);
+  Layout *layout_split = &layout_row->split(Layout::PROPERTY_SPLIT_FACTOR, true);
 
   split_wrapper.label_column = &layout_split->column(true);
   split_wrapper.label_column->alignment_set(LayoutAlign::Right);
