@@ -566,10 +566,10 @@ ccl_device_inline bool light_reference_from_sample(
       return sun_light_reference_from_sample(kg, ls, reference);
 
     case LIGHT_AREA:
-      return restir_area_light_reference_from_sample(kg, ls, reference);
+      return area_light_reference_from_sample(kg, ls, reference);
 
     case LIGHT_SPOT:
-      return restir_spot_light_reference_from_sample(kg, ls, reference);
+      return spot_light_reference_from_sample(kg, ls, reference);
 
     case LIGHT_TRIANGLE:
       return triangle_light_reference_from_sample(kg, ls, time, reference);
@@ -616,11 +616,11 @@ ccl_device_inline bool light_sample_from_reference(
           kg, reference, P, N, shader_flags, path_flag, ls);
 
     case LIGHT_AREA:
-      return restir_area_light_sample_from_reference(
+      return area_light_sample_from_reference(
           kg, reference, P, N, shader_flags, path_flag, ls);
 
     case LIGHT_SPOT:
-      return restir_spot_light_sample_from_reference(
+      return spot_light_sample_from_reference(
           kg, reference, P, N, shader_flags, path_flag, ls);
 
     case LIGHT_TRIANGLE:
