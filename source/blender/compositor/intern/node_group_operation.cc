@@ -220,8 +220,8 @@ void NodeGroupOperation::evaluate_pixel_compile_unit(CompileState &compile_state
   PixelCompileUnit &compile_unit = compile_state.get_pixel_compile_unit();
 
   /* Only compute previews if they are needed and the node group is currently active. */
-  const bool needs_node_previews = flag_is_set(this->context().needed_output_types(),
-                                               OutputTypes::NodePreviews);
+  const bool needs_node_previews = flag_is_set(this->context().needed_side_effect_output_types(),
+                                               SideEffectOutputTypes::NodePreviews);
   const bool is_active_context = compute_context_.hash() ==
                                  this->context().get_active_compute_context_hash();
   const bool are_node_previews_needed = needs_node_previews && is_active_context;

@@ -31,15 +31,14 @@ class NodesEvalLog;
 
 namespace blender::compositor {
 
-/* Enumerates the possible node group outputs can be computed. Those can be combined into a bit
- * flag. */
-enum class OutputTypes : uint8_t {
+/* A bit flag of compositor side effect outputs than can be computed. */
+enum class SideEffectOutputTypes : uint8_t {
   None = 0,
   ViewerNode = 1 << 0,
   FileOutputNode = 1 << 1,
   NodePreviews = 1 << 2,
 };
-ENUM_OPERATORS(OutputTypes)
+ENUM_OPERATORS(SideEffectOutputTypes)
 
 /* ------------------------------------------------------------------------------------------------
  * Context
@@ -72,8 +71,8 @@ class Context {
   /* True if the compositor should use GPU acceleration. */
   virtual bool use_gpu() const = 0;
 
-  /* Returns the output types that needs to be computed. */
-  virtual OutputTypes needed_output_types() const = 0;
+  /* Returns the side effect output types that needs to be computed. */
+  virtual SideEffectOutputTypes needed_side_effect_output_types() const = 0;
 
   /* Returns the hash of the currently active compute context. */
   virtual const ComputeContextHash &get_active_compute_context_hash() const = 0;

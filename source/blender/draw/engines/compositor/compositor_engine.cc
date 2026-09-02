@@ -87,9 +87,9 @@ class Context : public compositor::Context {
     return true;
   }
 
-  compositor::OutputTypes needed_output_types() const override
+  compositor::SideEffectOutputTypes needed_side_effect_output_types() const override
   {
-    return compositor::OutputTypes::ViewerNode;
+    return compositor::SideEffectOutputTypes::ViewerNode;
   }
 
   const ComputeContextHash &get_active_compute_context_hash() const override

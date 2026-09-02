@@ -66,12 +66,12 @@ class CompositorContext : public compositor::Context {
            this->render_data_.scene->r.compositor_device == SCE_COMPOSITOR_DEVICE_GPU;
   }
 
-  compositor::OutputTypes needed_output_types() const override
+  compositor::SideEffectOutputTypes needed_side_effect_output_types() const override
   {
     if (!render_data_.render) {
-      return compositor::OutputTypes::ViewerNode;
+      return compositor::SideEffectOutputTypes::ViewerNode;
     }
-    return compositor::OutputTypes();
+    return compositor::SideEffectOutputTypes::None;
   }
 
   compositor::ResultPrecision get_precision() const override;

@@ -163,8 +163,8 @@ static Result *get_effect_input(Context &context,
 void SceneCompositorEffectsOperation::execute()
 {
   const Scene &scene = this->context().get_scene();
-  const bool needs_viewer_output = flag_is_set(this->context().needed_output_types(),
-                                               OutputTypes::ViewerNode);
+  const bool needs_viewer_output = flag_is_set(this->context().needed_side_effect_output_types(),
+                                               SideEffectOutputTypes::ViewerNode);
   const bke::DataBlockComputeContext scene_compute_context(nullptr, scene.id);
 
   std::unique_ptr<NodeGroupOperation> last_operation;

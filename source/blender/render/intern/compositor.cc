@@ -116,9 +116,9 @@ class Context : public compositor::Context {
            this->get_render_data().compositor_device == SCE_COMPOSITOR_DEVICE_GPU;
   }
 
-  compositor::OutputTypes needed_output_types() const override
+  compositor::SideEffectOutputTypes needed_side_effect_output_types() const override
   {
-    return input_data_.needed_outputs;
+    return input_data_.needed_side_effects_outputs;
   }
 
   const ComputeContextHash &get_active_compute_context_hash() const override
@@ -735,8 +735,8 @@ class Context : public compositor::Context {
 
     /* If the operation does not have a viewer output but one is needed, write the output as a
      * viewer. */
-    const bool needs_viewer_output = flag_is_set(this->needed_output_types(),
-                                                 compositor::OutputTypes::ViewerNode);
+    const bool needs_viewer_output = flag_is_set(this->needed_side_effect_output_types(),
+                                                 compositor::SideEffectOutputTypes::ViewerNode);
     if (!operation.has_viewer_output() && needs_viewer_output) {
       this->write_viewer(output_result);
     }

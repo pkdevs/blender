@@ -226,8 +226,8 @@ void NodeOperation::log_data()
 
   /* Log node preview if they are needed and the node group is active. */
   const bool node_needs_preview = is_node_preview_needed(this->node());
-  const bool needs_node_previews = flag_is_set(this->context().needed_output_types(),
-                                               OutputTypes::NodePreviews);
+  const bool needs_node_previews = flag_is_set(this->context().needed_side_effect_output_types(),
+                                               SideEffectOutputTypes::NodePreviews);
   const bool is_active_context = compute_context_->hash() ==
                                  this->context().get_active_compute_context_hash();
   if (node_needs_preview && needs_node_previews && is_active_context) {
