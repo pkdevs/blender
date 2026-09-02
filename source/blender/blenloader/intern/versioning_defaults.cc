@@ -174,8 +174,7 @@ static void blo_update_defaults_screen(bScreen *screen,
         }
       }
 
-      /* Reveal the dope sheet footer, doesn't effect timeline. */
-      for (ARegion &region : area.regionbase) {
+      /* Reveal the footer by default. */ for (ARegion &region : area.regionbase) {
         if (region.regiontype == RGN_TYPE_FOOTER) {
           region.flag &= ~RGN_FLAG_HIDDEN;
         }
