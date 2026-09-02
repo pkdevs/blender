@@ -140,15 +140,46 @@ std::string FileHandlerType::get_default_filename(const StringRefNull name)
   return filename;
 }
 
+static std::string extensions_common_prefix(const Span<std::string> extensions)
+{
+  std::string prefix = extensions.first();
+  for (const std::string &extension : extensions.drop_front(1)) {
+    const int64_t max_len = std::min<int64_t>(prefix.size(), extension.size());
+    int64_t i = 0;
+    while (i < max_len && prefix[i] == extension[i]) {
+      i++;
+    }
+    prefix.resize(i);
+  }
+  return prefix;
+}
+
 std::string FileHandlerType::label_with_extensions() const
 {
   if (file_extensions.is_empty()) {
     return label;
   }
 
-  std::string extensions = file_extensions.first();
-  for (const std::string &extension : file_extensions.as_span().drop_front(1)) {
-    extensions += "/" + extension;
+  std::string extensions;
+  if (file_extensions.size() > 1) {
+    const std::string prefix = extensions_common_prefix(file_extensions.as_span());
+    const int64_t prefix_letters = prefix.size() - (!prefix.empty() && prefix[0] == '.' ? 1 : 0);
+    const bool collapsible = prefix_letters >= 3 &&
+                             std::all_of(file_extensions.begin(),
+                                         file_extensions.end(),
+                                         [&](const std::string &extension) {
+                                           return extension.size() - prefix.size() <= 1;
+                                         });
+    if (collapsible) {
+      extensions = prefix + "*";
+    }
+  }
+
+  if (extensions.empty()) {
+    extensions = file_extensions.first();
+    for (const std::string &extension : file_extensions.as_span().drop_front(1)) {
+      extensions += "/" + extension;
+    }
   }
 
   return std::string(label) + " (" + extensions + ")";
