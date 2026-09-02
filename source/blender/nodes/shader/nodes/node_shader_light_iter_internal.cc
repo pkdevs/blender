@@ -63,7 +63,6 @@ void register_node_type_sh_light_iter_internal_input()
       &ntype, "ShaderNodeLightIterInternalInput"_ustr, SH_NODE_LIGHT_ITER_INTERNAL_INPUT);
   ntype.ui_name = "Light Iter Internal Input";
   ntype.ui_description = "Light Iter Internal Input";
-  ntype.enum_name_legacy = "LIGHT ITER INTERNAL INPUT";
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.declare = file_ns::node_declare;
   ntype.gather_link_search_ops = search_link_ops_for_shader_material_lighting_node;
