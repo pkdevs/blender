@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2025 Blender Authors
+/* SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -37,7 +37,9 @@ static void node_geo_exec(GeoNodeExecParams params)
 {
   const std::string file_path = params.extract_input<std::string>("File Path"_ustr);
 
-  /* LOG: imprime o caminho completo */
+  /* Sometimes, while testing, Blender was suddenly stopping to reach the file
+   which was saved locally. So I added more logging for debugging. Apparently,
+   the main reason for not reaching was related to relative paths, but not sure. */
   std::cerr << "[Read MIDI] file_path = '" << file_path << "'" << std::endl;
 
   if (file_path.empty()) {
@@ -47,7 +49,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     return;
   }
 
-  /* Verifica se o arquivo existe e é legível (antes de chamar a biblioteca) */
+  // check if the file exists
   std::ifstream test_file(file_path, std::ios::binary);
   if (!test_file.good()) {
     std::cerr << "[Read MIDI] ERROR: file does not exist or cannot be opened: " << file_path << std::endl;
@@ -100,12 +102,14 @@ static void node_geo_exec(GeoNodeExecParams params)
   const int tpq = midifile.getTicksPerQuarterNote();
   std::cerr << "[Read MIDI] Ticks per quarter = " << tpq << std::endl;
 
-  /* Count events by type. */
+  // Count events by type.
   int note_count = 0;
   int tempo_count = 0;
   int time_sig_count = 0;
   int key_sig_count = 0;
   int other_meta_count = 0;
+  // I still intend to dig deeper into these other meta events and extract
+  // cool things, like fine tune pitch in cents, controllers etc..
 
   for (int t = 0; t < midifile.getTrackCount(); t++) {
     for (int e = 0; e < midifile[t].size(); e++) {
@@ -361,6 +365,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 
   /* ---------- OTHER META EVENTS POINT CLOUD ---------- */
+  // I haven't tested here much, honestly...
   PointCloud *other_meta_points = nullptr;
   if (other_meta_count > 0) {
     other_meta_points = BKE_pointcloud_new_nomain(other_meta_count);
@@ -395,13 +400,15 @@ static void node_geo_exec(GeoNodeExecParams params)
     for (int t = 0; t < midifile.getTrackCount(); t++) {
       for (int e = 0; e < midifile[t].size(); e++) {
         smf::MidiEvent &ev = midifile[t][e];
+        // tempo, time signatures and key signatures already extracted, so
+        // skipping them...
         if (ev.isMeta() && !ev.isTempo() && ev[1] != 0x58 && ev[1] != 0x59) {
           positions[idx] = float3(float(ev.seconds), 3.0f, 0.0f);
           meta_type_attr.span[idx] = ev[1]; // store the meta event type
           time_s_attr.span[idx] = float(ev.seconds);
           time_qn_attr.span[idx] = float(ev.tick) / float(tpq);
-          data1_attr.span[idx] = (ev.size() > 2) ? ev[2] : 0.0f;
-          data2_attr.span[idx] = (ev.size() > 3) ? ev[3] : 0.0f;
+          data1_attr.span[idx] = (ev.size() > 2) ? ev[2] : 0.0f;  // or ev[3]? or maybe getP1?
+          data2_attr.span[idx] = (ev.size() > 3) ? ev[3] : 0.0f;  // or ev[4]? or maybe getP2?
           channel_attr.span[idx] = ev.getChannel();
           track_attr.span[idx] = t;
           idx++;

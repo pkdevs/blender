@@ -1,4 +1,4 @@
- /* SPDX-FileCopyrightText: 2025 Blender Authors
+ /* SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -71,7 +71,7 @@ static void node_geo_exec(GeoNodeExecParams params)
             float event_time = time_values[i];
             float event_bpm = bpm_values[i];
 
-            /* If input_time is before this event, accumulate up to input_time and stop. */
+            /* If input_time is before this event, accumulate up to input_time and stop */
             if (input_time <= event_time) {
               float duration_seconds = input_time - last_time;
               if (duration_seconds > 0) {

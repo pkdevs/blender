@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2025 Blender Authors
+/* SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -67,11 +67,11 @@ static void node_geo_exec(GeoNodeExecParams params)
   const float input_time = params.extract_input<float>("Time"_ustr);
 
   /* Default values. */
-  int result_num = 4;   // 4/4 is a common default
+  int result_num = 4;   // 4/4 is a common default (aka. c in many music scores ;) )
   int result_den = 4;
   int result_track = -1;
 
-  /* Read storage to get the selected time unit. */
+  /* Read storage to get the selected time unit: */
   const NodeGeometryMidiTimeSignatureAt &storage = node_storage(params.node());
   const TimeUnit time_unit = TimeUnit(storage.time_unit);
   const char *time_attr_name = (time_unit == TimeUnit::Seconds) ? "time_s" : "time_qn";
