@@ -272,7 +272,7 @@ bool selection_update(const ViewContext *vc,
         /* Modes that un-set all elements not in the mask. */
         if (ELEM(sel_op, SEL_OP_SET, SEL_OP_AND)) {
           if (bke::SpanAttributeWriter<bool> selection =
-                  curves.attributes_for_write().convert_or_add_for_write_span<bool>(
+                  curves.attributes_for_write().lookup_or_add_for_write_span<bool>(
                       attribute_name, selection_domain))
           {
             const IndexMask not_in_mask = changed_element_mask.complement(
