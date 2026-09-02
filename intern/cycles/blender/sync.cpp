@@ -1208,8 +1208,6 @@ DenoiseParams BlenderSync::get_denoise_params(blender::Scene &b_scene,
       
       denoising.start_sample = 0;
       
-      printf("normal pass: %d\n", PASS_NORMAL);
-      
       denoising.passes = DENOISER_PASS_ALBEDO | DENOISER_PASS_SPECULAR_ALBEDO |
                          DENOISER_PASS_NORMAL | DENOISER_PASS_ROUGHNESS |
                          DENOISER_PASS_DEPTH | DENOISER_PASS_MOTION;

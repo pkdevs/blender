@@ -92,6 +92,7 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     desc.specularAlbedoTextureFormat = MTLPixelFormatRGBA16Float;
 
     desc.outputTextureFormat = MTLPixelFormatRGBA16Float;
+    
     mtlfx_denoiser = [desc newTemporalDenoisedScalerWithDevice: device];
     
     // Create the textures needed for denoising
@@ -231,15 +232,16 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(const DenoiseContext &co
   PassParams passParams = {
     context.pass_sample_count,
     context.buffer_params.get_pass_offset(PASS_DENOISING_DEPTH),
-    // TODO: motion pass is unused
-    context.buffer_params.get_pass_offset(PASS_DENOISING_BACKWARD_MOTION),
+    context.pass_motion,
     // TODO: This normal texture is in view space instead of world space, which MTLFX expects.
-    context.buffer_params.get_pass_offset(PASS_DENOISING_NORMAL),
+    context.buffer_params.get_pass_offset(PASS_NORMAL),
     context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
     context.buffer_params.get_pass_offset(PASS_DENOISING_ALBEDO),
     context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_ALBEDO),
     context.num_samples,
   };
+  
+  printf("normal: %d\n", passParams.render_pass_normal);
   
   id<MTLBuffer> render_buffer = (id<MTLBuffer>) denoiser_device_->get_native_buffer(context.render_buffers->buffer.device_pointer);
   
@@ -292,12 +294,12 @@ bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &con
   
   PassParams passParams = {
     context.pass_sample_count,
-    context.buffer_params.get_pass_offset(PASS_DENOISING_DEPTH),
-    context.buffer_params.get_pass_offset(PASS_DENOISING_BACKWARD_MOTION),
-    context.buffer_params.get_pass_offset(PASS_DENOISING_NORMAL),
-    context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
-    context.buffer_params.get_pass_offset(PASS_DENOISING_ALBEDO),
-    context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_ALBEDO),
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
     context.num_samples,
   };
   
@@ -354,6 +356,7 @@ bool MetalFXDenoiser::denoise_run(const DenoiseContext &context, const DenoisePa
   denoiser.outputTexture         = (id<MTLTexture>) output_texture;
   denoiser.jitterOffsetX         = context.pixel_jitter.x;
   denoiser.jitterOffsetY         = context.pixel_jitter.y;
+  denoiser.depthReversed         = YES;
   
   [denoiser encodeToCommandBuffer: command_buffer];
     
