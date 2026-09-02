@@ -1044,6 +1044,8 @@ struct RestrictPropertiesActive {
   bool object_hide_select;
   bool object_hide_render;
   bool base_hide_viewport;
+  bool object_holdout;
+  bool object_indirect_only;
   bool collection_hide_viewport;
   bool collection_hide_select;
   bool collection_hide_render;
@@ -1134,6 +1136,14 @@ static void outliner_restrict_properties_enable_layer_collection_set(
       props_active->layer_collection_holdout = false;
       props_active->layer_collection_indirect_only = false;
     }
+  }
+
+  if (!props_active->layer_collection_holdout) {
+    props_active->object_holdout = false;
+  }
+
+  if (!props_active->layer_collection_indirect_only) {
+    props_active->object_indirect_only = false;
   }
 }
 
@@ -1407,6 +1417,9 @@ static void outliner_draw_restrictbuts(ui::Block *block,
           button_func_set(
               bt, outliner__object_set_flag_recursive_fn, ob, const_cast<char *>("is_holdout"));
           button_flag_enable(bt, ui::BUT_DRAG_LOCK);
+          if (!props_active.object_holdout) {
+            button_flag_enable(bt, ui::BUT_INACTIVE);
+          }
         }
         if (space_outliner->show_restrict_flags & SO_RESTRICT_INDIRECT_ONLY) {
           if (OB_TYPE_IS_GEOMETRY(ob->type) && ob->type != OB_GREASE_PENCIL) {
@@ -1429,6 +1442,9 @@ static void outliner_draw_restrictbuts(ui::Block *block,
                             ob,
                             const_cast<char *>("visible_camera"));
             button_flag_enable(bt, ui::BUT_DRAG_LOCK);
+            if (props_active.object_holdout || !props_active.object_indirect_only) {
+              button_flag_enable(bt, ui::BUT_INACTIVE);
+            }
           }
         }
       }
