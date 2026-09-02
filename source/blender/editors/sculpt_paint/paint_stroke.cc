@@ -931,7 +931,7 @@ PaintStroke::PaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
     BKE_curvemapping_init(this->paint->cavity_curve);
   }
 
-  BKE_paint_set_overlay_override(eOverlayFlags(this->brush->overlay_flags));
+  BKE_paint_set_overlay_override(this->paint, eOverlayFlags(this->brush->overlay_flags));
 
   paint_runtime->start_pixel_radius = BKE_brush_radius_get(this->paint, this->brush);
 }
@@ -966,7 +966,7 @@ void PaintStroke::done(bContext *C, const bool is_cancel)
     rv3d->rflag &= ~RV3D_PAINTING;
   }
 
-  BKE_paint_set_overlay_override(eOverlayFlags(0));
+  BKE_paint_set_overlay_override(this->paint, eOverlayFlags(0));
 
   paint_runtime->draw_anchored = false;
   paint_runtime->stroke_active = false;

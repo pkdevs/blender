@@ -351,7 +351,7 @@ void paint_init_pivot(Object *ob, Scene *scene, Paint *paint);
 /**
  * Delete overlay cursor textures to preserve memory and invalidate all overlay flags.
  */
-void paint_cursor_delete_textures();
+void paint_cursor_delete_textures(Paint *paint);
 
 /* `paint_vertex.cc` */
 

@@ -255,79 +255,74 @@ IDTypeInfo IDType_ID_PC = {
     .lib_override_apply_post = nullptr,
 };
 
-static ePaintOverlayControlFlags overlay_flags = ePaintOverlayControlFlags{};
-
-void BKE_paint_invalidate_overlay_tex(const Main &bmain,
-                                      Scene *scene,
-                                      ViewLayer *view_layer,
-                                      const Tex *tex)
+void BKE_paint_invalidate_overlay_tex(Scene *scene, const Tex *tex)
 {
-  Paint *paint = BKE_paint_get_active(bmain, scene, view_layer);
-  if (!paint) {
-    return;
-  }
+  BKE_paint_settings_foreach_mode(scene->toolsettings, [&](Paint *paint) {
+    Brush *br = BKE_paint_brush(paint);
+    if (!br) {
+      return;
+    }
 
+    if (br->mtex.tex == tex) {
+      paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::InvalidTexturePrimary;
+    }
+    if (br->mask_mtex.tex == tex) {
+      paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::InvalidTextureSecondary;
+    }
+  });
+}
+
+void BKE_paint_invalidate_cursor_overlay(Scene *scene, CurveMapping *curve)
+{
+  BKE_paint_settings_foreach_mode(scene->toolsettings, [&](Paint *paint) {
+    Brush *br = BKE_paint_brush(paint);
+    if (br && br->curve_distance_falloff == curve) {
+      paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::InvalidCurve;
+    }
+  });
+}
+
+void BKE_paint_invalidate_overlay_all(Paint *paint)
+{
   Brush *br = BKE_paint_brush(paint);
   if (!br) {
     return;
   }
-
-  if (br->mtex.tex == tex) {
-    overlay_flags |= PAINT_OVERLAY_INVALID_TEXTURE_PRIMARY;
-  }
-  if (br->mask_mtex.tex == tex) {
-    overlay_flags |= PAINT_OVERLAY_INVALID_TEXTURE_SECONDARY;
-  }
+  paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::InvalidMask;
 }
 
-void BKE_paint_invalidate_cursor_overlay(const Main &bmain,
-                                         Scene *scene,
-                                         ViewLayer *view_layer,
-                                         CurveMapping *curve)
+void BKE_paint_invalidate_overlay_all(Scene *scene)
 {
-  Paint *paint = BKE_paint_get_active(bmain, scene, view_layer);
-  if (paint == nullptr) {
-    return;
-  }
-
-  Brush *br = BKE_paint_brush(paint);
-  if (br && br->curve_distance_falloff == curve) {
-    overlay_flags |= PAINT_OVERLAY_INVALID_CURVE;
-  }
+  BKE_paint_settings_foreach_mode(scene->toolsettings,
+                                  [&](Paint *paint) { BKE_paint_invalidate_overlay_all(paint); });
 }
 
-void BKE_paint_invalidate_overlay_all()
+bke::ePaintOverlayControlFlags BKE_paint_get_overlay_flags(const Paint *paint)
 {
-  overlay_flags |= (PAINT_OVERLAY_INVALID_TEXTURE_SECONDARY |
-                    PAINT_OVERLAY_INVALID_TEXTURE_PRIMARY | PAINT_OVERLAY_INVALID_CURVE);
+  return paint->runtime->overlay_flags;
 }
 
-ePaintOverlayControlFlags BKE_paint_get_overlay_flags()
-{
-  return overlay_flags;
-}
-
-void BKE_paint_set_overlay_override(eOverlayFlags flags)
+void BKE_paint_set_overlay_override(Paint *paint, eOverlayFlags const flags)
 {
   if (flags & BRUSH_OVERLAY_OVERRIDE_MASK) {
     if (flags & BRUSH_OVERLAY_CURSOR_OVERRIDE_ON_STROKE) {
-      overlay_flags |= PAINT_OVERLAY_OVERRIDE_CURSOR;
+      paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::OverrideCursor;
     }
     if (flags & BRUSH_OVERLAY_PRIMARY_OVERRIDE_ON_STROKE) {
-      overlay_flags |= PAINT_OVERLAY_OVERRIDE_PRIMARY;
+      paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::OverridePrimary;
     }
     if (flags & BRUSH_OVERLAY_SECONDARY_OVERRIDE_ON_STROKE) {
-      overlay_flags |= PAINT_OVERLAY_OVERRIDE_SECONDARY;
+      paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::OverrideSecondary;
     }
   }
   else {
-    overlay_flags &= ~PAINT_OVERRIDE_MASK;
+    paint->runtime->overlay_flags &= ~bke::ePaintOverlayControlFlags::OverrideMask;
   }
 }
 
-void BKE_paint_reset_overlay_invalid(ePaintOverlayControlFlags flag)
+void BKE_paint_reset_overlay_invalid(Paint *paint, const bke::ePaintOverlayControlFlags flag)
 {
-  overlay_flags &= ~(flag);
+  paint->runtime->overlay_flags &= ~(flag);
 }
 
 bool BKE_paint_ensure_from_paintmode(Scene *sce, PaintMode mode)
@@ -719,7 +714,7 @@ bool BKE_paint_brush_set(Paint *paint, Brush *brush)
     paint->brush_asset_reference = asset_reference_create_from_brush(brush);
   }
 
-  BKE_paint_invalidate_overlay_all();
+  BKE_paint_invalidate_overlay_all(paint);
 
   return true;
 }

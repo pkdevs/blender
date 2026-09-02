@@ -73,48 +73,35 @@ namespace blender {
  * There is also some ugliness with sculpt-specific code.
  */
 
-struct TexSnapshot {
-  gpu::Texture *overlay_texture;
-  int winx;
-  int winy;
-  int old_size;
-  float old_zoom;
-  bool old_col;
-};
-
-struct CursorSnapshot {
-  gpu::Texture *overlay_texture;
-  int size;
-  int zoom;
-  int curve_preset;
-};
-
-static TexSnapshot primary_snap = {nullptr};
-static TexSnapshot secondary_snap = {nullptr};
-static CursorSnapshot cursor_snap = {nullptr};
-
-void paint_cursor_delete_textures()
+namespace bke {
+TexSnapshot::~TexSnapshot()
 {
-  if (primary_snap.overlay_texture) {
-    GPU_texture_free(primary_snap.overlay_texture);
+  if (this->overlay_texture) {
+    GPU_texture_free(this->overlay_texture);
   }
-  if (secondary_snap.overlay_texture) {
-    GPU_texture_free(secondary_snap.overlay_texture);
-  }
-  if (cursor_snap.overlay_texture) {
-    GPU_texture_free(cursor_snap.overlay_texture);
-  }
+}
 
-  memset(&primary_snap, 0, sizeof(TexSnapshot));
-  memset(&secondary_snap, 0, sizeof(TexSnapshot));
-  memset(&cursor_snap, 0, sizeof(CursorSnapshot));
+CursorSnapshot::~CursorSnapshot()
+{
+  if (this->overlay_texture) {
+    GPU_texture_free(this->overlay_texture);
+  }
+}
 
-  BKE_paint_invalidate_overlay_all();
+}
+
+void paint_cursor_delete_textures(Paint *paint)
+{
+  paint->runtime->primary_snap = {};
+  paint->runtime->secondary_snap = {};
+  paint->runtime->cursor_snap = {};
+
+  BKE_paint_invalidate_overlay_all(paint);
 }
 
 namespace ed::sculpt_paint {
 
-static int same_tex_snap(TexSnapshot *snap, MTex *mtex, ViewContext *vc, bool col, float zoom)
+static int same_tex_snap(bke::TexSnapshot *snap, MTex *mtex, ViewContext *vc, bool col, float zoom)
 {
   return (/* make brush smaller shouldn't cause a resample */
           //(mtex->brush_map_mode != MTEX_MAP_MODE_VIEW ||
@@ -126,7 +113,7 @@ static int same_tex_snap(TexSnapshot *snap, MTex *mtex, ViewContext *vc, bool co
           snap->old_col == col);
 }
 
-static void make_tex_snap(TexSnapshot *snap, ViewContext *vc, float zoom)
+static void make_tex_snap(bke::TexSnapshot *snap, ViewContext *vc, float zoom)
 {
   snap->old_zoom = zoom;
   snap->winx = vc->region->winx;
@@ -252,20 +239,20 @@ static void load_tex_task_cb_ex(void *__restrict userdata,
 static int load_tex(Paint *paint, Brush *br, ViewContext *vc, float zoom, bool col, bool primary)
 {
   bool init;
-  TexSnapshot *target;
+  bke::TexSnapshot *target;
 
   MTex *mtex = (primary) ? &br->mtex : &br->mask_mtex;
-  ePaintOverlayControlFlags overlay_flags = BKE_paint_get_overlay_flags();
+  bke::ePaintOverlayControlFlags overlay_flags = BKE_paint_get_overlay_flags(paint);
   uchar *buffer = nullptr;
 
   int size;
   bool refresh;
-  ePaintOverlayControlFlags invalid =
-      ((primary) ? (overlay_flags & PAINT_OVERLAY_INVALID_TEXTURE_PRIMARY) :
-                   (overlay_flags & PAINT_OVERLAY_INVALID_TEXTURE_SECONDARY));
-  target = (primary) ? &primary_snap : &secondary_snap;
+  bke::ePaintOverlayControlFlags invalid =
+      ((primary) ? overlay_flags & bke::ePaintOverlayControlFlags::InvalidTexturePrimary :
+                   overlay_flags & bke::ePaintOverlayControlFlags::InvalidTextureSecondary);
+  target = (primary) ? &paint->runtime->primary_snap : &paint->runtime->secondary_snap;
 
-  refresh = !target->overlay_texture || (invalid != 0) ||
+  refresh = !target->overlay_texture || (invalid != bke::ePaintOverlayControlFlags{}) ||
             !same_tex_snap(target, mtex, vc, col, zoom);
 
   init = (target->overlay_texture != nullptr);
@@ -367,7 +354,7 @@ static int load_tex(Paint *paint, Brush *br, ViewContext *vc, float zoom, bool c
     size = target->old_size;
   }
 
-  BKE_paint_reset_overlay_invalid(invalid);
+  BKE_paint_reset_overlay_invalid(paint, invalid);
 
   return 1;
 }
@@ -408,20 +395,23 @@ static int load_tex_cursor(Paint *paint, Brush *br, float zoom)
 {
   bool init;
 
-  ePaintOverlayControlFlags overlay_flags = BKE_paint_get_overlay_flags();
+  bke::ePaintOverlayControlFlags overlay_flags = BKE_paint_get_overlay_flags(paint);
   uchar *buffer = nullptr;
 
   int size;
-  const bool refresh = !cursor_snap.overlay_texture ||
-                       (overlay_flags & PAINT_OVERLAY_INVALID_CURVE) || cursor_snap.zoom != zoom ||
-                       cursor_snap.curve_preset != br->curve_distance_falloff_preset;
+  const bool refresh = !paint->runtime->cursor_snap.overlay_texture ||
+                       (flag_is_set(overlay_flags,
+                                    bke::ePaintOverlayControlFlags::InvalidCurve)) ||
+                       paint->runtime->cursor_snap.zoom != zoom ||
+                       paint->runtime->cursor_snap.curve_preset !=
+                           br->curve_distance_falloff_preset;
 
-  init = (cursor_snap.overlay_texture != nullptr);
+  init = (paint->runtime->cursor_snap.overlay_texture != nullptr);
 
   if (refresh) {
     int s, r;
 
-    cursor_snap.zoom = zoom;
+    paint->runtime->cursor_snap.zoom = zoom;
 
     s = BKE_brush_radius_get(paint, br);
     r = 1;
@@ -433,17 +423,17 @@ static int load_tex_cursor(Paint *paint, Brush *br, float zoom)
     size = (1 << r);
 
     size = std::max(size, 256);
-    size = std::max(size, cursor_snap.size);
+    size = std::max(size, paint->runtime->cursor_snap.size);
 
-    if (cursor_snap.size != size) {
-      if (cursor_snap.overlay_texture) {
-        GPU_texture_free(cursor_snap.overlay_texture);
-        cursor_snap.overlay_texture = nullptr;
+    if (paint->runtime->cursor_snap.size != size) {
+      if (paint->runtime->cursor_snap.overlay_texture) {
+        GPU_texture_free(paint->runtime->cursor_snap.overlay_texture);
+        paint->runtime->cursor_snap.overlay_texture = nullptr;
       }
 
       init = false;
 
-      cursor_snap.size = size;
+      paint->runtime->cursor_snap.size = size;
     }
     buffer = MEM_new_array_uninitialized<uchar>(size * size, "load_tex");
 
@@ -458,17 +448,17 @@ static int load_tex_cursor(Paint *paint, Brush *br, float zoom)
     BLI_parallel_range_settings_defaults(&settings);
     BLI_task_parallel_range(0, size, &data, load_tex_cursor_task_cb, &settings);
 
-    if (!cursor_snap.overlay_texture) {
+    if (!paint->runtime->cursor_snap.overlay_texture) {
       eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
-      cursor_snap.overlay_texture = GPU_texture_create_2d(
+      paint->runtime->cursor_snap.overlay_texture = GPU_texture_create_2d(
           "cursor_snap_overaly", size, size, 1, gpu::TextureFormat::UNORM_8, usage, nullptr);
-      GPU_texture_update(cursor_snap.overlay_texture, GPU_DATA_UBYTE, buffer);
+      GPU_texture_update(paint->runtime->cursor_snap.overlay_texture, GPU_DATA_UBYTE, buffer);
 
-      GPU_texture_swizzle_set(cursor_snap.overlay_texture, "rrrr");
+      GPU_texture_swizzle_set(paint->runtime->cursor_snap.overlay_texture, "rrrr");
     }
 
     if (init) {
-      GPU_texture_update(cursor_snap.overlay_texture, GPU_DATA_UBYTE, buffer);
+      GPU_texture_update(paint->runtime->cursor_snap.overlay_texture, GPU_DATA_UBYTE, buffer);
     }
 
     if (buffer) {
@@ -476,11 +466,11 @@ static int load_tex_cursor(Paint *paint, Brush *br, float zoom)
     }
   }
   else {
-    size = cursor_snap.size;
+    size = paint->runtime->cursor_snap.size;
   }
 
-  cursor_snap.curve_preset = br->curve_distance_falloff_preset;
-  BKE_paint_reset_overlay_invalid(PAINT_OVERLAY_INVALID_CURVE);
+  paint->runtime->cursor_snap.curve_preset = br->curve_distance_falloff_preset;
+  BKE_paint_reset_overlay_invalid(paint, bke::ePaintOverlayControlFlags::InvalidCurve);
 
   return 1;
 }
@@ -607,8 +597,8 @@ static bool paint_draw_tex_overlay(Paint *paint,
     mul_v4_fl(final_color, overlay_alpha * 0.01f);
     immUniformColor4fv(final_color);
 
-    gpu::Texture *texture = (primary) ? primary_snap.overlay_texture :
-                                        secondary_snap.overlay_texture;
+    gpu::Texture *texture = (primary) ? paint->runtime->primary_snap.overlay_texture :
+                                        paint->runtime->secondary_snap.overlay_texture;
 
     GPUSamplerExtendMode extend_mode = (mtex->brush_map_mode == MTEX_MAP_MODE_VIEW) ?
                                            GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER :
@@ -699,7 +689,7 @@ static bool paint_draw_cursor_overlay(Paint *paint, Brush *brush, int x, int y, 
 
     /* Draw textured quad. */
     immBindTextureSampler("image",
-                          cursor_snap.overlay_texture,
+                          paint->runtime->cursor_snap.overlay_texture,
                           {GPU_SAMPLER_FILTERING_LINEAR,
                            GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER,
                            GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER});
@@ -715,7 +705,7 @@ static bool paint_draw_cursor_overlay(Paint *paint, Brush *brush, int x, int y, 
     immVertex2f(pos, quad.xmin, quad.ymax);
     immEnd();
 
-    GPU_texture_unbind(cursor_snap.overlay_texture);
+    GPU_texture_unbind(paint->runtime->cursor_snap.overlay_texture);
 
     immUnbindProgram();
 
@@ -735,7 +725,7 @@ static bool paint_draw_alpha_overlay(
 
   bool alpha_overlay_active = false;
 
-  ePaintOverlayControlFlags flags = BKE_paint_get_overlay_flags();
+  bke::ePaintOverlayControlFlags flags = BKE_paint_get_overlay_flags(paint);
   GPUBlend blend_state = GPU_blend_get();
   GPUDepthTest depth_test = GPU_depth_test_get();
 
@@ -747,24 +737,28 @@ static bool paint_draw_alpha_overlay(
 
   /* Colored overlay should be drawn separately. */
   if (col) {
-    if (!(flags & PAINT_OVERLAY_OVERRIDE_PRIMARY)) {
+    if (!flag_is_set(flags, bke::ePaintOverlayControlFlags::OverridePrimary)) {
       alpha_overlay_active = paint_draw_tex_overlay(
           paint, brush, vc, x, y, zoom, mode, true, true);
     }
-    if (!(flags & PAINT_OVERLAY_OVERRIDE_SECONDARY)) {
+    if (!flag_is_set(flags, bke::ePaintOverlayControlFlags::OverrideSecondary)) {
       alpha_overlay_active = paint_draw_tex_overlay(
           paint, brush, vc, x, y, zoom, mode, false, false);
     }
-    if (!(flags & PAINT_OVERLAY_OVERRIDE_CURSOR)) {
+    if (!flag_is_set(flags, bke::ePaintOverlayControlFlags::OverrideCursor)) {
       alpha_overlay_active = paint_draw_cursor_overlay(paint, brush, x, y, zoom);
     }
   }
   else {
-    if (!(flags & PAINT_OVERLAY_OVERRIDE_PRIMARY) && (mode != PaintMode::Weight)) {
+    if (!flag_is_set(flags, bke::ePaintOverlayControlFlags::OverridePrimary) &&
+        (mode != PaintMode::Weight))
+    {
       alpha_overlay_active = paint_draw_tex_overlay(
           paint, brush, vc, x, y, zoom, mode, false, true);
     }
-    if (!(flags & PAINT_OVERLAY_OVERRIDE_CURSOR)) {
+    if (!flag_is_set(flags, bke::ePaintOverlayControlFlags::OverrideCursor) &&
+        (mode != PaintMode::Weight))
+    {
       alpha_overlay_active = paint_draw_cursor_overlay(paint, brush, x, y, zoom);
     }
   }
@@ -1332,7 +1326,7 @@ void ED_paint_cursor_start(Paint *paint, bool (*poll)(bContext *C))
   }
 
   /* Invalidate the paint cursors. */
-  BKE_paint_invalidate_overlay_all();
+  BKE_paint_invalidate_overlay_all(paint);
 }
 
 }  // namespace blender
