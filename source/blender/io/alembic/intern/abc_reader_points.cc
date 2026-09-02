@@ -163,15 +163,17 @@ static void read_typed_property_sample(const ICompoundProperty &parent,
     using ValueType = typename TArrayProperty::value_type;
 
     const SamplePtr sample_ptr = array_prop.getValue(selector);
-    bke::SpanAttributeWriter<TWriteValue> writer =
-        attribute_accessor.convert_or_add_for_write_span<TWriteValue>(name,
-                                                                      bke::AttrDomain::Point);
-    MutableSpan<TWriteValue> span = writer.span;
-    for (const int64_t i : IndexRange(std::min(span.size(), int64_t(sample_ptr->size())))) {
-      ValueType value = (*sample_ptr)[i];
-      span[i] = convert_abc_value<TWriteValue>(value);
+    if (bke::SpanAttributeWriter<TWriteValue> writer =
+            attribute_accessor.lookup_or_add_for_write_span<TWriteValue>(name,
+                                                                         bke::AttrDomain::Point))
+    {
+      MutableSpan<TWriteValue> span = writer.span;
+      for (const int64_t i : IndexRange(std::min(span.size(), int64_t(sample_ptr->size())))) {
+        ValueType value = (*sample_ptr)[i];
+        span[i] = convert_abc_value<TWriteValue>(value);
+      }
+      writer.finish();
     }
-    writer.finish();
   }
 }
 
