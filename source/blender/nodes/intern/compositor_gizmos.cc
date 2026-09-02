@@ -1771,6 +1771,35 @@ static float2 gizmo_input_dims_from_log(const SpaceNode &snode,
   return float2(image_log->data_size);
 }
 
+static void gizmo_node_transform_foreach_rna_prop(
+    wmGizmoProperty *gz_prop,
+    const FunctionRef<void(PointerRNA &ptr, PropertyRNA *prop, int index)> callback)
+{
+  bNode *node = static_cast<bNode *>(gz_prop->custom_func.user_data);
+
+  bNodeSocket *x_socket = bke::node_find_socket(*node, SOCK_IN, "X"_ustr);
+  bNodeTree &node_tree = node->owner_tree();
+  PointerRNA x_ptr = RNA_pointer_create_discrete(&node_tree.id, RNA_NodeSocket, x_socket);
+  PropertyRNA *x_prop = RNA_struct_find_property(&x_ptr, "default_value");
+
+  bNodeSocket *y_socket = bke::node_find_socket(*node, SOCK_IN, "Y"_ustr);
+  PointerRNA y_ptr = RNA_pointer_create_discrete(&node_tree.id, RNA_NodeSocket, y_socket);
+  PropertyRNA *y_prop = RNA_struct_find_property(&y_ptr, "default_value");
+
+  bNodeSocket *angle_socket = bke::node_find_socket(*node, SOCK_IN, "Angle"_ustr);
+  PointerRNA angle_ptr = RNA_pointer_create_discrete(&node_tree.id, RNA_NodeSocket, angle_socket);
+  PropertyRNA *angle_prop = RNA_struct_find_property(&angle_ptr, "default_value");
+
+  bNodeSocket *scale_socket = bke::node_find_socket(*node, SOCK_IN, "Scale"_ustr);
+  PointerRNA scale_ptr = RNA_pointer_create_discrete(&node_tree.id, RNA_NodeSocket, scale_socket);
+  PropertyRNA *scale_prop = RNA_struct_find_property(&scale_ptr, "default_value");
+
+  callback(x_ptr, x_prop, 0);
+  callback(y_ptr, y_prop, 0);
+  callback(angle_ptr, angle_prop, 0);
+  callback(scale_ptr, scale_prop, 0);
+}
+
 void transform_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 {
   Main *bmain = CTX_data_main(C);
@@ -1814,8 +1843,7 @@ void transform_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   params.value_set_fn = gizmo_node_transform_prop_matrix_set;
   params.range_get_fn = nullptr;
   params.user_data = node;
-  // todo(habib): implement autokeying
-  // params.foreach_rna_prop_fn = gizmo_node_transform_foreach_rna_prop;
+  params.foreach_rna_prop_fn = gizmo_node_transform_foreach_rna_prop;
   WM_gizmo_target_property_def_func(gz, "matrix", &params);
 
   BKE_image_release_ibuf(ima, ibuf, lock);
