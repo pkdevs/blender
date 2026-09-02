@@ -657,6 +657,7 @@ static void image_widgets()
   WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_ellipse_mask);
   WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_split);
   WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_translate);
+  WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_transform);
 }
 
 /************************** main region ***************************/
