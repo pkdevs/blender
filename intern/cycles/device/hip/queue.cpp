@@ -31,35 +31,17 @@ int HIPDeviceQueue::num_concurrent_states(const size_t state_size) const
 {
   const int max_num_threads = hip_device_->get_num_multiprocessors() *
                               hip_device_->get_max_num_threads_per_multiprocessor();
-  int num_states = ((max_num_threads == 0) ? 65536 : max_num_threads) * 16;
-
-  const char *factor_str = getenv("CYCLES_CONCURRENT_STATES_FACTOR");
-  if (factor_str) {
-    const float factor = (float)atof(factor_str);
-    if (factor != 0.0f) {
-      num_states = max((int)(num_states * factor), 1024);
-    }
-    else {
-      LOG_TRACE << "CYCLES_CONCURRENT_STATES_FACTOR evaluated to 0";
-    }
-  }
-
-  LOG_TRACE << "GPU queue concurrent states: " << num_states << ", using up to "
-            << string_human_readable_size(num_states * state_size);
-
-  return num_states;
-}
-
-int HIPDeviceQueue::num_concurrent_busy_states(const size_t /*state_size*/) const
-{
-  const int max_num_threads = hip_device_->get_num_multiprocessors() *
-                              hip_device_->get_max_num_threads_per_multiprocessor();
 
   if (max_num_threads == 0) {
     return 65536;
   }
 
-  return 4 * max_num_threads;
+  int num_states = max_num_threads * 16;
+
+  LOG_TRACE << "GPU queue concurrent states: " << num_states << ", using up to "
+            << string_human_readable_size(num_states * state_size);
+
+  return num_states;
 }
 
 void HIPDeviceQueue::init_execution()

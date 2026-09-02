@@ -27,20 +27,14 @@ OneapiDeviceQueue::OneapiDeviceQueue(OneapiDevice *device)
 
 int OneapiDeviceQueue::num_concurrent_states(const size_t state_size) const
 {
-  int num_states = 4 * num_concurrent_busy_states(state_size);
+  const int max_num_threads = oneapi_device_->get_num_multiprocessors() *
+                              oneapi_device_->get_max_num_threads_per_multiprocessor();
+  int num_states = 16 * max(8 * max_num_threads, 65536);
 
   LOG_TRACE << "GPU queue concurrent states: " << num_states << ", using up to "
             << string_human_readable_size(num_states * state_size);
 
   return num_states;
-}
-
-int OneapiDeviceQueue::num_concurrent_busy_states(const size_t /*state_size*/) const
-{
-  const int max_num_threads = oneapi_device_->get_num_multiprocessors() *
-                              oneapi_device_->get_max_num_threads_per_multiprocessor();
-
-  return 4 * max(8 * max_num_threads, 65536);
 }
 
 int OneapiDeviceQueue::num_sort_partitions(int max_num_paths, uint /*max_scene_shaders*/) const

@@ -329,12 +329,6 @@ int MetalDeviceQueue::num_concurrent_states(const size_t state_size) const
   return state_count;
 }
 
-int MetalDeviceQueue::num_concurrent_busy_states(const size_t state_size) const
-{
-  /* A 1:4 busy:total ratio gives best rendering performance, independent of total state count. */
-  return num_concurrent_states(state_size) / 4;
-}
-
 int MetalDeviceQueue::num_sort_partitions(int max_num_paths, uint max_scene_shaders) const
 {
   int sort_partition_elements = MetalInfo::optimal_sort_partition_elements();
