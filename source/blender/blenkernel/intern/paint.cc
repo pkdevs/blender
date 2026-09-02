@@ -73,6 +73,8 @@
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
+#include "GPU_texture.hh"
+
 #include "PRF_profile.hh"
 
 #include "RNA_enum_types.hh"
@@ -81,7 +83,6 @@
 
 #include "IMB_colormanagement.hh"
 
-#include "GPU_texture.hh"
 #include "bmesh.hh"
 
 namespace blender {
