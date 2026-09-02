@@ -308,6 +308,8 @@ DNA_STRUCT_RENAME_MEMBER(bTheme, tv3d, space_view3d)
 DNA_STRUCT_RENAME_MEMBER(bUserAssetLibrary, path, dirpath)
 DNA_STRUCT_RENAME_MEMBER(bNodeTreeInterfaceSocket, name, name_)
 DNA_STRUCT_RENAME_MEMBER(bNodeTreeInterfaceSocket, description, description_)
+DNA_STRUCT_RENAME_MEMBER(bNodeTreeInterfacePanel, name, name_)
+DNA_STRUCT_RENAME_MEMBER(bNodeTreeInterfacePanel, description, description_)
 
 /* NOTE: Keep sorted! */
 
