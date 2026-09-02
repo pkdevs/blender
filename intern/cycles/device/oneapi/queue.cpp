@@ -27,9 +27,28 @@ OneapiDeviceQueue::OneapiDeviceQueue(OneapiDevice *device)
 
 int OneapiDeviceQueue::num_concurrent_states(const size_t state_size) const
 {
-  const int max_num_threads = oneapi_device_->get_num_multiprocessors() *
-                              oneapi_device_->get_max_num_threads_per_multiprocessor();
-  int num_states = 16 * max(8 * max_num_threads, 65536);
+  /* NOTE(@xavierh-intel): At the time of writing this, 32768 * the number of
+   * Execution Units is the best baseline across at least Intel Arc B390 and
+   * Arc Pro B70.  */
+  int num_states = 32768 * oneapi_device_->get_num_multiprocessors();
+
+  size_t total_memory = 0;
+  size_t free_memory = 0;
+  oneapi_device_->get_device_memory_info(total_memory, free_memory);
+
+  /* Only use 90% of available headroom for safety. */
+  const int max_safe_num_states = (free_memory * 90) / 100 / state_size;
+
+  if (max_safe_num_states < num_states) {
+    const int previous_num_states = num_states;
+    do {
+      num_states /= 2;
+    } while (num_states > max_safe_num_states && num_states > 65536);
+
+    LOG_INFO << "Reducing state count to fit within available memory: " << previous_num_states
+             << " -> " << num_states << " (" << string_human_readable_size(num_states * state_size)
+             << " of " << string_human_readable_size(free_memory) << " free)";
+  }
 
   LOG_TRACE << "GPU queue concurrent states: " << num_states << ", using up to "
             << string_human_readable_size(num_states * state_size);
