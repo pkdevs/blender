@@ -81,6 +81,7 @@
 
 #include "IMB_colormanagement.hh"
 
+#include "GPU_texture.hh"
 #include "bmesh.hh"
 
 namespace blender {
@@ -255,75 +256,102 @@ IDTypeInfo IDType_ID_PC = {
     .lib_override_apply_post = nullptr,
 };
 
-void BKE_paint_invalidate_overlay_tex(Scene *scene, const Tex *tex)
+namespace bke::paint {
+
+void invalidate_overlay_tex(Scene &scene, const Tex *tex)
 {
-  BKE_paint_settings_foreach_mode(scene->toolsettings, [&](Paint *paint) {
-    Brush *br = BKE_paint_brush(paint);
+  BKE_paint_settings_foreach_mode(scene.toolsettings, [&](Paint &paint) {
+    const Brush *br = BKE_paint_brush_for_read(&paint);
     if (!br) {
       return;
     }
 
     if (br->mtex.tex == tex) {
-      paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::InvalidTexturePrimary;
+      paint.runtime->overlay_flags |= eOverlayControlFlags::InvalidTexturePrimary;
     }
     if (br->mask_mtex.tex == tex) {
-      paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::InvalidTextureSecondary;
+      paint.runtime->overlay_flags |= eOverlayControlFlags::InvalidTextureSecondary;
     }
   });
 }
 
-void BKE_paint_invalidate_cursor_overlay(Scene *scene, CurveMapping *curve)
+void invalidate_cursor_overlay(Scene &scene, CurveMapping *curve)
 {
-  BKE_paint_settings_foreach_mode(scene->toolsettings, [&](Paint *paint) {
-    Brush *br = BKE_paint_brush(paint);
+  BKE_paint_settings_foreach_mode(scene.toolsettings, [&](Paint &paint) {
+    const Brush *br = BKE_paint_brush_for_read(&paint);
     if (br && br->curve_distance_falloff == curve) {
-      paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::InvalidCurve;
+      paint.runtime->overlay_flags |= eOverlayControlFlags::InvalidCurve;
     }
   });
 }
 
-void BKE_paint_invalidate_overlay_all(Paint *paint)
+void invalidate_overlay_all(Paint &paint)
 {
-  Brush *br = BKE_paint_brush(paint);
+  const Brush *br = BKE_paint_brush_for_read(&paint);
   if (!br) {
     return;
   }
-  paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::InvalidMask;
+  paint.runtime->overlay_flags |= eOverlayControlFlags::InvalidMask;
 }
 
-void BKE_paint_invalidate_overlay_all(Scene *scene)
+void invalidate_overlay_all(Scene &scene)
 {
-  BKE_paint_settings_foreach_mode(scene->toolsettings,
-                                  [&](Paint *paint) { BKE_paint_invalidate_overlay_all(paint); });
+  BKE_paint_settings_foreach_mode(scene.toolsettings,
+                                  [&](Paint &paint) { invalidate_overlay_all(paint); });
 }
 
-bke::ePaintOverlayControlFlags BKE_paint_get_overlay_flags(const Paint *paint)
+eOverlayControlFlags get_overlay_flags(const Paint &paint)
 {
-  return paint->runtime->overlay_flags;
+  return paint.runtime->overlay_flags;
 }
 
-void BKE_paint_set_overlay_override(Paint *paint, eOverlayFlags const flags)
+void set_overlay_brush_override(Paint &paint, eOverlayFlags const flags)
 {
   if (flags & BRUSH_OVERLAY_OVERRIDE_MASK) {
     if (flags & BRUSH_OVERLAY_CURSOR_OVERRIDE_ON_STROKE) {
-      paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::OverrideCursor;
+      paint.runtime->overlay_flags |= eOverlayControlFlags::OverrideCursor;
     }
     if (flags & BRUSH_OVERLAY_PRIMARY_OVERRIDE_ON_STROKE) {
-      paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::OverridePrimary;
+      paint.runtime->overlay_flags |= eOverlayControlFlags::OverridePrimary;
     }
     if (flags & BRUSH_OVERLAY_SECONDARY_OVERRIDE_ON_STROKE) {
-      paint->runtime->overlay_flags |= bke::ePaintOverlayControlFlags::OverrideSecondary;
+      paint.runtime->overlay_flags |= eOverlayControlFlags::OverrideSecondary;
     }
   }
   else {
-    paint->runtime->overlay_flags &= ~bke::ePaintOverlayControlFlags::OverrideMask;
+    paint.runtime->overlay_flags &= ~eOverlayControlFlags::OverrideMask;
   }
 }
 
-void BKE_paint_reset_overlay_invalid(Paint *paint, const bke::ePaintOverlayControlFlags flag)
+void reset_overlay_flag(Paint &paint, const eOverlayControlFlags flag)
 {
-  paint->runtime->overlay_flags &= ~(flag);
+  paint.runtime->overlay_flags &= ~(flag);
 }
+
+TexSnapshot::~TexSnapshot()
+{
+  if (this->overlay_texture) {
+    GPU_texture_free(this->overlay_texture);
+  }
+}
+
+CursorSnapshot::~CursorSnapshot()
+{
+  if (this->overlay_texture) {
+    GPU_texture_free(this->overlay_texture);
+  }
+}
+
+void cursor_delete_textures(Paint &paint)
+{
+  paint.runtime->primary_snap.reset();
+  paint.runtime->secondary_snap.reset();
+  paint.runtime->cursor_snap.reset();
+
+  invalidate_overlay_all(paint);
+}
+
+}  // namespace bke::paint
 
 bool BKE_paint_ensure_from_paintmode(Scene *sce, PaintMode mode)
 {
@@ -714,7 +742,7 @@ bool BKE_paint_brush_set(Paint *paint, Brush *brush)
     paint->brush_asset_reference = asset_reference_create_from_brush(brush);
   }
 
-  BKE_paint_invalidate_overlay_all(paint);
+  bke::paint::invalidate_overlay_all(*paint);
 
   return true;
 }
@@ -1149,6 +1177,9 @@ static void paint_runtime_init(const ToolSettings *ts, Paint *paint)
     BLI_assert_unreachable();
   }
 
+  paint->runtime->primary_snap = std::make_unique<bke::paint::TexSnapshot>();
+  paint->runtime->secondary_snap = std::make_unique<bke::paint::TexSnapshot>();
+  paint->runtime->cursor_snap = std::make_unique<bke::paint::CursorSnapshot>();
   paint->runtime->initialized = true;
 }
 
@@ -1614,33 +1645,33 @@ void BKE_paint_copy(const Paint *src, Paint *dst, const int flag)
   }
 }
 
-void BKE_paint_settings_foreach_mode(ToolSettings *ts, FunctionRef<void(Paint *paint)> fn)
+void BKE_paint_settings_foreach_mode(ToolSettings *ts, FunctionRef<void(Paint &paint)> fn)
 {
   if (ts->vpaint) {
-    fn(reinterpret_cast<Paint *>(ts->vpaint));
+    fn(*reinterpret_cast<Paint *>(ts->vpaint));
   }
   if (ts->wpaint) {
-    fn(reinterpret_cast<Paint *>(ts->wpaint));
+    fn(*reinterpret_cast<Paint *>(ts->wpaint));
   }
   if (ts->sculpt) {
-    fn(reinterpret_cast<Paint *>(ts->sculpt));
+    fn(*reinterpret_cast<Paint *>(ts->sculpt));
   }
   if (ts->gp_paint) {
-    fn(reinterpret_cast<Paint *>(ts->gp_paint));
+    fn(*reinterpret_cast<Paint *>(ts->gp_paint));
   }
   if (ts->gp_vertexpaint) {
-    fn(reinterpret_cast<Paint *>(ts->gp_vertexpaint));
+    fn(*reinterpret_cast<Paint *>(ts->gp_vertexpaint));
   }
   if (ts->gp_sculptpaint) {
-    fn(reinterpret_cast<Paint *>(ts->gp_sculptpaint));
+    fn(*reinterpret_cast<Paint *>(ts->gp_sculptpaint));
   }
   if (ts->gp_weightpaint) {
-    fn(reinterpret_cast<Paint *>(ts->gp_weightpaint));
+    fn(*reinterpret_cast<Paint *>(ts->gp_weightpaint));
   }
   if (ts->curves_sculpt) {
-    fn(reinterpret_cast<Paint *>(ts->curves_sculpt));
+    fn(*reinterpret_cast<Paint *>(ts->curves_sculpt));
   }
-  fn(reinterpret_cast<Paint *>(&ts->imapaint));
+  fn(*reinterpret_cast<Paint *>(&ts->imapaint));
 }
 
 namespace bke::paint {

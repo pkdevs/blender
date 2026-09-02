@@ -348,11 +348,6 @@ void BRUSH_OT_asset_revert(wmOperatorType *ot);
 /** Initialize viewport pivot from evaluated bounding box center of `ob`. */
 void paint_init_pivot(Object *ob, Scene *scene, Paint *paint);
 
-/**
- * Delete overlay cursor textures to preserve memory and invalidate all overlay flags.
- */
-void paint_cursor_delete_textures(Paint *paint);
-
 /* `paint_vertex.cc` */
 
 bool weight_paint_poll(bContext *C);

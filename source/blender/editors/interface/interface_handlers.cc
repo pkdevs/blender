@@ -8402,7 +8402,7 @@ static int do_but_CURVE(
         }
         else {
           BKE_curvemapping_changed(cumap, true); /* remove doubles */
-          BKE_paint_invalidate_cursor_overlay(scene, cumap);
+          bke::paint::invalidate_cursor_overlay(*scene, cumap);
         }
       }
 

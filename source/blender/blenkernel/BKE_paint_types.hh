@@ -44,8 +44,8 @@ enum class PaintMode : int8_t {
 };
 
 namespace bke {
-
-enum class ePaintOverlayControlFlags : uint8_t {
+namespace paint {
+enum class eOverlayControlFlags : uint8_t {
   InvalidTexturePrimary = 1,
   InvalidTextureSecondary = (1 << 2),
   InvalidCurve = (1 << 3),
@@ -55,7 +55,7 @@ enum class ePaintOverlayControlFlags : uint8_t {
   OverrideSecondary = (1 << 6),
   OverrideMask = OverrideCursor | OverridePrimary | OverrideSecondary,
 };
-ENUM_OPERATORS(ePaintOverlayControlFlags);
+ENUM_OPERATORS(eOverlayControlFlags);
 
 struct TexSnapshot {
   gpu::Texture *overlay_texture = nullptr;
@@ -65,6 +65,7 @@ struct TexSnapshot {
   float old_zoom = 0.0f;
   bool old_col = false;
 
+  TexSnapshot() = default;
   ~TexSnapshot();
 };
 
@@ -74,8 +75,10 @@ struct CursorSnapshot {
   int zoom = 0;
   int curve_preset = 0;
 
+  CursorSnapshot() = default;
   ~CursorSnapshot();
 };
+};  // namespace paint
 
 struct PaintRuntime : NonCopyable, NonMovable {
   bool initialized = false;
@@ -148,11 +151,11 @@ struct PaintRuntime : NonCopyable, NonMovable {
   /** WM Paint cursor. */
   void *paint_cursor = nullptr;
 
-  ePaintOverlayControlFlags overlay_flags = ePaintOverlayControlFlags{};
+  paint::eOverlayControlFlags overlay_flags = paint::eOverlayControlFlags{};
 
-  TexSnapshot primary_snap = {};
-  TexSnapshot secondary_snap = {};
-  CursorSnapshot cursor_snap = {};
+  std::unique_ptr<paint::TexSnapshot> primary_snap;
+  std::unique_ptr<paint::TexSnapshot> secondary_snap;
+  std::unique_ptr<paint::CursorSnapshot> cursor_snap;
 
   PaintRuntime();
   ~PaintRuntime();

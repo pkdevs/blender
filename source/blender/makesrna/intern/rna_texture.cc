@@ -259,7 +259,7 @@ void rna_TextureSlot_update(bContext *C, PointerRNA *ptr)
     case ID_BR: {
       Scene *scene = CTX_data_scene(C);
       MTex *mtex = static_cast<MTex *>(ptr->data);
-      BKE_paint_invalidate_overlay_tex(scene, mtex->tex);
+      bke::paint::invalidate_overlay_tex(*scene, mtex->tex);
       BKE_brush_tag_unsaved_changes(reinterpret_cast<Brush *>(id));
       WM_main_add_notifier(NC_BRUSH, id);
       break;

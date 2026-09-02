@@ -105,13 +105,16 @@ ENUM_OPERATORS(ePaintSymmetryAreas);
 
 #define PAINT_SYMM_AREAS 8
 
-void BKE_paint_invalidate_overlay_tex(Scene *scene, const Tex *tex);
-void BKE_paint_invalidate_cursor_overlay(Scene *scene, CurveMapping *curve);
-void BKE_paint_invalidate_overlay_all(Paint *paint);
-void BKE_paint_invalidate_overlay_all(Scene *scene);
-bke::ePaintOverlayControlFlags BKE_paint_get_overlay_flags(const Paint *paint);
-void BKE_paint_reset_overlay_invalid(Paint *paint, bke::ePaintOverlayControlFlags flag);
-void BKE_paint_set_overlay_override(Paint *paint, eOverlayFlags flag);
+namespace bke::paint {
+void invalidate_overlay_tex(Scene &scene, const Tex *tex);
+void invalidate_cursor_overlay(Scene &scene, CurveMapping *curve);
+void invalidate_overlay_all(Scene &scene);
+void invalidate_overlay_all(Paint &paint);
+eOverlayControlFlags get_overlay_flags(const Paint &paint);
+void reset_overlay_flag(Paint &paint, eOverlayControlFlags flag);
+void set_overlay_brush_override(Paint &paint, eOverlayFlags flag);
+void cursor_delete_textures(Paint &paint);
+}  // namespace bke::paint
 
 /* Palettes. */
 
@@ -150,7 +153,7 @@ void BKE_paint_copy(const Paint *src, Paint *dst, int flag);
 /**
  * Iterate over all paint settings in a scene.
  */
-void BKE_paint_settings_foreach_mode(ToolSettings *ts, FunctionRef<void(Paint *paint)> fn);
+void BKE_paint_settings_foreach_mode(ToolSettings *ts, FunctionRef<void(Paint &paint)> fn);
 
 void BKE_paint_cavity_curve_preset(Paint *paint, int preset);
 
