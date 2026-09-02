@@ -158,10 +158,12 @@ static void geometry_set_mesh_to_points(GeometrySet &geometry_set,
       dst_attributes.add(dst_name, AttrDomain::Point, data_type, init);
     }
     else {
-      GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_only_span(
-          dst_name, AttrDomain::Point, data_type);
-      array_utils::gather(src.varray, selection, dst.span);
-      dst.finish();
+      if (GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_only_span(
+              dst_name, AttrDomain::Point, data_type))
+      {
+        array_utils::gather(src.varray, selection, dst.span);
+        dst.finish();
+      }
     }
   });
 
