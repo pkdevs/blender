@@ -134,8 +134,6 @@ static void info_main_region_draw(const bContext *C, ARegion *region)
     region->runtime->text_cursor_overlay = bke::TextCursorOverlay{
         .last_active_time = BLI_time_now_seconds(),
     };
-    region->runtime->text_cursor_overlay->timer = WM_event_timer_add(
-        CTX_wm_manager(C), CTX_wm_window(C), TIMER, 0.6);
   }
   info_textview_main(sinfo, region, CTX_wm_reports(C));
   /* reset view matrix */

@@ -1730,4 +1730,24 @@ void BKE_screen_area_blend_read_after_liblink(BlendLibReader *reader, ID *parent
 
 /** \} */
 
+namespace bke {
+const ARegion *screen_topmost_active_region(const bScreen *screen)
+{
+  /* Multiple popups can be shown at the same time, and all they can have a text input active,
+   * select the last added one as active. */
+  for (const ARegion &region : screen->regionbase.items_reversed()) {
+    if (region.runtime->flag &
+        (bke::ARegionRuntimeFlag::SearchSubRegion | bke::ARegionRuntimeFlag::TooltipRegion))
+    {
+      /* Search menu buttons shows their content in a sub-region, select the button region as
+       * active region instead, which can be the previous popup region or the active region in the
+       * screen. */
+      continue;
+    }
+    return &region;
+  }
+  return screen->active_region;
+}
+}  // namespace bke
+
 }  // namespace blender

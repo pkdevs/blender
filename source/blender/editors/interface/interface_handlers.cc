@@ -526,7 +526,7 @@ void text_button_update_cursor_pos(Button *button, const rctf &rect)
 
 static void text_button_reset_cursor_timer(HandleButtonData *data)
 {
-  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, data->region);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, data->window);
 }
 
 struct AfterFunc {
@@ -3792,6 +3792,8 @@ static void textedit_begin(bContext *C, Button *but, HandleButtonData *data)
   wmWindow *win = data->window;
 
   if (data->region->runtime->type->regionid != RGN_TYPE_TEMPORARY) {
+    WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_PAUSE, win);
+    WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, win);
     /* Ensure active region is updated when activating button with operators. */
     CTX_wm_screen(C)->active_region = data->region;
   }
@@ -3948,10 +3950,10 @@ static void textedit_begin(bContext *C, Button *but, HandleButtonData *data)
 #endif
   data->region->runtime->text_cursor_overlay = {
       .rect = rctf{},
-      .timer = WM_event_timer_add(data->wm, data->window, TIMER, 0.6),
       .last_active_time = BLI_time_now_seconds(),
       .draw = true,
   };
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   theme::get_color_4fv(TH_WIDGET_TEXT_CURSOR, data->region->runtime->text_cursor_overlay->color);
 }
 

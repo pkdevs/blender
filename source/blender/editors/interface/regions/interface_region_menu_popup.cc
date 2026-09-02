@@ -894,7 +894,7 @@ void popup_block_close(bContext *C, wmWindow *win, Block *block)
       }
     }
   }
-
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, win);
   ED_workspace_status_text(C, nullptr);
 }
 

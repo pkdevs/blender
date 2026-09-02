@@ -131,15 +131,15 @@ void ED_region_do_listen(wmRegionListenerParams *params)
         region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
       }
       else if (notifier->data == ND_UI_TEXT_BLINK_TIMER_RESTART &&
-               ELEM(notifier->reference, region, params->window) &&
-               region->runtime->text_cursor_overlay)
+               notifier->reference == params->window && region->runtime->text_cursor_overlay &&
+               bke::screen_topmost_active_region(params->screen) == region)
       {
         if (region->runtime->text_cursor_overlay->timer) {
           WM_event_timer_remove(
               params->wm, params->window, region->runtime->text_cursor_overlay->timer);
         }
         region->runtime->text_cursor_overlay->timer = WM_event_timer_add(
-            params->wm, params->window, TIMER, 0.0f);
+            params->wm, params->window, TIMER, 0.6f);
 
         region->runtime->text_cursor_overlay->draw = true;
         region->runtime->text_cursor_overlay->last_active_time = BLI_time_now_seconds();

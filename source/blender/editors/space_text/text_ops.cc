@@ -69,12 +69,7 @@ namespace blender {
 
 static void text_reset_cursor_timer(const bContext &C)
 {
-  ScrArea *area = CTX_wm_area(&C);
-  if (!area) {
-    return;
-  }
-  ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
-  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, region);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(&C));
 }
 
 static void space_text_screen_clamp(SpaceText *st, const ARegion *region);

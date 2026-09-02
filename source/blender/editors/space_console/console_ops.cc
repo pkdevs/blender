@@ -52,12 +52,7 @@ namespace blender {
 
 static void console_reset_cursor_timer(const bContext &C)
 {
-  ScrArea *area = CTX_wm_area(&C);
-  if (!area) {
-    return;
-  }
-  ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
-  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, region);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(&C));
 }
 
 static char *console_select_to_buffer(SpaceConsole *sc)

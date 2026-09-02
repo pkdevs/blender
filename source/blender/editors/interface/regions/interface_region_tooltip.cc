@@ -1436,6 +1436,7 @@ static ARegion *tooltip_create_with_data(bContext *C,
   type.free = tooltip_region_free_cb;
   type.regionid = RGN_TYPE_TEMPORARY;
   region->runtime->type = &type;
+  region->runtime->flag |= bke::ARegionRuntimeFlag::TooltipRegion;
   /* Move ownership to region data. The region type free callback puts it back into a unique
    * pointer for save freeing. */
   region->regiondata = data_uptr.release();

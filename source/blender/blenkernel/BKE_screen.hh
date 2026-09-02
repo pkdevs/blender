@@ -198,6 +198,7 @@ struct wmRegionListenerParams {
   ARegion *region;
   const wmNotifier *notifier;
   const Scene *scene;
+  const bScreen *screen;
 };
 
 struct wmRegionMessageSubscribeParams {
@@ -563,6 +564,8 @@ enum class ARegionQuadviewIndex : uint8_t {
 enum ARegionRuntimeFlag : uint8_t {
   /** Move redo panel in +Y direction to avoid overlapping with other UI elements, see: #62258 */
   HUD_PADDING = (1 << 0),
+  SearchSubRegion = (1 << 1),
+  TooltipRegion = (1 << 2),
 };
 ENUM_OPERATORS(ARegionRuntimeFlag)
 
@@ -639,7 +642,6 @@ struct ARegionRuntime {
   ARegionRuntimeFlag flag = {};
 
   std::optional<TextCursorOverlay> text_cursor_overlay = std::nullopt;
-  bool is_search_menu = false;
 };
 
 }  // namespace bke
@@ -1054,5 +1056,13 @@ void BKE_screen_area_blend_read_after_liblink(BlendLibReader *reader,
  * Cannot use #IDTypeInfo callback yet, because of the return value.
  */
 bool BKE_screen_blend_read_data(BlendDataReader *reader, bScreen *screen);
+
+namespace bke {
+/**
+ * Returns the topmost active region, which can be the last invoked temporal region or the last
+ * focused editor region on the screen.
+ */
+const ARegion *screen_topmost_active_region(const bScreen *screen);
+}  // namespace bke
 
 }  // namespace blender
