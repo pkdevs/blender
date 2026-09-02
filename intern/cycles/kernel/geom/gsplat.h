@@ -34,8 +34,7 @@ ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private Sha
 {
   kernel_assert(sd.type & PRIMITIVE_GSPLAT);
 
-  const int radiance_base_offset =
-      kernel_data_fetch(objects, sd.object).gsplat.radiance_base_offset;
+  const int radiance_base_offset = gsplat_attr_radiance_base_offset(kg, sd.object);
   const float4 radiance_base = (sd.type & PRIMITIVE_MOTION) ?
                                    motion_gsplat_radiance_base(kg, sd.object, sd.prim, sd.time) :
                                    kernel_data_fetch(attributes_float4,
@@ -95,8 +94,8 @@ ccl_device_inline float3 gsplat_normal(
   /* TODO(sergey): Solve ambiguity when there are two smallest axis. */
   /* The paper mentions this case explicitly and that it is solved using the view direction. */
 
-  const int scale_offset = kernel_data_fetch(objects, object).gsplat.scale_offset;
-  const int rotation_offset = kernel_data_fetch(objects, object).gsplat.rotation_offset;
+  const int scale_offset = gsplat_attr_scale_offset(kg, object);
+  const int rotation_offset = gsplat_attr_rotation_offset(kg, object);
 
   float3 scale;
   Quaternion rotation;
@@ -115,15 +114,25 @@ ccl_device_inline float3 gsplat_normal(
     const int offset_for_next_step = motion_point_offset_for_step(num_verts, num_steps, step + 1) +
                                      prim;
 
-    scale = kernel_data_fetch(attributes_float3, scale_offset + offset_for_step);
-    const float3 next_scale = kernel_data_fetch(attributes_float3,
-                                                scale_offset + offset_for_next_step);
-    scale = (1.0f - t) * scale + t * next_scale;
+    if (gsplat_attr_scale_has_motion(kg, object)) {
+      scale = kernel_data_fetch(attributes_float3, scale_offset + offset_for_step);
+      const float3 next_scale = kernel_data_fetch(attributes_float3,
+                                                  scale_offset + offset_for_next_step);
+      scale = (1.0f - t) * scale + t * next_scale;
+    }
+    else {
+      scale = kernel_data_fetch(attributes_float3, scale_offset + prim);
+    }
 
-    rotation = kernel_data_fetch(attributes_quaternion, rotation_offset + offset_for_step);
-    const Quaternion next_rotation = kernel_data_fetch(attributes_quaternion,
-                                                       rotation_offset + offset_for_next_step);
-    rotation = motion_gsplat_rotation_interpolate(rotation, next_rotation, t);
+    if (gsplat_attr_rotation_has_motion(kg, object)) {
+      rotation = kernel_data_fetch(attributes_quaternion, rotation_offset + offset_for_step);
+      const Quaternion next_rotation = kernel_data_fetch(attributes_quaternion,
+                                                         rotation_offset + offset_for_next_step);
+      rotation = motion_gsplat_rotation_interpolate(rotation, next_rotation, t);
+    }
+    else {
+      rotation = kernel_data_fetch(attributes_quaternion, rotation_offset + prim);
+    }
   }
 
 #  if 0

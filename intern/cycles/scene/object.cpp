@@ -619,9 +619,9 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
   else if (geom->is_pointcloud()) {
     const PointCloud *pointcloud = static_cast<PointCloud *>(geom);
     if (pointcloud->primitive_type() & PRIMITIVE_GSPLAT) {
-      kobject.gsplat.scale_offset = ATTR_STD_NOT_FOUND;
-      kobject.gsplat.rotation_offset = ATTR_STD_NOT_FOUND;
-      kobject.gsplat.radiance_base_offset = ATTR_STD_NOT_FOUND;
+      kobject.gsplat.scale_offset_and_flag = ATTR_STD_NOT_FOUND << 1;
+      kobject.gsplat.rotation_offset_and_flag = ATTR_STD_NOT_FOUND << 1;
+      kobject.gsplat.radiance_base_offset_and_flag = ATTR_STD_NOT_FOUND << 1;
       kobject.gsplat.radiance_spherical_harmonics_offset = ATTR_STD_NOT_FOUND;
     }
     const Attribute *attr_P = geom->attributes.find(ATTR_STD_POSITION);
@@ -1088,6 +1088,25 @@ void ObjectManager::device_update_flags(Device * /*unused*/,
   dscene->object_flag.clear_modified();
 }
 
+static bool update_gsplat_std_point_attribute_offset_and_flag(const DeviceScene &dscene,
+                                                              const PointCloud &pointcloud,
+                                                              const size_t attr_map_offset,
+                                                              const AttributeStandard std,
+                                                              int &kobject_offset_and_flag)
+{
+  const Attribute *attribute = pointcloud.attributes.find(std);
+  const int offset =
+      find_attribute(dscene.attributes_map.data(), attr_map_offset, PRIMITIVE_POINT, std).offset;
+
+  const int offset_and_flag = (offset << 1) | (attribute ? attribute->has_motion() : 0);
+
+  if (kobject_offset_and_flag == offset_and_flag) {
+    return false;
+  }
+  kobject_offset_and_flag = offset_and_flag;
+  return true;
+}
+
 static bool update_gsplat_std_point_attribute_offset(const DeviceScene &dscene,
                                                      const size_t attr_map_offset,
                                                      const AttributeStandard std,
@@ -1178,19 +1197,30 @@ void ObjectManager::device_update_geom_offsets(Device * /*unused*/,
                             .offset;
       assert(position_offset != ATTR_STD_NOT_FOUND || pointcloud->num_points() == 0);
       if (pointcloud->primitive_type() & PRIMITIVE_GSPLAT) {
-        update |= update_gsplat_std_point_attribute_offset(*dscene,
-                                                           attr_map_offset,
-                                                           ATTR_STD_GSPLAT_RADIANCE_BASE,
-                                                           kobject.gsplat.radiance_base_offset);
+        update |= update_gsplat_std_point_attribute_offset_and_flag(
+            *dscene,
+            *pointcloud,
+            attr_map_offset,
+            ATTR_STD_GSPLAT_RADIANCE_BASE,
+            kobject.gsplat.radiance_base_offset_and_flag);
+        update |= update_gsplat_std_point_attribute_offset_and_flag(
+            *dscene,
+            *pointcloud,
+            attr_map_offset,
+            ATTR_STD_GSPLAT_SCALE,
+            kobject.gsplat.scale_offset_and_flag);
+        update |= update_gsplat_std_point_attribute_offset_and_flag(
+            *dscene,
+            *pointcloud,
+            attr_map_offset,
+            ATTR_STD_GSPLAT_ROTATION,
+            kobject.gsplat.rotation_offset_and_flag);
+
         update |= update_gsplat_std_point_attribute_offset(
             *dscene,
             attr_map_offset,
             ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS,
             kobject.gsplat.radiance_spherical_harmonics_offset);
-        update |= update_gsplat_std_point_attribute_offset(
-            *dscene, attr_map_offset, ATTR_STD_GSPLAT_SCALE, kobject.gsplat.scale_offset);
-        update |= update_gsplat_std_point_attribute_offset(
-            *dscene, attr_map_offset, ATTR_STD_GSPLAT_ROTATION, kobject.gsplat.rotation_offset);
       }
     }
     if (kobject.position_offset != position_offset) {

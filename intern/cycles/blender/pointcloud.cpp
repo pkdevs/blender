@@ -378,6 +378,7 @@ static void export_pointcloud_motion(PointCloud *pointcloud,
                                                b_pointcloud,
                                                b_attributes,
                                                attr_step);
+    /* TODO(sergey): Remove constant radiance base, scale, and rotation attributes. */
   }
 
   /* In case of new attribute, verify if there really was any motion. */

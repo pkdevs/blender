@@ -11,6 +11,36 @@
 
 CCL_NAMESPACE_BEGIN
 
+ccl_device_forceinline int gsplat_attr_radiance_base_offset(KernelGlobals kg, const int object)
+{
+  return kernel_data_fetch(objects, object).gsplat.radiance_base_offset_and_flag >> 1;
+}
+
+ccl_device_forceinline int gsplat_attr_radiance_base_has_motion(KernelGlobals kg, const int object)
+{
+  return kernel_data_fetch(objects, object).gsplat.radiance_base_offset_and_flag & 1;
+}
+
+ccl_device_forceinline int gsplat_attr_rotation_offset(KernelGlobals kg, const int object)
+{
+  return kernel_data_fetch(objects, object).gsplat.rotation_offset_and_flag >> 1;
+}
+
+ccl_device_forceinline int gsplat_attr_rotation_has_motion(KernelGlobals kg, const int object)
+{
+  return kernel_data_fetch(objects, object).gsplat.rotation_offset_and_flag & 1;
+}
+
+ccl_device_forceinline int gsplat_attr_scale_offset(KernelGlobals kg, const int object)
+{
+  return kernel_data_fetch(objects, object).gsplat.scale_offset_and_flag >> 1;
+}
+
+ccl_device_forceinline int gsplat_attr_scale_has_motion(KernelGlobals kg, const int object)
+{
+  return kernel_data_fetch(objects, object).gsplat.scale_offset_and_flag & 1;
+}
+
 /* Motion Gaussian Splat Primitive
  *
  * These are stored as regular gaussian splats, plus extra positions and radii at times other than
@@ -73,6 +103,11 @@ ccl_device_inline Quaternion motion_gsplat_rotation(KernelGlobals kg,
                                                     const int prim,
                                                     const float time)
 {
+  const int offset = kernel_data_fetch(objects, object).gsplat.rotation_offset_and_flag;
+  if (!gsplat_attr_rotation_has_motion(kg, object)) {
+    return kernel_data_fetch(attributes_quaternion, offset + prim);
+  }
+
   /* Get motion info. */
   const int num_verts = kernel_data_fetch(objects, object).numverts;
   int step, num_steps;
@@ -80,7 +115,6 @@ ccl_device_inline Quaternion motion_gsplat_rotation(KernelGlobals kg,
   motion_gsplat_compute_info(kg, object, time, &num_steps, &step, &t);
 
   /* Fetch key rotations. */
-  const int offset = kernel_data_fetch(objects, object).gsplat.rotation_offset;
   const Quaternion rotation = motion_gsplat_rotation_for_step(
       kg, offset, num_verts, num_steps, step, prim);
   const Quaternion next_rotation = motion_gsplat_rotation_for_step(
@@ -106,6 +140,11 @@ ccl_device_inline float4 motion_gsplat_radiance_base(KernelGlobals kg,
                                                      const int prim,
                                                      const float time)
 {
+  const int offset = gsplat_attr_rotation_offset(kg, object);
+  if (!gsplat_attr_radiance_base_has_motion(kg, object)) {
+    return kernel_data_fetch(attributes_float4, offset + prim);
+  }
+
   /* Get motion info. */
   const int num_verts = kernel_data_fetch(objects, object).numverts;
   int step, num_steps;
@@ -113,7 +152,6 @@ ccl_device_inline float4 motion_gsplat_radiance_base(KernelGlobals kg,
   motion_gsplat_compute_info(kg, object, time, &num_steps, &step, &t);
 
   /* Fetch key radiance bases. */
-  const int offset = kernel_data_fetch(objects, object).gsplat.radiance_base_offset;
   const float4 radiance_base = motion_gsplat_radiance_base_for_step(
       kg, offset, num_verts, num_steps, step, prim);
   const float4 next_radiance_base = motion_gsplat_radiance_base_for_step(
@@ -139,6 +177,11 @@ ccl_device_inline float3 motion_gsplat_scale(KernelGlobals kg,
                                              const int prim,
                                              const float time)
 {
+  const int offset = gsplat_attr_scale_offset(kg, object);
+  if (!gsplat_attr_scale_has_motion(kg, object)) {
+    return kernel_data_fetch(attributes_float3, offset + prim);
+  }
+
   /* Get motion info. */
   const int num_verts = kernel_data_fetch(objects, object).numverts;
   int step, num_steps;
@@ -146,7 +189,6 @@ ccl_device_inline float3 motion_gsplat_scale(KernelGlobals kg,
   motion_gsplat_compute_info(kg, object, time, &num_steps, &step, &t);
 
   /* Fetch key scales. */
-  const int offset = kernel_data_fetch(objects, object).gsplat.scale_offset;
   const float3 scale = motion_gsplat_scale_for_step(kg, offset, num_verts, num_steps, step, prim);
   const float3 next_scale = motion_gsplat_scale_for_step(
       kg, offset, num_verts, num_steps, step + 1, prim);

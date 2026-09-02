@@ -54,9 +54,9 @@ struct GSplatIsectParams {
 ccl_device_forceinline GSplatIsectParams gsplat_intersect_get_params(
     KernelGlobals kg, const int object, const int prim, const float time, const int primitive_type)
 {
-  const int scale_offset = kernel_data_fetch(objects, object).gsplat.scale_offset;
-  const int rotation_offset = kernel_data_fetch(objects, object).gsplat.rotation_offset;
-  const int radiance_base_offset = kernel_data_fetch(objects, object).gsplat.radiance_base_offset;
+  const int scale_offset = gsplat_attr_scale_offset(kg, object);
+  const int rotation_offset = gsplat_attr_rotation_offset(kg, object);
+  const int radiance_base_offset = gsplat_attr_radiance_base_offset(kg, object);
 
   GSplatIsectParams params;
 
@@ -77,23 +77,37 @@ ccl_device_forceinline GSplatIsectParams gsplat_intersect_get_params(
   const int offset_for_next_step = motion_point_offset_for_step(num_verts, num_steps, step + 1) +
                                    prim;
 
-  const float3 scale = kernel_data_fetch(attributes_float3, scale_offset + offset_for_step);
-  const float3 next_scale = kernel_data_fetch(attributes_float3,
-                                              scale_offset + offset_for_next_step);
+  if (gsplat_attr_scale_has_motion(kg, object)) {
+    const float3 scale = kernel_data_fetch(attributes_float3, scale_offset + offset_for_step);
+    const float3 next_scale = kernel_data_fetch(attributes_float3,
+                                                scale_offset + offset_for_next_step);
+    params.scale = (1.0f - t) * scale + t * next_scale;
+  }
+  else {
+    params.scale = kernel_data_fetch(attributes_float3, scale_offset + prim);
+  }
 
-  const Quaternion rotation = kernel_data_fetch(attributes_quaternion,
-                                                rotation_offset + offset_for_step);
-  const Quaternion next_rotation = kernel_data_fetch(attributes_quaternion,
-                                                     rotation_offset + offset_for_next_step);
+  if (gsplat_attr_rotation_has_motion(kg, object)) {
+    const Quaternion rotation = kernel_data_fetch(attributes_quaternion,
+                                                  rotation_offset + offset_for_step);
+    const Quaternion next_rotation = kernel_data_fetch(attributes_quaternion,
+                                                       rotation_offset + offset_for_next_step);
+    params.rotation = motion_gsplat_rotation_interpolate(rotation, next_rotation, t);
+  }
+  else {
+    params.rotation = kernel_data_fetch(attributes_quaternion, rotation_offset + prim);
+  }
 
-  const float4 radiance_base = kernel_data_fetch(attributes_float4,
-                                                 radiance_base_offset + offset_for_step);
-  const float4 next_radiance_base = kernel_data_fetch(attributes_float4,
-                                                      radiance_base_offset + offset_for_next_step);
-
-  params.scale = (1.0f - t) * scale + t * next_scale;
-  params.rotation = motion_gsplat_rotation_interpolate(rotation, next_rotation, t);
-  params.radiance_base = (1.0f - t) * radiance_base + t * next_radiance_base;
+  if (gsplat_attr_radiance_base_has_motion(kg, object)) {
+    const float4 radiance_base = kernel_data_fetch(attributes_float4,
+                                                   radiance_base_offset + offset_for_step);
+    const float4 next_radiance_base = kernel_data_fetch(
+        attributes_float4, radiance_base_offset + offset_for_next_step);
+    params.radiance_base = (1.0f - t) * radiance_base + t * next_radiance_base;
+  }
+  else {
+    params.radiance_base = kernel_data_fetch(attributes_float4, radiance_base_offset + prim);
+  }
 
   return params;
 }

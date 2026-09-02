@@ -1473,9 +1473,12 @@ struct KernelObject {
 
     /* Information about gaussian splat objects. */
     struct {
-      int scale_offset;
-      int rotation_offset;
-      int radiance_base_offset;
+      /* Offset for the attributes.
+       * The least significant bit denotes whether the attribute has motion. */
+      int scale_offset_and_flag;
+      int rotation_offset_and_flag;
+      int radiance_base_offset_and_flag;
+
       int radiance_spherical_harmonics_offset;
     } gsplat;
   };
