@@ -443,17 +443,15 @@ struct PaintOperationExecutor {
       hide_stroke.finish();
     }
     if (use_fill) {
-      if (bke::SpanAttributeWriter<int> fill_id = attributes.lookup_or_add_for_write_span<int>(
-              "fill_id", bke::AttrDomain::Curve))
-      {
-        /* Set new fill id to zero, because it will have uninitialized memory otherwise.
-         * Then get the #VArray of all fill ids to compute a new one. */
-        fill_id.span[active_curve] = 0;
-        const int new_fill_id = bke::greasepencil::get_next_available_fill_id(fill_id.span);
-        fill_id.span[active_curve] = new_fill_id;
-        curve_attributes_to_skip.add("fill_id");
-        fill_id.finish();
-      }
+      bke::SpanAttributeWriter<int> fill_id = attributes.convert_or_add_for_write_span<int>(
+          "fill_id", bke::AttrDomain::Curve);
+      /* Set new fill id to zero, because it will have uninitialized memory otherwise.
+       * Then get the #VArray of all fill ids to compute a new one. */
+      fill_id.span[active_curve] = 0;
+      const int new_fill_id = bke::greasepencil::get_next_available_fill_id(fill_id.span);
+      fill_id.span[active_curve] = new_fill_id;
+      curve_attributes_to_skip.add("fill_id");
+      fill_id.finish();
     }
 
     if (settings_->uv_random > 0.0f || attributes.contains("rotation")) {
