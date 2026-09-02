@@ -472,11 +472,11 @@ BLI_NOINLINE static void compute_attribute_outputs(const Mesh &mesh,
   SpanAttributeWriter<math::Quaternion> rotations;
 
   if (attribute_outputs.normal_id) {
-    normals = point_attributes.convert_or_add_for_write_only_span<float3>(
+    normals = point_attributes.lookup_or_add_for_write_only_span<float3>(
         *attribute_outputs.normal_id, AttrDomain::Point);
   }
   if (attribute_outputs.rotation_id) {
-    rotations = point_attributes.convert_or_add_for_write_only_span<math::Quaternion>(
+    rotations = point_attributes.lookup_or_add_for_write_only_span<math::Quaternion>(
         *attribute_outputs.rotation_id, AttrDomain::Point);
   }
 
