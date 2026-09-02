@@ -370,8 +370,13 @@ static void join_generic_attributes(const Span<const Object *> objects_to_join,
       continue;
     }
 
-    bke::GSpanAttributeWriter dst = dst_attributes.convert_or_add_for_write_span(
+    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_span(
         name, domain, data_type);
+
+    if (!dst) {
+      continue;
+    }
+
     for (const int i : objects_to_join.index_range()) {
       const Mesh &src_mesh = *id_cast<const Mesh *>(objects_to_join[i]->data);
       const bke::AttributeAccessor src_attributes = src_mesh.attributes();
