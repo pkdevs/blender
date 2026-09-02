@@ -1399,51 +1399,53 @@ static void outliner_draw_restrictbuts(ui::Block *block,
           }
         }
 
-        if (space_outliner->show_restrict_flags & SO_RESTRICT_HOLDOUT) {
-          bt = uiDefIconButR_prop(block,
-                                  ui::ButtonType::IconToggle,
-                                  ICON_NONE,
-                                  int(region->v2d.cur.xmax - restrict_offsets.holdout),
-                                  te.ys,
-                                  UI_UNIT_X,
-                                  UI_UNIT_Y,
-                                  &ptr,
-                                  props.object_holdout,
-                                  -1,
-                                  0,
-                                  0,
-                                  TIP_("Render object as holdout\n"
-                                       " \u2022 Shift to set children"));
-          button_func_set(
-              bt, outliner__object_set_flag_recursive_fn, ob, const_cast<char *>("is_holdout"));
-          button_flag_enable(bt, ui::BUT_DRAG_LOCK);
-          if (!props_active.object_holdout) {
-            button_flag_enable(bt, ui::BUT_INACTIVE);
-          }
-        }
-        if (space_outliner->show_restrict_flags & SO_RESTRICT_INDIRECT_ONLY) {
-          if (OB_TYPE_IS_GEOMETRY(ob->type) && ob->type != OB_GREASE_PENCIL) {
+        if (space_outliner->outlinevis == SO_VIEW_LAYER) {
+          if (space_outliner->show_restrict_flags & SO_RESTRICT_HOLDOUT) {
             bt = uiDefIconButR_prop(block,
-                                    ui::ButtonType::IconToggleN,
+                                    ui::ButtonType::IconToggle,
                                     ICON_NONE,
-                                    int(region->v2d.cur.xmax - restrict_offsets.indirect_only),
+                                    int(region->v2d.cur.xmax - restrict_offsets.holdout),
                                     te.ys,
                                     UI_UNIT_X,
                                     UI_UNIT_Y,
                                     &ptr,
-                                    props.object_indirect_only,
+                                    props.object_holdout,
                                     -1,
                                     0,
                                     0,
-                                    TIP_("Object will contribute indirectly as shadows\n"
+                                    TIP_("Render object as holdout\n"
                                          " \u2022 Shift to set children"));
-            button_func_set(bt,
-                            outliner__object_set_flag_recursive_fn,
-                            ob,
-                            const_cast<char *>("visible_camera"));
+            button_func_set(
+                bt, outliner__object_set_flag_recursive_fn, ob, const_cast<char *>("is_holdout"));
             button_flag_enable(bt, ui::BUT_DRAG_LOCK);
-            if (props_active.object_holdout || !props_active.object_indirect_only) {
+            if (!props_active.object_holdout) {
               button_flag_enable(bt, ui::BUT_INACTIVE);
+            }
+          }
+          if (space_outliner->show_restrict_flags & SO_RESTRICT_INDIRECT_ONLY) {
+            if (OB_TYPE_IS_GEOMETRY(ob->type) && ob->type != OB_GREASE_PENCIL) {
+              bt = uiDefIconButR_prop(block,
+                                      ui::ButtonType::IconToggleN,
+                                      ICON_NONE,
+                                      int(region->v2d.cur.xmax - restrict_offsets.indirect_only),
+                                      te.ys,
+                                      UI_UNIT_X,
+                                      UI_UNIT_Y,
+                                      &ptr,
+                                      props.object_indirect_only,
+                                      -1,
+                                      0,
+                                      0,
+                                      TIP_("Object will contribute indirectly as shadows\n"
+                                           " \u2022 Shift to set children"));
+              button_func_set(bt,
+                              outliner__object_set_flag_recursive_fn,
+                              ob,
+                              const_cast<char *>("visible_camera"));
+              button_flag_enable(bt, ui::BUT_DRAG_LOCK);
+              if (props_active.object_holdout || !props_active.object_indirect_only) {
+                button_flag_enable(bt, ui::BUT_INACTIVE);
+              }
             }
           }
         }
