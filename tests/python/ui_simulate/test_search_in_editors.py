@@ -92,7 +92,7 @@ def _op_hide_region_ui():
         bl_idname = "test.hide_region_ui"
 
         def execute(self, context):
-            context.spaces.active.show_region_ui = False
+            context.area.spaces.active.show_region_ui = False
             return {'FINISHED'}
 
     return TEST_PT_hide_region_ui
