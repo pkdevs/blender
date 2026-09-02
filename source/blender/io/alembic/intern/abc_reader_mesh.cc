@@ -429,6 +429,8 @@ BLI_INLINE void read_uvs_params(CDStreamConfig &config,
   }
 
   bke::MutableAttributeAccessor attributes = config.mesh->attributes_for_write();
+  /* convert_or_add... to force creation of the uv map, overwriting existing attributes of the same
+   * name. */
   config.uv_map = attributes.convert_or_add_for_write_span<float2>(name, bke::AttrDomain::Corner);
   config.mesh->uv_maps_active_set(name);
   config.mesh->uv_maps_default_set(name);
