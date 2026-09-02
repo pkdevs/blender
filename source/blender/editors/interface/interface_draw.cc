@@ -1650,6 +1650,17 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
     return;
   }
 
+  /* Outline. */
+  GPUVertFormat *format = immVertexFormat();
+  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+
+  GPU_line_width(1.8f);
+  immUniformColor3ubv(wcol->outline);
+  imm_draw_box_wire_2d(pos, rect->xmin, rect->ymin, rect->xmax, rect->ymax);
+  GPU_line_width(1.0f);
+  immUnbindProgram();
+
   CurveMap *cuma = &cumap->cm[cumap->cur];
 
   /* need scissor test, curve can draw outside of boundary */
@@ -1685,8 +1696,8 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
 
   GPU_line_width(1.0f);
 
-  GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
+  format = immVertexFormat();
+  pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   /* backdrop */
@@ -1855,16 +1866,6 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
   /* Reset state for fill & line. */
   GPU_line_smooth(false);
   GPU_blend(GPU_BLEND_ALPHA);
-  immUnbindProgram();
-
-  /* outline */
-  format = immVertexFormat();
-  pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
-  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-
-  immUniformColor3ubv(wcol->outline);
-  imm_draw_box_wire_2d(pos, rect->xmin, rect->ymin, rect->xmax, rect->ymax);
-
   immUnbindProgram();
 
   /* The points, use aspect to make them visible on edges. */
