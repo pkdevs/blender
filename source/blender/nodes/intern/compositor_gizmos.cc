@@ -1465,27 +1465,31 @@ void translate_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
   };
 }
 
-static float2 translate_gizmo_input_offset(const SpaceNode &snode, const bNode &node)
+static const eval_log::ImageInfoLog *gizmo_input_image_log(const SpaceNode &snode,
+                                                           const bNode &node)
 {
-  /* Gizmos may be drawn before the node tree is evaluated. */
-  const float2 fallback = {0.0f, 0.0f};
   const bNodeSocket *image_input = bke::node_find_socket(node, SOCK_IN, "Image"_ustr);
   if (!image_input) {
-    return fallback;
+    return nullptr;
   }
 
   eval_log::ContextualNodeTreeLogs tree_logs = eval_log::NodesEvalLog::get_contextual_tree_logs(
       snode);
   eval_log::NodeTreeLog *tree_log = tree_logs.get_main_tree_log(*image_input);
   if (!tree_log) {
-    return fallback;
+    return nullptr;
   }
 
   tree_log->ensure_socket_values();
-  const auto *image_log = dynamic_cast<const eval_log::ImageInfoLog *>(
+  return dynamic_cast<const eval_log::ImageInfoLog *>(
       tree_log->find_socket_value_log(*image_input));
+}
+
+static float2 translate_gizmo_input_offset(const SpaceNode &snode, const bNode &node)
+{
+  const eval_log::ImageInfoLog *image_log = gizmo_input_image_log(snode, node);
   if (!image_log) {
-    return fallback;
+    return float2(0.0f);
   }
 
   /* Logging considers data and display size. */
@@ -1628,7 +1632,7 @@ static bool show_transform_gizmo(const SpaceNode &snode)
   return true;
 }
 
-bool transform_poll_space_image(const bContext *C, wmGizmoGroupType *gzgt)
+bool transform_poll_space_image(const bContext *C, wmGizmoGroupType * /*gzgt*/)
 {
   const SpaceImage *sima = CTX_wm_space_image(C);
   if (sima == nullptr) {
@@ -1647,7 +1651,7 @@ bool transform_poll_space_image(const bContext *C, wmGizmoGroupType *gzgt)
   return show_transform_gizmo(*snode);
 }
 
-bool transform_poll_space_node(const bContext *C, wmGizmoGroupType *gzgt)
+bool transform_poll_space_node(const bContext *C, wmGizmoGroupType * /*gzgt*/)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
   if (snode == nullptr) {
@@ -1660,7 +1664,7 @@ bool transform_poll_space_node(const bContext *C, wmGizmoGroupType *gzgt)
   return show_transform_gizmo(*snode);
 }
 
-void transform_setup(const bContext *C, wmGizmoGroup *gzgroup)
+void transform_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
 {
   NodeBBoxWidgetGroup *transform_group = MEM_new<NodeBBoxWidgetGroup>(__func__);
   transform_group->border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
@@ -1726,18 +1730,12 @@ static void gizmo_node_transform_prop_matrix_set(const wmGizmo *gz,
   BLI_assert(gz_prop->type->array_length == 16);
   NodeBBoxWidgetGroup *transform_group = static_cast<NodeBBoxWidgetGroup *>(
       gz->parent_gzgroup->customdata);
-  const float2 dims = transform_group->state.dims;
   const float2 offset = transform_group->state.offset;
   bNode *node = static_cast<bNode *>(gz_prop->custom_func.user_data);
 
   bNodeSocket *x_input = bke::node_find_socket(*node, SOCK_IN, "X"_ustr);
-  const float x = x_input->default_value_typed<bNodeSocketValueFloat>()->value;
-
   bNodeSocket *y_input = bke::node_find_socket(*node, SOCK_IN, "Y"_ustr);
-  const float y = y_input->default_value_typed<bNodeSocketValueFloat>()->value;
-
   bNodeSocket *scale_input = bke::node_find_socket(*node, SOCK_IN, "Scale"_ustr);
-  const float scale = scale_input->default_value_typed<bNodeSocketValueFloat>()->value;
 
   float loc[3];
   float rot[3][3];
@@ -1760,33 +1758,17 @@ static void gizmo_node_transform_prop_matrix_set(const wmGizmo *gz,
   gizmo_node_bbox_update(transform_group);
 }
 
-// todo(habib): unify with other translate function.
-static int2 gizmo_input_dims_from_log(const SpaceNode &snode, const bNode &node)
+static float2 gizmo_input_dims_from_log(const SpaceNode &snode,
+                                        const bNode &node,
+                                        const float2 &fallback)
 {
-  /* Gizmos may be drawn before the node tree is evaluated. */
-  // todo(habib): fix node tree evaluated but gizmo using fallback
-  const int2 fallback{64, 64};
-  const bNodeSocket *image_input = bke::node_find_socket(node, SOCK_IN, "Image"_ustr);
-  if (!image_input) {
-    return fallback;
-  }
-
-  eval_log::ContextualNodeTreeLogs tree_logs = eval_log::NodesEvalLog::get_contextual_tree_logs(
-      snode);
-  eval_log::NodeTreeLog *tree_log = tree_logs.get_main_tree_log(*image_input);
-  if (!tree_log) {
-    return fallback;
-  }
-
-  tree_log->ensure_socket_values();
-  const auto *image_log = dynamic_cast<const eval_log::ImageInfoLog *>(
-      tree_log->find_socket_value_log(*image_input));
+  const eval_log::ImageInfoLog *image_log = gizmo_input_image_log(snode, node);
   if (!image_log) {
     return fallback;
   }
 
   /* Logging considers data and display size. */
-  return image_log->data_size;
+  return float2(image_log->data_size);
 }
 
 void transform_refresh(const bContext *C, wmGizmoGroup *gzgroup)
@@ -1813,7 +1795,10 @@ void transform_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   bNode *node = bke::node_get_active(*snode->edittree);
 
   transform_group->state.offset = translate_gizmo_input_offset(*snode, *node);
-  transform_group->state.dims = float2(gizmo_input_dims_from_log(*snode, *node));
+  /* Fall back to the size of the viewer image if the input size is not known, which is closer to
+   * the actual size than an arbitrary default. */
+  const float2 fallback = node_gizmo_safe_calc_dims(ibuf, GIZMO_NODE_DEFAULT_DIMS);
+  transform_group->state.dims = gizmo_input_dims_from_log(*snode, *node, fallback);
   RNA_float_set_array(gz->ptr, "dimensions", transform_group->state.dims);
 
   transform_group->update_data.context = const_cast<bContext *>(C);
