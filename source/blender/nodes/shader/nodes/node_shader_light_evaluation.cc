@@ -25,7 +25,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .description("Evaluation roughness. Used for reflection factor");
+      .description("Evaluation roughness. Used for reflection factor")
+      .make_available([](bNode &node) { node.custom1 = SHD_LIGHT_EVAL_GLOSSY; });
 
   b.add_output<decl::Float>("Factor"_ustr).description("Shading reflection factor, scaled by PI");
   b.add_output<decl::Float>("Mask"_ustr)
