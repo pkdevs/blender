@@ -102,7 +102,6 @@ static float code_block_padding_x = 10.00f;
 static float code_block_padding_y = 8.00f;
 static float code_span_padding_x = 4.00f;
 static float code_span_padding_y = 2.00f;
-static float code_box_corner_radius = 3.00f;
 static MdBlockSpacing horizontal_rule = {.margin_top = 0.50f, .margin_bottom = 0.50f};
 
 static MdListSpacing list = {.margin_top = 0.50f,
@@ -1412,9 +1411,10 @@ void label_markdown_resolve(ButtonLabel *button)
 struct MarkdownDrawColors {
   uchar link[4];
   uchar quote_dimmed[4];
-  uchar code_block_dimmed[4];
+  uchar code_span_text[4];
+  uchar code_box_text[4];
   uchar quote_dimmed_link[4];
-  uchar code_block_dimmed_link[4];
+  uchar code_span_link[4];
   float code_box_fill[4];
   float code_box_border[4];
   float code_span_fill[4];
@@ -1432,33 +1432,34 @@ static MarkdownDrawColors markdown_draw_colors_init(const uchar color[4])
   /* Blend toward the panel background so quote text is muted consistently across themes. */
   uchar back_color[3];
   theme::get_color_3ubv(TH_PANEL_BACK, back_color);
-  constexpr float quote_dimmed_blend = 0.5f;
-  constexpr float code_block_dimmed_blend = 0.1f;
-  constexpr float code_span_fill_blend = 0.88f;
+  constexpr float quote_dimmed_blend = 0.3f;
+  constexpr float code_span_fill_blend = 0.20f;
 
   const bTheme *btheme = theme::theme_get();
   const uchar *code_box_fill_color = btheme->tui.wcol_box.inner;
   const uchar *code_box_border_color = btheme->tui.wcol_box.outline;
+  const uchar *code_box_text_color = btheme->tui.wcol_box.text;
 
   theme::get_color_blend_shade_3ubv(color, back_color, quote_dimmed_blend, 0, colors.quote_dimmed);
   colors.quote_dimmed[3] = color[3];
 
-  theme::get_color_blend_shade_3ubv(
-      color, code_box_fill_color, code_block_dimmed_blend, 0, colors.code_block_dimmed);
-  colors.code_block_dimmed[3] = color[3];
+  for (const int i : IndexRange(4)) {
+    colors.code_span_text[i] = code_box_text_color[i];
+    colors.code_box_text[i] = code_box_text_color[i];
+  }
 
   theme::get_color_blend_shade_3ubv(
       colors.link, back_color, quote_dimmed_blend, 0, colors.quote_dimmed_link);
   colors.quote_dimmed_link[3] = colors.link[3];
 
   theme::get_color_blend_shade_3ubv(
-      colors.link, code_box_fill_color, code_block_dimmed_blend, 0, colors.code_block_dimmed_link);
-  colors.code_block_dimmed_link[3] = colors.link[3];
+      colors.link, code_box_fill_color, 0.1f, 0, colors.code_span_link);
+  colors.code_span_link[3] = colors.link[3];
 
   uchar code_span_fill_color[4];
   theme::get_color_blend_shade_3ubv(
-      color, back_color, code_span_fill_blend, 0, code_span_fill_color);
-  code_span_fill_color[3] = color[3];
+      back_color, code_box_fill_color, code_span_fill_blend, 0, code_span_fill_color);
+  code_span_fill_color[3] = 255;
 
   for (const int i : IndexRange(4)) {
     colors.code_box_fill[i] = float(code_box_fill_color[i]) / 255.0f;
@@ -1488,7 +1489,9 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
   const MarkdownLayoutCache &cache = *button->markdown_cache;
   const MarkdownDrawColors colors = markdown_draw_colors_init(color);
 
-  const float corner_radius = md_style::code_box_corner_radius * cache.key.pixels_per_point;
+  const bTheme *btheme = theme::theme_get();
+  const float corner_radius = btheme->tui.wcol_box.roundness * U.widget_unit *
+                              cache.key.pixels_per_point;
 
   for (const MarkdownItem &item : cache.md_layout.items) {
     const auto *code_box = std::get_if<MarkdownItemCodeBox>(&item);
@@ -1526,7 +1529,7 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
           BLF_color4ubv(text_item->fontid, colors.quote_dimmed_link);
         }
         else if (text_item->code_context == MarkdownItemText::CodeContext::CodeSpan) {
-          BLF_color4ubv(text_item->fontid, colors.code_block_dimmed_link);
+          BLF_color4ubv(text_item->fontid, colors.code_span_link);
         }
         else {
           BLF_color4ubv(text_item->fontid, colors.link);
@@ -1536,8 +1539,11 @@ void label_markdown_draw(const ButtonLabel *button, const uchar color[4], const 
         if (text_item->is_in_quote) {
           BLF_color4ubv(text_item->fontid, colors.quote_dimmed);
         }
+        else if (text_item->code_context == MarkdownItemText::CodeContext::CodeBlock) {
+          BLF_color4ubv(text_item->fontid, colors.code_box_text);
+        }
         else if (text_item->code_context == MarkdownItemText::CodeContext::CodeSpan) {
-          BLF_color4ubv(text_item->fontid, colors.code_block_dimmed);
+          BLF_color4ubv(text_item->fontid, colors.code_span_text);
         }
         else {
           BLF_color4ubv(text_item->fontid, color);
@@ -1632,8 +1638,6 @@ static std::string markdown_md_style_to_source()
       dst, "static float code_span_padding_x = {:.2f}f;\n", md_style::code_span_padding_x);
   fmt::format_to(
       dst, "static float code_span_padding_y = {:.2f}f;\n", md_style::code_span_padding_y);
-  fmt::format_to(
-      dst, "static float code_box_corner_radius = {:.2f}f;\n", md_style::code_box_corner_radius);
   append_block_spacing("horizontal_rule", md_style::horizontal_rule);
   fmt::format_to(dst, "\n");
 
@@ -2008,13 +2012,6 @@ static void label_markdown_dev_config_details_table(Block *block, Layout &panel_
        0.5f,
        1,
        IFACE_("Vertical padding around inline code spans in pixels at 1x scale")},
-      {IFACE_("Code Radius"),
-       &md_style::code_box_corner_radius,
-       0.0f,
-       12.0f,
-       0.5f,
-       1,
-       IFACE_("Corner radius for code boxes in pixels at 1x scale")},
   };
 
   label_markdown_dev_config_details_row(
