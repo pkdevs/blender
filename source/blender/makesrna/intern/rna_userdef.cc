@@ -808,16 +808,19 @@ static void rna_userdef_script_directory_remove(ReportList *reports, PointerRNA 
 
 static bUserAssetLibrary *rna_userdef_asset_library_new(const bContext *C,
                                                         const char *name,
-                                                        const char *directory)
+                                                        const char *directory,
+                                                        const char *remote_url)
 {
+  const bool is_remote = remote_url && remote_url[0];
   bUserAssetLibrary *new_library;
-  new_library = ED_userpref_asset_library_new(C,
-                                              name ? name : "",
-                                              directory ? directory : "",
-                                              bUserAssetLibraryAddType::Local,
-                                              false,
-                                              {},
-                                              {});
+  new_library = ED_userpref_asset_library_new(
+      C,
+      name ? name : "",
+      is_remote ? remote_url : (directory ? directory : ""),
+      is_remote ? bUserAssetLibraryAddType::Remote : bUserAssetLibraryAddType::Local,
+      false,
+      {},
+      {});
 
   USERDEF_TAG_DIRTY;
   return new_library;
@@ -7415,6 +7418,12 @@ static void rna_def_userdef_asset_library_collection(BlenderRNA *brna, PropertyR
   RNA_def_function_ui_description(func, "Add a new Asset Library");
   RNA_def_string(func, "name", nullptr, sizeof(bUserAssetLibrary::name), "Name", "");
   RNA_def_string(func, "directory", nullptr, sizeof(bUserAssetLibrary::dirpath), "Directory", "");
+  RNA_def_string(func,
+                 "remote_url",
+                 nullptr,
+                 sizeof(bUserAssetLibrary::remote_url),
+                 "Remote URL",
+                 "When set, add a remote asset library instead of a local directory");
   /* return type */
   parm = RNA_def_pointer(func, "library", "UserAssetLibrary", "", "Newly added asset library");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
