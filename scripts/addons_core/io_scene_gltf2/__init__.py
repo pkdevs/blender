@@ -2261,7 +2261,7 @@ class IO_FH_gltf2(bpy.types.FileHandler):
 
 
 def menu_func_import(self, context):
-    self.layout.operator(ImportGLTF2.bl_idname)
+    self.layout.operator(ImportGLTF2.bl_idname, text=bpy.types.FileHandler.label_with_extensions("IO_FH_gltf2"))
 
 
 classes = (
