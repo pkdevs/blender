@@ -1,3 +1,4 @@
 Referenced by issue #156199, Compositor: Stereo multilayer OpenEXR images loaded incorrectly
 Referenced by pull request #156213, Fix #156199: Compositor: Stereo multilayer OpenEXR images loaded wrong
 Referenced by pull request #156226, Fix #156199: Multi-view images have duplicate passes
+Referenced by issue #163402, ACCESS VIOLATION (regression) when updating image datablocks from render-pre handler, but only if mouse is wiggled over compositor node editor (with lock interface enabled)
