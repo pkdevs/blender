@@ -1103,15 +1103,11 @@ static void outliner_restrict_properties_enable_layer_collection_set(
     RestrictProperties *props,
     RestrictPropertiesActive *props_active)
 {
+  /* Inherit from parent. */
+  props_active->layer_collection_holdout = props_active->object_holdout;
+  props_active->layer_collection_indirect_only = props_active->object_indirect_only;
+
   outliner_restrict_properties_enable_collection_set(collection_ptr, props, props_active);
-
-  if (props_active->layer_collection_holdout) {
-    props_active->layer_collection_holdout = RNA_property_boolean_get(
-        layer_collection_ptr, props->layer_collection_holdout);
-  }
-
-  props_active->layer_collection_indirect_only = RNA_property_boolean_get(
-      layer_collection_ptr, props->layer_collection_indirect_only);
 
   if (props_active->layer_collection_hide_viewport) {
     props_active->layer_collection_hide_viewport = !RNA_property_boolean_get(
@@ -1138,13 +1134,20 @@ static void outliner_restrict_properties_enable_layer_collection_set(
     }
   }
 
-  if (!props_active->layer_collection_holdout) {
-    props_active->object_holdout = false;
+  /* Gray out properties overriden by parent collection. */
+  const bool holdout = RNA_property_boolean_get(layer_collection_ptr,
+                                                props->layer_collection_holdout);
+  const bool indirect_only = RNA_property_boolean_get(layer_collection_ptr,
+                                                      props->layer_collection_indirect_only);
+
+  if (holdout) {
+    /* Indirect only has no effect in rendering when holdout is enabled. */
+    props_active->layer_collection_indirect_only = false;
   }
 
-  if (!props_active->layer_collection_indirect_only) {
-    props_active->object_indirect_only = false;
-  }
+  props_active->object_holdout = props_active->layer_collection_holdout && !holdout;
+  props_active->object_indirect_only = props_active->layer_collection_indirect_only &&
+                                       !indirect_only;
 }
 
 static bool outliner_restrict_properties_collection_set(Scene *scene,
@@ -1443,7 +1446,9 @@ static void outliner_draw_restrictbuts(ui::Block *block,
                               ob,
                               const_cast<char *>("visible_camera"));
               button_flag_enable(bt, ui::BUT_DRAG_LOCK);
-              if (props_active.object_holdout || !props_active.object_indirect_only) {
+              if (!props_active.object_indirect_only ||
+                  RNA_property_boolean_get(&ptr, props.object_holdout))
+              {
                 button_flag_enable(bt, ui::BUT_INACTIVE);
               }
             }
@@ -1792,9 +1797,7 @@ static void outliner_draw_restrictbuts(ui::Block *block,
                               layer_collection,
                               const_cast<char *>("indirect_only"));
               button_flag_enable(bt, ui::BUT_DRAG_LOCK);
-              if (props_active.layer_collection_holdout ||
-                  !props_active.layer_collection_indirect_only)
-              {
+              if (!props_active.layer_collection_indirect_only) {
                 button_flag_enable(bt, ui::BUT_INACTIVE);
               }
             }
