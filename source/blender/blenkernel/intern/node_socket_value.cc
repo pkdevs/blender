@@ -231,10 +231,6 @@ bool SocketValueVariantTypeInfo::try_convert_fn(const CPPType &dst_type,
     return false;
   }
 #endif
-  else if constexpr (std::is_same_v<CurrentT, GList>) {
-    // TODO
-    return false;
-  }
   else {
     /* The stored value is a single value. */
 
