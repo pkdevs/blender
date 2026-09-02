@@ -569,7 +569,6 @@ ccl_device_inline float global_reservoir_compute_luminance(
   return dot(spectrum_to_rgb(radiance), reservoir->rgb_to_y);
 }
 
-// !!!: LOGGED
 ccl_device_inline bool global_reservoir_add_sample(ccl_private GlobalReservoir *reservoir,
                                                    const ccl_private Spectrum &radiance,
                                                    const float rand)

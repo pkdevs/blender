@@ -149,16 +149,25 @@ ccl_device_inline ShaderEvalResult integrate_background(
    decomposed into pass_diffuse_indirect / pass_glossy_indirect.
 
  * Reason: that decomposition requires the diffuse/glossy lobe weight of the
- * *candidate-generating* bounce, but GlobalReservoir intentionally does not
- * store per-lobe weights (would add 2x float3 / ~50% size increase to a
- * struct that must stay compact for spatial-reuse performance). The
- * INTEGRATOR_STATE(...)-based weights available at final-evaluation time
- * belong to a different, unrelated path state and cannot be substituted.
+ * *candidate-generating* bounce. GlobalReservoir::rcv_index and ::sd exist
+ * as placeholders for this but are currently dead: global_reservoir_add_sample()
+ * never assigns either field, so rcv_index round-trips as -1 through storage
+ * and sd is never populated. There is no reconnection-vertex mechanism to
+ * "wire up" yet — it would need to be built:
+ *   1. a render-buffer pass to persist a shading-point snapshot at
+ *      candidate-generation time (this file, in film_add_reservoir_pt callers),
+ *   2. global_reservoir_add_sample() extended to write that snapshot's slot
+ *      index into rcv_index only on the accept branch,
+ *   3. a lobe-classification helper to re-derive diffuse/glossy weight from
+ *      the stored closures at reconstruction time in integrator_evaluate_restir_pt().
+ * This is a nontrivial feature addition (extra per-pixel storage and
+ * bandwidth), and is deferred to a follow-up patch.
  *
- * Deferred until reconnection-vertex shading data (rcv_index -> sd) is
- * wired up, at which point the lobe weight can be *recomputed* at
- * reconstruction time in integrator_evaluate_restir_pt() instead of being
- * carried in the reservoir. Until then, Combined is correct but
+ * Storing the two lobe-weight float3s directly in GlobalReservoir is
+ * still considered: But it would grow the reservoir ~50%, which is
+ * unacceptable for a struct resampled and copied per spatial neighbor.
+ *
+ * Until one of the above lands, Combined is correct but
  * diffuse_indirect/glossy_indirect AOVs will undercount ReSTIR-GI
  * contributions for affected pixels. */
 
@@ -185,11 +194,6 @@ printf("integrate_background() running film_add_reservoir_pt()!\n\n");
       film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer);
 
       guiding_record_background(kg, state, L, mis_weight);
-      // !!!: Wrong
-      // /* This bounce's radiance is now owned by the PT reservoir; it must not
-      //  * also be deposited directly into Combined/background below, or the
-      //  * energy is counted twice once integrator_evaluate_restir_pt() runs. */
-      // L = zero_spectrum();
     }
 // <<<
     else {
@@ -318,6 +322,7 @@ ccl_device void integrator_shade_background(KernelGlobals kg,
   }
 #endif
 
+  integrator_finalize_reservoir(kg, state, render_buffer);
   integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND);
 }
 

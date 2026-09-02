@@ -638,9 +638,6 @@ ccl_device void integrator_evaluate_restir_pt(KernelGlobals kg, // DEVICE_KERNEL
 
     // TODO(Tri): Change this maybe?
     film_write_combined_pass(kg, path_visibility, reservoir.path_flag, sample, reservoir.radiance, buffer);
-    // !!!: Wrong!!!
-    // film_write_indirect_light(
-    //     kg, state, path_visibility, reservoir.path_flag, sample, reservoir.radiance, buffer);
   }
 
   integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION);
