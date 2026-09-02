@@ -123,10 +123,12 @@ enum PathTraceDimension {
   PRNG_SUBSURFACE_DISK = 0,
   PRNG_SUBSURFACE_DISK_RESAMPLE = 1,
 
+  // TODO(Tri):
   // TODO(weizhen): Temp for RIS, revisit later for stratified sampling.
   PRNG_RIS = 12,
   PRNG_PICK = 13,
   PRNG_SPATIAL_RESAMPLING = 14,
+  PRNG_TEMPORAL_RESAMPLING = 15,
 
   /* Volume density baking. */
   PRNG_BAKE_VOLUME_DENSITY_EVAL = 0,
@@ -166,7 +168,7 @@ enum SamplingPattern {
  * Keep in sync with the raytype mapping in the osl.cpp OSLManager::shading_system_init().
  *
  * NOTE: Recalculated after a surface bounce. */
-enum PathRayVisibilityFlag : uint32_t { // !!!
+enum PathRayVisibilityFlag : uint32_t {
   PATH_RAY_VISIBILITY_NONE = 0,
 
   PATH_RAY_VISIBILITY_CAMERA = (1U << 0U),
@@ -407,7 +409,7 @@ enum PassType {
   PASS_GLOSSY_COLOR,
   PASS_TRANSMISSION_COLOR,
   /* No Scatter color since it's tricky to define what it would even mean. */
-  PASS_MIST,
+  PASS_MIST = 49,
   PASS_RENDER_TIME,
 
   /* PASS_SHADOW_CATCHER accumulates contribution of shadow catcher object which is not affected by
@@ -424,7 +426,7 @@ enum PassType {
   PASS_SHADOW_CATCHER_SAMPLE_COUNT,
   PASS_SHADOW_CATCHER_MATTE,
   
-  PASS_SURFACE_DATA, // !!!
+  PASS_SURFACE_DATA,
 
   /* Guiding related debug rendering passes */
   /* The estimated sample color from the PathSegmentStorage. If everything is integrated correctly
@@ -435,8 +437,9 @@ enum PassType {
   /* The avg. roughness at the first bounce. */
   PASS_GUIDING_AVG_ROUGHNESS,
 
-  PASS_RESTIR_PT_PREVIOUS_RESERVOIR,
+  PASS_RESTIR_PT_PREVIOUS_RESERVOIR = 58,
   PASS_RESTIR_PT_RESERVOIR,
+  PASS_RESTIR_TEMPORAL_HISTORY_RESERVOIR,
   PASS_RESTIR_PREVIOUS_RESERVOIR,
   PASS_RESTIR_RESERVOIR,
 
@@ -444,7 +447,7 @@ enum PassType {
    * When reading this pass, it is converted to majorant transmittance */
   PASS_VOLUME_MAJORANT,
   PASS_VOLUME_MAJORANT_SAMPLE_COUNT,
-  PASS_CATEGORY_DATA_END = 63,
+  PASS_CATEGORY_DATA_END = 65,
 
   /* Denoising passes */
   PASS_DENOISING_ALBEDO,
@@ -603,13 +606,13 @@ enum ReSTIRLightReferenceFlag : uint {
  * Target-dependent LightSample fields are reconstructed when the sample is reused.
  */
 struct LightSampleReference {
-  LightType type;     // May eventually need a dedicated ReSTIRLightReferenceType (If KernelLight can't derive some distinctions...)
+  LightType type;
   uint flags;
 
   int object;
   int prim;
 
-  /**
+  /*
    * Emitter-specific canonical sample parameters.
    *
    * LIGHT_TRIANGLE:
@@ -641,30 +644,6 @@ struct LightSampleReference {
    * to shader_setup_from_sample() as shader UV coordinates.
    */
   float2 param;
-};
-
-// TODO: Remove
-struct ReSTIRReservoir {
-    // !!!: we may stop persisting LS here once ref lands, but not necessary for the initial transition.
-    LightSample light;
-
-    float W;        // Final Probabilistic reservoir weight; W = (ris.weight_sum / ris.M) / ris.selected_target_pdf;
-    uint M;
-};
-
-// To replace ReSTIRReservoir
-/**
- * @brief Finalized ReSTIR DI reservoir for the selected light candidate.
- */
-struct ReSTIRDIReservoir {
-  LightSample light;
-  LightSampleReference reference;
-
-  // TODO: ranking_radiance and ranking_luminance
-  BsdfEval radiance;      // Selected ranking payload: BSDF * light_eval * eval_fac.
-  float luminance;        // Luminance of radiance, used for RIS normalization.
-  float total_weight;     // Final RIS multiplier applied to radiance.
-  uint M;                 // Number of candidates in the proposal stream.
 };
 
 /* Guiding Distribution Type */
@@ -718,7 +697,7 @@ enum MotionPosition {
 
 /* Direct Light Sampling */
 
-enum DirectLightSamplingType { // !!!
+enum DirectLightSamplingType {
   DIRECT_LIGHT_SAMPLING_MIS = 0,
   DIRECT_LIGHT_SAMPLING_FORWARD = 1,
   DIRECT_LIGHT_SAMPLING_NEE = 2,
@@ -1877,7 +1856,7 @@ struct KernelShaderEvalInput {
 };
 static_assert_align(KernelShaderEvalInput, 16);
 
-enum ShaderEvalResult { // !!!
+enum ShaderEvalResult {
   /* Shader evaluation is empty (e.g. no volume density, no emission from light, ..). */
   SHADER_EVAL_EMPTY = 0,
   /* Shader evaluation succeeded. */

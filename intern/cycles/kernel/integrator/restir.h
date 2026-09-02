@@ -5,7 +5,6 @@
 #pragma once
 
 #include "kernel/integrator/reservoir.h"
-#include "kernel/light/sample_reference.h"
 #include "kernel/integrator/state.h"
 
 CCL_NAMESPACE_BEGIN

@@ -11,6 +11,7 @@
 #include "kernel/integrator/shadow_catcher.h"
 
 #include "kernel/sample/pattern.h"
+#include "kernel/light/common.h" // light_reference helpers
 #include "kernel/types.h"
 #include "util/atomic.h"
 
@@ -841,7 +842,7 @@ ccl_device_inline void film_write_pass_reservoir(
   film_overwrite_pass_float(ptr++, reservoir->reference.param.y);
 
   film_overwrite_pass_float(ptr++, reservoir->total_weight);
-  film_overwrite_pass_float(ptr, reservoir->luminance);
+  film_overwrite_pass_float(ptr,   reservoir->luminance);
 }
 
 // !!!: Called in init_from_camera; Don't we need a `film_clear_pass_reservoir_pt()` as well?

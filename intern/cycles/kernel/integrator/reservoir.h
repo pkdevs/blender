@@ -3,8 +3,7 @@
 #pragma once
 
 #include "kernel/types.h"
-
-#include "kernel/light/sample_reference.h"
+#include "kernel/light/common.h" // light_reference helpers
 
 CCL_NAMESPACE_BEGIN
 

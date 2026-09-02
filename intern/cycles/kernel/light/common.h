@@ -81,6 +81,8 @@ ccl_device_inline bool is_light_shader_visible_to_path(const int shader,
   return true;
 }
 
+// TODO(Tri): Relocate into a better place
+
 ccl_device_inline LightSampleReference light_reference_empty()
 {
   LightSampleReference reference{};

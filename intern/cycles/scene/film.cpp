@@ -217,6 +217,7 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
   /* ReSTIR. */
   kfilm->pass_restir_previous_reservoir = PASS_UNUSED;
   kfilm->pass_restir_reservoir = PASS_UNUSED;
+  kfilm->pass_restir_temporal_history_reservoir = PASS_UNUSED;
   kfilm->pass_restir_pt_previous_reservoir = PASS_UNUSED;
   kfilm->pass_restir_pt_reservoir = PASS_UNUSED;
   kfilm->pass_surface_data = PASS_UNUSED;
@@ -452,12 +453,14 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
       case PASS_GUIDING_AVG_ROUGHNESS:
         kfilm->pass_guiding_avg_roughness = kfilm->pass_stride;
         break;
-
       case PASS_RESTIR_PT_PREVIOUS_RESERVOIR:
         kfilm->pass_restir_pt_previous_reservoir = kfilm->pass_stride;
         break;
       case PASS_RESTIR_PT_RESERVOIR:
         kfilm->pass_restir_pt_reservoir = kfilm->pass_stride;
+        break;
+      case PASS_RESTIR_TEMPORAL_HISTORY_RESERVOIR:
+        kfilm->pass_restir_temporal_history_reservoir = kfilm->pass_stride;
         break;
       case PASS_RESTIR_PREVIOUS_RESERVOIR:
         kfilm->pass_restir_previous_reservoir = kfilm->pass_stride;
@@ -643,6 +646,7 @@ void Film::update_passes(Scene *scene)
   if (integrator->get_use_restir() & 0b11) {
     add_auto_pass(scene, PASS_RESTIR_PT_PREVIOUS_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_PT_RESERVOIR);
+    add_auto_pass(scene, PASS_RESTIR_TEMPORAL_HISTORY_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_PREVIOUS_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_RESERVOIR);
     add_auto_pass(scene, PASS_SURFACE_DATA);

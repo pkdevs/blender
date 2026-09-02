@@ -8,7 +8,6 @@
 
 #include "kernel/geom/object.h"
 #include "kernel/geom/triangle.h"
-#include "kernel/light/sample_reference.h"
 
 #include "util/math_fast.h"
 #include "util/math_intersect.h"

@@ -18,8 +18,6 @@
 #include "kernel/sample/lcg.h"
 #include "kernel/types.h"
 
-#include "kernel/light/sample_reference.h"
-
 CCL_NAMESPACE_BEGIN
 
 /* Light info. */
@@ -485,7 +483,7 @@ ccl_device bool light_sample_from_intersection(KernelGlobals kg,
   ref->type = type;
   ref->object = ls->object;
   ref->prim = ls->prim;
-  ref->flags = RESTIR_LIGHT_REFERENCE_VALID | RESTIR_LIGHT_REFERENCE_HAS_PARAM; // !!!: Ensure Correctness
+  ref->flags = RESTIR_LIGHT_REFERENCE_VALID | RESTIR_LIGHT_REFERENCE_HAS_PARAM;
 
   // printf("\nlight_sample_from_intersection(); set reference:\n"
   //       "ref->type=%u, ref->object=%u, ref->prim=%u, ref->flags=%u\n", 
