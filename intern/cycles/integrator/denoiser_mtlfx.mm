@@ -57,8 +57,8 @@ bool MetalFXDenoiser::is_device_supported(const DeviceInfo &device)
 bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
 {
   const bool recreate_denoiser = last_width != context.denoised_buffer_params.width ||
-                                 last_height != context.denoised_buffer_params.height;// ||
-                                 //last_upscale_factor != context.denoise_params.upscale_factor;
+                                 last_height != context.denoised_buffer_params.height ||
+                                 last_upscale_factor != context.denoise_params.upscale_factor;
   
   if (mtlfx_denoiser != nullptr && !recreate_denoiser) {
     return true;
@@ -146,10 +146,9 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     color_post_fn = (id<MTLFunction>) [library newFunctionWithName: @"filter_color_postprocess"];
     color_post_pso = [device newComputePipelineStateWithFunction: (id<MTLFunction>) color_post_fn error: &error];
     
-    
     last_width = context.denoised_buffer_params.width;
     last_height = context.denoised_buffer_params.height;
-//    last_upscale_factor = context.denoise_params.upscale_factor;
+    last_upscale_factor = context.denoise_params.upscale_factor;
     
     return !error;
   }
@@ -244,12 +243,6 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(const DenoiseContext &co
   
   id<MTLBuffer> render_buffer = (id<MTLBuffer>) denoiser_device_->get_native_buffer(context.render_buffers->buffer.device_pointer);
   
-  printf("motion: %d\n pass samples: %d\n samples: %d\n",
-         passParams.render_pass_motion,
-         passParams.render_pass_sample_count,
-         passParams.num_samples
-       );
-  
   [encoder setBuffer: render_buffer offset: 0 atIndex: 0];
   [encoder setTexture: (id<MTLTexture>) depth_texture atIndex: 0];
   [encoder setTexture: (id<MTLTexture>) motion_texture atIndex: 1];
@@ -277,71 +270,70 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(const DenoiseContext &co
 
 bool MetalFXDenoiser::denoise_filter_color_postprocess(const DenoiseContext &context, const DenoisePass &pass)
 {
-//  denoiser_queue_->synchronize();
-//  id<MTLCommandQueue> queue = (id<MTLCommandQueue>) denoiser_queue_->native_queue();
-//  id<MTLCommandBuffer> cmd = [queue commandBuffer];
-//  id<MTLComputeCommandEncoder> encoder = [cmd computeCommandEncoder];
-//  
-//  [encoder setComputePipelineState: (id<MTLComputePipelineState>) color_post_pso];
-//  
-//  BufferParams buffer_params = context.buffer_params;
-//  
-//  KernelParams params = {
-//    buffer_params.full_x,
-//    buffer_params.full_y,
-//    buffer_params.width,
-//    buffer_params.height,
-//    buffer_params.offset,
-//    buffer_params.stride,
-//    buffer_params.pass_stride,
-//    pass.denoised_offset,
-//  };
-//  
-//  PassParams passParams = {
-//    context.pass_sample_count,
-//    context.buffer_params.get_pass_offset(PASS_DENOISING_DEPTH),
-//    context.buffer_params.get_pass_offset(PASS_DENOISING_BACKWARD_MOTION),
-//    context.buffer_params.get_pass_offset(PASS_DENOISING_NORMAL),
-//    context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
-//    context.buffer_params.get_pass_offset(PASS_DENOISING_ALBEDO),
-//    context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_ALBEDO),
-//    context.num_samples,
-//  };
-//  
-//  BufferParams denoised_buffer = context.denoised_buffer_params;
-//  
-//  PostprocessParams denoise {
-//    denoised_buffer.full_x,
-//    denoised_buffer.full_y,
-//    denoised_buffer.offset,
-//    denoised_buffer.stride,
-//    pass.noisy_offset,
-//    pass.use_compositing,
-//    pass.num_components,
-//    params_.upscale_factor,
-//  };
-//  
-//  id<MTLBuffer> render_buffer = (id<MTLBuffer>) denoiser_device_->get_native_buffer(context.render_buffers->buffer.device_pointer);
-//  
-//  [encoder setBuffer: render_buffer offset: 0 atIndex: 0];
-//  [encoder setTexture: (id<MTLTexture>) output_texture atIndex: 0];
-//  [encoder setBytes: &params length: sizeof(params) atIndex: 1];
-//  [encoder setBytes: &passParams length: sizeof(passParams) atIndex: 2];
-//  [encoder setBytes: &denoise length: sizeof(denoise) atIndex: 3];
-//  
-//  MTLSize gridSize = MTLSizeMake(params.width, params.height, 1);
-//  id<MTLComputePipelineState> pso = (id<MTLComputePipelineState>) color_pre_pso;
-//  MTLSize threadSize = MTLSizeMake(pso.threadExecutionWidth, pso.maxTotalThreadsPerThreadgroup / pso.threadExecutionWidth, 1);
-//  
-//  [encoder dispatchThreads: gridSize threadsPerThreadgroup: threadSize];
-//  [encoder endEncoding];
-//  
-//  // TODO: these may not be needed in the future
-//  [cmd commit];
-//  [cmd waitUntilCompleted];
+  denoiser_queue_->synchronize();
+  id<MTLCommandQueue> queue = (id<MTLCommandQueue>) denoiser_queue_->native_queue();
+  id<MTLCommandBuffer> cmd = [queue commandBuffer];
+  id<MTLComputeCommandEncoder> encoder = [cmd computeCommandEncoder];
   
-  // TODO: return true only if the kernel succeeded.
-  return false;
+  [encoder setComputePipelineState: (id<MTLComputePipelineState>) color_post_pso];
+  
+  BufferParams buffer_params = context.buffer_params;
+  
+  KernelParams params = {
+    buffer_params.full_x,
+    buffer_params.full_y,
+    buffer_params.width,
+    buffer_params.height,
+    buffer_params.offset,
+    buffer_params.stride,
+    buffer_params.pass_stride,
+    pass.denoised_offset,
+  };
+  
+  PassParams passParams = {
+    context.pass_sample_count,
+    context.buffer_params.get_pass_offset(PASS_DENOISING_DEPTH),
+    context.buffer_params.get_pass_offset(PASS_DENOISING_BACKWARD_MOTION),
+    context.buffer_params.get_pass_offset(PASS_DENOISING_NORMAL),
+    context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
+    context.buffer_params.get_pass_offset(PASS_DENOISING_ALBEDO),
+    context.buffer_params.get_pass_offset(PASS_DENOISING_SPECULAR_ALBEDO),
+    context.num_samples,
+  };
+  
+  BufferParams denoised_buffer = context.denoised_buffer_params;
+  
+  PostprocessParams denoise {
+    denoised_buffer.full_x,
+    denoised_buffer.full_y,
+    denoised_buffer.offset,
+    denoised_buffer.stride,
+    pass.noisy_offset,
+    pass.use_compositing,
+    pass.num_components,
+    params_.upscale_factor,
+  };
+  
+  id<MTLBuffer> render_buffer = (id<MTLBuffer>) denoiser_device_->get_native_buffer(context.render_buffers->buffer.device_pointer);
+  
+  [encoder setBuffer: render_buffer offset: 0 atIndex: 0];
+  [encoder setTexture: (id<MTLTexture>) output_texture atIndex: 0];
+  [encoder setBytes: &params length: sizeof(params) atIndex: 1];
+  [encoder setBytes: &passParams length: sizeof(passParams) atIndex: 2];
+  [encoder setBytes: &denoise length: sizeof(denoise) atIndex: 3];
+  
+  MTLSize gridSize = MTLSizeMake(params.width, params.height, 1);
+  id<MTLComputePipelineState> pso = (id<MTLComputePipelineState>) color_pre_pso;
+  MTLSize threadSize = MTLSizeMake(pso.threadExecutionWidth, pso.maxTotalThreadsPerThreadgroup / pso.threadExecutionWidth, 1);
+  
+  [encoder dispatchThreads: gridSize threadsPerThreadgroup: threadSize];
+  [encoder endEncoding];
+  
+  // TODO: these may not be needed in the future
+  [cmd commit];
+  [cmd waitUntilCompleted];
+  
+  return true;
 }
 
 bool MetalFXDenoiser::denoise_run(const DenoiseContext &context, const DenoisePass &pass)
@@ -360,8 +352,8 @@ bool MetalFXDenoiser::denoise_run(const DenoiseContext &context, const DenoisePa
   denoiser.diffuseAlbedoTexture  = (id<MTLTexture>) diffuse_albedo_texture;
   denoiser.specularAlbedoTexture = (id<MTLTexture>) specular_albedo_texture;
   denoiser.outputTexture         = (id<MTLTexture>) output_texture;
-//  denoiser.jitterOffsetX         = context.pixel_jitter.x;
-//  denoiser.jitterOffsetY         = context.pixel_jitter.y;
+  denoiser.jitterOffsetX         = context.pixel_jitter.x;
+  denoiser.jitterOffsetY         = context.pixel_jitter.y;
   
   [denoiser encodeToCommandBuffer: command_buffer];
     
