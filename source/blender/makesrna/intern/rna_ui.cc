@@ -1808,6 +1808,7 @@ static void rna_def_ui_layout(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_property_split", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(
       prop, "rna_UILayout_property_split_get", "rna_UILayout_property_split_set");
+
   prop = RNA_def_float(srna,
                        "property_split_factor",
                        ui::Layout::property_split_factor,
