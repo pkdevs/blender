@@ -689,7 +689,7 @@ struct GreasePencilFillOpData {
   /* Draw extension lines overlay. */
   bool show_extension;
   /* Is the method Delaunay. */
-  bool is_delaunay;
+  bool is_delaunay_method;
 
   /* Mouse position where fill was initialized */
   float2 fill_mouse_pos;
@@ -717,11 +717,11 @@ struct GreasePencilFillOpData {
     const eGP_FillExtendModes extension_mode = eGP_FillExtendModes(
         brush.gpencil_settings->fill_extend_mode);
 
-    const bool is_delaunay = brush.gpencil_settings->fill_solver == GP_FILL_SOLVER_DELAUNAY;
+    const bool is_delaunay_method = brush.gpencil_settings->fill_solver == GP_FILL_SOLVER_DELAUNAY;
     const bool show_boundaries = (brush.gpencil_settings->flag & GP_BRUSH_FILL_SHOW_HELPLINES) &&
-                                 !is_delaunay;
+                                 !is_delaunay_method;
     const bool show_extension = (brush.gpencil_settings->flag & GP_BRUSH_FILL_SHOW_EXTENDLINES) &&
-                                !is_delaunay;
+                                !is_delaunay_method;
     const float extension_length = brush.gpencil_settings->fill_extend_fac *
                                    bke::greasepencil::LEGACY_RADIUS_CONVERSION_FACTOR;
     const bool extension_cut = brush.gpencil_settings->flag & GP_BRUSH_FILL_STROKE_COLLIDE;
@@ -738,7 +738,7 @@ struct GreasePencilFillOpData {
             extension_cut,
             show_boundaries,
             show_extension,
-            is_delaunay};
+            is_delaunay_method};
   }
 };
 
@@ -1161,7 +1161,7 @@ static void grease_pencil_fill_status_indicators(bContext &C,
   status.item(IFACE_("Cancel"), ICON_EVENT_ESC);
   status.item(IFACE_("Fill"), ICON_MOUSE_LMB);
 
-  if (!op_data.is_delaunay) {
+  if (!op_data.is_delaunay_method) {
     status.item(
         fmt::format("{} ({})", IFACE_("Mode"), (is_extend ? IFACE_("Extend") : IFACE_("Radius"))),
         ICON_EVENT_S);
@@ -1306,7 +1306,7 @@ static void grease_pencil_fill_overlay_cb(const bContext *C, ARegion * /*region*
 {
   auto &op_data = *static_cast<GreasePencilFillOpData *>(arg);
 
-  if (op_data.is_delaunay) {
+  if (op_data.is_delaunay_method) {
     grease_pencil_fill_overlay_delaunay_cb(*C, op_data);
   }
   else {
@@ -1318,7 +1318,7 @@ static void grease_pencil_fill_update_overlay(const ARegion &region,
                                               GreasePencilFillOpData &op_data)
 {
   const bool needs_overlay = op_data.show_boundaries || op_data.show_extension ||
-                             op_data.is_delaunay;
+                             op_data.is_delaunay_method;
 
   if (needs_overlay) {
     if (op_data.overlay_cb_handle == nullptr) {
@@ -1618,7 +1618,7 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
   const bool on_back = (ts.gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK);
   const bool auto_remove_fill_guides = (brush.gpencil_settings->flag &
                                         GP_BRUSH_FILL_AUTO_REMOVE_FILL_GUIDES) != 0;
-  const bool is_delaunay = brush.gpencil_settings->fill_solver == GP_FILL_SOLVER_DELAUNAY;
+  const bool is_delaunay_method = brush.gpencil_settings->fill_solver == GP_FILL_SOLVER_DELAUNAY;
 
   if (!grease_pencil.has_active_layer()) {
     return false;
@@ -1636,7 +1636,7 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
 
     std::optional<bke::CurvesGeometry> op_fill_curves;
 
-    if (!is_delaunay) {
+    if (!is_delaunay_method) {
       const ed::greasepencil::ExtensionData extensions = grease_pencil_fill_get_extension_data(
           C, op_data);
 
@@ -1703,7 +1703,7 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
     /* Only create fills. Users can change the appearance however they please afterwards. */
     attributes.add<bool>("hide_stroke", bke::AttrDomain::Curve, bke::AttributeInitValue(true));
 
-    if (!is_delaunay) {
+    if (!is_delaunay_method) {
       smooth_fill_strokes(fill_curves, fill_curves.curves_range());
 
       if (simplify_levels > 0) {
@@ -2001,7 +2001,7 @@ static wmOperatorStatus grease_pencil_fill_modal(bContext *C, wmOperator *op, co
   auto &op_data = *static_cast<GreasePencilFillOpData *>(op->customdata);
 
   wmOperatorStatus estate = OPERATOR_CANCELLED;
-  if (op_data.is_delaunay) {
+  if (op_data.is_delaunay_method) {
     op_data.mouse_path.append(float2(event->mval));
     estate = OPERATOR_RUNNING_MODAL;
 
