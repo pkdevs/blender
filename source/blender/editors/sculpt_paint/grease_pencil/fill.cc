@@ -1830,8 +1830,7 @@ std::optional<bke::CurvesGeometry> delaunay_fill_strokes(
     }
   }
 
-  Set<int> indices_to_fill;
-  indices_to_fill.add(hint_index);
+  Set<int> indices_to_fill({hint_index});
 
   Array<bool> tri_to_fill(result.face.size(), false);
 
