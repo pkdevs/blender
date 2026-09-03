@@ -1,1 +1,2 @@
 Referenced by commit blender/blender-manual@369e47325310b63dbdd962002d358ab83e89f1b2, Cycles: Mark shadow caustics as supported on HIP RDNA2 again
+Referenced by issue #163471, Cycles GPU CUDA illegal-address crash on RTX 5090 in Blender 5.2.1 with caustics enabled
