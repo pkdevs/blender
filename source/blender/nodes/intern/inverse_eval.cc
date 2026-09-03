@@ -501,8 +501,8 @@ static bool set_socket_value(bContext &C,
       return set_rna_property_float3(C, tree.id, default_value_rna_path, value);
     }
     case SOCK_ROTATION: {
-      const math::Quaternion rotation = SocketValueVariant(value_variant)
-                                            .ensure_type<math::Quaternion>();
+      const math::Quaternion rotation =
+          SocketValueVariant(value_variant).ensure_type<math::Quaternion>();
       const float3 euler = float3(math::to_euler(rotation));
       return set_rna_property_float3(C, tree.id, default_value_rna_path, euler);
     }
@@ -539,8 +539,8 @@ static bool set_value_node_value(bContext &C, bNode &node, const SocketValueVari
       return set_rna_property_float3(C, tree.id, rna_path, value);
     }
     case FN_NODE_INPUT_ROTATION: {
-      const math::Quaternion rotation = SocketValueVariant(value_variant)
-                                            .ensure_type<math::Quaternion>();
+      const math::Quaternion rotation =
+          SocketValueVariant(value_variant).ensure_type<math::Quaternion>();
       const float3 euler = float3(math::to_euler(rotation));
       const std::string rna_path = fmt::format("nodes[\"{}\"].rotation_euler",
                                                BLI_str_escape(node.name));
@@ -581,8 +581,8 @@ static bool set_modifier_value(bContext &C,
       return set_rna_property_float3(C, object.id, main_prop_rna_path, value);
     }
     case SOCK_ROTATION: {
-      const math::Quaternion rotation = SocketValueVariant(value_variant)
-                                            .ensure_type<math::Quaternion>();
+      const math::Quaternion rotation =
+          SocketValueVariant(value_variant).ensure_type<math::Quaternion>();
       const float3 euler = float3(math::to_euler(rotation));
       return set_rna_property_float3(C, object.id, main_prop_rna_path, euler);
     }
