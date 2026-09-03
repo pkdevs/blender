@@ -283,12 +283,16 @@ static void rna_PoseChannel_name_set(PointerRNA *ptr, const char *value)
   bPoseChannel *pchan = static_cast<bPoseChannel *>(ptr->data);
   char oldname[sizeof(pchan->name)], newname[sizeof(pchan->name)];
 
+  Main *bmain = ob->id.owner_bmain_for_write();
+  if (!bmain) {
+    return;
+  }
+
   /* need to be on the stack */
   STRNCPY_UTF8(newname, value);
   STRNCPY(oldname, pchan->name); /* Allow non UTF8 encoding for the old name. */
 
-  ED_armature_bone_rename(
-      ob->id.owner_bmain_for_write(), id_cast<bArmature *>(ob->data), oldname, newname);
+  ED_armature_bone_rename(bmain, id_cast<bArmature *>(ob->data), oldname, newname);
 }
 
 /* See rna_Bone_update_renamed() */
@@ -874,7 +878,6 @@ static void rna_def_pose_channel(BlenderRNA *brna)
   /* Name + Selection Status */
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_PoseChannel_name_set");
-  RNA_def_property_editable_func(prop, "rna_ID_owner_editable_if_in_bmain");
   RNA_def_property_ui_text(prop, "Name", "");
   RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
   RNA_def_struct_name_property(srna, prop);
