@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BKE_volume_grid.hh"
 #include "BKE_volume_grid_process.hh"
 #include "BKE_volume_openvdb.hh"
@@ -193,6 +197,15 @@ bool VolumeGridData::is_loaded() const
 {
   std::lock_guard lock{mutex_};
   return tree_loaded_ && transform_loaded_ && meta_data_loaded_;
+}
+
+const CPPType *VolumeGridData::cpp_type() const
+{
+  const VolumeGridType grid_type = this->grid_type();
+  const CPPType *cpp_type = nullptr;
+  BKE_volume_grid_type_to_blender_value_type(grid_type,
+                                             [&]<typename T>() { cpp_type = &CPPType::get<T>(); });
+  return cpp_type;
 }
 
 void VolumeGridData::count_memory(MemoryCounter &memory) const
