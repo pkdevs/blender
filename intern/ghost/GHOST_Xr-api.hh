@@ -104,7 +104,7 @@ void GHOST_XrSessionDrawViews(GHOST_IXrContext *xr_context, void *customdata);
  */
 int GHOST_XrSessionIsRunning(const GHOST_IXrContext *xr_context);
 /**
- * Get the OpenXR runtime name for the session in \a xr_context.
+ * Get the OpenXR runtime name for the session in \p xr_context.
  */
 void GHOST_XrGetRuntimeName(GHOST_IXrContext *xr_context, char *r_runtime_name);
 

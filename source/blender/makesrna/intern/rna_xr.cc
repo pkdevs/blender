@@ -2523,7 +2523,7 @@ static void rna_def_xr_session_state(BlenderRNA *brna)
                                 "rna_XrSessionState_runtime_name_length",
                                 nullptr);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-  RNA_def_property_ui_text(prop, "Runtime Name", "Current OpenXR runtime name");
+  RNA_def_property_ui_text(prop, "Runtime Name", "OpenXR runtime name");
 
   func = RNA_def_function(srna, "reset_to_base_pose", "rna_XrSessionState_reset_to_base_pose");
   RNA_def_function_ui_description(func, "Force resetting of position and rotation deltas");
