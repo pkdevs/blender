@@ -8,7 +8,7 @@ from bpy.app.translations import (
     contexts as i18n_contexts,
 )
 
-EFFECT_MENU_BLACKLIST = (
+EFFECT_MENU_BLOCKLIST = (
     # Color
     "CompositorNodeZcombine",
     "ShaderNodeValToRGB",
@@ -555,7 +555,7 @@ class CompositorEffectMenu(node_add_menu.NodeMenu):
 
     @classmethod
     def node_type_supported(cls, node_type):
-        return node_type not in EFFECT_MENU_BLACKLIST
+        return node_type not in EFFECT_MENU_BLOCKLIST
 
     @classmethod
     def draw_assets_for_catalog(cls, _layout, _catalog_path):
