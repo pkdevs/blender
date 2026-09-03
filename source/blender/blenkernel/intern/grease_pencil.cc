@@ -300,7 +300,7 @@ static void grease_pencil_blend_write(BlendWriter *writer, ID *id, const void *i
       attribute_data);
   grease_pencil->attribute_storage.dna_attributes = attribute_data.attributes.data();
   grease_pencil->attribute_storage.dna_attributes_num = attribute_data.attributes.size();
-  BLO_write_generated_pointer_tag(writer, grease_pencil->attribute_storage.dna_attributes);
+  writer->generated_pointer_tag(grease_pencil->attribute_storage.dna_attributes);
 
   CustomData_reset(&grease_pencil->layers_data_legacy);
 

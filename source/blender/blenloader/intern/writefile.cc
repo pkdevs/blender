@@ -729,8 +729,7 @@ static void mywrite_id_end(WriteData *wd, ID * /*id*/)
      *
      * So we can clear the stable address ids after each ID writing. This makes the mapping even
      * smaller, and ensures that data dynamically generated on write (which may re-use the same
-     * addresses between different IDs) do not trigger the assert in
-     * `BLO_write_generated_pointer_tag`.
+     * addresses between different IDs) do not trigger the assert in `generated_pointer_tag`.
      *
      * Note that `WriteDataStableAddressIDs::used_ids` and
      * `WriteDataStableAddressIDs::next_id_hint` are kept, to ensure generated address ids are
@@ -856,7 +855,7 @@ static uint64_t get_address_id_int(WriteData &wd, const void *address)
     return 0;
   }
   /* In undo case, addresses are kept as-is, unless they have been tagged by specific functions
-   * like `BLO_write_generated_pointer_tag`, in which case their value will already be in the
+   * like `generated_pointer_tag`, in which case their value will already be in the
    * `pointer_map`. */
   if (wd.use_memfile) {
     return wd.stable_address_ids.pointer_map.lookup_default_as(
@@ -1015,7 +1014,7 @@ void BlendStructWriter::generated_ptr(const int64_t offset)
   if (!*p_ptr) {
     return;
   }
-  /* Should exist if #BLO_write_generated_pointer_tag has been called before. */
+  /* Should exist if #generated_pointer_tag has been called before. */
   BLI_assert(wd_->stable_address_ids.pointer_map.contains(*p_ptr));
   const void *p_ptr_address_id = get_address_id(*wd_, *p_ptr);
   *p_ptr = p_ptr_address_id;
@@ -2397,19 +2396,19 @@ void BlendWriter::write_string(const char *data)
   }
 }
 
-void BLO_write_generated_pointer_tag(BlendWriter *writer, const void *data)
+void BlendWriter::generated_pointer_tag(const void *data)
 {
   if (!data) {
     return;
   }
-  if (!writer->is_undo()) {
+  if (!this->is_undo()) {
     return;
   }
-  const uint64_t address_id = get_address_id_for_undo(*writer->wd);
+  const uint64_t address_id = get_address_id_for_undo(*this->wd);
   /* Check that the pointer has not been written before it was tagged as being generated. */
-  BLI_assert(writer->wd->stable_address_ids.pointer_map.lookup_default(data, address_id) ==
+  BLI_assert(this->wd->stable_address_ids.pointer_map.lookup_default(data, address_id) ==
              address_id);
-  writer->wd->stable_address_ids.pointer_map.add(data, address_id);
+  this->wd->stable_address_ids.pointer_map.add(data, address_id);
 }
 
 StringRefNull BlendWriter::filepath() const

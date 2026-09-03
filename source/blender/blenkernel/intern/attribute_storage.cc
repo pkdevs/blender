@@ -680,7 +680,7 @@ void attribute_storage_blend_write_prepare(AttributeStorage &data,
     }
 
     write_data.attributes.append(attribute_dna);
-    BLO_write_generated_pointer_tag(write_data.writer, attribute_dna.data);
+    write_data.writer->generated_pointer_tag(attribute_dna.data);
   }
   data.runtime = nullptr;
 }

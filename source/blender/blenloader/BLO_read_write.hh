@@ -79,7 +79,7 @@ class BlendStructWriter {
   /**
    * Tag the pointer at the given offset as "generated". That implies that it may be remapped
    * to a stable pointer. It's expected that the pointer has been tagged with
-   * #BLO_write_generated_pointer_tag before.
+   * #generated_pointer_tag before.
    */
   void generated_ptr(int64_t offset);
 };
@@ -179,6 +179,16 @@ struct BlendWriter {
                     FunctionRef<void()> write_fn);
 
   int struct_id_by_name(const char *struct_name) const;
+
+  /**
+   * Needs to be called for all pointers that _need_ to be 'stabilized' when writing undo steps,
+   * _before_ any of these pointers are actually written (so typically at the very start of a write
+   * function)..
+   *
+   * Typically required for data dynamically generated as part of the write process, see e.g.
+   * AttributeStorage::dna_attributes.
+   */
+  void generated_pointer_tag(const void *data);
 
   template<typename T> void write_struct(const T *data, const BlendStructWriterFn fn = nullptr)
   {
@@ -320,18 +330,6 @@ struct BLO_Write_IDBuffer {
     return static_cast<ID *>(buffer_.buffer());
   };
 };
-
-/* Misc. */
-
-/**
- * Needs to be called for all pointers that _need_ to be 'stabilized' when writing undo steps,
- * _before_ any of these pointers are actually written (so typically at the very start of a write
- * function)..
- *
- * Typically required for data dynamically generated as part of the write process, see e.g.
- * AttributeStorage::dna_attributes.
- */
-void BLO_write_generated_pointer_tag(BlendWriter *writer, const void *data);
 
 /** \} */
 

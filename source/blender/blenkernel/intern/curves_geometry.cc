@@ -1998,8 +1998,7 @@ void CurvesGeometry::blend_write_prepare(CurvesGeometry::BlendWriteData &write_d
     this->attribute_storage.dna_attributes_num = write_data.attribute_data.attributes.size();
   }
 
-  BLO_write_generated_pointer_tag(write_data.attribute_data.writer,
-                                  this->attribute_storage.dna_attributes);
+  write_data.attribute_data.writer->generated_pointer_tag(this->attribute_storage.dna_attributes);
 }
 
 void CurvesGeometry::blend_write(BlendWriter &writer,

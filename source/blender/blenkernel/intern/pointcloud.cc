@@ -131,7 +131,7 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
     pointcloud->attribute_storage.dna_attributes = attribute_data.attributes.data();
     pointcloud->attribute_storage.dna_attributes_num = attribute_data.attributes.size();
   }
-  BLO_write_generated_pointer_tag(writer, pointcloud->attribute_storage.dna_attributes);
+  writer->generated_pointer_tag(pointcloud->attribute_storage.dna_attributes);
 
   CustomData_reset(&pointcloud->pdata_legacy);
 
