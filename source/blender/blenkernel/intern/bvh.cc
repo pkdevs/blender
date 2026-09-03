@@ -6,6 +6,9 @@
  * \ingroup bke
  */
 
+#include <cmath>
+#include <limits>
+
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_kdopbvh.hh"
@@ -605,8 +608,29 @@ struct ClosestPointUserData {
   RTCScene rtc_scene;
   Tree::ElemType elem_type;
   ClosestPointResult &result;
+  /**
+   * The squared distance to the closest element found so far. Embree's #RTCPointQuery::radius is
+   * not squared, and converting between the two is lossy, so the exact comparisons in
+   * #closest_point_fn use this value instead (see #radius_for_distance_sq).
+   */
+  float distance_sq;
   bool has_result = false;
 };
+
+/**
+ * Embree stores the search radius un-squared but culls nodes with `radius * radius`, comparing
+ * against the squared distance to the node bounds. Squaring the distance can result with a float
+ * one ULP or two below `distance_sq`, which culls a bit too eagerly. Return the smallest radius
+ * that passes this comparison instead, so that every element at the same distance is processed.
+ */
+static float radius_for_distance_sq(const float distance_sq)
+{
+  float radius = std::sqrt(distance_sq);
+  while (radius * radius < distance_sq) {
+    radius = std::nextafter(radius, std::numeric_limits<float>::infinity());
+  }
+  return radius;
+}
 
 static bool closest_point_fn(RTCPointQueryFunctionArguments *args)
 {
@@ -650,11 +674,11 @@ static bool closest_point_fn(RTCPointQueryFunctionArguments *args)
     }
   }
 
-  const float distance = math::distance(float3(&args->query->x), nearest_position);
-  if (distance > args->query->radius) {
+  const float distance_sq = math::distance_squared(float3(&args->query->x), nearest_position);
+  if (distance_sq > user_data.distance_sq) {
     return false;
   }
-  if (distance == args->query->radius) {
+  if (distance_sq == user_data.distance_sq) {
     if (!user_data.has_result) {
       /* The initial search radius is exclusive. */
       return false;
@@ -665,13 +689,12 @@ static bool closest_point_fn(RTCPointQueryFunctionArguments *args)
     if (args->geomID > user_data.result.geomID) {
       return false;
     }
-    if (args->geomID == uint32_t(user_data.result.geomID) &&
-        args->primID >= uint32_t(user_data.result.index))
-    {
+    if (args->geomID == user_data.result.geomID && args->primID >= user_data.result.index) {
       return false;
     }
   }
-  args->query->radius = distance;
+  user_data.distance_sq = distance_sq;
+  args->query->radius = radius_for_distance_sq(distance_sq);
   user_data.result.position = nearest_position;
   user_data.result.bary_coord = bary_coord;
   user_data.result.index = args->primID;
@@ -695,7 +718,7 @@ std::optional<ClosestPointResult> Tree::closest_point(const float3 &point,
   RTCPointQueryContext context{};
   rtcInitPointQueryContext(&context);
   ClosestPointResult result;
-  ClosestPointUserData user_data(this->rtc_scene_, elem_type_, result);
+  ClosestPointUserData user_data(this->rtc_scene_, elem_type_, result, radius * radius);
   if (!rtcPointQuery(this->rtc_scene_, &query, &context, closest_point_fn, &user_data)) {
     return std::nullopt;
   }
