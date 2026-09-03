@@ -752,7 +752,7 @@ Panel *panel_begin(
     if (order >= 0) {
       panel->sortorder = order;
       SET_FLAG_FROM_TEST(
-          panel->flag, !recents::Section("panel.open").get<int>(panel_name_str), PNL_CLOSED);
+          panel->flag, !recents::Section("panel.open").get<bool>(panel_name_str), PNL_CLOSED);
     }
   }
 
@@ -1053,6 +1053,18 @@ void panels_draw(const bContext *C, ARegion *region)
         !block_is_search_only(&block))
     {
       block_draw(C, &block);
+    }
+  }
+}
+
+void panels_do_after_block_layout_fns(const bContext *C, ARegion *region)
+{
+  for (ui::Block &block : region->runtime->uiblocks) {
+    if (block.panel) {
+      block.post_block_layout_fns_pending = false;
+      if (block.active) {
+        block_post_layout_callbacks_exec(C, region, &block);
+      }
     }
   }
 }

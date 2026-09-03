@@ -4121,8 +4121,8 @@ def km_grease_pencil_paint_mode(params):
 
     if params.select_mouse == 'LEFTMOUSE' and not params.legacy:
         items.extend([
-                op_tool_cycle("builtin.select_lasso", {"type": 'W', "value": 'PRESS'}),
-            ])
+            op_tool_cycle("builtin.select_lasso", {"type": 'W', "value": 'PRESS'}),
+        ])
 
     return keymap
 

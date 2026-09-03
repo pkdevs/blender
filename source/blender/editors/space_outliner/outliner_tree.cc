@@ -174,10 +174,6 @@ void outliner_free_tree_element(TreeElement *element, ListBaseT<TreeElement> *pa
   MEM_delete(element);
 }
 
-/* ********************************************************* */
-
-/* -------------------------------------------------------- */
-
 bool outliner_requires_rebuild_on_select_or_active_change(const SpaceOutliner *space_outliner)
 {
   eSpaceOutliner_Filter exclude_flags = outliner_exclude_filter_get(space_outliner);
@@ -360,8 +356,6 @@ TreeElement *AbstractTreeDisplay::add_element(ListBaseT<TreeElement> *lb,
   return te;
 }
 
-/* ======================================================= */
-
 BLI_INLINE void outliner_add_collection_init(TreeElement *te, Collection *collection)
 {
   te->name = BKE_collection_ui_name_get(collection);
@@ -399,11 +393,10 @@ TreeElement *outliner_add_collection_recursive(SpaceOutliner *space_outliner,
 
 /** \} */
 
-/* ======================================================= */
-/* Generic Tree Building helpers - order these are called is top to bottom */
-
 /* -------------------------------------------------------------------- */
 /** \name Tree Sorting Helper
+ *
+ * Generic tree building helpers, the order these are called is top to bottom.
  * \{ */
 
 struct tTreeSort {
@@ -969,10 +962,50 @@ static bool outliner_element_visible_get(const Main &bmain,
       }
     }
   }
+  else if ((te->idcode == ID_MA) && (exclude_filter & SO_FILTER_NO_OB_MATERIAL)) {
+    return false;
+  }
+  else if ((te->idcode == ID_KE) && (exclude_filter & SO_FILTER_NO_OB_SHAPE_KEYS)) {
+    return false;
+  }
+  else if ((TREESTORE(te)->type == TSE_BONE_COLLECTION_BASE) &&
+           (exclude_filter & SO_FILTER_NO_ARMATURE_BONE_COLLECTION))
+  {
+    return false;
+  }
   else if ((te->parent != nullptr) && (TREESTORE(te->parent)->type == TSE_SOME_ID) &&
            (te->parent->idcode == ID_OB))
   {
     if (exclude_filter & SO_FILTER_NO_OB_CONTENT) {
+      return false;
+    }
+    const eTreeStoreElemType type = eTreeStoreElemType(TREESTORE(te)->type);
+    if (type == TSE_SOME_ID && te->idcode != ID_OB) {
+      if (exclude_filter & SO_FILTER_NO_OB_DATA) {
+        return false;
+      }
+    }
+    else if ((type == TSE_ANIM_DATA) && (exclude_filter & SO_FILTER_NO_OB_ANIMATION)) {
+      return false;
+    }
+    else if ((type == TSE_CONSTRAINT_BASE) && (exclude_filter & SO_FILTER_NO_OB_CONSTRAINTS)) {
+      return false;
+    }
+    else if ((type == TSE_ANIM_DATA) && (exclude_filter & SO_FILTER_NO_OB_ANIMATION)) {
+      return false;
+    }
+    else if ((type == TSE_MODIFIER_BASE) && (exclude_filter & SO_FILTER_NO_OB_MODIFIERS)) {
+      return false;
+    }
+    else if ((type == TSE_DEFGROUP_BASE) && (exclude_filter & SO_FILTER_NO_OB_DEFGROUP)) {
+      return false;
+    }
+    else if ((type == TSE_GPENCIL_EFFECT_BASE) &&
+             (exclude_filter & SO_FILTER_NO_GREASE_PENCIL_EFFECTS))
+    {
+      return false;
+    }
+    else if ((type == TSE_POSE_BASE) && (exclude_filter & SO_FILTER_NO_POSE_BONES)) {
       return false;
     }
   }

@@ -39,6 +39,7 @@
 #include "BKE_sound.hh"
 
 #include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
 #include "MOV_read.hh"
 
@@ -896,7 +897,7 @@ static bool strip_write_data_cb(Strip *strip, void *userdata)
           break;
         case STRIP_TYPE_TEXT: {
           TextVars *text = static_cast<TextVars *>(strip->effectdata);
-          if (!BLO_write_is_undo(writer)) {
+          if (!writer->is_undo()) {
             /* Copy current text into legacy buffer. */
             STRNCPY_UTF8(text->text_legacy, text->text_ptr);
           }
@@ -1282,6 +1283,10 @@ static bool strip_sound_update_cb(Strip *strip, void *user_data)
 void eval_strips(Depsgraph *depsgraph, Scene *scene, ListBaseT<Strip> *seqbase)
 {
   DEG_debug_print_eval(depsgraph, __func__, scene->id.name, scene);
+
+  /* Note: sequencer caches are stored on the original scene, not the evaluated copy. */
+  relations_invalidate_temporary_animation_frame(DEG_get_original(scene));
+
   BKE_sound_ensure_scene(scene);
 
   foreach_strip(seqbase, strip_sound_update_cb, scene);

@@ -757,6 +757,10 @@ static bool rna_is_userdef(PointerRNA *ptr, PropertyRNA *prop)
     return false;
   }
 
+  if (RNA_struct_is_a(ptr->type, RNA_ProjectAssetLibrary)) {
+    return false;
+  }
+
   StructRNA *base = RNA_struct_base(ptr->type);
   if (base == nullptr) {
     base = ptr->type;
@@ -6435,7 +6439,7 @@ static int do_but_NUM(
           value_step = double(number_but->step_size * UI_PRECISION_FLOAT_SCALE);
         }
 
-        const eSnapType snap = event_to_snap(event);
+        const eSnapType snap = ISMOUSE_BUTTON(event->type) ? event_to_snap(event) : SNAP_OFF;
         value_step = (snap == SNAP_OFF) ? value_step : number_but->step_size;
         if (event->modifier & KM_SHIFT) {
           value_step *= 0.1;
@@ -13181,6 +13185,17 @@ void popup_handlers_add(bContext *C,
                         PopupBlockHandle *popup,
                         const char flag)
 {
+#ifdef WITH_INPUT_IME
+  /* A popup is modal, end the region's IME session so key presses reach the popup.
+   * Button owned sessions are kept, the popup may belong to the button being edited
+   * (a search menu for e.g.), see #wmIMEOwnerType. */
+  if (wmWindow *win = CTX_wm_window(C)) {
+    if (win->runtime->ime_owner == bke::wmIMEOwnerType::Region) {
+      WM_window_IME_end(win);
+    }
+  }
+#endif
+
   WM_event_add_ui_handler(
       C, handlers, popup_handler, popup_handler_remove, popup, eWM_EventHandlerFlag(flag));
 }
@@ -13409,41 +13424,65 @@ void refresh_for_srna_unregister(Main *bmain, StructRNA *srna_to_unreg)
   CTX_free(C);
 }
 
+static Button *block_find_rna_text_button(Block &block,
+                                          const void *rna_poin_data,
+                                          const char *rna_prop_id)
+{
+  for (Button &but : block.buttons()) {
+    if (but.type == ButtonType::Text) {
+      if (but.rnaprop && but.rnapoin.data == rna_poin_data) {
+        if (STREQ(RNA_property_identifier(but.rnaprop), rna_prop_id)) {
+          return &but;
+        }
+      }
+    }
+  }
+  return nullptr;
+}
+
+bool textbutton_activate_rna(const bContext *C,
+                             ARegion *region,
+                             const void *rna_poin_data,
+                             const char *rna_prop_id,
+                             Block &block)
+{
+  Button *but_text = block_find_rna_text_button(block, rna_poin_data, rna_prop_id);
+
+  if (!but_text) {
+    return false;
+  }
+
+  ARegion *region_ctx = CTX_wm_region(C);
+  /* Temporary context override for activating the button. */
+  CTX_wm_region_set(const_cast<bContext *>(C), region);
+  button_active_only(C, region, &block, but_text);
+  CTX_wm_region_set(const_cast<bContext *>(C), region_ctx);
+  return true;
+}
+
 bool textbutton_activate_rna(const bContext *C,
                              ARegion *region,
                              const void *rna_poin_data,
                              const char *rna_prop_id)
 {
-  Block *block_text = nullptr;
   Button *but_text = nullptr;
-
+  Block *block_text = nullptr;
   for (Block &block : region->runtime->uiblocks) {
-    for (Button &but : block.buttons()) {
-      if (but.type == ButtonType::Text) {
-        if (but.rnaprop && but.rnapoin.data == rna_poin_data) {
-          if (STREQ(RNA_property_identifier(but.rnaprop), rna_prop_id)) {
-            block_text = &block;
-            but_text = &but;
-            break;
-          }
-        }
-      }
-    }
+    but_text = block_find_rna_text_button(block, rna_poin_data, rna_prop_id);
+    block_text = &block;
     if (but_text) {
       break;
     }
   }
-
-  if (but_text) {
-    ARegion *region_ctx = CTX_wm_region(C);
-
-    /* Temporary context override for activating the button. */
-    CTX_wm_region_set(const_cast<bContext *>(C), region);
-    button_active_only(C, region, block_text, but_text);
-    CTX_wm_region_set(const_cast<bContext *>(C), region_ctx);
-    return true;
+  if (!but_text) {
+    return false;
   }
-  return false;
+  ARegion *region_ctx = CTX_wm_region(C);
+  /* Temporary context override for activating the button. */
+  CTX_wm_region_set(const_cast<bContext *>(C), region);
+  button_active_only(C, region, block_text, but_text);
+  CTX_wm_region_set(const_cast<bContext *>(C), region_ctx);
+  return true;
 }
 
 bool textbutton_activate_but(const bContext *C, Button *actbut)
@@ -13746,7 +13785,7 @@ std::optional<int2> try_activate_rna_button(bContext *C,
     WM_cursor_warp(win, BLI_rctf_cent_x(&button_view_rect), BLI_rctf_cent_y(&button_view_rect));
   }
 
-  /* Disable textsearch interactive mode. */
+  /* Disable text-search interactive mode. */
   button->changed = false;
 
   if (button->flag & (BUT_DISABLED | UI_HIDDEN)) {
@@ -13777,7 +13816,7 @@ std::optional<int2> try_activate_rna_button(bContext *C,
     event.xy[0] = BLI_rctf_cent_x(&button_view_rect);
     event.xy[1] = BLI_rctf_cent_y(&button_view_rect);
     /* Use `ui_do_button` for #BUTTON_STATE_NUM_EDITING with a dummy event, some buttons do some
-     * aditional configurations on left click to start editing. */
+     * additional configurations on left click to start editing. */
     do_button(C, button->block, button, &event);
   }
 

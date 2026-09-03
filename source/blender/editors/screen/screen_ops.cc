@@ -6955,13 +6955,17 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
     return OPERATOR_CANCELLED;
   }
 
-  /* The anim timer MUST be created before the 'jump to the start frame' code below executes. The
-   * anim timer data structure also contains the 'started from' frame, which gets restored on
-   * cancelling the playback, and that should be the actual current frame, not the one that's set
-   * below. */
+  /* The anim timer's 'started from' frame, which gets restored on cancelling the playback, must
+   * be the actual current frame, not the one the STOP_END_FRAME jump below sets it to. So record
+   * it before that jump happens, and restore it into the timer's data further down, after the
+   * timer has been created. Note that the timer is deliberately not created here already: its
+   * presence is used elsewhere (e.g. `ED_screen_animation_playing()`) to tell whether playback
+   * has started, and that should not become true before the ANIMATION_PLAYBACK_PRE callback and
+   * sound playback below have run. */
+  const int frame_before_loop_jump = scene->r.cfra;
+
   ViewLayer *view_layer = is_sequencer ? BKE_view_layer_default_render(scene) :
                                          CTX_data_view_layer(C);
-  ED_screen_animation_timer(C, scene, view_layer, screen->redraws_flag, sync, mode);
 
   /* The SCE_LOOP_MODE_STOP_END_FRAME loop mode is special: playback should stop at the end frame,
    * but when playback starts, in this mode, already at the end frame, it should actually start
@@ -6993,6 +6997,7 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
     BKE_sound_play_scene(scene_eval);
   }
 
+  ED_screen_animation_timer(C, scene, view_layer, screen->redraws_flag, sync, /*enable=*/mode);
   ED_scene_fps_average_clear(scene);
 
   if (screen->animtimer) {
@@ -7000,6 +7005,7 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
     ScreenAnimData *sad = static_cast<ScreenAnimData *>(wt->customdata);
 
     sad->region = CTX_wm_region(C);
+    sad->sfra = frame_before_loop_jump;
   }
 
   /* Send a fake mouse-move event so that the active button (the one the mouse hovers over) is
@@ -7401,6 +7407,17 @@ static wmOperatorStatus project_setup_show_exec(bContext *C, wmOperator *op)
     region_header->flag |= RGN_FLAG_HIDDEN;
     ED_region_visibility_change_update(C, area, region_header);
 
+    /* Set the section if specified. */
+    PropertyRNA *prop = RNA_struct_find_property(op->ptr, "section");
+    if (prop && RNA_property_is_set(op->ptr, prop)) {
+      char section_name[MAX_NAME];
+      RNA_property_string_get(op->ptr, prop, section_name);
+      ARegion *region_props = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
+      if (region_props) {
+        ui::panel_category_active_set_default(region_props, section_name);
+      }
+    }
+
     return OPERATOR_FINISHED;
   }
   BKE_report(op->reports, RPT_ERROR, "Failed to open window!");
@@ -7409,6 +7426,8 @@ static wmOperatorStatus project_setup_show_exec(bContext *C, wmOperator *op)
 
 static void SCREEN_OT_project_setup_show(wmOperatorType *ot)
 {
+  PropertyRNA *prop;
+
   /* identifiers */
   ot->name = "Open Project Setup...";
   ot->description = "Create and manage projects";
@@ -7417,6 +7436,14 @@ static void SCREEN_OT_project_setup_show(wmOperatorType *ot)
   /* API callbacks. */
   ot->exec = project_setup_show_exec;
   ot->poll = ED_operator_screenactive_nobackground; /* Not in background as this opens a window. */
+
+  prop = RNA_def_string(ot->srna,
+                        "section",
+                        "General",
+                        MAX_NAME,
+                        "Active Section",
+                        "Section to activate in Project Setup");
+  RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
 /** \} */

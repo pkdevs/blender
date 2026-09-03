@@ -161,7 +161,9 @@ DRWContext::DRWContext(Mode mode_,
     this->object_pose = nullptr;
   }
 
-  this->active_tool = (C) ? WM_toolsystem_ref_from_context(C) : nullptr;
+  if (C != nullptr) {
+    this->active_tool = WM_toolsystem_ref_from_context(C);
+  }
 
   /* View layer can be lazily synced. */
   BKE_view_layer_synced_ensure(*DEG_get_bmain(depsgraph), this->scene, this->view_layer);
@@ -1114,7 +1116,9 @@ static void drw_render_border_mask(const DRWContext &ctx)
   const RegionView3D *rv3d = ctx.rv3d;
 
   /* Check if we need to do any render border masking. */
-  if (v3d == nullptr || rv3d == nullptr || rv3d->persp != RV3D_CAMOB || rv3d->camroll == 0.0f) {
+  if (v3d == nullptr || rv3d == nullptr || rv3d->persp != RV3D_CAMOB || v3d->camera == nullptr ||
+      rv3d->camroll == 0.0f)
+  {
     return;
   }
 
