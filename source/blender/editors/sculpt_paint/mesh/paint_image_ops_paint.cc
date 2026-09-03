@@ -504,7 +504,7 @@ struct ExperimentalTexturePaintStroke final : public PaintStroke {
 
   std::optional<float3> get_location(float2 mouse, bool force_original) override;
   bool test_start(wmOperator *op, float2 mouse) override;
-  void update_step(wmOperator *op, PointerRNA *itemptr) override;
+  void update_step(wmOperator *op, const StrokeStep &stroke_step) override;
   void redraw(bool final) override;
   bool test_cancel() override;
   void done(bool is_cancel, bool stroke_started) override;
@@ -553,24 +553,26 @@ bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
 static void stroke_cache_update(ViewContext & /*vc*/,
                                 Paint &paint,
                                 Object &object,
-                                PointerRNA *ptr)
+                                const PaintStroke::StrokeStep &stroke_step)
 {
   SculptSession &ss = *object.runtime->sculpt_session;
   StrokeCache &cache = *ss.cache;
   Brush &brush = *BKE_paint_brush(&paint);
 
-  if (stroke_is_first_brush_step_of_symmetry_pass(cache)) {
-    RNA_float_get_array(ptr, "location", cache.location);
+  if (stroke_is_first_brush_step_of_symmetry_pass(cache) ||
+      brush.stroke_method != BRUSH_STROKE_ANCHORED)
+  {
+    cache.location = stroke_step.location;
   }
 
-  RNA_float_get_array(ptr, "mouse", cache.mouse);
-  RNA_float_get_array(ptr, "mouse_event", cache.mouse_event);
+  cache.mouse = stroke_step.mouse;
+  cache.mouse_event = stroke_step.mouse_event;
 
   if (paint_supports_dynamic_size(brush, PaintMode::Texture3D) || cache.first_time) {
-    cache.pressure = RNA_float_get(ptr, "pressure");
+    cache.pressure = stroke_step.pressure;
   }
 
-  cache.tilt = {RNA_float_get(ptr, "x_tilt"), RNA_float_get(ptr, "y_tilt")};
+  cache.tilt = stroke_step.tilt;
 
   if (stroke_is_first_brush_step_of_symmetry_pass(*ss.cache)) {
     cache.initial_radius = object_space_radius_get(*cache.vc, paint, brush, cache.location);
@@ -657,7 +659,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
   bke::paint::stroke_track_location(image_paint_settings.paint, world_location);
 }
 
-void ExperimentalTexturePaintStroke::update_step(wmOperator * /*op*/, PointerRNA *itemptr)
+void ExperimentalTexturePaintStroke::update_step(wmOperator * /*op*/, const StrokeStep &step)
 {
   Object &object = *this->object;
   SculptSession &ss = *object.runtime->sculpt_session;
@@ -665,7 +667,7 @@ void ExperimentalTexturePaintStroke::update_step(wmOperator * /*op*/, PointerRNA
   TexturePaintData &mode_data = *static_cast<TexturePaintData *>(mode_data_.get());
 
   cache.stroke_distance = this->stroke_distance();
-  stroke_cache_update(this->vc, *this->paint, object, itemptr);
+  stroke_cache_update(this->vc, *this->paint, object, step);
 
   /* TODO: 'restore' support */
 
@@ -714,8 +716,13 @@ void ExperimentalTexturePaintStroke::done(bool is_cancel, bool stroke_started)
     ED_image_undo_push_end();
   }
 
+  TexturePaintData *mode_data = static_cast<TexturePaintData *>(mode_data_.get());
+  Image *image = mode_data->image_data->image;
+
   WM_event_add_notifier(this->evil_C, NC_OBJECT | ND_DRAW, &ob);
-  /* DEG_id_tag_update(&ob.id, ID); */
+  WM_event_add_notifier(this->evil_C, NC_IMAGE | NA_PAINTING, image);
+
+  DEG_id_tag_update(&image->id, ID_RECALC_SYNC_TO_EVAL);
 }
 
 static PaintStroke *create_paint_stroke(bContext *C, wmOperator *op, const wmEvent *event)
