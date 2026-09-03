@@ -186,16 +186,13 @@ static void get_seq_strip_center_thumbnail(const View2D *v2d,
   const float strip_width = strip.is_single_image ? (strip.right_handle - strip.left_handle) :
                                                     (right_frame - left_frame);
   const float center_frame = roundf((left_frame + right_frame) / 2.0f);
-  const float overlap = max_ff(0.0f, thumb_width - strip_width);
 
   /* To center the thumbnail, offset it by half its width to the left. */
   const float display_offset = (strip.is_single_image ? strip_width / 2.0f : 0.0f) -
                                (thumb_width / 2.0f);
 
-  const float gap = 1.5f * ui::view2d_pixel_size_get_x(v2d) * UI_SCALE_FAC;
-
-  const float crop_left = overlap > 0.0f ? overlap / 2.0f + gap : 0.0f;
-  const float crop_right = overlap > 0.0f ? overlap / 2.0f + gap : 0.0f;
+  const float crop_left = max_ff(0.0f, thumb_width - strip_width) / 2.0f;
+  const float crop_right = max_ff(0.0f, thumb_width - strip_width) / 2.0f;
 
   if (is_thumbnail_in_view(center_frame + display_offset, thumb_width, v2d)) {
     add_thumbnail_at_frame(center_frame,
