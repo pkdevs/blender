@@ -957,10 +957,8 @@ void popup_menu_but_set(PopupMenu *pup, ARegion *butregion, Button *but);
 
 struct Popover;
 
-wmOperatorStatus popover_panel_invoke(bContext *C,
-                                      const char *idname,
-                                      bool keep_open,
-                                      ReportList *reports);
+wmOperatorStatus popover_panel_invoke(
+    bContext *C, const char *idname, bool keep_open, bool use_numselect, ReportList *reports);
 
 /**
  * Only return handler, and set optional title.
@@ -1076,6 +1074,17 @@ Block *block_begin(const bContext *C,
                    ARegion *region,
                    std::string name,
                    EmbossType emboss);
+
+/** Execute every block's after layout callback. */
+void block_post_layout_callbacks_exec(const bContext *C, ARegion *region, Block *block);
+
+/**
+ * \param postpone_callbacks: After block layout callbacks are postponed, caller must execute
+ * them with #block_post_layout_callbacks_exec.
+ * This is necessary if a callback requires to access the region bounds but they
+ * might be no known yet. For example: activating a button may scroll the region view so it can get
+ * properly focused, but that requires to build all panels in a region.
+ */
 void block_end_ex(const bContext *C,
                   Main *bmain,
                   wmWindow *window,
@@ -1084,8 +1093,9 @@ void block_end_ex(const bContext *C,
                   Depsgraph *depsgraph,
                   Block *block,
                   const int xy[2] = nullptr,
-                  int r_xy[2] = nullptr);
-void block_end(const bContext *C, Block *block);
+                  int r_xy[2] = nullptr,
+                  bool postpone_callbacks = false);
+void block_end(const bContext *C, Block *block, bool postpone_callbacks = false);
 /**
  * Uses local copy of style, to scale things down, and allow widgets to change stuff.
  */
@@ -2091,10 +2101,22 @@ void button_tooltip_refresh(bContext *C, Button *but);
  */
 void button_tooltip_timer_remove(bContext *C, Button *but);
 
+/**
+ * Attempt to activate an button referencing an RNA property in the \a region.
+ * \param block_name: targets a block in the \a region, if \a block_name is not set it will test
+ * any block in the \a region.
+ * \returns `true` if the button gets activated.
+ */
 bool textbutton_activate_rna(const bContext *C,
                              ARegion *region,
                              const void *rna_poin_data,
                              const char *rna_prop_id);
+bool textbutton_activate_rna(const bContext *C,
+                             ARegion *region,
+                             const void *rna_poin_data,
+                             const char *rna_prop_id,
+                             Block &block);
+
 bool textbutton_activate_but(const bContext *C, Button *actbut);
 
 /**
@@ -2189,6 +2211,8 @@ void panels_end(const bContext *C, ARegion *region, int *r_x, int *r_y);
  * Draw panels, selected (panels currently being dragged) on top.
  */
 void panels_draw(const bContext *C, ARegion *region);
+
+void panels_do_after_block_layout_fns(const bContext *C, ARegion *region);
 
 Panel *panel_find_by_type(ListBaseT<Panel> *lb, const PanelType *pt);
 /**
