@@ -10,9 +10,8 @@
 
 #include <algorithm>
 
+#include "BLI_index_range.hh"
 #include "BLI_vector.hh"
-
-#include "DRW_pbvh.hh"
 
 namespace blender::draw::pbvh {
 
@@ -44,18 +43,15 @@ class RangeAllocator {
   }
 
   /**
-   * \brief Acquire space for the given buffer range.
+   * \brief Acquire space for the given size.
    *
    * Reuses previously released space when a large enough range is available, otherwise grows the
-   * virtual buffer. Marks the range as acquired and fills in its offset.
+   * virtual buffer. Returns the offset where the new range starts.
    */
-  void acquire(NodeInfo::BufferRange &buffer_info)
+  int64_t acquire(const int64_t len)
   {
-    BLI_assert(!buffer_info.is_space_acquired);
-    if (buffer_info.len <= 0) {
-      buffer_info.is_space_acquired = true;
-      buffer_info.offset = 0;
-      return;
+    if (len <= 0) {
+      return 0;
     }
 
     /* Ensure sequential free space are merged. */
@@ -67,43 +63,33 @@ class RangeAllocator {
     /* Check for space inside existing unassigned space. */
     for (int64_t space_index : released_ranges_.index_range()) {
       IndexRange &index_range = released_ranges_[space_index];
-      if (index_range.size() >= buffer_info.len) {
-        buffer_info.offset = index_range.start();
-        index_range = index_range.drop_front(buffer_info.len);
+      if (index_range.size() >= len) {
+        const int64_t offset = index_range.start();
+        index_range = index_range.drop_front(len);
         if (index_range.is_empty()) {
           released_ranges_.remove(space_index);
         }
-        buffer_info.is_space_acquired = true;
-        break;
+        return offset;
       }
     }
 
     /* If not found we need to grow space. This would invalidate all existing VBO's. */
-    if (!buffer_info.is_space_acquired) {
-      buffer_info.offset = size_;
-      size_ += buffer_info.len;
-      buffer_info.is_space_acquired = true;
-    }
+    const int64_t offset = size_;
+    size_ += len;
+    return offset;
   }
 
   /**
-   * Release the space previously acquired for the given buffer range.
+   * Release the space previously acquired.
    *
-   * The space becomes available for reuse by a later #acquire. Resets the range to an unacquired
-   * state.
+   * The space becomes available for reuse by a later #acquire.
    */
-  void release(NodeInfo::BufferRange &buffer_info)
+  void release(const int64_t offset, const int64_t len)
   {
-    BLI_assert(buffer_info.is_space_acquired);
-    const IndexRange range = buffer_info.index_range();
-    buffer_info.is_space_acquired = false;
-    buffer_info.len = -1;
-    buffer_info.offset = -1;
-
-    if (range.is_empty()) {
+    if (len <= 0) {
       return;
     }
-    released_ranges_.append(range);
+    released_ranges_.append(IndexRange::from_begin_size(offset, len));
     should_optimize_ = true;
   }
 
