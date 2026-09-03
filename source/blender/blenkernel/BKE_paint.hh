@@ -479,7 +479,7 @@ struct SculptSession : NonCopyable, NonMovable {
   float4 prev_pivot_rot = float4(1.0f, 0.0f, 0.0f, 0.0f);
   float3 prev_pivot_scale = {};
 
-  eObjectMode mode_type;
+  eObjectMode mode_type = OB_MODE_OBJECT;
 
   /**
    * ID data is older than sculpt-mode data.
