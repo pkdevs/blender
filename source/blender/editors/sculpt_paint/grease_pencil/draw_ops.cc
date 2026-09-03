@@ -698,7 +698,7 @@ struct GreasePencilFillOpData {
   /* Mouse position where the extension mode was enabled. */
   float2 extension_mouse_pos;
 
-  /* All the points the mouse has been. Only used for the Delaunay method */
+  /* All the mouse positions while its held down. Only used for the Delaunay method. */
   Vector<float2> mouse_path;
 
   /* Overlay draw callback for helper lines, etc. */

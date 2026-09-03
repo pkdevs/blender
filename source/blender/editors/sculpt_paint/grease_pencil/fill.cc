@@ -1715,7 +1715,8 @@ std::optional<bke::CurvesGeometry> delaunay_fill_strokes(
   Array<int> tri_hint_index(result.face.size(), NULL_INDEX);
   Array<float> tri_weights(result.face.size(), 0.0f);
 
-  /* TODO: Currently only one fill hint is supported. */
+  /* Note: Delaunay filling allows for multiple hints being used at the same time, but for bucket
+   * filling only a single hint is used at a time. */
   const Span<float2> hint_points = fill_points[0];
 
   /* Each `hint` is the source of a fill region, each `hint` can have multiple points in it. */
