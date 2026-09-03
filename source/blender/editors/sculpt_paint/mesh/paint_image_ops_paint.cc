@@ -103,7 +103,8 @@ struct ImagePaintStroke final : public PaintStroke {
   wmPaintCursor *cursor_ = nullptr;
 
  public:
-  ImagePaintStroke(bContext *C, wmOperator *op, const wmEvent *event) : PaintStroke(C, op, event)
+  ImagePaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
+      : PaintStroke(C, op, event, PaintMode::Texture2D)
   {
   }
 
@@ -276,7 +277,8 @@ struct TexturePaintStroke final : public PaintStroke {
   wmPaintCursor *cursor_ = nullptr;
 
  public:
-  TexturePaintStroke(bContext *C, wmOperator *op, const wmEvent *event) : PaintStroke(C, op, event)
+  TexturePaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
+      : PaintStroke(C, op, event, PaintMode::Texture3D)
   {
   }
 

@@ -41,10 +41,30 @@ enum class PaintMode : int8_t {
 };
 
 namespace bke {
+
+namespace paint {
+
+/**
+ * Represents the essential library needed for a given runtime.
+ */
+enum class LibraryType : int8_t {
+  Invalid = 0,
+  CurvesSculpt = 1,
+  GPencilDraw = 2,
+  GPencilSculpt = 3,
+  GPencilVertex = 4,
+  GPencilWeight = 5,
+  MeshSculpt = 6,
+  MeshTexture = 7,
+  MeshVertex = 8,
+  MeshWeight = 9,
+};
+}  // namespace paint
+
 struct PaintRuntime : NonCopyable, NonMovable {
   bool initialized = false;
   uint16_t ob_mode = 0;
-  PaintMode paint_mode = PaintMode::Invalid;
+  paint::LibraryType library_type = paint::LibraryType::Invalid;
   AssetWeakReference *previous_active_brush_reference = nullptr;
 
   float2 last_rake = float2(0.0f, 0.0f);
