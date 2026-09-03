@@ -4674,11 +4674,8 @@ const EnumPropertyItem *RNA_action_itemf(bContext *C,
                                          bool *r_free)
 {
 
-  return rna_id_itemf(r_free,
-                      C ? reinterpret_cast<ID *>(CTX_data_main(C)->actions.first()) : nullptr,
-                      false,
-                      nullptr,
-                      nullptr);
+  return rna_id_itemf(
+      r_free, C ? CTX_data_main(C)->actions.first_as<ID>() : nullptr, false, nullptr, nullptr);
 }
 #if 0 /* UNUSED. */
 const EnumPropertyItem *RNA_action_local_itemf(bContext *C,
@@ -4695,22 +4692,16 @@ const EnumPropertyItem *RNA_collection_itemf(bContext *C,
                                              PropertyRNA * /*prop*/,
                                              bool *r_free)
 {
-  return rna_id_itemf(r_free,
-                      C ? reinterpret_cast<ID *>(CTX_data_main(C)->collections.first()) : nullptr,
-                      false,
-                      nullptr,
-                      nullptr);
+  return rna_id_itemf(
+      r_free, C ? CTX_data_main(C)->collections.first_as<ID>() : nullptr, false, nullptr, nullptr);
 }
 const EnumPropertyItem *RNA_collection_local_itemf(bContext *C,
                                                    PointerRNA * /*ptr*/,
                                                    PropertyRNA * /*prop*/,
                                                    bool *r_free)
 {
-  return rna_id_itemf(r_free,
-                      C ? reinterpret_cast<ID *>(CTX_data_main(C)->collections.first()) : nullptr,
-                      true,
-                      nullptr,
-                      nullptr);
+  return rna_id_itemf(
+      r_free, C ? CTX_data_main(C)->collections.first_as<ID>() : nullptr, true, nullptr, nullptr);
 }
 
 const EnumPropertyItem *RNA_image_itemf(bContext *C,
@@ -4718,22 +4709,16 @@ const EnumPropertyItem *RNA_image_itemf(bContext *C,
                                         PropertyRNA * /*prop*/,
                                         bool *r_free)
 {
-  return rna_id_itemf(r_free,
-                      C ? reinterpret_cast<ID *>(CTX_data_main(C)->images.first()) : nullptr,
-                      false,
-                      nullptr,
-                      nullptr);
+  return rna_id_itemf(
+      r_free, C ? CTX_data_main(C)->images.first_as<ID>() : nullptr, false, nullptr, nullptr);
 }
 const EnumPropertyItem *RNA_image_local_itemf(bContext *C,
                                               PointerRNA * /*ptr*/,
                                               PropertyRNA * /*prop*/,
                                               bool *r_free)
 {
-  return rna_id_itemf(r_free,
-                      C ? reinterpret_cast<ID *>(CTX_data_main(C)->images.first()) : nullptr,
-                      true,
-                      nullptr,
-                      nullptr);
+  return rna_id_itemf(
+      r_free, C ? CTX_data_main(C)->images.first_as<ID>() : nullptr, true, nullptr, nullptr);
 }
 
 const EnumPropertyItem *RNA_scene_itemf(bContext *C,
@@ -4741,22 +4726,16 @@ const EnumPropertyItem *RNA_scene_itemf(bContext *C,
                                         PropertyRNA * /*prop*/,
                                         bool *r_free)
 {
-  return rna_id_itemf(r_free,
-                      C ? reinterpret_cast<ID *>(CTX_data_main(C)->scenes.first()) : nullptr,
-                      false,
-                      nullptr,
-                      nullptr);
+  return rna_id_itemf(
+      r_free, C ? CTX_data_main(C)->scenes.first_as<ID>() : nullptr, false, nullptr, nullptr);
 }
 const EnumPropertyItem *RNA_scene_local_itemf(bContext *C,
                                               PointerRNA * /*ptr*/,
                                               PropertyRNA * /*prop*/,
                                               bool *r_free)
 {
-  return rna_id_itemf(r_free,
-                      C ? reinterpret_cast<ID *>(CTX_data_main(C)->scenes.first()) : nullptr,
-                      true,
-                      nullptr,
-                      nullptr);
+  return rna_id_itemf(
+      r_free, C ? CTX_data_main(C)->scenes.first_as<ID>() : nullptr, true, nullptr, nullptr);
 }
 const EnumPropertyItem *RNA_scene_without_sequencer_scene_itemf(bContext *C,
                                                                 PointerRNA * /*ptr*/,
@@ -4765,7 +4744,7 @@ const EnumPropertyItem *RNA_scene_without_sequencer_scene_itemf(bContext *C,
 {
   Scene *sequencer_scene = C ? CTX_data_sequencer_scene(C) : nullptr;
   return rna_id_itemf(r_free,
-                      C ? reinterpret_cast<ID *>(CTX_data_main(C)->scenes.first()) : nullptr,
+                      C ? CTX_data_main(C)->scenes.first_as<ID>() : nullptr,
                       false,
                       rna_id_enum_filter_single_and_assets,
                       sequencer_scene);
@@ -4775,22 +4754,16 @@ const EnumPropertyItem *RNA_movieclip_itemf(bContext *C,
                                             PropertyRNA * /*prop*/,
                                             bool *r_free)
 {
-  return rna_id_itemf(r_free,
-                      C ? reinterpret_cast<ID *>(CTX_data_main(C)->movieclips.first()) : nullptr,
-                      false,
-                      nullptr,
-                      nullptr);
+  return rna_id_itemf(
+      r_free, C ? CTX_data_main(C)->movieclips.first_as<ID>() : nullptr, false, nullptr, nullptr);
 }
 const EnumPropertyItem *RNA_movieclip_local_itemf(bContext *C,
                                                   PointerRNA * /*ptr*/,
                                                   PropertyRNA * /*prop*/,
                                                   bool *r_free)
 {
-  return rna_id_itemf(r_free,
-                      C ? reinterpret_cast<ID *>(CTX_data_main(C)->movieclips.first()) : nullptr,
-                      true,
-                      nullptr,
-                      nullptr);
+  return rna_id_itemf(
+      r_free, C ? CTX_data_main(C)->movieclips.first_as<ID>() : nullptr, true, nullptr, nullptr);
 }
 
 const EnumPropertyItem *RNA_mask_itemf(bContext *C,

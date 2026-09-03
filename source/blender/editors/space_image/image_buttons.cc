@@ -335,9 +335,7 @@ static void ui_imageuser_view_menu_rr(bContext * /*C*/, ui::Layout *layout, void
   layout->separator();
 
   nr = (rr ? rr->views.count() : 0) - 1;
-  for (rview = static_cast<RenderView *>(rr ? rr->views.last() : nullptr); rview;
-       rview = rview->prev, nr--)
-  {
+  for (rview = rr ? rr->views.last() : nullptr; rview; rview = rview->prev, nr--) {
     ui::Button *but = uiDefButV(block,
                                 ui::ButtonType::ButMenu,
                                 IFACE_(rview->name),

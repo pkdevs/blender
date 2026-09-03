@@ -1465,9 +1465,8 @@ static bool bm_vert_connect_select_history(BMesh *bm)
       if (changed == false) {
         /* existing loops: close the selection */
         if (bm_vert_is_select_history_open(bm)) {
-          changed |= bm_vert_connect_pair(bm,
-                                          reinterpret_cast<BMVert *>((bm->selected.first())->ele),
-                                          reinterpret_cast<BMVert *>((bm->selected.last())->ele));
+          changed |= bm_vert_connect_pair(
+              bm, bm->selected.first_as<BMVert>(), bm->selected.last_as<BMVert>());
 
           if (changed) {
             return true;
@@ -1570,12 +1569,12 @@ static bool bm_vert_connect_select_history_edge_to_vert_path(
     }
 
     v = (&e_curr->v1)[side];
-    if (!bm->selected.last() || reinterpret_cast<BMVert *>((bm->selected.last())->ele) != v) {
+    if (!bm->selected.last() || bm->selected.last_as<BMVert>() != v) {
       BM_select_history_store_notest(bm, v);
     }
 
     v = (&e_curr->v1)[!side];
-    if (!bm->selected.first() || reinterpret_cast<BMVert *>((bm->selected.first())->ele) != v) {
+    if (!bm->selected.first() || bm->selected.first_as<BMVert>() != v) {
       BM_select_history_store_head_notest(bm, v);
     }
 
