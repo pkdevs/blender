@@ -145,6 +145,8 @@ static void sima_zoom_set(
   Image *ima = ED_space_image(sima);
   if (ima) {
     ima->runtime->view_zoom = sima->zoom;
+    ima->runtime->view_offset[0] = sima->xof;
+    ima->runtime->view_offset[1] = sima->yof;
   }
 }
 
@@ -341,6 +343,13 @@ static void image_view_all(SpaceImage *sima, ARegion *region, wmOperator *op)
 
   sima->xof = xof;
   sima->yof = yof;
+
+  Image *ima = ED_space_image(sima);
+  if (ima) {
+    ima->runtime->view_zoom = sima->zoom;
+    ima->runtime->view_offset[0] = sima->xof;
+    ima->runtime->view_offset[1] = sima->yof;
+  }
 }
 
 bool space_image_poll(bContext *C)
@@ -3469,6 +3478,11 @@ static bool image_pack_test(Image *ima, const char **r_error_message)
 
   if (!ID_IS_EDITABLE(&ima->id)) {
     *r_error_message = N_("Image is not editable");
+    return false;
+  }
+
+  if (!BKE_image_is_dirty(ima) && ima->source == IMA_SRC_GENERATED) {
+    *r_error_message = N_("Unedited generated images do not support packing");
     return false;
   }
 

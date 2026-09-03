@@ -13,9 +13,14 @@
 #include "COM_context.hh"
 #include "COM_operation.hh"
 
+namespace blender {
+class ComputeContext;
+}
+
 namespace blender::compositor {
 
 struct Schedule;
+class CompileState;
 
 /* A type representing a contiguous subset of the node execution schedule that will be compiled
  * into a Pixel Operation. */
@@ -66,14 +71,11 @@ using PixelCompileUnit = VectorSet<const bNode *>;
  * the link from node 5 to node 6 is declared as an output to the operation. */
 class PixelOperation : public Operation {
  protected:
-  /* The compile unit that will be compiled into this pixel operation. */
-  PixelCompileUnit compile_unit_;
-  /* A reference to the node execution schedule that is being compiled. */
-  const Schedule &schedule_;
+  /* The compile state which currently contains a pixel compile unit that needs to be compiled into
+   * this pixel operation. */
+  CompileState &compile_state_;
   /* The compute context where this pixel operation is executing. */
   const ComputeContext &compute_context_;
-  /* False if node previews are not needed and true otherwise. */
-  bool needs_node_previews_ = false;
   /* A map that associates the identifier of each input of the operation with the output socket it
    * is linked to. This is needed to help the compiler establish links between operations. */
   Map<std::string, const bNodeSocket *> inputs_to_linked_outputs_map_;
@@ -108,8 +110,7 @@ class PixelOperation : public Operation {
 
  public:
   PixelOperation(Context &context,
-                 PixelCompileUnit &compile_unit,
-                 const Schedule &schedule,
+                 CompileState &compile_state,
                  const ComputeContext &compute_context,
                  const bool is_single_value);
 
@@ -152,9 +153,6 @@ class PixelOperation : public Operation {
    *
    * The node execution schedule is given as an input. */
   void compute_results_reference_counts(const Schedule &schedule);
-
-  /* Setter for needs_node_previews_. */
-  void set_needs_node_previews(const bool needed);
 };
 
 }  // namespace blender::compositor

@@ -60,7 +60,7 @@ struct SafetyRect;
 struct HandleButtonData;
 struct Layout;
 struct UndoStack_Text;
-/* ****************** general defines ************** */
+/* General defines. */
 
 #define RNA_ENUM_VALUE -2
 
@@ -449,8 +449,7 @@ struct ButtonSearch : public Button {
   void *item_active = nullptr;
   char *item_active_str;
 
-  void *arg = nullptr;
-  FreeArgFunc arg_free_fn = nullptr;
+  std::shared_ptr<void> arg = nullptr;
 
   ButtonSearchContextMenuFn item_context_menu_fn = nullptr;
   ButtonSearchTooltipFn item_tooltip_fn = nullptr;
@@ -767,6 +766,9 @@ struct Block {
   bool tooltipdisabled = false;
   /** True when #block_end has been called. */
   bool endblock = false;
+  /** True when #block_end has been called with #postpone_callbacks set to true,
+   * #block_post_layout_callbacks_exec must be called. */
+  bool post_block_layout_fns_pending = false;
 
   /** for doing delayed */
   BlockBoundsCalc bounds_type = BLOCK_BOUNDS_NONE;
@@ -1405,7 +1407,7 @@ Button *button_find_new(Block *block_new, const Button *but_old);
 int button_text_padding(const Button *but);
 
 #ifdef WITH_INPUT_IME
-void button_ime_reposition(Button *but, int x, int y, bool complete);
+void button_ime_reposition(Button *but, int x, int y);
 const wmIMEData *button_ime_data_get(Button *but);
 #endif
 
@@ -1631,6 +1633,10 @@ void button_anim_autokey(bContext *C, Button *but, Scene *scene, float cfra);
 
 void button_anim_decorate_cb(bContext *C, void *arg_but, void *arg_dummy);
 void button_anim_decorate_update_from_flag(ButtonDecorator *but);
+/**
+ * \return True when the decorated button should be considered "pushed".
+ */
+bool button_anim_decorate_pushed_state(ButtonDecorator *but);
 
 /* `interface_query.cc` */
 
@@ -1730,7 +1736,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
 /**
  * menu to show when right clicking on the panel header
  */
-void popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel);
+int popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel);
 
 /* `eyedroppers/interface_eyedropper.cc` */
 

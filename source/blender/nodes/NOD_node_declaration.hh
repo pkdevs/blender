@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include <cstdint>
@@ -132,7 +136,7 @@ class ItemDeclaration {
 using ItemDeclarationPtr = std::unique_ptr<ItemDeclaration>;
 
 struct SocketNameRNA {
-  PointerRNA owner = PointerRNA_NULL;
+  PointerRNA owner = {};
   std::string property_name;
 };
 
@@ -171,7 +175,7 @@ struct OutputStructureTypeDependency {
 class SocketDeclaration : public ItemDeclaration {
  public:
   UString name;
-  std::string short_label;
+  UString short_label;
   UString identifier;
   std::string description;
   std::optional<std::string> translation_context;
@@ -305,7 +309,7 @@ class BaseSocketDeclarationBuilder {
 
   BaseSocketDeclarationBuilder &compact(bool value = true);
 
-  BaseSocketDeclarationBuilder &short_label(std::string value = "");
+  BaseSocketDeclarationBuilder &short_label(UString value);
 
   BaseSocketDeclarationBuilder &description(std::string value = "");
 

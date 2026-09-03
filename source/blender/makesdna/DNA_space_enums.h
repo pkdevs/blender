@@ -114,6 +114,7 @@ enum eSpaceButtons_Context : short {
   BCONTEXT_COLLECTION = 17,
   BCONTEXT_STRIP = 18,
   BCONTEXT_STRIP_MODIFIER = 19,
+  BCONTEXT_COMPOSITOR = 20,
 
   /* Keep last. */
   BCONTEXT_TOT,
@@ -154,6 +155,7 @@ enum eSpaceOutliner_Flag : short {
   SO_SYNC_SELECT = (1 << 5),
   SO_MODE_COLUMN = (1 << 6),
   SO_SCROLL_TO_ACTIVE = (1 << 7),
+  SO_EXPAND_ON_FOCUS = (1 << 8),
 };
 ENUM_OPERATORS(eSpaceOutliner_Flag)
 
@@ -186,6 +188,17 @@ enum eSpaceOutliner_Filter : int {
   SO_FILTER_ID_TYPE = (1 << 19),
 
   SO_FILTER_NO_OB_GREASE_PENCIL = (1 << 20),
+
+  SO_FILTER_NO_OB_DATA = (1 << 21),
+  SO_FILTER_NO_OB_ANIMATION = (1 << 22),
+  SO_FILTER_NO_OB_CONSTRAINTS = (1 << 23),
+  SO_FILTER_NO_OB_SHAPE_KEYS = (1 << 24),
+  SO_FILTER_NO_OB_MATERIAL = (1 << 25),
+  SO_FILTER_NO_OB_DEFGROUP = (1 << 26),
+  SO_FILTER_NO_OB_MODIFIERS = (1 << 27),
+  SO_FILTER_NO_ARMATURE_BONE_COLLECTION = (1 << 28),
+  SO_FILTER_NO_GREASE_PENCIL_EFFECTS = (1 << 29),
+  SO_FILTER_NO_POSE_BONES = (1 << 30),
 };
 ENUM_OPERATORS(eSpaceOutliner_Filter)
 

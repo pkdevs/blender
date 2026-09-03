@@ -118,7 +118,7 @@ static ID **shapekey_owner_pointer_get(ID *id, const bool debug_relationship_ass
 static void shapekey_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   Key *key = id_cast<Key *>(id);
-  const bool is_undo = BLO_write_is_undo(writer);
+  const bool is_undo = writer->is_undo();
 
   /* Write LibData. */
   writer->write_id_struct(id_address, key);
@@ -164,8 +164,8 @@ static void shapekey_blend_read_data(BlendDataReader *reader, ID *id)
 static void shapekey_blend_read_after_liblink(BlendLibReader * /*reader*/, ID *id)
 {
   /* ShapeKeys should always only be linked indirectly through their user ID (mesh, Curve etc.), or
-   * be fully local data. */
-  BLI_assert((id->tag & ID_TAG_EXTERN) == 0);
+   * be fully local data, or part of linked packed data. */
+  BLI_assert((id->tag & ID_TAG_EXTERN) == 0 || ID_IS_PACKED(id));
   UNUSED_VARS_NDEBUG(id);
 }
 
