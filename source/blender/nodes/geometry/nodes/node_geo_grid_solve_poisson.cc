@@ -177,7 +177,6 @@ struct MixedBoundaryOp {
     diagonal -= 1.0 * (1.0f - factor);
     source += math::interpolate(
         value * voxel_volume_, (gradient * voxel_size_).dot(normal), factor);
-    // std::cout << "A" << ijk << "=" << diagonal << ", b=" << source << std::endl;
   };
 };
 
@@ -188,10 +187,6 @@ static openvdb::MaskTree::Ptr get_boundary_mask(const openvdb::FloatTree &tree)
   typename MaskTreeT::Ptr interior_mask(new MaskTreeT(tree, false, openvdb::TopologyCopy()));
   typename MaskTreeT::Ptr boundary_mask(new MaskTreeT(tree, false, openvdb::TopologyCopy()));
 
-  //   openvdb::tools::erodeActiveValues(
-  //       *interior_mask, /*iterations=*/1, openvdb::tools::NN_FACE,
-  //       openvdb::tools::IGNORE_TILES);
-  // openvdb::tools::pruneInactive(*interior_mask);
   openvdb::tools::dilateActiveValues(
       *boundary_mask, /*iterations=*/1, openvdb::tools::NN_FACE, openvdb::tools::IGNORE_TILES);
   boundary_mask->topologyDifference(*interior_mask);
