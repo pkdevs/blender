@@ -170,7 +170,7 @@ static bool is_thumbnail_in_view(const float timeline_frame,
   return false;
 }
 
-static void get_seq_strip_center_thumbnail(const View2D *v2d,
+static void get_seq_strip_middle_thumbnail(const View2D *v2d,
                                            const bContext *C,
                                            const StripDrawContext &strip,
                                            Scene *scene,
@@ -185,7 +185,7 @@ static void get_seq_strip_center_thumbnail(const View2D *v2d,
                                                     min_ff(strip.content_end, strip.right_handle);
   const float strip_width = strip.is_single_image ? (strip.right_handle - strip.left_handle) :
                                                     (right_frame - left_frame);
-  const float center_frame = roundf((left_frame + right_frame) / 2.0f);
+  const float middle_frame = roundf((left_frame + right_frame) / 2.0f);
 
   /* To center the thumbnail, offset it by half its width to the left. */
   const float display_offset = (strip.is_single_image ? strip_width / 2.0f : 0.0f) -
@@ -194,8 +194,8 @@ static void get_seq_strip_center_thumbnail(const View2D *v2d,
   const float crop_left = max_ff(0.0f, thumb_width - strip_width) / 2.0f;
   const float crop_right = max_ff(0.0f, thumb_width - strip_width) / 2.0f;
 
-  if (is_thumbnail_in_view(center_frame + display_offset, thumb_width, v2d)) {
-    add_thumbnail_at_frame(center_frame,
+  if (is_thumbnail_in_view(middle_frame + display_offset, thumb_width, v2d)) {
+    add_thumbnail_at_frame(middle_frame,
                            C,
                            v2d,
                            strip,
@@ -285,7 +285,7 @@ static void get_seq_strip_thumbnails(const View2D *v2d,
                                      Scene *scene,
                                      const StripDrawContext &strip,
                                      bool is_muted,
-                                     bool show_only_center,
+                                     bool show_only_middle,
                                      bool show_only_at_strip_ends,
                                      Vector<SeqThumbInfo> &r_thumbs)
 {
@@ -313,8 +313,8 @@ static void get_seq_strip_thumbnails(const View2D *v2d,
     upper_thumb_bound = strip.right_handle;
   }
 
-  if (show_only_center) {
-    get_seq_strip_center_thumbnail(v2d,
+  if (show_only_middle) {
+    get_seq_strip_middle_thumbnail(v2d,
                                    C,
                                    strip,
                                    scene,
@@ -470,7 +470,7 @@ void draw_strip_thumbnails(const TimelineDrawContext &ctx,
                            const Vector<StripDrawContext> &strips)
 {
   const bool show_thumbnails =
-      (ctx.sseq->timeline_overlay.flag & SEQ_TIMELINE_SINGLE_THUMBNAILS) ||
+      (ctx.sseq->timeline_overlay.flag & SEQ_TIMELINE_MIDDLE_THUMBNAILS) ||
       (ctx.sseq->timeline_overlay.flag & SEQ_TIMELINE_STRIP_END_THUMBNAILS) ||
       (ctx.sseq->timeline_overlay.flag & SEQ_TIMELINE_CONTINUOUS_THUMBNAILS);
   /* Nothing to do if we're not showing thumbnails overall. */
@@ -483,8 +483,7 @@ void draw_strip_thumbnails(const TimelineDrawContext &ctx,
   /* Gather information for all thumbnails. */
   Vector<SeqThumbInfo> thumbs;
   /* Thumbnail display mode (Strip ends / Continuous). */
-  const bool show_only_at_center = (ctx.sseq->timeline_overlay.flag &
-                                    SEQ_TIMELINE_SINGLE_THUMBNAILS);
+  const bool show_only_middle = (ctx.sseq->timeline_overlay.flag & SEQ_TIMELINE_MIDDLE_THUMBNAILS);
   const bool show_only_at_strip_ends = (ctx.sseq->timeline_overlay.flag &
                                         SEQ_TIMELINE_STRIP_END_THUMBNAILS);
 
@@ -494,7 +493,7 @@ void draw_strip_thumbnails(const TimelineDrawContext &ctx,
                              ctx.scene,
                              strip,
                              strip.is_muted,
-                             show_only_at_center,
+                             show_only_middle,
                              show_only_at_strip_ends,
                              thumbs);
   }
