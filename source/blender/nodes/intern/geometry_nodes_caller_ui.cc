@@ -932,10 +932,11 @@ void draw_geometry_nodes_modifier_ui(const bContext &C,
             const std::optional<StringRef> parent_name) {
           draw_property_for_socket(ctx, layout, socket, socket_props_ptr, parent_name);
         });
-    draw_warnings(&C, nmd, layout, modifier_ptr);
   }
 
   modifier_error_message_draw(layout, modifier_ptr);
+
+  draw_warnings(&C, nmd, layout, modifier_ptr);
 
   if (has_output_attribute(ctx, nmd.node_group)) {
     if (ui::Layout *panel_layout = layout.panel_prop(

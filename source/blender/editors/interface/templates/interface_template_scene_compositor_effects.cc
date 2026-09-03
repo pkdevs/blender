@@ -406,6 +406,7 @@ static void draw_effect_panel(const bContext *C, Panel *panel)
   if (effect.node_group && !ID_MISSING(effect.node_group)) {
     draw_effect_inputs(*C, *effect_ptr, layout);
   }
+
   draw_warnings(C, layout, *effect_ptr);
 }
 
