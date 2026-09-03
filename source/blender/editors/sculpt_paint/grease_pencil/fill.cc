@@ -1502,7 +1502,7 @@ static meshintersect::CDT_input<double> get_input_from_drawings(
   r_cdt_edges = Array<int2>(drawing_edge_offsets.total_size());
 
   meshintersect::CDT_input<double> input;
-  input.needed_ids = CDT_ORIG_EDGES;
+  input.needed_ids = CDT_ORIG_EDGES | CDT_ORIG_VERTS;
   input.vert = r_cdt_verts;
   input.edge = r_cdt_edges;
 
@@ -1650,6 +1650,8 @@ std::optional<bke::CurvesGeometry> delaunay_fill_strokes(
       src_drawings, object, boundary_layers, region, opacity_threshold, cdt_verts, cdt_edges);
   meshintersect::CDT_result<double> result = delaunay_2d_calc(input, CDT_FULL);
 
+  const IndexRange src_boundary_points = input.vert.index_range().take_back(4);
+
   Array<bool> is_source_edge(result.edge.size(), false);
 
   threading::parallel_for(is_source_edge.index_range(), 512, [&](const IndexRange range) {
@@ -1691,15 +1693,26 @@ std::optional<bke::CurvesGeometry> delaunay_fill_strokes(
     return NULL_INDEX;
   };
 
+  /* Check if a triangle is touches the boundary. */
+  auto is_tri_connected_to_boundary = [&](const int tri_index) {
+    const Vector<int> &tri = result.face[tri_index];
+
+    for (const int j : IndexRange(3)) {
+      for (const int orig_point : result.vert_orig[tri[j]]) {
+        if (src_boundary_points.contains(orig_point)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
   /* Get the first triangle that is touching the bounding box. */
   auto get_first_boundary_tri = [&]() {
     for (const int tri_index : result.face.index_range()) {
-      for (const int j : IndexRange(3)) {
-        const int next_tri = tri_adjacency[tri_index][j];
-
-        if (next_tri == NULL_INDEX) {
-          return tri_index;
-        }
+      if (is_tri_connected_to_boundary(tri_index)) {
+        return tri_index;
       }
     }
     BLI_assert_unreachable();
@@ -1725,7 +1738,7 @@ std::optional<bke::CurvesGeometry> delaunay_fill_strokes(
   Set<int> tris_for_hint;
   for (const int i : hint_points.index_range()) {
     const int hint_tri_index = get_tri_for_point(hint_points[i]);
-    if (hint_tri_index != NULL_INDEX) {
+    if (hint_tri_index != NULL_INDEX && !is_tri_connected_to_boundary(hint_tri_index)) {
       tris_for_hint.add(hint_tri_index);
     }
   }
