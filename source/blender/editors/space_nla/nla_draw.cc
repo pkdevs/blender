@@ -582,7 +582,8 @@ static void nla_draw_strip(SpaceNla *snla,
   }
   /* or if meta-strip, draw lines delimiting extents of sub-strips
    * (in same color as outline, if more than 1 exists) */
-  else if ((strip->type == NLASTRIP_TYPE_META) && (strip->strips.first() != strip->strips.last())) {
+  else if ((strip->type == NLASTRIP_TYPE_META) && (strip->strips.first() != strip->strips.last()))
+  {
     const float y = (ymaxc - yminc) * 0.5f + yminc;
 
     /* up to 2 lines per strip */

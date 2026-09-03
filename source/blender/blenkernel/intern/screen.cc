@@ -1079,7 +1079,7 @@ ARegion *BKE_screen_find_region_in_space(const bScreen *screen,
     for (SpaceLink &slink : area.spacedata) {
       if (&slink == sl) {
         ListBaseT<ARegion> *regionbase = (&slink == area.spacedata.first()) ? &area.regionbase :
-                                                                             &slink.regionbase;
+                                                                              &slink.regionbase;
         return BKE_region_find_in_listbase_by_type(regionbase, region_type);
       }
     }
@@ -1705,7 +1705,7 @@ void BKE_screen_area_blend_read_after_liblink(BlendLibReader *reader, ID *parent
   for (SpaceLink &sl : area->spacedata) {
     SpaceType *space_type = BKE_spacetype_from_id(sl.spacetype);
     ListBaseT<ARegion> *regionbase = (&sl == area->spacedata.first()) ? &area->regionbase :
-                                                                       &sl.regionbase;
+                                                                        &sl.regionbase;
 
     /* We cannot restore the region type without a valid space type. So delete all regions to make
      * sure no data is kept around that can't be restored safely (like the type dependent

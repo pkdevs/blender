@@ -1483,9 +1483,9 @@ static bool rearrange_animchannel_islands(ListBaseT<T> *list,
    *   to the direction we're moving things,
    *   so that we shouldn't need to encounter items we've moved already.
    */
-   if (islands.first() != islands.last()) {
-     tReorderChannelIsland *first = static_cast<tReorderChannelIsland *>(
-         (mode > 0) ? islands.last() : islands.first());
+  if (islands.first() != islands.last()) {
+    tReorderChannelIsland *first = static_cast<tReorderChannelIsland *>(
+        (mode > 0) ? islands.last() : islands.first());
     tReorderChannelIsland *island, *isn = nullptr;
 
     for (island = first; island; island = isn) {
