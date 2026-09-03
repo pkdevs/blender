@@ -10,6 +10,12 @@
 
 namespace blender {
 
+/**
+ * Interval defined by two values of type T.
+ *
+ * Whether this interval is considered open (exclusive of end-points) or closed (inclusive of
+ * end-points) varies across its member functions.
+ */
 template<typename T> struct Bounds {
   T min;
   T max;
@@ -20,6 +26,8 @@ template<typename T> struct Bounds {
   /**
    * Returns true when the size of the bounds is zero (or negative).
    * This matches the behavior of #BLI_rcti_is_empty/#BLI_rctf_is_empty.
+   *
+   * NOTE: this interprets this Bounds as an OPEN interval, where (x, x) is considered 'empty'.
    */
   bool is_empty() const;
   /**
@@ -66,15 +74,23 @@ template<typename T> struct Bounds {
   /**
    * Returns true if \a point is inside the bounds.
    * This matches the behavior of #BLI_rctf_isect_pt/#BLI_rcti_isect_pt.
+   *
+   * NOTE: this interprets this Bounds as a CLOSED interval, where [x, y] contains both x and y.
    */
   bool contains(const T &point) const;
 
   /**
    * Returns true if the \a other bounds is inside or intersect this one.
+   *
+   * NOTE: this interprets the Bounds as OPEN intervals, where (a, b) and (b, c) do NOT
+   * intersect.
    */
   bool intersects(const Bounds<T> &other) const;
   /**
    * Returns true if a line segment from \a start to \a end is inside or intersects the bounds.
+   *
+   * NOTE: this interprets the Bounds as OPEN intervals, where (a, b) and (b, c) do NOT
+   * intersect.
    */
   bool intersects_segment(const T &start, const T &end) const;
 };
