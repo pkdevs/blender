@@ -107,15 +107,15 @@ struct ImagePaintStroke final : public PaintStroke {
   {
   }
 
-  bool get_location(float location[3], const float mouse[2], bool force_original) override;
-  bool test_start(wmOperator *op, const float mouse[2]) override;
-  void update_step(wmOperator *op, PointerRNA *itemptr) override;
+  std::optional<float3> get_location(float2 mouse, bool force_original) override;
+  bool test_start(wmOperator *op, float2 mouse) override;
+  void update_step(wmOperator *op, const StrokeStep &stroke_step) override;
   void redraw(bool final) override;
   bool test_cancel() override;
   void done(bool is_cancel, bool stroke_started) override;
 };
 
-void ImagePaintStroke::update_step(wmOperator *op, PointerRNA *itemptr)
+void ImagePaintStroke::update_step(wmOperator *op, const StrokeStep &stroke_step)
 {
   Paint *paint = BKE_paint_get_active_from_context(this->evil_C);
   bke::PaintRuntime *paint_runtime = paint->runtime;
@@ -126,16 +126,13 @@ void ImagePaintStroke::update_step(wmOperator *op, PointerRNA *itemptr)
   /* initial brush values. Maybe it should be considered moving these to stroke system */
   float startalpha = BKE_brush_alpha_get(paint, brush);
 
-  float mouse[2];
-  float pressure;
-  float size;
   float distance = this->stroke_distance();
-  int eraser;
+  int eraser = RNA_boolean_get(op->ptr, "pen_flip");
 
-  RNA_float_get_array(itemptr, "mouse", mouse);
-  pressure = RNA_float_get(itemptr, "pressure");
-  eraser = RNA_boolean_get(op->ptr, "pen_flip");
-  size = RNA_float_get(itemptr, "size");
+  float mouse[2];
+  copy_v2_v2(mouse, stroke_step.mouse);
+  float pressure = stroke_step.pressure;
+  float size = stroke_step.size;
 
   /* stroking with fill tool only acts on stroke end */
   if (brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_FILL) {
@@ -215,11 +212,10 @@ void ImagePaintStroke::done(const bool is_cancel, const bool /*stroke_started*/)
     ED_image_undo_push_end();
   }
 }
-bool ImagePaintStroke::get_location(float /*location*/[3],
-                                    const float /*mouse*/[2],
-                                    bool /*force_original*/)
+std::optional<float3> ImagePaintStroke::get_location(const float2 /*mouse*/,
+                                                     bool /*force_original*/)
 {
-  return true;
+  return std::nullopt;
 }
 
 bool ImagePaintStroke::test_cancel()
@@ -227,7 +223,7 @@ bool ImagePaintStroke::test_cancel()
   return true;
 }
 
-bool ImagePaintStroke::test_start(wmOperator *op, const float mouse[2])
+bool ImagePaintStroke::test_start(wmOperator *op, const float2 mouse)
 {
   CTX_data_ensure_evaluated_depsgraph(evil_C);
 
@@ -284,15 +280,15 @@ struct TexturePaintStroke final : public PaintStroke {
   {
   }
 
-  bool get_location(float location[3], const float mouse[2], bool force_original) override;
-  bool test_start(wmOperator *op, const float mouse[2]) override;
-  void update_step(wmOperator *op, PointerRNA *itemptr) override;
+  std::optional<float3> get_location(float2 mouse, bool force_original) override;
+  bool test_start(wmOperator *op, float2 mouse) override;
+  void update_step(wmOperator *op, const StrokeStep &stroke_step) override;
   void redraw(bool final) override;
   bool test_cancel() override;
   void done(bool is_cancel, bool stroke_started) override;
 };
 
-void TexturePaintStroke::update_step(wmOperator *op, PointerRNA *itemptr)
+void TexturePaintStroke::update_step(wmOperator *op, const StrokeStep &stroke_step)
 {
   Paint *paint = BKE_paint_get_active_from_context(this->evil_C);
   bke::PaintRuntime *paint_runtime = paint->runtime;
@@ -303,16 +299,13 @@ void TexturePaintStroke::update_step(wmOperator *op, PointerRNA *itemptr)
   /* initial brush values. Maybe it should be considered moving these to stroke system */
   float startalpha = BKE_brush_alpha_get(paint, brush);
 
-  float mouse[2];
-  float pressure;
-  float size;
   float distance = this->stroke_distance();
-  int eraser;
+  int eraser = RNA_boolean_get(op->ptr, "pen_flip");
 
-  RNA_float_get_array(itemptr, "mouse", mouse);
-  pressure = RNA_float_get(itemptr, "pressure");
-  eraser = RNA_boolean_get(op->ptr, "pen_flip");
-  size = RNA_float_get(itemptr, "size");
+  float mouse[2];
+  copy_v2_v2(mouse, stroke_step.mouse);
+  float pressure = stroke_step.pressure;
+  float size = stroke_step.size;
 
   /* stroking with fill tool only acts on stroke end */
   if (brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_FILL) {
@@ -387,11 +380,12 @@ void TexturePaintStroke::done(const bool is_cancel, const bool /*stroke_started*
     ED_image_undo_push_end();
   }
 }
-bool TexturePaintStroke::get_location(float /*location*/[3],
-                                      const float /*mouse*/[2],
-                                      bool /*force_original*/)
+std::optional<float3> TexturePaintStroke::get_location(const float2 /*mouse*/,
+                                                       bool /*force_original*/)
 {
-  return true;
+  /* TODO: This value is a dummy value and not actually used by the rest of the stroke system,
+   * this could be replaced with std::nullopt, but that requires further refactoring. */
+  return float3(0.0f, 0.0f, 0.0f);
 }
 
 bool TexturePaintStroke::test_cancel()
@@ -399,7 +393,7 @@ bool TexturePaintStroke::test_cancel()
   return true;
 }
 
-bool TexturePaintStroke::test_start(wmOperator *op, const float mouse[2])
+bool TexturePaintStroke::test_start(wmOperator *op, const float2 mouse)
 {
   CTX_data_ensure_evaluated_depsgraph(evil_C);
 
