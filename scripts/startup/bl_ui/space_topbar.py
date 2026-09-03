@@ -418,6 +418,8 @@ class TOPBAR_MT_file_export(Menu):
     bl_owner_use_filter = False
 
     def draw(self, context):
+        FileHandler = bpy.types.FileHandler
+
         row = self.layout.row()
         row.operator("wm.collection_export_all")
         row.enabled = context.view_layer.has_export_collections
