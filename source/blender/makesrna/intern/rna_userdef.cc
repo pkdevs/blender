@@ -5669,6 +5669,13 @@ static void rna_def_userdef_view(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Reduce Motion", "Avoid animations and other motion effects in the interface");
   RNA_def_property_update(prop, 0, "rna_userdef_update");
+
+  /* outliner */
+  prop = RNA_def_property(srna, "scroll_to_active", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "outliner_scroll_to_active", 1);
+  RNA_def_property_ui_text(
+      prop, "Scroll to Active", "Scroll the active item into view when it changes outside of the Outliner");
+  RNA_def_property_update(prop, 0, "rna_userdef_update");
 }
 
 static void rna_def_userdef_edit(BlenderRNA *brna)

@@ -1815,6 +1815,9 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->sequencer_default_strip_length = 1.0f;
   }
 
+  if (!USER_VERSION_ATLEAST(503, 19)) {
+    userdef->outliner_scroll_to_active = 1;
+  }
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.

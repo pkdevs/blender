@@ -4624,7 +4624,7 @@ static void rna_def_space_outliner(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop,
       "Scroll to Active",
-      "Scroll the active item into view when it changes outside of the Outliner");
+      "Scroll the active item into view when it changes outside of the Outliner (Also enable it from user preferences)");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
 
   prop = RNA_def_property(srna, "expand_on_focus", PROP_BOOLEAN, PROP_NONE);

@@ -449,10 +449,12 @@ class OUTLINER_PT_filter(Panel):
             row = col.row(align=True)
             row.prop(space, "use_sync_select", text="Sync Selection")
             row = col.row(align=True)
-            row.active = space.use_sync_select
+
+            enable_row = space.use_sync_select and context.preferences.view.scroll_to_active
+            row.active = enable_row
             row.prop(space, "scroll_to_active", text="Scroll to Active")
             row = col.row(align=True)
-            row.active = space.scroll_to_active and space.use_sync_select
+            row.active = space.scroll_to_active and enable_row
             row.prop(space, "expand_on_focus")
 
             row = layout.row(align=True)

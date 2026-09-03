@@ -329,6 +329,19 @@ class USERPREF_PT_interface_editors(InterfacePanel, CenterAlignMixIn, Panel):
         col.prop(view, "factor_display_type")
 
 
+class USERPREF_PT_interface_outliner(InterfacePanel, CenterAlignMixIn, Panel):
+    bl_label = "Outliner"
+    bl_parent_id = "USERPREF_PT_interface_editors"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw_centered(self, context, layout):
+        prefs = context.preferences
+        view = prefs.view
+
+        col = layout.column()
+        col.prop(view, "scroll_to_active", text="Scroll to Active")
+
+
 class USERPREF_PT_interface_temporary_windows(InterfacePanel, CenterAlignMixIn, Panel):
     bl_label = "Temporary Editors"
     bl_parent_id = "USERPREF_PT_interface_editors"
@@ -3086,6 +3099,7 @@ classes = (
 
     USERPREF_PT_interface_display,
     USERPREF_PT_interface_editors,
+    USERPREF_PT_interface_outliner,
     USERPREF_PT_interface_temporary_windows,
     USERPREF_PT_interface_statusbar,
     USERPREF_PT_interface_translation,
