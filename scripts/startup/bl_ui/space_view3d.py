@@ -187,6 +187,8 @@ class VIEW3D_HT_tool_header(Header):
                 row.popover(panel="VIEW3D_PT_sculpt_symmetry_for_topbar", text="")
             elif mode_string == 'PAINT_VERTEX':
                 row.popover(panel="VIEW3D_PT_tools_vertexpaint_symmetry_for_topbar", text="")
+            elif mode_string == 'PAINT_TEXTURE' and bpy.context.preferences.experimental.use_3d_texture_paint:
+                row.popover(panel="VIEW3D_PT_tools_imagepaint_symmetry_for_topbar", text="")
         elif mode_string == 'SCULPT_CURVES':
             ob = context.object
             _row, sub = row_for_mirror()

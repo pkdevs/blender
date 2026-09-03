@@ -69,6 +69,7 @@
 #include "RNA_define.hh"
 
 #include "IMB_colormanagement.hh"
+
 #include "mesh_paint.hh"
 
 #include "../paint_intern.hh"

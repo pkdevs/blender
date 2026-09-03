@@ -38,11 +38,11 @@
 #include "MEM_guardedalloc.h"
 
 #include "RNA_access.hh"
+#include "RNA_define.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "RNA_define.hh"
 #include "image_paint_intern.hh"
 #include "mesh_paint.hh"
 #include "sculpt_automask.hh"
@@ -716,13 +716,15 @@ void ExperimentalTexturePaintStroke::done(bool is_cancel, bool stroke_started)
     ED_image_undo_push_end();
   }
 
-  TexturePaintData *mode_data = static_cast<TexturePaintData *>(mode_data_.get());
-  Image *image = mode_data->image_data->image;
+  if (stroke_started) {
+    TexturePaintData *mode_data = static_cast<TexturePaintData *>(mode_data_.get());
+    Image *image = mode_data->image_data->image;
 
-  WM_event_add_notifier(this->evil_C, NC_OBJECT | ND_DRAW, &ob);
-  WM_event_add_notifier(this->evil_C, NC_IMAGE | NA_PAINTING, image);
+    WM_event_add_notifier(this->evil_C, NC_OBJECT | ND_DRAW, &ob);
+    WM_event_add_notifier(this->evil_C, NC_IMAGE | NA_PAINTING, image);
 
-  DEG_id_tag_update(&image->id, ID_RECALC_SYNC_TO_EVAL);
+    DEG_id_tag_update(&image->id, ID_RECALC_SYNC_TO_EVAL);
+  }
 }
 
 static PaintStroke *create_paint_stroke(bContext *C, wmOperator *op, const wmEvent *event)
