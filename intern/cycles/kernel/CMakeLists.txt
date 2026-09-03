@@ -222,7 +222,6 @@ set(SRC_KERNEL_LIGHT_HEADERS
   light/light.h
   light/point.h
   light/sample.h
-  light/sample_reference.h
   light/spot.h
   light/sun.h
   light/tree.h

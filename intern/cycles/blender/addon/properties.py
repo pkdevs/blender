@@ -622,7 +622,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
     restir_temporal_history_limit: IntProperty(
         name="History Limit",
         description="Maximum length of temporal history to accumulate (in frames)", # sample + frame
-        min=1,
+        min=0,
         max=64,
         default=4,
     )

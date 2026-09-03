@@ -608,7 +608,7 @@ class CYCLES_RENDER_PT_sampling_lights_restir_spatial(CyclesButtonsPanel, Panel)
 
 class CYCLES_RENDER_PT_sampling_lights_restir_temporal(CyclesButtonsPanel, Panel):
     bl_label = "Temporal Resampling"
-    bl_parent_id = 'CYCLES_RENDER_PT_sampling_lights'
+    bl_parent_id = 'CYCLES_RENDER_PT_sampling_lights_restir'
 
     def draw_header(self, context):
         scene = context.scene

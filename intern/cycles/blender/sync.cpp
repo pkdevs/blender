@@ -350,7 +350,7 @@ void BlenderSync::sync_data(blender::RenderData &b_render,
 
 /* Integrator */
 
-void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer, // !!!
+void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
                                   bool background,
                                   const DeviceInfo &denoise_device_info)
 {
@@ -437,7 +437,7 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer, // !!!
   bool use_spatial_resampling  = get_boolean(cscene, "use_spatial_resampling");
   bool use_temporal_resampling = get_boolean(cscene, "use_temporal_resampling");
   const bool restir_unbiased = get_boolean(cscene, "restir_unbiased");
-  int restir_temporal_history_limit = get_int(cscene, "restir_temporal_history_limit");
+  int restir_temporal_history_limit = get_int(cscene, "restir_temporal_history_limit"); // !!!(Tri): Unused
   int light_samples = get_int(cscene, "restir_light_samples");
   int bsdf_samples = 1;
 
@@ -457,9 +457,10 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer, // !!!
 
   const bool pairwise_mis = get_boolean(cscene, "restir_pairwise");
 
+  // TODO(Tri):
   /* TODO(weizhen): add proper flags if necessary. */
-  integrator->set_use_restir(use_initial_resampling | (use_spatial_resampling << 1) |
-                             (pairwise_mis << 2) | (use_temporal_resampling << 3));
+  integrator->set_use_restir(use_initial_resampling + (use_spatial_resampling << 1) +
+                             (pairwise_mis << 2) + (use_temporal_resampling << 3));
   integrator->set_restir_unbiased(restir_unbiased);
   integrator->set_restir_light_samples(light_samples);
   integrator->set_restir_spatial_radius(get_int(cscene, "restir_spatial_radius"));

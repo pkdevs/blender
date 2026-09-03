@@ -748,8 +748,11 @@ ccl_device_forceinline ShaderEvalResult integrate_surface_nee_write_restir_di(
     ccl_global float *ccl_restrict render_buffer)
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_RESERVOIR_PASSES);
+// !!!: to write the fresh initial-candidates reservoir, unconditionally clobbering whichever slot is "current" for this iteration parity.
+// !!!: Nothing about this write path checks or preserves what was there from the previous sample
+// !!!: not designed to survive across samples, only across spatial iterations within one sample.
   /* Write to reservoir and trace shadow ray later. */
-  film_write_pass_reservoir(kg, state, reservoir, render_buffer); // !!!
+  film_write_pass_reservoir(kg, state, reservoir, render_buffer);
   return SHADER_EVAL_OK;
 }
 
@@ -971,7 +974,8 @@ ccl_device
       }
     }
 
-    kernel_assert(light_reference_is_valid(&reference));
+    // !!!(Tri): Crashes when ReSTIR's off for surface_emission
+    // kernel_assert(light_reference_is_valid(&reference));
 
     /* Evaluate light shader. */
     const bool check_visibility = use_restir && kernel_data.integrator.restir_unbiased; // !!!

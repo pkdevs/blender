@@ -104,7 +104,7 @@ NODE_DEFINE(Integrator)
   SOCKET_INT(restir_spatial_radius, "Radius", 10);
   SOCKET_INT(restir_spatial_neighbors, "Samples", 6);
   SOCKET_INT(restir_spatial_iterations, "Iterations", 2);
-  SOCKET_INT(restir_spatial_iterations, "History Limit", 4);
+  SOCKET_INT(restir_temporal_history_limit, "History Limit", 4);
 
   SOCKET_BOOLEAN(use_guiding, "Guiding", false);
   SOCKET_BOOLEAN(deterministic_guiding, "Deterministic Guiding", true);
@@ -418,7 +418,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   kintegrator->restir_spatial_radius = restir_spatial_radius;
   kintegrator->restir_spatial_neighbors = restir_spatial_neighbors;
   kintegrator->restir_spatial_iterations = restir_spatial_iterations;
-  kintegrator->restir_temporal_history_limit = restir_spatial_iterations;
+  kintegrator->restir_temporal_history_limit = restir_temporal_history_limit;
   kintegrator->restir_pairwise_mis = (use_restir >> 2) & 1;
 
   dscene->sample_pattern_lut.clear_modified();
