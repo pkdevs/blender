@@ -57,12 +57,9 @@ static PointerRNA rna_ViewLayer_active_layer_collection_get(PointerRNA *ptr)
 {
   const Scene *scene = id_cast<const Scene *>(ptr->owner_id);
   ViewLayer *view_layer = static_cast<ViewLayer *>(ptr->data);
-  Main *bmain = ptr->owner_id->owner_bmain_for_write();
-  if (!bmain) {
-    return {};
+  if (Main *bmain = ptr->owner_id->owner_bmain_for_write()) {
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   }
-
-  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   LayerCollection *lc = BKE_view_layer_active_collection_get(view_layer);
   return RNA_pointer_create_with_parent(*ptr, RNA_LayerCollection, lc);
 }
@@ -74,11 +71,9 @@ static void rna_ViewLayer_active_layer_collection_set(PointerRNA *ptr,
   const Scene *scene = id_cast<const Scene *>(ptr->owner_id);
   ViewLayer *view_layer = static_cast<ViewLayer *>(ptr->data);
   LayerCollection *lc = static_cast<LayerCollection *>(value.data);
-  Main *bmain = ptr->owner_id->owner_bmain_for_write();
-  if (!bmain) {
-    return;
+  if (Main *bmain = ptr->owner_id->owner_bmain_for_write()) {
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   }
-  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   const int index = BKE_layer_collection_findindex(view_layer, lc);
   if (index != -1) {
     BKE_layer_collection_activate(view_layer, lc);
@@ -89,12 +84,9 @@ static PointerRNA rna_LayerObjects_active_object_get(PointerRNA *ptr)
 {
   const Scene *scene = id_cast<Scene *>(ptr->owner_id);
   ViewLayer *view_layer = static_cast<ViewLayer *>(ptr->data);
-  Main *bmain = ptr->owner_id->owner_bmain_for_write();
-  if (!bmain) {
-    return {};
+  if (Main *bmain = ptr->owner_id->owner_bmain_for_write()) {
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   }
-
-  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   return RNA_id_pointer_create(
       reinterpret_cast<ID *>(BKE_view_layer_active_object_get(view_layer)));
 }
@@ -408,13 +400,9 @@ void rna_LayerCollection_children_begin(CollectionPropertyIterator *iter, Pointe
   Scene *scene = id_cast<Scene *>(ptr->owner_id);
   LayerCollection *lc = static_cast<LayerCollection *>(ptr->data);
   ViewLayer *view_layer = BKE_view_layer_find_from_collection(scene, lc);
-  Main *bmain = ptr->owner_id->owner_bmain_for_write();
-  if (!bmain) {
-    return;
+  if (Main *bmain = ptr->owner_id->owner_bmain_for_write()) {
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   }
-
-  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
-
   rna_iterator_listbase_begin(iter, ptr, &lc->layer_collections, nullptr);
 }
 
@@ -424,13 +412,9 @@ static bool rna_LayerCollection_children_lookupint(PointerRNA *ptr, int key, Poi
   LayerCollection *lc = static_cast<LayerCollection *>(ptr->data);
   /* TODO: replace by using RNA ancestors. */
   ViewLayer *view_layer = BKE_view_layer_find_from_collection(scene, lc);
-  Main *bmain = ptr->owner_id->owner_bmain_for_write();
-  if (!bmain) {
-    return {};
+  if (Main *bmain = ptr->owner_id->owner_bmain_for_write()) {
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   }
-
-  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
-
   LayerCollection *child = static_cast<LayerCollection *>(
       BLI_findlink(&lc->layer_collections, key));
   if (!child) {
@@ -448,12 +432,9 @@ static bool rna_LayerCollection_children_lookupstring(PointerRNA *ptr,
   LayerCollection *lc = static_cast<LayerCollection *>(ptr->data);
   /* TODO: replace by using RNA ancestors. */
   ViewLayer *view_layer = BKE_view_layer_find_from_collection(scene, lc);
-  Main *bmain = ptr->owner_id->owner_bmain_for_write();
-  if (!bmain) {
-    return {};
+  if (Main *bmain = ptr->owner_id->owner_bmain_for_write()) {
+    BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
   }
-  BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
-
   for (LayerCollection &child : lc->layer_collections) {
     if (STREQ(child.collection->id.name + 2, key)) {
       rna_pointer_create_with_ancestors(*ptr, RNA_LayerCollection, &child, *r_ptr);
