@@ -746,7 +746,6 @@ class ShapePanel(BrushPanel):
         settings = cls.paint_settings_from_active_tool(context)
         if not settings:
             return False
-        mode = cls.get_brush_mode(context)
         brush = settings.brush
 
         if not (brush and brush.curve_distance_falloff):
@@ -2074,6 +2073,10 @@ def brush_basic_grease_pencil_vertex_settings(layout, context, brush, *, compact
             layout.prop(gp_settings, "vertex_mode", text="Stroke Mode")
             if gp_settings.vertex_mode == 'BOTH':
                 layout.prop(gp_settings, "single_color")
+
+
+def supports_shape_panel(mode):
+    return mode in {'SCULPT', 'PAINT_VERTEX', 'PAINT_WEIGHT', 'PAINT_TEXTURE'}
 
 
 classes = (
