@@ -854,7 +854,7 @@ static const EnumPropertyItem *driver_mapping_type_itemf(bContext *C,
 
   ui::context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (ptr.owner_id && ptr.data && prop && RNA_property_driver_editable(&ptr, prop)) {
+  if (ptr && ptr.has_owner_id() && prop && RNA_property_driver_editable(&ptr, prop)) {
     const bool is_array = RNA_property_array_check(prop);
 
     while (input->identifier) {
@@ -887,7 +887,7 @@ static bool add_driver_button_poll(bContext *C)
   /* this operator can only run if there's a property button active, and it can be animated */
   ui::context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (!(ptr.owner_id && ptr.data && prop)) {
+  if (!(ptr && ptr.has_owner_id() && prop)) {
     return false;
   }
   if (!RNA_property_driver_editable(&ptr, prop)) {
@@ -915,7 +915,7 @@ static wmOperatorStatus add_driver_button_none(bContext *C, wmOperator *op, shor
     index = -1;
   }
 
-  if (ptr.owner_id && ptr.data && prop && RNA_property_driver_editable(&ptr, prop)) {
+  if (ptr && ptr.has_owner_id() && prop && RNA_property_driver_editable(&ptr, prop)) {
     short flags = CREATEDRIVER_WITH_DEFAULT_DVAR;
 
     if (const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop)) {
@@ -1010,7 +1010,7 @@ static wmOperatorStatus add_driver_button_invoke(bContext *C,
 
   ui::context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (ptr.owner_id && ptr.data && prop && RNA_property_driver_editable(&ptr, prop)) {
+  if (ptr && ptr.has_owner_id() && prop && RNA_property_driver_editable(&ptr, prop)) {
     /* 1) Create a new "empty" driver for this property */
     short flags = CREATEDRIVER_WITH_DEFAULT_DVAR;
     bool changed = false;
@@ -1031,7 +1031,7 @@ static wmOperatorStatus add_driver_button_invoke(bContext *C,
 
     /* 2) Show editing panel for setting up this driver */
     /* TODO: Use a different one from the editing popover, so we can have the single/all toggle? */
-    ui::popover_panel_invoke(C, "GRAPH_PT_drivers_popover", true, op->reports);
+    ui::popover_panel_invoke(C, "GRAPH_PT_drivers_popover", true, false, op->reports);
   }
 
   return OPERATOR_INTERFACE;
@@ -1069,7 +1069,7 @@ static wmOperatorStatus remove_driver_button_exec(bContext *C, wmOperator *op)
     index = -1;
   }
 
-  if (ptr.owner_id && ptr.data && prop) {
+  if (ptr && ptr.has_owner_id() && prop) {
     if (const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop)) {
       changed = ANIM_remove_driver(ptr.owner_id, path->c_str(), index);
     }
@@ -1115,8 +1115,8 @@ static wmOperatorStatus edit_driver_button_exec(bContext *C, wmOperator *op)
 
   ui::context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (ptr.owner_id && ptr.data && prop) {
-    ui::popover_panel_invoke(C, "GRAPH_PT_drivers_popover", true, op->reports);
+  if (ptr && ptr.has_owner_id() && prop) {
+    ui::popover_panel_invoke(C, "GRAPH_PT_drivers_popover", true, false, op->reports);
   }
 
   return OPERATOR_INTERFACE;
@@ -1149,7 +1149,7 @@ static wmOperatorStatus copy_driver_button_exec(bContext *C, wmOperator *op)
 
   ui::context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (ptr.owner_id && ptr.data && prop && RNA_property_driver_editable(&ptr, prop)) {
+  if (ptr && ptr.has_owner_id() && prop && RNA_property_driver_editable(&ptr, prop)) {
     if (const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop)) {
       /* only copy the driver for the button that this was involved for */
       changed = ANIM_copy_driver(op->reports, ptr.owner_id, path->c_str(), index, 0);
@@ -1188,7 +1188,7 @@ static wmOperatorStatus paste_driver_button_exec(bContext *C, wmOperator *op)
 
   ui::context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (ptr.owner_id && ptr.data && prop && RNA_property_driver_editable(&ptr, prop)) {
+  if (ptr && ptr.has_owner_id() && prop && RNA_property_driver_editable(&ptr, prop)) {
     if (const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop)) {
       /* only copy the driver for the button that this was involved for */
       changed = ANIM_paste_driver(op->reports, ptr.owner_id, path->c_str(), index, 0);

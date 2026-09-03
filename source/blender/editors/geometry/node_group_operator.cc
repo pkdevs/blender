@@ -546,7 +546,11 @@ static bke::GeometrySet get_original_geometry_eval_copy(Depsgraph &depsgraph,
         operator_data.active_face_index = BM_mesh_active_face_index_get(em->bm, false, true);
         EDBM_mesh_load_ex(DEG_get_bmain(&depsgraph), &object, true);
         EDBM_mesh_free_data(mesh->runtime->edit_mesh.get());
-        em->bm = nullptr;
+        /* Clear the edit-mesh entirely rather than just freeing its #BMesh. Leaving a #BMEditMesh
+         * with a null `bm` behind is a non-standard state that other code (e.g. the active
+         * attribute lookup when the tool result is stored back) doesn't expect. The edit-mesh is
+         * rebuilt from the tool result in #EDBM_mesh_make_from_mesh. */
+        mesh->runtime->edit_mesh.reset();
       }
 
       if (bke::pbvh::Tree *pbvh = bke::object::pbvh_get(object)) {
@@ -1038,7 +1042,7 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
 
   nodes::eval_log::NodeTreeLog &tree_log = eval_log.log->get_tree_log(compute_context.hash());
   tree_log.ensure_node_warnings(*bmain);
-  for (const nodes::eval_log::NodeWarning &warning : tree_log.all_warnings) {
+  for (const nodes::NodeWarning &warning : tree_log.all_warnings) {
     if (warning.type == nodes::NodeWarningType::Info) {
       BKE_report(op->reports, RPT_INFO, warning.message.c_str());
     }
