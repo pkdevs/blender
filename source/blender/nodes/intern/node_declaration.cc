@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "NOD_geometry_nodes_closure_signature.hh"
 #include "NOD_node_declaration.hh"
 #include "NOD_socket_declarations.hh"
@@ -650,9 +654,9 @@ BaseSocketDeclarationBuilder &BaseSocketDeclarationBuilder::label_fn(CustomSocke
   return *this;
 }
 
-BaseSocketDeclarationBuilder &BaseSocketDeclarationBuilder::short_label(std::string value)
+BaseSocketDeclarationBuilder &BaseSocketDeclarationBuilder::short_label(const UString value)
 {
-  decl_base_->short_label = std::move(value);
+  decl_base_->short_label = value;
   return *this;
 }
 

@@ -440,6 +440,13 @@ static bool socket_can_be_viewed(const bNodeSocket &socket)
   if (STREQ(socket.idname, "NodeSocketVirtual")) {
     return false;
   }
+
+  /* The compositor viewer can only view color sockets, so we make sure the socket can be converted
+   * into a color. */
+  if (socket.owner_tree().type == NTREE_COMPOSIT) {
+    return socket.owner_tree().typeinfo->validate_link(socket.type, SOCK_RGBA);
+  }
+
   return true;
 }
 
@@ -934,6 +941,10 @@ static int node_link_viewer(const bContext &C, bNode &bnode_to_view, bNodeSocket
   }
 
   if (bsocket_to_view == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+
+  if (!socket_can_be_viewed(*bsocket_to_view)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -2734,15 +2745,14 @@ void node_insert_on_link_flags_clear(bNodeTree &node_tree)
 
 void node_insert_on_link_flags(Main &bmain, SpaceNode &snode, bool is_new_node)
 {
-  bNodeTree &node_tree = *snode.edittree;
-  node_tree.ensure_topology_cache();
-  bNode *node_to_insert = get_selected_node_for_insertion(node_tree);
+  bNodeTree &ntree = *snode.edittree;
+  ntree.ensure_topology_cache();
+  bNode *node_to_insert = get_selected_node_for_insertion(ntree);
   if (!node_to_insert) {
     return;
   }
 
   /* Find link to insert on. */
-  bNodeTree &ntree = *snode.edittree;
   bNodeLink *old_link = nullptr;
   for (bNodeLink &link : ntree.links) {
     if (link.flag & NODE_LINK_INSERT_TARGET) {
@@ -2752,7 +2762,7 @@ void node_insert_on_link_flags(Main &bmain, SpaceNode &snode, bool is_new_node)
       break;
     }
   }
-  node_insert_on_link_flags_clear(node_tree);
+  node_insert_on_link_flags_clear(ntree);
   if (old_link == nullptr) {
     return;
   }
