@@ -1613,20 +1613,8 @@ static void draw_but_curve_grid(const uint pos,
   immEnd();
 }
 
-void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, const rcti *rect_but)
+void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, const rcti *rect)
 {
-  const float point_size = max_ff(U.pixelsize * 2.0f,
-                                  min_ff(UI_SCALE_FAC / but->block->aspect * 6.0f, 20.0f));
-  /* Add padding to button drawing to make corner points selectable. */
-  const int padding = point_size * 0.5;
-  rcti _rect{
-      rect_but->xmin + padding,
-      rect_but->xmax - padding,
-      rect_but->ymin + padding,
-      rect_but->ymax - padding,
-  };
-  rcti *rect = &_rect;
-
   ButtonCurveMapping *but_cumap = static_cast<ButtonCurveMapping *>(but);
   CurveMapping *cumap = (but_cumap->edit_cumap == nullptr) ?
                             reinterpret_cast<CurveMapping *>(but->poin) :
@@ -1891,6 +1879,8 @@ void draw_but_CURVE(ARegion *region, Button *but, const uiWidgetColors *wcol, co
   color_point_outline[3] *= fade_factor_float;
 
   cmp = cuma->curve;
+  const float point_size = max_ff(U.pixelsize * 2.0f,
+                                  min_ff(UI_SCALE_FAC / but->block->aspect * 6.0f, 20.0f));
 
   int selected = 0;
   int active = -1;
@@ -2024,22 +2014,9 @@ static bool point_draw_handles(CurveProfilePoint *point)
 void draw_but_CURVEPROFILE(ARegion *region,
                            Button *but,
                            const uiWidgetColors *wcol,
-                           const rcti *rect_but)
+                           const rcti *rect)
 {
   float fx, fy;
-
-  const float point_size = max_ff(U.pixelsize * 2.0f,
-                                  min_ff(UI_SCALE_FAC / but->block->aspect * 6.0f, 20.0f));
-
-  /* Add padding to button drawing to make corner points selectable. */
-  const int padding = point_size * 0.5;
-  rcti _rect{
-      rect_but->xmin + padding,
-      rect_but->xmax - padding,
-      rect_but->ymin + padding,
-      rect_but->ymax - padding,
-  };
-  rcti *rect = &_rect;
 
   ButtonCurveProfile *but_profile = static_cast<ButtonCurveProfile *>(but);
   CurveProfile *profile = (but_profile->edit_profile == nullptr) ?
@@ -2267,6 +2244,9 @@ void draw_but_CURVEPROFILE(ARegion *region,
       active = i;
     }
   }
+
+  const float point_size = max_ff(U.pixelsize * 2.0f,
+                                  min_ff(UI_SCALE_FAC / but->block->aspect * 6.0f, 20.0f));
 
   /* Draw curve points over outline. Don't change scissor if view is zoomed and not near edges.
    * Draw clipped points in that case. */
