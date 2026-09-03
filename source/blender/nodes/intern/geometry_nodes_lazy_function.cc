@@ -530,8 +530,8 @@ static void execute_multi_function_on_value_variant__field(
         fn, input_values, output_values, r_error_message);
   }
   if (any_input_is_list) {
-    execute_multi_function_on_value_variant__list(fn, input_values, output_values, user_data);
-    return true;
+    return execute_multi_function_on_value_variant__list(
+        fn, owned_fn, input_values, output_values, user_data, r_error_message);
   }
   if (any_input_is_field) {
     execute_multi_function_on_value_variant__field(fn, owned_fn, input_values, output_values);
@@ -1619,7 +1619,7 @@ void report_from_multi_function(const mf::Context &context,
   if (auto *shader_nodes_user_data = dynamic_cast<ShaderNodesMultiFunctionUserData *>(
           context.user_data))
   {
-    shader_nodes_user_data->error_messages.append(std::move(message));
+    shader_nodes_user_data->warnings.append({type, std::move(message)});
     return;
   }
 
