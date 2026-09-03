@@ -334,7 +334,7 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
 {
   using namespace blender::bke;
   Mesh *mesh = reinterpret_cast<Mesh *>(id);
-  const bool is_undo = BLO_write_is_undo(writer);
+  const bool is_undo = writer->is_undo();
 
   ResourceScope scope;
   Vector<CustomDataLayer, 16> vert_layers;

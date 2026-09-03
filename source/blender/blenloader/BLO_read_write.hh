@@ -89,6 +89,12 @@ using BlendStructWriterFn = FunctionRef<void(BlendStructWriter &struct_writer)>;
 struct BlendWriter {
   WriteData *wd = nullptr;
 
+  /**
+   * Sometimes different data is written depending on whether the file is saved to disk or used for
+   * undo. This function returns true when the current file-writing is done for undo.
+   */
+  bool is_undo() const;
+
   void write_struct_by_name(const char *struct_name,
                             const void *data,
                             BlendStructWriterFn fn = nullptr);
@@ -327,12 +333,6 @@ void BLO_write_shared(BlendWriter *writer,
  * AttributeStorage::dna_attributes.
  */
 void BLO_write_generated_pointer_tag(BlendWriter *writer, const void *data);
-
-/**
- * Sometimes different data is written depending on whether the file is saved to disk or used for
- * undo. This function returns true when the current file-writing is done for undo.
- */
-bool BLO_write_is_undo(BlendWriter *writer);
 
 /** \} */
 

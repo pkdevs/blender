@@ -779,7 +779,7 @@ static void panel_register(ARegionType *region_type)
 static void blend_write(BlendWriter *writer, const ID *id_owner, const ModifierData *md)
 {
   CorrectiveSmoothModifierData csmd = *reinterpret_cast<const CorrectiveSmoothModifierData *>(md);
-  const bool is_undo = BLO_write_is_undo(writer);
+  const bool is_undo = writer->is_undo();
 
   if (ID_IS_OVERRIDE_LIBRARY(id_owner) && !is_undo) {
     BLI_assert(!ID_IS_LINKED(id_owner));

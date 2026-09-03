@@ -1688,7 +1688,7 @@ BLO_Write_IDBuffer::BLO_Write_IDBuffer(ID &id, const bool is_undo, const bool is
 }
 
 BLO_Write_IDBuffer::BLO_Write_IDBuffer(ID &id, BlendWriter *writer)
-    : BLO_Write_IDBuffer(id, BLO_write_is_undo(writer), false)
+    : BLO_Write_IDBuffer(id, writer->is_undo(), false)
 {
 }
 
@@ -2232,6 +2232,11 @@ bool BLO_write_file_mem(Main *mainvar, MemFile *compare, MemFile *current, const
   return (err == 0);
 }
 
+bool BlendWriter::is_undo() const
+{
+  return this->wd->use_memfile;
+}
+
 /*
  * API to write chunks of data.
  */
@@ -2397,7 +2402,7 @@ void BLO_write_generated_pointer_tag(BlendWriter *writer, const void *data)
   if (!data) {
     return;
   }
-  if (!BLO_write_is_undo(writer)) {
+  if (!writer->is_undo()) {
     return;
   }
   const uint64_t address_id = get_address_id_for_undo(*writer->wd);
@@ -2422,7 +2427,7 @@ void BLO_write_shared(BlendWriter *writer,
     return;
   }
   const uint64_t address_id = get_address_id_int(*writer->wd, data);
-  if (BLO_write_is_undo(writer)) {
+  if (writer->is_undo()) {
     MemFile &memfile = *writer->wd->mem.written_memfile;
     if (sharing_info != nullptr) {
       if (memfile.shared_storage == nullptr) {
@@ -2445,11 +2450,6 @@ void BLO_write_shared(BlendWriter *writer,
     }
   }
   write_fn();
-}
-
-bool BLO_write_is_undo(BlendWriter *writer)
-{
-  return writer->wd->use_memfile;
 }
 
 /** \} */

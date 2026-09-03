@@ -4814,7 +4814,7 @@ static void blend_write_layer_data(BlendWriter *writer,
         int datasize = structnum * count;
         writer->write_struct_array_by_name(structname, datasize, layer.data);
       }
-      else if (!BLO_write_is_undo(writer)) { /* Do not warn on undo. */
+      else if (!writer->is_undo()) { /* Do not warn on undo. */
         printf("%s error: layer '%s':%d - can't be written to file\n",
                __func__,
                structname,
@@ -4832,7 +4832,7 @@ void CustomData_blend_write(BlendWriter *writer,
                             ID *id)
 {
   /* write external customdata (not for undo) */
-  if (data->external && !BLO_write_is_undo(writer)) {
+  if (data->external && !writer->is_undo()) {
     CustomData_external_write(data, BLO_write_filepath(writer), id, cddata_mask, count, 0);
   }
 
