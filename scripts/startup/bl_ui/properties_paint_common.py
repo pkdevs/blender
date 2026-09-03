@@ -805,7 +805,6 @@ class ShapePanel(BrushPanel):
                 )
             layout.separator()
 
-
         layout.use_property_split = False
         col = layout.column(align=True)
         if context.region.type == 'TOOL_HEADER':

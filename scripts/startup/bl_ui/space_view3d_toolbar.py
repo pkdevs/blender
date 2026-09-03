@@ -1336,6 +1336,7 @@ class VIEW3D_PT_tools_imagepaint_symmetry(Panel, View3DPaintPanel):
             layout.prop(mesh, "radial_symmetry", text="Radial")
             layout.prop(image_paint, "tile_offset", text="Tile Offset")
 
+
 class VIEW3D_PT_tools_imagepaint_symmetry_for_topbar(Panel):
     bl_space_type = 'TOPBAR'
     bl_region_type = 'HEADER'
@@ -1343,6 +1344,7 @@ class VIEW3D_PT_tools_imagepaint_symmetry_for_topbar(Panel):
     bl_ui_units_x = 13
 
     draw = VIEW3D_PT_tools_imagepaint_symmetry.draw
+
 
 class VIEW3D_PT_tools_imagepaint_options(View3DPaintPanel, Panel):
     bl_context = ".imagepaint"  # dot on purpose (access from topbar)

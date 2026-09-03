@@ -761,8 +761,46 @@ static PaintStroke *get_paint_stroke(bContext *C, wmOperator *op)
   return static_cast<ImagePaintStroke *>(op->customdata);
 }
 
+static bool should_check_before_stroke_creation(bContext *C, wmOperator *op)
+{
+  if (CTX_wm_region_view3d(C)) {
+    auto switch_mode = BrushSwitchMode(RNA_enum_get(op->ptr, "brush_toggle"));
+
+    const Paint &paint = *BKE_paint_get_active_from_context(C);
+    const Brush &brush = *BKE_paint_brush_for_read(&paint);
+    if (USER_EXPERIMENTAL_TEST(&U, use_3d_texture_paint) &&
+        bke::brush::implements_3d_texture_paint(brush) && switch_mode == BrushSwitchMode::None)
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool check_preconditions(bContext *C, wmOperator *op)
+{
+  const Main &bmain = *CTX_data_main(C);
+  Scene &scene = *CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+  BKE_view_layer_synced_ensure(bmain, &scene, view_layer);
+  Object &ob = *BKE_view_layer_active_object_get(view_layer);
+
+  bool uvs, mat, tex, stencil;
+  if (!ED_paint_proj_mesh_data_check(scene, ob, &uvs, &mat, &tex, &stencil)) {
+    ED_paint_data_warning(op->reports, uvs, mat, tex, stencil);
+    WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, nullptr);
+    return false;
+  }
+  return true;
+}
+
 static wmOperatorStatus paint_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  if (should_check_before_stroke_creation(C, op)) {
+    if (!check_preconditions(C, op)) {
+      return OPERATOR_CANCELLED;
+    }
+  }
   PaintStroke *stroke = create_paint_stroke(C, op, event);
 
   op->customdata = stroke;
@@ -788,6 +826,12 @@ static wmOperatorStatus paint_invoke(bContext *C, wmOperator *op, const wmEvent 
 
 static wmOperatorStatus paint_exec(bContext *C, wmOperator *op)
 {
+  if (should_check_before_stroke_creation(C, op)) {
+    if (!check_preconditions(C, op)) {
+      return OPERATOR_CANCELLED;
+    }
+  }
+
   PaintStroke *stroke = create_paint_stroke(C, op, nullptr);
   op->customdata = stroke;
 
