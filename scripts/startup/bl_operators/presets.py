@@ -97,10 +97,10 @@ class AddPresetBase:
     )
 
     @classmethod
-    def label(_cls, _context, properties):
+    def label(cls, _context, properties):
         if properties.remove_active or properties.remove_name:
             return "Remove Preset"
-        return "Add Preset"
+        return cls.bl_label
 
     @staticmethod
     def as_filename(name):  # could reuse for other presets
@@ -324,6 +324,7 @@ class ExecutePreset(Operator):
 
 class AddPresetTextStripStyle(AddPresetBase, Operator):
     bl_idname = "sequencer.text_strip_style_preset_add"
+    bl_label = "Add Text Strip Style Preset"
     preset_menu = "STRIP_PT_effect_text_style_presets"
 
     preset_defines = [
@@ -372,6 +373,7 @@ class AddPresetTextStripStyle(AddPresetBase, Operator):
 
 class AddPresetRender(AddPresetBase, Operator):
     bl_idname = "render.preset_add"
+    bl_label = "Add Render Preset"
     preset_menu = "RENDER_PT_format_presets"
 
     preset_defines = [
@@ -399,6 +401,7 @@ class AddPresetRender(AddPresetBase, Operator):
 
 class AddPresetCamera(AddPresetBase, Operator):
     bl_idname = "camera.preset_add"
+    bl_label = "Add Camera Preset"
     preset_menu = "CAMERA_PT_presets"
 
     preset_defines = [
@@ -434,6 +437,7 @@ class AddPresetCamera(AddPresetBase, Operator):
 
 class AddPresetCameraSafeAreas(AddPresetBase, Operator):
     bl_idname = "camera.safe_areas_preset_add"
+    bl_label = "Add Safe Area Preset"
     preset_menu = "CAMERA_PT_safe_areas_presets"
 
     preset_defines = [
@@ -458,6 +462,7 @@ class AddPresetCameraSafeAreas(AddPresetBase, Operator):
 
 class AddPresetCloth(AddPresetBase, Operator):
     bl_idname = "cloth.preset_add"
+    bl_label = "Add Cloth Preset"
     preset_menu = "CLOTH_PT_presets"
 
     preset_defines = [
@@ -504,6 +509,7 @@ class AddPresetCloth(AddPresetBase, Operator):
 
 class AddPresetFluid(AddPresetBase, Operator):
     bl_idname = "fluid.preset_add"
+    bl_label = "Add Fluid Preset"
     preset_menu = "FLUID_PT_presets"
 
     preset_defines = [
@@ -526,6 +532,7 @@ class AddPresetFluid(AddPresetBase, Operator):
 
 class AddPresetHairDynamics(AddPresetBase, Operator):
     bl_idname = "particle.hair_dynamics_preset_add"
+    bl_label = "Add Hair Dynamics Preset"
     preset_menu = "PARTICLE_PT_hair_dynamics_presets"
 
     preset_defines = [
@@ -560,6 +567,7 @@ class AddPresetHairDynamics(AddPresetBase, Operator):
 
 class AddPresetTextEditor(AddPresetBase, Operator):
     bl_idname = "text_editor.preset_add"
+    bl_label = "Add Text Editor Preset"
     preset_menu = "USERPREF_PT_text_editor_presets"
 
     preset_defines = [
@@ -582,6 +590,7 @@ class AddPresetTextEditor(AddPresetBase, Operator):
 
 class AddPresetTrackingCamera(AddPresetBase, Operator):
     bl_idname = "clip.camera_preset_add"
+    bl_label = "Add Tracking Camera Preset"
     preset_menu = "CLIP_PT_camera_presets"
 
     preset_defines = [
@@ -620,6 +629,7 @@ class AddPresetTrackingCamera(AddPresetBase, Operator):
 
 class AddPresetTrackingTrackColor(AddPresetBase, Operator):
     bl_idname = "clip.track_color_preset_add"
+    bl_label = "Add Track Color Preset"
     preset_menu = "CLIP_PT_track_color_presets"
 
     preset_defines = [
@@ -642,6 +652,7 @@ class AddPresetTrackingTrackColor(AddPresetBase, Operator):
 
 class AddPresetTrackingSettings(AddPresetBase, Operator):
     bl_idname = "clip.tracking_settings_preset_add"
+    bl_label = "Add Tracking Settings Preset"
     preset_menu = "CLIP_PT_tracking_settings_presets"
 
     preset_defines = [
@@ -676,6 +687,7 @@ class AddPresetTrackingSettings(AddPresetBase, Operator):
 
 class AddPresetEEVEERaytracing(AddPresetBase, Operator):
     bl_idname = "render.eevee_raytracing_preset_add"
+    bl_label = "Add Raytracing Preset"
     preset_menu = "RENDER_PT_eevee_raytracing_presets"
 
     preset_defines = [
@@ -714,6 +726,7 @@ class AddPresetEEVEERaytracing(AddPresetBase, Operator):
 
 class AddPresetColorManagementWhiteBalance(AddPresetBase, Operator):
     bl_idname = "render.color_management_white_balance_preset_add"
+    bl_label = "Add White Balance Preset"
     preset_menu = "RENDER_PT_color_management_white_balance_presets"
 
     preset_defines = [
@@ -736,6 +749,7 @@ class AddPresetColorManagementWhiteBalance(AddPresetBase, Operator):
 
 class AddPresetNodeColor(AddPresetBase, Operator):
     bl_idname = "node.node_color_preset_add"
+    bl_label = "Add Node Color Preset"
     preset_menu = "NODE_PT_node_color_presets"
 
     preset_defines = [
@@ -893,6 +907,7 @@ class RemovePresetKeyconfig(AddPresetBase, Operator):
 
 class AddPresetOperator(AddPresetBase, Operator):
     bl_idname = "wm.operator_preset_add"
+    bl_label = "Add Operator Preset"
     preset_menu = "WM_MT_operator_presets"
 
     operator: StringProperty(
@@ -1066,6 +1081,7 @@ class WM_OT_operator_presets_cleanup(Operator):
 
 class AddPresetGpencilBrush(AddPresetBase, Operator):
     bl_idname = "scene.gpencil_brush_preset_add"
+    bl_label = "Add Grease Pencil Brush Preset"
     preset_menu = "VIEW3D_PT_gpencil_brush_presets"
 
     preset_defines = [
@@ -1104,6 +1120,7 @@ class AddPresetGpencilBrush(AddPresetBase, Operator):
 
 class AddPresetGpencilMaterial(AddPresetBase, Operator):
     bl_idname = "scene.gpencil_material_preset_add"
+    bl_label = "Add Grease Pencil Material Preset"
     preset_menu = "MATERIAL_PT_gpencil_material_presets"
 
     preset_defines = [

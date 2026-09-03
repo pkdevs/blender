@@ -10,6 +10,7 @@ from bpy.types import Operator
 
 class AddPresetIntegrator(AddPresetBase, Operator):
     bl_idname = "render.cycles_integrator_preset_add"
+    bl_label = "Add Integrator Preset"
     preset_menu = "CYCLES_PT_integrator_presets"
 
     preset_defines = [
@@ -42,6 +43,7 @@ class AddPresetIntegrator(AddPresetBase, Operator):
 
 class AddPresetSampling(AddPresetBase, Operator):
     bl_idname = "render.cycles_sampling_preset_add"
+    bl_label = "Add Sampling Preset"
     preset_menu = "CYCLES_PT_sampling_presets"
 
     preset_defines = [
@@ -72,6 +74,7 @@ class AddPresetSampling(AddPresetBase, Operator):
 
 class AddPresetViewportSampling(AddPresetBase, Operator):
     bl_idname = "render.cycles_viewport_sampling_preset_add"
+    bl_label = "Add Viewport Sampling Preset"
     preset_menu = "CYCLES_PT_viewport_sampling_presets"
 
     preset_defines = [
@@ -102,6 +105,7 @@ class AddPresetViewportSampling(AddPresetBase, Operator):
 
 class AddPresetPerformance(AddPresetBase, Operator):
     bl_idname = "render.cycles_performance_preset_add"
+    bl_label = "Add Performance Preset"
     preset_menu = "CYCLES_PT_performance_presets"
 
     preset_defines = [
