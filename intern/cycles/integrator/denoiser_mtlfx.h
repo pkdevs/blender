@@ -173,7 +173,7 @@ private:
       if (pass.render_pass_sample_count == PASS_UNUSED) {
         pixelScale = 1.0f / pass.num_samples;
       } else {
-        pixelScale = 1.0f / buffer[pass.render_pass_sample_count];
+        pixelScale = 1.0f / float(as_type<uint>(buffer[pass.render_pass_sample_count]));
       }
 
       uint2 flip_tid = uint2(tid.x, params.height - 1 - tid.y);
@@ -285,7 +285,7 @@ private:
       if (pass.render_pass_sample_count == PASS_UNUSED) {
         pixelScale = pass.num_samples;
       } else {
-        pixelScale = buffer[pass.render_pass_sample_count];
+        pixelScale = float(as_type<uint>(buffer[pass.render_pass_sample_count]));
       }
       
       const uint64_t denoised_pixel_index = params.offset + (tid.x + params.full_x) + (tid.y + params.full_y) * params.stride;

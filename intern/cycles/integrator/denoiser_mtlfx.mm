@@ -86,7 +86,7 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     desc.depthTextureFormat = MTLPixelFormatR32Float;
     desc.motionTextureFormat = MTLPixelFormatRG16Float;
     
-    desc.normalTextureFormat = MTLPixelFormatRGBA16Float;
+    desc.normalTextureFormat = MTLPixelFormatRGBA8Snorm;
     desc.roughnessTextureFormat = MTLPixelFormatR16Float;
     desc.diffuseAlbedoTextureFormat = MTLPixelFormatRGBA16Float;
     desc.specularAlbedoTextureFormat = MTLPixelFormatRGBA16Float;
@@ -114,7 +114,7 @@ bool MetalFXDenoiser::denoise_create_if_needed(DenoiseContext &context)
     motion_texture = [device newTextureWithDescriptor: tex_desc];
     
     // NOTE TO SELF: normals are expected in world space, not view space.
-    tex_desc.pixelFormat = MTLPixelFormatRGBA16Float;
+    tex_desc.pixelFormat = MTLPixelFormatRGBA8Snorm;
     normal_texture = [device newTextureWithDescriptor: tex_desc];
     
     tex_desc.pixelFormat = MTLPixelFormatR16Float;
@@ -233,7 +233,6 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(const DenoiseContext &co
     context.pass_sample_count,
     context.buffer_params.get_pass_offset(PASS_DENOISING_DEPTH),
     context.pass_motion,
-    // TODO: This normal texture is in view space instead of world space, which MTLFX expects.
     context.buffer_params.get_pass_offset(PASS_NORMAL),
     context.buffer_params.get_pass_offset(PASS_DENOISING_ROUGHNESS),
     context.buffer_params.get_pass_offset(PASS_DENOISING_ALBEDO),
@@ -241,7 +240,7 @@ bool MetalFXDenoiser::denoise_filter_guiding_preprocess(const DenoiseContext &co
     context.num_samples,
   };
   
-  printf("normal: %d\n", passParams.render_pass_normal);
+  printf("motion: %d\n", passParams.render_pass_motion);
   
   id<MTLBuffer> render_buffer = (id<MTLBuffer>) denoiser_device_->get_native_buffer(context.render_buffers->buffer.device_pointer);
   
@@ -356,7 +355,6 @@ bool MetalFXDenoiser::denoise_run(const DenoiseContext &context, const DenoisePa
   denoiser.outputTexture         = (id<MTLTexture>) output_texture;
   denoiser.jitterOffsetX         = context.pixel_jitter.x;
   denoiser.jitterOffsetY         = context.pixel_jitter.y;
-  denoiser.depthReversed         = YES;
   
   [denoiser encodeToCommandBuffer: command_buffer];
     
