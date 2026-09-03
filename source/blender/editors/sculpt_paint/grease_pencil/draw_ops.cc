@@ -1284,11 +1284,15 @@ static void grease_pencil_fill_overlay_delaunay_cb(const bContext &C,
   const float line_width = 2.0f;
 
   Array<float3> line_positions(op_data.mouse_positions.size());
-  for (const int i : op_data.mouse_positions.index_range()) {
-    const float2 co = op_data.mouse_positions[i];
 
-    ED_view3d_win_to_3d(&view3d, &region, float3(0.0f), co, line_positions[i]);
-  }
+  threading::parallel_for(
+      op_data.mouse_positions.index_range(), 8192, [&](const IndexRange range) {
+        for (const int64_t point_i : range) {
+          const float2 co = op_data.mouse_positions[point_i];
+
+          ED_view3d_win_to_3d(&view3d, &region, float3(0.0f), co, line_positions[point_i]);
+        }
+      });
 
   if (line_positions.size() < 2) {
     return;
