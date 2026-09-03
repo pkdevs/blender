@@ -1395,6 +1395,15 @@ static void write_region(BlendWriter *writer, ARegion *region, int spacetype)
   /* Match #direct_link_region so scrollbar fade cannot drift across load/save. */
   region_copy.v2d.alpha_hor = 255;
   region_copy.v2d.alpha_vert = 255;
+  /* For some region types, this is pure runtime data. */
+  if (ELEM(region->regiontype,
+           RGN_TYPE_HEADER,
+           RGN_TYPE_TOOL_HEADER,
+           RGN_TYPE_FOOTER,
+           RGN_TYPE_ASSET_SHELF_HEADER))
+  {
+    region_copy.v2d.tot = region_copy.v2d.cur;
+  }
   writer->write_struct_at_address(region, &region_copy);
 
   if (region->regiondata) {
