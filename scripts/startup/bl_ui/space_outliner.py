@@ -631,6 +631,10 @@ class OUTLINER_PT_options_object_data(Panel):
         row.label(icon='BONE_DATA')
         row.separator()
         row.prop(space, "use_filter_pose_bones", text="Pose Bones")
+        row = panel_column.row(align=True)
+        row.label(icon='MATERIAL')
+        row.separator()
+        row.prop(space, "use_filter_object_materials", text="Materials")
 
 
 classes = (
