@@ -149,8 +149,8 @@ static void add_list_to_params(mf::ParamsBuilder &params,
   for (const int input_i : input_values.index_range()) {
     const SocketValueVariant &input_variant = *input_values[input_i];
     if (input_variant.is_context_dependent_field()) {
-      fields_as_lists[input_i] = evaluate_field_to_list(
-          SocketValueVariant(input_variant).ensure_type<fn::GField>(), output_size);
+      fields_as_lists[input_i] = evaluate_field_to_list(input_variant.copy_as<fn::GField>(),
+                                                        output_size);
     }
   }
 

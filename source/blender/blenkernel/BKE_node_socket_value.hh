@@ -131,6 +131,9 @@ class SocketValueVariant {
   template<typename T> T &ensure_type();
   void *ensure_type(const CPPType &type);
 
+  /** Equivalent to calling #extract<T>() on a copy of this value. */
+  template<typename T> T copy_as() const;
+
   /**
    * Get the stored value as a specific type. For convenience this allows accessing the stored type
    * as a different type, using implicit conversions as possible.
@@ -279,6 +282,12 @@ inline void *SocketValueVariant::ensure_type(const CPPType &type)
     return this->init_default(type);
   }
   return value_.get();
+}
+
+template<typename T> T SocketValueVariant::copy_as() const
+{
+  SocketValueVariant copy(*this);
+  return copy.extract<T>();
 }
 
 template<typename T> inline const T *SocketValueVariant::get_if() const

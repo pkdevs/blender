@@ -1136,7 +1136,7 @@ void LazyFunctionForReduceForeachGeometryElement::handle_generation_items_group(
         const AttrDomain capture_domain = AttrDomain(item.domain);
         const int field_param_i = body_i * body_main_outputs_num +
                                   parent_.indices_.generation.lf_inner[item_i];
-        GField field = params.get_input<SocketValueVariant>(field_param_i).ensure_type<GField>();
+        GField field = params.get_input<SocketValueVariant>(field_param_i).copy_as<GField>();
 
         if (capture_domain == AttrDomain::Instance) {
           if (geometry.has_instances()) {

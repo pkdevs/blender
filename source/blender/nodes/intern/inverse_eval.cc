@@ -485,24 +485,23 @@ static bool set_socket_value(bContext &C,
 
   switch (socket.type) {
     case SOCK_FLOAT: {
-      const float value = SocketValueVariant(value_variant).ensure_type<float>();
+      const float value = value_variant.copy_as<float>();
       return set_rna_property(C, tree.id, default_value_rna_path, value);
     }
     case SOCK_INT: {
-      const int value = SocketValueVariant(value_variant).ensure_type<int>();
+      const int value = value_variant.copy_as<int>();
       return set_rna_property(C, tree.id, default_value_rna_path, value);
     }
     case SOCK_BOOLEAN: {
-      const bool value = SocketValueVariant(value_variant).ensure_type<bool>();
+      const bool value = value_variant.copy_as<bool>();
       return set_rna_property(C, tree.id, default_value_rna_path, value);
     }
     case SOCK_VECTOR: {
-      const float3 value = SocketValueVariant(value_variant).ensure_type<float3>();
+      const float3 value = value_variant.copy_as<float3>();
       return set_rna_property_float3(C, tree.id, default_value_rna_path, value);
     }
     case SOCK_ROTATION: {
-      const math::Quaternion rotation =
-          SocketValueVariant(value_variant).ensure_type<math::Quaternion>();
+      const math::Quaternion rotation = value_variant.copy_as<math::Quaternion>();
       const float3 euler = float3(math::to_euler(rotation));
       return set_rna_property_float3(C, tree.id, default_value_rna_path, euler);
     }
@@ -518,29 +517,28 @@ static bool set_value_node_value(bContext &C, bNode &node, const SocketValueVari
 
   switch (node.type_legacy) {
     case SH_NODE_VALUE: {
-      const float value = SocketValueVariant(value_variant).ensure_type<float>();
+      const float value = value_variant.copy_as<float>();
       const std::string rna_path = fmt::format("nodes[\"{}\"].outputs[0].default_value",
                                                BLI_str_escape(node.name));
       return set_rna_property(C, tree.id, rna_path, value);
     }
     case FN_NODE_INPUT_INT: {
-      const int value = SocketValueVariant(value_variant).ensure_type<int>();
+      const int value = value_variant.copy_as<int>();
       const std::string rna_path = fmt::format("nodes[\"{}\"].integer", BLI_str_escape(node.name));
       return set_rna_property(C, tree.id, rna_path, value);
     }
     case FN_NODE_INPUT_BOOL: {
-      const bool value = SocketValueVariant(value_variant).ensure_type<bool>();
+      const bool value = value_variant.copy_as<bool>();
       const std::string rna_path = fmt::format("nodes[\"{}\"].boolean", BLI_str_escape(node.name));
       return set_rna_property(C, tree.id, rna_path, value);
     }
     case FN_NODE_INPUT_VECTOR: {
-      const float3 value = SocketValueVariant(value_variant).ensure_type<float3>();
+      const float3 value = value_variant.copy_as<float3>();
       const std::string rna_path = fmt::format("nodes[\"{}\"].vector", BLI_str_escape(node.name));
       return set_rna_property_float3(C, tree.id, rna_path, value);
     }
     case FN_NODE_INPUT_ROTATION: {
-      const math::Quaternion rotation =
-          SocketValueVariant(value_variant).ensure_type<math::Quaternion>();
+      const math::Quaternion rotation = value_variant.copy_as<math::Quaternion>();
       const float3 euler = float3(math::to_euler(rotation));
       const std::string rna_path = fmt::format("nodes[\"{}\"].rotation_euler",
                                                BLI_str_escape(node.name));
@@ -565,24 +563,23 @@ static bool set_modifier_value(bContext &C,
 
   switch (interface_socket.socket_typeinfo()->type) {
     case SOCK_FLOAT: {
-      const float value = SocketValueVariant(value_variant).ensure_type<float>();
+      const float value = value_variant.copy_as<float>();
       return set_rna_property(C, object.id, main_prop_rna_path, value);
     }
     case SOCK_INT: {
-      const int value = SocketValueVariant(value_variant).ensure_type<int>();
+      const int value = value_variant.copy_as<int>();
       return set_rna_property(C, object.id, main_prop_rna_path, value);
     }
     case SOCK_BOOLEAN: {
-      const bool value = SocketValueVariant(value_variant).ensure_type<bool>();
+      const bool value = value_variant.copy_as<bool>();
       return set_rna_property(C, object.id, main_prop_rna_path, value);
     }
     case SOCK_VECTOR: {
-      const float3 value = SocketValueVariant(value_variant).ensure_type<float3>();
+      const float3 value = value_variant.copy_as<float3>();
       return set_rna_property_float3(C, object.id, main_prop_rna_path, value);
     }
     case SOCK_ROTATION: {
-      const math::Quaternion rotation =
-          SocketValueVariant(value_variant).ensure_type<math::Quaternion>();
+      const math::Quaternion rotation = value_variant.copy_as<math::Quaternion>();
       const float3 euler = float3(math::to_euler(rotation));
       return set_rna_property_float3(C, object.id, main_prop_rna_path, euler);
     }

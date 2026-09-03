@@ -505,7 +505,7 @@ class LazyFunctionForMenuSwitchSocketUsage : public lf::LazyFunction {
       }
     }
     else {
-      const MenuValue value = SocketValueVariant(condition_variant).ensure_type<MenuValue>();
+      const MenuValue value = condition_variant.copy_as<MenuValue>();
       for (const int i : IndexRange(enum_def_.items_num)) {
         const NodeEnumItem &enum_item = enum_def_.items()[i];
         params.set_output(i, value.value == enum_item.identifier);
