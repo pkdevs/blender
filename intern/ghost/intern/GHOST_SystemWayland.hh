@@ -180,6 +180,11 @@ struct GWL_Output {
   std::string model;
 };
 
+struct GHOST_SystemDBusSettings {
+  /** Written from the watcher's background thread, see #getSystemColorScheme. */
+  std::atomic<GHOST_TColorScheme> color_scheme = GHOST_kColorSchemeUnknown;
+};
+
 class GHOST_SystemWayland : public GHOST_System {
  public:
   GHOST_SystemWayland(bool background);
@@ -410,7 +415,6 @@ class GHOST_SystemWayland : public GHOST_System {
 
 #ifdef WITH_GHOST_DBUS
   std::unique_ptr<GHOST_SystemDBusUnix> dbus_watcher_;
-  /** Written from the watcher's background thread, see #getSystemColorScheme. */
-  std::atomic<GHOST_TColorScheme> color_scheme_ = GHOST_kColorSchemeUnknown;
+  GHOST_SystemDBusSettings dbus_;
 #endif
 };

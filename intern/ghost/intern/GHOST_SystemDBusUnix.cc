@@ -194,12 +194,13 @@ static bool value_from_variant(DBusMessageIter *iter, GHOST_DBusValue &r_value)
  */
 static bool session_bus_is_available()
 {
-  if (getenv("DBUS_SESSION_BUS_ADDRESS")) {
+  const char *session_bus_address = getenv("DBUS_SESSION_BUS_ADDRESS");
+  if (session_bus_address && session_bus_address[0] != '\0') {
     return true;
   }
   /* `libdbus` checks this well known location before resorting to auto-launch. */
   const char *runtime_dir = getenv("XDG_RUNTIME_DIR");
-  if (!runtime_dir) {
+  if (!runtime_dir || runtime_dir[0] == '\0') {
     return false;
   }
   const std::string path = std::string(runtime_dir) + "/bus";

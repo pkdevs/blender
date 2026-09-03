@@ -1273,6 +1273,7 @@ class USERPREF_PT_theme_interface_styles(ThemePanel, CenterAlignMixIn, Panel):
 
         col = flow.column()
         col.prop(ui, "widget_text_cursor")
+        col.prop(ui, "link")
 
 
 class USERPREF_PT_theme_interface_transparent_checker(ThemePanel, CenterAlignMixIn, Panel):

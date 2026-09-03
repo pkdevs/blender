@@ -36,8 +36,6 @@ DBUS_DYNLOAD_FN(dbus_message_iter_recurse)
 DBUS_DYNLOAD_FN(dbus_message_iter_get_basic)
 DBUS_DYNLOAD_FN(dbus_bus_get_private)
 DBUS_DYNLOAD_FN(dbus_bus_add_match)
-#elif defined(DBUS_DYNLOAD_IFACE)
-/* No interfaces. */
 #else
 
 /* Header guard. */
@@ -139,7 +137,7 @@ struct DBusDynload {
 #      define dbus_bus_add_match(...) (*dbus_dynload.dbus_bus_add_match)(__VA_ARGS__)
 #    endif /* !DBUS_DYNLOAD_VALIDATE */
 #  endif   /* !defined(__DBUS_DYNLOAD_H__) && !defined(DBUS_DYNLOAD_VALIDATE) */
-#endif     /* !defined(DBUS_DYNLOAD_FN) && !defined(DBUS_DYNLOAD_IFACE) */
+#endif     /* !defined(DBUS_DYNLOAD_FN) */
 
 #ifdef __cplusplus
 }
