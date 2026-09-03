@@ -511,7 +511,7 @@ bool PathTraceWorkGPU::enqueue_path_iteration()
       }
     }
 
-    /* Limit number of scheduled paths to the availabel shadow path space. */
+    /* Limit number of scheduled paths to the available shadow path space. */
     num_paths_limit = available_shadow_paths / shadow_paths_per_path;
 
     if (kernel == DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE) {
