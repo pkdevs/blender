@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "NOD_eval_log.hh"
 #include "NOD_geometry_nodes_bundle.hh"
 #include "NOD_geometry_nodes_closure.hh"
@@ -260,19 +264,6 @@ ListInfoLog::ListInfoLog(const GListPtr &list)
     return;
   }
   this->size = list->size();
-}
-
-NodeWarning::NodeWarning(const Report &report)
-{
-  switch (report.type) {
-    case RPT_ERROR:
-      this->type = NodeWarningType::Error;
-      break;
-    default:
-      this->type = NodeWarningType::Info;
-      break;
-  }
-  this->message = report.message;
 }
 
 ImageInfoLog::ImageInfoLog(const int2 data_size,
@@ -941,6 +932,12 @@ NodeTreeLogger &NodesEvalLog::get_local_tree_logger(const ComputeContext &comput
       tree_logger.tree_orig_session_uid = get_original_session_uid(
           reinterpret_cast<const ID *>(nmd->node_group));
     }
+  }
+  else if (const auto *context = dynamic_cast<const bke::SceneCompositorEffectComputeContext *>(
+               &compute_context))
+  {
+    tree_logger.tree_orig_session_uid = get_original_session_uid(
+        reinterpret_cast<const ID *>(context->effect().node_group));
   }
   else if (const auto *context = dynamic_cast<const bke::OperatorComputeContext *>(
                &compute_context))

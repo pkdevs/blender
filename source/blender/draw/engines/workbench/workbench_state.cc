@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw_engine
+ */
+
 #include "workbench_private.hh"
 
 #include "DNA_userdef_types.h"
@@ -336,7 +340,7 @@ ObjectState::ObjectState(const DRWContext *draw_ctx,
 
   if (sculpt_pbvh) {
     if (color_type == V3D_SHADING_TEXTURE_COLOR &&
-        bke::object::pbvh_get(*ob)->type() != bke::pbvh::Type::Mesh)
+        !ELEM(bke::object::pbvh_get(*ob)->type(), bke::pbvh::Type::Mesh, bke::pbvh::Type::Grids))
     {
       /* Force use of material color for sculpt. */
       color_type = V3D_SHADING_MATERIAL_COLOR;

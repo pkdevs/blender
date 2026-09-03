@@ -10,8 +10,10 @@
 #include <cstring>
 
 #include "BLI_path_utils.hh"
-
 #include "BLI_string_ref.hh"
+
+#include "BLT_translation.hh"
+
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
@@ -296,6 +298,7 @@ static void rna_def_main_colorspace(BlenderRNA *brna)
                            "Working Space",
                            "Color space used for all scene linear colors in this file, and "
                            "for compositing, shader and geometry nodes processing");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_COLOR_MANAGEMENT);
   RNA_def_property_enum_funcs(prop,
                               "rna_MainColorspace_working_space_get",
                               nullptr,
@@ -663,6 +666,7 @@ void RNA_def_main(BlenderRNA *brna)
   RNA_def_property_struct_type(prop, "BlenderProject");
   RNA_def_property_pointer_funcs(prop, "rna_Main_blender_project_get", nullptr, nullptr, nullptr);
   RNA_def_property_ui_text(prop, "Project", "The currently active Blender project, if any");
+  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_EDITOR_PREFERENCES);
 
   RNA_api_main(srna);
 

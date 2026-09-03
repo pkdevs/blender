@@ -320,7 +320,7 @@ void RE_create_render_pass(struct RenderResult *rr,
  */
 void RE_InitState(struct Render *re,
                   struct Render *source,
-                  struct RenderData *rd,
+                  const struct RenderData *rd,
                   ListBaseT<ViewLayer> *render_layers,
                   struct ViewLayer *single_layer,
                   int winx,
@@ -355,7 +355,7 @@ bool RE_WriteRenderViewsMovie(struct ReportList *reports,
                               struct RenderResult *rr,
                               const bke::BlenderProject *project,
                               struct Scene *scene,
-                              struct RenderData *rd,
+                              const struct RenderData *rd,
                               struct MovieWriter **movie_writers,
                               int totvideos,
                               bool preview);
@@ -443,7 +443,7 @@ void RE_current_scene_update_cb(struct Render *re,
 GHOST_IContext *RE_system_gpu_context_get(Render *re);
 void *RE_blender_gpu_context_ensure(Render *re);
 
-bool RE_seq_render_active(struct Scene *scene, struct RenderData *rd);
+bool RE_seq_render_active(struct Scene *scene, const struct RenderData *rd);
 
 /**
  * Used in the interface to decide whether to show layers or passes.
@@ -461,11 +461,6 @@ struct RenderPass *RE_pass_find_by_name(struct RenderLayer *rl,
  * sharing with other users.
  */
 void RE_pass_set_buffer_data(struct RenderPass *pass, float *data);
-
-/**
- * Ensure a GPU texture corresponding to the render buffer data exists.
- */
-gpu::Texture *RE_pass_ensure_gpu_texture_cache(struct Render *re, struct RenderPass *rpass);
 
 void RE_GetCameraWindow(struct Render *re, const struct Object *camera, float r_winmat[4][4]);
 /**
