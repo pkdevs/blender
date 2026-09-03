@@ -217,7 +217,7 @@ static Vector<FCurve *> fcurves_filtered_by_path(const Span<FCurve *> input_fcur
 {
   Vector<FCurve *> fcurves;
   for (FCurve *fcurve : input_fcurves) {
-    if (StringRefNull(fcurve->rna_path) != path) {
+    if (fcurve->rna_path() != path) {
       continue;
     }
     fcurves.append(fcurve);
@@ -538,17 +538,14 @@ static void pose_slide_apply_quat(tPoseSlideOp *pso, SlideSubject *slide_subject
       /* Compute breakdown based on actual frame range. */
       const float interp_factor = (current_frame - pso->prev_frame) /
                                   float(pso->next_frame - pso->prev_frame);
-      ed::Rotation current = transformable->get_rotation();
       ed::Rotation breakdown = ed::rotation_interpolated(
           rot_prev_frame, rot_next_frame, interp_factor);
 
       if (pso->mode == POSESLIDE_PUSH) {
-        transformable->set_rotation(breakdown);
-        transformable->blend_rotation_to(current, factor, ed::AXIS_MUTABLE_ALL);
+        transformable->blend_rotation_to(breakdown, -factor, ed::AXIS_MUTABLE_ALL);
       }
       else {
         BLI_assert(pso->mode == POSESLIDE_RELAX);
-        transformable->set_rotation(current);
         transformable->blend_rotation_to(breakdown, factor, ed::AXIS_MUTABLE_ALL);
       }
       break;
@@ -955,11 +952,7 @@ static wmOperatorStatus pose_slide_modal(bContext *C, wmOperator *op, const wmEv
 {
   tPoseSlideOp *pso = static_cast<tPoseSlideOp *>(op->customdata);
   wmWindow *win = CTX_wm_window(C);
-  bool do_pose_update = false;
-
-  const bool has_numinput = hasNumInput(&pso->num);
-
-  do_pose_update = ED_slider_modal(pso->slider, event);
+  bool do_pose_update = ED_slider_modal(pso->slider, event);
 
   switch (event->type) {
     case LEFTMOUSE: /* Confirm. */
@@ -1006,13 +999,11 @@ static wmOperatorStatus pose_slide_modal(bContext *C, wmOperator *op, const wmEv
     }
 
     /* Factor Change... */
-    case MOUSEMOVE: /* Calculate new position. */
-    {
-      /* Only handle mouse-move if not doing numinput. */
-      if (has_numinput == false) {
-        /* Update pose to reflect the new values (see below). */
-        do_pose_update = true;
-      }
+    case MOUSEMOVE: {
+      /* `ED_slider_modal` already set `do_pose_update`. */
+      /* Reset numInput so the cursor movement can take over again. This allows to type in a number
+       * and then continue sliding around from there. */
+      initNumInput(&pso->num);
       break;
     }
     default: {

@@ -9,6 +9,7 @@
 #include "IMB_imbuf.hh"
 
 #include "BKE_callbacks.hh"
+#include "BKE_compositor.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_image.hh"
@@ -32,7 +33,7 @@
 #include "ED_node.hh"
 #include "ED_screen.hh"
 
-#include "COM_node_group_operation.hh"
+#include "COM_context.hh"
 
 namespace blender {
 
@@ -41,9 +42,8 @@ struct CompositorJob {
   Main *bmain;
   Scene *scene;
   ViewLayer *view_layer;
-  bNodeTree *evaluated_node_tree;
   Render *render;
-  compositor::NodeGroupOutputTypes needed_outputs;
+  compositor::SideEffectOutputTypes needed_side_effect_outputs;
   /* Identifies if the compositor is executing due to the user making a modification or if it is
    * executing due to playback or rendering. */
   bool triggered_by_user = false;
@@ -87,9 +87,6 @@ static void compositor_job_init(void *compositor_job_data)
    * evaluate_on_framechange. */
   DEG_evaluate_on_refresh(compositor_runtime.preview_depsgraph);
 
-  compositor_job->evaluated_node_tree = DEG_get_evaluated(compositor_runtime.preview_depsgraph,
-                                                          scene->compositing_node_group);
-
   compositor_job->render = RE_NewInteractiveCompositorRender(scene);
   if (scene->r.compositor_device == SCE_COMPOSITOR_DEVICE_GPU) {
     RE_display_ensure_gpu_context(compositor_job->render);
@@ -118,10 +115,9 @@ static void compositor_job_start(void *compositor_job_data, wmJobWorkerStatus *w
                                          *compositor_job->bmain,
                                          *evaluated_scene,
                                          evaluated_scene->r,
-                                         *compositor_job->evaluated_node_tree,
                                          "",
                                          nullptr,
-                                         compositor_job->needed_outputs,
+                                         compositor_job->needed_side_effect_outputs,
                                          compositor_job->triggered_by_user);
   if (!(evaluated_scene->r.scemode & R_MULTIVIEW)) {
     RE_compositor_execute(input_data);
@@ -180,7 +176,7 @@ static bool is_compositing_possible(const Scene *scene)
     return false;
   }
 
-  if (!scene->compositing_node_group) {
+  if (!bke::compositor::is_enabled(*scene, bke::compositor::ExecutionMode::Preview)) {
     return false;
   }
 
@@ -202,14 +198,15 @@ static bool is_compositing_possible(const Scene *scene)
 
 /* Returns the compositor outputs that need to be computed because their result is visible to the
  * user or required by the render pipeline. */
-static compositor::NodeGroupOutputTypes get_compositor_needed_outputs(
-    const wmWindowManager *window_manager, Scene *scene)
+static compositor::SideEffectOutputTypes get_needed_side_effect_outputs(
+    const wmWindowManager *window_manager)
 {
   if (G.background) {
-    return compositor::NodeGroupOutputTypes::None;
+    return compositor::SideEffectOutputTypes::None;
   }
 
-  compositor::NodeGroupOutputTypes needed_outputs = compositor::NodeGroupOutputTypes::None;
+  compositor::SideEffectOutputTypes needed_side_effect_outputs =
+      compositor::SideEffectOutputTypes::None;
 
   for (wmWindow &window : window_manager->windows) {
     bScreen *screen = WM_window_get_active_screen(&window);
@@ -221,47 +218,46 @@ static compositor::NodeGroupOutputTypes get_compositor_needed_outputs(
       if (space_link->spacetype == SPACE_NODE) {
         const SpaceNode *space_node = reinterpret_cast<const SpaceNode *>(space_link);
         if (space_node->flag & SNODE_BACKDRAW) {
-          needed_outputs |= compositor::NodeGroupOutputTypes::ViewerNode;
+          needed_side_effect_outputs |= compositor::SideEffectOutputTypes::ViewerNode;
         }
         if (space_node->overlay.flag & SN_OVERLAY_SHOW_PREVIEWS) {
-          needed_outputs |= compositor::NodeGroupOutputTypes::NodePreviews;
+          needed_side_effect_outputs |= compositor::SideEffectOutputTypes::NodePreviews;
         }
       }
       else if (space_link->spacetype == SPACE_IMAGE) {
         const SpaceImage *space_image = reinterpret_cast<const SpaceImage *>(space_link);
         Image *image = ED_space_image(space_image);
-        if (!image || image->source != IMA_SRC_VIEWER) {
-          continue;
-        }
-        /* Do not override the Render Result if compositing is disabled in the render pipeline or
-         * if the sequencer is enabled. */
-        if (image->type == IMA_TYPE_R_RESULT && scene->r.scemode & R_DOCOMP &&
-            !RE_seq_render_active(scene, &scene->r))
-        {
-          needed_outputs |= compositor::NodeGroupOutputTypes::GroupOutputNode;
-        }
-        else if (image->type == IMA_TYPE_COMPOSITE) {
-          needed_outputs |= compositor::NodeGroupOutputTypes::ViewerNode;
+        if (image && image->source == IMA_SRC_VIEWER && image->type == IMA_TYPE_COMPOSITE) {
+          needed_side_effect_outputs |= compositor::SideEffectOutputTypes::ViewerNode;
         }
       }
 
-      /* All outputs are already needed, return early. */
-      if (needed_outputs == (compositor::NodeGroupOutputTypes::GroupOutputNode |
-                             compositor::NodeGroupOutputTypes::ViewerNode |
-                             compositor::NodeGroupOutputTypes::NodePreviews))
+      /* All possible outputs are already needed, return early. */
+      if (needed_side_effect_outputs == (compositor::SideEffectOutputTypes::ViewerNode |
+                                         compositor::SideEffectOutputTypes::NodePreviews))
       {
-        return needed_outputs;
+        return needed_side_effect_outputs;
       }
     }
   }
 
   /* None of the outputs are needed except node previews but they are a secondary output that needs
    * another output to be computed with, so this is practically none. */
-  if (needed_outputs == compositor::NodeGroupOutputTypes::NodePreviews) {
-    return compositor::NodeGroupOutputTypes::None;
+  if (needed_side_effect_outputs == compositor::SideEffectOutputTypes::NodePreviews) {
+    return compositor::SideEffectOutputTypes::None;
   }
 
-  return needed_outputs;
+  return needed_side_effect_outputs;
+}
+
+static eWM_JobFlag get_job_flags(const bool triggered_by_user)
+{
+  /* Of the job is triggered by the user, report progress. */
+  if (triggered_by_user) {
+    return WM_JOB_EXCL_RENDER | WM_JOB_PROGRESS;
+  }
+
+  return WM_JOB_EXCL_RENDER;
 }
 
 void ED_node_compositor_job(Main *bmain,
@@ -274,9 +270,9 @@ void ED_node_compositor_job(Main *bmain,
   }
 
   wmWindowManager *window_manager = static_cast<wmWindowManager *>(bmain->wm.first);
-  const compositor::NodeGroupOutputTypes needed_outputs = get_compositor_needed_outputs(
-      window_manager, scene);
-  if (needed_outputs == compositor::NodeGroupOutputTypes::None) {
+  const compositor::SideEffectOutputTypes needed_side_effect_outputs =
+      get_needed_side_effect_outputs(window_manager);
+  if (needed_side_effect_outputs == compositor::SideEffectOutputTypes::None) {
     return;
   }
 
@@ -290,7 +286,7 @@ void ED_node_compositor_job(Main *bmain,
                            window,
                            scene,
                            "Compositing...",
-                           WM_JOB_EXCL_RENDER | WM_JOB_PROGRESS,
+                           get_job_flags(triggered_by_user),
                            WM_JOB_TYPE_COMPOSITE);
 
   CompositorJob *compositor_job = MEM_new<CompositorJob>("Compositor Job");
@@ -298,7 +294,7 @@ void ED_node_compositor_job(Main *bmain,
   compositor_job->bmain = bmain;
   compositor_job->scene = scene;
   compositor_job->view_layer = view_layer;
-  compositor_job->needed_outputs = needed_outputs;
+  compositor_job->needed_side_effect_outputs = needed_side_effect_outputs;
   compositor_job->triggered_by_user = triggered_by_user;
 
   WM_jobs_customdata_set(job, compositor_job, compositor_job_free);

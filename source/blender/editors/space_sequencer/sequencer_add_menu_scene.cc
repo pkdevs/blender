@@ -125,7 +125,7 @@ static void sequencer_add_unassigned_assets_draw(const bContext *C, Menu *menu)
                                          ICON_NONE,
                                          wm::OpCallContext::InvokeRegionWin,
                                          UI_ITEM_NONE);
-    BLI_assert(op_ptr.data != nullptr);
+    BLI_assert(op_ptr);
     asset::operator_asset_reference_props_set(*asset, op_ptr);
   }
 }
@@ -161,7 +161,7 @@ static void sequencer_add_scene_draw(const bContext *C, Menu *menu)
 
   if (show_assets) {
     if (!loading_finished) {
-      layout.label(IFACE_("Loading Asset Libraries"), ICON_INFO);
+      layout.label(IFACE_("Loading Asset Libraries"), ICON_STATUS_INFO);
     }
 
     tree.catalogs.foreach_root_item([&](const asset_system::AssetCatalogTreeItem &item) {

@@ -39,6 +39,9 @@ struct MeshRuntime;
 class AttributeAccessor;
 class MutableAttributeAccessor;
 enum class MeshNormalDomain : int8_t;
+namespace bvh {
+class Tree;
+}
 }  // namespace bke
 
 struct AnimData;
@@ -203,7 +206,7 @@ struct Mesh {
    *
    * Set to -1 when none is active.
    */
-  int attributes_active_index = 0;
+  int attributes_active_index = -1;
 
   /**
    * This array represents the selection order when the user manually picks elements in edit-mode,
@@ -540,6 +543,8 @@ struct Mesh {
   bke::BVHTreeFromMesh bvh_verts() const;
   bke::BVHTreeFromMesh bvh_edges() const;
   bke::BVHTreeFromMesh bvh_legacy_faces() const;
+  const blender::bke::bvh::Tree &bvh_tris() const;
+  /** NOTE: Legacy, to be replaced. Prefer #Mesh::bvh_tris(). */
   bke::BVHTreeFromMesh bvh_corner_tris() const;
   bke::BVHTreeFromMesh bvh_corner_tris_no_hidden() const;
   bke::BVHTreeFromMesh bvh_loose_verts() const;

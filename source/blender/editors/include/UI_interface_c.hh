@@ -406,8 +406,6 @@ enum ButtonFlag : int64_t {
    * buttons currently.
    */
   BUT_FORCE_SEMI_MODAL_ACTIVE = int64_t(1) << 33,
-  /** Allow double click editing on text buttons with no emboss styled like labels. */
-  BUT_TEXT_LABEL_STYLE = int64_t(1) << 34,
 };
 
 /** #Button.dragflag */
@@ -738,14 +736,19 @@ void draw_widget_scroll(uiWidgetColors *wcol, const rcti *rect, const rcti *slid
  *
  * \param clip_right_if_tight: In case this middle clipping would just remove a few chars, or there
  * are less than 10 characters before the clipping, it rather clips right, which is more readable.
+ *
+ * \param shorten_template_variables: When true, shortens template variable expressions
+ * as needed starting from the left. NOTE: this should only be set to true if the text
+ * field being clipped supports template variables!
  */
 float text_clip_middle_ex(const uiFontStyle *fstyle,
                           char *str,
                           float okwidth,
                           float minwidth,
-                          size_t max_len,
+                          size_t str_maxncpy,
                           char rpart_sep,
-                          bool clip_right_if_tight = true);
+                          bool clip_right_if_tight = true,
+                          bool shorten_template_variables = false);
 
 Vector<StringRef> text_clip_multiline_middle(const uiFontStyle *fstyle,
                                              const char *str,
@@ -994,14 +997,24 @@ Layout *pie_menu_layout(PieMenu *pie);
 using BlockCreateFunc = Block *(*)(bContext * C, ARegion *region, void *arg1);
 using BlockCancelFunc = void (*)(bContext *C, void *arg1);
 
-void popup_block_invoke(bContext *C, BlockCreateFunc func, void *arg, FreeArgFunc arg_free);
+void popup_block_invoke(bContext *C,
+                        BlockCreateFunc func,
+                        void *arg,
+                        FreeArgFunc arg_free,
+                        StructRNA *srna_owner = nullptr);
 /**
  * \param can_refresh: When true, the popup may be refreshed (updated after creation).
  * \note It can be useful to disable refresh (even though it will work)
  * as this exits text fields which can be disruptive if refresh isn't needed.
+ * \param srna_owner: The StructRNA type that owns this popup, this popup should be removed if this
+ * type gets unregistered.
  */
-void popup_block_invoke_ex(
-    bContext *C, BlockCreateFunc func, void *arg, FreeArgFunc arg_free, bool can_refresh);
+void popup_block_invoke_ex(bContext *C,
+                           BlockCreateFunc func,
+                           void *arg,
+                           FreeArgFunc arg_free,
+                           bool can_refresh,
+                           StructRNA *srna_owner = nullptr);
 void popup_block_ex(bContext *C,
                     BlockCreateFunc func,
                     BlockHandleFunc popup_func,
@@ -1648,7 +1661,7 @@ enum {
   TEMPLATE_ID_FILTER_AVAILABLE = 1,
 };
 
-/***************************** ID Utilities *******************************/
+/* ID utilities. */
 
 int icon_from_id(const ID *id);
 /** See: #BKE_report_type_str */
@@ -2308,6 +2321,13 @@ void popup_handlers_add(bContext *C,
 void popup_handlers_remove(ListBaseT<wmEventHandler> *handlers, PopupBlockHandle *popup);
 void popup_handlers_remove_all(bContext *C, ListBaseT<wmEventHandler> *handlers);
 
+/**
+ * Tags for refresh popup/menu handlers referencing a #StructRNA that is being unregistered,
+ * popups/menus that can't be refreshed or are created using the \a srna_to_unreg reference will
+ * be removed.
+ */
+void refresh_for_srna_unregister(Main *bmain, StructRNA *srna_to_unreg);
+
 /* Module
  *
  * init and exit should be called before using this module. init_userdef must
@@ -2507,6 +2527,8 @@ void template_path_builder(Layout *layout,
                            std::optional<StringRefNull> text);
 void template_modifiers(Layout *layout, bContext *C);
 void template_strip_modifiers(Layout *layout, bContext *C);
+void template_scene_compositor_effects(Layout *layout, bContext *C);
+
 /**
  * Check if the shader effect panels don't match the data and rebuild the panels if so.
  */
@@ -2762,6 +2784,11 @@ void template_tree_interface(Layout *layout, const bContext *C, PointerRNA *ptr)
  */
 void template_node_inputs(Layout *layout, bContext *C, PointerRNA *ptr);
 
+/**
+ * Draw the node group inputs for a compositor effect strip.
+ */
+void template_compositor_strip_inputs(Layout *layout, bContext *C, PointerRNA *ptr);
+
 void template_collection_importer(Layout *layout, bContext *C);
 void template_collection_exporters(Layout *layout, bContext *C);
 }  // namespace ui
@@ -2867,13 +2894,6 @@ Block *region_block_find_mouse_over(const ARegion *region, const int xy[2], bool
  * Try to find a search-box region opened from a button in \a button_region.
  */
 ARegion *region_searchbox_region_get(const ARegion *button_region);
-
-/** #uiFontStyle.align */
-enum FontStyleAlign {
-  UI_STYLE_TEXT_LEFT = 0,
-  UI_STYLE_TEXT_CENTER = 1,
-  UI_STYLE_TEXT_RIGHT = 2,
-};
 
 struct FontStyleDrawParams {
   FontStyleAlign align;
@@ -3140,5 +3160,30 @@ AbstractViewItem *region_views_find_active_item(const ARegion *region, const Abs
 Button *region_views_find_active_item_but(const ARegion *region);
 void region_views_clear_search_highlight(const ARegion *region);
 
+void register_scene_compositor_effects_panel(ARegionType *region_type);
+
+enum class ActivationButtonState : int8_t {
+  Highlight,
+  WaitKeyEvent,
+  NumEditing,
+  TextEditing,
+};
+
+/**
+ * Attempt to activate an button referencing an RNA property. If any other button in the screen is
+ * active, it will be deactivated.
+ * \param state: Activation state for the button. Some states are specific to certain button types;
+ * when an incompatible state is provided, the button will be activated with the
+ * #ActivationButtonState::Highlight state.
+ * \param index: Index of the button that references the RNA property.
+ * \return The center point of the button in window coordinates when successfully activated.
+ */
+std::optional<int2> try_activate_rna_button(bContext *C,
+                                            ARegion *region,
+                                            ActivationButtonState target_state,
+                                            PointerRNA *ptr,
+                                            PropertyRNA *prop,
+                                            bool warp_cursor_at_button = false,
+                                            int index = 0);
 }  // namespace ui
 }  // namespace blender

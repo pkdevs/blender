@@ -50,6 +50,8 @@ BLOCKLIST = [
     "transparent_shadow_limit_.*",
     # Redundant with transparent_shadow_hair.
     "transparent_shadow_hair_blur.blend",
+    # Unsupported feature. Renders differently on different backends due to hair transparency.
+    "transparent_shadow_hair_colored.blend",
     # Unsupported feature. Redundant tests. (except osl_camera_advanced which tests triangular bokeh)
     "osl_camera_advanced_manual_dof.blend",
     "osl_camera_advanced_manual_dof_138188.blend",
@@ -65,6 +67,17 @@ BLOCKLIST = [
     "light_path_is_camera_ray.blend",
     # Exhibit non-deterministic (to be fixed).
     "background_scene.blend",
+    # Currently, the only image_mipmap test enabled for EEVEE is image_mipmap_large_tex.blend.
+    "image_cache_evict.blend",
+    "image_mipmap_area_light.blend",
+    "image_mipmap_filter_glossy.blend",
+    "image_mipmap_incomplete_derivs.blend",
+    "image_mipmap_light_tree.blend",
+    "image_mipmap_transparent_shadow.blend",
+    "image_mipmap_volume.blend",
+    "image_mipmap_working_space.blend",
+    "image_mipmap_world.blend",
+    "image_mipmap_world_sun.blend",
 
     ### Cycles only tests go here ###
 ]
@@ -92,6 +105,8 @@ BLOCKLIST_VULKAN = [
 ]
 
 BLOCKLIST_OPENGL = [
+    # Fails on AMD.
+    "aov_consecutive_view_layers.blend",
 ]
 
 BLOCKLIST_INTEL = [
@@ -108,7 +123,7 @@ BLOCKLIST_AMD_VK = [
     ".*"
 ]
 
-BLOCKLIST_INTEL_WINDOWS_GL = [
+BLOCKLIST_INTEL_WINDOWS = [
     # Fails sporadically and causes all subsequent volume tests to fail (See #153612).
     "volume_instance.blend"
 ]
@@ -117,6 +132,53 @@ BLOCKLIST_NVIDIA_GL = [
     # Non-deterministic behavior. Unkown reason, the pool size doesn't seem to be exceeded.
     "shadow_min_pool_size.blend",
 ]
+
+
+def uses_any_lit_material(scene):
+    import bpy
+
+    # Define what we consider a "lit" BSDF node type in Blender
+    lit_node_types = {
+        "BSDF_PRINCIPLED",
+        "BSDF_DIFFUSE",
+        "BSDF_GLOSSY",
+        "BSDF_GLASS",
+        "BSDF_ANISOTROPIC",
+        "BSDF_VELVET",
+        "BSDF_HAIR",
+        "BSDF_TOON",
+        "BSDF_TRANSLUCENT",
+        "BSDF_HAIR_PRINCIPLED",
+        "SUBSURFACE_SCATTERING",
+        "BSDF_HAIR_PRINCIPLED",
+        "VOLUME_SCATTER",
+        "PRINCIPLED_VOLUME",
+    }
+
+    scene_materials = set()
+
+    # Gather all materials used by objects in the current scene
+    for obj in scene.objects:
+        # Check if the object type can hold materials (Meshes, Curves, etc.)
+        if hasattr(obj.data, "materials"):
+            if not obj.data.materials:
+                return True  # No material slot, object uses the default material which is lit
+            for mat in obj.data.materials:
+                if mat is not None:
+                    scene_materials.add(mat)
+                else:
+                    return True  # Empty material slot, object uses the default material which is lit
+
+    for mat in scene_materials:
+        # Check if the material uses the node system
+        if mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if node.type in lit_node_types:
+                    return True  # We found one, no need to check the rest of the nodes
+        else:
+            return True  # If use_nodes is False, Blender defaults to a basic lit surface
+
+    return False
 
 
 def setup():
@@ -130,6 +192,9 @@ def setup():
         skip_raytracing_setup = scene.get("EEVEE_skip_raytracing_setup", False)
         skip_shadow_setup = scene.get("EEVEE_skip_shadow_setup", False)
         skip_subsurface_setup = scene.get("EEVEE_skip_subsurface_setup", False)
+
+        if not uses_any_lit_material(scene):
+            skip_probes_setup = True
 
         # Enable Eevee features
         eevee = scene.eevee
@@ -253,7 +318,7 @@ def get_arguments(filepath, output_filepath, gpu_backend):
         "--debug-exit-on-error"]
 
     if gpu_backend:
-        arguments.extend(["--gpu-backend", gpu_backend])
+        arguments.extend(["--gpu-backend", gpu_backend, "--debug-gpu-backend-no-fallback"])
 
     arguments.extend([
         filepath,
@@ -292,12 +357,12 @@ def main():
     elif args.gpu_backend == "opengl":
         blocklist += BLOCKLIST_OPENGL
 
-    gpu_vendor = render_report.get_gpu_device_vendor(args.blender)
+    gpu_vendor = render_report.get_gpu_device_vendor(args.blender, args.gpu_backend)
     if os.getenv("BLENDER_TEST_IGNORE_VENDOR_BLOCKLIST") is None:
         if gpu_vendor == "INTEL":
             blocklist += BLOCKLIST_INTEL
-        if gpu_vendor == "INTEL" and sys.platform == "win32" and args.gpu_backend == "opengl":
-            blocklist += BLOCKLIST_INTEL_WINDOWS_GL
+        if gpu_vendor == "INTEL" and sys.platform == "win32":
+            blocklist += BLOCKLIST_INTEL_WINDOWS
         if gpu_vendor == "NVIDIA" and args.gpu_backend == "opengl":
             blocklist += BLOCKLIST_NVIDIA_GL
         if gpu_vendor == "AMD" and sys.platform == "win32" and args.gpu_backend == "vulkan":
@@ -332,6 +397,10 @@ def main():
         elif test_dir_name in {"texture"}:
             report.set_fail_percent(0.14)
             report.set_fail_threshold(6.0 / 255.0)
+        elif test_dir_name.startswith('image_mipmap'):
+            # Reference images on the CI worker seem to differ slightly from images on
+            # an NVIDIA RTX 4060 Ti with driver 610.74
+            report.set_fail_threshold(6.0 / 255.0)
     elif test_dir_name.startswith('camera'):
         # camera_stereo_panoramic have some platform specific small differences
         report.set_fail_percent(0.14)
@@ -353,6 +422,9 @@ def main():
         # Dithered transparency uses platform dependent noise pattern.
         report.set_fail_percent(0.22)
         report.set_fail_threshold(10.0 / 255.0)
+    elif test_dir_name.startswith('lighting_node'):
+        # Shadow noise pattern is system dependent.
+        report.set_fail_threshold(6.0 / 255.0)
     elif test_dir_name.startswith('instancing'):
         # Small pointcloud has platform dependent raster pattern
         report.set_fail_threshold(8.0 / 255.0)
@@ -361,11 +433,14 @@ def main():
     elif test_dir_name.startswith('hair'):
         # hair_close_up has differences of line rasterization on linux.
         if gpu_vendor == "INTEL":
-            report.set_fail_percent(0.13)
+            report.set_fail_percent(0.135)
     elif test_dir_name.startswith('principled_bsdf'):
         # principled_bsdf_thinfilm_metallic has some weird behavior in reflection of
         # black surfaces. to be investigated
         report.set_fail_percent(0.09)
+        # principled_bsdf_dispersion has some difference in the highlights
+        if gpu_vendor == "AMD":
+            report.set_fail_threshold(6.0 / 255.0)
     elif test_dir_name.startswith('integrator'):
         # Noise difference in transparent materials (mostly transparent_spatial_splits)
         report.set_fail_threshold(8.0 / 255.0)
@@ -422,6 +497,13 @@ def main():
         # Some shadow difference, to be investigated
         report.set_fail_percent(0.09)
         report.set_fail_threshold(6.0 / 255.0)
+    elif test_dir_name.startswith('image_mipmap'):
+        # Texture interpolation can look slightly different.
+        if gpu_vendor == "AMD":
+            report.set_fail_percent(0.39)
+        else:
+            report.set_fail_percent(0.08)
+        report.set_fail_threshold(8.0 / 255.0)
 
     ok = report.run(args.testdir, args.blender, get_arguments, batch=args.batch)
     sys.exit(not ok)

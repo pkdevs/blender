@@ -262,19 +262,6 @@ ListInfoLog::ListInfoLog(const GListPtr &list)
   this->size = list->size();
 }
 
-NodeWarning::NodeWarning(const Report &report)
-{
-  switch (report.type) {
-    case RPT_ERROR:
-      this->type = NodeWarningType::Error;
-      break;
-    default:
-      this->type = NodeWarningType::Info;
-      break;
-  }
-  this->message = report.message;
-}
-
 ImageInfoLog::ImageInfoLog(const int2 data_size,
                            const int2 display_size,
                            const int2 data_offset,
@@ -934,13 +921,19 @@ NodeTreeLogger &NodesEvalLog::get_local_tree_logger(const ComputeContext &comput
               ->original_tree_session_uid;
     }
   }
-  else if (const auto *context = dynamic_cast<const bke::ModifierComputeContext *>(
+  else if (const auto *context = dynamic_cast<const bke::GeometryNodesModifierComputeContext *>(
                &compute_context))
   {
     if (const NodesModifierData *nmd = context->nmd()) {
       tree_logger.tree_orig_session_uid = get_original_session_uid(
           reinterpret_cast<const ID *>(nmd->node_group));
     }
+  }
+  else if (const auto *context = dynamic_cast<const bke::SceneCompositorEffectComputeContext *>(
+               &compute_context))
+  {
+    tree_logger.tree_orig_session_uid = get_original_session_uid(
+        reinterpret_cast<const ID *>(context->effect().node_group));
   }
   else if (const auto *context = dynamic_cast<const bke::OperatorComputeContext *>(
                &compute_context))
@@ -1011,7 +1004,7 @@ static NodesEvalLog *get_geometry_nodes_root_log(const SpaceNode &snode)
   switch (SpaceNodeGeometryNodesType(snode.node_tree_sub_type)) {
     case SNODE_GEOMETRY_MODIFIER: {
       std::optional<ed::space_node::ObjectAndModifier> object_and_modifier =
-          ed::space_node::get_modifier_for_node_editor(snode);
+          ed::space_node::get_geometry_nodes_modifier_for_node_editor(snode);
       if (!object_and_modifier) {
         return {};
       }
@@ -1105,8 +1098,8 @@ const ViewerNodeLog *NodesEvalLog::find_viewer_node_log_for_path(const ViewerPat
   bke::ComputeContextCache compute_context_cache;
   const ComputeContext *object_context = &compute_context_cache.for_data_block(
       nullptr, parsed_path->object->id);
-  const ComputeContext *compute_context = &compute_context_cache.for_modifier(object_context,
-                                                                              *nmd);
+  const ComputeContext *compute_context = &compute_context_cache.for_geometry_nodes_modifier(
+      object_context, *nmd);
   for (const ViewerPathElem *elem : parsed_path->node_path) {
     compute_context = ed::viewer_path::compute_context_for_viewer_path_elem(
         *elem, compute_context_cache, compute_context);
