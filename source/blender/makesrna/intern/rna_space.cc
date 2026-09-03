@@ -1262,8 +1262,11 @@ static void rna_SpaceView3D_use_local_camera_set(PointerRNA *ptr, bool value)
   v3d->scenelock = !value;
 
   if (!value) {
-    Scene *scene = ED_screen_scene_find(
-        screen, static_cast<wmWindowManager *>(screen->id.owner_bmain()->wm.first));
+    const Main *bmain = screen->id.owner_bmain();
+    if (!bmain) {
+      return;
+    }
+    Scene *scene = ED_screen_scene_find(screen, static_cast<wmWindowManager *>(bmain->wm.first));
     /* nullptr if the screen isn't in an active window (happens when setting from Python).
      * This could be moved to the update function, in that case the scene won't relate to the
      * screen so keep it working this way. */
@@ -1277,8 +1280,11 @@ static float rna_View3DOverlay_GridScaleUnit_get(PointerRNA *ptr)
 {
   View3D *v3d = static_cast<View3D *>(ptr->data);
   bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
-  Scene *scene = ED_screen_scene_find(
-      screen, static_cast<wmWindowManager *>(screen->id.owner_bmain()->wm.first));
+  const Main *bmain = screen->id.owner_bmain();
+  if (!bmain) {
+    return 1.0f;
+  }
+  Scene *scene = ED_screen_scene_find(screen, static_cast<wmWindowManager *>(bmain->wm.first));
   if (scene != nullptr) {
     return ED_view3d_grid_scale(scene, v3d, nullptr);
   }
@@ -1604,8 +1610,12 @@ static ViewLayer *rna_3DViewShading_view_layer(PointerRNA *ptr)
   }
   else {
     bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
-    return WM_windows_view_layer_get_from_screen(
-        static_cast<wmWindowManager *>(screen->id.owner_bmain()->wm.first), screen);
+    const Main *bmain = screen->id.owner_bmain();
+    if (!bmain) {
+      return nullptr;
+    }
+    return WM_windows_view_layer_get_from_screen(static_cast<wmWindowManager *>(bmain->wm.first),
+                                                 screen);
   }
 }
 
@@ -2121,6 +2131,9 @@ static bool rna_SpaceImageEditor_show_maskedit_get(PointerRNA *ptr)
   SpaceImage *sima = static_cast<SpaceImage *>(ptr->data);
   bScreen *screen = id_cast<bScreen *>(ptr->owner_id);
   const Main *bmain = screen->id.owner_bmain();
+  if (!bmain) {
+    return false;
+  }
   Object *obedit = nullptr;
   wmWindow *win = ED_screen_window_find(screen, static_cast<wmWindowManager *>(bmain->wm.first));
   if (win != nullptr) {

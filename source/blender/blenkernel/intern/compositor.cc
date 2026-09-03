@@ -257,12 +257,14 @@ void rename_effect(Scene &scene,
   }
 
   /* Fix all the animation data which may link to this. */
-  BKE_animdata_fix_paths(scene.id,
-                         "compositor_effects",
-                         RNA_path_name_to_infix(old_name.c_str()),
-                         RNA_path_name_to_infix(effect.name),
-                         true,
-                         *scene.id.owner_bmain_for_write());
+  if (Main *bmain = scene.id.owner_bmain_for_write()) {
+    BKE_animdata_fix_paths(scene.id,
+                           "compositor_effects",
+                           RNA_path_name_to_infix(old_name.c_str()),
+                           RNA_path_name_to_infix(effect.name),
+                           true,
+                           *bmain);
+  }
 }
 
 SceneCompositorEffect &new_effect(Scene &scene, StringRef name)

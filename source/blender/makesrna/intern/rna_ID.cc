@@ -1242,10 +1242,14 @@ static int rna_IDPArray_length(PointerRNA *ptr)
 bool rna_IDMaterials_assign_int(PointerRNA *ptr, int key, const PointerRNA *assign_ptr)
 {
   ID *id = ptr->owner_id;
+    Main *bmain = id->owner_bmain_for_write();
+    if (!bmain) {
+      return false;
+    }
   short *totcol = BKE_id_material_len_p(id);
   Material *mat_id = id_cast<Material *>(assign_ptr->owner_id);
   if (totcol && (key >= 0 && key < *totcol)) {
-    BKE_id_material_assign(id->owner_bmain_for_write(), id, mat_id, key + 1);
+    BKE_id_material_assign(bmain, id, mat_id, key + 1);
     return true;
   }
   else {
