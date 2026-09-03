@@ -113,7 +113,7 @@ static const char *shortcut_get_operator_property(bContext *C, Button *but, IDPr
 {
   if (but->optype) {
     /* Operator */
-    *r_prop = (but->opptr && but->opptr->data) ?
+    *r_prop = (but->opptr && *but->opptr) ?
                   IDP_CopyProperty(static_cast<IDProperty *>(but->opptr->data)) :
                   nullptr;
     return but->optype->idname;
@@ -606,7 +606,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
       layout.separator();
     }
   }
-  else if (but->rnapoin.data && but->rnaprop) {
+  else if (but->rnapoin && but->rnaprop) {
     PointerRNA *ptr = &but->rnapoin;
     PropertyRNA *prop = but->rnaprop;
     const PropertyType type = RNA_property_type(prop);
@@ -1050,6 +1050,10 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
     if (asset && asset->is_online_only()) {
       layout.op("ASSET_OT_assets_download", {}, ICON_DOWNLOAD);
     }
+    if (asset && asset->get_metadata().webpage) {
+      PointerRNA op_ptr = layout.op("WM_OT_url_open", "Visit Webpage", ICON_URL);
+      RNA_string_set(&op_ptr, "url", asset->get_metadata().webpage);
+    }
   }
 
   {
@@ -1107,7 +1111,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
 
   /* Pointer properties and string properties with
    * prop_search support jumping to target object/bone. */
-  if (but->rnapoin.data && but->rnaprop) {
+  if (but->rnapoin && but->rnaprop) {
     const PropertyType prop_type = RNA_property_type(but->rnaprop);
     if (((prop_type == PROP_POINTER) ||
          (prop_type == PROP_STRING && but->type == ButtonType::SearchMenu &&

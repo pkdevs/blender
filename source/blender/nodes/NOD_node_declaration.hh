@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include <cstdint>
@@ -132,7 +136,7 @@ class ItemDeclaration {
 using ItemDeclarationPtr = std::unique_ptr<ItemDeclaration>;
 
 struct SocketNameRNA {
-  PointerRNA owner = PointerRNA_NULL;
+  PointerRNA owner = {};
   std::string property_name;
 };
 

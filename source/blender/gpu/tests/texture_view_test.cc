@@ -178,6 +178,9 @@ static void texture_view_create_format_test()
 
 static void test_texture_view_SFLOAT_32_32_32_32()
 {
+  if (GPU_backend_get_type() == GPUBackendType::GPU_BACKEND_VULKAN) {
+    GTEST_SKIP() << "TODO: See #162650.";
+  }
   texture_view_create_format_test<TextureFormat::SFLOAT_32_32_32_32,
                                   TextureFormat::SFLOAT_32_32_32_32>();
   texture_view_create_format_test<TextureFormat::SFLOAT_32_32_32_32,
@@ -185,10 +188,13 @@ static void test_texture_view_SFLOAT_32_32_32_32()
   texture_view_create_format_test<TextureFormat::SFLOAT_32_32_32_32,
                                   TextureFormat::SINT_32_32_32_32>();
 }
-GPU_OPENGL_TEST(texture_view_SFLOAT_32_32_32_32);
+GPU_TEST(texture_view_SFLOAT_32_32_32_32);
 
 static void test_texture_view_SFLOAT_32_32()
 {
+  if (GPU_backend_get_type() == GPUBackendType::GPU_BACKEND_VULKAN) {
+    GTEST_SKIP() << "TODO: See #162650.";
+  }
   if (GPU_type_matches_ex(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_ANY, GPU_BACKEND_OPENGL)) {
     GTEST_SKIP() << "Broken on AMD.";
   }
@@ -203,10 +209,13 @@ static void test_texture_view_SFLOAT_32_32()
   texture_view_create_format_test<TextureFormat::SFLOAT_32_32, TextureFormat::SNORM_16_16_16_16>();
   texture_view_create_format_test<TextureFormat::SFLOAT_32_32, TextureFormat::UNORM_16_16_16_16>();
 }
-GPU_OPENGL_TEST(texture_view_SFLOAT_32_32);
+GPU_TEST(texture_view_SFLOAT_32_32);
 
 static void test_texture_view_SFLOAT_32()
 {
+  if (GPU_backend_get_type() == GPUBackendType::GPU_BACKEND_VULKAN) {
+    GTEST_SKIP() << "TODO: See #162650.";
+  }
   if (GPU_type_matches_ex(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_ANY, GPU_BACKEND_OPENGL)) {
     GTEST_SKIP() << "Broken on AMD.";
   }
@@ -232,10 +241,13 @@ static void test_texture_view_SFLOAT_32()
   // texture_view_create_format_test<TextureFormat::SFLOAT_32, TextureFormat::UINT_10_10_10_2>();
   // texture_view_create_format_test<TextureFormat::SFLOAT_32, TextureFormat::UNORM_10_10_10_2>();
 }
-GPU_OPENGL_TEST(texture_view_SFLOAT_32);
+GPU_TEST(texture_view_SFLOAT_32);
 
 static void test_texture_view_SFLOAT_16()
 {
+  if (GPU_backend_get_type() == GPUBackendType::GPU_BACKEND_VULKAN) {
+    GTEST_SKIP() << "TODO: See #162650.";
+  }
   if (GPU_type_matches_ex(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_ANY, GPU_BACKEND_OPENGL)) {
     GTEST_SKIP() << "Broken on AMD.";
   }
@@ -250,26 +262,22 @@ static void test_texture_view_SFLOAT_16()
   texture_view_create_format_test<TextureFormat::SFLOAT_16, TextureFormat::UNORM_16>();
   texture_view_create_format_test<TextureFormat::SFLOAT_16, TextureFormat::UNORM_8_8>();
 }
-GPU_OPENGL_TEST(texture_view_SFLOAT_16);
+GPU_TEST(texture_view_SFLOAT_16);
 
 static void test_texture_view_UINT_8()
 {
+  if (GPU_backend_get_type() == GPUBackendType::GPU_BACKEND_VULKAN) {
+    GTEST_SKIP() << "TODO: See #162650.";
+  }
   texture_view_create_format_test<TextureFormat::UINT_8, TextureFormat::UINT_8>();
   texture_view_create_format_test<TextureFormat::UINT_8, TextureFormat::SINT_8>();
   texture_view_create_format_test<TextureFormat::UINT_8, TextureFormat::SNORM_8>();
   texture_view_create_format_test<TextureFormat::UINT_8, TextureFormat::UNORM_8>();
 }
-GPU_OPENGL_TEST(texture_view_UINT_8);
+GPU_TEST(texture_view_UINT_8);
 
 static void test_texture_view_mip_layer_test()
 {
-  if (GPU_type_matches_ex(
-          GPU_DEVICE_ATI | GPU_DEVICE_INTEL, GPU_OS_ANY, GPU_DRIVER_ANY, GPU_BACKEND_OPENGL))
-  {
-    GTEST_SKIP()
-        << "GL Texture Views are quite broken in all drivers. Only Nvidia passes this test.";
-  }
-
   GPU_render_begin();
 
   /* Test operates on a 4x4 texture patch. */
@@ -324,7 +332,7 @@ static void test_texture_view_mip_layer_test()
 
       EXPECT_EQ(expected_data, base_readback);
 
-      gpu::Texture *copy_view = create_view_texture(format, copy, mip, 4 - layer);
+      gpu::Texture *copy_view = create_view_texture(format, copy, mip, 3 - layer);
       GPU_texture_copy(copy_view, base_view);
       auto copy_readback = read_texture<uint>(copy_view, GPU_DATA_UINT, 0);
 

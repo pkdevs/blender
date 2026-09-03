@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BKE_anonymous_attribute_id.hh"
 #include "BKE_attribute_legacy_convert.hh"
 #include "BKE_bake_attribute_field.hh"
@@ -801,7 +805,7 @@ static void load_texspace(const DictionaryValue *io_mesh, Mesh *mesh)
       if (value->type() != io::serialize::eValueType::Double) {
         return false;
       }
-      r_texspace_property[i++] = static_cast<float>(value->as_double_value()->value());
+      r_texspace_property[i++] = float(value->as_double_value()->value());
     }
     return true;
   };

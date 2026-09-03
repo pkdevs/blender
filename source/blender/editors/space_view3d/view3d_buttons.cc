@@ -76,7 +76,10 @@
 
 namespace blender {
 
-/* ******************* view3d space & buttons ************** */
+/* -------------------------------------------------------------------- */
+/** \name Transform Panel Types
+ * \{ */
+
 enum {
   B_TRANSFORM_PANEL_MEDIAN = 1008,
   B_TRANSFORM_PANEL_DIMS = 1009,
@@ -143,6 +146,8 @@ struct TransformProperties {
 };
 
 #define TRANSFORM_MEDIAN_ARRAY_LEN (sizeof(TransformMedian) / sizeof(float))
+
+/** \} */
 
 static TransformProperties *v3d_transform_props_ensure(View3D *v3d);
 
@@ -221,6 +226,10 @@ static void editmesh_partial_update_update_fn(bContext *C,
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Median Utilities
+ * \{ */
 
 /* Helper function to compute a median changed value,
  * when the value should be clamped in [0.0, 1.0].
@@ -306,6 +315,12 @@ static void apply_scale_factor_clamp(float *val,
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Properties
+ * \{ */
+
 static TransformProperties *v3d_transform_props_ensure(View3D *v3d)
 {
   if (v3d->runtime.properties_storage == nullptr) {
@@ -320,6 +335,12 @@ static TransformProperties *v3d_transform_props_ensure(View3D *v3d)
   }
   return static_cast<TransformProperties *>(v3d->runtime.properties_storage);
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Curves Selection Status
+ * \{ */
 
 struct CurvesPointSelectionStatus {
   TransformMedian_Curves median = {};
@@ -692,6 +713,12 @@ static CurvesSelectionStatus init_grease_pencil_selection_status(
   return status;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Edit Vertex Buttons
+ * \{ */
+
 /* is used for both read and write... */
 static void v3d_editvertex_buts(
     const bContext *C, ui::Layout *layout, View3D *v3d, Object *ob, float lim)
@@ -721,7 +748,8 @@ static void v3d_editvertex_buts(
         &bm->vdata, CD_PROP_FLOAT, "bevel_weight_vert");
     const int cd_vert_crease_offset = CustomData_get_offset_named(
         &bm->vdata, CD_PROP_FLOAT, "crease_vert");
-    const int cd_vert_skin_offset = CustomData_get_offset(&bm->vdata, CD_MVERT_SKIN);
+    const int cd_vert_skin_offset = CustomData_get_offset_named(
+        &bm->vdata, CD_PROP_FLOAT2, "skin_modifier_radius");
     const int cd_edge_bweight_offset = CustomData_get_offset_named(
         &bm->edata, CD_PROP_FLOAT, "bevel_weight_edge");
     const int cd_edge_crease_offset = CustomData_get_offset_named(
@@ -744,9 +772,9 @@ static void v3d_editvertex_buts(
           }
 
           if (has_skinradius) {
-            MVertSkin *vs = static_cast<MVertSkin *>(
+            const float2 *radius = static_cast<const float2 *>(
                 BM_ELEM_CD_GET_VOID_P(eve, cd_vert_skin_offset));
-            add_v2_v2(median->skin, vs->radius); /* Third val not used currently. */
+            add_v2_v2(median->skin, *radius);
           }
         }
       }
@@ -1479,7 +1507,8 @@ static void v3d_editvertex_buts(
 
         for (int i = 0; i < 2; i++) {
           if (median->skin[i]) {
-            cd_vert_skin_offset = CustomData_get_offset(&bm->vdata, CD_MVERT_SKIN);
+            cd_vert_skin_offset = CustomData_get_offset_named(
+                &bm->vdata, CD_PROP_FLOAT2, "skin_modifier_radius");
             BLI_assert(cd_vert_skin_offset != -1);
 
             if (ve_median->skin[i] != median->skin[i]) {
@@ -1507,14 +1536,14 @@ static void v3d_editvertex_buts(
             }
 
             if (cd_vert_skin_offset != -1) {
-              MVertSkin *vs = static_cast<MVertSkin *>(
+              float2 *radius = static_cast<float2 *>(
                   BM_ELEM_CD_GET_VOID_P(eve, cd_vert_skin_offset));
 
               /* That one is not clamped to [0.0, 1.0]. */
               for (int i = 0; i < 2; i++) {
                 if (median->skin[i] != 0.0f) {
                   apply_scale_factor(
-                      &vs->radius[i], tot, ve_median->skin[i], median->skin[i], scale_skin[i]);
+                      &(*radius)[i], tot, ve_median->skin[i], median->skin[i], scale_skin[i]);
                 }
               }
             }
@@ -1719,6 +1748,12 @@ static void v3d_editvertex_buts(
 
 #undef TRANSFORM_MEDIAN_ARRAY_LEN
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Object Dimension Buttons
+ * \{ */
+
 static void v3d_object_dimension_buts(bContext *C, ui::Layout *layout, View3D *v3d, Object *ob)
 {
   ui::Block *block = (layout) ? layout->block() : nullptr;
@@ -1793,6 +1828,12 @@ static void v3d_object_dimension_buts(bContext *C, ui::Layout *layout, View3D *v
     RNA_property_update(C, &obptr, prop);
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Vertex Group Panel
+ * \{ */
 
 #define B_VGRP_PNL_EDIT_SINGLE 8 /* or greater */
 
@@ -2010,6 +2051,12 @@ static void view3d_panel_vgroup(const bContext *C, Panel *panel)
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Buttons
+ * \{ */
+
 static void v3d_transform_butsR(ui::Layout &layout, PointerRNA *ptr)
 {
   ui::Layout *split = &layout.split(0.8f, false);
@@ -2198,6 +2245,12 @@ static void v3d_editmetaball_buts(ui::Layout &layout, Object *ob)
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Panel
+ * \{ */
+
 static void do_view3d_region_buttons(bContext *C, void * /*index*/, int event)
 {
   const Main *bmain = CTX_data_main(C);
@@ -2275,6 +2328,12 @@ static void view3d_panel_transform(const bContext *C, Panel *panel)
     }
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Curve Data Panel
+ * \{ */
 
 static bool view3d_panel_curve_data_poll(const bContext *C, PanelType * /*pt*/)
 {
@@ -2967,6 +3026,12 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Registration
+ * \{ */
+
 void view3d_buttons_register(ARegionType *art)
 {
   PanelType *pt;
@@ -3000,6 +3065,12 @@ void view3d_buttons_register(ARegionType *art)
   BLI_addtail(&art->paneltypes, pt);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Object Mode Pie or Toggle Operator
+ * \{ */
+
 static wmOperatorStatus view3d_object_mode_menu_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_active_object(C);
@@ -3027,5 +3098,7 @@ void VIEW3D_OT_object_mode_pie_or_toggle(wmOperatorType *ot)
   /* flags */
   ot->flag = 0;
 }
+
+/** \} */
 
 }  // namespace blender

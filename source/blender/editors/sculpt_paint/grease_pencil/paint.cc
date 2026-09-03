@@ -1210,6 +1210,7 @@ void PaintOperation::on_stroke_begin(const bContext &C, const InputSample &start
     stroke_random_val_factor_ = rng_.get_float() * 2.0f - 1.0f;
   }
 
+  /* At this point it should be fine to create a new material + slot. */
   Material *material = BKE_grease_pencil_object_material_ensure_from_brush(
       CTX_data_main(&C), object_, brush);
   const int material_index = BKE_object_material_index_get(object_, material);
@@ -1463,16 +1464,18 @@ static int trim_end_points(bke::greasepencil::Drawing &drawing,
   }
 
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-  const int last_active_point = curves.points_by_curve()[0].last();
 
   /* Shift the data before resizing to not delete the data at the end. */
+  const int current_points_num = curves.points_by_curve()[0].size();
+  const int new_points_num = current_points_num - num_points_to_remove;
+
   attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
     if (iter.domain != bke::AttrDomain::Point) {
       return;
     }
 
     bke::GSpanAttributeWriter dst = attributes.lookup_for_write_span(iter.name);
-    bke::attribute_math::shift_left(dst.span, last_active_point, curves.points_num(), 0);
+    bke::attribute_math::shift_left(dst.span, current_points_num, dst.span.size(), new_points_num);
     dst.finish();
   });
 

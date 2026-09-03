@@ -77,8 +77,7 @@ Context::Context()
   matrix_state = GPU_matrix_state_create();
   texture_pool = GPUBackend::get()->texturepool_alloc();
 
-  context_id = Context::context_counter;
-  Context::context_counter++;
+  context_id = Context::context_counter++;
 }
 
 Context::~Context()
@@ -521,6 +520,11 @@ bool GPU_backend_type_selection_detect()
 
 static bool gpu_backend_supported()
 {
+  /* Skip the support check if "--debug-gpu-backend-no-fallback" is used. */
+  if (G.debug & G_DEBUG_GPU_BACKEND_NO_FALLBACK) {
+    return true;
+  }
+
   switch (g_backend_type) {
     case GPU_BACKEND_OPENGL:
 #ifdef WITH_OPENGL_BACKEND
