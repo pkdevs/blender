@@ -4106,7 +4106,7 @@ def km_grease_pencil_paint_mode(params):
         *_template_asset_shelf_popup("VIEW3D_AST_brush_gpencil_paint", params.spacebar_action),
 
         *_template_items_context_panel("VIEW3D_PT_greasepencil_draw_context_menu", params.context_menu_event),
-    
+
         # Delete menu
         op_menu("VIEW3D_MT_edit_greasepencil_delete", {"type": 'DEL', "value": 'PRESS'}),
         # Copy/paste
