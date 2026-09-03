@@ -33,3 +33,4 @@ Referenced by issue #161520, Writing `NodesModifier.properties.inputs.name` corr
 Referenced by issue #161652, Regression: Linking to group input does not set default value
 Referenced by issue #162064, Regression: Geometry Nodes: "Layer Selection" using separate geometry node doesn't work in 5.2
 Referenced by issue #162455, Linked geometry nodes modifiers ignore "Default Attribute"
+Referenced by pull request #163467, Fix #162455: Geometry nodes bool attribute needs correct default input type
