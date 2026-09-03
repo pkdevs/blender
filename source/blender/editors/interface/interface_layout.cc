@@ -3407,8 +3407,10 @@ void Layout::label_markdown(const StringRef text)
   }
 
   block_layout_set_current(this->block(), this);
-  ButtonLabel *button = static_cast<ButtonLabel *>(
-      uiDefBut(this->block(), ButtonType::Label, text, 0, 0, 0, 0, nullptr, 0, 0, std::nullopt));
+  /* Must be >0 for it to work on horizontal layouts. */
+  const int dummy_width = 1;
+  ButtonLabel *button = static_cast<ButtonLabel *>(uiDefBut(
+      this->block(), ButtonType::Label, text, 0, 0, dummy_width, 0, nullptr, 0, 0, std::nullopt));
   this->root_->use_dynamic_height = true;
   button->label_type = ButtonLabelType::Markdown;
   button->emboss = EmbossType::None;
