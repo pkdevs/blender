@@ -15,9 +15,12 @@
 
 CCL_NAMESPACE_BEGIN
 
-/* A packed representation of spherical harmonics.
- * Supports spherical harmonics for degrees 1 to 3. The values are quantized to 8 bit.
- * Spherical harmonics for degree 0 is stored in the base radiance attribute.
+/* A packed representation of spherical harmonics for bands 1 to 3.
+ *
+ * The spherical harmonics for band=0 is stored as a separate attribute. Such division allows for
+ * slightly better packing with opacity, and also allows to have higher bands optional.
+ *
+ * The values are quantized to 8 bit.
  *
  * The order is: <L=1 M=-1>, <L=1 M=0>, <L=1 M=1>, <L=2 M=-2> ...
  * where L is the band index, M is the  basis function.
