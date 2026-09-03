@@ -1159,7 +1159,7 @@ bool WM_operator_poll_context(bContext *C, wmOperatorType *ot, wm::OpCallContext
 
 bool WM_operator_ui_poll(wmOperatorType *ot, PointerRNA *ptr)
 {
-  if (ot->macro.first_ != nullptr) {
+  if (ot->macro.first() != nullptr) {
     /* For macros, check all have exec() we can call. */
     for (wmOperatorTypeMacro &otmacro : ot->macro) {
       wmOperatorType *otm = WM_operatortype_find(otmacro.idname, false);
@@ -1210,7 +1210,7 @@ static void wm_operator_reports(bContext *C,
                                 const bool caller_owns_reports)
 {
   if (G.background == 0 && caller_owns_reports == false) { /* Popup. */
-    if (op->reports->list.first_) {
+    if (op->reports->list.first()) {
       /* FIXME: temp setting window, see other call to #popup_menu_reports for why. */
       wmWindow *win_prev = CTX_wm_window(C);
       ScrArea *area_prev = CTX_wm_area(C);
@@ -1540,7 +1540,7 @@ static wmOperator *wm_operator_create(wmWindowManager *wm,
   }
 
   /* Recursive filling of operator macro list. */
-  if (ot->macro.first_) {
+  if (ot->macro.first()) {
     static wmOperator *motherop = nullptr;
     int root = 0;
 
@@ -3019,7 +3019,7 @@ static eHandlerActionFlag wm_handler_fileselect_do(bContext *C,
           }
         }
 
-        if (handler->op->reports->list.first_) {
+        if (handler->op->reports->list.first()) {
 
           /* FIXME(@ideasman42): temp setting window, this is really bad!
            * only have because lib linking errors need to be seen by users :(
@@ -3508,7 +3508,7 @@ static eHandlerActionFlag wm_handlers_do_intern(bContext *C,
    *
    * Calling a python script which changes the area.type, see #32232. */
   for (wmEventHandler *handler_base = handlers->first(), *handler_base_next;
-       handler_base && handlers->first_;
+       handler_base && handlers->first();
        handler_base = handler_base_next)
   {
     handler_base_next = handler_base->next;
@@ -3937,7 +3937,7 @@ static void wm_paintcursor_test(bContext *C, const wmEvent *event)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
 
-  if (wm->runtime->paintcursors.first_) {
+  if (wm->runtime->paintcursors.first()) {
     const bScreen *screen = CTX_wm_screen(C);
     ARegion *region = screen ? screen->active_region : nullptr;
 

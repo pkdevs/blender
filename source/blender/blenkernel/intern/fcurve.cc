@@ -221,7 +221,7 @@ void BKE_fmodifier_ensure_flag(ListBaseT<FModifier> *modifiers)
   for (FModifier &fcm : *modifiers) {
     const FModifierTypeInfo *fmi = get_fmodifier_typeinfo(fcm.type);
     if (fmi && fmi->requires_flag & FMI_REQUIRES_ORIGINAL_DATA) {
-      SET_FLAG_FROM_TEST(fcm.flag, &fcm != modifiers->first_, FMODIFIER_FLAG_DISABLED);
+      SET_FLAG_FROM_TEST(fcm.flag, &fcm != modifiers->first(), FMODIFIER_FLAG_DISABLED);
     }
   }
 }

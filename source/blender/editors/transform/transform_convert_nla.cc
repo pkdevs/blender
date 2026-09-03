@@ -268,7 +268,7 @@ static void nlatrack_truncate_temporary_tracks(bAnimContext *ac)
       if (!(track.flag & NLATRACK_TEMPORARILY_ADDED)) {
         break;
       }
-      if (track.strips.first_ != nullptr) {
+      if (track.strips.first() != nullptr) {
         break;
       }
       BKE_nlatrack_remove_and_free(nla_tracks, &track, true);
@@ -284,7 +284,7 @@ static void nlatrack_truncate_temporary_tracks(bAnimContext *ac)
       if (!(track.flag & NLATRACK_TEMPORARILY_ADDED)) {
         break;
       }
-      if (track.strips.first_ != nullptr) {
+      if (track.strips.first() != nullptr) {
         break;
       }
       BKE_nlatrack_remove_and_free(nla_tracks, &track, true);

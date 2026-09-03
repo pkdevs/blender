@@ -1861,7 +1861,7 @@ static void version_liboverride_rnacollections_insertion_object(Object *object)
       GpencilModifierData *gp_mod_src = gp_mod_anchor != nullptr ?
                                             gp_mod_anchor->next :
                                             static_cast<GpencilModifierData *>(
-                                                object->greasepencil_modifiers.first_);
+                                                object->greasepencil_modifiers.first());
 
       if (gp_mod_src == nullptr) {
         /* Invalid case, just remove that override property operation. */

@@ -1102,7 +1102,7 @@ static void write_result(const bke::BlenderProject *project,
       BKE_reportf(&reports, RPT_ERROR, "Write error: cannot save %s", filepath);
     }
   }
-  if (reports.list.first_ != nullptr) {
+  if (reports.list.first() != nullptr) {
     /* TODO: Should rather use new #BKE_reports_move_to_reports ? */
     std::unique_lock lock(oglrender->reports_mutex);
     for (Report *report = reports.list.first(); report != nullptr; report = report->next) {

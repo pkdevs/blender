@@ -1575,7 +1575,7 @@ static bool bm_vert_connect_select_history_edge_to_vert_path(
     }
 
     v = (&e_curr->v1)[!side];
-    if (!bm->selected.first_ || reinterpret_cast<BMVert *>((bm->selected.first())->ele) != v) {
+    if (!bm->selected.first() || reinterpret_cast<BMVert *>((bm->selected.first())->ele) != v) {
       BM_select_history_store_head_notest(bm, v);
     }
 
@@ -1632,7 +1632,7 @@ static wmOperatorStatus edbm_vert_connect_path_exec(bContext *C, wmOperator *op)
       continue;
     }
 
-    if (bm->selected.first_) {
+    if (bm->selected.first()) {
       BMEditSelection *ese = bm->selected.first();
       if (ese->htype == BM_EDGE) {
         if (bm_vert_connect_select_history_edge_to_vert_path(bm, &selected_orig)) {
@@ -3386,7 +3386,7 @@ static bool merge_firstlast(BMEditMesh *em,
     mergevert = reinterpret_cast<BMVert *>(ese->ele);
   }
   else {
-    if (!em->bm->selected.first_ || (em->bm->selected.first())->htype != BM_VERT) {
+    if (!em->bm->selected.first() || (em->bm->selected.first())->htype != BM_VERT) {
       return false;
     }
 
@@ -3575,14 +3575,14 @@ static const EnumPropertyItem *merge_type_itemf(bContext *C,
      * since selecting will activate - we could have a separate code-path for these but it's a
      * hassle for now just apply to the active (first) object. */
     if (em->selectmode & SCE_SELECT_VERTEX) {
-      if (em->bm->selected.first_ && em->bm->selected.last() &&
+      if (em->bm->selected.first() && em->bm->selected.last() &&
           (em->bm->selected.first())->htype == BM_VERT &&
           (em->bm->selected.last())->htype == BM_VERT)
       {
         RNA_enum_items_add_value(&item, &totitem, merge_type_items, MESH_MERGE_FIRST);
         RNA_enum_items_add_value(&item, &totitem, merge_type_items, MESH_MERGE_LAST);
       }
-      else if (em->bm->selected.first_ && (em->bm->selected.first())->htype == BM_VERT) {
+      else if (em->bm->selected.first() && (em->bm->selected.first())->htype == BM_VERT) {
         RNA_enum_items_add_value(&item, &totitem, merge_type_items, MESH_MERGE_FIRST);
       }
       else if (em->bm->selected.last() && (em->bm->selected.last())->htype == BM_VERT) {

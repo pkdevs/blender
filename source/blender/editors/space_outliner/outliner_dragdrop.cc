@@ -65,7 +65,7 @@ static TreeElement *outliner_dropzone_element(TreeElement *te,
     }
   }
   /* Not it.  Let's look at its children. */
-  if (children && (TREESTORE(te)->flag & TSE_CLOSED) == 0 && (te->subtree.first_)) {
+  if (children && (TREESTORE(te)->flag & TSE_CLOSED) == 0 && (te->subtree.first())) {
     for (TreeElement &te_sub : te->subtree) {
       TreeElement *te_valid = outliner_dropzone_element(&te_sub, fmval, children);
       if (te_valid) {

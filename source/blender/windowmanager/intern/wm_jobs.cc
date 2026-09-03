@@ -298,7 +298,7 @@ static void wm_jobs_update_progress_bars(wmWindowManager *wm)
   float jobs_progress = 0;
 
   for (wmJob &wm_job : wm->runtime->jobs) {
-    if (wm_job.threads.first_ && !wm_job.ready) {
+    if (wm_job.threads.first() && !wm_job.ready) {
       if (wm_job.flag & WM_JOB_PROGRESS) {
         /* Accumulate global progress for running jobs. */
         jobs_progress++;
@@ -721,7 +721,7 @@ void wm_jobs_timer(wmWindowManager *wm, wmTimer *wt)
 
   if (wm_job) {
     /* Running threads. */
-    if (wm_job->threads.first_) {
+    if (wm_job->threads.first()) {
       /* Let threads get temporary lock over main thread if needed. */
       wm_job_main_thread_yield(wm_job);
 
@@ -751,7 +751,7 @@ void wm_jobs_handle_finished(const bContext *C)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
   for (wmJob &job : wm->runtime->jobs.items_reversed_mutable()) {
-    if (!job.threads.first_) {
+    if (!job.threads.first()) {
       continue;
     }
 

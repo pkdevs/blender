@@ -2001,7 +2001,7 @@ void LayerGroup::move_node_top(TreeNode &node)
 void LayerGroup::move_node_bottom(TreeNode &node)
 {
   BLI_remlink(&this->children, &node);
-  BLI_insertlinkbefore(&this->children, this->children.first_, &node);
+  BLI_insertlinkbefore(&this->children, this->children.first(), &node);
   this->tag_nodes_cache_dirty();
 }
 

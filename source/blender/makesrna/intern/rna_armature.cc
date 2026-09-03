@@ -1061,8 +1061,8 @@ static void rna_Armature_bones_next(CollectionPropertyIterator *iter)
   ListBaseIterator *internal = &iter->internal.listbase;
   Bone *bone = reinterpret_cast<Bone *>(internal->link);
 
-  if (bone->childbase.first_) {
-    internal->link = static_cast<Link *>(bone->childbase.first_);
+  if (bone->childbase.first()) {
+    internal->link = reinterpret_cast<Link *>(bone->childbase.first());
   }
   else if (bone->next) {
     internal->link = reinterpret_cast<Link *>(bone->next);

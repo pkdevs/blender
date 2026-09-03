@@ -5680,7 +5680,7 @@ static wmOperatorStatus spacedata_cleanup_exec(bContext *C, wmOperator *op)
 
   for (bScreen &screen : bmain->screens) {
     for (ScrArea &area : screen.areabase) {
-      if (area.spacedata.first_ != area.spacedata.last()) {
+      if (area.spacedata.first() != area.spacedata.last()) {
         SpaceLink *sl = area.spacedata.first_as<SpaceLink>();
 
         BLI_remlink(&area.spacedata, sl);
@@ -6228,7 +6228,7 @@ void ED_screens_header_tools_menu_create(bContext *C, ui::Layout *layout, void *
   ScrArea *area = CTX_wm_area(C);
   {
     PointerRNA ptr = RNA_pointer_create_discrete(
-        id_cast<ID *>(CTX_wm_screen(C)), RNA_Space, area->spacedata.first_);
+        id_cast<ID *>(CTX_wm_screen(C)), RNA_Space, area->spacedata.first());
     if (!ELEM(area->spacetype, SPACE_TOPBAR)) {
       layout->prop(&ptr, "show_region_header", UI_ITEM_NONE, IFACE_("Show Header"), ICON_NONE);
     }
@@ -6261,7 +6261,7 @@ void ED_screens_footer_tools_menu_create(bContext *C, ui::Layout *layout, void *
 
   {
     PointerRNA ptr = RNA_pointer_create_discrete(
-        id_cast<ID *>(CTX_wm_screen(C)), RNA_Space, area->spacedata.first_);
+        id_cast<ID *>(CTX_wm_screen(C)), RNA_Space, area->spacedata.first());
     layout->prop(&ptr, "show_region_footer", UI_ITEM_NONE, IFACE_("Show Footer"), ICON_NONE);
   }
 
@@ -7893,7 +7893,7 @@ static void context_cycle_prop_get(bScreen *screen,
   switch (area->spacetype) {
     case SPACE_PROPERTIES:
       *r_ptr = RNA_pointer_create_discrete(
-          &screen->id, RNA_SpaceProperties, area->spacedata.first_);
+          &screen->id, RNA_SpaceProperties, area->spacedata.first());
       propname = "context";
       break;
     case SPACE_USERPREF:

@@ -532,7 +532,7 @@ void BM_mesh_edgeloops_calc_order(BMesh * /*bm*/,
   }
 
   /* not so efficient re-ordering */
-  while (eloops->first_) {
+  while (eloops->first()) {
     BMEdgeLoopStore *el_store_best = nullptr;
     const float *co = (eloops_ordered.last())->co;
     const float *no = (eloops_ordered.last())->no;
@@ -646,7 +646,7 @@ void BM_edgeloop_edges_get(BMEdgeLoopStore *el_store, BMEdge **e_arr)
   }
 
   if (el_store->flag & BM_EDGELOOP_IS_CLOSED) {
-    e_arr[i] = BM_edge_exists(NODE_AS_V(el_store->verts.first_),
+    e_arr[i] = BM_edge_exists(NODE_AS_V(el_store->verts.first()),
                               NODE_AS_V(el_store->verts.last()));
     BLI_assert(e_arr[i] != nullptr);
   }
@@ -796,7 +796,7 @@ void BM_edgeloop_expand(
       else {
         if (node_curr->next || (el_store->flag & BM_EDGELOOP_IS_CLOSED)) {
           EDGE_SPLIT(node_curr_copy,
-                     node_curr->next ? node_curr->next : (LinkData *)el_store->verts.first_);
+                     node_curr->next ? node_curr->next : (LinkData *)el_store->verts.first());
           BLI_insertlinkafter(&el_store->verts, node_curr, node_curr_copy);
           node_curr = node_curr_copy->next;
         }
@@ -831,7 +831,7 @@ void BM_edgeloop_expand(
       else {
         if (node_curr->next || (el_store->flag & BM_EDGELOOP_IS_CLOSED)) {
           EDGE_SPLIT(node_curr_copy,
-                     node_curr->next ? node_curr->next : (LinkData *)el_store->verts.first_);
+                     node_curr->next ? node_curr->next : (LinkData *)el_store->verts.first());
           BLI_insertlinkafter(&el_store->verts, node_curr, node_curr_copy);
           node_curr = node_curr_copy->next;
         }

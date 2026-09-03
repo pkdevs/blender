@@ -1159,7 +1159,7 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
       if (!region.runtime->visible) {
         continue;
       }
-      const bool do_paint_cursor = (wm->runtime->paintcursors.first_ &&
+      const bool do_paint_cursor = (wm->runtime->paintcursors.first() &&
                                     &region == screen->active_region);
       const bool do_draw_overlay = (region.runtime->type && region.runtime->type->draw_overlay);
       if (!(do_paint_cursor || do_draw_overlay)) {

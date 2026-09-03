@@ -545,7 +545,7 @@ static bool skip_modifier(Scene *scene, const StripModifierData *smd, int timeli
 
 void modifier_apply_stack(ModifierApplyContext &context)
 {
-  if (context.strip.modifiers.first_ == nullptr) {
+  if (context.strip.modifiers.first() == nullptr) {
     return;
   }
 

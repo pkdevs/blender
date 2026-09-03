@@ -545,7 +545,7 @@ ARegion *BKE_spacedata_find_region_type(const SpaceLink *slink,
                                         const ScrArea *area,
                                         int region_type)
 {
-  const bool is_slink_active = slink == area->spacedata.first_;
+  const bool is_slink_active = slink == area->spacedata.first();
   const ListBaseT<ARegion> *regionbase = (is_slink_active) ? &area->regionbase :
                                                              &slink->regionbase;
   ARegion *region = nullptr;
@@ -1078,7 +1078,7 @@ ARegion *BKE_screen_find_region_in_space(const bScreen *screen,
   for (ScrArea &area : screen->areabase) {
     for (SpaceLink &slink : area.spacedata) {
       if (&slink == sl) {
-        ListBaseT<ARegion> *regionbase = (&slink == area.spacedata.first_) ? &area.regionbase :
+        ListBaseT<ARegion> *regionbase = (&slink == area.spacedata.first()) ? &area.regionbase :
                                                                              &slink.regionbase;
         return BKE_region_find_in_listbase_by_type(regionbase, region_type);
       }
@@ -1617,7 +1617,7 @@ static void direct_link_area(BlendDataReader *reader, ScrArea *area)
 
   /* accident can happen when read/save new file with older version */
   /* 2.50: we now always add spacedata for info */
-  if (area->spacedata.first_ == nullptr) {
+  if (area->spacedata.first() == nullptr) {
     SpaceInfo *sinfo = MEM_new<SpaceInfo>("spaceinfo");
     area->spacetype = sinfo->spacetype = SPACE_INFO;
     BLI_addtail(&area->spacedata, sinfo);
@@ -1704,7 +1704,7 @@ void BKE_screen_area_blend_read_after_liblink(BlendLibReader *reader, ID *parent
 {
   for (SpaceLink &sl : area->spacedata) {
     SpaceType *space_type = BKE_spacetype_from_id(sl.spacetype);
-    ListBaseT<ARegion> *regionbase = (&sl == area->spacedata.first_) ? &area->regionbase :
+    ListBaseT<ARegion> *regionbase = (&sl == area->spacedata.first()) ? &area->regionbase :
                                                                        &sl.regionbase;
 
     /* We cannot restore the region type without a valid space type. So delete all regions to make

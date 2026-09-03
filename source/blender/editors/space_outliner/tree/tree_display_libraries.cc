@@ -106,7 +106,7 @@ TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar,
 
   TreeElement *tenlib = nullptr;
   for (int a = 0; a < lbarray.size(); a++) {
-    if (!lbarray[a] || !lbarray[a]->first_) {
+    if (!lbarray[a] || !lbarray[a]->first()) {
       continue;
     }
 

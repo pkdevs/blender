@@ -1410,7 +1410,7 @@ bool list_has_suitable_fmodifier(const ListBaseT<FModifier> *modifiers, int mtyp
 uint evaluate_fmodifiers_storage_size_per_modifier(const ListBaseT<FModifier> *modifiers)
 {
   /* Sanity checks. */
-  if (ELEM(nullptr, modifiers, modifiers->first_)) {
+  if (ELEM(nullptr, modifiers, modifiers->first())) {
     return 0;
   }
 

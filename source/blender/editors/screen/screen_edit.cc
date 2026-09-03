@@ -2163,7 +2163,7 @@ ScrArea *ED_screen_area_find_with_spacedata(const bScreen *screen,
 {
   if (only_visible) {
     for (ScrArea &area : screen->areabase) {
-      if (area.spacedata.first_ == sl) {
+      if (area.spacedata.first() == sl) {
         return &area;
       }
     }

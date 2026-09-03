@@ -852,7 +852,7 @@ void RE_InitState(Render *re,
     else if (re->result) {
       bool have_layer = false;
 
-      if (re->single_view_layer[0] == '\0' && re->result->layers.first_) {
+      if (re->single_view_layer[0] == '\0' && re->result->layers.first()) {
         have_layer = true;
       }
       else {

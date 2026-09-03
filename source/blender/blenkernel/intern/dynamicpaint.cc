@@ -368,7 +368,7 @@ bool dynamicPaint_outputLayerExists(DynamicPaintSurface *surface, Object *ob, in
 static bool surface_duplicateOutputExists(DynamicPaintSurface *t_surface, const StringRefNull name)
 {
   DynamicPaintSurface *surface = static_cast<DynamicPaintSurface *>(
-      t_surface->canvas->surfaces.first_);
+      t_surface->canvas->surfaces.first());
 
   for (; surface; surface = surface->next) {
     if (surface != t_surface && surface->type == t_surface->type &&
@@ -404,7 +404,7 @@ static void surface_setUniqueOutputName(DynamicPaintSurface *surface, char *base
 static bool surface_duplicateNameExists(DynamicPaintSurface *t_surface, const StringRefNull name)
 {
   DynamicPaintSurface *surface = static_cast<DynamicPaintSurface *>(
-      t_surface->canvas->surfaces.first_);
+      t_surface->canvas->surfaces.first());
 
   for (; surface; surface = surface->next) {
     if (surface != t_surface && STREQ(name.c_str(), surface->name)) {
@@ -1241,7 +1241,7 @@ void dynamicPaint_Modifier_copy(const DynamicPaintModifierData *pmd,
     DynamicPaintSurface *surface;
     tpmd->canvas->pmd = tpmd;
     /* free default surface */
-    if (tpmd->canvas->surfaces.first_) {
+    if (tpmd->canvas->surfaces.first()) {
       dynamicPaint_freeSurface(tpmd, tpmd->canvas->surfaces.first());
     }
 

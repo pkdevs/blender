@@ -2194,7 +2194,7 @@ static TreeElement *outliner_find_next_element(SpaceOutliner *space_outliner, Tr
 {
   TreeStoreElem *tselem = TREESTORE(te);
 
-  if (TSELEM_OPEN(tselem, space_outliner) && te->subtree.first_) {
+  if (TSELEM_OPEN(tselem, space_outliner) && te->subtree.first()) {
     te = te->subtree.first();
   }
   else if (te->next) {

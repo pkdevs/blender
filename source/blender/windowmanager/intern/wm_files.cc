@@ -3220,7 +3220,7 @@ static wmOperatorStatus wm_open_mainfile__select_file_path_exec(bContext *C, wmO
   }
 
   /* If possible, get the name of the most recently used `.blend` file. */
-  if (G.recent_files.first_) {
+  if (G.recent_files.first()) {
     RecentFile *recent = G.recent_files.first();
     blendfile_path = recent->filepath;
   }
@@ -3915,7 +3915,7 @@ static void save_set_filepath(bContext *C, wmOperator *op)
   if (!RNA_property_is_set(op->ptr, prop)) {
     const char *blendfile_path = BKE_main_blendfile_path(bmain);
     /* If not saved before, get the name of the most recently used `.blend` file. */
-    if ((blendfile_path[0] == '\0') && G.recent_files.first_) {
+    if ((blendfile_path[0] == '\0') && G.recent_files.first()) {
       RecentFile *recent = G.recent_files.first();
       STRNCPY(filepath, recent->filepath);
     }

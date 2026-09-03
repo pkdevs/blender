@@ -423,7 +423,7 @@ static wmOperatorStatus ptcache_remove_exec(bContext *C, wmOperator * /*op*/)
   PTCacheID pid = BKE_ptcache_id_find(ob, scene, cache);
 
   /* don't delete last cache */
-  if (pid.cache && pid.ptcaches->first_ != pid.ptcaches->last()) {
+  if (pid.cache && pid.ptcaches->first() != pid.ptcaches->last()) {
     BLI_remlink(pid.ptcaches, pid.cache);
     BKE_ptcache_free(pid.cache);
     *(pid.cache_ptr) = pid.ptcaches->first();

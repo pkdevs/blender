@@ -195,7 +195,7 @@ void ED_markers_get_minmax(ListBaseT<TimeMarker> *markers,
 
   /* sanity check */
   // printf("markers = %p -  %p, %p\n", markers, markers->first, markers->last);
-  if (ELEM(nullptr, markers, markers->first_, markers->last())) {
+  if (ELEM(nullptr, markers, markers->first(), markers->last())) {
     *r_first = 0.0f;
     *r_last = 0.0f;
     return;
@@ -801,7 +801,7 @@ static bool ed_markers_poll_markers_exist(bContext *C)
   }
 
   /* list of markers must exist, as well as some markers in it! */
-  return (markers && markers->first_);
+  return (markers && markers->first());
 }
 
 static bool ed_markers_poll_markers_exist_visible(bContext *C)
@@ -1458,7 +1458,7 @@ static wmOperatorStatus ed_marker_select(bContext *C,
       if (marker.frame == cfra) {
         if (marker.flag & SELECT) {
           marker_cycle_selected = static_cast<TimeMarker *>(marker.next ? marker.next :
-                                                                          markers->first_);
+                                                                          markers->first());
           break;
         }
       }

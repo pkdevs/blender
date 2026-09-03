@@ -758,7 +758,7 @@ bNode *version_eevee_output_node_get(bNodeTree *ntree, int16_t node_type)
 
 bool all_scenes_use(Main *bmain, const Span<const char *> engines)
 {
-  if (!bmain->scenes.first_) {
+  if (!bmain->scenes.first()) {
     return false;
   }
 

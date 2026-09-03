@@ -62,7 +62,7 @@ void outliner_make_object_parent_hierarchy(ListBaseT<TreeElement> *lb)
 bool outliner_animdata_test(const AnimData *adt)
 {
   if (adt) {
-    return (adt->action || adt->drivers.first_ || adt->nla_tracks.first_);
+    return (adt->action || adt->drivers.first() || adt->nla_tracks.first());
   }
   return false;
 }

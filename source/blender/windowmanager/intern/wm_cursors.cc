@@ -493,7 +493,7 @@ void WM_cursor_wait(bool val)
 {
   if (!G.background) {
     wmWindowManager *wm = G_MAIN->wm.first();
-    wmWindow *win = static_cast<wmWindow *>(wm ? wm->windows.first_ : nullptr);
+    wmWindow *win = static_cast<wmWindow *>(wm ? wm->windows.first() : nullptr);
 
     for (; win; win = win->next) {
       if (val) {

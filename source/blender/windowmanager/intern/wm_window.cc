@@ -2420,7 +2420,7 @@ void wm_test_gpu_backend_fallback(bContext *C)
 
   wmWindowManager *wm = CTX_wm_manager(C);
   wmWindow *win = static_cast<wmWindow *>((wm->runtime->winactive) ? wm->runtime->winactive :
-                                                                     wm->windows.first_);
+                                                                     wm->windows.first());
 
   if (win) {
     /* We want this warning on the Main window, not a child window even if active. See #118765. */

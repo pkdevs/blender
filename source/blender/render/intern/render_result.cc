@@ -1242,7 +1242,7 @@ bool RE_RenderResult_is_stereo(const RenderResult *result)
 RenderView *RE_RenderViewGetById(RenderResult *rr, const int view_id)
 {
   RenderView *rv = static_cast<RenderView *>(BLI_findlink(&rr->views, view_id));
-  BLI_assert(rr->views.first_);
+  BLI_assert(rr->views.first());
   return rv ? rv : rr->views.first();
 }
 
@@ -1250,7 +1250,7 @@ RenderView *RE_RenderViewGetByName(RenderResult *rr, const char *viewname)
 {
   RenderView *rv = static_cast<RenderView *>(
       BLI_findstring(&rr->views, viewname, offsetof(RenderView, name)));
-  BLI_assert(rr->views.first_);
+  BLI_assert(rr->views.first());
   return rv ? rv : rr->views.first();
 }
 

@@ -566,7 +566,7 @@ static void lineart_bounding_area_link_point_recursive(LineartData *ld,
 
     cre->eci = eci;
 
-    if (eci == ec->chain.first_) {
+    if (eci == ec->chain.first()) {
       cre->is_left = 1;
     }
   }
@@ -787,7 +787,7 @@ static void lineart_chain_connect(LineartData * /*ld*/,
     eci = sub->chain.first();
     if (lineart_point_overlapping(onto->chain.last(), eci->pos[0], eci->pos[1], 1e-5)) {
       BLI_pophead(&sub->chain);
-      if (sub->chain.first_ == nullptr) {
+      if (sub->chain.first() == nullptr) {
         return;
       }
     }
@@ -802,7 +802,7 @@ static void lineart_chain_connect(LineartData * /*ld*/,
     eci = onto->chain.first();
     if (lineart_point_overlapping(sub->chain.last(), eci->pos[0], eci->pos[1], 1e-5)) {
       BLI_pophead(&onto->chain);
-      if (onto->chain.first_ == nullptr) {
+      if (onto->chain.first() == nullptr) {
         return;
       }
     }
@@ -849,7 +849,7 @@ static LineartChainRegisterEntry *lineart_chain_get_closest_cre(LineartData *ld,
     if (cre.ec->picked || cre.picked) {
       continue;
     }
-    if (cre.ec == ec || (!cre.ec->chain.first_) || (cre.ec->level != occlusion) ||
+    if (cre.ec == ec || (!cre.ec->chain.first()) || (cre.ec->level != occlusion) ||
         (cre.ec->material_mask_bits != material_mask_bits) ||
         (cre.ec->intersection_mask != isec_mask) || (cre.ec->shadow_mask_bits != shadow_mask))
     {
@@ -947,7 +947,7 @@ void MOD_lineart_chain_connect(LineartData *ld)
 
   while (LineartEdgeChain *ec = static_cast<LineartEdgeChain *>(BLI_pophead(&swap))) {
     ec->next = ec->prev = nullptr;
-    if (ec->picked || ec->chain.first_ == ec->chain.last()) {
+    if (ec->picked || ec->chain.first() == ec->chain.last()) {
       continue;
     }
     BLI_addtail(&ld->chains, ec);

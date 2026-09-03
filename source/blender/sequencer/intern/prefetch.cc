@@ -686,7 +686,7 @@ void seq_prefetch_start(const RenderData *context, float timeline_frame)
 {
   Scene *scene = context->scene;
   Editing *ed = scene->ed;
-  bool has_strips = bool(ed->current_strips()->first_);
+  bool has_strips = bool(ed->current_strips()->first());
 
   if (!context->is_prefetch_render) {
     bool playing = context->is_playing;

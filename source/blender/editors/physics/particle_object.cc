@@ -1113,7 +1113,7 @@ static bool copy_particle_systems_to_object(const bContext *C,
  */
 #define PSYS_FROM_FIRST \
   static_cast<ParticleSystem *>( \
-      (single_psys_from ? single_psys_from : ob_from->particlesystem.first_))
+       (single_psys_from ? single_psys_from : ob_from->particlesystem.first()))
 #define PSYS_FROM_NEXT(cur) (single_psys_from ? nullptr : (cur)->next)
   totpsys = single_psys_from ? 1 : ob_from->particlesystem.count();
 

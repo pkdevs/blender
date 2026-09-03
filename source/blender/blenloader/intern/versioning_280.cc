@@ -266,7 +266,7 @@ static void do_version_layers_to_collections(Main *bmain, Scene *scene)
     scene->master_collection = BKE_collection_master_add(scene);
   }
 
-  if (scene->view_layers.first_) {
+  if (scene->view_layers.first()) {
     return;
   }
 
@@ -311,7 +311,7 @@ static void do_version_layers_to_collections(Main *bmain, Scene *scene)
 
   /* Handle legacy render layers. */
   bool have_override = false;
-  const bool need_default_renderlayer = scene->r.layers.first_ == nullptr;
+  const bool need_default_renderlayer = scene->r.layers.first() == nullptr;
 
   for (SceneRenderLayer &srl : scene->r.layers) {
     ViewLayer *view_layer = BKE_view_layer_add(bmain, scene, srl.name, nullptr, VIEWLAYER_ADD_NEW);
@@ -636,7 +636,7 @@ static void do_versions_seq_alloc_transform_and_crop(ListBaseT<Strip> *seqbase)
         strip.data->crop = MEM_new<StripCrop>("StripCrop");
       }
 
-      if (strip.seqbase.first_ != nullptr) {
+      if (strip.seqbase.first() != nullptr) {
         do_versions_seq_alloc_transform_and_crop(&strip.seqbase);
       }
     }
@@ -2988,7 +2988,7 @@ static void do_versions_seq_unique_name_all_strips(Scene *sce, ListBaseT<Strip> 
 {
   for (Strip &strip : *seqbasep) {
     seq::strip_unique_name_set(sce, &sce->ed->seqbase, &strip);
-    if (strip.seqbase.first_ != nullptr) {
+    if (strip.seqbase.first() != nullptr) {
       do_versions_seq_unique_name_all_strips(sce, &strip.seqbase);
     }
   }
@@ -3783,7 +3783,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 280, 21)) {
     for (Scene &sce : bmain->scenes) {
-      if (sce.ed != nullptr && sce.ed->seqbase.first_ != nullptr) {
+      if (sce.ed != nullptr && sce.ed->seqbase.first() != nullptr) {
         do_versions_seq_unique_name_all_strips(&sce, &sce.ed->seqbase);
       }
     }

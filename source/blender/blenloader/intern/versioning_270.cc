@@ -448,7 +448,7 @@ static void do_version_bbone_easing_fcurve_fix(ID * /*id*/, FCurve *fcu)
   }
 
   /* FModifiers -> Stepped (for frame_start/end) */
-  if (fcu->modifiers.first_) {
+  if (fcu->modifiers.first()) {
     for (FModifier &fcm : fcu->modifiers) {
       if (fcm.type == FMODIFIER_TYPE_STEPPED) {
         FMod_Stepped *data = static_cast<FMod_Stepped *>(fcm.data);

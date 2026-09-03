@@ -565,7 +565,7 @@ static EditBone *find_ebone_link(ListBaseT<EditBone> *edbo, Bone *link)
 
 EditBone *make_boneList(ListBaseT<EditBone> *edbo, ListBaseT<Bone> *bones, Bone *actBone)
 {
-  BLI_assert(!edbo->first_ && !edbo->last());
+  BLI_assert(!edbo->first() && !edbo->last());
 
   EditBone *active = make_boneList_recursive(edbo, bones, nullptr, actBone);
 
@@ -843,7 +843,7 @@ void ED_armature_edit_free(bArmature *arm)
 {
   /* Clear the edit-bones list. */
   if (arm->edbo) {
-    if (arm->edbo->first_) {
+    if (arm->edbo->first()) {
       for (EditBone &eBone : *arm->edbo) {
         if (eBone.prop) {
           IDP_FreeProperty(eBone.prop);

@@ -1357,7 +1357,7 @@ static void link_recurs_seq(BlendDataReader *reader, ListBaseT<Strip> *lb)
       BLI_freelinkN(lb, &strip);
       BLO_read_data_reports(reader)->count.sequence_strips_skipped++;
     }
-    else if (strip.seqbase.first_) {
+    else if (strip.seqbase.first()) {
       link_recurs_seq(reader, &strip.seqbase);
     }
   }
@@ -2306,7 +2306,7 @@ int BKE_scene_base_iter_next(
               BLI_assert(BKE_view_layer_is_synced(*view_layer_set));
             }
             ListBaseT<Base> *object_bases = BKE_view_layer_object_bases_get(view_layer_set);
-            if (object_bases->first_) {
+            if (object_bases->first()) {
               *base = object_bases->first();
               *ob = (*base)->object;
               iter->phase = F_SCENE;
@@ -2334,7 +2334,7 @@ int BKE_scene_base_iter_next(
                   BLI_assert(BKE_view_layer_is_synced(*view_layer_set));
                 }
                 ListBaseT<Base> *object_bases = BKE_view_layer_object_bases_get(view_layer_set);
-                if (object_bases->first_) {
+                if (object_bases->first()) {
                   *base = object_bases->first();
                   *ob = (*base)->object;
                   break;
@@ -2982,7 +2982,7 @@ bool BKE_scene_remove_render_view(Scene *scene, SceneRenderView *srv)
   if (act == -1) {
     return false;
   }
-  if (scene->r.views.first_ == scene->r.views.last()) {
+  if (scene->r.views.first() == scene->r.views.last()) {
     /* ensure 1 view is kept */
     return false;
   }
@@ -3034,7 +3034,7 @@ Base *_setlooper_base_step(const Main &bmain, Scene **sce_iter, ViewLayer *view_
     /* For the first loop we should get the layer from workspace when available. */
     BKE_view_layer_synced_ensure(bmain, *sce_iter, view_layer);
     ListBaseT<Base> *object_bases = BKE_view_layer_object_bases_get(view_layer);
-    if (object_bases->first_) {
+    if (object_bases->first()) {
       return object_bases->first();
     }
     /* No base on this scene layer. */

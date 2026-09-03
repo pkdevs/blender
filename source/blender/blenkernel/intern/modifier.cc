@@ -1465,7 +1465,7 @@ void BKE_modifier_blend_read_data(BlendDataReader *reader, ListBaseT<ModifierDat
               reader, &(fmd->domain->ptcaches[0]), &(fmd->domain->point_cache[0]), 1);
 
           /* Manta sim uses only one cache from now on, so store pointer convert */
-          if (fmd->domain->ptcaches[1].first_ || fmd->domain->point_cache[1]) {
+          if (fmd->domain->ptcaches[1].first() || fmd->domain->point_cache[1]) {
             PointCache *cache = fmd->domain->point_cache[1];
             if (BLO_read_struct_no_us_nonnull(reader, PointCache, &cache)) {
               if (cache->flag & PTCACHE_FAKE_SMOKE) {
@@ -1524,7 +1524,7 @@ void BKE_modifier_blend_read_data(BlendDataReader *reader, ListBaseT<ModifierDat
         pmd->canvas->pmd = pmd;
         pmd->canvas->flags &= ~MOD_DPAINT_BAKING; /* just in case */
 
-        if (pmd->canvas->surfaces.first_) {
+        if (pmd->canvas->surfaces.first()) {
           BLO_read_struct_list(reader, DynamicPaintSurface, &pmd->canvas->surfaces);
 
           for (DynamicPaintSurface &surface : pmd->canvas->surfaces) {

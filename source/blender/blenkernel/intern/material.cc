@@ -2276,7 +2276,7 @@ void BKE_material_defaults_free_gpu()
 {
   for (int i = 0; default_materials[i]; i++) {
     Material *ma = *default_materials[i];
-    if (ma && ma->gpumaterial.first_) {
+    if (ma && ma->gpumaterial.first()) {
       GPU_material_free(&ma->gpumaterial);
     }
   }

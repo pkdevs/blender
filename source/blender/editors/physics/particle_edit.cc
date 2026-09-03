@@ -5458,7 +5458,7 @@ static void free_all_psys_edit(Object *object)
 
 bool ED_object_particle_edit_mode_supported(const Object *ob)
 {
-  return (ob->particlesystem.first_ || BKE_modifiers_findby_type(ob, eModifierType_Cloth) ||
+  return (ob->particlesystem.first() || BKE_modifiers_findby_type(ob, eModifierType_Cloth) ||
           BKE_modifiers_findby_type(ob, eModifierType_Softbody));
 }
 

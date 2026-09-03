@@ -987,7 +987,7 @@ bool ANIM_fmodifiers_copy_to_buf(ListBaseT<FModifier> *modifiers, bool active)
   bool ok = true;
 
   /* sanity checks */
-  if (ELEM(nullptr, modifiers, modifiers->first_)) {
+  if (ELEM(nullptr, modifiers, modifiers->first())) {
     return false;
   }
 

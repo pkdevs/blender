@@ -2469,7 +2469,7 @@ static wmOperatorStatus sequencer_add_duplicate_exec(bContext *C, wmOperator *op
       bmain, scene, scene, &duplicated_strips, ed->current_strips(), dupe_flag, 0);
   deselect_all_strips(scene);
 
-  if (duplicated_strips.first_ == nullptr) {
+  if (duplicated_strips.first() == nullptr) {
     return OPERATOR_CANCELLED;
   }
 

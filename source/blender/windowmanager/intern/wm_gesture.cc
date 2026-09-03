@@ -106,14 +106,14 @@ void WM_gesture_end(wmWindow *win, wmGesture *gesture)
 
 void WM_gestures_free_all(wmWindow *win)
 {
-  while (win->runtime->gesture.first_) {
+  while (win->runtime->gesture.first()) {
     WM_gesture_end(win, win->runtime->gesture.first());
   }
 }
 
 void WM_gestures_remove(wmWindow *win)
 {
-  while (win->runtime->gesture.first_) {
+  while (win->runtime->gesture.first()) {
     WM_gesture_end(win, win->runtime->gesture.first());
   }
 }

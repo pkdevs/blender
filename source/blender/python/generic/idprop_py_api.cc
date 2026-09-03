@@ -1474,7 +1474,7 @@ static PyObject *IDGroup_Iter_New_WithType(BPy_IDProperty *group,
     BLI_assert(!PyObject_GC_IsTracked((PyObject *)iter));
     PyObject_GC_Track(iter);
     iter->cur = static_cast<IDProperty *>(
-        (reversed ? group->prop->data.group.last() : group->prop->data.group.first_));
+        (reversed ? group->prop->data.group.last() : group->prop->data.group.first()));
     iter->len_init = group->prop->len;
   }
   else {

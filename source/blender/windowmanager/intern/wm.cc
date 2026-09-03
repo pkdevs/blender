@@ -275,7 +275,7 @@ void WM_operator_free(wmOperator *op)
     MEM_delete(op->reports);
   }
 
-  if (op->macro.first_) {
+  if (op->macro.first()) {
     wmOperator *opm, *opmnext;
     for (opm = op->macro.first(); opm; opm = opmnext) {
       opmnext = opm->next;

@@ -585,7 +585,7 @@ void BMO_mesh_selected_remap(BMesh *bm,
                              BMOpSlot *slot_face_map,
                              const bool check_select)
 {
-  if (bm->selected.first_) {
+  if (bm->selected.first()) {
     BMEditSelection *ese, *ese_next;
     BMOpSlot *slot_elem_map;
 

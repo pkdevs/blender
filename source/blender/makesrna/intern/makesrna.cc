@@ -2364,7 +2364,7 @@ static void rna_def_function_funcs(FILE *f, StructDefRNA *dsrna, FunctionDefRNA 
   PropertyType type;
   const char *funcname, *valstr;
   const char *ptrstr;
-  const bool has_data = (dfunc->cont.properties.first_ != nullptr);
+  const bool has_data = (dfunc->cont.properties.first() != nullptr);
   int flag, flag_parameter, pout, cptr, first;
 
   srna = dsrna->srna;
@@ -3007,7 +3007,7 @@ static void rna_generate_internal_property_prototypes(BlenderRNA * /*brna*/,
     base = base->base;
   }
 
-  if (srna->cont.properties.first_) {
+  if (srna->cont.properties.first()) {
     fprintf(f, "\n");
   }
 
@@ -3033,7 +3033,7 @@ static void rna_generate_parameter_prototypes(BlenderRNA * /*brna*/,
             parm.identifier.c_str());
   }
 
-  if (func->cont.properties.first_) {
+  if (func->cont.properties.first()) {
     fprintf(f, "\n");
   }
 }

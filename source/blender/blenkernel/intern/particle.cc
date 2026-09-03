@@ -248,7 +248,7 @@ static void write_boid_state(BlendWriter *writer, BoidState *state)
     }
   }
 #if 0
-  BoidCondition *cond = state->conditions.first_;
+  BoidCondition *cond = state->conditions.first();
   for (; cond; cond = cond->next) {
     writer->write_struct(cond);
   }

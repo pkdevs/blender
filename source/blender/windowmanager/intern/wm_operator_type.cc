@@ -186,7 +186,7 @@ void WM_operatortype_remove_ptr(wmOperatorType *ot)
     IDP_FreeProperty(ot->last_properties);
   }
 
-  if (ot->macro.first_) {
+  if (ot->macro.first()) {
     wm_operatortype_free_macro(ot);
   }
 
@@ -216,7 +216,7 @@ static void operatortype_ghash_free_cb(wmOperatorType *ot)
     IDP_FreeProperty(ot->last_properties);
   }
 
-  if (ot->macro.first_) {
+  if (ot->macro.first()) {
     wm_operatortype_free_macro(ot);
   }
 
