@@ -3286,8 +3286,15 @@ static void node_draw_collapsed(const bContext &C,
     ui::theme::get_color_blend_shade_4fv(TH_SELECT, color_id, 0.4f, 10, color);
   }
 
+  const rctf header_rect = {
+      rct.xmin,
+      rct.xmax,
+      centy - NODE_DY * 0.5f,
+      centy + NODE_DY * 0.5f,
+  };
+
   float iconofs = rct.xmax - 0.35f * U.widget_unit;
-  node_add_error_message_button(tree_draw_ctx, ntree, node, block, rct, iconofs);
+  node_add_error_message_button(tree_draw_ctx, ntree, node, block, header_rect, iconofs);
 
   /* Collapse/expand icon. */
   {
