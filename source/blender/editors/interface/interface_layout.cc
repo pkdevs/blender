@@ -14,6 +14,8 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLF_api.hh"
+
 #include "DNA_screen_types.h"
 #include "DNA_userdef_types.h"
 
@@ -1591,8 +1593,35 @@ void Layout::op_enum_items(wmOperatorType *ot,
   Block *block = this->block();
   const bool radial = layout_is_radial(this);
 
+  bool force_vertical = false;
+  if (!radial && this->root()->type == LayoutType::Menu) {
+    const wmWindow *win = CTX_wm_window(static_cast<bContext *>(block->evil_C));
+    if (win) {
+      const int2 win_size = WM_window_native_pixel_size(win);
+      BLF_size(BLF_default(), style_get()->widget.points * UI_SCALE_FAC);
+      float menu_width = 0.0f;
+      float column_width = 0.0f;
+      const float item_padding = 100.0f * UI_SCALE_FAC;
+      for (const EnumPropertyItem *item = item_array; item->identifier; item++) {
+        if (!item->identifier[0] && item->name) {
+          menu_width += column_width + item_padding;
+          column_width = 0.0f;
+        }
+        if (item->name && item->name[0]) {
+          column_width = std::max(column_width,
+                                  BLF_width(BLF_default(), item->name, BLF_DRAW_STR_DUMMY_MAX));
+        }
+      }
+      menu_width += column_width + item_padding;
+      force_vertical = menu_width > win_size.x - (2.0f * UI_SCREEN_MARGIN);
+    }
+  }
+
   if (radial) {
     target = &this->menu_pie();
+  }
+  else if (force_vertical) {
+    target = this;
   }
   else if ((this->local_direction() == LayoutDirection::Horizontal) && (flag & ITEM_R_ICON_ONLY)) {
     target = this;
