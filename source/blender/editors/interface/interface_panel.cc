@@ -30,6 +30,7 @@
 #include "DNA_userdef_types.h"
 
 #include "BKE_context.hh"
+#include "BKE_recents.hh"
 #include "BKE_screen.hh"
 
 #include "RNA_access.hh"
@@ -743,6 +744,18 @@ Panel *panel_begin(
     }
   }
 
+  if (newpanel && region->regiontype == RGN_TYPE_TOOLS &&
+      STRPREFIX(panel->panelname, "FILEBROWSER_PT_"))
+  {
+    const std::string panel_name_str = panel->panelname;
+    const int order = recents::Section("panel.sortorder").get<int>(panel_name_str);
+    if (order >= 0) {
+      panel->sortorder = order;
+      SET_FLAG_FROM_TEST(
+          panel->flag, !recents::Section("panel.open").get<bool>(panel_name_str), PNL_CLOSED);
+    }
+  }
+
   if (panel_last) {
     panel_last->runtime_flag &= ~PANEL_LAST_ADDED;
   }
@@ -1040,6 +1053,18 @@ void panels_draw(const bContext *C, ARegion *region)
         !block_is_search_only(&block))
     {
       block_draw(C, &block);
+    }
+  }
+}
+
+void panels_do_after_block_layout_fns(const bContext *C, ARegion *region)
+{
+  for (ui::Block &block : region->runtime->uiblocks) {
+    if (block.panel) {
+      block.post_block_layout_fns_pending = false;
+      if (block.active) {
+        block_post_layout_callbacks_exec(C, region, &block);
+      }
     }
   }
 }
@@ -2918,6 +2943,17 @@ static void panel_activate_state(const bContext *C, Panel *panel, const HandlePa
     if (data->animtimer) {
       WM_event_timer_remove(CTX_wm_manager(C), win, data->animtimer);
       data->animtimer = nullptr;
+    }
+
+    /* Save File Browser panel order and open/close state. */
+    if (CTX_wm_area(C)->spacetype == SPACE_FILE && region->regiontype == RGN_TYPE_TOOLS) {
+      for (Panel &pnl : region->panels) {
+        if (STRPREFIX(pnl.panelname, "FILEBROWSER_PT_")) {
+          const std::string pnl_name_str = pnl.panelname;
+          recents::Section("panel.sortorder").set(pnl_name_str, pnl.sortorder);
+          recents::Section("panel.open").set(pnl_name_str, !(pnl.flag & PNL_CLOSED));
+        }
+      }
     }
 
     MEM_delete(data);

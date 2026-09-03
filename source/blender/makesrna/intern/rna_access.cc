@@ -864,14 +864,29 @@ PropertyRNA *RNA_struct_find_property(PointerRNA *ptr, const char *identifier)
     }
   }
   else {
-    /* most common case */
-    PropertyRNA *iterprop = RNA_struct_iterator_property(ptr->type);
-    PointerRNA propptr;
-
-    if (RNA_property_collection_lookup_string(ptr, iterprop, identifier, &propptr)) {
-      return static_cast<PropertyRNA *>(propptr.data);
-    }
+    return RNA_struct_find_property(ptr, UString(identifier));
   }
+
+  return nullptr;
+}
+
+PropertyRNA *RNA_struct_find_property(PointerRNA *ptr, const UString identifier)
+{
+  StructRNA *srna = ptr->type;
+  do {
+    if (srna->cont.prop_lookup_set) {
+      if (PropertyRNA *const *prop = srna->cont.prop_lookup_set->lookup_key_ptr_as(identifier)) {
+        return *prop;
+      }
+    }
+    else {
+      for (PropertyRNA &prop : srna->cont.properties) {
+        if (!(prop.flag_internal & PROP_INTERN_BUILTIN) && prop.identifier == identifier) {
+          return &prop;
+        }
+      }
+    }
+  } while ((srna = srna->base));
 
   return nullptr;
 }
@@ -1032,16 +1047,21 @@ const ListBaseT<PropertyRNA> *RNA_struct_type_properties(StructRNA *srna)
   return &srna->cont.properties;
 }
 
-PropertyRNA *RNA_struct_type_find_property_no_base(StructRNA *srna, const char *identifier)
+PropertyRNA *RNA_struct_type_find_property_no_base(StructRNA *srna, const UString identifier)
 {
-  return static_cast<PropertyRNA *>(
-      BLI_findstring_ptr(&srna->cont.properties, identifier, offsetof(PropertyRNA, identifier)));
+  for (PropertyRNA &prop : srna->cont.properties) {
+    if (prop.identifier == identifier) {
+      return &prop;
+    }
+  }
+  return nullptr;
 }
 
 PropertyRNA *RNA_struct_type_find_property(StructRNA *srna, const char *identifier)
 {
+  const UString identifier_ustr(identifier);
   for (; srna; srna = srna->base) {
-    PropertyRNA *prop = RNA_struct_type_find_property_no_base(srna, identifier);
+    PropertyRNA *prop = RNA_struct_type_find_property_no_base(srna, identifier_ustr);
     if (prop != nullptr) {
       return prop;
     }

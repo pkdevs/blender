@@ -70,6 +70,7 @@ DNA_STRUCT_RENAME_MEMBER(Bone, scale_out_y, scale_out_z)
 DNA_STRUCT_RENAME_MEMBER(Brush, curve, curve_distance_falloff)
 DNA_STRUCT_RENAME_MEMBER(Brush, curve_preset, curve_distance_falloff_preset)
 DNA_STRUCT_RENAME_MEMBER(Brush, curves_sculpt_tool, curves_sculpt_brush_type)
+DNA_STRUCT_RENAME_MEMBER(Brush, falloff_angle, falloff_angle_legacy)
 DNA_STRUCT_RENAME_MEMBER(Brush, gpencil_sculpt_tool, gpencil_sculpt_brush_type)
 DNA_STRUCT_RENAME_MEMBER(Brush, gpencil_tool, gpencil_brush_type)
 DNA_STRUCT_RENAME_MEMBER(Brush, gpencil_vertex_tool, gpencil_vertex_brush_type)
@@ -305,6 +306,10 @@ DNA_STRUCT_RENAME_MEMBER(bTheme, ttopbar, space_topbar)
 DNA_STRUCT_RENAME_MEMBER(bTheme, tuserpref, space_preferences)
 DNA_STRUCT_RENAME_MEMBER(bTheme, tv3d, space_view3d)
 DNA_STRUCT_RENAME_MEMBER(bUserAssetLibrary, path, dirpath)
+DNA_STRUCT_RENAME_MEMBER(bNodeTreeInterfaceSocket, name, name_)
+DNA_STRUCT_RENAME_MEMBER(bNodeTreeInterfaceSocket, description, description_)
+DNA_STRUCT_RENAME_MEMBER(bNodeTreeInterfacePanel, name, name_)
+DNA_STRUCT_RENAME_MEMBER(bNodeTreeInterfacePanel, description, description_)
 
 /* NOTE: Keep sorted! */
 

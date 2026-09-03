@@ -64,6 +64,7 @@
 #include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_material.hh"
+#include "BKE_paint.hh"
 #include "BKE_preview_image.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
@@ -1287,7 +1288,8 @@ bool WM_operator_check_ui_enabled(const bContext *C, const char *idname)
   wmWindowManager *wm = CTX_wm_manager(C);
   Scene *scene = CTX_data_scene(C);
 
-  return !((ED_undo_is_valid(C, idname) == false) || WM_jobs_test(wm, scene, WM_JOB_TYPE_ANY));
+  return !((ED_undo_is_valid(C, idname) == false) ||
+           WM_jobs_has_running(wm, scene, WM_JOB_TYPE_ANY, WM_JOB_BACKGROUND));
 }
 
 wmOperator *WM_operator_last_redo(const bContext *C)
@@ -2295,8 +2297,9 @@ static wmOperatorStatus wm_call_panel_exec(bContext *C, wmOperator *op)
   char idname[BKE_ST_MAXNAME];
   RNA_string_get(op->ptr, "name", idname);
   const bool keep_open = RNA_boolean_get(op->ptr, "keep_open");
+  const bool auto_keymap = RNA_boolean_get(op->ptr, "auto_keymap");
 
-  return ui::popover_panel_invoke(C, idname, keep_open, op->reports);
+  return ui::popover_panel_invoke(C, idname, keep_open, auto_keymap, op->reports);
 }
 
 static std::string wm_call_panel_get_name(wmOperatorType *ot, PointerRNA *ptr)
@@ -2330,6 +2333,12 @@ static void WM_OT_call_panel(wmOperatorType *ot)
       (PROP_STRING_SEARCH_SORT | PROP_STRING_SEARCH_SUGGESTION));
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   prop = RNA_def_boolean(ot->srna, "keep_open", true, "Keep Open", "");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  prop = RNA_def_boolean(ot->srna,
+                         "auto_keymap",
+                         false,
+                         "Auto Keymap",
+                         "Assign accelerator keys to buttons, shown as underlined characters");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
@@ -2829,7 +2838,7 @@ static void radial_control_paint_curve(uint pos, Brush *br, float radius, int li
   immEnd();
 }
 
-static void radial_control_paint_cursor(bContext * /*C*/,
+static void radial_control_paint_cursor(bContext *C,
                                         const int2 & /*xy*/,
                                         const float2 & /*tilt*/,
                                         void *customdata)
@@ -2950,14 +2959,49 @@ static void radial_control_paint_cursor(bContext * /*C*/,
     GPU_matrix_pop();
   }
 
+  bool draw_rounded_box = false;
+  float roundness = 1.0f;
+  float tip_scale_x = 1.0f;
+  if (RNA_type_to_ID_code(rc->image_id_ptr.type) == ID_BR && rc->prop &&
+      STREQ(RNA_property_identifier(rc->prop), "size"))
+  {
+    const Brush *br = static_cast<const Brush *>(rc->image_id_ptr.data);
+    if (br) {
+      const PaintMode paint_mode = BKE_paintmode_get_active_from_context(C);
+      draw_rounded_box = BKE_brush_has_cube_tip(br, paint_mode);
+      roundness = br->tip_roundness;
+      tip_scale_x = br->tip_scale_x;
+    }
+  }
+
   /* Draw circles on top. */
   GPU_line_width(2.0f);
   immUniformColor3fvAlpha(col, 0.8f);
-  imm_draw_circle_wire_2d(pos, 0.0f, 0.0f, r1, 80);
+  if (draw_rounded_box) {
+    gpu::imm_draw_rounded_box_wire_2d(pos,
+                                      0,
+                                      0,
+                                      float2(r1, r1 * tip_scale_x),
+                                      float2(r1 * roundness, r1 * roundness * tip_scale_x),
+                                      80);
+  }
+  else {
+    imm_draw_circle_wire_2d(pos, 0.0f, 0.0f, r1, 80);
+  }
 
   GPU_line_width(1.0f);
   immUniformColor3fvAlpha(col, 0.5f);
-  imm_draw_circle_wire_2d(pos, 0.0f, 0.0f, r2, 80);
+  if (draw_rounded_box) {
+    gpu::imm_draw_rounded_box_wire_2d(pos,
+                                      0,
+                                      0,
+                                      float2(r2, r2 * tip_scale_x),
+                                      float2(r2 * roundness, r2 * roundness * tip_scale_x),
+                                      80);
+  }
+  else {
+    imm_draw_circle_wire_2d(pos, 0.0f, 0.0f, r2, 80);
+  }
   if (rmin > 0.0f) {
     /* Inner fill circle to increase the contrast of the value. */
     const float black[3] = {0.0f};
