@@ -2,11 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup spnode
+ */
+
 #include "AS_asset_library.hh"
 #include "AS_asset_representation.hh"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_space_types.h"
 
@@ -156,7 +160,7 @@ static void add_existing_group_input_fn(nodes::LinkSearchOpParams &params,
 }
 
 /**
- * \note This could use #search_link_ops_for_socket_templates, but we have to store the inputs and
+ * \note This could use #search_link_ops_for_declarations, but we have to store the inputs and
  * outputs as IDProperties for assets because of asset indexing, so that's all we have without
  * loading the file.
  */
@@ -179,8 +183,8 @@ static void search_link_ops_for_asset_metadata(const bNodeTree &node_tree,
   if (!properties || properties->type != IDP_GROUP) {
     return;
   }
-  const IDProperty *sockets = IDP_GetPropertyFromGroup(properties,
-                                                       in_out == SOCK_IN ? "inputs" : "outputs");
+  const IDProperty *sockets = IDP_GetPropertyFromGroup(
+      properties, in_out == SOCK_IN ? "inputs" : "output_sockets");
   if (!sockets || sockets->type != IDP_GROUP) {
     return;
   }
@@ -222,6 +226,8 @@ static void search_link_ops_for_asset_metadata(const bNodeTree &node_tree,
              return;
            }
            bNode &node = params.add_node(params.node_tree.typeinfo->group_idname);
+           STRNCPY_UTF8(node.name, BKE_id_name(group->id));
+           bke::node_unique_name(params.node_tree, node);
            node.id = &group->id;
            id_us_plus(node.id);
            BKE_ntree_update_tag_node_property(&params.node_tree, &node);
@@ -501,7 +507,7 @@ static bool link_drag_operation_test_poll(bContext *C)
     return false;
   }
   PointerRNA socket_ptr = CTX_data_pointer_get_type(C, "socket", RNA_NodeSocket);
-  if (!socket_ptr.data) {
+  if (!socket_ptr) {
     return false;
   }
   return true;
@@ -515,7 +521,7 @@ static wmOperatorStatus link_drag_operation_test_exec(bContext *C, wmOperator *o
   }
   bNodeTree &ntree = *snode.edittree;
   PointerRNA socket_ptr = CTX_data_pointer_get_type(C, "socket", RNA_NodeSocket);
-  if (!socket_ptr.data) {
+  if (!socket_ptr) {
     return OPERATOR_CANCELLED;
   }
   bNodeSocket &socket = *socket_ptr.data_as<bNodeSocket>();

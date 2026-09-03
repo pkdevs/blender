@@ -17,16 +17,16 @@
 #include "DNA_ID.h"
 #include "DNA_asset_types.h"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_hash.hh"
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_serialize.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "AS_asset_catalog.hh"
 #include "BKE_appdir.hh"
@@ -72,6 +72,7 @@ using namespace blender::bke::idprop;
  *     "author": "<author>",
  *     "copyright": "<copyright>",
  *     "license": "<license>",
+ *     "webpage": "<webpage>",
  *     "tags": ["<tag>"],
  *     "preferred_import_method": eAssetImportMethod,
  *     "properties": [..]
@@ -96,6 +97,7 @@ constexpr StringRef ATTRIBUTE_ENTRIES_DESCRIPTION("description");
 constexpr StringRef ATTRIBUTE_ENTRIES_AUTHOR("author");
 constexpr StringRef ATTRIBUTE_ENTRIES_COPYRIGHT("copyright");
 constexpr StringRef ATTRIBUTE_ENTRIES_LICENSE("license");
+constexpr StringRef ATTRIBUTE_ENTRIES_WEBPAGE("webpage");
 constexpr StringRef ATTRIBUTE_ENTRIES_TAGS("tags");
 constexpr StringRef ATTRIBUTE_ENTRIES_PROPERTIES("properties");
 constexpr StringRef ATTRIBUTE_ENTRIES_PREFERRED_IMPORT_METHOD("preferred_import_method");
@@ -184,6 +186,9 @@ static void init_value_from_file_indexer_entry(DictionaryValue &result,
   if (const char *license = asset_data.license) {
     result.append_str(ATTRIBUTE_ENTRIES_LICENSE, license);
   }
+  if (const char *webpage = asset_data.webpage) {
+    result.append_str(ATTRIBUTE_ENTRIES_WEBPAGE, webpage);
+  }
 
   if (!asset_data.tags.is_empty()) {
     ArrayValue &tags = *result.append_array(ATTRIBUTE_ENTRIES_TAGS);
@@ -247,6 +252,9 @@ AssetMetaData *asset_metadata_from_dictionary(const DictionaryValue &entry)
   }
   if (const std::optional<StringRef> value = entry.lookup_str(ATTRIBUTE_ENTRIES_LICENSE)) {
     asset_data->license = BLI_strdupn(value->data(), value->size());
+  }
+  if (const std::optional<StringRef> value = entry.lookup_str(ATTRIBUTE_ENTRIES_WEBPAGE)) {
+    asset_data->webpage = BLI_strdupn(value->data(), value->size());
   }
 
   if (const std::optional<StringRefNull> catalog_name = entry.lookup_str(

@@ -13,13 +13,13 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
-#include "BLI_linklist_stack.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_linklist_stack.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_memarena.h"
+#include "BLI_memarena.hh"
 
 #include "BKE_context.hh"
 #include "BKE_crazyspace.hh"
@@ -2099,6 +2099,17 @@ static void recalcData_mesh(TransInfo *t)
 
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     DEG_id_tag_update(tc->obedit->data, ID_RECALC_GEOMETRY);
+
+    /* Transformation is not affine when the mirror modifier's clipping boundary is hit so
+     * normal calculation does not have to be skipped. */
+    if (tc->has_mirror_clipping) {
+      if (partial_state.for_looptris == PARTIAL_TYPE_GROUP) {
+        partial_state.for_looptris = PARTIAL_TYPE_ALL;
+      }
+      if (partial_state.for_normals == PARTIAL_TYPE_GROUP) {
+        partial_state.for_normals = PARTIAL_TYPE_ALL;
+      }
+    }
 
     mesh_partial_update(t, tc, &partial_state);
   }

@@ -95,15 +95,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_assert.h"
-#include "BLI_listbase.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_mempool.h"
-#include "BLI_utildefines.h"
+#include "BLI_mempool.hh"
+#include "BLI_utildefines.hh"
 
-#include "BLI_array_store.h" /* Own include. */
+#include "BLI_array_store.hh" /* Own include. */
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
 
@@ -1977,17 +1977,6 @@ bool BLI_array_store_is_valid(BArrayStore *bs)
       }
     }
 #endif
-  }
-
-  {
-    BLI_mempool_iter iter;
-    BChunk *chunk;
-    BLI_mempool_iternew(bs->memory.chunk, &iter);
-    while ((chunk = static_cast<BChunk *>(BLI_mempool_iterstep(&iter)))) {
-      if (!(MEM_allocN_len(chunk->data) >= chunk->data_len)) {
-        return false;
-      }
-    }
   }
 
   /* Check User Count & Lost References

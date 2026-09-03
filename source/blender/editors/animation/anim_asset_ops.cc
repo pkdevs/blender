@@ -2,7 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_listbase.h"
+/** \file
+ * \ingroup edanimation
+ */
+
+#include "BLI_listbase.hh"
 
 #include "BKE_asset.hh"
 #include "BKE_asset_edit.hh"
@@ -117,6 +121,7 @@ static blender::animrig::Action &extract_pose(Main &bmain, const Span<Object *> 
    * slots on the same action. */
 
   using namespace blender::animrig;
+  using blender::animrig::Strip;
   Action &action = action_add(bmain, "pose_create");
   Layer &layer = action.layer_add("pose");
   Strip &strip = layer.strip_add(action, Strip::Type::Keyframe);
@@ -136,7 +141,7 @@ static blender::animrig::Action &extract_pose(Main &bmain, const Span<Object *> 
       const slot_handle_t pose_object_slot = pose_object->adt->slot_handle;
       foreach_fcurve_in_action_slot(
           pose_object_action, pose_object_slot, [&](const FCurve &fcurve) {
-            RNAPath existing_path = {fcurve.rna_path, std::nullopt, fcurve.array_index};
+            RNAPath existing_path = {fcurve.rna_path(), std::nullopt, fcurve.array_index};
             existing_paths.add(existing_path);
           });
     }
@@ -458,6 +463,7 @@ void POSELIB_OT_create_pose_asset(wmOperatorType *ot)
 
   PropertyRNA *prop = RNA_def_property(ot->srna, "asset_library_reference", PROP_ENUM, PROP_NONE);
   RNA_def_enum_funcs(prop, rna_asset_library_reference_itemf);
+  RNA_def_property_enum_default(prop, ASSET_LIBRARY_LOCAL);
   RNA_def_property_ui_text(prop, "Library", "Asset library used to store the new pose");
 
   prop = RNA_def_string(
@@ -649,7 +655,7 @@ static void update_pose_action_from_scene(Main *bmain,
 
   Set<RNAPath> existing_paths;
   foreach_fcurve_in_action_slot(pose_action, slot.handle, [&](const FCurve &fcurve) {
-    existing_paths.add({fcurve.rna_path, std::nullopt, fcurve.array_index});
+    existing_paths.add({fcurve.rna_path(), std::nullopt, fcurve.array_index});
   });
 
   switch (mode) {
@@ -701,7 +707,7 @@ static void update_pose_action_from_scene(Main *bmain,
       Map<RNAPath, FCurve *> fcurve_map;
       foreach_fcurve_in_action_slot(
           pose_action, pose_action.slot_array[0]->handle, [&](FCurve &fcurve) {
-            fcurve_map.add({fcurve.rna_path, std::nullopt, fcurve.array_index}, &fcurve);
+            fcurve_map.add({fcurve.rna_path(), std::nullopt, fcurve.array_index}, &fcurve);
           });
       for (const PathValue &path_value : path_values) {
         if (existing_paths.contains(path_value.rna_path)) {

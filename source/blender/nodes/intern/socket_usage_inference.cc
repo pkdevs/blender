@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include <optional>
 #include <regex>
 
@@ -25,7 +29,7 @@
 #include "ANIM_action.hh"
 #include "ANIM_action_iterators.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_stack.hh"
 
 namespace blender::nodes::socket_usage_inference {

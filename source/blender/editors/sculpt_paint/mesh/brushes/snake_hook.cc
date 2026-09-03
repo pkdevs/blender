@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edsculpt
+ */
+
 #include "editors/sculpt_paint/mesh/brushes/brushes.hh"
 
 #include "DNA_brush_types.h"
@@ -18,8 +22,8 @@
 
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_math_quaternion.hh"
-#include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
 
 #include "editors/sculpt_paint/mesh/mesh_brush_common.hh"

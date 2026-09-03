@@ -10,7 +10,7 @@
 #include <fmt/format.h>
 
 #include "BLI_array.hh"
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_index_range.hh"
 #include "BLI_math_matrix.hh"
 
@@ -345,7 +345,8 @@ const ColorSpace *LibOCIOConfig::get_color_space_by_interop_id(StringRefNull int
     }
   }
 
-  return nullptr;
+  /* Fall back to name and alias lookup. */
+  return get_color_space(interop_id);
 }
 
 /** \} */

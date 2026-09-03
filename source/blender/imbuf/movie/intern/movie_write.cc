@@ -26,14 +26,14 @@
 
 #  include "MEM_guardedalloc.h"
 
-#  include "BLI_fileops.h"
-#  include "BLI_math_base.h"
+#  include "BLI_fileops.hh"
 #  include "BLI_math_base.hh"
-#  include "BLI_math_color.h"
+#  include "BLI_math_base_c.hh"
+#  include "BLI_math_color_c.hh"
 #  include "BLI_path_utils.hh"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
-#  include "BLI_utildefines.h"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
+#  include "BLI_utildefines.hh"
 
 #  include "BKE_blender_project.hh"
 #  include "BKE_image.hh"
@@ -939,7 +939,7 @@ static AVStream *alloc_video_stream(MovieWriter *context,
                                     int rectx,
                                     int recty,
                                     char *error,
-                                    int error_size)
+                                    int error_maxncpy)
 {
   AVStream *st;
   const AVCodec *codec;
@@ -1238,7 +1238,7 @@ static AVStream *alloc_video_stream(MovieWriter *context,
     char error_str[AV_ERROR_MAX_STRING_SIZE];
     av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, ret);
     CLOG_ERROR(&LOG, "Couldn't initialize video codec: %s\n", error_str);
-    BLI_strncpy(error, ffmpeg_last_error(), error_size);
+    BLI_strncpy(error, ffmpeg_last_error(), error_maxncpy);
     av_dict_free(&opts);
     avcodec_free_context(&c);
     context->video_codec = nullptr;

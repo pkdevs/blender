@@ -15,10 +15,10 @@
 #include "BLI_index_range.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_rect.h"
-#include "BLI_utildefines.h"
+#include "BLI_rect.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "DNA_scene_types.h"
@@ -424,7 +424,7 @@ static void draw_histogram(ARegion &region,
    * measurements are accurate. */
   const int font_id = BLF_set_default();
   float text_scale_x, text_scale_y;
-  ui::view2d_scale_get_inverse(&region.v2d, &text_scale_x, &text_scale_y);
+  ui::view2d_pixel_size_get(&region.v2d, &text_scale_x, &text_scale_y);
 
   float prev_label_right = -FLT_MAX;
 
@@ -512,7 +512,7 @@ static void draw_waveform_graticule(ARegion *region,
 
   const int font_id = BLF_set_default();
   float text_scale_x, text_scale_y;
-  ui::view2d_scale_get_inverse(&region->v2d, &text_scale_x, &text_scale_y);
+  ui::view2d_pixel_size_get(&region->v2d, &text_scale_x, &text_scale_y);
 
   float prev_label_top = -FLT_MAX;
 
@@ -671,7 +671,7 @@ static void draw_vectorscope_graticule(ARegion *region,
   /* Calculate size of single text letter. */
   char buf[2] = {'M', 0};
   float text_scale_x, text_scale_y;
-  ui::view2d_scale_get_inverse(&region->v2d, &text_scale_x, &text_scale_y);
+  ui::view2d_pixel_size_get(&region->v2d, &text_scale_x, &text_scale_y);
   float text_width, text_height;
   BLF_width_and_height(BLF_default(), buf, 1, &text_width, &text_height);
   text_width *= text_scale_x;
@@ -738,10 +738,14 @@ static void sequencer_draw_scopes(Scene *scene,
   /* Get display-space texture for scope values (positions, histogram bins).
    * Falls back to the raw input texture if no color management is needed. */
   gpu::Texture *scope_texture = seq::preview_cache_get_gpu_scope_texture(
-      scene, timeline_frame, 0, image_width, image_height);
+      scene, timeline_frame, space_sequencer.multiview_eye, 0, image_width, image_height);
   if (scope_texture == nullptr) {
-    scope_texture = seq::preview_cache_get_gpu_texture(
-        scene, timeline_frame, space_sequencer.chanshown, image_width, image_height);
+    scope_texture = seq::preview_cache_get_gpu_texture(scene,
+                                                       timeline_frame,
+                                                       space_sequencer.multiview_eye,
+                                                       space_sequencer.chanshown,
+                                                       image_width,
+                                                       image_height);
   }
 
   SeqQuadsBatch quads;
@@ -934,7 +938,12 @@ static void update_gpu_scopes(const ImBuf *input_ibuf,
   const int width = GPU_texture_width(input_texture);
   const int height = GPU_texture_height(input_texture);
   gpu::Texture *scope_texture = seq::preview_cache_get_gpu_scope_texture(
-      scene, timeline_frame, space_sequencer.chanshown, width, height);
+      scene,
+      timeline_frame,
+      space_sequencer.multiview_eye,
+      space_sequencer.chanshown,
+      width,
+      height);
   if (scope_texture != nullptr) {
     return;
   }
@@ -988,8 +997,11 @@ static void update_gpu_scopes(const ImBuf *input_ibuf,
   GPU_matrix_pop();
   GPU_matrix_pop_projection();
 
-  seq::preview_cache_set_gpu_scope_texture(
-      scene, timeline_frame, space_sequencer.chanshown, scope_texture);
+  seq::preview_cache_set_gpu_scope_texture(scene,
+                                           timeline_frame,
+                                           space_sequencer.multiview_eye,
+                                           space_sequencer.chanshown,
+                                           scope_texture);
 }
 
 static void update_cpu_scopes(const SpaceSeq &space_sequencer,
@@ -1141,7 +1153,6 @@ static void text_selection_draw(const bContext *C, const Strip *strip, uint pos)
     const float line_y = character_start.position.y + runtime->font_descender;
 
     const float2 view_offs{-scene->r.xsch / 2.0f, -scene->r.ysch / 2.0f};
-    const float view_aspect = scene->r.xasp / scene->r.yasp;
     float3x3 transform_mat = seq::image_transform_matrix_get(scene, strip);
     float2 selection_quad[4] = {
         {character_start.position.x, line_y},
@@ -1156,7 +1167,6 @@ static void text_selection_draw(const bContext *C, const Strip *strip, uint pos)
     for (int i : IndexRange(0, 4)) {
       selection_quad[i] += view_offs;
       selection_quad[i] = math::transform_point(transform_mat, selection_quad[i]);
-      selection_quad[i].x *= view_aspect;
     }
     for (int i : {0, 1, 2, 2, 3, 0}) {
       immVertex2f(pos, selection_quad[i][0], selection_quad[i][1]);
@@ -1185,7 +1195,6 @@ static void text_edit_draw_cursor(const bContext *C, const Strip *strip, uint po
   const Scene *scene = CTX_data_sequencer_scene(C);
 
   const float2 view_offs{-scene->r.xsch / 2.0f, -scene->r.ysch / 2.0f};
-  const float view_aspect = scene->r.xasp / scene->r.yasp;
   float3x3 transform_mat = seq::image_transform_matrix_get(scene, strip);
   const int2 cursor_position = strip_text_cursor_offset_to_position(runtime, data->cursor_offset);
   const float cursor_width = 10;
@@ -1214,7 +1223,6 @@ static void text_edit_draw_cursor(const bContext *C, const Strip *strip, uint po
   for (int i : IndexRange(0, 4)) {
     cursor_quad[i] += descender_offs + view_offs;
     cursor_quad[i] = math::transform_point(transform_mat, cursor_quad[i]);
-    cursor_quad[i].x *= view_aspect;
   }
   for (int i : {0, 1, 2, 2, 3, 0}) {
     immVertex2f(pos, cursor_quad[i][0], cursor_quad[i][1]);
@@ -1683,12 +1691,13 @@ static void sequencer_preview_draw_overlays(const bContext *C,
                                             gpu::Texture *current_texture,
                                             gpu::Texture *reference_texture,
                                             const ImBuf *input_ibuf,
+                                            gpu::Texture *input_texture,
                                             const int timeline_frame)
 {
   const bool is_playing = ED_screen_animation_playing(&wm);
   const bool show_preview_image = space_sequencer.mainb == SEQ_DRAW_IMG_IMBUF;
   const bool has_cpu_scope = input_ibuf && space_sequencer.mainb == SEQ_DRAW_IMG_HISTOGRAM;
-  const bool has_gpu_scope = input_ibuf && current_texture &&
+  const bool has_gpu_scope = input_ibuf && input_texture &&
                              ((space_sequencer.mainb == SEQ_DRAW_IMG_IMBUF &&
                                space_sequencer.zebra != 0) ||
                               ELEM(space_sequencer.mainb,
@@ -1702,7 +1711,7 @@ static void sequencer_preview_draw_overlays(const bContext *C,
   }
   if (has_gpu_scope) {
     update_gpu_scopes(input_ibuf,
-                      current_texture,
+                      input_texture,
                       view_settings,
                       display_settings,
                       space_sequencer,
@@ -1861,9 +1870,8 @@ void sequencer_preview_region_draw(const bContext *C, ARegion *region)
                                   draw_overlay;
   const bool need_current_frame = !(draw_frame_overlay && (space_sequencer.overlay_frame_type ==
                                                            SEQ_OVERLAY_FRAME_TYPE_REFERENCE));
-  const bool need_reference_frame = show_imbuf && draw_frame_overlay &&
-                                    space_sequencer.overlay_frame_type !=
-                                        SEQ_OVERLAY_FRAME_TYPE_CURRENT;
+  const bool need_reference_frame = draw_frame_overlay && space_sequencer.overlay_frame_type !=
+                                                              SEQ_OVERLAY_FRAME_TYPE_CURRENT;
 
   int timeline_frame = render_data.cfra;
   if (sequencer_draw_get_transform_preview(space_sequencer, *scene)) {
@@ -1887,7 +1895,7 @@ void sequencer_preview_region_draw(const bContext *C, ARegion *region)
     const int offset = get_reference_frame_offset(editing, render_data);
     reference_ibuf = sequencer_ibuf_get(
         C, timeline_frame + offset, view_names[space_sequencer.multiview_eye]);
-    if (show_imbuf && reference_ibuf) {
+    if (use_gpu_texture && reference_ibuf) {
       reference_texture = create_texture(*reference_ibuf);
     }
   }
@@ -1895,18 +1903,26 @@ void sequencer_preview_region_draw(const bContext *C, ARegion *region)
     current_ibuf = sequencer_ibuf_get(
         C, timeline_frame, view_names[space_sequencer.multiview_eye]);
     if (use_gpu_texture && current_ibuf) {
-      current_texture = seq::preview_cache_get_gpu_texture(
-          scene, timeline_frame, space_sequencer.chanshown, current_ibuf->x, current_ibuf->y);
+      current_texture = seq::preview_cache_get_gpu_texture(scene,
+                                                           timeline_frame,
+                                                           space_sequencer.multiview_eye,
+                                                           space_sequencer.chanshown,
+                                                           current_ibuf->x,
+                                                           current_ibuf->y);
       if (current_texture == nullptr) {
         current_texture = create_texture(*current_ibuf);
-        seq::preview_cache_set_gpu_texture(
-            scene, timeline_frame, space_sequencer.chanshown, current_texture);
+        seq::preview_cache_set_gpu_texture(scene,
+                                           timeline_frame,
+                                           space_sequencer.multiview_eye,
+                                           space_sequencer.chanshown,
+                                           current_texture);
       }
     }
   }
 
-  /* Image buffer used for overlays: scopes, metadata etc. */
+  /* Image buffer and texture used for overlays: scopes, metadata etc. */
   ImBuf *overlay_ibuf = need_current_frame ? current_ibuf : reference_ibuf;
+  gpu::Texture *overlay_texture = need_current_frame ? current_texture : reference_texture;
 
   /* Draw parts of the preview region to the corresponding frame buffers. */
   sequencer_preview_draw_color_render(space_sequencer,
@@ -1927,6 +1943,7 @@ void sequencer_preview_region_draw(const bContext *C, ARegion *region)
                                   current_texture,
                                   reference_texture,
                                   overlay_ibuf,
+                                  overlay_texture,
                                   timeline_frame);
 
 #if 0

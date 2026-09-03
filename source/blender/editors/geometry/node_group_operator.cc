@@ -8,9 +8,9 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_listbase.h"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_key_types.h"
 #include "ED_curves.hh"
@@ -546,7 +546,11 @@ static bke::GeometrySet get_original_geometry_eval_copy(Depsgraph &depsgraph,
         operator_data.active_face_index = BM_mesh_active_face_index_get(em->bm, false, true);
         EDBM_mesh_load_ex(DEG_get_bmain(&depsgraph), &object, true);
         EDBM_mesh_free_data(mesh->runtime->edit_mesh.get());
-        em->bm = nullptr;
+        /* Clear the edit-mesh entirely rather than just freeing its #BMesh. Leaving a #BMEditMesh
+         * with a null `bm` behind is a non-standard state that other code (e.g. the active
+         * attribute lookup when the tool result is stored back) doesn't expect. The edit-mesh is
+         * rebuilt from the tool result in #EDBM_mesh_make_from_mesh. */
+        mesh->runtime->edit_mesh.reset();
       }
 
       if (bke::pbvh::Tree *pbvh = bke::object::pbvh_get(object)) {
@@ -886,6 +890,49 @@ static Vector<Object *> gather_supported_objects(const bContext &C,
   return objects;
 }
 
+/**
+ * Input node values are stored as operator properties in order to support redoing from the redo
+ * panel for a few reasons:
+ *  1. Some data (like the mouse position) cannot be retrieved from the `exec` callback used for
+ *     operator redo. Redo is meant to just call the operator again with the exact same properties.
+ *  2. While adjusting an input in the redo panel, the user doesn't expect anything else to change.
+ *     If we retrieve other data like the viewport transform on every execution, that won't be the
+ *     case.
+ * We use operator RNA properties instead of operator custom data because the custom data struct
+ * isn't maintained for the redo `exec` call.
+ */
+static void store_input_node_values_rna_props(const bContext &C,
+                                              wmOperator &op,
+                                              const wmEvent &event)
+{
+  Scene *scene = CTX_data_scene(&C);
+  /* NOTE: `region` and `rv3d` may be null when called from a script. */
+  const ARegion *region = CTX_wm_region(&C);
+  const RegionView3D *rv3d = CTX_wm_region_view3d(&C);
+
+  /* Mouse position node inputs. */
+  RNA_int_set_array(op.ptr, "mouse_position", event.mval);
+  RNA_int_set_array(
+      op.ptr,
+      "region_size",
+      region ? int2(BLI_rcti_size_x(&region->winrct), BLI_rcti_size_y(&region->winrct)) : int2(0));
+
+  /* 3D cursor node inputs. */
+  const View3DCursor &cursor = scene->cursor;
+  RNA_float_set_array(op.ptr, "cursor_position", cursor.location);
+  math::Quaternion cursor_rotation = cursor.rotation();
+  RNA_float_set_array(op.ptr, "cursor_rotation", &cursor_rotation.w);
+
+  /* Viewport transform node inputs. */
+  RNA_float_set_array(op.ptr,
+                      "viewport_projection_matrix",
+                      rv3d ? float4x4(rv3d->winmat).base_ptr() : float4x4::identity().base_ptr());
+  RNA_float_set_array(op.ptr,
+                      "viewport_view_matrix",
+                      rv3d ? float4x4(rv3d->viewmat).base_ptr() : float4x4::identity().base_ptr());
+  RNA_boolean_set(op.ptr, "viewport_is_perspective", rv3d ? bool(rv3d->is_persp) : true);
+}
+
 static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -995,7 +1042,7 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
 
   nodes::eval_log::NodeTreeLog &tree_log = eval_log.log->get_tree_log(compute_context.hash());
   tree_log.ensure_node_warnings(*bmain);
-  for (const nodes::eval_log::NodeWarning &warning : tree_log.all_warnings) {
+  for (const nodes::NodeWarning &warning : tree_log.all_warnings) {
     if (warning.type == nodes::NodeWarningType::Info) {
       BKE_report(op->reports, RPT_INFO, warning.message.c_str());
     }
@@ -1005,49 +1052,6 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
   }
 
   return OPERATOR_FINISHED;
-}
-
-/**
- * Input node values are stored as operator properties in order to support redoing from the redo
- * panel for a few reasons:
- *  1. Some data (like the mouse position) cannot be retrieved from the `exec` callback used for
- *     operator redo. Redo is meant to just call the operator again with the exact same properties.
- *  2. While adjusting an input in the redo panel, the user doesn't expect anything else to change.
- *     If we retrieve other data like the viewport transform on every execution, that won't be the
- *     case.
- * We use operator RNA properties instead of operator custom data because the custom data struct
- * isn't maintained for the redo `exec` call.
- */
-static void store_input_node_values_rna_props(const bContext &C,
-                                              wmOperator &op,
-                                              const wmEvent &event)
-{
-  Scene *scene = CTX_data_scene(&C);
-  /* NOTE: `region` and `rv3d` may be null when called from a script. */
-  const ARegion *region = CTX_wm_region(&C);
-  const RegionView3D *rv3d = CTX_wm_region_view3d(&C);
-
-  /* Mouse position node inputs. */
-  RNA_int_set_array(op.ptr, "mouse_position", event.mval);
-  RNA_int_set_array(
-      op.ptr,
-      "region_size",
-      region ? int2(BLI_rcti_size_x(&region->winrct), BLI_rcti_size_y(&region->winrct)) : int2(0));
-
-  /* 3D cursor node inputs. */
-  const View3DCursor &cursor = scene->cursor;
-  RNA_float_set_array(op.ptr, "cursor_position", cursor.location);
-  math::Quaternion cursor_rotation = cursor.rotation();
-  RNA_float_set_array(op.ptr, "cursor_rotation", &cursor_rotation.w);
-
-  /* Viewport transform node inputs. */
-  RNA_float_set_array(op.ptr,
-                      "viewport_projection_matrix",
-                      rv3d ? float4x4(rv3d->winmat).base_ptr() : float4x4::identity().base_ptr());
-  RNA_float_set_array(op.ptr,
-                      "viewport_view_matrix",
-                      rv3d ? float4x4(rv3d->viewmat).base_ptr() : float4x4::identity().base_ptr());
-  RNA_boolean_set(op.ptr, "viewport_is_perspective", rv3d ? bool(rv3d->is_persp) : true);
 }
 
 static wmOperatorStatus run_node_group_invoke(bContext *C, wmOperator *op, const wmEvent *event)
@@ -1120,25 +1124,27 @@ static Array<EnumPropertyItem, 0> get_input_enum_items(const IDProperty &input_i
     return {rna_enum_dummy_NULL_items[0]};
   }
 
-  if (!items_idprop->data.children_map || items_idprop->data.children_map->children.is_empty()) {
-    return {rna_enum_dummy_NULL_items[0]};
-  }
-
-  const int items_num = items_idprop->data.children_map->children.size();
-  Array<EnumPropertyItem, 0> items(items_num + 1);
-  for (const auto [i, item_idprop] : items_idprop->data.group.enumerate()) {
-    items[i] = EnumPropertyItem{
+  Vector<EnumPropertyItem> items;
+  for (const IDProperty &item_idprop : items_idprop->data.group) {
+    if (item_idprop.type != IDP_GROUP) {
+      continue;
+    }
+    items.append(EnumPropertyItem{
         .value = IDP_group_lookup_int(item_idprop, "value").value_or(0),
         .identifier = item_idprop.name,
         .icon = ICON_NONE,
         .name = item_idprop.name,
         .description = IDP_group_lookup_string(item_idprop, "description").value_or("").c_str(),
-    };
+    });
   }
 
-  items.last() = {0, nullptr, 0, nullptr, nullptr};
+  if (items.is_empty()) {
+    return {rna_enum_dummy_NULL_items[0]};
+  }
 
-  return items;
+  items.append({0, nullptr, 0, nullptr, nullptr});
+
+  return Array<EnumPropertyItem, 0>(items.as_span());
 }
 
 static void make_common_type_prop(StructRNA &srna,
@@ -1383,7 +1389,7 @@ static StructRNA *create_panels_srna(const IDProperty &properties,
                                      Vector<StructRNA *> &r_generated)
 {
   const IDProperty *panels_props = IDP_GetPropertyFromGroup(&properties, "panels");
-  if (!panels_props) {
+  if (!panels_props || panels_props->type != IDP_GROUP) {
     return nullptr;
   }
   StructRNA *srna = RNA_def_struct_ptr(
@@ -1391,6 +1397,9 @@ static StructRNA *create_panels_srna(const IDProperty &properties,
   BLI_assert(!RNA_struct_in_public_namespace(srna));
   r_generated.append(srna);
   for (IDProperty &panel_prop : panels_props->data.group) {
+    if (panel_prop.type != IDP_BOOLEAN) {
+      continue;
+    }
     RNA_def_boolean(srna, panel_prop.name, IDP_bool_get(&panel_prop), "Is Open", "");
   }
   return srna;
@@ -1500,14 +1509,14 @@ void ui_template_node_operator_registration_errors(ui::Layout &layout,
   }
   ui::Layout &col = layout.column(false);
   if (errors_for_type->is_builtin_operator) {
-    col.label(TIP_("Operator is already registered"), ICON_ERROR);
+    col.label(TIP_("Operator is already registered"), ICON_STATUS_ERROR);
   }
   if (errors_for_type->duplicate_count != 0) {
     col.label(fmt::format(fmt::runtime(TIP_("Duplicates: {}")), errors_for_type->duplicate_count),
-              ICON_ERROR);
+              ICON_STATUS_ERROR);
   }
   for (const std::string &error : errors_for_type->idname_validation_errors) {
-    col.label(error, ICON_ERROR);
+    col.label(error, ICON_STATUS_ERROR);
   }
 }
 

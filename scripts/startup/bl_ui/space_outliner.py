@@ -177,7 +177,7 @@ class OUTLINER_MT_view_pie(Menu):
 
 
 class OUTLINER_MT_id_data(Menu):
-    bl_label = "ID Data"
+    bl_label = "Data-block"
 
     @classmethod
     def poll(cls, context):
@@ -261,7 +261,7 @@ class OUTLINER_MT_collection(Menu):
         space = context.space_data
 
         layout.operator("outliner.collection_new", text="New", text_ctxt=i18n_contexts.id_collection).nested = True
-        layout.operator("outliner.collection_duplicate", text="Duplicate Collection")
+        layout.operator("outliner.collection_duplicate", text="Duplicate Collection", icon='DUPLICATE')
         layout.operator("outliner.collection_duplicate_linked", text="Duplicate Linked")
         layout.operator("outliner.id_copy", text="Copy", icon='COPYDOWN')
         layout.operator("outliner.id_paste", text="Paste", icon='PASTEDOWN')
@@ -451,6 +451,9 @@ class OUTLINER_PT_filter(Panel):
             row = col.row(align=True)
             row.active = space.use_sync_select
             row.prop(space, "scroll_to_active", text="Scroll to Active")
+            row = col.row(align=True)
+            row.active = space.scroll_to_active and space.use_sync_select
+            row.prop(space, "expand_on_focus")
 
             row = layout.row(align=True)
             row.prop(space, "show_mode_column", text="Show Mode Column")
@@ -470,7 +473,6 @@ class OUTLINER_PT_options_search(Panel):
 
     @classmethod
     def poll(cls, context):
-        st = context.space_data
         space = context.space_data
         display_mode = space.display_mode
 
@@ -484,7 +486,6 @@ class OUTLINER_PT_options_search(Panel):
     def draw(self, context):
         layout = self.layout
         space = context.space_data
-        display_mode = space.display_mode
 
         col = layout.column(align=True)
         col.prop(space, "use_filter_complete", text="Exact Match")
@@ -506,7 +507,6 @@ class OUTLINER_PT_options_filter(Panel):
     def draw(self, context):
         layout = self.layout
         space = context.space_data
-        display_mode = space.display_mode
         col = layout.column(align=True)
 
         row = col.row()

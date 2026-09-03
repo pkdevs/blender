@@ -9,7 +9,7 @@
  */
 
 #include "BLI_array.hh"
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_task.hh"
 
@@ -111,7 +111,7 @@ StripEarlyOut early_out_fade(const Strip * /*strip*/, float fac);
 
 EffectHandle effect_handle_get(StripType strip_type);
 
-float effect_fader_calc(Scene *scene, Strip *strip, float timeline_frame);
+float effect_fader_calc(Scene *scene, Strip *strip, float timeline_frame, bool is_current_frame);
 
 void add_effect_get_handle(EffectHandle &rval);
 void adjustment_effect_get_handle(EffectHandle &rval);

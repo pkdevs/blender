@@ -4,9 +4,9 @@
 
 #include <cmath>
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -39,7 +39,14 @@ NODE_STORAGE_FUNCS(NodeFunctionCompare)
 static bool is_supported_data_block_type(const bNodeTree *ntree,
                                          const eNodeSocketDatatype data_type)
 {
-  if (!ELEM(data_type, SOCK_OBJECT, SOCK_IMAGE, SOCK_COLLECTION, SOCK_FONT, SOCK_SOUND)) {
+  if (!ELEM(data_type,
+            SOCK_OBJECT,
+            SOCK_IMAGE,
+            SOCK_COLLECTION,
+            SOCK_MATERIAL,
+            SOCK_FONT,
+            SOCK_SOUND))
+  {
     return false;
   }
   return bke::node_tree_type_supports_socket_type_static(ntree->type, data_type);
@@ -164,16 +171,59 @@ static std::optional<eNodeSocketDatatype> get_compare_type_for_operation(
   }
 }
 
+static eNodeSocketDatatype op_type_to_socket_type(const NodeCompareOperation value)
+{
+  switch (value) {
+    case NODE_COMPARE_LESS_THAN:
+      return SOCK_FLOAT;
+    case NODE_COMPARE_LESS_EQUAL:
+      return SOCK_FLOAT;
+    case NODE_COMPARE_GREATER_THAN:
+      return SOCK_FLOAT;
+    case NODE_COMPARE_GREATER_EQUAL:
+      return SOCK_FLOAT;
+    case NODE_COMPARE_EQUAL:
+      return SOCK_INT;
+    case NODE_COMPARE_NOT_EQUAL:
+      return SOCK_INT;
+    case NODE_COMPARE_COLOR_BRIGHTER:
+      return SOCK_RGBA;
+    case NODE_COMPARE_COLOR_DARKER:
+      return SOCK_RGBA;
+  }
+  BLI_assert_unreachable();
+  return SOCK_RGBA;
+}
+
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
   const bNodeTree &ntree = params.node_tree();
+  const bool is_input = params.in_out() == SOCK_IN;
   const eNodeSocketDatatype type = params.other_socket().type;
-  if (!ELEM(type, SOCK_INT, SOCK_BOOLEAN, SOCK_FLOAT, SOCK_VECTOR, SOCK_RGBA, SOCK_STRING) &&
-      !is_supported_data_block_type(&ntree, type))
+  const bool can_link_to_result = !is_input && ntree.typeinfo->validate_link(SOCK_BOOLEAN, type);
+  if (!ELEM(type, SOCK_INT, SOCK_FLOAT, SOCK_VECTOR, SOCK_RGBA, SOCK_STRING) &&
+      !can_link_to_result && !is_supported_data_block_type(&ntree, type))
   {
     return;
   }
-  const UString socket_name = params.in_out() == SOCK_IN ? "A"_ustr : "Result"_ustr;
+
+  if (!is_input) {
+    if (can_link_to_result) {
+      for (const EnumPropertyItem *item = rna_enum_node_compare_operation_items;
+           item->identifier != nullptr;
+           item++)
+      {
+        if (item->name == nullptr || item->identifier[0] == '\0') {
+          continue;
+        }
+        const NodeCompareOperation operation = NodeCompareOperation(item->value);
+        const eNodeSocketDatatype type = op_type_to_socket_type(operation);
+        params.add_item(IFACE_(item->name), SocketSearchOp{"Result"_ustr, type, operation});
+      }
+    }
+    return;
+  }
+
   for (const EnumPropertyItem *item = rna_enum_node_compare_operation_items;
        item->identifier != nullptr;
        item++)
@@ -183,19 +233,23 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
       if (const std::optional<eNodeSocketDatatype> fixed_type = get_compare_type_for_operation(
               ntree, type, operation))
       {
-        params.add_item(IFACE_(item->name), SocketSearchOp{socket_name, *fixed_type, operation});
+        params.add_item(IFACE_(item->name), SocketSearchOp{"A"_ustr, *fixed_type, operation});
       }
     }
   }
 
-  if (params.in_out() == SOCK_IN &&
-      (type != SOCK_STRING || is_supported_data_block_type(&ntree, type)))
-  {
-    params.add_item(
-        IFACE_("Angle"),
-        SocketSearchOp{
-            "Angle"_ustr, SOCK_VECTOR, NODE_COMPARE_GREATER_THAN, NODE_COMPARE_MODE_DIRECTION});
+  if (params.in_out() != SOCK_IN) {
+    return;
   }
+
+  if (type == SOCK_STRING || is_supported_data_block_type(&ntree, type)) {
+    return;
+  }
+
+  params.add_item(
+      IFACE_("Angle"),
+      SocketSearchOp{
+          "Angle"_ustr, SOCK_VECTOR, NODE_COMPARE_GREATER_THAN, NODE_COMPARE_MODE_DIRECTION});
 }
 
 static void node_label(const bNodeTree * /*tree*/,
@@ -227,6 +281,8 @@ static auto to_static_data_block_type(const eNodeSocketDatatype socket_type, Fn 
       return fn.template operator()<Image>();
     case SOCK_COLLECTION:
       return fn.template operator()<Collection>();
+    case SOCK_MATERIAL:
+      return fn.template operator()<Material>();
     case SOCK_FONT:
       return fn.template operator()<VFont>();
     case SOCK_SOUND:

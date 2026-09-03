@@ -38,16 +38,27 @@ void RenderBuffers::init()
 
   data.normal_id = pass_index_get(EEVEE_RENDER_PASS_NORMAL, EEVEE_RENDER_PASS_AO);
   data.position_id = pass_index_get(EEVEE_RENDER_PASS_POSITION);
-  data.diffuse_light_id = pass_index_get(EEVEE_RENDER_PASS_DIFFUSE_LIGHT);
-  data.diffuse_color_id = pass_index_get(EEVEE_RENDER_PASS_DIFFUSE_COLOR);
-  data.specular_light_id = pass_index_get(EEVEE_RENDER_PASS_SPECULAR_LIGHT);
-  data.specular_color_id = pass_index_get(EEVEE_RENDER_PASS_SPECULAR_COLOR);
+  /* Custom lighting in the hybrid pipeline requires both passes, so the combine pass can
+   * reconstruct the radiance. */
+  data.diffuse_light_id = pass_index_get(EEVEE_RENDER_PASS_DIFFUSE_LIGHT,
+                                         EEVEE_RENDER_PASS_DIFFUSE_COLOR);
+  data.diffuse_color_id = pass_index_get(EEVEE_RENDER_PASS_DIFFUSE_COLOR,
+                                         EEVEE_RENDER_PASS_DIFFUSE_LIGHT);
+  data.specular_light_id = pass_index_get(EEVEE_RENDER_PASS_SPECULAR_LIGHT,
+                                          EEVEE_RENDER_PASS_SPECULAR_COLOR);
+  data.specular_color_id = pass_index_get(EEVEE_RENDER_PASS_SPECULAR_COLOR,
+                                          EEVEE_RENDER_PASS_SPECULAR_LIGHT);
   data.volume_light_id = pass_index_get(EEVEE_RENDER_PASS_VOLUME_LIGHT);
   data.emission_id = pass_index_get(EEVEE_RENDER_PASS_EMIT);
   data.environment_id = pass_index_get(EEVEE_RENDER_PASS_ENVIRONMENT);
   data.shadow_id = pass_index_get(EEVEE_RENDER_PASS_SHADOW);
   data.ambient_occlusion_id = pass_index_get(EEVEE_RENDER_PASS_AO);
   data.transparent_id = pass_index_get(EEVEE_RENDER_PASS_TRANSPARENT);
+  data.denoising_depth_id = (enabled_passes & EEVEE_RENDER_PASS_DENOISING_DEPTH) ? 0 : -1;
+  data.denoising_normal_id = pass_index_get(EEVEE_RENDER_PASS_DENOISING_NORMAL);
+  data.denoising_roughness_id = pass_index_get(EEVEE_RENDER_PASS_DENOISING_ROUGHNESS);
+  data.denoising_diffuse_albedo_id = pass_index_get(EEVEE_RENDER_PASS_DENOISING_DIFFUSE_ALBEDO);
+  data.denoising_specular_albedo_id = pass_index_get(EEVEE_RENDER_PASS_DENOISING_SPECULAR_ALBEDO);
 
   data.aovs = inst_.film.aovs_info;
 }

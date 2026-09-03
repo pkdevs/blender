@@ -10,10 +10,11 @@
 
 #include "GPU_capabilities.hh"
 #include "GPU_platform.hh"
+#include "GPU_work_in_flight.hh"
 
 #include "gpu_backend.hh"
 
-#include "BLI_threads.h"
+#include "BLI_threads.hh"
 #include "BLI_vector.hh"
 
 #include "gpu_capabilities_private.hh"
@@ -35,6 +36,7 @@
 #include "gl_texture_pool.hh"
 #include "gl_uniform_buffer.hh"
 #include "gl_vertex_buffer.hh"
+#include "gl_work_in_flight.hh"
 
 namespace blender::gpu {
 
@@ -119,6 +121,11 @@ class GLBackend : public GPUBackend {
     return new GLFence();
   };
 
+  WorkInFlight *work_in_flight_alloc(unsigned int max_in_flight) override
+  {
+    return new GLWorkInFlight(max_in_flight);
+  };
+
   FrameBuffer *framebuffer_alloc(const char *name) override
   {
     return new GLFrameBuffer(name);
@@ -165,6 +172,19 @@ class GLBackend : public GPUBackend {
   {
     return new GLVertBuf();
   };
+
+  TopLevelAS *tlas_alloc(const char * /*name*/) override
+  {
+    /* OpenGL doesn't support Ray Queries. */
+    BLI_assert_unreachable();
+    return nullptr;
+  }
+  BottomLevelAS *blas_alloc(const char * /*name*/) override
+  {
+    /* OpenGL doesn't support Ray Queries. */
+    BLI_assert_unreachable();
+    return nullptr;
+  }
 
   GLSharedOrphanLists &shared_orphan_list_get()
   {

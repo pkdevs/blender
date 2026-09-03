@@ -12,6 +12,7 @@
 #include "BKE_deform.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_library.hh"
 #include "BKE_material.hh"
 #include "BKE_object_deform.h"
 #include "BKE_paint.hh"
@@ -20,17 +21,17 @@
 #include "BKE_screen.hh"
 
 #include "BLI_array_utils.hh"
-#include "BLI_assert.h"
+#include "BLI_assert.hh"
 #include "BLI_bounds.hh"
 #include "BLI_color_types.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_kdopbvh.hh"
 #include "BLI_kdtree.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_offset_indices.hh"
-#include "BLI_rect.h"
+#include "BLI_rect.hh"
 
 #include "DNA_brush_enums.h"
 #include "DNA_brush_types.h"
@@ -81,27 +82,23 @@ namespace ed::sculpt_paint {
  * \{ */
 
 struct GreasePencilPaintStroke final : public PaintStroke {
-  GreasePencilPaintStroke(bContext *C, wmOperator *op, const int event_type)
-      : PaintStroke(C, op, event_type)
+  GreasePencilPaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
+      : PaintStroke(C, op, event)
   {
   }
 
-  bool get_location(float location[3], const float mouse[2], bool force_original) override;
-  bool test_start(wmOperator *op, const float mouse[2]) override;
-  void update_step(wmOperator *op, PointerRNA *stroke_element) override;
+  std::optional<float3> get_location(float2 mouse, bool force_original) override;
+  bool test_start(wmOperator *op, float2 mouse) override;
+  void update_step(wmOperator *op, const StrokeStep &stroke_step) override;
   void redraw(bool final) override;
   bool test_cancel() override;
   void done(bool is_cancel, bool stroke_started) override;
 };
 
-bool GreasePencilPaintStroke::get_location(float location[3],
-                                           const float mouse[2],
-                                           bool /*force_original*/)
+std::optional<float3> GreasePencilPaintStroke::get_location(const float2 mouse,
+                                                            bool /*force_original*/)
 {
-  location[0] = mouse[0];
-  location[1] = mouse[1];
-  location[2] = 0;
-  return true;
+  return float3(mouse.x, mouse.y, 0);
 }
 
 static std::unique_ptr<GreasePencilStrokeOperation> get_stroke_operation(bContext &C,
@@ -193,19 +190,19 @@ static std::unique_ptr<GreasePencilStrokeOperation> get_stroke_operation(bContex
   return nullptr;
 }
 
-bool GreasePencilPaintStroke::test_start(wmOperator * /*op*/, const float /*mouse*/[2])
+bool GreasePencilPaintStroke::test_start(wmOperator * /*op*/, const float2 /*mouse*/)
 {
   return true;
 }
 
-void GreasePencilPaintStroke::update_step(wmOperator *op, PointerRNA *stroke_element)
+void GreasePencilPaintStroke::update_step(wmOperator *op, const StrokeStep &stroke_step)
 {
   GreasePencilStrokeOperation *operation = static_cast<GreasePencilStrokeOperation *>(
       mode_data_.get());
 
   InputSample sample;
-  RNA_float_get_array(stroke_element, "mouse", sample.mouse_position);
-  sample.pressure = RNA_float_get(stroke_element, "pressure");
+  sample.mouse_position = stroke_step.mouse;
+  sample.pressure = stroke_step.pressure;
 
   if (!operation) {
     std::unique_ptr<GreasePencilStrokeOperation> new_operation = get_stroke_operation(
@@ -310,7 +307,7 @@ static wmOperatorStatus grease_pencil_brush_stroke_invoke(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  GreasePencilPaintStroke *stroke = MEM_new<GreasePencilPaintStroke>(__func__, C, op, event->type);
+  GreasePencilPaintStroke *stroke = MEM_new<GreasePencilPaintStroke>(__func__, C, op, event);
   op->customdata = stroke;
 
   const wmOperatorStatus retval = op->type->modal(C, op, event);
@@ -420,7 +417,7 @@ static wmOperatorStatus grease_pencil_sculpt_paint_invoke(bContext *C,
   }
   WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
 
-  GreasePencilPaintStroke *stroke = MEM_new<GreasePencilPaintStroke>(__func__, C, op, event->type);
+  GreasePencilPaintStroke *stroke = MEM_new<GreasePencilPaintStroke>(__func__, C, op, event);
   op->customdata = stroke;
 
   const wmOperatorStatus retval = op->type->modal(C, op, event);
@@ -522,7 +519,7 @@ static wmOperatorStatus grease_pencil_weight_brush_stroke_invoke(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  GreasePencilPaintStroke *stroke = MEM_new<GreasePencilPaintStroke>(__func__, C, op, event->type);
+  GreasePencilPaintStroke *stroke = MEM_new<GreasePencilPaintStroke>(__func__, C, op, event);
   op->customdata = stroke;
 
   const wmOperatorStatus retval = op->type->modal(C, op, event);
@@ -631,7 +628,7 @@ static wmOperatorStatus grease_pencil_vertex_brush_stroke_invoke(bContext *C,
   }
   WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, nullptr);
 
-  GreasePencilPaintStroke *stroke = MEM_new<GreasePencilPaintStroke>(__func__, C, op, event->type);
+  GreasePencilPaintStroke *stroke = MEM_new<GreasePencilPaintStroke>(__func__, C, op, event);
   op->customdata = stroke;
 
   const wmOperatorStatus retval = op->type->modal(C, op, event);
@@ -1711,7 +1708,7 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
   }
 
   if (!did_create_fill) {
-    BKE_reportf(op.reports, RPT_ERROR, "Unable to fill unclosed areas");
+    BKE_report(op.reports, RPT_ERROR, "No fill created");
   }
 
   WM_cursor_modal_restore(&win);
@@ -1820,6 +1817,12 @@ static wmOperatorStatus grease_pencil_fill_invoke(bContext *C,
   }
   if (BKE_object_material_get(&ob, ob.actcol) == nullptr) {
     BKE_report(op->reports, RPT_ERROR, "Fill tool needs active material");
+    return OPERATOR_CANCELLED;
+  }
+  if (ed::greasepencil::check_brush_needs_new_material(&ob, &brush) &&
+      (!ID_IS_EDITABLE(&ob.id) || ID_IS_OVERRIDE_LIBRARY(&ob.id)))
+  {
+    BKE_report(op->reports, RPT_ERROR, "Cannot create new material on linked object");
     return OPERATOR_CANCELLED;
   }
   if (!grease_pencil_fill_init(*C, *op)) {
@@ -2072,8 +2075,8 @@ static bool remove_points_and_split_from_drawings(
     if (Drawing *drawing = get_current_drawing_or_duplicate_for_autokey(
             scene, grease_pencil, info.layer_index))
     {
-      drawing->strokes_for_write() = geometry::remove_points_and_split(drawing->strokes(),
-                                                                       points_to_remove);
+      drawing->strokes_for_write() = geometry::grease_pencil_remove_points_and_split(
+          drawing->strokes(), points_to_remove);
       drawing->tag_topology_changed();
       changed = true;
     }
@@ -2138,30 +2141,32 @@ static wmOperatorStatus grease_pencil_erase_lasso_exec(bContext *C, wmOperator *
       const float4x4 layer_to_world = layer.to_world_space(*ob_eval);
 
       const bke::CurvesGeometry &curves = info.drawing.strokes();
-      Array<float2> screen_space_positions(curves.points_num());
-      threading::parallel_for(curves.points_range(), 4096, [&](const IndexRange points) {
-        for (const int point : points) {
-          const float3 pos = math::transform_point(layer_to_world, deformation.positions[point]);
-          eV3DProjStatus result = ED_view3d_project_float_global(
-              region, pos, screen_space_positions[point], V3D_PROJ_TEST_NOP);
-          if (result != V3D_PROJ_RET_OK) {
-            screen_space_positions[point] = float2(0);
-          }
-        }
-      });
-
-      const OffsetIndices<int> points_by_curve = curves.points_by_curve();
-      Array<Bounds<float2>> screen_space_curve_bounds(curves.curves_num());
-      threading::parallel_for(curves.curves_range(), 512, [&](const IndexRange range) {
-        for (const int curve : range) {
-          screen_space_curve_bounds[curve] = *bounds::min_max(
-              screen_space_positions.as_span().slice(points_by_curve[curve]));
-        }
-      });
-
+      Array<float2> screen_space_positions(curves.points_num(), float2(0));
       IndexMaskMemory &memory = memories[drawing_i];
+      const IndexMask editable_points = retrieve_editable_points(
+          *object, info.drawing, info.layer_index, memory);
+      editable_points.foreach_index(
+          [&](const int point) {
+            const float3 pos = math::transform_point(layer_to_world, deformation.positions[point]);
+            ED_view3d_project_float_global(
+                region, pos, screen_space_positions[point], V3D_PROJ_TEST_NOP);
+          },
+          exec_mode::grain_size(4096));
+
+      const IndexMask editable_strokes = retrieve_editable_strokes(
+          *object, info.drawing, info.layer_index, memory);
+      const OffsetIndices<int> points_by_curve = curves.points_by_curve();
+      Array<Bounds<float2>> screen_space_curve_bounds(curves.curves_num(),
+                                                      {float2(0.0f), float2(0.0f)});
+      editable_strokes.foreach_index(
+          [&](const int curve) {
+            screen_space_curve_bounds[curve] = *bounds::min_max(
+                screen_space_positions.as_span().slice(points_by_curve[curve]));
+          },
+          exec_mode::grain_size(512));
+
       const IndexMask curve_selection = IndexMask::from_predicate(
-          curves.curves_range(), memory, [&](const int64_t index) {
+          editable_strokes, memory, [&](const int64_t index) {
             /* For a single point curve, its screen_space_curve_bounds Bounds will be empty (by
              * definition), so intersecting will fail. Check if the single point is in the bounds
              * instead. */
@@ -2248,21 +2253,20 @@ static wmOperatorStatus grease_pencil_erase_box_exec(bContext *C, wmOperator *op
       const float4x4 layer_to_world = layer.to_world_space(*ob_eval);
 
       const bke::CurvesGeometry &curves = info.drawing.strokes();
-      Array<float2> screen_space_positions(curves.points_num());
-      threading::parallel_for(curves.points_range(), 4096, [&](const IndexRange points) {
-        for (const int point : points) {
-          const float3 pos = math::transform_point(layer_to_world, deformation.positions[point]);
-          eV3DProjStatus result = ED_view3d_project_float_global(
-              region, pos, screen_space_positions[point], V3D_PROJ_TEST_NOP);
-          if (result != V3D_PROJ_RET_OK) {
-            screen_space_positions[point] = float2(0);
-          }
-        }
-      });
-
+      Array<float2> screen_space_positions(curves.points_num(), float2(0));
       IndexMaskMemory &memory = memories[drawing_i];
+      const IndexMask editable_points = retrieve_editable_points(
+          *object, info.drawing, info.layer_index, memory);
+      editable_points.foreach_index(
+          [&](const int point) {
+            const float3 pos = math::transform_point(layer_to_world, deformation.positions[point]);
+            ED_view3d_project_float_global(
+                region, pos, screen_space_positions[point], V3D_PROJ_TEST_NOP);
+          },
+          exec_mode::grain_size(4096));
+
       points_to_remove_per_drawing[drawing_i] = IndexMask::from_predicate(
-          curves.points_range(), memory, [&](const int64_t index) {
+          editable_points, memory, [&](const int64_t index) {
             return is_point_inside_bounds(box_bounds, int2(screen_space_positions[index]));
           });
     }

@@ -16,12 +16,12 @@
 #include "DNA_modifier_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_bvhutils.hh"
 #include "BKE_context.hh"
@@ -155,7 +155,7 @@ void OBJECT_OT_particle_system_remove(wmOperatorType *ot)
 static bool psys_poll(bContext *C)
 {
   PointerRNA ptr = CTX_data_pointer_get_type(C, "particle_system", RNA_ParticleSystem);
-  return (ptr.data != nullptr);
+  return ptr;
 }
 
 static wmOperatorStatus new_particle_settings_exec(bContext *C, wmOperator * /*op*/)

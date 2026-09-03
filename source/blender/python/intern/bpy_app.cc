@@ -37,7 +37,7 @@
 #include "bpy_app_icons.hh"
 #include "bpy_app_timers.hh"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_blender_version.h"
@@ -744,7 +744,7 @@ static PyObject *bpy_app_is_job_running(PyObject * /*self*/, PyObject *args, PyO
      * to avoid breaking the Python API. */
     return PyBool_FromLong(GPU_is_init() && GPU_shader_compiler_has_pending_work());
   }
-  return PyBool_FromLong(WM_jobs_has_running_type(wm, job_type_enum.value));
+  return PyBool_FromLong(WM_jobs_has_running(wm, nullptr, eWM_JobType(job_type_enum.value)));
 }
 
 char *(*BPY_python_app_help_text_fn)(bool all) = nullptr;
@@ -766,7 +766,7 @@ static PyObject *bpy_app_help_text(PyObject * /*self*/, PyObject *args, PyObject
   bool all = false;
   static const char *_keywords[] = {"all", nullptr};
   static _PyArg_Parser _parser = {
-      "|$" /* Optional keyword only arguments. */
+      "|$" /* Optional, keyword only arguments. */
       "O&" /* `all` */
       ":help_text",
       _keywords,

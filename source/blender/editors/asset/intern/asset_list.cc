@@ -23,9 +23,9 @@
 #include "BKE_preferences.h"
 #include "BKE_screen.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_utility_mixins.hh"
 
 #include "DNA_asset_types.h"
@@ -161,7 +161,6 @@ void AssetList::ensure_updated()
       true,
       /*filter_assets_hide_online=*/!show_online,
       /*filter_assets_hide_offline=*/!show_offline,
-      "",
       "");
   filelist_set_asset_include_online(files, show_online);
 }
@@ -420,6 +419,9 @@ void asset_reading_region_listen_fn(const wmRegionListenerParams *params)
   switch (wmn->category) {
     case NC_ASSET:
       if (ELEM(wmn->data, ND_ASSET_LIST_READING, ND_ASSET_LIST_PREVIEW)) {
+        ED_region_tag_refresh_ui(region);
+      }
+      if (ELEM(wmn->action, NA_DOWNLOAD_FINISHED)) {
         ED_region_tag_refresh_ui(region);
       }
       break;

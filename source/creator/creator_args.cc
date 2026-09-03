@@ -19,21 +19,21 @@
 #  include "CLG_log.h"
 
 #  ifdef WIN32
-#    include "BLI_winstuff.h"
+#    include "BLI_winstuff.hh"
 #  endif
 
-#  include "BLI_args.h"
-#  include "BLI_dynstr.h"
-#  include "BLI_fileops.h"
-#  include "BLI_listbase.h"
+#  include "BLI_args.hh"
+#  include "BLI_dynstr.hh"
+#  include "BLI_fileops.hh"
+#  include "BLI_listbase.hh"
 #  include "BLI_path_utils.hh"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
-#  include "BLI_system.h"
-#  include "BLI_threads.h"
-#  include "BLI_utildefines.h"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
+#  include "BLI_system.hh"
+#  include "BLI_threads.hh"
+#  include "BLI_utildefines.hh"
 #  ifndef NDEBUG
-#    include "BLI_mempool.h"
+#    include "BLI_mempool.hh"
 #  endif
 
 #  include "BKE_appdir.hh"
@@ -777,6 +777,7 @@ static void print_help(bArgs *ba, bool all)
   BLI_args_print_arg_doc(ba, "--debug-gpu-shader-no-preprocessor");
   BLI_args_print_arg_doc(ba, "--debug-gpu-shader-no-dce");
   BLI_args_print_arg_doc(ba, "--debug-gpu-no-texture-pool");
+  BLI_args_print_arg_doc(ba, "--debug-gpu-backend-no-fallback");
   if (defs.with_renderdoc) {
     BLI_args_print_arg_doc(ba, "--debug-gpu-renderdoc");
   }
@@ -797,6 +798,7 @@ static void print_help(bArgs *ba, bool all)
   if (defs.with_freestyle) {
     BLI_args_print_arg_doc(ba, "--debug-freestyle");
   }
+  BLI_args_print_arg_doc(ba, "--console-crash-handler");
   BLI_args_print_arg_doc(ba, "--disable-crash-handler");
   BLI_args_print_arg_doc(ba, "--disable-abort-handler");
 
@@ -1026,6 +1028,15 @@ static int arg_handle_internet_allow_set(int /*argc*/, const char ** /*argv*/, v
     G.f &= ~G_FLAG_INTERNET_ALLOW;
     G.f |= G_FLAG_INTERNET_OVERRIDE_PREF_OFFLINE;
   }
+  return 0;
+}
+
+static const char arg_handle_crash_handler_console_doc[] =
+    "\n\t"
+    "Use the console to report crashes.";
+static int arg_handle_crash_handler_console(int /*argc*/, const char ** /*argv*/, void * /*data*/)
+{
+  app_state.signal.use_console_crash_handler = true;
   return 0;
 }
 
@@ -1439,6 +1450,10 @@ static const char arg_handle_debug_mode_generic_set_doc_gpu_force_vulkan_local_r
 static const char arg_handle_debug_mode_generic_set_doc_gpu_device_no_fallback[] =
     "\n\t"
     "Fail instead of falling back when '--gpu-device' does not match a usable Vulkan device.";
+static const char arg_handle_debug_mode_generic_set_doc_gpu_backend_no_fallback[] =
+    "\n\t"
+    "Fail instead of falling back to another GPU backend when the selected one is not supported. "
+    "Skips the GPU backend support check.";
 
 static int arg_handle_debug_mode_generic_set(int /*argc*/, const char ** /*argv*/, void *data)
 {
@@ -1782,15 +1797,15 @@ static int arg_handle_gpu_device_set(int argc, const char **argv, void * /*data*
 
     char *end = nullptr;
     errno = 0;
-    const unsigned long vendor_id = strtoul(spec, &end, 16);
+    const ulong vendor_id = strtoul(spec, &end, 16);
     const bool vendor_ok = (errno == 0) && (end == p1) && (end != spec) &&
                            (vendor_id <= std::numeric_limits<uint32_t>::max());
     errno = 0;
-    const unsigned long device_id = strtoul(p1 + 1, &end, 16);
+    const ulong device_id = strtoul(p1 + 1, &end, 16);
     const bool device_ok = (errno == 0) && (end == p2) && (end != p1 + 1) &&
                            (device_id <= std::numeric_limits<uint32_t>::max());
     errno = 0;
-    const unsigned long index = strtoul(p2 + 1, &end, 16);
+    const ulong index = strtoul(p2 + 1, &end, 16);
     const bool index_ok = (errno == 0) && (*end == '\0') && (end != p2 + 1) && (index <= INT_MAX);
 
     if (!vendor_ok || !device_ok || !index_ok) {
@@ -2516,9 +2531,23 @@ static int arg_handle_render_frame(int argc, const char **argv, void *data)
         return 1;
       }
 
-      re = RE_NewSceneRender(scene);
       BKE_reports_init(&reports, RPT_STORE);
+
+      if (!RE_disable_save_output_allowed(true, *scene, &reports)) {
+        BKE_reports_free(&reports);
+        MEM_delete(frame_range_arr);
+        return 1;
+      }
+
+      if (!RE_is_rendering_allowed(*bmain, scene, nullptr, nullptr, &reports)) {
+        BKE_reports_free(&reports);
+        MEM_delete(frame_range_arr);
+        return 1;
+      }
+
+      re = RE_NewSceneRender(scene);
       RE_SetReports(re, &reports);
+
       for (int i = 0; i < frames_range_len; i++) {
         /* We could pass in frame ranges,
          * but prefer having exact behavior as passing in multiple frames. */
@@ -2553,10 +2582,23 @@ static int arg_handle_render_animation(int /*argc*/, const char ** /*argv*/, voi
     add_log_render_filter();
 
     Main *bmain = CTX_data_main(C);
-    Render *re = RE_NewSceneRender(scene);
+
     ReportList reports;
     BKE_reports_init(&reports, RPT_STORE);
+
+    if (!RE_disable_save_output_allowed(true, *scene, &reports)) {
+      BKE_reports_free(&reports);
+      return 0;
+    }
+
+    if (!RE_is_rendering_allowed(*bmain, scene, nullptr, nullptr, &reports)) {
+      BKE_reports_free(&reports);
+      return 0;
+    }
+
+    Render *re = RE_NewSceneRender(scene);
     RE_SetReports(re, &reports);
+
     RE_RenderAnim(
         re, bmain, scene, nullptr, nullptr, scene->r.sfra, scene->r.efra, scene->r.frame_step);
     RE_SetReports(re, nullptr);
@@ -3079,6 +3121,11 @@ void main_args_setup(bContext *C, bArgs *ba, bool all)
                "--gpu-device-no-fallback",
                CB_EX(arg_handle_debug_mode_generic_set, gpu_device_no_fallback),
                reinterpret_cast<void *>(G_DEBUG_GPU_DEVICE_NO_FALLBACK));
+  BLI_args_add(ba,
+               nullptr,
+               "--debug-gpu-backend-no-fallback",
+               CB_EX(arg_handle_debug_mode_generic_set, gpu_backend_no_fallback),
+               reinterpret_cast<void *>(G_DEBUG_GPU_BACKEND_NO_FALLBACK));
   BLI_args_add(ba, nullptr, "--gpu-vsync", CB(arg_handle_gpu_vsync_set), nullptr);
   if (defs.with_opengl_backend) {
     BLI_args_add(ba,
@@ -3123,6 +3170,8 @@ void main_args_setup(bContext *C, bArgs *ba, bool all)
                CB_EX(arg_handle_internet_allow_set, online),
                reinterpret_cast<void *>(true));
 
+  BLI_args_add(
+      ba, nullptr, "--console-crash-handler", CB(arg_handle_crash_handler_console), nullptr);
   BLI_args_add(
       ba, nullptr, "--disable-crash-handler", CB(arg_handle_crash_handler_disable), nullptr);
   BLI_args_add(

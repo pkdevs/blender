@@ -17,12 +17,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -30,6 +30,7 @@
 #include "DNA_userdef_types.h"
 
 #include "BKE_context.hh"
+#include "BKE_recents.hh"
 #include "BKE_screen.hh"
 
 #include "RNA_access.hh"
@@ -565,7 +566,7 @@ static bool panel_custom_pin_to_last_get(const Panel *panel)
 {
   if (panel->type->pin_to_last_property[0] != '\0') {
     PointerRNA *ptr = panel_custom_data_get(panel);
-    if (ptr != nullptr && !RNA_pointer_is_null(ptr)) {
+    if (ptr != nullptr && *ptr) {
       return RNA_boolean_get(ptr, panel->type->pin_to_last_property);
     }
   }
@@ -577,7 +578,7 @@ static void panel_custom_pin_to_last_set(const bContext *C, const Panel *panel, 
 {
   if (panel->type->pin_to_last_property[0] != '\0') {
     PointerRNA *ptr = panel_custom_data_get(panel);
-    if (ptr != nullptr && !RNA_pointer_is_null(ptr)) {
+    if (ptr != nullptr && *ptr) {
       PropertyRNA *prop = RNA_struct_find_property(ptr, panel->type->pin_to_last_property);
       RNA_boolean_set(ptr, panel->type->pin_to_last_property, value);
       RNA_property_update(const_cast<bContext *>(C), ptr, prop);
@@ -593,7 +594,7 @@ static bool panel_custom_data_active_get(const Panel *panel)
 
   if (panel->type->active_property[0] != '\0') {
     PointerRNA *ptr = panel_custom_data_get(panel);
-    if (ptr != nullptr && !RNA_pointer_is_null(ptr)) {
+    if (ptr != nullptr && *ptr) {
       return RNA_boolean_get(ptr, panel->type->active_property);
     }
   }
@@ -610,7 +611,7 @@ static void panel_custom_data_active_set(Panel *panel)
   if (panel->type->active_property[0] != '\0') {
     PointerRNA *ptr = panel_custom_data_get(panel);
     BLI_assert(RNA_struct_find_property(ptr, panel->type->active_property) != nullptr);
-    if (ptr != nullptr && !RNA_pointer_is_null(ptr)) {
+    if (ptr != nullptr && *ptr) {
       RNA_boolean_set(ptr, panel->type->active_property, true);
     }
   }
@@ -740,6 +741,18 @@ Panel *panel_begin(
       if (&panel_next != panel && panel_next.sortorder >= panel->sortorder) {
         panel_next.sortorder++;
       }
+    }
+  }
+
+  if (newpanel && region->regiontype == RGN_TYPE_TOOLS &&
+      STRPREFIX(panel->panelname, "FILEBROWSER_PT_"))
+  {
+    const std::string panel_name_str = panel->panelname;
+    const int order = recents::Section("panel.sortorder").get<int>(panel_name_str);
+    if (order >= 0) {
+      panel->sortorder = order;
+      SET_FLAG_FROM_TEST(
+          panel->flag, !recents::Section("panel.open").get<bool>(panel_name_str), PNL_CLOSED);
     }
   }
 
@@ -1064,17 +1077,17 @@ static void panel_title_color_get(const Panel *panel,
                                   const bool region_search_filter_active,
                                   uchar r_color[4])
 {
+  const bTheme *btheme = theme::theme_get();
+
   if (!show_background) {
     /* Use menu colors for floating panels. */
-    bTheme *btheme = theme::theme_get();
     const uiWidgetColors *wcol = &btheme->tui.wcol_menu_back;
     copy_v4_v4_uchar(r_color, static_cast<const uchar *>(wcol->text));
     return;
   }
 
   const bool search_match = panel_matches_search_filter(panel);
-
-  theme::get_color_4ubv(TH_TITLE, r_color);
+  copy_v4_v4_uchar(r_color, static_cast<const uchar *>(btheme->tui.panel_title));
   if (region_search_filter_active && !search_match) {
     r_color[0] *= 0.5;
     r_color[1] *= 0.5;
@@ -1424,12 +1437,19 @@ static void expand_panel_region(bContext &C, ARegion *region)
   const float aspect = BLI_rctf_size_y(&region->v2d.cur) /
                        (BLI_rcti_size_y(&region->v2d.mask) + 1);
   const bool too_narrow = BLI_rcti_size_x(&region->winrct) <=
-                          int(std::ceil(UI_PANEL_CATEGORY_MIN_WIDTH * UI_SCALE_FAC / aspect));
+                          int((UI_PANEL_CATEGORY_MIN_WIDTH + PANEL_MIN_DRAW_WIDTH) * UI_SCALE_FAC /
+                              aspect);
   if (!too_narrow) {
     return;
   }
   /* Enlarge region. */
-  const int new_width = region->runtime->type->prefsizex ? region->runtime->type->prefsizex : 250;
+  int new_width = region->runtime->type->prefsizex ? region->runtime->type->prefsizex : 250;
+
+  if (new_width < int(UI_PANEL_CATEGORY_MIN_WIDTH + PANEL_MIN_DRAW_WIDTH)) {
+    region->runtime->type->prefsizex = UI_SIDEBAR_PANEL_WIDTH;
+    new_width = UI_SIDEBAR_PANEL_WIDTH;
+  }
+
   panel_region_width_set(region, aspect, new_width);
   WM_event_add_notifier(&C, NC_SCREEN | NA_EDITED, nullptr);
   ED_region_tag_redraw(region);
@@ -1512,8 +1532,9 @@ void panel_category_tabs_draw_all(const bContext *C,
     immUnbindProgram();
   }
   /* If the area is too small to show panels, then don't show any tabs as active. */
-  const bool too_narrow = BLI_rcti_size_x(&region->winrct) <=
-                          int(UI_PANEL_CATEGORY_MIN_WIDTH * UI_SCALE_FAC / aspect);
+  const bool too_narrow = BLI_rcti_size_x(&region->winrct) <
+                          int((UI_PANEL_CATEGORY_MIN_WIDTH + PANEL_MIN_DRAW_WIDTH) * UI_SCALE_FAC /
+                              aspect);
   /* #widget_roundbox_set has this correction, keep in sync. */
   const int align_pad = (!region->overlap && !is_left) ? px : 0;
   /* Same for all tabs. */
@@ -2624,9 +2645,10 @@ int handler_panel_region(bContext *C,
       if (active_button && active_button->hardmax == val) {
         const float aspect = BLI_rctf_size_y(&region->v2d.cur) /
                              (BLI_rcti_size_y(&region->v2d.mask) + 1);
-        const bool too_narrow = BLI_rcti_size_x(&region->winrct) <=
-                                int(std::ceil(UI_PANEL_CATEGORY_MIN_WIDTH * UI_SCALE_FAC /
-                                              aspect));
+        const bool too_narrow = BLI_rcti_size_x(&region->winrct) <
+                                int(std::floor(
+                                    (UI_PANEL_CATEGORY_MIN_WIDTH + PANEL_MIN_DRAW_WIDTH) *
+                                    UI_SCALE_FAC / aspect));
         if (too_narrow) {
           expand_panel_region(*C, region);
         }
@@ -2656,9 +2678,8 @@ int handler_panel_region(bContext *C,
     }
     else if ((event->type == RIGHTMOUSE) && panel_categories_tab_is_mouse_over(region, event)) {
       BLI_assert(retval == WM_UI_HANDLER_CONTINUE);
-      retval = WM_UI_HANDLER_BREAK;
       WM_tooltip_clear(C, CTX_wm_window(C));
-      popup_context_menu_for_panel(C, region, nullptr);
+      retval = popup_context_menu_for_panel(C, region, nullptr);
     }
   }
 
@@ -2706,14 +2727,6 @@ int handler_panel_region(bContext *C,
       continue;
     }
 
-    if (has_panel_header && event->type == RIGHTMOUSE) {
-      if (ELEM(mouse_state, PANEL_MOUSE_INSIDE_HEADER, PANEL_MOUSE_INSIDE_CONTENT)) {
-        retval = WM_UI_HANDLER_BREAK;
-        popup_context_menu_for_panel(C, region, block.panel);
-        break;
-      }
-    }
-
     if ((has_panel_header && mouse_state == PANEL_MOUSE_INSIDE_HEADER)) {
       /* All mouse clicks inside panel headers should return in break. */
       if (ELEM(event->type, EVT_RETKEY, EVT_PADENTER, LEFTMOUSE)) {
@@ -2722,8 +2735,7 @@ int handler_panel_region(bContext *C,
             C, &block, mx, event->type, event->modifier & KM_CTRL, event->modifier & KM_SHIFT);
       }
       else if (event->type == RIGHTMOUSE) {
-        retval = WM_UI_HANDLER_BREAK;
-        popup_context_menu_for_panel(C, region, block.panel);
+        retval = popup_context_menu_for_panel(C, region, block.panel);
       }
       break;
     }
@@ -2919,6 +2931,17 @@ static void panel_activate_state(const bContext *C, Panel *panel, const HandlePa
     if (data->animtimer) {
       WM_event_timer_remove(CTX_wm_manager(C), win, data->animtimer);
       data->animtimer = nullptr;
+    }
+
+    /* Save File Browser panel order and open/close state. */
+    if (CTX_wm_area(C)->spacetype == SPACE_FILE && region->regiontype == RGN_TYPE_TOOLS) {
+      for (Panel &pnl : region->panels) {
+        if (STRPREFIX(pnl.panelname, "FILEBROWSER_PT_")) {
+          const std::string pnl_name_str = pnl.panelname;
+          recents::Section("panel.sortorder").set(pnl_name_str, pnl.sortorder);
+          recents::Section("panel.open").set(pnl_name_str, !(pnl.flag & PNL_CLOSED));
+        }
+      }
     }
 
     MEM_delete(data);

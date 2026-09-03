@@ -29,6 +29,8 @@
 
 #include "SEQ_thumbnail_cache.hh"
 
+#include "UI_view2d.hh"
+
 #include "WM_api.hh"
 
 #include "sequencer_intern.hh"
@@ -58,22 +60,24 @@ static void strip_get_thumb_image_dimensions(const Strip *strip,
                                              float *r_image_width,
                                              float *r_image_height)
 {
-  float image_width = strip->data->stripdata->orig_width;
-  float image_height = strip->data->stripdata->orig_height;
+  int image_width = seq::THUMB_SIZE, image_height = seq::THUMB_SIZE;
+  if (ELEM(strip->type, STRIP_TYPE_IMAGE, STRIP_TYPE_MOVIE)) {
+    image_width = strip->data->stripdata->orig_width;
+    image_height = strip->data->stripdata->orig_height;
+  }
+  else if (strip->type == STRIP_TYPE_MOVIECLIP && strip->clip) {
+    image_width = strip->clip->lastsize[0];
+    image_height = strip->clip->lastsize[1];
+  }
+  else if (strip->type == STRIP_TYPE_SCENE && strip->scene) {
+    image_width = strip->scene->r.xsch;
+    image_height = strip->scene->r.ysch;
+  }
 
-  /* Fix the dimensions to be max SEQ_THUMB_SIZE for x or y. */
-  float aspect_ratio = image_width / image_height;
-  if (image_width > image_height) {
-    image_width = seq::THUMB_SIZE;
-    image_height = round_fl_to_int(image_width / aspect_ratio);
-  }
-  else {
-    image_height = seq::THUMB_SIZE;
-    image_width = round_fl_to_int(image_height * aspect_ratio);
-  }
+  seq::image_size_to_thumb_size(image_width, image_height);
 
   /* Calculate thumb dimensions. */
-  aspect_ratio = image_width / image_height;
+  const float aspect_ratio = float(image_width) / float(image_height);
   float thumb_h_px = thumb_height / pixely;
   float thumb_width = aspect_ratio * thumb_h_px * pixelx;
 
@@ -172,7 +176,6 @@ static void get_seq_strip_ends_thumbnails(const View2D *v2d,
                                           Scene *scene,
                                           const float thumb_width,
                                           const float crop_x_multiplier,
-                                          const float pixelx,
                                           const float upper_thumb_bound,
                                           bool is_muted,
                                           Vector<SeqThumbInfo> &r_thumbs)
@@ -187,7 +190,7 @@ static void get_seq_strip_ends_thumbnails(const View2D *v2d,
                                            !(strip.strip->flag & SEQ_LEFTSEL));
   /* Offset the start of last thumbnail. */
   const float display_offset = (strip.is_single_image ? strip_width : 0.0f) - thumb_width;
-  const float gap = 1.5f * pixelx * UI_SCALE_FAC;
+  const float gap = 1.5f * ui::view2d_pixel_size_get_x(v2d) * UI_SCALE_FAC;
 
   float crop_left = 0.0;
   float crop_right = 0.0;
@@ -240,8 +243,6 @@ static void get_seq_strip_thumbnails(const View2D *v2d,
                                      const bContext *C,
                                      Scene *scene,
                                      const StripDrawContext &strip,
-                                     float pixelx,
-                                     float pixely,
                                      bool is_muted,
                                      bool show_only_at_strip_ends,
                                      Vector<SeqThumbInfo> &r_thumbs)
@@ -249,6 +250,9 @@ static void get_seq_strip_thumbnails(const View2D *v2d,
   if (!seq::strip_can_have_thumbnail(scene, strip.strip)) {
     return;
   }
+
+  const float pixelx = ui::view2d_pixel_size_get_x(v2d);
+  const float pixely = ui::view2d_pixel_size_get_y(v2d);
 
   /* No thumbnails if height of the strip is too small. */
   const float thumb_height = strip.strip_content_top - strip.bottom;
@@ -274,7 +278,6 @@ static void get_seq_strip_thumbnails(const View2D *v2d,
                                   scene,
                                   thumb_width,
                                   crop_x_multiplier,
-                                  pixelx,
                                   upper_thumb_bound,
                                   is_muted,
                                   r_thumbs);
@@ -429,15 +432,8 @@ void draw_strip_thumbnails(const TimelineDrawContext &ctx,
                                         SEQ_TIMELINE_STRIP_END_THUMBNAILS);
 
   for (const StripDrawContext &strip : strips) {
-    get_seq_strip_thumbnails(ctx.v2d,
-                             ctx.C,
-                             ctx.scene,
-                             strip,
-                             ctx.pixelx,
-                             ctx.pixely,
-                             strip.is_muted,
-                             show_only_at_strip_ends,
-                             thumbs);
+    get_seq_strip_thumbnails(
+        ctx.v2d, ctx.C, ctx.scene, strip, strip.is_muted, show_only_at_strip_ends, thumbs);
   }
   if (thumbs.is_empty()) {
     return;

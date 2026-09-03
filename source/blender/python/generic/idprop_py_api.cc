@@ -14,7 +14,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "idprop_py_api.hh"
 #include "idprop_py_ui_api.hh"
@@ -1753,7 +1753,14 @@ static PyObject *BPy_IDGroup_pop(BPy_IDProperty *self, PyObject *args)
   char *key;
   PyObject *def = nullptr;
 
-  if (!PyArg_ParseTuple(args, "s|O:pop", &key, &def)) {
+  if (!PyArg_ParseTuple(args,
+                        "s" /* `key` */
+                        "|" /* Optional arguments. */
+                        "O" /* `default` */
+                        ":pop",
+                        &key,
+                        &def))
+  {
     return nullptr;
   }
 
@@ -2036,7 +2043,14 @@ static PyObject *BPy_IDGroup_get(BPy_IDProperty *self, PyObject *args)
   const char *key;
   PyObject *def = Py_None;
 
-  if (!PyArg_ParseTuple(args, "s|O:get", &key, &def)) {
+  if (!PyArg_ParseTuple(args,
+                        "s" /* `key` */
+                        "|" /* Optional arguments. */
+                        "O" /* `default` */
+                        ":get",
+                        &key,
+                        &def))
+  {
     return nullptr;
   }
 
@@ -2124,7 +2138,11 @@ PyDoc_STRVAR(
     /* Wrap. */
     BPy_IDGroup_Type_doc,
     "A dictionary-like group of ID properties, "
-    "supporting key access, iteration, and membership testing.");
+    "supporting key access, iteration, and membership testing.\n"
+    "\n"
+    ".. note::\n"
+    "\n"
+    "   Only supports a maximum of 1024 levels of nesting.");
 
 PyTypeObject BPy_IDGroup_Type = {
     /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)

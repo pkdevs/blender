@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #include "GEO_join_geometries.hh"
 #include "GEO_realize_instances.hh"
 
@@ -10,7 +14,7 @@
 #include "DNA_object_types.h"
 
 #include "BLI_array_utils.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_noise.hh"
 
@@ -805,7 +809,7 @@ static void gather_realize_tasks_recursive(GatherTasksInfo &gather_info,
         const auto &pointcloud_component = *static_cast<const bke::PointCloudComponent *>(
             component);
         const PointCloud *pointcloud = pointcloud_component.get();
-        if (pointcloud != nullptr && pointcloud->totpoint > 0) {
+        if (pointcloud != nullptr) {
           const int pointcloud_index = gather_info.pointclouds.order.index_of(pointcloud);
           const PointCloudRealizeInfo &pointcloud_info =
               gather_info.pointclouds.realize_info[pointcloud_index];
@@ -1258,9 +1262,7 @@ static void gather_pointclouds_to_realize(const bke::GeometrySet &geometry_set,
                                           VectorSet<const PointCloud *> &r_pointclouds)
 {
   if (const PointCloud *pointcloud = geometry_set.get_pointcloud()) {
-    if (pointcloud->totpoint > 0) {
-      r_pointclouds.add(pointcloud);
-    }
+    r_pointclouds.add(pointcloud);
   }
   if (const Instances *instances = geometry_set.get_instances()) {
     instances->foreach_referenced_geometry([&](const bke::GeometrySet &instance_geometry_set) {
@@ -2000,6 +2002,9 @@ static void execute_realize_mesh_tasks(const RealizeInstancesOptions &options,
     if (!skip_transform(task.transform)) {
       bke::mesh_transform(*new_mesh, task.transform, false);
     }
+    if (options.preserve_normals && math::is_negative(task.transform)) {
+      bke::mesh_flip_faces(*new_mesh, IndexMask(new_mesh->faces_num));
+    }
     add_instance_attributes_to_single_geometry(
         ordered_attributes, task.attribute_fallbacks, new_mesh->attributes_for_write());
     r_result.geometry.replace_mesh(new_mesh);
@@ -2140,6 +2145,27 @@ static void execute_realize_mesh_tasks(const RealizeInstancesOptions &options,
   }
   vert_ids.finish();
   custom_normals.finish();
+
+  if (options.preserve_normals) {
+    IndexMaskMemory memory;
+    const IndexMask mirrored_tasks = IndexMask::from_predicate(
+        tasks.index_range(),
+        memory,
+        [&](const int task_i) { return math::is_negative(tasks[task_i].transform); },
+        exec_mode::grain_size(1024));
+    if (!mirrored_tasks.is_empty()) {
+      Array<IndexMask::Initializer> mirrored_face_ranges(mirrored_tasks.size());
+      mirrored_tasks.foreach_index(
+          [&](const int task_i, const int pos) {
+            const RealizeMeshTask &task = tasks[task_i];
+            mirrored_face_ranges[pos] = IndexRange(task.start_indices.face,
+                                                   task.mesh_info->mesh->faces_num);
+          },
+          exec_mode::grain_size(1024));
+      const IndexMask mirrored_faces = IndexMask::from_initializers(mirrored_face_ranges, memory);
+      bke::mesh_flip_faces(*dst_mesh, mirrored_faces);
+    }
+  }
 
   bke::mesh_ensure_default_uv_map(*dst_mesh);
 

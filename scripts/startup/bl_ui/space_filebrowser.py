@@ -674,6 +674,7 @@ class ASSETBROWSER_MT_editor_menus(AssetBrowserMenu, Menu):
         layout.menu("ASSETBROWSER_MT_select")
         layout.menu("ASSETBROWSER_MT_library")
         layout.menu("ASSETBROWSER_MT_catalog")
+        layout.menu("ASSETBROWSER_MT_asset")
 
 
 class ASSETBROWSER_MT_view(AssetBrowserMenu, Menu):
@@ -736,6 +737,23 @@ class ASSETBROWSER_MT_catalog(AssetBrowserMenu, Menu):
         layout.operator("asset.catalog_new").parent_path = ""
 
 
+class ASSETBROWSER_MT_asset(Menu):
+    bl_label = "Asset"
+
+    def draw(self, _context) -> None:
+        layout = self.layout
+
+        col = layout.column()
+        col.operator_context = 'EXEC_DEFAULT'
+        col.operator("asset.clear", text="Clear Asset").set_fake_user = False
+        col.operator("asset.clear", text="Clear Asset (Set Fake User)").set_fake_user = True
+
+        layout.separator()
+
+        layout.operator("asset.open_containing_blend_file", icon='FILE_BLEND')
+        layout.operator("asset.browse_containing_blend_file")
+
+
 class ASSETBROWSER_PT_import_settings(asset_utils.AssetBrowserPanel, Panel):
     bl_idname = "ASSETBROWSER_PT_import_settings"
     bl_region_type = 'HEADER'
@@ -763,13 +781,43 @@ class ASSETBROWSER_PT_metadata(asset_utils.AssetBrowserPanel, Panel):
     bl_options = {'HIDE_HEADER'}
 
     @staticmethod
-    def metadata_prop(layout, asset_metadata, propname):
+    def metadata_prop(layout, asset_metadata, propname, initial_visible_lines: int = 1):
         """
         Only display properties that are either set or can be modified (i.e. the
         asset is in the current file). Empty, non-editable fields are not really useful.
         """
         if getattr(asset_metadata, propname) or not asset_metadata.is_property_readonly(propname):
-            layout.prop(asset_metadata, propname)
+            split = layout.split(factor=0.4)
+            ui_name = asset_metadata.rna_type.properties[propname].name
+            sub = split.row()
+            sub.alignment = 'RIGHT'
+            sub.label(text=ui_name)
+            if asset_metadata.is_property_readonly(propname):
+                split.label_multiline(
+                    text=getattr(asset_metadata, propname))
+            else:
+                split.textbox(asset_metadata, propname, placeholder=ui_name,
+                              initial_visible_lines=initial_visible_lines)
+
+    @staticmethod
+    def _webpage_prop(layout, asset_metadata):
+        """
+        Only display the webpage property when is either set or can be modified (i.e. the
+        asset is in the current file).
+        """
+        if getattr(asset_metadata, "webpage") or not asset_metadata.is_property_readonly("webpage"):
+            ui_name = asset_metadata.rna_type.properties["webpage"].name
+            if asset_metadata.is_property_readonly("webpage"):
+                split = layout.split(factor=0.4)
+                sub = split.row()
+                sub.alignment = 'RIGHT'
+                sub.label(text=ui_name)
+                url = getattr(asset_metadata, "webpage")
+                sub = split.row()
+                sub.alignment = 'LEFT'
+                sub.link(url=url, text=url)
+            else:
+                layout.prop(asset_metadata, "webpage", placeholder=ui_name)
 
     def draw(self, context):
         layout = self.layout
@@ -777,7 +825,7 @@ class ASSETBROWSER_PT_metadata(asset_utils.AssetBrowserPanel, Panel):
         asset = context.asset
 
         if asset is None:
-            layout.label(text="No active asset", icon='INFO')
+            layout.label(text="No active asset", icon='STATUS_INFO')
             return
 
         prefs = context.preferences
@@ -812,10 +860,11 @@ class ASSETBROWSER_PT_metadata(asset_utils.AssetBrowserPanel, Panel):
             row.operator("asset.open_containing_blend_file", text="", icon='FILE_BLEND')
 
         metadata = asset.metadata
-        self.metadata_prop(layout, metadata, "description")
+        self.metadata_prop(layout, metadata, "description", initial_visible_lines=3)
         self.metadata_prop(layout, metadata, "license")
         self.metadata_prop(layout, metadata, "copyright")
         self.metadata_prop(layout, metadata, "author")
+        self._webpage_prop(layout, metadata)
 
 
 class ASSETBROWSER_PT_import(asset_utils.AssetMetaDataPanel, Panel):
@@ -923,8 +972,14 @@ class ASSETBROWSER_MT_context_menu(AssetBrowserMenu, Menu):
         st = context.space_data
         params = st.params
 
+        add_separator = False
         if bpy.ops.asset.assets_download.poll():
             layout.operator("asset.assets_download", icon='DOWNLOAD')
+            add_separator = True
+        if context.asset and context.asset.metadata.webpage:
+            layout.operator("wm.url_open", text="Visit Webpage", icon='URL').url = context.asset.metadata.webpage
+            add_separator = True
+        if add_separator:
             layout.separator()
 
         layout.operator("asset.library_refresh", icon='FILE_REFRESH')
@@ -974,6 +1029,7 @@ classes = (
     ASSETBROWSER_MT_select,
     ASSETBROWSER_MT_library,
     ASSETBROWSER_MT_catalog,
+    ASSETBROWSER_MT_asset,
     ASSETBROWSER_PT_import_settings,
     ASSETBROWSER_MT_metadata_preview_menu,
     ASSETBROWSER_PT_metadata,

@@ -7,7 +7,7 @@
 #include "BLI_array.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_task.hh"
 
 #include "BKE_asset_edit.hh"
@@ -1147,7 +1147,7 @@ static void remove_points_with_low_opacity(bke::CurvesGeometry &curves,
       curves.points_range(), memory, [&](const int64_t point) {
         return opacities[point] < epsilon && point_was_modified[point];
       });
-  curves = geometry::remove_points_and_split(curves, points_to_remove_and_split);
+  curves = geometry::grease_pencil_remove_points_and_split(curves, points_to_remove_and_split);
 }
 
 void EraseOperation::on_stroke_done(const bContext &C)

@@ -14,12 +14,12 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_enumerable_thread_specific.hh"
-#include "BLI_hash.h"
+#include "BLI_hash_c.hh"
 #include "BLI_index_range.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "BLT_translation.hh"
@@ -164,21 +164,22 @@ void cache_init(bContext *C,
   }
 
   const UnifiedPaintSettings *ups = &sd.paint.unified_paint_settings;
-  bke::PaintRuntime *paint_runtime = sd.paint.runtime;
 
-  float3 co;
-
-  if (vc.rv3d && stroke_get_location_bvh(C, co, mval_fl, false)) {
+  std::optional<float3> hit_location;
+  if (vc.rv3d) {
+    hit_location = stroke_get_location_bvh(C, mval_fl, false);
+  }
+  if (hit_location) {
     /* Get radius from brush. */
     const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
 
     float radius;
     if (brush) {
-      radius = object_space_radius_get(vc, sd.paint, *brush, co, area_normal_radius);
+      radius = object_space_radius_get(vc, sd.paint, *brush, *hit_location, area_normal_radius);
     }
     else {
       radius = paint_calc_object_space_radius(
-          vc, co, float(ups->size / 2.0f) * area_normal_radius);
+          vc, *hit_location, float(ups->size / 2.0f) * area_normal_radius);
     }
 
     const float radius_sq = math::square(radius);
@@ -186,7 +187,8 @@ void cache_init(bContext *C,
     IndexMaskMemory memory;
     const IndexMask node_mask = bke::pbvh::search_nodes(
         pbvh, memory, [&](const bke::pbvh::Node &node) {
-          return !node_fully_masked_or_hidden(node) && node_in_sphere(node, co, radius_sq, true);
+          return !node_fully_masked_or_hidden(node) &&
+                 node_in_sphere(node, *hit_location, radius_sq, true);
         });
 
     const std::optional<float3> area_normal = calc_area_normal(*depsgraph, *brush, ob, node_mask);
@@ -200,11 +202,9 @@ void cache_init(bContext *C,
 
     /* Update last stroke location */
 
-    mul_m4_v3(ob.object_to_world().ptr(), co);
+    mul_m4_v3(ob.object_to_world().ptr(), *hit_location);
 
-    add_v3_v3(paint_runtime->average_stroke_accum, co);
-    paint_runtime->average_stroke_counter++;
-    paint_runtime->last_stroke_valid = true;
+    bke::paint::stroke_track_location(sd.paint, *hit_location);
   }
   else {
     /* Use last normal. */
@@ -2438,7 +2438,7 @@ static wmOperatorStatus sculpt_mesh_filter_modal(bContext *C, wmOperator *op, co
 
   sculpt_mesh_update_strength(op, ss, prev_mval, mval);
 
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
 
   sculpt_mesh_filter_apply(C, op);
 
@@ -2504,7 +2504,7 @@ static wmOperatorStatus sculpt_mesh_filter_start(bContext *C, wmOperator *op)
   const bool use_automasking = auto_mask::is_enabled(sd.paint, ob, nullptr);
   const bool needs_topology_info = sculpt_mesh_filter_needs_pmap(filter_type) || use_automasking;
 
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
 
   if (!shape_key_check(ob, op->reports)) {
     return OPERATOR_CANCELLED;

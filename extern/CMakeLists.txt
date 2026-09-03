@@ -6,6 +6,7 @@
 add_subdirectory(curve_fit_nd)
 add_subdirectory(fast_float)
 add_subdirectory(json)
+add_subdirectory(toml11)
 if(WITH_IO_FBX)
   add_subdirectory(ufbx)
 endif()
@@ -102,6 +103,7 @@ endif()
 
 if(WITH_VULKAN_BACKEND)
   add_subdirectory(vulkan_memory_allocator)
+  add_subdirectory(volk)
 endif()
 
 if(WITH_TRACY)

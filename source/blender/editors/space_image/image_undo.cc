@@ -23,13 +23,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_index_range.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_string.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_mutex.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_task.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_image_types.h"
 #include "DNA_object_types.h"
@@ -40,9 +44,11 @@
 
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
+#include "IMB_partial_update.hh"
 
 #include "BKE_context.hh"
 #include "BKE_image.hh"
+#include "BKE_image_gpu.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
 #include "BKE_undo_system.hh"
@@ -61,27 +67,6 @@ namespace blender {
 static CLG_LogRef LOG = {"undo.image"};
 
 /* -------------------------------------------------------------------- */
-/** \name Thread Locking
- * \{ */
-
-/* This is a non-global static resource,
- * Maybe it should be exposed as part of the
- * paint operation, but for now just give a public interface */
-static SpinLock paint_tiles_lock;
-
-void ED_image_paint_tile_lock_init()
-{
-  BLI_spin_init(&paint_tiles_lock);
-}
-
-void ED_image_paint_tile_lock_end()
-{
-  BLI_spin_end(&paint_tiles_lock);
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
 /** \name Paint Tiles
  *
  * Created on demand while painting,
@@ -97,6 +82,18 @@ static void calc_tile_rect(
   r_tile_pos = int2(x_tile * ED_IMAGE_UNDO_TILE_SIZE, y_tile * ED_IMAGE_UNDO_TILE_SIZE);
   r_tile_size = math::min(int2(ibuf.x, ibuf.y), r_tile_pos + int2(ED_IMAGE_UNDO_TILE_SIZE)) -
                 r_tile_pos;
+}
+
+static rcti calc_tile_region(const ImBuf &ibuf, const int x_tile, const int y_tile)
+{
+  int2 tile_pos;
+  int2 tile_size;
+  calc_tile_rect(ibuf, x_tile, y_tile, tile_pos, tile_size);
+
+  rcti region;
+  BLI_rcti_init(
+      &region, tile_pos.x, tile_pos.x + tile_size.x, tile_pos.y, tile_pos.y + tile_size.y);
+  return region;
 }
 
 struct PaintTileKey {
@@ -130,6 +127,7 @@ struct PaintTile {
   bool valid = false;
   bool use_float = false;
   int x_tile = 0, y_tile = 0;
+  blender::Mutex mutex;
 };
 
 static void ptile_free(PaintTile *ptile)
@@ -142,6 +140,7 @@ static void ptile_free(PaintTile *ptile)
 }
 
 struct PaintTileMap {
+  blender::Mutex mutex;
   Map<PaintTileKey, PaintTile *> map;
 
   ~PaintTileMap()
@@ -200,79 +199,9 @@ const ImBuf *ED_image_paint_tile_push(PaintTileMap *paint_tile_map,
                                       int x_tile,
                                       int y_tile,
                                       ushort **r_mask,
-                                      bool **r_valid,
-                                      bool use_thread_lock,
-                                      bool find_prev)
+                                      bool **r_valid)
 {
-  if (use_thread_lock) {
-    BLI_spin_lock(&paint_tiles_lock);
-  }
   const bool has_float = (ibuf->float_data() != nullptr);
-
-  /* check if tile is already pushed */
-
-  /* in projective painting we keep accounting of tiles, so if we need one pushed, just push! */
-  if (find_prev) {
-    const ImBuf *data = ED_image_paint_tile_find(
-        paint_tile_map, image, ibuf, iuser, x_tile, y_tile, r_mask, true);
-    if (data) {
-      if (use_thread_lock) {
-        BLI_spin_unlock(&paint_tiles_lock);
-      }
-      return data;
-    }
-  }
-
-  PaintTile *ptile = MEM_new<PaintTile>("PaintTile");
-
-  ptile->image = image;
-  ptile->ibuf = ibuf;
-  ptile->iuser = *iuser;
-  ptile->iuser.scene = nullptr;
-
-  ptile->x_tile = x_tile;
-  ptile->y_tile = y_tile;
-
-  /* add mask explicitly here */
-  if (r_mask) {
-    *r_mask = ptile->mask = MEM_new_array_zeroed<uint16_t>(square_i(ED_IMAGE_UNDO_TILE_SIZE),
-                                                           "PaintTile.mask");
-  }
-
-  int2 tile_pos;
-  int2 tile_copy_size;
-  calc_tile_rect(*ibuf, ptile->x_tile, ptile->y_tile, tile_pos, tile_copy_size);
-
-  if (ibuf->float_data()) {
-    ptile->ptile_ibuf = IMB_allocImBuf(
-        ED_IMAGE_UNDO_TILE_SIZE, ED_IMAGE_UNDO_TILE_SIZE, ImBufFlags::FloatData);
-    IMB_copy_rect(ptile->ptile_ibuf->float_data_for_write(),
-                  int2(ED_IMAGE_UNDO_TILE_SIZE),
-                  ibuf->float_data(),
-                  int2(ibuf->x, ibuf->y),
-                  ibuf->channels,
-                  tile_pos,
-                  int2(0, 0),
-                  tile_copy_size);
-  }
-  else {
-    ptile->ptile_ibuf = IMB_allocImBuf(
-        ED_IMAGE_UNDO_TILE_SIZE, ED_IMAGE_UNDO_TILE_SIZE, ImBufFlags::ByteData);
-    IMB_copy_rect(ptile->ptile_ibuf->byte_data_for_write(),
-                  int2(ED_IMAGE_UNDO_TILE_SIZE),
-                  ibuf->byte_data(),
-                  int2(ibuf->x, ibuf->y),
-                  tile_pos,
-                  int2(0, 0),
-                  tile_copy_size);
-  }
-
-  ptile->use_float = has_float;
-  ptile->valid = true;
-
-  if (r_valid) {
-    *r_valid = &ptile->valid;
-  }
 
   PaintTileKey key = {};
   key.ibuf = ibuf;
@@ -280,19 +209,84 @@ const ImBuf *ED_image_paint_tile_push(PaintTileMap *paint_tile_map,
   key.iuser_tile = iuser->tile;
   key.x_tile = x_tile;
   key.y_tile = y_tile;
-  PaintTile *existing_tile = nullptr;
-  paint_tile_map->map.add_or_modify(
-      key,
-      [&](PaintTile **pptile) { *pptile = ptile; },
-      [&](PaintTile **pptile) { existing_tile = *pptile; });
-  if (existing_tile) {
-    ptile_free(ptile);
-    ptile = existing_tile;
+
+  /* Allocate the tile if it does not exist yet. */
+  PaintTile *ptile = nullptr;
+  bool created = false;
+  {
+    std::scoped_lock map_lock(paint_tile_map->mutex);
+    paint_tile_map->map.add_or_modify(
+        key,
+        [&](PaintTile **pptile) {
+          ptile = MEM_new<PaintTile>("PaintTile");
+          ptile->image = image;
+          ptile->ibuf = ibuf;
+          ptile->iuser = *iuser;
+          ptile->iuser.scene = nullptr;
+          ptile->x_tile = x_tile;
+          ptile->y_tile = y_tile;
+          ptile->use_float = has_float;
+          ptile->mutex.lock();
+          *pptile = ptile;
+          created = true;
+        },
+        [&](PaintTile **pptile) { ptile = *pptile; });
   }
 
-  if (use_thread_lock) {
-    BLI_spin_unlock(&paint_tiles_lock);
+  if (created) {
+    /* This thread created the tile, allocate it and copy pixels. */
+    int2 tile_pos;
+    int2 tile_copy_size;
+    calc_tile_rect(*ibuf, x_tile, y_tile, tile_pos, tile_copy_size);
+
+    ImBuf *ptile_ibuf;
+    if (ibuf->float_data()) {
+      ptile_ibuf = IMB_allocImBuf(ED_IMAGE_UNDO_TILE_SIZE,
+                                  ED_IMAGE_UNDO_TILE_SIZE,
+                                  ImBufFlags::FloatData | ImBufFlags::UninitializedPixels);
+      IMB_copy_rect(ptile_ibuf->float_data_for_write(),
+                    int2(ED_IMAGE_UNDO_TILE_SIZE),
+                    ibuf->float_data(),
+                    int2(ibuf->x, ibuf->y),
+                    ibuf->channels,
+                    tile_pos,
+                    int2(0, 0),
+                    tile_copy_size);
+    }
+    else {
+      ptile_ibuf = IMB_allocImBuf(ED_IMAGE_UNDO_TILE_SIZE,
+                                  ED_IMAGE_UNDO_TILE_SIZE,
+                                  ImBufFlags::ByteData | ImBufFlags::UninitializedPixels);
+      IMB_copy_rect(ptile_ibuf->byte_data_for_write(),
+                    int2(ED_IMAGE_UNDO_TILE_SIZE),
+                    ibuf->byte_data(),
+                    int2(ibuf->x, ibuf->y),
+                    tile_pos,
+                    int2(0, 0),
+                    tile_copy_size);
+    }
+
+    ptile->ptile_ibuf = ptile_ibuf;
   }
+  else {
+    /* Other threads wait until the creator is finished and unlocks the mutex. */
+    ptile->mutex.lock();
+  }
+
+  /* Set up the mask on demand. */
+  ptile->valid = true;
+  if (r_mask) {
+    if (!ptile->mask) {
+      ptile->mask = MEM_new_array_zeroed<uint16_t>(square_i(ED_IMAGE_UNDO_TILE_SIZE),
+                                                   "PaintTile.mask");
+    }
+    *r_mask = ptile->mask;
+  }
+  if (r_valid) {
+    *r_valid = &ptile->valid;
+  }
+
+  ptile->mutex.unlock();
   return ptile->ptile_ibuf;
 }
 
@@ -326,13 +320,7 @@ static void ptile_restore_runtime_map(PaintTileMap *paint_tile_map)
                     tile_copy_size);
     }
 
-    /* Force OpenGL reload (maybe partial update will operate better?) */
-    BKE_image_free_gputextures(image);
-
-    if (ibuf->float_data()) {
-      ibuf->userflags |= IB_RECT_INVALID; /* force recreate of char rect */
-    }
-    ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
+    IMB_partial_update_mark_region(ibuf, calc_tile_region(*ibuf, ptile->x_tile, ptile->y_tile));
 
     BKE_image_release_ibuf(image, ibuf, nullptr);
   }
@@ -449,6 +437,11 @@ struct UndoImageBuf {
   std::string ibuf_filepath;
   int ibuf_fileframe = 0;
 
+  /**
+   * Tiles for this state of the image.
+   * \note Unmodified tiles are shared with #UndoImageBuf::post,
+   * so pointer comparison can detect tiles that don't need restoring.
+   */
   UndoImageTile **tiles = nullptr;
 
   /** Can calculate these from dims, just for convenience. */
@@ -505,20 +498,26 @@ static void ubuf_from_image_all_tiles(UndoImageBuf *ubuf, const ImBuf *ibuf)
   BLI_assert(i == ubuf->tiles_len);
 }
 
-/** Ensure we can copy the ubuf into the ibuf. */
-static void ubuf_ensure_compat_ibuf(const UndoImageBuf *ubuf, ImBuf *ibuf)
+/**
+ * Ensure we can copy the ubuf into the ibuf.
+ * \returns true if the pixel buffers were replaced.
+ */
+[[nodiscard]] static bool ubuf_ensure_compat_ibuf(const UndoImageBuf *ubuf, ImBuf *ibuf)
 {
+  bool replaced = false;
+
   /* We could have both float and rect buffers,
    * in this case free the float buffer if it's unused. */
   if ((ibuf->float_data() != nullptr) && (ubuf->image_state.use_float == false)) {
     IMB_free_float_pixels(ibuf);
+    replaced = true;
   }
 
   if (ibuf->x == ubuf->image_dims[0] && ibuf->y == ubuf->image_dims[1] &&
       (ubuf->image_state.use_float ? static_cast<void *>(ibuf->float_data_for_write()) :
                                      static_cast<void *>(ibuf->byte_data_for_write())))
   {
-    return;
+    return replaced;
   }
 
   IMB_free_all_data(ibuf);
@@ -530,6 +529,8 @@ static void ubuf_ensure_compat_ibuf(const UndoImageBuf *ubuf, ImBuf *ibuf)
   else {
     IMB_alloc_byte_pixels(ibuf);
   }
+
+  return true;
 }
 
 static void ubuf_free(UndoImageBuf *ubuf)
@@ -570,7 +571,15 @@ struct UndoImageHandle {
   ListBaseT<UndoImageBuf> buffers;
 };
 
-static void uhandle_restore_list(ListBaseT<UndoImageHandle> *undo_handles, bool use_init)
+/**
+ * Copy the tiles of every #UndoImageBuf back into the image buffers.
+ *
+ * \param use_init: Restore the state before the undo step, instead of the state after it.
+ * \param use_partial: Only restore tiles this undo step changed (for debugging).
+ */
+static void uhandle_restore_list(ListBaseT<UndoImageHandle> *undo_handles,
+                                 const bool use_init,
+                                 const bool use_partial = true)
 {
   for (UndoImageHandle &uh : *undo_handles) {
     /* Tiles only added to second set of tiles. */
@@ -584,27 +593,30 @@ static void uhandle_restore_list(ListBaseT<UndoImageHandle> *undo_handles, bool 
     bool changed = false;
     for (UndoImageBuf &ubuf_iter : uh.buffers) {
       UndoImageBuf *ubuf = use_init ? &ubuf_iter : ubuf_iter.post;
-      ubuf_ensure_compat_ibuf(ubuf, ibuf);
+      const UndoImageBuf *ubuf_other = use_init ? ubuf_iter.post : &ubuf_iter;
+
+      /* Check if we need to restore all because of modified image dimensions or image
+       * buffer, or if we can do a partial restore and update. */
+      const bool ibuf_reallocated = ubuf_ensure_compat_ibuf(ubuf, ibuf);
+      const bool restore_all = ibuf_reallocated || !use_partial || ubuf_other == nullptr ||
+                               ubuf_other->tiles_dims[0] != ubuf->tiles_dims[0] ||
+                               ubuf_other->tiles_dims[1] != ubuf->tiles_dims[1];
 
       int i = 0;
       for (uint y_tile = 0; y_tile < ubuf->tiles_dims[1]; y_tile += 1) {
         for (uint x_tile = 0; x_tile < ubuf->tiles_dims[0]; x_tile += 1) {
-          utile_restore(ubuf->tiles[i], x_tile, y_tile, ibuf);
-          changed = true;
+          if (restore_all || ubuf->tiles[i] != ubuf_other->tiles[i]) {
+            utile_restore(ubuf->tiles[i], x_tile, y_tile, ibuf);
+            IMB_partial_update_mark_region(ibuf, calc_tile_region(*ibuf, x_tile, y_tile));
+            changed = true;
+          }
           i += 1;
         }
       }
     }
 
     if (changed) {
-      BKE_image_mark_dirty(image, ibuf);
-      /* TODO(@jbakker): only mark areas that are actually updated to improve performance. */
-      BKE_image_partial_update_mark_full_update(image);
-
-      if (ibuf->float_data()) {
-        ibuf->userflags |= IB_RECT_INVALID; /* Force recreate of char `rect` */
-      }
-      ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
+      IMB_mark_dirty(ibuf);
 
       DEG_id_tag_update(&image->id, 0);
     }
@@ -795,7 +807,8 @@ static bool image_undosys_step_encode(bContext *C, Main * /*bmain*/, UndoStep *u
 
         UndoImageTile *utile = MEM_new_zeroed<UndoImageTile>("UndoImageTile");
         utile->users = 1;
-        utile->ibuf = IMB_dupImBuf(ptile->ptile_ibuf);
+        utile->ibuf = ptile->ptile_ibuf;
+        ptile->ptile_ibuf = nullptr;
         const uint tile_index = index_from_xy(ptile->x_tile, ptile->y_tile, ubuf_pre->tiles_dims);
 
         BLI_assert(ubuf_pre->tiles[tile_index] == nullptr);
@@ -828,56 +841,56 @@ static bool image_undosys_step_encode(bContext *C, Main * /*bmain*/, UndoStep *u
                                   us_reference, uh.image_ref.ptr, uh.iuser.tile, ubuf_post) :
                               nullptr);
 
-          int i = 0;
-          for (uint y_tile = 0; y_tile < ubuf_pre.tiles_dims[1]; y_tile += 1) {
-            for (uint x_tile = 0; x_tile < ubuf_pre.tiles_dims[0]; x_tile += 1) {
+          const uint tiles_dims_x = ubuf_pre.tiles_dims[0];
+          threading::parallel_for(
+              IndexRange(ubuf_pre.tiles_len), 1024, [&](const IndexRange range) {
+                for (const int64_t i : range) {
+                  const uint x_tile = uint(i) % tiles_dims_x;
+                  const uint y_tile = uint(i) / tiles_dims_x;
 
-              if ((ubuf_reference != nullptr) &&
-                  ((ubuf_pre.tiles[i] == nullptr) ||
-                   /* In this case the paint stroke as has added a tile
-                    * which we have a duplicate reference available. */
-                   (ubuf_pre.tiles[i]->users == 1)))
-              {
-                if (ubuf_pre.tiles[i] != nullptr) {
-                  /* If we have a reference, re-use this single use tile for the post state. */
-                  BLI_assert(ubuf_pre.tiles[i]->users == 1);
-                  ubuf_post->tiles[i] = ubuf_pre.tiles[i];
-                  ubuf_pre.tiles[i] = nullptr;
-                  utile_init_from_imbuf(ubuf_post->tiles[i], x_tile, y_tile, ibuf);
-                }
-                else {
-                  BLI_assert(ubuf_post->tiles[i] == nullptr);
-                  ubuf_post->tiles[i] = ubuf_reference->tiles[i];
-                  ubuf_post->tiles[i]->users += 1;
-                }
-                BLI_assert(ubuf_pre.tiles[i] == nullptr);
-                ubuf_pre.tiles[i] = ubuf_reference->tiles[i];
-                ubuf_pre.tiles[i]->users += 1;
+                  if ((ubuf_reference != nullptr) &&
+                      ((ubuf_pre.tiles[i] == nullptr) ||
+                       /* In this case the paint stroke as has added a tile
+                        * which we have a duplicate reference available. */
+                       (ubuf_pre.tiles[i]->users == 1)))
+                  {
+                    if (ubuf_pre.tiles[i] != nullptr) {
+                      /* If we have a reference, re-use this single use tile for the post state. */
+                      BLI_assert(ubuf_pre.tiles[i]->users == 1);
+                      ubuf_post->tiles[i] = ubuf_pre.tiles[i];
+                      ubuf_pre.tiles[i] = nullptr;
+                      utile_init_from_imbuf(ubuf_post->tiles[i], x_tile, y_tile, ibuf);
+                    }
+                    else {
+                      BLI_assert(ubuf_post->tiles[i] == nullptr);
+                      ubuf_post->tiles[i] = ubuf_reference->tiles[i];
+                      ubuf_post->tiles[i]->users += 1;
+                    }
+                    BLI_assert(ubuf_pre.tiles[i] == nullptr);
+                    ubuf_pre.tiles[i] = ubuf_reference->tiles[i];
+                    ubuf_pre.tiles[i]->users += 1;
 
-                BLI_assert(ubuf_pre.tiles[i] != nullptr);
-                BLI_assert(ubuf_post->tiles[i] != nullptr);
-              }
-              else {
-                UndoImageTile *utile = utile_alloc(has_float);
-                utile_init_from_imbuf(utile, x_tile, y_tile, ibuf);
+                    BLI_assert(ubuf_pre.tiles[i] != nullptr);
+                    BLI_assert(ubuf_post->tiles[i] != nullptr);
+                  }
+                  else {
+                    UndoImageTile *utile = utile_alloc(has_float);
+                    utile_init_from_imbuf(utile, x_tile, y_tile, ibuf);
 
-                if (ubuf_pre.tiles[i] != nullptr) {
-                  ubuf_post->tiles[i] = utile;
-                  utile->users = 1;
+                    if (ubuf_pre.tiles[i] != nullptr) {
+                      ubuf_post->tiles[i] = utile;
+                      utile->users = 1;
+                    }
+                    else {
+                      ubuf_pre.tiles[i] = utile;
+                      ubuf_post->tiles[i] = utile;
+                      utile->users = 2;
+                    }
+                  }
+                  BLI_assert(ubuf_pre.tiles[i] != nullptr);
+                  BLI_assert(ubuf_post->tiles[i] != nullptr);
                 }
-                else {
-                  ubuf_pre.tiles[i] = utile;
-                  ubuf_post->tiles[i] = utile;
-                  utile->users = 2;
-                }
-              }
-              BLI_assert(ubuf_pre.tiles[i] != nullptr);
-              BLI_assert(ubuf_post->tiles[i] != nullptr);
-              i += 1;
-            }
-          }
-          BLI_assert(i == ubuf_pre.tiles_len);
-          BLI_assert(i == ubuf_post->tiles_len);
+              });
         }
         BKE_image_release_ibuf(uh.image_ref.ptr, ibuf, nullptr);
       }
@@ -885,7 +898,7 @@ static bool image_undosys_step_encode(bContext *C, Main * /*bmain*/, UndoStep *u
 
     /* Useful to debug tiles are stored correctly. */
     if (false) {
-      uhandle_restore_list(&us->handles, false);
+      uhandle_restore_list(&us->handles, false, false);
     }
   }
   else {
@@ -901,10 +914,10 @@ static bool image_undosys_step_encode(bContext *C, Main * /*bmain*/, UndoStep *u
   return true;
 }
 
-static void image_undosys_step_decode_undo_impl(ImageUndoStep *us, bool is_final)
+static void image_undosys_step_decode_undo_impl(ImageUndoStep *us)
 {
   BLI_assert(us->step.is_applied == true);
-  uhandle_restore_list(&us->handles, !is_final);
+  uhandle_restore_list(&us->handles, true);
   us->step.is_applied = false;
 }
 
@@ -928,7 +941,7 @@ static void image_undosys_step_decode_undo(ImageUndoStep *us, bool is_final)
   }
   while (us_iter != us || (!is_final && us_iter == us)) {
     BLI_assert(us_iter->step.type == us->step.type); /* Previous loop ensures this. */
-    image_undosys_step_decode_undo_impl(us_iter, is_final);
+    image_undosys_step_decode_undo_impl(us_iter);
     if (us_iter == us) {
       break;
     }
@@ -1009,7 +1022,7 @@ static void image_undosys_foreach_ID_ref(UndoStep *us_p,
 
 void ED_image_undosys_type(UndoType *ut)
 {
-  ut->name = "Image";
+  ut->identifier = "IMAGE";
   /* Note, we do not need the `poll` method overridden because of the `step_encode_init` callback
    * and exposed #ED_image_undo_push_begin/end calls. */
   ut->step_encode_init = image_undosys_step_encode_init;
@@ -1139,7 +1152,7 @@ void ED_image_undo_push(Image *image, ImBuf *ibuf, ImageUser *iuser, ImageUndoSt
 void ED_image_undo_push_end()
 {
   UndoStack *ustack = ED_undo_stack_get();
-  BKE_undosys_step_push(ustack, nullptr, nullptr);
+  BKE_undosys_step_push(ustack, nullptr, nullptr, UndoEncodeHints::None);
   BKE_undosys_stack_limit_steps_and_memory_defaults(ustack);
   WM_file_tag_modified();
 }

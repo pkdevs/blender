@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup fn
+ */
+
 #include "BLI_set.hh"
 #include "BLI_stack.hh"
 
@@ -420,6 +424,11 @@ bool operator==(const GFieldRef &a, const GFieldRef &b)
           if (const auto *v_b = std::get_if<GFieldRef::Value>(&b.variant())) {
             if (v_a.type != v_b->type) {
               return false;
+            }
+            if (v_a.value == v_b->value) {
+              /* This may return true even if the values don't compare equal, e.g. due to NaN
+               * values. */
+              return true;
             }
             return v_a.type->is_equal_or_false(v_a.value, v_b->value);
           }

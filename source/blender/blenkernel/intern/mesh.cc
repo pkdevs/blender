@@ -21,21 +21,21 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_bounds.hh"
-#include "BLI_hash.h"
+#include "BLI_hash_c.hh"
 #include "BLI_implicit_sharing.hh"
 #include "BLI_index_range.hh"
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_memory_counter.hh"
 #include "BLI_resource_scope.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_task.hh"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 #include "BLI_virtual_array.hh"
 
@@ -45,7 +45,6 @@
 #include "BKE_anonymous_attribute_id.hh"
 #include "BKE_attribute.hh"
 #include "BKE_attribute_legacy_convert.hh"
-#include "BKE_attribute_math.hh"
 #include "BKE_attribute_storage.hh"
 #include "BKE_attribute_storage_blend_write.hh"
 #include "BKE_bake_data_block_id.hh"
@@ -172,6 +171,7 @@ static void mesh_copy_data(Main *bmain,
   mesh_dst->runtime->bvh_cache_loose_edges = mesh_src->runtime->bvh_cache_loose_edges;
   mesh_dst->runtime->bvh_cache_loose_edges_no_hidden =
       mesh_src->runtime->bvh_cache_loose_edges_no_hidden;
+  mesh_dst->runtime->bvh_embree_cache = mesh_src->runtime->bvh_embree_cache;
   mesh_dst->runtime->max_material_index = mesh_src->runtime->max_material_index;
   if (mesh_src->runtime->bake_materials) {
     mesh_dst->runtime->bake_materials = std::make_unique<bke::bake::BakeMaterialsList>(
@@ -374,6 +374,9 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
     CustomData_blend_write_prepare(mesh->edge_data, edge_layers);
     CustomData_blend_write_prepare(mesh->face_data, face_layers);
     CustomData_blend_write_prepare(mesh->corner_data, loop_layers);
+    if (!is_undo) {
+      mesh_skin_to_legacy(attribute_data, mesh->vert_data, vert_layers, mesh->verts_num);
+    }
     if (attribute_data.attributes.is_empty()) {
       mesh->attribute_storage.dna_attributes = nullptr;
       mesh->attribute_storage.dna_attributes_num = 0;
@@ -389,7 +392,9 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
 
   BLO_write_generated_pointer_tag(writer, mesh->attribute_storage.dna_attributes);
 
-  writer->write_id_struct(id_address, mesh);
+  writer->write_id_struct(id_address, mesh, [](BlendStructWriter &struct_writer) {
+    struct_writer.generated_ptr(offsetof(Mesh, attribute_storage.dna_attributes));
+  });
   BKE_id_blend_write(writer, &mesh->id);
 
   BKE_defbase_blend_write(writer, &mesh->vertex_group_names);
@@ -534,33 +539,44 @@ bool BKE_mesh_attribute_required(const StringRef name)
 
 void BKE_mesh_ensure_skin_customdata(Mesh *mesh)
 {
+  using namespace bke;
   BMesh *bm = mesh->runtime->edit_mesh ? mesh->runtime->edit_mesh->bm : nullptr;
-  MVertSkin *vs;
 
   if (bm) {
-    if (!CustomData_has_layer(&bm->vdata, CD_MVERT_SKIN)) {
+    if (!CustomData_has_layer_named(&bm->vdata, CD_PROP_FLOAT2, "skin_modifier_radius")) {
+      BM_data_layer_add_named(bm, &bm->vdata, CD_PROP_FLOAT2, "skin_modifier_radius");
+      const int offset = CustomData_get_offset_named(
+          &bm->vdata, CD_PROP_FLOAT2, "skin_modifier_radius");
       BMVert *v;
       BMIter iter;
-
-      BM_data_layer_add(bm, &bm->vdata, CD_MVERT_SKIN);
-
-      /* Mark an arbitrary vertex as root */
       BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
-        vs = static_cast<MVertSkin *>(
-            CustomData_bmesh_get(&bm->vdata, v->head.data, CD_MVERT_SKIN));
-        vs->flag |= MVERT_SKIN_ROOT;
+        *static_cast<float2 *>(BM_ELEM_CD_GET_VOID_P(v, offset)) = float2(0.25f);
+      }
+    }
+    if (!CustomData_has_layer_named(&bm->vdata, CD_PROP_BOOL, "skin_modifier_root")) {
+      BM_data_layer_add_named(bm, &bm->vdata, CD_PROP_BOOL, "skin_modifier_root");
+      const int offset = CustomData_get_offset_named(
+          &bm->vdata, CD_PROP_BOOL, "skin_modifier_root");
+      /* Mark an arbitrary vertex as root */
+      BMVert *v;
+      BMIter iter;
+      BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
+        BM_ELEM_CD_SET_BOOL(v, offset, true);
         break;
       }
     }
   }
   else {
-    if (!CustomData_has_layer(&mesh->vert_data, CD_MVERT_SKIN)) {
-      vs = static_cast<MVertSkin *>(
-          CustomData_add_layer(&mesh->vert_data, CD_MVERT_SKIN, CD_SET_DEFAULT, mesh->verts_num));
-
+    MutableAttributeAccessor attributes = mesh->attributes_for_write();
+    attributes.add<float2>(
+        "skin_modifier_radius", AttrDomain::Point, AttributeInitValue(float2(0.25f)));
+    if (attributes.add<bool>("skin_modifier_root", AttrDomain::Point, AttributeInitDefaultValue()))
+    {
       /* Mark an arbitrary vertex as root */
-      if (vs) {
-        vs->flag |= MVERT_SKIN_ROOT;
+      if (mesh->verts_num > 0) {
+        AttributeWriter<bool> root = attributes.lookup_for_write<bool>("skin_modifier_root");
+        root.varray.set(0, true);
+        root.finish();
       }
     }
   }
@@ -979,18 +995,30 @@ void mesh_apply_spatial_organization(Mesh &mesh)
     }
     if (iter.domain == bke::AttrDomain::Face) {
       bke::GSpanAttributeWriter attribute = attributes_for_write.lookup_for_write_span(iter.name);
-      const CPPType &type = attribute.span.type();
+      GMutableSpan attribute_data = attribute.span;
+      const CPPType &type = attribute_data.type();
       GArray<> new_values(type, new_face_order.size());
-      bke::attribute_math::gather(attribute.span, new_face_order, new_values.as_mutable_span());
-      attribute.span.copy_from(new_values.as_span());
+
+      int new_face_idx = 0;
+      for (const int old_face_idx : new_face_order) {
+        type.copy_construct(attribute_data[old_face_idx], new_values[new_face_idx]);
+        new_face_idx++;
+      }
+      attribute_data.copy_from(new_values.as_span());
       attribute.finish();
     }
     else if (iter.domain == bke::AttrDomain::Point) {
       bke::GSpanAttributeWriter attribute = attributes_for_write.lookup_for_write_span(iter.name);
-      const CPPType &type = attribute.span.type();
+      GMutableSpan attribute_data = attribute.span;
+      const CPPType &type = attribute_data.type();
       GArray<> new_values(type, new_vert_order.size());
-      bke::attribute_math::gather(attribute.span, new_vert_order, new_values.as_mutable_span());
-      attribute.span.copy_from(new_values.as_span());
+
+      int new_vert_idx = 0;
+      for (const int old_vert_idx : new_vert_order) {
+        type.copy_construct(attribute_data[old_vert_idx], new_values[new_vert_idx]);
+        new_vert_idx++;
+      }
+      attribute_data.copy_from(new_values.as_span());
       attribute.finish();
     }
     else if (iter.domain == bke::AttrDomain::Corner && iter.name != ".corner_vert") {
@@ -1604,7 +1632,7 @@ static void ensure_orig_index_layer(CustomData &data, const int size)
   }
   int *indices = static_cast<int *>(
       CustomData_add_layer(&data, CD_ORIGINDEX, CD_SET_DEFAULT, size));
-  range_vn_i(indices, size, 0);
+  array_utils::fill_index_range<int>({indices, size});
 }
 
 void BKE_mesh_ensure_default_orig_index_customdata(Mesh *mesh)

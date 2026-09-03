@@ -13,12 +13,12 @@
 
 #include "DNA_collection_types.h"
 
-#include "BLI_fnmatch.h"
-#include "BLI_listbase.h"
-#include "BLI_mempool.h"
-#include "BLI_rect.h"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_fnmatch.hh"
+#include "BLI_listbase.hh"
+#include "BLI_mempool.hh"
+#include "BLI_rect.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
@@ -36,7 +36,7 @@
 #include "tree/tree_element.hh"
 
 #ifdef WIN32
-#  include "BLI_math_base.h" /* M_PI */
+#  include "BLI_math_base_c.hh" /* M_PI */
 #endif
 
 namespace blender::ed::outliner {
@@ -174,10 +174,6 @@ void outliner_free_tree_element(TreeElement *element, ListBaseT<TreeElement> *pa
   MEM_delete(element);
 }
 
-/* ********************************************************* */
-
-/* -------------------------------------------------------- */
-
 bool outliner_requires_rebuild_on_select_or_active_change(const SpaceOutliner *space_outliner)
 {
   eSpaceOutliner_Filter exclude_flags = outliner_exclude_filter_get(space_outliner);
@@ -185,39 +181,6 @@ bool outliner_requires_rebuild_on_select_or_active_change(const SpaceOutliner *s
    * select/active. */
   return exclude_flags & (SO_FILTER_OB_STATE_SELECTED | SO_FILTER_OB_STATE_ACTIVE);
 }
-
-#ifdef WITH_FREESTYLE
-static void outliner_add_line_styles(SpaceOutliner *space_outliner,
-                                     ListBaseT<TreeElement> *lb,
-                                     Scene *sce,
-                                     TreeElement *te)
-{
-  ViewLayer *view_layer;
-  FreestyleLineSet *lineset;
-
-  for (view_layer = sce->view_layers.first; view_layer; view_layer = view_layer->next) {
-    for (lineset = view_layer->freestyle_config.linesets.first; lineset; lineset = lineset->next) {
-      FreestyleLineStyle *linestyle = lineset->linestyle;
-      if (linestyle) {
-        linestyle->id.tag |= ID_TAG_DOIT;
-      }
-    }
-  }
-  for (view_layer = sce->view_layers.first; view_layer; view_layer = view_layer->next) {
-    for (lineset = view_layer->freestyle_config.linesets.first; lineset; lineset = lineset->next) {
-      FreestyleLineStyle *linestyle = lineset->linestyle;
-      if (linestyle) {
-        if (!(linestyle->id.tag & ID_TAG_DOIT)) {
-          continue;
-        }
-        linestyle->id.tag &= ~ID_TAG_DOIT;
-        AbstractTreeDisplay::add_element(
-            space_outliner, lb, reinterpret_cast<ID *>(linestyle), nullptr, te, TSE_SOME_ID, 0);
-      }
-    }
-  }
-}
-#endif
 
 TreeElement *AbstractTreeDisplay::add_element(SpaceOutliner *space_outliner,
                                               ListBaseT<TreeElement> *lb,
@@ -386,15 +349,12 @@ TreeElement *AbstractTreeDisplay::add_element(ListBaseT<TreeElement> *lb,
   else if (te->abstract_element) {
     tree_element_expand(*te->abstract_element, space_outliner_);
   }
-  /* Only #TSE_ID_BASE isn't ported to use the abstract elements design yet. */
-  else if (!ELEM(type, TSE_ID_BASE)) {
+  else {
     BLI_assert_msg(false, "Element type should use `AbstractTreeElement`");
   }
 
   return te;
 }
-
-/* ======================================================= */
 
 BLI_INLINE void outliner_add_collection_init(TreeElement *te, Collection *collection)
 {
@@ -433,11 +393,10 @@ TreeElement *outliner_add_collection_recursive(SpaceOutliner *space_outliner,
 
 /** \} */
 
-/* ======================================================= */
-/* Generic Tree Building helpers - order these are called is top to bottom */
-
 /* -------------------------------------------------------------------- */
 /** \name Tree Sorting Helper
+ *
+ * Generic tree building helpers, the order these are called is top to bottom.
  * \{ */
 
 struct tTreeSort {

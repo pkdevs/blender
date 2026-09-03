@@ -11,10 +11,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
+#include "BKE_compositor.hh"
 #include "BKE_context.hh"
 #include "BKE_mask.hh"
 
@@ -448,15 +449,16 @@ static void special_aftertrans_update__mask(bContext *C, TransInfo *t)
     BLI_assert(0);
   }
 
-  if (t->scene->compositing_node_group) {
+  if (bke::compositor::is_enabled(*t->scene, bke::compositor::ExecutionMode::Preview)) {
     WM_event_add_notifier(C, NC_MASK | ND_DATA, &mask->id);
   }
 
   /* TODO: don't key all masks. */
-  if (animrig::is_autokey_on(t->scene)) {
+  const bool canceled = (t->state == TRANS_CANCEL);
+  if (animrig::is_autokey_on(t->scene) && !canceled) {
     Scene *scene = t->scene;
 
-    if (ED_mask_layer_shape_auto_key_select(mask, scene->r.cfra)) {
+    if (ED_mask_layer_shape_auto_key_select(C, mask, scene->r.cfra)) {
       WM_event_add_notifier(C, NC_MASK | ND_DATA, &mask->id);
       DEG_id_tag_update(&mask->id, 0);
     }

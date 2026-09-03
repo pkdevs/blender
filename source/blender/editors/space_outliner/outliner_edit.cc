@@ -19,17 +19,17 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
 #include "BLF_api.hh"
 
 #include "BKE_action.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_appdir.hh"
 #include "BKE_armature.hh"
 #include "BKE_blender_copybuffer.hh"
@@ -1525,9 +1525,15 @@ void outliner_set_coordinates(const ARegion *region, SpaceOutliner *space_outlin
 {
   int starty = int(region->v2d.tot.ymax) - UI_UNIT_Y;
 
+  tree_iterator::all(space_outliner->runtime->tree, [&](TreeElement *te) {
+    /* Set coordinates to zero for all elements. This is done to reset coordinates of collapsed
+     * elements. */
+    te->xs = 0;
+    te->ys = 0;
+  });
+
   tree_iterator::all_open(*space_outliner, [&](TreeElement *te) {
     /* store coord and continue, we need coordinates for elements outside view too */
-    te->xs = 0;
     te->ys = float(starty);
     starty -= UI_UNIT_Y;
   });
@@ -1611,23 +1617,47 @@ static void outliner_show_active(SpaceOutliner *space_outliner,
   }
 }
 
-void outliner_scroll_to_active(const bContext *C,
-                               SpaceOutliner *space_outliner,
-                               ARegion *region,
-                               TreeViewContext *tvc)
+void outliner_scroll_to_active(SpaceOutliner *space_outliner, ARegion *region, short idcode)
 {
+  outliner_set_coordinates(region, space_outliner);
   const View2D *v2d = &region->v2d;
-  TreeElement *active_te = outliner_show_active_get_element(
-      C, space_outliner, tvc->scene, tvc->view_layer);
+  TreeElement *active_te = nullptr;
 
-  if (active_te) {
-    if (!BLI_rctf_isect_y(&v2d->cur, active_te->ys)) {
-      outliner_show_active(space_outliner, region, active_te, TREESTORE(active_te)->id);
-      const int size_y = BLI_rcti_size_y(&v2d->mask) + 1;
-      const int ytop = (active_te->ys + (size_y / 2));
-      const int delta_y = ytop - v2d->cur.ymax;
-      outliner_scroll_view(space_outliner, region, delta_y);
+  tree_iterator::all(space_outliner->runtime->tree, [&](TreeElement *te) {
+    TreeStoreElem *tselem = TREESTORE(te);
+    if (tselem->flag & TSE_ACTIVE) {
+      if (tselem->type == TSE_SOME_ID) {
+        if (te->idcode == idcode) {
+          active_te = te;
+        }
+      }
+      else {
+        active_te = te;
+      }
     }
+  });
+
+  if (!active_te) {
+    return;
+  }
+
+  TreeElement *scroll_to_te = active_te;
+  if ((space_outliner->flag & SO_EXPAND_ON_FOCUS) == 0) {
+    TreeElement *iter = active_te->parent;
+    while (iter) {
+      if (!TSELEM_OPEN(iter->store_elem, space_outliner)) {
+        scroll_to_te = iter;
+      }
+      iter = iter->parent;
+    }
+  }
+
+  if (!(scroll_to_te->ys && BLI_rctf_isect_y(&v2d->cur, scroll_to_te->ys))) {
+    outliner_show_active(space_outliner, region, scroll_to_te, TREESTORE(scroll_to_te)->id);
+    const int size_y = BLI_rcti_size_y(&v2d->mask) + 1;
+    const int ytop = (scroll_to_te->ys + (size_y / 2));
+    const int delta_y = ytop - v2d->cur.ymax;
+    outliner_scroll_view(space_outliner, region, delta_y);
   }
 }
 
@@ -2091,7 +2121,7 @@ static void do_outliner_drivers_editop(SpaceOutliner *space_outliner,
     eKSP_Grouping groupmode = KSP_GROUP_KSNAME;
 
     TreeElementRNACommon *te_rna = tree_element_cast<TreeElementRNACommon>(te);
-    PointerRNA ptr = te_rna ? te_rna->get_pointer_rna() : PointerRNA_NULL;
+    PointerRNA ptr = te_rna ? te_rna->get_pointer_rna() : PointerRNA();
     PropertyRNA *prop = te_rna ? te_rna->get_property_rna() : nullptr;
 
     /* check if RNA-property described by this selected element is an animatable prop */

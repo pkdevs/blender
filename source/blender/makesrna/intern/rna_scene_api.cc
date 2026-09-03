@@ -22,8 +22,8 @@
 
 #  include "DNA_screen_types.h"
 
-#  include "BLI_math_matrix.h"
-#  include "BLI_math_vector.h"
+#  include "BLI_math_matrix_c.hh"
+#  include "BLI_math_vector_c.hh"
 
 #  include "BKE_editmesh.hh"
 #  include "BKE_global.hh"
@@ -310,6 +310,7 @@ void RNA_api_scene(StructRNA *srna)
   RNA_def_function_ui_description(func, "Ensure sequence editor is valid in this scene");
   parm = RNA_def_pointer(
       func, "sequence_editor", "SequenceEditor", "", "New sequence editor data or None");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "sequence_editor_clear", "rna_Scene_sequencer_editing_free");

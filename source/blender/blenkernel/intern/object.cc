@@ -49,16 +49,16 @@
 
 #include "BLI_bounds.hh"
 #include "BLI_kdtree.hh"
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -66,7 +66,7 @@
 #include "BKE_anim_data.hh"
 #include "BKE_anim_path.h"
 #include "BKE_anim_visualization.h"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_armature.hh"
 #include "BKE_asset.hh"
 #include "BKE_bpath.hh"
@@ -186,7 +186,7 @@ static void object_init_data(ID *id)
   ob->runtime = MEM_new<bke::ObjectRuntime>(__func__);
 
   /* Animation Visualization defaults */
-  animviz_settings_init(&ob->avs);
+  bke::animviz::settings_init(&ob->avs);
 }
 
 static void object_copy_data(Main *bmain,
@@ -257,7 +257,7 @@ static void object_copy_data(Main *bmain,
   ob_dst->pc_ids.clear_no_delete();
 
   ob_dst->avs = ob_src->avs;
-  ob_dst->mpath = animviz_copy_motionpath(ob_src->mpath);
+  ob_dst->mpath = bke::motionpath::copy(ob_src->mpath);
 
   if ((flag & LIB_ID_COPY_NO_PREVIEW) == 0) {
     BKE_previewimg_id_copy(&ob_dst->id, &ob_src->id);
@@ -305,7 +305,7 @@ static void object_free_data(ID *id)
     ob->pose = nullptr;
   }
   if (ob->mpath) {
-    animviz_free_motionpath(ob->mpath);
+    bke::motionpath::free(ob->mpath);
     ob->mpath = nullptr;
   }
 
@@ -655,6 +655,14 @@ static void object_foreach_cache(ID *id,
                                  void *user_data)
 {
   Object *ob = reinterpret_cast<Object *>(id);
+  IDCacheKey key;
+  key.id_session_uid = id->session_uid;
+
+  constexpr size_t runtime_base_id = size_t(1) << 32u;
+  key.identifier = runtime_base_id + offsetof(bke::ObjectRuntime, sculpt_session);
+  function_callback(
+      id, &key, reinterpret_cast<void **>(&ob->runtime->sculpt_session), 0, user_data);
+
   for (ModifierData &md : ob->modifiers) {
     if (const ModifierTypeInfo *info = BKE_modifier_get_info(md.type)) {
       if (info->foreach_cache) {
@@ -711,6 +719,9 @@ static void create_legacy_geometry_nodes_properties(Object &ob)
     const IDProperty *inputs = IDP_GetPropertyFromGroup(system_props, "inputs");
     if (inputs && inputs->type == IDP_GROUP) {
       for (const IDProperty &prop : inputs->data.group) {
+        if (prop.type != IDP_GROUP) {
+          continue;
+        }
         const StringRefNull identifier = prop.name;
         const IDProperty *type_prop = IDP_GetPropertyFromGroup(&prop, "type");
         if (!type_prop) {
@@ -719,14 +730,14 @@ static void create_legacy_geometry_nodes_properties(Object &ob)
         const int type = IDP_int_get(type_prop);
         if (type == int(nodes::GeometryNodesInputType::Layer)) {
           if (const IDProperty *name = IDP_GetPropertyFromGroup(&prop, "layer_name")) {
-            IDProperty *legacy_prop = IDP_CopyProperty(name);
+            IDProperty *legacy_prop = IDP_CopyProperty_ex(name, LIB_ID_CREATE_NO_USER_REFCOUNT);
             STRNCPY(legacy_prop->name, identifier.c_str());
             IDP_AddToGroup(legacy_props, legacy_prop);
           }
         }
         else {
           if (const IDProperty *value = IDP_GetPropertyFromGroup(&prop, "value")) {
-            IDProperty *legacy_prop = IDP_CopyProperty(value);
+            IDProperty *legacy_prop = IDP_CopyProperty_ex(value, LIB_ID_CREATE_NO_USER_REFCOUNT);
             STRNCPY(legacy_prop->name, identifier.c_str());
             IDP_AddToGroup(legacy_props, legacy_prop);
           }
@@ -737,7 +748,8 @@ static void create_legacy_geometry_nodes_properties(Object &ob)
               bke::idprop::create(identifier + "_use_attribute", int(use_attribute)).release());
 
           if (const IDProperty *name = IDP_GetPropertyFromGroup(&prop, "attribute_name")) {
-            IDProperty *legacy_attr_prop = IDP_CopyProperty(name);
+            IDProperty *legacy_attr_prop = IDP_CopyProperty_ex(name,
+                                                               LIB_ID_CREATE_NO_USER_REFCOUNT);
             SNPRINTF(legacy_attr_prop->name, "%s_attribute_name", identifier.c_str());
             IDP_AddToGroup(legacy_props, legacy_attr_prop);
           }
@@ -748,9 +760,12 @@ static void create_legacy_geometry_nodes_properties(Object &ob)
     const IDProperty *outputs = IDP_GetPropertyFromGroup(system_props, "outputs");
     if (outputs && outputs->type == IDP_GROUP) {
       for (const IDProperty &prop : outputs->data.group) {
+        if (prop.type != IDP_GROUP) {
+          continue;
+        }
         const StringRefNull identifier = prop.name;
         if (const IDProperty *name = IDP_GetPropertyFromGroup(&prop, "attribute_name")) {
-          IDProperty *legacy_prop = IDP_CopyProperty(name);
+          IDProperty *legacy_prop = IDP_CopyProperty_ex(name, LIB_ID_CREATE_NO_USER_REFCOUNT);
           SNPRINTF(legacy_prop->name, "%s_attribute_name", identifier.c_str());
           IDP_AddToGroup(legacy_props, legacy_prop);
         }
@@ -811,7 +826,7 @@ static void object_blend_write(BlendWriter *writer, ID *id, const void *id_addre
     BKE_pose_blend_write(writer, ob->pose);
   }
   BKE_constraint_blend_write(writer, &ob->constraints);
-  animviz_motionpath_blend_write(writer, ob->mpath);
+  bke::motionpath::blend_write(writer, ob->mpath);
 
   writer->write_struct(ob->pd);
   if (ob->soft) {
@@ -891,7 +906,7 @@ static void object_blend_read_data(BlendDataReader *reader, ID *id)
 
   BLO_read_struct(reader, bMotionPath, &ob->mpath);
   if (ob->mpath) {
-    animviz_motionpath_blend_read_data(reader, ob->mpath);
+    bke::motionpath::blend_read_data(reader, ob->mpath);
   }
 
   /* Only for versioning, vertex group names are now stored on object data. */
@@ -1055,16 +1070,6 @@ static void object_blend_read_data(BlendDataReader *reader, ID *id)
   /* in case this value changes in future, clamp else we get undefined behavior */
   CLAMP(ob->rotmode, ROT_MODE_MIN, ROT_MODE_MAX);
 
-  /* Some files were incorrectly written with a dangling pointer to this runtime data. */
-  ob->runtime->sculpt_session = nullptr;
-
-  /* When loading undo steps, for objects in modes that use `sculpt`, recreate the mode runtime
-   * data. For regular non-undo reading, this is currently handled by mode switching after the
-   * initial file read. */
-  if (BLO_read_data_is_undo(reader) && (ob->mode & OB_MODE_ALL_SCULPT)) {
-    BKE_object_sculpt_data_create(ob);
-  }
-
   BLO_read_struct(reader, PreviewImage, &ob->preview);
   BKE_previewimg_blend_read(reader, ob->preview);
 
@@ -1075,6 +1080,8 @@ static void object_blend_read_data(BlendDataReader *reader, ID *id)
   if (ob->lightprobe_cache) {
     BKE_lightprobe_cache_blend_read(reader, ob->lightprobe_cache);
   }
+
+  BKE_object_material_active_index_sanitize(ob);
 }
 
 static void object_blend_read_after_liblink(BlendLibReader *reader, ID *id)
@@ -1138,6 +1145,21 @@ static void object_blend_read_after_liblink(BlendLibReader *reader, ID *id)
   BKE_pose_blend_read_after_liblink(reader, ob, ob->pose);
 
   BKE_particle_system_blend_read_after_liblink(reader, ob, &ob->id, &ob->particlesystem);
+
+  /* When loading undo steps, for objects in modes that use `sculpt_session`, recreate the mode
+   * runtime data. For regular non-undo reading, this is currently handled by mode switching after
+   * the initial file read. */
+  if (BLO_read_lib_is_undo(reader) && ob->mode & OB_MODE_ALL_SCULPT) {
+    /* The runtime may have been created in a non-matching mode and should be deleted here. */
+    if (ob->runtime->sculpt_session != nullptr &&
+        ob->runtime->sculpt_session->mode_type != ob->mode)
+    {
+      BKE_sculptsession_free(ob);
+    }
+    if (ob->runtime->sculpt_session == nullptr) {
+      BKE_object_sculpt_data_create(ob);
+    }
+  }
 }
 
 PartEff *BKE_object_do_version_give_parteff_245(Object *ob)
@@ -1439,7 +1461,8 @@ bool BKE_object_supports_modifiers(const Object *ob)
               OB_LATTICE,
               OB_POINTCLOUD,
               OB_VOLUME,
-              OB_GREASE_PENCIL);
+              OB_GREASE_PENCIL,
+              OB_EMPTY);
 }
 
 bool BKE_object_support_modifier_type_check(const Object *ob, int modifier_type)
@@ -1693,16 +1716,21 @@ static void object_update_from_subsurf_ccg(Object *object)
   if (object->type != OB_MESH) {
     return;
   }
-  /* If object does not own evaluated mesh we can not access it since it might be freed already
-   * (happens on dependency graph free where order of evaluated IDs free is undefined).
-   *
-   * Good news is: such mesh does not have modifiers applied, so no need to worry about CCG. */
-  if (!object->runtime->is_data_eval_owned) {
+  const bke::GeometrySet *geometry_set_eval = object->runtime->geometry_set_eval;
+  if (geometry_set_eval == nullptr) {
+    /* Object was never evaluated, so can not have CCG subdivision surface. */
     return;
   }
-  /* Object was never evaluated, so can not have CCG subdivision surface. If it were evaluated, do
-   * not try to compute OpenSubDiv on the CPU as it is not needed here. */
-  Mesh *mesh_eval = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(object);
+  /* Check for owns_direct_data() which may reference the original mesh from before modifier
+   * evaluation. In that case the mesh can't be read, because it's a separately owned ID that most
+   * likely comes from the object's copy-on-eval modifier input mesh which the depsgraph free
+   * destroys in an undefined order. For non read-only ownership types, the GeometrySet will have a
+   * user for the mesh, so it can be safely read here. */
+  const auto *mesh_component = geometry_set_eval->get_component<bke::MeshComponent>();
+  if (mesh_component == nullptr || !mesh_component->owns_direct_data()) {
+    return;
+  }
+  const Mesh *mesh_eval = mesh_component->get();
   if (mesh_eval == nullptr) {
     return;
   }
@@ -1765,18 +1793,13 @@ void BKE_object_eval_assign_data(Object *object_eval, ID *data_eval, bool is_own
   BLI_assert(object_eval->runtime->data_eval == nullptr);
   BLI_assert(data_eval->tag & ID_TAG_NO_MAIN);
 
-  if (is_owned) {
-    /* Set flag for debugging. */
-    data_eval->tag |= ID_TAG_COPIED_ON_EVAL_FINAL_RESULT;
-  }
-
   /* Assigned evaluated data. */
   object_eval->runtime->data_eval = data_eval;
   object_eval->runtime->is_data_eval_owned = is_owned;
 
   /* Overwrite data of evaluated object, if the data-block types match. */
   ID *data = object_eval->data;
-  if (GS(data->name) == GS(data_eval->name)) {
+  if (data->id_type() == data_eval->id_type()) {
     /* NOTE: we are not supposed to invoke evaluation for original objects,
      * but some areas are still being ported, so we play safe here. */
     if (object_eval->id.tag & ID_TAG_COPIED_ON_EVAL) {
@@ -1794,17 +1817,10 @@ void BKE_object_free_derived_caches(Object *ob)
 
   object_update_from_subsurf_ccg(ob);
 
-  if (ob->runtime->editmesh_eval_cage &&
-      ob->runtime->editmesh_eval_cage != reinterpret_cast<Mesh *>(ob->runtime->data_eval))
-  {
-    BKE_id_free(nullptr, ob->runtime->editmesh_eval_cage);
-  }
-  ob->runtime->editmesh_eval_cage = nullptr;
-
   if (ob->runtime->data_eval != nullptr) {
     if (ob->runtime->is_data_eval_owned) {
       ID *data_eval = ob->runtime->data_eval;
-      if (GS(data_eval->name) == ID_ME) {
+      if (data_eval->id_type() == ID_ME) {
         BKE_id_free(nullptr, id_cast<Mesh *>(data_eval));
       }
       else {
@@ -1814,11 +1830,6 @@ void BKE_object_free_derived_caches(Object *ob)
       }
     }
     ob->runtime->data_eval = nullptr;
-  }
-  if (ob->runtime->mesh_deform_eval != nullptr) {
-    Mesh *mesh_deform_eval = ob->runtime->mesh_deform_eval;
-    BKE_id_free(nullptr, mesh_deform_eval);
-    ob->runtime->mesh_deform_eval = nullptr;
   }
 
   /* Restore initial pointer for copy-on-evaluation data-blocks, object->data
@@ -1924,7 +1935,7 @@ bool BKE_object_is_in_editmode_vgroup(const Object *ob)
 
 bool BKE_object_data_is_in_editmode(const Object *ob, const ID *id)
 {
-  const short type = GS(id->name);
+  const short type = id->id_type();
   BLI_assert(OB_DATA_SUPPORT_EDITMODE(type));
   switch (type) {
     case ID_ME:
@@ -1953,7 +1964,7 @@ bool BKE_object_data_is_in_editmode(const Object *ob, const ID *id)
 
 char *BKE_object_data_editmode_flush_ptr_get(ID *id)
 {
-  const short type = GS(id->name);
+  const short type = id->id_type();
   switch (type) {
     case ID_ME: {
       if (BMEditMesh *em = (id_cast<Mesh *>(id))->runtime->edit_mesh.get()) {
@@ -2223,7 +2234,7 @@ void *BKE_object_obdata_add_from_type(Main *bmain, ObjectType type, const char *
 int BKE_object_obdata_to_type(const ID *id)
 {
   /* Keep in sync with #OB_DATA_SUPPORT_ID macro. */
-  switch (GS(id->name)) {
+  switch (id->id_type()) {
     case ID_ME:
       return OB_MESH;
     case ID_CU_LEGACY:
@@ -3996,7 +4007,7 @@ void BKE_object_foreach_display_point(Object *ob,
                                       void (*func_cb)(const float[3], void *),
                                       void *user_data)
 {
-  /* TODO: point-cloud and curves object support. */
+  /* TODO: volume object support. */
   const Mesh *mesh_eval = BKE_object_get_evaluated_mesh(ob);
   float3 co;
 
@@ -4039,6 +4050,25 @@ void BKE_object_foreach_display_point(Object *ob,
         func_cb(co, user_data);
       }
     }
+  }
+  else if (ob->type == OB_POINTCLOUD) {
+    PointCloud &pointcloud = *id_cast<PointCloud *>(ob->data);
+    const Span<float3> positions = pointcloud.positions();
+    threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
+      for (const int i : range) {
+        func_cb(math::transform_point(float4x4(obmat), positions[i]), user_data);
+      }
+    });
+  }
+  else if (ob->type == OB_CURVES) {
+    Curves &curves_id = *id_cast<Curves *>(ob->data);
+    const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
+    const Span<float3> positions = curves.evaluated_positions();
+    threading::parallel_for(positions.index_range(), 4096, [&](const IndexRange range) {
+      for (const int i : range) {
+        func_cb(math::transform_point(float4x4(obmat), positions[i]), user_data);
+      }
+    });
   }
 }
 
@@ -4164,16 +4194,16 @@ void BKE_object_protected_scale_set(Object *ob, const float scale[3])
 
 void BKE_object_protected_rotation_quaternion_set(Object *ob, const float quat[4])
 {
-  if ((ob->protectflag & OB_LOCK_ROTX) == 0) {
+  if ((ob->protectflag & OB_LOCK_ROTW) == 0) {
     ob->quat[0] = quat[0];
   }
-  if ((ob->protectflag & OB_LOCK_ROTY) == 0) {
+  if ((ob->protectflag & OB_LOCK_ROTX) == 0) {
     ob->quat[1] = quat[1];
   }
-  if ((ob->protectflag & OB_LOCK_ROTZ) == 0) {
+  if ((ob->protectflag & OB_LOCK_ROTY) == 0) {
     ob->quat[2] = quat[2];
   }
-  if ((ob->protectflag & OB_LOCK_ROTW) == 0) {
+  if ((ob->protectflag & OB_LOCK_ROTZ) == 0) {
     ob->quat[3] = quat[3];
   }
 }
@@ -4283,7 +4313,7 @@ bool BKE_object_obdata_texspace_get(Object *ob,
     return false;
   }
 
-  switch (GS(ob->data->name)) {
+  switch (ob->data->id_type()) {
     case ID_ME: {
       BKE_mesh_texspace_get_reference(
           id_cast<Mesh *>(ob->data), r_texspace_flag, r_texspace_location, r_texspace_size);
@@ -4342,7 +4372,7 @@ Mesh *BKE_object_get_evaluated_mesh_no_subsurf_unchecked(const Object *object)
    * not support evaluating to multiple data types. Eventually this should be removed, when all
    * object types use #geometry_set_eval. */
   ID *data_eval = object->runtime->data_eval;
-  if (data_eval && GS(data_eval->name) == ID_ME) {
+  if (data_eval && data_eval->id_type() == ID_ME) {
     return reinterpret_cast<Mesh *>(data_eval);
   }
 
@@ -4382,8 +4412,7 @@ const Mesh *BKE_object_get_pre_modified_mesh(const Object *object)
     BLI_assert(object->id.orig_id != nullptr);
     BLI_assert(data_orig->orig_id == ((const Object *)object->id.orig_id)->data);
     BLI_assert((data_orig->tag & ID_TAG_COPIED_ON_EVAL) != 0);
-    BLI_assert((data_orig->tag & ID_TAG_COPIED_ON_EVAL_FINAL_RESULT) == 0);
-    if (GS(data_orig->name) != ID_ME) {
+    if (data_orig->id_type() != ID_ME) {
       return nullptr;
     }
     return reinterpret_cast<const Mesh *>(data_orig);
@@ -4404,7 +4433,7 @@ Mesh *BKE_object_get_original_mesh(const Object *object)
     result = id_cast<Mesh *>((id_cast<Object *>(object->id.orig_id))->data);
   }
   BLI_assert(result != nullptr);
-  BLI_assert((result->id.tag & (ID_TAG_COPIED_ON_EVAL | ID_TAG_COPIED_ON_EVAL_FINAL_RESULT)) == 0);
+  BLI_assert((result->id.tag & (ID_TAG_COPIED_ON_EVAL)) == 0);
   return result;
 }
 
@@ -4420,28 +4449,66 @@ const Mesh *BKE_object_get_editmesh_eval_final(const Object *object)
     return nullptr;
   }
 
-  return reinterpret_cast<Mesh *>(object->runtime->data_eval);
+  return reinterpret_cast<const Mesh *>(object->runtime->data_eval);
 }
 
 const Mesh *BKE_object_get_editmesh_eval_cage(const Object *object)
 {
-  BLI_assert(!DEG_is_original(object));
+  using namespace blender::bke;
+  BLI_assert(!DEG_is_original(&object->id));
   BLI_assert(object->type == OB_MESH);
 
-  return object->runtime->editmesh_eval_cage;
+  const GeometrySet *geometry_set = object->runtime->geometry_set_eval;
+  if (!geometry_set) {
+    return nullptr;
+  }
+  const auto *component = geometry_set->get_component<GeometryComponentEditData>();
+  if (!component) {
+    return nullptr;
+  }
+  const MeshEditHints *edit_hints = component->mesh_edit_hints_.get();
+  if (!edit_hints) {
+    return nullptr;
+  }
+  BLI_assert(!edit_hints->mesh_cage ||
+             edit_hints->mesh_cage->type() == bke::GeometryComponent::Type::Mesh);
+  const auto *mesh_component = static_cast<const MeshComponent *>(edit_hints->mesh_cage.get());
+  if (!mesh_component) {
+    return nullptr;
+  }
+  return mesh_component->get();
 }
 
 const Mesh *BKE_object_get_mesh_deform_eval(const Object *object)
 {
-  BLI_assert(!DEG_is_original(object));
+  using namespace blender::bke;
+  BLI_assert(!DEG_is_original(&object->id));
   BLI_assert(object->type == OB_MESH);
-  return object->runtime->mesh_deform_eval;
+  const GeometrySet *geometry_set = object->runtime->geometry_set_eval;
+  if (!geometry_set) {
+    return nullptr;
+  }
+  const auto *component = geometry_set->get_component<GeometryComponentEditData>();
+  if (!component) {
+    return nullptr;
+  }
+  const MeshEditHints *edit_hints = component->mesh_edit_hints_.get();
+  if (!edit_hints) {
+    return nullptr;
+  }
+  BLI_assert(!edit_hints->mesh_deform ||
+             edit_hints->mesh_deform->type() == bke::GeometryComponent::Type::Mesh);
+  const auto *mesh_component = static_cast<const MeshComponent *>(edit_hints->mesh_deform.get());
+  if (!mesh_component) {
+    return nullptr;
+  }
+  return mesh_component->get();
 }
 
 Lattice *BKE_object_get_lattice(const Object *object)
 {
   ID *data = object->data;
-  if (data == nullptr || GS(data->name) != ID_LT) {
+  if (data == nullptr || data->id_type() != ID_LT) {
     return nullptr;
   }
 
@@ -4457,7 +4524,7 @@ Lattice *BKE_object_get_evaluated_lattice(const Object *object)
 {
   ID *data_eval = object->runtime->data_eval;
 
-  if (data_eval == nullptr || GS(data_eval->name) != ID_LT) {
+  if (data_eval == nullptr || data_eval->id_type() != ID_LT) {
     return nullptr;
   }
 
@@ -4942,13 +5009,13 @@ static bool modifiers_has_animation_check(const Object *ob)
     AnimData *adt = ob->adt;
     if (adt->action != nullptr) {
       for (FCurve *fcu : animrig::fcurves_for_assigned_action(adt)) {
-        if (fcu->rna_path && strstr(fcu->rna_path, "modifiers[")) {
+        if (strstr(fcu->rna_path().c_str(), "modifiers[")) {
           return true;
         }
       }
     }
     for (FCurve &fcu : adt->drivers) {
-      if (fcu.rna_path && strstr(fcu.rna_path, "modifiers[")) {
+      if (strstr(fcu.rna_path().c_str(), "modifiers[")) {
         return true;
       }
     }
@@ -5104,7 +5171,6 @@ void BKE_object_runtime_reset_on_copy(Object *object, const int /*flag*/)
 {
   bke::ObjectRuntime *runtime = object->runtime;
   runtime->data_eval = nullptr;
-  runtime->mesh_deform_eval = nullptr;
   runtime->curve_cache = nullptr;
   runtime->object_as_temp_mesh = nullptr;
   runtime->pose_backup = nullptr;
@@ -5657,10 +5723,12 @@ void BKE_object_replace_data_on_shallow_copy(Object *ob, ID *new_data)
 
 const float4x4 &Object::object_to_world() const
 {
+  BLI_assert(!this->runtime->is_draw_dupli_reference_tmp_object);
   return this->runtime->object_to_world;
 }
 const float4x4 &Object::world_to_object() const
 {
+  BLI_assert(!this->runtime->is_draw_dupli_reference_tmp_object);
   return this->runtime->world_to_object;
 }
 

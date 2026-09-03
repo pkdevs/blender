@@ -10,7 +10,7 @@
 
 #include <optional>
 
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_span.hh"
@@ -173,7 +173,7 @@ template<typename T>
  * \note The plane normal need not be unit length.
  */
 template<typename T>
-[[nodiscard]] inline T dist_squared_to_plane(const VecBase<T, 4> &plane, const VecBase<T, 3> &p)
+[[nodiscard]] inline T dist_squared_to_plane(const VecBase<T, 3> &p, const VecBase<T, 4> &plane)
 {
   const VecBase<T, 3> n(plane.x, plane.y, plane.z);
   const T len_sq = length_squared(n);
