@@ -30,6 +30,7 @@ from bl_ui.properties_paint_common import (
     brush_settings,
     brush_settings_advanced,
     draw_color_settings,
+    supports_shape_panel,
 )
 from bl_ui.utils import PresetPanel
 
@@ -867,12 +868,26 @@ class VIEW3D_PT_tools_brush_shape(Panel, View3DPaintPanel, ShapePanel):
     bl_options = {'DEFAULT_CLOSED'}
     bl_ui_units_x = 11
 
+    @classmethod
+    def poll(cls, context):
+        if not super().poll(context):
+            return False
+        mode = cls.get_brush_mode(context)
+        return supports_shape_panel(mode)
+
 
 class VIEW3D_PT_tools_brush_falloff(Panel, View3DPaintPanel, FalloffPanel):
     bl_context = ".paint_common"  # dot on purpose (access from topbar)
     bl_parent_id = "VIEW3D_PT_tools_brush_settings"
     bl_label = "Falloff"
     bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        if not super().poll(context):
+            return False
+        mode = cls.get_brush_mode(context)
+        return not supports_shape_panel(mode)
 
 
 class VIEW3D_PT_tools_brush_falloff_normal(View3DPaintPanel, Panel):
@@ -1653,7 +1668,7 @@ class VIEW3D_PT_tools_grease_pencil_brush_vertex_color(View3DPanel, Panel):
         brush = settings.brush
         use_unified_paint = (context.object.mode != 'PAINT_GREASE_PENCIL')
         ups = settings.unified_paint_settings
-        prop_owner = ups if use_unified_paint and ups.use_unified_color else brush
+        prop_owner = ups if use_unified_paint and brush.use_unified_color else brush
 
         col = layout.column()
 
@@ -1669,7 +1684,7 @@ class VIEW3D_PT_tools_grease_pencil_brush_vertex_color(View3DPanel, Panel):
 
         sub_row.operator("paint.brush_colors_flip", icon='FILE_REFRESH', text="")
         if use_unified_paint:
-            sub_row.prop(ups, "use_unified_color", text="", icon='BRUSHES_ALL')
+            sub_row.prop(brush, "use_unified_color", text="", icon='BRUSHES_ALL')
 
 
 class VIEW3D_PT_tools_grease_pencil_brush_vertex_falloff(GreasePencilBrushFalloff, Panel, View3DPaintPanel):
@@ -2211,7 +2226,7 @@ class VIEW3D_PT_tools_grease_pencil_v3_brush_mixcolor(View3DPanel, Panel):
         gp_settings = brush.gpencil_settings
         use_unified_paint = (context.object.mode != 'PAINT_GREASE_PENCIL')
         ups = settings.unified_paint_settings
-        prop_owner = ups if use_unified_paint and ups.use_unified_color else brush
+        prop_owner = ups if use_unified_paint and brush.use_unified_color else brush
 
         row = layout.row()
         row.prop(settings, "color_mode", expand=True)

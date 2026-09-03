@@ -325,14 +325,7 @@ static gpu::Texture *gpu_texture_create_tile_array(Image *ima, ImBuf *main_ibuf)
     BKE_image_release_ibuf(ima, ibuf, nullptr);
   }
 
-  if (!(main_ibuf->gpu.flag & IMB_GPU_DISABLE_MIPMAP_UPDATE)) {
-    GPU_texture_update_mipmap_chain(tex);
-    GPU_texture_mipmap_mode(tex, true, true);
-    main_ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
-  }
-  else {
-    GPU_texture_mipmap_mode(tex, false, true);
-  }
+  GPU_texture_update_mipmap_chain(tex);
   GPU_texture_original_size_set(tex, main_ibuf->x, main_ibuf->y);
 
   return tex;
@@ -476,8 +469,6 @@ static void image_gpu_atlas_try_partial_update(Image *image, ImageUser *iuser)
   /* A resized tile invalidates the atlas packing and forces a rebuild of all tiles. */
   bool need_full_rebuild = false;
 
-  bool need_mipmap_update = false;
-
   ImageUser tile_user = {};
   if (iuser != nullptr) {
     tile_user = *iuser;
@@ -514,7 +505,6 @@ static void image_gpu_atlas_try_partial_update(Image *image, ImageUser *iuser)
                                                  tile.runtime.tilearray_layer,
                                                  int2(tile.runtime.tilearray_offset),
                                                  int2(tile.runtime.tilearray_size));
-            need_mipmap_update |= !(ibuf->gpu.flag & IMB_GPU_DISABLE_MIPMAP_UPDATE);
           }
           break;
         case Changes::Kind::None:
@@ -526,11 +516,6 @@ static void image_gpu_atlas_try_partial_update(Image *image, ImageUser *iuser)
     if (need_full_rebuild) {
       break;
     }
-  }
-
-  if (need_mipmap_update && !need_full_rebuild) {
-    GPU_texture_update_mipmap_chain(atlas_tex);
-    atlas_ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
   }
 
   atlas_ibuf->gpu.partial_update_changeset = new_changeset_id;
@@ -563,9 +548,9 @@ static ImageGPUTextures image_get_gpu_texture_tiled(Image *ima,
 
   /* Acquire textures if they exist. */
   result.texture = IMB_acquire_gpu_texture(
-      ima->id.name + 2, atlas_ibuf, false, false, false, true);
+      ima->id.name + 2, atlas_ibuf, GPUTextureCreateFlags::EnableMipmaps, true);
   result.tile_mapping = IMB_acquire_gpu_texture(
-      ima->id.name + 2, mapping_ibuf, false, false, false, true);
+      ima->id.name + 2, mapping_ibuf, GPUTextureCreateFlags::EnableMipmaps, true);
 
   if (try_only || (result.texture != nullptr && result.tile_mapping != nullptr)) {
     IMB_freeImBuf(atlas_ibuf);
@@ -672,10 +657,17 @@ static ImageGPUTextures image_get_gpu_texture_single(Image *ima,
   bool gpu_load_failed = false;
   if (ibuf != nullptr && (!only_full_resolution || image_gpu_texture_fits_full_resolution(ibuf))) {
     /* Acquire a reference to the GPU texture. */
-    const bool use_high_bitdepth = (ima->flag & IMA_HIGH_BITDEPTH);
-    const bool store_premultiplied = BKE_image_has_gpu_texture_premultiplied_alpha(ima, ibuf);
+    GPUTextureCreateFlags texture_create_flags = GPUTextureCreateFlags::EnableMipmaps |
+                                                 GPUTextureCreateFlags::LimitSize;
+    if (ima->flag & IMA_HIGH_BITDEPTH) {
+      texture_create_flags |= GPUTextureCreateFlags::HighBitDepth;
+    }
+    if (BKE_image_has_gpu_texture_premultiplied_alpha(ima, ibuf)) {
+      texture_create_flags |= GPUTextureCreateFlags::Premultiplied;
+    }
+
     gpu::Texture *tex = IMB_acquire_gpu_texture(
-        ima->id.name + 2, ibuf, use_high_bitdepth, store_premultiplied, true, try_only);
+        ima->id.name + 2, ibuf, texture_create_flags, try_only);
     if (tex) {
       GPU_texture_original_size_set(tex, ibuf->x, ibuf->y);
       image_gpu_clear_load_error(ima);
@@ -702,7 +694,8 @@ static ImageGPUTextures image_get_gpu_texture_single(Image *ima,
                                                    ImageLoadError::LoadFailed;
     image_gpu_log_load_error_once(ima, iuser, error);
     ImBuf *error_ibuf = image_gpu_error_imbuf_ensure();
-    result.texture = IMB_acquire_gpu_texture(ima->id.name + 2, error_ibuf, false, false, false);
+    result.texture = IMB_acquire_gpu_texture(
+        ima->id.name + 2, error_ibuf, GPUTextureCreateFlags::EnableMipmaps);
   }
 
   return result;
@@ -866,40 +859,6 @@ void BKE_image_free_anim_gpu_texture_caches(Main *bmain)
         BKE_image_free_gpu_texture_caches(&ima);
       }
     }
-  }
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Paint Update
- * \{ */
-
-void BKE_image_paint_set_mipmap(Main *bmain, bool mipmap)
-{
-  for (Image &ima : bmain->images) {
-    if (ima.runtime->cache == nullptr) {
-      continue;
-    }
-    std::scoped_lock lock(ima.runtime->cache_mutex);
-    ImBufCacheIter *iter = IMB_cacheIter_new(ima.runtime->cache);
-    while (!IMB_cacheIter_done(iter)) {
-      ImBuf *ibuf = IMB_cacheIter_getImBuf(iter);
-      const ImageCacheKey *key = static_cast<const ImageCacheKey *>(
-          IMB_cacheIter_getUserKey(iter));
-      if (ibuf != nullptr && ibuf->gpu.texture != nullptr &&
-          key->index != IMA_INDEX_UDIM_TILE_MAPPING)
-      {
-        if (ibuf->gpu.flag & IMB_GPU_MIPMAP_COMPLETE) {
-          GPU_texture_mipmap_mode(ibuf->gpu.texture, mipmap, true);
-        }
-        else {
-          IMB_free_gpu_textures(ibuf);
-        }
-      }
-      IMB_cacheIter_step(iter);
-    }
-    IMB_cacheIter_free(iter);
   }
 }
 
