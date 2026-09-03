@@ -183,7 +183,10 @@ static void add_orco_mesh(Object &ob,
      * or `em` may have a different number of vertices than the evaluated `mesh`. */
     Array<float3> storage;
     const Span<float3> orco = get_orco_coords(ob, em, layer, storage);
-    if (!orco.is_empty()) {
+    /* The coordinates are indexed by the original mesh's vertices, so they can only be used
+     * directly while the evaluated mesh still has a matching vertex array. Bail out instead of
+     * writing out of bounds if that ever stops being the case. */
+    if (!orco.is_empty() && orco.size() == totvert) {
       layer_orco = orco_coord_layer_ensure(mesh, layer);
       layer_orco.copy_from(orco);
     }
@@ -194,6 +197,80 @@ static void add_orco_mesh(Object &ob,
       BKE_mesh_orco_verts_transform(id_cast<Mesh *>(ob.data), layer_orco, false);
     }
   }
+}
+
+/**
+ * True when \a md is guaranteed to hand on the vertex array of its input mesh untouched: the same
+ * number of vertices, in the same order, at the same positions.
+ *
+ * Undeformed (orco) coordinates are normally carried through the stack by evaluating a second mesh
+ * in parallel with the real one (see #create_orco_mesh). That parallel evaluation only ever runs
+ * the constructive modifiers -- deform modifiers are applied to the real mesh alone, which is what
+ * makes the result undeformed -- and only the *vertex positions* of its result are ever read, by
+ * #add_orco_mesh. So when every constructive modifier in the stack preserves the vertex array, the
+ * result of the parallel evaluation is element for element the array returned by
+ * #BKE_mesh_orco_verts_get, and the entire second evaluation can be skipped.
+ *
+ * This has to stay conservative. A wrong answer here does not raise an error, it leaves the
+ * #CD_ORCO layer holding deformed coordinates, which renders as textures sliding over a deforming
+ * surface. When in doubt, return false and take the regular path.
+ */
+static bool modifier_preserves_orco_vert_array(const ModifierData &md)
+{
+  const ModifierTypeInfo *mti = BKE_modifier_get_info(md.type);
+
+  if (mti->type == ModifierTypeType::OnlyDeform) {
+    /* Never evaluated on the orco mesh at all, so it cannot affect its vertices. */
+    return true;
+  }
+  if (mti->modify_mesh == nullptr || mti->modify_geometry_set != nullptr) {
+    /* Modifiers which produce other geometry components may replace or remove the mesh
+     * entirely (see #modifier_modify_mesh_and_geometry_set). */
+    return false;
+  }
+  if (mti->type == ModifierTypeType::NonGeometrical) {
+    /* By definition of the type: "does not affect the geometry of the object, rather some of its
+     * CustomData layers". */
+    return true;
+  }
+  if (md.type == eModifierType_Triangulate) {
+    /* Only splits existing faces. The BMesh round trip creates one vertex per input vertex in
+     * order, #BM_mesh_triangulate neither creates nor removes vertices, and the conversion back
+     * writes vertices in creation order. Note that the triangulation chosen for the deformed mesh
+     * may differ from the one chosen for the undeformed mesh (the quad method looks at the
+     * geometry), but that only affects faces and edges, never the vertex array. */
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Whether the undeformed coordinates of the final mesh can be taken straight from the original
+ * mesh, making the parallel orco mesh evaluation unnecessary. See
+ * #modifier_preserves_orco_vert_array.
+ *
+ * The whole stack has to be checked up front: the orco mesh has to exist before the first
+ * modifier that needs it, and it cannot be reconstructed after the fact.
+ */
+static bool mesh_orco_matches_input_verts(const Scene &scene,
+                                          ModifierData *md,
+                                          const int required_mode)
+{
+  for (; md; md = md->next) {
+    if (!BKE_modifier_is_enabled(&scene, md, required_mode)) {
+      continue;
+    }
+    if (md->type == eModifierType_Cloth) {
+      /* Cloth requests a second undeformed mesh (#CD_CLOTH_ORCO) which #add_orco_mesh currently
+       * fills from the #CD_ORCO mesh. Keep those stacks on the regular path so that behavior is
+       * unchanged. */
+      return false;
+    }
+    if (!modifier_preserves_orco_vert_array(*md)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -321,6 +398,13 @@ static GeometrySet mesh_calc_modifiers(Depsgraph &depsgraph,
   ModifierData *firstmd = BKE_modifiers_get_virtual_modifierlist(&ob, &virtual_modifier_data);
   ModifierData *md = firstmd;
 
+  /* When no modifier in the stack changes the vertex array, the undeformed coordinates of the
+   * evaluated mesh are exactly the original mesh's coordinates and the parallel orco mesh
+   * evaluation below can be skipped entirely. #add_orco_mesh fills the layer from
+   * #get_orco_coords in that case, which is the same data #create_orco_mesh would have started
+   * from. */
+  const bool orco_from_input_mesh = mesh_orco_matches_input_verts(scene, firstmd, required_mode);
+
   /* Compute accumulated datamasks needed by each modifier. It helps to do
    * this fine grained so that for example vertex groups are preserved up to
    * an armature modifier, but not through a following subsurf modifier where
@@ -437,8 +521,10 @@ static GeometrySet mesh_calc_modifiers(Depsgraph &depsgraph,
 
     ScopedModifierTimer modifier_timer{*md};
 
-    /* Add orco mesh as layer if needed by this modifier. */
-    if (mesh_orco && mti->required_data_mask) {
+    /* Add orco mesh as layer if needed by this modifier. When there is no orco mesh because the
+     * stack preserves the input vertices, #add_orco_mesh takes the coordinates from the original
+     * mesh instead, which is equivalent. */
+    if ((mesh_orco || orco_from_input_mesh) && mti->required_data_mask) {
       if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
         CustomData_MeshMasks mask = {0};
         mti->required_data_mask(md, &mask);
@@ -523,8 +609,10 @@ static GeometrySet mesh_calc_modifiers(Depsgraph &depsgraph,
 
       modifier_modify_mesh_and_geometry_set(md, mectx, mesh_input, geometry_set);
 
-      /* create an orco mesh in parallel */
-      if (nextmask.vmask & CD_MASK_ORCO) {
+      /* Create an orco mesh in parallel. Skipped when the stack preserves the input mesh's vertex
+       * array, since the undeformed coordinates are then available directly from the original
+       * mesh. See #modifier_preserves_orco_vert_array. */
+      if ((nextmask.vmask & CD_MASK_ORCO) && !orco_from_input_mesh) {
         if (!mesh_orco) {
           mesh_orco = create_orco_mesh(ob, mesh_input, nullptr, CD_ORCO);
         }
@@ -613,7 +701,26 @@ static GeometrySet mesh_calc_modifiers(Depsgraph &depsgraph,
     /* No need in ORCO layer if the mesh was not deformed or modified: undeformed mesh in this case
      * matches input mesh. */
     if (geometry_set.get_mesh() != &mesh_input) {
-      add_orco_mesh(ob, nullptr, *geometry_set.get_mesh_for_write(), mesh_orco, CD_ORCO);
+      Mesh &mesh_final = *geometry_set.get_mesh_for_write();
+      /* Sanity check on #modifier_preserves_orco_vert_array: when the parallel orco mesh was
+       * skipped, the evaluated mesh must still have the input mesh's vertex array, otherwise the
+       * original coordinates cannot be used directly. #add_orco_mesh bails out rather than write
+       * out of bounds, leaving the layer absent. */
+      BLI_assert(!orco_from_input_mesh || mesh_final.verts_num == mesh_input.verts_num);
+#ifndef NDEBUG
+      if (orco_from_input_mesh) {
+        /* The vertex count matching is not enough, the order has to be preserved too. When the
+         * original indices happen to be available they must be the identity mapping. */
+        if (const int *orig_indices = static_cast<const int *>(
+                CustomData_get_layer(&mesh_final.vert_data, CD_ORIGINDEX)))
+        {
+          for (const int i : IndexRange(mesh_final.verts_num)) {
+            BLI_assert(orig_indices[i] == i);
+          }
+        }
+      }
+#endif
+      add_orco_mesh(ob, nullptr, mesh_final, mesh_orco, CD_ORCO);
     }
 
     if (geometry_set.has<GeometryComponentEditData>()) {
