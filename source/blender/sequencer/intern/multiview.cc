@@ -40,16 +40,38 @@ int seq_multiview_num_files_get(const Scene *scene, eImageFormat_ViewsFormat vie
   return 1;
 }
 
-void seq_multiview_name(Scene *scene,
+void seq_multiview_name(const Scene *scene,
                         const int view_id,
                         const char *prefix,
                         const char *ext,
                         char *r_path,
-                        size_t r_size)
+                        size_t r_path_maxncpy)
 {
   const char *suffix = BKE_scene_multiview_view_id_suffix_get(&scene->r, view_id);
   BLI_assert(ext != nullptr && suffix != nullptr && prefix != nullptr);
-  BLI_snprintf(r_path, r_size, "%s%s%s", prefix, suffix, ext);
+  BLI_snprintf(r_path, r_path_maxncpy, "%s%s%s", prefix, suffix, ext);
+}
+
+bool seq_multiview_view_filepath_get(const Scene &scene,
+                                     const char *filepath,
+                                     const int view_id,
+                                     char *r_filepath,
+                                     const size_t r_filepath_maxncpy,
+                                     const char **r_suffix)
+{
+  char prefix[FILE_MAX];
+  const char *ext = nullptr;
+  BKE_scene_multiview_view_prefix_get(&scene, filepath, prefix, &ext);
+  if (prefix[0] == '\0') {
+    return false;
+  }
+
+  const char *suffix = BKE_scene_multiview_view_id_suffix_get(&scene.r, view_id);
+  if (r_suffix != nullptr) {
+    *r_suffix = suffix;
+  }
+  BLI_snprintf(r_filepath, r_filepath_maxncpy, "%s%s%s", prefix, suffix, ext);
+  return true;
 }
 
 }  // namespace blender::seq

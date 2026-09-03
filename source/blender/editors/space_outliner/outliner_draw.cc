@@ -1001,7 +1001,7 @@ static void namebutton_fn(bContext *C, TreeStoreElem *tselem, const char *oldnam
           Key *key = id_cast<Key *>(tselem->id);
           KeyBlock *keyblock = static_cast<KeyBlock *>(te->directdata);
           /* Outliner renaming already sets the new name to the KeyBlock. Restore the old name
-          before calling rename function which will ensure unique name. */
+           * before calling rename function which will ensure unique name. */
           char newname[sizeof(keyblock->name)];
           STRNCPY_UTF8(newname, keyblock->name);
           STRNCPY_UTF8(keyblock->name, oldname);
@@ -1924,7 +1924,9 @@ static void outliner_draw_userbuts(ui::Block *block,
                            tip);
 
       if (is_linked) {
-        button_flag_enable(bt, ui::BUT_DISABLED);
+        blender::ui::button_disable(bt,
+                                    "Cannot edit fake user on a linked datablock, consider "
+                                    "referencing it through a Custom Property");
       }
       else {
         button_func_set(bt, restrictbutton_id_user_toggle, id, nullptr);

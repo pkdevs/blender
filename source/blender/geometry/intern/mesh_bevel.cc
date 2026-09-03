@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #include <algorithm>
 #include <memory>
 #include <optional>
@@ -5534,7 +5538,7 @@ static void build_vmesh(BevelState &state, BevVert *bv)
       for (int i = 0; i < n; i++) {
         for (int j = 0; j <= ns2; j++) {
           for (int k = 0; k <= ns; k++) {
-            if (j == 0 && (k == 0 || k == ns)) {
+            if (j == 0 && ELEM(k, 0, ns)) {
               continue; /* Boundary corners already created. */
             }
             if (!geom::is_canon(vm, i, j, k)) {

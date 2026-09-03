@@ -28,6 +28,7 @@
 #include "NOD_geometry_nodes_list.hh"
 #include "NOD_multi_function.hh"
 #include "NOD_node_declaration.hh"
+#include "NOD_shader_nodes_multi_function.hh"
 
 #include "BLI_array_utils.hh"
 #include "BLI_bit_group_vector.hh"
@@ -529,8 +530,8 @@ static void execute_multi_function_on_value_variant__field(
         fn, input_values, output_values, r_error_message);
   }
   if (any_input_is_list) {
-    execute_multi_function_on_value_variant__list(fn, input_values, output_values, user_data);
-    return true;
+    return execute_multi_function_on_value_variant__list(
+        fn, owned_fn, input_values, output_values, user_data, r_error_message);
   }
   if (any_input_is_field) {
     execute_multi_function_on_value_variant__field(fn, owned_fn, input_values, output_values);
@@ -1615,6 +1616,13 @@ void report_from_multi_function(const mf::Context &context,
                                 NodeWarningType type,
                                 std::string message)
 {
+  if (auto *shader_nodes_user_data = dynamic_cast<ShaderNodesMultiFunctionUserData *>(
+          context.user_data))
+  {
+    shader_nodes_user_data->warnings.append({type, std::move(message)});
+    return;
+  }
+
   const auto *user_data = dynamic_cast<const GeoNodesUserData *>(context.user_data);
   if (!user_data) {
     return;
@@ -2470,16 +2478,14 @@ struct GeometryNodesLazyFunctionBuilder {
 
     for (const bNodeTreeInterfaceSocket *interface_input : btree_.interface_inputs()) {
       lf::GraphOutputSocket &lf_socket = lf_graph.add_output(
-          CPPType::get<bool>(),
-          StringRef("Usage: ") + (interface_input->name ? interface_input->name : ""));
+          CPPType::get<bool>(), StringRef("Usage: ") + interface_input->name());
       group_input_usage_sockets_.append(&lf_socket);
     }
 
     Vector<lf::GraphInputSocket *> lf_output_usages;
     for (const bNodeTreeInterfaceSocket *interface_output : btree_.interface_outputs()) {
       lf::GraphInputSocket &lf_socket = lf_graph.add_input(
-          CPPType::get<bool>(),
-          StringRef("Usage: ") + (interface_output->name ? interface_output->name : ""));
+          CPPType::get<bool>(), StringRef("Usage: ") + interface_output->name());
       group_output_used_sockets_.append(&lf_socket);
       lf_output_usages.append(&lf_socket);
     }
@@ -2877,8 +2883,8 @@ struct GeometryNodesLazyFunctionBuilder {
   {
     const Span<const bNodeTreeInterfaceSocket *> interface_inputs = btree_.interface_inputs();
     for (const bNodeTreeInterfaceSocket *interface_input : interface_inputs) {
-      lf::GraphInputSocket &lf_socket = lf_graph.add_input(
-          CPPType::get<SocketValueVariant>(), interface_input->name ? interface_input->name : "");
+      lf::GraphInputSocket &lf_socket = lf_graph.add_input(CPPType::get<SocketValueVariant>(),
+                                                           interface_input->name());
       group_input_sockets_.append(&lf_socket);
     }
   }
@@ -2891,9 +2897,8 @@ struct GeometryNodesLazyFunctionBuilder {
   {
     for (const bNodeTreeInterfaceSocket *interface_output : btree_.interface_outputs()) {
       const bke::bNodeSocketType *typeinfo = interface_output->socket_typeinfo();
-      lf::GraphOutputSocket &lf_socket = lf_graph.add_output(
-          CPPType::get<SocketValueVariant>(),
-          interface_output->name ? interface_output->name : "");
+      lf::GraphOutputSocket &lf_socket = lf_graph.add_output(CPPType::get<SocketValueVariant>(),
+                                                             interface_output->name());
       lf_socket.set_default_value(typeinfo->geometry_nodes_default_value);
       standard_group_output_sockets_.append(&lf_socket);
     }
@@ -3080,7 +3085,7 @@ struct GeometryNodesLazyFunctionBuilder {
       const bNodeTreeInterfaceSocket &interface_output = *btree_.interface_outputs()[i];
       const bNodeSocket &bsocket = bnode.input_socket(i);
       lf::GraphOutputSocket &lf_socket = graph_params.lf_graph.add_output(
-          CPPType::get<SocketValueVariant>(), interface_output.name ? interface_output.name : "");
+          CPPType::get<SocketValueVariant>(), interface_output.name());
       lf_graph_outputs.append(&lf_socket);
       this->add_to_socket_map(graph_params, bsocket, lf_socket);
     }
@@ -4019,10 +4024,9 @@ struct GeometryNodesLazyFunctionBuilder {
 
     for (const int i : output_indices.index_range()) {
       const int output_index = output_indices[i];
-      const char *name = btree_.interface_outputs()[output_index]->name;
+      const StringRef name = btree_.interface_outputs()[output_index]->name();
       lf::GraphInputSocket &lf_socket = lf_graph.add_input(
-          CPPType::get<GeometryNodesReferenceSet>(),
-          StringRef("Propagate: ") + (name ? name : ""));
+          CPPType::get<GeometryNodesReferenceSet>(), "Propagate: " + name);
       reference_set_by_output_.add(output_index, &lf_socket);
     }
   }

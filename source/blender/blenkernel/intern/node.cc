@@ -6,6 +6,8 @@
  * \ingroup bke
  */
 
+#include <fmt/format.h>
+
 #include "CLG_log.h"
 
 #include "MEM_guardedalloc.h"
@@ -232,6 +234,8 @@ static void ntree_copy_data(Main * /*bmain*/,
   dst_runtime.compositor_nodes_srna_data = ntree_src->runtime->compositor_nodes_srna_data;
   dst_runtime.compositor_effect_nodes_srna_data =
       ntree_src->runtime->compositor_effect_nodes_srna_data;
+  dst_runtime.scene_compositor_effect_srna_data =
+      ntree_src->runtime->scene_compositor_effect_srna_data;
 
   if (ntree_src->geometry_node_asset_traits) {
     ntree_dst->geometry_node_asset_traits = MEM_new<GeometryNodeAssetTraits>(
@@ -2227,12 +2231,9 @@ static std::unique_ptr<IDProperty, idprop::IDPropertyDeleter> create_socket_meta
   const bNodeSocketType *base_typeinfo = node_socket_type_find(socket.socket_type);
 
   auto socket_prop = idprop::create_group(socket.identifier);
-  IDP_AddToGroup(socket_prop.get(),
-                 idprop::create("name", socket.name ? socket.name : "").release());
+  IDP_AddToGroup(socket_prop.get(), idprop::create("name", socket.name()).release());
   IDP_AddToGroup(socket_prop.get(), idprop::create("type", base_typeinfo->type).release());
-  IDP_AddToGroup(
-      socket_prop.get(),
-      idprop::create("description", socket.description ? socket.description : "").release());
+  IDP_AddToGroup(socket_prop.get(), idprop::create("description", socket.description()).release());
   switch (base_typeinfo->type) {
     case SOCK_FLOAT: {
       const auto &value = node_interface::get_socket_data_as<bNodeSocketValueFloat>(socket);
@@ -2430,7 +2431,7 @@ IDProperty *node_create_asset_meta_data_properties(const bNodeTree &node_tree)
    * `output_sockets` in Blender 6.0 (next breaking release). */
   auto outputs = idprop::create_group("outputs");
   for (const bNodeTreeInterfaceSocket *socket : node_tree.interface_outputs()) {
-    auto *prop = idprop::create(socket->name ? socket->name : "", socket->socket_type).release();
+    auto *prop = idprop::create(socket->name(), socket->socket_type).release();
     if (!IDP_AddToGroup(outputs.get(), prop)) {
       IDP_FreeProperty(prop);
     }
@@ -2613,12 +2614,8 @@ static void node_init(const bContext *C, bNodeTree *ntree, bNode *node)
     ntype->initfunc(ntree, node);
   }
 
-  if (ntype->initfunc_api) {
+  if (ntype->initfunc_api && C) {
     PointerRNA ptr = RNA_pointer_create_discrete(&ntree->id, RNA_Node, node);
-
-    /* XXX WARNING: context can be nullptr in case nodes are added in do_versions.
-     * Delayed init is not supported for nodes with context-based `initfunc_api` at the moment. */
-    BLI_assert(C != nullptr);
     ntype->initfunc_api(C, &ptr);
   }
 

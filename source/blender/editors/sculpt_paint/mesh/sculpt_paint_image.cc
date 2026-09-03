@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edsculpt
+ */
+
 /* Paint a color made from hash of node pointer. */
 // #define DEBUG_PIXEL_NODES
 
@@ -58,9 +62,6 @@ ImageData::~ImageData()
 
   BLI_assert(image_buffers.size() <= image->tiles.count());
   for (ImBuf *buffer : image_buffers.values()) {
-    if (buffer) {
-      buffer->gpu.flag &= ~IMB_GPU_DISABLE_MIPMAP_UPDATE;
-    }
     BKE_image_release_ibuf(image, buffer, nullptr);
   }
   image_buffers.clear();
@@ -92,9 +93,6 @@ static void fetch_image_buffers(ImageData &image_data,
       tile_user.tile = tile.tile_number;
 
       ImBuf *ibuf = BKE_image_acquire_ibuf(image_data.image, &tile_user, nullptr);
-      if (ibuf) {
-        ibuf->gpu.flag |= IMB_GPU_DISABLE_MIPMAP_UPDATE;
-      }
       return ibuf;
     });
 
@@ -696,7 +694,6 @@ static void do_paint_pixels(const Depsgraph &depsgraph,
 }
 
 /* -------------------------------------------------------------------- */
-
 /** \name Fix non-manifold edge bleeding.
  * \{ */
 

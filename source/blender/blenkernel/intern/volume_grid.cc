@@ -2,8 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BKE_attribute_legacy_convert.hh"
 #include "BKE_customdata.hh"
+
 #include "BKE_volume_grid.hh"
 #include "BKE_volume_grid_fields.hh"
 #include "BKE_volume_grid_process.hh"

@@ -8,6 +8,8 @@
 
 #define DNA_DEPRECATED_ALLOW
 
+#include <fmt/format.h>
+
 #include "NOD_geometry_nodes_srna.hh"
 
 #include "DNA_ID.h"
@@ -603,7 +605,8 @@ void blo_do_versions_502(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       if (scene.toolsettings->gp_paint) {
         UnifiedPaintSettings &settings =
             scene.toolsettings->gp_paint->paint.unified_paint_settings;
-        settings.flag &= ~(UNIFIED_PAINT_SIZE | UNIFIED_PAINT_ALPHA | UNIFIED_PAINT_COLOR);
+        settings.flag &= ~(UNIFIED_PAINT_SIZE_DEPRECATED | UNIFIED_PAINT_ALPHA_DEPRECATED |
+                           UNIFIED_PAINT_COLOR_DEPRECATED);
       }
     }
   }
