@@ -27,6 +27,7 @@
 #include "BKE_material.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
+#include "BKE_node_tree_dot_export.hh"
 
 #include "NOD_shader.h"
 #include "NOD_shader_nodes_inline.hh"
@@ -171,7 +172,9 @@ GPUMaterialFromNodeTreeResult GPU_material_from_nodetree(
   nodes::inline_shader_node_tree(*ntree, *localtree, inline_params);
 
   for (nodes::InlineShaderNodeTreeParams::ErrorMessage &error : inline_params.r_error_messages) {
-    result.errors.append({error.node, std::move(error.message)});
+    result.errors.append({error.node,
+                          std::move(error.message),
+                          GPUMaterialFromNodeTreeResult::WarningType(error.type)});
   }
 
   ntreeGPUMaterialNodes(localtree, mat);
@@ -204,6 +207,13 @@ GPUMaterialFromNodeTreeResult GPU_material_from_nodetree(
   }
 
   gpu_node_graph_free_nodes(&mat->graph);
+
+#if 0
+  /* Dump localtree to a .dot file */
+  std::cout << ">>>>>>>>>>>>>>>>>" << name << std::endl
+            << blender::bke::node_tree_to_dot(*localtree) << std::endl;
+#endif
+
   /* Only free after GPU_pass_shader_get where gpu::UniformBuf read data from the local
    * tree. */
   BKE_id_free(nullptr, &localtree->id);
@@ -217,6 +227,14 @@ GPUMaterialFromNodeTreeResult GPU_material_from_nodetree(
 
   return result;
 }
+
+/* Make sure the two enums are actually the same. */
+static_assert(int(GPUMaterialFromNodeTreeResult::WarningType::Error) ==
+              int(nodes::NodeWarningType::Error));
+static_assert(int(GPUMaterialFromNodeTreeResult::WarningType::Warning) ==
+              int(nodes::NodeWarningType::Warning));
+static_assert(int(GPUMaterialFromNodeTreeResult::WarningType::Info) ==
+              int(nodes::NodeWarningType::Info));
 
 GPUMaterial *GPU_material_from_callbacks(eGPUMaterialEngine engine,
                                          ConstructGPUMaterialFn construct_function_cb,

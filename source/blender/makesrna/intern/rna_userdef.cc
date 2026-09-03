@@ -239,6 +239,7 @@ static const EnumPropertyItem rna_enum_preferences_extension_repo_source_type_it
 #  include "BLI_listbase.hh"
 #  include "BLI_math_vector_c.hh"
 #  include "BLI_memory_cache.hh"
+#  include "BLI_rand_c.hh"
 #  include "BLI_string.hh"
 #  include "BLI_string_utf8.hh"
 #  include "BLI_string_utils.hh"
@@ -249,6 +250,7 @@ static const EnumPropertyItem rna_enum_preferences_extension_repo_source_type_it
 #  include "BKE_addon.h"
 #  include "BKE_appdir.hh"
 #  include "BKE_blender.hh"
+#  include "BKE_blender_project.hh"
 #  include "BKE_blender_version.h"
 #  include "BKE_callbacks.hh"
 #  include "BKE_global.hh"
@@ -279,6 +281,7 @@ static const EnumPropertyItem rna_enum_preferences_extension_repo_source_type_it
 #  include "ED_asset_library.hh"
 #  include "ED_asset_list.hh"
 #  include "ED_screen.hh"
+#  include "ED_userpref.hh"
 
 #  include "UI_interface.hh"
 
@@ -455,6 +458,17 @@ int rna_userdef_asset_library_path_editable(const PointerRNA *ptr, const char **
   return PROP_EDITABLE;
 }
 
+static void rna_userdef_asset_libraries_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  if (RNA_struct_is_a(ptr->type, RNA_ProjectAssetLibrary)) {
+    bke::BlenderProject *project = BKE_blender_project_get(bmain);
+    bke::with_blender_project_write_lock([&] { project->is_dirty = true; });
+    WM_main_add_notifier(NC_WINDOW, nullptr);
+    return;
+  }
+  rna_userdef_update(bmain, scene, ptr);
+}
+
 static void rna_userdef_asset_libraries_refresh(bContext *C, PointerRNA *ptr)
 {
   ed::asset::list::clear_all_library(C);
@@ -462,6 +476,13 @@ static void rna_userdef_asset_libraries_refresh(bContext *C, PointerRNA *ptr)
   /* Trigger refresh for the Asset Browser. */
   WM_event_add_notifier(C, NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
 
+  if (RNA_struct_is_a(ptr->type, RNA_ProjectAssetLibrary)) {
+    Main *bmain = CTX_data_main(C);
+    bke::BlenderProject *project = BKE_blender_project_get(bmain);
+    bke::with_blender_project_write_lock([&] { project->is_dirty = true; });
+    WM_main_add_notifier(NC_WINDOW, nullptr);
+    return;
+  }
   rna_userdef_update(CTX_data_main(C), CTX_data_scene(C), ptr);
 }
 
@@ -481,11 +502,76 @@ static void rna_userdef_asset_library_remote_url_update(bContext *C, PointerRNA 
   rna_userdef_asset_libraries_refresh(C, ptr);
 }
 
+static void rna_userdef_asset_library_uuid_get(PointerRNA *ptr, char *value)
+{
+  const bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
+  if (!library->invalid_uuid) {
+    BLI_uuid_format(value, library->uuid);
+  }
+  else {
+    value[0] = '\0';
+  }
+}
+
+static int rna_userdef_asset_library_uuid_length(PointerRNA *ptr)
+{
+  const bUserAssetLibrary *library = (bUserAssetLibrary *)ptr->data;
+  /* UUID_STRING_SIZE - 1 as we exclude the null terminator. */
+  return (!library->invalid_uuid) ? UUID_STRING_SIZE - 1 : 0;
+}
+
 static void rna_userdef_asset_libraries_use_online_essentials_update(bContext *C, PointerRNA *ptr)
 {
   const AssetLibraryReference essentials = asset_system::essentials_library_reference();
   ed::asset::list::clear(&essentials, C);
   rna_userdef_update(CTX_data_main(C), CTX_data_scene(C), ptr);
+}
+
+static void rna_userdef_asset_library_auth_token_get(PointerRNA *ptr, char *value)
+{
+  bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
+  if (library->auth_token) {
+    strcpy(value, library->auth_token);
+  }
+  else {
+    value[0] = '\0';
+  }
+}
+
+static int rna_userdef_asset_library_auth_token_length(PointerRNA *ptr)
+{
+  bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
+  return (library->auth_token) ? strlen(library->auth_token) : 0;
+}
+
+static void rna_userdef_asset_library_auth_token_set(PointerRNA *ptr, const char *value)
+{
+  bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
+
+  if (library->auth_token) {
+    /* Replace the existing token with random characters to avoid leaving it in memory. */
+    RNG *rng = BLI_rng_new_srandom(uint(intptr_t(library->auth_token)));
+    BLI_rng_get_char_n(rng, library->auth_token, strlen(library->auth_token));
+    BLI_rng_free(rng);
+    /* Now we can more comfortably delete the token. */
+    MEM_delete(library->auth_token);
+    library->auth_token = nullptr;
+  }
+
+  if (value[0]) {
+    BKE_preferences_remote_asset_library_auth_token_set(library, value);
+  }
+}
+
+static void rna_userdef_asset_library_use_auth_token_update(bContext * /*C*/, PointerRNA *ptr)
+{
+  bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
+  const bool use_auth_token = (library->flag & ASSET_LIBRARY_USE_AUTH_TOKEN) != 0;
+
+  if (!use_auth_token && library->auth_token) {
+    /* Make sure the token is wiped if we are not using it. */
+    rna_userdef_asset_library_auth_token_set(ptr, "");
+  }
 }
 
 /**
@@ -712,13 +798,14 @@ static bUserAssetLibrary *rna_userdef_asset_library_new(const bContext *C,
                                                         const char *name,
                                                         const char *directory)
 {
-  bUserAssetLibrary *new_library = BKE_preferences_asset_library_add(
-      &U, name ? name : "", directory ? directory : "");
-
-  ed::asset::list::clear_all_library(C);
-
-  /* Trigger refresh for the Asset Browser. */
-  WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
+  bUserAssetLibrary *new_library;
+  new_library = ED_userpref_asset_library_new(C,
+                                              name ? name : "",
+                                              directory ? directory : "",
+                                              bUserAssetLibraryAddType::Local,
+                                              false,
+                                              {},
+                                              {});
 
   USERDEF_TAG_DIRTY;
   return new_library;
@@ -733,15 +820,7 @@ static void rna_userdef_asset_library_remove(bContext *C, ReportList *reports, P
     return;
   }
 
-  BKE_preferences_asset_library_remove(&U, library);
-  ed::asset::list::clear_all_library(C);
-
-  /* Update active library index to be in range. */
-  const int count_remaining = U.asset_libraries.count();
-  CLAMP(U.active_asset_library, 0, count_remaining - 1);
-
-  /* Trigger refresh for the Asset Browser. */
-  WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
+  ED_userpref_asset_library_remove(C, library);
 
   ptr->invalidate();
   USERDEF_TAG_DIRTY;
@@ -1263,7 +1342,7 @@ static PointerRNA rna_Addon_preferences_get(PointerRNA *ptr)
     return RNA_pointer_create_with_parent(*ptr, apt->rna_ext.srna, addon->prop);
   }
   else {
-    return PointerRNA_NULL;
+    return {};
   }
 }
 
@@ -1651,8 +1730,11 @@ static const EnumPropertyItem *rna_preference_asset_libray_import_method_itemf(
   return items;
 }
 
-int rna_preference_asset_libray_import_method_default(PointerRNA * /*ptr*/, PropertyRNA * /*prop*/)
+int rna_preference_asset_libray_import_method_default(PointerRNA *ptr, PropertyRNA * /*prop*/)
 {
+  if (RNA_struct_is_a(ptr->type, RNA_ProjectAssetLibrary)) {
+    return ASSET_IMPORT_LINK;
+  }
   return U.experimental.no_data_block_packing ? ASSET_IMPORT_APPEND_REUSE : ASSET_IMPORT_PACK;
 }
 
@@ -4640,6 +4722,7 @@ static void rna_def_userdef_studiolights(BlenderRNA *brna)
       "Path to the file that will contain the lighting info (without extension)");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_pointer(func, "studio_light", "StudioLight", "", "Newly created StudioLight");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_StudioLights_remove");
@@ -5790,6 +5873,7 @@ static void rna_def_userdef_edit(BlenderRNA *brna)
   prop = RNA_def_property(srna, "keyframe_new_handle_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_keyframe_handle_type_items);
   RNA_def_property_enum_sdna(prop, nullptr, "keyhandles_new");
+  RNA_def_property_enum_default(prop, HD_AUTO_ANIM);
   RNA_def_property_ui_text(prop, "New Handles Type", "Handle type for handles of new keyframes");
 
   /* frame numbers */
@@ -5866,6 +5950,25 @@ static void rna_def_userdef_edit(BlenderRNA *brna)
       prop,
       "Connect Movie Strips by Default",
       "Connect newly added movie strips by default if they have multiple channels");
+
+  prop = RNA_def_property(srna, "clamp_strips_by_default", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "sequencer_editor_flag", USER_SEQ_ED_CLAMP_STRIPS_BY_DEFAULT);
+  RNA_def_property_ui_text(
+      prop,
+      "Clamp Strips by Default",
+      "When slipping or adjusting handles, clamp movement to the underlying content bounds by "
+      "default to avoid producing extra hold frames or silence");
+
+  prop = RNA_def_property(srna, "default_strip_length", PROP_FLOAT, PROP_TIME_ABSOLUTE);
+  RNA_def_property_float_sdna(prop, nullptr, "sequencer_default_strip_length");
+  RNA_def_property_range(prop, 0.0f, 36000.0f);
+  RNA_def_property_ui_range(prop, 0.1f, 360.0f, 10.0f, 3);
+  RNA_def_property_ui_text(
+      prop,
+      "Default Strip Length",
+      "Duration of newly added strips that have no inherent length, such as color, text and "
+      "image strips");
 
   /* duplication linking */
   prop = RNA_def_property(srna, "use_duplicate_mesh", PROP_BOOLEAN, PROP_NONE);
@@ -6154,16 +6257,17 @@ static void rna_def_userdef_system(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Memory Cache Limit", "Memory cache limit (in megabytes)");
   RNA_def_property_update(prop, 0, "rna_Userdef_memcache_update");
 
-  /* Geometry Nodes. */
+  /* Nodes. */
 
-  prop = RNA_def_property(srna, "geometry_nodes_stack_limit", PROP_INT, PROP_NONE);
+  prop = RNA_def_property(srna, "nodes_stack_limit", PROP_INT, PROP_NONE);
   RNA_def_property_range(prop, 1, INT32_MAX);
-  RNA_def_property_ui_text(prop,
-                           "Geometry Nodes Stack Limit",
-                           "Approximate maximum size of the call stack used by Geometry Nodes. "
-                           "For example, this corresponds to the number of allowed nested node "
-                           "groups. Setting this too high can result in crashes caused by "
-                           "running out of stack memory.");
+  RNA_def_property_ui_text(
+      prop,
+      "Nodes Stack Limit",
+      "Approximate maximum size of the call stack used by node group evaluation. "
+      "For example, this corresponds to the number of allowed nested node "
+      "groups. Setting this too high can result in crashes caused by "
+      "running out of stack memory.");
   RNA_def_property_update(prop, 0, "rna_userdef_update");
 
   /* Sequencer proxy setup */
@@ -6949,7 +7053,7 @@ static void rna_def_userdef_filepaths_asset_library(BlenderRNA *brna)
       prop, "Name", "Identifier (not necessarily unique) for the asset library");
   RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_userdef_asset_library_name_set");
   RNA_def_struct_name_property(srna, prop);
-  RNA_def_property_update(prop, 0, "rna_userdef_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_asset_libraries_update");
 
   prop = RNA_def_property(srna, "path", PROP_STRING, PROP_DIRPATH);
   RNA_def_property_string_sdna(prop, nullptr, "dirpath");
@@ -6991,10 +7095,50 @@ static void rna_def_userdef_filepaths_asset_library(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", ASSET_LIBRARY_RELATIVE_PATH);
   RNA_def_property_ui_text(
       prop, "Relative Path", "Use relative path when linking assets from this asset library");
+  RNA_def_property_update(prop, 0, "rna_userdef_asset_libraries_update");
 
   prop = RNA_def_property(srna, "use_remote_url", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", ASSET_LIBRARY_USE_REMOTE_URL);
   RNA_def_property_ui_text(prop, "Use Remote", "Synchronize the asset library with a remote URL");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+  prop = RNA_def_property(srna, "use_auth_token", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", ASSET_LIBRARY_USE_AUTH_TOKEN);
+  RNA_def_property_ui_text(
+      prop, "Requires Access Token", "Asset library requires an authentication token");
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_update(prop, 0, "rna_userdef_asset_library_use_auth_token_update");
+
+  prop = RNA_def_property(srna, "auth_token", PROP_STRING, PROP_PASSWORD);
+  RNA_def_property_ui_text(
+      prop,
+      "Access Token",
+      "Personal authentication token, may be required by some asset libraries");
+  RNA_def_property_string_funcs(prop,
+                                "rna_userdef_asset_library_auth_token_get",
+                                "rna_userdef_asset_library_auth_token_length",
+                                "rna_userdef_asset_library_auth_token_set");
+
+  prop = RNA_def_property(srna, "is_project_defined", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", ASSET_LIBRARY_PROJECT_DEFINED);
+  RNA_def_property_ui_text(
+      prop, "Project Defined", "Signifies if the asset library is defined by a project");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+  prop = RNA_def_property(srna, "uuid", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_userdef_asset_library_uuid_get",
+                                "rna_userdef_asset_library_uuid_length",
+                                nullptr);
+  RNA_def_property_ui_text(prop, "UUID", "The unique identifier for the asset library");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+  prop = RNA_def_property(srna, "invalid_uuid", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "invalid_uuid");
+  RNA_def_property_ui_text(
+      prop,
+      "Invalid UUID",
+      "If the UUID is invalid for the asset, the invalid string will be available here.");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 }
 
@@ -7161,6 +7305,7 @@ static void rna_def_userdef_script_directory_collection(BlenderRNA *brna, Proper
   RNA_def_function_ui_description(func, "Add a new Python script directory");
   /* return type */
   parm = RNA_def_pointer(func, "script_directory", "ScriptDirectory", "", "");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_userdef_script_directory_remove");
@@ -7188,6 +7333,7 @@ static void rna_def_userdef_asset_library_collection(BlenderRNA *brna, PropertyR
   RNA_def_string(func, "directory", nullptr, sizeof(bUserAssetLibrary::dirpath), "Directory", "");
   /* return type */
   parm = RNA_def_pointer(func, "library", "UserAssetLibrary", "", "Newly added asset library");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_userdef_asset_library_remove");
@@ -7232,6 +7378,7 @@ static void rna_def_userdef_extension_repos_collection(BlenderRNA *brna, Propert
 
   /* return type */
   parm = RNA_def_pointer(func, "repo", "UserExtensionRepo", "", "Newly added repository");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_userdef_extension_repo_remove");
@@ -7737,6 +7884,7 @@ static void rna_def_userdef_addon_collection(BlenderRNA *brna, PropertyRNA *cpro
   RNA_def_function_ui_description(func, "Add a new add-on");
   /* return type */
   parm = RNA_def_pointer(func, "addon", "Addon", "", "Add-on data");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_userdef_addon_remove");
@@ -7762,6 +7910,7 @@ static void rna_def_userdef_autoexec_path_collection(BlenderRNA *brna, PropertyR
   RNA_def_function_ui_description(func, "Add a new path");
   /* return type */
   parm = RNA_def_pointer(func, "pathcmp", "PathCompare", "", "");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_userdef_pathcompare_remove");
