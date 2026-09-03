@@ -385,7 +385,13 @@ static int rna_ID_name_editable(const PointerRNA *ptr, const char **r_info)
       return 0;
     }
   }
-  else if (!rna_ID_editable_if_in_bmain(id, r_info)) {
+  if (id->flag & ID_FLAG_EMBEDDED_DATA) {
+    if (r_info) {
+      *r_info = N_("Embedded data-blocks cannot be renamed");
+    }
+    return 0;
+  }
+  if (!rna_ID_editable_if_in_bmain(id, r_info)) {
     return 0;
   }
 
@@ -1242,10 +1248,10 @@ static int rna_IDPArray_length(PointerRNA *ptr)
 bool rna_IDMaterials_assign_int(PointerRNA *ptr, int key, const PointerRNA *assign_ptr)
 {
   ID *id = ptr->owner_id;
-    Main *bmain = id->owner_bmain_for_write();
-    if (!bmain) {
-      return false;
-    }
+  Main *bmain = id->owner_bmain_for_write();
+  if (!bmain) {
+    return false;
+  }
   short *totcol = BKE_id_material_len_p(id);
   Material *mat_id = id_cast<Material *>(assign_ptr->owner_id);
   if (totcol && (key >= 0 && key < *totcol)) {
