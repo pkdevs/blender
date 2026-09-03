@@ -165,6 +165,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   if (all_single) {
     GArray<> array(*cpp_type, items.size(), NoInitialization());
     for (const int i : items.index_range()) {
+      BLI_assert(values[i].is_single());
       void *value_ptr = values[i].get_if(*cpp_type);
       cpp_type->move_construct(value_ptr, array[i]);
     }
