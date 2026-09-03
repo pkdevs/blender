@@ -518,7 +518,9 @@ std::optional<float3> ExperimentalTexturePaintStroke::get_location(float2 mouse,
 }
 bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
 {
-  if (!stroke_get_location_bvh(*this->depsgraph, this->vc, *this->paint, this->brush, mouse, op)) {
+  if (!stroke_get_location_bvh(
+          *this->depsgraph, this->vc, *this->paint, this->brush, mouse, false))
+  {
     return false;
   }
 
@@ -581,12 +583,18 @@ static void stroke_cache_update(ViewContext & /*vc*/,
   if (BKE_brush_use_size_pressure(&brush) && paint_supports_dynamic_size(brush, PaintMode::Sculpt))
   {
     const float pressure_eval = BKE_curvemapping_evaluateF(brush.curve_size, 0, cache.pressure);
-    cache.radius = cache.initial_radius + pressure_eval;
+    cache.radius = cache.initial_radius * pressure_eval;
   }
   else {
     cache.radius = cache.initial_radius;
   }
   cache.radius_squared = cache.radius * cache.radius;
+
+  cache.hardness = brush.hardness;
+  /* TODO: Extend the brush "capabilities" checks to handle multi-mode */
+  if (brush.paint_flags & BRUSH_PAINT_HARDNESS_PRESSURE) {
+    cache.hardness *= BKE_curvemapping_evaluateF(brush.curve_hardness, 0, cache.pressure);
+  }
 
   /* TODO: Brush delta */
 
@@ -663,10 +671,15 @@ void ExperimentalTexturePaintStroke::update_step(wmOperator * /*op*/, PointerRNA
 
   const bke::PaintRuntime &paint_runtime = *this->paint->runtime;
   const float overlap = paint_runtime.overlap_factor;
-  cache.base_brush_strength = cache.pressure * cache.pressure * overlap;
+  const float pressure = BKE_brush_use_alpha_pressure(brush) ?
+                             BKE_curvemapping_evaluateF(brush->curve_strength, 0, cache.pressure) :
+                             1.0f;
+  /* TODO: Remove hardcoded square pressure, this should be controlled by the user. */
+  cache.base_brush_strength = pressure * pressure * overlap;
 
   do_symmetrical_brush_actions_with_tiling_and_feathering(
       *this->depsgraph, *this->scene, *this->paint, object, do_brush_action, &mode_data);
+  cache.first_time = false;
 
   if (this->vc.rv3d) {
     /* Mark for faster 3D viewport redraws. */
@@ -684,8 +697,9 @@ void ExperimentalTexturePaintStroke::done(bool is_cancel, bool stroke_started)
   Object &ob = *this->object;
   SculptSession &ss = *ob.runtime->sculpt_session;
 
+  paint_brush_exit_tex(this->brush);
+
   if (!ss.cache) {
-    paint_brush_exit_tex(this->brush);
     return;
   }
 
@@ -700,18 +714,7 @@ void ExperimentalTexturePaintStroke::done(bool is_cancel, bool stroke_started)
     ED_image_undo_push_end();
   }
 
-  const wmWindowManager &wm = *CTX_wm_manager(this->evil_C);
-  for (wmWindow &win : wm.windows) {
-    const bScreen &screen = *WM_window_get_active_screen(&win);
-    for (ScrArea &area : screen.areabase) {
-      const SpaceLink &sl = *static_cast<SpaceLink *>(area.spacedata.first);
-      if (sl.spacetype != SPACE_IMAGE) {
-        continue;
-      }
-      ED_area_tag_redraw_regiontype(&area, RGN_TYPE_WINDOW);
-    }
-  }
-
+  WM_event_add_notifier(this->evil_C, NC_OBJECT | ND_DRAW, &ob);
   /* DEG_id_tag_update(&ob.id, ID); */
 }
 

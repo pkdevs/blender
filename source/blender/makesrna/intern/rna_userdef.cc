@@ -1752,7 +1752,10 @@ static void rna_experimental_no_data_block_packing_update(bContext *C, PointerRN
 static void rna_experimental_use_3d_texture_paint_update(bContext *C, PointerRNA *ptr)
 {
   Main *bmain = CTX_data_main(C);
-  Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
+  Scene *scene = CTX_data_scene(C);
+  rna_userdef_update(bmain, scene, ptr)
+
+      Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   Object *object = CTX_data_active_object(C);
   if (!object || (object->mode & OB_MODE_TEXTURE_PAINT) == 0) {
     return;

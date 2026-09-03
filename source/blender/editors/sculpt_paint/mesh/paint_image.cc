@@ -691,12 +691,12 @@ void ED_object_texture_paint_mode_exit_ex(Main & /*bmain*/, Scene &scene, Object
     ob.mode &= ~OB_MODE_TEXTURE_PAINT;
 
     toggle_paint_cursor(scene, false);
-
-    Mesh *mesh = BKE_mesh_from_object(&ob);
-    BLI_assert(mesh != nullptr);
-    DEG_id_tag_update(&mesh->id, ID_RECALC_SYNC_TO_EVAL);
-    WM_main_add_notifier(NC_SCENE | ND_MODE, &scene);
   }
+
+  Mesh *mesh = BKE_mesh_from_object(&ob);
+  BLI_assert(mesh != nullptr);
+  DEG_id_tag_update(&mesh->id, ID_RECALC_SYNC_TO_EVAL);
+  WM_main_add_notifier(NC_SCENE | ND_MODE, &scene);
 }
 
 void ED_object_texture_paint_mode_exit(bContext *C)

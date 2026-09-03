@@ -328,7 +328,7 @@ bool WM_toolsystem_activate_brush_and_tool(bContext *C, Paint *paint, Brush *bru
     return false;
   }
 
-  if (active_tool->runtime == nullptr) {
+  if (active_tool == nullptr || active_tool->runtime == nullptr) {
     BLI_assert(G.background);
     return false;
   }

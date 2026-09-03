@@ -168,7 +168,7 @@ void ED_editors_init(bContext *C)
     if (mode == OB_MODE_EDIT) {
       object::editmode_enter_ex(bmain, scene, &ob, 0);
     }
-    else if (BKE_object_use_sculptsession(&ob)) {
+    else if (BKE_object_use_sculptsession(mode)) {
       if (obact == &ob) {
         if (mode == OB_MODE_SCULPT) {
           ed::sculpt_paint::object_sculpt_mode_enter(
@@ -190,7 +190,7 @@ void ED_editors_init(bContext *C)
       else {
         /* Create data for non-active objects which need it for
          * mode-switching but don't yet support multi-editing. */
-        if (BKE_object_use_sculptsession(&ob)) {
+        if (BKE_object_use_sculptsession(mode)) {
           ob.mode = mode;
           BKE_object_sculpt_data_create(&ob);
         }
