@@ -794,15 +794,14 @@ static void blend_write(BlendWriter *writer, const ID *id_owner, const ModifierD
   }
 
   if (csmd.bind_coords != nullptr) {
-    BLO_write_shared(writer,
-                     csmd.bind_coords,
-                     sizeof(float[3]) * csmd.bind_coords_num,
-                     csmd.bind_coords_sharing_info,
-                     [&]() {
-                       writer->write_float3_array(
-                           csmd.bind_coords_num,
-                           reinterpret_cast<const float *>(csmd.bind_coords));
-                     });
+    writer->write_shared(csmd.bind_coords,
+                         sizeof(float[3]) * csmd.bind_coords_num,
+                         csmd.bind_coords_sharing_info,
+                         [&]() {
+                           writer->write_float3_array(
+                               csmd.bind_coords_num,
+                               reinterpret_cast<const float *>(csmd.bind_coords));
+                         });
   }
 
   writer->write_struct_at_address(md, &csmd);

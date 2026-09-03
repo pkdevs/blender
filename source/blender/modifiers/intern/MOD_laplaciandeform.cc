@@ -832,10 +832,10 @@ static void blend_write(BlendWriter *writer, const ID *id_owner, const ModifierD
   }
 
   if (lmd.vertexco != nullptr) {
-    BLO_write_shared(
-        writer, lmd.vertexco, sizeof(float[3]) * lmd.verts_num, lmd.vertexco_sharing_info, [&]() {
-          writer->write_float3_array(lmd.verts_num, lmd.vertexco);
-        });
+    writer->write_shared(lmd.vertexco,
+                         sizeof(float[3]) * lmd.verts_num,
+                         lmd.vertexco_sharing_info,
+                         [&]() { writer->write_float3_array(lmd.verts_num, lmd.vertexco); });
   }
 
   writer->write_struct_at_address(md, &lmd);

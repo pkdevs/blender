@@ -4838,7 +4838,7 @@ void CustomData_blend_write(BlendWriter *writer,
 
   for (const CustomDataLayer &layer : layers_to_write) {
     const size_t size_in_bytes = CustomData_sizeof(eCustomDataType(layer.type)) * count;
-    BLO_write_shared(writer, layer.data, size_in_bytes, layer.sharing_info, [&]() {
+    writer->write_shared(layer.data, size_in_bytes, layer.sharing_info, [&]() {
       blend_write_layer_data(writer, layer, count);
     });
   }

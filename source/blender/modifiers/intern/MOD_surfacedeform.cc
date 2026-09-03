@@ -1651,8 +1651,8 @@ static void blend_write(BlendWriter *writer, const ID *id_owner, const ModifierD
   }
 
   if (smd.verts != nullptr) {
-    BLO_write_shared(
-        writer, smd.verts, sizeof(SDefVert) * smd.bind_verts_num, smd.verts_sharing_info, [&]() {
+    writer->write_shared(
+        smd.verts, sizeof(SDefVert) * smd.bind_verts_num, smd.verts_sharing_info, [&]() {
           SDefVert *bind_verts = smd.verts;
           writer->write_struct_array(smd.bind_verts_num, bind_verts);
 

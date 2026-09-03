@@ -423,8 +423,7 @@ static void mesh_blend_write(BlendWriter *writer, ID *id, const void *id_address
   mesh->attribute_storage.wrap().blend_write(*writer, attribute_data);
 
   if (mesh->face_offset_indices) {
-    BLO_write_shared(
-        writer,
+    writer->write_shared(
         mesh->face_offset_indices,
         sizeof(int) * mesh->faces_num,
         mesh_runtime->face_offsets_sharing_info,

@@ -2417,18 +2417,17 @@ StringRefNull BlendWriter::filepath() const
   return this->wd->filepath;
 }
 
-void BLO_write_shared(BlendWriter *writer,
-                      const void *data,
-                      const size_t approximate_size_in_bytes,
-                      const ImplicitSharingInfo *sharing_info,
-                      const FunctionRef<void()> write_fn)
+void BlendWriter::write_shared(const void *data,
+                               const size_t approximate_size_in_bytes,
+                               const ImplicitSharingInfo *sharing_info,
+                               const FunctionRef<void()> write_fn)
 {
   if (data == nullptr) {
     return;
   }
-  const uint64_t address_id = get_address_id_int(*writer->wd, data);
-  if (writer->is_undo()) {
-    MemFile &memfile = *writer->wd->mem.written_memfile;
+  const uint64_t address_id = get_address_id_int(*this->wd, data);
+  if (this->is_undo()) {
+    MemFile &memfile = *this->wd->mem.written_memfile;
     if (sharing_info != nullptr) {
       if (memfile.shared_storage == nullptr) {
         memfile.shared_storage = MEM_new<MemFileSharedStorage>(__func__);
@@ -2444,7 +2443,7 @@ void BLO_write_shared(BlendWriter *writer,
     }
   }
   if (sharing_info != nullptr) {
-    if (!writer->wd->per_id_written_shared_addresses.add(data)) {
+    if (!this->wd->per_id_written_shared_addresses.add(data)) {
       /* Was written already. */
       return;
     }

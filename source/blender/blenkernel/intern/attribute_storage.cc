@@ -692,7 +692,7 @@ static void write_shared_array(BlendWriter &writer,
                                const ImplicitSharingInfo *sharing_info)
 {
   const CPPType &cpp_type = attribute_type_to_cpp_type(data_type);
-  BLO_write_shared(&writer, data, cpp_type.size * size, sharing_info, [&]() {
+  writer.write_shared(data, cpp_type.size * size, sharing_info, [&]() {
     write_array_data(writer, data_type, data, size);
   });
 }

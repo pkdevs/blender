@@ -164,6 +164,20 @@ struct BlendWriter {
   /** Write a null terminated string. */
   void write_string(const char *data);
 
+  /**
+   * Check if the data can be written more efficiently by making use of implicit-sharing. If yes,
+   * the user count of the sharing-info is increased making the data immutable. The provided
+   * callback should serialize the potentially shared data. It is only called when necessary.
+   *
+   * \param approximate_size_in_bytes: Used to be able to approximate how large the undo step is in
+   * total.
+   * \param write_fn: Use the #BlendWrite to serialize the potentially shared data.
+   */
+  void write_shared(const void *data,
+                    size_t approximate_size_in_bytes,
+                    const ImplicitSharingInfo *sharing_info,
+                    FunctionRef<void()> write_fn);
+
   int struct_id_by_name(const char *struct_name) const;
 
   template<typename T> void write_struct(const T *data, const BlendStructWriterFn fn = nullptr)
@@ -308,21 +322,6 @@ struct BLO_Write_IDBuffer {
 };
 
 /* Misc. */
-
-/**
- * Check if the data can be written more efficiently by making use of implicit-sharing. If yes, the
- * user count of the sharing-info is increased making the data immutable. The provided callback
- * should serialize the potentially shared data. It is only called when necessary.
- *
- * \param approximate_size_in_bytes: Used to be able to approximate how large the undo step is in
- * total.
- * \param write_fn: Use the #BlendWrite to serialize the potentially shared data.
- */
-void BLO_write_shared(BlendWriter *writer,
-                      const void *data,
-                      size_t approximate_size_in_bytes,
-                      const ImplicitSharingInfo *sharing_info,
-                      FunctionRef<void()> write_fn);
 
 /**
  * Needs to be called for all pointers that _need_ to be 'stabilized' when writing undo steps,
