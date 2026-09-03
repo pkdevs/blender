@@ -441,30 +441,34 @@ PyObject *pyrna_struct_keyframe_insert(BPy_StructRNA *self, PyObject *args, PyOb
   }
   else {
     Main *bmain = self->ptr->owner_id->owner_bmain_for_write();
-    BLI_assert(bmain);
-    const std::optional<StringRefNull> channel_group = group_name ? std::optional(group_name) :
-                                                                    std::nullopt;
-    PointerRNA id_pointer = RNA_id_pointer_create(self->ptr->owner_id);
-    CombinedKeyingResult combined_result = insert_keyframes(bmain,
-                                                            &id_pointer,
-                                                            channel_group,
-                                                            {{path_full, {}, index}},
-                                                            std::nullopt,
-                                                            anim_eval_context,
-                                                            eBezTriple_KeyframeType(keytype),
-                                                            eInsertKeyFlags(options));
-    const int success_count = combined_result.get_count(SingleKeyingResult::SUCCESS);
-    if (success_count == 0) {
-      /* Ideally this would use the GUI presentation of RPT_ERROR, as the resulting pop-up has more
-       * vertical space than the single-line warning in the status bar. However, semantically these
-       * may not be errors at all, as skipping the keying of certain properties due to the 'only
-       * insert available' flag is not an error.
-       *
-       * Furthermore, using RPT_ERROR here would cause this function to raise a Python exception,
-       * rather than returning a boolean. */
-      combined_result.generate_reports(&reports, RPT_WARNING);
+    if (!bmain) {
+      BKE_report(&reports, RPT_ERROR, "Cannot keyframe non-original data");
     }
-    result = success_count != 0;
+    else {
+      const std::optional<StringRefNull> channel_group = group_name ? std::optional(group_name) :
+                                                                      std::nullopt;
+      PointerRNA id_pointer = RNA_id_pointer_create(self->ptr->owner_id);
+      CombinedKeyingResult combined_result = insert_keyframes(bmain,
+                                                              &id_pointer,
+                                                              channel_group,
+                                                              {{path_full, {}, index}},
+                                                              std::nullopt,
+                                                              anim_eval_context,
+                                                              eBezTriple_KeyframeType(keytype),
+                                                              eInsertKeyFlags(options));
+      const int success_count = combined_result.get_count(SingleKeyingResult::SUCCESS);
+      if (success_count == 0) {
+        /* Ideally this would use the GUI presentation of RPT_ERROR, as the resulting pop-up has
+         * more vertical space than the single-line warning in the status bar. However,
+         * semantically these may not be errors at all, as skipping the keying of certain
+         * properties due to the 'only insert available' flag is not an error.
+         *
+         * Furthermore, using RPT_ERROR here would cause this function to raise a Python exception,
+         * rather than returning a boolean. */
+        combined_result.generate_reports(&reports, RPT_WARNING);
+      }
+      result = success_count != 0;
+    }
   }
 
   MEM_delete(path_full);
