@@ -189,6 +189,10 @@ LogImageFile *logImageCreate(const char *filepath,
                              const char *creator);
 void logImageClose(LogImageFile *logImage);
 
+/* Number of channels per pixel of an element descriptor.
+ * 0 for unsupported depth and composite elements, -1 if unknown. */
+int logImageDescriptorDepth(int descriptor);
+
 /* Data handling */
 size_t getRowLength(size_t width, const LogImageElement *logElement);
 int logImageSetDataRGBA(LogImageFile *logImage, const float *data, int dataIsLinearRGB);

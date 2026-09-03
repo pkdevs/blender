@@ -219,41 +219,17 @@ LogImageFile *dpxOpen(const uchar *byteStuff, int fromMemory, size_t bufferSize)
   for (i = 0; i < dpx->numElements; i++) {
     dpx->element[i].descriptor = header.imageHeader.element[i].descriptor;
 
-    switch (dpx->element[i].descriptor) {
-      case descriptor_Red:
-      case descriptor_Green:
-      case descriptor_Blue:
-      case descriptor_Alpha:
-      case descriptor_Luminance:
-      case descriptor_Chrominance:
-        dpx->depth++;
-        dpx->element[i].depth = 1;
-        break;
-
-      case descriptor_CbYCrY:
-        dpx->depth += 2;
-        dpx->element[i].depth = 2;
-        break;
-
-      case descriptor_RGB:
-      case descriptor_CbYCr:
-      case descriptor_CbYACrYA:
-        dpx->depth += 3;
-        dpx->element[i].depth = 3;
-        break;
-
-      case descriptor_RGBA:
-      case descriptor_ABGR:
-      case descriptor_CbYCrA:
-        dpx->depth += 4;
-        dpx->element[i].depth = 4;
-        break;
-
-      case descriptor_Depth:
-      case descriptor_Composite:
-        /* unsupported */
-        break;
+    /* Skip unknown descriptors, and YA which is for internal use only. */
+    const int element_depth = logImageDescriptorDepth(dpx->element[i].descriptor);
+    if (element_depth < 0 || dpx->element[i].descriptor == descriptor_YA) {
+      if (verbose) {
+        printf("DPX: Unsupported descriptor for element %d: %d\n", i, dpx->element[i].descriptor);
+      }
+      logImageClose(dpx);
+      return nullptr;
     }
+    dpx->depth += element_depth;
+    dpx->element[i].depth = element_depth;
 
     if (dpx->depth == 0 || dpx->depth > 4) {
       if (verbose) {

@@ -18,6 +18,7 @@
 #include <cstring>
 
 #include "BLI_fileops.hh"
+#include "BLI_memory_utils.hh"
 #include "BLI_utildefines.hh"
 
 #include "IMB_imbuf.hh"
@@ -191,6 +192,41 @@ void logImageClose(LogImageFile *logImage)
       logImage->file = nullptr;
     }
     MEM_delete(logImage);
+  }
+}
+
+int logImageDescriptorDepth(const int descriptor)
+{
+  switch (descriptor) {
+    case descriptor_Red:
+    case descriptor_Green:
+    case descriptor_Blue:
+    case descriptor_Alpha:
+    case descriptor_Luminance:
+    case descriptor_Chrominance:
+      return 1;
+
+    case descriptor_CbYCrY:
+    case descriptor_YA:
+      return 2;
+
+    case descriptor_RGB:
+    case descriptor_CbYCr:
+    case descriptor_CbYACrYA:
+      return 3;
+
+    case descriptor_RGBA:
+    case descriptor_ABGR:
+    case descriptor_CbYCrA:
+      return 4;
+
+    case descriptor_Depth:
+    case descriptor_Composite:
+      /* Unsupported, skipped when reading. */
+      return 0;
+
+    default:
+      return -1;
   }
 }
 
@@ -448,15 +484,19 @@ int logImageGetDataRGBA(LogImageFile *logImage, float *data, int dataIsLinearRGB
 {
   /* Fills data with 32 bits float RGBA values */
   int i, j, returnValue, sortedElementData[8], hasAlpha;
-  float *elementData[8];
-  float *elementData_ptr[8];
+  float *elementData[8] = {};
+  float *elementData_ptr[8] = {};
   float *mergedData;
-  uint sampleIndex;
   LogImageElement mergedElement;
+
+  BLI_SCOPED_DEFER([&]() {
+    for (float *element_data : elementData) {
+      MEM_delete(element_data);
+    }
+  });
 
   /* Determine the depth of the picture and if there's a separate alpha element.
    * If the element is supported, load it into an `uint` array. */
-  memset(&elementData, 0, 8 * sizeof(float *));
   hasAlpha = 0;
 
   for (i = 0; i < logImage->numElements; i++) {
@@ -473,11 +513,6 @@ int logImageGetDataRGBA(LogImageFile *logImage, float *data, int dataIsLinearRGB
         if (verbose) {
           printf("DPX/Cineon: Cannot allocate memory for elementData[%d]\n.", i);
         }
-        for (j = 0; j < i; j++) {
-          if (elementData[j] != nullptr) {
-            MEM_delete(elementData[j]);
-          }
-        }
         return 1;
       }
       elementData_ptr[i] = elementData[i];
@@ -486,11 +521,6 @@ int logImageGetDataRGBA(LogImageFile *logImage, float *data, int dataIsLinearRGB
       if (logImageElementGetData(logImage, logImage->element[i], elementData[i]) != 0) {
         if (verbose) {
           printf("DPX/Cineon: Cannot read elementData[%d]\n.", i);
-        }
-        for (j = 0; j < i; j++) {
-          if (elementData[j] != nullptr) {
-            MEM_delete(elementData[j]);
-          }
         }
         return 1;
       }
@@ -505,7 +535,6 @@ int logImageGetDataRGBA(LogImageFile *logImage, float *data, int dataIsLinearRGB
   if (logImage->numElements == 1) {
     returnValue = convertLogElementToRGBA(
         elementData[0], data, logImage, logImage->element[0], dataIsLinearRGB);
-    MEM_delete(elementData[0]);
   }
   else {
     /* The goal here is to merge every elements into only one
@@ -652,33 +681,41 @@ int logImageGetDataRGBA(LogImageFile *logImage, float *data, int dataIsLinearRGB
       }
     }
 
+    /* Check the elements exactly fill the merged element, to guard against corrupt files. */
+    int mergeDepth = 0;
+    for (const int element : sortedElementData) {
+      if (element >= 0) {
+        mergeDepth += logImage->element[element].depth;
+      }
+    }
+    if (mergeDepth != mergedElement.depth ||
+        logImageDescriptorDepth(mergedElement.descriptor) != mergedElement.depth)
+    {
+      if (verbose) {
+        printf("DPX/Cineon: Cannot merge elements.\n");
+      }
+      return 1;
+    }
+
     mergedData = static_cast<float *>(imb_alloc_pixels(
         logImage->width, logImage->height, mergedElement.depth, sizeof(float), true, __func__));
     if (mergedData == nullptr) {
       if (verbose) {
         printf("DPX/Cineon: Cannot allocate mergedData.\n");
       }
-      for (i = 0; i < logImage->numElements; i++) {
-        if (elementData[i] != nullptr) {
-          MEM_delete(elementData[i]);
-        }
-      }
       return 1;
     }
 
-    sampleIndex = 0;
-    while (sampleIndex < logImage->width * logImage->height * mergedElement.depth) {
-      for (i = 0; i < logImage->numElements; i++) {
-        for (j = 0; j < logImage->element[sortedElementData[i]].depth; j++) {
-          mergedData[sampleIndex++] = *(elementData_ptr[sortedElementData[i]]++);
+    const size_t sampleTotal = size_t(logImage->width) * logImage->height * mergedElement.depth;
+    size_t sampleIndex = 0;
+    while (sampleIndex < sampleTotal) {
+      for (const int element : sortedElementData) {
+        if (element < 0) {
+          continue;
         }
-      }
-    }
-
-    /* Done with elements data, clean-up */
-    for (i = 0; i < logImage->numElements; i++) {
-      if (elementData[i] != nullptr) {
-        MEM_delete(elementData[i]);
+        for (j = 0; j < logImage->element[element].depth; j++) {
+          mergedData[sampleIndex++] = *(elementData_ptr[element]++);
+        }
       }
     }
 
