@@ -561,6 +561,7 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
   /* Use lookup tables for generalized Schlick reflection, otherwise assume smooth surface.
    * Note that even if the reflectance or tranmissitance would evaluate to zero for
    * #microfacet_fresnel, we still compute it because this contributes to albedo passes. */
+
   if (bsdf->fresnel_type == MicrofacetFresnel::GENERALIZED_SCHLICK) {
     ccl_private FresnelGeneralizedSchlick *fresnel = (ccl_private FresnelGeneralizedSchlick *)
                                                          bsdf->fresnel;
@@ -606,34 +607,44 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
             bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) &&
            bsdf->ior > 1.0f)
   {
-    /* We can re-use the ggx_gen_schlick_ior_s table here, since it's already precomputed for our
-     * exponent<0 corner case where we use the real dielectric Fresnel. */
-    const float rough = sqrtf(sqrtf(bsdf->alpha_x * bsdf->alpha_y));
-    const float z = sqrtf(fabsf((bsdf->ior - 1.0f) / (bsdf->ior + 1.0f)));
-    const float s = lookup_table_read_3D(
-        kg, rough, cos_NI, z, kernel_data.tables.ggx_gen_schlick_ior_s, 16, 16, 16);
+    if (bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT &&
+        ((ccl_private FresnelDielectricTint *)bsdf->fresnel)->thin_film.thickness >
+            THINFILM_THICKNESS_CUTOFF)
+    {
+      /* Precomputing LUTs for thin-film iridescence isn't viable, so fall back to the specular
+       * reflection approximation from the microfacet_fresnel call above in that case. */
+    }
+    else {
+
+      /* We can re-use the ggx_gen_schlick_ior_s table here, since it's already precomputed for
+       * our exponent<0 corner case where we use the real dielectric Fresnel. */
+      const float rough = sqrtf(sqrtf(bsdf->alpha_x * bsdf->alpha_y));
+      const float z = sqrtf(fabsf((bsdf->ior - 1.0f) / (bsdf->ior + 1.0f)));
+      const float s = lookup_table_read_3D(
+          kg, rough, cos_NI, z, kernel_data.tables.ggx_gen_schlick_ior_s, 16, 16, 16);
 
 #if defined(__KERNEL_HIP__)
-    /* Temporary workaround for a HIP compiler bug under Windows in combination with AMD 6800 XT
-     * GPUs */
-    const float F = mix(F0_from_ior(bsdf->ior), 1.0f, s);
-    coeff.reflectance = make_spectrum(F) * float(eval_reflection);
-    coeff.transmittance = make_spectrum(1.0f - F) * float(eval_transmission);
+      /* Temporary workaround for a HIP compiler bug under Windows in combination with AMD 6800
+       * XT GPUs */
+      const float F = mix(F0_from_ior(bsdf->ior), 1.0f, s);
+      coeff.reflectance = make_spectrum(F) * float(eval_reflection);
+      coeff.transmittance = make_spectrum(1.0f - F) * float(eval_transmission);
 #else
-    coeff *= mix(F0_from_ior(bsdf->ior), 1.0f, s);
+      coeff *= mix(F0_from_ior(bsdf->ior), 1.0f, s);
 #endif
 
-    /* Tinted dielectric. */
-    if (bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) {
-      coeff *= ((ccl_private FresnelDielectricTint *)bsdf->fresnel)->tint;
-      return coeff.sum();
-    }
+      /* Tinted dielectric. */
+      if (bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) {
+        coeff *= ((ccl_private FresnelDielectricTint *)bsdf->fresnel)->tint;
+        return coeff.sum();
+      }
 
-    /* Untinted dielectric. */
-    if (CLOSURE_IS_GLASS(bsdf->type)) {
-      return coeff.sum();
+      /* Untinted dielectric. */
+      if (CLOSURE_IS_GLASS(bsdf->type)) {
+        return coeff.sum();
+      }
+      return coeff.reflectance;
     }
-    return coeff.reflectance;
   }
   else if (bsdf->type == CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID) {
     return eval_transmission ? one_spectrum() : zero_spectrum();
@@ -886,7 +897,8 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
   }
   const float cos_HI = dot(H, wi);
 
-  /* The angle between the half vector and the refracted ray. Not used when sampling reflection. */
+  /* The angle between the half vector and the refracted ray. Not used when sampling reflection.
+   */
   float cos_HO;
   /* Compute Fresnel coefficients. */
   const FresnelCoeff coeff = microfacet_fresnel(kg, bsdf, cos_HI, &cos_HO);
@@ -1364,8 +1376,9 @@ ccl_device_inline void bsdf_thin_glass_transmission_setup(KernelGlobals kg,
   if (!(ray_visibility & PATH_RAY_VISIBILITY_CAMERA) &&
       roughness_is_almost_specular(transmission_roughness, transmission_roughness))
   {
-    /* Smooth thin glass does not bend the ray and is effectively transparent, allocate transparent
-     * closures for non-camera rays to improve sampling and keep render passes intact. */
+    /* Smooth thin glass does not bend the ray and is effectively transparent, allocate
+     * transparent closures for non-camera rays to improve sampling and keep render passes
+     * intact. */
     bsdf_transparent_setup(sd, weight, path_flag);
     return;
   }
@@ -1413,8 +1426,8 @@ ccl_device int bsdf_thin_glass_transmission_sample(KernelGlobals kg,
     *wo = -wi;
 
     /* Some high number for MIS. */
-    /* TODO(weizhen): the magic number 1e6f is used in various places, either change it to a define
-     * or extract a function. */
+    /* TODO(weizhen): the magic number 1e6f is used in various places, either change it to a
+     * define or extract a function. */
     *pdf = 1e6f;
     *eval = one_spectrum() * 1e6f;
 
