@@ -1231,7 +1231,7 @@ static void rna_Scene_all_keyingsets_begin(CollectionPropertyIterator *iter, Poi
   /* start going over the scene KeyingSets first, while we still have pointer to it
    * but only if we have any Keying Sets to use...
    */
-  if (scene->keyingsets.first_) {
+  if (scene->keyingsets.first()) {
     rna_iterator_listbase_begin(iter, ptr, &scene->keyingsets, nullptr);
   }
   else {
@@ -2480,14 +2480,14 @@ static void rna_View3DCursor_rotation_axis_angle_set(PointerRNA *ptr, const floa
 static void rna_View3DCursor_matrix_get(PointerRNA *ptr, float *values)
 {
   const View3DCursor *cursor = static_cast<const View3DCursor *>(ptr->data);
-  copy_m4_m4(reinterpret_cast<float (*)[4]>(values), cursor->matrix<float4x4>().ptr());
+  copy_m4_m4(reinterpret_cast<float(*)[4]>(values), cursor->matrix<float4x4>().ptr());
 }
 
 static void rna_View3DCursor_matrix_set(PointerRNA *ptr, const float *values)
 {
   View3DCursor *cursor = static_cast<View3DCursor *>(ptr->data);
   float unit_mat[4][4];
-  normalize_m4_m4(unit_mat, reinterpret_cast<const float (*)[4]>(values));
+  normalize_m4_m4(unit_mat, reinterpret_cast<const float(*)[4]>(values));
   cursor->set_matrix(float4x4(unit_mat), false);
 }
 

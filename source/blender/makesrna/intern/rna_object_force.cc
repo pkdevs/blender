@@ -197,7 +197,7 @@ static std::optional<std::string> rna_PointCache_path(const PointerRNA *ptr)
         DynamicPaintModifierData *pmd = reinterpret_cast<DynamicPaintModifierData *>(md);
         if (pmd->canvas) {
           DynamicPaintSurface *surface = static_cast<DynamicPaintSurface *>(
-              pmd->canvas->surfaces.first_);
+              pmd->canvas->surfaces.first());
           for (; surface; surface = surface->next) {
             if (surface->pointcache == cache) {
               char name_surface_esc[sizeof(surface->name) * 2];
@@ -890,7 +890,7 @@ static std::optional<std::string> rna_EffectorWeight_path(const PointerRNA *ptr)
 
       if (pmd->canvas) {
         DynamicPaintSurface *surface = static_cast<DynamicPaintSurface *>(
-            pmd->canvas->surfaces.first_);
+            pmd->canvas->surfaces.first());
 
         for (; surface; surface = surface->next) {
           if (surface->effector_weights == ew) {

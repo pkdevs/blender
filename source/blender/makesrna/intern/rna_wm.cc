@@ -712,7 +712,7 @@ static int rna_Operator_name_length(PointerRNA *ptr)
 static bool rna_Operator_has_reports_get(PointerRNA *ptr)
 {
   wmOperator *op = static_cast<wmOperator *>(ptr->data);
-  return (op->reports && op->reports->list.first_);
+  return (op->reports && op->reports->list.first());
 }
 
 static PointerRNA rna_Operator_layout_get(PointerRNA *ptr)

@@ -614,7 +614,7 @@ static void rna_GizmoGroup_gizmo_remove(wmGizmoGroup *gzgroup, bContext *C, wmGi
 
 static void rna_GizmoGroup_gizmo_clear(wmGizmoGroup *gzgroup, bContext *C)
 {
-  while (gzgroup->gizmos.first_) {
+  while (gzgroup->gizmos.first()) {
     WM_gizmo_unlink(&gzgroup->gizmos, gzgroup->parent_gzmap, gzgroup->gizmos.first(), C);
   }
 }

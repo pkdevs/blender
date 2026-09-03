@@ -1292,8 +1292,9 @@ static PointerRNA rna_SpaceView3D_region_3d_get(PointerRNA *ptr)
   ScrArea *area = rna_area_from_space(ptr);
   void *regiondata = nullptr;
   if (area) {
-    ListBaseT<ARegion> *regionbase = (area->spacedata.first_ == v3d) ? &area->regionbase :
-                                                                       &v3d->regionbase;
+    ListBaseT<ARegion> *regionbase = (area->spacedata.first_as<View3D>() == v3d) ?
+                                         &area->regionbase :
+                                         &v3d->regionbase;
     ARegion *region = regionbase->last(); /* always last in list, weak. */
     regiondata = region->regiondata;
   }
@@ -1342,7 +1343,8 @@ static void rna_SpaceView3D_region_quadviews_begin(CollectionPropertyIterator *i
   int i = 3;
 
   ARegion *region = static_cast<ARegion *>(
-      ((area && area->spacedata.first_ == v3d) ? &area->regionbase : &v3d->regionbase)->last());
+      ((area && area->spacedata.first_as<View3D>() == v3d) ? &area->regionbase : &v3d->regionbase)
+          ->last());
   ListBaseT<ARegion> lb = {nullptr, nullptr};
 
   if (region && region->alignment == RGN_ALIGN_QSPLIT) {
@@ -1490,7 +1492,7 @@ static void rna_RegionView3D_view_matrix_set(PointerRNA *ptr, const float *value
 {
   RegionView3D *rv3d = static_cast<RegionView3D *>(ptr->data);
   float mat[4][4];
-  invert_m4_m4(mat, reinterpret_cast<float (*)[4]>(const_cast<float *>(values)));
+  invert_m4_m4(mat, reinterpret_cast<float(*)[4]>(const_cast<float *>(values)));
   ED_view3d_from_m4(mat, rv3d->ofs, rv3d->viewquat, &rv3d->dist, 0.0f);
   rna_RegionView3D_view_rotation_set_validate_view_axis(rv3d);
 }
@@ -2653,7 +2655,7 @@ static void rna_SpaceDopeSheetEditor_mode_update(bContext *C, PointerRNA *ptr)
   SpaceAction *saction = static_cast<SpaceAction *>(ptr->data);
   ScrArea *area = CTX_wm_area(C);
 
-  if (area && area->spacedata.first_ == saction) {
+  if (area && area->spacedata.first_as<SpaceAction>() == saction) {
     ARegion *channels_region = BKE_area_find_region_type(area, RGN_TYPE_CHANNELS);
     if (channels_region) {
       channels_region->flag &= ~RGN_FLAG_HIDDEN;
