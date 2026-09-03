@@ -820,7 +820,7 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
             return None
 
         # So that the created group doesn't show up in Unassigned.
-        group.allow_usage_in_scene_compositor_effect = False
+        group.allow_usage_in_scene_compositor_effect = True
 
         return group
 
@@ -834,6 +834,7 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
 
         effect = context.scene.compositor_effects.new(name=group.name)
         effect.node_group = group
+        effect.show_node_group_selector = False
 
         return {'FINISHED'}
 
