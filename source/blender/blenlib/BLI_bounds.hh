@@ -143,6 +143,9 @@ template<typename T, typename RadiusT>
 /**
  * Returns a new bound that contains the intersection of the two given bound.
  * Returns no box if there are no overlap.
+ *
+ * NOTE: this considers the bounds to be OPEN intervals. Two intervals (a, b) and (b, c) are NOT
+ * considered overlapping.
  */
 template<typename T>
 [[nodiscard]] inline std::optional<Bounds<T>> intersect(const Bounds<T> &a, const Bounds<T> &b)
@@ -153,6 +156,14 @@ template<typename T>
   }
   return result;
 }
+
+/**
+ * Returns a new bound that contains the intersection of the two given bound.
+ * Returns no box if there are no overlap.
+ *
+ * NOTE: this considers the bounds to be OPEN intervals. Two intervals (a, b) and (b, c) are NOT
+ * considered overlapping.
+ */
 template<typename T>
 [[nodiscard]] inline std::optional<Bounds<T>> intersect(const std::optional<Bounds<T>> &a,
                                                         const std::optional<Bounds<T>> &b)
