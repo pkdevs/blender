@@ -699,7 +699,7 @@ struct GreasePencilFillOpData {
   float2 extension_mouse_pos;
 
   /* All the mouse positions while its held down. Only used for the Delaunay method. */
-  Vector<float2> mouse_path;
+  Vector<float2> mouse_positions;
 
   /* Overlay draw callback for helper lines, etc. */
   void *overlay_cb_handle;
@@ -1283,9 +1283,9 @@ static void grease_pencil_fill_overlay_delaunay_cb(const bContext &C,
 
   const float line_width = 2.0f;
 
-  Array<float3> line_position(op_data.mouse_path.size());
-  for (const int i : op_data.mouse_path.index_range()) {
-    const float2 co = op_data.mouse_path[i];
+  Array<float3> line_position(op_data.mouse_positions.size());
+  for (const int i : op_data.mouse_positions.index_range()) {
+    const float2 co = op_data.mouse_positions[i];
 
     ED_view3d_win_to_3d(&view3d, &region, float3(0.0f), co, line_position[i]);
   }
@@ -1655,9 +1655,9 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
     }
     else {
       /* Take the full mouse path. */
-      const Array<int> fill_point_offset = {0, int(op_data.mouse_path.size())};
+      const Array<int> fill_point_offset = {0, int(op_data.mouse_positions.size())};
       const GroupedSpan<float2> fill_points = GroupedSpan<float2>(
-          OffsetIndices<int>(fill_point_offset), op_data.mouse_path);
+          OffsetIndices<int>(fill_point_offset), op_data.mouse_positions);
 
       const bool internal_gaps = (brush.gpencil_settings->flag & GP_BRUSH_FILL_INTERNAL_GAPS) != 0;
       const float gap_factor = brush.gpencil_settings->fill_gap_factor;
@@ -2002,7 +2002,7 @@ static wmOperatorStatus grease_pencil_fill_modal(bContext *C, wmOperator *op, co
 
   wmOperatorStatus estate = OPERATOR_CANCELLED;
   if (op_data.is_delaunay_method) {
-    op_data.mouse_path.append(float2(event->mval));
+    op_data.mouse_positions.append(float2(event->mval));
     estate = OPERATOR_RUNNING_MODAL;
 
     grease_pencil_update_extend(*C, op_data);
