@@ -63,6 +63,23 @@ inline const CPPType &to_storage_type(const CPPType &type)
 
 };  // namespace detail
 
+/**
+ * #SocketValueVariant is used to pass data between nodes, e.g. by geometry nodes in the lazy
+ * function evaluator. Specifically, it is the container type for the following socket types: bool,
+ * float, integer, vector, rotation, color and string.
+ *
+ * The data passed through e.g. an integer socket can be a single value, a field or a grid (and in
+ * the lists and images). Each of those is stored differently, but this container can store them
+ * all.
+ *
+ * A key requirement for this container is that it is type-erased, i.e. not all code that uses it
+ * has to include all the headers required to process the other storage types. This is achieved by
+ * using the #Any type and by providing templated accessors that are implemented outside of a
+ * header.
+ *
+ * This container is also able to do implicit conversions between the different types, with the
+ * #ensure_type() methods.
+ */
 class SocketValueVariant {
  private:
   using Info = detail::SocketValueVariantTypeInfo;
@@ -77,8 +94,15 @@ class SocketValueVariant {
   template<typename T> using to_storage_type = typename detail::storage_type<T>::type;
 
  public:
+  /**
+   * Create an empty variant. This is not valid for any socket type yet.
+   */
   SocketValueVariant() = default;
 
+  /**
+   * Create a variant based on the given value. This works for primitive types. For more complex
+   * types, one can use the #from or #construct_in utilities.
+   */
   template<typename T>
   explicit SocketValueVariant(T &&value)
       /* Required to avoid overriding the copy/move-constructors. */
@@ -87,38 +111,81 @@ class SocketValueVariant {
   /** Construct a #SocketValueVariant at the given pointer from the given value. */
   template<typename T> static SocketValueVariant &construct_in(void *ptr, T &&value);
 
+  /** Create a new #SocketValueVariant from the given value. */
   template<typename T> static SocketValueVariant from(T &&value);
 
+  /** Replace the stored value by constructing the given type in the storage. */
   template<typename T, typename... Args> T &emplace(Args &&...args);
 
+  /**
+   * Try to convert the stored value to the given type, returning null if the implicit conversion
+   * does not exist.
+   */
   template<typename T> T *try_convert();
   void *try_convert(const CPPType &type);
 
+  /**
+   * Try to convert the stored value to the given type, creating the type's default value if the
+   * conversion does not exist.
+   */
   template<typename T> T &ensure_type();
   void *ensure_type(const CPPType &type);
 
+  /**
+   * Get the stored value as a specific type. For convenience this allows accessing the stored type
+   * as a different type, using implicit conversions as possible.
+   *
+   * This method may leave the variant empty, in a moved from state or unchanged. Therefore, this
+   * should only be called once.
+   */
   template<typename T> T extract();
 
+  /**
+   * Return a pointer to the stored value if it is of the given type. Otherwise return null.
+   */
   template<typename T> const T *get_if() const;
   template<typename T> T *get_if();
-
   const void *get_if(const CPPType &type) const;
   void *get_if(const CPPType &type);
 
+  /** Get the stored value as a #GPointer. */
   GPointer get() const;
   GMutablePointer get();
 
-  void *allocate_single(const CPPType &type);
-
-  bool is_single() const;
-  bool is_field() const;
-  bool is_list() const;
-  bool is_volume_grid() const;
+  /**
+   * If true, the stored value cannot be converted to a single value without loss of information.
+   */
   bool is_context_dependent_field() const;
+
+  /**
+   * If true, the value is stored as a #GField.
+   */
+  bool is_field() const;
+
+  /**
+   * The stored value is a volume grid.
+   */
+  bool is_volume_grid() const;
+
+  /**
+   * The stored value is a single value.
+   */
+  bool is_single() const;
+
+  /**
+   * The stored value is a list.
+   */
+  bool is_list() const;
 
   /** Also see GeomtrySet::ensure_owns_direct_data. */
   void ensure_owns_direct_data();
   bool owns_direct_data() const;
+
+  /**
+   * Replaces the stored value with a new uninitialized single value for the given socket type. The
+   * caller is responsible to construct the value in the returned memory before it is used.
+   */
+  void *allocate_single(const CPPType &type);
 
   void count_memory(MemoryCounter &memory) const;
 
