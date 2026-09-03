@@ -95,6 +95,11 @@ struct BlendWriter {
    */
   bool is_undo() const;
 
+  /**
+   * \note Should not be strictly needed outside of handling external Multires .btx files.
+   */
+  StringRefNull filepath() const;
+
   void write_struct_by_name(const char *struct_name,
                             const void *data,
                             BlendStructWriterFn fn = nullptr);
@@ -303,11 +308,6 @@ struct BLO_Write_IDBuffer {
 };
 
 /* Misc. */
-
-/**
- * \note Should not be strictly needed outside of handling external Multires .btx files.
- */
-StringRefNull BLO_write_filepath(const BlendWriter *writer);
 
 /**
  * Check if the data can be written more efficiently by making use of implicit-sharing. If yes, the
