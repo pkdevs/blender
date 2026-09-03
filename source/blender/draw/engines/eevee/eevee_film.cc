@@ -59,7 +59,7 @@ void Film::init_aovs(const Set<std::string> &passes_used_by_viewport_compositor)
       }
     }
 
-    if (inst_.is_viewport_compositor_enabled) {
+    if (inst_.is_viewport_compositor_used) {
       for (ViewLayerAOV &aov : inst_.view_layer->aovs) {
         /* Already added as a display pass. No need to add again. */
         if (!aovs.is_empty() && aovs.last() == &aov) {
@@ -275,6 +275,19 @@ static eViewLayerEEVEEPassType get_viewport_compositor_enabled_passes(
   return viewport_compositor_enabled_passes;
 }
 
+/* Light passes are stored pre-divided by their matching Color pass, so Color must be enabled
+ * whenever Light is (#161352). */
+static eViewLayerEEVEEPassType with_light_pass_color_dependencies(eViewLayerEEVEEPassType passes)
+{
+  if (passes & EEVEE_RENDER_PASS_DIFFUSE_LIGHT) {
+    passes |= EEVEE_RENDER_PASS_DIFFUSE_COLOR;
+  }
+  if (passes & EEVEE_RENDER_PASS_SPECULAR_LIGHT) {
+    passes |= EEVEE_RENDER_PASS_SPECULAR_COLOR;
+  }
+  return passes;
+}
+
 void Film::init(const int2 &extent, const rcti *output_rect)
 {
   using namespace math;
@@ -297,10 +310,14 @@ void Film::init(const int2 &extent, const rcti *output_rect)
 
   /* Compute the passes needed by the viewport compositor. */
   Set<std::string> passes_used_by_viewport_compositor;
-  if (inst_.is_viewport_compositor_enabled) {
-    passes_used_by_viewport_compositor = bke::compositor::get_used_passes(scene, inst_.view_layer);
+  if (inst_.is_viewport_compositor_used) {
+    passes_used_by_viewport_compositor = bke::compositor::get_used_passes(
+        scene, inst_.view_layer, bke::compositor::ExecutionMode::Preview);
     viewport_compositor_enabled_passes_ = get_viewport_compositor_enabled_passes(
         passes_used_by_viewport_compositor, inst_.view_layer);
+  }
+  else {
+    viewport_compositor_enabled_passes_ = eViewLayerEEVEEPassType(0);
   }
 
   enabled_categories_ = PassCategory(0);
@@ -320,6 +337,8 @@ void Film::init(const int2 &extent, const rcti *output_rect)
         enabled_passes |= EEVEE_RENDER_PASS_DEPTH;
       }
 
+      enabled_passes = with_light_pass_color_dependencies(enabled_passes);
+
       if (assign_if_different(enabled_passes_, enabled_passes)) {
         inst_.sampling.reset();
       }
@@ -329,14 +348,7 @@ void Film::init(const int2 &extent, const rcti *output_rect)
       enabled_passes_ = enabled_passes(inst_.view_layer);
     }
 
-    /* Force enable color passes if light passes are enabled.
-     * This is needed since we need to pre-divide by them. */
-    if (enabled_passes_ & EEVEE_RENDER_PASS_DIFFUSE_LIGHT) {
-      enabled_passes_ |= EEVEE_RENDER_PASS_DIFFUSE_COLOR;
-    }
-    if (enabled_passes_ & EEVEE_RENDER_PASS_SPECULAR_LIGHT) {
-      enabled_passes_ |= EEVEE_RENDER_PASS_SPECULAR_COLOR;
-    }
+    enabled_passes_ = with_light_pass_color_dependencies(enabled_passes_);
 
     /* Filter obsolete passes. */
     enabled_passes_ &= ~(EEVEE_RENDER_PASS_UNUSED_8 | EEVEE_RENDER_PASS_UNUSED_14);
@@ -383,6 +395,16 @@ void Film::init(const int2 &extent, const rcti *output_rect)
       data_.extent_inv = 1.0f / float2(data_.extent);
       data_.offset = int2(0, 0);
       data_.overscan = 0;
+    }
+
+    if (inst_.camera.is_panoramic()) {
+      /* Reshape into a square so each face's pixel density stays close to the final film.
+       * TODO: Remove once per projection face clipping is implemented. */
+      int64_t render_pixel_count = data_.render_extent.x * int64_t(data_.render_extent.y);
+      render_extent_shading_view_ = int2(ceilf(sqrtf(float(render_pixel_count))));
+    }
+    else {
+      render_extent_shading_view_ = data_.render_extent;
     }
 
     data_.filter_radius = clamp_f(scene.r.gauss, 0.0f, 100.0f);
@@ -588,14 +610,17 @@ void Film::sync()
    *
    * See #153463
    */
-  use_compute_ = !inst_.is_viewport() ||
+  /* The fragment shader path below is only safe to call once per frame, so force the
+   * compute path for panoramic to avoid a race between accumulate calls. */
+  use_compute_ = !inst_.is_viewport() || inst_.camera.is_panoramic() ||
                  GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_MAC, GPU_DRIVER_ANY) ||
                  GPU_type_matches_ex(
                      GPU_DEVICE_QUALCOMM, GPU_OS_WIN, GPU_DRIVER_ANY, GPU_BACKEND_VULKAN);
 
-  eShaderType shader = use_compute_ ? FILM_COMP : FILM_FRAG;
+  eShaderType shader = inst_.camera.is_panoramic() ? FILM_COMP_PANORAMIC :
+                                                     (use_compute_ ? FILM_COMP : FILM_FRAG);
 
-  /* TODO(fclem): Shader variation for panoramic & scaled resolution. */
+  /* TODO(fclem): Shader variation for scaled resolution. */
 
   gpu::Shader *sh = inst_.shaders.static_shader_get(shader);
   accumulate_ps_.init();
@@ -613,12 +638,13 @@ void Film::sync()
   copy_ps_.init();
   if (use_compute_ && inst_.is_viewport()) {
     init_pass(copy_ps_, inst_.shaders.static_shader_get(FILM_COPY));
+    copy_ps_.barrier(GPU_BARRIER_TEXTURE_FETCH | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     copy_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
   }
 
   const int cryptomatte_layer_count = cryptomatte_layer_len_get();
   const bool is_cryptomatte_pass_enabled = cryptomatte_layer_count > 0;
-  const bool do_cryptomatte_sorting = !inst_.is_viewport() || inst_.is_viewport_compositor_enabled;
+  const bool do_cryptomatte_sorting = !inst_.is_viewport() || inst_.is_viewport_compositor_used;
   cryptomatte_post_ps_.init();
   if (is_cryptomatte_pass_enabled && do_cryptomatte_sorting) {
     cryptomatte_post_ps_.state_set(DRW_STATE_NO_DRAW);
@@ -658,7 +684,7 @@ void Film::init_pass(PassSimple &pass, gpu::Shader *sh)
   pass.bind_ubo("camera_curr", &(*velocity.camera_steps[STEP_CURRENT]));
   pass.bind_ubo("camera_next", &(*velocity.camera_steps[step_next]));
   pass.bind_texture("depth_tx", &rbuffers.depth_tx);
-  pass.bind_texture("combined_tx", &combined_final_tx_);
+  pass.bind_texture("combined_tx", &combined_final_tx_, filter);
   pass.bind_texture("vector_tx", &rbuffers.vector_tx);
   pass.bind_texture("rp_color_tx", &rbuffers.rp_color_tx);
   pass.bind_texture("rp_value_tx", &rbuffers.rp_value_tx);
@@ -676,11 +702,12 @@ void Film::init_pass(PassSimple &pass, gpu::Shader *sh)
   pass.bind_image("cryptomatte_img", &cryptomatte_tx_);
   pass.bind_image("denoising_depth_img", &denoising_depth_tx_);
   pass.bind_resources(inst_.uniform_data);
+  pass.bind_resources(inst_.sampling);
 }
 
 void Film::end_sync()
 {
-  use_reprojection_ = inst_.sampling.interactive_mode();
+  use_reprojection_ = inst_.sampling.interactive_mode() && !inst_.camera.is_panoramic();
 
   /* Just bypass the reprojection and reset the accumulation. */
   if (inst_.is_viewport() && !use_reprojection_ && inst_.sampling.is_reset()) {
@@ -777,7 +804,15 @@ void Film::update_sample_table()
   }
 
   data_.samples_len = 0;
-  if (data_.scaling_factor > 1) {
+  if (inst_.camera.is_panoramic()) {
+    /* TODO(fclem): Proper filtering instead of a single nearest sample. A 3x3 or plus-shape
+     * 5-sample kernel would reduce aliasing quite a lot. */
+    data_.samples[0].texel = int2(0, 0);
+    data_.samples[0].weight = 1.0f;
+    data_.samples_weight_total = 1.0f;
+    data_.samples_len = 1;
+  }
+  else if (data_.scaling_factor > 1) {
     /* For this case there might be no valid samples for some pixels.
      * Still visit all four neighbors to have the best weight available.
      * Note that weight is computed on the GPU as it is different for each sample. */
@@ -901,10 +936,12 @@ void Film::accumulate(View &view, gpu::Texture *combined_final_tx)
 
   display_only_ = false;
   inst_.manager->submit(accumulate_ps_, view);
-  inst_.manager->submit(copy_ps_, view);
 
   combined_tx_.swap();
   weight_tx_.swap();
+
+  /* copy_ps_ reads in_combined_tx so it must run after the swap. */
+  inst_.manager->submit(copy_ps_, view);
 
   /* Use history after first sample. */
   if (data_.use_history == 0) {

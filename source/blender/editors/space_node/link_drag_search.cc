@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup spnode
+ */
+
 #include "AS_asset_library.hh"
 #include "AS_asset_representation.hh"
 
@@ -222,6 +226,8 @@ static void search_link_ops_for_asset_metadata(const bNodeTree &node_tree,
              return;
            }
            bNode &node = params.add_node(params.node_tree.typeinfo->group_idname);
+           STRNCPY_UTF8(node.name, BKE_id_name(group->id));
+           bke::node_unique_name(params.node_tree, node);
            node.id = &group->id;
            id_us_plus(node.id);
            BKE_ntree_update_tag_node_property(&params.node_tree, &node);
@@ -320,12 +326,12 @@ static void gather_socket_link_operations(const bContext &C,
           return true;
         }
       }
-      search_link_ops.append({std::string(IFACE_("Group Input")) + " " + UI_MENU_ARROW_SEP +
-                                  (interface_socket.name ? interface_socket.name : ""),
-                              [interface_socket](nodes::LinkSearchOpParams &params) {
-                                add_existing_group_input_fn(params, interface_socket);
-                              },
-                              weight});
+      search_link_ops.append(
+          {std::string(IFACE_("Group Input")) + " " + UI_MENU_ARROW_SEP + interface_socket.name(),
+           [interface_socket](nodes::LinkSearchOpParams &params) {
+             add_existing_group_input_fn(params, interface_socket);
+           },
+           weight});
       weight--;
       return true;
     });
@@ -501,7 +507,7 @@ static bool link_drag_operation_test_poll(bContext *C)
     return false;
   }
   PointerRNA socket_ptr = CTX_data_pointer_get_type(C, "socket", RNA_NodeSocket);
-  if (!socket_ptr.data) {
+  if (!socket_ptr) {
     return false;
   }
   return true;
@@ -515,7 +521,7 @@ static wmOperatorStatus link_drag_operation_test_exec(bContext *C, wmOperator *o
   }
   bNodeTree &ntree = *snode.edittree;
   PointerRNA socket_ptr = CTX_data_pointer_get_type(C, "socket", RNA_NodeSocket);
-  if (!socket_ptr.data) {
+  if (!socket_ptr) {
     return OPERATOR_CANCELLED;
   }
   bNodeSocket &socket = *socket_ptr.data_as<bNodeSocket>();

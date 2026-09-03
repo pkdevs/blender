@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup geo
+ */
+
 #pragma once
 #include <optional>
 
@@ -67,7 +71,7 @@ struct BevelParameters {
   Array<bool> miter;
   /** Per corner float saying how much to spread arc miters. */
   Array<float> spread;
-  /** Which output attributes are needed.*/
+  /** Which output attributes are needed. */
   geometry::BevelAttributeOutputs attribute_outputs;
 };
 

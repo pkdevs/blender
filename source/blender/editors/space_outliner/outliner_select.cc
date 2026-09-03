@@ -221,7 +221,7 @@ void outliner_item_mode_toggle(bContext *C,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Outliner Element Selection/Activation on Click Operator
+/** \name Element Activation
  * \{ */
 
 static void tree_element_viewlayer_activate(bContext *C, TreeElement *te)
@@ -826,8 +826,6 @@ static void tree_element_text_activate(bContext *C, TreeElement *te)
   ED_text_activate_in_screen(C, text);
 }
 
-/* ---------------------------------------------- */
-
 void tree_element_activate(bContext *C,
                            const TreeViewContext &tvc,
                            TreeElement *te,
@@ -936,10 +934,17 @@ void tree_element_type_active_set(bContext *C,
       break;
     case TSE_SHAPE_KEY_BLOCK:
       tree_elemment_shapekey_active_set(C, te);
+      break;
     default:
       break;
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Element Active State Query
+ * \{ */
 
 static eOLDrawState tree_element_defgroup_state_get(const Main &bmain,
                                                     const Scene *scene,
@@ -1289,6 +1294,12 @@ bPoseChannel *outliner_find_parent_bone(TreeElement *te, TreeElement **r_bone_te
   return nullptr;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Properties Editor Sync
+ * \{ */
+
 static void outliner_sync_to_properties_editors(const bContext *C,
                                                 PointerRNA *ptr,
                                                 const eSpaceButtons_Context context)
@@ -1494,12 +1505,16 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
     }
   }
 
-  if (ptr.data) {
+  if (ptr) {
     outliner_sync_to_properties_editors(C, &ptr, context);
   }
 }
 
-/* ================================================ */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Outliner Element Selection/Activation on Click Operator
+ * \{ */
 
 /**
  * Action when clicking to activate an item (typically under the mouse cursor),

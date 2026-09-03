@@ -227,6 +227,9 @@ static wmOperatorStatus screen_render_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  /* Flush sculpt and editmode changes. */
+  ED_editors_flush_edits(mainp);
+
   re = RE_NewSceneRender(scene);
 
   G.is_break = false;
@@ -239,6 +242,8 @@ static wmOperatorStatus screen_render_exec(bContext *C, wmOperator *op)
   BKE_image_backup_render(scene, ima, true);
 
   RE_SetReports(re, op->reports);
+
+  ED_render_view3d_auto_pause(mainp, true);
 
   if (is_animation) {
     RE_RenderAnim(re,
@@ -262,6 +267,8 @@ static wmOperatorStatus screen_render_exec(bContext *C, wmOperator *op)
   }
 
   RE_SetReports(re, nullptr);
+
+  ED_render_view3d_auto_pause(mainp, false);
 
   const bool cancelled = G.is_break;
 
@@ -431,7 +438,9 @@ static void image_renderinfo_cb(void *rjv, RenderStats *rs)
 
   RE_ReleaseResult(rj->re);
 
-  BKE_callback_exec_string(G_MAIN, rs->infostr, BKE_CB_EVT_RENDER_STATS);
+  if (rs->infostr != nullptr) {
+    BKE_callback_exec_string(G_MAIN, rs->infostr, BKE_CB_EVT_RENDER_STATS);
+  }
 
   /* make jobs timer to send notifier */
   *(rj->do_update) = true;
@@ -678,6 +687,9 @@ static void render_endjob(void *rjv)
     WM_locked_interface_set(static_cast<wmWindowManager *>(G_MAIN->wm.first), false);
     DEG_tag_on_visible_update(G_MAIN, false);
   }
+
+  /* Resume viewport render engines now that the final render is complete. */
+  ED_render_view3d_auto_pause(G_MAIN, false);
 }
 
 /* called by render, check job 'stop' value or the global */
@@ -724,7 +736,7 @@ static wmOperatorStatus screen_render_modal(bContext *C, wmOperator *op, const w
   Scene *scene = static_cast<Scene *>(op->customdata);
 
   /* no running blender, remove handler and pass through */
-  if (0 == WM_jobs_test(CTX_wm_manager(C), scene, WM_JOB_TYPE_RENDER)) {
+  if (!WM_jobs_has_running(CTX_wm_manager(C), scene, WM_JOB_TYPE_RENDER)) {
     return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
   }
 
@@ -844,7 +856,7 @@ static wmOperatorStatus screen_render_invoke(bContext *C, wmOperator *op, const 
   }
 
   /* only one render job at a time */
-  if (WM_jobs_test(CTX_wm_manager(C), scene, WM_JOB_TYPE_RENDER)) {
+  if (WM_jobs_has_running(CTX_wm_manager(C), scene, WM_JOB_TYPE_RENDER)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -879,8 +891,8 @@ static wmOperatorStatus screen_render_invoke(bContext *C, wmOperator *op, const 
   /* handle UI stuff */
   WM_cursor_wait(true);
 
-  /* flush sculpt and editmode changes */
-  ED_editors_flush_edits_ex(bmain, true, false);
+  /* Flush sculpt and editmode changes. */
+  ED_editors_flush_edits(bmain);
 
   /* store spare
    * get view3d layer, local layer, make this nice API call to render
@@ -988,6 +1000,9 @@ static wmOperatorStatus screen_render_invoke(bContext *C, wmOperator *op, const 
    * the reason of this is that active scene could change when rendering
    * several layers from compositor #31800. */
   op->customdata = scene;
+
+  /* Pause viewport render engines for the duration of the final render. */
+  ED_render_view3d_auto_pause(bmain, true);
 
   WM_jobs_start(CTX_wm_manager(C), wm_job);
 
