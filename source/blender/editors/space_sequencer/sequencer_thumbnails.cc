@@ -469,10 +469,7 @@ void draw_strip_thumbnails(const TimelineDrawContext &ctx,
                            StripsDrawBatch &strips_batch,
                            const Vector<StripDrawContext> &strips)
 {
-  const bool show_thumbnails =
-      (ctx.sseq->timeline_overlay.flag & SEQ_TIMELINE_MIDDLE_THUMBNAILS) ||
-      (ctx.sseq->timeline_overlay.flag & SEQ_TIMELINE_STRIP_END_THUMBNAILS) ||
-      (ctx.sseq->timeline_overlay.flag & SEQ_TIMELINE_CONTINUOUS_THUMBNAILS);
+  const bool show_thumbnails = (ctx.sseq->timeline_overlay.flag & SEQ_TIMELINE_SHOW_THUMBNAILS);
   /* Nothing to do if we're not showing thumbnails overall. */
   if ((ctx.sseq->flag & SEQ_SHOW_OVERLAY) == 0 || !show_thumbnails) {
     return;
