@@ -367,7 +367,8 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
   /* We need this extra loop for the edge case when the ranges of the motion paths don't overlap.
    * We need to touch at least one frame of each motion path to ensure it has the
    * `MOTIONPATH_VERT_EVALUATED` flag. In practice this will almost always be the case and this
-   * loop will trigger the `continue` immediately below. */
+   * loop will trigger the `continue` immediately below. That is because we evaluate all targets
+   * for every frame visited (so we only evaluate the depsgraph once per frame). */
   for (MPathTarget &mpt : targets) {
     /* We can safely skip the target if either the start or end frame of it's range was already
      * visited. That is because if we had visited it, and it would need recalculation,
