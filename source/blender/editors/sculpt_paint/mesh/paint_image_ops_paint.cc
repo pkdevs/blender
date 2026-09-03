@@ -533,6 +533,7 @@ bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
   texture_paint_data->image_data = ImageData::init_active_image(*this->object,
                                                                 *paint_mode_settings_);
   if (!texture_paint_data->image_data) {
+    BLI_assert(0);
     return false;
   }
   mode_data_ = std::move(texture_paint_data);
