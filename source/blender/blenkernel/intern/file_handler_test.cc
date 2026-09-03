@@ -140,8 +140,7 @@ TEST_F(FileHandlerTest, label_with_extensions)
 
   /* Common prefix ".ab" has only 2 letters excluding the leading dot: below the 3-letter
    * threshold required to collapse. */
-  expect_label_with_extensions(
-      "Prefix Too Short", {".ab", ".abc"}, "Prefix Too Short (.ab/.abc)");
+  expect_label_with_extensions("Prefix Too Short", {".ab", ".abc"}, "Prefix Too Short (.ab/.abc)");
 
   /* Common prefix ".ble" has enough letters to collapse, but ".blend" is longer than
    * `prefix.size() + 1`, so the extensions are not collapsible. */

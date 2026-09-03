@@ -175,7 +175,7 @@ std::string FileHandlerType::label_with_extensions() const
   while (group_start < all_extensions.size()) {
     int64_t group_size = 1;
     while (group_start + group_size < all_extensions.size() &&
-          extensions_group_is_collapsible(all_extensions.slice(group_start, group_size + 1)))
+           extensions_group_is_collapsible(all_extensions.slice(group_start, group_size + 1)))
     {
       group_size++;
     }
