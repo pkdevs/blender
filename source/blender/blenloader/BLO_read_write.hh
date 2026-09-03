@@ -267,10 +267,10 @@ struct BlendWriter {
         [&](BlendStructWriter &struct_writer) {
           struct_writer.zero_runtime_fields<T>([&](T &data) {
             ID &id = *reinterpret_cast<ID *>(&data);
-            /* TODO: Check if these need to be
-             * preserved during undo. */
-            id.session_uid = 0;
-            id.recalc_up_to_undo_push = 0;
+            if (!this->is_undo()) {
+              id.session_uid = 0;
+              id.recalc_up_to_undo_push = 0;
+            }
           });
           if (fn) {
             fn(struct_writer);
