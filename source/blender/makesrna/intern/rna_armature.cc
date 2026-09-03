@@ -8,8 +8,9 @@
 
 #include <cstdlib>
 
-#include "BLI_math_constants.hh"
-#include "BLI_string_utf8_symbols.hh"
+#include "BLI_assert.hh"
+#include "BLI_math_constants.h"
+#include "BLI_string_utf8_symbols.h"
 
 #include "BLT_translation.hh"
 
@@ -744,6 +745,22 @@ static void rna_Bone_hide_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA
   DEG_id_tag_update(&arm->id, ID_RECALC_SYNC_TO_EVAL);
 }
 
+static int rna_Bone_display_type_effective_get(PointerRNA *ptr)
+{
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
+  Bone *bone = static_cast<Bone *>(ptr->data);
+  BLI_assert(arm != nullptr && bone != nullptr);
+  return (bone->drawtype == ARM_DRAW_TYPE_ARMATURE_DEFINED) ? arm->drawtype : bone->drawtype;
+}
+
+static int rna_EditBone_display_type_effective_get(PointerRNA *ptr)
+{
+  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
+  EditBone *ebone = static_cast<EditBone *>(ptr->data);
+  BLI_assert(arm != nullptr && ebone != nullptr);
+  return (ebone->drawtype == ARM_DRAW_TYPE_ARMATURE_DEFINED) ? arm->drawtype : ebone->drawtype;
+}
+
 /* called whenever a bone is renamed */
 static void rna_Bone_update_renamed(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
@@ -1428,6 +1445,17 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
   RNA_def_property_ui_text(prop, "Display Type", "");
   RNA_def_property_update(prop, 0, "rna_Armature_redraw_data");
   RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
+
+  prop = RNA_def_property(srna, "display_type_effective", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, prop_drawtype_items);
+  if (editbone) {
+    RNA_def_property_enum_funcs(prop, "rna_EditBone_display_type_effective_get", nullptr, nullptr);
+  }
+  else {
+    RNA_def_property_enum_funcs(prop, "rna_Bone_display_type_effective_get", nullptr, nullptr);
+  }
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Display Type Effective", "Actual display type used for drawing");
 
   /* flags */
   prop = RNA_def_property(srna, "use_connect", PROP_BOOLEAN, PROP_NONE);

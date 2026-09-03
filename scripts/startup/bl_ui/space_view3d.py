@@ -1378,30 +1378,20 @@ class VIEW3D_MT_transform_armature(VIEW3D_MT_transform_base, Menu):
 
         # armature specific extensions follow...
         obj = context.object
-        if obj.type == 'ARMATURE':
-            if obj.mode == 'EDIT':
-                layout.separator()
+        if obj.type == 'ARMATURE' and obj.mode in {'EDIT', 'POSE'}:
+            if obj.mode == 'POSE':
+               pose_bone = context.active_pose_bone
+               bone = pose_bone.bone if pose_bone else None
+            else:
+               bone = context.active_bone
 
-                layout.operator("transform.vertex_warp", text="Warp")
-                layout.operator_context = 'EXEC_REGION_WIN'
-                layout.operator("transform.vertex_random", text="Randomize").offset = 0.1
-                layout.operator_context = 'INVOKE_REGION_WIN'
-            elif obj.mode == 'POSE':
-                layout.separator()
+            if bone and bone.display_type_effective == 'BBONE':
+               layout.separator()
+               layout.operator("transform.transform", text="Scale BBone").mode = 'BONE_SIZE'
 
-                # Only show Align to Transform Orientation operator in pose mode, because in edit mode
-                # it might change the parent bone's length, or fail to align in certain cases.
-                layout.operator_context = 'EXEC_REGION_WIN'
-                layout.operator("transform.transform", text="Align to Transform Orientation").mode = 'ALIGN'
-                layout.operator_context = 'INVOKE_REGION_WIN'
-
-            if obj.data.display_type == 'BBONE':
+            elif bone and bone.display_type_effective == 'ENVELOPE':
                 layout.separator()
-                layout.operator("transform.transform", text="Scale BBone").mode = 'BONE_SIZE'
-
-            elif obj.data.display_type == 'ENVELOPE':
-                layout.separator()
-                layout.operator("transform.transform", text="Scale Envelope Distance").mode = 'BONE_ENVELOPE_DIST'
+                layout.operator("transform.transform", text="Scale Envelope Distance").mode = 'BONE_SIZE'
                 layout.operator("transform.transform", text="Scale Radius").mode = 'BONE_ENVELOPE'
 
         if context.edit_object and context.edit_object.type == 'ARMATURE':
