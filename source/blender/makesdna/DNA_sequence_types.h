@@ -1005,7 +1005,7 @@ struct WhiteBalanceModifierData {
 struct SequencerTonemapModifierData {
   StripModifierData modifier;
 
-  float key = 0, offset = 0, gamma = 0;
+  float key = 0.18f, offset = 1.0f, gamma = 1.0f;
   float intensity = 0, contrast = 0, adaptation = 1.0f, correction = 0;
   eModTonemapType type = SEQ_TONEMAP_RD_PHOTORECEPTOR;
 };
