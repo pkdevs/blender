@@ -65,6 +65,11 @@ int CUDADeviceQueue::num_concurrent_busy_states(const size_t /*state_size*/) con
   return 4 * max_num_threads;
 }
 
+int CUDADeviceQueue::num_sort_partitions(int max_num_paths, uint /*max_scene_shaders*/) const
+{
+  return max(max_num_paths / 65536, 1);
+}
+
 bool CUDADeviceQueue::supports_local_atomic_sort() const
 {
   return DebugFlags().cuda.use_local_atomic_sort;
