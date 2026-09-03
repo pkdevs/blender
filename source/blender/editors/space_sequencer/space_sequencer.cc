@@ -1176,7 +1176,9 @@ static void sequencer_space_blend_read_data(BlendDataReader * /*reader*/, SpaceL
 
 static void sequencer_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
-  writer->write_struct_cast<SpaceSeq>(sl);
+  writer->write_struct_cast<SpaceSeq>(sl, [](BlendStructWriter &struct_writer) {
+    struct_writer.zero_runtime_fields<SpaceSeq>([&](SpaceSeq &sseq) { sseq.runtime = nullptr; });
+  });
 }
 
 static bool sequencer_scrubbing_region_poll(const RegionPollParams *params)

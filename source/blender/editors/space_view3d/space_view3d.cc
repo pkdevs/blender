@@ -1646,7 +1646,10 @@ static void view3d_space_blend_write(BlendWriter *writer, SpaceLink *sl)
   });
 
   if (v3d->localvd) {
-    writer->write_struct(v3d->localvd);
+    writer->write_struct(v3d->localvd, [](BlendStructWriter &struct_writer) {
+      struct_writer.zero_runtime_fields<View3D>(
+          [&](View3D &v3d) { memset((void *)&v3d.runtime, 0, sizeof(v3d.runtime)); });
+    });
   }
 
   BKE_screen_view3d_shading_blend_write(writer, &v3d->shading);

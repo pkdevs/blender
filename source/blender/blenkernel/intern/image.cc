@@ -417,7 +417,9 @@ static void image_blend_write(BlendWriter *writer, ID *id, const void *id_addres
   }
   writer->write_struct(ima->stereo3d_format);
 
-  writer->write_struct_list(&ima->tiles);
+  writer->write_struct_list(&ima->tiles, [](BlendStructWriter &struct_writer) {
+    struct_writer.zero_runtime_fields<ImageTile>([&](ImageTile &tile) { tile.runtime = {}; });
+  });
 
   ima->packedfile = nullptr;
 

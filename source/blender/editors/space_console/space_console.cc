@@ -396,7 +396,10 @@ static void console_space_blend_write(BlendWriter *writer, SpaceLink *sl)
     writer->write_struct(&cl);
     writer->write_char_array(size_t(cl.len) + 1, cl.line);
   }
-  writer->write_struct_cast<SpaceConsole>(sl);
+  writer->write_struct_cast<SpaceConsole>(sl, [](BlendStructWriter &struct_writer) {
+    struct_writer.zero_runtime_fields<SpaceConsole>(
+        [&](SpaceConsole &con) { con.runtime = nullptr; });
+  });
 }
 
 void ED_spacetype_console()

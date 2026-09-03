@@ -104,7 +104,9 @@ static void mask_blend_write(BlendWriter *writer, ID *id, const void *id_address
 {
   Mask *mask = id_cast<Mask *>(id);
 
-  writer->write_id_struct(id_address, mask);
+  writer->write_id_struct(id_address, mask, [](BlendStructWriter &struct_writer) {
+    struct_writer.zero_runtime_fields<Mask>([&](Mask &mask) { mask.runtime = {}; });
+  });
   BKE_id_blend_write(writer, &mask->id);
 
   for (MaskLayer &masklay : mask->masklayers) {

@@ -1904,7 +1904,10 @@ void BKE_pose_blend_write(BlendWriter *writer, bPose *pose)
 
     bke::motionpath::blend_write(writer, chan.mpath);
 
-    writer->write_struct(&chan);
+    writer->write_struct(&chan, [](BlendStructWriter &struct_writer) {
+      struct_writer.zero_runtime_fields<bPoseChannel>(
+          [&](bPoseChannel &chan) { memset((void *)&chan.runtime, 0, sizeof(chan.runtime)); });
+    });
   }
 
   /* Write groups */

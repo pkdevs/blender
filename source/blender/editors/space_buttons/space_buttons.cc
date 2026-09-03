@@ -1087,7 +1087,15 @@ static void buttons_space_blend_read_after_liblink(BlendLibReader * /*reader*/,
 
 static void buttons_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
-  writer->write_struct_cast<SpaceProperties>(sl);
+  writer->write_struct_cast<SpaceProperties>(sl, [](BlendStructWriter &struct_writer) {
+    struct_writer.zero_runtime_fields<SpaceProperties>([&](SpaceProperties &sbuts) {
+      sbuts.path = nullptr;
+      sbuts.pathflag = 0;
+      sbuts.dataicon = 0;
+      sbuts.texuser = nullptr;
+      sbuts.runtime = nullptr;
+    });
+  });
 }
 
 /** \} */

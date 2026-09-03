@@ -28,6 +28,7 @@
 #include "DNA_view3d_types.h"
 
 #include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_rect.hh"
@@ -211,18 +212,32 @@ static void screen_blend_write(BlendWriter *writer, ID *id, const void *id_addre
 
   /* write LibData */
   /* in 2.50+ files, the file identifier for screens is patched, forward compatibility */
-  writer->write_struct_at_address_by_id_with_filecode(ID_SCRN,
-                                                      dna::sdna_struct_id_get<bScreen>(),
-                                                      id_address,
-                                                      screen,
-                                                      [&](BlendStructWriter &struct_writer) {
-                                                        struct_writer.zero_runtime_fields<bScreen>(
-                                                            [&](bScreen &screen) {
-                                                              if (!writer->is_undo()) {
-                                                                screen.id.session_uid = 0;
-                                                              }
-                                                            });
-                                                      });
+  writer->write_struct_at_address_by_id_with_filecode(
+      ID_SCRN,
+      dna::sdna_struct_id_get<bScreen>(),
+      id_address,
+      screen,
+      [&](BlendStructWriter &struct_writer) {
+        struct_writer.zero_runtime_fields<bScreen>([&](bScreen &screen) {
+          if (!writer->is_undo()) {
+            screen.id.session_uid = 0;
+            screen.id.recalc = 0;
+            screen.id.recalc_up_to_undo_push = 0;
+            screen.id.recalc_after_undo_push = 0;
+          }
+          screen.do_draw = 0;
+          screen.do_refresh = 0;
+          screen.do_draw_gesture = 0;
+          screen.do_draw_paintcursor = 0;
+          screen.do_draw_drag = 0;
+          screen.skip_handling = 0;
+          screen.scrubbing = 0;
+          screen.active_region = nullptr;
+          screen.animtimer = nullptr;
+          screen.context = nullptr;
+          screen.tool_tip = nullptr;
+        });
+      });
   BKE_id_blend_write(writer, &screen->id);
 
   BKE_previewimg_blend_write(writer, screen->preview);
@@ -1339,10 +1354,47 @@ void BKE_screen_view3d_shading_blend_read_data(BlendDataReader *reader, View3DSh
   }
 }
 
+static void zero_regionview3d_runtime_fields(RegionView3D &rv3d)
+{
+  zero_m4(rv3d.winmat);
+  zero_m4(rv3d.viewmat);
+  zero_m4(rv3d.viewinv);
+  zero_m4(rv3d.persmat);
+  zero_m4(rv3d.persinv);
+  zero_v4(rv3d.viewcamtexcofac);
+  zero_m4(rv3d.viewmatob);
+  zero_m4(rv3d.persmatob);
+  memset(rv3d.clip_local, 0, sizeof(rv3d.clip_local));
+  rv3d.pixsize = 0;
+  rv3d.is_persp = 0;
+  zero_m4(rv3d.twmat);
+  zero_v3(rv3d.tw_axis_min);
+  zero_v3(rv3d.tw_axis_max);
+  zero_m3(rv3d.tw_axis_matrix);
+  rv3d.twdrawflag = 0;
+  rv3d.rflag &= ~(RV3D_NAVIGATING | RV3D_GPULIGHT_UPDATE | RV3D_PAINTING);
+  rv3d.runtime_viewlock = {};
+  rv3d.ndof_rot_angle = 0;
+  zero_v3(rv3d.ndof_rot_axis);
+  rv3d.view_render = nullptr;
+  rv3d.sms = nullptr;
+  rv3d.smooth_timer = nullptr;
+}
+
 static void write_region(BlendWriter *writer, ARegion *region, int spacetype)
 {
   ARegion region_copy = *region;
   region_copy.runtime = nullptr;
+  region_copy.flag &= ~(RGN_FLAG_TOO_SMALL | RGN_FLAG_POLL_FAILED | RGN_FLAG_SIZE_CLAMP_X |
+                        RGN_FLAG_SIZE_CLAMP_Y | RGN_FLAG_SEARCH_FILTER_ACTIVE |
+                        RGN_FLAG_SEARCH_FILTER_UPDATE);
+  region_copy.v2d.sms = nullptr;
+  region_copy.v2d.smooth_timer = nullptr;
+  region_copy.v2d.scroll_ui = {};
+  region_copy.v2d.flag &= ~V2D_IS_NAVIGATING;
+  /* Match #direct_link_region so scrollbar fade cannot drift across load/save. */
+  region_copy.v2d.alpha_hor = 255;
+  region_copy.v2d.alpha_vert = 255;
   writer->write_struct_at_address(region, &region_copy);
 
   if (region->regiondata) {
@@ -1359,10 +1411,16 @@ static void write_region(BlendWriter *writer, ARegion *region, int spacetype)
       case SPACE_VIEW3D:
         if (region->regiontype == RGN_TYPE_WINDOW) {
           RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
-          writer->write_struct(rv3d);
+          writer->write_struct(rv3d, [](BlendStructWriter &struct_writer) {
+            struct_writer.zero_runtime_fields<RegionView3D>(
+                [&](RegionView3D &rv3d) { zero_regionview3d_runtime_fields(rv3d); });
+          });
 
           if (rv3d->localvd) {
-            writer->write_struct(rv3d->localvd);
+            writer->write_struct(rv3d->localvd, [](BlendStructWriter &struct_writer) {
+              struct_writer.zero_runtime_fields<RegionView3D>(
+                  [&](RegionView3D &rv3d) { zero_regionview3d_runtime_fields(rv3d); });
+            });
           }
           if (rv3d->clipbb) {
             writer->write_struct(rv3d->clipbb);
@@ -1417,7 +1475,12 @@ static void write_area(BlendWriter *writer, ScrArea *area)
     }
 
     for (uiPreview &ui_preview : region.ui_previews) {
-      writer->write_struct(&ui_preview);
+      writer->write_struct(&ui_preview, [](BlendStructWriter &struct_writer) {
+        struct_writer.zero_runtime_fields<uiPreview>([&](uiPreview &ui_preview) {
+          ui_preview.tag = {};
+          ui_preview.id_session_uid = 0;
+        });
+      });
     }
 
     for (uiViewStateLink &view_state : region.view_states) {
@@ -1448,7 +1511,18 @@ void BKE_screen_area_map_blend_write(BlendWriter *writer, ScrAreaMap *area_map)
   for (ScrArea &area : area_map->areabase) {
     area.butspacetype = area.spacetype; /* Just for compatibility, will be reset below. */
 
-    writer->write_struct(&area);
+    writer->write_struct(&area, [](BlendStructWriter &struct_writer) {
+      struct_writer.zero_runtime_fields<ScrArea>([&](ScrArea &area) {
+        area.type = nullptr;
+        area.do_refresh = 0;
+        area.region_active_win = -1;
+        area.flag &= ~(AREA_FLAG_REGION_SIZE_UPDATE | AREA_FLAG_ACTIVE_TOOL_UPDATE |
+                       AREA_FLAG_ACTIONZONES_UPDATE);
+        area.handlers.clear_no_delete();
+        area.actionzones.clear_no_delete();
+        area.runtime = {};
+      });
+    });
 
     writer->write_struct(area.global);
 

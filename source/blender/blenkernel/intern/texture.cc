@@ -147,7 +147,9 @@ static void texture_blend_write(BlendWriter *writer, ID *id, const void *id_addr
   Tex *tex = id_cast<Tex *>(id);
 
   /* write LibData */
-  writer->write_id_struct(id_address, tex);
+  writer->write_id_struct(id_address, tex, [](BlendStructWriter &struct_writer) {
+    struct_writer.zero_runtime_fields<Tex>([&](Tex &tex) { tex.runtime = {}; });
+  });
   BKE_id_blend_write(writer, &tex->id);
 
   /* direct data */

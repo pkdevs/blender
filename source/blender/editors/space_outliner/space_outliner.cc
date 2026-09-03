@@ -600,7 +600,11 @@ static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space
                                   nullptr;
 
     if (data) {
-      writer->write_struct_cast<SpaceOutliner>(space_outliner);
+      writer->write_struct_cast<SpaceOutliner>(
+          space_outliner, [](BlendStructWriter &struct_writer) {
+            struct_writer.zero_runtime_fields<SpaceOutliner>(
+                [&](SpaceOutliner &so) { so.runtime = nullptr; });
+          });
 
       /* To store #TreeStore (instead of the mempool), two unique memory addresses are needed,
        * which can be used to identify the data on read:
@@ -635,11 +639,15 @@ static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space
     else {
       SpaceOutliner space_outliner_flat = *space_outliner;
       space_outliner_flat.treestore = nullptr;
+      space_outliner_flat.runtime = nullptr;
       writer->write_struct_at_address(space_outliner, &space_outliner_flat);
     }
   }
   else {
-    writer->write_struct_cast<SpaceOutliner>(space_outliner);
+    writer->write_struct_cast<SpaceOutliner>(space_outliner, [](BlendStructWriter &struct_writer) {
+      struct_writer.zero_runtime_fields<SpaceOutliner>(
+          [&](SpaceOutliner &so) { so.runtime = nullptr; });
+    });
   }
 }
 

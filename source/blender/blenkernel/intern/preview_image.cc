@@ -592,6 +592,8 @@ void BKE_previewimg_blend_write(BlendWriter *writer, const PreviewImage *prv)
 
   PreviewImage prv_copy = dna::shallow_copy(*prv);
   prv_copy.runtime = nullptr;
+  prv_copy.changed_timestamp[0] = 0;
+  prv_copy.changed_timestamp[1] = 0;
   writer->write_struct_at_address(prv, &prv_copy);
   if (prv_copy.rect[0]) {
     writer->write_uint32_array(prv_copy.w[0] * prv_copy.h[0], prv_copy.rect[0]);

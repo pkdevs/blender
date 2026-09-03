@@ -272,7 +272,9 @@ struct BlendWriter {
             ID &id = *reinterpret_cast<ID *>(&data);
             if (!this->is_undo()) {
               id.session_uid = 0;
+              id.recalc = 0;
               id.recalc_up_to_undo_push = 0;
+              id.recalc_after_undo_push = 0;
             }
           });
           if (fn) {

@@ -1667,9 +1667,10 @@ BLO_Write_IDBuffer::BLO_Write_IDBuffer(ID &id, const bool is_undo, const bool is
   }
   else {
     temp_id->tag = 0;
-    temp_id->session_uid = MAIN_ID_SESSION_UID_UNSET;
-    temp_id->recalc_up_to_undo_push = 0;
     temp_id->session_uid = 0;
+    temp_id->recalc = 0;
+    temp_id->recalc_up_to_undo_push = 0;
+    temp_id->recalc_after_undo_push = 0;
   }
   temp_id->us = 0;
   temp_id->icon_id = 0;
