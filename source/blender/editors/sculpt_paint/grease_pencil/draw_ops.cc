@@ -2012,16 +2012,24 @@ static wmOperatorStatus grease_pencil_fill_modal(bContext *C, wmOperator *op, co
     grease_pencil_update_extend(*C, op_data);
 
     if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
-      estate = (grease_pencil_apply_fill(*C, *op, *event) ? OPERATOR_FINISHED :
-                                                            OPERATOR_CANCELLED);
+      if (grease_pencil_apply_fill(*C, *op, *event)) {
+        estate = OPERATOR_FINISHED;
+      }
+      else {
+        estate = OPERATOR_CANCELLED;
+      }
     }
   }
   else {
     if (!op_data.show_extension) {
       /* Apply fill immediately if "Visual Aids" (aka. extension lines) is disabled. */
       op_data.fill_mouse_pos = float2(event->mval);
-      estate = (grease_pencil_apply_fill(*C, *op, *event) ? OPERATOR_FINISHED :
-                                                            OPERATOR_CANCELLED);
+      if (grease_pencil_apply_fill(*C, *op, *event)) {
+        estate = OPERATOR_FINISHED;
+      }
+      else {
+        estate = OPERATOR_CANCELLED;
+      }
     }
     else {
       estate = OPERATOR_RUNNING_MODAL;
