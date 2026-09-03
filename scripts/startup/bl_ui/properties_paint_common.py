@@ -602,7 +602,7 @@ class StrokePanel(BrushPanel):
             row = col.row(align=True)
             row.prop(brush, "spacing", text="Spacing")
 
-        if mode == 'SCULPT':
+        if mode == 'SCULPT' or (mode == 'PAINT_TEXTURE' and bpy.context.preferences.experimental.use_3d_texture_paint):
             col.row().prop(brush, "use_scene_spacing", text="Spacing Distance", expand=True)
 
         if mode in {'PAINT_TEXTURE', 'PAINT_2D', 'SCULPT'}:
@@ -1250,6 +1250,8 @@ def brush_shared_settings(layout, context, brush, popover=False):
 
     # 3D and 2D Texture Paint #
     if mode in {'PAINT_TEXTURE', 'PAINT_2D'}:
+        if mode == 'PAINT_TEXTURE' and bpy.context.preferences.experimental.use_3d_texture_paint:
+            size_mode = True
         if not popover:
             blend_mode = brush.image_paint_capabilities.has_color
             size = brush.image_paint_capabilities.has_radius
@@ -1770,6 +1772,8 @@ def brush_mask_texture_settings(layout, brush):
 
 def brush_basic_texpaint_settings(layout, context, brush, *, compact=False):
     """Draw Tool Settings header for Vertex Paint and 2D and 3D Texture Paint modes."""
+
+    # TODO: This shared method is incorrect and unnecessary, remove this layer of abstraction
     capabilities = brush.image_paint_capabilities
 
     if capabilities.has_color:

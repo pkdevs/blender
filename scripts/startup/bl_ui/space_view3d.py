@@ -330,6 +330,7 @@ class _draw_tool_settings_context_mode:
             return False
 
         paint = context.tool_settings.image_paint
+        ups = paint.unified_paint_settings
         brush = paint.brush
 
         BrushAssetShelf.draw_popup_selector(layout, context, brush)
@@ -337,7 +338,44 @@ class _draw_tool_settings_context_mode:
         if brush is None:
             return False
 
-        brush_basic_texpaint_settings(layout, context, brush, compact=True)
+        if context.preferences.experimental.use_3d_texture_paint:
+            size = "size"
+            size_owner = ups if brush.use_unified_size else brush
+            if size_owner.use_locked_size == 'SCENE':
+                size = "unprojected_size"
+
+            capabilities = brush.image_paint_capabilities
+
+            if capabilities.has_color:
+                row = layout.row(align=True)
+                row.ui_units_x = 4
+                UnifiedPaintPanel.prop_unified_color(row, context, brush, "color", text="")
+                UnifiedPaintPanel.prop_unified_color(row, context, brush, "secondary_color", text="")
+                row.separator()
+                layout.prop(brush, "blend", text="", translate=False)
+
+            UnifiedPaintPanel.prop_unified(
+                layout,
+                context,
+                brush,
+                size,
+                pressure_name="use_pressure_size",
+                unified_name="use_unified_size",
+                slider=True,
+                text="Size",
+                header=True,
+            )
+            UnifiedPaintPanel.prop_unified(
+                layout,
+                context,
+                brush,
+                "strength",
+                pressure_name="use_pressure_strength",
+                unified_name="use_unified_strength",
+                header=True,
+            )
+        else:
+            brush_basic_texpaint_settings(layout, context, brush, compact=True)
 
         return True
 
