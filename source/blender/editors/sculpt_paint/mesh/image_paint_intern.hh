@@ -9,6 +9,7 @@
 #pragma once
 
 #include "BKE_image_wrappers.hh"
+#include "BKE_paint.hh"
 
 #include "IMB_colormanagement.hh"
 
@@ -28,7 +29,7 @@ using BufferType = std::variant<std::monostate, MutableSpan<float4>, MutableSpan
 
 struct ImageData : NonCopyable {
   Image *image = nullptr;
-  ImageUser *image_user = nullptr;
+  CanvasImageUser image_user;
 
   Map<bke::image::TileNumber, ImBuf *> image_buffers = {};
   Map<bke::image::TileNumber, BufferType> data_buffers = {};
@@ -42,8 +43,15 @@ struct ImageData : NonCopyable {
 
   ~ImageData();
 
-  static std::unique_ptr<ImageData> init_active_image(Object &ob,
-                                                      PaintModeSettings &paint_mode_settings);
+  static std::unique_ptr<ImageData> init_active_image(Object &ob, ImagePaintSettings &settings);
+  const ImageUser &image_user_get() const
+  {
+    if (std::holds_alternative<ImageUser *>(image_user)) {
+      return *std::get<ImageUser *>(image_user);
+    }
+
+    return std::get<ImageUser>(image_user);
+  }
 };
 
 void do_3d_image_paint_brush(const Depsgraph &depsgraph,

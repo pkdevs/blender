@@ -2387,8 +2387,7 @@ static void sculptsession_update(Depsgraph *depsgraph,
      * The relevant changes are stored/encoded in the paint canvas key.
      * These include the active uv map, and resolutions. */
     if (USER_EXPERIMENTAL_TEST(&U, use_3d_texture_paint)) {
-      std::string paint_canvas_key = BKE_paint_canvas_key_get(&scene->toolsettings->paint_mode,
-                                                              ob);
+      std::string paint_canvas_key = BKE_paint_canvas_key_get(scene->toolsettings->imapaint, ob);
       if (!ss.last_paint_canvas_key || paint_canvas_key != ss.last_paint_canvas_key) {
         ss.last_paint_canvas_key = paint_canvas_key;
         BKE_pbvh_mark_rebuild_pixels(pbvh);

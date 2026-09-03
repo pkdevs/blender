@@ -465,14 +465,14 @@ struct TexturePaintData : public PaintModeData {
 
 struct ExperimentalTexturePaintStroke final : public PaintStroke {
   Base *base_;
-  PaintModeSettings *paint_mode_settings_;
+  ImagePaintSettings *settings_;
 
   ExperimentalTexturePaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
       : PaintStroke(C, op, event)
   {
     base_ = CTX_data_active_base(C);
     ToolSettings *tool_settings = CTX_data_tool_settings(C);
-    paint_mode_settings_ = &tool_settings->paint_mode;
+    settings_ = &tool_settings->imapaint;
 
     if (!G.background) {
       view3d_operator_needs_gpu(C);
@@ -530,8 +530,7 @@ bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
   cache.accum = true;
 
   std::unique_ptr<TexturePaintData> texture_paint_data = std::make_unique<TexturePaintData>();
-  texture_paint_data->image_data = ImageData::init_active_image(*this->object,
-                                                                *paint_mode_settings_);
+  texture_paint_data->image_data = ImageData::init_active_image(*this->object, *settings_);
   if (!texture_paint_data->image_data) {
     BLI_assert(0);
     return false;
@@ -556,6 +555,7 @@ static void stroke_cache_update(ViewContext & /*vc*/,
                                 Object &object,
                                 const PaintStroke::StrokeStep &stroke_step)
 {
+  bke::PaintRuntime &paint_runtime = *paint.runtime;
   SculptSession &ss = *object.runtime->sculpt_session;
   StrokeCache &cache = *ss.cache;
   Brush &brush = *BKE_paint_brush(&paint);
@@ -583,10 +583,15 @@ static void stroke_cache_update(ViewContext & /*vc*/,
     }
   }
 
-  if (BKE_brush_use_size_pressure(&brush) && paint_supports_dynamic_size(brush, PaintMode::Sculpt))
+  if (BKE_brush_use_size_pressure(&brush) &&
+      paint_supports_dynamic_size(brush, PaintMode::Texture3D))
   {
     const float pressure_eval = BKE_curvemapping_evaluateF(brush.curve_size, 0, cache.pressure);
     cache.radius = cache.initial_radius * pressure_eval;
+  }
+  else if (brush.stroke_method == BRUSH_STROKE_ANCHORED) {
+    cache.radius = paint_calc_object_space_radius(
+        *cache.vc, cache.location, paint_runtime.pixel_radius);
   }
   else {
     cache.radius = cache.initial_radius;
@@ -601,7 +606,6 @@ static void stroke_cache_update(ViewContext & /*vc*/,
 
   /* TODO: Brush delta */
 
-  bke::PaintRuntime &paint_runtime = *paint.runtime;
   cache.special_rotation = paint_runtime.brush_rotation;
 }
 
@@ -619,7 +623,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
   IndexMaskMemory memory;
 
   bke::pbvh::build_pixels(
-      depsgraph, ob, *mode_data->image_data->image, *mode_data->image_data->image_user);
+      depsgraph, ob, *mode_data->image_data->image, mode_data->image_data->image_user_get());
 
   const IndexMask node_mask = gather_brush_nodes(ob, brush, memory, node_fully_masked_or_hidden);
 
