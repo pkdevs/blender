@@ -3844,8 +3844,7 @@ static void side_panel_draw_search_block(const bContext *C, ARegion *region)
                                      0.0f;
   const uiStyle *style = ui::style_get_dpi();
 
-  ui::Block *block = block_begin(
-      C, region, ui::panel_category_search_block_name, ui::EmbossType::Emboss);
+  ui::Block *block = block_begin(C, region, "panel_category_search_block", ui::EmbossType::Emboss);
   const int em = (region->runtime->type->prefsizex) ? 10 : 20;
   const int w = round_fl_to_int(BLI_rctf_size_x(&region->v2d.cur) - categories_width -
                                 2.0f * float(style->panelspace));
@@ -3881,7 +3880,7 @@ static void side_panel_draw_search_block(const bContext *C, ARegion *region)
   ui::block_layout_resolve(block);
 
   /* Make sure the events are consumed from the search and don't reach other UI blocks since this
-   * is drawn on top of animation-channels. */
+   * is drawn on top of panels. */
   block_flag_enable(block, ui::BLOCK_CLIP_EVENTS);
   block_bounds_set_normal(block, 0);
   block_end(C, block);
