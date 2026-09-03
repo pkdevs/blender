@@ -1322,55 +1322,8 @@ static void vgroup_levels_subset(Object *ob,
                                  const int vgroup_tot,
                                  const int /*subset_count*/,
                                  const float offset,
-                                 const float gain)
-{
-  MDeformWeight *dw;
-  MDeformVert *dv, **dvert_array = nullptr;
-  int dvert_tot = 0;
-
-  const bool use_vert_sel = vertex_group_use_vert_sel(ob);
-  const bool use_mirror = (ob->type == OB_MESH) ?
-                              ((id_cast<Mesh *>(ob->data))->symmetry & ME_SYMMETRY_X) != 0 :
-                              false;
-
-  vgroup_parray_alloc(ob->data, &dvert_array, &dvert_tot, use_vert_sel);
-
-  if (dvert_array) {
-
-    for (int i = 0; i < dvert_tot; i++) {
-      /* in case its not selected */
-      if (!(dv = dvert_array[i])) {
-        continue;
-      }
-
-      int j = vgroup_tot;
-      while (j--) {
-        if (vgroup_validmap[j]) {
-          dw = BKE_defvert_find_index(dv, j);
-          if (dw) {
-            dw->weight = gain * (dw->weight + offset);
-
-            CLAMP(dw->weight, 0.0f, 1.0f);
-          }
-        }
-      }
-    }
-
-    if (use_mirror && use_vert_sel) {
-      vgroup_parray_mirror_sync(ob, dvert_array, dvert_tot, vgroup_validmap, vgroup_tot);
-    }
-
-    MEM_delete(dvert_array);
-  }
-}
-
-static void vgroup_levels_subset(Object *ob,
-                                 const bool *vgroup_validmap,
-                                 const bool *vgroup_lockedmap,
-                                 const int vgroup_tot,
-                                 const int /*subset_count*/,
-                                 const float offset,
-                                 const float gain)
+                                 const float gain,
+                                 const bool *vgroup_lockedmap = nullptr)
 {
   MDeformWeight *dw;
   MDeformVert *dv, **dvert_array = nullptr;
@@ -3123,13 +3076,10 @@ static wmOperatorStatus vertex_group_levels_exec(bContext *C, wmOperator *op)
   const bool *vgroup_validmap = BKE_object_defgroup_subset_from_select_type(
       ob, subset_type, &vgroup_tot, &subset_count);
   const bool *vgroup_lockedmap = BKE_object_defgroup_lock_flags_get(ob, vgroup_tot);
-  if (vgroup_lockedmap != nullptr) {
-    vgroup_levels_subset(
-        ob, vgroup_validmap, vgroup_lockedmap, vgroup_tot, subset_count, offset, gain);
-  }
-  else {
-    vgroup_levels_subset(ob, vgroup_validmap, vgroup_tot, subset_count, offset, gain);
-  }
+
+  vgroup_levels_subset(
+      ob, vgroup_validmap, vgroup_tot, subset_count, offset, gain, vgroup_lockedmap);
+
   MEM_delete(vgroup_lockedmap);
   MEM_delete(vgroup_validmap);
 
