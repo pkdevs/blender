@@ -2787,16 +2787,6 @@ bool BKE_id_is_in_main(Main *bmain, ID *id)
   return (id == nullptr || BLI_findindex(which_libbase(bmain, id->id_type()), id) != -1);
 }
 
-bool BKE_id_is_in_global_main(ID *id)
-{
-  BLI_assert(id->runtime);
-  /* Use the stored pointer, not #ID::owner_bmain(), so embedded IDs are correctly reported as not
-   * being in Main. */
-  const bool is_in_global_main = id->runtime->owner_bmain == G_MAIN;
-  BLI_assert(is_in_global_main == BKE_id_is_in_main(G_MAIN, id));
-  return is_in_global_main;
-}
-
 bool BKE_id_can_be_asset(const ID *id)
 {
   return ID_IS_EDITABLE(id) && !ID_IS_OVERRIDE_LIBRARY(id) &&

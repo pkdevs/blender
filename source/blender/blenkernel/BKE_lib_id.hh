@@ -1050,11 +1050,6 @@ void BKE_id_tag_clear_atomic(ID *id, int tag);
 
 /** Check that given ID pointer actually is in given `bmain`. */
 bool BKE_id_is_in_main(Main *bmain, ID *id);
-/**
- * Check that given ID pointer actually is in G_MAIN.
- * Main intended use is for debug asserts in places we cannot easily get rid of #G_MAIN.
- */
-bool BKE_id_is_in_global_main(ID *id);
 
 bool BKE_id_can_be_asset(const ID *id);
 
