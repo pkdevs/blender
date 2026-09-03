@@ -224,22 +224,23 @@ struct BlendWriter {
   template<typename T>
   void write_id_struct(const void *id_address, const T *id, const BlendStructWriterFn fn = nullptr)
   {
-    this->write_struct_at_address_by_id_with_filecode(GS(id_cast<const ID *>(id)->name),
-                                                      dna::sdna_struct_id_get<T>(),
-                                                      id_address,
-                                                      id,
-                                                      [&](BlendStructWriter &struct_writer) {
-                                                        struct_writer.zero_runtime_fields<T>(
-                                                            [&](T &data) {
-                                                              /* TODO: Check if these need to be
-                                                               * preserved during undo. */
-                                                              data.id.session_uid = 0;
-                                                              data.id.recalc_up_to_undo_push = 0;
-                                                            });
-                                                        if (fn) {
-                                                          fn(struct_writer);
-                                                        }
-                                                      });
+    this->write_struct_at_address_by_id_with_filecode(
+        GS(id_cast<const ID *>(id)->name),
+        dna::sdna_struct_id_get<T>(),
+        id_address,
+        id,
+        [&](BlendStructWriter &struct_writer) {
+          struct_writer.zero_runtime_fields<T>([&](T &data) {
+            ID &id = *reinterpret_cast<ID *>(&data);
+            /* TODO: Check if these need to be
+             * preserved during undo. */
+            id.session_uid = 0;
+            id.recalc_up_to_undo_push = 0;
+          });
+          if (fn) {
+            fn(struct_writer);
+          }
+        });
   }
 };
 
