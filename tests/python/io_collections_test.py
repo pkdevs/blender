@@ -151,10 +151,11 @@ class TestCollectionImport(CollectionIOTestBase):
         self.assertEqual(len(bpy.data.collections[coll_B].all_objects), 1)
         self.assertEqual(len(bpy.data.collections[coll_C].all_objects), 0)
 
-        # Scenario should produce 3 main libraries and 3 archives
-        self.assertEqual(len(bpy.data.libraries), 6)
-        self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive == False]), 3)
-        self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive]), 3)
+        # Scenario should produce 2 main libraries and 2 archives (empty imports should not
+        # result in libraries being created).
+        self.assertEqual(len(bpy.data.libraries), 4)
+        self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive == False]), 2)
+        self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive]), 2)
 
     def test_import_multi(self):
         # Validate multiple importers all using the same external file.
@@ -190,10 +191,10 @@ class TestCollectionImport(CollectionIOTestBase):
         self.assertEqual(len(bpy.data.collections[coll_B].all_objects), 1)
         self.assertEqual(len(bpy.data.collections[coll_C].all_objects), 0)
 
-        # Scenario should produce 1 main library and 3 archives
-        self.assertEqual(len(bpy.data.libraries), 4)
+        # Scenario should produce 1 main library and 2 archives
+        self.assertEqual(len(bpy.data.libraries), 3)
         self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive == False]), 1)
-        self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive]), 3)
+        self.assertEqual(len([l for l in bpy.data.libraries if l.is_archive]), 2)
 
     def test_link_after_import(self):
         # Validate that a remote collection, which has an importer, is able to

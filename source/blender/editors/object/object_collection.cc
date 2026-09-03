@@ -677,6 +677,12 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
 
   wm->op_undo_depth--;
 
+  /* Only complete the collection import if there's at least one real object that was imported. */
+  if (temp_main->objects.is_empty()) {
+    BKE_reportf(op->reports, RPT_WARNING, "No objects were imported from '%s'", filepath);
+    op_result = OPERATOR_CANCELLED;
+  }
+
   if (op_result == OPERATOR_FINISHED) {
     /* Create an external parent library to encapsulate the external archive library if one is
      * not already present. */
