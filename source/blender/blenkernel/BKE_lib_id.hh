@@ -94,9 +94,8 @@ struct ID_Runtime {
 
   /**
    * #Main data-base containing this ID. Each ID can be in at most one #Main at the same time.
-   * - This is null for e.g. evaluated data.
-   * - For embedded data-blocks (e.g. material node trees), it is set to the same bmain as the
-   *   owner ID.
+   * - This is null for e.g. evaluated data and for embedded data-blocks.
+   * - For embedded data-blocks, #ID::owner_bmain() resolves this via the owner ID instead.
    */
   Main *owner_bmain = nullptr;
 };

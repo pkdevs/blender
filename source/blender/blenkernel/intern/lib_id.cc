@@ -69,7 +69,6 @@
 #include "RNA_access.hh"
 
 #include "BLO_read_write.hh"
-#include "BLO_readfile.hh"
 
 #include "atomic_ops.h"
 
@@ -1412,39 +1411,31 @@ void BKE_libblock_runtime_ensure(ID &id)
 void BKE_libblock_owner_bmain_set(ID &id, Main *bmain, const bool assert_contained)
 {
   BKE_libblock_runtime_ensure(id);
+  /* Embedded IDs are never stored in a Main; #ID::owner_bmain() resolves them via the owner. */
+  BLI_assert((id.flag & ID_FLAG_EMBEDDED_DATA) == 0);
   /* Assert that the ID is actually in the given bmain by scanning it. This is fairly expensive and
    * could slow down debug builds. If this turns out to be a problem, the assert can be removed.
    * Until then, it's good to have the check to be more confident that the owner-bmain is set
    * correctly. */
   BLI_assert(!assert_contained || !bmain || BKE_id_is_in_main(bmain, &id));
   id.runtime->owner_bmain = bmain;
-
-  if (BLO_readfile_id_runtime_tags(id).is_link_placeholder) {
-    return;
-  }
-
-  bNodeTree *ntree = bke::node_tree_from_id(&id);
-  if (ntree != nullptr) {
-    BKE_libblock_owner_bmain_set(ntree->id, bmain, false);
-  }
-  if (id.id_type() == ID_SCE) {
-    Collection *master_collection = id_cast<Scene &>(id).master_collection;
-    if (master_collection != nullptr) {
-      BKE_libblock_owner_bmain_set(master_collection->id, bmain, false);
-    }
-  }
 }
 
 const Main *ID::owner_bmain() const
 {
+  if (this->flag & ID_FLAG_EMBEDDED_DATA) {
+    if (ID *owner_id = BKE_id_owner_get(const_cast<ID *>(this), false)) {
+      return owner_id->owner_bmain();
+    }
+    return nullptr;
+  }
   BLI_assert(this->runtime);
   return this->runtime->owner_bmain;
 }
 
 Main *ID::owner_bmain_for_write()
 {
-  BLI_assert(this->runtime);
-  return this->runtime->owner_bmain;
+  return const_cast<Main *>(static_cast<const ID *>(this)->owner_bmain());
 }
 
 size_t BKE_libblock_get_alloc_info(short type, const char **r_name)
@@ -2798,7 +2789,10 @@ bool BKE_id_is_in_main(Main *bmain, ID *id)
 
 bool BKE_id_is_in_global_main(ID *id)
 {
-  const bool is_in_global_main = id->owner_bmain() == G_MAIN;
+  BLI_assert(id->runtime);
+  /* Use the stored pointer, not #ID::owner_bmain(), so embedded IDs are correctly reported as not
+   * being in Main. */
+  const bool is_in_global_main = id->runtime->owner_bmain == G_MAIN;
   BLI_assert(is_in_global_main == BKE_id_is_in_main(G_MAIN, id));
   return is_in_global_main;
 }

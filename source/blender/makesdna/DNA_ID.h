@@ -548,7 +548,7 @@ struct ID {
   /**
    * Get the #Main data-base containing this ID. An ID can be in at most one #Main at the same
    * time. This is null for e.g. evaluated data. For embedded data-blocks (e.g. material node
-   * trees), it is set to the same as for the owner ID.
+   * trees), returns the same #Main as for the owner ID.
    */
   const Main *owner_bmain() const;
   /**
