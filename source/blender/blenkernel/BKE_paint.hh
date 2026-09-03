@@ -309,6 +309,8 @@ bool supports_symmetry_tiling(PaintMode paint_mode);
  * gets a different starting point in the perlin noise. */
 float3 seed_hsv_jitter();
 
+bool paint_rake_rotation_active(const Brush &brush, PaintMode paint_mode);
+
 bool paint_calculate_rake_rotation(Paint &paint,
                                    const Brush &brush,
                                    const float mouse_pos[2],
