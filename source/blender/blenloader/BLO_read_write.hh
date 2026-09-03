@@ -76,6 +76,9 @@ class BlendStructWriter {
    */
   void runtime_ptr(int64_t offset);
 
+  /**
+   * Call when setting certain runtime fields to zero in order to keep .blend files more stable.
+   */
   template<typename T, typename Fn> void zero_runtime_fields(Fn &&fn)
   {
     BLI_assert(struct_nr_ == dna::sdna_struct_id_get<T>());
