@@ -23,6 +23,7 @@
 
 #include "rna_internal.hh"
 
+#include "UI_interface_c.hh"
 #include "UI_interface_layout.hh"
 
 #include "WM_api.hh"
@@ -876,7 +877,7 @@ static PointerRNA rna_Event_ndof_motion_get(PointerRNA *ptr)
 #  else
   UNUSED_VARS(ptr);
 #  endif
-  return PointerRNA_NULL;
+  return {};
 }
 
 static PointerRNA rna_Event_xr_get(PointerRNA *ptr)
@@ -888,7 +889,7 @@ static PointerRNA rna_Event_xr_get(PointerRNA *ptr)
   return RNA_pointer_create_with_parent(*ptr, RNA_XrEventData, actiondata);
 #  else
   UNUSED_VARS(ptr);
-  return PointerRNA_NULL;
+  return {};
 #  endif
 }
 
@@ -923,7 +924,7 @@ static void rna_Window_scene_set(PointerRNA *ptr, PointerRNA value, ReportList *
 {
   wmWindow *win = static_cast<wmWindow *>(ptr->data);
 
-  if (value.data == nullptr) {
+  if (!value) {
     return;
   }
 
@@ -973,7 +974,7 @@ static void rna_Window_workspace_set(PointerRNA *ptr, PointerRNA value, ReportLi
   if (WM_window_is_temp_screen(win)) {
     return;
   }
-  if (value.data == nullptr) {
+  if (!value) {
     return;
   }
 
@@ -1014,7 +1015,7 @@ static void rna_Window_screen_set(PointerRNA *ptr, PointerRNA value, ReportList 
   if (screen->temp) {
     return;
   }
-  if (value.data == nullptr) {
+  if (!value) {
     return;
   }
 
@@ -1113,7 +1114,7 @@ static PointerRNA rna_KeyMapItem_properties_get(PointerRNA *ptr)
   }
 
   // return RNA_pointer_create_with_parent(*ptr, RNA_OperatorProperties, op->properties);
-  return PointerRNA_NULL;
+  return {};
 }
 
 static int rna_wmKeyMapItem_map_type_get(PointerRNA *ptr)
@@ -1354,7 +1355,7 @@ static PointerRNA rna_wmKeyConfig_preferences_get(PointerRNA *ptr)
     return RNA_pointer_create_with_parent(*ptr, kpt_rt->rna_ext.srna, kpt->prop);
   }
   else {
-    return PointerRNA_NULL;
+    return {};
   }
 }
 
@@ -1363,7 +1364,7 @@ static IDProperty **rna_wmKeyConfigPref_idprops(PointerRNA *ptr)
   return reinterpret_cast<IDProperty **>(&ptr->data);
 }
 
-static bool rna_wmKeyConfigPref_unregister(Main * /*bmain*/, StructRNA *type)
+static bool rna_wmKeyConfigPref_unregister(Main *bmain, StructRNA *type)
 {
   wmKeyConfigPrefType_Runtime *kpt_rt = static_cast<wmKeyConfigPrefType_Runtime *>(
       RNA_struct_blender_type_get(type));
@@ -1371,7 +1372,7 @@ static bool rna_wmKeyConfigPref_unregister(Main * /*bmain*/, StructRNA *type)
   if (!kpt_rt) {
     return false;
   }
-
+  ui::refresh_for_srna_unregister(bmain, type);
   RNA_struct_free_extension(type, &kpt_rt->rna_ext);
   RNA_struct_free(&RNA_blender_rna_get(), type);
 
@@ -1944,7 +1945,8 @@ static bool rna_Operator_unregister(Main *bmain, StructRNA *type)
   if (!ot) {
     return false;
   }
-
+  ui::refresh_for_srna_unregister(bmain, ot->srna);
+  ui::refresh_for_srna_unregister(bmain, type);
   /* update while blender is running */
   wm = static_cast<wmWindowManager *>(bmain->wm.first);
   if (wm) {
@@ -2793,6 +2795,14 @@ static void rna_def_window(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Scene", "Active scene to be edited in the window");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, 0, "rna_Window_scene_update");
+
+  prop = RNA_def_property(srna, "global_areas", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, nullptr, "global_areas.areabase", nullptr);
+  RNA_def_property_struct_type(prop, "Area");
+  RNA_def_property_ui_text(prop,
+                           "Areas",
+                           "Areas at the edges of the window that are not part of the flexible "
+                           "screen layout (such as top and status bar)");
 
   prop = RNA_def_property(srna, "workspace", PROP_POINTER, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NEVER_NULL);

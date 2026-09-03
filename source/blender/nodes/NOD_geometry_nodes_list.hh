@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include <variant>
@@ -261,6 +265,9 @@ template<typename T> inline std::variant<MutableSpan<T>, T *> List<T>::values_fo
 
 template<typename T> template<typename Fn> inline void List<T>::foreach(Fn &&fn) const
 {
+  if (list_.size() == 0) {
+    return;
+  }
   const std::variant<Span<T>, const T *> values = this->values();
   if (const auto *span_values = std::get_if<Span<T>>(&values)) {
     for (const T &value : *span_values) {
@@ -274,6 +281,9 @@ template<typename T> template<typename Fn> inline void List<T>::foreach(Fn &&fn)
 
 template<typename T> template<typename Fn> inline void List<T>::foreach_for_write(Fn &&fn)
 {
+  if (list_.size() == 0) {
+    return;
+  }
   const std::variant<MutableSpan<T>, T *> values = this->values_for_write();
   if (auto *span_values = std::get_if<MutableSpan<T>>(&values)) {
     for (T &value : *span_values) {

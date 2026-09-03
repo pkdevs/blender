@@ -207,7 +207,10 @@ void outliner_item_mode_toggle(bContext *C,
       do_outliner_item_mode_toggle_generic(C, tvc, base);
     }
     else if (tvc.ob_edit && OB_TYPE_SUPPORT_EDITMODE(ob->type)) {
-      do_outliner_item_editmode_toggle(C, tvc.scene, base);
+      /* Grease Pencil does not support multi-object editing yet. */
+      if (ob->type != OB_GREASE_PENCIL) {
+        do_outliner_item_editmode_toggle(C, tvc.scene, base);
+      }
     }
     else if (tvc.ob_pose && ob->type == OB_ARMATURE) {
       do_outliner_item_posemode_toggle(C, tvc.scene, base);
@@ -218,7 +221,7 @@ void outliner_item_mode_toggle(bContext *C,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Outliner Element Selection/Activation on Click Operator
+/** \name Element Activation
  * \{ */
 
 static void tree_element_viewlayer_activate(bContext *C, TreeElement *te)
@@ -823,8 +826,6 @@ static void tree_element_text_activate(bContext *C, TreeElement *te)
   ED_text_activate_in_screen(C, text);
 }
 
-/* ---------------------------------------------- */
-
 void tree_element_activate(bContext *C,
                            const TreeViewContext &tvc,
                            TreeElement *te,
@@ -855,12 +856,19 @@ void tree_element_activate(bContext *C,
   }
 }
 
-static void tree_elemment_shapekey_active_set(bContext *C, Object &ob, TreeElement &te)
+static void tree_elemment_shapekey_active_set(bContext *C, TreeElement *te)
 {
-  PointerRNA object_ptr = RNA_pointer_create_discrete(&ob.id, RNA_Object, &ob);
-  PropertyRNA *prop = RNA_struct_find_property(&object_ptr, "active_shape_key_index");
-  RNA_property_int_set(&object_ptr, prop, te.index);
-  RNA_property_update(C, &object_ptr, prop);
+  if (TreeElement *parent_te = outliner_search_back_te(te, ID_OB)) {
+    TreeStoreElem *parent_tselem = TREESTORE(parent_te);
+    Object *ob = id_cast<Object *>(parent_tselem->id);
+
+    if (ob) {
+      PointerRNA object_ptr = RNA_pointer_create_discrete(&ob->id, RNA_Object, ob);
+      PropertyRNA *prop = RNA_struct_find_property(&object_ptr, "active_shape_key_index");
+      RNA_property_int_set(&object_ptr, prop, te->index);
+      RNA_property_update(C, &object_ptr, prop);
+    }
+  }
 }
 
 void tree_element_type_active_set(bContext *C,
@@ -925,11 +933,18 @@ void tree_element_type_active_set(bContext *C,
       tree_element_layer_collection_activate(C, te);
       break;
     case TSE_SHAPE_KEY_BLOCK:
-      tree_elemment_shapekey_active_set(C, *tvc.obact, *te);
+      tree_elemment_shapekey_active_set(C, te);
+      break;
     default:
       break;
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Element Active State Query
+ * \{ */
 
 static eOLDrawState tree_element_defgroup_state_get(const Main &bmain,
                                                     const Scene *scene,
@@ -1200,10 +1215,14 @@ eOLDrawState tree_element_active_state_get(const TreeViewContext &tvc,
   return OL_DRAWSEL_NONE;
 }
 
-static eOLDrawState tree_element_shapekey_state_get(const Object &ob, const TreeElement *te)
+static eOLDrawState tree_element_shapekey_state_get(const TreeElement *te)
 {
-  if (ob.shapenr == te->index + 1) {
-    return OL_DRAWSEL_NORMAL;
+  if (const Object *ob = id_cast<Object *>(
+          outliner_search_back(const_cast<TreeElement *>(te), ID_OB)))
+  {
+    if (ob->shapenr == te->index + 1) {
+      return OL_DRAWSEL_NORMAL;
+    }
   }
   return OL_DRAWSEL_NONE;
 }
@@ -1251,7 +1270,7 @@ eOLDrawState tree_element_type_active_state_get(const TreeViewContext &tvc,
     case TSE_BONE_COLLECTION:
       return tree_element_bone_collection_state_get(te, tselem);
     case TSE_SHAPE_KEY_BLOCK:
-      return tree_element_shapekey_state_get(*tvc.obact, te);
+      return tree_element_shapekey_state_get(te);
     default:
       break;
   }
@@ -1274,6 +1293,12 @@ bPoseChannel *outliner_find_parent_bone(TreeElement *te, TreeElement **r_bone_te
 
   return nullptr;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Properties Editor Sync
+ * \{ */
 
 static void outliner_sync_to_properties_editors(const bContext *C,
                                                 PointerRNA *ptr,
@@ -1332,14 +1357,19 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
       case ID_WO:
         context = BCONTEXT_WORLD;
         break;
-      case ID_KE:
-        context = BCONTEXT_DATA;
-        ptr = RNA_id_pointer_create(te->parent->store_elem->id);
-        break;
     }
   }
   else {
     switch (tselem->type) {
+      case TSE_SHAPE_KEY_BASE:
+      case TSE_SHAPE_KEY_BLOCK:
+        if (TreeElement *parent_te = outliner_search_back_te(te, ID_OB)) {
+          TreeStoreElem *parent_tselem = TREESTORE(parent_te);
+          Object *ob = id_cast<Object *>(parent_tselem->id);
+          ptr = RNA_id_pointer_create(static_cast<ID *>(ob->data));
+          context = BCONTEXT_DATA;
+        }
+        break;
       case TSE_DEFGROUP_BASE:
       case TSE_DEFGROUP:
         ptr = RNA_id_pointer_create(tselem->id);
@@ -1475,12 +1505,16 @@ static void outliner_set_properties_tab(bContext *C, TreeElement *te, TreeStoreE
     }
   }
 
-  if (ptr.data) {
+  if (ptr) {
     outliner_sync_to_properties_editors(C, &ptr, context);
   }
 }
 
-/* ================================================ */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Outliner Element Selection/Activation on Click Operator
+ * \{ */
 
 /**
  * Action when clicking to activate an item (typically under the mouse cursor),

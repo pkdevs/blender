@@ -20,6 +20,7 @@ namespace gpu::render_graph {
 class VKCommandBufferInterface {
  public:
   bool use_dynamic_rendering_local_read = true;
+  bool use_multi_draw_indirect = true;
 
   VKCommandBufferInterface() {}
   virtual ~VKCommandBufferInterface() = default;
@@ -151,14 +152,22 @@ class VKCommandBufferInterface {
   /* VK_EXT_debug_utils */
   virtual void begin_debug_utils_label(const VkDebugUtilsLabelEXT *vk_debug_utils_label) = 0;
   virtual void end_debug_utils_label() = 0;
+
+  /* VK_KHR_ray_tracing */
+  virtual void build_acceleration_structure(
+      const VkAccelerationStructureBuildGeometryInfoKHR *p_infos,
+      const VkAccelerationStructureBuildRangeInfoKHR *p_build_range_infos) = 0;
 };
 
 class VKCommandBufferWrapper : public VKCommandBufferInterface {
  private:
   VkCommandBuffer vk_command_buffer_ = VK_NULL_HANDLE;
+  const VolkDeviceTable *functions = nullptr;
 
  public:
-  VKCommandBufferWrapper(VkCommandBuffer vk_command_buffer, const VKExtensions &extensions);
+  VKCommandBufferWrapper(VkCommandBuffer vk_command_buffer,
+                         const VolkDeviceTable &functions,
+                         const VKExtensions &extensions);
 
   void begin_recording() override;
   void end_recording() override;
@@ -278,6 +287,11 @@ class VKCommandBufferWrapper : public VKCommandBufferInterface {
   void end_rendering() override;
   void begin_debug_utils_label(const VkDebugUtilsLabelEXT *vk_debug_utils_label) override;
   void end_debug_utils_label() override;
+
+  /* VK_KHR_ray_tracing */
+  void build_acceleration_structure(
+      const VkAccelerationStructureBuildGeometryInfoKHR *p_infos,
+      const VkAccelerationStructureBuildRangeInfoKHR *p_build_range_infos) override;
 };
 }  // namespace gpu::render_graph
 

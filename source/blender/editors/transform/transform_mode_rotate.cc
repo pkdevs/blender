@@ -398,7 +398,7 @@ static void initRotation(TransInfo *t, wmOperator * /*op*/)
 
   if (transform_mode_affect_only_locations(t)) {
     WorkspaceStatus status(t->context);
-    status.item(TIP_("Transform is set to only affect location"), ICON_ERROR);
+    status.item(TIP_("Transform is set to only affect location"), ICON_STATUS_WARNING_FILLED);
     initMouseInputMode(t, &t->mouse, INPUT_ERROR_DASH);
   }
   else {
@@ -432,6 +432,7 @@ TransModeInfo TransMode_rotate = {
     /*snap_distance_fn*/ RotationBetween,
     /*snap_apply_fn*/ ApplySnapRotation,
     /*draw_fn*/ nullptr,
+    /*status_fn*/ nullptr,
 };
 
 }  // namespace blender::ed::transform

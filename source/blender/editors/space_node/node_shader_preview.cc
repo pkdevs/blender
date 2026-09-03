@@ -548,7 +548,7 @@ static bool prepare_viewlayer_update(void *pvl_data, ViewLayer *vl, Depsgraph *d
 }
 
 /* Called by renderer, refresh the UI. */
-static void all_nodes_preview_update(void *npv, RenderResult *rr, rcti * /*rect*/)
+static void all_nodes_preview_update(void *npv, RenderResult *rr)
 {
   ShaderNodesPreviewJob *job_data = static_cast<ShaderNodesPreviewJob *>(npv);
   *job_data->do_update = true;
@@ -795,7 +795,7 @@ static void ensure_nodetree_previews(const bContext &C,
                               CTX_wm_window(&C),
                               CTX_wm_space_node(&C),
                               "Generating shader previews...",
-                              WM_JOB_EXCL_RENDER,
+                              WM_JOB_EXCL_RENDER | WM_JOB_BACKGROUND,
                               WM_JOB_TYPE_RENDER_PREVIEW);
   ShaderNodesPreviewJob *job_data = MEM_new<ShaderNodesPreviewJob>(__func__);
 
