@@ -1283,22 +1283,22 @@ static void grease_pencil_fill_overlay_delaunay_cb(const bContext &C,
 
   const float line_width = 2.0f;
 
-  Array<float3> line_position(op_data.mouse_positions.size());
+  Array<float3> line_positions(op_data.mouse_positions.size());
   for (const int i : op_data.mouse_positions.index_range()) {
     const float2 co = op_data.mouse_positions[i];
 
-    ED_view3d_win_to_3d(&view3d, &region, float3(0.0f), co, line_position[i]);
+    ED_view3d_win_to_3d(&view3d, &region, float3(0.0f), co, line_positions[i]);
   }
 
-  if (line_position.size() < 2) {
+  if (line_positions.size() < 2) {
     return;
   }
 
   const VArray<ColorGeometry4f> line_colors = VArray<ColorGeometry4f>::from_single(
-      ColorGeometry4f(color), line_position.size());
+      ColorGeometry4f(color), line_positions.size());
 
   ed::greasepencil::image_render::draw_polyline(
-      world_to_view, line_position.index_range(), line_position, line_colors, false, line_width);
+      world_to_view, line_positions.index_range(), line_positions, line_colors, false, line_width);
 }
 
 /* Draw callback for fill tool overlay. */
