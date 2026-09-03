@@ -887,13 +887,24 @@ static void do_weight_paint_vertex(const VPaint &wp,
   }
 }
 
+struct WeightPaintVertexGroupData {
+  WPaintVGroupIndex vgroup_index;
+  bool *defbase_sel;
+  int defbase_tot_sel;
+};
+
 struct WeightPaintStroke final : public PaintStroke {
   Main *bmain_;
   ToolSettings *tool_settings_;
   VPaint *weight_paint_;
   Base *base_;
+  WeightPaintVertexGroupData vertex_group_data_;
 
-  WeightPaintStroke(bContext *C, wmOperator *op, const wmEvent *event) : PaintStroke(C, op, event)
+  WeightPaintStroke(bContext *C,
+                    wmOperator *op,
+                    const wmEvent *event,
+                    WeightPaintVertexGroupData vertex_group_data)
+      : PaintStroke(C, op, event), vertex_group_data_(vertex_group_data)
   {
     bmain_ = CTX_data_main(C);
     tool_settings_ = CTX_data_tool_settings(C);
@@ -944,70 +955,22 @@ bool WeightPaintStroke::test_start(wmOperator *op, const float2 mouse)
   SculptSession &ss = *ob.runtime->sculpt_session;
   VPaint &wp = *weight_paint_;
 
-  if (ED_wpaint_ensure_data(
-          this->evil_C, bmain_, this->object, op->reports, WPAINT_ENSURE_MIRROR, &vgroup_index) ==
-      false)
-  {
-    return false;
-  }
-
-  {
-    /* check if we are attempting to paint onto a locked vertex group,
-     * and other options disallow it from doing anything useful */
-    bDeformGroup *dg;
-    dg = static_cast<bDeformGroup *>(BLI_findlink(&mesh.vertex_group_names, vgroup_index.active));
-    if (dg->flag & DG_LOCK_WEIGHT) {
-      BKE_report(op->reports, RPT_WARNING, "Active group is locked, aborting");
-      return false;
-    }
-    if (vgroup_index.mirror != -1) {
-      dg = static_cast<bDeformGroup *>(
-          BLI_findlink(&mesh.vertex_group_names, vgroup_index.mirror));
-      if (dg->flag & DG_LOCK_WEIGHT) {
-        BKE_report(op->reports, RPT_WARNING, "Mirror group is locked, aborting");
-        return false;
-      }
-    }
-  }
-
-  /* check that multipaint groups are unlocked */
-  defbase_tot = mesh.vertex_group_names.count();
-  defbase_sel = BKE_object_defgroup_selected_get(&ob, defbase_tot, &defbase_tot_sel);
-
-  if (ts.multipaint && defbase_tot_sel > 1) {
-    int i;
-    bDeformGroup *dg;
-
-    if (ME_USING_MIRROR_X_VERTEX_GROUPS(&mesh)) {
-      BKE_object_defgroup_mirror_selection(
-          &ob, defbase_tot, defbase_sel, defbase_sel, &defbase_tot_sel);
-    }
-
-    for (i = 0; i < defbase_tot; i++) {
-      if (defbase_sel[i]) {
-        dg = static_cast<bDeformGroup *>(BLI_findlink(&mesh.vertex_group_names, i));
-        if (dg->flag & DG_LOCK_WEIGHT) {
-          BKE_report(op->reports, RPT_WARNING, "Multipaint group is locked, aborting");
-          MEM_delete(defbase_sel);
-          return false;
-        }
-      }
-    }
-  }
 
   std::unique_ptr<WPaintData> wpd = std::make_unique<WPaintData>();
   wpd->vc = this->vc;
 
   const Brush *brush = BKE_paint_brush_for_read(&wp.paint);
 
-  wpd->active.index = vgroup_index.active;
-  wpd->mirror.index = vgroup_index.mirror;
+  wpd->active.index = vertex_group_data_.vgroup_index.active;
+  wpd->mirror.index = vertex_group_data_.vgroup_index.mirror;
 
   /* multipaint */
-  wpd->defbase_tot = defbase_tot;
-  wpd->defbase_sel = defbase_sel;
-  wpd->defbase_tot_sel = defbase_tot_sel > 1 ? defbase_tot_sel : 1;
-  wpd->do_multipaint = (ts.multipaint && defbase_tot_sel > 1);
+  wpd->defbase_tot = mesh.vertex_group_names.count();
+  wpd->defbase_sel = vertex_group_data_.defbase_sel;
+  wpd->defbase_tot_sel = vertex_group_data_.defbase_tot_sel > 1 ?
+                             vertex_group_data_.defbase_tot_sel :
+                             1;
+  wpd->do_multipaint = (ts.multipaint && wpd->defbase_tot_sel > 1);
 
   /* set up auto-normalize, and generate map for detecting which
    * vgroups affect deform bones */
@@ -1910,13 +1873,79 @@ void WeightPaintStroke::done(bool /*is_cancel*/, bool /*stroke_started*/)
   ob.runtime->sculpt_session->cache = nullptr;
 }
 
+
+static std::optional<WeightPaintVertexGroupData> check_preconditions(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  Object *object = CTX_data_active_object(C);
+
+  WPaintVGroupIndex vgroup_index;
+  if (!ED_wpaint_ensure_data(C, bmain, object, op->reports, WPAINT_ENSURE_MIRROR, &vgroup_index))
+  {
+    return std::nullopt;
+  }
+
+  Mesh &mesh = *BKE_mesh_from_object(object);
+  {
+    /* check if we are attempting to paint onto a locked vertex group,
+     * and other options disallow it from doing anything useful */
+    bDeformGroup *dg = static_cast<bDeformGroup *>(
+        BLI_findlink(&mesh.vertex_group_names, vgroup_index.active));
+    if (dg->flag & DG_LOCK_WEIGHT) {
+      BKE_report(op->reports, RPT_WARNING, "Active group is locked, aborting");
+      return std::nullopt;
+    }
+    if (vgroup_index.mirror != -1) {
+      dg = static_cast<bDeformGroup *>(
+          BLI_findlink(&mesh.vertex_group_names, vgroup_index.mirror));
+      if (dg->flag & DG_LOCK_WEIGHT) {
+        BKE_report(op->reports, RPT_WARNING, "Mirror group is locked, aborting");
+        return std::nullopt;
+      }
+    }
+  }
+
+  /* check that multipaint groups are unlocked */
+  Scene &scene = *CTX_data_scene(C);
+  ToolSettings &ts = *scene.toolsettings;
+  int defbase_tot_sel;
+  int defbase_tot = mesh.vertex_group_names.count();
+  bool *defbase_sel = BKE_object_defgroup_selected_get(object, defbase_tot, &defbase_tot_sel);
+
+  if (ts.multipaint && defbase_tot_sel > 1) {
+
+    if (ME_USING_MIRROR_X_VERTEX_GROUPS(&mesh)) {
+      BKE_object_defgroup_mirror_selection(
+          object, defbase_tot, defbase_sel, defbase_sel, &defbase_tot_sel);
+    }
+
+    for (int i = 0; i < defbase_tot; i++) {
+      if (defbase_sel[i]) {
+        bDeformGroup *dg = static_cast<bDeformGroup *>(BLI_findlink(&mesh.vertex_group_names, i));
+        if (dg->flag & DG_LOCK_WEIGHT) {
+          BKE_report(op->reports, RPT_WARNING, "Multipaint group is locked, aborting");
+          MEM_delete(defbase_sel);
+          return std::nullopt;
+        }
+      }
+    }
+  }
+
+  return WeightPaintVertexGroupData{vgroup_index, defbase_sel, defbase_tot_sel};
+}
+
 static wmOperatorStatus wpaint_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  std::optional<WeightPaintVertexGroupData> vgroup_data = check_preconditions(C, op);
+  if (!vgroup_data) {
+    return OPERATOR_CANCELLED;
+  }
+
   if (!G.background) {
     view3d_operator_needs_gpu(C);
   }
 
-  WeightPaintStroke *stroke = MEM_new<WeightPaintStroke>(__func__, C, op, event);
+  WeightPaintStroke *stroke = MEM_new<WeightPaintStroke>(__func__, C, op, event, *vgroup_data);
   op->customdata = stroke;
   vwpaint::init_stroke(*op, *stroke->bmain_, *stroke->paint, *stroke->depsgraph, *stroke->object);
 
@@ -1940,7 +1969,12 @@ static wmOperatorStatus wpaint_invoke(bContext *C, wmOperator *op, const wmEvent
 
 static wmOperatorStatus wpaint_exec(bContext *C, wmOperator *op)
 {
-  WeightPaintStroke *stroke = MEM_new<WeightPaintStroke>(__func__, C, op, nullptr);
+  std::optional<WeightPaintVertexGroupData> vgroup_data = check_preconditions(C, op);
+  if (!vgroup_data) {
+    return OPERATOR_CANCELLED;
+  }
+
+  WeightPaintStroke *stroke = MEM_new<WeightPaintStroke>(__func__, C, op, nullptr, vgroup_data);
   op->customdata = stroke;
 
   vwpaint::init_stroke(*op, *stroke->bmain_, *stroke->paint, *stroke->depsgraph, *stroke->object);

@@ -814,19 +814,12 @@ bool VertexPaintStroke::test_start(wmOperator *op, const float2 mouse)
   Object &ob = *this->object;
   SculptSession &ss = *ob.runtime->sculpt_session;
 
-  /* context checks could be a poll() */
   Mesh *mesh = BKE_mesh_from_object(&ob);
-  if (mesh == nullptr || mesh->faces_num == 0) {
-    return false;
-  }
-
-  if (!ED_mesh_color_ensure(mesh, nullptr)) {
-    return false;
-  }
-
   const std::optional<bke::AttributeMetaData> meta_data = mesh->attributes().lookup_meta_data(
       mesh->active_color_attribute);
   if (!meta_data) {
+    /* TODO: This sanity check can be removed if we store the meta_data in VertexPaintStroke */
+    BLI_assert(0);
     return false;
   }
 
@@ -1834,8 +1827,30 @@ void VertexPaintStroke::done(bool /*is_cancel*/, bool /*stroke_started*/)
   ob.runtime->sculpt_session->cache = nullptr;
 }
 
+static bool check_preconditions(bContext *C)
+{
+  Object &ob = *CTX_data_active_object(C);
+  Mesh *mesh = BKE_mesh_from_object(&ob);
+  if (mesh == nullptr || mesh->faces_num == 0) {
+    return false;
+  }
+
+  if (!ED_mesh_color_ensure(mesh, nullptr)) {
+    return false;
+  }
+
+  const std::optional<bke::AttributeMetaData> meta_data = mesh->attributes().lookup_meta_data(
+      mesh->active_color_attribute);
+  if (!meta_data) {
+    return false;
+  }
+}
+
 static wmOperatorStatus vpaint_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  if (!check_preconditions(C)) {
+    return OPERATOR_CANCELLED;
+  }
   VertexPaintStroke *stroke = MEM_new<VertexPaintStroke>(__func__, C, op, event);
   op->customdata = stroke;
 
@@ -1862,6 +1877,9 @@ static wmOperatorStatus vpaint_invoke(bContext *C, wmOperator *op, const wmEvent
 
 static wmOperatorStatus vpaint_exec(bContext *C, wmOperator *op)
 {
+  if (!check_preconditions(C)) {
+    return OPERATOR_CANCELLED;
+  }
   VertexPaintStroke *stroke = MEM_new<VertexPaintStroke>(__func__, C, op, nullptr);
   op->customdata = stroke;
 
