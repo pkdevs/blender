@@ -119,7 +119,7 @@ class DrawCacheImpl : public DrawCache {
      */
     void tag_dirty(const IndexMask &node_mask);
     void ensure_nodes_capacity(int64_t nodes_len);
-    void ensure_buffer_capacity(const GPUVertFormat &format, uint64_t vertex_len);
+    void ensure_buffer_capacity(uint64_t needed_vertex_len);
   };
 
  private:
@@ -389,6 +389,27 @@ static ScratchOffsets build_scratch_offsets(const Span<NodeInfo> node_infos,
   return result;
 }
 
+/**
+ * \brief Staging offsets for an initial vertex buffer build.
+ *
+ * Nodes are staged at their absolute VBO offsets so that the full-sized scratch buffer can be
+ * promoted to the final vertex buffer.
+ */
+static ScratchOffsets build_vbo_initial_offsets(const Span<NodeInfo> node_infos,
+                                                const IndexMask &node_mask,
+                                                const int64_t total)
+{
+  ScratchOffsets result;
+  if (node_mask.is_empty()) {
+    return result;
+  }
+  result.offsets = Array<int64_t>(node_mask.size());
+  node_mask.foreach_index(
+      [&](const int i, const int64_t pos) { result.offsets[pos] = node_infos[i].vbo.offset; });
+  result.total = total;
+  return result;
+}
+
 static ScratchOffsets build_vbo_scratch_offsets(const Span<NodeInfo> node_infos,
                                                 const IndexMask &node_mask)
 {
@@ -428,6 +449,31 @@ static void update_vbo_subrange(gpu::VertBuf &dst,
     return;
   }
   dst.copy_sub(scratch, uint(src_vertex), uint(dst_range.offset), uint(dst_range.len));
+}
+
+/**
+ * \brief Upload staged vertex data and commit it to the final vertex buffer.
+ *
+ * \note Will promote the staging buffer to the final vertex buffer for initial
+ * uploads.
+ */
+static void finalize_vbo_update(DrawCacheImpl::AttributeData &attr_vbo,
+                                const DrawCacheImpl &draw_cache,
+                                const IndexMask &node_mask,
+                                const ScratchOffsets &scratch_offsets,
+                                gpu::VertBufPtr &scratch_vbo)
+{
+  scratch_vbo->upload();
+  if (attr_vbo.vbo == nullptr) {
+    attr_vbo.vbo = std::move(scratch_vbo);
+    return;
+  }
+  attr_vbo.ensure_buffer_capacity(draw_cache.get_vert_len());
+  const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
+  node_mask.foreach_index([&](const int i, const int64_t pos) {
+    update_vbo_subrange(
+        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
+  });
 }
 
 BLI_NOINLINE static void free_batches(const MutableSpan<gpu::Batch *> batches)
@@ -802,27 +848,18 @@ void DrawCacheImpl::AttributeData::ensure_nodes_capacity(const int64_t nodes_len
 {
   this->dirty_nodes.resize(nodes_len, true);
 }
-void DrawCacheImpl::AttributeData::ensure_buffer_capacity(const GPUVertFormat &format,
-                                                          const uint64_t needed_vertex_len)
+void DrawCacheImpl::AttributeData::ensure_buffer_capacity(const uint64_t needed_vertex_len)
 {
-  /* Check if existing VBO needs to be resized. */
-  if (vbo) {
-    if (vbo->vertex_len < needed_vertex_len) {
-      gpu::VertBufPtr new_vbo = gpu::VertBufPtr(
-          GPU_vertbuf_create_with_format_ex(format, GPU_USAGE_DEVICE_ONLY));
-      new_vbo->allocate(uint32_t(needed_vertex_len));
-      new_vbo->upload();
-      /* Preserve the data of the existing vertices by copying the used vertex data to the new
-       * buffer. The source buffer is guaranteed to be uploaded by the caller. */
-      new_vbo->copy_sub(*vbo, 0, 0, vbo->vertex_len);
-      vbo.swap(new_vbo);
-    }
-  }
-  else {
-    /* No VBO allocated yet. */
-    vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format_ex(format, GPU_USAGE_DEVICE_ONLY));
-    vbo->allocate(needed_vertex_len);
-    vbo->upload();
+  BLI_assert_msg(vbo != nullptr, "Can only grow an existing VBO");
+  if (vbo->vertex_len < needed_vertex_len) {
+    gpu::VertBufPtr new_vbo = gpu::VertBufPtr(
+        GPU_vertbuf_create_with_format_ex(vbo->format, GPU_USAGE_DEVICE_ONLY));
+    new_vbo->allocate(uint32_t(needed_vertex_len));
+    new_vbo->upload();
+    /* Preserve the data of the existing vertices by copying the used vertex data to the new
+     * buffer. */
+    new_vbo->copy_sub(*vbo, 0, 0, vbo->vertex_len);
+    vbo.swap(new_vbo);
   }
 }
 
@@ -839,13 +876,12 @@ static void update_positions_mesh(const Object &object,
   const OffsetIndices<int> faces = mesh.faces();
   const Span<int> corner_verts = mesh.corner_verts();
   const Span<float3> vert_positions = bke::pbvh::vert_positions_eval_from_eval(object);
-  attr_vbo.ensure_buffer_capacity(position_format(), draw_cache.get_vert_len());
   if (node_mask.is_empty()) {
     return;
   }
   const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(position_format(),
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(position_format(),
+                                                          scratch_offsets.total);
   node_mask.foreach_index(
       [&](const int i, const int64_t pos) {
         const NodeInfo &node_info = node_infos[i];
@@ -855,11 +891,7 @@ static void update_positions_mesh(const Object &object,
             faces, corner_verts, vert_positions, nodes[i].faces(), *scratch_vbo, scratch_range);
       },
       exec_mode::grain_size(1));
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 static void update_normals_mesh(const Object &object,
@@ -878,13 +910,10 @@ static void update_normals_mesh(const Object &object,
   const Span<float3> face_normals = bke::pbvh::face_normals_eval_from_eval(object);
   const bke::AttributeAccessor attributes = mesh.attributes();
   const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", bke::AttrDomain::Face);
-  attr_vbo.ensure_buffer_capacity(normal_format(), draw_cache.get_vert_len());
   if (node_mask.is_empty()) {
     return;
   }
-  const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(normal_format(),
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(normal_format(), scratch_offsets.total);
   node_mask.foreach_index(
       [&](const int i, const int64_t pos) {
         short4 *data = scratch_vbo->data<short4>().data() + scratch_offsets.offsets[pos];
@@ -904,15 +933,11 @@ static void update_normals_mesh(const Object &object,
           }
         }
         UNUSED_VARS_NDEBUG(data_start);
-        BLI_assert_msg(data == data_start + node_infos[i].vbo.len,
+        BLI_assert_msg(data == data_start + draw_cache.get_node_infos()[i].vbo.len,
                        "Node VBO data extraction did not fill the expected amount");
       },
       exec_mode::grain_size(1));
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_masks_mesh(const Object &object,
@@ -930,13 +955,11 @@ BLI_NOINLINE static void update_masks_mesh(const Object &object,
   const Span<int> corner_verts = mesh.corner_verts();
   const VArraySpan mask = *orig_mesh_data.attributes.lookup<float>(".sculpt_mask",
                                                                    bke::AttrDomain::Point);
-  attr_vbo.ensure_buffer_capacity(mask_format(), draw_cache.get_vert_len());
   if (node_mask.is_empty()) {
     return;
   }
   const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(mask_format(),
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(mask_format(), scratch_offsets.total);
   if (!mask.is_empty()) {
     node_mask.foreach_index(
         [&](const int i, const int64_t pos) {
@@ -965,11 +988,7 @@ BLI_NOINLINE static void update_masks_mesh(const Object &object,
         },
         exec_mode::grain_size(64));
   }
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_face_sets_mesh(const Object &object,
@@ -988,13 +1007,12 @@ BLI_NOINLINE static void update_face_sets_mesh(const Object &object,
   const int color_seed = orig_mesh_data.face_set_seed;
   const VArraySpan face_sets = *orig_mesh_data.attributes.lookup<int>(".sculpt_face_set",
                                                                       bke::AttrDomain::Face);
-  attr_vbo.ensure_buffer_capacity(face_set_format(), draw_cache.get_vert_len());
   if (node_mask.is_empty()) {
     return;
   }
   const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(face_set_format(),
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(face_set_format(),
+                                                          scratch_offsets.total);
   if (!face_sets.is_empty()) {
     node_mask.foreach_index(
         [&](const int i, const int64_t pos) {
@@ -1033,11 +1051,7 @@ BLI_NOINLINE static void update_face_sets_mesh(const Object &object,
         },
         exec_mode::grain_size(64));
   }
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_generic_attribute_mesh(const Object &object,
@@ -1060,14 +1074,12 @@ BLI_NOINLINE static void update_generic_attribute_mesh(const Object &object,
     return;
   }
   const bke::AttrType data_type = bke::cpp_type_to_attribute_type(attr.varray.type());
-  attr_vbo.ensure_buffer_capacity(attribute_format(orig_mesh_data, name, data_type),
-                                  draw_cache.get_vert_len());
+  const GPUVertFormat format = attribute_format(orig_mesh_data, name, data_type);
   if (node_mask.is_empty()) {
     return;
   }
   const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(attr_vbo.vbo->format,
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(format, scratch_offsets.total);
   node_mask.foreach_index(
       [&](const int i, const int64_t pos) {
         const NodeInfo &node_info = node_infos[i];
@@ -1096,11 +1108,7 @@ BLI_NOINLINE static void update_generic_attribute_mesh(const Object &object,
         });
       },
       exec_mode::grain_size(1));
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_positions_grids(const Object &object,
@@ -1116,13 +1124,12 @@ BLI_NOINLINE static void update_positions_grids(const Object &object,
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
   const Span<float3> positions = subdiv_ccg.positions;
   const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
-  attr_vbo.ensure_buffer_capacity(position_format(), draw_cache.get_vert_len());
   if (node_mask.is_empty()) {
     return;
   }
   const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(position_format(),
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(position_format(),
+                                                          scratch_offsets.total);
   node_mask.foreach_index(
       [&](const int i, const int64_t pos) {
         float3 *data = scratch_vbo->data<float3>().data() + scratch_offsets.offsets[pos];
@@ -1152,16 +1159,12 @@ BLI_NOINLINE static void update_positions_grids(const Object &object,
             data += grid_positions.size();
           }
         }
-        UNUSED_VARS_NDEBUG(data_start);
+        UNUSED_VARS_NDEBUG(data_start, node_infos);
         BLI_assert_msg(data == data_start + node_infos[i].vbo.len,
                        "Node VBO data extraction did not fill the expected amount");
       },
       exec_mode::grain_size(1));
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_normals_grids(const Object &object,
@@ -1182,13 +1185,10 @@ BLI_NOINLINE static void update_normals_grids(const Object &object,
   const Span<int> grid_to_face_map = subdiv_ccg.grid_to_face_map;
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
   const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", bke::AttrDomain::Face);
-  attr_vbo.ensure_buffer_capacity(normal_format(), draw_cache.get_vert_len());
   if (node_mask.is_empty()) {
     return;
   }
-  const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(normal_format(),
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(normal_format(), scratch_offsets.total);
   node_mask.foreach_index(
       [&](const int i, const int64_t pos) {
         short4 *data = scratch_vbo->data<short4>().data() + scratch_offsets.offsets[pos];
@@ -1236,15 +1236,11 @@ BLI_NOINLINE static void update_normals_grids(const Object &object,
           }
         }
         UNUSED_VARS_NDEBUG(data_start);
-        BLI_assert_msg(data == data_start + node_infos[i].vbo.len,
+        BLI_assert_msg(data == data_start + draw_cache.get_node_infos()[i].vbo.len,
                        "Node VBO data extraction did not fill the expected amount");
       },
       exec_mode::grain_size(1));
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_masks_grids(const Object &object,
@@ -1260,13 +1256,11 @@ BLI_NOINLINE static void update_masks_grids(const Object &object,
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
   const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
   const Span<float> masks = subdiv_ccg.masks;
-  attr_vbo.ensure_buffer_capacity(mask_format(), draw_cache.get_vert_len());
   if (node_mask.is_empty()) {
     return;
   }
   const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(mask_format(),
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(mask_format(), scratch_offsets.total);
   if (!masks.is_empty()) {
     node_mask.foreach_index(
         [&](const int i, const int64_t pos) {
@@ -1314,11 +1308,7 @@ BLI_NOINLINE static void update_masks_grids(const Object &object,
         },
         exec_mode::grain_size(64));
   }
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_face_sets_grids(const Object &object,
@@ -1338,13 +1328,12 @@ BLI_NOINLINE static void update_face_sets_grids(const Object &object,
   const int color_seed = orig_mesh_data.face_set_seed;
   const Span<int> grid_to_face_map = subdiv_ccg.grid_to_face_map;
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
-  attr_vbo.ensure_buffer_capacity(face_set_format(), draw_cache.get_vert_len());
   if (node_mask.is_empty()) {
     return;
   }
   const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(face_set_format(),
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(face_set_format(),
+                                                          scratch_offsets.total);
   if (const VArray<int> face_sets = *attributes.lookup<int>(".sculpt_face_set",
                                                             bke::AttrDomain::Face))
   {
@@ -1382,11 +1371,7 @@ BLI_NOINLINE static void update_face_sets_grids(const Object &object,
         },
         exec_mode::grain_size(1));
   }
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 static void calc_quad_uv(const SubdivCCG &subdiv_ccg,
@@ -2116,16 +2101,14 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
   const bke::AttrType data_type = (!attr) ? bke::AttrType::Float3 :
                                             bke::cpp_type_to_attribute_type(attr.varray.type());
   const StringRef format_name = (!attr) ? "Dummy" : name;
-  attr_vbo.ensure_buffer_capacity(attribute_format(orig_mesh_data, format_name, data_type),
-                                  draw_cache.get_vert_len());
+  const GPUVertFormat format = attribute_format(orig_mesh_data, format_name, data_type);
   const bool is_uvs = attr && attr.domain == bke::AttrDomain::Corner &&
                       data_type == bke::AttrType::Float2;
   if (node_mask.is_empty()) {
     return;
   }
   const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(attr_vbo.vbo->format,
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(format, scratch_offsets.total);
 
   if (!attr) {
     node_mask.foreach_index(
@@ -2184,11 +2167,7 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
         BLI_assert_unreachable();
     }
   }
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_positions_bmesh(const Object &object,
@@ -2200,13 +2179,12 @@ BLI_NOINLINE static void update_positions_bmesh(const Object &object,
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-  attr_vbo.ensure_buffer_capacity(position_format(), draw_cache.get_vert_len());
   if (node_mask.is_empty()) {
     return;
   }
   const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(position_format(),
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(position_format(),
+                                                          scratch_offsets.total);
   node_mask.foreach_index(
       [&](const int i, const int64_t pos) {
         float3 *data = scratch_vbo->data<float3>().data() + scratch_offsets.offsets[pos];
@@ -2225,16 +2203,12 @@ BLI_NOINLINE static void update_positions_bmesh(const Object &object,
           *data = l->next->v->co;
           data++;
         }
-        UNUSED_VARS_NDEBUG(data_start);
+        UNUSED_VARS_NDEBUG(data_start, node_infos);
         BLI_assert_msg(data == data_start + node_infos[i].vbo.len,
                        "Node VBO data extraction did not fill the expected amount");
       },
       exec_mode::grain_size(1));
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_normals_bmesh(const Object &object,
@@ -2246,13 +2220,11 @@ BLI_NOINLINE static void update_normals_bmesh(const Object &object,
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
-  attr_vbo.ensure_buffer_capacity(normal_format(), draw_cache.get_vert_len());
   if (node_mask.is_empty()) {
     return;
   }
   const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(normal_format(),
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(normal_format(), scratch_offsets.total);
   node_mask.foreach_index(
       [&](const int i, const int64_t pos) {
         short4 *data = scratch_vbo->data<short4>().data() + scratch_offsets.offsets[pos];
@@ -2277,16 +2249,12 @@ BLI_NOINLINE static void update_normals_bmesh(const Object &object,
             data += 3;
           }
         }
-        UNUSED_VARS_NDEBUG(data_start);
+        UNUSED_VARS_NDEBUG(data_start, node_infos);
         BLI_assert_msg(data == data_start + node_infos[i].vbo.len,
                        "Node VBO data extraction did not fill the expected amount");
       },
       exec_mode::grain_size(1));
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_masks_bmesh(const Object &object,
@@ -2300,13 +2268,11 @@ BLI_NOINLINE static void update_masks_bmesh(const Object &object,
   const Span<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
   const BMesh &bm = *object.runtime->sculpt_session->bm;
   const int cd_offset = CustomData_get_offset_named(&bm.vdata, CD_PROP_FLOAT, ".sculpt_mask");
-  attr_vbo.ensure_buffer_capacity(mask_format(), draw_cache.get_vert_len());
   if (node_mask.is_empty()) {
     return;
   }
   const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(mask_format(),
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(mask_format(), scratch_offsets.total);
   if (cd_offset != -1) {
     node_mask.foreach_index(
         [&](const int i, const int64_t pos) {
@@ -2341,11 +2307,7 @@ BLI_NOINLINE static void update_masks_bmesh(const Object &object,
         },
         exec_mode::grain_size(64));
   }
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_face_sets_bmesh(const Object &object,
@@ -2362,13 +2324,12 @@ BLI_NOINLINE static void update_face_sets_bmesh(const Object &object,
   const int color_default = orig_mesh_data.face_set_default;
   const int color_seed = orig_mesh_data.face_set_seed;
   const int offset = CustomData_get_offset_named(&bm.pdata, CD_PROP_INT32, ".sculpt_face_set");
-  attr_vbo.ensure_buffer_capacity(face_set_format(), draw_cache.get_vert_len());
   if (node_mask.is_empty()) {
     return;
   }
   const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(face_set_format(),
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(face_set_format(),
+                                                          scratch_offsets.total);
   if (offset != -1) {
     node_mask.foreach_index(
         [&](const int i, const int64_t pos) {
@@ -2405,11 +2366,7 @@ BLI_NOINLINE static void update_face_sets_bmesh(const Object &object,
         },
         exec_mode::grain_size(64));
   }
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_generic_attribute_bmesh(const Object &object,
@@ -2432,12 +2389,12 @@ BLI_NOINLINE static void update_generic_attribute_bmesh(const Object &object,
   if (node_mask.is_empty()) {
     return;
   }
+
+  const bke::AttrType attr_type = attr ? attr.type : bke::AttrType::Float3;
+  const GPUVertFormat format = attribute_format(orig_mesh_data, name, attr_type);
   if (!attr) {
-    attr_vbo.ensure_buffer_capacity(attribute_format(orig_mesh_data, name, bke::AttrType::Float3),
-                                    draw_cache.get_vert_len());
     const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-    const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(attr_vbo.vbo->format,
-                                                                  scratch_offsets.total);
+    gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(format, scratch_offsets.total);
     node_mask.foreach_index(
         [&](const int i, const int64_t pos) {
           const NodeInfo &node_info = node_infos[i];
@@ -2447,19 +2404,12 @@ BLI_NOINLINE static void update_generic_attribute_bmesh(const Object &object,
               .fill(float3(0.0f));
         },
         exec_mode::grain_size(1));
-    scratch_vbo->upload();
-    node_mask.foreach_index([&](const int i, const int64_t pos) {
-      update_vbo_subrange(
-          *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-    });
+    finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
     return;
   }
 
-  attr_vbo.ensure_buffer_capacity(attribute_format(orig_mesh_data, name, attr.type),
-                                  draw_cache.get_vert_len());
   const Span<NodeInfo> node_infos = draw_cache.get_node_infos();
-  const gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(attr_vbo.vbo->format,
-                                                                scratch_offsets.total);
+  gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(format, scratch_offsets.total);
   node_mask.foreach_index(
       [&](const int i, const int64_t pos) {
         const NodeInfo &node_info = node_infos[i];
@@ -2486,11 +2436,7 @@ BLI_NOINLINE static void update_generic_attribute_bmesh(const Object &object,
         });
       },
       exec_mode::grain_size(1));
-  scratch_vbo->upload();
-  node_mask.foreach_index([&](const int i, const int64_t pos) {
-    update_vbo_subrange(
-        *attr_vbo.vbo, node_infos[i].vbo, scratch_offsets.offsets[pos], *scratch_vbo);
-  });
+  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
 }
 
 static void create_lines_index_faces(const OffsetIndices<int> faces,
@@ -3186,7 +3132,10 @@ DrawCacheImpl::AttributeData &DrawCacheImpl::ensure_attribute_data(
   const IndexMask dirty_mask = IndexMask::from_bits(
       node_mask.slice_content(attr_vbo.dirty_nodes.index_range()), attr_vbo.dirty_nodes, memory);
 
-  const ScratchOffsets scratch_offsets = build_vbo_scratch_offsets(node_infos_, dirty_mask);
+  const ScratchOffsets scratch_offsets = (attr_vbo.vbo == nullptr) ?
+                                             build_vbo_initial_offsets(
+                                                 node_infos_, dirty_mask, vbo_space_.size()) :
+                                             build_vbo_scratch_offsets(node_infos_, dirty_mask);
 
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
