@@ -1595,7 +1595,7 @@ wmOperatorStatus PaintStroke::modal(bContext *C, wmOperator *op, const wmEvent *
    * If rake is active, we need to wait for the second step to calculate it. */
   const bool frist_step = first_dab && paint_space_stroke_enabled(*br, mode);
 
-  const float mouse_delta_length = math::length(mouse - this->last_mouse_position);
+  const float mouse_delta_length = math::length(sample_average.mouse - this->last_mouse_position);
   /* This indicates the first step where rake should be calculated. */
   const bool first_rake_step = paint_rake_rotation_active(*br, mode) && !rake_started_ &&
                                mouse_delta_length >= WM_event_drag_threshold(event);
