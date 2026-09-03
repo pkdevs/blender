@@ -495,7 +495,7 @@ class _draw_tool_settings_context_mode:
             row.prop_with_popover(prop_owner, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
             if brush.gpencil_settings.vertex_mode == 'BOTH' and not brush.gpencil_settings.single_color:
                 row.prop_with_popover(prop_owner, "secondary_color", text="",
-                                      panel="TOPBAR_PT_grease_pencil_vertex_color")
+                                      panel="TOPBAR_PT_grease_pencil_vertex_color_secondary")
                 row.scale_x = 0.5
 
         brush_basic_grease_pencil_vertex_settings(layout, context, brush, compact=True)
@@ -674,7 +674,7 @@ class _draw_tool_settings_context_mode:
             sub_row.prop_with_popover(brush, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
             if brush.gpencil_settings.vertex_mode == 'BOTH' and not brush.gpencil_settings.single_color:
                 sub_row.prop_with_popover(brush, "secondary_color", text="",
-                                          panel="TOPBAR_PT_grease_pencil_vertex_color")
+                                          panel="TOPBAR_PT_grease_pencil_vertex_color_secondary")
                 sub_row.scale_x = 0.5
 
         from bl_ui.properties_paint_common import (
@@ -9034,6 +9034,54 @@ class TOPBAR_PT_grease_pencil_materials(GreasePencilMaterialsPanel, Panel):
         return ob and ob.type == 'GREASEPENCIL'
 
 
+def draw_grease_pencil_vertex_color(layout, context, is_secondary):
+    layout.use_property_split = True
+    layout.use_property_decorate = False
+
+    ob = context.object
+    if ob.mode == 'PAINT_GREASE_PENCIL':
+        paint = context.scene.tool_settings.gpencil_paint
+    elif ob.mode == 'VERTEX_GREASE_PENCIL':
+        paint = context.scene.tool_settings.gpencil_vertex_paint
+    use_unified_paint = (ob.mode != 'PAINT_GREASE_PENCIL')
+
+    ups = paint.unified_paint_settings
+    brush = paint.brush
+    prop_owner = ups if use_unified_paint and brush.use_unified_color else brush
+
+    col = layout.column()
+    if is_secondary:
+        col.template_color_picker(prop_owner, "secondary_color", value_slider=True)
+    else:
+        col.template_color_picker(prop_owner, "color", value_slider=True)
+
+    sub_row = layout.row(align=True)
+    if use_unified_paint:
+        UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "color", text="")
+        UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "secondary_color", text="")
+    else:
+        sub_row.prop(brush, "color", text="")
+        sub_row.prop(brush, "secondary_color", text="")
+
+    sub_row.operator("paint.brush_colors_flip", icon='FILE_REFRESH', text="")
+
+    row = layout.row(align=True)
+    row.template_ID(paint, "palette", new="palette.new")
+    if paint.palette:
+        layout.template_palette(paint, "palette")
+
+    gp_settings = brush.gpencil_settings
+    if brush.gpencil_brush_type in {'DRAW', 'FILL'}:
+        if ob.mode == 'VERTEX_GREASE_PENCIL':
+            row = layout.row(align=True)
+            row.prop(gp_settings, "vertex_mode", text="Mode")
+            if gp_settings.vertex_mode == 'BOTH':
+                row = layout.row(align=True)
+                row.prop(gp_settings, "single_color")
+        row = layout.row(align=True)
+        row.prop(gp_settings, "vertex_color_factor", slider=True, text="Mix Factor")
+
+
 class TOPBAR_PT_grease_pencil_vertex_color(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'HEADER'
@@ -9047,48 +9095,23 @@ class TOPBAR_PT_grease_pencil_vertex_color(Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
+        draw_grease_pencil_vertex_color(layout, context, False)
 
+
+class TOPBAR_PT_grease_pencil_vertex_color_secondary(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'HEADER'
+    bl_label = "Color Attribute"
+    bl_ui_units_x = 10
+
+    @classmethod
+    def poll(cls, context):
         ob = context.object
-        if ob.mode == 'PAINT_GREASE_PENCIL':
-            paint = context.scene.tool_settings.gpencil_paint
-        elif ob.mode == 'VERTEX_GREASE_PENCIL':
-            paint = context.scene.tool_settings.gpencil_vertex_paint
-        use_unified_paint = (ob.mode != 'PAINT_GREASE_PENCIL')
+        return ob and ob.type == 'GREASEPENCIL'
 
-        ups = paint.unified_paint_settings
-        brush = paint.brush
-        prop_owner = ups if use_unified_paint and brush.use_unified_color else brush
-
-        col = layout.column()
-        col.template_color_picker(prop_owner, "color", value_slider=True)
-
-        sub_row = layout.row(align=True)
-        if use_unified_paint:
-            UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "color", text="")
-            UnifiedPaintPanel.prop_unified_color(sub_row, context, brush, "secondary_color", text="")
-        else:
-            sub_row.prop(brush, "color", text="")
-            sub_row.prop(brush, "secondary_color", text="")
-
-        sub_row.operator("paint.brush_colors_flip", icon='FILE_REFRESH', text="")
-
-        row = layout.row(align=True)
-        row.template_ID(paint, "palette", new="palette.new")
-        if paint.palette:
-            layout.template_palette(paint, "palette")
-
-        gp_settings = brush.gpencil_settings
-        if brush.gpencil_brush_type in {'DRAW', 'FILL'}:
-            if ob.mode == 'VERTEX_GREASE_PENCIL':
-                row = layout.row(align=True)
-                row.prop(gp_settings, "vertex_mode", text="Mode")
-                if gp_settings.vertex_mode == 'BOTH':
-                    row = layout.row(align=True)
-                    row.prop(gp_settings, "single_color")
-            row = layout.row(align=True)
-            row.prop(gp_settings, "vertex_color_factor", slider=True, text="Mix Factor")
+    def draw(self, context):
+        layout = self.layout
+        draw_grease_pencil_vertex_color(layout, context, True)
 
 
 class VIEW3D_PT_curves_sculpt_add_shape(Panel):
@@ -9507,6 +9530,7 @@ classes = (
     VIEW3D_PT_sculpt_context_menu,
     TOPBAR_PT_grease_pencil_materials,
     TOPBAR_PT_grease_pencil_vertex_color,
+    TOPBAR_PT_grease_pencil_vertex_color_secondary,
     TOPBAR_PT_annotation_layers,
     VIEW3D_PT_curves_sculpt_add_shape,
     VIEW3D_PT_curves_sculpt_parameter_falloff,

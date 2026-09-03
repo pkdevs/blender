@@ -1836,7 +1836,7 @@ def brush_basic__draw_color_selector(context, layout, brush, gp_settings):
             sub_row.prop_with_popover(brush, "color", text="", panel="TOPBAR_PT_grease_pencil_vertex_color")
             if gp_settings.stroke_type == 'BOTH' and not gp_settings.single_color:
                 sub_row.prop_with_popover(brush, "secondary_color", text="",
-                                          panel="TOPBAR_PT_grease_pencil_vertex_color")
+                                          panel="TOPBAR_PT_grease_pencil_vertex_color_secondary")
                 sub_row.scale_x *= 0.5
         row.prop(gp_settings, "pin_draw_mode", text="")
 
