@@ -165,11 +165,9 @@ std::string FileHandlerType::label_with_extensions() const
     const std::string prefix = extensions_common_prefix(file_extensions.as_span());
     const int64_t prefix_letters = prefix.size() - (!prefix.empty() && prefix[0] == '.' ? 1 : 0);
     const bool collapsible = prefix_letters >= 3 &&
-                             std::all_of(file_extensions.begin(),
-                                         file_extensions.end(),
-                                         [&](const std::string &extension) {
-                                           return extension.size() - prefix.size() <= 1;
-                                         });
+                             std::ranges::all_of(file_extensions, [&](const auto &extension) {
+                               return extension.size() <= prefix.size() + 1;
+                             });
     if (collapsible) {
       extensions = prefix + "*";
     }
