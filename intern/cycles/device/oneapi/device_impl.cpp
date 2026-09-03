@@ -239,8 +239,9 @@ size_t OneapiDevice::get_free_mem() const
   size_t free_memory = 0;
 
   /* Estimate: Capacity - in use. */
-  if (device_mem_in_use < max_memory_on_device_) {
-    free_memory = max_memory_on_device_ - device_mem_in_use;
+  const size_t resident_memory = stats.mem_used - map_host_used;
+  if (resident_memory < max_memory_on_device_) {
+    free_memory = max_memory_on_device_ - resident_memory;
   }
 
   /* Accurate: Use device info.
