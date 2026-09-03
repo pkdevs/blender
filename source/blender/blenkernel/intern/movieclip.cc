@@ -1170,6 +1170,10 @@ static ImBuf *movieclip_get_postprocessed_ibuf(MovieClip *clip,
                                                MovieClipPostprocFlag postprocess_flag,
                                                MovieClipCacheFlag cache_flag)
 {
+  /* Use the original datablock, so that the cache gets reused and is not duplicated
+   * for evaluated copies. */
+  clip = DEG_get_original(clip);
+
   ImBuf *ibuf = nullptr;
   int framenr = user->framenr;
   bool need_postprocess = false;
