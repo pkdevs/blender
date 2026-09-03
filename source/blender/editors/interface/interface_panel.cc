@@ -2630,6 +2630,7 @@ static int handle_panel_category_cycling(const wmEvent *event,
 
 void panel_region_width_set(ARegion *region, const float aspect, int unscaled_size)
 {
+  BLI_assert(BKE_regiontype_uses_category_tabs(region->runtime->type));
   const float size_new = unscaled_size / aspect;
   if (region->alignment & RGN_ALIGN_RIGHT) {
     region->winrct.xmin = region->winrct.xmax - (size_new * UI_SCALE_FAC);

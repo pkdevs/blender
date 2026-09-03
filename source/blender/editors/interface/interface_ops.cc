@@ -3309,7 +3309,7 @@ static wmOperatorStatus region_start_filter_exec(bContext *C, wmOperator * /*op*
                          (BLI_rcti_size_y(&region->v2d.mask) + 1);
     const int new_width = region->runtime->type->prefsizex ? region->runtime->type->prefsizex :
                                                              250;
-    panel_region_width_set(region, aspect, new_width);
+    ui::panel_region_width_set(region, aspect, new_width);
     WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, nullptr);
   }
   ED_region_activate_rna_prop(C, region, region, "search_filter");

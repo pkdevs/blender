@@ -9,6 +9,7 @@
 #include "DNA_windowmanager_types.h"
 
 #include "BLI_listbase.hh"
+#include "BLI_rect.hh"
 #include "BLI_string_utf8.hh"
 
 #include "BKE_context.hh"
@@ -19,6 +20,7 @@
 
 #include "ED_screen.hh"
 
+#include "WM_api.hh"
 #include "WM_types.hh"
 
 #include "UI_interface.hh"
@@ -82,12 +84,19 @@ static wmOperatorStatus text_text_search_exec(bContext *C, wmOperator * /*op*/)
         BLI_strncpy_utf8(st->findstr, sel_start, std::min(sel_len + 1, ST_MAX_FIND_STR));
       }
     }
-
     const char *active_category = ui::panel_category_active_get(region, false);
     if (active_category && !STREQ(active_category, "Text")) {
       ui::panel_category_active_set(region, "Text");
     }
-
+    if (ui::region_panels_fits_only_categories(region)) {
+      /* Enlarge region to show text search query button. */
+      const float aspect = BLI_rctf_size_y(&region->v2d.cur) /
+                           (BLI_rcti_size_y(&region->v2d.mask) + 1);
+      const int new_width = region->runtime->type->prefsizex ? region->runtime->type->prefsizex :
+                                                               250;
+      ui::panel_region_width_set(region, aspect, new_width);
+      WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, nullptr);
+    }
     ED_region_activate_rna_prop(C, region, st, "find_text");
   }
   return OPERATOR_FINISHED;
