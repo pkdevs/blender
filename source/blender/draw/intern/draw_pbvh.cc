@@ -465,7 +465,7 @@ static ScratchOffsets build_scratch_offsets(const Buffer &buffer, const IndexMas
   }
   result.offsets = Array<int64_t>(node_mask.size());
   int64_t offset = 0;
-  node_mask.foreach_index([&](const int node_index, const int64_t scratch_index) {
+  node_mask.foreach_index([&](const int node_index, const int scratch_index) {
     result.offsets[scratch_index] = offset;
     if (buffer.acquired[node_index]) {
       offset += buffer.sizes[node_index];
@@ -490,7 +490,7 @@ static ScratchOffsets build_vbo_initial_offsets(const Buffer &buffer,
     return result;
   }
   result.offsets = Array<int64_t>(node_mask.size());
-  node_mask.foreach_index([&](const int node_index, const int64_t scratch_index) {
+  node_mask.foreach_index([&](const int node_index, const int scratch_index) {
     result.offsets[scratch_index] = buffer.offsets[node_index];
   });
   result.total = total;
@@ -543,7 +543,7 @@ static void finalize_vbo_update(DrawCacheImpl::AttributeData &attr_vbo,
   }
   attr_vbo.ensure_buffer_capacity(draw_cache.get_vert_len());
   const Buffer &vbo = draw_cache.get_vbo();
-  node_mask.foreach_index([&](const int node_index, const int64_t scratch_index) {
+  node_mask.foreach_index([&](const int node_index, const int scratch_index) {
     update_vbo_subrange(*attr_vbo.vbo,
                         vbo.index_range(node_index),
                         scratch_offsets.offsets[scratch_index],
@@ -958,7 +958,7 @@ static void update_positions_mesh(const Object &object,
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(position_format(),
                                                           scratch_offsets.total);
   node_mask.foreach_index(
-      [&](const int node_index, const int64_t scratch_index) {
+      [&](const int node_index, const int scratch_index) {
         const IndexRange scratch_range = vbo.scratch_range(node_index,
                                                            scratch_offsets.offsets[scratch_index]);
         extract_data_vert_mesh<float3>(faces,
@@ -993,7 +993,7 @@ static void update_normals_mesh(const Object &object,
   }
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(normal_format(), scratch_offsets.total);
   node_mask.foreach_index(
-      [&](const int node_index, const int64_t scratch_index) {
+      [&](const int node_index, const int scratch_index) {
         short4 *data = scratch_vbo->data<short4>().data() + scratch_offsets.offsets[scratch_index];
         short4 *data_start = data;
 
@@ -1040,7 +1040,7 @@ BLI_NOINLINE static void update_masks_mesh(const Object &object,
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(mask_format(), scratch_offsets.total);
   if (!mask.is_empty()) {
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           float *data = scratch_vbo->data<float>().data() + scratch_offsets.offsets[scratch_index];
           float *data_start = data;
           for (const int face : nodes[node_index].faces()) {
@@ -1057,7 +1057,7 @@ BLI_NOINLINE static void update_masks_mesh(const Object &object,
   }
   else {
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           scratch_vbo->data<float>()
               .slice(scratch_offsets.offsets[scratch_index],
                      vbo.acquired[node_index] ? vbo.sizes[node_index] : 0)
@@ -1092,7 +1092,7 @@ BLI_NOINLINE static void update_face_sets_mesh(const Object &object,
                                                           scratch_offsets.total);
   if (!face_sets.is_empty()) {
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           uchar4 *data = scratch_vbo->data<uchar4>().data() +
                          scratch_offsets.offsets[scratch_index];
           uchar4 *data_start = data;
@@ -1120,7 +1120,7 @@ BLI_NOINLINE static void update_face_sets_mesh(const Object &object,
   }
   else {
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           scratch_vbo->data<uchar4>()
               .slice(scratch_offsets.offsets[scratch_index],
                      vbo.acquired[node_index] ? vbo.sizes[node_index] : 0)
@@ -1158,7 +1158,7 @@ BLI_NOINLINE static void update_generic_attribute_mesh(const Object &object,
   const Buffer &vbo = draw_cache.get_vbo();
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(format, scratch_offsets.total);
   node_mask.foreach_index(
-      [&](const int node_index, const int64_t scratch_index) {
+      [&](const int node_index, const int scratch_index) {
         const IndexRange scratch_range = vbo.scratch_range(node_index,
                                                            scratch_offsets.offsets[scratch_index]);
         bke::attribute_math::to_static_type(attr.varray.type(), [&]<typename T>() {
@@ -1210,7 +1210,7 @@ BLI_NOINLINE static void update_positions_grids(const Object &object,
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(position_format(),
                                                           scratch_offsets.total);
   node_mask.foreach_index(
-      [&](const int node_index, const int64_t scratch_index) {
+      [&](const int node_index, const int scratch_index) {
         float3 *data = scratch_vbo->data<float3>().data() + scratch_offsets.offsets[scratch_index];
         float3 *data_start = data;
         if (use_flat_layout[node_index]) {
@@ -1269,7 +1269,7 @@ BLI_NOINLINE static void update_normals_grids(const Object &object,
   }
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(normal_format(), scratch_offsets.total);
   node_mask.foreach_index(
-      [&](const int node_index, const int64_t scratch_index) {
+      [&](const int node_index, const int scratch_index) {
         short4 *data = scratch_vbo->data<short4>().data() + scratch_offsets.offsets[scratch_index];
         short4 *data_start = data;
 
@@ -1342,7 +1342,7 @@ BLI_NOINLINE static void update_masks_grids(const Object &object,
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(mask_format(), scratch_offsets.total);
   if (!masks.is_empty()) {
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           float *data = scratch_vbo->data<float>().data() + scratch_offsets.offsets[scratch_index];
           float *data_start = data;
           if (use_flat_layout[node_index]) {
@@ -1378,7 +1378,7 @@ BLI_NOINLINE static void update_masks_grids(const Object &object,
   }
   else {
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           scratch_vbo->data<float>()
               .slice(scratch_offsets.offsets[scratch_index],
                      vbo.acquired[node_index] ? vbo.sizes[node_index] : 0)
@@ -1416,7 +1416,7 @@ BLI_NOINLINE static void update_face_sets_grids(const Object &object,
                                                             bke::AttrDomain::Face))
   {
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           const Span<int> grids = nodes[node_index].grids();
           const int verts_per_grid = use_flat_layout[node_index] ?
                                          square_i(key.grid_size - 1) * 4 :
@@ -1442,7 +1442,7 @@ BLI_NOINLINE static void update_face_sets_grids(const Object &object,
   }
   else {
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           scratch_vbo->data<uchar4>()
               .slice(scratch_offsets.offsets[scratch_index],
                      vbo.acquired[node_index] ? vbo.sizes[node_index] : 0)
@@ -1682,7 +1682,7 @@ BLI_NOINLINE static void fill_uvs_grids(const Object &object,
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
   const Buffer &vbo = draw_cache.get_vbo();
   node_mask.foreach_index(
-      [&](const int node_index, const int64_t scratch_index) {
+      [&](const int node_index, const int scratch_index) {
         float2 *data = scratch_vbo->data<float2>().data() + scratch_offsets.offsets[scratch_index];
 
         const int uv_channel = orig_mesh_data.uv_map_names.index_of_try(name);
@@ -1898,7 +1898,7 @@ BLI_NOINLINE static void calc_generic_vert_attribute_grids(const Object &object,
   const Buffer &vbo = draw_cache.get_vbo();
 
   node_mask.foreach_index(
-      [&](const int node_index, const int64_t scratch_index) {
+      [&](const int node_index, const int scratch_index) {
         bke::attribute_math::to_static_type(attr.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
             const int64_t dst_len = vbo.acquired[node_index] ? vbo.sizes[node_index] : 0;
@@ -2082,7 +2082,7 @@ BLI_NOINLINE static void calc_generic_corner_attribute_grids(const Object &objec
   const Buffer &vbo = draw_cache.get_vbo();
 
   node_mask.foreach_index(
-      [&](const int node_index, const int64_t scratch_index) {
+      [&](const int node_index, const int scratch_index) {
         bke::attribute_math::to_static_type(attr.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
             const int64_t dst_len = vbo.acquired[node_index] ? vbo.sizes[node_index] : 0;
@@ -2142,7 +2142,7 @@ BLI_NOINLINE static void fill_generic_face_attribute_grids(const Object &object,
   const Buffer &vbo = draw_cache.get_vbo();
 
   node_mask.foreach_index(
-      [&](const int node_index, const int64_t scratch_index) {
+      [&](const int node_index, const int scratch_index) {
         bke::attribute_math::to_static_type(attr.type(), [&]<typename T>() {
           if constexpr (!std::is_void_v<typename AttributeConverter<T>::VBOType>) {
             const int64_t dst_len = vbo.acquired[node_index] ? vbo.sizes[node_index] : 0;
@@ -2190,7 +2190,7 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
 
   if (!attr) {
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           const int64_t dst_len = vbo.acquired[node_index] ? vbo.sizes[node_index] : 0;
           scratch_vbo->data<float3>()
               .slice(scratch_offsets.offsets[scratch_index], dst_len)
@@ -2262,7 +2262,7 @@ BLI_NOINLINE static void update_positions_bmesh(const Object &object,
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(position_format(),
                                                           scratch_offsets.total);
   node_mask.foreach_index(
-      [&](const int node_index, const int64_t scratch_index) {
+      [&](const int node_index, const int scratch_index) {
         float3 *data = scratch_vbo->data<float3>().data() + scratch_offsets.offsets[scratch_index];
         float3 *data_start = data;
         for (const BMFace *face :
@@ -2301,7 +2301,7 @@ BLI_NOINLINE static void update_normals_bmesh(const Object &object,
   }
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(normal_format(), scratch_offsets.total);
   node_mask.foreach_index(
-      [&](const int node_index, const int64_t scratch_index) {
+      [&](const int node_index, const int scratch_index) {
         short4 *data = scratch_vbo->data<short4>().data() + scratch_offsets.offsets[scratch_index];
         short4 *data_start = data;
         for (const BMFace *face :
@@ -2350,7 +2350,7 @@ BLI_NOINLINE static void update_masks_bmesh(const Object &object,
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(mask_format(), scratch_offsets.total);
   if (cd_offset != -1) {
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           float *data = scratch_vbo->data<float>().data() + scratch_offsets.offsets[scratch_index];
           float *data_start = data;
           for (const BMFace *face :
@@ -2375,7 +2375,7 @@ BLI_NOINLINE static void update_masks_bmesh(const Object &object,
   }
   else {
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           const int64_t dst_len = vbo.acquired[node_index] ? vbo.sizes[node_index] : 0;
           scratch_vbo->data<float>()
               .slice(scratch_offsets.offsets[scratch_index], dst_len)
@@ -2408,7 +2408,7 @@ BLI_NOINLINE static void update_face_sets_bmesh(const Object &object,
                                                           scratch_offsets.total);
   if (offset != -1) {
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           uchar4 *data = scratch_vbo->data<uchar4>().data() +
                          scratch_offsets.offsets[scratch_index];
           uchar4 *data_start = data;
@@ -2434,7 +2434,7 @@ BLI_NOINLINE static void update_face_sets_bmesh(const Object &object,
   }
   else {
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           const int64_t dst_len = vbo.acquired[node_index] ? vbo.sizes[node_index] : 0;
           scratch_vbo->data<uchar4>()
               .slice(scratch_offsets.offsets[scratch_index], dst_len)
@@ -2472,7 +2472,7 @@ BLI_NOINLINE static void update_generic_attribute_bmesh(const Object &object,
     const Buffer &vbo = draw_cache.get_vbo();
     gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(format, scratch_offsets.total);
     node_mask.foreach_index(
-        [&](const int node_index, const int64_t scratch_index) {
+        [&](const int node_index, const int scratch_index) {
           const int64_t dst_len = vbo.acquired[node_index] ? vbo.sizes[node_index] : 0;
           scratch_vbo->data<float3>()
               .slice(scratch_offsets.offsets[scratch_index], dst_len)
@@ -2486,7 +2486,7 @@ BLI_NOINLINE static void update_generic_attribute_bmesh(const Object &object,
   const Buffer &vbo = draw_cache.get_vbo();
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(format, scratch_offsets.total);
   node_mask.foreach_index(
-      [&](const int node_index, const int64_t scratch_index) {
+      [&](const int node_index, const int scratch_index) {
         const IndexRange scratch_range = vbo.scratch_range(node_index,
                                                            scratch_offsets.offsets[scratch_index]);
         bke::attribute_math::to_static_type(attr.type, [&]<typename T>() {
@@ -3099,7 +3099,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
       const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
       const VArraySpan hide_poly = *attributes.lookup<bool>(".hide_poly", bke::AttrDomain::Face);
       nodes_to_calculate.foreach_index(
-          [&](const int node_index, const int64_t scratch_index) {
+          [&](const int node_index, const int scratch_index) {
             create_lines_index_faces(faces,
                                      hide_poly,
                                      nodes[node_index].faces(),
@@ -3109,7 +3109,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
                                          scratch_offsets.offsets[scratch_index]);
           },
           exec_mode::grain_size(1));
-      nodes_to_calculate.foreach_index([&](const int node_index, const int64_t scratch_index) {
+      nodes_to_calculate.foreach_index([&](const int node_index, const int scratch_index) {
         const IndexRange dst_range = ibo_lines_.buffer.index_range(node_index);
         update_ibos_subrange(
             ibo_shared, dst_range, scratch_buffer.data() + scratch_offsets.offsets[scratch_index]);
@@ -3121,7 +3121,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
     case bke::pbvh::Type::Grids: {
       const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
       nodes_to_calculate.foreach_index(
-          [&](const int node_index, const int64_t scratch_index) {
+          [&](const int node_index, const int scratch_index) {
             const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
             const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
             create_lines_index_grids(key,
@@ -3135,7 +3135,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
                                          scratch_offsets.offsets[scratch_index]);
           },
           exec_mode::grain_size(1));
-      nodes_to_calculate.foreach_index([&](const int node_index, const int64_t scratch_index) {
+      nodes_to_calculate.foreach_index([&](const int node_index, const int scratch_index) {
         const IndexRange dst_range = ibo_buffer.index_range(node_index);
         update_ibos_subrange(
             ibo_shared, dst_range, scratch_buffer.data() + scratch_offsets.offsets[scratch_index]);
@@ -3147,7 +3147,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
     case bke::pbvh::Type::BMesh: {
       const Span<bke::pbvh::BMeshNode> nodes = pbvh.nodes<bke::pbvh::BMeshNode>();
       nodes_to_calculate.foreach_index(
-          [&](const int node_index, const int64_t scratch_index) {
+          [&](const int node_index, const int scratch_index) {
             const Set<BMFace *, 0> &faces = BKE_pbvh_bmesh_node_faces(
                 &const_cast<bke::pbvh::BMeshNode &>(nodes[node_index]));
             create_lines_index_bmesh(faces,
@@ -3157,7 +3157,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_lines_indices(const Object &object,
                                          scratch_offsets.offsets[scratch_index]);
           },
           exec_mode::grain_size(1));
-      nodes_to_calculate.foreach_index([&](const int node_index, const int64_t scratch_index) {
+      nodes_to_calculate.foreach_index([&](const int node_index, const int scratch_index) {
         const IndexRange dst_range = ibo_lines_.buffer.index_range(node_index);
         update_ibos_subrange(
             ibo_shared, dst_range, scratch_buffer.data() + scratch_offsets.offsets[scratch_index]);
@@ -3355,7 +3355,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
       const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
       const VArraySpan hide_poly = *attributes.lookup<bool>(".hide_poly", bke::AttrDomain::Face);
       nodes_to_calculate.foreach_index(
-          [&](const int node_index, const int64_t scratch_index) {
+          [&](const int node_index, const int scratch_index) {
             create_tri_index_mesh(faces,
                                   corner_tris,
                                   hide_poly,
@@ -3365,7 +3365,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
                                   scratch_buffer.data() + scratch_offsets.offsets[scratch_index]);
           },
           exec_mode::grain_size(1));
-      nodes_to_calculate.foreach_index([&](const int node_index, const int64_t scratch_index) {
+      nodes_to_calculate.foreach_index([&](const int node_index, const int scratch_index) {
         const IndexRange dst_range = ibo_tris_.buffer.index_range(node_index);
         update_ibos_subrange(
             ibo_shared, dst_range, scratch_buffer.data() + scratch_offsets.offsets[scratch_index]);
@@ -3408,7 +3408,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
       const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
 
       nodes_to_calculate.foreach_index(
-          [&](const int node_index, const int64_t scratch_index) {
+          [&](const int node_index, const int scratch_index) {
             create_tri_index_grids(key,
                                    subdiv_ccg.grid_hidden,
                                    coarse,
@@ -3419,7 +3419,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
                                    scratch_buffer.data() + scratch_offsets.offsets[scratch_index]);
           },
           exec_mode::grain_size(1));
-      nodes_to_calculate.foreach_index([&](const int node_index, const int64_t scratch_index) {
+      nodes_to_calculate.foreach_index([&](const int node_index, const int scratch_index) {
         const IndexRange dst_range = ibo_buffer.index_range(node_index);
         update_ibos_subrange(
             ibo_shared, dst_range, scratch_buffer.data() + scratch_offsets.offsets[scratch_index]);
@@ -3450,7 +3450,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
       Array<uint32_t> scratch_buffer(uint32_t(scratch_offsets.total));
 
       nodes_to_calculate.foreach_index(
-          [&](const int node_index, const int64_t scratch_index) {
+          [&](const int node_index, const int scratch_index) {
             const Set<BMFace *, 0> &faces = BKE_pbvh_bmesh_node_faces(
                 &const_cast<bke::pbvh::BMeshNode &>(nodes[node_index]));
             create_tri_index_bmesh(faces,
@@ -3459,7 +3459,7 @@ Span<gpu::IndexBufPtr> DrawCacheImpl::ensure_tri_indices(const Object &object,
                                    scratch_buffer.data() + scratch_offsets.offsets[scratch_index]);
           },
           exec_mode::grain_size(1));
-      nodes_to_calculate.foreach_index([&](const int node_index, const int64_t scratch_index) {
+      nodes_to_calculate.foreach_index([&](const int node_index, const int scratch_index) {
         const IndexRange dst_range = ibo_tris_.buffer.index_range(node_index);
         update_ibos_subrange(
             ibo_shared, dst_range, scratch_buffer.data() + scratch_offsets.offsets[scratch_index]);
