@@ -258,6 +258,14 @@ def _find_dependencies_recursive_impl(
                 _find_dependencies_recursive(
                     visited_pointers, r_dependencies, value, blend_filepath, asset_library_root)
 
+    if not isinstance(data, bpy.types.ID):
+        return
+    for _, value in data.items():
+        if getattr(data, '__module__', None) not in ('bpy.types', '_bpy_types'):
+            continue
+        _find_dependencies_recursive(
+            visited_pointers, r_dependencies, value, blend_filepath, asset_library_root)
+
 
 def _find_dependencies_recursive(
         # Track of pointers already visited when gatering dependencies, used to avoid cicular recursion calls
