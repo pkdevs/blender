@@ -181,10 +181,6 @@ template<class T> class MEM_CacheLimiter {
       return;
     }
 
-    if (max == 0) {
-      return;
-    }
-
     mem_in_use = get_memory_in_use();
 
     if (mem_in_use <= max) {
