@@ -11,6 +11,7 @@
 
 #include "DNA_action_types.h"
 #include "DNA_layer_types.h"
+#include "DNA_light_types.h"
 #include "DNA_lightprobe_types.h"
 #include "DNA_meta_types.h"
 #include "DNA_object_types.h"
@@ -2083,6 +2084,16 @@ bool rna_Camera_object_poll(PointerRNA * /*ptr*/, PointerRNA value)
 bool rna_Light_object_poll(PointerRNA * /*ptr*/, PointerRNA value)
 {
   return (reinterpret_cast<Object *>(value.owner_id))->type == OB_LAMP;
+}
+
+bool rna_SunLight_object_poll(PointerRNA * /*ptr*/, PointerRNA value)
+{
+  const Object *ob = reinterpret_cast<Object *>(value.owner_id);
+  if (ob->type != OB_LAMP || ob->data == nullptr) {
+    return false;
+  }
+  /* The Sun is far enough away that its light is directional. */
+  return reinterpret_cast<const Light *>(ob->data)->type == LA_SUN;
 }
 
 bool rna_Object_use_dynamic_topology_sculpting_get(PointerRNA *ptr)

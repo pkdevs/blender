@@ -1519,6 +1519,19 @@ void DepsgraphNodeBuilder::build_world(World *world)
   build_parameters(&world->id);
   /* World's nodetree. */
   build_nodetree(world->nodetree);
+  /* Objects a sky texture can be linked to, pulled in so that the evaluated World points at
+   * evaluated objects, which is what BKE_world_eval() reads. The camera is pulled in only when a
+   * sky is actually taking its altitude from it, so that an ordinary camera move does not rebake
+   * the sky for nothing. */
+  Object *altitude_camera = (scene_ != nullptr && BKE_world_sky_uses_camera_altitude(world)) ?
+                                scene_->camera :
+                                nullptr;
+  for (Object *object : {scene_ ? scene_->sun_object : nullptr, altitude_camera}) {
+    if (object != nullptr) {
+      /* TODO(sergey): Use visibility of the owner of the world. */
+      build_object(-1, object, DEG_ID_LINKED_INDIRECTLY, true);
+    }
+  }
 }
 
 /* Rigidbody Simulation - Scene Level */

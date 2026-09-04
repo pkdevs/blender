@@ -640,6 +640,10 @@ static void determine_potentially_visible_panels_recursive(
       determine_potentially_visible_panels_recursive(node, *sub_panel_decl, r_result);
       potentially_visible |= r_result[sub_panel_decl->index];
     }
+    else if (dynamic_cast<const nodes::LayoutDeclaration *>(item_decl)) {
+      /* A panel can hold buttons and no sockets at all, and is worth showing when it does. */
+      potentially_visible |= (node.flag & NODE_OPTIONS) != 0;
+    }
   }
   r_result[panel_decl.index] = potentially_visible;
 }

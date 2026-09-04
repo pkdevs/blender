@@ -5494,6 +5494,11 @@ static void def_sh_tex_sky(BlenderRNA *brna, StructRNA *srna)
        0,
        "Multiple Scattering",
        "Multiple scattering sky model (more accurate)"},
+      {SHD_SKY_HILLAIRE,
+       "HILLAIRE",
+       0,
+       "Hillaire",
+       "Hillaire 2020 physically based sky and atmosphere model"},
       {SHD_SKY_PREETHAM, "PREETHAM", 0, "Preetham", "Preetham 1999 (Legacy)"},
       {SHD_SKY_HOSEK, "HOSEK_WILKIE", 0, "Hosek / Wilkie", "Hosek / Wilkie 2012 (Legacy)"},
       {0, nullptr, 0, nullptr, nullptr},
@@ -5575,6 +5580,114 @@ static void def_sh_tex_sky(BlenderRNA *brna, StructRNA *srna)
                            "Density of ozone layer.\n"
                            "0 means no ozone, 1 means urban city ozone");
   RNA_def_property_range(prop, 0.0f, 1000.0f);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  /* Hillaire parameters. */
+  static const EnumPropertyItem sky_source_items[] = {
+      {SHD_SKY_SOURCE_DRIVEN,
+       "DRIVEN",
+       0,
+       "Driven",
+       "Follow the light object picked below. Its direction and color drive the sky, while the "
+       "sky leaves the light itself untouched"},
+      {SHD_SKY_SOURCE_MANUAL,
+       "MANUAL",
+       0,
+       "Manual",
+       "Set the direction and color here, with no light object involved"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+  static const EnumPropertyItem sky_altitude_source_items[] = {
+      {SHD_SKY_ALTITUDE_CAMERA,
+       "CAMERA",
+       0,
+       "Camera",
+       "Follow how high the scene's camera is standing"},
+      {SHD_SKY_ALTITUDE_MANUAL, "MANUAL", 0, "Manual", "Set the altitude here"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  prop = RNA_def_property(srna, "sun_source", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "sun_source");
+  RNA_def_property_enum_items(prop, sky_source_items);
+  RNA_def_property_ui_text(
+      prop, "Sun Source", "Whether the Sun follows a light object or is placed by hand");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "sun_elevation_offset", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_ui_text(
+      prop, "Elevation Offset", "Added to the elevation taken from the light object");
+  RNA_def_property_range(prop, -M_PI_2, M_PI_2);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "sun_rotation_offset", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_ui_text(
+      prop, "Rotation Offset", "Added to the rotation taken from the light object");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "sun_temperature", PROP_FLOAT, PROP_COLOR_TEMPERATURE);
+  RNA_def_property_ui_text(prop,
+                           "Temperature",
+                           "Color temperature of the Sun in Kelvin. Multiplied with the color to "
+                           "give the light that lights the sky, before the atmosphere.\n"
+                           "The default is the Sun's own temperature, which leaves the sky as the "
+                           "model works it out");
+  RNA_def_property_range(prop, 800.0f, 20000.0f);
+  RNA_def_property_ui_range(prop, 800.0f, 20000.0f, 400.0f, 1);
+  RNA_def_property_float_default(prop, 5778.0f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  static const float default_sun_color[3] = {1.0f, 1.0f, 1.0f};
+
+  prop = RNA_def_property(srna, "sun_color", PROP_FLOAT, PROP_COLOR);
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_float_array_default(prop, default_sun_color);
+  RNA_def_property_ui_text(prop,
+                           "Color",
+                           "Color of the Sun. Multiplied with the temperature to give the light "
+                           "that lights the sky, before the atmosphere");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "altitude_source", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "altitude_source");
+  RNA_def_property_enum_items(prop, sky_altitude_source_items);
+  RNA_def_property_ui_text(prop, "Altitude Source", "Where the viewer's altitude comes from");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update_relations");
+
+  prop = RNA_def_property(srna, "altitude_offset", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_ui_text(prop, "Altitude Offset", "Added to the altitude taken from the camera");
+  RNA_def_property_range(prop, -100000.0f, 100000.0f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "aerosol_anisotropy", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(prop,
+                           "Anisotropy",
+                           "Directionality of aerosol scattering. Zero is isotropic, negative is "
+                           "backward, positive is forward and tightens the glow around the Sun");
+  RNA_def_property_range(prop, -0.99f, 0.99f);
+  RNA_def_property_ui_range(prop, -0.9f, 0.9f, 10, 3);
+  RNA_def_property_float_default(prop, 0.8f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "airglow", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_ui_text(prop,
+                           "Airglow",
+                           "Strength of the faint glow the upper atmosphere gives off by itself, "
+                           "which is what lights a moonless night.\n0 means no airglow");
+  RNA_def_property_range(prop, 0.0f, 100.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 10.0f, 10, 2);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "night_adaptation", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(
+      prop,
+      "Night Adaptation",
+      "How far the night sky's color is adapted to the eye rather than left as a camera records "
+      "it.\nSight loses color as light fades, so the airglow is drained of it by how faint it "
+      "is.\n0 means physically correct, 1 means fully adapted");
+  RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 

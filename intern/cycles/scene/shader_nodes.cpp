@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ * SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -20,6 +21,7 @@
 #include "scene/shader_nodes.h"
 #include "scene/svm.h"
 
+#include "sky_hillaire.h"
 #include "sky_hosek.h"
 #include "sky_nishita.h"
 
@@ -687,6 +689,9 @@ struct SunSky {
   /* Parameter */
   float radiance_x, radiance_y, radiance_z;
   float config_x[9], config_y[9], config_z[9], nishita_data[11];
+  /* Color the Sun lights the sky with. Named rather than appended to nishita_data, since OSL
+   * takes it as a parameter of its own and the array's length is shared with that shader. */
+  float3 sun_color;
 };
 
 /* Preetham model */
@@ -803,7 +808,7 @@ static void sky_texture_precompute_hosek(SunSky *sunsky,
 
 /* Nishita improved */
 static void sky_texture_precompute_nishita(SunSky *sunsky,
-                                           bool multiple_scattering,
+                                           NodeSkyType sky_type,
                                            bool sun_disc,
                                            const float sun_size,
                                            const float sun_intensity,
@@ -812,13 +817,28 @@ static void sky_texture_precompute_nishita(SunSky *sunsky,
                                            const float altitude,
                                            const float air_density,
                                            const float aerosol_density,
-                                           const float ozone_density)
+                                           const float ozone_density,
+                                           const float3 sun_light_color)
 {
   /* Sample 2 Sun pixels */
   float pixel_bottom[3];
   float pixel_top[3];
 
-  if (multiple_scattering) {
+  if (sky_type == NODE_SKY_SINGLE_SCATTERING) {
+    SKY_single_scattering_precompute_sun(
+        sun_elevation, sun_size, altitude, air_density, aerosol_density, pixel_bottom, pixel_top);
+  }
+  else if (sky_type == NODE_SKY_HILLAIRE) {
+    SKY_hillaire_precompute_sun(sun_elevation,
+                                sun_size,
+                                altitude,
+                                air_density,
+                                aerosol_density,
+                                ozone_density,
+                                pixel_bottom,
+                                pixel_top);
+  }
+  else {
     SKY_multiple_scattering_precompute_sun(sun_elevation,
                                            sun_size,
                                            altitude,
@@ -827,10 +847,6 @@ static void sky_texture_precompute_nishita(SunSky *sunsky,
                                            ozone_density,
                                            pixel_bottom,
                                            pixel_top);
-  }
-  else {
-    SKY_single_scattering_precompute_sun(
-        sun_elevation, sun_size, altitude, air_density, aerosol_density, pixel_bottom, pixel_top);
   }
 
   float earth_intersection_angle = SKY_earth_intersection_angle(altitude);
@@ -847,6 +863,9 @@ static void sky_texture_precompute_nishita(SunSky *sunsky,
   sunsky->nishita_data[8] = sun_disc ? sun_size : -1.0f;
   sunsky->nishita_data[9] = sun_intensity;
   sunsky->nishita_data[10] = -earth_intersection_angle;
+
+  /* The Sun disc carries the same light color the sky around it was baked with. */
+  sunsky->sun_color = sun_light_color;
 }
 
 float SkyTextureNode::get_sun_average_radiance()
@@ -863,6 +882,16 @@ float SkyTextureNode::get_sun_average_radiance()
                                          aerosol_density,
                                          pix_bottom,
                                          pix_top);
+  }
+  else if (sky_type == NODE_SKY_HILLAIRE) {
+    SKY_hillaire_precompute_sun(sun_elevation,
+                                angular_diameter,
+                                altitude,
+                                air_density,
+                                aerosol_density,
+                                ozone_density,
+                                pix_bottom,
+                                pix_top);
   }
   else {
     SKY_multiple_scattering_precompute_sun(sun_elevation,
@@ -914,6 +943,7 @@ NODE_DEFINE(SkyTextureNode)
   type_enum.insert("hosek_wilkie", NODE_SKY_HOSEK);
   type_enum.insert("single_scattering", NODE_SKY_SINGLE_SCATTERING);
   type_enum.insert("multiple_scattering", NODE_SKY_MULTIPLE_SCATTERING);
+  type_enum.insert("hillaire", NODE_SKY_HILLAIRE);
   SOCKET_ENUM(sky_type, "Type", type_enum, NODE_SKY_MULTIPLE_SCATTERING);
 
   /* Nishita parameters. */
@@ -926,6 +956,14 @@ NODE_DEFINE(SkyTextureNode)
   SOCKET_FLOAT(air_density, "Air", 1.0f);
   SOCKET_FLOAT(aerosol_density, "Aerosol", 1.0f);
   SOCKET_FLOAT(ozone_density, "Ozone", 1.0f);
+
+  /* Hillaire parameters. */
+  SOCKET_FLOAT(aerosol_anisotropy, "Aerosol Anisotropy", 0.8f);
+  SOCKET_FLOAT(airglow, "Airglow", 1.0f);
+  SOCKET_FLOAT(night_adaptation, "Night Adaptation", 1.0f);
+  SOCKET_FLOAT(sun_temperature, "Sun Temperature", SKY_SUN_TEMPERATURE);
+  SOCKET_COLOR(sun_color, "Sun Color", one_float3());
+
   SOCKET_IN_POINT(vector, "Vector", zero_float3(), SocketType::LINK_TEXTURE_GENERATED);
   SOCKET_OUT_COLOR(color, "Color");
 
@@ -974,6 +1012,115 @@ void SkyTextureNode::simplify_settings(Scene * /* scene */)
   }
 }
 
+/* Drain the color the eye could not find at this brightness, and slide what is left toward
+ * blue. Thin wrapper so the float3/float[3] shuffle happens in one place. */
+static float3 sky_adapt(const float3 color, const float luminance, const float strength)
+{
+  const float in[3] = {color.x, color.y, color.z};
+  float out[3];
+  SKY_night_adaptation(in, luminance, strength, out);
+  return make_float3(out[0], out[1], out[2]);
+}
+
+/* The change the adaptation makes to airglow's own color, as a per-channel multiplier that can
+ * be carried through the bake the same way an illuminant tint is. */
+static float3 sky_airglow_tint(const float luminance, const float strength)
+{
+  float xyz[3];
+  SKY_airglow_color(xyz);
+  const Transform to_rgb = ColorSpaceManager::get_xyz_to_scene_linear_rgb();
+  /* A near-monochromatic 560 nm emission sits outside the render's RGB gamut, so one channel of
+   * its true color comes out slightly negative. A per-channel ratio against that would blow up,
+   * so clamp into gamut first and leave any channel with nothing to scale alone. */
+  const float3 physical = max(transform_point(&to_rgb, make_float3(xyz[0], xyz[1], xyz[2])),
+                              zero_float3());
+  const float3 adapted = sky_adapt(physical, luminance, strength);
+  return make_float3((physical.x > 1e-9f) ? adapted.x / physical.x : 1.0f,
+                     (physical.y > 1e-9f) ? adapted.y / physical.y : 1.0f,
+                     (physical.z > 1e-9f) ? adapted.z / physical.z : 1.0f);
+}
+
+/* Light the Sun sends down: a blackbody at the given temperature, tinted by the color - the same
+ * way a light object computes its own color. Divided through by the Sun's own reference
+ * temperature, since the sky is already computed for a real solar spectrum and would otherwise
+ * double up the Sun's color. Mirrors sky_light_color() on the Blender side. */
+static float3 sky_light_color(Scene *scene, const float temperature, const float3 color)
+{
+  ShaderManager *manager = scene->shader_manager.get();
+  const float3 blackbody = manager->rec709_to_scene_linear(
+      svm_math_blackbody_color_rec709(temperature));
+  const float3 reference = manager->rec709_to_scene_linear(
+      svm_math_blackbody_color_rec709(SKY_SUN_TEMPERATURE));
+
+  float3 light = color;
+  for (int i = 0; i < 3; i++) {
+    light[i] *= (reference[i] > 0.0f) ? max(blackbody[i], 0.0f) / reference[i] : 1.0f;
+  }
+  return light;
+}
+
+/* Everything the Nishita family of models needs before either compiler can emit anything: the
+ * color the Sun lights the sky with, the values the kernels read, and the baked sky itself. Both
+ * compilers want exactly this, so it is worked out in one place rather than twice. They differ
+ * only in whether a sky that has already been baked may be kept. */
+static void sky_precompute_nishita_family(SkyTextureNode *node,
+                                          Scene *scene,
+                                          SunSky *sunsky,
+                                          const bool reuse_baked_sky)
+{
+  const NodeSkyType sky_type = node->get_sky_type();
+  /* The Sun's own color belongs to the Hillaire model only. The other models never show the
+   * temperature or the color, so a file saved before either existed has them at zero, which
+   * would otherwise turn the Sun disc black. EEVEE gates this the same way. */
+  const float3 sun_light_color = (sky_type == NODE_SKY_HILLAIRE) ?
+                                     sky_light_color(scene,
+                                                     node->get_sun_temperature(),
+                                                     node->get_sun_color()) :
+                                     one_float3();
+
+  sky_texture_precompute_nishita(sunsky,
+                                 sky_type,
+                                 node->get_sun_disc(),
+                                 node->get_sun_size(),
+                                 node->get_sun_intensity(),
+                                 node->get_sun_elevation(),
+                                 node->get_sun_rotation(),
+                                 node->get_altitude(),
+                                 node->get_air_density(),
+                                 node->get_aerosol_density(),
+                                 node->get_ozone_density(),
+                                 sun_light_color);
+
+  if (reuse_baked_sky && !node->handle.empty()) {
+    return;
+  }
+
+  /* The airglow belongs to the Hillaire model only. It is faint enough for the eye to lose color
+   * in, so it is adapted here, before the bake, according to how bright it actually renders. The
+   * Sun's own disc is far too bright for this to touch, so it is left alone. */
+  const bool hillaire = (sky_type == NODE_SKY_HILLAIRE);
+  const float airglow = hillaire ? node->get_airglow() : 0.0f;
+  const float3 airglow_tint = hillaire ? sky_airglow_tint(SKY_NOMINAL_LUMINANCE_AIRGLOW * airglow,
+                                                          node->get_night_adaptation()) :
+                                         one_float3();
+
+  ImageParams impar;
+  impar.interpolation = INTERPOLATION_LINEAR;
+  impar.extension = EXTENSION_EXTEND;
+  node->handle = scene->image_manager->add_image(
+      make_unique<SkyLoader>(sky_type,
+                             node->get_sun_elevation(),
+                             node->get_altitude(),
+                             node->get_air_density(),
+                             node->get_aerosol_density(),
+                             node->get_ozone_density(),
+                             node->get_aerosol_anisotropy(),
+                             airglow,
+                             airglow_tint,
+                             sun_light_color),
+      impar);
+}
+
 void SkyTextureNode::compile(SVMCompiler &compiler)
 {
   ShaderInput *vector_in = input("Vector");
@@ -986,34 +1133,7 @@ void SkyTextureNode::compile(SVMCompiler &compiler)
     sky_texture_precompute_hosek(&sunsky, sun_direction, turbidity, ground_albedo);
   }
   else {
-    sky_texture_precompute_nishita(&sunsky,
-                                   sky_type == NODE_SKY_MULTIPLE_SCATTERING,
-                                   sun_disc,
-                                   get_sun_size(),
-                                   sun_intensity,
-                                   sun_elevation,
-                                   sun_rotation,
-                                   altitude,
-                                   air_density,
-                                   aerosol_density,
-                                   ozone_density);
-    /* Sky texture image parameters */
-    ImageManager *image_manager = compiler.scene->image_manager.get();
-    ImageParams impar;
-    impar.interpolation = INTERPOLATION_LINEAR;
-    impar.extension = EXTENSION_EXTEND;
-
-    /* Precompute sky texture */
-    if (handle.empty()) {
-      unique_ptr<SkyLoader> loader = make_unique<SkyLoader>(sky_type ==
-                                                                NODE_SKY_MULTIPLE_SCATTERING,
-                                                            sun_elevation,
-                                                            altitude,
-                                                            air_density,
-                                                            aerosol_density,
-                                                            ozone_density);
-      handle = image_manager->add_image(std::move(loader), impar);
-    }
+    sky_precompute_nishita_family(this, compiler.scene, &sunsky, true);
   }
 
   const SVMStackOffset vector_offset = tex_mapping.compile_begin(compiler, vector_in, nullptr);
@@ -1050,6 +1170,9 @@ void SkyTextureNode::compile(SVMCompiler &compiler)
         .angular_diameter = sunsky.nishita_data[8],
         .sun_intensity = sunsky.nishita_data[9],
         .earth_intersection_angle = sunsky.nishita_data[10],
+        .sun_color_x = sunsky.sun_color.x,
+        .sun_color_y = sunsky.sun_color.y,
+        .sun_color_z = sunsky.sun_color.z,
         .texture_id = uint(handle.kernel_id()),
     });
   }
@@ -1069,35 +1192,7 @@ void SkyTextureNode::compile(OSLCompiler &compiler)
     sky_texture_precompute_hosek(&sunsky, sun_direction, turbidity, ground_albedo);
   }
   else {
-    sky_texture_precompute_nishita(&sunsky,
-                                   sky_type == NODE_SKY_MULTIPLE_SCATTERING,
-                                   sun_disc,
-                                   get_sun_size(),
-                                   sun_intensity,
-                                   sun_elevation,
-                                   sun_rotation,
-                                   altitude,
-                                   air_density,
-                                   aerosol_density,
-                                   ozone_density);
-    /* Sky texture image parameters */
-    ImageManager *image_manager = compiler.scene->image_manager.get();
-    ImageParams impar;
-    impar.interpolation = INTERPOLATION_LINEAR;
-    impar.extension = EXTENSION_EXTEND;
-
-    /* Precompute sky texture */
-    {
-      unique_ptr<SkyLoader> loader = make_unique<SkyLoader>(sky_type ==
-                                                                NODE_SKY_MULTIPLE_SCATTERING,
-                                                            sun_elevation,
-                                                            altitude,
-                                                            air_density,
-                                                            aerosol_density,
-                                                            ozone_density);
-      handle = image_manager->add_image(std::move(loader), impar);
-    }
-
+    sky_precompute_nishita_family(this, compiler.scene, &sunsky, false);
     compiler.parameter_texture("filename", handle);
   }
 
@@ -1110,6 +1205,7 @@ void SkyTextureNode::compile(OSLCompiler &compiler)
   compiler.parameter_array("config_y", sunsky.config_y, 9);
   compiler.parameter_array("config_z", sunsky.config_z, 9);
   compiler.parameter_array("nishita_data", sunsky.nishita_data, 11);
+  compiler.parameter_color("sun_color", sunsky.sun_color);
   compiler.add(this, "node_sky_texture");
 }
 

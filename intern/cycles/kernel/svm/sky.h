@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ * SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -143,6 +144,7 @@ ccl_device float3 sky_radiance_nishita(KernelGlobals kg,
                                        const float3 pixel_bottom,
                                        const float3 pixel_top,
                                        const ccl_private float *sky_data,
+                                       const float3 sun_color,
                                        const uint texture_id)
 {
   /* Definitions */
@@ -153,6 +155,7 @@ ccl_device float3 sky_radiance_nishita(KernelGlobals kg,
   const float earth_intersection_angle = sky_data[4];
   const bool sun_disc = (angular_diameter >= 0.0f);
   float3 xyz = zero_float3();
+  float3 sun_disc_xyz = zero_float3();
   const float2 direction = direction_to_spherical(dir);
   const float3 sun_dir = spherical_to_direction(sun_elevation - M_PI_2_F, sun_rotation - M_PI_2_F);
   const float sun_dir_angle = precise_angle(dir, sun_dir);
@@ -169,7 +172,7 @@ ccl_device float3 sky_radiance_nishita(KernelGlobals kg,
     /* Limb darkening, coefficient is 0.6f */
     const float limb_darkening = (1.0f -
                                   0.6f * (1.0f - sqrtf(1.0f - sqr(sun_dir_angle / half_angular))));
-    xyz = mix(pixel_bottom, pixel_top, y) * sun_intensity * limb_darkening;
+    sun_disc_xyz = mix(pixel_bottom, pixel_top, y) * sun_intensity * limb_darkening;
   }
 
   /* Sky */
@@ -178,8 +181,14 @@ ccl_device float3 sky_radiance_nishita(KernelGlobals kg,
   const float y = copysignf(sqrtf(fabsf(dir_elevation) * M_2_PI_F), dir_elevation) * 0.5f + 0.5f;
   xyz += make_float3(kernel_image_interp(kg, sd, texture_id, dual2(make_float2(x, y))));
 
-  /* Convert to RGB */
-  return xyz_to_rgb_clamped(kg, xyz);
+  /* Convert to RGB. The Sun's own color is already baked into the sky texture. The disc is
+   * converted separately so that it can carry that color on top of the atmospheric reddening it
+   * has already picked up near the horizon - but the two are summed and clamped together, as one
+   * total, rather than clamped individually first. Clamping drops negative channels, which a
+   * saturated sky commonly has, and doing that to the sky and the disc separately throws away a
+   * cancellation that a joint clamp would have kept, leaving the sum brighter than it should
+   * be. */
+  return max(xyz_to_rgb(kg, xyz) + xyz_to_rgb(kg, sun_disc_xyz) * sun_color, zero_float3());
 }
 
 ccl_device_noinline int svm_node_tex_sky(KernelGlobals kg,
@@ -252,10 +261,12 @@ ccl_device_noinline int svm_node_tex_sky(KernelGlobals kg,
                                nishita.angular_diameter,
                                nishita.sun_intensity,
                                nishita.earth_intersection_angle};
+    const float3 sun_color = make_float3(
+        nishita.sun_color_x, nishita.sun_color_y, nishita.sun_color_z);
 
     /* Compute Sky */
     rgb = sky_radiance_nishita(
-        kg, sd, dir, path_flag, pixel_bottom, pixel_top, sky_data, nishita.texture_id);
+        kg, sd, dir, path_flag, pixel_bottom, pixel_top, sky_data, sun_color, nishita.texture_id);
   }
 
   stack_store_float3(stack, node.out_offset, rgb);

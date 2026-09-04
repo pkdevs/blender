@@ -14,6 +14,7 @@
 #include "DNA_curves_types.h"
 #include "DNA_grease_pencil_types.h"
 #include "DNA_mesh_types.h"
+#include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_pointcloud_types.h"
 #include "DNA_scene_types.h"
@@ -24,6 +25,7 @@
 
 #include "BLI_listbase_iterator.hh"
 #include "BLI_math_base.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_sys_types.hh"
 
@@ -34,6 +36,7 @@
 #include "BKE_main.hh"
 #include "BKE_mesh_legacy_convert.hh"
 #include "BKE_node.hh"
+#include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
@@ -513,6 +516,29 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
         });
       }
     }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 20)) {
+    /* Initialize the parameters of the new Hillaire sky model. Reading a file zero-fills fields
+     * that did not exist when it was written, and struct defaults are not applied on load, so a
+     * Sky Texture saved before these were added would come out with a black Sun and no atmosphere
+     * the moment it was switched to Hillaire. The fields whose default is zero are left to the
+     * zero-fill. Keep in step with node_shader_init_tex_sky(). */
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type == NTREE_SHADER) {
+        for (bNode &node : ntree->nodes) {
+          if (node.type_legacy == SH_NODE_TEX_SKY && node.storage) {
+            NodeTexSky *tex = static_cast<NodeTexSky *>(node.storage);
+            tex->sun_temperature = 5778.0f;
+            copy_v3_fl(tex->sun_color, 1.0f);
+            tex->aerosol_anisotropy = 0.8f;
+            tex->airglow = 1.0f;
+            tex->night_adaptation = 1.0f;
+          }
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
   }
 
   /**

@@ -160,6 +160,7 @@ void node_tex_sky_nishita(float3 co,
                           float3 sun_pixel_bottom,
                           float3 sun_pixel_top,
                           float4 sun_params,
+                          float3 sun_color,
                           sampler2DArray ima,
                           float layer,
                           float4 &color)
@@ -175,17 +176,18 @@ void node_tex_sky_nishita(float3 co,
   float dir_elevation_abs = (dir_elevation < 0.0f) ? -dir_elevation : dir_elevation;
   y = sqrt(dir_elevation_abs / M_PI_2) * sign(dir_elevation) * 0.5f + 0.5f;
 
-  /* Look up color in the precomputed map and convert to RGB. */
+  /* Look up color in the precomputed map and convert to RGB. The Sun's own color is already baked
+   * into this map. */
   xyz = fade * texture(ima, float3(x, y, layer)).rgb;
   float3 rgb = float3(dot(xyz_to_r, xyz), dot(xyz_to_g, xyz), dot(xyz_to_b, xyz));
 
-  /* The Sun disc covers about half a degree, too small to survive baking into the map, so it's
+  /* The Sun disc covers about half a degree, too small to survive baking into the map, so it is
    * drawn here instead. Every ray sees it, and it reaches the scene through EEVEE's existing
    * mechanism: anything brighter than the World's Sun Threshold is pulled out of the light probe
-   * and turned into a sun light, which is what casts shadows. Excluding the disc here would leave
-   * the Sun lighting the scene with only its glow, none of its own light - measured on a lit
-   * plane, turning the disc off changes nothing at all without this. This also brings EEVEE
-   * nearer to Cycles, which has always let every ray see the disc. */
+   * and turned into a sun light, which is what casts the shadows. Excluding the disc here would
+   * leave the Sun lighting the scene with only its glow and none of its own light.
+   *
+   * A negative angular diameter means the disc is off. */
   float sun_elevation = sun_params.x;
   float angular_diameter = sun_params.y;
   float sun_intensity = sun_params.z;
@@ -201,7 +203,9 @@ void node_tex_sky_nishita(float3 co,
                                                             0.0f)));
       float sun_y = ((dir_elevation - sun_elevation) / angular_diameter) + 0.5f;
       float3 disc = mix(sun_pixel_bottom, sun_pixel_top, sun_y) * sun_intensity * limb_darkening;
-      rgb += float3(dot(xyz_to_r, disc), dot(xyz_to_g, disc), dot(xyz_to_b, disc));
+      /* The disc carries the Sun's tint on top of the atmospheric reddening it has already picked
+       * up near the horizon. */
+      rgb += float3(dot(xyz_to_r, disc), dot(xyz_to_g, disc), dot(xyz_to_b, disc)) * sun_color;
     }
   }
 

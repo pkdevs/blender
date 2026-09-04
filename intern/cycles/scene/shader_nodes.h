@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ * SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -192,6 +193,11 @@ class SkyTextureNode : public TextureNode {
   NODE_SOCKET_API(float, air_density)
   NODE_SOCKET_API(float, aerosol_density)
   NODE_SOCKET_API(float, ozone_density)
+  NODE_SOCKET_API(float, aerosol_anisotropy)
+  NODE_SOCKET_API(float, night_adaptation)
+  NODE_SOCKET_API(float, airglow)
+  NODE_SOCKET_API(float, sun_temperature)
+  NODE_SOCKET_API(float3, sun_color)
   NODE_SOCKET_API(float3, vector)
   ImageHandle handle;
 

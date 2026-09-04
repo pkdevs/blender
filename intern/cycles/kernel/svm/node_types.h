@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ * SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -809,6 +810,9 @@ struct SVMNodeTexSkyNishitaData {
   float angular_diameter;
   float sun_intensity;
   float earth_intersection_angle;
+  float sun_color_x;
+  float sun_color_y;
+  float sun_color_z;
   uint texture_id;
 };
 static_assert(alignof(SVMNodeTexSkyNishitaData) <= alignof(uint));

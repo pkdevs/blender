@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ * SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -347,7 +348,8 @@ enum NodeSkyType : uint {
   NODE_SKY_PREETHAM,
   NODE_SKY_HOSEK,
   NODE_SKY_SINGLE_SCATTERING,
-  NODE_SKY_MULTIPLE_SCATTERING
+  NODE_SKY_MULTIPLE_SCATTERING,
+  NODE_SKY_HILLAIRE
 };
 
 enum NodeGradientType : uint {

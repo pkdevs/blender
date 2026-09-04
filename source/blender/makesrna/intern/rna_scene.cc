@@ -990,6 +990,18 @@ void rna_Scene_set_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
   }
 }
 
+/* Linking or unlinking a light object changes what the world's sky depends on, so the relations
+ * have to be rebuilt. Without this the sky would resolve the object once and then never notice it
+ * move again. */
+static void rna_Scene_sky_object_update(Main *bmain, Scene *scene, PointerRNA * /*ptr*/)
+{
+  DEG_relations_tag_update(bmain);
+  if (scene->world != nullptr) {
+    DEG_id_tag_update(&scene->world->id, 0);
+  }
+  WM_main_add_notifier(NC_WORLD | ND_WORLD, scene->world);
+}
+
 static void rna_Scene_camera_update(Main *bmain, Scene * /*scene_unused*/, PointerRNA *ptr)
 {
   wmWindowManager *wm = bmain->wm.first();
@@ -9289,6 +9301,21 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_pointer_funcs(prop, nullptr, nullptr, nullptr, "rna_Camera_object_poll");
   RNA_def_property_ui_text(prop, "Camera", "Active camera, used for rendering the scene");
   RNA_def_property_update(prop, NC_SCENE | NA_EDITED, "rna_Scene_camera_update");
+
+  /* Light object the Hillaire sky reads the Sun from. Picking one here is what links a Sky
+   * Texture node to a real light in the scene. It lives alongside the camera because which light
+   * stands in for the Sun is a fact about the shot, not about a World that several scenes may
+   * share. */
+  prop = RNA_def_property(srna, "sun_object", PROP_POINTER, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_pointer_funcs(prop, nullptr, nullptr, nullptr, "rna_SunLight_object_poll");
+  RNA_def_property_ui_text(prop,
+                           "Sun Object",
+                           "Light object the sky takes the Sun's direction and color from. The "
+                           "light provides the direct lighting, the sky provides the scattering "
+                           "around it");
+  RNA_def_property_update(prop, NC_SCENE | NA_EDITED, "rna_Scene_sky_object_update");
 
   prop = RNA_def_property(srna, "background_set", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_sdna(prop, nullptr, "set");

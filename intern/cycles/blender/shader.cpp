@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ * SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -1111,6 +1112,12 @@ static ShaderNode *add_node(Scene *scene,
     sky->set_air_density(storage.air_density);
     sky->set_aerosol_density(storage.aerosol_density);
     sky->set_ozone_density(storage.ozone_density);
+    sky->set_aerosol_anisotropy(storage.aerosol_anisotropy);
+    sky->set_night_adaptation(storage.night_adaptation);
+    sky->set_airglow(storage.airglow);
+    sky->set_sun_temperature(storage.sun_temperature);
+    sky->set_sun_color(
+        make_float3(storage.sun_color[0], storage.sun_color[1], storage.sun_color[2]));
     const blender::TexMapping &b_texture_mapping = storage.base.tex_mapping;
     get_tex_mapping(sky, &b_texture_mapping);
     node = sky;
