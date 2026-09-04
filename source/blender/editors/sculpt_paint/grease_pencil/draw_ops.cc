@@ -1185,7 +1185,7 @@ static void grease_pencil_fill_overlay_pixel_cb(const bContext &C,
   const GreasePencil &grease_pencil = *id_cast<const GreasePencil *>(object.data);
 
   const float4x4 world_to_view = float4x4(rv3d.viewmat);
-  /* Note; the initial view matrix is already set, clear to draw in view space. */
+  /* Note: The initial view matrix is already set, clear to draw in view space. */
   ed::greasepencil::image_render::clear_view_matrix();
 
   const ColorGeometry4f stroke_curves_color = ColorGeometry4f(1, 0, 0, 1);
@@ -1268,7 +1268,7 @@ static void grease_pencil_fill_overlay_delaunay_cb(const bContext &C,
   Brush &brush = *BKE_paint_brush(&paint);
 
   const float4x4 world_to_view = float4x4(rv3d.viewmat);
-  /* Note; the initial view matrix is already set, clear to draw in view space. */
+  /* Note: The initial view matrix is already set, clear to draw in view space. */
   ed::greasepencil::image_render::clear_view_matrix();
 
   float4 color;
