@@ -15,8 +15,12 @@ void MTLPipeline::resolve_draw(GPUPrimType /*prim_type*/, int64_t /*vertex_input
 {
   Context *ctx = Context::get();
   sync_context();
-  sync_state_manager();
-  ctx->state_manager->apply_state();
+  /* Push the pipeline's fixed-function state into the StateManager so MTL
+   * can read it when building its PSO / depth-stencil / RPS. */
+  MTLStateManager &sm = static_cast<MTLStateManager &>(*ctx->state_manager);
+  sm.state = this->state_;
+  sm.mutable_state = this->mutable_state_;
+  sm.apply_state();
   clear_dirty();
 }
 
@@ -24,6 +28,36 @@ void MTLPipeline::resolve_compute()
 {
   sync_context();
   clear_dirty();
+}
+
+void MTLPipeline::texture_bind(Texture *tex, GPUSamplerState sampler, int unit)
+{
+  MTLContext::get()->state_manager->texture_bind(tex, sampler, unit);
+}
+
+void MTLPipeline::texture_unbind(Texture *tex)
+{
+  MTLContext::get()->state_manager->texture_unbind(tex);
+}
+
+void MTLPipeline::texture_unbind_all()
+{
+  MTLContext::get()->state_manager->texture_unbind_all();
+}
+
+void MTLPipeline::image_bind(Texture *tex, int unit)
+{
+  MTLContext::get()->state_manager->image_bind(tex, unit);
+}
+
+void MTLPipeline::image_unbind(Texture *tex)
+{
+  MTLContext::get()->state_manager->image_unbind(tex);
+}
+
+void MTLPipeline::image_unbind_all()
+{
+  MTLContext::get()->state_manager->image_unbind_all();
 }
 
 void MTLPipeline::issue_barrier(GPUBarrier barrier_bits)

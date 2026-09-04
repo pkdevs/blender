@@ -114,14 +114,18 @@ class Pipeline {
   virtual void uniform_float(int location, int comp_len, int array_size, const float *data);
   virtual void uniform_int(int location, int comp_len, int array_size, const int *data);
 
-  /* Resource bindings (abstract on base). Each backend owns its own storage +
-   * fast path. See `GLPipeline`, `VKPipeline`, `MTLPipeline`. */
+  /* Resource bindings. Each backend `Pipeline` stores into its own backend
+   * storage (GL slot arrays, VK descriptor bind-spaces, MTL argument-buffer
+   * bindings) and overrides these. The base provides no storage. */
   virtual void texture_bind(Texture *tex, GPUSamplerState sampler, int unit) = 0;
   virtual void texture_unbind(Texture *tex) = 0;
   virtual void texture_unbind_all() = 0;
   virtual void image_bind(Texture *tex, int unit) = 0;
   virtual void image_unbind(Texture *tex) = 0;
   virtual void image_unbind_all() = 0;
+  /* Buffer / ray-tracing binds. Default no-op; backends that have a descriptor
+   * slot for them (Vulkan) override. GL/Metal bind buffers through their own
+   * resource objects, so they leave these as no-ops. */
   virtual void uniformbuf_bind(UniformBuf *ubo, int slot);
   virtual void uniformbuf_unbind(UniformBuf *ubo);
   virtual void storagebuf_bind(StorageBuf *ssbo, int slot);
@@ -129,6 +133,16 @@ class Pipeline {
   virtual void tlas_bind(TopLevelAS *tlas, int slot);
   virtual void tlas_unbind(TopLevelAS *tlas);
   virtual void image_format_set(int unit, TextureWriteFormat format);
+
+  /**
+   * Return the per-image-unit write formats currently bound on this pipeline.
+   * Backends that do not track this (Vulkan - it is baked into the PSO)
+   * return an empty range; callers must handle both cases.
+   */
+  virtual Span<const TextureWriteFormat> image_formats_get() const
+  {
+    return {};
+  }
 
   /** Convenience: set several state values at once. */
   void state_set(GPUWriteMask write_mask,

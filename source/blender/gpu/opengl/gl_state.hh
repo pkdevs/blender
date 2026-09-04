@@ -4,103 +4,20 @@
 
 /** \file
  * \ingroup gpu
+ *
+ * GL-specific utilities that used to live alongside the (now-removed)
+ * `GLStateManager`: the GL fence and a handful of GPU→GL enum conversions.
  */
 
 #pragma once
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_utildefines.hh"
-
 #include "gpu_state_private.hh"
 
 #include <epoxy/gl.h>
 
 namespace blender::gpu {
-
-class GLFrameBuffer;
-class GLTexture;
-
-/**
- * State manager keeping track of the draw state and applying it before drawing.
- * Opengl Implementation.
- */
-class GLStateManager : public StateManager {
- public:
-  /** Another reference to the active frame-buffer. */
-  GLFrameBuffer *active_fb = nullptr;
-
- private:
-  /** Current state of the GL implementation. Avoids resetting the whole state for every change. */
-  GPUState current_;
-  GPUStateMutable current_mutable_;
-  /** Limits. */
-  float line_width_range_[2];
-
-  /**
-   * Texture state:
-   * We keep the full stack of textures and sampler bounds to use multi bind, and to be able to
-   * edit and restore texture binds on the fly without querying the context.
-   * Also this allows us to keep track of textures bounds to many texture units.
-   * Keep the targets to know what target to set to 0 for unbinding (legacy).
-   * Init first target to GL_TEXTURE_2D for texture_bind_temp to work.
-   */
-  GLuint targets_[64] = {GL_TEXTURE_2D};
-  GLuint textures_[64] = {0};
-  GLuint samplers_[64] = {0};
-  uint64_t dirty_texture_binds_ = 0;
-
-  GLuint images_[8] = {0};
-  GLenum formats_[8] = {0};
-  uint8_t dirty_image_binds_ = 0;
-
- public:
-  GLStateManager();
-
-  void apply_state() override;
-  /**
-   * Will set all the states regardless of the current ones.
-   */
-  void force_state() override;
-
-  void issue_barrier(GPUBarrier barrier_bits) override;
-
-  void texture_bind(Texture *tex, GPUSamplerState sampler, int unit) override;
-  /**
-   * Bind the texture to slot 0 for editing purpose. Used by legacy pipeline.
-   */
-  void texture_bind_temp(GLTexture *tex);
-  void texture_unbind(Texture *tex) override;
-  void texture_unbind_all() override;
-
-  void image_bind(Texture *tex, int unit) override;
-  void image_unbind(Texture *tex) override;
-  void image_unbind_all() override;
-
-  uint64_t bound_texture_slots();
-  uint8_t bound_image_slots();
-
- private:
-  static void set_write_mask(GPUWriteMask value);
-  static void set_depth_test(GPUDepthTest value);
-  static void set_stencil_test(GPUStencilTest test, GPUStencilOp operation);
-  static void set_stencil_mask(GPUStencilTest test, const GPUStateMutable &state);
-  static void set_clip_distances(int new_dist_len, int old_dist_len);
-
-  static void set_facing(bool invert);
-  static void set_backface_culling(GPUFaceCullTest test);
-  static void set_provoking_vert(GPUProvokingVertex vert);
-  static void set_clip_control(bool enable);
-  static void set_blend(GPUBlend value);
-
-  void set_state(const GPUState &state);
-  void set_mutable_state(const GPUStateMutable &state);
-
-  void texture_bind_apply();
-  void image_bind_apply();
-
-  MEM_CXX_CLASS_ALLOC_FUNCS("GLStateManager")
-};
 
 /* Fence synchronization primitive. */
 class GLFence : public Fence {

@@ -268,50 +268,17 @@ void Pipeline::state_set(GPUWriteMask write_mask,
 }
 
 /* ------------------------------------------------------------ */
-/** \name Resource bindings (concrete on the base).
+/** \name Resource bindings.
  *
- * Texture / image binds forward to the context's StateManager (the base
- * StateManager interface every backend implements). Buffers are bound
- * through each backend's own buffer objects (see GLUniformBuf::bind), so
- * from the pipeline side we only mark the descriptor dirty so that
- * `resolve_*` knows something in the descriptor category changed.
+ * Texture / image binds are pure virtual: each backend `Pipeline` stores
+ * them into its own backend storage (GL slot arrays, VK descriptor
+ * bind-spaces, MTL argument-buffer bindings).
+ *
+ * Buffer / ray-tracing binds are no-ops on the base and only mark the
+ * descriptor dirty so `resolve_*` knows the descriptor category changed.
+ * GL/Metal bind these through their own buffer objects; Vulkan overrides to
+ * record the binding for descriptor-set creation.
  * \{ */
-
-void Pipeline::texture_bind(Texture *tex, GPUSamplerState sampler, int unit)
-{
-  Context::get()->state_manager->texture_bind(tex, sampler, unit);
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::texture_unbind(Texture *tex)
-{
-  Context::get()->state_manager->texture_unbind(tex);
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::texture_unbind_all()
-{
-  Context::get()->state_manager->texture_unbind_all();
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::image_bind(Texture *tex, int unit)
-{
-  Context::get()->state_manager->image_bind(tex, unit);
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::image_unbind(Texture *tex)
-{
-  Context::get()->state_manager->image_unbind(tex);
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::image_unbind_all()
-{
-  Context::get()->state_manager->image_unbind_all();
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
 
 void Pipeline::uniformbuf_bind(UniformBuf *ubo, int slot)
 {
@@ -390,17 +357,6 @@ void Pipeline::sync_context()
   }
   if (framebuffer_ != nullptr) {
     ctx->active_fb = framebuffer_;
-  }
-}
-
-void Pipeline::sync_state_manager()
-{
-  StateManager *sm = Context::get()->state_manager;
-  if (sm->state != state_) {
-    sm->state = state_;
-  }
-  if (sm->mutable_state != mutable_state_) {
-    sm->mutable_state = mutable_state_;
   }
 }
 

@@ -672,6 +672,42 @@ void GLPipeline::issue_barrier(GPUBarrier barrier_bits)
   glMemoryBarrier(to_gl(barrier_bits));
 }
 
+void GLPipeline::texture_bind(Texture *tex, GPUSamplerState sampler, int unit)
+{
+  GLPipeline::bind_texture(tex, sampler, unit);
+  this->mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
+void GLPipeline::texture_unbind(Texture *tex)
+{
+  GLPipeline::unbind_texture(tex);
+  this->mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
+void GLPipeline::texture_unbind_all()
+{
+  GLPipeline::unbind_all_textures();
+  this->mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
+void GLPipeline::image_bind(Texture *tex, int unit)
+{
+  GLPipeline::bind_image(tex, unit);
+  this->mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
+void GLPipeline::image_unbind(Texture *tex)
+{
+  GLPipeline::unbind_image(tex);
+  this->mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
+void GLPipeline::image_unbind_all()
+{
+  GLPipeline::unbind_all_images();
+  this->mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
 /** \} */
 
 }  // namespace blender::gpu

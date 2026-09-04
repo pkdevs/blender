@@ -145,12 +145,6 @@ class GLContext : public Context {
     return static_cast<GLContext *>(Context::get());
   }
 
-  static GLStateManager *state_manager_active_get()
-  {
-    GLContext *ctx = GLContext::get();
-    return static_cast<GLStateManager *>(ctx->state_manager);
-  };
-
   /* These need to be called with the context the id was created with. */
   void vao_free(GLuint vao_id);
   void fbo_free(GLuint fbo_id);

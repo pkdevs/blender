@@ -49,7 +49,18 @@ GLContext::GLContext(GHOST_IWindow *ghost_window,
   glBufferData(GL_ARRAY_BUFFER, sizeof(data), data, GL_STATIC_DRAW);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-  state_manager = new GLStateManager();
+  /* One-time GL enables (moved from the old `GLStateManager` constructor). */
+  glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_DITHER);
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  glPixelStorei(GL_PACK_ALIGNMENT, 1);
+  glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+
+  /* Takes precedence over #GL_PRIMITIVE_RESTART.
+   * Sets restart index correctly following the IBO type. */
+  glEnable(GL_PRIMITIVE_RESTART_FIXED_INDEX);
+
   imm = new GLImmediate();
   ghost_window_ = ghost_window;
 
@@ -86,8 +97,6 @@ GLContext::GLContext(GHOST_IWindow *ghost_window,
   ghost_context_ = ghost_context;
 
   active_fb = back_left;
-  static_cast<GLStateManager *>(state_manager)->active_fb = static_cast<GLFrameBuffer *>(
-      active_fb);
 }
 
 GLContext::~GLContext()

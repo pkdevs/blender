@@ -627,39 +627,39 @@ void GPU_texture_bind_ex(gpu::Texture *texture, GPUSamplerState state, int unit)
 {
   Texture *tex = texture;
   state = (state.type == GPU_SAMPLER_STATE_TYPE_INTERNAL) ? tex->sampler_state : state;
-  Context::get()->state_manager->texture_bind(tex, state, unit);
+  Context::get()->pipeline_get()->texture_bind(tex, state, unit);
 }
 
 void GPU_texture_bind(gpu::Texture *texture, int unit)
 {
   Texture *tex = texture;
-  Context::get()->state_manager->texture_bind(tex, tex->sampler_state, unit);
+  Context::get()->pipeline_get()->texture_bind(tex, tex->sampler_state, unit);
 }
 
 void GPU_texture_unbind(gpu::Texture *texture)
 {
   Texture *tex = texture;
-  Context::get()->state_manager->texture_unbind(tex);
+  Context::get()->pipeline_get()->texture_unbind(tex);
 }
 
 void GPU_texture_unbind_all()
 {
-  Context::get()->state_manager->texture_unbind_all();
+  Context::get()->pipeline_get()->texture_unbind_all();
 }
 
 void GPU_texture_image_bind(gpu::Texture *tex, int unit)
 {
-  Context::get()->state_manager->image_bind(tex, unit);
+  Context::get()->pipeline_get()->image_bind(tex, unit);
 }
 
 void GPU_texture_image_unbind(gpu::Texture *tex)
 {
-  Context::get()->state_manager->image_unbind(tex);
+  Context::get()->pipeline_get()->image_unbind(tex);
 }
 
 void GPU_texture_image_unbind_all()
 {
-  Context::get()->state_manager->image_unbind_all();
+  Context::get()->pipeline_get()->image_unbind_all();
 }
 
 void GPU_texture_copy(gpu::Texture *dst_, gpu::Texture *src_)

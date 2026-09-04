@@ -12,8 +12,15 @@ namespace blender::gpu {
 
 void VKPipeline::resolve_draw(GPUPrimType /*prim_type*/, int64_t /*vertex_input_key*/)
 {
+  Context *ctx = Context::get();
   sync_context();
-  sync_state_manager();
+  /* Push the pipeline's fixed-function state into the StateManager. VK reads
+   * this (via `state_manager.state`) when building VkPipeline objects — the
+   * StateManager no longer owns state, it only caches it here. This copy is
+   * what the old `Pipeline::sync_state_manager()` did. */
+  VKStateManager &sm = static_cast<VKStateManager &>(*ctx->state_manager);
+  sm.state = this->state_;
+  sm.mutable_state = this->mutable_state_;
   clear_dirty();
 }
 
@@ -21,6 +28,36 @@ void VKPipeline::resolve_compute()
 {
   sync_context();
   clear_dirty();
+}
+
+void VKPipeline::texture_bind(Texture *tex, GPUSamplerState sampler, int unit)
+{
+  static_cast<VKStateManager &>(*Context::get()->state_manager).texture_bind(tex, sampler, unit);
+}
+
+void VKPipeline::texture_unbind(Texture *tex)
+{
+  static_cast<VKStateManager &>(*Context::get()->state_manager).texture_unbind(tex);
+}
+
+void VKPipeline::texture_unbind_all()
+{
+  static_cast<VKStateManager &>(*Context::get()->state_manager).texture_unbind_all();
+}
+
+void VKPipeline::image_bind(Texture *tex, int unit)
+{
+  static_cast<VKStateManager &>(*Context::get()->state_manager).image_bind(tex, unit);
+}
+
+void VKPipeline::image_unbind(Texture *tex)
+{
+  static_cast<VKStateManager &>(*Context::get()->state_manager).image_unbind(tex);
+}
+
+void VKPipeline::image_unbind_all()
+{
+  static_cast<VKStateManager &>(*Context::get()->state_manager).image_unbind_all();
 }
 
 void VKPipeline::issue_barrier(GPUBarrier barrier_bits)

@@ -36,7 +36,6 @@ GLFrameBuffer::GLFrameBuffer(
 {
   context_ = ctx;
   context_id_ = context_->context_id;
-  state_manager_ = static_cast<GLStateManager *>(ctx->state_manager);
   immutable_ = true;
   fbo_id_ = fbo;
   gl_attachments_[0] = target;
@@ -88,7 +87,6 @@ void GLFrameBuffer::init()
 {
   context_ = GLContext::get();
   context_id_ = context_->context_id;
-  state_manager_ = static_cast<GLStateManager *>(context_->state_manager);
   glGenFramebuffers(1, &fbo_id_);
   /* Binding before setting the label is needed on some drivers.
    * This is not an issue since we call this function only before binding. */
@@ -417,7 +415,6 @@ void GLFrameBuffer::bind(bool enabled_srgb)
 
   if (context_->active_fb != this) {
     context_->active_fb = this;
-    state_manager_->active_fb = this;
     dirty_state_ = true;
   }
 }
@@ -496,7 +493,7 @@ void GLFrameBuffer::clear_attachment(GPUAttachmentType type, const double4 clear
   GPU_depth_mask(true);
   GPU_color_mask(true, true, true, true);
 
-  context_->state_manager->apply_state();
+  context_->pipeline_get()->apply_state();
 
   if (ELEM(type, GPU_FB_DEPTH_ATTACHMENT, GPU_FB_DEPTH_STENCIL_ATTACHMENT)) {
     glClearDepth(float(clear_value.x));

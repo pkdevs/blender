@@ -310,10 +310,10 @@ void VKContext::update_pipeline_data(const VKFrameBuffer &framebuffer,
 {
   VKShader &vk_shader = unwrap(*shader);
 
-  /* Ensure the pipeline's state has been applied to the state manager. For the explicit pipeline
-   * case this is a no-op (`prepare_draw` was already called by the batch path and cleared the
-   * dirty flag). For the legacy (no pipeline bound) case it runs the resolve so the state
-   * manager is in sync. */
+  /* Ensure the pipeline has been resolved (for legacy/no-pipeline paths);
+   * that also pushes the pipeline's fixed-function state into the
+   * `VKStateManager` where `VKShader` and `vk_descriptor_set` read it from.
+   * The StateManager is now purely a cache; the pipeline is the source. */
   pipeline_get()->prepare_draw(primitive, vertex_input_key);
 
   VKStateManager &state_manager = state_manager_get();

@@ -164,7 +164,7 @@ class Context {
       return;
     }
 
-    if (!(state_manager->state.write_mask & GPUWriteMask::GPU_WRITE_COLOR)) {
+    if (!(pipeline_get()->write_mask_get() & GPUWriteMask::GPU_WRITE_COLOR)) {
       return;
     }
 

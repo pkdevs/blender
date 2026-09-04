@@ -19,6 +19,8 @@
 #include "GPU_platform.hh"
 #include "gpu_profile_report.hh"
 
+#include "gl_pipeline.hh"
+
 #include "CLG_log.h"
 
 #include "gl_backend.hh"
@@ -210,11 +212,11 @@ void check_gl_resources(const char *info)
   /* NOTE: This only check binding. To be valid, the bound texture needs to
    * be the same format/target the shader expects. */
   uint64_t tex_needed = interface->enabled_tex_mask_;
-  tex_needed &= ~GLContext::state_manager_active_get()->bound_texture_slots();
+  tex_needed &= ~GLPipeline::bound_texture_slots();
   /* NOTE: This only check binding. To be valid, the bound image needs to
    * be the same format/target the shader expects. */
   uint8_t ima_needed = interface->enabled_ima_mask_;
-  ima_needed &= ~GLContext::state_manager_active_get()->bound_image_slots();
+  ima_needed &= ~GLPipeline::bound_image_slots();
 
   if (ubo_needed == 0 && tex_needed == 0 && ima_needed == 0 && ssbo_needed == 0) {
     return;

@@ -49,8 +49,8 @@ GLTexture::~GLTexture()
   GLContext *ctx = GLContext::get();
   if (ctx != nullptr && is_bound_) {
     /* This avoid errors when the texture is still inside the bound texture array. */
-    ctx->state_manager->texture_unbind(this);
-    ctx->state_manager->image_unbind(this);
+    GLPipeline::unbind_texture(this);
+    GLPipeline::unbind_image(this);
   }
   GLContext::texture_free(tex_id_);
 }
@@ -60,7 +60,7 @@ bool GLTexture::init_internal()
   target_ = to_gl_target(type_);
 
   /* We need to bind once to define the texture type. */
-  GLContext::state_manager_active_get()->texture_bind_temp(this);
+  GLPipeline::texture_bind_temp(this);
 
   if (!this->proxy_check(0)) {
     return false;
@@ -102,7 +102,7 @@ bool GLTexture::init_internal(VertBuf *vbo)
   target_ = to_gl_target(type_);
 
   /* We need to bind once to define the texture type. */
-  GLContext::state_manager_active_get()->texture_bind_temp(this);
+  GLPipeline::texture_bind_temp(this);
 
   GLenum internal_format = to_gl_internal_format(format_);
 
@@ -313,7 +313,7 @@ void GLTexture::update_sub(int mip,
     return;
   }
 
-  GLContext::state_manager_active_get()->texture_bind_temp(this);
+  GLPipeline::texture_bind_temp(this);
   if (type_ == GPU_TEXTURE_CUBE) {
     for (int i = 0; i < extent[2]; i++) {
       GLenum target = GL_TEXTURE_CUBE_MAP_POSITIVE_X + offset[2] + i;
@@ -369,7 +369,7 @@ void GLTexture::update_sub(int offset[3],
   GLenum gl_type = to_gl(format);
 
   /* Temporarily Bind texture. */
-  GLContext::state_manager_active_get()->texture_bind_temp(this);
+  GLPipeline::texture_bind_temp(this);
 
   /* Bind pixel buffer for source data. */
   GLint pix_buf_handle = GLint(GPU_pixel_buffer_get_native_handle(pixbuf).handle);
@@ -411,7 +411,7 @@ void GLTexture::generate_mipmap()
     glGenerateTextureMipmap(tex_id_);
   }
   else {
-    GLContext::state_manager_active_get()->texture_bind_temp(this);
+    GLPipeline::texture_bind_temp(this);
     glGenerateMipmap(target_);
   }
 }
@@ -541,7 +541,7 @@ void GLTexture::swizzle_set(const char swizzle[4])
     glTextureParameteriv(tex_id_, GL_TEXTURE_SWIZZLE_RGBA, gl_swizzle);
   }
   else {
-    GLContext::state_manager_active_get()->texture_bind_temp(this);
+    GLPipeline::texture_bind_temp(this);
     glTexParameteriv(target_, GL_TEXTURE_SWIZZLE_RGBA, gl_swizzle);
   }
 }
@@ -554,7 +554,7 @@ void GLTexture::stencil_texture_mode_set(bool use_stencil)
     glTextureParameteri(tex_id_, GL_DEPTH_STENCIL_TEXTURE_MODE, value);
   }
   else {
-    GLContext::state_manager_active_get()->texture_bind_temp(this);
+    GLPipeline::texture_bind_temp(this);
     glTexParameteri(target_, GL_DEPTH_STENCIL_TEXTURE_MODE, value);
   }
 }
@@ -569,7 +569,7 @@ void GLTexture::mip_range_set(int min, int max)
     glTextureParameteri(tex_id_, GL_TEXTURE_MAX_LEVEL, max);
   }
   else {
-    GLContext::state_manager_active_get()->texture_bind_temp(this);
+    GLPipeline::texture_bind_temp(this);
     glTexParameteri(target_, GL_TEXTURE_BASE_LEVEL, min);
     glTexParameteri(target_, GL_TEXTURE_MAX_LEVEL, max);
   }

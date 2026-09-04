@@ -297,7 +297,7 @@ static void update_mipmaps(Texture &texture,
    *
    * To not over complicate the implementation for something that is not likely to happen it was
    * decided to unbind all images. When artifacts happen the calling code must be fixed. */
-  context.state_manager->image_unbind_all();
+  context.pipeline_get()->image_unbind_all();
 
   /* Reset original state. */
   if (prev_shader) {

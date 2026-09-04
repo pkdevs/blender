@@ -95,12 +95,28 @@ class GLPipeline : public Pipeline {
   static uint64_t bound_texture_slots();
   static uint8_t bound_image_slots();
 
+  /** Return the per-image-unit write formats currently bound. */
+  Span<const TextureWriteFormat> image_formats_get() const override
+  {
+    return Span<const TextureWriteFormat>(image_formats_.data(),
+                                          (size_t)GLPipeline::image_format_unit_count());
+  }
+
   /* Apply the pending binds (called from `resolve_draw`). */
   static void texture_bind_apply();
   static void image_bind_apply();
 
   void bind() override;
   void unbind() override;
+
+  /* Texture / image binding overrides — store into GLPipeline's static slot
+   * arrays and mark the descriptor dirty. */
+  void texture_bind(Texture *tex, GPUSamplerState sampler, int unit) override;
+  void texture_unbind(Texture *tex) override;
+  void texture_unbind_all() override;
+  void image_bind(Texture *tex, int unit) override;
+  void image_unbind(Texture *tex) override;
+  void image_unbind_all() override;
 
  protected:
   void resolve_draw(GPUPrimType prim_type, int64_t vertex_input_key) override;

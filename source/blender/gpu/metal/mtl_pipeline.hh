@@ -27,6 +27,15 @@ class MTLPipeline : public Pipeline {
   void resolve_draw(GPUPrimType prim_type, int64_t vertex_input_key) override;
   void resolve_compute() override;
   void issue_barrier(GPUBarrier barrier_bits) override;
+
+ public:
+  /* Texture / image binding overrides — delegate to MTLStateManager. */
+  void texture_bind(Texture *tex, GPUSamplerState sampler, int unit) override;
+  void texture_unbind(Texture *tex) override;
+  void texture_unbind_all() override;
+  void image_bind(Texture *tex, int unit) override;
+  void image_unbind(Texture *tex) override;
+  void image_unbind_all() override;
 };
 
 }  // namespace blender::gpu

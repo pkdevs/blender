@@ -196,10 +196,12 @@ void debug_validate_binding_image_format()
     return;
   }
 
-  const auto &texture_formats_state = Context::get()->state_manager->image_formats;
+  auto texture_formats_state = Context::get()->pipeline_get()->image_formats_get();
   const auto &texture_formats_shader = Context::get()->shader->interface->image_formats_;
   for (int image_unit = 0; image_unit < GPU_MAX_IMAGE; image_unit++) {
-    TextureWriteFormat format_state = texture_formats_state[image_unit];
+    TextureWriteFormat format_state = image_unit < (int)texture_formats_state.size() ?
+                                          texture_formats_state[image_unit] :
+                                          TextureWriteFormat::Invalid;
     TextureWriteFormat format_shader = texture_formats_shader[image_unit];
     if (format_state != TextureWriteFormat::Invalid &&
         format_shader == TextureWriteFormat::Invalid)
