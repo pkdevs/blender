@@ -3099,12 +3099,14 @@ static void rna_def_constraint_shrinkwrap(BlenderRNA *brna)
   prop = RNA_def_property(srna, "project_axis", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "projAxis");
   RNA_def_property_enum_items(prop, rna_enum_object_axis_items);
+  RNA_def_property_enum_default(prop, POS_Z);
   RNA_def_property_ui_text(prop, "Project Axis", "Axis constrain to");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "project_axis_space", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "projAxisSpace");
   RNA_def_property_enum_items(prop, owner_space_pchan_items);
+  RNA_def_property_enum_default(prop, LOCAL);
   RNA_def_property_enum_funcs(prop, nullptr, nullptr, "rna_Constraint_owner_space_itemf");
   RNA_def_property_ui_text(prop, "Axis Space", "Space for the projection axis");
 
