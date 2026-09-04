@@ -21,6 +21,8 @@
 
 namespace blender::gpu {
 
+static constexpr int BIND_SPACE_IMAGE_OFFSET = 512;
+
 class VKTexture;
 class VKUniformBuffer;
 class VKVertexBuffer;
@@ -253,7 +255,7 @@ class VKBindSpaceTLAS {
  */
 struct VKPipelineBindings {
   VKBindSpaceTextures textures_;
-  VKBindSpaceImages<GPU_MAX_IMAGE> images_;
+  VKBindSpaceImages<BIND_SPACE_IMAGE_OFFSET> images_;
   VKBindSpaceUniformBuffers uniform_buffers_;
   VKBindSpaceBuffers storage_buffers_;
   VKBindSpaceTLAS acceleration_structures_;
