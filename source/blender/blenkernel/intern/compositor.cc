@@ -49,7 +49,6 @@
 #include "BKE_node.hh"
 #include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
-#include "BKE_scene_runtime.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -59,7 +58,6 @@
 #include "IMB_imbuf.hh"
 
 #include "NOD_dependencies.hh"
-#include "NOD_eval_log.hh"
 
 namespace blender::bke::compositor {
 
@@ -408,12 +406,8 @@ void update_effect_node_group_interface(Main &main, Scene &scene, SceneComposito
   }
 
   /* In case the node group is missing, do not update the properties to avoid the values reverting
-   * to their default value if the node group later becomes available. Logging is reset to avoid
-   * displaying stale warnings/errors of the previously assigned node group. */
+   * to their default value if the node group later becomes available. */
   if (!effect.node_group || ID_MISSING(effect.node_group)) {
-    if (scene.runtime) {
-      scene.runtime->compositor.nodes_evaluation_log.reset();
-    }
     return;
   }
 
