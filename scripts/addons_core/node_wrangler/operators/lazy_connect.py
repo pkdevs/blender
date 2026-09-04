@@ -16,7 +16,6 @@ from ..utils.nodes import (
     NWBaseMenu,
     nw_check,
     nw_check_not_empty,
-    get_nodes,
     node_at_pos,
     autolink,
     force_update,

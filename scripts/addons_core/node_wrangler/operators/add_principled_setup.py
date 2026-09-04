@@ -18,7 +18,6 @@ from ..utils.nodes import (
     nw_check_active,
     nw_check_node_type,
     nw_check_space_type,
-    get_nodes,
     force_update,
 )
 from ..utils.paths import (

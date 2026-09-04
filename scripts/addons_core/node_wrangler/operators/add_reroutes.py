@@ -14,7 +14,6 @@ from ..utils.nodes import (
     NWBase,
     nw_check,
     nw_check_selected,
-    get_nodes,
 )
 
 

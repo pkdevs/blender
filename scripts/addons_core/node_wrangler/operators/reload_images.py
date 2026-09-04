@@ -9,7 +9,6 @@ from bpy.app.translations import pgettext_rpt as rpt_
 from ..utils.nodes import (
     nw_check,
     nw_check_space_type,
-    get_nodes,
     force_update,
 )
 

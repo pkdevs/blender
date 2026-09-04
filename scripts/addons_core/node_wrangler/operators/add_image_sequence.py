@@ -15,7 +15,6 @@ from ..utils.nodes import (
     NWBase,
     nw_check,
     nw_check_space_type,
-    get_nodes,
     node_mid_pt,
 )
 

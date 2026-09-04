@@ -9,7 +9,6 @@ from ..utils.nodes import (
     NWBase,
     nw_check,
     nw_check_not_empty,
-    get_nodes,
     node_at_pos,
 )
 from ..utils.draw import (

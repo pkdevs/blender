@@ -11,7 +11,6 @@ from ..utils.nodes import (
     nw_check_active,
     nw_check_visible_outputs,
     nw_check_space_type,
-    get_nodes,
     is_visible_socket,
     force_update,
 )

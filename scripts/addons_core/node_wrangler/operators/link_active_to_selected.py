@@ -14,7 +14,6 @@ from ..utils.nodes import (
     nw_check,
     nw_check_active,
     nw_check_selected,
-    get_nodes,
 )
 
 

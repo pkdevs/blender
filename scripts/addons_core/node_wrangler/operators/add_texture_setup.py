@@ -15,7 +15,6 @@ from ..utils.nodes import (
     nw_check,
     nw_check_selected,
     nw_check_space_type,
-    get_nodes,
 )
 
 

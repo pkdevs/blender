@@ -7,7 +7,7 @@ import gpu
 from gpu_extras.batch import batch_for_shader
 from math import cos, sin, pi
 
-from .nodes import get_nodes, prefs_line_width, abs_node_location, dpi_fac
+from .nodes import prefs_line_width, abs_node_location, dpi_fac
 
 
 def draw_line(x1, y1, x2, y2, size, colour=(1.0, 1.0, 1.0, 0.7)):
