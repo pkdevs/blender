@@ -1644,37 +1644,10 @@ BLO_Write_IDBuffer::BLO_Write_IDBuffer(ID &id, const bool is_undo, const bool is
     return;
   }
 
-  /* Regular 'full' ID writing, copy everything, then clear some runtime data irrelevant in the
-   * blendfile. */
+  /* Common ID-header runtime fields are cleared when the ID is written via
+   * #BlendWriter::write_id_struct. The shallow copy here is still necessary because some functions
+   * like #mesh_blend_write still override the data. */
   memcpy(temp_id, &id, id_type->struct_size);
-
-  /* Clear runtime data to reduce false detection of changed data in undo/redo context. */
-  if (is_undo) {
-    temp_id->tag &= ID_TAG_KEEP_ON_UNDO;
-  }
-  else {
-    temp_id->tag = 0;
-    temp_id->session_uid = 0;
-    temp_id->recalc = 0;
-    temp_id->recalc_up_to_undo_push = 0;
-    temp_id->recalc_after_undo_push = 0;
-  }
-  temp_id->us = 0;
-  temp_id->icon_id = 0;
-  temp_id->runtime = nullptr;
-  /* Those listbase data change every time we add/remove an ID, and also often when
-   * renaming one (due to re-sorting). This avoids generating a lot of false 'is changed'
-   * detections between undo steps. */
-  temp_id->prev = nullptr;
-  temp_id->next = nullptr;
-  /* Those runtime pointers should never be set during writing stage, but just in case clear
-   * them too. */
-  temp_id->orig_id = nullptr;
-  temp_id->newid = nullptr;
-  /* Even though in theory we could be able to preserve this python instance across undo even
-   * when we need to re-read the ID into its original address, this is currently cleared in
-   * #direct_link_id_common in `readfile.cc` anyway. */
-  temp_id->py_instance = nullptr;
 }
 
 BLO_Write_IDBuffer::BLO_Write_IDBuffer(ID &id, BlendWriter *writer)

@@ -212,19 +212,9 @@ static void screen_blend_write(BlendWriter *writer, ID *id, const void *id_addre
 
   /* write LibData */
   /* in 2.50+ files, the file identifier for screens is patched, forward compatibility */
-  writer->write_struct_at_address_by_id_with_filecode(
-      ID_SCRN,
-      dna::sdna_struct_id_get<bScreen>(),
-      id_address,
-      screen,
-      [&](BlendStructWriterVoid &struct_writer) {
-        bScreen &shallow_screen = struct_writer.typed<bScreen>().shallow_data;
-        if (!writer->is_undo()) {
-          shallow_screen.id.session_uid = 0;
-          shallow_screen.id.recalc = 0;
-          shallow_screen.id.recalc_up_to_undo_push = 0;
-          shallow_screen.id.recalc_after_undo_push = 0;
-        }
+  writer->write_id_struct(
+      ID_SCRN, id_address, screen, [](BlendStructWriter<bScreen> &struct_writer) {
+        bScreen &shallow_screen = struct_writer.shallow_data;
         shallow_screen.do_draw = 0;
         shallow_screen.do_refresh = 0;
         shallow_screen.do_draw_gesture = 0;

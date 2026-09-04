@@ -41,6 +41,8 @@
 #include "BLI_implicit_sharing.hh"
 #include "BLI_map.hh"
 
+#include "BLO_core_bhead.hh"
+
 namespace blender {
 
 class ImplicitSharingInfo;
@@ -305,20 +307,51 @@ struct BlendWriter {
                        const T *id,
                        BlendStructWriterTypedFn<T> fn = nullptr)
   {
+    this->write_id_struct(GS(id_cast<const ID *>(id)->name), id_address, id, fn);
+  }
+
+  template<typename T>
+  void write_embedded_id_struct(const void *id_address,
+                                const T *id,
+                                BlendStructWriterTypedFn<T> fn = nullptr)
+  {
+    this->write_id_struct(BLO_CODE_DATA, id_address, id, fn);
+  }
+
+  /** Write an ID data-block with an explicit file-code. */
+  template<typename T>
+  void write_id_struct(const int filecode,
+                       const void *id_address,
+                       const T *id,
+                       BlendStructWriterTypedFn<T> fn = nullptr)
+  {
     this->write_struct_at_address_by_id_with_filecode(
-        GS(id_cast<const ID *>(id)->name),
+        filecode,
         dna::sdna_struct_id_get<T>(),
         id_address,
         id,
         [&](BlendStructWriterVoid &struct_writer) {
           BlendStructWriter<T> typed_writer(struct_writer);
-          ID &id = *reinterpret_cast<ID *>(&typed_writer.shallow_data);
-          if (!this->is_undo()) {
-            id.session_uid = 0;
-            id.recalc = 0;
-            id.recalc_up_to_undo_push = 0;
-            id.recalc_after_undo_push = 0;
+          ID &shallow_id = *reinterpret_cast<ID *>(&typed_writer.shallow_data);
+          /* Clear runtime ID fields shared by every ID write path. */
+          if (this->is_undo()) {
+            shallow_id.tag &= ID_TAG_KEEP_ON_UNDO;
           }
+          else {
+            shallow_id.tag = 0;
+            shallow_id.session_uid = 0;
+            shallow_id.recalc = 0;
+            shallow_id.recalc_up_to_undo_push = 0;
+            shallow_id.recalc_after_undo_push = 0;
+          }
+          shallow_id.us = 0;
+          shallow_id.icon_id = 0;
+          shallow_id.runtime = nullptr;
+          shallow_id.prev = nullptr;
+          shallow_id.next = nullptr;
+          shallow_id.orig_id = nullptr;
+          shallow_id.newid = nullptr;
+          shallow_id.py_instance = nullptr;
           if (fn) {
             fn(typed_writer);
           }
@@ -378,12 +411,11 @@ struct BlendLibReader {
  * \{ */
 
 /**
- * Specific code to prepare IDs to be written.
+ * Scratch copy of an ID for #blend_write.
  *
- * Required for writing properly embedded IDs currently.
- *
- * \note Once there is a better generic handling of embedded IDs,
- * this may go back to private code in `writefile.cc`.
+ * Still required so write callbacks can mutate without touching live data, and for placeholder /
+ * embedded ID preparation. Common ID-header runtime fields are cleared in
+ * #BlendWriter::write_id_struct instead.
  */
 struct BLO_Write_IDBuffer {
  private:
