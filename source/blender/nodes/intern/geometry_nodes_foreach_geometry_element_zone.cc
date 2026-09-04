@@ -911,13 +911,13 @@ void LazyFunctionForReduceForeachGeometryElement::handle_main_items_and_geometry
         const IndexMask inverted_mask = mask.complement(IndexRange(domain_size), memory);
         base_cpp_type->value_initialize_indices(attribute.span.data(), inverted_mask);
 
-      /* Copy the values from each iteration into the attribute. */
-      mask.foreach_index([&](const int i, const int pos) {
-        const int lf_param_index = pos * body_main_outputs_num + item_i;
-        SocketValueVariant &value_variant = params.get_input<SocketValueVariant>(lf_param_index);
-        const void *value = value_variant.ensure_type(*base_cpp_type);
-        base_cpp_type->copy_construct(value, attribute.span[i]);
-      });
+        /* Copy the values from each iteration into the attribute. */
+        mask.foreach_index([&](const int i, const int pos) {
+          const int lf_param_index = pos * body_main_outputs_num + item_i;
+          SocketValueVariant &value_variant = params.get_input<SocketValueVariant>(lf_param_index);
+          const void *value = value_variant.ensure_type(*base_cpp_type);
+          base_cpp_type->copy_construct(value, attribute.span[i]);
+        });
 
         attribute.finish();
       }
