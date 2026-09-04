@@ -2541,7 +2541,7 @@ static void create_lines_index_faces(const OffsetIndices<int> faces,
     }
     for (const int i : IndexRange(face_size)) {
       const int next = (i == face_size - 1) ? 0 : i + 1;
-      data[line_index] = uint2(i, next) + (node_corner_offset + (int)vbo_offset);
+      data[line_index] = uint2(i, next) + (node_corner_offset + int(vbo_offset));
       line_index++;
     }
 
@@ -2978,7 +2978,7 @@ static void create_tri_index_mesh(const OffsetIndices<int> faces,
       for (int i : IndexRange(3)) {
         const int corner = tri[i];
         const int index_in_face = corner - face.first();
-        data[tri_index][i] = node_corner_offset + index_in_face + (int)vbo_offset;
+        data[tri_index][i] = node_corner_offset + index_in_face + int(vbo_offset);
       }
       tri_index++;
     }
