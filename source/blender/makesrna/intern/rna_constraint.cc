@@ -1614,16 +1614,19 @@ static void rna_def_constraint_size_like(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_x", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", SIZELIKE_X);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Copy X", "Copy the target's X scale");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "use_y", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", SIZELIKE_Y);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Copy Y", "Copy the target's Y scale");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "use_z", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", SIZELIKE_Z);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Copy Z", "Copy the target's Z scale");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
@@ -1650,6 +1653,7 @@ static void rna_def_constraint_size_like(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_add", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "flag", SIZELIKE_MULTIPLY);
+  RNA_def_property_boolean_default(prop, false);
   RNA_def_property_ui_text(
       prop,
       "Additive",
@@ -2428,6 +2432,7 @@ static void rna_def_constraint_transform(BlenderRNA *brna)
   prop = RNA_def_property(srna, "map_to_y_from", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "map[1]");
   RNA_def_property_enum_items(prop, rna_enum_axis_xyz_items);
+  RNA_def_property_enum_default(prop, 1);
   RNA_def_property_ui_text(
       prop, "Map To Y From", "The source axis constrained object's Y axis uses");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
@@ -2435,6 +2440,7 @@ static void rna_def_constraint_transform(BlenderRNA *brna)
   prop = RNA_def_property(srna, "map_to_z_from", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "map[2]");
   RNA_def_property_enum_items(prop, rna_enum_axis_xyz_items);
+  RNA_def_property_enum_default(prop, 2);
   RNA_def_property_ui_text(
       prop, "Map To Z From", "The source axis constrained object's Z axis uses");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
@@ -2632,72 +2638,84 @@ static void rna_def_constraint_transform(BlenderRNA *brna)
   prop = RNA_def_property(srna, "from_min_x_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "from_min_scale[0]");
   RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 10, 3);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "From Minimum X", "Bottom range of X axis source motion");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "from_min_y_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "from_min_scale[1]");
   RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 10, 3);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "From Minimum Y", "Bottom range of Y axis source motion");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "from_min_z_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "from_min_scale[2]");
   RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 10, 3);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "From Minimum Z", "Bottom range of Z axis source motion");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "from_max_x_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "from_max_scale[0]");
   RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 10, 3);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "From Maximum X", "Top range of X axis source motion");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "from_max_y_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "from_max_scale[1]");
   RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 10, 3);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "From Maximum Y", "Top range of Y axis source motion");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "from_max_z_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "from_max_scale[2]");
   RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 10, 3);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "From Maximum Z", "Top range of Z axis source motion");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "to_min_x_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "to_min_scale[0]");
   RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 10, 3);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "To Minimum X", "Bottom range of X axis destination motion");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "to_min_y_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "to_min_scale[1]");
   RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 10, 3);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "To Minimum Y", "Bottom range of Y axis destination motion");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "to_min_z_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "to_min_scale[2]");
   RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 10, 3);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "To Minimum Z", "Bottom range of Z axis destination motion");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "to_max_x_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "to_max_scale[0]");
   RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 10, 3);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "To Maximum X", "Top range of X axis destination motion");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "to_max_y_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "to_max_scale[1]");
   RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 10, 3);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "To Maximum Y", "Top range of Y axis destination motion");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "to_max_z_scale", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "to_max_scale[2]");
   RNA_def_property_ui_range(prop, -1000.0f, 1000.0f, 10, 3);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "To Maximum Z", "Top range of Z axis destination motion");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
