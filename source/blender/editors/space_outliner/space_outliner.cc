@@ -591,6 +591,8 @@ static void outliner_space_blend_read_after_liblink(BlendLibReader * /*reader*/,
 static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space_outliner)
 {
   BLI_mempool *ts = space_outliner->treestore;
+  constexpr eSpaceOutliner_StoreFlag runtime_store_flags = SO_TREESTORE_CLEANUP |
+                                                           SO_TREESTORE_REBUILD;
 
   if (ts) {
     const int elems = BLI_mempool_len(ts);
@@ -603,7 +605,7 @@ static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space
       writer->write_struct_cast<SpaceOutliner>(
           space_outliner, [](BlendStructWriter<SpaceOutliner> &struct_writer) {
             struct_writer.shallow_data.runtime = nullptr;
-            struct_writer.shallow_data.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
+            struct_writer.shallow_data.storeflag &= ~runtime_store_flags;
           });
 
       /* To store #TreeStore (instead of the mempool), two unique memory addresses are needed,
@@ -641,7 +643,7 @@ static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space
           space_outliner, [](BlendStructWriter<SpaceOutliner> &struct_writer) {
             struct_writer.shallow_data.treestore = nullptr;
             struct_writer.shallow_data.runtime = nullptr;
-            struct_writer.shallow_data.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
+            struct_writer.shallow_data.storeflag &= ~runtime_store_flags;
           });
     }
   }
@@ -649,7 +651,7 @@ static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space
     writer->write_struct_cast<SpaceOutliner>(
         space_outliner, [](BlendStructWriter<SpaceOutliner> &struct_writer) {
           struct_writer.shallow_data.runtime = nullptr;
-          struct_writer.shallow_data.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
+          struct_writer.shallow_data.storeflag &= ~runtime_store_flags;
         });
   }
 }

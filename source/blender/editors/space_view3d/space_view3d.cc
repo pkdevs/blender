@@ -1653,8 +1653,7 @@ static void view3d_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
   View3D *v3d = reinterpret_cast<View3D *>(sl);
   writer->write_struct(v3d, [](BlendStructWriter<View3D> &struct_writer) {
-    View3D &shallow_v3d = struct_writer.shallow_data;
-    memset((void *)&shallow_v3d.runtime, 0, sizeof(shallow_v3d.runtime));
+    struct_writer.shallow_data.runtime = {};
   });
 
   if (v3d->localvd) {

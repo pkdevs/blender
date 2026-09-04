@@ -955,8 +955,7 @@ static void action_space_blend_read_data(BlendDataReader * /*reader*/, SpaceLink
 static void action_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
   writer->write_struct_cast<SpaceAction>(sl, [](BlendStructWriter<SpaceAction> &struct_writer) {
-    SpaceAction &shallow_sact = struct_writer.shallow_data;
-    memset((void *)&shallow_sact.runtime, 0, sizeof(shallow_sact.runtime));
+    struct_writer.shallow_data.runtime = {};
   });
 }
 
