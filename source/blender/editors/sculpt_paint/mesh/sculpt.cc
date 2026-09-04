@@ -5218,7 +5218,7 @@ void flush_update_done(ViewContext &vc,
   for (wmWindow &win : wm.windows) {
     const bScreen &screen = *WM_window_get_active_screen(&win);
     for (ScrArea &area : screen.areabase) {
-      const SpaceLink &sl = *static_cast<SpaceLink *>(area.spacedata.first);
+      const SpaceLink &sl = *area.spacedata.first();
       if (sl.spacetype != SPACE_VIEW3D) {
         continue;
       }
@@ -5785,7 +5785,6 @@ void SculptPaintStroke::done(bool is_cancel, bool stroke_started)
     brush_exit_tex(sd);
     return;
   }
-  bke::PaintRuntime *paint_runtime = sd.paint.runtime;
   Brush *brush = BKE_paint_brush(&sd.paint);
 
   stroke_modifiers_check(*this->depsgraph, this->vc.rv3d, sd, ob, brush);
