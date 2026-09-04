@@ -312,7 +312,16 @@ static void action_foreach_id(ID *id, LibraryForeachIDData *data)
 
 static void write_channelbag(BlendWriter *writer, animrig::Channelbag &channelbag)
 {
-  writer->write_struct_cast<ActionChannelbag>(&channelbag);
+  writer->write_struct_cast<ActionChannelbag>(&channelbag, [](BlendStructWriter &struct_writer) {
+    struct_writer.zero_runtime_fields<ActionChannelbag>([&](ActionChannelbag &bag) {
+      if (bag.group_array_num == 0) {
+        bag.group_array = nullptr;
+      }
+      if (bag.fcurve_array_num == 0) {
+        bag.fcurve_array = nullptr;
+      }
+    });
+  });
 
   Span<bActionGroup *> groups = channelbag.channel_groups();
   writer->write_pointer_array(groups.size(), groups.data());

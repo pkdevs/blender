@@ -602,8 +602,10 @@ static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space
     if (data) {
       writer->write_struct_cast<SpaceOutliner>(
           space_outliner, [](BlendStructWriter &struct_writer) {
-            struct_writer.zero_runtime_fields<SpaceOutliner>(
-                [&](SpaceOutliner &so) { so.runtime = nullptr; });
+            struct_writer.zero_runtime_fields<SpaceOutliner>([&](SpaceOutliner &so) {
+              so.runtime = nullptr;
+              so.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
+            });
           });
 
       /* To store #TreeStore (instead of the mempool), two unique memory addresses are needed,
@@ -640,13 +642,16 @@ static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space
       SpaceOutliner space_outliner_flat = *space_outliner;
       space_outliner_flat.treestore = nullptr;
       space_outliner_flat.runtime = nullptr;
+      space_outliner_flat.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
       writer->write_struct_at_address(space_outliner, &space_outliner_flat);
     }
   }
   else {
     writer->write_struct_cast<SpaceOutliner>(space_outliner, [](BlendStructWriter &struct_writer) {
-      struct_writer.zero_runtime_fields<SpaceOutliner>(
-          [&](SpaceOutliner &so) { so.runtime = nullptr; });
+      struct_writer.zero_runtime_fields<SpaceOutliner>([&](SpaceOutliner &so) {
+        so.runtime = nullptr;
+        so.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
+      });
     });
   }
 }

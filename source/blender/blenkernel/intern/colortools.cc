@@ -1511,8 +1511,15 @@ void BKE_curvemapping_blend_write(BlendWriter *writer, const CurveMapping *cumap
     struct_writer.zero_runtime_fields<CurveMapping>([&](CurveMapping &cumap) {
       cumap.changed_timestamp = 0;
       for (int a = 0; a < CM_TOT; a++) {
+        cumap.cm[a].range = 0;
+        cumap.cm[a].mintable = 0;
+        cumap.cm[a].maxtable = 0;
+        zero_v2(cumap.cm[a].ext_in);
+        zero_v2(cumap.cm[a].ext_out);
         cumap.cm[a].table = nullptr;
         cumap.cm[a].premultable = nullptr;
+        zero_v2(cumap.cm[a].premul_ext_in);
+        zero_v2(cumap.cm[a].premul_ext_out);
       }
     });
   });

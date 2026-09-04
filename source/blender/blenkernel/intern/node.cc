@@ -1119,7 +1119,10 @@ static void pixel_subtype_forward_compat(BlendWriter *writer, const bNodeSocket 
   IDProperty *prop_copy = sock_copy->prop;
   sock_copy->default_value = sock.default_value;
   sock_copy->prop = sock.prop;
-  writer->write_struct_at_address(&sock, sock_copy);
+  writer->write_struct_at_address(&sock, sock_copy, [](BlendStructWriter &struct_writer) {
+    struct_writer.runtime_ptr(offsetof(bNodeSocket, runtime));
+    struct_writer.runtime_ptr(offsetof(bNodeSocket, typeinfo));
+  });
   sock_copy->default_value = default_value_copy;
   sock_copy->prop = prop_copy;
 
@@ -1240,7 +1243,10 @@ static void write_node_socket(BlendWriter *writer, const bNodeSocket *sock)
     return;
   }
 
-  writer->write_struct(sock);
+  writer->write_struct(sock, [](BlendStructWriter &struct_writer) {
+    struct_writer.runtime_ptr(offsetof(bNodeSocket, runtime));
+    struct_writer.runtime_ptr(offsetof(bNodeSocket, typeinfo));
+  });
 
   if (sock->prop) {
     IDP_BlendWrite(writer, sock->prop);
@@ -1374,6 +1380,11 @@ void node_tree_blend_write(BlendWriter *writer, bNodeTree *ntree)
     writer->write_struct(node, [](BlendStructWriter &struct_writer) {
       struct_writer.runtime_ptr(offsetof(bNode, runtime));
       struct_writer.runtime_ptr(offsetof(bNode, typeinfo));
+      struct_writer.zero_runtime_fields<bNode>([&](bNode &node) {
+        if (node.num_panel_states == 0) {
+          node.panel_states_array = nullptr;
+        }
+      });
     });
 
     if (node->prop) {
