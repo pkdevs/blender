@@ -9135,7 +9135,7 @@ GHOST_SystemWayland::GHOST_SystemWayland(const bool background)
           /* #color_scheme_ starts out #GHOST_kColorSchemeUnknown, so the first value always
            * differs from it and gets reported, including a desktop that says it has no
            * preference. Repeats are dropped to avoid unnecessary events for duplicate signals. */
-          if (color_scheme_.exchange(color_scheme) == color_scheme) {
+          if (dbus_.color_scheme.exchange(color_scheme) == color_scheme) {
             return;
           }
           pushEvent_maybe_pending(std::make_unique<GHOST_Event>(
@@ -10847,7 +10847,7 @@ GHOST_TColorScheme GHOST_SystemWayland::getSystemColorScheme(const int blocking_
   }
   /* Stays #GHOST_kColorSchemeUnknown until the watcher's first read completes, which callers
    * can wait for with `blocking_timeout_ms`, see also #GHOST_kEventSystemAppearanceChanged. */
-  return color_scheme_.load();
+  return dbus_.color_scheme.load();
 #else
   (void)blocking_timeout_ms;
   return GHOST_kColorSchemeUnknown;
