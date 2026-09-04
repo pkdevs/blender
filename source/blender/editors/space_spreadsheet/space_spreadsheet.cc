@@ -739,7 +739,7 @@ static void spreadsheet_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
 static void spreadsheet_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
   writer->write_struct_cast<SpaceSpreadsheet>(sl, [](BlendStructWriter &struct_writer) {
-    struct_writer.zero_runtime_fields<SpaceSpreadsheet>(
+    struct_writer.reset_runtime_fields<SpaceSpreadsheet>(
         [&](SpaceSpreadsheet &ss) { ss.runtime = nullptr; });
   });
   SpaceSpreadsheet *sspreadsheet = reinterpret_cast<SpaceSpreadsheet *>(sl);

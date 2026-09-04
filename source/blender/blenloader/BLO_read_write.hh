@@ -79,7 +79,7 @@ class BlendStructWriter {
   /**
    * Call when setting certain runtime fields to zero in order to keep .blend files more stable.
    */
-  template<typename T, typename Fn> void zero_runtime_fields(Fn &&fn)
+  template<typename T, typename Fn> void reset_runtime_fields(Fn &&fn)
   {
     BLI_assert(struct_nr_ == dna::sdna_struct_id_get<T>());
     T &data = *reinterpret_cast<T *>(data_.data());
@@ -268,7 +268,7 @@ struct BlendWriter {
         id_address,
         id,
         [&](BlendStructWriter &struct_writer) {
-          struct_writer.zero_runtime_fields<T>([&](T &data) {
+          struct_writer.reset_runtime_fields<T>([&](T &data) {
             ID &id = *reinterpret_cast<ID *>(&data);
             if (!this->is_undo()) {
               id.session_uid = 0;

@@ -313,7 +313,7 @@ static void action_foreach_id(ID *id, LibraryForeachIDData *data)
 static void write_channelbag(BlendWriter *writer, animrig::Channelbag &channelbag)
 {
   writer->write_struct_cast<ActionChannelbag>(&channelbag, [](BlendStructWriter &struct_writer) {
-    struct_writer.zero_runtime_fields<ActionChannelbag>([&](ActionChannelbag &bag) {
+    struct_writer.reset_runtime_fields<ActionChannelbag>([&](ActionChannelbag &bag) {
       if (bag.group_array_num == 0) {
         bag.group_array = nullptr;
       }
@@ -1914,7 +1914,7 @@ void BKE_pose_blend_write(BlendWriter *writer, bPose *pose)
     bke::motionpath::blend_write(writer, chan.mpath);
 
     writer->write_struct(&chan, [](BlendStructWriter &struct_writer) {
-      struct_writer.zero_runtime_fields<bPoseChannel>(
+      struct_writer.reset_runtime_fields<bPoseChannel>(
           [&](bPoseChannel &chan) { memset((void *)&chan.runtime, 0, sizeof(chan.runtime)); });
     });
   }

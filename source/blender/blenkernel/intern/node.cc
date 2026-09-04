@@ -1380,7 +1380,7 @@ void node_tree_blend_write(BlendWriter *writer, bNodeTree *ntree)
     writer->write_struct(node, [](BlendStructWriter &struct_writer) {
       struct_writer.runtime_ptr(offsetof(bNode, runtime));
       struct_writer.runtime_ptr(offsetof(bNode, typeinfo));
-      struct_writer.zero_runtime_fields<bNode>([&](bNode &node) {
+      struct_writer.reset_runtime_fields<bNode>([&](bNode &node) {
         if (node.num_panel_states == 0) {
           node.panel_states_array = nullptr;
         }

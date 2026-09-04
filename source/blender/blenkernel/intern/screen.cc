@@ -218,7 +218,7 @@ static void screen_blend_write(BlendWriter *writer, ID *id, const void *id_addre
       id_address,
       screen,
       [&](BlendStructWriter &struct_writer) {
-        struct_writer.zero_runtime_fields<bScreen>([&](bScreen &screen) {
+        struct_writer.reset_runtime_fields<bScreen>([&](bScreen &screen) {
           if (!writer->is_undo()) {
             screen.id.session_uid = 0;
             screen.id.recalc = 0;
@@ -1421,13 +1421,13 @@ static void write_region(BlendWriter *writer, ARegion *region, int spacetype)
         if (region->regiontype == RGN_TYPE_WINDOW) {
           RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
           writer->write_struct(rv3d, [](BlendStructWriter &struct_writer) {
-            struct_writer.zero_runtime_fields<RegionView3D>(
+            struct_writer.reset_runtime_fields<RegionView3D>(
                 [&](RegionView3D &rv3d) { zero_regionview3d_runtime_fields(rv3d); });
           });
 
           if (rv3d->localvd) {
             writer->write_struct(rv3d->localvd, [](BlendStructWriter &struct_writer) {
-              struct_writer.zero_runtime_fields<RegionView3D>(
+              struct_writer.reset_runtime_fields<RegionView3D>(
                   [&](RegionView3D &rv3d) { zero_regionview3d_runtime_fields(rv3d); });
             });
           }
@@ -1485,7 +1485,7 @@ static void write_area(BlendWriter *writer, ScrArea *area)
 
     for (uiPreview &ui_preview : region.ui_previews) {
       writer->write_struct(&ui_preview, [](BlendStructWriter &struct_writer) {
-        struct_writer.zero_runtime_fields<uiPreview>([&](uiPreview &ui_preview) {
+        struct_writer.reset_runtime_fields<uiPreview>([&](uiPreview &ui_preview) {
           ui_preview.tag = {};
           ui_preview.id_session_uid = 0;
         });
@@ -1521,7 +1521,7 @@ void BKE_screen_area_map_blend_write(BlendWriter *writer, ScrAreaMap *area_map)
     area.butspacetype = area.spacetype; /* Just for compatibility, will be reset below. */
 
     writer->write_struct(&area, [](BlendStructWriter &struct_writer) {
-      struct_writer.zero_runtime_fields<ScrArea>([&](ScrArea &area) {
+      struct_writer.reset_runtime_fields<ScrArea>([&](ScrArea &area) {
         area.type = nullptr;
         area.do_refresh = 0;
         area.region_active_win = -1;

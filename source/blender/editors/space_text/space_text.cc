@@ -480,7 +480,7 @@ static void text_space_blend_read_data(BlendDataReader * /*reader*/, SpaceLink *
 static void text_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
   writer->write_struct_cast<SpaceText>(sl, [](BlendStructWriter &struct_writer) {
-    struct_writer.zero_runtime_fields<SpaceText>([&](SpaceText &st) { st.runtime = nullptr; });
+    struct_writer.reset_runtime_fields<SpaceText>([&](SpaceText &st) { st.runtime = nullptr; });
   });
 }
 

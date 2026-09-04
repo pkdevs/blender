@@ -121,7 +121,7 @@ static void window_manager_blend_write(BlendWriter *writer, ID *id, const void *
   wm->runtime = nullptr;
 
   writer->write_id_struct(id_address, wm, [](BlendStructWriter &struct_writer) {
-    struct_writer.zero_runtime_fields<wmWindowManager>([&](wmWindowManager &wm) {
+    struct_writer.reset_runtime_fields<wmWindowManager>([&](wmWindowManager &wm) {
       wm.init_flag = {};
       wm.op_undo_depth = 0;
       wm.outliner_sync_select_dirty = {};
@@ -138,7 +138,7 @@ static void window_manager_blend_write(BlendWriter *writer, ID *id, const void *
     win.screen = BKE_workspace_active_screen_get(win.workspace_hook);
 
     writer->write_struct(&win, [](BlendStructWriter &struct_writer) {
-      struct_writer.zero_runtime_fields<wmWindow>([&](wmWindow &win) {
+      struct_writer.reset_runtime_fields<wmWindow>([&](wmWindow &win) {
         win.active = 0;
         win.grabcursor = 0;
         win.addmousemove = 0;

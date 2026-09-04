@@ -210,7 +210,7 @@ static void movieclip_blend_write(BlendWriter *writer, ID *id, const void *id_ad
   MovieTracking *tracking = &clip->tracking;
 
   writer->write_id_struct(id_address, clip, [](BlendStructWriter &struct_writer) {
-    struct_writer.zero_runtime_fields<MovieClip>([&](MovieClip &clip) { clip.runtime = {}; });
+    struct_writer.reset_runtime_fields<MovieClip>([&](MovieClip &clip) { clip.runtime = {}; });
   });
   BKE_id_blend_write(writer, &clip->id);
 

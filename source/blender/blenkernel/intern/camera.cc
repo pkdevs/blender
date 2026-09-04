@@ -218,7 +218,7 @@ static void camera_blend_write(BlendWriter *writer, ID *id, const void *id_addre
 
   /* write LibData */
   writer->write_id_struct(id_address, cam, [](BlendStructWriter &struct_writer) {
-    struct_writer.zero_runtime_fields<Camera>(
+    struct_writer.reset_runtime_fields<Camera>(
         [&](Camera &cam) { memset((void *)&cam.runtime, 0, sizeof(cam.runtime)); });
   });
   BKE_id_blend_write(writer, &cam->id);

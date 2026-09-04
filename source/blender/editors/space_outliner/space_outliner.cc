@@ -602,7 +602,7 @@ static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space
     if (data) {
       writer->write_struct_cast<SpaceOutliner>(
           space_outliner, [](BlendStructWriter &struct_writer) {
-            struct_writer.zero_runtime_fields<SpaceOutliner>([&](SpaceOutliner &so) {
+            struct_writer.reset_runtime_fields<SpaceOutliner>([&](SpaceOutliner &so) {
               so.runtime = nullptr;
               so.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
             });
@@ -648,7 +648,7 @@ static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space
   }
   else {
     writer->write_struct_cast<SpaceOutliner>(space_outliner, [](BlendStructWriter &struct_writer) {
-      struct_writer.zero_runtime_fields<SpaceOutliner>([&](SpaceOutliner &so) {
+      struct_writer.reset_runtime_fields<SpaceOutliner>([&](SpaceOutliner &so) {
         so.runtime = nullptr;
         so.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
       });
