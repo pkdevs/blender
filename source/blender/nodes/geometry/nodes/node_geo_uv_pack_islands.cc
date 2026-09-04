@@ -55,8 +55,10 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-  b.add_input<decl::Vector>("UV"_ustr).hide_value().structure_type(StructureType::Field);
+  b.add_input<decl::Vector>("UV"_ustr).dimensions(2).hide_value().structure_type(
+      StructureType::Field);
   b.add_output<decl::Vector>("UV"_ustr)
+      .dimensions(2)
       .structure_type(StructureType::Field)
       .propagate_references()
       .align_with_previous();
@@ -90,14 +92,14 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("Top-right corner of packing bounds");
 }
 
-static VArray<float3> construct_uv_gvarray(const Mesh &mesh,
+static VArray<float2> construct_uv_gvarray(const Mesh &mesh,
                                            const Field<bool> selection_field,
-                                           const Field<float3> uv_field,
+                                           const Field<float2> uv_field,
                                            const bool rotate,
                                            const float margin,
                                            const eUVPackIsland_ShapeMethod shape_method,
-                                           const float3 bottom,
-                                           const float3 top,
+                                           const float2 bottom,
+                                           const float2 top,
                                            const AttrDomain domain)
 {
   const Span<float3> positions = mesh.vert_positions();
@@ -115,7 +117,7 @@ static VArray<float3> construct_uv_gvarray(const Mesh &mesh,
 
   const bke::MeshFieldContext corner_context{mesh, AttrDomain::Corner};
   FieldEvaluator evaluator{corner_context, mesh.corners_num};
-  Array<float3> uv(mesh.corners_num);
+  Array<float2> uv(mesh.corners_num);
   evaluator.add_with_destination(uv_field, uv.as_mutable_span());
   evaluator.evaluate();
 
@@ -162,29 +164,29 @@ static VArray<float3> construct_uv_gvarray(const Mesh &mesh,
   geometry::uv_parametrizer_flush(handle);
   delete (handle);
 
-  return mesh.attributes().adapt_domain<float3>(
-      VArray<float3>::from_container(std::move(uv)), AttrDomain::Corner, domain);
+  return mesh.attributes().adapt_domain<float2>(
+      VArray<float2>::from_container(std::move(uv)), AttrDomain::Corner, domain);
 }
 
 class PackIslandsFieldInput final : public bke::MeshFieldInput {
  private:
   const Field<bool> selection_field_;
-  const Field<float3> uv_field_;
+  const Field<float2> uv_field_;
   const bool rotate_;
   const float margin_;
   const eUVPackIsland_ShapeMethod shape_method_;
-  const float3 bottom_;
-  const float3 top_;
+  const float2 bottom_;
+  const float2 top_;
 
  public:
   PackIslandsFieldInput(const Field<bool> selection_field,
-                        const Field<float3> uv_field,
+                        const Field<float2> uv_field,
                         const bool rotate,
                         const float margin,
                         const eUVPackIsland_ShapeMethod shape_method,
-                        const float3 bottom,
-                        const float3 top)
-      : bke::MeshFieldInput(CPPType::get<float3>(), "Pack UV Islands Field"),
+                        const float2 bottom,
+                        const float2 top)
+      : bke::MeshFieldInput(CPPType::get<float2>(), "Pack UV Islands Field"),
         selection_field_(selection_field),
         uv_field_(uv_field),
         rotate_(rotate),
@@ -221,13 +223,13 @@ static void node_geo_exec(GeoNodeExecParams params)
   const eUVPackIsland_ShapeMethod shape_method = convert_shape_method(local_shape_method);
 
   const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection"_ustr);
-  const Field<float3> uv_field = params.extract_input<Field<float3>>("UV"_ustr);
+  const Field<float2> uv_field = params.extract_input<Field<float2>>("UV"_ustr);
   const bool rotate = params.extract_input<bool>("Rotate"_ustr);
   const float margin = params.extract_input<float>("Margin"_ustr);
-  const float3 bottom = params.extract_input<float3>("Bottom Left"_ustr);
-  const float3 top = params.extract_input<float3>("Top Right"_ustr);
+  const float2 bottom = params.extract_input<float2>("Bottom Left"_ustr);
+  const float2 top = params.extract_input<float2>("Top Right"_ustr);
   params.set_output("UV"_ustr,
-                    Field<float3>::from_input<PackIslandsFieldInput>(
+                    Field<float2>::from_input<PackIslandsFieldInput>(
                         selection_field, uv_field, rotate, margin, shape_method, bottom, top));
 }
 

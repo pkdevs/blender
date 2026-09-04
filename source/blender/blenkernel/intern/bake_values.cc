@@ -649,24 +649,37 @@ BakeValues BakeValues::from_runtime_values(Vector<InputValue> runtime_values,
   return bake_values;
 }
 
+/**
+ * A socket does not necessarily store values of its #bNodeSocketType::base_cpp_type. For example,
+ * a vector socket can store 2D, 3D and 4D vectors. So any type that corresponds to the same socket
+ * type is valid.
+ */
+static bool base_type_valid_for_socket(const CPPType &base_cpp_type, const bNodeSocketType &stype)
+{
+  if (&base_cpp_type == stype.base_cpp_type) {
+    return true;
+  }
+  return geo_nodes_base_cpp_type_to_socket_type(base_cpp_type) == stype.type;
+}
+
 static bool value_variant_valid_for_socket(const SocketValueVariant &value,
-                                           const CPPType &base_cpp_type)
+                                           const bNodeSocketType &stype)
 {
   if (value.is_field()) {
-    return value.get_if<fn::GField>()->cpp_type() == base_cpp_type;
+    return base_type_valid_for_socket(value.get_if<fn::GField>()->cpp_type(), stype);
   }
   if (value.is_list()) {
     const nodes::GListPtr &list = *value.get_if<nodes::GListPtr>();
-    return !list || list->cpp_type() == base_cpp_type;
+    return !list || base_type_valid_for_socket(list->cpp_type(), stype);
   }
 #ifdef WITH_OPENVDB
   if (value.is_volume_grid()) {
     const volume_grid::GVolumeGrid &grid = *value.get_if<volume_grid::GVolumeGrid>();
-    return !grid || grid->cpp_type() == &base_cpp_type;
+    return !grid || base_type_valid_for_socket(*grid->cpp_type(), stype);
   }
 #endif
   if (value.is_single()) {
-    return value.get().type() == &base_cpp_type;
+    return base_type_valid_for_socket(*value.get().type(), stype);
   }
   return false;
 }
@@ -696,7 +709,7 @@ Vector<SocketValueVariant> BakeValues::to_runtime_values(const Span<OutputKey> k
     }
     output_value = item->value;
     bake_to_runtime_op.bake_to_runtime(output_value, item->name.value_or(""));
-    if (!value_variant_valid_for_socket(output_value, *stype->base_cpp_type)) {
+    if (!value_variant_valid_for_socket(output_value, *stype)) {
       output_value = *stype->geometry_nodes_default_value;
     }
   }

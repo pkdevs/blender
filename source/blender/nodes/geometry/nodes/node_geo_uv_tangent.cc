@@ -69,7 +69,7 @@ static void calc_uv_tangents_simple(const Span<float3> positions,
                                     const Span<int> corner_verts,
                                     const Span<int3> corner_tris,
                                     const GroupedSpan<int> vert_to_corners_map,
-                                    const Span<float3> uvs,
+                                    const Span<float2> uvs,
                                     MutableSpan<float3> r_corner_tangents)
 {
   BLI_assert(r_corner_tangents.size() == corner_verts.size());
@@ -81,9 +81,9 @@ static void calc_uv_tangents_simple(const Span<float3> positions,
       const float3 tangent = compute_triangle_tangent(positions[corner_verts[tri[0]]],
                                                       positions[corner_verts[tri[1]]],
                                                       positions[corner_verts[tri[2]]],
-                                                      uvs[tri[0]].xy(),
-                                                      uvs[tri[1]].xy(),
-                                                      uvs[tri[2]].xy());
+                                                      uvs[tri[0]],
+                                                      uvs[tri[1]],
+                                                      uvs[tri[2]]);
       /* Writing the result separately for every triangle simplifies the next loop. */
       r_corner_tangents[tri[0]] = tangent;
       r_corner_tangents[tri[1]] = tangent;
@@ -104,7 +104,7 @@ static void calc_uv_tangents_simple(const Span<float3> positions,
 
       shared_corners.clear();
       for (const int corner : corners) {
-        const float2 uv = uvs[corner].xy();
+        const float2 uv = uvs[corner];
         /* This is only the non-interpolated tangent right now. */
         const float3 &tri_tangent = r_corner_tangents[corner];
         bool found = false;
@@ -133,10 +133,10 @@ static void calc_uv_tangents_simple(const Span<float3> positions,
 class TangentFieldInput final : public bke::MeshFieldInput {
  private:
   Method method_;
-  Field<float3> uv_field_;
+  Field<float2> uv_field_;
 
  public:
-  TangentFieldInput(const Method method, Field<float3> uv)
+  TangentFieldInput(const Method method, Field<float2> uv)
       : bke::MeshFieldInput(CPPType::get<float3>(), "Tangent Field"),
         method_(method),
         uv_field_(std::move(uv))
@@ -153,7 +153,7 @@ class TangentFieldInput final : public bke::MeshFieldInput {
     FieldEvaluator evaluator{corner_context, mesh.corners_num};
     evaluator.add(uv_field_);
     evaluator.evaluate();
-    const VArraySpan uvs = evaluator.get_evaluated<float3>(0);
+    const VArraySpan uvs = evaluator.get_evaluated<float2>(0);
 
     Array<float3> corner_tangents(mesh.corners_num);
     switch (method_) {
@@ -169,12 +169,6 @@ class TangentFieldInput final : public bke::MeshFieldInput {
       case Method::Exact: {
         const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face",
                                                                 bke::AttrDomain::Face);
-        Array<float2> uvs_float2(uvs.size());
-        threading::parallel_for(corner_tangents.index_range(), 4096, [&](const IndexRange range) {
-          for (const int64_t corner : range) {
-            uvs_float2[corner] = uvs[corner].xy();
-          }
-        });
         Array<Array<float4>> mikk_tangents = bke::mesh::calc_uv_tangents(mesh.vert_positions(),
                                                                          mesh.faces(),
                                                                          mesh.corner_verts(),
@@ -184,7 +178,7 @@ class TangentFieldInput final : public bke::MeshFieldInput {
                                                                          mesh.vert_normals(),
                                                                          mesh.face_normals(),
                                                                          mesh.corner_normals(),
-                                                                         {uvs_float2});
+                                                                         {uvs});
         threading::parallel_for(corner_tangents.index_range(), 4096, [&](const IndexRange range) {
           for (const int64_t corner : range) {
             corner_tangents[corner] = mikk_tangents[0][corner].xyz();
@@ -221,7 +215,7 @@ class TangentFieldInput final : public bke::MeshFieldInput {
 static void node_geo_exec(GeoNodeExecParams params)
 {
   const Method method = params.extract_input<Method>("Method"_ustr);
-  Field<float3> uv_field = params.extract_input<Field<float3>>("UV"_ustr);
+  Field<float2> uv_field = params.extract_input<Field<float2>>("UV"_ustr);
   params.set_output("Tangent"_ustr,
                     Field<float3>::from_input<TangentFieldInput>(method, uv_field));
 }

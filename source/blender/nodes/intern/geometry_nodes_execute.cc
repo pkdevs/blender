@@ -155,17 +155,33 @@ static bke::SocketValueVariant init_socket_cpp_value(const GeoNodesCallData *cal
     case SOCK_VECTOR: {
       const GeometryNodesInputType type = get_effective_input_type(
           input_props_ptr, ntree, io_socket);
+      /* Vector sockets can have 2, 3 or 4 dimensions, which is reflected in their base type. */
+      const CPPType &base_type = *stype->base_cpp_type;
       if (type == GeometryNodesInputType::Value) {
         /* Vector can have variable length. Use a large enough value to read all components.
-         * Zero initialize to in case length is below 3. */
+         * Zero initialize in case the length is below 4. */
         float4 value = float4(0.0f);
         RNA_float_get_array(input_props_ptr, "value", value);
+        if (base_type.is<float2>()) {
+          return bke::SocketValueVariant(float2(value));
+        }
+        if (base_type.is<float4>()) {
+          return bke::SocketValueVariant(value);
+        }
         return bke::SocketValueVariant(float3(value));
       }
       if (type == GeometryNodesInputType::Attribute) {
-        if (std::optional<bke::SocketValueVariant> value = load_attribute_field_input<float3>(
-                *input_props_ptr))
-        {
+        std::optional<bke::SocketValueVariant> value;
+        if (base_type.is<float2>()) {
+          value = load_attribute_field_input<float2>(*input_props_ptr);
+        }
+        else if (base_type.is<float4>()) {
+          value = load_attribute_field_input<float4>(*input_props_ptr);
+        }
+        else {
+          value = load_attribute_field_input<float3>(*input_props_ptr);
+        }
+        if (value) {
           return std::move(*value);
         }
       }

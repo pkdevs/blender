@@ -419,11 +419,33 @@ BaseSocketDeclarationBuilder &DeclarationListBuilder::add_input(
   return *decl;
 }
 
+/**
+ * The socket type alone does not describe the number of components of a vector socket, so it has
+ * to be set separately to match the attribute type.
+ */
+static void set_vector_dimensions(BaseSocketDeclarationBuilder &decl,
+                                  const eCustomDataType data_type)
+{
+  switch (data_type) {
+    case CD_PROP_FLOAT2:
+      static_cast<decl::VectorBuilder &>(decl).dimensions(2);
+      break;
+    case CD_PROP_FLOAT4:
+      static_cast<decl::VectorBuilder &>(decl).dimensions(4);
+      break;
+    default:
+      break;
+  }
+}
+
 BaseSocketDeclarationBuilder &DeclarationListBuilder::add_input(const eCustomDataType data_type,
                                                                 const UString name,
                                                                 const UString identifier)
 {
-  return this->add_input(*bke::custom_data_type_to_socket_type(data_type), name, identifier);
+  BaseSocketDeclarationBuilder &decl = this->add_input(
+      *bke::custom_data_type_to_socket_type(data_type), name, identifier);
+  set_vector_dimensions(decl, data_type);
+  return decl;
 }
 
 BaseSocketDeclarationBuilder &DeclarationListBuilder::add_output(
@@ -444,7 +466,10 @@ BaseSocketDeclarationBuilder &DeclarationListBuilder::add_output(const eCustomDa
                                                                  const UString name,
                                                                  const UString identifier)
 {
-  return this->add_output(*bke::custom_data_type_to_socket_type(data_type), name, identifier);
+  BaseSocketDeclarationBuilder &decl = this->add_output(
+      *bke::custom_data_type_to_socket_type(data_type), name, identifier);
+  set_vector_dimensions(decl, data_type);
+  return decl;
 }
 
 void DeclarationListBuilder::add_separator()

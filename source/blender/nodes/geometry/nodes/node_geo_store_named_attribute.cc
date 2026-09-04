@@ -145,14 +145,11 @@ static void node_geo_exec(GeoNodeExecParams params)
   const Field<bool> selection = params.extract_input<Field<bool>>("Selection"_ustr);
 
   GField field = params.extract_input<GField>("Value"_ustr);
-  if (ELEM(data_type,
-           bke::AttrType::Float2,
-           bke::AttrType::Float4,
-           bke::AttrType::ColorByte,
-           bke::AttrType::Int8))
+  /* For now, use the type chosen in the node's UI rather than the incoming field's type. */
+  if (std::optional<GField> converted_field = bke::get_implicit_type_conversions().try_convert(
+          field, bke::attribute_type_to_cpp_type(data_type)))
   {
-    field = *bke::get_implicit_type_conversions().try_convert(
-        std::move(field), bke::attribute_type_to_cpp_type(data_type));
+    field = std::move(*converted_field);
   }
 
   std::atomic<bool> failure = false;

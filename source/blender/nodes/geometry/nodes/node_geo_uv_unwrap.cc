@@ -65,6 +65,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .usage_by_single_menu(GEO_NODE_UV_UNWRAP_METHOD_MINIMUM_STRETCH)
       .description("Prevents flipping UVs");
   b.add_output<decl::Vector>("UV"_ustr)
+      .dimensions(2)
       .structure_type(StructureType::Field)
       .propagate_references()
       .description("UV coordinates between 0 and 1 for each face corner in the selected faces");
@@ -76,7 +77,7 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
   node->storage = MEM_new<NodeGeometryUVUnwrap>(__func__);
 }
 
-static VArray<float3> construct_uv_gvarray(const Mesh &mesh,
+static VArray<float2> construct_uv_gvarray(const Mesh &mesh,
                                            const Field<bool> selection_field,
                                            const Field<bool> seam_field,
                                            const bool fill_holes,
@@ -106,7 +107,7 @@ static VArray<float3> construct_uv_gvarray(const Mesh &mesh,
   edge_evaluator.evaluate();
   const IndexMask seam = edge_evaluator.get_evaluated_as_mask(0);
 
-  Array<float3> uv(corner_verts.size(), float3(0));
+  Array<float2> uv(corner_verts.size(), float2(0));
 
   geometry::ParamHandle *handle = new geometry::ParamHandle();
   selection.foreach_index([&](const int face_index) {
@@ -167,8 +168,8 @@ static VArray<float3> construct_uv_gvarray(const Mesh &mesh,
   geometry::uv_parametrizer_flush(handle);
   delete (handle);
 
-  return mesh.attributes().adapt_domain<float3>(
-      VArray<float3>::from_container(std::move(uv)), AttrDomain::Corner, domain);
+  return mesh.attributes().adapt_domain<float2>(
+      VArray<float2>::from_container(std::move(uv)), AttrDomain::Corner, domain);
 }
 
 class UnwrapFieldInput final : public bke::MeshFieldInput {
@@ -189,7 +190,7 @@ class UnwrapFieldInput final : public bke::MeshFieldInput {
                    const GeometryNodeUVUnwrapMethod method,
                    const int iterations,
                    const bool no_flip)
-      : bke::MeshFieldInput(CPPType::get<float3>(), "UV Unwrap Field"),
+      : bke::MeshFieldInput(CPPType::get<float2>(), "UV Unwrap Field"),
         selection_(selection),
         seam_(seam),
         fill_holes_(fill_holes),
@@ -235,7 +236,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
   params.set_output(
       "UV"_ustr,
-      Field<float3>::from_input<UnwrapFieldInput>(
+      Field<float2>::from_input<UnwrapFieldInput>(
           selection_field, seam_field, fill_holes, margin, method, iterations, no_flip));
 }
 

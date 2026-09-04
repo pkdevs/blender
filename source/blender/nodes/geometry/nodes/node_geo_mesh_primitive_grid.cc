@@ -33,7 +33,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .max(1000)
       .description("Number of vertices in the Y direction");
   b.add_output<decl::Geometry>("Mesh"_ustr);
-  b.add_output<decl::Vector>("UV Map"_ustr).anonymous_attribute_output();
+  b.add_output<decl::Vector>("UV Map"_ustr).dimensions(2).anonymous_attribute_output();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)

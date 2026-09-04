@@ -1380,21 +1380,42 @@ static bke::bNodeSocketType *make_socket_type_int(PropertySubType subtype)
   return socktype;
 }
 
+/**
+ * Vector sockets can have a different number of dimensions, and each of those is a separate socket
+ * type. So each of them uses the vector type that matches its number of components.
+ */
+template<typename T> static void set_vector_socket_type_cpp_value_fns(bke::bNodeSocketType &stype)
+{
+  stype.base_cpp_type = &CPPType::get<T>();
+  stype.get_base_cpp_value = [](const void *socket_value, void *r_value) {
+    *static_cast<T *>(r_value) = T(
+        static_cast<const bNodeSocketValueVector *>(socket_value)->value);
+  };
+  stype.get_geometry_nodes_cpp_value = [](const void *socket_value) {
+    const T value = T(static_cast<const bNodeSocketValueVector *>(socket_value)->value);
+    return SocketValueVariant(value);
+  };
+  static SocketValueVariant default_value{T(0.0f)};
+  stype.geometry_nodes_default_value = &default_value;
+}
+
 static bke::bNodeSocketType *make_socket_type_vector(PropertySubType subtype, const int dimensions)
 {
   bke::bNodeSocketType *socktype = make_standard_socket_type(SOCK_VECTOR, subtype, dimensions);
-  socktype->base_cpp_type = &CPPType::get<float3>();
-  socktype->get_base_cpp_value = [](const void *socket_value, void *r_value) {
-    *static_cast<float3 *>(r_value) =
-        (static_cast<bNodeSocketValueVector *>(const_cast<void *>(socket_value)))->value;
-  };
-  socktype->get_geometry_nodes_cpp_value = [](const void *socket_value) {
-    const float3 value =
-        (static_cast<bNodeSocketValueVector *>(const_cast<void *>(socket_value)))->value;
-    return SocketValueVariant(value);
-  };
-  static SocketValueVariant default_value{float3(0, 0, 0)};
-  socktype->geometry_nodes_default_value = &default_value;
+  switch (dimensions) {
+    case 2:
+      set_vector_socket_type_cpp_value_fns<float2>(*socktype);
+      break;
+    case 3:
+      set_vector_socket_type_cpp_value_fns<float3>(*socktype);
+      break;
+    case 4:
+      set_vector_socket_type_cpp_value_fns<float4>(*socktype);
+      break;
+    default:
+      BLI_assert_unreachable();
+      break;
+  }
   socktype->make_geometry_nodes_input_srna = [](const bNodeTree & /*tree*/,
                                                 StructRNA &srna,
                                                 const bNodeTreeInterfaceSocket &socket,

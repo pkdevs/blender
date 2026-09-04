@@ -5,7 +5,6 @@
 #include "DNA_mesh_types.h"
 
 #include "BKE_mesh_sample.hh"
-#include "BKE_type_conversions.hh"
 
 #include "NOD_rna_define.hh"
 #include "NOD_socket_search_link.hh"
@@ -35,10 +34,13 @@ static void node_declare(NodeDeclarationBuilder &b)
     b.add_input(data_type, "Value"_ustr).hide_value().evaluated_geometry_field();
   }
   b.add_input<decl::Vector>("UV Map"_ustr, "Source UV Map"_ustr)
+      .dimensions(2)
       .hide_value()
       .evaluated_geometry_field()
       .description("The mesh UV map to sample. Should not have overlapping faces");
   auto &sample_uv = b.add_input<decl::Vector>("Sample UV"_ustr)
+                        .dimensions(2)
+                        .subtype(PROP_XYZ)
                         .description("The coordinates to sample within the UV map")
                         .structure_type(StructureType::Dynamic);
 
@@ -174,9 +176,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 
   /* Do reverse sampling of the UV map first. */
-  const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
-  Field<float2> source_uv_map = *conversions.try_convert<float2>(
-      params.extract_input<Field<float3>>("Source UV Map"_ustr));
+  Field<float2> source_uv_map = params.extract_input<Field<float2>>("Source UV Map"_ustr);
 
   auto sample_uv_value = params.extract_input<bke::SocketValueVariant>("Sample UV"_ustr);
   if (sample_uv_value.is_list()) {
@@ -187,8 +187,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.error_message_add(NodeWarningType::Error,
                              "Volume grids are not supported for \"Sample UV\" input");
   }
-  Field<float2> sample_uvs = *conversions.try_convert<float2>(
-      sample_uv_value.extract<Field<float3>>());
+  Field<float2> sample_uvs = sample_uv_value.extract<Field<float2>>();
 
   auto uv_op = FieldOperation::from(
       std::make_shared<ReverseUVSampleFunction>(geometry, std::move(source_uv_map)),

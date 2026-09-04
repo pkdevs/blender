@@ -45,7 +45,8 @@ struct NodeAndSocket {
 };
 
 struct PrimitiveSocketValue {
-  std::variant<int, float, bool, ColorGeometry4f, float3, MenuValue, std::string> value;
+  std::variant<int, float, bool, ColorGeometry4f, float2, float3, float4, MenuValue, std::string>
+      value;
 
   const void *buffer() const
   {
@@ -72,8 +73,14 @@ struct PrimitiveSocketValue {
     if (type.is<ColorGeometry4f>()) {
       return {*static_cast<const ColorGeometry4f *>(value.get())};
     }
+    if (type.is<float2>()) {
+      return {*static_cast<const float2 *>(value.get())};
+    }
     if (type.is<float3>()) {
       return {*static_cast<const float3 *>(value.get())};
+    }
+    if (type.is<float4>()) {
+      return {*static_cast<const float4 *>(value.get())};
     }
     if (type.is<MenuValue>()) {
       return {*static_cast<const MenuValue *>(value.get())};
