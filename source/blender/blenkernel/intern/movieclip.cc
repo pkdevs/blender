@@ -73,6 +73,7 @@ namespace blender {
 static CLG_LogRef LOG = {"gpu.texture"};
 
 static void free_buffers(MovieClip *clip);
+static void movieclip_cache_release(MovieClip *clip);
 
 /** Reset runtime mask fields when data-block is being initialized. */
 static void movie_clip_runtime_reset(MovieClip *clip)
@@ -118,6 +119,8 @@ static void movie_clip_copy_data(Main * /*bmain*/,
 static void movie_clip_free_data(ID *id)
 {
   MovieClip *movie_clip = id_cast<MovieClip *>(id);
+
+  movieclip_cache_release(movie_clip);
 
   /* Also frees animation-data. */
   free_buffers(movie_clip);
@@ -614,6 +617,8 @@ struct MovieClipCache {
   int sequence_offset;
 
   bool is_still_sequence;
+
+  int user_count;
 };
 
 struct MovieClipImBufCacheKey {
@@ -709,7 +714,7 @@ static void moviecache_prioritydeleter(void *priority_data_v)
 
 static ImBuf *get_imbuf_cache(MovieClip *clip, const MovieClipUser *user, int flag)
 {
-  if (clip->cache) {
+  if (clip->cache && clip->cache->imbufcache) {
     MovieClipImBufCacheKey key;
 
     if (!clip->cache->is_still_sequence) {
@@ -736,7 +741,7 @@ static ImBuf *get_imbuf_cache(MovieClip *clip, const MovieClipUser *user, int fl
 
 static bool has_imbuf_cache(MovieClip *clip, const MovieClipUser *user, int flag)
 {
-  if (clip->cache) {
+  if (clip->cache && clip->cache->imbufcache) {
     MovieClipImBufCacheKey key;
 
     key.framenr = user_frame_to_cache_frame(clip, user->framenr);
@@ -756,35 +761,54 @@ static bool has_imbuf_cache(MovieClip *clip, const MovieClipUser *user, int flag
   return false;
 }
 
+static void movieclip_cache_init_imbuf(MovieClip *clip)
+{
+  ImBufCache *imbufcache = IMB_cache_create(
+      "movieclip", sizeof(MovieClipImBufCacheKey), movieclip_hashhash, imbufcache_hashcmp);
+
+  IMB_cache_set_getdata_callback(imbufcache, moviecache_keydata);
+  IMB_cache_set_priority_callback(imbufcache,
+                                  moviecache_getprioritydata,
+                                  moviecache_getitempriority,
+                                  moviecache_prioritydeleter);
+
+  clip->cache->imbufcache = imbufcache;
+}
+
 static bool put_imbuf_cache(
     MovieClip *clip, const MovieClipUser *user, ImBuf *ibuf, int flag, bool destructive)
 {
   MovieClipImBufCacheKey key;
 
   if (clip->cache == nullptr) {
-    ImBufCache *imbufcache;
+    MovieClip *clip_orig = DEG_get_original(clip);
 
-    // char cache_name[64];
-    // SNPRINTF(cache_name, "movie %s", clip->id.name);
-
-    clip->cache = MEM_new_zeroed<MovieClipCache>("movieClipCache");
-
-    imbufcache = IMB_cache_create(
-        "movieclip", sizeof(MovieClipImBufCacheKey), movieclip_hashhash, imbufcache_hashcmp);
-
-    IMB_cache_set_getdata_callback(imbufcache, moviecache_keydata);
-    IMB_cache_set_priority_callback(imbufcache,
-                                    moviecache_getprioritydata,
-                                    moviecache_getitempriority,
-                                    moviecache_prioritydeleter);
-
-    clip->cache->imbufcache = imbufcache;
-    clip->cache->sequence_offset = -1;
-    if (clip->source == MCLIP_SRC_SEQUENCE) {
-      ushort numlen;
-      BLI_path_sequence_decode(clip->filepath, nullptr, 0, nullptr, 0, &numlen);
-      clip->cache->is_still_sequence = (numlen == 0);
+    if (clip_orig != clip && clip_orig->cache) {
+      /* Evaluated copy: use the original's existing cache. */
+      clip->cache = clip_orig->cache;
+      clip->cache->user_count++;
     }
+    else {
+      clip->cache = MEM_new_zeroed<MovieClipCache>("movieClipCache");
+      clip->cache->user_count = 1;
+
+      movieclip_cache_init_imbuf(clip);
+      clip->cache->sequence_offset = -1;
+      if (clip->source == MCLIP_SRC_SEQUENCE) {
+        ushort numlen;
+        BLI_path_sequence_decode(clip->filepath, nullptr, 0, nullptr, 0, &numlen);
+        clip->cache->is_still_sequence = (numlen == 0);
+      }
+
+      /* If this is an evaluated copy, also add the cache to the original. */
+      if (clip_orig != clip && clip_orig->cache == nullptr) {
+        clip_orig->cache = clip->cache;
+        clip->cache->user_count++;
+      }
+    }
+  }
+  else if (clip->cache->imbufcache == nullptr) {
+    movieclip_cache_init_imbuf(clip);
   }
 
   if (!clip->cache->is_still_sequence) {
@@ -1170,10 +1194,6 @@ static ImBuf *movieclip_get_postprocessed_ibuf(MovieClip *clip,
                                                MovieClipPostprocFlag postprocess_flag,
                                                MovieClipCacheFlag cache_flag)
 {
-  /* Use the original datablock, so that the cache gets reused and is not duplicated
-   * for evaluated copies. */
-  clip = DEG_get_original(clip);
-
   ImBuf *ibuf = nullptr;
   int framenr = user->framenr;
   bool need_postprocess = false;
@@ -1520,7 +1540,7 @@ void BKE_movieclip_get_cache_segments(MovieClip *clip,
   *r_totseg = 0;
   *r_points = nullptr;
 
-  if (clip->cache) {
+  if (clip->cache && clip->cache->imbufcache) {
     int proxy = rendersize_to_proxy(user, clip->flag);
 
     BLI_thread_lock(LOCK_MOVIECLIP);
@@ -1537,23 +1557,40 @@ void BKE_movieclip_user_set_frame(MovieClipUser *user, int framenr)
   user->framenr = framenr;
 }
 
-static void free_buffers(MovieClip *clip)
+static void movieclip_cache_clear_contents(MovieClipCache *cache)
 {
-  if (clip->cache) {
-    IMB_cache_free(clip->cache->imbufcache);
-
-    if (clip->cache->postprocessed.ibuf) {
-      IMB_freeImBuf(clip->cache->postprocessed.ibuf);
-    }
-
-    if (clip->cache->stabilized.ibuf) {
-      IMB_freeImBuf(clip->cache->stabilized.ibuf);
-    }
-
-    MEM_delete(clip->cache);
-    clip->cache = nullptr;
+  if (cache->imbufcache) {
+    IMB_cache_free(cache->imbufcache);
+    cache->imbufcache = nullptr;
   }
 
+  if (cache->postprocessed.ibuf) {
+    IMB_freeImBuf(cache->postprocessed.ibuf);
+    cache->postprocessed.ibuf = nullptr;
+  }
+
+  if (cache->stabilized.ibuf) {
+    IMB_freeImBuf(cache->stabilized.ibuf);
+    cache->stabilized.ibuf = nullptr;
+  }
+}
+
+static void movieclip_cache_release(MovieClip *clip)
+{
+  if (!clip->cache) {
+    return;
+  }
+
+  clip->cache->user_count--;
+  if (clip->cache->user_count <= 0) {
+    movieclip_cache_clear_contents(clip->cache);
+    MEM_delete(clip->cache);
+  }
+  clip->cache = nullptr;
+}
+
+static void free_buffers(MovieClip *clip)
+{
   if (clip->anim) {
     MOV_close(clip->anim);
     clip->anim = nullptr;
@@ -1573,6 +1610,9 @@ static void free_buffers(MovieClip *clip)
 
 void BKE_movieclip_clear_cache(MovieClip *clip)
 {
+  if (clip->cache) {
+    movieclip_cache_clear_contents(clip->cache);
+  }
   free_buffers(clip);
 }
 
@@ -1586,7 +1626,7 @@ void BKE_movieclip_clear_proxy_cache(MovieClip *clip)
 void BKE_movieclip_reload(Main *bmain, MovieClip *clip)
 {
   /* clear cache */
-  free_buffers(clip);
+  BKE_movieclip_clear_cache(clip);
 
   /* update clip source */
   detect_clip_source(bmain, clip);
