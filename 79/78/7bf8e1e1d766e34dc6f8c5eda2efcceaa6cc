@@ -1,2 +1,3 @@
 Referenced by issue #106667, Cycles: Multi-device denoise runs denoising data passes
 Referenced by issue #95836, Viewport performance slows down when using OptiX Denoiser on Windows machine with dual GPUs.
+Referenced by pull request #163437, Cycles: Consolidate num_concurrent_(busy_)states and tune oneAPI implementation
