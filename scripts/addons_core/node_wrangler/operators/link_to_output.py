@@ -11,7 +11,7 @@ from ..utils.nodes import (
     nw_check_active,
     nw_check_visible_outputs,
     nw_check_space_type,
-    get_nodes_links,
+    get_nodes,
     is_visible_socket,
     force_update,
 )
@@ -35,7 +35,7 @@ class NODE_OT_link_to_output(Operator):
                 and nw_check_visible_outputs(cls, context))
 
     def execute(self, context):
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
         active = nodes.active
         output_index = None
         tree_type = context.space_data.tree_type

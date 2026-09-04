@@ -9,7 +9,7 @@ from ..utils.nodes import (
     NWBase,
     nw_check,
     nw_check_selected,
-    get_nodes_links,
+    get_nodes,
 )
 
 
@@ -28,7 +28,7 @@ class NODE_OT_labels_clear(Operator, NWBase):
         return nw_check(cls, context) and nw_check_selected(cls, context)
 
     def execute(self, context):
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
         for node in [n for n in nodes if n.select]:
             node.label = ''
 

@@ -138,9 +138,9 @@ def store_mouse_cursor(context, event):
         space.cursor_location = tree.view_center
 
 
-def get_nodes_links(context):
+def get_nodes(context):
     tree = context.space_data.edit_tree
-    return tree.nodes, tree.links
+    return tree.nodes
 
 
 def get_internal_socket(socket):

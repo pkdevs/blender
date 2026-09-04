@@ -14,7 +14,7 @@ from ..utils.nodes import (
     NWBase,
     nw_check,
     nw_check_selected,
-    get_nodes_links,
+    get_nodes,
 )
 
 
@@ -41,7 +41,7 @@ class NODE_OT_add_reroutes(Operator, NWBase):
         return nw_check(cls, context) and nw_check_selected(cls, context)
 
     def execute(self, context):
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
         post_select = []  # Nodes to be selected after execution.
         y_offset = -22.0
 

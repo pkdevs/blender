@@ -16,7 +16,7 @@ from ..utils.nodes import (
     NWBaseMenu,
     nw_check,
     nw_check_not_empty,
-    get_nodes_links,
+    get_nodes,
     node_at_pos,
     autolink,
     force_update,
@@ -41,7 +41,9 @@ class NODE_OT_lazy_connect(Operator, NWBase):
 
     def modal(self, context, event):
         context.area.tag_redraw()
-        nodes, links = get_nodes_links(context)
+        tree = context.space_data.edit_tree
+        nodes = get_nodes(context)
+        links = tree.links
         cont = True
 
         node1 = None
@@ -115,7 +117,7 @@ class NODE_OT_lazy_connect(Operator, NWBase):
             self.report({'WARNING'}, "Active editor should be a node editor for the operator to run")
             return {'CANCELLED'}
 
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
         node = node_at_pos(nodes, context, event)
         if node:
             context.scene.NWBusyDrawing = node.name
@@ -145,7 +147,7 @@ class NODE_OT_lazy_connect_call_inputs_menu(Operator, NWBase):
     from_socket: IntProperty()
 
     def execute(self, context):
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
 
         context.scene.NWSourceSocket = self.from_socket
 
@@ -169,7 +171,7 @@ class NODE_OT_lazy_connect_make_link(Operator, NWBase):
     to_socket: IntProperty()
 
     def execute(self, context):
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
 
         n1 = nodes[context.scene.NWLazySource]
         n2 = nodes[context.scene.NWLazyTarget]
@@ -189,7 +191,7 @@ class NODE_MT_lazy_connect_outputs(Menu, NWBaseMenu):
 
     def draw(self, context):
         layout = self.layout
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
 
         layout.label(text="From Socket", icon='RADIOBUT_OFF')
         layout.separator()
@@ -212,7 +214,7 @@ class NODE_MT_lazy_connect_inputs(Menu, NWBaseMenu):
 
     def draw(self, context):
         layout = self.layout
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
 
         layout.label(text="To Socket", icon='FORWARD')
         layout.separator()

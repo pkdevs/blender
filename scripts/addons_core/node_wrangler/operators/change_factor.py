@@ -9,7 +9,7 @@ from ..utils.nodes import (
     NWBase,
     nw_check,
     nw_check_selected,
-    get_nodes_links,
+    get_nodes,
 )
 
 
@@ -31,7 +31,7 @@ class NODE_OT_change_factor(Operator, NWBase):
     option: FloatProperty()
 
     def execute(self, context):
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
         option = self.option
         selected = []  # entry = index
         for si, node in enumerate(nodes):

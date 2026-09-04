@@ -15,7 +15,7 @@ from ..utils.nodes import (
     nw_check,
     nw_check_selected,
     nw_check_space_type,
-    get_nodes_links,
+    get_nodes,
 )
 
 
@@ -39,7 +39,7 @@ class NODE_OT_add_texture_setup(Operator, NWBase):
                 and nw_check_selected(cls, context))
 
     def execute(self, context):
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
 
         texture_types = get_texture_node_types()
         selected_nodes = [n for n in nodes if n.select]

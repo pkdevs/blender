@@ -9,7 +9,7 @@ from bpy.app.translations import pgettext_rpt as rpt_
 from ..utils.nodes import (
     nw_check,
     nw_check_space_type,
-    get_nodes_links,
+    get_nodes,
     force_update,
 )
 
@@ -28,7 +28,7 @@ class NODE_OT_reload_images(Operator):
 
     def execute(self, context):
         edit_tree = context.space_data.edit_tree
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
         images_to_reload = set()
 
         for node in nodes:

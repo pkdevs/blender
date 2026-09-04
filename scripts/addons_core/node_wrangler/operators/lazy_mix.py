@@ -9,7 +9,7 @@ from ..utils.nodes import (
     NWBase,
     nw_check,
     nw_check_not_empty,
-    get_nodes_links,
+    get_nodes,
     node_at_pos,
 )
 from ..utils.draw import (
@@ -31,7 +31,7 @@ class NODE_OT_lazy_mix(Operator, NWBase):
 
     def modal(self, context, event):
         context.area.tag_redraw()
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
         cont = True
 
         node1 = None

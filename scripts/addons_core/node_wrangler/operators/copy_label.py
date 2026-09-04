@@ -9,7 +9,7 @@ from ..utils.nodes import (
     NWBase,
     nw_check,
     nw_check_selected,
-    get_nodes_links,
+    get_nodes,
 )
 
 
@@ -36,7 +36,7 @@ class NODE_OT_copy_label(Operator, NWBase):
         return nw_check(cls, context) and nw_check_selected(cls, context, min=2)
 
     def execute(self, context):
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
         option = self.option
         active = nodes.active
         if option == 'FROM_ACTIVE':

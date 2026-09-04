@@ -12,7 +12,7 @@ from ..utils.nodes import (
     nw_check,
     nw_check_not_empty,
     nw_check_space_type,
-    get_nodes_links,
+    get_nodes,
 )
 
 
@@ -55,7 +55,7 @@ class NODE_OT_delete_unused(Operator, NWBase):
                                         'TextureNodeTree', 'GeometryNodeTree'}))
 
     def execute(self, context):
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
 
         # Store selection
         selection = []
@@ -122,7 +122,7 @@ class NODE_OT_delete_unused(Operator, NWBase):
             self.report({'INFO'}, message)
 
         # Restore selection
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
         for node in nodes:
             if node.name in selection:
                 node.select = True

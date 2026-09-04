@@ -15,7 +15,7 @@ from ..utils.nodes import (
     NWBase,
     nw_check,
     nw_check_space_type,
-    get_nodes_links,
+    get_nodes,
     node_mid_pt,
 )
 
@@ -62,7 +62,7 @@ class NODE_OT_add_image_sequence(Operator, NWBase, ImportHelper):
         layout.prop(self, 'frame_start')
 
     def execute(self, context):
-        nodes, _links = get_nodes_links(context)
+        nodes = get_nodes(context)
         directory = bpy.path.abspath(self.directory)
         filename = self.filename
         files = self.files
