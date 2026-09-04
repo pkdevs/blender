@@ -141,6 +141,11 @@ if(APPLE)
     --target-os=darwin
     --x86asmexe=${LIBDIR}/nasm/bin/nasm
   )
+elseif(WIN32)
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --enable-d3d11va
+  )
 elseif(UNIX)
   set(FFMPEG_EXTRA_FLAGS
     ${FFMPEG_EXTRA_FLAGS}
