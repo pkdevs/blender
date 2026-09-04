@@ -1,0 +1,1 @@
+Referenced by pull request #163506, Fix: RNA_property_enum_step leaks memory on empty enum
