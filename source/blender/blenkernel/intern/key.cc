@@ -1795,7 +1795,7 @@ bool BKE_keyblock_move(Object *ob, int org_index, int new_index)
   /* We swap 'org' element with its previous/next neighbor (depending on direction of the move)
    * repeatedly, until we reach final position.
    * This allows us to only loop on the list once! */
-  for (kb = static_cast<KeyBlock *>(rev ? key->block.last() : key->block.first_),
+  for (kb = static_cast<KeyBlock *>(rev ? key->block.last() : key->block.first()),
       i = (rev ? totkey - 1 : 0);
        kb;
        kb = (rev ? kb->prev : kb->next), rev ? i-- : i++)

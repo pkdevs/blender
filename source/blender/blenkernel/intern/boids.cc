@@ -1068,7 +1068,7 @@ void boid_brain(BoidBrainData *bbd, int p, ParticleData *pa)
 
 /* Planned for near future. */
 #if 0
-  BoidCondition *cond = state->conditions.first;
+  BoidCondition *cond = state->conditions.first();
   for (; cond; cond = cond->next) {
     if (boid_condition_is_true(cond)) {
       pa->boid->state_id = cond->state_id;

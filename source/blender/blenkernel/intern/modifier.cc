@@ -1339,7 +1339,7 @@ static ModifierData *modifier_replace_with_fluid(BlendDataReader *reader,
   if (new_modifier_data->next != nullptr) {
     new_modifier_data->next->prev = new_modifier_data;
   }
-  if (modifiers->first_ == old_modifier_data) {
+  if (modifiers->first() == old_modifier_data) {
     modifiers->first_ = new_modifier_data;
   }
   if (modifiers->last_ == old_modifier_data) {

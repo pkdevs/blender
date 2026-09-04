@@ -648,7 +648,7 @@ void txt_clean_text(Text *text)
   }
 
   if (!text->lines.last()) {
-    text->lines.last_ = text->lines.first_;
+    text->lines.last_ = text->lines.first();
   }
 
   top = reinterpret_cast<TextLine **>(&text->lines.first_);

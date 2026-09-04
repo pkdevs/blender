@@ -1440,7 +1440,7 @@ static BChunkList *bchunk_list_from_data_merge(const BArrayInfo *info,
   }
   else if ((data_len - i_prev >= info->chunk_byte_size) &&
            (chunk_list_reference->chunk_refs_len >= chunk_list_reference_skip_len) &&
-           (chunk_list_reference->chunk_refs.first_ != nullptr))
+           (chunk_list_reference->chunk_refs.first() != nullptr))
   {
 
     /* --------------------------------------------------------------------
