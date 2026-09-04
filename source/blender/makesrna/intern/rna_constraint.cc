@@ -1434,6 +1434,7 @@ static void rna_def_constraint_track_to(BlenderRNA *brna)
   prop = RNA_def_property(srna, "track_axis", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "reserved1");
   RNA_def_property_enum_items(prop, track_axis_items);
+  RNA_def_property_enum_default(prop, TRACK_nZ);
   RNA_def_property_ui_text(prop, "Track Axis", "Axis that points to the target object");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
