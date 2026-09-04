@@ -399,14 +399,6 @@ class DrawCacheImpl : public DrawCache {
                                           const IndexMask &nodes_to_update) override;
 
   Span<int> ensure_material_indices(const Object &object) override;
-  const Buffer &get_vbo() const
-  {
-    return vbo_;
-  }
-  uint64_t get_vert_len() const
-  {
-    return vbo_.space.size();
-  }
 
  private:
   /**
@@ -613,7 +605,8 @@ static void update_vbo_subrange(gpu::VertBuf &dst,
  * uploads.
  */
 static void finalize_vbo_update(DrawCacheImpl::AttributeData &attr_vbo,
-                                const DrawCacheImpl &draw_cache,
+                                const Buffer &vbo,
+                                const int vert_len,
                                 const IndexMask &node_mask,
                                 const ScratchOffsets &scratch_offsets,
                                 gpu::VertBufPtr &scratch_vbo)
@@ -623,8 +616,7 @@ static void finalize_vbo_update(DrawCacheImpl::AttributeData &attr_vbo,
     attr_vbo.vbo = std::move(scratch_vbo);
     return;
   }
-  attr_vbo.ensure_buffer_capacity(draw_cache.get_vert_len());
-  const Buffer &vbo = draw_cache.get_vbo();
+  attr_vbo.ensure_buffer_capacity(vert_len);
   node_mask.foreach_index([&](const int node_index, const int scratch_index) {
     update_vbo_subrange(*attr_vbo.vbo,
                         vbo.index_range(node_index),
@@ -1123,10 +1115,11 @@ void DrawCacheImpl::AttributeData::ensure_buffer_capacity(const uint64_t needed_
 }
 
 static void update_positions_mesh(const Object &object,
-                                  const DrawCacheImpl &draw_cache,
-                                  DrawCacheImpl::AttributeData &attr_vbo,
+                                  const Buffer &vbo,
+                                  const int vert_len,
                                   const IndexMask &node_mask,
-                                  const ScratchOffsets &scratch_offsets)
+                                  const ScratchOffsets &scratch_offsets,
+                                  DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1138,7 +1131,6 @@ static void update_positions_mesh(const Object &object,
   if (node_mask.is_empty()) {
     return;
   }
-  const Buffer &vbo = draw_cache.get_vbo();
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(position_format(),
                                                           scratch_offsets.total);
   node_mask.foreach_index(
@@ -1153,14 +1145,15 @@ static void update_positions_mesh(const Object &object,
                                        scratch_range);
       },
       exec_mode::grain_size(1));
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 static void update_normals_mesh(const Object &object,
-                                const DrawCacheImpl &draw_cache,
-                                DrawCacheImpl::AttributeData &attr_vbo,
+                                const Buffer &vbo,
+                                const int vert_len,
                                 const IndexMask &node_mask,
-                                const ScratchOffsets &scratch_offsets)
+                                const ScratchOffsets &scratch_offsets,
+                                DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1195,18 +1188,19 @@ static void update_normals_mesh(const Object &object,
           }
         }
         UNUSED_VARS_NDEBUG(data_start);
-        BLI_assert(data == data_start + draw_cache.get_vbo().sizes[node_index]);
+        BLI_assert(data == data_start + vbo.sizes[node_index]);
       },
       exec_mode::grain_size(1));
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_masks_mesh(const Object &object,
                                            const OrigMeshData &orig_mesh_data,
-                                           const DrawCacheImpl &draw_cache,
-                                           DrawCacheImpl::AttributeData &attr_vbo,
+                                           const Buffer &vbo,
+                                           const int vert_len,
                                            const IndexMask &node_mask,
-                                           const ScratchOffsets &scratch_offsets)
+                                           const ScratchOffsets &scratch_offsets,
+                                           DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1219,7 +1213,6 @@ BLI_NOINLINE static void update_masks_mesh(const Object &object,
   if (node_mask.is_empty()) {
     return;
   }
-  const Buffer &vbo = draw_cache.get_vbo();
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(mask_format(), scratch_offsets.total);
   if (!mask.is_empty()) {
     node_mask.foreach_index(
@@ -1247,15 +1240,16 @@ BLI_NOINLINE static void update_masks_mesh(const Object &object,
         },
         exec_mode::grain_size(64));
   }
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_face_sets_mesh(const Object &object,
                                                const OrigMeshData &orig_mesh_data,
-                                               const DrawCacheImpl &draw_cache,
-                                               DrawCacheImpl::AttributeData &attr_vbo,
+                                               const Buffer &vbo,
+                                               const int vert_len,
                                                const IndexMask &node_mask,
-                                               const ScratchOffsets &scratch_offsets)
+                                               const ScratchOffsets &scratch_offsets,
+                                               DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1269,7 +1263,6 @@ BLI_NOINLINE static void update_face_sets_mesh(const Object &object,
   if (node_mask.is_empty()) {
     return;
   }
-  const Buffer &vbo = draw_cache.get_vbo();
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(face_set_format(),
                                                           scratch_offsets.total);
   if (!face_sets.is_empty()) {
@@ -1309,16 +1302,17 @@ BLI_NOINLINE static void update_face_sets_mesh(const Object &object,
         },
         exec_mode::grain_size(64));
   }
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_generic_attribute_mesh(const Object &object,
                                                        const OrigMeshData &orig_mesh_data,
-                                                       const DrawCacheImpl &draw_cache,
-                                                       DrawCacheImpl::AttributeData &attr_vbo,
+                                                       const Buffer &vbo,
+                                                       const int vert_len,
                                                        const StringRef name,
                                                        const IndexMask &node_mask,
-                                                       const ScratchOffsets &scratch_offsets)
+                                                       const ScratchOffsets &scratch_offsets,
+                                                       DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1336,7 +1330,6 @@ BLI_NOINLINE static void update_generic_attribute_mesh(const Object &object,
   if (node_mask.is_empty()) {
     return;
   }
-  const Buffer &vbo = draw_cache.get_vbo();
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(format, scratch_offsets.total);
   node_mask.foreach_index(
       [&](const int node_index, const int scratch_index) {
@@ -1369,15 +1362,16 @@ BLI_NOINLINE static void update_generic_attribute_mesh(const Object &object,
         });
       },
       exec_mode::grain_size(1));
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_positions_grids(const Object &object,
-                                                const DrawCacheImpl &draw_cache,
-                                                DrawCacheImpl::AttributeData &attr_vbo,
+                                                const Buffer &vbo,
+                                                const int vert_len,
                                                 const BitSpan use_flat_layout,
                                                 const IndexMask &node_mask,
-                                                const ScratchOffsets &scratch_offsets)
+                                                const ScratchOffsets &scratch_offsets,
+                                                DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1420,19 +1414,20 @@ BLI_NOINLINE static void update_positions_grids(const Object &object,
           }
         }
         UNUSED_VARS_NDEBUG(data_start);
-        BLI_assert(data == data_start + draw_cache.get_vbo().sizes[node_index]);
+        BLI_assert(data == data_start + vbo.sizes[node_index]);
       },
       exec_mode::grain_size(1));
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_normals_grids(const Object &object,
                                               const OrigMeshData &orig_mesh_data,
-                                              const DrawCacheImpl &draw_cache,
-                                              DrawCacheImpl::AttributeData &attr_vbo,
+                                              const Buffer &vbo,
+                                              const int vert_len,
                                               const BitSpan use_flat_layout,
                                               const IndexMask &node_mask,
-                                              const ScratchOffsets &scratch_offsets)
+                                              const ScratchOffsets &scratch_offsets,
+                                              DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1495,18 +1490,19 @@ BLI_NOINLINE static void update_normals_grids(const Object &object,
           }
         }
         UNUSED_VARS_NDEBUG(data_start);
-        BLI_assert(data == data_start + draw_cache.get_vbo().sizes[node_index]);
+        BLI_assert(data == data_start + vbo.sizes[node_index]);
       },
       exec_mode::grain_size(1));
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_masks_grids(const Object &object,
-                                            const DrawCacheImpl &draw_cache,
-                                            DrawCacheImpl::AttributeData &attr_vbo,
+                                            const Buffer &vbo,
+                                            const int vert_len,
                                             const BitSpan use_flat_layout,
                                             const IndexMask &node_mask,
-                                            const ScratchOffsets &scratch_offsets)
+                                            const ScratchOffsets &scratch_offsets,
+                                            DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1517,7 +1513,6 @@ BLI_NOINLINE static void update_masks_grids(const Object &object,
   if (node_mask.is_empty()) {
     return;
   }
-  const Buffer &vbo = draw_cache.get_vbo();
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(mask_format(), scratch_offsets.total);
   if (!masks.is_empty()) {
     node_mask.foreach_index(
@@ -1564,16 +1559,17 @@ BLI_NOINLINE static void update_masks_grids(const Object &object,
         },
         exec_mode::grain_size(64));
   }
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_face_sets_grids(const Object &object,
                                                 const OrigMeshData &orig_mesh_data,
-                                                const DrawCacheImpl &draw_cache,
-                                                DrawCacheImpl::AttributeData &attr_vbo,
+                                                const Buffer &vbo,
+                                                const int vert_len,
                                                 const BitSpan use_flat_layout,
                                                 const IndexMask &node_mask,
-                                                const ScratchOffsets &scratch_offsets)
+                                                const ScratchOffsets &scratch_offsets,
+                                                DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -1587,7 +1583,6 @@ BLI_NOINLINE static void update_face_sets_grids(const Object &object,
   if (node_mask.is_empty()) {
     return;
   }
-  const Buffer &vbo = draw_cache.get_vbo();
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(face_set_format(),
                                                           scratch_offsets.total);
   if (const VArray<int> face_sets = *attributes.lookup<int>(".sculpt_face_set",
@@ -1627,7 +1622,7 @@ BLI_NOINLINE static void update_face_sets_grids(const Object &object,
         },
         exec_mode::grain_size(1));
   }
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 static void calc_quad_uv(const SubdivCCG &subdiv_ccg,
@@ -1846,7 +1841,7 @@ static void calc_node_uvs(const SubdivCCG &subdiv_ccg,
 
 BLI_NOINLINE static void fill_uvs_grids(const Object &object,
                                         const OrigMeshData &orig_mesh_data,
-                                        const DrawCacheImpl &draw_cache,
+                                        const Buffer &vbo,
                                         const BitSpan use_flat_layout,
                                         const IndexMask &node_mask,
                                         const StringRef name,
@@ -1857,7 +1852,6 @@ BLI_NOINLINE static void fill_uvs_grids(const Object &object,
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Span<bke::pbvh::GridsNode> nodes = pbvh.nodes<bke::pbvh::GridsNode>();
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
-  const Buffer &vbo = draw_cache.get_vbo();
   node_mask.foreach_index(
       [&](const int node_index, const int scratch_index) {
         float2 *data = scratch_vbo->data<float2>().data() + scratch_offsets.offsets[scratch_index];
@@ -2056,7 +2050,7 @@ static void interpolate_vert_data_for_standard_layout(
 
 BLI_NOINLINE static void calc_generic_vert_attribute_grids(const Object &object,
                                                            const OrigMeshData &orig_mesh_data,
-                                                           const DrawCacheImpl &draw_cache,
+                                                           const Buffer &vbo,
                                                            const BitSpan use_flat_layout,
                                                            const IndexMask &node_mask,
                                                            const StringRef name,
@@ -2072,7 +2066,6 @@ BLI_NOINLINE static void calc_generic_vert_attribute_grids(const Object &object,
 
   const Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(object);
   const Span<int> corner_verts = mesh.corner_verts();
-  const Buffer &vbo = draw_cache.get_vbo();
 
   node_mask.foreach_index(
       [&](const int node_index, const int scratch_index) {
@@ -2243,7 +2236,7 @@ static void interpolate_corner_data_for_standard_layout(
 
 BLI_NOINLINE static void calc_generic_corner_attribute_grids(const Object &object,
                                                              const OrigMeshData &orig_mesh_data,
-                                                             const DrawCacheImpl &draw_cache,
+                                                             const Buffer &vbo,
                                                              const BitSpan use_flat_layout,
                                                              const IndexMask &node_mask,
                                                              const StringRef name,
@@ -2256,7 +2249,6 @@ BLI_NOINLINE static void calc_generic_corner_attribute_grids(const Object &objec
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
   const GVArraySpan attr = *attributes.lookup(name);
-  const Buffer &vbo = draw_cache.get_vbo();
 
   node_mask.foreach_index(
       [&](const int node_index, const int scratch_index) {
@@ -2303,7 +2295,7 @@ static void fill_face_data_grids(const SubdivCCG &subdiv_ccg,
 
 BLI_NOINLINE static void fill_generic_face_attribute_grids(const Object &object,
                                                            const OrigMeshData &orig_mesh_data,
-                                                           const DrawCacheImpl &draw_cache,
+                                                           const Buffer &vbo,
                                                            const BitSpan use_flat_layout,
                                                            const IndexMask &node_mask,
                                                            const StringRef name,
@@ -2316,7 +2308,6 @@ BLI_NOINLINE static void fill_generic_face_attribute_grids(const Object &object,
   const SubdivCCG &subdiv_ccg = *object.runtime->sculpt_session->subdiv_ccg;
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
   const GVArraySpan attr = *attributes.lookup(name);
-  const Buffer &vbo = draw_cache.get_vbo();
 
   node_mask.foreach_index(
       [&](const int node_index, const int scratch_index) {
@@ -2339,12 +2330,13 @@ BLI_NOINLINE static void fill_generic_face_attribute_grids(const Object &object,
 
 BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
                                                         const OrigMeshData &orig_mesh_data,
-                                                        const DrawCacheImpl &draw_cache,
-                                                        DrawCacheImpl::AttributeData &attr_vbo,
+                                                        const Buffer &vbo,
+                                                        const int vert_len,
                                                         const StringRef name,
                                                         const BitSpan use_flat_layout,
                                                         const IndexMask &node_mask,
-                                                        const ScratchOffsets &scratch_offsets)
+                                                        const ScratchOffsets &scratch_offsets,
+                                                        DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::AttributeAccessor attributes = orig_mesh_data.attributes;
@@ -2362,7 +2354,6 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
   if (node_mask.is_empty()) {
     return;
   }
-  const Buffer &vbo = draw_cache.get_vbo();
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(format, scratch_offsets.total);
 
   if (!attr) {
@@ -2378,7 +2369,7 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
   else if (is_uvs) {
     fill_uvs_grids(object,
                    orig_mesh_data,
-                   draw_cache,
+                   vbo,
                    use_flat_layout,
                    node_mask,
                    name,
@@ -2390,7 +2381,7 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
       case bke::AttrDomain::Point:
         calc_generic_vert_attribute_grids(object,
                                           orig_mesh_data,
-                                          draw_cache,
+                                          vbo,
                                           use_flat_layout,
                                           node_mask,
                                           name,
@@ -2400,7 +2391,7 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
       case bke::AttrDomain::Corner:
         calc_generic_corner_attribute_grids(object,
                                             orig_mesh_data,
-                                            draw_cache,
+                                            vbo,
                                             use_flat_layout,
                                             node_mask,
                                             name,
@@ -2410,7 +2401,7 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
       case bke::AttrDomain::Face:
         fill_generic_face_attribute_grids(object,
                                           orig_mesh_data,
-                                          draw_cache,
+                                          vbo,
                                           use_flat_layout,
                                           node_mask,
                                           name,
@@ -2421,14 +2412,15 @@ BLI_NOINLINE static void update_generic_attribute_grids(const Object &object,
         BLI_assert_unreachable();
     }
   }
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_positions_bmesh(const Object &object,
-                                                const DrawCacheImpl &draw_cache,
-                                                DrawCacheImpl::AttributeData &attr_vbo,
+                                                const Buffer &vbo,
+                                                const int vert_len,
                                                 const IndexMask &node_mask,
-                                                const ScratchOffsets &scratch_offsets)
+                                                const ScratchOffsets &scratch_offsets,
+                                                DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -2457,17 +2449,18 @@ BLI_NOINLINE static void update_positions_bmesh(const Object &object,
           data++;
         }
         UNUSED_VARS_NDEBUG(data_start);
-        BLI_assert(data == data_start + draw_cache.get_vbo().sizes[node_index]);
+        BLI_assert(data == data_start + vbo.sizes[node_index]);
       },
       exec_mode::grain_size(1));
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_normals_bmesh(const Object &object,
-                                              const DrawCacheImpl &draw_cache,
-                                              DrawCacheImpl::AttributeData &attr_vbo,
+                                              const Buffer &vbo,
+                                              const int vert_len,
                                               const IndexMask &node_mask,
-                                              const ScratchOffsets &scratch_offsets)
+                                              const ScratchOffsets &scratch_offsets,
+                                              DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -2501,17 +2494,18 @@ BLI_NOINLINE static void update_normals_bmesh(const Object &object,
           }
         }
         UNUSED_VARS_NDEBUG(data_start);
-        BLI_assert(data == data_start + draw_cache.get_vbo().sizes[node_index]);
+        BLI_assert(data == data_start + vbo.sizes[node_index]);
       },
       exec_mode::grain_size(1));
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_masks_bmesh(const Object &object,
-                                            const DrawCacheImpl &draw_cache,
-                                            DrawCacheImpl::AttributeData &attr_vbo,
+                                            const Buffer &vbo,
+                                            const int vert_len,
                                             const IndexMask &node_mask,
-                                            const ScratchOffsets &scratch_offsets)
+                                            const ScratchOffsets &scratch_offsets,
+                                            DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -2521,7 +2515,6 @@ BLI_NOINLINE static void update_masks_bmesh(const Object &object,
   if (node_mask.is_empty()) {
     return;
   }
-  const Buffer &vbo = draw_cache.get_vbo();
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(mask_format(), scratch_offsets.total);
   if (cd_offset != -1) {
     node_mask.foreach_index(
@@ -2557,15 +2550,16 @@ BLI_NOINLINE static void update_masks_bmesh(const Object &object,
         },
         exec_mode::grain_size(64));
   }
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_face_sets_bmesh(const Object &object,
                                                 const OrigMeshData &orig_mesh_data,
-                                                const DrawCacheImpl &draw_cache,
-                                                DrawCacheImpl::AttributeData &attr_vbo,
+                                                const Buffer &vbo,
+                                                const int vert_len,
                                                 const IndexMask &node_mask,
-                                                const ScratchOffsets &scratch_offsets)
+                                                const ScratchOffsets &scratch_offsets,
+                                                DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -2577,7 +2571,6 @@ BLI_NOINLINE static void update_face_sets_bmesh(const Object &object,
   if (node_mask.is_empty()) {
     return;
   }
-  const Buffer &vbo = draw_cache.get_vbo();
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(face_set_format(),
                                                           scratch_offsets.total);
   if (offset != -1) {
@@ -2615,16 +2608,17 @@ BLI_NOINLINE static void update_face_sets_bmesh(const Object &object,
         },
         exec_mode::grain_size(64));
   }
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 BLI_NOINLINE static void update_generic_attribute_bmesh(const Object &object,
                                                         const OrigMeshData &orig_mesh_data,
-                                                        const DrawCacheImpl &draw_cache,
-                                                        DrawCacheImpl::AttributeData &attr_vbo,
+                                                        const Buffer &vbo,
+                                                        const int vert_len,
                                                         const StringRef name,
                                                         const IndexMask &node_mask,
-                                                        const ScratchOffsets &scratch_offsets)
+                                                        const ScratchOffsets &scratch_offsets,
+                                                        DrawCacheImpl::AttributeData &attr_vbo)
 {
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
@@ -2642,7 +2636,6 @@ BLI_NOINLINE static void update_generic_attribute_bmesh(const Object &object,
   const bke::AttrType attr_type = attr ? attr.type : bke::AttrType::Float3;
   const GPUVertFormat format = attribute_format(orig_mesh_data, name, attr_type);
   if (!attr) {
-    const Buffer &vbo = draw_cache.get_vbo();
     gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(format, scratch_offsets.total);
     node_mask.foreach_index(
         [&](const int node_index, const int scratch_index) {
@@ -2652,11 +2645,10 @@ BLI_NOINLINE static void update_generic_attribute_bmesh(const Object &object,
               .fill(float3(0.0f));
         },
         exec_mode::grain_size(1));
-    finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+    finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
     return;
   }
 
-  const Buffer &vbo = draw_cache.get_vbo();
   gpu::VertBufPtr scratch_vbo = create_vbo_scratch_buffer(format, scratch_offsets.total);
   node_mask.foreach_index(
       [&](const int node_index, const int scratch_index) {
@@ -2683,7 +2675,7 @@ BLI_NOINLINE static void update_generic_attribute_bmesh(const Object &object,
         });
       },
       exec_mode::grain_size(1));
-  finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
+  finalize_vbo_update(attr_vbo, vbo, vert_len, node_mask, scratch_offsets, scratch_vbo);
 }
 
 static void create_lines_index_faces(const OffsetIndices<int> faces,
@@ -3308,29 +3300,42 @@ DrawCacheImpl::AttributeData &DrawCacheImpl::ensure_attribute_data(
       if (const CustomRequest *request_type = std::get_if<CustomRequest>(&attr)) {
         switch (*request_type) {
           case CustomRequest::Position:
-            update_positions_mesh(object, *this, attr_vbo, dirty_mask, scratch_offsets);
+            update_positions_mesh(
+                object, vbo_, vbo_.space.size(), dirty_mask, scratch_offsets, attr_vbo);
             break;
           case CustomRequest::Normal:
-            update_normals_mesh(object, *this, attr_vbo, dirty_mask, scratch_offsets);
+            update_normals_mesh(
+                object, vbo_, vbo_.space.size(), dirty_mask, scratch_offsets, attr_vbo);
             break;
           case CustomRequest::Mask:
-            update_masks_mesh(
-                object, orig_mesh_data, *this, attr_vbo, dirty_mask, scratch_offsets);
+            update_masks_mesh(object,
+                              orig_mesh_data,
+                              vbo_,
+                              vbo_.space.size(),
+                              dirty_mask,
+                              scratch_offsets,
+                              attr_vbo);
             break;
           case CustomRequest::FaceSet:
-            update_face_sets_mesh(
-                object, orig_mesh_data, *this, attr_vbo, dirty_mask, scratch_offsets);
+            update_face_sets_mesh(object,
+                                  orig_mesh_data,
+                                  vbo_,
+                                  vbo_.space.size(),
+                                  dirty_mask,
+                                  scratch_offsets,
+                                  attr_vbo);
             break;
         }
       }
       else {
         update_generic_attribute_mesh(object,
                                       orig_mesh_data,
-                                      *this,
-                                      attr_vbo,
+                                      vbo_,
+                                      vbo_.space.size(),
                                       std::get<GenericRequest>(attr),
                                       dirty_mask,
-                                      scratch_offsets);
+                                      scratch_offsets,
+                                      attr_vbo);
       }
       break;
     }
@@ -3338,42 +3343,55 @@ DrawCacheImpl::AttributeData &DrawCacheImpl::ensure_attribute_data(
       if (const CustomRequest *request_type = std::get_if<CustomRequest>(&attr)) {
         switch (*request_type) {
           case CustomRequest::Position:
-            update_positions_grids(
-                object, *this, attr_vbo, use_flat_layout_, dirty_mask, scratch_offsets);
+            update_positions_grids(object,
+                                   vbo_,
+                                   vbo_.space.size(),
+                                   use_flat_layout_,
+                                   dirty_mask,
+                                   scratch_offsets,
+                                   attr_vbo);
             break;
           case CustomRequest::Normal:
             update_normals_grids(object,
                                  orig_mesh_data,
-                                 *this,
-                                 attr_vbo,
+                                 vbo_,
+                                 vbo_.space.size(),
                                  use_flat_layout_,
                                  dirty_mask,
-                                 scratch_offsets);
+                                 scratch_offsets,
+                                 attr_vbo);
             break;
           case CustomRequest::Mask:
-            update_masks_grids(
-                object, *this, attr_vbo, use_flat_layout_, dirty_mask, scratch_offsets);
+            update_masks_grids(object,
+                               vbo_,
+                               vbo_.space.size(),
+                               use_flat_layout_,
+                               dirty_mask,
+                               scratch_offsets,
+                               attr_vbo);
             break;
           case CustomRequest::FaceSet:
             update_face_sets_grids(object,
                                    orig_mesh_data,
-                                   *this,
-                                   attr_vbo,
+                                   vbo_,
+                                   vbo_.space.size(),
                                    use_flat_layout_,
                                    dirty_mask,
-                                   scratch_offsets);
+                                   scratch_offsets,
+                                   attr_vbo);
             break;
         }
       }
       else {
         update_generic_attribute_grids(object,
                                        orig_mesh_data,
-                                       *this,
-                                       attr_vbo,
+                                       vbo_,
+                                       vbo_.space.size(),
                                        std::get<GenericRequest>(attr),
                                        use_flat_layout_,
                                        dirty_mask,
-                                       scratch_offsets);
+                                       scratch_offsets,
+                                       attr_vbo);
       }
       break;
     }
@@ -3381,28 +3399,37 @@ DrawCacheImpl::AttributeData &DrawCacheImpl::ensure_attribute_data(
       if (const CustomRequest *request_type = std::get_if<CustomRequest>(&attr)) {
         switch (*request_type) {
           case CustomRequest::Position:
-            update_positions_bmesh(object, *this, attr_vbo, dirty_mask, scratch_offsets);
+            update_positions_bmesh(
+                object, vbo_, vbo_.space.size(), dirty_mask, scratch_offsets, attr_vbo);
             break;
           case CustomRequest::Normal:
-            update_normals_bmesh(object, *this, attr_vbo, dirty_mask, scratch_offsets);
+            update_normals_bmesh(
+                object, vbo_, vbo_.space.size(), dirty_mask, scratch_offsets, attr_vbo);
             break;
           case CustomRequest::Mask:
-            update_masks_bmesh(object, *this, attr_vbo, dirty_mask, scratch_offsets);
+            update_masks_bmesh(
+                object, vbo_, vbo_.space.size(), dirty_mask, scratch_offsets, attr_vbo);
             break;
           case CustomRequest::FaceSet:
-            update_face_sets_bmesh(
-                object, orig_mesh_data, *this, attr_vbo, dirty_mask, scratch_offsets);
+            update_face_sets_bmesh(object,
+                                   orig_mesh_data,
+                                   vbo_,
+                                   vbo_.space.size(),
+                                   dirty_mask,
+                                   scratch_offsets,
+                                   attr_vbo);
             break;
         }
       }
       else {
         update_generic_attribute_bmesh(object,
                                        orig_mesh_data,
-                                       *this,
-                                       attr_vbo,
+                                       vbo_,
+                                       vbo_.space.size(),
                                        std::get<GenericRequest>(attr),
                                        dirty_mask,
-                                       scratch_offsets);
+                                       scratch_offsets,
+                                       attr_vbo);
       }
       break;
     }
