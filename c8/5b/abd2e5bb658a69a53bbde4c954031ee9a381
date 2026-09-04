@@ -1,0 +1,1 @@
+Referenced by pull request #163526, Fix: Vulkan reads back texture views of RGB16F/RGB32F textures wrong
