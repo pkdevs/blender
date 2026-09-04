@@ -45,9 +45,9 @@ namespace bke {
 namespace paint {
 
 /**
- * Represents the essential library needed for a given runtime.
+ * Represents the essential library file needed for a given runtime.
  */
-enum class LibraryType : int8_t {
+enum class AssetCategory : int8_t {
   Invalid = 0,
   CurvesSculpt = 1,
   GPencilDraw = 2,
@@ -64,7 +64,7 @@ enum class LibraryType : int8_t {
 struct PaintRuntime : NonCopyable, NonMovable {
   bool initialized = false;
   uint16_t ob_mode = 0;
-  paint::LibraryType library_type = paint::LibraryType::Invalid;
+  paint::AssetCategory asset_category = paint::AssetCategory::Invalid;
   AssetWeakReference *previous_active_brush_reference = nullptr;
 
   float2 last_rake = float2(0.0f, 0.0f);
