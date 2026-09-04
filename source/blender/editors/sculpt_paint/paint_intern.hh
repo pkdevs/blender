@@ -108,6 +108,14 @@ struct PaintSample {
  */
 struct PaintStroke : NonCopyable, NonMovable {
  public:
+  struct StrokeStep {
+    float size = 0.0f;
+    float3 location = float3(0.0f);
+    float2 mouse = float2(0.0f);
+    float2 mouse_event = float2(0.0f);
+    float pressure = 0.0f;
+    float2 tilt = float2(0.0f);
+  };
   /* TODO: Temporary, used to assist removing usage of bContext in PaintStroke callbacks.
    * See #149378 */
   bContext *evil_C = nullptr;
@@ -233,22 +241,21 @@ struct PaintStroke : NonCopyable, NonMovable {
 
   /**
    * Callback function to retrieve the object space coordinates based on screen space coordinates.
-   * \param location: resulting object space coordinates
    * \returns whether a value was actually found & the value in location is usable
    */
-  virtual bool get_location(float location[3], const float mouse[2], bool force_original) = 0;
+  virtual std::optional<float3> get_location(float2 mouse, bool force_original) = 0;
 
   /**
    * Callback function to determine whether a stroke has started, and performing initialization.
    *
    * In many cases, this is a check to whether the stroke is over the active mesh.
    */
-  virtual bool test_start(wmOperator *op, const float mouse[2]) = 0;
+  virtual bool test_start(wmOperator *op, float2 mouse) = 0;
 
   /**
    * Callback function for performing a paint stroke for a new step.
    */
-  virtual void update_step(wmOperator *op, PointerRNA *itemptr) = 0;
+  virtual void update_step(wmOperator *op, const StrokeStep &stroke_step) = 0;
 
   /**
    * Callback function for performing necessary redraw functions based on the stroke.
@@ -348,11 +355,6 @@ void BRUSH_OT_asset_revert(wmOperatorType *ot);
 
 /** Initialize viewport pivot from evaluated bounding box center of `ob`. */
 void paint_init_pivot(Object *ob, Scene *scene, Paint *paint);
-
-/**
- * Delete overlay cursor textures to preserve memory and invalidate all overlay flags.
- */
-void paint_cursor_delete_textures();
 
 /* `paint_vertex.cc` */
 
