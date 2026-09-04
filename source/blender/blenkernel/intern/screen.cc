@@ -1393,10 +1393,10 @@ static void write_region(BlendWriter *writer, ARegion *region, int spacetype)
     shallow_region.v2d.smooth_timer = nullptr;
     shallow_region.v2d.scroll_ui = {};
     shallow_region.v2d.flag &= ~V2D_IS_NAVIGATING;
-    /* Match #direct_link_region so scrollbar fade cannot drift across load/save. */
+    /* Matches #direct_link_region. */
     shallow_region.v2d.alpha_hor = 255;
     shallow_region.v2d.alpha_vert = 255;
-    /* For some region types, this is pure runtime data. */
+    /* For some region types, #View2D.tot is pure runtime data. */
     if (ELEM(shallow_region.regiontype,
              RGN_TYPE_HEADER,
              RGN_TYPE_TOOL_HEADER,

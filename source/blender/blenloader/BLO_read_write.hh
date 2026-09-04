@@ -411,11 +411,8 @@ struct BlendLibReader {
  * \{ */
 
 /**
- * Scratch copy of an ID for #blend_write.
- *
- * Still required so write callbacks can mutate without touching live data, and for placeholder /
- * embedded ID preparation. Common ID-header runtime fields are cleared in
- * #BlendWriter::write_id_struct instead.
+ * Makes a shallow copy of the ID for use in #IDTypeInfo::blend_write. The functions are currently
+ * allowed to make shallow changes to the data-block which won't be written to the file.
  */
 struct BLO_Write_IDBuffer {
  private:
