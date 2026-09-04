@@ -467,12 +467,16 @@ struct ExperimentalTexturePaintStroke final : public PaintStroke {
   Base *base_;
   ImagePaintSettings *settings_;
 
+  /* Needed for restore support */
+  wmWindowManager *wm_;
+
   ExperimentalTexturePaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
       : PaintStroke(C, op, event)
   {
     base_ = CTX_data_active_base(C);
     ToolSettings *tool_settings = CTX_data_tool_settings(C);
     settings_ = &tool_settings->imapaint;
+    wm_ = CTX_wm_manager(C);
 
     if (!G.background) {
       view3d_operator_needs_gpu(C);
@@ -664,6 +668,20 @@ static void do_brush_action(const Depsgraph &depsgraph,
   bke::paint::stroke_track_location(image_paint_settings.paint, world_location);
 }
 
+static void restore_from_undo_step_if_necessary(wmWindowManager &wm, const Brush &brush)
+{
+  if (!ELEM(brush.stroke_method, BRUSH_STROKE_DRAG_DOT, BRUSH_STROKE_ANCHORED)) {
+    return;
+  }
+  UndoStack *ustack = wm.runtime->undo_stack;
+  if (!ustack) {
+    BLI_assert(G.background);
+    return;
+  }
+
+  ED_image_undo_restore(ustack->step_init);
+}
+
 void ExperimentalTexturePaintStroke::update_step(wmOperator * /*op*/, const StrokeStep &step)
 {
   Object &object = *this->object;
@@ -673,8 +691,7 @@ void ExperimentalTexturePaintStroke::update_step(wmOperator * /*op*/, const Stro
 
   cache.stroke_distance = this->stroke_distance();
   stroke_cache_update(this->vc, *this->paint, object, step);
-
-  /* TODO: 'restore' support */
+  restore_from_undo_step_if_necessary(*wm_, *brush);
 
   const bke::PaintRuntime &paint_runtime = *this->paint->runtime;
   const float overlap = paint_runtime.overlap_factor;
