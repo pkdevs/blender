@@ -201,7 +201,6 @@ class VariableMap {
    * #std::nullopt otherwise.
    */
   std::optional<int64_t> get_integer(StringRef name) const;
-
   /**
    * Fetch the value of the float variable with the given name.
    *
@@ -209,6 +208,11 @@ class VariableMap {
    * #std::nullopt otherwise.
    */
   std::optional<double> get_float(StringRef name) const;
+
+  /**
+   * The names of all variables currently in the map, in no particular order.
+   */
+  Vector<StringRefNull> names() const;
 
   /* ------------------------------------------------------------------
    * Convenience methods, to aid in consistency across different uses. */

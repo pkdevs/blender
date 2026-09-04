@@ -47,6 +47,7 @@
 #include "BKE_movieclip.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
+#include "BKE_path_templates.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
@@ -433,7 +434,9 @@ struct HandleButtonData {
   wmTimer *flashtimer = nullptr;
 
   TextEdit text_edit;
-  /** Unit hint drawn faded after the edit string, empty when there is none. */
+  /**
+   * Input hint drawn faded after the edit string, empty when there is none.
+   */
   std::string text_edit_unit_hint;
 
   wmTimer *text_select_auto_scroll = nullptr;
@@ -3807,6 +3810,110 @@ static void button_edit_unit_hint_refresh(bContext *C, Button *but, HandleButton
   data->text_edit_unit_hint = " " + name_short;
 }
 
+/**
+ * If `text` ends with an unclosed `{variable_name` path-template expression
+ * (i.e. an opening `{` with no matching `}` after it), returns the byte index
+ * of that opening `{`. Escaped braces (`{{` and `}}`) are skipped. Returns
+ * #std::nullopt if the text doesn't end inside such an expression, including
+ * when the expression syntax is already invalid (e.g. nested `{`).
+ */
+static std::optional<int64_t> template_variable_open_token_start(StringRef text)
+{
+  int64_t start = -1;
+  const int64_t size = text.size();
+
+  for (int64_t i = 0; i < size; i++) {
+    if (start == -1) {
+      if (text[i] == '{') {
+        if (i + 1 < size && text[i + 1] == '{') {
+          /* Escaped "{{". */
+          i++;
+          continue;
+        }
+        start = i;
+      }
+      else if (text[i] == '}' && i + 1 < size && text[i + 1] == '}') {
+        /* Escaped "}}". */
+        i++;
+      }
+      continue;
+    }
+
+    if (text[i] == '}') {
+      /* Expression closed. */
+      start = -1;
+    }
+    else if (text[i] == '{') {
+      /* Nested "{": the expression is already invalid, don't offer a hint for it. */
+      return std::nullopt;
+    }
+  }
+
+  return (start == -1) ? std::nullopt : std::optional(start);
+}
+
+static std::optional<int64_t> button_template_variable_being_typed(const Button *but,
+                                                                   const HandleButtonData *data)
+{
+  if (but->type != ButtonType::Text || but->rnaprop == nullptr ||
+      (RNA_property_flag(but->rnaprop) & PROP_PATH_SUPPORTS_TEMPLATES) == 0 ||
+      data->text_edit.edit_string == nullptr)
+  {
+    return std::nullopt;
+  }
+
+  const PropertySubType subtype = RNA_property_subtype(but->rnaprop);
+  if (!ELEM(subtype, PROP_FILEPATH, PROP_DIRPATH, PROP_FILENAME, PROP_NONE)) {
+    return std::nullopt;
+  }
+
+  const StringRefNull text = data->text_edit.edit_string;
+
+  if (but->pos != int(text.size())) {
+    return std::nullopt;
+  }
+
+  return template_variable_open_token_start(text);
+}
+
+static void button_edit_template_variable_hint_refresh(bContext *C,
+                                                       Button *but,
+                                                       HandleButtonData *data,
+                                                       const int64_t token_start)
+{
+  data->text_edit_unit_hint.clear();
+
+  const StringRefNull text = data->text_edit.edit_string;
+  const StringRef typed = text.substr(token_start + 1);
+
+  const std::optional<bke::path_templates::VariableMap> variables =
+      BKE_build_template_variables_for_prop(C, &but->rnapoin, but->rnaprop);
+  if (!variables.has_value()) {
+    return;
+  }
+
+  Vector<StringRefNull> names = variables->names();
+  std::sort(names.begin(), names.end());
+
+  for (const StringRefNull &name : names) {
+    if (name.size() > typed.size() && name.startswith(typed)) {
+      data->text_edit_unit_hint = name.substr(typed.size());
+      data->text_edit_unit_hint += "}";
+      break;
+    }
+  }
+}
+
+static void button_edit_hint_refresh(bContext *C, Button *but, HandleButtonData *data)
+{
+  if (const std::optional<int64_t> token_start = button_template_variable_being_typed(but, data)) {
+    button_edit_template_variable_hint_refresh(C, but, data, *token_start);
+  }
+  else {
+    button_edit_unit_hint_refresh(C, but, data);
+  }
+}
+
 static void textedit_begin(bContext *C, Button *but, HandleButtonData *data)
 {
   TextEdit &text_edit = data->text_edit;
@@ -3929,8 +4036,8 @@ static void textedit_begin(bContext *C, Button *but, HandleButtonData *data)
 
   button_update(but);
 
-  /* Set the edit unit hint if needed. */
-  button_edit_unit_hint_refresh(C, but, data);
+  /* Set the edit hint if needed. */
+  button_edit_hint_refresh(C, but, data);
 
   /* Make sure the edited button is in view. */
   if (data->searchbox) {
@@ -4547,7 +4654,7 @@ static int do_but_textedit(
       textedit_undo_push(text_edit.undo_stack_text, text_edit.edit_string, but->pos);
     }
 
-    button_edit_unit_hint_refresh(C, but, data);
+    button_edit_hint_refresh(C, but, data);
 
     /* only do live update when but flag request it (BUT_TEXTEDIT_UPDATE). */
     if (update && data->interactive) {

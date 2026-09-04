@@ -961,7 +961,12 @@ Button *button_drag_multi_edit_get(Button *but);
 const char *button_placeholder_get(Button *but);
 
 /**
- * Get the unit hint shown after the text while editing.
+ * Get the input hint shown after the text while editing.
+ *
+ * This is one of two mutually exclusive hints, decided per refresh by
+ * #button_edit_hint_refresh: if a path-template variable is currently being
+ * typed, the variable completion hint; otherwise, if the button's property has a unit, the unit
+ * completion hint.
  */
 std::optional<StringRef> button_edit_unit_hint_get(const Button &but);
 

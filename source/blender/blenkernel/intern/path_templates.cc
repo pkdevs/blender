@@ -138,6 +138,26 @@ std::optional<double> VariableMap::get_float(StringRef name) const
   return *value;
 }
 
+Vector<StringRefNull> VariableMap::names() const
+{
+  Vector<StringRefNull> result;
+  result.reserve(this->strings_.size() + this->filepaths_.size() + this->integers_.size() +
+                 this->floats_.size());
+
+  const auto gather = [&](const auto &map) {
+    for (const std::string &name : map.keys()) {
+      result.append(StringRefNull(name));
+    }
+  };
+
+  gather(this->strings_);
+  gather(this->filepaths_);
+  gather(this->integers_);
+  gather(this->floats_);
+
+  return result;
+}
+
 bool VariableMap::add_filename_only(StringRef var_name,
                                     StringRefNull full_path,
                                     StringRef fallback)
