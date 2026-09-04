@@ -8,7 +8,6 @@
 
 #include "draw_sculpt.hh"
 
-#include "BKE_paint_bvh.hh"
 #include "DNA_mesh_types.h"
 #include "DNA_scene_types.h"
 #include "draw_attributes.hh"
@@ -109,11 +108,14 @@ static Vector<SculptBatch> sculpt_batches_get_ex(const Object *ob,
   /* In the future we expect that update_only_visible nodes will be removed to support GPU driven
    * pipelines better. Only visible nodes is an CPU based optimization but does not provide the GPU
    * with the actual data it needs. Currently the draw_data already expects all leaf nodes to
-   * reduce complexity. */
+   * reduce complexity.
+   *
+   * When only updating visible nodes not all updates that happen in PBVH will be detected, and
+   * leads to invalid batches or buffers. */
   const IndexMask all_leaf_nodes = bke::pbvh::all_leaf_nodes(*pbvh, memory);
   const IndexMask &nodes_to_update = update_only_visible ? visible_nodes : all_leaf_nodes;
 
-  draw_data.ensure_node_infos(*ob, all_leaf_nodes);
+  draw_data.ensure_node_ranges(*ob, all_leaf_nodes);
 
   Span<gpu::Batch *> batches;
   if (use_wire) {

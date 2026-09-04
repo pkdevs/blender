@@ -78,15 +78,11 @@ class DrawCache : public bke::pbvh::DrawCache {
    * index, as ensured by the BVH building process).
    */
   virtual Span<int> ensure_material_indices(const Object &object) = 0;
-
   /**
-   * \brief Assign a space inside the vertex/index buffers to each node.
-   *
-   * After invoking each node will have a space inside the vertex buffers/index buffers.
-   *
-   * \note Should be called before requesting other information.
+   * Prepare the shared vertex/index buffer layout for the given leaf nodes, so they are ready to
+   * have their data extracted and batches configured. Should be called before requesting batches.
    */
-  virtual void ensure_node_infos(const Object &object, const IndexMask &nodes_to_update) = 0;
+  virtual void ensure_node_ranges(const Object &object, const IndexMask &all_leaf_nodes) = 0;
 };
 
 DrawCache &ensure_draw_data(std::unique_ptr<bke::pbvh::DrawCache> &ptr);
