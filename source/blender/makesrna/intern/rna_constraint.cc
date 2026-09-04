@@ -2254,6 +2254,7 @@ static void rna_def_constraint_stretch_to(BlenderRNA *brna)
   prop = RNA_def_property(srna, "keep_axis", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "plane");
   RNA_def_property_enum_items(prop, plane_items);
+  RNA_def_property_enum_default(prop, SWING_Y);
   RNA_def_property_ui_text(prop, "Keep Axis", "The rotation type and axis order to use");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
@@ -2272,12 +2273,14 @@ static void rna_def_constraint_stretch_to(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_bulge_min", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", STRETCHTOCON_USE_BULGE_MIN);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(
       prop, "Use Volume Variation Minimum", "Use lower limit for volume variation");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "use_bulge_max", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", STRETCHTOCON_USE_BULGE_MAX);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(
       prop, "Use Volume Variation Maximum", "Use upper limit for volume variation");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
