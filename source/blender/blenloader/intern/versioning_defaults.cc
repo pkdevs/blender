@@ -232,6 +232,7 @@ static void blo_update_defaults_screen(bScreen *screen,
       v3d->overlay.gpencil_vertex_paint_opacity = 1.0f;
       /* Always use theme color for wireframe by default. */
       v3d->shading.wire_color_type = V3D_SHADING_SINGLE_COLOR;
+      v3d->shading.use_compositor = V3D_SHADING_USE_COMPOSITOR_ALWAYS;
 
       /* Level out the 3D Viewport camera rotation, see: #113751. */
       constexpr float viewports_to_level[][4] = {
@@ -372,6 +373,10 @@ void BLO_update_defaults_workspace(WorkSpace *workspace, const char *app_templat
                                                                                &sl.regionbase;
               ARegion *sidebar = BKE_region_find_in_listbase_by_type(regionbase, RGN_TYPE_UI);
               sidebar->flag |= RGN_FLAG_HIDDEN;
+            }
+            else if (sl.spacetype == SPACE_PROPERTIES) {
+              reinterpret_cast<SpaceProperties *>(&sl)->visible_tabs &= ~(1
+                                                                          << BCONTEXT_COMPOSITOR);
             }
           }
         }

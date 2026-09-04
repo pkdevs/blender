@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
@@ -100,26 +104,6 @@ void node_tree_shader_default(const bContext *C, Main *bmain, ID *id)
     printf("node_tree_shader_default() called on wrong ID type.\n");
     return;
   }
-}
-
-void node_tree_composit_default(const bContext *C, Scene *sce)
-{
-  Main *bmain = CTX_data_main(C);
-
-  /* but lets check it anyway */
-  if (sce->compositing_node_group) {
-    if (G.debug & G_DEBUG) {
-      printf("error in composite initialize\n");
-    }
-    return;
-  }
-
-  sce->compositing_node_group = bke::node_tree_add_tree(
-      bmain, DATA_("Compositor Nodes"), ntreeType_Composite->idname.ref());
-
-  node_tree_composit_default_init(C, sce->compositing_node_group);
-
-  BKE_ntree_update_after_single_tree_change(*bmain, *sce->compositing_node_group);
 }
 
 void node_tree_composit_default_init(const bContext *C, bNodeTree *ntree)

@@ -861,7 +861,7 @@ static float inner_clickable_handle_size_get(const Scene *scene,
   return min_ff(15.0f * pixelx * U.pixelsize, strip_len / 4);
 }
 
-bool can_select_handle(const Scene *scene, const Strip *strip, const View2D *v2d)
+bool can_select_handle(const Scene *scene, const Strip *strip)
 {
   if (strip->is_effect_with_inputs()) {
     return false;
@@ -870,21 +870,6 @@ bool can_select_handle(const Scene *scene, const Strip *strip, const View2D *v2d
   Editing *ed = seq::editing_get(scene);
   const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
   if (seq::transform_is_locked(channels, strip)) {
-    return false;
-  }
-
-  /* This ensures clickable handles are deactivated when the strip gets too small
-   * (25 pixels). Since the full handle size for a small strip is 1/3 of the strip size (see
-   * `inner_clickable_handle_size_get`), this means handles cannot be smaller than 25/3 = 8px. */
-  int min_len = 25 * U.pixelsize;
-
-  const float pixelx = ui::view2d_pixel_size_get_x(v2d);
-  const int strip_len = strip->right_handle(scene) - strip->left_handle();
-  if (strip_len / pixelx < min_len) {
-    return false;
-  }
-
-  if (ui::view2d_scale_get_y(v2d) < 16 * U.pixelsize) {
     return false;
   }
 
@@ -985,7 +970,7 @@ static eStripHandle strip_handle_under_cursor_get(const Scene *scene,
                                                   const View2D *v2d,
                                                   float mouse_co[2])
 {
-  if (!can_select_handle(scene, strip, v2d)) {
+  if (!can_select_handle(scene, strip)) {
     return STRIP_HANDLE_NONE;
   }
 
@@ -1093,8 +1078,11 @@ wmOperatorStatus sequencer_select_exec(bContext *C, wmOperator *op)
       key = try_to_realize_fake_keys(scene, v2d, strip_key_owner, mouse_co.region);
     }
     else {
-      /* There may be fake key on either side of strip. It must be realized. */
+      /* There may be a fake key on either side of the strip. It must be realized. Realizing
+       * reallocates the key array, so `key` has to be looked up again. */
+      const int key_frame = seq::retiming_key_frame_get(scene, strip_key_owner, key);
       seq::realize_fake_keys(scene, strip_key_owner);
+      key = seq::retiming_key_get_by_frame(scene, strip_key_owner, key_frame);
     }
 
     if (key != nullptr) {
@@ -2137,7 +2125,19 @@ static wmOperatorStatus sequencer_box_select_invoke(bContext *C,
     }
   }
 
-  return WM_gesture_box_invoke(C, op, event);
+  const wmOperatorStatus opstatus = WM_gesture_box_invoke(C, op, event);
+  const SpaceSeq *sseq = CTX_wm_space_seq(C);
+
+  wmGesture *gesture = static_cast<wmGesture *>(op->customdata);
+  if ((sseq->flag & SEQ_CLAMP_VIEW) && gesture->edge_pan_data && scene != nullptr &&
+      region->regiontype == RGN_TYPE_WINDOW)
+  {
+    const rctf view_bounds = sequencer_clamped_view_bounds_get(C, region);
+    gesture->edge_pan_data->limit.ymin = view_bounds.ymin;
+    gesture->edge_pan_data->limit.ymax = view_bounds.ymax;
+  }
+
+  return opstatus;
 }
 
 void SEQUENCER_OT_select_box(wmOperatorType *ot)
