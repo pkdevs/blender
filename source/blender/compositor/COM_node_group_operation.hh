@@ -23,7 +23,7 @@ namespace blender::compositor {
 /* ------------------------------------------------------------------------------------------------
  * Node Group Operation
  *
- * The node group operation represents and evaluates a node group.  */
+ * The node group operation represents and evaluates a node group. */
 class NodeGroupOperation : public Operation {
  private:
   /* The node group that this operation represents. */
