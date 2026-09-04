@@ -140,9 +140,7 @@ static void action_copy_data(Main * /*bmain*/,
   /* Copy F-Curves, fixing up the links as we go. */
   action_dst.curves.clear_no_delete();
 
-  for (fcurve_src = static_cast<FCurve *>(action_src.curves.first); fcurve_src;
-       fcurve_src = fcurve_src->next)
-  {
+  for (fcurve_src = action_src.curves.first(); fcurve_src; fcurve_src = fcurve_src->next) {
     /* Duplicate F-Curve. */
 
     /* XXX TODO: pass sub-data flag?
@@ -152,19 +150,18 @@ static void action_copy_data(Main * /*bmain*/,
     BLI_addtail(&action_dst.curves, fcurve_dst);
 
     /* Fix group links (kind of bad list-in-list search, but this is the most reliable way). */
-    for (group_dst = static_cast<bActionGroup *>(action_dst.groups.first),
-        group_src = static_cast<bActionGroup *>(action_src.groups.first);
+    for (group_dst = action_dst.groups.first(), group_src = action_src.groups.first();
          group_dst && group_src;
          group_dst = group_dst->next, group_src = group_src->next)
     {
       if (fcurve_src->grp == group_src) {
         fcurve_dst->grp = group_dst;
 
-        if (group_dst->channels.first == fcurve_src) {
-          group_dst->channels.first = fcurve_dst;
+        if (group_dst->channels.first() == fcurve_src) {
+          group_dst->channels.first_ = fcurve_dst;
         }
-        if (group_dst->channels.last == fcurve_src) {
-          group_dst->channels.last = fcurve_dst;
+        if (group_dst->channels.last() == fcurve_src) {
+          group_dst->channels.last_ = fcurve_dst;
         }
         break;
       }
@@ -431,8 +428,8 @@ static void action_blend_write_make_legacy_channel_groups_listbase(
     channel_groups[index]->next = (index < last_index) ? channel_groups[index + 1] : nullptr;
   }
 
-  listbase.first = channel_groups[0];
-  listbase.last = channel_groups[last_index];
+  listbase.first_ = channel_groups[0];
+  listbase.last_ = channel_groups[last_index];
 }
 
 static void action_blend_write_clear_legacy_channel_groups_listbase(
@@ -476,8 +473,8 @@ static void action_blend_write_make_legacy_fcurves_listbase(ListBaseT<FCurve> &l
     fcurves[index]->next = (index < last_index) ? fcurves[index + 1] : nullptr;
   }
 
-  listbase.first = fcurves[0];
-  listbase.last = fcurves[last_index];
+  listbase.first_ = fcurves[0];
+  listbase.last_ = fcurves[last_index];
 }
 
 static void action_blend_write_clear_legacy_fcurves_listbase(ListBaseT<FCurve> &listbase)
@@ -699,8 +696,8 @@ static void action_blend_read_data(BlendDataReader *reader, ID *id)
     BKE_fcurve_blend_read_data_listbase(reader, &action.curves);
 
     for (bActionGroup &agrp : action.groups) {
-      BLO_read_struct(reader, FCurve, &agrp.channels.first);
-      BLO_read_struct(reader, FCurve, &agrp.channels.last);
+      BLO_read_struct(reader, FCurve, &agrp.channels.first_);
+      BLO_read_struct(reader, FCurve, &agrp.channels.last_);
     }
   }
 
@@ -960,7 +957,7 @@ bool BKE_pose_channels_is_valid(const bPose *pose)
 {
   if (!pose->runtime->chanhash.is_empty()) {
     bPoseChannel *pchan;
-    for (pchan = static_cast<bPoseChannel *>(pose->chanbase.first); pchan; pchan = pchan->next) {
+    for (pchan = pose->chanbase.first(); pchan; pchan = pchan->next) {
       bPoseChannel *const *found = pose->runtime->chanhash.lookup_ptr(pchan->name);
       if (!found || *found != pchan) {
         return false;
@@ -1079,7 +1076,7 @@ void BKE_pose_copy_data_ex(bPose **dst,
    * BUT this will have the penalty that the ghash will be built twice
    * if BKE_pose_rebuild() gets called after this...
    */
-  if (outPose->chanbase.first != outPose->chanbase.last) {
+  if (outPose->chanbase.first() != outPose->chanbase.last()) {
     BKE_pose_channels_hash_ensure(outPose);
   }
 
@@ -1277,8 +1274,7 @@ void BKE_pose_channels_remove(Object *ob,
   if (ob->pose) {
     bPoseChannel *pchan, *pchan_next;
 
-    for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan; pchan = pchan_next)
-    {
+    for (pchan = ob->pose->chanbase.first(); pchan; pchan = pchan_next) {
       pchan_next = pchan->next;
 
       if (filter_fn(pchan->name, user_data)) {
@@ -1421,7 +1417,7 @@ void BKE_pose_free_data_ex(bPose *pose, bool do_id_user)
   BKE_pose_channels_free_ex(pose, do_id_user);
 
   /* free pose-groups */
-  if (pose->agroups.first) {
+  if (pose->agroups.first()) {
     pose->agroups.free_no_destruct();
   }
 
@@ -1809,8 +1805,8 @@ void what_does_obaction(Object *ob,
   workob->par2 = ob->par2;
   workob->par3 = ob->par3;
 
-  workob->constraints.first = ob->constraints.first;
-  workob->constraints.last = ob->constraints.last;
+  workob->constraints.first_ = ob->constraints.first();
+  workob->constraints.last_ = ob->constraints.last();
 
   /* Need to set pose too, since this is used for both types of Action Constraint. */
   workob->pose = pose;
@@ -1819,7 +1815,7 @@ void what_does_obaction(Object *ob,
      * For such cases it makes no sense to create hash since it'll only waste CPU ticks on memory
      * allocation and also will make lookup slower.
      */
-    if (pose->chanbase.first != pose->chanbase.last) {
+    if (pose->chanbase.first() != pose->chanbase.last()) {
       BKE_pose_channels_hash_ensure(pose);
     }
     if (pose->flag & POSE_CONSTRAINTS_NEED_UPDATE_FLAGS) {
