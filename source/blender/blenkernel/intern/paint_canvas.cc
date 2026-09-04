@@ -58,6 +58,9 @@ std::optional<CanvasImageData> BKE_paint_canvas_image_get(const ImagePaintSettin
     return std::make_optional<CanvasImageData>({slot->ima, slot->image_user});
   }
   if (settings.mode == PAINT_CANVAS_SOURCE_IMAGE) {
+    if (settings.canvas == nullptr) {
+      return std::nullopt;
+    }
     return std::make_optional<CanvasImageData>({settings.canvas, ImageUser{}});
   }
   return std::nullopt;
