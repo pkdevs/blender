@@ -2179,12 +2179,14 @@ static void rna_def_constraint_follow_path(BlenderRNA *brna)
   prop = RNA_def_property(srna, "forward_axis", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "trackflag");
   RNA_def_property_enum_items(prop, forwardpath_items);
+  RNA_def_property_enum_default(prop, TRACK_Y);
   RNA_def_property_ui_text(prop, "Forward Axis", "Axis that points forward along the path");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "up_axis", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "upflag");
   RNA_def_property_enum_items(prop, pathup_items);
+  RNA_def_property_enum_default(prop, UP_Z);
   RNA_def_property_ui_text(prop, "Up Axis", "Axis that points upward");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
