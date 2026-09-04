@@ -191,8 +191,8 @@ static void get_seq_strip_middle_thumbnail(const View2D *v2d,
   const float display_offset = (strip.is_single_image ? strip_width / 2.0f : 0.0f) -
                                (thumb_width / 2.0f);
 
-  const float crop_left = max_ff(0.0f, thumb_width - strip_width) / 2.0f;
-  const float crop_right = max_ff(0.0f, thumb_width - strip_width) / 2.0f;
+  /* Thumbnail is centered, so same crop used for left and right. */
+  const float crop = max_ff(0.0f, thumb_width - strip_width) / 2.0f;
 
   if (is_thumbnail_in_view(middle_frame + display_offset, thumb_width, v2d)) {
     add_thumbnail_at_frame(middle_frame,
@@ -201,8 +201,8 @@ static void get_seq_strip_middle_thumbnail(const View2D *v2d,
                            strip,
                            scene,
                            thumb_width,
-                           crop_left,
-                           crop_right,
+                           crop,
+                           crop,
                            crop_x_multiplier,
                            upper_thumb_bound,
                            display_offset,
