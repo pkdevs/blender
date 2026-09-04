@@ -5279,7 +5279,7 @@ void flush_update_done(ViewContext &vc,
   for (wmWindow &win : wm.windows) {
     const bScreen &screen = *WM_window_get_active_screen(&win);
     for (ScrArea &area : screen.areabase) {
-      const SpaceLink &sl = *static_cast<SpaceLink *>(area.spacedata.first);
+      const SpaceLink &sl = *area.spacedata.first();
       if (sl.spacetype != SPACE_VIEW3D) {
         continue;
       }
@@ -5301,7 +5301,7 @@ void flush_update_done(ViewContext &vc,
 
     if (update_type == UpdateType::Image) {
       for (ScrArea &area : screen.areabase) {
-        const SpaceLink &sl = *static_cast<SpaceLink *>(area.spacedata.first);
+        const SpaceLink &sl = *area.spacedata.first();
         if (sl.spacetype != SPACE_IMAGE) {
           continue;
         }
