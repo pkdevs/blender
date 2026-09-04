@@ -181,7 +181,7 @@ class Hotkey:
     ctrl: bool = False
     shift: bool = False
     alt: bool = False
-    props: dict = None
+    props: dict = ()
 
 
 addon_keymaps = []
@@ -403,9 +403,8 @@ def register():
                 ctrl=hotkey.ctrl,
                 shift=hotkey.shift,
                 alt=hotkey.alt)
-            if hotkey.props:
-                for prop, value in hotkey.props:
-                    setattr(kmi.properties, prop, value)
+            for prop, value in hotkey.props:
+                setattr(kmi.properties, prop, value)
             addon_keymaps.append((km, kmi))
 
 
