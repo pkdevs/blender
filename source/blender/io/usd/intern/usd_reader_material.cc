@@ -23,6 +23,7 @@
 #include "BLI_map.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_path_utils.hh"
 #include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
@@ -136,15 +137,39 @@ static void link_nodes(bNodeTree *ntree,
  * Note that the returned handle may be invalid if no layer could be found. */
 static pxr::SdfLayerHandle get_layer_handle(const pxr::UsdAttribute &attribute)
 {
-  for (const auto &PropertySpec : attribute.GetPropertyStack(pxr::UsdTimeCode::EarliestTime())) {
-    if (PropertySpec->HasDefaultValue() ||
-        PropertySpec->GetLayer()->GetNumTimeSamplesForPath(PropertySpec->GetPath()) > 0)
-    {
-      return PropertySpec->GetLayer();
+  for (pxr::UsdTimeCode time : {pxr::UsdTimeCode::EarliestTime(), pxr::UsdTimeCode::Default()}) {
+    for (const auto &PropertySpec : attribute.GetPropertyStack(time)) {
+      if (PropertySpec->HasDefaultValue() ||
+          PropertySpec->GetLayer()->GetNumTimeSamplesForPath(PropertySpec->GetPath()) > 0)
+      {
+        return PropertySpec->GetLayer();
+      }
     }
   }
-
   return pxr::SdfLayerHandle();
+}
+
+/* Anchors the given relative asset path to the given layer, forcing "bare" relative paths
+ * (i.e. paths that don't already start with "./" or "../") to be anchored the same way as
+ * explicitly relative paths.
+ *
+ * This matters for UDIM asset paths: the literal "<UDIM>" token in the path never corresponds
+ * to an actual file on disk, so #SdfLayer::ComputeAbsolutePath() -- which, for a "bare"
+ * relative path, defers to the active #ArResolver's search-path semantics and only anchors the
+ * path if some file with that literal name is found -- has no way to tell that the path should
+ * be anchored to this layer, and returns it unresolved. Explicitly-relative paths ("./" or
+ * "../" prefixed) don't have this problem, since those are always anchored to the referencing
+ * layer regardless of whether the target exists, so we fall back to that form here. */
+static std::string anchor_relative_asset_path(const std::string &path,
+                                              const pxr::SdfLayerHandle &layer)
+{
+  if (path.empty() || BLI_path_is_abs_from_cwd(path.c_str()) || StringRef(path).startswith("./") ||
+      StringRef(path).startswith("../"))
+  {
+    return layer->ComputeAbsolutePath(path);
+  }
+
+  return layer->ComputeAbsolutePath("./" + path);
 }
 
 /* For the given UDIM path (assumed to contain the UDIM token), returns an array
@@ -1337,7 +1362,7 @@ void USDMaterialReader::load_tex_image(const pxr::UsdShadeShader &usd_shader,
     if (!file_path.empty() && is_udim_path(file_path)) {
       /* Texture paths are frequently relative to the USD, so get the absolute path. */
       if (pxr::SdfLayerHandle layer_handle = get_layer_handle(file_input.GetAttr())) {
-        file_path = layer_handle->ComputeAbsolutePath(file_path);
+        file_path = anchor_relative_asset_path(file_path, layer_handle);
       }
     }
   }

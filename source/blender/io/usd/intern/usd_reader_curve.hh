@@ -46,6 +46,9 @@ class USDCurvesReader : public USDGeomReader {
                        const pxr::UsdTimeCode time) const;
   void read_custom_data(bke::CurvesGeometry &curves, const pxr::UsdTimeCode time) const;
 
+  /* Assign the material bound to the curve prim to the object's material slot. */
+  void assign_materials(Main *bmain);
+
   virtual bool is_animated() const = 0;
   virtual void read_curve_sample(Curves *curves_id, pxr::UsdTimeCode time) = 0;
 };

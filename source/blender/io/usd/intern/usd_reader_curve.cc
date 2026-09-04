@@ -7,6 +7,8 @@
 #include "usd_reader_curve.hh"
 #include "usd.hh"
 #include "usd_attribute_utils.hh"
+#include "usd_reader_material.hh"
+#include "usd_reader_utils.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_curves.hh"
@@ -15,6 +17,7 @@
 #include "BKE_report.hh"
 
 #include "BLI_index_range.hh"
+#include "BLI_map.hh"
 #include "BLI_math_vector_types.hh"
 
 #include "DNA_curves_types.h"
@@ -23,6 +26,7 @@
 #include <pxr/base/vt/types.h>
 #include <pxr/usd/usdGeom/basisCurves.h>
 #include <pxr/usd/usdGeom/primvarsAPI.h>
+#include <pxr/usd/usdShade/material.h>
 
 namespace blender::io::usd {
 
@@ -146,7 +150,37 @@ void USDCurvesReader::read_object_data(Main *bmain, pxr::UsdTimeCode time)
     this->add_cache_modifier();
   }
 
+  if (import_params_.import_materials) {
+    this->assign_materials(bmain);
+  }
+
   USDXformReader::read_object_data(bmain, time);
+}
+
+void USDCurvesReader::assign_materials(Main *bmain)
+{
+  /* Curves support a single material bound to the whole prim. Per-curve binding via
+   * UsdGeomSubset is not currently handled. */
+  Map<pxr::SdfPath, int> mat_map;
+
+  const pxr::UsdShadeMaterial mtl = compute_bound_material(prim_, import_params_.mtl_purpose);
+  if (mtl) {
+    const pxr::SdfPath mtl_path = mtl.GetPath();
+    if (!mtl_path.IsEmpty()) {
+      mat_map.add(mtl_path, 1);
+    }
+  }
+
+  if (mat_map.is_empty()) {
+    return;
+  }
+
+  /* Build material name map if it's not built yet. */
+  if (settings_->mat_name_to_mat.is_empty()) {
+    build_material_map(bmain, settings_->mat_name_to_mat);
+  }
+
+  io::usd::assign_materials(bmain, object_, mat_map, import_params_, prim_.GetStage(), *settings_);
 }
 
 void USDCurvesReader::read_velocities(bke::CurvesGeometry &curves,

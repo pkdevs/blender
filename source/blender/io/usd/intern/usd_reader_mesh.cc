@@ -10,6 +10,7 @@
 #include "usd_attribute_utils.hh"
 #include "usd_mesh_utils.hh"
 #include "usd_reader_material.hh"
+#include "usd_reader_utils.hh"
 #include "usd_skel_convert.hh"
 
 #include "BKE_attribute.h"
@@ -63,112 +64,6 @@ static const pxr::TfToken normalsPrimvar("normals", pxr::TfToken::Immortal);
 }  // namespace usdtokens
 
 namespace io::usd {
-
-namespace utils {
-
-static pxr::UsdShadeMaterial compute_bound_material(const pxr::UsdPrim &prim,
-                                                    MtlPurpose mtl_purpose)
-{
-  const pxr::UsdShadeMaterialBindingAPI api = pxr::UsdShadeMaterialBindingAPI(prim);
-
-  /* See the following documentation for material resolution behavior:
-   * https://openusd.org/release/api/class_usd_shade_material_binding_a_p_i.html#UsdShadeMaterialBindingAPI_MaterialResolution
-   */
-
-  pxr::UsdShadeMaterial mtl;
-  switch (mtl_purpose) {
-    case MtlPurpose::Full:
-      mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->full);
-      if (!mtl) {
-        /* Add an additional Blender-specific fallback to help with oddly authored USD files. */
-        mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->preview);
-      }
-      break;
-    case MtlPurpose::Preview:
-      mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->preview);
-      break;
-    case MtlPurpose::All:
-      mtl = api.ComputeBoundMaterial(pxr::UsdShadeTokens->allPurpose);
-      break;
-  }
-
-  return mtl;
-}
-
-static void assign_materials(Main *bmain,
-                             Object *ob,
-                             const Map<pxr::SdfPath, int> &mat_index_map,
-                             const USDImportParams &params,
-                             pxr::UsdStageRefPtr stage,
-                             const ImportSettings &settings)
-{
-  if (!(stage && bmain && ob)) {
-    return;
-  }
-
-  if (mat_index_map.size() > MAXMAT) {
-    return;
-  }
-
-  USDMaterialReader mat_reader(params, *bmain);
-
-  for (const auto item : mat_index_map.items()) {
-    Material *assigned_mat = find_existing_material(
-        item.key, params, settings.mat_name_to_mat, settings.usd_path_to_mat);
-    if (!assigned_mat) {
-      /* Blender material doesn't exist, so create it now. */
-
-      /* Look up the USD material. */
-      pxr::UsdPrim prim = stage->GetPrimAtPath(item.key);
-      pxr::UsdShadeMaterial usd_mat(prim);
-
-      if (!usd_mat) {
-        CLOG_WARN(
-            &LOG, "Couldn't construct USD material from prim %s", item.key.GetAsString().c_str());
-        continue;
-      }
-
-      const bool have_import_hook = settings.mat_import_hook_sources.contains(item.key);
-
-      /* Add the Blender material. If we have an import hook which can handle this material
-       * we don't import USD Preview Surface shaders. */
-      assigned_mat = mat_reader.add_material(usd_mat, !have_import_hook);
-
-      if (!assigned_mat) {
-        CLOG_WARN(&LOG,
-                  "Couldn't create Blender material from USD material %s",
-                  item.key.GetAsString().c_str());
-        continue;
-      }
-
-      settings.mat_name_to_mat.add_new(assigned_mat->id.name + 2, assigned_mat);
-
-      if (params.mtl_name_collision_mode == MtlNameCollisionMode::MakeUnique) {
-        /* Record the Blender material we created for the USD material with the given path. */
-        settings.usd_path_to_mat.add_new(item.key, assigned_mat);
-      }
-
-      if (have_import_hook) {
-        /* Defer invoking the hook to convert the material till we can do so from
-         * the main thread. */
-        settings.usd_path_to_mat_for_hook.add_new(item.key, assigned_mat);
-      }
-    }
-
-    if (assigned_mat) {
-      BKE_object_material_assign_single_obdata(bmain, ob, assigned_mat, item.value);
-    }
-    else {
-      /* This shouldn't happen. */
-      CLOG_WARN(&LOG, "Couldn't assign material %s", item.key.GetAsString().c_str());
-    }
-  }
-  if (ob->totcol > 0) {
-    ob->actcol = 1;
-  }
-}
-
-}  // namespace utils
 
 USDMeshReadData::USDMeshReadData(const pxr::UsdGeomMesh &mesh_prim, const pxr::UsdTimeCode time)
 {
@@ -879,8 +774,8 @@ void USDMeshReader::assign_facesets_to_material_indices(pxr::UsdTimeCode time,
   if (!subsets.empty()) {
     for (const pxr::UsdGeomSubset &subset : subsets) {
       pxr::UsdPrim subset_prim = subset.GetPrim();
-      pxr::UsdShadeMaterial subset_mtl = utils::compute_bound_material(subset_prim,
-                                                                       import_params_.mtl_purpose);
+      pxr::UsdShadeMaterial subset_mtl = compute_bound_material(subset_prim,
+                                                                import_params_.mtl_purpose);
       if (!subset_mtl) {
         continue;
       }
@@ -924,7 +819,7 @@ void USDMeshReader::assign_facesets_to_material_indices(pxr::UsdTimeCode time,
   }
 
   if (r_mat_map->is_empty()) {
-    pxr::UsdShadeMaterial mtl = utils::compute_bound_material(prim_, import_params_.mtl_purpose);
+    pxr::UsdShadeMaterial mtl = compute_bound_material(prim_, import_params_.mtl_purpose);
     if (mtl) {
       pxr::SdfPath mtl_path = mtl.GetPath();
 
@@ -952,7 +847,7 @@ void USDMeshReader::readFaceSetsSample(Main *bmain, Mesh *mesh, const pxr::UsdTi
   if (this->settings_->mat_name_to_mat.is_empty()) {
     build_material_map(bmain, this->settings_->mat_name_to_mat);
   }
-  utils::assign_materials(
+  assign_materials(
       bmain, object_, mat_map, this->import_params_, this->prim_.GetStage(), *this->settings_);
 }
 
