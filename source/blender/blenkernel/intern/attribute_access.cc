@@ -569,20 +569,31 @@ GAttributeWriter MutableAttributeAccessor::convert_or_add_for_write(
     }
     /* The attribute already exists, but with the wrong domain or type.
      * Convert it. */
-    GVArray data_on_domain = *this->lookup(name, domain, data_type);
-    const CPPType &type = data_on_domain.type();
-    void *converted_data = MEM_new_array_uninitialized_aligned(
-        data_on_domain.size(), type.size, type.alignment, __func__);
-    data_on_domain.materialize_to_uninitialized(converted_data);
-    AttributeInitMoveArray attributeInit(converted_data);
-    if (this->add_override(name, domain, data_type, attributeInit)) {
-      return this->lookup_for_write(name);
+    GAttributeReader data_on_domain_reader = this->lookup(name, domain, data_type);
+    if (data_on_domain_reader) {
+      GVArray data_on_domain = *data_on_domain_reader;
+      const CPPType &type = data_on_domain.type();
+      void *converted_data = MEM_new_array_uninitialized_aligned(
+          data_on_domain.size(), type.size, type.alignment, __func__);
+      data_on_domain.materialize_to_uninitialized(converted_data);
+      AttributeInitMoveArray attributeInit(converted_data);
+      if (this->add_override(name, domain, data_type, attributeInit)) {
+        return this->lookup_for_write(name);
+      }
+      type.destruct_n(converted_data, data_on_domain.size());
+      MEM_delete_void(converted_data);
+    }
+    else {
+      /* Attribute is of a type that cannot be converted, so just initialize it with a default
+       * value. */
+      if (this->add_override(name, domain, data_type, AttributeInitDefaultValue())) {
+        return this->lookup_for_write(name);
+      }
     }
     /* Transfer failed, convert_or_add_for_write() should not be used for attributes
-     * that can't be converted. */
+     * that can't be overridden. */
+
     BLI_assert_unreachable();
-    type.destruct_n(converted_data, data_on_domain.size());
-    MEM_delete_void(converted_data);
     return {};
   }
   this->add(name, domain, data_type, initializer);
