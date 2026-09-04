@@ -4390,8 +4390,7 @@ void stroke_modifiers_check(Depsgraph &depsgraph, Object &ob, const Brush *brush
 {
   SculptSession &ss = *ob.runtime->sculpt_session;
 
-  if (ss.shapekey_active || ss.deform_modifiers_active)
-  {
+  if (ss.shapekey_active || ss.deform_modifiers_active) {
     BLI_assert(ss.pbvh->type() == bke::pbvh::Type::Mesh);
     BKE_sculptsession_update_for_edit(
         &depsgraph, &ob, brush_type_is_paint(brush->sculpt_brush_type));
