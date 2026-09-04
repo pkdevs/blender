@@ -3,3 +3,4 @@ Referenced by issue #161331, Simulation, Cloth Dynamics: Torn pieces from object
 Referenced by issue #161397, Default Materials for Geometry Nodes Don't Populate In Modifier Panel (5.2)
 Referenced by issue #117863, Window size is broken in Linux Gnome Wayland
 Referenced by issue #162344, Crash creating library override on character.
+Referenced by pull request #163513, Wip: Fix: crash converting an attribute to an incompatible type
