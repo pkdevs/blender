@@ -2109,12 +2109,14 @@ static void rna_def_constraint_locked_track(BlenderRNA *brna)
   prop = RNA_def_property(srna, "track_axis", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "trackflag");
   RNA_def_property_enum_items(prop, track_axis_items);
+  RNA_def_property_enum_default(prop, TRACK_Y);
   RNA_def_property_ui_text(prop, "Track Axis", "Axis that points to the target object");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "lock_axis", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "lockflag");
   RNA_def_property_enum_items(prop, lock_items);
+  RNA_def_property_enum_default(prop, LOCK_Z);
   RNA_def_property_ui_text(prop, "Locked Axis", "Axis that points upward");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
@@ -3170,6 +3172,7 @@ static void rna_def_constraint_damped_track(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "track_axis", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "trackflag");
+  RNA_def_property_enum_default(prop, TRACK_Y);
   RNA_def_property_enum_items(prop, track_axis_items);
   RNA_def_property_ui_text(prop, "Track Axis", "Axis that points to the target object");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
@@ -3297,6 +3300,7 @@ static void rna_def_constraint_spline_ik(BlenderRNA *brna)
   prop = RNA_def_property(srna, "y_scale_mode", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "yScaleMode");
   RNA_def_property_enum_items(prop, splineik_y_scale_mode);
+  RNA_def_property_enum_default(prop, CONSTRAINT_SPLINEIK_YS_FIT_CURVE);
   RNA_def_property_ui_text(prop,
                            "Y Scale Mode",
                            "Method used for determining the scaling of the Y axis of the bones, "
