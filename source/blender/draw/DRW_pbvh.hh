@@ -61,6 +61,7 @@ class DrawCache : public bke::pbvh::DrawCache {
   /**
    * Recalculate and copy data as necessary to prepare batches for drawing triangles for a
    * specific combination of attributes.
+   * \note Calls within the drawing of a single viewport must use the same nodes_to_update mask.
    */
   virtual Span<gpu::Batch *> ensure_tris_batches(const Object &object,
                                                  const ViewportRequest &request,
@@ -68,6 +69,7 @@ class DrawCache : public bke::pbvh::DrawCache {
   /**
    * Recalculate and copy data as necessary to prepare batches for drawing wireframe geometry for a
    * specific combination of attributes.
+   * \note Calls within the drawing of a single viewport must use the same nodes_to_update mask.
    */
   virtual Span<gpu::Batch *> ensure_lines_batches(const Object &object,
                                                   const ViewportRequest &request,
@@ -78,11 +80,6 @@ class DrawCache : public bke::pbvh::DrawCache {
    * index, as ensured by the BVH building process).
    */
   virtual Span<int> ensure_material_indices(const Object &object) = 0;
-  /**
-   * Prepare the shared vertex/index buffer layout for the given leaf nodes, so they are ready to
-   * have their data extracted and batches configured. Should be called before requesting batches.
-   */
-  virtual void ensure_node_ranges(const Object &object, const IndexMask &all_leaf_nodes) = 0;
 };
 
 DrawCache &ensure_draw_data(std::unique_ptr<bke::pbvh::DrawCache> &ptr);

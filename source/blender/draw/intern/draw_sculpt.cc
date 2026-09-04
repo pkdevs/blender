@@ -107,15 +107,9 @@ static Vector<SculptBatch> sculpt_batches_get_ex(const Object *ob,
 
   /* In the future we expect that update_only_visible nodes will be removed to support GPU driven
    * pipelines better. Only visible nodes is an CPU based optimization but does not provide the GPU
-   * with the actual data it needs. Currently the draw_data already expects all leaf nodes to
-   * reduce complexity.
-   *
-   * When only updating visible nodes not all updates that happen in PBVH will be detected, and
-   * leads to invalid batches or buffers. */
-  const IndexMask all_leaf_nodes = bke::pbvh::all_leaf_nodes(*pbvh, memory);
-  const IndexMask &nodes_to_update = update_only_visible ? visible_nodes : all_leaf_nodes;
-
-  draw_data.ensure_node_ranges(*ob, all_leaf_nodes);
+   * with the actual data it needs. */
+  const IndexMask nodes_to_update = update_only_visible ? visible_nodes :
+                                                          bke::pbvh::all_leaf_nodes(*pbvh, memory);
 
   Span<gpu::Batch *> batches;
   if (use_wire) {
