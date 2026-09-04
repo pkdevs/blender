@@ -1945,6 +1945,7 @@ static void rna_def_constraint_action(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "transform_channel", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "type");
+  RNA_def_property_enum_default(prop, 20);
   RNA_def_property_enum_items(prop, transform_channel_items);
   RNA_def_property_ui_text(
       prop,
