@@ -95,10 +95,10 @@ struct Buffer {
     if (sizes[node_index] == new_len) {
       return false;
     }
-    const bool was_acquired = acquired[node_index];
+    const bool was_acquired = this->acquired[node_index];
     if (was_acquired) {
       space.release(offsets[node_index], sizes[node_index]);
-      acquired[node_index].reset();
+      this->acquired[node_index].reset();
     }
     this->sizes[node_index] = new_len;
     return was_acquired;
@@ -112,7 +112,7 @@ struct Buffer {
     BLI_assert(!acquired[node_index]);
     const int64_t offset = space.acquire(sizes[node_index]);
     this->offsets[node_index] = offset;
-    acquired[node_index].set();
+    this->acquired[node_index].set();
   }
 
   /** \brief Release the previously-acquired space of node #node_index back to #space. */
@@ -120,7 +120,7 @@ struct Buffer {
   {
     BLI_assert(acquired[node_index]);
     space.release(offsets[node_index], sizes[node_index]);
-    acquired[node_index].reset();
+    this->acquired[node_index].reset();
   }
 
   void resize(const int64_t n)
@@ -140,8 +140,8 @@ struct Buffer {
    */
   IndexRange scratch_range(int node_index, int64_t scratch_offset) const
   {
-    return acquired[node_index] ? IndexRange(scratch_offset, sizes[node_index]) :
-                                  IndexRange(scratch_offset, 0);
+    return this->acquired[node_index] ? IndexRange(scratch_offset, this->sizes[node_index]) :
+                                        IndexRange(scratch_offset, 0);
   }
 };
 
