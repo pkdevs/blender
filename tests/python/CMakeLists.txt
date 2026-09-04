@@ -250,6 +250,13 @@ add_blender_test(
   --python ${CMAKE_CURRENT_LIST_DIR}/bl_disk_file_hash_service_test.py
 )
 
+# Runs outside of Blender, Blender is run with different command line arguments.
+add_python_test(
+  script_blend_autoexec_cli
+  ${CMAKE_CURRENT_LIST_DIR}/bl_blend_autoexec_cli.py
+  --blender "${TEST_BLENDER_EXE}"
+)
+
 # test running operators doesn't segfault under various conditions
 if(WITH_TESTS_EXPERIMENTAL)
   add_blender_test(
@@ -1837,6 +1844,13 @@ if(WITH_UI_TESTS)
     test_tool_activation.node_editor
     test_tool_activation.sequencer
     test_preferences_draw_all.test_preferences_draw_all
+    test_blend_autoexec.pref_enabled_drop_blend_file_untrusted
+    test_blend_autoexec.pref_enabled_drop_blend_file_trusted
+    test_blend_autoexec.pref_enabled_open_file_selector_trusted
+    test_blend_autoexec.pref_enabled_open_file_selector_untrusted
+    test_blend_autoexec.pref_disabled_open_file_selector
+    test_blend_autoexec.pref_disabled_drop_blend_file
+    test_blend_autoexec.pref_disabled_drop_blend_file_trusted_source
   )
   foreach(ui_test ${_ui_tests})
     add_blender_test_ui(
