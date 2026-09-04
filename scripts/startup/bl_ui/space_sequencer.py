@@ -304,14 +304,16 @@ class SEQUENCER_PT_sequencer_overlay_thumbnails(Panel):
 
     def draw_header(self, context):
         overlay_settings = context.space_data.timeline_overlay
-        self.layout.prop(overlay_settings, "show_thumbnails", text="")
+        layout = self.layout
+        layout.active = context.space_data.show_overlays
+        layout.prop(overlay_settings, "show_thumbnails", text="")
 
     def draw(self, context):
         st = context.space_data
         overlay_settings = st.timeline_overlay
         layout = self.layout
 
-        layout.active = st.show_overlays
+        layout.active = st.show_overlays and overlay_settings.show_thumbnails
 
         row = layout.row()
         row.prop(overlay_settings, "thumbnail_display_style", expand=True)
