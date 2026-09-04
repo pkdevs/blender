@@ -1915,7 +1915,7 @@ void BKE_pose_blend_write(BlendWriter *writer, bPose *pose)
 
     writer->write_struct(&chan, [](BlendStructWriter &struct_writer) {
       struct_writer.reset_runtime_fields<bPoseChannel>(
-          [&](bPoseChannel &chan) { memset((void *)&chan.runtime, 0, sizeof(chan.runtime)); });
+          [&](bPoseChannel &chan) { chan.runtime = {}; });
     });
   }
 

@@ -1120,8 +1120,10 @@ static void pixel_subtype_forward_compat(BlendWriter *writer, const bNodeSocket 
   sock_copy->default_value = sock.default_value;
   sock_copy->prop = sock.prop;
   writer->write_struct_at_address(&sock, sock_copy, [](BlendStructWriter &struct_writer) {
-    struct_writer.runtime_ptr(offsetof(bNodeSocket, runtime));
-    struct_writer.runtime_ptr(offsetof(bNodeSocket, typeinfo));
+    struct_writer.reset_runtime_fields<bNodeSocket>([](bNodeSocket &sock) {
+      sock.runtime = nullptr;
+      sock.typeinfo = nullptr;
+    });
   });
   sock_copy->default_value = default_value_copy;
   sock_copy->prop = prop_copy;
