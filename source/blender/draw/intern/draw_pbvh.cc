@@ -2520,15 +2520,6 @@ static void create_lines_index_faces(const OffsetIndices<int> faces,
                                      const int64_t ibo_len,
                                      uint32_t *host_data)
 {
-  int corners_count = 0;
-  for (const int face : face_indices) {
-    if (!hide_poly.is_empty() && hide_poly[face]) {
-      continue;
-    }
-    corners_count += faces[face].size();
-  }
-  BLI_assert(uint(ibo_len) == 2 * corners_count);
-
   MutableSpan<uint2> data = MutableSpan<uint32_t>(host_data, ibo_len).cast<uint2>();
 
   int node_corner_offset = 0;
@@ -2950,19 +2941,6 @@ static void create_tri_index_mesh(const OffsetIndices<int> faces,
                                   uint32_t *host_data)
 {
   const Span<int> face_indices = node.faces();
-  int tris_num = 0;
-  if (hide_poly.is_empty()) {
-    tris_num = poly_to_tri_count(face_indices.size(), node.corners_num());
-  }
-  else {
-    for (const int face : face_indices) {
-      if (hide_poly[face]) {
-        continue;
-      }
-      tris_num += bke::mesh::face_triangles_num(faces[face].size());
-    }
-  }
-  BLI_assert(uint(ibo_len) == 3 * tris_num);
 
   MutableSpan<uint3> data = MutableSpan<uint32_t>(host_data, ibo_len).cast<uint3>();
 
