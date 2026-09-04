@@ -1490,6 +1490,7 @@ static void node_widgets()
   WM_gizmogrouptype_append_and_link(gzmap_type, NODE_GGT_backdrop_box_mask);
   WM_gizmogrouptype_append_and_link(gzmap_type, NODE_GGT_backdrop_ellipse_mask);
   WM_gizmogrouptype_append_and_link(gzmap_type, NODE_GGT_backdrop_split);
+  WM_gizmogrouptype_append_and_link(gzmap_type, NODE_GGT_compositor_translate);
 }
 
 static void node_id_remap(ID *old_id, ID *new_id, SpaceNode *snode)
@@ -1864,6 +1865,7 @@ void ED_spacetype_node()
   /* regions: list-view/buttons */
   art = MEM_new_zeroed<ARegionType>("spacetype node region");
   art->regionid = RGN_TYPE_UI;
+  art->flag = ARegionTypeFlag::UsePanelCategoriesSearch;
   art->prefsizex = UI_SIDEBAR_PANEL_WIDTH;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_FRAMES;
   art->listener = node_region_listener;
