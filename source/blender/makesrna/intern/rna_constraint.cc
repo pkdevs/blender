@@ -1472,16 +1472,19 @@ static void rna_def_constraint_locate_like(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_x", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", LOCLIKE_X);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Copy X", "Copy the target's X location");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "use_y", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", LOCLIKE_Y);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Copy Y", "Copy the target's Y location");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "use_z", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", LOCLIKE_Z);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Copy Z", "Copy the target's Z location");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
@@ -1546,16 +1549,19 @@ static void rna_def_constraint_rotate_like(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_x", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", ROTLIKE_X);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Copy X", "Copy the target's X rotation");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "use_y", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", ROTLIKE_Y);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Copy Y", "Copy the target's Y rotation");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "use_z", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", ROTLIKE_Z);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Copy Z", "Copy the target's Z rotation");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
