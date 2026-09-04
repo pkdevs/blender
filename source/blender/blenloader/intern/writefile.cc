@@ -154,7 +154,7 @@ namespace blender {
  * Generate an additional file next to every saved .blend file that contains the file content in a
  * more human readable form.
  */
-#define GENERATE_DEBUG_BLEND_FILE 1
+#define GENERATE_DEBUG_BLEND_FILE 0
 #define DEBUG_BLEND_FILE_SUFFIX ".debug.txt"
 
 /* ********* my write, buffered writing with minimum size chunks ************ */
