@@ -120,8 +120,8 @@ static void window_manager_blend_write(BlendWriter *writer, ID *id, const void *
 
   wm->runtime = nullptr;
 
-  writer->write_id_struct(id_address, wm, [](BlendStructWriter &struct_writer) {
-    wmWindowManager &shallow_wm = struct_writer.shallow_copy_to_write<wmWindowManager>();
+  writer->write_id_struct(id_address, wm, [](BlendStructWriter<wmWindowManager> &struct_writer) {
+    wmWindowManager &shallow_wm = struct_writer.shallow_data;
     shallow_wm.init_flag = {};
     shallow_wm.op_undo_depth = 0;
     shallow_wm.outliner_sync_select_dirty = {};
@@ -136,8 +136,8 @@ static void window_manager_blend_write(BlendWriter *writer, ID *id, const void *
     /* Update deprecated screen member (for so loading in 2.7x uses the correct screen). */
     win.screen = BKE_workspace_active_screen_get(win.workspace_hook);
 
-    writer->write_struct(&win, [](BlendStructWriter &struct_writer) {
-      wmWindow &shallow_win = struct_writer.shallow_copy_to_write<wmWindow>();
+    writer->write_struct(&win, [](BlendStructWriter<wmWindow> &struct_writer) {
+      wmWindow &shallow_win = struct_writer.shallow_data;
       shallow_win.active = 0;
       shallow_win.grabcursor = 0;
       shallow_win.addmousemove = 0;

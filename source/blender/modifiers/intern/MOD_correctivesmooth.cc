@@ -787,11 +787,10 @@ static void blend_write(BlendWriter *writer, const ID *id_owner, const ModifierD
     /* Modifier coming from linked data cannot be bound from an override, so we can remove all
      * binding data, can save a significant amount of memory. */
     BLI_assert(!ID_IS_LINKED(id_owner));
-    writer->write_struct(csmd, [](BlendStructWriter &struct_writer) {
-      auto &shallow_csmd = struct_writer.shallow_copy_to_write<CorrectiveSmoothModifierData>();
-      shallow_csmd.bind_coords_num = 0;
-      shallow_csmd.bind_coords = nullptr;
-      shallow_csmd.bind_coords_sharing_info = nullptr;
+    writer->write_struct(csmd, [](BlendStructWriter<CorrectiveSmoothModifierData> &struct_writer) {
+      struct_writer.shallow_data.bind_coords_num = 0;
+      struct_writer.shallow_data.bind_coords = nullptr;
+      struct_writer.shallow_data.bind_coords_sharing_info = nullptr;
     });
     return;
   }

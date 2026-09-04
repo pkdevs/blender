@@ -863,9 +863,8 @@ static void object_blend_write(BlendWriter *writer, ID *id, const void *id_addre
     writer->write_struct(ob->lightgroup);
   }
   if (ob->light_linking) {
-    writer->write_struct(ob->light_linking, [](BlendStructWriter &struct_writer) {
-      LightLinking &shallow_linking = struct_writer.shallow_copy_to_write<LightLinking>();
-      shallow_linking.runtime = {};
+    writer->write_struct(ob->light_linking, [](BlendStructWriter<LightLinking> &struct_writer) {
+      struct_writer.shallow_data.runtime = {};
     });
   }
 

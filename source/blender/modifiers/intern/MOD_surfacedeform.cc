@@ -1643,11 +1643,10 @@ static void blend_write(BlendWriter *writer, const ID *id_owner, const ModifierD
     /* Modifier coming from linked data cannot be bound from an override, so we can remove all
      * binding data, can save a significant amount of memory. */
     BLI_assert(!ID_IS_LINKED(id_owner));
-    writer->write_struct(smd, [](BlendStructWriter &struct_writer) {
-      auto &shallow_smd = struct_writer.shallow_copy_to_write<SurfaceDeformModifierData>();
-      shallow_smd.bind_verts_num = 0;
-      shallow_smd.verts = nullptr;
-      shallow_smd.verts_sharing_info = nullptr;
+    writer->write_struct(smd, [](BlendStructWriter<SurfaceDeformModifierData> &struct_writer) {
+      struct_writer.shallow_data.bind_verts_num = 0;
+      struct_writer.shallow_data.verts = nullptr;
+      struct_writer.shallow_data.verts_sharing_info = nullptr;
     });
     return;
   }

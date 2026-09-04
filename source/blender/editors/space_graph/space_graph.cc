@@ -957,9 +957,8 @@ static void graph_space_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
 static void graph_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
   SpaceGraph *sipo = reinterpret_cast<SpaceGraph *>(sl);
-  writer->write_struct_cast<SpaceGraph>(sl, [](BlendStructWriter &struct_writer) {
-    SpaceGraph &shallow_sipo = struct_writer.shallow_copy_to_write<SpaceGraph>();
-    shallow_sipo.runtime = {};
+  writer->write_struct_cast<SpaceGraph>(sl, [](BlendStructWriter<SpaceGraph> &struct_writer) {
+    struct_writer.shallow_data.runtime = {};
   });
   if (sipo->ads) {
     writer->write_struct(sipo->ads);

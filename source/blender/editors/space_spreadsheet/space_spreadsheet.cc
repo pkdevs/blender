@@ -738,10 +738,10 @@ static void spreadsheet_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
 
 static void spreadsheet_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
-  writer->write_struct_cast<SpaceSpreadsheet>(sl, [](BlendStructWriter &struct_writer) {
-    SpaceSpreadsheet &shallow_ss = struct_writer.shallow_copy_to_write<SpaceSpreadsheet>();
-    shallow_ss.runtime = nullptr;
-  });
+  writer->write_struct_cast<SpaceSpreadsheet>(
+      sl, [](BlendStructWriter<SpaceSpreadsheet> &struct_writer) {
+        struct_writer.shallow_data.runtime = nullptr;
+      });
   SpaceSpreadsheet *sspreadsheet = reinterpret_cast<SpaceSpreadsheet *>(sl);
 
   for (SpreadsheetRowFilter &row_filter : sspreadsheet->row_filters) {

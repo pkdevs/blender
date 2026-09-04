@@ -825,11 +825,10 @@ static void blend_write(BlendWriter *writer, const ID *id_owner, const ModifierD
     /* Modifier coming from linked data cannot be bound from an override, so we can remove all
      * binding data, can save a significant amount of memory. */
     BLI_assert(!ID_IS_LINKED(id_owner));
-    writer->write_struct(lmd, [](BlendStructWriter &struct_writer) {
-      auto &shallow_lmd = struct_writer.shallow_copy_to_write<LaplacianDeformModifierData>();
-      shallow_lmd.verts_num = 0;
-      shallow_lmd.vertexco = nullptr;
-      shallow_lmd.vertexco_sharing_info = nullptr;
+    writer->write_struct(lmd, [](BlendStructWriter<LaplacianDeformModifierData> &struct_writer) {
+      struct_writer.shallow_data.verts_num = 0;
+      struct_writer.shallow_data.vertexco = nullptr;
+      struct_writer.shallow_data.vertexco_sharing_info = nullptr;
     });
     return;
   }

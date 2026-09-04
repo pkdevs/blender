@@ -312,15 +312,16 @@ static void action_foreach_id(ID *id, LibraryForeachIDData *data)
 
 static void write_channelbag(BlendWriter *writer, animrig::Channelbag &channelbag)
 {
-  writer->write_struct_cast<ActionChannelbag>(&channelbag, [](BlendStructWriter &struct_writer) {
-    ActionChannelbag &shallow_bag = struct_writer.shallow_copy_to_write<ActionChannelbag>();
-    if (shallow_bag.group_array_num == 0) {
-      shallow_bag.group_array = nullptr;
-    }
-    if (shallow_bag.fcurve_array_num == 0) {
-      shallow_bag.fcurve_array = nullptr;
-    }
-  });
+  writer->write_struct_cast<ActionChannelbag>(
+      &channelbag, [](BlendStructWriter<ActionChannelbag> &struct_writer) {
+        ActionChannelbag &shallow_bag = struct_writer.shallow_data;
+        if (shallow_bag.group_array_num == 0) {
+          shallow_bag.group_array = nullptr;
+        }
+        if (shallow_bag.fcurve_array_num == 0) {
+          shallow_bag.fcurve_array = nullptr;
+        }
+      });
 
   Span<bActionGroup *> groups = channelbag.channel_groups();
   writer->write_pointer_array(groups.size(), groups.data());
@@ -331,9 +332,8 @@ static void write_channelbag(BlendWriter *writer, animrig::Channelbag &channelba
   Span<FCurve *> fcurves = channelbag.fcurves();
   writer->write_pointer_array(fcurves.size(), fcurves.data());
   for (FCurve *fcurve : fcurves) {
-    writer->write_struct(fcurve, [](BlendStructWriter &struct_writer) {
-      FCurve &shallow_fcurve = struct_writer.shallow_copy_to_write<FCurve>();
-      shallow_fcurve.runtime = nullptr;
+    writer->write_struct(fcurve, [](BlendStructWriter<FCurve> &struct_writer) {
+      struct_writer.shallow_data.runtime = nullptr;
     });
     BKE_fcurve_blend_write_data(writer, fcurve);
   }
@@ -385,9 +385,8 @@ static void write_slots(BlendWriter *writer, Span<animrig::Slot *> slots)
 {
   writer->write_pointer_array(slots.size(), slots.data());
   for (animrig::Slot *slot : slots) {
-    writer->write_struct_cast<ActionSlot>(slot, [](BlendStructWriter &struct_writer) {
-      ActionSlot &shallow_slot = struct_writer.shallow_copy_to_write<ActionSlot>();
-      shallow_slot.runtime = nullptr;
+    writer->write_struct_cast<ActionSlot>(slot, [](BlendStructWriter<ActionSlot> &struct_writer) {
+      struct_writer.shallow_data.runtime = nullptr;
     });
   }
 }
@@ -1911,9 +1910,8 @@ void BKE_pose_blend_write(BlendWriter *writer, bPose *pose)
 
     bke::motionpath::blend_write(writer, chan.mpath);
 
-    writer->write_struct(&chan, [](BlendStructWriter &struct_writer) {
-      bPoseChannel &shallow_chan = struct_writer.shallow_copy_to_write<bPoseChannel>();
-      shallow_chan.runtime = {};
+    writer->write_struct(&chan, [](BlendStructWriter<bPoseChannel> &struct_writer) {
+      struct_writer.shallow_data.runtime = {};
     });
   }
 
@@ -1931,9 +1929,8 @@ void BKE_pose_blend_write(BlendWriter *writer, bPose *pose)
   }
 
   /* Write this pose */
-  writer->write_struct(pose, [](BlendStructWriter &struct_writer) {
-    bPose &shallow_pose = struct_writer.shallow_copy_to_write<bPose>();
-    shallow_pose.runtime = nullptr;
+  writer->write_struct(pose, [](BlendStructWriter<bPose> &struct_writer) {
+    struct_writer.shallow_data.runtime = nullptr;
   });
 }
 

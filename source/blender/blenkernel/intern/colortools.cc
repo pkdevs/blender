@@ -1507,8 +1507,8 @@ int BKE_curvemapping_num_channels(const CurveMapping *cumap)
 
 void BKE_curvemapping_blend_write(BlendWriter *writer, const CurveMapping *cumap)
 {
-  writer->write_struct(cumap, [](BlendStructWriter &struct_writer) {
-    CurveMapping &shallow_cumap = struct_writer.shallow_copy_to_write<CurveMapping>();
+  writer->write_struct(cumap, [](BlendStructWriter<CurveMapping> &struct_writer) {
+    CurveMapping &shallow_cumap = struct_writer.shallow_data;
     shallow_cumap.changed_timestamp = 0;
     for (const int i : IndexRange(CM_TOT)) {
       shallow_cumap.cm[i].range = 0;

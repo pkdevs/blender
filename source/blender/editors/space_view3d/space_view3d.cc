@@ -1652,14 +1652,14 @@ static void view3d_space_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
 static void view3d_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
   View3D *v3d = reinterpret_cast<View3D *>(sl);
-  writer->write_struct(v3d, [](BlendStructWriter &struct_writer) {
-    View3D &shallow_v3d = struct_writer.shallow_copy_to_write<View3D>();
+  writer->write_struct(v3d, [](BlendStructWriter<View3D> &struct_writer) {
+    View3D &shallow_v3d = struct_writer.shallow_data;
     memset((void *)&shallow_v3d.runtime, 0, sizeof(shallow_v3d.runtime));
   });
 
   if (v3d->localvd) {
-    writer->write_struct(v3d->localvd, [](BlendStructWriter &struct_writer) {
-      View3D &shallow_v3d = struct_writer.shallow_copy_to_write<View3D>();
+    writer->write_struct(v3d->localvd, [](BlendStructWriter<View3D> &struct_writer) {
+      View3D &shallow_v3d = struct_writer.shallow_data;
       memset((void *)&shallow_v3d.runtime, 0, sizeof(shallow_v3d.runtime));
     });
   }

@@ -1087,14 +1087,15 @@ static void buttons_space_blend_read_after_liblink(BlendLibReader * /*reader*/,
 
 static void buttons_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
-  writer->write_struct_cast<SpaceProperties>(sl, [](BlendStructWriter &struct_writer) {
-    SpaceProperties &shallow_sbuts = struct_writer.shallow_copy_to_write<SpaceProperties>();
-    shallow_sbuts.path = nullptr;
-    shallow_sbuts.pathflag = 0;
-    shallow_sbuts.dataicon = 0;
-    shallow_sbuts.texuser = nullptr;
-    shallow_sbuts.runtime = nullptr;
-  });
+  writer->write_struct_cast<SpaceProperties>(
+      sl, [](BlendStructWriter<SpaceProperties> &struct_writer) {
+        SpaceProperties &shallow_sbuts = struct_writer.shallow_data;
+        shallow_sbuts.path = nullptr;
+        shallow_sbuts.pathflag = 0;
+        shallow_sbuts.dataicon = 0;
+        shallow_sbuts.texuser = nullptr;
+        shallow_sbuts.runtime = nullptr;
+      });
 }
 
 /** \} */

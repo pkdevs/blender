@@ -128,10 +128,9 @@ static void shapekey_blend_write(BlendWriter *writer, ID *id, const void *id_add
   for (KeyBlock &kb : key->block) {
     /* Do not store actual geometry data in case this is a library override ID. */
     if (ID_IS_OVERRIDE_LIBRARY(key) && !is_undo) {
-      writer->write_struct(&kb, [](BlendStructWriter &struct_writer) {
-        KeyBlock &shallow_kb = struct_writer.shallow_copy_to_write<KeyBlock>();
-        shallow_kb.totelem = 0;
-        shallow_kb.data = nullptr;
+      writer->write_struct(&kb, [](BlendStructWriter<KeyBlock> &struct_writer) {
+        struct_writer.shallow_data.totelem = 0;
+        struct_writer.shallow_data.data = nullptr;
       });
     }
     else {

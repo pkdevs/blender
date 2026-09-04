@@ -217,8 +217,8 @@ static void screen_blend_write(BlendWriter *writer, ID *id, const void *id_addre
       dna::sdna_struct_id_get<bScreen>(),
       id_address,
       screen,
-      [&](BlendStructWriter &struct_writer) {
-        bScreen &shallow_screen = struct_writer.shallow_copy_to_write<bScreen>();
+      [&](BlendStructWriterVoid &struct_writer) {
+        bScreen &shallow_screen = struct_writer.typed<bScreen>().shallow_data;
         if (!writer->is_undo()) {
           shallow_screen.id.session_uid = 0;
           shallow_screen.id.recalc = 0;
@@ -1393,8 +1393,8 @@ static void zero_regionview3d_runtime_fields(RegionView3D &rv3d)
 
 static void write_region(BlendWriter *writer, ARegion *region, int spacetype)
 {
-  writer->write_struct(region, [](BlendStructWriter &struct_writer) {
-    ARegion &shallow_region = struct_writer.shallow_copy_to_write<ARegion>();
+  writer->write_struct(region, [](BlendStructWriter<ARegion> &struct_writer) {
+    ARegion &shallow_region = struct_writer.shallow_data;
     shallow_region.runtime = nullptr;
     shallow_region.flag &= ~(RGN_FLAG_TOO_SMALL | RGN_FLAG_POLL_FAILED | RGN_FLAG_SIZE_CLAMP_X |
                              RGN_FLAG_SIZE_CLAMP_Y | RGN_FLAG_SEARCH_FILTER_ACTIVE |
@@ -1431,16 +1431,15 @@ static void write_region(BlendWriter *writer, ARegion *region, int spacetype)
       case SPACE_VIEW3D:
         if (region->regiontype == RGN_TYPE_WINDOW) {
           RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
-          writer->write_struct(rv3d, [](BlendStructWriter &struct_writer) {
-            RegionView3D &shallow_rv3d = struct_writer.shallow_copy_to_write<RegionView3D>();
-            zero_regionview3d_runtime_fields(shallow_rv3d);
+          writer->write_struct(rv3d, [](BlendStructWriter<RegionView3D> &struct_writer) {
+            zero_regionview3d_runtime_fields(struct_writer.shallow_data);
           });
 
           if (rv3d->localvd) {
-            writer->write_struct(rv3d->localvd, [](BlendStructWriter &struct_writer) {
-              RegionView3D &shallow_rv3d = struct_writer.shallow_copy_to_write<RegionView3D>();
-              zero_regionview3d_runtime_fields(shallow_rv3d);
-            });
+            writer->write_struct(rv3d->localvd,
+                                 [](BlendStructWriter<RegionView3D> &struct_writer) {
+                                   zero_regionview3d_runtime_fields(struct_writer.shallow_data);
+                                 });
           }
           if (rv3d->clipbb) {
             writer->write_struct(rv3d->clipbb);
@@ -1468,10 +1467,9 @@ static void write_uilist(BlendWriter *writer, uiList *ui_list)
 static void write_panel_list(BlendWriter *writer, ListBaseT<Panel> *lb)
 {
   for (Panel &panel : *lb) {
-    writer->write_struct(&panel, [](BlendStructWriter &struct_writer) {
-      Panel &shallow_panel = struct_writer.shallow_copy_to_write<Panel>();
-      shallow_panel.runtime_flag = 0;
-      shallow_panel.runtime = nullptr;
+    writer->write_struct(&panel, [](BlendStructWriter<Panel> &struct_writer) {
+      struct_writer.shallow_data.runtime_flag = 0;
+      struct_writer.shallow_data.runtime = nullptr;
     });
     writer->write_struct_list(&panel.layout_panel_states);
     for (LayoutPanelState &state : panel.layout_panel_states) {
@@ -1496,10 +1494,9 @@ static void write_area(BlendWriter *writer, ScrArea *area)
     }
 
     for (uiPreview &ui_preview : region.ui_previews) {
-      writer->write_struct(&ui_preview, [](BlendStructWriter &struct_writer) {
-        uiPreview &shallow_ui_preview = struct_writer.shallow_copy_to_write<uiPreview>();
-        shallow_ui_preview.tag = {};
-        shallow_ui_preview.id_session_uid = 0;
+      writer->write_struct(&ui_preview, [](BlendStructWriter<uiPreview> &struct_writer) {
+        struct_writer.shallow_data.tag = {};
+        struct_writer.shallow_data.id_session_uid = 0;
       });
     }
 
@@ -1531,8 +1528,8 @@ void BKE_screen_area_map_blend_write(BlendWriter *writer, ScrAreaMap *area_map)
   for (ScrArea &area : area_map->areabase) {
     area.butspacetype = area.spacetype; /* Just for compatibility, will be reset below. */
 
-    writer->write_struct(&area, [](BlendStructWriter &struct_writer) {
-      ScrArea &shallow_area = struct_writer.shallow_copy_to_write<ScrArea>();
+    writer->write_struct(&area, [](BlendStructWriter<ScrArea> &struct_writer) {
+      ScrArea &shallow_area = struct_writer.shallow_data;
       shallow_area.type = nullptr;
       shallow_area.do_refresh = 0;
       shallow_area.region_active_win = -1;

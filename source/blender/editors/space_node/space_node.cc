@@ -1753,9 +1753,8 @@ static void node_space_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
 static void node_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
   SpaceNode *snode = reinterpret_cast<SpaceNode *>(sl);
-  writer->write_struct_cast<SpaceNode>(snode, [](BlendStructWriter &struct_writer) {
-    SpaceNode &shallow_snode = struct_writer.shallow_copy_to_write<SpaceNode>();
-    shallow_snode.runtime = nullptr;
+  writer->write_struct_cast<SpaceNode>(snode, [](BlendStructWriter<SpaceNode> &struct_writer) {
+    struct_writer.shallow_data.runtime = nullptr;
   });
 
   for (bNodeTreePath &path : snode->treepath) {

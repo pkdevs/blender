@@ -601,10 +601,9 @@ static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space
 
     if (data) {
       writer->write_struct_cast<SpaceOutliner>(
-          space_outliner, [](BlendStructWriter &struct_writer) {
-            SpaceOutliner &shallow_so = struct_writer.shallow_copy_to_write<SpaceOutliner>();
-            shallow_so.runtime = nullptr;
-            shallow_so.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
+          space_outliner, [](BlendStructWriter<SpaceOutliner> &struct_writer) {
+            struct_writer.shallow_data.runtime = nullptr;
+            struct_writer.shallow_data.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
           });
 
       /* To store #TreeStore (instead of the mempool), two unique memory addresses are needed,
@@ -639,20 +638,19 @@ static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space
     }
     else {
       writer->write_struct_cast<SpaceOutliner>(
-          space_outliner, [](BlendStructWriter &struct_writer) {
-            SpaceOutliner &shallow_so = struct_writer.shallow_copy_to_write<SpaceOutliner>();
-            shallow_so.treestore = nullptr;
-            shallow_so.runtime = nullptr;
-            shallow_so.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
+          space_outliner, [](BlendStructWriter<SpaceOutliner> &struct_writer) {
+            struct_writer.shallow_data.treestore = nullptr;
+            struct_writer.shallow_data.runtime = nullptr;
+            struct_writer.shallow_data.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
           });
     }
   }
   else {
-    writer->write_struct_cast<SpaceOutliner>(space_outliner, [](BlendStructWriter &struct_writer) {
-      SpaceOutliner &shallow_so = struct_writer.shallow_copy_to_write<SpaceOutliner>();
-      shallow_so.runtime = nullptr;
-      shallow_so.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
-    });
+    writer->write_struct_cast<SpaceOutliner>(
+        space_outliner, [](BlendStructWriter<SpaceOutliner> &struct_writer) {
+          struct_writer.shallow_data.runtime = nullptr;
+          struct_writer.shallow_data.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
+        });
   }
 }
 

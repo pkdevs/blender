@@ -1098,10 +1098,10 @@ static const Map<StringRef, StringRef> &subtype_pixel_to_none()
 template<typename ValueType>
 static void write_default_value_none_subtype(BlendWriter *writer, const void *default_value)
 {
-  writer->write_struct_cast<ValueType>(default_value, [](BlendStructWriter &struct_writer) {
-    ValueType &shallow_value = struct_writer.shallow_copy_to_write<ValueType>();
-    shallow_value.subtype = PROP_NONE;
-  });
+  writer->write_struct_cast<ValueType>(default_value,
+                                       [](BlendStructWriter<ValueType> &struct_writer) {
+                                         struct_writer.shallow_data.subtype = PROP_NONE;
+                                       });
 }
 
 static void pixel_subtype_forward_compat(BlendWriter *writer, const bNodeSocket &sock)
@@ -1120,11 +1120,11 @@ static void pixel_subtype_forward_compat(BlendWriter *writer, const bNodeSocket 
   IDProperty *prop_copy = sock_copy->prop;
   sock_copy->default_value = sock.default_value;
   sock_copy->prop = sock.prop;
-  writer->write_struct_at_address(&sock, sock_copy, [](BlendStructWriter &struct_writer) {
-    bNodeSocket &shallow_sock = struct_writer.shallow_copy_to_write<bNodeSocket>();
-    shallow_sock.runtime = nullptr;
-    shallow_sock.typeinfo = nullptr;
-  });
+  writer->write_struct_at_address(
+      &sock, sock_copy, [](BlendStructWriter<bNodeSocket> &struct_writer) {
+        struct_writer.shallow_data.runtime = nullptr;
+        struct_writer.shallow_data.typeinfo = nullptr;
+      });
   sock_copy->default_value = default_value_copy;
   sock_copy->prop = prop_copy;
 
@@ -1245,10 +1245,9 @@ static void write_node_socket(BlendWriter *writer, const bNodeSocket *sock)
     return;
   }
 
-  writer->write_struct(sock, [](BlendStructWriter &struct_writer) {
-    bNodeSocket &shallow_sock = struct_writer.shallow_copy_to_write<bNodeSocket>();
-    shallow_sock.runtime = nullptr;
-    shallow_sock.typeinfo = nullptr;
+  writer->write_struct(sock, [](BlendStructWriter<bNodeSocket> &struct_writer) {
+    struct_writer.shallow_data.runtime = nullptr;
+    struct_writer.shallow_data.typeinfo = nullptr;
   });
 
   if (sock->prop) {
@@ -1380,8 +1379,8 @@ void node_tree_blend_write(BlendWriter *writer, bNodeTree *ntree)
       node->custom1 = data->parametrization;
     }
 
-    writer->write_struct(node, [](BlendStructWriter &struct_writer) {
-      bNode &shallow_node = struct_writer.shallow_copy_to_write<bNode>();
+    writer->write_struct(node, [](BlendStructWriter<bNode> &struct_writer) {
+      bNode &shallow_node = struct_writer.shallow_data;
       shallow_node.runtime = nullptr;
       shallow_node.typeinfo = nullptr;
       if (shallow_node.num_panel_states == 0) {

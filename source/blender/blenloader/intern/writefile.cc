@@ -940,7 +940,7 @@ static void writestruct_at_address_nr(WriteData *wd,
     if (has_custom_fn) {
       for (const int i : IndexRange(nr)) {
         const int offset = i * struct_info.size_in_bytes;
-        BlendStructWriter struct_writer(
+        BlendStructWriterVoid struct_writer(
             *wd,
             struct_nr,
             {static_cast<char *>(POINTER_OFFSET(buffer, offset)), struct_info.size_in_bytes});
@@ -982,7 +982,7 @@ static void writestruct_at_address_nr(WriteData *wd,
   mywrite(wd, data_to_write, size_t(bh.len));
 }
 
-void BlendStructWriter::generated_ptr(const int64_t offset)
+void BlendStructWriterVoid::generated_ptr(const int64_t offset)
 {
   if (!wd_->use_memfile) {
     /* When writing to file, all pointers are remapped to stable pointers. */
