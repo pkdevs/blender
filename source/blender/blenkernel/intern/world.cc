@@ -251,14 +251,18 @@ static void world_sky_angles_from_object(const Object &object,
   *r_azimuth = std::atan2(toward.x, toward.y);
 }
 
-/* The Sun's own temperature, which is what the sky is worked out for. A light that is not using
- * temperature leaves the Sun at this, where it costs nothing.
+/* Temperatures a light falls back to when it is not carrying one of its own, so that linking a
+ * plain light leaves each body looking exactly as it does in Manual mode. These match the node's
+ * own defaults: the Sun sits at its true temperature, which is what the sky is worked out for and
+ * so costs nothing, and the Moon sits cooler than the sunlight it reflects, which is how moonlight
+ * is seen once the eye is dark adapted.
  *
  * This repeats SKY_SUN_TEMPERATURE from intern/sky, deliberately: blenkernel does not link
  * against that library at all, and pulling it in for a single float would not be worth it. */
 static const float SUN_TEMPERATURE_KELVIN = 5778.0f;
+static const float MOON_TEMPERATURE_KELVIN = 8000.0f;
 
-/* An offset can push the Sun over the pole, which leaves a sum that is no longer an elevation.
+/* An offset can push a body over the pole, which leaves a sum that is no longer an elevation.
  * Fold it back the way the sky itself does, so the value that is stored, rendered and shown is
  * one and the same. */
 static void world_sky_canonical_angles(float *elevation, float *rotation)
@@ -308,6 +312,7 @@ static const Light *world_sky_light_data(const Object &object)
  * Manual lossless. */
 static void world_sky_resolve_tree(bNodeTree *ntree,
                                    const Object *sun_object,
+                                   const Object *moon_object,
                                    const Object *camera,
                                    Set<bNodeTree *> &visited)
 {
@@ -319,7 +324,8 @@ static void world_sky_resolve_tree(bNodeTree *ntree,
     /* Group nodes are walked into, since a sky is just as likely to be tucked inside one as it is
      * to sit at the top level. The visited set keeps a group that contains itself from looping. */
     if (ELEM(node.type_legacy, NODE_GROUP, NODE_CUSTOM_GROUP)) {
-      world_sky_resolve_tree(reinterpret_cast<bNodeTree *>(node.id), sun_object, camera, visited);
+      world_sky_resolve_tree(
+          reinterpret_cast<bNodeTree *>(node.id), sun_object, moon_object, camera, visited);
       continue;
     }
     if (node.type_legacy != SH_NODE_TEX_SKY || node.storage == nullptr) {
@@ -346,6 +352,22 @@ static void world_sky_resolve_tree(bNodeTree *ntree,
       }
     }
 
+    if (sky->moon_source == SHD_SKY_SOURCE_DRIVEN && moon_object != nullptr) {
+      float elevation, azimuth;
+      world_sky_angles_from_object(*moon_object, &elevation, &azimuth);
+      sky->moon_elevation = elevation + sky->moon_elevation_offset;
+      sky->moon_rotation = azimuth + sky->moon_rotation_offset;
+      world_sky_canonical_angles(&sky->moon_elevation, &sky->moon_rotation);
+
+      if (const Light *light = world_sky_light_data(*moon_object)) {
+        /* The Moon's light is deliberately kept apart from the Sun's, even though it started out
+         * as sunlight, so that a night can be graded on its own. */
+        sky->moon_temperature = (light->mode & LA_USE_TEMPERATURE) ? light->temperature :
+                                                                     MOON_TEMPERATURE_KELVIN;
+        copy_v3_v3(sky->moon_color, &light->r);
+      }
+    }
+
     if (sky->altitude_source == SHD_SKY_ALTITUDE_CAMERA && camera != nullptr) {
       /* How much air stands above the viewer is what the altitude is for, so it is simply how
        * high the camera is standing. Below sea level there is no more atmosphere to add, so the
@@ -363,18 +385,19 @@ static void world_sky_resolve_sources(Depsgraph *depsgraph, World *world)
   if (world->nodetree == nullptr) {
     return;
   }
-  /* Which light stands in for the Sun, and which camera is doing the looking, are properties of
-   * the scene, so they are read from the scene being evaluated rather than from the world, which
-   * several scenes may share. */
+  /* Which light stands in for which body, and which camera is doing the looking, are properties
+   * of the scene, so they are read from the scene being evaluated rather than from the world,
+   * which several scenes may share. */
   const Scene *scene = DEG_get_evaluated_scene(depsgraph);
   if (scene == nullptr) {
     return;
   }
-  if (scene->sun_object == nullptr && scene->camera == nullptr) {
+  if (scene->sun_object == nullptr && scene->moon_object == nullptr && scene->camera == nullptr) {
     return;
   }
   Set<bNodeTree *> visited;
-  world_sky_resolve_tree(world->nodetree, scene->sun_object, scene->camera, visited);
+  world_sky_resolve_tree(
+      world->nodetree, scene->sun_object, scene->moon_object, scene->camera, visited);
 }
 
 /* Whether any sky in this tree is taking its altitude from the camera. This exists so that the

@@ -5608,6 +5608,16 @@ static void def_sh_tex_sky(BlenderRNA *brna, StructRNA *srna)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
+  static const EnumPropertyItem sky_phase_source_items[] = {
+      {SHD_SKY_PHASE_DRIVEN,
+       "DRIVEN",
+       0,
+       "Driven",
+       "Work the phase out from where the Sun and the Moon are"},
+      {SHD_SKY_PHASE_MANUAL, "MANUAL", 0, "Manual", "Set the phase here"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
   prop = RNA_def_property(srna, "sun_source", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "sun_source");
   RNA_def_property_enum_items(prop, sky_source_items);
@@ -5647,6 +5657,135 @@ static void def_sh_tex_sky(BlenderRNA *brna, StructRNA *srna)
                            "that lights the sky, before the atmosphere");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 
+  prop = RNA_def_property(srna, "use_moon", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "use_moon", 1);
+  RNA_def_property_ui_text(prop,
+                           "Moon",
+                           "Include the Moon in the sky.\n"
+                           "The Moon lights the scene through the glow it puts into the sky, "
+                           "which is soft and casts no shadows. A moonlit sky never rises above "
+                           "the World's Sun Threshold, so no sun light is made from it. Link a "
+                           "light object for moonlight that casts shadows");
+  RNA_def_property_update(prop, 0, "rna_ShaderNode_socket_update");
+
+  prop = RNA_def_property(srna, "moon_source", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "moon_source");
+  RNA_def_property_enum_items(prop, sky_source_items);
+  RNA_def_property_ui_text(
+      prop, "Moon Source", "Whether the Moon follows a light object or is placed by hand");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "moon_size", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_ui_text(prop, "Moon Size", "Size of the Moon's disc");
+  RNA_def_property_range(prop, 0.0f, M_PI_2);
+  RNA_def_property_ui_range(prop, 0.0f, DEG2RADF(10.0f), 10, 4);
+  RNA_def_property_float_default(prop, DEG2RADF(0.52));
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "moon_intensity", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Moon Intensity", "Strength of the Moon");
+  RNA_def_property_range(prop, 0.0f, 1000.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 10.0f, 10, 2);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "moon_elevation", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_ui_text(prop, "Moon Elevation", "Angle of the Moon above the horizon");
+  RNA_def_property_range(prop, -M_PI_2, M_PI_2);
+  RNA_def_property_float_default(prop, DEG2RADF(40.0));
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "moon_rotation", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_ui_text(prop,
+                           "Moon Rotation",
+                           "Rotation of the Moon around the zenith, measured the same way round "
+                           "as the Sun's");
+  RNA_def_property_float_default(prop, DEG2RADF(180.0));
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "moon_elevation_offset", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_ui_text(
+      prop, "Elevation Offset", "Added to the elevation taken from the light object");
+  RNA_def_property_range(prop, -M_PI_2, M_PI_2);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "moon_rotation_offset", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_ui_text(
+      prop, "Rotation Offset", "Added to the rotation taken from the light object");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "moon_phase_source", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "moon_phase_source");
+  RNA_def_property_enum_items(prop, sky_phase_source_items);
+  RNA_def_property_ui_text(prop, "Phase Source", "Where the Moon's phase comes from");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "moon_phase", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(
+      prop, "Phase", "Lit fraction of the Moon's disc.\n0 means new, 1 means full");
+  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_float_default(prop, 0.5f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "moon_temperature", PROP_FLOAT, PROP_COLOR_TEMPERATURE);
+  RNA_def_property_ui_text(prop,
+                           "Temperature",
+                           "Color temperature of the moonlight in Kelvin. Kept separate from the "
+                           "Sun's, so that a night can be graded on its own.\n"
+                           "The default is cooler than the sunlight the Moon reflects, which is "
+                           "how moonlight is seen once the eye is dark adapted");
+  RNA_def_property_range(prop, 800.0f, 20000.0f);
+  RNA_def_property_ui_range(prop, 800.0f, 20000.0f, 400.0f, 1);
+  RNA_def_property_float_default(prop, 8000.0f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "moon_color", PROP_FLOAT, PROP_COLOR);
+  RNA_def_property_array(prop, 3);
+  RNA_def_property_ui_text(prop,
+                           "Color",
+                           "Color of the moonlight. Multiplied with the temperature to give the "
+                           "light that lights the sky, before the atmosphere");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "use_stars", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "use_stars", 1);
+  RNA_def_property_ui_text(
+      prop,
+      "Stars",
+      "Include stars in the sky.\nThe Milky Way is part of the star field, so it goes with them.\n"
+      "A star covers a pixel or two, which is what a denoiser exists to remove, so Cycles renders "
+      "far fewer of them with denoising on");
+  RNA_def_property_update(prop, 0, "rna_ShaderNode_socket_update");
+
+  prop = RNA_def_property(srna, "star_density", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Density", "How many stars are visible");
+  RNA_def_property_range(prop, 0.0f, 10.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 4.0f, 10, 2);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "star_brightness", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Brightness", "Strength of the stars");
+  RNA_def_property_range(prop, 0.0f, 1000.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 10.0f, 10, 2);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "star_color_variation", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(
+      prop, "Color Variation", "How much the stars vary in color.\n0 means all stars are white");
+  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_float_default(prop, 0.5f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "star_seed", PROP_INT, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Seed", "Seed used to place the stars");
+  /* The kernels fold the seed and the cube face into one integer before hashing, so the range has
+   * to stay well inside what a signed 32-bit multiply can hold. Overflowing it would be undefined
+   * behavior, and the three shading backends would not agree on the result. */
+  RNA_def_property_range(prop, 0, 1000000);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
   prop = RNA_def_property(srna, "altitude_source", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "altitude_source");
   RNA_def_property_enum_items(prop, sky_altitude_source_items);
@@ -5662,7 +5801,8 @@ static void def_sh_tex_sky(BlenderRNA *brna, StructRNA *srna)
   RNA_def_property_ui_text(prop,
                            "Anisotropy",
                            "Directionality of aerosol scattering. Zero is isotropic, negative is "
-                           "backward, positive is forward and tightens the glow around the Sun");
+                           "backward, positive is forward and tightens the glow around the Sun "
+                           "and the Moon");
   RNA_def_property_range(prop, -0.99f, 0.99f);
   RNA_def_property_ui_range(prop, -0.9f, 0.9f, 10, 3);
   RNA_def_property_float_default(prop, 0.8f);
@@ -5678,15 +5818,102 @@ static void def_sh_tex_sky(BlenderRNA *brna, StructRNA *srna)
   RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 
+  prop = RNA_def_property(srna, "milky_way", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_ui_text(prop,
+                           "Milky Way",
+                           "Strength of the Milky Way's band, both its crowd of faint stars and "
+                           "the glow between them.\n0 means no band");
+  RNA_def_property_range(prop, 0.0f, 100.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 10.0f, 10, 2);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "milky_way_crowding", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(prop,
+                           "Crowding",
+                           "How much of the Milky Way's strength goes into thickening the star "
+                           "field rather than into its glow.\n0 means the band is glow alone");
+  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_float_default(prop, 0.35f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "milky_way_structure", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(prop,
+                           "Structure",
+                           "Dust and star clouds along the band. Dust takes light away in clouds "
+                           "with edges rather than evenly, which is what gives the Milky Way its "
+                           "shape.\n0 means a smooth band");
+  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_float_default(prop, 0.5f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "nebulae", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(prop,
+                           "Nebulae",
+                           "Glowing hydrogen along the band, in sparse patches.\nBarely visible "
+                           "to the eye at the default, and photographic exposures want it higher");
+  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_float_default(prop, 0.15f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "zodiacal_light", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_ui_text(prop,
+                           "Zodiacal Light",
+                           "Sunlight scattered by the dust of the solar system, in a wedge along "
+                           "the ecliptic reaching up from where the Sun set, with a faint "
+                           "brightening opposite it.\n0 means none");
+  RNA_def_property_range(prop, 0.0f, 100.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 3.0f, 10, 2);
+  RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "star_latitude", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_ui_text(
+      prop,
+      "Latitude",
+      "Latitude of the viewer, which sets how high the celestial pole stands.\nStars rise steeply "
+      "near the equator and circle without setting near the poles");
+  RNA_def_property_range(prop, DEG2RADF(-90.0f), DEG2RADF(90.0f));
+  RNA_def_property_float_default(prop, DEG2RADF(45.0f));
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "star_longitude", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_ui_text(prop,
+                           "Longitude",
+                           "Longitude of the viewer.\nTurns the sky about the celestial pole, "
+                           "adding to Rotation rather than acting on its own");
+  RNA_def_property_range(prop, DEG2RADF(-180.0f), DEG2RADF(180.0f));
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "star_rotation", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_ui_text(prop,
+                           "Rotation",
+                           "Turn of the sky about the celestial pole.\nAnimate this for star "
+                           "trails, or to carry the stars through the night");
+  RNA_def_property_ui_range(prop, 0.0f, DEG2RADF(360.0f), 10, 3);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
   prop = RNA_def_property(srna, "night_adaptation", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_ui_text(
       prop,
       "Night Adaptation",
       "How far the night sky's color is adapted to the eye rather than left as a camera records "
-      "it.\nSight loses color as light fades, so the airglow is drained of it by how faint it "
-      "is.\n0 means physically correct, 1 means fully adapted");
+      "it.\nSight loses color as light fades, so the Moon's glow, the stars, the Milky Way and "
+      "the airglow are drained of it by how faint each one is.\n0 means physically correct, 1 "
+      "means fully adapted");
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_float_default(prop, 1.0f);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "night_exposure", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_ui_text(prop,
+                           "Night Exposure",
+                           "Stops of exposure added to moonlight and starlight, so a night sky "
+                           "reads at the same camera exposure as a day sky.\n0 means the default "
+                           "lift, negative goes back toward true radiance");
+  RNA_def_property_range(prop, -20.0f, 20.0f);
+  RNA_def_property_ui_range(prop, -10.0f, 10.0f, 10, 2);
+  RNA_def_property_float_default(prop, 0.0f);
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 
   /* Legacy parameters. */

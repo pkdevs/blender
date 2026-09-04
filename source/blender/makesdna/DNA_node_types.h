@@ -645,6 +645,13 @@ enum eNodeSky_AltitudeSource : int8_t {
   SHD_SKY_ALTITUDE_CAMERA = 1,
 };
 
+/* Where the Moon's phase comes from. Named to match the Sun and Moon source toggles beside it,
+ * which read "Driven" for the same idea. */
+enum eNodeSky_PhaseSource : int8_t {
+  SHD_SKY_PHASE_DRIVEN = 0,
+  SHD_SKY_PHASE_MANUAL = 1,
+};
+
 /* environment texture */
 enum eNodeProj_Env : short {
   SHD_PROJ_EQUIRECTANGULAR = 0,
@@ -2658,7 +2665,11 @@ struct NodeTexSky {
   /* Hillaire model. */
   char sun_source = 0;
   char altitude_source = 0;
-  char _pad[5] = {};
+  char use_moon = 0;
+  char moon_source = 0;
+  char moon_phase_source = 0;
+  char use_stars = 0;
+  char _pad[1] = {};
   float sun_temperature = 0;
   float sun_color[3] = {1.0f, 1.0f, 1.0f};
   float sun_elevation_offset = 0;
@@ -2667,6 +2678,30 @@ struct NodeTexSky {
   float aerosol_anisotropy = 0;
   float airglow = 0;
   float night_adaptation = 0;
+  float night_exposure = 0.0f;
+  float moon_size = 0;
+  float moon_intensity = 0;
+  float moon_elevation = 0;
+  float moon_rotation = 0;
+  float moon_elevation_offset = 0;
+  float moon_rotation_offset = 0;
+  float moon_phase = 0;
+  float moon_temperature = 0;
+  float moon_color[3] = {1.0f, 1.0f, 1.0f};
+  float star_density = 0;
+  float star_brightness = 0;
+  float star_color_variation = 0;
+  float milky_way = 0;
+  float milky_way_crowding = 0;
+  float milky_way_structure = 0;
+  float nebulae = 0;
+  /* Orientation of the celestial sphere the stars and the Milky Way are fixed to. Latitude tilts
+   * the pole, longitude and rotation both turn the sky about it. Radians. */
+  float star_latitude = 0;
+  float star_longitude = 0.0f;
+  float star_rotation = 0.0f;
+  int star_seed = 0;
+  float zodiacal_light = 0;
 };
 
 struct NodeTexImage {

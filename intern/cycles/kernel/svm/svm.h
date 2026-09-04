@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ * SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -449,7 +450,7 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
       SVM_CASE(NODE_TEX_SKY)
       {
         const ccl_global auto &node = svm_node_get<SVMNodeTexSky>(kg, &offset);
-        offset = svm_node_tex_sky(kg, sd, path_flag, stack, node, offset);
+        offset = svm_node_tex_sky(kg, sd, path_visibility, path_flag, stack, node, offset);
       }
       break;
       SVM_CASE(NODE_TEX_GRADIENT)

@@ -25,6 +25,7 @@
 
 #include "BLI_listbase_iterator.hh"
 #include "BLI_math_base.hh"
+#include "BLI_math_constants.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_sys_types.hh"
@@ -534,6 +535,39 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
             tex->aerosol_anisotropy = 0.8f;
             tex->airglow = 1.0f;
             tex->night_adaptation = 1.0f;
+          }
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 21)) {
+    /* Initialize the Moon and the stars, added to the Hillaire sky after the model itself. Same
+     * reasoning as the block above: the fields are zero-filled on load rather than defaulted, so
+     * without this an older file switched to Hillaire would show a zero-size Moon and no stars.
+     * Keep in step with node_shader_init_tex_sky(). */
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ntree->type == NTREE_SHADER) {
+        for (bNode &node : ntree->nodes) {
+          if (node.type_legacy == SH_NODE_TEX_SKY && node.storage) {
+            NodeTexSky *tex = static_cast<NodeTexSky *>(node.storage);
+            tex->moon_size = DEG2RADF(0.52f);
+            tex->moon_intensity = 1.0f;
+            tex->moon_elevation = DEG2RADF(40.0f);
+            tex->moon_rotation = DEG2RADF(180.0f);
+            tex->moon_phase = 0.5f;
+            tex->moon_temperature = 8000.0f;
+            copy_v3_fl(tex->moon_color, 1.0f);
+            tex->star_density = 1.0f;
+            tex->star_brightness = 1.0f;
+            tex->star_color_variation = 0.5f;
+            tex->milky_way = 1.0f;
+            tex->milky_way_crowding = 0.35f;
+            tex->milky_way_structure = 0.5f;
+            tex->nebulae = 0.15f;
+            tex->zodiacal_light = 1.0f;
+            tex->star_latitude = DEG2RADF(45.0f);
           }
         }
       }

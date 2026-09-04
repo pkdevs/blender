@@ -22,9 +22,13 @@ SkyLoader::SkyLoader(const NodeSkyType sky_type,
                      const float aerosol_density,
                      const float ozone_density,
                      const float aerosol_anisotropy,
+                     const float moon_elevation,
+                     const float moon_azimuth_offset,
+                     const float moonlight,
                      const float airglow,
                      const float3 airglow_tint,
-                     const float3 sun_light_color)
+                     const float3 sun_light_color,
+                     const float3 moon_light_color)
     : sky_type(sky_type),
       sun_elevation(sun_elevation),
       altitude(altitude),
@@ -32,9 +36,13 @@ SkyLoader::SkyLoader(const NodeSkyType sky_type,
       aerosol_density(aerosol_density),
       ozone_density(ozone_density),
       aerosol_anisotropy(aerosol_anisotropy),
+      moon_elevation(moon_elevation),
+      moon_azimuth_offset(moon_azimuth_offset),
+      moonlight(moonlight),
       airglow(airglow),
       airglow_tint(airglow_tint),
-      sun_light_color(sun_light_color)
+      sun_light_color(sun_light_color),
+      moon_light_color(moon_light_color)
 {
 }
 
@@ -121,7 +129,24 @@ bool SkyLoader::load_pixels(const ImageMetaData &metadata, void *pixels)
                                     ozone_density,
                                     aerosol_anisotropy,
                                     sun_color_transform);
-    /* Owes nothing to the Sun, so it goes on last and on its own. */
+    /* Scattering is linear in the light that drives it, so the Moon's sky is the same bake run
+     * again with the Moon as the illuminant, then turned to the right bearing and added. */
+    float moon_color_transform[9];
+    sky_light_color_transform(moon_light_color, moon_color_transform);
+    SKY_hillaire_add_moon(pixel_data,
+                          metadata.channels,
+                          width,
+                          height,
+                          moon_elevation,
+                          moon_azimuth_offset,
+                          altitude,
+                          air_density,
+                          aerosol_density,
+                          ozone_density,
+                          aerosol_anisotropy,
+                          moonlight,
+                          moon_color_transform);
+    /* Owes nothing to the Sun or the Moon, so it goes on last and on its own. */
     SKY_hillaire_add_airglow(pixel_data,
                              metadata.channels,
                              width,
@@ -162,8 +187,12 @@ bool SkyLoader::equals(const ImageLoader &other) const
          altitude == other_sky.altitude && air_density == other_sky.air_density &&
          aerosol_density == other_sky.aerosol_density &&
          ozone_density == other_sky.ozone_density &&
-         aerosol_anisotropy == other_sky.aerosol_anisotropy && airglow == other_sky.airglow &&
-         airglow_tint == other_sky.airglow_tint && sun_light_color == other_sky.sun_light_color;
+         aerosol_anisotropy == other_sky.aerosol_anisotropy &&
+         moon_elevation == other_sky.moon_elevation &&
+         moon_azimuth_offset == other_sky.moon_azimuth_offset &&
+         moonlight == other_sky.moonlight && airglow == other_sky.airglow &&
+         airglow_tint == other_sky.airglow_tint && sun_light_color == other_sky.sun_light_color &&
+         moon_light_color == other_sky.moon_light_color;
 }
 
 CCL_NAMESPACE_END

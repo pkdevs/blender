@@ -38,6 +38,32 @@ void SKY_hillaire_precompute_sun(float sun_elevation,
                                  float r_pixel_bottom[3],
                                  float r_pixel_top[3]);
 
+/* Fraction of light that survives the trip down through the atmosphere from the given elevation.
+ * One at the top, falling away toward the horizon and taking the blue with it first. */
+void SKY_transmittance(float elevation,
+                       float altitude,
+                       float air_density,
+                       float aerosol_density,
+                       float ozone_density,
+                       float r_dimmed_xyz[3],
+                       float r_clear_xyz[3]);
+
+/* Add the sky lit by a second, much dimmer body to a sky that has already been computed. The
+ * azimuth offset is the bearing of that body measured from the first one. */
+void SKY_hillaire_add_moon(float *pixels,
+                           int stride,
+                           int width,
+                           int height,
+                           float moon_elevation,
+                           float azimuth_offset,
+                           float altitude,
+                           float air_density,
+                           float aerosol_density,
+                           float ozone_density,
+                           float aerosol_anisotropy,
+                           float scale,
+                           const float moon_color_transform[9]);
+
 /* Color of the airglow emission before the atmosphere or any adaptation touches it, as XYZ.
  * The engines need it to work out how far the night adaptation moves it. */
 void SKY_airglow_color(float r_xyz[3]);

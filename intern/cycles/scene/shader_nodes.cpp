@@ -23,6 +23,7 @@
 
 #include "sky_hillaire.h"
 #include "sky_hosek.h"
+#include "sky_night.h"
 #include "sky_nishita.h"
 
 #include "util/colorspace.h"
@@ -689,9 +690,30 @@ struct SunSky {
   /* Parameter */
   float radiance_x, radiance_y, radiance_z;
   float config_x[9], config_y[9], config_z[9], nishita_data[11];
-  /* Color the Sun lights the sky with. Named rather than appended to nishita_data, since OSL
-   * takes it as a parameter of its own and the array's length is shared with that shader. */
+  /* Everything past the eleven values the other sky models share is named rather than appended to
+   * nishita_data, since OSL takes each as a parameter of its own and that array's length is
+   * shared with the shader. Appending instead would mean the array literal there and the
+   * parameter_array count here had to be kept in step by hand. */
   float3 sun_color;
+  /* (elevation, rotation, angular diameter, intensity). A negative diameter means the Moon is
+   * off, the same convention the Sun's disc uses. */
+  float4 moon_params;
+  float3 moon_color;
+  float3 moon_sun_dir;
+  float3 moon_illuminant;
+  /* (density, brightness, color variation, seed). A negative density means the stars are off. */
+  float4 star_params;
+  float3 star_color_cool;
+  float3 star_color_hot;
+  float3 zenith_transmittance;
+  float celestial[9];
+  float milky_way;
+  float milky_way_crowding;
+  float milky_way_structure;
+  float nebulae;
+  float3 milky_way_tint;
+  float zodiacal_light;
+  float3 zodiacal_tint;
 };
 
 /* Preetham model */
@@ -806,6 +828,56 @@ static void sky_texture_precompute_hosek(SunSky *sunsky,
   SKY_arhosekskymodelstate_free(sky_state);
 }
 
+/* Thin float3 adapters around SKY_eclipse() and SKY_moon_illumination() (intern/sky), which speak
+ * plain floats so the geometry itself - pure trig with no engine-specific dependency - can be
+ * shared with the Blender side rather than hand-duplicated. Only the render-time kernel code
+ * genuinely needs one implementation per shading language; this doesn't. */
+static void sky_eclipse(const bool use_moon,
+                        const float sun_size,
+                        const float moon_size,
+                        const float sun_elevation,
+                        const float sun_rotation,
+                        const float moon_elevation,
+                        const float moon_rotation,
+                        float3 *r_sun_light,
+                        float3 *r_moon_light)
+{
+  float sun_light[3] = {r_sun_light->x, r_sun_light->y, r_sun_light->z};
+  float moon_light[3] = {r_moon_light->x, r_moon_light->y, r_moon_light->z};
+  SKY_eclipse(use_moon,
+              sun_size,
+              moon_size,
+              sun_elevation,
+              sun_rotation,
+              moon_elevation,
+              moon_rotation,
+              sun_light,
+              moon_light);
+  *r_sun_light = make_float3(sun_light[0], sun_light[1], sun_light[2]);
+  *r_moon_light = make_float3(moon_light[0], moon_light[1], moon_light[2]);
+}
+
+static void sky_moon_illumination(const bool manual_phase,
+                                  const float moon_phase,
+                                  const float moon_elevation,
+                                  const float moon_rotation,
+                                  const float sun_elevation,
+                                  const float sun_rotation,
+                                  float3 *r_direction,
+                                  float *r_phase_angle)
+{
+  float direction[3];
+  SKY_moon_illumination(manual_phase,
+                        moon_phase,
+                        moon_elevation,
+                        moon_rotation,
+                        sun_elevation,
+                        sun_rotation,
+                        direction,
+                        r_phase_angle);
+  *r_direction = make_float3(direction[0], direction[1], direction[2]);
+}
+
 /* Nishita improved */
 static void sky_texture_precompute_nishita(SunSky *sunsky,
                                            NodeSkyType sky_type,
@@ -818,8 +890,40 @@ static void sky_texture_precompute_nishita(SunSky *sunsky,
                                            const float air_density,
                                            const float aerosol_density,
                                            const float ozone_density,
-                                           const float3 sun_light_color)
+                                           const float3 sun_light_color,
+                                           bool use_moon,
+                                           const float moon_size,
+                                           const float moon_intensity,
+                                           const float moon_elevation,
+                                           const float moon_rotation,
+                                           const float3 moon_light_color,
+                                           const float3 moon_sun_dir,
+                                           bool use_stars,
+                                           const float star_density,
+                                           float star_brightness,
+                                           const float star_color_variation,
+                                           const int star_seed,
+                                           const float night_exposure,
+                                           const float3 star_color_cool,
+                                           const float3 star_color_hot,
+                                           const ccl_private float *celestial,
+                                           const float milky_way,
+                                           const float milky_way_crowding,
+                                           const float milky_way_structure,
+                                           const float nebulae,
+                                           const float3 milky_way_tint,
+                                           const float zodiacal_light,
+                                           const float3 zodiacal_tint)
 {
+  /* The Moon and stars belong to Hillaire only. use_moon and use_stars are ordinary sockets that
+   * keep whatever they last held when the sky type is switched away, so the gate lives here
+   * rather than at the call sites - having it at some of them and not all of them is exactly how
+   * this drifted apart once before. */
+  use_moon = use_moon && (sky_type == NODE_SKY_HILLAIRE);
+  use_stars = use_stars && (sky_type == NODE_SKY_HILLAIRE);
+  /* Moonlight and starlight are lifted well above their true radiance so that a night sky reads
+   * at the same camera exposure as a day sky. Night Exposure adjusts that lift, in stops. */
+  star_brightness *= exp2f(night_exposure);
   /* Sample 2 Sun pixels */
   float pixel_bottom[3];
   float pixel_top[3];
@@ -866,6 +970,83 @@ static void sky_texture_precompute_nishita(SunSky *sunsky,
 
   /* The Sun disc carries the same light color the sky around it was baked with. */
   sunsky->sun_color = sun_light_color;
+
+  /* Light reaching the Moon, then the viewer. Reusing the Sun precompute at the Moon's elevation
+   * gives sunlight dimmed and reddened by whatever air lies along the line of sight to the Moon.
+   * The Sun's angular diameter keeps the result as the Sun's own radiance, which is then turned
+   * into an irradiance by its solid angle and spread over the hemisphere it scatters into. */
+  float moon_illuminant[3] = {0.0f, 0.0f, 0.0f};
+  if (use_moon) {
+    float moon_bottom[3];
+    float moon_top[3];
+    SKY_hillaire_precompute_sun(moon_elevation,
+                                sun_size,
+                                altitude,
+                                air_density,
+                                aerosol_density,
+                                ozone_density,
+                                moon_bottom,
+                                moon_top);
+    const float sun_solid_angle = M_2PI_F * (1.0f - cosf(sun_size * 0.5f));
+    const float scale = sun_solid_angle * M_1_PI_F;
+    for (int i = 0; i < 3; i++) {
+      moon_illuminant[i] = 0.5f * (moon_bottom[i] + moon_top[i]) * scale;
+    }
+  }
+
+  /* The disc takes the same lift as the glow, the stars and the airglow. Left out, raising Night
+   * Exposure brightens the whole night sky except the Moon, which sinks into its own halo.
+   *
+   * The size carries the same floor the Sun's does: the disc is divided through by its own half
+   * angle when its face is shaded, and a negative diameter is the sentinel for "off", so a size
+   * of exactly zero would otherwise switch the Moon off rather than make it a point. */
+  sunsky->moon_params = make_float4(moon_elevation,
+                                    moon_rotation,
+                                    use_moon ? fmaxf(moon_size, 0.0005f) : -1.0f,
+                                    moon_intensity * exp2f(night_exposure));
+  sunsky->moon_color = moon_light_color;
+  sunsky->moon_sun_dir = moon_sun_dir;
+  sunsky->moon_illuminant = make_float3(
+      moon_illuminant[0], moon_illuminant[1], moon_illuminant[2]);
+
+  sunsky->star_params = make_float4(
+      use_stars ? star_density : -1.0f, star_brightness, star_color_variation, float(star_seed));
+  sunsky->star_color_cool = star_color_cool;
+  sunsky->star_color_hot = star_color_hot;
+  for (int i = 0; i < 9; i++) {
+    sunsky->celestial[i] = celestial[i];
+  }
+  /* The band belongs to the star field, so it goes out with it. */
+  sunsky->milky_way = use_stars ? milky_way : 0.0f;
+  sunsky->milky_way_crowding = milky_way_crowding;
+  sunsky->milky_way_structure = use_stars ? milky_way_structure : 0.0f;
+  sunsky->nebulae = use_stars ? nebulae : 0.0f;
+  sunsky->milky_way_tint = milky_way_tint;
+  sunsky->zodiacal_light = (sky_type == NODE_SKY_HILLAIRE) ? zodiacal_light : -1.0f;
+  sunsky->zodiacal_tint = zodiacal_tint;
+
+  /* Zenith transmittance: the ratio between light that arrives and light that would arrive
+   * through nothing at all, computed after both are converted to color. The shader raises this to
+   * the air mass to get the transmittance along any other line of sight. */
+  float3 zenith = one_float3();
+  if (use_stars) {
+    float dimmed[3];
+    float clear[3];
+    SKY_transmittance(
+        M_PI_2_F, altitude, air_density, aerosol_density, ozone_density, dimmed, clear);
+    /* SKY_transmittance() returns XYZ, but the division has to happen after converting to RGB:
+     * XYZ ratios are not RGB ratios, since the channels mix. Z in particular is dominated by the
+     * shortest wavelength, so dividing in XYZ crushes blue far more than it should. */
+    const Transform to_rgb = ColorSpaceManager::get_xyz_to_scene_linear_rgb();
+    const float3 dimmed_rgb = transform_direction(&to_rgb,
+                                                  make_float3(dimmed[0], dimmed[1], dimmed[2]));
+    const float3 clear_rgb = transform_direction(&to_rgb,
+                                                 make_float3(clear[0], clear[1], clear[2]));
+    for (int i = 0; i < 3; i++) {
+      zenith[i] = clamp(dimmed_rgb[i] / max(clear_rgb[i], 1e-6f), 0.0f, 1.0f);
+    }
+  }
+  sunsky->zenith_transmittance = zenith;
 }
 
 float SkyTextureNode::get_sun_average_radiance()
@@ -961,8 +1142,31 @@ NODE_DEFINE(SkyTextureNode)
   SOCKET_FLOAT(aerosol_anisotropy, "Aerosol Anisotropy", 0.8f);
   SOCKET_FLOAT(airglow, "Airglow", 1.0f);
   SOCKET_FLOAT(night_adaptation, "Night Adaptation", 1.0f);
+  SOCKET_FLOAT(night_exposure, "Night Exposure", 0.0f);
   SOCKET_FLOAT(sun_temperature, "Sun Temperature", SKY_SUN_TEMPERATURE);
   SOCKET_COLOR(sun_color, "Sun Color", one_float3());
+  SOCKET_BOOLEAN(use_moon, "Use Moon", false);
+  SOCKET_FLOAT(moon_size, "Moon Size", 0.009076f);
+  SOCKET_FLOAT(moon_intensity, "Moon Intensity", 1.0f);
+  SOCKET_FLOAT(moon_elevation, "Moon Elevation", 40.0f * M_PI_F / 180.0f);
+  SOCKET_FLOAT(moon_rotation, "Moon Rotation", M_PI_F);
+  SOCKET_BOOLEAN(moon_phase_manual, "Moon Phase Manual", false);
+  SOCKET_FLOAT(moon_phase, "Moon Phase", 0.5f);
+  SOCKET_FLOAT(moon_temperature, "Moon Temperature", SKY_MOON_TEMPERATURE);
+  SOCKET_COLOR(moon_color, "Moon Color", one_float3());
+  SOCKET_BOOLEAN(use_stars, "Use Stars", false);
+  SOCKET_FLOAT(star_density, "Star Density", 1.0f);
+  SOCKET_FLOAT(star_brightness, "Star Brightness", 1.0f);
+  SOCKET_FLOAT(star_color_variation, "Star Color Variation", 0.5f);
+  SOCKET_INT(star_seed, "Star Seed", 0);
+  SOCKET_FLOAT(milky_way, "Milky Way", 1.0f);
+  SOCKET_FLOAT(milky_way_crowding, "Milky Way Crowding", 0.35f);
+  SOCKET_FLOAT(milky_way_structure, "Milky Way Structure", 0.5f);
+  SOCKET_FLOAT(nebulae, "Nebulae", 0.15f);
+  SOCKET_FLOAT(zodiacal_light, "Zodiacal Light", 1.0f);
+  SOCKET_FLOAT(star_latitude, "Star Latitude", 0.785398163f);
+  SOCKET_FLOAT(star_longitude, "Star Longitude", 0.0f);
+  SOCKET_FLOAT(star_rotation, "Star Rotation", 0.0f);
 
   SOCKET_IN_POINT(vector, "Vector", zero_float3(), SocketType::LINK_TEXTURE_GENERATED);
   SOCKET_OUT_COLOR(color, "Color");
@@ -1069,14 +1273,85 @@ static void sky_precompute_nishita_family(SkyTextureNode *node,
                                           const bool reuse_baked_sky)
 {
   const NodeSkyType sky_type = node->get_sky_type();
-  /* The Sun's own color belongs to the Hillaire model only. The other models never show the
+  const bool hillaire = (sky_type == NODE_SKY_HILLAIRE);
+  /* A body's own color belongs to the Hillaire model only. The other models never show the
    * temperature or the color, so a file saved before either existed has them at zero, which
    * would otherwise turn the Sun disc black. EEVEE gates this the same way. */
-  const float3 sun_light_color = (sky_type == NODE_SKY_HILLAIRE) ?
-                                     sky_light_color(scene,
-                                                     node->get_sun_temperature(),
-                                                     node->get_sun_color()) :
-                                     one_float3();
+  const float3 sun_light_color = hillaire ? sky_light_color(scene,
+                                                            node->get_sun_temperature(),
+                                                            node->get_sun_color()) :
+                                            one_float3();
+  float3 moon_light_color = hillaire ? sky_light_color(scene,
+                                                       node->get_moon_temperature(),
+                                                       node->get_moon_color()) :
+                                       one_float3();
+
+  /* Both rotations are measured the same way round for the user, and both are negated on the way
+   * to the kernels, where they turn the sky rather than the body. */
+  const float moon_rotation = -node->get_moon_rotation();
+  const bool use_moon = hillaire && node->get_use_moon();
+
+  /* Where the Moon is lit from, and how far round from full that leaves it. Worked out once so
+   * that every backend is handed the same answer rather than each deriving it again. */
+  float3 moon_sun_dir;
+  float moon_phase_angle;
+  sky_moon_illumination(node->get_moon_phase_manual(),
+                        node->get_moon_phase(),
+                        node->get_moon_elevation(),
+                        moon_rotation,
+                        node->get_sun_elevation(),
+                        node->get_sun_rotation(),
+                        &moon_sun_dir,
+                        &moon_phase_angle);
+
+  /* The disc itself does not dim during a partial solar eclipse - it is cut to a crescent
+   * geometrically instead, in the kernels, and a real crescent is no dimmer per unit area than a
+   * full disc. Only the sky glow, baked into the LUT below, loses light in proportion to how much
+   * of the Sun's face is covered. The Moon has no equivalent split: a lunar eclipse genuinely
+   * dims and reddens the Moon itself, disc included. */
+  float3 sun_glow_color = sun_light_color;
+  sky_eclipse(use_moon,
+              node->get_sun_size(),
+              node->get_moon_size(),
+              node->get_sun_elevation(),
+              node->get_sun_rotation(),
+              node->get_moon_elevation(),
+              moon_rotation,
+              &sun_glow_color,
+              &moon_light_color);
+
+  /* Star color is a temperature, like the Sun's and the Moon's. Both ends of the ramp are worked
+   * out here rather than in the kernels, because each backend has its own blackbody routine and
+   * they would not agree; the middle of the ramp is the Sun's temperature, which
+   * sky_light_color() normalizes to white. */
+  const float night_lift = exp2f(node->get_night_exposure());
+  const float star_luminance = SKY_NOMINAL_LUMINANCE_STARS * node->get_star_brightness() *
+                               night_lift;
+  const float3 star_color_cool = sky_adapt(
+      sky_light_color(scene, SKY_STAR_TEMPERATURE_COOL, one_float3()),
+      star_luminance,
+      node->get_night_adaptation());
+  const float3 star_color_hot = sky_adapt(
+      sky_light_color(scene, SKY_STAR_TEMPERATURE_HOT, one_float3()),
+      star_luminance,
+      node->get_night_adaptation());
+  /* Physically the band is a distinctly yellow-brown thing, old cool stars reddened by their own
+   * dust, and that is how it photographs. */
+  /* The night lift rides on the band's color rather than on its strength. Its strength also sets
+   * how far the band thickens the star field, and an exposure control must not change how many
+   * stars there are - at the top of its range every cell on the sky would hold one. */
+  const float3 milky_way_tint = night_lift * sky_adapt(make_float3(1.0f, 0.93f, 0.82f),
+                                                       SKY_NOMINAL_LUMINANCE_MILKY_WAY *
+                                                           node->get_milky_way() * night_lift,
+                                                       node->get_night_adaptation());
+  /* Scattered sunlight, so very nearly the Sun's own color, dulled a little by the dust. */
+  const float3 zodiacal_tint = sky_adapt(make_float3(1.0f, 0.96f, 0.90f),
+                                         SKY_NOMINAL_LUMINANCE_ZODIACAL *
+                                             node->get_zodiacal_light() * night_lift,
+                                         node->get_night_adaptation());
+  float celestial[9];
+  SKY_celestial_frame(
+      node->get_star_latitude(), node->get_star_longitude(), node->get_star_rotation(), celestial);
 
   sky_texture_precompute_nishita(sunsky,
                                  sky_type,
@@ -1089,7 +1364,30 @@ static void sky_precompute_nishita_family(SkyTextureNode *node,
                                  node->get_air_density(),
                                  node->get_aerosol_density(),
                                  node->get_ozone_density(),
-                                 sun_light_color);
+                                 sun_light_color,
+                                 node->get_use_moon(),
+                                 node->get_moon_size(),
+                                 node->get_moon_intensity(),
+                                 node->get_moon_elevation(),
+                                 moon_rotation,
+                                 moon_light_color,
+                                 moon_sun_dir,
+                                 node->get_use_stars(),
+                                 node->get_star_density(),
+                                 node->get_star_brightness(),
+                                 node->get_star_color_variation(),
+                                 node->get_star_seed(),
+                                 node->get_night_exposure(),
+                                 star_color_cool,
+                                 star_color_hot,
+                                 celestial,
+                                 node->get_milky_way(),
+                                 node->get_milky_way_crowding(),
+                                 node->get_milky_way_structure(),
+                                 node->get_nebulae(),
+                                 milky_way_tint,
+                                 node->get_zodiacal_light() * night_lift,
+                                 zodiacal_tint);
 
   if (reuse_baked_sky && !node->handle.empty()) {
     return;
@@ -1097,9 +1395,9 @@ static void sky_precompute_nishita_family(SkyTextureNode *node,
 
   /* The airglow belongs to the Hillaire model only. It is faint enough for the eye to lose color
    * in, so it is adapted here, before the bake, according to how bright it actually renders. The
-   * Sun's own disc is far too bright for this to touch, so it is left alone. */
-  const bool hillaire = (sky_type == NODE_SKY_HILLAIRE);
-  const float airglow = hillaire ? node->get_airglow() : 0.0f;
+   * Sun's and the Moon's own discs are far too bright for this to touch, so they are left
+   * alone. */
+  const float airglow = hillaire ? node->get_airglow() * night_lift : 0.0f;
   const float3 airglow_tint = hillaire ? sky_airglow_tint(SKY_NOMINAL_LUMINANCE_AIRGLOW * airglow,
                                                           node->get_night_adaptation()) :
                                          one_float3();
@@ -1108,16 +1406,24 @@ static void sky_precompute_nishita_family(SkyTextureNode *node,
   impar.interpolation = INTERPOLATION_LINEAR;
   impar.extension = EXTENSION_EXTEND;
   node->handle = scene->image_manager->add_image(
-      make_unique<SkyLoader>(sky_type,
-                             node->get_sun_elevation(),
-                             node->get_altitude(),
-                             node->get_air_density(),
-                             node->get_aerosol_density(),
-                             node->get_ozone_density(),
-                             node->get_aerosol_anisotropy(),
-                             airglow,
-                             airglow_tint,
-                             sun_light_color),
+      make_unique<SkyLoader>(
+          sky_type,
+          node->get_sun_elevation(),
+          node->get_altitude(),
+          node->get_air_density(),
+          node->get_aerosol_density(),
+          node->get_ozone_density(),
+          node->get_aerosol_anisotropy(),
+          node->get_moon_elevation(),
+          node->get_sun_rotation() - moon_rotation,
+          SKY_moonlight_scale(
+              use_moon, moon_phase_angle, node->get_moon_intensity(), node->get_night_exposure()),
+          airglow,
+          airglow_tint,
+          sun_glow_color,
+          sky_adapt(moon_light_color,
+                    SKY_NOMINAL_LUMINANCE_MOONGLOW * node->get_moon_intensity() * night_lift,
+                    node->get_night_adaptation())),
       impar);
 }
 
@@ -1173,6 +1479,52 @@ void SkyTextureNode::compile(SVMCompiler &compiler)
         .sun_color_x = sunsky.sun_color.x,
         .sun_color_y = sunsky.sun_color.y,
         .sun_color_z = sunsky.sun_color.z,
+        .moon_elevation = sunsky.moon_params.x,
+        .moon_rotation = sunsky.moon_params.y,
+        .moon_angular_diameter = sunsky.moon_params.z,
+        .moon_intensity = sunsky.moon_params.w,
+        .moon_color_x = sunsky.moon_color.x,
+        .moon_color_y = sunsky.moon_color.y,
+        .moon_color_z = sunsky.moon_color.z,
+        .moon_illuminant_x = sunsky.moon_illuminant.x,
+        .moon_illuminant_y = sunsky.moon_illuminant.y,
+        .moon_illuminant_z = sunsky.moon_illuminant.z,
+        .moon_sun_dir_x = sunsky.moon_sun_dir.x,
+        .moon_sun_dir_y = sunsky.moon_sun_dir.y,
+        .moon_sun_dir_z = sunsky.moon_sun_dir.z,
+        .star_density = sunsky.star_params.x,
+        .star_brightness = sunsky.star_params.y,
+        .star_color_variation = sunsky.star_params.z,
+        .star_seed = sunsky.star_params.w,
+        .star_color_cool_x = sunsky.star_color_cool.x,
+        .star_color_cool_y = sunsky.star_color_cool.y,
+        .star_color_cool_z = sunsky.star_color_cool.z,
+        .star_color_hot_x = sunsky.star_color_hot.x,
+        .star_color_hot_y = sunsky.star_color_hot.y,
+        .star_color_hot_z = sunsky.star_color_hot.z,
+        .zenith_transmittance_x = sunsky.zenith_transmittance.x,
+        .zenith_transmittance_y = sunsky.zenith_transmittance.y,
+        .zenith_transmittance_z = sunsky.zenith_transmittance.z,
+        .celestial_0 = sunsky.celestial[0],
+        .celestial_1 = sunsky.celestial[1],
+        .celestial_2 = sunsky.celestial[2],
+        .celestial_3 = sunsky.celestial[3],
+        .celestial_4 = sunsky.celestial[4],
+        .celestial_5 = sunsky.celestial[5],
+        .celestial_6 = sunsky.celestial[6],
+        .celestial_7 = sunsky.celestial[7],
+        .celestial_8 = sunsky.celestial[8],
+        .milky_way = sunsky.milky_way,
+        .milky_way_crowding = sunsky.milky_way_crowding,
+        .milky_way_structure = sunsky.milky_way_structure,
+        .nebulae = sunsky.nebulae,
+        .zodiacal_light = sunsky.zodiacal_light,
+        .zodiacal_tint_x = sunsky.zodiacal_tint.x,
+        .zodiacal_tint_y = sunsky.zodiacal_tint.y,
+        .zodiacal_tint_z = sunsky.zodiacal_tint.z,
+        .milky_way_tint_x = sunsky.milky_way_tint.x,
+        .milky_way_tint_y = sunsky.milky_way_tint.y,
+        .milky_way_tint_z = sunsky.milky_way_tint.z,
         .texture_id = uint(handle.kernel_id()),
     });
   }
@@ -1206,6 +1558,30 @@ void SkyTextureNode::compile(OSLCompiler &compiler)
   compiler.parameter_array("config_z", sunsky.config_z, 9);
   compiler.parameter_array("nishita_data", sunsky.nishita_data, 11);
   compiler.parameter_color("sun_color", sunsky.sun_color);
+  /* The fourth component of each of these is carried separately, since OSL has no float4 and a
+   * vector holds only three. */
+  compiler.parameter_vector(
+      "moon_params",
+      make_float3(sunsky.moon_params.x, sunsky.moon_params.y, sunsky.moon_params.z));
+  compiler.parameter("moon_intensity", sunsky.moon_params.w);
+  compiler.parameter_color("moon_color", sunsky.moon_color);
+  compiler.parameter_vector("moon_sun_dir", sunsky.moon_sun_dir);
+  compiler.parameter_color("moon_illuminant", sunsky.moon_illuminant);
+  compiler.parameter_vector(
+      "star_params",
+      make_float3(sunsky.star_params.x, sunsky.star_params.y, sunsky.star_params.z));
+  compiler.parameter("star_seed", sunsky.star_params.w);
+  compiler.parameter_color("star_color_cool", sunsky.star_color_cool);
+  compiler.parameter_color("star_color_hot", sunsky.star_color_hot);
+  compiler.parameter_color("zenith_transmittance", sunsky.zenith_transmittance);
+  compiler.parameter_array("celestial", sunsky.celestial, 9);
+  compiler.parameter("milky_way", sunsky.milky_way);
+  compiler.parameter("milky_way_crowding", sunsky.milky_way_crowding);
+  compiler.parameter("milky_way_structure", sunsky.milky_way_structure);
+  compiler.parameter("nebulae", sunsky.nebulae);
+  compiler.parameter("zodiacal_light", sunsky.zodiacal_light);
+  compiler.parameter_color("zodiacal_tint", sunsky.zodiacal_tint);
+  compiler.parameter_color("milky_way_tint", sunsky.milky_way_tint);
   compiler.add(this, "node_sky_texture");
 }
 

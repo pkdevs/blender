@@ -570,6 +570,101 @@ void SKY_hillaire_precompute_texture(float *pixels,
   });
 }
 
+void SKY_transmittance(float elevation,
+                       float altitude,
+                       float air_density,
+                       float aerosol_density,
+                       float ozone_density,
+                       float r_dimmed_xyz[3],
+                       float r_clear_xyz[3])
+{
+  const SkyHillaire sms(air_density, aerosol_density, ozone_density, G);
+
+  /* Clamp altitude to avoid numerical issues. */
+  altitude = clamp(altitude, 1.0f, 99999.0f) / 1000.0f;
+  const float normalized_altitude = altitude / ATMOSPHERE_THICKNESS;
+  const float cos_theta = cosf(M_PI_2_F - elevation);
+  const float4 transmittance = sms.get_transmittance(cos_theta, normalized_altitude);
+
+  /* Sunlight as it arrives at the ground, and as it would arrive with nothing in the way. What
+   * the air does is the ratio between the two, but that ratio only means anything once both have
+   * been carried through the same conversion, so the division is left to the caller to do after
+   * they have been turned into colors. */
+  const float3 dimmed = spectral_to_xyz(SUN_SPECTRAL_IRRADIANCE * transmittance);
+  const float3 clear = spectral_to_xyz(SUN_SPECTRAL_IRRADIANCE);
+
+  r_dimmed_xyz[0] = dimmed.x;
+  r_dimmed_xyz[1] = dimmed.y;
+  r_dimmed_xyz[2] = dimmed.z;
+  r_clear_xyz[0] = clear.x;
+  r_clear_xyz[1] = clear.y;
+  r_clear_xyz[2] = clear.z;
+}
+
+void SKY_hillaire_add_moon(float *pixels,
+                           int stride,
+                           int width,
+                           int height,
+                           float moon_elevation,
+                           float azimuth_offset,
+                           float altitude,
+                           float air_density,
+                           float aerosol_density,
+                           float ozone_density,
+                           float aerosol_anisotropy,
+                           float scale,
+                           const float moon_color_transform[9])
+{
+  if (scale <= 0.0f) {
+    return;
+  }
+
+  /* Scattering is linear in the radiance of whatever is lighting the atmosphere, so the sky lit
+   * by the Moon can be worked out on its own and added to the sky lit by the Sun. This is what
+   * keeps a moonlit night from coming out black. */
+  std::vector<float> moonlit(size_t(width) * size_t(height) * size_t(stride), 0.0f);
+  SKY_hillaire_precompute_texture(moonlit.data(),
+                                  stride,
+                                  width,
+                                  height,
+                                  moon_elevation,
+                                  altitude,
+                                  air_density,
+                                  aerosol_density,
+                                  ozone_density,
+                                  aerosol_anisotropy,
+                                  moon_color_transform);
+
+  /* Both skies are stored with their own light source at the middle of the row, so the Moon's
+   * has to be turned to sit at the right bearing from the Sun before the two are added. The
+   * azimuth axis is evenly spaced and wraps around, which makes that a circular shift. */
+  const float shift = azimuth_offset * (1.0f / M_2PI_F) * float(width);
+
+  SKY_parallel_for(
+      0, height, std::max(1024 / width, 1), [&](const size_t begin, const size_t end) {
+        for (size_t y = begin; y < end; y++) {
+          const float *src_row = moonlit.data() + y * size_t(width) * size_t(stride);
+          float *dst_row = pixels + y * size_t(width) * size_t(stride);
+          for (int x = 0; x < width; x++) {
+            float src_x = fmodf(float(x) - shift, float(width));
+            if (src_x < 0.0f) {
+              src_x += float(width);
+            }
+            int x0 = int(src_x);
+            if (x0 >= width) {
+              x0 = 0;
+            }
+            const int x1 = (x0 + 1) % width;
+            const float f = src_x - floorf(src_x);
+            for (int c = 0; c < 3; c++) {
+              const float v = mix(src_row[x0 * stride + c], src_row[x1 * stride + c], f);
+              dst_row[x * stride + c] += v * scale;
+            }
+          }
+        }
+      });
+}
+
 /* Oxygen and hydroxyl high in the atmosphere glow faintly on their own, with no sunlight involved
  * at all. It is what keeps a genuinely moonless night from being black, and it is brightest some
  * way above the horizon: the line of sight runs further through the layer as it flattens, until

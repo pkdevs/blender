@@ -883,6 +883,7 @@ static void scene_foreach_id(ID *id, LibraryForeachIDData *data)
 
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->camera, IDWALK_CB_NOP);
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->sun_object, IDWALK_CB_NOP);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->moon_object, IDWALK_CB_NOP);
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->world, IDWALK_CB_USER);
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->set, IDWALK_CB_NEVER_SELF);
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->clip, IDWALK_CB_USER);

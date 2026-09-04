@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 #include "node_color.h"
+#include "node_hash.h"
 #include "stdcycles.h"
 
 float sky_angle_between(float thetav, float phiv, float theta, float phi)
@@ -129,8 +130,841 @@ float signx(float x)
   }
 }
 
-color sky_radiance_nishita(
-    vector dir, float sky_data[11], color sun_color, string filename, string sky_type)
+/* Cells across one cube face, per side. */
+#define SKY_STAR_GRID 256.0
+/* Surface brightness of the band where it is thickest, lifted above the physical level by the
+ * same reasoning as the stars and moonlight. */
+#define SKY_MILKY_WAY_RADIANCE 2.4e-3
+/* Surface brightness of the zodiacal light, scaled so that near the Sun it stands with the Milky
+ * Way's band, which is what it does at a dark site, and the gegenschein opposite lands about a
+ * tenth of that. */
+#define SKY_ZODIACAL_RADIANCE 2.0e-4
+/* Lattice size of the band's dust and cloud structure, in cycles across the sky. Six puts the
+ * coarse cell near ten degrees and the fine one near five, against a band ten to thirty wide. */
+#define SKY_NEBULA_SCALE 6.0
+
+/* Stars.
+ *
+ * Cube-face grid: the sky is divided into cells on the six faces of a cube, one star per cell.
+ * Cube-face coordinates avoid trigonometry between the view direction and the hash, so the star
+ * field is bit-identical on every device. Each star is kept inside its own cell, so a lookup only
+ * ever needs that cell. */
+vector sky_star_direction(int face, float u, float v)
+{
+  /* Faces pair up: even is the positive side of an axis, odd the negative. */
+  float side = (face % 2 == 1) ? -1.0 : 1.0;
+  if (face < 2) {
+    return normalize(vector(side, u, v));
+  }
+  if (face < 4) {
+    return normalize(vector(u, side, v));
+  }
+  return normalize(vector(u, v, side));
+}
+
+/* Where a direction falls in the galaxy, given in celestial coordinates. Returns the sine of
+ * galactic latitude in x (zero on the band, +/-1 at the galactic poles) and in y how far the
+ * direction leans toward the galactic center in Sagittarius, much the brightest part of the
+ * band. The two constants are the north galactic pole and the galactic center, written out in
+ * equatorial coordinates. */
+vector sky_galactic_coords(vector cel)
+{
+  vector pole = vector(-0.8678, -0.1970, 0.4560);
+  vector center = vector(-0.0549, -0.8736, -0.4841);
+  return vector(dot(cel, pole), dot(cel, center), 0.0);
+}
+
+/* How much the band thickens the star field at this direction.
+ *
+ * The strength saturates rather than rising without limit. Left linear, turning the band up also
+ * multiplies the share of cells holding a star, and past a few units every cell on the band has
+ * one - so the band stops reading as a glow with stars in it and becomes a field of dots. The
+ * crowding factor is separate from the band's brightness for the same reason. */
+float sky_milky_way_crowding(vector cel, float milky_way, float crowding)
+{
+  if (milky_way <= 0.0 || crowding <= 0.0) {
+    return 1.0;
+  }
+  vector g = sky_galactic_coords(cel);
+  float spread = g[0] / 0.30;
+  float along = 0.35 + 0.65 * smoothstep(-0.6, 0.9, g[1]);
+  float strength = milky_way / (1.0 + 0.4 * milky_way);
+  return 1.0 + 7.0 * crowding * strength * exp(-spread * spread) * along;
+}
+
+/* Unresolved starlight along the band, plus the dust of the Great Rift cutting a dark lane
+ * through the middle of it. */
+/* Value noise on the same integer hash all three backends share, so the field is identical
+ * everywhere. Nothing but multiply, add and floor stands between the direction and the integer
+ * lattice, and unlike the star field this one is continuous across a cell boundary, so a
+ * last-bit disagreement about which cell a ray is in changes the result by nothing.
+ *
+ * The hash returns three independent numbers, so one lattice yields three uncorrelated fields for
+ * the price of one. That is what makes dust, star clouds and emission affordable together. */
+vector sky_value_noise(vector p)
+{
+  vector cell = vector(floor(p[0]), floor(p[1]), floor(p[2]));
+  vector f = p - cell;
+  vector w = f * f * (vector(3.0, 3.0, 3.0) - 2.0 * f);
+  int ix = (int)cell[0], iy = (int)cell[1], iz = (int)cell[2];
+
+  vector c000 = (vector)hash_int3_to_vector3(int3(ix, iy, iz));
+  vector c100 = (vector)hash_int3_to_vector3(int3(ix + 1, iy, iz));
+  vector c010 = (vector)hash_int3_to_vector3(int3(ix, iy + 1, iz));
+  vector c110 = (vector)hash_int3_to_vector3(int3(ix + 1, iy + 1, iz));
+  vector c001 = (vector)hash_int3_to_vector3(int3(ix, iy, iz + 1));
+  vector c101 = (vector)hash_int3_to_vector3(int3(ix + 1, iy, iz + 1));
+  vector c011 = (vector)hash_int3_to_vector3(int3(ix, iy + 1, iz + 1));
+  vector c111 = (vector)hash_int3_to_vector3(int3(ix + 1, iy + 1, iz + 1));
+
+  vector x00 = mix(c000, c100, w[0]);
+  vector x10 = mix(c010, c110, w[0]);
+  vector x01 = mix(c001, c101, w[0]);
+  vector x11 = mix(c011, c111, w[0]);
+  return mix(mix(x00, x10, w[1]), mix(x01, x11, w[1]), w[2]);
+}
+
+/* Dust, star clouds and emission along the band, from one lattice.
+ *
+ * What gives the Milky Way its shape in any photograph is dust taking light away, not stars piling
+ * up: the Great Rift, the Coalsack and the Pipe are foreground clouds subtracting from the star
+ * clouds behind them. The dust term is thresholded rather than smooth, so most of the band is left
+ * alone and what remains reads as discrete clouds with edges instead of an even haze.
+ *
+ * Returned as (extinction, cloud gain, emission) and used by the glow, the star brightness and the
+ * star count together, so a dark cloud loses its glow AND its stars. */
+vector sky_nebulosity(vector cel, float structure, float nebulae)
+{
+  /* Two lattices, the second at twice the frequency and half the weight. One alone leaves plain
+   * blobs on a ten-degree grid; a third would land near a pixel and only flatten the two. */
+  vector p = cel * SKY_NEBULA_SCALE;
+  vector n = (sky_value_noise(p) * 2.0 + sky_value_noise(p * 2.0)) / 3.0;
+  float tau = structure * max(n[0] - 0.45, 0.0) * 3.2;
+  float clouds = 1.0 + 1.8 * structure * (n[1] - 0.5);
+  float emission = nebulae * pow(max(n[2] - 0.75, 0.0), 2.0) * 6.0;
+  return vector(exp(-tau), max(clouds, 0.0), emission);
+}
+
+color sky_milky_way_glow(vector cel, float milky_way, color tint, vector nebulosity)
+{
+  if (milky_way <= 0.0) {
+    return color(0.0);
+  }
+  vector g = sky_galactic_coords(cel);
+  float sin_b = g[0];
+  float toward_center = g[1];
+  float along = 0.35 + 0.65 * smoothstep(-0.6, 0.9, toward_center);
+  /* The band is thin toward the anticenter and swells toward the galactic center, where the line
+   * of sight runs the length of the disc and through the bulge. A single width everywhere is most
+   * of what makes it read as a smear rather than a galaxy. */
+  float width = mix(0.09, 0.26, smoothstep(-0.6, 0.9, toward_center));
+  float band = exp(-(sin_b / width) * (sin_b / width)) +
+               0.55 * exp(-(sin_b / 0.34) * (sin_b / 0.34)) *
+                   smoothstep(0.72, 0.99, toward_center);
+  float rift_offset = (sin_b + 0.035) / 0.045;
+  float rift = 1.0 - 0.55 * exp(-rift_offset * rift_offset) * smoothstep(-0.2, 0.8, toward_center);
+  /* The band's own color arrives already adapted, so it carries whatever the eye would still find
+   * in it at this brightness, not its full photographic warmth. Dust takes light away and star
+   * clouds add it; the emission patches sit on top, tinted warm, since a hydrogen region is red
+   * where the band around it is not. */
+  color glow = tint * (SKY_MILKY_WAY_RADIANCE * milky_way * along * band * rift * nebulosity[0] *
+                       nebulosity[1]);
+  color emission = color(1.0, 0.35, 0.40) *
+                   (SKY_MILKY_WAY_RADIANCE * milky_way * band * nebulosity[2]);
+  return glow + emission;
+}
+
+/* One star per cell, or none. Density decides how many cells hold a visible star, and brightness
+ * how strongly the survivors shine: letting one number do both gives either a bare sky or an even
+ * speckle, neither of which reads as stars. A star smaller than a pixel is widened to the ray's
+ * own footprint and dimmed to match, so that it keeps its light instead of flickering as the
+ * camera moves. */
+color sky_stars(vector cel,
+                float density,
+                float brightness,
+                float variation,
+                float seed,
+                float footprint,
+                color color_cool,
+                color color_hot,
+                float milky_way,
+                float milky_way_crowding,
+                vector nebulosity)
+{
+  float ax = abs(cel[0]), ay = abs(cel[1]), az = abs(cel[2]);
+  int face;
+  float u, v;
+  if (ax >= ay && ax >= az) {
+    face = (cel[0] > 0.0) ? 0 : 1;
+    u = cel[1] / ax;
+    v = cel[2] / ax;
+  }
+  else if (ay >= az) {
+    face = (cel[1] > 0.0) ? 2 : 3;
+    u = cel[0] / ay;
+    v = cel[2] / ay;
+  }
+  else {
+    face = (cel[2] > 0.0) ? 4 : 5;
+    u = cel[0] / az;
+    v = cel[1] / az;
+  }
+
+  float grid_x = (u * 0.5 + 0.5) * SKY_STAR_GRID;
+  float grid_y = (v * 0.5 + 0.5) * SKY_STAR_GRID;
+  int cx = (int)clamp(floor(grid_x), 0.0, 255.0);
+  int cy = (int)clamp(floor(grid_y), 0.0, 255.0);
+  /* One integer identifying the cell's face, with the seed folded in. The node bounds the seed so
+   * that this multiply stays inside a signed 32-bit integer in every backend. */
+  int base = face + (int)seed * 6;
+
+  /* Same hash used by all three shading backends, in signed integers for OSL compatibility, so
+   * the star field matches everywhere. Two calls cover the four values needed here. */
+  vector h0 = (vector)hash_int3_to_vector3(int3(cx, cy, base));
+  vector h1 = (vector)hash_int3_to_vector3(int3(cx, cy, base + 97));
+  float pick = h0[0];
+
+  /* Keep the star well inside its own cell. */
+  float sx = ((float)cx + 0.5 + (h0[1] - 0.5) * 0.6) / SKY_STAR_GRID * 2.0 - 1.0;
+  float sy = ((float)cy + 0.5 + (h0[2] - 0.5) * 0.6) / SKY_STAR_GRID * 2.0 - 1.0;
+  vector star_dir = sky_star_direction(face, sx, sy);
+
+  /* Only a small share of cells get a star. Count and brightness are chosen separately: one
+   * number driving both would give either an empty sky or uniform speckle, not the mix of a few
+   * bright stars over many faint ones a real sky has.
+   *
+   * The band is a crowd of stars as much as it is a glow, so it thickens the field here rather
+   * than only adding light on top of it. Cells are equal area on the cube face but not on the
+   * sphere: one near a face center covers about five times the sky one near a corner does, and
+   * without the cube of the largest component undoing exactly that stretch the field clumps into
+   * eight knots at the corners of the cube.
+   *
+   * Both of those are asked at the star's own direction, never at the ray's. They vary
+   * continuously across a cell, so asking at the ray would let the same star exist for one sample
+   * and not the next, and would put a transcendental between the hash and the decision, which is
+   * what the field being identical on every device rests on not doing.
+   *
+   * The dust is the exception: it is taken at the ray, since the glow needs it there and asking
+   * again at the star would double the cost of the whole field. Its lattice spans about ten
+   * degrees, so across one pixel it moves by a fraction of a percent - far below the gap between
+   * the hash values either side of the decision, save for a cell sitting right on it. */
+  float cell_max = max(abs(star_dir[0]), max(abs(star_dir[1]), abs(star_dir[2])));
+  /* The same clouds that shape the glow shape the field: a dark cloud loses its stars as well as
+   * its light, and a bright knot gains both. */
+  float crowding = sky_milky_way_crowding(star_dir, milky_way, milky_way_crowding) *
+                   nebulosity[0] * nebulosity[1];
+  float share = clamp(0.02 * density * crowding, 0.0, 1.0) * (cell_max * cell_max * cell_max);
+  if (share <= 0.0 || pick < 1.0 - share) {
+    return color(0.0);
+  }
+  /* Real star counts rise steeply toward the faint end, so bias survivors toward dim. */
+  float flux = pow((pick - (1.0 - share)) / share, 3.0);
+  if (flux < 1.0e-5) {
+    return color(0.0);
+  }
+
+  /* A star is far smaller than a pixel. Draw it at least pixel-sized and dim it to compensate, or
+   * it would flicker in and out as the camera moves and the sample point drifts on and off it.
+   *
+   * The size does not follow brightness. A bright star looks bigger in a photograph because of the
+   * camera - the core saturates and spills into its neighbors, and the lens spreads a fringe
+   * around it - not because the star is bigger; every star is an unresolved point. That belongs to
+   * the compositor's Glare, which produces it from brightness for free. Growing the disc here
+   * would also push it past its own cell, and since a lookup only ever consults the cell the ray
+   * falls in, the part that crossed the boundary would simply be cut off square. */
+  float radius = max(footprint * 0.7, 1.0e-5);
+  float dist = length(cel - star_dir);
+  float shape = 1.0 - smoothstep(0.0, radius, dist);
+  if (shape <= 0.0) {
+    return color(0.0);
+  }
+
+  /* Color comes from a temperature, the way the Sun's and the Moon's do. The two ends of the
+   * ramp are blackbody colors worked out on the CPU, so all three backends agree even though
+   * each has its own blackbody routine; the middle is the Sun's own temperature, which is white
+   * by construction. The hash is spread evenly in reciprocal temperature, where the Planckian
+   * locus is nearly straight, so interpolating along it stays close to a real blackbody. */
+  float warmth = h1[0];
+  color tint = (warmth < 0.5) ? mix(color_cool, color(1.0), warmth * 2.0) :
+                                mix(color(1.0), color_hot, (warmth - 0.5) * 2.0);
+  /* Only the bright ones show their color. Sight is nearly achromatic at these levels, which the
+   * night adaptation already applies to the sky as a whole; this is the same effect per star,
+   * and without it a high variation reads as confetti. */
+  color shade = mix(color(1.0), tint, clamp(variation, 0.0, 1.0) * sqrt(flux));
+
+  /* Only partly dimmed by the dust: about half the stars the eye can pick out are in front of
+   * the band rather than behind it. */
+  float extinction = mix(1.0, nebulosity[0], 0.6);
+  /* Radiance divides by disc area, so spreading a star over more pixels doesn't change the total
+   * light it delivers. Boosted well above the physical level - a star's true brightness is some
+   * five decades under a daytime sky, so a night scene would otherwise open black - by the same
+   * factor as moonlight, so the two keep their relative brightness. */
+  float radiance = 3.0e-6 * flux * brightness * extinction / (radius * radius);
+  return shade * radiance * shape;
+}
+
+/* Direction of a body in the sky, in the frame used by sky_spherical_coordinates(). */
+vector sky_body_direction(float elevation, float rotation)
+{
+  float theta = M_PI_2 - elevation;
+  float phi = -rotation;
+  return vector(sin(theta) * sin(phi), sin(theta) * cos(phi), cos(theta));
+}
+
+/* True if the ray hits the disc of a body occluding the stars. Negative diameter means off. */
+int sky_behind_body(vector view, float elevation, float rotation, float angular_diameter)
+{
+  if (angular_diameter <= 0.0) {
+    return 0;
+  }
+  return (dot(view, sky_body_direction(elevation, rotation)) > cos(angular_diameter * 0.5)) ? 1 :
+                                                                                              0;
+}
+
+/* Smooth minimum, for unioning the plains below. */
+float sky_smin(float a, float b, float k)
+{
+  float h = max(k - abs(a - b), 0.0) / k;
+  return min(a, b) - h * h * k * 0.25;
+}
+
+/* Derivative of smoothstep, for the crater profile's slope. */
+float sky_dsmoothstep(float a, float b, float x)
+{
+  float t = clamp((x - a) / (b - a), 0.0, 1.0);
+  return 6.0 * t * (1.0 - t) / (b - a);
+}
+
+/* Displace a direction on the Moon's surface by banded noise, so that a shoreline traced out of
+ * circles does not read as circles. Amplitude falls with frequency, which is what lets it be
+ * applied to every basin at once: the coarse octave carries a small crater bodily instead of
+ * tearing it up, and only the fine octaves work the edges. The amplitude is in radians, directly
+ * comparable to the radii in the maria table. */
+vector sky_moon_warp(vector body)
+{
+  vector d = vector(0.0);
+  float amp = 0.05;
+  float freq = 6.0;
+  for (int i = 0; i < 3; i++) {
+    d += amp * (sky_value_noise(body * freq) * 2.0 - vector(1.0));
+    freq *= 2.17;
+    amp *= 0.5;
+  }
+  return normalize(body + d);
+}
+
+/* Albedo variation across plains and highlands alike, or the face reads as two flat tones.
+ *
+ * A sum of smooth octaves is smooth however much amplitude it is given - turning it up only grows
+ * the blotches. The Moon's albedo is not made that way: it is discrete events at every scale,
+ * crater floors and ejecta aprons and basalt units with mapped boundaries, superposed. So each
+ * octave is thresholded into sparse bright and sparse dark patches with hard edges at its own
+ * scale, rather than summed raw, and the stack spans two decades instead of one.
+ *
+ * Six octaves is the ceiling worth paying for. They run 3, 7.2, 17.3, 41.5, 99.5, 239, and at a
+ * five degree disc one body unit is the disc radius, so the last already has cells under a pixel.
+ * A seventh is sub-pixel even for a Moon filling a twelve degree frame. */
+float sky_moon_patches(vector body)
+{
+  vector q = body * 3.0 + vector(5.1, 41.7, -13.3);
+  float total = 0.0;
+  float amp = 1.0;
+  float norm = 0.0;
+  for (int i = 0; i < 6; i++) {
+    vector octave = sky_value_noise(q);
+    float n = octave[0];
+    /* Thresholds sit close together so that most of each octave clears one of them and the
+     * patches are dense; the amplitude is what keeps that from adding up to more contrast. */
+    float bright = smoothstep(0.475, 0.585, n);
+    /* Written as a forward ramp subtracted from one, never as smoothstep(hi, lo, n). Reversed
+     * edges are undefined in GLSL and Cycles resolves them to a step in the wrong direction, so
+     * the reversed form silently disagrees between backends. */
+    float dark = 1.0 - smoothstep(0.415, 0.525, n);
+    total += amp * (bright - 0.9 * dark);
+    norm += amp;
+    q *= 2.4;
+    amp *= 0.72;
+  }
+  return total / norm;
+}
+
+/* Fine surface texture from the level sets of a noise field: a thin band either side of a level
+ * crossing gives closed loops, and the region past it gives their interiors. The loops are not
+ * circular - level sets of value noise are amoebas - so this reads as grain rather than as
+ * craters, and the craters proper are the cellular field below. It is a zoom-only layer either
+ * way; at the half degree the Moon really subtends it averages into a uniform lift. */
+float sky_moon_speckle(vector body)
+{
+  vector q = body * 35.0 + vector(-3.9, 27.1, 61.4);
+  float total = 0.0;
+  float amp = 1.0;
+  float norm = 0.0;
+  for (int i = 0; i < 3; i++) {
+    vector octave = sky_value_noise(q);
+    float n = octave[0];
+    float rim = 1.0 - smoothstep(0.0, 0.08, abs(n - 0.52));
+    float inside = smoothstep(0.52, 0.87, n);
+    total += amp * (rim - 0.55 * inside);
+    norm += amp;
+    q *= 2.4;
+    amp *= 0.75;
+  }
+  return total / norm;
+}
+
+/* Craterlets: one crater per lattice cell, jittered inside it by the cell's own hash, so they
+ * come out circular by construction rather than as whatever shape a level set happens to take.
+ * The hash returns three floats, which is exactly the jitter offset, and the radius is scrambled
+ * out of those same three rather than costing a second lookup. Radii are drawn log-uniformly over
+ * a nine-fold range, so small craters outnumber large ones and the field does not read as bubble
+ * wrap; that range, not a second octave, is what buys the size variety.
+ *
+ * Twenty-seven cells have to be visited because the nearest centre can be in any neighbour. That
+ * is 27 hashes, affordable only because none of it runs unless the ray hits the disc.
+ *
+ * Returns the height gradient, with the albedo term as an output. The gradient is what lets the
+ * Sun shade them: crater depth scales with crater radius, so the radius cancels out of dh/ds and
+ * one profile serves every size with no lattice frequency in the answer. The constants put the
+ * inner walls near the angle of repose, which is where real simple-crater walls sit. */
+vector sky_moon_craters(vector body, output float albedo)
+{
+  vector q = body * 26.0 + vector(113.0, -47.0, 29.0);
+  vector base = vector(floor(q[0]), floor(q[1]), floor(q[2]));
+  float best_x = 1.0e6;
+  vector best_u = vector(0.0);
+  for (int dz = -1; dz <= 1; dz++) {
+    for (int dy = -1; dy <= 1; dy++) {
+      for (int dx = -1; dx <= 1; dx++) {
+        vector cell = base + vector((float)dx, (float)dy, (float)dz);
+        vector h = (vector)hash_int3_to_vector3(int3((int)cell[0], (int)cell[1], (int)cell[2]));
+        vector delta = q - (cell + h);
+        float dist = length(delta);
+        float scramble = dot(h, vector(7.31, 3.17, 11.9));
+        float u = scramble - floor(scramble);
+        float radius = 0.12 * pow(1.10 / 0.12, u);
+        float x = dist / radius;
+        if (x < best_x) {
+          best_x = x;
+          best_u = delta / max(dist, 1e-6);
+        }
+      }
+    }
+  }
+  float x = best_x;
+  float rim = smoothstep(0.78, 0.94, x) * (1.0 - smoothstep(1.00, 1.16, x));
+  float bowl = 1.0 - smoothstep(0.55, 0.86, x);
+  albedo = rim - 0.55 * bowl;
+
+  float dbowl = -sky_dsmoothstep(0.35, 1.00, x);
+  float drim = sky_dsmoothstep(0.78, 0.94, x) * (1.0 - smoothstep(1.00, 1.16, x)) -
+               smoothstep(0.78, 0.94, x) * sky_dsmoothstep(1.00, 1.16, x);
+  float dh_ds = -0.12 * dbowl + 0.06 * drim;
+
+  vector u = best_u - body * dot(best_u, body);
+  u = u / max(length(u), 1e-6);
+  return u * dh_ds;
+}
+
+/* Relief, felt only at the terminator.
+ *
+ * The terminator is the locus where the incidence cosine crosses zero, so adding a little signed
+ * noise to that cosine alone shifts the locus sideways by about the amplitude in radians of arc
+ * and does nothing anywhere else, where the cosine is of order one. No height field, no perturbed
+ * normal, and no cost away from the one place relief shows on the real Moon.
+ *
+ * The amplitude is set against resolution rather than against lunar topography: it displaces the
+ * terminator by roughly its own value in disc radii, which is under half a pixel at the half
+ * degree the Moon really subtends and only becomes visible past a few degrees of sky. Real slopes
+ * would be an order of magnitude larger and ragged at any size.
+ *
+ * Stretching the lattice along the Sun elongates each feature the way a low Sun draws out a
+ * shadow - nothing is occluding anything here, but the dark side of a bump running away from the
+ * light is the cue the eye reads as relief rather than as a noisy edge. The stretch relaxes toward
+ * isotropic on the finer octaves; held constant it combs them into parallel fingers. */
+float sky_moon_relief(vector body, vector sun_body)
+{
+  float total = 0.0;
+  float amp = 1.0;
+  float norm = 0.0;
+  float freq = 60.0;
+  float stretch = 2.2;
+  for (int i = 0; i < 4; i++) {
+    vector p = body - sun_body * dot(body, sun_body) * (1.0 - 1.0 / stretch);
+    vector octave = sky_value_noise(p * freq + vector(-31.7, 12.9, 22.4));
+    total += amp * (octave[0] - 0.5);
+    norm += amp;
+    freq *= 2.11;
+    amp *= 0.5;
+    stretch = 1.0 + (stretch - 1.0) * 0.35;
+  }
+  return total / norm;
+}
+
+#define SKY_RAY_COUNT 8
+/* OSL wants a plain integer for an array length and will not take an expression, so the float
+ * count is spelled out rather than written as SKY_RAY_COUNT * 4. */
+#define SKY_RAY_FLOATS 32
+
+/* Ray systems: returns the coverage, with the albedo that coverage mixes toward as an output.
+ *
+ * Two fields, each doing what its parameterisation is good at. A field in distance and azimuth
+ * always converges on the crater, so on its own it can only read as a dot with a spider around
+ * it; mixing a positional lattice into the same lookup buys a blob at the cost of the radial
+ * structure everywhere else. So the continuous ejecta gets its own purely positional field,
+ * confined to the inner part of the system, and the filaments are suppressed underneath it. The
+ * blob's ragged edge is what hides their convergence, and no separate core is needed.
+ *
+ * The tangent direction carries azimuth with no polar seam and no trigonometry, and the three
+ * hash channels give a filament its presence, its length and its tone from one lookup. Without
+ * the length varying, every filament ends on a common circle and the system reads as a lens
+ * flare; without brightness falling faster than coverage, a ray that widens with distance - as
+ * any radial feature must - reads as a searchlight beam.
+ *
+ * The whole field is gated on phase because fresh ejecta has a stronger opposition effect than
+ * mature regolith: a ray system does not merely stay visible at full, it gains on its
+ * surroundings, and is swamped by relief contrast well before quarter. That gate is also what
+ * lets the contrast at full be this high without the filaments reading as scratches elsewhere.
+ *
+ * `sky_ray_craters` is a centre in the same selenographic frame as the maria plus the angular
+ * reach of the system in radians, taken from the published extent over a 1737 km radius.
+ * `sky_ray_strength` is how strongly each shows and `sky_ray_bright` how bright its own core is
+ * against the ray albedo: the young craters are not interchangeable, and Aristarchus is the
+ * brightest point on the Moon by a wide margin. */
+float sky_moon_rays(vector p, float cos_phase, output float target)
+{
+  /* clang-format off */
+  float sky_ray_craters[SKY_RAY_FLOATS] = {
+      0.7134, -0.1438, -0.6858, 1.05, /* Tycho */
+      0.9259, -0.3388, 0.1668, 0.46, /* Copernicus */
+      0.7801, -0.6095, 0.1409, 0.30, /* Kepler */
+      0.6198, -0.6740, 0.4019, 0.34, /* Aristarchus */
+      0.6577, 0.7004, 0.2773, 0.28, /* Proclus */
+      0.2813, -0.0501, 0.9583, 0.38, /* Anaxagoras */
+      0.4029, -0.8151, -0.4163, 0.30, /* Byrgius A */
+      0.5279, 0.6661, -0.5270, 0.30 /* Stevinus A */
+  };
+  float sky_ray_strength[SKY_RAY_COUNT] = {1.00, 0.75, 0.55, 0.65, 0.50, 0.40, 0.45, 0.45};
+  float sky_ray_bright[SKY_RAY_COUNT] = {1.15, 1.10, 1.05, 1.55, 1.30, 0.95, 1.00, 1.05};
+  /* clang-format on */
+
+  float cover = 0.0;
+  target = 0.170;
+  for (int i = 0; i < SKY_RAY_COUNT; i++) {
+    vector c = vector(
+        sky_ray_craters[i * 4], sky_ray_craters[i * 4 + 1], sky_ray_craters[i * 4 + 2]);
+    float reach = sky_ray_craters[i * 4 + 3];
+    float cd = clamp(dot(p, c), -1.0, 1.0);
+    float d = acos(cd);
+    /* Nothing of this system reaches here, and most points are in range of only one or two. */
+    if (d > reach * 1.45) {
+      continue;
+    }
+    float br = reach * 0.28;
+    vector blob_noise = sky_value_noise(p * 30.0 + c * 7.0);
+    float bn = blob_noise[0];
+    float blob = 0.62 * smoothstep(0.26, 0.58, bn) * (1.0 - smoothstep(br * 0.35, br, d));
+
+    vector t = p - c * cd;
+    t = t / max(length(t), 1e-6);
+    vector fine = sky_value_noise(t * 18.0 + c * d);
+    vector tuft_noise = sky_value_noise(t * 5.04);
+    float tuft = tuft_noise[0];
+    float v = fine[0] * (0.45 + 0.55 * tuft);
+    float end = reach * (0.35 + 1.05 * fine[1]);
+    float far = clamp(d / max(end, 1e-4), 0.0, 1.0);
+    /* Raising the threshold as a filament runs kills the weak ones first, so the system is dense
+     * at the crater and sparse at its edge instead of dissolving all at once. */
+    float th = 0.34 + 0.54 * pow(far, 0.7);
+    float rays = 0.50 * smoothstep(th - 0.11, th + 0.11, v) * pow(1.0 - far, 1.8);
+    rays *= smoothstep(0.0, br * 0.9, d);
+
+    float s = sky_ray_strength[i] * max(blob, rays);
+    /* The strongest system here sets the tone, not whichever comes last in the table. */
+    if (s > cover) {
+      cover = s;
+      target = 0.170 * sky_ray_bright[i];
+    }
+  }
+  cover *= 0.35 + 0.65 * pow(max(cos_phase, 0.0), 0.6);
+  return clamp(cover, 0.0, 1.0);
+}
+
+#define SKY_MARIA_COUNT 40
+/* OSL wants a plain integer for an array length and will not take an expression, so the
+ * float count is spelled out rather than written as SKY_MARIA_COUNT * 4. */
+#define SKY_MARIA_FLOATS 160
+
+/* Fraction of incoming light reflected back along the view ray, or zero outside the disc.
+ * Multiply by the light reaching the Moon to get its radiance.
+ *
+ * `sky_maria` below is the hand-placed maria (the Moon's dark plains), in selenographic
+ * coordinates: each entry is a unit vector in the Moon's own frame plus an angular radius. The
+ * near-side maria are what makes the Moon recognizable, more than any crater, so a handful of
+ * overlapping circles is enough - no texture needed. */
+color sky_moon_reflectance(
+    vector view, vector moon_dir, vector sun_dir, vector pole, float angular_diameter)
+{
+  /* clang-format off */
+  float sky_maria[SKY_MARIA_FLOATS] = {
+      0.8062, -0.2312, 0.5446, 0.3310, /* Mare Imbrium */
+      0.5826, -0.6943, 0.4226, 0.2591, /* Oceanus Procellarum */
+      0.4924, -0.8529, 0.1736, 0.2706, /* Oceanus Procellarum */
+      0.5736, -0.8192, 0.0000, 0.2303, /* Oceanus Procellarum */
+      0.7002, -0.7002, -0.1392, 0.2015, /* Oceanus Procellarum */
+      0.8444, 0.2581, 0.4695, 0.2015, /* Mare Serenitatis */
+      0.8488, 0.5100, 0.1392, 0.2504, /* Mare Tranquillitatis */
+      0.5821, 0.8011, -0.1392, 0.2533, /* Mare Fecunditatis */
+      0.8008, 0.5401, -0.2588, 0.0979, /* Mare Nectaris */
+      0.4925, 0.8197, 0.2924, 0.1595, /* Mare Crisium */
+      0.7100, -0.5749, -0.4067, 0.1220, /* Mare Humorum */
+      0.8928, -0.2730, -0.3584, 0.2055, /* Mare Nubium */
+      0.9730, 0.0510, 0.2250, 0.0702, /* Mare Vaporum */
+      0.5591, 0.0098, 0.8290, 0.1382, /* Mare Frigoris */
+      0.4341, -0.3039, 0.8480, 0.1151, /* Mare Frigoris */
+      0.5043, 0.3531, 0.7880, 0.1094, /* Mare Frigoris */
+      0.9065, -0.3848, -0.1736, 0.1007, /* Mare Cognitum */
+      0.6123, -0.3752, 0.6959, 0.0679, /* Sinus Iridum */
+      0.8507, -0.5091, 0.1305, 0.1474, /* Mare Insularum */
+      0.9704, -0.1502, 0.1891, 0.0835, /* Sinus Aestuum */
+      0.9987, 0.0296, 0.0419, 0.0823, /* Sinus Medii */
+      0.8738, -0.4549, -0.1719, 0.0823, /* Palus Epidemiarum */
+      0.3287, -0.4873, 0.8090, 0.1163, /* Sinus Roris */
+      0.6879, 0.3844, 0.6157, 0.1203, /* Lacus Somniorum */
+      0.3503, 0.8542, 0.3843, 0.0864, /* Mare Anguis */
+      0.3655, 0.9232, 0.1184, 0.0697, /* Mare Undarum */
+      0.4210, 0.9069, 0.0192, 0.0800, /* Mare Spumans */
+      0.0436, 0.9988, 0.0227, 0.1077, /* Mare Smythii */
+      0.0662, 0.9709, 0.2300, 0.1036, /* Mare Marginis */
+      0.3680, -0.9249, -0.0958, 0.0495, /* Grimaldi */
+      0.2651, -0.9625, -0.0576, 0.0443, /* Riccioli */
+      0.6130, -0.1004, 0.7837, 0.0294, /* Plato */
+      0.8665, -0.0606, 0.4955, 0.0230, /* Archimedes */
+      0.9866, -0.0310, -0.1599, 0.0443, /* Ptolemaeus */
+      0.9716, -0.0475, -0.2317, 0.0317, /* Alphonsus */
+      0.9522, 0.2623, 0.1564, 0.0259, /* Julius Caesar */
+      0.3232, 0.4977, 0.8049, 0.0357, /* Endymion */
+      0.7696, 0.4552, 0.4478, 0.0173, /* Le Monnier */
+      0.6229, -0.7450, -0.2385, 0.0132, /* Billy */
+      0.8780, 0.4359, -0.1977, 0.0288 /* Theophilus */
+  };
+  /* clang-format on */
+
+  /* How dark each plain is. Rows sharing a mare share a tone, so the four Procellarum circles and
+   * the three of Frigoris do not show seams against themselves, and the ordering is the one the
+   * eye gets from a photograph - Grimaldi, Plato and Billy nearly black, Crisium and Iridum
+   * noticeably lighter than Imbrium - rather than measured values.
+   *
+   * The range is compressed against the measured albedos, which run 0.046 to 0.060 for the maria
+   * against about 0.13 for the highlands: at the true spread the disc renders as paper and ink.
+   * The mean is what matters downstream, and it is preserved. */
+  /* clang-format off */
+  float sky_maria_tone[SKY_MARIA_COUNT] = {
+      0.0795, /* Mare Imbrium */
+      0.0811, /* Oceanus Procellarum */
+      0.0811, /* Oceanus Procellarum */
+      0.0811, /* Oceanus Procellarum */
+      0.0811, /* Oceanus Procellarum */
+      0.0875, /* Mare Serenitatis */
+      0.0827, /* Mare Tranquillitatis */
+      0.0859, /* Mare Fecunditatis */
+      0.0843, /* Mare Nectaris */
+      0.0891, /* Mare Crisium */
+      0.0811, /* Mare Humorum */
+      0.0827, /* Mare Nubium */
+      0.0859, /* Mare Vaporum */
+      0.0875, /* Mare Frigoris */
+      0.0875, /* Mare Frigoris */
+      0.0875, /* Mare Frigoris */
+      0.0843, /* Mare Cognitum */
+      0.0907, /* Sinus Iridum */
+      0.0859, /* Mare Insularum */
+      0.0875, /* Sinus Aestuum */
+      0.0891, /* Sinus Medii */
+      0.0907, /* Palus Epidemiarum */
+      0.0891, /* Sinus Roris */
+      0.0859, /* Lacus Somniorum */
+      0.0907, /* Mare Anguis */
+      0.0891, /* Mare Undarum */
+      0.0891, /* Mare Spumans */
+      0.0859, /* Mare Smythii */
+      0.0875, /* Mare Marginis */
+      0.0763, /* Grimaldi */
+      0.0795, /* Riccioli */
+      0.0763, /* Plato */
+      0.0907, /* Archimedes */
+      0.0923, /* Ptolemaeus */
+      0.0907, /* Alphonsus */
+      0.0907, /* Julius Caesar */
+      0.0827, /* Endymion */
+      0.0859, /* Le Monnier */
+      0.0779, /* Billy */
+      0.0923 /* Theophilus */
+  };
+  /* clang-format on */
+
+  float half_angular = angular_diameter * 0.5;
+  float cos_sep = dot(view, moon_dir);
+  if (cos_sep < cos(half_angular)) {
+    return color(0.0);
+  }
+
+  /* Frame centered on the Moon; distance is great enough to treat the disc projection as
+   * orthographic. Lunar east is the leading limb as the Moon crosses the sky - the right side of
+   * the disc when north is up. */
+  vector east = cross(moon_dir, pole);
+  /* At the zenith or nadir there's no well-defined east; any perpendicular direction works.
+   * Without this fallback the cross product is zero and the whole face comes out NaN. */
+  east = (length(east) > 1e-6) ? normalize(east) : vector(1.0, 0.0, 0.0);
+  vector north = cross(east, moon_dir);
+
+  vector offset = view - moon_dir * cos_sep;
+  float u = dot(offset, east) / sin(half_angular);
+  float v = dot(offset, north) / sin(half_angular);
+  float r2 = u * u + v * v;
+  if (r2 > 1.0) {
+    return color(0.0);
+  }
+
+  /* Outward normal of the lunar surface, pointing back toward the observer at the center. */
+  vector N = u * east + v * north - sqrt(max(1.0 - r2, 0.0)) * moon_dir;
+
+  /* Darker plains over brighter highlands, in the Moon's own frame. */
+  vector body = vector(dot(N, -moon_dir), dot(N, east), dot(N, north));
+  vector p = sky_moon_warp(body);
+  float patches = sky_moon_patches(body);
+
+  /* Union of the plains, as a smooth minimum over the signed distance to each. Summing soft
+   * falloffs cannot merge them: a lone basin has to clear the threshold by itself, so a circle
+   * alone already clears it, overlap only tells in a thin annulus, and the joins come out as
+   * lens-shaped bulges rather than one plain. */
+  float sd = acos(clamp(dot(p, vector(sky_maria[0], sky_maria[1], sky_maria[2])), -1.0, 1.0)) -
+             sky_maria[3];
+  float nearest_rim = sd;
+  float plain_tone = sky_maria_tone[0];
+  for (int i = 1; i < SKY_MARIA_COUNT; i++) {
+    vector center = vector(sky_maria[i * 4], sky_maria[i * 4 + 1], sky_maria[i * 4 + 2]);
+    float rim = acos(clamp(dot(p, center), -1.0, 1.0)) - sky_maria[i * 4 + 3];
+    sd = sky_smin(sd, rim, 0.045);
+    if (rim < nearest_rim) {
+      nearest_rim = rim;
+      plain_tone = sky_maria_tone[i];
+    }
+  }
+  /* A wide shoreline, broken by the same patch field the highlands carry. Widening it alone only
+   * blurs the boundary; breaking it dissolves the shore into flooded embayments and stranded
+   * highland, so that half the disc stops reading as one flat dark shape. */
+  float maria = 1.0 - smoothstep(-0.050, 0.050, sd + patches * 0.10);
+  /* Maria are young surfaces with almost no craters on them. Holding the craterlets and the
+   * speckle out of the plains is most of what makes the disc read as two terrains. */
+  float highland = 1.0 - 0.85 * maria;
+
+  /* The phase angle, from the two directions already in hand: the angle at the Moon between the
+   * Sun and the viewer. Constant across a half-degree disc, but it costs nothing to take it here
+   * rather than thread another value through three backends. */
+  float cos_phase = clamp(-dot(moon_dir, sun_dir), -1.0, 1.0);
+  float phase_angle = acos(cos_phase);
+  float phase_deg = phase_angle * (180.0 / M_PI);
+
+  /* Plains over highlands. The spread between them is compressed against the measured albedos -
+   * maria average 0.046 to 0.060 and highlands about 0.13 - because at the true spread the disc
+   * renders as paper and ink. What is given up there is spent on the patch field, which leaves
+   * the mean where it was, and the mean is what SKY_moonlight_scale() is fitted against. */
+  float albedo = mix(0.130, plain_tone, maria);
+  albedo *= 1.0 + patches * 0.45 * (1.0 - 0.45 * maria);
+  albedo *= 1.0 + sky_moon_speckle(body) * 0.34 * (1.0 - 0.75 * maria);
+  float crater_albedo;
+  vector crater_grad = sky_moon_craters(body, crater_albedo);
+  albedo *= 1.0 + crater_albedo * 0.18 * highland;
+  /* Bright ejecta is one material lying on two grounds. Mixing toward its own albedo rather than
+   * scaling the ground makes it loud over a plain and quiet over highland by itself, which is how
+   * the real systems behave. */
+  float ray_target;
+  float ray_cover = sky_moon_rays(p, cos_phase, ray_target);
+  albedo = mix(albedo, ray_target, ray_cover);
+
+  /* Lommel-Seeliger against Lambert, weighted by phase - McEwen's lunar-Lambert function, with
+   * the cubic USGS ISIS uses. At opposition it is pure Lommel-Seeliger, and a full Moon really is
+   * a flat disc with no limb darkening at all: incidence equals emission everywhere, the ratio
+   * below is 1/2 across the whole face, and a cosine term there is what makes a rendered Moon
+   * look like a shaded ball instead. But that flatness is a property of full Moon and not of the
+   * surface - by quarter the same regolith is very nearly Lambertian, and L has fallen to 0.19.
+   *
+   * The cubic is a fit over a limited range and turns negative past 104 degrees, so a thin
+   * crescent needs the clamp or the shading inverts. */
+  float lunar_lambert = clamp(1.0 - 0.019 * phase_deg + 0.000242 * phase_deg * phase_deg -
+                                  0.00000146 * phase_deg * phase_deg * phase_deg,
+                              0.0,
+                              1.0);
+
+  vector sun_body = vector(dot(sun_dir, -moon_dir), dot(sun_dir, east), dot(sun_dir, north));
+  /* Craterlets are shaded by their own slope against the Sun. The gradient lies in the tangent
+   * plane, so this dot product picks up only the Sun's tangential component by itself: the
+   * shading vanishes where the Sun is overhead and is strongest where it grazes. A full Moon
+   * therefore has flat craters at the centre of the disc and shaded ones toward the limb, and a
+   * quarter Moon has them shaded along the terminator, with no phase term written here. */
+  float shaded = dot(N, sun_dir) + sky_moon_relief(body, sun_body) * 0.040 * (1.0 - 0.6 * maria) -
+                 dot(crater_grad, sun_body) * highland * 0.22;
+  /* Earthshine needs the signed value - it lights the face the Sun does not - so the clamp for
+   * the sunlit term is kept separate. */
+  float mu0 = max(shaded, 0.0);
+  float mu = dot(N, -view);
+  float lit = (mu > 0.0) ?
+                  lunar_lambert * mu0 / max(mu0 + mu, 1e-9) + (1.0 - lunar_lambert) * mu0 * 0.5 :
+                  0.0;
+  /* L redistributes brightness across the disc; it must not change how much the disc emits in
+   * total, or the Moon would dim through the lunation while the glow it casts did not. This undoes
+   * the shift, measured off the disc integral and exact at full, where everything downstream is
+   * calibrated. */
+  lit *= 1.0 + 8.7373e-3 * phase_deg - 1.8246e-4 * phase_deg * phase_deg +
+         1.7312e-6 * phase_deg * phase_deg * phase_deg;
+
+  /* Opposition surge. Within a few degrees of full, regolith brightens sharply beyond what
+   * Lommel-Seeliger gives: the shadows between grains hide behind the grains themselves, and
+   * backscatter adds to it. This is why a full Moon is startlingly brighter than a gibbous one
+   * rather than proportionally so. Hapke's form, with the shadow-hiding amplitude and width he
+   * fits for the Moon.
+   *
+   * The disc only. The glow the Moon puts into the sky is scaled by SKY_moonlight_scale(), whose
+   * exponential fit against phase already absorbs the surge; applying it in both places would
+   * count it twice. */
+  float surge = 1.0 + 0.6 / (1.0 + tan(phase_angle * 0.5) / 0.06);
+
+  /* Earthshine: sunlight reflected off Earth faintly lights the Moon's night side, tinted blue.
+   * Brightest at new Moon, when the Earth seen from there is full, and gone at full Moon, when it
+   * is new. That is what puts the old moon in the new moon's arms. */
+  float earth_phase = (1.0 - cos_phase) * 0.5;
+  /* Weighted to blue because Earth is, and small: under a tenth of the sunlit face at its best. */
+  color earthshine = albedo * color(0.020, 0.026, 0.044) * earth_phase * max(-shaded, 0.0);
+
+  /* Fade the very edge to keep the silhouette from aliasing. */
+  float edge = 1.0 - smoothstep(0.98, 1.0, r2);
+  return (color(albedo * lit * surge) + earthshine) * edge;
+}
+
+color sky_radiance_nishita(vector dir,
+                           float sky_data[11],
+                           color sun_color,
+                           vector moon_params,
+                           float moon_intensity,
+                           color moon_color,
+                           vector moon_sun_dir,
+                           color moon_illuminant_xyz,
+                           vector star_params,
+                           float star_seed,
+                           color star_color_cool,
+                           color star_color_hot,
+                           color zenith_transmittance,
+                           float celestial[9],
+                           float milky_way,
+                           float milky_way_crowding,
+                           float milky_way_structure,
+                           float nebulae,
+                           color milky_way_tint,
+                           float zodiacal_light,
+                           color zodiacal_tint,
+                           string filename,
+                           string sky_type,
+                           float footprint)
 {
   /* Get 2 pixels data */
   color pixel_bottom = color(sky_data[0], sky_data[1], sky_data[2]);
@@ -146,13 +980,22 @@ color sky_radiance_nishita(
   float half_angular = angular_diameter * 0.5;
   float alpha = 1.0;
   color rgb_sun = color(0.0, 0.0, 0.0);
+  /* Normalized once. The Vector socket carries whatever a Mapping node put on it, and every
+   * angular test below compares a dot product against a cosine, which only means anything for a
+   * unit vector: unnormalized, a scaled Vector makes the eclipse test true for the whole sky or
+   * for none of it. */
+  vector view = normalize(dir);
   vector direction = sky_spherical_coordinates(dir);
   float dir_elevation = M_PI_2 - direction[0];
 
   /* If the ray is inside the Sun disc and is not occluded by Earth's surface, render it, otherwise
    * render the sky. Alternatively, ignore the Sun if we're evaluating the background texture. */
-  if (sun_dir_angle < half_angular && sun_disc == 1 && raytype("importance_bake") != 1 &&
-      dir_elevation > earth_intersection_angle)
+  /* The Moon occludes the Sun when it's nearer along this ray - an eclipse. What's left of the
+   * Sun disc keeps full brightness; the sky dims by the covered fraction, computed from both
+   * angular diameters before baking. */
+  int eclipsed = sky_behind_body(view, moon_params[0], moon_params[1], moon_params[2]);
+  if (sun_dir_angle < half_angular && sun_disc == 1 && eclipsed == 0 &&
+      raytype("importance_bake") != 1 && dir_elevation > earth_intersection_angle)
   {
     float y = ((dir_elevation - sun_elevation) / angular_diameter) + 0.5;
     color xyz = mix(pixel_bottom, pixel_top, y);
@@ -171,9 +1014,100 @@ color sky_radiance_nishita(
   color xyz = (color)texture(filename, x, y, "wrap", "clamp", "interp", "linear", "alpha", alpha);
   color rgb_sky = xyz_to_rgb(xyz[0], xyz[1], xyz[2]);
 
-  /* The Sun's own color is already baked into the sky texture. The disc carries it here instead,
-   * on top of the atmospheric reddening it has already picked up near the horizon. */
-  return rgb_sun * sun_intensity * sun_color + rgb_sky;
+  /* The Sun's and the Moon's colors are already baked into the sky texture. The disc is
+   * converted separately so that it can carry the Sun's tint on top of the atmospheric reddening
+   * it has already picked up near the horizon. */
+  color rgb = rgb_sun * sun_intensity * sun_color + rgb_sky;
+
+  /* Negative angular diameter means the Moon is off. */
+  float moon_angular_diameter = moon_params[2];
+  /* Visible to camera and glossy rays, not diffuse - the Moon's light already reaches the scene
+   * through the moonlit sky around it; see sky.h for the full reasoning. */
+  int visible_to = (raytype("camera") == 1 || raytype("glossy") == 1) ? 1 : 0;
+  if (moon_angular_diameter > 0.0 && visible_to == 1 && dir_elevation > earth_intersection_angle) {
+    vector moon_dir = sky_body_direction(moon_params[0], moon_params[1]);
+    /* moon_sun_dir is the direction the Moon is lit from - the real Sun direction, or wherever a
+     * manual phase implies. Precomputed on the CPU.
+     *
+     * Row three of the celestial frame is the pole in world coordinates. */
+    vector pole = vector(celestial[6], celestial[7], celestial[8]);
+    color reflectance = sky_moon_reflectance(
+        view, moon_dir, moon_sun_dir, pole, moon_angular_diameter);
+    color moon_illuminant = xyz_to_rgb(
+        moon_illuminant_xyz[0], moon_illuminant_xyz[1], moon_illuminant_xyz[2]);
+    rgb += reflectance * moon_illuminant * moon_intensity * moon_color;
+  }
+
+  /* Stars are never faded by hand - daylight is millions of times brighter, so it drowns them
+   * out on its own. */
+  if ((star_params[0] >= 0.0 || zodiacal_light > 0.0) && visible_to == 1 &&
+      dir_elevation > earth_intersection_angle)
+  {
+    /* The Sun and Moon occlude stars behind their discs. */
+    int hidden = (sky_behind_body(view, moon_params[0], moon_params[1], moon_params[2]) == 1 ||
+                  sky_behind_body(view, sun_elevation, sun_rotation, angular_diameter) == 1) ?
+                     1 :
+                     0;
+    /* Stars and the band are fixed to the celestial sphere, not to the world, so the view
+     * direction is carried into that frame before either is looked up. The rotation is rigid, so
+     * angles and the pixel footprint mean the same thing on both sides of it. */
+    vector cel = vector(celestial[0] * view[0] + celestial[1] * view[1] + celestial[2] * view[2],
+                        celestial[3] * view[0] + celestial[4] * view[1] + celestial[5] * view[2],
+                        celestial[6] * view[0] + celestial[7] * view[1] + celestial[8] * view[2]);
+    color stars = color(0.0);
+    if (star_params[0] >= 0.0) {
+      /* Off the band there is nothing to shape, and the fractal is the most expensive thing in
+       * this function, so it is only evaluated where it shows. */
+      vector nebulosity = vector(1.0, 1.0, 0.0);
+      if ((milky_way_structure > 0.0 || nebulae > 0.0) && milky_way > 0.0) {
+        vector g = sky_galactic_coords(cel);
+        if (abs(g[0]) < 0.45) {
+          nebulosity = sky_nebulosity(cel, milky_way_structure, nebulae);
+        }
+      }
+      stars = (hidden == 1) ? color(0.0) :
+                              sky_stars(cel,
+                                        star_params[0],
+                                        star_params[1],
+                                        star_params[2],
+                                        star_seed,
+                                        footprint,
+                                        star_color_cool,
+                                        star_color_hot,
+                                        milky_way,
+                                        milky_way_crowding,
+                                        nebulosity) +
+                                  sky_milky_way_glow(cel, milky_way, milky_way_tint, nebulosity);
+    }
+
+    /* Sunlight scattered by the dust of the solar system, spread along the ecliptic: a broad
+     * wedge reaching up from where the Sun set, and a faint brightening directly opposite it.
+     * No date is modeled, so the ecliptic is taken as the plane through the Sun that leans as
+     * close to the celestial pole as it can. The Sun lies on the ecliptic by definition, which
+     * makes that exactly right whenever the sky's frame and the Sun agree. */
+    if (zodiacal_light > 0.0 && hidden == 0) {
+      vector pole = vector(celestial[6], celestial[7], celestial[8]);
+      vector ecliptic = normalize(pole - dot(pole, sun_dir) * sun_dir);
+      float cos_elongation = dot(view, sun_dir);
+      float sin_latitude = dot(view, ecliptic);
+      float wedge = 1.0 / (0.08 + (1.0 - cos_elongation));
+      float across = exp(-(sin_latitude / 0.30) * (sin_latitude / 0.30));
+      float opposition = 1.0 + cos_elongation;
+      float gegenschein = 0.55 * exp(-(opposition / 0.09) * (opposition / 0.09));
+      float zodiacal = SKY_ZODIACAL_RADIANCE * zodiacal_light * (wedge + gegenschein) * across;
+      stars = stars + zodiacal_tint * zodiacal;
+    }
+    /* A star near the horizon is seen through far more air than one overhead - the air mass.
+     * Transmittance falls off as a power of air mass, so raising the zenith transmittance to this
+     * power gives the transmittance along any other line of sight. */
+    float air_mass = clamp(1.0 / max(sin(dir_elevation), 0.02), 1.0, 38.0);
+    color transmittance = color(pow(zenith_transmittance[0], air_mass),
+                                pow(zenith_transmittance[1], air_mass),
+                                pow(zenith_transmittance[2], air_mass));
+    rgb += stars * transmittance;
+  }
+
+  return rgb;
 }
 
 shader node_sky_texture(
@@ -190,6 +1124,24 @@ shader node_sky_texture(
     float config_z[9] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
     float nishita_data[11] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
     color sun_color = color(1.0, 1.0, 1.0),
+    vector moon_params = vector(0.0, 0.0, -1.0),
+    float moon_intensity = 0.0,
+    color moon_color = color(1.0, 1.0, 1.0),
+    vector moon_sun_dir = vector(0.0, 0.0, 1.0),
+    color moon_illuminant = color(0.0, 0.0, 0.0),
+    vector star_params = vector(-1.0, 0.0, 0.0),
+    float star_seed = 0.0,
+    color star_color_cool = color(1.0, 1.0, 1.0),
+    color star_color_hot = color(1.0, 1.0, 1.0),
+    color zenith_transmittance = color(1.0, 1.0, 1.0),
+    float celestial[9] = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0},
+    float milky_way = 0.0,
+    float milky_way_crowding = 0.35,
+    float milky_way_structure = 0.5,
+    float nebulae = 0.15,
+    float zodiacal_light = 0.0,
+    color zodiacal_tint = color(1.0, 1.0, 1.0),
+    color milky_way_tint = color(1.0, 1.0, 1.0),
     output color Color = color(0.0, 0.0, 0.0))
 {
   vector p = Vector;
@@ -202,5 +1154,28 @@ shader node_sky_texture(
   else if (sky_type == "preetham")
     Color = sky_radiance_preetham(p, phi, theta, radiance, config_x, config_y, config_z);
   else
-    Color = sky_radiance_nishita(p, nishita_data, sun_color, filename, sky_type);
+    Color = sky_radiance_nishita(p,
+                                 nishita_data,
+                                 sun_color,
+                                 moon_params,
+                                 moon_intensity,
+                                 moon_color,
+                                 moon_sun_dir,
+                                 moon_illuminant,
+                                 star_params,
+                                 star_seed,
+                                 star_color_cool,
+                                 star_color_hot,
+                                 zenith_transmittance,
+                                 celestial,
+                                 milky_way,
+                                 milky_way_crowding,
+                                 milky_way_structure,
+                                 nebulae,
+                                 milky_way_tint,
+                                 zodiacal_light,
+                                 zodiacal_tint,
+                                 filename,
+                                 sky_type,
+                                 max(length(Dx(p)), length(Dy(p))));
 }

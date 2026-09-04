@@ -1114,10 +1114,34 @@ static ShaderNode *add_node(Scene *scene,
     sky->set_ozone_density(storage.ozone_density);
     sky->set_aerosol_anisotropy(storage.aerosol_anisotropy);
     sky->set_night_adaptation(storage.night_adaptation);
+    sky->set_night_exposure(storage.night_exposure);
     sky->set_airglow(storage.airglow);
+    sky->set_milky_way(storage.milky_way);
+    sky->set_milky_way_crowding(storage.milky_way_crowding);
+    sky->set_milky_way_structure(storage.milky_way_structure);
+    sky->set_nebulae(storage.nebulae);
+    sky->set_zodiacal_light(storage.zodiacal_light);
+    sky->set_star_latitude(storage.star_latitude);
+    sky->set_star_longitude(storage.star_longitude);
+    sky->set_star_rotation(storage.star_rotation);
     sky->set_sun_temperature(storage.sun_temperature);
     sky->set_sun_color(
         make_float3(storage.sun_color[0], storage.sun_color[1], storage.sun_color[2]));
+    sky->set_use_moon(storage.use_moon);
+    sky->set_moon_size(storage.moon_size);
+    sky->set_moon_intensity(storage.moon_intensity);
+    sky->set_moon_elevation(storage.moon_elevation);
+    sky->set_moon_rotation(storage.moon_rotation);
+    sky->set_moon_phase_manual(storage.moon_phase_source == blender::SHD_SKY_PHASE_MANUAL);
+    sky->set_moon_phase(storage.moon_phase);
+    sky->set_moon_temperature(storage.moon_temperature);
+    sky->set_moon_color(
+        make_float3(storage.moon_color[0], storage.moon_color[1], storage.moon_color[2]));
+    sky->set_use_stars(storage.use_stars);
+    sky->set_star_density(storage.star_density);
+    sky->set_star_brightness(storage.star_brightness);
+    sky->set_star_color_variation(storage.star_color_variation);
+    sky->set_star_seed(storage.star_seed);
     const blender::TexMapping &b_texture_mapping = storage.base.tex_mapping;
     get_tex_mapping(sky, &b_texture_mapping);
     node = sky;

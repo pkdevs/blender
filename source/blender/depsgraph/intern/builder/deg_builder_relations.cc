@@ -2282,15 +2282,18 @@ void DepsgraphRelationBuilder::build_world(World *world)
     build_nested_nodetree(&world->id, world->nodetree);
   }
 
-  /* Objects a sky texture can be linked to. The sky follows both where the Sun's light object is
+  /* Objects a sky texture can be linked to. The sky follows both where each light object is
    * pointing and what color it is asking for, so it has to be re-evaluated when either changes.
-   * That light may also be the altitude camera, hence the check before adding. The camera is
-   * pulled in only when a sky is actually taking its altitude from it, so that an ordinary camera
-   * move does not rebake the sky for nothing. */
+   * One object may stand in for more than one of these, hence the check before adding. The camera
+   * is pulled in only when a sky is actually taking its altitude from it, so that an ordinary
+   * camera move does not rebake the sky for nothing. */
   Object *altitude_camera = (scene_ != nullptr && BKE_world_sky_uses_camera_altitude(world)) ?
                                 scene_->camera :
                                 nullptr;
-  for (Object *object : {scene_ ? scene_->sun_object : nullptr, altitude_camera}) {
+  for (Object *object : {scene_ ? scene_->sun_object : nullptr,
+                         scene_ ? scene_->moon_object : nullptr,
+                         altitude_camera})
+  {
     if (object == nullptr) {
       continue;
     }

@@ -10,6 +10,7 @@
 #include "node_util.hh"
 #include "sky_hillaire.h"
 #include "sky_hosek.h"
+#include "sky_night.h"
 #include "sky_nishita.h"
 
 #include "BKE_context.hh"
@@ -158,6 +159,78 @@ static void sky_panel_sun(ui::Layout &layout, bContext *C, PointerRNA *ptr)
   }
 }
 
+static void sky_panel_moon(ui::Layout &layout, bContext *C, PointerRNA *ptr)
+{
+  layout.prop(ptr, "use_moon", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+
+  ui::Layout &body = layout.column(false);
+  body.active_set(RNA_boolean_get(ptr, "use_moon"));
+
+  ui::Layout &disc = body.column(true);
+  disc.prop(ptr, "moon_size", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  disc.prop(ptr, "moon_intensity", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+
+  const bool can_drive = sky_can_be_driven(ptr);
+  if (can_drive) {
+    sky_source_toggle(body, ptr, "moon_source");
+  }
+  const bool driven = can_drive && RNA_enum_get(ptr, "moon_source") == SHD_SKY_SOURCE_DRIVEN;
+  if (driven) {
+    sky_object_row(body, C, "moon_object");
+    ui::Layout &col = body.column(true);
+    col.prop(ptr, "moon_elevation_offset", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+    col.prop(ptr, "moon_rotation_offset", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+
+    if (std::optional<PointerRNA> eval = sky_evaluated_node(C, ptr)) {
+      ui::Layout &angles = sky_driven_column(body);
+      angles.prop(&*eval, "moon_elevation", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+      angles.prop(&*eval, "moon_rotation", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+      ui::Layout &color = sky_driven_column(body);
+      color.prop(&*eval, "moon_temperature", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+      color.prop(&*eval, "moon_color", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+    }
+  }
+  else {
+    ui::Layout &col = body.column(true);
+    col.prop(ptr, "moon_elevation", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+    col.prop(ptr, "moon_rotation", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+    ui::Layout &color = body.column(true);
+    color.prop(ptr, "moon_temperature", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+    color.prop(ptr, "moon_color", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  }
+
+  /* Only worth saying when there is no light to say it about. The Moon's own glow lights the
+   * scene softly and cannot cast a shadow, and a moonlit sky never gets bright enough for EEVEE
+   * to pull a sun light out of it. */
+  if (!driven) {
+    body.label(IFACE_("Dim, casts no shadow"), ICON_INFO);
+  }
+
+  sky_source_toggle(body, ptr, "moon_phase_source");
+  if (RNA_enum_get(ptr, "moon_phase_source") == SHD_SKY_PHASE_MANUAL) {
+    body.prop(ptr, "moon_phase", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  }
+}
+
+static void sky_panel_stars(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
+{
+  layout.prop(ptr, "use_stars", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+
+  ui::Layout &body = layout.column(false);
+  body.active_set(RNA_boolean_get(ptr, "use_stars"));
+  ui::Layout &col = body.column(true);
+  col.prop(ptr, "star_density", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  col.prop(ptr, "star_brightness", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  col.prop(ptr, "star_color_variation", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  col.prop(ptr, "milky_way", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  body.prop(ptr, "star_seed", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+
+  ui::Layout &sky_frame = body.column(true);
+  sky_frame.prop(ptr, "star_latitude", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  sky_frame.prop(ptr, "star_longitude", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  sky_frame.prop(ptr, "star_rotation", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+}
+
 static void sky_panel_atmosphere(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
 {
   sky_source_toggle(layout, ptr, "altitude_source");
@@ -176,6 +249,7 @@ static void sky_panel_atmosphere(ui::Layout &layout, bContext * /*C*/, PointerRN
 
   ui::Layout &night = layout.column(true);
   night.prop(ptr, "airglow", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  night.prop(ptr, "night_exposure", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
   night.prop(ptr, "night_adaptation", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
 }
 
@@ -190,7 +264,9 @@ static void node_declare(NodeDeclarationBuilder &b)
       static_cast<const NodeTexSky *>(node->storage)->sky_model == SHD_SKY_HILLAIRE)
   {
     b.add_panel("Sun"_ustr, 0).add_layout(sky_panel_sun);
-    b.add_panel("Atmosphere"_ustr, 1).add_layout(sky_panel_atmosphere);
+    b.add_panel("Moon"_ustr, 1).default_closed(true).add_layout(sky_panel_moon);
+    b.add_panel("Stars"_ustr, 2).default_closed(true).add_layout(sky_panel_stars);
+    b.add_panel("Atmosphere"_ustr, 3).add_layout(sky_panel_atmosphere);
   }
 
   b.add_input<decl::Vector>("Vector"_ustr).hide_value();
@@ -260,9 +336,28 @@ static void node_shader_init_tex_sky(bNodeTree * /*ntree*/, bNode *node)
   /* Hillaire model. */
   tex->sun_temperature = SKY_SUN_TEMPERATURE;
   copy_v3_fl(tex->sun_color, 1.0f);
+  tex->moon_size = DEG2RADF(0.52f);
+  tex->moon_intensity = 1.0f;
+  tex->moon_elevation = DEG2RADF(40.0f);
+  tex->moon_rotation = DEG2RADF(180.0f);
+  tex->moon_phase = 0.5f;
+  tex->moon_temperature = SKY_MOON_TEMPERATURE;
+  copy_v3_fl(tex->moon_color, 1.0f);
+  tex->star_density = 1.0f;
+  tex->star_brightness = 1.0f;
+  tex->star_color_variation = 0.5f;
   tex->aerosol_anisotropy = 0.8f;
   tex->airglow = 1.0f;
+  tex->milky_way = 1.0f;
+  tex->milky_way_crowding = 0.35f;
+  tex->milky_way_structure = 0.5f;
+  tex->nebulae = 0.15f;
+  tex->zodiacal_light = 1.0f;
+  tex->night_exposure = 0.0f;
   tex->night_adaptation = 1.0f;
+  tex->star_latitude = DEG2RADF(45.0f);
+  tex->star_longitude = 0.0f;
+  tex->star_rotation = 0.0f;
   node->storage = tex;
 }
 
@@ -397,6 +492,54 @@ static void sky_light_color_transform(const float3 light, float r_transform[9])
   sky_matrix(to_xyz * tint * to_rgb, r_transform);
 }
 
+/* Thin float3 adapters around SKY_eclipse() and SKY_moon_illumination() (intern/sky), which speak
+ * plain floats so the geometry itself - pure trig with no engine-specific dependency - can be
+ * shared with the Cycles side rather than hand-duplicated. Only the render-time kernel code
+ * genuinely needs one implementation per shading language; this doesn't. */
+static void sky_eclipse(const bool use_moon,
+                        const float sun_size,
+                        const float moon_size,
+                        const float sun_elevation,
+                        const float sun_rotation,
+                        const float moon_elevation,
+                        const float moon_rotation,
+                        float3 *r_sun_light,
+                        float3 *r_moon_light)
+{
+  float sun_light[3] = {r_sun_light->x, r_sun_light->y, r_sun_light->z};
+  float moon_light[3] = {r_moon_light->x, r_moon_light->y, r_moon_light->z};
+  SKY_eclipse(use_moon,
+              sun_size,
+              moon_size,
+              sun_elevation,
+              sun_rotation,
+              moon_elevation,
+              moon_rotation,
+              sun_light,
+              moon_light);
+  *r_sun_light = float3(sun_light[0], sun_light[1], sun_light[2]);
+  *r_moon_light = float3(moon_light[0], moon_light[1], moon_light[2]);
+}
+
+static void sky_moon_illumination(const NodeTexSky *tex,
+                                  const float moon_rotation,
+                                  const float sun_elevation,
+                                  const float sun_rotation,
+                                  float3 *r_direction,
+                                  float *r_phase_angle)
+{
+  float direction[3];
+  SKY_moon_illumination(tex->moon_phase_source == SHD_SKY_PHASE_MANUAL,
+                        tex->moon_phase,
+                        tex->moon_elevation,
+                        moon_rotation,
+                        sun_elevation,
+                        sun_rotation,
+                        direction,
+                        r_phase_angle);
+  *r_direction = float3(direction[0], direction[1], direction[2]);
+}
+
 static void sky_simplify_multiscatter_elevation_rotation(float &sun_elevation, float &sun_rotation)
 {
   /* Patch Sun position so users are able to animate the daylight cycle while keeping the shading
@@ -516,9 +659,19 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
   const float sun_size = math::max(tex->sun_size, 0.0005f);
   float sun_rotation = tex->sun_rotation;
   float sun_elevation = tex->sun_elevation;
-  /* The light the Sun sends toward the atmosphere, once its own color is accounted for. Only the
-   * Hillaire model offers that color, so for the others it stays white. */
+  /* Both rotations are measured the same way round for the user, and both are negated on the way
+   * to the shaders, where they turn the sky rather than the body. The Sun's negation happens
+   * inside sky_simplify_multiscatter_elevation_rotation() below. */
+  const float moon_rotation = -tex->moon_rotation;
+  /* Where the Moon is lit from. Worked out on the CPU so that the three shading backends are
+   * handed the same answer rather than each deriving it again. */
+  float3 moon_sun_dir(0.0f, 0.0f, 1.0f);
+  float moon_phase_angle = 0.0f;
+  /* The light each body sends toward the atmosphere, once its own color and whatever an eclipse
+   * has taken away from it are both accounted for. Only the Hillaire model offers those colors,
+   * so for the others they stay white. */
   float3 sun_light(1.0f, 1.0f, 1.0f);
+  float3 moon_light(1.0f, 1.0f, 1.0f);
   float pixel_bottom[3];
   float pixel_top[3];
   if (tex->sky_model == SHD_SKY_SINGLE_SCATTERING) {
@@ -560,14 +713,34 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
                                   pixel_bottom,
                                   pixel_top);
 
+      sky_moon_illumination(
+          tex, moon_rotation, sun_elevation, sun_rotation, &moon_sun_dir, &moon_phase_angle);
+
       sun_light = sky_light_color(tex->sun_temperature, tex->sun_color);
+      moon_light = sky_light_color(tex->moon_temperature, tex->moon_color);
+      /* The Sun's disc keeps its full brightness where it still shows, since the Moon takes it
+       * away by standing in front of it rather than by dimming it. Only the glow baked below
+       * loses light. The Moon's disc is the thing that actually reddens in a lunar eclipse, so it
+       * carries that. */
+      float3 sun_glow = sun_light;
+      sky_eclipse(tex->use_moon,
+                  sun_size,
+                  tex->moon_size,
+                  sun_elevation,
+                  sun_rotation,
+                  tex->moon_elevation,
+                  moon_rotation,
+                  &sun_glow,
+                  &moon_light);
+
       float sun_color_transform[9];
-      sky_light_color_transform(sun_light, sun_color_transform);
+      sky_light_color_transform(sun_glow, sun_color_transform);
       /* The airglow is faint enough for the eye to lose color in, so it is adapted before the
        * bake, according to how bright it actually renders. It is also cut back into gamut as it
        * is added, which needs the trip into the render's RGB and the trip back out of it as two
        * separate steps. The tint rides on the way back. */
-      const float3 airglow_tint = sky_airglow_tint(SKY_NOMINAL_LUMINANCE_AIRGLOW * tex->airglow,
+      const float3 airglow_tint = sky_airglow_tint(SKY_NOMINAL_LUMINANCE_AIRGLOW * tex->airglow *
+                                                       exp2f(tex->night_exposure),
                                                    tex->night_adaptation);
       float airglow_to_rgb[9];
       float airglow_tinted_to_xyz[9];
@@ -586,7 +759,33 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
                                       tex->ozone_density,
                                       tex->aerosol_anisotropy,
                                       sun_color_transform);
-      /* Owes nothing to the Sun, so it goes on last and on its own. */
+      if (tex->use_moon) {
+        /* Scattering is linear in the light that drives it, so the Moon's sky is the same bake
+         * run again with the Moon as the illuminant, then turned to the right bearing and added.
+         */
+        const float moonlight = SKY_moonlight_scale(
+            true, moon_phase_angle, tex->moon_intensity, tex->night_exposure);
+        float moon_color_transform[9];
+        sky_light_color_transform(sky_adapt(moon_light,
+                                            SKY_NOMINAL_LUMINANCE_MOONGLOW * tex->moon_intensity *
+                                                exp2f(tex->night_exposure),
+                                            tex->night_adaptation),
+                                  moon_color_transform);
+        SKY_hillaire_add_moon(pixels.data(),
+                              4,
+                              GPU_SKY_WIDTH,
+                              GPU_SKY_HEIGHT,
+                              tex->moon_elevation,
+                              sun_rotation - moon_rotation,
+                              tex->altitude,
+                              tex->air_density,
+                              tex->aerosol_density,
+                              tex->ozone_density,
+                              tex->aerosol_anisotropy,
+                              moonlight,
+                              moon_color_transform);
+      }
+      /* Owes nothing to the Sun or the Moon, so it goes on last and on its own. */
       SKY_hillaire_add_airglow(pixels.data(),
                                4,
                                GPU_SKY_WIDTH,
@@ -595,7 +794,7 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
                                tex->air_density,
                                tex->aerosol_density,
                                tex->ozone_density,
-                               tex->airglow,
+                               tex->airglow * exp2f(tex->night_exposure),
                                airglow_to_rgb,
                                airglow_tinted_to_xyz);
     }
@@ -639,6 +838,110 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
                                tex->sun_disc ? sun_size : -1.0f,
                                tex->sun_intensity,
                                -SKY_earth_intersection_angle(tex->altitude)};
+  /* The Moon belongs to the Hillaire model only. */
+  const bool use_moon = (tex->sky_model == SHD_SKY_HILLAIRE) && tex->use_moon;
+  /* The disc takes the same lift as the glow, the stars and the airglow. Left out, raising Night
+   * Exposure brightens the whole night sky except the Moon, which sinks into its own halo. */
+  const float moon_params[4] = {tex->moon_elevation,
+                                moon_rotation,
+                                use_moon ? math::max(tex->moon_size, 0.0005f) : -1.0f,
+                                tex->moon_intensity * exp2f(tex->night_exposure)};
+
+  const bool use_stars = (tex->sky_model == SHD_SKY_HILLAIRE) && tex->use_stars;
+  const float star_params[4] = {use_stars ? tex->star_density : -1.0f,
+                                tex->star_brightness * exp2f(tex->night_exposure),
+                                tex->star_color_variation,
+                                float(tex->star_seed)};
+
+  float celestial[9];
+  SKY_celestial_frame(tex->star_latitude, tex->star_longitude, tex->star_rotation, celestial);
+
+  /* Star color is a temperature, like the Sun's and the Moon's. Both ends of the ramp are worked
+   * out here rather than in the shader, because each backend has its own blackbody routine and
+   * they would not agree; the middle of the ramp is the Sun's temperature, which
+   * sky_light_color() normalizes to white. */
+  const float white[3] = {1.0f, 1.0f, 1.0f};
+  const float night_lift = exp2f(tex->night_exposure);
+  const float star_luminance = SKY_NOMINAL_LUMINANCE_STARS * tex->star_brightness * night_lift;
+  const float3 star_color_cool = sky_adapt(
+      sky_light_color(SKY_STAR_TEMPERATURE_COOL, white), star_luminance, tex->night_adaptation);
+  const float3 star_color_hot = sky_adapt(
+      sky_light_color(SKY_STAR_TEMPERATURE_HOT, white), star_luminance, tex->night_adaptation);
+  /* The night lift rides on the band's color rather than on its strength, since its strength also
+   * sets how far the band thickens the star field and an exposure control must not change how
+   * many stars there are. */
+  const float milky_way = use_stars ? tex->milky_way : 0.0f;
+  /* Physically the band is a distinctly yellow-brown thing, old cool stars reddened by their own
+   * dust, and that is how it photographs. */
+  const float milky_way_structure = use_stars ? tex->milky_way_structure : 0.0f;
+  const float nebulae = use_stars ? tex->nebulae : 0.0f;
+  const float zodiacal_light = (tex->sky_model == SHD_SKY_HILLAIRE) ?
+                                   tex->zodiacal_light * night_lift :
+                                   -1.0f;
+  /* Scattered sunlight, so very nearly the Sun's own color, dulled a little by the dust. */
+  const float3 zodiacal_tint = sky_adapt(float3(1.0f, 0.96f, 0.90f),
+                                         SKY_NOMINAL_LUMINANCE_ZODIACAL * tex->zodiacal_light *
+                                             night_lift,
+                                         tex->night_adaptation);
+  const float3 milky_way_tint = night_lift * sky_adapt(float3(1.0f, 0.93f, 0.82f),
+                                                       SKY_NOMINAL_LUMINANCE_MILKY_WAY *
+                                                           tex->milky_way * night_lift,
+                                                       tex->night_adaptation);
+
+  /* Straight up, where the least air stands in the way. The shader works out the rest. */
+  float zenith_transmittance[3] = {1.0f, 1.0f, 1.0f};
+  if (use_stars) {
+    float dimmed[3];
+    float clear[3];
+    SKY_transmittance(float(M_PI_2),
+                      tex->altitude,
+                      tex->air_density,
+                      tex->aerosol_density,
+                      tex->ozone_density,
+                      dimmed,
+                      clear);
+    XYZ_to_RGB to_rgb;
+    get_XYZ_to_RGB_for_gpu(&to_rgb);
+    const float dimmed_rgb[3] = {
+        dot_v3v3(to_rgb.r, dimmed), dot_v3v3(to_rgb.g, dimmed), dot_v3v3(to_rgb.b, dimmed)};
+    const float clear_rgb[3] = {
+        dot_v3v3(to_rgb.r, clear), dot_v3v3(to_rgb.g, clear), dot_v3v3(to_rgb.b, clear)};
+    for (int i = 0; i < 3; i++) {
+      zenith_transmittance[i] = clamp_f(dimmed_rgb[i] / max_ff(clear_rgb[i], 1e-6f), 0.0f, 1.0f);
+    }
+  }
+
+  /* Light reaching the Moon, then the viewer. Reusing the Sun precompute at the Moon's elevation
+   * gives sunlight dimmed and reddened by whatever air lies along the line of sight to the Moon.
+   * The Sun's angular diameter keeps the result as the Sun's own radiance, which is then turned
+   * into an irradiance by its solid angle and spread over the hemisphere it scatters into. */
+  float moon_illuminant[3] = {0.0f, 0.0f, 0.0f};
+  if (use_moon) {
+    float moon_bottom[3];
+    float moon_top[3];
+    SKY_hillaire_precompute_sun(tex->moon_elevation,
+                                sun_size,
+                                tex->altitude,
+                                tex->air_density,
+                                tex->aerosol_density,
+                                tex->ozone_density,
+                                moon_bottom,
+                                moon_top);
+    const float sun_solid_angle = 2.0f * M_PI * (1.0f - cosf(sun_size * 0.5f));
+    const float scale = sun_solid_angle / M_PI;
+    for (int i = 0; i < 3; i++) {
+      moon_illuminant[i] = 0.5f * (moon_bottom[i] + moon_top[i]) * scale;
+    }
+  }
+  /* Both discs carry the same light color the sky around them was baked with. */
+  const bool hillaire = (tex->sky_model == SHD_SKY_HILLAIRE);
+  /* The Sun's disc keeps its full brightness where it still shows, since the Moon takes it away
+   * by standing in front of it rather than by dimming it. The Moon's disc is the thing that
+   * actually reddens in a lunar eclipse, so it carries that. */
+  const float3 sun_disc_color = hillaire ? sky_light_color(tex->sun_temperature, tex->sun_color) :
+                                           float3(1.0f, 1.0f, 1.0f);
+  const float3 moon_disc_color = hillaire ? moon_light : float3(1.0f, 1.0f, 1.0f);
+
   GPUNodeLink *sky_texture = GPU_image_sky(
       mat, GPU_SKY_WIDTH, GPU_SKY_HEIGHT, pixels.data(), &layer, sampler);
   return GPU_stack_link(mat,
@@ -654,9 +957,27 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
                         GPU_uniform(pixel_bottom),
                         GPU_uniform(pixel_top),
                         GPU_uniform(sun_params),
-                        /* The disc carries the same light color the sky around it was baked
+                        /* Each disc carries the same light color the sky around it was baked
                          * with. */
-                        GPU_uniform(sun_light),
+                        GPU_uniform(sun_disc_color),
+                        GPU_uniform(moon_params),
+                        GPU_uniform(moon_disc_color),
+                        GPU_uniform(moon_sun_dir),
+                        GPU_uniform(moon_illuminant),
+                        GPU_uniform(star_params),
+                        GPU_uniform(zenith_transmittance),
+                        GPU_uniform(celestial),
+                        GPU_uniform(celestial + 3),
+                        GPU_uniform(celestial + 6),
+                        GPU_uniform(star_color_cool),
+                        GPU_uniform(star_color_hot),
+                        GPU_uniform(milky_way_tint),
+                        GPU_uniform(&milky_way),
+                        GPU_uniform(&tex->milky_way_crowding),
+                        GPU_uniform(&milky_way_structure),
+                        GPU_uniform(&nebulae),
+                        GPU_uniform(&zodiacal_light),
+                        GPU_uniform(zodiacal_tint),
                         sky_texture,
                         GPU_constant(&layer));
 }

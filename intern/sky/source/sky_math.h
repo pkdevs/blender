@@ -373,6 +373,11 @@ inline float dot(const float3 &a, const float3 &b)
   return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+inline float3 cross(const float3 &a, const float3 &b)
+{
+  return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+}
+
 inline float distance(const float3 &a, const float3 &b)
 {
   return float3::distance(a, b);
