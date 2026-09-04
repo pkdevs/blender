@@ -11,8 +11,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_nla.hh"
 #include "BKE_scene.hh"
@@ -237,6 +237,7 @@ TransModeInfo TransMode_timeslide = {
     /*snap_distance_fn*/ nullptr,
     /*snap_apply_fn*/ nullptr,
     /*draw_fn*/ nullptr,
+    /*status_fn*/ nullptr,
 };
 
 }  // namespace blender::ed::transform

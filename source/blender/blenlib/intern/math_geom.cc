@@ -9,17 +9,17 @@
 #include <algorithm>
 
 #include "BLI_array.hh"
-#include "BLI_math_base.h"
 #include "BLI_math_base.hh"
-#include "BLI_math_geom.h"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_geom_c.hh"
 
-#include "BLI_math_bits.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_bits.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
-#include "BLI_strict_flags.h" /* IWYU pragma: keep. Keep last. */
+#include "BLI_strict_flags.hh" /* IWYU pragma: keep. Keep last. */
 
 namespace blender {
 
@@ -1034,8 +1034,12 @@ float dist_seg_seg_v2(const float a1[3], const float a2[3], const float b1[3], c
   return sqrtf(std::min({d1, d2, d3, d4}));
 }
 
-void closest_on_tri_to_point_v3(
-    float r[3], const float p[3], const float v1[3], const float v2[3], const float v3[3])
+void closest_on_tri_to_point_v3(float r[3],
+                                float r_bary[3],
+                                const float p[3],
+                                const float v1[3],
+                                const float v2[3],
+                                const float v3[3])
 {
   /* Adapted from "Real-Time Collision Detection" by Christer Ericson,
    * published by Morgan Kaufmann Publishers, copyright 2005 Elsevier Inc. */
@@ -1051,7 +1055,9 @@ void closest_on_tri_to_point_v3(
   d1 = dot_v3v3(ab, ap);
   d2 = dot_v3v3(ac, ap);
   if (d1 <= 0.0f && d2 <= 0.0f) {
-    /* barycentric coordinates (1,0,0) */
+    r_bary[0] = 1.0f;
+    r_bary[1] = 0.0f;
+    r_bary[2] = 0.0f;
     copy_v3_v3(r, v1);
     return;
   }
@@ -1061,7 +1067,9 @@ void closest_on_tri_to_point_v3(
   d3 = dot_v3v3(ab, bp);
   d4 = dot_v3v3(ac, bp);
   if (d3 >= 0.0f && d4 <= d3) {
-    /* barycentric coordinates (0,1,0) */
+    r_bary[0] = 0.0f;
+    r_bary[1] = 1.0f;
+    r_bary[2] = 0.0f;
     copy_v3_v3(r, v2);
     return;
   }
@@ -1070,11 +1078,17 @@ void closest_on_tri_to_point_v3(
   if (vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f) {
     const float ab_squared = d1 - d3;
     if (ab_squared == 0.0f) {
+      r_bary[0] = 1.0f;
+      r_bary[1] = 0.0f;
+      r_bary[2] = 0.0f;
       copy_v3_v3(r, v1);
     }
     else {
-      /* barycentric coordinates (1-v,v,0) */
-      madd_v3_v3v3fl(r, v1, ab, d1 / ab_squared);
+      v = d1 / ab_squared;
+      r_bary[0] = 1.0f - v;
+      r_bary[1] = v;
+      r_bary[2] = 0.0f;
+      madd_v3_v3v3fl(r, v1, ab, v);
     }
     return;
   }
@@ -1083,7 +1097,9 @@ void closest_on_tri_to_point_v3(
   d5 = dot_v3v3(ab, cp);
   d6 = dot_v3v3(ac, cp);
   if (d6 >= 0.0f && d5 <= d6) {
-    /* barycentric coordinates (0,0,1) */
+    r_bary[0] = 0.0f;
+    r_bary[1] = 0.0f;
+    r_bary[2] = 1.0f;
     copy_v3_v3(r, v3);
     return;
   }
@@ -1092,11 +1108,17 @@ void closest_on_tri_to_point_v3(
   if (vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f) {
     const float ac_squared = d2 - d6;
     if (ac_squared == 0.0f) {
+      r_bary[0] = 1.0f;
+      r_bary[1] = 0.0f;
+      r_bary[2] = 0.0f;
       copy_v3_v3(r, v1);
     }
     else {
-      /* barycentric coordinates (1-w,0,w) */
-      madd_v3_v3v3fl(r, v1, ac, d2 / ac_squared);
+      w = d2 / ac_squared;
+      r_bary[0] = 1.0f - w;
+      r_bary[1] = 0.0f;
+      r_bary[2] = w;
+      madd_v3_v3v3fl(r, v1, ac, w);
     }
     return;
   }
@@ -1105,12 +1127,19 @@ void closest_on_tri_to_point_v3(
   if (va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f) {
     const float bc_squared = (d4 - d3) + (d5 - d6);
     if (bc_squared == 0.0f) {
+      r_bary[0] = 0.0f;
+      r_bary[1] = 1.0f;
+      r_bary[2] = 0.0f;
       copy_v3_v3(r, v2);
     }
     else {
-      /* barycentric coordinates (0,1-w,w) */
+      w = (d4 - d3) / bc_squared;
+      r_bary[0] = 0.0f;
+      r_bary[1] = 1.0f - w;
+      r_bary[2] = w;
+
       sub_v3_v3v3(r, v3, v2);
-      mul_v3_fl(r, (d4 - d3) / bc_squared);
+      mul_v3_fl(r, w);
       add_v3_v3(r, v2);
     }
     return;
@@ -1121,6 +1150,10 @@ void closest_on_tri_to_point_v3(
   v = vb * denom;
   w = vc * denom;
 
+  r_bary[1] = v;
+  r_bary[2] = w;
+  r_bary[0] = 1.0f - v - w;
+
   /* = u*a + v*b + w*c, u = va * denom = 1.0f - v - w */
   /* ac * w */
   mul_v3_fl(ac, w);
@@ -1128,6 +1161,13 @@ void closest_on_tri_to_point_v3(
   madd_v3_v3v3fl(r, v1, ab, v);
   /* a + ab * v + ac * w */
   add_v3_v3(r, ac);
+}
+
+void closest_on_tri_to_point_v3(
+    float r[3], const float p[3], const float v1[3], const float v2[3], const float v3[3])
+{
+  float bary_dummy[3];
+  closest_on_tri_to_point_v3(r, bary_dummy, p, v1, v2, v3);
 }
 
 /** \} */
@@ -1965,7 +2005,7 @@ bool isect_ray_tri_watertight_v3(const float ray_origin[3],
 
   /* Calculate determinant. */
   det = u + v + w;
-  if (UNLIKELY(det == 0.0f || !isfinite(det))) {
+  if (det == 0.0f || !isfinite(det)) [[unlikely]] {
     return false;
   }
 
@@ -3011,11 +3051,11 @@ int isect_line_line_epsilon_v3(const float v1[3],
 
   /* important not to use an epsilon here, see: #45919 */
   /* test zero length line */
-  if (UNLIKELY(div == 0.0f)) {
+  if (div == 0.0f) [[unlikely]] {
     return 0;
   }
   /* test if the two lines are coplanar */
-  if (UNLIKELY(fabsf(d) <= epsilon)) {
+  if (fabsf(d) <= epsilon) [[unlikely]] {
     cross_v3_v3v3(cb, c, b);
 
     mul_v3_fl(a, dot_v3v3(cb, ab) / div);
@@ -3086,11 +3126,11 @@ bool isect_line_line_strict_v3(const float v1[3],
 
   /* important not to use an epsilon here, see: #45919 */
   /* test zero length line */
-  if (UNLIKELY(div == 0.0f)) {
+  if (div == 0.0f) [[unlikely]] {
     return false;
   }
   /* test if the two lines are coplanar */
-  if (UNLIKELY(fabsf(d) < epsilon)) {
+  if (fabsf(d) < epsilon) [[unlikely]] {
     return false;
   }
 
@@ -3129,7 +3169,7 @@ bool isect_ray_ray_epsilon_v3(const float ray_origin_a[3],
   const float nlen = len_squared_v3(n);
 
   /* `nlen` is the square of the area formed by the two vectors. */
-  if (UNLIKELY(nlen < epsilon)) {
+  if (nlen < epsilon) [[unlikely]] {
     /* The lines are parallel. */
     return false;
   }
@@ -3276,7 +3316,7 @@ float closest_to_ray_v3(float r_close[3],
 {
   float h[3], lambda;
 
-  if (UNLIKELY(is_zero_v3(ray_dir))) {
+  if (is_zero_v3(ray_dir)) [[unlikely]] {
     lambda = 0.0f;
     copy_v3_v3(r_close, ray_orig);
     return lambda;
@@ -3912,19 +3952,19 @@ void barycentric_weights_v2_quad(const float v1[2],
   };
 
   /* avoid divide by zero */
-  if (UNLIKELY(lens[0] < FLT_EPSILON)) {
+  if (lens[0] < FLT_EPSILON) [[unlikely]] {
     w[0] = 1.0f;
     w[1] = w[2] = w[3] = 0.0f;
   }
-  else if (UNLIKELY(lens[1] < FLT_EPSILON)) {
+  else if (lens[1] < FLT_EPSILON) [[unlikely]] {
     w[1] = 1.0f;
     w[0] = w[2] = w[3] = 0.0f;
   }
-  else if (UNLIKELY(lens[2] < FLT_EPSILON)) {
+  else if (lens[2] < FLT_EPSILON) [[unlikely]] {
     w[2] = 1.0f;
     w[0] = w[1] = w[3] = 0.0f;
   }
-  else if (UNLIKELY(lens[3] < FLT_EPSILON)) {
+  else if (lens[3] < FLT_EPSILON) [[unlikely]] {
     w[3] = 1.0f;
     w[0] = w[1] = w[2] = 0.0f;
   }
@@ -4170,7 +4210,7 @@ static float mean_value_half_tan_v3(const Float3_Len *d_curr, const Float3_Len *
   cross_v3_v3v3(cross, d_curr->dir, d_next->dir);
   const float area = len_v3(cross);
   /* Compare against zero since 'FLT_EPSILON' can be too large, see: #73348. */
-  if (LIKELY(area != 0.0f)) {
+  if (area != 0.0f) [[likely]] {
     const float dot = dot_v3v3(d_curr->dir, d_next->dir);
     const float len = d_curr->len * d_next->len;
     const float result = (len - dot) / area;
@@ -4195,7 +4235,7 @@ static double mean_value_half_tan_v2_db(const Double2_Len *d_curr, const Double2
   /* Different from the 3d version but still correct. */
   const double area = cross_v2v2_db(d_curr->dir, d_next->dir);
   /* Compare against zero since 'FLT_EPSILON' can be too large, see: #73348. */
-  if (LIKELY(area != 0.0)) {
+  if (area != 0.0) [[likely]] {
     const double dot = dot_v2v2_db(d_curr->dir, d_next->dir);
     const double len = d_curr->len * d_next->len;
     const double result = (len - dot) / area;
@@ -4246,11 +4286,11 @@ void interp_weights_poly_v3(float *w, float v[][3], const int n, const float co[
      * In that case, do simple linear interpolation between the two edge vertices */
 
     /* 'd_next.len' is in fact 'd_curr.len', just avoid copy to begin with */
-    if (UNLIKELY(d_next.len < eps)) {
+    if (d_next.len < eps) [[unlikely]] {
       ix_flag = IS_POINT_IX;
       break;
     }
-    if (UNLIKELY(dist_squared_to_line_segment_v3(co, v_curr, v_next) < eps_sq)) {
+    if (dist_squared_to_line_segment_v3(co, v_curr, v_next) < eps_sq) [[unlikely]] {
       ix_flag = IS_SEGMENT_IX;
       break;
     }
@@ -4331,11 +4371,11 @@ void interp_weights_poly_v2(float *w, float v[][2], const int n, const float co[
      * do simple linear interpolation between the two edge vertices */
 
     /* 'd_next.len' is in fact 'd_curr.len', just avoid copy to begin with */
-    if (UNLIKELY(d_next.len < eps)) {
+    if (d_next.len < eps) [[unlikely]] {
       ix_flag = IS_POINT_IX;
       break;
     }
-    if (UNLIKELY(dist_squared_to_line_segment_v2(co, v_curr, v_next) < eps_sq)) {
+    if (dist_squared_to_line_segment_v2(co, v_curr, v_next) < eps_sq) [[unlikely]] {
       ix_flag = IS_SEGMENT_IX;
       break;
     }
@@ -5685,7 +5725,15 @@ float geodesic_distance_propagate_across_triangle(
          * the edge between v1 and v2. */
         const float x_intercept = S_[0] + h * (v0_[0] - S_[0]) / (v0_[1] + h);
         if (x_intercept >= 0.0f && x_intercept <= d12) {
-          return len_v2v2(S_, v0_);
+          const float dist0 = len_v2v2(S_, v0_);
+
+          /* Only valid if the wavefront reaches v0 after both v1 and v2, as it has to
+           * travel through the edge between them. Otherwise dist1 and dist2 did not
+           * originate from a common source, and the virtual source point is bogus and
+           * can give a distance much shorter than the actual one. */
+          if (dist0 >= std::max(dist1, dist2)) {
+            return dist0;
+          }
         }
       }
     }

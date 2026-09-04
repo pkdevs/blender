@@ -668,8 +668,15 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
      * comes with deformed position in object space, or if we transform
      * the shading point in world space. */
     if (!(flag & SD_OBJECT_HAS_VERTEX_MOTION)) {
-      tfm_pre = tfm_pre * itfm;
-      tfm_post = tfm_post * itfm;
+      if (ob->use_motion()) {
+        tfm_pre = tfm_pre * itfm;
+        tfm_post = tfm_post * itfm;
+      }
+      else {
+        /* Use identity to avoid numerical inaccuracy of tfm * transform_inverse(tfm). */
+        tfm_pre = transform_identity();
+        tfm_post = transform_identity();
+      }
     }
 
     const int motion_pass_offset = ob->index * OBJECT_MOTION_PASS_SIZE;
@@ -755,8 +762,14 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
   }
 }
 
-void ObjectManager::device_update_prim_offsets(Device *device, DeviceScene *dscene, Scene *scene)
+void ObjectManager::device_update_prim_offsets(Device * /*device*/,
+                                               DeviceScene *dscene,
+                                               Scene *scene)
 {
+  /* Currently only OptiX and BVH2 do not require object_prim_offset (unless light trees are used).
+   * While it is possible to save some computation time here and device memory, the logic for it
+   * becomes tricky and fragile. */
+#if 0
   if (!scene->integrator->get_use_light_tree()) {
     const BVHLayoutMask layout_mask = device->get_bvh_layout_mask(dscene->data.kernel_features);
     if (layout_mask != BVH_LAYOUT_METAL && layout_mask != BVH_LAYOUT_MULTI_METAL &&
@@ -766,6 +779,7 @@ void ObjectManager::device_update_prim_offsets(Device *device, DeviceScene *dsce
       return;
     }
   }
+#endif
 
   /* On MetalRT, primitive / curve segment offsets can't be baked at BVH build time. Intersection
    * handlers need to apply the offset manually. */
@@ -774,7 +788,7 @@ void ObjectManager::device_update_prim_offsets(Device *device, DeviceScene *dsce
     uint32_t prim_offset = 0;
     if (Geometry *const geom = ob->geometry) {
       if (geom->is_hair()) {
-        prim_offset = ((Hair *const)geom)->curve_segment_offset;
+        prim_offset = ((Hair *)geom)->curve_segment_offset;
       }
       else {
         prim_offset = geom->prim_offset;

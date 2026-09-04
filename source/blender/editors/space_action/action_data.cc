@@ -10,8 +10,8 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "BLI_listbase.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -577,7 +577,7 @@ void ED_animedit_unlink_action(
     PointerRNA ptr = RNA_pointer_create_discrete(id, RNA_AnimData, adt);
     PropertyRNA *prop = RNA_struct_find_property(&ptr, "action");
 
-    RNA_property_pointer_set(&ptr, prop, PointerRNA_NULL, nullptr);
+    RNA_property_pointer_set(&ptr, prop, {}, nullptr);
     RNA_property_update(C, &ptr, prop);
   }
 }

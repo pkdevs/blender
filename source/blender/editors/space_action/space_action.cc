@@ -16,10 +16,10 @@
 #include "DNA_screen_types.h"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_lib_query.hh"
@@ -84,7 +84,8 @@ static SpaceLink *action_create(const ScrArea *area, const Scene *scene)
 
   saction->cache_display = TIME_CACHE_DISPLAY | TIME_CACHE_SOFTBODY | TIME_CACHE_PARTICLES |
                            TIME_CACHE_CLOTH | TIME_CACHE_SMOKE | TIME_CACHE_DYNAMICPAINT |
-                           TIME_CACHE_RIGIDBODY | TIME_CACHE_SIMULATION_NODES;
+                           TIME_CACHE_RIGIDBODY | TIME_CACHE_SIMULATION_NODES |
+                           TIME_CACHE_COMPOSITOR;
 
   saction->overlays.flag |= (ADS_OVERLAY_SHOW_OVERLAYS | ADS_SHOW_SCENE_STRIP_FRAME_RANGE);
 
@@ -1035,6 +1036,7 @@ void ED_spacetype_action()
   /* regions: UI buttons */
   art = MEM_new_zeroed<ARegionType>("spacetype action region");
   art->regionid = RGN_TYPE_UI;
+  art->flag = ARegionTypeFlag::UsePanelCategoriesSearch;
   art->prefsizex = UI_SIDEBAR_PANEL_WIDTH;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_FRAMES;
   art->listener = action_region_listener;

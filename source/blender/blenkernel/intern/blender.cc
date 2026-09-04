@@ -16,10 +16,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "IMB_cache.hh"
 #include "IMB_imbuf.hh"
@@ -38,6 +38,7 @@
 #include "BKE_idprop.hh"
 #include "BKE_main.hh"
 #include "BKE_node.hh"
+#include "BKE_preferences.h"
 #include "BKE_screen.hh"
 #include "BKE_studiolight.h"
 
@@ -377,7 +378,10 @@ void BKE_blender_userdef_data_free(UserDef *userdef, bool clear_fonts)
 
   userdef->autoexec_paths.free_no_destruct();
   userdef->script_directories.free_no_destruct();
-  userdef->asset_libraries.free_no_destruct();
+
+  for (bUserAssetLibrary &library_ref : userdef->asset_libraries.items_mutable()) {
+    BKE_preferences_asset_library_remove(userdef, &library_ref);
+  }
 
   for (bUserExtensionRepo &repo_ref : userdef->extension_repos.items_mutable()) {
     MEM_SAFE_DELETE(repo_ref.access_token);

@@ -10,11 +10,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_task.hh"
 
@@ -649,6 +649,7 @@ TransModeInfo TransMode_translate = {
     /*snap_distance_fn*/ transform_snap_distance_len_squared_fn,
     /*snap_apply_fn*/ ApplySnapTranslation,
     /*draw_fn*/ nullptr,
+    /*status_fn*/ nullptr,
 };
 
 }  // namespace blender::ed::transform

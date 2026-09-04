@@ -14,11 +14,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -104,7 +104,6 @@ static void ui_imageuser_slot_menu(bContext *C, ui::Layout *layout, void *image_
     }
     ui::Button *but = uiDefIconTextBut(
         block, ui::ButtonType::ButMenu, icon, str, 0, 0, UI_UNIT_X * 5, UI_UNIT_X, nullptr, "");
-    button_retval_set(but, B_NOP);
     button_func_set(
         but, [image, slot_id = slot_id](bContext & /*C*/) { image->render_slot = slot_id; });
   }
@@ -174,7 +173,7 @@ static void ui_imageuser_layer_menu(bContext * /*C*/, ui::Layout *layout, void *
 
   /* May have been freed since drawing. */
   RenderResult *rr = BKE_image_acquire_renderresult(scene, image);
-  if (UNLIKELY(rr == nullptr)) {
+  if (rr == nullptr) [[unlikely]] {
     BKE_image_release_renderresult(scene, image, rr);
     return;
   }
@@ -245,7 +244,7 @@ static void ui_imageuser_pass_menu(bContext * /*C*/, ui::Layout *layout, void *r
 
   /* may have been freed since drawing */
   rr = BKE_image_acquire_renderresult(scene, image);
-  if (UNLIKELY(rr == nullptr)) {
+  if (rr == nullptr) [[unlikely]] {
     BKE_image_release_renderresult(scene, image, rr);
     return;
   }
@@ -316,7 +315,7 @@ static void ui_imageuser_view_menu_rr(bContext * /*C*/, ui::Layout *layout, void
 
   /* may have been freed since drawing */
   rr = BKE_image_acquire_renderresult(scene, image);
-  if (UNLIKELY(rr == nullptr)) {
+  if (rr == nullptr) [[unlikely]] {
     BKE_image_release_renderresult(scene, image, rr);
     return;
   }
@@ -425,7 +424,7 @@ static bool ui_imageuser_layer_menu_step(bContext *C, int direction, void *rnd_p
   bool changed = false;
 
   rr = BKE_image_acquire_renderresult(scene, image);
-  if (UNLIKELY(rr == nullptr)) {
+  if (rr == nullptr) [[unlikely]] {
     BKE_image_release_renderresult(scene, image, rr);
     return false;
   }
@@ -475,7 +474,7 @@ static bool ui_imageuser_pass_menu_step(bContext *C, int direction, void *rnd_pt
   RenderPass *rpass;
 
   rr = BKE_image_acquire_renderresult(scene, image);
-  if (UNLIKELY(rr == nullptr)) {
+  if (rr == nullptr) [[unlikely]] {
     BKE_image_release_renderresult(scene, image, rr);
     return false;
   }
@@ -732,7 +731,7 @@ void uiTemplateImage(ui::Layout *layout,
                      bool compact,
                      bool multiview)
 {
-  if (!ptr->data) {
+  if (!*ptr) {
     return;
   }
 
@@ -1246,8 +1245,11 @@ void uiTemplateImageInfo(ui::Layout *layout, bContext *C, Image *ima, ImageUser 
 
     gpu::TextureFormat texture_format = gpu::TextureFormat::Invalid;
 
-    /* Try to see if this texture is a compressed format, if not, get the generic format. */
-    if (!IMB_gpu_get_compressed_format(ibuf, &texture_format)) {
+    /* Try to see if this texture is a compressed format, if not, get the generic format.
+     * A modified image is uploaded uncompressed so it can be written to. */
+    const bool is_compressed = (ibuf->userflags & IB_BITMAPDIRTY) == 0 &&
+                               IMB_gpu_get_compressed_format(ibuf, &texture_format);
+    if (!is_compressed) {
       texture_format = IMB_gpu_get_texture_format(
           ibuf, ima->flag & IMA_HIGH_BITDEPTH, ibuf->color_mode == ImColorMode::BW);
     }

@@ -19,8 +19,8 @@
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
 
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BLT_translation.hh"
 
@@ -192,7 +192,7 @@ static int depthdropper_init(bContext *C, wmOperator *op)
     }
   }
 
-  if ((ddr->ptr.data == nullptr) || (ddr->prop == nullptr) ||
+  if (!ddr->ptr || (ddr->prop == nullptr) ||
       (RNA_property_editable(&ddr->ptr, ddr->prop) == false) ||
       (RNA_property_type(ddr->prop) != PROP_FLOAT))
   {

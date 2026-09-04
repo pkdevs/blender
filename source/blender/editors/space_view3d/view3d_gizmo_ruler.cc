@@ -6,14 +6,14 @@
  * \ingroup spview3d
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_types.hh"
-#include "BLI_math_rotation.h"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_gpencil_legacy.h"
@@ -190,7 +190,7 @@ static void ruler_item_remove(bContext *C, wmGizmoGroup *gzgroup, RulerItem *rul
 }
 
 static void ruler_item_as_string(
-    RulerItem *ruler_item, const UnitSettings &unit, char *numstr, size_t numstr_size, int prec)
+    RulerItem *ruler_item, const UnitSettings &unit, char *numstr, size_t numstr_maxncpy, int prec)
 {
   if (ruler_item->flag & RULERITEM_USE_ANGLE) {
     const float ruler_angle = angle_v3v3v3(
@@ -198,22 +198,22 @@ static void ruler_item_as_string(
 
     if (unit.system == USER_UNIT_NONE) {
       BLI_snprintf_utf8(
-          numstr, numstr_size, "%.*f" BLI_STR_UTF8_DEGREE_SIGN, prec, RAD2DEGF(ruler_angle));
+          numstr, numstr_maxncpy, "%.*f" BLI_STR_UTF8_DEGREE_SIGN, prec, RAD2DEGF(ruler_angle));
     }
     else {
       BKE_unit_value_as_string(
-          numstr, numstr_size, double(ruler_angle), prec, B_UNIT_ROTATION, unit, false, true);
+          numstr, numstr_maxncpy, double(ruler_angle), prec, B_UNIT_ROTATION, unit, false, true);
     }
   }
   else {
     const float ruler_len = len_v3v3(ruler_item->co[0], ruler_item->co[2]);
 
     if (unit.system == USER_UNIT_NONE) {
-      BLI_snprintf_utf8(numstr, numstr_size, "%.*f", prec, ruler_len);
+      BLI_snprintf_utf8(numstr, numstr_maxncpy, "%.*f", prec, ruler_len);
     }
     else {
       BKE_unit_value_as_string_scaled(
-          numstr, numstr_size, ruler_len, prec, B_UNIT_LENGTH, unit, false, true);
+          numstr, numstr_maxncpy, ruler_len, prec, B_UNIT_LENGTH, unit, false, true);
     }
   }
 }

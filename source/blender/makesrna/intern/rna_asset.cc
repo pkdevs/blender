@@ -8,6 +8,7 @@
 
 #include <cstdlib>
 
+#include "BLI_path_utils.hh"
 #include "BLT_translation.hh"
 
 #include "RNA_define.hh"
@@ -83,14 +84,15 @@ const EnumPropertyItem rna_enum_asset_import_method_items[] = {
 
 #  include "AS_asset_library.hh"
 #  include "AS_asset_representation.hh"
+#  include "AS_essentials_library.hh"
 
 #  include "BKE_asset.hh"
 #  include "BKE_context.hh"
 #  include "BKE_report.hh"
 
-#  include "BLI_listbase.h"
-#  include "BLI_string.h"
-#  include "BLI_uuid.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_string.hh"
+#  include "BLI_uuid.hh"
 
 #  include "ED_asset.hh"
 #  include "ED_fileselect.hh"
@@ -346,6 +348,38 @@ static void rna_AssetMetaData_license_set(PointerRNA *ptr, const char *value)
   }
 }
 
+static void rna_AssetMetaData_webpage_get(PointerRNA *ptr, char *value)
+{
+  AssetMetaData *asset_data = static_cast<AssetMetaData *>(ptr->data);
+
+  if (asset_data->webpage) {
+    strcpy(value, asset_data->webpage);
+  }
+  else {
+    value[0] = '\0';
+  }
+}
+
+static int rna_AssetMetaData_webpage_length(PointerRNA *ptr)
+{
+  AssetMetaData *asset_data = static_cast<AssetMetaData *>(ptr->data);
+  return asset_data->webpage ? strlen(asset_data->webpage) : 0;
+}
+
+static void rna_AssetMetaData_webpage_set(PointerRNA *ptr, const char *value)
+{
+  AssetMetaData *asset_data = static_cast<AssetMetaData *>(ptr->data);
+
+  MEM_delete(asset_data->webpage);
+
+  if (value[0]) {
+    asset_data->webpage = BLI_strdup(value);
+  }
+  else {
+    asset_data->webpage = nullptr;
+  }
+}
+
 static void rna_AssetMetaData_active_tag_range(
     PointerRNA *ptr, int *min, int *max, int *softmin, int *softmax)
 {
@@ -453,6 +487,16 @@ static bool rna_AssetLibrary_is_editable_get(PointerRNA *ptr)
 {
   asset_system::AssetLibrary *asset_library = static_cast<asset_system::AssetLibrary *>(ptr->data);
   return !asset_library->is_read_only();
+}
+
+static const char *rna_AssetLibrary_online_assets_url()
+{
+  return asset_system::online_essentials_url().c_str();
+}
+
+static const char *rna_AssetLibrary_online_assets_cache_path()
+{
+  return asset_system::online_essentials_cache_directory_path().c_str();
 }
 
 static void rna_AssetRepresentation_name_get(PointerRNA *ptr, char *value)
@@ -676,6 +720,17 @@ static void rna_def_asset_data(BlenderRNA *brna)
                            "name does not necessarily indicate that this is free of licensing "
                            "terms. Contact the author if any clarification is needed.");
 
+  prop = RNA_def_property(srna, "webpage", PROP_STRING, PROP_NONE);
+  RNA_def_property_editable_func(prop, "rna_AssetMetaData_editable");
+  RNA_def_property_string_funcs(prop,
+                                "rna_AssetMetaData_webpage_get",
+                                "rna_AssetMetaData_webpage_length",
+                                "rna_AssetMetaData_webpage_set");
+  RNA_def_property_ui_text(prop,
+                           "Webpage",
+                           "Webpage"
+                           "Web-address to a page with more information about this asset");
+
   prop = RNA_def_property(srna, "tags", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_struct_type(prop, "AssetTag");
   RNA_def_property_editable_func(prop, "rna_AssetMetaData_editable");
@@ -837,6 +892,26 @@ static void rna_def_asset_library(BlenderRNA *brna)
       prop,
       "Is Editable",
       "Assets and catalogs in this library can be edited from the current Blender instance");
+
+  FunctionRNA *func;
+  PropertyRNA *parm;
+
+  func = RNA_def_function(srna, "online_assets_url", "rna_AssetLibrary_online_assets_url");
+  RNA_def_function_flag(func, FUNC_NO_SELF);
+  parm = RNA_def_string(
+      func, "url", nullptr, 0, "URL", "Remote location of the Online Essentials library");
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(
+      srna, "online_assets_cache_path", "rna_AssetLibrary_online_assets_cache_path");
+  RNA_def_function_flag(func, FUNC_NO_SELF);
+  parm = RNA_def_string(func,
+                        "path",
+                        nullptr,
+                        0,
+                        "Path",
+                        "Local location of the Online Essentials library's disk cache");
+  RNA_def_function_return(func, parm);
 }
 
 PropertyRNA *rna_def_asset_library_ui_reference_common(StructRNA *srna,

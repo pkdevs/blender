@@ -5,9 +5,9 @@
 #include <cstring>
 #include <fmt/format.h>
 
-#include "BLI_listbase.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
 
 #include "BKE_screen.hh"
 #include "BKE_viewer_path.hh"
@@ -835,6 +835,7 @@ void register_spacetype()
   /* regions: right panel buttons */
   art = MEM_new_zeroed<ARegionType>("spacetype spreadsheet right region");
   art->regionid = RGN_TYPE_UI;
+  art->flag = ARegionTypeFlag::UsePanelCategoriesSearch;
   art->prefsizex = UI_SIDEBAR_PANEL_WIDTH;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_FRAMES;
   art->lock = REGION_DRAW_LOCK_ALL;

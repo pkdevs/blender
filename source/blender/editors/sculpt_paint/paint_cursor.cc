@@ -11,13 +11,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_axis_angle.hh"
-#include "BLI_math_color.h"
-#include "BLI_math_rotation.h"
-#include "BLI_rect.h"
-#include "BLI_task.h"
-#include "BLI_utildefines.h"
+#include "BLI_math_color_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_task_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_brush_types.h"
 #include "DNA_mesh_types.h"
@@ -47,7 +47,7 @@
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf_types.hh"
 
-#include "ED_image.hh"
+#include "ED_paint.hh"
 #include "ED_view3d.hh"
 
 #include "GPU_immediate.hh"
@@ -1037,7 +1037,7 @@ static bool paint_cursor_context_init(bContext *C,
   const bke::PaintRuntime &paint_runtime = *pcontext.paint->runtime;
   /* There is currently no way to check if the direction is inverted before starting the stroke,
    * so this does not reflect the state of the brush in the UI. */
-  if (((!paint_runtime.draw_inverted) ^ ((pcontext.brush->flag & BRUSH_DIR_IN) == 0)) &&
+  if ((pcontext.brush->flag & BRUSH_DIR_IN) &&
       bke::brush::supports_secondary_cursor_color(*pcontext.brush))
   {
     pcontext.outline_col = float3(pcontext.brush->sub_col);
@@ -1202,10 +1202,15 @@ static void paint_cursor_update_rake_rotation(PaintCursorContext &pcontext)
   /* Don't calculate rake angles while a stroke is active because the rake variables are global
    * and we may get interference with the stroke itself.
    * For line strokes, such interference is visible. */
+
   const bke::PaintRuntime *paint_runtime = pcontext.paint->runtime;
+
+  ARegion *region = pcontext.vc.region;
+  float2 mouse = {pcontext.translation.x - region->winrct.xmin,
+                  pcontext.translation.y - region->winrct.ymin};
   if (!paint_runtime->stroke_active) {
     paint_calculate_rake_rotation(
-        *pcontext.paint, *pcontext.brush, pcontext.translation, pcontext.mode, true);
+        *pcontext.paint, *pcontext.brush, mouse, pcontext.mode, false, false);
   }
 }
 

@@ -13,8 +13,8 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_idtype.hh"
@@ -27,8 +27,8 @@
 #include "BKE_paint_types.hh"
 #include "BKE_report.hh"
 
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -205,6 +205,13 @@ bool mode_set_ex(bContext *C, eObjectMode mode, bool use_undo, ReportList *repor
   }
 
   const char *opstring = object_mode_op_string((mode == OB_MODE_OBJECT) ? ob->mode : mode);
+  if (opstring == nullptr) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Unable to set invalid object mode %d",
+                int((mode == OB_MODE_OBJECT) ? ob->mode : mode));
+    return false;
+  }
   wmOperatorType *ot = WM_operatortype_find(opstring, false);
 
   if (!use_undo) {
@@ -221,8 +228,9 @@ bool mode_set_ex(bContext *C, eObjectMode mode, bool use_undo, ReportList *repor
     if (ob->data && !ID_IS_EDITABLE(ob->data)) {
       const ID &obdata_id = *ob->data;
       char obdata_idtype_name_lower[MAX_ID_NAME];
-      STRNCPY(obdata_idtype_name_lower, BKE_idtype_idcode_to_name(GS(obdata_id.name)));
-      BLI_str_tolower_ascii(obdata_idtype_name_lower, strlen(obdata_idtype_name_lower));
+      const size_t obdata_idtype_name_lower_len = STRNCPY_RLEN(
+          obdata_idtype_name_lower, BKE_idtype_idcode_to_name(GS(obdata_id.name)));
+      BLI_str_tolower_ascii(obdata_idtype_name_lower, obdata_idtype_name_lower_len);
 
       if (ID_IS_PACKED(ob->data)) {
         BKE_reportf(reports,
@@ -442,10 +450,7 @@ static void object_transfer_mode_reposition_view_pivot(ARegion *region,
   if (!ED_view3d_autodist_simple(region, mval, global_loc, 0, nullptr)) {
     return;
   }
-  bke::PaintRuntime *paint_runtime = paint->runtime;
-  copy_v3_v3(paint_runtime->average_stroke_accum, global_loc);
-  paint_runtime->average_stroke_counter = 1;
-  paint_runtime->last_stroke_valid = true;
+  bke::paint::stroke_set_location(*paint, float3(global_loc));
 }
 
 constexpr float mode_transfer_flash_length = 0.55f;

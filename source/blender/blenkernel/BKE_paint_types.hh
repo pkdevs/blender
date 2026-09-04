@@ -5,7 +5,7 @@
 #pragma once
 
 #include "BLI_math_vector_types.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_utility_mixins.hh"
 
 namespace blender {
@@ -75,7 +75,6 @@ struct PaintRuntime : NonCopyable, NonMovable {
    * if space attenuation is used.
    */
   float overlap_factor = 0.0f;
-  bool draw_inverted = false;
   /** Check is there an ongoing stroke right now. */
   bool stroke_active = false;
 

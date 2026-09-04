@@ -16,10 +16,11 @@
 
 #include "BLI_array.hh"
 #include "BLI_kdtree.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
 
+#include "BKE_attribute.h"
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
 #include "BKE_editmesh.hh"
@@ -284,7 +285,7 @@ bool EDBM_op_call_silentf(BMEditMesh *em, const char *fmt, ...)
 static int object_shapenr_basis_index_ensured(const Object *ob)
 {
   const Mesh *mesh = id_cast<const Mesh *>(ob->data);
-  if (UNLIKELY((ob->shapenr == 0) && (mesh->key && !mesh->key->block.is_empty()))) {
+  if ((ob->shapenr == 0) && (mesh->key && !mesh->key->block.is_empty())) [[unlikely]] {
     return 1;
   }
   return ob->shapenr;
@@ -307,6 +308,9 @@ void EDBM_mesh_make_from_mesh(Object *ob,
   /* Clamp the index, so the behavior of enter & exit edit-mode matches, see #43998. */
   const int shapenr = object_shapenr_basis_index_ensured(ob);
 
+  AttributeOwner owner = AttributeOwner::from_id(const_cast<ID *>(&mesh->id));
+  const std::string attributes_active_name = BKE_attributes_active_name_get(owner).value_or("");
+
   BMesh *bm = BKE_mesh_to_bmesh(src_mesh, shapenr, add_key_index, &create_params);
 
   if (mesh->runtime->edit_mesh) {
@@ -325,6 +329,17 @@ void EDBM_mesh_make_from_mesh(Object *ob,
 
   /* we need to flush selection because the mode may have changed from when last in editmode */
   EDBM_selectmode_flush(mesh->runtime->edit_mesh.get());
+
+  /* Conversion to edit-mesh may have modified the attribute layers.
+   * Re-resolve the active attribute by name to keep it stable. */
+  if (!attributes_active_name.empty()) {
+    BLI_assert(bke::allow_procedural_attribute_access(attributes_active_name));
+    BKE_attributes_active_set(owner, attributes_active_name);
+  }
+  else {
+    BLI_assert(mesh->attributes_active_index == -1);
+    mesh->attributes_active_index = -1;
+  }
 }
 
 void EDBM_mesh_load_ex(Main *bmain, Object *ob, bool free_data)
@@ -334,7 +349,7 @@ void EDBM_mesh_load_ex(Main *bmain, Object *ob, bool free_data)
 
   /* Workaround for #42360, 'ob->shapenr' should be 1 in this case.
    * however this isn't synchronized between objects at the moment. */
-  if (UNLIKELY((ob->shapenr == 0) && (object_shapenr_basis_index_ensured(ob) > 0))) {
+  if ((ob->shapenr == 0) && (object_shapenr_basis_index_ensured(ob) > 0)) [[unlikely]] {
     bm->shapenr = 1;
   }
 
@@ -2004,8 +2019,8 @@ bool BMBVH_EdgeVisible(const BMBVHTree *tree,
   scale_point(co1, co2, 0.99);
   scale_point(co3, co2, 0.99);
 
-  /* OK, idea is to generate rays going from the camera origin to the
-   * three points on the edge (v1, mid, v2). */
+  /* OK, idea is to generate rays going from the three points on the edge (v1, mid, v2) to the
+   * camera origin. */
   sub_v3_v3v3(dir1, origin, co1);
   sub_v3_v3v3(dir2, origin, co2);
   sub_v3_v3v3(dir3, origin, co3);

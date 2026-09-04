@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include <fmt/format.h>
+
 #include "MEM_guardedalloc.h"
 
 #include "DNA_armature_types.h"
@@ -26,13 +28,13 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_enum_flags.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_timecode.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_timecode.hh"
 
 #include "BLT_translation.hh"
 

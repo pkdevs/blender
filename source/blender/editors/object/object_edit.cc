@@ -16,11 +16,11 @@
 #include "BLI_path_utils.hh"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -183,7 +183,7 @@ Vector<Object *> objects_in_mode_or_selected(bContext *C,
     id_pin = sbuts->pinid;
   }
 
-  if (id_pin && (GS(id_pin->name) == ID_OB)) {
+  if (id_pin && (id_pin->id_type() == ID_OB)) {
     /* Pinned data takes priority, in this case ignore selection & other objects in the mode. */
     ob = id_cast<Object *>(id_pin);
   }
@@ -196,9 +196,7 @@ Vector<Object *> objects_in_mode_or_selected(bContext *C,
      * irrespective of selection. */
     ob = ob_active;
   }
-  else if (ob_active && (ob_active->mode &
-                         (OB_MODE_ALL_PAINT | OB_MODE_ALL_SCULPT | OB_MODE_ALL_PAINT_GPENCIL)))
-  {
+  else if (ob_active && (ob_active->mode & (OB_MODE_ALL_PAINT | OB_MODE_ALL_PAINT_GPENCIL))) {
     /* When painting, limit to active. */
     ob = ob_active;
   }
@@ -787,7 +785,7 @@ bool editmode_exit_ex(Main *bmain, Scene *scene, Object *obedit, int flag)
   if (editmode_load_free_ex(bmain, obedit, true, free_data) == false) {
     /* in rare cases (background mode) its possible active object
      * is flagged for editmode, without 'obedit' being set #35489. */
-    if (UNLIKELY(obedit && obedit->mode & OB_MODE_EDIT)) {
+    if (obedit && obedit->mode & OB_MODE_EDIT) [[unlikely]] {
       obedit->mode &= ~OB_MODE_EDIT;
       /* Also happens when mesh is shared across multiple objects. #69834. */
       DEG_id_tag_update(&obedit->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
@@ -871,7 +869,7 @@ bool editmode_enter_ex(Main *bmain, Scene *scene, Object *ob, int flag)
 {
   bool ok = false;
 
-  if (ELEM(nullptr, ob, ob->data) || !ID_IS_EDITABLE(ob) || ID_IS_OVERRIDE_LIBRARY(ob) ||
+  if (ELEM(nullptr, ob, ob->data) || !ID_IS_EDITABLE(ob) || !ID_IS_EDITABLE(ob->data) ||
       ID_IS_OVERRIDE_LIBRARY(ob->data))
   {
     return false;
@@ -902,7 +900,7 @@ bool editmode_enter_ex(Main *bmain, Scene *scene, Object *ob, int flag)
     EDBM_mesh_make(ob, scene->toolsettings->selectmode, use_key_index);
 
     BMEditMesh *em = BKE_editmesh_from_object(ob);
-    if (LIKELY(em)) {
+    if (em) [[likely]] {
       BKE_editmesh_looptris_and_normals_calc(em);
     }
 
@@ -1068,7 +1066,7 @@ static bool editmode_toggle_poll(bContext *C)
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   /* Covers liboverrides too. */
-  if (ELEM(nullptr, ob, ob->data) || !ID_IS_EDITABLE(ob->data) || ID_IS_OVERRIDE_LIBRARY(ob) ||
+  if (ELEM(nullptr, ob, ob->data) || !ID_IS_EDITABLE(ob) || !ID_IS_EDITABLE(ob->data) ||
       ID_IS_OVERRIDE_LIBRARY(ob->data))
   {
     return false;
@@ -1281,16 +1279,13 @@ static bool has_pose_motion_paths(Object *ob)
   return ob->pose && (ob->pose->avs.path_bakeflag & MOTIONPATH_BAKE_HAS_PATHS) != 0;
 }
 
-void motion_paths_recalc(bContext *C,
-                         Scene *scene,
-                         const eAnimvizCalcRange range,
-                         const Span<Object *> objects)
+void motion_paths_recalc(bContext *C, Scene *scene, const Span<Object *> objects)
 {
   BLI_assert(C != nullptr);
   Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
-  Vector<MPathTarget *> targets;
+  Vector<MPathTarget> targets;
   for (Object *ob : objects) {
     /* set flag to force recalc, then grab path(s) from object */
     if (has_object_motion_paths(ob)) {
@@ -1306,8 +1301,7 @@ void motion_paths_recalc(bContext *C,
 
   Depsgraph *depsgraph = animviz_depsgraph_build(bmain, scene, view_layer, targets);
 
-  animviz_calc_motionpaths(depsgraph, scene, targets, range);
-  animviz_free_motionpath_targets(targets);
+  animviz_calc_motionpaths(depsgraph, scene, targets, BKE_scene_frame_get(scene));
 
   /* Tag objects for copy-on-eval - so paths will draw/redraw
    * For currently frame only we update evaluated object directly. */
@@ -1319,28 +1313,6 @@ void motion_paths_recalc(bContext *C,
 
   /* Free temporary depsgraph. */
   DEG_graph_free(depsgraph);
-}
-
-void motion_paths_recalc_selected(bContext *C, Scene *scene, const eAnimvizCalcRange range)
-{
-  Vector<Object *> selected_objects;
-  CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects) {
-    selected_objects.append(ob);
-  }
-  CTX_DATA_END;
-
-  motion_paths_recalc(C, scene, range, selected_objects);
-}
-
-void motion_paths_recalc_visible(bContext *C, Scene *scene, const eAnimvizCalcRange range)
-{
-  Vector<Object *> visible_objects;
-  CTX_DATA_BEGIN (C, Object *, ob, visible_objects) {
-    visible_objects.append(ob);
-  }
-  CTX_DATA_END;
-
-  motion_paths_recalc(C, scene, range, visible_objects);
 }
 
 /* show popup to determine settings */
@@ -1370,6 +1342,7 @@ static wmOperatorStatus object_calculate_paths_exec(bContext *C, wmOperator *op)
   eMotionPaths_Types path_type = eMotionPaths_Types(RNA_enum_get(op->ptr, "display_type"));
   eMotionPath_Ranges path_range = eMotionPath_Ranges(RNA_enum_get(op->ptr, "range"));
 
+  Vector<Object *> selected_objects;
   /* set up path data for objects being calculated */
   CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects) {
     bAnimVizSettings *avs = &ob->avs;
@@ -1379,12 +1352,16 @@ static wmOperatorStatus object_calculate_paths_exec(bContext *C, wmOperator *op)
     animviz_motionpath_compute_range(ob, scene);
 
     /* verify that the selected object has the appropriate settings */
-    animviz_verify_motionpaths(op->reports, scene, ob, nullptr);
+    bke::motionpath::ensure(op->reports, scene, ob, nullptr);
+    if (ob->mpath) {
+      ed::motionpath::tag_for_recalc(*ob->mpath);
+      selected_objects.append(ob);
+    }
   }
   CTX_DATA_END;
 
   /* calculate the paths for objects that have them (and are tagged to get refreshed) */
-  motion_paths_recalc_selected(C, scene, ANIMVIZ_CALC_RANGE_FULL);
+  motion_paths_recalc(C, scene, selected_objects);
 
   /* notifiers for updates */
   WM_event_add_notifier(C, NC_OBJECT | ND_DRAW_ANIMVIZ, nullptr);
@@ -1448,15 +1425,20 @@ static wmOperatorStatus object_update_paths_exec(bContext *C, wmOperator *op)
   if (scene == nullptr) {
     return OPERATOR_CANCELLED;
   }
+  Vector<Object *> selected_objects;
   CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects) {
     animviz_motionpath_compute_range(ob, scene);
     /* verify that the selected object has the appropriate settings */
-    animviz_verify_motionpaths(op->reports, scene, ob, nullptr);
+    bke::motionpath::ensure(op->reports, scene, ob, nullptr);
+    if (ob->mpath) {
+      ed::motionpath::tag_for_recalc(*ob->mpath);
+      selected_objects.append(ob);
+    }
   }
   CTX_DATA_END;
 
   /* calculate the paths for objects that have them (and are tagged to get refreshed) */
-  motion_paths_recalc_selected(C, scene, ANIMVIZ_CALC_RANGE_FULL);
+  motion_paths_recalc(C, scene, selected_objects);
 
   /* notifiers for updates */
   WM_event_add_notifier(C, NC_OBJECT | ND_DRAW_ANIMVIZ, nullptr);
@@ -1500,8 +1482,27 @@ static wmOperatorStatus object_update_all_paths_exec(bContext *C, wmOperator * /
   if (scene == nullptr) {
     return OPERATOR_CANCELLED;
   }
-
-  motion_paths_recalc_visible(C, scene, ANIMVIZ_CALC_RANGE_FULL);
+  Vector<Object *> visible_objects_with_mpath;
+  CTX_DATA_BEGIN (C, Object *, ob, visible_objects) {
+    bool has_any_motion_path = false;
+    if (ob->mpath) {
+      ed::motionpath::tag_for_recalc(*ob->mpath);
+      has_any_motion_path = true;
+    }
+    if (ob->pose) {
+      for (bPoseChannel &pchan : ob->pose->chanbase) {
+        if (pchan.mpath) {
+          ed::motionpath::tag_for_recalc(*pchan.mpath);
+          has_any_motion_path = true;
+        }
+      }
+    }
+    if (has_any_motion_path) {
+      visible_objects_with_mpath.append(ob);
+    }
+  }
+  CTX_DATA_END;
+  motion_paths_recalc(C, scene, visible_objects_with_mpath);
 
   WM_event_add_notifier(C, NC_OBJECT | ND_POSE | ND_TRANSFORM, nullptr);
 
@@ -1533,7 +1534,7 @@ void OBJECT_OT_paths_update_visible(wmOperatorType *ot)
 static void object_clear_mpath(Object *ob)
 {
   if (ob->mpath) {
-    animviz_free_motionpath(ob->mpath);
+    bke::motionpath::free(ob->mpath);
     ob->mpath = nullptr;
     ob->avs.path_bakeflag &= ~MOTIONPATH_BAKE_HAS_PATHS;
 
@@ -1704,7 +1705,7 @@ static wmOperatorStatus shade_smooth_exec(bContext *C, wmOperator *op)
     }
 
     bool changed = false;
-    if (GS(data->name) == ID_ME) {
+    if (data->id_type() == ID_ME) {
       Mesh &mesh = *reinterpret_cast<Mesh *>(data);
       const bool keep_sharp_edges = RNA_boolean_get(op->ptr, "keep_sharp_edges");
       bke::mesh_smooth_set(mesh, use_smooth || use_smooth_by_angle, keep_sharp_edges);
@@ -1715,7 +1716,7 @@ static wmOperatorStatus shade_smooth_exec(bContext *C, wmOperator *op)
       BKE_mesh_batch_cache_dirty_tag(reinterpret_cast<Mesh *>(data), BKE_MESH_BATCH_DIRTY_ALL);
       changed = true;
     }
-    else if (GS(data->name) == ID_CU_LEGACY) {
+    else if (data->id_type() == ID_CU_LEGACY) {
       BKE_curve_smooth_flag_set(reinterpret_cast<Curve *>(data), use_smooth);
       changed = true;
     }
@@ -1879,7 +1880,7 @@ static wmOperatorStatus shade_auto_smooth_exec(bContext *C, wmOperator *op)
       if (!node_group_id) {
         return OPERATOR_CANCELLED;
       }
-      if (GS(node_group_id->name) != ID_NT) {
+      if (node_group_id->id_type() != ID_NT) {
         return OPERATOR_CANCELLED;
       }
       node_group = reinterpret_cast<bNodeTree *>(node_group_id);
@@ -1919,7 +1920,7 @@ static wmOperatorStatus shade_auto_smooth_exec(bContext *C, wmOperator *op)
         smooth_by_angle_nmd->modifier.flag |= eModifierFlag_PinLast;
         smooth_by_angle_nmd->node_group = node_group;
         id_us_plus(&node_group->id);
-        MOD_nodes_update_interface(object, smooth_by_angle_nmd);
+        MOD_nodes_update_interface(bmain, object, smooth_by_angle_nmd);
         smooth_by_angle_nmd->flag |= NODES_MODIFIER_HIDE_DATABLOCK_SELECTOR |
                                      NODES_MODIFIER_HIDE_MANAGE_PANEL;
         STRNCPY_UTF8(smooth_by_angle_nmd->modifier.name, DATA_(node_group->id.name + 2));

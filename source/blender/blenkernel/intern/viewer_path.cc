@@ -2,13 +2,17 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #include "BKE_lib_query.hh"
 #include "BKE_lib_remap.hh"
 #include "BKE_viewer_path.hh"
 
 #include "BLI_index_range.hh"
-#include "BLI_listbase.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
 
 #include "MEM_guardedalloc.h"

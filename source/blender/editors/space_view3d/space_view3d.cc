@@ -9,9 +9,11 @@
 /* Allow using deprecated functionality for .blend file I/O. */
 #define DNA_DEPRECATED_ALLOW
 
+#include <array>
 #include <cstring>
 
 #include "DNA_collection_types.h"
+#include "DNA_curve_types.h"
 #include "DNA_gpencil_legacy_types.h"
 #include "DNA_lightprobe_types.h"
 #include "DNA_object_types.h"
@@ -20,13 +22,15 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_asset.hh"
+#include "BKE_compositor.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_gpencil_legacy.h"
@@ -40,6 +44,7 @@
 #include "BKE_object.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
+#include "BKE_vfont.hh"
 #include "BKE_viewer_path.hh"
 
 #include "ED_asset_shelf.hh"
@@ -554,6 +559,59 @@ static void *view3d_main_region_duplicate(void *poin)
   return nullptr;
 }
 
+#ifdef WITH_INPUT_IME
+static std::optional<ARegionIMECursorState> view3d_main_region_cursor_ime(
+    wmWindow *win, const ScrArea * /*area*/, const ARegion *region, ARegionIMECursor *r_cursor)
+{
+  /* The position is pending during viewport navigation (orbit, pan, zoom, fly, walk). */
+  const RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+  if (rv3d->rflag & RV3D_NAVIGATING) {
+    return ARegionIMECursorState::PositionPending;
+  }
+
+  ViewLayer *view_layer = WM_window_get_active_view_layer(win);
+  if (!view_layer) {
+    return std::nullopt;
+  }
+  Object *ob = BKE_view_layer_active_object_get(view_layer);
+  if (!(ob && ob->type == OB_FONT && ob->mode == OB_MODE_EDIT)) {
+    return std::nullopt;
+  }
+
+  const Curve *cu = id_cast<Curve *>(ob->data);
+  const EditFont *ef = cu->editfont;
+  /* `cu->editfont` can be nullptr on Blender startup. */
+  if (!ef) {
+    return std::nullopt;
+  }
+
+  /* Use the lower-left corner of the cursor with a zero width, since the object transform may
+   * rotate it, where an axis-aligned width wouldn't represent it. */
+  const float3 cursor_local = {ef->textcurs[0].x, ef->textcurs[0].y, 0.0f};
+  /* Transform to world space, then project to region coordinates. */
+  const float3 cursor_world = math::transform_point(ob->object_to_world(), cursor_local);
+  float2 cursor_screen;
+  if (ED_view3d_project_float_global(
+          region, cursor_world, cursor_screen, V3D_PROJ_TEST_CLIP_NEAR) != V3D_PROJ_RET_OK)
+  {
+    /* Behind the view, so pending since editing is still active and the view may move back. */
+    return ARegionIMECursorState::PositionPending;
+  }
+
+  const int x = int(cursor_screen[0]);
+  const int y = int(cursor_screen[1]);
+  r_cursor->rect = {
+      .xmin = x,
+      .xmax = x,
+      .ymin = y,
+      .ymax = y + int(UI_UNIT_Y),
+  };
+  r_cursor->font_size = UI_UNIT_Y;
+  return ARegionIMECursorState::PositionSet;
+}
+
+#endif
+
 static void view3d_main_region_listener(const wmRegionListenerParams *params)
 {
   wmWindow *window = params->window;
@@ -638,6 +696,11 @@ static void view3d_main_region_listener(const wmRegionListenerParams *params)
           }
           break;
         }
+        case ND_COMPO_RESULT:
+          if (bke::compositor::is_viewport_compositor_enabled(*v3d, *rv3d)) {
+            ED_region_tag_redraw(region);
+          }
+          break;
       }
       if (wmn->action == NA_EDITED) {
         ED_region_tag_redraw(region);
@@ -1135,13 +1198,11 @@ static void view3d_buttons_region_init(wmWindowManager *wm, ARegion *region)
   WM_event_add_keymap_handler(&region->runtime->handlers, keymap);
 }
 
-void ED_view3d_buttons_region_layout_ex(const bContext *C,
-                                        ARegion *region,
-                                        const char *category_override)
+std::array<const char *, 4> ED_view3d_buttons_contexts(const bContext *C)
 {
   const enum eContextObjectMode mode = CTX_data_mode_enum(C);
 
-  const char *contexts_base[4] = {nullptr};
+  std::array<const char *, 4> contexts_base = {nullptr};
   contexts_base[0] = CTX_data_mode_string(C);
 
   const char **contexts = &contexts_base[1];
@@ -1249,6 +1310,15 @@ void ED_view3d_buttons_region_layout_ex(const bContext *C,
       break;
   }
 
+  return contexts_base;
+}
+
+void ED_view3d_buttons_region_layout_ex(const bContext *C,
+                                        ARegion *region,
+                                        const char *category_override)
+{
+  std::array<const char *, 4> contexts = ED_view3d_buttons_contexts(C);
+
   ListBaseT<PanelType> *paneltypes = &region->runtime->type->paneltypes;
 
   /* Allow drawing 3D view toolbar from non 3D view space type. */
@@ -1258,8 +1328,12 @@ void ED_view3d_buttons_region_layout_ex(const bContext *C,
     paneltypes = &art->paneltypes;
   }
 
-  ED_region_panels_layout_ex(
-      C, region, paneltypes, wm::OpCallContext::InvokeRegionWin, contexts_base, category_override);
+  ED_region_panels_layout_ex(C,
+                             region,
+                             paneltypes,
+                             wm::OpCallContext::InvokeRegionWin,
+                             contexts.data(),
+                             category_override);
 }
 
 static void view3d_buttons_region_layout(const bContext *C, ARegion *region)
@@ -1625,6 +1699,9 @@ void ED_spacetype_view3d()
   art->exit = view3d_main_region_exit;
   art->free = view3d_main_region_free;
   art->duplicate = view3d_main_region_duplicate;
+#ifdef WITH_INPUT_IME
+  art->cursor_ime = view3d_main_region_cursor_ime;
+#endif
   art->listener = view3d_main_region_listener;
   art->message_subscribe = view3d_main_region_message_subscribe;
   art->cursor = view3d_main_region_cursor;
@@ -1634,6 +1711,7 @@ void ED_spacetype_view3d()
   /* regions: list-view/buttons */
   art = MEM_new_zeroed<ARegionType>("spacetype view3d buttons region");
   art->regionid = RGN_TYPE_UI;
+  art->flag = ARegionTypeFlag::UsePanelCategoriesSearch;
   art->prefsizex = UI_SIDEBAR_PANEL_WIDTH;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_FRAMES;
   art->listener = view3d_buttons_region_listener;

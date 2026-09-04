@@ -16,15 +16,15 @@
 #include "DNA_volume_types.h"
 
 #include "BLI_bounds.hh"
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_index_range.hh"
-#include "BLI_math_base.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 #include "BLI_string_ref.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_anim_data.hh"
 #include "BKE_bake_data_block_id.hh"
@@ -252,7 +252,7 @@ static void volume_foreach_path(ID *id, BPathForeachPathData *bpath_data)
 static void volume_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   Volume *volume = id_cast<Volume *>(id);
-  const bool is_undo = BLO_write_is_undo(writer);
+  const bool is_undo = writer->is_undo();
 
   /* Do not store packed files in case this is a library override ID. */
   if (ID_IS_OVERRIDE_LIBRARY(volume) && !is_undo) {

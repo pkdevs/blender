@@ -11,8 +11,8 @@
 #include "BKE_material.hh"
 
 #include "BLI_math_quaternion.hh"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 
 #include "DNA_material_types.h"
 
@@ -386,7 +386,7 @@ static int gpu_shader_mix(GPUMaterial *mat,
     if (is_non_uniform && is_vector_mode) {
       const float min[3] = {0.0f, 0.0f, 0.0f};
       const float max[3] = {1.0f, 1.0f, 1.0f};
-      const GPUNodeLink *factor_link = in[1].link ? in[1].link : GPU_uniform(in[1].vec);
+      const GPUNodeLink *factor_link = in[1].link ? in[1].link : GPU_uniform(in[1]);
       GPU_link(mat,
                "node_mix_clamp_vector",
                factor_link,
@@ -397,7 +397,7 @@ static int gpu_shader_mix(GPUMaterial *mat,
     else {
       const float min = 0.0f;
       const float max = 1.0f;
-      const GPUNodeLink *factor_link = in[0].link ? in[0].link : GPU_uniform(in[0].vec);
+      const GPUNodeLink *factor_link = in[0].link ? in[0].link : GPU_uniform(in[0]);
       GPU_link(mat,
                "node_mix_clamp_value",
                factor_link,

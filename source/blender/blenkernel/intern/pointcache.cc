@@ -18,7 +18,7 @@
 #ifndef WIN32
 #  include <dirent.h>
 #else
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #endif
 
 #include "CLG_log.h"
@@ -38,15 +38,15 @@
 #include "DNA_space_types.h"
 
 #include "BLI_compression.hh"
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -2603,7 +2603,7 @@ void BKE_ptcache_id_clear(PTCacheID *pid, int mode, uint cfra)
         closedir(dir);
 
         if (mode == PTCACHE_CLEAR_ALL && pid->cache->cached_frames) {
-          memset(pid->cache->cached_frames, 0, MEM_allocN_len(pid->cache->cached_frames));
+          memset(pid->cache->cached_frames, 0, pid->cache->cached_frames_len);
         }
       }
       else {
@@ -2619,7 +2619,7 @@ void BKE_ptcache_id_clear(PTCacheID *pid, int mode, uint cfra)
           pid->cache->mem_cache.free_no_destruct();
 
           if (pid->cache->cached_frames) {
-            memset(pid->cache->cached_frames, 0, MEM_allocN_len(pid->cache->cached_frames));
+            memset(pid->cache->cached_frames, 0, pid->cache->cached_frames_len);
           }
         }
         else {
@@ -3685,11 +3685,15 @@ void BKE_ptcache_update_info(PTCacheID *pid)
 
     for (; pm; pm = pm->next) {
       for (i = 0; i < BPHYS_TOT_DATA; i++) {
-        bytes += MEM_allocN_len(pm->data[i]);
+        if (pm->data_types & (1 << i)) {
+          /* Size of pm->data[i]. */
+          bytes += int64_t(pm->totpoint) * ptcache_data_size[i];
+        }
       }
 
       for (PTCacheExtra &extra : pm->extradata) {
-        bytes += MEM_allocN_len(extra.data);
+        /* Size of extra.data. */
+        bytes += int64_t(extra.totdata) * ptcache_extra_datasize[extra.type];
         bytes += sizeof(PTCacheExtra);
       }
 

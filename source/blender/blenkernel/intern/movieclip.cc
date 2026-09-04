@@ -31,13 +31,13 @@
 #include "DNA_scene_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -56,7 +56,6 @@
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
-#include "IMB_openexr.hh"
 
 #include "MOV_read.hh"
 
@@ -454,78 +453,6 @@ static void get_proxy_filepath(const MovieClip *clip,
   BLI_strncat(filepath, ".jpg", FILE_MAX);
 }
 
-namespace {
-
-struct MultilayerConvertContext {
-  float *combined_pass;
-  int num_combined_channels;
-};
-
-}  // namespace
-
-static void *movieclip_convert_multilayer_add_view(void * /*ctx_v*/, const char * /*view_name*/)
-{
-  return nullptr;
-}
-
-static void *movieclip_convert_multilayer_add_layer(void *ctx_v, const char * /*layer_name*/)
-{
-  /* Return dummy non-nullptr value, we don't use layer handle but need to return
-   * something, so render API invokes the add_pass() callbacks. */
-  return ctx_v;
-}
-
-static void movieclip_convert_multilayer_add_pass(void * /*layer*/,
-                                                  void *ctx_v,
-                                                  const char *pass_name,
-                                                  float *rect,
-                                                  int num_channels,
-                                                  const char *chan_id,
-                                                  const char * /*view_name*/)
-{
-  /* NOTE: This function must free pass pixels data if it is not used, this
-   * is how IMB_exr_multilayer_convert() is working. */
-  MultilayerConvertContext *ctx = static_cast<MultilayerConvertContext *>(ctx_v);
-  /* If we've found a first combined pass, skip all the rest ones. */
-  if (ctx->combined_pass != nullptr) {
-    MEM_delete(rect);
-    return;
-  }
-  if (STREQ(pass_name, RE_PASSNAME_COMBINED) || STR_ELEM(chan_id, "RGBA", "RGB")) {
-    ctx->combined_pass = rect;
-    ctx->num_combined_channels = num_channels;
-  }
-  else {
-    MEM_delete(rect);
-  }
-}
-
-void BKE_movieclip_convert_multilayer_ibuf(ImBuf *ibuf)
-{
-  if (ibuf == nullptr) {
-    return;
-  }
-  if (ibuf->ftype != IMB_FTYPE_OPENEXR || ibuf->exrhandle == nullptr) {
-    return;
-  }
-  MultilayerConvertContext ctx;
-  ctx.combined_pass = nullptr;
-  ctx.num_combined_channels = 0;
-  IMB_exr_multilayer_convert(ibuf->exrhandle,
-                             &ctx,
-                             movieclip_convert_multilayer_add_view,
-                             movieclip_convert_multilayer_add_layer,
-                             movieclip_convert_multilayer_add_pass);
-  if (ctx.combined_pass != nullptr) {
-    BLI_assert(ibuf->float_data() == nullptr);
-    ibuf->assign_float_data(ctx.combined_pass);
-    ibuf->channels = ctx.num_combined_channels;
-    ibuf->color_mode = (ctx.num_combined_channels == 4) ? ImColorMode::RGBA : ImColorMode::RGB;
-  }
-  IMB_exr_close(ibuf->exrhandle);
-  ibuf->exrhandle = nullptr;
-}
-
 static ImBuf *movieclip_load_sequence_file(MovieClip *clip,
                                            const MovieClipUser *user,
                                            int framenr,
@@ -558,12 +485,10 @@ static ImBuf *movieclip_load_sequence_file(MovieClip *clip,
     colorspace = clip->colorspace_settings.name;
   }
 
-  ImBufFlags loadflag = ImBufFlags::ByteData | ImBufFlags::MultiLayer | ImBufFlags::AlphaDetect |
-                        ImBufFlags::Metadata;
+  ImBufFlags loadflag = ImBufFlags::ByteData | ImBufFlags::AlphaDetect | ImBufFlags::Metadata;
 
   /* read ibuf */
   ibuf = IMB_load_image_from_filepath(filepath, loadflag, colorspace);
-  BKE_movieclip_convert_multilayer_ibuf(ibuf);
 
   return ibuf;
 }
@@ -926,8 +851,7 @@ static void detect_clip_source(Main *bmain, MovieClip *clip)
   STRNCPY(filepath, clip->filepath);
   BLI_path_abs(filepath, ID_BLEND_PATH(bmain, &clip->id));
 
-  ibuf = IMB_load_image_from_filepath(
-      filepath, ImBufFlags::ByteData | ImBufFlags::MultiLayer | ImBufFlags::Test);
+  ibuf = IMB_load_image_from_filepath(filepath, ImBufFlags::ByteData | ImBufFlags::Test);
   if (ibuf) {
     clip->source = MCLIP_SRC_SEQUENCE;
     IMB_freeImBuf(ibuf);
@@ -1635,11 +1559,9 @@ static void free_buffers(MovieClip *clip)
   for (tex = static_cast<MovieClip_RuntimeGPUTexture *>(clip->runtime.gputextures.first); tex;
        tex = static_cast<MovieClip_RuntimeGPUTexture *>(tex->next))
   {
-    for (int i = 0; i < TEXTARGET_COUNT; i++) {
-      if (tex->gputexture[i] != nullptr) {
-        GPU_texture_free(tex->gputexture[i]);
-        tex->gputexture[i] = nullptr;
-      }
+    if (tex->gputexture != nullptr) {
+      GPU_texture_free(tex->gputexture);
+      tex->gputexture = nullptr;
     }
   }
   clip->runtime.gputextures.free_no_destruct();
@@ -1987,9 +1909,7 @@ void BKE_movieclip_eval_update(Depsgraph *depsgraph, Main *bmain, MovieClip *cli
 /** \name GPU textures
  * \{ */
 
-static gpu::Texture **movieclip_get_gputexture_ptr(MovieClip *clip,
-                                                   MovieClipUser *cuser,
-                                                   eGPUTextureTarget textarget)
+static gpu::Texture **movieclip_get_gputexture_ptr(MovieClip *clip, MovieClipUser *cuser)
 {
   /* Check if we have an existing entry for that clip user. */
   MovieClip_RuntimeGPUTexture *tex;
@@ -2004,16 +1924,11 @@ static gpu::Texture **movieclip_get_gputexture_ptr(MovieClip *clip,
   /* If not, allocate a new one. */
   if (tex == nullptr) {
     tex = MEM_new<MovieClip_RuntimeGPUTexture>(__func__);
-
-    for (int i = 0; i < TEXTARGET_COUNT; i++) {
-      tex->gputexture[i] = nullptr;
-    }
-
     memcpy(&tex->user, cuser, sizeof(MovieClipUser));
     BLI_addtail(&clip->runtime.gputextures, tex);
   }
 
-  return &tex->gputexture[textarget];
+  return &tex->gputexture;
 }
 
 gpu::Texture *BKE_movieclip_get_gpu_texture(MovieClip *clip, MovieClipUser *cuser)
@@ -2022,7 +1937,7 @@ gpu::Texture *BKE_movieclip_get_gpu_texture(MovieClip *clip, MovieClipUser *cuse
     return nullptr;
   }
 
-  gpu::Texture **tex = movieclip_get_gputexture_ptr(clip, cuser, TEXTARGET_2D);
+  gpu::Texture **tex = movieclip_get_gputexture_ptr(clip, cuser);
   if (*tex) {
     return *tex;
   }
@@ -2036,9 +1951,12 @@ gpu::Texture *BKE_movieclip_get_gpu_texture(MovieClip *clip, MovieClipUser *cuse
   }
 
   /* This only means RGBA16F instead of RGBA32F. */
-  const bool high_bitdepth = false;
-  const bool store_premultiplied = ibuf->float_data() ? false : true;
-  *tex = IMB_create_gpu_texture(clip->id.name + 2, ibuf, high_bitdepth, store_premultiplied, true);
+  GPUTextureCreateFlags flags = GPUTextureCreateFlags::EnableMipmaps |
+                                GPUTextureCreateFlags::LimitSize;
+  if (!ibuf->float_data()) {
+    flags |= GPUTextureCreateFlags::Premultiplied;
+  }
+  *tex = IMB_create_gpu_texture(clip->id.name + 2, ibuf, flags);
 
   /* Do not generate mips for movieclips... too slow. */
   GPU_texture_mipmap_mode(*tex, false, true);
@@ -2058,12 +1976,9 @@ void BKE_movieclip_free_gputexture(MovieClip *clip)
   while (clip->runtime.gputextures.count() > MOVIECLIP_NUM_GPUTEXTURES) {
     MovieClip_RuntimeGPUTexture *tex = static_cast<MovieClip_RuntimeGPUTexture *>(
         BLI_pophead(&clip->runtime.gputextures));
-    for (int i = 0; i < TEXTARGET_COUNT; i++) {
-      /* Free GLSL image binding. */
-      if (tex->gputexture[i]) {
-        GPU_texture_free(tex->gputexture[i]);
-        tex->gputexture[i] = nullptr;
-      }
+    /* Free GLSL image binding. */
+    if (tex->gputexture) {
+      GPU_texture_free(tex->gputexture);
     }
     MEM_delete(tex);
   }

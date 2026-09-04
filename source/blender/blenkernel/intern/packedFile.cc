@@ -30,10 +30,10 @@
 #include "DNA_vfont_types.h"
 #include "DNA_volume_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_bake_geometry_nodes_modifier.hh"
 #include "BKE_bake_geometry_nodes_modifier_pack.hh"
@@ -970,9 +970,8 @@ void BKE_packedfile_blend_write(BlendWriter *writer, const PackedFile *pf)
   if (pf == nullptr) {
     return;
   }
-  BLO_write_shared(writer, pf->data, pf->size, pf->sharing_info, [&]() {
-    writer->write_raw(pf->size, pf->data);
-  });
+  writer->write_shared(
+      pf->data, pf->size, pf->sharing_info, [&]() { writer->write_raw(pf->size, pf->data); });
   writer->write_struct(pf);
 }
 

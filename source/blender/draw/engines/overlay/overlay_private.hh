@@ -15,6 +15,7 @@
 #include "BLI_function_ref.hh"
 
 #include "DNA_space_types.h"
+#include "DNA_workspace_types.h"
 #include "DNA_world_types.h"
 
 #include "GPU_matrix.hh"
@@ -132,6 +133,7 @@ struct State {
   const SpaceLink *space_data = nullptr;
   const ARegion *region = nullptr;
   const RegionView3D *rv3d = nullptr;
+  const bToolRef *active_tool = nullptr;
   DRWTextStore *dt = nullptr;
   View3DOverlay overlay = {};
   eSpace_Type space_type = SPACE_EMPTY;
@@ -810,7 +812,7 @@ struct Resources : public select::SelectMap {
       this->color_overlay_tx.wrap(this->color_overlay_alloc_tx);
       this->color_render_tx.wrap(this->color_render_alloc_tx);
 
-      this->line_tx.acquire_2d(int2(1, 1), gpu::TextureFormat::UNORM_8_8_8_8);
+      this->line_tx.acquire_2d(int2(1, 1), gpu::TextureFormat::UNORM_8_8);
       this->overlay_tx.acquire_2d(int2(1, 1), gpu::TextureFormat::SRGBA_8_8_8_8);
 
       this->overlay_fb.ensure(GPU_ATTACHMENT_TEXTURE(this->depth_target_tx));
@@ -821,7 +823,7 @@ struct Resources : public select::SelectMap {
     else {
       eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE |
                                GPU_TEXTURE_USAGE_ATTACHMENT;
-      this->line_tx.acquire_2d(render_size, gpu::TextureFormat::UNORM_8_8_8_8, usage);
+      this->line_tx.acquire_2d(render_size, gpu::TextureFormat::UNORM_8_8, usage);
       this->overlay_tx.acquire_2d(render_size, gpu::TextureFormat::SRGBA_8_8_8_8, usage);
 
       this->overlay_fb.ensure(GPU_ATTACHMENT_TEXTURE(this->depth_target_tx),
@@ -898,7 +900,7 @@ struct Resources : public select::SelectMap {
 
   const float4 &object_wire_color(const ObjectRef &ob_ref, ThemeColorID theme_id) const
   {
-    if (UNLIKELY(ob_ref.object->base_flag & BASE_FROM_SET)) {
+    if (ob_ref.object->base_flag & BASE_FROM_SET) [[unlikely]] {
       return theme.colors.wire;
     }
     switch (theme_id) {

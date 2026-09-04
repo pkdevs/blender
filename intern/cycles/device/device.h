@@ -96,6 +96,14 @@ class DeviceInfo {
   /* Indicate that device execution has been optimized by Blender or vendor developers.
    * For LTS versions, this helps communicate that newer versions may have better performance. */
   bool has_execution_optimization = true;
+  /* True if device's driver is above the minimal Blender required version, false otherwise.
+   * Needed for properly communicating this fact back to the user, who then can choose to upgrade
+   * the driver or do nothing.
+   *
+   * Default value is chosen to be true intentionally - assume compliant unless proven otherwise,
+   * especially since CPU devices do not have any minimal versions, as well as some GPU backends,
+   * for example CUDA. */
+  bool meets_driver_requirement = true;
 
   KernelOptimizationLevel kernel_optimization_level =
       KERNEL_OPTIMIZATION_LEVEL_FULL;         /* Optimization level applied to path tracing
@@ -166,7 +174,7 @@ class Device {
     return !error_message().empty();
   }
   virtual void set_error(const string &error);
-  virtual BVHLayoutMask get_bvh_layout_mask(const uint kernel_features) const = 0;
+  virtual BVHLayoutMask get_bvh_layout_mask(uint64_t kernel_features) const = 0;
 
   /* statistics */
   Stats &stats;
@@ -177,7 +185,7 @@ class Device {
   virtual void const_copy_to(const char *name, void *host, const size_t size) = 0;
 
   /* load/compile kernels, must be called before adding tasks */
-  virtual bool load_kernels(uint /*kernel_features*/)
+  virtual bool load_kernels(const uint64_t /*kernel_features*/)
   {
     return true;
   }
@@ -263,12 +271,16 @@ class Device {
     return false;
   }
 
-  virtual bool has_unified_memory() const
+  /* Return true if any device has unified regular memory, where a host write is immediately
+   * visible to the device. */
+  virtual bool has_unified_memory_any() const
   {
     return false;
   }
 
-  virtual bool has_unified_image_memory() const
+  /* Return true if all devices have unified image memory, where a host write to an image
+   * is immediately visible to the device. */
+  virtual bool has_unified_image_memory_all() const
   {
     return false;
   }

@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
@@ -25,7 +29,7 @@
 #include "ED_node.hh"
 #include "ED_screen.hh"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 
 #include "BLT_translation.hh"
 

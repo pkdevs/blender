@@ -42,14 +42,14 @@
 #include "DNA_world_types.h"
 
 #include "BLI_function_ref.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_math_rotation.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
+#include "BLI_threads.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLO_readfile.hh"
 
@@ -57,7 +57,7 @@
 
 #include "BKE_action.hh"
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_bpath.hh"
 #include "BKE_callbacks.hh"
 #include "BKE_collection.hh"
@@ -157,6 +157,15 @@ CurveMapping *BKE_paint_default_curve()
 {
   CurveMapping *cumap = BKE_curvemapping_add(1, 0, 0, 1, 1);
   BKE_curvemap_reset(cumap->cm, &cumap->clipr, CURVE_PRESET_LINE, CurveMapSlopeType::Positive);
+  BKE_curvemapping_init(cumap);
+
+  return cumap;
+}
+
+CurveMapping *BKE_paint_default_curve_inverted()
+{
+  CurveMapping *cumap = BKE_curvemapping_add(1, 0, 0, 1, 1);
+  BKE_curvemap_reset(cumap->cm, &cumap->clipr, CURVE_PRESET_LINE, CurveMapSlopeType::Negative);
   BKE_curvemapping_init(cumap);
 
   return cumap;
@@ -367,6 +376,8 @@ static void scene_copy_data(Main *bmain,
 
   BKE_scene_copy_data_eevee(scene_dst, scene_src);
 
+  bke::compositor::copy_effects(*scene_dst, *scene_src, flag_subdata);
+
   scene_dst->runtime = MEM_new<SceneRuntime>(__func__);
 }
 
@@ -389,7 +400,7 @@ static void scene_free_data(ID *id)
 
   BKE_keyingsets_free(&scene->keyingsets);
 
-  BLI_assert_msg(scene->nodetree == nullptr,
+  BLI_assert_msg(!scene->nodetree && !scene->compositing_node_group,
                  "Pointer should not be valid after blend file reading.");
 
   if (scene->rigidbody_world) {
@@ -442,6 +453,8 @@ static void scene_free_data(ID *id)
     IDP_FreeProperty(scene->display.shading.prop);
     scene->display.shading.prop = nullptr;
   }
+
+  bke::compositor::free_effects(*scene);
 
   /* These are freed on `do_versions`. */
   BLI_assert(scene->layer_properties == nullptr);
@@ -829,6 +842,9 @@ static bool strip_foreach_member_id_cb(Strip *strip, void *user_data)
   if (strip->type == STRIP_TYPE_COMPOSITOR && strip->effectdata) {
     CompositorEffectVars *comp_data = static_cast<CompositorEffectVars *>(strip->effectdata);
     FOREACHID_PROCESS_IDSUPER(data, comp_data->node_group, IDWALK_CB_USER);
+    IDP_foreach_property(comp_data->system_properties, IDP_TYPE_FILTER_ID, [&](IDProperty *prop) {
+      BKE_lib_query_idpropertiesForeachIDLink_callback(prop, data);
+    });
   }
   /* TODO: This could use `seq::foreach_strip_modifier_id`, but because `FOREACHID_PROCESS_IDSUPER`
    * doesn't take IDs but "ID supers", it makes it a bit more cumbersome. */
@@ -838,6 +854,9 @@ static bool strip_foreach_member_id_cb(Strip *strip, void *user_data)
       auto *modifier_data = reinterpret_cast<SequencerCompositorModifierData *>(&smd);
       FOREACHID_PROCESS_IDSUPER(data, modifier_data->node_group, IDWALK_CB_USER);
     }
+    IDP_foreach_property(smd.system_properties, IDP_TYPE_FILTER_ID, [&](IDProperty *prop) {
+      BKE_lib_query_idpropertiesForeachIDLink_callback(prop, data);
+    });
   }
 
   if (strip->type == STRIP_TYPE_TEXT && strip->effectdata) {
@@ -863,6 +882,8 @@ static void scene_foreach_id(ID *id, LibraryForeachIDData *data)
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->gpd, IDWALK_CB_USER);
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->r.bake.cage_object, IDWALK_CB_NOP);
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->compositing_node_group, IDWALK_CB_USER);
+
+  bke::compositor::for_each_id_in_effects(*scene, *data);
 
   if (scene->nodetree) {
     /* nodetree **are owned by IDs**, treat them as mere sub-data and not real ID! */
@@ -990,7 +1011,7 @@ static bool strip_foreach_path_callback(Strip *strip, void *user_data)
     }
     else if ((strip->type == STRIP_TYPE_IMAGE) && se) {
       /* NOTE: An option not to loop over all strips could be useful? */
-      uint len = uint(MEM_allocN_len(se)) / uint(sizeof(*se));
+      uint len = uint(strip->data->stripdata_num);
       uint i;
 
       if (bpath_data->flag & BKE_BPATH_FOREACH_PATH_SKIP_MULTIFILE) {
@@ -1077,7 +1098,9 @@ static void scene_blend_write_compositor_forward_compat(Scene &scene,
                                                  "Final render output",
                                                  "COMPOSITE",
                                                  NODE_CLASS_OUTPUT,
-                                                 false);
+                                                 140.0f,
+                                                 100.0f,
+                                                 true);
       composite_input = &version_node_add_socket(
           *temp_nodetree_copy, *composite_node, SOCK_IN, "NodeSocketColor", "Image");
 
@@ -1116,17 +1139,28 @@ static void scene_blend_write_compositor_forward_compat(Scene &scene,
   temp_nodetree_copy = nullptr;
   MEM_delete_void(reinterpret_cast<void *>(scene.nodetree));
   scene.nodetree = nullptr;
+  scene.compositing_node_group = nullptr;
 }
 
 static void scene_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   Scene *sce = id_cast<Scene *>(id);
-  const bool is_write_undo = BLO_write_is_undo(writer);
+  const bool is_write_undo = writer->is_undo();
 
   if (is_write_undo) {
     /* Clean up, important in undo case to reduce false detection of changed data-blocks. */
     /* XXX This UI data should not be stored in Scene at all... */
     sce->cursor = View3DCursor{};
+  }
+
+  /* Todo(#140111): Forward compatibility support will be removed in 6.0. */
+  if (!is_write_undo) {
+    for (const SceneCompositorEffect &effect : sce->compositor_effects) {
+      if (bke::compositor::is_effect_enabled(effect, bke::compositor::ExecutionMode::Render)) {
+        sce->compositing_node_group = effect.node_group;
+        break;
+      }
+    }
   }
 
   /* Todo(#140111): Forward compatibility support will be removed in 6.0. Do not initialize the
@@ -1296,6 +1330,8 @@ static void scene_blend_write(BlendWriter *writer, ID *id, const void *id_addres
   }
 
   BKE_screen_view3d_shading_blend_write(writer, &sce->display.shading);
+
+  bke::compositor::write_effects(*sce, *writer);
 
   /* Freed on `do_versions()`. */
   BLI_assert(sce->layer_properties == nullptr);
@@ -1538,6 +1574,8 @@ static void scene_blend_read_data(BlendDataReader *reader, ID *id)
 
   BLO_read_struct(reader, IDProperty, &sce->layer_properties);
   IDP_BlendDataRead(reader, &sce->layer_properties);
+
+  bke::compositor::read_effects(*sce, *reader);
 }
 
 /* patch for missing scene IDs, can't be in do-versions */
@@ -1693,7 +1731,7 @@ static void remove_sequencer_fcurves(Scene *sce)
   Vector<FCurve *> fcurves = channelbag->fcurves();
 
   for (FCurve *fcurve : fcurves) {
-    if ((fcurve->rna_path) && strstr(fcurve->rna_path, "sequence_editor.strips_all")) {
+    if (strstr(fcurve->rna_path().c_str(), "sequence_editor.strips_all")) {
       channelbag->fcurve_remove(*fcurve);
     }
   }
@@ -1978,8 +2016,10 @@ Scene *BKE_scene_duplicate(Main *bmain,
    * compositing node tree with a Render Layers node that referred to the new scene.
    * To preserve this behavior, we make a full copy when creating a linked copy as well as a full
    * copy of the scene.*/
-  BKE_id_copy_for_duplicate(
-      bmain, reinterpret_cast<ID *>(sce->compositing_node_group), duplicate_flags, copy_flags);
+  for (SceneCompositorEffect &effect : sce->compositor_effects) {
+    BKE_id_copy_for_duplicate(
+        bmain, reinterpret_cast<ID *>(effect.node_group), duplicate_flags, copy_flags);
+  }
 
   if (type == SCE_COPY_FULL) {
     /* Copy Freestyle LineStyle datablocks. */
@@ -3445,7 +3485,7 @@ int BKE_scene_multiview_num_videos_get(const RenderData *rd, const ImageFormatDa
 void BKE_scene_ppm_get(const RenderData *rd, double r_ppm[2])
 {
   /* Should not be zero, prevent divide by zero if it is. */
-  if (UNLIKELY(rd->ppm_base == 0.0f)) {
+  if (rd->ppm_base == 0.0f) [[unlikely]] {
     /* Zero PPM should be ignored. */
     r_ppm[0] = 0.0;
     r_ppm[1] = 0.0;

@@ -16,12 +16,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_ghash.h"
-#include "BLI_listbase.h"
+#include "BLI_ghash.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -137,7 +137,7 @@ static void vfont_foreach_path(ID *id, BPathForeachPathData *bpath_data)
 static void vfont_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   VFont *vf = id_cast<VFont *>(id);
-  const bool is_undo = BLO_write_is_undo(writer);
+  const bool is_undo = writer->is_undo();
 
   /* Clean up, important in undo case to reduce false detection of changed datablocks. */
   vf->data = nullptr;

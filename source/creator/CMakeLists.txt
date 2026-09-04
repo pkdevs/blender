@@ -497,19 +497,54 @@ if(WITH_PYTHON)
   endif()
   unset(FREESTYLE_EXCLUDE_CONDITIONAL)
 
+  # The glTF add-on's draco & meshopt bridge libraries, loaded at run-time by `io_scene_gltf2`.
+  # Install beside their bundled dependencies, found via each target's RPATH (UNIX)
+  # or the `blender.shared` side-by-side assembly (WIN32).
+  # Non-portable installs (UNIX system installs) place them beside the add-on.
+  if(WITH_INSTALL_PORTABLE)
+    set(GLTF_BRIDGE_INSTALL_DIR "${TARGETDIR_LIB}")
+  else()
+    set(GLTF_BRIDGE_INSTALL_DIR "${TARGETDIR_VER_LIBS}/scripts/addons_core/io_scene_gltf2")
+  endif()
+
+  # Unlike `install(TARGETS)`, `install(PROGRAMS)` copies the file without rewriting its RPATH,
+  # so these must be linked with the install RPATH, see `BUILD_WITH_INSTALL_RPATH` below.
+  if(PLATFORM_BUNDLED_LIBRARIES)
+    if(APPLE)
+      set(GLTF_BRIDGE_RPATH "@loader_path")
+    elseif(UNIX)
+      set(GLTF_BRIDGE_RPATH "$ORIGIN")
+    endif()
+  endif()
+
   if(WITH_DRACO)
+    if(GLTF_BRIDGE_RPATH)
+      set_target_properties(bf_intern_draco_bridge PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "${GLTF_BRIDGE_RPATH}"
+      )
+    endif()
     install(
       PROGRAMS $<TARGET_FILE:bf_intern_draco_bridge>
-      DESTINATION ${TARGETDIR_VER_LIBS}/scripts/addons_core/io_scene_gltf2
+      DESTINATION ${GLTF_BRIDGE_INSTALL_DIR}
     )
   endif()
 
   if(WITH_MESHOPTIMIZER)
+    if(GLTF_BRIDGE_RPATH)
+      set_target_properties(bf_intern_meshopt_bridge PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "${GLTF_BRIDGE_RPATH}"
+      )
+    endif()
     install(
       PROGRAMS $<TARGET_FILE:bf_intern_meshopt_bridge>
-      DESTINATION ${TARGETDIR_VER_LIBS}/scripts/addons_core/io_scene_gltf2
+      DESTINATION ${GLTF_BRIDGE_INSTALL_DIR}
     )
   endif()
+
+  unset(GLTF_BRIDGE_INSTALL_DIR)
+  unset(GLTF_BRIDGE_RPATH)
 
 endif()
 
@@ -543,7 +578,7 @@ if(WITH_INTERNATIONAL)
   )
 
   foreach(_mo_file ${_all_mo_files})
-    get_filename_component(_locale_name ${_mo_file} NAME_WE)
+    cmake_path(GET _mo_file STEM _locale_name)
     install(
       FILES ${_mo_file}
       DESTINATION ${_locale_target_dir}/${_locale_name}/LC_MESSAGES
@@ -694,7 +729,7 @@ elseif("${CMAKE_GENERATOR}" MATCHES "Ninja")
 endif()
 if(NOT ("${_install_cmd}" STREQUAL ""))
   # Message to display after building.
-  get_filename_component(_install_dst ${TARGETDIR_VER} ABSOLUTE BASE_DIR ${CMAKE_INSTALL_PREFIX})
+  cmake_path(ABSOLUTE_PATH TARGETDIR_VER BASE_DIRECTORY ${CMAKE_INSTALL_PREFIX} NORMALIZE OUTPUT_VARIABLE _install_dst)
   add_custom_command(
     TARGET blender POST_BUILD
     COMMAND
@@ -858,7 +893,7 @@ if(UNIX AND NOT APPLE)
       # determine this from Python's libraries path.
       # Ugh, its possible `lib64` is just a symbolic-link to `lib`
       # which causes incorrect use of `lib64`.
-      get_filename_component(_pypath_real ${PYTHON_LIBPATH} REALPATH)
+      file(REAL_PATH ${PYTHON_LIBPATH} _pypath_real)
       if(${_pypath_real} MATCHES "lib64$")
         set(_target_LIB "lib64")
       else()
@@ -886,7 +921,7 @@ if(UNIX AND NOT APPLE)
 
       # Needed for `distutils/pip`.
       # Get the last part of the include dir, will be `python{version}{abiflag}`.
-      get_filename_component(_py_inc_suffix ${PYTHON_INCLUDE_DIR} NAME)
+      cmake_path(GET PYTHON_INCLUDE_DIR FILENAME _py_inc_suffix)
       install(
         FILES ${PYTHON_INCLUDE_DIR}/pyconfig.h
         DESTINATION ${TARGETDIR_VER}/python/include/${_py_inc_suffix}
@@ -903,16 +938,16 @@ if(UNIX AND NOT APPLE)
         install(
           DIRECTORY ${PYTHON_NUMPY_PATH}/numpy
           DESTINATION ${TARGETDIR_VER}/python/${_target_LIB}/python${PYTHON_VERSION}/${_suffix}
-          PATTERN "__pycache__" EXCLUDE           # * any cache *
-          PATTERN "*.pyc" EXCLUDE                 # * any cache *
-          PATTERN "*.pyo" EXCLUDE                 # * any cache *
-          PATTERN "oldnumeric" EXCLUDE            # ./oldnumeric
-          PATTERN "doc" EXCLUDE                   # ./doc
-          PATTERN "tests" EXCLUDE                 # ./tests
-          PATTERN "f2py" EXCLUDE                  # ./f2py - fortran/python interface code, not for blender.
-          PATTERN "include" EXCLUDE               # include dirs all over, we won't use NumPy/CAPI
-          PATTERN "*.h" EXCLUDE                   # some includes are not in include dirs
-          PATTERN "*.a" EXCLUDE                   # ./core/lib/libnpymath.a - for linking, we don't need.
+          PATTERN "__pycache__" EXCLUDE   # * any cache *
+          PATTERN "*.pyc" EXCLUDE         # * any cache *
+          PATTERN "*.pyo" EXCLUDE         # * any cache *
+          PATTERN "oldnumeric" EXCLUDE    # ./oldnumeric
+          PATTERN "doc" EXCLUDE           # ./doc
+          PATTERN "tests" EXCLUDE         # ./tests
+          PATTERN "f2py" EXCLUDE          # ./f2py - fortran/python interface code, not for blender.
+          PATTERN "include" EXCLUDE       # include dirs all over, we won't use NumPy/CAPI
+          PATTERN "*.h" EXCLUDE           # some includes are not in include dirs
+          PATTERN "*.a" EXCLUDE           # ./core/lib/libnpymath.a - for linking, we don't need.
         )
         install(
           DIRECTORY ${PYTHON_NUMPY_PATH}/Cython
@@ -1010,7 +1045,7 @@ if(UNIX AND NOT APPLE)
       # The script uses the version of Python installed with Blender,
       # so it must only be inside installed if `WITH_PYTHON AND WITH_PYTHON_INSTALL`
       # are active.
-      get_filename_component(PYTHON_EXECUTABLE_NAME_ONLY ${PYTHON_EXECUTABLE} NAME)
+      cmake_path(GET PYTHON_EXECUTABLE FILENAME PYTHON_EXECUTABLE_NAME_ONLY)
       configure_file(
         ${CMAKE_SOURCE_DIR}/release/freedesktop/scripts/blender-system-info.sh.in
         ${CMAKE_BINARY_DIR}/release/freedesktop/scripts/blender-system-info.sh
@@ -1163,8 +1198,12 @@ elseif(WIN32)
       if(PDBCOPY_EXECUTABLE)
         add_custom_command(
           TARGET blender POST_BUILD
-          COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/blender_public.pdb
-          COMMAND ${PDBCOPY_EXECUTABLE} $<TARGET_PDB_FILE:blender> ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/blender_public.pdb -p
+          COMMAND
+            ${CMAKE_COMMAND} -E
+            rm -f ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/blender_public.pdb
+          COMMAND
+            ${PDBCOPY_EXECUTABLE} $<TARGET_PDB_FILE:blender>
+            ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/blender_public.pdb -p
           COMMENT "Stripping PDB file..."
         )
       else()
@@ -1623,7 +1662,7 @@ elseif(WIN32)
 
 
   if(NOT WITH_PYTHON_MODULE)
-    get_filename_component(PYTHON_EXECUTABLE_NAME_ONLY ${PYTHON_EXECUTABLE} NAME)
+    cmake_path(GET PYTHON_EXECUTABLE FILENAME PYTHON_EXECUTABLE_NAME_ONLY)
     # Configure then generate file. Note that this copies the literal generator
     # for the Python executable name. So the file needs to be generated afterwards
     # to get the correct name.
@@ -1657,6 +1696,7 @@ elseif(WIN32)
         ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_debug_gpu_glitchworkaround.cmd
         ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_debug_log.cmd
         ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_factory_startup.cmd
+        ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_factory_startup_opengl.cmd
         ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_factory_startup_vulkan.cmd
         ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_startup_opengl.cmd
         ${CMAKE_SOURCE_DIR}/release/windows/batch/blender_startup_vulkan.cmd
@@ -1790,7 +1830,7 @@ elseif(APPLE)
 
     # Needed for `distutils/pip`.
     # Get the last part of the include dir, will be `python{version}{abiflag}`.
-    get_filename_component(_py_inc_suffix ${PYTHON_INCLUDE_DIR} NAME)
+    cmake_path(GET PYTHON_INCLUDE_DIR FILENAME _py_inc_suffix)
     install(
       FILES ${PYTHON_INCLUDE_DIR}/pyconfig.h
       DESTINATION ${TARGETDIR_VER}/python/include/${_py_inc_suffix}
@@ -1806,7 +1846,7 @@ elseif(APPLE)
   endif()
 
   if(NOT WITH_PYTHON_MODULE AND WITH_PYTHON AND WITH_PYTHON_INSTALL)
-    get_filename_component(PYTHON_EXECUTABLE_NAME_ONLY ${PYTHON_EXECUTABLE} NAME)
+    cmake_path(GET PYTHON_EXECUTABLE FILENAME PYTHON_EXECUTABLE_NAME_ONLY)
     configure_file(
       ${CMAKE_SOURCE_DIR}/release/darwin/scripts/blender-system-info.sh.in
       ${CMAKE_BINARY_DIR}/release/darwin/scripts/blender-system-info.sh
@@ -1848,9 +1888,13 @@ if(WITH_PYTHON_MODULE AND LIBDIR AND NOT WIN32)
       DESTINATION ${TARGETDIR_SITE_PACKAGES}
     )
     if(APPLE)
-      set(_openvdb_filename openvdb.cpython-${PYTHON_VERSION_NO_DOTS}-darwin.so)
+      set(_openvdb_filename
+        openvdb.cpython-${PYTHON_VERSION_NO_DOTS}-darwin.so
+      )
     else()
-      set(_openvdb_filename openvdb.cpython-${PYTHON_VERSION_NO_DOTS}-${CMAKE_SYSTEM_PROCESSOR}-linux-gnu.so)
+      set(_openvdb_filename
+        openvdb.cpython-${PYTHON_VERSION_NO_DOTS}-${CMAKE_SYSTEM_PROCESSOR}-linux-gnu.so
+      )
     endif()
     install(
       FILES ${LIBDIR}/python/lib/python${PYTHON_VERSION}/site-packages/${_openvdb_filename}
@@ -1904,12 +1948,9 @@ unset(TARGETDIR_TEXT)
 
 # Geometry icons.
 get_property(_icon_names GLOBAL PROPERTY ICON_GEOM_NAMES)
-set(_icon_files "")
-foreach(_f ${_icon_names})
-  list(APPEND _icon_files
-    "${CMAKE_SOURCE_DIR}/release/datafiles/icons/${_f}.dat"
-  )
-endforeach()
+set(_icon_files ${_icon_names})
+list(TRANSFORM _icon_files PREPEND "${CMAKE_SOURCE_DIR}/release/datafiles/icons/")
+list(TRANSFORM _icon_files APPEND ".dat")
 install(
   FILES ${_icon_files}
   DESTINATION ${TARGETDIR_VER}/datafiles/icons
@@ -1917,7 +1958,6 @@ install(
 
 unset(_icon_names)
 unset(_icon_files)
-unset(_f)
 
 
 # -----------------------------------------------------------------------------

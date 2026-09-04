@@ -35,6 +35,9 @@ class TexturePool;
 class UniformBuf;
 class StorageBuf;
 class VertBuf;
+class TopLevelAS;
+class BottomLevelAS;
+class WorkInFlight;
 
 class GPUBackend {
  protected:
@@ -62,6 +65,7 @@ class GPUBackend {
 
   virtual Batch *batch_alloc() = 0;
   virtual Fence *fence_alloc() = 0;
+  virtual WorkInFlight *work_in_flight_alloc(unsigned int max_in_flight) = 0;
   virtual FrameBuffer *framebuffer_alloc(const char *name) = 0;
   virtual IndexBuf *indexbuf_alloc() = 0;
   virtual PixelBuffer *pixelbuf_alloc(size_t size) = 0;
@@ -72,6 +76,8 @@ class GPUBackend {
   virtual UniformBuf *uniformbuf_alloc(size_t size, const char *name) = 0;
   virtual StorageBuf *storagebuf_alloc(size_t size, GPUUsageType usage, const char *name) = 0;
   virtual VertBuf *vertbuf_alloc() = 0;
+  virtual TopLevelAS *tlas_alloc(const char *name) = 0;
+  virtual BottomLevelAS *blas_alloc(const char *name) = 0;
   virtual void shader_cache_dir_clear_old() = 0;
 
   /* Render Frame Coordination --

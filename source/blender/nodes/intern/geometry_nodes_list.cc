@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "BLI_memory_counter.hh"
 
 #include "NOD_geometry_nodes_bundle.hh"
@@ -99,6 +103,7 @@ class SingleImplicitSharingData : public ImplicitSharingInfo {
   void delete_self_with_data() override
   {
     type.destruct(this->data);
+    MEM_delete_void(this->data);
     MEM_delete(this);
   }
 };
@@ -166,6 +171,9 @@ void GList::ensure_owns_direct_data()
 {
   if (cpp_type_.is<BundlePtr>()) {
     this->typed<BundlePtr>().foreach_for_write([](BundlePtr &bundle_ptr) {
+      if (!bundle_ptr) {
+        return;
+      }
       bundle_ptr.ensure_mutable_inplace();
       const_cast<Bundle &>(*bundle_ptr).ensure_owns_direct_data();
     });
@@ -184,21 +192,22 @@ bool GList::owns_direct_data() const
 {
   const std::variant<GSpan, GPointer> &values = this->values();
   if (cpp_type_.is<BundlePtr>()) {
+    /* Null bundles don't reference any data, so they are trivially owned. */
     return std::visit(
         []<typename T>(const T &value) {
           if constexpr (std::is_same_v<T, GSpan>) {
             const Span span = value.template typed<BundlePtr>();
             return std::all_of(span.begin(), span.end(), [](const BundlePtr &bundle_ptr) {
               if (!bundle_ptr) {
-                return false;
+                return true;
               }
               return bundle_ptr->owns_direct_data();
             });
           }
           else if constexpr (std::is_same_v<T, GPointer>) {
             const BundlePtr *value_ptr = value.template get<BundlePtr>();
-            if (!value_ptr) {
-              return false;
+            if (!value_ptr || !*value_ptr) {
+              return true;
             }
             return (*value_ptr)->owns_direct_data();
           }
@@ -330,6 +339,12 @@ GListPtr GList::from_garray(GArray<> array)
   array_data.sharing_info = ImplicitSharingPtr<>(sharable_data);
   return GList::create(
       sharable_data->data.type(), std::move(array_data), sharable_data->data.size());
+}
+
+GListPtr GList::from_single(const GPointer value, const int64_t size)
+{
+  const CPPType &type = *value.type();
+  return GListPtr{MEM_new<GList>(__func__, type, SingleData::ForValue(value), size)};
 }
 
 }  // namespace blender::nodes

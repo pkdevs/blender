@@ -23,17 +23,17 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_bitmap.h"
+#include "BLI_bitmap.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_lasso_2d.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_bits.h"
-#include "BLI_math_geom.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_bits.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_rect.hh"
 #include "BLI_span.hh"
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
@@ -94,7 +94,7 @@
 
 #include "view3d_intern.hh" /* own include */
 
-// #include "BLI_time_utildefines.h"
+// #include "BLI_time_utildefines.hh"
 
 namespace blender {
 
@@ -2096,7 +2096,7 @@ static bool bone_mouse_select_menu(bContext *C,
 static bool selectbuffer_has_bones(const Span<GPUSelectResult> hit_results)
 {
   for (const GPUSelectResult &hit_result : hit_results) {
-    if (hit_result.id & 0xFFFF0000) {
+    if (ED_armature_selectresult_is_bone(hit_result)) {
       return true;
     }
   }
@@ -4255,12 +4255,13 @@ static bool do_armature_box_select(const ViewContext *vc, const rcti *rect, cons
 
   /* first we only check points inside the border */
   for (a = 0; a < hits; a++) {
-    const int select_id = buffer.storage[a].id;
-    if (select_id != -1) {
-      if ((select_id & 0xFFFF0000) == 0) {
-        continue;
-      }
+    GPUSelectResult &hit_result = buffer.storage[a];
+    if (!ED_armature_selectresult_is_bone(hit_result)) {
+      continue;
+    }
 
+    const int select_id = hit_result.id;
+    if (select_id != -1) {
       EditBone *ebone;
       Base *base_edit = ED_armature_base_and_ebone_from_select_buffer(bases, select_id, &ebone);
       ebone->temp.i |= select_id & BONESEL_ANY;
@@ -4404,6 +4405,10 @@ static void process_pose_bone_hits(GPUSelectBuffer &buffer,
        buf_iter < buf_end;
        buf_iter++)
   {
+    if (!ED_armature_selectresult_is_bone(*buf_iter)) {
+      continue;
+    }
+
     bPoseChannel *pose_bone;
     Base *base = ED_armature_base_and_pchan_from_select_buffer(bases, buf_iter->id, &pose_bone);
 

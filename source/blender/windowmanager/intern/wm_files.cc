@@ -22,9 +22,9 @@
 /* Minimal requirements for SHGetSpecialFolderPath on MINGW MSVC has this defined already. */
 #    define _WIN32_IE 0x0400
 #  endif
-/* For #SHGetSpecialFolderPath, has to be done before `BLI_winstuff.h`
+/* For #SHGetSpecialFolderPath, has to be done before `BLI_winstuff.hh`
  * because 'near' is disabled through `BLI_windstuff.h`. */
-#  include "BLI_winstuff.h"
+#  include "BLI_winstuff.hh"
 #  include <shlobj.h>
 #endif
 
@@ -33,20 +33,20 @@
 #include "MEM_CacheLimiterC-Api.h"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
-#include "BLI_filereader.h"
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_math_time.h"
+#include "BLI_fileops.hh"
+#include "BLI_filereader.hh"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_base_c.hh"
+#include "BLI_math_time.hh"
 #include "BLI_memory_cache.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_system.h"
-#include "BLI_threads.h"
-#include "BLI_time.h"
-#include "BLI_timer.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_system.hh"
+#include "BLI_threads.hh"
+#include "BLI_time.hh"
+#include "BLI_timer.hh"
+#include "BLI_utildefines.hh"
 #include BLI_SYSTEM_PID_H
 
 #include "BLO_core_blend_header.hh"
@@ -559,7 +559,6 @@ static void wm_init_userdef(Main *bmain)
   BLO_sanitize_experimental_features_userpref_blend(&U);
 
   wm_gpu_backend_override_from_userdef();
-  GPU_backend_type_selection_detect();
 }
 
 /* Return codes. */
@@ -1761,12 +1760,12 @@ static uint8_t *blend_file_thumb_fast_downscale(const uint8_t *src_rect,
    * this isn't a concern. */
 
   BLI_assert(dst_size[0] <= src_size[0] && dst_size[1] <= src_size[1]);
-  uint8_t *dst_rect = MEM_new_array_uninitialized<uint8_t>(size_t(4 * dst_size[0] * dst_size[1]),
+  uint8_t *dst_rect = MEM_new_array_uninitialized<uint8_t>(size_t(4) * dst_size[0] * dst_size[1],
                                                            __func__);
 
   /* A row, the width of the destination to accumulate pixel values into
    * before writing into the image. */
-  uint32_t *accum_row = MEM_new_array_zeroed<uint32_t>(size_t(dst_size[0] * 4), __func__);
+  uint32_t *accum_row = MEM_new_array_zeroed<uint32_t>(size_t(dst_size[0]) * 4, __func__);
 
 #  ifndef NDEBUG
   /* Assert that samples are calculated correctly. */
@@ -1908,8 +1907,7 @@ static ImBuf *blend_file_thumb_from_screenshot(bContext *C, BlendThumbnail **r_t
     /* Save metadata for quick access. */
     char version_str[10];
     SNPRINTF(version_str, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
-    IMB_metadata_ensure(&ibuf->metadata);
-    IMB_metadata_set_field(ibuf->metadata, "Thumb::Blender::Version", version_str);
+    IMB_metadata_set_field(ibuf->metadata_for_write(), "Thumb::Blender::Version", version_str);
   }
 
   /* Must be freed by caller. */
@@ -2015,8 +2013,7 @@ static ImBuf *blend_file_thumb_from_camera(const bContext *C,
     /* Save metadata for quick access. */
     char version_str[10];
     SNPRINTF(version_str, "%d.%01d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
-    IMB_metadata_ensure(&ibuf->metadata);
-    IMB_metadata_set_field(ibuf->metadata, "Thumb::Blender::Version", version_str);
+    IMB_metadata_set_field(ibuf->metadata_for_write(), "Thumb::Blender::Version", version_str);
 
     /* BLEN_THUMB_SIZE is size of thumbnail inside blend file: 128x128. */
     ImBuf *thumb_ibuf = IMB_scale_into_new(
@@ -3314,9 +3311,9 @@ static std::string wm_open_mainfile_get_description(bContext * /*C*/,
   }
 
   /* Date. */
-  const tm mod_time = *localtime(&stats.st_mtime);
+  const tm mod_time = date_string::localtime_safe(stats.st_mtime);
   const time_t ts_now = time(nullptr);
-  const tm now_tm = *localtime(&ts_now);
+  const tm now_tm = date_string::localtime_safe(ts_now);
   const char *lang = BLT_lang_get();
   std::string modified_s = blender::date_string::datetime(mod_time,
                                                           lang,

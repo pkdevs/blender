@@ -6,11 +6,12 @@
  * \ingroup edtransform
  */
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
+#include "BKE_camera.h"
 #include "BKE_context.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_global.hh"
@@ -84,7 +85,9 @@ bool transdata_check_local_islands(TransInfo *t, short around)
 
 /** \} */
 
-/* ************************** SPACE DEPENDENT CODE **************************** */
+/* -------------------------------------------------------------------- */
+/** \name Space Dependent Utilities
+ * \{ */
 
 void setTransformViewMatrices(TransInfo *t)
 {
@@ -236,7 +239,7 @@ void projectFloatViewCenterFallback(TransInfo *t, float adr[2])
 {
   const ARegion *region = t->region;
 
-  if (UNLIKELY(region == nullptr)) {
+  if (region == nullptr) [[unlikely]] {
     /* While this function probably wont be calved without a region.
      * Doing so shouldn't cause errors. */
     adr[0] = 0.0f;
@@ -264,8 +267,15 @@ void projectFloatViewCenterFallback(TransInfo *t, float adr[2])
              * for a 3D point that couldn't be projected. */
             const bool no_shift = true;
             rctf viewborder = {0};
-            ED_view3d_calc_camera_border(
-                t->scene, t->depsgraph, region, v3d, rv3d, no_shift, &viewborder);
+            viewborder = BKE_camera_view_border(t->scene,
+                                                t->depsgraph,
+                                                v3d,
+                                                rv3d,
+                                                region->winx,
+                                                region->winy,
+                                                no_shift,
+                                                false,
+                                                true);
             adr[0] = BLI_rctf_cent_x(&viewborder);
             adr[1] = BLI_rctf_cent_y(&viewborder);
             changed = true;
@@ -625,7 +635,11 @@ static void viewRedrawPost(bContext *C, TransInfo *t)
   }
 }
 
-/* ************************************************* */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Modal Keymap
+ * \{ */
 
 static bool transform_modal_item_poll(const wmOperator *op, int value)
 {
@@ -798,6 +812,9 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
       if (t->spacetype != SPACE_SEQ) {
         return false;
       }
+      if (t->data_type == &TransConvertType_SequencerRetiming) {
+        return false;
+      }
       break;
   }
   return true;
@@ -942,6 +959,12 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
 
   return keymap;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Event Handling
+ * \{ */
 
 static bool transform_event_modal_constraint(TransInfo *t, short modal_type)
 {
@@ -1516,6 +1539,12 @@ wmOperatorStatus transformEvent(TransInfo *t, wmOperator *op, const wmEvent *eve
   return OPERATOR_PASS_THROUGH;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Center
+ * \{ */
+
 bool calculateTransformCenter(bContext *C, int centerMode, float cent3d[3], float cent2d[2])
 {
   TransInfo *t = MEM_new_zeroed<TransInfo>("TransInfo data");
@@ -1566,6 +1595,12 @@ bool calculateTransformCenter(bContext *C, int centerMode, float cent3d[3], floa
 
   return success;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Overlay Drawing
+ * \{ */
 
 static bool transinfo_show_overlay(TransInfo *t, ARegion *region)
 {
@@ -1743,6 +1778,12 @@ static void drawTransformPixel(const bContext * /*C*/, ARegion *region, void *ar
     }
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Init / Apply / End
+ * \{ */
 
 void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
 {
@@ -2108,15 +2149,10 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
           continue;
         }
 
-        if (kmi.propvalue == TFM_MODAL_SNAP_INV_ON && kmi.val == KM_PRESS) {
-          if ((ELEM(kmi.type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY) && (event->modifier & KM_CTRL)) ||
-              (ELEM(kmi.type, EVT_LEFTSHIFTKEY, EVT_RIGHTSHIFTKEY) &&
-               (event->modifier & KM_SHIFT)) ||
-              (ELEM(kmi.type, EVT_LEFTALTKEY, EVT_RIGHTALTKEY) && (event->modifier & KM_ALT)) ||
-              ((kmi.type == EVT_OSKEY) && (event->modifier & KM_OSKEY)))
-          {
-            t->modifiers |= MOD_SNAP_INVERT;
-          }
+        if ((kmi.propvalue == TFM_MODAL_SNAP_INV_ON) &&
+            WM_event_modifier_flag_match_kmi_press(event->modifier, &kmi))
+        {
+          t->modifiers |= MOD_SNAP_INVERT;
           break;
         }
       }
@@ -2130,16 +2166,10 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
           continue;
         }
 
-        if (kmi.propvalue == TFM_MODAL_NODE_ATTACH_OFF && kmi.val == KM_PRESS) {
-          if ((ELEM(kmi.type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY) && (event->modifier & KM_CTRL)) ||
-              (ELEM(kmi.type, EVT_LEFTSHIFTKEY, EVT_RIGHTSHIFTKEY) &&
-               (event->modifier & KM_SHIFT)) ||
-              (ELEM(kmi.type, EVT_LEFTALTKEY, EVT_RIGHTALTKEY) && (event->modifier & KM_ALT)) ||
-              ((kmi.type == EVT_OSKEY) && (event->modifier & KM_OSKEY)) ||
-              ((kmi.type == EVT_HYPER) && (event->modifier & KM_HYPER)))
-          {
-            t->modifiers &= ~MOD_NODE_ATTACH;
-          }
+        if ((kmi.propvalue == TFM_MODAL_NODE_ATTACH_OFF) &&
+            WM_event_modifier_flag_match_kmi_press(event->modifier, &kmi))
+        {
+          t->modifiers &= ~MOD_NODE_ATTACH;
           break;
         }
       }
@@ -2238,6 +2268,10 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     }
   }
 
+  if ((t->flag & T_MODAL) && t->mode_info && t->mode_info->status_fn) {
+    t->mode_info->status_fn(t);
+  }
+
   t->context = nullptr;
 
   return true;
@@ -2251,6 +2285,9 @@ void transformApply(bContext *C, TransInfo *t)
     selectConstraint(t);
     if (t->mode_info) {
       t->mode_info->transform_fn(t); /* Calls #recalc_data(). */
+      if ((t->flag & T_MODAL) && t->mode_info->status_fn) {
+        t->mode_info->status_fn(t);
+      }
     }
   }
 
@@ -2309,6 +2346,12 @@ wmOperatorStatus transformEnd(bContext *C, TransInfo *t)
   return exit_code;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Public Utilities
+ * \{ */
+
 bool checkUseAxisMatrix(TransInfo *t)
 {
   /* Currently only checks for editmode. */
@@ -2348,5 +2391,7 @@ void view_vector_calc(const TransInfo *t, const float focus[3], float r_vec[3])
   }
   normalize_v3(r_vec);
 }
+
+/** \} */
 
 }  // namespace blender::ed::transform

@@ -16,9 +16,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_string_utf8.h"
-#include "BLI_threads.h"
+#include "BLI_listbase.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_threads.hh"
 
 #include "BKE_colortools.hh"
 #include "BKE_context.hh"
@@ -40,6 +40,7 @@
 #include "ED_image.hh"
 #include "ED_mask.hh"
 #include "ED_node.hh"
+#include "ED_paint.hh"
 #include "ED_render.hh"
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
@@ -329,7 +330,6 @@ static void image_listener(const wmSpaceTypeListenerParams *params)
         case ND_COMPO_RESULT:
           if (ED_space_image_show_render(sima)) {
             image_scopes_tag_refresh(area);
-            BKE_image_partial_update_mark_full_update(sima->image);
           }
           ED_area_tag_redraw(area);
           const ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
@@ -610,6 +610,20 @@ static void IMAGE_GGT_compositor_split(wmGizmoGroupType *gzgt)
   gzgt->refresh = nodes::gizmos::split_refresh;
 }
 
+static void IMAGE_GGT_compositor_translate(wmGizmoGroupType *gzgt)
+{
+  gzgt->name = "Translate Widget";
+  gzgt->idname = "IMAGE_GGT_compositor_translate";
+
+  gzgt->flag |= WM_GIZMOGROUPTYPE_PERSISTENT;
+
+  gzgt->poll = nodes::gizmos::translate_poll_space_image;
+  gzgt->setup = nodes::gizmos::translate_setup;
+  gzgt->setup_keymap = WM_gizmogroup_setup_keymap_generic_maybe_drag;
+  gzgt->draw_prepare = nodes::gizmos::bbox_draw_prepare_space_image;
+  gzgt->refresh = nodes::gizmos::translate_refresh;
+}
+
 static void image_widgets()
 {
   const wmGizmoMapType_Params params{SPACE_IMAGE, RGN_TYPE_WINDOW};
@@ -628,6 +642,7 @@ static void image_widgets()
   WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_corner_pin);
   WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_ellipse_mask);
   WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_split);
+  WM_gizmogrouptype_append_and_link(gzmap_type, IMAGE_GGT_compositor_translate);
 }
 
 /************************** main region ***************************/
@@ -944,12 +959,12 @@ static void image_buttons_region_init(wmWindowManager *wm, ARegion *region)
   WM_event_add_keymap_handler(&region->runtime->handlers, keymap);
 }
 
-static void image_buttons_region_layout(const bContext *C, ARegion *region)
+std::array<const char *, 4> ED_image_buttons_contexts(const bContext *C)
 {
   const enum eContextObjectMode mode = CTX_data_mode_enum(C);
-  const char *contexts_base[3] = {nullptr};
+  std::array<const char *, 4> contexts_base = {nullptr};
 
-  const char **contexts = contexts_base;
+  const char **contexts = contexts_base.data();
 
   SpaceImage *sima = CTX_wm_space_image(C);
   switch (sima->mode) {
@@ -966,12 +981,18 @@ static void image_buttons_region_layout(const bContext *C, ARegion *region)
       }
       break;
   }
+  return contexts_base;
+}
+
+static void image_buttons_region_layout(const bContext *C, ARegion *region)
+{
+  std::array<const char *, 4> contexts = ED_image_buttons_contexts(C);
 
   ED_region_panels_layout_ex(C,
                              region,
                              &region->runtime->type->paneltypes,
                              wm::OpCallContext::InvokeRegionWin,
-                             contexts_base,
+                             contexts.data(),
                              nullptr);
 }
 
@@ -1352,6 +1373,7 @@ void ED_spacetype_image()
   /* regions: list-view/buttons/scopes */
   art = MEM_new_zeroed<ARegionType>("spacetype image region");
   art->regionid = RGN_TYPE_UI;
+  art->flag = ARegionTypeFlag::UsePanelCategoriesSearch;
   art->prefsizex = UI_SIDEBAR_PANEL_WIDTH;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_FRAMES;
   art->listener = image_buttons_region_listener;

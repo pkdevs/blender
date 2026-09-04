@@ -14,14 +14,15 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_enum_flags.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_time.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_time.hh"
 
 #include "BLT_translation.hh"
 
 #include "BKE_callbacks.hh"
+#include "BKE_camera.h"
 #include "BKE_context.hh"
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
@@ -219,9 +220,7 @@ static bool annotation_draw_poll(bContext *C)
     if (ED_annotation_data_get_pointers(C, nullptr) != nullptr) {
       return true;
     }
-    else {
-      CTX_wm_operator_poll_msg_set(C, "Failed to find Annotation data to draw into");
-    }
+    CTX_wm_operator_poll_msg_set(C, "Failed to find Annotation data to draw into");
   }
   else {
     CTX_wm_operator_poll_msg_set(C, "Active region not set");
@@ -1611,8 +1610,8 @@ static void annotation_paint_initstroke(tGPsdata *p,
       /* for camera view set the subrect */
       if (rv3d->persp == RV3D_CAMOB) {
         /* no shift */
-        ED_view3d_calc_camera_border(
-            p->scene, depsgraph, p->region, v3d, rv3d, true, &p->subrect_data);
+        p->subrect_data = BKE_camera_view_border(
+            p->scene, depsgraph, v3d, rv3d, p->region->winx, p->region->winy, true, false, true);
         p->subrect = &p->subrect_data;
       }
     }

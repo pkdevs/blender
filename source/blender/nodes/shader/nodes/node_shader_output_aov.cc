@@ -2,10 +2,14 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
-#include "BLI_hash.h"
+#include "BLI_hash_c.hh"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"

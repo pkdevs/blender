@@ -7,11 +7,11 @@
  */
 
 #include "BLI_bounds.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_time.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_time.hh"
 
 #include "DNA_userdef_types.h"
 
@@ -343,7 +343,7 @@ void drawSnapping(TransInfo *t)
     GPU_blend(GPU_BLEND_ALPHA);
     uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
-    float pixelx = BLI_rctf_size_x(&region->v2d.cur) / BLI_rcti_size_x(&region->v2d.mask);
+    float pixelx = ui::view2d_pixel_size_get_x(&region->v2d);
 
     const float target_x = t->tsnap.snap_target[0];
     const float target_y = t->tsnap.snap_target[1];

@@ -11,11 +11,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_armature_types.h"
 #include "DNA_curve_types.h"
@@ -423,7 +423,7 @@ static void object_hook_from_context(
   Object *ob;
   HookModifierData *hmd;
 
-  if (ptr->data) { /* if modifier context is available, use that */
+  if (*ptr) { /* if modifier context is available, use that */
     ob = id_cast<Object *>(ptr->owner_id);
     hmd = static_cast<HookModifierData *>(ptr->data);
   }
@@ -569,7 +569,7 @@ static int add_hook_object(const bContext *C,
       STRNCPY_UTF8(hmd->subtarget, arm->act_bone->name);
 
       pchan_act = BKE_pose_channel_active_if_bonecoll_visible(ob);
-      if (LIKELY(pchan_act)) {
+      if (pchan_act) [[likely]] {
         invert_m4_m4(pose_mat, pchan_act->pose_mat);
         mul_v3_m4v3(cent, ob->object_to_world().ptr(), pchan_act->pose_mat[3]);
         mul_v3_m4v3(cent, obedit->world_to_object().ptr(), cent);

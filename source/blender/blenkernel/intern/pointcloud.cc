@@ -19,7 +19,7 @@
 #include "BLI_index_range.hh"
 #include "BLI_resource_scope.hh"
 #include "BLI_span.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_anim_data.hh"
@@ -119,7 +119,7 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
   bke::AttributeStorage::BlendWriteData attribute_data{writer, scope};
   attribute_storage_blend_write_prepare(
       pointcloud->attribute_storage.wrap(),
-      !BLO_write_is_undo(writer),
+      !writer->is_undo(),
       [&](const AttrDomain /*domain*/) { return pointcloud->totpoint; },
       attribute_data);
 
@@ -131,12 +131,14 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
     pointcloud->attribute_storage.dna_attributes = attribute_data.attributes.data();
     pointcloud->attribute_storage.dna_attributes_num = attribute_data.attributes.size();
   }
-  BLO_write_generated_pointer_tag(writer, pointcloud->attribute_storage.dna_attributes);
+  writer->generated_pointer_tag(pointcloud->attribute_storage.dna_attributes);
 
   CustomData_reset(&pointcloud->pdata_legacy);
 
   /* Write LibData */
-  writer->write_id_struct(id_address, pointcloud);
+  writer->write_id_struct(id_address, pointcloud, [](BlendStructWriter &struct_writer) {
+    struct_writer.generated_ptr(offsetof(PointCloud, attribute_storage.dna_attributes));
+  });
   BKE_id_blend_write(writer, &pointcloud->id);
 
   /* Direct data */
@@ -346,7 +348,7 @@ void pointcloud_resize(PointCloud &pointcloud, const int size)
   if (size > old_totpoint) {
     /* Initialize new points. */
     fill_attribute_range_default(
-        attributes, bke::AttrDomain::Point, {}, IndexRange(old_totpoint, size));
+        attributes, bke::AttrDomain::Point, {}, IndexRange::from_begin_end(old_totpoint, size));
   }
 }
 
