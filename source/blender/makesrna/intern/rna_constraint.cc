@@ -1276,6 +1276,7 @@ static void rna_def_constraint_kinematic(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "iterations", PROP_INT, PROP_NONE);
   RNA_def_property_range(prop, 0, 10000);
+  RNA_def_property_int_default(prop, 500);
   RNA_def_property_ui_text(prop, "Iterations", "Maximum number of solving iterations");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
@@ -1299,12 +1300,14 @@ static void rna_def_constraint_kinematic(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "weight", PROP_FLOAT, PROP_NONE);
   RNA_def_property_range(prop, 0.01, 1.0f);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(
       prop, "Weight", "For Tree-IK: Weight of position control for this target");
 
   prop = RNA_def_property(srna, "orient_weight", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "orientweight");
   RNA_def_property_range(prop, 0.01, 1.0f);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(
       prop, "Orientation Weight", "For Tree-IK: Weight of orientation control for this target");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
@@ -1321,6 +1324,7 @@ static void rna_def_constraint_kinematic(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_tail", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", CONSTRAINT_IK_TIP);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Use Tail", "Include bone's tail as last element in chain");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
 
@@ -1333,6 +1337,7 @@ static void rna_def_constraint_kinematic(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_location", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", CONSTRAINT_IK_POS);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Position", "Chain follows position of target");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
 
@@ -1373,6 +1378,7 @@ static void rna_def_constraint_kinematic(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_stretch", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", CONSTRAINT_IK_STRETCH);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop, "Stretch", "Enable IK Stretching");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
 
