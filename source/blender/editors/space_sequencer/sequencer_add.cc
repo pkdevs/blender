@@ -133,7 +133,7 @@ static bool is_drag_and_drop(const wmOperator *op, const wmEvent *event)
   if (event != nullptr && event->type == EVT_DROP) {
     return true;
   }
-  /* TAKE NOTICE, footgun! Dragging and dropping *multiple* files will not emit `EVT_DROP`,
+  /* WARNING: foot-gun! Dragging and dropping *multiple* files will not emit `EVT_DROP`,
    * so we can't check for that alone. */
   return (RNA_struct_property_is_set(op->ptr, "files") &&
           !RNA_collection_is_empty(op->ptr, "files")) ||
@@ -255,11 +255,11 @@ static void sequencer_generic_props__internal(wmOperatorType *ot, int flag)
     RNA_def_int(ot->srna,
                 "length",
                 0,
-                INT_MIN,
+                1,
                 INT_MAX,
                 "Length",
                 "Length of the strip in frames, or the length of each strip if multiple are added",
-                -MAXFRAME,
+                1,
                 MAXFRAME);
   }
 
@@ -491,7 +491,7 @@ static void sequencer_generic_invoke_xy__internal(
   }
 
   if ((flag & SEQPROP_LENGTH) && !RNA_struct_property_is_set(op->ptr, "length")) {
-    RNA_int_set(op->ptr, "length", seq::DEFAULT_STRIP_LENGTH);
+    RNA_int_set(op->ptr, "length", seq::default_strip_length(scene->frames_per_second()));
   }
 
   if (!(flag & SEQPROP_NOPATHS)) {
@@ -700,7 +700,7 @@ static void seq_load_apply_generic_options(bContext *C, wmOperator *op, Strip *s
     strip_col.add(strip);
 
     ScrArea *area = CTX_wm_area(C);
-    const bool use_sync_markers = ((static_cast<SpaceSeq *>(area->spacedata.first))->flag &
+    const bool use_sync_markers = ((area->spacedata.first_as<SpaceSeq>())->flag &
                                    SEQ_MARKER_TRANS) != 0;
     seq::transform_handle_overlap(scene, ed->current_strips(), strip_col, use_sync_markers);
   }
@@ -734,7 +734,7 @@ static void sequencer_disable_one_time_properties(bContext *C, wmOperator *op)
 {
   Editing *ed = seq::editing_get(CTX_data_sequencer_scene(C));
   /* Disable following properties if there are any existing strips, unless overridden by user. */
-  if (ed && ed->current_strips() && ed->current_strips()->first) {
+  if (ed && ed->current_strips() && ed->current_strips()->first()) {
     if (RNA_struct_find_property(op->ptr, "use_framerate")) {
       RNA_boolean_set(op->ptr, "use_framerate", false);
     }

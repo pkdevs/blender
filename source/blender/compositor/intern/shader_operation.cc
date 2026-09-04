@@ -9,6 +9,7 @@
 #include <fmt/format.h>
 
 #include "BLI_assert.hh"
+#include "BLI_compute_context.hh"
 #include "BLI_listbase.hh"
 #include "BLI_map.hh"
 #include "BLI_math_euler.hh"
@@ -50,8 +51,9 @@ ShaderOperation::ShaderOperation(Context &context,
                                  const ComputeContext &compute_context)
     : PixelOperation(context, compile_state, compute_context, false)
 {
+  const int64_t uuid = this->context().get_precision() == ResultPrecision::Full ? 0 : 1;
   material_ = GPU_material_from_callbacks(
-      GPU_MAT_COMPOSITOR, &construct_material, &generate_code, this);
+      GPU_MAT_COMPOSITOR, &construct_material, &generate_code, this, uuid);
 }
 
 ShaderOperation::~ShaderOperation()
@@ -554,8 +556,16 @@ void ShaderOperation::declare_operation_input(const bNodeSocket &input_socket,
 
 void ShaderOperation::populate_results_for_node(const bNode &node)
 {
-  const bNodeSocket *preview_output = needs_node_previews_ ? find_preview_output_socket(node) :
-                                                             nullptr;
+  /* Only compute previews if they are needed and the node group is active. */
+  const bool node_needs_preview = is_node_preview_needed(node);
+  const bool needs_node_previews = flag_is_set(this->context().needed_side_effect_output_types(),
+                                               SideEffectOutputTypes::NodePreviews);
+  const bool is_active_context = compute_context_.hash() ==
+                                 this->context().get_active_compute_context_hash();
+  const bNodeSocket *preview_output = nullptr;
+  if (node_needs_preview && needs_node_previews && is_active_context) {
+    preview_output = find_preview_output_socket(node);
+  }
 
   for (const bNodeSocket *output : node.output_sockets()) {
     if (!is_socket_available(output)) {
