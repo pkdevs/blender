@@ -403,7 +403,7 @@ void object_sculpt_mode_enter(Main &bmain,
 
     if ((message_unsupported == nullptr) || force_dyntopo) {
       /* Needed because we may be entering this mode before the undo system loads. */
-      wmWindowManager *wm = static_cast<wmWindowManager *>(bmain.wm.first);
+      wmWindowManager *wm = bmain.wm.first();
       const bool has_undo = wm->runtime->undo_stack != nullptr;
       /* Undo push is needed to prevent memory leak. */
       if (has_undo) {
@@ -455,7 +455,7 @@ void object_sculpt_mode_exit(Main &bmain, Depsgraph &depsgraph, Scene &scene, Ob
   }
 
   DEG_id_tag_update(&ob.id, ID_RECALC_GEOMETRY);
-  ed::sculpt_paint::mode_exit_generic(ob, OB_MODE_SCULPT);
+  ed::sculpt_paint::mode_exit_generic(scene, ob, OB_MODE_SCULPT);
 }
 
 void object_sculpt_mode_exit(bContext *C, Depsgraph &depsgraph)
