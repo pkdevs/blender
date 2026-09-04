@@ -250,7 +250,7 @@ void BKE_vfont_data_free(VFont *vfont)
           continue;
         }
 
-        while (che->nurbsbase.first_) {
+        while (che->nurbsbase.first()) {
           Nurb *nu = che->nurbsbase.first();
           if (nu->bezt) {
             MEM_delete(nu->bezt);

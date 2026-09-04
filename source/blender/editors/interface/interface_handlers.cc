@@ -11683,7 +11683,7 @@ static int handle_menu_event(bContext *C,
         case RIGHTMOUSE:
           if (inside == false) {
             if (event->val == KM_PRESS && (block->flag & BLOCK_LOOP)) {
-              if (block->saferct.first_) {
+              if (block->saferct.first()) {
                 /* Currently right clicking on a top level pull-down (typically in the header)
                  * just closes the menu and doesn't support immediately handling the RMB event.
                  *
@@ -11701,7 +11701,7 @@ static int handle_menu_event(bContext *C,
         /* Closing sub-levels of pull-downs. */
         case EVT_LEFTARROWKEY:
           if (event->val == KM_PRESS && (block->flag & BLOCK_LOOP)) {
-            if (block->saferct.first_) {
+            if (block->saferct.first()) {
               menu->menuretval = RETURN_OUT;
             }
           }
