@@ -468,10 +468,9 @@ void GLFrameBuffer::clear(GPUFrameBufferBits buffers,
     glClearStencil(clear_stencil);
   }
 
-  context_->state_manager->apply_state();
-
   /* Mutable frame-buffers clear color via per-attachment calls above,
    * exclude color from the #glClear mask in that case. */
+  context_->pipeline_get()->apply_state();
   GPUFrameBufferBits glclear_buffers = immutable_ ? buffers :
                                                     GPUFrameBufferBits(buffers & ~GPU_COLOR_BIT);
   GLbitfield mask = to_gl(glclear_buffers);
@@ -604,7 +603,7 @@ void GLFrameBuffer::blit_to(
     glDrawBuffer(dst->gl_attachments_[dst_slot]);
   }
 
-  context_->state_manager->apply_state();
+  context_->pipeline_get()->apply_state();
 
   int w = src->width_;
   int h = src->height_;

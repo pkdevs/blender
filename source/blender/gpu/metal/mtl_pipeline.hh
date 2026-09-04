@@ -19,9 +19,14 @@ namespace blender::gpu {
  * OpenGL) so it can be polled when the render pipeline state is (re)created.
  */
 class MTLPipeline : public Pipeline {
- public:
-  void prepare_draw(GPUPrimType prim_type, int64_t vertex_input_key = 0) override;
-  void prepare_compute() override;
+ protected:
+  /* Metal bakes state into MTLRenderPipelineState / depth-stencil, which the
+   * context re-creates from the StateManager. `resolve_draw` stages the
+   * pipeline's state there, mirroring the OpenGL path.
+   */
+  void resolve_draw(GPUPrimType prim_type, int64_t vertex_input_key) override;
+  void resolve_compute() override;
+  void issue_barrier(GPUBarrier barrier_bits) override;
 };
 
 }  // namespace blender::gpu

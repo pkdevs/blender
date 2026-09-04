@@ -250,112 +250,6 @@ void Pipeline::uniform_int(int location, int comp_len, int array_size, const int
   mark_dirty(GPU_PIPELINE_DIRTY_PUSH_CONSTANTS);
 }
 
-void Pipeline::texture_bind(Texture *tex, GPUSamplerState sampler, int unit)
-{
-  texture_bindings_.resize(std::max<int>(unit + 1, (int)texture_bindings_.size()));
-  texture_bindings_[unit] = TextureBinding{tex, sampler, TextureWriteFormat::Invalid};
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::texture_unbind(Texture *tex)
-{
-  for (TextureBinding &b : texture_bindings_) {
-    if (b.tex == tex) {
-      b = TextureBinding{};
-    }
-  }
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::texture_unbind_all()
-{
-  texture_bindings_.clear();
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::image_bind(Texture *tex, int unit)
-{
-  image_bindings_.resize(std::max<int>(unit + 1, (int)image_bindings_.size()));
-  image_bindings_[unit] = TextureBinding{
-      tex, GPUSamplerState::default_sampler(), TextureWriteFormat(tex->format_get())};
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::image_unbind(Texture *tex)
-{
-  for (TextureBinding &b : image_bindings_) {
-    if (b.tex == tex) {
-      b = TextureBinding{};
-    }
-  }
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::image_unbind_all()
-{
-  image_bindings_.clear();
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::uniformbuf_bind(UniformBuf *ubo, int slot)
-{
-  ubo_bindings_.resize(std::max<int>(slot + 1, (int)ubo_bindings_.size()));
-  ubo_bindings_[slot] = ubo;
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::uniformbuf_unbind(UniformBuf *ubo)
-{
-  for (int i = 0; i < (int)ubo_bindings_.size(); i++) {
-    if (ubo_bindings_[i] == ubo) {
-      ubo_bindings_[i] = nullptr;
-    }
-  }
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::storagebuf_bind(StorageBuf *ssbo, int slot)
-{
-  ssbo_bindings_.resize(std::max<int>(slot + 1, (int)ssbo_bindings_.size()));
-  ssbo_bindings_[slot] = ssbo;
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::storagebuf_unbind(StorageBuf *ssbo)
-{
-  for (int i = 0; i < (int)ssbo_bindings_.size(); i++) {
-    if (ssbo_bindings_[i] == ssbo) {
-      ssbo_bindings_[i] = nullptr;
-    }
-  }
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::tlas_bind(TopLevelAS *tlas, int slot)
-{
-  tlas_bindings_.resize(std::max<int>(slot + 1, (int)tlas_bindings_.size()));
-  tlas_bindings_[slot] = tlas;
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::tlas_unbind(TopLevelAS *tlas)
-{
-  for (int i = 0; i < (int)tlas_bindings_.size(); i++) {
-    if (tlas_bindings_[i] == tlas) {
-      tlas_bindings_[i] = nullptr;
-    }
-  }
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
-void Pipeline::image_format_set(int unit, TextureWriteFormat format)
-{
-  image_bindings_.resize(std::max<int>(unit + 1, (int)image_bindings_.size()));
-  image_bindings_[unit].format = format;
-  /* Image format affects descriptor / shader binding - mark dirty. */
-  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
-}
-
 void Pipeline::state_set(GPUWriteMask write_mask,
                          GPUBlend blend,
                          GPUFaceCullTest culling_test,
@@ -373,50 +267,96 @@ void Pipeline::state_set(GPUWriteMask write_mask,
   set_provoking_vertex(provoking_vert);
 }
 
-/** \} */
-
 /* ------------------------------------------------------------ */
-/** \name Query
+/** \name Resource bindings (concrete on the base).
+ *
+ * Texture / image binds forward to the context's StateManager (the base
+ * StateManager interface every backend implements). Buffers are bound
+ * through each backend's own buffer objects (see GLUniformBuf::bind), so
+ * from the pipeline side we only mark the descriptor dirty so that
+ * `resolve_*` knows something in the descriptor category changed.
  * \{ */
 
-const Pipeline::TextureBinding *Pipeline::texture_bind_get(int unit) const
+void Pipeline::texture_bind(Texture *tex, GPUSamplerState sampler, int unit)
 {
-  if (unit < 0 || unit >= (int)texture_bindings_.size()) {
-    return nullptr;
-  }
-  return &texture_bindings_[unit];
+  Context::get()->state_manager->texture_bind(tex, sampler, unit);
+  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
 }
 
-const Texture *Pipeline::image_bind_get(int unit) const
+void Pipeline::texture_unbind(Texture *tex)
 {
-  if (unit < 0 || unit >= (int)image_bindings_.size()) {
-    return nullptr;
-  }
-  return image_bindings_[unit].tex;
+  Context::get()->state_manager->texture_unbind(tex);
+  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
 }
 
-UniformBuf *Pipeline::uniformbuf_bind_get(int slot) const
+void Pipeline::texture_unbind_all()
 {
-  if (slot < 0 || slot >= (int)ubo_bindings_.size()) {
-    return nullptr;
-  }
-  return ubo_bindings_[slot];
+  Context::get()->state_manager->texture_unbind_all();
+  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
 }
 
-StorageBuf *Pipeline::storagebuf_bind_get(int slot) const
+void Pipeline::image_bind(Texture *tex, int unit)
 {
-  if (slot < 0 || slot >= (int)ssbo_bindings_.size()) {
-    return nullptr;
-  }
-  return ssbo_bindings_[slot];
+  Context::get()->state_manager->image_bind(tex, unit);
+  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
 }
 
-TopLevelAS *Pipeline::tlas_bind_get(int slot) const
+void Pipeline::image_unbind(Texture *tex)
 {
-  if (slot < 0 || slot >= (int)tlas_bindings_.size()) {
-    return nullptr;
-  }
-  return tlas_bindings_[slot];
+  Context::get()->state_manager->image_unbind(tex);
+  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
+void Pipeline::image_unbind_all()
+{
+  Context::get()->state_manager->image_unbind_all();
+  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
+void Pipeline::uniformbuf_bind(UniformBuf *ubo, int slot)
+{
+  (void)ubo;
+  (void)slot;
+  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
+void Pipeline::uniformbuf_unbind(UniformBuf *ubo)
+{
+  (void)ubo;
+  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
+void Pipeline::storagebuf_bind(StorageBuf *ssbo, int slot)
+{
+  (void)ssbo;
+  (void)slot;
+  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
+void Pipeline::storagebuf_unbind(StorageBuf *ssbo)
+{
+  (void)ssbo;
+  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
+void Pipeline::tlas_bind(TopLevelAS *tlas, int slot)
+{
+  (void)tlas;
+  (void)slot;
+  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
+void Pipeline::tlas_unbind(TopLevelAS *tlas)
+{
+  (void)tlas;
+  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
+}
+
+void Pipeline::image_format_set(int unit, TextureWriteFormat format)
+{
+  (void)unit;
+  (void)format;
+  mark_dirty(GPU_PIPELINE_DIRTY_DESCRIPTOR);
 }
 
 /** \} */
@@ -428,6 +368,10 @@ TopLevelAS *Pipeline::tlas_bind_get(int slot) const
 void Pipeline::bind()
 {
   Context::get()->active_pipeline_ = this;
+  /* Default: mark dirty so the first prepare_* after binding re-resolves. A
+   * backend that can detect "unchanged vs last applied" (GL) overrides this to
+   * skip the redundant resolve. */
+  mark_dirty(GPU_PIPELINE_DIRTY_ALL);
 }
 
 void Pipeline::unbind()
@@ -441,9 +385,6 @@ void Pipeline::unbind()
 void Pipeline::sync_context()
 {
   Context *ctx = Context::get();
-  /* Propagate the pipeline's shader/framebuffer to the context so the
-   * state-manager-based draw path uses them. Only update if we actually have
-   * a value - avoid clobbering context state that the pipeline didn't set. */
   if (shader_ != nullptr) {
     ctx->shader = shader_;
   }
@@ -455,13 +396,28 @@ void Pipeline::sync_context()
 void Pipeline::sync_state_manager()
 {
   StateManager *sm = Context::get()->state_manager;
-  /* Cheap bitfield copies; the backend decides whether to (re)apply. */
   if (sm->state != state_) {
     sm->state = state_;
   }
   if (sm->mutable_state != mutable_state_) {
     sm->mutable_state = mutable_state_;
   }
+}
+
+void Pipeline::prepare_draw(GPUPrimType prim_type, int64_t vertex_input_key)
+{
+  if (!is_dirty()) {
+    return;
+  }
+  resolve_draw(prim_type, vertex_input_key);
+}
+
+void Pipeline::prepare_compute()
+{
+  if (!is_dirty()) {
+    return;
+  }
+  resolve_compute();
 }
 
 void Pipeline::mark_dirty(GPUPipelineDirtyFlag flag)
@@ -479,6 +435,22 @@ void Pipeline::clear_dirty()
 void PipelineDeleter::operator()(Pipeline *p)
 {
   GPU_pipeline_discard(p);
+}
+
+Pipeline *Context::pipeline_get()
+{
+  if (active_pipeline_ != nullptr) {
+    return active_pipeline_;
+  }
+  return fallback_pipeline_get();
+}
+
+Pipeline *Context::fallback_pipeline_get()
+{
+  if (fallback_pipeline_ == nullptr) {
+    fallback_pipeline_ = GPUBackend::get()->pipeline_alloc();
+  }
+  return fallback_pipeline_;
 }
 
 }  // namespace gpu

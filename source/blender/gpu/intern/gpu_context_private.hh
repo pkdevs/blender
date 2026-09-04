@@ -38,10 +38,33 @@ class Context {
   /** State management */
   Shader *shader = nullptr;
   Pipeline *active_pipeline_ = nullptr;
+  /** Owned. Used by the legacy API when no pipeline is explicitly bound. */
+  Pipeline *fallback_pipeline_ = nullptr;
   FrameBuffer *active_fb = nullptr;
   GPUMatrixState *matrix_state = nullptr;
   StateManager *state_manager = nullptr;
   Immediate *imm = nullptr;
+
+  /**
+   * Last state actually pushed to the device (by whichever pipeline last ran
+   * `prepare_draw`). Used by backends (e.g. GL) to compare against in `bind()`
+   * and skip the redundant resolve when the incoming pipeline matches what's
+   * already on the device. Initialised to "unknown" so the first bind always
+   * marks dirty.
+   */
+  GPUState applied_state_ = {};
+  GPUStateMutable applied_mutable_state_ = {};
+  Shader *applied_shader_ = nullptr;
+  bool state_ever_applied_ = false;
+
+  /**
+   * The pipeline the (legacy) state API should configure: the explicitly bound
+   * `active_pipeline_`, or the per-context `fallback_pipeline_` when none is set.
+   * Returns a valid pipeline once `fallback_pipeline_` has been created.
+   */
+  Pipeline *pipeline_get();
+  /** Lazily create and return the context's fallback pipeline. */
+  Pipeline *fallback_pipeline_get();
 
   /**
    * All 4 window frame-buffers.

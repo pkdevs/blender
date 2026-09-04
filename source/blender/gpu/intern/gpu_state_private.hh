@@ -141,7 +141,29 @@ class StateManager {
   /* Formats of all image units. */
   std::array<TextureWriteFormat, GPU_MAX_IMAGE> image_formats;
 
-  StateManager();
+  StateManager()
+  {
+    state.write_mask = GPU_WRITE_COLOR;
+    state.blend = GPU_BLEND_NONE;
+    state.culling_test = GPU_CULL_NONE;
+    state.depth_test = GPU_DEPTH_NONE;
+    state.stencil_test = GPU_STENCIL_NONE;
+    state.stencil_op = GPU_STENCIL_OP_NONE;
+    state.provoking_vert = GPU_VERTEX_LAST;
+    state.invert_facing = false;
+    state.clip_distances = 0;
+    state.clip_control = false;
+    state.polygon_smooth = false;
+    state.line_smooth = false;
+
+    mutable_state.point_size = -1.0f;
+    mutable_state.line_width = 1.0f;
+    mutable_state.stencil_write_mask = 0x00;
+    mutable_state.stencil_compare_mask = 0x00;
+    mutable_state.stencil_reference = 0x00;
+
+    image_formats.fill(TextureWriteFormat::Invalid);
+  }
   virtual ~StateManager() = default;
 
   virtual void apply_state() = 0;

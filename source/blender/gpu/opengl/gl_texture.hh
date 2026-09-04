@@ -22,6 +22,7 @@ class GLTexture : public Texture {
   friend class GLStateManager;
   friend class GLFrameBuffer;
   friend class GLTexturePool;
+  friend class GLPipeline;
 
  private:
   /**

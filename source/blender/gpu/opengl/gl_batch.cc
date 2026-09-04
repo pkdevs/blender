@@ -240,10 +240,18 @@ void GLBatch::bind()
 {
   Context *ctx = Context::get();
   if (ctx->active_pipeline_ != nullptr) {
+    /* An explicit pipeline is bound: it owns the fixed-function state and
+     * resolves it onto the GL state machine. `bind()` already marked it dirty
+     * when its state differs from the last-applied snapshot, and
+     * `prepare_draw` (guarded on `is_dirty()`) applies the delta only when
+     * needed via `resolve_draw`. */
     ctx->active_pipeline_->prepare_draw(this->prim_type);
   }
   else {
-    ctx->state_manager->apply_state();
+    /* No explicit pipeline: the state was set through the legacy API
+     * (`GPU_blend`, framebuffer state, ...) on the context's fallback pipeline.
+     * Force a resolve via `prepare_draw` (guarded on the pipeline's dirty flag). */
+    Context::get()->pipeline_get()->apply_state();
   }
 
   if (flag & GPU_BATCH_DIRTY) {

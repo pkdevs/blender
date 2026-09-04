@@ -1142,7 +1142,7 @@ bool MTLContext::ensure_render_pipeline_state(MTLPrimitiveType mtl_prim_type)
   }
 
   /* Apply global state. */
-  this->state_manager->apply_state();
+  this->pipeline_get()->apply_state();
 
   /* Main command buffer tracks the current state of the render pass, based on bound
    * MTLFrameBuffer. */

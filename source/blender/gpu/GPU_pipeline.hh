@@ -19,6 +19,7 @@
 #include <memory>
 
 #include "BLI_enum_flags.hh"
+#include "BLI_span.hh"
 #include "BLI_sys_types.hh"
 #include "BLI_vector.hh"
 
@@ -60,6 +61,8 @@ enum GPUPipelineDirtyFlag {
   GPU_PIPELINE_DIRTY_DEPTH_STENCIL = (1 << 2),
   /* Push constants (per-draw uniform data). */
   GPU_PIPELINE_DIRTY_PUSH_CONSTANTS = (1 << 3),
+  GPU_PIPELINE_DIRTY_ALL = GPU_PIPELINE_DIRTY_PIPELINE | GPU_PIPELINE_DIRTY_DESCRIPTOR |
+                           GPU_PIPELINE_DIRTY_DEPTH_STENCIL | GPU_PIPELINE_DIRTY_PUSH_CONSTANTS,
 };
 ENUM_OPERATORS(GPUPipelineDirtyFlag)
 
@@ -77,13 +80,6 @@ using PipelinePtr = std::unique_ptr<Pipeline, PipelineDeleter>;
  */
 class Pipeline {
  public:
-  /** A texture (or image) binding: the texture plus the sampler/format used. */
-  struct TextureBinding {
-    Texture *tex = nullptr;
-    GPUSamplerState sampler = GPUSamplerState::default_sampler();
-    TextureWriteFormat format = TextureWriteFormat::Invalid;
-  };
-
   Pipeline();
   virtual ~Pipeline();
 
@@ -118,13 +114,14 @@ class Pipeline {
   virtual void uniform_float(int location, int comp_len, int array_size, const float *data);
   virtual void uniform_int(int location, int comp_len, int array_size, const int *data);
 
-  /* Resource bindings. */
-  virtual void texture_bind(Texture *tex, GPUSamplerState sampler, int unit);
-  virtual void texture_unbind(Texture *tex);
-  virtual void texture_unbind_all();
-  virtual void image_bind(Texture *tex, int unit);
-  virtual void image_unbind(Texture *tex);
-  virtual void image_unbind_all();
+  /* Resource bindings (abstract on base). Each backend owns its own storage +
+   * fast path. See `GLPipeline`, `VKPipeline`, `MTLPipeline`. */
+  virtual void texture_bind(Texture *tex, GPUSamplerState sampler, int unit) = 0;
+  virtual void texture_unbind(Texture *tex) = 0;
+  virtual void texture_unbind_all() = 0;
+  virtual void image_bind(Texture *tex, int unit) = 0;
+  virtual void image_unbind(Texture *tex) = 0;
+  virtual void image_unbind_all() = 0;
   virtual void uniformbuf_bind(UniformBuf *ubo, int slot);
   virtual void uniformbuf_unbind(UniformBuf *ubo);
   virtual void storagebuf_bind(StorageBuf *ssbo, int slot);
@@ -173,23 +170,22 @@ class Pipeline {
   {
     return prim_type_;
   }
-  const GPUState &state_get() const
-  {
-    return state_;
-  }
-  const GPUStateMutable &mutable_state_get() const
-  {
-    return mutable_state_;
-  }
-  const TextureBinding *texture_bind_get(int unit) const;
-  const Texture *image_bind_get(int unit) const;
-  UniformBuf *uniformbuf_bind_get(int slot) const;
-  StorageBuf *storagebuf_bind_get(int slot) const;
-  TopLevelAS *tlas_bind_get(int slot) const;
-  const Vector<uint8_t> &push_constants_data_get() const
-  {
-    return push_constants_data_;
-  }
+   const GPUState &state_get() const
+   {
+     return state_;
+   }
+   const GPUStateMutable &mutable_state_get() const
+   {
+     return mutable_state_;
+   }
+   Span<uint8_t> push_constants_data_get() const
+   {
+     return push_constants_data_;
+   }
+   uint32_t push_constants_size_get() const
+   {
+     return (uint32_t)push_constants_data_.size();
+   }
 
   /* Dirty state. */
   GPUPipelineDirtyFlag dirty_flags_get() const
@@ -208,32 +204,55 @@ class Pipeline {
     return (dirty_flags_ & GPU_PIPELINE_DIRTY_PUSH_CONSTANTS) != 0;
   }
 
-  /* ------------------------------------------------------------
-   * Orchestration (common to all backends in this phase)
-   * ---------------------------------------------------------- */
-  /** Mark this pipeline as the active one on the context. */
-  void bind();
-  /** Clear the active pipeline if it is this one. */
-  void unbind();
-  /**
-   * Apply this pipeline's state to the context's StateManager and (if anything
-   * is dirty) force the backend to re-resolve. Called by the draw path.
-   * Backends that want to cache device state can override this in a later phase.
-   */
-   virtual void prepare_draw(GPUPrimType prim_type, int64_t vertex_input_key = 0) = 0;
-   virtual void prepare_compute() = 0;
+   /* ------------------------------------------------------------
+    * Orchestration (common to all backends)
+    * ---------------------------------------------------------- */
+   /**
+    * Mark this pipeline as the active one on the context and mark it dirty so
+    * the first `prepare_*` after binding re-resolves. Overriding is optional;
+    * backends that want to skip the resolve when state is unchanged can compare
+    * against their own "last applied" cache and only mark dirty when there's
+    * a real diff (see `GLPipeline::bind`).
+    */
+   virtual void bind();
+   virtual void unbind();
+   /**
+    * Called by the draw path. Skips work when the pipeline is not dirty
+    * (nothing has changed since the last resolve on this pipeline). Otherwise
+    * delegates to the backend's `resolve_draw`, which applies the pipeline's
+    * state to the device and clears the dirty flag at the end.
+    */
+   void prepare_draw(GPUPrimType prim_type, int64_t vertex_input_key = 0);
+   void prepare_compute();
+   /** Backend hook: apply/resolve this pipeline's state for a draw call. */
+    virtual void resolve_draw(GPUPrimType prim_type, int64_t vertex_input_key) = 0;
+    /** Backend hook: apply/resolve this pipeline's state for a compute dispatch. */
+    virtual void resolve_compute() = 0;
+    /** Issue a memory barrier on the active context. Backend-specific. */
+    virtual void issue_barrier(GPUBarrier barrier_bits) = 0;
+    /**
+     * Legacy entrypoint: unconditionally (re)apply this pipeline's state to the
+     * device, regardless of whether a `prepare_draw` already ran. Used by the
+     * legacy (non-pipeline-bound) draw paths to force a resolve.
+     */
+    void apply_state()
+    {
+      mark_dirty(GPU_PIPELINE_DIRTY_ALL);
+      resolve_draw(prim_type_, 0);
+    }
 
   protected:
   void mark_dirty(GPUPipelineDirtyFlag flag);
   void clear_dirty();
 
-  /** Propagate shader + framebuffer to the context's global state. */
+  /**
+   * Propagate this pipeline's shader + framebuffer to the context's global state
+   * (only when set, so we don't clobber context state the pipeline didn't touch).
+   */
   void sync_context();
-  /** Copy the pipeline's fixed-function state into the StateManager (no apply). */
-  void sync_state_manager();
 
   /* ------------------------------------------------------------
-   * State storage (shared - backends own their device objects in a later phase)
+   * State storage (fixed-function shared - backends own device objects/bindings)
    * ---------------------------------------------------------- */
   Shader *shader_ = nullptr;
   uint64_t shader_interface_id_ = 0;
@@ -243,13 +262,6 @@ class Pipeline {
 
   GPUState state_ = {};
   GPUStateMutable mutable_state_ = {};
-
-  /* Resource bindings (dynamic, sized as needed). */
-  Vector<TextureBinding> texture_bindings_;
-  Vector<TextureBinding> image_bindings_;
-  Vector<UniformBuf *> ubo_bindings_;
-  Vector<StorageBuf *> ssbo_bindings_;
-  Vector<TopLevelAS *> tlas_bindings_;
 
   /* Push constants (raw byte buffer). */
   Vector<uint8_t> push_constants_data_;

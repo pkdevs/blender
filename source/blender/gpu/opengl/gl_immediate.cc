@@ -171,7 +171,7 @@ void GLImmediate::end()
 #endif
   }
   else {
-    GLContext::get()->state_manager->apply_state();
+    Context::get()->pipeline_get()->apply_state();
 
     /* We convert the offset in vertex offset from the buffer's start.
      * This works because we added some padding to align the first vertex. */

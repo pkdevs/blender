@@ -304,11 +304,18 @@ void VKContext::rendering_end()
  * \{ */
 
 void VKContext::update_pipeline_data(const VKFrameBuffer &framebuffer,
-                                     GPUPrimType primitive,
-                                     VKVertexInputDescriptionPool::Key vertex_input_key,
-                                     render_graph::VKPipelineDataGraphics &r_pipeline_data)
+                                      GPUPrimType primitive,
+                                      VKVertexInputDescriptionPool::Key vertex_input_key,
+                                      render_graph::VKPipelineDataGraphics &r_pipeline_data)
 {
   VKShader &vk_shader = unwrap(*shader);
+
+  /* Ensure the pipeline's state has been applied to the state manager. For the explicit pipeline
+   * case this is a no-op (`prepare_draw` was already called by the batch path and cleared the
+   * dirty flag). For the legacy (no pipeline bound) case it runs the resolve so the state
+   * manager is in sync. */
+  pipeline_get()->prepare_draw(primitive, vertex_input_key);
+
   VKStateManager &state_manager = state_manager_get();
 
   /* Disable non-vulkan state flags to reduce unneeded pipeline compilation. */
