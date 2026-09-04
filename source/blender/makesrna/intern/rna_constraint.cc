@@ -2270,6 +2270,7 @@ static void rna_def_constraint_stretch_to(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "bulge", PROP_FLOAT, PROP_NONE);
   RNA_def_property_range(prop, 0.0, 100.0f);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(
       prop, "Volume Variation", "Factor between volume variation and stretching");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
@@ -3318,6 +3319,7 @@ static void rna_def_constraint_spline_ik(BlenderRNA *brna)
   /* take original scaling of the bone into account in volume preservation */
   prop = RNA_def_property(srna, "use_original_scale", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", CONSTRAINT_SPLINEIK_USE_ORIGINAL_SCALE);
+  RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(
       prop, "Use Original Scale", "Apply volume preservation over the original scaling");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
@@ -3325,6 +3327,7 @@ static void rna_def_constraint_spline_ik(BlenderRNA *brna)
   /* Volume preservation for "volumetric" scale mode. */
   prop = RNA_def_property(srna, "bulge", PROP_FLOAT, PROP_NONE);
   RNA_def_property_range(prop, 0.0, 100.0f);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(
       prop, "Volume Variation", "Factor between volume variation and stretching");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
@@ -3343,6 +3346,7 @@ static void rna_def_constraint_spline_ik(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "bulge_min", PROP_FLOAT, PROP_NONE);
   RNA_def_property_range(prop, 0.0, 1.0f);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "Volume Variation Minimum", "Minimum volume stretching factor");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
