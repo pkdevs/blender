@@ -68,6 +68,12 @@ struct SearchItems {
 
   AutoComplete *autocpl;
   void *active;
+
+  int replace_start = -1;
+  int replace_end = -1;
+
+  /** The button's cursor position */
+  int cursor_pos = -1;
 };
 
 struct uiSearchboxData {
@@ -166,6 +172,17 @@ bool search_item_add(SearchItems *items,
   items->totitem++;
 
   return true;
+}
+
+void search_items_set_replace_range(SearchItems *items, int replace_start, int replace_end)
+{
+  items->replace_start = replace_start;
+  items->replace_end = replace_end;
+}
+
+int search_items_cursor_pos(const SearchItems *items)
+{
+  return items->cursor_pos;
 }
 
 int searchbox_size_y()
@@ -329,6 +346,10 @@ bool searchbox_inside(ARegion *region, const int xy[2])
 {
   uiSearchboxData *data = static_cast<uiSearchboxData *>(region->regiondata);
 
+  if (data->items.totitem == 0 && data->search_but->hide_when_no_results) {
+    return false;
+  }
+
   return BLI_rcti_isect_pt(&data->bbox, xy[0] - region->winrct.xmin, xy[1] - region->winrct.ymin);
 }
 
@@ -353,7 +374,27 @@ bool searchbox_apply(Button *but, ARegion *region)
     /* Search button with dynamic string properties may have their own method of applying
      * the search results, so only copy the result if there is a proper space for it. */
     if (but->hardmax != 0) {
-      BLI_strncpy(but->editstr, name, name_sep ? (name_sep - name) + 1 : data->items.maxstrlen);
+      if (data->items.replace_start >= 0 && data->items.replace_end >= data->items.replace_start) {
+        /* Partial replace: splice the result into `[replace_sta, replace_end)` of `editstr`,
+         * instead of replacing the whole string. */
+        const int name_len = name_sep ? int(name_sep - name) : int(strlen(name));
+        const int old_len = int(strlen(but->editstr));
+        const int replace_len = data->items.replace_end - data->items.replace_start;
+        const int new_len = old_len - replace_len + name_len;
+
+        if (new_len < data->items.maxstrlen) {
+          /* Shift the tail of the string to make room, then
+           * copy the replacement text in. */
+          memmove(but->editstr + data->items.replace_start + name_len,
+                  but->editstr + data->items.replace_end,
+                  size_t(old_len - data->items.replace_end + 1));
+          memcpy(but->editstr + data->items.replace_start, name, size_t(name_len));
+          but->pos = data->items.replace_start + name_len;
+        }
+      }
+      else {
+        BLI_strncpy(but->editstr, name, name_sep ? (name_sep - name) + 1 : data->items.maxstrlen);
+      }
     }
 
     search_but->item_active = data->items.pointers[data->active];
@@ -363,6 +404,18 @@ bool searchbox_apply(Button *but, ARegion *region)
     return true;
   }
   return false;
+}
+
+bool searchbox_has_active_item(ARegion *region)
+{
+  const uiSearchboxData *data = static_cast<const uiSearchboxData *>(region->regiondata);
+  return data->active != -1;
+}
+
+const char *searchbox_active_item_name(ARegion *region)
+{
+  const uiSearchboxData *data = static_cast<const uiSearchboxData *>(region->regiondata);
+  return (data->active != -1) ? data->items.names[data->active] : nullptr;
 }
 
 static ARegion *wm_searchbox_tooltip_init(
@@ -508,6 +561,7 @@ static void searchbox_update_fn(bContext *C,
     wmWindow *win = CTX_wm_window(C);
     WM_tooltip_clear(C, win);
   }
+  items->cursor_pos = but->pos;
   const bool is_first_search = !but->changed;
   but->items_update_fn(C, but->arg.get(), str, items, is_first_search);
 }
@@ -522,6 +576,8 @@ void searchbox_update(bContext *C, ARegion *region, Button *but, const bool rese
   /* reset vars */
   data->items.totitem = 0;
   data->items.more = 0;
+  data->items.replace_start = -1;
+  data->items.replace_end = -1;
   if (!reset) {
     data->items.offset_i = data->items.offset;
   }
@@ -670,6 +726,10 @@ static void searchbox_draw_clip_tri_up(rcti *rect, const float zoom)
 static void searchbox_region_draw_fn(const bContext *C, ARegion *region)
 {
   uiSearchboxData *data = static_cast<uiSearchboxData *>(region->regiondata);
+
+  if (data->items.totitem == 0 && data->search_but->hide_when_no_results) {
+    return;
+  }
 
   /* pixel space */
   wmOrtho2_region_pixelspace(region);

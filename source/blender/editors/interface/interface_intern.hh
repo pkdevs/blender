@@ -470,6 +470,10 @@ struct ButtonSearch : public Button {
    * the string to match one of the search items when applying.
    */
   bool results_are_suggestions = false;
+
+  bool keep_editing_after_apply = false;
+
+  bool hide_when_no_results = false;
 };
 
 /**
@@ -960,15 +964,22 @@ Button *button_drag_multi_edit_get(Button *but);
  */
 const char *button_placeholder_get(Button *but);
 
+struct ButtonEditHint {
+  StringRef text;
+  int64_t replace_start;
+  int64_t replace_end;
+};
+
 /**
- * Get the input hint shown after the text while editing.
+ * Get the input hint to draw over the button's text while editing.
  *
  * This is one of two mutually exclusive hints, decided per refresh by
- * #button_edit_hint_refresh: if a path-template variable is currently being
- * typed, the variable completion hint; otherwise, if the button's property has a unit, the unit
- * completion hint.
+ * #button_edit_hint_refresh: if a path-template variable is currently being typed, the variable
+ * completion hint; otherwise, if the button's property has a unit, the unit completion hint.
  */
-std::optional<StringRef> button_edit_unit_hint_get(const Button &but);
+std::optional<ButtonEditHint> button_edit_hint_get(const Button &but);
+
+std::optional<IndexRange> template_variable_span_at_cursor(StringRef text, int64_t cursor);
 
 void def_but_icon(Button *but, int icon, int64_t flag);
 /**
@@ -1186,6 +1197,16 @@ bool searchbox_event(
  * String validated to be of correct length (but->hardmax).
  */
 bool searchbox_apply(Button *but, ARegion *region);
+/**
+ * Whether the search box currently has a highlighted match, i.e. whether #searchbox_apply()
+ * would apply something if called right now.
+ */
+bool searchbox_has_active_item(ARegion *region);
+/**
+ * The display text of the search box's currently highlighted match, or null if none is
+ * highlighted (see #searchbox_has_active_item).
+ */
+const char *searchbox_active_item_name(ARegion *region);
 void searchbox_free(bContext *C, ARegion *region);
 /**
  * XXX weak: search_func adds all partial matches.

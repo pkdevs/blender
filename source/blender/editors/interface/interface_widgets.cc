@@ -2551,7 +2551,7 @@ static void widget_draw_text(const uiFontStyle *fstyle,
   const char *drawstr_right = nullptr;
   bool use_right_only = false;
   const char *indeterminate_str = UI_VALUE_INDETERMINATE_CHAR;
-  std::optional<StringRef> unit_hint = button_edit_unit_hint_get(*but);
+  std::optional<ButtonEditHint> edit_hint = button_edit_hint_get(*but);
 
 #ifdef WITH_INPUT_IME
   const wmIMEData *ime_data;
@@ -2577,7 +2577,7 @@ static void widget_draw_text(const uiFontStyle *fstyle,
     Button *but_edit = button_drag_multi_edit_get(but);
     if (but_edit) {
       drawstr = but_edit->editstr;
-      unit_hint = button_edit_unit_hint_get(*but_edit);
+      edit_hint = button_edit_hint_get(*but_edit);
       align = UI_STYLE_TEXT_LEFT;
     }
   }
@@ -2803,75 +2803,109 @@ static void widget_draw_text(const uiFontStyle *fstyle,
     if (drawlen > 0) {
       FontStyleDrawParams params{};
       params.align = align;
-      fontstyle_draw_ex(fstyle,
-                        rect,
-                        drawstr + but->ofs,
-                        drawlen,
-                        wcol->text,
-                        &params,
-                        &font_xofs,
-                        &font_yofs,
-                        nullptr);
 
-      if (but->menu_key != '\0') {
-        const char *drawstr_ofs = drawstr + but->ofs;
-        int ul_index = -1;
+      int64_t hint_replace_start_ofs = -1;
+      int64_t hint_replace_end_ofs = -1;
+      if (edit_hint && edit_hint->replace_start < edit_hint->replace_end) {
+        hint_replace_start_ofs = edit_hint->replace_start - but->ofs;
+        hint_replace_end_ofs = edit_hint->replace_end - but->ofs;
+      }
+      const bool hint_splits_text = hint_replace_start_ofs >= 0 &&
+                                    hint_replace_start_ofs < drawlen;
+      const int main_drawlen = hint_splits_text ? int(hint_replace_start_ofs) : drawlen;
 
-        {
-          /* Find upper case, fall back to lower case. */
-          const char *drawstr_end = drawstr_ofs + drawlen;
-          const char keys[] = {char(but->menu_key - 32), but->menu_key};
-          for (int i = 0; i < ARRAY_SIZE(keys); i++) {
-            const char *drawstr_menu = strchr(drawstr_ofs, keys[i]);
-            if (drawstr_menu != nullptr && drawstr_menu < drawstr_end) {
-              ul_index = int(drawstr_menu - drawstr_ofs);
-              break;
+      if (main_drawlen > 0) {
+        fontstyle_draw_ex(fstyle,
+                          rect,
+                          drawstr + but->ofs,
+                          main_drawlen,
+                          wcol->text,
+                          &params,
+                          &font_xofs,
+                          &font_yofs,
+                          nullptr);
+
+        if (but->menu_key != '\0') {
+          const char *drawstr_ofs = drawstr + but->ofs;
+          int ul_index = -1;
+
+          {
+            /* Find upper case, fall back to lower case. */
+            const char *drawstr_end = drawstr_ofs + drawlen;
+            const char keys[] = {char(but->menu_key - 32), but->menu_key};
+            for (int i = 0; i < ARRAY_SIZE(keys); i++) {
+              const char *drawstr_menu = strchr(drawstr_ofs, keys[i]);
+              if (drawstr_menu != nullptr && drawstr_menu < drawstr_end) {
+                ul_index = int(drawstr_menu - drawstr_ofs);
+                break;
+              }
             }
           }
-        }
 
-        if (ul_index != -1) {
-          rcti bounds;
-          if (BLF_str_offset_to_glyph_bounds(fstyle->uifont_id, drawstr_ofs, ul_index, &bounds) &&
-              !BLI_rcti_is_empty(&bounds))
-          {
-            int ul_width = round_fl_to_int(BLF_width(fstyle->uifont_id, "_", 2));
-            int pos_x = rect->xmin + font_xofs + bounds.xmin +
-                        (bounds.xmax - bounds.xmin - ul_width) / 2;
-            int pos_y = rect->ymin + font_yofs + bounds.ymin - U.pixelsize;
-            /* Use text output because direct drawing doesn't always work. See #89246. */
-            BLF_position(fstyle->uifont_id, float(pos_x), pos_y, 0.0f);
-            BLF_color4ubv(fstyle->uifont_id, wcol->text);
-            BLF_draw(fstyle->uifont_id, "_", 2);
+          if (ul_index != -1) {
+            rcti bounds;
+            if (BLF_str_offset_to_glyph_bounds(
+                    fstyle->uifont_id, drawstr_ofs, ul_index, &bounds) &&
+                !BLI_rcti_is_empty(&bounds))
+            {
+              int ul_width = round_fl_to_int(BLF_width(fstyle->uifont_id, "_", 2));
+              int pos_x = rect->xmin + font_xofs + bounds.xmin +
+                          (bounds.xmax - bounds.xmin - ul_width) / 2;
+              int pos_y = rect->ymin + font_yofs + bounds.ymin - U.pixelsize;
+              BLF_position(fstyle->uifont_id, float(pos_x), pos_y, 0.0f);
+              BLF_color4ubv(fstyle->uifont_id, wcol->text);
+              BLF_draw(fstyle->uifont_id, "_", 2);
+            }
           }
         }
       }
 
-      if (unit_hint && drawstr[0] != '\0') {
+      if (edit_hint && drawstr[0] != '\0') {
         rcti text_bounds;
-        BLF_boundbox(fstyle->uifont_id, drawstr + but->ofs, drawlen, &text_bounds);
+        BLF_boundbox(fstyle->uifont_id, drawstr + but->ofs, main_drawlen, &text_bounds);
 
-        /* Draw unit hint with 33% opacity. */
+        /* Draw the hint with 33% opacity. */
         uiFontStyle style = *fstyle;
         style.shadow = 0;
         uchar col[4];
         copy_v4_v4_uchar(col, wcol->text);
         col[3] *= UI_INPUT_HINT_ALPHA;
 
-        rcti unit_hint_rect;
-        unit_hint_rect.xmin = rect->xmin + text_bounds.xmax;
-        unit_hint_rect.ymin = rect->ymin;
-        unit_hint_rect.xmax = rect->xmax;
-        unit_hint_rect.ymax = rect->ymax;
+        rcti hint_rect;
+        hint_rect.xmin = rect->xmin + text_bounds.xmax;
+        hint_rect.ymin = rect->ymin;
+        hint_rect.xmax = rect->xmax;
+        hint_rect.ymax = rect->ymax;
         fontstyle_draw_ex(&style,
-                          &unit_hint_rect,
-                          unit_hint->data(),
-                          unit_hint->size(),
+                          &hint_rect,
+                          edit_hint->text.data(),
+                          edit_hint->text.size(),
                           col,
                           &params,
                           nullptr,
                           nullptr,
                           nullptr);
+
+        /* Real text continues (in the normal color) after the range the hint replaced. */
+        if (hint_splits_text && hint_replace_end_ofs < drawlen) {
+          rcti hint_bounds;
+          BLF_boundbox(
+              fstyle->uifont_id, edit_hint->text.data(), edit_hint->text.size(), &hint_bounds);
+
+          rcti after_rect = *rect;
+          after_rect.xmin = hint_rect.xmin + hint_bounds.xmax;
+
+          const int64_t after_ofs = std::max<int64_t>(hint_replace_end_ofs, 0);
+          fontstyle_draw_ex(fstyle,
+                            &after_rect,
+                            drawstr + but->ofs + after_ofs,
+                            int(drawlen - after_ofs),
+                            wcol->text,
+                            &params,
+                            nullptr,
+                            nullptr,
+                            nullptr);
+        }
       }
     }
   }

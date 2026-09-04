@@ -1894,6 +1894,10 @@ bool search_item_add(SearchItems *items,
                      int64_t but_flag,
                      uint8_t name_prefix_offset);
 
+void search_items_set_replace_range(SearchItems *items, int replace_start, int replace_end);
+
+int search_items_cursor_pos(const SearchItems *items);
+
 /**
  * \note The item-pointer (referred to below) is a per search item user pointer
  * passed to #search_item_add (stored in  #SearchItems.pointers).

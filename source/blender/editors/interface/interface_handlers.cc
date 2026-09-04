@@ -47,7 +47,6 @@
 #include "BKE_movieclip.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_types.hh"
-#include "BKE_path_templates.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
@@ -435,9 +434,12 @@ struct HandleButtonData {
 
   TextEdit text_edit;
   /**
-   * Input hint drawn faded after the edit string, empty when there is none.
+   * Input hint drawn faded, empty when there is none.
    */
   std::string text_edit_unit_hint;
+
+  int64_t text_edit_hint_replace_start = 0;
+  int64_t text_edit_hint_replace_end = 0;
 
   wmTimer *text_select_auto_scroll = nullptr;
   double text_select_auto_scroll_last_time = std::numeric_limits<double>::lowest();
@@ -3720,13 +3722,15 @@ const wmIMEData *button_ime_data_get(Button *but)
 }
 #endif /* WITH_INPUT_IME */
 
-std::optional<StringRef> button_edit_unit_hint_get(const Button &but)
+std::optional<ButtonEditHint> button_edit_hint_get(const Button &but)
 {
   const HandleButtonData *data = but.semi_modal_state ? but.semi_modal_state : but.active;
   if (data == nullptr || data->text_edit_unit_hint.empty()) {
     return std::nullopt;
   }
-  return data->text_edit_unit_hint;
+  return ButtonEditHint{data->text_edit_unit_hint,
+                        data->text_edit_hint_replace_start,
+                        data->text_edit_hint_replace_end};
 }
 
 /* Currently there are property subtypes that are not considered "units", so handle them
@@ -3808,16 +3812,11 @@ static void button_edit_unit_hint_refresh(bContext *C, Button *but, HandleButton
 
   /* Add a space before the short unit name. */
   data->text_edit_unit_hint = " " + name_short;
+  data->text_edit_hint_replace_start = data->text_edit_hint_replace_end = int64_t(
+      strlen(data->text_edit.edit_string));
 }
 
-/**
- * If `text` ends with an unclosed `{variable_name` path-template expression
- * (i.e. an opening `{` with no matching `}` after it), returns the byte index
- * of that opening `{`. Escaped braces (`{{` and `}}`) are skipped. Returns
- * #std::nullopt if the text doesn't end inside such an expression, including
- * when the expression syntax is already invalid (e.g. nested `{`).
- */
-static std::optional<int64_t> template_variable_open_token_start(StringRef text)
+std::optional<IndexRange> template_variable_span_at_cursor(StringRef text, int64_t cursor)
 {
   int64_t start = -1;
   const int64_t size = text.size();
@@ -3840,7 +3839,12 @@ static std::optional<int64_t> template_variable_open_token_start(StringRef text)
     }
 
     if (text[i] == '}') {
-      /* Expression closed. */
+      const int64_t name_start = start + 1;
+      const int64_t name_end = i;
+      if (cursor >= name_start && cursor <= name_end) {
+        return IndexRange::from_begin_end(name_start, name_end);
+      }
+      /* Expression closed, and it's not the one the cursor is in: keep scanning. */
       start = -1;
     }
     else if (text[i] == '{') {
@@ -3849,68 +3853,81 @@ static std::optional<int64_t> template_variable_open_token_start(StringRef text)
     }
   }
 
-  return (start == -1) ? std::nullopt : std::optional(start);
+  /* Reached the end of the text with an unclosed expression open. */
+  if (start != -1) {
+    const int64_t name_start = start + 1;
+    const int64_t name_end = size;
+    if (cursor >= name_start && cursor <= name_end) {
+      return IndexRange::from_begin_end(name_start, name_end);
+    }
+  }
+
+  return std::nullopt;
 }
 
-static std::optional<int64_t> button_template_variable_being_typed(const Button *but,
-                                                                   const HandleButtonData *data)
-{
-  if (but->type != ButtonType::Text || but->rnaprop == nullptr ||
-      (RNA_property_flag(but->rnaprop) & PROP_PATH_SUPPORTS_TEMPLATES) == 0 ||
-      data->text_edit.edit_string == nullptr)
-  {
-    return std::nullopt;
-  }
-
-  const PropertySubType subtype = RNA_property_subtype(but->rnaprop);
-  if (!ELEM(subtype, PROP_FILEPATH, PROP_DIRPATH, PROP_FILENAME, PROP_NONE)) {
-    return std::nullopt;
-  }
-
-  const StringRefNull text = data->text_edit.edit_string;
-
-  if (but->pos != int(text.size())) {
-    return std::nullopt;
-  }
-
-  return template_variable_open_token_start(text);
-}
-
-static void button_edit_template_variable_hint_refresh(bContext *C,
-                                                       Button *but,
-                                                       HandleButtonData *data,
-                                                       const int64_t token_start)
+/**
+ * Faded inline completion hint (like #button_edit_unit_hint_refresh) for a path-template
+ * `{variable_name}` expression the cursor is currently positioned in, mirroring whatever match
+ * is highlighted in the dropdown popup (see #prop_path_template_variable_search_set). Drawn in
+ * place of whatever real characters (if any) come after the cursor up to the end of the
+ * expression, so it previews exactly what accepting the highlighted match would produce.
+ */
+static void button_edit_template_variable_hint_refresh(Button *but, HandleButtonData *data)
 {
   data->text_edit_unit_hint.clear();
 
-  const StringRefNull text = data->text_edit.edit_string;
-  const StringRef typed = text.substr(token_start + 1);
-
-  const std::optional<bke::path_templates::VariableMap> variables =
-      BKE_build_template_variables_for_prop(C, &but->rnapoin, but->rnaprop);
-  if (!variables.has_value()) {
+  if (but->type != ButtonType::SearchMenu || but->rnaprop == nullptr ||
+      (RNA_property_flag(but->rnaprop) & PROP_PATH_SUPPORTS_TEMPLATES) == 0 ||
+      data->text_edit.edit_string == nullptr || data->searchbox == nullptr)
+  {
     return;
   }
 
-  Vector<StringRefNull> names = variables->names();
-  std::sort(names.begin(), names.end());
+  const StringRefNull text = data->text_edit.edit_string;
+  const int64_t cursor = but->pos;
 
-  for (const StringRefNull &name : names) {
-    if (name.size() > typed.size() && name.startswith(typed)) {
-      data->text_edit_unit_hint = name.substr(typed.size());
-      data->text_edit_unit_hint += "}";
-      break;
-    }
+  const std::optional<IndexRange> span = template_variable_span_at_cursor(text, cursor);
+  if (!span.has_value()) {
+    return;
   }
+
+  /* Mirror whatever is currently highlighted in the popup, rather than independently picking a
+   * match: keeps the ghost text and the popup's selection in sync. */
+  const char *active_item = searchbox_active_item_name(data->searchbox);
+  if (active_item == nullptr) {
+    return;
+  }
+
+  /* Items are stored (and displayed) as the full "{name}" expression; recover the bare name. */
+  const StringRefNull item_text = active_item;
+  if (item_text.size() < 2 || item_text[0] != '{' || item_text.back() != '}') {
+    return;
+  }
+  const StringRef name = item_text.substr(1, item_text.size() - 2);
+
+  const StringRef typed = text.substr(span->start(), cursor - span->start());
+  if (name.size() <= typed.size() || !name.startswith(typed)) {
+    return;
+  }
+
+  /* Absorb an already-present closing '}' (see #prop_path_template_variable_search_update_fn):
+   * the hint's own trailing "}" (added below) takes its place. */
+  int64_t replace_end = span->one_after_last();
+  if (replace_end < int64_t(text.size()) && text[replace_end] == '}') {
+    replace_end += 1;
+  }
+
+  data->text_edit_unit_hint = name.substr(typed.size());
+  data->text_edit_unit_hint += "}";
+  data->text_edit_hint_replace_start = cursor;
+  data->text_edit_hint_replace_end = replace_end;
 }
 
 static void button_edit_hint_refresh(bContext *C, Button *but, HandleButtonData *data)
 {
-  if (const std::optional<int64_t> token_start = button_template_variable_being_typed(but, data)) {
-    button_edit_template_variable_hint_refresh(C, but, data, *token_start);
-  }
-  else {
-    button_edit_unit_hint_refresh(C, but, data);
+  button_edit_unit_hint_refresh(C, but, data);
+  if (data->text_edit_unit_hint.empty()) {
+    button_edit_template_variable_hint_refresh(but, data);
   }
 }
 
@@ -4234,6 +4251,23 @@ static eStrCursorJumpType textedit_jump_type_from_event(const wmEvent *event)
   return STRCUR_JUMP_NONE;
 }
 
+static bool searchbox_try_apply_and_continue(bContext *C, Button *but, HandleButtonData *data)
+{
+  if (!data->searchbox || but->type != ButtonType::SearchMenu) {
+    return false;
+  }
+  const ButtonSearch *search_but = static_cast<const ButtonSearch *>(but);
+  if (!search_but->keep_editing_after_apply || !searchbox_has_active_item(data->searchbox)) {
+    return false;
+  }
+
+  searchbox_apply(but, data->searchbox);
+  but->changed = true;
+  searchbox_update(C, data->searchbox, but, true);
+
+  return true;
+}
+
 static int do_but_textedit(
     bContext *C, Block *block, Button *but, HandleButtonData *data, const wmEvent *event)
 {
@@ -4267,6 +4301,8 @@ static int do_but_textedit(
 #else
         searchbox_event(C, data->searchbox, but, data->region, event);
 #endif
+        button_edit_hint_refresh(C, but, data);
+        ED_region_tag_redraw(data->region);
       }
       do_but_extra_operator_icons_mousemove(but, data, event);
 
@@ -4385,7 +4421,12 @@ static int do_but_textedit(
         /* if we allow activation on key press,
          * it gives problems launching operators #35713. */
         if (event->val == KM_RELEASE) {
-          button_activate_state(C, but, BUTTON_STATE_EXIT);
+          if (searchbox_try_apply_and_continue(C, but, data)) {
+            button_edit_hint_refresh(C, but, data);
+          }
+          else {
+            button_activate_state(C, but, BUTTON_STATE_EXIT);
+          }
           retval = WM_UI_HANDLER_BREAK;
         }
       }
@@ -4437,6 +4478,8 @@ static int do_but_textedit(
           mouse_motion_keynav_init(&data->searchbox_keynav_state, event);
 #endif
           searchbox_event(C, data->searchbox, but, data->region, event);
+          button_edit_hint_refresh(C, but, data);
+          ED_region_tag_redraw(data->region);
           break;
         }
         if (textbox && event->type == EVT_DOWNARROWKEY) {
@@ -4464,6 +4507,8 @@ static int do_but_textedit(
           mouse_motion_keynav_init(&data->searchbox_keynav_state, event);
 #endif
           searchbox_event(C, data->searchbox, but, data->region, event);
+          button_edit_hint_refresh(C, but, data);
+          ED_region_tag_redraw(data->region);
           break;
         }
         if (textbox && event->type == EVT_UPARROWKEY) {
@@ -4490,6 +4535,9 @@ static int do_but_textedit(
           char utf8_buf[2] = "\n";
           textedit_insert_buf(but, text_edit, utf8_buf, 1);
           but->selsta = but->selend = but->pos;
+          changed = true;
+        }
+        else if (searchbox_try_apply_and_continue(C, but, data)) {
           changed = true;
         }
         else {
@@ -4654,8 +4702,6 @@ static int do_but_textedit(
       textedit_undo_push(text_edit.undo_stack_text, text_edit.edit_string, but->pos);
     }
 
-    button_edit_hint_refresh(C, but, data);
-
     /* only do live update when but flag request it (BUT_TEXTEDIT_UPDATE). */
     if (update && data->interactive) {
       apply_but(C, block, but, data, true);
@@ -4668,6 +4714,10 @@ static int do_but_textedit(
     if (data->searchbox) {
       searchbox_update(C, data->searchbox, but, true); /* true = reset */
     }
+
+    /* After the search box (if any), since the template-variable hint mirrors its current
+     * highlight -- see #button_edit_template_variable_hint_refresh. */
+    button_edit_hint_refresh(C, but, data);
   }
 
   if (changed || (retval == WM_UI_HANDLER_BREAK)) {

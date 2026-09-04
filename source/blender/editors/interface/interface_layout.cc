@@ -1118,6 +1118,83 @@ static void keymap_but_cb(bContext * /*C*/, void *but_v, void * /*key_v*/)
       &but->rnapoin, "hyper", (hotkey_but->modifier_key & KM_HYPER) ? KM_MOD_HELD : KM_NOTHING);
 }
 
+struct PathTemplateVariableSearchArg {
+  PointerRNA rnapoin;
+  PropertyRNA *rnaprop;
+};
+
+static void prop_path_template_variable_search_arg_free_fn(void *ptr)
+{
+  MEM_delete(static_cast<PathTemplateVariableSearchArg *>(ptr));
+}
+
+static void prop_path_template_variable_search_update_fn(
+    const bContext *C, void *arg, const char *str, SearchItems *items, bool /*is_first*/)
+{
+  PathTemplateVariableSearchArg *search_arg = static_cast<PathTemplateVariableSearchArg *>(arg);
+
+  const StringRefNull text = str;
+  const int64_t cursor = search_items_cursor_pos(items);
+
+  const std::optional<IndexRange> span = template_variable_span_at_cursor(text, cursor);
+  if (!span.has_value()) {
+    return;
+  }
+
+  /* Filter by what's typed so far (up to the cursor); a full match replaces the whole existing
+   * name, not just that prefix. */
+  const StringRef typed = text.substr(span->start(), cursor - span->start());
+
+  const std::optional<bke::path_templates::VariableMap> variables =
+      BKE_build_template_variables_for_prop(C, &search_arg->rnapoin, search_arg->rnaprop);
+  if (!variables.has_value()) {
+    return;
+  }
+
+  Vector<StringRefNull> names = variables->names();
+  std::sort(names.begin(), names.end());
+
+  const int64_t replace_start = span->start() - 1;
+  BLI_assert(text[replace_start] == '{');
+  int64_t replace_end = span->one_after_last();
+  if (replace_end < int64_t(text.size()) && text[replace_end] == '}') {
+    replace_end += 1;
+  }
+
+  for (const StringRefNull &name : names) {
+    if (!name.startswith(typed)) {
+      continue;
+    }
+    const std::string item_text = "{" + name + "}";
+    if (!search_item_add(items, item_text, nullptr, ICON_NONE, 0, 0)) {
+      break;
+    }
+  }
+
+  search_items_set_replace_range(items, int(replace_start), int(replace_end));
+}
+
+static void prop_path_template_variable_search_set(Button *but)
+{
+  PathTemplateVariableSearchArg *search_arg = MEM_new<PathTemplateVariableSearchArg>(__func__);
+  search_arg->rnapoin = but->rnapoin;
+  search_arg->rnaprop = but->rnaprop;
+
+  button_func_search_set_results_are_suggestions(but, true);
+  button_func_search_set(but,
+                         nullptr,
+                         prop_path_template_variable_search_update_fn,
+                         search_arg,
+                         true,
+                         prop_path_template_variable_search_arg_free_fn,
+                         nullptr,
+                         nullptr);
+
+  ButtonSearch *search_but = static_cast<ButtonSearch *>(but);
+  search_but->keep_editing_after_apply = true;
+  search_but->hide_when_no_results = true;
+}
+
 /**
  * Create label + button for RNA property
  *
@@ -1199,6 +1276,14 @@ static Button *item_with_label(Layout *layout,
   const PropertyType type = RNA_property_type(prop);
   const PropertySubType subtype = RNA_property_subtype(prop);
 
+  const bool is_template_variable_search_candidate =
+      (type == PROP_STRING) &&
+      ELEM(subtype, PROP_FILEPATH, PROP_DIRPATH, PROP_FILENAME, PROP_NONE) &&
+      ((RNA_property_flag(prop) & PROP_PATH_SUPPORTS_TEMPLATES) != 0);
+  const std::optional<ButtonType> effective_button_type_override =
+      is_template_variable_search_candidate ? std::make_optional(ButtonType::SearchMenu) :
+                                              button_type_override;
+
   Button *but;
   if (ELEM(subtype, PROP_FILEPATH, PROP_DIRPATH)) {
     block_layout_set_current(block, &sub->row(true));
@@ -1212,7 +1297,7 @@ static Button *item_with_label(Layout *layout,
                         y,
                         prop_but_width - UI_UNIT_X,
                         h,
-                        button_type_override);
+                        effective_button_type_override);
 
     if (but != nullptr) {
       if (ELEM(subtype, PROP_FILEPATH, PROP_DIRPATH)) {
@@ -1277,31 +1362,40 @@ static Button *item_with_label(Layout *layout,
     const std::optional<StringRefNull> str = (type == PROP_ENUM && !(flag & ITEM_R_ICON_ONLY)) ?
                                                  std::nullopt :
                                                  std::make_optional<StringRefNull>("");
-    but = uiDefAutoButR(
-        block, ptr, prop, index, str, icon, x, y, prop_but_width, h, button_type_override);
+    but = uiDefAutoButR(block,
+                        ptr,
+                        prop,
+                        index,
+                        str,
+                        icon,
+                        x,
+                        y,
+                        prop_but_width,
+                        h,
+                        effective_button_type_override);
     if (flag & ITEM_R_TEXT_RIGHT) {
       but->drawflag |= BUT_TEXT_RIGHT;
       but->drawflag &= ~BUT_TEXT_LEFT;
     }
   }
 
-  /* Highlight in red on path template validity errors. */
-  if (but != nullptr && ELEM(but->type, ButtonType::Text)) {
-    /* We include PROP_NONE here because some plain string properties are used
-     * as parts of paths. For example, the sub-paths in the compositor's File
-     * Output node. */
-    if (ELEM(subtype, PROP_FILEPATH, PROP_DIRPATH, PROP_FILENAME, PROP_NONE)) {
-      if ((RNA_property_flag(prop) & PROP_PATH_SUPPORTS_TEMPLATES) != 0) {
-        const std::string path = RNA_property_string_get(ptr, prop);
-        if (BKE_path_contains_template_syntax(path)) {
-          const std::optional<bke::path_templates::VariableMap> variables =
-              BKE_build_template_variables_for_prop(
-                  static_cast<const bContext *>(block->evil_C), ptr, prop);
-          BLI_assert(variables.has_value());
+  if (but != nullptr && is_template_variable_search_candidate) {
+    BLI_assert(but->type == ButtonType::SearchMenu);
+    prop_path_template_variable_search_set(but);
+  }
 
-          if (!BKE_path_validate_template(path, *variables).is_empty()) {
-            button_flag_enable(but, BUT_REDALERT);
-          }
+  /* Highlight in red on path template validity errors. */
+  if (but != nullptr && ELEM(but->type, ButtonType::Text, ButtonType::SearchMenu)) {
+    if (is_template_variable_search_candidate) {
+      const std::string path = RNA_property_string_get(ptr, prop);
+      if (BKE_path_contains_template_syntax(path)) {
+        const std::optional<bke::path_templates::VariableMap> variables =
+            BKE_build_template_variables_for_prop(
+                static_cast<const bContext *>(block->evil_C), ptr, prop);
+        BLI_assert(variables.has_value());
+
+        if (!BKE_path_validate_template(path, *variables).is_empty()) {
+          button_flag_enable(but, BUT_REDALERT);
         }
       }
     }
