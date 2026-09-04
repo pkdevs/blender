@@ -215,6 +215,41 @@ def _absolute_path(filepath: str, blend_filepath: Path):
         return Path(filepath)
 
 
+def _find_image_sequence_dependencies(r_dependencies: set[DependencyFile],
+                                      data: bpy.types.Image,
+                                      blend_filepath: Path,
+                                      asset_library_root: Path):
+
+    # See #BLI_path_sequence_decode and #BLI_path_extension_or_end
+    path = _absolute_path(data.filepath, blend_filepath)
+    filename = path.name
+    filename_split = os.path.splitext(filename)
+    found_number = False
+    number_end = number_begin = len(filename_split[0])
+    for char in reversed(filename_split[0]):
+        if char.isdigit():
+            found_number = True
+            number_begin = number_begin - 1
+        else:
+            if found_number:
+                break
+            number_end = number_end - 1
+            number_begin = number_begin - 1
+    if not found_number:
+        number_end = number_begin = len(filename_split[0])
+    head = filename[:number_begin]
+    tail = filename[number_end:]
+    sequence_format = re.compile("{}\\d*{}".format(re.escape(head), re.escape(tail)))
+    directory = path.parent
+
+    for file in directory.iterdir():
+        if not file.is_file():
+            continue
+        if sequence_format.search(file.name):
+            dependency = DependencyFile(file, None)
+            r_dependencies.add(dependency)
+
+
 def _find_dependencies_recursive_impl(
         visited_pointers: set[any],
         r_dependencies: set[DependencyFile],
@@ -226,8 +261,11 @@ def _find_dependencies_recursive_impl(
         return
 
     if isinstance(data, (bpy.types.Image, bpy.types.Sound, bpy.types.VectorFont)) and data.filepath:
-        dependency = DependencyFile(_absolute_path(data.filepath, blend_filepath), None)
-        r_dependencies.add(dependency)
+        if isinstance(data, bpy.types.Image) and data.source == 'SEQUENCE':
+            _find_image_sequence_dependencies(r_dependencies, data, blend_filepath, asset_library_root)
+        else:
+            dependency = DependencyFile(_absolute_path(data.filepath, blend_filepath), None)
+            r_dependencies.add(dependency)
 
     if isinstance(data, bpy.types.ID) and data.id_data and data.id_data.library and data.id_data.library.filepath:
         dependency = DependencyFile(
