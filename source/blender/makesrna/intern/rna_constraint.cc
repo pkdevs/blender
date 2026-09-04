@@ -3441,6 +3441,7 @@ static void rna_def_constraint_pivot(BlenderRNA *brna)
   prop = RNA_def_property(srna, "rotation_range", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "rotAxis");
   RNA_def_property_enum_items(prop, pivot_rotAxis_items);
+  RNA_def_property_enum_default(prop, NX);
   RNA_def_property_ui_text(
       prop, "Enabled Rotation Range", "Rotation range on which pivoting should occur");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
