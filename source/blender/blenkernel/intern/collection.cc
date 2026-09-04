@@ -418,7 +418,7 @@ static void collection_blend_read_after_liblink(BlendLibReader * /*reader*/, ID 
   /* Restore the collection importer's archive library by using the first object's library. */
   if (collection->importer) {
     if (!collection->gobject.is_empty()) {
-      const CollectionObject *cob = static_cast<CollectionObject *>(collection->gobject.first);
+      const CollectionObject *cob = collection->gobject.first_as<CollectionObject>();
       Library *lib = cob->ob->id.lib;
 
       BLI_assert((lib->flag & (LIBRARY_FLAG_IS_ARCHIVE | LIBRARY_FLAG_IS_EXTERNAL)) != 0);
