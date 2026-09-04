@@ -773,6 +773,12 @@ static void movieclip_cache_init_imbuf(MovieClip *clip)
                                   moviecache_prioritydeleter);
 
   clip->cache->imbufcache = imbufcache;
+  clip->cache->sequence_offset = -1;
+  if (clip->source == MCLIP_SRC_SEQUENCE) {
+    ushort numlen;
+    BLI_path_sequence_decode(clip->filepath, nullptr, 0, nullptr, 0, &numlen);
+    clip->cache->is_still_sequence = (numlen == 0);
+  }
 }
 
 static bool put_imbuf_cache(
@@ -793,12 +799,6 @@ static bool put_imbuf_cache(
       clip->cache->user_count = 1;
 
       movieclip_cache_init_imbuf(clip);
-      clip->cache->sequence_offset = -1;
-      if (clip->source == MCLIP_SRC_SEQUENCE) {
-        ushort numlen;
-        BLI_path_sequence_decode(clip->filepath, nullptr, 0, nullptr, 0, &numlen);
-        clip->cache->is_still_sequence = (numlen == 0);
-      }
 
       /* If this is an evaluated copy, also add the cache to the original. */
       if (clip_orig != clip && clip_orig->cache == nullptr) {
