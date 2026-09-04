@@ -366,7 +366,7 @@ static bool parent_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
   }
 
   if (!allow_parenting_without_modifier_key(space_outliner)) {
-    if ((event->modifier & KM_SHIFT) == 0) {
+    if (event->modifier != KM_SHIFT) {
       return false;
     }
   }
@@ -1243,7 +1243,7 @@ static bool collection_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event
   bool changed = outliner_flag_set(*space_outliner, TSE_HIGHLIGHTED_ANY | TSE_DRAG_ANY, false);
 
   CollectionDrop data;
-  if (((event->modifier & KM_SHIFT) == 0) && collection_drop_init(C, drag, event->xy, &data)) {
+  if (((event->modifier != KM_SHIFT)) && collection_drop_init(C, drag, event->xy, &data)) {
     TreeElement *te = data.te;
     TreeStoreElem *tselem = TREESTORE(te);
     switch (data.insert_type) {
@@ -1281,8 +1281,8 @@ static std::string collection_drop_tooltip(bContext *C,
   const wmEvent *event = win ? win->runtime->eventstate : nullptr;
 
   CollectionDrop data;
-  if (event && ((event->modifier & KM_SHIFT) == 0) && collection_drop_init(C, drag, xy, &data)) {
-    const bool is_link = !data.from || (event->modifier & KM_CTRL);
+  if (event && collection_drop_init(C, drag, xy, &data)) {
+    const bool is_link = !data.from || (event->modifier == KM_CTRL);
 
     /* Test if we are moving within same parent collection. */
     bool same_level = false;
@@ -1325,13 +1325,29 @@ static std::string collection_drop_tooltip(bContext *C,
         wmDragID *drag_id = drag->ids.first();
         const bool is_object = (GS(drag_id->id->name) == ID_OB);
         if (is_object) {
-          return TIP_("Move inside collection (Ctrl to link, Shift to parent)");
+          if (event->modifier & (KM_SHIFT | KM_CTRL)) {
+            return TIP_("Move parent object inside collection");
+          }
+          return TIP_(
+              "Move inside collection (Ctrl to link, Shift to parent,\n Ctrl + Shift to move "
+              "only parent)");
         }
         return TIP_("Move inside collection (Ctrl to link)");
       }
     }
   }
   return {};
+}
+
+static void find_child_objects_recursive(bContext *C, Object *ob, Vector<Object *> &child_objects)
+{
+  CTX_DATA_BEGIN (C, Base *, base, selectable_bases) {
+    if (base->object->parent == ob) {
+      child_objects.append(base->object);
+      find_child_objects_recursive(C, base->object, child_objects);
+    }
+  }
+  CTX_DATA_END;
 }
 
 static wmOperatorStatus collection_drop_invoke(bContext *C,
@@ -1382,7 +1398,7 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
 
   for (wmDragID &drag_id : drag->ids) {
     /* Ctrl enables linking, so we don't need a from collection then. */
-    Collection *from = (event->modifier & KM_CTRL) ?
+    Collection *from = (event->modifier == KM_CTRL) ?
                            nullptr :
                            collection_parent_from_ID(drag_id.from_parent);
 
@@ -1392,6 +1408,13 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
 
       if (from) {
         BKE_collection_object_move(bmain, scene, data.to, from, object);
+        if ((event->modifier & (KM_CTRL | KM_SHIFT)) == 0) {
+          Vector<Object *> child_objects;
+          find_child_objects_recursive(C, object, child_objects);
+          for (Object *child_ob : child_objects) {
+            BKE_collection_object_move(bmain, scene, data.to, from, child_ob);
+          }
+        }
       }
       else {
         BKE_collection_object_add(bmain, data.to, object);
