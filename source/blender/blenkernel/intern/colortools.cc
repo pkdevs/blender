@@ -1508,20 +1508,19 @@ int BKE_curvemapping_num_channels(const CurveMapping *cumap)
 void BKE_curvemapping_blend_write(BlendWriter *writer, const CurveMapping *cumap)
 {
   writer->write_struct(cumap, [](BlendStructWriter &struct_writer) {
-    struct_writer.reset_runtime_fields<CurveMapping>([&](CurveMapping &cumap) {
-      cumap.changed_timestamp = 0;
-      for (const int i : IndexRange(CM_TOT)) {
-        cumap.cm[i].range = 0;
-        cumap.cm[i].mintable = 0;
-        cumap.cm[i].maxtable = 0;
-        zero_v2(cumap.cm[i].ext_in);
-        zero_v2(cumap.cm[i].ext_out);
-        cumap.cm[i].table = nullptr;
-        cumap.cm[i].premultable = nullptr;
-        zero_v2(cumap.cm[i].premul_ext_in);
-        zero_v2(cumap.cm[i].premul_ext_out);
-      }
-    });
+    CurveMapping &shallow_cumap = struct_writer.shallow_copy_to_write<CurveMapping>();
+    shallow_cumap.changed_timestamp = 0;
+    for (const int i : IndexRange(CM_TOT)) {
+      shallow_cumap.cm[i].range = 0;
+      shallow_cumap.cm[i].mintable = 0;
+      shallow_cumap.cm[i].maxtable = 0;
+      zero_v2(shallow_cumap.cm[i].ext_in);
+      zero_v2(shallow_cumap.cm[i].ext_out);
+      shallow_cumap.cm[i].table = nullptr;
+      shallow_cumap.cm[i].premultable = nullptr;
+      zero_v2(shallow_cumap.cm[i].premul_ext_in);
+      zero_v2(shallow_cumap.cm[i].premul_ext_out);
+    }
   });
   BKE_curvemapping_curves_blend_write(writer, cumap);
 }

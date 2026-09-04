@@ -218,25 +218,24 @@ static void screen_blend_write(BlendWriter *writer, ID *id, const void *id_addre
       id_address,
       screen,
       [&](BlendStructWriter &struct_writer) {
-        struct_writer.reset_runtime_fields<bScreen>([&](bScreen &screen) {
-          if (!writer->is_undo()) {
-            screen.id.session_uid = 0;
-            screen.id.recalc = 0;
-            screen.id.recalc_up_to_undo_push = 0;
-            screen.id.recalc_after_undo_push = 0;
-          }
-          screen.do_draw = 0;
-          screen.do_refresh = 0;
-          screen.do_draw_gesture = 0;
-          screen.do_draw_paintcursor = 0;
-          screen.do_draw_drag = 0;
-          screen.skip_handling = 0;
-          screen.scrubbing = 0;
-          screen.active_region = nullptr;
-          screen.animtimer = nullptr;
-          screen.context = nullptr;
-          screen.tool_tip = nullptr;
-        });
+        bScreen &shallow_screen = struct_writer.shallow_copy_to_write<bScreen>();
+        if (!writer->is_undo()) {
+          shallow_screen.id.session_uid = 0;
+          shallow_screen.id.recalc = 0;
+          shallow_screen.id.recalc_up_to_undo_push = 0;
+          shallow_screen.id.recalc_after_undo_push = 0;
+        }
+        shallow_screen.do_draw = 0;
+        shallow_screen.do_refresh = 0;
+        shallow_screen.do_draw_gesture = 0;
+        shallow_screen.do_draw_paintcursor = 0;
+        shallow_screen.do_draw_drag = 0;
+        shallow_screen.skip_handling = 0;
+        shallow_screen.scrubbing = 0;
+        shallow_screen.active_region = nullptr;
+        shallow_screen.animtimer = nullptr;
+        shallow_screen.context = nullptr;
+        shallow_screen.tool_tip = nullptr;
       });
   BKE_id_blend_write(writer, &screen->id);
 
@@ -1421,14 +1420,14 @@ static void write_region(BlendWriter *writer, ARegion *region, int spacetype)
         if (region->regiontype == RGN_TYPE_WINDOW) {
           RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
           writer->write_struct(rv3d, [](BlendStructWriter &struct_writer) {
-            struct_writer.reset_runtime_fields<RegionView3D>(
-                [&](RegionView3D &rv3d) { zero_regionview3d_runtime_fields(rv3d); });
+            RegionView3D &shallow_rv3d = struct_writer.shallow_copy_to_write<RegionView3D>();
+            zero_regionview3d_runtime_fields(shallow_rv3d);
           });
 
           if (rv3d->localvd) {
             writer->write_struct(rv3d->localvd, [](BlendStructWriter &struct_writer) {
-              struct_writer.reset_runtime_fields<RegionView3D>(
-                  [&](RegionView3D &rv3d) { zero_regionview3d_runtime_fields(rv3d); });
+              RegionView3D &shallow_rv3d = struct_writer.shallow_copy_to_write<RegionView3D>();
+              zero_regionview3d_runtime_fields(shallow_rv3d);
             });
           }
           if (rv3d->clipbb) {
@@ -1485,10 +1484,9 @@ static void write_area(BlendWriter *writer, ScrArea *area)
 
     for (uiPreview &ui_preview : region.ui_previews) {
       writer->write_struct(&ui_preview, [](BlendStructWriter &struct_writer) {
-        struct_writer.reset_runtime_fields<uiPreview>([&](uiPreview &ui_preview) {
-          ui_preview.tag = {};
-          ui_preview.id_session_uid = 0;
-        });
+        uiPreview &shallow_ui_preview = struct_writer.shallow_copy_to_write<uiPreview>();
+        shallow_ui_preview.tag = {};
+        shallow_ui_preview.id_session_uid = 0;
       });
     }
 
@@ -1521,16 +1519,15 @@ void BKE_screen_area_map_blend_write(BlendWriter *writer, ScrAreaMap *area_map)
     area.butspacetype = area.spacetype; /* Just for compatibility, will be reset below. */
 
     writer->write_struct(&area, [](BlendStructWriter &struct_writer) {
-      struct_writer.reset_runtime_fields<ScrArea>([&](ScrArea &area) {
-        area.type = nullptr;
-        area.do_refresh = 0;
-        area.region_active_win = -1;
-        area.flag &= ~(AREA_FLAG_REGION_SIZE_UPDATE | AREA_FLAG_ACTIVE_TOOL_UPDATE |
-                       AREA_FLAG_ACTIONZONES_UPDATE);
-        area.handlers.clear_no_delete();
-        area.actionzones.clear_no_delete();
-        area.runtime = {};
-      });
+      ScrArea &shallow_area = struct_writer.shallow_copy_to_write<ScrArea>();
+      shallow_area.type = nullptr;
+      shallow_area.do_refresh = 0;
+      shallow_area.region_active_win = -1;
+      shallow_area.flag &= ~(AREA_FLAG_REGION_SIZE_UPDATE | AREA_FLAG_ACTIVE_TOOL_UPDATE |
+                             AREA_FLAG_ACTIONZONES_UPDATE);
+      shallow_area.handlers.clear_no_delete();
+      shallow_area.actionzones.clear_no_delete();
+      shallow_area.runtime = {};
     });
 
     writer->write_struct(area.global);

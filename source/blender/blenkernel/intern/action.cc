@@ -313,14 +313,13 @@ static void action_foreach_id(ID *id, LibraryForeachIDData *data)
 static void write_channelbag(BlendWriter *writer, animrig::Channelbag &channelbag)
 {
   writer->write_struct_cast<ActionChannelbag>(&channelbag, [](BlendStructWriter &struct_writer) {
-    struct_writer.reset_runtime_fields<ActionChannelbag>([&](ActionChannelbag &bag) {
-      if (bag.group_array_num == 0) {
-        bag.group_array = nullptr;
-      }
-      if (bag.fcurve_array_num == 0) {
-        bag.fcurve_array = nullptr;
-      }
-    });
+    ActionChannelbag &shallow_bag = struct_writer.shallow_copy_to_write<ActionChannelbag>();
+    if (shallow_bag.group_array_num == 0) {
+      shallow_bag.group_array = nullptr;
+    }
+    if (shallow_bag.fcurve_array_num == 0) {
+      shallow_bag.fcurve_array = nullptr;
+    }
   });
 
   Span<bActionGroup *> groups = channelbag.channel_groups();
@@ -333,7 +332,8 @@ static void write_channelbag(BlendWriter *writer, animrig::Channelbag &channelba
   writer->write_pointer_array(fcurves.size(), fcurves.data());
   for (FCurve *fcurve : fcurves) {
     writer->write_struct(fcurve, [](BlendStructWriter &struct_writer) {
-      struct_writer.runtime_ptr(offsetof(FCurve, runtime));
+      FCurve &shallow_fcurve = struct_writer.shallow_copy_to_write<FCurve>();
+      shallow_fcurve.runtime = nullptr;
     });
     BKE_fcurve_blend_write_data(writer, fcurve);
   }
@@ -1914,8 +1914,8 @@ void BKE_pose_blend_write(BlendWriter *writer, bPose *pose)
     bke::motionpath::blend_write(writer, chan.mpath);
 
     writer->write_struct(&chan, [](BlendStructWriter &struct_writer) {
-      struct_writer.reset_runtime_fields<bPoseChannel>(
-          [&](bPoseChannel &chan) { chan.runtime = {}; });
+      bPoseChannel &shallow_chan = struct_writer.shallow_copy_to_write<bPoseChannel>();
+      shallow_chan.runtime = {};
     });
   }
 
@@ -1934,7 +1934,8 @@ void BKE_pose_blend_write(BlendWriter *writer, bPose *pose)
 
   /* Write this pose */
   writer->write_struct(pose, [](BlendStructWriter &struct_writer) {
-    struct_writer.runtime_ptr(offsetof(bPose, runtime));
+    bPose &shallow_pose = struct_writer.shallow_copy_to_write<bPose>();
+    shallow_pose.runtime = nullptr;
   });
 }
 

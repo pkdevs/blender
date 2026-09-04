@@ -397,8 +397,8 @@ static void console_space_blend_write(BlendWriter *writer, SpaceLink *sl)
     writer->write_char_array(size_t(cl.len) + 1, cl.line);
   }
   writer->write_struct_cast<SpaceConsole>(sl, [](BlendStructWriter &struct_writer) {
-    struct_writer.reset_runtime_fields<SpaceConsole>(
-        [&](SpaceConsole &con) { con.runtime = nullptr; });
+    SpaceConsole &shallow_con = struct_writer.shallow_copy_to_write<SpaceConsole>();
+    shallow_con.runtime = nullptr;
   });
 }
 

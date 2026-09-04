@@ -518,8 +518,8 @@ static void userpref_blend_read_data(BlendDataReader * /*reader*/, SpaceLink *sl
 static void userpref_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
   writer->write_struct_cast<SpaceUserPref>(sl, [](BlendStructWriter &struct_writer) {
-    struct_writer.reset_runtime_fields<SpaceUserPref>(
-        [&](SpaceUserPref &spref) { spref.runtime = nullptr; });
+    SpaceUserPref &shallow_spref = struct_writer.shallow_copy_to_write<SpaceUserPref>();
+    shallow_spref.runtime = nullptr;
   });
 }
 

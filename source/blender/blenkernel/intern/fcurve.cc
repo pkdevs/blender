@@ -2649,7 +2649,8 @@ void BKE_fcurve_blend_write_data(BlendWriter *writer, FCurve *fcu)
 void BKE_fcurve_blend_write_listbase(BlendWriter *writer, ListBaseT<FCurve> *fcurves)
 {
   writer->write_struct_list(fcurves, [](BlendStructWriter &struct_writer) {
-    struct_writer.runtime_ptr(offsetof(FCurve, runtime));
+    FCurve &shallow_fcurve = struct_writer.shallow_copy_to_write<FCurve>();
+    shallow_fcurve.runtime = nullptr;
   });
   for (FCurve &fcu : *fcurves) {
     BKE_fcurve_blend_write_data(writer, &fcu);

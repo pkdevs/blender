@@ -72,18 +72,14 @@ class BlendStructWriter {
   }
 
   /**
-   * Mark the pointer at the given offset as purely runtime. That means that it will be zeroed.
+   * Access the shallow copy of the struct that will be written. Can be used to reset runtime
+   * fields to keep .blend files more stable.
    */
-  void runtime_ptr(int64_t offset);
-
-  /**
-   * Call when setting certain runtime fields to zero in order to keep .blend files more stable.
-   */
-  template<typename T, typename Fn> void reset_runtime_fields(Fn &&fn)
+  template<typename T> T &shallow_copy_to_write()
   {
     BLI_assert(struct_nr_ == dna::sdna_struct_id_get<T>());
     T &data = *reinterpret_cast<T *>(data_.data());
-    fn(data);
+    return data;
   }
 
   /**
@@ -268,15 +264,14 @@ struct BlendWriter {
         id_address,
         id,
         [&](BlendStructWriter &struct_writer) {
-          struct_writer.reset_runtime_fields<T>([&](T &data) {
-            ID &id = *reinterpret_cast<ID *>(&data);
-            if (!this->is_undo()) {
-              id.session_uid = 0;
-              id.recalc = 0;
-              id.recalc_up_to_undo_push = 0;
-              id.recalc_after_undo_push = 0;
-            }
-          });
+          T &shallow_id = struct_writer.shallow_copy_to_write<T>();
+          ID &id = *reinterpret_cast<ID *>(&shallow_id);
+          if (!this->is_undo()) {
+            id.session_uid = 0;
+            id.recalc = 0;
+            id.recalc_up_to_undo_push = 0;
+            id.recalc_after_undo_push = 0;
+          }
           if (fn) {
             fn(struct_writer);
           }

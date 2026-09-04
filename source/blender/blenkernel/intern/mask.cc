@@ -105,7 +105,8 @@ static void mask_blend_write(BlendWriter *writer, ID *id, const void *id_address
   Mask *mask = id_cast<Mask *>(id);
 
   writer->write_id_struct(id_address, mask, [](BlendStructWriter &struct_writer) {
-    struct_writer.reset_runtime_fields<Mask>([&](Mask &mask) { mask.runtime = {}; });
+    Mask &shallow_mask = struct_writer.shallow_copy_to_write<Mask>();
+    shallow_mask.runtime = {};
   });
   BKE_id_blend_write(writer, &mask->id);
 
@@ -116,7 +117,8 @@ static void mask_blend_write(BlendWriter *writer, ID *id, const void *id_address
       int i;
 
       writer->write_struct(&spline, [](BlendStructWriter &struct_writer) {
-        struct_writer.runtime_ptr(offsetof(MaskSpline, runtime));
+        MaskSpline &shallow_spline = struct_writer.shallow_copy_to_write<MaskSpline>();
+        shallow_spline.runtime = nullptr;
       });
       writer->write_struct_array(spline.tot_point, spline.points);
 

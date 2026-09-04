@@ -1088,13 +1088,12 @@ static void buttons_space_blend_read_after_liblink(BlendLibReader * /*reader*/,
 static void buttons_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
   writer->write_struct_cast<SpaceProperties>(sl, [](BlendStructWriter &struct_writer) {
-    struct_writer.reset_runtime_fields<SpaceProperties>([&](SpaceProperties &sbuts) {
-      sbuts.path = nullptr;
-      sbuts.pathflag = 0;
-      sbuts.dataicon = 0;
-      sbuts.texuser = nullptr;
-      sbuts.runtime = nullptr;
-    });
+    SpaceProperties &shallow_sbuts = struct_writer.shallow_copy_to_write<SpaceProperties>();
+    shallow_sbuts.path = nullptr;
+    shallow_sbuts.pathflag = 0;
+    shallow_sbuts.dataicon = 0;
+    shallow_sbuts.texuser = nullptr;
+    shallow_sbuts.runtime = nullptr;
   });
 }
 

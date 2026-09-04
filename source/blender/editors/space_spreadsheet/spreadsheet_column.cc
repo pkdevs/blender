@@ -154,8 +154,8 @@ void spreadsheet_column_free(SpreadsheetColumn *column)
 void spreadsheet_column_blend_write(BlendWriter *writer, const SpreadsheetColumn *column)
 {
   writer->write_struct(column, [](BlendStructWriter &struct_writer) {
-    struct_writer.reset_runtime_fields<SpreadsheetColumn>(
-        [&](SpreadsheetColumn &column) { column.runtime = nullptr; });
+    SpreadsheetColumn &shallow_column = struct_writer.shallow_copy_to_write<SpreadsheetColumn>();
+    shallow_column.runtime = nullptr;
   });
   spreadsheet_column_id_blend_write(writer, column->id);
   writer->write_string(column->display_name);

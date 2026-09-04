@@ -1177,7 +1177,8 @@ static void sequencer_space_blend_read_data(BlendDataReader * /*reader*/, SpaceL
 static void sequencer_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 {
   writer->write_struct_cast<SpaceSeq>(sl, [](BlendStructWriter &struct_writer) {
-    struct_writer.reset_runtime_fields<SpaceSeq>([&](SpaceSeq &sseq) { sseq.runtime = nullptr; });
+    SpaceSeq &shallow_sseq = struct_writer.shallow_copy_to_write<SpaceSeq>();
+    shallow_sseq.runtime = nullptr;
   });
 }
 

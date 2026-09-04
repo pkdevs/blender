@@ -1120,10 +1120,9 @@ static void pixel_subtype_forward_compat(BlendWriter *writer, const bNodeSocket 
   sock_copy->default_value = sock.default_value;
   sock_copy->prop = sock.prop;
   writer->write_struct_at_address(&sock, sock_copy, [](BlendStructWriter &struct_writer) {
-    struct_writer.reset_runtime_fields<bNodeSocket>([](bNodeSocket &sock) {
-      sock.runtime = nullptr;
-      sock.typeinfo = nullptr;
-    });
+    bNodeSocket &shallow_sock = struct_writer.shallow_copy_to_write<bNodeSocket>();
+    shallow_sock.runtime = nullptr;
+    shallow_sock.typeinfo = nullptr;
   });
   sock_copy->default_value = default_value_copy;
   sock_copy->prop = prop_copy;
@@ -1246,8 +1245,9 @@ static void write_node_socket(BlendWriter *writer, const bNodeSocket *sock)
   }
 
   writer->write_struct(sock, [](BlendStructWriter &struct_writer) {
-    struct_writer.runtime_ptr(offsetof(bNodeSocket, runtime));
-    struct_writer.runtime_ptr(offsetof(bNodeSocket, typeinfo));
+    bNodeSocket &shallow_sock = struct_writer.shallow_copy_to_write<bNodeSocket>();
+    shallow_sock.runtime = nullptr;
+    shallow_sock.typeinfo = nullptr;
   });
 
   if (sock->prop) {
@@ -1380,13 +1380,12 @@ void node_tree_blend_write(BlendWriter *writer, bNodeTree *ntree)
     }
 
     writer->write_struct(node, [](BlendStructWriter &struct_writer) {
-      struct_writer.runtime_ptr(offsetof(bNode, runtime));
-      struct_writer.runtime_ptr(offsetof(bNode, typeinfo));
-      struct_writer.reset_runtime_fields<bNode>([&](bNode &node) {
-        if (node.num_panel_states == 0) {
-          node.panel_states_array = nullptr;
-        }
-      });
+      bNode &shallow_node = struct_writer.shallow_copy_to_write<bNode>();
+      shallow_node.runtime = nullptr;
+      shallow_node.typeinfo = nullptr;
+      if (shallow_node.num_panel_states == 0) {
+        shallow_node.panel_states_array = nullptr;
+      }
     });
 
     if (node->prop) {

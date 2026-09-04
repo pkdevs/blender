@@ -121,14 +121,13 @@ static void window_manager_blend_write(BlendWriter *writer, ID *id, const void *
   wm->runtime = nullptr;
 
   writer->write_id_struct(id_address, wm, [](BlendStructWriter &struct_writer) {
-    struct_writer.reset_runtime_fields<wmWindowManager>([&](wmWindowManager &wm) {
-      wm.init_flag = {};
-      wm.op_undo_depth = 0;
-      wm.outliner_sync_select_dirty = {};
-      wm.extensions_updates = {};
-      wm.extensions_blocked = 0;
-      wm.autosave_scheduled = 0;
-    });
+    wmWindowManager &shallow_wm = struct_writer.shallow_copy_to_write<wmWindowManager>();
+    shallow_wm.init_flag = {};
+    shallow_wm.op_undo_depth = 0;
+    shallow_wm.outliner_sync_select_dirty = {};
+    shallow_wm.extensions_updates = {};
+    shallow_wm.extensions_blocked = 0;
+    shallow_wm.autosave_scheduled = 0;
   });
   BKE_id_blend_write(writer, &wm->id);
   write_wm_xr_data(writer, &wm->xr);
@@ -138,18 +137,17 @@ static void window_manager_blend_write(BlendWriter *writer, ID *id, const void *
     win.screen = BKE_workspace_active_screen_get(win.workspace_hook);
 
     writer->write_struct(&win, [](BlendStructWriter &struct_writer) {
-      struct_writer.reset_runtime_fields<wmWindow>([&](wmWindow &win) {
-        win.active = 0;
-        win.grabcursor = 0;
-        win.addmousemove = 0;
-        win.event_queue_check_click = 0;
-        win.event_queue_check_drag = 0;
-        win.event_queue_check_drag_handled = 0;
-        win.event_queue_consecutive_gesture_type = 0;
-        win.event_queue_consecutive_gesture_xy[0] = 0;
-        win.event_queue_consecutive_gesture_xy[1] = 0;
-        win.event_queue_consecutive_gesture_data = nullptr;
-      });
+      wmWindow &shallow_win = struct_writer.shallow_copy_to_write<wmWindow>();
+      shallow_win.active = 0;
+      shallow_win.grabcursor = 0;
+      shallow_win.addmousemove = 0;
+      shallow_win.event_queue_check_click = 0;
+      shallow_win.event_queue_check_drag = 0;
+      shallow_win.event_queue_check_drag_handled = 0;
+      shallow_win.event_queue_consecutive_gesture_type = 0;
+      shallow_win.event_queue_consecutive_gesture_xy[0] = 0;
+      shallow_win.event_queue_consecutive_gesture_xy[1] = 0;
+      shallow_win.event_queue_consecutive_gesture_data = nullptr;
     });
     writer->write_struct(win.workspace_hook);
     writer->write_struct(win.stereo3d_format);

@@ -2492,8 +2492,8 @@ static void write_layer_collections(BlendWriter *writer, ListBaseT<LayerCollecti
 {
   for (LayerCollection &lc : *lb) {
     writer->write_struct(&lc, [](BlendStructWriter &struct_writer) {
-      struct_writer.reset_runtime_fields<LayerCollection>(
-          [&](LayerCollection &lc) { lc.runtime_flag = {}; });
+      LayerCollection &shallow_lc = struct_writer.shallow_copy_to_write<LayerCollection>();
+      shallow_lc.runtime_flag = {};
     });
 
     write_layer_collections(writer, &lc.layer_collections);
@@ -2508,16 +2508,16 @@ void BKE_view_layer_blend_write(BlendWriter *writer,
     BLI_assert(BKE_view_layer_is_synced(*view_layer));
   }
   writer->write_struct(view_layer, [](BlendStructWriter &struct_writer) {
-    struct_writer.reset_runtime_fields<ViewLayer>([&](ViewLayer &view_layer) {
-      view_layer.stats = nullptr;
-      view_layer.runtime = nullptr;
-      view_layer.flag &= ~VIEW_LAYER_OUT_OF_SYNC;
-    });
+    ViewLayer &shallow_view_layer = struct_writer.shallow_copy_to_write<ViewLayer>();
+    shallow_view_layer.stats = nullptr;
+    shallow_view_layer.runtime = nullptr;
+    shallow_view_layer.flag &= ~VIEW_LAYER_OUT_OF_SYNC;
   });
-  writer->write_struct_list(
-      BKE_view_layer_object_bases_get(view_layer), [](BlendStructWriter &struct_writer) {
-        struct_writer.reset_runtime_fields<Base>([&](Base &base) { base.base_orig = nullptr; });
-      });
+  writer->write_struct_list(BKE_view_layer_object_bases_get(view_layer),
+                            [](BlendStructWriter &struct_writer) {
+                              Base &shallow_base = struct_writer.shallow_copy_to_write<Base>();
+                              shallow_base.base_orig = nullptr;
+                            });
 
   if (view_layer->id_properties) {
     IDP_BlendWrite(writer, view_layer->id_properties);
