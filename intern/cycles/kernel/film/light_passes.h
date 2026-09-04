@@ -797,40 +797,13 @@ ccl_device_inline void film_write_background(KernelGlobals kg,
 
 // MARK: - 
 
-/* Debug eval:
-The writer itself is being handed a reservoir whose state is already inconsistent:
-
-total_weight > 0
-reference.object = -1
-reference.prim   = -1 // !!!
-
-So the important invariant: total_weight > 0  =>  valid selected reference
-is being violated before the reservoir reaches the film buffer.
-*/
-ccl_device_inline void film_write_pass_reservoir(
-    KernelGlobals kg,
-    ConstIntegratorState state,
-    ccl_private const Reservoir *reservoir,
-    ccl_global float *ccl_restrict render_buffer,
-    const bool write_prev = false)
+/* Shared serialization for both the spatial ping-pong reservoir passes and
+ * the temporal history pass below. 
+ * Layout is identical, only the destination offset differs. */
+ccl_device_inline void film_write_pass_reservoir_at(ccl_private const Reservoir *reservoir,
+                                                    ccl_global float *ccl_restrict ptr)
 {
-  kernel_assert(kernel_data.integrator.use_restir);
-
-  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
-
-  ccl_global float *ptr = buffer + (write_prev ?
-                                        kernel_data.film.pass_restir_previous_reservoir :
-                                        kernel_data.film.pass_restir_reservoir);
-
   // TODO(weizhen): it is possible to compress the light sample reference.
-
-// // DEBUG ONLY
-// if (reservoir->total_weight > 0.0f) {
-//   printf(
-//       "film_write_pass_reservoir(); FILM INVARIANT: weight>0 => prim=%d flags=%u\n",
-//       reservoir->reference.prim,
-//       reservoir->reference.flags);
-// }
 
   film_overwrite_pass_float(ptr++, (float)reservoir->reference.type);
   film_overwrite_pass_float(ptr++, (float)reservoir->reference.flags);
@@ -842,7 +815,48 @@ ccl_device_inline void film_write_pass_reservoir(
   film_overwrite_pass_float(ptr++, reservoir->reference.param.y);
 
   film_overwrite_pass_float(ptr++, reservoir->total_weight);
-  film_overwrite_pass_float(ptr,   reservoir->luminance);
+  film_overwrite_pass_float(ptr++, reservoir->luminance);
+  film_overwrite_pass_float(ptr,   (float)reservoir->M);
+}
+
+ccl_device_inline void film_write_pass_reservoir(
+    KernelGlobals kg,
+    ConstIntegratorState state,
+    ccl_private const Reservoir *reservoir,
+    ccl_global float *ccl_restrict render_buffer,
+    const bool write_prev = false)
+{
+  kernel_assert(kernel_data.integrator.use_restir);
+
+  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+  ccl_global float *ptr = buffer + (write_prev ?
+                                        kernel_data.film.pass_restir_previous_reservoir :
+                                        kernel_data.film.pass_restir_reservoir);
+
+  film_write_pass_reservoir_at(reservoir, ptr);
+}
+
+/* Persists this render sample's finalized reservoir for the next sample's
+ * streaming_temporal_sample() to read as history. Distinct from the two
+ * pass_restir_reservoir / pass_restir_previous_reservoir slots above: those
+ * ping-pong *within* a sample across spatial-resampling iterations and are
+ * unconditionally overwritten at the start of every new sample's initial
+ * candidate generation, so they cannot double as cross-sample history —
+ * see the pass_restir_previous_reservoir discussion. This pass is written
+ * exactly once per sample, after spatial resampling has finished, and the
+ * spatial ping-pong logic never touches it. */
+ccl_device_inline void film_write_pass_reservoir_temporal(
+    KernelGlobals kg,
+    ConstIntegratorState state,
+    ccl_private const Reservoir *reservoir,
+    ccl_global float *ccl_restrict render_buffer)
+{
+  kernel_assert(kernel_data.integrator.use_restir);
+
+  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+  ccl_global float *ptr = buffer + kernel_data.film.pass_restir_temporal_history_reservoir;
+
+  film_write_pass_reservoir_at(reservoir, ptr);
 }
 
 // !!!: Called in init_from_camera; Don't we need a `film_clear_pass_reservoir_pt()` as well?
@@ -858,11 +872,15 @@ ccl_device_inline void film_clear_pass_reservoir(KernelGlobals kg,
 
   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
 
-  /* Set DI reservoir weights to zero. */
-  ccl_global float *ptr = buffer + kernel_data.film.pass_restir_reservoir + 6; // !!!: offset + 6 = total_weight
+  /* Set DI reservoir weights to zero.
+   * offset + 6 = total_weight */
+  ccl_global float *ptr = buffer + kernel_data.film.pass_restir_reservoir + 6;
   film_overwrite_pass_float(ptr, 0.0f);
 
   ptr = buffer + kernel_data.film.pass_restir_previous_reservoir + 6;
+  film_overwrite_pass_float(ptr, 0.0f);
+
+  ptr = buffer + kernel_data.film.pass_restir_temporal_history_reservoir + 6;
   film_overwrite_pass_float(ptr, 0.0f);
 
   /* Set PT reservoir weights to zero. */

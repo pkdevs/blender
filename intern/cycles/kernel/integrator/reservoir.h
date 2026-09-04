@@ -17,6 +17,13 @@ struct Reservoir {
   float luminance;
   float total_weight = 0.0f;
 
+  /* Number of samples this reservoir represents. A freshly generated
+   * candidate this render sample starts at 1; temporal combination grows
+   * it (capped by restir_temporal_history_limit) as history accumulates
+   * across samples. Spatial-only combination currently ignores this and
+   * treats every neighbor as M == 1; see mis_weight_pairwise() call sites. */
+  int M = 1;
+
   int num_light_samples;
   int num_bsdf_samples = 1;
   int max_samples;
@@ -32,6 +39,7 @@ ccl_device_inline void reservoir_clear(ccl_private Reservoir *reservoir)
   reservoir->radiance = {};
   reservoir->luminance = 0.0f;
   reservoir->total_weight = 0.0f;
+  reservoir->M = 1;
 }
 
 ccl_device_inline void reservoir_init(KernelGlobals kg,
@@ -446,7 +454,7 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
 
   // prevents stale light, radiance, or reference metadata from surviving when reusing a stack variable
   // simply guarantees that anything you don't deserialize cannot remain stale.
-  reservoir_clear(reservoir); // !!!: Cause of crash in render mode? No
+  reservoir_clear(reservoir);
 
 
 // printf(
@@ -475,7 +483,9 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
 
   reservoir->total_weight = buffer[i++];
 
-  reservoir->luminance = buffer[i];
+  reservoir->luminance = buffer[i++];
+
+  reservoir->M = (int)buffer[i]; // New
 
   // printf("restir_unpack_reservoir() entered; object=%f, prim=%f, total_weight=%f\n\n\n",
   //   (double)reservoir->reference.object, (double)reservoir->reference.prim, (double)reservoir->total_weight);
@@ -534,6 +544,11 @@ printf( // Accepted candidates
 // MARK: --- GlobalReservoirs ---
 // No Reference adaptation is required
 
+/* TODO(Tri): GlobalReservoir/PT temporal, needs the same M treatment, but is entangled 
+   with the still-unresolved reconnection-vertex problem explained in `shade_background.h`.
+ * Can't correctly re-evaluate a GI candidate's target function at a new shading context 
+ * without sd actually being reconstructable. Temporal PT reuse should wait...
+ */
 struct GlobalReservoir {
   // File intern/cycles/util/types_rgbe.h
   /* TODO(weizhen): Compress with rgbe. http://www.graphics.cornell.edu/online/formats/rgbe

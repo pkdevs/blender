@@ -751,7 +751,7 @@ ccl_device_forceinline ShaderEvalResult integrate_surface_nee_write_restir_di(
 // !!!: to write the fresh initial-candidates reservoir, unconditionally clobbering whichever slot is "current" for this iteration parity.
 // !!!: Nothing about this write path checks or preserves what was there from the previous sample
 // !!!: not designed to survive across samples, only across spatial iterations within one sample.
-  /* Write to reservoir and trace shadow ray later. */
+  /* Write to fresh initial-candidates reservoir and trace shadow ray later. */
   film_write_pass_reservoir(kg, state, reservoir, render_buffer);
   return SHADER_EVAL_OK;
 }

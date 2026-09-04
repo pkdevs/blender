@@ -398,13 +398,13 @@ PassInfo Pass::get_info(const PassType type,
       break;
 
     case PASS_RESTIR_PREVIOUS_RESERVOIR:
-      pass_info.num_components = 8;
+      pass_info.num_components = 9;
       break;
     case PASS_RESTIR_RESERVOIR:
-      pass_info.num_components = 8;
+      pass_info.num_components = 9;
       break;
     case PASS_RESTIR_TEMPORAL_HISTORY_RESERVOIR:
-      pass_info.num_components = 8; // TODO(Tri): Ensure
+      pass_info.num_components = 9;
       break;
     case PASS_RESTIR_PT_PREVIOUS_RESERVOIR:
       pass_info.num_components = 6;
