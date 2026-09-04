@@ -79,6 +79,7 @@
 #include "BKE_pointcache.h"
 #include "BKE_shader_fx.hh"
 #include "BKE_shrinkwrap.hh"
+#include "BKE_world.h"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
@@ -2279,6 +2280,30 @@ void DepsgraphRelationBuilder::build_world(World *world)
         &world->nodetree->id, NodeType::NTREE_OUTPUT, OperationCode::NTREE_OUTPUT);
     add_relation(ntree_key, world_key, "World's NTree");
     build_nested_nodetree(&world->id, world->nodetree);
+  }
+
+  /* Objects a sky texture can be linked to. The sky follows both where the Sun's light object is
+   * pointing and what color it is asking for, so it has to be re-evaluated when either changes.
+   * That light may also be the altitude camera, hence the check before adding. The camera is
+   * pulled in only when a sky is actually taking its altitude from it, so that an ordinary camera
+   * move does not rebake the sky for nothing. */
+  Object *altitude_camera = (scene_ != nullptr && BKE_world_sky_uses_camera_altitude(world)) ?
+                                scene_->camera :
+                                nullptr;
+  for (Object *object : {scene_ ? scene_->sun_object : nullptr, altitude_camera}) {
+    if (object == nullptr) {
+      continue;
+    }
+    build_object(object);
+    ComponentKey object_transform_key(&object->id, NodeType::TRANSFORM);
+    add_relation(
+        object_transform_key, world_key, "Sky Object -> World", RELATION_CHECK_BEFORE_ADD);
+    if (object->type == OB_LAMP && object->data != nullptr) {
+      ComponentKey light_parameters_key(reinterpret_cast<ID *>(object->data),
+                                        NodeType::PARAMETERS);
+      add_relation(
+          light_parameters_key, world_key, "Sky Light Data -> World", RELATION_CHECK_BEFORE_ADD);
+    }
   }
 }
 

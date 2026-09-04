@@ -631,6 +631,18 @@ enum eNodeSky_Type : short {
   SHD_SKY_HOSEK = 1,
   SHD_SKY_SINGLE_SCATTERING = 2,
   SHD_SKY_MULTIPLE_SCATTERING = 3,
+  SHD_SKY_HILLAIRE = 4,
+};
+
+/* Where the Hillaire sky reads a value from. */
+enum eNodeSky_Source : int8_t {
+  SHD_SKY_SOURCE_MANUAL = 0,
+  SHD_SKY_SOURCE_DRIVEN = 1,
+};
+
+enum eNodeSky_AltitudeSource : int8_t {
+  SHD_SKY_ALTITUDE_MANUAL = 0,
+  SHD_SKY_ALTITUDE_CAMERA = 1,
 };
 
 /* environment texture */
@@ -2643,7 +2655,18 @@ struct NodeTexSky {
   float aerosol_density = 0;
   float ozone_density = 0;
   char sun_disc = 0;
-  char _pad[7] = {};
+  /* Hillaire model. */
+  char sun_source = 0;
+  char altitude_source = 0;
+  char _pad[5] = {};
+  float sun_temperature = 0;
+  float sun_color[3] = {1.0f, 1.0f, 1.0f};
+  float sun_elevation_offset = 0;
+  float sun_rotation_offset = 0;
+  float altitude_offset = 0;
+  float aerosol_anisotropy = 0;
+  float airglow = 0;
+  float night_adaptation = 0;
 };
 
 struct NodeTexImage {

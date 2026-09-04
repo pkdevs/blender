@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ * SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: Apache-2.0 */
 
@@ -128,7 +129,8 @@ float signx(float x)
   }
 }
 
-color sky_radiance_nishita(vector dir, float sky_data[11], string filename, string sky_type)
+color sky_radiance_nishita(
+    vector dir, float sky_data[11], color sun_color, string filename, string sky_type)
 {
   /* Get 2 pixels data */
   color pixel_bottom = color(sky_data[0], sky_data[1], sky_data[2]);
@@ -169,7 +171,9 @@ color sky_radiance_nishita(vector dir, float sky_data[11], string filename, stri
   color xyz = (color)texture(filename, x, y, "wrap", "clamp", "interp", "linear", "alpha", alpha);
   color rgb_sky = xyz_to_rgb(xyz[0], xyz[1], xyz[2]);
 
-  return rgb_sun * sun_intensity + rgb_sky;
+  /* The Sun's own color is already baked into the sky texture. The disc carries it here instead,
+   * on top of the atmospheric reddening it has already picked up near the horizon. */
+  return rgb_sun * sun_intensity * sun_color + rgb_sky;
 }
 
 shader node_sky_texture(
@@ -185,6 +189,7 @@ shader node_sky_texture(
     float config_y[9] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
     float config_z[9] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
     float nishita_data[11] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+    color sun_color = color(1.0, 1.0, 1.0),
     output color Color = color(0.0, 0.0, 0.0))
 {
   vector p = Vector;
@@ -197,5 +202,5 @@ shader node_sky_texture(
   else if (sky_type == "preetham")
     Color = sky_radiance_preetham(p, phi, theta, radiance, config_x, config_y, config_z);
   else
-    Color = sky_radiance_nishita(p, nishita_data, filename, sky_type);
+    Color = sky_radiance_nishita(p, nishita_data, sun_color, filename, sky_type);
 }

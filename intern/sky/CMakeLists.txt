@@ -13,9 +13,11 @@ set(INC_SYS
 set(SRC
   source/sky_single_scattering.cpp
   source/sky_multiple_scattering.cpp
+  source/sky_hillaire.cpp
   source/sky_hosek.cpp
   source/sky_hosek_data.h
 
+  include/sky_hillaire.h
   include/sky_hosek.h
   include/sky_nishita.h
   source/sky_math.h

@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ * SPDX-FileCopyrightText: 2026 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -2873,6 +2874,11 @@ struct Scene {
 
   struct Object *camera = nullptr;
   struct World *world = nullptr;
+  /* Light object the Hillaire sky reads the Sun from. Which light stands in for the Sun is a
+   * fact about the shot rather than about the world, in the same way the camera is, so it
+   * belongs here and not on the World that several scenes may share. */
+  struct Object *sun_object = nullptr;
+  void *_pad8 = nullptr;
 
   struct Scene *set = nullptr;
 

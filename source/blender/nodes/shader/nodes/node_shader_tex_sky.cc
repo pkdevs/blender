@@ -8,12 +8,27 @@
 
 #include "node_shader_util.hh"
 #include "node_util.hh"
+#include "sky_hillaire.h"
 #include "sky_hosek.h"
 #include "sky_nishita.h"
 
+#include "BKE_context.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_texture.h"
 
+#include "BLI_math_matrix.hh"
+
+#include "DNA_scene_types.h"
+#include "DNA_world_types.h"
+
+#include "BKE_node.hh"
+
+#include "DEG_depsgraph_query.hh"
+
+#include "IMB_colormanagement.hh"
+
 #include "RNA_access.hh"
+#include "RNA_prototypes.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -24,10 +39,161 @@ namespace blender {
 
 namespace nodes::node_shader_tex_sky_cc {
 
+/* Row of two buttons choosing whether a group of values is read from a light object or set by
+ * hand. The values set by hand are kept either way, so switching back and forth is lossless. */
+static void sky_source_toggle(ui::Layout &layout, PointerRNA *ptr, const StringRefNull prop)
+{
+  ui::Layout &row = layout.row(true);
+  row.use_property_split_set(false);
+  /* An expanded enum drops the labels off its own items when it is given an empty name, so the
+   * name has to be left alone here even though it is never drawn. */
+  row.prop(ptr, prop, ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+}
+
+/* The Sun's light object lives on the Scene rather than on the node. That is where it belongs:
+ * which light stands in for the Sun is a fact about the shot, like the camera, and not about a
+ * World that several scenes may share. */
+static void sky_object_row(ui::Layout &layout, bContext *C, const StringRefNull prop)
+{
+  Scene *scene = CTX_data_scene(C);
+  if (scene == nullptr) {
+    return;
+  }
+  PointerRNA scene_ptr = RNA_id_pointer_create(&scene->id);
+  layout.prop(&scene_ptr, prop, ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_LIGHT_SUN);
+}
+
+/* Only a sky that belongs to a World is resolved during evaluation, so only there can the Sun
+ * follow a light object. Everywhere else the choice is not offered at all, rather than offered
+ * and quietly ignored.
+ *
+ * The walk up handles a World's own embedded node tree. It stops at a real node group, which is a
+ * standalone ID with no owner to walk to, so the toggle is not offered for a sky sitting inside
+ * one even though the evaluator would resolve it. A group can be shared by several worlds and by
+ * materials, and there is no one light object that is right for all of them, so declining to
+ * offer the choice there is the honest answer rather than a gap to be filled in. */
+static bool sky_can_be_driven(PointerRNA *ptr)
+{
+  ID *id = ptr->owner_id;
+  while (id != nullptr && GS(id->name) == ID_NT) {
+    id = BKE_id_owner_get(id, false);
+  }
+  return id != nullptr && GS(id->name) == ID_WO;
+}
+
+/* The same node as the depsgraph left it, where a driven Sun has already been resolved to
+ * wherever its light object is pointing. The node the user edits still holds the values set by
+ * hand, so it is the evaluated copy that has to be read to show what is actually being rendered.
+ * Empty when this node is not the scene world's, or when nothing has been evaluated yet. */
+static std::optional<PointerRNA> sky_evaluated_node(bContext *C, PointerRNA *ptr)
+{
+  const Scene *scene = CTX_data_scene(C);
+  if (scene == nullptr || scene->world == nullptr || scene->world->nodetree == nullptr) {
+    return std::nullopt;
+  }
+  if (ptr->owner_id != &scene->world->nodetree->id) {
+    return std::nullopt;
+  }
+  Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
+  if (depsgraph == nullptr) {
+    return std::nullopt;
+  }
+  World *world_eval = DEG_get_evaluated(depsgraph, scene->world);
+  if (world_eval == nullptr || world_eval->nodetree == nullptr) {
+    return std::nullopt;
+  }
+  const bNode &node = *ptr->data_as<bNode>();
+  bNode *node_eval = bke::node_find_node_by_name(*world_eval->nodetree, node.name);
+  if (node_eval == nullptr || node_eval->type_legacy != SH_NODE_TEX_SKY) {
+    return std::nullopt;
+  }
+  return RNA_pointer_create_discrete(&world_eval->nodetree->id, RNA_Node, node_eval);
+}
+
+/* Column of values that the linked light object is driving. Read-only, because editing them would
+ * write into the evaluated copy, which is thrown away on the next update. */
+static ui::Layout &sky_driven_column(ui::Layout &layout)
+{
+  ui::Layout &col = layout.column(true);
+  col.enabled_set(false);
+  return col;
+}
+
+static void sky_panel_sun(ui::Layout &layout, bContext *C, PointerRNA *ptr)
+{
+  layout.prop(ptr, "sun_disc", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  if (RNA_boolean_get(ptr, "sun_disc")) {
+    ui::Layout &col = layout.column(true);
+    col.prop(ptr, "sun_size", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+    col.prop(ptr, "sun_intensity", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  }
+
+  const bool can_drive = sky_can_be_driven(ptr);
+  if (can_drive) {
+    sky_source_toggle(layout, ptr, "sun_source");
+  }
+  const bool driven = can_drive && RNA_enum_get(ptr, "sun_source") == SHD_SKY_SOURCE_DRIVEN;
+  if (driven) {
+    sky_object_row(layout, C, "sun_object");
+    ui::Layout &col = layout.column(true);
+    col.prop(ptr, "sun_elevation_offset", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+    col.prop(ptr, "sun_rotation_offset", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+
+    if (std::optional<PointerRNA> eval = sky_evaluated_node(C, ptr)) {
+      ui::Layout &angles = sky_driven_column(layout);
+      angles.prop(&*eval, "sun_elevation", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+      angles.prop(&*eval, "sun_rotation", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+      ui::Layout &color = sky_driven_column(layout);
+      color.prop(&*eval, "sun_temperature", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+      color.prop(&*eval, "sun_color", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+    }
+  }
+  else {
+    ui::Layout &col = layout.column(true);
+    col.prop(ptr, "sun_elevation", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+    col.prop(ptr, "sun_rotation", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+    ui::Layout &color = layout.column(true);
+    color.prop(ptr, "sun_temperature", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+    color.prop(ptr, "sun_color", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  }
+}
+
+static void sky_panel_atmosphere(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
+{
+  sky_source_toggle(layout, ptr, "altitude_source");
+  if (RNA_enum_get(ptr, "altitude_source") == SHD_SKY_ALTITUDE_CAMERA) {
+    layout.prop(ptr, "altitude_offset", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  }
+  else {
+    layout.prop(ptr, "altitude", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  }
+
+  ui::Layout &col = layout.column(true);
+  col.prop(ptr, "air_density", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  col.prop(ptr, "aerosol_density", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  col.prop(ptr, "ozone_density", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  col.prop(ptr, "aerosol_anisotropy", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+
+  ui::Layout &night = layout.column(true);
+  night.prop(ptr, "airglow", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  night.prop(ptr, "night_adaptation", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+}
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Vector>("Vector"_ustr).hide_value();
+  b.use_custom_socket_order();
   b.add_output<decl::Color>("Color"_ustr).no_muted_links();
+  b.add_default_layout();
+
+  const bNode *node = b.node_or_null();
+  if (node != nullptr && node->storage != nullptr &&
+      static_cast<const NodeTexSky *>(node->storage)->sky_model == SHD_SKY_HILLAIRE)
+  {
+    b.add_panel("Sun"_ustr, 0).add_layout(sky_panel_sun);
+    b.add_panel("Atmosphere"_ustr, 1).add_layout(sky_panel_atmosphere);
+  }
+
+  b.add_input<decl::Vector>("Vector"_ustr).hide_value();
 }
 
 static void node_shader_buts_tex_sky(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -42,6 +208,9 @@ static void node_shader_buts_tex_sky(ui::Layout &layout, bContext * /*C*/, Point
     layout.prop(ptr, "sun_direction", ui::ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
     layout.prop(ptr, "turbidity", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
     layout.prop(ptr, "ground_albedo", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
+  }
+  else if (RNA_enum_get(ptr, "sky_type") == SHD_SKY_HILLAIRE) {
+    /* Drawn by the panels declared in node_declare(). */
   }
   else {
     layout.prop(ptr, "sun_disc", ui::ITEM_R_SPLIT_EMPTY_NAME, std::nullopt, ICON_NONE);
@@ -88,6 +257,12 @@ static void node_shader_init_tex_sky(bNodeTree * /*ntree*/, bNode *node)
   tex->aerosol_density = 1.0f;
   tex->ozone_density = 1.0f;
   tex->sky_model = SHD_SKY_MULTIPLE_SCATTERING;
+  /* Hillaire model. */
+  tex->sun_temperature = SKY_SUN_TEMPERATURE;
+  copy_v3_fl(tex->sun_color, 1.0f);
+  tex->aerosol_anisotropy = 0.8f;
+  tex->airglow = 1.0f;
+  tex->night_adaptation = 1.0f;
   node->storage = tex;
 }
 
@@ -148,6 +323,78 @@ static void sky_precompute_old(SkyModelPreetham *sunsky, const float sun_angles[
   sunsky->radiance[0] /= sky_perez_function(sunsky->config_Y, 0, theta);
   sunsky->radiance[1] /= sky_perez_function(sunsky->config_x, 0, theta);
   sunsky->radiance[2] /= sky_perez_function(sunsky->config_y, 0, theta);
+}
+
+/* Drain the color the eye could not find at this brightness, and slide what is left toward
+ * blue. Thin wrapper so the float3/float[3] shuffle happens in one place. */
+static float3 sky_adapt(const float3 color, const float luminance, const float strength)
+{
+  const float in[3] = {color[0], color[1], color[2]};
+  float out[3];
+  SKY_night_adaptation(in, luminance, strength, out);
+  return float3(out);
+}
+
+/* The change the adaptation makes to airglow's own color, as a per-channel multiplier that can
+ * be carried through the bake the same way an illuminant tint is. */
+static float3 sky_airglow_tint(const float luminance, const float strength)
+{
+  float xyz[3];
+  SKY_airglow_color(xyz);
+  XYZ_to_RGB to_rgb;
+  get_XYZ_to_RGB_for_gpu(&to_rgb);
+  /* A near-monochromatic 560 nm emission sits outside the render's RGB gamut, so one channel of
+   * its true color comes out slightly negative. A per-channel ratio against that would blow up,
+   * so clamp into gamut first and leave any channel with nothing to scale alone. */
+  const float3 physical(math::max(dot_v3v3(to_rgb.r, xyz), 0.0f),
+                        math::max(dot_v3v3(to_rgb.g, xyz), 0.0f),
+                        math::max(dot_v3v3(to_rgb.b, xyz), 0.0f));
+  const float3 adapted = sky_adapt(physical, luminance, strength);
+  float3 tint(1.0f, 1.0f, 1.0f);
+  for (int i = 0; i < 3; i++) {
+    tint[i] = (physical[i] > 1e-9f) ? adapted[i] / physical[i] : 1.0f;
+  }
+  return tint;
+}
+
+/* Light the Sun sends down: a blackbody at the given temperature, tinted by the color - the same
+ * way a light object computes its own color. Divided through by the Sun's own reference
+ * temperature, since the sky is already computed for a real solar spectrum and would otherwise
+ * double up the Sun's color. The default temperature costs nothing; moving away from it shifts
+ * the light the same way it would shift a lamp. */
+static float3 sky_light_color(const float temperature, const float color[3])
+{
+  float blackbody[4];
+  float reference[4];
+  IMB_colormanagement_blackbody_temperature_to_rgb(blackbody, temperature);
+  IMB_colormanagement_blackbody_temperature_to_rgb(reference, SKY_SUN_TEMPERATURE);
+
+  float3 light(color);
+  for (int i = 0; i < 3; i++) {
+    light[i] *= (reference[i] > 0.0f) ? blackbody[i] / reference[i] : 1.0f;
+  }
+  return light;
+}
+
+/* Write a matrix out the way the sky library reads one: 3x3, row major. */
+static void sky_matrix(const float3x3 &m, float r_matrix[9])
+{
+  for (int row = 0; row < 3; row++) {
+    for (int col = 0; col < 3; col++) {
+      r_matrix[row * 3 + col] = m[col][row];
+    }
+  }
+}
+
+/* The same color written as a transform on XYZ, which is the space the sky texture is baked in.
+ * Tinting is a per-channel multiply in the render's RGB space, so it has to be carried across
+ * rather than applied to XYZ channels directly. Row major, to match the sky library. */
+static void sky_light_color_transform(const float3 light, float r_transform[9])
+{
+  const float3x3 to_rgb = IMB_colormanagement_get_xyz_to_scene_linear();
+  const float3x3 to_xyz = IMB_colormanagement_get_scene_linear_to_xyz();
+  const float3x3 tint = math::from_scale<float3x3>(light);
+  sky_matrix(to_xyz * tint * to_rgb, r_transform);
 }
 
 static void sky_simplify_multiscatter_elevation_rotation(float &sun_elevation, float &sun_rotation)
@@ -263,8 +510,15 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
   /* Nishita */
   Array<float> pixels(4 * GPU_SKY_WIDTH * GPU_SKY_HEIGHT);
 
+  /* The disc is divided through by its own size when its face is shaded, so a size of exactly
+   * zero has to be kept away from. Cycles holds the same floor, in SkyTextureNode::get_sun_size(),
+   * and the two have to agree or a hairline Sun renders differently in each. */
+  const float sun_size = math::max(tex->sun_size, 0.0005f);
   float sun_rotation = tex->sun_rotation;
   float sun_elevation = tex->sun_elevation;
+  /* The light the Sun sends toward the atmosphere, once its own color is accounted for. Only the
+   * Hillaire model offers that color, so for the others it stays white. */
+  float3 sun_light(1.0f, 1.0f, 1.0f);
   float pixel_bottom[3];
   float pixel_top[3];
   if (tex->sky_model == SHD_SKY_SINGLE_SCATTERING) {
@@ -278,7 +532,7 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
                                              tex->aerosol_density,
                                              tex->ozone_density);
     SKY_single_scattering_precompute_sun(tex->sun_elevation,
-                                         tex->sun_size,
+                                         sun_size,
                                          tex->altitude,
                                          tex->air_density,
                                          tex->aerosol_density,
@@ -294,24 +548,76 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
     sun_rotation = 2.0f * M_PI - sun_rotation;
   }
   else {
+    /* Both multiple scattering models share the same parameterization. */
     sky_simplify_multiscatter_elevation_rotation(sun_elevation, sun_rotation);
-    SKY_multiple_scattering_precompute_texture(pixels.data(),
-                                               4,
-                                               GPU_SKY_WIDTH,
-                                               GPU_SKY_HEIGHT,
-                                               sun_elevation,
-                                               tex->altitude,
-                                               tex->air_density,
-                                               tex->aerosol_density,
-                                               tex->ozone_density);
-    SKY_multiple_scattering_precompute_sun(sun_elevation,
-                                           tex->sun_size,
-                                           tex->altitude,
-                                           tex->air_density,
-                                           tex->aerosol_density,
-                                           tex->ozone_density,
-                                           pixel_bottom,
-                                           pixel_top);
+    if (tex->sky_model == SHD_SKY_HILLAIRE) {
+      SKY_hillaire_precompute_sun(sun_elevation,
+                                  sun_size,
+                                  tex->altitude,
+                                  tex->air_density,
+                                  tex->aerosol_density,
+                                  tex->ozone_density,
+                                  pixel_bottom,
+                                  pixel_top);
+
+      sun_light = sky_light_color(tex->sun_temperature, tex->sun_color);
+      float sun_color_transform[9];
+      sky_light_color_transform(sun_light, sun_color_transform);
+      /* The airglow is faint enough for the eye to lose color in, so it is adapted before the
+       * bake, according to how bright it actually renders. It is also cut back into gamut as it
+       * is added, which needs the trip into the render's RGB and the trip back out of it as two
+       * separate steps. The tint rides on the way back. */
+      const float3 airglow_tint = sky_airglow_tint(SKY_NOMINAL_LUMINANCE_AIRGLOW * tex->airglow,
+                                                   tex->night_adaptation);
+      float airglow_to_rgb[9];
+      float airglow_tinted_to_xyz[9];
+      sky_matrix(IMB_colormanagement_get_xyz_to_scene_linear(), airglow_to_rgb);
+      sky_matrix(IMB_colormanagement_get_scene_linear_to_xyz() *
+                     math::from_scale<float3x3>(airglow_tint),
+                 airglow_tinted_to_xyz);
+      SKY_hillaire_precompute_texture(pixels.data(),
+                                      4,
+                                      GPU_SKY_WIDTH,
+                                      GPU_SKY_HEIGHT,
+                                      sun_elevation,
+                                      tex->altitude,
+                                      tex->air_density,
+                                      tex->aerosol_density,
+                                      tex->ozone_density,
+                                      tex->aerosol_anisotropy,
+                                      sun_color_transform);
+      /* Owes nothing to the Sun, so it goes on last and on its own. */
+      SKY_hillaire_add_airglow(pixels.data(),
+                               4,
+                               GPU_SKY_WIDTH,
+                               GPU_SKY_HEIGHT,
+                               tex->altitude,
+                               tex->air_density,
+                               tex->aerosol_density,
+                               tex->ozone_density,
+                               tex->airglow,
+                               airglow_to_rgb,
+                               airglow_tinted_to_xyz);
+    }
+    else {
+      SKY_multiple_scattering_precompute_sun(sun_elevation,
+                                             sun_size,
+                                             tex->altitude,
+                                             tex->air_density,
+                                             tex->aerosol_density,
+                                             tex->ozone_density,
+                                             pixel_bottom,
+                                             pixel_top);
+      SKY_multiple_scattering_precompute_texture(pixels.data(),
+                                                 4,
+                                                 GPU_SKY_WIDTH,
+                                                 GPU_SKY_HEIGHT,
+                                                 sun_elevation,
+                                                 tex->altitude,
+                                                 tex->air_density,
+                                                 tex->aerosol_density,
+                                                 tex->ozone_density);
+    }
   }
 
   XYZ_to_RGB xyz_to_rgb;
@@ -325,11 +631,12 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
   float sky_type = (tex->sky_model == SHD_SKY_SINGLE_SCATTERING) ? 0.0f : 1.0f;
   /* A negative angular diameter tells the shader that the disc is turned off.
    *
-   * SKY_earth_intersection_angle() returns a positive angle: how far the true horizon dips below
-   * the local horizontal for an observer standing above sea level. Negated here, since the
-   * visible sky extends down to that small *negative* elevation, not stops short of it. */
+   * SKY_earth_intersection_angle() returns a positive angle. Negated, since standing at an
+   * altitude above zero means the true horizon dips below the local horizontal - the visible sky
+   * (and anything in it) extends down to a small *negative* elevation, not stops short of zero.
+   * Matches the sign Cycles has always used for this same gate. */
   const float sun_params[4] = {sun_elevation,
-                               tex->sun_disc ? tex->sun_size : -1.0f,
+                               tex->sun_disc ? sun_size : -1.0f,
                                tex->sun_intensity,
                                -SKY_earth_intersection_angle(tex->altitude)};
   GPUNodeLink *sky_texture = GPU_image_sky(
@@ -347,6 +654,9 @@ static int node_shader_gpu_tex_sky(GPUMaterial *mat,
                         GPU_uniform(pixel_bottom),
                         GPU_uniform(pixel_top),
                         GPU_uniform(sun_params),
+                        /* The disc carries the same light color the sky around it was baked
+                         * with. */
+                        GPU_uniform(sun_light),
                         sky_texture,
                         GPU_constant(&layer));
 }
@@ -356,11 +666,13 @@ static void node_shader_update_sky(bNodeTree *ntree, bNode *node)
   bNodeSocket *sockVector = bke::node_find_socket(*node, SOCK_IN, "Vector"_ustr);
 
   NodeTexSky *tex = static_cast<NodeTexSky *>(node->storage);
-  bke::node_set_socket_availability(
-      *ntree,
-      *sockVector,
-      !(ELEM(tex->sky_model, SHD_SKY_SINGLE_SCATTERING, SHD_SKY_MULTIPLE_SCATTERING) &&
-        tex->sun_disc == 1));
+  bke::node_set_socket_availability(*ntree,
+                                    *sockVector,
+                                    !(ELEM(tex->sky_model,
+                                           SHD_SKY_SINGLE_SCATTERING,
+                                           SHD_SKY_MULTIPLE_SCATTERING,
+                                           SHD_SKY_HILLAIRE) &&
+                                      tex->sun_disc == 1));
 }
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
