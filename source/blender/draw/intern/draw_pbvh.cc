@@ -637,8 +637,7 @@ void extract_data_vert_mesh(const OffsetIndices<int> faces,
     }
   }
   UNUSED_VARS_NDEBUG(data_start);
-  BLI_assert_msg(data == data_start + scratch_range.size(),
-                 "Node VBO data extraction did not fill the expected amount");
+  BLI_assert(data == data_start + scratch_range.size());
 }
 
 template<typename T>
@@ -660,8 +659,7 @@ void extract_data_face_mesh(const OffsetIndices<int> faces,
     data += face_size;
   }
   UNUSED_VARS_NDEBUG(data_start);
-  BLI_assert_msg(data == data_start + scratch_range.size(),
-                 "Node VBO data extraction did not fill the expected amount");
+  BLI_assert(data == data_start + scratch_range.size());
 }
 
 template<typename T>
@@ -684,8 +682,7 @@ void extract_data_corner_mesh(const OffsetIndices<int> faces,
     }
   }
   UNUSED_VARS_NDEBUG(data_start);
-  BLI_assert_msg(data == data_start + scratch_range.size(),
-                 "Node VBO data extraction did not fill the expected amount");
+  BLI_assert(data == data_start + scratch_range.size());
 }
 
 template<typename T> const T &bmesh_cd_vert_get(const BMVert &vert, const int offset)
@@ -728,8 +725,7 @@ void extract_data_vert_bmesh(const Set<BMFace *, 0> &faces,
     data++;
   }
   UNUSED_VARS_NDEBUG(data_start);
-  BLI_assert_msg(data == data_start + scratch_range.size(),
-                 "Node VBO data extraction did not fill the expected amount");
+  BLI_assert(data == data_start + scratch_range.size());
 }
 
 template<typename T>
@@ -752,8 +748,7 @@ void extract_data_face_bmesh(const Set<BMFace *, 0> &faces,
     data += 3;
   }
   UNUSED_VARS_NDEBUG(data_start);
-  BLI_assert_msg(data == data_start + scratch_range.size(),
-                 "Node VBO data extraction did not fill the expected amount");
+  BLI_assert(data == data_start + scratch_range.size());
 }
 
 template<typename T>
@@ -781,8 +776,7 @@ void extract_data_corner_bmesh(const Set<BMFace *, 0> &faces,
     data++;
   }
   UNUSED_VARS_NDEBUG(data_start);
-  BLI_assert_msg(data == data_start + scratch_range.size(),
-                 "Node VBO data extraction did not fill the expected amount");
+  BLI_assert(data == data_start + scratch_range.size());
 }
 
 /**
@@ -1011,8 +1005,7 @@ static void update_normals_mesh(const Object &object,
           }
         }
         UNUSED_VARS_NDEBUG(data_start);
-        BLI_assert_msg(data == data_start + draw_cache.get_vbo().sizes[node_index],
-                       "Node VBO data extraction did not fill the expected amount");
+        BLI_assert(data == data_start + draw_cache.get_vbo().sizes[node_index]);
       },
       exec_mode::grain_size(1));
   finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
@@ -1050,8 +1043,7 @@ BLI_NOINLINE static void update_masks_mesh(const Object &object,
             }
           }
           UNUSED_VARS_NDEBUG(data_start);
-          BLI_assert_msg(data == data_start + vbo.sizes[node_index],
-                         "Node VBO data extraction did not fill the expected amount");
+          BLI_assert(data == data_start + vbo.sizes[node_index]);
         },
         exec_mode::grain_size(1));
   }
@@ -1113,8 +1105,7 @@ BLI_NOINLINE static void update_face_sets_mesh(const Object &object,
             data += face_size;
           }
           UNUSED_VARS_NDEBUG(data_start);
-          BLI_assert_msg(data == data_start + vbo.sizes[node_index],
-                         "Node VBO data extraction did not fill the expected amount");
+          BLI_assert(data == data_start + vbo.sizes[node_index]);
         },
         exec_mode::grain_size(1));
   }
@@ -1239,8 +1230,7 @@ BLI_NOINLINE static void update_positions_grids(const Object &object,
           }
         }
         UNUSED_VARS_NDEBUG(data_start);
-        BLI_assert_msg(data == data_start + draw_cache.get_vbo().sizes[node_index],
-                       "Node VBO data extraction did not fill the expected amount");
+        BLI_assert(data == data_start + draw_cache.get_vbo().sizes[node_index]);
       },
       exec_mode::grain_size(1));
   finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
@@ -1315,8 +1305,7 @@ BLI_NOINLINE static void update_normals_grids(const Object &object,
           }
         }
         UNUSED_VARS_NDEBUG(data_start);
-        BLI_assert_msg(data == data_start + draw_cache.get_vbo().sizes[node_index],
-                       "Node VBO data extraction did not fill the expected amount");
+        BLI_assert(data == data_start + draw_cache.get_vbo().sizes[node_index]);
       },
       exec_mode::grain_size(1));
   finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
@@ -1371,8 +1360,7 @@ BLI_NOINLINE static void update_masks_grids(const Object &object,
             }
           }
           UNUSED_VARS_NDEBUG(data_start);
-          BLI_assert_msg(data == data_start + vbo.sizes[node_index],
-                         "Node VBO data extraction did not fill the expected amount");
+          BLI_assert(data == data_start + vbo.sizes[node_index]);
         },
         exec_mode::grain_size(1));
   }
@@ -1435,8 +1423,7 @@ BLI_NOINLINE static void update_face_sets_grids(const Object &object,
             data += verts_per_grid;
           }
           UNUSED_VARS_NDEBUG(data_start);
-          BLI_assert_msg(data == data_start + vbo.sizes[node_index],
-                         "Node VBO data extraction did not fill the expected amount");
+          BLI_assert(data == data_start + vbo.sizes[node_index]);
         },
         exec_mode::grain_size(1));
   }
@@ -2280,8 +2267,7 @@ BLI_NOINLINE static void update_positions_bmesh(const Object &object,
           data++;
         }
         UNUSED_VARS_NDEBUG(data_start);
-        BLI_assert_msg(data == data_start + draw_cache.get_vbo().sizes[node_index],
-                       "Node VBO data extraction did not fill the expected amount");
+        BLI_assert(data == data_start + draw_cache.get_vbo().sizes[node_index]);
       },
       exec_mode::grain_size(1));
   finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
@@ -2325,8 +2311,7 @@ BLI_NOINLINE static void update_normals_bmesh(const Object &object,
           }
         }
         UNUSED_VARS_NDEBUG(data_start);
-        BLI_assert_msg(data == data_start + draw_cache.get_vbo().sizes[node_index],
-                       "Node VBO data extraction did not fill the expected amount");
+        BLI_assert(data == data_start + draw_cache.get_vbo().sizes[node_index]);
       },
       exec_mode::grain_size(1));
   finalize_vbo_update(attr_vbo, draw_cache, node_mask, scratch_offsets, scratch_vbo);
@@ -2368,8 +2353,7 @@ BLI_NOINLINE static void update_masks_bmesh(const Object &object,
             data++;
           }
           UNUSED_VARS_NDEBUG(data_start);
-          BLI_assert_msg(data == data_start + vbo.sizes[node_index],
-                         "Node VBO data extraction did not fill the expected amount");
+          BLI_assert(data == data_start + vbo.sizes[node_index]);
         },
         exec_mode::grain_size(1));
   }
@@ -2427,8 +2411,7 @@ BLI_NOINLINE static void update_face_sets_bmesh(const Object &object,
             data += 3;
           }
           UNUSED_VARS_NDEBUG(data_start);
-          BLI_assert_msg(data == data_start + vbo.sizes[node_index],
-                         "Node VBO data extraction did not fill the expected amount");
+          BLI_assert(data == data_start + vbo.sizes[node_index]);
         },
         exec_mode::grain_size(1));
   }
