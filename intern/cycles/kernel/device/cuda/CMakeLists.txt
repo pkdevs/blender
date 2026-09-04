@@ -39,7 +39,6 @@ function(cuda_add_common_flags cuda_version arch in_flags out_flags)
   endif()
 
   set(flags ${flags}
-    -D __KERNEL_LOCAL_ATOMIC_SORT__
     # Helps with compatibility when using recent clang host compiler.
     "-std=c++17"
     --use_fast_math
