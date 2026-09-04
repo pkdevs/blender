@@ -9,7 +9,6 @@
 #pragma once
 
 #include "GPU_pipeline.hh"
-#include "vk_pipeline_bindspaces.hh"
 
 namespace blender::gpu {
 
