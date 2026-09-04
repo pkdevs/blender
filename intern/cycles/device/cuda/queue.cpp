@@ -43,6 +43,25 @@ int CUDADeviceQueue::num_concurrent_states(const size_t state_size) const
       LOG_TRACE << "CYCLES_CONCURRENT_STATES_FACTOR evaluated to 0";
     }
   }
+  else {
+    size_t total = 0;
+    size_t free = 0;
+    cuda_device_->get_device_memory_info(total, free);
+
+    size_t grow_percent = 50;
+    if (auto *str = getenv("CYCLES_CUDA_GROW_PERCENT")) {
+      grow_percent = atoi(str);
+    }
+
+    int num_states_safe = ((free / state_size) * grow_percent) / 100;
+    /* Always keep a minimum state count regardless of available memory. */
+    num_states_safe = max(num_states_safe, num_states);
+
+    /* Higher number of concurrent states reduces the number of iterations to go through, which
+     * reduces the total overhead. The benefit of this stops being measurable at around 160 states
+     * per available thread. */
+    num_states = min(num_states * 10, num_states_safe);
+  }
 
   LOG_TRACE << "GPU queue concurrent states: " << num_states << ", using up to "
             << string_human_readable_size(num_states * state_size);
@@ -50,16 +69,9 @@ int CUDADeviceQueue::num_concurrent_states(const size_t state_size) const
   return num_states;
 }
 
-int CUDADeviceQueue::num_concurrent_busy_states(const size_t /*state_size*/) const
+int CUDADeviceQueue::num_concurrent_busy_states(const size_t state_size) const
 {
-  const int max_num_threads = cuda_device_->get_num_multiprocessors() *
-                              cuda_device_->get_max_num_threads_per_multiprocessor();
-
-  if (max_num_threads == 0) {
-    return 65536;
-  }
-
-  return 4 * max_num_threads;
+  return num_concurrent_states(state_size) / 4;
 }
 
 void CUDADeviceQueue::init_execution()
