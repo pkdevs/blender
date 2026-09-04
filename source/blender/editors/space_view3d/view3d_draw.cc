@@ -1379,12 +1379,6 @@ static void draw_frame_info(Scene *scene, int xoffset, int *yoffset)
 {
   const int cfra = scene->r.cfra;
   const char *msg_sep = " | ";
-  const char *info_array[16];
-  int i = 0;
-
-  struct {
-    char frame[16];
-  } info_buffers;
 
   /* Info can contain:
    * - 1 frame number `(7)`.
@@ -1393,8 +1387,7 @@ static void draw_frame_info(Scene *scene, int xoffset, int *yoffset)
    * - 1 active keying set name `(MAX_NAME + 3)`.
    */
 
-  SNPRINTF_UTF8(info_buffers.frame, "%d", cfra);
-  info_array[i++] = info_buffers.frame;
+  std::string info = std::to_string(cfra);
 
   /* 8 4-bytes chars (complex writing systems like Devanagari in UTF8 encoding) */
   char printable[32];
@@ -1402,38 +1395,29 @@ static void draw_frame_info(Scene *scene, int xoffset, int *yoffset)
   get_fps_string(scene, printable, sizeof(printable));
 
   if (U.uiflag & USER_SHOW_FPS && printable[0] != '\0') {
-    info_array[i++] = msg_sep;
-    info_array[i++] = printable;
+    info += msg_sep;
+    info += printable;
   }
   else {
     /* Draw marker name on current frame, if any. */
     const char *markern = BKE_scene_find_marker_name(scene, cfra);
 
     if (markern) {
-      info_array[i++] = msg_sep;
-      info_array[i++] = markern;
+      info += msg_sep;
+      info += markern;
     }
 
     /* Draw scene active keying set name, if set. */
     KeyingSet *active_ks = animrig::scene_get_active_keyingset(scene);
 
     if (active_ks) {
-      info_array[i++] = msg_sep;
-      info_array[i++] = active_ks->name;
+      info += msg_sep;
+      info += active_ks->name;
     }
   }
 
-  BLI_assert(i < int(ARRAY_SIZE(info_array)));
-
-  char info[MAX_ID_NAME * 4];
-  /* It's expected there will be enough room for the whole string in the buffer.
-   * If not, increase it. */
-  BLI_assert(BLI_string_len_array(info_array, i) < sizeof(info));
-
-  BLI_string_join_array(info, sizeof(info), info_array, i);
-
   *yoffset -= VIEW3D_OVERLAY_LINEHEIGHT;
-  BLF_draw_default(xoffset, *yoffset, 0.0f, info, sizeof(info));
+  BLF_draw_default(xoffset, *yoffset, 0.0f, info.c_str(), info.size());
 }
 
 static void draw_grid_unit_name(
