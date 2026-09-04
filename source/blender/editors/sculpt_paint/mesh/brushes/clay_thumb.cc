@@ -65,15 +65,8 @@ static void calc_faces(const Depsgraph &depsgraph,
 
   Array<float, bke::pbvh::MESH_LEAF_LIMIT> factors(verts.size());
   Array<float, bke::pbvh::MESH_LEAF_LIMIT> distances(verts.size());
-  calc_factors_common_mesh(depsgraph,
-                           brush,
-                           object,
-                           attribute_data,
-                           positions,
-                           vert_normals,
-                           node,
-                           factors,
-                           distances);
+  calc_factors_common_mesh(
+      depsgraph, brush, object, attribute_data, positions, vert_normals, node, factors, distances);
 
   scale_factors(factors, strength);
 

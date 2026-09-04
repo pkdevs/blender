@@ -190,14 +190,8 @@ void do_grab_brush(const Depsgraph &depsgraph,
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
       node_mask.foreach_index(
           [&](const int i) {
-            calc_faces(depsgraph,
-                       sd,
-                       brush,
-                       grab_delta,
-                       attribute_data,
-                       nodes[i],
-                       object,
-                       position_data);
+            calc_faces(
+                depsgraph, sd, brush, grab_delta, attribute_data, nodes[i], object, position_data);
             bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
           },
           exec_mode::grain_size(1));
