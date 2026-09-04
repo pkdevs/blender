@@ -1846,7 +1846,7 @@ ListBaseT<wmDropBox> *WM_dropboxmap_find(const char *idname, int spaceid, int re
 
 /**
  * \note This can return null! Importing can fail if the asset was deleted or moved since the asset
- * library was loaded.
+ * library was loaded. Also a handler, such as `blend_import_post`, can delete the imported ID.
  *
  * \param flag_extra: Additional linking flags (from #eFileSel_Params_Flag).
  */

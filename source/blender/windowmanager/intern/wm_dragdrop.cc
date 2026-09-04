@@ -871,12 +871,24 @@ ID *WM_drag_asset_id_import(const bContext *C, wmDragAsset *asset_drag, const in
 
   /* FIXME: Link/Append should happens in the operator called at the end of drop process, not from
    * here. */
-  return ed::asset::asset_local_id_ensure_imported(*CTX_data_main(C),
-                                                   *asset_drag->asset,
-                                                   flag,
-                                                   asset_drag->import_settings.method,
-                                                   instantiate_context,
-                                                   CTX_wm_reports(C));
+  Main *bmain = CTX_data_main(C);
+  ID *id = ed::asset::asset_local_id_ensure_imported(*bmain,
+                                                     *asset_drag->asset,
+                                                     flag,
+                                                     asset_drag->import_settings.method,
+                                                     instantiate_context,
+                                                     CTX_wm_reports(C));
+  if (id == nullptr) {
+    return nullptr;
+  }
+
+  /* Handlers (e.g. `blend_import_post`) run while the asset is imported and may delete the
+   * imported data. So, re-validate that the ID is still in Main before returning it. */
+  const ListBase *ids = which_libbase(bmain, asset_drag->asset->get_id_type());
+  if (ids == nullptr || BLI_findindex(ids, id) == -1) {
+    return nullptr;
+  }
+  return id;
 }
 
 bool WM_drag_asset_will_import_linked(const wmDrag *drag)
