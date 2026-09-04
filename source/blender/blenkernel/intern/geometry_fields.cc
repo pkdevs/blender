@@ -986,6 +986,19 @@ bool try_capture_fields_on_geometry(MutableAttributeAccessor attributes,
                                     const fn::Field<bool> &selection,
                                     const Span<fn::GField> fields)
 {
+  return try_capture_fields_on_geometry(
+      attributes, field_context, names, domain, selection, fields, fn::FieldEvaluationMode::CPU);
+}
+
+bool try_capture_fields_on_geometry(MutableAttributeAccessor attributes,
+                                    const fn::FieldContext &field_context,
+                                    const Span<StringRef> names,
+                                    const AttrDomain domain,
+                                    const fn::Field<bool> &selection,
+                                    const Span<fn::GField> fields,
+                                    const fn::FieldEvaluationMode evaluation_mode,
+                                    fn::GPUFieldChainScope *gpu_field_chain_scope)
+{
   BLI_assert(names.size() == fields.size());
   const int domain_size = attributes.domain_size(domain);
   if (domain_size == 0) {
@@ -997,11 +1010,29 @@ bool try_capture_fields_on_geometry(MutableAttributeAccessor attributes,
     return all_added;
   }
 
-  fn::FieldEvaluator evaluator{field_context, domain_size};
-  evaluator.set_selection(selection);
-
   const bool selection_is_full = !selection.depends_on_input() &&
                                  fn::evaluate_constant_field(selection);
+
+  fn::FieldEvaluator evaluator{field_context, domain_size};
+  if (evaluation_mode == fn::FieldEvaluationMode::CPU || !selection_is_full) {
+    evaluator.set_selection(selection);
+  }
+  evaluator.set_evaluation_mode(evaluation_mode);
+  evaluator.set_gpu_field_chain_scope(gpu_field_chain_scope);
+  if (gpu_field_chain_scope != nullptr) {
+    const auto *geometry_context = dynamic_cast<const GeometryFieldContext *>(&field_context);
+    BLI_assert(geometry_context != nullptr);
+    fn::GPUFieldContextKey context_key;
+    context_key.geometry = geometry_context->geometry();
+    context_key.component_type = int(geometry_context->type());
+    context_key.domain = int(geometry_context->domain());
+    if (geometry_context->type() == GeometryComponent::Type::GreasePencil &&
+        geometry_context->domain() != AttrDomain::Layer)
+    {
+      context_key.subcontext = geometry_context->grease_pencil_layer_index();
+    }
+    evaluator.set_gpu_field_context_key(context_key);
+  }
 
   struct StoreResult {
     int input_index;
@@ -1132,6 +1163,18 @@ bool try_capture_fields_on_geometry(GeometryComponent &component,
                                     const fn::Field<bool> &selection,
                                     const Span<fn::GField> fields)
 {
+  return try_capture_fields_on_geometry(
+      component, names, domain, selection, fields, fn::FieldEvaluationMode::CPU);
+}
+
+bool try_capture_fields_on_geometry(GeometryComponent &component,
+                                    const Span<StringRef> names,
+                                    const AttrDomain domain,
+                                    const fn::Field<bool> &selection,
+                                    const Span<fn::GField> fields,
+                                    const fn::FieldEvaluationMode evaluation_mode,
+                                    fn::GPUFieldChainScope *gpu_field_chain_scope)
+{
   const GeometryComponent::Type component_type = component.type();
   if (component_type == GeometryComponent::Type::GreasePencil &&
       ELEM(domain, AttrDomain::Point, AttrDomain::Curve))
@@ -1155,7 +1198,9 @@ bool try_capture_fields_on_geometry(GeometryComponent &component,
               names,
               domain,
               selection,
-              fields);
+              fields,
+              evaluation_mode,
+              gpu_field_chain_scope);
           if (success & !any_success) {
             any_success = true;
           }
@@ -1171,8 +1216,14 @@ bool try_capture_fields_on_geometry(GeometryComponent &component,
 
   MutableAttributeAccessor attributes = *component.attributes_for_write();
   const GeometryFieldContext field_context{component, domain};
-  return try_capture_fields_on_geometry(
-      attributes, field_context, names, domain, selection, fields);
+  return try_capture_fields_on_geometry(attributes,
+                                        field_context,
+                                        names,
+                                        domain,
+                                        selection,
+                                        fields,
+                                        evaluation_mode,
+                                        gpu_field_chain_scope);
 }
 
 bool try_capture_fields_on_geometry(GeometryComponent &component,
@@ -1180,8 +1231,20 @@ bool try_capture_fields_on_geometry(GeometryComponent &component,
                                     const AttrDomain domain,
                                     const Span<fn::GField> fields)
 {
+  return try_capture_fields_on_geometry(
+      component, names, domain, fields, fn::FieldEvaluationMode::CPU);
+}
+
+bool try_capture_fields_on_geometry(GeometryComponent &component,
+                                    const Span<StringRef> names,
+                                    const AttrDomain domain,
+                                    const Span<fn::GField> fields,
+                                    const fn::FieldEvaluationMode evaluation_mode,
+                                    fn::GPUFieldChainScope *gpu_field_chain_scope)
+{
   const fn::Field<bool> selection = fn::Field<bool>(true);
-  return try_capture_fields_on_geometry(component, names, domain, selection, fields);
+  return try_capture_fields_on_geometry(
+      component, names, domain, selection, fields, evaluation_mode, gpu_field_chain_scope);
 }
 
 std::optional<AttrDomain> try_detect_native_field_domain(const GeometryComponent &component,

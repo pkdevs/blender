@@ -9,8 +9,10 @@
 #include "BKE_material.hh"
 
 #include "GPU_batch.hh"
+#include "GPU_context.hh"
 #include "GPU_init_exit.hh" /* interface */
 #include "GPU_pass.hh"
+#include "GPU_shader.hh"
 
 #include "intern/gpu_private.hh"
 #include "intern/gpu_shader_create_info_private.hh"
@@ -52,6 +54,10 @@ void GPU_exit()
 
   BKE_material_defaults_free_gpu();
   GPU_shader_free_builtin_shaders();
+
+  /* Context-owned resources must be released while the backend is still alive. */
+  GPU_context_data_discard(GPU_context_active_get());
+  GPU_shader_generated_cache_clear();
 
   gpu_backend_delete_resources();
 

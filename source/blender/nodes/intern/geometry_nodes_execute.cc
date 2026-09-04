@@ -35,6 +35,7 @@
 #include "BKE_node_socket_value.hh"
 #include "BKE_node_socket_value_iter.hh"
 
+#include "FN_field_gpu.hh"
 #include "FN_lazy_function_execute.hh"
 
 #include "DNA_collection_types.h"
@@ -583,8 +584,10 @@ bke::GeometrySet execute_geometry_nodes_on_geometry(const bNodeTree &btree,
 
   call_data.call_depth_limit = U.nodes_stack_limit;
 
+  fn::GPUFieldChainScope gpu_field_chain_scope;
   GeoNodesUserData user_data;
   user_data.call_data = &call_data;
+  user_data.gpu_field_chain_scope = &gpu_field_chain_scope;
   call_data.root_ntree = &btree;
 
   user_data.compute_context = &base_compute_context;

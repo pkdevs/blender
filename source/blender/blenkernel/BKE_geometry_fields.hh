@@ -524,6 +524,15 @@ bool try_capture_fields_on_geometry(MutableAttributeAccessor attributes,
                                     const fn::Field<bool> &selection,
                                     Span<fn::GField> fields);
 
+bool try_capture_fields_on_geometry(MutableAttributeAccessor attributes,
+                                    const fn::FieldContext &field_context,
+                                    Span<StringRef> names,
+                                    AttrDomain domain,
+                                    const fn::Field<bool> &selection,
+                                    Span<fn::GField> fields,
+                                    fn::FieldEvaluationMode evaluation_mode,
+                                    fn::GPUFieldChainScope *gpu_field_chain_scope = nullptr);
+
 inline bool try_capture_field_on_geometry(MutableAttributeAccessor attributes,
                                           const fn::FieldContext &field_context,
                                           const StringRef name,
@@ -540,6 +549,13 @@ bool try_capture_fields_on_geometry(GeometryComponent &component,
                                     AttrDomain domain,
                                     Span<fn::GField> fields);
 
+bool try_capture_fields_on_geometry(GeometryComponent &component,
+                                    Span<StringRef> names,
+                                    AttrDomain domain,
+                                    Span<fn::GField> fields,
+                                    fn::FieldEvaluationMode evaluation_mode,
+                                    fn::GPUFieldChainScope *gpu_field_chain_scope = nullptr);
+
 inline bool try_capture_field_on_geometry(GeometryComponent &component,
                                           const StringRef name,
                                           AttrDomain domain,
@@ -553,6 +569,14 @@ bool try_capture_fields_on_geometry(GeometryComponent &component,
                                     AttrDomain domain,
                                     const fn::Field<bool> &selection,
                                     Span<fn::GField> fields);
+
+bool try_capture_fields_on_geometry(GeometryComponent &component,
+                                    Span<StringRef> names,
+                                    AttrDomain domain,
+                                    const fn::Field<bool> &selection,
+                                    Span<fn::GField> fields,
+                                    fn::FieldEvaluationMode evaluation_mode,
+                                    fn::GPUFieldChainScope *gpu_field_chain_scope = nullptr);
 
 inline bool try_capture_field_on_geometry(GeometryComponent &component,
                                           const StringRef name,

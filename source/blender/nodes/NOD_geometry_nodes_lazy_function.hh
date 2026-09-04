@@ -38,6 +38,10 @@
 
 namespace blender {
 
+namespace fn {
+class GPUFieldChainScope;
+}
+
 struct Depsgraph;
 struct Object;
 struct Scene;
@@ -269,6 +273,8 @@ struct GeoNodesUserData : public fn::UserData {
    * Data provided by the root caller of geometry nodes.
    */
   const GeoNodesCallData *call_data = nullptr;
+  /** Transient GPU field intermediates shared by nodes in one top-level evaluation. */
+  fn::GPUFieldChainScope *gpu_field_chain_scope = nullptr;
   /**
    * Current compute context. This is different depending in the (nested) node group that is being
    * evaluated.

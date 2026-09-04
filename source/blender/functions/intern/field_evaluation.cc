@@ -604,7 +604,57 @@ void FieldEvaluator::evaluate()
       fields.append(field);
     }
   }
-  evaluated_varrays_ = evaluate_fields(scope_, fields, selection_mask_, context_, dst_varrays_);
+
+  if (evaluation_mode_ == FieldEvaluationMode::GPU_EXPERIMENTAL && !selection_field_.has_value() &&
+      fields_to_evaluate_.size() == 1 && !fields.is_empty())
+  {
+    evaluated_varrays_.resize(1);
+    evaluated_on_gpu_ = try_evaluate_field_gpu(
+        fields_to_evaluate_[0],
+        context_,
+        selection_mask_,
+        dst_varrays_[0] && dst_varrays_[0].is_span() ? dst_varrays_[0].get_internal_span() :
+                                                       GMutableSpan{},
+        gpu_field_context_key_ ? &*gpu_field_context_key_ : nullptr,
+        gpu_field_chain_scope_);
+    if (evaluated_on_gpu_) {
+      evaluated_varrays_[0] = dst_varrays_[0];
+    }
+  }
+
+  if (!evaluated_on_gpu_) {
+    if (gpu_field_chain_scope_ != nullptr && gpu_field_context_key_) {
+      class FallbackContext : public FieldContext {
+       public:
+        const FieldContext &base;
+        GPUFieldChainScope &chain;
+        const GPUFieldContextKey &key;
+
+        FallbackContext(const FieldContext &base,
+                        GPUFieldChainScope &chain,
+                        const GPUFieldContextKey &key)
+            : base(base), chain(chain), key(key)
+        {
+        }
+
+        GVArray get_varray_for_input(const FieldInput &input,
+                                     const IndexMask &mask,
+                                     ResourceScope &scope) const override
+        {
+          if (GVArray values = chain.get_varray_for_input(input, key, mask, *this)) {
+            return values;
+          }
+          return base.get_varray_for_input(input, mask, scope);
+        }
+      } fallback_context(context_, *gpu_field_chain_scope_, *gpu_field_context_key_);
+      evaluated_varrays_ = evaluate_fields(
+          scope_, fields, selection_mask_, fallback_context, dst_varrays_);
+    }
+    else {
+      evaluated_varrays_ = evaluate_fields(
+          scope_, fields, selection_mask_, context_, dst_varrays_);
+    }
+  }
   BLI_assert(fields_to_evaluate_.size() == evaluated_varrays_.size());
   for (const int i : fields_to_evaluate_.index_range()) {
     OutputPointerInfo &info = output_pointer_infos_[i];

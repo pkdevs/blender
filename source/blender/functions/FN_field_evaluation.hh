@@ -8,8 +8,15 @@
 #include "BLI_vector.hh"
 
 #include "FN_field.hh"
+#include "FN_field_gpu.hh"
 
 namespace blender::fn {
+
+enum class FieldEvaluationMode {
+  CPU,
+  /** Experimental opt-in mode. Unsupported fields retain the CPU fallback. */
+  GPU_EXPERIMENTAL,
+};
 
 /**
  * Utility class that makes it easier to evaluate fields.
@@ -30,6 +37,10 @@ class FieldEvaluator : NonMovable, NonCopyable {
   Vector<GVArray> evaluated_varrays_;
   Vector<OutputPointerInfo> output_pointer_infos_;
   bool is_evaluated_ = false;
+  FieldEvaluationMode evaluation_mode_ = FieldEvaluationMode::CPU;
+  bool evaluated_on_gpu_ = false;
+  GPUFieldChainScope *gpu_field_chain_scope_ = nullptr;
+  std::optional<GPUFieldContextKey> gpu_field_context_key_;
 
   std::optional<Field<bool>> selection_field_;
   IndexMask selection_mask_;
@@ -64,6 +75,27 @@ class FieldEvaluator : NonMovable, NonCopyable {
   void set_selection(Field<bool> selection)
   {
     selection_field_ = std::move(selection);
+  }
+
+  /** GPU evaluation requires an active context; unsupported fields fall back to the CPU. */
+  void set_evaluation_mode(const FieldEvaluationMode mode)
+  {
+    BLI_assert(!is_evaluated_);
+    evaluation_mode_ = mode;
+  }
+
+  /** Consume intermediates from preceding Vector Field GPU nodes in this evaluation. */
+  void set_gpu_field_chain_scope(GPUFieldChainScope *scope)
+  {
+    BLI_assert(!is_evaluated_);
+    gpu_field_chain_scope_ = scope;
+  }
+
+  /** Set the geometry identity used to match a transient GPU field result. */
+  void set_gpu_field_context_key(const GPUFieldContextKey &key)
+  {
+    BLI_assert(!is_evaluated_);
+    gpu_field_context_key_ = key;
   }
 
   /**
@@ -160,6 +192,12 @@ class FieldEvaluator : NonMovable, NonCopyable {
   const IndexMask &evaluation_mask() const
   {
     return mask_;
+  }
+
+  bool evaluated_on_gpu() const
+  {
+    BLI_assert(is_evaluated_);
+    return evaluated_on_gpu_;
   }
 };
 

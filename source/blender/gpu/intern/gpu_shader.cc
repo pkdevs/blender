@@ -7,6 +7,7 @@
  */
 
 #include "BLI_colorspace.hh"
+#include "BLI_map.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_string.hh"
@@ -14,6 +15,7 @@
 #include "CLG_log.h"
 
 #include "GPU_capabilities.hh"
+#include "GPU_context.hh"
 #include "GPU_debug.hh"
 #include "GPU_matrix.hh"
 #include "GPU_platform.hh"
@@ -30,6 +32,7 @@
 #include "gpu_shader_private.hh"
 
 #include <filesystem>
+#include <memory>
 #include <string>
 
 namespace blender {
@@ -104,6 +107,33 @@ std::string Shader::defines_declare(const shader::ShaderCreateInfo &info)
 }  // namespace gpu
 
 using namespace blender::gpu;
+
+/* Generated shaders must be freed before their context and backend. */
+struct GeneratedShaderCache {
+  Map<uint64_t, gpu::Shader *> shaders;
+};
+
+static Map<GPUContext *, std::unique_ptr<GeneratedShaderCache>> generated_shader_caches;
+static std::mutex generated_shader_caches_mutex;
+
+static GeneratedShaderCache &generated_shader_cache_for_context(GPUContext *context)
+{
+  std::unique_ptr<GeneratedShaderCache> *cache = generated_shader_caches.lookup_ptr(context);
+  if (cache == nullptr) {
+    generated_shader_caches.add_new(context, std::make_unique<GeneratedShaderCache>());
+    cache = generated_shader_caches.lookup_ptr(context);
+  }
+  BLI_assert(cache != nullptr);
+  return **cache;
+}
+
+static void free_generated_shader_cache(GeneratedShaderCache &cache)
+{
+  for (const auto item : cache.shaders.items()) {
+    GPU_shader_free(item.value);
+  }
+  cache.shaders.clear();
+}
 
 /* -------------------------------------------------------------------- */
 /** \name Creation / Destruction
@@ -254,6 +284,106 @@ std::string GPU_shader_preprocess_source(StringRefNull original,
   }
   return processed_str;
 };
+
+static gpu::Shader *gpu_shader_create_from_info_generated(const GPUShaderCreateInfo *_info)
+{
+  using namespace blender::gpu::shader;
+  ShaderCreateInfo info = *reinterpret_cast<const ShaderCreateInfo *>(_info);
+
+  if (info.compute_source_generated.empty()) {
+    std::cerr << "Runtime-generated GPU shaders currently require compute source.\n";
+    return nullptr;
+  }
+
+#ifdef __APPLE__
+  /* See usage for more info. */
+  info.define("WITH_MATRIX_EQ_OPERATORS");
+#endif
+
+  info.builtins(BuiltinBits::NO_BUFFER_TYPE_LINTING);
+  info.builtins(BuiltinBits::NO_PREPROCESSOR);
+
+  std::string processed_str;
+  processed_str += "\n";
+  processed_str += "#ifdef CREATE_INFO_RES_PASS_gpu_shader_generated\n";
+  processed_str += "CREATE_INFO_RES_PASS_gpu_shader_generated\n";
+  processed_str += "#endif\n";
+  processed_str += GPU_shader_preprocess_source(info.compute_source_generated, info);
+
+  info.compute_source("gpu_shader_generated_comp.glsl");
+  info.generated_sources.append({"gpu_shader_generated_comp.glsl", {}, std::move(processed_str)});
+
+  return GPUBackend::get()->get_compiler()->compile(info, false);
+}
+
+gpu::Shader *GPU_shader_generated_cache_lookup(uint64_t cache_key)
+{
+  GPUContext *context = GPU_context_active_get();
+  if (context == nullptr) {
+    return nullptr;
+  }
+
+  std::scoped_lock lock(generated_shader_caches_mutex);
+  std::unique_ptr<GeneratedShaderCache> *cache = generated_shader_caches.lookup_ptr(context);
+  if (cache == nullptr) {
+    return nullptr;
+  }
+  gpu::Shader **shader = (*cache)->shaders.lookup_ptr(cache_key);
+  return shader ? *shader : nullptr;
+}
+
+gpu::Shader *GPU_shader_create_from_info_generated_cached(uint64_t cache_key,
+                                                          const GPUShaderCreateInfo *_info)
+{
+  GPUContext *context = GPU_context_active_get();
+  if (context == nullptr || _info == nullptr) {
+    return nullptr;
+  }
+
+  std::scoped_lock lock(generated_shader_caches_mutex);
+  GeneratedShaderCache &cache = generated_shader_cache_for_context(context);
+  if (gpu::Shader **shader = cache.shaders.lookup_ptr(cache_key)) {
+    return *shader;
+  }
+
+  gpu::Shader *shader = gpu_shader_create_from_info_generated(_info);
+  if (shader != nullptr) {
+    cache.shaders.add_new(cache_key, shader);
+  }
+  return shader;
+}
+
+void GPU_shader_generated_cache_discard_context(GPUContext *context)
+{
+  if (context == nullptr) {
+    return;
+  }
+  if (GPU_context_active_get() == context) {
+    GPU_shader_unbind();
+  }
+
+  std::scoped_lock lock(generated_shader_caches_mutex);
+  if (std::unique_ptr<GeneratedShaderCache> *cache = generated_shader_caches.lookup_ptr(context)) {
+    free_generated_shader_cache(**cache);
+    generated_shader_caches.remove(context);
+    if (generated_shader_caches.is_empty()) {
+      generated_shader_caches.clear();
+    }
+  }
+}
+
+void GPU_shader_generated_cache_clear()
+{
+  if (GPU_context_active_get() != nullptr) {
+    GPU_shader_unbind();
+  }
+
+  std::scoped_lock lock(generated_shader_caches_mutex);
+  for (const auto item : generated_shader_caches.items()) {
+    free_generated_shader_cache(*item.value);
+  }
+  generated_shader_caches.clear();
+}
 
 gpu::Shader *GPU_shader_create_from_info_python(const GPUShaderCreateInfo *_info)
 {

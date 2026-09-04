@@ -103,6 +103,20 @@ GPUContext *GPU_context_create(GHOST_IWindow *ghost_window, GHOST_IContext *ghos
 void GPU_context_discard(GPUContext *);
 
 /**
+ * Small opaque data slots owned by a GPU context. The owner supplies a stable key and cleanup
+ * callback. This is intended for narrowly scoped GPU subsystems that need context-local state
+ * without making the core context depend on that subsystem.
+ */
+using GPUContextDataCreateFn = void *(*)();
+using GPUContextDataFreeFn = void (*)(void *data);
+
+void *GPU_context_data_ensure(GPUContext *context,
+                              const void *key,
+                              GPUContextDataCreateFn create_fn,
+                              GPUContextDataFreeFn free_fn);
+void GPU_context_data_discard(GPUContext *context);
+
+/**
  * #GPUContext can be null.
  */
 void GPU_context_active_set(GPUContext *);

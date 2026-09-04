@@ -25,6 +25,8 @@
 struct GPUShaderCreateInfo;
 namespace blender {
 
+struct GPUContext;
+
 namespace gpu {
 class VertBuf;
 class Shader;
@@ -60,6 +62,31 @@ gpu::Shader *GPU_shader_create_from_info(const GPUShaderCreateInfo *_info);
  * Same as GPU_shader_create_from_info but will run preprocessor on source strings.
  */
 gpu::Shader *GPU_shader_create_from_info_python(const GPUShaderCreateInfo *_info);
+
+/**
+ * Look up a runtime-generated shader in the active context's cache.
+ *
+ * The cache key is owned by the caller and must identify the complete generated program structure.
+ * Runtime values and dispatch sizes should not be included in the key. The returned shader is
+ * owned by the GPU cache and must not be freed by the caller.
+ */
+gpu::Shader *GPU_shader_generated_cache_lookup(uint64_t cache_key);
+
+/**
+ * Create or fetch a runtime-generated shader in the active context's cache.
+ *
+ * The cache is scoped to the active #GPUContext. A cache miss compiles `info`; a hit does not
+ * inspect or compile it. The returned shader is owned by the cache and must not be freed by the
+ * caller.
+ */
+gpu::Shader *GPU_shader_create_from_info_generated_cached(uint64_t cache_key,
+                                                          const GPUShaderCreateInfo *_info);
+
+/** Discard generated shaders owned by one GPU context before that context is destroyed. */
+void GPU_shader_generated_cache_discard_context(GPUContext *context);
+
+/** Discard all runtime-generated shader caches before the GPU backend is destroyed. */
+void GPU_shader_generated_cache_clear();
 
 /**
  * Create a shader using a named #GPUShaderCreateInfo registered at startup.

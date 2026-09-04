@@ -584,6 +584,7 @@ set(GLSL_SRC
   shaders/gpu_shader_codegen_lib.glsl
 
   shaders/gpu_shader_python_comp.glsl
+  shaders/gpu_shader_generated_comp.glsl
   shaders/gpu_shader_python_frag.glsl
   shaders/gpu_shader_python_typedef_lib.glsl
   shaders/gpu_shader_python_vert.glsl
@@ -958,11 +959,14 @@ endif()
 
 if(WITH_GTESTS)
   set(TEST_SRC "")
-  set(TEST_INC "")
+  set(TEST_INC
+    ${CMAKE_BINARY_DIR}/source/blender/makesrna
+  )
   set(TEST_LIB
     bf_intern_ghost
     bf_imbuf
     bf_windowmanager
+    bf::functions
   )
 
   if(WITH_GPU_BACKEND_TESTS)
@@ -970,6 +974,7 @@ if(WITH_GTESTS)
       tests/buffer_texture_test.cc
       tests/compute_test.cc
       tests/framebuffer_test.cc
+      tests/gpu_field_test.cc
       tests/immediate_test.cc
       tests/index_buffer_test.cc
       tests/mipmap_test.cc

@@ -16,6 +16,7 @@
 #include "BKE_global.hh"
 
 #include "BLI_assert.hh"
+#include "BLI_map.hh"
 #include "BLI_threads.hh"
 #include "BLI_vector_set.hh"
 
@@ -29,6 +30,7 @@
 
 #include "GPU_batch.hh"
 #include "GPU_pass.hh"
+#include "GPU_shader.hh"
 #include "gpu_backend.hh"
 #include "gpu_context_private.hh"
 #include "gpu_matrix_private.hh"
@@ -61,8 +63,70 @@ static thread_local Context *active_ctx = nullptr;
 static Mutex backend_users_mutex;
 static int num_backend_users = 0;
 
+struct GPUContextDataEntry {
+  const void *key = nullptr;
+  void *data = nullptr;
+  GPUContextDataFreeFn free_fn = nullptr;
+};
+
+static Map<GPUContext *, Vector<GPUContextDataEntry>> context_data;
+static std::mutex context_data_mutex;
+
 static void gpu_backend_create();
 static void gpu_backend_discard();
+
+void *GPU_context_data_ensure(GPUContext *context,
+                              const void *key,
+                              const GPUContextDataCreateFn create_fn,
+                              const GPUContextDataFreeFn free_fn)
+{
+  BLI_assert(context != nullptr);
+  BLI_assert(key != nullptr);
+  BLI_assert(create_fn != nullptr);
+  BLI_assert(free_fn != nullptr);
+
+  std::scoped_lock lock(context_data_mutex);
+  Vector<GPUContextDataEntry> *entries = context_data.lookup_ptr(context);
+  if (entries == nullptr) {
+    entries = &context_data.lookup_or_add_default(context);
+  }
+  for (const GPUContextDataEntry &entry : *entries) {
+    if (entry.key == key) {
+      BLI_assert(entry.free_fn == free_fn);
+      return entry.data;
+    }
+  }
+
+  void *data = create_fn();
+  BLI_assert(data != nullptr);
+  entries->append({key, data, free_fn});
+  return data;
+}
+
+void GPU_context_data_discard(GPUContext *context)
+{
+  if (context == nullptr) {
+    return;
+  }
+
+  Vector<GPUContextDataEntry> entries;
+  {
+    std::scoped_lock lock(context_data_mutex);
+    if (Vector<GPUContextDataEntry> *stored_entries = context_data.lookup_ptr(context)) {
+      entries = std::move(*stored_entries);
+      context_data.remove(context);
+      if (context_data.is_empty()) {
+        /* Release the hash-table allocation before Blender's guarded-allocation leak report runs.
+         */
+        context_data.clear();
+      }
+    }
+  }
+
+  for (const GPUContextDataEntry &entry : entries) {
+    entry.free_fn(entry.data);
+  }
+}
 
 /* -------------------------------------------------------------------- */
 /** \name gpu::Context methods
@@ -217,6 +281,10 @@ void GPU_context_discard(GPUContext *ctx_)
 {
   Context *ctx = unwrap(ctx_);
   BLI_assert(active_ctx == ctx);
+
+  /* Release opaque subsystem data while the context and its backend are still active. */
+  GPU_context_data_discard(ctx_);
+  GPU_shader_generated_cache_discard_context(ctx_);
 
   draw::DebugDraw::get().release();
 
