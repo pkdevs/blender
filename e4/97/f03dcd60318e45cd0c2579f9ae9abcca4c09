@@ -1,2 +1,3 @@
 Referenced by pull request #163543, Fix: Explicitly include header for `ENUM_OPERATORS`
 Referenced by commit 944752620c67b7162e07ae71a3f7913c44e908db, Fix: Explicitly include header for `ENUM_OPERATORS`
+Referenced by commit 92ebb62a06aab40ab9bb700dd0bcf60eee48bfed, Fix: Crash after drawing when copying Scene with cursor data
