@@ -638,11 +638,13 @@ static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space
       MEM_delete(data);
     }
     else {
-      SpaceOutliner space_outliner_flat = *space_outliner;
-      space_outliner_flat.treestore = nullptr;
-      space_outliner_flat.runtime = nullptr;
-      space_outliner_flat.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
-      writer->write_struct_at_address(space_outliner, &space_outliner_flat);
+      writer->write_struct_cast<SpaceOutliner>(
+          space_outliner, [](BlendStructWriter &struct_writer) {
+            SpaceOutliner &shallow_so = struct_writer.shallow_copy_to_write<SpaceOutliner>();
+            shallow_so.treestore = nullptr;
+            shallow_so.runtime = nullptr;
+            shallow_so.storeflag &= ~(SO_TREESTORE_CLEANUP | SO_TREESTORE_REBUILD);
+          });
     }
   }
   else {

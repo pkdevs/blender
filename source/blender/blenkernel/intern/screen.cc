@@ -1382,28 +1382,29 @@ static void zero_regionview3d_runtime_fields(RegionView3D &rv3d)
 
 static void write_region(BlendWriter *writer, ARegion *region, int spacetype)
 {
-  ARegion region_copy = *region;
-  region_copy.runtime = nullptr;
-  region_copy.flag &= ~(RGN_FLAG_TOO_SMALL | RGN_FLAG_POLL_FAILED | RGN_FLAG_SIZE_CLAMP_X |
-                        RGN_FLAG_SIZE_CLAMP_Y | RGN_FLAG_SEARCH_FILTER_ACTIVE |
-                        RGN_FLAG_SEARCH_FILTER_UPDATE);
-  region_copy.v2d.sms = nullptr;
-  region_copy.v2d.smooth_timer = nullptr;
-  region_copy.v2d.scroll_ui = {};
-  region_copy.v2d.flag &= ~V2D_IS_NAVIGATING;
-  /* Match #direct_link_region so scrollbar fade cannot drift across load/save. */
-  region_copy.v2d.alpha_hor = 255;
-  region_copy.v2d.alpha_vert = 255;
-  /* For some region types, this is pure runtime data. */
-  if (ELEM(region->regiontype,
-           RGN_TYPE_HEADER,
-           RGN_TYPE_TOOL_HEADER,
-           RGN_TYPE_FOOTER,
-           RGN_TYPE_ASSET_SHELF_HEADER))
-  {
-    region_copy.v2d.tot = region_copy.v2d.cur;
-  }
-  writer->write_struct_at_address(region, &region_copy);
+  writer->write_struct(region, [](BlendStructWriter &struct_writer) {
+    ARegion &shallow_region = struct_writer.shallow_copy_to_write<ARegion>();
+    shallow_region.runtime = nullptr;
+    shallow_region.flag &= ~(RGN_FLAG_TOO_SMALL | RGN_FLAG_POLL_FAILED | RGN_FLAG_SIZE_CLAMP_X |
+                             RGN_FLAG_SIZE_CLAMP_Y | RGN_FLAG_SEARCH_FILTER_ACTIVE |
+                             RGN_FLAG_SEARCH_FILTER_UPDATE);
+    shallow_region.v2d.sms = nullptr;
+    shallow_region.v2d.smooth_timer = nullptr;
+    shallow_region.v2d.scroll_ui = {};
+    shallow_region.v2d.flag &= ~V2D_IS_NAVIGATING;
+    /* Match #direct_link_region so scrollbar fade cannot drift across load/save. */
+    shallow_region.v2d.alpha_hor = 255;
+    shallow_region.v2d.alpha_vert = 255;
+    /* For some region types, this is pure runtime data. */
+    if (ELEM(shallow_region.regiontype,
+             RGN_TYPE_HEADER,
+             RGN_TYPE_TOOL_HEADER,
+             RGN_TYPE_FOOTER,
+             RGN_TYPE_ASSET_SHELF_HEADER))
+    {
+      shallow_region.v2d.tot = shallow_region.v2d.cur;
+    }
+  });
 
   if (region->regiondata) {
     if (region->flag & RGN_FLAG_TEMP_REGIONDATA) {
@@ -1456,10 +1457,11 @@ static void write_uilist(BlendWriter *writer, uiList *ui_list)
 static void write_panel_list(BlendWriter *writer, ListBaseT<Panel> *lb)
 {
   for (Panel &panel : *lb) {
-    Panel panel_copy = panel;
-    panel_copy.runtime_flag = 0;
-    panel_copy.runtime = nullptr;
-    writer->write_struct_at_address(&panel, &panel_copy);
+    writer->write_struct(&panel, [](BlendStructWriter &struct_writer) {
+      Panel &shallow_panel = struct_writer.shallow_copy_to_write<Panel>();
+      shallow_panel.runtime_flag = 0;
+      shallow_panel.runtime = nullptr;
+    });
     writer->write_struct_list(&panel.layout_panel_states);
     for (LayoutPanelState &state : panel.layout_panel_states) {
       writer->write_string(state.idname);

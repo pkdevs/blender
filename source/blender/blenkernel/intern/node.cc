@@ -1098,9 +1098,10 @@ static const Map<StringRef, StringRef> &subtype_pixel_to_none()
 template<typename ValueType>
 static void write_default_value_none_subtype(BlendWriter *writer, const void *default_value)
 {
-  ValueType value = *static_cast<const ValueType *>(default_value);
-  value.subtype = PROP_NONE;
-  writer->write_struct_at_address_cast<ValueType>(default_value, &value);
+  writer->write_struct_cast<ValueType>(default_value, [](BlendStructWriter &struct_writer) {
+    ValueType &shallow_value = struct_writer.shallow_copy_to_write<ValueType>();
+    shallow_value.subtype = PROP_NONE;
+  });
 }
 
 static void pixel_subtype_forward_compat(BlendWriter *writer, const bNodeSocket &sock)

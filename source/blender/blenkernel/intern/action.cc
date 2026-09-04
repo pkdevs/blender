@@ -385,12 +385,10 @@ static void write_slots(BlendWriter *writer, Span<animrig::Slot *> slots)
 {
   writer->write_pointer_array(slots.size(), slots.data());
   for (animrig::Slot *slot : slots) {
-    /* Make a shallow copy using the C type, so that no new runtime struct is
-     * allocated for the copy. */
-    ActionSlot shallow_copy = *slot;
-    shallow_copy.runtime = nullptr;
-
-    writer->write_struct_at_address(slot, &shallow_copy);
+    writer->write_struct_cast<ActionSlot>(slot, [](BlendStructWriter &struct_writer) {
+      ActionSlot &shallow_slot = struct_writer.shallow_copy_to_write<ActionSlot>();
+      shallow_slot.runtime = nullptr;
+    });
   }
 }
 

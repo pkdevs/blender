@@ -590,16 +590,17 @@ void BKE_previewimg_blend_write(BlendWriter *writer, const PreviewImage *prv)
     return;
   }
 
-  PreviewImage prv_copy = dna::shallow_copy(*prv);
-  prv_copy.runtime = nullptr;
-  prv_copy.changed_timestamp[0] = 0;
-  prv_copy.changed_timestamp[1] = 0;
-  writer->write_struct_at_address(prv, &prv_copy);
-  if (prv_copy.rect[0]) {
-    writer->write_uint32_array(prv_copy.w[0] * prv_copy.h[0], prv_copy.rect[0]);
+  writer->write_struct(prv, [](BlendStructWriter &struct_writer) {
+    PreviewImage &shallow_prv = struct_writer.shallow_copy_to_write<PreviewImage>();
+    shallow_prv.runtime = nullptr;
+    shallow_prv.changed_timestamp[0] = 0;
+    shallow_prv.changed_timestamp[1] = 0;
+  });
+  if (prv->rect[0]) {
+    writer->write_uint32_array(prv->w[0] * prv->h[0], prv->rect[0]);
   }
-  if (prv_copy.rect[1]) {
-    writer->write_uint32_array(prv_copy.w[1] * prv_copy.h[1], prv_copy.rect[1]);
+  if (prv->rect[1]) {
+    writer->write_uint32_array(prv->w[1] * prv->h[1], prv->rect[1]);
   }
 }
 
