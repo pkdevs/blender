@@ -1705,6 +1705,7 @@ static void rna_def_constraint_same_volume(BlenderRNA *brna)
   prop = RNA_def_property(srna, "free_axis", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "free_axis");
   RNA_def_property_enum_items(prop, axis_items);
+  RNA_def_property_enum_default(prop, SAMEVOL_Y);
   RNA_def_property_ui_text(prop, "Free Axis", "The free scaling axis of the object");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
@@ -1718,6 +1719,7 @@ static void rna_def_constraint_same_volume(BlenderRNA *brna)
   prop = RNA_def_property(srna, "volume", PROP_FLOAT, PROP_NONE);
   RNA_def_property_range(prop, 0.0f, FLT_MAX);
   RNA_def_property_ui_range(prop, 0.001f, 100.0f, 1, 3);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_ui_text(prop, "Volume", "Volume of the bone at rest");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
