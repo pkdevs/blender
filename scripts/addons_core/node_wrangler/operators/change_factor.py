@@ -31,7 +31,8 @@ class NODE_OT_change_factor(Operator, NWBase):
     option: FloatProperty()
 
     def execute(self, context):
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
         option = self.option
         selected = []  # entry = index
         for si, node in enumerate(nodes):

@@ -55,7 +55,8 @@ class NODE_OT_delete_unused(Operator, NWBase):
                                         'TextureNodeTree', 'GeometryNodeTree'}))
 
     def execute(self, context):
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
 
         # Store selection
         selection = []
@@ -122,7 +123,8 @@ class NODE_OT_delete_unused(Operator, NWBase):
             self.report({'INFO'}, message)
 
         # Restore selection
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
         for node in nodes:
             if node.name in selection:
                 node.select = True

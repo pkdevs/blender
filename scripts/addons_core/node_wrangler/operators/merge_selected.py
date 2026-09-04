@@ -156,7 +156,7 @@ class NODE_OT_merge_selected(Operator, NWBase):
             node_type = 'TextureNode'
 
         tree = context.space_data.edit_tree
-        nodes = get_nodes(context)
+        nodes = tree.nodes
         links = tree.links
         mode = self.mode
         merge_type = self.merge_type

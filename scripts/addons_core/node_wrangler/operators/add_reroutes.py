@@ -41,7 +41,8 @@ class NODE_OT_add_reroutes(Operator, NWBase):
         return nw_check(cls, context) and nw_check_selected(cls, context)
 
     def execute(self, context):
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
         post_select = []  # Nodes to be selected after execution.
         y_offset = -22.0
 

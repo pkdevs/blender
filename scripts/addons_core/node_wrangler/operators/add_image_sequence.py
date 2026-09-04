@@ -62,12 +62,12 @@ class NODE_OT_add_image_sequence(Operator, NWBase, ImportHelper):
         layout.prop(self, 'frame_start')
 
     def execute(self, context):
-        nodes = get_nodes(context)
         directory = bpy.path.abspath(self.directory)
         filename = self.filename
         files = self.files
         frame_start = self.frame_start
         tree = context.space_data.node_tree
+        nodes = tree.nodes
 
         # DEBUG
         # print ("\nDIR:", directory)

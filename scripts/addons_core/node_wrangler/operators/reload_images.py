@@ -28,7 +28,8 @@ class NODE_OT_reload_images(Operator):
 
     def execute(self, context):
         edit_tree = context.space_data.edit_tree
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
         images_to_reload = set()
 
         for node in nodes:

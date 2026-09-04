@@ -39,7 +39,8 @@ class NODE_OT_add_texture_setup(Operator, NWBase):
                 and nw_check_selected(cls, context))
 
     def execute(self, context):
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
 
         texture_types = get_texture_node_types()
         selected_nodes = [n for n in nodes if n.select]

@@ -31,7 +31,8 @@ class NODE_OT_lazy_mix(Operator, NWBase):
 
     def modal(self, context, event):
         context.area.tag_redraw()
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
         cont = True
 
         node1 = None

@@ -80,7 +80,7 @@ class NODE_OT_add_principled_setup(Operator, NWBase, ImportHelper):
             return {'CANCELLED'}
 
         tree = context.space_data.edit_tree
-        nodes = get_nodes(context)
+        nodes = tree.nodes
         links = tree.links
         active_node = nodes.active
 

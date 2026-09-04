@@ -42,7 +42,7 @@ class NODE_OT_lazy_connect(Operator, NWBase):
     def modal(self, context, event):
         context.area.tag_redraw()
         tree = context.space_data.edit_tree
-        nodes = get_nodes(context)
+        nodes = tree.nodes
         links = tree.links
         cont = True
 
@@ -117,7 +117,8 @@ class NODE_OT_lazy_connect(Operator, NWBase):
             self.report({'WARNING'}, "Active editor should be a node editor for the operator to run")
             return {'CANCELLED'}
 
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
         node = node_at_pos(nodes, context, event)
         if node:
             context.scene.NWBusyDrawing = node.name
@@ -147,7 +148,8 @@ class NODE_OT_lazy_connect_call_inputs_menu(Operator, NWBase):
     from_socket: IntProperty()
 
     def execute(self, context):
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
 
         context.scene.NWSourceSocket = self.from_socket
 
@@ -171,7 +173,8 @@ class NODE_OT_lazy_connect_make_link(Operator, NWBase):
     to_socket: IntProperty()
 
     def execute(self, context):
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
 
         n1 = nodes[context.scene.NWLazySource]
         n2 = nodes[context.scene.NWLazyTarget]
@@ -191,7 +194,8 @@ class NODE_MT_lazy_connect_outputs(Menu, NWBaseMenu):
 
     def draw(self, context):
         layout = self.layout
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
 
         layout.label(text="From Socket", icon='RADIOBUT_OFF')
         layout.separator()
@@ -214,7 +218,8 @@ class NODE_MT_lazy_connect_inputs(Menu, NWBaseMenu):
 
     def draw(self, context):
         layout = self.layout
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
 
         layout.label(text="To Socket", icon='FORWARD')
         layout.separator()

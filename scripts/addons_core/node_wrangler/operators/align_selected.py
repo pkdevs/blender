@@ -35,7 +35,8 @@ class NODE_OT_align_selected(Operator, NWBase):
         return nw_check(cls, context) and nw_check_not_empty(cls, context) and nw_check_selected(cls, context)
 
     def execute(self, context):
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
         margin = self.margin
 
         selection = []

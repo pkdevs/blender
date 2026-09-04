@@ -172,7 +172,8 @@ def draw_callback_nodeoutline(self, context, mode):
     if self.mouse_path:
         gpu.state.blend_set('ALPHA')
 
-        nodes = get_nodes(context)
+        tree = context.space_data.edit_tree
+        nodes = tree.nodes
 
         if mode == "LINK":
             col_outer = (1.0, 0.2, 0.2, 0.4)
