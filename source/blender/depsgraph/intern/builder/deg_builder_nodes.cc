@@ -1240,6 +1240,12 @@ void DepsgraphNodeBuilder::build_object_shading(Object *object)
 
 void DepsgraphNodeBuilder::build_animdata(ID *id)
 {
+  /* A Scene's animation can be reached through multiple Scene strips or view layers. */
+  if (id->id_type() == ID_SCE && built_map_.check_is_built_and_tag(id, BuilderMap::TAG_ANIMATION))
+  {
+    return;
+  }
+
   /* Special handling for animated images/sequences. */
   build_animation_images(id);
   /* Regular animation. */
