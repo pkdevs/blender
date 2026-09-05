@@ -441,9 +441,9 @@ static wmOperatorStatus shape_key_copy_exec(bContext *C, wmOperator * /*op*/)
 
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-        const Vector<std::string> src_names = bke::greasepencil::shapekey_all_attribute_names(
+        const Vector<std::string> src_names = bke::greasepencil::shapekey_attribute_names_all(
             kb_src->name);
-        const Vector<std::string> new_names = bke::greasepencil::shapekey_all_attribute_names(
+        const Vector<std::string> new_names = bke::greasepencil::shapekey_attribute_names_all(
             kb_new->name);
 
         for (const int i : src_names.index_range()) {

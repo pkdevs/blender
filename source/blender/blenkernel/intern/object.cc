@@ -4892,7 +4892,7 @@ bool BKE_object_shapekey_remove(Main *bmain, Object *ob, KeyBlock *kb)
 
       bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-      const Vector<std::string> names = bke::greasepencil::shapekey_all_attribute_names(kb->name);
+      const Vector<std::string> names = bke::greasepencil::shapekey_attribute_names_all(kb->name);
 
       for (const std::string &name : names) {
         attributes.remove(name);

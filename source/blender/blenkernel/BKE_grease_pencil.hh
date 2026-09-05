@@ -983,8 +983,8 @@ std::string shapekey_attribute_name_radius(const char *name);
 std::string shapekey_attribute_name_opacity(const char *name);
 std::string shapekey_attribute_name_handle_left(const char *name);
 std::string shapekey_attribute_name_handle_right(const char *name);
-Vector<std::string> shapekey_all_attribute_names(const char *name);
-Vector<std::string> shapekey_position_attribute_names(const char *name);
+Vector<std::string> shapekey_attribute_names_all(const char *name);
+Vector<std::string> shapekey_attribute_names_position(const char *name);
 
 /* Add all shape key deformations to the data in the `MutableSpan` */
 void shapekey_add_applied_position(const Key *key,

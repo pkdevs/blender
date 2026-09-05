@@ -2316,7 +2316,7 @@ static std::string shapekey_attribute_name_generic(const char *key_name,
   return shapekey_attribute_name_handle_right(key_name);
 }
 
-Vector<std::string> shapekey_all_attribute_names(const char *name)
+Vector<std::string> shapekey_attribute_names_all(const char *name)
 {
   Vector<std::string> all_names;
 
@@ -2329,7 +2329,7 @@ Vector<std::string> shapekey_all_attribute_names(const char *name)
   return all_names;
 }
 
-Vector<std::string> shapekey_position_attribute_names(const char *name)
+Vector<std::string> shapekey_attribute_names_position(const char *name)
 {
   Vector<std::string> all_names;
 

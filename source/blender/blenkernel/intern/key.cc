@@ -1972,9 +1972,9 @@ void BKE_keyblock_rename(Main &bmain, Key *key, KeyBlock *kb, const char *newnam
 
       bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
-      const Vector<std::string> old_names = bke::greasepencil::shapekey_all_attribute_names(
+      const Vector<std::string> old_names = bke::greasepencil::shapekey_attribute_names_all(
           oldname);
-      const Vector<std::string> new_names = bke::greasepencil::shapekey_all_attribute_names(
+      const Vector<std::string> new_names = bke::greasepencil::shapekey_attribute_names_all(
           newname);
 
       for (const int i : old_names.index_range()) {

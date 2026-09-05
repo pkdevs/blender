@@ -670,7 +670,7 @@ static void apply_grease_pencil_transform_to_shape_keys(const Key *key,
       continue;
     }
 
-    const Vector<std::string> names = bke::greasepencil::shapekey_position_attribute_names(
+    const Vector<std::string> names = bke::greasepencil::shapekey_attribute_names_position(
         keyblock.name);
 
     for (const StringRef name : names) {
