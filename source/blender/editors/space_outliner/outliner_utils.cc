@@ -114,7 +114,6 @@ static TreeElement *outliner_find_item_at_x_in_row_recursive(const TreeElement *
                                                              float view_co_x,
                                                              bool *r_is_merged_icon)
 {
-
   for (TreeElement *child_te : parent_te->subtree) {
     const bool over_element = (view_co_x > child_te->xs) && (view_co_x < child_te->xend);
     if ((child_te->flag & TE_ICONROW) && over_element) {

@@ -19,6 +19,9 @@
 #include "../outliner_intern.hh"
 #include "tree_display.hh"
 
+#include "tree_element_bone.hh"
+#include "tree_element_bone_collection.hh"
+#include "tree_element_edit_bone.hh"
 #include "tree_element_id_armature.hh"
 
 namespace blender::ed::outliner {
@@ -28,7 +31,7 @@ TreeElementIDArmature::TreeElementIDArmature(TreeElement &legacy_te, bArmature &
 {
 }
 
-void TreeElementIDArmature::expand(SpaceOutliner &space_outliner) const
+void TreeElementIDArmature::expand(SpaceOutliner & /*space_outliner*/) const
 {
   expand_animation_data(arm_.adt);
 
@@ -44,12 +47,12 @@ void TreeElementIDArmature::expand(SpaceOutliner &space_outliner) const
       /* pass */
     }
     else {
-      expand_bones(space_outliner);
+      expand_bones();
     }
   }
 
   if (arm_.collection_array_num > 0) {
-    add_element(&legacy_te_.subtree, &arm_.id, nullptr, &legacy_te_, TSE_BONE_COLLECTION_BASE, 0);
+    add_element<TreeElementBoneCollectionBase>({}, arm_);
   }
 }
 
@@ -57,51 +60,50 @@ void TreeElementIDArmature::expand_edit_bones() const
 {
 
   for (const auto [a, ebone] : (arm_.edbo)->enumerate()) {
-    TreeElement *ten = add_element(
-        &legacy_te_.subtree, &arm_.id, &ebone, &legacy_te_, TSE_EBONE, a);
+    TreeElement *ten = add_element<TreeElementEditBone>({.index = a}, arm_.id, ebone);
     ebone.temp.p = ten;
   }
   /* make hierarchy */
-  TreeElement *ten = arm_.edbo->first ? static_cast<TreeElement *>(
-                                            (static_cast<EditBone *>(arm_.edbo->first))->temp.p) :
+  TreeElement *ten = arm_.edbo->first() ? static_cast<TreeElement *>(
+                                            (static_cast<EditBone *>(arm_.edbo->first()))->temp.p) :
                                         nullptr;
 
-  for (int index : legacy_te_.subtree.index_range()) {
+  for (int index : ten->subtree.index_range()) {
     TreeElement *par;
-    TreeElement *ten = legacy_te_.subtree[index];
-    EditBone *ebone = static_cast<EditBone *>(ten->directdata);
+    TreeElement *te = ten->subtree[index];
+    EditBone *ebone = static_cast<EditBone *>(te->directdata);
     if (ebone->parent) {
       legacy_te_.subtree.remove(index);
       par = static_cast<TreeElement *>(ebone->parent->temp.p);
-      par->subtree.append(ten);
-      ten->parent = par;
+      par->subtree.append(te);
+      te->parent = par;
     }
   }
 }
 
 /* special handling of hierarchical non-lib data */
-static void outliner_add_bone(SpaceOutliner *space_outliner,
+static void outliner_add_bone(AbstractTreeDisplay &tree_display,
                               Vector<TreeElement *> *tree,
                               ID *id,
                               Bone *curBone,
                               TreeElement *parent,
                               int *a)
 {
-  TreeElement *te = AbstractTreeDisplay::add_element(
-      space_outliner, tree, id, curBone, parent, TSE_BONE, *a);
+  TreeElement *te = tree_display.add_element<TreeElementBone>(
+      {.tree = tree, .parent = parent, .index = *a}, *id, *curBone);
 
   (*a)++;
 
   for (Bone &child_bone : curBone->childbase) {
-    outliner_add_bone(space_outliner, &te->subtree, id, &child_bone, te, a);
+    outliner_add_bone(tree_display, &te->subtree, id, &child_bone, te, a);
   }
 }
 
-void TreeElementIDArmature::expand_bones(SpaceOutliner &space_outliner) const
+void TreeElementIDArmature::expand_bones() const
 {
   int a = 0;
   for (Bone &bone : arm_.bonebase) {
-    outliner_add_bone(&space_outliner, &legacy_te_.subtree, &arm_.id, &bone, &legacy_te_, &a);
+    outliner_add_bone(*display_, &legacy_te_.subtree, &arm_.id, &bone, &legacy_te_, &a);
   }
 }
 

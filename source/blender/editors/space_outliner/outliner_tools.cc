@@ -1652,7 +1652,7 @@ static void id_override_library_delete_hierarchy_process(bContext *C,
 }
 
 static void id_fake_user_set_fn(bContext * /*C*/,
-                                ReportList * /*reports*/,
+                                ReportList *reports,
                                 Scene * /*scene*/,
                                 TreeElement * /*te*/,
                                 TreeStoreElem * /*tsep*/,
@@ -1660,17 +1660,30 @@ static void id_fake_user_set_fn(bContext * /*C*/,
 {
   ID *id = tselem->id;
 
+  if (ID_IS_LINKED(id)) {
+    BKE_report(reports,
+               RPT_INFO,
+               "Cannot set fake user on a linked datablock, consider referencing it through a "
+               "Custom Property");
+    return;
+  }
+
   id_fake_user_set(id);
 }
 
 static void id_fake_user_clear_fn(bContext * /*C*/,
-                                  ReportList * /*reports*/,
+                                  ReportList *reports,
                                   Scene * /*scene*/,
                                   TreeElement * /*te*/,
                                   TreeStoreElem * /*tsep*/,
                                   TreeStoreElem *tselem)
 {
   ID *id = tselem->id;
+
+  if (ID_IS_LINKED(id)) {
+    BKE_report(reports, RPT_INFO, "Cannot clear fake user on a linked datablock");
+    return;
+  }
 
   id_fake_user_clear(id);
 }
@@ -2662,7 +2675,7 @@ static void outliner_batch_delete_object_hierarchy_tag(
 
   /* Even though the object itself may not be deletable, some of its children may still be
    * deletable. */
-  for (Base *base_iter = static_cast<Base *>(BKE_view_layer_object_bases_get(view_layer)->first);
+  for (Base *base_iter = BKE_view_layer_object_bases_get(view_layer)->first();
        base_iter != nullptr;
        base_iter = base_iter->next)
   {
@@ -3360,7 +3373,6 @@ static wmOperatorStatus outliner_id_operation_exec(bContext *C, wmOperator *op)
     case OUTLINER_IDOP_FAKE_CLEAR: {
       /* clear fake user */
       outliner_do_libdata_operation(C, op->reports, scene, space_outliner, id_fake_user_clear_fn);
-
       WM_event_add_notifier(C, NC_ID | NA_EDITED, nullptr);
       ED_undo_push(C, "Clear Fake User");
       break;

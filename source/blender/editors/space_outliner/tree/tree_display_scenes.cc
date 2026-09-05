@@ -40,7 +40,7 @@ Vector<TreeElement *> TreeDisplayScenes::build_tree(const TreeSourceData &source
 
   for (ID *id : List<ID>(source_data.bmain->scenes)) {
     Scene *scene = reinterpret_cast<Scene *>(id);
-    TreeElement *te = add_element(&tree, id, nullptr, nullptr, TSE_SOME_ID, 0);
+    TreeElement *te = add_id_element({.tree = &tree}, id);
     TreeStoreElem *tselem = TREESTORE(te);
 
     /* New scene elements open by default */

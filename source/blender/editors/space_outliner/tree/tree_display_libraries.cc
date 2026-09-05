@@ -21,6 +21,8 @@
 #include "../outliner_intern.hh"
 #include "common.hh"
 #include "tree_display.hh"
+#include "tree_element_id_base.hh"
+#include "tree_element_shapekey.hh"
 
 namespace blender::ed::outliner {
 
@@ -94,7 +96,7 @@ Vector<TreeElement *> TreeDisplayLibraries::build_tree(const TreeSourceData &sou
 }
 
 TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar,
-                                                        Vector<TreeElement *> &lb,
+                                                        Vector<TreeElement *> &tree,
                                                         Library *lib)
 {
   const short filter_id_type = id_filter_get();
@@ -109,11 +111,11 @@ TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar,
 
   TreeElement *tenlib = nullptr;
   for (int a = 0; a < lbarray.size(); a++) {
-    if (!lbarray[a] || !lbarray[a]->first) {
+    if (!lbarray[a] || !lbarray[a]->first()) {
       continue;
     }
 
-    ID *id = static_cast<ID *>(lbarray[a]->first);
+    ID *id = lbarray[a]->first();
     const bool is_library = (GS(id->name) == ID_LI) && (lib != nullptr);
 
     /* Don't show deprecated types. */
@@ -135,10 +137,10 @@ TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar,
       if (!tenlib) {
         /* Create library tree element on demand, depending if there are any data-blocks. */
         if (lib) {
-          tenlib = add_element(&lb, reinterpret_cast<ID *>(lib), nullptr, nullptr, TSE_SOME_ID, 0);
+          tenlib = add_id_element({.tree = &tree}, reinterpret_cast<ID *>(lib));
         }
         else {
-          tenlib = add_element(&lb, nullptr, &mainvar, nullptr, TSE_ID_BASE, 0);
+          tenlib = add_element<TreeElementIDBase>({.tree = &tree, .persistent_ptr = &mainvar});
           tenlib->name = IFACE_("Current File");
         }
       }
@@ -151,17 +153,20 @@ TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar,
           ten = tenlib;
         }
         else if (id->lib == lib) {
-          ten = add_element(
-              &tenlib->subtree, reinterpret_cast<ID *>(lib), nullptr, nullptr, TSE_ID_BASE, a);
+          ten = add_element<TreeElementIDBase>(
+              {.tree = &tenlib->subtree, .index = a, .persistent_ptr = lib});
           ten->name = outliner_idcode_to_plural(GS(id->name));
         }
 
         for (ID *id : List<ID>(lbarray[a])) {
           if (library_id_filter_poll(lib, id)) {
             /* Shape Key isn't treated as ID in outliner, see #TreeElementShapeKeyBase. */
-            const eTreeStoreElemType type = GS(id->name) == ID_KE ? TSE_SHAPE_KEY_BASE :
-                                                                    TSE_SOME_ID;
-            add_element(&ten->subtree, id, nullptr, ten, type, 0);
+            if (GS(id->name) == ID_KE) {
+              add_element<TreeElementShapeKeyBase>({.parent = ten}, *reinterpret_cast<Key *>(id));
+            }
+            else {
+              add_id_element({.parent = ten}, id);
+            }
           }
         }
       }

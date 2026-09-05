@@ -118,7 +118,7 @@ static wmOperatorStatus outliner_highlight_update_invoke(bContext *C,
 
   /* Drag and drop does its own highlighting. */
   wmWindowManager *wm = CTX_wm_manager(C);
-  if (wm->runtime->drags.first) {
+  if (wm->runtime->drags.first_) {
     return OPERATOR_PASS_THROUGH;
   }
 
@@ -1479,7 +1479,8 @@ static wmOperatorStatus outliner_start_filter_exec(bContext *C, wmOperator * /*o
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
   ScrArea *area = CTX_wm_area(C);
   ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_HEADER);
-  ui::textbutton_activate_rna(C, region, space_outliner, "filter_text");
+
+  ED_region_activate_rna_prop(C, region, space_outliner, "filter_text");
 
   return OPERATOR_FINISHED;
 }
@@ -1527,12 +1528,16 @@ void outliner_set_coordinates(const ARegion *region, SpaceOutliner *space_outlin
   int starty = int(region->v2d.tot.ymax) - UI_UNIT_Y;
 
   tree_iterator::all(space_outliner->runtime->tree, [&](TreeElement *te) {
-    /* store coord and continue, we need coordinates for elements outside view too */
+    /* Set coordinates to zero for all elements. This is done to reset coordinates of collapsed
+     * elements. */
     te->xs = 0;
-    /* Set coordinates to zero for collapsed elements. */
-    const bool is_open = te->parent && TSELEM_OPEN(te->parent->store_elem, space_outliner);
-    te->ys = is_open ? float(starty) : 0;
-    starty -= is_open ? UI_UNIT_Y : 0;
+    te->ys = 0;
+  });
+
+  tree_iterator::all_open(*space_outliner, [&](TreeElement *te) {
+    /* store coord and continue, we need coordinates for elements outside view too */
+    te->ys = float(starty);
+    starty -= UI_UNIT_Y;
   });
 }
 
@@ -1978,7 +1983,7 @@ static void tree_element_to_path(TreeElement *te,
 
   /* step 2: step down hierarchy building the path
    * (NOTE: addhead in previous loop was needed so that we can loop like this) */
-  for (const LinkData *ld = static_cast<const LinkData *>(hierarchy.first); ld; ld = ld->next) {
+  for (const LinkData *ld = hierarchy.first(); ld; ld = ld->next) {
     /* get data */
     TreeElement *tem = static_cast<TreeElement *>(ld->data);
     TreeElementRNACommon *tem_rna = tree_element_cast<TreeElementRNACommon>(tem);

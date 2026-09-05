@@ -170,6 +170,10 @@ ImBuf *BKE_brush_gen_radial_control_imbuf(Brush *br, bool secondary, bool displa
 
 /* Unified strength size and color. */
 
+bool BKE_brush_use_unified_size(const Paint *paint, const Brush *brush);
+bool BKE_brush_use_unified_strength(const Paint *paint, const Brush *brush);
+bool BKE_brush_use_unified_color(const Paint *paint, const Brush *brush);
+
 struct BrushColorJitterSettings {
   int flag;
   /** Jitter amounts */
@@ -237,6 +241,10 @@ float normal_weight_get(const Brush &brush, bool invert);
 
 /* debugging only */
 void BKE_brush_debug_print_state(Brush *br);
+
+namespace bke::brush {
+bool implements_3d_texture_paint(const Brush &brush);
+}
 
 /* -------------------------------------------------------------------- */
 /** \name Brush Capabilities

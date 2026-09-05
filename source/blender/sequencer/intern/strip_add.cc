@@ -19,6 +19,7 @@
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 #include "DNA_sound_types.h"
+#include "DNA_userdef_types.h"
 
 #include "BLI_math_base.hh"
 #include "BLI_path_utils.hh"
@@ -59,6 +60,11 @@
 #include "utils.hh"
 
 namespace blender::seq {
+
+int default_strip_length(const double scene_fps)
+{
+  return std::max(1, int(std::round(U.sequencer_default_strip_length * scene_fps)));
+}
 
 void add_load_data_init(LoadData *load_data,
                         const char *name,
@@ -244,6 +250,7 @@ Strip *add_image_strip(Main *bmain, Scene *scene, ListBaseT<Strip> *seqbase, Loa
   strip->content_length_set(load_data->image.count);
   StripData *data = strip->data;
   data->stripdata = MEM_new_array<StripElem>(load_data->image.count, "stripelem");
+  data->stripdata_num = load_data->image.count;
 
   if (strip->content_length() == 1) {
     strip->flag |= SEQ_SINGLE_FRAME_CONTENT;
@@ -328,6 +335,7 @@ Strip *add_sound_strip(Main *bmain, Scene *scene, ListBaseT<Strip> *seqbase, Loa
   StripData *data = strip->data;
   /* We only need 1 element to store the filename. */
   StripElem *se = data->stripdata = MEM_new<StripElem>("stripelem");
+  data->stripdata_num = 1;
   BLI_path_split_dir_file(
       load_data->path, data->dirpath, sizeof(data->dirpath), se->filename, sizeof(se->filename));
 
@@ -499,6 +507,7 @@ Strip *add_movie_strip(Main *bmain, Scene *scene, ListBaseT<Strip> *seqbase, Loa
   /* We only need 1 element for MOVIE strips. */
   StripElem *se;
   data->stripdata = se = MEM_new<StripElem>("stripelem");
+  data->stripdata_num = 1;
   data->stripdata->orig_width = orig_width;
   data->stripdata->orig_height = orig_height;
   data->stripdata->orig_fps = video_fps;
@@ -538,13 +547,11 @@ static void add_reload_new_file_impl(
 
   switch (strip->type) {
     case STRIP_TYPE_IMAGE: {
-      /* Hack? */
-      int olen = MEM_allocN_len(strip->data->stripdata) / sizeof(StripElem);
-
-      olen -= strip->anim_startofs;
-      olen -= strip->anim_endofs;
-      olen = std::max(olen, 0);
-      strip->content_length_set(olen);
+      int new_len = strip->data->stripdata_num;
+      new_len -= strip->anim_startofs;
+      new_len -= strip->anim_endofs;
+      new_len = std::max(new_len, 0);
+      strip->content_length_set(new_len);
       break;
     }
     case STRIP_TYPE_MOVIE: {

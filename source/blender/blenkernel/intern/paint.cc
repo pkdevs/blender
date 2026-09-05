@@ -73,6 +73,8 @@
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
+#include "GPU_texture.hh"
+
 #include "PRF_profile.hh"
 
 #include "RNA_enum_types.hh"
@@ -255,80 +257,102 @@ IDTypeInfo IDType_ID_PC = {
     .lib_override_apply_post = nullptr,
 };
 
-static ePaintOverlayControlFlags overlay_flags = ePaintOverlayControlFlags{};
+namespace bke::paint {
 
-void BKE_paint_invalidate_overlay_tex(const Main &bmain,
-                                      Scene *scene,
-                                      ViewLayer *view_layer,
-                                      const Tex *tex)
+void invalidate_overlay_tex(Scene &scene, const Tex *tex)
 {
-  Paint *paint = BKE_paint_get_active(bmain, scene, view_layer);
-  if (!paint) {
-    return;
-  }
+  BKE_paint_settings_foreach_mode(scene.toolsettings, [&](Paint &paint) {
+    const Brush *br = BKE_paint_brush_for_read(&paint);
+    if (!br) {
+      return;
+    }
 
-  Brush *br = BKE_paint_brush(paint);
+    if (br->mtex.tex == tex) {
+      paint.runtime->overlay_flags |= eOverlayControlFlags::InvalidTexturePrimary;
+    }
+    if (br->mask_mtex.tex == tex) {
+      paint.runtime->overlay_flags |= eOverlayControlFlags::InvalidTextureSecondary;
+    }
+  });
+}
+
+void invalidate_cursor_overlay(Scene &scene, CurveMapping *curve)
+{
+  BKE_paint_settings_foreach_mode(scene.toolsettings, [&](Paint &paint) {
+    const Brush *br = BKE_paint_brush_for_read(&paint);
+    if (br && br->curve_distance_falloff == curve) {
+      paint.runtime->overlay_flags |= eOverlayControlFlags::InvalidCurve;
+    }
+  });
+}
+
+void invalidate_overlay_all(Paint &paint)
+{
+  const Brush *br = BKE_paint_brush_for_read(&paint);
   if (!br) {
     return;
   }
-
-  if (br->mtex.tex == tex) {
-    overlay_flags |= PAINT_OVERLAY_INVALID_TEXTURE_PRIMARY;
-  }
-  if (br->mask_mtex.tex == tex) {
-    overlay_flags |= PAINT_OVERLAY_INVALID_TEXTURE_SECONDARY;
-  }
+  paint.runtime->overlay_flags |= eOverlayControlFlags::InvalidMask;
 }
 
-void BKE_paint_invalidate_cursor_overlay(const Main &bmain,
-                                         Scene *scene,
-                                         ViewLayer *view_layer,
-                                         CurveMapping *curve)
+void invalidate_overlay_all(Scene &scene)
 {
-  Paint *paint = BKE_paint_get_active(bmain, scene, view_layer);
-  if (paint == nullptr) {
-    return;
-  }
-
-  Brush *br = BKE_paint_brush(paint);
-  if (br && br->curve_distance_falloff == curve) {
-    overlay_flags |= PAINT_OVERLAY_INVALID_CURVE;
-  }
+  BKE_paint_settings_foreach_mode(scene.toolsettings,
+                                  [&](Paint &paint) { invalidate_overlay_all(paint); });
 }
 
-void BKE_paint_invalidate_overlay_all()
+eOverlayControlFlags get_overlay_flags(const Paint &paint)
 {
-  overlay_flags |= (PAINT_OVERLAY_INVALID_TEXTURE_SECONDARY |
-                    PAINT_OVERLAY_INVALID_TEXTURE_PRIMARY | PAINT_OVERLAY_INVALID_CURVE);
+  return paint.runtime->overlay_flags;
 }
 
-ePaintOverlayControlFlags BKE_paint_get_overlay_flags()
-{
-  return overlay_flags;
-}
-
-void BKE_paint_set_overlay_override(eOverlayFlags flags)
+void set_overlay_brush_override(Paint &paint, eOverlayFlags const flags)
 {
   if (flags & BRUSH_OVERLAY_OVERRIDE_MASK) {
     if (flags & BRUSH_OVERLAY_CURSOR_OVERRIDE_ON_STROKE) {
-      overlay_flags |= PAINT_OVERLAY_OVERRIDE_CURSOR;
+      paint.runtime->overlay_flags |= eOverlayControlFlags::OverrideCursor;
     }
     if (flags & BRUSH_OVERLAY_PRIMARY_OVERRIDE_ON_STROKE) {
-      overlay_flags |= PAINT_OVERLAY_OVERRIDE_PRIMARY;
+      paint.runtime->overlay_flags |= eOverlayControlFlags::OverridePrimary;
     }
     if (flags & BRUSH_OVERLAY_SECONDARY_OVERRIDE_ON_STROKE) {
-      overlay_flags |= PAINT_OVERLAY_OVERRIDE_SECONDARY;
+      paint.runtime->overlay_flags |= eOverlayControlFlags::OverrideSecondary;
     }
   }
   else {
-    overlay_flags &= ~PAINT_OVERRIDE_MASK;
+    paint.runtime->overlay_flags &= ~eOverlayControlFlags::OverrideMask;
   }
 }
 
-void BKE_paint_reset_overlay_invalid(ePaintOverlayControlFlags flag)
+void reset_overlay_flag(Paint &paint, const eOverlayControlFlags flag)
 {
-  overlay_flags &= ~(flag);
+  paint.runtime->overlay_flags &= ~(flag);
 }
+
+TexSnapshot::~TexSnapshot()
+{
+  if (this->overlay_texture) {
+    GPU_texture_free(this->overlay_texture);
+  }
+}
+
+CursorSnapshot::~CursorSnapshot()
+{
+  if (this->overlay_texture) {
+    GPU_texture_free(this->overlay_texture);
+  }
+}
+
+void cursor_reinitialize_textures(Paint &paint)
+{
+  paint.runtime->primary_snap = std::make_unique<TexSnapshot>();
+  paint.runtime->secondary_snap = std::make_unique<TexSnapshot>();
+  paint.runtime->cursor_snap = std::make_unique<CursorSnapshot>();
+
+  invalidate_overlay_all(paint);
+}
+
+}  // namespace bke::paint
 
 bool BKE_paint_ensure_from_paintmode(Scene *sce, PaintMode mode)
 {
@@ -607,36 +631,6 @@ PaintMode BKE_paintmode_get_from_tool(const bToolRef *tref)
   return PaintMode::Invalid;
 }
 
-bool BKE_paint_use_unified_size(const Paint *paint)
-{
-  /* For now, Grease Pencil Draw mode doesn't use the unified paint settings. */
-  if (paint->runtime->ob_mode == OB_MODE_PAINT_GREASE_PENCIL) {
-    return false;
-  }
-
-  return paint->brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_SIZE;
-}
-
-bool BKE_paint_use_unified_strength(const Paint *paint)
-{
-  /* For now, Grease Pencil Draw mode doesn't use the unified paint settings. */
-  if (paint->runtime->ob_mode == OB_MODE_PAINT_GREASE_PENCIL) {
-    return false;
-  }
-
-  return paint->brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_ALPHA;
-}
-
-bool BKE_paint_use_unified_color(const Paint *paint)
-{
-  /* For now, Grease Pencil Draw mode doesn't use the unified paint settings. */
-  if (paint->runtime->ob_mode == OB_MODE_PAINT_GREASE_PENCIL) {
-    return false;
-  }
-
-  return paint->brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_COLOR;
-}
-
 /**
  * After changing #Paint.brush_asset_reference, call this to activate the matching brush, importing
  * it if necessary. Has no effect if #Paint.brush is set already.
@@ -749,7 +743,7 @@ bool BKE_paint_brush_set(Paint *paint, Brush *brush)
     paint->brush_asset_reference = asset_reference_create_from_brush(brush);
   }
 
-  BKE_paint_invalidate_overlay_all();
+  bke::paint::invalidate_overlay_all(*paint);
 
   return true;
 }
@@ -1184,35 +1178,10 @@ static void paint_runtime_init(const ToolSettings *ts, Paint *paint)
     BLI_assert_unreachable();
   }
 
+  paint->runtime->primary_snap = std::make_unique<bke::paint::TexSnapshot>();
+  paint->runtime->secondary_snap = std::make_unique<bke::paint::TexSnapshot>();
+  paint->runtime->cursor_snap = std::make_unique<bke::paint::CursorSnapshot>();
   paint->runtime->initialized = true;
-}
-
-uint BKE_paint_get_brush_type_offset_from_paintmode(const PaintMode mode)
-{
-  switch (mode) {
-    case PaintMode::Texture2D:
-    case PaintMode::Texture3D:
-      return offsetof(Brush, image_brush_type);
-    case PaintMode::Sculpt:
-      return offsetof(Brush, sculpt_brush_type);
-    case PaintMode::Vertex:
-      return offsetof(Brush, vertex_brush_type);
-    case PaintMode::Weight:
-      return offsetof(Brush, weight_brush_type);
-    case PaintMode::GPencil:
-      return offsetof(Brush, gpencil_brush_type);
-    case PaintMode::VertexGPencil:
-      return offsetof(Brush, gpencil_vertex_brush_type);
-    case PaintMode::SculptGPencil:
-      return offsetof(Brush, gpencil_sculpt_brush_type);
-    case PaintMode::WeightGPencil:
-      return offsetof(Brush, gpencil_weight_brush_type);
-    case PaintMode::SculptCurves:
-      return offsetof(Brush, curves_sculpt_brush_type);
-    case PaintMode::Invalid:
-      break; /* We don't use these yet. */
-  }
-  return 0;
 }
 
 std::optional<int> BKE_paint_get_brush_type_from_obmode(const Brush *brush,
@@ -1343,11 +1312,6 @@ PaletteColor *BKE_palette_color_add(Palette *palette)
   return color;
 }
 
-bool BKE_palette_is_empty(const Palette *palette)
-{
-  return palette->colors.is_empty();
-}
-
 bool BKE_paint_select_face_test(const Object *ob)
 {
   return ((ob != nullptr) && (ob->type == OB_MESH) && (ob->data != nullptr) &&
@@ -1368,7 +1332,8 @@ bool BKE_paint_select_grease_pencil_test(const Object *ob)
     return false;
   }
   if (ob->type == OB_GREASE_PENCIL) {
-    return (ob->mode & (OB_MODE_SCULPT_GREASE_PENCIL | OB_MODE_VERTEX_GREASE_PENCIL));
+    return (ob->mode & (OB_MODE_PAINT_GREASE_PENCIL | OB_MODE_SCULPT_GREASE_PENCIL |
+                        OB_MODE_VERTEX_GREASE_PENCIL));
   }
   return false;
 }
@@ -1645,50 +1610,68 @@ void BKE_paint_copy(const Paint *src, Paint *dst, const int flag)
   if (src->runtime) {
     dst->runtime->paint_mode = src->runtime->paint_mode;
     dst->runtime->ob_mode = src->runtime->ob_mode;
+    dst->runtime->primary_snap = std::make_unique<bke::paint::TexSnapshot>();
+    dst->runtime->secondary_snap = std::make_unique<bke::paint::TexSnapshot>();
+    dst->runtime->cursor_snap = std::make_unique<bke::paint::CursorSnapshot>();
     dst->runtime->initialized = true;
   }
 }
 
-void BKE_paint_settings_foreach_mode(ToolSettings *ts, FunctionRef<void(Paint *paint)> fn)
+void BKE_paint_settings_foreach_mode(ToolSettings *ts, FunctionRef<void(Paint &paint)> fn)
 {
   if (ts->vpaint) {
-    fn(reinterpret_cast<Paint *>(ts->vpaint));
+    fn(*reinterpret_cast<Paint *>(ts->vpaint));
   }
   if (ts->wpaint) {
-    fn(reinterpret_cast<Paint *>(ts->wpaint));
+    fn(*reinterpret_cast<Paint *>(ts->wpaint));
   }
   if (ts->sculpt) {
-    fn(reinterpret_cast<Paint *>(ts->sculpt));
+    fn(*reinterpret_cast<Paint *>(ts->sculpt));
   }
   if (ts->gp_paint) {
-    fn(reinterpret_cast<Paint *>(ts->gp_paint));
+    fn(*reinterpret_cast<Paint *>(ts->gp_paint));
   }
   if (ts->gp_vertexpaint) {
-    fn(reinterpret_cast<Paint *>(ts->gp_vertexpaint));
+    fn(*reinterpret_cast<Paint *>(ts->gp_vertexpaint));
   }
   if (ts->gp_sculptpaint) {
-    fn(reinterpret_cast<Paint *>(ts->gp_sculptpaint));
+    fn(*reinterpret_cast<Paint *>(ts->gp_sculptpaint));
   }
   if (ts->gp_weightpaint) {
-    fn(reinterpret_cast<Paint *>(ts->gp_weightpaint));
+    fn(*reinterpret_cast<Paint *>(ts->gp_weightpaint));
   }
   if (ts->curves_sculpt) {
-    fn(reinterpret_cast<Paint *>(ts->curves_sculpt));
+    fn(*reinterpret_cast<Paint *>(ts->curves_sculpt));
   }
-  fn(reinterpret_cast<Paint *>(&ts->imapaint));
+  fn(*reinterpret_cast<Paint *>(&ts->imapaint));
 }
 
-void BKE_paint_stroke_get_average(const Paint *paint, const Object *ob, float stroke[3])
+namespace bke::paint {
+float3 stroke_get_average(const Paint *paint, const Object *ob)
 {
-  const bke::PaintRuntime &paint_runtime = *paint->runtime;
+  const PaintRuntime &paint_runtime = *paint->runtime;
   if (paint_runtime.last_stroke_valid && paint_runtime.average_stroke_counter > 0) {
     float fac = 1.0f / paint_runtime.average_stroke_counter;
-    mul_v3_v3fl(stroke, paint_runtime.average_stroke_accum, fac);
+    return paint_runtime.average_stroke_accum * fac;
   }
-  else {
-    copy_v3_v3(stroke, ob->object_to_world().location());
-  }
+
+  return ob->object_to_world().location();
 }
+void stroke_track_location(Paint &paint, float3 location)
+{
+  PaintRuntime &paint_runtime = *paint.runtime;
+  paint_runtime.average_stroke_accum += location;
+  paint_runtime.average_stroke_counter++;
+  paint_runtime.last_stroke_valid = true;
+}
+void stroke_set_location(Paint &paint, float3 location)
+{
+  PaintRuntime &paint_runtime = *paint.runtime;
+  paint_runtime.average_stroke_accum = location;
+  paint_runtime.average_stroke_counter = 1;
+  paint_runtime.last_stroke_valid = true;
+}
+}  // namespace bke::paint
 
 float3 BKE_paint_randomize_color(const BrushColorJitterSettings &color_jitter,
                                  const float3 &initial_hsv_jitter,
@@ -2382,7 +2365,7 @@ static void sculptsession_update(Depsgraph *depsgraph,
     /* Painting doesn't need crazyspace, use already evaluated mesh coordinates if possible. */
     bool used_me_eval = false;
 
-    if (ob->mode & (OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT)) {
+    if (ob->mode & (OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT | OB_MODE_TEXTURE_PAINT)) {
       const Mesh *me_eval_deform = BKE_object_get_mesh_deform_eval(ob_eval);
       BLI_assert(me_eval_deform != nullptr);
       /* If the fully evaluated mesh has the same topology as the deform-only version, use it.
@@ -2434,18 +2417,16 @@ static void sculptsession_update(Depsgraph *depsgraph,
      *
      * The relevant changes are stored/encoded in the paint canvas key.
      * These include the active uv map, and resolutions. */
-    if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint)) {
-      std::string paint_canvas_key = BKE_paint_canvas_key_get(&scene->toolsettings->paint_mode,
-                                                              ob);
+    if (USER_EXPERIMENTAL_TEST(&U, use_3d_texture_paint)) {
+      std::string paint_canvas_key = BKE_paint_canvas_key_get(scene->toolsettings->imapaint, ob);
       if (!ss.last_paint_canvas_key || paint_canvas_key != ss.last_paint_canvas_key) {
         ss.last_paint_canvas_key = paint_canvas_key;
         BKE_pbvh_mark_rebuild_pixels(pbvh);
       }
     }
 
-    /* We could be more precise when we have access to the active tool. */
-    const bool use_paint_slots = (ob->mode & OB_MODE_SCULPT) != 0;
-    if (use_paint_slots) {
+    /* Ensure attributes are correctly updated in the UI. */
+    if (ob->mode & OB_MODE_SCULPT) {
       BKE_texpaint_slots_refresh_object(scene, ob);
     }
   }

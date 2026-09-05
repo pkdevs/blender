@@ -1578,7 +1578,7 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_src_itemf(
       RNA_enum_item_add_separator(&item, &totitem);
 
       const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(ob_src);
-      for (i = 0, dg = static_cast<const bDeformGroup *>(defbase->first); dg; i++, dg = dg->next) {
+      for (i = 0, dg = defbase->first(); dg; i++, dg = dg->next) {
         tmp_item.value = i;
         tmp_item.identifier = tmp_item.name = dg->name;
         RNA_enum_item_add(&item, &totitem, &tmp_item);
@@ -1705,8 +1705,7 @@ static const EnumPropertyItem *rna_DataTransferModifier_layers_select_dst_itemf(
         RNA_enum_item_add_separator(&item, &totitem);
 
         const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(ob_dst);
-        for (i = 0, dg = static_cast<const bDeformGroup *>(defbase->first); dg; i++, dg = dg->next)
-        {
+        for (i = 0, dg = defbase->first(); dg; i++, dg = dg->next) {
           tmp_item.value = i;
           tmp_item.identifier = tmp_item.name = dg->name;
           RNA_enum_item_add(&item, &totitem, &tmp_item);
@@ -6686,7 +6685,7 @@ static void rna_def_modifier_remesh(BlenderRNA *brna)
                            "values preserve finer details.");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
-  prop = RNA_def_property(srna, "adaptivity", PROP_FLOAT, PROP_DISTANCE);
+  prop = RNA_def_property(srna, "adaptivity", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "adaptivity");
   RNA_def_property_ui_range(prop, 0, 1, 0.1, 3);
   RNA_def_property_ui_text(

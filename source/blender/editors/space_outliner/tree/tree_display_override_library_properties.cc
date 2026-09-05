@@ -16,6 +16,8 @@
 #include "../outliner_intern.hh"
 #include "common.hh"
 #include "tree_display.hh"
+#include "tree_element_id_base.hh"
+#include "tree_element_overrides.hh"
 
 namespace blender::ed::outliner {
 
@@ -58,7 +60,7 @@ Vector<TreeElement *> TreeDisplayOverrideLibraryProperties::add_library_contents
   }
 
   for (int a = 0; a < lbarray.size(); a++) {
-    if (!lbarray[a] || !lbarray[a]->first) {
+    if (!lbarray[a] || !lbarray[a]->first()) {
       continue;
     }
 
@@ -81,7 +83,7 @@ Vector<TreeElement *> TreeDisplayOverrideLibraryProperties::add_library_contents
     Vector<TreeElement *> *tree_to_expand = &tree;
 
     if (!filter_id_type) {
-      id_base_te = add_element(&tree, nullptr, lbarray[a], nullptr, TSE_ID_BASE, 0);
+      id_base_te = add_element<TreeElementIDBase>({.tree = &tree, .persistent_ptr = lbarray[a]});
       id_base_te->name = outliner_idcode_to_plural(GS(id->name));
 
       tree_to_expand = &id_base_te->subtree;
@@ -89,8 +91,8 @@ Vector<TreeElement *> TreeDisplayOverrideLibraryProperties::add_library_contents
 
     for (ID *id : List<ID>(lbarray[a])) {
       if (ID_IS_OVERRIDE_LIBRARY_REAL(id) && !ID_IS_LINKED(id)) {
-        TreeElement *override_tree_element = add_element(
-            tree_to_expand, id, nullptr, id_base_te, TSE_LIBRARY_OVERRIDE_BASE, 0);
+        TreeElement *override_tree_element = add_element<TreeElementOverridesBase>(
+            {.tree = tree_to_expand, .parent = id_base_te}, *id);
 
         if (override_tree_element->subtree.is_empty()) {
           outliner_free_tree_element(override_tree_element, tree_to_expand);
