@@ -35,6 +35,7 @@
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 
+#include "BKE_attribute.hh"
 #include "BKE_brush.hh"
 #include "BKE_image_wrappers.hh"
 #include "BKE_object_types.hh"
@@ -199,6 +200,23 @@ static BitVector<> init_uv_primitives_brush_test(SculptSession &ss,
         isect_aabb_aabb_v3(brush_bounds.min, brush_bounds.max, tri_bounds.min, tri_bounds.max));
   }
   return brush_test;
+}
+
+void apply_selection_filter(const Span<int3> corner_tris,
+                            const Span<int> tri_indices,
+                            const Span<int> corner_to_face_map,
+                            const Span<bool> select_poly,
+                            BitVector<> &brush_test)
+{
+  if (select_poly.is_empty()) {
+    return;
+  }
+
+  for (const int i : tri_indices.index_range()) {
+    const int3 &tri = corner_tris[tri_indices[i]];
+    const bool current = brush_test[i];
+    brush_test[i].set(current && select_poly[corner_to_face_map[tri[0]]]);
+  }
 }
 
 /** Cached settings for faster paint blending. */
@@ -481,8 +499,21 @@ static void do_paint_pixels(const Depsgraph &depsgraph,
   const Mesh &mesh = *id_cast<const Mesh *>(object.data);
   const Span<int> corner_verts = mesh.corner_verts();
   const Span<int3> corner_tris = mesh.corner_tris();
+
   BitVector<> brush_test = init_uv_primitives_brush_test(
       ss, corner_verts, corner_tris, pixel_node.uv_primitives.tri_indices, positions);
+
+  const bool use_face_sel = (mesh.editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
+  if (use_face_sel) {
+    const bke::AttributeAccessor attributes = mesh.attributes();
+    Span<int> corner_to_face_map = mesh.corner_to_face_map();
+    VArraySpan<bool> select_poly = *attributes.lookup<bool>(".select_poly", bke::AttrDomain::Face);
+    apply_selection_filter(corner_tris,
+                           pixel_node.uv_primitives.tri_indices,
+                           corner_to_face_map,
+                           select_poly,
+                           brush_test);
+  }
 
   const PaintBlendSettings blend_settings(paint, brush, ss.cache->toggle_settings.invert);
 
