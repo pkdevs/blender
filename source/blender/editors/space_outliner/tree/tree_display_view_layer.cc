@@ -186,7 +186,7 @@ void TreeDisplayViewLayer::add_layer_collection_objects(ListBaseT<TreeElement> &
   for (CollectionObject &cob : lc.collection->gobject) {
     Base *base = BKE_view_layer_base_find(view_layer_, cob.ob);
     TreeElement *te_object = add_id_element({.lb = &tree, .parent = &ten},
-                                                reinterpret_cast<ID *>(base->object));
+                                            reinterpret_cast<ID *>(base->object));
     te_object->abstract_element->set_data(base);
   }
 }

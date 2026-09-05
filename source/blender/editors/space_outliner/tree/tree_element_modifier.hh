@@ -79,6 +79,7 @@ class TreeElementModifier final : public AbstractTreeElement {
     }
     return nullptr;
   }
+
  private:
   /** Add a #TreeElementLinkedObject child for \a object, if the modifier references one. */
   void add_linked_object(Object *object) const;
