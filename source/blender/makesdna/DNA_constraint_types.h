@@ -859,7 +859,7 @@ struct bLocateLikeConstraint {
 /* Copy Scale Constraint */
 struct bSizeLikeConstraint {
   struct Object *tar = nullptr;
-  eCopyScale_Flags flag = {};
+  eCopyScale_Flags flag = SIZELIKE_MULTIPLY;
   float power = 0;
   char subtarget[/*MAX_NAME*/ 64] = "";
 };

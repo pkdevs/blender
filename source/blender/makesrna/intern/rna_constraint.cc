@@ -1659,7 +1659,6 @@ static void rna_def_constraint_size_like(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_add", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "flag", SIZELIKE_MULTIPLY);
-  RNA_def_property_boolean_default(prop, false);
   RNA_def_property_ui_text(
       prop,
       "Additive",
