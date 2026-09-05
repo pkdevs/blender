@@ -653,6 +653,53 @@ static bool apply_objects_internal_need_single_user(bContext *C)
   return (ID_REAL_USERS(ob->data) > CTX_DATA_COUNT(C, selected_editable_objects));
 }
 
+static void apply_grease_pencil_transform_to_shape_keys(const Key *key,
+                                                        bke::CurvesGeometry &curves,
+                                                        const float3x3 &matrix,
+                                                        const float scalef)
+{
+  if (!key) {
+    return;
+  }
+
+  bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+
+  for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
+    /* Skip the base key frame. */
+    if (&keyblock == key->refkey) {
+      continue;
+    }
+
+    const Vector<std::string> names = bke::greasepencil::shapekey_position_attribute_names(
+        keyblock.name);
+
+    for (const StringRef name : names) {
+      bke::SpanAttributeWriter<float3> key_data = attributes.lookup_or_add_for_write_span<float3>(
+          name, bke::AttrDomain::Point);
+
+      threading::parallel_for(curves.points_range(), 8192, [&](const IndexRange range) {
+        for (const int i : range) {
+          key_data.span[i] = math::transform_point(matrix, key_data.span[i]);
+        }
+      });
+
+      key_data.finish();
+    }
+
+    /* Apply scale to radius shape keys. */
+    bke::SpanAttributeWriter<float> key_radius = attributes.lookup_or_add_for_write_span<float>(
+        bke::greasepencil::shapekey_attribute_name_radius(keyblock.name), bke::AttrDomain::Point);
+
+    threading::parallel_for(curves.points_range(), 8192, [&](const IndexRange range) {
+      for (const int i : range) {
+        key_radius.span[i] *= scalef;
+      }
+    });
+
+    key_radius.finish();
+  }
+}
+
 static wmOperatorStatus apply_objects_internal(bContext *C,
                                                ReportList *reports,
                                                bool apply_loc,
@@ -930,72 +977,31 @@ static wmOperatorStatus apply_objects_internal(bContext *C,
         const float4x4 layer_to_object = layer.to_object_space(*ob);
         const float4x4 object_to_layer = math::invert(layer_to_object);
         const Map<bke::greasepencil::FramesMapKeyT, GreasePencilFrame> frames = layer.frames();
-        frames.foreach_item([&](bke::greasepencil::FramesMapKeyT /*key*/,
-                                GreasePencilFrame frame) {
-          GreasePencilDrawingBase *base = grease_pencil.drawing(frame.drawing_index);
-          if (base->type != GP_DRAWING) {
-            return;
-          }
-          bke::greasepencil::Drawing &drawing =
-              reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
-          bke::CurvesGeometry &curves = drawing.strokes_for_write();
-          MutableSpan<float> radii = drawing.radii_for_write();
-          threading::parallel_for(radii.index_range(), 8192, [&](const IndexRange range) {
-            for (const int i : range) {
-              radii[i] *= scalef;
-            }
-          });
-
-          const float4x4 matrix = object_to_layer * float4x4(mat) * layer_to_object;
-          const float3x3 matrix_without_translation = float3x3(matrix);
-
-          curves.transform(matrix);
-          curves.calculate_bezier_auto_handles();
-
-          if (!key) {
-            return;
-          }
-
-          bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-
-          for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
-            /* Skip the base key frame. */
-            if (&keyblock == key->refkey) {
-              continue;
-            }
-
-            const Vector<std::string> names = bke::greasepencil::shapekey_position_attribute_names(
-                keyblock.name);
-
-            for (const StringRef name : names) {
-              bke::SpanAttributeWriter<float3> key_data =
-                  attributes.lookup_or_add_for_write_span<float3>(name, bke::AttrDomain::Point);
-
-              threading::parallel_for(curves.points_range(), 8192, [&](const IndexRange range) {
+        frames.foreach_item(
+            [&](bke::greasepencil::FramesMapKeyT /*key*/, GreasePencilFrame frame) {
+              GreasePencilDrawingBase *base = grease_pencil.drawing(frame.drawing_index);
+              if (base->type != GP_DRAWING) {
+                return;
+              }
+              bke::greasepencil::Drawing &drawing =
+                  reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
+              bke::CurvesGeometry &curves = drawing.strokes_for_write();
+              MutableSpan<float> radii = drawing.radii_for_write();
+              threading::parallel_for(radii.index_range(), 8192, [&](const IndexRange range) {
                 for (const int i : range) {
-                  key_data.span[i] = math::transform_point(matrix_without_translation,
-                                                           key_data.span[i]);
+                  radii[i] *= scalef;
                 }
               });
 
-              key_data.finish();
-            }
+              const float4x4 matrix = object_to_layer * float4x4(mat) * layer_to_object;
+              const float3x3 matrix_without_translation = float3x3(matrix);
 
-            /* Apply scale to radius shape keys. */
-            bke::SpanAttributeWriter<float> key_radius =
-                attributes.lookup_or_add_for_write_span<float>(
-                    bke::greasepencil::shapekey_attribute_name_radius(keyblock.name),
-                    bke::AttrDomain::Point);
+              curves.transform(matrix);
+              curves.calculate_bezier_auto_handles();
 
-            threading::parallel_for(curves.points_range(), 8192, [&](const IndexRange range) {
-              for (const int i : range) {
-                key_radius.span[i] *= scalef;
-              }
+              apply_grease_pencil_transform_to_shape_keys(
+                  key, curves, matrix_without_translation, scalef);
             });
-
-            key_radius.finish();
-          }
-        });
       }
     }
     else if (ob->type == OB_POINTCLOUD) {
