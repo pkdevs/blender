@@ -461,6 +461,7 @@ if(WITH_BLENDER)
       image_zdepth
       imgdisplay
       import
+      import_export
       indirect_only_off
       indirect_only_on
       info
@@ -568,6 +569,7 @@ if(WITH_BLENDER)
       mesh_monkey
       mesh_plane
       mesh_torus
+      mesh_quadsphere
       mesh_uvsphere
       meta_ball
       meta_capsule

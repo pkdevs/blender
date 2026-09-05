@@ -1802,7 +1802,7 @@ static bool object_mouse_select_menu(bContext *C,
     return false;
   }
   if (base_count == 1) {
-    Base *base = (static_cast<BaseRefWithDepth *>(base_ref_list.first))->base;
+    Base *base = (base_ref_list.first())->base;
     base_ref_list.free_no_destruct();
     *r_basact = base;
     return false;
@@ -1815,7 +1815,7 @@ static bool object_mouse_select_menu(bContext *C,
   });
 
   while (base_count > SEL_MENU_SIZE) {
-    BLI_freelinkN(&base_ref_list, base_ref_list.last);
+    BLI_freelinkN(&base_ref_list, base_ref_list.last());
     base_count -= 1;
   }
 
@@ -2053,7 +2053,7 @@ static bool bone_mouse_select_menu(bContext *C,
   });
 
   while (bone_count > SEL_MENU_SIZE) {
-    BLI_freelinkN(&bone_ref_list, bone_ref_list.last);
+    BLI_freelinkN(&bone_ref_list, bone_ref_list.last());
     bone_count -= 1;
   }
 
@@ -2096,7 +2096,7 @@ static bool bone_mouse_select_menu(bContext *C,
 static bool selectbuffer_has_bones(const Span<GPUSelectResult> hit_results)
 {
   for (const GPUSelectResult &hit_result : hit_results) {
-    if (hit_result.id & 0xFFFF0000) {
+    if (ED_armature_selectresult_is_bone(hit_result)) {
       return true;
     }
   }
@@ -2432,7 +2432,7 @@ static Base *mouse_select_object_center(const ViewContext *vc, Base *startbase, 
     base = base->next;
 
     if (base == nullptr) {
-      base = static_cast<Base *>(BKE_view_layer_object_bases_get(view_layer)->first);
+      base = BKE_view_layer_object_bases_get(view_layer)->first();
     }
     if (base == startbase) {
       break;
@@ -2703,7 +2703,7 @@ static bool ed_object_select_pick(bContext *C,
   /* Always start list from `basact` when cycling the selection. */
   Base *startbase = (oldbasact && oldbasact->next) ?
                         oldbasact->next :
-                        static_cast<Base *>(BKE_view_layer_object_bases_get(view_layer)->first);
+                        BKE_view_layer_object_bases_get(view_layer)->first();
 
   /* The next object's base to make active. */
   Base *basact = nullptr;
@@ -4174,9 +4174,7 @@ static bool do_meta_box_select(const ViewContext *vc, const rcti *rect, const eS
   }
 
   int metaelem_id = 0;
-  for (ml = static_cast<MetaElem *>(mb->editelems->first); ml;
-       ml = ml->next, metaelem_id += 0x10000)
-  {
+  for (ml = mb->editelems->first(); ml; ml = ml->next, metaelem_id += 0x10000) {
     bool is_inside_radius = false;
     bool is_inside_stiff = false;
 
@@ -4255,12 +4253,13 @@ static bool do_armature_box_select(const ViewContext *vc, const rcti *rect, cons
 
   /* first we only check points inside the border */
   for (a = 0; a < hits; a++) {
-    const int select_id = buffer.storage[a].id;
-    if (select_id != -1) {
-      if ((select_id & 0xFFFF0000) == 0) {
-        continue;
-      }
+    GPUSelectResult &hit_result = buffer.storage[a];
+    if (!ED_armature_selectresult_is_bone(hit_result)) {
+      continue;
+    }
 
+    const int select_id = hit_result.id;
+    if (select_id != -1) {
       EditBone *ebone;
       Base *base_edit = ED_armature_base_and_ebone_from_select_buffer(bases, select_id, &ebone);
       ebone->temp.i |= select_id & BONESEL_ANY;
@@ -4362,7 +4361,7 @@ static bool do_object_box_select(bContext *C,
     }
   }
 
-  for (Base *base = static_cast<Base *>(object_bases->first); base && hits; base = base->next) {
+  for (Base *base = object_bases->first(); base && hits; base = base->next) {
     if (BASE_SELECTABLE(v3d, base)) {
       const bool is_select = base->flag & BASE_SELECTED;
       const bool is_inside = bases_inside.contains(base);
@@ -4404,6 +4403,10 @@ static void process_pose_bone_hits(GPUSelectBuffer &buffer,
        buf_iter < buf_end;
        buf_iter++)
   {
+    if (!ED_armature_selectresult_is_bone(*buf_iter)) {
+      continue;
+    }
+
     bPoseChannel *pose_bone;
     Base *base = ED_armature_base_and_pchan_from_select_buffer(bases, buf_iter->id, &pose_bone);
 
