@@ -297,16 +297,17 @@ static wmOperatorStatus render_border_exec(bContext *C, wmOperator *op)
   border.xmax = float(rect.xmax);
   border.ymax = float(rect.ymax);
 
+  /* Apply flip. */
+  if (rv3d->persp == RV3D_CAMOB && (rv3d->rflag & RV3D_MIRROR_X) != 0) {
+    std::swap(border.xmin, border.xmax);
+    border.xmin = region->winx - border.xmin;
+    border.xmax = region->winx - border.xmax;
+  }
+
   /* Remove the roll to put the border in view border space, expanding to fully cover the box. */
   if (rv3d->persp == RV3D_CAMOB && rv3d->camroll != 0.0f) {
     const float pivot[2] = {region->winx / 2.0f, region->winy / 2.0f};
     BLI_rctf_rotate_expand_around(&border, &border, pivot, -rv3d->camroll);
-
-    if ((rv3d->rflag & RV3D_MIRROR_X) != 0) {
-      std::swap(border.xmin, border.xmax);
-      border.xmin = -border.xmin;
-      border.xmax = -border.xmax;
-    }
   }
 
   border.xmin = (border.xmin - vb.xmin) / BLI_rctf_size_x(&vb);
