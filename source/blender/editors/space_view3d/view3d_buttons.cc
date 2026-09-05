@@ -383,8 +383,8 @@ static CurvesPointSelectionStatus init_curves_point_selection_status(
   array_utils::copy(curves.radius(), radius.as_mutable_span());
 
   if (key) {
-    bke::greasepencil::shapekey_get_applied_position(key, attributes, positions);
-    bke::greasepencil::shapekey_get_applied_radius(key, attributes, radius);
+    bke::greasepencil::shapekey_add_applied_position(key, attributes, positions);
+    bke::greasepencil::shapekey_add_applied_radius(key, attributes, radius);
   }
 
   IndexMaskMemory memory;
@@ -443,10 +443,10 @@ static CurvesPointSelectionStatus init_curves_point_selection_status(
       Array<float3> handle_positions = Array<float3>(*positions);
 
       if (selection_attribute == ".selection_handle_left") {
-        bke::greasepencil::shapekey_get_applied_handle_left(key, attributes, handle_positions);
+        bke::greasepencil::shapekey_add_applied_handle_left(key, attributes, handle_positions);
       }
       else {
-        bke::greasepencil::shapekey_get_applied_handle_right(key, attributes, handle_positions);
+        bke::greasepencil::shapekey_add_applied_handle_right(key, attributes, handle_positions);
       }
 
       selection.foreach_index_optimized<int>(

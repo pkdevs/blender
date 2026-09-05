@@ -573,7 +573,7 @@ void curve_populate_trans_data_structs(const TransInfo &t,
   if (key) {
     Array<float3> offset_position(curves.points_num(), float3(0.0f));
 
-    bke::greasepencil::shapekey_get_applied_position(key, attributes, offset_position);
+    bke::greasepencil::shapekey_add_applied_position(key, attributes, offset_position);
 
     points_to_transform_per_attr[0].foreach_index([&](const int point_i, const int pos) {
       positions_per_selection_attr[0][pos] += offset_position[point_i];
@@ -583,8 +583,8 @@ void curve_populate_trans_data_structs(const TransInfo &t,
       Array<float3> offset_handle_left(curves.points_num(), float3(0.0f));
       Array<float3> offset_handle_right(curves.points_num(), float3(0.0f));
 
-      bke::greasepencil::shapekey_get_applied_handle_left(key, attributes, offset_handle_left);
-      bke::greasepencil::shapekey_get_applied_handle_right(key, attributes, offset_handle_right);
+      bke::greasepencil::shapekey_add_applied_handle_left(key, attributes, offset_handle_left);
+      bke::greasepencil::shapekey_add_applied_handle_right(key, attributes, offset_handle_right);
 
       points_to_transform_per_attr[1].foreach_index([&](const int point_i, const int pos) {
         positions_per_selection_attr[1][pos] += offset_handle_left[point_i];

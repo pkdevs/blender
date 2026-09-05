@@ -741,8 +741,8 @@ bool GreasePencilStrokeOperationCommon::drawing_apply_delta_function_to_position
       array_utils::copy(*curves.handle_positions_left(), handle_left.as_mutable_span());
       array_utils::copy(*curves.handle_positions_right(), handle_right.as_mutable_span());
 
-      bke::greasepencil::shapekey_get_applied_handle_left(key, attributes, handle_left);
-      bke::greasepencil::shapekey_get_applied_handle_right(key, attributes, handle_right);
+      bke::greasepencil::shapekey_add_applied_handle_left(key, attributes, handle_left);
+      bke::greasepencil::shapekey_add_applied_handle_right(key, attributes, handle_right);
 
       const Array<float2> view_positions_left = view_positions_from_span_point_mask(
           params, handle_left, mask);

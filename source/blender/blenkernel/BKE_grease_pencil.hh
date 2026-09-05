@@ -986,22 +986,22 @@ std::string shapekey_attribute_name_handle_right(const char *name);
 Vector<std::string> shapekey_all_attribute_names(const char *name);
 Vector<std::string> shapekey_position_attribute_names(const char *name);
 
-void shapekey_get_applied_position(const Key *key,
+void shapekey_add_applied_position(const Key *key,
                                    const bke::AttributeAccessor &attributes,
                                    MutableSpan<float3> position);
-void shapekey_get_applied_radius(const Key *key,
+void shapekey_add_applied_radius(const Key *key,
                                  const bke::AttributeAccessor &attributes,
                                  MutableSpan<float> radius);
-void shapekey_get_applied_opacity(const Key *key,
+void shapekey_add_applied_opacity(const Key *key,
                                   const bke::AttributeAccessor &attributes,
                                   MutableSpan<float> opacity);
-void shapekey_get_applied_handle_left(const Key *key,
+void shapekey_add_applied_handle_left(const Key *key,
                                       const bke::AttributeAccessor &attributes,
                                       MutableSpan<float3> position);
-void shapekey_get_applied_handle_right(const Key *key,
+void shapekey_add_applied_handle_right(const Key *key,
                                        const bke::AttributeAccessor &attributes,
                                        MutableSpan<float3> position);
-void shapekey_get_applied_generic_position(const Key *key,
+void shapekey_add_applied_generic_position(const Key *key,
                                            const bke::AttributeAccessor &attributes,
                                            const StringRef &data_name,
                                            MutableSpan<float3> data);

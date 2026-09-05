@@ -148,11 +148,11 @@ void SmoothOperation::on_stroke_extended(const bContext &C, const InputSample &e
             if (keyblock_influence != 0.0f) {
               bke::CurvesGeometry curves_copy = bke::CurvesGeometry(curves);
 
-              bke::greasepencil::shapekey_get_applied_position(
+              bke::greasepencil::shapekey_add_applied_position(
                   key, attributes, curves_copy.positions_for_write());
-              bke::greasepencil::shapekey_get_applied_handle_left(
+              bke::greasepencil::shapekey_add_applied_handle_left(
                   key, attributes, curves_copy.handle_positions_left_for_write());
-              bke::greasepencil::shapekey_get_applied_handle_right(
+              bke::greasepencil::shapekey_add_applied_handle_right(
                   key, attributes, curves_copy.handle_positions_right_for_write());
 
               geometry::smooth_curve_positions(curves_copy,

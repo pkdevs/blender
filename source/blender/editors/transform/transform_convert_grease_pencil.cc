@@ -232,7 +232,7 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
           MutableSpan<float> opacity =
               curves_transform_data.value_attribute[drawing].as_mutable_span();
 
-          bke::greasepencil::shapekey_get_applied_opacity(key, attributes, opacity);
+          bke::greasepencil::shapekey_add_applied_opacity(key, attributes, opacity);
 
           value_attribute = opacity;
         }
@@ -251,7 +251,7 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
           MutableSpan<float> radius =
               curves_transform_data.value_attribute[drawing].as_mutable_span();
 
-          bke::greasepencil::shapekey_get_applied_radius(key, attributes, radius);
+          bke::greasepencil::shapekey_add_applied_radius(key, attributes, radius);
 
           value_attribute = radius;
         }
@@ -397,7 +397,7 @@ static void recalcData_grease_pencil(TransInfo *t)
             if (key) {
               Array<float3> offset_position(curves.points_num(), float3(0.0f));
 
-              bke::greasepencil::shapekey_get_applied_generic_position(
+              bke::greasepencil::shapekey_add_applied_generic_position(
                   key, attributes, position_attribute_names[name_i], offset_position);
 
               selection.foreach_index(

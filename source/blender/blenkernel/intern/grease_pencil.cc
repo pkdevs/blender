@@ -2375,7 +2375,7 @@ static void shapekey_foreach_keyblock(
   }
 }
 
-static void shapekey_get_applied_generic_float3(const Key *key,
+static void shapekey_add_applied_generic_float3(const Key *key,
                                                 const bke::AttributeAccessor &attributes,
                                                 const StringRef &data_name,
                                                 MutableSpan<float3> data)
@@ -2400,7 +2400,7 @@ static void shapekey_get_applied_generic_float3(const Key *key,
       });
 }
 
-static void shapekey_get_applied_generic_float(const Key *key,
+static void shapekey_add_applied_generic_float(const Key *key,
                                                const bke::AttributeAccessor &attributes,
                                                const StringRef &data_name,
                                                MutableSpan<float> data)
@@ -2425,12 +2425,12 @@ static void shapekey_get_applied_generic_float(const Key *key,
       });
 }
 
-void shapekey_get_applied_generic_position(const Key *key,
+void shapekey_add_applied_generic_position(const Key *key,
                                            const bke::AttributeAccessor &attributes,
                                            const StringRef &data_name,
                                            MutableSpan<float3> data)
 {
-  shapekey_get_applied_generic_float3(key, attributes, "position", data);
+  shapekey_add_applied_generic_float3(key, attributes, "position", data);
 
   if (data_name == "position") {
     return;
@@ -2438,21 +2438,21 @@ void shapekey_get_applied_generic_position(const Key *key,
   BLI_assert(ELEM(data_name, "handle_left", "handle_right"));
 
   /* The handles are offset by the main position attributes. */
-  shapekey_get_applied_generic_float3(key, attributes, data_name, data);
+  shapekey_add_applied_generic_float3(key, attributes, data_name, data);
 }
 
-void shapekey_get_applied_position(const Key *key,
+void shapekey_add_applied_position(const Key *key,
                                    const bke::AttributeAccessor &attributes,
                                    MutableSpan<float3> position)
 {
-  shapekey_get_applied_generic_float3(key, attributes, "position", position);
+  shapekey_add_applied_generic_float3(key, attributes, "position", position);
 }
 
-void shapekey_get_applied_radius(const Key *key,
+void shapekey_add_applied_radius(const Key *key,
                                  const bke::AttributeAccessor &attributes,
                                  MutableSpan<float> radius)
 {
-  shapekey_get_applied_generic_float(key, attributes, "radius", radius);
+  shapekey_add_applied_generic_float(key, attributes, "radius", radius);
 
   threading::parallel_for(radius.index_range(), 4096, [&](const IndexRange range) {
     for (const int i : range) {
@@ -2462,11 +2462,11 @@ void shapekey_get_applied_radius(const Key *key,
   });
 }
 
-void shapekey_get_applied_opacity(const Key *key,
+void shapekey_add_applied_opacity(const Key *key,
                                   const bke::AttributeAccessor &attributes,
                                   MutableSpan<float> opacity)
 {
-  shapekey_get_applied_generic_float(key, attributes, "opacity", opacity);
+  shapekey_add_applied_generic_float(key, attributes, "opacity", opacity);
 
   threading::parallel_for(opacity.index_range(), 4096, [&](const IndexRange range) {
     for (const int i : range) {
@@ -2476,18 +2476,18 @@ void shapekey_get_applied_opacity(const Key *key,
   });
 }
 
-void shapekey_get_applied_handle_left(const Key *key,
+void shapekey_add_applied_handle_left(const Key *key,
                                       const bke::AttributeAccessor &attributes,
                                       MutableSpan<float3> position)
 {
-  shapekey_get_applied_generic_position(key, attributes, "handle_left", position);
+  shapekey_add_applied_generic_position(key, attributes, "handle_left", position);
 }
 
-void shapekey_get_applied_handle_right(const Key *key,
+void shapekey_add_applied_handle_right(const Key *key,
                                        const bke::AttributeAccessor &attributes,
                                        MutableSpan<float3> position)
 {
-  shapekey_get_applied_generic_position(key, attributes, "handle_right", position);
+  shapekey_add_applied_generic_position(key, attributes, "handle_right", position);
 }
 
 void shapekey_set_applied_generic_position(const Key *key,
@@ -2503,7 +2503,7 @@ void shapekey_set_applied_generic_position(const Key *key,
 
   Array<float3> old_data(data.size());
   array_utils::copy(data, old_data.as_mutable_span());
-  shapekey_get_applied_generic_position(key, attributes, data_name, old_data.as_mutable_span());
+  shapekey_add_applied_generic_position(key, attributes, data_name, old_data.as_mutable_span());
 
   bke::SpanAttributeWriter<float3> key_data = attributes.lookup_or_add_for_write_span<float3>(
       shapekey_attribute_name_generic(actkb->name, data_name), bke::AttrDomain::Point);
@@ -2528,7 +2528,7 @@ static void shapekey_set_applied_generic_float(const Key *key,
 
   Array<float> old_data(data.size());
   array_utils::copy(data, old_data.as_mutable_span());
-  shapekey_get_applied_generic_float(key, attributes, data_name, old_data.as_mutable_span());
+  shapekey_add_applied_generic_float(key, attributes, data_name, old_data.as_mutable_span());
 
   bke::SpanAttributeWriter<float> key_data = attributes.lookup_or_add_for_write_span<float>(
       shapekey_attribute_name_generic(actkb->name, data_name), bke::AttrDomain::Point);
@@ -2944,16 +2944,16 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
     MutableSpan<float> radius = curves.radius_for_write();
     MutableSpan<float> opacity = info.drawing->opacities_for_write();
 
-    shapekey_get_applied_position(key, attributes, positions);
-    shapekey_get_applied_radius(key, attributes, radius);
-    shapekey_get_applied_opacity(key, attributes, opacity);
+    shapekey_add_applied_position(key, attributes, positions);
+    shapekey_add_applied_radius(key, attributes, radius);
+    shapekey_add_applied_opacity(key, attributes, opacity);
 
     if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
       MutableSpan<float3> handle_positions_left = curves.handle_positions_left_for_write();
       MutableSpan<float3> handle_positions_right = curves.handle_positions_right_for_write();
 
-      shapekey_get_applied_handle_left(key, attributes, handle_positions_left);
-      shapekey_get_applied_handle_right(key, attributes, handle_positions_right);
+      shapekey_add_applied_handle_left(key, attributes, handle_positions_left);
+      shapekey_add_applied_handle_right(key, attributes, handle_positions_right);
 
       curves.calculate_bezier_auto_handles();
       curves.calculate_bezier_aligned_handles();
@@ -2966,7 +2966,7 @@ static void grease_pencil_do_shape_keys(bke::GeometrySet &geometry_set)
     if (layer_edit_hints && layer_edit_hints->positions()) {
       MutableSpan<float3> edit_positions = *layer_edit_hints->positions_for_write();
 
-      shapekey_get_applied_position(key, attributes, edit_positions);
+      shapekey_add_applied_position(key, attributes, edit_positions);
     }
 
     info.drawing->tag_positions_changed();
