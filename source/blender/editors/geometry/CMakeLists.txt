@@ -40,5 +40,9 @@ set(LIB
 
 blender_add_lib(bf_editor_geometry "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
+if(WITH_XR_OPENXR)
+    target_compile_definitions(bf_editor_geometry PRIVATE WITH_XR_OPENXR)
+endif()
+
 # RNA_prototypes.hh dna_type_offsets.h
 add_dependencies(bf_editor_geometry bf_rna)

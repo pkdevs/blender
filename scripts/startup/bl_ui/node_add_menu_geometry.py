@@ -400,6 +400,7 @@ class NODE_MT_gn_input_scene_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeIsViewport")
         if context.space_data.node_tree_sub_type == 'TOOL':
             self.node_operator(layout, "GeometryNodeModalEvent")
+            self.node_operator(layout, "GeometryNodeModalValue")
             self.node_operator(layout, "GeometryNodeModalTimer")
             self.node_operator_with_outputs(
                 context, layout, "GeometryNodeToolMousePosition",

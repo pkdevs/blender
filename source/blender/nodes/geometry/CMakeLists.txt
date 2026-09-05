@@ -220,6 +220,7 @@ set(SRC
   nodes/node_geo_mesh_topology_offset_corner_in_face.cc
   nodes/node_geo_mesh_topology_vertex_of_corner.cc
   nodes/node_geo_modal_event.cc
+  nodes/node_geo_modal_value.cc
   nodes/node_geo_modal_timer.cc
   nodes/node_geo_mouse_position.cc
   nodes/node_geo_nurbs_order.cc

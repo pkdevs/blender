@@ -11315,6 +11315,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("GeometryNode", "GeometryNodeMeshToVolume");
   define("GeometryNode", "GeometryNodeMeshUVSphere");
   define("GeometryNode", "GeometryNodeModalEvent", def_geo_modal_event);
+  define("GeometryNode", "GeometryNodeModalValue", def_geo_modal_event);
   define("GeometryNode", "GeometryNodeModalTimer");
   define("GeometryNode", "GeometryNodeNURBSOrder");
   define("GeometryNode", "GeometryNodeNURBSWeight");
