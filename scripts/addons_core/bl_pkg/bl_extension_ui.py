@@ -1915,8 +1915,6 @@ class USERPREF_MT_extensions_item(Menu):
 
         from . import repo_cache_store_ensure
         from .bl_extension_ops import (
-            extension_asset_library_find,
-            extension_asset_library_id,
             extension_repos_read,
         )
 
@@ -1956,12 +1954,6 @@ class USERPREF_MT_extensions_item(Menu):
             match item_local.type:
                 case "add-on":
                     is_enabled = prefs.addons.get(addon_module_name) is not None
-                case "asset-library":
-                    library = extension_asset_library_find(
-                        prefs.filepaths.asset_libraries,
-                        extension_asset_library_id(repo.module, pkg_id),
-                    )
-                    is_enabled = library is not None and library.enabled
                 case "theme":
                     active_theme_info = pkg_repo_and_id_from_theme_path(repos_all, prefs.themes[0].filepath)
                     is_enabled = (repo_index, pkg_id) == active_theme_info
@@ -2008,13 +2000,7 @@ class USERPREF_MT_extensions_item(Menu):
                         ).module = addon_module_name
             case "asset-library":
                 if is_installed:
-                    props = layout.operator(
-                        (
-                            "extensions.package_asset_library_disable" if is_enabled else
-                            "extensions.package_asset_library_enable"
-                        ),
-                        text="Disable Asset Library" if is_enabled else "Enable Asset Library",
-                    )
+                    props = layout.operator("extensions.package_asset_library_show", text="View Details")
                     props.repo_index = repo_index
                     props.pkg_id = pkg_id
                     del props

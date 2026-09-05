@@ -4037,6 +4037,35 @@ class EXTENSIONS_OT_package_asset_library_disable(Operator):
         return {'FINISHED'}
 
 
+class EXTENSIONS_OT_package_asset_library_show(Operator):
+    """Show this asset library in Preferences"""
+    bl_idname = "extensions.package_asset_library_show"
+    bl_label = "Show asset library extension"
+    bl_options = {'INTERNAL'}
+
+    pkg_id: rna_prop_pkg_id
+    repo_index: rna_prop_repo_index
+
+    def execute(self, context):
+        repo_item = extension_repos_read_index(self.repo_index)
+        if repo_item is None:
+            return {'CANCELLED'}
+        prefs = context.preferences
+        asset_libraries = prefs.filepaths.asset_libraries
+        lib = extension_asset_library_find(asset_libraries, extension_asset_library_id(repo_item.module, self.pkg_id))
+        if lib is None:
+            return {'CANCELLED'}
+
+        asset_libraries.active = lib
+        prefs.active_section = 'ASSETS'
+
+        # No need to show the editor if it is already visible in the main window.
+        if 'PREFERENCES' not in (area.type for area in context.screen.areas):
+            bpy.ops.screen.userpref_show('INVOKE_DEFAULT')
+
+        return {'FINISHED'}
+
+
 # -----------------------------------------------------------------------------
 # Non Wrapped Actions
 #
@@ -4489,6 +4518,7 @@ classes = (
 
     EXTENSIONS_OT_package_asset_library_enable,
     EXTENSIONS_OT_package_asset_library_disable,
+    EXTENSIONS_OT_package_asset_library_show,
 
     EXTENSIONS_OT_package_upgrade_all,
     EXTENSIONS_OT_package_install_marked,
