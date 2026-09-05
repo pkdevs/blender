@@ -128,8 +128,8 @@ void TreeDisplayViewLayer::add_view_layer(Scene &scene,
   }
   else {
     /* Show collections in the view layer. */
-    TreeElement &ten = *add_element<TreeElementViewCollectionBase>({.tree = &tree, .parent = parent},
-                                                                   scene);
+    TreeElement &ten = *add_element<TreeElementViewCollectionBase>(
+        {.tree = &tree, .parent = parent}, scene);
     TREESTORE(&ten)->flag &= ~TSE_CLOSED;
 
     /* First layer collection is for master collection, don't show it. */

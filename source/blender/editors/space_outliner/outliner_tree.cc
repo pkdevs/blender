@@ -216,8 +216,9 @@ TreeElement *AbstractTreeDisplay::add_element_impl(
     FunctionRef<std::unique_ptr<AbstractTreeElement>(TreeElement &)> construct_fn)
 {
   Vector<TreeElement *> *tree = params.tree ? params.tree :
-                                           (params.parent ? &params.parent->subtree : nullptr);
-  BLI_assert_msg(tree != nullptr, "Either a sub-tree or a parent to add the element to is required");
+                                              (params.parent ? &params.parent->subtree : nullptr);
+  BLI_assert_msg(tree != nullptr,
+                 "Either a sub-tree or a parent to add the element to is required");
 
   /* Pointer to store in #TreeStoreElem.id to identify the element over rebuilds and reconstruct it
    * on file read. This is never an arbitrary pointer that happens to be reinterpreted as an ID: it
