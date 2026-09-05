@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstdint>
 #include <cstdlib>
@@ -26,9 +27,11 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_bounds.hh"
 #include "BLI_build_config.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_listbase.hh"
+#include "BLI_map.hh"
 #include "BLI_math_base_c.hh"
 #include "BLI_math_rotation_c.hh"
 #include "BLI_path_utils.hh"
@@ -719,61 +722,62 @@ static bool sound_scene_audio_animation_cache_can_extend(
          sound_scene_audio_animation_cache_has_data(audio);
 }
 
-static void sound_collect_scene_audio_animation_updates(
-    Scene *scene,
-    Depsgraph *depsgraph,
-    const std::optional<uint64_t> &frame_change_handlers_hash,
-    const int frame_start,
-    const int frame_end,
-    Set<const Scene *> &visited_scenes,
-    Set<Scene *> &live_only_scenes,
-    Vector<SoundAnimationBakeRequest> &r_requests)
+static void sound_collect_scene_audio_animation_ranges(Scene *scene,
+                                                       Depsgraph *depsgraph,
+                                                       int frame_start,
+                                                       int frame_end,
+                                                       Set<const Scene *> &scene_path,
+                                                       Set<Scene *> &live_only_scenes,
+                                                       Map<Scene *, Bounds<int>> &r_ranges)
 {
   scene = sound_original_scene(scene);
-  if (!visited_scenes.add(scene)) {
+  if (!scene_path.add(scene)) {
     return;
   }
+  if (const Bounds<int> *range = r_ranges.lookup_ptr(scene)) {
+    if (range->min <= frame_start && range->max >= frame_end) {
+      scene_path.remove(scene);
+      return;
+    }
+    frame_start = min_ii(frame_start, range->min);
+    frame_end = max_ii(frame_end, range->max);
+  }
+  r_ranges.add_overwrite(scene, Bounds<int>{frame_start, frame_end});
 
-  if (scene->ed != nullptr) {
-    seq::foreach_strip(&scene->ed->seqbase, [&](Strip *strip) {
+  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
+  if (DEG_is_evaluated(scene_eval) && scene_eval->ed != nullptr) {
+    seq::foreach_strip(&scene_eval->ed->seqbase, [&](Strip *strip) {
       if (sound_scene_strip_uses_sequencer(strip)) {
-        sound_collect_scene_audio_animation_updates(sound_original_scene(strip->scene),
-                                                    depsgraph,
-                                                    frame_change_handlers_hash,
-                                                    strip->scene->r.sfra,
-                                                    strip->scene->r.efra,
-                                                    visited_scenes,
-                                                    live_only_scenes,
-                                                    r_requests);
+        if (strip->runtime == nullptr || strip->runtime->scene_sound == nullptr) {
+          return true;
+        }
+        /* Use the evaluated audio handle: Sequencer image timing clamps to content length and
+         * handles reversal differently. The audio bounds already include trimming, Meta bounds
+         * and the Scene start offset. Audaspace integrates the actual retiming pitch samples. */
+        const double fps = scene_eval->frames_per_second();
+        double source_start, source_end;
+        if (strip->runtime->scene_sound->getSourceTimeRange(
+                frame_start / fps, (double(frame_end) + 1.0) / fps, source_start, source_end))
+        {
+          const double child_fps = strip->scene->frames_per_second();
+          sound_collect_scene_audio_animation_ranges(strip->scene,
+                                                     depsgraph,
+                                                     int(std::floor(source_start * child_fps)),
+                                                     int(std::ceil(source_end * child_fps)),
+                                                     scene_path,
+                                                     live_only_scenes,
+                                                     r_ranges);
+        }
       }
       else if (strip->type == STRIP_TYPE_SCENE && strip->scene != nullptr) {
-        /* The child sequencer is not used by this strip, so automatic preparation does not own
-         * its animation. Discard any cache left from an earlier explicit or enabled-strip bake
-         * so those future values cannot become active again later. */
+        /* The child sequencer is not used by this strip. Discard an old cache unless another
+         * reference uses that child's sequencer. */
         live_only_scenes.add(sound_original_scene(strip->scene));
       }
       return true;
     });
   }
-
-  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
-  if (!DEG_is_evaluated(scene_eval)) {
-    r_requests.append({scene, frame_start, frame_end});
-    return;
-  }
-
-  const bke::SceneAudioRuntime &audio = scene_eval->runtime->audio;
-  if (!sound_scene_audio_animation_cache_is_compatible(
-          audio, frame_change_handlers_hash, frame_start, frame_end))
-  {
-    int bake_frame_start = frame_start;
-    int bake_frame_end = frame_end;
-    if (sound_scene_audio_animation_cache_can_extend(audio, frame_change_handlers_hash)) {
-      bake_frame_start = min_ii(bake_frame_start, audio.cached_animation_frame_start);
-      bake_frame_end = max_ii(bake_frame_end, audio.cached_animation_frame_end);
-    }
-    r_requests.append({scene, bake_frame_start, bake_frame_end});
-  }
+  scene_path.remove(scene);
 }
 
 static bool sound_live_only_scene_audio_animation_cache_needs_discard(
@@ -958,17 +962,37 @@ void BKE_sound_ensure_scene_audio_animation(
   scene = sound_original_scene(scene);
   BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
 
+  Set<const Scene *> scene_path;
   Set<const Scene *> visited_scenes;
   Set<Scene *> live_only_scenes;
+  Map<Scene *, Bounds<int>> ranges;
+  sound_collect_scene_audio_animation_ranges(
+      scene, depsgraph, frame_start, frame_end, scene_path, live_only_scenes, ranges);
+
+  /* Check compatibility only after all references have contributed their ranges. A global
+   * visited set during traversal would miss both wider sibling references and their descendants.
+   */
   Vector<SoundAnimationBakeRequest> requests;
-  sound_collect_scene_audio_animation_updates(scene,
-                                              depsgraph,
-                                              frame_change_handlers_hash,
-                                              frame_start,
-                                              frame_end,
-                                              visited_scenes,
-                                              live_only_scenes,
-                                              requests);
+  for (const auto item : ranges.items()) {
+    Scene *scene_to_prepare = item.key;
+    visited_scenes.add(scene_to_prepare);
+    Scene *scene_eval = DEG_get_evaluated(depsgraph, scene_to_prepare);
+    int bake_start = item.value.min;
+    int bake_end = item.value.max;
+    if (DEG_is_evaluated(scene_eval)) {
+      const bke::SceneAudioRuntime &audio = scene_eval->runtime->audio;
+      if (sound_scene_audio_animation_cache_is_compatible(
+              audio, frame_change_handlers_hash, bake_start, bake_end))
+      {
+        continue;
+      }
+      if (sound_scene_audio_animation_cache_can_extend(audio, frame_change_handlers_hash)) {
+        bake_start = min_ii(bake_start, audio.cached_animation_frame_start);
+        bake_end = max_ii(bake_end, audio.cached_animation_frame_end);
+      }
+    }
+    requests.append({scene_to_prepare, bake_start, bake_end});
+  }
   bool has_live_only_cache = false;
   for (Scene *live_only_scene : live_only_scenes) {
     if (sound_live_only_scene_audio_animation_cache_needs_discard(
