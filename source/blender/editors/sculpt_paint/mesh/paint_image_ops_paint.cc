@@ -470,7 +470,7 @@ struct ExperimentalTexturePaintStroke final : public PaintStroke {
   ImagePaintSettings *settings_;
 
   ExperimentalTexturePaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
-      : PaintStroke(C, op, event)
+      : PaintStroke(C, op, event, PaintMode::Texture3D)
   {
     base_ = CTX_data_active_base(C);
     ToolSettings *tool_settings = CTX_data_tool_settings(C);
