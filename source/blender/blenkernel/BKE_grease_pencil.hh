@@ -986,6 +986,7 @@ std::string shapekey_attribute_name_handle_right(const char *name);
 Vector<std::string> shapekey_all_attribute_names(const char *name);
 Vector<std::string> shapekey_position_attribute_names(const char *name);
 
+/* Add all shape key deformations to the data in the `MutableSpan` */
 void shapekey_add_applied_position(const Key *key,
                                    const bke::AttributeAccessor &attributes,
                                    MutableSpan<float3> position);
