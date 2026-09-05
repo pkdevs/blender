@@ -200,16 +200,30 @@ static bool asset_write_in_library(Main &bmain,
   if (success) {
     const IDTypeInfo *idtype = BKE_idtype_get_info_from_id(&id);
     final_full_file_path = std::string(filepath) + SEP + std::string(idtype->name) + SEP + name;
+
+    if (id.lib && STREQ(id.lib->runtime->filepath_abs, filepath.c_str())) {
+      BKE_libblock_runtime_ensure(id);
+      id.runtime->asset_orig_idname = name;
+    }
   }
 
   return success;
+}
+
+/* Library-file name; stays stable after a session rename. */
+static const char *asset_edit_library_idname(const ID &id)
+{
+  if (id.runtime && !id.runtime->asset_orig_idname.empty()) {
+    return id.runtime->asset_orig_idname.c_str();
+  }
+  return id.name + 2;
 }
 
 static ID *asset_reload(Main &global_main, ID &id, ReportList *reports)
 {
   BLI_assert(ID_IS_LINKED(&id));
 
-  const std::string name = BKE_id_name(id);
+  const std::string name = asset_edit_library_idname(id);
   const std::string filepath = id.lib->runtime->filepath_abs;
   const ID_Type id_type = GS(id.name);
 
@@ -404,15 +418,6 @@ ID *asset_edit_id_from_weak_reference(Main &global_main,
   return asset_link_id(global_main, id_type, asset_lib_path, asset_name);
 }
 
-/* Library-file name so weak refs stay stable after a session rename. */
-static const char *asset_edit_idname_for_weak_reference(const ID &id)
-{
-  if (id.runtime && !id.runtime->asset_orig_idname.empty()) {
-    return id.runtime->asset_orig_idname.c_str();
-  }
-  return id.name + 2;
-}
-
 std::optional<AssetWeakReference> asset_edit_weak_reference_from_id(const ID &id)
 {
   /* Brush is local to the file. */
@@ -434,7 +439,7 @@ std::optional<AssetWeakReference> asset_edit_weak_reference_from_id(const ID &id
       &U, id.lib->runtime->filepath_abs);
 
   const short idcode = GS(id.name);
-  const char *idname = asset_edit_idname_for_weak_reference(id);
+  const char *idname = asset_edit_library_idname(id);
 
   if (user_library && user_library->dirpath[0]) {
     return asset_weak_reference_for_user_library(
@@ -531,6 +536,9 @@ ID *asset_edit_id_ensure_local(Main &global_main, ID &id)
     GHashIterator gh_iter;
     GHASH_ITER (gh_iter, old_to_new_id) {
       ID *now_local_id = static_cast<ID *>(BLI_ghashIterator_getValue(&gh_iter));
+      if (now_local_id->runtime) {
+        now_local_id->runtime->asset_orig_idname.clear();
+      }
       BKE_library_foreach_ID_link(
           &global_main,
           now_local_id,
