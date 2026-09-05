@@ -347,7 +347,7 @@ static bool rna_path_parse(const PointerRNA *ptr,
     /* look up property name in current struct */
     prop = nullptr;
     if (const auto *member = std::get_if<rna_path::Member>(item_iter)) {
-      prop = RNA_struct_find_property(&curptr, member->identifier.c_str());
+      prop = RNA_struct_find_property(&curptr, member->identifier);
     }
     else if (const auto *lookup_key = std::get_if<rna_path::LookupKey>(item_iter)) {
       IDProperty *group = RNA_struct_idprops(&curptr, false);
@@ -900,7 +900,7 @@ static char *rna_idp_path(PointerRNA *ptr,
   link.name = nullptr;
   link.index = -1;
 
-  for (iter = static_cast<IDProperty *>(haystack->data.group.first); iter; iter = iter->next) {
+  for (iter = haystack->data.group.first(); iter; iter = iter->next) {
     if (needle == iter) { /* found! */
       link.name = iter->name;
       link.index = -1;
@@ -1150,7 +1150,7 @@ static void rna_path_array_multi_string_from_flat_index(const PointerRNA *ptr,
                                                         int index_dim,
                                                         int index,
                                                         char *index_str,
-                                                        int index_str_len)
+                                                        int index_str_maxncpy)
 {
   int dimsize[RNA_MAX_ARRAY_LENGTH];
   int totdims = RNA_property_array_dimension(ptr, prop, dimsize);
@@ -1158,9 +1158,9 @@ static void rna_path_array_multi_string_from_flat_index(const PointerRNA *ptr,
 
   rna_path_array_multi_from_flat_index(dimsize, totdims, index_dim, index, index_multi);
 
-  for (int i = 0, offset = 0; (i < index_dim) && (offset < index_str_len); i++) {
+  for (int i = 0, offset = 0; (i < index_dim) && (offset < index_str_maxncpy); i++) {
     offset += BLI_snprintf_rlen(
-        &index_str[offset], index_str_len - offset, "[%d]", index_multi[i]);
+        &index_str[offset], index_str_maxncpy - offset, "[%d]", index_multi[i]);
   }
 }
 

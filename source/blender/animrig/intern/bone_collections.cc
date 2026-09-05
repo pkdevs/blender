@@ -608,6 +608,10 @@ void ANIM_armature_bonecoll_name_set(Main &bmain,
 
   bonecoll_ensure_name_unique(armature, bcoll);
 
+  if (armature->runtime->active_collection == bcoll) {
+    STRNCPY(armature->active_collection_name, bcoll->name);
+  }
+
   /* Bone collections can be reached via .collections (4.0+) and .collections_all (4.1+).
    * Animation data from 4.0 should have been versioned to only use `.collections_all`. */
   const DriverMap driver_map = BKE_animdata_build_driver_target_map(bmain);
@@ -1112,8 +1116,7 @@ void ANIM_armature_bonecoll_show_from_bone(bArmature *armature, const Bone *bone
    *
    * Since bones without collection are considered visible,
    * bone->runtime.collections.first is certainly a valid pointer. */
-  BoneCollectionReference *ref = static_cast<BoneCollectionReference *>(
-      bone->runtime.collections.first);
+  BoneCollectionReference *ref = bone->runtime.collections.first();
   ref->bcoll->flags |= BONE_COLLECTION_VISIBLE;
 }
 
@@ -1127,8 +1130,7 @@ void ANIM_armature_bonecoll_show_from_ebone(bArmature *armature, const EditBone 
    *
    * Since bones without collection are considered visible,
    * ebone->bone_collections.first is certainly a valid pointer. */
-  BoneCollectionReference *ref = static_cast<BoneCollectionReference *>(
-      ebone->bone_collections.first);
+  BoneCollectionReference *ref = ebone->bone_collections.first();
   ref->bcoll->flags |= BONE_COLLECTION_VISIBLE;
 }
 
