@@ -116,6 +116,7 @@ void PathTraceWorkCPU::initial_resampling(const int64_t image_width,
   });
 }
 
+// !!!(Tri): Only Spatial Resampling calls render_samples_direct_illumination() which calls -> integrator_restir()
 void PathTraceWorkCPU::spatial_resampling(const int64_t image_width,
                                           const int64_t image_height,
                                           const int start_sample,
@@ -137,6 +138,8 @@ void PathTraceWorkCPU::spatial_resampling(const int64_t image_width,
     render_samples_direct_illumination(kernel_globals, work_tile, iteration);
   });
 }
+
+// TODO(Tri): temporal_resampling()
 
 void PathTraceWorkCPU::evaluate_final_samples(const int64_t image_width,
                                               const int64_t image_height,
@@ -180,11 +183,26 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   local_arena.execute(
       [&] { initial_resampling(image_width, image_height, start_sample, sample_offset); });
 
+// TODO(Tri): Real per-pass separation & decoupling! Later on...
+
   /* TODO(weizhen): spatial resampling makes adaptive sampling (noise threshold) fail. */
-  /* Spatial Resampling. */
+  /* Spatial + Temporal Resampling.
+   *
+   * restir_spatial_iterations == 0 is a valid configuration meaning "no
+   * spatial reuse"; evaluate_final_samples() below correctly falls back to
+   * reading straight from pass_restir_reservoir in that case. However,
+   * integrator_restir() is also the only place streaming_temporal_sample()
+   * is reachable from, so if temporal reuse is enabled it must still run
+   * at least once even when spatial_iterations is 0. Spatial math itself
+   * degrades to a no-op automatically when restir_spatial_neighbors == 0
+   * (see streaming_di_samples()'s neighbor loop), so forcing one pass here
+   * does not silently reintroduce spatial reuse the user disabled. */
   int i = 0;
   if (device_scene_->data.integrator.use_restir) {
-    for (; i < device_scene_->data.integrator.restir_spatial_iterations; i++) {
+    const int dispatch_count = max(device_scene_->data.integrator.restir_spatial_iterations,
+                                   device_scene_->data.integrator.restir_temporal_history_limit > 0 ? 1 : 0);
+
+    for (; i < dispatch_count; i++) {
       local_arena.execute(
           [&] { spatial_resampling(image_width, image_height, start_sample, sample_offset, i); });
     }
@@ -286,6 +304,7 @@ void PathTraceWorkCPU::render_samples_full_pipeline(ThreadKernelGlobalsCPU *kern
   }
 }
 
+// TODO(Tri): Hook up Temporal
 void PathTraceWorkCPU::render_samples_direct_illumination(ThreadKernelGlobalsCPU *kernel_globals,
                                                           const KernelWorkTile &work_tile,
                                                           const int iteration)

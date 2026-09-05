@@ -514,7 +514,7 @@ ccl_device_inline bool restir_unpack_reservoir(KernelGlobals kg, // !!!: lamp
   }
 
 printf( // Accepted candidates
-    "\n=== UNPACKED REFERENCE ===\n"
+    "\n=== UNPACKED REFERENCE; Accepted candidates ===\n"
     "total_weight=%f\n"
     "luminance=%f\n"
     "type=%d\n"

@@ -859,6 +859,7 @@ ccl_device_inline void film_write_pass_reservoir_temporal(
   film_write_pass_reservoir_at(reservoir, ptr);
 }
 
+// TODO(Tri): film_clear_pass_reservoir() zeroes temporal_history_reservoir unconditionally on every integrator_init_from_camera(): Fixed!
 // !!!: Called in init_from_camera; Don't we need a `film_clear_pass_reservoir_pt()` as well?
 // !!!: It does not clear object prim, u, v, luminance
 /* TODO(weizhen): clear data properly. */
@@ -872,16 +873,20 @@ ccl_device_inline void film_clear_pass_reservoir(KernelGlobals kg,
 
   ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
 
-  /* Set DI reservoir weights to zero.
-   * offset + 6 = total_weight */
+  /* Set DI reservoir weights to zero. */
   ccl_global float *ptr = buffer + kernel_data.film.pass_restir_reservoir + 6;
   film_overwrite_pass_float(ptr, 0.0f);
 
   ptr = buffer + kernel_data.film.pass_restir_previous_reservoir + 6;
   film_overwrite_pass_float(ptr, 0.0f);
 
-  ptr = buffer + kernel_data.film.pass_restir_temporal_history_reservoir + 6;
-  film_overwrite_pass_float(ptr, 0.0f);
+  // ptr = buffer + kernel_data.film.pass_restir_temporal_history_reservoir + 6;
+  // film_overwrite_pass_float(ptr, 0.0f);
+  /* pass_restir_temporal_history_reservoir is deliberately NOT cleared here.
+   * Unlike the DI/PT reservoirs above, this pass is write-once-per-sample
+   * and it must survive across every call to integrator_init_from_camera().
+   * film_write_pass_reservoir_temporal() fully overwrites all fields.
+   */
 
   /* Set PT reservoir weights to zero. */
   ptr = buffer + kernel_data.film.pass_restir_pt_reservoir;

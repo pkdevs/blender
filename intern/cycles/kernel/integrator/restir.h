@@ -58,7 +58,7 @@ struct SpatialResampling {
  * rather than stored in the render buffer in `shader_setup_from_restir()`.
  */
 /* TODO(weizhen): better to pack in another pass. */
-ccl_device_inline bool integrator_restir_unpack_shader(ccl_private ShaderData *sd,
+ccl_device_inline bool integrator_restir_unpack_shader(ccl_private ShaderData *sd, 
                                                        ccl_private uint32_t *path_flag,
                                                        const ccl_global float *buffer)
 {
@@ -79,7 +79,12 @@ ccl_device_inline bool integrator_restir_unpack_shader(ccl_private ShaderData *s
   /* TODO(weizhen): do I need to write to this? */
   // sd->closure_transparent_extinction;
 
+  // printf("\nintegrator_restir_unpack_shader():\n"
+  //        "u=%f v=%f type=%d object=%d prim=%d lcg_state=%d\n\n",
+  //        (double)sd->u, (double)sd->v, sd->type, sd->object, sd->prim, sd->lcg_state);
+
   /* Whether there is valid interesction at the current shading point. */
+  // TODO(Tri):
   /* TODO(weizhen): revisit this condition when we support background and distant lights. */ // !!!
   return sd->type; // !!!: a 0 type can mean that there was no valid surface intersection stored for this pixel.
 }
@@ -294,6 +299,8 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
 
   Reservoir canonical = current->reservoir;
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
+
+// TODO(Tri): Pull canonical-unpack out of here, so both callers (this+temporal) can use it in integrate_restir()
   if (integrator_restir_unpack_reservoir( // !!!: Re-Constructs DI analytic lights only
           kg, &canonical, render_pixel_index, render_buffer, read_prev))
   {
@@ -518,8 +525,8 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
   ccl_global const float *buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
                                    kernel_data.film.pass_restir_temporal_history_reservoir;
 
-  if (!restir_unpack_reservoir(kg, &history, buffer)) {
-    printf("streaming_temporal_sample() RETURNED EARLY! can't unpack history\n\n\n");
+  if (!restir_unpack_reservoir(kg, &history, buffer)) { // !!!: Always failing here 
+    // printf("streaming_temporal_sample() RETURNED EARLY! can't unpack history\n\n\n");
     return false; /* No valid history yet (first sample, or history invalidated). */
   }
 
@@ -554,6 +561,7 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
 
   current->reservoir.M += history.M;
 
+// printf("\n--- streaming_temporal_sample(), returned true! ---\n\n\n");
   return true;
 }
 
@@ -711,14 +719,16 @@ ccl_device bool integrator_restir(KernelGlobals kg,
                                   const int y,
                                   const int scheduled_sample)
 {
+  printf("--- integrator_restir(), Ran! ---\n\n\n");
   PROFILING_INIT(kg, PROFILING_RESTIR_SPATIAL_RESAMPLING);
 
   SpatialReservoir current;
   spatial_reservoir_init(kg, &current, true); // !!!: require_valid_reference
 
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
-  if (!integrator_restir_unpack_shader(kg, &current, render_pixel_index, render_buffer)) {
+  if (!integrator_restir_unpack_shader(kg, &current, render_pixel_index, render_buffer)) { // !!!: Returns type... So, LIGHT_SUN==false?
     integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR);
+    printf("--- integrator_restir(), early Returned!!! can't unpack! ---\n\n\n");
     return false;
   }
 
@@ -736,34 +746,37 @@ ccl_device bool integrator_restir(KernelGlobals kg,
 
   const bool visibility = kernel_data.integrator.restir_unbiased; // !!!: power heuristics
 
+  printf("--- integrator_restir(), ENTERING streaming_temporal_sample() ---\n\n\n"); // !!!: Never reaches with spatial off
 // TODO(Tri):
-// !!!: Commented out, since it never logged!
-// const Spectrum rad_sum_1 = current.reservoir.radiance.sum;
-// if (rad_sum_1.x > 0 || rad_sum_1.y > 0 || rad_sum_1.z > 0) { // Avoid cluttering the log
-// // TODO(Tri): Remove
-// printf("--- integrator_restir(), BEFORE early streaming_temporal_sample(): ---\n"
-//        "pixel_index=(%u, %u, %u) path_flag=%u,\n"
-//        "reservoir.M=%d reservoir.luminance=%f\n"
-//        "reservoir.radiance=(%f, %f, %f)\n\n",
-//         current.pixel_index.x, current.pixel_index.y, current.pixel_index.z, current.path_flag,
-//         current.reservoir.M, (double)current.reservoir.luminance,
-//         (double)rad_sum_1.x, (double)rad_sum_1.y, (double)rad_sum_1.z);
+const Spectrum rad_sum_1 = current.reservoir.radiance.sum;
+if (rad_sum_1.x > 0 || rad_sum_1.y > 0 || rad_sum_1.z > 0) { // Avoid cluttering the log
+// TODO(Tri): Remove
+printf("--- integrator_restir(), BEFORE early streaming_temporal_sample(): ---\n"
+       "pixel_index=(%u, %u, %u) path_flag=%u,\n"
+       "reservoir.M=%d reservoir.luminance=%f\n"
+       "reservoir.radiance=(%f, %f, %f)\n\n",
+        current.pixel_index.x, current.pixel_index.y, current.pixel_index.z, current.path_flag,
+        current.reservoir.M, (double)current.reservoir.luminance,
+        (double)rad_sum_1.x, (double)rad_sum_1.y, (double)rad_sum_1.z);
+}
+
+  // TODO(Tri): Somehow M is only incremented with spatial_iteration!
+// if (kernel_data.integrator.restir_temporal) {
+  streaming_temporal_sample( // New
+      kg, state, &current, &rng_state, visibility, render_buffer);
 // }
 
-//   streaming_temporal_sample( // New
-//       kg, state, &current, &rng_state, visibility, render_buffer);
-
-// const Spectrum rad_sum_2 = current.reservoir.radiance.sum;
-// // TODO(Tri): Remove
-// if (rad_sum_2.x > 0 || rad_sum_2.y > 0 || rad_sum_2.z > 0) { // Avoid cluttering the log
-// printf("integrator_restir(), AFTER early streaming_temporal_sample():\n"
-//        "pixel_index=(%u, %u, %u) path_flag=%u,\n"
-//        "reservoir.M=%d reservoir.luminance=%f\n"
-//        "reservoir.radiance=(%f, %f, %f)\n\n",
-//         current.pixel_index.x, current.pixel_index.y, current.pixel_index.z, current.path_flag,
-//         current.reservoir.M, (double)current.reservoir.luminance,
-//         (double)rad_sum_2.x, (double)rad_sum_2.y, (double)rad_sum_2.z);
-// }
+const Spectrum rad_sum_2 = current.reservoir.radiance.sum;
+// TODO(Tri): Remove
+if (rad_sum_2.x > 0 || rad_sum_2.y > 0 || rad_sum_2.z > 0) { // Avoid cluttering the log
+printf("integrator_restir(), AFTER early streaming_temporal_sample():\n"
+       "pixel_index=(%u, %u, %u) path_flag=%u,\n"
+       "reservoir.M=%d reservoir.luminance=%f\n" // !!!: M is currently Bound to spatial_iteration!
+       "reservoir.radiance=(%f, %f, %f)\n\n",
+        current.pixel_index.x, current.pixel_index.y, current.pixel_index.z, current.path_flag,
+        current.reservoir.M, (double)current.reservoir.luminance,
+        (double)rad_sum_2.x, (double)rad_sum_2.y, (double)rad_sum_2.z);
+}
 
   /* Uniformly sample neighboring reservoirs within a radius. There is probability to pick the same
    * reservoir twice, but the chance should be low if the radius is big enough and low descrepancy
@@ -784,21 +797,21 @@ printf("integrator_restir(), AFTER streaming_di_samples():\n"
 }      
 
 
-  // TODO(Tri): Also test streaming_temporal_sample() here, after streaming_di_samples()
-  streaming_temporal_sample( // New
-      kg, state, &current, &rng_state, visibility, render_buffer);
+//   // TODO(Tri): Also test streaming_temporal_sample() here, after streaming_di_samples()
+//   streaming_temporal_sample( // New
+//       kg, state, &current, &rng_state, visibility, render_buffer);
 
-const Spectrum rad_sum_4 = current.reservoir.radiance.sum;
-// TODO(Tri): Remove
-if (rad_sum_4.x > 0 || rad_sum_4.y > 0 || rad_sum_4.z > 0) { // Avoid cluttering the log
-printf("integrator_restir(), AFTER streaming_temporal_sample():\n"
-       "pixel_index=(%u, %u, %u) path_flag=%u,\n"
-       "reservoir.M=%d reservoir.luminance=%f\n"
-       "reservoir.radiance=(%f, %f, %f)\n\n",
-        current.pixel_index.x, current.pixel_index.y, current.pixel_index.z, current.path_flag,
-        current.reservoir.M, (double)current.reservoir.luminance,
-        (double)rad_sum_4.x, (double)rad_sum_4.y, (double)rad_sum_4.z);
-}
+// const Spectrum rad_sum_4 = current.reservoir.radiance.sum;
+// // TODO(Tri): Remove
+// if (rad_sum_4.x > 0 || rad_sum_4.y > 0 || rad_sum_4.z > 0) { // Avoid cluttering the log
+// printf("integrator_restir(), AFTER streaming_temporal_sample():\n"
+//        "pixel_index=(%u, %u, %u) path_flag=%u,\n"
+//        "reservoir.M=%d reservoir.luminance=%f\n"
+//        "reservoir.radiance=(%f, %f, %f)\n\n",
+//         current.pixel_index.x, current.pixel_index.y, current.pixel_index.z, current.path_flag,
+//         current.reservoir.M, (double)current.reservoir.luminance,
+//         (double)rad_sum_4.x, (double)rad_sum_4.y, (double)rad_sum_4.z);
+// }
 
   GlobalReservoir current_pt;
   global_reservoir_init(kg, &current_pt);
