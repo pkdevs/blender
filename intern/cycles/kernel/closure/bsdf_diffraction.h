@@ -76,37 +76,75 @@ struct DiffractionBsdf {
 
 static_assert(sizeof(ShaderClosure) >= sizeof(DiffractionBsdf), "DiffractionBsdf is too large!");
 
-/* Ascending series for the Bessel function of the first kind, J_n(x). Converges
- * quickly for the small orders and small arguments this closure needs (order
- * magnitude <= DIFFRACTION_MAX_ORDER, phase depth x typically a few units). */
-ccl_device_inline float diffraction_bessel_j(const int n, const float x)
+/* How far above the highest order actually needed to seed Miller's algorithm (see
+ * diffraction_fill_sinusoidal_efficiencies below). Forward recurrence for J_n(A) is
+ * numerically unstable whenever an order exceeds A -- routine here, since A shrinks
+ * to 0 at grazing incidence regardless of order count -- so this closure always
+ * recurses downward from a seed order safely above every order it needs, then
+ * normalizes with a closed-form identity. The margin has to grow with A itself (a
+ * deep groove can push A into the tens), capped so the loop stays bounded. */
+ccl_device_inline int diffraction_bessel_miller_start(const int max_order, const float A)
 {
-  const int n_abs = abs(n);
-  const float half_x = 0.5f * x;
-
-  float term = 1.0f;
-  for (int i = 1; i <= n_abs; i++) {
-    term *= half_x / (float)i;
-  }
-
-  float sum = term;
-  const float neg_half_x_sq = -half_x * half_x;
-  for (int k = 1; k <= 24; k++) {
-    term *= neg_half_x_sq / (float)(k * (k + n_abs));
-    sum += term;
-  }
-
-  /* J_{-n}(x) = (-1)^n * J_n(x). */
-  return ((n < 0) && (n_abs & 1)) ? -sum : sum;
+  const int margin = max(10, (int)(1.6f * A) + 8);
+  return min(max_order + margin, 64);
 }
 
-ccl_device_inline float diffraction_efficiency_sinusoidal(const int m,
-                                                           const float wavelength_nm,
-                                                           const float cos_theta_i,
-                                                           const float groove_depth_nm)
+/* Fills eta_out[0..2*max_order] with J_m(A)^2 for m = -max_order..max_order
+ * (eta_out[max_order + m]), i.e. the sinusoidal profile's per-order efficiency
+ * (see file header) for every order at once, sharing a single downward recurrence
+ * instead of an independent series per order.
+ *
+ * Miller's algorithm: seed J_{n+1}=0, J_n=1 (arbitrary) at some n = n_start well
+ * above every order needed, then apply the Bessel recurrence
+ *   J_{n-1}(A) = (2n/A) J_n(A) - J_{n+1}(A)
+ * downward to n=0. Downward recurrence is the numerically stable direction (unlike
+ * going upward from J_0/J_1, which blows up once n exceeds A); this is the standard
+ * technique for computing Bessel functions of a given order range for exactly that
+ * reason. The raw values this produces aren't yet the true J_n -- they're only
+ * correct up to an overall scale -- so they're normalized using the closed-form
+ * identity J_0(A) + 2*sum_{k=1,2,3,...} J_2k(A) = 1 (from the Bessel generating
+ * function at t=1), accumulated during the same downward pass. */
+ccl_device_inline void diffraction_fill_sinusoidal_efficiencies(const float A,
+                                                                 const int max_order,
+                                                                 ccl_private float *eta_out)
 {
-  const float A = (M_2PI_F / wavelength_nm) * groove_depth_nm * cos_theta_i;
-  return sqr(diffraction_bessel_j(m, A));
+  /* Below this, J_0(A) is already ~1 and every higher order is already negligible;
+   * skip the recurrence entirely rather than push it into its own small-argument
+   * instability (the ratio 2n/A used below grows without bound as A -> 0). */
+  if (A < 0.15f) {
+    for (int m = -max_order; m <= max_order; m++) {
+      eta_out[m + max_order] = (m == 0) ? 1.0f : 0.0f;
+    }
+    return;
+  }
+
+  const int n_start = diffraction_bessel_miller_start(max_order, A);
+  float raw[DIFFRACTION_MAX_ORDER + 1];
+  for (int i = 0; i <= max_order; i++) {
+    raw[i] = 0.0f;
+  }
+
+  float J_next = 0.0f; /* J_{n_start + 1}. */
+  float J_curr = 1.0f; /* J_{n_start}, arbitrary seed. */
+  float sum = 0.0f;
+  for (int n = n_start; n >= 1; n--) {
+    const float J_prev = (2.0f * (float)n / A) * J_curr - J_next;
+    if (n - 1 <= max_order) {
+      raw[n - 1] = J_prev;
+    }
+    if (((n - 1) & 1) == 0 && (n - 1) > 0) {
+      sum += 2.0f * J_prev;
+    }
+    J_next = J_curr;
+    J_curr = J_prev;
+  }
+  sum += raw[0];
+  const float inv_sum = (fabsf(sum) > 1e-8f) ? 1.0f / sum : 0.0f;
+
+  for (int m = -max_order; m <= max_order; m++) {
+    const float J = raw[abs(m)] * inv_sum;
+    eta_out[m + max_order] = sqr(J);
+  }
 }
 
 ccl_device_inline float diffraction_efficiency_rectangular(const int m,
@@ -131,18 +169,30 @@ ccl_device_inline float diffraction_efficiency_rectangular(const int m,
   return sqr(amp);
 }
 
-ccl_device_inline float diffraction_order_efficiency(const int m,
-                                                      const float wavelength_nm,
+/* Fills eta_out[0..2*max_order] with the efficiency of every order at once (indexed
+ * as eta_out[max_order + m], m = -max_order..max_order), so eval() and sample() can
+ * look orders up instead of recomputing each one independently. The rectangular
+ * profile is already O(1) per order (a couple of trig calls), so it is simply
+ * evaluated order by order here; the sinusoidal profile shares one Bessel
+ * recurrence across all orders instead (see diffraction_fill_sinusoidal_efficiencies). */
+ccl_device_inline void diffraction_fill_efficiencies(const float wavelength_nm,
                                                       const float cos_theta_i,
                                                       const float groove_depth_nm,
                                                       const float duty_cycle,
-                                                      const int profile)
+                                                      const int profile,
+                                                      const int max_order,
+                                                      ccl_private float *eta_out)
 {
   if (profile == DIFFRACTION_PROFILE_RECTANGULAR) {
-    return diffraction_efficiency_rectangular(
-        m, wavelength_nm, cos_theta_i, groove_depth_nm, duty_cycle);
+    for (int m = -max_order; m <= max_order; m++) {
+      eta_out[m + max_order] = diffraction_efficiency_rectangular(
+          m, wavelength_nm, cos_theta_i, groove_depth_nm, duty_cycle);
+    }
+    return;
   }
-  return diffraction_efficiency_sinusoidal(m, wavelength_nm, cos_theta_i, groove_depth_nm);
+
+  const float A = (M_2PI_F / wavelength_nm) * groove_depth_nm * cos_theta_i;
+  diffraction_fill_sinusoidal_efficiencies(A, max_order, eta_out);
 }
 
 /* Highest order that can still leave the surface for this period/wavelength pair;
@@ -217,6 +267,15 @@ ccl_device Spectrum bsdf_diffraction_eval(KernelGlobals kg,
   const float alpha2 = sqr(fmaxf(bsdf->roughness, 1e-4f));
   const int max_order = diffraction_max_propagating_order(period_nm, wavelength_nm);
 
+  float eta_arr[2 * DIFFRACTION_MAX_ORDER + 1];
+  diffraction_fill_efficiencies(wavelength_nm,
+                                cos_NI,
+                                bsdf->groove_depth_nm,
+                                bsdf->duty_cycle,
+                                bsdf->profile,
+                                max_order,
+                                eta_arr);
+
   Spectrum sum = zero_spectrum();
   float pdf_sum = 0.0f;
   float weight_sum = 0.0f;
@@ -225,8 +284,7 @@ ccl_device Spectrum bsdf_diffraction_eval(KernelGlobals kg,
   const float Iy = dot(Y, wi);
 
   for (int m = -max_order; m <= max_order; m++) {
-    const float eta_m = diffraction_order_efficiency(
-        m, wavelength_nm, cos_NI, bsdf->groove_depth_nm, bsdf->duty_cycle, bsdf->profile);
+    const float eta_m = eta_arr[m + max_order];
     if (eta_m < 1e-6f) {
       continue;
     }
@@ -321,6 +379,10 @@ ccl_device int bsdf_diffraction_sample(KernelGlobals kg,
   const int max_order = diffraction_max_propagating_order(period_nm, wavelength_nm);
   const int order_count = 2 * max_order + 1;
 
+  float eta_arr[2 * DIFFRACTION_MAX_ORDER + 1];
+  diffraction_fill_efficiencies(
+      wavelength_nm, cos_NI, bsdf->groove_depth_nm, bsdf->duty_cycle, bsdf->profile, max_order, eta_arr);
+
   /* Pick which order to sample, weighted by its efficiency at this incidence angle
    * (the same kind of discrete lobe choice as picking reflection vs. transmission
    * in a glass BSDF, just with more than two options). */
@@ -340,8 +402,7 @@ ccl_device int bsdf_diffraction_sample(KernelGlobals kg,
       weights[i] = 0.0f;
       continue;
     }
-    const float eta_m = diffraction_order_efficiency(
-        m, wavelength_nm, cos_NI, bsdf->groove_depth_nm, bsdf->duty_cycle, bsdf->profile);
+    const float eta_m = eta_arr[i];
     weights[i] = eta_m;
     weight_sum += eta_m;
   }
