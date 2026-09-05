@@ -4753,7 +4753,7 @@ static KeyBlock *insert_grease_pencil_shape_key(Main *bmain,
     /* create from curve */
     kb = BKE_keyblock_add_ctime(key, name, false);
     if (!newkey) {
-      KeyBlock *basekb = static_cast<KeyBlock *>(key->block.first);
+      KeyBlock *basekb = key->block.first();
       kb->data = MEM_dupalloc_void(basekb->data);
       kb->totelem = basekb->totelem;
     }
