@@ -400,8 +400,7 @@ static bool rna_idproperty_known(CollectionPropertyIterator *iter, void *data)
    * RNA property, they are different data. */
   const UString idprop_name(idprop->name);
   do {
-    for (prop = static_cast<PropertyRNA *>(ptype->cont.properties.first); prop; prop = prop->next)
-    {
+    for (prop = ptype->cont.properties.first(); prop; prop = prop->next) {
       if ((prop->flag_internal & PROP_INTERN_BUILTIN) == 0 &&
           (prop->flag & PROP_IDPROPERTY) != 0 && prop->identifier == idprop_name)
       {
@@ -597,38 +596,15 @@ PointerRNA rna_builtin_properties_get(CollectionPropertyIterator *iter)
   return rna_Struct_properties_get(iter);
 }
 
-bool rna_builtin_properties_lookup_string(PointerRNA *ptr,
-                                          const char *key_c_str,
-                                          PointerRNA *r_ptr)
+bool rna_builtin_properties_lookup_string(PointerRNA *ptr, const char *key, PointerRNA *r_ptr)
 {
-  StructRNA *srna;
-  PropertyRNA *prop;
-
-  srna = ptr->type;
-
-  const UString key(key_c_str);
-  do {
-    if (srna->cont.prop_lookup_set) {
-      PropertyRNA *const *lookup_prop = srna->cont.prop_lookup_set->lookup_key_ptr_as(key);
-      prop = lookup_prop ? *lookup_prop : nullptr;
-      if (prop) {
-        *r_ptr = {nullptr, RNA_Property, prop};
-        return true;
-      }
-    }
-    else {
-      for (prop = static_cast<PropertyRNA *>(srna->cont.properties.first); prop; prop = prop->next)
-      {
-        if (!(prop->flag_internal & PROP_INTERN_BUILTIN) && prop->identifier == key) {
-          *r_ptr = {nullptr, RNA_Property, prop};
-          return true;
-        }
-      }
-    }
-  } while ((srna = srna->base));
-
-  *r_ptr = {};
-  return false;
+  PropertyRNA *prop = RNA_struct_find_property(ptr, UString(key));
+  if (!prop) {
+    *r_ptr = {};
+    return false;
+  }
+  *r_ptr = {nullptr, RNA_Property, prop};
+  return true;
 }
 
 PointerRNA rna_builtin_type_get(PointerRNA *ptr)
