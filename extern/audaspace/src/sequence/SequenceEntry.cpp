@@ -17,6 +17,7 @@
 #include "sequence/SequenceEntry.h"
 #include "sequence/SequenceReader.h"
 
+#include <algorithm>
 #include <limits>
 #include <mutex>
 
@@ -96,6 +97,62 @@ void SequenceEntry::move(double begin, double end, double skip)
 		m_end = end;
 		m_pos_status++;
 	}
+}
+
+void SequenceEntry::sourceTimeRange(double begin, double end, double& minimum, double& maximum)
+{
+	const double fps = m_sequence_data->getFPS();
+	const double first = std::max(0.0, std::max(0.0, (begin - m_begin) * fps) + m_skip * fps);
+	const double last = std::max(0.0, std::max(0.0, (end - m_begin) * fps) + m_skip * fps);
+	const int frame_start = (m_begin - m_skip) * fps;
+
+	minimum = std::numeric_limits<double>::infinity();
+	maximum = -std::numeric_limits<double>::infinity();
+	double source_frame = 0.0;
+	if(last == 0.0)
+	{
+		minimum = maximum = 0.0;
+		return;
+	}
+
+	// Integrate exactly the frame-wise pitch samples used by SequenceHandle::seek.
+	// Include both ends of each segment so a non-monotonic mapping cannot hide an extremum.
+	for(int i = 0; i < last; i++)
+	{
+		float pitch;
+		m_pitch.read(frame_start + i, &pitch);
+		const double step = std::min(1.0, last - i);
+		if(i + step >= first)
+		{
+			const double a = source_frame + pitch * std::max(0.0, first - i);
+			const double b = source_frame + pitch * step;
+			minimum = std::min(minimum, std::min(a, b));
+			maximum = std::max(maximum, std::max(a, b));
+		}
+		source_frame += pitch * step;
+	}
+	minimum /= fps;
+	maximum /= fps;
+}
+
+double SequenceEntry::getSourcePosition(double position)
+{
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+	double minimum, maximum;
+	sourceTimeRange(position, position, minimum, maximum);
+	return minimum;
+}
+
+bool SequenceEntry::getSourceTimeRange(double begin, double end, double& minimum, double& maximum)
+{
+	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+	begin = std::max(begin, m_begin);
+	if(m_end >= 0.0)
+		end = std::min(end, m_end);
+	if(begin >= end)
+		return false;
+	sourceTimeRange(begin, end, minimum, maximum);
+	return true;
 }
 
 bool SequenceEntry::isMuted()

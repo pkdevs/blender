@@ -119,6 +119,9 @@ private:
 	SequenceEntry(const SequenceEntry&) = delete;
 	SequenceEntry& operator=(const SequenceEntry&) = delete;
 
+	/** Source-time extrema using the same pitch integration as seeking. Requires m_mutex. */
+	void sourceTimeRange(double begin, double end, double& minimum, double& maximum);
+
 public:
 	/**
 	 * Creates a new sequenced entry.
@@ -161,6 +164,16 @@ public:
 	 * \param skip How many seconds to skip at the beginning.
 	 */
 	void move(double begin, double end, double skip);
+
+	/** Returns the source time used when seeking to a sequence time, in seconds. */
+	double getSourcePosition(double position);
+
+	/**
+	 * Computes the source-time range consumed by a sequence-time interval, in seconds.
+	 * Clips to the entry's playback bounds and includes interior pitch extrema.
+	 * Returns false when the interval does not overlap the entry.
+	 */
+	bool getSourceTimeRange(double begin, double end, double& minimum, double& maximum);
 
 	/**
 	 * Retrieves the muting state of the entry.
