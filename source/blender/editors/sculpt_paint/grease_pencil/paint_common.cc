@@ -694,7 +694,8 @@ bool GreasePencilStrokeOperationCommon::drawing_apply_delta_function_to_position
     const Key *key,
     const KeyBlock *actkb,
     const FunctionRef<float3(
-        const int64_t point_i, const int64_t pos, const float2 co, const int pos_type)> &delta_fn)
+        const int64_t point_i, const int64_t pos, const float2 co, const PointType point_type)>
+        &delta_fn)
 {
   const Array<float2> view_positions = view_positions_from_point_mask(params, mask);
   bke::CurvesGeometry &curves = params.drawing.strokes_for_write();
@@ -717,7 +718,7 @@ bool GreasePencilStrokeOperationCommon::drawing_apply_delta_function_to_position
     mask.foreach_index(
         [&](const int64_t point_i, const int64_t pos) {
           const float2 &co = view_positions[point_i];
-          delta[point_i] = delta_fn(point_i, pos, co, 0) / keyblock_influence;
+          delta[point_i] = delta_fn(point_i, pos, co, PointType::Point) / keyblock_influence;
 
           key_positions.span[point_i] += delta[point_i];
         },
@@ -752,7 +753,8 @@ bool GreasePencilStrokeOperationCommon::drawing_apply_delta_function_to_position
           [&](const int64_t point_i, const int64_t pos) {
             const float2 co_left = view_positions_left[point_i];
 
-            key_handle_left.span[point_i] += delta_fn(point_i, pos, co_left, 1) /
+            key_handle_left.span[point_i] += delta_fn(
+                                                 point_i, pos, co_left, PointType::HandleLeft) /
                                              keyblock_influence;
 
             key_handle_left.span[point_i] -= delta[point_i];
@@ -763,7 +765,8 @@ bool GreasePencilStrokeOperationCommon::drawing_apply_delta_function_to_position
           [&](const int64_t point_i, const int64_t pos) {
             const float2 co_right = view_positions_right[point_i];
 
-            key_handle_right.span[point_i] += delta_fn(point_i, pos, co_right, 2) /
+            key_handle_right.span[point_i] += delta_fn(
+                                                  point_i, pos, co_right, PointType::HandleRight) /
                                               keyblock_influence;
 
             key_handle_right.span[point_i] -= delta[point_i];
@@ -781,7 +784,7 @@ bool GreasePencilStrokeOperationCommon::drawing_apply_delta_function_to_position
         [&](const int64_t point_i, const int64_t pos) {
           const float2 &co = view_positions[point_i];
 
-          positions[point_i] += delta_fn(point_i, pos, co, 0);
+          positions[point_i] += delta_fn(point_i, pos, co, PointType::Point);
         },
         exec_mode::grain_size(4096));
 
@@ -797,7 +800,8 @@ bool GreasePencilStrokeOperationCommon::drawing_apply_delta_function_to_position
           [&](const int64_t point_i, const int64_t pos) {
             const float2 co_left = view_positions_left[point_i];
 
-            handle_positions_left[point_i] += delta_fn(point_i, pos, co_left, 1);
+            handle_positions_left[point_i] += delta_fn(
+                point_i, pos, co_left, PointType::HandleLeft);
           },
           exec_mode::grain_size(4096));
 
@@ -805,7 +809,8 @@ bool GreasePencilStrokeOperationCommon::drawing_apply_delta_function_to_position
           [&](const int64_t point_i, const int64_t pos) {
             const float2 co_right = view_positions_right[point_i];
 
-            handle_positions_right[point_i] += delta_fn(point_i, pos, co_right, 2);
+            handle_positions_right[point_i] += delta_fn(
+                point_i, pos, co_right, PointType::HandleRight);
           },
           exec_mode::grain_size(4096));
 

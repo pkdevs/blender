@@ -94,7 +94,7 @@ void RandomizeOperation::on_stroke_extended(const bContext &C, const InputSample
               [&](const int64_t point_i,
                   const int64_t /*pos*/,
                   const float2 co,
-                  const int pos_type) {
+                  const PointType point_type) {
                 const float influence = brush_point_influence(
                     paint, brush, co, extension_sample, params.multi_frame_falloff);
                 if (influence <= 0.0f) {
@@ -103,12 +103,10 @@ void RandomizeOperation::on_stroke_extended(const bContext &C, const InputSample
 
                 int seed_2 = 5678;
 
-                /* Handle Left. */
-                if (pos_type == 1) {
+                if (point_type == PointType::HandleLeft) {
                   seed_2 = 3621;
                 }
-                /* Handle Right. */
-                else if (pos_type == 2) {
+                else if (point_type == PointType::HandleRight) {
                   seed_2 = 9754;
                 }
 

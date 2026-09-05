@@ -176,6 +176,12 @@ float3 compute_orig_delta(const DeltaProjectionFunc &projection_fn,
 bool do_vertex_color_points(const Brush &brush);
 bool do_vertex_color_fill(const Brush &brush);
 
+enum class PointType : int8_t {
+  Point = 0,
+  HandleLeft = 1,
+  HandleRight = 2,
+};
+
 /* Stroke operation base class that performs various common initializations. */
 class GreasePencilStrokeOperationCommon : public GreasePencilStrokeOperation {
  public:
@@ -234,8 +240,8 @@ class GreasePencilStrokeOperationCommon : public GreasePencilStrokeOperation {
       const IndexMask &mask_right,
       const Key *key,
       const KeyBlock *actkb,
-      const FunctionRef<
-          float3(const int64_t point_i, const int64_t pos, const float2 co, const int pos_type)>
+      const FunctionRef<float3(
+          const int64_t point_i, const int64_t pos, const float2 co, const PointType point_type)>
           &delta_fn);
 };
 

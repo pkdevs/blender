@@ -63,7 +63,7 @@ void PinchOperation::on_stroke_extended(const bContext &C, const InputSample &ex
             [&](const int64_t point_i,
                 const int64_t /*pos*/,
                 const float2 co,
-                const int /*pos_type*/) {
+                const PointType /*point_type*/) {
               const float influence = brush_point_influence(
                   paint, brush, co, extension_sample, params.multi_frame_falloff);
               if (influence <= 0.0f) {

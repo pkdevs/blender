@@ -265,16 +265,16 @@ void GrabOperation::on_stroke_extended(const bContext &C, const InputSample &ext
             [&](const int64_t point_i,
                 const int64_t pos,
                 const float2 /*co*/,
-                const int pos_type) {
-              if (pos_type == 0) {
+                const PointType point_type) {
+              if (point_type == PointType::Point) {
                 return compute_orig_delta(
                     projection_fn, deformation, point_i, mouse_delta_win * weights[pos]);
               }
-              else if (pos_type == 1) {
+              else if (point_type == PointType::HandleLeft) {
                 return compute_orig_delta(
                     projection_fn, deformation, point_i, mouse_delta_win * weights_left[pos]);
               }
-              else if (pos_type == 2) {
+              else if (point_type == PointType::HandleRight) {
                 return compute_orig_delta(
                     projection_fn, deformation, point_i, mouse_delta_win * weights_right[pos]);
               }
