@@ -22,6 +22,7 @@
 #include "RNA_prototypes.hh"
 
 #include "ED_asset_library_ui.hh"
+#include "ED_userpref.hh"
 
 #include "userpref_intern.hh"
 
@@ -93,7 +94,7 @@ int userpref_ui_asset_libraries_count()
   return userpref_ui_asset_libraries().size();
 }
 
-std::optional<int> userpref_ui_asset_libraries_index_from_user_library(
+static std::optional<int> userpref_ui_asset_libraries_index_from_user_library(
     const bUserAssetLibrary &user_library)
 {
   int i = 0;
@@ -107,6 +108,24 @@ std::optional<int> userpref_ui_asset_libraries_index_from_user_library(
   }
 
   return std::nullopt;
+}
+
+bUserAssetLibrary *ED_userpref_asset_library_active_get()
+{
+  const Vector<AnyAssetLibraryDefinition> libraries = userpref_ui_asset_libraries();
+  if (!libraries.index_range().contains(U.active_asset_library)) {
+    return nullptr;
+  }
+  return libraries[U.active_asset_library].user_library;
+}
+
+void ED_userpref_asset_library_active_set(const bUserAssetLibrary &asset_library)
+{
+  const std::optional<int> index = userpref_ui_asset_libraries_index_from_user_library(
+      asset_library);
+  if (index) {
+    U.active_asset_library = *index;
+  }
 }
 
 struct AssetLibraryListItem : public AssetLibraryListItemCommon {

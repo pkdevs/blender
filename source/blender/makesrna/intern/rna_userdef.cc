@@ -844,6 +844,21 @@ static bUserAssetLibrary *rna_userdef_asset_library_new(const bContext *C,
   return new_library;
 }
 
+static PointerRNA rna_AssetLibraryCollection_active_get(PointerRNA *ptr)
+{
+  return RNA_pointer_create_with_parent(
+      *ptr, RNA_UserAssetLibrary, ED_userpref_asset_library_active_get());
+}
+
+static void rna_AssetLibraryCollection_active_set(PointerRNA * /*ptr*/,
+                                                  PointerRNA value,
+                                                  ReportList * /*reports*/)
+{
+  if (const bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(value.data)) {
+    ED_userpref_asset_library_active_set(*library);
+  }
+}
+
 static void rna_userdef_asset_library_remove(bContext *C, ReportList *reports, PointerRNA *ptr)
 {
   bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
@@ -7442,10 +7457,23 @@ static void rna_def_userdef_asset_library_collection(BlenderRNA *brna, PropertyR
   StructRNA *srna;
   FunctionRNA *func;
   PropertyRNA *parm;
+  PropertyRNA *prop;
 
   RNA_def_property_srna(cprop, "AssetLibraryCollection");
   srna = RNA_def_struct(brna, "AssetLibraryCollection", nullptr);
   RNA_def_struct_ui_text(srna, "User Asset Libraries", "Collection of user asset libraries");
+
+  prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "UserAssetLibrary");
+  RNA_def_property_pointer_funcs(prop,
+                                 "rna_AssetLibraryCollection_active_get",
+                                 "rna_AssetLibraryCollection_active_set",
+                                 nullptr,
+                                 nullptr);
+  RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Active Asset Library", "The asset library being edited in the Preferences UI");
+  RNA_def_property_update(prop, 0, "rna_userdef_ui_update");
 
   func = RNA_def_function(srna, "new", "rna_userdef_asset_library_new");
   RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
