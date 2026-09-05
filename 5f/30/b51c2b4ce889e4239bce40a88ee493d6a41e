@@ -1,1 +1,2 @@
 Referenced by pull request #163506, Fix: RNA_property_enum_step leaks memory on empty enum
+Referenced by commit 04293f67367236cb2318c1f2081012e7eaf7bd15, Fix: RNA_property_enum_step leaks memory on empty enum
