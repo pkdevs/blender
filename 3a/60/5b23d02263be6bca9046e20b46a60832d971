@@ -1,2 +1,3 @@
 Referenced by issue #100749, Blender LTS: Maintenance Task 3.3
 Referenced by issue #100708, Texture bake fills black when set clear texture
+Referenced by issue #99634, Baking vertex colors does not respect alpha with "Diffuse" selected but respects alpha with "Direct + Indirect" also selected
