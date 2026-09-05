@@ -980,6 +980,20 @@ static wmOperatorStatus apply_objects_internal(bContext *C,
 
               key_data.finish();
             }
+
+            /* Apply scale to radius shape keys. */
+            bke::SpanAttributeWriter<float> key_radius =
+                attributes.lookup_or_add_for_write_span<float>(
+                    bke::greasepencil::shapekey_attribute_name_radius(keyblock.name),
+                    bke::AttrDomain::Point);
+
+            threading::parallel_for(curves.points_range(), 8192, [&](const IndexRange range) {
+              for (const int i : range) {
+                key_radius.span[i] *= scalef;
+              }
+            });
+
+            key_radius.finish();
           }
         });
       }
