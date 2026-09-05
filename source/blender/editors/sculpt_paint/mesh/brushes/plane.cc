@@ -544,6 +544,30 @@ CursorSampleResult calc_node_mask(const Depsgraph &depsgraph,
   float3 plane_normal;
   calc_brush_plane(depsgraph, brush, ob, initial_node_mask, plane_normal, plane_center);
 
+  if (math::is_zero(ss.cache->grab_delta_symm) || math::is_zero(plane_normal)) {
+    /* The brush local matrix is degenerate: return an empty index mask. */
+    return {IndexMask(), plane_center, plane_normal};
+  }
+
+  /* The tip normal is the plane normal under spherical falloff, but when under projected
+   * falloff, it is the view normal. */
+  const float3 tip_normal = brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE ?
+                                ss.cache->view_normal_symm :
+                                plane_normal;
+  const float tip_rotation = bke::brush::supports_rake(brush) ? ss.cache->special_rotation : 0.0f;
+
+  float4x4 brush_local_mat;
+  float4x4 brush_local_mat_inv;
+  calc_brush_local_mat(0,
+                       tip_rotation,
+                       *ss.cache->vc,
+                       ob,
+                       tip_normal,
+                       plane_center,
+                       ss.cache->radius,
+                       brush_local_mat.ptr(),
+                       brush_local_mat_inv.ptr());
+
   /* Recompute the node mask using the center of the brush plane as the center.
    *
    * The indices of the nodes in `cursor_node_mask` have been calculated based on the cursor
@@ -555,9 +579,12 @@ CursorSampleResult calc_node_mask(const Depsgraph &depsgraph,
         if (node_fully_masked_or_hidden(node)) {
           return false;
         }
-        /* TODO: Replace with node_in_box. */
-        return node_in_sphere(
-            node, plane_center, ss.cache->radius_squared * M_SQRT2, use_original);
+        const Bounds<float3> &bounds = use_original ? node.bounds_orig() : node.bounds();
+        if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
+          return node_in_box(
+              brush_local_mat, bounds, float3(0.0f), float3(1.0f, 1.0f, 1.0f), false);
+        }
+        return node_in_box(brush_local_mat, bounds);
       });
 
   return {plane_mask, plane_center, plane_normal};
