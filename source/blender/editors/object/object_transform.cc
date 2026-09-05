@@ -930,55 +930,58 @@ static wmOperatorStatus apply_objects_internal(bContext *C,
         const float4x4 layer_to_object = layer.to_object_space(*ob);
         const float4x4 object_to_layer = math::invert(layer_to_object);
         const Map<bke::greasepencil::FramesMapKeyT, GreasePencilFrame> frames = layer.frames();
-        frames.foreach_item(
-            [&](bke::greasepencil::FramesMapKeyT /*key*/, GreasePencilFrame frame) {
-              GreasePencilDrawingBase *base = grease_pencil.drawing(frame.drawing_index);
-              if (base->type != GP_DRAWING) {
-                return;
-              }
-              bke::greasepencil::Drawing &drawing =
-                  reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
-              bke::CurvesGeometry &curves = drawing.strokes_for_write();
-              MutableSpan<float> radii = drawing.radii_for_write();
-              threading::parallel_for(radii.index_range(), 8192, [&](const IndexRange range) {
+        frames.foreach_item([&](bke::greasepencil::FramesMapKeyT /*key*/,
+                                GreasePencilFrame frame) {
+          GreasePencilDrawingBase *base = grease_pencil.drawing(frame.drawing_index);
+          if (base->type != GP_DRAWING) {
+            return;
+          }
+          bke::greasepencil::Drawing &drawing =
+              reinterpret_cast<GreasePencilDrawing *>(base)->wrap();
+          bke::CurvesGeometry &curves = drawing.strokes_for_write();
+          MutableSpan<float> radii = drawing.radii_for_write();
+          threading::parallel_for(radii.index_range(), 8192, [&](const IndexRange range) {
+            for (const int i : range) {
+              radii[i] *= scalef;
+            }
+          });
+
+          const float4x4 matrix = object_to_layer * float4x4(mat) * layer_to_object;
+          const float3x3 matrix_without_translation = float3x3(matrix);
+
+          curves.transform(matrix);
+          curves.calculate_bezier_auto_handles();
+
+          if (!key) {
+            return;
+          }
+
+          bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+
+          for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
+            /* Skip the base key frame. */
+            if (&keyblock == key->refkey) {
+              continue;
+            }
+
+            const Vector<std::string> names = bke::greasepencil::shapekey_position_attribute_names(
+                keyblock.name);
+
+            for (const StringRef name : names) {
+              bke::SpanAttributeWriter<float3> key_data =
+                  attributes.lookup_or_add_for_write_span<float3>(name, bke::AttrDomain::Point);
+
+              threading::parallel_for(curves.points_range(), 8192, [&](const IndexRange range) {
                 for (const int i : range) {
-                  radii[i] *= scalef;
+                  key_data.span[i] = math::transform_point(matrix_without_translation,
+                                                           key_data.span[i]);
                 }
               });
 
-              const float4x4 matrix = object_to_layer * float4x4(mat) * layer_to_object;
-              const float3x3 matrix_without_translation = float3x3(matrix);
-
-              curves.transform(matrix);
-              curves.calculate_bezier_auto_handles();
-
-              if (!key) {
-                return;
-              }
-
-              bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-
-              for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
-                /* Skip the base key frame. */
-                if (&keyblock == key->refkey) {
-                  continue;
-                }
-
-                bke::SpanAttributeWriter<float3> key_positions =
-                    attributes.lookup_or_add_for_write_span<float3>(
-                        bke::greasepencil::shapekey_attribute_name_position(keyblock.name),
-                        bke::AttrDomain::Point);
-
-                threading::parallel_for(curves.points_range(), 8192, [&](const IndexRange range) {
-                  for (const int i : range) {
-                    key_positions.span[i] = math::transform_point(matrix_without_translation,
-                                                                  key_positions.span[i]);
-                  }
-                });
-
-                key_positions.finish();
-              }
-            });
+              key_data.finish();
+            }
+          }
+        });
       }
     }
     else if (ob->type == OB_POINTCLOUD) {

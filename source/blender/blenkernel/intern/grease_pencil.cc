@@ -2329,6 +2329,17 @@ Vector<std::string> shapekey_all_attribute_names(const char *name)
   return all_names;
 }
 
+Vector<std::string> shapekey_position_attribute_names(const char *name)
+{
+  Vector<std::string> all_names;
+
+  all_names.append(shapekey_attribute_name_position(name));
+  all_names.append(shapekey_attribute_name_handle_left(name));
+  all_names.append(shapekey_attribute_name_handle_right(name));
+
+  return all_names;
+}
+
 static void shapekey_foreach_keyblock(
     const Key *key,
     const FunctionRef<void(const float keyblock_influence,
