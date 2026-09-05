@@ -674,8 +674,11 @@ static void apply_grease_pencil_transform_to_shape_keys(const Key *key,
         keyblock.name);
 
     for (const StringRef name : names) {
-      bke::SpanAttributeWriter<float3> key_data = attributes.lookup_or_add_for_write_span<float3>(
-          name, bke::AttrDomain::Point);
+      bke::SpanAttributeWriter<float3> key_data = attributes.lookup_for_write_span<float3>(name);
+
+      if (!key_data) {
+        continue;
+      }
 
       threading::parallel_for(curves.points_range(), 8192, [&](const IndexRange range) {
         for (const int i : range) {
@@ -687,8 +690,12 @@ static void apply_grease_pencil_transform_to_shape_keys(const Key *key,
     }
 
     /* Apply scale to radius shape keys. */
-    bke::SpanAttributeWriter<float> key_radius = attributes.lookup_or_add_for_write_span<float>(
-        bke::greasepencil::shapekey_attribute_name_radius(keyblock.name), bke::AttrDomain::Point);
+    bke::SpanAttributeWriter<float> key_radius = attributes.lookup_for_write_span<float>(
+        bke::greasepencil::shapekey_attribute_name_radius(keyblock.name));
+
+    if (!key_radius) {
+      continue;
+    }
 
     threading::parallel_for(curves.points_range(), 8192, [&](const IndexRange range) {
       for (const int i : range) {
