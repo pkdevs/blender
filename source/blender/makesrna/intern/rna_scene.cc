@@ -9333,8 +9333,10 @@ void RNA_def_scene(BlenderRNA *brna)
                                     nullptr);
   rna_def_scene_objects(brna, prop);
 
-  /* Frame Range Stuff */
+  /* Frame-time callbacks tag ID_RECALC_FRAME_CHANGE themselves. Do not also tag a generic user
+   * edit, which would invalidate derived caches on a pure time change. */
   prop = RNA_def_property(srna, "frame_current", PROP_INT, PROP_TIME);
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_int_sdna(prop, nullptr, "r.cfra");
   RNA_def_property_range(prop, MINAFRAME, MAXFRAME);
@@ -9347,6 +9349,7 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_SCENE | ND_FRAME, "rna_Scene_frame_update_context");
 
   prop = RNA_def_property(srna, "frame_subframe", PROP_FLOAT, PROP_TIME);
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
   RNA_def_property_float_sdna(prop, nullptr, "r.subframe");
   RNA_def_property_ui_text(prop, "Current Subframe", "");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
@@ -9355,6 +9358,7 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_SCENE | ND_FRAME, "rna_Scene_frame_update");
 
   prop = RNA_def_property(srna, "frame_float", PROP_FLOAT, PROP_TIME);
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
   RNA_def_property_ui_text(prop, "Current Subframe", "");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_range(prop, MINAFRAME, MAXFRAME);
