@@ -71,7 +71,6 @@
 #include "ED_outliner.hh"
 #include "ED_paint.hh"
 #include "ED_undo.hh"
-#include "ED_outliner.hh"
 
 /* for Copy As Driver */
 #include "ED_keyframing.hh"
@@ -2057,6 +2056,7 @@ bool jump_to_target_button_poll(bContext *C)
 static wmOperatorStatus jump_to_target_button_exec(bContext *C, wmOperator * /*op*/)
 {
   const bool success = jump_to_target_button(C, false);
+
   return (success) ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
