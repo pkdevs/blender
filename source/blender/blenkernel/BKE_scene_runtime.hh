@@ -75,7 +75,7 @@ struct SceneAudioRuntime {
   /* Controls how evaluated audio updates write to Audaspace. */
   AudioAnimationWriteState animation_write_state = AudioAnimationWriteState::Normal;
   /* Automatic caches only contain directly evaluable animation. Explicit caches can also contain
-   * dependency-driven values and must be replaced before normal playback or movie rendering. */
+   * dependency-driven values and can satisfy automatic requests while clean and compatible. */
   AudioAnimationCacheType animation_cache_type = AudioAnimationCacheType::None;
   /* Identity of the frame-change handler lists associated with the current audio cache state.
    * An empty value means that no frame-change handlers were present. */

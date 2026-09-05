@@ -702,7 +702,9 @@ static bool sound_scene_audio_animation_cache_is_compatible(
     const int frame_end)
 {
   return !audio.animation_cache_dirty &&
-         audio.animation_cache_type == bke::AudioAnimationCacheType::Automatic &&
+         ELEM(audio.animation_cache_type,
+              bke::AudioAnimationCacheType::Automatic,
+              bke::AudioAnimationCacheType::Explicit) &&
          audio.cached_animation_frame_start <= frame_start &&
          audio.cached_animation_frame_end >= frame_end &&
          audio.animation_cache_frame_change_handlers_hash == frame_change_handlers_hash;
@@ -1038,8 +1040,8 @@ void BKE_sound_bake_animation(
   BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
 
   /* Explicit baking still uses the historical full dependency-graph evaluation below. This
-   * traversal only resets stale automatic data and records the cache kind for reachable nested
-   * scenes; it does not evaluate or schedule nested frame ranges. */
+   * traversal only resets stale data in reachable nested scenes; it does not evaluate or schedule
+   * nested frame ranges. */
   Set<const Scene *> visited_scenes;
   Vector<Scene *> scenes;
   sound_collect_explicit_bake_scenes(scene, depsgraph, visited_scenes, scenes);
@@ -1069,14 +1071,14 @@ void BKE_sound_bake_animation(
 #  ifdef WITH_PYTHON
   frame_change_handlers_hash = BPY_app_handlers_frame_change_identity();
 #  endif
-  for (Scene *scene_to_bake : scenes) {
-    Scene *scene_eval = DEG_get_evaluated(depsgraph, scene_to_bake);
-    if (!DEG_is_evaluated(scene_eval)) {
-      continue;
-    }
+  /* The full bake advances this graph's root Scene. Nested Scenes keep their own frame values,
+   * so their audio writes are not a bake of their local timelines. Leave their cache metadata
+   * invalid instead of claiming that their render ranges were sampled. */
+  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
+  if (DEG_is_evaluated(scene_eval)) {
     sound_store_scene_audio_animation_cache(scene_eval,
-                                            scene_to_bake->r.sfra,
-                                            scene_to_bake->r.efra,
+                                            frame_start,
+                                            frame_end,
                                             frame_change_handlers_hash,
                                             bke::AudioAnimationCacheType::Explicit);
   }
