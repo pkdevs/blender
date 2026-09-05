@@ -88,7 +88,7 @@ static ID *asset_link_id(Main &global_main,
     }
   }
 
-  /* Library-file name; lookup and weak refs still use this after a rename. */
+  /* Library-file name; lookup and weak refs use this after a rename. */
   if (local_asset && ID_IS_EDITABLE(local_asset)) {
     BKE_libblock_runtime_ensure(*local_asset);
     local_asset->runtime->asset_orig_idname = asset_name;
