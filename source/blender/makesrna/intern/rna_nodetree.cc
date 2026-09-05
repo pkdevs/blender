@@ -4644,6 +4644,20 @@ static const EnumPropertyItem node_glossy_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+static const EnumPropertyItem node_diffraction_items[] = {
+    {SHD_DIFFRACTION_SINUSOIDAL,
+     "SINUSOIDAL",
+     0,
+     "Sinusoidal",
+     "Continuous cosine groove profile (thin phase grating)"},
+    {SHD_DIFFRACTION_RECTANGULAR,
+     "RECTANGULAR",
+     0,
+     "Rectangular",
+     "Two-level pit/land groove profile, matching a stamped CD/DVD track or holographic foil"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static const EnumPropertyItem node_glass_items[] = {
     {SHD_GLOSSY_BECKMANN, "BECKMANN", 0, "Beckmann", ""},
     {SHD_GLOSSY_GGX, "GGX", 0, "GGX", ""},
@@ -6219,6 +6233,17 @@ static void def_metallic(BlenderRNA * /*brna*/, StructRNA *srna)
   RNA_def_property_enum_sdna(prop, nullptr, "custom2");
   RNA_def_property_enum_items(prop, node_metallic_fresnel_type_items);
   RNA_def_property_ui_text(prop, "Fresnel Type", "Fresnel method used to tint the metal");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+static void def_diffraction(BlenderRNA * /*brna*/, StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  prop = RNA_def_property(srna, "profile", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "custom1");
+  RNA_def_property_enum_items(prop, node_diffraction_items);
+  RNA_def_property_ui_text(prop, "Profile", "Cross-section shape of the diffraction grooves");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
@@ -10732,6 +10757,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("ShaderNode", "ShaderNodeBsdfHair", def_hair);
   define("ShaderNode", "ShaderNodeBsdfHairPrincipled", def_hair_principled);
   define("ShaderNode", "ShaderNodeBsdfMetallic", def_metallic);
+  define("ShaderNode", "ShaderNodeBsdfDiffraction", def_diffraction);
   define("ShaderNode", "ShaderNodeBsdfPrincipled", def_principled);
   define("ShaderNode", "ShaderNodeBsdfRayPortal");
   define("ShaderNode", "ShaderNodeBsdfRefraction", def_refraction);

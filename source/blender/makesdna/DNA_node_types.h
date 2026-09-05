@@ -470,6 +470,12 @@ enum eNodeConducetiveFresnel_Type : short {
   SHD_CONDUCTOR_F82 = 1,
 };
 
+/* Diffraction grating groove cross-section (Diffraction BSDF node). */
+enum eNodeDiffraction_Profile : short {
+  SHD_DIFFRACTION_SINUSOIDAL = 0,
+  SHD_DIFFRACTION_RECTANGULAR = 1,
+};
+
 /* glossy distributions */
 enum eNodeGlossy_Dist : short {
   SHD_GLOSSY_BECKMANN = 0,

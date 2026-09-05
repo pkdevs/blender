@@ -23,6 +23,7 @@ void register_node_type_sh_blackbody();
 void register_node_type_sh_brightcontrast();
 void register_node_type_sh_bsdf_diffuse();
 void register_node_type_sh_bsdf_glass();
+void register_node_type_sh_bsdf_diffraction();
 void register_node_type_sh_bsdf_glossy();
 void register_node_type_sh_bsdf_hair_principled();
 void register_node_type_sh_bsdf_hair();

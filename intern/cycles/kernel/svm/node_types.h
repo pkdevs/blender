@@ -1073,6 +1073,21 @@ struct SVMNodeGlossyBsdfData {
 static_assert(alignof(SVMNodeGlossyBsdfData) <= alignof(uint));
 static_assert(sizeof(SVMNodeGlossyBsdfData) % sizeof(uint) == 0);
 
+/* Diffraction BSDF. */
+struct SVMNodeDiffractionBsdfData {
+  SVMInputFloat roughness;
+  SVMInputFloat period;       /* Grating period (grating spacing), in micrometers. */
+  SVMInputFloat groove_depth; /* Groove depth, in nanometers. */
+  SVMInputFloat duty_cycle;   /* Pit/land width fraction, used by the rectangular profile only. */
+  SVMInputFloat rotation;
+  SVMStackOffset normal_offset;
+  SVMStackOffset tangent_offset;
+  uint8_t profile; /* DiffractionProfile. */
+  uint8_t _pad[1];
+};
+static_assert(alignof(SVMNodeDiffractionBsdfData) <= alignof(uint));
+static_assert(sizeof(SVMNodeDiffractionBsdfData) % sizeof(uint) == 0);
+
 /* Refraction BSDF. */
 struct SVMNodeRefractionBsdfData {
   SVMInputFloat roughness;

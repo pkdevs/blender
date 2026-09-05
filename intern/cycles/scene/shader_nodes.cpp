@@ -2405,6 +2405,74 @@ void GlossyBsdfNode::compile(OSLCompiler &compiler)
   compiler.add(this, "node_glossy_bsdf");
 }
 
+/* Diffraction BSDF Closure */
+
+NODE_DEFINE(DiffractionBsdfNode)
+{
+  NodeType *type = NodeType::add("diffraction_bsdf", create, NodeType::SHADER);
+
+  SOCKET_IN_COLOR(color, "Color", make_float3(0.9f, 0.9f, 0.9f));
+  SOCKET_IN_NORMAL(normal, "Normal", zero_float3(), SocketType::LINK_NORMAL);
+  SOCKET_IN_FLOAT(surface_mix_weight, "SurfaceMixWeight", 0.0f, SocketType::SVM_INTERNAL);
+
+  SOCKET_IN_VECTOR(tangent, "Tangent", zero_float3(), SocketType::LINK_TANGENT);
+
+  SOCKET_IN_FLOAT(roughness, "Roughness", 0.05f);
+  SOCKET_IN_FLOAT(period, "Period", 1.6f);
+  SOCKET_IN_FLOAT(groove_depth, "Groove Depth", 110.0f);
+  SOCKET_IN_FLOAT(duty_cycle, "Duty Cycle", 0.45f);
+  SOCKET_IN_FLOAT(rotation, "Rotation", 0.0f);
+
+  static NodeEnum profile_enum;
+  profile_enum.insert("sinusoidal", DIFFRACTION_PROFILE_SINUSOIDAL);
+  profile_enum.insert("rectangular", DIFFRACTION_PROFILE_RECTANGULAR);
+  SOCKET_ENUM(profile, "Profile", profile_enum, DIFFRACTION_PROFILE_RECTANGULAR);
+
+  SOCKET_OUT_CLOSURE(BSDF, "BSDF");
+
+  return type;
+}
+
+DiffractionBsdfNode::DiffractionBsdfNode() : BsdfNode(get_node_type())
+{
+  closure = CLOSURE_BSDF_DIFFRACTION_ID;
+}
+
+void DiffractionBsdfNode::attributes(Shader *shader, AttributeRequestSet *attributes)
+{
+  if (shader->has_surface_link()) {
+    if (!input("Tangent")->link) {
+      /* No tangent connected: the generated UV tangent is used instead, so the
+       * grating direction follows the surface's own UV layout (e.g. radial UVs on a
+       * disc give a concentric groove pattern for free, see bsdf_diffraction.h). */
+      attributes->add(ATTR_STD_GENERATED);
+    }
+  }
+
+  ShaderNode::attributes(shader, attributes);
+}
+
+void DiffractionBsdfNode::compile(SVMCompiler &compiler)
+{
+  BsdfNode::compile(compiler,
+                    SVMNodeDiffractionBsdfData{
+                        .roughness = compiler.input_float("Roughness"),
+                        .period = compiler.input_float("Period"),
+                        .groove_depth = compiler.input_float("Groove Depth"),
+                        .duty_cycle = compiler.input_float("Duty Cycle"),
+                        .rotation = compiler.input_float("Rotation"),
+                        .normal_offset = compiler.input_link("Normal"),
+                        .tangent_offset = compiler.input_link("Tangent"),
+                        .profile = (uint8_t)profile,
+                    });
+}
+
+void DiffractionBsdfNode::compile(OSLCompiler & /*compiler*/)
+{
+  /* Not implemented: this closure targets Cycles' GPU (SVM) kernels only. */
+  assert(0);
+}
+
 /* Glass BSDF Closure */
 
 NODE_DEFINE(GlassBsdfNode)

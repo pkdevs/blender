@@ -490,6 +490,7 @@ enum ClosureType : uint {
   CLOSURE_BSDF_PHONG_RAMP_ID,
   CLOSURE_BSDF_GLOSSY_TOON_ID,
   CLOSURE_BSDF_HAIR_REFLECTION_ID,
+  CLOSURE_BSDF_DIFFRACTION_ID,
 
   /* Transmission */
   CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID,
@@ -538,7 +539,7 @@ static_assert(NBUILTIN_CLOSURES < 256, "Too many Closure types (need to change S
 #define CLOSURE_IS_BSDF_DIFFUSE(type) \
   (type >= CLOSURE_BSDF_DIFFUSE_ID && type <= CLOSURE_BSDF_TRANSLUCENT_ID)
 #define CLOSURE_IS_BSDF_GLOSSY(type) \
-  ((type >= CLOSURE_BSDF_MICROFACET_GGX_ID && type <= CLOSURE_BSDF_HAIR_REFLECTION_ID) || \
+  ((type >= CLOSURE_BSDF_MICROFACET_GGX_ID && type <= CLOSURE_BSDF_DIFFRACTION_ID) || \
    (type == CLOSURE_BSDF_HAIR_CHIANG_ID) || (type == CLOSURE_BSDF_HAIR_HUANG_ID))
 #define CLOSURE_IS_BSDF_TRANSMISSION(type) \
   (type >= CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID && \
@@ -577,5 +578,12 @@ static_assert(NBUILTIN_CLOSURES < 256, "Too many Closure types (need to change S
 
 #define CLOSURE_WEIGHT_CUTOFF 1e-5f
 #define THINFILM_THICKNESS_CUTOFF 0.1f
+
+/* Groove cross-section used by the Diffraction BSDF (see bsdf_diffraction.h). Shared
+ * between host (node compilation) and device (closure setup) code, like ClosureType. */
+enum DiffractionProfile {
+  DIFFRACTION_PROFILE_SINUSOIDAL = 0,
+  DIFFRACTION_PROFILE_RECTANGULAR = 1,
+};
 
 CCL_NAMESPACE_END

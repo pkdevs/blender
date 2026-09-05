@@ -60,6 +60,9 @@ ccl_device_inline int svm_node_closure_bsdf_skip(int offset, const uint type)
     case CLOSURE_BSDF_MICROFACET_MULTI_GGX_ID:
       offset += sizeof(SVMNodeGlossyBsdfData) / sizeof(uint);
       break;
+    case CLOSURE_BSDF_DIFFRACTION_ID:
+      offset += sizeof(SVMNodeDiffractionBsdfData) / sizeof(uint);
+      break;
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
     case CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID:
       offset += sizeof(SVMNodeRefractionBsdfData) / sizeof(uint);
@@ -666,6 +669,57 @@ ccl_device
         }
       }
 
+      break;
+    }
+    case CLOSURE_BSDF_DIFFRACTION_ID: {
+      const ccl_global SVMNodeDiffractionBsdfData &bsdf_data =
+          svm_node_get<SVMNodeDiffractionBsdfData>(kg, &offset);
+
+#ifdef __CAUSTICS_TRICKS__
+      if (!kernel_data.integrator.caustics_reflective &&
+          (ray_visibility & PATH_RAY_VISIBILITY_DIFFUSE))
+      {
+        break;
+      }
+#endif
+      float3 N = stack_load_float3_default(stack, bsdf_data.normal_offset, sd->N);
+      N = safe_normalize_fallback(N, sd->N);
+
+      const Spectrum weight = closure_weight * mix_weight;
+      ccl_private DiffractionBsdf *bsdf = (ccl_private DiffractionBsdf *)bsdf_alloc(
+          sd, sizeof(DiffractionBsdf), weight);
+
+      if (!bsdf) {
+        break;
+      }
+
+      bsdf->N = maybe_ensure_valid_specular_reflection(sd, N);
+      bsdf->roughness = stack_load(stack, bsdf_data.roughness);
+      bsdf->period_um = stack_load(stack, bsdf_data.period);
+      bsdf->groove_depth_nm = stack_load(stack, bsdf_data.groove_depth);
+      bsdf->duty_cycle = stack_load(stack, bsdf_data.duty_cycle);
+      bsdf->profile = (int)bsdf_data.profile;
+
+      if (!stack_valid(bsdf_data.tangent_offset)) {
+        /* No tangent socket link and no generated UV attribute to fall back to
+         * either (e.g. a mesh with no UVs at all): same degenerate case as
+         * isotropic Glossy, handled by bsdf_diffraction_eval()/_sample() picking an
+         * arbitrary but consistent basis instead. Normally the Tangent socket's
+         * default link already supplies the generated UV tangent here, which on a
+         * disc with radial UVs runs circumferentially, giving the concentric groove
+         * pattern for free without any texture input. */
+        bsdf->T = zero_float3();
+      }
+      else {
+        bsdf->T = stack_load_float3(stack, bsdf_data.tangent_offset);
+
+        const float rotation = stack_load(stack, bsdf_data.rotation);
+        if (rotation != 0.0f) {
+          bsdf->T = rotate_around_axis(bsdf->T, bsdf->N, rotation * M_2PI_F);
+        }
+      }
+
+      sd->runtime_flag |= bsdf_diffraction_setup(sd, bsdf);
       break;
     }
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:

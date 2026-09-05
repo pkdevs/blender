@@ -664,6 +664,19 @@ static ShaderNode *add_node(Scene *scene,
     }
     node = glossy;
   }
+  else if (b_node.is_type("ShaderNodeBsdfDiffraction"_ustr)) {
+    DiffractionBsdfNode *diffraction = graph->create_node<DiffractionBsdfNode>();
+
+    switch (b_node.custom1) {
+      case blender::SHD_DIFFRACTION_SINUSOIDAL:
+        diffraction->set_profile(DIFFRACTION_PROFILE_SINUSOIDAL);
+        break;
+      case blender::SHD_DIFFRACTION_RECTANGULAR:
+        diffraction->set_profile(DIFFRACTION_PROFILE_RECTANGULAR);
+        break;
+    }
+    node = diffraction;
+  }
   else if (b_node.is_type("ShaderNodeBsdfGlass"_ustr)) {
     GlassBsdfNode *glass = graph->create_node<GlassBsdfNode>();
     switch (b_node.custom1) {

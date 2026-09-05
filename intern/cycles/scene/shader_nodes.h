@@ -704,6 +704,35 @@ class GlossyBsdfNode : public BsdfNode {
   bool is_isotropic();
 };
 
+class DiffractionBsdfNode : public BsdfNode {
+ public:
+  SHADER_NODE_CLASS(DiffractionBsdfNode)
+
+  ClosureType get_closure_type() override
+  {
+    return closure;
+  }
+
+  bool has_dispersion() override
+  {
+    return true;
+  }
+
+  NODE_SOCKET_API(float3, tangent)
+  NODE_SOCKET_API(float, roughness)
+  NODE_SOCKET_API(float, period)
+  NODE_SOCKET_API(float, groove_depth)
+  NODE_SOCKET_API(float, duty_cycle)
+  NODE_SOCKET_API(float, rotation)
+  NODE_SOCKET_API(DiffractionProfile, profile)
+
+  void attributes(Shader *shader, AttributeRequestSet *attributes) override;
+  bool has_attribute_dependency() override
+  {
+    return true;
+  }
+};
+
 class GlassBsdfNode : public BsdfNode {
  public:
   SHADER_NODE_CLASS(GlassBsdfNode)

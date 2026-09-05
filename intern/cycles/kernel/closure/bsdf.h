@@ -10,6 +10,7 @@
 #include "kernel/closure/bsdf_oren_nayar.h"
 #include "kernel/closure/bsdf_phong_ramp.h"
 #include "kernel/closure/bsdf_diffuse_ramp.h"
+#include "kernel/closure/bsdf_diffraction.h"
 #include "kernel/closure/bsdf_microfacet.h"
 #include "kernel/closure/bsdf_burley.h"
 #include "kernel/closure/bsdf_sheen.h"
@@ -35,6 +36,11 @@ ccl_device_inline float bsdf_get_specular_roughness_squared(const ccl_private Sh
   if (CLOSURE_IS_BSDF_MICROFACET(sc->type)) {
     ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)sc;
     return bsdf->alpha_x * bsdf->alpha_y;
+  }
+
+  if (sc->type == CLOSURE_BSDF_DIFFRACTION_ID) {
+    ccl_private DiffractionBsdf *bsdf = (ccl_private DiffractionBsdf *)sc;
+    return sqr(bsdf->roughness);
   }
 
   return 1.0f;
@@ -254,6 +260,10 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
           sc, Ng, sd->wi, rand_xy, eval, wo, pdf, sampled_roughness);
       *eta = 1.0f;
       break;
+    case CLOSURE_BSDF_DIFFRACTION_ID:
+      label = bsdf_diffraction_sample(
+          kg, sc, Ng, sd->wi, rand, eval, wo, pdf, sampled_roughness, eta);
+      break;
     case CLOSURE_BSDF_ASHIKHMIN_VELVET_ID:
       label = bsdf_ashikhmin_velvet_sample(sc, Ng, sd->wi, rand_xy, eval, wo, pdf);
       *sampled_roughness = one_float2();
@@ -391,6 +401,12 @@ ccl_device_inline void bsdf_roughness_eta(const ccl_private ShaderClosure *sc,
       *eta = 1.0f;
       break;
     }
+    case CLOSURE_BSDF_DIFFRACTION_ID: {
+      const ccl_private DiffractionBsdf *bsdf = (const ccl_private DiffractionBsdf *)sc;
+      *roughness = make_float2(bsdf->roughness, bsdf->roughness);
+      *eta = 1.0f;
+      break;
+    }
     case CLOSURE_BSDF_ASHIKHMIN_VELVET_ID:
       *roughness = one_float2();
       *eta = 1.0f;
@@ -494,6 +510,9 @@ ccl_device_inline int bsdf_label(const KernelGlobals kg,
       label = LABEL_TRANSMIT | LABEL_GLOSSY;
       break;
     case CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID:
+      label = LABEL_REFLECT | LABEL_GLOSSY;
+      break;
+    case CLOSURE_BSDF_DIFFRACTION_ID:
       label = LABEL_REFLECT | LABEL_GLOSSY;
       break;
     case CLOSURE_BSDF_ASHIKHMIN_VELVET_ID:
@@ -613,6 +632,9 @@ ccl_device_inline
     case CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID:
       eval = bsdf_ashikhmin_shirley_eval(sc, sd->wi, wo, pdf);
       break;
+    case CLOSURE_BSDF_DIFFRACTION_ID:
+      eval = bsdf_diffraction_eval(kg, sc, sd->wi, wo, pdf);
+      break;
     case CLOSURE_BSDF_ASHIKHMIN_VELVET_ID:
       eval = bsdf_ashikhmin_velvet_eval(sc, sd->wi, wo, pdf);
       break;
@@ -680,6 +702,9 @@ ccl_device void bsdf_blur(ccl_private ShaderClosure *sc, const float roughness)
       break;
     case CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID:
       bsdf_ashikhmin_shirley_blur(sc, roughness);
+      break;
+    case CLOSURE_BSDF_DIFFRACTION_ID:
+      bsdf_diffraction_blur(sc, roughness);
       break;
 #  ifdef __PRINCIPLED_HAIR__
     case CLOSURE_BSDF_HAIR_CHIANG_ID:
