@@ -47,6 +47,7 @@
 #include "BKE_grease_pencil.hh"
 #include "BKE_grease_pencil_fills.hh"
 #include "BKE_instances.hh"
+#include "BKE_key.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 #include "BKE_material.hh"
@@ -5505,6 +5506,342 @@ static void GREASE_PENCIL_OT_separate_fills(wmOperatorType *ot)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Blend from Shape Operator
+ * \{ */
+
+static bool grease_pencil_shape_poll(bContext *C)
+{
+  if (!editable_grease_pencil_poll(C)) {
+    return false;
+  }
+
+  Object *object = CTX_data_active_object(C);
+  const GreasePencil *grease_pencil = id_cast<GreasePencil *>(object->data);
+
+  Key *key = grease_pencil->key;
+  if (key == nullptr) {
+    return false;
+  }
+
+  return true;
+}
+
+static const EnumPropertyItem *shape_itemf(bContext *C,
+                                           PointerRNA * /*ptr*/,
+                                           PropertyRNA * /*prop*/,
+                                           bool *r_free)
+{
+  Object *ob = (C) ? CTX_data_active_object(C) : nullptr;
+  EnumPropertyItem *item = nullptr, item_tmp = {0};
+  int totitem = 0;
+
+  if (ob == nullptr) {
+    return rna_enum_dummy_DEFAULT_items;
+  }
+
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(ob->data);
+  Key *key = grease_pencil.key;
+
+  if (key == nullptr) {
+    return rna_enum_dummy_DEFAULT_items;
+  }
+
+  for (const auto [keyblock_index, keyblock] : key->block.enumerate()) {
+    item_tmp.value = totitem;
+    item_tmp.identifier = keyblock.name;
+    item_tmp.name = keyblock.name;
+    /* RNA_enum_item_add sets totitem itself! */
+    RNA_enum_item_add(&item, &totitem, &item_tmp);
+  }
+
+  RNA_enum_item_end(&item, &totitem);
+  *r_free = true;
+
+  return item;
+}
+
+static wmOperatorStatus grease_pencil_blend_from_shape_exec(bContext *C, wmOperator *op)
+{
+  const Scene *scene = CTX_data_scene(C);
+  Object *object = CTX_data_active_object(C);
+  GreasePencil &grease_pencil = *blender::id_cast<GreasePencil *>(object->data);
+  Key *key = grease_pencil.key;
+  KeyBlock &actkb = *BKE_keyblock_find_by_index(key, object->shapenr - 1);
+
+  const float blend = RNA_float_get(op->ptr, "blend");
+  int shape_ref = RNA_enum_get(op->ptr, "shape");
+  const bool use_add = RNA_boolean_get(op->ptr, "add");
+
+  if (!key) {
+    return OPERATOR_CANCELLED;
+  }
+
+  KeyBlock *keyblock = static_cast<KeyBlock *>(BLI_findlink(&key->block, shape_ref));
+  KeyBlock *ref_keyblock = static_cast<KeyBlock *>(BLI_findlink(&key->block, keyblock->relative));
+
+  const bool is_act_basis = &actkb == key->refkey;
+
+  /* If the reference block is the same as the current block nothing will happen, so
+   * skip. */
+  if (keyblock == ref_keyblock && use_add) {
+    return OPERATOR_FINISHED;
+  }
+
+  std::atomic<bool> changed = false;
+  const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(*scene, grease_pencil);
+  threading::parallel_for_each(drawings, [&](const MutableDrawingInfo &info) {
+    IndexMaskMemory memory;
+    const IndexMask selected_points = ed::greasepencil::retrieve_editable_and_selected_points(
+        *object, info.drawing, info.layer_index, memory);
+    if (selected_points.is_empty()) {
+      return;
+    }
+    bke::CurvesGeometry &curves = info.drawing.strokes_for_write();
+    bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
+
+    const VArray<float3> key_position = *attributes.lookup_or_default<float3>(
+        bke::greasepencil::shapekey_attribute_name_position(keyblock->name),
+        bke::AttrDomain::Point,
+        float3(0.0f));
+    const VArray<float3> ref_key_position = *attributes.lookup_or_default<float3>(
+        bke::greasepencil::shapekey_attribute_name_position(ref_keyblock->name),
+        bke::AttrDomain::Point,
+        float3(0.0f));
+
+    const VArray<float3> key_left = *attributes.lookup_or_default<float3>(
+        bke::greasepencil::shapekey_attribute_name_handle_left(keyblock->name),
+        bke::AttrDomain::Point,
+        float3(0.0f));
+    const VArray<float3> ref_key_left = *attributes.lookup_or_default<float3>(
+        bke::greasepencil::shapekey_attribute_name_handle_left(ref_keyblock->name),
+        bke::AttrDomain::Point,
+        float3(0.0f));
+
+    const VArray<float3> key_right = *attributes.lookup_or_default<float3>(
+        bke::greasepencil::shapekey_attribute_name_handle_right(keyblock->name),
+        bke::AttrDomain::Point,
+        float3(0.0f));
+    const VArray<float3> ref_key_right = *attributes.lookup_or_default<float3>(
+        bke::greasepencil::shapekey_attribute_name_handle_right(ref_keyblock->name),
+        bke::AttrDomain::Point,
+        float3(0.0f));
+
+    const VArray<float> key_radius = *attributes.lookup_or_default<float>(
+        bke::greasepencil::shapekey_attribute_name_radius(keyblock->name),
+        bke::AttrDomain::Point,
+        0.0f);
+    const VArray<float> ref_key_radius = *attributes.lookup_or_default<float>(
+        bke::greasepencil::shapekey_attribute_name_radius(ref_keyblock->name),
+        bke::AttrDomain::Point,
+        0.0f);
+
+    const VArray<float> key_opacity = *attributes.lookup_or_default<float>(
+        bke::greasepencil::shapekey_attribute_name_opacity(keyblock->name),
+        bke::AttrDomain::Point,
+        0.0f);
+    const VArray<float> ref_key_opacity = *attributes.lookup_or_default<float>(
+        bke::greasepencil::shapekey_attribute_name_opacity(ref_keyblock->name),
+        bke::AttrDomain::Point,
+        0.0f);
+
+    if (!is_act_basis) {
+      bke::SpanAttributeWriter<float3> act_key_positions =
+          attributes.lookup_or_add_for_write_span<float3>(
+              bke::greasepencil::shapekey_attribute_name_position(actkb.name),
+              bke::AttrDomain::Point);
+      bke::SpanAttributeWriter<float3> act_key_left =
+          attributes.lookup_or_add_for_write_span<float3>(
+              bke::greasepencil::shapekey_attribute_name_handle_left(actkb.name),
+              bke::AttrDomain::Point);
+      bke::SpanAttributeWriter<float3> act_key_right =
+          attributes.lookup_or_add_for_write_span<float3>(
+              bke::greasepencil::shapekey_attribute_name_handle_right(actkb.name),
+              bke::AttrDomain::Point);
+      bke::SpanAttributeWriter<float> act_key_radius =
+          attributes.lookup_or_add_for_write_span<float>(
+              bke::greasepencil::shapekey_attribute_name_radius(actkb.name),
+              bke::AttrDomain::Point);
+      bke::SpanAttributeWriter<float> act_key_opacity =
+          attributes.lookup_or_add_for_write_span<float>(
+              bke::greasepencil::shapekey_attribute_name_opacity(actkb.name),
+              bke::AttrDomain::Point);
+
+      if (use_add) {
+        selected_points.foreach_index(
+            [&](const int point_i) {
+              act_key_positions.span[point_i] += (key_position[point_i] -
+                                                  ref_key_position[point_i]) *
+                                                 blend;
+            },
+            exec_mode::grain_size(4096));
+
+        selected_points.foreach_index(
+            [&](const int point_i) {
+              act_key_left.span[point_i] += (key_left[point_i] - ref_key_left[point_i]) * blend;
+            },
+            exec_mode::grain_size(4096));
+
+        selected_points.foreach_index(
+            [&](const int point_i) {
+              act_key_right.span[point_i] += (key_right[point_i] - ref_key_right[point_i]) * blend;
+            },
+            exec_mode::grain_size(4096));
+
+        selected_points.foreach_index(
+            [&](const int point_i) {
+              act_key_radius.span[point_i] += (key_radius[point_i] - ref_key_radius[point_i]) *
+                                              blend;
+            },
+            exec_mode::grain_size(4096));
+
+        selected_points.foreach_index(
+            [&](const int point_i) {
+              act_key_opacity.span[point_i] += (key_opacity[point_i] - ref_key_opacity[point_i]) *
+                                               blend;
+            },
+            exec_mode::grain_size(4096));
+      }
+      else {
+        selected_points.foreach_index(
+            [&](const int point_i) {
+              act_key_positions.span[point_i] += (key_position[point_i] -
+                                                  ref_key_position[point_i] -
+                                                  act_key_positions.span[point_i]) *
+                                                 blend;
+            },
+            exec_mode::grain_size(4096));
+
+        selected_points.foreach_index(
+            [&](const int point_i) {
+              act_key_left.span[point_i] += (key_left[point_i] - ref_key_left[point_i] -
+                                             act_key_left.span[point_i]) *
+                                            blend;
+            },
+            exec_mode::grain_size(4096));
+
+        selected_points.foreach_index(
+            [&](const int point_i) {
+              act_key_right.span[point_i] += (key_right[point_i] - ref_key_right[point_i] -
+                                              act_key_right.span[point_i]) *
+                                             blend;
+            },
+            exec_mode::grain_size(4096));
+
+        selected_points.foreach_index(
+            [&](const int point_i) {
+              act_key_radius.span[point_i] += (key_radius[point_i] - ref_key_radius[point_i] -
+                                               act_key_radius.span[point_i]) *
+                                              blend;
+            },
+            exec_mode::grain_size(4096));
+
+        selected_points.foreach_index(
+            [&](const int point_i) {
+              act_key_opacity.span[point_i] += (key_opacity[point_i] - ref_key_opacity[point_i] -
+                                                act_key_opacity.span[point_i]) *
+                                               blend;
+            },
+            exec_mode::grain_size(4096));
+      }
+
+      act_key_positions.finish();
+      act_key_left.finish();
+      act_key_right.finish();
+      act_key_radius.finish();
+      act_key_opacity.finish();
+    }
+    else {
+      MutableSpan<float3> positions = curves.positions_for_write();
+
+      selected_points.foreach_index(
+          [&](const int point_i) {
+            positions[point_i] += (key_position[point_i] - ref_key_position[point_i]) * blend;
+          },
+          exec_mode::grain_size(4096));
+
+      if (curves.has_curve_with_type(CURVE_TYPE_BEZIER)) {
+        MutableSpan<float3> handle_positions_left = curves.handle_positions_left_for_write();
+        MutableSpan<float3> handle_positions_right = curves.handle_positions_right_for_write();
+
+        selected_points.foreach_index(
+            [&](const int point_i) {
+              handle_positions_left[point_i] += (key_left[point_i] - ref_key_left[point_i]) *
+                                                blend;
+              handle_positions_left[point_i] += (key_position[point_i] -
+                                                 ref_key_position[point_i]) *
+                                                blend;
+            },
+            exec_mode::grain_size(4096));
+
+        selected_points.foreach_index(
+            [&](const int point_i) {
+              handle_positions_right[point_i] += (key_right[point_i] - ref_key_right[point_i]) *
+                                                 blend;
+              handle_positions_right[point_i] += (key_position[point_i] -
+                                                  ref_key_position[point_i]) *
+                                                 blend;
+            },
+            exec_mode::grain_size(4096));
+      }
+
+      MutableSpan<float> radius = curves.radius_for_write();
+
+      selected_points.foreach_index(
+          [&](const int point_i) {
+            radius[point_i] += (key_radius[point_i] - ref_key_radius[point_i]) * blend;
+          },
+          exec_mode::grain_size(4096));
+
+      MutableSpan<float> opacity = info.drawing.opacities_for_write();
+
+      selected_points.foreach_index(
+          [&](const int point_i) {
+            opacity[point_i] += (key_opacity[point_i] - ref_key_opacity[point_i]) * blend;
+          },
+          exec_mode::grain_size(4096));
+    }
+
+    info.drawing.tag_positions_changed();
+
+    changed.store(true, std::memory_order_relaxed);
+  });
+
+  if (changed) {
+    DEG_id_tag_update(&grease_pencil.id, ID_RECALC_GEOMETRY);
+    WM_event_add_notifier(C, NC_GEOM | ND_DATA, &grease_pencil);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static void GREASE_PENCIL_OT_blend_from_shape(wmOperatorType *ot)
+{
+  PropertyRNA *prop;
+
+  ot->name = "Blend from Shape";
+  ot->idname = "GREASE_PENCIL_OT_blend_from_shape";
+  ot->description = "Blend in shape from a shape key";
+
+  ot->exec = grease_pencil_blend_from_shape_exec;
+  ot->poll = grease_pencil_shape_poll;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  prop = RNA_def_enum(ot->srna,
+                      "shape",
+                      rna_enum_dummy_DEFAULT_items,
+                      0,
+                      "Shape",
+                      "Shape key to use for blending");
+  RNA_def_enum_funcs(prop, shape_itemf);
+  RNA_def_property_flag(prop, PROP_ENUM_NO_TRANSLATE | PROP_NEVER_UNLINK);
+  RNA_def_float(ot->srna, "blend", 1.0f, -1e3f, 1e3f, "Blend", "Blending factor", -2.0f, 2.0f);
+  RNA_def_boolean(ot->srna, "add", false, "Add", "Add rather than blend between shapes");
+}
+
+/** \} */
+
 }  // namespace ed::greasepencil
 
 void ED_operatortypes_grease_pencil_edit()
@@ -5552,6 +5889,7 @@ void ED_operatortypes_grease_pencil_edit()
   WM_operatortype_append(GREASE_PENCIL_OT_set_stroke_type);
   WM_operatortype_append(GREASE_PENCIL_OT_join_fills);
   WM_operatortype_append(GREASE_PENCIL_OT_separate_fills);
+  WM_operatortype_append(GREASE_PENCIL_OT_blend_from_shape);
 }
 
 /* -------------------------------------------------------------------- */

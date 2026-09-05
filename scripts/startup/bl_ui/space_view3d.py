@@ -6019,6 +6019,10 @@ class VIEW3D_MT_edit_greasepencil_point(Menu):
 
         layout.separator()
 
+        layout.operator("grease_pencil.blend_from_shape")
+
+        layout.separator()
+
         layout.operator_menu_enum("grease_pencil.set_handle_type", property="type")
         layout.operator_menu_enum("grease_pencil.set_corner_type", property="corner_type")
 
