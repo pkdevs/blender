@@ -756,7 +756,8 @@ set(GLSL_SRC
   intern/shaders/draw_curves_test.glsl
 )
 
-# These tests depend on gpu_shader_test, so they're only included when WITH_GPU_BACKEND_TESTS is enabled.
+# These tests depend on gpu_shader_test, so they're only included when
+# WITH_GPU_BACKEND_TESTS is enabled.
 set(GLSL_TEST_SRC
   engines/eevee/shaders/eevee_test_fast_gi.bsl.hh
   engines/eevee/shaders/eevee_test_gbuffer_closure.bsl.hh
@@ -776,6 +777,7 @@ set(GLSL_INC
   ../gpu/intern
   ../gpu/shaders
   ../gpu/shaders/common
+  ../gpu/shaders/compat
   ../gpu/shaders/infos
 
   engines/gpencil

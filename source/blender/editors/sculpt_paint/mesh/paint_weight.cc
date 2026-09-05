@@ -905,7 +905,7 @@ struct WeightPaintStroke final : public PaintStroke {
   bool test_start(wmOperator *op, float2 mouse) override;
   void redraw(bool final) override;
   bool test_cancel() override;
-  void update_step(wmOperator *op, PointerRNA *itemptr) override;
+  void update_step(wmOperator *op, const StrokeStep &stroke_step) override;
   void done(bool is_cancel, bool stroke_started) override;
 };
 
@@ -1647,16 +1647,16 @@ void ED_object_wpaintmode_enter(bContext *C, Depsgraph &depsgraph)
 /** \name Exit Weight Paint Mode
  * \{ */
 
-void ED_object_wpaintmode_exit_ex(Object &ob)
+void ED_object_wpaintmode_exit_ex(Scene &scene, Object &ob)
 {
-  ed::sculpt_paint::mode_exit_generic(ob, OB_MODE_WEIGHT_PAINT);
+  ed::sculpt_paint::mode_exit_generic(scene, ob, OB_MODE_WEIGHT_PAINT);
   ED_mesh_mirror_spatial_table_end(&ob);
   ED_mesh_mirror_topo_table_end(&ob);
 }
 void ED_object_wpaintmode_exit(bContext *C)
 {
   Object *ob = CTX_data_active_object(C);
-  ED_object_wpaintmode_exit_ex(*ob);
+  ED_object_wpaintmode_exit_ex(*CTX_data_scene(C), *ob);
 }
 /** \} */
 
@@ -1726,7 +1726,7 @@ static wmOperatorStatus wpaint_mode_toggle_exec(bContext *C, wmOperator *op)
   Mesh *mesh = BKE_mesh_from_object(&ob);
 
   if (is_mode_set) {
-    ED_object_wpaintmode_exit_ex(ob);
+    ED_object_wpaintmode_exit_ex(scene, ob);
   }
   else {
     Depsgraph *depsgraph = CTX_data_depsgraph_on_load(C);
@@ -1768,6 +1768,7 @@ void PAINT_OT_weight_paint_toggle(wmOperatorType *ot)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
 /** \name Weight Paint Operator
  * \{ */
 
@@ -1795,7 +1796,7 @@ static void wpaint_do_paint(const Depsgraph &depsgraph,
   wpaint_paint_leaves(depsgraph, ob, wp, wpd, wpd.info, mesh, node_mask);
 }
 
-void WeightPaintStroke::update_step(wmOperator * /*op*/, PointerRNA *itemptr)
+void WeightPaintStroke::update_step(wmOperator * /*op*/, const StrokeStep &stroke_step)
 {
   VPaint &wp = *weight_paint_;
   const ToolSettings &ts = *tool_settings_;
@@ -1807,7 +1808,7 @@ void WeightPaintStroke::update_step(wmOperator * /*op*/, PointerRNA *itemptr)
   SculptSession &ss = *ob->runtime->sculpt_session;
   StrokeCache &cache = *ss.cache;
 
-  vwpaint::update_cache_variants(*this->depsgraph, *vc, wp, *ob, *this->base_, itemptr);
+  vwpaint::update_cache_variants(*this->depsgraph, *vc, wp, *ob, *this->base_, stroke_step);
 
   const float brush_alpha_value = BKE_brush_alpha_get(&wp.paint, &brush);
 
@@ -1890,7 +1891,7 @@ void WeightPaintStroke::done(bool /*is_cancel*/, bool /*stroke_started*/)
     vwpaint::smooth_brush_toggle_off(this->paint, ss.cache);
   }
 
-  if (ob.particlesystem.first) {
+  if (ob.particlesystem.first_) {
     for (ParticleSystem &psys : ob.particlesystem) {
       for (int i = 0; i < PSYS_TOT_VG; i++) {
         if (psys.vgroup[i] == BKE_object_defgroup_active_index_get(&ob)) {
