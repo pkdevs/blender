@@ -550,23 +550,17 @@ void PaintStroke::add_step(bContext *C, wmOperator *op, const float2 mval, float
 
   /* Add to stroke */
   if (add_step) {
-    PointerRNA itemptr;
-    RNA_collection_add(op->ptr, "stroke", &itemptr);
-    RNA_float_set(&itemptr, "size", paint_runtime->pixel_radius);
-    RNA_float_set_array(&itemptr, "location", location);
+    StrokeStep step;
+    step.size = paint_runtime->pixel_radius;
+    step.location = location;
     /* Mouse coordinates modified by the stroke type options. */
-    RNA_float_set_array(&itemptr, "mouse", mouse_out);
+    step.mouse = mouse_out;
     /* Original mouse coordinates. */
-    RNA_float_set_array(&itemptr, "mouse_event", mval);
-    RNA_float_set(&itemptr, "pressure", pressure);
-    RNA_float_set(&itemptr, "x_tilt", tilt_.x);
-    RNA_float_set(&itemptr, "y_tilt", tilt_.y);
+    step.mouse_event = mval;
+    step.pressure = pressure;
+    step.tilt = tilt_;
 
-    this->update_step(op, &itemptr);
-
-    /* don't record this for now, it takes up a lot of memory when doing long
-     * strokes with small brush size, and operators have register disabled */
-    RNA_collection_clear(op->ptr, "stroke");
+    this->update_step(op, step);
   }
 
   tot_samples_++;
@@ -931,7 +925,7 @@ PaintStroke::PaintStroke(bContext *C, wmOperator *op, const wmEvent *event)
     BKE_curvemapping_init(this->paint->cavity_curve);
   }
 
-  BKE_paint_set_overlay_override(eOverlayFlags(this->brush->overlay_flags));
+  bke::paint::set_overlay_brush_override(*this->paint, eOverlayFlags(this->brush->overlay_flags));
 
   paint_runtime->start_pixel_radius = BKE_brush_radius_get(this->paint, this->brush);
 }
@@ -966,7 +960,7 @@ void PaintStroke::done(bContext *C, const bool is_cancel)
     rv3d->rflag &= ~RV3D_PAINTING;
   }
 
-  BKE_paint_set_overlay_override(eOverlayFlags(0));
+  bke::paint::set_overlay_brush_override(*this->paint, eOverlayFlags(0));
 
   paint_runtime->draw_anchored = false;
   paint_runtime->stroke_active = false;
@@ -1640,24 +1634,31 @@ wmOperatorStatus PaintStroke::exec(bContext *C, wmOperator *op)
     }
 
     /* This mimics `add_step` to update various properties on PaintRuntime. */
-    const float pressure = RNA_float_get(&itemptr, "pressure");
-    float2 mouse_out = paint_stroke_jitter_pos(
-        this->paint, mode, *this->brush, pressure, stroke_mode_, zoom_2d_, mval);
+    StrokeStep step;
+    RNA_float_get_array(&itemptr, "location", step.location);
+    RNA_float_get_array(&itemptr, "mouse_event", step.mouse_event);
+    step.pressure = RNA_float_get(&itemptr, "pressure");
+    step.mouse = paint_stroke_jitter_pos(
+        this->paint, mode, *this->brush, step.pressure, stroke_mode_, zoom_2d_, mval);
+    step.size = RNA_float_get(&itemptr, "size");
+    step.tilt = {RNA_float_get(&itemptr, "x_tilt"), RNA_float_get(&itemptr, "y_tilt")};
+    /* TODO: Note, this misses both `time` and `is_start`, but neither of those systems
+     * (UV / Annotations) use this base class */
 
     /* TODO: This process misses updating some values at the moment, see `add_step` */
     float3 dummy_location;
     bool dummy_is_set;
-    this->update(C, *this->brush, mode, mval, mouse_out, pressure, dummy_location, &dummy_is_set);
-    RNA_float_set_array(&itemptr, "mouse", mouse_out);
+    this->update(
+        C, *this->brush, mode, mval, step.mouse, step.pressure, dummy_location, &dummy_is_set);
 
     if (override_location) {
-      if (std::optional<float3> location = this->get_location(mouse_out, false)) {
-        RNA_float_set_array(&itemptr, "location", *location);
-        this->update_step(op, &itemptr);
+      if (std::optional<float3> location = this->get_location(step.mouse, false)) {
+        step.location = *location;
+        this->update_step(op, step);
       }
     }
     else {
-      this->update_step(op, &itemptr);
+      this->update_step(op, step);
     }
   }
   RNA_END;
