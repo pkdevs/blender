@@ -1879,7 +1879,23 @@ ID *BKE_libblock_find_name_and_library_filepath(Main *bmain,
       return nullptr;
     }
   }
-  return BKE_libblock_find_name(bmain, type, name, library);
+  if (ID *id = BKE_libblock_find_name(bmain, type, name, library)) {
+    return id;
+  }
+
+  /* Asset-editable IDs keep the library-file name in #ID_Runtime::asset_orig_idname so they can
+   * still be found after a rename in the current session (#158281). */
+  const ListBaseT<ID> *lb = which_libbase(bmain, type);
+  for (ID &id_iter : *lb) {
+    if (id_iter.lib != library) {
+      continue;
+    }
+    if (ID_IS_EDITABLE(&id_iter) && id_iter.runtime && id_iter.runtime->asset_orig_idname == name)
+    {
+      return &id_iter;
+    }
+  }
+  return nullptr;
 }
 
 void id_sort_by_name(ListBaseT<ID> *lb, ID *id, ID *id_sorting_hint)

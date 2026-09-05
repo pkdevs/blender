@@ -12,6 +12,7 @@
 #include "BLI_memory_utils.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_string.hh"
+#include "BLI_string_ref.hh"
 
 #include "DNA_ID.h"
 #include "DNA_asset_types.h"
@@ -72,7 +73,6 @@ static ID *asset_link_id(Main &global_main,
 
   BKE_blendfile_link_append_context_free(lapp_context);
 
-  /* Verify that the name matches. It must for referencing the same asset again to work. */
   BLI_assert(local_asset == nullptr || STREQ(local_asset->name + 2, asset_name));
 
   /* Tag library as being editable. */
@@ -86,6 +86,12 @@ static ID *asset_link_id(Main &global_main,
     {
       local_asset->lib->runtime->tag |= LIBRARY_ASSET_FILE_WRITABLE;
     }
+  }
+
+  /* Library-file name; lookup and weak refs still use this after a rename. */
+  if (local_asset && ID_IS_EDITABLE(local_asset)) {
+    BKE_libblock_runtime_ensure(*local_asset);
+    local_asset->runtime->asset_orig_idname = asset_name;
   }
 
   return local_asset;
@@ -398,6 +404,15 @@ ID *asset_edit_id_from_weak_reference(Main &global_main,
   return asset_link_id(global_main, id_type, asset_lib_path, asset_name);
 }
 
+/* Library-file name so weak refs stay stable after a session rename. */
+static const char *asset_edit_idname_for_weak_reference(const ID &id)
+{
+  if (id.runtime && !id.runtime->asset_orig_idname.empty()) {
+    return id.runtime->asset_orig_idname.c_str();
+  }
+  return id.name + 2;
+}
+
 std::optional<AssetWeakReference> asset_edit_weak_reference_from_id(const ID &id)
 {
   /* Brush is local to the file. */
@@ -419,10 +434,11 @@ std::optional<AssetWeakReference> asset_edit_weak_reference_from_id(const ID &id
       &U, id.lib->runtime->filepath_abs);
 
   const short idcode = GS(id.name);
+  const char *idname = asset_edit_idname_for_weak_reference(id);
 
   if (user_library && user_library->dirpath[0]) {
     return asset_weak_reference_for_user_library(
-        *user_library, idcode, id.name + 2, id.lib->runtime->filepath_abs);
+        *user_library, idcode, idname, id.lib->runtime->filepath_abs);
   }
 
   const bool is_online_essential = BLI_path_contains(
@@ -430,10 +446,10 @@ std::optional<AssetWeakReference> asset_edit_weak_reference_from_id(const ID &id
       id.lib->runtime->filepath_abs);
   if (is_online_essential) {
     return asset_weak_reference_for_online_essentials(
-        idcode, id.name + 2, id.lib->runtime->filepath_abs);
+        idcode, idname, id.lib->runtime->filepath_abs);
   }
 
-  return asset_weak_reference_for_essentials(idcode, id.name + 2, id.lib->runtime->filepath_abs);
+  return asset_weak_reference_for_essentials(idcode, idname, id.lib->runtime->filepath_abs);
 }
 
 bool asset_edit_id_is_editable(const ID &id)

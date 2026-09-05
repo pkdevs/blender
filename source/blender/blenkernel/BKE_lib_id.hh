@@ -31,6 +31,7 @@
  */
 
 #include <optional>
+#include <string>
 
 #include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
@@ -91,6 +92,13 @@ struct ID_Runtime {
    * freed and the pointer set to `nullptr`.
    */
   ID_Readfile_Data *readfile_data = nullptr;
+
+  /**
+   * ID name (without the type prefix) as stored in the source library file.
+   * Set when an asset-editable ID is first linked. Lookup and weak references keep using this
+   * after a rename in the current session (#158281).
+   */
+  std::string asset_orig_idname;
 };
 
 }  // namespace bke::id
@@ -462,6 +470,10 @@ ID *BKE_libblock_find_name_and_library(Main *bmain,
  * Find an ID in `bmain` by its type, name, and absolute library file path.
  *
  * If `lib_filepath_abs` is null or empty, the ID is searched into local ones only.
+ *
+ * When no ID currently has \a name, also matches asset-editable IDs whose
+ * #ID_Runtime::asset_orig_idname was stored at link time. That is the library-file name, which
+ * stays stable if the user renames the datablock in the current session (#158281).
  */
 ID *BKE_libblock_find_name_and_library_filepath(Main *bmain,
                                                 short type,
