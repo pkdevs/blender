@@ -379,7 +379,7 @@ PyObject *BPY_app_handlers_struct()
 std::optional<uint64_t> BPY_app_handlers_frame_change_identity()
 {
   const PyGILState_STATE gilstate = PyGILState_Ensure();
-  uint64_t hash = 1469598103934665603ULL;
+  uint64_t hash = 14695981039346656037ULL;
   const auto hash_value = [&hash](const uint64_t value) {
     hash ^= value;
     hash *= 1099511628211ULL;
