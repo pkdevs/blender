@@ -303,9 +303,9 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
         if (brush.mesh_automasking_settings == nullptr) {
           brush.mesh_automasking_settings = MEM_new<MeshAutomaskingSettings>(__func__);
           brush.mesh_automasking_settings->cavity_curve = BKE_sculpt_default_cavity_curve();
+        }
       }
     }
-  }
 
     auto apply_to_paint = [&](Paint *paint) {
       if (paint == nullptr) {
