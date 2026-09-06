@@ -28,8 +28,7 @@ namespace blender::geometry {
 enum class BevelAffect {
   Vertices = 0,
   Edges = 1,
-  /* TODO: Implement Face Bevel. */
-  // Faces = 2,
+  Faces = 2,
 };
 
 enum class BevelMiterType {

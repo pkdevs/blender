@@ -27,6 +27,7 @@ static const EnumPropertyItem affect_items[] = {
      N_("Vertices"),
      N_("Bevel affects vertices")},
     {int(geometry::BevelAffect::Edges), "EDGES", 0, N_("Edges"), N_("Bevel affects edges")},
+    {int(geometry::BevelAffect::Faces), "FACES", 0, N_("Faces"), N_("Bevel affects faces")},
     {0, nullptr, 0, nullptr, nullptr}};
 
 static void node_declare(NodeDeclarationBuilder &b)
@@ -188,6 +189,14 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
   const auto affect = params.extract_input<geometry::BevelAffect>("Affect Kind"_ustr);
 
+  if (affect == geometry::BevelAffect::Faces) {
+    /* Face bevel is not yet implemented; it will use the mesh inset / straight-skeleton path
+     * in a later step. */
+    params.error_message_add(NodeWarningType::Warning, "Face bevel is not yet implemented");
+    params.set_output("Mesh"_ustr, std::move(geometry_set));
+    params.set_default_remaining_outputs();
+    return;
+  }
   const Field<float> offset0_field = affect == geometry::BevelAffect::Edges ?
                                          params.extract_input<Field<float>>(
                                              "Start Left Offset"_ustr) :
