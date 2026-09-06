@@ -113,6 +113,7 @@ set(SRC
   intern/memory_cache_file_load.cc
   intern/memory_counter.cc
   intern/mesh_boolean.cc
+  intern/mesh_inset.cc
   intern/mesh_intersect.cc
   intern/noise.cc
   intern/noise_c.cc
@@ -336,6 +337,7 @@ set(SRC
   BLI_memory_utils.hh
   BLI_mempool.hh
   BLI_mesh_boolean.hh
+  BLI_mesh_inset.hh
   BLI_mesh_intersect.hh
   BLI_mmap.hh
   BLI_multi_value_map.hh
@@ -573,6 +575,7 @@ if(WITH_GTESTS)
     tests/BLI_memory_counter_test.cc
     tests/BLI_memory_utils_test.cc
     tests/BLI_mesh_boolean_test.cc
+    tests/BLI_mesh_inset_test.cc
     tests/BLI_mesh_intersect_test.cc
     tests/BLI_multi_value_map_test.cc
     tests/BLI_normalized_int_test.cc
