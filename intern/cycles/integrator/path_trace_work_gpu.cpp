@@ -456,6 +456,7 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
 
   restir_iteration_ = 0;
   setup_restir_ = false;
+  setup_temporal_ = false;
   final_evaluation_ = false;
 
   /* MARK: - Initial PT. */
@@ -496,11 +497,54 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
     ++num_iterations;
   }
 
+  /* MARK: - ReSTIR temporal resampling. */
+
+  if (!is_cancel_requested() && device_scene_->data.integrator.use_restir &&
+      device_scene_->data.integrator.restir_temporal_history_limit > 0)
+  {
+    setup_restir_ = false;
+    setup_temporal_ = true;
+    final_evaluation_ = false;
+
+    reset_work_tile_scheduler(start_sample, samples_num, sample_offset);
+
+    while (true) {
+      bool finished = false;
+
+      if (enqueue_work_tiles(finished)) {
+        if (!update_queue_counter_and_cache()) {
+          break; /* Matching Initial PT's convention. */
+        }
+      }
+
+      if (is_cancel_requested()) {
+        break;
+      }
+
+      if (finished) {
+        break;
+      }
+
+      if (enqueue_path_iteration()) {
+        if (!update_queue_counter_and_cache()) {
+          break;
+        }
+      }
+
+      if (is_cancel_requested()) {
+        break;
+      }
+    }
+
+    setup_temporal_ = false;
+  }
+
   /* MARK: - ReSTIR spatial resampling. */
 
   if (!is_cancel_requested() && device_scene_->data.integrator.use_restir)
   {
     setup_restir_ = true;
+    setup_temporal_ = false;
     final_evaluation_ = false;
 
     for (restir_iteration_ = 0;
@@ -511,13 +555,6 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
 
       while (true) {
         bool finished = false;
-
-        /*
-        * Generate the next batch of pixels.
-        * INIT_FROM_CAMERA will put them into RESTIR because
-        * setup_restir_ == true.
-        */
-
         if (enqueue_work_tiles(finished)) {
           if (!update_queue_counter_and_cache()) {
             // return; // !!!: would cause right half of the screen to go to regular pt!
@@ -543,6 +580,7 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
     /* MARK: - Final evaluation. */
 
     setup_restir_ = false;
+    setup_temporal_ = false;
     final_evaluation_ = true;
 
     reset_work_tile_scheduler(start_sample, samples_num, sample_offset);
@@ -589,7 +627,7 @@ DeviceKernel PathTraceWorkGPU::get_most_queued_kernel() const
     /* SHADOW_PATH_MNEE_PENDING is a sentinel marker on shadow slots holding an MNEE precompute
      * payload; there is no kernel to dispatch for it. The slot transitions to a real shadow
      * kernel (or terminates) when integrator_shade_surface runs on the main path. */
-     // TODO: make get_most_queued_kernel() itself aware of terminal kernels instead
+     // TODO(Tri): make get_most_queued_kernel() itself aware of terminal kernels instead
     if (i == DEVICE_KERNEL_INTEGRATOR_SHADOW_PATH_MNEE_PENDING || i == DEVICE_KERNEL_INTEGRATOR_RESTIR) { // !!!: Excluded DEVICE_KERNEL_INTEGRATOR_RESTIR
       continue;
     }
@@ -724,7 +762,7 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
       const int num_path_indices = work_size;
       device_ptr null_tiles = 0;
       int zero = 0;
-      const DeviceKernelArguments args(&null_tiles, // TODO: cleanup and merge the `enqueue_restir_work_tiles()` here?
+      const DeviceKernelArguments args(&null_tiles, // TODO(Tri): cleanup and merge the `enqueue_restir_work_tiles()` here?
                                        &zero,
                                        &buffers_->buffer.device_pointer,
                                        &zero,
@@ -761,6 +799,7 @@ void PathTraceWorkGPU::enqueue_path_iteration(DeviceKernel kernel, const int num
       break;
     }
     case DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION:
+    case DEVICE_KERNEL_INTEGRATOR_RESTIR_TEMPORAL:
     case DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND:
     case DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE:
@@ -1115,6 +1154,7 @@ void PathTraceWorkGPU::enqueue_work_tiles(DeviceKernel kernel,
 
     work_tile.restir_iteration = restir_iteration_;
     work_tile.setup_restir = setup_restir_;
+    work_tile.setup_temporal = setup_temporal_;
     work_tile.final_evaluation = final_evaluation_;
 
     path_index_offset += tile_work_size;
@@ -1142,47 +1182,6 @@ void PathTraceWorkGPU::enqueue_work_tiles(DeviceKernel kernel,
     restir_num_work_tiles_ = num_work_tiles;
   }
 }
-
-/*
-TODO(Tri): Read:
-You save:
-restir_num_work_tiles_
-restir_max_tile_work_size_
-
-so later you can say:
-
-"Now run the RESTIR kernel over the exact tile layout that initialized this batch."
-
-And this is why the argument ordering mattered so much.
-
-The RESTIR wrapper expects:
-```
-path_index_array
-tiles
-num_tiles
-render_buffer
-max_tile_work_size
-num_active_paths
-```
-
-but the normal tile dispatch had a different arrangement.
-
-So enqueue_restir_work_tiles() explicitly constructs the correct ABI.
-```
-INIT_FROM_CAMERA dispatch
-        │
-        └── creates RESTIR states
-        │
-        └── remembers tile geometry
-                     │
-                     ▼
-             RESTIR dispatch
-                     │
-                     └── same tiles → RESTIR states
-```
-So, 
-TODO: Do I remove enqueue_restir_work_tiles() by normalizing restir's argument order and merge it with normal tile dispatch?
-*/
 
 void PathTraceWorkGPU::enqueue_restir_work_tiles()
 {

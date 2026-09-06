@@ -541,9 +541,11 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
 
   film_write_pass_reservoir(kg, state, &current.reservoir, render_buffer, /*write_prev=*/false);
 
+  const bool use_spatial = kernel_data.integrator.restir_spatial_radius > 0 &&
+                           kernel_data.integrator.restir_spatial_neighbors > 0 &&
+                           kernel_data.integrator.restir_spatial_iterations > 0;
   if (!use_spatial) {
-    /* Only persist here when integrator_restir() won't run this sample —
-    * Persist this sample's temporally-resampled reservoir as next sample's history. */
+    /* Only persist here when integrator_restir() won't run this sample. */
     film_write_pass_reservoir_temporal(kg, state, &current.reservoir, render_buffer);
   }
 
@@ -804,7 +806,7 @@ ccl_device bool integrator_restir(KernelGlobals kg,
 
   const bool visibility = kernel_data.integrator.restir_unbiased; // !!!: power heuristics
 
-  // TODO(Tri): M is only incremented with spatial_iteration!
+  // TODO(Tri): M is only incremented with spatial_iteration?
 
   /* Uniformly sample neighboring reservoirs within a radius. There is probability to pick the same
    * reservoir twice, but the chance should be low if the radius is big enough and low descrepancy
@@ -825,9 +827,8 @@ ccl_device bool integrator_restir(KernelGlobals kg,
   // !!!: film_finalize_reservoir_pt not needed
   film_write_pass_reservoir_pt(kg, state, &current_pt, render_buffer, write_prev); // light_pass
 
-  // !!!: Very Important to keep here!
-  // TODO(Tri): Add proper comments here
-  // TODO(Tri): Write the finalized current.reservoir into pass_restir_temporal_history_reservoir
+  /* Persists this sample's finalized reservoir as history for next sample's
+  * streaming_temporal_sample(). */
   film_write_pass_reservoir_temporal(kg, state, &current.reservoir, render_buffer); // New, separate from film_write_pass_reservoir's ping-pong write
 
   /* Spatial RESTIR is a terminal GPU pass.

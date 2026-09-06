@@ -136,6 +136,7 @@ class PathTraceWorkGPU : public PathTraceWork {
   /* ReSTIR WorkTile. */
   int restir_iteration_ = 0;
   bool setup_restir_ = false;
+  bool setup_temporal_ = false;
   bool final_evaluation_ = false;
 
   /* Integrator queue. */
