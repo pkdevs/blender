@@ -1207,6 +1207,10 @@ bool searchbox_has_active_item(ARegion *region);
  * highlighted (see #searchbox_has_active_item).
  */
 const char *searchbox_active_item_name(ARegion *region);
+/**
+ * Hide the search box's results without ending the text edit they belong to
+ */
+void searchbox_hide(ARegion *region);
 void searchbox_free(bContext *C, ARegion *region);
 /**
  * XXX weak: search_func adds all partial matches.

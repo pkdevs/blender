@@ -424,6 +424,13 @@ const char *searchbox_active_item_name(ARegion *region)
   return (data->active != -1) ? data->items.names[data->active] : nullptr;
 }
 
+void searchbox_hide(ARegion *region)
+{
+  uiSearchboxData *data = static_cast<uiSearchboxData *>(region->regiondata);
+  data->items.totitem = 0;
+  data->active = -1;
+}
+
 static ARegion *wm_searchbox_tooltip_init(
     bContext *C, ARegion *region, int * /*r_pass*/, double * /*pass_delay*/, bool *r_exit_on_event)
 {

@@ -4324,6 +4324,20 @@ static int do_but_textedit(
           }
         }
 
+        /* For a suggestions-style search box (e.g. path-template variable hinting), the first
+         * Escape press should only dismiss the suggestions, not cancel the whole edit. A second
+         * Escape (with no suggestions left to dismiss) falls through to the cancel below. */
+        if (event->type == EVT_ESCKEY && data->searchbox) {
+          ButtonSearch *but_search = static_cast<ButtonSearch *>(but);
+          if (but_search->results_are_suggestions && searchbox_has_active_item(data->searchbox)) {
+            searchbox_hide(data->searchbox);
+            button_edit_hint_refresh(C, but, data);
+            ED_region_tag_redraw(data->region);
+            retval = WM_UI_HANDLER_BREAK;
+            break;
+          }
+        }
+
 #ifdef WITH_INPUT_IME
         /* skips button handling since it is not wanted */
         if (is_ime_composing) {
