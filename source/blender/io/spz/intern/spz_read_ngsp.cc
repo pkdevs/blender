@@ -27,7 +27,6 @@
 #include "CLG_log.h"
 
 #include "spz_read_common.hh"
-#include "spz_types.hh"
 
 namespace blender::io::spz {
 
@@ -90,7 +89,7 @@ class BufferedStreamReader {
   }
 };
 
-/* Helper class that allows to read a Gzip-compressed file from disk with the minimum amount of
+/* Helper class that allows reading a Gzip-compressed file from disk with the minimum amount of
  * extra memory usage, but allowing to easily access data of specific size. */
 class StreamedZstdReader {
   BufferedStreamReader buffered_reader_;
@@ -98,7 +97,7 @@ class StreamedZstdReader {
   ZSTD_inBuffer input_buffer_;
 
  public:
-  explicit StreamedZstdReader(FILE *file, const StreamInfo &stream_info)
+  StreamedZstdReader(FILE *file, const StreamInfo &stream_info)
       : buffered_reader_(file, stream_info)
   {
   }
@@ -208,6 +207,103 @@ static bool read_toc(FILE *file, const NgspFileHeader &header, Array<StreamInfo>
   return true;
 }
 
+static bool read_spz(FILE *file,
+                     const NgspFileHeader &header,
+                     const Span<StreamInfo> stream_infos,
+                     ReportList *reports,
+                     gsplat::GsplatMutableAttributeAccessor &accessor)
+{
+  if (stream_infos.size() < 6) {
+    return false;
+  }
+
+  const MutableSpan<float3> positions = accessor.positions_for_write();
+  const MutableSpan<math::Quaternion> rotations = accessor.rotations_for_write();
+  const Span<MutableSpan<float3>> sh_attrs = accessor.sh_for_write();
+
+  /* Positions. */
+  {
+    StreamedZstdReader reader(file, stream_infos[0]);
+    if (!reader.initialize()) {
+      BKE_report(reports, RPT_ERROR, "SPZ Read: Error initializing positions reader");
+      return false;
+    }
+    if (!read_positions(reader, header.fractional_bits, positions)) {
+      BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading positions");
+      return false;
+    }
+  }
+
+  /* Alphas and colors. */
+  {
+    StreamedZstdReader reader(file, stream_infos[1]);
+    if (!reader.initialize()) {
+      BKE_report(reports, RPT_ERROR, "SPZ Read: Error initializing alphas reader");
+      return false;
+    }
+    if (!read_alphas(reader, accessor.radiance_base_for_write())) {
+      BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading alphas");
+      return false;
+    }
+  }
+  {
+    StreamedZstdReader reader(file, stream_infos[2]);
+    if (!reader.initialize()) {
+      BKE_report(reports, RPT_ERROR, "SPZ Read: Error initializing colors reader");
+      return false;
+    }
+    if (!read_colors(reader, accessor.radiance_base_for_write())) {
+      BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading colors");
+      return false;
+    }
+  }
+
+  /* Scales. */
+  {
+    StreamedZstdReader reader(file, stream_infos[3]);
+    if (!reader.initialize()) {
+      BKE_report(reports, RPT_ERROR, "SPZ Read: Error initializing scales reader");
+      return false;
+    }
+    if (!read_scales(reader, accessor.scales_for_write())) {
+      BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading scales");
+      return false;
+    }
+  }
+
+  /* Rotations. */
+  {
+    StreamedZstdReader reader(file, stream_infos[4]);
+    if (!reader.initialize()) {
+      BKE_report(reports, RPT_ERROR, "SPZ Read: Error initializing rotations reader");
+      return false;
+    }
+    if (!read_rotations(reader, header.version, rotations)) {
+      BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading rotations");
+      return false;
+    }
+  }
+
+  /* SH. */
+  {
+    StreamedZstdReader reader(file, stream_infos[5]);
+    if (!reader.initialize()) {
+      BKE_report(reports, RPT_ERROR, "SPZ Read: Error initializing SH reader");
+      return false;
+    }
+    if (!read_sh(reader, sh_attrs)) {
+      BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading spherical harmonics");
+      return false;
+    }
+  }
+
+  /* TODO(sergey): Handle extensions. */
+
+  convert_axis_to_blender(positions, rotations, sh_attrs);
+
+  return true;
+}
+
 PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
 {
   NgspFileHeader header;
@@ -266,116 +362,18 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
     return nullptr;
   }
 
-  PointCloud *point_cloud = BKE_pointcloud_new_nomain(PT_TYPE_GSPLAT, header.num_points);
-  gsplat::GsplatMutableAttributeAccessor accessor(*point_cloud, header.sh_degree);
+  PointCloud *pointcloud = BKE_pointcloud_new_nomain(PointCloudType::GSplat, header.num_points);
+  gsplat::GsplatMutableAttributeAccessor accessor(*pointcloud, header.sh_degree);
 
-  bool ok = true;
-
-  const MutableSpan<float3> positions = accessor.positions_for_write();
-  const MutableSpan<math::Quaternion> rotations = accessor.rotations_for_write();
-  const Span<MutableSpan<float3>> sh_attrs = accessor.sh_for_write();
-
-  /* Positions. */
-  if (ok) {
-    StreamedZstdReader reader(file, stream_infos[0]);
-    if (!reader.initialize()) {
-      BKE_report(reports, RPT_ERROR, "SPZ Read: Error initializing positions reader");
-      ok = false;
-    }
-    else {
-      ok = read_positions(reader, header.fractional_bits, positions);
-      if (!ok) {
-        BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading positions");
-      }
-    }
-  }
-
-  /* Alphas and colors. */
-  if (ok) {
-    StreamedZstdReader reader(file, stream_infos[1]);
-    if (!reader.initialize()) {
-      BKE_report(reports, RPT_ERROR, "SPZ Read: Error initializing alphas reader");
-      ok = false;
-    }
-    else {
-      ok = read_alphas(reader, accessor.radiance_base_for_write());
-      if (!ok) {
-        BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading alphas");
-      }
-    }
-  }
-  if (ok) {
-    StreamedZstdReader reader(file, stream_infos[2]);
-    if (!reader.initialize()) {
-      BKE_report(reports, RPT_ERROR, "SPZ Read: Error initializing colors reader");
-      ok = false;
-    }
-    else {
-      ok = read_colors(reader, accessor.radiance_base_for_write());
-      if (!ok) {
-        BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading colors");
-      }
-    }
-  }
-
-  /* Scales. */
-  if (ok) {
-    StreamedZstdReader reader(file, stream_infos[3]);
-    if (!reader.initialize()) {
-      BKE_report(reports, RPT_ERROR, "SPZ Read: Error initializing scales reader");
-      ok = false;
-    }
-    else {
-      ok = read_scales(reader, accessor.scales_for_write());
-      if (!ok) {
-        BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading scales");
-      }
-    }
-  }
-
-  /* Rotations. */
-  if (ok) {
-    StreamedZstdReader reader(file, stream_infos[4]);
-    if (!reader.initialize()) {
-      BKE_report(reports, RPT_ERROR, "SPZ Read: Error initializing rotations reader");
-      ok = false;
-    }
-    else {
-      ok = read_rotations(reader, header.version, rotations);
-      if (!ok) {
-        BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading rotations");
-      }
-    }
-  }
-
-  /* SH. */
-  if (ok) {
-    StreamedZstdReader reader(file, stream_infos[5]);
-    if (!reader.initialize()) {
-      BKE_report(reports, RPT_ERROR, "SPZ Read: Error initializing SH reader");
-      ok = false;
-    }
-    else {
-      ok = read_sh(reader, sh_attrs);
-      if (!ok) {
-        BKE_report(reports, RPT_ERROR, "SPZ Read: Error reading spherical harmonics");
-      }
-    }
-  }
-
-  if (!ok) {
+  if (!read_spz(file, header, stream_infos, reports, accessor)) {
     accessor.finish();
-    BKE_id_free(nullptr, &point_cloud->id);
+    BKE_id_free(nullptr, &pointcloud->id);
     return nullptr;
   }
 
-  /* TODO(sergey): Handle extensions. */
-
-  convert_axis_to_blender(positions, rotations, sh_attrs);
-
   accessor.finish();
 
-  return point_cloud;
+  return pointcloud;
 }
 
 }  // namespace blender::io::spz

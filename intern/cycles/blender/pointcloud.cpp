@@ -145,7 +145,7 @@ static void export_pointcloud_gsplat_attributes(
   /* Spherical harmonics. */
   vector<blender::bke::AttributeReader<blender::float3>> sh_attribute_readers;
   vector<blender::VArraySpan<blender::float3>> sh_attribute_spans;
-  for (int i = 0; i < PackedSphericalHarmonics::MAX_COEFFICIENTS; ++i) {
+  for (int i = 0; i < PackedSphericalHarmonicsRest::MAX_COEFFICIENTS; ++i) {
     const string sh_attr_name = "radiance:sh_" + std::to_string(i);
     blender::bke::AttributeReader<blender::float3> reader = b_attributes.lookup<blender::float3>(
         sh_attr_name, blender::bke::AttrDomain::Point);
@@ -158,12 +158,12 @@ static void export_pointcloud_gsplat_attributes(
   }
   if (!sh_attribute_readers.empty()) {
     Attribute *attr = pointcloud->attributes.add(ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS);
-    PackedSphericalHarmonics *sh_data = attr->data_for_write<PackedSphericalHarmonics>();
+    PackedSphericalHarmonicsRest *sh_data = attr->data_for_write<PackedSphericalHarmonicsRest>();
     parallel_for(blocked_range<size_t>(0, num_points, 32), [&](const blocked_range<size_t> &r) {
       for (size_t point_index = r.begin(); point_index != r.end(); point_index++) {
-        spherical_harmonics_fill_zero(sh_data[point_index]);
+        spherical_harmonics_rest_fill_zero(sh_data[point_index]);
         for (int sh_index = 0; sh_index < int(sh_attribute_readers.size()); ++sh_index) {
-          spherical_harmonics_set_coefficient(
+          spherical_harmonics_rest_set_coefficient(
               sh_data[point_index],
               sh_index,
               make_float3(sh_attribute_spans[sh_index][point_index].x,
@@ -290,7 +290,7 @@ static void export_pointcloud(Scene *scene,
     }
   }
 
-  if (b_pointcloud.type == blender::PT_TYPE_GSPLAT) {
+  if (b_pointcloud.type == blender::PointCloudType::GSplat) {
     export_pointcloud_gsplat_attributes(pointcloud, b_attributes);
     pointcloud->set_render_as(PointCloud::RENDER_AS_GSPLATS);
   }
@@ -302,7 +302,7 @@ static void export_pointcloud_motion(PointCloud *pointcloud,
                                      const blender::PointCloud &b_pointcloud,
                                      const int motion_step)
 {
-  const bool is_gsplat = (b_pointcloud.type == blender::PT_TYPE_GSPLAT);
+  const bool is_gsplat = (b_pointcloud.type == blender::PointCloudType::GSplat);
 
   /* Set motion steps on position and radius attributes. */
   Attribute *attr_P = pointcloud->attributes.find(ATTR_STD_POSITION);

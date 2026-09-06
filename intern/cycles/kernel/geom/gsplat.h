@@ -58,9 +58,10 @@ ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private Sha
   const int radiance_spherical_harmonics_offset =
       kernel_data_fetch(objects, sd.object).gsplat.radiance_spherical_harmonics_offset;
   if (radiance_spherical_harmonics_offset != ATTR_STD_NOT_FOUND) {
-    const ccl_global PackedSphericalHarmonics &packed_spherical_harmonics = kernel_data_fetch(
-        attributes_spherical_harmonics, radiance_spherical_harmonics_offset + sd.prim);
-    color_srgb += spherical_harmonics_evaluate_rest(packed_spherical_harmonics, direction);
+    const ccl_global PackedSphericalHarmonicsRest &packed_spherical_harmonics_rest =
+        kernel_data_fetch(attributes_spherical_harmonics_rest,
+                          radiance_spherical_harmonics_offset + sd.prim);
+    color_srgb += spherical_harmonics_evaluate_rest(packed_spherical_harmonics_rest, direction);
   }
 
   /* Map to linear color space, add 1/2 offset to mirror [3dgs2023]. */

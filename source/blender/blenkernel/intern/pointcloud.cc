@@ -119,7 +119,7 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
   bke::AttributeStorage::BlendWriteData attribute_data{writer, scope};
   attribute_storage_blend_write_prepare(
       pointcloud->attribute_storage.wrap(),
-      !BLO_write_is_undo(writer),
+      !writer->is_undo(),
       [&](const AttrDomain /*domain*/) { return pointcloud->totpoint; },
       attribute_data);
 
@@ -131,7 +131,7 @@ static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_a
     pointcloud->attribute_storage.dna_attributes = attribute_data.attributes.data();
     pointcloud->attribute_storage.dna_attributes_num = attribute_data.attributes.size();
   }
-  BLO_write_generated_pointer_tag(writer, pointcloud->attribute_storage.dna_attributes);
+  writer->generated_pointer_tag(pointcloud->attribute_storage.dna_attributes);
 
   CustomData_reset(&pointcloud->pdata_legacy);
 
@@ -222,7 +222,7 @@ PointCloud *BKE_pointcloud_add(Main *bmain, const char *name)
   return pointcloud;
 }
 
-PointCloud *BKE_pointcloud_new_nomain(const ePointCloud_Type type, const int totpoint)
+PointCloud *BKE_pointcloud_new_nomain(const PointCloudType type, const int totpoint)
 {
   PointCloud *pointcloud = static_cast<PointCloud *>(BKE_libblock_alloc(
       nullptr, ID_PT, BKE_idtype_idcode_to_name(ID_PT), LIB_ID_CREATE_LOCALIZE));
@@ -476,7 +476,7 @@ void BKE_pointcloud_batch_cache_free(PointCloud *pointcloud)
 
 namespace bke {
 
-PointCloud *pointcloud_new_no_attributes(const ePointCloud_Type type, const int totpoint)
+PointCloud *pointcloud_new_no_attributes(const PointCloudType type, const int totpoint)
 {
   PointCloud *pointcloud = BKE_id_new_nomain<PointCloud>(nullptr);
   pointcloud->type = type;

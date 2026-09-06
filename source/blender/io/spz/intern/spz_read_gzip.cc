@@ -28,7 +28,6 @@
 #include "IO_validate.hh"
 
 #include "spz_read_common.hh"
-#include "spz_types.hh"
 
 namespace blender::io::spz {
 
@@ -67,7 +66,7 @@ class BufferedFileReader {
   }
 };
 
-/* Helper class that allows to read a Gzip-compressed file from disk with the minimum amount of
+/* Helper class that allows reading a Gzip-compressed file from disk with the minimum amount of
  * extra memory usage, but allowing to easily access data of specific size. */
 class StreamedGzipReader {
   BufferedFileReader buffered_reader_;
@@ -181,7 +180,7 @@ PointCloud *read_spz_gzip_compressed_file(FILE *file, ReportList *reports)
     return nullptr;
   }
 
-  PointCloud *point_cloud = BKE_pointcloud_new_nomain(PT_TYPE_GSPLAT, header.num_points);
+  PointCloud *point_cloud = BKE_pointcloud_new_nomain(PointCloudType::GSplat, header.num_points);
   gsplat::GsplatMutableAttributeAccessor accessor(*point_cloud, header.sh_degree);
 
   const MutableSpan<float3> positions = accessor.positions_for_write();

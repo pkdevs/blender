@@ -68,7 +68,8 @@ static Shader *get_default_shader(const Scene *scene, const blender::Object &b_o
   }
 
   if (b_ob.type == blender::OB_POINTCLOUD &&
-      blender::id_cast<const blender::PointCloud *>(b_ob.data)->type == blender::PT_TYPE_GSPLAT)
+      blender::id_cast<const blender::PointCloud *>(b_ob.data)->type ==
+          blender::PointCloudType::GSplat)
   {
     return scene->default_gsplat;
   }
