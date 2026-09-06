@@ -201,6 +201,7 @@ class VariableMap {
    * #std::nullopt otherwise.
    */
   std::optional<int64_t> get_integer(StringRef name) const;
+
   /**
    * Fetch the value of the float variable with the given name.
    *

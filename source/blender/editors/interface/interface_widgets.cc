@@ -2806,7 +2806,7 @@ static void widget_draw_text(const uiFontStyle *fstyle,
 
       int64_t hint_replace_start_ofs = -1;
       int64_t hint_replace_end_ofs = -1;
-      if (edit_hint && edit_hint->replace_start < edit_hint->replace_end) {
+      if (edit_hint && edit_hint->replace_start <= edit_hint->replace_end) {
         hint_replace_start_ofs = edit_hint->replace_start - but->ofs;
         hint_replace_end_ofs = edit_hint->replace_end - but->ofs;
       }

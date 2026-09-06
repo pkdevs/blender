@@ -3873,13 +3873,6 @@ std::optional<IndexRange> template_variable_span_at_cursor(StringRef text, int64
   return std::nullopt;
 }
 
-/**
- * Faded inline completion hint (like #button_edit_unit_hint_refresh) for a path-template
- * `{variable_name}` expression the cursor is currently positioned in, mirroring whatever match
- * is highlighted in the dropdown popup (see #prop_path_template_variable_search_set). Drawn in
- * place of whatever real characters (if any) come after the cursor up to the end of the
- * expression, so it previews exactly what accepting the highlighted match would produce.
- */
 static void button_edit_template_variable_hint_refresh(Button *but, HandleButtonData *data)
 {
   data->text_edit_unit_hint.clear();
@@ -3918,17 +3911,16 @@ static void button_edit_template_variable_hint_refresh(Button *but, HandleButton
     return;
   }
 
-  /* Absorb an already-present closing '}' (see #prop_path_template_variable_search_update_fn):
-   * the hint's own trailing "}" (added below) takes its place. */
-  int64_t replace_end = span->one_after_last();
-  if (replace_end < int64_t(text.size()) && text[replace_end] == '}') {
-    replace_end += 1;
-  }
+  const int64_t name_end = span->one_after_last();
+  const bool has_closing_brace = name_end < int64_t(text.size()) && text[name_end] == '}';
 
+  /* Only show a hint "}" when the real text doesn't have a '}' */
   data->text_edit_unit_hint = name.substr(typed.size());
-  data->text_edit_unit_hint += "}";
+  if (!has_closing_brace) {
+    data->text_edit_unit_hint += "}";
+  }
   data->text_edit_hint_replace_start = cursor;
-  data->text_edit_hint_replace_end = replace_end;
+  data->text_edit_hint_replace_end = name_end;
 }
 
 static void button_edit_hint_refresh(bContext *C, Button *but, HandleButtonData *data)
@@ -4723,8 +4715,6 @@ static int do_but_textedit(
       searchbox_update(C, data->searchbox, but, true); /* true = reset */
     }
 
-    /* After the search box (if any), since the template-variable hint mirrors its current
-     * highlight -- see #button_edit_template_variable_hint_refresh. */
     button_edit_hint_refresh(C, but, data);
   }
 
