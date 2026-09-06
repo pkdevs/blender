@@ -374,6 +374,17 @@ ccl_device_forceinline void kernel_embree_custom_occluded_func_impl(
 #endif
 }
 
+ccl_device_forceinline void kernel_embree_custom_occluded_local_func_impl(
+    const RTCOccludedFunctionNArguments *args)
+{
+  kernel_assert(args->N == 1);
+
+  /* Ignore intersections with custom primitives.
+   * Currently the only custom primitive is the gaussian splat, which requires extra design work
+   * to integrate into local intersection test. */
+  args->valid[0] = 0;
+}
+
 ccl_device_forceinline void kernel_embree_custom_occluded_volume_func_impl(
     const RTCOccludedFunctionNArguments *args)
 {
@@ -608,6 +619,14 @@ kernel_embree_custom_occluded_func_static(const RTCOccludedFunctionNArguments *a
 }
 
 RTC_SYCL_INDIRECTLY_CALLABLE static void ccl_always_inline
+kernel_embree_custom_occluded_local_func_static(const RTCOccludedFunctionNArguments *args)
+{
+  CCLLocalContext *ctx = (CCLLocalContext *)(args->context);
+  ONEAPIKernelContext *context = static_cast<ONEAPIKernelContext *>(ctx->kg);
+  context->kernel_embree_custom_occluded_local_func_impl(args);
+}
+
+RTC_SYCL_INDIRECTLY_CALLABLE static void ccl_always_inline
 kernel_embree_custom_occluded_volume_func_static(const RTCOccludedFunctionNArguments *args)
 {
   CCLVolumeContext *ctx = (CCLVolumeContext *)(args->context);
@@ -625,6 +644,7 @@ kernel_embree_custom_occluded_volume_func_static(const RTCOccludedFunctionNArgum
     ONEAPIKernelContext::kernel_embree_filter_occluded_volume_all_func_static
 #  define kernel_embree_custom_intersection_func kernel_embree_custom_intersection_func_static
 #  define kernel_embree_custom_occluded_func kernel_embree_custom_occluded_func_static
+#  define kernel_embree_custom_occluded_local_func kernel_embree_custom_occluded_local_func_static
 #  define kernel_embree_custom_occluded_volume_func \
     kernel_embree_custom_occluded_volume_func_static
 #else
@@ -636,6 +656,7 @@ kernel_embree_custom_occluded_volume_func_static(const RTCOccludedFunctionNArgum
     kernel_embree_filter_occluded_volume_all_func_impl
 #  define kernel_embree_custom_intersection_func kernel_embree_custom_intersection_func_impl
 #  define kernel_embree_custom_occluded_func kernel_embree_custom_occluded_func_impl
+#  define kernel_embree_custom_occluded_local_func kernel_embree_custom_occluded_local_func_impl
 #  define kernel_embree_custom_occluded_volume_func kernel_embree_custom_occluded_volume_func_impl
 #endif
 
@@ -688,17 +709,6 @@ ccl_device_intersect bool kernel_embree_intersect_local(KernelGlobals kg,
                                                         ccl_private uint *lcg_state,
                                                         const int max_hits)
 {
-  /* Explicitly disable intersection with anything that is not a triangle.
-   * Matches other backends, and allows to simplify setup for the custom primitives in the scene.
-   */
-  const int primitive_type = kernel_data_fetch(objects, local_object).primitive_type;
-  if (!(primitive_type & PRIMITIVE_TRIANGLE)) {
-    if (local_isect) {
-      local_isect->num_hits = 0;
-    }
-    return false;
-  }
-
   const bool has_bvh = !(kernel_data_fetch(object_flag, local_object) &
                          SD_OBJECT_TRANSFORM_APPLIED);
   CCLLocalContext ctx;
@@ -726,6 +736,7 @@ ccl_device_intersect bool kernel_embree_intersect_local(KernelGlobals kg,
 
   RTCOccludedArguments args;
   rtcInitOccludedArguments(&args);
+  args.occluded = reinterpret_cast<RTCOccludedFunctionN>(kernel_embree_custom_occluded_local_func);
   args.filter = reinterpret_cast<RTCFilterFunctionN>(kernel_embree_filter_occluded_local_func);
   args.feature_mask = CYCLES_EMBREE_USED_FEATURES;
   args.context = &ctx;
