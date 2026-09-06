@@ -21,13 +21,15 @@ namespace blender::nodes::node_geo_points_type_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
   b.add_input<decl::Geometry>("Points"_ustr)
       .supported_type(GeometryComponent::Type::PointCloud)
       .description("Point cloud to change the type of");
+  b.add_output<decl::Geometry>("Points"_ustr).propagate_all_geometry().align_with_previous();
   b.add_input<decl::Menu>("Type"_ustr)
     .static_items(rna_enum_pointcloud_type_items)
     .optional_label();
-  b.add_output<decl::Geometry>("Points"_ustr).propagate_all_geometry().align_with_previous();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -53,7 +55,6 @@ static void node_register()
   geo_node_type_base(&ntype, "GeometryNodePointsSetType"_ustr);
   ntype.ui_name = "Set Point Cloud Type";
   ntype.ui_description = "Change the type of point cloud";
-  ntype.enum_name_legacy = "POINT_CLOUD_SET_TYPE";
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
