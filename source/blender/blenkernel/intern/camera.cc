@@ -689,6 +689,12 @@ bool BKE_camera_view_render_border(const Scene *scene,
     else {
       border = viewborder;
     }
+
+    if ((rv3d->rflag & RV3D_MIRROR_X) != 0) {
+      std::swap(border.xmin, border.xmax);
+      border.xmin = winx - border.xmin;
+      border.xmax = winx - border.xmax;
+    }
   }
   else {
     if ((v3d->flag2 & V3D_RENDER_BORDER) == 0) {
@@ -708,7 +714,12 @@ bool BKE_camera_view_render_border(const Scene *scene,
   /* The camera view roll rotates the border around the center of the viewport. */
   if (is_camera_view && rv3d->camroll != 0.0f) {
     const float pivot[2] = {winx / 2.0f, winy / 2.0f};
-    BLI_rctf_rotate_expand_around(&border, &border, pivot, rv3d->camroll);
+    if ((rv3d->rflag & RV3D_MIRROR_X) != 0) {
+      BLI_rctf_rotate_expand_around(&border, &border, pivot, -rv3d->camroll);
+    }
+    else {
+      BLI_rctf_rotate_expand_around(&border, &border, pivot, rv3d->camroll);
+    }
   }
 
   *r_border = border;
