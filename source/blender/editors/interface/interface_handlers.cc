@@ -3824,15 +3824,13 @@ std::optional<IndexRange> template_variable_span_at_cursor(StringRef text, int64
   for (int64_t i = 0; i < size; i++) {
     if (start == -1) {
       if (text[i] == '{') {
-        if (i + 1 < size && text[i + 1] == '{') {
-          /* Escaped "{{". */
+        if (i + 1 < size && text[i + 1] == '{' && cursor != i + 1) {
           i++;
           continue;
         }
         start = i;
       }
       else if (text[i] == '}' && i + 1 < size && text[i + 1] == '}') {
-        /* Escaped "}}". */
         i++;
       }
       continue;
@@ -3848,8 +3846,18 @@ std::optional<IndexRange> template_variable_span_at_cursor(StringRef text, int64
       start = -1;
     }
     else if (text[i] == '{') {
-      /* Nested "{": the expression is already invalid, don't offer a hint for it. */
-      return std::nullopt;
+      const int64_t name_start = start + 1;
+      const int64_t name_end = i;
+      if (cursor >= name_start && cursor <= name_end) {
+        return IndexRange::from_begin_end(name_start, name_end);
+      }
+      if (i + 1 < size && text[i + 1] == '{') {
+        i++;
+        start = -1;
+      }
+      else {
+        start = i;
+      }
     }
   }
 
