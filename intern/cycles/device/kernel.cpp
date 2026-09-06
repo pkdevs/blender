@@ -14,7 +14,7 @@ bool device_kernel_has_shading(DeviceKernel kernel)
 {
   return (kernel == DEVICE_KERNEL_INTEGRATOR_RESTIR ||
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_BACKGROUND ||
-          kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE ||
+          kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_NEE || // !!!: Remove?
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_LIGHT_FORWARD ||
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE ||
           kernel == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE ||
@@ -117,7 +117,8 @@ const char *device_kernel_as_string(DeviceKernel kernel)
       return "integrator_reset";
     case DEVICE_KERNEL_INTEGRATOR_SHADOW_CATCHER_COUNT_POSSIBLE_SPLITS:
       return "integrator_shadow_catcher_count_possible_splits";
-
+    case DEVICE_KERNEL_INTEGRATOR_RESTIR_TEMPORAL:
+      return "integrator_restir_temporal";
     case DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION:
       return "integrator_evaluate_final_samples";
     case DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION:

@@ -1841,6 +1841,7 @@ struct KernelWorkTile {
 
   int restir_iteration;
   bool setup_restir;
+  bool setup_temporal;
   bool final_evaluation;
 };
 
@@ -1906,6 +1907,7 @@ enum DeviceKernel : int {
   DEVICE_KERNEL_INTEGRATOR_SHADOW_PATH_MNEE_PENDING,
 
 	DEVICE_KERNEL_INTEGRATOR_RESTIR,
+  DEVICE_KERNEL_INTEGRATOR_RESTIR_TEMPORAL,
   DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION,
   DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION,
 

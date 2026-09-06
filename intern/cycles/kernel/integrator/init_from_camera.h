@@ -132,6 +132,7 @@ ccl_device bool integrator_init_from_camera(KernelGlobals kg,
 
     INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = tile->restir_iteration;
     INTEGRATOR_STATE_WRITE(state, path, setup_restir) = tile->setup_restir;
+    INTEGRATOR_STATE_WRITE(state, path, setup_temporal) = tile->setup_temporal;
     INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = tile->final_evaluation;
 
     if (INTEGRATOR_STATE(state, path, final_evaluation)) {
@@ -142,6 +143,12 @@ ccl_device bool integrator_init_from_camera(KernelGlobals kg,
 
     if (INTEGRATOR_STATE(state, path, setup_restir)) {
       integrator_path_init(state, DEVICE_KERNEL_INTEGRATOR_RESTIR);
+
+      return true;
+    }
+
+    if (INTEGRATOR_STATE(state, path, setup_temporal)) {
+      integrator_path_init(state, DEVICE_KERNEL_INTEGRATOR_RESTIR_TEMPORAL);
 
       return true;
     }

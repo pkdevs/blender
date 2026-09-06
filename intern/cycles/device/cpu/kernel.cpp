@@ -21,6 +21,7 @@ CPUKernels::CPUKernels()
       REGISTER_KERNEL(integrator_init_from_bake),
       REGISTER_KERNEL(integrator_restir),
       REGISTER_KERNEL(integrator_megakernel),
+      REGISTER_KERNEL(integrator_restir_temporal),
       REGISTER_KERNEL(integrator_evaluate_final_samples),
       REGISTER_KERNEL(integrator_evaluate_restir_pt),
       /* Shader evaluation. */

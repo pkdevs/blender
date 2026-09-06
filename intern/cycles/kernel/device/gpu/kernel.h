@@ -480,6 +480,21 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
 ccl_gpu_kernel_postfix
 
 ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
+    ccl_gpu_kernel_signature(integrator_restir_temporal,
+                             const ccl_global int *path_index_array,
+                             ccl_global float *render_buffer,
+                             const int work_size)
+{
+  const int global_index = ccl_gpu_global_id_x();
+
+  if (ccl_gpu_kernel_within_bounds(global_index, work_size)) {
+    const int state = (path_index_array) ? path_index_array[global_index] : global_index;
+    ccl_gpu_kernel_call(integrator_restir_temporal(nullptr, state, render_buffer));
+  }
+}
+ccl_gpu_kernel_postfix
+
+ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
     ccl_gpu_kernel_signature(integrator_evaluate_restir_pt,
                              const ccl_global int *path_index_array,
                              ccl_global float *render_buffer,

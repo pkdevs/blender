@@ -92,6 +92,7 @@ void PathTraceWorkCPU::setup_work_tile(KernelWorkTile &work_tile,
 
   work_tile.restir_iteration = 0;
   work_tile.setup_restir = false;
+  work_tile.setup_temporal = false;
   work_tile.final_evaluation = false;
 }
 
@@ -113,6 +114,27 @@ void PathTraceWorkCPU::initial_resampling(const int64_t image_width,
     ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_->data();
 
     render_samples_full_pipeline(kernel_globals, work_tile);
+  });
+}
+
+void PathTraceWorkCPU::temporal_resampling(const int64_t image_width,
+                                           const int64_t image_height,
+                                           const int start_sample,
+                                           const int sample_offset)
+{
+  const int64_t total_pixels_num = image_width * image_height;
+
+  parallel_for(int64_t(0), total_pixels_num, [&](int64_t work_index) {
+    if (is_cancel_requested()) {
+      return;
+    }
+
+    KernelWorkTile work_tile;
+    setup_work_tile(work_tile, work_index, image_width, image_height, start_sample, sample_offset);
+
+    ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_->data();
+
+    render_samples_temporal_resampling(kernel_globals, work_tile);
   });
 }
 
@@ -166,7 +188,7 @@ void PathTraceWorkCPU::evaluate_final_samples(const int64_t image_width,
 
 void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
                                       const int start_sample,
-                                      const int samples_num,
+                                      const int samples_num, // !!!(Tri): Unused!
                                       const int sample_offset)
 {
   const int64_t image_width = effective_buffer_params_.width;
@@ -183,26 +205,20 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   local_arena.execute(
       [&] { initial_resampling(image_width, image_height, start_sample, sample_offset); });
 
-// TODO(Tri): Real per-pass separation & decoupling! Later on...
+  /* Temporal Resampling: runs before spatial regardless of its 
+   * iteration count, since temporal and spatial reuse are orthogonal settings. */
+  if (device_scene_->data.integrator.use_restir &&
+      device_scene_->data.integrator.restir_temporal_history_limit > 0)
+  {
+    local_arena.execute(
+        [&] { temporal_resampling(image_width, image_height, start_sample, sample_offset); });
+  }
 
   /* TODO(weizhen): spatial resampling makes adaptive sampling (noise threshold) fail. */
-  /* Spatial + Temporal Resampling.
-   *
-   * restir_spatial_iterations == 0 is a valid configuration meaning "no
-   * spatial reuse"; evaluate_final_samples() below correctly falls back to
-   * reading straight from pass_restir_reservoir in that case. However,
-   * integrator_restir() is also the only place streaming_temporal_sample()
-   * is reachable from, so if temporal reuse is enabled it must still run
-   * at least once even when spatial_iterations is 0. Spatial math itself
-   * degrades to a no-op automatically when restir_spatial_neighbors == 0
-   * (see streaming_di_samples()'s neighbor loop), so forcing one pass here
-   * does not silently reintroduce spatial reuse the user disabled. */
+  /* Spatial Resampling. */
   int i = 0;
   if (device_scene_->data.integrator.use_restir) {
-    const int dispatch_count = max(device_scene_->data.integrator.restir_spatial_iterations,
-                                   device_scene_->data.integrator.restir_temporal_history_limit > 0 ? 1 : 0);
-
-    for (; i < dispatch_count; i++) {
+    for (; i < device_scene_->data.integrator.restir_spatial_iterations; i++) {
       local_arena.execute(
           [&] { spatial_resampling(image_width, image_height, start_sample, sample_offset, i); });
     }
@@ -232,6 +248,7 @@ void PathTraceWorkCPU::render_samples_full_pipeline(ThreadKernelGlobalsCPU *kern
   IntegratorStateCPU *shadow_catcher_state = nullptr;
 
   INTEGRATOR_STATE_WRITE(state, path, setup_restir) = false;
+  INTEGRATOR_STATE_WRITE(state, path, setup_temporal) = false;
   INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = false;
 
   if (device_scene_->data.integrator.has_shadow_catcher) {
@@ -304,7 +321,37 @@ void PathTraceWorkCPU::render_samples_full_pipeline(ThreadKernelGlobalsCPU *kern
   }
 }
 
-// TODO(Tri): Hook up Temporal
+void PathTraceWorkCPU::render_samples_temporal_resampling(ThreadKernelGlobalsCPU *kernel_globals,
+                                                          const KernelWorkTile &work_tile)
+{
+  IntegratorStateCPU integrator_states[2];
+  IntegratorStateCPU *state = &integrator_states[0];
+
+  INTEGRATOR_STATE_WRITE(state, path, setup_temporal) = true;
+  INTEGRATOR_STATE_WRITE(state, path, setup_restir) = false;
+  INTEGRATOR_STATE_WRITE(state, path, setup_temporal) = true;
+  INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = false;
+
+  KernelWorkTile sample_work_tile = work_tile;
+  sample_work_tile.setup_temporal = true;
+  sample_work_tile.setup_restir = false;
+  sample_work_tile.final_evaluation = false;
+
+  float *render_buffer = buffers_->buffer.data();
+
+  if (is_cancel_requested()) {
+    return;
+  }
+
+  if (!kernels_.integrator_init_from_camera(
+          kernel_globals, state, &sample_work_tile, render_buffer))
+  {
+    return;
+  }
+
+  kernels_.integrator_restir_temporal(kernel_globals, state, render_buffer);
+}
+
 void PathTraceWorkCPU::render_samples_direct_illumination(ThreadKernelGlobalsCPU *kernel_globals,
                                                           const KernelWorkTile &work_tile,
                                                           const int iteration)
@@ -315,6 +362,7 @@ void PathTraceWorkCPU::render_samples_direct_illumination(ThreadKernelGlobalsCPU
 
   INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = iteration;
   INTEGRATOR_STATE_WRITE(state, path, setup_restir) = true;
+  INTEGRATOR_STATE_WRITE(state, path, setup_temporal) = false;
   INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = false;
 
   KernelWorkTile sample_work_tile = work_tile;
@@ -352,6 +400,7 @@ void PathTraceWorkCPU::render_samples_evaluate_final(ThreadKernelGlobalsCPU *ker
 
   INTEGRATOR_STATE_WRITE(state, path, spatial_iteration) = iteration;
   INTEGRATOR_STATE_WRITE(state, path, setup_restir) = false;
+  INTEGRATOR_STATE_WRITE(state, path, setup_temporal) = false;
   INTEGRATOR_STATE_WRITE(state, path, final_evaluation) = true;
 
   KernelWorkTile sample_work_tile = work_tile;

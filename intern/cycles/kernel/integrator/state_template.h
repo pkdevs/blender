@@ -4,7 +4,7 @@
 
 /************************************ Path State *****************************/
 
-KERNEL_STRUCT_BEGIN(path)
+KERNEL_STRUCT_BEGIN(path) // !!!
 /* Index of a pixel within the device render buffer where this path will write its result.
  * To get an actual offset within the buffer the value needs to be multiplied by the
  * `kernel_data.film.pass_stride`.
@@ -74,8 +74,9 @@ KERNEL_STRUCT_MEMBER(path, uint32_t, shader_sort_key, KERNEL_FEATURE_PATH_TRACIN
 /* ReSTIR state. */
 KERNEL_STRUCT_MEMBER(path, int, last_bounce_is_rough, KERNEL_FEATURE_PATH_TRACING)
 
-KERNEL_STRUCT_MEMBER(path, int, spatial_iteration, KERNEL_FEATURE_PATH_TRACING) // !!! KERNEL_FEATURE_RESTIR is 32...
+KERNEL_STRUCT_MEMBER(path, int, spatial_iteration, KERNEL_FEATURE_PATH_TRACING) // !!! KERNEL_FEATURE_RESTIR is (1U << 32U) which isn't supported on a 32bit design
 KERNEL_STRUCT_MEMBER(path, bool, setup_restir, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(path, bool, setup_temporal, KERNEL_FEATURE_PATH_TRACING)
 KERNEL_STRUCT_MEMBER(path, bool, final_evaluation, KERNEL_FEATURE_PATH_TRACING)
 
 KERNEL_STRUCT_END(path)
