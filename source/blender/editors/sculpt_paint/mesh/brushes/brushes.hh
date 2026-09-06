@@ -12,8 +12,6 @@
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 
-#include "DNA_scene_types.h"
-
 #include <optional>
 
 namespace blender {
@@ -157,11 +155,9 @@ void do_layer_brush(const Depsgraph &depsgraph,
                     const IndexMask &node_mask);
 /** A brush that modifies mask values instead of position. */
 void do_mask_brush(const Depsgraph &depsgraph,
-                   PaintModeSettings paint_mode_settings,
                    const Sculpt &sd,
                    Object &object,
-                   const IndexMask &node_mask,
-                   const IndexMask &texnode_mask);
+                   const IndexMask &node_mask);
 void do_multiplane_scrape_brush(const Depsgraph &depsgraph,
                                 const Sculpt &sd,
                                 Object &object,

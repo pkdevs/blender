@@ -1354,27 +1354,14 @@ struct ImagePaintSettings {
 /** \name Paint Mode Settings
  * \{ */
 
-/** #PaintModeSettings::flag */
-enum ePaintMode_Flag : short {
-  PAINTMODE_STENCIL = 1 << 0,
-  PAINTMODE_STENCIL_INVERTED = 1 << 1,
-};
-ENUM_OPERATORS(ePaintMode_Flag)
-
 struct PaintModeSettings {
-  ePaintMode_Flag flag = {};
   /** Source to select canvas from to paint on. */
   ePaintCanvasSource canvas_source = PAINT_CANVAS_SOURCE_MATERIAL;
-  char _pad[5] = {};
+  char _pad[7] = {};
 
   /** Selected image when canvas_source=PAINT_CANVAS_SOURCE_IMAGE. */
   Image *canvas_image = nullptr;
   ImageUser image_user;
-
-  /** Masking texture for Paint Mode. */
-  Image *stencil = nullptr;
-  float stencil_color[3] = {};
-  char _pad2[4] = {};
 };
 
 /** \} */

@@ -532,7 +532,9 @@ bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
   cache.accum = true;
 
   std::unique_ptr<TexturePaintData> texture_paint_data = std::make_unique<TexturePaintData>();
-  texture_paint_data->image_data = ImageData::init_active_image(*this->object, *settings_);
+  texture_paint_data->image_data = this->brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK ?
+                                       ImageData::init_mask(*settings_) :
+                                       ImageData::init_active_image(*this->object, *settings_);
   if (!texture_paint_data->image_data) {
     BLI_assert(0);
     return false;
@@ -652,6 +654,10 @@ static void do_brush_action(const Depsgraph &depsgraph,
   switch (brush.image_brush_type) {
     case IMAGE_PAINT_BRUSH_TYPE_DRAW:
       do_3d_image_paint_brush(
+          depsgraph, image_paint_settings.paint, brush, ob, *mode_data->image_data, node_mask);
+      break;
+    case IMAGE_PAINT_BRUSH_TYPE_MASK:
+      do_3d_image_mask_brush(
           depsgraph, image_paint_settings.paint, brush, ob, *mode_data->image_data, node_mask);
       break;
     default:

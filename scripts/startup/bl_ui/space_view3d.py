@@ -1014,7 +1014,7 @@ class VIEW3D_HT_header(Header):
             if tool.use_brushes:
                 brush = paint.brush
                 if brush:
-                    is_paint_tool = brush.sculpt_brush_type in {'PAINT', 'SMEAR', 'MASK'}
+                    is_paint_tool = brush.sculpt_brush_type in {'PAINT', 'SMEAR'}
             else:
                 is_paint_tool = tool and tool.use_paint_canvas
 
@@ -8983,56 +8983,6 @@ class VIEW3D_PT_mesh_paint_automasking(Panel):
             use_operators=use_operators)
 
 
-class VIEW3D_PT_sculpt_stencil_masking(Panel):
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'HEADER'
-    bl_label = "Stencil Mask"
-    bl_options = {'DEFAULT_CLOSED'}
-    bl_parent_id = "VIEW3D_PT_mesh_paint_automasking"
-
-    @classmethod
-    def poll(cls, context):
-        brush = context.tool_settings.sculpt.brush
-        ob = context.active_object
-        return (brush is not None and ob is not None and context.preferences.experimental.use_sculpt_texture_paint)
-
-    def draw_header(self, context):
-        paint_mode = context.tool_settings.paint_mode
-        self.layout.prop(paint_mode, "use_stencil_layer", text=self.bl_label)
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-
-        tool_settings = context.tool_settings
-        paint_mode = tool_settings.paint_mode
-        ob = context.active_object
-        mesh = ob.data
-
-        col = layout.column()
-        col.active = paint_mode.use_stencil_layer
-
-        col.label(text="Stencil Image")
-        col.template_ID(paint_mode, "stencil_image", new="image.new", open="image.open")
-
-        stencil_text = mesh.uv_layer_stencil.name if mesh.uv_layer_stencil else ""
-
-        col.separator()
-
-        split = col.split()
-        colsub = split.column()
-        colsub.alignment = 'RIGHT'
-        colsub.label(text="UV Layer")
-        split.column().menu("VIEW3D_MT_tools_projectpaint_stencil", text=stencil_text, translate=False)
-
-        col.separator()
-
-        row = col.row(align=True)
-        row.prop(paint_mode, "stencil_color", text="Display Color")
-        row.prop(paint_mode, "invert_stencil", text="", icon='IMAGE_ALPHA')
-
-
 class VIEW3D_PT_sculpt_context_menu(Panel):
     # Only for popover, these are dummy values.
     bl_space_type = 'VIEW_3D'
@@ -9582,7 +9532,6 @@ classes = (
     VIEW3D_PT_paint_texture_context_menu,
     VIEW3D_PT_paint_weight_context_menu,
     VIEW3D_PT_mesh_paint_automasking,
-    VIEW3D_PT_sculpt_stencil_masking,
     VIEW3D_PT_sculpt_context_menu,
     TOPBAR_PT_grease_pencil_materials,
     TOPBAR_PT_grease_pencil_vertex_color,

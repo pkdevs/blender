@@ -1436,30 +1436,6 @@ static void rna_def_paint_mode(BlenderRNA *brna)
       prop, nullptr, nullptr, nullptr, "rna_Image_no_renderresult_or_viewer_poll");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_CONTEXT_UPDATE);
   RNA_def_property_ui_text(prop, "Texture", "Image used as painting target");
-
-  prop = RNA_def_property(srna, "stencil_image", PROP_POINTER, PROP_NONE);
-  RNA_def_property_pointer_sdna(prop, nullptr, "stencil");
-  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_CONTEXT_UPDATE);
-  RNA_def_property_ui_text(prop, "Stencil Image", "Image used as stencil");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, "rna_ImaPaint_viewport_update");
-  RNA_def_property_pointer_funcs(
-      prop, nullptr, nullptr, nullptr, "rna_Image_no_renderresult_or_viewer_poll");
-
-  prop = RNA_def_property(srna, "stencil_color", PROP_FLOAT, PROP_COLOR_GAMMA);
-  RNA_def_property_range(prop, 0.0, 1.0);
-  RNA_def_property_float_sdna(prop, nullptr, "stencil_color");
-  RNA_def_property_ui_text(prop, "Stencil Color", "Stencil color in the viewport");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, "rna_ImaPaint_viewport_update");
-
-  prop = RNA_def_property(srna, "use_stencil_layer", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", PAINTMODE_STENCIL);
-  RNA_def_property_ui_text(prop, "Stencil Layer", "Set the mask layer from the UV map buttons");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, "rna_ImaPaint_viewport_update");
-
-  prop = RNA_def_property(srna, "invert_stencil", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", PAINTMODE_STENCIL_INVERTED);
-  RNA_def_property_ui_text(prop, "Invert", "Invert the stencil layer");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, "rna_ImaPaint_viewport_update");
 }
 
 static void rna_def_image_paint(BlenderRNA *brna)

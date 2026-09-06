@@ -209,16 +209,10 @@ static void calc_bmesh(const Depsgraph &depsgraph,
 }  // namespace mask_cc
 
 void do_mask_brush(const Depsgraph &depsgraph,
-                   PaintModeSettings paint_mode_settings,
                    const Sculpt &sd,
                    Object &object,
-                   const IndexMask &node_mask,
-                   const IndexMask &texnode_mask)
+                   const IndexMask &node_mask)
 {
-  if (SCULPT_use_image_mask_brush(paint_mode_settings)) {
-    SCULPT_do_mask_brush_image(depsgraph, sd, object, texnode_mask);
-    return;
-  }
   PRF_scope(ProfileCategory::Editor);
   SculptSession &ss = *object.runtime->sculpt_session;
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);

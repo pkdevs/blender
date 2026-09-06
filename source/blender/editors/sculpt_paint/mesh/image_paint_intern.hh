@@ -44,6 +44,7 @@ struct ImageData : NonCopyable {
   ~ImageData();
 
   static std::unique_ptr<ImageData> init_active_image(Object &ob, ImagePaintSettings &settings);
+  static std::unique_ptr<ImageData> init_mask(ImagePaintSettings &settings);
   const ImageUser &image_user_get() const
   {
     if (std::holds_alternative<ImageUser *>(image_user)) {
@@ -60,5 +61,12 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                              Object &ob,
                              ImageData &image_data,
                              const IndexMask &node_mask);
+
+void do_3d_image_mask_brush(const Depsgraph &depsgraph,
+                            const Paint &paint,
+                            const Brush &brush,
+                            Object &ob,
+                            ImageData &image_data,
+                            const IndexMask &node_mask);
 /** \} */
 }  // namespace blender::ed::sculpt_paint::image

@@ -82,19 +82,18 @@ std::unique_ptr<ImageData> ImageData::init_active_image(Object &ob, ImagePaintSe
 
   return image_data;
 }
-
-std::unique_ptr<ImageData> ImageData::init_mask_image(PaintModeSettings &paint_mode_settings)
+std::unique_ptr<ImageData> ImageData::init_mask(ImagePaintSettings &settings)
 {
-  /* TODO: Implement a user-facing warning notifying the user that Stencil Mask has no texture
-   * to work with. */
-  if (!paint_mode_settings.stencil) {
+  if (!settings.stencil) {
     return nullptr;
   }
+
   std::unique_ptr<ImageData> image_data = std::make_unique<ImageData>();
-  image_data->image = paint_mode_settings.stencil;
-  image_data->image_user = &paint_mode_settings.image_user;
+  image_data->image = settings.stencil;
+  image_data->image_user = ImageUser{};
+
   BLI_assert(image_data->image);
-  BLI_assert(image_data->image_user);
+
   return image_data;
 }
 
@@ -220,9 +219,11 @@ static BitVector<> init_uv_primitives_brush_test(SculptSession &ss,
 struct PaintBlendSettings {
   PaintBlendSettings(const Paint &paint, const Brush &brush, const bool invert)
   {
-    brush_color = float4(invert ? BKE_brush_secondary_color_get(&paint, &brush) :
-                                  BKE_brush_color_get(&paint, &brush),
-                         1.0f);
+    brush_color = brush.image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK ?
+                      float4(invert ? float3(0.0, 0.0, 0.0) : float3(1.0, 1.0, 1.0), 1.0f) :
+                      float4(invert ? BKE_brush_secondary_color_get(&paint, &brush) :
+                                      BKE_brush_color_get(&paint, &brush),
+                             1.0f);
     brush_alpha = brush.alpha;
     blend_mode = IMB_BlendMode(brush.blend);
   }
@@ -386,60 +387,6 @@ static void paint_blend_pixels(const PaintBlendSettings &settings,
 #endif
       paint_pixels[i] = paint_blend_pixel(
           brush_color, brush_alpha, is_mix, blend_mode, factors[start + i], scene);
-    }
-
-    /* SIMD optimized write. */
-    const float (*matrix)[3] = blender::colorspace::scene_linear_is_rec709 ?
-                                   nullptr :
-                                   reinterpret_cast<const float (*)[3]>(
-                                       blender::colorspace::scene_linear_to_rec709.ptr());
-    linearrgb_to_srgb_uchar4_n(reinterpret_cast<uchar(*)[4]>(&image_pixels[img_x]),
-                               reinterpret_cast<const float (*)[4]>(paint_pixels.data()),
-                               size,
-                               matrix);
-  }
-}
-
-template<typename PixelT>
-static void paint_blend_mask(const bool invert,
-                             const Span<float> factors,
-                             const int start,
-                             const int size,
-                             const MutableSpan<PixelT> image_pixels,
-                             const int img_x,
-                             Vector<float4> &paint_pixels)
-{
-  constexpr bool is_float = std::is_same_v<typename PixelT::base_type, float>;
-  PRF_scope(ProfileCategory::Editor);
-
-  /* Keep variables in registers during the loop. */
-  const float4 brush_color = float4(invert ? float3(0.0, 0.0, 0.0) : float3(1.0, 1.0, 1.0), 1.0);
-  const float brush_alpha = 1.0;
-  const IMB_BlendMode blend_mode = IMB_BLEND_MIX;
-
-  if constexpr (is_float) {
-    /* Scene linear float. */
-    for (int i = 0; i < size; i++) {
-      float4 scene = image_pixels[img_x + i];
-#ifdef DEBUG_PIXEL_NODES
-      scene = paint_debug_color(scene, img_y);
-#endif
-      image_pixels[img_x + i] = paint_blend_pixel(
-          brush_color, brush_alpha, true, blend_mode, factors[start + i], scene);
-    }
-  }
-  else {
-    /* sRGB byte. */
-    paint_pixels.resize(size);
-    for (int i = 0; i < size; i++) {
-      float4 scene;
-      srgb_to_linearrgb_uchar4(scene, image_pixels[img_x + i]);
-      IMB_colormanagement_rec709_to_scene_linear(scene, scene);
-#ifdef DEBUG_PIXEL_NODES
-      scene = paint_debug_color(scene, img_y);
-#endif
-      paint_pixels[i] = paint_blend_pixel(
-          brush_color, brush_alpha, true, blend_mode, factors[start + i], scene);
     }
 
     /* SIMD optimized write. */
@@ -765,7 +712,7 @@ static void do_paint_pixels(const Depsgraph &depsgraph,
 
 static void do_mask_pixels(const Depsgraph &depsgraph,
                            Object &object,
-                           const Paint & /*paint*/,
+                           const Paint &paint,
                            const Brush &brush,
                            ImageData &image_data,
                            bke::pbvh::Node & /*node*/,
@@ -781,6 +728,8 @@ static void do_mask_pixels(const Depsgraph &depsgraph,
   const Span<int3> corner_tris = mesh.corner_tris();
   BitVector<> brush_test = init_uv_primitives_brush_test(
       ss, corner_verts, corner_tris, pixel_node.uv_primitives.tri_indices, positions);
+
+  const PaintBlendSettings blend_settings(paint, brush, ss.cache->toggle_settings.invert);
 
 #ifdef DEBUG_PIXEL_NODES
   float4 debug_color;
@@ -799,23 +748,20 @@ static void do_mask_pixels(const Depsgraph &depsgraph,
   const Bounds<float3> brush_bounds(location - radius, location + radius);
 
   for (UDIMTilePixels &tile_data : pixel_node.tiles) {
-    ImBuf *image_buffer = image_data.buffers.lookup_default(tile_data.tile_number, nullptr);
+    ImBuf *image_buffer = image_data.image_buffers.lookup_default(tile_data.tile_number, nullptr);
     if (image_buffer == nullptr) {
       continue;
     }
 
-    MutableSpan<float4> float_buffer;
-    MutableSpan<uchar4> byte_buffer;
+    BufferType mutable_buffer = image_data.data_buffers.lookup_default(tile_data.tile_number,
+                                                                       BufferType{});
+    if (std::holds_alternative<std::monostate>(mutable_buffer)) {
+      BLI_assert_unreachable();
+      continue;
+    }
 
-    if (image_buffer->float_data()) {
-      BLI_assert(ELEM(image_buffer->channels, 0, 4));
-      float_buffer = MutableSpan(reinterpret_cast<float4 *>(image_buffer->float_data_for_write()),
-                                 image_buffer->x * image_buffer->y);
-    }
-    else {
-      byte_buffer = MutableSpan(reinterpret_cast<uchar4 *>(image_buffer->byte_data_for_write()),
-                                image_buffer->x * image_buffer->y);
-    }
+    const TileColorspaceProcessor *processors = image_data.processors.lookup_ptr(
+        tile_data.tile_number);
 
     const MutableSpan<uint32_t> undo_tile_pushed = image_data.undo_tile_pushed.lookup(
         tile_data.tile_number);
@@ -936,23 +882,27 @@ static void do_mask_pixels(const Depsgraph &depsgraph,
                         run_y);
 
         /* Blend pixels with computed factors. */
-        if (!float_buffer.is_empty()) {
-          paint_blend_mask<float4>(ss.cache->bstrength < 0,
-                                   factors,
-                                   run_active_begin,
-                                   run_active_size,
-                                   float_buffer,
-                                   run_y * image_buffer->x + run_active_x,
-                                   tls.paint_blend_pixels);
+        if (std::holds_alternative<MutableSpan<float4>>(mutable_buffer)) {
+          paint_blend_pixels<float4>(blend_settings,
+                                     factors,
+                                     run_active_begin,
+                                     run_active_size,
+                                     std::get<MutableSpan<float4>>(mutable_buffer),
+                                     run_y * image_buffer->x + run_active_x,
+                                     run_y,
+                                     *processors,
+                                     tls.paint_blend_pixels);
         }
         else {
-          paint_blend_mask<uchar4>(ss.cache->bstrength < 0,
-                                   factors,
-                                   run_active_begin,
-                                   run_active_size,
-                                   byte_buffer,
-                                   run_y * image_buffer->x + run_active_x,
-                                   tls.paint_blend_pixels);
+          paint_blend_pixels<uchar4>(blend_settings,
+                                     factors,
+                                     run_active_begin,
+                                     run_active_size,
+                                     std::get<MutableSpan<uchar4>>(mutable_buffer),
+                                     run_y * image_buffer->x + run_active_x,
+                                     run_y,
+                                     *processors,
+                                     tls.paint_blend_pixels);
         }
       }
     });
@@ -1061,6 +1011,41 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
   node_mask.foreach_index(
       [&](const int i) {
         do_paint_pixels(depsgraph, ob, paint, brush, image_data, nodes[i], pixel_nodes[i]);
+      },
+      exec_mode::grain_size(1));
+
+  fix_non_manifold_seam_bleeding(ob, image_data, nodes, pixel_nodes, node_mask);
+
+  node_mask.foreach_index([&](const int i) {
+    bke::pbvh::pixels::mark_image_dirty(
+        nodes[i], pixel_nodes[i], *image_data.image, image_data.image_buffers);
+  });
+}
+
+void do_3d_image_mask_brush(const Depsgraph &depsgraph,
+                            const Paint &paint,
+                            const Brush &brush,
+                            Object &ob,
+                            ImageData &image_data,
+                            const IndexMask &node_mask)
+{
+  PRF_scope(ProfileCategory::Editor);
+
+  bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
+  MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
+  PixelData &pixel_data = *pbvh.pixels_;
+  MutableSpan<PixelNode> pixel_nodes = pixel_data.nodes;
+
+  node_mask.foreach_index(
+      [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i]); });
+
+  for (Array<uint8_t> &modified : image_data.seam_tile_modified.values()) {
+    modified.as_mutable_span().fill(0);
+  }
+
+  node_mask.foreach_index(
+      [&](const int i) {
+        do_mask_pixels(depsgraph, ob, paint, brush, image_data, nodes[i], pixel_nodes[i]);
       },
       exec_mode::grain_size(1));
 

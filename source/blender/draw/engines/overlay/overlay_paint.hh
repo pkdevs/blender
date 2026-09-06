@@ -51,12 +51,9 @@ class Paints : Overlay {
  public:
   void begin_sync(Resources &res, const State &state) final
   {
-    enabled_ = state.is_space_v3d() && !res.is_selection() &&
-               ELEM(state.ctx_mode,
-                    CTX_MODE_PAINT_WEIGHT,
-                    CTX_MODE_PAINT_VERTEX,
-                    CTX_MODE_PAINT_TEXTURE,
-                    CTX_MODE_SCULPT);
+    enabled_ =
+        state.is_space_v3d() && !res.is_selection() &&
+        ELEM(state.ctx_mode, CTX_MODE_PAINT_WEIGHT, CTX_MODE_PAINT_VERTEX, CTX_MODE_PAINT_TEXTURE);
 
     /* Init in any case to release the data. */
     paint_region_ps_.init();
@@ -160,31 +157,6 @@ class Paints : Overlay {
         pass.push_constant("opacity", state.overlay.texture_paint_mode_opacity);
       }
     }
-
-    if (state.ctx_mode == CTX_MODE_SCULPT) {
-      const PaintModeSettings &paint_settings = state.scene->toolsettings->paint_mode;
-      show_paint_mask_ = paint_settings.stencil && (paint_settings.flag & PAINTMODE_STENCIL);
-
-      if (show_paint_mask_) {
-        const bool mask_premult = (paint_settings.stencil->alpha_mode == IMA_ALPHA_PREMUL);
-        const bool mask_inverted = (paint_settings.flag & PAINTMODE_STENCIL_INVERTED);
-        gpu::Texture *mask_texture = BKE_image_acquire_gpu_texture(paint_settings.stencil,
-                                                                   nullptr);
-        DRW_manager_get()->hold_texture(mask_texture);
-
-        auto &pass = paint_mask_ps_;
-        pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL | DRW_STATE_BLEND_ALPHA,
-                       state.clipping_plane_count);
-        pass.shader_set(res.shaders->paint_texture.get());
-        pass.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
-        pass.bind_ubo(DRW_CLIPPING_UBO_SLOT, &res.clip_planes_buf);
-        pass.bind_texture("mask_image", mask_texture);
-        pass.push_constant("maskPremult", mask_premult);
-        pass.push_constant("mask_invert_stencil", mask_inverted);
-        pass.push_constant("mask_color", float3(paint_settings.stencil_color));
-        pass.push_constant("opacity", state.overlay.sculpt_mode_mask_opacity);
-      }
-    }
   }
 
   void object_sync(Manager &manager,
@@ -220,12 +192,6 @@ class Paints : Overlay {
           return;
         }
         break;
-      case CTX_MODE_SCULPT:
-        if (ob_ref.object->mode != OB_MODE_SCULPT) {
-          /* Not matching context mode. */
-          return;
-        }
-        break;
       default:
         /* Not in paint mode. */
         return;
@@ -246,7 +212,6 @@ class Paints : Overlay {
         /* Drawing of vertex paint color is done by the render engine (i.e. workbench). */
         break;
       }
-      case CTX_MODE_SCULPT:
       case CTX_MODE_PAINT_TEXTURE: {
         if (show_paint_mask_) {
           gpu::Batch *geom = DRW_cache_mesh_surface_texpaint_single_get(ob_ref.object);

@@ -3636,7 +3636,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
     case SCULPT_BRUSH_TYPE_MASK:
       switch (BrushMaskTool(brush.mask_tool)) {
         case BRUSH_MASK_DRAW:
-          brushes::do_mask_brush(depsgraph, paint_mode_settings, sd, ob, node_mask, texnode_mask);
+          brushes::do_mask_brush(depsgraph, sd, ob, node_mask);
           break;
         case BRUSH_MASK_SMOOTH:
           brushes::do_smooth_mask_brush(depsgraph, sd, ob, node_mask, ss.cache->bstrength);
@@ -5715,12 +5715,7 @@ void SculptPaintStroke::update_step(wmOperator * /*op*/, const StrokeStep &strok
 
   /* Cleanup. */
   if (brush.sculpt_brush_type == SCULPT_BRUSH_TYPE_MASK) {
-    if (SCULPT_use_image_mask_brush(*this->paint_mode_settings_)) {
-      flush_update_step(this->vc, *this->object, UpdateType::Image);
-    }
-    else {
-      flush_update_step(this->vc, *this->object, UpdateType::Mask);
-    }
+    flush_update_step(this->vc, *this->object, UpdateType::Mask);
   }
   else if (brush_type_is_paint(brush.sculpt_brush_type)) {
     flush_update_step(this->vc, *this->object, UpdateType::Color);
@@ -5776,12 +5771,7 @@ void SculptPaintStroke::done(bool is_cancel, bool stroke_started)
   }
 
   if (brush->sculpt_brush_type == SCULPT_BRUSH_TYPE_MASK) {
-    if (SCULPT_use_image_mask_brush(*this->paint_mode_settings_)) {
-      flush_update_done(this->vc, *wm_, ob, UpdateType::Image);
-    }
-    else {
-      flush_update_done(this->vc, *wm_, ob, UpdateType::Mask);
-    }
+    flush_update_done(this->vc, *wm_, ob, UpdateType::Mask);
   }
   else if (brush->sculpt_brush_type == SCULPT_BRUSH_TYPE_PAINT) {
     flush_update_done(this->vc, *wm_, ob, UpdateType::Color);
