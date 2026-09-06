@@ -2129,8 +2129,13 @@ static void mouse_mesh_loop_edge(BMEditMesh *em,
         em, BMW_EDGEBOUNDARY, eed, select, BMW_FLAG_TEST_HIDDEN, BMW_DELIMIT_NONE, nullptr);
   }
   else if (non_manifold) {
-    walker_select(
-        em, BMW_EDGELOOP_NONMANIFOLD, eed, select, BMW_FLAG_TEST_HIDDEN, delimit, nullptr);
+    walker_select(em,
+                  BMW_EDGELOOP_NONMANIFOLD,
+                  eed,
+                  select,
+                  BMW_FLAG_TEST_HIDDEN,
+                  BMW_DELIMIT_NONE,
+                  nullptr);
   }
   else if (full_loop) {
     walker_select(em, BMW_EDGELOOP, eed, select, BMW_FLAG_TEST_HIDDEN, BMW_DELIMIT_NONE, nullptr);
@@ -2951,7 +2956,7 @@ static void edbm_strip_selections(BMEditMesh *em)
   BMEditSelection *ese, *nextese;
 
   if (!(em->selectmode & SCE_SELECT_VERTEX)) {
-    ese = static_cast<BMEditSelection *>(em->bm->selected.first);
+    ese = em->bm->selected.first();
     while (ese) {
       nextese = ese->next;
       if (ese->htype == BM_VERT) {
@@ -2961,7 +2966,7 @@ static void edbm_strip_selections(BMEditMesh *em)
     }
   }
   if (!(em->selectmode & SCE_SELECT_EDGE)) {
-    ese = static_cast<BMEditSelection *>(em->bm->selected.first);
+    ese = em->bm->selected.first();
     while (ese) {
       nextese = ese->next;
       if (ese->htype == BM_EDGE) {
@@ -2971,7 +2976,7 @@ static void edbm_strip_selections(BMEditMesh *em)
     }
   }
   if (!(em->selectmode & SCE_SELECT_FACE)) {
-    ese = static_cast<BMEditSelection *>(em->bm->selected.first);
+    ese = em->bm->selected.first();
     while (ese) {
       nextese = ese->next;
       if (ese->htype == BM_FACE) {
@@ -3038,10 +3043,18 @@ void EDBM_selectmode_set(BMEditMesh *em, const short selectmode)
   }
 
   if (em->bm->uv_select_sync_valid) {
-    /* NOTE(@ideasman42): this could/should use the "sticky" tool setting.
-     * Although in practice it's OK to assume "connected" sticky in this case. */
-    const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_PROP_FLOAT2);
-    BM_mesh_uvselect_mode_flush_update(em->bm, selectmode_prev, selectmode, cd_loop_uv_offset);
+    if (em->selectmode & (SCE_SELECT_VERTEX | SCE_SELECT_EDGE)) {
+      /* NOTE(@ideasman42): this could/should use the "sticky" tool setting.
+       * Although in practice it's OK to assume "connected" sticky in this case. */
+      const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_PROP_FLOAT2);
+      BM_mesh_uvselect_mode_flush_update(em->bm, selectmode_prev, selectmode, cd_loop_uv_offset);
+    }
+    else {
+      /* Always clear for face-only selection, because any discrepancy
+       * between UV/Viewport selection caused by de-selecting verts/edges
+       * can't be represented in face-only selection mode. */
+      BM_mesh_uvselect_clear(em->bm);
+    }
   }
 }
 
