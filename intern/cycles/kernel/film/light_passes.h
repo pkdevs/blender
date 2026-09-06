@@ -798,8 +798,7 @@ ccl_device_inline void film_write_background(KernelGlobals kg,
 // MARK: - 
 
 /* Shared serialization for both the spatial ping-pong reservoir passes and
- * the temporal history pass below. 
- * Layout is identical, only the destination offset differs. */
+ * the temporal history pass. */
 ccl_device_inline void film_write_pass_reservoir_at(ccl_private const Reservoir *reservoir,
                                                     ccl_global float *ccl_restrict ptr)
 {
@@ -817,6 +816,11 @@ ccl_device_inline void film_write_pass_reservoir_at(ccl_private const Reservoir 
   film_overwrite_pass_float(ptr++, reservoir->total_weight);
   film_overwrite_pass_float(ptr++, reservoir->luminance);
   film_overwrite_pass_float(ptr,   (float)reservoir->M);
+
+  if (reservoir->luminance > 0) {
+    printf("film_write_pass_reservoir_at(), total_weight=%f luminance=%f, M=%d\n",
+          (double)reservoir->total_weight, (double)reservoir->luminance, reservoir->M);
+  }
 }
 
 ccl_device_inline void film_write_pass_reservoir(
@@ -836,15 +840,6 @@ ccl_device_inline void film_write_pass_reservoir(
   film_write_pass_reservoir_at(reservoir, ptr);
 }
 
-/* Persists this render sample's finalized reservoir for the next sample's
- * streaming_temporal_sample() to read as history. Distinct from the two
- * pass_restir_reservoir / pass_restir_previous_reservoir slots above: those
- * ping-pong *within* a sample across spatial-resampling iterations and are
- * unconditionally overwritten at the start of every new sample's initial
- * candidate generation, so they cannot double as cross-sample history —
- * see the pass_restir_previous_reservoir discussion. This pass is written
- * exactly once per sample, after spatial resampling has finished, and the
- * spatial ping-pong logic never touches it. */
 ccl_device_inline void film_write_pass_reservoir_temporal(
     KernelGlobals kg,
     ConstIntegratorState state,
@@ -859,7 +854,6 @@ ccl_device_inline void film_write_pass_reservoir_temporal(
   film_write_pass_reservoir_at(reservoir, ptr);
 }
 
-// TODO(Tri): film_clear_pass_reservoir() zeroes temporal_history_reservoir unconditionally on every integrator_init_from_camera(): Fixed!
 // !!!: Called in init_from_camera; Don't we need a `film_clear_pass_reservoir_pt()` as well?
 // !!!: It does not clear object prim, u, v, luminance
 /* TODO(weizhen): clear data properly. */

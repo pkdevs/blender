@@ -471,7 +471,7 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
                                    kernel_data.film.pass_restir_temporal_history_reservoir;
 
   if (!restir_unpack_reservoir(kg, &history, buffer)) { // !!!: Always failing here 
-    // printf("streaming_temporal_sample() RETURNED EARLY! can't unpack history\n\n\n");
+    printf("streaming_temporal_sample() RETURNED EARLY! can't unpack history\n\n\n");
     return false; /* No valid history yet (first sample, or history invalidated). */
   }
 
@@ -506,17 +506,15 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
 
   current->reservoir.M += history.M;
 
-// printf("\n--- streaming_temporal_sample(), returned true! ---\n\n\n");
+printf("\n--- streaming_temporal_sample(), returned true! total_weight=%f ---\n\n\n",
+       (double)history.total_weight);
   return true;
 }
 
-// TODO(Tri): Silence unused arguments' warns
-// !!!: Has kernel calls
 /* Standalone temporal-resampling pass, dispatched once per sample before
  * spatial resampling begins. */
 ccl_device bool integrator_restir_temporal(KernelGlobals kg,
                                            IntegratorState state,
-                                          //  ccl_global const KernelWorkTile *ccl_restrict tile, // !!!(Tri): Would turn this into a _INIT_KERNEL and not a _SHADE_KERNEL
                                            ccl_global float *ccl_restrict render_buffer)
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_SPATIAL_RESAMPLING);
@@ -537,21 +535,26 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
 
   const bool visibility = kernel_data.integrator.restir_unbiased;
 
-  /* This pass always runs before any spatial ping-pong iteration, so it
-   * always reads/writes the non-"previous" slot. */
   current.reservoir = restir_unpack_canonical_reservoir(kg, state, &current, render_buffer, false);
 
   streaming_temporal_sample(kg, state, &current, &rng_state, visibility, render_buffer);
 
   film_write_pass_reservoir(kg, state, &current.reservoir, render_buffer, /*write_prev=*/false);
 
+  if (!use_spatial) {
+    /* Only persist here when integrator_restir() won't run this sample —
+    * Persist this sample's temporally-resampled reservoir as next sample's history. */
+    film_write_pass_reservoir_temporal(kg, state, &current.reservoir, render_buffer);
+  }
+
   integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR_TEMPORAL);
 
+printf("integrator_restir_temporal(): radiance=(%f, %f, %f)\n",
+       (double)current.reservoir.radiance.sum.x, (double)current.reservoir.radiance.sum.y, (double)current.reservoir.radiance.sum.z);
   return true;
 }
 
 /* Evaluate ReSTIR DI final samples. */
-// !!!: Has kernel calls
 ccl_device void integrator_evaluate_final_samples(KernelGlobals kg, // DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION
                                                   IntegratorState state,
                                                   ccl_global float *ccl_restrict render_buffer)
@@ -725,7 +728,6 @@ printf(
     (double)reservoir->radiance.z);
 }
 
-// !!!: Has kernel calls
 /* Evaluate ReSTIR PT final samples. */
 /* TODO(weizhen): merge with restir DI. */
 ccl_device void integrator_evaluate_restir_pt(KernelGlobals kg, // DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION
@@ -764,7 +766,6 @@ ccl_device void integrator_evaluate_restir_pt(KernelGlobals kg, // DEVICE_KERNEL
 }
 
 // TODO(Tri): Silence unused arguments' warns
-// !!!: Has kernel calls
 ccl_device bool integrator_restir(KernelGlobals kg,
                                   IntegratorState state,
                                   ccl_global const KernelWorkTile *ccl_restrict tile,
@@ -773,7 +774,10 @@ ccl_device bool integrator_restir(KernelGlobals kg,
                                   const int y,
                                   const int scheduled_sample)
 {
-  printf("--- integrator_restir(), Ran! ---\n\n\n");
+  (void)x;
+  (void)y;
+  (void)scheduled_sample;
+
   PROFILING_INIT(kg, PROFILING_RESTIR_SPATIAL_RESAMPLING);
 
   SpatialReservoir current;
