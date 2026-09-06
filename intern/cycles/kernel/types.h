@@ -816,7 +816,7 @@ enum AttributeStandard : int {
   ATTR_STD_RANDOM_PER_ISLAND,
   ATTR_STD_SHADOW_TRANSPARENCY,
   ATTR_STD_GSPLAT_RADIANCE_BASE,
-  ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS,
+  ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS_REST,
   ATTR_STD_GSPLAT_RADIANCE,
   ATTR_STD_GSPLAT_ROTATION,
   ATTR_STD_GSPLAT_SCALE,
@@ -1479,7 +1479,7 @@ struct KernelObject {
       int rotation_offset_and_flag;
       int radiance_base_offset_and_flag;
 
-      int radiance_spherical_harmonics_offset;
+      int radiance_spherical_harmonics_rest_offset;
     } gsplat;
   };
 

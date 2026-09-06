@@ -157,7 +157,7 @@ static void export_pointcloud_gsplat_attributes(
         blender::VArraySpan<blender::float3>(*sh_attribute_readers.back()));
   }
   if (!sh_attribute_readers.empty()) {
-    Attribute *attr = pointcloud->attributes.add(ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS);
+    Attribute *attr = pointcloud->attributes.add(ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS_REST);
     PackedSphericalHarmonicsRest *sh_data = attr->data_for_write<PackedSphericalHarmonicsRest>();
     parallel_for(blocked_range<size_t>(0, num_points, 32), [&](const blocked_range<size_t> &r) {
       for (size_t point_index = r.begin(); point_index != r.end(); point_index++) {

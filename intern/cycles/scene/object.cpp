@@ -622,7 +622,7 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
       kobject.gsplat.scale_offset_and_flag = ATTR_STD_NOT_FOUND << 1;
       kobject.gsplat.rotation_offset_and_flag = ATTR_STD_NOT_FOUND << 1;
       kobject.gsplat.radiance_base_offset_and_flag = ATTR_STD_NOT_FOUND << 1;
-      kobject.gsplat.radiance_spherical_harmonics_offset = ATTR_STD_NOT_FOUND;
+      kobject.gsplat.radiance_spherical_harmonics_rest_offset = ATTR_STD_NOT_FOUND;
     }
     const Attribute *attr_P = geom->attributes.find(ATTR_STD_POSITION);
     if (attr_P->has_motion()) {
@@ -1219,8 +1219,8 @@ void ObjectManager::device_update_geom_offsets(Device * /*unused*/,
         update |= update_gsplat_std_point_attribute_offset(
             *dscene,
             attr_map_offset,
-            ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS,
-            kobject.gsplat.radiance_spherical_harmonics_offset);
+            ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS_REST,
+            kobject.gsplat.radiance_spherical_harmonics_rest_offset);
       }
     }
     if (kobject.position_offset != position_offset) {

@@ -529,7 +529,7 @@ const char *Attribute::standard_name(AttributeStandard std)
       return "shadow_transparency";
     case ATTR_STD_GSPLAT_RADIANCE_BASE:
       return "radiance:base";
-    case ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS:
+    case ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS_REST:
       return "radiance:sh";
     case ATTR_STD_GSPLAT_RADIANCE:
       return "radiance";
@@ -837,7 +837,7 @@ static bool standard_type_element(const Geometry *geometry,
         type = TypeFloat4;
         element = ATTR_ELEMENT_VERTEX;
         return true;
-      case ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS:
+      case ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS_REST:
         type = TypePackedSphericalHarmonicsRest;
         element = ATTR_ELEMENT_VERTEX;
         return true;

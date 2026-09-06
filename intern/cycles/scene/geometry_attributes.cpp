@@ -620,7 +620,7 @@ void GeometryManager::device_update_attributes(Device *device,
       {
         switch (attr.std) {
           case ATTR_STD_GSPLAT_RADIANCE_BASE:
-          case ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS:
+          case ATTR_STD_GSPLAT_RADIANCE_SPHERICAL_HARMONICS_REST:
           case ATTR_STD_GSPLAT_SCALE:
           case ATTR_STD_GSPLAT_ROTATION:
             geom_attributes[i].add(attr.std);
