@@ -30,6 +30,7 @@
 #include "UI_view2d.hh"
 
 #include "transform.hh"
+#include "transform_constraints.hh"
 #include "transform_convert.hh"
 #include "transform_mode.hh"
 #include "transform_snap.hh"
@@ -503,20 +504,10 @@ static void applyTranslation(TransInfo *t)
     mul_v3_m3v3(global_dir, t->spacemtx, t->values);
   }
   else if (applyNumInput(&t->num, global_dir)) {
-    if (t->con.mode & CON_APPLY) {
-      if (t->con.mode & CON_AXIS0) {
-        mul_v3_v3fl(global_dir, t->spacemtx[0], global_dir[0]);
-      }
-      else if (t->con.mode & CON_AXIS1) {
-        mul_v3_v3fl(global_dir, t->spacemtx[1], global_dir[0]);
-      }
-      else if (t->con.mode & CON_AXIS2) {
-        mul_v3_v3fl(global_dir, t->spacemtx[2], global_dir[0]);
-      }
-    }
-    else {
-      mul_v3_m3v3(global_dir, t->spacemtx, global_dir);
-    }
+    /* Values are typed in constraint order (one per constrained axis),
+     * map them onto the constrained axes before converting to global space. */
+    constraintNumInput(t, global_dir);
+    mul_v3_m3v3(global_dir, t->spacemtx, global_dir);
     if (t->flag & T_2D_EDIT) {
       removeAspectRatio(t, global_dir);
     }
