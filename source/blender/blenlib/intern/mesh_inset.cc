@@ -3373,7 +3373,7 @@ static MeshInset_Result trimesh_to_output(const TriangleMesh &trimesh,
 
 MeshInset_Result mesh_inset_calc(const MeshInset_Input &input)
 {
-  constexpr int dbg_level = 1;
+  constexpr int dbg_level = 0;
   if (dbg_level > 0) {
     std::cout << "mesh_inset_calc\n";
     if (dbg_level > 1) {

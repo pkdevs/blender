@@ -81,6 +81,19 @@ static void node_declare(NodeDeclarationBuilder &b)
       .evaluated_geometry_field()
       .usage_by_single_menu(int(geometry::BevelAffect::Vertices))
       .description("Offset per vertex for vertex bevel (all edges)");
+  b.add_input<decl::Float>("Offset"_ustr, "Face Offset"_ustr)
+      .default_value(0.1f)
+      .min(0.0f)
+      .subtype(PROP_DISTANCE)
+      .evaluated_geometry_field()
+      .usage_by_single_menu(int(geometry::BevelAffect::Faces))
+      .description("Inset distance for face bevel");
+  b.add_input<decl::Float>("Depth"_ustr, "Face Depth"_ustr)
+      .default_value(0.0f)
+      .subtype(PROP_DISTANCE)
+      .evaluated_geometry_field()
+      .usage_by_single_menu(int(geometry::BevelAffect::Faces))
+      .description("Depth of the face bevel, raising or lowering the inner face");
   b.add_input<decl::Bool>("Miter"_ustr)
       .default_value(false)
       .evaluated_geometry_field()
@@ -189,18 +202,13 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
   const auto affect = params.extract_input<geometry::BevelAffect>("Affect Kind"_ustr);
 
-  if (affect == geometry::BevelAffect::Faces) {
-    /* Face bevel is not yet implemented; it will use the mesh inset / straight-skeleton path
-     * in a later step. */
-    params.error_message_add(NodeWarningType::Warning, "Face bevel is not yet implemented");
-    params.set_output("Mesh"_ustr, std::move(geometry_set));
-    params.set_default_remaining_outputs();
-    return;
-  }
-  const Field<float> offset0_field = affect == geometry::BevelAffect::Edges ?
-                                         params.extract_input<Field<float>>(
-                                             "Start Left Offset"_ustr) :
-                                         params.extract_input<Field<float>>("Offset"_ustr);
+  const Field<float> offset0_field = (affect == geometry::BevelAffect::Vertices) ?
+                                         params.extract_input<Field<float>>("Offset"_ustr) :
+                                         (affect == geometry::BevelAffect::Faces) ?
+                                             params.extract_input<Field<float>>(
+                                                 "Face Offset"_ustr) :
+                                             params.extract_input<Field<float>>(
+                                                 "Start Left Offset"_ustr);
   const Field<float> offset1_field = params.extract_input<Field<float>>("Start Right Offset"_ustr);
   const Field<float> offset2_field = params.extract_input<Field<float>>("End Left Offset"_ustr);
   const Field<float> offset3_field = params.extract_input<Field<float>>("End Right Offset"_ustr);
@@ -281,6 +289,27 @@ static void node_geo_exec(GeoNodeExecParams params)
 
       /* Pass to run_bevel while vert_evaluator is still alive. */
       run_bevel(vert_evaluator.get_evaluated_as_mask(0));
+    }
+    else if (affect == geometry::BevelAffect::Faces) {
+      /* Face bevel: selection and offset are both per-face.  Only offsets[0] is used;  the
+       * single 'Offset' field drives the inset distance for each selected face. */
+      const bke::MeshFieldContext face_context(*src_mesh, AttrDomain::Face);
+      bevel_params.offsets = {Array<float>(src_mesh->faces_num),
+                              Array<float>(0),
+                              Array<float>(0),
+                              Array<float>(0)};
+      bevel_params.face_depth = Array<float>(src_mesh->faces_num);
+      const Field<float> depth_field = params.extract_input<Field<float>>("Face Depth"_ustr);
+      FieldEvaluator face_evaluator{face_context, src_mesh->faces_num};
+      face_evaluator.add(selection_field);
+      face_evaluator.add_with_destination(offset0_field,
+                                          bevel_params.offsets[0].as_mutable_span());
+      face_evaluator.add_with_destination(depth_field,
+                                          bevel_params.face_depth.as_mutable_span());
+      face_evaluator.evaluate();
+
+      /* Pass face selection mask while face_evaluator is still alive. */
+      run_bevel(face_evaluator.get_evaluated_as_mask(0));
     }
     else {
       /* Edge bevel: selection and all four offsets are per-edge. */

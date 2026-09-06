@@ -24,6 +24,7 @@
 #include "BLI_math_rotation.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
+#include "BLI_mesh_inset.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_ordered_edge.hh"
 #include "BLI_span.hh"
@@ -1002,7 +1003,7 @@ BevelState::BevelState(const Mesh &mesh, const BevelParameters &params, const In
   if (params.affect_type == BevelAffect::Vertices) {
     this->bevel_affected_vertices = selection;
   }
-  else {
+  else if (params.affect_type == BevelAffect::Edges) {
     /* Mirror the BMesh operator's manifold filter (see #bmo_bevel_exec): only edges with
      * exactly two incident faces can be beveled. Boundary edges (one face) and wire edges
      * (zero faces) are silently excluded, matching the behavior of the bevel operator. */
@@ -1013,6 +1014,13 @@ BevelState::BevelState(const Mesh &mesh, const BevelParameters &params, const In
     const Span<int2> src_edges = mesh.edges();
     this->bevel_affected_vertices = vert_selection_from_edge(
         src_edges, this->selection, mesh.verts_num, memory);
+  }
+  else {
+    /* BevelAffect::Faces: the selection contains face indices.
+     * Derive the affected vertex set from all corners of the selected faces.
+     * No manifold edge filtering: face inset works for boundary edges too. */
+    this->bevel_affected_vertices = vert_selection_from_face(
+        mesh.faces(), selection, mesh.corner_verts(), mesh.verts_num, memory);
   }
 
   /* Calculate affected faces and their centers. */
@@ -7734,6 +7742,118 @@ static std::optional<Mesh *> build_output_mesh(const BevelState &state,
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Face Bevel via Straight-Skeleton Inset
+ *
+ * Implements face beveling by delegating each selected face to
+ * #blender::meshinset::mesh_inset_calc.  The inset amount is the average of
+ * the four per-edge offset values around the face's boundary edges.
+ * Original boundary vertices and edges are kept intact; only the original
+ * face polygon is replaced by the ring of new side-strip faces plus the
+ * new inner face produced by the inset.
+ * \{ */
+
+/**
+ * Performs face bevel for all faces in #BevelState::selection.
+ * Must be called after #BevelState::uv_init().
+ */
+static std::optional<Mesh *> mesh_face_bevel(BevelState &state,
+                                             const bke::AttributeFilter &attribute_filter)
+{
+  const ExtendableMesh &emesh = state.emesh;
+  const Span<float3> positions = emesh.src_positions;
+  const OffsetIndices<int> src_faces = emesh.src_faces;
+  const Span<int> corner_verts = emesh.src_corner_verts;
+  const BevelParameters &params = state.params;
+
+  bool any_changed = false;
+
+  state.selection.foreach_index([&](const int f) {
+    const IndexRange face_range = src_faces[f];
+    const int n = face_range.size();
+    if (n < 3) {
+      return;
+    }
+
+    /* The inset amount for this face is taken directly from offsets[0], which holds
+     * the per-face 'Offset' field value evaluated by the node. */
+    const double inset_amount = double(params.offsets[0][f]);
+    if (inset_amount <= 0.0) {
+      return;
+    }
+
+    Array<double3> mi_verts(n);
+    Vector<int> loop_indices(n);
+    for (const int i : IndexRange(n)) {
+      const int c = face_range[i];
+      mi_verts[i] = double3(positions[corner_verts[c]]);
+      loop_indices[i] = i;
+    }
+
+    /* The face boundary is both the input face and the contour to inset. */
+    Array<Vector<int>> mi_faces(1);
+    mi_faces[0] = loop_indices;
+
+    blender::meshinset::MeshInset_Input mi_input;
+    mi_input.vert = mi_verts.as_span();
+    mi_input.face = mi_faces.as_span();
+    mi_input.contour = mi_faces.as_span();
+    mi_input.inset_amount = inset_amount;
+    mi_input.slope = params.face_depth.is_empty() ? 0.0 : double(params.face_depth[f]);
+    mi_input.need_ids = true;
+
+    const blender::meshinset::MeshInset_Result mi_result = blender::meshinset::mesh_inset_calc(
+        mi_input);
+
+    if (mi_result.face.is_empty()) {
+      return;
+    }
+
+    /* Map result vertex indices to mesh vertex indices.
+     * #MeshInset_Result::orig_vert[r] gives the local index (0..n-1) into the
+     * face's corners if result vertex r is an original boundary vertex, or -1 if new. */
+    Array<int> result_to_mesh_vert(mi_result.vert.size());
+    for (const int r : IndexRange(mi_result.vert.size())) {
+      const int orig = mi_result.orig_vert[r];
+      if (orig != -1) {
+        result_to_mesh_vert[r] = corner_verts[face_range[orig]];
+      }
+      else {
+        result_to_mesh_vert[r] = state.emesh.vert_create(float3(mi_result.vert[r]), -1);
+      }
+    }
+
+    /* Emit new output faces (side-strip quads + inner inset face).
+     * Use the original face as the attribute representative for all new faces. */
+    for (const Vector<int> &out_face : mi_result.face) {
+      const int m = out_face.size();
+      Array<int> mesh_verts(m);
+      for (const int i : IndexRange(m)) {
+        mesh_verts[i] = result_to_mesh_vert[out_face[i]];
+      }
+      state.emesh.face_create(mesh_verts.as_span(), f);
+    }
+
+    /* Kill the original face polygon.  Its boundary vertices and edges are preserved
+     * so that adjacent faces and their attributes remain intact. */
+    state.emesh.face_kill(f);
+    any_changed = true;
+  });
+
+  if (!any_changed) {
+    return std::nullopt;
+  }
+
+  const NewCornerInterpWeights new_corner_interp_weights = compute_new_corner_interp_weights(
+      state.emesh);
+  /* TODO: Implement UV interpolation for new face-bevel corners.  For now the
+   * new corners carry default (zero) UV values since no snap edges are set up. */
+  bevel_extend_edge_data(state);
+  return build_output_mesh(state, new_corner_interp_weights, attribute_filter);
+}
+
+/** \} */
+
 }  // namespace construct
 
 std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
@@ -7758,6 +7878,12 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   if (state.bevel_affected_vertices.size() == 0) {
     return std::nullopt;
   }
+
+  if (params.affect_type == BevelAffect::Faces) {
+    state.uv_init();
+    return construct::mesh_face_bevel(state, attribute_filter);
+  }
+
   state.initialize_profile_data();
   state.uv_init();
 

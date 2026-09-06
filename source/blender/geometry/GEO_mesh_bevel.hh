@@ -75,6 +75,8 @@ struct BevelParameters {
   Array<float> spread;
   /** Which output attributes are needed. */
   geometry::BevelAttributeOutputs attribute_outputs;
+  /** Per face depth for face bevel: used as the slope for #mesh_inset_calc. */
+  Array<float> face_depth;
 };
 
 /**
