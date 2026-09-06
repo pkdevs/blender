@@ -18,6 +18,7 @@
 #include "sequence/SequenceReader.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <limits>
 #include <mutex>
 
@@ -104,35 +105,42 @@ void SequenceEntry::sourceTimeRange(double begin, double end, double& minimum, d
 	const double fps = m_sequence_data->getFPS();
 	const double first = std::max(0.0, std::max(0.0, (begin - m_begin) * fps) + m_skip * fps);
 	const double last = std::max(0.0, std::max(0.0, (end - m_begin) * fps) + m_skip * fps);
-	const int frame_start = (m_begin - m_skip) * fps;
-
-	minimum = std::numeric_limits<double>::infinity();
-	maximum = -std::numeric_limits<double>::infinity();
-	double source_frame = 0.0;
-	if(last == 0.0)
+	if(!m_pitch.isAnimated())
 	{
-		minimum = maximum = 0.0;
+		const float pitch = m_pitch.readSingle(0);
+		minimum = first * pitch / fps;
+		maximum = last * pitch / fps;
 		return;
 	}
 
-	// Integrate exactly the frame-wise pitch samples used by SequenceHandle::seek.
-	// Include both ends of each segment so a non-monotonic mapping cannot hide an extremum.
-	for(int i = 0; i < last; i++)
-	{
-		float pitch;
-		m_pitch.read(frame_start + i, &pitch);
-		const double step = std::min(1.0, last - i);
-		if(i + step >= first)
+	// Seeking uses integer pitch samples starting at the truncated entry origin,
+	// with a fractional contribution only at the endpoint. Keep the whole-frame
+	// sum separate so the two endpoints share the same integration.
+	const int64_t frame_start = (m_begin - m_skip) * fps;
+	const int64_t first_whole = first;
+	const int64_t last_whole = last;
+	const int64_t pitch_frames = m_pitch.getBuffer().getSize() / sizeof(float);
+	double source_frame = 0.0;
+	auto integrate = [&](int64_t from, int64_t to) {
+		// AnimateableProperty holds its endpoint values outside the stored frames.
+		// Do not walk a potentially very long constant prefix or suffix.
+		const int64_t leading_end = std::min(to, std::max(from, -frame_start));
+		if(from < leading_end)
 		{
-			const double a = source_frame + pitch * std::max(0.0, first - i);
-			const double b = source_frame + pitch * step;
-			minimum = std::min(minimum, std::min(a, b));
-			maximum = std::max(maximum, std::max(a, b));
+			source_frame += m_pitch.readSingle(0) * double(leading_end - from);
+			from = leading_end;
 		}
-		source_frame += pitch * step;
-	}
-	minimum /= fps;
-	maximum /= fps;
+		const int64_t animated_end = std::min(to, std::max(from, pitch_frames - frame_start));
+		for(int64_t i = from; i < animated_end; i++)
+			source_frame += m_pitch.readSingle(frame_start + i);
+		if(animated_end < to)
+			source_frame += m_pitch.readSingle(pitch_frames - 1) * double(to - animated_end);
+	};
+
+	integrate(0, first_whole);
+	minimum = (source_frame + m_pitch.readSingle(frame_start + first_whole) * (first - first_whole)) / fps;
+	integrate(first_whole, last_whole);
+	maximum = (source_frame + m_pitch.readSingle(frame_start + last_whole) * (last - last_whole)) / fps;
 }
 
 double SequenceEntry::getSourcePosition(double position)
@@ -146,6 +154,8 @@ double SequenceEntry::getSourcePosition(double position)
 bool SequenceEntry::getSourceTimeRange(double begin, double end, double& minimum, double& maximum)
 {
 	std::lock_guard<std::recursive_mutex> lock(m_mutex);
+	if(begin > end)
+		std::swap(begin, end);
 	begin = std::max(begin, m_begin);
 	if(m_end >= 0.0)
 		end = std::min(end, m_end);
