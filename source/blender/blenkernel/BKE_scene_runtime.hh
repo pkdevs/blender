@@ -72,6 +72,12 @@ struct SceneAudioRuntime {
   bool volume_update_needed = false;
   /* Set by the depsgraph when an input to this evaluated #Scene's animation cache changes. */
   bool animation_cache_dirty = true;
+  /* An automatic attempt exceeded its budget. Use current-frame updates until an input changes,
+   * instead of retrying the same expensive preparation on every playback frame. */
+  bool animation_cache_skipped = false;
+  /* True when some audible properties still need current-frame evaluation. Also includes nested
+   * Scenes after automatic preparation. Movie writers must consume these before advancing time. */
+  bool animation_cache_has_live_properties = true;
   /* Controls how evaluated audio updates write to Audaspace. */
   AudioAnimationWriteState animation_write_state = AudioAnimationWriteState::Normal;
   /* Automatic caches only contain directly evaluable animation. Explicit caches can also contain

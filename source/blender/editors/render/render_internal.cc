@@ -246,7 +246,7 @@ static wmOperatorStatus screen_render_exec(bContext *C, wmOperator *op)
   ED_render_view3d_auto_pause(mainp, true);
 
   if (is_animation) {
-    RE_RenderAnimPrepareAudio(re, mainp, scene, frame_start, frame_end);
+    RE_RenderAnimPrepareAudio(re, mainp, scene, active_layer, frame_start, frame_end);
     RE_RenderAnim(re,
                   mainp,
                   scene,
@@ -561,7 +561,8 @@ static void render_initjob(void *rjv)
 {
   RenderJob *rj = static_cast<RenderJob *>(rjv);
   if (rj->anim) {
-    RE_RenderAnimPrepareAudio(rj->re, rj->main, rj->scene, rj->frame_start, rj->frame_end);
+    RE_RenderAnimPrepareAudio(
+        rj->re, rj->main, rj->scene, rj->view_layer, rj->frame_start, rj->frame_end);
   }
 }
 

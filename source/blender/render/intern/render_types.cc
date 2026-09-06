@@ -13,6 +13,7 @@
 #include "BKE_colortools.hh"
 
 #include "BLI_assert.hh"
+#include "DEG_depsgraph.hh"
 #include "RE_compositor.hh"
 #include "RE_engine.h"
 
@@ -52,6 +53,7 @@ Render::Render()
 Render::~Render()
 {
   RE_compositor_free(*this);
+  DEG_graph_free(audio_depsgraph);
 
   BKE_curvemapping_free_data(&r.mblur_shutter_curve);
 

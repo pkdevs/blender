@@ -2556,7 +2556,7 @@ static int arg_handle_render_frame(int argc, const char **argv, void *data)
         }
 
         for (int frame = frame_range_arr[i][0]; frame <= frame_range_arr[i][1]; frame++) {
-          RE_RenderAnimPrepareAudio(re, bmain, scene, frame, frame);
+          RE_RenderAnimPrepareAudio(re, bmain, scene, CTX_data_view_layer(C), frame, frame);
           RE_RenderAnim(re, bmain, scene, nullptr, nullptr, frame, frame, scene->r.frame_step);
         }
       }
@@ -2600,7 +2600,8 @@ static int arg_handle_render_animation(int /*argc*/, const char ** /*argv*/, voi
     Render *re = RE_NewSceneRender(scene);
     RE_SetReports(re, &reports);
 
-    RE_RenderAnimPrepareAudio(re, bmain, scene, scene->r.sfra, scene->r.efra);
+    RE_RenderAnimPrepareAudio(
+        re, bmain, scene, CTX_data_view_layer(C), scene->r.sfra, scene->r.efra);
     RE_RenderAnim(
         re, bmain, scene, nullptr, nullptr, scene->r.sfra, scene->r.efra, scene->r.frame_step);
     RE_SetReports(re, nullptr);

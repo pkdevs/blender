@@ -381,10 +381,16 @@ void RE_RenderFrame(struct Render *re,
 /**
  * Prepare directly evaluable audio animation on the calling thread before an animation render
  * starts. All #RE_RenderAnim callers must call this first; #RE_RenderAnim never performs automatic
- * future audio preparation itself. This is a no-op when the output is not a movie with audio.
+ * future audio preparation itself. Sample on the Scene's normal view-layer depsgraph, then copy
+ * the prepared buffers to a render-owned graph for current-frame audio updates. Only sample
+ * animation when the output is a movie with audio.
  */
-void RE_RenderAnimPrepareAudio(
-    struct Render *re, struct Main *bmain, struct Scene *scene, int sfra, int efra);
+void RE_RenderAnimPrepareAudio(struct Render *re,
+                               struct Main *bmain,
+                               struct Scene *scene,
+                               struct ViewLayer *view_layer,
+                               int sfra,
+                               int efra);
 
 /**
  * A version of #RE_RenderFrame that saves images to disk.

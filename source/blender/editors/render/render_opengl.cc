@@ -44,6 +44,7 @@
 #include "BKE_main.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
+#include "BKE_scene_runtime.hh"
 #include "BKE_sound.hh"
 
 #include "DEG_depsgraph.hh"
@@ -144,6 +145,7 @@ struct OGLRender : public RenderJobBase {
   wmWindow *win = nullptr;
 
   Vector<MovieWriter *> movie_writers;
+  bool write_audio_synchronously = false;
 
   TaskPool *task_pool = nullptr;
   bool pool_ok = true;
@@ -974,6 +976,7 @@ static bool screen_opengl_render_anim_init(wmOperator *op)
 
   oglrender->totvideos = BKE_scene_multiview_num_videos_get(&scene->r, &image_format);
   oglrender->reports = op->reports;
+  G.is_break = false;
 
   if (BKE_imtype_is_movie(image_format.imtype)) {
     if (scene->r.ffcodecdata.audio_codec_id_get() != FFMPEG_CODEC_ID_NONE) {
@@ -982,6 +985,10 @@ static bool screen_opengl_render_anim_init(wmOperator *op)
                                              oglrender->depsgraph,
                                              scene->playback_start(),
                                              scene->playback_end());
+      const bke::SceneAudioRuntime &audio =
+          DEG_get_evaluated_scene(oglrender->depsgraph)->runtime->audio;
+      oglrender->write_audio_synchronously = audio.animation_cache_skipped ||
+                                             audio.animation_cache_has_live_properties;
     }
 
     size_t width, height;
@@ -1144,7 +1151,9 @@ static void write_result_func(TaskPool *__restrict pool, void *task_data_v)
   });
 }
 
-static bool schedule_write_result(OGLRender *oglrender, RenderResult *rr)
+static bool schedule_write_result(const bke::BlenderProject *project,
+                                  OGLRender *oglrender,
+                                  RenderResult *rr)
 {
   if (!oglrender->pool_ok) {
     RE_FreeRenderResult(rr);
@@ -1162,7 +1171,16 @@ static bool schedule_write_result(OGLRender *oglrender, RenderResult *rr)
       oglrender->task_condition.wait(lock);
     }
   }
-  BLI_task_pool_push(oglrender->task_pool, write_result_func, task_data, true, nullptr);
+  if (oglrender->write_audio_synchronously) {
+    /* Partial Automatic caches and fallback audio need the current frame's live values.
+     * Consume them before advancing the Scene; an asynchronous writer could otherwise read
+     * another frame's values. No render worker needs to request main-thread evaluation. */
+    write_result(project, oglrender->task_pool, task_data);
+    MEM_delete(task_data);
+  }
+  else {
+    BLI_task_pool_push(oglrender->task_pool, write_result_func, task_data, true, nullptr);
+  }
   return true;
 }
 
@@ -1256,7 +1274,7 @@ static bool screen_opengl_render_anim_step(const bke::BlenderProject *project,
     RenderResult *new_rr = RE_DuplicateRenderResult(rr);
     RE_ReleaseResult(oglrender->re);
 
-    ok = schedule_write_result(oglrender, new_rr);
+    ok = schedule_write_result(project, oglrender, new_rr);
   }
 
 finally: /* Step the frame and bail early if needed */
@@ -1369,8 +1387,6 @@ static wmOperatorStatus screen_opengl_render_invoke(bContext *C,
 
   /* Setup animation job. */
   if (anim) {
-    G.is_break = false;
-
     wmJob *wm_job = WM_jobs_get(CTX_wm_manager(C),
                                 CTX_wm_window(C),
                                 oglrender->scene,
