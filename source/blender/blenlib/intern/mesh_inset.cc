@@ -16,7 +16,7 @@
 #include "BLI_heap.hh"
 #include "BLI_map.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_geom_c.hh"
+#include "BLI_math_geom.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_c.hh"
@@ -274,7 +274,7 @@ class Triangle {
   }
 
   /* Our algorithm cares which edges are "spokes".
-   * As a convenience, always mark the spoke of the neibhgor edge too. */
+   * As a convenience, always mark the spoke of the neighbor edge too. */
   void mark_spoke(int pos)
   {
     flags_ |= (TSPOKE0 << pos);
@@ -473,11 +473,8 @@ static double vertex_shell_factor(Vert *vert)
   do {
     if (!e.tri()->is_ghost()) {
       Edge eprev = e.triangle_pred();
-      /* angle_v3v3v3 and shell_v3v3_normalized_to_dist only accept float; cast at the boundary. */
-      float face_angle = angle_v3v3v3(
-          float3(v_src(eprev)->co), float3(v_src(e)->co), float3(v_dst(e)->co));
-      accum_shell += shell_v3v3_normalized_to_dist(float3(vnorm), float3(e.tri()->normal())) *
-                     face_angle;
+      double face_angle = math::angle_on_tri(v_src(eprev)->co, v_src(e)->co, v_dst(e)->co);
+      accum_shell += math::shell_angle_to_dist(vnorm, e.tri()->normal()) * face_angle;
       accum_angle += face_angle;
     }
     e = rot_ccw(e);
@@ -696,17 +693,11 @@ static void trimesh_draw(const std::string &label, const TriangleMesh &trimesh)
     avg_normal = avg_normal + triangle_normal(tri);
   }
   avg_normal = math::normalize(avg_normal);
-  /* axis_dominant_v3_to_m3 / mul_v2_m3v3 only accept float; cast at the boundary. */
-  float axis_mat[3][3];
-  float3 avg_normal_f(avg_normal);
-  axis_dominant_v3_to_m3(axis_mat, &avg_normal_f.x);
+  const blender::MatBase<double, 3, 3> axis_mat = math::axis_dominant_to_m3(avg_normal);
 
   Array<double2> proj_vertco(verts.size());
   for (int64_t i : verts.index_range()) {
-    float tmp[2];
-    float3 co_f(verts[i]->co);
-    mul_v2_m3v3(tmp, axis_mat, &co_f.x);
-    proj_vertco[i] = double2(tmp[0], tmp[1]);
+    proj_vertco[i] = math::project_v3_to_v2(axis_mat, verts[i]->co);
   }
 
   double2 vmin(DBL_MAX, DBL_MAX);
@@ -3003,20 +2994,20 @@ static Vector<Triangle *> triangulate_face(int f,
   else {
     /* Face has 5 or more edges; use polyfill. */
     /* Project vertices to 2d along negative face normal. */
-    /* axis_dominant_v3_to_m3_negate / mul_v2_m3v3 / BLI_polyfill_calc only accept float;
-     * cast at the boundary. */
-    float axis_mat[3][3];
+    /* BLI_polyfill_calc/BLI_polyfill_beautify only accept float[2] arrays;
+     * the projection itself uses doubles and the results are cast to float. */
     float (*projverts)[2];
     unsigned int (*tris)[3];
     const int totfilltri = flen - 2;
     tris = MEM_new_array_uninitialized<unsigned int[3]>(size_t(totfilltri), __func__);
     projverts = MEM_new_array_uninitialized<float[2]>(size_t(flen), __func__);
-    float3 norm_f(norm);
-    axis_dominant_v3_to_m3_negate(axis_mat, &norm_f.x);
+    const blender::MatBase<double, 3, 3> axis_mat = math::axis_dominant_to_m3_negate(norm);
     Map<int, int> vert_index_to_facepos;
     for (int j = 0; j < flen; ++j) {
-      float3 vco(base_trimesh.get_vert_by_index(face[j])->co);
-      mul_v2_m3v3(projverts[j], axis_mat, &vco.x);
+      const double2 pv = math::project_v3_to_v2(axis_mat,
+                                                base_trimesh.get_vert_by_index(face[j])->co);
+      projverts[j][0] = float(pv[0]);
+      projverts[j][1] = float(pv[1]);
       vert_index_to_facepos.add(face[j], j);
     }
     MemArena *pf_arena = BLI_memarena_new(BLI_POLYFILL_ARENA_SIZE, __func__);
