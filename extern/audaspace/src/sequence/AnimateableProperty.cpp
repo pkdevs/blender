@@ -38,6 +38,19 @@ AnimateableProperty::AnimateableProperty(int count, float value) :
 		buf[i] = value;
 }
 
+void AnimateableProperty::copyFrom(AnimateableProperty& other)
+{
+	if(this == &other)
+		return;
+
+	std::scoped_lock lock(m_mutex, other.m_mutex);
+	assert(m_count == other.m_count);
+	resize(other.getSize());
+	std::memcpy(Buffer::getBuffer(), other.Buffer::getBuffer(), other.getSize());
+	m_isAnimated = other.m_isAnimated;
+	m_unknown = other.m_unknown;
+}
+
 void AnimateableProperty::updateUnknownCache(int start, int end)
 {
 	float* buf = Buffer::getBuffer();

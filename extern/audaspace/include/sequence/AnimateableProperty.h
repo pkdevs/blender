@@ -102,6 +102,12 @@ public:
 	int getCount() const;
 
 	/**
+	 * Copies values and unwritten-frame state from another property with the same component count.
+	 * Subsequent writes are independent, including interpolation across unwritten frames.
+	 */
+	void copyFrom(AnimateableProperty& other);
+
+	/**
 	 * Clears animation data after the first value, preserves that value and marks the property
 	 * non-animated.
 	 */
