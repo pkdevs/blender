@@ -86,7 +86,8 @@ class DespeckleOperation : public NodeOperation {
     input_image.bind_as_texture(shader, "input_tx");
 
     const Result &factor_image = get_input("Fac");
-    factor_image.bind_as_texture(shader, "factor_tx");
+    gpu::Texture *factor_texture = factor_image.bind_as_texture_or_single_value(shader,
+                                                                                "factor_tx");
 
     const Domain domain = compute_domain();
     Result &output_image = get_result("Image");
@@ -98,7 +99,7 @@ class DespeckleOperation : public NodeOperation {
     GPU_shader_unbind();
     output_image.unbind_as_image();
     input_image.unbind_as_texture();
-    factor_image.unbind_as_texture();
+    factor_image.unbind_as_texture_or_single_value(factor_texture);
   }
 
   void execute_cpu()
@@ -198,7 +199,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeDespeckle", CMP_NODE_DESPECKLE);
+  cmp_node_type_base(&ntype, "CompositorNodeDespeckle"_ustr, CMP_NODE_DESPECKLE);
   ntype.ui_name = "Despeckle";
   ntype.ui_description =
       "Smooth areas of an image in which noise is noticeable, while leaving complex areas "

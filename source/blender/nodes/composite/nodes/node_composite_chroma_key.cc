@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_math_base.hh"
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -133,7 +133,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeChromaMatte", CMP_NODE_CHROMA_MATTE);
+  cmp_node_type_base(&ntype, "CompositorNodeChromaMatte"_ustr, CMP_NODE_CHROMA_MATTE);
   ntype.ui_name = "Chroma Key";
   ntype.ui_description = "Create matte based on chroma values";
   ntype.enum_name_legacy = "CHROMA_MATTE";
@@ -142,7 +142,7 @@ static void node_register()
   ntype.flag |= NODE_PREVIEW;
   ntype.gpu_fn = node_gpu_material;
   ntype.build_multi_function = node_build_multi_function;
-  bke::node_type_size(ntype, 155, 140, NODE_DEFAULT_MAX_WIDTH);
+  ntype.default_width = bke::NodeWidth::_160;
 
   bke::node_register_type(ntype);
 }

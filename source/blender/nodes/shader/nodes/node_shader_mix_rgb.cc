@@ -11,7 +11,7 @@
 
 #include "BKE_material.hh"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "DNA_material_types.h"
 
@@ -94,7 +94,7 @@ static int gpu_shader_mix_rgb(GPUMaterial *mat,
 
   const float min = 0.0f;
   const float max = 1.0f;
-  const GPUNodeLink *factor_link = in[0].link ? in[0].link : GPU_uniform(in[0].vec);
+  const GPUNodeLink *factor_link = in[0].link ? in[0].link : GPU_uniform(in[0]);
   GPU_link(mat, "clamp_value", factor_link, GPU_constant(&min), GPU_constant(&max), &in[0].link);
 
   int ret = GPU_stack_link(mat, node, name, in, out);
@@ -165,7 +165,7 @@ void register_node_type_sh_mix_rgb()
 
   static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "ShaderNodeMixRGB", SH_NODE_MIX_RGB_LEGACY);
+  common_node_type_base(&ntype, "ShaderNodeMixRGB"_ustr, SH_NODE_MIX_RGB_LEGACY);
   ntype.ui_name = "Mix (Legacy)";
   ntype.ui_description = "Mix two input colors";
   ntype.enum_name_legacy = "MIX_RGB";

@@ -18,9 +18,15 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Mesh"_ustr)
       .supported_type(GeometryComponent::Type::Mesh)
       .description("Edges to convert to curves");
-  b.add_input<decl::Bool>("Start Vertices"_ustr).default_value(true).hide_value().field_on_all();
-  b.add_input<decl::Int>("Next Vertex Index"_ustr).default_value(-1).hide_value().field_on_all();
-  b.add_output<decl::Geometry>("Curves"_ustr).propagate_all();
+  b.add_input<decl::Bool>("Start Vertices"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
+  b.add_input<decl::Int>("Next Vertex Index"_ustr)
+      .default_value(-1)
+      .hide_value()
+      .evaluated_geometry_field();
+  b.add_output<decl::Geometry>("Curves"_ustr).propagate_all_geometry();
 }
 
 static Curves *edge_paths_to_curves_convert(const Mesh &mesh,
@@ -105,13 +111,14 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeEdgePathsToCurves", GEO_NODE_EDGE_PATHS_TO_CURVES);
+  geo_node_type_base(&ntype, "GeometryNodeEdgePathsToCurves"_ustr, GEO_NODE_EDGE_PATHS_TO_CURVES);
   ntype.ui_name = "Edge Paths to Curves";
   ntype.ui_description = "Output curves following paths across mesh edges";
   ntype.enum_name_legacy = "EDGE_PATHS_TO_CURVES";
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
+  ntype.default_width = bke::NodeWidth::_160;
   bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)

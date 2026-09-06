@@ -67,13 +67,12 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeRGBToBW", CMP_NODE_RGBTOBW);
+  cmp_node_type_base(&ntype, "CompositorNodeRGBToBW"_ustr, CMP_NODE_RGBTOBW);
   ntype.ui_name = "RGB to BW";
   ntype.ui_description = "Convert RGB input into grayscale using luminance";
   ntype.enum_name_legacy = "RGBTOBW";
   ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.declare = node_declare;
-  bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Default);
   ntype.gpu_fn = node_gpu_material;
   ntype.build_multi_function = node_build_multi_function;
 

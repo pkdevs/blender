@@ -8,8 +8,6 @@
 
 #include <sstream>
 
-#include "GPU_capabilities.hh"
-
 #include "vk_shader.hh"
 
 #include "vk_backend.hh"
@@ -19,7 +17,6 @@
 #include "vk_state_manager.hh"
 #include "vk_vertex_attribute_object.hh"
 
-#include "BLI_string_utils.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_global.hh"
@@ -393,6 +390,9 @@ static void print_resource(std::ostream &os,
       os << "buffer _" << res.storagebuf.name.str_no_array() << " { "
          << info.buffer_typename(res.storagebuf.type_name) << " " << res.storagebuf.name << "; };";
       break;
+    case ShaderCreateInfo::Resource::BindType::ACCELERATION_STRUCTURE:
+      os << "uniform accelerationStructureEXT " << res.acceleration_structure.name << ";";
+      break;
   }
 }
 
@@ -514,6 +514,11 @@ void VKShader::init(const shader::ShaderCreateInfo &info, bool /*is_codegen_only
   interface = vk_interface;
   is_static_shader_ = info.do_static_compilation_;
   is_compute_shader_ = !info.compute_source_.is_empty() || !info.compute_source_generated.empty();
+  max_input_attachment_index_ = 0;
+  for (const ShaderCreateInfo::SubpassIn &input : info.subpass_inputs_) {
+    max_input_attachment_index_ = max_uu(max_input_attachment_index_, uint32_t(input.index));
+  }
+  use_ray_query_ = bool(info.builtins_combined() & BuiltinBits::RAY_QUERY);
 }
 
 VKShader::~VKShader()
@@ -540,16 +545,16 @@ void VKShader::build_shader_module(MutableSpan<StringRefNull> sources,
 
   switch (stage) {
     case shaderc_vertex_shader:
-      source_patch = device.glsl_vertex_patch_get();
+      source_patch = device.glsl_vertex_patch_get(use_ray_query_);
       break;
     case shaderc_geometry_shader:
       source_patch = device.glsl_geometry_patch_get();
       break;
     case shaderc_fragment_shader:
-      source_patch = device.glsl_fragment_patch_get();
+      source_patch = device.glsl_fragment_patch_get(use_ray_query_);
       break;
     case shaderc_compute_shader:
-      source_patch = device.glsl_compute_patch_get();
+      source_patch = device.glsl_compute_patch_get(use_ray_query_);
       break;
     default:
       BLI_assert_msg(0, "Only forced ShaderC shader kinds are supported.");
@@ -693,8 +698,8 @@ bool VKShader::finalize_pipeline_layout(VKDevice &device,
     pipeline_info.pPushConstantRanges = &push_constant_range;
   }
 
-  if (vkCreatePipelineLayout(device.vk_handle(), &pipeline_info, nullptr, &vk_pipeline_layout) !=
-      VK_SUCCESS)
+  if (device.functions.vkCreatePipelineLayout(
+          device.vk_handle(), &pipeline_info, nullptr, &vk_pipeline_layout) != VK_SUCCESS)
   {
     return false;
   };
@@ -837,7 +842,7 @@ std::string VKShader::resources_declare(const shader::ShaderCreateInfo &info) co
     if (push_constants_storage == VKPushConstants::StorageType::PUSH_CONSTANTS) {
       ss << "layout(push_constant, std430) uniform constants\n";
     }
-    else if (push_constants_storage == VKPushConstants::StorageType::UNIFORM_BUFFER) {
+    else if (push_constants_storage == VKPushConstants::StorageType::BUFFER) {
       ss << "layout(binding = " << push_constants_layout.descriptor_set_location_get()
          << ", std140) uniform constants\n";
     }
@@ -874,8 +879,9 @@ std::string VKShader::vertex_interface_declare(const shader::ShaderCreateInfo &i
 
   const bool has_geometry_stage = do_geometry_shader_injection(&info) ||
                                   !info.geometry_source_.is_empty();
-  const bool do_layer_output = flag_is_set(info.builtins_, BuiltinBits::LAYER);
-  const bool do_viewport_output = flag_is_set(info.builtins_, BuiltinBits::VIEWPORT_INDEX);
+  const bool do_layer_output = flag_is_set(info.builtins_combined(), BuiltinBits::LAYER);
+  const bool do_viewport_output = flag_is_set(info.builtins_combined(),
+                                              BuiltinBits::VIEWPORT_INDEX);
   if (has_geometry_stage) {
     if (do_layer_output) {
       ss << "layout(location=" << (location++) << ") out int gpu_Layer;\n ";
@@ -962,22 +968,22 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
   const VKExtensions &extensions = VKBackend::get().device.extensions_get();
 
   /* Interfaces. */
-  const Span<StageInterfaceInfo *> in_interfaces = info.geometry_source_.is_empty() ?
-                                                       info.vertex_out_interfaces_ :
-                                                       info.geometry_out_interfaces_;
+  const Span<ShaderCreateInfo::StageInterfaceInfoHandle> in_interfaces =
+      info.geometry_source_.is_empty() ? info.vertex_out_interfaces_ :
+                                         info.geometry_out_interfaces_;
   int location = 0;
   for (const StageInterfaceInfo *iface : in_interfaces) {
     print_interface(ss, "in", *iface, location);
   }
-  if (flag_is_set(info.builtins_, BuiltinBits::LAYER)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::LAYER)) {
     ss << "#define gpu_Layer gl_Layer\n";
   }
-  if (flag_is_set(info.builtins_, BuiltinBits::VIEWPORT_INDEX)) {
+  if (flag_is_set(info.builtins_combined(), BuiltinBits::VIEWPORT_INDEX)) {
     ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
   }
 
   if (!extensions.fragment_shader_barycentric &&
-      flag_is_set(info.builtins_, BuiltinBits::BARYCENTRIC_COORD))
+      flag_is_set(info.builtins_combined(), BuiltinBits::BARYCENTRIC_COORD))
   {
     ss << "layout(location=" << (location++) << ") smooth in vec3 gpu_BaryCoord;\n";
     ss << "layout(location=" << (location++) << ") noperspective in vec3 gpu_BaryCoordNoPersp;\n";
@@ -1042,7 +1048,7 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
 
       /* IMPORTANT: We assume that the frame-buffer will be layered or not based on the layer
        * built-in flag. */
-      bool is_layered_fb = flag_is_set(info.builtins_, BuiltinBits::LAYER);
+      bool is_layered_fb = flag_is_set(info.builtins_combined(), BuiltinBits::LAYER);
       bool is_layered_input = ELEM(
           input.img_type, ImageType::Uint2DArray, ImageType::Int2DArray, ImageType::Float2DArray);
       /* Declare image. */
@@ -1120,10 +1126,10 @@ std::string VKShader::geometry_interface_declare(const shader::ShaderCreateInfo 
   return ss.str();
 }
 
-static StageInterfaceInfo *find_interface_by_name(const Span<StageInterfaceInfo *> ifaces,
-                                                  const StringRefNull name)
+static StageInterfaceInfo *find_interface_by_name(
+    const Span<ShaderCreateInfo::StageInterfaceInfoHandle> ifaces, const StringRefNull name)
 {
-  for (StageInterfaceInfo *iface : ifaces) {
+  for (auto [iface, cond] : ifaces) {
     if (iface->instance_name == name) {
       return iface;
     }
@@ -1191,10 +1197,11 @@ std::string VKShader::workaround_geometry_shader_source_create(
   std::stringstream ss;
   const VKExtensions &extensions = VKBackend::get().device.extensions_get();
 
-  const bool do_layer_output = flag_is_set(info.builtins_, BuiltinBits::LAYER);
-  const bool do_viewport_output = flag_is_set(info.builtins_, BuiltinBits::VIEWPORT_INDEX);
+  const bool do_layer_output = flag_is_set(info.builtins_combined(), BuiltinBits::LAYER);
+  const bool do_viewport_output = flag_is_set(info.builtins_combined(),
+                                              BuiltinBits::VIEWPORT_INDEX);
   const bool do_barycentric_workaround = !extensions.fragment_shader_barycentric &&
-                                         flag_is_set(info.builtins_,
+                                         flag_is_set(info.builtins_combined(),
                                                      BuiltinBits::BARYCENTRIC_COORD);
 
   shader::ShaderCreateInfo info_modified = info;
@@ -1258,7 +1265,7 @@ std::string VKShader::workaround_geometry_shader_source_create(
 bool VKShader::do_geometry_shader_injection(const shader::ShaderCreateInfo *info) const
 {
   const VKExtensions &extensions = VKBackend::get().device.extensions_get();
-  BuiltinBits builtins = info->builtins_;
+  BuiltinBits builtins = info->builtins_combined();
   if (!extensions.fragment_shader_barycentric &&
       flag_is_set(builtins, BuiltinBits::BARYCENTRIC_COORD))
   {
@@ -1337,6 +1344,7 @@ bool VKShader::ensure_graphics_pipelines(Span<shader::PipelineState> pipeline_st
     graphics_info.shaders.has_depth = pipeline_state.depth_format_ != TextureTargetFormat::Invalid;
     graphics_info.shaders.has_stencil = pipeline_state.stencil_format_ !=
                                         TextureTargetFormat::Invalid;
+    graphics_info.shaders.max_input_attachment_index = max_input_attachment_index_;
 
     /* Disable pipeline features that are dynamic to increase cache hits. */
     if (extensions.extended_dynamic_state) {
@@ -1408,6 +1416,7 @@ VkPipeline VKShader::ensure_and_get_graphics_pipeline(
   graphics_info.shaders.specialization_constants.extend(constants_state.values);
   graphics_info.shaders.has_depth = depth_attachment_format != VK_FORMAT_UNDEFINED;
   graphics_info.shaders.has_stencil = stencil_attachment_format != VK_FORMAT_UNDEFINED;
+  graphics_info.shaders.max_input_attachment_index = max_input_attachment_index_;
   /* Cleanup state to increase cache hits. */
   if (!graphics_info.shaders.has_stencil || state_manager.state.stencil_test == GPU_STENCIL_NONE) {
     graphics_info.shaders.state.stencil_test = GPU_STENCIL_NONE;

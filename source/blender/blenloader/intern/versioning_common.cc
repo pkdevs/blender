@@ -16,13 +16,16 @@
 #include "DNA_screen_types.h"
 #include "DNA_sequence_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_map.hh"
-#include "BLI_string.h"
-#include "BLI_string_ref.hh"
-#include "BLI_string_utf8.h"
+#include "RNA_path.hh"
 
-#include "BKE_animsys.h"
+#include "BLI_function_ref.hh"
+#include "BLI_listbase.hh"
+#include "BLI_map.hh"
+#include "BLI_string.hh"
+#include "BLI_string_ref.hh"
+#include "BLI_string_utf8.hh"
+
+#include "BKE_animsys.hh"
 #include "BKE_grease_pencil_legacy_convert.hh"
 #include "BKE_idprop.hh"
 #include "BKE_lib_id.hh"
@@ -81,7 +84,7 @@ ARegion *do_versions_add_region_if_not_found(ListBaseT<ARegion> *regionbase,
   }
 
   ARegion *new_region = BKE_area_region_new();
-  new_region->regiontype = region_type;
+  new_region->regiontype = eRegion_Type(region_type);
   BLI_insertlinkafter(regionbase, link_after_region, new_region);
   return new_region;
 }
@@ -102,7 +105,7 @@ ARegion *do_versions_ensure_region(ListBaseT<ARegion> *regionbase,
   }
 
   ARegion *new_region = BKE_area_region_new();
-  new_region->regiontype = region_type;
+  new_region->regiontype = eRegion_Type(region_type);
   BLI_insertlinkafter(regionbase, link_after_region, new_region);
   return new_region;
 }
@@ -246,7 +249,7 @@ StringRef legacy_socket_idname_to_socket_type(StringRef idname)
 
 bNode &version_node_add_empty(bNodeTree &ntree, const char *idname)
 {
-  bke::bNodeType *ntype = bke::node_type_find(idname);
+  bke::bNodeType *ntype = bke::node_type_find(UString(idname));
 
   bNode *node = MEM_new<bNode>(__func__);
   node->runtime = MEM_new<bke::bNodeRuntime>(__func__);
@@ -258,7 +261,7 @@ bNode &version_node_add_empty(bNodeTree &ntree, const char *idname)
   bke::node_unique_name(ntree, *node);
 
   node->flag = NODE_SELECT | NODE_OPTIONS | NODE_INIT;
-  node->width = ntype->width;
+  node->width = ntype->default_width;
   node->height = ntype->height;
   node->color[0] = node->color[1] = node->color[2] = 0.608;
 
@@ -282,11 +285,10 @@ bNode &version_node_add_unknown(bNodeTree &ntree,
 {
   using namespace blender::bke;
 
-  ntype.idname = idname;
+  ntype.idname = UString(idname);
   ntype.type_legacy = legacy_type;
   ntype.height = height;
-  ntype.width = width;
-  node_type_size_preset(ntype, eNodeSizePreset::Default);
+  ntype.default_width = width;
   ntype.minheight = 30.0f;
   ntype.maxheight = FLT_MAX;
 
@@ -308,7 +310,7 @@ bNode &version_node_add_unknown(bNodeTree &ntree,
   node_unique_name(ntree, *node);
 
   node->flag = NODE_SELECT | NODE_OPTIONS | NODE_INIT;
-  node->width = ntype.width;
+  node->width = ntype.default_width;
   node->height = ntype.height;
   node->color[0] = node->color[1] = node->color[2] = 0.608f;
 
@@ -354,7 +356,7 @@ bNodeSocket &version_node_add_socket(bNodeTree &ntree,
     BLI_addtail(&node.outputs, socket);
   }
 
-  node_socket_init_default_value_data(stype->type, stype->subtype, &socket->default_value);
+  socket->default_value = bke::socket_value_new(stype->type, stype->subtype);
 
   BKE_ntree_update_tag_socket_new(&ntree, socket);
   return *socket;
@@ -405,7 +407,7 @@ bNodeSocket *version_node_add_socket_if_not_exist(bNodeTree *ntree,
                                                   const char *identifier,
                                                   const char *name)
 {
-  bNodeSocket *sock = bke::node_find_socket(*node, eNodeSocketInOut(in_out), identifier);
+  bNodeSocket *sock = bke::node_find_socket(*node, eNodeSocketInOut(in_out), UString(identifier));
   if (sock != nullptr) {
     return sock;
   }
@@ -429,27 +431,32 @@ void version_node_id(bNodeTree *ntree, const int node_type, const char *new_name
   }
 }
 
-void version_node_socket_index_animdata(Main *bmain,
-                                        const int node_tree_type,
-                                        const int node_type,
-                                        const int socket_index_orig,
-                                        const int socket_index_offset,
-                                        const int total_number_of_sockets)
+/**
+ * Version the animdata of nodes of the given tree type, where node_match_fn(node) returns true.
+ */
+static void version_node_socket_index_animdata_ex(
+    Main *bmain,
+    const int node_tree_type,
+    const FunctionRef<bool(const bNode *)> node_match_fn,
+    const int socket_index_orig,
+    const int socket_index_offset,
+    const int total_number_of_sockets)
 {
 
   /* The for loop for the input ids is at the top level otherwise we lose the animation
    * keyframe data. Not sure what causes that, so I (Sybren) moved the code here from
    * versioning_290.cc as-is (structure-wise). */
+  const DriverMap driver_map = BKE_animdata_build_driver_target_map(*bmain);
   for (int input_index = total_number_of_sockets - 1; input_index >= socket_index_orig;
        input_index--)
   {
-    FOREACH_NODETREE_BEGIN (bmain, ntree, owner_id) {
+    FOREACH_NODETREE_BEGIN (bmain, ntree, _owner_id) {
       if (ntree->type != node_tree_type) {
         continue;
       }
 
       for (bNode *node : ntree->all_nodes()) {
-        if (node->type_legacy != node_type) {
+        if (!node_match_fn(node)) {
           continue;
         }
 
@@ -458,20 +465,53 @@ void version_node_socket_index_animdata(Main *bmain,
         char *rna_path_prefix = BLI_sprintfN("nodes[\"%s\"].inputs", node_name_escaped);
 
         const int new_index = input_index + socket_index_offset;
-        BKE_animdata_fix_paths_rename_all_ex(bmain,
-                                             owner_id,
-                                             rna_path_prefix,
-                                             nullptr,
-                                             nullptr,
-                                             input_index,
-                                             new_index,
-                                             /*verify_paths=*/false,
-                                             /*infix_is_name=*/true);
+        /* Note: this should not use `owner_id`, as in the case of embedded node trees, that is set
+         * to the owning ID (like a material owning its shader node tree). It's the node tree
+         * itself that needs its animation versioned. */
+        BKE_animdata_fix_paths(ntree->id,
+                               rna_path_prefix,
+                               RNA_path_number_to_infix(input_index),
+                               RNA_path_number_to_infix(new_index),
+                               /*verify_paths=*/false,
+                               driver_map);
         MEM_delete(rna_path_prefix);
       }
     }
     FOREACH_NODETREE_END;
   }
+}
+
+void version_node_socket_index_animdata(Main *bmain,
+                                        const int node_tree_type,
+                                        const int node_type,
+                                        const int socket_index_orig,
+                                        const int socket_index_offset,
+                                        const int total_number_of_sockets)
+{
+  version_node_socket_index_animdata_ex(
+      bmain,
+      node_tree_type,
+      [node_type](const bNode *node) -> bool { return node->type_legacy == node_type; },
+      socket_index_orig,
+      socket_index_offset,
+      total_number_of_sockets);
+}
+
+void version_node_socket_index_animdata(Main *bmain,
+                                        const int node_tree_type,
+                                        const char *node_idname,
+                                        const int socket_index_orig,
+                                        const int socket_index_offset,
+                                        const int total_number_of_sockets)
+{
+  const StringRef node_idname_ref(node_idname);
+  version_node_socket_index_animdata_ex(
+      bmain,
+      node_tree_type,
+      [node_idname_ref](const bNode *node) -> bool { return node_idname_ref == node->idname; },
+      socket_index_orig,
+      socket_index_offset,
+      total_number_of_sockets);
 }
 
 void version_socket_update_is_used(bNodeTree *ntree)
@@ -493,7 +533,7 @@ void version_socket_update_is_used(bNodeTree *ntree)
 ARegion *do_versions_add_region(int regiontype, const char * /*name*/)
 {
   ARegion *region = BKE_area_region_new();
-  region->regiontype = regiontype;
+  region->regiontype = eRegion_Type(regiontype);
   return region;
 }
 
@@ -507,7 +547,8 @@ void node_tree_relink_with_socket_id_map(bNodeTree &ntree,
       bNodeSocket *old_socket = link.tosock;
       if (old_socket->is_available()) {
         if (const std::string *new_identifier = map.lookup_ptr_as(old_socket->identifier)) {
-          bNodeSocket *new_socket = bke::node_find_socket(*&new_node, SOCK_IN, *new_identifier);
+          bNodeSocket *new_socket = bke::node_find_socket(
+              *&new_node, SOCK_IN, UString(*new_identifier));
           link.tonode = &new_node;
           link.tosock = new_socket;
           old_socket->link = nullptr;
@@ -518,7 +559,8 @@ void node_tree_relink_with_socket_id_map(bNodeTree &ntree,
       bNodeSocket *old_socket = link.fromsock;
       if (old_socket->is_available()) {
         if (const std::string *new_identifier = map.lookup_ptr_as(old_socket->identifier)) {
-          bNodeSocket *new_socket = bke::node_find_socket(*&new_node, SOCK_OUT, *new_identifier);
+          bNodeSocket *new_socket = bke::node_find_socket(
+              *&new_node, SOCK_OUT, UString(*new_identifier));
           link.fromnode = &new_node;
           link.fromsock = new_socket;
           old_socket->link = nullptr;
@@ -673,7 +715,7 @@ void version_update_node_input(
    * Do this after the link update in case it changes the identifier. */
   for (bNode &node : ntree->nodes) {
     if (check_node(&node)) {
-      bNodeSocket *input = bke::node_find_socket(node, SOCK_IN, socket_identifier);
+      bNodeSocket *input = bke::node_find_socket(node, SOCK_IN, UString(socket_identifier));
       if (input != nullptr) {
         update_input(&node, input);
       }
@@ -850,7 +892,6 @@ void do_versions_after_setup(Main *new_bmain,
       ntree->owner_id = nullptr;
       ntree->id.tag |= ID_TAG_NO_MAIN;
 
-      scene.compositing_node_group = ntree;
       scene.nodetree = nullptr;
 
       BKE_libblock_management_main_add(new_bmain, ntree);

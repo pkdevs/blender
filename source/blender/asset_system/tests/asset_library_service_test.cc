@@ -4,12 +4,14 @@
 
 #include "asset_library_service.hh"
 
-#include "BLI_fileops.h" /* For PATH_MAX (at least on Windows). */
+#include "BLI_fileops.hh" /* For PATH_MAX (at least on Windows). */
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BKE_appdir.hh"
 #include "BKE_callbacks.hh"
+#include "BKE_global.hh"
+#include "BKE_gtest_base.hh"
 #include "BKE_main.hh"
 
 #include "DNA_asset_types.h"
@@ -22,21 +24,11 @@ namespace blender::asset_system::tests {
 
 const UUID UUID_POSES_ELLIE("df60e1f6-2259-475b-93d9-69a1b4a8db78");
 
-class AssetLibraryServiceTest : public testing::Test {
+class AssetLibraryServiceTest : public bke::BlenderGTestBase {
  public:
   CatalogFilePath asset_library_root_;
   CatalogFilePath temp_library_path_;
-
-  static void SetUpTestSuite()
-  {
-    CLG_init();
-    BKE_callback_global_init();
-  }
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-    BKE_callback_global_finalize();
-  }
+  Main *bmain;
 
   void SetUp() override
   {
@@ -44,6 +36,13 @@ class AssetLibraryServiceTest : public testing::Test {
     if (test_files_dir.empty()) {
       FAIL();
     }
+
+    /* G_MAIN is needed for variable expansion in asset library paths.
+     * IE {project_root}, {blend_name}, {blend_dir} etc.
+     */
+    bmain = BKE_main_new();
+    G_MAIN = bmain;
+
     asset_library_root_ = test_files_dir + SEP_STR + "asset_library";
     temp_library_path_ = "";
   }
@@ -56,6 +55,9 @@ class AssetLibraryServiceTest : public testing::Test {
       BLI_delete(temp_library_path_.c_str(), true, true);
       temp_library_path_ = "";
     }
+
+    BKE_main_free(bmain);
+    G_MAIN = nullptr;
   }
 
   /* Register a temporary path, which will be removed at the end of the test.

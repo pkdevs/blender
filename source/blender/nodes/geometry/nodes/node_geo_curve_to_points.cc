@@ -35,7 +35,7 @@ static void node_declare(NodeDeclarationBuilder &b)
                     .default_value(10)
                     .min(2)
                     .max(100000)
-                    .field_on_all()
+                    .evaluated_geometry_field()
                     .make_available([](bNode &node) {
                       node_storage(node).mode = GEO_NODE_CURVE_RESAMPLE_COUNT;
                     });
@@ -43,14 +43,14 @@ static void node_declare(NodeDeclarationBuilder &b)
                      .default_value(0.1f)
                      .min(0.001f)
                      .subtype(PROP_DISTANCE)
-                     .field_on_all()
+                     .evaluated_geometry_field()
                      .make_available([](bNode &node) {
                        node_storage(node).mode = GEO_NODE_CURVE_RESAMPLE_LENGTH;
                      });
-  b.add_output<decl::Geometry>("Points"_ustr).propagate_all();
-  b.add_output<decl::Vector>("Tangent"_ustr).field_on_all();
-  b.add_output<decl::Vector>("Normal"_ustr).field_on_all();
-  b.add_output<decl::Rotation>("Rotation"_ustr).field_on_all();
+  b.add_output<decl::Geometry>("Points"_ustr).propagate_all_geometry();
+  b.add_output<decl::Vector>("Tangent"_ustr).anonymous_attribute_output();
+  b.add_output<decl::Vector>("Normal"_ustr).anonymous_attribute_output();
+  b.add_output<decl::Rotation>("Rotation"_ustr).anonymous_attribute_output();
 
   const bNode *node = b.node_or_null();
   if (node != nullptr) {
@@ -373,7 +373,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeCurveToPoints", GEO_NODE_CURVE_TO_POINTS);
+  geo_node_type_base(&ntype, "GeometryNodeCurveToPoints"_ustr, GEO_NODE_CURVE_TO_POINTS);
   ntype.ui_name = "Curve to Points";
   ntype.ui_description = "Generate a point cloud by sampling positions along curves";
   ntype.enum_name_legacy = "CURVE_TO_POINTS";

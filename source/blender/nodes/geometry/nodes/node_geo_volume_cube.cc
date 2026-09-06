@@ -25,7 +25,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Float>("Density"_ustr)
       .default_value(1.0f)
       .description("Volume density per voxel")
-      .supports_field();
+      .structure_type(StructureType::Field);
   b.add_input<decl::Float>("Background"_ustr).description("Value for voxels outside of the cube");
 
   b.add_input<decl::Vector>("Min"_ustr)
@@ -181,7 +181,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeVolumeCube", GEO_NODE_VOLUME_CUBE);
+  geo_node_type_base(&ntype, "GeometryNodeVolumeCube"_ustr, GEO_NODE_VOLUME_CUBE);
   ntype.ui_name = "Volume Cube";
   ntype.ui_description =
       "Generate a dense volume with a field that controls the density at each grid voxel based on "

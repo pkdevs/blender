@@ -11,19 +11,21 @@ namespace blender::nodes::node_geo_offset_point_in_curve_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Int>("Point Index"_ustr)
-      .implicit_field(NODE_DEFAULT_INPUT_INDEX_FIELD)
+      .default_input_type(NODE_DEFAULT_INPUT_INDEX_FIELD)
       .description("The index of the control point to evaluate. Defaults to the current index")
       .structure_type(StructureType::Field);
   b.add_input<decl::Int>("Offset"_ustr)
-      .supports_field()
+      .structure_type(StructureType::Field)
       .description("The number of control points along the curve to traverse");
   b.add_output<decl::Bool>("Is Valid Offset"_ustr)
-      .field_source_reference_all()
+      .structure_type(StructureType::Field)
+      .propagate_references()
       .description(
           "Whether the input control point plus the offset is a valid index of the "
           "original curve");
   b.add_output<decl::Int>("Point Index"_ustr)
-      .field_source_reference_all()
+      .structure_type(StructureType::Field)
+      .propagate_references()
       .description(
           "The index of the control point plus the offset within the entire "
           "curves data-block");
@@ -170,13 +172,15 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeOffsetPointInCurve", GEO_NODE_OFFSET_POINT_IN_CURVE);
+  geo_node_type_base(
+      &ntype, "GeometryNodeOffsetPointInCurve"_ustr, GEO_NODE_OFFSET_POINT_IN_CURVE);
   ntype.ui_name = "Offset Point in Curve";
   ntype.ui_description = "Offset a control point index within its curve";
   ntype.enum_name_legacy = "OFFSET_POINT_IN_CURVE";
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
+  ntype.default_width = bke::NodeWidth::_160;
   bke::node_register_type(ntype);
 }
 NOD_REGISTER_NODE(node_register)

@@ -2,9 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_string_utf8.h"
+#include "BLI_string_utf8.hh"
 
 #include "../geometry/node_geometry_util.hh"
+
+#include "NOD_geometry_nodes_list.hh"
+
 #include "node_function_util.hh"
 
 namespace blender::nodes::node_fn_split_string_cc {
@@ -43,14 +46,14 @@ static void node_geo_exec(GeoNodeExecParams params)
   const std::string separator = params.extract_input<std::string>("Separator"_ustr);
 
   Vector<std::string> list = split_string(str, separator);
-  params.set_output("List"_ustr, List::from_container(std::move(list)));
+  params.set_output("List"_ustr, List<std::string>::from_container(std::move(list)));
 }
 
 static void node_register()
 {
   static bke::bNodeType ntype;
 
-  fn_node_type_base(&ntype, "FunctionNodeSplitString");
+  fn_node_type_base(&ntype, "FunctionNodeSplitString"_ustr);
   ntype.ui_name = "Split String";
   ntype.ui_description = "Split a string into a list using a separator";
   ntype.nclass = NODE_CLASS_CONVERTER;

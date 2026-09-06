@@ -22,7 +22,7 @@ static void node_declare(NodeDeclarationBuilder &b)
           "For curves, point clouds, and Grease Pencil, take the radius attribute into account "
           "when computing the bounds.");
   b.add_output<decl::Geometry>("Bounding Box"_ustr)
-      .propagate_all_instance_attributes()
+      .propagate_all_geometry()
       .description("A cube mesh enclosing the input geometry");
   b.add_output<decl::Vector>("Min"_ustr);
   b.add_output<decl::Vector>("Max"_ustr);
@@ -81,7 +81,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeBoundBox", GEO_NODE_BOUNDING_BOX);
+  geo_node_type_base(&ntype, "GeometryNodeBoundBox"_ustr, GEO_NODE_BOUNDING_BOX);
   ntype.ui_name = "Bounding Box";
   ntype.ui_description =
       "Calculate the limits of a geometry's positions and generate a box mesh with those "

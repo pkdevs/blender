@@ -9,8 +9,8 @@
 
 #include "BKE_volume.hh"
 #include "BKE_volume_render.hh"
-#include "BLI_math_geom.h"
-#include "BLI_rand.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_rand_c.hh"
 #include "DNA_fluid_types.h"
 #include "DNA_modifier_types.h"
 
@@ -55,7 +55,7 @@ void VolumePass::object_sync_volume(Manager &manager,
 
   PassMain::Sub &sub_ps = ps_.sub("Volume Object SubPass");
 
-  const bool use_slice = (volume.display.axis_slice_method == AXIS_SLICE_SINGLE);
+  const bool use_slice = (volume.display.axis_slice_method == VOLUME_AXIS_SLICE_SINGLE);
 
   sub_ps.shader_set(
       ShaderCache::get().volume_get(false, volume.display.interpolation_method, false, use_slice));

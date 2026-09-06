@@ -32,7 +32,7 @@ static int gpu_shader_int(GPUMaterial *mat,
                           GPUNodeStack *out)
 {
   NodeInputInt *node_storage = static_cast<NodeInputInt *>(node->storage);
-  float integer = static_cast<float>(node_storage->integer);
+  float integer = float(node_storage->integer);
   return GPU_link(mat, "set_value", GPU_uniform(&integer), &out->link);
 }
 
@@ -62,7 +62,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  common_node_type_base(&ntype, "FunctionNodeInputInt", FN_NODE_INPUT_INT);
+  common_node_type_base(&ntype, "FunctionNodeInputInt"_ustr, FN_NODE_INPUT_INT);
   ntype.ui_name = "Integer";
   ntype.ui_description =
       "Provide an integer value that can be connected to other nodes in the tree";

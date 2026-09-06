@@ -23,14 +23,14 @@
 
 #include "BLT_translation.hh"
 
-#include "BLI_array_utils.h"
+#include "BLI_array_utils_c.hh"
 #include "BLI_bit_vector.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_action.hh"
@@ -76,9 +76,11 @@
 
 namespace blender {
 
-/* ******************* view3d space & buttons ************** */
+/* -------------------------------------------------------------------- */
+/** \name Transform Panel Types
+ * \{ */
+
 enum {
-  B_REDR = 2,
   B_TRANSFORM_PANEL_MEDIAN = 1008,
   B_TRANSFORM_PANEL_DIMS = 1009,
 };
@@ -120,8 +122,8 @@ struct CurvesDataPanelState {
   char cyclic;
 
   float fill_opacity;
-  int start_cap;
-  int end_cap;
+  int8_t start_cap;
+  int8_t end_cap;
   float softness;
   float u_scale;
   float aspect_ratio;
@@ -144,6 +146,8 @@ struct TransformProperties {
 };
 
 #define TRANSFORM_MEDIAN_ARRAY_LEN (sizeof(TransformMedian) / sizeof(float))
+
+/** \} */
 
 static TransformProperties *v3d_transform_props_ensure(View3D *v3d);
 
@@ -222,6 +226,10 @@ static void editmesh_partial_update_update_fn(bContext *C,
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Median Utilities
+ * \{ */
 
 /* Helper function to compute a median changed value,
  * when the value should be clamped in [0.0, 1.0].
@@ -307,6 +315,12 @@ static void apply_scale_factor_clamp(float *val,
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Properties
+ * \{ */
+
 static TransformProperties *v3d_transform_props_ensure(View3D *v3d)
 {
   if (v3d->runtime.properties_storage == nullptr) {
@@ -321,6 +335,12 @@ static TransformProperties *v3d_transform_props_ensure(View3D *v3d)
   }
   return static_cast<TransformProperties *>(v3d->runtime.properties_storage);
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Curves Selection Status
+ * \{ */
 
 struct CurvesPointSelectionStatus {
   TransformMedian_Curves median = {};
@@ -540,6 +560,10 @@ struct CurvesSelectionStatus {
   int resolution_max = 0;
 
   StatusValue<float> fill_opacity;
+  /* Use int for start_cap and end_cap, even though the underlying
+   * attribute is int8_t. The statusvalue is used to hold the
+   * summation of the value over all curves, so it needs the headroom.
+   */
   StatusValue<int> start_cap;
   StatusValue<int> end_cap;
   StatusValue<float> softness;
@@ -689,6 +713,12 @@ static CurvesSelectionStatus init_grease_pencil_selection_status(
   return status;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Edit Vertex Buttons
+ * \{ */
+
 /* is used for both read and write... */
 static void v3d_editvertex_buts(
     const bContext *C, ui::Layout *layout, View3D *v3d, Object *ob, float lim)
@@ -718,7 +748,8 @@ static void v3d_editvertex_buts(
         &bm->vdata, CD_PROP_FLOAT, "bevel_weight_vert");
     const int cd_vert_crease_offset = CustomData_get_offset_named(
         &bm->vdata, CD_PROP_FLOAT, "crease_vert");
-    const int cd_vert_skin_offset = CustomData_get_offset(&bm->vdata, CD_MVERT_SKIN);
+    const int cd_vert_skin_offset = CustomData_get_offset_named(
+        &bm->vdata, CD_PROP_FLOAT2, "skin_modifier_radius");
     const int cd_edge_bweight_offset = CustomData_get_offset_named(
         &bm->edata, CD_PROP_FLOAT, "bevel_weight_edge");
     const int cd_edge_crease_offset = CustomData_get_offset_named(
@@ -741,9 +772,9 @@ static void v3d_editvertex_buts(
           }
 
           if (has_skinradius) {
-            MVertSkin *vs = static_cast<MVertSkin *>(
+            const float2 *radius = static_cast<const float2 *>(
                 BM_ELEM_CD_GET_VOID_P(eve, cd_vert_skin_offset));
-            add_v2_v2(median->skin, vs->radius); /* Third val not used currently. */
+            add_v2_v2(median->skin, *radius);
           }
         }
       }
@@ -995,7 +1026,7 @@ static void v3d_editvertex_buts(
     block_align_begin(block);
 
     /* Should be no need to translate these. */
-    but = uiDefButF(block,
+    but = uiDefButV(block,
                     ui::ButtonType::Num,
                     IFACE_("X:"),
                     0,
@@ -1010,7 +1041,7 @@ static void v3d_editvertex_buts(
     button_number_step_size_set(but, 10);
     button_number_precision_set(but, RNA_TRANSLATION_PREC_DEFAULT);
     button_unit_type_set(but, PROP_UNIT_LENGTH);
-    but = uiDefButF(block,
+    but = uiDefButV(block,
                     ui::ButtonType::Num,
                     IFACE_("Y:"),
                     0,
@@ -1025,7 +1056,7 @@ static void v3d_editvertex_buts(
     button_number_step_size_set(but, 10);
     button_number_precision_set(but, RNA_TRANSLATION_PREC_DEFAULT);
     button_unit_type_set(but, PROP_UNIT_LENGTH);
-    but = uiDefButF(block,
+    but = uiDefButV(block,
                     ui::ButtonType::Num,
                     IFACE_("Z:"),
                     0,
@@ -1045,7 +1076,7 @@ static void v3d_editvertex_buts(
       float &weight = ELEM(ob->type, OB_CURVES, OB_GREASE_PENCIL) ?
                           tfp->ve_median.curves.nurbs_weight :
                           tfp->ve_median.curve.b_weight;
-      but = uiDefButF(block,
+      but = uiDefButV(block,
                       ui::ButtonType::Num,
                       IFACE_("W:"),
                       0,
@@ -1062,32 +1093,32 @@ static void v3d_editvertex_buts(
     }
 
     block_align_begin(block);
-    but = uiDefButBitS(block,
-                       ui::ButtonType::Toggle,
-                       V3D_GLOBAL_STATS,
-                       IFACE_("Global"),
-                       0,
-                       yi -= buth + but_margin,
-                       100,
-                       buth,
-                       &v3d->flag,
-                       0,
-                       0,
-                       TIP_("Displays global values"));
-    button_retval_set(but, B_REDR);
-    but = uiDefButBitS(block,
-                       ui::ButtonType::ToggleN,
-                       V3D_GLOBAL_STATS,
-                       IFACE_("Local"),
-                       100,
-                       yi,
-                       100,
-                       buth,
-                       &v3d->flag,
-                       0,
-                       0,
-                       TIP_("Displays local values"));
-    button_retval_set(but, B_REDR);
+    but = uiDefButBit(block,
+                      ui::ButtonType::Toggle,
+                      V3D_GLOBAL_STATS,
+                      IFACE_("Global"),
+                      0,
+                      yi -= buth + but_margin,
+                      100,
+                      buth,
+                      &v3d->flag,
+                      0,
+                      0,
+                      TIP_("Displays global values"));
+    ui::button_func_set(but, [](bContext &C) { ED_area_tag_redraw(CTX_wm_area(&C)); });
+    but = uiDefButBit(block,
+                      ui::ButtonType::ToggleN,
+                      V3D_GLOBAL_STATS,
+                      IFACE_("Local"),
+                      100,
+                      yi,
+                      100,
+                      buth,
+                      &v3d->flag,
+                      0,
+                      0,
+                      TIP_("Displays local values"));
+    ui::button_func_set(but, [](bContext &C) { ED_area_tag_redraw(CTX_wm_area(&C)); });
     block_align_end(block);
 
     /* Meshes... */
@@ -1106,7 +1137,7 @@ static void v3d_editvertex_buts(
                  0.0,
                  "");
         /* customdata layer added on demand */
-        but = uiDefButF(block,
+        but = uiDefButV(block,
                         ui::ButtonType::Num,
                         tot == 1 ? IFACE_("Bevel Weight:") : IFACE_("Mean Bevel Weight:"),
                         0,
@@ -1121,7 +1152,7 @@ static void v3d_editvertex_buts(
         button_number_step_size_set(but, 1);
         button_number_precision_set(but, 2);
         /* customdata layer added on demand */
-        but = uiDefButF(block,
+        but = uiDefButV(block,
                         ui::ButtonType::Num,
                         tot == 1 ? IFACE_("Vertex Crease:") : IFACE_("Mean Vertex Crease:"),
                         0,
@@ -1138,7 +1169,7 @@ static void v3d_editvertex_buts(
       }
       if (has_skinradius) {
         block_align_begin(block);
-        but = uiDefButF(block,
+        but = uiDefButV(block,
                         ui::ButtonType::Num,
                         tot == 1 ? IFACE_("Radius X:") : IFACE_("Mean Radius X:"),
                         0,
@@ -1152,7 +1183,7 @@ static void v3d_editvertex_buts(
         button_retval_set(but, B_TRANSFORM_PANEL_MEDIAN);
         button_number_step_size_set(but, 1);
         button_number_precision_set(but, 3);
-        but = uiDefButF(block,
+        but = uiDefButV(block,
                         ui::ButtonType::Num,
                         tot == 1 ? IFACE_("Radius Y:") : IFACE_("Mean Radius Y:"),
                         0,
@@ -1181,7 +1212,7 @@ static void v3d_editvertex_buts(
                  0.0,
                  "");
         /* customdata layer added on demand */
-        but = uiDefButF(block,
+        but = uiDefButV(block,
                         ui::ButtonType::Num,
                         totedgedata == 1 ? IFACE_("Bevel Weight:") : IFACE_("Mean Bevel Weight:"),
                         0,
@@ -1196,7 +1227,7 @@ static void v3d_editvertex_buts(
         button_number_step_size_set(but, 1);
         button_number_precision_set(but, 2);
         /* customdata layer added on demand */
-        but = uiDefButF(block,
+        but = uiDefButV(block,
                         ui::ButtonType::Num,
                         totedgedata == 1 ? IFACE_("Crease:") : IFACE_("Mean Crease:"),
                         0,
@@ -1217,7 +1248,7 @@ static void v3d_editvertex_buts(
       const bool is_single = total_curve_points_data == 1;
       TransformMedian_Curves *ve_median = &tfp->ve_median.curves;
 
-      but = uiDefButF(block,
+      but = uiDefButV(block,
                       ui::ButtonType::Num,
                       is_single ? IFACE_("Radius:") : IFACE_("Mean Radius:"),
                       0,
@@ -1233,7 +1264,7 @@ static void v3d_editvertex_buts(
       button_retval_set(but, B_TRANSFORM_PANEL_MEDIAN);
       button_number_step_size_set(but, 1);
       button_number_precision_set(but, 3);
-      but = uiDefButF(block,
+      but = uiDefButV(block,
                       ui::ButtonType::Num,
                       is_single ? IFACE_("Tilt:") : IFACE_("Mean Tilt:"),
                       0,
@@ -1301,7 +1332,7 @@ static void v3d_editvertex_buts(
         button_number_precision_set(but, 3);
       }
       else if (totcurvedata > 1) {
-        but = uiDefButF(block,
+        but = uiDefButV(block,
                         ui::ButtonType::Num,
                         IFACE_("Mean Weight:"),
                         0,
@@ -1315,7 +1346,7 @@ static void v3d_editvertex_buts(
         button_retval_set(but, B_TRANSFORM_PANEL_MEDIAN);
         button_number_step_size_set(but, 1);
         button_number_precision_set(but, 3);
-        but = uiDefButF(block,
+        but = uiDefButV(block,
                         ui::ButtonType::Num,
                         IFACE_("Mean Radius:"),
                         0,
@@ -1329,7 +1360,7 @@ static void v3d_editvertex_buts(
         button_retval_set(but, B_TRANSFORM_PANEL_MEDIAN);
         button_number_step_size_set(but, 1);
         button_number_precision_set(but, 3);
-        but = uiDefButF(block,
+        but = uiDefButV(block,
                         ui::ButtonType::Num,
                         IFACE_("Mean Tilt:"),
                         0,
@@ -1367,7 +1398,7 @@ static void v3d_editvertex_buts(
         button_number_precision_set(but, 3);
       }
       else if (totlattdata > 1) {
-        but = uiDefButF(block,
+        but = uiDefButV(block,
                         ui::ButtonType::Num,
                         IFACE_("Mean Weight:"),
                         0,
@@ -1398,7 +1429,15 @@ static void v3d_editvertex_buts(
       }
     }
   }
-  else { /* apply */
+  else {
+    /* Getting here (via #do_view3d_region_buttons()) if the above buttons return
+     * B_TRANSFORM_PANEL_MEDIAN, so either when multiple elements are selected or no RNA buttons
+     * are used. Either way, we are now setting values directly (not via RNA buttons) and thus lack
+     * automatic RNA updates. We could run the actual RNA updates (creating a PointerRNA, finding
+     * the specific PropertyRNA and calling #RNA_property_update()), but for one, this creates a
+     * lot of noisy code and secondly, it also would not work for bmesh (since that has no RNA
+     * updates). Instead, just run the corresponding notifiers and dependency graph tagging (see
+     * for each object type below). */
     memcpy(&ve_median_basis, &tfp->ve_median, sizeof(tfp->ve_median));
 
     if (v3d->flag & V3D_GLOBAL_STATS) {
@@ -1468,7 +1507,8 @@ static void v3d_editvertex_buts(
 
         for (int i = 0; i < 2; i++) {
           if (median->skin[i]) {
-            cd_vert_skin_offset = CustomData_get_offset(&bm->vdata, CD_MVERT_SKIN);
+            cd_vert_skin_offset = CustomData_get_offset_named(
+                &bm->vdata, CD_PROP_FLOAT2, "skin_modifier_radius");
             BLI_assert(cd_vert_skin_offset != -1);
 
             if (ve_median->skin[i] != median->skin[i]) {
@@ -1496,14 +1536,14 @@ static void v3d_editvertex_buts(
             }
 
             if (cd_vert_skin_offset != -1) {
-              MVertSkin *vs = static_cast<MVertSkin *>(
+              float2 *radius = static_cast<float2 *>(
                   BM_ELEM_CD_GET_VOID_P(eve, cd_vert_skin_offset));
 
               /* That one is not clamped to [0.0, 1.0]. */
               for (int i = 0; i < 2; i++) {
                 if (median->skin[i] != 0.0f) {
                   apply_scale_factor(
-                      &vs->radius[i], tot, ve_median->skin[i], median->skin[i], scale_skin[i]);
+                      &(*radius)[i], tot, ve_median->skin[i], median->skin[i], scale_skin[i]);
                 }
               }
             }
@@ -1557,6 +1597,8 @@ static void v3d_editvertex_buts(
           }
         }
       }
+      /* We basically want the same update as in #EDBM_update(), so keep in sync. */
+      WM_main_add_notifier(NC_GEOM | ND_DATA, &mesh->id);
     }
     else if (ELEM(ob->type, OB_CURVES_LEGACY, OB_SURF) &&
              (apply_vcos || median_basis.curve.b_weight || median_basis.curve.weight ||
@@ -1634,6 +1676,8 @@ static void v3d_editvertex_buts(
         if ((nu.type == CU_BEZIER) && apply_vcos) {
           BKE_nurb_handles_test(&nu, NURB_HANDLE_TEST_EACH, false); /* test for bezier too */
         }
+        /* We basically want the same update as in #rna_Curve_update_data_id(), so keep in sync. */
+        WM_main_add_notifier(NC_GEOM | ND_DATA, &cu->id);
       }
     }
     else if ((ob->type == OB_LATTICE) && (apply_vcos || median_basis.lattice.weight)) {
@@ -1657,6 +1701,8 @@ static void v3d_editvertex_buts(
         }
         bp++;
       }
+      /* We basically want the same update as in #rna_Lattice_update_data(), so keep in sync. */
+      WM_main_add_notifier(NC_GEOM | ND_DATA, &lt->id);
     }
     else if (ob->type == OB_GREASE_PENCIL &&
              (apply_vcos || median_basis.curves.nurbs_weight || median_basis.curves.radius ||
@@ -1676,6 +1722,8 @@ static void v3d_editvertex_buts(
           info.drawing.tag_positions_changed();
         }
       });
+      /* We basically want the same update as in #rna_grease_pencil_update(), so keep in sync. */
+      WM_main_add_notifier(NC_GPENCIL | NA_EDITED, &grease_pencil.id);
     }
     else if (ob->type == OB_CURVES && (apply_vcos || median_basis.curves.nurbs_weight ||
                                        median_basis.curves.radius || median_basis.curves.tilt))
@@ -1688,13 +1736,23 @@ static void v3d_editvertex_buts(
       {
         curves.tag_positions_changed();
       }
+      /* We basically want the same update as in #rna_Curves_update_data(), so keep in sync. */
+      WM_main_add_notifier(NC_GEOM | ND_DATA, &curves_id.id);
     }
+
+    DEG_id_tag_update(ob->data, ID_RECALC_GEOMETRY);
   }
 
   // ED_undo_push(C, "Transform properties");
 }
 
 #undef TRANSFORM_MEDIAN_ARRAY_LEN
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Object Dimension Buttons
+ * \{ */
 
 static void v3d_object_dimension_buts(bContext *C, ui::Layout *layout, View3D *v3d, Object *ob)
 {
@@ -1734,7 +1792,7 @@ static void v3d_object_dimension_buts(bContext *C, ui::Layout *layout, View3D *v
     for (int i = 0; i < 3; i++) {
       ui::Button *but;
       const char text[3] = {char('X' + i), ':', '\0'};
-      but = uiDefButF(block,
+      but = uiDefButV(block,
                       ui::ButtonType::Num,
                       text,
                       0,
@@ -1770,6 +1828,12 @@ static void v3d_object_dimension_buts(bContext *C, ui::Layout *layout, View3D *v
     RNA_property_update(C, &obptr, prop);
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Vertex Group Panel
+ * \{ */
 
 #define B_VGRP_PNL_EDIT_SINGLE 8 /* or greater */
 
@@ -1865,7 +1929,7 @@ static void view3d_panel_vgroup(const bContext *C, Panel *panel)
     vgroup_validmap = BKE_object_defgroup_subset_from_select_type(
         ob, subset_type, &vgroup_tot, &subset_count);
     const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(ob);
-    const int vgroup_num = BLI_listbase_count(defbase);
+    const int vgroup_num = defbase->count();
     tfp->vertex_weights.resize(vgroup_num);
 
     for (i = 0, dg = static_cast<bDeformGroup *>(defbase->first); dg; i++, dg = dg->next) {
@@ -1906,7 +1970,7 @@ static void view3d_panel_vgroup(const bContext *C, Panel *panel)
           /* To be reworked still */
           float &vertex_weight = tfp->vertex_weights[i];
           vertex_weight = dw->weight;
-          but = uiDefButF(block,
+          but = uiDefButV(block,
                           ui::ButtonType::Num,
                           "",
                           xco,
@@ -1986,6 +2050,12 @@ static void view3d_panel_vgroup(const bContext *C, Panel *panel)
     }
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Buttons
+ * \{ */
 
 static void v3d_transform_butsR(ui::Layout &layout, PointerRNA *ptr)
 {
@@ -2175,6 +2245,12 @@ static void v3d_editmetaball_buts(ui::Layout &layout, Object *ob)
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Transform Panel
+ * \{ */
+
 static void do_view3d_region_buttons(bContext *C, void * /*index*/, int event)
 {
   const Main *bmain = CTX_data_main(C);
@@ -2185,15 +2261,9 @@ static void do_view3d_region_buttons(bContext *C, void * /*index*/, int event)
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
   switch (event) {
-
-    case B_REDR:
-      ED_area_tag_redraw(CTX_wm_area(C));
-      return; /* no notifier! */
-
     case B_TRANSFORM_PANEL_MEDIAN:
       if (ob) {
         v3d_editvertex_buts(C, nullptr, v3d, ob, 1.0);
-        DEG_id_tag_update(ob->data, ID_RECALC_GEOMETRY);
       }
       break;
     case B_TRANSFORM_PANEL_DIMS:
@@ -2259,6 +2329,12 @@ static void view3d_panel_transform(const bContext *C, Panel *panel)
   }
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Curve Data Panel
+ * \{ */
+
 static bool view3d_panel_curve_data_poll(const bContext *C, PanelType * /*pt*/)
 {
   const Main *bmain = CTX_data_main(C);
@@ -2319,7 +2395,7 @@ static void apply_to_active_object(
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, ob->data);
 }
 
-static void handle_curves_cyclic(bContext *C, void *, void *)
+static void handle_curves_cyclic(bContext *C, void * /*arg1*/, void * /*arg2*/)
 {
   apply_to_active_object(C,
                          [](const CurvesDataPanelState &modified_state,
@@ -2367,7 +2443,7 @@ static void update_custom_knots(const OffsetIndices<int> &src_custom_knots_by_cu
   }
 }
 
-static void handle_curves_knot_mode(bContext *C, void *, void *)
+static void handle_curves_knot_mode(bContext *C, void * /*arg1*/, void * /*arg2*/)
 {
   apply_to_active_object(
       C,
@@ -2408,7 +2484,7 @@ static void handle_curves_knot_mode(bContext *C, void *, void *)
       });
 }
 
-static void handle_curves_order(bContext *C, void *, void *)
+static void handle_curves_order(bContext *C, void * /*arg1*/, void * /*arg2*/)
 {
   apply_to_active_object(
       C,
@@ -2455,7 +2531,7 @@ static void handle_curves_order(bContext *C, void *, void *)
       });
 }
 
-static void handle_curves_resolution(bContext *C, void *, void *)
+static void handle_curves_resolution(bContext *C, void * /*arg1*/, void * /*arg2*/)
 {
   apply_to_active_object(C,
                          [](const CurvesDataPanelState &modified_state,
@@ -2467,7 +2543,7 @@ static void handle_curves_resolution(bContext *C, void *, void *)
                          });
 }
 
-static void handle_curves_aspect_ratio(bContext *C, void *, void *)
+static void handle_curves_aspect_ratio(bContext *C, void * /*arg1*/, void * /*arg2*/)
 {
   using namespace blender;
 
@@ -2487,7 +2563,7 @@ static void handle_curves_aspect_ratio(bContext *C, void *, void *)
       });
 }
 
-static void handle_curves_softness(bContext *C, void *, void *)
+static void handle_curves_softness(bContext *C, void * /*arg1*/, void * /*arg2*/)
 {
   using namespace blender;
 
@@ -2504,7 +2580,7 @@ static void handle_curves_softness(bContext *C, void *, void *)
       });
 }
 
-static void handle_curves_u_scale(bContext *C, void *, void *)
+static void handle_curves_u_scale(bContext *C, void * /*arg1*/, void * /*arg2*/)
 {
   using namespace blender;
 
@@ -2523,7 +2599,7 @@ static void handle_curves_u_scale(bContext *C, void *, void *)
       });
 }
 
-static void handle_curves_fill_opacity(bContext *C, void *, void *)
+static void handle_curves_fill_opacity(bContext *C, void * /*arg1*/, void * /*arg2*/)
 {
   using namespace blender;
 
@@ -2533,17 +2609,17 @@ static void handle_curves_fill_opacity(bContext *C, void *, void *)
          const IndexMask &selection,
          bke::CurvesGeometry &curves) {
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-        bke::SpanAttributeWriter<float> fill_opacity =
-            attributes.lookup_or_add_for_write_span<float>(
-                "fill_opacity",
-                bke::AttrDomain::Curve,
-                bke::AttributeInitVArray(VArray<float>::from_single(1.0f, curves.curves_num())));
-        index_mask::masked_fill(fill_opacity.span, modified_state.fill_opacity, selection);
-        fill_opacity.finish();
+        if (bke::SpanAttributeWriter<float> fill_opacity =
+                attributes.lookup_or_add_for_write_span<float>(
+                    "fill_opacity", bke::AttrDomain::Curve, bke::AttributeInitValue(1.0f)))
+        {
+          index_mask::masked_fill(fill_opacity.span, modified_state.fill_opacity, selection);
+          fill_opacity.finish();
+        }
       });
 }
 
-static void handle_curves_end_cap(bContext *C, void *, void *)
+static void handle_curves_end_cap(bContext *C, void * /*arg1*/, void * /*arg2*/)
 {
   using namespace blender;
 
@@ -2553,17 +2629,19 @@ static void handle_curves_end_cap(bContext *C, void *, void *)
          const IndexMask &selection,
          bke::CurvesGeometry &curves) {
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-        bke::SpanAttributeWriter<int> end_cap = attributes.lookup_or_add_for_write_span<int>(
+        bke::SpanAttributeWriter<int8_t> end_cap = attributes.lookup_or_add_for_write_span<int8_t>(
             "end_cap",
             bke::AttrDomain::Curve,
             bke::AttributeInitVArray(
-                VArray<int>::from_single(GP_STROKE_CAP_TYPE_ROUND, curves.curves_num())));
-        index_mask::masked_fill(end_cap.span, modified_state.end_cap, selection);
-        end_cap.finish();
+                VArray<int8_t>::from_single(GP_STROKE_CAP_TYPE_ROUND, curves.curves_num())));
+        if (end_cap) {
+          index_mask::masked_fill(end_cap.span, modified_state.end_cap, selection);
+          end_cap.finish();
+        }
       });
 }
 
-static void handle_curves_start_cap(bContext *C, void *, void *)
+static void handle_curves_start_cap(bContext *C, void * /*arg1*/, void * /*arg2*/)
 {
   using namespace blender;
 
@@ -2573,13 +2651,16 @@ static void handle_curves_start_cap(bContext *C, void *, void *)
          const IndexMask &selection,
          bke::CurvesGeometry &curves) {
         bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
-        bke::SpanAttributeWriter<int> start_cap = attributes.lookup_or_add_for_write_span<int>(
-            "start_cap",
-            bke::AttrDomain::Curve,
-            bke::AttributeInitVArray(
-                VArray<int>::from_single(GP_STROKE_CAP_TYPE_ROUND, curves.curves_num())));
-        index_mask::masked_fill(start_cap.span, modified_state.start_cap, selection);
-        start_cap.finish();
+        bke::SpanAttributeWriter<int8_t> start_cap =
+            attributes.lookup_or_add_for_write_span<int8_t>(
+                "start_cap",
+                bke::AttrDomain::Curve,
+                bke::AttributeInitVArray(
+                    VArray<int8_t>::from_single(GP_STROKE_CAP_TYPE_ROUND, curves.curves_num())));
+        if (start_cap) {
+          index_mask::masked_fill(start_cap.span, modified_state.start_cap, selection);
+          start_cap.finish();
+        }
       });
 }
 
@@ -2618,17 +2699,18 @@ static void knot_modes_menu(bContext * /*C*/, ui::Layout *layout, void *knot_mod
   layout->column(false);
 
   for (const EnumPropertyItem &item : enum_curve_knot_mode_items) {
-    uiDefButI(block,
-              ui::ButtonType::ButMenu,
-              CTX_IFACE_(BLT_I18NCONTEXT_ID_GPENCIL, item.name),
-              0,
-              0,
-              UI_UNIT_X * 5,
-              UI_UNIT_Y,
-              reinterpret_cast<int *>(knot_mode_p),
-              item.value,
-              0.0,
-              "");
+    ui::Button *but = uiDefButV(block,
+                                ui::ButtonType::ButMenu,
+                                CTX_IFACE_(BLT_I18NCONTEXT_ID_GPENCIL, item.name),
+                                0,
+                                0,
+                                UI_UNIT_X * 5,
+                                UI_UNIT_Y,
+                                reinterpret_cast<int *>(knot_mode_p),
+                                0.0,
+                                0.0,
+                                "");
+    button_enum_prop_value_set(but, item.value);
   }
 }
 
@@ -2644,17 +2726,18 @@ static void grease_pencil_cap_menu(bContext * /*C*/, ui::Layout *layout, void *c
   layout->column(false);
 
   for (const EnumPropertyItem &item : enum_grease_pencil_cap_items) {
-    uiDefButI(block,
-              ui::ButtonType::ButMenu,
-              CTX_IFACE_(BLT_I18NCONTEXT_ID_GPENCIL, item.name),
-              0,
-              0,
-              UI_UNIT_X * 5,
-              UI_UNIT_Y,
-              reinterpret_cast<int *>(cap_type_p),
-              item.value,
-              0.0,
-              "");
+    ui::Button *but = uiDefButV(block,
+                                ui::ButtonType::ButMenu,
+                                CTX_IFACE_(BLT_I18NCONTEXT_ID_GPENCIL, item.name),
+                                0,
+                                0,
+                                UI_UNIT_X * 5,
+                                UI_UNIT_Y,
+                                reinterpret_cast<int *>(cap_type_p),
+                                0.0,
+                                0.0,
+                                "");
+    button_enum_prop_value_set(but, item.value);
   }
 }
 
@@ -2765,7 +2848,7 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
       IFACE_("Cyclic"),
       status.cyclic_count == 0 || status.cyclic_count == status.curve_count,
       [&]() {
-        ui::Button *but = uiDefButC(
+        ui::Button *but = uiDefButV(
             block, ui::ButtonType::Checkbox, "", 0, 0, butw, buth, &modified.cyclic, 0, 1, "");
         button_func_set(but, handle_curves_cyclic, nullptr, nullptr);
         return but;
@@ -2794,7 +2877,7 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
 
     add_labeled_field(
         IFACE_("Order"), status.order_max * status.nurbs_count == status.order_sum, [&]() {
-          ui::Button *but = uiDefButI(
+          ui::Button *but = uiDefButV(
               block, ui::ButtonType::Num, "", 0, 0, butw, buth, &modified.order, 2, 6, "");
           button_number_step_size_set(but, 1);
           button_number_precision_set(but, -1);
@@ -2808,7 +2891,7 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
         IFACE_("Resolution"),
         status.resolution_max * status.curve_count == status.resolution_sum,
         [&]() {
-          ui::Button *but = uiDefButI(
+          ui::Button *but = uiDefButV(
               block, ui::ButtonType::Num, "", 0, 0, butw, buth, &modified.resolution, 1, 64, "");
           button_number_step_size_set(but, 1);
           button_number_precision_set(but, -1);
@@ -2822,7 +2905,7 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
                       is_equal(status.fill_opacity.value_max * status.curve_count,
                                status.fill_opacity.value_sum),
                       [&]() {
-                        ui::Button *but = uiDefButF(block,
+                        ui::Button *but = uiDefButV(block,
                                                     ui::ButtonType::Num,
                                                     "",
                                                     0,
@@ -2882,7 +2965,7 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
         IFACE_("Softness"),
         is_equal(status.softness.value_max * status.curve_count, status.softness.value_sum),
         [&]() {
-          ui::Button *but = uiDefButF(block,
+          ui::Button *but = uiDefButV(block,
                                       ui::ButtonType::Num,
                                       "",
                                       0,
@@ -2903,7 +2986,7 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
         IFACE_("U Scale"),
         is_equal(status.u_scale.value_max * status.curve_count, status.u_scale.value_sum),
         [&]() {
-          ui::Button *but = uiDefButF(block,
+          ui::Button *but = uiDefButV(block,
                                       ui::ButtonType::Num,
                                       "",
                                       0,
@@ -2924,7 +3007,7 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
                       is_equal(status.aspect_ratio.value_max * status.curve_count,
                                status.aspect_ratio.value_sum),
                       [&]() {
-                        ui::Button *but = uiDefButF(block,
+                        ui::Button *but = uiDefButV(block,
                                                     ui::ButtonType::Num,
                                                     "",
                                                     0,
@@ -2942,6 +3025,12 @@ static void view3d_panel_curve_data(const bContext *C, Panel *panel)
                       });
   }
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Registration
+ * \{ */
 
 void view3d_buttons_register(ARegionType *art)
 {
@@ -2976,6 +3065,12 @@ void view3d_buttons_register(ARegionType *art)
   BLI_addtail(&art->paneltypes, pt);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Object Mode Pie or Toggle Operator
+ * \{ */
+
 static wmOperatorStatus view3d_object_mode_menu_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_active_object(C);
@@ -3003,5 +3098,7 @@ void VIEW3D_OT_object_mode_pie_or_toggle(wmOperatorType *ot)
   /* flags */
   ot->flag = 0;
 }
+
+/** \} */
 
 }  // namespace blender

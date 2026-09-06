@@ -18,8 +18,11 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Mesh"_ustr)
       .supported_type(GeometryComponent::Type::Mesh)
       .description("Mesh whose edges to split");
-  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
+  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -51,7 +54,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSplitEdges", GEO_NODE_SPLIT_EDGES);
+  geo_node_type_base(&ntype, "GeometryNodeSplitEdges"_ustr, GEO_NODE_SPLIT_EDGES);
   ntype.ui_name = "Split Edges";
   ntype.ui_description = "Duplicate mesh edges and break connections with the surrounding faces";
   ntype.enum_name_legacy = "SPLIT_EDGES";

@@ -19,10 +19,15 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Instances"_ustr)
       .only_instances()
       .description("Instances to translate individually");
-  b.add_output<decl::Geometry>("Instances"_ustr).propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
-  b.add_input<decl::Vector>("Translation"_ustr).subtype(PROP_TRANSLATION).field_on_all();
-  b.add_input<decl::Bool>("Local Space"_ustr).default_value(true).field_on_all();
+  b.add_output<decl::Geometry>("Instances"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
+  b.add_input<decl::Vector>("Translation"_ustr)
+      .subtype(PROP_TRANSLATION)
+      .evaluated_geometry_field();
+  b.add_input<decl::Bool>("Local Space"_ustr).default_value(true).evaluated_geometry_field();
 }
 
 static void translate_instances(GeoNodeExecParams &params, bke::Instances &instances)
@@ -65,7 +70,7 @@ static void register_node()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeTranslateInstances", GEO_NODE_TRANSLATE_INSTANCES);
+  geo_node_type_base(&ntype, "GeometryNodeTranslateInstances"_ustr, GEO_NODE_TRANSLATE_INSTANCES);
   ntype.ui_name = "Translate Instances";
   ntype.ui_description = "Move top-level geometry instances in local or global space";
   ntype.enum_name_legacy = "TRANSLATE_INSTANCES";

@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_geom.h"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -128,11 +128,10 @@ class CornerPinOperation : public NodeOperation {
       }
 
       if (output_mask.should_compute()) {
-        output_mask.steal_data(anti_aliased_plane_mask);
+        output_mask.share_data(anti_aliased_plane_mask);
       }
-      else {
-        anti_aliased_plane_mask.release();
-      }
+
+      anti_aliased_plane_mask.release();
     }
     else {
       if (output_image.should_compute()) {
@@ -455,7 +454,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeCornerPin", CMP_NODE_CORNERPIN);
+  cmp_node_type_base(&ntype, "CompositorNodeCornerPin"_ustr, CMP_NODE_CORNERPIN);
   ntype.ui_name = "Corner Pin";
   ntype.ui_description = "Plane warp transformation using explicit corner values";
   ntype.enum_name_legacy = "CORNERPIN";

@@ -20,10 +20,10 @@
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
 
-#include "BLI_fileops.h"
-#include "BLI_math_rotation.h"
+#include "BLI_fileops.hh"
+#include "BLI_math_rotation_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "BLF_api.hh"
 
@@ -606,7 +606,8 @@ void BLF_draw(int fontid, const char *str, const size_t str_len, ResultBLF *r_in
   }
 }
 
-int BLF_draw_mono(int fontid, const char *str, const size_t str_len, int cwidth, int tab_columns)
+int BLF_draw_mono(
+    int fontid, const char *str, const size_t str_len, int char_width, int tab_columns)
 {
   if (str_len == 0 || str[0] == '\0') {
     return 0;
@@ -617,7 +618,7 @@ int BLF_draw_mono(int fontid, const char *str, const size_t str_len, int cwidth,
 
   if (font) {
     blf_draw_gpu__start(font);
-    columns = blf_font_draw_mono(font, str, str_len, cwidth, tab_columns);
+    columns = blf_font_draw_mono(font, str, str_len, char_width, tab_columns);
     blf_draw_gpu__end(font);
   }
 
@@ -694,6 +695,18 @@ void BLF_boundbox_foreach_glyph(
     else {
       blf_font_boundbox_foreach_glyph(font, str, str_len, user_fn, user_data);
     }
+  }
+}
+
+void BLF_info_foreach_glyph(
+    int fontid,
+    const char *str,
+    size_t str_len,
+    FunctionRef<void(int index, size_t byte_offset, int byte_len, int advance_x)> callback)
+{
+  FontBLF *font = blf_get(fontid);
+  if (font != nullptr) {
+    blf_font_info_foreach_glyph(font, str, str_len, callback);
   }
 }
 
@@ -973,8 +986,16 @@ void BLF_shadow_offset(int fontid, int x, int y)
   }
 }
 
-void BLF_buffer(int fontid, float *fbuf, uchar *cbuf, int w, int h, const ColorSpace *colorspace)
+void BLF_buffer(int fontid,
+                float *fbuf,
+                uchar *cbuf,
+                int w,
+                int h,
+                int channel_count,
+                const ColorSpace *colorspace)
 {
+  BLI_assert(channel_count == 1 || channel_count == 4);
+
   FontBLF *font = blf_get(fontid);
 
   if (font) {
@@ -982,6 +1003,7 @@ void BLF_buffer(int fontid, float *fbuf, uchar *cbuf, int w, int h, const ColorS
     font->buf_info.cbuf = cbuf;
     font->buf_info.dims[0] = w;
     font->buf_info.dims[1] = h;
+    font->buf_info.channel_count = channel_count;
     font->buf_info.colorspace = colorspace;
   }
 }
@@ -1168,13 +1190,15 @@ bool BLF_character_to_curves(int fontid,
                              ListBaseT<Nurb> *nurbsbase,
                              const float scale,
                              bool use_fallback,
-                             float *r_advance)
+                             float *r_advance,
+                             rctf *r_bounds)
 {
   FontBLF *font = blf_get(fontid);
   if (!font) {
     return false;
   }
-  return blf_character_to_curves(font, unicode, nurbsbase, scale, use_fallback, r_advance);
+  return blf_character_to_curves(
+      font, unicode, nurbsbase, scale, use_fallback, r_advance, r_bounds);
 }
 
 #ifndef NDEBUG

@@ -43,11 +43,13 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("The Y position of the lower left corner of the crop region");
   b.add_input<decl::Int>("Width"_ustr)
       .default_value(1920)
+      .subtype(PROP_PIXEL)
       .min(1)
 
       .description("The width of the crop region");
   b.add_input<decl::Int>("Height"_ustr)
       .default_value(1080)
+      .subtype(PROP_PIXEL)
       .min(1)
 
       .description("The height of the crop region");
@@ -243,7 +245,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeCrop", CMP_NODE_CROP);
+  cmp_node_type_base(&ntype, "CompositorNodeCrop"_ustr, CMP_NODE_CROP);
   ntype.ui_name = "Crop";
   ntype.ui_description =
       "Crops image to a smaller region, either making the cropped area transparent or resizing "

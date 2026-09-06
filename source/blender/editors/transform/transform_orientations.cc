@@ -22,14 +22,14 @@
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_string_utf8.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_action.hh"
 #include "BKE_armature.hh"
@@ -62,7 +62,7 @@ void BIF_clearTransformOrientation(bContext *C)
   Scene *scene = CTX_data_scene(C);
   ListBaseT<TransformOrientation> *transform_orientations = &scene->transform_spaces;
 
-  BLI_freelistN(transform_orientations);
+  transform_orientations->free_no_destruct();
 
   for (int i = 0; i < ARRAY_SIZE(scene->orientation_slots); i++) {
     TransformOrientationSlot *orient_slot = &scene->orientation_slots[i];
@@ -246,7 +246,8 @@ static bool test_rotmode_euler(short rotmode)
 }
 
 /**
- * Could move into BLI_math_rotation.h however this is only useful for display/editing purposes.
+ * Could move into BLI_math_rotation_c.hh however this is only useful for display/editing
+ * purposes.
  */
 static void axis_angle_to_gimbal_axis(float gmat[3][3], const float axis[3], const float angle)
 {
@@ -291,14 +292,15 @@ bool gimbal_axis_pose(Object *ob, const bPoseChannel *pchan, float gmat[3][3])
   }
 
   /* Apply bone transformation. */
-  mul_m3_m3m3(tmat, pchan->bone->bone_mat, mat);
+  const Bone *pchan_bone = pchan->bone_get(*ob);
+  mul_m3_m3m3(tmat, pchan_bone->bone_mat, mat);
 
   if (pchan->parent) {
     float parent_mat[3][3];
 
     copy_m3_m4(parent_mat,
-               (pchan->bone->flag & BONE_HINGE) ? pchan->parent->bone->arm_mat :
-                                                  pchan->parent->pose_mat);
+               (pchan_bone->flag & BONE_HINGE) ? pchan_bone->parent->arm_mat :
+                                                 pchan->parent->pose_mat);
     mul_m3_m3m3(mat, parent_mat, tmat);
 
     /* Needed if object transformation isn't identity. */
@@ -412,7 +414,7 @@ bool createSpaceNormalTangent(float mat[3][3], const float normal[3], const floa
   BLI_ASSERT_UNIT_V3(normal);
   BLI_ASSERT_UNIT_V3(tangent);
 
-  if (UNLIKELY(is_zero_v3(normal))) {
+  if (is_zero_v3(normal)) [[unlikely]] {
     /* Error return. */
     return false;
   }
@@ -422,12 +424,12 @@ bool createSpaceNormalTangent(float mat[3][3], const float normal[3], const floa
   negate_v3_v3(mat[1], tangent);
 
   /* Preempt zero length tangent from causing trouble. */
-  if (UNLIKELY(is_zero_v3(mat[1]))) {
+  if (is_zero_v3(mat[1])) [[unlikely]] {
     mat[1][2] = 1.0f;
   }
 
   cross_v3_v3v3(mat[0], mat[2], mat[1]);
-  if (UNLIKELY(normalize_v3(mat[0]) == 0.0f)) {
+  if (normalize_v3(mat[0]) == 0.0f) [[unlikely]] {
     /* Error return from co-linear normal & tangent. */
     return false;
   }
@@ -435,7 +437,7 @@ bool createSpaceNormalTangent(float mat[3][3], const float normal[3], const floa
   /* Make the tangent orthogonal. */
   cross_v3_v3v3(mat[1], mat[2], mat[0]);
 
-  if (UNLIKELY(normalize_v3(mat[1]) == 0.0f)) {
+  if (normalize_v3(mat[1]) == 0.0f) [[unlikely]] {
     /* Error return as it's possible making the tangent orthogonal to the normal
      * causes it to be zero length. */
     return false;
@@ -561,7 +563,7 @@ int BIF_countTransformOrientation(const bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
   ListBaseT<TransformOrientation> *transform_orientations = &scene->transform_spaces;
-  return BLI_listbase_count(transform_orientations);
+  return transform_orientations->count();
 }
 
 void applyTransformOrientation(const TransformOrientation *ts, float r_mat[3][3], char r_name[64])
@@ -572,10 +574,10 @@ void applyTransformOrientation(const TransformOrientation *ts, float r_mat[3][3]
   copy_m3_m3(r_mat, ts->mat);
 }
 
-static int bone_children_clear_transflag(bPose &pose, bPoseChannel &pose_bone)
+static int bone_children_clear_transflag(Object &pose_ob, bPoseChannel &pose_bone)
 {
   int cleared = 0;
-  animrig::pose_bone_descendent_iterator(pose, pose_bone, [&](bPoseChannel &child) {
+  animrig::pose_bone_descendent_iterator(pose_ob, pose_bone, [&](bPoseChannel &child) {
     if (&child == &pose_bone) {
       return;
     }
@@ -596,7 +598,7 @@ static int armature_bone_transflags_update(Object &ob, bArmature *arm, ListBaseT
 
   for (bPoseChannel &pchan : *lb) {
     pchan.runtime.flag &= ~POSE_RUNTIME_TRANSFORM;
-    if (!ANIM_bone_in_visible_collection(arm, pchan.bone)) {
+    if (!ANIM_bone_in_visible_collection(arm, pchan.bone_get(ob))) {
       continue;
     }
     if (pchan.flag & POSE_SELECTED) {
@@ -608,7 +610,7 @@ static int armature_bone_transflags_update(Object &ob, bArmature *arm, ListBaseT
   /* No transform on children if any parent bone is selected. */
   for (bPoseChannel &pchan : *lb) {
     if (pchan.runtime.flag & POSE_RUNTIME_TRANSFORM) {
-      total -= bone_children_clear_transflag(*ob.pose, pchan);
+      total -= bone_children_clear_transflag(ob, pchan);
     }
   }
   return total;
@@ -879,7 +881,7 @@ static uint bm_mesh_elems_select_get_n__internal(
   BLI_assert(ELEM(htype, BM_VERT, BM_EDGE, BM_FACE));
   BLI_assert(ELEM(itype, BM_VERTS_OF_MESH, BM_EDGES_OF_MESH, BM_FACES_OF_MESH));
 
-  if (!BLI_listbase_is_empty(&bm->selected)) {
+  if (!bm->selected.is_empty()) {
     /* Quick check. */
     i = 0;
     for (BMEditSelection &ese : bm->selected.items_reversed()) {
@@ -1117,7 +1119,7 @@ int getTransformOrientation_ex(const Main &bmain,
           }
 
           /* Should never fail. */
-          if (LIKELY(v_pair[0] && v_pair[1])) {
+          if (v_pair[0] && v_pair[1]) [[likely]] {
             bool v_pair_swap = false;
             /**
              * Logic explained:
@@ -1152,7 +1154,7 @@ int getTransformOrientation_ex(const Main &bmain,
               /* For edges it'd important the resulting matrix can rotate around the edge,
                * project onto the plane so we can use a fallback value. */
               project_plane_normalized_v3_v3v3(r_normal, r_normal, r_plane);
-              if (UNLIKELY(normalize_v3(r_normal) == 0.0f)) {
+              if (normalize_v3(r_normal) == 0.0f) [[unlikely]] {
                 /* In the case the normal and plane are aligned,
                  * use a fallback normal which is orthogonal to the plane. */
                 ortho_v3_v3(r_normal, r_plane);
@@ -1501,7 +1503,7 @@ int getTransformOrientation_ex(const Main &bmain,
       else {
         BKE_view_layer_synced_ensure(bmain, scene, view_layer);
         Base *base = BKE_view_layer_base_find(view_layer, ob);
-        if (UNLIKELY(base == nullptr)) {
+        if (base == nullptr) [[unlikely]] {
           /* This is very unlikely, if it happens allow the value to be set since the caller
            * may have taken the object from outside this view-layer. */
           ok = true;

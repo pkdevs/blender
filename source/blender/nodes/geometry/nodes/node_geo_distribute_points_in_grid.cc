@@ -65,7 +65,7 @@ static void node_declare(NodeDeclarationBuilder &b)
                         .description("Minimum density of a voxel to contain a grid point")
                         .make_available(
                             [](bNode &node) { node.custom1 = int16_t(DistributeMode::Grid); });
-  b.add_output<decl::Geometry>("Points"_ustr).propagate_all();
+  b.add_output<decl::Geometry>("Points"_ustr).propagate_all_geometry();
 
   const bNode *node = b.node_or_null();
   if (node != nullptr) {
@@ -256,13 +256,13 @@ static void node_register()
 {
   static bke::bNodeType ntype;
   geo_node_type_base(
-      &ntype, "GeometryNodeDistributePointsInGrid", GEO_NODE_DISTRIBUTE_POINTS_IN_GRID);
+      &ntype, "GeometryNodeDistributePointsInGrid"_ustr, GEO_NODE_DISTRIBUTE_POINTS_IN_GRID);
   ntype.ui_name = "Distribute Points in Grid";
   ntype.ui_description = "Generate points inside a volume grid";
   ntype.enum_name_legacy = "DISTRIBUTE_POINTS_IN_GRID";
   ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.initfunc = node_init;
-  bke::node_type_size(ntype, 170, 100, 320);
+  ntype.default_width = bke::NodeWidth::_180;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.draw_buttons = node_layout;

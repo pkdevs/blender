@@ -11,10 +11,10 @@ namespace blender::nodes::node_geo_tool_selection_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_output<decl::Bool>("Boolean"_ustr, "Selection"_ustr)
-      .field_source()
+      .structure_type(StructureType::Field)
       .description("The selection of each element as a true or false value");
   b.add_output<decl::Float>("Float"_ustr)
-      .field_source()
+      .structure_type(StructureType::Field)
       .description("The selection of each element as a floating point value");
 }
 
@@ -183,7 +183,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeToolSelection", GEO_NODE_TOOL_SELECTION);
+  geo_node_type_base(&ntype, "GeometryNodeToolSelection"_ustr, GEO_NODE_TOOL_SELECTION);
   ntype.ui_name = "Selection";
   ntype.ui_description = "User selection of the edited geometry, for tool execution";
   ntype.enum_name_legacy = "TOOL_SELECTION";

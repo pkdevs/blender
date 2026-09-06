@@ -9,12 +9,12 @@
 #include <cstddef>
 #include <cstdlib>
 
-#include "BLI_assert.h"
-#include "BLI_listbase.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_base.h"
-#include "BLI_math_vector.h"
+#include "BLI_math_base_c.hh"
 #include "BLI_math_vector.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_vector.hh"
 
 #include "MEM_guardedalloc.h"
@@ -23,6 +23,8 @@
 #include "DNA_screen_types.h"
 #include "DNA_sequence_types.h"
 #include "DNA_space_types.h"
+
+#include "BKE_scene.hh"
 
 #include "ED_transform.hh"
 
@@ -78,9 +80,11 @@ static int snap_distance_frame_threshold_get(const TransInfo *t)
 static VectorSet<Strip *> query_strip_sources_timeline(const Scene *scene)
 {
   const Editing *ed = seq::editing_get(scene);
-  ListBaseT<Strip> *seqbase = seq::active_seqbase_get(seq::editing_get(scene));
+  const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
+  ListBaseT<Strip> *seqbase = seq::active_seqbase_get(ed);
 
   VectorSet<Strip *> strip_sources = seq::query_selected_strips(seqbase);
+  strip_sources.remove_if([&](Strip *strip) { return seq::transform_is_locked(channels, strip); });
 
   const Map retiming_selection = seq::retiming_selection_get(ed);
   /* Strips owned by retiming keys are technically not selected,
@@ -112,24 +116,6 @@ static VectorSet<Strip *> query_strip_sources_preview(const Scene *scene)
 /** \name Strip Targets
  * \{ */
 
-/* Add effect strips directly or indirectly connected to `strip_reference` to `collection`. */
-static void query_strip_effects_fn(Strip *strip_reference,
-                                   ListBaseT<Strip> *seqbase,
-                                   VectorSet<Strip *> &strips)
-{
-  if (strips.contains(strip_reference)) {
-    return; /* Strip is already in set, so all effects connected to it are as well. */
-  }
-  strips.add(strip_reference);
-
-  /* Find all strips connected to `strip_reference`. */
-  for (Strip &strip_test : *seqbase) {
-    if (seq::relation_is_effect_of_strip(&strip_test, strip_reference)) {
-      query_strip_effects_fn(&strip_test, seqbase, strips);
-    }
-  }
-}
-
 static VectorSet<Strip *> query_strip_targets_timeline(Scene *scene,
                                                        const Span<Strip *> strip_sources,
                                                        const bool drag_and_drop)
@@ -142,14 +128,15 @@ static VectorSet<Strip *> query_strip_targets_timeline(Scene *scene,
   /* Effects will always change position with strip to which they are connected and they don't
    * have to be selected. Remove such strips from `snap_targets` collection. */
   VectorSet effects_of_strip_sources = strip_sources;
-  seq::iterator_set_expand(seqbase, effects_of_strip_sources, query_strip_effects_fn);
+  seq::expand_strips(ed, effects_of_strip_sources, seq::StripRelation::Effects);
   effects_of_strip_sources.remove_if(
       [&](Strip *strip) { return strip->is_effect() && !strip->is_effect_with_inputs(); });
 
   VectorSet<Strip *> strip_targets;
   for (Strip &strip : *seqbase) {
-    if (!drag_and_drop && strip.flag & SEQ_SELECT) {
-      continue; /* Selected strips are being transformed, they shouldn't be a target. */
+    if (!drag_and_drop && strip.flag & SEQ_SELECT && !seq::transform_is_locked(channels, &strip)) {
+      /* Selected (and unlocked) strips are being transformed, they shouldn't be a target. */
+      continue;
     }
     if (seq::render_is_muted(channels, &strip) && (snap_flag & SEQ_SNAP_IGNORE_MUTED)) {
       continue;
@@ -250,14 +237,14 @@ static void build_sources_preview(const Scene *scene,
 {
   for (Strip *strip : strip_sources) {
     if (!translate_origin) {
-      const Array<float2> strip_image_quad = seq::image_transform_final_quad_get(scene, strip);
+      const Array<float2> strip_image_quad = seq::image_transform_quad_get(scene, strip);
       for (const float2 &point : strip_image_quad) {
         snap_data->sources.append(point);
       }
     }
 
     /* Add origins last */
-    const float2 image_origin = seq::image_transform_origin_offset_pixelspace_get(scene, strip);
+    const float2 image_origin = seq::image_transform_origin_preview_offset_get(scene, strip);
     snap_data->sources.append(image_origin);
   }
 }
@@ -284,8 +271,8 @@ static void build_targets_timeline(const Scene *scene,
   }
 
   if (snap_mode & SEQ_SNAP_TO_FRAME_RANGE) {
-    snap_data->targets.append(float2(PSFRA, all_channels));
-    snap_data->targets.append(float2(PEFRA + 1, all_channels));
+    snap_data->targets.append(float2(scene->playback_start(), all_channels));
+    snap_data->targets.append(float2(scene->playback_end() + 1, all_channels));
     /* Also snap to meta-strip display range if we are in a meta-strip. */
     MetaStack *ms = seq::meta_stack_active_get(seq::editing_get(scene));
     if (ms != nullptr) {
@@ -346,7 +333,7 @@ static void build_targets_preview(const Scene *scene,
   }
 
   auto build_corners = [&](Strip *strip) {
-    const Array<float2> corners = seq::image_transform_final_quad_get(scene, strip);
+    const Array<float2> corners = seq::image_transform_quad_get(scene, strip);
     for (const float2 &point : corners) {
       snap_data->targets.append(point);
     }
@@ -356,7 +343,7 @@ static void build_targets_preview(const Scene *scene,
   if (snap_mode & SEQ_SNAP_TO_STRIPS_PREVIEW) {
     for (Strip *strip : strip_targets) {
       build_corners(strip);
-      const float2 image_origin = seq::image_transform_origin_offset_pixelspace_get(scene, strip);
+      const float2 image_origin = seq::image_transform_origin_preview_offset_get(scene, strip);
       snap_data->targets.append(image_origin);
     }
   }
@@ -584,7 +571,7 @@ static int snap_sequencer_calc_drag_drop_impl(TransInfo *t,
   TransSeqSnapData *snap_data = MEM_new<TransSeqSnapData>(__func__);
 
   VectorSet<Strip *> empty_col;
-  VectorSet<Strip *> strip_targets = query_strip_targets_timeline(scene, empty_col, false);
+  VectorSet<Strip *> strip_targets = query_strip_targets_timeline(scene, empty_col, true);
 
   BLI_assert(left_frame <= right_frame);
 

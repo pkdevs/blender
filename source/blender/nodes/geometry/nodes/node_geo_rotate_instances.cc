@@ -19,11 +19,16 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Instances"_ustr)
       .only_instances()
       .description("Instances to rotate individually");
-  b.add_output<decl::Geometry>("Instances"_ustr).propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
-  b.add_input<decl::Rotation>("Rotation"_ustr).field_on_all();
-  b.add_input<decl::Vector>("Pivot Point"_ustr).subtype(PROP_TRANSLATION).field_on_all();
-  b.add_input<decl::Bool>("Local Space"_ustr).default_value(true).field_on_all();
+  b.add_output<decl::Geometry>("Instances"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
+  b.add_input<decl::Rotation>("Rotation"_ustr).evaluated_geometry_field();
+  b.add_input<decl::Vector>("Pivot Point"_ustr)
+      .subtype(PROP_TRANSLATION)
+      .evaluated_geometry_field();
+  b.add_input<decl::Bool>("Local Space"_ustr).default_value(true).evaluated_geometry_field();
 }
 
 static void rotate_instances(GeoNodeExecParams &params, bke::Instances &instances)
@@ -100,7 +105,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeRotateInstances", GEO_NODE_ROTATE_INSTANCES);
+  geo_node_type_base(&ntype, "GeometryNodeRotateInstances"_ustr, GEO_NODE_ROTATE_INSTANCES);
   ntype.ui_name = "Rotate Instances";
   ntype.ui_description = "Rotate geometry instances in local or global space";
   ntype.enum_name_legacy = "ROTATE_INSTANCES";

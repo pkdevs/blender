@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_math_base.hh"
-#include "BLI_math_color.h"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
@@ -102,7 +102,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeHueSat", CMP_NODE_HUE_SAT);
+  cmp_node_type_base(&ntype, "CompositorNodeHueSat"_ustr, CMP_NODE_HUE_SAT);
   ntype.ui_name = "Hue/Saturation/Value";
   ntype.ui_description = "Apply a color transformation in the HSV color model";
   ntype.enum_name_legacy = "HUE_SAT";

@@ -33,7 +33,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .max(1000)
       .description("Number of vertices in the Y direction");
   b.add_output<decl::Geometry>("Mesh"_ustr);
-  b.add_output<decl::Vector>("UV Map"_ustr).field_on_all();
+  b.add_output<decl::Vector>("UV Map"_ustr).anonymous_attribute_output();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -60,7 +60,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeMeshGrid", GEO_NODE_MESH_PRIMITIVE_GRID);
+  geo_node_type_base(&ntype, "GeometryNodeMeshGrid"_ustr, GEO_NODE_MESH_PRIMITIVE_GRID);
   ntype.ui_name = "Grid";
   ntype.ui_description = "Generate a planar mesh on the XY plane";
   ntype.enum_name_legacy = "MESH_PRIMITIVE_GRID";

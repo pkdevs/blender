@@ -18,10 +18,10 @@
 #include "DNA_material_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
+#include "BLI_listbase.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_color.h"
-#include "BLI_rand.h"
+#include "BLI_math_color_c.hh"
+#include "BLI_rand_c.hh"
 
 #include "BLT_translation.hh"
 
@@ -47,6 +47,8 @@
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
+#include "PRF_profile.hh"
+
 #include "RE_texture.h" /* RE_texture_evaluate */
 
 #include "BLO_read_write.hh"
@@ -64,8 +66,6 @@ static void brush_init_data(ID *id)
   /* the default alpha falloff curve */
   BKE_brush_curve_preset(brush, CURVE_PRESET_SMOOTH);
 
-  brush->automasking_cavity_curve = BKE_paint_default_curve();
-
   brush->curve_rand_hue = BKE_paint_default_curve();
   brush->curve_rand_saturation = BKE_paint_default_curve();
   brush->curve_rand_value = BKE_paint_default_curve();
@@ -73,6 +73,9 @@ static void brush_init_data(ID *id)
   brush->curve_size = BKE_paint_default_curve();
   brush->curve_strength = BKE_paint_default_curve();
   brush->curve_jitter = BKE_paint_default_curve();
+  brush->curve_hardness = BKE_paint_default_curve();
+  brush->curve_auto_smooth = BKE_paint_default_curve_inverted();
+  brush->curve_spacing = BKE_paint_default_curve();
 }
 
 static void brush_copy_data(Main * /*bmain*/,
@@ -101,6 +104,9 @@ static void brush_copy_data(Main * /*bmain*/,
   brush_dst->curve_size = BKE_curvemapping_copy(brush_src->curve_size);
   brush_dst->curve_strength = BKE_curvemapping_copy(brush_src->curve_strength);
   brush_dst->curve_jitter = BKE_curvemapping_copy(brush_src->curve_jitter);
+  brush_dst->curve_hardness = BKE_curvemapping_copy(brush_src->curve_hardness);
+  brush_dst->curve_auto_smooth = BKE_curvemapping_copy(brush_src->curve_auto_smooth);
+  brush_dst->curve_spacing = BKE_curvemapping_copy(brush_src->curve_spacing);
 
   if (brush_src->gpencil_settings != nullptr) {
     brush_dst->gpencil_settings = MEM_new<BrushGpencilSettings>(
@@ -131,6 +137,15 @@ static void brush_copy_data(Main * /*bmain*/,
     brush_dst->curves_sculpt_settings->curve_parameter_falloff = BKE_curvemapping_copy(
         brush_src->curves_sculpt_settings->curve_parameter_falloff);
   }
+  if (brush_src->mesh_automasking_settings != nullptr) {
+    brush_dst->mesh_automasking_settings = MEM_new<MeshAutomaskingSettings>(
+        __func__, dna::shallow_copy(*(brush_src->mesh_automasking_settings)));
+    brush_dst->mesh_automasking_settings->cavity_curve = BKE_curvemapping_copy(
+        brush_src->mesh_automasking_settings->cavity_curve);
+
+    /* The "operator" level cavity curve is never used for the brush. Ensure it is nullptr */
+    brush_dst->mesh_automasking_settings->cavity_curve_op = nullptr;
+  }
 
   /* enable fake user by default */
   id_fake_user_set(&brush_dst->id);
@@ -149,6 +164,9 @@ static void brush_free_data(ID *id)
   BKE_curvemapping_free(brush->curve_size);
   BKE_curvemapping_free(brush->curve_strength);
   BKE_curvemapping_free(brush->curve_jitter);
+  BKE_curvemapping_free(brush->curve_hardness);
+  BKE_curvemapping_free(brush->curve_auto_smooth);
+  BKE_curvemapping_free(brush->curve_spacing);
 
   if (brush->gpencil_settings != nullptr) {
     BKE_curvemapping_free(brush->gpencil_settings->curve_sensitivity);
@@ -167,6 +185,10 @@ static void brush_free_data(ID *id)
   if (brush->curves_sculpt_settings != nullptr) {
     BKE_curvemapping_free(brush->curves_sculpt_settings->curve_parameter_falloff);
     MEM_delete(brush->curves_sculpt_settings);
+  }
+  if (brush->mesh_automasking_settings != nullptr) {
+    BKE_curvemapping_free(brush->mesh_automasking_settings->cavity_curve);
+    MEM_delete(brush->mesh_automasking_settings);
   }
 
   MEM_SAFE_DELETE(brush->gradient);
@@ -272,6 +294,15 @@ static void brush_blend_write(BlendWriter *writer, ID *id, const void *id_addres
   if (brush->curve_jitter) {
     BKE_curvemapping_blend_write(writer, brush->curve_jitter);
   }
+  if (brush->curve_hardness) {
+    BKE_curvemapping_blend_write(writer, brush->curve_hardness);
+  }
+  if (brush->curve_auto_smooth) {
+    BKE_curvemapping_blend_write(writer, brush->curve_auto_smooth);
+  }
+  if (brush->curve_spacing) {
+    BKE_curvemapping_blend_write(writer, brush->curve_spacing);
+  }
 
   if (brush->gpencil_settings) {
     writer->write_struct(brush->gpencil_settings);
@@ -308,6 +339,11 @@ static void brush_blend_write(BlendWriter *writer, ID *id, const void *id_addres
     writer->write_struct(brush->curves_sculpt_settings);
     BKE_curvemapping_blend_write(writer, brush->curves_sculpt_settings->curve_parameter_falloff);
   }
+  if (brush->mesh_automasking_settings) {
+    writer->write_struct(brush->mesh_automasking_settings);
+    BKE_curvemapping_blend_write(writer, brush->mesh_automasking_settings->cavity_curve);
+  }
+
   if (brush->gradient) {
     writer->write_struct(brush->gradient);
   }
@@ -387,6 +423,30 @@ static void brush_blend_read_data(BlendDataReader *reader, ID *id)
     brush->curve_jitter = BKE_paint_default_curve();
   }
 
+  BLO_read_struct(reader, CurveMapping, &brush->curve_hardness);
+  if (brush->curve_hardness) {
+    BKE_curvemapping_blend_read(reader, brush->curve_hardness);
+  }
+  else {
+    brush->curve_hardness = BKE_paint_default_curve();
+  }
+
+  BLO_read_struct(reader, CurveMapping, &brush->curve_auto_smooth);
+  if (brush->curve_auto_smooth) {
+    BKE_curvemapping_blend_read(reader, brush->curve_auto_smooth);
+  }
+  else {
+    brush->curve_auto_smooth = BKE_paint_default_curve_inverted();
+  }
+
+  BLO_read_struct(reader, CurveMapping, &brush->curve_spacing);
+  if (brush->curve_spacing) {
+    BKE_curvemapping_blend_read(reader, brush->curve_spacing);
+  }
+  else {
+    brush->curve_spacing = BKE_paint_default_curve();
+  }
+
   /* grease pencil */
   BLO_read_struct(reader, BrushGpencilSettings, &brush->gpencil_settings);
   if (brush->gpencil_settings != nullptr) {
@@ -444,6 +504,17 @@ static void brush_blend_read_data(BlendDataReader *reader, ID *id)
     if (brush->curves_sculpt_settings->curve_parameter_falloff) {
       BKE_curvemapping_blend_read(reader, brush->curves_sculpt_settings->curve_parameter_falloff);
     }
+  }
+
+  BLO_read_struct(reader, MeshAutomaskingSettings, &brush->mesh_automasking_settings);
+  if (brush->mesh_automasking_settings) {
+    BLO_read_struct(reader, CurveMapping, &brush->mesh_automasking_settings->cavity_curve);
+    if (brush->mesh_automasking_settings->cavity_curve) {
+      BKE_curvemapping_blend_read(reader, brush->mesh_automasking_settings->cavity_curve);
+    }
+
+    /* The "operator" level curve is never used on the brush, ensure it is nullptr */
+    brush->mesh_automasking_settings->cavity_curve_op = nullptr;
   }
 
   BLO_read_struct(reader, PreviewImage, &brush->preview);
@@ -637,6 +708,9 @@ Brush *BKE_brush_add(Main *bmain, const char *name, const eObjectMode ob_mode)
   {
     BKE_brush_init_gpencil_settings(brush);
   }
+  else if (ELEM(ob_mode, OB_MODE_SCULPT, OB_MODE_WEIGHT_PAINT, OB_MODE_VERTEX_PAINT)) {
+    BKE_brush_init_mesh_automasking_settings(brush);
+  }
 
   return brush;
 }
@@ -648,7 +722,7 @@ void BKE_brush_init_gpencil_settings(Brush *brush)
   }
 
   brush->gpencil_settings->draw_smoothlvl = 1;
-  brush->gpencil_settings->flag = 0;
+  brush->gpencil_settings->flag = eGPDbrush_Flag{};
   brush->gpencil_settings->flag |= GP_BRUSH_USE_PRESSURE;
   brush->gpencil_settings->draw_strength = 1.0f;
   brush->gpencil_settings->draw_jitter = 0.0f;
@@ -741,6 +815,14 @@ Brush *BKE_brush_duplicate(Main *bmain,
   return new_brush;
 }
 
+void BKE_brush_init_mesh_automasking_settings(Brush *brush)
+{
+  if (brush->mesh_automasking_settings == nullptr) {
+    brush->mesh_automasking_settings = MEM_new<MeshAutomaskingSettings>(__func__);
+    brush->mesh_automasking_settings->cavity_curve = BKE_paint_default_curve();
+  }
+}
+
 void BKE_brush_init_curves_sculpt_settings(Brush *brush)
 {
   if (brush->curves_sculpt_settings == nullptr) {
@@ -762,16 +844,6 @@ void BKE_brush_tag_unsaved_changes(Brush *brush)
   if (brush && ID_IS_LINKED(brush)) {
     brush->has_unsaved_changes = true;
   }
-}
-
-Brush *BKE_brush_first_search(Main *bmain, const eObjectMode ob_mode)
-{
-  for (Brush &brush : bmain->brushes) {
-    if (brush.ob_mode & ob_mode) {
-      return &brush;
-    }
-  }
-  return nullptr;
 }
 
 void BKE_brush_debug_print_state(Brush *br)
@@ -826,7 +898,7 @@ void BKE_brush_debug_print_state(Brush *br)
   BR_TEST_FLAG(BRUSH_ADAPTIVE_SPACE);
   BR_TEST_FLAG(BRUSH_LOCK_SIZE);
   BR_TEST_FLAG(BRUSH_EDGE_TO_EDGE);
-  BR_TEST_FLAG(BRUSH_INVERSE_SMOOTH_PRESSURE);
+  BR_TEST_FLAG(BRUSH_SMOOTH_PRESSURE);
   BR_TEST_FLAG(BRUSH_PLANE_TRIM);
   BR_TEST_FLAG(BRUSH_FRONTFACE);
 
@@ -1144,9 +1216,57 @@ float BKE_brush_sample_masktex(
 /** \name Unified Settings
  * \{ */
 
+bool BKE_brush_use_unified_size(const Paint *paint, const Brush *brush)
+{
+  /* For now, Grease Pencil Draw mode doesn't use the unified paint settings. */
+  if (paint->runtime->ob_mode == OB_MODE_PAINT_GREASE_PENCIL) {
+    return false;
+  }
+
+  /* In the case of having no active brush (e.g. for non-brush tools), default to the scene level
+   * settings */
+  if (!brush) {
+    return true;
+  }
+
+  return brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_SIZE;
+}
+
+bool BKE_brush_use_unified_strength(const Paint *paint, const Brush *brush)
+{
+  /* For now, Grease Pencil Draw mode doesn't use the unified paint settings. */
+  if (paint->runtime->ob_mode == OB_MODE_PAINT_GREASE_PENCIL) {
+    return false;
+  }
+
+  /* In the case of having no active brush (e.g. for non-brush tools), default to the scene level
+   * settings */
+  if (!brush) {
+    return true;
+  }
+
+  return brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_ALPHA;
+}
+
+bool BKE_brush_use_unified_color(const Paint *paint, const Brush *brush)
+{
+  /* For now, Grease Pencil Draw mode doesn't use the unified paint settings. */
+  if (paint->runtime->ob_mode == OB_MODE_PAINT_GREASE_PENCIL) {
+    return false;
+  }
+
+  /* In the case of having no active brush (e.g. for non-brush tools), default to the scene level
+   * settings */
+  if (!brush) {
+    return true;
+  }
+
+  return brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_COLOR;
+}
+
 float3 BKE_brush_color_get(const Paint *paint, const Brush *brush)
 {
-  if (BKE_paint_use_unified_color(paint)) {
+  if (BKE_brush_use_unified_color(paint, brush)) {
     return paint->unified_paint_settings.color;
   }
   return brush->color;
@@ -1156,7 +1276,7 @@ float3 BKE_brush_color_get(const Paint *paint, const Brush *brush)
 std::optional<BrushColorJitterSettings> BKE_brush_color_jitter_get_settings(const Paint *paint,
                                                                             const Brush *brush)
 {
-  if (BKE_paint_use_unified_color(paint)) {
+  if (BKE_brush_use_unified_color(paint, brush)) {
     if ((paint->unified_paint_settings.flag & UNIFIED_PAINT_COLOR_JITTER) == 0) {
       return std::nullopt;
     }
@@ -1190,7 +1310,7 @@ std::optional<BrushColorJitterSettings> BKE_brush_color_jitter_get_settings(cons
 
 float3 BKE_brush_secondary_color_get(const Paint *paint, const Brush *brush)
 {
-  if (BKE_paint_use_unified_color(paint)) {
+  if (BKE_brush_use_unified_color(paint, brush)) {
     return paint->unified_paint_settings.secondary_color;
   }
   return brush->secondary_color;
@@ -1198,7 +1318,7 @@ float3 BKE_brush_secondary_color_get(const Paint *paint, const Brush *brush)
 
 void BKE_brush_color_set(Paint *paint, Brush *brush, const float3 &color)
 {
-  if (BKE_paint_use_unified_color(paint)) {
+  if (BKE_brush_use_unified_color(paint, brush)) {
     UnifiedPaintSettings *ups = &paint->unified_paint_settings;
     copy_v3_v3(ups->color, color);
     BKE_brush_color_sync_legacy(ups);
@@ -1238,7 +1358,7 @@ void BKE_brush_size_set(Paint *paint, Brush *brush, int size)
   /* make sure range is sane */
   CLAMP(size, 1, MAX_BRUSH_PIXEL_DIAMETER);
 
-  if (BKE_paint_use_unified_size(paint)) {
+  if (BKE_brush_use_unified_size(paint, brush)) {
     ups->size = size;
   }
   else {
@@ -1251,7 +1371,7 @@ int BKE_brush_size_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  if (BKE_paint_use_unified_size(paint)) {
+  if (BKE_brush_use_unified_size(paint, brush)) {
     return ups->size;
   }
   return brush->size;
@@ -1266,8 +1386,9 @@ bool BKE_brush_use_locked_size(const Paint *paint, const Brush *brush)
 {
   const short us_flag = paint->unified_paint_settings.flag;
 
-  return (us_flag & UNIFIED_PAINT_SIZE) ? (us_flag & UNIFIED_PAINT_BRUSH_LOCK_SIZE) :
-                                          (brush->flag & BRUSH_LOCK_SIZE);
+  return (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_SIZE) ?
+             (us_flag & UNIFIED_PAINT_BRUSH_LOCK_SIZE) != 0 :
+             (brush->flag & BRUSH_LOCK_SIZE) != 0;
 }
 
 bool BKE_brush_use_size_pressure(const Brush *brush)
@@ -1284,7 +1405,7 @@ void BKE_brush_unprojected_size_set(Paint *paint, Brush *brush, float unprojecte
 {
   UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  if (BKE_paint_use_unified_size(paint)) {
+  if (BKE_brush_use_unified_size(paint, brush)) {
     ups->unprojected_size = unprojected_size;
   }
   else {
@@ -1296,7 +1417,7 @@ void BKE_brush_unprojected_size_set(Paint *paint, Brush *brush, float unprojecte
 float BKE_brush_unprojected_size_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
-  if (BKE_paint_use_unified_size(paint)) {
+  if (BKE_brush_use_unified_size(paint, brush)) {
     return ups->unprojected_size;
   }
   return brush->unprojected_size;
@@ -1335,7 +1456,7 @@ void BKE_brush_alpha_set(Paint *paint, Brush *brush, float alpha)
 {
   UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  if (BKE_paint_use_unified_strength(paint)) {
+  if (BKE_brush_use_unified_strength(paint, brush)) {
     ups->alpha = alpha;
   }
   else {
@@ -1348,7 +1469,7 @@ float BKE_brush_alpha_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  if (BKE_paint_use_unified_strength(paint)) {
+  if (BKE_brush_use_unified_strength(paint, brush)) {
     return ups->alpha;
   }
   return brush->alpha;
@@ -1358,14 +1479,15 @@ float BKE_brush_weight_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  return (ups->flag & UNIFIED_PAINT_WEIGHT) ? ups->weight : brush->weight;
+  return (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_WEIGHT) ? ups->weight :
+                                                                         brush->weight;
 }
 
 void BKE_brush_weight_set(Paint *paint, Brush *brush, float value)
 {
   UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  if (ups->flag & UNIFIED_PAINT_WEIGHT) {
+  if (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_WEIGHT) {
     ups->weight = value;
   }
   else {
@@ -1378,14 +1500,16 @@ int BKE_brush_input_samples_get(const Paint *paint, const Brush *brush)
 {
   const UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  return (ups->flag & UNIFIED_PAINT_INPUT_SAMPLES) ? ups->input_samples : brush->input_samples;
+  return (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_INPUT_SAMPLES) ?
+             ups->input_samples :
+             brush->input_samples;
 }
 
 void BKE_brush_input_samples_set(Paint *paint, Brush *brush, int value)
 {
   UnifiedPaintSettings *ups = &paint->unified_paint_settings;
 
-  if (ups->flag & UNIFIED_PAINT_INPUT_SAMPLES) {
+  if (brush->unified_paint_flags & BRUSH_USE_UNIFIED_PAINT_INPUT_SAMPLES) {
     ups->input_samples = value;
   }
   else {
@@ -1441,7 +1565,10 @@ void common_pressure_curves_init(Brush &brush)
   BKE_curvemapping_init(brush.curve_size);
   BKE_curvemapping_init(brush.curve_strength);
   BKE_curvemapping_init(brush.curve_jitter);
+  BKE_curvemapping_init(brush.curve_hardness);
+  BKE_curvemapping_init(brush.curve_auto_smooth);
   BKE_curvemapping_init(brush.curve_distance_falloff);
+  BKE_curvemapping_init(brush.curve_spacing);
 }
 }  // namespace bke::brush
 
@@ -1451,6 +1578,7 @@ void BKE_brush_calc_curve_factors(const eBrushCurvePreset preset,
                                   const float brush_radius,
                                   const MutableSpan<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   BLI_assert(factors.size() == distances.size());
 
   const float radius_rcp = math::rcp(brush_radius);
@@ -1676,28 +1804,22 @@ static bool brush_gen_texture(const Brush *br,
 
 ImBuf *BKE_brush_gen_radial_control_imbuf(Brush *br, bool secondary, bool display_gradient)
 {
-  ImBuf *im = MEM_new<ImBuf>("radial control texture");
   int side = 512;
   int half = side / 2;
 
   BKE_curvemapping_init(br->curve_distance_falloff);
 
-  float *rect_float = MEM_new_array_zeroed<float>(size_t(side) * size_t(side),
-                                                  "radial control rect");
-  IMB_assign_float_buffer(im, rect_float, IB_DO_NOT_TAKE_OWNERSHIP);
+  ImBuf *im = IMB_allocImBuf(side, side, ImBufFlags::FloatData);
 
-  im->x = im->y = side;
-
-  const bool have_texture = brush_gen_texture(br, side, secondary, im->float_buffer.data);
+  const bool have_texture = brush_gen_texture(br, side, secondary, im->float_data_for_write());
 
   if (display_gradient || have_texture) {
+    float *float_data = im->float_data_for_write();
     for (int i = 0; i < side; i++) {
       for (int j = 0; j < side; j++) {
         const float magn = sqrtf(pow2f(i - half) + pow2f(j - half));
         const float strength = BKE_brush_curve_strength_clamped(br, magn, half);
-        im->float_buffer.data[i * side + j] = (have_texture) ?
-                                                  im->float_buffer.data[i * side + j] * strength :
-                                                  strength;
+        float_data[i * side + j] = (have_texture) ? float_data[i * side + j] * strength : strength;
       }
     }
   }
@@ -1713,7 +1835,7 @@ bool BKE_brush_has_cube_tip(const Brush *brush, PaintMode paint_mode)
         return true;
       }
 
-      if (ELEM(brush->sculpt_brush_type, SCULPT_BRUSH_TYPE_CLAY_STRIPS, SCULPT_BRUSH_TYPE_PAINT) &&
+      if (bke::brush::supports_tip_roundness(*brush) &&
           (brush->tip_roundness < 1.0f || brush->tip_scale_x != 1.0f))
       {
         return true;
@@ -1833,6 +1955,10 @@ bool supports_normal_radius(const Brush &brush)
   /* TODO: This setting is closely tied to #supports_sculpt_plane, they should be merged in some
    * way. Update after initial commit to avoid confusing PRs. */
   return !ELEM(brush.sculpt_brush_type, SCULPT_BRUSH_TYPE_POSE);
+}
+bool supports_tip_roundness(const Brush &brush)
+{
+  return ELEM(brush.sculpt_brush_type, SCULPT_BRUSH_TYPE_CLAY_STRIPS, SCULPT_BRUSH_TYPE_PAINT);
 }
 bool supports_hardness(const Brush &brush)
 {

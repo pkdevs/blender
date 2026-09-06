@@ -351,8 +351,7 @@ class AddPresetTextStripStyle(AddPresetBase, Operator):
             "strip.alignment_x",
             "strip.anchor_x",
             "strip.anchor_y",
-            "strip.transform.offset_x",
-            "strip.transform.offset_y",
+            "strip.location",
         ]
 
         strip = bpy.context.active_strip
@@ -653,7 +652,6 @@ class AddPresetEEVEERaytracing(AddPresetBase, Operator):
         "eevee.fast_gi_quality",
         "eevee.fast_gi_distance",
         "eevee.fast_gi_thickness_near",
-        "eevee.fast_gi_thickness_far",
         "eevee.fast_gi_bias",
     ]
 

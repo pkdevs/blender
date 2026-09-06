@@ -37,7 +37,7 @@ static int gpu_shader_normal(GPUMaterial *mat,
                              GPUNodeStack *in,
                              GPUNodeStack *out)
 {
-  GPUNodeLink *vec = GPU_uniform(out[0].vec);
+  GPUNodeLink *vec = GPU_uniform(out[0]);
   return GPU_stack_link(mat, node, "normal_new_shading", in, out, vec);
 }
 
@@ -63,7 +63,7 @@ void register_node_type_sh_normal()
 
   static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeNormal", SH_NODE_NORMAL);
+  sh_node_type_base(&ntype, "ShaderNodeNormal"_ustr, SH_NODE_NORMAL);
   ntype.ui_name = "Normal";
   ntype.ui_description = "Generate a normal vector and a dot product";
   ntype.enum_name_legacy = "NORMAL";

@@ -79,11 +79,23 @@ class TestGraph:
         # Gather used revisions.
         revisions = {}
         revision_dates = {}
+        use_error_bars = False
         for entry in entries:
             revision = entry.revision
             if revision not in revisions.keys():
                 revisions[revision] = len(revisions)
                 revision_dates[revision] = int(entry.date)
+
+            output_values = entry.output_all_runs.get(output)
+            if output_values and len(output_values) > 1:
+                use_error_bars = True
+
+        default_entry = {
+            'x': None,
+            'y': None,
+            'yMin': None,
+            'yMax': None,
+        }
 
         # Convert to chart.js data layout.
         if chart_type == 'comparison':
@@ -99,14 +111,20 @@ class TestGraph:
             for revision, index in sorted_revisions:
                 datasets.append({
                     'label': revision,
-                    'data': [None] * len(tests),
+                    'data': [default_entry] * len(tests),
                 })
 
             for entry in entries:
                 test_index = tests[entry.test]
                 revision_index = revisions[entry.revision]
-                output_value = entry.output[output] if output in entry.output else None
-                datasets[revision_index]['data'][test_index] = output_value
+                output_values = entry.output_all_runs.get(output)
+                if output_values:
+                    datasets[revision_index]['data'][test_index] = {
+                        'x': test_index,
+                        'y': sum(output_values) / len(output_values),
+                        'yMin': min(output_values),
+                        'yMax': max(output_values),
+                    }
 
         else:
             # For time series, dates on the X axis and tests as datasets.
@@ -120,16 +138,21 @@ class TestGraph:
             for test, index in sorted_tests:
                 datasets.append({
                     'label': test,
-                    'data': [None] * len(revisions),
+                    'data': [default_entry] * len(revisions),
                     'tension': 0.1,
                 })
 
             for entry in entries:
                 test_index = tests[entry.test]
                 revision_index = revisions[entry.revision]
-                output_value = entry.output[output] if output in entry.output else None
-
-                datasets[test_index]['data'][revision_index] = output_value
+                output_values = entry.output_all_runs.get(output)
+                if output_values:
+                    datasets[test_index]['data'][revision_index] = {
+                        'x': revision_index,
+                        'y': sum(output_values) / len(output_values),
+                        'yMin': min(output_values),
+                        'yMax': max(output_values),
+                    }
 
         data = {'labels': labels, 'datasets': datasets}
         return {
@@ -137,7 +160,8 @@ class TestGraph:
             'device_cpu': device_cpu,
             'name': chart_name,
             'data': data,
-            'chart_type': chart_type}
+            'chart_type': chart_type,
+            'use_error_bars': use_error_bars}
 
     def write(self, filepath: pathlib.Path) -> None:
         # Write HTML page with JSON graph data embedded.

@@ -16,39 +16,101 @@
 namespace blender::gpu::shader {
 using namespace std;
 using namespace shader::parser;
+using namespace shader::parser::ast;
 using namespace metadata;
 
-static void parse_namespace_symbols(Scope ns, metadata::Source &metadata)
+static string get_prefix(Scope ns_scope)
 {
-  ns.foreach_scope(ScopeType::Namespace,
-                   [&](const Scope &ns) { parse_namespace_symbols(ns, metadata); });
+  string prefix;
+  while (ns_scope.type() == ScopeType::Namespace || ns_scope.type() == ScopeType::Struct) {
+    prefix = ns_scope.front().prev().full_symbol_name() + "::" + prefix;
+    ns_scope = ns_scope.scope();
+  }
+  return prefix;
+}
+
+TemplateDefinition SourceProcessor::parse_template_definition(SourceProcessor::Parser &parser,
+                                                              Token template_tok,
+                                                              bool is_method,
+                                                              Scope ns_scope,
+                                                              const std::string &filepath)
+{
+  Token def_start = template_tok;
+  Scope template_args = def_start.next().scope();
+  /* Skip arguments. */
+  Token tok_type = template_args.back().next();
+
+  Token body_start = template_tok.find_next(BracketOpen);
+  Token def_end = body_start.scope().back();
+
+  TemplateDefinition symbol;
+  symbol.filepath = filepath;
+  symbol.definition_line = tok_type.line_number();
+  symbol.is_method = is_method;
+  symbol.is_static = tok_type == Static;
+  symbol.is_struct = tok_type == Struct || tok_type == Class;
+  symbol.name_space = get_prefix(ns_scope);
+
+  if (symbol.is_struct) {
+    Token name = body_start.prev();
+    symbol.identifier = string(name.str());
+  }
+  else {
+    Token fn_args = body_start.prev() == TokenType::Const ? body_start.prev(2) : body_start.prev();
+    Token fn_name = fn_args.scope().front().prev();
+    symbol.identifier = string(fn_name.str());
+  }
+
+  /* Capture end semicolon for structs. */
+  def_end = (symbol.is_struct) ? def_end.next() : def_end;
+  symbol.definition = parser.substr(def_start, def_end);
+  return symbol;
+}
+
+void SourceProcessor::parse_namespace_symbols(SourceProcessor::Parser &parser,
+                                              Scope ns,
+                                              metadata::Source &metadata,
+                                              const std::string &filepath)
+{
+  ns.foreach_scope(ScopeType::Namespace, [&](const Scope &ns) {
+    parse_namespace_symbols(parser, ns, metadata, filepath);
+  });
 
   auto process_symbol = [&](Scope ns_scope,
                             Token name,
                             string_view identifier,
                             size_t line,
                             bool is_method,
-                            bool is_static) {
+                            bool is_static,
+                            bool is_struct,
+                            std::vector<std::pair<std::string, std::string>> members = {}) {
     if (name.scope() != ns_scope) {
       return;
     }
-    string prefix;
-    while (ns_scope.type() == ScopeType::Namespace || ns_scope.type() == ScopeType::Struct) {
-      prefix = ns_scope.front().prev().full_symbol_name() + "::" + prefix;
-      ns_scope = ns_scope.scope();
-    }
-    Symbol symbol;
-    symbol.name_space = prefix;
+    metadata::Symbol symbol;
+    symbol.name_space = get_prefix(ns_scope);
     symbol.identifier = identifier;
     symbol.definition_line = line;
     symbol.is_method = is_method;
     symbol.is_static = is_static;
+    symbol.is_struct = is_struct;
+    symbol.members = members;
     metadata.symbol_table.emplace_back(symbol);
   };
 
   auto process_templates = [&](Scope ns_scope, Token t, bool is_method) {
+    if (t.scope() != ns_scope) {
+      return;
+    }
+
     if (t.next() == '<') {
-      /* Template definition.*/
+      if (t.next(2) == '>') {
+        /* Template specialization. */
+        return;
+      }
+      TemplateDefinition symbol = SourceProcessor::parse_template_definition(
+          parser, t, is_method, ns_scope, filepath);
+      metadata.template_definitions.emplace_back(symbol);
       return;
     }
     /* Line number of the instantiation should be the one of the definition.
@@ -62,7 +124,7 @@ static void parse_namespace_symbols(Scope ns, metadata::Source &metadata)
       Scope template_args = name.next().scope();
       string resolved_name = string(name.str()) +
                              SourceProcessor::template_arguments_mangle(template_args);
-      process_symbol(ns_scope, name, resolved_name, line, false, false);
+      process_symbol(ns_scope, name, resolved_name, line, false, false, true, {});
     }
     else {
       /* Function. */
@@ -71,23 +133,36 @@ static void parse_namespace_symbols(Scope ns, metadata::Source &metadata)
       Token name = template_args.front().prev();
       string resolved_name = string(name.str()) +
                              SourceProcessor::template_arguments_mangle(template_args);
-      process_symbol(ns_scope, name, resolved_name, line, is_method, false);
+      process_symbol(ns_scope, name, resolved_name, line, is_method, false, false);
     }
   };
 
   ns.foreach_struct([&](Token, Scope, Token struct_name, Scope body) {
-    process_symbol(ns, struct_name, struct_name.str(), struct_name.line_number(), false, false);
+    /* Parse member. */
+    std::vector<std::pair<std::string, std::string>> members;
+    body.foreach_declaration([&](Scope, Token, Token type, Scope, Token name, Scope, Token) {
+      /* For methods, the declaration line is the top of the struct. */
+      members.emplace_back(type.str(), name.str());
+    });
+    process_symbol(ns,
+                   struct_name,
+                   struct_name.str(),
+                   struct_name.line_number(),
+                   false,
+                   false,
+                   true,
+                   members);
     /* Methods. */
     body.foreach_function([&](bool is_static, Token, Token name, Scope, bool, Scope) {
       /* For methods, the declaration line is the top of the struct. */
-      process_symbol(body, name, name.str(), struct_name.line_number(), true, is_static);
+      process_symbol(body, name, name.str(), struct_name.line_number(), true, is_static, false);
     });
     /* Parse template instantiations. */
     body.foreach_token(Template, [&](Token t) { process_templates(body, t, true); });
   });
 
   ns.foreach_function([&](bool, Token, Token name, Scope, bool, Scope) {
-    process_symbol(ns, name, name.str(), name.line_number(), false, false);
+    process_symbol(ns, name, name.str(), name.line_number(), false, false, false);
   });
   /* Parse template instantiations. */
   ns.foreach_token(Template, [&](Token t) { process_templates(ns, t, false); });
@@ -95,21 +170,21 @@ static void parse_namespace_symbols(Scope ns, metadata::Source &metadata)
 
 void SourceProcessor::parse_local_symbols(Parser &parser)
 {
-  parse_namespace_symbols(parser(), metadata_);
+  parse_namespace_symbols(parser, parser(), metadata_, filepath_);
 }
 
 static void lower_namespace(string ns_prefix,
                             const Scope &scope,
                             SourceProcessor::Parser &parser,
-                            SourceProcessor::report_callback report_error,
-                            const set<Symbol> &symbols_set)
+                            ErrorHandler &error_handler,
+                            const set<metadata::Symbol> &symbols_set)
 {
   string ns_name(scope.front().prev().str());
   ns_prefix += ns_name + "::";
 
   bool has_nested_scope = false;
   scope.foreach_scope(ScopeType::Namespace, [&](const Scope &scope) {
-    lower_namespace(ns_prefix, scope, parser, report_error, symbols_set);
+    lower_namespace(ns_prefix, scope, parser, error_handler, symbols_set);
     has_nested_scope = true;
   });
 
@@ -150,7 +225,8 @@ static void lower_namespace(string ns_prefix,
       return;
     }
 
-    const bool is_fn = (token.next() == '(');
+    const bool is_fn = (token.next() == '(') ||
+                       (token.next() == '<' && token.next().scope().back().next() == '(');
     /* Reject method definition. */
     if (is_fn && token.scope().type() == ScopeType::Struct) {
       return;
@@ -173,7 +249,7 @@ static void lower_namespace(string ns_prefix,
         continue;
       }
       /* Only expand symbols that are visible inside this namespace. */
-      if (symbol.name_space.substr(0, ns_prefix.size()) != ns_prefix) {
+      if (!symbol.name_space.starts_with(ns_prefix)) {
         continue;
       }
       /* Reject symbols declared after the identifier.
@@ -228,14 +304,14 @@ static void lower_namespace(string ns_prefix,
             continue;
           }
           /* Only expand symbols that are visible inside this namespace. */
-          if (ns_prefix.substr(0, overload.name_space.size()) != overload.name_space) {
+          if (!ns_prefix.starts_with(overload.name_space)) {
             continue;
           }
           if (specified_symbol != overload.identifier) {
             continue;
           }
-          report_error(ERROR_TOK(token),
-                       "Call to function is ambiguous. Specify namespace to remove ambiguity.");
+          error_handler.report(
+              token, "Call to function is ambiguous. Specify namespace to remove ambiguity.");
           break;
         }
       }
@@ -261,12 +337,12 @@ static void lower_namespace(string ns_prefix,
   });
 
   Token namespace_tok = scope.front().prev().namespace_start().prev();
-  if (namespace_tok == Namespace) {
+  if (namespace_tok == TokenType::Namespace) {
     parser.erase(namespace_tok, scope.front());
     parser.erase(scope.back());
   }
   else {
-    report_error(ERROR_TOK(namespace_tok), "Expected namespace token.");
+    error_handler.report(namespace_tok, "Expected namespace token.");
   }
 }
 
@@ -277,7 +353,7 @@ void SourceProcessor::lower_namespaces(Parser &parser)
 
   /* Expand compound namespaces. Simplify lowering.
    * Example: `namespace A::B {}` > `namespace A { namespace B {} }` */
-  parser().foreach_token(Namespace, [&](Token t) {
+  parser().foreach_token(TokenType::Namespace, [&](Token t) {
     int nesting = 0;
     Token name = t.next();
     while (name.next() == ':') {
@@ -295,7 +371,7 @@ void SourceProcessor::lower_namespaces(Parser &parser)
 
   /* Using an ordered set ordered by namespace make homonym symbols are resolve
    * properly (closest from current namespace). */
-  set<Symbol> symbols_set;
+  set<metadata::Symbol> symbols_set;
   {
     /* Deduplicate symbols. Done this way because we want to keep line definition ordering
      * inside the symbols_set. */
@@ -312,7 +388,7 @@ void SourceProcessor::lower_namespaces(Parser &parser)
     /* Parse each namespace declaration.
      * Do it iteratively from the deepest namespace to the shallowest. */
     parser().foreach_scope(ScopeType::Namespace, [&](const Scope &scope) {
-      lower_namespace("", scope, parser, report_error_, symbols_set);
+      lower_namespace("", scope, parser, error_handler, symbols_set);
     });
   } while (parser.apply_mutations());
 }

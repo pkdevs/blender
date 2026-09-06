@@ -8,9 +8,10 @@
 
 #include <cctype>
 #include <cstdint>
+#include <fstream>
 #include <iostream>
-#include <set>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -18,198 +19,542 @@
 #include "metadata.hh"
 #include "processor.hh"
 
+#include "bsl/symbol_table.hh"
+
 namespace blender::gpu::shader {
 using namespace std;
 using namespace shader::parser;
 using namespace metadata;
+using namespace shader::parser::ast;
 
-#define ERROR_TOK(token) (token).line_number(), (token).char_number(), (token).line_str()
-
-SourceProcessor::Result SourceProcessor::convert(vector<Symbol> symbols_set)
+SourceProcessor::Result SourceProcessor::convert_glsl()
 {
   metadata_ = {};
-
-  if (language_ == Language::UNKNOWN) {
-    report_error_(0, 0, "", "Unknown file type");
-    return {"", metadata_};
-  }
-  /* Extend. */
-  metadata_.symbol_table.insert(
-      metadata_.symbol_table.end(), symbols_set.begin(), symbols_set.end());
-
-  const string filename = filepath_.substr(filepath_.find_last_of('/') + 1);
 
   string str = this->source_;
 
   str = remove_comments(str);
-  if (language_ == Language::BLENDER_GLSL || language_ == Language::CPP) {
-    str = disabled_code_mutation(str);
+
+  IntermediateForm<SimpleLexer, DummyParser> parser(error_handler);
+  try {
+    parser.language = Language::GLSL;
+    parser.set_str(str);
+    /* Remove trailing white space as they make the subsequent transformation much slower. */
+    cleanup_whitespace(parser);
+    str = parser.result_get();
+    str = threadgroup_variables_parse_and_remove(str);
   }
-  else {
-    IntermediateForm<SimpleLexer, DummyParser> parser(str, report_error_);
+  catch (ParserException & /*e*/) {
+    /* Output the current source state for inspection. */
+    return {parser.result_get(), metadata_, error_handler.err};
+  }
+
+  parse_builtins(str, filename, true);
+#ifdef __APPLE__ /* Limiting to Apple hardware since GLSL compilers might have issues. */
+  str = matrix_constructor_mutation(str);
+#endif
+  str = argument_decorator_macro_injection(str);
+  str = array_constructor_macro_injection(str);
+  str = line_directive_prefix(filename) + str;
+  return {str, metadata_, error_handler.err};
+}
+
+SourceProcessor::Result SourceProcessor::convert_msl()
+{
+  metadata_ = {};
+
+  string str = this->source_;
+
+  str = remove_comments(str);
+
+  {
+    IntermediateForm<SimpleLexer, DummyParser> parser(str, error_handler);
     /* Remove trailing white space as they make the subsequent regex much slower. */
     cleanup_whitespace(parser);
     str = parser.result_get();
   }
+
   str = threadgroup_variables_parse_and_remove(str);
-  if (language_ == Language::BLENDER_GLSL || language_ == Language::CPP) {
-    {
-      parse_builtins(str, filename);
-      Parser parser(str, report_error_);
 
-      /* Preprocessor directive parsing & linting. */
-      if (language_ == Language::BLENDER_GLSL) { /* TODO(fclem): Enforce in C++ header too. */
-        lint_pragma_once(parser, filename);
-      }
-      parse_pragma_runtime_generated(parser);
-      parse_includes(parser);
-      parse_defines(parser);
-      parse_legacy_create_info(parser);
-      parse_library_functions(parser);
-
-      lower_preprocessor(parser);
-
-      parser.apply_mutations();
-
-      /* Early out for certain files. */
-      if (parser.str().find("\n#pragma no_processing") != string::npos) {
-        cleanup_whitespace(parser);
-        return {line_directive_prefix(filename) + parser.result_get(), metadata_};
-      }
-
-      parse_local_symbols(parser);
-
-      /* Lower high level parsing complexity.
-       * Merge tokens that can be combined together,
-       * remove the token that are unsupported or that are noop.
-       * All these steps should be independent. */
-      lower_namesless_parameters(parser);
-      lower_attribute_sequences(parser);
-      lower_strings_sequences(parser);
-      lower_swizzle_methods(parser);
-      lower_classes(parser);
-      lower_noop_keywords(parser);
-      lower_trailing_comma_in_list(parser);
-      lower_comma_separated_declarations(parser);
-
-      parser.apply_mutations();
-
-      /* Linting phase. Detect valid syntax with invalid usage. */
-      lint_unbraced_statements(parser);
-      lint_reserved_tokens(parser);
-      lint_attributes(parser);
-      lint_global_scope_constants(parser);
-      lint_constructors(parser);
-      lint_forward_declared_structs(parser);
-
-      /* Lower noop attributes after linting them. */
-      lower_maybe_unused(parser);
-      /* Lower assert first to keep original condition. */
-      lower_assert(parser, filename);
-      /* Lint and remove C++ accessor templates before lowering template. */
-      lower_srt_accessor_templates(parser);
-      lower_union_accessor_templates(parser);
-      /* Lower implicit members before we remove SRT member from their struct. */
-      lower_implicit_member(parser);
-      /* Lower namespaces. */
-      lower_using(parser);
-      lower_namespaces(parser);
-      lower_scope_resolution_operators(parser);
-      /* Lower templates. */
-      lower_template_dependent_names(parser);
-      lower_templates(parser);
-      /* Lower unions and then lint shared structures. */
-      lower_unions(parser);
-      lower_host_shared_structures(parser);
-      /* Lower enums. */
-      lower_enums(parser);
-      /* Lower SRT and Interfaces. */
-      lower_entry_points(parser);
-      lower_pipeline_definition(parser, filename);
-      lower_resource_table(parser);
-      lower_resource_access_functions(parser);
-      /* Lower class methods. */
-      lower_default_constructors(parser);
-      lower_function_default_arguments(parser);
-      lower_method_definitions(parser);
-      lower_method_calls(parser);
-      lower_empty_struct(parser);
-      /* Lower SRT accesses. */
-      lower_srt_member_access(parser);
-      lower_srt_arguments(parser);
-      lower_entry_points_signature(parser);
-      lower_stage_function(parser);
-      /* Lower string, assert, printf. */
-      lower_strings(parser);
-      lower_printf(parser);
-      /* Lower other C++ constructs. */
-      lower_implicit_return_types(parser);
-      lower_initializer_implicit_types(parser);
-      lower_designated_initializers(parser);
-      lower_aggregate_initializers(parser);
-      lower_array_initializations(parser);
-      lower_scope_resolution_operators(parser);
-      /* Lower references. */
-      lower_reference_arguments(parser);
-      lower_reference_variables(parser);
-      /* Lower control flow. */
-      lower_static_branch(parser);
-      /* Unroll last to avoid processing more tokens in other phases. */
-      lower_loop_unroll(parser);
-
-      /* GLSL syntax compatibility.
-       * TODO(fclem): Remove. */
-      lower_argument_qualifiers(parser);
-
-      /* Cleanup to make output more human readable and smaller for runtime. */
-      cleanup_whitespace(parser);
-      cleanup_empty_lines(parser);
-      cleanup_line_directives(parser);
-      str = parser.result_get();
-    }
-
-    str = line_directive_prefix(filename) + str;
-    return {str, metadata_};
-  }
-
-  if (language_ == Language::MSL) {
-    Parser parser(str, report_error_);
+  Parser parser(error_handler);
+  try {
+    parser.language = Language::MSL;
+    parser.set_str(str);
     parse_pragma_runtime_generated(parser);
     parse_includes(parser);
     lower_preprocessor(parser);
     str = parser.result_get();
   }
-  if (language_ == Language::GLSL) {
-    parse_builtins(str, filename, true);
-#ifdef __APPLE__ /* Limiting to Apple hardware since GLSL compilers might have issues. */
-    str = matrix_constructor_mutation(str);
-#endif
+  catch (ParserException & /*e*/) {
+    /* Output the current source state for inspection. */
+    return {parser.result_get(), metadata_, error_handler.err};
   }
+
   str = argument_decorator_macro_injection(str);
   str = array_constructor_macro_injection(str);
   str = line_directive_prefix(filename) + str;
-  return {str, metadata_};
+  return {str, metadata_, error_handler.err};
+}
+
+SourceProcessor::Result SourceProcessor::convert_bsl_legacy(
+    metadata::Source external_sources_symbols)
+{
+  metadata_ = {};
+
+  /* Only use symbols and templates from external sources. */
+  metadata_.symbol_table.insert(metadata_.symbol_table.end(),
+                                external_sources_symbols.symbol_table.begin(),
+                                external_sources_symbols.symbol_table.end());
+  metadata_.template_definitions.insert(metadata_.template_definitions.end(),
+                                        external_sources_symbols.template_definitions.begin(),
+                                        external_sources_symbols.template_definitions.end());
+
+  /* Set line number for each symbol to 0 as they are defined outside of the target file. */
+  for (auto &symbol : metadata_.symbol_table) {
+    symbol.definition_line = 0;
+  }
+
+  string str = remove_comments(this->source_);
+
+  Parser parser(error_handler);
+  try {
+    parser.set_str(str);
+
+    disabled_code_mutation(parser);
+    /* Legacy GLSL compat.  */
+    threadgroup_variables_parse_and_remove(parser);
+    parse_builtins(parser, filename);
+    /* Preprocessor directive parsing & linting. */
+    lint_pragma_once(parser, filename);
+    parse_pragma_runtime_generated(parser);
+    parse_includes(parser);
+    parse_defines(parser);
+    parse_library_functions(parser);
+
+    lower_preprocessor(parser);
+
+    parser.apply_mutations();
+
+    /* Early out for certain files. */
+    if (parser.str().find("\n#pragma no_processing") != string::npos) {
+      cleanup_whitespace(parser);
+      return {line_directive_prefix(filename) + parser.result_get(), metadata_, error_handler.err};
+    }
+
+    /* Lower high level parsing complexity.
+     * Merge tokens that can be combined together,
+     * remove the token that are unsupported or that are noop.
+     * All these steps should be independent. */
+    lower_namesless_parameters(parser);
+    lower_attribute_sequences(parser);
+    lower_strings_sequences(parser);
+    lower_swizzle_methods(parser);
+    lower_binary_literals(parser);
+    lower_classes(parser);
+    lower_noop_keywords(parser);
+    lower_trailing_comma_in_list(parser);
+    lower_comma_separated_declarations(parser);
+    lower_assert(parser, filename);
+    /* Lower implicit members before we remove SRT member from their struct. */
+    lower_implicit_member(parser);
+
+    parser.apply_mutations();
+
+    parse_local_symbols(parser);
+
+    /* Linting phase. Detect valid syntax with invalid usage. */
+    lint_unbraced_statements(parser);
+    lint_reserved_tokens(parser);
+    lint_attributes(parser);
+    lint_global_scope_constants(parser);
+    lint_constructors(parser);
+    lint_forward_declared_structs(parser);
+
+    /* All mutations that needs to also be applied on template definitions. */
+    lower_pre_template(parser);
+    /* Lower templates. */
+    lower_templates(parser);
+    /* Lower unions and then lint shared structures. */
+    lower_unions(parser);
+    lower_host_shared_structures(parser);
+    /* Lower enums. */
+    lower_enums(parser);
+    /* Lower SRT and Interfaces. */
+    lower_entry_points(parser);
+    lower_pipeline_definition(parser, filename);
+    lower_resource_table(parser);
+    lower_resource_access_functions(parser);
+    /* Lower class methods. */
+    lower_default_constructors(parser);
+    lower_function_default_arguments(parser);
+    lower_method_definitions(parser);
+    lower_method_calls(parser);
+    lower_empty_struct(parser);
+    /* Lower SRT accesses. */
+    lower_srt_member_access(parser);
+    lower_srt_arguments(parser);
+    lower_entry_points_signature(parser);
+    lower_stage_function(parser);
+    /* Lower string, assert, printf. */
+    lower_strings(parser);
+    lower_printf(parser);
+    /* Lower other C++ constructs. */
+    lower_implicit_return_types(parser);
+    lower_initializer_implicit_types(parser);
+    lower_designated_initializers(parser);
+    lower_aggregate_initializers(parser);
+    lower_array_initializations(parser);
+    lower_scope_resolution_operators(parser);
+    lower_structured_bindings(parser);
+    lower_tests(parser);
+    /* Lower references. */
+    lower_reference_arguments(parser);
+    lower_reference_variables(parser);
+    /* Lower control flow. */
+    lower_static_branch(parser);
+    /* Unroll last to avoid processing more tokens in other phases. */
+    lower_loop_unroll(parser);
+
+    /* GLSL syntax compatibility.
+     * TODO(fclem): Remove. */
+    lower_argument_qualifiers(parser);
+    lower_gather_component(parser);
+
+    /* Cleanup to make output more human readable and smaller for runtime. */
+    cleanup_whitespace(parser);
+    cleanup_empty_lines(parser);
+    cleanup_line_directives(parser);
+
+    str = parser.result_get();
+  }
+  catch (ParserException & /*e*/) {
+    /* Output the current source state for inspection. */
+    return {parser.result_get(), metadata_, error_handler.err};
+  }
+
+  str = line_directive_prefix(filename) + str;
+  return {str, metadata_, error_handler.err};
+}
+
+SourceProcessor::Result SourceProcessor::convert_bsl()
+{
+  metadata_ = {};
+
+  string str = remove_comments(this->source_);
+  /* Add source file line directive first so that error lines are correct. */
+  str = line_directive_prefix(filename) + str;
+  /* Define `BSL_530` macro for this file only. Needed for compatibility with old BSL version? */
+  str = "#define BSL_530\n" + str + "\n#undef BSL_530\n";
+
+  SourceManager sources;
+
+  /* Init builtin parser to add builtin symbols. */
+  Parser &builtin_parser = sources.new_source(error_handler);
+  builtin_parser.language = Language::BSL;
+  builtin_parser.set_str("#line 1 \"builtin\"\n#error This should not be emitted\n");
+  builtin_parser.include_id = sources.include_id_get();
+  /* Init symbol table and add builtin symbols. */
+  bsl::SymbolTable symbols(builtin_parser);
+
+  Parser &parser = sources.new_source(error_handler);
+  try {
+    /* Allow CPP grammar until we remove #ifndef GPU_SHADER blocks. */
+    parser.language = Language::CPP;
+    parser.set_str(str);
+
+    disabled_code_mutation(parser, true);
+    /* Preprocessor directive parsing & linting. */
+    lint_pragma_once(parser, filename);
+    parse_pragma_runtime_generated(parser);
+    parse_includes(parser);
+    parse_defines(parser);
+    lower_tests(parser, "srt.");
+
+    parser.only_apply_mutations();
+
+    vector<string> visited_files;
+    scan_external_symbols(sources, symbols, visited_files);
+
+    parser.include_id = sources.include_id_get();
+
+    parser.language = Language::BSL;
+    parser.parse(error_handler);
+
+    parse_library_functions_ast(parser);
+    lower_preprocessor_ast(parser);
+
+    /* Lower high level parsing complexity.
+     * Merge tokens that can be combined together,
+     * remove the token that are unsupported or that are noop.
+     * All these steps should be independent. */
+    lower_namesless_parameters_ast(parser);
+    lower_attribute_sequences_ast(parser);
+    lower_strings_sequences(parser);
+    lower_swizzle_methods_ast(parser);
+    lower_binary_literals(parser);
+    lower_noop_keywords_ast(parser);
+    lower_trailing_comma_in_list_ast(parser);
+    lower_assert_ast(parser, filename);
+    lower_this_keyword(parser);
+
+    parser.apply_mutations();
+
+    /* Linting phase. Detect valid syntax with invalid usage. */
+    lint_reserved_tokens(parser);
+    lint_attributes_ast(parser);
+
+    lower_srt_accessor_templates_ast(parser);   /* Legacy. To remove. */
+    lower_union_accessor_templates_ast(parser); /* Legacy. To remove. */
+
+    symbols.parse(parser.root(), error_handler);
+
+    lower_bsl_to_il(parser, symbols);
+    /* Lower SRT and Interfaces. */
+    lower_pipeline_definition(parser, filename);
+    /* Lower class methods. */
+    lower_method_forward_declaration(parser);
+    lower_union_setters(parser);
+    lower_method_calls(parser, false);
+    /* Lower string, assert, printf. */
+    lower_strings(parser);
+    lower_printf(parser);
+    /* Needs to be last. */
+    lower_resource_macro_placeholder_ast(parser);
+    lower_constructors(parser);
+
+    parser.language = Language::IL;
+    parser.apply_mutations();
+
+    /* GLSL syntax compatibility. */
+    lower_reference_arguments(parser);
+    lower_argument_qualifiers(parser);
+    lower_gather_component(parser);
+
+    /* Cleanup to make output more human readable and smaller for runtime. */
+    cleanup_whitespace(parser, true);
+    cleanup_empty_lines(parser);
+    cleanup_line_directives(parser);
+
+    str = parser.result_get();
+  }
+  catch (ParserException & /*e*/) {
+    /* Output the current source state for inspection. */
+    return {parser.result_get(), metadata_, error_handler.err};
+  }
+  return {str, metadata_, error_handler.err};
+}
+
+SourceProcessor::Result SourceProcessor::convert_info()
+{
+  metadata_ = {};
+
+  string str = remove_comments(this->source_);
+
+  Parser parser(error_handler);
+  try {
+    parser.set_str(str);
+
+    disabled_code_mutation(parser);
+    /* Legacy GLSL compat.  */
+    threadgroup_variables_parse_and_remove(parser);
+    parse_builtins(parser, filename);
+    /* Preprocessor directive parsing & linting. */
+    lint_pragma_once(parser, filename);
+    parse_pragma_runtime_generated(parser);
+    parse_includes(parser);
+    parse_defines(parser);
+    parse_legacy_create_info(parser);
+
+    lower_preprocessor(parser);
+
+    /* Cleanup to make output more human readable and smaller for runtime. */
+    cleanup_whitespace(parser);
+    cleanup_empty_lines(parser);
+    cleanup_line_directives(parser);
+
+    str = parser.result_get();
+  }
+  catch (ParserException & /*e*/) {
+    /* Output the current source state for inspection. */
+    return {parser.result_get(), metadata_, error_handler.err};
+  }
+
+  return {str, metadata_, error_handler.err};
+}
+
+SourceProcessor::Result SourceProcessor::convert(metadata::Source external_sources_symbols)
+{
+  switch (language_) {
+    case Language::INFO:
+      return convert_info();
+    case Language::CPP:
+      /* Should become BSL, but until the new compiler is fully working, fallback
+       * to the legacy path. */
+      return convert_bsl_legacy(external_sources_symbols);
+    case Language::BSL:
+      return convert_bsl(); /* WIP */
+    case Language::BLENDER_GLSL:
+      return convert_bsl_legacy(external_sources_symbols);
+    case Language::MSL:
+      return convert_msl();
+    case Language::GLSL:
+      return convert_glsl();
+    case Language::UNKNOWN:
+    default:
+      break;
+  }
+
+  metadata_ = {};
+  report_error(0, 0, "", "Unknown file type");
+  return {"", metadata_, error_handler.err};
 }
 
 metadata::Source SourceProcessor::parse_include_and_symbols()
 {
   metadata_ = {};
 
-  string str = this->source_;
-  str = remove_comments(str);
-  str = disabled_code_mutation(str);
+  string str = remove_comments(this->source_);
 
-  Parser parser(str, report_error_);
-  parse_pragma_runtime_generated(parser);
-  parse_includes(parser);
+  Parser parser(error_handler);
+  try {
+    parser.set_str(str);
+    disabled_code_mutation(parser);
+    parse_pragma_runtime_generated(parser);
+    parse_includes(parser);
 
-  parser.apply_mutations();
+    parser.apply_mutations();
 
-  lower_preprocessor(parser);
+    lower_preprocessor(parser);
 
-  parser.apply_mutations();
+    parser.apply_mutations();
 
-  parse_local_symbols(parser);
+    /* Lower high level parsing complexity.
+     * Merge tokens that can be combined together,
+     * remove the token that are unsupported or that are noop.
+     * All these steps should be independent. */
+    lower_namesless_parameters(parser);
+    lower_attribute_sequences(parser);
+    lower_strings_sequences(parser);
+    lower_swizzle_methods(parser);
+    lower_classes(parser);
+    lower_noop_keywords(parser);
+    lower_trailing_comma_in_list(parser);
+    lower_comma_separated_declarations(parser);
+    lower_assert(parser, filename);
+    /* Lower implicit members before we remove SRT member from their struct. */
+    lower_implicit_member(parser);
+
+    parser.apply_mutations();
+
+    parse_local_symbols(parser);
+  }
+  catch (ParserException & /*e*/) {
+    /* Expect that the parsing will generate error when the file itself is compiled. */
+    return {};
+  }
+
+  return metadata_;
+}
+
+void SourceProcessor::scan_external_symbols(SourceManager &sources,
+                                            bsl::SymbolTable &symbols,
+                                            vector<string> &visited_files)
+{
+  for (const auto &dep : metadata_.dependencies) {
+    string file;
+    for (const auto &filename : file_list_) {
+      if (filename.find(dep) != string::npos) {
+        file = filename;
+      }
+    }
+
+    if (file.empty()) {
+      report_error(0, 0, "", "Error: Included file not found " + dep);
+      throw ParserException();
+    }
+
+    if (ranges::find(visited_files, file) == visited_files.end()) {
+      visited_files.emplace_back(file);
+
+      ifstream input_file(file);
+      if (!input_file) {
+        report_error(0, 0, "", "Error: Could not open file " + file);
+        throw ParserException();
+      }
+
+      stringstream buffer;
+      buffer << input_file.rdbuf();
+
+      Language language = language_from_filename(file);
+      SourceProcessor processor(buffer.str(), file, language, file_list_);
+      /* Recursive. */
+      processor.parse_include_and_symbols(sources, symbols, visited_files);
+
+      /* If an error occur, cancel everything and let the error bubble up. */
+      if (processor.error_handler.err) {
+        this->error_handler.err = processor.error_handler.err;
+        throw ParserException();
+      }
+    }
+  }
+}
+
+metadata::Source SourceProcessor::parse_include_and_symbols(SourceManager &sources,
+                                                            bsl::SymbolTable &symbols,
+                                                            vector<string> &visited_files)
+{
+  string str = remove_comments(this->source_);
+  /* Add source file line directive first so that error lines are correct. */
+  str = line_directive_prefix(filename) + str;
+
+  Parser &parser = sources.new_source(error_handler);
+  try {
+    parser.set_str(str);
+    disabled_code_mutation(parser, true);
+    parse_pragma_runtime_generated(parser);
+    parse_includes(parser);
+
+    if (language_ == Language::INFO) {
+      return metadata_;
+    }
+
+    if (language_ == Language::GLSL || language_ == Language::BLENDER_GLSL) {
+      parser().foreach_match("A(A)", [&](Tokens toks) {
+        string_view fn_name = toks[0].str();
+        if (fn_name == "SHADER_LIBRARY_CREATE_INFO" || fn_name == "VERTEX_SHADER_CREATE_INFO" ||
+            fn_name == "FRAGMENT_SHADER_CREATE_INFO" || fn_name == "COMPUTE_SHADER_CREATE_INFO")
+        {
+          parser.erase(toks.front(), toks.back().next() == ';' ? toks.back().next() : toks.back());
+        }
+      });
+    }
+
+    parser.apply_mutations();
+
+    lower_preprocessor(parser);
+
+    parser.language = Language::BSL;
+    parser.only_apply_mutations();
+    parser.parse(error_handler);
+
+    lower_namesless_parameters_ast(parser);
+    lower_attribute_sequences_ast(parser);
+
+    parser.apply_mutations();
+
+    scan_external_symbols(sources, symbols, visited_files);
+
+    parser.include_id = sources.include_id_get();
+
+    lower_srt_accessor_templates_ast(parser);   /* Legacy. To remove. */
+    lower_union_accessor_templates_ast(parser); /* Legacy. To remove. */
+
+    symbols.parse(parser.root(), error_handler);
+  }
+  catch (ParserException & /*e*/) {
+    /* Expect that the parsing will generate error when the file itself is compiled. */
+    return {};
+  }
 
   return metadata_;
 }
@@ -233,10 +578,10 @@ string SourceProcessor::remove_comments(const string &str)
     }
 
     if (end == string::npos) {
-      report_error_(line_number(out_str, start),
-                    char_number(out_str, start),
-                    line_str(out_str, start),
-                    "Malformed multi-line comment.");
+      report_error(line_number(out_str, start),
+                   char_number(out_str, start),
+                   line_str(out_str, start),
+                   "Malformed multi-line comment.");
       return out_str;
     }
   }
@@ -256,10 +601,26 @@ string SourceProcessor::remove_comments(const string &str)
   return out_str;
 }
 
+void SourceProcessor::remove_comments(Parser &parser)
+{
+  parser().foreach_token(TokenType::Comment, [&](Token tok) { parser.erase(tok); });
+  parser.apply_mutations();
+}
+
 /* Remove trailing white spaces. */
-template<typename ParserT> void SourceProcessor::cleanup_whitespace(ParserT &parser)
+template<typename ParserT>
+void SourceProcessor::cleanup_whitespace(ParserT &parser, bool do_leading)
 {
   const string &str = parser.str();
+
+  if (do_leading) {
+    /* Cleanup leading white-spaces at the start of the file.
+     * Only to be done if there is a line directive at the top of the file. */
+    size_t first_char = str.find_first_not_of(" \n");
+    if (first_char != 0 && first_char != string::npos) {
+      parser.replace(0, first_char - 1, "");
+    }
+  }
 
   size_t last_whitespace = -1;
   while ((last_whitespace = str.find(" \n", last_whitespace + 1)) != string::npos) {
@@ -278,6 +639,19 @@ void SourceProcessor::parse_defines(Parser &parser)
 {
   parser().foreach_match<true>("#A", [&](const vector<Token> &tokens) {
     if (tokens[1].str() == "define") {
+      if (tokens[1].next().str().starts_with("LIGHT_STACK_SIZE_")) {
+        /* WORKAROUND: Avoid warning caused by EEVEE macro setup. */
+        return;
+      }
+      if (tokens[1].next().str() == "GBUFFER_LAYER_MAX") {
+        /* WORKAROUND: Avoid warning caused by EEVEE macro setup. */
+        return;
+      }
+      if (tokens[1].next().str().starts_with("gather_")) {
+        /* WORKAROUND: Avoid warning caused by EEVEE macro setup. */
+        return;
+      }
+
       metadata_.create_infos_defines.emplace_back(tokens[1].next().scope().str_with_whitespace());
     }
     if (tokens[1].str() == "undef") {
@@ -339,7 +713,7 @@ void SourceProcessor::parse_legacy_create_info(Parser &parser)
       const string end_tok = "GPU_SHADER_CREATE_END()";
       const size_t end_pos = parser.str().find(end_tok, start_end);
       if (end_pos == string::npos) {
-        report_error_(ERROR_TOK(tokens[0]), "Missing create info end.");
+        report_error(tokens[0], "Missing create info end.");
         return;
       }
 
@@ -357,13 +731,13 @@ void SourceProcessor::parse_legacy_create_info(Parser &parser)
       const string end_str = "GPU_SHADER_NAMED_INTERFACE_END(";
       size_t end_pos = parser.str().find(end_str, start_end);
       if (end_pos == string::npos) {
-        report_error_(ERROR_TOK(tokens[0]), "Missing create info end.");
+        report_error(tokens[0], "Missing create info end.");
         return;
       }
 
       end_pos = parser.str().find(')', end_pos);
       if (end_pos == string::npos) {
-        report_error_(ERROR_TOK(tokens[0]), "Missing parenthesis at info end.");
+        report_error(tokens[0], "Missing parenthesis at info end.");
         return;
       }
 
@@ -379,7 +753,7 @@ void SourceProcessor::parse_legacy_create_info(Parser &parser)
       const string end_str = "GPU_SHADER_INTERFACE_END()";
       size_t end_pos = parser.str().find(end_str, start_end);
       if (end_pos == string::npos) {
-        report_error_(ERROR_TOK(tokens[0]), "Missing create info end.");
+        report_error(tokens[0], "Missing create info end.");
         return;
       }
       const string variant_decl = parser.substr_range_inclusive(tokens.front().str_index_start(),
@@ -418,7 +792,7 @@ void SourceProcessor::parse_includes(Parser &parser)
       metadata_.create_infos_dependencies.emplace_back(dependency_name);
     }
 
-    if (dependency_name == "BLI_utildefines_variadic.h") {
+    if (dependency_name == "BLI_utildefines_variadic.hh") {
       /* Skip GLSL-C++ stubs. They are only for IDE linting. */
       parser.erase(tokens.front(), tokens.back());
       return;
@@ -438,8 +812,12 @@ void SourceProcessor::parse_includes(Parser &parser)
       dependency_name = dependency_name.substr(6);
     }
 
+    if (dependency_name == filename) {
+      report_error(tokens[2], "Recursive include");
+    }
     metadata_.dependencies.emplace_back(dependency_name);
   });
+  parser.apply_mutations();
 }
 
 bool SourceProcessor::has_pragma(Parser &parser, string_view pragma_str)
@@ -469,7 +847,7 @@ void SourceProcessor::lint_pragma_once(Parser &parser, const string &filename)
     return;
   }
   if (!has_pragma(parser, "once")) {
-    report_error_(0, 0, "", "Header files must contain #pragma once directive.");
+    report_error(parser[0], "Header files must contain #pragma once directive.");
   }
 }
 
@@ -488,7 +866,7 @@ void SourceProcessor::lower_namesless_parameters(Parser &parser)
     }
     int i = 0;
     tok.scope().foreach_scope(ScopeType::FunctionArg, [&](Scope arg) {
-      if (arg.token_count() == 1 || arg.back().prev() == Const || arg.back() == '&' ||
+      if (arg.token_count() == 1 || arg.back().prev() == TokenType::Const || arg.back() == '&' ||
           arg.back() == '>')
       {
         /* Append a name for nameless argument. */
@@ -500,16 +878,31 @@ void SourceProcessor::lower_namesless_parameters(Parser &parser)
   });
 }
 
-string SourceProcessor::disabled_code_mutation(const string &str)
+void SourceProcessor::lower_namesless_parameters_ast(Parser &parser)
 {
-  Parser parser(str, report_error_);
+  for (FuncDecl fn : parser.root().descendants_of_type<FuncDecl>()) {
+    int i = 0;
+    for (FuncArg arg : fn.arguments().children_of_type<FuncArg>()) {
+      if (!arg.identifier().is_valid()) {
+        bool is_ref = arg.is_reference();
+        Token arg_back(is_ref ? arg.declarator().reference().back() : arg.back());
+        /* Append a name for nameless argument. */
+        parser.replace(arg_back.str_index_last_no_whitespace() + 1,
+                       arg_back.str_index_last(),
+                       " _" + std::to_string(i++));
+      }
+    }
+  }
+}
 
+void SourceProcessor::disabled_code_mutation(Parser &parser, bool new_bsl_compiler)
+{
   auto process_disabled_scope = [&](Token start_tok) {
     /* Search for endif with the same indentation. Assume formatted input. */
     string end_str = string(start_tok.str_with_whitespace()) + "endif";
     size_t scope_end = parser.str().find(end_str, start_tok.str_index_start());
     if (scope_end == string::npos) {
-      report_error_(ERROR_TOK(start_tok), "Couldn't find end of disabled scope.");
+      report_error(start_tok, "Couldn't find end of disabled scope.");
       return;
     }
     /* Search for else/elif with the same indentation. Assume formatted input. */
@@ -525,22 +918,73 @@ string SourceProcessor::disabled_code_mutation(const string &str)
     }
   };
 
+  auto process_enabled_scope = [&](Token start_tok) {
+    /* Search for endif with the same indentation. Assume formatted input. */
+    string end_str = string(start_tok.str_with_whitespace()) + "endif";
+    size_t scope_end = parser.str().find(end_str, start_tok.str_index_start());
+    if (scope_end == string::npos) {
+      report_error(start_tok, "Couldn't find end of enabled scope.");
+      return;
+    }
+
+    /* Find where the #if 1 line ends to start keeping content */
+    size_t code_start = start_tok.line_end() + 1;
+
+    /* Search for else/elif with the same indentation. */
+    string else_str = string(start_tok.str_with_whitespace()) + "el";
+    size_t scope_else = parser.str().find(else_str, start_tok.str_index_start());
+
+    /* Erase the initial #if 1 directive line */
+    parser.erase(start_tok.str_index_start(), code_start - 1);
+
+    if (scope_else != string::npos && scope_else < scope_end) {
+      /* Erase the disabled #else/#elif block up to the end of #endif */
+      parser.erase(scope_else, scope_end + end_str.size());
+    }
+    else {
+      /* If there's no #else branch, erase just the #endif directive line */
+      parser.erase(scope_end, scope_end + end_str.size());
+    }
+  };
+
   parser().foreach_match<true>("#AA", [&](const vector<Token> &tokens) {
-    if (tokens[1].str() == "ifndef" && tokens[2].str() == "GPU_SHADER") {
+    if (tokens[1].str() != "ifndef") {
+      return;
+    }
+    if (tokens[2].str() == "GPU_SHADER" ||
+        (new_bsl_compiler ? tokens[2].str() == "BSL_530" : false))
+    {
       process_disabled_scope(tokens[0]);
     }
   });
   parser().foreach_match<true>("#i!A(A)", [&](const vector<Token> &tokens) {
-    if (tokens[1].str() == "if" && tokens[3].str() == "defined" && tokens[5].str() == "GPU_SHADER")
+    if (tokens[1].str() != "if" || tokens[3].str() != "defined") {
+      return;
+    }
+    if (tokens[5].str() == "GPU_SHADER" ||
+        (new_bsl_compiler ? tokens[5].str() == "BSL_530" : false))
     {
       process_disabled_scope(tokens[0]);
     }
   });
   parser().foreach_match<true>("#i1", [&](const vector<Token> &tokens) {
-    if (tokens[1].str() == "if" && tokens[2].str() == "0") {
-      process_disabled_scope(tokens[0]);
+    if (tokens[1].str() == "if") {
+      if (tokens[2].str() == "0") {
+        process_disabled_scope(tokens[0]);
+      }
+      else if (tokens[2].str() == "1") {
+        process_enabled_scope(tokens[0]);
+      }
     }
   });
+
+  parser.apply_mutations();
+}
+
+string SourceProcessor::disabled_code_mutation(const string &str)
+{
+  Parser parser(str, error_handler);
+  disabled_code_mutation(parser);
   return parser.result_get();
 }
 
@@ -562,6 +1006,28 @@ void SourceProcessor::lower_preprocessor(Parser &parser)
       parser.erase(tokens.front(), tokens[1].next());
     }
   });
+  parser.apply_mutations();
+}
+
+void SourceProcessor::lower_preprocessor_ast(Parser &parser)
+{
+  /* Remove unsupported directives. */
+  for (Preprocessor directive : parser.root().descendants_of_type<Preprocessor>()) {
+    Token type = directive.front().next();
+    if (type.str() == "pragma") {
+      Token pragma = type.next();
+      if (pragma.str() == "once") {
+        parser.erase(directive);
+      }
+      else if (pragma.str() == "runtime_generated") {
+        parser.erase(directive);
+      }
+    }
+    else if (type.str() == "include" && type.next() == String) {
+      parser.erase(directive);
+    }
+  }
+  parser.apply_mutations();
 }
 
 /* Support for BLI swizzle syntax. */
@@ -582,10 +1048,43 @@ void SourceProcessor::lower_swizzle_methods(Parser &parser)
   });
 }
 
-string SourceProcessor::threadgroup_variables_parse_and_remove(const string &str)
+void SourceProcessor::lower_swizzle_methods_ast(Parser &parser)
 {
-  Parser parser(str, report_error_);
+  /* Change C++ swizzle functions into plain swizzle. */
+  /** IMPORTANT: This prevent the usage of any method with a swizzle name. */
+  for (FuncCall call : parser.root().descendants_of_type<FuncCall>()) {
+    ast::FuncParamList params = call.parameters();
+    if (call.front().prev() != Dot || !params.is_empty()) {
+      continue;
+    }
 
+    string_view method_name = call.identifier().str();
+    if (method_name.length() > 1 && method_name.length() <= 4 &&
+        (method_name.find_first_not_of("xyzw") == string::npos ||
+         method_name.find_first_not_of("rgba") == string::npos))
+    {
+      /* `.xyz()` -> `.xyz  ` */
+      parser.erase(params);
+    }
+  }
+}
+
+/* Support for C++ binary literal syntax for integers. */
+void SourceProcessor::lower_binary_literals(Parser &parser)
+{
+  parser().foreach_token(Number, [&](const Token tok) {
+    string_view str = tok.str();
+    if (str.starts_with("0b") || str.starts_with("0B")) {
+      int64_t value = std::stoll(string(str.substr(2)), nullptr, 2);
+      parser.replace(tok.str_index_start(),
+                     tok.str_index_last_no_whitespace(),
+                     std::to_string(value) + (str.ends_with("u") ? "u" : ""));
+    }
+  });
+}
+
+void SourceProcessor::threadgroup_variables_parse_and_remove(Parser &parser)
+{
   auto process_shared_var = [&](Token shared_tok, Token type, Token name, Token decl_end) {
     if (shared_tok.str() == "shared") {
       metadata_.shared_variables.push_back(
@@ -594,20 +1093,28 @@ string SourceProcessor::threadgroup_variables_parse_and_remove(const string &str
       parser.erase(shared_tok, decl_end);
     }
   };
-  parser().foreach_match("AAA;", [&](const vector<Token> &tokens) {
-    process_shared_var(tokens[0], tokens[1], tokens[2], tokens.back());
+  parser().foreach_match("AAA", [&](const vector<Token> &tokens) {
+    Token end = tokens[2].find_next(lexit::SemiColon);
+    process_shared_var(tokens[0], tokens[1], tokens[2], end);
   });
-  parser().foreach_match("AAA[..];", [&](const vector<Token> &tokens) {
-    process_shared_var(tokens[0], tokens[1], tokens[2], tokens.back());
-  });
-  parser().foreach_match("AAA[..][..];", [&](const vector<Token> &tokens) {
-    process_shared_var(tokens[0], tokens[1], tokens[2], tokens.back());
-  });
-  parser().foreach_match("AAA[..][..][..];", [&](const vector<Token> &tokens) {
-    process_shared_var(tokens[0], tokens[1], tokens[2], tokens.back());
-  });
-  /* If more array depth is needed, find a less dumb solution. */
+  parser.apply_mutations();
+}
 
+string SourceProcessor::threadgroup_variables_parse_and_remove(const string &str)
+{
+  IntermediateForm<FullLexer, DummyParser> parser(str, error_handler);
+  auto process_shared_var = [&](Token shared_tok, Token type, Token name, Token decl_end) {
+    if (shared_tok.str() == "shared") {
+      metadata_.shared_variables.push_back(
+          {string(type.str()), parser.substr_range_inclusive(name, decl_end.prev())});
+
+      parser.erase(shared_tok, decl_end);
+    }
+  };
+  parser().foreach_match("AAA", [&](const vector<Token> &tokens) {
+    process_shared_var(tokens[0], tokens[1], tokens[2], tokens[2].find_next(lexit::SemiColon));
+  });
+  parser.apply_mutations();
   return parser.result_get();
 }
 
@@ -623,11 +1130,11 @@ void SourceProcessor::parse_library_functions(Parser &parser)
           return;
         }
         if (fn_type.str() != "void") {
-          report_error_(ERROR_TOK(fn_type), "Expected void return type for node function");
+          report_error(fn_type, "Expected void return type for node function");
           return;
         }
         if (fn_args.token_count() <= 3) {
-          report_error_(ERROR_TOK(fn_type), "Expected at least one argument for node function");
+          report_error(fn_type, "Expected at least one argument for node function");
           return;
         }
         FunctionFormat fn;
@@ -643,8 +1150,8 @@ void SourceProcessor::parse_library_functions(Parser &parser)
               qualifier = "out";
             }
             else if (qualifier != "const" && qualifier != "(" && qualifier != ",") {
-              report_error_(ERROR_TOK(type.prev()),
-                            "Unrecognized qualifier, expecting 'const', 'in', 'out' or 'inout'.");
+              report_error(type.prev(),
+                           "Unrecognized qualifier, expecting 'const', 'in', 'out' or 'inout'.");
               qualifier = "in";
             }
             else {
@@ -657,6 +1164,46 @@ void SourceProcessor::parse_library_functions(Parser &parser)
 
         metadata_.functions.emplace_back(fn);
       });
+}
+
+void SourceProcessor::parse_library_functions_ast(Parser &parser)
+{
+  using namespace metadata;
+  for (FuncDecl func : parser.root().children_of_type<FuncDecl>()) {
+    if (!func.attributes().contains_attr("node")) {
+      return;
+    }
+    if (func.return_type().str() != "void") {
+      report_error(func.return_type(), "Expected void return type for node function");
+      return;
+    }
+    if (func.arguments().is_empty()) {
+      report_error(func.identifier(), "Expected at least one argument for node function");
+      return;
+    }
+
+    FunctionFormat fn;
+    fn.name = func.identifier().str();
+
+    for (FuncArg arg : func.arguments().children_of_type<FuncArg>()) {
+      if (arg.declarator().array().is_valid()) {
+        report_error(arg.declarator().array(),
+                     "Array arguments are not supported in node functions.");
+      }
+
+      Type type = Type(hash(string(arg.type().str())));
+      Qualifier qualifier;
+      if (arg.is_reference() && !arg.is_const()) {
+        qualifier = Qualifier(hash("inout"));
+      }
+      else {
+        qualifier = Qualifier(hash("in"));
+      }
+
+      fn.arguments.emplace_back(qualifier, type);
+    }
+    metadata_.functions.emplace_back(fn);
+  }
 }
 
 void SourceProcessor::parse_builtins(const string &str, const string &filename, bool pure_glsl)
@@ -709,12 +1256,26 @@ void SourceProcessor::parse_builtins(const string &str, const string &filename, 
   }
 }
 
+void SourceProcessor::parse_builtins(Parser &parser, const std::string &filename)
+{
+  parser.apply_mutations();
+  parse_builtins(parser.str(), filename);
+}
+
 /* Add padding member to empty structs.
  * Empty structs are useful for templating. */
 void SourceProcessor::lower_empty_struct(Parser &parser)
 {
-  parser().foreach_match(
-      "sA{};", [&](const vector<Token> &tokens) { parser.insert_after(tokens[2], "int _pad;"); });
+  parser().foreach_struct([&](Token, Scope, Token, Scope body) {
+    int decl_count = 0;
+    body.foreach_declaration(
+        [&](Scope, Token, Token, Scope, Token, Scope, Token) { decl_count += 1; });
+
+    if (decl_count == 0) {
+      parser.insert_before(body.back(), "int _pad;");
+    }
+  });
+
   parser.apply_mutations();
 }
 
@@ -730,9 +1291,9 @@ void SourceProcessor::lower_pipeline_definition(Parser &parser, const string &fi
       Token struct_name = tok.next();
       Scope scope = struct_name.next().scope();
       if (scope.token_count() == 2) {
-        report_error_(ERROR_TOK(struct_name),
-                      "Empty brace constructor is an error in Pipeline declaration. "
-                      "Either remove it or add compilation constant values to it.");
+        report_error(struct_name,
+                     "Empty brace constructor is an error in Pipeline declaration. "
+                     "Either remove it or add compilation constant values to it.");
       }
       auto process_constant = [&](const vector<Token> &toks) {
         create_info_decl += "COMPILATION_CONSTANT(";
@@ -753,10 +1314,10 @@ void SourceProcessor::lower_pipeline_definition(Parser &parser, const string &fi
 
   auto validate_fn_name = [&](Token fn_name) {
     if (fn_name == '&') {
-      report_error_(ERROR_TOK(fn_name), "Double function reference, remove '&'");
+      report_error(fn_name, "Double function reference, remove '&'");
     }
     else if (fn_name != Word) {
-      report_error_(ERROR_TOK(fn_name), "Expected function name");
+      report_error(fn_name, "Expected function name");
     }
     return fn_name;
   };
@@ -866,7 +1427,7 @@ void SourceProcessor::guarded_scope_mutation(Parser &parser,
         /**/
         type == "float3x2" || type == "float3x3" || type == "float3x4" ||
         /**/
-        type == "float4x2" || type == "float4x3" || type == "float4x4")
+        type == "float4x2" || type == "float4x3" || type == "float4x4" || type == "bool")
     {
       is_trivial = true;
     }
@@ -904,8 +1465,8 @@ void SourceProcessor::lower_host_shared_structures(Parser &parser)
 
     Token comma = body.find_token(',');
     if (comma.is_valid() && comma.scope() == body) {
-      report_error_(
-          ERROR_TOK(comma),
+      report_error(
+          comma,
           "comma declaration is not supported in shared struct, expand to multiple definition");
       return;
     }
@@ -944,37 +1505,37 @@ void SourceProcessor::lower_host_shared_structures(Parser &parser)
       if (type_str.find("char") != string::npos || type_str.find("short") != string::npos ||
           type_str.find("half") != string::npos)
       {
-        report_error_(ERROR_TOK(type), "Small types are forbidden in shader interfaces.");
+        report_error(type, "Small types are forbidden in shader interfaces.");
       }
       else if (type_str == "float3") {
-        report_error_(ERROR_TOK(type), "use packed_float3 instead of float3 in shared structure");
+        report_error(type, "use packed_float3 instead of float3 in shared structure");
       }
       else if (type_str == "uint3") {
-        report_error_(ERROR_TOK(type), "use packed_uint3 instead of uint3 in shared structure");
+        report_error(type, "use packed_uint3 instead of uint3 in shared structure");
       }
       else if (type_str == "int3") {
-        report_error_(ERROR_TOK(type), "use packed_int3 instead of int3 in shared structure");
+        report_error(type, "use packed_int3 instead of int3 in shared structure");
       }
       else if (type_str == "bool") {
-        report_error_(ERROR_TOK(type), "bool is not allowed in shared structure, use bool32_t");
+        report_error(type, "bool is not allowed in shared structure, use bool32_t");
       }
       else if (type_str == "float4x3") {
-        report_error_(ERROR_TOK(type), "float4x3 is not allowed in shared structure");
+        report_error(type, "float4x3 is not allowed in shared structure");
       }
       else if (type_str == "float3x3") {
-        report_error_(ERROR_TOK(type), "float3x3 is not allowed in shared structure");
+        report_error(type, "float3x3 is not allowed in shared structure");
       }
       else if (type_str == "float2x3") {
-        report_error_(ERROR_TOK(type), "float2x3 is not allowed in shared structure");
+        report_error(type, "float2x3 is not allowed in shared structure");
       }
       else if (type_str == "float4x2") {
-        report_error_(ERROR_TOK(type), "float4x2 is not allowed in shared structure");
+        report_error(type, "float4x2 is not allowed in shared structure");
       }
       else if (type_str == "float3x2") {
-        report_error_(ERROR_TOK(type), "float3x2 is not allowed in shared structure");
+        report_error(type, "float3x2 is not allowed in shared structure");
       }
       else if (type_str == "float2x2") {
-        report_error_(ERROR_TOK(type), "float2x2 is not allowed in shared structure");
+        report_error(type, "float2x2 is not allowed in shared structure");
       }
 
       auto sz = sizeof_types.find(string(type_str));
@@ -1001,8 +1562,7 @@ void SourceProcessor::lower_host_shared_structures(Parser &parser)
         // parser.replace(type, type.str() + linted_struct_suffix + " ");
       }
       else {
-        report_error_(ERROR_TOK(type),
-                      "Unknown type, add 'enum' or 'struct' keyword before the type name");
+        report_error(type, "Unknown type, add 'enum' or 'struct' keyword before the type name");
         return;
       }
 
@@ -1013,7 +1573,7 @@ void SourceProcessor::lower_host_shared_structures(Parser &parser)
       size_t align = type_info.alignment - (offset % type_info.alignment);
       if (align != type_info.alignment) {
         string err = "Misaligned member, missing " + to_string(align) + " padding bytes";
-        report_error_(ERROR_TOK(type), err.c_str());
+        report_error(type, err);
       }
 
       size_t array_size = 1;
@@ -1037,7 +1597,7 @@ void SourceProcessor::lower_host_shared_structures(Parser &parser)
     }
     else if (offset % 16 != 0) {
       string err = "Alignment issue, missing " + to_string(16 - (offset % 16)) + " padding bytes";
-      report_error_(ERROR_TOK(struct_name), err.c_str());
+      report_error(struct_name, err);
     }
     /* Insert an alias to the type that will get referenced for shaders that enforce usage of
      * linted types. */
@@ -1063,7 +1623,7 @@ void SourceProcessor::lint_unbraced_statements(Parser &parser)
       end_tok = end_tok.next().scope().back();
     }
     if (end_tok.next() != '{') {
-      report_error_(ERROR_TOK(end_tok), "Missing curly braces after flow control statement.");
+      report_error(end_tok, "Missing curly braces after flow control statement.");
     }
   };
 
@@ -1087,11 +1647,41 @@ void SourceProcessor::lint_reserved_tokens(Parser &parser)
   };
 
   parser().foreach_token(Word, [&](Token tok) {
-    if (reserved_symbols.find(string(tok.str())) != reserved_symbols.end()) {
+    if (reserved_symbols.contains(string(tok.str()))) {
       string err = string(tok.str()) + " is a reserved token";
-      report_error_(ERROR_TOK(tok), err.c_str());
+      report_error(tok, err);
     }
   });
+}
+
+void SourceProcessor::lower_tests(Parser &parser, const string &prefix)
+{
+  parser().foreach_function([&](bool, Token type, Token, Scope, bool, Scope fn_body) {
+    if (type.str() != "void") {
+      return;
+    }
+    /* Note: Assume any function containing tests are entry points. */
+    int test_id = 0;
+    fn_body.foreach_match("A(A,A){..}", [&](Tokens toks) {
+      if (toks[0].str() != "TEST") {
+        return;
+      }
+      Scope test_body = toks[6].scope();
+      parser.erase(toks[0], toks[5]);
+      test_body.foreach_match("A(..)", [&](Tokens toks) {
+        if (toks[0].str().starts_with("EXPECT_")) {
+          int id = test_id;
+          parser.insert_before(toks[0], prefix + "out_test[" + to_string(id) + "] = ");
+          parser.insert_after(toks[4],
+                              "; " + prefix + "out_test[" + to_string(id) +
+                                  "].line = " + to_string(toks[0].line_number()));
+          test_id++;
+        }
+      });
+    });
+  });
+
+  parser.apply_mutations();
 }
 
 void SourceProcessor::lower_noop_keywords(Parser &parser)
@@ -1103,7 +1693,9 @@ void SourceProcessor::lower_noop_keywords(Parser &parser)
   parser().foreach_token(Static, [&](Token tok) {
     ScopeType scope_type = tok.scope().type();
     if (scope_type != ScopeType::Struct && scope_type != ScopeType::Preprocessor) {
-      parser.erase(tok);
+      if (tok.next() != Constexpr) {
+        parser.erase(tok);
+      }
     }
   });
 
@@ -1113,16 +1705,48 @@ void SourceProcessor::lower_noop_keywords(Parser &parser)
       parser.erase(tok, tok.next());
     }
     else {
-      report_error_(ERROR_TOK(tok), "Expecting colon ':' after access specifier");
+      report_error(tok, "Expecting colon ':' after access specifier");
     }
   };
   parser().foreach_token(Private, process_access);
   parser().foreach_token(Public, process_access);
+
+  lower_template_dependent_names(parser);
+}
+
+void SourceProcessor::lower_noop_keywords_ast(Parser &parser)
+{
+  /* inline has no equivalent in GLSL and is making parsing more complicated. */
+  parser().foreach_token(Inline, [&](Token tok) { parser.erase(tok); });
+  /* Erase `public:` and `private:` keywords. Access is checked by C++ compilation. */
+  for (AccessSpecifier node : parser.root().descendants_of_type<AccessSpecifier>()) {
+    parser.erase(node);
+  }
+  /* Given our code-style, we don't need the disambiguation. */
+  for (TemplateExplicit node : parser.root().descendants_of_type<TemplateExplicit>()) {
+    parser.erase(node.front());
+  }
+  /* Remove `struct`, `class`, `enum`, `union` from type declaration. */
+  for (IdType type : parser.root().descendants_of_type<IdType>()) {
+    Token tok = type.identifier().front().prev();
+    if (tok == Struct || tok == Class || tok == Enum || tok == Union) {
+      parser.erase(tok);
+    }
+  }
 }
 
 void SourceProcessor::lower_trailing_comma_in_list(Parser &parser)
 {
   parser().foreach_match(",}", [&](const Tokens &t) { parser.erase(t[0]); });
+}
+
+void SourceProcessor::lower_trailing_comma_in_list_ast(Parser &parser)
+{
+  for (InitializerList decl : parser.root().descendants_of_type<InitializerList>()) {
+    if (decl.back().prev() == ',') {
+      parser.erase(decl.back().prev());
+    }
+  }
 }
 
 /* Allow easier parsing of struct member declaration.
@@ -1171,6 +1795,41 @@ void SourceProcessor::lower_implicit_return_types(Parser &parser)
   });
 }
 
+void SourceProcessor::lower_implicit_return_types_ast(Parser &parser)
+{
+  for (FuncDecl func : parser.root().descendants_of_type<FuncDecl>()) {
+    for (ReturnStmt stmt : func.body().descendants_of_type<ReturnStmt>()) {
+      Expr expr = stmt.expression();
+      if (!expr.is_valid()) {
+        return;
+      }
+      InitializerList list;
+      Node node = expr.child_first();
+      if (node == NodeType::InitializerList) {
+        list = node;
+      }
+      else if (node == NodeType::Constructor) {
+        list = node.child_first();
+      }
+      else {
+        return;
+      }
+
+      const string type_str(func.return_type().str());
+      if (list.child_first() == NodeType::DesignatedInitializer) {
+        /* `return {1, 2};` > `T tmp = T{1, 2}; return tmp;`
+         * This syntax allow to support designated initializer. */
+        parser.replace(
+            stmt, "{" + type_str + " _tmp" + string(list.str()) + "; return _tmp;}", true);
+      }
+      else {
+        /* Regular initializer list. Keep it simple. */
+        parser.insert_before(list.front(), type_str);
+      }
+    }
+  }
+}
+
 void SourceProcessor::lower_initializer_implicit_types(Parser &parser)
 {
   auto process_scope = [&](Scope s) {
@@ -1186,12 +1845,38 @@ void SourceProcessor::lower_initializer_implicit_types(Parser &parser)
   parser.apply_mutations();
 }
 
+void SourceProcessor::lower_initializer_implicit_types_ast(Parser &parser)
+{
+  for (VarDecl decl : parser.root().descendants_of_type<VarDecl>()) {
+    for (Declarator var : decl.children_of_type<Declarator>()) {
+      InitializerList init_list = var.initializer_list();
+      if (init_list.is_valid()) {
+        /* Insert assignment. */
+        parser.insert_before(init_list.front(), " = " + string(decl.type().str()));
+        return;
+      }
+
+      AssignStmt assign = var.initial_value();
+      if (assign.is_valid()) {
+        InitializerList init_list = assign.initializer_list();
+        if (init_list.is_valid()) {
+          /* Insert type. */
+          parser.insert_before(init_list.front(), string(decl.type().str()));
+          return;
+        }
+      }
+    }
+  }
+
+  parser.apply_mutations();
+}
+
 void SourceProcessor::lower_designated_initializers(Parser &parser)
 {
   /* Transform to compatibility macro. */
   parser().foreach_match("A{.A=", [&](Tokens t) {
     if (t[0].prev() != '=' || t[0].prev().prev() != Word) {
-      report_error_(ERROR_TOK(t[0]), "Designated initializers are only supported in assignments");
+      report_error(t[0], "Designated initializers are only supported in assignments");
       return;
     }
     /* Lint for nested aggregates. */
@@ -1199,8 +1884,7 @@ void SourceProcessor::lower_designated_initializers(Parser &parser)
     if (nested_aggregate_end != t[3]) {
       Token nested_aggregate_start = nested_aggregate_end.scope().front();
       if (nested_aggregate_start.prev() != Word) {
-        report_error_(ERROR_TOK(nested_aggregate_start),
-                      "Nested anonymous aggregate is not supported");
+        report_error(nested_aggregate_start, "Nested anonymous aggregate is not supported");
         return;
       }
     }
@@ -1212,7 +1896,7 @@ void SourceProcessor::lower_designated_initializers(Parser &parser)
     parser.erase(assign_tok, t[1]);
     aggregate.foreach_match(".A=", [&](Tokens t) {
       if (t[0].scope() != aggregate) {
-        report_error_(ERROR_TOK(t[0]), "Nested initializer lists are not supported");
+        report_error(t[0], "Nested initializer lists are not supported");
         return;
       }
       parser.insert_before(t[0], string(var.str()));
@@ -1247,10 +1931,10 @@ void SourceProcessor::lower_aggregate_initializers(Parser &parser)
       if (t[0].prev() == Struct) {
         return;
       }
-      if (builtin_types.find(string(t[0].str())) != builtin_types.end()) {
-        report_error_(ERROR_TOK(t[0]),
-                      "Aggregate is error prone for built-in vector and matrix types, use "
-                      "constructors instead");
+      if (builtin_types.contains(string(t[0].str()))) {
+        report_error(t[0],
+                     "Aggregate is error prone for built-in vector and matrix types, use "
+                     "constructors instead");
       }
       if (t[1].scope().token_count() == 2) {
         /* Call generated default ctor. */
@@ -1263,8 +1947,7 @@ void SourceProcessor::lower_aggregate_initializers(Parser &parser)
       if (nested_aggregate_end != t[4]) {
         Token nested_aggregate_start = nested_aggregate_end.scope().front();
         if (nested_aggregate_start.prev() != Word) {
-          report_error_(ERROR_TOK(nested_aggregate_start),
-                        "Nested anonymous aggregate is not supported");
+          report_error(nested_aggregate_start, "Nested anonymous aggregate is not supported");
         }
       }
       parser.insert_before(t[0], "_ctor(");
@@ -1279,6 +1962,55 @@ void SourceProcessor::lower_aggregate_initializers(Parser &parser)
       /* TODO: Lint for vector/matrix type (unsafe aggregate). */
     });
   } while (parser.apply_mutations());
+}
+
+/* Support for **full** aggregate initialization.
+ * They are converted to default constructor for GLSL. */
+void SourceProcessor::lower_aggregate_initializers_ast(Parser &parser)
+{
+  unordered_set<string> builtin_types = {
+      "float2",   "float3",   "float4",   "float2x2", "float2x3", "float2x4",
+      "float3x2", "float3x3", "float3x4", "float4x2", "float4x3", "float4x4",
+      "float2x2", "float3x3", "float4x4", "int2",     "int3",     "int4",
+      "uint2",    "uint3",    "uint4",    "bool2",    "bool3",    "bool4",
+  };
+
+  /* Transform aggregate to compatibility macro. */
+  for (InitializerList list : parser.root().descendants_of_type<InitializerList>()) {
+    IdType type(list.prev());
+    if (!type.is_valid()) {
+      return;
+    }
+    /* Lint unsafe use with vector types. */
+    if (builtin_types.contains(string(type.str()))) {
+      report_error(type.front(),
+                   "Aggregate is error prone for built-in vector and matrix types, use "
+                   "constructors instead");
+    }
+    /* Call generated default ctor for empty bracket initializer. */
+    if (list.is_empty()) {
+      parser.insert_after(type.back(), "_ctor_");
+      parser.replace(list, "()", true);
+      return;
+    }
+    /* Lint for nested aggregates. */
+    for (InitializerList nested_list : list.descendants_of_type<InitializerList>()) {
+      if (!IdType(nested_list.prev()).is_valid()) {
+        report_error(nested_list.front(), "Nested anonymous aggregate is not supported");
+      }
+    }
+    /* `A{1,}` -> `_agg(A,1)` */
+    parser.insert_before(type.front(), "_ctor(");
+    parser.insert_after(type.back(), ",");
+    parser.erase(list.front());
+    if (list.back().prev() == ',') {
+      parser.erase(list.back().prev());
+    }
+    parser.insert_before(list.back(), " _rotc()");
+    parser.erase(list.back());
+  }
+
+  parser.apply_mutations();
 }
 
 /* Auto detect array length, and lower to GLSL compatible syntax.
@@ -1303,20 +2035,20 @@ void SourceProcessor::lower_array_initializations(Parser &parser)
       });
       const int list_len = (comma_count > 0) ? comma_count + 1 : 0;
       if (list_len == 0) {
-        report_error_(ERROR_TOK(name_tok), "Array size must be greater than zero.");
+        report_error(name_tok, "Array size must be greater than zero.");
       }
       parser.insert_after(array_scope[0], to_string(list_len));
     }
     else if (array_scope_tok_len == 3 && array_scope[1] == Number) {
       if (stol(string(array_scope[1].str())) == 0) {
-        report_error_(ERROR_TOK(name_tok), "Array size must be greater than zero.");
+        report_error(name_tok, "Array size must be greater than zero.");
       }
     }
 
     /* Lint nested initializer list. */
     list_scope.foreach_token(BracketOpen, [&](Token tok) {
       if (tok != list_scope.front()) {
-        report_error_(ERROR_TOK(name_tok), "Nested initializer list is not supported.");
+        report_error(name_tok, "Nested initializer list is not supported.");
       }
     });
 
@@ -1424,6 +2156,10 @@ void SourceProcessor::cleanup_line_directives(Parser &parser)
     if (toks[1].str() != "line") {
       return;
     }
+    if (toks[2].next() == String) {
+      /* Do not process directives with filenames. */
+      return;
+    }
     /* Workaround the foreach_match not matching overlapping patterns. */
     if (toks.back().next() == '#' && toks.back().next().next() == Word &&
         toks.back().next().next().next() == Number)
@@ -1450,9 +2186,53 @@ void SourceProcessor::cleanup_line_directives(Parser &parser)
     if (toks[1].str() != "line") {
       return;
     }
+    if (toks[2].next() == String) {
+      /* Do not process directives with filenames. */
+      return;
+    }
+    int line = toks[0].line_number();
+    int value = stol(string(toks[2].str()));
+
+    Token prev = toks[0].prev();
+    Token next = toks[2].next();
+    /* True if the directive splits a logical line and the parts do not overlap. */
+    if (prev.line_number() == value) {
+      /* Backtrack to find the first token of the previous line. */
+      Token first_on_prev_line = prev;
+      Token peek = first_on_prev_line.prev();
+      while (peek.is_valid() && peek.str_with_whitespace().find_first_of('\n') == string::npos) {
+        first_on_prev_line = peek;
+        peek = first_on_prev_line.prev();
+      }
+
+      /* Check if the previous line is a preprocessor directive. */
+      bool is_prev_directive = (first_on_prev_line.is_valid() && first_on_prev_line == '#');
+
+      /* Only merge if the previous line is NOT a preprocessor directive. */
+      if (!is_prev_directive) {
+        int prev_end_col = prev.char_number() + prev.str().length();
+        int next_start_col = next.char_number();
+
+        if (prev_end_col < next_start_col) {
+          int spaces_needed = next_start_col - prev_end_col;
+          parser.replace(prev.str_index_last_no_whitespace() + 1,
+                         next.str_index_start() - 1,
+                         std::string(spaces_needed, ' '));
+          return;
+        }
+      }
+    }
     /* True if directive is noop. */
-    if (toks[0].line_number() == stol(string(toks[2].str()))) {
+    if (line == value) {
       parser.replace(toks[0].line_start(), toks[0].line_end() + 1, "");
+    }
+    /* True if directive is not better than 1 newline. */
+    if (line == value - 1) {
+      parser.replace(toks[0].line_start(), toks[0].line_end(), "");
+    }
+    /* True if directive is not better than 2 newline. */
+    if (line == value - 2) {
+      parser.replace(toks[0].line_start(), toks[0].line_end(), "\n");
     }
   });
   parser.apply_mutations();
@@ -1498,7 +2278,7 @@ string SourceProcessor::matrix_constructor_mutation(const string &str)
     return str;
   }
 
-  IntermediateForm<FullLexer, DummyParser> parser(str, report_error_);
+  IntermediateForm<FullLexer, DummyParser> parser(str, error_handler);
   parser().foreach_token(ParOpen, [&](const Token t) {
     if (t.prev() == Word) {
       Token fn_name = t.prev();
@@ -1532,7 +2312,7 @@ string SourceProcessor::matrix_constructor_mutation(const string &str)
 void SourceProcessor::lower_reference_arguments(Parser &parser)
 {
   auto add_mutation = [&](Token type, Token arg_name, Token last_tok) {
-    if (type.prev() == Const) {
+    if (type.prev() == TokenType::Const) {
       parser.replace(type.prev(), last_tok, string(type.str()) + " " + string(arg_name.str()));
     }
     else {
@@ -1567,27 +2347,26 @@ void SourceProcessor::lower_reference_variables(Parser &parser)
 
       /* Assert definition doesn't contain any side effect. */
       assignment.foreach_token(Increment, [&](const Token token) {
-        report_error_(ERROR_TOK(token), "Reference definitions cannot have side effects.");
+        report_error(token, "Reference definitions cannot have side effects.");
       });
       assignment.foreach_token(Decrement, [&](const Token token) {
-        report_error_(ERROR_TOK(token), "Reference definitions cannot have side effects.");
+        report_error(token, "Reference definitions cannot have side effects.");
       });
       assignment.foreach_token(ParOpen, [&](const Token token) {
         string_view fn_name = token.prev().str();
         if ((fn_name != "specialization_constant_get") && (fn_name != "push_constant_get") &&
-            (fn_name != "interface_get") && (fn_name != "attribute_get") &&
-            (fn_name != "buffer_get") && (fn_name != "srt_access") && (fn_name != "sampler_get") &&
-            (fn_name != "image_get"))
+            (fn_name != "interface_get") && (fn_name != "resource_table_get") &&
+            (fn_name != "attribute_get") && (fn_name != "buffer_get") &&
+            (fn_name != "srt_access") && (fn_name != "sampler_get") && (fn_name != "image_get"))
         {
-          report_error_(ERROR_TOK(token), "Reference definitions cannot contain function calls.");
+          report_error(token, "Reference definitions cannot contain function calls.");
         }
       });
       assignment.foreach_scope(ScopeType::Subscript, [&](const Scope subscript) {
         if (subscript.token_count() != 3) {
-          report_error_(
-              ERROR_TOK(subscript.front()),
-              "Array subscript inside reference declaration must be a single variable or "
-              "a constant, not an expression.");
+          report_error(subscript.front(),
+                       "Array subscript inside reference declaration must be a single variable or "
+                       "a constant, not an expression.");
           return;
         }
 
@@ -1616,36 +2395,41 @@ void SourceProcessor::lower_reference_variables(Parser &parser)
         fn_scope.foreach_match("c?A&?A", [&](const vector<Token> &toks) { process_decl(toks); });
 
         if (!is_found) {
-          report_error_(ERROR_TOK(index_var),
-                        "Cannot locate array subscript variable declaration. "
-                        "If it is a global variable, assign it to a temporary const variable for "
-                        "indexing inside the reference.");
+          report_error(index_var,
+                       "Cannot locate array subscript variable declaration. "
+                       "If it is a global variable, assign it to a temporary const variable for "
+                       "indexing inside the reference.");
           return;
         }
         if (!is_const) {
-          report_error_(ERROR_TOK(index_var),
-                        "Array subscript variable must be declared as const qualified.");
+          report_error(index_var, "Array subscript variable must be declared as const qualified.");
           return;
         }
         if (is_ref) {
-          report_error_(ERROR_TOK(index_var),
-                        "Array subscript variable must not be declared as reference.");
+          report_error(index_var, "Array subscript variable must not be declared as reference.");
           return;
         }
       });
 
       string definition = parser.substr_range_inclusive(assignment[1], assignment.back());
 
+      bool error = false;
       /* Replace declaration. */
       parser.erase(decl_start, decl_end);
       /* Replace all occurrences with definition. */
       name.scope().foreach_token(Word, [&](const Token token) {
         /* Do not match member access or function calls. */
-        if (token.prev() == '.' || token.next() == '(') {
+        if (error || token.prev() == '.' || token.next() == '(') {
           return;
         }
         if (token.str_index_start() > decl_end.str_index_last() && token.str() == name.str()) {
-          parser.replace(token, definition);
+          if (token.prev() == '&' && token.next() == '=') {
+            report_error(token, "Local reference shadowing is not allowed.");
+            error = true;
+          }
+          else {
+            parser.replace(token, definition);
+          }
         }
       });
     });
@@ -1653,8 +2437,7 @@ void SourceProcessor::lower_reference_variables(Parser &parser)
   parser.apply_mutations();
 
   parser().foreach_match("c?A&A=", [&](const vector<Token> &tokens) {
-    report_error_(ERROR_TOK(tokens[4]),
-                  "Reference is defined inside a global or unterminated scope.");
+    report_error(tokens[4], "Reference is defined inside a global or unterminated scope.");
   });
 }
 
@@ -1674,9 +2457,26 @@ void SourceProcessor::lower_argument_qualifiers(Parser &parser)
   parser.apply_mutations();
 }
 
+void SourceProcessor::lower_gather_component(Parser &parser)
+{
+  parser().foreach_match("A(..)", [&](const Tokens &toks) {
+    if (toks[0].scope().type() == ScopeType::Preprocessor) {
+      /* Don't mutate the actual implementation. */
+      return;
+    }
+    Token component = toks.back().prev();
+    /* Assume that if there is a number at the end of argument list, it is the component id. */
+    if (toks[0].str() == "textureGather" && component == Number && component.prev() == Comma) {
+      parser.insert_after(toks[0], string(component.str()));
+      parser.erase(component.prev(), component);
+    }
+  });
+  parser.apply_mutations();
+}
+
 string SourceProcessor::argument_decorator_macro_injection(const string &str)
 {
-  IntermediateForm<FullLexer, DummyParser> parser(str, report_error_);
+  IntermediateForm<FullLexer, DummyParser> parser(str, error_handler);
   /* Example: `out float foo` > `out float _out_sta foo _out_end` */
   parser().foreach_match("AAA", [&](const Tokens &t) {
     string_view qualifier = t[0].str();
@@ -1690,7 +2490,7 @@ string SourceProcessor::argument_decorator_macro_injection(const string &str)
 
 string SourceProcessor::array_constructor_macro_injection(const string &str)
 {
-  IntermediateForm<FullLexer, DummyParser> parser(str, report_error_);
+  IntermediateForm<FullLexer, DummyParser> parser(str, error_handler);
   parser().foreach_match("=A[", [&](const Tokens toks) {
     Token array_len_start = toks.back();
     Token array_len_end = array_len_start.find_next(SquareClose);
@@ -1713,12 +2513,25 @@ void SourceProcessor::lint_global_scope_constants(Parser &parser)
   /* Example: `const uint global_var = 1u;`. */
   parser().foreach_match("cAA=", [&](const vector<Token> &tokens) {
     if (tokens[0].scope().type() == ScopeType::Global) {
-      report_error_(
-          ERROR_TOK(tokens[2]),
+      report_error(
+          tokens[2],
           "Global scope constant expression found. These get allocated per-thread in MSL. "
           "Use Macro's or uniforms instead.");
     }
   });
+}
+
+void SourceProcessor::lint_global_scope_constants_ast(Parser &parser)
+{
+  /* Example: `const uint global_var = 1u;`. */
+  for (VarDecl decl : parser.root().children_of_type<VarDecl>()) {
+    if (decl.is_const()) {
+      report_error(
+          decl,
+          "Global scope constant expression found. These get allocated per-thread in MSL. "
+          "Use Macro's or uniforms instead.");
+    }
+  }
 }
 
 int SourceProcessor::static_array_size(const Scope &array, int fallback_value)
@@ -1728,7 +2541,7 @@ int SourceProcessor::static_array_size(const Scope &array, int fallback_value)
       return stol(string(array[1].str()));
     }
     catch (invalid_argument const & /*ex*/) {
-      report_error_(ERROR_TOK(array.front()), "Invalid array size, expecting integer literal");
+      report_error(array.front(), "Invalid array size, expecting integer literal");
     }
   }
   return fallback_value;

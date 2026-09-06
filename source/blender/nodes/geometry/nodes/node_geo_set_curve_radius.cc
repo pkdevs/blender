@@ -18,13 +18,16 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Curve"_ustr)
       .supported_type({GeometryComponent::Type::Curve, GeometryComponent::Type::GreasePencil})
       .description("Curves to set the radius on");
-  b.add_output<decl::Geometry>("Curve"_ustr).propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
+  b.add_output<decl::Geometry>("Curve"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
   b.add_input<decl::Float>("Radius"_ustr)
       .min(0.0f)
       .default_value(0.005f)
       .subtype(PROP_DISTANCE)
-      .field_on_all();
+      .evaluated_geometry_field();
 }
 
 static void set_radius(bke::CurvesGeometry &curves,
@@ -75,7 +78,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSetCurveRadius", GEO_NODE_SET_CURVE_RADIUS);
+  geo_node_type_base(&ntype, "GeometryNodeSetCurveRadius"_ustr, GEO_NODE_SET_CURVE_RADIUS);
   ntype.ui_name = "Set Curve Radius";
   ntype.ui_description = "Set the radius of the curve at each control point";
   ntype.enum_name_legacy = "SET_CURVE_RADIUS";

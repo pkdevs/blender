@@ -299,14 +299,14 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeDoubleEdgeMask", CMP_NODE_DOUBLEEDGEMASK);
+  cmp_node_type_base(&ntype, "CompositorNodeDoubleEdgeMask"_ustr, CMP_NODE_DOUBLEEDGEMASK);
   ntype.ui_name = "Double Edge Mask";
   ntype.ui_description = "Create a gradient between two masks";
   ntype.enum_name_legacy = "DOUBLEEDGEMASK";
   ntype.nclass = NODE_CLASS_MATTE;
   ntype.declare = node_declare;
   ntype.get_compositor_operation = get_compositor_operation;
-  bke::node_type_size(ntype, 145, 140, NODE_DEFAULT_MAX_WIDTH);
+  ntype.default_width = bke::NodeWidth::_160;
 
   bke::node_register_type(ntype);
 }

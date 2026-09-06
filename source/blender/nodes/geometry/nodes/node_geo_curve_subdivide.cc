@@ -19,12 +19,12 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Curve"_ustr)
       .supported_type({GeometryComponent::Type::Curve, GeometryComponent::Type::GreasePencil})
       .description("Curves to subdivide");
-  b.add_output<decl::Geometry>("Curve"_ustr).propagate_all().align_with_previous();
+  b.add_output<decl::Geometry>("Curve"_ustr).propagate_all_geometry().align_with_previous();
   b.add_input<decl::Int>("Cuts"_ustr)
       .default_value(1)
       .min(0)
       .max(1000)
-      .field_on_all()
+      .evaluated_geometry_field()
       .description("The number of control points to create on the segment following each point");
 }
 
@@ -112,7 +112,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeSubdivideCurve", GEO_NODE_SUBDIVIDE_CURVE);
+  geo_node_type_base(&ntype, "GeometryNodeSubdivideCurve"_ustr, GEO_NODE_SUBDIVIDE_CURVE);
   ntype.ui_name = "Subdivide Curve";
   ntype.ui_description = "Dividing each curve segment into a specified number of pieces";
   ntype.enum_name_legacy = "SUBDIVIDE_CURVE";

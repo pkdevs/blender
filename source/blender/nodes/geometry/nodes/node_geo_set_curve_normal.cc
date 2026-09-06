@@ -20,8 +20,11 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Curve"_ustr)
       .supported_type({GeometryComponent::Type::Curve, GeometryComponent::Type::GreasePencil})
       .description("Curves to change the normals on");
-  b.add_output<decl::Geometry>("Curve"_ustr).propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
+  b.add_output<decl::Geometry>("Curve"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
   b.add_input<decl::Menu>("Mode"_ustr)
       .static_items(rna_enum_curve_normal_mode_items)
       .optional_label()
@@ -29,7 +32,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Vector>("Normal"_ustr)
       .default_value({0.0f, 0.0f, 1.0f})
       .subtype(PROP_XYZ)
-      .field_on_all()
+      .evaluated_geometry_field()
       .usage_by_single_menu(NORMAL_MODE_FREE);
 }
 
@@ -114,7 +117,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeSetCurveNormal", GEO_NODE_SET_CURVE_NORMAL);
+  geo_node_type_base(&ntype, "GeometryNodeSetCurveNormal"_ustr, GEO_NODE_SET_CURVE_NORMAL);
   ntype.ui_name = "Set Curve Normal";
   ntype.ui_description = "Set the evaluation mode for curve normals";
   ntype.enum_name_legacy = "SET_CURVE_NORMAL";

@@ -276,8 +276,17 @@ vector<DeviceInfo> Device::available_devices(const uint mask)
 #ifdef WITH_OPTIX
   if (mask & DEVICE_MASK_OPTIX) {
     if (!(devices_initialized_mask & DEVICE_MASK_OPTIX)) {
-      if (device_optix_init()) {
+      bool meets_nvidia_driver_requirement = true;
+      if (device_optix_init(&meets_nvidia_driver_requirement) || !meets_nvidia_driver_requirement)
+      {
         device_optix_info(cuda_devices(), optix_devices());
+        for (DeviceInfo &info : optix_devices()) {
+          info.meets_driver_requirement = meets_nvidia_driver_requirement;
+        }
+      }
+      else {
+        /* `device_optix_init` has failed but not because of the driver being too old.
+         * Nothing to do in this case. */
       }
       devices_initialized_mask |= DEVICE_MASK_OPTIX;
     }
@@ -290,8 +299,29 @@ vector<DeviceInfo> Device::available_devices(const uint mask)
 #ifdef WITH_HIP
   if (mask & DEVICE_MASK_HIP) {
     if (!(devices_initialized_mask & DEVICE_MASK_HIP)) {
-      if (device_hip_init()) {
+      bool meets_amd_driver_requirement = true;
+      if (device_hip_init(&meets_amd_driver_requirement)) {
         device_hip_info(hip_devices());
+        for (DeviceInfo &info : hip_devices()) {
+          info.meets_driver_requirement = meets_amd_driver_requirement;
+        }
+      }
+      else if (meets_amd_driver_requirement == false) {
+        /* If we are here, then hipewInit has failed with HIPEW_ERROR_OLD_DRIVER. */
+        /* It is unclear if proper device info can be collected at this point, so we create
+         * a placeholder device to communicate the need to upgrade the driver, as presumably
+         * the hardware is available. */
+        DeviceInfo info = DeviceInfo();
+        info.type = DEVICE_HIP;
+        info.description = "Unknown AMD device";
+        info.id = "unknown_amd_device_with_outdated_driver";
+        info.num = 0;
+        info.meets_driver_requirement = false;
+        hip_devices().push_back(info);
+      }
+      else {
+        /* `device_hip_init` has failed but not because of the driver being too old.
+         * Nothing to do in this case. */
       }
       devices_initialized_mask |= DEVICE_MASK_HIP;
     }
@@ -429,7 +459,7 @@ DeviceInfo Device::get_multi_device(const vector<DeviceInfo> &subdevices,
   info.num = 0;
 
   info.has_nanovdb = true;
-  info.has_mnee = true;
+  info.has_mnee_ = true;
   info.has_osl = true;
   info.has_guiding = true;
   info.has_profiling = true;
@@ -478,7 +508,7 @@ DeviceInfo Device::get_multi_device(const vector<DeviceInfo> &subdevices,
 
     /* Accumulate device info. */
     info.has_nanovdb &= device.has_nanovdb;
-    info.has_mnee &= device.has_mnee;
+    info.has_mnee_ &= device.has_mnee();
     info.has_osl &= device.has_osl;
     info.has_guiding &= device.has_guiding;
     info.has_profiling &= device.has_profiling;
@@ -549,6 +579,23 @@ void *Device::host_alloc(const MemoryType /*type*/, const size_t size)
 void Device::host_free(const MemoryType /*type*/, void *host_pointer, const size_t size)
 {
   util_aligned_free(host_pointer, size);
+}
+
+void Device::mem_or_from_device(device_memory &mem)
+{
+  /* Note that we always accumulate into the host buffer without zeroing, as CPU and unified
+   * memory write into the host buffer and we need to combine with those flags. */
+  const size_t size = mem.memory_size();
+  vector<uint8_t> tmp(size);
+  uint8_t *combined = static_cast<uint8_t *>(mem.host_pointer);
+  mem.host_pointer = tmp.data();
+  mem_copy_from(
+      mem, 0, mem.data_width, (mem.data_height == 0) ? 1 : mem.data_height, sizeof(uint8_t));
+  const uint8_t *src = (const uint8_t *)mem.host_pointer;
+  for (size_t i = 0; i < size; i++) {
+    combined[i] |= src[i];
+  }
+  mem.host_pointer = combined;
 }
 
 device_ptr Device::mem_device_ptr(const device_memory &mem, Device *sub_device)

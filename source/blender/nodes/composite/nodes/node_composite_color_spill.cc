@@ -192,7 +192,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeColorSpill", CMP_NODE_COLOR_SPILL);
+  cmp_node_type_base(&ntype, "CompositorNodeColorSpill"_ustr, CMP_NODE_COLOR_SPILL);
   ntype.ui_name = "Color Spill";
   ntype.ui_description =
       "Remove colors from a blue or green screen, by reducing one RGB channel compared to the "
@@ -205,7 +205,7 @@ static void node_register()
       ntype, "NodeColorspill", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = node_gpu_material;
   ntype.build_multi_function = node_build_multi_function;
-  bke::node_type_size(ntype, 160, 140, NODE_DEFAULT_MAX_WIDTH);
+  ntype.default_width = bke::NodeWidth::_160;
 
   bke::node_register_type(ntype);
 }

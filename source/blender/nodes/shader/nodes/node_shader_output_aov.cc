@@ -5,7 +5,7 @@
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
-#include "BLI_hash.h"
+#include "BLI_hash_c.hh"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
@@ -99,7 +99,7 @@ void register_node_type_sh_output_aov()
 
   static bke::bNodeType ntype;
 
-  sh_node_type_base(&ntype, "ShaderNodeOutputAOV", SH_NODE_OUTPUT_AOV);
+  sh_node_type_base(&ntype, "ShaderNodeOutputAOV"_ustr, SH_NODE_OUTPUT_AOV);
   ntype.ui_name = "AOV Output";
   ntype.ui_description =
       "Arbitrary Output Variables.\nProvide custom render passes for arbitrary shader node "

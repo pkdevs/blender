@@ -47,25 +47,29 @@ static void node_declare(NodeDeclarationBuilder &b)
         BLI_assert_unreachable();
         break;
     }
-    value_declaration->supports_field().description("The values to be accumulated");
+    value_declaration->structure_type(StructureType::Field)
+        .description("The values to be accumulated");
   }
 
   b.add_input<decl::Int>("Group ID"_ustr, "Group Index"_ustr)
-      .supports_field()
+      .structure_type(StructureType::Field)
       .hide_value()
       .description("An index used to group values together for multiple separate accumulations");
 
   if (node != nullptr) {
     const eCustomDataType data_type = eCustomDataType(node_storage(*node).data_type);
     b.add_output(data_type, "Leading"_ustr)
-        .field_source_reference_all()
+        .structure_type(StructureType::Field)
+        .propagate_references()
         .description(
             "The running total of values in the corresponding group, starting at the first value");
     b.add_output(data_type, "Trailing"_ustr)
-        .field_source_reference_all()
+        .structure_type(StructureType::Field)
+        .propagate_references()
         .description("The running total of values in the corresponding group, starting at zero");
     b.add_output(data_type, "Total"_ustr)
-        .field_source_reference_all()
+        .structure_type(StructureType::Field)
+        .propagate_references()
         .description("The total of all of the values in the corresponding group");
   }
 }
@@ -118,7 +122,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     params.add_item(
         IFACE_("Leading"),
         [type](LinkSearchOpParams &params) {
-          bNode &node = params.add_node("GeometryNodeAccumulateField");
+          bNode &node = params.add_node("GeometryNodeAccumulateField"_ustr);
           node_storage(node).data_type = *type;
           params.update_and_connect_available_socket(node, "Leading"_ustr);
         },
@@ -126,7 +130,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     params.add_item(
         IFACE_("Trailing"),
         [type](LinkSearchOpParams &params) {
-          bNode &node = params.add_node("GeometryNodeAccumulateField");
+          bNode &node = params.add_node("GeometryNodeAccumulateField"_ustr);
           node_storage(node).data_type = *type;
           params.update_and_connect_available_socket(node, "Trailing"_ustr);
         },
@@ -134,7 +138,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     params.add_item(
         IFACE_("Total"),
         [type](LinkSearchOpParams &params) {
-          bNode &node = params.add_node("GeometryNodeAccumulateField");
+          bNode &node = params.add_node("GeometryNodeAccumulateField"_ustr);
           node_storage(node).data_type = *type;
           params.update_and_connect_available_socket(node, "Total"_ustr);
         },
@@ -144,7 +148,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     params.add_item(
         IFACE_("Value"),
         [type](LinkSearchOpParams &params) {
-          bNode &node = params.add_node("GeometryNodeAccumulateField");
+          bNode &node = params.add_node("GeometryNodeAccumulateField"_ustr);
           node_storage(node).data_type = *type;
           params.update_and_connect_available_socket(node, "Value"_ustr);
         },
@@ -263,22 +267,14 @@ class AccumulateFieldInput final : public bke::GeometryFieldInput {
     fn(group_index_);
   }
 
-  uint64_t hash() const override
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep &deep_hash_cache) const override
   {
-    return get_default_hash(input_, group_index_, source_domain_, accumulation_mode_);
-  }
-
-  bool is_equal_to(const fn::FieldInput &other) const override
-  {
-    if (const AccumulateFieldInput *other_accumulate = dynamic_cast<const AccumulateFieldInput *>(
-            &other))
-    {
-      return input_ == other_accumulate->input_ &&
-             group_index_ == other_accumulate->group_index_ &&
-             source_domain_ == other_accumulate->source_domain_ &&
-             accumulation_mode_ == other_accumulate->accumulation_mode_;
-    }
-    return false;
+    static constexpr int8_t id = 0;
+    hash.add(&id);
+    hash.add(deep_hash_cache.ensure(input_));
+    hash.add(deep_hash_cache.ensure(group_index_));
+    hash.add(source_domain_);
+    hash.add(accumulation_mode_);
   }
 
   std::optional<AttrDomain> preferred_domain(
@@ -355,18 +351,13 @@ class TotalFieldInput final : public bke::GeometryFieldInput {
     fn(group_index_);
   }
 
-  uint64_t hash() const override
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep &deep_hash_cache) const override
   {
-    return get_default_hash(input_, group_index_, source_domain_);
-  }
-
-  bool is_equal_to(const fn::FieldInput &other) const override
-  {
-    if (const TotalFieldInput *other_field = dynamic_cast<const TotalFieldInput *>(&other)) {
-      return input_ == other_field->input_ && group_index_ == other_field->group_index_ &&
-             source_domain_ == other_field->source_domain_;
-    }
-    return false;
+    static constexpr int8_t id = 0;
+    hash.add(&id);
+    hash.add(deep_hash_cache.ensure(input_));
+    hash.add(deep_hash_cache.ensure(group_index_));
+    hash.add(source_domain_);
   }
 
   std::optional<AttrDomain> preferred_domain(
@@ -438,7 +429,7 @@ static void node_rna(StructRNA *srna)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeAccumulateField", GEO_NODE_ACCUMULATE_FIELD);
+  geo_node_type_base(&ntype, "GeometryNodeAccumulateField"_ustr, GEO_NODE_ACCUMULATE_FIELD);
   ntype.ui_name = "Accumulate Field";
   ntype.ui_description =
       "Add the values of an evaluated field together and output the running total for each "

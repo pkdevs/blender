@@ -28,7 +28,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_DISTANCE)
       .description("Distance from the generated points to the origin");
   b.add_output<decl::Geometry>("Mesh"_ustr);
-  b.add_output<decl::Vector>("UV Map"_ustr).field_on_all();
+  b.add_output<decl::Vector>("UV Map"_ustr).anonymous_attribute_output();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -60,7 +60,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeMeshUVSphere", GEO_NODE_MESH_PRIMITIVE_UV_SPHERE);
+  geo_node_type_base(&ntype, "GeometryNodeMeshUVSphere"_ustr, GEO_NODE_MESH_PRIMITIVE_UV_SPHERE);
   ntype.ui_name = "UV Sphere";
   ntype.ui_description =
       "Generate a spherical mesh with quads, except for triangles at the top and bottom";

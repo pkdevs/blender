@@ -6,6 +6,8 @@
  * \ingroup shader_tool
  */
 
+#include <unordered_map>
+
 #include "intermediate.hh"
 #include "metadata.hh"
 #include "processor.hh"
@@ -13,6 +15,7 @@
 namespace blender::gpu::shader {
 using namespace std;
 using namespace shader::parser;
+using namespace shader::parser::ast;
 using namespace metadata;
 
 void SourceProcessor::lower_unions(Parser &parser)
@@ -62,14 +65,14 @@ void SourceProcessor::lower_unions(Parser &parser)
       union_body.foreach_declaration(
           [&](Scope, Token, Token type, Scope, Token name, Scope array, Token) {
             if (array.is_valid()) {
-              report_error_(ERROR_TOK(name), "Arrays are not supported inside unions.");
+              report_error(name, "Arrays are not supported inside unions.");
             }
             members.emplace_back(
                 Member{string(type.str()), string(name.str()), 0, 0, type.prev() == Enum});
           });
 
       if (members.empty()) {
-        report_error_(ERROR_TOK(t[0]), "Empty union");
+        report_error(t[0], "Empty union");
         return;
       }
       union_members.emplace(union_type, members);
@@ -181,9 +184,9 @@ void SourceProcessor::lower_unions(Parser &parser)
     /* Replace placeholder struct with float members. */
     size_t size = type_size_get(body.front().next());
     if (size == 0) {
-      report_error_(ERROR_TOK(body.front().next()),
-                    "Can't infer size of member. Type must be defined in this file and have "
-                    "the [[host_shared]] attribute.");
+      report_error(body.front().next(),
+                   "Can't infer size of member. Type must be defined in this file and have "
+                   "the [[host_shared]] attribute.");
     }
     for (int i = 0; i < size; i += 16) {
       size_t member_size = size - i;
@@ -212,10 +215,10 @@ void SourceProcessor::lower_unions(Parser &parser)
         if (is_enum) {
           return struct_member.type + "(floatBitsToUint(" + access + "))";
         }
-        if (type.substr(0, 4) == "uint") {
+        if (type.starts_with("uint")) {
           return "floatBitsToUint(" + access + ")";
         }
-        if (type.substr(0, 3) == "int") {
+        if (type.starts_with("int")) {
           return "floatBitsToInt(" + access + ")";
         }
         if (type == "bool") {
@@ -233,10 +236,10 @@ void SourceProcessor::lower_unions(Parser &parser)
         if (is_enum) {
           return "uintBitsToFloat(uint(" + access + "))";
         }
-        if (type.substr(0, 4) == "uint") {
+        if (type.starts_with("uint")) {
           return "uintBitsToFloat(" + access + ")";
         }
-        if (type.substr(0, 3) == "int") {
+        if (type.starts_with("int")) {
           return "intBitsToFloat(" + access + ")";
         }
         if (type == "bool") {
@@ -288,14 +291,14 @@ void SourceProcessor::lower_unions(Parser &parser)
                            const vector<Member> &struct_members) -> string {
     const size_t union_size = type_size_get(union_type_tok);
     if (union_size == 0) {
-      report_error_(ERROR_TOK(union_type_tok),
-                    "Can't infer size of member. Type must be defined in this file and have "
-                    "the [[host_shared]] attribute.");
+      report_error(union_type_tok,
+                   "Can't infer size of member. Type must be defined in this file and have "
+                   "the [[host_shared]] attribute.");
       return "";
     }
     const Member &last_member = struct_members.back();
     if (last_member.offset + last_member.size != union_size) {
-      report_error_(ERROR_TOK(union_type_tok), "union has members of different sizes");
+      report_error(union_type_tok, "union has members of different sizes");
       return "";
     }
 
@@ -323,14 +326,14 @@ void SourceProcessor::lower_unions(Parser &parser)
                            const vector<Member> &struct_members) -> string {
     const size_t union_size = type_size_get(union_type_tok);
     if (union_size == 0) {
-      report_error_(ERROR_TOK(union_type_tok),
-                    "Can't infer size of member. Type must be defined in this file and have "
-                    "the [[host_shared]] attribute.");
+      report_error(union_type_tok,
+                   "Can't infer size of member. Type must be defined in this file and have "
+                   "the [[host_shared]] attribute.");
       return "";
     }
     const Member &last_member = struct_members.back();
     if (last_member.offset + last_member.size != union_size) {
-      report_error_(ERROR_TOK(union_type_tok), "union has members of different sizes");
+      report_error(union_type_tok, "union has members of different sizes");
       return "";
     }
 
@@ -355,9 +358,9 @@ void SourceProcessor::lower_unions(Parser &parser)
         dst.emplace_back(member);
         continue;
       }
-      if (struct_members.find(member.type) == struct_members.end()) {
-        report_error_(
-            ERROR_TOK(type),
+      if (!struct_members.contains(member.type)) {
+        report_error(
+            type,
             "Unknown type encountered while unwrapping union. Contained types must be defined "
             "in this file and decorated with [[host_shared]] attribute.");
         continue;
@@ -381,21 +384,21 @@ void SourceProcessor::lower_unions(Parser &parser)
   };
 
   parser().foreach_struct([&](Token, Scope, Token struct_name, Scope body) {
-    if (union_members.find(string(struct_name.str())) != union_members.end()) {
+    if (union_members.contains(string(struct_name.str()))) {
       replace_placeholder_member(body);
       return;
     }
 
     body.foreach_declaration([&](Scope, Token, Token type, Scope, Token name, Scope, Token) {
-      if (union_members.find(string(type.str())) == union_members.end()) {
+      if (!union_members.contains(string(type.str()))) {
         return;
       }
 
       const vector<Member> &members = union_members.find(string(type.str()))->second;
       for (const auto &member : members) {
-        if (struct_members.find(member.type) == struct_members.end()) {
-          report_error_(
-              ERROR_TOK(type),
+        if (!struct_members.contains(member.type)) {
+          report_error(
+              type,
               "Unknown union member type. Type must be defined in this file and decorated "
               "with [[host_shared]] attribute.");
           return;
@@ -411,6 +414,11 @@ void SourceProcessor::lower_unions(Parser &parser)
     });
   });
 
+  lower_union_setters(parser);
+}
+
+void SourceProcessor::lower_union_setters(Parser &parser)
+{
   /* Replace assignment pattern.
    * Example: `a.b() = c;` >  `a.b_set_(c);`
    * This pattern is currently only allowed for `union_t`. */
@@ -437,8 +445,8 @@ void SourceProcessor::lower_union_accessor_templates(Parser &parser)
       t[1].scope().foreach_declaration(
           [&](Scope, Token, Token type, Scope template_scope, Token name, Scope, Token) {
             if (type.str() != "union_t") {
-              report_error_(
-                  ERROR_TOK(name),
+              report_error(
+                  name,
                   "All union members must have their type wrapped using the union_t<T> template.");
               parser.erase(type, type.find_next(SemiColon));
               return;
@@ -453,6 +461,39 @@ void SourceProcessor::lower_union_accessor_templates(Parser &parser)
           });
     });
   });
+  parser.apply_mutations();
+}
+
+/**
+ * For safety reason, union members need to be declared with the union_t template.
+ * This avoid raw member access which we cannot emulate. Instead this forces the use of the `()`
+ * operator for accessing the members of the enum.
+ *
+ * Need to run before lower_unions.
+ */
+void SourceProcessor::lower_union_accessor_templates_ast(Parser &parser)
+{
+  for (ClassDecl decl : parser.root().descendants_of_type<ClassDecl>()) {
+    if (decl.is_union()) {
+      for (VarDecl var : decl.body().children_of_type<VarDecl>()) {
+        IdType type = var.type();
+        Id name = type.identifier().name();
+
+        if (type.identifier().name().str() != "union_t") {
+          continue;
+        }
+
+        /* Remove the template but not the wrapped type. */
+        parser.erase(name);
+        TemplateParamList param = type.identifier().template_params();
+        if (param.is_valid()) {
+          parser.erase(param.front());
+          parser.erase(param.back());
+        }
+      }
+    }
+  }
+
   parser.apply_mutations();
 }
 

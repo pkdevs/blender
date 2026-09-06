@@ -12,10 +12,11 @@
 
 #include "BKE_appdir.hh"
 #include "BKE_blender_version.h"
+#include "BKE_gtest_base.hh"
 #include "BKE_main.hh"
 
-#include "BLI_fileops.h"
-#include "BLI_string.h"
+#include "BLI_fileops.hh"
+#include "BLI_string.hh"
 
 #include "BLO_readfile.hh"
 

@@ -27,22 +27,24 @@ static void node_declare(NodeDeclarationBuilder &b)
   if (node != nullptr) {
     const eCustomDataType data_type = eCustomDataType(node->custom1);
     b.add_input(data_type, "Value"_ustr)
-        .supports_field()
+        .structure_type(StructureType::Field)
         .description("The values the minimum and maximum will be calculated from");
   }
 
   b.add_input<decl::Int>("Group ID"_ustr, "Group Index"_ustr)
-      .supports_field()
+      .structure_type(StructureType::Field)
       .hide_value()
       .description("An index used to group values together for multiple separate operations");
 
   if (node != nullptr) {
     const eCustomDataType data_type = eCustomDataType(node->custom1);
     b.add_output(data_type, "Min"_ustr)
-        .field_source_reference_all()
+        .structure_type(StructureType::Field)
+        .propagate_references()
         .description("The lowest value in each group");
     b.add_output(data_type, "Max"_ustr)
-        .field_source_reference_all()
+        .structure_type(StructureType::Field)
+        .propagate_references()
         .description("The highest value in each group");
   }
 }
@@ -91,7 +93,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     params.add_item(
         IFACE_("Min"),
         [type](LinkSearchOpParams &params) {
-          bNode &node = params.add_node("GeometryNodeFieldMinAndMax");
+          bNode &node = params.add_node("GeometryNodeFieldMinAndMax"_ustr);
           node.custom1 = *type;
           params.update_and_connect_available_socket(node, "Min"_ustr);
         },
@@ -99,7 +101,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     params.add_item(
         IFACE_("Max"),
         [type](LinkSearchOpParams &params) {
-          bNode &node = params.add_node("GeometryNodeFieldMinAndMax");
+          bNode &node = params.add_node("GeometryNodeFieldMinAndMax"_ustr);
           node.custom1 = *type;
           params.update_and_connect_available_socket(node, "Max"_ustr);
         },
@@ -109,7 +111,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     params.add_item(
         IFACE_("Value"),
         [type](LinkSearchOpParams &params) {
-          bNode &node = params.add_node("GeometryNodeFieldMinAndMax");
+          bNode &node = params.add_node("GeometryNodeFieldMinAndMax"_ustr);
           node.custom1 = *type;
           params.update_and_connect_available_socket(node, "Value"_ustr);
         },
@@ -232,19 +234,14 @@ class FieldMinMaxInput final : public bke::GeometryFieldInput {
     fn(group_index_);
   }
 
-  uint64_t hash() const override
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep &deep_hash_cache) const override
   {
-    return get_default_hash(input_, group_index_, source_domain_, operation_);
-  }
-
-  bool is_equal_to(const fn::FieldInput &other) const override
-  {
-    if (const FieldMinMaxInput *other_field = dynamic_cast<const FieldMinMaxInput *>(&other)) {
-      return input_ == other_field->input_ && group_index_ == other_field->group_index_ &&
-             source_domain_ == other_field->source_domain_ &&
-             operation_ == other_field->operation_;
-    }
-    return false;
+    static constexpr int8_t id = 0;
+    hash.add(&id);
+    hash.add(deep_hash_cache.ensure(input_));
+    hash.add(deep_hash_cache.ensure(group_index_));
+    hash.add(source_domain_);
+    hash.add(operation_);
   }
 
   std::optional<AttrDomain> preferred_domain(
@@ -308,7 +305,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeFieldMinAndMax");
+  geo_node_type_base(&ntype, "GeometryNodeFieldMinAndMax"_ustr);
   ntype.ui_name = "Field Min & Max";
   ntype.ui_description = "Calculate the minimum and maximum of a given field";
   ntype.nclass = NODE_CLASS_CONVERTER;

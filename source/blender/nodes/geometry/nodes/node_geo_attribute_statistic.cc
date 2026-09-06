@@ -25,11 +25,14 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bNode *node = b.node_or_null();
 
   b.add_input<decl::Geometry>("Geometry"_ustr).description("Geometry to get the statistics from");
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).field_on_all().hide_value();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .evaluated_geometry_field()
+      .hide_value();
 
   if (node != nullptr) {
     const eCustomDataType data_type = eCustomDataType(node->custom1);
-    b.add_input(data_type, "Attribute"_ustr).hide_value().field_on_all();
+    b.add_input(data_type, "Attribute"_ustr).hide_value().evaluated_geometry_field();
 
     b.add_output(data_type, "Mean"_ustr);
     b.add_output(data_type, CTX_N_(BLT_I18NCONTEXT_ID_NODETREE, "Median"_ustr))
@@ -363,7 +366,7 @@ static void node_rna(StructRNA *srna)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeAttributeStatistic", GEO_NODE_ATTRIBUTE_STATISTIC);
+  geo_node_type_base(&ntype, "GeometryNodeAttributeStatistic"_ustr, GEO_NODE_ATTRIBUTE_STATISTIC);
   ntype.ui_name = "Attribute Statistic";
   ntype.ui_description =
       "Calculate statistics about a data set from a field evaluated on a geometry";

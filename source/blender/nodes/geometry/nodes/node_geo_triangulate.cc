@@ -64,8 +64,11 @@ static void node_declare(NodeDeclarationBuilder &b)
       .supported_type(GeometryComponent::Type::Mesh)
       .is_default_link_socket()
       .description("Mesh to triangulate");
-  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).field_on_all().hide_value();
+  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .evaluated_geometry_field()
+      .hide_value();
   b.add_input<decl::Menu>("Quad Method"_ustr)
       .static_items(rna_node_geometry_triangulate_quad_method_items)
       .default_value(geometry::TriangulateQuadMode::ShortEdge)
@@ -131,7 +134,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeTriangulate", GEO_NODE_TRIANGULATE);
+  geo_node_type_base(&ntype, "GeometryNodeTriangulate"_ustr, GEO_NODE_TRIANGULATE);
   ntype.ui_name = "Triangulate";
   ntype.ui_description = "Convert all faces in a mesh to triangular faces";
   ntype.enum_name_legacy = "TRIANGULATE";

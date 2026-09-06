@@ -45,21 +45,21 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Geometry>("Points"_ustr)
       .description("A point for each active voxel or tile in the grid");
   b.add_output(data_type, "Value"_ustr)
-      .field_on_all()
+      .anonymous_attribute_output()
       .description("The grid's value at each voxel");
 
   auto &panel = b.add_panel("Voxel Index"_ustr).default_closed(true);
-  panel.add_output<decl::Int>("X"_ustr).field_on_all().description(
+  panel.add_output<decl::Int>("X"_ustr).anonymous_attribute_output().description(
       "X coordinate of the voxel in index space, or the minimum X coordinate of a tile");
-  panel.add_output<decl::Int>("Y"_ustr).field_on_all().description(
+  panel.add_output<decl::Int>("Y"_ustr).anonymous_attribute_output().description(
       "Y coordinate of the voxel in index space, or the minimum Y coordinate of a tile");
-  panel.add_output<decl::Int>("Z"_ustr).field_on_all().description(
+  panel.add_output<decl::Int>("Z"_ustr).anonymous_attribute_output().description(
       "Z coordinate of the voxel in index space, or the minimum Z coordinate of a tile");
   panel.add_output<decl::Bool>("Is Tile"_ustr)
-      .field_on_all()
+      .anonymous_attribute_output()
       .description("The point represents a tile (multiple voxels) rather than a single voxel");
   panel.add_output<decl::Int>("Extent"_ustr)
-      .field_on_all()
+      .anonymous_attribute_output()
       .description(
           "The size of the tile or voxel. For individual voxels this is 1, for tiles this "
           "represents "
@@ -96,14 +96,14 @@ static void node_gather_link_search_ops(GatherLinkSearchOpParams &params)
 {
   const bNodeSocket &other_socket = params.other_socket();
   const StructureType structure_type = other_socket.runtime->inferred_structure_type;
-  const eNodeSocketDatatype other_type = eNodeSocketDatatype(other_socket.type);
+  const eNodeSocketDatatype other_type = other_socket.type;
 
   if (params.in_out() == SOCK_IN) {
     if (ELEM(structure_type, StructureType::Grid, StructureType::Dynamic)) {
       const std::optional<eNodeSocketDatatype> data_type = node_type_for_socket_type(other_socket);
       if (data_type) {
         params.add_item(IFACE_("Grid"), [data_type](LinkSearchOpParams &params) {
-          bNode &node = params.add_node("GeometryNodeGridToPoints");
+          bNode &node = params.add_node("GeometryNodeGridToPoints"_ustr);
           node.custom1 = *data_type;
           params.update_and_connect_available_socket(node, "Grid"_ustr);
         });
@@ -113,14 +113,14 @@ static void node_gather_link_search_ops(GatherLinkSearchOpParams &params)
   else {
     if (params.node_tree().typeinfo->validate_link(SOCK_GEOMETRY, other_type)) {
       params.add_item(IFACE_("Points"), [](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("GeometryNodeGridToPoints");
+        bNode &node = params.add_node("GeometryNodeGridToPoints"_ustr);
         params.update_and_connect_available_socket(node, "Points"_ustr);
       });
     }
     const std::optional<eNodeSocketDatatype> data_type = node_type_for_socket_type(other_socket);
     if (data_type) {
       params.add_item(IFACE_("Value"), [data_type](LinkSearchOpParams &params) {
-        bNode &node = params.add_node("GeometryNodeGridToPoints");
+        bNode &node = params.add_node("GeometryNodeGridToPoints"_ustr);
         node.custom1 = *data_type;
         params.update_and_connect_available_socket(node, "Value"_ustr);
       });
@@ -392,7 +392,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     using type_traits = typename bke::VolumeGridTraits<ValueT>;
     using TreeT = typename type_traits::TreeType;
 
-    if constexpr (!std::is_same_v<typename type_traits::BlenderType, void>) {
+    if constexpr (!std::is_same_v<TreeT, void>) {
       valid_grid_type = true;
       const TreeT &tree = static_cast<const TreeT &>(tree_base);
       process_tree<TreeT>(tree,
@@ -497,7 +497,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeGridToPoints");
+  geo_node_type_base(&ntype, "GeometryNodeGridToPoints"_ustr);
   ntype.ui_name = "Grid to Points";
   ntype.ui_description = "Generate a point cloud from a volume grid's active voxels";
   ntype.nclass = NODE_CLASS_GEOMETRY;

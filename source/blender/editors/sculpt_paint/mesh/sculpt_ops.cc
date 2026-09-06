@@ -27,6 +27,7 @@
 #include "BKE_context.hh"
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
+#include "BKE_material.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mirror.hh"
 #include "BKE_multires.hh"
@@ -50,11 +51,13 @@
 
 #include "ED_image.hh"
 #include "ED_object.hh"
+#include "ED_paint.hh"
 #include "ED_screen.hh"
 #include "ED_sculpt.hh"
 
 #include "../paint_intern.hh"
 #include "mesh_brush_common.hh"
+#include "mesh_paint.hh"
 #include "paint_mask.hh"
 #include "sculpt_automask.hh"
 #include "sculpt_color.hh"
@@ -97,7 +100,7 @@ static wmOperatorStatus set_persistent_base_exec(bContext *C, wmOperator * /*op*
     return OPERATOR_CANCELLED;
   }
 
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
 
   switch (bke::object::pbvh_get(ob)->type()) {
     case bke::pbvh::Type::Mesh: {
@@ -318,31 +321,42 @@ static void SCULPT_OT_symmetrize(wmOperatorType *ot)
 /** \name Sculpt Mode Toggle Operator
  * \{ */
 
-static void init_sculpt_mode_session(Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &ob)
+void object_sculpt_mode_enter(Main &bmain,
+                              Depsgraph &depsgraph,
+                              Scene &scene,
+                              Object &ob,
+                              const bool force_dyntopo,
+                              ReportList *reports)
 {
-  /* Create persistent sculpt mode data. */
-  BKE_sculpt_toolsettings_data_ensure(&bmain, &scene);
+  Mesh *mesh = BKE_mesh_from_object(&ob);
 
-  /* Create sculpt mode session data. */
-  if (ob.runtime->sculpt_session != nullptr) {
-    BKE_sculptsession_free(&ob);
+  /* Re-triangulating the mesh for position changes in sculpt mode isn't worth the performance
+   * impact, so delay triangulation updates until the user exits sculpt mode. */
+  mesh->runtime->corner_tris_cache.freeze();
+
+  if (!(fabsf(ob.scale[0] - ob.scale[1]) < 1e-4f && fabsf(ob.scale[1] - ob.scale[2]) < 1e-4f)) {
+    BKE_report(
+        reports, RPT_WARNING, "Object has non-uniform scale, sculpting may be unpredictable");
   }
-  ob.runtime->sculpt_session = MEM_new<SculptSession>(__func__);
-  ob.runtime->sculpt_session->mode_type = OB_MODE_SCULPT;
+  else if (is_negative_m4(ob.object_to_world().ptr())) {
+    BKE_report(reports, RPT_WARNING, "Object has negative scale, sculpting may be unpredictable");
+  }
 
-  /* Trigger evaluation of modifier stack to ensure
-   * multires modifier sets .runtime.ccg in
-   * the evaluated mesh.
-   */
-  DEG_id_tag_update(&ob.id, ID_RECALC_GEOMETRY);
+  if (USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint)) {
+    BKE_texpaint_slots_refresh_object(&scene, &ob);
 
-  BKE_scene_graph_evaluated_ensure(&depsgraph, &bmain);
+    PaintModeSettings *paint_settings = &scene.toolsettings->paint_mode;
+    Image *image;
+    ImageUser *image_user;
 
-  /* This function expects a fully evaluated depsgraph. */
-  BKE_sculpt_update_object_for_edit(&depsgraph, &ob, false);
+    if (BKE_paint_canvas_image_get(paint_settings, &ob, &image, &image_user)) {
+      ED_space_image_sync(&bmain, image, false);
+    }
+  }
 
-  Mesh &mesh = *id_cast<Mesh *>(ob.data);
-  if (mesh.attributes().contains(".sculpt_face_set")) {
+  ed::sculpt_paint::mode_enter_generic(bmain, depsgraph, scene, ob, OB_MODE_SCULPT);
+
+  if (mesh->attributes().contains(".sculpt_face_set")) {
     /* Here we can detect geometry that was just added to Sculpt Mode as it has the
      * face_set_none assigned, so we can create a new face set for it. */
     /* In sculpt mode all geometry that is assigned to face_set_none is considered as not
@@ -356,63 +370,6 @@ static void init_sculpt_mode_session(Main &bmain, Depsgraph &depsgraph, Scene &s
     const int new_face_set = face_set::find_next_available_id(ob);
     face_set::initialize_none_to_id(id_cast<Mesh *>(ob.data), new_face_set);
   }
-}
-
-void ensure_valid_pivot(const Object &ob, Paint &paint)
-{
-  bke::PaintRuntime &paint_runtime = *paint.runtime;
-  const bke::pbvh::Tree *pbvh = bke::object::pbvh_get(ob);
-
-  /* Account for the case where no objects are evaluated. */
-  if (!pbvh) {
-    return;
-  }
-
-  /* No valid pivot? Use bounding box center. */
-  if (paint_runtime.average_stroke_counter == 0 || !paint_runtime.last_stroke_valid) {
-    const Bounds<float3> bounds = bke::pbvh::bounds_get(*pbvh);
-    const float3 center = math::midpoint(bounds.min, bounds.max);
-    const float3 location = math::transform_point(ob.object_to_world(), center);
-
-    copy_v3_v3(paint_runtime.average_stroke_accum, location);
-    paint_runtime.average_stroke_counter = 1;
-
-    /* Update last stroke position. */
-    paint_runtime.last_stroke_valid = true;
-  }
-}
-
-void object_sculpt_mode_enter(Main &bmain,
-                              Depsgraph &depsgraph,
-                              Scene &scene,
-                              Object &ob,
-                              const bool force_dyntopo,
-                              ReportList *reports)
-{
-  const int mode_flag = OB_MODE_SCULPT;
-  Mesh *mesh = BKE_mesh_from_object(&ob);
-
-  /* Re-triangulating the mesh for position changes in sculpt mode isn't worth the performance
-   * impact, so delay triangulation updates until the user exits sculpt mode. */
-  mesh->runtime->corner_tris_cache.freeze();
-
-  /* Enter sculpt mode. */
-  ob.mode |= mode_flag;
-
-  init_sculpt_mode_session(bmain, depsgraph, scene, ob);
-
-  if (!(fabsf(ob.scale[0] - ob.scale[1]) < 1e-4f && fabsf(ob.scale[1] - ob.scale[2]) < 1e-4f)) {
-    BKE_report(
-        reports, RPT_WARNING, "Object has non-uniform scale, sculpting may be unpredictable");
-  }
-  else if (is_negative_m4(ob.object_to_world().ptr())) {
-    BKE_report(reports, RPT_WARNING, "Object has negative scale, sculpting may be unpredictable");
-  }
-
-  Paint *paint = BKE_paint_get_active_from_paintmode(&scene, PaintMode::Sculpt);
-  BKE_paint_init(&bmain, &scene, PaintMode::Sculpt);
-
-  ED_paint_cursor_start(paint, brush_cursor_poll);
 
   /* Check dynamic-topology flag; re-enter dynamic-topology mode when changing modes,
    * As long as no data was added that is not supported. */
@@ -465,8 +422,6 @@ void object_sculpt_mode_enter(Main &bmain,
     }
   }
 
-  ensure_valid_pivot(ob, *paint);
-
   /* Flush object mode. */
   DEG_id_tag_update(&ob.id, ID_RECALC_SYNC_TO_EVAL);
 }
@@ -483,25 +438,11 @@ void object_sculpt_mode_enter(bContext *C, Depsgraph &depsgraph, ReportList *rep
 
 void object_sculpt_mode_exit(Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &ob)
 {
-  const int mode_flag = OB_MODE_SCULPT;
   Mesh *mesh = BKE_mesh_from_object(&ob);
 
   mesh->runtime->corner_tris_cache.unfreeze();
 
   multires_flush_sculpt_updates(&ob);
-
-  /* Not needed for now. */
-#if 0
-  MultiresModifierData *mmd = BKE_sculpt_multires_active(scene, ob);
-  const int flush_recalc = ed_object_sculptmode_flush_recalc_flag(scene, ob, mmd);
-#endif
-
-  /* Always for now, so leaving sculpt mode always ensures scene is in
-   * a consistent state. */
-  if (true || /* flush_recalc || */ (ob.runtime->sculpt_session && ob.runtime->sculpt_session->bm))
-  {
-    DEG_id_tag_update(&ob.id, ID_RECALC_GEOMETRY);
-  }
 
   if (mesh->flag & ME_SCULPT_DYNAMIC_TOPOLOGY) {
     /* Dynamic topology must be disabled before exiting sculpt
@@ -513,18 +454,8 @@ void object_sculpt_mode_exit(Main &bmain, Depsgraph &depsgraph, Scene &scene, Ob
     mesh->flag |= ME_SCULPT_DYNAMIC_TOPOLOGY;
   }
 
-  /* Leave sculpt mode. */
-  ob.mode &= ~mode_flag;
-
-  BKE_sculptsession_free(&ob);
-
-  paint_cursor_delete_textures();
-
-  /* Never leave derived meshes behind. */
-  BKE_object_free_derived_caches(&ob);
-
-  /* Flush object mode. */
-  DEG_id_tag_update(&ob.id, ID_RECALC_SYNC_TO_EVAL);
+  DEG_id_tag_update(&ob.id, ID_RECALC_GEOMETRY);
+  ed::sculpt_paint::mode_exit_generic(ob, OB_MODE_SCULPT);
 }
 
 void object_sculpt_mode_exit(bContext *C, Depsgraph &depsgraph)
@@ -543,11 +474,10 @@ static wmOperatorStatus sculpt_mode_toggle_exec(bContext *C, wmOperator *op)
   Main &bmain = *CTX_data_main(C);
   Depsgraph *depsgraph = CTX_data_depsgraph_on_load(C);
   Scene &scene = *CTX_data_scene(C);
-  ToolSettings &ts = *scene.toolsettings;
   ViewLayer &view_layer = *CTX_data_view_layer(C);
   BKE_view_layer_synced_ensure(bmain, &scene, &view_layer);
   Object &ob = *BKE_view_layer_active_object_get(&view_layer);
-  const int mode_flag = OB_MODE_SCULPT;
+  const eObjectMode mode_flag = OB_MODE_SCULPT;
   const bool is_mode_set = (ob.mode & mode_flag) != 0;
 
   if (!is_mode_set) {
@@ -564,7 +494,6 @@ static wmOperatorStatus sculpt_mode_toggle_exec(bContext *C, wmOperator *op)
       depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
     }
     object_sculpt_mode_enter(bmain, *depsgraph, scene, ob, false, op->reports);
-    BKE_paint_brushes_validate(&bmain, &ts.sculpt->paint);
 
     if (ob.mode & mode_flag) {
       Mesh *mesh = id_cast<Mesh *>(ob.data);
@@ -597,7 +526,7 @@ static void SCULPT_OT_sculptmode_toggle(wmOperatorType *ot)
   ot->description = "Toggle sculpt mode in 3D view";
 
   ot->exec = sculpt_mode_toggle_exec;
-  ot->poll = ED_operator_object_active_editable_mesh;
+  ot->poll = ED_operator_object_active_editable_mesh_from_view_layer;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
@@ -758,12 +687,11 @@ static wmOperatorStatus mask_by_color(bContext *C, wmOperator *op, const float2 
     return OPERATOR_CANCELLED;
   }
 
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
 
   /* Tools that are not brushes do not have the brush gizmo to update the vertex as the mouse move,
    * so it needs to be updated here. */
-  CursorGeometryInfo cgi;
-  cursor_geometry_info_update(C, &cgi, region_location, false);
+  cursor_geometry_info_update(C, region_location, false);
 
   if (std::holds_alternative<std::monostate>(ss.active_vert())) {
     return OPERATOR_CANCELLED;
@@ -929,7 +857,6 @@ static void apply_mask_mesh(const Depsgraph &depsgraph,
                             const auto_mask::Cache &automasking,
                             const ApplyMaskMode mode,
                             const float factor,
-                            const bool invert_automask,
                             const bke::pbvh::MeshNode &node,
                             LocalData &tls,
                             const MutableSpan<float> mask)
@@ -946,9 +873,7 @@ static void apply_mask_mesh(const Depsgraph &depsgraph,
   new_mask.fill(1.0f);
   auto_mask::calc_vert_factors(depsgraph, object, automasking, node, verts, new_mask);
 
-  if (invert_automask) {
-    mask::invert_mask(new_mask);
-  }
+  mask::invert_mask(new_mask);
 
   tls.mask.resize(verts.size());
   const MutableSpan<float> node_mask = tls.mask;
@@ -965,7 +890,6 @@ static void apply_mask_grids(const Depsgraph &depsgraph,
                              const auto_mask::Cache &automasking,
                              const ApplyMaskMode mode,
                              const float factor,
-                             const bool invert_automask,
                              const bke::pbvh::GridsNode &node,
                              LocalData &tls)
 {
@@ -986,9 +910,7 @@ static void apply_mask_grids(const Depsgraph &depsgraph,
   new_mask.fill(1.0f);
   auto_mask::calc_grids_factors(depsgraph, object, automasking, node, grids, new_mask);
 
-  if (invert_automask) {
-    mask::invert_mask(new_mask);
-  }
+  mask::invert_mask(new_mask);
 
   tls.mask.resize(grid_verts_num);
   const MutableSpan<float> node_mask = tls.mask;
@@ -1005,7 +927,6 @@ static void apply_mask_bmesh(const Depsgraph &depsgraph,
                              const auto_mask::Cache &automasking,
                              const ApplyMaskMode mode,
                              const float factor,
-                             const float invert_automask,
                              bke::pbvh::BMeshNode &node,
                              LocalData &tls)
 {
@@ -1022,9 +943,7 @@ static void apply_mask_bmesh(const Depsgraph &depsgraph,
   new_mask.fill(1.0f);
   auto_mask::calc_vert_factors(depsgraph, object, automasking, node, verts, new_mask);
 
-  if (invert_automask) {
-    mask::invert_mask(new_mask);
-  }
+  mask::invert_mask(new_mask);
 
   tls.mask.resize(verts.size());
   const MutableSpan<float> node_mask = tls.mask;
@@ -1042,8 +961,7 @@ static void apply_mask_from_settings(const Depsgraph &depsgraph,
                                      const IndexMask &node_mask,
                                      const auto_mask::Cache &automasking,
                                      const ApplyMaskMode mode,
-                                     const float factor,
-                                     const bool invert_automask)
+                                     const float factor)
 {
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {
@@ -1057,16 +975,8 @@ static void apply_mask_from_settings(const Depsgraph &depsgraph,
       node_mask.foreach_index(
           [&](const int i) {
             LocalData &tls = all_tls.local();
-            apply_mask_mesh(depsgraph,
-                            object,
-                            hide_vert,
-                            automasking,
-                            mode,
-                            factor,
-                            invert_automask,
-                            nodes[i],
-                            tls,
-                            mask.span);
+            apply_mask_mesh(
+                depsgraph, object, hide_vert, automasking, mode, factor, nodes[i], tls, mask.span);
             bke::pbvh::node_update_mask_mesh(mask.span, nodes[i]);
           },
           exec_mode::grain_size(1));
@@ -1081,8 +991,7 @@ static void apply_mask_from_settings(const Depsgraph &depsgraph,
       node_mask.foreach_index(
           [&](const int i) {
             LocalData &tls = all_tls.local();
-            apply_mask_grids(
-                depsgraph, object, automasking, mode, factor, invert_automask, nodes[i], tls);
+            apply_mask_grids(depsgraph, object, automasking, mode, factor, nodes[i], tls);
             bke::pbvh::node_update_mask_grids(key, masks, nodes[i]);
           },
           exec_mode::grain_size(1));
@@ -1095,8 +1004,7 @@ static void apply_mask_from_settings(const Depsgraph &depsgraph,
       node_mask.foreach_index(
           [&](const int i) {
             LocalData &tls = all_tls.local();
-            apply_mask_bmesh(
-                depsgraph, object, automasking, mode, factor, invert_automask, nodes[i], tls);
+            apply_mask_bmesh(depsgraph, object, automasking, mode, factor, nodes[i], tls);
             bke::pbvh::node_update_mask_bmesh(mask_offset, nodes[i]);
           },
           exec_mode::grain_size(1));
@@ -1111,6 +1019,7 @@ static wmOperatorStatus mask_from_cavity_exec(bContext *C, wmOperator *op)
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   Object &ob = *CTX_data_active_object(C);
   const Sculpt &sd = *CTX_data_tool_settings(C)->sculpt;
+  const Paint &paint = sd.paint;
   const Brush *brush = BKE_paint_brush_for_read(&sd.paint);
 
   const View3D *v3d = CTX_wm_view3d(C);
@@ -1124,7 +1033,7 @@ static wmOperatorStatus mask_from_cavity_exec(bContext *C, wmOperator *op)
 
   ed::sculpt_paint::mask_overlay_check(*C, *op);
 
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
   vert_random_access_ensure(ob);
 
   const ApplyMaskMode mode = ApplyMaskMode(RNA_enum_get(op->ptr, "mix_mode"));
@@ -1136,40 +1045,51 @@ static wmOperatorStatus mask_from_cavity_exec(bContext *C, wmOperator *op)
   const IndexMask node_mask = bke::pbvh::all_leaf_nodes(pbvh, memory);
 
   /* Set up automasking settings. */
-  Sculpt scene_copy = dna::shallow_copy(sd);
+  Paint scene_copy = dna::shallow_copy(sd.paint);
+  /* We don't do a deep copy of the automasking settings, we simply need a new one so that the
+   * canonical pointer isn't overwritten. */
+  MeshAutomaskingSettings automasking_settings;
+  scene_copy.mesh_automasking_settings = &automasking_settings;
 
+  /* TODO: This pattern of recreating the scene / brush and using them as the "settings" is weak
+   * and can cause hard to find bugs due to modifying actual data. This should be refactored to
+   * take in a options struct */
   MaskSettingsSource src = MaskSettingsSource(RNA_enum_get(op->ptr, "settings_source"));
   switch (src) {
     case MaskSettingsSource::Operator:
       if (RNA_boolean_get(op->ptr, "invert")) {
-        scene_copy.automasking_flags = BRUSH_AUTOMASKING_CAVITY_INVERTED;
+        scene_copy.mesh_automasking_settings->flags = BRUSH_AUTOMASKING_CAVITY_INVERTED;
       }
       else {
-        scene_copy.automasking_flags = BRUSH_AUTOMASKING_CAVITY_NORMAL;
+        scene_copy.mesh_automasking_settings->flags = BRUSH_AUTOMASKING_CAVITY_NORMAL;
       }
 
       if (RNA_boolean_get(op->ptr, "use_curve")) {
-        scene_copy.automasking_flags |= BRUSH_AUTOMASKING_CAVITY_USE_CURVE;
+        scene_copy.mesh_automasking_settings->flags |= BRUSH_AUTOMASKING_CAVITY_USE_CURVE;
       }
 
-      scene_copy.automasking_cavity_blur_steps = RNA_int_get(op->ptr, "blur_steps");
-      scene_copy.automasking_cavity_factor = RNA_float_get(op->ptr, "factor");
+      scene_copy.mesh_automasking_settings->cavity_blur_steps = RNA_int_get(op->ptr, "blur_steps");
+      scene_copy.mesh_automasking_settings->cavity_factor = RNA_float_get(op->ptr, "factor");
 
-      scene_copy.automasking_cavity_curve = sd.automasking_cavity_curve_op;
+      scene_copy.mesh_automasking_settings->cavity_curve =
+          paint.mesh_automasking_settings->cavity_curve_op;
       break;
     case MaskSettingsSource::Brush:
       if (brush) {
-        scene_copy.automasking_flags = brush->automasking_flags;
-        scene_copy.automasking_cavity_factor = brush->automasking_cavity_factor;
-        scene_copy.automasking_cavity_curve = brush->automasking_cavity_curve;
-        scene_copy.automasking_cavity_blur_steps = brush->automasking_cavity_blur_steps;
+        scene_copy.mesh_automasking_settings->flags = brush->mesh_automasking_settings->flags;
+        scene_copy.mesh_automasking_settings->cavity_factor =
+            brush->mesh_automasking_settings->cavity_factor;
+        scene_copy.mesh_automasking_settings->cavity_curve =
+            brush->mesh_automasking_settings->cavity_curve;
+        scene_copy.mesh_automasking_settings->cavity_blur_steps =
+            brush->mesh_automasking_settings->cavity_blur_steps;
 
         /* Ensure only cavity masking is enabled. */
-        scene_copy.automasking_flags &= BRUSH_AUTOMASKING_CAVITY_ALL |
-                                        BRUSH_AUTOMASKING_CAVITY_USE_CURVE;
+        scene_copy.mesh_automasking_settings->flags &= BRUSH_AUTOMASKING_CAVITY_ALL |
+                                                       BRUSH_AUTOMASKING_CAVITY_USE_CURVE;
       }
       else {
-        scene_copy.automasking_flags = 0;
+        scene_copy.mesh_automasking_settings->flags = 0;
         BKE_report(op->reports, RPT_WARNING, "No active brush");
 
         return OPERATOR_CANCELLED;
@@ -1178,23 +1098,26 @@ static wmOperatorStatus mask_from_cavity_exec(bContext *C, wmOperator *op)
       break;
     case MaskSettingsSource::Scene:
       /* Ensure only cavity masking is enabled. */
-      scene_copy.automasking_flags &= BRUSH_AUTOMASKING_CAVITY_ALL |
-                                      BRUSH_AUTOMASKING_CAVITY_USE_CURVE;
+      scene_copy.mesh_automasking_settings->flags &= BRUSH_AUTOMASKING_CAVITY_ALL |
+                                                     BRUSH_AUTOMASKING_CAVITY_USE_CURVE;
       break;
   }
 
   /* Ensure cavity mask is actually enabled. */
-  if (!(scene_copy.automasking_flags & BRUSH_AUTOMASKING_CAVITY_ALL)) {
-    scene_copy.automasking_flags |= BRUSH_AUTOMASKING_CAVITY_NORMAL;
+  if (!(scene_copy.mesh_automasking_settings->flags & BRUSH_AUTOMASKING_CAVITY_ALL)) {
+    scene_copy.mesh_automasking_settings->flags |= BRUSH_AUTOMASKING_CAVITY_NORMAL;
   }
 
   /* Create copy of brush with cleared automasking settings. */
   Brush brush_copy = dna::shallow_copy(*brush);
+  MeshAutomaskingSettings brush_settings;
+  brush_settings.flags = 0;
+  brush_settings.boundary_edges_propagation_steps = 1;
+  brush_settings.cavity_curve = scene_copy.mesh_automasking_settings->cavity_curve;
+
+  brush_copy.mesh_automasking_settings = &brush_settings;
   /* Set a brush type that doesn't change topology so automasking isn't "disabled". */
   brush_copy.sculpt_brush_type = SCULPT_BRUSH_TYPE_SMOOTH;
-  brush_copy.automasking_flags = 0;
-  brush_copy.automasking_boundary_edges_propagation_steps = 1;
-  brush_copy.automasking_cavity_curve = scene_copy.automasking_cavity_curve;
 
   std::unique_ptr<auto_mask::Cache> automasking = auto_mask::cache_init(
       *depsgraph, scene_copy, &brush_copy, ob);
@@ -1207,7 +1130,7 @@ static wmOperatorStatus mask_from_cavity_exec(bContext *C, wmOperator *op)
   undo::push_nodes(*depsgraph, ob, node_mask, undo::Type::Mask);
 
   automasking->calc_cavity_factor(*depsgraph, ob, node_mask);
-  apply_mask_from_settings(*depsgraph, ob, pbvh, node_mask, *automasking, mode, factor, false);
+  apply_mask_from_settings(*depsgraph, ob, pbvh, node_mask, *automasking, mode, factor);
 
   undo::push_end(ob);
 
@@ -1327,7 +1250,7 @@ static wmOperatorStatus mask_from_boundary_exec(bContext *C, wmOperator *op)
 
   ed::sculpt_paint::mask_overlay_check(*C, *op);
 
-  BKE_sculpt_update_object_for_edit(depsgraph, &ob, false);
+  BKE_sculptsession_update_for_edit(depsgraph, &ob, false);
   vert_random_access_ensure(ob);
 
   const ApplyMaskMode mode = ApplyMaskMode(RNA_enum_get(op->ptr, "mix_mode"));
@@ -1339,7 +1262,11 @@ static wmOperatorStatus mask_from_boundary_exec(bContext *C, wmOperator *op)
   const IndexMask node_mask = bke::pbvh::all_leaf_nodes(pbvh, memory);
 
   /* Set up automasking settings. */
-  Sculpt scene_copy = dna::shallow_copy(sd);
+  Paint scene_copy = dna::shallow_copy(sd.paint);
+  /* We don't do a deep copy of the automasking settings, we simply need a new one so that the
+   * canonical pointer isn't overwritten. */
+  MeshAutomaskingSettings automasking_settings;
+  scene_copy.mesh_automasking_settings = &automasking_settings;
 
   MaskSettingsSource src = MaskSettingsSource(RNA_enum_get(op->ptr, "settings_source"));
   switch (src) {
@@ -1348,27 +1275,27 @@ static wmOperatorStatus mask_from_boundary_exec(bContext *C, wmOperator *op)
           RNA_enum_get(op->ptr, "boundary_mode"));
       switch (boundary_mode) {
         case MaskBoundaryMode::Mesh:
-          scene_copy.automasking_flags = BRUSH_AUTOMASKING_BOUNDARY_EDGES;
+          scene_copy.mesh_automasking_settings->flags = BRUSH_AUTOMASKING_BOUNDARY_EDGES;
           break;
         case MaskBoundaryMode::FaceSets:
-          scene_copy.automasking_flags = BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS;
+          scene_copy.mesh_automasking_settings->flags = BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS;
           break;
       }
-      scene_copy.automasking_boundary_edges_propagation_steps = RNA_int_get(op->ptr,
-                                                                            "propagation_steps");
+      scene_copy.mesh_automasking_settings->boundary_edges_propagation_steps = RNA_int_get(
+          op->ptr, "propagation_steps");
       break;
     }
     case MaskSettingsSource::Brush:
       if (brush) {
-        scene_copy.automasking_flags = brush->automasking_flags;
-        scene_copy.automasking_boundary_edges_propagation_steps =
-            brush->automasking_boundary_edges_propagation_steps;
+        scene_copy.mesh_automasking_settings->flags = brush->mesh_automasking_settings->flags;
+        scene_copy.mesh_automasking_settings->boundary_edges_propagation_steps =
+            brush->mesh_automasking_settings->boundary_edges_propagation_steps;
 
-        scene_copy.automasking_flags &= BRUSH_AUTOMASKING_BOUNDARY_EDGES |
-                                        BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS;
+        scene_copy.mesh_automasking_settings->flags &= BRUSH_AUTOMASKING_BOUNDARY_EDGES |
+                                                       BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS;
       }
       else {
-        scene_copy.automasking_flags = 0;
+        scene_copy.mesh_automasking_settings->flags = 0;
         BKE_report(op->reports, RPT_WARNING, "No active brush");
 
         return OPERATOR_CANCELLED;
@@ -1376,17 +1303,19 @@ static wmOperatorStatus mask_from_boundary_exec(bContext *C, wmOperator *op)
 
       break;
     case MaskSettingsSource::Scene:
-      scene_copy.automasking_flags &= BRUSH_AUTOMASKING_BOUNDARY_EDGES |
-                                      BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS;
+      scene_copy.mesh_automasking_settings->flags &= BRUSH_AUTOMASKING_BOUNDARY_EDGES |
+                                                     BRUSH_AUTOMASKING_BOUNDARY_FACE_SETS;
       break;
   }
 
   /* Create copy of brush with cleared automasking settings. */
   Brush brush_copy = dna::shallow_copy(*brush);
+  MeshAutomaskingSettings brush_settings;
+  brush_settings.flags = 0;
+  brush_settings.boundary_edges_propagation_steps = 1;
   /* Set a brush type that doesn't change topology so automasking isn't "disabled". */
+  brush_copy.mesh_automasking_settings = &brush_settings;
   brush_copy.sculpt_brush_type = SCULPT_BRUSH_TYPE_SMOOTH;
-  brush_copy.automasking_flags = 0;
-  brush_copy.automasking_boundary_edges_propagation_steps = 1;
 
   std::unique_ptr<auto_mask::Cache> automasking = auto_mask::cache_init(
       *depsgraph, scene_copy, &brush_copy, ob);
@@ -1398,7 +1327,7 @@ static wmOperatorStatus mask_from_boundary_exec(bContext *C, wmOperator *op)
   undo::push_begin(scene, ob, op);
   undo::push_nodes(*depsgraph, ob, node_mask, undo::Type::Mask);
 
-  apply_mask_from_settings(*depsgraph, ob, pbvh, node_mask, *automasking, mode, factor, true);
+  apply_mask_from_settings(*depsgraph, ob, pbvh, node_mask, *automasking, mode, factor);
 
   undo::push_end(ob);
 

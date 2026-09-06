@@ -2,9 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
 
 #include "BKE_curves.hh"
 
@@ -370,7 +370,7 @@ static void node_rna(StructRNA *srna)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeCurveArc", GEO_NODE_CURVE_PRIMITIVE_ARC);
+  geo_node_type_base(&ntype, "GeometryNodeCurveArc"_ustr, GEO_NODE_CURVE_PRIMITIVE_ARC);
   ntype.ui_name = "Arc";
   ntype.ui_description = "Generate a poly spline arc";
   ntype.enum_name_legacy = "CURVE_PRIMITIVE_ARC";

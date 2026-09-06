@@ -8,16 +8,22 @@ set(INC
   cached_resources
   derived_resources
   utilities
+  ../functions
+  ../nodes/geometry/include
   ../gpu/intern
   ../makesrna
   ../render/intern
   ../imbuf/opencolorio/intern/libocio
+
+  # RNA_prototypes.hh
+  ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
 set(INC_SYS
 )
 
 set(SRC
+  COM_bundle_item.hh
   COM_compile_state.hh
   COM_context.hh
   COM_conversion_operation.hh
@@ -34,10 +40,10 @@ set(SRC
   COM_node_operation.hh
   COM_operation.hh
   COM_pixel_operation.hh
-  COM_profiler.hh
   COM_realize_on_domain_operation.hh
   COM_render_context.hh
   COM_result.hh
+  COM_scene_compositor_effects_operation.hh
   COM_scheduler.hh
   COM_shader_node.hh
   COM_shader_operation.hh
@@ -47,6 +53,7 @@ set(SRC
   COM_undefined_node_operation.hh
   COM_utilities.hh
 
+  intern/bundle_item.cc
   intern/compile_state.cc
   intern/context.cc
   intern/conversion_operation.cc
@@ -61,10 +68,10 @@ set(SRC
   intern/node_operation.cc
   intern/operation.cc
   intern/pixel_operation.cc
-  intern/profiler.cc
   intern/realize_on_domain_operation.cc
   intern/render_context.cc
   intern/result.cc
+  intern/scene_compositor_effects_operation.cc
   intern/scheduler.cc
   intern/shader_node.cc
   intern/shader_operation.cc
@@ -122,6 +129,7 @@ set(SRC
   cached_resources/intern/morphological_distance_feather_weights.cc
   cached_resources/intern/ocio_color_space_conversion_shader.cc
   cached_resources/intern/smaa_precomputed_textures.cc
+  cached_resources/intern/string_image.cc
   cached_resources/intern/symmetric_blur_weights.cc
   cached_resources/intern/symmetric_separable_blur_weights.cc
   cached_resources/intern/van_vliet_gaussian_coefficients.cc
@@ -139,6 +147,7 @@ set(SRC
   cached_resources/COM_morphological_distance_feather_weights.hh
   cached_resources/COM_ocio_color_space_conversion_shader.hh
   cached_resources/COM_smaa_precomputed_textures.hh
+  cached_resources/COM_string_image.hh
   cached_resources/COM_symmetric_blur_weights.hh
   cached_resources/COM_symmetric_separable_blur_weights.hh
   cached_resources/COM_van_vliet_gaussian_coefficients.hh
@@ -147,15 +156,14 @@ set(SRC
 
   derived_resources/COM_denoised_auxiliary_pass.hh
 
-  utilities/intern/gpu_material.cc
   utilities/intern/oidn.cc
 
   utilities/COM_utilities_diagonals.hh
-  utilities/COM_utilities_gpu_material.hh
   utilities/COM_utilities_oidn.hh
 )
 
 set(LIB
+  PRIVATE bf::blenfont
   PRIVATE bf::blenkernel
   PRIVATE bf::blentranslation
   PRIVATE bf::functions
@@ -167,7 +175,7 @@ set(LIB
   PRIVATE bf::dna
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::intern::clog
-  PRIVATE bf::dependencies::optional::opencolorio
+  PRIVATE bf::dependencies::opencolorio
   PRIVATE bf::dependencies::optional::tbb
   PRIVATE bf::dependencies::optional::fftw3
   PRIVATE bf::dependencies::optional::openimagedenoise
@@ -408,6 +416,7 @@ set(GLSL_INC
   ../gpu/intern
   ../gpu/shaders
   ../gpu/shaders/common
+  ../gpu/shaders/compat
 
   shaders
   shaders/infos
@@ -430,8 +439,9 @@ set(GLSL_SOURCE_CONTENT "")
 set(GLSL_METADATA_CONTENT "")
 set(GLSL_INFOS_CONTENT "")
 foreach(GLSL_FILE ${GLSL_SRC})
-  get_filename_component(GLSL_FILE_NAME ${GLSL_FILE} NAME)
+  cmake_path(GET GLSL_FILE FILENAME GLSL_FILE_NAME)
   string(REPLACE "." "_" GLSL_FILE_NAME_UNDERSCORES ${GLSL_FILE_NAME})
+  string(APPEND GLSL_FILE_NAME_UNDERSCORES "_tmp")
   string(APPEND GLSL_SOURCE_CONTENT "SHADER_SOURCE\(${GLSL_FILE_NAME_UNDERSCORES}, \"${GLSL_FILE_NAME}\", \"${GLSL_FILE}\"\)\n")
   string(APPEND GLSL_METADATA_CONTENT "#include \"${GLSL_FILE}.hh\"\n")
   string(APPEND GLSL_INFOS_CONTENT "#include \"${GLSL_FILE}.info\"\n")
@@ -455,3 +465,6 @@ blender_add_lib(bf_compositor "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 if(CXX_WARN_NO_SUGGEST_OVERRIDE)
   target_compile_options(bf_compositor PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wsuggest-override>)
 endif()
+
+# RNA_prototypes.hh
+add_dependencies(bf_compositor bf_rna)

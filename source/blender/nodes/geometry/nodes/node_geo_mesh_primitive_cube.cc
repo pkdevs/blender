@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BLI_math_constants.h"
+#include "BLI_math_constants.hh"
 #include "BLI_math_euler.hh"
 
 #include "DNA_mesh_types.h"
@@ -41,7 +41,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .max(1000)
       .description("Number of vertices for the Z side of the shape");
   b.add_output<decl::Geometry>("Mesh"_ustr);
-  b.add_output<decl::Vector>("UV Map"_ustr).field_on_all();
+  b.add_output<decl::Vector>("UV Map"_ustr).anonymous_attribute_output();
 }
 
 static Mesh *create_cube_mesh(const float3 size,
@@ -117,7 +117,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeMeshCube", GEO_NODE_MESH_PRIMITIVE_CUBE);
+  geo_node_type_base(&ntype, "GeometryNodeMeshCube"_ustr, GEO_NODE_MESH_PRIMITIVE_CUBE);
   ntype.ui_name = "Cube";
   ntype.ui_description = "Generate a cuboid mesh with variable side lengths and subdivisions";
   ntype.enum_name_legacy = "MESH_PRIMITIVE_CUBE";

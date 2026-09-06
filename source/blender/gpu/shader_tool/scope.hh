@@ -248,10 +248,11 @@ struct Scope {
    *
    * If `include_preprocessor` is true, try to match any token. Otherwise ignore tokens in
    * preprocessor scopes.
+   *
+   * Callback should have this signature `void(const std::vector<Token>)`.
    */
-  template<bool include_preprocessor = false>
-  void foreach_match(const std::string &pattern,
-                     std::function<void(const std::vector<Token>)> callback) const
+  template<bool include_preprocessor = false, typename CallbackFn>
+  void foreach_match(const std::string &pattern, CallbackFn callback) const
   {
     assert(!pattern.empty());
     if (this->is_invalid()) {
@@ -331,8 +332,11 @@ struct Scope {
     }
   }
 
-  /* Will iterate over all the scopes that are direct children. */
-  void foreach_scope(ScopeType type, std::function<void(Scope)> callback) const
+  /**
+   * Will iterate over all the scopes that are direct children.
+   * Callback should have this signature `void(Scope)`.
+   */
+  template<typename CallbackFn> void foreach_scope(ScopeType type, CallbackFn callback) const
   {
     /* Makes no sense to iterate on global scope since it is the top level. */
     assert(type != ScopeType::Global);
@@ -356,9 +360,11 @@ struct Scope {
     }
   }
 
-  /* Will iterate over all the attribute if this scope is an ScopeType::Attributes. */
-  void foreach_attribute(
-      std::function<void(Token attribute_name, Scope attribute_props)> callback) const
+  /**
+   * Will iterate over all the attribute if this scope is an ScopeType::Attributes.
+   * Callback should have this signature `void(Token attribute_name, Scope attribute_parameters)`.
+   */
+  template<typename CallbackFn> void foreach_attribute(CallbackFn callback) const
   {
     assert(this->type() == ScopeType::Attributes);
     this->foreach_scope(ScopeType::Attribute, [&](Scope attr) {
@@ -366,6 +372,10 @@ struct Scope {
     });
   }
 
+  /**
+   * Will iterate over all tokens of the scope (and its contained scopes).
+   * Callback should have this signature `void(Token)`.
+   */
   template<typename Callback>
   void foreach_token(const TokenType token_type, Callback callback) const
   {
@@ -381,11 +391,12 @@ struct Scope {
     }
   }
 
-  /* Run a callback for all existing function scopes. */
-  void foreach_function(
-      std::function<void(
-          bool is_static, Token type, Token name, Scope args, bool is_const, Scope body)> callback)
-      const
+  /**
+   * Run a callback for all the function scopes that are direct children of this scope.
+   * Callback should have this signature
+   * `void(bool is_static, Token type, Token name, Scope args, bool is_const, Scope body)`.
+   */
+  template<typename Callback> void foreach_function(Callback callback) const
   {
     foreach_match("m?AA(..)c?{..}", [&](const std::vector<Token> matches) {
       callback(matches[0] == Static,
@@ -421,10 +432,12 @@ struct Scope {
     });
   }
 
-  /* Run a callback for all existing struct scopes. */
-  void foreach_struct(
-      std::function<void(Token struct_tok, Scope attributes, Token name, Scope body)> callback)
-      const
+  /**
+   * Run a callback for all the struct scopes that are direct children of this scope.
+   * Callback should have this signature
+   * `void(Token struct_tok, Scope attributes, Token name, Scope body)`.
+   */
+  template<typename Callback> void foreach_struct(Callback callback) const
   {
     foreach_match("sA{..}", [&](const std::vector<Token> matches) {
       callback(matches[0], Scope(*parser_), matches[1], matches[2].scope());
@@ -440,17 +453,22 @@ struct Scope {
     });
   }
 
-  /* Run a callback for all existing variable declaration (without assignment). */
-  void foreach_declaration(std::function<void(Scope attributes,
-                                              Token const_tok,
-                                              Token type,
-                                              Scope template_scope,
-                                              Token name,
-                                              Scope array,
-                                              Token decl_end)> callback) const
+  /**
+   * Run a callback for all the variable declarations (without assignment) that are direct children
+   * Callback should have this signature
+   * `void(Scope attributes,
+   *       Token const_tok,
+   *       Token type,
+   *       Scope template_scope,
+   *       Token name,
+   *       Scope array,
+   *       Token decl_end)`.
+   */
+  template<typename Callback> void foreach_declaration(Callback callback) const
   {
     auto attrs = [&](const std::vector<Token> &tokens) {
-      Token first = tokens[0].is_valid() ? tokens[0] : tokens[2];
+      Token first = tokens[0].is_valid() ? tokens[0] :
+                                           (tokens[2].is_valid() ? tokens[2] : tokens[4]);
       Scope attributes = first.prev().prev().scope();
       attributes = (attributes.type() == ScopeType::Attributes) ? attributes : Scope(*parser_);
       return attributes;
@@ -472,42 +490,42 @@ struct Scope {
     Scope invalid(*parser_);
 
     /* TODO(fclem): This is getting out of hand... */
-    foreach_match("c?AA;", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], invalid, toks[3], invalid, toks.back());
+    foreach_match("m?c?AA;", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[2], toks[4], invalid, toks[5], invalid, toks.back());
     });
-    foreach_match("c?AA[..];", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], invalid, toks[3], toks[4].scope(), toks.back());
+    foreach_match("m?c?AA[..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[2], toks[4], invalid, toks[5], toks[6].scope(), toks.back());
     });
-    foreach_match("c?AA[..][..];", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], invalid, toks[3], toks[4].scope(), toks.back());
+    foreach_match("m?c?AA[..][..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[2], toks[4], invalid, toks[5], toks[6].scope(), toks.back());
     });
-    foreach_match("c?A<..>A;", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[7], invalid, toks.back());
+    foreach_match("m?c?A<..>A;", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[2], toks[4], toks[5].scope(), toks[9], invalid, toks.back());
     });
-    foreach_match("c?A<..>A[..];", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[7], toks[8].scope(), toks.back());
+    foreach_match("m?c?A<..>A[..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[2], toks[4], toks[5].scope(), toks[9], toks[10].scope(), toks.back());
     });
-    foreach_match("c?A<..>A[..][..];", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[7], toks[8].scope(), toks.back());
+    foreach_match("m?c?A<..>A[..][..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[2], toks[4], toks[5].scope(), toks[9], toks[10].scope(), toks.back());
     });
 
-    foreach_match("c?A&A;", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], invalid, toks[4], invalid, toks.back());
+    foreach_match("m?c?A&A;", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[2], toks[4], invalid, toks[6], invalid, toks.back());
     });
-    foreach_match("c?A(&A)[..];", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], invalid, toks[5], toks[7].scope(), toks.back());
+    foreach_match("m?c?A(&A)[..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[2], toks[4], invalid, toks[7], toks[9].scope(), toks.back());
     });
-    foreach_match("c?A(&A)[..][..];", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], invalid, toks[5], toks[7].scope(), toks.back());
+    foreach_match("m?c?A(&A)[..][..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[2], toks[4], invalid, toks[7], toks[9].scope(), toks.back());
     });
-    foreach_match("c?A<..>&A;", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[8], invalid, toks.back());
+    foreach_match("m?c?A<..>&A;", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[2], toks[4], toks[5].scope(), toks[10], invalid, toks.back());
     });
-    foreach_match("c?A<..>(&A)[..];", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[9], toks[11].scope(), toks.back());
+    foreach_match("m?c?A<..>(&A)[..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[2], toks[4], toks[5].scope(), toks[11], toks[13].scope(), toks.back());
     });
-    foreach_match("c?A<..>(&A)[..][..];", [&](const std::vector<Token> toks) {
-      cb(attrs(toks), toks[0], toks[2], toks[3].scope(), toks[9], toks[11].scope(), toks.back());
+    foreach_match("m?c?A<..>(&A)[..][..];", [&](const std::vector<Token> toks) {
+      cb(attrs(toks), toks[2], toks[4], toks[5].scope(), toks[11], toks[13].scope(), toks.back());
     });
   }
 

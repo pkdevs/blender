@@ -16,20 +16,22 @@
 #include "DNA_brush_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_color.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_rect.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_rect.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
 #include "BKE_brush.hh"
+#include "BKE_bvh.hh"
 #include "BKE_bvhutils.hh"
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
+#include "BKE_global.hh"
 #include "BKE_image.hh"
 #include "BKE_layer.hh"
 #include "BKE_material.hh"
@@ -131,27 +133,21 @@ static bool imapaint_pick_face(ViewContext *vc,
   const float3 start_object = math::transform_point(world_to_object, start_world);
   const float3 end_object = math::transform_point(world_to_object, end_world);
 
-  bke::BVHTreeFromMesh mesh_bvh = mesh.bvh_corner_tris();
-
-  BVHTreeRayHit ray_hit;
-  ray_hit.dist = FLT_MAX;
-  ray_hit.index = -1;
-  BLI_bvhtree_ray_cast(mesh_bvh.tree,
-                       start_object,
-                       math::normalize(end_object - start_object),
-                       0.0f,
-                       &ray_hit,
-                       mesh_bvh.raycast_callback,
-                       &mesh_bvh);
-  if (ray_hit.index == -1) {
+  const bke::bvh::Tree &mesh_bvh = mesh.bvh_tris();
+  const bke::bvh::Ray ray(start_object, math::normalize(end_object - start_object));
+  const std::optional<bke::bvh::RayHit> ray_hit = mesh_bvh.ray_intersect(ray);
+  if (!ray_hit) {
     return false;
   }
 
   *r_bary_coord = bke::mesh_surface_sample::compute_bary_coord_in_triangle(
-      mesh.vert_positions(), mesh.corner_verts(), mesh.corner_tris()[ray_hit.index], ray_hit.co);
+      mesh.vert_positions(),
+      mesh.corner_verts(),
+      mesh.corner_tris()[ray_hit->index],
+      ray_hit->position(ray));
 
-  *r_tri_index = ray_hit.index;
-  *r_face_index = mesh.corner_tri_faces()[ray_hit.index];
+  *r_tri_index = ray_hit->index;
+  *r_face_index = mesh.corner_tri_faces()[ray_hit->index];
   return true;
 }
 
@@ -227,7 +223,7 @@ static std::optional<float3> sample_texture_paint_color(
 
   ImBuf *ibuf = BKE_image_acquire_ibuf(image, &iuser, nullptr);
   BLI_SCOPED_DEFER([&]() { BKE_image_release_ibuf(image, ibuf, nullptr); });
-  if (!ibuf || (!ibuf->byte_buffer.data && !ibuf->float_buffer.data)) {
+  if (!ibuf || (!ibuf->byte_data() && !ibuf->float_data())) {
     return std::nullopt;
   }
 
@@ -239,7 +235,7 @@ static std::optional<float3> sample_texture_paint_color(
   }
 
   float4 rgba_f;
-  if (ibuf->float_buffer.data) {
+  if (ibuf->float_data()) {
     rgba_f = interp == SHD_INTERP_CLOSEST ? imbuf::interpolate_nearest_wrap_fl(ibuf, u, v) :
                                             imbuf::interpolate_bilinear_wrap_fl(ibuf, u, v);
     rgba_f = math::clamp(rgba_f, 0.0f, 1.0f);
@@ -250,7 +246,7 @@ static std::optional<float3> sample_texture_paint_color(
                                                  imbuf::interpolate_bilinear_wrap_byte(ibuf, u, v);
     rgba_uchar_to_float(rgba_f, rgba);
 
-    if ((ibuf->colormanage_flag & IMB_COLORMANAGE_IS_DATA) == 0) {
+    if (!ibuf->colorspace_is_data()) {
       IMB_colormanagement_colorspace_to_scene_linear_v3(rgba_f, ibuf->byte_buffer.colorspace);
     }
   }
@@ -296,7 +292,7 @@ static void apply_sampled_color(Main &bMain,
     }
 
     PaletteColor *color = BKE_palette_color_add(palette);
-    palette->active_color = BLI_listbase_count(&palette->colors) - 1;
+    palette->active_color = palette->colors.count() - 1;
     BKE_palette_color_set(color, sampled_color);
   }
   else {
@@ -332,7 +328,7 @@ static float3 paint_sample_color(bContext *C,
       sampled_color = sample_texture_paint_color(*depsgraph, *scene, vc, ob, mval);
     }
     else if (ELEM(mode, PaintMode::Sculpt, PaintMode::Vertex)) {
-      BKE_sculpt_update_object_for_edit(depsgraph, ob, false);
+      BKE_sculptsession_update_for_edit(depsgraph, ob, false);
       sampled_color = sample_mesh_attribute_color(vc, *ob, mval);
     }
   }
@@ -485,8 +481,8 @@ static wmOperatorStatus sample_color_invoke(bContext *C, wmOperator *op, const w
 
   RNA_int_set_array(op->ptr, "location", event->mval);
 
-  int2 mval(std::clamp(event->mval[0], 0, (int)region->winx),
-            std::clamp(event->mval[1], 0, (int)region->winy));
+  int2 mval(std::clamp(event->mval[0], 0, int(region->winx)),
+            std::clamp(event->mval[1], 0, int(region->winy)));
   const float3 sampled_color = paint_sample_color(C, region, mval, use_merged_texture);
   const float3 average_color = sample_average_color(data, sampled_color);
   /* On initial invoke, we never sample to the palette. */
@@ -563,6 +559,10 @@ static wmOperatorStatus sample_color_modal(bContext *C, wmOperator *op, const wm
 
 static bool sample_color_poll(bContext *C)
 {
+  /* Requires a window with pixel-data. */
+  if (G.background) {
+    return false;
+  }
   return (image_paint_poll_ignore_tool(C) || vertex_paint_poll_ignore_tool(C) ||
           sculpt_mode_poll(C) || ed::greasepencil::grease_pencil_painting_poll(C) ||
           ed::greasepencil::grease_pencil_vertex_painting_poll(C));

@@ -69,7 +69,7 @@ CPUDevice::~CPUDevice()
   image_info->free();
 }
 
-BVHLayoutMask CPUDevice::get_bvh_layout_mask(uint /*kernel_features*/) const
+BVHLayoutMask CPUDevice::get_bvh_layout_mask(uint64_t /*kernel_features*/) const
 {
   BVHLayoutMask bvh_layout_mask = BVH_LAYOUT_BVH2;
 #ifdef WITH_EMBREE
@@ -134,6 +134,11 @@ void CPUDevice::mem_copy_from(
     device_memory & /*mem*/, size_t /*y*/, size_t /*w*/, size_t /*h*/, size_t /*elem*/)
 {
   /* no-op */
+}
+
+void CPUDevice::mem_or_from_device(device_memory & /*mem*/)
+{
+  /* Nothing to do data is already in host buffer. */
 }
 
 void CPUDevice::mem_zero(device_memory &mem)
@@ -263,7 +268,12 @@ void CPUDevice::image_free(device_image &mem)
   }
 }
 
-bool CPUDevice::has_unified_memory() const
+bool CPUDevice::has_unified_memory_any() const
+{
+  return true;
+}
+
+bool CPUDevice::has_unified_image_memory_all() const
 {
   return true;
 }
@@ -351,7 +361,7 @@ void CPUDevice::set_image_cache_func(KernelImageLoadRequestedCPU image_load_requ
   kernel_globals.image_load_requested_cpu = image_load_requested_cpu;
 }
 
-bool CPUDevice::load_kernels(const uint /*kernel_features*/)
+bool CPUDevice::load_kernels(const uint64_t /*kernel_features*/)
 {
   return true;
 }

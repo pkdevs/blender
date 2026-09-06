@@ -86,7 +86,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeTime", CMP_NODE_TIME);
+  cmp_node_type_base(&ntype, "CompositorNodeTime"_ustr, CMP_NODE_TIME);
   ntype.ui_name = "Time Curve";
   ntype.ui_description =
       "Generate a factor value (from 0.0 to 1.0) between scene start and end time, using a curve "
@@ -94,7 +94,7 @@ static void node_register()
   ntype.enum_name_legacy = "TIME";
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = node_declare;
-  bke::node_type_size(ntype, 200, 140, 320);
+  ntype.default_width = bke::NodeWidth::_200;
   ntype.initfunc = node_init;
   bke::node_type_storage(ntype, "CurveMapping", node_free_curves, node_copy_curves);
   ntype.get_compositor_operation = get_compositor_operation;

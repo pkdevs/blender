@@ -6,12 +6,12 @@
  * \ingroup modifiers
  */
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
-#include "BLI_math_geom.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
-#include "BLI_utildefines_stack.h"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
+#include "BLI_utildefines_stack.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -847,8 +847,8 @@ static void blend_read(BlendDataReader *reader, ModifierData *md)
 
   if (lmd->vertexco) {
     lmd->vertexco_sharing_info = BLO_read_shared(reader, &lmd->vertexco, [&]() {
-      BLO_read_float3_array(reader, lmd->verts_num, &lmd->vertexco);
-      return implicit_sharing::info_for_mem_free(lmd->vertexco);
+      BLO_read_array_and_validate_size(reader, &lmd->vertexco, &lmd->verts_num, 3);
+      return lmd->vertexco ? implicit_sharing::info_for_mem_free(lmd->vertexco) : nullptr;
     });
   }
   lmd->cache_system = nullptr;

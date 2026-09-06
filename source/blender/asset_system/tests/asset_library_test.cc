@@ -5,32 +5,33 @@
 #include "AS_asset_catalog.hh"
 #include "AS_asset_library.hh"
 
-#include "BKE_callbacks.hh"
+#include "BKE_global.hh"
+#include "BKE_gtest_base.hh"
+#include "BKE_main.hh"
 
 #include "asset_library_service.hh"
-
-#include "CLG_log.h"
 
 #include "testing/testing.h"
 
 namespace blender::asset_system::tests {
 
-class AssetLibraryTest : public testing::Test {
- public:
-  static void SetUpTestSuite()
+class AssetLibraryTest : public bke::BlenderGTestBase {
+ protected:
+  Main *bmain;
+  void SetUp() override
   {
-    CLG_init();
-    BKE_callback_global_init();
-  }
-  static void TearDownTestSuite()
-  {
-    CLG_exit();
-    BKE_callback_global_finalize();
+    /* G_MAIN is needed for variable expansion in asset library paths.
+     * IE {project_root}, {blend_name}, {blend_dir} etc.
+     */
+    bmain = BKE_main_new();
+    G_MAIN = bmain;
   }
 
   void TearDown() override
   {
     asset_system::AssetLibraryService::destroy();
+    BKE_main_free(bmain);
+    G_MAIN = nullptr;
   }
 };
 

@@ -25,9 +25,14 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Mesh"_ustr, "Geometry"_ustr)
       .supported_type(GeometryComponent::Type::Mesh)
       .description("Geometry to set the smoothness of");
-  b.add_output<decl::Geometry>("Mesh"_ustr, "Geometry"_ustr).propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
-  b.add_input<decl::Bool>("Shade Smooth"_ustr).default_value(true).field_on_all();
+  b.add_output<decl::Geometry>("Mesh"_ustr, "Geometry"_ustr)
+      .propagate_all_geometry()
+      .align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
+  b.add_input<decl::Bool>("Shade Smooth"_ustr).default_value(true).evaluated_geometry_field();
 }
 
 static void node_layout(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)
@@ -117,7 +122,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSetShadeSmooth", GEO_NODE_SET_SHADE_SMOOTH);
+  geo_node_type_base(&ntype, "GeometryNodeSetShadeSmooth"_ustr, GEO_NODE_SET_SHADE_SMOOTH);
   ntype.ui_name = "Set Shade Smooth";
   ntype.ui_description =
       "Control the smoothness of mesh normals around each face by changing the \"shade smooth\" "

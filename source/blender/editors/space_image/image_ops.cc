@@ -20,13 +20,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_fileops.h"
-#include "BLI_listbase.h"
+#include "BLI_fileops.hh"
+#include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_set.hh"
-#include "BLI_string.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -54,10 +54,11 @@
 
 #include "DEG_depsgraph.hh"
 
+#include "IMB_cache.hh"
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
-#include "IMB_moviecache.hh"
+#include "IMB_partial_update.hh"
 
 #include "MOV_read.hh"
 
@@ -249,8 +250,7 @@ static bool image_from_context_has_data_poll(bContext *C)
 
   void *lock;
   ImBuf *ibuf = BKE_image_acquire_ibuf_gpu(ima, iuser, &lock);
-  const bool has_buffer = (ibuf && (ibuf->byte_buffer.data || ibuf->float_buffer.data ||
-                                    ibuf->gpu.texture));
+  const bool has_buffer = (ibuf && (ibuf->byte_data() || ibuf->float_data() || ibuf->gpu.texture));
   BKE_image_release_ibuf(ima, ibuf, lock);
   return has_buffer;
 }
@@ -276,7 +276,7 @@ static bool image_not_packed_poll(bContext *C)
 {
   /* Do not run 'replace' on packed images, it does not give user expected results at all. */
   Image *ima = image_from_context(C);
-  return (ima && BLI_listbase_is_empty(&ima->packedfiles));
+  return (ima && ima->packedfiles.is_empty());
 }
 
 static void image_view_all(SpaceImage *sima, ARegion *region, wmOperator *op)
@@ -343,27 +343,43 @@ static void image_view_all(SpaceImage *sima, ARegion *region, wmOperator *op)
   sima->yof = yof;
 }
 
+bool space_image_poll(bContext *C)
+{
+  SpaceImage *sima = CTX_wm_space_image(C);
+  if (sima == nullptr) {
+    return false;
+  }
+  return true;
+}
+
 bool space_image_main_region_poll(bContext *C)
 {
   SpaceImage *sima = CTX_wm_space_image(C);
-  // ARegion *region = CTX_wm_region(C); /* XXX. */
-
-  if (sima) {
-    return true; /* XXX (region && region->runtime->type->regionid == RGN_TYPE_WINDOW); */
+  if (sima == nullptr) {
+    return false;
   }
-  return false;
+  ARegion *region = CTX_wm_region(C);
+  if (!(region && region->regiontype == RGN_TYPE_WINDOW)) {
+    return false;
+  }
+  return true;
 }
 
 /** For #IMAGE_OT_curves_point_set to avoid sampling when in uv smooth mode or edit-mode. */
 static bool space_image_main_area_not_uv_brush_poll(bContext *C)
 {
   SpaceImage *sima = CTX_wm_space_image(C);
-
-  if (sima && (CTX_data_edit_object(C) == nullptr)) {
-    return true;
+  if (sima == nullptr) {
+    return false;
   }
-
-  return false;
+  ARegion *region = CTX_wm_region(C);
+  if (!(region && region->regiontype == RGN_TYPE_WINDOW)) {
+    return false;
+  }
+  if (CTX_data_edit_object(C)) {
+    return false;
+  }
+  return true;
 }
 
 /** \} */
@@ -504,7 +520,7 @@ void IMAGE_OT_view_pan(wmOperatorType *ot)
   ot->invoke = image_view_pan_invoke;
   ot->modal = image_view_pan_modal;
   ot->cancel = image_view_pan_cancel;
-  ot->poll = space_image_main_region_poll;
+  ot->poll = space_image_poll;
 
   /* flags */
   ot->flag = OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR_XY | OPTYPE_LOCK_BYPASS;
@@ -966,7 +982,7 @@ void IMAGE_OT_view_cursor_center(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = view_cursor_center_exec;
-  ot->poll = ED_space_image_cursor_poll;
+  ot->poll = ED_space_image_region_cursor_poll;
 
   /* properties */
   prop = RNA_def_boolean(ot->srna, "fit_view", false, "Fit View", "Fit frame to the viewport");
@@ -1359,9 +1375,6 @@ static Image *image_open_single(Main *bmain,
   ima = BKE_image_load_exists_in_lib(bmain, owner_library, range->filepath, &exists);
 
   if (!ima) {
-    if (op->customdata) {
-      MEM_delete(static_cast<ImageOpenData *>(op->customdata));
-    }
     BKE_reportf(op->reports,
                 RPT_ERROR,
                 "Cannot read '%s': %s",
@@ -1443,12 +1456,14 @@ static wmOperatorStatus image_open_exec(bContext *C, wmOperator *op)
       frame_ofs = range.offset;
     }
 
-    BLI_freelistN(&range.udim_tiles);
-    BLI_freelistN(&range.frames);
+    range.udim_tiles.free_no_destruct();
+    range.frames.free_no_destruct();
   }
-  BLI_freelistN(&ranges);
+  ranges.free_no_destruct();
 
   if (ima == nullptr) {
+    op->customdata = nullptr;
+    MEM_delete(iod);
     return OPERATOR_CANCELLED;
   }
 
@@ -1736,10 +1751,10 @@ static wmOperatorStatus image_file_browse_invoke(bContext *C, wmOperator *op, co
     return OPERATOR_CANCELLED;
   }
 
-  /* The image is typically passed to the operator via layout/button context (e.g.
-   * # ui::Layout::context_ptr_set. The File Browser doesn't support
-   * restoring this context when calling `exec()` though, so we have to pass it the image via
-   * custom data. */
+  /* The image is typically passed to the operator via layout/button context
+   * (e.g. #ui::Layout::context_ptr_set).
+   * The File Browser doesn't support restoring this context when calling `exec()` though,
+   * so we have to pass it the image via custom data. */
   op->customdata = ima;
 
   image_filesel(C, op, filepath);
@@ -1809,7 +1824,7 @@ static wmOperatorStatus image_match_len_exec(bContext *C, wmOperator * /*op*/)
   if (!anim) {
     return OPERATOR_CANCELLED;
   }
-  iuser->frames = MOV_get_duration_frames(anim, IMB_TC_RECORD_RUN);
+  iuser->frames = MOV_get_duration_frames(anim);
   BKE_image_user_frame_calc(ima, iuser, scene->r.cfra);
 
   return OPERATOR_FINISHED;
@@ -2339,7 +2354,7 @@ static wmOperatorStatus image_save_sequence_exec(bContext *C, wmOperator *op)
   ImBuf *ibuf, *first_ibuf = nullptr;
   int tot = 0;
   char di[FILE_MAX];
-  MovieCacheIter *iter;
+  ImBufCacheIter *iter;
 
   if (image == nullptr) {
     return OPERATOR_CANCELLED;
@@ -2358,18 +2373,18 @@ static wmOperatorStatus image_save_sequence_exec(bContext *C, wmOperator *op)
   /* get total dirty buffers and first dirty buffer which is used for menu */
   ibuf = nullptr;
   if (image->runtime->cache != nullptr) {
-    iter = IMB_moviecacheIter_new(image->runtime->cache);
-    while (!IMB_moviecacheIter_done(iter)) {
-      ibuf = IMB_moviecacheIter_getImBuf(iter);
+    iter = IMB_cacheIter_new(image->runtime->cache);
+    while (!IMB_cacheIter_done(iter)) {
+      ibuf = IMB_cacheIter_getImBuf(iter);
       if (ibuf != nullptr && ibuf->userflags & IB_BITMAPDIRTY) {
         if (first_ibuf == nullptr) {
           first_ibuf = ibuf;
         }
         tot++;
       }
-      IMB_moviecacheIter_step(iter);
+      IMB_cacheIter_step(iter);
     }
-    IMB_moviecacheIter_free(iter);
+    IMB_cacheIter_free(iter);
   }
 
   if (tot == 0) {
@@ -2381,12 +2396,12 @@ static wmOperatorStatus image_save_sequence_exec(bContext *C, wmOperator *op)
   BLI_path_split_dir_part(first_ibuf->filepath.c_str(), di, sizeof(di));
   BKE_reportf(op->reports, RPT_INFO, "%d image(s) will be saved in %s", tot, di);
 
-  iter = IMB_moviecacheIter_new(image->runtime->cache);
-  while (!IMB_moviecacheIter_done(iter)) {
-    ibuf = IMB_moviecacheIter_getImBuf(iter);
+  iter = IMB_cacheIter_new(image->runtime->cache);
+  while (!IMB_cacheIter_done(iter)) {
+    ibuf = IMB_cacheIter_getImBuf(iter);
 
     if (ibuf != nullptr && ibuf->userflags & IB_BITMAPDIRTY) {
-      if (0 == IMB_save_image(ibuf, ibuf->filepath.c_str(), IB_byte_data)) {
+      if (0 == IMB_save_image(ibuf, ibuf->filepath.c_str(), ImBufFlags::ByteData)) {
         BKE_reportf(op->reports, RPT_ERROR, "Could not write image: %s", strerror(errno));
         break;
       }
@@ -2395,9 +2410,9 @@ static wmOperatorStatus image_save_sequence_exec(bContext *C, wmOperator *op)
       ibuf->userflags &= ~IB_BITMAPDIRTY;
     }
 
-    IMB_moviecacheIter_step(iter);
+    IMB_cacheIter_step(iter);
   }
-  IMB_moviecacheIter_free(iter);
+  IMB_cacheIter_free(iter);
 
   return OPERATOR_FINISHED;
 }
@@ -2457,7 +2472,7 @@ bool ED_image_should_save_modified(const Main *bmain)
   BKE_reports_init(&reports, RPT_STORE);
 
   uint modified_images_count = ED_image_save_all_modified_info(bmain, &reports);
-  bool should_save = modified_images_count || !BLI_listbase_is_empty(&reports.list);
+  bool should_save = modified_images_count || !reports.list.is_empty();
 
   BKE_reports_free(&reports);
 
@@ -2553,6 +2568,23 @@ bool ED_image_save_all_modified(const bContext *C, ReportList *reports)
   return ok;
 }
 
+void ED_image_internal_autosave_flush(const Main *bmain)
+{
+  for (Image *ima = static_cast<Image *>(bmain->images.first); ima;
+       ima = static_cast<Image *>(ima->id.next))
+  {
+    bool is_format_writable;
+
+    if (image_should_be_saved(ima, &is_format_writable)) {
+      if (BKE_image_has_packedfile(ima) || image_should_pack_during_save_all(ima) ||
+          (is_format_writable && image_has_valid_path(ima)))
+      {
+        BKE_image_autosave_memorypack(ima);
+      }
+    }
+  }
+}
+
 static bool image_save_all_modified_poll(bContext *C)
 {
   int num_files = ED_image_save_all_modified_info(CTX_data_main(C), nullptr);
@@ -2595,6 +2627,8 @@ static wmOperatorStatus image_reload_exec(bContext *C, wmOperator * /*op*/)
   if (!ima) {
     return OPERATOR_CANCELLED;
   }
+
+  BKE_image_clear_autosave(ima);
 
   /* XXX BKE_packedfile_unpack_image frees image buffers */
   ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
@@ -2763,6 +2797,7 @@ static wmOperatorStatus image_new_invoke(bContext *C, wmOperator *op, const wmEv
 
 static void image_new_draw(bContext * /*C*/, wmOperator *op)
 {
+  /* TODO: Deduplicate with texture_paint_add_texture_paint_slot_ui */
   ui::Layout &layout = *op->layout;
 
   /* copy of WM_operator_props_dialog_popup() layout */
@@ -2770,13 +2805,21 @@ static void image_new_draw(bContext * /*C*/, wmOperator *op)
   layout.use_property_split_set(true);
   layout.use_property_decorate_set(false);
 
+  layout.prop(op->ptr, "name", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  ui::Layout &dim_col = layout.column(true);
+  dim_col.prop(op->ptr, "width", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  dim_col.prop(op->ptr, "height", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
   ui::Layout &col = layout.column(false);
-  col.prop(op->ptr, "name", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(op->ptr, "width", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(op->ptr, "height", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(op->ptr, "color", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(op->ptr, "alpha", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   col.prop(op->ptr, "generated_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
+  const int gen_type = RNA_enum_get(op->ptr, "generated_type");
+  ui::Layout &color_col = col.column(false);
+  if (gen_type == IMA_GENTYPE_BLANK) {
+    color_col.prop(op->ptr, "color", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+
+  col.prop(op->ptr, "alpha", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   col.prop(op->ptr, "float", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   col.prop(op->ptr, "tiled", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
@@ -2874,8 +2917,8 @@ static wmOperatorStatus image_flip_exec(bContext *C, wmOperator *op)
   const int size_x = ibuf->x;
   const int size_y = ibuf->y;
 
-  if (ibuf->float_buffer.data) {
-    float *float_pixels = ibuf->float_buffer.data;
+  if (ibuf->float_data()) {
+    float *float_pixels = ibuf->float_data_for_write();
 
     float *orig_float_pixels = MEM_dupalloc(float_pixels);
     for (int x = 0; x < size_x; x++) {
@@ -2892,12 +2935,11 @@ static wmOperatorStatus image_flip_exec(bContext *C, wmOperator *op)
     }
     MEM_delete(orig_float_pixels);
 
-    if (ibuf->byte_buffer.data) {
+    if (ibuf->byte_data()) {
       IMB_byte_from_float(ibuf);
     }
   }
-  else if (ibuf->byte_buffer.data) {
-    uchar *char_pixels = ibuf->byte_buffer.data;
+  else if (uchar *char_pixels = ibuf->byte_data_for_write()) {
     uchar *orig_char_pixels = MEM_dupalloc(char_pixels);
     for (int x = 0; x < size_x; x++) {
       const int source_pixel_x = use_flip_x ? size_x - x - 1 : x;
@@ -2918,12 +2960,10 @@ static wmOperatorStatus image_flip_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-  BKE_image_mark_dirty(ima, ibuf);
-
   ED_image_undo_push_end();
 
-  BKE_image_partial_update_mark_full_update(ima);
+  IMB_partial_update_mark_full(ibuf);
+  IMB_mark_dirty(ibuf);
 
   DEG_id_tag_update(&ima->id, ID_RECALC_EDITORS);
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
@@ -2988,12 +3028,10 @@ static wmOperatorStatus image_rotate_orthogonal_exec(bContext *C, wmOperator *op
     return OPERATOR_CANCELLED;
   }
 
-  ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-  BKE_image_mark_dirty(ima, ibuf);
-
   ED_image_undo_push_end();
 
-  BKE_image_partial_update_mark_full_update(ima);
+  IMB_partial_update_mark_full(ibuf);
+  IMB_mark_dirty(ibuf);
 
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
 
@@ -3206,9 +3244,9 @@ static wmOperatorStatus image_invert_exec(bContext *C, wmOperator *op)
   }
 
   /* TODO: make this into an IMB_invert_channels(ibuf,r,g,b,a) method!? */
-  if (ibuf->float_buffer.data) {
+  if (float *float_data = ibuf->float_data_for_write()) {
 
-    float *fp = ibuf->float_buffer.data;
+    float *fp = float_data;
     for (i = size_t(ibuf->x) * ibuf->y; i > 0; i--, fp += 4) {
       if (r) {
         fp[0] = 1.0f - fp[0];
@@ -3224,13 +3262,11 @@ static wmOperatorStatus image_invert_exec(bContext *C, wmOperator *op)
       }
     }
 
-    if (ibuf->byte_buffer.data) {
+    if (ibuf->byte_data()) {
       IMB_byte_from_float(ibuf);
     }
   }
-  else if (ibuf->byte_buffer.data) {
-
-    uchar *cp = ibuf->byte_buffer.data;
+  else if (uchar *cp = ibuf->byte_data_for_write()) {
     for (i = size_t(ibuf->x) * ibuf->y; i > 0; i--, cp += 4) {
       if (r) {
         cp[0] = 255 - cp[0];
@@ -3251,12 +3287,10 @@ static wmOperatorStatus image_invert_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-  BKE_image_mark_dirty(ima, ibuf);
-
   ED_image_undo_push_end();
 
-  BKE_image_partial_update_mark_full_update(ima);
+  IMB_partial_update_mark_full(ibuf);
+  IMB_mark_dirty(ibuf);
 
   DEG_id_tag_update(&ima->id, ID_RECALC_EDITORS);
 
@@ -3348,9 +3382,9 @@ static wmOperatorStatus image_scale_exec(bContext *C, wmOperator *op)
     }
 
     ED_image_undo_push_begin_with_image(op->type->name, ima, ibuf, &iuser);
-    ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
     IMB_scale(ibuf, size[0], size[1], IMBScaleFilter::Box, false);
-    BKE_image_mark_dirty(ima, ibuf);
+    IMB_partial_update_mark_full(ibuf);
+    IMB_mark_dirty(ibuf);
     BKE_image_release_ibuf(ima, ibuf, nullptr);
     ED_image_undo_push_end();
   }
@@ -3386,15 +3420,13 @@ static wmOperatorStatus image_scale_exec(bContext *C, wmOperator *op)
         RNA_property_int_set_array(op->ptr, prop, size);
       }
 
-      ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
       IMB_scale(ibuf, size[0], size[1], IMBScaleFilter::Box, false);
-      BKE_image_mark_dirty(ima, ibuf);
+      IMB_partial_update_mark_full(ibuf);
+      IMB_mark_dirty(ibuf);
       BKE_image_release_ibuf(ima, ibuf, nullptr);
     }
     ED_image_undo_push_end();
   }
-
-  BKE_image_partial_update_mark_full_update(ima);
 
   DEG_id_tag_update(&ima->id, 0);
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
@@ -3437,6 +3469,11 @@ static bool image_pack_test(Image *ima, const char **r_error_message)
 
   if (!ID_IS_EDITABLE(&ima->id)) {
     *r_error_message = N_("Image is not editable");
+    return false;
+  }
+
+  if (!BKE_image_is_dirty(ima) && ima->source == IMA_SRC_GENERATED) {
+    *r_error_message = N_("Unedited generated images do not support packing");
     return false;
   }
 
@@ -3672,19 +3709,19 @@ bool ED_space_image_color_sample(
 
   if (uv[0] >= 0.0f && uv[1] >= 0.0f && uv[0] < 1.0f && uv[1] < 1.0f) {
     const float *fp;
-    uchar *cp;
+    const uchar *cp;
     int x = int(uv[0] * ibuf->x), y = int(uv[1] * ibuf->y);
 
     CLAMP(x, 0, ibuf->x - 1);
     CLAMP(y, 0, ibuf->y - 1);
 
-    if (ibuf->float_buffer.data) {
-      fp = (ibuf->float_buffer.data + (ibuf->channels) * (y * ibuf->x + x));
+    if (ibuf->float_data()) {
+      fp = (ibuf->float_data() + (ibuf->channels) * (y * ibuf->x + x));
       copy_v3_v3(r_col, fp);
       ret = true;
     }
-    else if (ibuf->byte_buffer.data) {
-      cp = ibuf->byte_buffer.data + 4 * (y * ibuf->x + x);
+    else if (ibuf->byte_data()) {
+      cp = ibuf->byte_data() + 4 * (y * ibuf->x + x);
       rgb_uchar_to_float(r_col, cp);
       IMB_colormanagement_colorspace_to_scene_linear_v3(r_col, ibuf->byte_buffer.colorspace);
       ret = true;
@@ -3692,7 +3729,7 @@ bool ED_space_image_color_sample(
   }
 
   if (r_is_data) {
-    *r_is_data = (ibuf->colormanage_flag & IMB_COLORMANAGE_IS_DATA) != 0;
+    *r_is_data = ibuf->colorspace_is_data();
   }
 
   ED_space_image_release_buffer(sima, ibuf, lock);
@@ -3743,6 +3780,9 @@ static wmOperatorStatus image_sample_line_exec(bContext *C, wmOperator *op)
   ui::view2d_region_to_view(&region->v2d, x_start, y_start, &uv1[0], &uv1[1]);
   ui::view2d_region_to_view(&region->v2d, x_end, y_end, &uv2[0], &uv2[1]);
 
+  if (ima == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
   /* If the image has tiles, shift the positions accordingly. */
   int tile = BKE_image_get_tile_from_pos(ima, uv1, uv1, ofs);
   sub_v2_v2(uv2, ofs);
@@ -4155,7 +4195,7 @@ void IMAGE_OT_read_viewlayers(wmOperatorType *ot)
   ot->idname = "IMAGE_OT_read_viewlayers";
   ot->description = "Read all the current scene's view layers from cache, as needed";
 
-  ot->poll = space_image_main_region_poll;
+  ot->poll = space_image_poll;
   ot->exec = image_read_viewlayers_exec;
 
   /* flags */
@@ -4292,12 +4332,12 @@ void IMAGE_OT_clear_render_border(wmOperatorType *ot)
 static bool do_fill_tile(PointerRNA *ptr, Image *ima, ImageTile *tile)
 {
   RNA_float_get_array(ptr, "color", tile->gen_color);
-  tile->gen_type = RNA_enum_get(ptr, "generated_type");
+  tile->gen_type = eImageGenType(RNA_enum_get(ptr, "generated_type"));
   tile->gen_x = RNA_int_get(ptr, "width");
   tile->gen_y = RNA_int_get(ptr, "height");
   bool is_float = RNA_boolean_get(ptr, "float");
 
-  tile->gen_flag = is_float ? IMA_GEN_FLOAT : 0;
+  tile->gen_flag = is_float ? IMA_GEN_FLOAT : eImage_GenFlag{};
   tile->gen_depth = RNA_boolean_get(ptr, "alpha") ? 32 : 24;
 
   return BKE_image_fill_tile(ima, tile);
@@ -4337,8 +4377,8 @@ static void tile_fill_init(PointerRNA *ptr, Image *ima, ImageTile *tile)
     /* Initialize properties from reference tile. */
     RNA_int_set(ptr, "width", ibuf->x);
     RNA_int_set(ptr, "height", ibuf->y);
-    RNA_boolean_set(ptr, "float", ibuf->float_buffer.data != nullptr);
-    RNA_boolean_set(ptr, "alpha", ibuf->planes > 24);
+    RNA_boolean_set(ptr, "float", ibuf->float_data() != nullptr);
+    RNA_boolean_set(ptr, "alpha", ibuf->can_contain_alpha());
 
     BKE_image_release_ibuf(ima, ibuf, nullptr);
   }
@@ -4508,7 +4548,7 @@ static bool tile_remove_poll(bContext *C)
 {
   Image *ima = CTX_data_edit_image(C);
 
-  return (ima != nullptr && ima->source == IMA_SRC_TILED && !BLI_listbase_is_single(&ima->tiles));
+  return (ima != nullptr && ima->source == IMA_SRC_TILED && !ima->tiles.is_single());
 }
 
 static wmOperatorStatus tile_remove_exec(bContext *C, wmOperator * /*op*/)
@@ -4521,7 +4561,7 @@ static wmOperatorStatus tile_remove_exec(bContext *C, wmOperator * /*op*/)
   }
 
   /* Ensure that the active index is valid. */
-  ima->active_tile_index = min_ii(ima->active_tile_index, BLI_listbase_count(&ima->tiles) - 1);
+  ima->active_tile_index = min_ii(ima->active_tile_index, ima->tiles.count() - 1);
 
   WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, nullptr);
 

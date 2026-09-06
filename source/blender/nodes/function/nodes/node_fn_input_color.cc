@@ -4,7 +4,7 @@
 
 #include "node_function_util.hh"
 
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 
 #include "UI_interface.hh"
 #include "UI_interface_layout.hh"
@@ -41,7 +41,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  fn_node_type_base(&ntype, "FunctionNodeInputColor", FN_NODE_INPUT_COLOR);
+  fn_node_type_base(&ntype, "FunctionNodeInputColor"_ustr, FN_NODE_INPUT_COLOR);
   ntype.ui_name = "Color";
   ntype.ui_description = "Output a color value chosen with the color picker widget";
   ntype.enum_name_legacy = "INPUT_COLOR";

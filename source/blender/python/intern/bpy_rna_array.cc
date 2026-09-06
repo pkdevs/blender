@@ -12,7 +12,7 @@
 
 #include "CLG_log.h"
 
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "RNA_types.hh"
 
@@ -39,7 +39,7 @@ namespace blender {
 struct ItemConvertArgData;
 
 using ItemConvertFunc = void (*)(const ItemConvertArgData *arg, PyObject *py_data, char *data);
-using ItemTypeCheckFunc = int (*)(PyObject *py_data);
+using ItemTypeCheckFunc = bool (*)(PyObject *py_data);
 using RNA_SetArrayFunc = void (*)(PointerRNA *ptr, PropertyRNA *prop, const char *data);
 using RNA_SetIndexFunc = void (*)(PointerRNA *ptr, PropertyRNA *prop, int index, void *data_item);
 
@@ -480,7 +480,7 @@ static char *copy_values(PyObject *seq,
                          RNA_SetIndexFunc rna_set_index)
 {
 #ifdef USE_MATHUTILS
-  if (dim == 0) {
+  if (data && dim == 0) {
     if (MatrixObject_Check(seq)) {
       MatrixObject *pymat = reinterpret_cast<MatrixObject *>(seq);
       const size_t allocsize = pymat->col_num * pymat->row_num * sizeof(float);
@@ -672,19 +672,19 @@ static void py_to_bool(const ItemConvertArgData * /*arg*/, PyObject *py, char *d
   *reinterpret_cast<bool *>(data) = bool(PyObject_IsTrue(py));
 }
 
-static int py_float_check(PyObject *py)
+static bool py_float_check(PyObject *py)
 {
   /* accept both floats and integers */
   return PyNumber_Check(py);
 }
 
-static int py_int_check(PyObject *py)
+static bool py_int_check(PyObject *py)
 {
   /* accept only integers */
   return PyLong_Check(py);
 }
 
-static int py_bool_check(PyObject *py)
+static bool py_bool_check(PyObject *py)
 {
   return PyBool_Check(py);
 }

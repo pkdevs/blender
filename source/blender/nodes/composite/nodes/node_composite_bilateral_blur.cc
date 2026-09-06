@@ -31,6 +31,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .structure_type(StructureType::Dynamic);
   b.add_input<decl::Int>("Size"_ustr)
       .default_value(0)
+      .subtype(PROP_PIXEL)
       .min(0)
       .description("The size of the blur in pixels");
   b.add_input<decl::Float>("Threshold"_ustr)
@@ -168,7 +169,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeBilateralblur", CMP_NODE_BILATERALBLUR);
+  cmp_node_type_base(&ntype, "CompositorNodeBilateralblur"_ustr, CMP_NODE_BILATERALBLUR);
   ntype.ui_name = "Bilateral Blur";
   ntype.ui_description = "Adaptively blur image, while retaining sharp edges";
   ntype.enum_name_legacy = "BILATERALBLUR";

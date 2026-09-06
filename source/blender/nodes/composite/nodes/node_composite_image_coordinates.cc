@@ -54,7 +54,7 @@ class ImageCoordinatesOperation : public NodeOperation {
     if (uniform_coordinates_result.should_compute()) {
       const Result &uniform_coordinates = this->context().cache_manager().image_coordinates.get(
           this->context(), domain, CoordinatesType::Uniform);
-      uniform_coordinates_result.wrap_external(uniform_coordinates);
+      uniform_coordinates_result.share_data(uniform_coordinates);
       uniform_coordinates_result.transform(domain.transformation);
     }
 
@@ -62,7 +62,7 @@ class ImageCoordinatesOperation : public NodeOperation {
     if (normalized_coordinates_result.should_compute()) {
       const Result &normalized_coordinates = this->context().cache_manager().image_coordinates.get(
           this->context(), domain, CoordinatesType::Normalized);
-      normalized_coordinates_result.wrap_external(normalized_coordinates);
+      normalized_coordinates_result.share_data(normalized_coordinates);
       normalized_coordinates_result.transform(domain.transformation);
     }
 
@@ -70,7 +70,7 @@ class ImageCoordinatesOperation : public NodeOperation {
     if (pixel_coordinates_result.should_compute()) {
       const Result &pixel_coordinates = this->context().cache_manager().image_coordinates.get(
           this->context(), domain, CoordinatesType::Pixel);
-      pixel_coordinates_result.wrap_external(pixel_coordinates);
+      pixel_coordinates_result.share_data(pixel_coordinates);
       pixel_coordinates_result.transform(domain.transformation);
     }
   }
@@ -85,7 +85,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeImageCoordinates");
+  cmp_node_type_base(&ntype, "CompositorNodeImageCoordinates"_ustr);
   ntype.ui_name = "Image Coordinates";
   ntype.ui_description = "Returns the coordinates of the pixels of an image";
   ntype.nclass = NODE_CLASS_INPUT;

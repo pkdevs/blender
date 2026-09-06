@@ -97,7 +97,11 @@ static void node_geo_exec(GeoNodeExecParams params)
       if (auto grid = params.extract_input<bke::VolumeGrid<float>>("Grid 1"_ustr)) {
         operands.append(std::move(grid));
       }
-      operands.extend(grids.values);
+      for (const bke::VolumeGrid<float> &grid : grids.values) {
+        if (grid) {
+          operands.append(grid);
+        }
+      }
       break;
   }
 
@@ -172,7 +176,7 @@ static void node_rna(StructRNA *srna)
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, "GeometryNodeSDFGridBoolean", GEO_NODE_SDF_GRID_BOOLEAN);
+  geo_node_type_base(&ntype, "GeometryNodeSDFGridBoolean"_ustr, GEO_NODE_SDF_GRID_BOOLEAN);
   ntype.ui_name = "SDF Grid Boolean";
   ntype.ui_description = "Cut, subtract, or join multiple SDF volume grid inputs";
   ntype.enum_name_legacy = "SDF_GRID_BOOLEAN";

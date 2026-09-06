@@ -8,6 +8,7 @@ import pathlib
 
 from dataclasses import dataclass, field
 
+from .common import normalize_device_id
 from .test import TestCollection
 
 
@@ -37,6 +38,7 @@ class TestEntry:
     # More detailed error info, potentially multi-lines.
     exception_msg: str = ''
     output: dict = field(default_factory=dict)
+    output_all_runs: dict = field(default_factory=dict)
     benchmark_type: str = 'comparison'
 
     def to_json(self) -> dict:
@@ -50,6 +52,12 @@ class TestEntry:
             if field in json_dict:
                 setattr(self, field, json_dict[field])
 
+    def migrate(self):
+        if self.output:
+            missing_keys = self.output.keys() - self.output_all_runs.keys()
+            for key in missing_keys:
+                self.output_all_runs[key] = [self.output[key]]
+
 
 class TestQueue:
     """Queue of tests to be run or inspected. Matches JSON file on disk."""
@@ -57,6 +65,7 @@ class TestQueue:
     def __init__(self, filepath: pathlib.Path):
         self.filepath = filepath
         self.has_multiple_categories = False
+        self.has_multiple_devices = False
         self.entries = []
 
         if self.filepath.is_file():
@@ -66,6 +75,7 @@ class TestQueue:
             for json_entry in json_entries:
                 entry = TestEntry()
                 entry.from_json(json_entry)
+                entry.migrate()
                 self.entries.append(entry)
 
     def rows(self, use_revision_columns: bool) -> list:
@@ -87,7 +97,7 @@ class TestQueue:
             rows = {}
 
             for entry in entries:
-                key = (entry.device_id, entry.category, entry.test)
+                key = (normalize_device_id(entry.device_id), entry.category, entry.test)
                 if key in rows:
                     rows[key].append(entry)
                 else:
@@ -96,12 +106,13 @@ class TestQueue:
             return [value for _, value in sorted(rows.items())]
 
     def find(self, revision: str, test: str, category: str, device_id: str) -> dict:
+        sanitized = normalize_device_id(device_id)
         for entry in self.entries:
             if (
                 entry.revision == revision and
                 entry.test == test and
                 entry.category == category and
-                entry.device_id == device_id
+                normalize_device_id(entry.device_id) == sanitized
             ):
                 return entry
 
@@ -149,15 +160,18 @@ class TestConfig:
         return "Unknown"
 
     @staticmethod
-    def write_default_config(env, config_dir: pathlib.Path) -> None:
+    def write_default_config(env, config_dir: pathlib.Path, build_dir: str) -> None:
         config_dir.mkdir(parents=True, exist_ok=True)
 
         default_config = """devices = ['CPU']\n"""
         default_config += """tests = ['*']\n"""
         default_config += """categories = ['*']\n"""
         default_config += """builds = {\n"""
-        default_config += """    'main': '/home/user/blender-git/build/bin/blender',"""
-        default_config += """    '2.93': '/home/user/blender-2.93/blender',"""
+        if build_dir:
+            default_config += """    'main': '{}',""".format(build_dir)
+        else:
+            default_config += """    'main': '/home/user/blender-git/build/bin/blender',"""
+            default_config += """    '2.93': '/home/user/blender-2.93/blender',"""
         default_config += """}\n"""
         default_config += """revisions = {\n"""
         default_config += """}\n"""
@@ -195,7 +209,8 @@ class TestConfig:
         self.devices = []
         for device in machine.devices:
             for device_filter in device_filters:
-                if fnmatch.fnmatch(device.id, device_filter):
+                if fnmatch.fnmatch(device.id, device_filter) or \
+                   fnmatch.fnmatch(normalize_device_id(device.id), normalize_device_id(device_filter)):
                     self.devices.append(device)
                     break
 
@@ -218,7 +233,7 @@ class TestConfig:
             executable_path = env._blender_executable_from_path(pathlib.Path(executable))
             if not executable_path:
                 import sys
-                sys.stderr.write(f'Error: build {executable} not found\n')
+                sys.stderr.write(f'Error: no valid build found at {executable}\n')
                 sys.exit(1)
 
             env.set_blender_executable(executable_path)
@@ -230,9 +245,12 @@ class TestConfig:
 
         # Detect number of categories for more compact printing.
         categories = set()
+        devices = set()
         for entry in entries:
             categories.add(entry.category)
+            devices.add(entry.device_id)
         self.queue.has_multiple_categories = len(categories) > 1
+        self.queue.has_multiple_devices = len(devices) > 1
 
         # Replace actual entries.
         self.queue.entries = entries

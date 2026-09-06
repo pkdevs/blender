@@ -10,12 +10,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_vector.h"
-#include "BLI_string.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_string.hh"
 #include "BLI_string_utils.hh"
-#include "BLI_utildefines.h"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
@@ -276,7 +276,7 @@ struct SlidePointData {
 
   /* Data needed to restore the state. */
   float vec[3][3];
-  char old_h1, old_h2;
+  eBezTriple_Handle old_h1, old_h2;
 
   /* Point sliding. */
 
@@ -425,14 +425,14 @@ static void select_sliding_point(Mask *mask,
       BKE_mask_point_select_set(point, true);
       break;
     case MASK_WHICH_HANDLE_LEFT:
-      point->bezt.f1 |= SELECT;
+      point->bezt.f1 |= BEZT_FLAG_SELECT;
       break;
     case MASK_WHICH_HANDLE_RIGHT:
-      point->bezt.f3 |= SELECT;
+      point->bezt.f3 |= BEZT_FLAG_SELECT;
       break;
     case MASK_WHICH_HANDLE_STICK:
-      point->bezt.f1 |= SELECT;
-      point->bezt.f3 |= SELECT;
+      point->bezt.f1 |= BEZT_FLAG_SELECT;
+      point->bezt.f3 |= BEZT_FLAG_SELECT;
       break;
     default:
       BLI_assert_msg(0, "Unexpected situation in select_sliding_point()");
@@ -916,7 +916,7 @@ static wmOperatorStatus slide_point_modal(bContext *C, wmOperator *op, const wmE
         /* Don't key sliding feather UW's. */
         if ((data->action == SLIDE_ACTION_FEATHER && data->uw) == false) {
           if (animrig::is_autokey_on(scene)) {
-            ED_mask_layer_shape_auto_key(data->mask_layer, scene->r.cfra);
+            ED_mask_layer_shape_auto_key(C, data->mask_layer, scene->r.cfra);
           }
         }
 
@@ -1124,15 +1124,15 @@ static SlideSplineCurvatureData *slide_spline_curvature_customdata(bContext *C,
 
   /* Change selection */
   ED_mask_select_toggle_all(mask, SEL_DESELECT);
-  slide_data->adjust_bezt->f2 |= SELECT;
-  slide_data->other_bezt->f2 |= SELECT;
+  slide_data->adjust_bezt->f2 |= BEZT_FLAG_SELECT;
+  slide_data->other_bezt->f2 |= BEZT_FLAG_SELECT;
   if (u < 0.5f) {
-    slide_data->adjust_bezt->f3 |= SELECT;
-    slide_data->other_bezt->f1 |= SELECT;
+    slide_data->adjust_bezt->f3 |= BEZT_FLAG_SELECT;
+    slide_data->other_bezt->f1 |= BEZT_FLAG_SELECT;
   }
   else {
-    slide_data->adjust_bezt->f1 |= SELECT;
-    slide_data->other_bezt->f3 |= SELECT;
+    slide_data->adjust_bezt->f1 |= BEZT_FLAG_SELECT;
+    slide_data->other_bezt->f3 |= BEZT_FLAG_SELECT;
   }
   mask_layer->act_spline = spline;
   mask_layer->act_point = point;
@@ -1333,7 +1333,7 @@ static wmOperatorStatus slide_spline_curvature_modal(bContext *C,
       if (event->type == slide_data->event_invoke_type && event->val == KM_RELEASE) {
         /* Don't key sliding feather UW's. */
         if (animrig::is_autokey_on(scene)) {
-          ED_mask_layer_shape_auto_key(slide_data->mask_layer, scene->r.cfra);
+          ED_mask_layer_shape_auto_key(C, slide_data->mask_layer, scene->r.cfra);
         }
 
         WM_event_add_notifier(C, NC_MASK | NA_EDITED, slide_data->mask);
@@ -1547,7 +1547,7 @@ static wmOperatorStatus delete_exec(bContext *C, wmOperator * /*op*/)
 
     /* Not essential but confuses users when there are keys with no data!
      * Assume if they delete all data from the layer they also don't care about keys. */
-    if (BLI_listbase_is_empty(&mask_layer.splines)) {
+    if (mask_layer.splines.is_empty()) {
       BKE_mask_layer_free_shapes(&mask_layer);
     }
   }
@@ -1620,7 +1620,7 @@ static wmOperatorStatus mask_switch_direction_exec(bContext *C, wmOperator * /*o
 
     if (changed_layer) {
       if (animrig::is_autokey_on(scene)) {
-        ED_mask_layer_shape_auto_key(&mask_layer, scene->r.cfra);
+        ED_mask_layer_shape_auto_key(C, &mask_layer, scene->r.cfra);
       }
     }
   }
@@ -1682,7 +1682,7 @@ static wmOperatorStatus mask_normals_make_consistent_exec(bContext *C, wmOperato
 
     if (changed_layer) {
       if (animrig::is_autokey_on(scene)) {
-        ED_mask_layer_shape_auto_key(&mask_layer, scene->r.cfra);
+        ED_mask_layer_shape_auto_key(C, &mask_layer, scene->r.cfra);
       }
     }
   }
@@ -1719,7 +1719,7 @@ void MASK_OT_normals_make_consistent(wmOperatorType *ot)
 static wmOperatorStatus set_handle_type_exec(bContext *C, wmOperator *op)
 {
   Mask *mask = CTX_data_edit_mask(C);
-  int handle_type = RNA_enum_get(op->ptr, "type");
+  eBezTriple_Handle handle_type = eBezTriple_Handle(RNA_enum_get(op->ptr, "type"));
 
   bool changed = false;
 
@@ -1806,9 +1806,9 @@ static wmOperatorStatus mask_hide_view_clear_exec(bContext *C, wmOperator *op)
 
   for (MaskLayer &mask_layer : mask->masklayers) {
 
-    if (mask_layer.visibility_flag & OB_HIDE_VIEWPORT) {
+    if (mask_layer.visibility_flag & MASK_HIDE_VIEW) {
       ED_mask_layer_select_set(&mask_layer, select);
-      mask_layer.visibility_flag &= ~OB_HIDE_VIEWPORT;
+      mask_layer.visibility_flag &= ~MASK_HIDE_VIEW;
       changed = true;
     }
   }
@@ -1856,7 +1856,7 @@ static wmOperatorStatus mask_hide_view_set_exec(bContext *C, wmOperator *op)
       if (ED_mask_layer_select_check(&mask_layer)) {
         ED_mask_layer_select_set(&mask_layer, false);
 
-        mask_layer.visibility_flag |= OB_HIDE_VIEWPORT;
+        mask_layer.visibility_flag |= MASK_HIDE_VIEW;
         changed = true;
         if (&mask_layer == BKE_mask_layer_active(mask)) {
           BKE_mask_layer_active_set(mask, nullptr);
@@ -1865,7 +1865,7 @@ static wmOperatorStatus mask_hide_view_set_exec(bContext *C, wmOperator *op)
     }
     else {
       if (!ED_mask_layer_select_check(&mask_layer)) {
-        mask_layer.visibility_flag |= OB_HIDE_VIEWPORT;
+        mask_layer.visibility_flag |= MASK_HIDE_VIEW;
         changed = true;
         if (&mask_layer == BKE_mask_layer_active(mask)) {
           BKE_mask_layer_active_set(mask, nullptr);
@@ -2248,8 +2248,8 @@ static wmOperatorStatus mask_duplicate_exec(bContext *C, wmOperator * /*op*/)
           }
 
           /* Flush selection to splines. */
-          new_spline->flag |= SELECT;
-          spline.flag &= ~SELECT;
+          new_spline->flag |= MASK_SPLINE_SELECT;
+          spline.flag &= ~MASK_SPLINE_SELECT;
         }
         i++;
         point++;

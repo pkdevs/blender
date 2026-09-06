@@ -13,6 +13,8 @@
 #include "BKE_anonymous_attribute_id.hh"
 #include "BKE_geometry_set.hh"
 
+#include "BLI_fixed_string.hh"
+
 #include "FN_field_evaluation.hh"
 
 namespace blender {
@@ -216,6 +218,37 @@ class GeometryFieldContext : public fn::FieldContext {
   const Curves *curves_id() const;
 };
 
+/**
+ * Information about a field input's relationship with the domain of the data it represents.
+ *
+ * If the native field domain is `Point/Face`, evaluating the field on the corner domain is
+ * identical to evaluating it on the native domain and copying the values to corners afterwards. If
+ * the native field domain is `Curve`, evaluating it on the point domain is identical to evaluating
+ * it on the curve domain and copying the values to the points afterwards. Of course, copying the
+ * values to the more complex domain can be skipped if the algorithm can be optimized to use the
+ * data directly from the smaller domain.
+ */
+struct NativeFieldDomain {
+  /**
+   * The input may depend on the order of the domain. For example, the index field, can't be
+   * transparently evaluated on a different domain unlike attribute fields which are more flexible
+   * because of domain interpolation.
+   */
+  struct None {};
+  /** The input represents data on a specific domain. */
+  struct Domain {
+    AttrDomain domain;
+  };
+  /** Interpolating the field between domains does not change the value. */
+  struct Constant {};
+
+  std::variant<None, Domain, Constant> variant;
+
+  NativeFieldDomain(const None & /*tag*/) : variant(None{}) {}
+  NativeFieldDomain(const Domain &domain) : variant(domain) {}
+  NativeFieldDomain(const Constant & /*tag*/) : variant(Constant{}) {}
+};
+
 class GeometryFieldInput : public fn::FieldInput {
  public:
   using fn::FieldInput::FieldInput;
@@ -225,6 +258,7 @@ class GeometryFieldInput : public fn::FieldInput {
   virtual GVArray get_varray_for_context(const GeometryFieldContext &context,
                                          const IndexMask &mask) const = 0;
   virtual std::optional<AttrDomain> preferred_domain(const GeometryComponent &component) const;
+  virtual NativeFieldDomain native_domain_info(const GeometryComponent &component) const;
 };
 
 class MeshFieldInput : public fn::FieldInput {
@@ -237,6 +271,7 @@ class MeshFieldInput : public fn::FieldInput {
                                          AttrDomain domain,
                                          const IndexMask &mask) const = 0;
   virtual std::optional<AttrDomain> preferred_domain(const Mesh &mesh) const;
+  virtual NativeFieldDomain native_domain_info(const Mesh &mesh) const;
 };
 
 class CurvesFieldInput : public fn::FieldInput {
@@ -311,12 +346,18 @@ class AttributeFieldInput : public GeometryFieldInput {
 
   std::string socket_inspection_name() const override;
 
-  uint64_t hash() const override;
-  bool is_equal_to(const fn::FieldInput &other) const override;
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep &deep_hash_cache) const override;
   std::optional<AttrDomain> preferred_domain(const GeometryComponent &component) const override;
+  NativeFieldDomain native_domain_info(const GeometryComponent &component) const override;
 
-  /** Cached position field to avoid allocating a new one every time. */
-  static const fn::GField &position_field();
+  template<typename T, FixedString FStr> static const fn::Field<T> &get_field()
+  {
+    static const auto field = fn::Field<T>::template from_input<AttributeFieldInput>(
+        FStr.data, CPPType::get<T>());
+    /* Use a non-owning wrapper to avoid unnecessary reference counting of a static field. */
+    static const auto field_ref = fn::Field<T>::from_non_owning_ref(field);
+    return field_ref;
+  }
 };
 
 class AttributeExistsFieldInput final : public bke::GeometryFieldInput {
@@ -337,6 +378,8 @@ class AttributeExistsFieldInput final : public bke::GeometryFieldInput {
 
   GVArray get_varray_for_context(const bke::GeometryFieldContext &context,
                                  const IndexMask &mask) const final;
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep &deep_hash_cache) const override;
+  NativeFieldDomain native_domain_info(const GeometryComponent &component) const override;
 };
 
 class NamedLayerSelectionFieldInput final : public bke::GeometryFieldInput {
@@ -352,8 +395,7 @@ class NamedLayerSelectionFieldInput final : public bke::GeometryFieldInput {
 
   GVArray get_varray_for_context(const bke::GeometryFieldContext &context,
                                  const IndexMask &mask) const final;
-  uint64_t hash() const override;
-  bool is_equal_to(const fn::FieldInput &other) const override;
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep &deep_hash_cache) const override;
   std::optional<AttrDomain> preferred_domain(const GeometryComponent &component) const override;
 };
 
@@ -366,8 +408,10 @@ class IDAttributeFieldInput : public GeometryFieldInput {
 
   std::string socket_inspection_name() const override;
 
-  uint64_t hash() const override;
-  bool is_equal_to(const fn::FieldInput &other) const override;
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep &deep_hash_cache) const override;
+
+  /** Cached  field to avoid allocating a new one every time. */
+  static const fn::Field<int> &get_field();
 };
 
 VArray<float3> curve_normals_varray(const CurvesGeometry &curves, AttrDomain domain);
@@ -395,8 +439,12 @@ class NormalFieldInput : public GeometryFieldInput {
 
   std::string socket_inspection_name() const override;
 
-  uint64_t hash() const override;
-  bool is_equal_to(const fn::FieldInput &other) const override;
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep &deep_hash_cache) const override;
+
+  NativeFieldDomain native_domain_info(const GeometryComponent &component) const override;
+
+  /** Cached normal field to avoid allocating a new one every time. */
+  static const fn::Field<float3> &get_field();
 };
 
 class CurveLengthFieldInput final : public CurvesFieldInput {
@@ -405,8 +453,7 @@ class CurveLengthFieldInput final : public CurvesFieldInput {
   GVArray get_varray_for_context(const CurvesGeometry &curves,
                                  AttrDomain domain,
                                  const IndexMask &mask) const final;
-  uint64_t hash() const override;
-  bool is_equal_to(const fn::FieldInput &other) const override;
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep &deep_hash_cache) const override;
   std::optional<AttrDomain> preferred_domain(const bke::CurvesGeometry &curves) const final;
 };
 
@@ -423,7 +470,7 @@ class EvaluateAtIndexInput final : public bke::GeometryFieldInput {
 
   GVArray get_varray_for_context(const bke::GeometryFieldContext &context,
                                  const IndexMask &mask) const final;
-
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep &deep_hash_cache) const override;
   std::optional<AttrDomain> preferred_domain(const GeometryComponent & /*component*/) const final
   {
     return value_field_domain_;
@@ -437,15 +484,16 @@ class SampleIndexFunction : public mf::MultiFunction {
 
   mf::Signature signature_;
 
-  std::optional<bke::GeometryFieldContext> geometry_context_;
-  std::unique_ptr<fn::FieldEvaluator> evaluator_;
-  const GVArray *src_data_ = nullptr;
+  mutable CacheMutex mutex_;
+  mutable std::optional<bke::GeometryFieldContext> geometry_context_;
+  mutable std::unique_ptr<fn::FieldEvaluator> evaluator_;
+  mutable const GVArray *src_data_ = nullptr;
 
  public:
   SampleIndexFunction(GeometrySet geometry, fn::GField src_field, AttrDomain domain);
-  void evaluate_field();
-
+  void prepare_for_execution() const override;
   void call(const IndexMask &mask, mf::Params params, mf::Context /*context*/) const override;
+  void hash_unique(UniqueHashBytes &hash) const override;
 
   static const GeometryComponent *find_source_component(const GeometrySet &geometry,
                                                         AttrDomain domain);
@@ -461,10 +509,12 @@ class EvaluateOnDomainInput final : public bke::GeometryFieldInput {
 
   GVArray get_varray_for_context(const bke::GeometryFieldContext &context,
                                  const IndexMask & /*mask*/) const final;
+  void hash_unique(UniqueHashBytes &hash, fn::FieldHashDeep &deep_hash_cache) const override;
   void foreach_recursive_field(FunctionRef<void(const fn::GField &)> fn) const override;
 
   std::optional<AttrDomain> preferred_domain(
       const GeometryComponent & /*component*/) const override;
+  NativeFieldDomain native_domain_info(const GeometryComponent & /*component*/) const override;
 };
 
 bool try_capture_fields_on_geometry(MutableAttributeAccessor attributes,
@@ -519,6 +569,14 @@ inline bool try_capture_field_on_geometry(GeometryComponent &component,
  */
 std::optional<AttrDomain> try_detect_field_domain(const GeometryComponent &component,
                                                   const fn::GField &field);
+
+/**
+ * Try to detect the domain that the field's inputs represent. If any field may depend on the
+ * order of the domain, none is returned, and if the fields will give the same value regardless of
+ * the domain, none is also returned.
+ */
+std::optional<AttrDomain> try_detect_native_field_domain(const GeometryComponent &component,
+                                                         const fn::GField &field);
 
 }  // namespace bke
 }  // namespace blender

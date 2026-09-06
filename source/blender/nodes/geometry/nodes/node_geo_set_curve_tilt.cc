@@ -18,9 +18,12 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Curve"_ustr)
       .supported_type({GeometryComponent::Type::Curve, GeometryComponent::Type::GreasePencil})
       .description("Curves to set tilt on");
-  b.add_output<decl::Geometry>("Curve"_ustr).propagate_all().align_with_previous();
-  b.add_input<decl::Bool>("Selection"_ustr).default_value(true).hide_value().field_on_all();
-  b.add_input<decl::Float>("Tilt"_ustr).subtype(PROP_ANGLE).field_on_all();
+  b.add_output<decl::Geometry>("Curve"_ustr).propagate_all_geometry().align_with_previous();
+  b.add_input<decl::Bool>("Selection"_ustr)
+      .default_value(true)
+      .hide_value()
+      .evaluated_geometry_field();
+  b.add_input<decl::Float>("Tilt"_ustr).subtype(PROP_ANGLE).evaluated_geometry_field();
 }
 
 static void set_curve_tilt(bke::CurvesGeometry &curves,
@@ -78,7 +81,7 @@ static void node_register()
 {
   static bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSetCurveTilt", GEO_NODE_SET_CURVE_TILT);
+  geo_node_type_base(&ntype, "GeometryNodeSetCurveTilt"_ustr, GEO_NODE_SET_CURVE_TILT);
   ntype.ui_name = "Set Curve Tilt";
   ntype.ui_description = "Set the tilt angle at each curve control point";
   ntype.enum_name_legacy = "SET_CURVE_TILT";

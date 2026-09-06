@@ -8,9 +8,12 @@
 
 #include <fmt/format.h>
 
-#include "BLI_assert.h"
-#include "BLI_listbase.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
+#include "BLI_math_euler.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_ustring.hh"
 #include "BLI_vector_set.hh"
@@ -30,10 +33,12 @@
 
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
+#include "BKE_type_conversions.hh"
 
 #include "COM_context.hh"
 #include "COM_pixel_operation.hh"
 #include "COM_result.hh"
+#include "COM_scheduler.hh"
 #include "COM_shader_node.hh"
 #include "COM_shader_operation.hh"
 #include "COM_utilities.hh"
@@ -41,9 +46,9 @@
 namespace blender::compositor {
 
 ShaderOperation::ShaderOperation(Context &context,
-                                 PixelCompileUnit &compile_unit,
-                                 const VectorSet<const bNode *> &schedule)
-    : PixelOperation(context, compile_unit, schedule)
+                                 CompileState &compile_state,
+                                 const ComputeContext &compute_context)
+    : PixelOperation(context, compile_state, compute_context, false)
 {
   material_ = GPU_material_from_callbacks(
       GPU_MAT_COMPOSITOR, &construct_material, &generate_code, this);
@@ -119,7 +124,7 @@ void ShaderOperation::construct_material(void *thunk, GPUMaterial *material)
 {
   ShaderOperation *operation = static_cast<ShaderOperation *>(thunk);
   operation->material_ = material;
-  for (const bNode *node : operation->compile_unit_) {
+  for (const bNode *node : operation->compile_state_.get_pixel_compile_unit()) {
     operation->shader_nodes_.add_new(node, std::make_unique<ShaderNode>(*node));
 
     operation->link_node_inputs(*node);
@@ -140,10 +145,15 @@ void ShaderOperation::link_node_inputs(const bNode &node)
       continue;
     }
 
+    if (compile_state_.get_schedule().unneeded_inputs.contains(input)) {
+      this->link_node_input_unavailable(*input);
+      continue;
+    }
+
     const bNodeSocket *output = get_output_linked_to_input(*input);
     if (!output) {
       const InputDescriptor input_descriptor = input_descriptor_from_input_socket(input);
-      if (input_descriptor.implicit_input == ImplicitInput::None) {
+      if (!input_descriptor.implicit_input.has_value()) {
         /* No implicit input, so link a constant setter node for it that holds the input value. */
         this->link_node_input_constant(*input);
       }
@@ -155,7 +165,7 @@ void ShaderOperation::link_node_inputs(const bNode &node)
 
     /* If the source node is part of the shader operation, then the link is internal to the GPU
      * material graph and is linked appropriately. */
-    if (compile_unit_.contains(&output->owner_node())) {
+    if (compile_state_.get_pixel_compile_unit().contains(&output->owner_node())) {
       this->link_node_input_internal(*input, *output);
     }
     else {
@@ -167,85 +177,6 @@ void ShaderOperation::link_node_inputs(const bNode &node)
 
     /* Implicitly convert the input link type to the expected input type if needed. */
     this->convert_input_link_type(*input, *output);
-  }
-}
-
-void ShaderOperation::link_node_input_unavailable(const bNodeSocket &input)
-{
-  ShaderNode &node = *shader_nodes_.lookup(&input.owner_node());
-  GPUNodeStack &stack = node.get_input(input.identifier);
-
-  /* Create a constant link with some zero value. The value is arbitrary and ignored. See the
-   * method description. */
-  zero_v4(stack.vec);
-  GPUNodeLink *link = GPU_constant(stack.vec);
-
-  GPU_link(material_, "set_float", link, &stack.link);
-}
-
-/* Initializes the vector value of the given GPU node stack from the default value of the given
- * input socket. */
-static void initialize_input_stack_value(const bNodeSocket &input, GPUNodeStack &stack)
-{
-  switch (input.type) {
-    case SOCK_FLOAT: {
-      const float value = input.default_value_typed<bNodeSocketValueFloat>()->value;
-      stack.vec[0] = value;
-      break;
-    }
-    case SOCK_INT: {
-      /* GPUMaterial doesn't support int, so it is stored as a float. */
-      const int value = input.default_value_typed<bNodeSocketValueInt>()->value;
-      stack.vec[0] = int(value);
-      break;
-    }
-    case SOCK_BOOLEAN: {
-      /* GPUMaterial doesn't support bool, so it is stored as a float. */
-      const bool value = input.default_value_typed<bNodeSocketValueBoolean>()->value;
-      stack.vec[0] = float(value);
-      break;
-    }
-    case SOCK_VECTOR: {
-      const float4 value = float4(input.default_value_typed<bNodeSocketValueVector>()->value);
-      copy_v4_v4(stack.vec, value);
-      break;
-    }
-    case SOCK_INT_VECTOR: {
-      /* GPUMaterial doesn't support int[23], so it is stored as a float[23]. */
-      const int3 value = int3(input.default_value_typed<bNodeSocketValueIntVector>()->value);
-      const float3 float_value = float3(value);
-      copy_v3_v3(stack.vec, float_value);
-      break;
-    }
-    case SOCK_RGBA: {
-      const Color value = Color(input.default_value_typed<bNodeSocketValueRGBA>()->value);
-      copy_v4_v4(stack.vec, value);
-      break;
-    }
-    case SOCK_MENU: {
-      /* GPUMaterial doesn't support int, so it is stored as a float. */
-      const int32_t value = input.default_value_typed<bNodeSocketValueMenu>()->value;
-      stack.vec[0] = int(value);
-      break;
-    }
-    case SOCK_MATRIX:
-      /* Matrix sockets do not have default values. */
-      BLI_assert_unreachable();
-      break;
-    case SOCK_STRING:
-    case SOCK_OBJECT:
-    case SOCK_IMAGE:
-    case SOCK_FONT:
-    case SOCK_SCENE:
-    case SOCK_TEXT_ID:
-    case SOCK_MASK:
-      /* Single only types do not support GPU code path. */
-      BLI_assert(Result::is_single_value_only_type(get_node_socket_result_type(&input)));
-      BLI_assert_unreachable();
-      break;
-    default:
-      BLI_assert_unreachable();
-      break;
   }
 }
 
@@ -263,22 +194,21 @@ static const char *get_set_function_name(const ResultType type)
     case ResultType::Color:
       return "set_color";
     case ResultType::Int:
-      /* GPUMaterial doesn't support int, so it is passed as a float. */
-      return "set_float";
+      return "set_int";
     case ResultType::Int2:
-      /* GPUMaterial doesn't support int2, so it is passed as a float2. */
-      return "set_float2";
+      return "set_int2";
     case ResultType::Int3:
-      /* GPUMaterial doesn't support int3, so it is passed as a float3. */
-      return "set_float3";
+      return "set_int3";
+    case ResultType::Int4:
+      return "set_int4";
     case ResultType::Bool:
-      /* GPUMaterial doesn't support bool, so it is passed as a float. */
-      return "set_float";
+      return "set_bool";
     case ResultType::Float4x4:
       return "set_float4x4";
     case ResultType::Menu:
-      /* GPUMaterial doesn't support int, so it is passed as a float. */
-      return "set_float";
+      return "set_int";
+    case ResultType::Quaternion:
+      return "set_quaternion";
     case ResultType::String:
     case ResultType::Object:
     case ResultType::Image:
@@ -286,9 +216,112 @@ static const char *get_set_function_name(const ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
+      break;
+  }
+
+  BLI_assert_unreachable();
+  return nullptr;
+}
+
+void ShaderOperation::link_node_input_unavailable(const bNodeSocket &input)
+{
+  ShaderNode &node = *shader_nodes_.lookup(&input.owner_node());
+  GPUNodeStack &stack = node.get_input(input.identifier);
+
+  /* Create a constant link with some zero value. The value is arbitrary and ignored. See the
+   * method description. */
+  stack.value = GPU_node_stack_default_value(stack.type);
+  GPUNodeLink *link = GPU_constant(stack);
+
+  const ResultType type = get_node_socket_result_type(&input);
+  GPU_link(material_, get_set_function_name(type), link, &stack.link);
+}
+
+/* Initializes the given GPU node stack from the default value of the given input socket
+ * and creates a constant or uniform link that references the typed stack storage. */
+static GPUNodeLink *get_input_value_link(const bNodeSocket &input, GPUNodeStack &stack)
+{
+  /* Use a constant for socket types that rarely change like booleans and menus, and use a
+   * uniform for socket types that might change a lot to avoid excessive shader recompilation. */
+  switch (input.type) {
+    case SOCK_INT: {
+      stack.value = input.default_value_typed<bNodeSocketValueInt>()->value;
+      return GPU_uniform(stack);
+    }
+    case SOCK_MENU: {
+      stack.value = input.default_value_typed<bNodeSocketValueMenu>()->value;
+      return GPU_constant(stack);
+    }
+    case SOCK_INT_VECTOR: {
+      const bNodeSocketValueIntVector *storage =
+          input.default_value_typed<bNodeSocketValueIntVector>();
+      switch (storage->dimensions) {
+        case 2:
+          stack.value = int2(storage->value);
+          return GPU_uniform(stack);
+        case 3:
+          stack.value = int3(storage->value);
+          return GPU_uniform(stack);
+        default:
+          break;
+      }
+      break;
+    }
+    case SOCK_BOOLEAN: {
+      stack.value = bool(input.default_value_typed<bNodeSocketValueBoolean>()->value);
+      return GPU_constant(stack);
+    }
+    case SOCK_FLOAT: {
+      stack.value = input.default_value_typed<bNodeSocketValueFloat>()->value;
+      return GPU_uniform(stack);
+    }
+    case SOCK_VECTOR: {
+      const bNodeSocketValueVector *storage = input.default_value_typed<bNodeSocketValueVector>();
+      switch (storage->dimensions) {
+        case 2:
+          stack.value = float2(storage->value);
+          return GPU_uniform(stack);
+        case 3:
+          stack.value = float3(storage->value);
+          return GPU_uniform(stack);
+        case 4:
+          stack.value = float4(storage->value);
+          return GPU_uniform(stack);
+        default:
+          break;
+      }
+      break;
+    }
+    case SOCK_RGBA: {
+      stack.value = float4(Color(input.default_value_typed<bNodeSocketValueRGBA>()->value));
+      return GPU_uniform(stack);
+    }
+    case SOCK_ROTATION: {
+      const bNodeSocketValueRotation *rotation =
+          input.default_value_typed<bNodeSocketValueRotation>();
+      const math::EulerXYZ euler(float3(rotation->value_euler));
+      stack.value = float4(math::to_quaternion(euler));
+      return GPU_uniform(stack);
+    }
+    case SOCK_MATRIX:
+      /* Matrix sockets do not have default values. */
+      break;
+    case SOCK_STRING:
+    case SOCK_OBJECT:
+    case SOCK_IMAGE:
+    case SOCK_FONT:
+    case SOCK_SCENE:
+    case SOCK_TEXT_ID:
+    case SOCK_MASK:
+    case SOCK_BUNDLE:
+      /* Single only types do not support GPU code path. */
+      BLI_assert(Result::is_single_value_only_type(get_node_socket_result_type(&input)));
+      break;
+    default:
       break;
   }
 
@@ -307,12 +340,7 @@ void ShaderOperation::link_node_input_constant(const bNodeSocket &input)
     return;
   }
 
-  /* Create a constant or a uniform link that carry the value of the input. Use a constant for
-   * socket types that rarely change like booleans and menus, while use a uniform for socket type
-   * that might change a lot to avoid excessive shader recompilation. */
-  initialize_input_stack_value(input, stack);
-  const bool use_as_constant = ELEM(input.type, SOCK_BOOLEAN, SOCK_MENU);
-  GPUNodeLink *link = use_as_constant ? GPU_constant(stack.vec) : GPU_uniform(stack.vec);
+  GPUNodeLink *link = get_input_value_link(input, stack);
 
   const ResultType type = get_node_socket_result_type(&input);
   const char *function_name = get_set_function_name(type);
@@ -325,7 +353,7 @@ void ShaderOperation::link_node_input_implicit(const bNodeSocket &input)
   GPUNodeStack &stack = node.get_input(input.identifier);
 
   const InputDescriptor input_descriptor = input_descriptor_from_input_socket(&input);
-  const ImplicitInput implicit_input = input_descriptor.implicit_input;
+  const ImplicitInputType implicit_input = input_descriptor.implicit_input.value();
 
   /* An input was already declared for that implicit input, so no need to declare it again and we
    * just link it. */
@@ -382,12 +410,80 @@ void ShaderOperation::link_node_input_internal(const bNodeSocket &input_socket,
   input_stack.link = output_stack.link;
 }
 
+/* Creates a constant or a uniform link that references the single value of the given result. */
+static GPUNodeLink *get_result_single_value_link(const Result &result)
+{
+  /* Use a constant for types that rarely change like booleans and menus, and use a uniform for
+   * socket types that might change a lot to avoid excessive shader recompilation. */
+  switch (result.type()) {
+    case ResultType::Float:
+      return GPU_uniform(&result.get_single_value<float>());
+    case ResultType::Float2:
+      return GPU_uniform(result.get_single_value<float2>());
+    case ResultType::Float3:
+      return GPU_uniform(result.get_single_value<float3>());
+    case ResultType::Float4:
+      return GPU_uniform(result.get_single_value<float4>());
+    case ResultType::Color:
+      return GPU_uniform(result.get_single_value<Color>());
+    case ResultType::Int:
+      return GPU_uniform(&result.get_single_value<int32_t>());
+    case ResultType::Int2:
+      return GPU_uniform(result.get_single_value<int2>());
+    case ResultType::Int3:
+      return GPU_uniform(result.get_single_value<int3>());
+    case ResultType::Int4:
+      return GPU_uniform(result.get_single_value<int4>());
+    case ResultType::Bool:
+      return GPU_constant(&result.get_single_value<bool>());
+    case ResultType::Float4x4:
+      return GPU_uniform(result.get_single_value<float4x4>().base_ptr());
+    case ResultType::Menu:
+      return GPU_constant(&result.get_single_value<nodes::MenuValue>().value);
+    case ResultType::Quaternion:
+      return GPU_uniform(result.get_single_value<math::Quaternion>());
+    case ResultType::String:
+    case ResultType::Object:
+    case ResultType::Image:
+    case ResultType::Font:
+    case ResultType::Scene:
+    case ResultType::Text:
+    case ResultType::Mask:
+    case ResultType::Bundle:
+      /* Single only types do not support GPU code path. */
+      BLI_assert(Result::is_single_value_only_type(result.type()));
+      BLI_assert_unreachable();
+      break;
+  }
+
+  BLI_assert_unreachable();
+  return nullptr;
+}
+
 void ShaderOperation::link_node_input_external(const bNodeSocket &input_socket,
                                                const bNodeSocket &output_socket)
 {
-
   ShaderNode &node = *shader_nodes_.lookup(&input_socket.owner_node());
   GPUNodeStack &stack = node.get_input(input_socket.identifier);
+
+  /* The output is a single value, so create an internal constant link instead of declaring an
+   * input for it, it follows that the result needs to be released since it will no longer be
+   * referenced by the operation. */
+  Result &result = compile_state_.get_result_from_output_socket(output_socket);
+  if (result.is_single_value()) {
+    /* Single only types do not support GPU code path. */
+    if (Result::is_single_value_only_type(result.type())) {
+      this->link_node_input_unavailable(input_socket);
+      result.release();
+      return;
+    }
+
+    GPUNodeLink *link = get_result_single_value_link(result);
+    const char *function_name = get_set_function_name(result.type());
+    GPU_link(material_, function_name, link, &stack.link);
+    result.release();
+    return;
+  }
 
   if (!output_to_material_attribute_map_.contains(&output_socket)) {
     /* No input was declared for that output yet, so declare it. */
@@ -458,9 +554,8 @@ void ShaderOperation::declare_operation_input(const bNodeSocket &input_socket,
 
 void ShaderOperation::populate_results_for_node(const bNode &node)
 {
-  const bool is_node_preview_needed = this->get_node_previews() != nullptr;
-  const bNodeSocket *preview_output = is_node_preview_needed ? find_preview_output_socket(node) :
-                                                               nullptr;
+  const bNodeSocket *preview_output = needs_node_previews_ ? find_preview_output_socket(node) :
+                                                             nullptr;
 
   for (const bNodeSocket *output : node.output_sockets()) {
     if (!is_socket_available(output)) {
@@ -469,9 +564,11 @@ void ShaderOperation::populate_results_for_node(const bNode &node)
 
     /* If any of the nodes linked to the output are not part of the shader operation but are part
      * of the execution schedule, then an output result needs to be populated for it. */
-    const bool is_operation_output = is_output_linked_to_node_conditioned(
-        *output, [&](const bNode &node) {
-          return schedule_.contains(&node) && !compile_unit_.contains(&node);
+    const bool is_operation_output = is_output_linked_to_input_conditioned(
+        *output, [&](const bNodeSocket &input) {
+          return compile_state_.get_schedule().nodes.contains(&input.owner_node()) &&
+                 !compile_state_.get_schedule().unneeded_inputs.contains(&input) &&
+                 !compile_state_.get_pixel_compile_unit().contains(&input.owner_node());
         });
 
     /* If the output is used as the node preview, then an output result needs to be populated for
@@ -506,12 +603,16 @@ static const char *get_store_function_name(ResultType type)
       return "node_compositor_store_output_int2";
     case ResultType::Int3:
       return "node_compositor_store_output_int3";
+    case ResultType::Int4:
+      return "node_compositor_store_output_int4";
     case ResultType::Bool:
       return "node_compositor_store_output_bool";
     case ResultType::Float4x4:
       return "node_compositor_store_output_float4x4";
     case ResultType::Menu:
       return "node_compositor_store_output_menu";
+    case ResultType::Quaternion:
+      return "node_compositor_store_output_quaternion";
     case ResultType::String:
     case ResultType::Object:
     case ResultType::Image:
@@ -519,6 +620,7 @@ static const char *get_store_function_name(ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
@@ -535,8 +637,7 @@ void ShaderOperation::populate_operation_result(const bNodeSocket &output_socket
   std::string output_identifier = "output" + std::to_string(output_id);
 
   const ResultType result_type = get_node_socket_result_type(&output_socket);
-  const Result result = context().create_result(result_type);
-  populate_result(output_identifier, result);
+  populate_result(output_identifier, result_type);
 
   /* Map the output socket to the identifier of the newly populated result. */
   output_sockets_to_output_identifiers_map_.add_new(&output_socket, output_identifier);
@@ -560,6 +661,44 @@ void ShaderOperation::populate_operation_result(const bNodeSocket &output_socket
   GPU_material_add_output_link_composite(material_, storer_output_link);
 }
 
+static GPUNodeLink *get_default_input_value_link(const ResultType type)
+{
+  const void *value = Result::cpp_type(type).default_value();
+  switch (type) {
+    case ResultType::Float:
+    case ResultType::Float2:
+    case ResultType::Float3:
+    case ResultType::Float4:
+    case ResultType::Color:
+    case ResultType::Float4x4:
+    case ResultType::Quaternion:
+      return GPU_constant(static_cast<const float *>(value));
+    case ResultType::Int:
+    case ResultType::Int2:
+    case ResultType::Int3:
+    case ResultType::Int4:
+    case ResultType::Menu:
+      return GPU_constant(static_cast<const int *>(value));
+    case ResultType::Bool:
+      return GPU_constant(static_cast<const bool *>(value));
+    case ResultType::String:
+    case ResultType::Object:
+    case ResultType::Image:
+    case ResultType::Font:
+    case ResultType::Scene:
+    case ResultType::Text:
+    case ResultType::Mask:
+    case ResultType::Bundle:
+      /* Single only types do not support GPU code path. */
+      BLI_assert(Result::is_single_value_only_type(type));
+      BLI_assert_unreachable();
+      break;
+  }
+
+  BLI_assert_unreachable();
+  return nullptr;
+}
+
 void ShaderOperation::convert_input_link_type(const bNodeSocket &input, const bNodeSocket &output)
 {
   const ResultType source_type = get_node_socket_result_type(&output);
@@ -570,6 +709,17 @@ void ShaderOperation::convert_input_link_type(const bNodeSocket &input, const bN
 
   ShaderNode &input_node = *shader_nodes_.lookup(&input.owner_node());
   GPUNodeStack &input_stack = input_node.get_input(input.identifier);
+
+  /* Conversion is not possible, link a zero constant instead. */
+  const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
+  if (!conversions.is_convertible(Result::cpp_type(source_type), Result::cpp_type(target_type))) {
+    GPU_link(material_,
+             get_set_function_name(target_type),
+             get_default_input_value_link(target_type),
+             &input_stack.link);
+    return;
+  }
+
   const UString function_name = UString(
       fmt::format("{}_to_{}", Result::type_name(source_type), Result::type_name(target_type)));
 
@@ -676,27 +826,21 @@ static const char *glsl_store_expression_from_result_type(ResultType type)
     case ResultType::Color:
       return "value";
     case ResultType::Int:
-      /* GPUMaterial doesn't support int, so it is passed as a float, and we need to convert it
-       * back to int before writing it. */
-      return "ivec4(int(value))";
+      return "ivec4(value)";
     case ResultType::Int2:
-      /* GPUMaterial doesn't support int2, so it is passed as a float2, and we need to convert it
-       * back to int2 before writing it. */
-      return "ivec4(ivec2(value), 0, 0)";
+      return "ivec4(value, 0, 0)";
     case ResultType::Int3:
-      /* GPUMaterial doesn't support int3, so it is passed as a float3, and we need to convert it
-       * back to int3 before writing it. */
-      return "ivec4(ivec3(value), 0)";
+      return "ivec4(value, 0)";
+    case ResultType::Int4:
+      return "ivec4(value)";
     case ResultType::Bool:
-      /* GPUMaterial doesn't support bool, so it is passed as a float and stored as an int, and we
-       * need to convert it back to bool and then to an int before writing it. */
-      return "ivec4(bool(value))";
+      return "ivec4(int(value))";
     case ResultType::Float4x4:
       return "value";
     case ResultType::Menu:
-      /* GPUMaterial doesn't support int, so it is passed as a float, and we need to convert it
-       * back to int before writing it. */
-      return "ivec4(int(value))";
+      return "ivec4(value)";
+    case ResultType::Quaternion:
+      return "value";
     case ResultType::String:
     case ResultType::Object:
     case ResultType::Image:
@@ -704,6 +848,7 @@ static const char *glsl_store_expression_from_result_type(ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
@@ -722,10 +867,12 @@ static ImageType gpu_image_type_from_result_type(const ResultType type)
     case ResultType::Float3:
     case ResultType::Color:
     case ResultType::Float4:
+    case ResultType::Quaternion:
       return ImageType::Float2D;
     case ResultType::Int:
     case ResultType::Int2:
     case ResultType::Int3:
+    case ResultType::Int4:
     case ResultType::Bool:
     case ResultType::Menu:
       return ImageType::Int2D;
@@ -738,6 +885,7 @@ static ImageType gpu_image_type_from_result_type(const ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
@@ -755,18 +903,16 @@ std::string ShaderOperation::generate_code_for_outputs(ShaderCreateInfo &shader_
   const std::string store_float3_function_header = "void store_float3(const uint id, vec3 value)";
   const std::string store_float4_function_header = "void store_float4(const uint id, vec4 value)";
   const std::string store_color_function_header = "void store_color(const uint id, vec4 value)";
-  /* GPUMaterial doesn't support int, so it is passed as a float. */
-  const std::string store_int_function_header = "void store_int(const uint id, float value)";
-  /* GPUMaterial doesn't support int2, so it is passed as a float2. */
-  const std::string store_int2_function_header = "void store_int2(const uint id, vec2 value)";
-  /* GPUMaterial doesn't support int3, so it is passed as a float3. */
-  const std::string store_int3_function_header = "void store_int3(const uint id, vec3 value)";
-  /* GPUMaterial doesn't support bool, so it is passed as a float. */
-  const std::string store_bool_function_header = "void store_bool(const uint id, float value)";
+  const std::string store_int_function_header = "void store_int(const uint id, int value)";
+  const std::string store_int2_function_header = "void store_int2(const uint id, ivec2 value)";
+  const std::string store_int3_function_header = "void store_int3(const uint id, ivec3 value)";
+  const std::string store_int4_function_header = "void store_int4(const uint id, ivec4 value)";
+  const std::string store_bool_function_header = "void store_bool(const uint id, bool value)";
   const std::string store_float4x4_function_header =
       "void store_float4x4(const uint id, float4x4 value)";
-  /* GPUMaterial doesn't support int, so it is passed as a float. */
-  const std::string store_menu_function_header = "void store_menu(const uint id, float value)";
+  const std::string store_menu_function_header = "void store_menu(const uint id, int value)";
+  const std::string store_quaternion_function_header =
+      "void store_quaternion(const uint id, vec4 value)";
 
   /* Each of the store functions is essentially a single switch case on the given ID, so start by
    * opening the function with a curly bracket followed by opening a switch statement in each of
@@ -779,9 +925,11 @@ std::string ShaderOperation::generate_code_for_outputs(ShaderCreateInfo &shader_
   std::stringstream store_int_function;
   std::stringstream store_int2_function;
   std::stringstream store_int3_function;
+  std::stringstream store_int4_function;
   std::stringstream store_bool_function;
   std::stringstream store_float4x4_function;
   std::stringstream store_menu_function;
+  std::stringstream store_quaternion_function;
   const std::string store_function_start = "\n{\n  switch (id) {\n";
   store_float_function << store_float_function_header << store_function_start;
   store_float2_function << store_float2_function_header << store_function_start;
@@ -791,9 +939,11 @@ std::string ShaderOperation::generate_code_for_outputs(ShaderCreateInfo &shader_
   store_int_function << store_int_function_header << store_function_start;
   store_int2_function << store_int2_function_header << store_function_start;
   store_int3_function << store_int3_function_header << store_function_start;
+  store_int4_function << store_int4_function_header << store_function_start;
   store_bool_function << store_bool_function_header << store_function_start;
   store_float4x4_function << store_float4x4_function_header << store_function_start;
   store_menu_function << store_menu_function_header << store_function_start;
+  store_quaternion_function << store_quaternion_function_header << store_function_start;
 
   shader_create_info.builtins(BuiltinBits::GLOBAL_INVOCATION_ID);
 
@@ -849,6 +999,9 @@ std::string ShaderOperation::generate_code_for_outputs(ShaderCreateInfo &shader_
       case ResultType::Int3:
         store_int3_function << common_case_code.str();
         break;
+      case ResultType::Int4:
+        store_int4_function << common_case_code.str();
+        break;
       case ResultType::Bool:
         store_bool_function << common_case_code.str();
         break;
@@ -864,6 +1017,9 @@ std::string ShaderOperation::generate_code_for_outputs(ShaderCreateInfo &shader_
       case ResultType::Menu:
         store_menu_function << common_case_code.str();
         break;
+      case ResultType::Quaternion:
+        store_quaternion_function << common_case_code.str();
+        break;
       case ResultType::String:
       case ResultType::Object:
       case ResultType::Image:
@@ -871,6 +1027,7 @@ std::string ShaderOperation::generate_code_for_outputs(ShaderCreateInfo &shader_
       case ResultType::Scene:
       case ResultType::Text:
       case ResultType::Mask:
+      case ResultType::Bundle:
         /* Single only types do not support GPU code path. */
         BLI_assert(Result::is_single_value_only_type(result.type()));
         BLI_assert_unreachable();
@@ -888,14 +1045,17 @@ std::string ShaderOperation::generate_code_for_outputs(ShaderCreateInfo &shader_
   store_int_function << store_function_end;
   store_int2_function << store_function_end;
   store_int3_function << store_function_end;
+  store_int4_function << store_function_end;
   store_bool_function << store_function_end;
   store_float4x4_function << store_function_end;
   store_menu_function << store_function_end;
+  store_quaternion_function << store_function_end;
 
   return store_float_function.str() + store_float2_function.str() + store_float3_function.str() +
          store_float4_function.str() + store_color_function.str() + store_int_function.str() +
-         store_int2_function.str() + store_int3_function.str() + store_bool_function.str() +
-         store_float4x4_function.str() + store_menu_function.str();
+         store_int2_function.str() + store_int3_function.str() + store_int4_function.str() +
+         store_bool_function.str() + store_float4x4_function.str() + store_menu_function.str() +
+         store_quaternion_function.str();
 }
 
 static const char *glsl_type_from_result_type(ResultType type)
@@ -912,22 +1072,21 @@ static const char *glsl_type_from_result_type(ResultType type)
     case ResultType::Color:
       return "vec4";
     case ResultType::Int:
-      /* GPUMaterial doesn't support int, so it is passed as a float. */
-      return "float";
+      return "int";
     case ResultType::Int2:
-      /* GPUMaterial doesn't support int2, so it is passed as a float2. */
-      return "vec2";
+      return "ivec2";
     case ResultType::Int3:
-      /* GPUMaterial doesn't support int3, so it is passed as a float3. */
-      return "vec3";
+      return "ivec3";
+    case ResultType::Int4:
+      return "ivec4";
     case ResultType::Bool:
-      /* GPUMaterial doesn't support bool, so it is passed as a float. */
-      return "float";
+      return "bool";
     case ResultType::Float4x4:
       return "float4x4";
     case ResultType::Menu:
-      /* GPUMaterial doesn't support int, so it is passed as a float. */
-      return "float";
+      return "int";
+    case ResultType::Quaternion:
+      return "vec4";
     case ResultType::String:
     case ResultType::Object:
     case ResultType::Image:
@@ -935,6 +1094,7 @@ static const char *glsl_type_from_result_type(ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
@@ -966,12 +1126,16 @@ static const char *glsl_swizzle_from_result_type(ResultType type)
       return "xy";
     case ResultType::Int3:
       return "xyz";
+    case ResultType::Int4:
+      return "xyzw";
     case ResultType::Bool:
       return "x";
     case ResultType::Float4x4:
       return "xyzw";
     case ResultType::Menu:
       return "x";
+    case ResultType::Quaternion:
+      return "xyzw";
     case ResultType::String:
     case ResultType::Object:
     case ResultType::Image:
@@ -979,6 +1143,7 @@ static const char *glsl_swizzle_from_result_type(ResultType type)
     case ResultType::Scene:
     case ResultType::Text:
     case ResultType::Mask:
+    case ResultType::Bundle:
       /* Single only types do not support GPU code path. */
       BLI_assert(Result::is_single_value_only_type(type));
       BLI_assert_unreachable();
@@ -995,7 +1160,7 @@ std::string ShaderOperation::generate_code_for_inputs(GPUMaterial *material,
   /* The attributes of the GPU material represents the inputs of the operation. */
   ListBaseT<GPUMaterialAttribute> attributes = GPU_material_attributes(material);
 
-  if (BLI_listbase_is_empty(&attributes)) {
+  if (attributes.is_empty()) {
     return "";
   }
 
@@ -1005,7 +1170,7 @@ std::string ShaderOperation::generate_code_for_inputs(GPUMaterial *material,
    * counting the sampler slot location from the number of textures in the material, since some
    * sampler slots may be reserved for things like color band textures. */
   const ListBaseT<GPUMaterialTexture> textures = GPU_material_textures(material);
-  int input_slot_location = BLI_listbase_count(&textures);
+  int input_slot_location = textures.count();
   for (GPUMaterialAttribute &attribute : attributes) {
     const InputDescriptor &input_descriptor = get_input_descriptor(attribute.name);
     shader_create_info.sampler(input_slot_location,
