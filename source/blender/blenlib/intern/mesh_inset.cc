@@ -28,6 +28,10 @@
 #include "BLI_span.hh"
 #include "BLI_vector.hh"
 
+#ifdef WITH_MANIFOLD
+#  include "manifold/polygon.h"
+#endif
+
 namespace blender::meshinset {
 
 class Vert;
@@ -2919,19 +2923,6 @@ static void connect_neighbors(Span<Triangle *> tris)
   }
 }
 
-/* Like BLI_math's is_quad_flip_v3_first_third_fast_with_normal, with const float3's. */
-static bool is_quad_flip_first_third(const double3 &v1,
-                                     const double3 &v2,
-                                     const double3 &v3,
-                                     const double3 &v4,
-                                     const double3 &normal)
-{
-  double3 dir_v3v1 = v3 - v1;
-  double3 tangent = math::cross(dir_v3v1, normal);
-  double dot = math::dot(v1, tangent);
-  return (math::dot(v4, tangent) >= dot) || (math::dot(v2, tangent) <= dot);
-}
-
 /** Triangulate face f of input and return it as a Vector of Triangle *. The vertices with
  * coordinates for face f will be found in base_trimesh. Caller assumes ownership of the
  * Triangles.
@@ -2959,91 +2950,81 @@ static Vector<Triangle *> triangulate_face(int f,
   }
   /* Need the face normal for the rest of this. */
   double3 norm = poly_normal(fvert.as_span());
-  if (flen == 4) {
-    Vert *v0 = fvert[0];
-    Vert *v1 = fvert[1];
-    Vert *v2 = fvert[2];
-    Vert *v3 = fvert[3];
-    Triangle *t0;
-    Triangle *t1;
-    double d02_sqr = math::distance_squared(v0->co, v2->co);
-    double d13_sqr = math::distance_squared(v1->co, v3->co);
-    if (d13_sqr < d02_sqr ||
-        UNLIKELY(is_quad_flip_first_third(v0->co, v1->co, v2->co, v3->co, norm)))
-    {
-      t0 = new Triangle(v0, v1, v3);
-      t1 = new Triangle(v1, v2, v3);
-      set_mutual_neighbors(t0, 1, t1, 2);
-      t0->mark_orig(0);
-      t0->mark_orig(2);
-      t1->mark_orig(0);
-      t1->mark_orig(1);
-    }
-    else {
-      t0 = new Triangle(v0, v1, v2);
-      t1 = new Triangle(v0, v2, v3);
-      set_mutual_neighbors(t0, 2, t1, 0);
-      t0->mark_orig(0);
-      t0->mark_orig(1);
-      t1->mark_orig(1);
-      t1->mark_orig(2);
-    }
-    ans.append(t0);
-    ans.append(t1);
-  }
-  else {
-    /* Face has 5 or more edges; use polyfill. */
-    /* Project vertices to 2d along negative face normal. */
-    /* BLI_polyfill_calc/BLI_polyfill_beautify only accept float[2] arrays;
-     * the projection itself uses doubles and the results are cast to float. */
-    float (*projverts)[2];
-    unsigned int (*tris)[3];
-    const int totfilltri = flen - 2;
-    tris = MEM_new_array_uninitialized<unsigned int[3]>(size_t(totfilltri), __func__);
-    projverts = MEM_new_array_uninitialized<float[2]>(size_t(flen), __func__);
-    const blender::MatBase<double, 3, 3> axis_mat = math::axis_dominant_to_m3_negate(norm);
-    Map<int, int> vert_index_to_facepos;
-    for (int j = 0; j < flen; ++j) {
-      const double2 pv = math::project_v3_to_v2(axis_mat,
-                                                base_trimesh.get_vert_by_index(face[j])->co);
-      projverts[j][0] = float(pv[0]);
-      projverts[j][1] = float(pv[1]);
-      vert_index_to_facepos.add(face[j], j);
-    }
-    MemArena *pf_arena = BLI_memarena_new(BLI_POLYFILL_ARENA_SIZE, __func__);
-    Heap *pf_heap = BLI_heap_new_ex(BLI_POLYFILL_ALLOC_NGON_RESERVE);
-    BLI_polyfill_calc(projverts, flen, 0, tris);
-    BLI_polyfill_beautify(projverts, flen, tris, pf_arena, pf_heap);
 
-    /* First add the triangles, without setting neighbors yet. */
-    for (int t = 0; t < totfilltri; ++t) {
-      unsigned int *tri = tris[t];
-      Vert *v[3];
-      for (int k = 0; k < 3; k++) {
-        BLI_assert(tri[k] < flen);
-        v[k] = fvert[tri[k]];
-      }
-      Triangle *newtri = new Triangle(v[0], v[1], v[2]);
-      /* Find and mark the original edges. */
-      for (int k = 0; k < 3; k++) {
-        int v1 = newtri->vert(k)->id;
-        int v2 = newtri->vert((k + 1) % 3)->id;
-        int pos = vert_index_to_facepos.lookup_default(v1, -1);
-        if (pos != -1) {
-          BLI_assert(face[pos] == v1);
-          if (face[(pos + 1) % flen] == v2) {
-            newtri->mark_orig(k);
-          }
+  /* Build a map from vertex ID to face position so original edges can be identified. */
+  Map<int, int> vert_index_to_facepos;
+  for (int j = 0; j < flen; ++j) {
+    vert_index_to_facepos.add(face[j], j);
+  }
+
+  /* Lambda to build triangles from (facepos0, facepos1, facepos2) index triples
+   * and mark edges that coincide with original polygon edges. */
+  auto add_tri_from_facepos = [&](int fp0, int fp1, int fp2) {
+    Vert *v[3] = {fvert[fp0], fvert[fp1], fvert[fp2]};
+    Triangle *newtri = new Triangle(v[0], v[1], v[2]);
+    for (int k = 0; k < 3; k++) {
+      const int v1 = newtri->vert(k)->id;
+      const int v2 = newtri->vert((k + 1) % 3)->id;
+      const int pos = vert_index_to_facepos.lookup_default(v1, -1);
+      if (pos != -1) {
+        BLI_assert(face[pos] == v1);
+        if (face[(pos + 1) % flen] == v2) {
+          newtri->mark_orig(k);
         }
       }
-      ans.append(newtri);
     }
+    ans.append(newtri);
+  };
 
-    MEM_delete(tris);
-    MEM_delete(projverts);
-    BLI_memarena_free(pf_arena);
-    BLI_heap_free(pf_heap, nullptr);
+#ifdef WITH_MANIFOLD
+  /* Use Manifold's TriangulateIdx, which accepts double-precision coordinates
+   * and returns triangles as indices into the original polygon.
+   * Project along the face normal (not negated) so the projected polygon is CCW,
+   * as required by TriangulateIdx. */
+  const blender::MatBase<double, 3, 3> axis_mat = math::axis_dominant_to_m3(norm);
+  manifold::SimplePolygonIdx poly;
+  poly.reserve(flen);
+  for (int j = 0; j < flen; ++j) {
+    const double2 pv = math::project_v3_to_v2(axis_mat,
+                                              base_trimesh.get_vert_by_index(face[j])->co);
+    poly.push_back(manifold::PolyVert{{pv[0], pv[1]}, j});
   }
+  manifold::PolygonsIdx polys{poly};
+  const std::vector<manifold::ivec3> tris_m = manifold::TriangulateIdx(polys);
+  for (const manifold::ivec3 &tri : tris_m) {
+    add_tri_from_facepos(tri[0], tri[1], tri[2]);
+  }
+#else
+  /* Fallback: use BLI_polyfill (float precision). */
+  /* BLI_polyfill_calc/BLI_polyfill_beautify only accept float[2] arrays;
+   * the projection itself uses doubles and the results are cast to float. */
+  float (*projverts)[2];
+  unsigned int (*tris)[3];
+  const int totfilltri = flen - 2;
+  tris = MEM_new_array_uninitialized<unsigned int[3]>(size_t(totfilltri), __func__);
+  projverts = MEM_new_array_uninitialized<float[2]>(size_t(flen), __func__);
+  /* BLI_polyfill autodetects winding, so either normal direction works. */
+  const blender::MatBase<double, 3, 3> axis_mat = math::axis_dominant_to_m3_negate(norm);
+  for (int j = 0; j < flen; ++j) {
+    const double2 pv = math::project_v3_to_v2(axis_mat,
+                                              base_trimesh.get_vert_by_index(face[j])->co);
+    projverts[j][0] = float(pv[0]);
+    projverts[j][1] = float(pv[1]);
+  }
+  MemArena *pf_arena = BLI_memarena_new(BLI_POLYFILL_ARENA_SIZE, __func__);
+  Heap *pf_heap = BLI_heap_new_ex(BLI_POLYFILL_ALLOC_NGON_RESERVE);
+  BLI_polyfill_calc(projverts, flen, 0, tris);
+  BLI_polyfill_beautify(projverts, flen, tris, pf_arena, pf_heap);
+  for (int t = 0; t < totfilltri; ++t) {
+    unsigned int *tri = tris[t];
+    add_tri_from_facepos(int(tri[0]), int(tri[1]), int(tri[2]));
+  }
+  MEM_delete(tris);
+  MEM_delete(projverts);
+  BLI_memarena_free(pf_arena);
+  BLI_heap_free(pf_heap, nullptr);
+#endif
+
   return ans;
 }
 
@@ -3294,7 +3275,7 @@ static void append_interior_faces_for_cycle(Vector<Vector<int>> &out_faces,
 static MeshInset_Result trimesh_to_output(const TriangleMesh &trimesh,
                                           const MeshInset_Input &input)
 {
-  constexpr bool dbg_level = 0;
+  constexpr bool dbg_level = 1;
   if (dbg_level > 0) {
     std::cout << "trimesh_to_output\n";
   }
@@ -3392,7 +3373,7 @@ static MeshInset_Result trimesh_to_output(const TriangleMesh &trimesh,
 
 MeshInset_Result mesh_inset_calc(const MeshInset_Input &input)
 {
-  constexpr int dbg_level = 0;
+  constexpr int dbg_level = 1;
   if (dbg_level > 0) {
     std::cout << "mesh_inset_calc\n";
     if (dbg_level > 1) {

@@ -439,6 +439,7 @@ set(LIB
   PRIVATE bf::dependencies::zstd
   PRIVATE bf::dependencies::optional::gmp
   PRIVATE bf::dependencies::optional::fftw3
+  PRIVATE bf::dependencies::optional::manifold
   PUBLIC bf::dependencies::openimageio
 )
 
@@ -452,6 +453,10 @@ endif()
 
 if(WITH_MEM_VALGRIND)
   add_definitions(-DWITH_MEM_VALGRIND)
+endif()
+
+if(WITH_MANIFOLD)
+  add_definitions(-DWITH_MANIFOLD)
 endif()
 
 if(WIN32)
