@@ -10,13 +10,11 @@
 #include "BLI_mesh_inset.hh"
 #include "BLI_vector.hh"
 
-namespace blender::meshinset {
-
-namespace test {
+namespace blender::meshinset::test {
 
 class SpecArrays {
  public:
-  Array<float3> vert;
+  Array<double3> vert;
   Array<Vector<int>> face;
   Array<Vector<int>> contour;
 };
@@ -39,15 +37,15 @@ static SpecArrays fill_input_from_string(const char *spec)
   if (nverts == 0) {
     return SpecArrays();
   }
-  ans.vert = Array<float3>(nverts);
+  ans.vert = Array<double3>(nverts);
   ans.face = Array<Vector<int>>(nfaces);
   ans.contour = Array<Vector<int>>(ncontours);
   int i = 0;
   while (i < nverts && getline(ss, line)) {
     std::istringstream iss(line);
-    float x, y, z;
+    double x, y, z;
     iss >> x >> y >> z;
-    ans.vert[i] = float3(x, y, z);
+    ans.vert[i] = double3(x, y, z);
     i++;
   }
   i = 0;
@@ -77,14 +75,14 @@ class InputHolder {
  public:
   MeshInset_Input input;
 
-  InputHolder(const char *spec, float amount)
+  InputHolder(const char *spec, double amount)
   {
     spec_arrays_ = fill_input_from_string(spec);
     input.vert = spec_arrays_.vert.as_span();
     input.face = spec_arrays_.face.as_span();
     input.contour = spec_arrays_.contour.as_span();
     input.inset_amount = amount;
-    input.slope = 0.5f;
+    input.slope = 0.5;
     input.need_ids = false;
   }
 };
@@ -155,7 +153,7 @@ TEST(mesh_inset, Square)
   EXPECT_EQ(out1.face.size(), 5);
 
   InputHolder in2(spec, 0.51);
-  in2.input.slope = 0.5f;
+  in2.input.slope = 0.5;
   MeshInset_Result out2 = mesh_inset_calc(in2.input);
   /* Note: current code wants all 3-valence vertices in
    * straight skeleton, so the center doesn't collapse to
@@ -164,8 +162,8 @@ TEST(mesh_inset, Square)
   EXPECT_EQ(out2.vert.size(), 6);
   EXPECT_EQ(out2.face.size(), 4);
   /* The last two verts should be in the center, with height 0.25. */
-  const float3 &v4 = out2.vert[4];
-  const float3 &v5 = out2.vert[5];
+  const double3 &v4 = out2.vert[4];
+  const double3 &v5 = out2.vert[5];
   EXPECT_NEAR(v4.x, 0.5, 1e-5);
   EXPECT_NEAR(v4.y, 0.5, 1e-5);
   EXPECT_NEAR(v4.z, 0.25, 1e-5);
@@ -388,6 +386,4 @@ TEST(mesh_inset, Grid)
 }
 #endif
 
-}  // namespace test
-
-}  // namespace blender::meshinset
+}  // namespace blender::meshinset::test

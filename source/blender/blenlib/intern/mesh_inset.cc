@@ -4,6 +4,7 @@
  * \ingroup bli
  */
 
+#include <cfloat>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -56,9 +57,7 @@ class Edge {
   Triangle *tri_and_index_;
 
  public:
-  Edge() : tri_and_index_(nullptr)
-  {
-  }
+  Edge() : tri_and_index_(nullptr) {}
   Edge(const Triangle *tri, int tri_edge_index)
   {
     static_assert(sizeof(Triangle *) % 4 == 0);
@@ -127,18 +126,14 @@ enum VertFlags { VDELETED = 1 };
 
 class Vert {
  public:
-  float3 co;
+  double3 co;
   /** Any Edge leaving this vertesx. */
   Edge e;
   int id{0};
   uint8_t flags{0};
 
-  Vert(const float3 co, const Edge e) : co(co), e(e)
-  {
-  }
-  Vert(const float3 co) : co(co), e(Edge(nullptr, 0))
-  {
-  }
+  Vert(const double3 co, const Edge e) : co(co), e(e) {}
+  Vert(const double3 co) : co(co), e(Edge(nullptr, 0)) {}
 
   void mark_deleted()
   {
@@ -175,7 +170,7 @@ class Triangle {
   };
   Edge neighbor_[3];
   Vert *vert_[3];
-  float3 normal_;
+  double3 normal_;
   int id_{0};
   uint16_t flags_{0};
 
@@ -244,7 +239,7 @@ class Triangle {
   }
 
   /** Return the triangle normal. Assumes calculate_normal() has been called. */
-  float3 normal() const
+  double3 normal() const
   {
     BLI_assert(flags_ & TNORMAL_VALID);
     return normal_;
@@ -327,22 +322,22 @@ class Triangle {
 void Triangle::calculate_normal()
 {
   BLI_assert(!this->is_ghost() && !this->is_deleted());
-  float3 v0v1 = vert_[1]->co - vert_[0]->co;
-  float3 v0v2 = vert_[2]->co - vert_[0]->co;
-  normal_ = math::normalize(math::cross_high_precision(v0v1, v0v2));
+  double3 v0v1 = vert_[1]->co - vert_[0]->co;
+  double3 v0v2 = vert_[2]->co - vert_[0]->co;
+  normal_ = math::normalize(math::cross(v0v1, v0v2));
   flags_ |= TNORMAL_VALID;
 }
 
 /* For use when we may not have calculated tri->normal_ (mostly for debugging). */
-static float3 triangle_normal(const Triangle *tri)
+static double3 triangle_normal(const Triangle *tri)
 {
   if (tri->is_ghost() || tri->is_deleted()) {
-    return float3(0.0f, 0.0f, 0.0f);
+    return double3(0.0, 0.0, 0.0);
   }
   BLI_assert(!tri->is_ghost());
-  float3 v0v1 = tri->vert(1)->co - tri->vert(0)->co;
-  float3 v0v2 = tri->vert(2)->co - tri->vert(0)->co;
-  return math::normalize(math::cross_high_precision(v0v1, v0v2));
+  double3 v0v1 = tri->vert(1)->co - tri->vert(0)->co;
+  double3 v0v2 = tri->vert(2)->co - tri->vert(0)->co;
+  return math::normalize(math::cross(v0v1, v0v2));
 }
 
 /** Mark triangles \a t1 and \a t2 as neighbors, where \a pos1 and \a pos2
@@ -445,10 +440,10 @@ static Vector<Triangle *> triangles_of_vert(const Vert *v)
  * In Blender, the vertex normal is the angle-weighted combination of the adjacent
  * face normals.
  */
-static float3 vertex_normal(const Vert *vert)
+static double3 vertex_normal(const Vert *vert)
 {
   BLI_assert(!vert->is_deleted());
-  float3 ans{0.0f, 0.0f, 0.0f};
+  double3 ans{0.0, 0.0, 0.0};
   Edge e0 = vert->e;
   BLI_assert(!e0.is_null());
   Edge ecur = e0;
@@ -457,9 +452,9 @@ static float3 vertex_normal(const Vert *vert)
     BLI_assert(!tri->is_deleted());
     if (!tri->is_ghost()) {
       Edge eprev = ecur.triangle_pred();
-      float3 din = math::normalize(vert->co - v_src(eprev)->co);
-      float3 dout = math::normalize(v_dst(ecur)->co - vert->co);
-      float fac = math::safe_acos(-math::dot(din, dout));
+      double3 din = math::normalize(vert->co - v_src(eprev)->co);
+      double3 dout = math::normalize(v_dst(ecur)->co - vert->co);
+      double fac = math::safe_acos(-math::dot(din, dout));
       ans = ans + fac * tri->normal();
     }
     ecur = rot_ccw(ecur);
@@ -469,25 +464,28 @@ static float3 vertex_normal(const Vert *vert)
 }
 
 /** Analog of BM_vert_calc_shell_factor. */
-static float vertex_shell_factor(Vert *vert)
+static double vertex_shell_factor(Vert *vert)
 {
-  float accum_shell = 0.0f;
-  float accum_angle = 0.0f;
+  double accum_shell = 0.0;
+  double accum_angle = 0.0;
   Edge e = vert->e;
-  float3 vnorm = vertex_normal(vert);
+  double3 vnorm = vertex_normal(vert);
   do {
     if (!e.tri()->is_ghost()) {
       Edge eprev = e.triangle_pred();
-      float face_angle = angle_v3v3v3(v_src(eprev)->co, v_src(e)->co, v_dst(e)->co);
-      accum_shell += shell_v3v3_normalized_to_dist(vnorm, e.tri()->normal()) * face_angle;
+      /* angle_v3v3v3 and shell_v3v3_normalized_to_dist only accept float; cast at the boundary. */
+      float face_angle = angle_v3v3v3(
+          float3(v_src(eprev)->co), float3(v_src(e)->co), float3(v_dst(e)->co));
+      accum_shell += shell_v3v3_normalized_to_dist(float3(vnorm), float3(e.tri()->normal())) *
+                     face_angle;
       accum_angle += face_angle;
     }
     e = rot_ccw(e);
   } while (e != vert->e);
-  if (accum_angle != 0.0f) {
+  if (accum_angle != 0.0) {
     return accum_shell / accum_angle;
   }
-  return 1.0f;
+  return 1.0;
 }
 
 class TriangleMesh {
@@ -505,7 +503,7 @@ class TriangleMesh {
     }
   }
 
-  Vert *add_vert(const float3 co)
+  Vert *add_vert(const double3 co)
   {
     Vert *vert = new Vert(co);
     int v = int(verts_.append_and_get_index(vert));
@@ -693,24 +691,27 @@ static void trimesh_draw(const std::string &label, const TriangleMesh &trimesh)
   Span<Triangle *> tris = trimesh.all_tris();
 
   /* Get the best projection axis. */
-  float3 avg_normal(0.0f, 0.0f, 0.0f);
+  double3 avg_normal(0.0, 0.0, 0.0);
   for (const Triangle *tri : tris) {
     avg_normal = avg_normal + triangle_normal(tri);
   }
   avg_normal = math::normalize(avg_normal);
+  /* axis_dominant_v3_to_m3 / mul_v2_m3v3 only accept float; cast at the boundary. */
   float axis_mat[3][3];
-  axis_dominant_v3_to_m3(axis_mat, &avg_normal.x);
+  float3 avg_normal_f(avg_normal);
+  axis_dominant_v3_to_m3(axis_mat, &avg_normal_f.x);
 
-  Array<float2> proj_vertco(verts.size());
+  Array<double2> proj_vertco(verts.size());
   for (int64_t i : verts.index_range()) {
     float tmp[2];
-    mul_v2_m3v3(tmp, axis_mat, &verts[i]->co.x);
-    proj_vertco[i] = float2(tmp[0], tmp[1]);
+    float3 co_f(verts[i]->co);
+    mul_v2_m3v3(tmp, axis_mat, &co_f.x);
+    proj_vertco[i] = double2(tmp[0], tmp[1]);
   }
 
-  float2 vmin(FLT_MAX, FLT_MAX);
-  float2 vmax(-FLT_MAX, -FLT_MAX);
-  for (const float2 &pv : proj_vertco) {
+  double2 vmin(DBL_MAX, DBL_MAX);
+  double2 vmax(-DBL_MAX, -DBL_MAX);
+  for (const double2 &pv : proj_vertco) {
     vmin[0] = math::min(vmin[0], pv[0]);
     vmin[1] = math::min(vmin[1], pv[1]);
     vmax[0] = math::max(vmax[0], pv[0]);
@@ -733,8 +734,8 @@ static void trimesh_draw(const std::string &label, const TriangleMesh &trimesh)
   }
   double scale = view_width / width;
 
-  auto mapxy = [&](float2 z) -> float2 {
-    return float2((z[0] - minx) * scale, (maxy - z[1]) * scale);
+  auto mapxy = [&](double2 z) -> double2 {
+    return double2((z[0] - minx) * scale, (maxy - z[1]) * scale);
   };
 
   std::ofstream f;
@@ -762,18 +763,18 @@ static void trimesh_draw(const std::string &label, const TriangleMesh &trimesh)
     }
     if (tri->is_ghost()) {
       if (draw_ghost_labels) {
-        const float2 &uco = proj_vertco[tri->vert(0)->id];
-        const float2 &vco = proj_vertco[tri->vert(2)->id];
-        float2 p = mapxy(0.5f * (uco + vco));
+        const double2 &uco = proj_vertco[tri->vert(0)->id];
+        const double2 &vco = proj_vertco[tri->vert(2)->id];
+        double2 p = mapxy(0.5 * (uco + vco));
         f << "<text x=\"" << p[0] << "\" y=\"" << p[1] << "\" font-size=\"small\">g" << tri->id()
           << "</text>\n";
       }
     }
     else {
-      float2 center(0.0f, 0.0f);
+      double2 center(0.0, 0.0);
       for (int i = 0; i < 3; ++i) {
-        float2 p0 = mapxy(proj_vertco[tri->vert(i)->id]);
-        float2 p1 = mapxy(proj_vertco[tri->vert(succ_index(i))->id]);
+        double2 p0 = mapxy(proj_vertco[tri->vert(i)->id]);
+        double2 p1 = mapxy(proj_vertco[tri->vert(succ_index(i))->id]);
         /* Make spokes and boundary between in-region and out-region bolder. */
         bool in_r = tri->in_region();
         bool other_in_r = neighbor_edge(Edge(tri, i)).tri()->in_region();
@@ -784,11 +785,11 @@ static void trimesh_draw(const std::string &label, const TriangleMesh &trimesh)
         center = center + p0;
       }
       if (draw_face_labels) {
-        center = center / 3.0f;
+        center = center / 3.0;
         f << "<text x=\"" << center[0] << "\" y=\"" << center[1] << "\" font-size=\"small\">"
           << tri->id() << "</text>\n";
         /* Show first vertex with a dotted line from center to it. */
-        float2 p0 = mapxy(proj_vertco[tri->vert(0)->id]);
+        double2 p0 = mapxy(proj_vertco[tri->vert(0)->id]);
         f << "<line fill=\"none\" stroke=\"grey\" stroke-width=\"1\" stroke-dasharray=\"2, 5\" "
              "x1=\""
           << center[0] << "\" y1=\"" << center[1] << "\" x2=\"" << p0[0] << "\" y2=\"" << p0[1]
@@ -801,7 +802,7 @@ static void trimesh_draw(const std::string &label, const TriangleMesh &trimesh)
     if (vert->is_deleted()) {
       continue;
     }
-    float2 p = mapxy(proj_vertco[vert->id]);
+    double2 p = mapxy(proj_vertco[vert->id]);
     f << R"(<circle fill="black" cx=")" << p[0] << "\" cy=\"" << p[1] << "\" r=\"" << vert_radius
       << "\">\n";
     f << "  <title>[" << vert->id << "]" << vert->co << "</title>\n";
@@ -1238,114 +1239,114 @@ static Vector<Vector<Edge>> init_contour_inset(TriangleMesh &trimesh, Span<Vecto
   return ans;
 }
 
-static float det(const float3 &v1, const float3 &v2, const float3 &n)
+static double det(const double3 &v1, const double3 &v2, const double3 &n)
 {
-  return math::dot(math::cross_high_precision(v1, v2), n);
+  return math::dot(math::cross(v1, v2), n);
 }
 
 /** Solve a*x*x + b*x + c = 0 and return the number of real roots,
  * and set *r_root1 to the first root and *r_root2 to the second, as each of those exist.
  */
-static int solve_quadratic(float a, float b, float c, float *r_root1, float *r_root2)
+static int solve_quadratic(double a, double b, double c, double *r_root1, double *r_root2)
 {
-  if (a == 0.0f) {
-    if (b == 0.0f) {
+  if (a == 0.0) {
+    if (b == 0.0) {
       return 0;
     }
     *r_root1 = -c / b;
     return 1;
   }
-  float p = -b / a / 2;
-  float q = c / a;
-  float discr = p * p - q;
-  if (fabsf(discr) < 2e-7 * abs(q)) {
+  double p = -b / a / 2;
+  double q = c / a;
+  double discr = p * p - q;
+  if (fabs(discr) < 2e-14 * fabs(q)) {
     /* Duplicate zero. */
     *r_root1 = p;
     return 1;
   }
-  if (discr < 0.0f) {
+  if (discr < 0.0) {
     return 0;
   }
   /* Numerically stable solution to the quadratic eq. */
-  float x1 = p + copysignf(sqrtf(discr), p);
-  if (x1 == 0.0f) {
+  double x1 = p + copysign(sqrt(discr), p);
+  if (x1 == 0.0) {
     *r_root1 = x1;
     return 1;
   }
-  float x2 = q / x1;
+  double x2 = q / x1;
   *r_root1 = x1;
   *r_root2 = x2;
   return 2;
 }
 
-static std::pair<float3, float> calc_velo(const float3 &delta_prev,
-                                          const float3 &delta_next,
-                                          const float3 &normal)
+static std::pair<double3, double> calc_velo(const double3 &delta_prev,
+                                            const double3 &delta_next,
+                                            const double3 &normal)
 {
-  float3 r1 = delta_next - delta_prev;
-  r1 = r1 - math::cross_high_precision(math::cross_high_precision(r1, normal), normal);
-  float3 velo;
+  double3 r1 = delta_next - delta_prev;
+  r1 = r1 - math::cross(math::cross(r1, normal), normal);
+  double3 velo;
   /* Get the best precision bisector. */
-  if (math::length_squared(r1) > 1e-12f * math::length_squared(delta_next)) {
+  if (math::length_squared(r1) > 1e-22 * math::length_squared(delta_next)) {
     velo = r1;
   }
   else {
-    float3 r2 = delta_next + delta_prev;
+    double3 r2 = delta_next + delta_prev;
     velo = math::cross(r2, normal);
   }
-  float dhdl = det(velo, delta_next, normal);
+  double dhdl = det(velo, delta_next, normal);
   if (dhdl < 0) {
-    return std::pair<float3, float>(-velo, -dhdl);
+    return std::pair<double3, double>(-velo, -dhdl);
   }
   else {
-    return std::pair<float3, float>(velo, dhdl);
+    return std::pair<double3, double>(velo, dhdl);
   }
 }
 
 class SkeletonVertex {
-  float3 position_;
-  float3 delta_prev_;
-  float3 delta_next_;
-  float3 normal_;
-  float3 velo_;
-  float dhdl_;
-  float height_;
+  double3 position_;
+  double3 delta_prev_;
+  double3 delta_next_;
+  double3 normal_;
+  double3 velo_;
+  double dhdl_;
+  double height_;
 
  public:
   SkeletonVertex(
-      float3 position, float height, float3 *delta_prev, float3 *delta_next, float3 *normal);
+      double3 position, double height, double3 *delta_prev, double3 *delta_next, double3 *normal);
 
-  float3 position() const
+  double3 position() const
   {
     return position_;
   }
 
-  float3 delta_prev() const
+  double3 delta_prev() const
   {
     return delta_prev_;
   }
 
-  float3 delta_next() const
+  double3 delta_next() const
   {
     return delta_next_;
   }
 
-  float3 normal() const
+  double3 normal() const
   {
     return normal_;
   }
 
-  float3 velo() const
+  double3 velo() const
   {
     return velo_;
   }
 
-  float dhdl() const
+  double dhdl() const
   {
     return dhdl_;
   }
 
-  float height() const
+  double height() const
   {
     return height_;
   }
@@ -1354,7 +1355,7 @@ class SkeletonVertex {
 };
 
 SkeletonVertex::SkeletonVertex(
-    float3 position, float height, float3 *delta_prev, float3 *delta_next, float3 *normal)
+    double3 position, double height, double3 *delta_prev, double3 *delta_next, double3 *normal)
     : position_(position), height_(height)
 {
   if (delta_prev != nullptr && delta_next != nullptr) {
@@ -1363,26 +1364,26 @@ SkeletonVertex::SkeletonVertex(
     delta_prev_ = *delta_prev;
     delta_next_ = *delta_next;
     normal_ = *normal;
-    std::pair<float3, float> velo_dhdl = calc_velo(*delta_prev, *delta_next, *normal);
+    std::pair<double3, double> velo_dhdl = calc_velo(*delta_prev, *delta_next, *normal);
     velo_ = velo_dhdl.first;
     dhdl_ = velo_dhdl.second;
   }
   else {
     /* This is a stationary inner vertex. */
-    delta_prev_ = float3(0.0, 0.0, 0.0);
-    delta_next_ = float3(0.0, 0.0, 0.0);
+    delta_prev_ = double3(0.0, 0.0, 0.0);
+    delta_next_ = double3(0.0, 0.0, 0.0);
     if (normal != nullptr) {
       normal_ = *normal;
     }
     else {
-      normal_ = float3(0.0, 0.0, 0.0);
+      normal_ = double3(0.0, 0.0, 0.0);
     }
-    velo_ = float3(0.0, 0.0, 0.0);
+    velo_ = double3(0.0, 0.0, 0.0);
     dhdl_ = 1.0;  // Zero will cause trouble.
   }
 }
 
-static constexpr float inf = std::numeric_limits<float>::infinity();
+static constexpr double inf = std::numeric_limits<double>::infinity();
 
 std::ostream &operator<<(std::ostream &os, const SkeletonVertex &skv)
 {
@@ -1394,17 +1395,15 @@ std::ostream &operator<<(std::ostream &os, const SkeletonVertex &skv)
 
 class SkeletonEvent {
   Edge edge_;
-  float height_{inf};
-  float3 final_pos_{0.0f, 0.0f, 0.0f};
+  double height_{inf};
+  double3 final_pos_{0.0, 0.0, 0.0};
   int epoch_{0};
   bool split_event_{false};
 
  public:
-  SkeletonEvent(Edge edge) : edge_(edge)
-  {
-  }
+  SkeletonEvent(Edge edge) : edge_(edge) {}
 
-  SkeletonEvent(Edge edge, float height, float3 final_pos, bool split_event, int epoch)
+  SkeletonEvent(Edge edge, double height, double3 final_pos, bool split_event, int epoch)
       : edge_(edge),
         height_(height),
         final_pos_(final_pos),
@@ -1418,12 +1417,12 @@ class SkeletonEvent {
     return edge_;
   }
 
-  float height() const
+  double height() const
   {
     return height_;
   }
 
-  float3 final_pos() const
+  double3 final_pos() const
   {
     return final_pos_;
   }
@@ -1514,17 +1513,17 @@ class StraightSkeleton {
 
  public:
   /** Algorithm output data structures. */
-  Map<int, float> vertex_height_map;
+  Map<int, double> vertex_height_map;
   Set<Triangle *> remaining_triangles_set;
 
-  StraightSkeleton(TriangleMesh &trimesh, Span<Vector<int>> contours, float target_height);
+  StraightSkeleton(TriangleMesh &trimesh, Span<Vector<int>> contours, double target_height);
   ~StraightSkeleton();
 
   void compute();
 
  private:
   SkeletonVertex *add_skeleton_vertex(
-      float3 position, float height, float3 *delta_prev, float3 *delta_next, float3 *normal)
+      double3 position, double height, double3 *delta_prev, double3 *delta_next, double3 *normal)
   {
     /* Store the allocated SkeletonVertex so can free at end.
      * TODO: allocate these from a pool.
@@ -1564,10 +1563,10 @@ class StraightSkeleton {
   }
 
   /** Add events. */
-  void add_events(Vert *vert, float min_height, bool instant);
+  void add_events(Vert *vert, double min_height, bool instant);
 
   /** Add the triangle with edge \a edge to the event queue. */
-  void add_triangle(Edge edge, float min_height);
+  void add_triangle(Edge edge, double min_height);
 
   /** Handle vertex event (edge collapse). Return the new spoke edge. */
   Edge handle_vertex_event(Edge edge);
@@ -1588,7 +1587,7 @@ class StraightSkeleton {
 
 StraightSkeleton::StraightSkeleton(TriangleMesh &trimesh,
                                    Span<Vector<int>> contours,
-                                   float target_height)
+                                   double target_height)
     : trimesh_(trimesh), contours_(contours), target_height_(target_height)
 {
   /* Build sets of the contour edges and region triangles,
@@ -1739,10 +1738,10 @@ static Edge find_cw_wavefront_or_orig_edge(Edge edge)
   return null_edge;
 }
 
-static constexpr float dhdl_epsilon = 1e-5f;
-static constexpr float collision_epsilon = 1e-5;
+static constexpr double dhdl_epsilon = 1e-10;
+static constexpr double collision_epsilon = 1e-10;
 
-void StraightSkeleton::add_events(Vert *vert, float min_height, bool instant)
+void StraightSkeleton::add_events(Vert *vert, double min_height, bool instant)
 {
   constexpr int dbg_level = 0;
   if (dbg_level > 0) {
@@ -1760,10 +1759,10 @@ void StraightSkeleton::add_events(Vert *vert, float min_height, bool instant)
     } while (e != vert->e);
   }
   else {
-    float best_sqr = inf;
+    double best_sqr = inf;
     Edge best = null_edge;
-    float3 ref_pos = vert->co;
-    float3 best_pos = ref_pos;
+    double3 ref_pos = vert->co;
+    double3 best_pos = ref_pos;
     Edge e = vert->e;
     do {
       if (e.tri()->in_region()) {
@@ -1772,20 +1771,20 @@ void StraightSkeleton::add_events(Vert *vert, float min_height, bool instant)
         bool out2 = is_wavefront_edge(face_edge.triangle_succ());
         SkeletonVertex *skv1 = get_skel_vertex(face_edge);
         SkeletonVertex *skv2 = get_skel_vertex(face_edge.triangle_succ().triangle_succ());
-        if (out1 && skv1->dhdl() != 0.0f) {
-          float3 pos = skv1->position() +
-                       skv1->velo() * (min_height - skv1->height()) / skv1->dhdl();
-          float d = math::distance_squared(pos, ref_pos);
+        if (out1 && skv1->dhdl() != 0.0) {
+          double3 pos = skv1->position() +
+                        skv1->velo() * (min_height - skv1->height()) / skv1->dhdl();
+          double d = math::distance_squared(pos, ref_pos);
           if (d < best_sqr) {
             best_sqr = d;
             best = face_edge;
             best_pos = pos;
           }
         }
-        if (out2 && skv2->dhdl() != 0.0f) {
-          float3 pos = skv2->position() +
-                       skv2->velo() * (min_height - skv2->height()) / skv2->dhdl();
-          float d = math::distance_squared(pos, ref_pos);
+        if (out2 && skv2->dhdl() != 0.0) {
+          double3 pos = skv2->position() +
+                        skv2->velo() * (min_height - skv2->height()) / skv2->dhdl();
+          double d = math::distance_squared(pos, ref_pos);
           if (d < best_sqr) {
             best_sqr = d;
             best = face_edge.triangle_succ();
@@ -1814,7 +1813,7 @@ void StraightSkeleton::add_events(Vert *vert, float min_height, bool instant)
   }
 }
 
-void StraightSkeleton::add_triangle(Edge edge, float min_height)
+void StraightSkeleton::add_triangle(Edge edge, double min_height)
 {
   constexpr int dbg_level = 0;
   if (dbg_level > 0) {
@@ -1832,18 +1831,18 @@ void StraightSkeleton::add_triangle(Edge edge, float min_height)
     std::cout << " skv1=" << *skv1 << "\n skv2=" << *skv2 << "\n skv3=" << *skv3 << "\n";
   }
   /* This special case handling is needed, it seems. */
-  if (fabsf(skv1->dhdl()) < dhdl_epsilon) {
-    if (skv2->dhdl() == 0.0f || skv3->dhdl() == 0.0f) {
+  if (fabs(skv1->dhdl()) < dhdl_epsilon) {
+    if (skv2->dhdl() == 0.0 || skv3->dhdl() == 0.0) {
       event_queue_.push(SkeletonEvent(edge));
       return;
     }
-    float best_sqr = inf;
+    double best_sqr = inf;
     Edge best = null_edge;
-    float3 ref_pos = skv1->position();
-    float3 best_pos = ref_pos;
+    double3 ref_pos = skv1->position();
+    double3 best_pos = ref_pos;
     if (out1) {
-      float3 pos = skv2->position() + skv2->velo() * (min_height - skv2->height()) / skv2->dhdl();
-      float d = math::distance_squared(pos, ref_pos);
+      double3 pos = skv2->position() + skv2->velo() * (min_height - skv2->height()) / skv2->dhdl();
+      double d = math::distance_squared(pos, ref_pos);
       if (d < best_sqr) {
         best_sqr = d;
         best = edge;
@@ -1851,8 +1850,8 @@ void StraightSkeleton::add_triangle(Edge edge, float min_height)
       }
     }
     if (out3) {
-      float3 pos = skv3->position() + skv3->velo() * (min_height - skv3->height()) / skv3->dhdl();
-      float d = math::distance_squared(pos, ref_pos);
+      double3 pos = skv3->position() + skv3->velo() * (min_height - skv3->height()) / skv3->dhdl();
+      double d = math::distance_squared(pos, ref_pos);
       if (d < best_sqr) {
         best_sqr = d;
         best = edge.triangle_succ().triangle_succ();
@@ -1867,17 +1866,17 @@ void StraightSkeleton::add_triangle(Edge edge, float min_height)
     }
     return;
   }
-  if (fabsf(skv2->dhdl()) <= dhdl_epsilon) {
-    if (skv1->dhdl() == 0.0f || skv3->dhdl() == 0.0f) {
+  if (fabs(skv2->dhdl()) <= dhdl_epsilon) {
+    if (skv1->dhdl() == 0.0 || skv3->dhdl() == 0.0) {
       return;
     }
-    float best_sqr = inf;
+    double best_sqr = inf;
     Edge best = null_edge;
-    float3 ref_pos = skv2->position();
-    float3 best_pos = ref_pos;
+    double3 ref_pos = skv2->position();
+    double3 best_pos = ref_pos;
     if (out1) {
-      float3 pos = skv1->position() + skv1->velo() * (min_height - skv1->height()) / skv1->dhdl();
-      float d = math::distance_squared(pos, ref_pos);
+      double3 pos = skv1->position() + skv1->velo() * (min_height - skv1->height()) / skv1->dhdl();
+      double d = math::distance_squared(pos, ref_pos);
       if (d < best_sqr) {
         best_sqr = d;
         best = edge;
@@ -1885,8 +1884,8 @@ void StraightSkeleton::add_triangle(Edge edge, float min_height)
       }
     }
     if (out2) { /* CHECK: Should this test be if out3? */
-      float3 pos = skv3->position() + skv3->velo() * (min_height - skv3->height()) / skv3->dhdl();
-      float d = math::distance_squared(pos, ref_pos);
+      double3 pos = skv3->position() + skv3->velo() * (min_height - skv3->height()) / skv3->dhdl();
+      double d = math::distance_squared(pos, ref_pos);
       if (d < best_sqr) {
         best_sqr = d;
         best = edge.triangle_succ(); /* CHECK another succ? */
@@ -1901,18 +1900,18 @@ void StraightSkeleton::add_triangle(Edge edge, float min_height)
     }
     return;
   }
-  if (fabsf(skv3->dhdl()) <= dhdl_epsilon) {
-    if (skv1->dhdl() == 0.0f || skv2->dhdl() == 0.0f) {
+  if (fabs(skv3->dhdl()) <= dhdl_epsilon) {
+    if (skv1->dhdl() == 0.0 || skv2->dhdl() == 0.0) {
       event_queue_.push(SkeletonEvent(edge));
       return;
     }
-    float best_sqr = inf;
+    double best_sqr = inf;
     Edge best = null_edge;
-    float3 ref_pos = skv3->position();
-    float3 best_pos = ref_pos;
+    double3 ref_pos = skv3->position();
+    double3 best_pos = ref_pos;
     if (out2) {
-      float3 pos = skv2->position() + skv2->velo() * (min_height - skv2->height()) / skv2->dhdl();
-      float d = math::distance_squared(pos, ref_pos);
+      double3 pos = skv2->position() + skv2->velo() * (min_height - skv2->height()) / skv2->dhdl();
+      double d = math::distance_squared(pos, ref_pos);
       if (d < best_sqr) {
         best_sqr = d;
         best = edge.triangle_succ();
@@ -1920,8 +1919,8 @@ void StraightSkeleton::add_triangle(Edge edge, float min_height)
       }
     }
     if (out3) {
-      float3 pos = skv1->position() + skv1->velo() * (min_height - skv1->height()) / skv1->dhdl();
-      float d = math::distance_squared(pos, ref_pos);
+      double3 pos = skv1->position() + skv1->velo() * (min_height - skv1->height()) / skv1->dhdl();
+      double d = math::distance_squared(pos, ref_pos);
       if (d < best_sqr) {
         best_sqr = d;
         best = edge.triangle_succ().triangle_succ();
@@ -1936,30 +1935,30 @@ void StraightSkeleton::add_triangle(Edge edge, float min_height)
     }
     return;
   }
-  float3 x1 = v_src(edge)->co;
-  float3 x2 = v_src(edge.triangle_succ())->co;
-  float3 x3 = v_src(edge.triangle_succ().triangle_succ())->co;
-  float3 normal = math::normalize(skv1->normal() + skv2->normal() + skv3->normal());
-  float3 v1 = skv1->velo() / skv1->dhdl();
-  float3 v2 = skv2->velo() / skv2->dhdl();
-  float3 v3 = skv3->velo() / skv3->dhdl();
+  double3 x1 = v_src(edge)->co;
+  double3 x2 = v_src(edge.triangle_succ())->co;
+  double3 x3 = v_src(edge.triangle_succ().triangle_succ())->co;
+  double3 normal = math::normalize(skv1->normal() + skv2->normal() + skv3->normal());
+  double3 v1 = skv1->velo() / skv1->dhdl();
+  double3 v2 = skv2->velo() / skv2->dhdl();
+  double3 v3 = skv3->velo() / skv3->dhdl();
   x1 = x1 + v1 * (min_height - skv1->height());
   x2 = x2 + v2 * (min_height - skv2->height());
   x3 = x3 + v3 * (min_height - skv3->height());
-  float3 dx1 = x1 - x2;
-  float3 dx2 = x2 - x3;
-  float3 dx3 = x1 - x3;
-  float3 dv1 = v1 - v2;
-  float3 dv2 = v2 - v3;
-  float3 dv3 = v1 - v3;
-  float c = det(dx1, dx2, normal);
-  bool positive = c > 0.0f;
+  double3 dx1 = x1 - x2;
+  double3 dx2 = x2 - x3;
+  double3 dx3 = x1 - x3;
+  double3 dv1 = v1 - v2;
+  double3 dv2 = v2 - v3;
+  double3 dv3 = v1 - v3;
+  double c = det(dx1, dx2, normal);
+  bool positive = c > 0.0;
   if (out_num == 3) {
     /* Closing event. */
-    float a = det(dv1, dv2, normal);
-    float b = det(dx1, dv2, normal) + det(dv1, dx2, normal);
+    double a = det(dv1, dv2, normal);
+    double b = det(dx1, dv2, normal) + det(dv1, dx2, normal);
     /* Solve 2*a*x+b = 0. */
-    float height = -0.5f * b / a;
+    double height = -0.5 * b / a;
     event_queue_.push(SkeletonEvent(edge, min_height + height, x1 + v1 * height, false, epoch_));
     if (dbg_level > 1) {
       std::cout << "added closing event " << event_queue_.top() << "\n";
@@ -1967,34 +1966,34 @@ void StraightSkeleton::add_triangle(Edge edge, float min_height)
     return;
   }
 
-  auto div_zero = [&](float a, float b) -> float {
-    if (fabsf(b) > 1e-7) {
+  auto div_zero = [&](double a, double b) -> double {
+    if (fabs(b) > 1e-14) {
       return a / b;
     }
     if (!positive) {
-      return 1e-16;
+      return 1e-30;
     }
     return std::numeric_limits<double>::quiet_NaN();
   };
 
   /* Use collapsing edges as indicator => solve simple linear equation. */
-  float dv1_sqr = math::length_squared(dv1);
-  float dv2_sqr = math::length_squared(dv2);
-  float dv3_sqr = math::length_squared(dv3);
-  if (dv1_sqr == 0.0f && dv2_sqr == 0.0f && dv3_sqr == 0.0f) {
+  double dv1_sqr = math::length_squared(dv1);
+  double dv2_sqr = math::length_squared(dv2);
+  double dv3_sqr = math::length_squared(dv3);
+  if (dv1_sqr == 0.0 && dv2_sqr == 0.0 && dv3_sqr == 0.0) {
     event_queue_.push(SkeletonEvent(edge));
     return;
   }
-  float lin_height1 = div_zero(-math::dot(dx1, dv1), dv1_sqr);
-  float lin_height2 = div_zero(-math::dot(dx2, dv2), dv2_sqr);
-  float lin_height3 = div_zero(-math::dot(dx3, dv3), dv3_sqr);
+  double lin_height1 = div_zero(-math::dot(dx1, dv1), dv1_sqr);
+  double lin_height2 = div_zero(-math::dot(dx2, dv2), dv2_sqr);
+  double lin_height3 = div_zero(-math::dot(dx3, dv3), dv3_sqr);
 
   if (out_num == 2) {
     /* Vertex Event. */
     if (dbg_level > 1) {
       std::cout << "out_num==2 vertex event case\n";
     }
-    float epsilon = positive ? 0.0f : fabsf(c) + 1e-6;  // TODO: remove epsilon?
+    double epsilon = positive ? 0.0 : fabs(c) + 1e-13;  // TODO: remove epsilon?
     if (!out1) {
       if ((lin_height2 < lin_height3 || !(lin_height3 >= -epsilon)) && lin_height2 >= -epsilon) {
         event_queue_.push(SkeletonEvent(
@@ -2044,43 +2043,41 @@ void StraightSkeleton::add_triangle(Edge edge, float min_height)
   }
 
   /* General case -> solve quadratic equation a*x*x + b*x + c = 0 , */
-  float a = det(dv1, dv2, normal);
-  float b = det(dx1, dv2, normal) + det(dv1, dx2, normal);
-  float res1, res2;
+  double a = det(dv1, dv2, normal);
+  double b = det(dx1, dv2, normal) + det(dv1, dx2, normal);
+  double res1, res2;
   int nroots = solve_quadratic(a, b, c, &res1, &res2);
-  float height = inf;
+  double height = inf;
   for (int i = 0; i < nroots; ++i) {
-    float h = i == 1 ? res1 : res2;
-    if (0.0f <= h && h < height) {
+    double h = i == 1 ? res1 : res2;
+    if (0.0 <= h && h < height) {
       height = h;
     }
   }
-  /* Replace the quadratic solution if the triangle is zero and doesn't change size.
-   * TODO: change the constants for what is appropriate for floats. */
-  if (fabsf(a) < 1e-10f && fabsf(b) < 1e-4f && fabsf(c) < 1e-4f) {
+  /* Replace the quadratic solution if the triangle is zero and doesn't change size. */
+  if (fabs(a) < 1e-20 && fabs(b) < 1e-10 && fabs(c) < 1e-10) {
     nroots = 1;
-    res1 = 0.0f;
+    res1 = 0.0;
   }
   if (dbg_level > 1) {
     std::cout << "general case, nroots=" << nroots << " res1=" << res1 << " res2=" << res2 << "\n";
   }
   /* Check if edge collapse times were missed. */
-  float lin_height1_ = div_zero(-math::length_squared(dx1), math::dot(dx1, dv1));
-  float lin_height2_ = div_zero(-math::length_squared(dx2), math::dot(dx2, dv2));
-  float lin_height3_ = div_zero(-math::length_squared(dx3), math::dot(dx3, dv3));
-  /* Note: for floats, changed 1e-7 to 1e-5 below. */
-  if (lin_height1 >= 0 && !(lin_height1 >= height) && fabsf(lin_height1 - lin_height1_) < 1e-5) {
+  double lin_height1_ = div_zero(-math::length_squared(dx1), math::dot(dx1, dv1));
+  double lin_height2_ = div_zero(-math::length_squared(dx2), math::dot(dx2, dv2));
+  double lin_height3_ = div_zero(-math::length_squared(dx3), math::dot(dx3, dv3));
+  if (lin_height1 >= 0 && !(lin_height1 >= height) && fabs(lin_height1 - lin_height1_) < 1e-11) {
     height = lin_height1;
   }
-  if (lin_height2 >= 0 && !(lin_height2 >= height) && fabsf(lin_height2 - lin_height2_) < 1e-5) {
+  if (lin_height2 >= 0 && !(lin_height2 >= height) && fabs(lin_height2 - lin_height2_) < 1e-11) {
     height = lin_height2;
   }
-  if (lin_height3 >= 0 && !(lin_height3 >= height) && fabsf(lin_height3 - lin_height3_) < 1e-5) {
+  if (lin_height3 >= 0 && !(lin_height3 >= height) && fabs(lin_height3 - lin_height3_) < 1e-11) {
     height = lin_height3;
   }
   /* Abort if there is no event. */
   if (positive) {
-    if (height == inf || !(height >= 0.0f)) {
+    if (height == inf || !(height >= 0.0)) {
       if (dbg_level > 1) {
         std::cout << "no event so force abort\n";
       }
@@ -2090,7 +2087,7 @@ void StraightSkeleton::add_triangle(Edge edge, float min_height)
   }
   else {
     /* Note: changes 1e-8 to 1e-5 for float. */
-    if (nroots == 0 || !(res1 >= -fabsf(c) - 1e-8f)) {
+    if (nroots == 0 || !(res1 >= -fabs(c) - 1e-14)) {
       if (dbg_level > 1) {
         std::cout << "no event2 so force abort\n";
       }
@@ -2099,9 +2096,9 @@ void StraightSkeleton::add_triangle(Edge edge, float min_height)
     }
     height = res1;
   }
-  float len1 = math::length_squared(dx1 + dv1 * height);
-  float len2 = math::length_squared(dx2 + dv2 * height);
-  float len3 = math::length_squared(dx3 + dv3 * height);
+  double len1 = math::length_squared(dx1 + dv1 * height);
+  double len2 = math::length_squared(dx2 + dv2 * height);
+  double len3 = math::length_squared(dx3 + dv3 * height);
   if (dbg_level > 1) {
     std::cout << "len1=" << len1 << " len2=" << len2 << " len3=" << len3 << "\n";
   }
@@ -2462,8 +2459,8 @@ void StraightSkeleton::compute()
     for (int i = 0; i < n; ++i) {
       Edge e = contour[i];
       Edge e_prev = contour[(i + n - 1) % n];
-      float e_weight = 1.0f;
-      float e_prev_weight = 1.0f;
+      double e_weight = 1.0;
+      double e_prev_weight = 1.0;
       /* TODO: add an edge_weight_map argument and use it to set e_weight. */
       Vert *vprev = v_src(e_prev);
       Vert *v = v_src(e);
@@ -2471,10 +2468,10 @@ void StraightSkeleton::compute()
       /* The reference code uses prev and next as if we go ccw around
        * the contour (as usual), but measures deltas going cw.
        */
-      float3 delta_prev = math::normalize(vprev->co - v->co) / e_prev_weight;
-      float3 delta_next = math::normalize(v->co - vnext->co) / e_weight;
-      float3 normal = math::normalize(e_prev.tri()->normal() + e.tri()->normal());
-      SkeletonVertex *skv = add_skeleton_vertex(v->co, 0.0f, &delta_prev, &delta_next, &normal);
+      double3 delta_prev = math::normalize(vprev->co - v->co) / e_prev_weight;
+      double3 delta_next = math::normalize(v->co - vnext->co) / e_weight;
+      double3 normal = math::normalize(e_prev.tri()->normal() + e.tri()->normal());
+      SkeletonVertex *skv = add_skeleton_vertex(v->co, 0.0, &delta_prev, &delta_next, &normal);
       /* TODO: handle case where a vertex is used > 1 time in contours. */
       set_skel_vertex_map(v->id, skv);
       if (dbg_level > 0) {
@@ -2491,16 +2488,16 @@ void StraightSkeleton::compute()
     Edge e = tri->edge(0);
     for (int i = 0; i < 3; ++i) {
       Vert *v = tri->vert(i);
-      float3 vnormal = vertex_normal(v);
+      double3 vnormal = vertex_normal(v);
       if (!skel_vertex_map_has_id(v->id)) {
-        SkeletonVertex *skv = add_skeleton_vertex(v->co, 0.0f, nullptr, nullptr, &vnormal);
+        SkeletonVertex *skv = add_skeleton_vertex(v->co, 0.0, nullptr, nullptr, &vnormal);
         set_skel_vertex_map(v->id, skv);
         if (dbg_level > 0) {
           std::cout << "added skelvert for internal v" << v->id << " " << *skv << "\n";
         }
       }
     }
-    add_triangle(e, 0.0f);
+    add_triangle(e, 0.0);
   };
   if (dbg_level > 0) {
     std::cout << "initial events\n";
@@ -2533,7 +2530,7 @@ void StraightSkeleton::compute()
       }
       continue;
     }
-    float height = event.height();
+    double height = event.height();
     Edge edge = event.edge();
     if (height > target_height_) {
       if (dbg_level > 0) {
@@ -2566,8 +2563,8 @@ void StraightSkeleton::compute()
          # To check one could e.g. check if the length of the edge 1...
          */
         SkeletonVertex *skv2 = get_skel_vertex(flip_edge);
-        if (skv2->dhdl() != 0.0f) {
-          float3 p2 = skv2->position() + skv2->velo() * (height - skv2->height()) / skv2->dhdl();
+        if (skv2->dhdl() != 0.0) {
+          double3 p2 = skv2->position() + skv2->velo() * (height - skv2->height()) / skv2->dhdl();
           if (math::distance_squared(event.final_pos(), p2) < collision_epsilon) {
             /* TODO: remove epsilon here. */
             flip_event = false;
@@ -2578,9 +2575,9 @@ void StraightSkeleton::compute()
           else {
             /* Decide which edge to flip. */
             SkeletonVertex *skv3 = get_skel_vertex(edge.triangle_succ().triangle_succ());
-            if (skv3->dhdl() != 0.0f) {
-              float3 p3 = skv3->position() +
-                          skv3->velo() * (height - skv3->height()) / skv3->dhdl();
+            if (skv3->dhdl() != 0.0) {
+              double3 p3 = skv3->position() +
+                           skv3->velo() * (height - skv3->height()) / skv3->dhdl();
               if (math::distance_squared(event.final_pos(), p3) > math::distance_squared(p3, p2)) {
                 flip_edge = flip_edge.triangle_succ();
               }
@@ -2630,9 +2627,9 @@ void StraightSkeleton::compute()
 
       SkeletonVertex *skv = get_skel_vertex(edge);
       SkeletonVertex *skv_next = get_skel_vertex(edge.triangle_succ());
-      float3 delta_prev = skv->delta_prev();
-      float3 delta_next = skv_next->delta_next();
-      float3 normal = math::normalize(skv->normal() + skv_next->normal());
+      double3 delta_prev = skv->delta_prev();
+      double3 delta_next = skv_next->delta_next();
+      double3 normal = math::normalize(skv->normal() + skv_next->normal());
       SkeletonVertex *new_skv = add_skeleton_vertex(
           event.final_pos(), height, &delta_prev, &delta_next, &normal);
       set_skel_vertex_map(v_src(edge)->id, new_skv);
@@ -2654,9 +2651,9 @@ void StraightSkeleton::compute()
 
       if (dbg_level > 0) {
         std::cout << "add_events for v" << new_v->id << " at height " << height
-                  << " instant=" << (fabsf(new_skv->dhdl()) <= dhdl_epsilon) << "\n";
+                  << " instant=" << (fabs(new_skv->dhdl()) <= dhdl_epsilon) << "\n";
       }
-      add_events(new_v, height, fabsf(skv->dhdl()) <= dhdl_epsilon);
+      add_events(new_v, height, fabs(skv->dhdl()) <= dhdl_epsilon);
 
       /* Check for the whisker case. */
       if (out2 || out3) {
@@ -2674,12 +2671,12 @@ void StraightSkeleton::compute()
         SkeletonVertex *skv2 = get_skel_vertex(e);
         SkeletonVertex *skv3 = get_skel_vertex(e.triangle_succ());
         BLI_assert(skv2 != nullptr && skv3 != nullptr);
-        float3 p2 = skv2->position() +
-                    skv2->velo() *
-                        (skv2->dhdl() != 0.0f ? (height - skv2->height()) / skv2->dhdl() : 0.0f);
-        float3 p3 = skv3->position() +
-                    skv3->velo() *
-                        (skv3->dhdl() != 0.0f ? (height - skv3->height()) / skv3->dhdl() : 0.0f);
+        double3 p2 = skv2->position() +
+                     skv2->velo() *
+                         (skv2->dhdl() != 0.0 ? (height - skv2->height()) / skv2->dhdl() : 0.0);
+        double3 p3 = skv3->position() +
+                     skv3->velo() *
+                         (skv3->dhdl() != 0.0 ? (height - skv3->height()) / skv3->dhdl() : 0.0);
         if (math::distance_squared(p2, p3) < collision_epsilon) {
           event_queue_.push(SkeletonEvent(e, height, event.final_pos(), false, epoch_));
           if (dbg_level > 0) {
@@ -2696,16 +2693,16 @@ void StraightSkeleton::compute()
       /* First detect whether it is a real split or a "collision" event. */
       SkeletonVertex *skv2 = get_skel_vertex(edge.triangle_succ());
       SkeletonVertex *skv3 = get_skel_vertex(edge.triangle_succ().triangle_succ());
-      float3 p2 = skv2->position() +
-                  skv2->velo() *
-                      (skv2->dhdl() != 0.0f ? (height - skv2->height()) / skv2->dhdl() : 0);
-      float3 p3 = skv3->position() +
-                  skv3->velo() *
-                      (skv3->dhdl() != 0.0f ? (height - skv3->height()) / skv3->dhdl() : 0);
+      double3 p2 = skv2->position() +
+                   skv2->velo() *
+                       (skv2->dhdl() != 0.0 ? (height - skv2->height()) / skv2->dhdl() : 0);
+      double3 p3 = skv3->position() +
+                   skv3->velo() *
+                       (skv3->dhdl() != 0.0 ? (height - skv3->height()) / skv3->dhdl() : 0);
       bool collide1 = false;
       bool collide2 = false;
-      float d1 = math::distance_squared(event.final_pos(), p2);
-      float d2 = math::distance_squared(event.final_pos(), p3);
+      double d1 = math::distance_squared(event.final_pos(), p2);
+      double d2 = math::distance_squared(event.final_pos(), p3);
       if (d1 < collision_epsilon || d2 < collision_epsilon) {
         if (d1 < d2) {
           collide1 = true;
@@ -2741,12 +2738,12 @@ void StraightSkeleton::compute()
       SkeletonVertex *ske1n = get_skel_vertex(e1.triangle_succ());
       SkeletonVertex *ske2 = get_skel_vertex(e2);
       SkeletonVertex *ske2n = get_skel_vertex(e2.triangle_succ());
-      float3 delta_prev = ske1->delta_next();
-      float3 delta_next = ske1n->delta_next();
-      float3 delta_prev2 = ske2->delta_prev();
-      float3 delta_next2 = ske2n->delta_prev();
-      float3 normal1 = math::normalize(ske1->normal() + ske1n->normal());
-      float3 normal2 = math::normalize(ske2->normal() + ske2n->normal());
+      double3 delta_prev = ske1->delta_next();
+      double3 delta_next = ske1n->delta_next();
+      double3 delta_prev2 = ske2->delta_prev();
+      double3 delta_next2 = ske2n->delta_prev();
+      double3 normal1 = math::normalize(ske1->normal() + ske1n->normal());
+      double3 normal2 = math::normalize(ske2->normal() + ske2n->normal());
       SkeletonVertex *skv1 = add_skeleton_vertex(
           event.final_pos(), height, &delta_prev, &delta_next, &normal1);
       skv2 = add_skeleton_vertex(event.final_pos(), height, &delta_prev2, &delta_next2, &normal2);
@@ -2838,7 +2835,7 @@ void StraightSkeleton::compute()
       Vert *vert = tri->vert(i);
       SkeletonVertex *skv = skel_vertex_map(vert->id);
       if (skv != nullptr) {
-        if (skv->dhdl() != 0.0f) {
+        if (skv->dhdl() != 0.0) {
           vert->co = vert->co + skv->velo() * (target_height_ - skv->height()) / skv->dhdl();
           if (dbg_level > 0) {
             std::cout << "  skelv=" << *skv << ", v" << vert->id << ".co = " << vert->co << "\n";
@@ -2856,13 +2853,13 @@ void StraightSkeleton::compute()
   }
 }
 
-static float3 poly_normal(Span<Vert *> verts)
+static double3 poly_normal(Span<Vert *> verts)
 {
-  Array<float3> poly(verts.size());
+  Array<double3> poly(verts.size());
   for (const int64_t i : verts.index_range()) {
     poly[i] = verts[i]->co;
   }
-  float3 n = math::cross_poly(poly.as_span());
+  double3 n = math::cross_poly(poly.as_span());
   return math::normalize(n);
 }
 
@@ -2881,7 +2878,8 @@ static int edgepos_by_canon_pair(const Triangle *tri, const std::pair<int, int> 
   int b = vert_id_pair.second;
   for (int i = 0; i < 3; ++i) {
     if ((tri->vert(i)->id == a && tri->vert(succ_index(i))->id == b) ||
-        (tri->vert(i)->id == b && tri->vert(succ_index(i))->id == a)) {
+        (tri->vert(i)->id == b && tri->vert(succ_index(i))->id == a))
+    {
       return i;
     }
   }
@@ -2931,12 +2929,15 @@ static void connect_neighbors(Span<Triangle *> tris)
 }
 
 /* Like BLI_math's is_quad_flip_v3_first_third_fast_with_normal, with const float3's. */
-static bool is_quad_flip_first_third(
-    const float3 &v1, const float3 &v2, const float3 &v3, const float3 &v4, const float3 &normal)
+static bool is_quad_flip_first_third(const double3 &v1,
+                                     const double3 &v2,
+                                     const double3 &v3,
+                                     const double3 &v4,
+                                     const double3 &normal)
 {
-  float3 dir_v3v1 = v3 - v1;
-  float3 tangent = math::cross(dir_v3v1, normal);
-  float dot = math::dot(v1, tangent);
+  double3 dir_v3v1 = v3 - v1;
+  double3 tangent = math::cross(dir_v3v1, normal);
+  double dot = math::dot(v1, tangent);
   return (math::dot(v4, tangent) >= dot) || (math::dot(v2, tangent) <= dot);
 }
 
@@ -2966,7 +2967,7 @@ static Vector<Triangle *> triangulate_face(int f,
     return ans;
   }
   /* Need the face normal for the rest of this. */
-  float3 norm = poly_normal(fvert.as_span());
+  double3 norm = poly_normal(fvert.as_span());
   if (flen == 4) {
     Vert *v0 = fvert[0];
     Vert *v1 = fvert[1];
@@ -2974,10 +2975,11 @@ static Vector<Triangle *> triangulate_face(int f,
     Vert *v3 = fvert[3];
     Triangle *t0;
     Triangle *t1;
-    float d02_sqr = math::distance_squared(v0->co, v2->co);
-    float d13_sqr = math::distance_squared(v1->co, v3->co);
+    double d02_sqr = math::distance_squared(v0->co, v2->co);
+    double d13_sqr = math::distance_squared(v1->co, v3->co);
     if (d13_sqr < d02_sqr ||
-        UNLIKELY(is_quad_flip_first_third(v0->co, v1->co, v2->co, v3->co, norm))) {
+        UNLIKELY(is_quad_flip_first_third(v0->co, v1->co, v2->co, v3->co, norm)))
+    {
       t0 = new Triangle(v0, v1, v3);
       t1 = new Triangle(v1, v2, v3);
       set_mutual_neighbors(t0, 1, t1, 2);
@@ -3001,16 +3003,19 @@ static Vector<Triangle *> triangulate_face(int f,
   else {
     /* Face has 5 or more edges; use polyfill. */
     /* Project vertices to 2d along negative face normal. */
+    /* axis_dominant_v3_to_m3_negate / mul_v2_m3v3 / BLI_polyfill_calc only accept float;
+     * cast at the boundary. */
     float axis_mat[3][3];
-    float(*projverts)[2];
-    unsigned int(*tris)[3];
+    float (*projverts)[2];
+    unsigned int (*tris)[3];
     const int totfilltri = flen - 2;
     tris = MEM_new_array_uninitialized<unsigned int[3]>(size_t(totfilltri), __func__);
     projverts = MEM_new_array_uninitialized<float[2]>(size_t(flen), __func__);
-    axis_dominant_v3_to_m3_negate(axis_mat, &norm.x);
+    float3 norm_f(norm);
+    axis_dominant_v3_to_m3_negate(axis_mat, &norm_f.x);
     Map<int, int> vert_index_to_facepos;
     for (int j = 0; j < flen; ++j) {
-      float3 vco = base_trimesh.get_vert_by_index(face[j])->co;
+      float3 vco(base_trimesh.get_vert_by_index(face[j])->co);
       mul_v2_m3v3(projverts[j], axis_mat, &vco.x);
       vert_index_to_facepos.add(face[j], j);
     }
@@ -3315,7 +3320,7 @@ static MeshInset_Result trimesh_to_output(const TriangleMesh &trimesh,
       totv++;
     }
   }
-  result.vert = Array<float3>(totv);
+  result.vert = Array<double3>(totv);
   result.orig_vert = Array<int>(totv, -1);
   int out_v_index = 0;
   for (int i = 0; i < tot_all_verts; ++i) {
@@ -3425,17 +3430,17 @@ MeshInset_Result mesh_inset_calc(const MeshInset_Input &input)
   TriangleMesh trimesh = triangulate_input(input);
   StraightSkeleton ss(trimesh, input.contour, input.inset_amount);
   ss.compute();
-  if (input.slope != 0.0f) {
+  if (input.slope != 0.0) {
     /* Gather all the deltas before applying, as changing height changes the vertex normals. */
-    Array<float3> vco_delta(trimesh.all_verts().size(), float3(0.0f, 0.0f, 0.0f));
+    Array<double3> vco_delta(trimesh.all_verts().size(), double3(0.0, 0.0, 0.0));
     trimesh.calculate_all_tri_normals();
     for (int64_t v_index : trimesh.all_verts().index_range()) {
       Vert *v = trimesh.get_vert_by_index(int(v_index));
       if (!v->is_deleted()) {
         if (ss.vertex_height_map.contains(v->id)) {
-          float h = ss.vertex_height_map.lookup(v->id);
-          if (h != 0.0f) {
-            float shell_factor = vertex_shell_factor(v);
+          double h = ss.vertex_height_map.lookup(v->id);
+          if (h != 0.0) {
+            double shell_factor = vertex_shell_factor(v);
             vco_delta[v_index] = vertex_normal(v) * shell_factor * h * input.slope;
           }
         }

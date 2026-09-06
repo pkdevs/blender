@@ -63,7 +63,7 @@ namespace blender::meshinset {
  * and the amount to inset and the slope.
  * Pass this to #mesh_inset_calc, and receive a #MeshInset_Result
  * as output.
- * The #MeshInset_Result has a new mesh, also give by vertex
+ * The #MeshInset_Result has a new mesh, also given by vertex
  * coordinates and faces. It also has some data to help understand
  * how to map the output back to the input:
  * TODO: Document the extras when this interface finally settles down.
@@ -73,13 +73,13 @@ namespace blender::meshinset {
 class MeshInset_Input {
  public:
   /** The vertices. Can be a superset of the needed vertices. */
-  Span<float3> vert;
+  Span<double3> vert;
   /** The faces, each a CCW ordering of vertex indices. */
   Span<Vector<int>> face;
   /** The contours to inset; ints are vert indices; contour is on left side of implied edges. */
   Span<Vector<int>> contour;
-  float inset_amount;
-  float slope;
+  double inset_amount;
+  double slope;
   bool need_ids;
 };
 
@@ -87,7 +87,7 @@ class MeshInset_Input {
 class MeshInset_Result {
  public:
   /** The output vertices. A subset (perhaps) of input vertices, plus some new ones. */
-  Array<float3> vert;
+  Array<double3> vert;
   /** The output faces, each a CCW ordering of the output vertices. */
   Array<Vector<int>> face;
   /** The output contours -- where the input contours ended up. */
