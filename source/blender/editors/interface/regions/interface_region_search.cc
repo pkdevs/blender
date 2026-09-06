@@ -374,22 +374,28 @@ bool searchbox_apply(Button *but, ARegion *region)
     /* Search button with dynamic string properties may have their own method of applying
      * the search results, so only copy the result if there is a proper space for it. */
     if (but->hardmax != 0) {
-      if (data->items.replace_start >= 0 && data->items.replace_end >= data->items.replace_start) {
-        /* Partial replace: splice the result into `[replace_sta, replace_end)` of `editstr`,
-         * instead of replacing the whole string. */
-        const int name_len = name_sep ? int(name_sep - name) : int(strlen(name));
-        const int old_len = int(strlen(but->editstr));
-        const int replace_len = data->items.replace_end - data->items.replace_start;
-        const int new_len = old_len - replace_len + name_len;
+      const SearchItems &items = data->items;
 
-        if (new_len < data->items.maxstrlen) {
-          /* Shift the tail of the string to make room, then
-           * copy the replacement text in. */
-          memmove(but->editstr + data->items.replace_start + name_len,
-                  but->editstr + data->items.replace_end,
-                  size_t(old_len - data->items.replace_end + 1));
-          memcpy(but->editstr + data->items.replace_start, name, size_t(name_len));
-          but->pos = data->items.replace_start + name_len;
+      if (items.replace_start >= 0 && items.replace_end >= items.replace_start) {
+        const size_t name_len = name_sep ? static_cast<size_t>(name_sep - name) :
+                                           std::strlen(name);
+        const size_t old_len = std::strlen(but->editstr);
+        const size_t replace_start = static_cast<size_t>(items.replace_start);
+        const size_t replace_end = static_cast<size_t>(items.replace_end);
+
+        if (replace_end <= old_len) {
+          const size_t replace_len = replace_end - replace_start;
+          const size_t new_len = old_len - replace_len + name_len;
+
+          if (new_len < static_cast<size_t>(items.maxstrlen)) {
+            /* Shift the tail of the string to make room, then
+             * copy the replacement text in. */
+            std::memmove(but->editstr + replace_start + name_len,
+                         but->editstr + replace_end,
+                         (old_len - replace_end) + 1);
+            std::memcpy(but->editstr + replace_start, name, name_len);
+            but->pos = static_cast<int>(replace_start + name_len);
+          }
         }
       }
       else {
