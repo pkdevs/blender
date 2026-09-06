@@ -91,6 +91,12 @@ BLOCKLIST = [
 
     ### Cycles only tests go here ###
     "gsplat.*.blend",
+    "raycast_types_from_curve.blend",
+    "raycast_types_from_curve_local.blend",
+    "raycast_types_from_mesh.blend",
+    "raycast_types_from_mesh_local.blend",
+    "raycast_types_from_points.blend",
+    "raycast_types_from_points_local.blend",
 ]
 
 BLOCKLIST_METAL = [

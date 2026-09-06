@@ -40,6 +40,14 @@ BLOCKLIST = [
     # Currently, image_mipmap tests are not enabled for storm-usd
     "image_cache_evict.blend",
     "image_mipmap_.*.blend",
+
+    # XXX: Support?
+    "raycast_types_from_curve.blend",
+    "raycast_types_from_curve_local.blend",
+    "raycast_types_from_mesh.blend",
+    "raycast_types_from_mesh_local.blend",
+    "raycast_types_from_points.blend",
+    "raycast_types_from_points_local.blend",
 ]
 
 # Unsupported or broken scenarios for the Storm render engine
