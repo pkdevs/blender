@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#pragma once
+
 #include "gpu_shader_bicubic_sampler_lib.glsl"
 #include "gpu_shader_tiled_image_lookup_lib.glsl"
 

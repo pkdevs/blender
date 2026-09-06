@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "gpu_shader_material_blackbody.glsl"
+#include "gpu_shader_material_blackbody.bsl.hh"
 
 [[node]]
 void node_volume_coefficients(float weight,

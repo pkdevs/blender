@@ -11,8 +11,8 @@
  */
 
 #include "gpu_shader_common_hash.glsl"
-#include "gpu_shader_material_fractal_noise.glsl"
-#include "gpu_shader_material_noise.glsl"
+#include "gpu_shader_material_fractal_noise.bsl.hh"
+#include "gpu_shader_material_noise.bsl.hh"
 
 #define NOISE_FRACTAL_DISTORTED_1D(NOISE_TYPE) \
   if (distortion != 0.0f) { \
