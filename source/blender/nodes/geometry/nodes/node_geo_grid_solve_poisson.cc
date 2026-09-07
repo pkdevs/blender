@@ -348,6 +348,7 @@ static void node_register()
       "Solve the Poisson equation for a scalar field. Computes a grid whose Laplacian equals the "
       "input scalar grid.";
   ntype.nclass = NODE_CLASS_GEOMETRY;
+  ntype.default_width = bke::NodeWidth::_200;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
   blender::bke::node_register_type(ntype);
