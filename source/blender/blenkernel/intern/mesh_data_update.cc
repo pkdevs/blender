@@ -960,7 +960,7 @@ static void mesh_build_data(Depsgraph &depsgraph,
   ob.runtime->last_data_mask = dataMask;
   ob.runtime->last_need_mapping = need_mapping;
 
-  if ((ob.mode & OB_MODE_ALL_SCULPT) && ob.runtime->sculpt_session) {
+  if (BKE_object_use_sculptsession(ob.mode) && ob.runtime->sculpt_session) {
     if (DEG_is_active(&depsgraph)) {
       BKE_sculptsession_update_after_eval(&depsgraph, &ob);
     }
@@ -1030,13 +1030,6 @@ static void object_get_datamask(const Depsgraph &depsgraph,
 
     if (ob.mode & OB_MODE_WEIGHT_PAINT) {
       r_mask.vmask |= CD_MASK_MDEFORMVERT;
-    }
-  }
-
-  /* Multiple objects can be in edit-mode at once. */
-  if (actob && (actob->mode & OB_MODE_EDIT)) {
-    if (ob.mode & OB_MODE_EDIT) {
-      r_mask.vmask |= CD_MASK_MVERT_SKIN;
     }
   }
 }

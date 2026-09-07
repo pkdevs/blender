@@ -6,6 +6,8 @@
  * \ingroup edanimation
  */
 
+#include <fmt/format.h>
+
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_rotation_c.hh"
@@ -387,7 +389,7 @@ AnimTransformable::AnimTransformable(Object &owner_id, bPoseChannel &pchan)
       scale_({pchan.scale, 3})
 {
   build_rotations_array(rotations_, pchan.eul, pchan.quat, pchan.rotAxis, &pchan.rotAngle);
-  rna_path_from_id_ = animrig::get_pose_bone_rna_path(pchan);
+  rna_path_from_id_ = blender::animrig::get_pose_bone_rna_path(pchan);
 }
 
 AnimTransformable::AnimTransformable(Object &obj)
@@ -431,7 +433,7 @@ std::string AnimTransformable::rna_path_to_property(const PropertyType prop_type
       property_name = "location";
       break;
     case PropertyType::ROTATION:
-      property_name = animrig::get_rotation_mode_path(*rotation_mode_);
+      property_name = blender::animrig::get_rotation_mode_path(*rotation_mode_);
       break;
     case PropertyType::SCALE:
       property_name = "scale";
@@ -450,7 +452,7 @@ std::string AnimTransformable::rna_path_to_property(const StringRef property_nam
 
 std::string AnimTransformable::rna_path_to_rotation(const eRotationModes rotation_mode) const
 {
-  StringRefNull property_name = animrig::get_rotation_mode_path(rotation_mode);
+  StringRefNull property_name = blender::animrig::get_rotation_mode_path(rotation_mode);
   return this->rna_path_to_property(property_name);
 }
 

@@ -550,8 +550,7 @@ struct AfterFunc {
   PointerRNA rnapoin;
   PropertyRNA *rnaprop;
 
-  void *search_arg;
-  FreeArgFunc search_arg_free_fn;
+  std::shared_ptr<void> search_arg;
 
   BlockInteraction_CallbackData custom_interaction_callbacks;
   BlockInteraction_Handle *custom_interaction_handle;
@@ -755,6 +754,10 @@ static bool rna_is_userdef(PointerRNA *ptr, PropertyRNA *prop)
     return false;
   }
   if (RNA_property_flag(prop) & PROP_NO_DEG_UPDATE) {
+    return false;
+  }
+
+  if (RNA_struct_is_a(ptr->type, RNA_ProjectAssetLibrary)) {
     return false;
   }
 
@@ -999,10 +1002,7 @@ static void apply_but_func(bContext *C, Button *but)
 
   if (but->type == ButtonType::SearchMenu) {
     ButtonSearch *search_but = static_cast<ButtonSearch *>(but);
-    after->search_arg_free_fn = search_but->arg_free_fn;
     after->search_arg = search_but->arg;
-    search_but->arg_free_fn = nullptr;
-    search_but->arg = nullptr;
   }
 
   if (but->active != nullptr) {
@@ -1173,7 +1173,7 @@ static void apply_but_funcs_after(bContext *C)
       WM_operator_properties_free(&opptr);
     }
 
-    if (after.rnapoin.data) {
+    if (after.rnapoin) {
       RNA_property_update(C, &after.rnapoin, after.rnaprop);
     }
 
@@ -1208,10 +1208,6 @@ static void apply_but_funcs_after(bContext *C)
     }
     if (after.rename_orig) {
       MEM_delete(after.rename_orig);
-    }
-
-    if (after.search_arg_free_fn) {
-      after.search_arg_free_fn(after.search_arg);
     }
 
     if (after.custom_interaction_handle != nullptr) {
@@ -1712,25 +1708,25 @@ static bool drag_toggle_but_is_supported(const Button *but)
   return false;
 }
 
-/* Button pushed state to compare if other buttons match. Can be more
- * then just true or false for toggle buttons with more than 2 states. */
-static int drag_toggle_but_pushed_state(Button *but)
+/**
+ * Button pushed state to compare if other buttons match.
+ */
+static bool drag_toggle_but_pushed_state(Button *but)
 {
-  if (but->rnapoin.data == nullptr && but->poin == nullptr && but->icon) {
-    /* Assume icon identifies a unique state, for buttons that
-     * work through functions callbacks and don't have an boolean
-     * value that indicates the state. */
-    return but->icon + but->iconadd;
+  BLI_assert(drag_toggle_but_is_supported(but));
+  if (button_is_decorator(but)) {
+    return button_anim_decorate_pushed_state(static_cast<ButtonDecorator *>(but));
   }
   if (button_is_bool(but)) {
     return button_is_pushed(but);
   }
-  return 0;
+  BLI_assert_unreachable();
+  return false;
 }
 
 struct uiDragToggleHandle {
   /* init */
-  int pushed_state;
+  bool pushed_state;
   float but_cent_start[2];
 
   bool is_xy_lock_init;
@@ -1742,7 +1738,7 @@ struct uiDragToggleHandle {
 
 static bool drag_toggle_set_xy_xy(bContext *C,
                                   ARegion *region,
-                                  const int pushed_state,
+                                  const bool pushed_state,
                                   const int xy_src[2],
                                   const int xy_dst[2],
                                   const bool drag_lock[2])
@@ -1776,7 +1772,7 @@ static bool drag_toggle_set_xy_xy(bContext *C,
         continue;
       }
       /* is it pressed? */
-      const int pushed_state_but = drag_toggle_but_pushed_state(&but);
+      const bool pushed_state_but = drag_toggle_but_pushed_state(&but);
       if (pushed_state_but == pushed_state) {
         continue;
       }
@@ -1938,7 +1934,7 @@ static bool selectcontext_begin(bContext *C, Button *but, uiSelectContextStore *
   }
 
   /* if there is a valid property that is editable... */
-  if (ptr.data && prop) {
+  if (ptr && prop) {
     bool use_path_from_id;
 
     /* some facts we want to know */
@@ -2944,7 +2940,7 @@ static bool but_copy(bContext *C, Button *but, const bool copy_array)
   /* Left false for copying internal data (color-band for eg). */
   bool is_buf_set = false;
 
-  const bool has_required_data = !(but->poin == nullptr && but->rnapoin.data == nullptr);
+  const bool has_required_data = but->poin || but->rnapoin;
 
   switch (but->type) {
     case ButtonType::Num:
@@ -3045,7 +3041,7 @@ static void but_paste(bContext *C, Button *but, HandleButtonData *data, const bo
   but_get_pasted_text_from_clipboard(
       but_is_utf8(but), &buf_paste, &buf_paste_len, but->type == ButtonType::TextBox);
 
-  const bool has_required_data = !(but->poin == nullptr && but->rnapoin.data == nullptr);
+  const bool has_required_data = but->poin || but->rnapoin;
 
   switch (but->type) {
     case ButtonType::Num:
@@ -5025,7 +5021,7 @@ static ButtonExtraOpIcon *but_extra_operator_icon_mouse_over_get(Button *but,
 
   /* Handle the padding space from the right edge as the last button. */
   if (x > xmax) {
-    return static_cast<ButtonExtraOpIcon *>(but->extra_op_icons.last);
+    return but->extra_op_icons.last();
   }
 
   /* Inverse order, from right to left. */
@@ -5422,16 +5418,8 @@ static int do_but_TEX(
       return WM_UI_HANDLER_BREAK;
     }
     else if (ELEM(event->type, WHEELUPMOUSE, WHEELDOWNMOUSE) && (event->modifier & KM_CTRL)) {
-      if (but->type == ButtonType::SearchMenu) {
-        /* Disable value cycling for search buttons. This causes issues because the search data is
-         * moved to the `afterfuncs`, but search updating requires it again or sometimes this
-         * event can be triggered twice in row without the button being refreshed. See #147539 and
-         * #152976. */
-      }
-      else {
-        const int inc_value = (event->type == WHEELUPMOUSE) ? 1 : -1;
-        return do_but_text_value_cycle(C, but, data, inc_value);
-      }
+      const int inc_value = (event->type == WHEELUPMOUSE) ? 1 : -1;
+      return do_but_text_value_cycle(C, but, data, inc_value);
     }
   }
   else if (data->state == BUTTON_STATE_TEXT_EDITING) {
@@ -6299,7 +6287,7 @@ static int do_but_NUM(
       click = 1;
     }
     else if (event->val == KM_PRESS) {
-      if (ELEM(event->type, LEFTMOUSE, EVT_PADENTER, EVT_RETKEY) && (event->modifier & KM_CTRL)) {
+      if (ELEM(event->type, EVT_PADENTER, EVT_RETKEY) && (event->modifier & KM_CTRL)) {
         button_activate_state(C, but, BUTTON_STATE_TEXT_EDITING);
         retval = WM_UI_HANDLER_BREAK;
       }
@@ -6410,7 +6398,8 @@ static int do_but_NUM(
       if (but->drawflag & (BUT_HOVER_LEFT | BUT_HOVER_RIGHT)) {
         button_activate_state(C, but, BUTTON_STATE_NUM_EDITING);
 
-        const int value_step = int(number_but->step_size);
+        const int step = number_but->step_size * (event->modifier & KM_SHIFT ? 0.1 : 1);
+        const int value_step = std::max(1, step);
         BLI_assert(value_step > 0);
         const int softmin = round_fl_to_int_clamp(but->softmin);
         const int softmax = round_fl_to_int_clamp(but->softmax);
@@ -6449,13 +6438,20 @@ static int do_but_NUM(
         else {
           value_step = double(number_but->step_size * UI_PRECISION_FLOAT_SCALE);
         }
+
+        const eSnapType snap = ISMOUSE_BUTTON(event->type) ? event_to_snap(event) : SNAP_OFF;
+        value_step = (snap == SNAP_OFF) ? value_step : number_but->step_size;
+        if (event->modifier & KM_SHIFT) {
+          value_step *= 0.1;
+        }
+
         BLI_assert(value_step > 0.0f);
         const double value_test =
             (but->drawflag & BUT_HOVER_LEFT) ?
                 double(max_ff(but->softmin, float(data->value - value_step))) :
                 double(min_ff(but->softmax, float(data->value + value_step)));
         if (value_test != data->value) {
-          data->value = value_test;
+          data->value = numedit_apply_snapf(but, value_test, but->softmin, but->softmax, snap);
         }
         else {
           data->cancel = true;
@@ -7252,7 +7248,7 @@ static int do_but_COLOR(bContext *C, Button *but, HandleButtonData *data, const 
 
       /* this is risky. it works OK for now,
        * but if it gives trouble we should delay execution */
-      but->rnapoin = PointerRNA_NULL;
+      but->rnapoin = {};
       but->rnaprop = nullptr;
 
       return WM_UI_HANDLER_BREAK;
@@ -8256,9 +8252,7 @@ static int do_but_CURVE(
     bContext *C, Block *block, Button *but, HandleButtonData *data, const wmEvent *event)
 {
   bool changed = false;
-  const Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
-  ViewLayer *view_layer = CTX_data_view_layer(C);
 
   int mx = event->xy[0];
   int my = event->xy[1];
@@ -8408,7 +8402,7 @@ static int do_but_CURVE(
         }
         else {
           BKE_curvemapping_changed(cumap, true); /* remove doubles */
-          BKE_paint_invalidate_cursor_overlay(*bmain, scene, view_layer, cumap);
+          bke::paint::invalidate_cursor_overlay(*scene, cumap);
         }
       }
 
@@ -9373,7 +9367,7 @@ static void button_tooltip_timer_reset(bContext *C, Button *but)
 
   if ((U.flag & USER_TOOLTIPS) || (data->tooltip_force)) {
     if (!but->block->tooltipdisabled) {
-      if (!wm->runtime->drags.first) {
+      if (!wm->runtime->drags.first_) {
         const bool is_quick_tip = but_has_quick_tooltip(but);
         const double delay = is_quick_tip ? UI_TOOLTIP_DELAY_QUICK : UI_TOOLTIP_DELAY;
         WM_tooltip_timer_init_ex(
@@ -9707,7 +9701,7 @@ static void button_activate_init(bContext *C,
     /* activate first button in submenu */
     if (data->menu && data->menu->region) {
       ARegion *subar = data->menu->region;
-      Block *subblock = static_cast<Block *>(subar->runtime->uiblocks.first);
+      Block *subblock = subar->runtime->uiblocks.first();
       Button *subbut;
 
       if (subblock) {
@@ -10012,7 +10006,7 @@ Button *region_active_but_prop_get(const ARegion *region,
 {
   Button *activebut = region_active_but_get(region);
 
-  if (activebut && activebut->rnapoin.data) {
+  if (activebut && activebut->rnapoin) {
     *r_ptr = activebut->rnapoin;
     *r_prop = activebut->rnaprop;
     *r_index = activebut->rnaindex;
@@ -11063,7 +11057,7 @@ static void handle_button_return_submenu(bContext *C, const wmEvent *event, Butt
 
 static void mouse_motion_towards_init_ex(PopupBlockHandle *menu, const int xy[2], const bool force)
 {
-  BLI_assert(((Block *)menu->region->runtime->uiblocks.first)->flag &
+  BLI_assert(((Block *)menu->region->runtime->uiblocks.first_)->flag &
              (BLOCK_MOVEMOUSE_QUIT | BLOCK_POPOVER));
 
   if (!menu->dotowards || force) {
@@ -11104,7 +11098,7 @@ static bool mouse_motion_towards_check(Block *block,
     /* Test if this is the last menu. */
     ARegion *region = menu->region->next;
     do {
-      Block *block_iter = static_cast<Block *>(region->runtime->uiblocks.first);
+      Block *block_iter = region->runtime->uiblocks.first();
       if (block_iter && block_is_menu(block_iter)) {
         return true;
       }
@@ -11467,7 +11461,7 @@ static int handle_menu_mmb_event(bContext *C,
                                  const bool is_parent_menu)
 {
   ARegion *region = menu->region;
-  Block *block = static_cast<Block *>(region->runtime->uiblocks.first);
+  Block *block = region->runtime->uiblocks.first();
   wmWindow *win = CTX_wm_window(C);
   Button *but = region_find_active_but(region);
   int mx = event->xy[0];
@@ -11565,7 +11559,7 @@ static int handle_menu_event(bContext *C,
 {
   Button *but;
   ARegion *region = menu->region;
-  Block *block = static_cast<Block *>(region->runtime->uiblocks.first);
+  Block *block = region->runtime->uiblocks.first();
 
   int retval = WM_UI_HANDLER_CONTINUE;
 
@@ -11687,7 +11681,7 @@ static int handle_menu_event(bContext *C,
         case RIGHTMOUSE:
           if (inside == false) {
             if (event->val == KM_PRESS && (block->flag & BLOCK_LOOP)) {
-              if (block->saferct.first) {
+              if (block->saferct.first()) {
                 /* Currently right clicking on a top level pull-down (typically in the header)
                  * just closes the menu and doesn't support immediately handling the RMB event.
                  *
@@ -11705,7 +11699,7 @@ static int handle_menu_event(bContext *C,
         /* Closing sub-levels of pull-downs. */
         case EVT_LEFTARROWKEY:
           if (event->val == KM_PRESS && (block->flag & BLOCK_LOOP)) {
-            if (block->saferct.first) {
+            if (block->saferct.first()) {
               menu->menuretval = RETURN_OUT;
             }
           }
@@ -11961,7 +11955,7 @@ static int handle_menu_event(bContext *C,
               }
 
               /* exception for rna layer buts */
-              if (but.rnapoin.data && but.rnaprop &&
+              if (but.rnapoin && but.rnaprop &&
                   ELEM(RNA_property_subtype(but.rnaprop), PROP_LAYER, PROP_LAYER_MEMBER))
               {
                 if (but.rnaindex == act - 1) {
@@ -12087,7 +12081,7 @@ static int handle_menu_event(bContext *C,
        * don't overwrite them, see: #61015.
        */
       if ((inside == false) && (menu->menuretval == 0)) {
-        SafetyRect *saferct = static_cast<SafetyRect *>(block->saferct.first);
+        SafetyRect *saferct = block->saferct.first();
 
         if (event->type == MOUSEMOVE) {
           WM_tooltip_clear(C, win);
@@ -12189,15 +12183,11 @@ static int handle_menu_event(bContext *C,
           mouse_motion_towards_check(block, menu, event->xy, is_parent_inside == false);
 
           /* Check for all parent rects, enables arrow-keys to be used. */
-          for (saferct = static_cast<SafetyRect *>(block->saferct.first); saferct;
-               saferct = saferct->next)
-          {
+          for (saferct = block->saferct.first(); saferct; saferct = saferct->next) {
             /* for mouse move we only check our own rect, for other
              * events we check all preceding block rects too to make
              * arrow keys navigation work */
-            if (event->type != MOUSEMOVE ||
-                saferct == static_cast<SafetyRect *>(block->saferct.first))
-            {
+            if (event->type != MOUSEMOVE || saferct == block->saferct.first()) {
               if (BLI_rctf_isect_pt(&saferct->parent, float(event->xy[0]), float(event->xy[1]))) {
                 break;
               }
@@ -12268,7 +12258,7 @@ static int handle_menu_event(bContext *C,
 static int handle_menu_return_submenu(bContext *C, const wmEvent *event, PopupBlockHandle *menu)
 {
   ARegion *region = menu->region;
-  Block *block = static_cast<Block *>(region->runtime->uiblocks.first);
+  Block *block = region->runtime->uiblocks.first();
 
   Button *but = region_find_active_but(region);
 
@@ -12393,7 +12383,7 @@ static int pie_handler(bContext *C, const wmEvent *event, PopupBlockHandle *menu
   }
 
   ARegion *region = menu->region;
-  Block *block = static_cast<Block *>(region->runtime->uiblocks.first);
+  Block *block = region->runtime->uiblocks.first();
 
   const bool is_click_style = (block->pie_data->flags & PIE_CLICK_STYLE);
 
@@ -12664,7 +12654,7 @@ static int handle_menus_recursive(bContext *C,
   PopupBlockHandle *submenu = (data) ? data->menu : nullptr;
 
   if (submenu) {
-    Block *block = static_cast<Block *>(menu->region->runtime->uiblocks.first);
+    Block *block = menu->region->runtime->uiblocks.first();
     const bool is_menu = block_is_menu(block);
     bool inside = false;
     /* root pie menus accept the key that spawned
@@ -12731,7 +12721,7 @@ static int handle_menus_recursive(bContext *C,
     }
 
     if (do_but_search) {
-      Block *block = static_cast<Block *>(menu->region->runtime->uiblocks.first);
+      Block *block = menu->region->runtime->uiblocks.first();
 
       retval = handle_menu_button(C, event, menu);
 
@@ -12744,7 +12734,7 @@ static int handle_menus_recursive(bContext *C,
       }
     }
     else {
-      Block *block = static_cast<Block *>(menu->region->runtime->uiblocks.first);
+      Block *block = menu->region->runtime->uiblocks.first();
 
       if (block->flag & BLOCK_PIE_MENU) {
         retval = pie_handler(C, event, menu);
@@ -13100,7 +13090,7 @@ static int popup_handler(bContext *C, const wmEvent *event, void *userdata)
     wmWindow *win = CTX_wm_window(C);
     /* copy values, we have to free first (closes region) */
     const PopupBlockHandle temp = *menu;
-    Block *block = static_cast<Block *>(menu->region->runtime->uiblocks.first);
+    Block *block = menu->region->runtime->uiblocks.first();
 
     /* set last pie event to allow chained pie spawning */
     if (block->flag & BLOCK_PIE_MENU) {
@@ -13189,6 +13179,17 @@ void popup_handlers_add(bContext *C,
                         PopupBlockHandle *popup,
                         const char flag)
 {
+#ifdef WITH_INPUT_IME
+  /* A popup is modal, end the region's IME session so key presses reach the popup.
+   * Button owned sessions are kept, the popup may belong to the button being edited
+   * (a search menu for e.g.), see #wmIMEOwnerType. */
+  if (wmWindow *win = CTX_wm_window(C)) {
+    if (win->runtime->ime_owner == bke::wmIMEOwnerType::Region) {
+      WM_window_IME_end(win);
+    }
+  }
+#endif
+
   WM_event_add_ui_handler(
       C, handlers, popup_handler, popup_handler_remove, popup, eWM_EventHandlerFlag(flag));
 }
@@ -13417,41 +13418,65 @@ void refresh_for_srna_unregister(Main *bmain, StructRNA *srna_to_unreg)
   CTX_free(C);
 }
 
+static Button *block_find_rna_text_button(Block &block,
+                                          const void *rna_poin_data,
+                                          const char *rna_prop_id)
+{
+  for (Button &but : block.buttons()) {
+    if (but.type == ButtonType::Text) {
+      if (but.rnaprop && but.rnapoin.data == rna_poin_data) {
+        if (STREQ(RNA_property_identifier(but.rnaprop), rna_prop_id)) {
+          return &but;
+        }
+      }
+    }
+  }
+  return nullptr;
+}
+
+bool textbutton_activate_rna(const bContext *C,
+                             ARegion *region,
+                             const void *rna_poin_data,
+                             const char *rna_prop_id,
+                             Block &block)
+{
+  Button *but_text = block_find_rna_text_button(block, rna_poin_data, rna_prop_id);
+
+  if (!but_text) {
+    return false;
+  }
+
+  ARegion *region_ctx = CTX_wm_region(C);
+  /* Temporary context override for activating the button. */
+  CTX_wm_region_set(const_cast<bContext *>(C), region);
+  button_active_only(C, region, &block, but_text);
+  CTX_wm_region_set(const_cast<bContext *>(C), region_ctx);
+  return true;
+}
+
 bool textbutton_activate_rna(const bContext *C,
                              ARegion *region,
                              const void *rna_poin_data,
                              const char *rna_prop_id)
 {
-  Block *block_text = nullptr;
   Button *but_text = nullptr;
-
+  Block *block_text = nullptr;
   for (Block &block : region->runtime->uiblocks) {
-    for (Button &but : block.buttons()) {
-      if (but.type == ButtonType::Text) {
-        if (but.rnaprop && but.rnapoin.data == rna_poin_data) {
-          if (STREQ(RNA_property_identifier(but.rnaprop), rna_prop_id)) {
-            block_text = &block;
-            but_text = &but;
-            break;
-          }
-        }
-      }
-    }
+    but_text = block_find_rna_text_button(block, rna_poin_data, rna_prop_id);
+    block_text = &block;
     if (but_text) {
       break;
     }
   }
-
-  if (but_text) {
-    ARegion *region_ctx = CTX_wm_region(C);
-
-    /* Temporary context override for activating the button. */
-    CTX_wm_region_set(const_cast<bContext *>(C), region);
-    button_active_only(C, region, block_text, but_text);
-    CTX_wm_region_set(const_cast<bContext *>(C), region_ctx);
-    return true;
+  if (!but_text) {
+    return false;
   }
-  return false;
+  ARegion *region_ctx = CTX_wm_region(C);
+  /* Temporary context override for activating the button. */
+  CTX_wm_region_set(const_cast<bContext *>(C), region);
+  button_active_only(C, region, block_text, but_text);
+  CTX_wm_region_set(const_cast<bContext *>(C), region_ctx);
+  return true;
 }
 
 bool textbutton_activate_but(const bContext *C, Button *actbut)
@@ -13754,7 +13779,7 @@ std::optional<int2> try_activate_rna_button(bContext *C,
     WM_cursor_warp(win, BLI_rctf_cent_x(&button_view_rect), BLI_rctf_cent_y(&button_view_rect));
   }
 
-  /* Disable textsearch interactive mode. */
+  /* Disable text-search interactive mode. */
   button->changed = false;
 
   if (button->flag & (BUT_DISABLED | UI_HIDDEN)) {
@@ -13785,7 +13810,7 @@ std::optional<int2> try_activate_rna_button(bContext *C,
     event.xy[0] = BLI_rctf_cent_x(&button_view_rect);
     event.xy[1] = BLI_rctf_cent_y(&button_view_rect);
     /* Use `ui_do_button` for #BUTTON_STATE_NUM_EDITING with a dummy event, some buttons do some
-     * aditional configurations on left click to start editing. */
+     * additional configurations on left click to start editing. */
     do_button(C, button->block, button, &event);
   }
 
