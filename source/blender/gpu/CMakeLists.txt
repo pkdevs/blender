@@ -715,7 +715,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_tex_gradient.bsl.hh
   shaders/material/gpu_shader_material_tex_image.bsl.hh
   shaders/material/gpu_shader_material_tex_magic.bsl.hh
-  shaders/material/gpu_shader_material_tex_noise.glsl
+  shaders/material/gpu_shader_material_tex_noise.bsl.hh
   shaders/material/gpu_shader_material_tex_sky.bsl.hh
   shaders/material/gpu_shader_material_tex_voronoi.bsl.hh
   shaders/material/gpu_shader_material_tex_wave.bsl.hh

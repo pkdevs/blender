@@ -89,6 +89,7 @@
 #include "gpu_shader_material_tex_gradient.bsl.hh"             /* IWYU pragma: export */
 #include "gpu_shader_material_tex_image.bsl.hh"                /* IWYU pragma: export */
 #include "gpu_shader_material_tex_magic.bsl.hh"                /* IWYU pragma: export */
+#include "gpu_shader_material_tex_noise.bsl.hh"                /* IWYU pragma: export */
 #include "gpu_shader_material_tex_sky.bsl.hh"                  /* IWYU pragma: export */
 #include "gpu_shader_material_tex_voronoi.bsl.hh"              /* IWYU pragma: export */
 #include "gpu_shader_material_tex_wave.bsl.hh"                 /* IWYU pragma: export */
