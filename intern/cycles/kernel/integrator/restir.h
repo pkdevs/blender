@@ -79,7 +79,7 @@ ccl_device_inline bool integrator_restir_unpack_shader(ccl_private ShaderData *s
   /* TODO(weizhen): do I need to write to this? */
   // sd->closure_transparent_extinction;
 
-  // printf("\nintegrator_restir_unpack_shader():\n"
+  // ccl_debug_printf("\nintegrator_restir_unpack_shader():\n"
   //        "u=%f v=%f type=%d object=%d prim=%d lcg_state=%d\n\n",
   //        (double)sd->u, (double)sd->v, sd->type, sd->object, sd->prim, sd->lcg_state);
 
@@ -154,9 +154,9 @@ ccl_device_inline bool integrator_restir_unpack_reservoir(KernelGlobals kg, // !
                              (read_prev ? kernel_data.film.pass_restir_pt_previous_reservoir :
                                           kernel_data.film.pass_restir_pt_reservoir);
 
-printf("integrator_restir_unpack_reservoir() GI called restir_unpack_reservoir_pt()\n");
+ccl_debug_printf("integrator_restir_unpack_reservoir() GI called restir_unpack_reservoir_pt()\n");
 // Write is correct in film_add_reservoir_pt(); This is to ensure the read!
-printf("PT READ pixel=%u read_prev=%d ptr=%p weight=%f\n",
+ccl_debug_printf("PT READ pixel=%u read_prev=%d ptr=%p weight=%f\n",
        render_pixel_index,
        (int)read_prev,
        buffer,
@@ -471,7 +471,7 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
                                    kernel_data.film.pass_restir_temporal_history_reservoir;
 
   if (!restir_unpack_reservoir(kg, &history, buffer)) { // !!!: Always failing here 
-    printf("streaming_temporal_sample() RETURNED EARLY! can't unpack history\n\n\n");
+    ccl_debug_printf("streaming_temporal_sample() RETURNED EARLY! can't unpack history\n\n\n");
     return false; /* No valid history yet (first sample, or history invalidated). */
   }
 
@@ -506,7 +506,7 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
 
   current->reservoir.M += history.M;
 
-printf("\n--- streaming_temporal_sample(), returned true! total_weight=%f ---\n\n\n",
+ccl_debug_printf("\n--- streaming_temporal_sample(), returned true! total_weight=%f ---\n\n\n",
        (double)history.total_weight);
   return true;
 }
@@ -551,7 +551,7 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
 
   integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR_TEMPORAL);
 
-printf("integrator_restir_temporal(): radiance=(%f, %f, %f)\n",
+ccl_debug_printf("integrator_restir_temporal(): radiance=(%f, %f, %f)\n",
        (double)current.reservoir.radiance.sum.x, (double)current.reservoir.radiance.sum.y, (double)current.reservoir.radiance.sum.z);
   return true;
 }
@@ -674,11 +674,11 @@ ccl_device_inline void streaming_pt_samples(KernelGlobals kg, // !!!: GI
             kg, resampling, &canonical, &neighbor, i, rand_neighbor, render_buffer, read_prev);
     if (!is_unpacked)
     {
-      printf("streaming_pt_samples() is_unpacked=%d\n", is_unpacked);
+      ccl_debug_printf("streaming_pt_samples() is_unpacked=%d\n", is_unpacked);
       continue;
     }
 
-printf(
+ccl_debug_printf(
     "\n=== streaming_pt_samples: PT CANONICAL ===\n"
     "pixel=%u read_prev=%d\n"
     "canonical BEFORE finalize: W=%f flag=%u rcv=%d rad=(%f,%f,%f)\n\n",
@@ -693,7 +693,7 @@ printf(
 
     valid_neighbors++;
     if (global_reservoir_finalize(&neighbor)) {
-printf(
+ccl_debug_printf(
     "streaming_pt_samples: canonical AFTER finalize: W=%f flag=%u rcv=%d rad=(%f,%f,%f)\n",
     (double)canonical.total_weight,
     canonical.path_flag,
@@ -704,7 +704,7 @@ printf(
 
       global_reservoir_add_reservoir(reservoir, neighbor, rand_pick);
 
-printf(
+ccl_debug_printf(
     "streaming_pt_samples: current_pt AFTER CANONICAL: W=%f flag=%u rcv=%d rad=(%f,%f,%f)\n",
     (double)reservoir->total_weight,
     reservoir->path_flag,
@@ -719,7 +719,7 @@ printf(
   reservoir->total_weight /= valid_neighbors;
 
 
-printf(
+ccl_debug_printf(
     "streaming_pt_samples: PT CURRENT FINAL: pixel=%u valid_neighbors=%d W=%f "
     "rad=(%f,%f,%f)\n",
     render_pixel_index,
@@ -788,7 +788,7 @@ ccl_device bool integrator_restir(KernelGlobals kg,
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
   if (!integrator_restir_unpack_shader(kg, &current, render_pixel_index, render_buffer)) { // !!!: Returns type... So, LIGHT_SUN==false?
     integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR);
-    printf("--- integrator_restir(), early Returned!!! can't unpack! ---\n\n\n");
+    ccl_debug_printf("--- integrator_restir(), early Returned!!! can't unpack! ---\n\n\n");
     return false;
   }
 

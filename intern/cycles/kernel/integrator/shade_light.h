@@ -41,8 +41,8 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
     return SHADER_EVAL_EMPTY;
   }
 
-// printf("\n=== integrate_light_forward ENTER ===\n");
-// printf("bounce=%d\n", INTEGRATOR_STATE(state, path, bounce));
+// ccl_debug_printf("\n=== integrate_light_forward ENTER ===\n");
+// ccl_debug_printf("bounce=%d\n", INTEGRATOR_STATE(state, path, bounce));
 
   /* Use visibility flag to skip lights. */
 #ifdef __PASSES__
@@ -60,7 +60,7 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
       kg, state, isect.prim, ray_P, ray_D, isect.t, ray_time, shader_eval);
 
   if (eval_result == SHADER_EVAL_CACHE_MISS) {
-    printf("integrate_light_forward() early returned; eval_result == SHADER_EVAL_CACHE_MISS\n\n");
+    ccl_debug_printf("integrate_light_forward() early returned; eval_result == SHADER_EVAL_CACHE_MISS\n\n");
     return SHADER_EVAL_CACHE_MISS;
   }
 
@@ -69,7 +69,7 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
     return SHADER_EVAL_EMPTY;
   }
 
-// printf("integrate_light_forward: light_sample_shader_eval_forward()'s eval=(%f,%f,%f)\n",
+// ccl_debug_printf("integrate_light_forward: light_sample_shader_eval_forward()'s eval=(%f,%f,%f)\n",
 //        (double)eval.x, (double)eval.y, (double)eval.z);
 
   /* MIS weighting. */
@@ -112,7 +112,7 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
     /* film_add_reservoir_pt() handles the path → ray → emissive-geometry here.
      * path → ray → miss → World/background is contained inside integrate_background(). */
     else {
-// printf("integrate_light_forward: ABOUT TO PT INSERT, bounce=%d\n",
+// ccl_debug_printf("integrate_light_forward: ABOUT TO PT INSERT, bounce=%d\n",
 //        INTEGRATOR_STATE(state, path, bounce));
 
       const Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * eval * mis_weight;
@@ -125,8 +125,8 @@ ccl_device_inline ShaderEvalResult integrate_light_forward(
       /* Add to GI Reservoir. */
       film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer);
 
-// printf("integrate_light_forward: PT INSERT RETURNED\n");
-printf("integrate_light_forward: PT INSERT pixel=%u buffer=%p ptr not accessible\n",
+// ccl_debug_printf("integrate_light_forward: PT INSERT RETURNED\n");
+ccl_debug_printf("integrate_light_forward: PT INSERT pixel=%u buffer=%p ptr not accessible\n",
        INTEGRATOR_STATE(state, path, render_pixel_index), buffer);
     }
   }
@@ -184,7 +184,7 @@ ccl_device void integrator_shade_light_forward(KernelGlobals kg,
 ccl_device ShaderEvalResult integrate_light_nee(KernelGlobals kg, IntegratorShadowState state)
 {
   /* Read intersection and ray. */
-  printf("integrate_light_nee() ran!\n\n\n");
+  ccl_debug_printf("integrate_light_nee() ran!\n\n\n");
 
   Ray ray ccl_optional_struct_init;
   integrator_state_read_shadow_ray(state, &ray);

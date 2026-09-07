@@ -485,7 +485,7 @@ ccl_device bool light_sample_from_intersection(KernelGlobals kg,
   ref->prim = ls->prim;
   ref->flags = RESTIR_LIGHT_REFERENCE_VALID | RESTIR_LIGHT_REFERENCE_HAS_PARAM;
 
-  // printf("\nlight_sample_from_intersection(); set reference:\n"
+  // ccl_debug_printf("\nlight_sample_from_intersection(); set reference:\n"
   //       "ref->type=%u, ref->object=%u, ref->prim=%u, ref->flags=%u\n", 
   //       ref->type, ref->object, ref->prim, ref->flags);
 
@@ -590,7 +590,7 @@ ccl_device_inline bool light_sample_from_reference(
     const uint32_t path_flag,
     ccl_private LightSample *ls)
 {
-// printf("RECONSTRUCT DISPATCH: flags=%u type=%d prim=%d object=%d param=(%f,%f)\n",
+// ccl_debug_printf("RECONSTRUCT DISPATCH: flags=%u type=%d prim=%d object=%d param=(%f,%f)\n",
 //        reference->flags,
 //        reference->type,
 //        reference->prim,

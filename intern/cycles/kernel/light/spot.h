@@ -75,7 +75,7 @@ ccl_device_inline float3 restir_spot_disk_sample(const float radius,
 //   ls->eval_fac = klight->spot.eval_fac;
 
 //   if (klight->spot.is_sphere) { // !!!: 
-//     printf("\n=== SPOT CANONICAL SAMPLE DEBUG (Sphere) ===\n");
+//     ccl_debug_printf("\n=== SPOT CANONICAL SAMPLE DEBUG (Sphere) ===\n");
 //     /* Spherical light geometry. */
 //     float cos_theta;
 //     ls->t = FLT_MAX;
@@ -157,32 +157,32 @@ ccl_device_inline float3 restir_spot_disk_sample(const float radius,
 
 // const float3 debug_roundtrip_P = transform_point(&itfm, debug_world_P);
 
-// printf("\n=== SPOT CANONICAL SAMPLE DEBUG (Disk) ===\n");
+// ccl_debug_printf("\n=== SPOT CANONICAL SAMPLE DEBUG (Disk) ===\n");
 
-// printf("local sample      = %f %f %f\n",
+// ccl_debug_printf("local sample      = %f %f %f\n",
 //        (double)debug_local_P.x,
 //        (double)debug_local_P.y,
 //        (double)debug_local_P.z);
 
-// printf("world transformed = %f %f %f\n",
+// ccl_debug_printf("world transformed = %f %f %f\n",
 //        (double)debug_world_P.x,
 //        (double)debug_world_P.y,
 //        (double)debug_world_P.z);
 
-// printf("roundtrip local   = %f %f %f\n",
+// ccl_debug_printf("roundtrip local   = %f %f %f\n",
 //        (double)debug_roundtrip_P.x,
 //        (double)debug_roundtrip_P.y,
 //        (double)debug_roundtrip_P.z);
 
-// printf("roundtrip error   = %g\n",
+// ccl_debug_printf("roundtrip error   = %g\n",
 //        (double)len(debug_roundtrip_P - debug_local_P));
 
-// printf("klight->co        = %f %f %f\n",
+// ccl_debug_printf("klight->co        = %f %f %f\n",
 //        (double)klight->co.x,
 //        (double)klight->co.y,
 //        (double)klight->co.z);
 
-// printf("=================================\n");
+// ccl_debug_printf("=================================\n");
 
 // ls->P = debug_world_P;
 // // #endif
@@ -237,7 +237,7 @@ ccl_device_inline bool spot_light_sample(KernelGlobals kg,
   ls->eval_fac = klight->spot.eval_fac;
 
   if (klight->spot.is_sphere) {
-    // printf("\n=== SPOT CANONICAL SAMPLE DEBUG (Sphere) ===\n");
+    // ccl_debug_printf("\n=== SPOT CANONICAL SAMPLE DEBUG (Sphere) ===\n");
     /* Spherical light geometry. */
     float cos_theta;
     ls->t = FLT_MAX;
@@ -317,7 +317,7 @@ ccl_device_inline bool spot_light_sample(KernelGlobals kg,
 // DISK SPOT: will replace its target-dependent disk construction with the canonical local XY disk. NO NEED!
 // !!!: Sampling distribution may depend on the target. Persistent geometry identity must not.
   else {
-    // printf("\n=== SPOT CANONICAL SAMPLE DEBUG (Disk) ===\n");
+    // ccl_debug_printf("\n=== SPOT CANONICAL SAMPLE DEBUG (Disk) ===\n");
     /* Point light with ad-hoc radius based on oriented disk. */
     ls->P = klight->co;
     if (r_sq > 0.0f) {
@@ -523,17 +523,17 @@ const Transform itfm = lamp_get_inverse_transform(kg, klight);
 
 const float3 local_P = transform_point(&itfm, ls->P); // !!!: Does not come from the disk (z=0)
 
-printf("\n=== SPOT INTERSECTION REFERENCE ===\n");
-printf("world P = %f %f %f\n",
+ccl_debug_printf("\n=== SPOT INTERSECTION REFERENCE ===\n");
+ccl_debug_printf("world P = %f %f %f\n",
        (double)ls->P.x,
        (double)ls->P.y,
        (double)ls->P.z);
 
-printf("local P = %f %f %f\n",
+ccl_debug_printf("local P = %f %f %f\n",
        (double)local_P.x,
        (double)local_P.y,
        (double)local_P.z);
-printf("local Z = %g\n", (double)local_P.z);
+ccl_debug_printf("local Z = %g\n", (double)local_P.z);
 
 
 // !!!: Take whatever point Cycles happened to give me and pretend its XY coordinates came from the canonical disk.
@@ -541,7 +541,7 @@ const float2 param = make_float2( // !!!: Not Final fix!
     local_P.x / klight->spot.radius,
     local_P.y / klight->spot.radius);
 
-printf("parameter = (%f, %f)\n\n\n", (double)param.x, (double)param.y);
+ccl_debug_printf("parameter = (%f, %f)\n\n\n", (double)param.x, (double)param.y);
 
 // ref->param = param;
 // <<<

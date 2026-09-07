@@ -83,7 +83,7 @@ CCL_NAMESPACE_BEGIN
 #define KERNEL_FEATURE_LIGHT_TREE (1U << 31U)
 
 /* ReSTIR. */
-// !!!(Tri): warning: shift count >= width of type!
+// !!!(Tri): warning: shift count >= width of type! 
 #define KERNEL_FEATURE_RESTIR (1U << 32U)
 
 /* Shader node feature mask, to specialize shader evaluation for kernels. */
@@ -167,6 +167,25 @@ CCL_NAMESPACE_BEGIN
 #  define __VOLUME_RECORD_ALL__
 #  define RESTIR_DI_DEBUG
 #endif /* !__KERNEL_GPU__ */
+
+// TODO(Tri): Remove after you're done
+#ifdef RESTIR_DI_DEBUG
+
+#  if !defined(__KERNEL_GPU__)
+
+#    define ccl_debug_printf(...) printf(__VA_ARGS__)
+
+#  else
+
+#    define ccl_debug_printf(...) ((void)0)
+
+#  endif
+
+#else
+
+#  define ccl_debug_printf(...) ((void)0)
+
+#endif
 
 /* MNEE caused "Compute function exceeds available temporary registers" in macOS < 13 due to a bug
  * in spill buffer allocation sizing. */

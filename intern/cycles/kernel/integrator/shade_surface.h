@@ -967,7 +967,7 @@ ccl_device
       // !!!: One contributor of the darkness in DI (not all types are supported; current support might have issues)
       // !!!: light_reference_from_sample() may have problem populating reference
       if (!light_reference_from_sample(kg, &ls, sd->time, &reference)) {      
-        printf("integrate_surface_nee() returned!; !restir_light_reference_from_sample()=%u\n\n\n\n",
+        ccl_debug_printf("integrate_surface_nee() returned!; !restir_light_reference_from_sample()=%u\n\n\n\n",
                (!light_reference_from_sample(kg, &ls, sd->time, &reference)));
         continue;
         // break; // !!!: Break or continue?
@@ -987,7 +987,7 @@ ccl_device
     PROFILING_EVENT(PROFILING_RESTIR_RESERVOIR);
 
 
-// printf(
+// ccl_debug_printf(
 //     "\n=== BEFORE RESERVOIR ADD ===\n"
 //     "radiance.sum = (%e, %e, %e)\n"
 //     "rgb_to_y     = (%e, %e, %e)\n"

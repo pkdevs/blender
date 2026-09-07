@@ -180,7 +180,7 @@ ccl_device_inline ShaderEvalResult integrate_background(
       Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * L * mis_weight;
 
 // What bounce should we regard as the first PT candidate?
-printf("BACKGROUND PT CANDIDATE pixel=%u bounce=%d L=(%f, %f, %f)\n" 
+ccl_debug_printf("BACKGROUND PT CANDIDATE pixel=%u bounce=%d L=(%f, %f, %f)\n" 
         "contribution=(%f, %f, %f)\n\n",
         INTEGRATOR_STATE(state, path, render_pixel_index), 0, // !!!: Prints for every pixel!
         (double)L.x, (double)L.y, (double)L.z, 
@@ -190,7 +190,7 @@ printf("BACKGROUND PT CANDIDATE pixel=%u bounce=%d L=(%f, %f, %f)\n"
       path_state_rng_load(state, &rng_state);
 
       ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
-printf("integrate_background() running film_add_reservoir_pt()!\n\n");
+ccl_debug_printf("integrate_background() running film_add_reservoir_pt()!\n\n");
       film_add_reservoir_pt(kg, path_flag, contribution, &rng_state, buffer);
 
       guiding_record_background(kg, state, L, mis_weight);
