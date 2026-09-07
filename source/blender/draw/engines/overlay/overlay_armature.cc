@@ -1942,7 +1942,7 @@ bool Armatures::object_has_bone_in_front_edit(const Object *ob)
 {
   const bArmature &arm = DRW_object_get_data_for_drawing<bArmature>(*ob);
 
-  /* `edbo` isn't covered by bone_flag_any_in_front's cache. */
+  /* `edbo` isn't covered by `bone_flag_any_in_front()`, which only iterates `bones`. */
   if (arm.edbo == nullptr) {
     return false;
   }

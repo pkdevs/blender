@@ -717,16 +717,6 @@ static void rna_Armature_redraw_data(Main * /*bmain*/, Scene * /*scene*/, Pointe
   WM_main_add_notifier(NC_SPACE | ND_SPACE_OUTLINER, nullptr);
 }
 
-/* Invalidate the "In Front" cache if a bone is modified. */
-static void rna_Bone_show_in_front_update(Main *bmain, Scene *scene, PointerRNA *ptr)
-{
-  bArmature *arm = id_cast<bArmature *>(ptr->owner_id);
-  if (arm->runtime) {
-    arm->runtime->bone_in_front_cache.reset();
-  }
-  rna_Armature_redraw_data(bmain, scene, ptr);
-}
-
 /* Unselect bones when hidden or not selectable. */
 static void rna_EditBone_hide_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
 {
@@ -1506,7 +1496,8 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
       prop,
       "In Front",
       "Always draw this bone in front, independent of the Armature's In Front setting");
-  RNA_def_property_update(prop, 0, "rna_Bone_show_in_front_update");
+  RNA_def_property_update(prop, 0, "rna_Armature_redraw_data");
+  RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
 
   /* XXX: use_cyclic_offset is deprecated in 2.5. May/may not return */
   prop = RNA_def_property(srna, "use_cyclic_offset", PROP_BOOLEAN, PROP_NONE);
