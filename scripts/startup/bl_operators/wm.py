@@ -2820,7 +2820,7 @@ class WM_OT_batch_rename(Operator):
             ('ACTION_CLIP', "Action Clips", "", 'ACTION', 17),
             None,
             ('SCENE', "Scenes", "", 'SCENE_DATA', 18),
-            ('MARKER', "Timeline Markers", "", 'TIME', 19),
+            ('MARKER', "Markers", "", 'TIME', 19),
             ('BRUSH', "Brushes", "", 'BRUSH_DATA', 20),
         ),
         translation_context=i18n_contexts.id_id,
@@ -2874,6 +2874,19 @@ class WM_OT_batch_rename(Operator):
             if (action := action_from_any_id(id)) is not None
             if action.is_editable
         ))
+
+    @staticmethod
+    def _markers_from_context(context, space_type, only_selected):
+        if space_type == 'SEQUENCE_EDITOR':
+            with context.temp_override(scene=context.sequencer_scene):
+                return context.selected_markers if only_selected else context.markers
+        return context.selected_markers if only_selected else context.markers
+
+    @staticmethod
+    def _markers_i18n(markers):
+        if markers and markers[0].id_data.id_type == 'ACTION':
+            return iface_("Pose Marker(s)")
+        return iface_("Timeline Marker(s)")
 
     @classmethod
     def _data_from_context(cls, context, data_type, only_selected, *, check_context=False):
@@ -3047,11 +3060,11 @@ class WM_OT_batch_rename(Operator):
                     iface_("Scene(s)"),
                 )
             elif data_type == 'MARKER':
+                markers = cls._markers_from_context(context, space_type, only_selected)
                 data = (
-                    [marker for marker in context.scene.timeline_markers if marker.select] if only_selected else
-                    context.scene.timeline_markers,
+                    markers,
                     "name",
-                    iface_("Timeline Marker(s)"),
+                    cls._markers_i18n(markers)
                 )
             elif data_type == 'BRUSH':
                 data = (
