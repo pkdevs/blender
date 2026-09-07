@@ -1136,6 +1136,95 @@ Vert *TriangleMesh::collapse_triangle(Triangle *tri, int pos)
   return v;
 }
 
+/* Forward declaration: #det is defined later in the file but used in #trimesh_is_planar. */
+static double det(const double3 &v1, const double3 &v2, const double3 &n);
+
+/** Check that the triangulation is planar: no two non-adjacent edges cross each other.
+ *
+ * Returns true if the triangulation is planar, false (and prints a description of the
+ * crossing edges) if a violation is found.  Only non-deleted, non-ghost triangles are
+ * considered.  The check is O(n^2) in the number of edges, which is acceptable for
+ * debug builds where the face size is small.
+ *
+ * The sign-of-determinant intersection test: segment AB crosses segment CD if and only if
+ * A and B lie on strictly opposite sides of the line through C and D, AND C and D lie on
+ * strictly opposite sides of the line through A and B.  #det(p-q, r-q, n) gives the signed
+ * area of the parallelogram spanned by those two vectors in the plane with normal n, which
+ * is the 2-D signed orientation test projected onto that plane.
+ */
+static bool trimesh_is_planar(const TriangleMesh &trimesh)
+{
+  /* Determine the face-plane normal from the first usable triangle. */
+  double3 normal(0.0, 0.0, 0.0);
+  for (const Triangle *t : trimesh.all_tris()) {
+    if (!t->is_deleted() && !t->is_ghost()) {
+      normal = triangle_normal(t);
+      break;
+    }
+  }
+  if (math::length_squared(normal) < 0.5) {
+    return true; /* Degenerate or empty — nothing to check. */
+  }
+
+  /* Collect unique undirected edges as (src, dst) vertex pointer pairs.
+   * Include edge (t, i) from the triangle with the numerically smaller id to avoid
+   * processing the same geometric edge twice.  Boundary edges (neighbour is a ghost)
+   * are always included from their single non-ghost triangle. */
+  struct EdgeSeg {
+    const Vert *a, *b;
+    int ta_id, tb_id; /* Triangle ids, for diagnostics. */
+  };
+  Vector<EdgeSeg> edges;
+  for (const Triangle *t : trimesh.all_tris()) {
+    if (t->is_deleted() || t->is_ghost()) {
+      continue;
+    }
+    for (int i = 0; i < 3; ++i) {
+      const Edge ne = t->neighbor(i);
+      const Triangle *nt = ne.tri();
+      /* Only include each internal edge once: from the lower-id triangle side. */
+      if (nt == nullptr || nt->is_ghost() || nt->is_deleted() || t->id() < nt->id()) {
+        const Vert *a = t->vert(i);
+        const Vert *b = t->vert(succ_index(i));
+        if (a != nullptr && b != nullptr) {
+          edges.append({a, b, t->id(), nt ? nt->id() : -1});
+        }
+      }
+    }
+  }
+
+  /* O(n^2) scan over all edge pairs. */
+  const int n_edges = int(edges.size());
+  for (int i = 0; i < n_edges; ++i) {
+    const double3 &a = edges[i].a->co;
+    const double3 &b = edges[i].b->co;
+    for (int j = i + 1; j < n_edges; ++j) {
+      const double3 &c = edges[j].a->co;
+      const double3 &d = edges[j].b->co;
+      /* Skip pairs that share a vertex — adjacent edges never cross. */
+      if (edges[i].a == edges[j].a || edges[i].a == edges[j].b ||
+          edges[i].b == edges[j].a || edges[i].b == edges[j].b) {
+        continue;
+      }
+      /* Signed-area test: strictly opposite sides ↔ negative product. */
+      const double da = det(a - c, d - c, normal);
+      const double db = det(b - c, d - c, normal);
+      if (da * db < 0.0) {
+        const double dc = det(c - a, b - a, normal);
+        const double dd_val = det(d - a, b - a, normal);
+        if (dc * dd_val < 0.0) {
+          std::cout << "PLANARITY VIOLATION: edge (t" << edges[i].ta_id << ",t"
+                    << edges[i].tb_id << ") [" << a << " -> " << b << "] crosses edge (t"
+                    << edges[j].ta_id << ",t" << edges[j].tb_id << ") [" << c << " -> " << d
+                    << "]\n";
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
 /** Check that we have a valid Triangle mesh, asserting false if not. */
 void TriangleMesh::validate()
 {
@@ -1177,6 +1266,9 @@ void TriangleMesh::validate()
       }
     }
   }
+  /* Check that no two non-adjacent edges of the triangulation cross each other.
+   * A non-planar triangulation indicates a bug in the edge-flip or collapse logic. */
+  BLI_assert(trimesh_is_planar(*this));
 }
 
 /** Make the initial contours inset for \a contours
@@ -2527,7 +2619,14 @@ void StraightSkeleton::compute()
     }
     double height = event.height();
     Edge edge = event.edge();
-    if (height > target_height_) {
+    /* Allow events within floating-point noise of target_height_ to still be processed.
+     * A closing event computed from min_height + (-0.5*b/a) can land 1–2 ULPs above
+     * target_height_ due to accumulated FP error even when the triangle is already
+     * degenerate.  Without this tolerance, the closing event is deferred to the drain loop
+     * which only extrapolates positions but never collapses the triangle, leaving 2–3
+     * separate near-coincident vertices that form a tiny edge in the output. */
+    static constexpr double target_height_epsilon = 1e-10;
+    if (height > target_height_ + target_height_epsilon * (1.0 + fabs(target_height_))) {
       if (dbg_level > 0) {
         std::cout << "event height > target_height; repush event and break\n";
       }
@@ -3275,7 +3374,7 @@ static void append_interior_faces_for_cycle(Vector<Vector<int>> &out_faces,
 static MeshInset_Result trimesh_to_output(const TriangleMesh &trimesh,
                                           const MeshInset_Input &input)
 {
-  constexpr bool dbg_level = 1;
+  constexpr bool dbg_level = 0;
   if (dbg_level > 0) {
     std::cout << "trimesh_to_output\n";
   }
@@ -3345,6 +3444,80 @@ static MeshInset_Result trimesh_to_output(const TriangleMesh &trimesh,
     Vector<int> &face = out_faces[fi];
     for (int64_t i : face.index_range()) {
       face[i] = vert_index_to_output_index[face[i]];
+    }
+  }
+  /* Deduplicate output vertices that are at the same (or nearly the same) 3D position.
+   * Zero-length spokes created by #handle_vertex_event when the vertex event fires at
+   * the skeleton terminus leave two trimesh vertices at the same location.  After the
+   * index remapping above they become two distinct output vertex indices whose coordinates
+   * are identical, so faces that should share an edge end up with a visible seam.
+   * We use an O(n^2) scan here, which is acceptable because the number of output vertices
+   * from a single face inset is always small. */
+  {
+    static constexpr double vert_dedup_sq_dist = 1e-14;
+    const int ntotv = int(result.vert.size());
+    Array<int> canonical(ntotv);
+    for (int i = 0; i < ntotv; ++i) {
+      canonical[i] = i;
+    }
+    bool any_dedup = false;
+    for (int i = 0; i < ntotv; ++i) {
+      if (canonical[i] != i) {
+        continue;
+      }
+      for (int j = i + 1; j < ntotv; ++j) {
+        if (canonical[j] != j) {
+          continue;
+        }
+        if (math::distance_squared(result.vert[i], result.vert[j]) <= vert_dedup_sq_dist) {
+          canonical[j] = i;
+          any_dedup = true;
+        }
+      }
+    }
+    if (any_dedup) {
+      /* Assign compact sequential indices to the surviving (canonical) vertices. */
+      Array<int> new_out_idx(ntotv, -1);
+      int new_totv = 0;
+      for (int i = 0; i < ntotv; ++i) {
+        if (canonical[i] == i) {
+          new_out_idx[i] = new_totv++;
+        }
+      }
+      Array<double3> new_vert(new_totv);
+      Array<int> new_orig_vert(new_totv, -1);
+      for (int i = 0; i < ntotv; ++i) {
+        if (canonical[i] == i) {
+          new_vert[new_out_idx[i]] = result.vert[i];
+          new_orig_vert[new_out_idx[i]] = result.orig_vert[i];
+        }
+      }
+      result.vert = std::move(new_vert);
+      result.orig_vert = std::move(new_orig_vert);
+      /* Remap all face vertex indices through canonical[] then through new_out_idx[]. */
+      for (Vector<int> &face : out_faces) {
+        for (int &vi : face) {
+          vi = new_out_idx[canonical[vi]];
+        }
+      }
+    }
+  }
+  /* Remove consecutive duplicate vertices from faces.
+   * After vertex deduplication above, adjacent face vertices may now share the same
+   * index; also catches any zero-length spokes that survived deduplication. */
+  for (Vector<int> &face : out_faces) {
+    const int n = int(face.size());
+    Vector<int> cleaned;
+    cleaned.reserve(n);
+    for (int i = 0; i < n; ++i) {
+      const int vi = face[i];
+      const int vi_prev = face[(i + n - 1) % n];
+      if (vi != vi_prev) {
+        cleaned.append(vi);
+      }
+    }
+    if (int(cleaned.size()) < n) {
+      face = std::move(cleaned);
     }
   }
   result.face = Array<Vector<int>>(out_faces.size());
