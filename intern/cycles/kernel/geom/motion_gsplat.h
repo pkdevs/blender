@@ -103,7 +103,7 @@ ccl_device_inline Quaternion motion_gsplat_rotation(KernelGlobals kg,
                                                     const int prim,
                                                     const float time)
 {
-  const int offset = kernel_data_fetch(objects, object).gsplat.rotation_offset_and_flag;
+  const int offset = gsplat_attr_rotation_offset(kg, object);
   if (!gsplat_attr_rotation_has_motion(kg, object)) {
     return kernel_data_fetch(attributes_quaternion, offset + prim);
   }
@@ -140,7 +140,7 @@ ccl_device_inline float4 motion_gsplat_radiance_base(KernelGlobals kg,
                                                      const int prim,
                                                      const float time)
 {
-  const int offset = gsplat_attr_rotation_offset(kg, object);
+  const int offset = gsplat_attr_radiance_base_offset(kg, object);
   if (!gsplat_attr_radiance_base_has_motion(kg, object)) {
     return kernel_data_fetch(attributes_float4, offset + prim);
   }
