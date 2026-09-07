@@ -1815,7 +1815,7 @@ void blo_do_versions_userdef(UserDef *userdef)
     }
   }
 
-  if (!USER_VERSION_ATLEAST(503, 20)) {
+  if (!USER_VERSION_ATLEAST(503, 21)) {
     if (userdef->sequencer_default_strip_length == 0.0f) {
       userdef->sequencer_default_strip_length = 1.0f;
     }
