@@ -881,7 +881,7 @@ void GPUDevice::generic_free(device_memory &mem)
         mem.host_pointer = mem.host_alloc(size);
         memcpy(mem.host_pointer, mem.shared_pointer, size);
       }
-      shared_free(mem.shared_pointer);
+      shared_free(mem.shared_pointer, mem.device_size);
       mem.shared_pointer = nullptr;
     }
     map_host_used -= mem.device_size;
