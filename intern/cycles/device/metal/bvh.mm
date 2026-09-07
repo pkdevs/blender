@@ -984,7 +984,6 @@ bool BVHMetal::build_TLAS(Progress &progress,
   /* Wait for all BLAS builds to finish. */
   g_bvh_build_throttler.wait_for_all();
 
-  /* Defined inside available check, for return type to be available. */
   auto make_null_BLAS = [this](id<MTLDevice> mtl_device,
                                id<MTLCommandQueue> queue) -> id<MTLAccelerationStructure> {
     id<MTLBuffer> nullBuf = [mtl_device newBufferWithLength:sizeof(packed_float3)
