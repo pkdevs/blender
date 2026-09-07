@@ -1189,7 +1189,7 @@ static float2 coords_region_view_align(const View2D *v2d, const float2 coords)
   return coords_region_aligned;
 }
 
-static void text_edit_draw_cursor(const bContext *C, const Strip *strip, uint pos)
+static void text_edit_draw_cursor(const bContext *C, const Strip *strip)
 {
   const TextVars *data = static_cast<TextVars *>(strip->effectdata);
   const seq::TextVarsRuntime *runtime = data->runtime;
@@ -1265,7 +1265,7 @@ static void text_edit_draw(const bContext *C)
 
   std::scoped_lock runtime_lock(seq::text_runtime_mutex_get());
   text_selection_draw(C, strip, pos);
-  text_edit_draw_cursor(C, strip, pos);
+  text_edit_draw_cursor(C, strip);
 
   immUnbindProgram();
   GPU_blend(GPU_BLEND_NONE);

@@ -128,7 +128,6 @@ void ED_region_do_listen(wmRegionListenerParams *params)
               params->wm, params->window, region->runtime->text_cursor_overlay->timer);
           region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
           region->runtime->text_cursor_overlay->timer = nullptr;
-          region->runtime->text_cursor_overlay->draw = true;
           region->runtime->text_cursor_overlay->last_active_time = BLI_time_now_seconds();
         }
       }
@@ -141,9 +140,8 @@ void ED_region_do_listen(wmRegionListenerParams *params)
               params->wm, params->window, region->runtime->text_cursor_overlay->timer);
         }
         region->runtime->text_cursor_overlay->timer = WM_event_timer_add(
-            params->wm, params->window, TIMER, 0.6f);
+            params->wm, params->window, TIMER, bke::TEXT_EDIT_CURSOR_BLINK_INTERVAL);
 
-        region->runtime->text_cursor_overlay->draw = true;
         region->runtime->text_cursor_overlay->last_active_time = BLI_time_now_seconds();
         region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
       }

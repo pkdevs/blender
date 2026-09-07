@@ -3951,7 +3951,6 @@ static void textedit_begin(bContext *C, Button *but, HandleButtonData *data)
   data->region->runtime->text_cursor_overlay = {
       .rect = rctf{},
       .last_active_time = BLI_time_now_seconds(),
-      .draw = true,
   };
   WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   theme::get_color_4fv(TH_WIDGET_TEXT_CURSOR, data->region->runtime->text_cursor_overlay->color);
@@ -9027,10 +9026,6 @@ static int region_cursor_handler(ARegion *region, const wmEvent *event)
   if (event->type == TIMER && region->runtime->text_cursor_overlay &&
       region->runtime->text_cursor_overlay->timer == event->customdata)
   {
-    region->runtime->text_cursor_overlay->draw =
-        (int((BLI_time_now_seconds() - region->runtime->text_cursor_overlay->last_active_time) *
-             10.0) %
-         12) < 6;
     region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
     return WM_UI_HANDLER_BREAK;
   }

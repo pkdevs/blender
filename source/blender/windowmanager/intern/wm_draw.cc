@@ -423,7 +423,7 @@ static void wm_region_draw_overlay(bContext *C, const ScrArea *area, ARegion *re
 static void wm_region_draw_cursor_overlay(bContext *C, ARegion &region, bool active)
 {
   if (!(region.runtime->text_cursor_overlay.has_value() &&
-        (region.runtime->text_cursor_overlay->draw || !active)))
+        (region.runtime->text_cursor_overlay->is_blink() || !active)))
   {
     return;
   }
