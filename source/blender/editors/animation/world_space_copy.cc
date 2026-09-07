@@ -666,7 +666,7 @@ static bAction *read_action_from_clipboard(Main &clipboard_bmain,
     return nullptr;
   }
 
-  bAction *clipboard_dna_action = reinterpret_cast<bAction *>(clipboard_bmain.actions.first);
+  bAction *clipboard_dna_action = clipboard_bmain.actions.first();
   ar::Action &clipboard_action = clipboard_dna_action->wrap();
   if (clipboard_action.strip_keyframe_data().is_empty() ||
       clipboard_action.strip_keyframe_data()[0]->channelbags().is_empty())
