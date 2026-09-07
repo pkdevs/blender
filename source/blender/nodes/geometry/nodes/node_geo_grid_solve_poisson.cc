@@ -52,8 +52,8 @@ static const EnumPropertyItem boundary_items[] = {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.allow_any_socket_order();
   b.use_custom_socket_order();
+  b.allow_any_socket_order();
 
   b.add_input<decl::Float>("Grid"_ustr)
       .hide_value()
