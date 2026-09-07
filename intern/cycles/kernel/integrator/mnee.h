@@ -116,6 +116,35 @@ ccl_device_inline float mat22_inverse(const float4 m, ccl_private float4 &m_inve
   return det;
 }
 
+/* Relative index of refraction at a vertex for a path arriving along wi. The closure stores the
+ * ratio for the front face, so it is inverted when coming from inside. */
+ccl_device_inline float mnee_vertex_eta(const ccl_private ManifoldVertex &v, const float3 wi)
+{
+  return (dot(wi, v.ng) < .0f) ? 1.f / v.eta : v.eta;
+}
+
+/* Generalized half vector of a transmissive interface, normalized, also returning its inverse
+ * length which the constraint derivatives need. */
+ccl_device_inline float3 mnee_half_vector(const float3 wi,
+                                          const float3 wo,
+                                          const float eta,
+                                          ccl_private float *r_inv_len)
+{
+  const float3 H = -(wi + eta * wo);
+  const float ilh = 1.f / len(H);
+  *r_inv_len = ilh;
+  return H * ilh;
+}
+
+/* Whether wi and wo lie on the sides of the interface required by its interaction: transmission
+ * needs them on opposite sides of the shading normal. */
+ccl_device_inline bool mnee_vertex_directions_valid(const ccl_private ManifoldVertex &v,
+                                                    const float3 wi,
+                                                    const float3 wo)
+{
+  return dot(v.n, wi) * dot(v.n, wo) < 0.f;
+}
+
 /* Manifold vertex setup from ray and intersection data */
 ccl_device_inline void mnee_setup_manifold_vertex(KernelGlobals kg,
                                                   ccl_private ManifoldVertex *vtx,
@@ -276,16 +305,11 @@ bool mnee_compute_constraint_derivatives(
     ilo = 1.f / ilo;
     wo *= ilo;
 
-    /* Invert ior if coming from inside. */
-    float eta = v.eta;
-    if (dot(wi, v.ng) < .0f) {
-      eta = 1.f / eta;
-    }
+    const float eta = mnee_vertex_eta(v, wi);
 
     /* Half vector. */
-    float3 H = -(wi + eta * wo);
-    const float ilh = 1.f / len(H);
-    H *= ilh;
+    float ilh;
+    const float3 H = mnee_half_vector(wi, wo, eta, &ilh);
 
     ilo *= eta * ilh;
     ili *= ilh;
@@ -528,7 +552,8 @@ ccl_device_inline bool mnee_newton_solver(KernelGlobals kg,
       }
     }
 
-    /* Check that tentative path is still transmissive. */
+    /* Check that the tentative path still interacts with each interface the way its vertex
+     * was set up for. */
     if (!reduce_stepsize) {
       for (int vi = 0; vi < vertex_count; vi++) {
         const ccl_private ManifoldVertex &tv = tentative[vi];
@@ -539,7 +564,7 @@ ccl_device_inline bool mnee_newton_solver(KernelGlobals kg,
         const float3 wo = (vi == vertex_count - 1) ? light_fixed_direction ? ls->D : ls->P - tv.p :
                                                      tentative[vi + 1].p - tv.p;
 
-        if (dot(tv.n, wi) * dot(tv.n, wo) >= 0.f) {
+        if (!mnee_vertex_directions_valid(tv, wi, wo)) {
           reduce_stepsize = true;
           break;
         }
@@ -710,11 +735,7 @@ ccl_device_inline bool mnee_compute_transfer_matrix(const ccl_private ShaderData
   const float ili = 1.f / len(wi);
   wi *= ili;
 
-  /* Invert ior if coming from inside. */
-  float eta = m.eta;
-  if (dot(wi, m.ng) < .0f) {
-    eta = 1.f / eta;
-  }
+  const float eta = mnee_vertex_eta(m, wi);
 
   float dxn_dwn;
   float4 dc_dlight;
@@ -724,9 +745,8 @@ ccl_device_inline bool mnee_compute_transfer_matrix(const ccl_private ShaderData
     const float3 wo = ls->D;
 
     /* Half vector. */
-    float3 H = -(wi + eta * wo);
-    const float ilh = 1.f / len(H);
-    H *= ilh;
+    float ilh;
+    const float3 H = mnee_half_vector(wi, wo, eta, &ilh);
 
     const float ilo = -eta * ilh;
 
@@ -756,9 +776,8 @@ ccl_device_inline bool mnee_compute_transfer_matrix(const ccl_private ShaderData
     wo *= ilo;
 
     /* Half vector. */
-    float3 H = -(wi + eta * wo);
-    const float ilh = 1.f / len(H);
-    H *= ilh;
+    float ilh;
+    const float3 H = mnee_half_vector(wi, wo, eta, &ilh);
 
     ilo *= eta * ilh;
 
@@ -942,6 +961,46 @@ ccl_device_inline ShaderEvalResult mnee_path_contribution(KernelGlobals kg,
   return SHADER_EVAL_OK;
 }
 
+/* Pick the closure the manifold walk goes through at a caster hit, sample its microfacet normal
+ * and initialize the manifold vertex from it. Returns false when the caster has no closure the
+ * walk can handle. */
+ccl_device_inline bool mnee_setup_caster_vertex(KernelGlobals kg,
+                                                const ccl_private RNGState *rng_state,
+                                                ccl_private ShaderData *sd_mnee,
+                                                const ccl_private Ray *probe_ray,
+                                                const ccl_private Intersection *probe_isect,
+                                                ccl_private ManifoldVertex *mv)
+{
+  for (int ci = 0; ci < sd_mnee->num_closure; ci++) {
+    ccl_private ShaderClosure *bsdf = &sd_mnee->closure[ci];
+    if (!(CLOSURE_IS_REFRACTION(bsdf->type) || CLOSURE_IS_GLASS(bsdf->type))) {
+      continue;
+    }
+
+    /* Glass closures are walked as refractive interfaces, only their transmission lobe is
+     * evaluated by #mnee_eval_bsdf_contribution. */
+    ccl_private MicrofacetBsdf *microfacet_bsdf = (ccl_private MicrofacetBsdf *)bsdf;
+
+    /* Figure out appropriate index of refraction ratio. */
+    const float eta = (sd_mnee->runtime_flag & SR_BACKFACING) ? 1.0f / microfacet_bsdf->ior :
+                                                                microfacet_bsdf->ior;
+
+    float2 h = zero_float2();
+    if (microfacet_bsdf->alpha_x > 0.f && microfacet_bsdf->alpha_y > 0.f) {
+      /* Sample transmissive microfacet bsdf. */
+      const float2 bsdf_uv = path_state_rng_2D(kg, rng_state, PRNG_SURFACE_BSDF);
+      h = mnee_sample_bsdf_dh(
+          bsdf->type, microfacet_bsdf->alpha_x, microfacet_bsdf->alpha_y, bsdf_uv.x, bsdf_uv.y);
+    }
+
+    /* Setup differential geometry on vertex. */
+    mnee_setup_manifold_vertex(kg, mv, bsdf, eta, h, probe_ray, probe_isect, sd_mnee);
+    return true;
+  }
+
+  return false;
+}
+
 /* Manifold next event estimation path sampling. */
 ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
                                                            IntegratorState state,
@@ -1035,36 +1094,7 @@ ccl_device_inline ShaderEvalResult kernel_path_mnee_sample(KernelGlobals kg,
       }
 
       /* Get and sample refraction bsdf */
-      bool found_refractive_microfacet_bsdf = false;
-      for (int ci = 0; ci < sd_mnee->num_closure; ci++) {
-        ccl_private ShaderClosure *bsdf = &sd_mnee->closure[ci];
-        if (CLOSURE_IS_REFRACTION(bsdf->type) || CLOSURE_IS_GLASS(bsdf->type)) {
-          /* Note that Glass closures are treated as refractive further below. */
-
-          found_refractive_microfacet_bsdf = true;
-          ccl_private MicrofacetBsdf *microfacet_bsdf = (ccl_private MicrofacetBsdf *)bsdf;
-
-          /* Figure out appropriate index of refraction ratio. */
-          const float eta = (sd_mnee->runtime_flag & SR_BACKFACING) ? 1.0f / microfacet_bsdf->ior :
-                                                                      microfacet_bsdf->ior;
-
-          float2 h = zero_float2();
-          if (microfacet_bsdf->alpha_x > 0.f && microfacet_bsdf->alpha_y > 0.f) {
-            /* Sample transmissive microfacet bsdf. */
-            const float2 bsdf_uv = path_state_rng_2D(kg, rng_state, PRNG_SURFACE_BSDF);
-            h = mnee_sample_bsdf_dh(bsdf->type,
-                                    microfacet_bsdf->alpha_x,
-                                    microfacet_bsdf->alpha_y,
-                                    bsdf_uv.x,
-                                    bsdf_uv.y);
-          }
-
-          /* Setup differential geometry on vertex. */
-          mnee_setup_manifold_vertex(kg, &mv, bsdf, eta, h, &probe_ray, &probe_isect, sd_mnee);
-          break;
-        }
-      }
-      if (!found_refractive_microfacet_bsdf) {
+      if (!mnee_setup_caster_vertex(kg, rng_state, sd_mnee, &probe_ray, &probe_isect, &mv)) {
         return SHADER_EVAL_EMPTY;
       }
     }
