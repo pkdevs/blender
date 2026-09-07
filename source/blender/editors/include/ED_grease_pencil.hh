@@ -1100,5 +1100,7 @@ void apply_eval_grease_pencil_data(const GreasePencil &eval_grease_pencil,
  */
 bool remove_fill_guides(bke::CurvesGeometry &curves);
 
+void VIEW3D_GGT_grease_pencil_quad(wmGizmoGroupType *gzgt);
+
 }  // namespace ed::greasepencil
 }  // namespace blender
