@@ -9,7 +9,7 @@ from bl_ui.space_dopesheet import (
     DopesheetActionPanelBase,
     dopesheet_filter,
 )
-from bl_ui.space_time import playback_controls
+from bl_ui.space_time import MarkerPanelBase, playback_controls
 
 
 class NLA_HT_header(Header):
@@ -404,6 +404,10 @@ class NLA_MT_channel_context_menu(Menu):
         layout.operator("nla.tracks_delete", icon='X')
 
 
+class NLA_PT_marker(MarkerPanelBase, Panel):
+    bl_space_type = 'NLA_EDITOR'
+
+
 classes = (
     NLA_HT_header,
     NLA_HT_playback_controls,
@@ -423,6 +427,7 @@ classes = (
     NLA_PT_filters,
     NLA_PT_action,
     NLA_PT_snapping,
+    NLA_PT_marker,
 )
 
 if __name__ == "__main__":  # only for live edit.

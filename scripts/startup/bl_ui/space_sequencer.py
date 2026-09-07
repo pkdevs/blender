@@ -21,7 +21,7 @@ from bl_ui.space_toolsystem_common import (
 )
 
 from rna_prop_ui import PropertyPanel
-from bl_ui.space_time import playback_controls
+from bl_ui.space_time import MarkerPanelBase, playback_controls
 from bl_ui.properties_data_camera import DATA_PT_camera_display_composition_guides
 
 
@@ -2083,6 +2083,19 @@ class SEQUENCER_PT_sequencer_snapping(Panel):
         col.prop(sequencer_tool_settings, "snap_ignore_sound", text="Sound Strips")
 
 
+class SEQUENCER_PT_marker(MarkerPanelBase, Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+
+    @classmethod
+    def get_active_marker(cls, context):
+        with context.temp_override(scene=context.sequencer_scene):
+            return context.active_marker
+
+    @classmethod
+    def get_marker_scene(cls, context):
+        return context.sequencer_scene
+
+
 classes = (
     SEQUENCER_MT_change,
     SEQUENCER_HT_tool_header,
@@ -2158,6 +2171,8 @@ classes = (
     SEQUENCER_PT_snapping,
     SEQUENCER_PT_preview_snapping,
     SEQUENCER_PT_sequencer_snapping,
+
+    SEQUENCER_PT_marker,
 )
 
 if __name__ == "__main__":  # only for live edit.

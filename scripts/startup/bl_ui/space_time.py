@@ -129,6 +129,7 @@ class TIME_MT_view(Menu):
         layout = self.layout
         scene = context.scene
         st = context.space_data
+        layout.prop(st, "show_region_ui")
         layout.prop(st, "show_region_hud")
         layout.prop(st, "show_region_channels")
         layout.separator()
@@ -369,6 +370,42 @@ class TIME_PT_playback_options(TimelinePanelButtons, Panel):
         layout.prop(scene, "time_jump_delta", text="Delta")
 
 
+# Mix-in class, do not use directly.
+class MarkerPanelBase:
+    bl_region_type = 'UI'
+    bl_category = "Markers"
+    bl_label = "Marker"
+
+    @classmethod
+    def get_marker_scene(cls, context):
+        return context.scene
+
+    @classmethod
+    def get_active_marker(cls, context):
+        return context.active_marker
+
+    @classmethod
+    def poll(cls, context):
+        return cls.get_active_marker(context) is not None
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        scene = self.get_marker_scene(context)
+        layout.enabled = not scene.tool_settings.lock_markers
+
+        marker = self.get_active_marker(context)
+        layout.prop(marker, "name", placeholder="Marker Name")
+        layout.prop(marker, "frame")
+        layout.prop(marker, "camera")
+
+
+class TIME_PT_marker(MarkerPanelBase, Panel):
+    bl_space_type = 'DOPESHEET_EDITOR'
+
+
 ###################################
 
 classes = (
@@ -379,6 +416,7 @@ classes = (
     TIME_PT_auto_keyframing,
     TIME_PT_playback_options,
     TIME_PT_playhead_snapping,
+    TIME_PT_marker,
 )
 
 if __name__ == "__main__":  # only for live edit.

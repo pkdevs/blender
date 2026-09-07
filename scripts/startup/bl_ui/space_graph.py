@@ -11,7 +11,7 @@ from bl_ui.space_dopesheet import (
     DopesheetFilterPopoverBase,
     dopesheet_filter,
 )
-from bl_ui.space_time import playback_controls
+from bl_ui.space_time import MarkerPanelBase, playback_controls
 
 
 def drivers_editor_footer(layout, context):
@@ -590,6 +590,15 @@ class GRAPH_MT_snap_pie(Menu):
         pie.operator("graph.snap_cursor_value", text="Cursor Value to Selection")
 
 
+class GRAPH_PT_marker(MarkerPanelBase, Panel):
+    bl_space_type = 'GRAPH_EDITOR'
+
+    @classmethod
+    def poll(cls, context):
+        sd = context.space_data
+        return sd.mode != 'DRIVERS' and MarkerPanelBase.poll(context)
+
+
 classes = (
     GRAPH_HT_header,
     GRAPH_HT_playback_controls,
@@ -613,6 +622,7 @@ classes = (
     GRAPH_PT_filters,
     GRAPH_PT_snapping,
     GRAPH_PT_driver_snapping,
+    GRAPH_PT_marker,
 )
 
 if __name__ == "__main__":  # only for live edit.
