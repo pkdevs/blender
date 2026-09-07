@@ -127,7 +127,7 @@ void ShaderOperation::construct_material(void *thunk, GPUMaterial *material)
 {
   ShaderOperation *operation = static_cast<ShaderOperation *>(thunk);
   operation->material_ = material;
-  for (const bNode *node : operation->node_tree_evaluator_.get_pixel_compile_unit()) {
+  for (const bNode *node : operation->node_tree_evaluator_.pixel_compile_unit()) {
     operation->shader_nodes_.add_new(node, std::make_unique<ShaderNode>(*node));
 
     operation->link_node_inputs(*node);
@@ -168,7 +168,7 @@ void ShaderOperation::link_node_inputs(const bNode &node)
 
     /* If the source node is part of the shader operation, then the link is internal to the GPU
      * material graph and is linked appropriately. */
-    if (node_tree_evaluator_.get_pixel_compile_unit().contains(&output->owner_node())) {
+    if (node_tree_evaluator_.pixel_compile_unit().contains(&output->owner_node())) {
       this->link_node_input_internal(*input, *output);
     }
     else {
@@ -579,7 +579,7 @@ void ShaderOperation::populate_results_for_node(const bNode &node)
         *output, [&](const bNodeSocket &input) {
           return node_tree_evaluator_.schedule().nodes.contains(&input.owner_node()) &&
                  !node_tree_evaluator_.schedule().unneeded_inputs.contains(&input) &&
-                 !node_tree_evaluator_.get_pixel_compile_unit().contains(&input.owner_node());
+                 !node_tree_evaluator_.pixel_compile_unit().contains(&input.owner_node());
         });
 
     /* If the output is used as the node preview, then an output result needs to be populated for

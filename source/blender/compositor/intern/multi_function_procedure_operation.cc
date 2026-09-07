@@ -106,7 +106,7 @@ void MultiFunctionProcedureOperation::execute()
 
 void MultiFunctionProcedureOperation::build_procedure()
 {
-  for (const bNode *node : node_tree_evaluator_.get_pixel_compile_unit()) {
+  for (const bNode *node : node_tree_evaluator_.pixel_compile_unit()) {
     /* Get the multi-function of the node. */
     auto &multi_function_builder = *node_multi_functions_.lookup_or_add_cb(node, [&]() {
       return std::make_unique<nodes::NodeMultiFunctionBuilder>(*node, node->owner_tree());
@@ -182,7 +182,7 @@ Vector<mf::Variable *> MultiFunctionProcedureOperation::get_input_variables(
     else {
       /* If the source node is part of the multi-function procedure operation, then the output has
        * an existing variable for it. */
-      if (node_tree_evaluator_.get_pixel_compile_unit().contains(&output->owner_node())) {
+      if (node_tree_evaluator_.pixel_compile_unit().contains(&output->owner_node())) {
         input_variables.append(output_to_variable_map_.lookup(output));
       }
       else {
@@ -472,7 +472,7 @@ void MultiFunctionProcedureOperation::assign_output_variables(const bNode &node,
         *output, [&](const bNodeSocket &input) {
           return node_tree_evaluator_.schedule().nodes.contains(&input.owner_node()) &&
                  !node_tree_evaluator_.schedule().unneeded_inputs.contains(&input) &&
-                 !node_tree_evaluator_.get_pixel_compile_unit().contains(&input.owner_node());
+                 !node_tree_evaluator_.pixel_compile_unit().contains(&input.owner_node());
         });
 
     /* If the output is used as the node preview, then an output result needs to be populated for

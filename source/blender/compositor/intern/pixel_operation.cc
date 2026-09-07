@@ -79,7 +79,7 @@ void PixelOperation::log_data()
   /* All inputs and outputs of pixel operations operate in the same domain, so the operation domain
    * should be logged for all. The exception is inputs that are single values, in which case, their
    * value is simply logged. */
-  for (const bNode *node : node_tree_evaluator_.get_pixel_compile_unit()) {
+  for (const bNode *node : node_tree_evaluator_.pixel_compile_unit()) {
     /* Log output values. */
     for (const bNodeSocket *output_socket : node->output_sockets()) {
       if (!is_socket_available(output_socket)) {
@@ -134,7 +134,7 @@ void PixelOperation::log_data()
       /* The input is linked to a node that is inside the pixel operation, so skip it since it will
        * inherit its value from an output that was logged above. */
       const bNodeSocket &linked_output = *input_socket->logically_linked_sockets()[0];
-      if (node_tree_evaluator_.get_pixel_compile_unit().contains(&linked_output.owner_node())) {
+      if (node_tree_evaluator_.pixel_compile_unit().contains(&linked_output.owner_node())) {
         continue;
       }
 
@@ -197,7 +197,7 @@ void PixelOperation::compute_results_reference_counts(const Schedule &schedule)
            * directly. */
           return schedule.nodes.contains(&input.owner_node()) &&
                  !schedule.unneeded_inputs.contains(&input) &&
-                 !node_tree_evaluator_.get_pixel_compile_unit().contains(&input.owner_node());
+                 !node_tree_evaluator_.pixel_compile_unit().contains(&input.owner_node());
         });
 
     if (preview_outputs_.contains(item.key)) {

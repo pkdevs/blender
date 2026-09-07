@@ -7,6 +7,7 @@
 #include "BLI_compute_context.hh"
 #include "BLI_set.hh"
 #include "BLI_string_ref.hh"
+#include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 
 #include "DNA_node_types.h"
@@ -82,7 +83,7 @@ Result &NodeTreeEvaluator::get_result_from_output_socket(const bNodeSocket &outp
   return operation->get_result(operation->get_output_identifier_from_output_socket(output));
 }
 
-PixelCompileUnit &NodeTreeEvaluator::get_pixel_compile_unit()
+PixelCompileUnit &NodeTreeEvaluator::pixel_compile_unit()
 {
   return pixel_compile_unit_;
 }
@@ -187,7 +188,7 @@ PixelOperation *NodeTreeEvaluator::create_pixel_operation()
 
 void NodeTreeEvaluator::evaluate_pixel_compile_unit()
 {
-  PixelCompileUnit &compile_unit = this->get_pixel_compile_unit();
+  PixelCompileUnit &compile_unit = this->pixel_compile_unit();
 
   /* Only compute previews if they are needed and the node group is currently active. */
   const bool needs_node_previews = flag_is_set(this->context().needed_side_effect_output_types(),
@@ -208,10 +209,10 @@ void NodeTreeEvaluator::evaluate_pixel_compile_unit()
     const PixelCompileUnit start_compile_unit(compile_unit.as_span().take_front(split_index));
     const PixelCompileUnit end_compile_unit(compile_unit.as_span().drop_front(split_index));
 
-    this->get_pixel_compile_unit() = start_compile_unit;
+    this->pixel_compile_unit() = start_compile_unit;
     this->evaluate_pixel_compile_unit();
 
-    this->get_pixel_compile_unit() = end_compile_unit;
+    this->pixel_compile_unit() = end_compile_unit;
     this->evaluate_pixel_compile_unit();
 
     /* No need to continue, the above recursive calls will eventually exist the loop and do the
@@ -264,14 +265,14 @@ void NodeTreeEvaluator::map_pixel_operation_inputs_to_their_results(PixelOperati
   }
 }
 
-void NodeTreeEvaluator::map_node_to_node_operation(const bNode &node, NodeOperation *operations)
+void NodeTreeEvaluator::map_node_to_node_operation(const bNode &node, NodeOperation *operation)
 {
-  node_operations_.add_new(&node, operations);
+  node_operations_.add_new(&node, operation);
 }
 
-void NodeTreeEvaluator::map_node_to_pixel_operation(const bNode &node, PixelOperation *operations)
+void NodeTreeEvaluator::map_node_to_pixel_operation(const bNode &node, PixelOperation *operation)
 {
-  pixel_operations_.add_new(&node, operations);
+  pixel_operations_.add_new(&node, operation);
 }
 
 void NodeTreeEvaluator::add_node_to_pixel_compile_unit(const bNode &node)

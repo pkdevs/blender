@@ -4,14 +4,21 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
 
 #include "BLI_map.hh"
+#include "BLI_vector.hh"
 
 #include "COM_context.hh"
 #include "COM_domain.hh"
 #include "COM_node_operation.hh"
 #include "COM_pixel_operation.hh"
+
+namespace blender {
+struct bNode;
+struct bNodeSocket;
+}  // namespace blender
 
 namespace blender::compositor {
 
@@ -115,7 +122,7 @@ struct Schedule;
  * have a certain operation domain, and any node that gets added to the compile unit should itself
  * have a computed node domain that is compatible with that operation domain, otherwise, had the
  * node been compiled into its own operation separately, the result would have been be different.
- * For instance, consider the anode tree in Figure (1) where node 1 outputs a 100x100 result, node
+ * For instance, consider the node tree in Figure (1) where node 1 outputs a 100x100 result, node
  * 2 outputs a 50x50 result, the first input in node 3 has the highest domain priority, and the
  * second input in node 5 has the highest domain priority. In this case, pixel operation 1 will
  * output a 100x100 result, and pixel operation 2 will output a 50x50 result, because that's the
@@ -204,7 +211,7 @@ class NodeTreeEvaluator {
   Result &get_result_from_output_socket(const bNodeSocket &output);
 
   /* Get a reference to the pixel compile unit. */
-  PixelCompileUnit &get_pixel_compile_unit();
+  PixelCompileUnit &pixel_compile_unit();
 
   /* Get a reference to the node execution schedule being compiled. */
   const Schedule &schedule();
@@ -238,7 +245,7 @@ class NodeTreeEvaluator {
    * also correct the reference counts of the results, see the implementation for more details. */
   void map_pixel_operation_inputs_to_their_results(PixelOperation *operation);
 
-  /* Add an association between the given node and the give node operation that the node was
+  /* Add an association between the given node and the given node operation that the node was
    * compiled into in the node_operations_ map. */
   void map_node_to_node_operation(const bNode &node, NodeOperation *operation);
 
@@ -248,7 +255,7 @@ class NodeTreeEvaluator {
 
   /* Add the given node to the compile unit. And if the domain of the compile unit is not yet
    * determined or was determined to be an identity domain, update it to the computed domain for
-   * the give node. */
+   * the given node. */
   void add_node_to_pixel_compile_unit(const bNode &node);
 
   /* Returns true if the pixel compile unit operates on single values. */
@@ -272,12 +279,12 @@ class NodeTreeEvaluator {
    * compiled operation. See the discussion in COM_domain.hh for more information. */
   Domain compute_pixel_node_domain(const bNode &node);
 
-  /* Identify of the number of outputs of the pixel compile unit surpass what is possible. This is
+  /* Identify if the number of outputs of the pixel compile unit surpass what is possible. This is
    * essentially the number of outputs that will be added for the nodes in the pixel compile unit
    * in ShaderOperation::populate_results_for_node. */
   bool pixel_compile_unit_has_too_many_outputs(const bool are_node_previews_needed);
 
-  /* Identify of the number of inputs of the pixel compile unit surpass what is possible. This is
+  /* Identify if the number of inputs of the pixel compile unit surpass what is possible. This is
    * essentially the number of inputs that will be added for the nodes in the pixel compile unit in
    * ShaderOperation::link_node_inputs. */
   bool pixel_compile_unit_has_too_many_inputs();
@@ -291,7 +298,7 @@ class NodeTreeEvaluator {
   /* Get a reference to the compositor context. */
   Context &context();
 
-  /* Get a reference to the node execution schedule being compiled. */
+  /* Get a reference to the operation that uses the evaluator. */
   Operation &operation();
 };
 
