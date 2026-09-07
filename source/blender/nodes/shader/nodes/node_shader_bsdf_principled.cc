@@ -519,6 +519,9 @@ NODE_SHADER_MATERIALX_BEGIN
         {"roughness", get_input_value("Roughness", NodeItem::Type::Float)},
         {"anisotropic", get_input_value("Anisotropic", NodeItem::Type::Float)},
         {"anisotropic_rotation", get_input_value("Anisotropic Rotation", NodeItem::Type::Float)},
+        {"retroreflectivity",
+         get_input_value("Retroreflectivity", NodeItem::Type::Float)
+             .convert(NodeItem::Type::Boolean)},
         {"sheen", get_input_value("Sheen Weight", NodeItem::Type::Float)},
         {"sheen_roughness", get_input_value("Sheen Roughness", NodeItem::Type::Float)},
         {"sheen_tint", get_input_value("Sheen Tint", NodeItem::Type::Color3)},
@@ -562,6 +565,7 @@ NODE_SHADER_MATERIALX_BEGIN
       NodeItem normal = in["normal"];
       NodeItem tangent = in["tangent"];
       NodeItem coat_normal = in["coat_normal"];
+      NodeItem retroreflectivity = in["retroreflectivity"];
 
       NodeItem n_main_tangent = empty();
       if (tangent && normal) {
@@ -622,6 +626,7 @@ NODE_SHADER_MATERIALX_BEGIN
                                           {{"ior", n_ior_out},
                                            {"extinction", n_extinction_out},
                                            {"roughness", n_main_roughness},
+                                           {"retroreflective", retroreflectivity},
                                            {"normal", normal},
                                            {"tangent", n_main_tangent}});
 
@@ -632,6 +637,7 @@ NODE_SHADER_MATERIALX_BEGIN
                                               {"ior", ior},
                                               {"scatter_mode", val(std::string("R"))},
                                               {"roughness", n_main_roughness},
+                                              {"retroreflective", retroreflectivity},
                                               {"normal", normal},
                                               {"tangent", n_main_tangent}});
 
@@ -648,6 +654,7 @@ NODE_SHADER_MATERIALX_BEGIN
                                                  {{"tint", base_color},
                                                   {"ior", ior},
                                                   {"roughness", n_transmission_roughness},
+                                                  {"retroreflective", retroreflectivity},
                                                   {"normal", normal},
                                                   {"tangent", n_main_tangent}});
 

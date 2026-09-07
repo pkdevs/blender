@@ -84,6 +84,8 @@ NODE_SHADER_MATERIALX_BEGIN
   NodeItem color = get_input_value("Color", NodeItem::Type::Color3);
   NodeItem roughness = get_input_value("Roughness", NodeItem::Type::Vector2);
   NodeItem anisotropy = get_input_value("Anisotropy", NodeItem::Type::Color3);
+  NodeItem retroreflectivity =
+      get_input_value("Retroreflectivity", NodeItem::Type::Float).convert(NodeItem::Type::Boolean);
   NodeItem normal = get_input_link("Normal", NodeItem::Type::Vector3);
   NodeItem tangent = get_input_link("Tangent", NodeItem::Type::Vector3);
 
@@ -99,7 +101,8 @@ NODE_SHADER_MATERIALX_BEGIN
                       {"tangent", tangent},
                       {"ior", ior_out},
                       {"extinction", extinction_out},
-                      {"roughness", roughness}});
+                      {"roughness", roughness},
+                      {"retroreflective", retroreflectivity}});
 }
 #endif
 NODE_SHADER_MATERIALX_END

@@ -658,6 +658,12 @@ NodeItem NodeItem::convert(Type to_type) const
       case Type::Float: {
         float v = value->asA<float>();
         switch (to_type) {
+          case Type::Boolean:
+            res.value = MaterialX::Value::createValue<bool>(v);
+            break;
+          case Type::Integer:
+            res.value = MaterialX::Value::createValue<int>(v);
+            break;
           case Type::Vector2:
             res.value = MaterialX::Value::createValue<MaterialX::Vector2>({v, v});
             break;

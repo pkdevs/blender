@@ -116,6 +116,8 @@ NODE_SHADER_MATERIALX_BEGIN
   NodeItem normal = get_input_link("Normal", NodeItem::Type::Vector3);
   NodeItem thin_film_thickness = get_input_value("Thin Film Thickness", NodeItem::Type::Float);
   NodeItem thin_film_ior = get_input_value("Thin Film IOR", NodeItem::Type::Float);
+  NodeItem retroreflectivity =
+      get_input_value("Retroreflectivity", NodeItem::Type::Float).convert(NodeItem::Type::Boolean);
 
   return create_node("dielectric_bsdf",
                      NodeItem::Type::BSDF,
@@ -123,6 +125,7 @@ NODE_SHADER_MATERIALX_BEGIN
                       {"tint", color},
                       {"roughness", roughness},
                       {"ior", ior},
+                      {"retroreflective", retroreflectivity},
                       {"thinfilm_thickness", thin_film_thickness},
                       {"thinfilm_ior", thin_film_ior},
                       {"scatter_mode", val(std::string("RT"))}});

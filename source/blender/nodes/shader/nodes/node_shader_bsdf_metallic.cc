@@ -163,6 +163,8 @@ NODE_SHADER_MATERIALX_BEGIN
   NodeItem edge_tint = get_input_value("Edge Tint", NodeItem::Type::Color3);
   NodeItem roughness = get_input_value("Roughness", NodeItem::Type::Vector2);
   NodeItem anisotropy = get_input_value("Anisotropy", NodeItem::Type::Color3);
+  NodeItem retroreflectivity =
+      get_input_value("Retroreflectivity", NodeItem::Type::Float).convert(NodeItem::Type::Boolean);
   NodeItem normal = get_input_link("Normal", NodeItem::Type::Vector3);
   NodeItem tangent = get_input_link("Tangent", NodeItem::Type::Vector3);
   NodeItem thin_film_thickness = get_input_value("Thin Film Thickness", NodeItem::Type::Float);
@@ -188,6 +190,7 @@ NODE_SHADER_MATERIALX_BEGIN
                       {"ior", ior_out},
                       {"extinction", extinction_out},
                       {"roughness", roughness},
+                      {"retroreflective", retroreflectivity},
                       {"thinfilm_thickness", thin_film_thickness},
                       {"thinfilm_ior", thin_film_ior}});
 }
