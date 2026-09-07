@@ -173,7 +173,7 @@ enum eBone_Flag : int {
   BONE_TRANSFORM_MIRROR = (1 << 25),
   /** this bone is associated with a locked vertex group, ONLY USE FOR DRAWING */
   BONE_DRAW_LOCKED_WEIGHT = (1 << 26),
-  /** bone is drawn in front of others, like Object's "In Front" but per-bone */
+  /** Bone is drawn in front of others, like the Armature's "In Front" setting, but per-bone. */
   BONE_DRAW_IN_FRONT = (1 << 27),
 };
 ENUM_OPERATORS(eBone_Flag)
