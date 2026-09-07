@@ -11,6 +11,7 @@
 #include "UI_resources.hh"
 
 #include "BLI_array_utils.hh"
+#include "BLI_bounds.hh"
 
 #include "NOD_socket_search_link.hh"
 
@@ -183,10 +184,10 @@ static void node_geo_exec(GeoNodeExecParams params)
       float range = 0.0f;
       float standard_deviation = 0.0f;
       float variance = 0.0f;
-      const bool sort_required = params.output_is_required("Min"_ustr) ||
-                                 params.output_is_required("Max"_ustr) ||
-                                 params.output_is_required("Range"_ustr) ||
-                                 params.output_is_required("Median"_ustr);
+      const bool min_max_required = params.output_is_required("Range"_ustr) ||
+                                    params.output_is_required("Min"_ustr) ||
+                                    params.output_is_required("Max"_ustr);
+      const bool sort_required = params.output_is_required("Median"_ustr);
       const bool sum_required = params.output_is_required("Sum"_ustr) ||
                                 params.output_is_required("Mean"_ustr);
       const bool variance_required = params.output_is_required("Standard Deviation"_ustr) ||
@@ -196,9 +197,12 @@ static void node_geo_exec(GeoNodeExecParams params)
         if (sort_required) {
           std::ranges::sort(data);
           median = median_of_sorted_span(data);
+        }
+        if (min_max_required) {
+          Bounds<float> bounds = bounds::min_max(data.as_span()).value_or({});
 
-          min = data.first();
-          max = data.last();
+          min = bounds.min;
+          max = bounds.max;
           range = max - min;
         }
         if (sum_required || variance_required) {
@@ -216,10 +220,12 @@ static void node_geo_exec(GeoNodeExecParams params)
         params.set_output("Sum"_ustr, sum);
         params.set_output("Mean"_ustr, mean);
       }
-      if (sort_required) {
+      if (min_max_required) {
+        params.set_output("Range"_ustr, range);
         params.set_output("Min"_ustr, min);
         params.set_output("Max"_ustr, max);
-        params.set_output("Range"_ustr, range);
+      }
+      if (sort_required) {
         params.set_output("Median"_ustr, median);
       }
       if (variance_required) {
@@ -261,10 +267,10 @@ static void node_geo_exec(GeoNodeExecParams params)
       float3 mean{0};
       float3 variance{0};
       float3 standard_deviation{0};
-      const bool sort_required = params.output_is_required("Min"_ustr) ||
-                                 params.output_is_required("Max"_ustr) ||
-                                 params.output_is_required("Range"_ustr) ||
-                                 params.output_is_required("Median"_ustr);
+      const bool min_max_required = params.output_is_required("Range"_ustr) ||
+                                    params.output_is_required("Min"_ustr) ||
+                                    params.output_is_required("Max"_ustr);
+      const bool sort_required = params.output_is_required("Median"_ustr);
       const bool sum_required = params.output_is_required("Sum"_ustr) ||
                                 params.output_is_required("Mean"_ustr);
       const bool variance_required = params.output_is_required("Standard Deviation"_ustr) ||
@@ -294,9 +300,12 @@ static void node_geo_exec(GeoNodeExecParams params)
           const float y_median = median_of_sorted_span(data_y);
           const float z_median = median_of_sorted_span(data_z);
           median = float3(x_median, y_median, z_median);
+        }
+        if (min_max_required) {
+          Bounds<float3> bounds = bounds::min_max(data.as_span()).value_or({});
 
-          min = float3(data_x.first(), data_y.first(), data_z.first());
-          max = float3(data_x.last(), data_y.last(), data_z.last());
+          min = bounds.min;
+          max = bounds.max;
           range = max - min;
         }
         if (sum_required || variance_required) {
@@ -318,10 +327,12 @@ static void node_geo_exec(GeoNodeExecParams params)
         params.set_output("Sum"_ustr, sum);
         params.set_output("Mean"_ustr, mean);
       }
-      if (sort_required) {
+      if (min_max_required) {
         params.set_output("Min"_ustr, min);
         params.set_output("Max"_ustr, max);
         params.set_output("Range"_ustr, range);
+      }
+      if (sort_required) {
         params.set_output("Median"_ustr, median);
       }
       if (variance_required) {
