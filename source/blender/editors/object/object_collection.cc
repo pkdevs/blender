@@ -615,29 +615,30 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
   /* Execute operator with our stored properties. */
   IDProperty *op_props = IDP_CopyProperty(data->import_properties);
   PointerRNA properties = RNA_pointer_create_discrete(nullptr, ot->srna, op_props);
+  Main *bmain = CTX_data_main(C);
 
   /* Ensure we have a valid filepath set. Create one if the user has not specified anything yet. */
-  char filepath[FILE_MAX];
-  RNA_string_get(&properties, "filepath", filepath);
-  if (!filepath[0]) {
+  char filepath_abs[FILE_MAX];
+  RNA_string_get(&properties, "filepath", filepath_abs);
+  BLI_path_abs(filepath_abs, BKE_main_blendfile_path(bmain));
+
+  if (!filepath_abs[0]) {
     BKE_report(op->reports, RPT_ERROR, "No filepath set");
 
     IDP_FreeProperty(op_props);
     return OPERATOR_CANCELLED;
   }
   else {
-    const char *filename = BLI_path_basename(filepath);
+    const char *filename = BLI_path_basename(filepath_abs);
     if (!filename[0] || !BLI_path_extension(filename)) {
-      BKE_reportf(op->reports, RPT_ERROR, "File path '%s' is not a valid file", filepath);
+      BKE_reportf(op->reports, RPT_ERROR, "File path '%s' is not a valid file", filepath_abs);
 
       IDP_FreeProperty(op_props);
       return OPERATOR_CANCELLED;
     }
   }
 
-  Main *bmain = CTX_data_main(C);
-  BLI_path_abs(filepath, BKE_main_blendfile_path(bmain));
-  RNA_string_set(&properties, "filepath", filepath);
+  RNA_string_set(&properties, "filepath", filepath_abs);
 
   /* If there is already a library for this collection importer, then an import has already
    * occurred. */
@@ -646,7 +647,7 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
                 RPT_WARNING,
                 "Collection '%s' has already been imported from '%s'",
                 collection->id.name + 2,
-                filepath);
+                filepath_abs);
     IDP_FreeProperty(op_props);
     return OPERATOR_CANCELLED;
   }
@@ -679,22 +680,32 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
 
   /* Only complete the collection import if there's at least one real object that was imported. */
   if (temp_main->objects.is_empty()) {
-    BKE_reportf(op->reports, RPT_WARNING, "No objects were imported from '%s'", filepath);
+    BKE_reportf(op->reports, RPT_WARNING, "No objects were imported from '%s'", filepath_abs);
     op_result = OPERATOR_CANCELLED;
   }
 
   if (op_result == OPERATOR_FINISHED) {
     /* Create an external parent library to encapsulate the external archive library if one is
      * not already present. */
-    Library *external_lib = static_cast<Library *>(
-        BLI_findstring(&bmain->libraries, filepath, offsetof(Library, filepath)));
-    BLI_assert(!external_lib || external_lib->flag & LIBRARY_FLAG_IS_EXTERNAL);
+    Library *external_lib = nullptr;
+    for (Library &lib : bmain->libraries) {
+      if ((lib.flag & LIBRARY_FLAG_IS_EXTERNAL) && STREQ(lib.runtime->filepath_abs, filepath_abs))
+      {
+        external_lib = &lib;
+        break;
+      }
+    }
 
     if (!external_lib) {
-      external_lib = BKE_id_new<Library>(bmain, BLI_path_basename(filepath));
+      external_lib = BKE_id_new<Library>(bmain, BLI_path_basename(filepath_abs));
       external_lib->flag |= LIBRARY_FLAG_IS_EXTERNAL;
       id_us_ensure_real(&external_lib->id);
-      BKE_library_filepath_set(bmain, external_lib, filepath);
+      BKE_library_filepath_set(bmain, external_lib, filepath_abs);
+
+      /* Immediately make the filepath relative for UI display and other queries. */
+      if (U.flag & USER_RELPATHS) {
+        BLI_path_rel(external_lib->filepath, BKE_main_blendfile_path(bmain));
+      }
     }
 
     /* Create the external archive library to serve as the namespace for all IDs imported from the
@@ -729,7 +740,7 @@ static wmOperatorStatus collection_importer_import_exec(bContext *C, wmOperator 
 
     BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
 
-    BKE_reportf(op->reports, RPT_INFO, "Imported '%s'", filepath);
+    BKE_reportf(op->reports, RPT_INFO, "Imported '%s'", filepath_abs);
   }
   else {
     BKE_main_free(temp_main);
