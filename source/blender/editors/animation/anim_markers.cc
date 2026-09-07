@@ -1541,7 +1541,7 @@ static wmOperatorStatus ed_marker_select(bContext *C,
     if (marker_found) {
       if (sel_op == SEL_OP_SUB) {
         marker_found->flag &= ~SELECT;
-        ED_markers_set_active(markers, nullptr); /* TODO redmser: is this correct? */
+        ED_markers_set_active(markers, nullptr);
       }
       else {
         marker_found->flag |= SELECT;
