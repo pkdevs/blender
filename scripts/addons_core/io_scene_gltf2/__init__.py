@@ -7,7 +7,7 @@ bl_info = {
     # This is now displayed as the maintainer, so show the foundation.
     # "author": "Julien Duroure, Scurest, Norbert Nopper, Urs Hanselmann, Moritz Becher, Benjamin Schmithüsen, Jim Eckerlein", # Original Authors
     'author': "Blender Foundation, Khronos Group",
-    "version": (5, 3, 21),
+    "version": (5, 3, 22),
     'blender': (5, 3, 0),
     'location': 'File > Import-Export',
     'description': 'Import-Export as glTF 2.0',
@@ -530,7 +530,7 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
              'Viewport',
              'Export minimal materials as defined in Viewport display properties'),
             ('NONE',
-             'No export',
+             'No Export',
              'Do not export materials, and combine mesh primitive groups, losing material slot information')),
         description='Export materials',
         default='EXPORT')
