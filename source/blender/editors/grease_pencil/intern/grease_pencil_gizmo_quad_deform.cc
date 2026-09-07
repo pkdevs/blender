@@ -18,6 +18,8 @@
 #include "ED_screen.hh"
 #include "ED_view3d.hh"
 
+#include "DEG_depsgraph.hh"
+
 #include "WM_api.hh"
 // #include "WM_gizmo_types.hh"
 #include "WM_types.hh"
@@ -409,6 +411,9 @@ struct QuadWidgetGroup2 {
 
   Vector<MutableDrawingInfo> drawings;
   Vector<IndexMask> selections;
+  Vector<Array<float3>> src_positions;
+
+  GreasePencil *grease_pencil_src;
 
   struct {
     PointerRNA ptr;
@@ -417,7 +422,149 @@ struct QuadWidgetGroup2 {
   } update_data;
 };
 
-static void box_mask_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
+static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
+    const RegionView3D &rv3d,
+    Object &object,
+    const int layer_index,
+    const IndexMask selection,
+    const bke::greasepencil::Drawing &drawing)
+{
+  using bke::greasepencil::Drawing;
+  using bke::greasepencil::Layer;
+
+  std::optional<Bounds<float2>> drawing_bounds = std::nullopt;
+
+  BLI_assert(object.type == OB_GREASE_PENCIL);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
+
+  const Layer &layer = *grease_pencil.layers()[layer_index];
+  const float4x4 layer_to_world = layer.to_world_space(object);
+  const VArray<float> radii = drawing.radii();
+  const bke::CurvesGeometry &strokes = drawing.strokes();
+  const Span<float3> positions = strokes.positions();
+
+  selection.foreach_index(
+      [&](const int point_i) {
+        const float2 screen_co = float2(positions[point_i].x, positions[point_i].z);
+        // const float2 screen_co = this->project_to_screen(layer_to_world, positions[point_i]);
+
+        if (screen_co.x != V2D_IS_CLIPPED) {
+          const float3 world_pos = math::transform_point(layer_to_world, positions[point_i]);
+          // const float pixels = radii[point_i] / ED_view3d_pixel_size(&rv3d, world_pos);
+          const float pixels = radii[point_i];
+
+          std::optional<Bounds<float2>> point_bounds = Bounds<float2>(screen_co);
+          point_bounds->pad(pixels);
+          drawing_bounds = bounds::merge(drawing_bounds, point_bounds);
+        }
+      },
+      exec_mode::grain_size(512));
+
+  return drawing_bounds;
+}
+
+static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
+{
+  const Scene &scene = *CTX_data_scene(C);
+
+  ARegion *region = CTX_wm_region(C);
+  RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+  // wmGizmo *gz = gzgroup->gizmos.first();
+  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
+  wmGizmo *gz = mask_group->border;
+
+  // SpaceImage *sima = CTX_wm_space_image(C);
+  // const float2 offset = float2{sima->xof, sima->yof} * sima->zoom;
+
+  // node_gizmo_calc_matrix_space(region, sima->zoom, offset, gz->matrix_space);
+
+  float3 placement_normal_;
+
+  unit_m4(gz->matrix_space);
+
+  switch (scene.toolsettings->gp_sculpt.lock_axis) {
+    case GP_LOCKAXIS_VIEW:
+      // plane_ = DrawingPlacementPlane::View;
+      break;
+    case GP_LOCKAXIS_Y:
+      // plane_ = DrawingPlacementPlane::Front;
+      placement_normal_ = float3(0, 1, 0);
+
+      rotate_m4(gz->matrix_space, 'X', M_PI / 2.0f);
+      break;
+    case GP_LOCKAXIS_X:
+      // plane_ = DrawingPlacementPlane::Side;
+      placement_normal_ = float3(1, 0, 0);
+
+      rotate_m4(gz->matrix_space, 'Y', M_PI / 2.0f);
+      rotate_m4(gz->matrix_space, 'Z', M_PI / 2.0f);
+      break;
+    case GP_LOCKAXIS_Z:
+      // plane_ = DrawingPlacementPlane::Top;
+      placement_normal_ = float3(0, 0, 1);
+      break;
+    case GP_LOCKAXIS_CURSOR: {
+      // plane_ = DrawingPlacementPlane::Cursor;
+
+      // rotate_m4(gz->matrix_space, 'X', M_PI / 2.0f);
+
+      placement_normal_ = scene.cursor.matrix<float3x3>() * float3(0, 0, 1);
+      break;
+    }
+  }
+
+  std::optional<Bounds<float2>> box;
+
+  Object *object = CTX_data_active_object(C);
+  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object->data);
+
+  mask_group->grease_pencil_src = &grease_pencil;
+
+  mask_group->selections = Vector<IndexMask>();
+  mask_group->src_positions = Vector<Array<float3>>();
+  const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(scene, grease_pencil);
+  for (const MutableDrawingInfo &info : drawings) {
+    IndexMaskMemory memory;
+    const IndexMask selected_points = retrieve_editable_and_selected_points(
+        *object, info.drawing, info.layer_index, memory);
+
+    mask_group->selections.append(selected_points);
+    mask_group->src_positions.append(Array<float3>(info.drawing.strokes().positions()));
+
+    box = bounds::merge(box,
+                        compute_screen_space_drawing_bounds(
+                            *rv3d, *object, info.layer_index, selected_points, info.drawing));
+  }
+
+  mask_group->drawings = drawings;
+
+  if (box) {
+    printf("box %f, %f\n", box->size().x, box->size().y);
+
+    mul_v3_fl(gz->matrix_space[0], box->size().x);
+    mul_v3_fl(gz->matrix_space[1], box->size().y);
+
+    gz->matrix_space[3][0] = box->center().x;
+    gz->matrix_space[3][2] = box->center().y;
+
+    // RNA_float_set_array(gz->ptr, "dimensions", box->size());
+    WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
+  }
+  else {
+    WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
+  }
+
+  // box.min = float2(-1.0f, -1.0f);
+  // box.max = float2(1.0f, 1.0f);
+
+  // mul_v3_fl(gz->matrix_space[0], box.size().x);
+  // mul_v3_fl(gz->matrix_space[1], box.size().y);
+
+  // gz->matrix_space[3][0] = box.center().x;
+  // gz->matrix_space[3][1] = box.center().y;
+}
+
+static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
 {
   QuadWidgetGroup2 *mask_group = MEM_new<QuadWidgetGroup2>(__func__);
   mask_group->border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
@@ -436,6 +583,8 @@ static void box_mask_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
   gzgroup->customdata_free = [](void *customdata) {
     MEM_delete(static_cast<QuadWidgetGroup2 *>(customdata));
   };
+
+  update_things(C, gzgroup);
 }
 
 static void gizmo_node_box_mask_prop_matrix_get(const wmGizmo *gz,
@@ -488,8 +637,6 @@ static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
                                                 wmGizmoProperty *gz_prop,
                                                 const void *value_p)
 {
-  return;
-
   const float (*matrix)[4] = static_cast<const float (*)[4]>(value_p);
   float4x4 mat = float4x4(matrix);
   BLI_assert(gz_prop->type->array_length == 16);
@@ -500,8 +647,10 @@ static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
 
   const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
   const Vector<IndexMask> selections = mask_group->selections;
+  const Vector<Array<float3>> &src_positions = mask_group->src_positions;
 
-  const float4x4 transform = mat;
+  const float4x4 transform = float4x4(gz->matrix_space) * mat *
+                             math::invert(float4x4(gz->matrix_space));
 
   printf("transform: \n");
   printf("%f %f %f %f\n", transform[0][0], transform[1][0], transform[2][0], transform[3][0]);
@@ -513,12 +662,13 @@ static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
   for (const int drawing_i : drawings.index_range()) {
     const MutableDrawingInfo &info = drawings[drawing_i];
     const IndexMask selected_points = selections[drawing_i];
+    const Span<float3> src_positions_i = src_positions[drawing_i];
 
     bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
     MutableSpan<float3> positions = strokes.positions_for_write();
 
     selected_points.foreach_index([&](const int point_i) {
-      positions[point_i] = math::transform_point(transform, positions[point_i]);
+      positions[point_i] = math::transform_point(transform, src_positions_i[point_i]);
     });
 
     info.drawing.tag_positions_changed();
@@ -527,6 +677,11 @@ static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
     //                     compute_screen_space_drawing_bounds(
     //                         *rv3d, *object, info.layer_index, selected_points, info.drawing));
   }
+
+  DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(mask_group->update_data.context,
+                        NC_GEOM | ND_DATA | NA_EDITED,
+                        mask_group->grease_pencil_src);
 
   // const float2 dims = mask_group->state.dims;
   // const float2 offset = mask_group->state.offset;
@@ -604,7 +759,7 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 
   // bNode *node = bke::node_get_active(*snode->edittree);
 
-  // mask_group->update_data.context = const_cast<bContext *>(C);
+  mask_group->update_data.context = const_cast<bContext *>(C);
   // bNodeSocket *source_input = bke::node_find_socket(*node, SOCK_IN, "Mask"_ustr);
   // mask_group->update_data.ptr = RNA_pointer_create_discrete(
   //     reinterpret_cast<ID *>(snode->edittree), RNA_NodeSocket, source_input);
@@ -622,142 +777,9 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   // BKE_image_release_ibuf(ima, ibuf, lock);
 }
 
-static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
-    const RegionView3D &rv3d,
-    Object &object,
-    const int layer_index,
-    const IndexMask selection,
-    const bke::greasepencil::Drawing &drawing)
-{
-  using bke::greasepencil::Drawing;
-  using bke::greasepencil::Layer;
-
-  std::optional<Bounds<float2>> drawing_bounds = std::nullopt;
-
-  BLI_assert(object.type == OB_GREASE_PENCIL);
-  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
-
-  const Layer &layer = *grease_pencil.layers()[layer_index];
-  const float4x4 layer_to_world = layer.to_world_space(object);
-  const VArray<float> radii = drawing.radii();
-  const bke::CurvesGeometry &strokes = drawing.strokes();
-  const Span<float3> positions = strokes.positions();
-
-  selection.foreach_index(
-      [&](const int point_i) {
-        const float2 screen_co = float2(positions[point_i].x, positions[point_i].z);
-        // const float2 screen_co = this->project_to_screen(layer_to_world, positions[point_i]);
-
-        if (screen_co.x != V2D_IS_CLIPPED) {
-          const float3 world_pos = math::transform_point(layer_to_world, positions[point_i]);
-          // const float pixels = radii[point_i] / ED_view3d_pixel_size(&rv3d, world_pos);
-          const float pixels = radii[point_i];
-
-          std::optional<Bounds<float2>> point_bounds = Bounds<float2>(screen_co);
-          point_bounds->pad(pixels);
-          drawing_bounds = bounds::merge(drawing_bounds, point_bounds);
-        }
-      },
-      exec_mode::grain_size(512));
-
-  return drawing_bounds;
-}
-
 void bbox_draw_prepare_space_image(const bContext *C, wmGizmoGroup *gzgroup)
 {
-  const Scene &scene = *CTX_data_scene(C);
-
-  ARegion *region = CTX_wm_region(C);
-  RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
-  // wmGizmo *gz = gzgroup->gizmos.first();
-  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
-  wmGizmo *gz = mask_group->border;
-
-  // SpaceImage *sima = CTX_wm_space_image(C);
-  // const float2 offset = float2{sima->xof, sima->yof} * sima->zoom;
-
-  // node_gizmo_calc_matrix_space(region, sima->zoom, offset, gz->matrix_space);
-
-  float3 placement_normal_;
-
-  unit_m4(gz->matrix_space);
-
-  switch (scene.toolsettings->gp_sculpt.lock_axis) {
-    case GP_LOCKAXIS_VIEW:
-      // plane_ = DrawingPlacementPlane::View;
-      break;
-    case GP_LOCKAXIS_Y:
-      // plane_ = DrawingPlacementPlane::Front;
-      placement_normal_ = float3(0, 1, 0);
-
-      rotate_m4(gz->matrix_space, 'X', M_PI / 2.0f);
-      break;
-    case GP_LOCKAXIS_X:
-      // plane_ = DrawingPlacementPlane::Side;
-      placement_normal_ = float3(1, 0, 0);
-
-      rotate_m4(gz->matrix_space, 'Y', M_PI / 2.0f);
-      rotate_m4(gz->matrix_space, 'Z', M_PI / 2.0f);
-      break;
-    case GP_LOCKAXIS_Z:
-      // plane_ = DrawingPlacementPlane::Top;
-      placement_normal_ = float3(0, 0, 1);
-      break;
-    case GP_LOCKAXIS_CURSOR: {
-      // plane_ = DrawingPlacementPlane::Cursor;
-
-      // rotate_m4(gz->matrix_space, 'X', M_PI / 2.0f);
-
-      placement_normal_ = scene.cursor.matrix<float3x3>() * float3(0, 0, 1);
-      break;
-    }
-  }
-
-  std::optional<Bounds<float2>> box;
-
-  Object *object = CTX_data_active_object(C);
-  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object->data);
-
-  mask_group->selections = Vector<IndexMask>();
-  const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(scene, grease_pencil);
-  for (const MutableDrawingInfo &info : drawings) {
-    IndexMaskMemory memory;
-    const IndexMask selected_points = retrieve_editable_and_selected_points(
-        *object, info.drawing, info.layer_index, memory);
-
-    mask_group->selections.append(selected_points);
-
-    box = bounds::merge(box,
-                        compute_screen_space_drawing_bounds(
-                            *rv3d, *object, info.layer_index, selected_points, info.drawing));
-  }
-
-  mask_group->drawings = drawings;
-
-  if (box) {
-    printf("box %f, %f\n", box->size().x, box->size().y);
-
-    mul_v3_fl(gz->matrix_space[0], box->size().x);
-    mul_v3_fl(gz->matrix_space[1], box->size().y);
-
-    gz->matrix_space[3][0] = box->center().x;
-    gz->matrix_space[3][2] = box->center().y;
-
-    // RNA_float_set_array(gz->ptr, "dimensions", box->size());
-    WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
-  }
-  else {
-    WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
-  }
-
-  // box.min = float2(-1.0f, -1.0f);
-  // box.max = float2(1.0f, 1.0f);
-
-  // mul_v3_fl(gz->matrix_space[0], box.size().x);
-  // mul_v3_fl(gz->matrix_space[1], box.size().y);
-
-  // gz->matrix_space[3][0] = box.center().x;
-  // gz->matrix_space[3][1] = box.center().y;
+  // update_things(C, gzgroup);
 }
 
 void VIEW3D_GGT_grease_pencil_quad(wmGizmoGroupType *gzgt)
