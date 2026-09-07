@@ -124,12 +124,12 @@ struct DirichletBoundaryOp {
   {
   }
 
-  void operator()(const openvdb::Coord &ijk,
-                  const openvdb::Coord & /*neighbor*/,
+  void operator()(const openvdb::Coord & /*ijk*/,
+                  const openvdb::Coord &neighbor,
                   double &source,
                   double &diagonal) const
   {
-    const float value = value_accessor_.getValue(ijk);
+    const float value = value_accessor_.getValue(neighbor);
     diagonal -= 1.0;
     source += value * voxel_volume_;
   };
@@ -151,7 +151,7 @@ struct NeumannBoundaryOp {
                   double & /*diagonal*/) const
   {
     const openvdb::math::Vec3s normal = ijk.asVec3s() - neighbor.asVec3s();
-    const openvdb::math::Vec3s gradient = gradient_accessor_.getValue(ijk);
+    const openvdb::math::Vec3s gradient = gradient_accessor_.getValue(neighbor);
     source += (gradient * voxel_size_).dot(normal);
   };
 };
