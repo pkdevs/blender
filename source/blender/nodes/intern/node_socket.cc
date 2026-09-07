@@ -53,6 +53,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "NOD_compositor_nodes_srna.hh"
+#include "NOD_geometry.hh"
 #include "NOD_geometry_nodes_bundle.hh"
 #include "NOD_geometry_nodes_closure.hh"
 #include "NOD_geometry_nodes_srna.hh"
@@ -140,7 +141,7 @@ static bNodeSocket *verify_socket_template(bNodeTree *ntree,
 {
   bNodeSocket *sock;
 
-  for (sock = static_cast<bNodeSocket *>(socklist->first); sock; sock = sock->next) {
+  for (sock = socklist->first(); sock; sock = sock->next) {
     if (STREQLEN(sock->name, stemp->name, NODE_MAXSTR)) {
       break;
     }
@@ -174,7 +175,7 @@ static void verify_socket_template_list(bNodeTree *ntree,
 
   /* no inputs anymore? */
   if (stemp_first == nullptr) {
-    for (sock = static_cast<bNodeSocket *>(socklist->first); sock; sock = nextsock) {
+    for (sock = socklist->first(); sock; sock = nextsock) {
       nextsock = sock->next;
       bke::node_remove_socket(*ntree, *node, *sock);
     }
@@ -187,17 +188,17 @@ static void verify_socket_template_list(bNodeTree *ntree,
       stemp++;
     }
     /* leftovers are removed */
-    for (sock = static_cast<bNodeSocket *>(socklist->first); sock; sock = nextsock) {
+    for (sock = socklist->first(); sock; sock = nextsock) {
       nextsock = sock->next;
       bke::node_remove_socket(*ntree, *node, *sock);
     }
 
     /* and we put back the verified sockets */
     stemp = stemp_first;
-    if (socklist->first) {
+    if (socklist->first_) {
       /* Some dynamic sockets left, store the list start
        * so we can add static sockets in front of it. */
-      sock = static_cast<bNodeSocket *>(socklist->first);
+      sock = socklist->first();
       while (stemp->type != -1) {
         /* Put static sockets in front of dynamic. */
         BLI_insertlinkbefore(socklist, sock, stemp->sock);
@@ -433,7 +434,7 @@ static bool hide_new_group_input_sockets(const bNode &node)
 {
   BLI_assert(node.is_group_input());
   /* Check needed to handle newly added group input nodes. */
-  if (const bNodeSocket *extension_socket = static_cast<bNodeSocket *>(node.outputs.last)) {
+  if (const bNodeSocket *extension_socket = node.outputs.last()) {
     return extension_socket->is_user_hidden();
   }
   return false;
@@ -1005,11 +1006,16 @@ static bke::bNodeSocketType *make_socket_type_bool()
         &srna, "value", data->value, socket.name().c_str(), socket.description().c_str());
     RNA_def_property_flag(prop, PROP_FORCE_GEOMETRY_EVAL);
     RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
-    make_common_type_prop(srna,
-                          socket,
-                          nodes::geometry_nodes_input_type_items_value_or_attribute_or_layer,
-                          nodes::GeometryNodesInputType::Value,
-                          r_generated);
+    make_common_type_prop(
+        srna,
+        socket,
+        nodes::geometry_nodes_input_type_items_value_or_attribute_or_layer,
+        is_layer_selection_field(socket) ?
+            nodes::GeometryNodesInputType::Layer :
+            (socket.default_attribute_name && socket.default_attribute_name[0] != '\0' ?
+                 nodes::GeometryNodesInputType::Attribute :
+                 nodes::GeometryNodesInputType::Value),
+        r_generated);
     make_common_attribute_name_prop(srna, socket, r_generated);
     prop = RNA_def_string(
         &srna,
