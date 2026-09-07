@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #define DNA_DEPRECATED_ALLOW
 
 #include <optional>
@@ -46,6 +50,7 @@ std::optional<AttrType> custom_data_type_to_attr_type(const eCustomDataType data
     case CD_TESSLOOPNORMAL:
     case CD_FREESTYLE_EDGE:
     case CD_FREESTYLE_FACE:
+    case CD_MVERT_SKIN:
       return std::nullopt;
 
     /* These types are only used for #BMesh. */
@@ -62,7 +67,6 @@ std::optional<AttrType> custom_data_type_to_attr_type(const eCustomDataType data
 
     /* Custom data on vertices. */
     case CD_MDEFORMVERT:
-    case CD_MVERT_SKIN:
     case CD_ORCO:
     case CD_CLOTH_ORCO:
       return std::nullopt;
