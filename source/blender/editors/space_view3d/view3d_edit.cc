@@ -588,7 +588,6 @@ static wmOperatorStatus view3d_flip_view_exec(bContext *C, wmOperator *op)
 
   const FlipDirection direction = FlipDirection(RNA_enum_get(op->ptr, "direction"));
 
-  /* no nullptr check is needed, poll checks */
   ED_view3d_context_user_region(C, &v3d, &region);
   ED_view3d_smooth_view_force_finish(C, v3d, region);
 
@@ -607,16 +606,13 @@ static wmOperatorStatus view3d_flip_view_exec(bContext *C, wmOperator *op)
 
 void VIEW3D_OT_view_flip(wmOperatorType *ot)
 {
-  /* identifiers */
   ot->name = "Flip View";
   ot->description = "Mirror the view when in a camera";
   ot->idname = "VIEW3D_OT_view_flip";
 
-  /* API callbacks. */
   ot->exec = view3d_flip_view_exec;
   ot->poll = view3d_camera_user_poll;
 
-  /* properties */
   ot->prop = RNA_def_enum(ot->srna,
                           "direction",
                           prop_flip_directions,
