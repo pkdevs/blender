@@ -734,7 +734,30 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
   wmGizmo *gz = mask_group->border;
 
-  printf("box_mask_refresh\n");
+  bool update = false;
+
+  const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
+  const Vector<IndexMask> selections = mask_group->selections;
+
+  Object *object = CTX_data_active_object(C);
+
+  for (const int drawing_i : drawings.index_range()) {
+    const MutableDrawingInfo &info = drawings[drawing_i];
+
+    IndexMaskMemory memory;
+    const IndexMask selected_points_1 = retrieve_editable_and_selected_points(
+        *object, info.drawing, info.layer_index, memory);
+
+    const IndexMask selected_points_2 = selections[drawing_i];
+
+    if (selected_points_1 != selected_points_2) {
+      update = true;
+    }
+  }
+
+  if (update) {
+    update_things(C, gzgroup);
+  }
 
   // void *lock;
   // Image *ima = BKE_image_ensure_viewer(bmain, IMA_TYPE_COMPOSITE, "Render Result");
