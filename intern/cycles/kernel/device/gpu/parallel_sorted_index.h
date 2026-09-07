@@ -29,7 +29,7 @@ ccl_device_inline void gpu_parallel_sort_bucket_pass_impl(const uint num_states,
 #endif
                                                           ccl_global ushort *d_queued_kernel,
                                                           ccl_global uint *d_shader_sort_key,
-                                                          ccl_global int *partition_key_offset)
+                                                          ccl_global int *partition_key_offsets)
 {
 #ifndef __KERNEL_METAL__
 #  ifndef __KERNEL_ONEAPI__
