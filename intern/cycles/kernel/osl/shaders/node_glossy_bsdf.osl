@@ -11,6 +11,7 @@ shader node_glossy_bsdf(color Color = 0.8,
                         float Roughness = 0.2,
                         float Anisotropy = 0.0,
                         float Rotation = 0.0,
+                        float Retroreflectivity = 0.0,
                         normal Normal = N,
                         normal Tangent = 0.0,
                         output closure color BSDF = 0)
@@ -43,9 +44,9 @@ shader node_glossy_bsdf(color Color = 0.8,
   }
 
   if (distribution == "Multiscatter GGX") {
-    BSDF = base_color * microfacet_multi_ggx_aniso(Normal, T, alpha_x, alpha_y, base_color);
+    BSDF = base_color * microfacet_multi_ggx_aniso(Normal, T, alpha_x, alpha_y, base_color, "retroreflectivity", Retroreflectivity);
   }
   else {
-    BSDF = base_color * microfacet(distribution, Normal, T, alpha_x, alpha_y, 0.0, 0);
+    BSDF = base_color * microfacet(distribution, Normal, T, alpha_x, alpha_y, 0.0, 0, "retroreflectivity", Retroreflectivity);
   }
 }
