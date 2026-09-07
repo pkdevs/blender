@@ -52,6 +52,9 @@ static const EnumPropertyItem boundary_items[] = {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  b.allow_any_socket_order();
+  b.use_custom_socket_order();
+
   b.add_input<decl::Float>("Grid"_ustr)
       .hide_value()
       .structure_type(StructureType::Grid)
@@ -98,6 +101,17 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("Final absolute error of the solution");
   b.add_output<decl::Float>("Relative Error"_ustr)
       .description("Final relative error of the solution");
+
+  auto &p = b.add_panel("Debug"_ustr).default_closed(true);
+  p.add_output<decl::Float>("Debug Boundary Value"_ustr)
+      .structure_type(StructureType::Grid)
+      .usage_by_menu("Boundary"_ustr, {int(Boundary::Fixed), int(Boundary::Mixed)});
+  p.add_output<decl::Vector>("Debug Boundary Gradient"_ustr)
+      .structure_type(StructureType::Grid)
+      .usage_by_menu("Boundary"_ustr, {int(Boundary::Normal), int(Boundary::Mixed)});
+  p.add_output<decl::Float>("Debug Boundary Factor"_ustr)
+      .structure_type(StructureType::Grid)
+      .usage_by_menu("Boundary"_ustr, int(Boundary::Mixed));
 }
 
 struct DirichletBoundaryOp {
@@ -216,6 +230,9 @@ static void node_geo_exec(GeoNodeExecParams params)
   using PreconditionerType =
       openvdb::math::pcg::JacobiPreconditioner<openvdb::tools::poisson::LaplacianMatrix>;
   openvdb::util::NullInterrupter interrupter;
+  SocketValueVariant debug_boundary_value = SocketValueVariant::from(0.0f);
+  SocketValueVariant debug_boundary_gradient = SocketValueVariant::from(float3(0.0f));
+  SocketValueVariant debug_boundary_factor = SocketValueVariant::from(0.0f);
   switch (boundary) {
     case Boundary::Background:
       solution_tree = openvdb::tools::poisson::solve(
@@ -235,6 +252,8 @@ static void node_geo_exec(GeoNodeExecParams params)
       solution_tree = openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<
           PreconditionerType>(
           source_vdb_grid.tree(), boundary_op, solver_state, interrupter, staggered);
+
+      debug_boundary_value = SocketValueVariant::from(grids[0]);
       break;
     }
 
@@ -251,6 +270,8 @@ static void node_geo_exec(GeoNodeExecParams params)
       solution_tree = openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<
           PreconditionerType>(
           source_vdb_grid.tree(), boundary_op, solver_state, interrupter, staggered);
+
+      debug_boundary_gradient = SocketValueVariant::from(grids[0]);
       break;
     }
 
@@ -276,6 +297,10 @@ static void node_geo_exec(GeoNodeExecParams params)
       solution_tree = openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<
           PreconditionerType>(
           source_vdb_grid.tree(), boundary_op, solver_state, interrupter, staggered);
+
+      debug_boundary_value = SocketValueVariant::from(grids[0]);
+      debug_boundary_gradient = SocketValueVariant::from(grids[1]);
+      debug_boundary_factor = SocketValueVariant::from(grids[2]);
       break;
     }
 
@@ -293,6 +318,15 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Success"_ustr, solver_state.success);
   params.set_output("Absolute Error"_ustr, float(solver_state.absoluteError));
   params.set_output("Relative Error"_ustr, float(solver_state.relativeError));
+  if (params.output_is_required("Debug Boundary Value"_ustr)) {
+    params.set_output("Debug Boundary Value"_ustr, std::move(debug_boundary_value));
+  }
+  if (params.output_is_required("Debug Boundary Gradient"_ustr)) {
+    params.set_output("Debug Boundary Gradient"_ustr, std::move(debug_boundary_gradient));
+  }
+  if (params.output_is_required("Debug Boundary Factor"_ustr)) {
+    params.set_output("Debug Boundary Factor"_ustr, std::move(debug_boundary_factor));
+  }
 
   if (!solver_state.success) {
     params.error_message_add(
