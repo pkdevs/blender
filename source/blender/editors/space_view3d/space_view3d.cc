@@ -1693,7 +1693,7 @@ void ED_spacetype_view3d()
   /* regions: main window */
   art = MEM_new_zeroed<ARegionType>("spacetype view3d main region");
   art->regionid = RGN_TYPE_WINDOW;
-  art->keymapflag = ED_KEYMAP_GIZMO | ED_KEYMAP_TOOL | ED_KEYMAP_GPENCIL;
+  art->keymapflag = ED_KEYMAP_GIZMO | ED_KEYMAP_TOOL | ED_KEYMAP_GPENCIL | ED_CURSOR_UI;
   art->draw = view3d_main_region_draw;
   art->init = view3d_main_region_init;
   art->exit = view3d_main_region_exit;

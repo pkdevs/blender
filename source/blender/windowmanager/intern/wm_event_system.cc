@@ -408,6 +408,11 @@ void WM_main_add_notifier(uint type, void *reference)
   WM_event_add_notifier_ex(wm, nullptr, type, reference);
 }
 
+void WM_event_reset_cursor_blink_notifier(const bContext &C)
+{
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(&C));
+}
+
 void WM_main_remove_notifier_reference(const void *reference)
 {
   Main *bmain = G_MAIN;

@@ -1313,7 +1313,7 @@ static void draw_text_decoration(SpaceText *st, ARegion *region)
       GPU_blend(GPU_BLEND_NONE);
     }
   }
-  region->runtime->text_cursor_overlay->rect = {};
+  region->runtime->text_cursor_overlay->rect = rctf{};
   ui::theme::get_color_4fv(TH_HILITE, region->runtime->text_cursor_overlay->color);
   if (!hidden) {
     int x = TXT_BODY_LEFT(st) + (vselc * st->runtime->char_width_px);
@@ -1329,7 +1329,7 @@ static void draw_text_decoration(SpaceText *st, ARegion *region)
       if (ch == '\t') {
         w *= st->tabnumber - (vselc + st->left) % st->tabnumber;
       }
-      region->runtime->text_cursor_overlay->rect = {
+      region->runtime->text_cursor_overlay->rect = rctf{
           .xmin = float(x),
           .xmax = float(x + w + U.pixelsize),
           .ymin = float(y - line_height - U.pixelsize),
@@ -1337,7 +1337,7 @@ static void draw_text_decoration(SpaceText *st, ARegion *region)
       };
     }
     else {
-      region->runtime->text_cursor_overlay->rect = {
+      region->runtime->text_cursor_overlay->rect = rctf{
           .xmin = float(x - U.pixelsize),
           .xmax = float(x + U.pixelsize),
           .ymin = float(y),
@@ -1346,7 +1346,7 @@ static void draw_text_decoration(SpaceText *st, ARegion *region)
     }
   }
   else {
-    region->runtime->text_cursor_overlay->rect = {};
+    region->runtime->text_cursor_overlay->rect = rctf{};
   }
 
   immUnbindProgram();

@@ -11,6 +11,7 @@
 #include "BLI_math_color_c.hh"
 #include "BLI_math_matrix.hh"
 
+#include "BKE_screen.hh"
 #include "BKE_vfont.hh"
 
 #include "overlay_base.hh"
@@ -92,6 +93,16 @@ class Text : Overlay {
         sub.shader_set(res.shaders->uniform_color.get());
         sub.state_set(default_state, state.clipping_plane_count);
         ui::theme::get_color_4fv(TH_WIDGET_TEXT_CURSOR, color);
+        if (state.region->runtime->draw_flag & bke::ARegionRuntimeDrawFlag::TopmostActive) {
+          if (state.region->runtime->text_cursor_overlay &&
+              !state.region->runtime->text_cursor_overlay->draw)
+          {
+            color[3] = 0.0f;
+          }
+        }
+        else {
+          color[3] *= 0.5f;
+        }
         srgb_to_linearrgb_v4(color, color);
         sub.push_constant("ucolor", color);
         cursor_ps_ = &sub;

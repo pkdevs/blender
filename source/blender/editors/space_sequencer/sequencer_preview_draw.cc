@@ -18,6 +18,7 @@
 #include "BLI_math_rotation_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_rect.hh"
+#include "BLI_time.hh"
 #include "BLI_utildefines.hh"
 #include "BLI_vector.hh"
 
@@ -1209,31 +1210,46 @@ static void text_edit_draw_cursor(const bContext *C, const Strip *strip, uint po
 
   cursor_coords = coords_region_view_align(ui::view2d_fromcontext(C), cursor_coords);
 
-  float2 cursor_quad[4] = {
-      {cursor_coords.x, cursor_coords.y},
-      {cursor_coords.x, cursor_coords.y + runtime->line_height},
-      {cursor_coords.x + cursor_width, cursor_coords.y + runtime->line_height},
-      {cursor_coords.x + cursor_width, cursor_coords.y},
+  std::array<blender::float2, 4> cursor_quad = {
+      float2{cursor_coords.x, cursor_coords.y},
+      float2{cursor_coords.x, cursor_coords.y + runtime->line_height},
+      float2{cursor_coords.x + cursor_width, cursor_coords.y + runtime->line_height},
+      float2{cursor_coords.x + cursor_width, cursor_coords.y},
   };
   const float2 descender_offs{0.0f, float(runtime->font_descender)};
-
-  immBegin(GPU_PRIM_TRIS, 6);
-  immUniformThemeColor(TH_SEQ_TEXT_CURSOR);
+  ARegion *region = CTX_wm_region(C);
 
   for (int i : IndexRange(0, 4)) {
     cursor_quad[i] += descender_offs + view_offs;
     cursor_quad[i] = math::transform_point(transform_mat, cursor_quad[i]);
-  }
-  for (int i : {0, 1, 2, 2, 3, 0}) {
-    immVertex2f(pos, cursor_quad[i][0], cursor_quad[i][1]);
+    ui::view2d_view_to_region_fl(
+        &region->v2d, cursor_quad[i].x, cursor_quad[i].y, &cursor_quad[i].x, &cursor_quad[i].y);
   }
 
-  immEnd();
+  if (!region->runtime->text_cursor_overlay) {
+    region->runtime->text_cursor_overlay = bke::TextCursorOverlay{
+        .last_active_time = BLI_time_now_seconds(),
+    };
+    WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
+  }
+  ui::theme::get_color_4fv(TH_SEQ_TEXT_CURSOR, region->runtime->text_cursor_overlay->color);
+  region->runtime->text_cursor_overlay->rect = cursor_quad;
 }
 
 static void text_edit_draw(const bContext *C)
 {
+  ARegion *region = CTX_wm_region(C);
+  if (region->runtime->text_cursor_overlay) {
+    region->runtime->text_cursor_overlay->rect = {};
+  }
+
   if (!sequencer_text_editing_active_poll(const_cast<bContext *>(C))) {
+    if (region->runtime->text_cursor_overlay && region->runtime->text_cursor_overlay->timer) {
+      WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_PAUSE, CTX_wm_window(C));
+      WM_event_timer_remove(
+          CTX_wm_manager(C), CTX_wm_window(C), region->runtime->text_cursor_overlay->timer);
+      region->runtime->text_cursor_overlay = std::nullopt;
+    }
     return;
   }
   const Strip *strip = seq::select_active_get(CTX_data_sequencer_scene(C));

@@ -7,10 +7,12 @@
  * \ingroup bke
  */
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+#include <variant>
 
 #include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
@@ -574,9 +576,13 @@ enum ARegionRuntimeFlag : uint8_t {
   TooltipRegion = (1 << 2),
 };
 ENUM_OPERATORS(ARegionRuntimeFlag)
+enum ARegionRuntimeDrawFlag : uint8_t {
+  TopmostActive = (1 << 0),
+};
+ENUM_OPERATORS(ARegionRuntimeDrawFlag)
 
 struct TextCursorOverlay {
-  rctf rect = {};
+  std::variant<rctf, std::array<float2, 4>> rect = rctf{};
   wmTimer *timer = nullptr;
   double last_active_time = 0;
   float color[4];
@@ -648,6 +654,7 @@ struct ARegionRuntime {
   /** Dummy panel used in popups so they can support layout panels. */
   Panel *popup_block_panel = nullptr;
   ARegionRuntimeFlag flag = {};
+  ARegionRuntimeDrawFlag draw_flag = {};
 
   std::string search_filter;
   Set<std::string> categories_search_match;

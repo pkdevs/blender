@@ -71,6 +71,7 @@
 #include "wm_window_private.hh"
 
 #include "UI_resources.hh"
+#include "UI_view2d.hh"
 
 #include "IMB_colormanagement.hh"
 
@@ -430,19 +431,29 @@ static void wm_region_draw_cursor_overlay(bContext *C, ARegion &region, bool act
   wmViewport(&region.winrct);
   GPU_matrix_push_projection();
   GPU_blend(GPU_BLEND_ALPHA);
-  rctf rect = region.runtime->text_cursor_overlay->rect;
   const uint pos = GPU_vertformat_attr_add(
       immVertexFormat(), "pos", gpu::VertAttrType::SFLOAT_32_32);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   float4 color = region.runtime->text_cursor_overlay->color;
+
   if (!active) {
     color[3] *= 0.5f;
   }
   immUniformColor4fv(color);
 
   /* Draw cursor. */
-  immRectf(pos, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
-
+  if (const rctf *rect = std::get_if<rctf>(&region.runtime->text_cursor_overlay->rect)) {
+    immRectf(pos, rect->xmin, rect->ymin, rect->xmax, rect->ymax);
+  }
+  else {
+    const std::array<float2, 4> &quad = std::get<std::array<float2, 4>>(
+        region.runtime->text_cursor_overlay->rect);
+    immBegin(GPU_PRIM_TRIS, 6);
+    for (int i : {0, 1, 2, 2, 3, 0}) {
+      immVertex2f(pos, quad[i][0], quad[i][1]);
+    }
+    immEnd();
+  }
   immUnbindProgram();
   GPU_matrix_pop_projection();
   wmWindowViewport(win);
@@ -1008,6 +1019,8 @@ static void wm_draw_area_offscreen(bContext *C, wmWindow *win, ScrArea *area, bo
 
   CTX_wm_area_set(C, area);
   GPU_debug_group_begin(wm_area_name(area));
+  const ARegion *active_region = bke::screen_topmost_active_region(
+      WM_window_get_active_screen(win));
 
   /* Compute UI layouts for dynamically size regions. */
   for (ARegion &region : area->regionbase) {
@@ -1045,7 +1058,9 @@ static void wm_draw_area_offscreen(bContext *C, wmWindow *win, ScrArea *area, bo
     if (!region.runtime->visible || !region.runtime->do_draw) {
       continue;
     }
-
+    if (&region == active_region) {
+      region.runtime->draw_flag |= bke::ARegionRuntimeDrawFlag::TopmostActive;
+    }
     CTX_wm_region_set(C, &region);
     bool use_viewport = WM_region_use_viewport(area, &region);
 
@@ -1091,6 +1106,7 @@ static void wm_draw_area_offscreen(bContext *C, wmWindow *win, ScrArea *area, bo
 
     /* Clear temporary update flag. */
     region.flag &= ~RGN_FLAG_SEARCH_FILTER_UPDATE;
+    region.runtime->draw_flag &= ~bke::ARegionRuntimeDrawFlag::TopmostActive;
 
     CTX_wm_region_set(C, nullptr);
   }
@@ -1117,11 +1133,14 @@ static void wm_draw_window_offscreen(bContext *C, wmWindow *win, bool stereo)
       wm_draw_area_offscreen(C, win, area, stereo);
     }
   }
-
+  const ARegion *active_region = bke::screen_topmost_active_region(screen);
   /* Draw menus into their own frame-buffer. */
   for (ARegion &region : screen->regionbase) {
     if (!region.runtime->visible) {
       continue;
+    }
+    if (&region == active_region) {
+      region.runtime->draw_flag |= bke::ARegionRuntimeDrawFlag::TopmostActive;
     }
     CTX_wm_region_popup_set(C, &region);
 
@@ -1144,6 +1163,7 @@ static void wm_draw_window_offscreen(bContext *C, wmWindow *win, bool stereo)
     GPU_debug_group_end();
 
     region.runtime->do_draw = 0;
+    region.runtime->draw_flag &= ~bke::ARegionRuntimeDrawFlag::TopmostActive;
     CTX_wm_region_popup_set(C, nullptr);
   }
 }
@@ -1223,10 +1243,14 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
       if (!region.runtime->visible) {
         continue;
       }
+      if (&region == active_region) {
+        region.runtime->draw_flag |= bke::ARegionRuntimeDrawFlag::TopmostActive;
+      }
       if (region.overlap) {
         wm_draw_region_blend(&region, 0, true);
       }
       wm_region_draw_cursor_overlay(C, region, active_region == &region);
+      region.runtime->draw_flag &= ~bke::ARegionRuntimeDrawFlag::TopmostActive;
     }
   }
 
@@ -1245,8 +1269,12 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
     if (!region.runtime->visible) {
       continue;
     }
+    if (&region == active_region) {
+      region.runtime->draw_flag |= bke::ARegionRuntimeDrawFlag::TopmostActive;
+    }
     wm_draw_region_blend(&region, 0, true);
     wm_region_draw_cursor_overlay(C, region, active_region == &region);
+    region.runtime->draw_flag &= ~bke::ARegionRuntimeDrawFlag::TopmostActive;
   }
 
   /* Always draw, not only when screen tagged. */

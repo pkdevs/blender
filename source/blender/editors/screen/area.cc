@@ -126,12 +126,11 @@ void ED_region_do_listen(wmRegionListenerParams *params)
         if (region->runtime->text_cursor_overlay->timer) {
           WM_event_timer_remove(
               params->wm, params->window, region->runtime->text_cursor_overlay->timer);
+          region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
+          region->runtime->text_cursor_overlay->timer = nullptr;
+          region->runtime->text_cursor_overlay->draw = true;
+          region->runtime->text_cursor_overlay->last_active_time = BLI_time_now_seconds();
         }
-        region->runtime->text_cursor_overlay->timer = nullptr;
-
-        region->runtime->text_cursor_overlay->draw = true;
-        region->runtime->text_cursor_overlay->last_active_time = BLI_time_now_seconds();
-        region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
       }
       else if (notifier->data == ND_UI_TEXT_BLINK_TIMER_RESTART &&
                notifier->reference == params->window && region->runtime->text_cursor_overlay &&
