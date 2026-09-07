@@ -206,7 +206,7 @@ void CUDADeviceQueue::copy_to_device(device_memory &mem)
   assert(d_ptr != 0);
   assert(mem.host_pointer != nullptr);
 
-  if (mem.is_shared(cuda_device_)) {
+  if (mem.is_shared(cuda_device_) && mem.host_pointer == mem.shared_pointer) {
     return;
   }
 
@@ -228,7 +228,7 @@ void CUDADeviceQueue::copy_from_device(device_memory &mem)
   assert(mem.device_pointer != 0);
   assert(mem.host_pointer != nullptr);
 
-  if (mem.is_shared(cuda_device_)) {
+  if (mem.is_shared(cuda_device_) && mem.host_pointer == mem.shared_pointer) {
     return;
   }
 

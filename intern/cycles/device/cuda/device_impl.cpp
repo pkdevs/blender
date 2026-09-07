@@ -719,20 +719,28 @@ void CUDADevice::mem_copy_from(
 {
   if (mem.type == MEM_IMAGE_TEXTURE) {
     assert(!"mem_copy_from not supported for images.");
+    return;
   }
-  else if (mem.host_pointer) {
-    const size_t size = elem * w * h;
-    const size_t offset = elem * y * w;
 
-    if (mem.device_pointer) {
-      const CUDAContextScope scope(this);
-      cuda_assert(cuMemcpyDtoH(
-          (char *)mem.host_pointer + offset, (CUdeviceptr)mem.device_pointer + offset, size));
-    }
-    else {
-      memset((char *)mem.host_pointer + offset, 0, size);
-    }
+  const size_t size = elem * w * h;
+  const size_t offset = elem * y * w;
+
+  if (!mem.host_pointer) {
+    return;
   }
+  if (!mem.device_pointer) {
+    memset((char *)mem.host_pointer + offset, 0, size);
+    return;
+  }
+
+  if (mem.is_shared(this) && mem.host_pointer == mem.shared_pointer) {
+    return;
+  }
+
+  const CUDAContextScope scope(this);
+
+  cuda_assert(cuMemcpyDtoH(
+      (char *)mem.host_pointer + offset, (CUdeviceptr)mem.device_pointer + offset, size));
 }
 
 void CUDADevice::mem_zero(device_memory &mem)
@@ -744,13 +752,14 @@ void CUDADevice::mem_zero(device_memory &mem)
     return;
   }
 
-  if (!(mem.is_shared(this) && mem.host_pointer == mem.shared_pointer)) {
-    const CUDAContextScope scope(this);
-    cuda_assert(cuMemsetD8((CUdeviceptr)mem.device_pointer, 0, mem.memory_size()));
-  }
-  else if (mem.host_pointer) {
+  if (mem.is_shared(this) && mem.host_pointer == mem.shared_pointer) {
     memset(mem.host_pointer, 0, mem.memory_size());
+    return;
   }
+
+  const CUDAContextScope scope(this);
+
+  cuda_assert(cuMemsetD8((CUdeviceptr)mem.device_pointer, 0, mem.memory_size()));
 }
 
 void CUDADevice::mem_free(device_memory &mem)
