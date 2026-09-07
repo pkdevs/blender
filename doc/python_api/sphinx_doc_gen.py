@@ -1982,6 +1982,7 @@ context_type_map = {
     "active_annotation_layer": [("AnnotationLayer", False)],
     "active_bone": [("EditBone", False), ("Bone", False)],
     "active_file": [("FileSelectEntry", False)],
+    "active_marker": [("TimelineMarker", False)],
     "active_node": [("Node", False)],
     "active_object": [("Object", False)],
     "active_operator": [("Operator", False)],

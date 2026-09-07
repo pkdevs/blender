@@ -118,6 +118,7 @@ const char *screen_context_dir[] = {
     "sequencer_scene",
     "markers",
     "selected_markers",
+    "active_marker",
     nullptr,
 };
 
@@ -1220,6 +1221,23 @@ static eContextResult screen_ctx_selected_markers(const bContext *C, bContextDat
 {
   return screen_ctx_markers_ex(C, result, /*selected_only=*/true);
 }
+static eContextResult screen_ctx_active_marker(const bContext *C, bContextDataResult *result)
+{
+  Scene *scene = CTX_data_scene(C);
+  ListBaseT<TimeMarker> *markers = ED_scene_markers_get(C, scene);
+  if (!markers) {
+    return CTX_RESULT_NO_DATA;
+  }
+
+  TimeMarker *active_marker = ED_markers_get_active(markers);
+  if (!active_marker) {
+    return CTX_RESULT_NO_DATA;
+  }
+
+  ID *owner_id = ED_markers_get_owner_id(C, scene);
+  CTX_data_pointer_set(result, owner_id, RNA_TimelineMarker, active_marker);
+  return CTX_RESULT_OK;
+}
 
 /* Registry of context callback functions. */
 
@@ -1284,6 +1302,7 @@ static const Map<StringRef, context_callback> &ensure_ed_screen_context_function
     map.add("sequencer_scene", screen_ctx_sequencer_scene);
     map.add("markers", screen_ctx_markers);
     map.add("selected_markers", screen_ctx_selected_markers);
+    map.add("active_marker", screen_ctx_active_marker);
     return map;
   }();
   return screen_context_functions;

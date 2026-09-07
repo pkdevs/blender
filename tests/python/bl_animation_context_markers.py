@@ -22,6 +22,8 @@ def _add_test_markers(collection: bpy.types.TimelineMarkers | bpy.types.ActionPo
     marker.frame = 20
     marker.select = True
 
+    collection.active = marker
+
     marker = collection.new("Baz")
     marker.frame = 30
     marker.select = False
@@ -42,6 +44,9 @@ class ContextMarkersTest(unittest.TestCase):
         selected_markers = bpy.context.selected_markers
         self.assertEqual(0, len(selected_markers))
 
+        active_marker = bpy.context.active_marker
+        self.assertIsNone(active_marker)
+
     def _test_context_markers(self):
         """Asserts that the current context contains the markers created by `_add_test_markers`."""
         markers = bpy.context.markers
@@ -61,6 +66,11 @@ class ContextMarkersTest(unittest.TestCase):
         self.assertEqual("Bar", selected_markers[0].name)
         self.assertEqual(20, selected_markers[0].frame)
         self.assertEqual(True, selected_markers[0].select)
+
+        active_marker = bpy.context.active_marker
+        self.assertEqual("Bar", active_marker.name)
+        self.assertEqual(20, active_marker.frame)
+        self.assertEqual(True, active_marker.select)
 
 
 class SceneMarkersTest(ContextMarkersTest):
