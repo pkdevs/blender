@@ -109,6 +109,7 @@ if platform.system() == "Darwin":
         BLOCKLIST_METAL += [
             # MNEE only works on Metal with macOS >= 13
             "underwater_caustics.blend",
+            "mnee_.*.blend",
         ]
 
 
@@ -120,6 +121,7 @@ BLOCKLIST_HIPRT = [
 BLOCKLIST_HIP_NORT = [
     # MNEE not supported on HIP without HIP-RT
     "underwater_caustics.blend",
+    "mnee_.*.blend",
 ]
 
 
@@ -339,8 +341,11 @@ def main():
     # Microfacet hair renders slightly differently, and fails on Windows and Linux with OSL
     #
     # both_displacement.blend has slight differences between Linux and other platforms.
+    #
+    # caustics tests use the same manifold walk as underwater_caustics.blend and
+    # get the same tolerance.
 
-    if (test_dir_name in {'motion_blur', 'integrator', "displacement"}) or \
+    if (test_dir_name in {'motion_blur', 'integrator', 'caustics', "displacement"}) or \
        ((args.osl == 'all') and (test_dir_name in {'shader', 'hair'})):
         report.set_fail_threshold(0.032)
 

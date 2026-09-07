@@ -914,6 +914,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
   set(render_tests
     attributes
     camera
+    caustics
     colorspace
     bsdf
     hair
@@ -993,7 +994,7 @@ if((WITH_CYCLES OR WITH_GPU_RENDER_TESTS) AND TEST_SRC_DIR_EXISTS)
 
   set(gpu_render_tests ${render_tests})
   # Remove cycles specific tests.
-  list(FILTER gpu_render_tests EXCLUDE REGEX light_group|shadow_catcher|denoise|guiding|reports)
+  list(FILTER gpu_render_tests EXCLUDE REGEX caustics|light_group|shadow_catcher|denoise|guiding|reports)
 
   # Add EEVEE specific tests.
   set(eevee_tests ${gpu_render_tests};lighting_nodes)
