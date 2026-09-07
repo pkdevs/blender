@@ -481,6 +481,7 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   float3 placement_normal_;
 
   unit_m4(gz->matrix_space);
+  unit_m4(gz->matrix_offset);
 
   switch (scene.toolsettings->gp_sculpt.lock_axis) {
     case GP_LOCKAXIS_VIEW:
