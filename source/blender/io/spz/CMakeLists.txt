@@ -19,6 +19,8 @@ set(SRC
   IO_spz.hh
   importer/spz_import.hh
 
+  intern/spz_header.cc
+  intern/spz_header.hh
   intern/spz_read.cc
   intern/spz_read_gzip.cc
   intern/spz_read_ngsp.cc
@@ -40,3 +42,13 @@ set(LIB
 )
 
 blender_add_lib(bf_io_spz "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+
+if(WITH_GTESTS)
+  set(TEST_SRC
+    tests/spz_header_test.cc
+  )
+  set(TEST_LIB
+    bf_io_spz
+  )
+  blender_add_test_suite_lib(io_spz "${TEST_SRC}" "${INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
+endif()

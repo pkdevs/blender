@@ -1,0 +1,59 @@
+/* SPDX-FileCopyrightText: 2026 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+
+#include "spz_header.hh"
+
+#include <fmt/format.h>
+
+#include "IO_validate.hh"
+
+namespace blender::io::spz {
+
+template<typename Header>
+static std::optional<std::string> validate_common_header(const Header &header,
+                                                         const uint32_t min_version,
+                                                         const uint32_t max_version)
+{
+  if (header.magic != SPZ_HEADER_MAGIC) {
+    return fmt::format("Unexpected SPZ header magic 0x{:X}", header.magic);
+  }
+  if (header.version < min_version || header.version > max_version) {
+    return fmt::format("Unsupported SPZ version {}", header.version);
+  }
+  if (!validate::size_fits_in_int(header.num_points)) {
+    return "Too many points";
+  }
+  /* Blender supports spherical harmonics up to degree 4. */
+  if (header.sh_degree > 4) {
+    return fmt::format("Unsupported SH degree {}", header.sh_degree);
+  }
+  /* Match the range supported by the 24-bit fixed-point position decoder. */
+  if (header.fractional_bits >= 24) {
+    return fmt::format("Unsupported number of position fractional bits {}",
+                       header.fractional_bits);
+  }
+  return std::nullopt;
+}
+
+std::optional<std::string> validate_header(const PackedGaussiansHeader &header)
+{
+  return validate_common_header(header, 2, 3);
+}
+
+std::optional<std::string> validate_header(const NgspFileHeader &header)
+{
+  if (const std::optional<std::string> error = validate_common_header(header, 4, 4)) {
+    return error;
+  }
+  if (header.toc_byte_offset < sizeof(NgspFileHeader)) {
+    return "TOC byte offset is less than the size of the header";
+  }
+  /* Positions, alphas, colors, scales, rotations, and spherical harmonics. */
+  if (header.num_streams < 6) {
+    return "Unexpected number of Zstd streams";
+  }
+  return std::nullopt;
+}
+
+}  // namespace blender::io::spz
