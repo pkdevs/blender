@@ -913,7 +913,7 @@ void ED_text_to_object(bContext *C, const Text *text, const bool split_lines)
   float offset[3];
   int linenum = 0;
 
-  if (!text || !text->lines.first) {
+  if (!text || !text->lines.first_) {
     return;
   }
 
@@ -944,8 +944,7 @@ void ED_text_to_object(bContext *C, const Text *text, const bool split_lines)
     offset[1] = 0.0f;
     offset[2] = 0.0f;
 
-    txt_add_object(
-        C, static_cast<const TextLine *>(text->lines.first), text->lines.count(), offset);
+    txt_add_object(C, text->lines.first(), text->lines.count(), offset);
   }
 
   DEG_relations_tag_update(bmain);
@@ -1731,6 +1730,12 @@ static const EnumPropertyItem delete_type_items[] = {
 
 static wmOperatorStatus delete_exec(bContext *C, wmOperator *op)
 {
+#ifdef WITH_INPUT_IME
+  if (const std::optional<wmOperatorStatus> status = WM_operator_IME_edit_maybe(C)) {
+    return *status;
+  }
+#endif
+
   Object *obedit = CTX_data_edit_object(C);
   Curve *cu = id_cast<Curve *>(obedit->data);
   EditFont *ef = cu->editfont;
@@ -1929,6 +1934,14 @@ static wmOperatorStatus insert_text_invoke(bContext *C, wmOperator *op, const wm
     }
     return OPERATOR_PASS_THROUGH;
   }
+
+#ifdef WITH_INPUT_IME
+  if (const std::optional<wmOperatorStatus> status = WM_operator_IME_insert_maybe(
+          C, op, event, "text"))
+  {
+    return *status;
+  }
+#endif
 
   /* Tab typically exit edit-mode, but we allow it to be typed using modifier keys. */
   if (event->type == EVT_TABKEY) {
@@ -2424,7 +2437,11 @@ void FONT_OT_case_toggle(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-/* **************** Open Font ************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Open Font
+ * \{ */
 
 static void font_ui_template_init(bContext *C, wmOperator *op)
 {
@@ -2546,7 +2563,7 @@ void FONT_OT_open(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Delete Operator
+/** \name Unlink Font Operator
  * \{ */
 
 static wmOperatorStatus font_unlink_exec(bContext *C, wmOperator *op)
@@ -2581,6 +2598,11 @@ void FONT_OT_unlink(wmOperatorType *ot)
   /* API callbacks. */
   ot->exec = font_unlink_exec;
 }
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Select Pick
+ * \{ */
 
 bool ED_curve_editfont_select_pick(
     bContext *C,

@@ -2,10 +2,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup bke
+ */
+
 #pragma once
 
 #include <utility>
 
+#include "BLI_bounds_types.hh"
 #include "BLI_math_vector.hh"
 
 namespace blender::bke::pbvh {
@@ -30,12 +35,23 @@ struct TriRasterizer {
   Edge edges[3];
 
  public:
-  float3 dx_step;
-  float3 dy_step;
+  Bounds<int2> bounds;
 
-  TriRasterizer(const float2 p0, const float2 p1, const float2 p2)
+  TriRasterizer(const float2 uv0, const float2 uv1, const float2 uv2, const int2 image_size)
   {
-    const float2 p[3] = {p0, p1, p2};
+    const float2 f_image_size(image_size.x, image_size.y);
+    const float2 p[3] = {uv0 * f_image_size, uv1 * f_image_size, uv2 * f_image_size};
+
+    if (isfinite(p[0].x) && isfinite(p[0].y) && isfinite(p[1].x) && isfinite(p[1].y) &&
+        isfinite(p[2].x) && isfinite(p[2].y))
+    {
+      Bounds<float2> f_bounds(math::min({p[0], p[1], p[2]}), math::max({p[0], p[1], p[2]}));
+      bounds = Bounds<int2>(math::clamp(int2(math::floor(f_bounds.min)), int2(0), image_size),
+                            math::clamp(int2(math::ceil(f_bounds.max)), int2(0), image_size));
+    }
+    else {
+      bounds = Bounds<int2>(int2(1), int2(0)); /* Empty bounds. */
+    }
 
     for (int i = 0; i < 3; i++) {
       float2 a = p[i];
@@ -50,27 +66,19 @@ struct TriRasterizer {
       /* Check which side the c vertex is on. */
       edges[i].positive_side = (math::cross(d, c - a) > 0.0f);
     }
-
-    dx_step = {edges[0].coefficients.x, edges[1].coefficients.x, edges[2].coefficients.x};
-    dy_step = {edges[0].coefficients.y, edges[1].coefficients.y, edges[2].coefficients.y};
   }
 
-  /* Edge function values at pixel center. */
-  float3 edge_values(const int x, const int y) const
+  /* True if the pixel center at (x, y) is inside. */
+  bool inside(const int x, const int y) const
   {
     const float3 xyz = {float(x) + 0.5f, float(y) + 0.5f, 1.0f};
-    return {math::dot(edges[0].coefficients, xyz),
-            math::dot(edges[1].coefficients, xyz),
-            math::dot(edges[2].coefficients, xyz)};
-  }
-
-  /* True if the point with edge values e is inside. */
-  bool inside(const float3 e) const
-  {
+    const float3 edge_values = {math::dot(edges[0].coefficients, xyz),
+                                math::dot(edges[1].coefficients, xyz),
+                                math::dot(edges[2].coefficients, xyz)};
     /* Note the positive side uses >= and negative uses < to make it watertight. */
-    return (edges[0].positive_side ? e.x >= 0.0f : e.x < 0.0f) &&
-           (edges[1].positive_side ? e.y >= 0.0f : e.y < 0.0f) &&
-           (edges[2].positive_side ? e.z >= 0.0f : e.z < 0.0f);
+    return ((edge_values.x >= 0.0f) == edges[0].positive_side) &
+           ((edge_values.y >= 0.0f) == edges[1].positive_side) &
+           ((edge_values.z >= 0.0f) == edges[2].positive_side);
   }
 };
 

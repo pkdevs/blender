@@ -7,13 +7,16 @@
  * \ingroup bke
  */
 
+#include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_map.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_set.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
@@ -229,12 +232,16 @@ enum class ARegionTypeFlag {
    * region.
    */
   UsePanelCategoryTabs = (1 << 1),
-
   /**
    * When using panel categories, this hides the sidebar tab where there is only one category
    * active.
    */
   HideSinglePanelCategories = (1 << 2),
+  /**
+   * Use panel categories region search, adds a button on top of the region which allows
+   * searching.
+   */
+  UsePanelCategoriesSearch = (1 << 3),
 };
 ENUM_OPERATORS(ARegionTypeFlag)
 
@@ -244,6 +251,40 @@ enum ARegionDrawLockFlags {
   REGION_DRAW_LOCK_RENDER = (1 << 0),
   REGION_DRAW_LOCK_BAKING = (1 << 1),
   REGION_DRAW_LOCK_ALL = (REGION_DRAW_LOCK_RENDER | REGION_DRAW_LOCK_BAKING)
+};
+
+/**
+ * Result of #ARegionType::cursor_ime, describing what should happen to the region's IME session.
+ * Ending a session cancels composition, discarding text the user has entered but not committed,
+ * so a temporary lack of position must *not* end it.
+ *
+ * A `std::nullopt` result means the region isn't editing text, end the session.
+ */
+enum class ARegionIMECursorState : int8_t {
+  /**
+   * The callback filled in its #ARegionIMECursor, (re)position the IME popup.
+   */
+  PositionSet,
+  /**
+   * No usable position right now, e.g. scrolling or the current-frame off a text strip:
+   * keep the session until it returns.
+   */
+  PositionPending,
+};
+
+/**
+ * The cursor position & size to display.
+ * See #ARegionType::cursor_ime for details.
+ */
+struct ARegionIMECursor {
+  /**
+   * Region relative, positions the candidate window & the composition preview.
+   *
+   * The width may be zero but the height should match the cursor size.
+   */
+  rcti rect = {0, 0, 0, 0};
+  /** The size the editor draws text at, so the preview matches it. */
+  int font_size = 0;
 };
 
 struct ARegionType {
@@ -314,6 +355,21 @@ struct ARegionType {
    * when the `v2d->tot` is changed and `cur` is adopted accordingly).
    */
   void (*on_view2d_changed)(const bContext *C, ARegion *region);
+
+  /**
+   * Report the IME cursor so the candidate window can be positioned,
+   * see #ARegionIMECursorState for the results.
+   *
+   * On #ARegionIMECursorState::PositionSet, `r_cursor->rect` is the region-relative cursor:
+   * used to position the IME popup. Otherwise `r_cursor` is left untouched.
+   *
+   * Called on region activation and after each draw (when `ARegionRuntime::do_ime` is set)
+   * to position the IME candidate window.
+   */
+  std::optional<ARegionIMECursorState> (*cursor_ime)(wmWindow *win,
+                                                     const ScrArea *area,
+                                                     const ARegion *region,
+                                                     ARegionIMECursor *r_cursor);
 
   ARegionTypeFlag flag;
 
@@ -510,7 +566,7 @@ enum class ARegionQuadviewIndex : uint8_t {
 };
 
 enum ARegionRuntimeFlag : uint8_t {
-  /* Move redo panel in +Y direction to avoid overlaping with other UI elements, see: #62258 */
+  /** Move redo panel in +Y direction to avoid overlapping with other UI elements, see: #62258 */
   HUD_PADDING = (1 << 0),
 };
 ENUM_OPERATORS(ARegionRuntimeFlag)
@@ -555,6 +611,9 @@ struct ARegionRuntime {
   /** Blend in/out. */
   wmTimer *regiontimer = nullptr;
 
+  /** For calling after building a blocks. */
+  Vector<std::function<void(const bContext &C, ui::Block &Block)>> post_block_layout_fns;
+
   wmDrawBuffer *draw_buffer = nullptr;
 
   /** Panel categories runtime. */
@@ -569,11 +628,17 @@ struct ARegionRuntime {
   /** Private, cached notifier events. */
   short do_draw_paintcursor;
 
+  /** Tag for IME cursor position refresh on next draw. */
+  bool do_ime = false;
+
   ARegionQuadviewIndex quadview_index = ARegionQuadviewIndex::None;
 
   /** Dummy panel used in popups so they can support layout panels. */
   Panel *popup_block_panel = nullptr;
   ARegionRuntimeFlag flag = {};
+
+  std::string search_filter;
+  Set<std::string> categories_search_match;
 };
 
 }  // namespace bke
@@ -774,6 +839,8 @@ void BKE_spacetypes_free();
 
 bool BKE_regiontype_uses_categories(const ARegionType *region_type);
 bool BKE_regiontype_uses_category_tabs(const ARegionType *region_type);
+bool BKE_regiontype_uses_panel_categories_search(const ARegionType *region_type);
+bool BKE_region_panel_categories_search_filter_visible(const ARegion *region);
 
 /* Space-data. */
 
@@ -890,9 +957,13 @@ ARegion *BKE_screen_find_region_in_space(const bScreen *screen,
     ATTR_NONNULL(1, 2);
 /**
  * \note used to get proper RNA paths for spaces (editors).
+ * \note This handles both normal screen areas, and global areas that are owned by the window.
  */
-std::optional<std::string> BKE_screen_path_from_screen_to_space(const PointerRNA *ptr);
-std::optional<std::string> BKE_screen_path_from_screen_to_area(const PointerRNA *ptr);
+std::optional<std::string> BKE_screen_path_to_space(const PointerRNA *ptr);
+/**
+ * \note This handles both normal screen areas, and global areas that are owned by the window.
+ */
+std::optional<std::string> BKE_screen_path_to_area(const PointerRNA *ptr);
 /**
  * \note Using this function is generally a last resort, you really want to be
  * using the context when you can - campbell
