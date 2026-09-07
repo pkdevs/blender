@@ -362,7 +362,7 @@ static void blender_camera_from_object(BlenderCamera *bcam,
     }
   }
   else {
-    /* Fallback to 35mm for other object types, like Blender. */
+    /* Like Blender, fall back to 35mm for other object types. */
     bcam->lens = 35.0f;
   }
 }
