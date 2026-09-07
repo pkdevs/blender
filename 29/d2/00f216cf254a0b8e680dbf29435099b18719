@@ -1,3 +1,4 @@
 Referenced by pull request #163359, Fix: Compositor asset shelf tabs not working
 Referenced by issue #161229, Blender LTS: Maintenance Task 5.2
 Referenced by pull request #163615, Fix: VSE: Default strip length preference not versioned for some builds
+Referenced by commit 7b2d02a3b6db90f464fd6a82e1d20973a9b64c2e, Fix: VSE: Default strip length preference not versioned for some builds
