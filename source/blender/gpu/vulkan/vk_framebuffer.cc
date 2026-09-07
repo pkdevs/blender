@@ -42,6 +42,20 @@ VKFrameBuffer::~VKFrameBuffer()
   if (context && context->active_framebuffer_get() == this) {
     context->deactivate_framebuffer();
   }
+  render_pass_free();
+}
+
+void VKFrameBuffer::render_pass_free()
+{
+  VKDiscardPool &discard_pool = VKDiscardPool::discard_pool_get();
+  if (vk_framebuffer != VK_NULL_HANDLE) {
+    discard_pool.discard_framebuffer(vk_framebuffer);
+    vk_framebuffer = VK_NULL_HANDLE;
+  }
+  if (vk_render_pass != VK_NULL_HANDLE) {
+    discard_pool.discard_render_pass(vk_render_pass);
+    vk_render_pass = VK_NULL_HANDLE;
+  }
 }
 
 /** \} */
@@ -566,6 +580,250 @@ void VKFrameBuffer::rendering_reset()
   is_rendering_ = false;
 }
 
+void VKFrameBuffer::rendering_ensure_render_pass(VKContext &context)
+{
+  render_pass_free();
+
+  depth_attachment_format_ = VK_FORMAT_UNDEFINED;
+  stencil_attachment_format_ = VK_FORMAT_UNDEFINED;
+  color_attachment_formats_.clear();
+
+  render_graph::VKResourceAccessInfo access_info;
+  Vector<VkAttachmentDescription> vk_attachment_descriptions;
+  Vector<VkAttachmentReference> color_attachments;
+  Vector<VkAttachmentReference> input_attachments;
+  Vector<VkImageView> vk_image_views;
+
+  uint32_t max_layer_count = 1;
+
+  /* Color attachments */
+  VkAttachmentReference depth_attachment_reference = {0u};
+  for (int color_attachment_index :
+       IndexRange(GPU_FB_COLOR_ATTACHMENT0, GPU_FB_MAX_COLOR_ATTACHMENT))
+  {
+    const GPUAttachment &attachment = attachments_[color_attachment_index];
+    if (attachment.tex == nullptr) {
+      continue;
+    }
+    VKTexture &color_texture = *unwrap(unwrap(attachment.tex));
+    BLI_assert_msg(color_texture.usage_get() & GPU_TEXTURE_USAGE_ATTACHMENT,
+                   "Texture is used as an attachment, but doesn't have the "
+                   "GPU_TEXTURE_USAGE_ATTACHMENT flag.");
+    GPUAttachmentState attachment_state = attachment_states_[color_attachment_index];
+    uint32_t layer_base = max_ii(attachment.layer, 0);
+    int layer_count = color_texture.layer_count();
+    if (attachment.layer == -1 && layer_count != 1) {
+      max_layer_count = max_ii(max_layer_count, layer_count);
+    }
+
+    VkFormat vk_format = to_vk_format(color_texture.device_format_get());
+    if (srgb_) {
+      if (!enabled_srgb_) {
+        vk_format = VK_FORMAT_R8G8B8_UNORM;
+      }
+    }
+
+    VKImageViewInfo image_view_info = {
+        eImageViewUsage::Attachment,
+        IndexRange(layer_base,
+                   layer_count != 1 ? max_ii(layer_count - layer_base, 1) : layer_count),
+        IndexRange(attachment.mip, 1),
+        {{'r', 'g', 'b', 'a'}},
+        VKImageViewArrayed::DONT_CARE,
+        vk_format,
+        VK_IMAGE_ASPECT_COLOR_BIT};
+    const VKImageView &image_view = color_texture.image_view_get(image_view_info);
+    /* TODO: Use VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL for read-only attachments. */
+    VkImageLayout vk_image_layout = (attachment_state == GPU_ATTACHMENT_READ) ?
+                                        VK_IMAGE_LAYOUT_GENERAL :
+                                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    uint32_t attachment_reference = color_attachment_index - GPU_FB_COLOR_ATTACHMENT0;
+    /* Depth attachment should always be right after the last color attachment. If not shaders
+     * cannot be reused between frame-buffers with and without depth/stencil attachment. */
+    depth_attachment_reference.attachment = attachment_reference + 1;
+
+    VkAttachmentDescription vk_attachment_description = {};
+    vk_attachment_description.format = image_view.vk_format();
+    vk_attachment_description.samples = VK_SAMPLE_COUNT_1_BIT;
+    vk_attachment_description.initialLayout = vk_image_layout;
+    vk_attachment_description.finalLayout = vk_image_layout;
+    vk_attachment_descriptions.append(std::move(vk_attachment_description));
+    vk_image_views.append(image_view.vk_handle());
+
+    switch (attachment_state) {
+      case GPU_ATTACHMENT_WRITE: {
+        color_attachments.append({attachment_reference, vk_image_layout});
+        color_attachment_formats_.append(vk_format);
+
+        access_info.images.append(
+            {color_texture.vk_image_handle(),
+             VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+             VK_IMAGE_ASPECT_COLOR_BIT,
+             layer_base});
+        break;
+      }
+
+      case GPU_ATTACHMENT_READ: {
+        input_attachments.append({attachment_reference, vk_image_layout});
+        access_info.images.append({color_texture.vk_image_handle(),
+                                   VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+                                   VK_IMAGE_ASPECT_COLOR_BIT,
+                                   layer_base});
+        break;
+      }
+
+      case GPU_ATTACHMENT_IGNORE: {
+        input_attachments.append({VK_ATTACHMENT_UNUSED, VK_IMAGE_LAYOUT_UNDEFINED});
+        break;
+      }
+    }
+  }
+
+  /* Update the color attachment size attribute. This is used to generate the correct amount of
+   * color blend states in the graphics pipeline. */
+  color_attachment_size = color_attachments.size();
+
+  /* Depth attachment */
+  bool has_depth_attachment = false;
+  for (int depth_attachment_index : IndexRange(GPU_FB_DEPTH_ATTACHMENT, 2)) {
+    const GPUAttachment &attachment = attachments_[depth_attachment_index];
+
+    if (attachment.tex == nullptr) {
+      continue;
+    }
+    has_depth_attachment = true;
+    bool is_stencil_attachment = depth_attachment_index == GPU_FB_DEPTH_STENCIL_ATTACHMENT;
+    VKTexture &depth_texture = *unwrap(unwrap(attachment.tex));
+    BLI_assert_msg(depth_texture.usage_get() & GPU_TEXTURE_USAGE_ATTACHMENT,
+                   "Texture is used as an attachment, but doesn't have the "
+                   "GPU_TEXTURE_USAGE_ATTACHMENT flag.");
+    VkImageAspectFlags depth_texture_aspect = to_vk_image_aspect_flag_bits(
+        depth_texture.device_format_get());
+    bool is_depth_stencil_attachment = depth_texture_aspect & VK_IMAGE_ASPECT_STENCIL_BIT;
+    VkImageLayout vk_image_layout = is_depth_stencil_attachment ?
+                                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
+                                        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    GPUAttachmentState attachment_state = attachment_states_[GPU_FB_DEPTH_ATTACHMENT];
+    VkImageView depth_image_view = VK_NULL_HANDLE;
+    uint32_t layer_base = max_ii(attachment.layer, 0);
+    if (attachment_state == GPU_ATTACHMENT_WRITE) {
+      VKImageViewInfo image_view_info = {eImageViewUsage::Attachment,
+                                         IndexRange(layer_base, 1),
+                                         IndexRange(attachment.mip, 1),
+                                         {{'r', 'g', 'b', 'a'}},
+                                         VKImageViewArrayed::DONT_CARE,
+                                         to_vk_format(depth_texture.device_format_get()),
+                                         is_stencil_attachment ?
+                                             static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT) :
+                                             static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT)};
+      depth_image_view = depth_texture.image_view_get(image_view_info).vk_handle();
+    }
+    VkAttachmentDescription vk_attachment_description = {};
+    vk_attachment_description.format = to_vk_format(depth_texture.device_format_get());
+    vk_attachment_description.samples = VK_SAMPLE_COUNT_1_BIT;
+    vk_attachment_description.initialLayout = vk_image_layout;
+    vk_attachment_description.finalLayout = vk_image_layout;
+    vk_attachment_descriptions.append(std::move(vk_attachment_description));
+    depth_attachment_reference.layout = vk_image_layout;
+    vk_image_views.append(depth_image_view);
+    access_info.images.append({depth_texture.vk_image_handle(),
+                               VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                   VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                               is_stencil_attachment ?
+                                   static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT |
+                                                                   VK_IMAGE_ASPECT_STENCIL_BIT) :
+                                   static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT),
+                               0});
+
+    VkFormat vk_format = to_vk_format(depth_texture.device_format_get());
+    depth_attachment_format_ = vk_format;
+    if (is_stencil_attachment) {
+      stencil_attachment_format_ = vk_format;
+    }
+  }
+
+  /* Sub-pass description. */
+  VkSubpassDescription vk_subpass_description = {};
+  vk_subpass_description.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+  vk_subpass_description.colorAttachmentCount = color_attachments.size();
+  vk_subpass_description.pColorAttachments = color_attachments.data();
+  vk_subpass_description.inputAttachmentCount = input_attachments.size();
+  vk_subpass_description.pInputAttachments = input_attachments.data();
+  if (has_depth_attachment) {
+    vk_subpass_description.pDepthStencilAttachment = &depth_attachment_reference;
+  }
+
+  VKDevice &device = VKBackend::get().device;
+  /* Render-pass create info. */
+  VkRenderPassCreateInfo vk_render_pass_create_info = {};
+  vk_render_pass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+  vk_render_pass_create_info.subpassCount = 1;
+  vk_render_pass_create_info.pSubpasses = &vk_subpass_description;
+  vk_render_pass_create_info.attachmentCount = vk_attachment_descriptions.size();
+  vk_render_pass_create_info.pAttachments = vk_attachment_descriptions.data();
+  VkResult res = device.functions.vkCreateRenderPass(device.vk_handle(), &vk_render_pass_create_info, nullptr, &vk_render_pass);
+  (void)res;
+  BLI_assert_msg(res == VK_SUCCESS, "Cannot create render-pass");
+  debug::object_label(vk_render_pass, name_);
+
+  /* Frame buffer create info */
+  VkFramebufferCreateInfo vk_framebuffer_create_info = {};
+  vk_framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+  vk_framebuffer_create_info.renderPass = vk_render_pass;
+  vk_framebuffer_create_info.attachmentCount = vk_image_views.size();
+  vk_framebuffer_create_info.pAttachments = vk_image_views.data();
+  vk_framebuffer_create_info.width = width_;
+  vk_framebuffer_create_info.height = height_;
+  vk_framebuffer_create_info.layers = max_layer_count;
+  device.functions.vkCreateFramebuffer(device.vk_handle(), &vk_framebuffer_create_info, nullptr, &vk_framebuffer);
+  debug::object_label(vk_framebuffer, name_);
+
+  /* Begin rendering */
+  render_graph::VKBeginRenderingNode::CreateInfo begin_rendering(access_info);
+  VkRenderPassBeginInfo &begin_info = begin_rendering.node_data.vk_render_pass_begin_info;
+  begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+  begin_info.renderPass = vk_render_pass;
+  begin_info.framebuffer = vk_framebuffer;
+  render_area_update(begin_info.renderArea);
+
+  context.render_graph().add_node(begin_rendering);
+
+  /* Load store operations are not supported inside a render pass.
+   * It requires duplicating render passes and frame-buffers to support suspend/resume rendering.
+   * After suspension all the graphics pipelines needs to be created using the resume handles.
+   * Due to command reordering it is unclear when this switch needs to be made and would require
+   * to double the graphics pipelines.
+   *
+   * This all adds a lot of complexity just to support clearing ops on legacy platforms. An easier
+   * solution is to use #vkCmdClearAttachments right after the begin rendering.
+   */
+  if (use_explicit_load_store_) {
+    render_graph::VKClearAttachmentsNode::CreateInfo clear_attachments = {};
+    for (int attachment_index : IndexRange(GPU_FB_MAX_ATTACHMENT)) {
+      GPULoadStore &load_store = load_stores[attachment_index];
+      if (load_store.load_action != GPU_LOADACTION_CLEAR) {
+        continue;
+      }
+
+      bool is_depth = attachment_index < GPU_FB_COLOR_ATTACHMENT0;
+      if (is_depth) {
+        build_clear_attachments_depth_stencil(
+            GPU_DEPTH_BIT, load_store.clear_value[0], 0, clear_attachments);
+      }
+      else {
+        build_clear_attachments_color(Span<double4>(reinterpret_cast<double4 *>(&load_store.clear_value), 1), false, clear_attachments);
+      }
+    }
+
+    if (clear_attachments.attachment_count != 0) {
+      render_area_update(clear_attachments.vk_clear_rect.rect);
+      clear_attachments.vk_clear_rect.baseArrayLayer = 0;
+      clear_attachments.vk_clear_rect.layerCount = 1;
+      context.render_graph().add_node(clear_attachments);
+    }
+  }
+}
+
 void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
                                                        const VKExtensions &extensions)
 {
@@ -635,7 +893,7 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
         vk_format = VK_FORMAT_R8G8B8_UNORM;
       }
     }
-    if (attachment_state == GPU_ATTACHMENT_WRITE) {
+    if (attachment_state != GPU_ATTACHMENT_IGNORE) {
       VKImageViewInfo image_view_info = {
           eImageViewUsage::Attachment,
           IndexRange(layer_base,
@@ -658,7 +916,9 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
 
     access_info.images.append(
         {color_texture.vk_image_handle(),
-         VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+         attachment_state == GPU_ATTACHMENT_WRITE ?
+             (VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) :
+             VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
          VK_IMAGE_ASPECT_COLOR_BIT,
          {uint32_t(attachment.mip),
           1,
@@ -669,7 +929,7 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
             VK_FORMAT_UNDEFINED :
             vk_format);
   }
-  uint32_t color_attachment_size = uint32_t(max_filled_slot_index + 1);
+  color_attachment_size = uint32_t(max_filled_slot_index + 1);
   color_attachment_formats_.resize(color_attachment_size);
 
   begin_rendering.node_data.vk_rendering_info.colorAttachmentCount = color_attachment_size;
@@ -695,7 +955,7 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
                                         VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
     GPUAttachmentState attachment_state = attachment_states_[GPU_FB_DEPTH_ATTACHMENT];
     VkImageView depth_image_view = VK_NULL_HANDLE;
-    if (attachment_state == GPU_ATTACHMENT_WRITE) {
+    if (attachment_state != GPU_ATTACHMENT_IGNORE) {
       VKImageViewInfo image_view_info = {
           eImageViewUsage::Attachment,
           IndexRange(max_ii(attachment.layer, 0), 1),
@@ -741,8 +1001,9 @@ void VKFrameBuffer::rendering_ensure_dynamic_rendering(VKContext &context,
 
     access_info.images.append(
         {depth_texture.vk_image_handle(),
-         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-             VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+         attachment_state == GPU_ATTACHMENT_WRITE ?
+             (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT) :
+             VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
          is_depth_stencil_attachment ?
              static_cast<VkImageAspectFlags>(VK_IMAGE_ASPECT_DEPTH_BIT |
                                              VK_IMAGE_ASPECT_STENCIL_BIT) :
@@ -766,7 +1027,12 @@ void VKFrameBuffer::rendering_ensure(VKContext &context)
 
   const VKExtensions &extensions = VKBackend::get().device.extensions_get();
   is_rendering_ = true;
-  rendering_ensure_dynamic_rendering(context, extensions);
+  if (extensions.dynamic_rendering) {
+    rendering_ensure_dynamic_rendering(context, extensions);
+  }
+  else {
+    rendering_ensure_render_pass(context);
+  }
   dirty_attachments_ = false;
   dirty_state_ = false;
   use_explicit_load_store_ = false;
@@ -793,7 +1059,13 @@ void VKFrameBuffer::rendering_end(VKContext &context)
   }
 
   if (is_rendering_) {
+    const VKExtensions &extensions = VKBackend::get().device.extensions_get();
     render_graph::VKEndRenderingNode::CreateInfo end_rendering = {};
+    end_rendering.vk_render_pass = VK_NULL_HANDLE;
+    if (!extensions.dynamic_rendering) {
+      BLI_assert(vk_render_pass);
+      end_rendering.vk_render_pass = vk_render_pass;
+    }
     context.render_graph().add_node(end_rendering);
     is_rendering_ = false;
   }

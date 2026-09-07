@@ -672,7 +672,10 @@ struct GHOST_InstanceVK {
     VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering = {};
     dynamic_rendering.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
     dynamic_rendering.dynamicRendering = VK_TRUE;
-    feature_struct_ptr.push_back(&dynamic_rendering);
+
+    if (device.extensions.is_enabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)) {
+      feature_struct_ptr.push_back(&dynamic_rendering);
+    }
 
     VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT
         dynamic_rendering_unused_attachments = {};
@@ -1913,7 +1916,7 @@ GHOST_TSuccess GHOST_ContextVK::initializeDrawingContext()
 #endif
 
     optional_device_extensions.append(VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME);
-    required_device_extensions.append(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+    optional_device_extensions.append(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
     required_device_extensions.append(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
     required_device_extensions.append(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
     required_device_extensions.append(VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME);
