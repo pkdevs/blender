@@ -36,7 +36,8 @@ class ContextMarkersTest(unittest.TestCase):
         self.scene = bpy.data.scenes['Scene']
         self.cube = bpy.data.objects['Cube']
 
-    def _test_context_no_markers(self):
+    def _test_context_no_markers(self, collection: bpy.types.TimelineMarkers |
+                                 bpy.types.ActionPoseMarkers | None = None):
         """Asserts that the current context has no markers in it."""
         markers = bpy.context.markers
         self.assertEqual(0, len(markers))
@@ -44,10 +45,12 @@ class ContextMarkersTest(unittest.TestCase):
         selected_markers = bpy.context.selected_markers
         self.assertEqual(0, len(selected_markers))
 
-        active_marker = bpy.context.active_marker
-        self.assertIsNone(active_marker)
+        self.assertIsNone(bpy.context.active_marker)
+        if collection is not None:
+            self.assertIsNone(collection.active)
+            self.assertEqual(-1, collection.active_index)
 
-    def _test_context_markers(self):
+    def _test_context_markers(self, collection: bpy.types.TimelineMarkers | bpy.types.ActionPoseMarkers | None = None):
         """Asserts that the current context contains the markers created by `_add_test_markers`."""
         markers = bpy.context.markers
         self.assertEqual(3, len(markers))
@@ -72,14 +75,22 @@ class ContextMarkersTest(unittest.TestCase):
         self.assertEqual(20, active_marker.frame)
         self.assertEqual(True, active_marker.select)
 
+        if collection is not None:
+            active_marker = collection.active
+            self.assertEqual("Bar", active_marker.name)
+            self.assertEqual(20, active_marker.frame)
+            self.assertEqual(True, active_marker.select)
+
+            self.assertEqual(1, collection.active_index)
+
 
 class SceneMarkersTest(ContextMarkersTest):
     """Tests for markers in the current scene."""
 
     def test_scene_markers(self):
-        self._test_context_no_markers()
+        self._test_context_no_markers(self.scene.timeline_markers)
         _add_test_markers(self.scene.timeline_markers)
-        self._test_context_markers()
+        self._test_context_markers(self.scene.timeline_markers)
 
 
 class PoseMarkersTest(ContextMarkersTest):
@@ -121,7 +132,7 @@ class PoseMarkersTest(ContextMarkersTest):
         space.show_pose_markers = True
 
         with bpy.context.temp_override(window=window, screen=screen, area=area, region=region):
-            self._test_context_markers()
+            self._test_context_markers(action.pose_markers)
 
 
 class ActionPoseMarkersTest(PoseMarkersTest):
@@ -150,7 +161,7 @@ class OverrideSceneMarkersTest(ContextMarkersTest):
 
         self._test_context_no_markers()
         with bpy.context.temp_override(scene=other_scene):
-            self._test_context_markers()
+            self._test_context_markers(other_scene.timeline_markers)
 
 
 if __name__ == "__main__":
