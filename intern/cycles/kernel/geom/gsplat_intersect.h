@@ -131,7 +131,10 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
                            kernel_data_fetch(points, position_offset + prim);
 
   /* Intersect with the bounding sphere.
-   * Equivalent to IsNegligible() check in Algorithm 1 of [sun2025]. */
+   * Equivalent to IsNegligible() check in Algorithm 1 of [sun2025].
+   *
+   * Disable backface culling so that we can intersect splats with the ray origin which is inside
+   * of the bounding sphere. */
   float sphere_t;
   if (!point_intersect_test<false>(point, ray_P, ray_D, ray_tmin, ray_tmax, &sphere_t)) {
     return false;
@@ -166,8 +169,10 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
   const float t = -dot(o_g, d_g) / dot(d_g, d_g); /* tau_max in [3dgrt2024] */
 
   /* Check the intersection with the gaussian splat is within the valid ray range.
-   * The previous checks are based on the bounding sphere distance. */
-  /* TODO(sergey): We can skip check with the ray_tmin here? */
+   * The previous checks are based on the bounding sphere distance.
+   *
+   * The t might be lower than the ray_tmin when the ray origin is within the bounding sphere but
+   * is "past" the density extrema. */
   if (t < ray_tmin || t > ray_tmax) {
     return false;
   }
