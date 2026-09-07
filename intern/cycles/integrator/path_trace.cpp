@@ -1376,8 +1376,9 @@ static string device_info_list_report(const string &message,
   if (device_info.multi_devices.empty()) {
     result += full_device_info_description(device_info) + "\n";
     if (show_hardware_raytracing) {
-      result += pad + "    Hardware Ray-Tracing: " +
-                (device_info.use_hardware_raytracing ? "On" : "Off") + "\n";
+      result += pad +
+                "  Hardware Ray-Tracing: " + (device_info.use_hardware_raytracing ? "On" : "Off") +
+                "\n";
     }
     return result;
   }
@@ -1390,7 +1391,7 @@ static string device_info_list_report(const string &message,
 
     result += full_device_info_description(sub_device_info) + "\n";
     if (show_hardware_raytracing) {
-      result += pad + "    Hardware Ray-Tracing: " +
+      result += pad + "  Hardware Ray-Tracing: " +
                 (sub_device_info.use_hardware_raytracing ? "On" : "Off") + "\n";
     }
 
