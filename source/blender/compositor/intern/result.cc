@@ -558,7 +558,7 @@ void Result::allocate_texture(const Domain domain,
   if (use_gpu) {
     storage_type_ = ResultStorageType::GPUImage;
     auto *new_texture = new ImplicitSharedValue<GPUData>(
-        domain_.data_size, this->type(), this->precision(), from_pool);
+        domain_.data_size, this->type(), this->precision(), false);
     sharing_info_ = ImplicitSharingPtr<>(new_texture);
     gpu_texture_ = new_texture->data.texture;
     return;
