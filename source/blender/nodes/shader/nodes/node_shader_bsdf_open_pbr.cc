@@ -393,12 +393,85 @@ static int node_shader_gpu_bsdf_open_pbr(GPUMaterial *mat,
     GPU_link(mat, "world_normals_get", &in[OPENPBR_SOCK_GEOMETRY_NORMAL_ID].link);
   }
 
+  /* Coat Normals */
+  if (!in[OPENPBR_SOCK_GEOMETRY_COAT_NORMAL_ID].link) {
+    GPU_link(mat, "world_normals_get", &in[OPENPBR_SOCK_GEOMETRY_COAT_NORMAL_ID].link);
+  }
+
+  const GPUNodeStack metalness = in[OPENPBR_SOCK_BASE_METALNESS_ID];
+  const GPUNodeStack base_color = in[OPENPBR_SOCK_BASE_COLOR_ID];
+  const GPUNodeStack specular_color = in[OPENPBR_SOCK_SPECULAR_COLOR_ID];
+  const GPUNodeStack transmission = in[OPENPBR_SOCK_TRANSMISSION_WEIGHT_ID];
+  const GPUNodeStack thin_wall = in[OPENPBR_SOCK_GEOMETRY_THIN_WALLED_ID];
+
+  const bool use_diffuse = in[OPENPBR_SOCK_FUZZ_WEIGHT_ID].socket_not_zero() ||
+                           (metalness.socket_not_one() && transmission.socket_not_one());
+  const bool use_subsurf = in[OPENPBR_SOCK_SUBSURFACE_WEIGHT_ID].socket_not_zero() && use_diffuse;
+  const bool use_refract = metalness.socket_not_one() && transmission.socket_not_zero();
+  const bool use_transparency = in[OPENPBR_SOCK_GEOMETRY_OPACITY_ID].socket_not_one();
+  const bool use_coat = in[OPENPBR_SOCK_COAT_WEIGHT_ID].socket_not_zero();
+  const bool use_translucent = use_subsurf && thin_wall.socket_not_zero();
+
   eGPUMaterialFlag flag = GPU_MATFLAG_GLOSSY;
-  flag |= GPU_MATFLAG_DIFFUSE;
-  /* TODO: setup flags based on the settings: see principled*/
+  if (use_diffuse) {
+    flag |= GPU_MATFLAG_DIFFUSE;
+  }
+  if (use_refract) {
+    flag |= GPU_MATFLAG_REFRACT;
+  }
+  if (use_subsurf && thin_wall.socket_not_one()) {
+    flag |= GPU_MATFLAG_SUBSURFACE;
+  }
+  if (use_transparency) {
+    flag |= GPU_MATFLAG_TRANSPARENT;
+  }
+  if (use_coat) {
+    flag |= GPU_MATFLAG_COAT;
+  }
+  if (use_translucent) {
+    flag |= GPU_MATFLAG_TRANSLUCENT;
+  }
+
+  /* Coat tints lower layers. */
+  const bool coat_might_be_tinted = use_coat && in[OPENPBR_SOCK_COAT_COLOR_ID].might_be_tinted();
+
+  const bool refraction_might_be_tinted =
+      use_refract &&
+      (in[OPENPBR_SOCK_TRANSMISSION_COLOR_ID].might_be_tinted() || coat_might_be_tinted);
+
+  bool specular_might_be_tinted = specular_color.might_be_tinted() ||
+                                  (metalness.socket_not_zero() && base_color.might_be_tinted());
+  specular_might_be_tinted |= coat_might_be_tinted;
+  /* Multiscatter GGX can tint the reflection lobe. See `bsdf_lut`. */
+  specular_might_be_tinted |= refraction_might_be_tinted;
+
+  if (specular_might_be_tinted) {
+    /* Specular reflection. */
+    flag |= GPU_MATFLAG_REFLECTION_MAYBE_COLORED;
+  }
+  if (refraction_might_be_tinted) {
+    /* Specular refraction. */
+    flag |= GPU_MATFLAG_REFRACTION_MAYBE_COLORED;
+  }
+
   GPU_material_flag_set(mat, flag);
-  // Needed to be set explicitly when glossy reflection can have a color
-  GPU_material_flag_set(mat, GPU_MATFLAG_REFLECTION_MAYBE_COLORED);
+
+  /* Make constant link for the cases we optimize. This allows the driver to constant fold.
+   * Note that doing so specialize the final tree topology, and thus the shader becomes less
+   * reusable. So to be used with care.
+   * Also note that we do note override existing links. This is because it would leak the current
+   * nodes otherwise. */
+  const float zero = 0.0f;
+  if (!use_coat && in[OPENPBR_SOCK_COAT_WEIGHT_ID].link == nullptr) {
+    in[OPENPBR_SOCK_COAT_WEIGHT_ID].link = GPU_constant(&zero);
+  }
+  if (!use_subsurf && in[OPENPBR_SOCK_SUBSURFACE_WEIGHT_ID].link == nullptr) {
+    in[OPENPBR_SOCK_SUBSURFACE_WEIGHT_ID].link = GPU_constant(&zero);
+  }
+  if (!use_refract && in[OPENPBR_SOCK_TRANSMISSION_WEIGHT_ID].link == nullptr) {
+    in[OPENPBR_SOCK_TRANSMISSION_WEIGHT_ID].link = GPU_constant(&zero);
+  }
+
   return GPU_stack_link(mat, node, "node_bsdf_open_pbr", in, out);
 }
 

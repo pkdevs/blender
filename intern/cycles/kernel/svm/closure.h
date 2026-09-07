@@ -288,7 +288,7 @@ ccl_device_inline float openpbr_specular_ior(const ccl_global SVMNodeOpenPBRBsdf
   specular_ior = backfacing ? 1.0f / specular_ior : specular_ior;
 
   if (coat_weight > CLOSURE_WEIGHT_CUTOFF) {
-    /* Fixing the ration to compensate for total internal reflections (TIR),
+    /* Fixing the ratio to compensate for total internal reflections (TIR).
      * OpenPBR Surface specification v1.1.1, Eq. (74) */
     const float tir_fixed_ratio = (coat_ior > specular_ior) ? (coat_ior / specular_ior) :
                                                               (specular_ior / coat_ior);

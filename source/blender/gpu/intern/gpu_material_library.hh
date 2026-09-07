@@ -16,7 +16,7 @@
 namespace blender {
 
 #define MAX_FUNCTION_NAME 64
-#define MAX_PARAMETER 64
+#define MAX_PARAMETER 43
 
 enum GPUFunctionQual {
   FUNCTION_QUAL_IN,
