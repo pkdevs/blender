@@ -31,12 +31,7 @@ int HIPDeviceQueue::num_concurrent_states(const size_t state_size) const
 {
   const int max_num_threads = hip_device_->get_num_multiprocessors() *
                               hip_device_->get_max_num_threads_per_multiprocessor();
-
-  if (max_num_threads == 0) {
-    return 65536;
-  }
-
-  int num_states = max_num_threads * 16;
+  int num_states = max(max_num_threads, 65536) * 16;
 
   LOG_TRACE << "GPU queue concurrent states: " << num_states << ", using up to "
             << string_human_readable_size(num_states * state_size);
