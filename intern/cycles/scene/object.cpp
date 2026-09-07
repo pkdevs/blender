@@ -619,9 +619,13 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
   else if (geom->is_pointcloud()) {
     const PointCloud *pointcloud = static_cast<PointCloud *>(geom);
     if (pointcloud->primitive_type() & PRIMITIVE_GSPLAT) {
-      kobject.gsplat.scale_offset_and_flag = ATTR_STD_NOT_FOUND << 1;
-      kobject.gsplat.rotation_offset_and_flag = ATTR_STD_NOT_FOUND << 1;
-      kobject.gsplat.radiance_base_offset_and_flag = ATTR_STD_NOT_FOUND << 1;
+      /* NOTE: scale, rotation, and radiance base attributes are required.
+       * The value here does not really matter as it'll be overwritten by a proper offset. Keep the
+       * initialization to allow catching logical errors with asserts. */
+      kobject.gsplat.scale_offset_and_flag = ATTR_STD_NOT_FOUND;
+      kobject.gsplat.rotation_offset_and_flag = ATTR_STD_NOT_FOUND;
+      kobject.gsplat.radiance_base_offset_and_flag = ATTR_STD_NOT_FOUND;
+
       kobject.gsplat.radiance_spherical_harmonics_rest_offset = ATTR_STD_NOT_FOUND;
     }
     const Attribute *attr_P = geom->attributes.find(ATTR_STD_POSITION);
@@ -1088,6 +1092,8 @@ void ObjectManager::device_update_flags(Device * /*unused*/,
   dscene->object_flag.clear_modified();
 }
 
+/* NOTE: Only use for attributes that are guaranteed to exist.
+ * Otherwise it is not possible to encore offset and motion flag. */
 static bool update_gsplat_std_point_attribute_offset_and_flag(const DeviceScene &dscene,
                                                               const PointCloud &pointcloud,
                                                               const size_t attr_map_offset,
@@ -1097,6 +1103,11 @@ static bool update_gsplat_std_point_attribute_offset_and_flag(const DeviceScene 
   const Attribute *attribute = pointcloud.attributes.find(std);
   const int offset =
       find_attribute(dscene.attributes_map.data(), attr_map_offset, PRIMITIVE_POINT, std).offset;
+
+  /* The function is only working correctly for attributes that are required.
+   * Also check that the most significant bit is not set, as it will be lost during encoding. */
+  assert(offset != ATTR_STD_NOT_FOUND);
+  assert((uint(offset) >> 31U) == 0);
 
   const int offset_and_flag = (offset << 1) | (attribute ? attribute->has_motion() : 0);
 

@@ -13,31 +13,43 @@ CCL_NAMESPACE_BEGIN
 
 ccl_device_forceinline int gsplat_attr_radiance_base_offset(KernelGlobals kg, const int object)
 {
+  kernel_assert(kernel_data_fetch(objects, object).gsplat.radiance_base_offset_and_flag !=
+                ATTR_STD_NOT_FOUND);
   return kernel_data_fetch(objects, object).gsplat.radiance_base_offset_and_flag >> 1;
 }
 
 ccl_device_forceinline int gsplat_attr_radiance_base_has_motion(KernelGlobals kg, const int object)
 {
+  kernel_assert(kernel_data_fetch(objects, object).gsplat.radiance_base_offset_and_flag !=
+                ATTR_STD_NOT_FOUND);
   return kernel_data_fetch(objects, object).gsplat.radiance_base_offset_and_flag & 1;
 }
 
 ccl_device_forceinline int gsplat_attr_rotation_offset(KernelGlobals kg, const int object)
 {
+  kernel_assert(kernel_data_fetch(objects, object).gsplat.rotation_offset_and_flag !=
+                ATTR_STD_NOT_FOUND);
   return kernel_data_fetch(objects, object).gsplat.rotation_offset_and_flag >> 1;
 }
 
 ccl_device_forceinline int gsplat_attr_rotation_has_motion(KernelGlobals kg, const int object)
 {
+  kernel_assert(kernel_data_fetch(objects, object).gsplat.rotation_offset_and_flag !=
+                ATTR_STD_NOT_FOUND);
   return kernel_data_fetch(objects, object).gsplat.rotation_offset_and_flag & 1;
 }
 
 ccl_device_forceinline int gsplat_attr_scale_offset(KernelGlobals kg, const int object)
 {
+  kernel_assert(kernel_data_fetch(objects, object).gsplat.scale_offset_and_flag !=
+                ATTR_STD_NOT_FOUND);
   return kernel_data_fetch(objects, object).gsplat.scale_offset_and_flag >> 1;
 }
 
 ccl_device_forceinline int gsplat_attr_scale_has_motion(KernelGlobals kg, const int object)
 {
+  kernel_assert(kernel_data_fetch(objects, object).gsplat.scale_offset_and_flag !=
+                ATTR_STD_NOT_FOUND);
   return kernel_data_fetch(objects, object).gsplat.scale_offset_and_flag & 1;
 }
 
