@@ -231,7 +231,6 @@ set(SRC
   nodes/node_geo_points_to_sdf_grid.cc
   nodes/node_geo_points_to_vertices.cc
   nodes/node_geo_points_to_volume.cc
-  nodes/node_geo_points_type.cc
   nodes/node_geo_proximity.cc
   nodes/node_geo_rasterize_points.cc
   nodes/node_geo_raycast.cc
@@ -279,6 +278,7 @@ set(SRC
   nodes/node_geo_set_nurbs_order.cc
   nodes/node_geo_set_nurbs_weight.cc
   nodes/node_geo_set_point_radius.cc
+  nodes/node_geo_set_points_type.cc
   nodes/node_geo_set_position.cc
   nodes/node_geo_set_shade_smooth.cc
   nodes/node_geo_set_spline_cyclic.cc
