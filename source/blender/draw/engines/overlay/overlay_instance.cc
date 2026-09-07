@@ -1128,9 +1128,9 @@ bool Instance::object_is_in_front(const Object *object, const State &state)
 }
 
 void Instance::armature_sync_infront_bones(ObjectRef &ob_ref,
-                                            Manager &manager,
-                                            const bool ob_in_front,
-                                            const bool edit_mode)
+                                           Manager &manager,
+                                           const bool ob_in_front,
+                                           const bool edit_mode)
 {
   if (ob_in_front) {
     return;

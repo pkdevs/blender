@@ -150,9 +150,9 @@ class Instance : public DrawEngine {
 
   /* Syncs "In Front" bones into the in-front layer. */
   void armature_sync_infront_bones(ObjectRef &ob_ref,
-                                    Manager &manager,
-                                    bool ob_in_front,
-                                    bool edit_mode);
+                                   Manager &manager,
+                                   bool ob_in_front,
+                                   bool edit_mode);
 
   /* Returns true if the object is rendered transparent by the render engine.
    * Overlays should not rely on the correct depth being available (and do a depth pre-pass). */
