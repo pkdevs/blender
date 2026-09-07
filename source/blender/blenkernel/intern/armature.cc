@@ -3579,6 +3579,20 @@ Bone *bArmature::bone_get_indexed(const int64_t bone_index)
   return const_cast<Bone *>(std::as_const(*this).bone_get_indexed(bone_index));
 }
 
+bool bArmature::bone_flag_any_in_front() const
+{
+  if (!this->runtime->bone_in_front_cache.has_value()) {
+    bool any_in_front = false;
+    BKE_armature_foreach_bone(*this, [&](const int /*bone_index*/, const Bone &bone) {
+      if (bone.flag & BONE_DRAW_IN_FRONT) {
+        any_in_front = true;
+      }
+    });
+    this->runtime->bone_in_front_cache = any_in_front;
+  }
+  return *this->runtime->bone_in_front_cache;
+}
+
 /** \} */
 
 static int visit_bone_and_descendants(const Bone &bone,

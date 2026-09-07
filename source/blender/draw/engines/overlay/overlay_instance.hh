@@ -75,7 +75,9 @@ class Instance : public DrawEngine {
 
   struct OverlayLayer {
     const SelectionType selection_type_;
-    Armatures armatures = {selection_type_};
+    /* Whether this is the "in front" layer. */
+    const bool is_infront_layer_;
+    Armatures armatures = {selection_type_, is_infront_layer_};
     AttributeViewer attribute_viewer;
     AttributeTexts attribute_texts;
     Axes axes = {selection_type_};
@@ -105,7 +107,7 @@ class Instance : public DrawEngine {
     Sculpts sculpts;
     Speakers speakers = {selection_type_};
     Wireframe wireframe;
-  } regular{selection_type_}, infront{selection_type_};
+  } regular{selection_type_, false}, infront{selection_type_, true};
 
   Grid grid;
   AntiAliasing anti_aliasing;
@@ -145,6 +147,12 @@ class Instance : public DrawEngine {
                                  bool in_sculpt_mode);
   bool object_is_in_front(const Object *object, const State &state);
   bool object_needs_prepass(const ObjectRef &ob_ref, bool in_paint_mode);
+
+  /* Syncs "In Front" bones into the in-front layer. */
+  void armature_sync_infront_bones(ObjectRef &ob_ref,
+                                    Manager &manager,
+                                    bool ob_in_front,
+                                    bool edit_mode);
 
   /* Returns true if the object is rendered transparent by the render engine.
    * Overlays should not rely on the correct depth being available (and do a depth pre-pass). */

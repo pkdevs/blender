@@ -46,6 +46,8 @@ class Armatures : Overlay {
   bool show_relations = false;
   /* Show selection state. */
   bool show_outline = false;
+  /* Whether this instance belongs to the "In Front" overlay. */
+  const bool is_infront_layer_;
 
   struct BoneBuffers {
     const SelectionType selection_type_;
@@ -140,7 +142,13 @@ class Armatures : Overlay {
   BoneBuffers transparent_ = {selection_type_};
 
  public:
-  Armatures(const SelectionType selection_type) : selection_type_(selection_type) {};
+  Armatures(const SelectionType selection_type, const bool is_infront_layer)
+      : selection_type_(selection_type), is_infront_layer_(is_infront_layer) {};
+
+  /* Returns true if any bone of this armature (in Pose mode) has its "In Front" flag set.*/
+  static bool object_has_bone_in_front_pose(const Object *ob);
+  /* Returns true if any bone of this armature (in Edit mode) has its "In Front" flag set.*/
+  static bool object_has_bone_in_front_edit(const Object *ob);
 
   void begin_sync(Resources &res, const State &state) final
   {
@@ -498,10 +506,21 @@ class Armatures : Overlay {
     bool show_text = false;
     /* Draw the inner part of the bones, otherwise render just outlines. */
     bool is_filled = false;
+    /* Whether the whole armature Object has "In Front" set. */
+    bool object_in_front = false;
+    /* When some of its bones have their "In Front" flag set. */
+    bool is_infront_layer = false;
 
     const ThemeWireColor *bcolor = nullptr; /* Pose-channel color. */
 
     DrawContext() = default;
+
+    /* Whether a bone belong to the other layer (regular vs. in-front), so it can be skipped. */
+    bool skip_bone_for_layer(const eBone_Flag bone_flag) const
+    {
+      const bool bone_in_front = object_in_front || (bone_flag & BONE_DRAW_IN_FRONT);
+      return bone_in_front != is_infront_layer;
+    }
   };
 
   DrawContext create_draw_context(const ObjectRef &ob_ref,
@@ -537,6 +556,8 @@ class Armatures : Overlay {
     if ((ctx.ob->base_flag & BASE_SELECTED) && show_outline) {
       ctx.const_wire = 1.5f;
     }
+    ctx.object_in_front = object_is_in_front(ctx.ob, state);
+    ctx.is_infront_layer = is_infront_layer_;
     return ctx;
   }
 
@@ -670,6 +691,13 @@ class Armatures : Overlay {
     }
 
     return false;
+  }
+
+  /* Whether the whole armature Object is "In Front". */
+  static bool object_is_in_front(const Object *armature_ob, const State &state)
+  {
+    return (armature_ob->dtx & OB_DRAW_IN_FRONT) ||
+           (state.do_pose_xray && is_pose_mode(armature_ob, state));
   }
 };
 

@@ -173,6 +173,8 @@ enum eBone_Flag : int {
   BONE_TRANSFORM_MIRROR = (1 << 25),
   /** this bone is associated with a locked vertex group, ONLY USE FOR DRAWING */
   BONE_DRAW_LOCKED_WEIGHT = (1 << 26),
+  /** bone is drawn in front of others, like Object's "In Front" but per-bone */
+  BONE_DRAW_IN_FRONT = (1 << 27),
 };
 ENUM_OPERATORS(eBone_Flag)
 
@@ -492,6 +494,12 @@ struct bArmature {
 
   const Bone *bone_get_indexed(int64_t bone_index) const;
   Bone *bone_get_indexed(int64_t bone_index);
+
+  /**
+   * Whether any Bone in this armature has the per-bone "In Front" flag.
+   * Cached and invalidated when a bone's flag changes.
+   */
+  bool bone_flag_any_in_front() const;
 
 #endif
 };

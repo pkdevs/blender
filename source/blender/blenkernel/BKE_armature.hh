@@ -766,6 +766,12 @@ struct bArmature_Runtime {
    * when there actually are bones.
    */
   bool is_bones_array_valid() const;
+
+  /**
+   * Cache of whether any Bone in this armature has the per-bone "In Front" flag set.
+   * `std::nullopt` means this cache needs to be recomputed.
+   */
+  std::optional<bool> bone_in_front_cache;
 };
 
 struct SelectedBonesResult {

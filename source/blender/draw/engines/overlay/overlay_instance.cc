@@ -586,6 +586,8 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
         break;
       case OB_ARMATURE:
         layer.armatures.edit_object_sync(manager, ob_ref, resources, state);
+        armature_sync_infront_bones(
+            ob_ref, manager, object_is_in_front(ob_ref.object, state), true);
         break;
       case OB_SURF:
       case OB_CURVES_LEGACY:
@@ -630,6 +632,8 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
       case OB_ARMATURE:
         if (!in_edit_mode) {
           layer.armatures.object_sync(manager, ob_ref, resources, state);
+          armature_sync_infront_bones(
+              ob_ref, manager, object_is_in_front(ob_ref.object, state), false);
         }
         break;
       case OB_LATTICE:
@@ -1117,10 +1121,31 @@ bool Instance::object_is_in_front(const Object *object, const State &state)
 {
   switch (object->type) {
     case OB_ARMATURE:
-      return (object->dtx & OB_DRAW_IN_FRONT) ||
-             (state.do_pose_xray && Armatures::is_pose_mode(object, state));
+      return Armatures::object_is_in_front(object, state);
     default:
       return state.use_in_front && (object->dtx & OB_DRAW_IN_FRONT);
+  }
+}
+
+void Instance::armature_sync_infront_bones(ObjectRef &ob_ref,
+                                            Manager &manager,
+                                            const bool ob_in_front,
+                                            const bool edit_mode)
+{
+  if (ob_in_front) {
+    return;
+  }
+  const bool any_bone_in_front = edit_mode ?
+                                     Armatures::object_has_bone_in_front_edit(ob_ref.object) :
+                                     Armatures::object_has_bone_in_front_pose(ob_ref.object);
+  if (!any_bone_in_front) {
+    return;
+  }
+  if (edit_mode) {
+    infront.armatures.edit_object_sync(manager, ob_ref, resources, state);
+  }
+  else {
+    infront.armatures.object_sync(manager, ob_ref, resources, state);
   }
 }
 

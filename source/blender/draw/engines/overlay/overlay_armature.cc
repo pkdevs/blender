@@ -1938,6 +1938,28 @@ static void bone_draw_update_display_matrix(const eArmature_Drawtype drawtype,
   }
 }
 
+bool Armatures::object_has_bone_in_front_edit(const Object *ob)
+{
+  const bArmature &arm = DRW_object_get_data_for_drawing<bArmature>(*ob);
+
+  /* `edbo` isn't covered by bone_flag_any_in_front's cache. */
+  if (arm.edbo == nullptr) {
+    return false;
+  }
+  for (const EditBone &ebone : *arm.edbo) {
+    if (ebone.flag & BONE_DRAW_IN_FRONT) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool Armatures::object_has_bone_in_front_pose(const Object *ob)
+{
+  const bArmature &arm = DRW_object_get_data_for_drawing<bArmature>(*ob);
+  return arm.bone_flag_any_in_front();
+}
+
 void Armatures::draw_armature_edit(Armatures::DrawContext *ctx)
 {
   Object *ob = ctx->ob;
@@ -1964,6 +1986,10 @@ void Armatures::draw_armature_edit(Armatures::DrawContext *ctx)
        eBone = eBone->next, index += 0x10000)
   {
     if (!animrig::bone_is_visible(&arm, eBone)) {
+      continue;
+    }
+
+    if (ctx->skip_bone_for_layer(eBone->flag)) {
       continue;
     }
 
@@ -2093,6 +2119,11 @@ void Armatures::draw_armature_pose(Armatures::DrawContext *ctx)
     }
 
     Bone *bone = pchan->bone_get(arm);
+
+    if (ctx->skip_bone_for_layer(bone->flag)) {
+      continue;
+    }
+
     const bool draw_dofs = !is_pose_select && ctx->show_relations &&
                            (ctx->draw_mode == ARM_DRAW_MODE_POSE) &&
                            (pchan->flag & POSE_SELECTED) &&
