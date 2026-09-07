@@ -4724,7 +4724,9 @@ static int do_but_textedit(
       button_update_edited(but);
     }
     but->changed = true;
+  }
 
+  if (changed || prev_pos != but->pos) {
     if (data->searchbox) {
       searchbox_update(C, data->searchbox, but, true); /* true = reset */
     }
@@ -4732,7 +4734,7 @@ static int do_but_textedit(
     button_edit_hint_refresh(C, but, data);
   }
 
-  if (changed || (retval == WM_UI_HANDLER_BREAK)) {
+  if (changed || prev_pos != but->pos || (retval == WM_UI_HANDLER_BREAK)) {
     ED_region_tag_redraw(data->region);
     if (!data->searchbox) {
       /* In case of popup regions, tag for popup refreshing too (contents may have changed). Not
