@@ -860,7 +860,7 @@ gpu::Texture *Result::bind_as_texture_or_single_value(gpu::Shader *shader,
   gpu::Texture *single_value_texture = nullptr;
 
   /* Texture pool does not work on Vulkan at the moment. */
-  if (GPU_backend_get_type() == GPU_BACKEND_VULKAN) {
+  if (true) {
     if (this->type() == ResultType::Float4x4) {
       single_value_texture = GPU_texture_create_2d_array(
           __func__, 1, 1, 4, 1, format, usage, nullptr);
@@ -964,7 +964,7 @@ void Result::unbind_as_texture_or_single_value(gpu::Texture *single_value_textur
   GPU_texture_unbind(single_value_texture);
 
   /* Texture pool does not work on Vulkan at the moment. */
-  if (GPU_backend_get_type() == GPU_BACKEND_VULKAN) {
+  if (true) {
     GPU_texture_free(single_value_texture);
   }
   else {
