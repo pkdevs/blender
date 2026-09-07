@@ -108,12 +108,12 @@ struct Buffer {
    */
   bool update_range(const int64_t node_index, const int64_t new_len)
   {
-    if (sizes[node_index] == new_len) {
+    if (this->sizes[node_index] == new_len) {
       return false;
     }
     const bool was_acquired = this->acquired[node_index];
     if (was_acquired) {
-      space.release(offsets[node_index], sizes[node_index]);
+      this->space.release(this->offsets[node_index], this->sizes[node_index]);
       this->acquired[node_index].reset();
     }
     this->sizes[node_index] = new_len;
@@ -126,7 +126,7 @@ struct Buffer {
   void acquire(const int64_t node_index)
   {
     BLI_assert(!this->acquired[node_index]);
-    this->offsets[node_index] = space.acquire(sizes[node_index]);
+    this->offsets[node_index] = this->space.acquire(this->sizes[node_index]);
     this->acquired[node_index].set();
   }
 
@@ -272,7 +272,7 @@ class DrawCacheImpl : public DrawCache {
      * the values will be extracted again.
      */
     void tag_dirty(const IndexMask &node_mask);
-    void ensure_nodes_capacity(int64_t nodes_len);
+    void ensure_nodes_capacity(int64_t nodes_num);
     void ensure_buffer_capacity(uint64_t needed_vertex_len);
   };
 
@@ -1095,9 +1095,9 @@ static void calc_tris_index_counts(const Object &object,
   }
 }
 
-void DrawCacheImpl::AttributeData::ensure_nodes_capacity(const int64_t nodes_len)
+void DrawCacheImpl::AttributeData::ensure_nodes_capacity(const int64_t nodes_num)
 {
-  this->dirty_nodes.resize(nodes_len, true);
+  this->dirty_nodes.resize(nodes_num, true);
 }
 void DrawCacheImpl::AttributeData::ensure_buffer_capacity(const uint64_t needed_vertex_len)
 {
@@ -3284,7 +3284,7 @@ DrawCacheImpl::AttributeData &DrawCacheImpl::ensure_attribute_data(
   PRF_scope(ProfileCategory::Draw);
   const bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   AttributeData &attr_vbo = attribute_vbos_.lookup_or_add_default(attr);
-  attr_vbo.ensure_nodes_capacity(pbvh.nodes_num() + 1);
+  attr_vbo.ensure_nodes_capacity(node_mask.min_array_size());
 
   /* Compute mask that needs to be recomputed. */
   IndexMaskMemory memory;
