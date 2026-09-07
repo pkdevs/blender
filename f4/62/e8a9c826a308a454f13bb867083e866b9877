@@ -1,3 +1,4 @@
 Referenced by issue #38607, Blender BTD crash when rendering a particle video with motionblur in cycles
 Referenced by issue #38332, Segmentation fault, when script active and render animation with motion blur
 Referenced by pull request #163574, Fix: Cycles: Random ui_test_render.animation_rendering_and_player hangs
+Referenced by commit e4fd76c335ccdec3dc7b7100da20e76cc1e2a4ea, Refactor: Cycles: Remove custom Python thread save/restore
