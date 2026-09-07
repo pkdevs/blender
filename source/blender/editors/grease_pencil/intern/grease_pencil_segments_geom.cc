@@ -1693,9 +1693,9 @@ struct BooleanResult {
   Vector<bool> segment_reversed;
   Vector<int> segment_offsets;
   Vector<bool> cyclic;
-  Vector<int> fill_ids;
+  Vector<int> subj_first_curves;
 
-  void append_result(const BooleanResult &other_result, const int fill_id)
+  void append_result(const BooleanResult &other_result, const int subj_first_curve)
   {
     if (other_result.segments.is_empty()) {
       return;
@@ -1706,7 +1706,7 @@ struct BooleanResult {
     }
     cyclic.extend(other_result.cyclic);
     segment_reversed.extend(other_result.segment_reversed);
-    fill_ids.append_n_times(fill_id, other_result.cyclic.size());
+    subj_first_curves.append_n_times(subj_first_curve, other_result.cyclic.size());
 
     for (const int i : other_result.segments.index_range()) {
       segments.append(std::move(other_result.segments[i]));
@@ -2054,7 +2054,8 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
                                                           is_fill,
                                                           cyclic);
 
-      results_all.append_result(result, shape_i);
+      const int subj_first_curve = shapes[shape_i].first();
+      results_all.append_result(result, subj_first_curve);
     }
     else {
       BooleanResult result;
@@ -2071,7 +2072,8 @@ static BooleanResult execute_boolean(const CurveBooleanOpParameters op_params,
         result.segment_reversed.append(false);
       }
 
-      results_all.append_result(result, shape_i);
+      const int subj_first_curve = shape.first();
+      results_all.append_result(result, subj_first_curve);
     }
   });
 
@@ -2439,8 +2441,8 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
   Array<int> dst_to_src_curves(dst_segments_by_curve.size());
   for (const int i : dst_segments_by_curve.index_range()) {
     const IndexRange segment_range = dst_segments_by_curve[i];
-    const int fill_id = result.fill_ids[i];
-    dst_to_src_curves[i] = fill_id;
+    const int subj_first_curve = result.subj_first_curves[i];
+    dst_to_src_curves[i] = subj_first_curve;
 
     /* Prioritize non-clipping curves. */
     for (const int seg_i : segment_range) {
@@ -2530,8 +2532,8 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
   Array<int> dst_to_src_curves(dst_segments_by_curve.size());
   for (const int i : dst_segments_by_curve.index_range()) {
     const IndexRange segment_range = dst_segments_by_curve[i];
-    const int fill_id = result.fill_ids[i];
-    dst_to_src_curves[i] = fill_id;
+    const int subj_first_curve = result.subj_first_curves[i];
+    dst_to_src_curves[i] = subj_first_curve;
 
     /* Prioritize non-clipping curves. */
     for (const int seg_i : segment_range) {
