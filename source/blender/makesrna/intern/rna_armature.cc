@@ -1504,8 +1504,8 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", BONE_DRAW_IN_FRONT);
   RNA_def_property_ui_text(prop,
                            "In Front",
-                           "Draw this bone in front of others."
-                           "Object's own In Front setting");
+                           "Draw this bone in front of others "
+                           "(independent of the Armature's In Front setting)");
   RNA_def_property_update(prop, 0, "rna_Bone_show_in_front_update");
 
   /* XXX: use_cyclic_offset is deprecated in 2.5. May/may not return */
