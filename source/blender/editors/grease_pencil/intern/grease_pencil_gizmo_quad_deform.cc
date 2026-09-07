@@ -427,7 +427,8 @@ static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
     Object &object,
     const int layer_index,
     const IndexMask selection,
-    const bke::greasepencil::Drawing &drawing)
+    const bke::greasepencil::Drawing &drawing,
+    const FunctionRef<float2(const float3 &position)> project_to_screen)
 {
   using bke::greasepencil::Drawing;
   using bke::greasepencil::Layer;
@@ -445,7 +446,8 @@ static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
 
   selection.foreach_index(
       [&](const int point_i) {
-        const float2 screen_co = float2(positions[point_i].x, positions[point_i].z);
+        const float2 screen_co = project_to_screen(positions[point_i]);
+        // const float2 screen_co = float2(positions[point_i].x, positions[point_i].z);
         // const float2 screen_co = this->project_to_screen(layer_to_world, positions[point_i]);
 
         if (screen_co.x != V2D_IS_CLIPPED) {
@@ -514,6 +516,38 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
     }
   }
 
+  auto projection_function = [&](const float3 position) {
+    switch (scene.toolsettings->gp_sculpt.lock_axis) {
+      case GP_LOCKAXIS_VIEW:
+        // plane_ = DrawingPlacementPlane::View;
+        break;
+      case GP_LOCKAXIS_Y:
+        // plane_ = DrawingPlacementPlane::Front;
+
+        return float2(position.x, position.z);
+
+        break;
+      case GP_LOCKAXIS_X:
+        // plane_ = DrawingPlacementPlane::Side;
+
+        return float2(position.y, position.z);
+
+        break;
+      case GP_LOCKAXIS_Z:
+        // plane_ = DrawingPlacementPlane::Top;
+        return float2(position.x, position.y);
+        break;
+      case GP_LOCKAXIS_CURSOR: {
+        // plane_ = DrawingPlacementPlane::Cursor;
+
+        // placement_normal_ = scene.cursor.matrix<float3x3>() * float3(0, 0, 1);
+        break;
+      }
+    }
+
+    return float2(position.x, position.y);
+  };
+
   std::optional<Bounds<float2>> box;
 
   Object *object = CTX_data_active_object(C);
@@ -532,9 +566,10 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
     mask_group->selections.append(selected_points);
     mask_group->src_positions.append(Array<float3>(info.drawing.strokes().positions()));
 
-    box = bounds::merge(box,
-                        compute_screen_space_drawing_bounds(
-                            *rv3d, *object, info.layer_index, selected_points, info.drawing));
+    box = bounds::merge(
+        box,
+        compute_screen_space_drawing_bounds(
+            *rv3d, *object, info.layer_index, selected_points, info.drawing, projection_function));
   }
 
   mask_group->drawings = drawings;
