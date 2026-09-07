@@ -752,7 +752,7 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   //                                float2(0.0f);
 
   // RNA_float_set_array(gz->ptr, "dimensions", mask_group->state.dims);
-  WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
+  // WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
 
   // const SpaceNode *snode = find_active_node_editor(C);
   // BLI_assert(snode != nullptr);
