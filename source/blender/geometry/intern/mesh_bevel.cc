@@ -7799,7 +7799,7 @@ static std::optional<Mesh *> mesh_face_bevel(BevelState &state,
     mi_input.face = mi_faces.as_span();
     mi_input.contour = mi_faces.as_span();
     mi_input.inset_amount = inset_amount;
-    mi_input.slope = params.face_depth.is_empty() ? 0.0 : double(params.face_depth[f]);
+    mi_input.slope = params.face_height.is_empty() ? 0.0 : double(params.face_height[f]);
     mi_input.need_ids = true;
 
     const blender::meshinset::MeshInset_Result mi_result = blender::meshinset::mesh_inset_calc(

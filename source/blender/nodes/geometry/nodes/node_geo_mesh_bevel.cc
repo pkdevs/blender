@@ -88,7 +88,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .evaluated_geometry_field()
       .usage_by_single_menu(int(geometry::BevelAffect::Faces))
       .description("Inset distance for face bevel");
-  b.add_input<decl::Float>("Depth"_ustr, "Face Depth"_ustr)
+  b.add_input<decl::Float>("Depth"_ustr, "Face Height"_ustr)
       .default_value(0.0f)
       .subtype(PROP_DISTANCE)
       .evaluated_geometry_field()
@@ -204,11 +204,10 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   const Field<float> offset0_field = (affect == geometry::BevelAffect::Vertices) ?
                                          params.extract_input<Field<float>>("Offset"_ustr) :
-                                         (affect == geometry::BevelAffect::Faces) ?
-                                             params.extract_input<Field<float>>(
-                                                 "Face Offset"_ustr) :
-                                             params.extract_input<Field<float>>(
-                                                 "Start Left Offset"_ustr);
+                                     (affect == geometry::BevelAffect::Faces) ?
+                                         params.extract_input<Field<float>>("Face Offset"_ustr) :
+                                         params.extract_input<Field<float>>(
+                                             "Start Left Offset"_ustr);
   const Field<float> offset1_field = params.extract_input<Field<float>>("Start Right Offset"_ustr);
   const Field<float> offset2_field = params.extract_input<Field<float>>("End Left Offset"_ustr);
   const Field<float> offset3_field = params.extract_input<Field<float>>("End Right Offset"_ustr);
@@ -294,18 +293,16 @@ static void node_geo_exec(GeoNodeExecParams params)
       /* Face bevel: selection and offset are both per-face.  Only offsets[0] is used;  the
        * single 'Offset' field drives the inset distance for each selected face. */
       const bke::MeshFieldContext face_context(*src_mesh, AttrDomain::Face);
-      bevel_params.offsets = {Array<float>(src_mesh->faces_num),
-                              Array<float>(0),
-                              Array<float>(0),
-                              Array<float>(0)};
-      bevel_params.face_depth = Array<float>(src_mesh->faces_num);
-      const Field<float> depth_field = params.extract_input<Field<float>>("Face Depth"_ustr);
+      bevel_params.offsets = {
+          Array<float>(src_mesh->faces_num), Array<float>(0), Array<float>(0), Array<float>(0)};
+      bevel_params.face_height = Array<float>(src_mesh->faces_num);
+      const Field<float> height_field = params.extract_input<Field<float>>("Face Height"_ustr);
       FieldEvaluator face_evaluator{face_context, src_mesh->faces_num};
       face_evaluator.add(selection_field);
       face_evaluator.add_with_destination(offset0_field,
                                           bevel_params.offsets[0].as_mutable_span());
-      face_evaluator.add_with_destination(depth_field,
-                                          bevel_params.face_depth.as_mutable_span());
+      face_evaluator.add_with_destination(height_field,
+                                          bevel_params.face_height.as_mutable_span());
       face_evaluator.evaluate();
 
       /* Pass face selection mask while face_evaluator is still alive. */
