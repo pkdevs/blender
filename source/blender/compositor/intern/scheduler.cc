@@ -337,10 +337,10 @@ using NeededBuffers = Map<const bNode *, int>;
  * nodes, only inputs and outputs linked to nodes that are not pixel nodes should be considered.
  * Note that this might not actually be true, because the compiler may decide to split a pixel
  * operation into multiples ones that will pass buffers, but this is not something that can be
- * known at scheduling-time. See the discussion in COM_compile_state.hh, COM_evaluator.hh, and
- * COM_shader_operation.hh for more information. In the node tree shown below, node 4 will have
- * exactly the same number of needed buffers by node 3, because its inputs and outputs are all
- * internally linked in the pixel operation.
+ * known at scheduling-time. See the description of NodeTreeEvaluator and COM_shader_operation.hh
+ * for more information. In the node tree shown below, node 4 will have exactly the same number of
+ * needed buffers by node 3, because its inputs and outputs are all internally linked in the pixel
+ * operation.
  *
  *                                      Pixel Operation
  *                   +------------------------------------------------------+
@@ -548,7 +548,6 @@ Schedule compute_schedule(NodeGroupOperation &node_group_operation)
   /* Validate node group. */
   node_group_operation.node_group().ensure_topology_cache();
   if (node_group_operation.node_group().has_available_link_cycle()) {
-    node_group_operation.context().set_info_message("Compositor node group has cyclic links.");
     return schedule;
   }
 
