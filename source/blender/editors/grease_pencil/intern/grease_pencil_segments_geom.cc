@@ -2327,6 +2327,11 @@ static Array<bool> calculate_unchanged_curves(const Span<Segment> segments,
  * Separate disjoint fill islands.
  *
  * Note: Nested islands of 3 or more curves will not be split.
+ *
+ * If a curve as been changed and it is not a child then update it's and it's children's fill ids.
+ *
+ * Note: Previously unchanged curves may have their fill id changed, if their parent curve id is
+ * changed.
  */
 static void separate_fill_islands(bke::CurvesGeometry &dst, const Span<bool> unchanged_curves)
 {
@@ -2340,6 +2345,7 @@ static void separate_fill_islands(bke::CurvesGeometry &dst, const Span<bool> unc
 
   const OffsetIndices<int> points_by_curve = dst.points_by_curve();
 
+  /* Returns if #curve_i in inside of #curve_j, only valid if the curves do not intersect. */
   auto is_curve_i_in_j = [&](const int curve_i, const int curve_j) {
     const IndexRange points_i = points_by_curve[curve_i];
     const IndexRange points_j = points_by_curve[curve_j];
@@ -2356,18 +2362,23 @@ static void separate_fill_islands(bke::CurvesGeometry &dst, const Span<bool> unc
   Array<Vector<int>> curve_children(points_by_curve.size());
 
   for (const int curve_i : points_by_curve.index_range()) {
-    if (fill_ids.span[curve_i] == 0 || unchanged_curves[curve_i]) {
+    /* Skip curves without fill. */
+    if (fill_ids.span[curve_i] == 0) {
       continue;
     }
 
     for (const int curve_j : points_by_curve.index_range()) {
+      if (curve_j == curve_i) {
+        continue;
+      }
+
       if (fill_ids.span[curve_j] != fill_ids.span[curve_i]) {
         continue;
       }
 
       if (is_curve_i_in_j(curve_i, curve_j)) {
-        is_curve_child[curve_j] = true;
-        curve_children[curve_i].append(curve_j);
+        is_curve_child[curve_i] = true;
+        curve_children[curve_j].append(curve_i);
       }
     }
   }
