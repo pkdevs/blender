@@ -219,11 +219,15 @@ static BitVector<> init_uv_primitives_brush_test(SculptSession &ss,
 struct PaintBlendSettings {
   PaintBlendSettings(const Paint &paint, const Brush &brush, const bool invert)
   {
-    brush_color = brush.image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK ?
-                      float4(invert ? float3(0.0, 0.0, 0.0) : float3(1.0, 1.0, 1.0), 1.0f) :
-                      float4(invert ? BKE_brush_secondary_color_get(&paint, &brush) :
-                                      BKE_brush_color_get(&paint, &brush),
-                             1.0f);
+    brush_color = float4(invert ? BKE_brush_secondary_color_get(&paint, &brush) :
+                                  BKE_brush_color_get(&paint, &brush),
+                         1.0f);
+    brush_alpha = brush.alpha;
+    blend_mode = IMB_BlendMode(brush.blend);
+  }
+  PaintBlendSettings(const Brush &brush, const bool invert)
+  {
+    brush_color = float4(invert ? float3(0.0, 0.0, 0.0) : float3(1.0, 1.0, 1.0), 1.0f);
     brush_alpha = brush.alpha;
     blend_mode = IMB_BlendMode(brush.blend);
   }
@@ -712,7 +716,7 @@ static void do_paint_pixels(const Depsgraph &depsgraph,
 
 static void do_mask_pixels(const Depsgraph &depsgraph,
                            Object &object,
-                           const Paint &paint,
+                           const Paint & /*paint*/,
                            const Brush &brush,
                            ImageData &image_data,
                            bke::pbvh::Node & /*node*/,
@@ -729,7 +733,7 @@ static void do_mask_pixels(const Depsgraph &depsgraph,
   BitVector<> brush_test = init_uv_primitives_brush_test(
       ss, corner_verts, corner_tris, pixel_node.uv_primitives.tri_indices, positions);
 
-  const PaintBlendSettings blend_settings(paint, brush, ss.cache->toggle_settings.invert);
+  const PaintBlendSettings blend_settings(brush, ss.cache->toggle_settings.invert);
 
 #ifdef DEBUG_PIXEL_NODES
   float4 debug_color;
@@ -829,7 +833,7 @@ static void do_mask_pixels(const Depsgraph &depsgraph,
             apply_hardness_to_distances(cache, tri_distances);
             calc_brush_strength_factors(cache, brush, tri_distances, tri_factors);
             calc_brush_texture_factors(ss, brush, tri_positions, tri_factors);
-            scale_factors(tri_factors, abs(cache.bstrength));
+            scale_factors(tri_factors, cache.bstrength);
 
             /* Track which subset of the run has non-zero factors. */
             int tri_active_begin = -1;
