@@ -133,7 +133,7 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
   /* Intersect with the bounding sphere.
    * Equivalent to IsNegligible() check in Algorithm 1 of [sun2025]. */
   float sphere_t;
-  if (!point_intersect_test<true>(point, ray_P, ray_D, ray_tmin, ray_tmax, &sphere_t)) {
+  if (!point_intersect_test<false>(point, ray_P, ray_D, ray_tmin, ray_tmax, &sphere_t)) {
     return false;
   }
 
