@@ -104,6 +104,49 @@ class NodeGroupInterfaceTests:
         self.assertFalse(group_node.inputs)
         self.assertFalse(group_node.outputs)
 
+    def test_panel_items_lookup(self):
+        tree = self.make_group()
+        interface = tree.interface
+        panel = interface.new_panel("Panel")
+        child = interface.new_panel("Child")
+        interface.move_to_parent(child, panel, 0)
+        socket = interface.new_socket("Input", socket_type="NodeSocketFloat", parent=panel)
+        nested = interface.new_socket("Nested", socket_type="NodeSocketFloat", parent=child)
+        sibling = interface.new_panel("Sibling")
+        other = interface.new_socket("Input", socket_type="NodeSocketFloat", parent=sibling)
+
+        self.assertEqual(panel.interface_items["Child"], child)
+        self.assertEqual(panel.interface_items["Input"], socket)
+        self.assertEqual(panel.interface_items[socket.identifier], socket)
+        self.assertEqual(sibling.interface_items["Input"], other)
+        self.assertEqual(panel.interface_items["Child"].interface_items["Nested"], nested)
+        for index, item in enumerate(panel.interface_items):
+            self.assertEqual(panel.interface_items[index], item)
+            self.assertEqual(panel.interface_items[item.name], item)
+
+        # Lookup is limited to immediate children, not the entire interface tree.
+        for key in ("Missing", "Nested", "Sibling", nested.identifier, other.identifier):
+            with self.subTest(key=key):
+                self.assertNotIn(key, panel.interface_items)
+                self.assertIsNone(panel.interface_items.get(key))
+                with self.assertRaises(KeyError):
+                    panel.interface_items[key]
+
+        child.name = "Renamed"
+        self.assertEqual(panel.interface_items["Renamed"], child)
+        self.assertNotIn("Child", panel.interface_items)
+
+        # Match items_tree: socket identifiers take precedence over item names.
+        child.name = socket.identifier
+        self.assertEqual(panel.interface_items[socket.identifier], socket)
+        self.assertEqual(interface.items_tree[socket.identifier], socket)
+
+        interface.remove(socket)
+        self.assertEqual(panel.interface_items[child.name], child)
+        interface.remove(child, move_content_to_parent=False)
+        self.assertEqual(len(panel.interface_items), 0)
+        self.assertIsNone(panel.interface_items.get("Missing"))
+
     def do_test_invalid_socket_type(self, socket_type):
         tree = self.make_group()
 

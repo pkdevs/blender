@@ -1141,17 +1141,12 @@ static bool rna_NodeTreeInterface_items_lookup_int(PointerRNA *ptr, int index, P
   return true;
 }
 
-static bool rna_NodeTreeInterface_items_lookup_string(PointerRNA *ptr,
-                                                      const char *key,
-                                                      PointerRNA *r_ptr)
+static bool rna_NodeTreeInterfaceItems_lookup_string(PointerRNA *ptr,
+                                                     const Span<bNodeTreeInterfaceItem *> items,
+                                                     const char *key,
+                                                     PointerRNA *r_ptr)
 {
-  bNodeTree *ntree = reinterpret_cast<bNodeTree *>(ptr->owner_id);
-  if (!ntree->runtime) {
-    return false;
-  }
-
-  ntree->ensure_interface_cache();
-  for (bNodeTreeInterfaceItem *item : ntree->interface_items()) {
+  for (bNodeTreeInterfaceItem *item : items) {
     switch (item->item_type) {
       case NodeTreeInterfaceItemType::Socket: {
         bNodeTreeInterfaceSocket *socket = reinterpret_cast<bNodeTreeInterfaceSocket *>(item);
@@ -1165,7 +1160,7 @@ static bool rna_NodeTreeInterface_items_lookup_string(PointerRNA *ptr,
         break;
     }
   }
-  for (bNodeTreeInterfaceItem *item : ntree->interface_items()) {
+  for (bNodeTreeInterfaceItem *item : items) {
     switch (item->item_type) {
       case NodeTreeInterfaceItemType::Socket: {
         bNodeTreeInterfaceSocket *socket = reinterpret_cast<bNodeTreeInterfaceSocket *>(item);
@@ -1186,6 +1181,27 @@ static bool rna_NodeTreeInterface_items_lookup_string(PointerRNA *ptr,
     }
   }
   return false;
+}
+
+static bool rna_NodeTreeInterface_items_lookup_string(PointerRNA *ptr,
+                                                      const char *key,
+                                                      PointerRNA *r_ptr)
+{
+  bNodeTree *ntree = reinterpret_cast<bNodeTree *>(ptr->owner_id);
+  if (!ntree->runtime) {
+    return false;
+  }
+
+  ntree->ensure_interface_cache();
+  return rna_NodeTreeInterfaceItems_lookup_string(ptr, ntree->interface_items(), key, r_ptr);
+}
+
+static bool rna_NodeTreeInterfacePanel_items_lookup_string(PointerRNA *ptr,
+                                                           const char *key,
+                                                           PointerRNA *r_ptr)
+{
+  bNodeTreeInterfacePanel *panel = static_cast<bNodeTreeInterfacePanel *>(ptr->data);
+  return rna_NodeTreeInterfaceItems_lookup_string(ptr, panel->items(), key, r_ptr);
 }
 
 static PointerRNA rna_NodeTreeInterface_root_panel_get(PointerRNA *ptr)
@@ -1509,6 +1525,15 @@ static void rna_def_node_interface_panel(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "interface_items", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_collection_sdna(prop, nullptr, "items_array", "items_num");
+  RNA_def_property_collection_funcs(prop,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    "rna_NodeTreeInterfacePanel_items_lookup_string",
+                                    nullptr);
   RNA_def_property_struct_type(prop, "NodeTreeInterfaceItem");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_ui_text(prop, "Items", "Items in the node panel");
