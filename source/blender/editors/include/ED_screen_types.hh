@@ -30,6 +30,8 @@ struct ScreenAnimData {
   ViewLayer *view_layer;
   /* For sequencer scenes, account for scene syncing during playback. */
   bool do_scene_syncing;
+  /* Use strip frame range of active scene during playback. */
+  bool use_scene_strip_range;
 
   short redraws;
   /** Flags for playback */

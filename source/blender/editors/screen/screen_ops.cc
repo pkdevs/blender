@@ -6657,9 +6657,15 @@ static wmOperatorStatus screen_animation_step_invoke(bContext *C,
    * this function. */
   bool do_stop_playback = false;
 
+  float start_frame = scene->playback_start();
+  float end_frame = scene->playback_end();
+
+  /* Preview range overrides all other playbacks. */
+  if (sad->use_scene_strip_range && (scene->r.flag & SCER_PRV_RANGE) == 0) {
+    ed::vse::get_scene_strip_frame_range(*C, &start_frame, &end_frame);
+  }
+
   /* Handle reaching the extreme frames. */
-  const int start_frame = scene->playback_start();
-  const int end_frame = scene->playback_end();
   const bool is_playing_forward = (sad->flag & ANIMPLAY_FLAG_REVERSE) == 0;
   const bool is_extreme_frame = is_playing_forward ? scene->r.cfra > end_frame :
                                                      scene->r.cfra < start_frame;

@@ -84,6 +84,7 @@
 #include "sequencer_intern.hh"
 #include <cstddef>
 #include <fmt/format.h>
+#include <utility>
 
 namespace blender::ed::vse {
 
@@ -390,6 +391,24 @@ bool is_scene_time_sync_needed(const bContext &C)
   return true;
 }
 
+bool is_scene_frame_range_from_strip_needed(const bContext &C)
+{
+  WorkSpace *workspace = CTX_wm_workspace(&C);
+  if (!workspace || !workspace->sequencer_scene) {
+    return false;
+  }
+  if ((workspace->flags & WORKSPACE_USE_STRIP_SCENE_RANGE_FOR_PLAYBACK) == 0) {
+    return false;
+  }
+  SpaceSeq *sseq = CTX_wm_space_seq(&C);
+  if (sseq) {
+    /* Strip frame range playback should be triggered from all editors except the video
+     * sequencer. */
+    return false;
+  }
+  return true;
+}
+
 static Scene *get_sequencer_scene_for_time_sync(const bContext &C)
 {
   wmWindowManager *wm = CTX_wm_manager(&C);
@@ -435,6 +454,49 @@ const Strip *get_scene_strip_for_time_sync(const Scene *sequencer_scene)
     }
   }
   return nullptr;
+}
+
+static void scene_strip_visible_frame_range(const Scene *sequencer_scene,
+                                            const Strip *scene_strip,
+                                            float *r_start,
+                                            float *r_end)
+{
+  /* ..._handle are frames in "sequencer logic", meaning that on the right_handle point in time,
+   * the strip is not visible any more. The last visible frame of the strip is actually on
+   * (right_handle-1), hence the -1 when computing the end_frame. */
+  const float left_handle = scene_strip->left_handle();
+  const float right_handle = scene_strip->right_handle(sequencer_scene);
+  float start_frame = seq::give_frame_index(sequencer_scene, scene_strip, left_handle) +
+                      scene_strip->scene->r.sfra + scene_strip->anim_startofs;
+  float end_frame = seq::give_frame_index(sequencer_scene, scene_strip, right_handle - 1) +
+                    scene_strip->scene->r.sfra + scene_strip->anim_startofs;
+
+  /* This can happen when the strip time is reversed. */
+  if (start_frame > end_frame) {
+    std::swap(start_frame, end_frame);
+  }
+
+  *r_start = start_frame;
+  *r_end = end_frame;
+}
+
+bool get_scene_strip_frame_range(const bContext &C, float *r_start, float *r_end)
+{
+  const WorkSpace *workspace = CTX_wm_workspace(&C);
+  if (workspace == nullptr) {
+    return false;
+  }
+  const Scene *sequencer_scene = workspace->sequencer_scene;
+  if (!sequencer_scene) {
+    return false;
+  }
+  const Strip *scene_strip = get_scene_strip_for_time_sync(sequencer_scene);
+  if (!scene_strip || !scene_strip->scene) {
+    return false;
+  }
+
+  scene_strip_visible_frame_range(sequencer_scene, scene_strip, r_start, r_end);
+  return true;
 }
 
 void sync_active_scene_and_time_with_scene_strip(bContext &C)

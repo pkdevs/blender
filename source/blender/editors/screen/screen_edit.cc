@@ -1977,6 +1977,7 @@ void ED_screen_animation_timer(
     sad->view_layer = view_layer;
 
     sad->do_scene_syncing = ed::vse::is_scene_time_sync_needed(*C);
+    sad->use_scene_strip_range = ed::vse::is_scene_frame_range_from_strip_needed(*C);
 
     sad->sfra = scene->r.cfra;
     /* Make sure that were are inside the scene or preview frame range. */

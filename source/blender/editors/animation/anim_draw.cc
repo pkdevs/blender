@@ -14,7 +14,6 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
-#include "DNA_sequence_types.h"
 #include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
 #include "DNA_workspace_types.h"
@@ -45,10 +44,6 @@
 
 #include "GPU_immediate.hh"
 #include "GPU_state.hh"
-
-#include "SEQ_time.hh"
-
-#include <utility>
 
 namespace blender {
 
@@ -126,15 +121,11 @@ void ANIM_draw_scene_strip_range(const bContext *C, View2D *v2d)
   if (!workspace) {
     return;
   }
-  if ((workspace->flags & WORKSPACE_SYNC_SCENE_TIME) == 0) {
+  if ((workspace->flags & WORKSPACE_USE_STRIP_SCENE_RANGE_FOR_PLAYBACK) == 0) {
     return;
   }
-  const Scene *sequencer_scene = workspace->sequencer_scene;
-  if (!sequencer_scene) {
-    return;
-  }
-  const Strip *scene_strip = ed::vse::get_scene_strip_for_time_sync(sequencer_scene);
-  if (!scene_strip || !scene_strip->scene) {
+  float start_frame, end_frame;
+  if (!ed::vse::get_scene_strip_frame_range(*C, &start_frame, &end_frame)) {
     return;
   }
   GPU_blend(GPU_BLEND_ALPHA);
@@ -144,21 +135,6 @@ void ANIM_draw_scene_strip_range(const bContext *C, View2D *v2d)
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformThemeColorShadeAlpha(TH_ANIM_SCENE_STRIP_RANGE, -25, -30);
-
-  /* ..._handle are frames in "sequencer logic", meaning that on the right_handle point in time,
-   * the strip is not visible any more. The last visible frame of the strip is actually on
-   * (right_handle-1), hence the -1 when computing the end_frame. */
-  const float left_handle = scene_strip->left_handle();
-  const float right_handle = scene_strip->right_handle(sequencer_scene);
-  float start_frame = seq::give_frame_index(sequencer_scene, scene_strip, left_handle) +
-                      scene_strip->scene->r.sfra + scene_strip->anim_startofs;
-  float end_frame = seq::give_frame_index(sequencer_scene, scene_strip, right_handle - 1) +
-                    scene_strip->scene->r.sfra + scene_strip->anim_startofs;
-
-  /* This can happen when the strip time is reversed. */
-  if (start_frame > end_frame) {
-    std::swap(start_frame, end_frame);
-  }
 
   immRectf(pos, v2d->cur.xmin, v2d->cur.ymin, start_frame, v2d->cur.ymax);
   immRectf(pos, end_frame, v2d->cur.ymin, v2d->cur.xmax, v2d->cur.ymax);

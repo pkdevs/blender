@@ -513,6 +513,15 @@ static void rna_def_workspace(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, NC_WINDOW, "rna_workspace_sync_scene_time_update");
 
+  prop = RNA_def_property(srna, "use_strip_scene_range_for_playback", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "flags", WORKSPACE_USE_STRIP_SCENE_RANGE_FOR_PLAYBACK);
+  RNA_def_property_ui_text(prop,
+                           "Limit Playback Range to Scene Strip",
+                           "Limit playback to the frame range covered by this scene's strip in "
+                           "the Sequencer if it exists");
+
   RNA_api_workspace(srna);
 }
 
