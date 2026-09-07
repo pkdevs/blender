@@ -17,7 +17,6 @@ struct Main;
 struct Scene;
 struct ScrArea;
 struct TimeMarker;
-struct bAction;
 struct bAnimContext;
 struct bContext;
 struct wmKeyConfig;

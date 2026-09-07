@@ -158,7 +158,7 @@ int ED_markers_get_active_index(const ListBaseT<TimeMarker> *markers)
 {
   int i = 0;
   TimeMarker *marker;
-  for (i = 0, marker = static_cast<TimeMarker *>(markers->first); marker; marker = marker->next) {
+  for (i = 0, marker = markers->first(); marker; marker = marker->next) {
     if (marker->flag & TIME_MARKER_ACTIVE) {
       return i;
     }
@@ -170,7 +170,7 @@ void ED_markers_set_active_index(ListBaseT<TimeMarker> *markers, int active)
 {
   int i = 0;
   TimeMarker *marker;
-  for (i = 0, marker = static_cast<TimeMarker *>(markers->first); marker; marker = marker->next) {
+  for (i = 0, marker = markers->first(); marker; marker = marker->next) {
     SET_FLAG_FROM_TEST(marker->flag, i == active, TIME_MARKER_ACTIVE);
   }
 }

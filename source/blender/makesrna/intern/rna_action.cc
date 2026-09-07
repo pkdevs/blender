@@ -1052,7 +1052,7 @@ static PointerRNA rna_Action_active_pose_marker_get(PointerRNA *ptr)
 {
   bAction *act = static_cast<bAction *>(ptr->data);
   return RNA_pointer_create_with_parent(
-      *ptr, RNA_TimelineMarker, ED_action_markers_get_active(&act->markers));
+      *ptr, RNA_TimelineMarker, ED_markers_get_active(&act->markers));
 }
 
 static void rna_Action_active_pose_marker_set(PointerRNA *ptr,
@@ -1060,19 +1060,19 @@ static void rna_Action_active_pose_marker_set(PointerRNA *ptr,
                                               ReportList * /*reports*/)
 {
   bAction *act = static_cast<bAction *>(ptr->data);
-  ED_action_markers_set_active(&act->markers, static_cast<TimeMarker *>(value.data));
+  ED_markers_set_active(&act->markers, static_cast<TimeMarker *>(value.data));
 }
 
 static int rna_Action_active_pose_marker_index_get(PointerRNA *ptr)
 {
   bAction *act = static_cast<bAction *>(ptr->data);
-  return ED_action_markers_get_active_index(&act->markers);
+  return ED_markers_get_active_index(&act->markers);
 }
 
 static void rna_Action_active_pose_marker_index_set(PointerRNA *ptr, int value)
 {
   bAction *act = static_cast<bAction *>(ptr->data);
-  ED_action_markers_set_active_index(&act->markers, value);
+  ED_markers_set_active_index(&act->markers, value);
 }
 
 static void rna_Action_active_pose_marker_index_range(
@@ -2488,7 +2488,6 @@ static void rna_def_action_pose_markers(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_property_ui_text(prop, "Active Pose Marker", "Active pose marker for this action");
 
   prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
-  RNA_def_property_int_sdna(prop, nullptr, "active_marker");
   RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
   RNA_def_property_int_funcs(prop,
                              "rna_Action_active_pose_marker_index_get",
