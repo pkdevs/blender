@@ -595,12 +595,12 @@ static void draw_marker_line(const uchar *color, int xpos, int ymin, int ymax)
 static int marker_get_icon_id(TimeMarker *marker, int flag)
 {
   if (flag & DRAW_MARKERS_LOCAL) {
-    return (marker->flag & SELECT) ? ICON_PMARKER_SEL : ICON_PMARKER;
+    return (marker->flag & TIME_MARKER_ACTIVE) ? ICON_PMARKER_SEL : ICON_PMARKER;
   }
   if (marker->camera) {
-    return (marker->flag & SELECT) ? ICON_OUTLINER_OB_CAMERA : ICON_CAMERA_DATA;
+    return (marker->flag & TIME_MARKER_ACTIVE) ? ICON_OUTLINER_OB_CAMERA : ICON_CAMERA_DATA;
   }
-  return (marker->flag & SELECT) ? ICON_MARKER_HLT : ICON_MARKER;
+  return (marker->flag & TIME_MARKER_ACTIVE) ? ICON_MARKER_HLT : ICON_MARKER;
 }
 
 static void draw_marker(
@@ -930,6 +930,7 @@ static wmOperatorStatus ed_marker_add_exec(bContext *C, wmOperator * /*op*/)
   marker->frame = frame;
   SNPRINTF_UTF8(marker->name, "F_%02d", frame);
   BLI_addtail(markers, marker);
+  ED_markers_set_active(markers, marker);
 
   WM_event_add_notifier(C, NC_SCENE | ND_MARKERS, nullptr);
   WM_event_add_notifier(C, NC_ANIMATION | ND_MARKERS, nullptr);
@@ -1493,8 +1494,10 @@ static wmOperatorStatus ed_marker_select(bContext *C,
   const int cfra = ED_markers_find_nearest_marker_time(markers, frame_at_mouse_position);
   const bool found = (nearest_marker != nullptr);
   const bool is_selected = (nearest_marker && nearest_marker->flag & SELECT);
+  const bool is_active = ED_markers_get_active(markers) == nearest_marker;
 
-  eSelectOp sel_op = (extend) ? (is_selected ? SEL_OP_SUB : SEL_OP_ADD) : SEL_OP_SET;
+  eSelectOp sel_op = (extend) ? ((is_selected && is_active) ? SEL_OP_SUB : SEL_OP_ADD) :
+                                SEL_OP_SET;
 
   if ((sel_op == SEL_OP_SET && found) || (!found && deselect_all)) {
     sel_op = SEL_OP_ADD;
@@ -1506,6 +1509,7 @@ static wmOperatorStatus ed_marker_select(bContext *C,
     }
     else {
       ED_markers_select_all(markers, SEL_DESELECT);
+      ED_markers_set_active(markers, nullptr);
     }
   }
 
@@ -1537,9 +1541,11 @@ static wmOperatorStatus ed_marker_select(bContext *C,
     if (marker_found) {
       if (sel_op == SEL_OP_SUB) {
         marker_found->flag &= ~SELECT;
+        ED_markers_set_active(markers, nullptr); /* TODO redmser: is this correct? */
       }
       else {
         marker_found->flag |= SELECT;
+        ED_markers_set_active(markers, marker_found);
       }
     }
   }
@@ -2134,6 +2140,7 @@ static wmOperatorStatus ed_marker_camera_bind_exec(bContext *C, wmOperator *op)
 
   /* bind to the nominated camera (as set in operator props) */
   marker->camera = ob;
+  ED_markers_set_active(markers, marker);
 
   /* camera may have changes */
   BKE_scene_camera_switch_update(scene);
