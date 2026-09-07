@@ -1202,8 +1202,9 @@ static bool trimesh_is_planar(const TriangleMesh &trimesh)
       const double3 &c = edges[j].a->co;
       const double3 &d = edges[j].b->co;
       /* Skip pairs that share a vertex — adjacent edges never cross. */
-      if (edges[i].a == edges[j].a || edges[i].a == edges[j].b ||
-          edges[i].b == edges[j].a || edges[i].b == edges[j].b) {
+      if (edges[i].a == edges[j].a || edges[i].a == edges[j].b || edges[i].b == edges[j].a ||
+          edges[i].b == edges[j].b)
+      {
         continue;
       }
       /* Signed-area test: strictly opposite sides ↔ negative product. */
@@ -1213,10 +1214,9 @@ static bool trimesh_is_planar(const TriangleMesh &trimesh)
         const double dc = det(c - a, b - a, normal);
         const double dd_val = det(d - a, b - a, normal);
         if (dc * dd_val < 0.0) {
-          std::cout << "PLANARITY VIOLATION: edge (t" << edges[i].ta_id << ",t"
-                    << edges[i].tb_id << ") [" << a << " -> " << b << "] crosses edge (t"
-                    << edges[j].ta_id << ",t" << edges[j].tb_id << ") [" << c << " -> " << d
-                    << "]\n";
+          std::cout << "PLANARITY VIOLATION: edge (t" << edges[i].ta_id << ",t" << edges[i].tb_id
+                    << ") [" << a << " -> " << b << "] crosses edge (t" << edges[j].ta_id << ",t"
+                    << edges[j].tb_id << ") [" << c << " -> " << d << "]\n";
           return false;
         }
       }
