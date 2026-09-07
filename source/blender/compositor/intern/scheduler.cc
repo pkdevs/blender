@@ -82,9 +82,9 @@ static bool has_file_output_recursive(const bNodeTree &node_group)
   return false;
 }
 
-/* Get a stack the output nodes whose result should be computed. This typically includes the main
- * output node like the Group Output node, as well as side-effect nodes if requested by the context
- * like the File Output, Viewer nodes, or group nodes that have those side effect nodes. */
+/* Get a stack of the output nodes whose result should be computed. This typically includes the
+ * main output node like the Group Output node, as well as side-effect nodes if requested by the
+ * context like the File Output, Viewer nodes, or group nodes that have those side effect nodes. */
 static Stack<const bNode *> get_output_nodes(const Context &context,
                                              const bNodeTree &node_group,
                                              const ComputeContext &compute_context,
@@ -172,7 +172,7 @@ static Stack<const bNode *> get_output_nodes(const Context &context,
 /* Returns the value of the input of the node with the given identifier in the given operation. If
  * the value can not be determined statically, a nullopt is returned. The value is only known
  * statically if the input is not connected, directly connected to the input of the operation, or
- * connected to a context-base node like the Is Viewport node. */
+ * connected to a context-based nodes like the Is Viewport node. */
 template<typename T, typename SocketT>
 static std::optional<T> get_input_socket_value(const Context &context,
                                                const bNode &node,
@@ -239,7 +239,7 @@ static bool is_switch_node_input_needed(const Context &context,
   return (input.identifier_ustr() == "True"_ustr) == condition.value();
 }
 
-/* returns true if the given input of the given menu switch node in the given operation is needed
+/* Returns true if the given input of the given menu switch node in the given operation is needed
  * by the node. */
 static bool is_menu_switch_node_input_needed(const Context &context,
                                              const bNode &node,

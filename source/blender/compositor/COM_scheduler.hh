@@ -28,7 +28,7 @@ struct Schedule {
 };
 
 /* Computes the execution schedule of the given node group which is being evaluated for the given
- * operation in the given compute context. Only outputs types and node group outputs that are
+ * operation in the given compute context. Only output types and node group outputs that are
  * needed are computed. This is essentially a post-order depth first traversal of the node tree
  * from the needed output nodes to the leaf input nodes, with informed order of traversal of
  * dependencies based on a heuristic estimation of the number of needed buffers. */
