@@ -1681,7 +1681,7 @@ static void rna_FileHandler_label_with_extensions(const char *idname, char *resu
   const bke::FileHandlerType *file_handler = bke::file_handler_find(idname);
   BLI_strncpy(result,
               file_handler ? file_handler->label_with_extensions().c_str() : "",
-              FH_MAX_FILE_EXTENSIONS_STR + OP_MAX_TYPENAME);
+              FH_MAX_FILE_EXTENSIONS_STR + OP_MAX_TYPENAME + 3);
 }
 
 }  // namespace blender
@@ -2613,7 +2613,7 @@ static void rna_def_file_handler(BlenderRNA *brna)
   parm = RNA_def_string(func, "idname", nullptr, sizeof(bke::FileHandlerType::idname), "", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_string(
-      func, "result", nullptr, FH_MAX_FILE_EXTENSIONS_STR + OP_MAX_TYPENAME, "result", "");
+      func, "result", nullptr, FH_MAX_FILE_EXTENSIONS_STR + OP_MAX_TYPENAME + 3, "result", "");
   RNA_def_parameter_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
   RNA_def_function_output(func, parm);
 }
