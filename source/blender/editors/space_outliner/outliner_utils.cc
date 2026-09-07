@@ -100,7 +100,7 @@ TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
       /* co_y is lower than current element (but not lower than the next one), possibly inside
        * children */
       TreeElement *te_sub = outliner_find_item_at_y(
-          space_outliner, te_iter->subtree.as_span(), view_co_y);
+          space_outliner, te_iter->subtree, view_co_y);
       if (te_sub) {
         return te_sub;
       }
@@ -164,7 +164,7 @@ TreeElement *outliner_find_tree_element(Span<TreeElement *> tree, const TreeStor
     if (te->store_elem == store_elem) {
       return te;
     }
-    TreeElement *tes = outliner_find_tree_element(te->subtree.as_span(), store_elem);
+    TreeElement *tes = outliner_find_tree_element(te->subtree, store_elem);
     if (tes) {
       return tes;
     }
@@ -181,7 +181,7 @@ TreeElement *outliner_find_parent_element(Span<TreeElement *> tree,
       return parent_te;
     }
 
-    TreeElement *find_te = outliner_find_parent_element(te->subtree.as_span(), te, child_te);
+    TreeElement *find_te = outliner_find_parent_element(te->subtree, te, child_te);
     if (find_te) {
       return find_te;
     }
@@ -215,7 +215,7 @@ TreeElement *outliner_find_id(SpaceOutliner *space_outliner,
       }
     }
 
-    TreeElement *tes = outliner_find_id(space_outliner, te->subtree.as_span(), id, exclude_flags);
+    TreeElement *tes = outliner_find_id(space_outliner, te->subtree, id, exclude_flags);
     if (tes) {
       return tes;
     }
@@ -232,7 +232,7 @@ TreeElement *outliner_find_posechannel(Span<TreeElement *> tree, const bPoseChan
 
     TreeStoreElem *tselem = TREESTORE(te);
     if (ELEM(tselem->type, TSE_POSE_BASE, TSE_POSE_CHANNEL)) {
-      TreeElement *tes = outliner_find_posechannel(te->subtree.as_span(), pchan);
+      TreeElement *tes = outliner_find_posechannel(te->subtree, pchan);
       if (tes) {
         return tes;
       }
@@ -250,7 +250,7 @@ TreeElement *outliner_find_editbone(Span<TreeElement *> tree, const EditBone *eb
 
     TreeStoreElem *tselem = TREESTORE(te);
     if (ELEM(tselem->type, TSE_SOME_ID, TSE_EBONE)) {
-      TreeElement *tes = outliner_find_editbone(te->subtree.as_span(), ebone);
+      TreeElement *tes = outliner_find_editbone(te->subtree, ebone);
       if (tes) {
         return tes;
       }
@@ -318,7 +318,7 @@ bool outliner_tree_traverse(const SpaceOutliner *space_outliner,
       /* skip */
     }
     else if (!outliner_tree_traverse(space_outliner,
-                                     te->subtree.as_span(),
+                                     te->subtree,
                                      filter_te_flag,
                                      filter_tselem_flag,
                                      func,
@@ -388,7 +388,7 @@ TreeElement *outliner_find_element_with_flag(const Span<TreeElement *> tree, sho
     if ((TREESTORE(te)->flag & flag) == flag) {
       return te;
     }
-    TreeElement *active_element = outliner_find_element_with_flag(te->subtree.as_span(), flag);
+    TreeElement *active_element = outliner_find_element_with_flag(te->subtree, flag);
     if (active_element) {
       return active_element;
     }
@@ -495,7 +495,7 @@ Base *ED_outliner_give_base_under_cursor(bContext *C, const int mval[2])
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
 
   te = outliner_find_item_at_y(
-      space_outliner, space_outliner->runtime->tree.as_span(), view_mval[1]);
+      space_outliner, space_outliner->runtime->tree, view_mval[1]);
   if (te) {
     TreeStoreElem *tselem = TREESTORE(te);
     if ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB)) {
@@ -518,7 +518,7 @@ bool ED_outliner_give_rna_under_cursor(bContext *C, const int mval[2], PointerRN
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
 
   TreeElement *te = outliner_find_item_at_y(
-      space_outliner, space_outliner->runtime->tree.as_span(), view_mval[1]);
+      space_outliner, space_outliner->runtime->tree, view_mval[1]);
   if (!te) {
     return false;
   }

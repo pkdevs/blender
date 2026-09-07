@@ -318,7 +318,7 @@ static void outliner_sync_selection_from_outliner(WorkSpace *workspace,
     }
 
     outliner_sync_selection_from_outliner(
-        workspace, bmain, scene, view_layer, te->subtree.as_span(), sync_types, selected_items);
+        workspace, bmain, scene, view_layer, te->subtree, sync_types, selected_items);
   }
 }
 
@@ -351,7 +351,7 @@ void ED_outliner_select_sync_from_outliner(bContext *C, SpaceOutliner *space_out
                                         *bmain,
                                         scene,
                                         view_layer,
-                                        space_outliner->runtime->tree.as_span(),
+                                        space_outliner->runtime->tree,
                                         &sync_types,
                                         &selected_items);
 
@@ -541,7 +541,7 @@ static void outliner_sync_selection_to_outliner(const Main &bmain,
                                         view_layer,
                                         layer_collection,
                                         space_outliner,
-                                        te->subtree.as_span(),
+                                        te->subtree,
                                         active_data,
                                         sync_types,
                                         r_any_new_active,
@@ -584,7 +584,7 @@ bool outliner_sync_selection(const bContext *C,
                                         tvc.view_layer,
                                         tvc.layer_collection,
                                         space_outliner,
-                                        space_outliner->runtime->tree.as_span(),
+                                        space_outliner->runtime->tree,
                                         &active_data,
                                         &sync_types,
                                         &r_any_new_active,

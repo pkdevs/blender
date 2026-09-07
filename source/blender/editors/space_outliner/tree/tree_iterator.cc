@@ -30,7 +30,7 @@ void all(const Span<TreeElement *> subtree, const ConstVisitorFn visitor)
 {
   for (const TreeElement *element : subtree) {
     visitor(element);
-    all(element->subtree.as_span(), visitor);
+    all(element->subtree, visitor);
   }
 }
 
@@ -54,7 +54,7 @@ void all_open(const SpaceOutliner &space_outliner, const ConstVisitorFn visitor)
 
 void all_open(SpaceOutliner &space_outliner, const VisitorFn visitor)
 {
-  all_open(space_outliner, space_outliner.runtime->tree.as_span(), visitor);
+  all_open(space_outliner, space_outliner.runtime->tree, visitor);
 }
 
 void all_open(const SpaceOutliner &space_outliner,
@@ -66,7 +66,7 @@ void all_open(const SpaceOutliner &space_outliner,
 
     const TreeStoreElem *tselem = TREESTORE(element);
     if (TSELEM_OPEN(tselem, &space_outliner)) {
-      all_open(space_outliner, element->subtree.as_span(), visitor);
+      all_open(space_outliner, element->subtree, visitor);
     }
   }
 }
@@ -76,7 +76,7 @@ void all_open(SpaceOutliner &space_outliner, Span<TreeElement *> subtree, const 
   for (TreeElement *element : subtree) {
     /* Get needed data out in case element gets freed. */
     const TreeStoreElem *tselem = TREESTORE(element);
-    Span<TreeElement *> subtree = element->subtree.as_span();
+    Span<TreeElement *> subtree = element->subtree;
 
     visitor(element);
     /* Don't access element from now on, it may be freed. Note that the open/collapsed state may

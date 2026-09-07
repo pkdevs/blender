@@ -30,7 +30,7 @@ using ConstVisitorFn = FunctionRef<void(const TreeElement *)>;
  * For the non-const variations, freeing the currently visited element in \a visitor is fine.
  */
 void all(const SpaceOutliner &space_outliner, ConstVisitorFn visitor);
-void all(const Span<TreeElement> subtree, ConstVisitorFn visitor);
+void all(Span<TreeElement *> subtree, ConstVisitorFn visitor);
 void all(SpaceOutliner &space_outliner, VisitorFn visitor);
 void all(Span<TreeElement *> subtree, VisitorFn visitor);
 

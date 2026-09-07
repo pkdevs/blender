@@ -130,7 +130,7 @@ static wmOperatorStatus outliner_highlight_update_invoke(bContext *C,
       &region->v2d, event->mval[0], event->mval[1], &view_mval[0], &view_mval[1]);
 
   TreeElement *hovered_te = outliner_find_item_at_y(
-      space_outliner, space_outliner->runtime->tree.as_span(), view_mval[1]);
+      space_outliner, space_outliner->runtime->tree, view_mval[1]);
 
   TreeElement *icon_te = nullptr;
   bool is_over_icon = false;
@@ -225,7 +225,7 @@ static wmOperatorStatus outliner_item_openclose_modal(bContext *C,
 
   if (event->type == MOUSEMOVE) {
     TreeElement *te = outliner_find_item_at_y(
-        space_outliner, space_outliner->runtime->tree.as_span(), view_mval[1]);
+        space_outliner, space_outliner->runtime->tree, view_mval[1]);
 
     /* Only openclose if mouse is not over the previously toggled element */
     if (te && TREESTORE(te) != data->prev_tselem) {
@@ -271,14 +271,14 @@ static wmOperatorStatus outliner_item_openclose_invoke(bContext *C,
   ui::view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
 
   TreeElement *te = outliner_find_item_at_y(
-      space_outliner, space_outliner->runtime->tree.as_span(), view_mval[1]);
+      space_outliner, space_outliner->runtime->tree, view_mval[1]);
 
   if (te && outliner_item_is_co_within_close_toggle(te, view_mval[0])) {
     TreeStoreElem *tselem = TREESTORE(te);
 
     const bool open = (tselem->flag & TSE_CLOSED) ||
                       (toggle_all &&
-                       outliner_flag_is_any_test(te->subtree.as_span(), TSE_CLOSED, 1));
+                       outliner_flag_is_any_test(te->subtree, TSE_CLOSED, 1));
 
     outliner_item_openclose(te, open, toggle_all);
     outliner_tag_redraw_avoid_rebuild_on_open_change(space_outliner, region);
@@ -407,7 +407,7 @@ static TreeElement *outliner_item_rename_find_active(const SpaceOutliner *space_
                                                      ReportList *reports)
 {
   TreeElement *active_element = outliner_find_element_with_flag(
-      space_outliner->runtime->tree.as_span(), TSE_ACTIVE);
+      space_outliner->runtime->tree, TSE_ACTIVE);
 
   if (!active_element) {
     BKE_report(reports, RPT_WARNING, "No active item to rename");
@@ -425,7 +425,7 @@ static TreeElement *outliner_item_rename_find_hovered(const SpaceOutliner *space
   ui::view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &fmval[0], &fmval[1]);
 
   TreeElement *hovered = outliner_find_item_at_y(
-      space_outliner, space_outliner->runtime->tree.as_span(), fmval[1]);
+      space_outliner, space_outliner->runtime->tree, fmval[1]);
   if (hovered && outliner_item_is_co_over_name(hovered, fmval[0])) {
     return hovered;
   }
@@ -835,7 +835,7 @@ static bool outliner_id_remap_find_tree_element(bContext *C,
         return true;
       }
     }
-    if (outliner_id_remap_find_tree_element(C, op, te->subtree.as_span(), y)) {
+    if (outliner_id_remap_find_tree_element(C, op, te->subtree, y)) {
       return true;
     }
   }
@@ -851,7 +851,7 @@ static wmOperatorStatus outliner_id_remap_invoke(bContext *C, wmOperator *op, co
   if (!RNA_property_is_set(op->ptr, RNA_struct_find_property(op->ptr, "id_type"))) {
     ui::view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &fmval[0], &fmval[1]);
 
-    outliner_id_remap_find_tree_element(C, op, space_outliner->runtime->tree.as_span(), fmval[1]);
+    outliner_id_remap_find_tree_element(C, op, space_outliner->runtime->tree, fmval[1]);
   }
 
   return WM_operator_props_dialog_popup(C, op, 400, IFACE_("Remap Data ID"), IFACE_("Remap"));
@@ -963,7 +963,7 @@ static int outliner_id_copy_tag(SpaceOutliner *space_outliner,
     }
 
     /* go over sub-tree */
-    num_ids += outliner_id_copy_tag(space_outliner, te->subtree.as_span(), copybuffer, reports);
+    num_ids += outliner_id_copy_tag(space_outliner, te->subtree, copybuffer, reports);
   }
 
   return num_ids;
@@ -978,7 +978,7 @@ static wmOperatorStatus outliner_id_copy_exec(bContext *C, wmOperator *op)
   PartialWriteContext copybuffer{*bmain};
 
   const int num_ids = outliner_id_copy_tag(
-      space_outliner, space_outliner->runtime->tree.as_span(), copybuffer, op->reports);
+      space_outliner, space_outliner->runtime->tree, copybuffer, op->reports);
   if (num_ids == 0) {
     BKE_report(op->reports, RPT_INFO, "No selected data-blocks to copy");
     return OPERATOR_CANCELLED;
@@ -1305,7 +1305,7 @@ static int outliner_count_levels(Span<TreeElement *> tree, const int curlevel)
   int level = curlevel;
 
   for (TreeElement *te : tree) {
-    int lev = outliner_count_levels(te->subtree.as_span(), curlevel + 1);
+    int lev = outliner_count_levels(te->subtree, curlevel + 1);
     level = std::max(lev, level);
   }
   return level;
@@ -1321,7 +1321,7 @@ int outliner_flag_is_any_test(Span<TreeElement *> tree,
       return curlevel;
     }
 
-    int level = outliner_flag_is_any_test(te->subtree.as_span(), flag, curlevel + 1);
+    int level = outliner_flag_is_any_test(te->subtree, flag, curlevel + 1);
     if (level) {
       return level;
     }
@@ -1386,7 +1386,7 @@ static wmOperatorStatus outliner_toggle_expanded_exec(bContext *C, wmOperator * 
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
   ARegion *region = CTX_wm_region(C);
 
-  if (outliner_flag_is_any_test(space_outliner->runtime->tree.as_span(), TSE_CLOSED, 1)) {
+  if (outliner_flag_is_any_test(space_outliner->runtime->tree, TSE_CLOSED, 1)) {
     outliner_flag_set(*space_outliner, TSE_CLOSED, 0);
   }
   else {
@@ -1425,7 +1425,7 @@ static wmOperatorStatus outliner_select_all_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   int action = RNA_enum_get(op->ptr, "action");
   if (action == SEL_TOGGLE) {
-    action = outliner_flag_is_any_test(space_outliner->runtime->tree.as_span(), TSE_SELECTED, 1) ?
+    action = outliner_flag_is_any_test(space_outliner->runtime->tree, TSE_SELECTED, 1) ?
                  SEL_DESELECT :
                  SEL_SELECT;
   }
@@ -1577,7 +1577,7 @@ static TreeElement *outliner_show_active_get_element(const bContext *C,
   }
 
   te = outliner_find_id(space_outliner,
-                        space_outliner->runtime->tree.as_span(),
+                        space_outliner->runtime->tree,
                         &obact->id,
                         TE_CHILD_NOT_IN_COLLECTION);
 
@@ -1589,13 +1589,13 @@ static TreeElement *outliner_show_active_get_element(const bContext *C,
       Object *obpose = BKE_object_pose_armature_get(obact);
       bPoseChannel *pchan = BKE_pose_channel_active(obpose, false);
       if (pchan) {
-        te = outliner_find_posechannel(te_obact->subtree.as_span(), pchan);
+        te = outliner_find_posechannel(te_obact->subtree, pchan);
       }
     }
     else if (obact->mode & OB_MODE_EDIT) {
       EditBone *ebone = CTX_data_active_bone(C);
       if (ebone) {
-        te = outliner_find_editbone(te_obact->subtree.as_span(), ebone);
+        te = outliner_find_editbone(te_obact->subtree, ebone);
       }
     }
   }
@@ -1783,7 +1783,7 @@ static void outliner_openclose_level(Span<TreeElement *> tree, int curlevel, int
       }
     }
 
-    outliner_openclose_level(te->subtree.as_span(), curlevel + 1, level, open);
+    outliner_openclose_level(te->subtree, curlevel + 1, level, open);
   }
 }
 
@@ -1794,18 +1794,18 @@ static wmOperatorStatus outliner_one_level_exec(bContext *C, wmOperator *op)
   const bool add = RNA_boolean_get(op->ptr, "open");
   int level;
 
-  level = outliner_flag_is_any_test(space_outliner->runtime->tree.as_span(), TSE_CLOSED, 1);
+  level = outliner_flag_is_any_test(space_outliner->runtime->tree, TSE_CLOSED, 1);
   if (add == 1) {
     if (level) {
-      outliner_openclose_level(space_outliner->runtime->tree.as_span(), 1, level, 1);
+      outliner_openclose_level(space_outliner->runtime->tree, 1, level, 1);
     }
   }
   else {
     if (level == 0) {
-      level = outliner_count_levels(space_outliner->runtime->tree.as_span(), 0);
+      level = outliner_count_levels(space_outliner->runtime->tree, 0);
     }
     if (level) {
-      outliner_openclose_level(space_outliner->runtime->tree.as_span(), 1, level - 1, 0);
+      outliner_openclose_level(space_outliner->runtime->tree, 1, level - 1, 0);
     }
   }
 
@@ -1851,7 +1851,7 @@ static int subtree_has_objects(Span<TreeElement *> tree)
     if ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB)) {
       return 1;
     }
-    if (subtree_has_objects(te->subtree.as_span())) {
+    if (subtree_has_objects(te->subtree)) {
       return 1;
     }
   }
@@ -1880,7 +1880,7 @@ static void tree_element_show_hierarchy(Scene *scene, SpaceOutliner *space_outli
         }
       }
       else if (te->idcode == ID_OB) {
-        if (subtree_has_objects(te->subtree.as_span())) {
+        if (subtree_has_objects(te->subtree)) {
           tselem->flag &= ~TSE_CLOSED;
         }
         else {

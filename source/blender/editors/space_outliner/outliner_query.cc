@@ -34,7 +34,7 @@ bool outliner_has_element_warnings(const SpaceOutliner &space_outliner)
         return true;
       }
 
-      if (recursive_fn(te->subtree.as_span())) {
+      if (recursive_fn(te->subtree)) {
         return true;
       }
     }
@@ -42,7 +42,7 @@ bool outliner_has_element_warnings(const SpaceOutliner &space_outliner)
     return false;
   };
 
-  return recursive_fn(space_outliner.runtime->tree.as_span());
+  return recursive_fn(space_outliner.runtime->tree);
 }
 
 }  // namespace blender::ed::outliner
