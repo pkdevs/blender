@@ -133,7 +133,8 @@ static const char *shortcut_get_operator_property(bContext *C, Button *but, IDPr
     if (rnaprop_type == PROP_ENUM) {
       /* Enum */
       const bool is_enum_menu = but->type == ButtonType::Menu;
-      *r_prop = is_enum_menu ? shortcut_property_from_rna(C, but) : shortcut_property_from_rna_for_enum(C, but, but);
+      *r_prop = is_enum_menu ? shortcut_property_from_rna(C, but) :
+                               shortcut_property_from_rna_for_enum(C, but, but);
       if (*r_prop == nullptr) {
         return nullptr;
       }
