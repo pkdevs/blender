@@ -391,6 +391,7 @@ ccl_device
           bsdf->T = T;
           bsdf->alpha_x = alpha_x;
           bsdf->alpha_y = alpha_y;
+          bsdf->retroreflectivity = retroreflectivity;
 
           fresnel->f0 = f0 * specular_tint;
           fresnel->f90 = white;
@@ -698,7 +699,7 @@ ccl_device
       if (bsdf) {
         bsdf->N = maybe_ensure_valid_specular_reflection(sd, N);
         bsdf->T = zero_float3();
-        /* Retroreflectivity only affects reflection */
+        /* Retroreflectivity only affects reflected rays */
         bsdf->retroreflectivity = 0.0f;
 
         float eta = fmaxf(stack_load(stack, bsdf_data.ior), 1e-5f);

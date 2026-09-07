@@ -123,7 +123,7 @@ struct MicrofacetBsdf {
 
   float3 T;
 
-  /* Probability of retroreflection, converted to a boolean in the bsdf_microfacet_XXX_setup() methods */
+  /* Probability of retroreflection, converted to a boolean in bsdf_microfacet_<TYPE>_setup() */
   /* This must be initialized to 0.0f when unused! */
   float retroreflectivity;
 };
@@ -1639,7 +1639,7 @@ ccl_device Spectrum bsdf_coat_setup(KernelGlobals kg,
       bsdf->T = zero_float3();
       bsdf->ior = coat.ior;
       bsdf->alpha_x = bsdf->alpha_y = sqr(coat.roughness);
-      /* Retroreflectivity should not affect coat */
+      /* Retroreflectivity doesn't affect coat layers */
       bsdf->retroreflectivity = 0.0f;
 
       const int runtime_flag = bsdf_microfacet_ggx_setup(bsdf, sd);
