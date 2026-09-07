@@ -107,9 +107,9 @@ def _template_items_animation():
 def _template_items_gizmo_tweak_value_drag():
     return [
         ("gizmogroup.gizmo_tweak", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG', "shift": True, "alt": True},
-         {"properties": [("action", 'DUPLICATE_LINKED')]}),
+         {"properties": [("variant", 'DUPLICATE_LINKED')]}),
         ("gizmogroup.gizmo_tweak", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG', "shift": True},
-         {"properties": [("action", 'DUPLICATE')]}),
+         {"properties": [("variant", 'DUPLICATE')]}),
         ("gizmogroup.gizmo_tweak", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG'}, None),
     ]
 

@@ -98,14 +98,14 @@ void WM_gizmo_modal_set_while_modal(wmGizmoMap *gzmap,
 
 wmGizmoOpElem *WM_gizmo_operator_get(wmGizmo *gz, int part_index);
 
-wmGizmoOpElem *WM_gizmo_action_operator_get(wmGizmo *gz, int action_slot);
+wmGizmoOpElem *WM_gizmo_variant_operator_get(wmGizmo *gz, int variant);
 
-PointerRNA *WM_gizmo_action_operator_set(wmGizmo *gz,
-                                         eWM_GizmoOpActionSlot action_slot,
-                                         wmOperatorType *ot,
-                                         IDProperty *properties);
+PointerRNA *WM_gizmo_variant_operator_set(wmGizmo *gz,
+                                          eWM_GizmoOpVariant variant,
+                                          wmOperatorType *ot,
+                                          IDProperty *properties);
 
-void WM_gizmo_action_operators_clear(wmGizmo *gz);
+void WM_gizmo_variant_operators_clear(wmGizmo *gz);
 
 PointerRNA *WM_gizmo_operator_set(wmGizmo *gz,
                                   int part_index,

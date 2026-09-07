@@ -219,13 +219,16 @@ struct wmGizmoOpElem {
   bool is_redo = false;
 };
 
-/** Alternative "action" operators a gizmo may provide, selected by a key-map item. */
-enum eWM_GizmoOpActionSlot {
-  WM_GIZMO_OP_ACTION_DUPLICATE = 0,
-  WM_GIZMO_OP_ACTION_DUPLICATE_LINKED = 1,
-  WM_GIZMO_OP_ACTION_CONSTRAIN_PLANE = 2,
+/**
+ * Variants of a gizmo's operator (e.g. duplicate before transforming), selected by the
+ * "variant" property of #GIZMOGROUP_OT_gizmo_tweak, so a key-map item picks which one runs.
+ */
+enum eWM_GizmoOpVariant {
+  WM_GIZMO_OP_VARIANT_DUPLICATE = 0,
+  WM_GIZMO_OP_VARIANT_DUPLICATE_LINKED = 1,
+  WM_GIZMO_OP_VARIANT_CONSTRAIN_PLANE = 2,
 
-  WM_GIZMO_OP_ACTION_LEN,
+  WM_GIZMO_OP_VARIANT_LEN,
 };
 
 /** Gizmos are set per region by registering them on gizmo-maps. */
@@ -299,7 +302,8 @@ struct wmGizmo {
    * an array of items (aligned with #wmGizmo.highlight_part). */
   Vector<wmGizmoOpElem, 4> op_data;
 
-  wmGizmoOpElem action_op_data[WM_GIZMO_OP_ACTION_LEN];
+  /** Operator variants indexed by #eWM_GizmoOpVariant, see #WM_gizmo_variant_operator_set. */
+  wmGizmoOpElem variant_op_data[WM_GIZMO_OP_VARIANT_LEN];
 
   IDProperty *properties;
 

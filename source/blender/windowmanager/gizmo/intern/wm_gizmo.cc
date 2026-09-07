@@ -144,7 +144,7 @@ void WM_gizmo_free(wmGizmo *gz)
   for (wmGizmoOpElem &gzop : gz->op_data) {
     WM_operator_properties_free(&gzop.ptr);
   }
-  for (wmGizmoOpElem &gzop : gz->action_op_data) {
+  for (wmGizmoOpElem &gzop : gz->variant_op_data) {
     WM_operator_properties_free(&gzop.ptr);
   }
 
@@ -200,10 +200,10 @@ wmGizmoOpElem *WM_gizmo_operator_get(wmGizmo *gz, int part_index)
   return nullptr;
 }
 
-wmGizmoOpElem *WM_gizmo_action_operator_get(wmGizmo *gz, int action_slot)
+wmGizmoOpElem *WM_gizmo_variant_operator_get(wmGizmo *gz, int variant)
 {
-  if ((action_slot >= 0) && (action_slot < WM_GIZMO_OP_ACTION_LEN)) {
-    return &gz->action_op_data[action_slot];
+  if ((variant >= 0) && (variant < WM_GIZMO_OP_VARIANT_LEN)) {
+    return &gz->variant_op_data[variant];
   }
   return nullptr;
 }
@@ -238,34 +238,34 @@ PointerRNA *WM_gizmo_operator_set(wmGizmo *gz,
   return gizmo_operator_elem_set(gz->op_data[part_index], ot, properties);
 }
 
-PointerRNA *WM_gizmo_action_operator_set(wmGizmo *gz,
-                                         const eWM_GizmoOpActionSlot action_slot,
-                                         wmOperatorType *ot,
-                                         IDProperty *properties)
+PointerRNA *WM_gizmo_variant_operator_set(wmGizmo *gz,
+                                          const eWM_GizmoOpVariant variant,
+                                          wmOperatorType *ot,
+                                          IDProperty *properties)
 {
-  BLI_assert(uint(action_slot) < uint(WM_GIZMO_OP_ACTION_LEN));
-  if (uint(action_slot) >= uint(WM_GIZMO_OP_ACTION_LEN)) {
+  BLI_assert(uint(variant) < uint(WM_GIZMO_OP_VARIANT_LEN));
+  if (uint(variant) >= uint(WM_GIZMO_OP_VARIANT_LEN)) {
     return nullptr;
   }
-  return gizmo_operator_elem_set(gz->action_op_data[action_slot], ot, properties);
+  return gizmo_operator_elem_set(gz->variant_op_data[variant], ot, properties);
 }
 
-void WM_gizmo_action_operators_clear(wmGizmo *gz)
+void WM_gizmo_variant_operators_clear(wmGizmo *gz)
 {
-  for (wmGizmoOpElem &gzop : gz->action_op_data) {
+  for (wmGizmoOpElem &gzop : gz->variant_op_data) {
     WM_operator_properties_free(&gzop.ptr);
     gzop = {};
   }
 }
 
-wmGizmoOpElem *wm_gizmo_tweak_operator_get(wmGizmo *gz, int action_slot)
+wmGizmoOpElem *wm_gizmo_tweak_operator_get(wmGizmo *gz, int variant)
 {
-  if (action_slot != GIZMO_TWEAK_ACTION_DEFAULT) {
-    wmGizmoOpElem *gzop = WM_gizmo_action_operator_get(gz, action_slot);
+  if (variant != GIZMO_TWEAK_VARIANT_DEFAULT) {
+    wmGizmoOpElem *gzop = WM_gizmo_variant_operator_get(gz, variant);
     if (gzop && gzop->type) {
       return gzop;
     }
-    /* The gizmo doesn't provide this action, fall back to its default operator. */
+    /* The gizmo doesn't provide this variant, fall back to its default operator. */
   }
   return WM_gizmo_operator_get(gz, gz->highlight_part);
 }

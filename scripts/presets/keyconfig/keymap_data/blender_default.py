@@ -495,10 +495,10 @@ def _template_items_gizmo_tweak_value():
     return [
         ("gizmogroup.gizmo_tweak",
          {"type": 'LEFTMOUSE', "value": 'PRESS', **any_except("alt", "shift"), "shift": True, "alt": True},
-         {"properties": [("action", 'DUPLICATE_LINKED')]}),
+         {"properties": [("variant", 'DUPLICATE_LINKED')]}),
         ("gizmogroup.gizmo_tweak",
          {"type": 'LEFTMOUSE', "value": 'PRESS', **any_except("alt", "shift"), "shift": True},
-         {"properties": [("action", 'DUPLICATE')]}),
+         {"properties": [("variant", 'DUPLICATE')]}),
         ("gizmogroup.gizmo_tweak",
          {"type": 'LEFTMOUSE', "value": 'PRESS', **any_except("alt")}, None),
     ]
@@ -508,10 +508,10 @@ def _template_items_gizmo_tweak_value_click_drag():
     return [
         ("gizmogroup.gizmo_tweak",
          {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG', **any_except("alt", "shift"), "shift": True, "alt": True},
-         {"properties": [("action", 'DUPLICATE_LINKED')]}),
+         {"properties": [("variant", 'DUPLICATE_LINKED')]}),
         ("gizmogroup.gizmo_tweak",
          {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG', **any_except("alt", "shift"), "shift": True},
-         {"properties": [("action", 'DUPLICATE')]}),
+         {"properties": [("variant", 'DUPLICATE')]}),
         ("gizmogroup.gizmo_tweak",
          {"type": 'LEFTMOUSE', "value": 'CLICK', **any_except("alt")}, None),
         ("gizmogroup.gizmo_tweak",
@@ -523,10 +523,10 @@ def _template_items_gizmo_tweak_value_drag():
     return [
         ("gizmogroup.gizmo_tweak",
          {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG', **any_except("alt", "shift"), "shift": True, "alt": True},
-         {"properties": [("action", 'DUPLICATE_LINKED')]}),
+         {"properties": [("variant", 'DUPLICATE_LINKED')]}),
         ("gizmogroup.gizmo_tweak",
          {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG', **any_except("alt", "shift"), "shift": True},
-         {"properties": [("action", 'DUPLICATE')]}),
+         {"properties": [("variant", 'DUPLICATE')]}),
         ("gizmogroup.gizmo_tweak",
          {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG', **any_except("alt")}, None),
     ]

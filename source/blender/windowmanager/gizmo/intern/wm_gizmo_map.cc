@@ -1091,12 +1091,8 @@ wmGizmo *wm_gizmomap_highlight_get(wmGizmoMap *gzmap)
   return gzmap->gzmap_context.highlight;
 }
 
-void wm_gizmomap_modal_set(wmGizmoMap *gzmap,
-                           bContext *C,
-                           wmGizmo *gz,
-                           const wmEvent *event,
-                           bool enable,
-                           int action_slot)
+void wm_gizmomap_modal_set(
+    wmGizmoMap *gzmap, bContext *C, wmGizmo *gz, const wmEvent *event, bool enable, int variant)
 {
   bool do_refresh = false;
 
@@ -1135,7 +1131,7 @@ void wm_gizmomap_modal_set(wmGizmoMap *gzmap,
       gzmap->gzmap_context.event_xy[0] = INT_MAX;
     }
 
-    wmGizmoOpElem *gzop = wm_gizmo_tweak_operator_get(gz, action_slot);
+    wmGizmoOpElem *gzop = wm_gizmo_tweak_operator_get(gz, variant);
     if (gzop && gzop->type) {
       const wmOperatorStatus retval = WM_gizmo_operator_invoke(C, gz, gzop, event);
       OPERATOR_RETVAL_CHECK(retval);

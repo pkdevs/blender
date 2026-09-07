@@ -1763,7 +1763,7 @@ static wmOperatorStatus gizmo_modal(bContext *C,
       }
     }
     if (op == nullptr) {
-      for (const wmGizmoOpElem &gzop : widget->action_op_data) {
+      for (const wmGizmoOpElem &gzop : widget->variant_op_data) {
         op = WM_operator_find_modal_by_type(win, gzop.type);
         if (op != nullptr) {
           break;
@@ -1860,12 +1860,12 @@ static void gizmo_operator_set_properties(PointerRNA *ptr, const bool constraint
 /**
  * Assign a transform operator constrained to the plane perpendicular to the handle's axis.
  */
-static void gizmo_action_plane_operator_set(wmGizmo *axis,
-                                            const eWM_GizmoOpActionSlot action_slot,
-                                            wmOperatorType *ot,
-                                            const bool plane_axis[3])
+static void gizmo_variant_plane_operator_set(wmGizmo *axis,
+                                             const eWM_GizmoOpVariant variant,
+                                             wmOperatorType *ot,
+                                             const bool plane_axis[3])
 {
-  PointerRNA *ptr = WM_gizmo_action_operator_set(axis, action_slot, ot, nullptr);
+  PointerRNA *ptr = WM_gizmo_variant_operator_set(axis, variant, ot, nullptr);
   if (ptr == nullptr) {
     return;
   }
@@ -1877,42 +1877,42 @@ static void gizmo_action_plane_operator_set(wmGizmo *axis,
 }
 
 /* -------------------------------------------------------------------- */
-/** \name Per-Mode Action Operators
+/** \name Per-Mode Operator Variants
  *
  * Alternative operators the transform gizmos offer, selected by a key-map item through
- * #GIZMOGROUP_OT_gizmo_tweak's "action" property (e.g. Shift-drag to duplicate or extrude).
+ * #GIZMOGROUP_OT_gizmo_tweak's "variant" property (e.g. Shift-drag to duplicate or extrude).
  * Supporting another object mode is a matter of adding a row.
  * \{ */
 
-enum eGizmoActionTransform {
-  GIZMO_ACTION_TRANSLATE = 0,
-  GIZMO_ACTION_ROTATE,
-  GIZMO_ACTION_TRACKBALL,
-  GIZMO_ACTION_RESIZE,
+enum eGizmoHandleTransform {
+  GIZMO_HANDLE_TRANSLATE = 0,
+  GIZMO_HANDLE_ROTATE,
+  GIZMO_HANDLE_TRACKBALL,
+  GIZMO_HANDLE_RESIZE,
 
-  GIZMO_ACTION_TRANSFORM_LEN,
+  GIZMO_HANDLE_TRANSFORM_LEN,
 };
 
-/** Number of action slots a row fills, see #gizmo_action_table_slots. */
-constexpr int GIZMO_ACTION_TABLE_SLOTS_LEN = 2;
+/** Number of variants a row fills, see #gizmo_variant_table. */
+constexpr int GIZMO_VARIANT_TABLE_LEN = 2;
 
-/** The action slots the table columns are assigned to, in order. */
-static const eWM_GizmoOpActionSlot gizmo_action_table_slots[GIZMO_ACTION_TABLE_SLOTS_LEN] = {
-    WM_GIZMO_OP_ACTION_DUPLICATE,
-    WM_GIZMO_OP_ACTION_DUPLICATE_LINKED,
+/** The variants the table columns are assigned to, in order. */
+static const eWM_GizmoOpVariant gizmo_variant_table[GIZMO_VARIANT_TABLE_LEN] = {
+    WM_GIZMO_OP_VARIANT_DUPLICATE,
+    WM_GIZMO_OP_VARIANT_DUPLICATE_LINKED,
 };
 
-struct GizmoModeActionOps {
+struct GizmoModeVariantOps {
   eContextObjectMode mode;
   /**
-   * Operator ID names indexed by #eGizmoActionTransform, then by the column of
-   * #gizmo_action_table_slots. A nullptr leaves that slot empty, so the tweak falls back to the
+   * Operator ID names indexed by #eGizmoHandleTransform, then by the column of
+   * #gizmo_variant_table. A nullptr leaves that variant empty, so the tweak falls back to the
    * plain transform (or, for single-axis handles, the plane constraint).
    */
-  const char *idnames[GIZMO_ACTION_TRANSFORM_LEN][GIZMO_ACTION_TABLE_SLOTS_LEN];
+  const char *idnames[GIZMO_HANDLE_TRANSFORM_LEN][GIZMO_VARIANT_TABLE_LEN];
 };
 
-static const GizmoModeActionOps gizmo_mode_action_ops[] = {
+static const GizmoModeVariantOps gizmo_mode_variant_ops[] = {
     {CTX_MODE_OBJECT,
      {
          {"OBJECT_OT_duplicate_move", "OBJECT_OT_duplicate_move_linked"},
@@ -1965,16 +1965,15 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
   ggd->mode_prev = mode;
 
   /* Resolve this mode's alternative operators once, up front. */
-  wmOperatorType *action_ots[GIZMO_ACTION_TRANSFORM_LEN][GIZMO_ACTION_TABLE_SLOTS_LEN] = {
-      {nullptr}};
-  for (const GizmoModeActionOps &row : gizmo_mode_action_ops) {
+  wmOperatorType *variant_ots[GIZMO_HANDLE_TRANSFORM_LEN][GIZMO_VARIANT_TABLE_LEN] = {{nullptr}};
+  for (const GizmoModeVariantOps &row : gizmo_mode_variant_ops) {
     if (row.mode != mode) {
       continue;
     }
-    for (int t = 0; t < GIZMO_ACTION_TRANSFORM_LEN; t++) {
-      for (int s = 0; s < GIZMO_ACTION_TABLE_SLOTS_LEN; s++) {
+    for (int t = 0; t < GIZMO_HANDLE_TRANSFORM_LEN; t++) {
+      for (int s = 0; s < GIZMO_VARIANT_TABLE_LEN; s++) {
         if (row.idnames[t][s]) {
-          action_ots[t][s] = WM_operatortype_find(row.idnames[t][s], true);
+          variant_ots[t][s] = WM_operatortype_find(row.idnames[t][s], true);
         }
       }
     }
@@ -1985,7 +1984,7 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
     const short axis_type = gizmo_get_axis_type(axis_idx);
     bool constraint_axis[3] = {true, false, false};
     PointerRNA *ptr = nullptr;
-    int action_transform = -1;
+    int handle_transform = -1;
 
     gizmo_get_axis_constraint(axis_idx, constraint_axis);
 
@@ -1994,7 +1993,7 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
 
     gizmo_3d_setup_draw_from_twtype(axis, axis_idx, ggd->twtype);
 
-    WM_gizmo_action_operators_clear(axis);
+    WM_gizmo_variant_operators_clear(axis);
 
     switch (axis_type) {
       case MAN_AXES_TRANSLATE:
@@ -2002,7 +2001,7 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
           ot_store.translate = WM_operatortype_find("TRANSFORM_OT_translate", true);
         }
         ptr = WM_gizmo_operator_set(axis, 0, ot_store.translate, nullptr);
-        action_transform = GIZMO_ACTION_TRANSLATE;
+        handle_transform = GIZMO_HANDLE_TRANSLATE;
         break;
       case MAN_AXES_ROTATE: {
         wmOperatorType *ot_rotate;
@@ -2011,14 +2010,14 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
             ot_store.trackball = WM_operatortype_find("TRANSFORM_OT_trackball", true);
           }
           ot_rotate = ot_store.trackball;
-          action_transform = GIZMO_ACTION_TRACKBALL;
+          handle_transform = GIZMO_HANDLE_TRACKBALL;
         }
         else {
           if (ot_store.rotate == nullptr) {
             ot_store.rotate = WM_operatortype_find("TRANSFORM_OT_rotate", true);
           }
           ot_rotate = ot_store.rotate;
-          action_transform = GIZMO_ACTION_ROTATE;
+          handle_transform = GIZMO_HANDLE_ROTATE;
         }
         ptr = WM_gizmo_operator_set(axis, 0, ot_rotate, nullptr);
         break;
@@ -2028,22 +2027,22 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
           ot_store.resize = WM_operatortype_find("TRANSFORM_OT_resize", true);
         }
         ptr = WM_gizmo_operator_set(axis, 0, ot_store.resize, nullptr);
-        action_transform = GIZMO_ACTION_RESIZE;
+        handle_transform = GIZMO_HANDLE_RESIZE;
         break;
       }
     }
 
-    if (action_transform != -1) {
-      for (int s = 0; s < GIZMO_ACTION_TABLE_SLOTS_LEN; s++) {
-        wmOperatorType *ot = action_ots[action_transform][s];
+    if (handle_transform != -1) {
+      for (int s = 0; s < GIZMO_VARIANT_TABLE_LEN; s++) {
+        wmOperatorType *ot = variant_ots[handle_transform][s];
         if (ot == nullptr) {
           continue;
         }
-        /* #wmGizmo.action_op_data is a fixed array, so unlike #WM_gizmo_operator_set the returned
-         * pointer stays valid while the remaining slots are assigned. */
-        PointerRNA *ptr_action = WM_gizmo_action_operator_set(
-            axis, gizmo_action_table_slots[s], ot, nullptr);
-        gizmo_operator_set_properties(ptr_action, constraint_axis);
+        /* #wmGizmo.variant_op_data is a fixed array, so unlike #WM_gizmo_operator_set the returned
+         * pointer stays valid while the remaining variants are assigned. */
+        PointerRNA *ptr_variant = WM_gizmo_variant_operator_set(
+            axis, gizmo_variant_table[s], ot, nullptr);
+        gizmo_operator_set_properties(ptr_variant, constraint_axis);
       }
     }
 
@@ -2059,18 +2058,18 @@ static void gizmogroup_init_properties_from_twtype(const bContext *C, wmGizmoGro
       }
       if (ot_plane) {
         const bool plane_axis[3] = {!constraint_axis[0], !constraint_axis[1], !constraint_axis[2]};
-        gizmo_action_plane_operator_set(
-            axis, WM_GIZMO_OP_ACTION_CONSTRAIN_PLANE, ot_plane, plane_axis);
+        gizmo_variant_plane_operator_set(
+            axis, WM_GIZMO_OP_VARIANT_CONSTRAIN_PLANE, ot_plane, plane_axis);
 
-        /* Modes that define no duplicate/extrude action (pose, edit curve, edit armature, ...)
+        /* Modes that define no duplicate/extrude variant (pose, edit curve, edit armature, ...)
          * would otherwise fall back to the handle's own axis-constrained transform, silently
          * dropping the long-standing behavior of this modifier excluding the handle's axis.
-         * Keep that behavior by giving them the plane constraint on the same slot. */
-        const wmGizmoOpElem *gzop_dup = WM_gizmo_action_operator_get(axis,
-                                                                     WM_GIZMO_OP_ACTION_DUPLICATE);
+         * Keep that behavior by giving them the plane constraint as that variant. */
+        const wmGizmoOpElem *gzop_dup = WM_gizmo_variant_operator_get(
+            axis, WM_GIZMO_OP_VARIANT_DUPLICATE);
         if (gzop_dup && gzop_dup->type == nullptr) {
-          gizmo_action_plane_operator_set(
-              axis, WM_GIZMO_OP_ACTION_DUPLICATE, ot_plane, plane_axis);
+          gizmo_variant_plane_operator_set(
+              axis, WM_GIZMO_OP_VARIANT_DUPLICATE, ot_plane, plane_axis);
         }
       }
     }
@@ -2450,9 +2449,9 @@ static void WIDGETGROUP_gizmo_invoke_prepare(const bContext *C,
 
     wmGizmoOpElem *gzop_all[] = {
         WM_gizmo_operator_get(gz, 0),
-        WM_gizmo_action_operator_get(gz, WM_GIZMO_OP_ACTION_DUPLICATE),
-        WM_gizmo_action_operator_get(gz, WM_GIZMO_OP_ACTION_DUPLICATE_LINKED),
-        WM_gizmo_action_operator_get(gz, WM_GIZMO_OP_ACTION_CONSTRAIN_PLANE),
+        WM_gizmo_variant_operator_get(gz, WM_GIZMO_OP_VARIANT_DUPLICATE),
+        WM_gizmo_variant_operator_get(gz, WM_GIZMO_OP_VARIANT_DUPLICATE_LINKED),
+        WM_gizmo_variant_operator_get(gz, WM_GIZMO_OP_VARIANT_CONSTRAIN_PLANE),
     };
     for (wmGizmoOpElem *gzop : gzop_all) {
       if (gzop == nullptr || gzop->type == nullptr) {

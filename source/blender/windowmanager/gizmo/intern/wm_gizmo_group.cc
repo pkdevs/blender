@@ -405,10 +405,10 @@ struct GizmoTweakData {
 };
 
 static bool gizmo_tweak_start(
-    bContext *C, wmGizmoMap *gzmap, wmGizmo *gz, const wmEvent *event, int action_slot)
+    bContext *C, wmGizmoMap *gzmap, wmGizmo *gz, const wmEvent *event, int variant)
 {
   /* Activate highlighted gizmo. */
-  wm_gizmomap_modal_set(gzmap, C, gz, event, true, action_slot);
+  wm_gizmomap_modal_set(gzmap, C, gz, event, true, variant);
 
   return (gz->state & WM_GIZMO_STATE_MODAL);
 }
@@ -417,10 +417,10 @@ static bool gizmo_tweak_start_and_finish(bContext *C,
                                          wmGizmoMap *gzmap,
                                          wmGizmo *gz,
                                          const wmEvent *event,
-                                         int action_slot,
+                                         int variant,
                                          bool *r_is_modal)
 {
-  wmGizmoOpElem *gzop = wm_gizmo_tweak_operator_get(gz, action_slot);
+  wmGizmoOpElem *gzop = wm_gizmo_tweak_operator_get(gz, variant);
   if (r_is_modal) {
     *r_is_modal = false;
   }
@@ -444,7 +444,7 @@ static bool gizmo_tweak_start_and_finish(bContext *C,
      * conflicting with modal operator attached to gizmo. */
     if (gzop->type->modal) {
       /* Activate highlighted gizmo. */
-      wm_gizmomap_modal_set(gzmap, C, gz, event, true, action_slot);
+      wm_gizmomap_modal_set(gzmap, C, gz, event, true, variant);
       if (r_is_modal) {
         *r_is_modal = true;
       }
@@ -599,13 +599,13 @@ static wmOperatorStatus gizmo_tweak_invoke(bContext *C, wmOperator *op, const wm
     }
   }
 
-  const int action_slot = RNA_enum_get(op->ptr, "action");
+  const int variant = RNA_enum_get(op->ptr, "variant");
 
-  if (gizmo_tweak_start_and_finish(C, gzmap, gz, event, action_slot, nullptr)) {
+  if (gizmo_tweak_start_and_finish(C, gzmap, gz, event, variant, nullptr)) {
     return OPERATOR_FINISHED;
   }
 
-  if (!gizmo_tweak_start(C, gzmap, gz, event, action_slot)) {
+  if (!gizmo_tweak_start(C, gzmap, gz, event, variant)) {
     /* Failed to start. */
     gz->highlight_part = highlight_part_init;
     return OPERATOR_PASS_THROUGH;
@@ -645,24 +645,24 @@ static wmOperatorStatus gizmo_tweak_invoke(bContext *C, wmOperator *op, const wm
 
 void GIZMOGROUP_OT_gizmo_tweak(wmOperatorType *ot)
 {
-  static const EnumPropertyItem tweak_action_items[] = {
-      {GIZMO_TWEAK_ACTION_DEFAULT,
+  static const EnumPropertyItem tweak_variant_items[] = {
+      {GIZMO_TWEAK_VARIANT_DEFAULT,
        "DEFAULT",
        0,
        "Default",
        "Run the gizmo's primary operator (transform)"},
-      {WM_GIZMO_OP_ACTION_DUPLICATE,
+      {WM_GIZMO_OP_VARIANT_DUPLICATE,
        "DUPLICATE",
        0,
        "Duplicate / Extrude",
        "Duplicate the selection (object mode) or extrude it (edit mesh) before transforming"},
-      {WM_GIZMO_OP_ACTION_DUPLICATE_LINKED,
+      {WM_GIZMO_OP_VARIANT_DUPLICATE_LINKED,
        "DUPLICATE_LINKED",
        0,
        "Duplicate Linked",
        "Make a linked duplicate (object mode) or a plain duplicate (edit mesh) before "
        "transforming"},
-      {WM_GIZMO_OP_ACTION_CONSTRAIN_PLANE,
+      {WM_GIZMO_OP_VARIANT_CONSTRAIN_PLANE,
        "CONSTRAIN_PLANE",
        0,
        "Constrain to Plane",
@@ -689,12 +689,12 @@ void GIZMOGROUP_OT_gizmo_tweak(wmOperatorType *ot)
 
   PropertyRNA *prop = RNA_def_enum(
       ot->srna,
-      "action",
-      tweak_action_items,
-      GIZMO_TWEAK_ACTION_DEFAULT,
-      "Action",
-      "Operator to run when tweaking the gizmo, allowing a key-map item to invoke "
-      "alternatives such as duplicate or extrude");
+      "variant",
+      tweak_variant_items,
+      GIZMO_TWEAK_VARIANT_DEFAULT,
+      "Variant",
+      "Variant of the gizmo's operator to run when tweaking it, allowing a key-map item to "
+      "invoke alternatives such as duplicate or extrude");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
