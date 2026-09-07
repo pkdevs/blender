@@ -102,7 +102,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Float>("Relative Error"_ustr)
       .description("Final relative error of the solution");
 
-  auto &p = b.add_panel("Debug"_ustr).default_closed(true);
+  PanelDeclarationBuilder &p = b.add_panel("Debug"_ustr).default_closed(true);
   p.add_output<decl::Float>("Debug Boundary Value"_ustr)
       .structure_type(StructureType::Grid)
       .usage_by_menu("Boundary"_ustr, {int(Boundary::Fixed), int(Boundary::Mixed)});
