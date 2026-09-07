@@ -12,8 +12,6 @@
 #include "kernel/constants.h"
 #include "kernel/sample/mapping.h"
 #include "kernel/util/lookup_table.h"
-#include "kernel/sample/lcg.h"
-#include "kernel/types.h"
 
 #include "util/math_fast.h"
 
@@ -37,7 +35,7 @@ struct FresnelCoeff {
   Spectrum reflectance;
   Spectrum transmittance;
 
-  ccl_device_inline_method FresnelCoeff() = default;
+  FresnelCoeff() = default;
 
   ccl_device_inline_method FresnelCoeff(Spectrum r_, Spectrum t_)
       : reflectance(r_), transmittance(t_)
@@ -122,10 +120,6 @@ struct MicrofacetBsdf {
   ccl_private void *fresnel;
 
   float3 T;
-
-  /* Probability of retroreflection, converted to a boolean in bsdf_microfacet_ggx_setup() */
-  /* This must always be initialized to 0.0f when unused! */
-  float retroreflectivity;
 };
 
 static_assert(sizeof(ShaderClosure) >= sizeof(MicrofacetBsdf), "MicrofacetBsdf is too large!");
@@ -142,7 +136,7 @@ struct Coat {
 /** \name GGX LUT Index Mapping Functions
  *
  * This section contains functions to map from GGX alphas, IOR, and mu to the indicies of
- * 2D and 3D LUTs (e.g., for multis-scatter GGX energy compensation or scattering albedos).
+ * 2D and 3D LUTs (e.g., for multi-scatter GGX energy compensation or scattering albedos).
  * \{ */
 
 ccl_device_forceinline float alpha_to_roughness_index(const float alpha_x, const float alpha_y)
@@ -539,10 +533,9 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
 
 ccl_device_inline void microfacet_ggx_preserve_energy(KernelGlobals kg,
                                                       ccl_private MicrofacetBsdf *bsdf,
-                                                      const float3 wi_in,
+                                                      const float3 wi,
                                                       const Spectrum Fss)
 {
-  const float3 wi = bsdf->retroreflectivity ? reflect(-wi_in, bsdf->N) : wi_in;
   const float mu = dot(wi, bsdf->N);
   const float y = mu_to_y_index(mu);
   const float rough = alpha_to_roughness_index(bsdf->alpha_x, bsdf->alpha_y);
@@ -608,12 +601,11 @@ ccl_device_inline void microfacet_ggx_preserve_energy(KernelGlobals kg,
  * energy-preserving then transmission should just be `1 - reflection`. For dielectric we could
  * probably split the LUT for multiGGX if smooth assumption is not good enough. */
 ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
-                                                    const float3 wi_in,
+                                                    const float3 wi,
                                                     const ccl_private MicrofacetBsdf *bsdf,
                                                     const bool eval_reflection,
                                                     const bool eval_transmission)
 {
-  const float3 wi = bsdf->retroreflectivity ? reflect(-wi_in, bsdf->N) : wi_in;
   const float cos_NI = dot(wi, bsdf->N);
   FresnelCoeff coeff(eval_reflection, eval_transmission);
 
@@ -826,7 +818,7 @@ ccl_device_forceinline int bsdf_microfacet_eval_flag(const ccl_private Microface
 template<MicrofacetType m_type>
 ccl_device Spectrum bsdf_microfacet_eval(KernelGlobals kg,
                                          const ccl_private ShaderClosure *sc,
-                                         const float3 wi_in,
+                                         const float3 wi,
                                          const float3 wo,
                                          ccl_private float *pdf)
 {
@@ -837,16 +829,13 @@ ccl_device Spectrum bsdf_microfacet_eval(KernelGlobals kg,
   const bool has_transmission = CLOSURE_IS_GLASS(bsdf->type) || !has_reflection;
 
   const float3 N = bsdf->N;
+  const float cos_NI = dot(N, wi);
   const float cos_NO = dot(N, wo);
 
   const float alpha_x = bsdf->alpha_x;
   const float alpha_y = bsdf->alpha_y;
 
   const bool is_transmission = (cos_NO < 0.0f);
-
-  /* Don't retroreflect transmission or refraction rays */
-  const float3 wi = (bsdf->retroreflectivity && !is_transmission) ? reflect(-wi_in, N) : wi_in;
-  const float cos_NI = dot(N, wi);
 
   /* Check whether the pair of directions is valid for evaluation:
    * - Incoming direction has to be in the upper hemisphere (Cycles convention)
@@ -881,15 +870,15 @@ ccl_device Spectrum bsdf_microfacet_eval(KernelGlobals kg,
   float lambdaI;
   float lambdaO;
 
-  /* NOTE: we could add support for anisotropic transmission, although it will make dispersion
-   * harder to compute. */
-  if (alpha_x == alpha_y || is_transmission) { /* Isotropic. */
+  if (alpha_x == alpha_y) {
+    /* Isotropic. */
     const float alpha2 = alpha_x * alpha_y;
     D = bsdf_D<m_type>(alpha2, cos_NH);
     lambdaI = bsdf_lambda<m_type>(alpha2, cos_NI);
     lambdaO = bsdf_lambda<m_type>(alpha2, cos_NO);
   }
-  else { /* Anisotropic. */
+  else {
+    /* Anisotropic. */
     float3 X;
     float3 Y;
     make_orthonormals_tangent(N, bsdf->T, &X, &Y);
@@ -920,7 +909,7 @@ template<MicrofacetType m_type>
 ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
                                       const ccl_private ShaderClosure *sc,
                                       const float3 Ng,
-                                      const float3 wi_in,
+                                      const float3 wi,
                                       const float3 rand,
                                       ccl_private Spectrum *eval,
                                       ccl_private float3 *wo,
@@ -931,7 +920,7 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
   const ccl_private MicrofacetBsdf *bsdf = (const ccl_private MicrofacetBsdf *)sc;
 
   const float3 N = bsdf->N;
-  const float cos_NI = dot(N, wi_in);
+  const float cos_NI = dot(N, wi);
   if (cos_NI <= 0) {
     /* Incident angle from the lower hemisphere is invalid. */
     return LABEL_NONE;
@@ -946,10 +935,7 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
   /* Half vector. */
   float3 H;
   /* Needed for anisotropic microfacets later. */
-  float3 local_H;
-  float3 local_I;
-  float3 X, Y;
-
+  float3 local_H, local_I, X, Y;
   if (m_singular) {
     H = N;
   }
@@ -963,7 +949,7 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
 
     /* Importance sampling with distribution of visible normals. Vectors are transformed to local
      * space before and after sampling. */
-    local_I = make_float3(dot(X, wi_in), dot(Y, wi_in), cos_NI);
+    local_I = make_float3(dot(X, wi), dot(Y, wi), cos_NI);
     if (m_type == MicrofacetType::GGX) {
       local_H = microfacet_ggx_sample_vndf(local_I, alpha_x, alpha_y, make_float2(rand));
     }
@@ -974,45 +960,20 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
 
     H = to_global(local_H, X, Y, N);
   }
+  const float cos_HI = dot(H, wi);
 
-  float cos_HI = dot(H, wi_in);
   /* The angle between the half vector and the refracted ray. Not used when sampling reflection. */
   float cos_HO;
   /* Compute Fresnel coefficients. */
-  FresnelCoeff coeff = microfacet_fresnel(kg, bsdf, cos_HI, &cos_HO);
+  const FresnelCoeff coeff = microfacet_fresnel(kg, bsdf, cos_HI, &cos_HO);
 
   if (iszero(coeff)) {
     return LABEL_NONE;
   }
 
+  /* Decide between refraction and reflection based on the energy. */
   const float pdf_reflect = average(coeff.reflectance) / average(coeff.sum());
   const bool do_refract = (rand.z >= pdf_reflect);
-
-  /* For retroreflection, recompute H, cos_HI and coeff with flipped wi. */
-  /* This is done here to avoid affecting refraction rays. */
-  float3 wi = wi_in;
-  if (!do_refract && bsdf->retroreflectivity) {
-    wi = reflect(-wi_in, N);
-    /* cos_NI is preserved by the flip, no need to recompute it. */
-    if (!m_singular) {
-      local_I = make_float3(dot(X, wi), dot(Y, wi), cos_NI);
-      if (m_type == MicrofacetType::GGX) {
-        local_H = microfacet_ggx_sample_vndf(local_I, alpha_x, alpha_y, make_float2(rand));
-      }
-      else {
-        local_H = microfacet_beckmann_sample_vndf(local_I, alpha_x, alpha_y, make_float2(rand));
-      }
-      H = to_global(local_H, X, Y, N);
-    }
-    /* If singular, H still equals N. */
-    cos_HI = dot(H, wi);
-
-    coeff = microfacet_fresnel(kg, bsdf, cos_HI, &cos_HO);
-
-    if (iszero(coeff)) {
-      return LABEL_NONE;
-    }
-  }
 
   /* Compute actual reflected or refracted direction. */
   *wo = do_refract ? refract_angle(wi, H, cos_HO, m_inv_eta) : 2.0f * cos_HI * H - wi;
@@ -1050,8 +1011,8 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
     float lambdaI;
     float lambdaO;
 
-    /* TODO: add support for anisotropic transmission. */
-    if (alpha_x == alpha_y || do_refract) { /* Isotropic. */
+    if (alpha_x == alpha_y) {
+      /* Isotropic. */
       const float alpha2 = alpha_x * alpha_y;
       const float cos_NH = local_H.z;
       const float cos_NO = dot(N, *wo);
@@ -1060,8 +1021,9 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
       lambdaO = bsdf_lambda<m_type>(alpha2, cos_NO);
       lambdaI = bsdf_lambda<m_type>(alpha2, cos_NI);
     }
-    else { /* Anisotropic. */
-      const float3 local_O = 2.0f * cos_HI * local_H - local_I;
+    else {
+      /* Anisotropic. */
+      const float3 local_O = make_float3(dot(X, *wo), dot(Y, *wo), cos_NO);
 
       D = bsdf_aniso_D<m_type>(alpha_x, alpha_y, local_H);
 
@@ -1197,12 +1159,9 @@ ccl_device void bsdf_microfacet_setup_fresnel_dielectric(KernelGlobals kg,
  *
  * Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs
  * E. Heitz, Research Report 2014
- *
- * Anisotropy is only supported for reflection currently, but adding it for
- * transmission is just a matter of copying code from reflection if needed. */
+ */
 
-ccl_device int bsdf_microfacet_ggx_setup(ccl_private MicrofacetBsdf *bsdf,
-                                         ccl_private ShaderData *sd)
+ccl_device int bsdf_microfacet_ggx_setup(ccl_private MicrofacetBsdf *bsdf)
 {
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
   bsdf->alpha_y = saturatef(bsdf->alpha_y);
@@ -1211,17 +1170,13 @@ ccl_device int bsdf_microfacet_ggx_setup(ccl_private MicrofacetBsdf *bsdf,
   bsdf->energy_scale = 1.0f;
   bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_ID;
 
-  /* Probabilistically swap between the regular and retroreflective lobe */
-  bsdf->retroreflectivity = bsdf->retroreflectivity > 0.0f &&
-                            lcg_step_float(&sd->lcg_state) < bsdf->retroreflectivity;
-
   return SR_BSDF | bsdf_microfacet_eval_flag(bsdf);
 }
 
 ccl_device int bsdf_microfacet_ggx_refraction_setup(ccl_private MicrofacetBsdf *bsdf)
 {
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
-  bsdf->alpha_y = bsdf->alpha_x;
+  bsdf->alpha_y = saturatef(bsdf->alpha_y);
 
   bsdf->fresnel_type = MicrofacetFresnel::NONE;
   bsdf->energy_scale = 1.0f;
@@ -1230,19 +1185,14 @@ ccl_device int bsdf_microfacet_ggx_refraction_setup(ccl_private MicrofacetBsdf *
   return SR_BSDF | SR_BSDF_HAS_TRANSMISSION | bsdf_microfacet_eval_flag(bsdf);
 }
 
-ccl_device int bsdf_microfacet_ggx_glass_setup(ccl_private MicrofacetBsdf *bsdf,
-                                               ccl_private ShaderData *sd)
+ccl_device int bsdf_microfacet_ggx_glass_setup(ccl_private MicrofacetBsdf *bsdf)
 {
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
-  bsdf->alpha_y = bsdf->alpha_x;
+  bsdf->alpha_y = saturatef(bsdf->alpha_y);
 
   bsdf->fresnel_type = MicrofacetFresnel::DIELECTRIC;
   bsdf->energy_scale = 1.0f;
   bsdf->type = CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID;
-
-  /* Probabilistically swap between the regular and retroreflective lobe */
-  bsdf->retroreflectivity = bsdf->retroreflectivity > 0.0f &&
-                            lcg_step_float(&sd->lcg_state) < bsdf->retroreflectivity;
 
   return SR_BSDF | SR_BSDF_HAS_TRANSMISSION | bsdf_microfacet_eval_flag(bsdf);
 }
@@ -1287,8 +1237,7 @@ ccl_device int bsdf_microfacet_ggx_sample(KernelGlobals kg,
  * Microfacet Models for Refraction through Rough Surfaces
  * B. Walter, S. R. Marschner, H. Li, K. E. Torrance, EGSR 2007 */
 
-ccl_device int bsdf_microfacet_beckmann_setup(ccl_private MicrofacetBsdf *bsdf,
-                                              ccl_private ShaderData *sd)
+ccl_device int bsdf_microfacet_beckmann_setup(ccl_private MicrofacetBsdf *bsdf)
 {
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
   bsdf->alpha_y = saturatef(bsdf->alpha_y);
@@ -1296,17 +1245,13 @@ ccl_device int bsdf_microfacet_beckmann_setup(ccl_private MicrofacetBsdf *bsdf,
   bsdf->fresnel_type = MicrofacetFresnel::NONE;
   bsdf->type = CLOSURE_BSDF_MICROFACET_BECKMANN_ID;
 
-  /* Probabilistically swap between the regular and retroreflective lobe */
-  bsdf->retroreflectivity = bsdf->retroreflectivity > 0.0f &&
-                            lcg_step_float(&sd->lcg_state) < bsdf->retroreflectivity;
-
   return SR_BSDF | bsdf_microfacet_eval_flag(bsdf);
 }
 
 ccl_device int bsdf_microfacet_beckmann_refraction_setup(ccl_private MicrofacetBsdf *bsdf)
 {
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
-  bsdf->alpha_y = bsdf->alpha_x;
+  bsdf->alpha_y = saturatef(bsdf->alpha_y);
 
   bsdf->fresnel_type = MicrofacetFresnel::NONE;
   bsdf->type = CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID;
@@ -1314,18 +1259,13 @@ ccl_device int bsdf_microfacet_beckmann_refraction_setup(ccl_private MicrofacetB
   return SR_BSDF | SR_BSDF_HAS_TRANSMISSION | bsdf_microfacet_eval_flag(bsdf);
 }
 
-ccl_device int bsdf_microfacet_beckmann_glass_setup(ccl_private MicrofacetBsdf *bsdf,
-                                                    ccl_private ShaderData *sd)
+ccl_device int bsdf_microfacet_beckmann_glass_setup(ccl_private MicrofacetBsdf *bsdf)
 {
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
-  bsdf->alpha_y = bsdf->alpha_x;
+  bsdf->alpha_y = saturatef(bsdf->alpha_y);
 
   bsdf->fresnel_type = MicrofacetFresnel::DIELECTRIC;
   bsdf->type = CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID;
-
-  /* Probabilistically swap between the regular and retroreflective lobe */
-  bsdf->retroreflectivity = bsdf->retroreflectivity > 0.0f &&
-                            lcg_step_float(&sd->lcg_state) < bsdf->retroreflectivity;
 
   return SR_BSDF | SR_BSDF_HAS_TRANSMISSION | bsdf_microfacet_eval_flag(bsdf);
 }
@@ -1365,16 +1305,16 @@ ccl_device void bsdf_dielectric_tint_setup(KernelGlobals kg,
   const bool has_transmission = !is_zero(fresnel->tint.transmittance);
 
   if (has_reflection && has_transmission) {
-    sd->runtime_flag |= is_beckmann ? bsdf_microfacet_beckmann_glass_setup(bsdf, sd) :
-                                      bsdf_microfacet_ggx_glass_setup(bsdf, sd);
+    sd->runtime_flag |= is_beckmann ? bsdf_microfacet_beckmann_glass_setup(bsdf) :
+                                      bsdf_microfacet_ggx_glass_setup(bsdf);
   }
   else if (has_transmission) {
     sd->runtime_flag |= is_beckmann ? bsdf_microfacet_beckmann_refraction_setup(bsdf) :
                                       bsdf_microfacet_ggx_refraction_setup(bsdf);
   }
   else {
-    sd->runtime_flag |= is_beckmann ? bsdf_microfacet_beckmann_setup(bsdf, sd) :
-                                      bsdf_microfacet_ggx_setup(bsdf, sd);
+    sd->runtime_flag |= is_beckmann ? bsdf_microfacet_beckmann_setup(bsdf) :
+                                      bsdf_microfacet_ggx_setup(bsdf);
   }
 
   bsdf->fresnel_type = MicrofacetFresnel::DIELECTRIC_TINT;
@@ -1463,8 +1403,7 @@ ccl_device_inline void bsdf_thin_glass_reflection_setup(KernelGlobals kg,
                                                         const Spectrum color,
                                                         const Spectrum weight,
                                                         const float3 N,
-                                                        const float roughness,
-                                                        const float retroreflectivity)
+                                                        const float roughness)
 {
   ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
       sd, sizeof(MicrofacetBsdf), weight);
@@ -1473,8 +1412,7 @@ ccl_device_inline void bsdf_thin_glass_reflection_setup(KernelGlobals kg,
     bsdf->T = zero_float3();
     bsdf->alpha_x = bsdf->alpha_y = roughness;
     bsdf->ior = 1.0f;
-    bsdf->retroreflectivity = retroreflectivity;
-    sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf, sd);
+    sd->runtime_flag |= bsdf_microfacet_ggx_setup(bsdf);
     bsdf_microfacet_setup_fresnel_constant(kg, bsdf, sd->wi, color);
   }
 }
@@ -1519,7 +1457,6 @@ ccl_device_inline void bsdf_thin_glass_transmission_setup(KernelGlobals kg,
     bsdf->fresnel_type = MicrofacetFresnel::NONE;
     bsdf->energy_scale = 1.0f;
     bsdf->type = CLOSURE_BSDF_THIN_GLASS_TRANSMISSION_ID;
-    bsdf->retroreflectivity = 0.0f;
     sd->runtime_flag |= (SR_BSDF | SR_BSDF_HAS_TRANSMISSION | bsdf_microfacet_eval_flag(bsdf));
     bsdf_microfacet_setup_fresnel_constant(kg, bsdf, reflect(sd->wi, N), one_spectrum());
   }
@@ -1578,7 +1515,6 @@ ccl_device FresnelCoeff bsdf_thin_glass_setup(KernelGlobals kg,
                                               const float3 N,
                                               const float roughness,
                                               const float ior,
-                                              const float retroreflectivity,
                                               const FresnelThinFilm thinfilm,
                                               const PathRayVisibility ray_visibility,
                                               const uint32_t path_flag)
@@ -1588,7 +1524,7 @@ ccl_device FresnelCoeff bsdf_thin_glass_setup(KernelGlobals kg,
       kg, reflective, refractive, tint, thinfilm, ior, cos_theta_i);
 
   bsdf_thin_glass_reflection_setup(
-      kg, sd, tint.reflectance, fresnel.reflectance * weight, N, roughness, retroreflectivity);
+      kg, sd, tint.reflectance, fresnel.reflectance * weight, N, roughness);
   bsdf_thin_glass_transmission_setup(
       kg, sd, fresnel.transmittance * weight, N, roughness, ior, ray_visibility, path_flag);
 
@@ -1628,7 +1564,7 @@ ccl_device Spectrum bsdf_coat_setup(KernelGlobals kg,
      * OpenPBR Surface Specification v1.1.1, Section 3.4.2.
      * NOTE(OpenPBR): Eq. (77) requires the cosines of both the incoming and the outgoing
      * directions, but we only have access to the incoming direction. We therefore assume that the
-     * refracted cosine of both directions are the same. The same approaximation is done in Adobe's
+     * refracted cosine of both directions are the same. The same approximation is done in Adobe's
      * implementation. */
     const float cosNI = dot(sd->wi, coat.N);
     coat.tint = slab_color_at_angle(coat.tint, cosNI, coat.ior);
@@ -1643,9 +1579,8 @@ ccl_device Spectrum bsdf_coat_setup(KernelGlobals kg,
       bsdf->T = zero_float3();
       bsdf->ior = coat.ior;
       bsdf->alpha_x = bsdf->alpha_y = sqr(coat.roughness);
-      bsdf->retroreflectivity = 0.0f;
 
-      const int runtime_flag = bsdf_microfacet_ggx_setup(bsdf, sd);
+      const int runtime_flag = bsdf_microfacet_ggx_setup(bsdf);
       if (bsdf != &coat_bsdf) {
         /* Add flag only if the closure is actually allocated in `sd->closure`. */
         sd->runtime_flag |= runtime_flag;

@@ -1088,12 +1088,15 @@ static_assert(sizeof(SVMNodeRefractionBsdfData) % sizeof(uint) == 0);
 struct SVMNodeGlassBsdfData {
   SVMInputFloat3 color;
   SVMInputFloat roughness;
+  SVMInputFloat anisotropy;
+  SVMInputFloat rotation;
   SVMInputFloat ior;
   SVMInputFloat retroreflectivity;
   SVMInputFloat thin_film_thickness;
   SVMInputFloat thin_film_ior;
   SVMStackOffset normal_offset;
-  uint8_t _pad[3];
+  SVMStackOffset tangent_offset;
+  uint8_t _pad[2];
 };
 static_assert(alignof(SVMNodeGlassBsdfData) <= alignof(uint));
 static_assert(sizeof(SVMNodeGlassBsdfData) % sizeof(uint) == 0);
