@@ -909,12 +909,9 @@ void set_inactive_values(openvdb::GridBase &grid_base, const GPointer value)
     BLI_assert(value.type()->size == sizeof(ValueType));
     const ValueType &new_value = *static_cast<const ValueType *>(value.get());
 
-    openvdb::tools::foreach(
-        tree.beginValueOff(),
-        [&](const typename GridT::ValueOffIter &iter) { iter.setValue(new_value); },
-        /* XXX This should support threading, but for some reason causes incorrect values
-           (#162263). Running the loop single-threaded seems to work correctly. */
-        /*threaded=*/false);
+    openvdb::tools::foreach(tree.beginValueOff(), [&](const typename GridT::ValueOffIter &iter) {
+      iter.setValue(new_value);
+    });
   });
 }
 
