@@ -210,7 +210,7 @@ def list_assets(blendfile_version_info: FileVersionInfo,
 
 def _absolute_path(filepath: str, blend_filepath: Path):
     if filepath.startswith("//"):
-        return Path(os.path.join(str(blend_filepath), filepath[2::])).absolute()
+        return Path(os.path.join(str(blend_filepath.parent), filepath[2::])).absolute()
     else:
         return Path(filepath)
 
@@ -219,6 +219,7 @@ def _find_image_sequence_dependencies(r_dependencies: set[DependencyFile],
                                       data: bpy.types.Image,
                                       blend_filepath: Path):
 
+    # List all images that matches the filepath sequence file name.
     # See #BLI_path_sequence_decode and #BLI_path_extension_or_end
     path = _absolute_path(data.filepath, blend_filepath)
     filename = path.name
