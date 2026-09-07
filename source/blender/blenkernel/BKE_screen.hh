@@ -586,9 +586,8 @@ static constexpr double TEXT_EDIT_CURSOR_BLINK_INTERVAL = 0.6f;
 struct TextCursorOverlay {
   std::variant<rctf, std::array<float2, 4>> rect = rctf{};
   wmTimer *timer = nullptr;
-  double last_active_time = 0;
   float color[4];
-  
+
   bool is_blink() const;
 };
 

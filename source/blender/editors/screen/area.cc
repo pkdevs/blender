@@ -121,14 +121,13 @@ void ED_region_do_listen(wmRegionListenerParams *params)
         ED_region_tag_redraw(region);
       }
       else if (notifier->data == ND_UI_TEXT_BLINK_TIMER_PAUSE &&
-               params->window == notifier->reference && region->runtime->text_cursor_overlay)
+               params->window == notifier->reference)
       {
-        if (region->runtime->text_cursor_overlay->timer) {
+        if (region->runtime->text_cursor_overlay && region->runtime->text_cursor_overlay->timer) {
           WM_event_timer_remove(
               params->wm, params->window, region->runtime->text_cursor_overlay->timer);
           region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
           region->runtime->text_cursor_overlay->timer = nullptr;
-          region->runtime->text_cursor_overlay->last_active_time = BLI_time_now_seconds();
         }
       }
       else if (notifier->data == ND_UI_TEXT_BLINK_TIMER_RESTART &&
@@ -142,7 +141,6 @@ void ED_region_do_listen(wmRegionListenerParams *params)
         region->runtime->text_cursor_overlay->timer = WM_event_timer_add(
             params->wm, params->window, TIMER, bke::TEXT_EDIT_CURSOR_BLINK_INTERVAL);
 
-        region->runtime->text_cursor_overlay->last_active_time = BLI_time_now_seconds();
         region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
       }
       break;

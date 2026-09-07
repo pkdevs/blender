@@ -1627,14 +1627,11 @@ void view3d_main_region_draw(const bContext *C, ARegion *region)
   const Object *object = CTX_data_edit_object(C);
   if (object && object->type == ObjectType::OB_FONT) {
     if (!region->runtime->text_cursor_overlay) {
-      region->runtime->text_cursor_overlay = bke::TextCursorOverlay{
-          .last_active_time = BLI_time_now_seconds(),
-      };
+      region->runtime->text_cursor_overlay = bke::TextCursorOverlay{};
       WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
     }
   }
   else if (region->runtime->text_cursor_overlay) {
-    WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_PAUSE, CTX_wm_window(C));
     WM_event_timer_remove(
         CTX_wm_manager(C), CTX_wm_window(C), region->runtime->text_cursor_overlay->timer);
     region->runtime->text_cursor_overlay = std::nullopt;

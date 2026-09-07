@@ -335,9 +335,7 @@ static void text_main_region_draw(const bContext *C, ARegion *region)
 
   /* Data. */
   if (!region->runtime->text_cursor_overlay) {
-    region->runtime->text_cursor_overlay = bke::TextCursorOverlay{
-        .last_active_time = BLI_time_now_seconds(),
-    };
+    region->runtime->text_cursor_overlay = bke::TextCursorOverlay{};
   }
   draw_text_main(st, region);
 

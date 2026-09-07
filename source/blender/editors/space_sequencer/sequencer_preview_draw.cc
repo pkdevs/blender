@@ -1227,9 +1227,7 @@ static void text_edit_draw_cursor(const bContext *C, const Strip *strip)
   }
 
   if (!region->runtime->text_cursor_overlay) {
-    region->runtime->text_cursor_overlay = bke::TextCursorOverlay{
-        .last_active_time = BLI_time_now_seconds(),
-    };
+    region->runtime->text_cursor_overlay = bke::TextCursorOverlay{};
     WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   }
   ui::theme::get_color_4fv(TH_SEQ_TEXT_CURSOR, region->runtime->text_cursor_overlay->color);
@@ -1245,7 +1243,6 @@ static void text_edit_draw(const bContext *C)
 
   if (!sequencer_text_editing_active_poll(const_cast<bContext *>(C))) {
     if (region->runtime->text_cursor_overlay && region->runtime->text_cursor_overlay->timer) {
-      WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_PAUSE, CTX_wm_window(C));
       WM_event_timer_remove(
           CTX_wm_manager(C), CTX_wm_window(C), region->runtime->text_cursor_overlay->timer);
       region->runtime->text_cursor_overlay = std::nullopt;

@@ -3950,7 +3950,6 @@ static void textedit_begin(bContext *C, Button *but, HandleButtonData *data)
 #endif
   data->region->runtime->text_cursor_overlay = {
       .rect = rctf{},
-      .last_active_time = BLI_time_now_seconds(),
   };
   WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   theme::get_color_4fv(TH_WIDGET_TEXT_CURSOR, data->region->runtime->text_cursor_overlay->color);
