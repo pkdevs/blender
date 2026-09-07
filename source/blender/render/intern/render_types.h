@@ -159,9 +159,6 @@ struct Render : public BaseRender {
    * layer visibility and use for postprocessing (compositor and sequencer). */
   struct Depsgraph *pipeline_depsgraph = nullptr;
   Scene *pipeline_scene_eval = nullptr;
-  /* Owned graph for current-frame movie audio, with independent copies of the normal Scene
-   * graph's prepared audio buffers. The minimal pipeline graph is incomplete for audio. */
-  struct Depsgraph *audio_depsgraph = nullptr;
 
   /* Compositor.
    * NOTE: Use bare pointer instead of smart pointer because the it is a fully opaque type. */

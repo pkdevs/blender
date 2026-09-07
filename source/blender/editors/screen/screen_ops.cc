@@ -7004,8 +7004,6 @@ static wmOperatorStatus start_playback(bContext *C, int sync, int mode)
   }
   Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
 
-  /* A previous Escape must not cancel the optional preparation for this new playback. */
-  G.is_break = false;
   BKE_callback_exec_id_depsgraph(bmain, &scene->id, depsgraph, BKE_CB_EVT_ANIMATION_PLAYBACK_PRE);
 
   /* Only play sound when playing forward. Reverse sound playback is not implemented. */

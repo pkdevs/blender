@@ -36,11 +36,8 @@
 #include "BLI_math_base_c.hh"
 #include "BLI_math_rotation_c.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_set.hh"
 #include "BLI_string.hh"
 #include "BLI_threads.hh"
-#include "BLI_time.hh"
-#include "BLI_vector.hh"
 
 #include "BLT_translation.hh"
 
@@ -58,6 +55,9 @@
 #include "DNA_userdef_types.h"
 
 #ifdef WITH_AUDASPACE
+#  include "BLI_set.hh"
+#  include "BLI_vector.hh"
+
 #  include <Exception.h>
 #  include <IReader.h>
 #  include <devices/DeviceManager.h>
@@ -441,33 +441,9 @@ void BKE_sound_invalidate_scene_audio_animation_cache(Scene *scene)
 {
   BLI_assert(DEG_is_evaluated(scene));
   scene->runtime->audio.animation_cache_dirty = true;
-  scene->runtime->audio.animation_cache_skipped = false;
 }
 
 #ifdef WITH_AUDASPACE
-/* Automatic preparation is optional and runs before playback/the render job can process events.
- * A break check alone cannot bound that wait. Share a short deadline and a work/allocation limit
- * across the entire nested Scene traversal. Current-frame depsgraph evaluation is not a bake. */
-struct SoundAnimationBudget {
-  /* Limit optional startup work to a short wait and scalar buffers to a few MiB. */
-  static constexpr double time_limit_seconds = 0.1;
-  static constexpr int64_t value_limit = 1000000;
-
-  double deadline = BLI_time_now_seconds() + time_limit_seconds;
-  int64_t remaining_values = value_limit;
-
-  bool expired() const
-  {
-    return G.is_break || BLI_time_now_seconds() >= deadline;
-  }
-
-  bool consume(const int64_t values)
-  {
-    remaining_values -= values;
-    return remaining_values >= 0 && !expired();
-  }
-};
-
 static std::optional<std::string> sound_audio_animation_path(PointerRNA &ptr, const char *property)
 {
   PropertyRNA *prop = RNA_struct_find_property(&ptr, property);
@@ -518,8 +494,6 @@ struct SoundDrivenAudioValue {
 struct SoundSceneAudioAnimationClassification {
   SoundSceneAudioProperties direct;
   SoundSceneAudioProperties driven;
-  /* Muting and sound factories have no Audaspace animation buffer, even in an Explicit bake. */
-  bool has_unbaked_properties = false;
   Vector<SoundDrivenAudioValue> driven_values;
 
   void preserve_driven_value(float &value)
@@ -583,7 +557,7 @@ static void sound_audio_property_classification_add(
 }
 
 static SoundSceneAudioAnimationClassification sound_scene_audio_animation_classify(
-    Scene *scene, Scene *scene_eval, SoundAnimationBudget &budget)
+    Scene *scene, Scene *scene_eval)
 {
   SoundSceneAudioAnimationClassification classification;
 
@@ -600,40 +574,13 @@ static SoundSceneAudioAnimationClassification sound_scene_audio_animation_classi
     return classification;
   }
 
-  const auto classify_channels = [&](ListBaseT<SeqTimelineChannel> &channels) {
-    for (SeqTimelineChannel &channel : channels) {
-      if (budget.expired()) {
-        return;
-      }
-      PointerRNA ptr = RNA_pointer_create_discrete(
-          &scene_eval->id, RNA_SequenceTimelineChannel, &channel);
-      classification.has_unbaked_properties |= sound_audio_property_animation(
-                                                   scene,
-                                                   sound_audio_animation_path(ptr, "mute")) !=
-                                               SoundAudioPropertyAnimation::None;
-    }
-  };
-  classify_channels(scene_eval->ed->channels);
   seq::foreach_strip(&scene_eval->ed->seqbase, [&](Strip *strip) {
-    if (budget.expired()) {
-      return false;
-    }
-    const bool is_audio_strip = ELEM(strip->type, STRIP_TYPE_SOUND, STRIP_TYPE_SCENE) &&
-                                sound_strip_has_audio(strip);
-    PointerRNA strip_ptr = RNA_pointer_create_discrete(&scene_eval->id, RNA_Strip, strip);
-    if (is_audio_strip || strip->type == STRIP_TYPE_META) {
-      classification.has_unbaked_properties |=
-          sound_audio_property_animation(scene, sound_audio_animation_path(strip_ptr, "mute")) !=
-          SoundAudioPropertyAnimation::None;
-      classify_channels(strip->channels);
-    }
-    if (is_audio_strip && !strip->modifiers.is_empty()) {
-      /* A modifier may replace the sound factory during evaluation. */
-      classification.has_unbaked_properties = true;
-    }
-    if (!is_audio_strip || strip->runtime == nullptr || strip->runtime->scene_sound == nullptr) {
+    if (!sound_strip_has_audio(strip) || strip->runtime == nullptr ||
+        strip->runtime->scene_sound == nullptr)
+    {
       return true;
     }
+    PointerRNA strip_ptr = RNA_pointer_create_discrete(&scene_eval->id, RNA_Strip, strip);
 
     SoundAudioPropertyAnimation volume = sound_audio_property_animation(
         scene, sound_audio_animation_path(strip_ptr, "volume"));
@@ -707,9 +654,11 @@ static void sound_evaluate_scene_audio_animation_at_frame(Depsgraph *depsgraph,
 
 static void sound_restore_scene_animation_at_current_frame(Depsgraph *depsgraph,
                                                            Scene *scene_eval,
-                                                           const float scene_frame)
+                                                           const int scene_frame,
+                                                           const float scene_subframe)
 {
-  BKE_scene_frame_set(scene_eval, scene_frame);
+  scene_eval->r.cfra = scene_frame;
+  scene_eval->r.subframe = scene_subframe;
   const AnimationEvalContext anim_eval_context = BKE_animsys_eval_context_construct(
       depsgraph, DEG_get_ctime(depsgraph));
   /* Dependencies already contain their current-frame values. Evaluating the Scene's animation
@@ -773,12 +722,8 @@ static bool sound_collect_scene_audio_animation_ranges(Scene *scene,
                                                        int frame_end,
                                                        Set<const Scene *> &scene_path,
                                                        Set<Scene *> &live_only_scenes,
-                                                       Map<Scene *, Bounds<int>> &r_ranges,
-                                                       SoundAnimationBudget &budget)
+                                                       Map<Scene *, Bounds<int>> &r_ranges)
 {
-  if (!budget.consume(1)) {
-    return false;
-  }
   scene = sound_original_scene(scene);
   if (!scene_path.add(scene)) {
     return true;
@@ -797,10 +742,6 @@ static bool sound_collect_scene_audio_animation_ranges(Scene *scene,
   Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
   if (DEG_is_evaluated(scene_eval) && scene_eval->ed != nullptr) {
     seq::foreach_strip(&scene_eval->ed->seqbase, [&](Strip *strip) {
-      if (!budget.consume(1)) {
-        success = false;
-        return false;
-      }
       if (sound_scene_strip_uses_sequencer(strip)) {
         if (strip->runtime == nullptr || strip->runtime->scene_sound == nullptr) {
           return true;
@@ -809,12 +750,6 @@ static bool sound_collect_scene_audio_animation_ranges(Scene *scene,
          * handles reversal differently. The audio bounds already include trimming, Meta bounds
          * and the Scene start offset. Audaspace integrates the actual retiming pitch samples. */
         const double fps = scene_eval->frames_per_second();
-        aud::AnimateableProperty *pitch = strip->runtime->scene_sound->getAnimProperty(
-            aud::AP_PITCH);
-        if (pitch->isAnimated() && !budget.consume(pitch->getBuffer().getSize() / sizeof(float))) {
-          success = false;
-          return false;
-        }
         double source_start, source_end;
         if (strip->runtime->scene_sound->getSourceTimeRange(
                 frame_start / fps, (double(frame_end) + 1.0) / fps, source_start, source_end))
@@ -834,8 +769,7 @@ static bool sound_collect_scene_audio_animation_ranges(Scene *scene,
                                                                int(child_end),
                                                                scene_path,
                                                                live_only_scenes,
-                                                               r_ranges,
-                                                               budget);
+                                                               r_ranges);
           if (!success) {
             return false;
           }
@@ -894,16 +828,7 @@ static void sound_store_scene_audio_animation_cache(
 {
   bke::SceneAudioRuntime &audio = scene_eval->runtime->audio;
   audio.animation_cache_dirty = false;
-  audio.animation_cache_skipped = false;
   audio.animation_cache_type = cache_type;
-  if (cache_type == bke::AudioAnimationCacheType::Explicit) {
-    SoundAnimationBudget budget;
-    const SoundSceneAudioAnimationClassification classification =
-        sound_scene_audio_animation_classify(sound_original_scene(scene_eval), scene_eval, budget);
-    audio.animation_cache_has_live_properties = classification.has_unbaked_properties ||
-                                                frame_change_handlers_hash.has_value() ||
-                                                budget.expired();
-  }
   audio.animation_cache_frame_change_handlers_hash = frame_change_handlers_hash;
   audio.cached_animation_frame_start = frame_start;
   audio.cached_animation_frame_end = frame_end;
@@ -911,7 +836,6 @@ static void sound_store_scene_audio_animation_cache(
 
 static bool sound_animation_pause_playback(Depsgraph *depsgraph, Scene *scene)
 {
-#  ifdef WITH_AUDASPACE
   Scene *scene_eval = DEG_get_evaluated(depsgraph, sound_original_scene(scene));
   if (!DEG_is_evaluated(scene_eval) || !scene_eval->runtime->audio.playback_handle ||
       scene_eval->runtime->audio.playback_handle->getStatus() != aud::STATUS_PLAYING)
@@ -920,10 +844,6 @@ static bool sound_animation_pause_playback(Depsgraph *depsgraph, Scene *scene)
   }
   BKE_sound_stop_scene(scene_eval);
   return true;
-#  else
-  UNUSED_VARS(depsgraph, scene);
-  return false;
-#  endif
 }
 
 static void sound_animation_resume_playback(Depsgraph *depsgraph,
@@ -958,23 +878,18 @@ struct SoundPreparedAnimation {
 static bool sound_sample_automatic_scene_audio_animation(
     Depsgraph *depsgraph,
     SoundPreparedAnimation &prepared,
-    const std::optional<uint64_t> &frame_change_handlers_hash,
-    SoundAnimationBudget &budget)
+    const std::optional<uint64_t> &frame_change_handlers_hash)
 {
   const SoundAnimationBakeRequest &request = prepared.request;
   Scene *scene_eval = DEG_get_evaluated(depsgraph, request.scene);
-  if (!DEG_is_evaluated(scene_eval) || budget.expired()) {
+  if (!DEG_is_evaluated(scene_eval)) {
     return false;
   }
 
-  prepared.classification = sound_scene_audio_animation_classify(
-      request.scene, scene_eval, budget);
-  if (budget.expired()) {
-    return false;
-  }
+  prepared.classification = sound_scene_audio_animation_classify(request.scene, scene_eval);
   const SoundSceneAudioProperties &direct = prepared.classification.direct;
   if (frame_change_handlers_hash.has_value() || direct.is_empty()) {
-    return !budget.expired();
+    return true;
   }
 
   if (direct.scene_volume && scene_eval->runtime->audio.sound_scene) {
@@ -984,9 +899,6 @@ static bool sound_sample_automatic_scene_audio_animation(
   }
   if (scene_eval->ed) {
     seq::foreach_strip(&scene_eval->ed->seqbase, [&](Strip *strip) {
-      if (budget.expired()) {
-        return false;
-      }
       if (!strip->runtime || !strip->runtime->scene_sound) {
         return true;
       }
@@ -1005,10 +917,11 @@ static bool sound_sample_automatic_scene_audio_animation(
   }
 
   const int bake_start = request.frame_start > 0 ? request.frame_start - 1 : 0;
-  /* Include the leading Audaspace buffer gap in the limit, even for a short range far from zero.
-   * Check in 64 bits before adding padding or allocating any frame arrays. */
+  /* Audaspace adds the signed-int position and count before calculating the buffer size.
+   * Include padding and the leading gap in that check, then validate the allocation in bytes.
+   * These are representation limits, not a limit on optional playback work. */
   const int64_t buffer_frames = std::max(int64_t(request.frame_end) + 2, int64_t(0));
-  if (!budget.consume(buffer_frames * prepared.samples.size())) {
+  if (buffer_frames > INT_MAX || uint64_t(buffer_frames) > SIZE_MAX / sizeof(float)) {
     return false;
   }
   const int64_t frames = std::max(buffer_frames - bake_start, int64_t(0));
@@ -1016,23 +929,20 @@ static bool sound_sample_automatic_scene_audio_animation(
     samples.values.resize(frames);
   }
 
-  const float current_scene_frame = BKE_scene_frame_get(scene_eval);
-  bool success = true;
+  const int current_scene_frame = scene_eval->r.cfra;
+  const float current_scene_subframe = scene_eval->r.subframe;
   for (int64_t i = 0; i < frames; i++) {
-    if (budget.expired()) {
-      success = false;
-      break;
-    }
     sound_evaluate_scene_audio_animation_at_frame(depsgraph, scene_eval, float(bake_start + i));
     for (SoundAnimationSamples &samples : prepared.samples) {
       samples.values[i] = *samples.value * (samples.multiplier ? *samples.multiplier : 1.0f);
     }
   }
-  sound_restore_scene_animation_at_current_frame(depsgraph, scene_eval, current_scene_frame);
+  sound_restore_scene_animation_at_current_frame(
+      depsgraph, scene_eval, current_scene_frame, current_scene_subframe);
   /* Action/NLA also writes properties that have a driver on top. Preserve their evaluated values.
    */
   prepared.classification.restore_driven_values();
-  return success && !budget.expired();
+  return true;
 }
 
 static void sound_commit_automatic_scene_audio_animation(
@@ -1060,124 +970,60 @@ static void sound_commit_automatic_scene_audio_animation(
   }
   audio.animation_write_state = old_write_state;
   sound_sync_scene_audio_current_frame(depsgraph, scene_eval);
-  audio.animation_cache_has_live_properties = frame_change_handlers_hash.has_value() ||
-                                              prepared.classification.has_unbaked_properties ||
-                                              !prepared.classification.driven.is_empty() ||
-                                              !audio.speaker_handles.is_empty();
 }
 
-/* Use the Sequencer's existing Scene-reference lookup, without integrating pitch or evaluating
- * animation. Collect before the bounded range pass so cleanup also knows about unvisited Scenes.
- */
-struct SoundAudioCacheCandidates {
-  Set<Scene *> scenes;
-  Map<Scene *, Bounds<int>> known_ranges;
-};
-
-static void sound_collect_audio_cache_scenes(Scene *scene,
-                                             Depsgraph *depsgraph,
-                                             const std::optional<Bounds<int>> range,
-                                             SoundAudioCacheCandidates &candidates)
+static void sound_collect_explicit_bake_scenes(Scene *scene,
+                                               Depsgraph *depsgraph,
+                                               Set<const Scene *> &visited_scenes,
+                                               Vector<Scene *> &r_scenes)
 {
   scene = sound_original_scene(scene);
-  if (range) {
-    const Bounds<int> previous = candidates.known_ranges.lookup_default(scene, *range);
-    candidates.known_ranges.add_overwrite(
-        scene, Bounds<int>{min_ii(previous.min, range->min), max_ii(previous.max, range->max)});
-  }
-  if (!candidates.scenes.add(scene)) {
+  if (!visited_scenes.add(scene)) {
     return;
   }
-  Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
-  if (!DEG_is_evaluated(scene_eval) || !scene_eval->ed) {
+
+  if (DEG_is_evaluated(DEG_get_evaluated(depsgraph, scene))) {
+    r_scenes.append(scene);
+  }
+  if (scene->ed == nullptr) {
     return;
   }
-  for (const auto item : seq::lookup_strips_by_scene_map_get(scene_eval->ed).items()) {
-    std::optional<Bounds<int>> child_range;
-    if (range) {
-      for (const Strip *strip : item.value) {
-        if (!sound_scene_strip_uses_sequencer(strip) || !strip->runtime ||
-            !strip->runtime->scene_sound)
-        {
-          continue;
-        }
-        const AUD_SequenceEntry &handle = strip->runtime->scene_sound;
-        if (handle->getAnimProperty(aud::AP_PITCH)->isAnimated()) {
-          continue;
-        }
-        /* Static pitch maps in constant time. Retimed references belong to the bounded pass;
-         * do not integrate their buffers merely to prepare fallback cleanup. */
-        double start, end;
-        const double fps = scene_eval->frames_per_second();
-        if (handle->getSourceTimeRange(
-                range->min / fps, (double(range->max) + 1) / fps, start, end))
-        {
-          start = std::floor(start * item.key->frames_per_second());
-          end = std::ceil(end * item.key->frames_per_second());
-          if (std::isfinite(start) && std::isfinite(end) && start >= INT_MIN && end < INT_MAX) {
-            child_range = child_range ? Bounds<int>{min_ii(child_range->min, int(start)),
-                                                    max_ii(child_range->max, int(end))} :
-                                        Bounds<int>{int(start), int(end)};
-          }
-        }
-      }
+
+  seq::foreach_strip(&scene->ed->seqbase, [&](Strip *strip) {
+    if (strip->type == STRIP_TYPE_SCENE && strip->scene != nullptr) {
+      sound_collect_explicit_bake_scenes(strip->scene, depsgraph, visited_scenes, r_scenes);
     }
-    sound_collect_audio_cache_scenes(
-        const_cast<Scene *>(item.key), depsgraph, child_range, candidates);
-  }
+    return true;
+  });
 }
 
-static void sound_skip_automatic_scene_audio_animation(
+/* Only needed for an invalid range. Walk all reachable Scenes here so a failed mapping cannot
+ * leave an unvisited child's stale animation active. Keep clean compatible Explicit caches. */
+static void sound_discard_incompatible_scene_audio_animation(
     Depsgraph *depsgraph,
-    const SoundAnimationBakeRequest &request,
-    const SoundAudioCacheCandidates &candidates,
+    Scene *scene,
     const Map<Scene *, Bounds<int>> &ranges,
     const std::optional<uint64_t> &frame_change_handlers_hash)
 {
-  const auto discard_incompatible_cache = [&](Scene *scene, const Bounds<int> &range) {
-    Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
-    if (!DEG_is_evaluated(scene_eval)) {
-      return;
-    }
+  Set<const Scene *> visited_scenes;
+  Vector<Scene *> scenes;
+  sound_collect_explicit_bake_scenes(scene, depsgraph, visited_scenes, scenes);
+  const bool playback_was_playing = sound_animation_pause_playback(depsgraph, scene);
+  for (Scene *scene_to_discard : scenes) {
+    Scene *scene_eval = DEG_get_evaluated(depsgraph, scene_to_discard);
     const bke::SceneAudioRuntime &audio = scene_eval->runtime->audio;
+    const Bounds<int> range = ranges.lookup_default(
+        scene_to_discard, {audio.cached_animation_frame_start, audio.cached_animation_frame_end});
     if (audio.animation_cache_type != bke::AudioAnimationCacheType::Explicit ||
         !sound_scene_audio_animation_cache_is_compatible(
             audio, frame_change_handlers_hash, range.min, range.max))
     {
       sound_discard_scene_audio_animation_cache(depsgraph, scene_eval);
     }
-  };
-  const bool playback_was_playing = sound_animation_pause_playback(depsgraph, request.scene);
-  for (Scene *scene : candidates.scenes) {
-    Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
-    if (!DEG_is_evaluated(scene_eval)) {
-      continue;
-    }
-    const bke::SceneAudioRuntime &audio = scene_eval->runtime->audio;
-    /* Unmapped Scenes still need dirty/handler-invalid caches removed. A clean Explicit cache
-     * must not be destroyed merely because another branch exhausted the mapping budget. */
-    Bounds<int> range = ranges.lookup_default(
-        scene,
-        candidates.known_ranges.lookup_default(
-            scene, {audio.cached_animation_frame_start, audio.cached_animation_frame_end}));
-    if (const Bounds<int> *known_range = candidates.known_ranges.lookup_ptr(scene)) {
-      range.min = min_ii(range.min, known_range->min);
-      range.max = max_ii(range.max, known_range->max);
-    }
-    discard_incompatible_cache(scene, range);
   }
-  /* A compatible Explicit cache survives an unrelated child's failed preparation. Incompatible
-   * caches must be reset: current-frame Audaspace writes otherwise preserve stale future values.
-   * Also handle cancellation before range collection reaches the root Scene. */
-  if (!ranges.contains(request.scene)) {
-    discard_incompatible_cache(request.scene, {request.frame_start, request.frame_end});
-  }
-  Scene *scene_eval = DEG_get_evaluated(depsgraph, request.scene);
-  if (DEG_is_evaluated(scene_eval)) {
-    scene_eval->runtime->audio.animation_cache_skipped = true;
-  }
-  sound_animation_resume_playback(depsgraph, request.scene, playback_was_playing);
+  sound_animation_resume_playback(depsgraph, scene, playback_was_playing);
 }
+
 #endif
 
 void BKE_sound_ensure_scene_audio_animation(
@@ -1196,26 +1042,19 @@ void BKE_sound_ensure_scene_audio_animation(
   BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
 
   Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
-  if (!DEG_is_evaluated(scene_eval) || scene_eval->runtime->audio.animation_cache_skipped) {
+  if (!DEG_is_evaluated(scene_eval)) {
     return;
   }
 
-  SoundAnimationBudget budget;
-  SoundAudioCacheCandidates cache_scenes;
-  sound_collect_audio_cache_scenes(
-      scene, depsgraph, Bounds<int>{frame_start, frame_end}, cache_scenes);
   Set<const Scene *> scene_path;
   Set<const Scene *> visited_scenes;
   Set<Scene *> live_only_scenes;
   Map<Scene *, Bounds<int>> ranges;
   if (!sound_collect_scene_audio_animation_ranges(
-          scene, depsgraph, frame_start, frame_end, scene_path, live_only_scenes, ranges, budget))
+          scene, depsgraph, frame_start, frame_end, scene_path, live_only_scenes, ranges))
   {
-    sound_skip_automatic_scene_audio_animation(depsgraph,
-                                               {scene, frame_start, frame_end},
-                                               cache_scenes,
-                                               ranges,
-                                               frame_change_handlers_hash);
+    sound_discard_incompatible_scene_audio_animation(
+        depsgraph, scene, ranges, frame_change_handlers_hash);
     return;
   }
 
@@ -1223,15 +1062,6 @@ void BKE_sound_ensure_scene_audio_animation(
    * visited set during traversal would miss both wider sibling references and their descendants.
    */
   Vector<SoundAnimationBakeRequest> requests;
-  const auto include_live_children = [&]() {
-    for (Scene *child : ranges.keys()) {
-      Scene *child_eval = DEG_get_evaluated(depsgraph, child);
-      if (DEG_is_evaluated(child_eval)) {
-        scene_eval->runtime->audio.animation_cache_has_live_properties |=
-            child_eval->runtime->audio.animation_cache_has_live_properties;
-      }
-    }
-  };
   for (const auto item : ranges.items()) {
     Scene *scene_to_prepare = item.key;
     visited_scenes.add(scene_to_prepare);
@@ -1262,7 +1092,6 @@ void BKE_sound_ensure_scene_audio_animation(
     }
   }
   if (requests.is_empty() && !has_live_only_cache) {
-    include_live_children();
     return;
   }
 
@@ -1271,28 +1100,16 @@ void BKE_sound_ensure_scene_audio_animation(
     SoundPreparedAnimation animation;
     animation.request = request;
     if (!sound_sample_automatic_scene_audio_animation(
-            depsgraph, animation, frame_change_handlers_hash, budget))
+            depsgraph, animation, frame_change_handlers_hash))
     {
-      sound_skip_automatic_scene_audio_animation(depsgraph,
-                                                 {scene, frame_start, frame_end},
-                                                 cache_scenes,
-                                                 ranges,
-                                                 frame_change_handlers_hash);
+      sound_discard_incompatible_scene_audio_animation(
+          depsgraph, scene, ranges, frame_change_handlers_hash);
       return;
     }
     prepared.append(std::move(animation));
   }
-  if (budget.expired()) {
-    sound_skip_automatic_scene_audio_animation(depsgraph,
-                                               {scene, frame_start, frame_end},
-                                               cache_scenes,
-                                               ranges,
-                                               frame_change_handlers_hash);
-    return;
-  }
-
-  /* All expensive evaluation succeeded. Commit bounded buffers as one operation before consumers
-   * resume; neither cancellation nor a failed child may publish a partially sampled animation. */
+  /* Commit only after every Scene has been sampled, so a failed child cannot publish a
+   * partially sampled animation. */
   const bool playback_was_playing = sound_animation_pause_playback(depsgraph, scene);
   for (Scene *live_only_scene : live_only_scenes) {
     if (sound_live_only_scene_audio_animation_cache_needs_discard(
@@ -1311,37 +1128,28 @@ void BKE_sound_ensure_scene_audio_animation(
                                             frame_change_handlers_hash,
                                             bke::AudioAnimationCacheType::Automatic);
   }
-  include_live_children();
   sound_animation_resume_playback(depsgraph, scene, playback_was_playing);
 #endif
 }
 
-#ifdef WITH_AUDASPACE
-static void sound_collect_explicit_bake_scenes(Scene *scene,
-                                               Depsgraph *depsgraph,
-                                               Set<const Scene *> &visited_scenes,
-                                               Vector<Scene *> &r_scenes)
+void BKE_sound_clear_scene_audio_playback_cache(Depsgraph *depsgraph)
 {
-  scene = sound_original_scene(scene);
-  if (!visited_scenes.add(scene)) {
-    return;
-  }
-
-  if (DEG_is_evaluated(DEG_get_evaluated(depsgraph, scene))) {
-    r_scenes.append(scene);
-  }
-  if (scene->ed == nullptr) {
-    return;
-  }
-
-  seq::foreach_strip(&scene->ed->seqbase, [&](Strip *strip) {
-    if (strip->type == STRIP_TYPE_SCENE && strip->scene != nullptr) {
-      sound_collect_explicit_bake_scenes(strip->scene, depsgraph, visited_scenes, r_scenes);
+#ifdef WITH_AUDASPACE
+  Set<const Scene *> visited_scenes;
+  Vector<Scene *> scenes;
+  sound_collect_explicit_bake_scenes(
+      DEG_get_input_scene(depsgraph), depsgraph, visited_scenes, scenes);
+  for (Scene *scene : scenes) {
+    Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
+    if (scene_eval->runtime->audio.animation_cache_type == bke::AudioAnimationCacheType::Automatic)
+    {
+      sound_discard_scene_audio_animation_cache(depsgraph, scene_eval);
     }
-    return true;
-  });
-}
+  }
+#else
+  UNUSED_VARS(depsgraph);
 #endif
+}
 
 void BKE_sound_bake_animation(
     Main *bmain, Scene *scene, Depsgraph *depsgraph, const int frame_start, const int frame_end)
@@ -1395,129 +1203,6 @@ void BKE_sound_bake_animation(
                                             frame_change_handlers_hash,
                                             bke::AudioAnimationCacheType::Explicit);
   }
-#endif
-}
-
-void BKE_sound_copy_scene_audio_animation(Main *bmain, Depsgraph *source, Depsgraph *destination)
-{
-#ifdef WITH_AUDASPACE
-  BLI_assert(BLI_thread_is_main());
-  BLI_assert(source != destination);
-  const auto copy_property = [](aud::AnimateableProperty *src, aud::AnimateableProperty *dst) {
-    dst->copyFrom(*src);
-  };
-  BKE_sound_lock();
-  for (Scene &scene : bmain->scenes) {
-    Scene *src = DEG_get_evaluated(source, &scene);
-    Scene *dst = DEG_get_evaluated(destination, &scene);
-    if (!DEG_is_evaluated(src) || !DEG_is_evaluated(dst)) {
-      continue;
-    }
-    const bke::SceneAudioRuntime &src_audio = src->runtime->audio;
-    bke::SceneAudioRuntime &dst_audio = dst->runtime->audio;
-    if (!src_audio.animation_cache_dirty && src_audio.sound_scene && dst_audio.sound_scene) {
-      copy_property(src_audio.sound_scene->getAnimProperty(aud::AP_VOLUME),
-                    dst_audio.sound_scene->getAnimProperty(aud::AP_VOLUME));
-      if (src_audio.animation_cache_type == bke::AudioAnimationCacheType::Explicit) {
-        for (const auto type : {aud::AP_LOCATION, aud::AP_ORIENTATION}) {
-          copy_property(src_audio.sound_scene->getAnimProperty(type),
-                        dst_audio.sound_scene->getAnimProperty(type));
-        }
-      }
-      if (src->ed && dst->ed) {
-        seq::foreach_strip(&src->ed->seqbase, [&](Strip *src_strip) {
-          Strip *dst_strip = seq::lookup_strip_by_name(dst->ed, src_strip->name + 2);
-          if (src_strip->runtime && src_strip->runtime->scene_sound && dst_strip &&
-              dst_strip->runtime && dst_strip->runtime->scene_sound)
-          {
-            for (const auto type : {aud::AP_VOLUME, aud::AP_PANNING, aud::AP_PITCH}) {
-              copy_property(src_strip->runtime->scene_sound->getAnimProperty(type),
-                            dst_strip->runtime->scene_sound->getAnimProperty(type));
-            }
-          }
-          return true;
-        });
-      }
-    }
-    dst_audio.animation_cache_dirty = src_audio.animation_cache_dirty;
-    dst_audio.animation_cache_skipped = src_audio.animation_cache_skipped;
-    dst_audio.animation_cache_has_live_properties = src_audio.animation_cache_has_live_properties;
-    dst_audio.animation_cache_type = src_audio.animation_cache_type;
-    dst_audio.animation_cache_frame_change_handlers_hash =
-        src_audio.animation_cache_frame_change_handlers_hash;
-    dst_audio.cached_animation_frame_start = src_audio.cached_animation_frame_start;
-    dst_audio.cached_animation_frame_end = src_audio.cached_animation_frame_end;
-  }
-  const bke::SceneAudioRuntime &root_audio = DEG_get_evaluated_scene(source)->runtime->audio;
-  if (!root_audio.animation_cache_dirty &&
-      root_audio.animation_cache_type == bke::AudioAnimationCacheType::Explicit)
-  {
-    DEGObjectIterSettings settings = {};
-    settings.depsgraph = source;
-    settings.flags = DEG_ITER_OBJECT_FLAG_LINKED_DIRECTLY |
-                     DEG_ITER_OBJECT_FLAG_LINKED_INDIRECTLY | DEG_ITER_OBJECT_FLAG_LINKED_VIA_SET;
-    DEG_OBJECT_ITER_BEGIN (&settings, src_object) {
-      Object *dst_object = DEG_get_evaluated(destination, DEG_get_original(src_object));
-      if (src_object->type != OB_SPEAKER || !src_object->adt || !DEG_is_evaluated(dst_object) ||
-          !dst_object->adt)
-      {
-        continue;
-      }
-      for (const NlaTrack &src_track : src_object->adt->nla_tracks) {
-        const NlaTrack *dst_track = static_cast<NlaTrack *>(BLI_findstring(
-            &dst_object->adt->nla_tracks, src_track.name, offsetof(NlaTrack, name)));
-        if (!dst_track) {
-          continue;
-        }
-        for (const NlaStrip &src_strip : src_track.strips) {
-          const NlaStrip *dst_strip = static_cast<NlaStrip *>(
-              BLI_findstring(&dst_track->strips, src_strip.name, offsetof(NlaStrip, name)));
-          if (!src_strip.runtime || !src_strip.runtime->speaker_handle || !dst_strip ||
-              !dst_strip->runtime || !dst_strip->runtime->speaker_handle)
-          {
-            continue;
-          }
-          for (const auto type :
-               {aud::AP_VOLUME, aud::AP_PITCH, aud::AP_LOCATION, aud::AP_ORIENTATION})
-          {
-            copy_property(src_strip.runtime->speaker_handle->getAnimProperty(type),
-                          dst_strip->runtime->speaker_handle->getAnimProperty(type));
-          }
-        }
-      }
-    }
-    DEG_OBJECT_ITER_END;
-  }
-  BKE_sound_unlock();
-#else
-  UNUSED_VARS(bmain, source, destination);
-#endif
-}
-
-void BKE_sound_discard_dirty_scene_audio_animation(Depsgraph *depsgraph)
-{
-#ifdef WITH_AUDASPACE
-  std::optional<uint64_t> handlers_hash;
-#  ifdef WITH_PYTHON
-  handlers_hash = BPY_app_handlers_frame_change_identity();
-#  endif
-  for (Scene &scene : DEG_get_bmain(depsgraph)->scenes) {
-    Scene *scene_eval = DEG_get_evaluated(depsgraph, &scene);
-    if (!DEG_is_evaluated(scene_eval)) {
-      continue;
-    }
-    bke::SceneAudioRuntime &audio = scene_eval->runtime->audio;
-    if (audio.animation_cache_type != bke::AudioAnimationCacheType::None &&
-        (audio.animation_cache_dirty ||
-         audio.animation_cache_frame_change_handlers_hash != handlers_hash))
-    {
-      sound_discard_scene_audio_animation_cache(depsgraph, scene_eval);
-      audio.animation_cache_skipped = true;
-      audio.animation_cache_has_live_properties = true;
-    }
-  }
-#else
-  UNUSED_VARS(depsgraph);
 #endif
 }
 
@@ -1979,7 +1664,6 @@ void BKE_sound_create_scene(Scene *scene)
   audio.sound_scrub_handle = nullptr;
   audio.speaker_handles.clear();
   audio.animation_cache_dirty = true;
-  audio.animation_cache_skipped = false;
   audio.animation_write_state = bke::AudioAnimationWriteState::Normal;
   audio.animation_cache_type = bke::AudioAnimationCacheType::None;
   audio.animation_cache_frame_change_handlers_hash.reset();
@@ -2004,7 +1688,6 @@ void BKE_sound_destroy_scene(Scene *scene)
   audio.speaker_handles.clear();
   audio.sound_scene.reset();
   audio.animation_cache_dirty = true;
-  audio.animation_cache_skipped = false;
   audio.animation_write_state = bke::AudioAnimationWriteState::Normal;
   audio.animation_cache_type = bke::AudioAnimationCacheType::None;
   audio.animation_cache_frame_change_handlers_hash.reset();
@@ -2173,7 +1856,7 @@ void BKE_sound_update_sequence_handle(AUD_SequenceEntry handle, AUD_Sound sound_
 #ifdef WITH_AUDASPACE
 
 template<typename T>
-static void set_audaspace_anim_property(const std::shared_ptr<T> &sound,
+static void set_audaspace_anim_property(std::shared_ptr<T> sound,
                                         aud::AnimateablePropertyType type,
                                         const int frame,
                                         float *value,
@@ -2614,6 +2297,7 @@ void BKE_sound_read_waveform(Main *bmain, bSound *sound, bool *stop)
 
 static void sound_update_base(Scene *scene, Object *object, Set<AUD_SequenceEntry> &new_set)
 {
+  Speaker *speaker;
   float quat[4];
 
   sound_verify_evaluated_id(&scene->id);
@@ -2623,12 +2307,12 @@ static void sound_update_base(Scene *scene, Object *object, Set<AUD_SequenceEntr
     return;
   }
 
-  Speaker *speaker = id_cast<Speaker *>(object->data);
   for (NlaTrack &track : object->adt->nla_tracks) {
     for (NlaStrip &strip : track.strips) {
       if (strip.type != NLASTRIP_TYPE_SOUND) {
         continue;
       }
+      speaker = (Speaker *)object->data;
 
       bke::NlaStripRuntime &strip_runtime = strip.runtime_get();
 
@@ -2684,30 +2368,6 @@ static void sound_update_base(Scene *scene, Object *object, Set<AUD_SequenceEntr
   }
 }
 
-static void sound_update_listener(Scene *scene, Object *camera)
-{
-  if (camera == nullptr) {
-    return;
-  }
-
-  float quat[4];
-  mat4_to_quat(quat, camera->object_to_world().ptr());
-  float3 location = camera->object_to_world().location();
-  set_audaspace_anim_property(
-      scene->runtime->audio.sound_scene, aud::AP_LOCATION, scene->r.cfra, location, true);
-  set_audaspace_anim_property(
-      scene->runtime->audio.sound_scene, aud::AP_ORIENTATION, scene->r.cfra, quat, true);
-}
-
-static void sound_finish_spatial_audio_update(Scene *scene, Set<AUD_SequenceEntry> &new_set)
-{
-  bke::SceneAudioRuntime &audio = scene->runtime->audio;
-  for (const AUD_SequenceEntry &handle : audio.speaker_handles) {
-    audio.sound_scene->remove(handle);
-  }
-  audio.speaker_handles = std::move(new_set);
-}
-
 void BKE_sound_update_scene(Depsgraph *depsgraph, Scene *scene)
 {
   sound_verify_evaluated_id(&scene->id);
@@ -2722,16 +2382,12 @@ void BKE_sound_update_scene(Depsgraph *depsgraph, Scene *scene)
       /* Handler lists are not depsgraph inputs. Detect policy changes at the normal audio update
        * boundary so the next consumer update can discard an incompatible cache. */
       scene->runtime->audio.animation_cache_dirty = true;
-      if (scene->runtime->audio.animation_cache_type != bke::AudioAnimationCacheType::None) {
-        /* A skipped attempt may have preserved an Explicit cache. Recheck that cache after a
-         * policy change, without repeatedly retrying an already uncached fallback. */
-        scene->runtime->audio.animation_cache_skipped = false;
-      }
     }
   }
 #  endif
 
   Set<AUD_SequenceEntry> new_set;
+  float quat[4];
 
   /* cheap test to skip looping over all objects (no speakers is a common case) */
   if (DEG_id_type_any_exists(depsgraph, ID_SPK)) {
@@ -2746,8 +2402,21 @@ void BKE_sound_update_scene(Depsgraph *depsgraph, Scene *scene)
     DEG_OBJECT_ITER_END;
   }
 
-  sound_update_listener(scene, scene->camera);
-  sound_finish_spatial_audio_update(scene, new_set);
+  bke::SceneAudioRuntime &audio = scene->runtime->audio;
+  for (AUD_SequenceEntry handle : audio.speaker_handles) {
+    audio.sound_scene->remove(handle);
+  }
+  audio.speaker_handles.clear();
+
+  if (scene->camera) {
+    mat4_to_quat(quat, scene->camera->object_to_world().ptr());
+    float3 location = scene->camera->object_to_world().location();
+    set_audaspace_anim_property(
+        audio.sound_scene, aud::AP_LOCATION, scene->r.cfra, location, true);
+    set_audaspace_anim_property(audio.sound_scene, aud::AP_ORIENTATION, scene->r.cfra, quat, true);
+  }
+
+  audio.speaker_handles = new_set;
 }
 
 AUD_Sound BKE_sound_get_factory(void *sound)
@@ -3221,10 +2890,6 @@ void BKE_sound_set_scene_sound_pan_at_frame(AUD_SequenceEntry /*handle*/,
 {
 }
 void BKE_sound_set_scene_volume(Scene * /*scene*/, float /*volume*/) {}
-static void sound_reset_scene_audio_animation(Scene * /*scene*/) {}
-static void sound_discard_scene_audio_animation_cache(Depsgraph * /*depsgraph*/, Scene * /*scene*/)
-{
-}
 void BKE_sound_set_scene_sound_pitch_at_frame(AUD_SequenceEntry /*handle*/,
                                               int /*frame*/,
                                               float /*pitch*/,

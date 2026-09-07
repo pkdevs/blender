@@ -122,19 +122,14 @@ void BKE_sound_bake_animation(
     Main *bmain, Scene *scene, Depsgraph *depsgraph, int frame_start, int frame_end);
 
 /** Lazily prepare directly evaluable framed audio automation. Dependency-driven values and
- * frame-change handlers remain live and are not evaluated at future frames. Automatic sampling
- * has a shared time/work budget; on failure current-frame updates continue without partial caches.
- * Compatible Explicit caches are preserved when an automatic attempt fails. */
+ * frame-change handlers remain live and are not evaluated at future frames. Invalid sample ranges
+ * are discarded without publishing partial caches. Compatible Explicit caches remain usable. */
 void BKE_sound_ensure_scene_audio_animation(
     Main *bmain, Scene *scene, Depsgraph *depsgraph, int frame_start, int frame_end);
 
-/** Copy prepared audio animation to an independently evaluated graph of the same Scene and view
- * layer. Called on the main thread before a render worker takes ownership of the destination. */
-void BKE_sound_copy_scene_audio_animation(Main *bmain, Depsgraph *source, Depsgraph *destination);
-
-/** Discard caches invalidated during a render, using only already evaluated current-frame values.
- * This never prepares future animation and can run on the thread that owns the graph. */
-void BKE_sound_discard_dirty_scene_audio_animation(Depsgraph *depsgraph);
+/** Discard Automatic playback caches before another consumer uses the same evaluated graph.
+ * Only current-frame values are written; Explicit caches are preserved. */
+void BKE_sound_clear_scene_audio_playback_cache(Depsgraph *depsgraph);
 
 void BKE_sound_destroy_scene(Scene *scene);
 

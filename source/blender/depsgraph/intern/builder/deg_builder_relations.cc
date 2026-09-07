@@ -1102,12 +1102,6 @@ void DepsgraphRelationBuilder::build_object_data_speaker(Object *object)
   ComponentKey speaker_key(&speaker->id, NodeType::AUDIO);
   ComponentKey object_key(&object->id, NodeType::AUDIO);
   add_relation(speaker_key, object_key, "Speaker Update");
-  ComponentKey transform_key(&object->id, NodeType::TRANSFORM);
-  add_relation(transform_key, object_key, "Transform -> Speaker");
-  if (check_id_has_anim_component(&object->id)) {
-    ComponentKey animation_key(&object->id, NodeType::ANIMATION);
-    add_relation(animation_key, object_key, "Animation -> Speaker");
-  }
 }
 
 void DepsgraphRelationBuilder::build_object_parent(Object *object)
@@ -3468,11 +3462,9 @@ void DepsgraphRelationBuilder::build_speaker(Speaker *speaker)
   build_idproperties(speaker->id.system_properties);
   build_animdata(&speaker->id);
   build_parameters(&speaker->id);
-  ComponentKey parameters_key(&speaker->id, NodeType::PARAMETERS);
-  ComponentKey speaker_key(&speaker->id, NodeType::AUDIO);
-  add_relation(parameters_key, speaker_key, "Parameters -> Speaker");
   if (speaker->sound != nullptr) {
     build_sound(speaker->sound);
+    ComponentKey speaker_key(&speaker->id, NodeType::AUDIO);
     ComponentKey sound_key(&speaker->sound->id, NodeType::AUDIO);
     add_relation(sound_key, speaker_key, "Sound -> Speaker");
   }

@@ -246,7 +246,6 @@ static wmOperatorStatus screen_render_exec(bContext *C, wmOperator *op)
   ED_render_view3d_auto_pause(mainp, true);
 
   if (is_animation) {
-    RE_RenderAnimPrepareAudio(re, mainp, scene, active_layer, frame_start, frame_end);
     RE_RenderAnim(re,
                   mainp,
                   scene,
@@ -555,15 +554,6 @@ static void current_scene_update(void *rjv, Scene *scene)
   RenderJob *rj = static_cast<RenderJob *>(rjv);
   rj->current_scene = scene;
   rj->iuser.scene = scene;
-}
-
-static void render_initjob(void *rjv)
-{
-  RenderJob *rj = static_cast<RenderJob *>(rjv);
-  if (rj->anim) {
-    RE_RenderAnimPrepareAudio(
-        rj->re, rj->main, rj->scene, rj->view_layer, rj->frame_start, rj->frame_end);
-  }
 }
 
 static void render_startjob(void *rjv, wmJobWorkerStatus *worker_status)
@@ -976,7 +966,7 @@ static wmOperatorStatus screen_render_invoke(bContext *C, wmOperator *op, const 
                        WM_JOB_TYPE_RENDER);
   WM_jobs_customdata_set(wm_job, rj, render_freejob);
   WM_jobs_timer(wm_job, 0.2, NC_SCENE | ND_RENDER_RESULT, 0);
-  WM_jobs_callbacks(wm_job, render_startjob, render_initjob, nullptr, render_endjob);
+  WM_jobs_callbacks(wm_job, render_startjob, nullptr, nullptr, render_endjob);
 
   if (RNA_struct_property_is_set(op->ptr, "layer")) {
     WM_jobs_delay_start(wm_job, 0.2);

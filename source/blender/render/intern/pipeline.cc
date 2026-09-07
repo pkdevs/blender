@@ -1969,30 +1969,6 @@ static void render_update_depsgraph(Render *re)
   BKE_scene_update_sound(re->pipeline_depsgraph, re->main);
 }
 
-static void render_ensure_audio_view_layer(Render *re)
-{
-  /* Like render engines, resolve an original view layer before rebuilding the owned graph.
-   * The UI can delete the layer selected at preflight during an unlocked render. */
-  if (!BKE_scene_has_view_layer(re->scene, DEG_get_input_view_layer(re->audio_depsgraph))) {
-    DEG_graph_replace_owners(
-        re->audio_depsgraph, re->main, re->scene, BKE_view_layer_default_render(re->scene));
-    DEG_graph_tag_relations_update(re->audio_depsgraph);
-  }
-}
-
-static void render_update_audio_depsgraph(Render *re)
-{
-  if (re->audio_depsgraph) {
-    re->display->draw_lock();
-    render_ensure_audio_view_layer(re);
-    DEG_graph_relations_update(re->audio_depsgraph);
-    DEG_evaluate_on_framechange(re->audio_depsgraph, BKE_scene_frame_get(re->scene));
-    BKE_scene_update_sound(re->audio_depsgraph, re->main);
-    BKE_sound_discard_dirty_scene_audio_animation(re->audio_depsgraph);
-    re->display->draw_unlock();
-  }
-}
-
 static void render_init_depsgraph(Render *re)
 {
   Scene *scene = re->scene;
@@ -2008,39 +1984,6 @@ static void render_init_depsgraph(Render *re)
   render_update_depsgraph(re);
 
   re->pipeline_scene_eval = DEG_get_evaluated_scene(re->pipeline_depsgraph);
-}
-
-void RE_RenderAnimPrepareAudio(
-    Render *re, Main *bmain, Scene *scene, ViewLayer *view_layer, const int sfra, const int efra)
-{
-  BLI_assert(BLI_thread_is_main());
-  re->main = bmain;
-  re->scene = scene;
-  if (re->audio_depsgraph) {
-    DEG_graph_free(re->audio_depsgraph);
-    re->audio_depsgraph = nullptr;
-  }
-  if (!(scene->r.mode & R_SAVE_OUTPUT) || !BKE_imtype_is_movie(scene->r.im_format.imtype) ||
-      scene->r.ffcodecdata.audio_codec_id_get() == FFMPEG_CODEC_ID_NONE)
-  {
-    return;
-  }
-
-  /* A render operator may override the context Scene. In that case its context view layer
-   * belongs to another Scene. Otherwise use the same graph as playback and manual mixdown. */
-  if (!view_layer || !BKE_scene_has_view_layer(scene, view_layer)) {
-    view_layer = BKE_view_layer_default_render(scene);
-  }
-  /* The Scene-owned graph can be updated or freed by the UI during an unlocked render. The
-   * worker needs independent evaluated IDs and Audaspace buffers, as do render engines. This
-   * graph uses the complete normal builder and is only evaluated at the current frame. */
-  re->audio_depsgraph = DEG_graph_new(bmain, scene, view_layer, DAG_EVAL_VIEWPORT);
-  DEG_debug_name_set(re->audio_depsgraph, "RENDER AUDIO");
-
-  Depsgraph *scene_depsgraph = BKE_scene_ensure_depsgraph(bmain, scene, view_layer);
-  BKE_sound_ensure_scene_audio_animation(bmain, scene, scene_depsgraph, sfra, efra);
-  BKE_scene_graph_evaluated_ensure(re->audio_depsgraph, bmain);
-  BKE_sound_copy_scene_audio_animation(bmain, scene_depsgraph, re->audio_depsgraph);
 }
 
 /* Free data only needed during rendering operation. */
@@ -2059,10 +2002,6 @@ static void render_pipeline_free(Render *re)
     DEG_graph_free(re->pipeline_depsgraph);
     re->pipeline_depsgraph = nullptr;
     re->pipeline_scene_eval = nullptr;
-  }
-  if (re->audio_depsgraph) {
-    DEG_graph_free(re->audio_depsgraph);
-    re->audio_depsgraph = nullptr;
   }
 
   /* Destroy the opengl context in the correct thread. */
@@ -2504,8 +2443,6 @@ void RE_RenderAnim(Render *re,
 
   /* do not fully call for each frame, it initializes & pops output window */
   if (!render_init_from_main(re, &rd, bmain, scene, single_layer, camera_override, false, true)) {
-    DEG_graph_free(re->audio_depsgraph);
-    re->audio_depsgraph = nullptr;
     return;
   }
 
@@ -2527,26 +2464,6 @@ void RE_RenderAnim(Render *re,
                               (re_type->flag & RE_USE_POSTPROCESS)) &&
                              write_anim;
 
-  if (is_movie && do_write_file &&
-      scene->r.ffcodecdata.audio_codec_id_get() != FFMPEG_CODEC_ID_NONE)
-  {
-    /* RENDER_INIT may edit the Scene or enable audio. Only evaluate its current state here;
-     * automatic future sampling belongs exclusively to the main-thread preparation above. */
-    re->display->draw_lock();
-    if (!re->audio_depsgraph) {
-      ViewLayer *view_layer = single_layer ? single_layer : BKE_view_layer_default_render(scene);
-      re->audio_depsgraph = DEG_graph_new(bmain, scene, view_layer, DAG_EVAL_VIEWPORT);
-      DEG_debug_name_set(re->audio_depsgraph, "RENDER AUDIO");
-    }
-    render_ensure_audio_view_layer(re);
-    BKE_scene_graph_evaluated_ensure(re->audio_depsgraph, bmain);
-    BKE_sound_discard_dirty_scene_audio_animation(re->audio_depsgraph);
-    re->display->draw_unlock();
-  }
-  else {
-    DEG_graph_free(re->audio_depsgraph);
-    re->audio_depsgraph = nullptr;
-  }
   render_init_depsgraph(re);
 
   if (is_movie && do_write_file) {
@@ -2560,9 +2477,7 @@ void RE_RenderAnim(Render *re,
                                                "";
       MovieWriter *writer = BKE_blender_project_read_callback(
           bmain, [&](const bke::BlenderProject *project) {
-            return MOV_write_begin(re->audio_depsgraph ?
-                                       DEG_get_evaluated_scene(re->audio_depsgraph) :
-                                       re->pipeline_scene_eval,
+            return MOV_write_begin(re->pipeline_scene_eval,
                                    project,
                                    &re->r,
                                    &image_format,
@@ -2629,7 +2544,6 @@ void RE_RenderAnim(Render *re,
 
     if (nfra != scene->r.cfra) {
       /* Skip this frame, but could update for physics and particles system. */
-      render_update_audio_depsgraph(re);
       continue;
     }
 
@@ -2728,9 +2642,6 @@ void RE_RenderAnim(Render *re,
     const bool should_write = !(re->flag & R_SKIP_WRITE);
     if (re->display->test_break() == 0) {
       if (!G.is_break && should_write) {
-        /* Render/frame-change callbacks may change live audio inputs. Consume their current
-         * values after rendering this frame, before the movie writer reads its audio. */
-        render_update_audio_depsgraph(re);
         if (!do_write_image_or_movie(re, bmain, scene, totvideos, nullptr, write_anim)) {
           G.is_break = true;
         }
@@ -2800,9 +2711,6 @@ void RE_RenderAnim(Render *re,
                           &scene->id,
                           G.is_break ? BKE_CB_EVT_RENDER_CANCEL : BKE_CB_EVT_RENDER_COMPLETE);
   BKE_sound_reset_scene_specs(re->pipeline_scene_eval);
-  if (re->audio_depsgraph) {
-    BKE_sound_reset_scene_specs(DEG_get_evaluated_scene(re->audio_depsgraph));
-  }
 
   render_pipeline_free(re);
 
