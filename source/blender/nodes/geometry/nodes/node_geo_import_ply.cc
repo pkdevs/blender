@@ -23,7 +23,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       .optional_label()
       .description("Path to a PLY file");
 
-  b.add_output<decl::Geometry>("Mesh"_ustr);
+  /* TODO(sergey): Remove the Mesh identifier in the next major Blender version. */
+  b.add_output<decl::Geometry>("Geometry"_ustr, "Mesh"_ustr);
 }
 
 class LoadPlyCache : public memory_cache::CachedValue {
@@ -58,13 +59,8 @@ static void node_geo_exec(GeoNodeExecParams params)
         BLI_SCOPED_DEFER([&]() { BKE_reports_free(&reports); });
         import_params.reports = &reports;
 
-        Mesh *mesh = PLY_import_mesh(import_params);
-
-        // TODO(sergey): Support loading PLY as point cloud of gaussian splat.
-        // PointCloud *point_cloud = PLY_import_point_cloud(import_params);
-
         auto cached_value = std::make_unique<LoadPlyCache>();
-        cached_value->geometry = GeometrySet::from_mesh(mesh);
+        cached_value->geometry = PLY_import_geometry_set(import_params);
 
         for (Report &report : (import_params.reports)->list) {
           cached_value->warnings.append_as(report);
