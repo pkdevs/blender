@@ -597,11 +597,11 @@ class Cameras : Overlay {
       if (tex) {
         image_camera_background_matrix_get(&cam, bgpic, state, aspect, mat);
 
-        /* Apply roll to image. */
-        if (state.rv3d->camroll != 0.0f || (state.rv3d->rflag & RV3D_MIRROR_X) != 0) {
+        /* Apply roll and flip to image. */
+        if (state.rv3d->camroll != 0.0f || (state.rv3d->rflag & RV3D_FLIPPED) != 0) {
           transpose_m4(mat.ptr());
           rotate_m4(mat.ptr(), 'Z', -state.rv3d->camroll);
-          if ((state.rv3d->rflag & RV3D_MIRROR_X) != 0) {
+          if ((state.rv3d->rflag & RV3D_FLIPPED) != 0) {
             negate_v4(mat[0]);
           }
           transpose_m4(mat.ptr());

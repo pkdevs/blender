@@ -85,7 +85,7 @@ static void view_zoom_to_window_xy_camera(Scene *scene,
     float2 delta_px;
 
     /* Calculate the center of zoom with roll applied. */
-    if (rv3d->camroll != 0.0f || (rv3d->rflag & RV3D_MIRROR_X) != 0) {
+    if (rv3d->camroll != 0.0f || (rv3d->rflag & RV3D_FLIPPED) != 0) {
       const float2 center(region->winx / 2, region->winy / 2);
 
       float2 pt_src_rotated = rotate_around_point_2d(
@@ -107,7 +107,7 @@ static void view_zoom_to_window_xy_camera(Scene *scene,
 
       delta_px = pt_dst - pt_src;
 
-      if ((rv3d->rflag & RV3D_MIRROR_X) != 0) {
+      if ((rv3d->rflag & RV3D_FLIPPED) != 0) {
         delta_px.x = -delta_px.x;
       }
 

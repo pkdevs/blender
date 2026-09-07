@@ -193,7 +193,7 @@ static wmOperatorStatus view3d_center_camera_exec(bContext *C, wmOperator * /*op
 
   rv3d->camdx = rv3d->camdy = 0.0f;
   rv3d->camroll = 0.0f;
-  rv3d->rflag &= ~RV3D_MIRROR_X;
+  rv3d->rflag &= ~RV3D_FLIPPED;
 
   const rctf viewborder = BKE_camera_view_border(
       scene, depsgraph, v3d, rv3d, region->winx, region->winy, true, true, false);
@@ -298,7 +298,7 @@ static wmOperatorStatus render_border_exec(bContext *C, wmOperator *op)
   border.ymax = float(rect.ymax);
 
   /* Apply flip. */
-  if (rv3d->persp == RV3D_CAMOB && (rv3d->rflag & RV3D_MIRROR_X) != 0) {
+  if (rv3d->persp == RV3D_CAMOB && (rv3d->rflag & RV3D_FLIPPED) != 0) {
     std::swap(border.xmin, border.xmax);
     border.xmin = region->winx - border.xmin;
     border.xmax = region->winx - border.xmax;
@@ -567,7 +567,7 @@ void VIEW3D_OT_view_roll_set(wmOperatorType *ot)
 /* -------------------------------------------------------------------- */
 /** \name Flip View Operator
  *
- * Mirrors the view either horizontally or vertically.
+ * Flips the view either horizontally or vertically.
  * \{ */
 
 enum class FlipDirection : int8_t {
@@ -593,7 +593,7 @@ static wmOperatorStatus view3d_flip_view_exec(bContext *C, wmOperator *op)
 
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
 
-  rv3d->rflag ^= RV3D_MIRROR_X;
+  rv3d->rflag ^= RV3D_FLIPPED;
 
   if (direction == FlipDirection::Vertically) {
     rv3d->camroll += M_PI;
@@ -607,7 +607,7 @@ static wmOperatorStatus view3d_flip_view_exec(bContext *C, wmOperator *op)
 void VIEW3D_OT_view_flip(wmOperatorType *ot)
 {
   ot->name = "Flip View";
-  ot->description = "Mirror the view when in a camera";
+  ot->description = "Flip the view when in a camera";
   ot->idname = "VIEW3D_OT_view_flip";
 
   ot->exec = view3d_flip_view_exec;

@@ -595,9 +595,8 @@ bool ED_view3d_camera_view_pan(ARegion *region, const float event_ofs[2])
       event_ofs[0] / (region->winx * zoomfac),
       event_ofs[1] / (region->winy * zoomfac),
   };
-  const bool is_mirrored = (rv3d->rflag & RV3D_MIRROR_X) != 0;
 
-  if (is_mirrored) {
+  if ((rv3d->rflag & RV3D_FLIPPED) != 0) {
     xy.x = -xy.x;
   }
 

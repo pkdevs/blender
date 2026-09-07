@@ -389,13 +389,12 @@ static void obmat_to_viewmat(RegionView3D *rv3d, Object *ob)
   if (rv3d->camroll != 0.0f) {
     rotate_m4(bmat, 'Z', -rv3d->camroll);
   }
-
   invert_m4_m4(rv3d->viewmat, bmat);
 
   /* view quat calculation, needed for add object */
   mat4_normalized_to_quat(rv3d->viewquat, rv3d->viewmat);
 
-  if (rv3d->rflag & RV3D_MIRROR_X) {
+  if (rv3d->rflag & RV3D_FLIPPED) {
     transpose_m4(rv3d->viewmat);
     negate_v4(rv3d->viewmat[0]);
     transpose_m4(rv3d->viewmat);

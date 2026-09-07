@@ -409,7 +409,7 @@ static void drawviewborder(Scene *scene, Depsgraph *depsgraph, ARegion *region, 
   y2 = viewborder.ymax;
 
   const float roll = rv3d->camroll;
-  const bool is_mirrored = (rv3d->rflag & RV3D_MIRROR_X) != 0;
+  const bool is_flipped = (rv3d->rflag & RV3D_FLIPPED) != 0;
   GPU_line_width(1.0f);
 
   /* apply offsets so the real 3D camera shows through */
@@ -432,12 +432,12 @@ static void drawviewborder(Scene *scene, Depsgraph *depsgraph, ARegion *region, 
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
     /* Apply roll. */
-    if (roll != 0.0f || is_mirrored) {
+    if (roll != 0.0f || is_flipped) {
       GPU_matrix_push();
       const int center_x = region->winx / 2;
       const int center_y = region->winy / 2;
       GPU_matrix_translate_2f(center_x, center_y);
-      if (is_mirrored) {
+      if (is_flipped) {
         GPU_matrix_scale_2f(-1.0f, 1.0f);
       }
       if (roll != 0.0f) {
@@ -503,7 +503,7 @@ static void drawviewborder(Scene *scene, Depsgraph *depsgraph, ARegion *region, 
 
   /* When overlays are disabled, only show camera outline & passepartout. */
   if (v3d->flag2 & V3D_HIDE_OVERLAYS || !(v3d->flag2 & V3D_SHOW_CAMERA_GUIDES)) {
-    if (roll != 0.0f || is_mirrored) {
+    if (roll != 0.0f || is_flipped) {
       GPU_matrix_pop();
     }
     return;
@@ -634,7 +634,7 @@ static void drawviewborder(Scene *scene, Depsgraph *depsgraph, ARegion *region, 
                      sizeof(v3d->camera->id.name) - 2);
   }
 
-  if (roll != 0.0f || is_mirrored) {
+  if (roll != 0.0f || is_flipped) {
     GPU_matrix_pop();
   }
 }
@@ -1178,9 +1178,9 @@ static void draw_viewport_name(ARegion *region, View3D *v3d, int xoffset, int *y
     name_array[name_array_len++] = IFACE_(" (Clipped)");
   }
 
-  /* Indicate that the view is mirrored. */
-  if (rv3d->persp == RV3D_CAMOB && rv3d->rflag & RV3D_MIRROR_X) {
-    name_array[name_array_len++] = IFACE_(" (Mirrored)");
+  /* Indicate that the view is flipped. */
+  if (rv3d->persp == RV3D_CAMOB && rv3d->rflag & RV3D_FLIPPED) {
+    name_array[name_array_len++] = IFACE_(" (Flipped)");
   }
 
   if (name_array_len > 1) {

@@ -6255,9 +6255,9 @@ static void rna_def_space_view3d(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, nullptr, "rflag", RV3D_CLIPPING);
   RNA_def_property_ui_text(prop, "Use Clip Planes", "");
 
-  prop = RNA_def_property(srna, "view_mirror_x", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "rflag", RV3D_MIRROR_X);
-  RNA_def_property_ui_text(prop, "Mirror", "Mirror view horizontally");
+  prop = RNA_def_property(srna, "view_flipped", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "rflag", RV3D_FLIPPED);
+  RNA_def_property_ui_text(prop, "Flip", "Flip view horizontally");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
   const int default_value[] = {6, 4};

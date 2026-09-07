@@ -53,7 +53,7 @@ float2 BKE_camera_frame_size(float winx, float winy, float frame_aspect);
 struct CameraParams {
   /* lens */
   bool is_ortho = false;
-  bool is_mirrored = false;
+  bool is_flipped = false;
   float lens = 0.0f;
   float ortho_scale = 1.0f;
   float zoom = 1.0f;
