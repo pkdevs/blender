@@ -1722,9 +1722,8 @@ static void do_outliner_select_recursive(Span<TreeElement *> tree,
         /* Restrict sub-tree selections to this collection. This prevents undesirable behavior in
          * the edge-case where there is an object which is part of this collection, but which has
          * children that are part of another collection. */
-        do_outliner_select_recursive(te->subtree,
-                                     selecting,
-                                     static_cast<LayerCollection *>(te->directdata)->collection);
+        do_outliner_select_recursive(
+            te->subtree, selecting, static_cast<LayerCollection *>(te->directdata)->collection);
       }
       else {
         do_outliner_select_recursive(te->subtree, selecting, in_collection);
@@ -1784,8 +1783,7 @@ static void do_outliner_range_select(bContext *C,
                                      const bool recurse,
                                      Collection *in_collection)
 {
-  TreeElement *active = outliner_find_element_with_flag(space_outliner->runtime->tree,
-                                                        TSE_ACTIVE);
+  TreeElement *active = outliner_find_element_with_flag(space_outliner->runtime->tree, TSE_ACTIVE);
 
   /* If no active element exists, activate the element under the cursor */
   if (!active) {
@@ -1884,8 +1882,7 @@ static wmOperatorStatus outliner_item_do_activate_from_cursor(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  if (!(te = outliner_find_item_at_y(
-            space_outliner, space_outliner->runtime->tree, view_mval[1])))
+  if (!(te = outliner_find_item_at_y(space_outliner, space_outliner->runtime->tree, view_mval[1])))
   {
     if (deselect_all) {
       changed |= outliner_flag_set(*space_outliner, TSE_SELECTED, false);

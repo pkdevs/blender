@@ -202,8 +202,7 @@ static void get_element_operation_type(
 
 static TreeElement *get_target_element(const SpaceOutliner *space_outliner)
 {
-  TreeElement *te = outliner_find_element_with_flag(space_outliner->runtime->tree,
-                                                    TSE_ACTIVE);
+  TreeElement *te = outliner_find_element_with_flag(space_outliner->runtime->tree, TSE_ACTIVE);
 
   return te;
 }
@@ -857,8 +856,7 @@ static void merged_element_search_update_fn(const bContext * /*C*/,
 
   int type = tree_element_id_type_to_index(te);
 
-  merged_element_search_fn_recursive(
-      parent->subtree, TREESTORE(te)->type, type, str, items);
+  merged_element_search_fn_recursive(parent->subtree, TREESTORE(te)->type, type, str, items);
 }
 
 /* Activate an element from the merged element search menu */
@@ -1774,13 +1772,8 @@ void outliner_do_object_operation_ex(bContext *C,
     }
     if (TSELEM_OPEN(tselem, space_outliner)) {
       if ((select_handled == false) || recurse_selected) {
-        outliner_do_object_operation_ex(C,
-                                        reports,
-                                        scene_act,
-                                        space_outliner,
-                                        te->subtree,
-                                        operation_fn,
-                                        recurse_selected);
+        outliner_do_object_operation_ex(
+            C, reports, scene_act, space_outliner, te->subtree, operation_fn, recurse_selected);
       }
     }
   }
@@ -2811,12 +2804,8 @@ static wmOperatorStatus outliner_object_operation_exec(bContext *C, wmOperator *
   switch (event) {
     case OL_OP_SELECT: {
       Scene *sce = scene; /* To be able to delete, scenes are set... */
-      outliner_do_object_operation(C,
-                                   op->reports,
-                                   scene,
-                                   space_outliner,
-                                   space_outliner->runtime->tree,
-                                   object_select_fn);
+      outliner_do_object_operation(
+          C, op->reports, scene, space_outliner, space_outliner->runtime->tree, object_select_fn);
       /* FIXME: This is most certainly broken, maybe check should rather be
        * `if (CTX_data_scene(C) != scene)` ? */
       if (scene != sce) {
@@ -2865,12 +2854,8 @@ static wmOperatorStatus outliner_object_operation_exec(bContext *C, wmOperator *
       break;
     }
     case OL_OP_RENAME:
-      outliner_do_object_operation(C,
-                                   op->reports,
-                                   scene,
-                                   space_outliner,
-                                   space_outliner->runtime->tree,
-                                   item_rename_fn);
+      outliner_do_object_operation(
+          C, op->reports, scene, space_outliner, space_outliner->runtime->tree, item_rename_fn);
       str = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Rename Object");
       break;
     default:

@@ -277,8 +277,7 @@ static wmOperatorStatus outliner_item_openclose_invoke(bContext *C,
     TreeStoreElem *tselem = TREESTORE(te);
 
     const bool open = (tselem->flag & TSE_CLOSED) ||
-                      (toggle_all &&
-                       outliner_flag_is_any_test(te->subtree, TSE_CLOSED, 1));
+                      (toggle_all && outliner_flag_is_any_test(te->subtree, TSE_CLOSED, 1));
 
     outliner_item_openclose(te, open, toggle_all);
     outliner_tag_redraw_avoid_rebuild_on_open_change(space_outliner, region);
@@ -406,8 +405,8 @@ void item_rename_fn(bContext *C,
 static TreeElement *outliner_item_rename_find_active(const SpaceOutliner *space_outliner,
                                                      ReportList *reports)
 {
-  TreeElement *active_element = outliner_find_element_with_flag(
-      space_outliner->runtime->tree, TSE_ACTIVE);
+  TreeElement *active_element = outliner_find_element_with_flag(space_outliner->runtime->tree,
+                                                                TSE_ACTIVE);
 
   if (!active_element) {
     BKE_report(reports, RPT_WARNING, "No active item to rename");
@@ -1576,10 +1575,8 @@ static TreeElement *outliner_show_active_get_element(const bContext *C,
     return nullptr;
   }
 
-  te = outliner_find_id(space_outliner,
-                        space_outliner->runtime->tree,
-                        &obact->id,
-                        TE_CHILD_NOT_IN_COLLECTION);
+  te = outliner_find_id(
+      space_outliner, space_outliner->runtime->tree, &obact->id, TE_CHILD_NOT_IN_COLLECTION);
 
   if (te != nullptr && obact->type == OB_ARMATURE) {
     /* traverse down the bone hierarchy in case of armature */

@@ -588,8 +588,7 @@ static void outliner_restore_scrolling_position(SpaceOutliner *space_outliner,
   if (focus->tselem != nullptr) {
     outliner_set_coordinates(region, space_outliner);
 
-    TreeElement *te_new = outliner_find_tree_element(space_outliner->runtime->tree,
-                                                     focus->tselem);
+    TreeElement *te_new = outliner_find_tree_element(space_outliner->runtime->tree, focus->tselem);
 
     if (te_new != nullptr) {
       int ys_new = te_new->ys;

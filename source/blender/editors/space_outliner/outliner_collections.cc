@@ -236,8 +236,8 @@ static wmOperatorStatus collection_new_exec(bContext *C, wmOperator *op)
   Collection *collection = nullptr;
 
   if (RNA_boolean_get(op->ptr, "nested")) {
-    if (TreeElement *active_te = outliner_find_element_with_flag(
-            space_outliner->runtime->tree, TSE_ACTIVE))
+    if (TreeElement *active_te = outliner_find_element_with_flag(space_outliner->runtime->tree,
+                                                                 TSE_ACTIVE))
     {
       collection = outliner_collection_from_tree_element(active_te);
       if (active_te->idcode == ID_OB) {

@@ -123,8 +123,7 @@ void outliner_tree_dimensions(SpaceOutliner *space_outliner, int *r_width, int *
 {
   *r_width = 0;
   *r_height = 0;
-  outliner_tree_dimensions_impl(
-      space_outliner, space_outliner->runtime->tree, r_width, r_height);
+  outliner_tree_dimensions_impl(space_outliner, space_outliner->runtime->tree, r_width, r_height);
 }
 
 /**
@@ -1849,14 +1848,8 @@ static void outliner_draw_restrictbuts(ui::Block *block,
     }
 
     if (TSELEM_OPEN(tselem, space_outliner)) {
-      outliner_draw_restrictbuts(block,
-                                 bmain,
-                                 scene,
-                                 view_layer,
-                                 region,
-                                 space_outliner,
-                                 te->subtree,
-                                 props_active);
+      outliner_draw_restrictbuts(
+          block, bmain, scene, view_layer, region, space_outliner, te->subtree, props_active);
     }
   }
 }
@@ -2065,8 +2058,7 @@ static void outliner_draw_overrides_restrictbuts(Main *bmain,
   for (const TreeElement *te : tree) {
     const TreeStoreElem *tselem = TREESTORE(te);
     if (TSELEM_OPEN(tselem, space_outliner)) {
-      outliner_draw_overrides_restrictbuts(
-          bmain, block, region, space_outliner, te->subtree, x);
+      outliner_draw_overrides_restrictbuts(bmain, block, region, space_outliner, te->subtree, x);
     }
 
     if (!outliner_is_element_in_view(te, &region->v2d)) {
@@ -3417,14 +3409,8 @@ static void outliner_draw_hierarchy_lines_recursive(uint pos,
         y = *starty;
       }
 
-      outliner_draw_hierarchy_lines_recursive(pos,
-                                              space_outliner,
-                                              te->subtree,
-                                              tvc,
-                                              startx + UI_UNIT_X,
-                                              col,
-                                              draw_grayed_out,
-                                              starty);
+      outliner_draw_hierarchy_lines_recursive(
+          pos, space_outliner, te->subtree, tvc, startx + UI_UNIT_X, col, draw_grayed_out, starty);
     }
 
     if (draw_hierarchy_line) {
@@ -3650,8 +3636,7 @@ static void outliner_draw_tree(ui::Block *block,
   if (space_outliner->outlinevis == SO_DATA_API) {
     /* struct marks */
     int starty = int(region->v2d.tot.ymax) - UI_UNIT_Y - OL_Y_OFFSET;
-    outliner_draw_struct_marks(
-        region, space_outliner, space_outliner->runtime->tree, &starty);
+    outliner_draw_struct_marks(region, space_outliner, space_outliner->runtime->tree, &starty);
   }
 
   /* Draw highlights before hierarchy. */
