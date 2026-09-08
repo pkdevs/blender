@@ -15,6 +15,27 @@
 
 namespace blender::nodes::node_geo_grid_solve_poisson_cc {
 
+enum class ThresholdMode {
+  /** Threshold relative to the maximum absolute value of the input grid (infinity norm). */
+  RelativeError,
+  /** Threshold based on the maximum absolute value of the solution (infinity norm). */
+  AbsoluteError,
+};
+
+static const EnumPropertyItem threshold_mode_items[] = {
+    {int(ThresholdMode::RelativeError),
+     "RELATIVE_ERROR",
+     0,
+     "Relative Error",
+     "Threshold relative to the maximum absolute value of the input grid (infinity norm)"},
+    {int(ThresholdMode::AbsoluteError),
+     "ABSOLUTE_ERROR",
+     0,
+     "Absolute Error",
+     "Threshold based on the maximum absolute value of the solution (infinity norm)"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 enum class Boundary {
   /** Dirichlet boundary condition, using the background value for all exterior boundary voxels. */
   Background,
@@ -64,10 +85,16 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(1)
       .max(10000)
       .description("Maximum number of solver iterations");
-  b.add_input<decl::Float>("Tolerance"_ustr)
-      .default_value(1e-3f)
+  b.add_input<decl::Menu>("Threshold Mode"_ustr)
+      .static_items(threshold_mode_items)
+      .expanded()
+      .default_value(ThresholdMode::RelativeError)
+      .optional_label()
+      .description("Mode that defines how the error threshold is interpreted");
+  b.add_input<decl::Float>("Error Threshold"_ustr)
       .min(0.0f)
-      .description("Convergence tolerance for the solver");
+      .default_value(1e-3f)
+      .description("Error threshold below which a solution is considered valid");
   b.add_input<decl::Bool>("Staggered"_ustr)
       .default_value(false)
       .description("Use staggered grid discretization for the Laplacian operator");
@@ -213,7 +240,8 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 
   const int max_iterations = params.extract_input<int>("Iterations"_ustr);
-  const float tolerance = params.extract_input<float>("Tolerance"_ustr);
+  const ThresholdMode threshold_mode = params.extract_input<ThresholdMode>("Threshold Mode"_ustr);
+  const float error_threshold = params.extract_input<float>("Error Threshold"_ustr);
   const bool staggered = params.extract_input<bool>("Staggered"_ustr);
   const Boundary boundary = params.extract_input<Boundary>("Boundary"_ustr);
 
@@ -223,8 +251,16 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   openvdb::math::pcg::State solver_state;
   solver_state.iterations = max_iterations;
-  solver_state.relativeError = double(tolerance);
-  solver_state.absoluteError = double(tolerance);
+  switch (threshold_mode) {
+    case ThresholdMode::RelativeError:
+      solver_state.relativeError = double(error_threshold);
+      solver_state.absoluteError = 0.0;
+      break;
+    case ThresholdMode::AbsoluteError:
+      solver_state.relativeError = 0.0;
+      solver_state.absoluteError = double(error_threshold);
+      break;
+  }
 
   openvdb::FloatTree::Ptr solution_tree;
   using PreconditionerType =
