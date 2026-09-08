@@ -381,7 +381,8 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
     const Vector<IndexMask> selections = mask_group->selections;
     const Vector<Array<float3>> &src_positions = mask_group->src_positions;
 
-    // const float4x4 mat = float4x4(gz->matrix_space);
+    const float4x4 mat = float4x4(gz->matrix_space);
+    const float4x4 mat_inv = math::invert(mat);
 
     const float3x3 homography_mat = compute_homography_matrix(mask_group);
 
@@ -394,13 +395,13 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
       MutableSpan<float3> positions = strokes.positions_for_write();
 
       selected_points.foreach_index([&](const int point_i) {
-        const float2 pos_2d = float2(src_positions_i[point_i].x, src_positions_i[point_i].z);
+        const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) +
+                              float2(0.5f);
 
         const float3 pos_3d_out = homography_mat * float3(pos_2d, 1.0f);
         const float2 pos_2d_out = float2(pos_3d_out.x, pos_3d_out.y) / pos_3d_out.z;
 
-        positions[point_i].x = pos_2d_out.x;
-        positions[point_i].z = pos_2d_out.y;
+        positions[point_i] = math::transform_point(mat, float3(pos_2d_out - float2(0.5f), 0.0f));
       });
 
       info.drawing.tag_positions_changed();
