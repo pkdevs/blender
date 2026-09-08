@@ -570,6 +570,8 @@ static void WIDGETGROUP_camera_view_draw_prepare(const bContext *C, wmGizmoGroup
     rect.xmax = region->winx;
     rect.ymax = region->winy;
     viewgroup->state.view_border = rect;
+    viewgroup->state.roll = 0.0f;
+    viewgroup->state.flipped_x = false;
   }
 
   wmGizmo *gz = viewgroup->border;
