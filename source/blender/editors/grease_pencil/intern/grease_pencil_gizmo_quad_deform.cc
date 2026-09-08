@@ -63,6 +63,8 @@ struct QuadWidgetGroup2 {
 
   GreasePencil *grease_pencil_src;
 
+  IndexMaskMemory memory;
+
   struct {
     PointerRNA ptr;
     PropertyRNA *prop;
@@ -207,9 +209,8 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   mask_group->src_positions = Vector<Array<float3>>();
   const Vector<MutableDrawingInfo> drawings = retrieve_editable_drawings(scene, grease_pencil);
   for (const MutableDrawingInfo &info : drawings) {
-    IndexMaskMemory memory;
     const IndexMask selected_points = retrieve_editable_and_selected_points(
-        *object, info.drawing, info.layer_index, memory);
+        *object, info.drawing, info.layer_index, mask_group->memory);
 
     mask_group->selections.append(selected_points);
     mask_group->src_positions.append(Array<float3>(info.drawing.strokes().positions()));
@@ -345,7 +346,7 @@ static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
 
   for (const int drawing_i : drawings.index_range()) {
     const MutableDrawingInfo &info = drawings[drawing_i];
-    const IndexMask selected_points = selections[drawing_i];
+    const IndexMask &selected_points = selections[drawing_i];
     const Span<float3> src_positions_i = src_positions[drawing_i];
 
     bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
@@ -428,9 +429,8 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   for (const int drawing_i : drawings.index_range()) {
     const MutableDrawingInfo &info = drawings[drawing_i];
 
-    IndexMaskMemory memory;
     const IndexMask selected_points_1 = retrieve_editable_and_selected_points(
-        *object, info.drawing, info.layer_index, memory);
+        *object, info.drawing, info.layer_index, mask_group->memory);
 
     const IndexMask selected_points_2 = selections[drawing_i];
 
