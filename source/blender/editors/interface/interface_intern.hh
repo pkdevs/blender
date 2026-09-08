@@ -60,7 +60,7 @@ struct SafetyRect;
 struct HandleButtonData;
 struct Layout;
 struct UndoStack_Text;
-/* ****************** general defines ************** */
+/* General defines. */
 
 #define RNA_ENUM_VALUE -2
 
@@ -387,6 +387,8 @@ struct ButtonText : public Button {
    */
   std::function<void(StringRefNull new_name)> rename_full_func = nullptr;
   std::string rename_full_new;
+  /** Allow double click editing on text buttons with no emboss styled like labels. */
+  bool use_label_style = false;
 };
 
 /** Derived struct for #ButtonType::TextBox */
@@ -447,8 +449,7 @@ struct ButtonSearch : public Button {
   void *item_active = nullptr;
   char *item_active_str;
 
-  void *arg = nullptr;
-  FreeArgFunc arg_free_fn = nullptr;
+  std::shared_ptr<void> arg = nullptr;
 
   ButtonSearchContextMenuFn item_context_menu_fn = nullptr;
   ButtonSearchTooltipFn item_tooltip_fn = nullptr;
@@ -500,6 +501,18 @@ struct ButtonLabel : public Button {
   float alpha_factor = 1.0f;
   /** When the button draws an icon, also draw a mono-colored border for it. */
   bool draw_icon_border = false;
+
+  bool is_multiline = false;
+  /**
+   * Wrap cache from last layout pass.
+   * This is also referenced in the button owning #Block so it can be looked up and reused in
+   * following layout passes. Wrapped text references an allocated string, so it can't be just
+   * copied/moved around.
+   */
+  std::shared_ptr<TextWrapCache> wrap_cache;
+  /** Maximum lines to be drawn in multi-line labels, 0 means all. */
+  int max_lines = 0;
+  FontStyleAlign text_align = UI_STYLE_TEXT_LEFT;
 };
 
 /** Derived struct for #ButtonType::Scroll. */
@@ -674,6 +687,8 @@ struct Block {
   Block *next = nullptr, *prev = nullptr;
 
   Vector<std::unique_ptr<Button>> buttons_ptrs;
+  Vector<std::shared_ptr<TextWrapCache>> text_wrap_cache;
+
   Panel *panel = nullptr;
   Block *oldblock = nullptr;
 
@@ -751,6 +766,9 @@ struct Block {
   bool tooltipdisabled = false;
   /** True when #block_end has been called. */
   bool endblock = false;
+  /** True when #block_end has been called with #postpone_callbacks set to true,
+   * #block_post_layout_callbacks_exec must be called. */
+  bool post_block_layout_fns_pending = false;
 
   /** for doing delayed */
   BlockBoundsCalc bounds_type = BLOCK_BOUNDS_NONE;
@@ -1389,7 +1407,7 @@ Button *button_find_new(Block *block_new, const Button *but_old);
 int button_text_padding(const Button *but);
 
 #ifdef WITH_INPUT_IME
-void button_ime_reposition(Button *but, int x, int y, bool complete);
+void button_ime_reposition(Button *but, int x, int y);
 const wmIMEData *button_ime_data_get(Button *but);
 #endif
 
@@ -1615,6 +1633,10 @@ void button_anim_autokey(bContext *C, Button *but, Scene *scene, float cfra);
 
 void button_anim_decorate_cb(bContext *C, void *arg_but, void *arg_dummy);
 void button_anim_decorate_update_from_flag(ButtonDecorator *but);
+/**
+ * \return True when the decorated button should be considered "pushed".
+ */
+bool button_anim_decorate_pushed_state(ButtonDecorator *but);
 
 /* `interface_query.cc` */
 
@@ -1714,7 +1736,7 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
 /**
  * menu to show when right clicking on the panel header
  */
-void popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel);
+int popup_context_menu_for_panel(bContext *C, ARegion *region, Panel *panel);
 
 /* `eyedroppers/interface_eyedropper.cc` */
 
@@ -1866,6 +1888,8 @@ int paste_property_drivers(Span<FCurve *> src_drivers,
                            PropertyRNA *dst_prop);
 
 }  // namespace internal
+void panel_region_width_set(ARegion *region, const float aspect, int unscaled_size);
+void region_panels_sort_for_search_filter_visibility_change(bContext *C, const ARegion *region);
 
 }  // namespace ui
 }  // namespace blender

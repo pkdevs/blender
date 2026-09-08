@@ -77,7 +77,7 @@ void ED_space_image_set(Main *bmain, SpaceImage *sima, Image *ima, bool automati
 
 void ED_space_image_sync(Main *bmain, Image *image, bool ignore_render_viewer)
 {
-  wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+  wmWindowManager *wm = bmain->wm.first();
   for (wmWindow &win : wm->windows) {
     const bScreen *screen = WM_window_get_active_screen(&win);
     for (ScrArea &area : screen->areabase) {
@@ -425,9 +425,6 @@ bool ED_image_slot_cycle(Image *image, int direction)
     image->render_slot = ((cur == 1) ? 0 : 1);
   }
 
-  if (cur != image->render_slot) {
-    BKE_image_partial_update_mark_full_update(image);
-  }
   return (cur != image->render_slot);
 }
 

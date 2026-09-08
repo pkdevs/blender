@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.2.0 LTS Beta (b'e65907bec1c9')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'f5df8c32f99b')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-29 10:51+0000\n"
+"POT-Creation-Date: 2026-09-07 07:47+0000\n"
 "PO-Revision-Date: 2025-12-04 22:18+0000\n"
 "Last-Translator: Jackson Zheng <business.jackson.zheng@gmail.com>\n"
 "Language-Team: Hindi <https://translate.blender.org/projects/blender-ui/ui/hi/>\n"
@@ -556,6 +556,10 @@ msgid "Window Managers"
 msgstr "खिडकी प्रबंधक"
 
 
+msgid "Dirty"
+msgstr "गंदे"
+
+
 msgid "Goal"
 msgstr "लक्ष्य"
 
@@ -843,20 +847,12 @@ msgid "Quality"
 msgstr "गुणवत्ता"
 
 
-msgid "Display"
-msgstr "प्रदर्शित करें"
-
-
 msgid "Curve"
 msgstr "वक्र"
 
 
 msgid "Gamma"
 msgstr "गामा"
-
-
-msgid "View"
-msgstr "दृश्य"
 
 
 msgid "RGB"
@@ -1042,6 +1038,10 @@ msgstr "विभक्त करें"
 
 msgid "Plane"
 msgstr "समतल"
+
+
+msgid "View"
+msgstr "दृश्य"
 
 
 msgid "Radius"
@@ -1909,10 +1909,6 @@ msgid "Generated image width"
 msgstr "उत्पन्न छवि चौड़ाई"
 
 
-msgid "Dirty"
-msgstr "गंदे"
-
-
 msgid "Single image file"
 msgstr "एक छवि संचिका"
 
@@ -2151,6 +2147,10 @@ msgstr "गुच्छ"
 
 msgid "Damp"
 msgstr "आद्र"
+
+
+msgid "Display"
+msgstr "प्रदर्शित करें"
 
 
 msgid "Steps"
@@ -2586,80 +2586,80 @@ msgid "Placement"
 msgstr "नियोजन"
 
 
-msgid "Mirror"
-msgstr "दर्पण"
-
-
-msgid "Snap"
-msgstr "स्नैप"
+msgid "Import"
+msgstr "आयात करें"
 
 
 msgid "Math"
 msgstr "गणित"
 
 
-msgid "Light"
-msgstr "प्रकाश"
-
-
-msgid "Rigid Body"
-msgstr "कठोर-पदार्थ"
-
-
-msgid "Import"
-msgstr "आयात करें"
-
-
-msgid "Apply"
-msgstr "लागू करें"
-
-
-msgid "Track"
-msgstr "ट्रैक"
-
-
-msgid "Quick Effects"
-msgstr "त्वरित प्रभाव"
-
-
-msgid "Show/Hide"
-msgstr "छुपाएँ / दिखाएँ"
-
-
-msgid "Make Single User"
-msgstr "एकल प्रयोक्ता बनाएँ"
-
-
-msgid "Hooks"
-msgstr "खूँटी"
-
-
 msgid "UV"
 msgstr "यूवी"
 
 
-msgid "Names"
-msgstr "नाम"
-
-
-msgid "Toggle Bone Options"
-msgstr "हड्डी विकल्प बंद/बुझ"
-
-
-msgid "Enable Bone Options"
-msgstr "हड्डी विकल्प को सक्षम करें"
-
-
-msgid "Merge"
-msgstr "विलय करें"
+msgid "Snap"
+msgstr "स्नैप"
 
 
 msgid "Bone Roll"
 msgstr "हड्डी पंजी"
 
 
+msgid "Mirror"
+msgstr "दर्पण"
+
+
+msgid "Show/Hide"
+msgstr "छुपाएँ / दिखाएँ"
+
+
+msgid "Names"
+msgstr "नाम"
+
+
+msgid "Merge"
+msgstr "विलय करें"
+
+
 msgid "Keying"
 msgstr "कुंजीयन"
+
+
+msgid "Enable Bone Options"
+msgstr "हड्डी विकल्प को सक्षम करें"
+
+
+msgid "Toggle Bone Options"
+msgstr "हड्डी विकल्प बंद/बुझ"
+
+
+msgid "Apply"
+msgstr "लागू करें"
+
+
+msgid "Hooks"
+msgstr "खूँटी"
+
+
+msgid "Make Single User"
+msgstr "एकल प्रयोक्ता बनाएँ"
+
+
+msgid "Quick Effects"
+msgstr "त्वरित प्रभाव"
+
+
+msgid "Track"
+msgstr "ट्रैक"
+
+
+msgid "Rigid Body"
+msgstr "कठोर-पदार्थ"
+
+
+msgid "Light"
+msgstr "प्रकाश"
 
 
 msgid "Basic"
@@ -3033,10 +3033,6 @@ msgstr "प्रारम्भ"
 
 msgid "NLA Track is locked"
 msgstr "अरैखिक अनुप्राणन ट्रैक अवरोधित है"
-
-
-msgid "To"
-msgstr "करने के लिए"
 
 
 msgid "Keying Screen"
@@ -4111,6 +4107,10 @@ msgid "Paste"
 msgstr "चिपकाएँ"
 
 
+msgid "Movie"
+msgstr "चलचित्र"
+
+
 msgid "Effect"
 msgstr "प्रभाव"
 
@@ -4414,12 +4414,12 @@ msgid "Lock Y"
 msgstr "तालाबंदी y"
 
 
-msgid "Motion Tracking"
-msgstr "गति मार्गन"
-
-
 msgid "Transform Orientations"
 msgstr "दिक् विन्यास संरचनांतरण"
+
+
+msgid "Motion Tracking"
+msgstr "गति मार्गन"
 
 
 msgid "Predefined tracking camera intrinsics"
@@ -5101,11 +5101,6 @@ msgid "File:"
 msgstr "संचिका:"
 
 
-msgctxt "Operator"
-msgid "Apply"
-msgstr "लागू करें"
-
-
 msgid "Options:"
 msgstr "विकल्प:"
 
@@ -5397,6 +5392,11 @@ msgstr "निर्माण"
 
 
 msgctxt "Operator"
+msgid "Text"
+msgstr "पाठ"
+
+
+msgctxt "Operator"
 msgid "Delete Keyframes..."
 msgstr "अनुबोधक चिन्हों मिटाएँ..."
 
@@ -5414,11 +5414,6 @@ msgstr "दाईं ओर"
 msgctxt "Operator"
 msgid "Color"
 msgstr "रंग"
-
-
-msgctxt "Operator"
-msgid "Text"
-msgstr "पाठ"
 
 
 msgctxt "Operator"
@@ -5631,6 +5626,11 @@ msgstr "सब से हटाएँ"
 msgctxt "Operator"
 msgid "Quick Edit"
 msgstr "त्वरित संपादन"
+
+
+msgctxt "Operator"
+msgid "Apply"
+msgstr "लागू करें"
 
 
 msgid ", cannot have single-frame paths"
@@ -5870,10 +5870,6 @@ msgstr "हेक्स"
 
 msgid "OK"
 msgstr "ठीक है"
-
-
-msgid "Movie"
-msgstr "चलचित्र"
 
 
 msgid "Pos"

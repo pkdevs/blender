@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #include "BLI_listbase.hh"
 
 #include "BKE_compute_context_cache.hh"
@@ -252,7 +256,7 @@ static void foreach_active_gizmo_in_open_node_editor(
     return;
   }
   const std::optional<ed::space_node::ObjectAndModifier> object_and_modifier =
-      ed::space_node::get_modifier_for_node_editor(snode);
+      ed::space_node::get_geometry_nodes_modifier_for_node_editor(snode);
   if (!object_and_modifier) {
     return;
   }
@@ -350,12 +354,12 @@ static void foreach_active_gizmo_in_open_editors(const wmWindowManager &wm,
     const bScreen *active_screen = BKE_workspace_active_screen_get(window.workspace_hook);
     Vector<const bScreen *> screens = {active_screen};
     if (ELEM(active_screen->state, SCREENMAXIMIZED, SCREENFULL)) {
-      const ScrArea *area = static_cast<const ScrArea *>(active_screen->areabase.first);
+      const ScrArea *area = active_screen->areabase.first();
       screens.append(area->full);
     }
     for (const bScreen *screen : screens) {
       for (const ScrArea &area : screen->areabase) {
-        const SpaceLink *sl = static_cast<SpaceLink *>(area.spacedata.first);
+        const SpaceLink *sl = area.spacedata.first_as<SpaceLink>();
         if (sl == nullptr) {
           continue;
         }
@@ -402,8 +406,8 @@ static void foreach_active_gizmo_exposed_to_modifier(
       *nmd.node_group, scope, value_inferencer, compute_context_cache);
 
   const ComputeContext &object_context = compute_context_cache.for_data_block(nullptr, object.id);
-  const ComputeContext &root_compute_context = compute_context_cache.for_modifier(&object_context,
-                                                                                  nmd);
+  const ComputeContext &root_compute_context = compute_context_cache.for_geometry_nodes_modifier(
+      &object_context, nmd);
   for (auto &&item : tree.runtime->gizmo_propagation->gizmo_inputs_by_group_inputs.items()) {
     const ie::GroupInputElem &group_input_elem = item.key;
     if (item.value.is_empty()) {

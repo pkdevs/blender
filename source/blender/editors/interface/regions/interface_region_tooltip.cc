@@ -1290,11 +1290,7 @@ static std::unique_ptr<TooltipData> tooltip_data_from_button_or_extra_icon(
     }
 
     if (disabled_msg && disabled_msg[0]) {
-      tooltip_text_field_add(*data,
-                             fmt::format(fmt::runtime(TIP_("Disabled: {}")), disabled_msg),
-                             {},
-                             TIP_STYLE_NORMAL,
-                             TIP_LC_ALERT);
+      tooltip_text_field_add(*data, disabled_msg, {}, TIP_STYLE_NORMAL, TIP_LC_ALERT, true);
     }
     if (disabled_msg_free) {
       MEM_delete(disabled_msg_orig);
@@ -1825,7 +1821,7 @@ static void tooltip_from_image(Image &ima, TooltipData &data)
   }
 
   if (BKE_image_has_anim(&ima)) {
-    MovieReader *anim = static_cast<ImageAnim *>(ima.anims.first)->anim;
+    MovieReader *anim = ima.anims.first()->anim;
     if (anim) {
       int duration = MOV_get_duration_frames(anim);
       tooltip_text_field_add(data,

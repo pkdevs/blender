@@ -351,10 +351,10 @@ set(OSL_HOMEPAGE https://github.com/AcademySoftwareFoundation/OpenShadingLanguag
 set(OSL_LICENSE SPDX:BSD-3-Clause)
 set(OSL_COPYRIGHT "Copyright (c) 2009-present Contributors to the Open Shading Language project.")
 
-set(MANIFOLD_VERSION v3.4.1)
+set(MANIFOLD_VERSION v3.5.2)
 set(MANIFOLD_NAME "Manifold")
 set(MANIFOLD_URI https://github.com/elalish/manifold/archive/refs/tags/${MANIFOLD_VERSION}.tar.gz)
-set(MANIFOLD_HASH 1fd7e7741cae23db2956159d42ea7017)
+set(MANIFOLD_HASH 4fc28c8318bd052f54e66b86b5947601)
 set(MANIFOLD_HASH_TYPE MD5)
 set(MANIFOLD_FILE Manifold-${MANIFOLD_VERSION}.tar.gz)
 set(MANIFOLD_HOMEPAGE https://github.com/elalish/manifold)
@@ -651,7 +651,7 @@ set(FFMPEG_CPE "cpe:2.3:a:ffmpeg:ffmpeg:${FFMPEG_VERSION}:*:*:*:*:*:*:*")
 set(FFMPEG_NAME FFmpeg)
 set(FFMPEG_HOMEPAGE https://ffmpeg.org/)
 set(FFMPEG_LICENSE SPDX:LGPL-2.1-or-later)
-set(FFMPEG_COPYRIGHT "The FFmpeg contributors https://github.com/FFmpeg/FFmpeg/blob/master/CREDITS")
+set(FFMPEG_COPYRIGHT "Copyright (c) 2000-2017 the FFMPEG developers")
 
 set(FFTW_VERSION 3.3.10)
 set(FFTW_NAME FFTW)
@@ -799,10 +799,10 @@ set(LZMA_URI https://tukaani.org/xz/xz-${LZMA_VERSION}.tar.bz2)
 set(LZMA_HASH 5117f930900b341493827d63aa910ff5e011e0b994197c3b71c08a20228a42df)
 set(LZMA_HASH_TYPE SHA256)
 set(LZMA_FILE xz-${LZMA_VERSION}.tar.bz2)
-set(LZMA_NAME LZMA)
-set(LZMA_HOMEPAGE https://tukaani.org/lzma/)
-set(LZMA_LICENSE SPDX:GPL-3.0-or-later)
-set(LZMA_COPYRIGHT "Igor Pavlov, Ville Koskinen, Lasse Collin")
+set(LZMA_NAME "XZ (LZMA)")
+set(LZMA_HOMEPAGE https://tukaani.org/xz/)
+set(LZMA_LICENSE SPDX:0BSD)
+set(LZMA_COPYRIGHT "Copyright (C) The XZ Utils authors and contributors")
 
 # NOTE: Python's build has been modified to use our ssl version.
 set(SSL_VERSION 3.5.6)
@@ -1293,12 +1293,7 @@ set(FRIBIDI_FILE fribidi-${FRIBIDI_VERSION}.tar.gz)
 set(FRIBIDI_CPE "cpe:2.3:a:gnu:fribidi:${FRIBIDI_VERSION}:*:*:*:*:*:*:*")
 set(FRIBIDI_HOMEPAGE https://github.com/fribidi/fribidi)
 set(FRIBIDI_LICENSE SPDX:LGPL-2.1-or-later)
-set(FRIBIDI_COPYRIGHT [=[
-Behdad Esfahbod <behdad@gnu.org>,
-Dov Grobgeld <dov.grobgeld@gmail.com>,
-Roozbeh Pournader <roozbeh@gnu.org>,
-Khaled Hosny <khaledhosny@eglug.org>
-]=])
+set(FRIBIDI_COPYRIGHT "Copyright (c) 2004-2012 Behdad Esfahbod, Dov Grobgeld, Roozbeh Pournader")
 
 set(HARFBUZZ_VERSION 10.0.1)
 set(HARFBUZZ_URI https://github.com/harfbuzz/harfbuzz/archive/refs/tags/${HARFBUZZ_VERSION}.tar.gz)

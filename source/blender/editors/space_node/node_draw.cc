@@ -106,6 +106,7 @@
 #include "node_intern.hh" /* own include */
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <sstream>
 
 namespace blender {
@@ -165,7 +166,7 @@ struct TreeDrawContext {
    */
   Array<Vector<NodeExtraInfoRow>> extra_info_rows_per_node;
 
-  Map<int32_t, VectorSet<std::string>> shader_node_errors;
+  Map<int32_t, VectorSet<nodes::NodeWarning>> shader_node_errors;
 
   ~TreeDrawContext()
   {
@@ -2105,12 +2106,12 @@ static void node_draw_panels(bNodeTree &ntree, const bNode &node, ui::Block &blo
   }
 }
 
-static nodes::NodeWarningType node_error_highest_priority(
-    Span<nodes::eval_log::NodeWarning> warnings)
+template<typename WarningsRange>
+static nodes::NodeWarningType node_error_highest_priority(const WarningsRange &warnings)
 {
   int highest_priority = 0;
   nodes::NodeWarningType highest_priority_type = nodes::NodeWarningType::Info;
-  for (const nodes::eval_log::NodeWarning &warning : warnings) {
+  for (const auto &warning : warnings) {
     const int priority = node_warning_type_severity(warning.type);
     if (priority > highest_priority) {
       highest_priority = priority;
@@ -2120,11 +2121,11 @@ static nodes::NodeWarningType node_error_highest_priority(
   return highest_priority_type;
 }
 
-static std::string node_errors_tooltip_fn(const Span<nodes::eval_log::NodeWarning> warnings)
+static std::string node_errors_tooltip_fn(const Span<nodes::NodeWarning> warnings)
 {
   std::string complete_string;
 
-  for (const nodes::eval_log::NodeWarning &warning : warnings.drop_back(1)) {
+  for (const nodes::NodeWarning &warning : warnings.drop_back(1)) {
     complete_string += warning.message;
     /* Adding the period is not ideal for multi-line messages, but it is consistent
      * with other tooltip implementations in Blender, so it is added here. */
@@ -2183,7 +2184,7 @@ static void node_add_error_message_button(const TreeDrawContext &tree_draw_ctx,
       return tree_draw_ctx.tree_logs.get_main_tree_log(zone);
     }();
 
-    Span<nodes::eval_log::NodeWarning> warnings;
+    Span<nodes::NodeWarning> warnings;
     if (geo_tree_log) {
       nodes::eval_log::NodeLog *node_log = geo_tree_log->find_node_log(node.identifier);
       if (node_log != nullptr) {
@@ -2199,14 +2200,13 @@ static void node_add_error_message_button(const TreeDrawContext &tree_draw_ctx,
     ui::Button *but = add_error_message_button(
         block, rect, nodes::node_warning_type_icon(display_type), icon_offset);
     button_func_quick_tooltip_set(
-        but,
-        [warnings = Array<nodes::eval_log::NodeWarning>(warnings)](const ui::Button * /*but*/) {
+        but, [warnings = Array<nodes::NodeWarning>(warnings)](const ui::Button * /*but*/) {
           return node_errors_tooltip_fn(warnings);
         });
     return;
   }
   if (ntree.type == NTREE_SHADER) {
-    const VectorSet<std::string> *errors = tree_draw_ctx.shader_node_errors.lookup_ptr(
+    const VectorSet<nodes::NodeWarning> *errors = tree_draw_ctx.shader_node_errors.lookup_ptr(
         node.identifier);
     if (!errors) {
       return;
@@ -2214,17 +2214,22 @@ static void node_add_error_message_button(const TreeDrawContext &tree_draw_ctx,
     if (errors->is_empty()) {
       return;
     }
-    ui::Button *but = add_error_message_button(block, rect, ICON_ERROR, icon_offset);
+    const nodes::NodeWarningType display_type = node_error_highest_priority(*errors);
+    ui::Button *but = add_error_message_button(
+        block, rect, nodes::node_warning_type_icon(display_type), icon_offset);
     button_func_quick_tooltip_set(but, [errors = *errors](const ui::Button * /*but*/) {
-      std::string tooltip;
-      for (const int i : errors.index_range()) {
-        const StringRefNull error = errors[i];
-        tooltip += error.c_str();
-        if (i + 1 < errors.size()) {
-          tooltip += ".\n";
+      Vector<std::string> tooltip_lines;
+      for (const nodes::NodeWarning &error : errors) {
+        std::string message = error.message;
+        if (message.empty()) {
+          continue;
         }
+        if (!message.ends_with(".")) {
+          message += ".";
+        }
+        tooltip_lines.append(std::move(message));
       }
-      return tooltip;
+      return fmt::format("{}", fmt::join(tooltip_lines, "\n"));
     });
   }
 }
@@ -2478,7 +2483,7 @@ static Vector<NodeExtraInfoRow> node_get_extra_info(const bContext &C,
   if (node.typeinfo->deprecation_notice) {
     NodeExtraInfoRow row;
     row.text = IFACE_("Deprecated");
-    row.icon = ICON_INFO;
+    row.icon = ICON_STATUS_INFO;
     row.tooltip = TIP_(node.typeinfo->deprecation_notice);
     rows.append(std::move(row));
   }
@@ -2512,6 +2517,7 @@ static Vector<NodeExtraInfoRow> node_get_extra_info(const bContext &C,
             NODE_EVALUATE_CLOSURE) ||
        StringRef(node.idname).startswith("GeometryNodeImport") ||
        node.is_type("GeometryNodeClosureToList"_ustr) ||
+       node.is_type("GeometryNodeCombineList"_ustr) ||
        node.is_type("GeometryNodeFilterList"_ustr) ||
        node.is_type("GeometryNodeListGetItem"_ustr) ||
        node.is_type("GeometryNodeFieldToList"_ustr) ||
@@ -2533,7 +2539,7 @@ static Vector<NodeExtraInfoRow> node_get_extra_info(const bContext &C,
       for (const StringRef message : node_log->debug_messages) {
         NodeExtraInfoRow row;
         row.text = message;
-        row.icon = ICON_INFO;
+        row.icon = ICON_STATUS_INFO;
         rows.append(std::move(row));
       }
     }
@@ -3839,7 +3845,7 @@ static Set<const bNodeSocket *> find_sockets_on_active_gizmo_paths(
     const bContext &C, const SpaceNode &snode, bke::ComputeContextCache &compute_context_cache)
 {
   const std::optional<ed::space_node::ObjectAndModifier> object_and_modifier =
-      ed::space_node::get_modifier_for_node_editor(snode);
+      ed::space_node::get_geometry_nodes_modifier_for_node_editor(snode);
   if (!object_and_modifier) {
     return {};
   }
@@ -3951,7 +3957,7 @@ static void reroute_node_draw_body(const bContext &C,
 {
   BLI_assert(node.is_reroute());
 
-  bNodeSocket &sock = *static_cast<bNodeSocket *>(node.inputs.first);
+  bNodeSocket &sock = *node.inputs.first();
 
   PointerRNA nodeptr = RNA_pointer_create_discrete(
       const_cast<ID *>(&ntree.id), RNA_Node, const_cast<bNode *>(&node));
@@ -4483,7 +4489,7 @@ static void draw_link_errors(const bContext &C,
   block_emboss_set(&invalid_links_block, ui::EmbossType::None);
   ui::Button *but = uiDefIconBut(&invalid_links_block,
                                  ui::ButtonType::But,
-                                 ICON_ERROR,
+                                 ICON_STATUS_WARNING_FILLED,
                                  draw_position.x - icon_size / 2,
                                  draw_position.y - icon_size / 2,
                                  icon_size,
@@ -4755,8 +4761,8 @@ void node_draw_space(const bContext &C, ARegion &region)
   ui::view2d_dot_grid_draw(&v2d, TH_GRID, NODE_GRID_STEP_SIZE, grid_levels);
 
   /* Draw parent node trees. */
-  if (snode.treepath.last) {
-    bNodeTreePath *path = static_cast<bNodeTreePath *>(snode.treepath.last);
+  if (snode.treepath.last()) {
+    bNodeTreePath *path = snode.treepath.last();
 
     /* Update tree path name (drawn in the bottom left). */
     ID *name_id = (path->nodetree && path->nodetree != snode.nodetree) ? &path->nodetree->id :
@@ -4858,7 +4864,7 @@ void node_draw_space(const bContext &C, ARegion &region)
 
   int text_info_y_offset = 0;
   if (snode.overlay.flag & SN_OVERLAY_SHOW_OVERLAYS) {
-    if (snode.flag & SNODE_SHOW_GPENCIL && snode.treepath.last) {
+    if (snode.flag & SNODE_SHOW_GPENCIL && snode.treepath.last()) {
       /* Draw grease-pencil (screen strokes, and also paint-buffer). */
       ED_annotation_draw_view2d(&C, false);
     }

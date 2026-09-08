@@ -108,7 +108,7 @@ bool button_is_interactive_ex(const Button *but, const bool labeledit, const boo
       ELEM(but->emboss, EmbossType::None, EmbossType::NoneOrStatus) && !labeledit)
   {
     /* Make editable text buttons with no emboss interactive. */
-    if ((but->flag & BUT_TEXT_LABEL_STYLE) == 0) {
+    if (!static_cast<const ButtonText *>(but)->use_label_style) {
       return false;
     }
   }
@@ -145,7 +145,7 @@ bool button_is_popover_once_compat(const Button *but)
 
 bool button_has_array_value(const Button *but)
 {
-  return (but->rnapoin.data && but->rnaprop && RNA_property_array_check(but->rnaprop));
+  return (but->rnapoin && but->rnaprop && RNA_property_array_check(but->rnaprop));
 }
 
 static wmOperatorType *g_ot_tool_set_by_id = nullptr;
