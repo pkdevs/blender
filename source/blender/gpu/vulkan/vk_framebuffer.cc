@@ -205,7 +205,7 @@ void VKFrameBuffer::clear(const GPUFrameBufferBits buffers,
     /* WORKAROUND: Clearing depth attachment when using dynamic rendering are not working on AMD
      * official drivers.
      * See #129265 */
-    if ((context.state_manager_get().state.write_mask & needed_mask) == needed_mask &&
+    if ((context.pipeline_get()->state_get().write_mask & needed_mask) == needed_mask &&
         !GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL))
     {
       build_clear_attachments_depth_stencil(

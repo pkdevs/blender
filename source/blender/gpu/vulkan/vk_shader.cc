@@ -1399,7 +1399,7 @@ bool VKShader::ensure_graphics_pipelines(Span<shader::PipelineState> pipeline_st
 VkPipeline VKShader::ensure_and_get_graphics_pipeline(
     GPUPrimType primitive,
     VKVertexInputDescriptionPool::Key vertex_input_description_key,
-    VKStateManager &state_manager,
+    const GPUState &state,
     const VKFrameBuffer &framebuffer,
     SpecializationConstants &constants_state)
 {
@@ -1431,14 +1431,14 @@ VkPipeline VKShader::ensure_and_get_graphics_pipeline(
   graphics_info.shaders.vk_fragment_module = fragment_module.vk_shader_module;
   graphics_info.shaders.vk_pipeline_layout = vk_pipeline_layout;
   graphics_info.shaders.vk_topology = vk_topology;
-  graphics_info.shaders.state = state_manager.state;
+  graphics_info.shaders.state = state;
   graphics_info.shaders.viewport_count = framebuffer.viewport_size();
   graphics_info.shaders.specialization_constants.extend(constants_state.values);
   graphics_info.shaders.has_depth = depth_attachment_format != VK_FORMAT_UNDEFINED;
   graphics_info.shaders.has_stencil = stencil_attachment_format != VK_FORMAT_UNDEFINED;
   graphics_info.shaders.max_input_attachment_index = max_input_attachment_index_;
   /* Cleanup state to increase cache hits. */
-  if (!graphics_info.shaders.has_stencil || state_manager.state.stencil_test == GPU_STENCIL_NONE) {
+  if (!graphics_info.shaders.has_stencil || state.stencil_test == GPU_STENCIL_NONE) {
     graphics_info.shaders.state.stencil_test = GPU_STENCIL_NONE;
     graphics_info.shaders.state.stencil_op = GPU_STENCIL_OP_NONE;
   }

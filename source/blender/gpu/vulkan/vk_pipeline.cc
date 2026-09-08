@@ -12,15 +12,11 @@ namespace blender::gpu {
 
 void VKPipeline::resolve_draw(GPUPrimType /*prim_type*/, int64_t /*vertex_input_key*/)
 {
-  Context *ctx = Context::get();
   sync_context();
-  /* Push the pipeline's fixed-function state into the StateManager. VK reads
-   * this (via `state_manager.state`) when building VkPipeline objects — the
-   * StateManager no longer owns state, it only caches it here. This copy is
-   * what the old `Pipeline::sync_state_manager()` did. */
-  VKStateManager &sm = static_cast<VKStateManager &>(*ctx->state_manager);
-  sm.state = this->state_;
-  sm.mutable_state = this->mutable_state_;
+  /* Vulkan bakes fixed-function state into the VkPipeline at render-graph
+   * creation; `update_pipeline_data` / `VKShader::ensure_and_get_graphics_pipeline`
+   * read the state directly from the pipeline (`pipeline_get()->state_get()`).
+   * The old "mirror into VKStateManager then read it back" is gone. */
   clear_dirty();
 }
 

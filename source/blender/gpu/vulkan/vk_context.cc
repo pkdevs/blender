@@ -310,22 +310,22 @@ void VKContext::update_pipeline_data(const VKFrameBuffer &framebuffer,
 {
   VKShader &vk_shader = unwrap(*shader);
 
-  /* Ensure the pipeline has been resolved (for legacy/no-pipeline paths);
-   * that also pushes the pipeline's fixed-function state into the
-   * `VKStateManager` where `VKShader` and `vk_descriptor_set` read it from.
-   * The StateManager is now purely a cache; the pipeline is the source. */
-  pipeline_get()->prepare_draw(primitive, vertex_input_key);
-
-  VKStateManager &state_manager = state_manager_get();
+  /* Resolve first (for legacy/no-pipeline paths) and read fixed-function state
+   * directly from the pipeline — the single source of truth. No longer
+   * mirrored into `VKStateManager`. */
+  Pipeline *pl = pipeline_get();
+  pl->prepare_draw(primitive, vertex_input_key);
+  GPUState state = pl->state_get();
+  GPUStateMutable mutable_state = pl->mutable_state_get();
 
   /* Disable non-vulkan state flags to reduce unneeded pipeline compilation. */
-  state_manager.state.clip_control = 0;
+  state.clip_control = 0;
 
   framebuffer.vk_viewports_append(r_pipeline_data.viewport.viewports);
   framebuffer.vk_render_areas_append(r_pipeline_data.viewport.scissors);
 
   /* Override size of point shader when GPU_point size < 0 */
-  const float point_size = state_manager.mutable_state.point_size;
+  const float point_size = mutable_state.point_size;
   if (primitive == GPU_PRIM_POINTS && point_size < 0.0) {
     GPU_shader_uniform_1f(shader, "size", -point_size);
   }
@@ -341,7 +341,7 @@ void VKContext::update_pipeline_data(const VKFrameBuffer &framebuffer,
                                       GPU_PRIM_LINES_ADJ,
                                       GPU_PRIM_LINE_STRIP_ADJ);
   if (is_line_primitive) {
-    r_pipeline_data.line_width = extensions.wide_lines ? state_manager.mutable_state.line_width :
+    r_pipeline_data.line_width = extensions.wide_lines ? mutable_state.line_width :
                                                          1.0f;
   }
   else {
@@ -350,11 +350,11 @@ void VKContext::update_pipeline_data(const VKFrameBuffer &framebuffer,
 
   /* Dynamic state stencil state */
   if (framebuffer.stencil_attachment_format_get() != VK_FORMAT_UNDEFINED &&
-      state_manager.state.stencil_test != GPU_STENCIL_NONE)
+      state.stencil_test != GPU_STENCIL_NONE)
   {
-    r_pipeline_data.stencil_state = {state_manager.mutable_state.stencil_compare_mask,
-                                     state_manager.mutable_state.stencil_reference,
-                                     state_manager.mutable_state.stencil_write_mask};
+    r_pipeline_data.stencil_state = {mutable_state.stencil_compare_mask,
+                                     mutable_state.stencil_reference,
+                                     mutable_state.stencil_write_mask};
   }
   else {
     r_pipeline_data.stencil_state.reset();
@@ -362,7 +362,7 @@ void VKContext::update_pipeline_data(const VKFrameBuffer &framebuffer,
 
   /* VK_EXT_extended_dynamic_state */
   if (extensions.extended_dynamic_state) {
-    r_pipeline_data.front_face = state_manager.state.invert_facing ?
+    r_pipeline_data.front_face = state.invert_facing ?
                                      VK_FRONT_FACE_COUNTER_CLOCKWISE :
                                      VK_FRONT_FACE_CLOCKWISE;
   }
@@ -374,7 +374,7 @@ void VKContext::update_pipeline_data(const VKFrameBuffer &framebuffer,
   update_pipeline_data(
       vk_shader,
       vk_shader.ensure_and_get_graphics_pipeline(
-          primitive, vertex_input_key, state_manager, framebuffer, constants_state_),
+          primitive, vertex_input_key, state, framebuffer, constants_state_),
       r_pipeline_data.pipeline_data);
 }
 
