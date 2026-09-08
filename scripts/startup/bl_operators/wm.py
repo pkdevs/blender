@@ -2877,13 +2877,17 @@ class WM_OT_batch_rename(Operator):
 
     @staticmethod
     def _markers_from_context(context, space_type, only_selected):
+        from contextlib import nullcontext
         if space_type == 'SEQUENCE_EDITOR':
-            with context.temp_override(scene=context.sequencer_scene):
-                return context.selected_markers if only_selected else context.markers
-        return context.selected_markers if only_selected else context.markers
+            context_manager = context.temp_override(scene=context.sequencer_scene)
+        else:
+            context_manager = nullcontext()
+
+        with context_manager:
+            return context.selected_markers if only_selected else context.markers
 
     @staticmethod
-    def _markers_i18n(markers):
+    def _markers_label(markers):
         if markers and markers[0].id_data.id_type == 'ACTION':
             return iface_("Pose Marker(s)")
         return iface_("Timeline Marker(s)")
@@ -3064,7 +3068,7 @@ class WM_OT_batch_rename(Operator):
                 data = (
                     markers,
                     "name",
-                    cls._markers_i18n(markers)
+                    cls._markers_label(markers)
                 )
             elif data_type == 'BRUSH':
                 data = (
