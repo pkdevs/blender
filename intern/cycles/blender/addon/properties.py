@@ -1890,7 +1890,7 @@ class CyclesPreferences(bpy.types.AddonPreferences):
                 found_device = True
                 break
 
-        optix_minimum_driver_version = "535"
+        optix_minimum_driver_version = "575"
         hip_minimum_adrenalin_driver_version = "24.9.1"
         hip_minimum_pro_driver_version = "24.Q4"
         hip_minimum_linux_driver_version = "24.30"
@@ -1968,7 +1968,7 @@ class CyclesPreferences(bpy.types.AddonPreferences):
                         translate=False)
                     col.label(text=rpt_("  - oneAPI Level-Zero Loader"), icon='BLANK1', translate=False)
             elif device_type == 'METAL':
-                mac_version = "12.2"
+                mac_version = "13.0"
                 col.label(text=rpt_("Requires Apple Silicon with macOS %s or newer") % mac_version,
                           icon='BLANK1', translate=False)
             return

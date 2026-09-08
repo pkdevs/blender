@@ -217,6 +217,7 @@ struct bNodeSocketType {
 
   SocketMakeNodesInputSrnaFunction make_geometry_nodes_input_srna = nullptr;
   SocketMakeNodesInputSrnaFunction make_compositor_nodes_input_srna = nullptr;
+  SocketMakeNodesInputSrnaFunction make_scene_compositor_effect_input_srna = nullptr;
 };
 
 using NodeInitExecFunction = void *(*)(bNodeExecContext * context,
@@ -943,7 +944,7 @@ bool node_tree_iterator_step(NodeTreeIterStore *ntreeiter, bNodeTree **r_nodetre
 
 /* -------------------------------------------------------------------- */
 /** \name Node Tree
- */
+ * \{ */
 
 void node_tree_remove_layer_n(bNodeTree *ntree, Scene *scene, int layer_index);
 
@@ -1238,6 +1239,8 @@ bool node_declaration_ensure_on_outdated_node(bNodeTree &ntree, bNode &node);
  * and sockets are up to date already.
  */
 void node_socket_declarations_update(bNode *node);
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Node Type Access

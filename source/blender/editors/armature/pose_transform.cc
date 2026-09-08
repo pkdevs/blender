@@ -100,9 +100,7 @@ static void applyarmature_fix_boneparents(const bContext *C, Scene *scene, Objec
   Main *bmain = CTX_data_main(C);
 
   /* go through all objects in database */
-  for (Object *ob = static_cast<Object *>(bmain->objects.first); ob;
-       ob = static_cast<Object *>(ob->id.next))
-  {
+  for (Object *ob = bmain->objects.first(); ob; ob = static_cast<Object *>(ob->id.next)) {
     /* if parent is bone in this armature, apply corrections */
     if ((ob->parent == armob) && (ob->partype == PARBONE)) {
       /* apply current transform from parent (not yet destroyed),
@@ -995,7 +993,7 @@ static wmOperatorStatus pose_paste_exec(bContext *C, wmOperator *op)
 
   /* Recalculate paths if any of the bones have paths... */
   if (ob->pose->avs.path_bakeflag & MOTIONPATH_BAKE_HAS_PATHS) {
-    ED_pose_recalculate_paths(C, scene, ob, ANIMVIZ_CALC_RANGE_FULL);
+    ED_pose_recalculate_paths(C, scene, ob);
   }
 
   WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);
@@ -1311,7 +1309,7 @@ static wmOperatorStatus pose_clear_transform_generic_exec(bContext *C,
 
         /* now recalculate paths */
         if (ob_iter->pose->avs.path_bakeflag & MOTIONPATH_BAKE_HAS_PATHS) {
-          ED_pose_recalculate_paths(C, scene, ob_iter, ANIMVIZ_CALC_RANGE_FULL);
+          ED_pose_recalculate_paths(C, scene, ob_iter);
         }
       }
 
@@ -1485,8 +1483,9 @@ static wmOperatorStatus pose_clear_user_transforms_exec(bContext *C, wmOperator 
         }
       }
 
-      /* Was copied without constraints. */
+      /* Was copied without constraints so we can't use `BKE_pose_free_data`. */
       dummyPose->chanbase.free_no_destruct();
+      MEM_delete(dummyPose->runtime);
       MEM_delete(dummyPose);
     }
     else {

@@ -91,7 +91,7 @@ static bool has_workbench_in_texture_color(const wmWindowManager *wm,
     const bScreen *screen = BKE_workspace_active_screen_get(win.workspace_hook);
     for (ScrArea &area : screen->areabase) {
       if (area.spacetype == SPACE_VIEW3D) {
-        const View3D *v3d = static_cast<const View3D *>(area.spacedata.first);
+        const View3D *v3d = area.spacedata.first_as<View3D>();
 
         if (ED_view3d_has_workbench_in_texture_color(scene, ob, v3d)) {
           return true;
@@ -1427,8 +1427,7 @@ static std::string node_find_create_string_value(const bNode &node, const String
   return fmt::format("{}: \"{}\" ({})", TIP_("String"), str, node.name);
 }
 
-static std::string node_find_create_warning(const bNode &node,
-                                            const nodes::eval_log::NodeWarning warning)
+static std::string node_find_create_warning(const bNode &node, const nodes::NodeWarning warning)
 {
   return fmt::format(
       "{}: \"{}\" ({})", nodes::node_warning_type_name(warning.type), warning.message, node.name);
@@ -1512,7 +1511,7 @@ static void node_find_update_fn(const bContext *C,
     }
     if (nodes::eval_log::NodeTreeLog *tree_log = tree_logs.get_main_tree_log(*node)) {
       if (nodes::eval_log::NodeLog *node_log = tree_log->find_node_log(node->identifier)) {
-        for (const nodes::eval_log::NodeWarning &warning : node_log->warnings) {
+        for (const nodes::NodeWarning &warning : node_log->warnings) {
           const StringRef search_str = scope.add_value(node_find_create_warning(*node, warning));
           search.add(search_str, &scope.construct<Item>(Item{node, search_str}));
         }

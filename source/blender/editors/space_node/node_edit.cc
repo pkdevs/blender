@@ -179,8 +179,8 @@ void ED_node_texture_default(const bContext *C, Tex *tex)
   in->location[1] = 300.0f;
   bke::node_set_active(*tex->nodetree, *in);
 
-  bNodeSocket *fromsock = static_cast<bNodeSocket *>(in->outputs.first);
-  bNodeSocket *tosock = static_cast<bNodeSocket *>(out->inputs.first);
+  bNodeSocket *fromsock = in->outputs.first();
+  bNodeSocket *tosock = out->inputs.first();
   bke::node_add_link(*tex->nodetree, *in, *fromsock, *out, *tosock);
 
   BKE_ntree_update_after_single_tree_change(*CTX_data_main(C), *tex->nodetree);
@@ -224,7 +224,7 @@ void snode_set_context(const bContext &C)
   }
 
   if (snode->nodetree != ntree || snode->id != id || snode->from != from ||
-      (snode->treepath.last == nullptr && ntree))
+      (snode->treepath.last() == nullptr && ntree))
   {
     ScrArea *area = CTX_wm_area(&C);
     ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
@@ -724,11 +724,13 @@ void node_set_hidden_sockets(bNode *node, int set)
     for (bNodeSocket &sock : node->inputs) {
       if (sock.link == nullptr) {
         sock.flag |= SOCK_HIDDEN;
+        sock.flag &= ~SOCK_SELECT;
       }
     }
     for (bNodeSocket &sock : node->outputs) {
       if ((sock.flag & SOCK_IS_LINKED) == 0) {
         sock.flag |= SOCK_HIDDEN;
+        sock.flag &= ~SOCK_SELECT;
       }
     }
   }
@@ -1010,7 +1012,7 @@ static wmOperatorStatus node_duplicate_exec(bContext *C, wmOperator *op)
   }
 
   /* Copy links between selected nodes. */
-  bNodeLink *lastlink = static_cast<bNodeLink *>(ntree->links.last);
+  bNodeLink *lastlink = ntree->links.last();
   for (bNodeLink &link : ntree->links) {
     /* This creates new links between copied nodes. If keep_inputs is set, also copies input links
      * from unselected (when fromnode is null)! */
@@ -1172,9 +1174,17 @@ wmOperatorStatus node_render_changed_exec(bContext *C, wmOperator * /*op*/)
    * All the nodes are using same render result, so there is no need to do
    * anything smart about check how exactly scene is used. */
   bNode *node = nullptr;
-  for (bNode *node_iter : sce->compositing_node_group->all_nodes()) {
-    if (node_iter->id == id_cast<ID *>(sce)) {
-      node = node_iter;
+  for (SceneCompositorEffect &effect : sce->compositor_effects) {
+    if (!effect.node_group || ID_MISSING(effect.node_group)) {
+      continue;
+    }
+    for (bNode *node_iter : effect.node_group->all_nodes()) {
+      if (node_iter->id == id_cast<ID *>(sce)) {
+        node = node_iter;
+        break;
+      }
+    }
+    if (node) {
       break;
     }
   }

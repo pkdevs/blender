@@ -1092,6 +1092,8 @@ def km_user_interface(_params):
          {"properties": [("scroll_direction", 'TOP')]}),
         ("ui.view_item_page_scroll", {"type": 'END', "value": 'PRESS'},
          {"properties": [("scroll_direction", 'BOTTOM')]}),
+        ("ui.region_start_filter", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
+        ("ui.region_clear_filter", {"type": 'F', "value": 'PRESS', "alt": True}, None),
     ])
 
     return keymap
@@ -1301,6 +1303,12 @@ def km_property_editor(_params):
         ("sequencer.strip_modifier_duplicate", {"type": 'D', "value": 'PRESS', "shift": True}, None),
         ("sequencer.add_strip_modifier_menu", {"type": 'A', "value": 'PRESS', "shift": True}, None),
         ("sequencer.strip_modifier_set_active", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
+        # Scene Compositor Effects
+        ("scene.set_active_compositor_effect", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
+        ("scene.remove_compositor_effect", {"type": 'X', "value": 'PRESS'}, None),
+        ("scene.remove_compositor_effect", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("scene.duplicate_compositor_effect", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("scene.add_compositor_effect_menu", {"type": 'A', "value": 'PRESS', "shift": True}, None),
     ])
 
     return keymap
@@ -4046,6 +4054,8 @@ def km_grease_pencil_paint_mode(params):
     )
 
     items.extend([
+        # Select All
+        *_template_items_select_actions(params, "grease_pencil.select_all"),
         # Active material
         op_menu("VIEW3D_MT_greasepencil_material_active", {"type": 'U', "value": 'PRESS'}),
         # Active layer
@@ -4099,6 +4109,11 @@ def km_grease_pencil_paint_mode(params):
 
         *_template_items_context_panel("VIEW3D_PT_greasepencil_draw_context_menu", params.context_menu_event),
     ])
+
+    if params.select_mouse == 'LEFTMOUSE' and not params.legacy:
+        items.extend([
+            op_tool_cycle("builtin.select_lasso", {"type": 'W', "value": 'PRESS'}),
+        ])
 
     return keymap
 
@@ -4822,12 +4837,12 @@ def radial_control_properties(
         "properties": [
             ("data_path_primary", "{:s}.{:s}".format(brush_path, prop)),
             ("data_path_secondary", "{:s}.{:s}".format(unified_path, prop) if secondary_prop else ""),
-            ("use_secondary", "{:s}.{:s}".format(unified_path, secondary_prop) if secondary_prop else ""),
+            ("use_secondary", "{:s}.{:s}".format(brush_path, secondary_prop) if secondary_prop else ""),
             ("rotation_path", "{:s}.{:s}".format(brush_path, rotation)),
             ("color_path", "{:s}.cursor_color_add".format(brush_path)),
             ("fill_color_path", "{:s}.color".format(brush_path) if color else ""),
             ("fill_color_override_path", "{:s}.color".format(unified_path) if color else ""),
-            ("fill_color_override_test_path", "{:s}.use_unified_color".format(unified_path) if color else ""),
+            ("fill_color_override_test_path", "{:s}.use_unified_color".format(brush_path) if color else ""),
             ("zoom_path", "space_data.zoom" if zoom else ""),
             ("image_id", brush_path),
             ("secondary_tex", secondary_rotation),
