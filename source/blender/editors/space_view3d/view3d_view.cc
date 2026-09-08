@@ -394,7 +394,7 @@ static void obmat_to_viewmat(RegionView3D *rv3d, Object *ob)
   /* view quat calculation, needed for add object */
   mat4_normalized_to_quat(rv3d->viewquat, rv3d->viewmat);
 
-  if (rv3d->rflag & RV3D_FLIPPED) {
+  if (rv3d->rflag & RV3D_FLIP_X) {
     transpose_m4(rv3d->viewmat);
     negate_v4(rv3d->viewmat[0]);
     transpose_m4(rv3d->viewmat);

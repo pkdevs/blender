@@ -446,7 +446,7 @@ void BKE_camera_params_from_view3d(CameraParams *params,
     params->offsetx = 2.0f * rv3d->camdx * params->zoom;
     params->offsety = 2.0f * rv3d->camdy * params->zoom;
     params->roll = rv3d->camroll;
-    params->is_flipped = (rv3d->rflag & RV3D_FLIPPED) != 0;
+    params->is_flipped_x = (rv3d->rflag & RV3D_FLIP_X) != 0;
 
     params->shiftx *= params->zoom;
     params->shifty *= params->zoom;
@@ -524,11 +524,11 @@ void BKE_camera_params_compute_viewplane(
   dy = params->shifty * viewfac + winy * params->offsety;
 
   /* Apply roll. */
-  if (params->roll != 0.0f || params->is_flipped) {
+  if (params->roll != 0.0f || params->is_flipped_x) {
     const float2x2 rot = math::from_rotation<float2x2>(math::AngleRadian(params->roll));
     float2 dxy = rot * float2(dx, dy);
 
-    if (params->is_flipped) {
+    if (params->is_flipped_x) {
       dxy.x = -dxy.x;
     }
 
@@ -614,7 +614,7 @@ rctf BKE_camera_view_border(const Scene *scene,
   }
   if (no_roll) {
     params.roll = 0.0f;
-    params.is_flipped = false;
+    params.is_flipped_x = false;
   }
   BKE_camera_params_compute_viewplane(&params, winx, winy, 1.0f, 1.0f);
   rect_view = params.viewplane;
@@ -690,7 +690,7 @@ bool BKE_camera_view_render_border(const Scene *scene,
       border = viewborder;
     }
 
-    if ((rv3d->rflag & RV3D_FLIPPED) != 0) {
+    if ((rv3d->rflag & RV3D_FLIP_X) != 0) {
       std::swap(border.xmin, border.xmax);
       border.xmin = winx - border.xmin;
       border.xmax = winx - border.xmax;
@@ -714,7 +714,7 @@ bool BKE_camera_view_render_border(const Scene *scene,
   /* The camera view roll rotates the border around the center of the viewport. */
   if (is_camera_view && rv3d->camroll != 0.0f) {
     const float pivot[2] = {winx / 2.0f, winy / 2.0f};
-    if ((rv3d->rflag & RV3D_FLIPPED) != 0) {
+    if ((rv3d->rflag & RV3D_FLIP_X) != 0) {
       BLI_rctf_rotate_expand_around(&border, &border, pivot, -rv3d->camroll);
     }
     else {

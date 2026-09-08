@@ -73,7 +73,7 @@ static void viewroll_apply(ViewOpsData *vod, int x, int y)
       const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
       if (!is_camera_lock) {
         /* Wrap to prevent poor precision at large values. */
-        if ((vod->rv3d->rflag & RV3D_FLIPPED) != 0) {
+        if ((vod->rv3d->rflag & RV3D_FLIP_X) != 0) {
           vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll + angle);
         }
         else {
@@ -225,7 +225,7 @@ static wmOperatorStatus viewroll_exec(bContext *C, wmOperator *op)
     const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
     if (!is_camera_lock) {
       /* Wrap to prevent poor precision at large values. */
-      if ((vod->rv3d->rflag & RV3D_FLIPPED) != 0) {
+      if ((vod->rv3d->rflag & RV3D_FLIP_X) != 0) {
         vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll + angle);
       }
       else {

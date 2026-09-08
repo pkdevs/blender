@@ -1141,7 +1141,7 @@ static void drw_render_border_mask(const DRWContext &ctx)
   }
 
   float roll_angle = rv3d->camroll;
-  if ((rv3d->rflag & RV3D_FLIPPED) != 0) {
+  if ((rv3d->rflag & RV3D_FLIP_X) != 0) {
     roll_angle = -roll_angle;
   }
 

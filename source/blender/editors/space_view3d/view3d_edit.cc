@@ -193,7 +193,7 @@ static wmOperatorStatus view3d_center_camera_exec(bContext *C, wmOperator * /*op
 
   rv3d->camdx = rv3d->camdy = 0.0f;
   rv3d->camroll = 0.0f;
-  rv3d->rflag &= ~RV3D_FLIPPED;
+  rv3d->rflag &= ~RV3D_FLIP_X;
 
   const rctf viewborder = BKE_camera_view_border(
       scene, depsgraph, v3d, rv3d, region->winx, region->winy, true, true, false);
@@ -298,7 +298,7 @@ static wmOperatorStatus render_border_exec(bContext *C, wmOperator *op)
   border.ymax = float(rect.ymax);
 
   /* Apply flip. */
-  if (rv3d->persp == RV3D_CAMOB && (rv3d->rflag & RV3D_FLIPPED) != 0) {
+  if (rv3d->persp == RV3D_CAMOB && (rv3d->rflag & RV3D_FLIP_X) != 0) {
     std::swap(border.xmin, border.xmax);
     border.xmin = region->winx - border.xmin;
     border.xmax = region->winx - border.xmax;
@@ -593,7 +593,7 @@ static wmOperatorStatus view3d_flip_view_exec(bContext *C, wmOperator *op)
 
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
 
-  rv3d->rflag ^= RV3D_FLIPPED;
+  rv3d->rflag ^= RV3D_FLIP_X;
 
   if (direction == FlipDirection::Vertically) {
     rv3d->camroll += M_PI;

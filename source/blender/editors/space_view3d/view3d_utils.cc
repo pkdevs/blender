@@ -596,7 +596,7 @@ bool ED_view3d_camera_view_pan(ARegion *region, const float event_ofs[2])
       event_ofs[1] / (region->winy * zoomfac),
   };
 
-  if ((rv3d->rflag & RV3D_FLIPPED) != 0) {
+  if ((rv3d->rflag & RV3D_FLIP_X) != 0) {
     xy.x = -xy.x;
   }
 
