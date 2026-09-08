@@ -2276,6 +2276,8 @@ class _defs_grease_pencil_paint:
             row = layout.row()
             row.use_property_split = False
             row.prop(props, "mode", text="", expand=True, icon_only=True)
+            props = tool.gizmo_group_properties("VIEW3D_GGT_grease_pencil_quad")
+            row.prop(props, "mode", expand=True)
         return dict(
             idname="builtin.select_lasso",
             label="Select Lasso",

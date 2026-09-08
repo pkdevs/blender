@@ -22,12 +22,14 @@
 
 #include "WM_api.hh"
 // #include "WM_gizmo_types.hh"
+#include "WM_toolsystem.hh"
 #include "WM_types.hh"
 
 #include "UI_resources.hh"
 #include "UI_view2d.hh"
 
 #include "RNA_access.hh"
+#include "RNA_define.hh"
 
 // /* Local module include. */
 // #include "transform.hh"
@@ -36,6 +38,17 @@
 namespace blender {
 
 namespace ed::greasepencil {
+
+enum class DeformMode : int8_t {
+  FREE = 0,
+  PERSPECTIVE = 1,
+};
+
+static const EnumPropertyItem prop_deform_modes[] = {
+    {int(DeformMode::FREE), "FREE", 0, "Free", "TODO"},
+    {int(DeformMode::PERSPECTIVE), "PERSPECTIVE", 0, "Perspective", "TODO"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
 
 static bool WIDGETGROUP_grease_pencil_quad_poll(const bContext *C, wmGizmoGroupType *gzgt)
 {
@@ -48,6 +61,11 @@ static bool WIDGETGROUP_grease_pencil_quad_poll(const bContext *C, wmGizmoGroupT
   }
   return true;
 }
+
+struct CornerPinData {
+  int index;
+  float2 corner_pos;
+};
 
 struct QuadWidgetGroup2 {
   wmGizmo *border;
@@ -66,8 +84,14 @@ struct QuadWidgetGroup2 {
   IndexMaskMemory memory;
 
   struct {
+    wmGizmo *gizmos[4];
+    CornerPinData *corner_data[4];
+  } corner_pin;
+
+  struct {
     PointerRNA ptr;
     PropertyRNA *prop;
+    PropertyRNA *gzgt_mode_prop;
     bContext *context;
   } update_data;
 };
@@ -129,6 +153,12 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   // const float2 offset = float2{sima->xof, sima->yof} * sima->zoom;
 
   // node_gizmo_calc_matrix_space(region, sima->zoom, offset, gz->matrix_space);
+
+  PointerRNA ptr;
+  bToolRef *tref = WM_toolsystem_ref_from_context(const_cast<bContext *>(C));
+  WM_toolsystem_ref_properties_ensure_from_gizmo_group(tref, gzgroup->type, &ptr);
+  const DeformMode mode = DeformMode(
+      RNA_property_enum_get(&ptr, mask_group->update_data.gzgt_mode_prop));
 
   float3 placement_normal_;
 
@@ -232,11 +262,34 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
     gz->matrix_space[3][0] = box->center().x;
     gz->matrix_space[3][2] = box->center().y;
 
-    // RNA_float_set_array(gz->ptr, "dimensions", box->size());
-    WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
+    for (int i = 0; i < 4; i++) {
+      wmGizmo *gz2 = mask_group->corner_pin.gizmos[i];
+      copy_m4_m4(gz2->matrix_space, gz->matrix_space);
+    }
+
+    if (mode == DeformMode::FREE) {
+      // RNA_float_set_array(gz->ptr, "dimensions", box->size());
+      WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
+      for (int i = 0; i < 4; i++) {
+        wmGizmo *gz2 = mask_group->corner_pin.gizmos[i];
+        WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
+      }
+    }
+    else if (mode == DeformMode::PERSPECTIVE) {
+      WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
+      for (int i = 0; i < 4; i++) {
+        wmGizmo *gz2 = mask_group->corner_pin.gizmos[i];
+        WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, false);
+      }
+    }
   }
   else {
     WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
+
+    for (int i = 0; i < 4; i++) {
+      wmGizmo *gz2 = mask_group->corner_pin.gizmos[i];
+      WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
+    }
   }
 
   // box.min = float2(-1.0f, -1.0f);
@@ -249,10 +302,94 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   // gz->matrix_space[3][1] = box.center().y;
 }
 
+/* translate callbacks */
+static void gizmo_bisect_prop_translate_get(const wmGizmo * /*gz*/,
+                                            wmGizmoProperty *gz_prop,
+                                            void *value_p)
+{
+  BLI_assert(gz_prop->type->array_length == 3);
+  float *values = static_cast<float *>(value_p);
+  // GizmoGroup *ggd = static_cast<GizmoGroup *>(gz->parent_gzgroup->customdata);
+  // wmOperator *op = ggd->data.op;
+
+  const CornerPinData *corner_pin_data = static_cast<CornerPinData *>(
+      gz_prop->custom_func.user_data);
+
+  values[0] = corner_pin_data->corner_pos[0];
+  values[1] = corner_pin_data->corner_pos[1];
+  values[2] = 0.0f;
+  // UNUSED_VARS_NDEBUG(gz_prop);
+
+  // corner_pin_data->corner_pos
+
+  // RNA_property_float_get_array(op->ptr, ggd->data.prop_plane_co, static_cast<float *>(value_p));
+}
+
+static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
+                                            wmGizmoProperty *gz_prop,
+                                            const void *value_p)
+{
+  BLI_assert(gz_prop->type->array_length == 3);
+  // GizmoGroup *ggd = static_cast<GizmoGroup *>(gz->parent_gzgroup->customdata);
+  // wmOperator *op = ggd->data.op;
+
+  const float *values = static_cast<const float *>(value_p);
+  const float3 position_value = float3(values);
+
+  CornerPinData *corner_pin_data = static_cast<CornerPinData *>(gz_prop->custom_func.user_data);
+
+  corner_pin_data->corner_pos = float2(position_value.x, position_value.y);
+
+  // UNUSED_VARS_NDEBUG(gz_prop);
+
+  // RNA_property_float_set_array(
+  //     op->ptr, ggd->data.prop_plane_co, static_cast<const float *>(value_p));
+
+  // gizmo_bisect_exec(ggd);
+
+  {
+    printf("gizmo_node_box_mask_prop_matrix_set\n");
+
+    QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
+
+    const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
+    const Vector<IndexMask> selections = mask_group->selections;
+    const Vector<Array<float3>> &src_positions = mask_group->src_positions;
+
+    //
+
+    for (const int drawing_i : drawings.index_range()) {
+      const MutableDrawingInfo &info = drawings[drawing_i];
+      const IndexMask &selected_points = selections[drawing_i];
+      const Span<float3> src_positions_i = src_positions[drawing_i];
+
+      bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
+      MutableSpan<float3> positions = strokes.positions_for_write();
+
+      selected_points.foreach_index([&](const int point_i) {
+        // positions[point_i] = math::transform_point(transform, src_positions_i[point_i]);
+        positions[point_i] = src_positions_i[point_i];
+      });
+
+      info.drawing.tag_positions_changed();
+
+      // box = bounds::merge(box,
+      //                     compute_screen_space_drawing_bounds(
+      //                         *rv3d, *object, info.layer_index, selected_points, info.drawing));
+    }
+
+    DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
+    WM_event_add_notifier(mask_group->update_data.context,
+                          NC_GEOM | ND_DATA | NA_EDITED,
+                          mask_group->grease_pencil_src);
+  }
+}
+
 static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
 {
   QuadWidgetGroup2 *mask_group = MEM_new<QuadWidgetGroup2>(__func__);
   mask_group->border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
+  const wmGizmoType *gzt_move_3d = WM_gizmotype_find("GIZMO_GT_move_3d", false);
 
   RNA_enum_set(mask_group->border->ptr,
                "transform",
@@ -264,10 +401,45 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
                ED_GIZMO_CAGE_DRAW_FLAG_XFORM_CENTER_HANDLE |
                    ED_GIZMO_CAGE_DRAW_FLAG_CORNER_HANDLES);
 
+  for (int i = 0; i < 4; i++) {
+    mask_group->corner_pin.gizmos[i] = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
+    wmGizmo *gz = mask_group->corner_pin.gizmos[i];
+    // RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
+    RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
+
+    WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
+    // WM_gizmo_set_flag(gz2, WM_GIZMO_DRAW_MODAL, true);
+
+    gz->scale_basis = 0.1f;
+  }
+
   gzgroup->customdata = mask_group;
   gzgroup->customdata_free = [](void *customdata) {
     MEM_delete(static_cast<QuadWidgetGroup2 *>(customdata));
   };
+
+  constexpr std::array<float2, 4> corner_positions(
+      {{-0.5f, 0.5f}, {0.5f, 0.5f}, {-0.5f, -0.5f}, {0.5f, -0.5f}});
+
+  for (int i = 0; i < 4; i++) {
+    mask_group->corner_pin.corner_data[i] = MEM_new<CornerPinData>(__func__);
+
+    wmGizmo *gz = mask_group->corner_pin.gizmos[i];
+    CornerPinData *corner_pin_data = mask_group->corner_pin.corner_data[i];
+
+    corner_pin_data->index = i;
+    corner_pin_data->corner_pos = corner_positions[i];
+
+    wmGizmoPropertyFnParams params{};
+    params.value_get_fn = gizmo_bisect_prop_translate_get;
+    params.value_set_fn = gizmo_bisect_prop_translate_set;
+    params.range_get_fn = nullptr;
+    params.user_data = corner_pin_data;
+    WM_gizmo_target_property_def_func(gz, "offset", &params);
+  }
+
+  mask_group->update_data.gzgt_mode_prop = RNA_struct_type_find_property(gzgroup->type->srna,
+                                                                         "mode");
 
   update_things(C, gzgroup);
 }
@@ -513,6 +685,10 @@ void VIEW3D_GGT_grease_pencil_quad(wmGizmoGroupType *gzgt)
   gzgt->refresh = box_mask_refresh;
   // gzgt->message_subscribe = WIDGETGROUP_xform_shear_message_subscribe;
   gzgt->draw_prepare = bbox_draw_prepare_space_image;
+
+  RNA_def_enum(gzgt->srna, "mode", prop_deform_modes, int(DeformMode::FREE), "Mode", "");
+
+  // RNA_def_enum_flag(gzgt->srna, "axis", rna_enum_axis_flag_xyz_items, (1 << 2), "Axis", "");
 }
 
 }  // namespace ed::greasepencil
