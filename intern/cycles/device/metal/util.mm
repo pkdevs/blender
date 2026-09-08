@@ -91,7 +91,7 @@ const vector<id<MTLDevice>> &MetalInfo::get_usable_devices()
     bool usable = false;
 
     /* NOTE: This @available check sets the Cycles minimum macOS version. */
-    if (@available(macos 12.2, *)) {
+    if (@available(macos 13.0, *)) {
       const char *device_name_char = [device.name UTF8String];
       if (!(strstr(device_name_char, "Intel") || strstr(device_name_char, "AMD")) &&
           strstr(device_name_char, "Apple"))
