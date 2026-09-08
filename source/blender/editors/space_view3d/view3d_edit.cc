@@ -571,13 +571,13 @@ void VIEW3D_OT_view_roll_set(wmOperatorType *ot)
  * \{ */
 
 enum class FlipDirection : int8_t {
-  Horizontally = 0,
-  Vertically = 1,
+  Horizontal = 0,
+  Vertical = 1,
 };
 
 static const EnumPropertyItem prop_flip_directions[] = {
-    {int(FlipDirection::Horizontally), "HORIZONTALLY", 0, "Horizontally", ""},
-    {int(FlipDirection::Vertically), "VERTICALLY", 0, "Vertically", ""},
+    {int(FlipDirection::Horizontal), "HORIZONTAL", 0, "Horizontal", ""},
+    {int(FlipDirection::Vertical), "VERTICAL", 0, "Vertical", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -595,7 +595,7 @@ static wmOperatorStatus view3d_flip_view_exec(bContext *C, wmOperator *op)
 
   rv3d->rflag ^= RV3D_FLIP_X;
 
-  if (direction == FlipDirection::Vertically) {
+  if (direction == FlipDirection::Vertical) {
     rv3d->camroll += M_PI;
   }
 
@@ -616,7 +616,7 @@ void VIEW3D_OT_view_flip(wmOperatorType *ot)
   ot->prop = RNA_def_enum(ot->srna,
                           "direction",
                           prop_flip_directions,
-                          int(FlipDirection::Horizontally),
+                          int(FlipDirection::Horizontal),
                           "Flip Direction",
                           "");
   RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
