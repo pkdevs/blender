@@ -631,6 +631,8 @@ static void WIDGETGROUP_camera_view_refresh(const bContext *C, wmGizmoGroup *gzg
     else {
       viewgroup->state.edit_border = &v3d->render_border;
       viewgroup->is_camera = false;
+      viewgroup->state.roll = 0.0f;
+      viewgroup->state.flipped_x = false;
     }
 
     wmGizmoPropertyFnParams params{};
