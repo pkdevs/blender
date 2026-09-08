@@ -69,6 +69,7 @@ template<typename T> struct Bounds {
 
   /**
    * Returns true if \a point is inside the bounds.
+   * This matches the behavior of #BLI_rctf_isect_pt/#BLI_rcti_isect_pt.
    */
   bool contains(const T &point) const;
 
