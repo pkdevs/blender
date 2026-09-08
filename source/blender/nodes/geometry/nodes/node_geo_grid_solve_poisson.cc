@@ -95,9 +95,6 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .default_value(1e-3f)
       .description("Error threshold below which a solution is considered valid");
-  b.add_input<decl::Bool>("Staggered"_ustr)
-      .default_value(false)
-      .description("Use staggered grid discretization for the Laplacian operator");
 
   b.add_input<decl::Menu>("Boundary"_ustr)
       .static_items(boundary_items)
@@ -242,8 +239,20 @@ static void node_geo_exec(GeoNodeExecParams params)
   const int max_iterations = params.extract_input<int>("Iterations"_ustr);
   const ThresholdMode threshold_mode = params.extract_input<ThresholdMode>("Threshold Mode"_ustr);
   const float error_threshold = params.extract_input<float>("Error Threshold"_ustr);
-  const bool staggered = params.extract_input<bool>("Staggered"_ustr);
   const Boundary boundary = params.extract_input<Boundary>("Boundary"_ustr);
+  /* The OpenVDB Poisson solver has a "staggered" and a "collocated" variant.
+   * The difference seems to be that the staggered version uses a +-1 stencil while the collocated
+   * version uses a +-2 size stencil. The collocated stencil (according to code comments) leads to
+   * a smoother solution at boundaries, but it requires a smoother input grid as well:
+   * any variation smaller than 2 voxels can lead to "ringing" artifacts with odd/even coupling.
+   * The "staggered" variant of the Laplacian seems to be the better choice in most cases.
+   *
+   * Note: By the looks of it the "staggered" Laplacian version was the original implementation,
+   * and the collocated version with the +-2 stencil was added later. Not much documentation is
+   * available to explain the use cases. This could be exposed as an option if it ever becomes
+   * necessary.
+   */
+  const bool staggered = true;
 
   bke::VolumeTreeAccessToken tree_token;
   const openvdb::FloatGrid &source_vdb_grid = source_grid.grid(tree_token);
