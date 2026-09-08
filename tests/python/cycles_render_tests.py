@@ -90,6 +90,8 @@ BLOCKLIST_OPTIX_OSL_ALL = BLOCKLIST_OPTIX_OSL_LIMITED + [
     'panorama_dicing.blend',
     # Error during rendering. Need to investigate why.
     'points_volume.blend',
+    # OptiX OSL does not support >= 12 closures, see #163481
+    'principled_bsdf_max_closures.blend',
 ]
 
 
