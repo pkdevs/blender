@@ -43,7 +43,7 @@ using SocketResultFn = FunctionRef<Result *(const bNodeSocket &)>;
 Schedule compute_schedule(const Context &context,
                           const bNodeTree &node_group,
                           const ComputeContext &compute_context,
-                          const SocketResultFn socket_result_fn);
+                          SocketResultFn socket_result_fn);
 
 /* Checks if the given node group with the given compute context has an active Viewer node in it or
  * in one of its descendants. Only nodes of node groups whose compute context match that of the

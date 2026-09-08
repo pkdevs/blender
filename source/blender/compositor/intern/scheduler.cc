@@ -302,6 +302,10 @@ static Stack<const bNode *> get_output_nodes(const Context &context,
   const bNode *output_node = node_group.group_output_node();
   if (output_node && !output_node->is_muted()) {
     for (const bNodeSocket *input : output_node->input_sockets()) {
+      if (!is_socket_available(input)) {
+        continue;
+      }
+
       if (is_input_needed(context, *output_node, *input, socket_result_fn)) {
         node_stack.push(output_node);
         break;
@@ -547,7 +551,7 @@ static Vector<const bNode *> find_dependency_nodes(const Context &context,
 Schedule compute_schedule(const Context &context,
                           const bNodeTree &node_group,
                           const ComputeContext &compute_context,
-                          SocketResultFn socket_result_fn)
+                          const SocketResultFn socket_result_fn)
 {
   Schedule schedule;
 

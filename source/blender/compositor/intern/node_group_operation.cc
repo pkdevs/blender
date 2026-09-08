@@ -69,10 +69,10 @@ static Result *get_node_group_result_for_socket(NodeGroupOperation &operation,
                                                 const bNodeSocket &socket)
 {
   if (socket.owner_node().is_group_input()) {
-    operation.get_input(socket.identifier);
+    return &operation.get_input(socket.identifier);
   }
   if (socket.owner_node().is_group_output()) {
-    operation.get_result(socket.identifier);
+    return &operation.get_result(socket.identifier);
   }
   return nullptr;
 }
