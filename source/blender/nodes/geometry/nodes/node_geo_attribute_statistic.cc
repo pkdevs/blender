@@ -123,15 +123,15 @@ static float compute_median(const MutableSpan<float> data)
   return *middle_itr;
 }
 
-static float compute_variance(const Span<float> data, const float mean)
+template<typename T> static T compute_variance(const Span<T> data, const T mean)
 {
   if (data.size() <= 1) {
-    return 0.0f;
+    return T();
   }
 
-  float sum_of_squared_differences = std::accumulate(
-      data.begin(), data.end(), 0.0f, [mean](float accumulator, float value) {
-        float difference = mean - value;
+  const T sum_of_squared_differences = std::accumulate(
+      data.begin(), data.end(), T(), [mean](T accumulator, T value) {
+        T difference = mean - value;
         return accumulator + difference * difference;
       });
 
@@ -205,8 +205,8 @@ static void node_geo_exec(GeoNodeExecParams params)
           mean = sum / data.size();
 
           if (variance_required) {
-            variance = compute_variance(data, mean);
-            standard_deviation = std::sqrt(variance);
+            variance = compute_variance<float>(data, mean);
+            standard_deviation = math::sqrt(variance);
           }
         }
       }
@@ -271,22 +271,17 @@ static void node_geo_exec(GeoNodeExecParams params)
       const bool variance_required = params.output_is_required("Standard Deviation"_ustr) ||
                                      params.output_is_required("Variance"_ustr);
 
-      Array<float> data_x;
-      Array<float> data_y;
-      Array<float> data_z;
-      if (median_required || variance_required) {
-        data_x.reinitialize(data.size());
-        data_y.reinitialize(data.size());
-        data_z.reinitialize(data.size());
-        for (const int i : data.index_range()) {
-          data_x[i] = data[i].x;
-          data_y[i] = data[i].y;
-          data_z[i] = data[i].z;
-        }
-      }
-
       if (data.size() != 0) {
         if (median_required) {
+          Array<float> data_x(data.size());
+          Array<float> data_y(data.size());
+          Array<float> data_z(data.size());
+          for (const int i : data.index_range()) {
+            data_x[i] = data[i].x;
+            data_y[i] = data[i].y;
+            data_z[i] = data[i].z;
+          }
+
           median = float3(compute_median(data_x), compute_median(data_y), compute_median(data_z));
         }
         if (min_max_required) {
@@ -301,12 +296,8 @@ static void node_geo_exec(GeoNodeExecParams params)
           mean = sum / data.size();
 
           if (variance_required) {
-            const float x_variance = compute_variance(data_x, mean.x);
-            const float y_variance = compute_variance(data_y, mean.y);
-            const float z_variance = compute_variance(data_z, mean.z);
-            variance = float3(x_variance, y_variance, z_variance);
-            standard_deviation = float3(
-                std::sqrt(variance.x), std::sqrt(variance.y), std::sqrt(variance.z));
+            variance = compute_variance<float3>(data, mean);
+            standard_deviation = math::sqrt(variance);
           }
         }
       }
