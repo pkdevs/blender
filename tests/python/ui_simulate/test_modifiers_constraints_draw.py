@@ -34,7 +34,7 @@ def _activate_object(obj):
     bpy.context.view_layer.objects.active = obj
 
 
-def test_modifiers_constraints_draw():
+def modifiers_constraints_draw():
     import bpy
 
     # Setup editor area
@@ -78,9 +78,6 @@ def test_modifiers_constraints_draw():
     bpy.ops.object.armature_add()
     armature_obj = bpy.context.active_object
     objects['ARMATURE'] = armature_obj
-
-    # Enter Pose Mode to access the default bone.
-    bpy.ops.object.mode_set(mode='POSE')
 
     bone = armature_obj.pose.bones[0]
 

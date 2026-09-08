@@ -1807,7 +1807,7 @@ if(WITH_UI_TESTS)
     test_tool_activation.image_editor
     test_tool_activation.node_editor
     test_tool_activation.sequencer
-    test_modifiers_constraints_draw.test_modifiers_constraints_draw
+    test_modifiers_constraints_draw.modifiers_constraints_draw
   )
   foreach(ui_test ${_ui_tests})
     add_blender_test_ui(
