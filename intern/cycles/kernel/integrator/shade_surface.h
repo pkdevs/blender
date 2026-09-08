@@ -151,7 +151,7 @@ ccl_device_forceinline bool integrate_surface_holdout(KernelGlobals kg,
 //       kg, state, path_visibility, path_flag, sd);
 
 //   guiding_record_surface_emission(kg, state, L, mis_weight);
-//   film_write_surface_emission(
+//   film_write_surface_emission( 
 //       kg, state, L, mis_weight, render_buffer, object_lightgroup(kg, sd->object));
 // }
 
@@ -212,13 +212,14 @@ ccl_device_forceinline void integrate_surface_emission(KernelGlobals kg,
     ls.pdf = light_sample_pdf_surface(kg, state, path_visibility, path_flag, sd);
 
     if (INTEGRATOR_STATE(state, path, bounce) == 1) {
-      film_add_reservoir_di(kg, state, L, ls, ref, rng_state, render_buffer);
+      film_add_reservoir_di(kg, state, L, ls, ref, rng_state, render_buffer); //
     }
     else {
       // !!!: Compare against the GI
       // !!!: ReSTIR PT lifecycle must be active, otherwise, dark multipass shadings will occur
       const Spectrum contribution = INTEGRATOR_STATE(state, path, throughput) * L * mis_weight;
       ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+
       film_add_reservoir_pt(kg, path_flag, contribution, rng_state, buffer); // ???: GI or basically for emitters?
     }
   }
@@ -563,8 +564,6 @@ ccl_device_inline void integrate_direct_light_create_shadow_path(
 
 // --- EO SEG 2
 
-// /* Path tracing: sample point on light and evaluate light shader, then
-//  * queue shadow ray to be traced. */
 // template<uint node_feature_mask>
 // #if defined(__KERNEL_GPU__)
 // ccl_device_forceinline
@@ -573,169 +572,177 @@ ccl_device_inline void integrate_direct_light_create_shadow_path(
 // ccl_device
 // #endif
 //     ShaderEvalResult
-//     integrate_surface_direct_light(KernelGlobals kg,
+//     integrate_surface_direct_light(KernelGlobals kg, // !!!: Converted into integrate_surface_nee()
 //                                    IntegratorState state,
 //                                    ccl_private ShaderData *sd,
 //                                    const ccl_private RNGState *rng_state,
 //                                    ccl_global float *ccl_restrict render_buffer)
 // {
-//   /* Test if there is a light or BSDF that needs direct light. */
-//   if (!(kernel_data.integrator.use_direct_light && (sd->flag & SD_BSDF_HAS_EVAL))) {
-//     return SHADER_EVAL_EMPTY;
-//   }
+/* Ordinary NEE: sample point on light and evaluate light shader, then
+ * queue shadow ray to be traced. */
+ccl_device_forceinline ShaderEvalResult integrate_surface_nee_legacy(
+    KernelGlobals kg,
+    IntegratorState state,
+    ccl_private ShaderData *sd,
+    const ccl_private RNGState *rng_state,
+    ccl_global float *ccl_restrict render_buffer)
+{
+  // /* Test if there is a light or BSDF that needs direct light. */
+  // if (!(kernel_data.integrator.use_direct_light && (sd->flag & SD_BSDF_HAS_EVAL))) {
+  //   return SHADER_EVAL_EMPTY;
+  // }
 
-//   LightSample ls ccl_optional_struct_init;
-//   int mnee_vertex_count = 0;  // NOLINT
+  LightSample ls ccl_optional_struct_init;
+  int mnee_vertex_count = 0;  // NOLINT
 
-// #ifdef __MNEE__
-//   if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) &&
-//       (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_SAMPLED))
-//   {
-//     /* MNEE already sampled a light and caustics casters. */
-//     integrator_state_read_mnee(state, &ls, &mnee_vertex_count);
-//   }
-//   else
-// #endif
-//   {
-//     /* Sample position on a light. */
-//     const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
-//     const uint bounce = INTEGRATOR_STATE(state, path, bounce);
-//     const float3 rand_light = path_state_rng_3D(kg, rng_state, PRNG_LIGHT);
+#ifdef __MNEE__
+  if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) &&
+      (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_SAMPLED))
+  {
+    /* MNEE already sampled a light and caustics casters. */
+    integrator_state_read_mnee(state, &ls, &mnee_vertex_count);
+  }
+  else
+#endif
+  {
+    /* Sample position on a light. */
+    const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
+    const uint bounce = INTEGRATOR_STATE(state, path, bounce);
+    const float3 rand_light = path_state_rng_3D(kg, rng_state, PRNG_LIGHT);
 
-//     if (!light_sample_from_position(kg,
-//                                     rand_light,
-//                                     sd->time,
-//                                     sd->P,
-//                                     sd->N,
-//                                     light_link_receiver_nee(kg, sd),
-//                                     sd->flag,
-//                                     bounce,
-//                                     path_flag,
-//                                     &ls))
-//     {
-//       return SHADER_EVAL_EMPTY;
-//     }
-//   }
+    if (!light_sample_from_position(kg,
+                                    rand_light,
+                                    sd->time,
+                                    sd->P,
+                                    sd->N,
+                                    light_link_receiver_nee(kg, sd),
+                                    sd->flag,
+                                    bounce,
+                                    path_flag,
+                                    &ls))
+    {
+      return SHADER_EVAL_EMPTY;
+    }
+  }
 
-//   kernel_assert(ls.pdf != 0.0f);
+  kernel_assert(ls.pdf != 0.0f);
 
-//   const bool is_transmission = dot(ls.D, sd->N) < 0.0f;
+  const bool is_transmission = dot(ls.D, sd->N) < 0.0f;
 
-//   if (ls.prim != PRIM_NONE && ls.prim == sd->prim && ls.object == sd->object) {
-//     /* Skip self intersection if light direction lies in the same hemisphere as the geometric
-//      * normal. */
-//     if (dot(ls.D, is_transmission ? -sd->Ng : sd->Ng) > 0.0f) {
-//       return SHADER_EVAL_EMPTY;
-//     }
-//   }
+  if (ls.prim != PRIM_NONE && ls.prim == sd->prim && ls.object == sd->object) {
+    /* Skip self intersection if light direction lies in the same hemisphere as the geometric
+     * normal. */
+    if (dot(ls.D, is_transmission ? -sd->Ng : sd->Ng) > 0.0f) {
+      return SHADER_EVAL_EMPTY;
+    }
+  }
 
-// #ifdef __MNEE__
-//   /* On a caustic caster, a caustic light's contribution is delivered to receivers by
-//    * MNEE and does not need to be computed again here. */
-//   if (kernel_data.kernel_features & KERNEL_FEATURE_MNEE) {
-//     if (mnee_vertex_count == 0 && is_transmission &&
-//         (sd->object_flag & SD_OBJECT_CAUSTICS_CASTER) && ls.type != LIGHT_TRIANGLE &&
-//         kernel_data_fetch(lights, ls.prim).use_caustics)
-//     {
-//       return SHADER_EVAL_EMPTY;
-//     }
-//   }
-// #endif
+#ifdef __MNEE__
+  /* On a caustic caster, a caustic light's contribution is delivered to receivers by
+   * MNEE and does not need to be computed again here. */
+  if (kernel_data.kernel_features & KERNEL_FEATURE_MNEE) {
+    if (mnee_vertex_count == 0 && is_transmission &&
+        (sd->object_flag & SD_OBJECT_CAUSTICS_CASTER) && ls.type != LIGHT_TRIANGLE &&
+        kernel_data_fetch(lights, ls.prim).use_caustics)
+    {
+      return SHADER_EVAL_EMPTY;
+    }
+  }
+#endif
 
-//   /* Evaluate constant part of light shader, rest will optionally be done in another kernel. */
-//   Spectrum light_shader_eval ccl_optional_struct_init;
-//   const bool is_constant_light_shader = light_sample_shader_eval_nee_constant(
-//       kg, ls.shader, ls.prim, ls.type != LIGHT_TRIANGLE, light_shader_eval);
+  /* Evaluate constant part of light shader, rest will optionally be done in another kernel. */
+  Spectrum light_shader_eval ccl_optional_struct_init;
+  const bool is_constant_light_shader = light_sample_shader_eval_nee_constant(
+      kg, ls.shader, ls.prim, ls.type != LIGHT_TRIANGLE, light_shader_eval);
 
-//   /* Evaluate BSDF. */
-//   BsdfEval bsdf_eval ccl_optional_struct_init;
-//   const float bsdf_pdf = surface_shader_bsdf_eval(kg, state, sd, ls.D, &bsdf_eval, ls.shader);
+  /* Evaluate BSDF. */
+  BsdfEval bsdf_eval ccl_optional_struct_init;
+  const float bsdf_pdf = surface_shader_bsdf_eval(kg, state, sd, ls.D, &bsdf_eval, ls.shader);
 
-//   Ray ray ccl_optional_struct_init;
+  Ray ray ccl_optional_struct_init;
 
-// #ifdef __MNEE__
-//   if (mnee_vertex_count > 0) {
-//     light_shader_eval *= integrator_state_read_mnee_throughput(state);
-//     bsdf_eval_mul(&bsdf_eval, light_shader_eval);
+#ifdef __MNEE__
+  if (mnee_vertex_count > 0) {
+    light_shader_eval *= integrator_state_read_mnee_throughput(state);
+    bsdf_eval_mul(&bsdf_eval, light_shader_eval);
 
-//     if (bsdf_eval_is_zero(&bsdf_eval)) {
-//       return SHADER_EVAL_EMPTY;
-//     }
+    if (bsdf_eval_is_zero(&bsdf_eval)) {
+      return SHADER_EVAL_EMPTY;
+    }
 
-//     integrator_state_read_mnee_ray(state, &ls, &ray);
-//   }
-//   else
-// #endif /* __MNEE__ */
-//   {
-//     const float mis_weight = light_sample_mis_weight_nee(kg, ls.pdf, bsdf_pdf);
-//     bsdf_eval_mul(&bsdf_eval, light_shader_eval * ls.eval_fac / ls.pdf * mis_weight);
+    integrator_state_read_mnee_ray(state, &ls, &ray);
+  }
+  else
+#endif /* __MNEE__ */
+  {
+    const float mis_weight = light_sample_mis_weight_nee(kg, ls.pdf, bsdf_pdf); // !!!(Tri): instead of reservoir_mis_weight_nee()
+    bsdf_eval_mul(&bsdf_eval, light_shader_eval * ls.eval_fac / ls.pdf * mis_weight);
 
-//     /* Path termination for constant light shader. */
-//     if (is_constant_light_shader && !(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_TREE)) {
-//       const float terminate = path_state_rng_light_termination(kg, rng_state);
-//       if (light_sample_terminate(kg, &bsdf_eval, terminate)) {
-//         return SHADER_EVAL_EMPTY;
-//       }
-//     }
-//     /* For non-constant light shader, probabilistic termination happens in
-//      * SHADE_LIGHT_NEE when the full contribution is known. */
-//     else if (bsdf_eval_is_zero(&bsdf_eval)) {
-//       return SHADER_EVAL_EMPTY;
-//     }
+    /* Path termination for constant light shader. */
+    if (is_constant_light_shader && !(kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_TREE)) {
+      const float terminate = path_state_rng_light_termination(kg, rng_state);
+      if (light_sample_terminate(kg, &bsdf_eval, terminate)) {
+        return SHADER_EVAL_EMPTY;
+      }
+    }
+    /* For non-constant light shader, probabilistic termination happens in
+     * SHADE_LIGHT_NEE when the full contribution is known. */
+    else if (bsdf_eval_is_zero(&bsdf_eval)) {
+      return SHADER_EVAL_EMPTY;
+    }
 
-//     /* Create shadow ray. */
-//     light_sample_to_surface_shadow_ray(kg, sd, &ls, &ray); // !!!
-//   }
+    /* Create shadow ray. */
+    light_sample_to_surface_shadow_ray(kg, sd, &ls, &ray); // !!!
+  }
 
-//   if (ray.self.object != OBJECT_NONE) {
-//     ray.P = integrate_surface_ray_offset(kg, sd, ray.P, ray.D);
-//   }
+  if (ray.self.object != OBJECT_NONE) {
+    ray.P = integrate_surface_ray_offset(kg, sd, ray.P, ray.D);
+  }
 
-//   /* Branch off shadow kernel. */
-//   IntegratorShadowState shadow_state = integrate_direct_light_shadow_init_common(
-//       kg,
-//       state,
-//       &ray,
-//       bsdf_eval_sum(&bsdf_eval),
-//       ls.group,
-//       mnee_vertex_count,
-//       is_constant_light_shader);
+  /* Branch off shadow kernel. */
+  IntegratorShadowState shadow_state = integrate_direct_light_shadow_init_common(
+      kg,
+      state,
+      &ray,
+      bsdf_eval_sum(&bsdf_eval),
+      ls.group,
+      mnee_vertex_count,
+      is_constant_light_shader);
 
-//   if (is_transmission) {
-// #ifdef __VOLUME__
-//     volume_stack_enter_exit<true>(kg, shadow_state, sd);
-// #endif
-//   }
+  if (is_transmission) {
+#ifdef __VOLUME__
+    volume_stack_enter_exit<true>(kg, shadow_state, sd);
+#endif
+  }
 
-//   uint32_t shadow_flag = INTEGRATOR_STATE(state, path, flag);
+  uint32_t shadow_flag = INTEGRATOR_STATE(state, path, flag);
 
-//   if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
-//     // ???: Why is modern pass-weight separated into only 2 passes of glossy and diffuse?
-//     PackedSpectrum pass_diffuse_weight;
-//     PackedSpectrum pass_glossy_weight;
+  if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
+    PackedSpectrum pass_diffuse_weight;
+    PackedSpectrum pass_glossy_weight;
 
-//     if (shadow_flag & PATH_RAY_ANY_PASS) {
-//       /* Indirect bounce, use weights from earlier surface or volume bounce. */
-//       pass_diffuse_weight = INTEGRATOR_STATE(state, path, pass_diffuse_weight);
-//       pass_glossy_weight = INTEGRATOR_STATE(state, path, pass_glossy_weight);
-//     }
-//     else {
-//       /* Direct light, use BSDFs at this bounce. */
-//       shadow_flag |= PATH_RAY_SURFACE_PASS;
-//       pass_diffuse_weight = PackedSpectrum(bsdf_eval_pass_diffuse_weight(&bsdf_eval)); // !!!: See if changes are needed here
-//       pass_glossy_weight = PackedSpectrum(bsdf_eval_pass_glossy_weight(&bsdf_eval)); // !!!
-//     }
+    if (shadow_flag & PATH_RAY_ANY_PASS) {
+      /* Indirect bounce, use weights from earlier surface or volume bounce. */
+      pass_diffuse_weight = INTEGRATOR_STATE(state, path, pass_diffuse_weight);
+      pass_glossy_weight = INTEGRATOR_STATE(state, path, pass_glossy_weight);
+    }
+    else {
+      /* Direct light, use BSDFs at this bounce. */
+      shadow_flag |= PATH_RAY_SURFACE_PASS;
+      pass_diffuse_weight = PackedSpectrum(bsdf_eval_pass_diffuse_weight(&bsdf_eval));
+      pass_glossy_weight = PackedSpectrum(bsdf_eval_pass_glossy_weight(&bsdf_eval));
+    }
 
-//     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, pass_diffuse_weight) = pass_diffuse_weight;
-//     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, pass_glossy_weight) = pass_glossy_weight;
-//   }
+    INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, pass_diffuse_weight) = pass_diffuse_weight;
+    INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, pass_glossy_weight) = pass_glossy_weight;
+  }
 
-//   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, visibility) = INTEGRATOR_STATE(
-//       state, path, visibility); // !!!
-//   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, flag) = shadow_flag; // !!!
+  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, visibility) = INTEGRATOR_STATE(
+      state, path, visibility); // !!!
+  INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, flag) = shadow_flag; // !!!
 
-//   return SHADER_EVAL_OK;
-// }
+  return SHADER_EVAL_OK;
+}
 
 
 /* ReSTIR DI epilogue: the winning candidate is written to the persistent
@@ -752,7 +759,7 @@ ccl_device_forceinline ShaderEvalResult integrate_surface_nee_write_restir_di(
 // !!!: Nothing about this write path checks or preserves what was there from the previous sample
 // !!!: not designed to survive across samples, only across spatial iterations within one sample.
   /* Write to fresh initial-candidates reservoir and trace shadow ray later. */
-  film_write_pass_reservoir(kg, state, reservoir, render_buffer);
+  film_write_pass_reservoir(kg, state, reservoir, render_buffer); 
   return SHADER_EVAL_OK;
 }
 
@@ -833,16 +840,22 @@ ccl_device
     return SHADER_EVAL_EMPTY;
   }
 
+  // TODO(Tri):
+  /* ReSTIR entirely off: skip RIS, Reservoir, and LightSampleReference
+   * construction altogether. Use ordinary single-sample NEE instead, which
+   * also restores MIS weighting, constant-light-shader termination, and
+   * MNEE handling that the RIS path below does not (yet) fully replicate. */
+  if (!kernel_data.integrator.use_restir) {
+    return integrate_surface_nee_legacy(kg, state, sd, rng_state, render_buffer);
+  }
+
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
   const uint bounce = INTEGRATOR_STATE(state, path, bounce);
 
   /* Use Resampled Importance Sampling for direct illumination based on Talbot, Justin F.
    * Importance resampling for global illumination. Brigham Young University, 2005. */
-  /* TODO(weizhen): add MNEE back? */
   const bool is_direct_light = light_is_direct_illumination(state);
-  const bool use_restir = kernel_data.integrator.use_restir;
-
-  const bool use_restir_di = is_direct_light && use_restir;
+  const bool use_restir_di = is_direct_light;
 
 // TODO(Tri): Handle MNEE
 // #if 0
@@ -850,6 +863,11 @@ ccl_device
   if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) &&
       (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_SAMPLED))
   {
+    // ccl_debug_printf("MNEE early-return: pixel=%u bounce=%d mnee_flag=%u\n",
+    //                  INTEGRATOR_STATE(state, path, render_pixel_index),
+    //                  INTEGRATOR_STATE(state, path, bounce),
+    //                  INTEGRATOR_STATE(state, path, mnee));
+
     LightSample ls ccl_optional_struct_init;
     int mnee_vertex_count = 0; // NOLINT
 
@@ -866,7 +884,6 @@ ccl_device
     }
 
     Spectrum light_shader_eval ccl_optional_struct_init;
-    /* Evaluate constant part of light shader, rest will optionally be done in another kernel. */
     light_sample_shader_eval_nee_constant(
         kg, ls.shader, ls.prim, ls.type != LIGHT_TRIANGLE, light_shader_eval);
 
@@ -880,10 +897,8 @@ ccl_device
       return SHADER_EVAL_EMPTY;
     }
 
-    /*
-     * ReSTIR DI does not replace an already-constructed MNEE path.
-     * The helper reads the MNEE ray when mnee_vertex_count is nonzero.
-     */
+    /* ReSTIR DI does not replace an already-constructed MNEE path.
+     * The helper reads the MNEE ray when mnee_vertex_count is nonzero. */
     integrate_direct_light_create_shadow_path<false>(
         kg, state, rng_state, sd, &ls, &radiance, mnee_vertex_count);
 
@@ -905,12 +920,10 @@ ccl_device
     BsdfEval radiance ccl_optional_struct_init;
 
     /* TODO(weizhen): does this result in correlated samples in ReSTIR PT? */
-    const float3 rand_light = path_branched_rng_3D( // !!!
+    const float3 rand_light = path_branched_rng_3D(
         kg, rng_state, i, reservoir.num_light_samples, PRNG_LIGHT);
 
-    const float rand_pick = use_restir ?
-                                path_branched_rng_1D(kg, rng_state, i, max_samples, PRNG_PICK) :
-                                0.0f;
+    const float rand_pick = path_branched_rng_1D(kg, rng_state, i, max_samples, PRNG_PICK);
 
     /* TODO(weizhen): use higher-level nodes in light tree, or use light tile as in the ReSTIR PT
      * paper. */
@@ -942,17 +955,14 @@ ccl_device
 
 // #if 0
 #  ifdef __MNEE__
-    /*
-     * Temporarily disabled for tests
-     *
-     * Contributions from caustic lights on a caustic caster were excluded
-     * from ordinary NEE by this block. The Old PR did not include this
-     * rejection.
-     */
+    /* Contributions from caustic lights on a caustic caster are excluded from
+     * ordinary NEE here; MNEE handles that connection separately. */
     if ((kernel_data.kernel_features & KERNEL_FEATURE_MNEE) && is_transmission &&
         (sd->object_flag & SD_OBJECT_CAUSTICS_CASTER) && ls.type != LIGHT_TRIANGLE &&
         kernel_data_fetch(lights, ls.prim).use_caustics)
     {
+      // ccl_debug_printf("MNEE caustic-caster candidate excluded: pixel=%u i=%d ls.type=%d\n",
+      //                  INTEGRATOR_STATE(state, path, render_pixel_index), i, ls.type);
       continue;
     }
 #  endif
@@ -961,28 +971,18 @@ ccl_device
     LightSampleReference reference;
     reference = light_reference_empty();
 
-    // TODO(Tri): Fix the comments!
-    if (use_restir) {
-      /* Construct the reference from the light sample in ordinary NEE. */
-      // !!!: One contributor of the darkness in DI (not all types are supported; current support might have issues)
-      // !!!: light_reference_from_sample() may have problem populating reference
-      if (!light_reference_from_sample(kg, &ls, sd->time, &reference)) {      
-        ccl_debug_printf("integrate_surface_nee() returned!; !restir_light_reference_from_sample()=%u\n\n\n\n",
-               (!light_reference_from_sample(kg, &ls, sd->time, &reference)));
-        continue;
-        // break; // !!!: Break or continue?
-      }
+    /* Construct the reference from the light sample in ordinary NEE. */
+    if (!light_reference_from_sample(kg, &ls, sd->time, &reference)) {
+      continue;
     }
 
-    // !!!(Tri): Crashes when ReSTIR's off for surface_emission
-    // kernel_assert(light_reference_is_valid(&reference));
+    kernel_assert(light_reference_is_valid(&reference));
 
     /* Evaluate light shader. */
-    const bool check_visibility = use_restir && kernel_data.integrator.restir_unbiased; // !!!
+    const bool check_visibility = kernel_data.integrator.restir_unbiased;
 
     /* Evaluates light emission, BSDF response, and the geometry conversion. */
-    const float bsdf_pdf = radiance_eval( // !!!:
-        kg, state, sd, &ls, &radiance, &reference, check_visibility);
+    const float bsdf_pdf = radiance_eval(kg, state, sd, &ls, &radiance, &reference, check_visibility);
 
     PROFILING_EVENT(PROFILING_RESTIR_RESERVOIR);
 
@@ -1005,9 +1005,8 @@ ccl_device
 //     (double)ls.eval_fac,
 //     (double)ls.pdf);
 
-// TODO(Tri): Seperate ReSTIR path properly!
     /* Compute the NEE MIS weight and divide by the light PDF in the appropriate measure. */
-    reservoir_add_light_sample(&reservoir, ls, reference, radiance, bsdf_pdf, rand_pick, use_restir); // !!!
+    reservoir_add_light_sample(&reservoir, ls, reference, radiance, bsdf_pdf, rand_pick, /*require_valid_reference=*/true); // !!!(Tri)
   }
 
   if (reservoir_is_empty(&reservoir)) {
@@ -1025,7 +1024,7 @@ ccl_device
     return integrate_surface_nee_write_restir_di(kg, state, &reservoir, render_buffer);
   }
   else {
-    return integrate_surface_nee_shade_indirect(kg, state, sd, rng_state, use_restir, &reservoir);
+    return integrate_surface_nee_shade_indirect(kg, state, sd, rng_state, /*use_restir=*/true, &reservoir);
   }
 }
 
@@ -1352,13 +1351,6 @@ ccl_device int integrate_surface(KernelGlobals kg,
       /* Write emission. */
       if (sd.flag & SD_EMISSION) {
         integrate_surface_emission(kg, state, &sd, &rng_state, render_buffer);
-        // integrate_surface_emission(kg, state, &sd, render_buffer); // !!!: OG
-
-// TODO(Tri): Remove
-        // /* TODO(weizhen): `min_bounce` is only for debugging, revert after finishing the branch. */
-        // if (INTEGRATOR_STATE(state, path, bounce) >= kernel_data.integrator.min_bounce) {
-        //   integrate_surface_emission(kg, state, &sd, &rng_state, render_buffer);
-        // }
       }
 
       /* Perform path termination. Most paths have already been terminated in
@@ -1370,7 +1362,7 @@ ccl_device int integrate_surface(KernelGlobals kg,
         return LABEL_NONE;
       }
 
-      /* Write render passes. */
+      /* Write render passes. */ 
 #ifdef __PASSES__
       PROFILING_EVENT(PROFILING_SHADE_SURFACE_PASSES);
       film_write_data_passes(kg, state, &sd, render_buffer);
