@@ -30,7 +30,25 @@ class VertexPaintOperation : public GreasePencilStrokeOperationCommon {
 void VertexPaintOperation::on_stroke_begin(const bContext &C, const InputSample &start_sample)
 {
   this->init_stroke(C, start_sample);
+  this->init_auto_masking(C, start_sample);
   this->on_stroke_extended(C, start_sample);
+}
+
+/* Curve-level counterpart of a point-level auto-masking mask: a curve is kept if any of its
+ * points are. Used to apply auto-masking to fills, which are keyed by curve, not by point. */
+static IndexMask curve_mask_from_point_mask(const OffsetIndices<int> points_by_curve,
+                                            const IndexMask &curve_range,
+                                            const IndexMask &point_mask,
+                                            IndexMaskMemory &memory)
+{
+  return IndexMask::from_predicate(curve_range, memory, [&](const int64_t curve_i) {
+    for (const int point_i : points_by_curve[curve_i]) {
+      if (point_mask.contains(point_i)) {
+        return true;
+      }
+    }
+    return false;
+  });
 }
 
 void VertexPaintOperation::on_stroke_extended(const bContext &C,
@@ -53,128 +71,146 @@ void VertexPaintOperation::on_stroke_extended(const bContext &C,
   copy_v3_v3(color_linear, BKE_brush_color_get(&paint, &brush));
   const ColorPaint4f mix_color(color_linear[0], color_linear[1], color_linear[2], 1.0f);
 
-  this->foreach_editable_drawing(C, [&](const GreasePencilStrokeParams &params) {
-    IndexMaskMemory memory;
-    const IndexMask point_selection = point_mask_for_stroke_operation(
-        params, use_selection_masking, memory);
-    if (!point_selection.is_empty() && do_points) {
-      const Array<float2> view_positions = view_positions_from_point_mask(params, point_selection);
-      MutableSpan<ColorGeometry4f> vertex_colors = params.drawing.vertex_colors_for_write();
+  this->foreach_editable_drawing_with_automask(
+      C, [&](const GreasePencilStrokeParams &params, const IndexMask &automask) {
+        IndexMaskMemory memory;
+        const IndexMask editable_point_selection = point_mask_for_stroke_operation(
+            params, use_selection_masking, memory);
+        const IndexMask point_selection = IndexMask::from_intersection(
+            editable_point_selection, automask, memory);
+        if (!point_selection.is_empty() && do_points) {
+          const Array<float2> view_positions = view_positions_from_point_mask(params,
+                                                                              point_selection);
+          MutableSpan<ColorGeometry4f> vertex_colors = params.drawing.vertex_colors_for_write();
 
-      if (invert) {
-        /* Erase vertex colors. */
-        point_selection.foreach_index(
-            [&](const int64_t point_i) {
-              const float influence = brush_point_influence(paint,
-                                                            brush,
-                                                            view_positions[point_i],
-                                                            extension_sample,
-                                                            params.multi_frame_falloff);
+          if (invert) {
+            /* Erase vertex colors. */
+            point_selection.foreach_index(
+                [&](const int64_t point_i) {
+                  const float influence = brush_point_influence(paint,
+                                                                brush,
+                                                                view_positions[point_i],
+                                                                extension_sample,
+                                                                params.multi_frame_falloff);
 
-              ColorGeometry4f &color = vertex_colors[point_i];
-              color.a -= influence;
-              color.a = math::max(color.a, 0.0f);
-            },
-            exec_mode::grain_size(4096));
-      }
-      else {
-        /* Mix brush color into vertex colors by influence. */
-        point_selection.foreach_index(
-            [&](const int64_t point_i) {
-              const float influence = brush_point_influence(paint,
-                                                            brush,
-                                                            view_positions[point_i],
-                                                            extension_sample,
-                                                            params.multi_frame_falloff);
+                  ColorGeometry4f &color = vertex_colors[point_i];
+                  color.a -= influence;
+                  color.a = math::max(color.a, 0.0f);
+                },
+                exec_mode::grain_size(4096));
+          }
+          else {
+            /* Mix brush color into vertex colors by influence. */
+            point_selection.foreach_index(
+                [&](const int64_t point_i) {
+                  const float influence = brush_point_influence(paint,
+                                                                brush,
+                                                                view_positions[point_i],
+                                                                extension_sample,
+                                                                params.multi_frame_falloff);
 
-              ColorGeometry4f &color = vertex_colors[point_i];
+                  ColorGeometry4f &color = vertex_colors[point_i];
 
-              using Color = ColorPaint4f;
-              using Traits = color::Traits<Color>;
+                  using Color = ColorPaint4f;
+                  using Traits = color::Traits<Color>;
 
-              const Color linearrgb_color = color::unpremultiply_alpha(color);
+                  const Color linearrgb_color = color::unpremultiply_alpha(color);
 
-              color = color::premultiply_alpha(color::BLI_mix_colors<Color, Traits>(
-                  blend_mode, linearrgb_color, mix_color, Traits::range * influence));
-            },
-            exec_mode::grain_size(4096));
-      }
-    }
+                  color = color::premultiply_alpha(color::BLI_mix_colors<Color, Traits>(
+                      blend_mode, linearrgb_color, mix_color, Traits::range * influence));
+                },
+                exec_mode::grain_size(4096));
+          }
+        }
 
-    const IndexMask fill_selection = fill_mask_for_stroke_operation(
-        params, use_selection_masking, memory);
-    if (!fill_selection.is_empty() && do_fill) {
-      BLI_assert(params.drawing.fills().has_value());
-      const GroupedSpan<int> fills = *params.drawing.fills();
-      const bke::CurvesGeometry &curves = params.drawing.strokes();
-      const OffsetIndices<int> points_by_curve = curves.points_by_curve();
-      MutableSpan<ColorGeometry4f> fill_colors = params.drawing.fill_colors_for_write();
-      /* TODO. Only calculate needed positions. */
-      const Array<float2> view_positions = view_positions_from_curve_mask(params,
-                                                                          curves.curves_range());
-
-      if (invert) {
-        fill_selection.foreach_index(
-            [&](const int64_t fill_i) {
-              const Span<int> fill_curves = fills[fill_i];
-              const IndexMask fill_curve_mask = IndexMask::from_indices(fill_curves, memory);
-
-              float influence = 0.0f;
-              fill_curve_mask.foreach_index([&](const int64_t curve) {
-                const IndexRange points = points_by_curve[curve];
-                const Span<float2> curve_view_positions = view_positions.as_span().slice(points);
-                influence = math::max(influence,
-                                      brush_fill_influence(paint,
-                                                           brush,
-                                                           curve_view_positions,
-                                                           extension_sample,
-                                                           params.multi_frame_falloff));
+        const IndexMask editable_fill_selection = fill_mask_for_stroke_operation(
+            params, use_selection_masking, memory);
+        if (!editable_fill_selection.is_empty() && do_fill) {
+          BLI_assert(params.drawing.fills().has_value());
+          const GroupedSpan<int> fills = *params.drawing.fills();
+          const bke::CurvesGeometry &curves = params.drawing.strokes();
+          const OffsetIndices<int> points_by_curve = curves.points_by_curve();
+          /* A fill is auto-masked out unless all of its curves are. */
+          const IndexMask automask_curves = curve_mask_from_point_mask(
+              points_by_curve, curves.curves_range(), automask, memory);
+          const IndexMask fill_selection = IndexMask::from_predicate(
+              editable_fill_selection, memory, [&](const int64_t fill_i) {
+                for (const int curve_i : fills[fill_i]) {
+                  if (!automask_curves.contains(curve_i)) {
+                    return false;
+                  }
+                }
+                return true;
               });
+          MutableSpan<ColorGeometry4f> fill_colors = params.drawing.fill_colors_for_write();
+          /* TODO. Only calculate needed positions. */
+          const Array<float2> view_positions = view_positions_from_curve_mask(
+              params, curves.curves_range());
 
-              ColorGeometry4f color = fill_colors[fill_curves.first()];
-              color.a -= influence;
-              color.a = math::max(color.a, 0.0f);
+          if (invert) {
+            fill_selection.foreach_index(
+                [&](const int64_t fill_i) {
+                  const Span<int> fill_curves = fills[fill_i];
+                  const IndexMask fill_curve_mask = IndexMask::from_indices(fill_curves, memory);
 
-              index_mask::masked_fill(fill_colors, color, fill_curve_mask);
-            },
-            exec_mode::grain_size(1024));
-      }
-      else {
-        fill_selection.foreach_index(
-            [&](const int64_t fill_i) {
-              const Span<int> fill_curves = fills[fill_i];
-              const IndexMask fill_curve_mask = IndexMask::from_indices(fill_curves, memory);
+                  float influence = 0.0f;
+                  fill_curve_mask.foreach_index([&](const int64_t curve) {
+                    const IndexRange points = points_by_curve[curve];
+                    const Span<float2> curve_view_positions = view_positions.as_span().slice(
+                        points);
+                    influence = math::max(influence,
+                                          brush_fill_influence(paint,
+                                                               brush,
+                                                               curve_view_positions,
+                                                               extension_sample,
+                                                               params.multi_frame_falloff));
+                  });
 
-              float influence = 0.0f;
-              fill_curve_mask.foreach_index([&](const int64_t curve) {
-                const IndexRange points = points_by_curve[curve];
-                const Span<float2> curve_view_positions = view_positions.as_span().slice(points);
-                influence = math::max(influence,
-                                      brush_fill_influence(paint,
-                                                           brush,
-                                                           curve_view_positions,
-                                                           extension_sample,
-                                                           params.multi_frame_falloff));
-              });
+                  ColorGeometry4f color = fill_colors[fill_curves.first()];
+                  color.a -= influence;
+                  color.a = math::max(color.a, 0.0f);
 
-              ColorGeometry4f color = fill_colors[fill_curves.first()];
+                  index_mask::masked_fill(fill_colors, color, fill_curve_mask);
+                },
+                exec_mode::grain_size(1024));
+          }
+          else {
+            fill_selection.foreach_index(
+                [&](const int64_t fill_i) {
+                  const Span<int> fill_curves = fills[fill_i];
+                  const IndexMask fill_curve_mask = IndexMask::from_indices(fill_curves, memory);
 
-              using Color = ColorPaint4f;
-              using Traits = color::Traits<Color>;
+                  float influence = 0.0f;
+                  fill_curve_mask.foreach_index([&](const int64_t curve) {
+                    const IndexRange points = points_by_curve[curve];
+                    const Span<float2> curve_view_positions = view_positions.as_span().slice(
+                        points);
+                    influence = math::max(influence,
+                                          brush_fill_influence(paint,
+                                                               brush,
+                                                               curve_view_positions,
+                                                               extension_sample,
+                                                               params.multi_frame_falloff));
+                  });
 
-              const Color linearrgb_color = color::unpremultiply_alpha(color);
+                  ColorGeometry4f color = fill_colors[fill_curves.first()];
 
-              color = color::premultiply_alpha(color::BLI_mix_colors<Color, Traits>(
-                  blend_mode, linearrgb_color, mix_color, Traits::range * influence));
+                  using Color = ColorPaint4f;
+                  using Traits = color::Traits<Color>;
 
-              index_mask::masked_fill(fill_colors, color, fill_curve_mask);
-            },
-            exec_mode::grain_size(1024));
-      }
-    }
+                  const Color linearrgb_color = color::unpremultiply_alpha(color);
 
-    return true;
-  });
+                  color = color::premultiply_alpha(color::BLI_mix_colors<Color, Traits>(
+                      blend_mode, linearrgb_color, mix_color, Traits::range * influence));
+
+                  index_mask::masked_fill(fill_colors, color, fill_curve_mask);
+                },
+                exec_mode::grain_size(1024));
+          }
+        }
+
+        return true;
+      });
 }
 
 std::unique_ptr<GreasePencilStrokeOperation> new_vertex_paint_operation(

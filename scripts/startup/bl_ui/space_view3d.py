@@ -1052,6 +1052,12 @@ class VIEW3D_HT_header(Header):
             )
         elif object_mode == 'VERTEX_GREASE_PENCIL':
             draw_topbar_grease_pencil_layer_panel(context, layout)
+
+            layout.popover(
+                panel="VIEW3D_PT_grease_pencil_sculpt_automasking",
+                text="",
+                icon=VIEW3D_HT_header._grease_pencil_sculpt_automasking_icon(tool_settings.gpencil_sculpt),
+            )
         elif object_mode == 'WEIGHT_PAINT':
             row = layout.row()
             row.popover(panel="VIEW3D_PT_slots_vertex_groups", icon='GROUP_VERTEX')
