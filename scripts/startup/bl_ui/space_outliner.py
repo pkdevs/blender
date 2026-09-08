@@ -577,6 +577,7 @@ class OUTLINER_PT_options_filter(Panel):
         row.label(icon='BLANK1')
         row.prop(space, "use_object_in_different_collection", text="Indirect Children")
 
+
 class OUTLINER_PT_options_object_data(Panel):
     bl_space_type = 'OUTLINER'
     bl_region_type = 'HEADER'

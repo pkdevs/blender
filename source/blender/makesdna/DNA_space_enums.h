@@ -199,7 +199,8 @@ enum eSpaceOutliner_Filter : int {
   SO_FILTER_NO_ARMATURE_BONE_COLLECTION = (1 << 28),
   SO_FILTER_NO_GREASE_PENCIL_EFFECTS = (1 << 29),
   SO_FILTER_NO_POSE_BONES = (1 << 30),
-  SO_FILTER_NO_INDIRECT_OBJECT_CHILDREN = (1 << 31), /* Ignore children objects that are in different collection. */
+  SO_FILTER_NO_INDIRECT_OBJECT_CHILDREN =
+      (1 << 31), /* Ignore children objects that are in different collection. */
 };
 ENUM_OPERATORS(eSpaceOutliner_Filter)
 
