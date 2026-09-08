@@ -206,7 +206,10 @@ static void transfer_attributes(
         if (keep_boundaries) {
           ensure_face_map();
           bke::attribute_math::gather(
-              src.varray, boundary_vert_src_face, boundary_vert_mask, dst.span);
+              src.varray,
+              boundary_vert_src_face,
+              boundary_vert_mask,
+              dst.span.take_front(boundary_vert_src_face.size()));
         }
         break;
       }
