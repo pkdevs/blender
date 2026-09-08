@@ -112,7 +112,7 @@ static wmOperatorStatus compositor_effect_invoke_properties_with_hover(bContext 
 static wmOperatorStatus add_compositor_effect_exec(bContext *C, wmOperator * /*op*/)
 {
   Scene *scene = CTX_data_scene(C);
-  bke::compositor::new_effect(*scene, "Effect");
+  bke::compositor::new_effect(*scene, "Scene Effect");
 
   WM_event_add_notifier(C, NC_SCENE | ND_COMPO_RESULT, scene);
 
@@ -121,9 +121,9 @@ static wmOperatorStatus add_compositor_effect_exec(bContext *C, wmOperator * /*o
 
 static void SCENE_OT_add_compositor_effect(wmOperatorType *ot)
 {
-  ot->name = "Add Scene Compositor Effect";
+  ot->name = "Add Scene Effect";
   ot->idname = "SCENE_OT_add_compositor_effect";
-  ot->description = "Add a scene compositor effect to the scene";
+  ot->description = "Add a compositor effect to the scene";
 
   ot->exec = add_compositor_effect_exec;
 
