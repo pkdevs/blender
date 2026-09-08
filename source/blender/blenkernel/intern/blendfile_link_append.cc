@@ -380,6 +380,12 @@ void BKE_blendfile_link_append_context_finalize(BlendfileLinkAppendContext *lapp
                   BlendfileLinkAppendContext::ProcessStage::Instantiating));
   lapp_context->process_stage = BlendfileLinkAppendContext::ProcessStage::Done;
 
+  /* Linking may have changed some data link status.
+   * Further more, some versioning code can leave some ID link status tags in invalid state, due to
+   * low-level manipulations of these instead of using API like `id_lib_extern`, which will be also
+   * fixed by this call. */
+  BKE_main_id_indirect_linked_update(*lapp_context->params->bmain);
+
   /* Tag node trees to update generated RNA with potentially updated session uid values from
    * data-block defaults in interfaces. This is only necessary because RNA types were already
    * generated before these data-blocks were local; theoretically that shouldn't be necessary. */
@@ -609,8 +615,7 @@ static void loose_data_instantiate_obdata_preprocess(
  * (return false). */
 static bool loose_data_instantiate_collection_parents_check_recursive(Collection *collection)
 {
-  for (CollectionParent *parent_collection =
-           static_cast<CollectionParent *>(collection->runtime->parents.first);
+  for (CollectionParent *parent_collection = collection->runtime->parents.first();
        parent_collection != nullptr;
        parent_collection = parent_collection->next)
   {
@@ -1067,6 +1072,7 @@ static bool foreach_libblock_link_append_common_processing(
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
 /** \name Library packing code.
  * \{ */
 
@@ -1139,6 +1145,7 @@ void BKE_blendfile_link_pack(BlendfileLinkAppendContext *lapp_context, ReportLis
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
 /** \name Library append code.
  * \{ */
 
@@ -1645,6 +1652,7 @@ void BKE_blendfile_append(BlendfileLinkAppendContext *lapp_context, ReportList *
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
 /** \name Library link code.
  * \{ */
 
@@ -1933,6 +1941,7 @@ void BKE_blendfile_override(BlendfileLinkAppendContext *lapp_context,
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
 /** \name Library relocating code.
  * \{ */
 
@@ -2149,7 +2158,7 @@ static void blendfile_relocate_postprocess_cleanup(BlendfileLinkAppendContext &l
           ViewLayer *new_view_layer = BKE_view_layer_find(
               new_scene, lapp_context.params->context.view_layer->name);
           lapp_context.params->context.view_layer = static_cast<ViewLayer *>(
-              (new_view_layer != nullptr) ? new_view_layer : new_scene->view_layers.first);
+              (new_view_layer != nullptr) ? new_view_layer : new_scene->view_layers.first());
         }
         /* lapp_context->params->context.v3d should never be made invalid by newly linked data
          * here, as it is UI data, ultimately owned by a #bScreen ID, which is not linkable. */
@@ -2256,7 +2265,7 @@ void BKE_blendfile_library_relocate(BlendfileLinkAppendContext *lapp_context,
   MainListsArray lbarray = BKE_main_lists_get(*bmain);
   int lba_idx = lbarray.size();
   while (lba_idx--) {
-    ID *id = static_cast<ID *>(lbarray[lba_idx]->first);
+    ID *id = lbarray[lba_idx]->first();
     const short idcode = id ? id->id_type() : 0;
 
     if (!id || !BKE_idtype_idcode_is_linkable(idcode)) {

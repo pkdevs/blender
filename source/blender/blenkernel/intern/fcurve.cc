@@ -108,7 +108,7 @@ void BKE_fcurves_free(ListBaseT<FCurve> *list)
   /* Free data, no need to call #BLI_remlink before freeing each curve,
    * as we store reference to next, and freeing only touches the curve it's given. */
   FCurve *fcn = nullptr;
-  for (FCurve *fcu = static_cast<FCurve *>(list->first); fcu; fcu = fcn) {
+  for (FCurve *fcu = list->first(); fcu; fcu = fcn) {
     fcn = fcu->next;
     BKE_fcurve_free(fcu);
   }
@@ -175,17 +175,28 @@ void FCurve::rna_path_set(const StringRef path)
 {
   MEM_SAFE_DELETE(this->rna_path_ptr);
   this->rna_path_ptr = BLI_strdupn(path.data(), path.size());
+  this->runtime->parsed_rna_path = ParsedRNAPath<>::from_string(
+      StringRefNull(this->rna_path_ptr, path.size()));
 }
 
 void FCurve::rna_path_set_move(char *path)
 {
   MEM_SAFE_DELETE(this->rna_path_ptr);
   this->rna_path_ptr = path;
+  this->runtime->parsed_rna_path = ParsedRNAPath<>::from_string(path);
 }
 
 StringRefNull FCurve::rna_path() const
 {
   return this->rna_path_ptr ? StringRefNull(this->rna_path_ptr) : StringRefNull("");
+}
+
+ParsedRNAPathRef FCurve::rna_path_parsed() const
+{
+  if (!this->runtime->parsed_rna_path) {
+    return {};
+  }
+  return *this->runtime->parsed_rna_path;
 }
 
 void BKE_fmodifier_name_set(FModifier *fcm, const char *name)
@@ -210,7 +221,7 @@ void BKE_fmodifier_ensure_flag(ListBaseT<FModifier> *modifiers)
   for (FModifier &fcm : *modifiers) {
     const FModifierTypeInfo *fmi = get_fmodifier_typeinfo(fcm.type);
     if (fmi && fmi->requires_flag & FMI_REQUIRES_ORIGINAL_DATA) {
-      SET_FLAG_FROM_TEST(fcm.flag, &fcm != modifiers->first, FMODIFIER_FLAG_DISABLED);
+      SET_FLAG_FROM_TEST(fcm.flag, &fcm != modifiers->first(), FMODIFIER_FLAG_DISABLED);
     }
   }
 }
@@ -878,7 +889,7 @@ bool BKE_fcurve_are_keyframes_usable(const FCurve &fcu)
   }
 
   /* If it has modifiers, none of these should "drastically" alter the curve. */
-  if (fcu.modifiers.first) {
+  if (fcu.modifiers.first()) {
     /* Check modifiers from last to first, as last will be more influential. */
     /* TODO: optionally, only check modifier if it is the active one... (Joshua Leung 2010) */
     for (const FModifier &fcm : fcu.modifiers.items_reversed()) {
@@ -1104,7 +1115,7 @@ void fcurve_samples_to_keyframes(FCurve *fcu, const int start, const int end)
 
 eFCU_Cycle_Type BKE_fcurve_get_cycle_type(const FCurve &fcu)
 {
-  FModifier *fcm = static_cast<FModifier *>(fcu.modifiers.first);
+  FModifier *fcm = fcu.modifiers.first();
 
   if (!fcm || fcm->type != FMODIFIER_TYPE_CYCLES) {
     return FCU_CYCLE_NONE;
@@ -2659,6 +2670,9 @@ void BKE_fcurve_blend_read_data(BlendDataReader *reader, FCurve *fcu)
 
   /* rna path */
   BLO_read_string(reader, &fcu->rna_path_ptr);
+  if (fcu->rna_path_ptr) {
+    fcu->runtime->parsed_rna_path = ParsedRNAPath<>::from_string(fcu->rna_path_ptr);
+  }
 
   /* group */
   BLO_read_struct(reader, bActionGroup, &fcu->grp);

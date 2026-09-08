@@ -15,6 +15,8 @@
 #include "DNA_curve_types.h"
 #include "DNA_listBase.h"
 
+#include "RNA_path.hh"
+
 namespace blender {
 
 struct ChannelDriver;
@@ -41,6 +43,9 @@ namespace bke {
 struct FCurveRuntime {
   /** Value stored from last time curve was evaluated (not threadsafe, debug display only!). */
   float curval = 0;
+
+  /** Cached parsed RNA path, computed eagerly when the string path is changed. */
+  std::optional<ParsedRNAPath<>> parsed_rna_path;
 };
 
 }  // namespace bke
@@ -82,7 +87,8 @@ struct FModifierTypeInfo {
   void (*copy_data)(FModifier *fcm, const FModifier *src);
   /**
    * Set settings for data that will be used for FCuModifier.data
-   * (memory already allocated using #MEM_new_zeroed). */
+   * (memory already allocated using #MEM_new_zeroed).
+   */
   void (*new_data)(void *mdata);
   /** Verifies that the modifier settings are valid */
   void (*verify_data)(FModifier *fcm);

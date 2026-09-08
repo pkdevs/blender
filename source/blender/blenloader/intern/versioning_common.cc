@@ -597,13 +597,10 @@ void add_realize_instances_before_socket(bNodeTree *ntree,
     realize_node->parent = node->parent;
     realize_node->locx_legacy = node->locx_legacy - 100;
     realize_node->locy_legacy = node->locy_legacy;
-    bke::node_add_link(*ntree,
-                       *link->fromnode,
-                       *link->fromsock,
-                       *realize_node,
-                       *static_cast<bNodeSocket *>(realize_node->inputs.first));
+    bke::node_add_link(
+        *ntree, *link->fromnode, *link->fromsock, *realize_node, *realize_node->inputs.first());
     link->fromnode = realize_node;
-    link->fromsock = static_cast<bNodeSocket *>(realize_node->outputs.first);
+    link->fromsock = realize_node->outputs.first();
   }
 }
 
@@ -761,7 +758,7 @@ bNode *version_eevee_output_node_get(bNodeTree *ntree, int16_t node_type)
 
 bool all_scenes_use(Main *bmain, const Span<const char *> engines)
 {
-  if (!bmain->scenes.first) {
+  if (!bmain->scenes.first()) {
     return false;
   }
 
@@ -892,7 +889,6 @@ void do_versions_after_setup(Main *new_bmain,
       ntree->owner_id = nullptr;
       ntree->id.tag |= ID_TAG_NO_MAIN;
 
-      scene.compositing_node_group = ntree;
       scene.nodetree = nullptr;
 
       BKE_libblock_management_main_add(new_bmain, ntree);

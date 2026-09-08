@@ -295,9 +295,9 @@ class VoronoiTextureNode : public TextureNode {
  public:
   SHADER_NODE_CLASS(VoronoiTextureNode)
 
-  uint get_feature() override
+  uint64_t get_feature() override
   {
-    int result = ShaderNode::get_feature();
+    uint64_t result = ShaderNode::get_feature();
     if (dimensions == 4) {
       result |= KERNEL_FEATURE_NODE_VORONOI_EXTRA;
     }
@@ -502,7 +502,7 @@ class BsdfBaseNode : public ShaderNode {
     return false;
   }
 
-  uint get_feature() override
+  uint64_t get_feature() override
   {
     return ShaderNode::get_feature() | KERNEL_FEATURE_NODE_BSDF;
   }
@@ -571,6 +571,8 @@ class PrincipledBsdfNode : public BsdfBaseNode {
   NODE_SOCKET_API(float, anisotropic_rotation)
   NODE_SOCKET_API(float3, tangent)
   NODE_SOCKET_API(float, transmission_weight)
+  NODE_SOCKET_API(float, transmission_dispersion_scale)
+  NODE_SOCKET_API(float, transmission_dispersion_abbe_number)
   NODE_SOCKET_API(float, sheen_weight)
   NODE_SOCKET_API(float, sheen_roughness)
   NODE_SOCKET_API(float3, sheen_tint)
@@ -593,6 +595,7 @@ class PrincipledBsdfNode : public BsdfBaseNode {
   }
   bool has_surface_transparent() override;
   bool has_surface_emission() override;
+  bool has_dispersion() override;
 
  protected:
   /* Checks whether the given weight input is potentially non-zero. */
@@ -626,7 +629,7 @@ class RayPortalBsdfNode : public BsdfNode {
     return true;
   }
 
-  uint get_feature() override
+  uint64_t get_feature() override
   {
     return BsdfNode::get_feature() | KERNEL_FEATURE_NODE_PORTAL;
   }
@@ -705,16 +708,28 @@ class GlassBsdfNode : public BsdfNode {
  public:
   SHADER_NODE_CLASS(GlassBsdfNode)
 
+  void simplify_settings(Scene *scene) override;
   ClosureType get_closure_type() override
   {
     return distribution;
   }
 
+  NODE_SOCKET_API(float3, tangent)
   NODE_SOCKET_API(float, roughness)
+  NODE_SOCKET_API(float, anisotropy)
+  NODE_SOCKET_API(float, rotation)
   NODE_SOCKET_API(float, IOR)
   NODE_SOCKET_API(float, thin_film_thickness)
   NODE_SOCKET_API(float, thin_film_ior)
   NODE_SOCKET_API(ClosureType, distribution)
+
+  void attributes(Shader *shader, AttributeRequestSet *attributes) override;
+  bool has_attribute_dependency() override
+  {
+    return true;
+  }
+
+  bool is_isotropic();
 };
 
 class RefractionBsdfNode : public BsdfNode {
@@ -779,7 +794,7 @@ class EmissionNode : public ShaderNode {
     return true;
   }
 
-  uint get_feature() override
+  uint64_t get_feature() override
   {
     return ShaderNode::get_feature() | KERNEL_FEATURE_NODE_EMISSION;
   }
@@ -801,7 +816,7 @@ class BackgroundNode : public ShaderNode {
     return true;
   }
 
-  uint get_feature() override
+  uint64_t get_feature() override
   {
     return ShaderNode::get_feature() | KERNEL_FEATURE_NODE_EMISSION;
   }
@@ -835,7 +850,7 @@ class AmbientOcclusionNode : public ShaderNode {
   {
     return true;
   }
-  uint get_feature() override
+  uint64_t get_feature() override
   {
     return KERNEL_FEATURE_NODE_RAYTRACE;
   }
@@ -862,7 +877,7 @@ class VolumeNode : public ShaderNode {
                ShaderInput *density,
                ShaderInput *param1 = nullptr,
                ShaderInput *param2 = nullptr);
-  uint get_feature() override
+  uint64_t get_feature() override
   {
     return ShaderNode::get_feature() | KERNEL_FEATURE_NODE_VOLUME;
   }
@@ -987,9 +1002,9 @@ class PrincipledHairBsdfNode : public BsdfBaseNode {
   /* Selected scattering model (chiang/huang). */
   NODE_SOCKET_API(NodePrincipledHairModel, model)
 
-  uint get_feature() override
+  uint64_t get_feature() override
   {
-    return ccl::BsdfBaseNode::get_feature() | KERNEL_FEATURE_NODE_PRINCIPLED_HAIR;
+    return BsdfBaseNode::get_feature() | KERNEL_FEATURE_NODE_PRINCIPLED_HAIR;
   }
 
   bool has_surface_transparent() override;
@@ -1375,6 +1390,19 @@ class SeparateXYZNode : public ShaderNode {
   NODE_SOCKET_API(float3, vector)
 };
 
+class GetVectorComponentNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(GetVectorComponentNode)
+  void constant_fold(const ConstantFolder &folder) override;
+  ShaderNodeType shader_node_type() const override
+  {
+    return NODE_GET_VECTOR_COMPONENT;
+  }
+
+  NODE_SOCKET_API(float3, vector)
+  NODE_SOCKET_API(int, index)
+};
+
 class HSVNode : public ShaderNode {
  public:
   SHADER_NODE_CLASS(HSVNode)
@@ -1591,7 +1619,7 @@ class BumpNode : public ShaderNode {
   {
     return true;
   }
-  uint get_feature() override
+  uint64_t get_feature() override
   {
     return KERNEL_FEATURE_NODE_BUMP;
   }
@@ -1721,7 +1749,7 @@ class OSLNode final : public ShaderNode {
   {
     return true;
   }
-  uint get_feature() override
+  uint64_t get_feature() override
   {
     return ShaderNode::get_feature() | KERNEL_FEATURE_NODE_RAYTRACE;
   }
@@ -1796,7 +1824,7 @@ class BevelNode : public ShaderNode {
   {
     return true;
   }
-  uint get_feature() override
+  uint64_t get_feature() override
   {
     return KERNEL_FEATURE_NODE_RAYTRACE;
   }
@@ -1810,7 +1838,7 @@ class DisplacementNode : public ShaderNode {
  public:
   SHADER_NODE_CLASS(DisplacementNode)
   void constant_fold(const ConstantFolder &folder) override;
-  uint get_feature() override
+  uint64_t get_feature() override
   {
     return KERNEL_FEATURE_NODE_BUMP;
   }
@@ -1831,7 +1859,7 @@ class VectorDisplacementNode : public ShaderNode {
     return true;
   }
   void constant_fold(const ConstantFolder &folder) override;
-  uint get_feature() override
+  uint64_t get_feature() override
   {
     return KERNEL_FEATURE_NODE_BUMP;
   }
@@ -1862,7 +1890,7 @@ class RaycastNode : public ShaderNode {
   {
     return true;
   }
-  uint get_feature() override
+  uint64_t get_feature() override
   {
     return KERNEL_FEATURE_NODE_RAYTRACE;
   }
