@@ -22,6 +22,7 @@
 #  include "BLI_listbase.hh"
 #  include "BLI_string.hh"
 
+#  include "BKE_context.hh"
 #  include "BKE_global.hh"
 #  include "BKE_paint.hh"
 #  include "BKE_paint_types.hh"
@@ -248,9 +249,15 @@ static int rna_WorkSpaceTool_widget_length(PointerRNA *ptr)
   return tref->runtime ? strlen(tref->runtime->gizmo_group) : 0;
 }
 
-static void rna_workspace_sync_scene_time_update(bContext *C, PointerRNA * /*ptr*/)
+static void rna_workspace_sync_scene_time_update(bContext *C, PointerRNA *ptr)
 {
   ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+  ed::vse::sync_sequencer_scene_strip_range(CTX_data_main(C), static_cast<WorkSpace *>(ptr->data));
+}
+
+static void rna_workspace_strip_scene_range_update(bContext *C, PointerRNA *ptr)
+{
+  ed::vse::sync_sequencer_scene_strip_range(CTX_data_main(C), static_cast<WorkSpace *>(ptr->data));
 }
 
 }  // namespace blender
@@ -521,6 +528,8 @@ static void rna_def_workspace(BlenderRNA *brna)
                            "Limit Playback Range to Scene Strip",
                            "Limit playback to the frame range covered by this scene's strip in "
                            "the Sequencer if it exists");
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_update(prop, NC_WINDOW, "rna_workspace_strip_scene_range_update");
 
   RNA_api_workspace(srna);
 }

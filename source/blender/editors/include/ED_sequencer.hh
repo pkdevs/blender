@@ -19,6 +19,8 @@ struct bContext;
 struct View2D;
 struct rctf;
 struct ARegion;
+struct Main;
+struct WorkSpace;
 
 namespace ed::vse {
 
@@ -86,14 +88,12 @@ bool handle_is_selected(const Strip *strip, eStripHandle handle);
 
 bool is_scene_time_sync_needed(const bContext &C);
 bool is_scene_frame_range_from_strip_needed(const bContext &C);
-/**
- * Returns the scene strip (if any) that should be used for the scene synchronization feature.
- * This is the top-most visible scene strip at the current time of the \a sequencer_scene.
- */
-const Strip *get_scene_strip_for_time_sync(const Scene *sequencer_scene);
 
 bool get_scene_strip_frame_range(const bContext &C, float *r_start, float *r_end);
 void sync_active_scene_and_time_with_scene_strip(bContext &C);
+
+// todo(habib): doc
+void sync_sequencer_scene_strip_range(Main *bmain, WorkSpace *workspace);
 
 rctf sequencer_clamped_view_bounds_get(const bContext *C, ARegion *region);
 

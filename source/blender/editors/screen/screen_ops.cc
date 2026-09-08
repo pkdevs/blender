@@ -3902,7 +3902,7 @@ static wmOperatorStatus frame_offset_exec(bContext *C, wmOperator *op)
 
   const bool wrap_timeline_navigation = scene->r.flag & SCER_WRAP_TIMELINE_NAVIGATION;
   if (wrap_timeline_navigation) {
-    const ScenePlaybackRange playback_range = BKE_scene_get_playback_range(scene);
+    const ScenePlaybackRange playback_range = ED_scene_get_effective_playback_range(*C, scene);
     scene->r.cfra = wrap_frame_in_range(scene->r.cfra, playback_range);
   }
   else {
@@ -3952,7 +3952,7 @@ static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
   wmTimer *animtimer = CTX_wm_screen(C)->animtimer;
-  const ScenePlaybackRange playback_range = BKE_scene_get_playback_range(scene);
+  const ScenePlaybackRange playback_range = ED_scene_get_effective_playback_range(*C, scene);
 
   /* Don't change scene->r.cfra directly if animtimer is running as this can cause
    * first/last frame not to be actually shown (bad since for example physics
@@ -4056,7 +4056,7 @@ static wmOperatorStatus frame_jump_delta_exec(bContext *C, wmOperator *op)
 
   const bool wrap_timeline_navigation = scene->r.flag & SCER_WRAP_TIMELINE_NAVIGATION;
   if (wrap_timeline_navigation) {
-    const ScenePlaybackRange playback_range = BKE_scene_get_playback_range(scene);
+    const ScenePlaybackRange playback_range = ED_scene_get_effective_playback_range(*C, scene);
     scene->r.cfra = wrap_frame_in_range(scene->r.cfra, playback_range);
   }
   else {
@@ -4219,7 +4219,7 @@ static wmOperatorStatus keyframe_jump_exec(bContext *C, wmOperator *op)
   const float cfra = BKE_scene_frame_get(scene);
 
   const bool wrap_timeline_navigation = scene->r.flag & SCER_WRAP_TIMELINE_NAVIGATION;
-  const ScenePlaybackRange playback_range = BKE_scene_get_playback_range(scene);
+  const ScenePlaybackRange playback_range = ED_scene_get_effective_playback_range(*C, scene);
 
   /* Find matching keyframe in the right direction. */
   const ActKeyColumn *ak;
@@ -4355,7 +4355,7 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
   }
 
   const bool wrap_timeline_navigation = scene->r.flag & SCER_WRAP_TIMELINE_NAVIGATION;
-  const ScenePlaybackRange playback_range = BKE_scene_get_playback_range(scene);
+  const ScenePlaybackRange playback_range = ED_scene_get_effective_playback_range(*C, scene);
 
   int closest = scene->r.cfra;
   const bool next = RNA_boolean_get(op->ptr, "next");

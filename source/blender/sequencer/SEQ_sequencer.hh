@@ -130,6 +130,9 @@ struct EditingRuntime {
   int transform_preview_frame = 0;
   bool show_transform_preview = false;
 
+  // todo(habib): doc
+  bool use_scene_strip_range = false;
+
   CompositorCache &ensure_compositor_cache();
 };
 

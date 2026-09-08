@@ -48,6 +48,7 @@
 #include "SEQ_prefetch.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_render.hh"
+#include "SEQ_scene_strip.hh"
 #include "SEQ_select.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_thumbnail_cache.hh"
@@ -428,58 +429,6 @@ static Scene *get_sequencer_scene_for_time_sync(const bContext &C)
   return nullptr;
 }
 
-const Strip *get_scene_strip_for_time_sync(const Scene *sequencer_scene)
-{
-  const Editing *ed = seq::editing_get(sequencer_scene);
-  if (!ed) {
-    return nullptr;
-  }
-  ListBaseT<Strip> *seqbase = seq::active_seqbase_get(ed);
-  const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
-  VectorSet<Strip *> query_strips = seq::query_strips_recursive_at_frame(
-      sequencer_scene, seqbase, sequencer_scene->r.cfra);
-  /* Ignore effect strips, sound strips and muted strips. */
-  query_strips.remove_if([&](const Strip *strip) {
-    return strip->is_effect() || strip->type == STRIP_TYPE_SOUND ||
-           seq::render_is_muted(channels, strip);
-  });
-  Vector<Strip *> strips = query_strips.extract_vector();
-  /* Sort strips by channel. */
-  std::ranges::sort(strips,
-                    [](const Strip *a, const Strip *b) { return a->channel > b->channel; });
-  /* Get the top-most scene strip. */
-  for (const Strip *strip : strips) {
-    if (strip->type == STRIP_TYPE_SCENE) {
-      return strip;
-    }
-  }
-  return nullptr;
-}
-
-static void scene_strip_visible_frame_range(const Scene *sequencer_scene,
-                                            const Strip *scene_strip,
-                                            float *r_start,
-                                            float *r_end)
-{
-  /* ..._handle are frames in "sequencer logic", meaning that on the right_handle point in time,
-   * the strip is not visible any more. The last visible frame of the strip is actually on
-   * (right_handle-1), hence the -1 when computing the end_frame. */
-  const float left_handle = scene_strip->left_handle();
-  const float right_handle = scene_strip->right_handle(sequencer_scene);
-  float start_frame = seq::give_frame_index(sequencer_scene, scene_strip, left_handle) +
-                      scene_strip->scene->r.sfra + scene_strip->anim_startofs;
-  float end_frame = seq::give_frame_index(sequencer_scene, scene_strip, right_handle - 1) +
-                    scene_strip->scene->r.sfra + scene_strip->anim_startofs;
-
-  /* This can happen when the strip time is reversed. */
-  if (start_frame > end_frame) {
-    std::swap(start_frame, end_frame);
-  }
-
-  *r_start = start_frame;
-  *r_end = end_frame;
-}
-
 bool get_scene_strip_frame_range(const bContext &C, float *r_start, float *r_end)
 {
   const WorkSpace *workspace = CTX_wm_workspace(&C);
@@ -490,13 +439,26 @@ bool get_scene_strip_frame_range(const bContext &C, float *r_start, float *r_end
   if (!sequencer_scene) {
     return false;
   }
-  const Strip *scene_strip = get_scene_strip_for_time_sync(sequencer_scene);
-  if (!scene_strip || !scene_strip->scene) {
-    return false;
+  return seq::scene_strip_frame_range_get(sequencer_scene, r_start, r_end);
+}
+
+void sync_sequencer_scene_strip_range(Main *bmain, WorkSpace *workspace)
+{
+  const bool use_scene_strip_range = (workspace->flags &
+                                      WORKSPACE_USE_STRIP_SCENE_RANGE_FOR_PLAYBACK) != 0;
+
+  /* Start from a clean state. */
+  // todo(habib):
+  for (Scene &scene : bmain->scenes) {
+    if (scene.ed && scene.ed->runtime) {
+      scene.ed->runtime->use_scene_strip_range = false;
+    }
   }
 
-  scene_strip_visible_frame_range(sequencer_scene, scene_strip, r_start, r_end);
-  return true;
+  Scene *sequencer_scene = workspace->sequencer_scene;
+  if (sequencer_scene && sequencer_scene->ed && sequencer_scene->ed->runtime) {
+    sequencer_scene->ed->runtime->use_scene_strip_range = use_scene_strip_range;
+  }
 }
 
 void sync_active_scene_and_time_with_scene_strip(bContext &C)
@@ -507,7 +469,7 @@ void sync_active_scene_and_time_with_scene_strip(bContext &C)
   }
 
   wmWindow *win = CTX_wm_window(&C);
-  const Strip *scene_strip = get_scene_strip_for_time_sync(sequencer_scene);
+  const Strip *scene_strip = seq::scene_strip_for_time_sync_get(sequencer_scene);
   if (!scene_strip || !scene_strip->scene) {
     /* No scene strip with scene found. Switch to pinned scene. */
     Main *bmain = CTX_data_main(&C);

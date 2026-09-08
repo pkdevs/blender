@@ -18,6 +18,7 @@
 #include "IMB_imbuf.hh"
 
 #include "SEQ_relations.hh"
+#include "SEQ_scene_strip.hh"
 #include "SEQ_sequencer.hh"
 
 #include "final_image_cache.hh"
@@ -241,8 +242,8 @@ bool final_image_cache_evict(Scene *scene)
   }
   const bool prefetch_loops_around = cur_prefetch_start > cur_prefetch_end;
 
-  const int timeline_start = scene->playback_start();
-  const int timeline_end = scene->playback_end();
+  int timeline_start, timeline_end;
+  scene_playback_range_get(scene, &timeline_start, &timeline_end);
   /* If we wrap around, treat the timeline start as the playback head position.
    * This is to try to mitigate un-needed cache evictions. */
   const int cur_frame = prefetch_loops_around ? timeline_start : scene->r.cfra;

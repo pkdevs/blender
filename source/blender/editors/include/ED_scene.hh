@@ -55,6 +55,13 @@ bool ED_scene_view_layer_delete(Main *bmain, Scene *scene, ViewLayer *layer, Rep
 
 void ED_operatortypes_scene();
 
+/* If the scene is instantiated in the sequencer, use its strip range, otherwise fallback to the
+ * scene's frame range, which can also be the preview range. */
+ScenePlaybackRange ED_scene_get_effective_playback_range(const bContext &C, const Scene *scene);
+
+// todo(habib): doc
+void ED_scene_frame_clamp_for_playback(const bContext &C, Scene *scene, bool is_playing_forward);
+
 /* -------------------------------------------------------------------- */
 /** \name Scene FPS Management
  * \{ */
