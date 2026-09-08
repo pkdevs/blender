@@ -2,15 +2,21 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup nodes
+ */
+
 #pragma once
 
 #include "FN_user_data.hh"
+
+#include "NOD_warning.hh"
 
 namespace blender::nodes {
 
 class ShaderNodesMultiFunctionUserData : public fn::UserData {
  public:
-  Vector<std::string> error_messages;
+  Vector<NodeWarning> warnings;
 };
 
 }  // namespace blender::nodes
