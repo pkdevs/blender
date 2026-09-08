@@ -437,7 +437,8 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
   bool use_spatial_resampling  = get_boolean(cscene, "use_spatial_resampling");
   bool use_temporal_resampling = get_boolean(cscene, "use_temporal_resampling");
   const bool restir_unbiased = get_boolean(cscene, "restir_unbiased");
-  int restir_temporal_history_limit = get_int(cscene, "restir_temporal_history_limit"); // !!!(Tri): Unused
+  int restir_temporal_sample_count = get_int(cscene, "restir_temporal_sample_count"); // !!!(Tri): Unused
+  int restir_temporal_frame_count = get_int(cscene, "restir_temporal_frame_count");
   int light_samples = get_int(cscene, "restir_light_samples");
   int bsdf_samples = 1;
 
@@ -467,8 +468,10 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
   integrator->set_restir_spatial_neighbors(get_int(cscene, "restir_spatial_neighbors"));
   integrator->set_restir_spatial_iterations(
       use_spatial_resampling ? get_int(cscene, "restir_spatial_iterations") : 0);
-  integrator->set_restir_temporal_history_limit(
-      use_temporal_resampling ? get_int(cscene, "restir_temporal_history_limit") : 0);
+  integrator->set_restir_temporal_sample_count(
+      use_temporal_resampling ? get_int(cscene, "restir_temporal_sample_count") : 0);
+  integrator->set_restir_temporal_frame_count(
+      use_temporal_resampling ? get_int(cscene, "restir_temporal_frame_count") : 0);
 
   SamplingPattern sampling_pattern = (SamplingPattern)get_enum(
       cscene, "sampling_pattern", SAMPLING_NUM_PATTERNS, SAMPLING_PATTERN_TABULATED_SOBOL);

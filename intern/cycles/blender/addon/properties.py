@@ -618,13 +618,20 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default='POWER_HEURISTIC',
     )
 
-    # TODO(Tri)
-    restir_temporal_history_limit: IntProperty(
-        name="History Limit",
-        description="Maximum length of temporal history to accumulate (in frames)", # sample + frame
+    restir_temporal_sample_count: IntProperty(
+        name="Sample History Limit",
+        description="Maximum count of Samples to accumulate for temporal history",
+        min=0,
+        max=128,
+        default=16,
+    )
+
+    restir_temporal_frame_count: IntProperty(
+        name="Frame History Limit",
+        description="Maximum count of Frames to accumulate for temporal history",
         min=0,
         max=64,
-        default=4,
+        default=2,
     )
 
     scrambling_distance: FloatProperty(

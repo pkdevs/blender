@@ -218,6 +218,8 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
   kfilm->pass_restir_previous_reservoir = PASS_UNUSED;
   kfilm->pass_restir_reservoir = PASS_UNUSED;
   kfilm->pass_restir_temporal_history_reservoir = PASS_UNUSED;
+  kfilm->pass_restir_reprojection_surface = PASS_UNUSED;
+  kfilm->pass_restir_previous_reprojection_surface = PASS_UNUSED;
   kfilm->pass_restir_pt_previous_reservoir = PASS_UNUSED;
   kfilm->pass_restir_pt_reservoir = PASS_UNUSED;
   kfilm->pass_surface_data = PASS_UNUSED;

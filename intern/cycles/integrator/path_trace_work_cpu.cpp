@@ -208,7 +208,7 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
   /* Temporal Resampling: runs before spatial regardless of its 
    * iteration count, since temporal and spatial reuse are orthogonal settings. */
   if (device_scene_->data.integrator.use_restir &&
-      device_scene_->data.integrator.restir_temporal_history_limit > 0)
+      device_scene_->data.integrator.restir_temporal_sample_count > 0)
   {
     local_arena.execute(
         [&] { temporal_resampling(image_width, image_height, start_sample, sample_offset); });

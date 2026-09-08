@@ -628,7 +628,8 @@ class CYCLES_RENDER_PT_sampling_lights_restir_temporal(CyclesButtonsPanel, Panel
 
         col = layout.column(align=True)
         col.active = cscene.use_temporal_resampling
-        col.prop(cscene, "restir_temporal_history_limit", text="History Limit")
+        col.prop(cscene, "restir_temporal_sample_count", text="Samples Limit")
+        col.prop(cscene, "restir_temporal_frame_count", text="Frames Limit")
 
 
 class CYCLES_RENDER_PT_subdivision(CyclesButtonsPanel, Panel):

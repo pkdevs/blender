@@ -120,6 +120,10 @@ KERNEL_STRUCT_MEMBER(film, int, pass_shadow_catcher_matte)
 KERNEL_STRUCT_MEMBER(film, int, pass_restir_previous_reservoir)
 KERNEL_STRUCT_MEMBER(film, int, pass_restir_reservoir)
 KERNEL_STRUCT_MEMBER(film, int, pass_restir_temporal_history_reservoir)
+
+KERNEL_STRUCT_MEMBER(film, int, pass_restir_reprojection_surface)
+KERNEL_STRUCT_MEMBER(film, int, pass_restir_previous_reprojection_surface)
+
 // ???: Can we Use pass_normal/position/uv?
 KERNEL_STRUCT_MEMBER(film, int, pass_restir_pt_previous_reservoir)
 KERNEL_STRUCT_MEMBER(film, int, pass_restir_pt_reservoir)
@@ -253,7 +257,11 @@ KERNEL_STRUCT_MEMBER(integrator, int, restir_spatial_radius)
 KERNEL_STRUCT_MEMBER(integrator, int, restir_spatial_neighbors)
 KERNEL_STRUCT_MEMBER(integrator, int, restir_spatial_iterations)
 KERNEL_STRUCT_MEMBER(integrator, int, restir_pairwise_mis)
-KERNEL_STRUCT_MEMBER(integrator, int, restir_temporal_history_limit)
+
+KERNEL_STRUCT_MEMBER(integrator, int, restir_temporal_sample_count)
+KERNEL_STRUCT_MEMBER(integrator, int, restir_temporal_frame_count)
+KERNEL_STRUCT_MEMBER(integrator, int, restir_temporal_normal_threshold)
+KERNEL_STRUCT_MEMBER(integrator, int, restir_temporal_depth_threshold)
 
 KERNEL_STRUCT_MEMBER(integrator, float2, pixel_jitter)
 KERNEL_STRUCT_END(KernelIntegrator)

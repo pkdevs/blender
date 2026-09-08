@@ -500,7 +500,7 @@ void PathTraceWorkGPU::render_samples(RenderStatistics &statistics,
   /* MARK: - ReSTIR temporal resampling. */
 
   if (!is_cancel_requested() && device_scene_->data.integrator.use_restir &&
-      device_scene_->data.integrator.restir_temporal_history_limit > 0)
+      device_scene_->data.integrator.restir_temporal_sample_count > 0)
   {
     setup_restir_ = false;
     setup_temporal_ = true;

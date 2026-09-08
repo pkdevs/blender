@@ -477,7 +477,7 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
 
   /* Cap history so a lighting change or moving object doesn't get stuck
    * behind decades of stale confidence. */
-  history.M = min(history.M, current->reservoir.M * kernel_data.integrator.restir_temporal_history_limit); // restir_temporal_max_history
+  history.M = min(history.M, current->reservoir.M * kernel_data.integrator.restir_temporal_sample_count); // restir_temporal_max_history
 
   light_sample_from_reference(kg,
                               &history.reference,
@@ -551,8 +551,8 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
 
   integrator_path_terminate(kg, state, render_buffer, DEVICE_KERNEL_INTEGRATOR_RESTIR_TEMPORAL);
 
-ccl_debug_printf("integrator_restir_temporal(): radiance=(%f, %f, %f)\n",
-       (double)current.reservoir.radiance.sum.x, (double)current.reservoir.radiance.sum.y, (double)current.reservoir.radiance.sum.z);
+ccl_debug_printf("integrator_restir_temporal(): use_spatial=(%d) radiance=(%f, %f, %f)\n",
+       use_spatial, (double)current.reservoir.radiance.sum.x, (double)current.reservoir.radiance.sum.y, (double)current.reservoir.radiance.sum.z);
   return true;
 }
 

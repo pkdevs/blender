@@ -19,7 +19,7 @@ struct Reservoir {
 
   /* Number of samples this reservoir represents. A freshly generated
    * candidate this render sample starts at 1; temporal combination grows
-   * it (capped by restir_temporal_history_limit) as history accumulates
+   * it (capped by restir_temporal_sample_count) as history accumulates
    * across samples. Spatial-only combination currently ignores this and
    * treats every neighbor as M == 1; see mis_weight_pairwise() call sites. */
   int M = 1;
@@ -244,6 +244,13 @@ ccl_device_inline void reservoir_add_light_sample(
   //   return;
   // }
 
+/*
+The RIS path weights samples via reservoir_mis_weight_nee() inside reservoir_add_light_sample(), 
+normalized through reservoir_finalize()'s unbiased-contribution-weight division. 
+The legacy path uses light_sample_mis_weight_nee() directly against ls.eval_fac. 
+These are different estimators of the same underlying integral — 
+patching the reference alone would still shade every non-ReSTIR bounce through the wrong one.
+*/
   const float mis_weight = reservoir_mis_weight_nee(reservoir, ls.pdf, bsdf_pdf);
 
   float light_pdf_in_area = ls.pdf;
