@@ -17,21 +17,21 @@ namespace blender::nodes::node_geo_grid_solve_poisson_cc {
 
 enum class ThresholdMode {
   /** Threshold relative to the maximum absolute value of the input grid (infinity norm). */
-  RelativeError,
+  Relative,
   /** Threshold based on the maximum absolute value of the solution (infinity norm). */
-  AbsoluteError,
+  Absolute,
 };
 
 static const EnumPropertyItem threshold_mode_items[] = {
-    {int(ThresholdMode::RelativeError),
-     "RELATIVE_ERROR",
+    {int(ThresholdMode::Relative),
+     "RELATIVE",
      0,
-     "Relative Error",
+     "Relative",
      "Threshold relative to the maximum absolute value of the input grid (infinity norm)"},
-    {int(ThresholdMode::AbsoluteError),
-     "ABSOLUTE_ERROR",
+    {int(ThresholdMode::Absolute),
+     "ABSOLUTE",
      0,
-     "Absolute Error",
+     "Absolute",
      "Threshold based on the maximum absolute value of the solution (infinity norm)"},
     {0, nullptr, 0, nullptr, nullptr},
 };
@@ -85,16 +85,16 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(1)
       .max(10000)
       .description("Maximum number of solver iterations");
-  b.add_input<decl::Menu>("Threshold Mode"_ustr)
-      .static_items(threshold_mode_items)
-      .expanded()
-      .default_value(ThresholdMode::RelativeError)
-      .optional_label()
-      .description("Mode that defines how the error threshold is interpreted");
   b.add_input<decl::Float>("Error Threshold"_ustr)
       .min(0.0f)
       .default_value(1e-3f)
       .description("Error threshold below which a solution is considered valid");
+  b.add_input<decl::Menu>("Threshold Mode"_ustr)
+      .static_items(threshold_mode_items)
+      .expanded()
+      .default_value(ThresholdMode::Relative)
+      .short_label("Threshold"_ustr)
+      .description("Mode that defines how the error threshold is interpreted");
 
   b.add_input<decl::Menu>("Boundary"_ustr)
       .static_items(boundary_items)
@@ -261,11 +261,11 @@ static void node_geo_exec(GeoNodeExecParams params)
   openvdb::math::pcg::State solver_state;
   solver_state.iterations = max_iterations;
   switch (threshold_mode) {
-    case ThresholdMode::RelativeError:
+    case ThresholdMode::Relative:
       solver_state.relativeError = double(error_threshold);
       solver_state.absoluteError = 0.0;
       break;
-    case ThresholdMode::AbsoluteError:
+    case ThresholdMode::Absolute:
       solver_state.relativeError = 0.0;
       solver_state.absoluteError = double(error_threshold);
       break;
