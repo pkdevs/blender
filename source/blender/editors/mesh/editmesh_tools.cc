@@ -4277,19 +4277,22 @@ static Base *mesh_separate_arrays(Main *bmain,
   return base_new;
 }
 
-static bool isolate_selection(
-    BMesh *bm, BMVert **verts, BMEdge **edges, BMFace **faces, int (*lengths)[3])
+static bool isolate_selection(BMesh *bm,
+                              MutableSpan<BMVert *> verts,
+                              MutableSpan<BMEdge *> edges,
+                              MutableSpan<BMFace *> faces,
+                              int (*lengths)[3])
 {
   BM_mesh_select_mode_flush(bm);
 
   STACK_DECLARE(verts);
-  STACK_INIT(verts, bm->totvert);
+  STACK_INIT(verts, verts.size());
 
   STACK_DECLARE(edges);
-  STACK_INIT(edges, bm->totedge);
+  STACK_INIT(edges, edges.size());
 
   STACK_DECLARE(faces);
-  STACK_INIT(faces, bm->totface);
+  STACK_INIT(faces, faces.size());
 
   BMIter iter;
   BMFace *f;
@@ -4328,9 +4331,7 @@ static bool mesh_separate_selected(
   Array<BMFace *> face_selection(bm_old->totface);
 
   int lengths[3];
-  if (!isolate_selection(
-          bm_old, vert_selection.data(), edge_selection.data(), face_selection.data(), &lengths))
-  {
+  if (!isolate_selection(bm_old, vert_selection, edge_selection, face_selection, &lengths)) {
     return false;
   }
 
@@ -4418,17 +4419,20 @@ static void mesh_separate_material_assign_mat_nr(Main *bmain, Object *ob, const 
   }
 }
 
-static short isolate_single_material(
-    BMesh *bm, BMVert **verts, BMEdge **edges, BMFace **faces, int (*lengths)[3])
+static short isolate_single_material(BMesh *bm,
+                                     MutableSpan<BMVert *> verts,
+                                     MutableSpan<BMEdge *> edges,
+                                     MutableSpan<BMFace *> faces,
+                                     int (*lengths)[3])
 {
   STACK_DECLARE(verts);
-  STACK_INIT(verts, bm->totvert);
+  STACK_INIT(verts, verts.size());
 
   STACK_DECLARE(edges);
-  STACK_INIT(edges, bm->totedge);
+  STACK_INIT(edges, edges.size());
 
   STACK_DECLARE(faces);
-  STACK_INIT(faces, bm->totface);
+  STACK_INIT(faces, faces.size());
 
   BMFace *f = static_cast<BMFace *>(BM_iter_at_index(bm, BM_FACES_OF_MESH, nullptr, 0));
   const short mat_nr = f->mat_nr;
@@ -4476,8 +4480,7 @@ static bool mesh_separate_material(
   Array<BMFace *> faces(bm_old->totface);
 
   int lengths[3];
-  short mat_nr = isolate_single_material(
-      bm_old, verts.data(), edges.data(), faces.data(), &lengths);
+  short mat_nr = isolate_single_material(bm_old, verts, edges, faces, &lengths);
 
   if (lengths[2] == bm_old->totface) {
     mesh_separate_material_assign_mat_nr(bmain, base_old->object, mat_nr);
@@ -4514,7 +4517,7 @@ static bool mesh_separate_material(
       mesh_separate_material_assign_mat_nr(bmain, base_new->object, mat_nr);
     }
 
-    mat_nr = isolate_single_material(bm_old, verts.data(), edges.data(), faces.data(), &lengths);
+    mat_nr = isolate_single_material(bm_old, verts, edges, faces, &lengths);
     if (lengths[2] == bm_old->totface) {
       break;
     }
