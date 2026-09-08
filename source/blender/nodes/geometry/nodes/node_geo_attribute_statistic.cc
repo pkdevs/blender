@@ -112,6 +112,17 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   }
 }
 
+static float compute_median(const MutableSpan<float> data)
+{
+  const auto middle_itr = data.begin() + data.size() / 2;
+  std::nth_element(data.begin(), middle_itr, data.end());
+  if (data.size() % 2 == 0) {
+    auto *const left_middle_itr = std::max_element(data.begin(), middle_itr);
+    return math::midpoint<float>(*left_middle_itr, *middle_itr);
+  }
+  return *middle_itr;
+}
+
 static float compute_variance(const Span<float> data, const float mean)
 {
   if (data.size() <= 1) {
@@ -125,21 +136,6 @@ static float compute_variance(const Span<float> data, const float mean)
       });
 
   return sum_of_squared_differences / data.size();
-}
-
-static float median_of_sorted_span(const Span<float> data)
-{
-  if (data.is_empty()) {
-    return 0.0f;
-  }
-
-  const float median = data[data.size() / 2];
-
-  /* For spans of even length, the median is the average of the middle two elements. */
-  if (data.size() % 2 == 0) {
-    return (median + data[data.size() / 2 - 1]) * 0.5f;
-  }
-  return median;
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -187,16 +183,15 @@ static void node_geo_exec(GeoNodeExecParams params)
       const bool min_max_required = params.output_is_required("Range"_ustr) ||
                                     params.output_is_required("Min"_ustr) ||
                                     params.output_is_required("Max"_ustr);
-      const bool sort_required = params.output_is_required("Median"_ustr);
+      const bool median_required = params.output_is_required("Median"_ustr);
       const bool sum_required = params.output_is_required("Sum"_ustr) ||
                                 params.output_is_required("Mean"_ustr);
       const bool variance_required = params.output_is_required("Standard Deviation"_ustr) ||
                                      params.output_is_required("Variance"_ustr);
 
       if (data.size() != 0) {
-        if (sort_required) {
-          std::ranges::sort(data);
-          median = median_of_sorted_span(data);
+        if (median_required) {
+          median = compute_median(data);
         }
         if (min_max_required) {
           Bounds<float> bounds = bounds::min_max(data.as_span()).value_or({});
@@ -225,7 +220,7 @@ static void node_geo_exec(GeoNodeExecParams params)
         params.set_output("Min"_ustr, min);
         params.set_output("Max"_ustr, max);
       }
-      if (sort_required) {
+      if (median_required) {
         params.set_output("Median"_ustr, median);
       }
       if (variance_required) {
@@ -270,7 +265,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       const bool min_max_required = params.output_is_required("Range"_ustr) ||
                                     params.output_is_required("Min"_ustr) ||
                                     params.output_is_required("Max"_ustr);
-      const bool sort_required = params.output_is_required("Median"_ustr);
+      const bool median_required = params.output_is_required("Median"_ustr);
       const bool sum_required = params.output_is_required("Sum"_ustr) ||
                                 params.output_is_required("Mean"_ustr);
       const bool variance_required = params.output_is_required("Standard Deviation"_ustr) ||
@@ -279,7 +274,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       Array<float> data_x;
       Array<float> data_y;
       Array<float> data_z;
-      if (sort_required || variance_required) {
+      if (median_required || variance_required) {
         data_x.reinitialize(data.size());
         data_y.reinitialize(data.size());
         data_z.reinitialize(data.size());
@@ -291,15 +286,8 @@ static void node_geo_exec(GeoNodeExecParams params)
       }
 
       if (data.size() != 0) {
-        if (sort_required) {
-          std::ranges::sort(data_x);
-          std::ranges::sort(data_y);
-          std::ranges::sort(data_z);
-
-          const float x_median = median_of_sorted_span(data_x);
-          const float y_median = median_of_sorted_span(data_y);
-          const float z_median = median_of_sorted_span(data_z);
-          median = float3(x_median, y_median, z_median);
+        if (median_required) {
+          median = float3(compute_median(data_x), compute_median(data_y), compute_median(data_z));
         }
         if (min_max_required) {
           Bounds<float3> bounds = bounds::min_max(data.as_span()).value_or({});
@@ -332,7 +320,7 @@ static void node_geo_exec(GeoNodeExecParams params)
         params.set_output("Max"_ustr, max);
         params.set_output("Range"_ustr, range);
       }
-      if (sort_required) {
+      if (median_required) {
         params.set_output("Median"_ustr, median);
       }
       if (variance_required) {
