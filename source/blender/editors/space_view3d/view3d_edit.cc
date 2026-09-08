@@ -596,7 +596,7 @@ static wmOperatorStatus view3d_flip_view_exec(bContext *C, wmOperator *op)
   rv3d->rflag ^= RV3D_FLIP_X;
 
   if (direction == FlipDirection::Vertical) {
-    rv3d->camroll += M_PI;
+    rv3d->camroll = angle_wrap_rad(rv3d->camroll + M_PI);
   }
 
   ED_region_tag_redraw(region);
