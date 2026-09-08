@@ -57,7 +57,7 @@ static std::ostream &operator<<(std::ostream &stream, const GPUInput *input)
     case GPU_SOURCE_LAYER_ATTR:
       return stream << "attr_load_layer(" << input->layer_attr->hash_code << ")";
     case GPU_SOURCE_STRUCT:
-      return stream << "strct" << input->id;
+      return stream << (input->is_zone_io ? "zone" : "strct") << input->id;
     case GPU_SOURCE_TEX:
       return stream << input->texture->sampler_name;
     case GPU_SOURCE_TEX_TILED_MAPPING:
@@ -294,7 +294,14 @@ void GPUCodegen::generate_resources()
         ss << input->type << " crypto_hash;\n";
       }
       else {
-        ss << input->type << " u" << input->id << (input->is_duplicate ? "b" : "") << ";\n";
+        /* MSL does not pad bool to 4 bytes; use bool32_t so UBO layout matches correctly. */
+        if (input->type == GPU_BOOL) {
+          ss << "bool32_t";
+        }
+        else {
+          ss << input->type;
+        }
+        ss << " u" << input->id << (input->is_duplicate ? "b" : "") << ";\n";
       }
     }
     ss << "};\n";
@@ -422,7 +429,7 @@ void GPUCodegen::node_serialize(Set<StringRefNull> &used_libraries,
         eval_ss << &input;
         break;
     }
-    GPUOutput *output = static_cast<GPUOutput *>(node->outputs.first);
+    GPUOutput *output = node->outputs.first();
     if ((input.next && !input.next->is_zone_io) || (output && !output->is_zone_io)) {
       eval_ss << ", ";
     }
@@ -572,13 +579,13 @@ void GPUCodegen::set_unique_ids()
   /* Assign the same id to inputs and outputs of start and end zones. */
   for (GPUNode *end : zone_ends.values()) {
 
-    GPUInput *end_input = find_zone_io(static_cast<GPUInput *>(end->inputs.first));
-    GPUOutput *end_output = find_zone_io(static_cast<GPUOutput *>(end->outputs.first));
+    GPUInput *end_input = find_zone_io(end->inputs.first());
+    GPUOutput *end_output = find_zone_io(end->outputs.first());
 
     GPUNode *start = zone_starts.lookup(end->zone_index);
 
-    GPUInput *start_input = find_zone_io(static_cast<GPUInput *>(start->inputs.first));
-    GPUOutput *start_output = find_zone_io(static_cast<GPUOutput *>(start->outputs.first));
+    GPUInput *start_input = find_zone_io(start->inputs.first());
+    GPUOutput *start_output = find_zone_io(start->outputs.first());
 
     for (; start_input; start_input = start_input->next,
                         start_output = start_output->next,
