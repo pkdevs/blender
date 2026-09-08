@@ -4280,6 +4280,8 @@ static Base *mesh_separate_arrays(Main *bmain,
 static bool isolate_selection(
     BMesh *bm, BMVert **verts, BMEdge **edges, BMFace **faces, int (*lengths)[3])
 {
+  BM_mesh_select_mode_flush(bm);
+
   STACK_DECLARE(verts);
   STACK_INIT(verts, bm->totvert);
 
