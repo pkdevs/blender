@@ -6,6 +6,13 @@
  * Compile shader files as C++ inside one compilation unit to lint syntax and get IDE integration.
  */
 
+#include "gpu_shader_common_color_ramp.bsl.hh"                 /* IWYU pragma: export */
+#include "gpu_shader_common_color_utils.bsl.hh"                /* IWYU pragma: export */
+#include "gpu_shader_common_curves.bsl.hh"                     /* IWYU pragma: export */
+#include "gpu_shader_common_hash.bsl.hh"                       /* IWYU pragma: export */
+#include "gpu_shader_common_math.bsl.hh"                       /* IWYU pragma: export */
+#include "gpu_shader_common_math_utils.bsl.hh"                 /* IWYU pragma: export */
+#include "gpu_shader_common_mix_rgb.bsl.hh"                    /* IWYU pragma: export */
 #include "gpu_shader_material_add_shader.bsl.hh"               /* IWYU pragma: export */
 #include "gpu_shader_material_align_rotation_to_vector.bsl.hh" /* IWYU pragma: export */
 #include "gpu_shader_material_ambient_occlusion.bsl.hh"        /* IWYU pragma: export */

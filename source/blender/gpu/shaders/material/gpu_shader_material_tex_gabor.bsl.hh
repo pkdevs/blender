@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include "gpu_shader_common_hash.glsl"
+#include "gpu_shader_common_hash.bsl.hh"
 #include "gpu_shader_math_constants_lib.glsl"
 #include "gpu_shader_math_vector_lib.glsl"
 

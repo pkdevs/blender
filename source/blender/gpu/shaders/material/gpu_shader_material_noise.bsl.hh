@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "gpu_shader_common_hash.glsl"
+#include "gpu_shader_common_hash.bsl.hh"
 #include "gpu_shader_math_vector_safe_lib.glsl"
 
 /* clang-format off */

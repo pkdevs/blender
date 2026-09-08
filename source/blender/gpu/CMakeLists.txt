@@ -569,13 +569,6 @@ set(GLSL_SRC
 
   shaders/common/gpu_shader_attribute_load_lib.glsl
   shaders/common/gpu_shader_bicubic_sampler_lib.glsl
-  shaders/common/gpu_shader_common_color_ramp.glsl
-  shaders/common/gpu_shader_common_color_utils.glsl
-  shaders/common/gpu_shader_common_curves.glsl
-  shaders/common/gpu_shader_common_hash.glsl
-  shaders/common/gpu_shader_common_math_utils.glsl
-  shaders/common/gpu_shader_common_math.glsl
-  shaders/common/gpu_shader_common_mix_rgb.glsl
   shaders/common/gpu_shader_debug_gradients_lib.glsl
   shaders/common/gpu_shader_fullscreen_vert.glsl
   shaders/common/gpu_shader_fullscreen_lib.glsl
@@ -614,6 +607,14 @@ set(GLSL_SRC
   shaders/common/gpu_shader_test_lib.bsl.hh
   shaders/common/gpu_shader_tiled_image_lookup_lib.glsl
   shaders/common/gpu_shader_utildefines_lib.glsl
+
+  shaders/nodes/gpu_shader_common_color_ramp.bsl.hh
+  shaders/nodes/gpu_shader_common_color_utils.bsl.hh
+  shaders/nodes/gpu_shader_common_curves.bsl.hh
+  shaders/nodes/gpu_shader_common_hash.bsl.hh
+  shaders/nodes/gpu_shader_common_math.bsl.hh
+  shaders/nodes/gpu_shader_common_math_utils.bsl.hh
+  shaders/nodes/gpu_shader_common_mix_rgb.bsl.hh
 
   shaders/material/gpu_shader_material_interface.bsl.hh
 
@@ -839,6 +840,7 @@ set(GLSL_INC
   shaders/common
   shaders/compat
   shaders/infos
+  shaders/nodes
   shaders/material
   shaders/python
 

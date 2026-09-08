@@ -6,7 +6,7 @@
 
 COMPUTE_SHADER_CREATE_INFO(compositor_glare_sun_beams_shared)
 
-#include "gpu_shader_common_hash.glsl"
+#include "gpu_shader_common_hash.bsl.hh"
 #include "gpu_shader_compositor_texture_utilities.glsl"
 #include "gpu_shader_math_base_lib.glsl"
 #include "gpu_shader_math_safe_lib.glsl"

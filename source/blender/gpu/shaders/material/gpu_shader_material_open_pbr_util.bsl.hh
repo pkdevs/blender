@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "gpu_shader_common_math.glsl"
+#include "gpu_shader_common_math.bsl.hh"
 #include "gpu_shader_material_interface.bsl.hh"
 #include "gpu_shader_math_fast_lib.glsl"
 #include "gpu_shader_utildefines_lib.glsl"

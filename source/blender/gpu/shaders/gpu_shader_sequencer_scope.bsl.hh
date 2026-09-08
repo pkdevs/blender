@@ -5,7 +5,7 @@
 #pragma once
 
 #include "GPU_shader_shared.hh"
-#include "gpu_shader_common_color_utils.glsl"
+#include "gpu_shader_common_color_utils.bsl.hh"
 #include "gpu_shader_fullscreen_lib.glsl"
 
 namespace sequencer::scope {
