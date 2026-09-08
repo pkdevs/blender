@@ -1182,6 +1182,19 @@ eRegionView3D_View ED_view3d_lock_view_from_index(int index);
 eRegionView3D_View ED_view3d_axis_view_opposite(eRegionView3D_View view);
 bool ED_view3d_lock(RegionView3D *rv3d);
 
+enum class eRegionView3D_ViewFlipRoll : int8_t {
+  ROLL_0,
+  ROLL_90,
+  ROLL_180,
+  ROLL_270,
+  ROLL_OTHER,
+  FLIP_X,
+  FLIP_Y,
+  FLIP_OTHER,
+};
+
+eRegionView3D_ViewFlipRoll view3d_effective_flip_axis(RegionView3D *rv3d);
+
 void ED_view3d_datamask(const Main &bmain,
                         const Scene *scene,
                         ViewLayer *view_layer,

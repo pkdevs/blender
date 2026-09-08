@@ -1174,8 +1174,36 @@ static void draw_viewport_name(ARegion *region, View3D *v3d, int xoffset, int *y
   }
 
   /* Indicate that the view is flipped. */
-  if (rv3d->persp == RV3D_CAMOB && rv3d->rflag & RV3D_FLIP_X) {
-    name_array.append(IFACE_(" (Flipped)"));
+  if (rv3d->persp == RV3D_CAMOB) {
+    const eRegionView3D_ViewFlipRoll flip_roll = view3d_effective_flip_axis(rv3d);
+
+    switch (flip_roll) {
+      case eRegionView3D_ViewFlipRoll::FLIP_OTHER:
+        name_array.append(IFACE_(" (Flipped)"));
+        break;
+      case eRegionView3D_ViewFlipRoll::FLIP_X:
+        name_array.append(IFACE_(" (Flipped X)"));
+        break;
+      case eRegionView3D_ViewFlipRoll::FLIP_Y:
+        name_array.append(IFACE_(" (Flipped Y)"));
+        break;
+      case eRegionView3D_ViewFlipRoll::ROLL_0:
+        break;
+      case eRegionView3D_ViewFlipRoll::ROLL_90:
+        name_array.append(IFACE_(" (90\xC2\xB0)"));
+        break;
+      case eRegionView3D_ViewFlipRoll::ROLL_180:
+        name_array.append(IFACE_(" (180\xC2\xB0)"));
+        break;
+      case eRegionView3D_ViewFlipRoll::ROLL_270:
+        name_array.append(IFACE_(" (-90\xC2\xB0)"));
+        break;
+      case eRegionView3D_ViewFlipRoll::ROLL_OTHER:
+        name_array.append(IFACE_(" (Rolled)"));
+        break;
+      default:
+        break;
+    }
   }
 
   if (!name_array.is_empty()) {
