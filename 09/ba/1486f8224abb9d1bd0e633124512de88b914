@@ -1,3 +1,3 @@
 Referenced by commit f3fb3a9ecda, Cycles: Update device entries more often
 Referenced by issue #123911, Cycles: Update device entries more often
-Referenced by issue #163670, Cycles: Viewport does not register that the render device is changed
+Referenced by issue #163670, Cycles: Viewport does not register that the render device is changed with factory startup on macOS
