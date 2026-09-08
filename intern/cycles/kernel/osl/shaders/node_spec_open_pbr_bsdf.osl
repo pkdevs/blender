@@ -214,21 +214,34 @@ BSDF_T openpbr_translucent(color reflection_color,
     return mix(ThinGlass, ThinGlass_film, thin_film.weight);
   }
 
-  /* TODO(OpenPBR): thin film. */
   color transmission_tint = (transmission.depth == 0.0) ? transmission.tint : color(1.0);
   color specular_tint = backfacing() ? color(1.0) : reflection_color;
   float inv_abbe = transmission.dispersion_scale / transmission.dispersion_abbe_number;
-  BSDF_T Glass = dielectric_bsdf(N,
-                                 T,
-                                 specular_tint,
-                                 transmission_tint,
-                                 roughness.x,
-                                 roughness.y,
-                                 ior,
-                                 "multi_ggx",
-                                 "inv_abbe",
-                                 inv_abbe);
-
+  BSDF_T Glass_no_film = dielectric_bsdf(N,
+                                         T,
+                                         specular_tint,
+                                         transmission_tint,
+                                         roughness.x,
+                                         roughness.y,
+                                         ior,
+                                         "multi_ggx",
+                                         "inv_abbe",
+                                         inv_abbe);
+  BSDF_T Glass_film = dielectric_bsdf(N,
+                                      T,
+                                      specular_tint,
+                                      transmission_tint,
+                                      roughness.x,
+                                      roughness.y,
+                                      ior,
+                                      "multi_ggx",
+                                      "inv_abbe",
+                                      inv_abbe,
+                                      "thinfilm_thickness",
+                                      thin_film.thickness,
+                                      "thinfilm_ior",
+                                      thin_film.ior);
+  BSDF_T Glass = mix(Glass_no_film, Glass_film, thin_film.weight);
   if (transmission.depth > 0.0) {
     /* OpenPBR Surface Specification v1.1.1, Eq. (50-53). */
     color sigma_s = transmission.scatter / transmission.depth;
@@ -383,11 +396,11 @@ closure color node_spec_open_pbr_bsdf(float BaseWeight,
   base_weight = closure_weight_cutoff(base_weight);
 
   /* Adjust parameters. */
+  specular.ior = openpbr_specular_ior(specular.ior, specular.weight, coat.weight, coat.ior);
   if (!thin_walled && backfacing()) {
     specular.ior = 1.0 / specular.ior;
     thin_film.ior *= specular.ior;
   }
-  specular.ior = openpbr_specular_ior(specular.ior, specular.weight, coat.weight, coat.ior);
   color weighted_base_color = base_weight * base_color;
   vector2 alpha = openpbr_specular_roughness(specular.roughness, specular.anisotropy, coat);
 

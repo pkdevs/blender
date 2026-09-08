@@ -324,14 +324,12 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .not_implemented()
       .description("Coverage weight of the thin film");
 #define OPENPBR_SOCK_THIN_FILM_WEIGHT_ID 33
   thinfilm.add_input<decl::Float>("Thin Film Thickness"_ustr)
       .default_value(0.5f)
       .min(0.0f)
       .max(1.0f)
-      .not_implemented()
       .description("Thickness of the thin film in micrometers (μm)");
   /* TODO(weizhen): OpenPBR unit for thin film is micrometer, but our default is nanometer. Need to
    * address this discrepancy. */
@@ -341,7 +339,6 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(1.0f)
       .max(3.0f)
       .subtype(PROP_FACTOR)
-      .not_implemented()
       .description("Refractive index of the thin film");
 #define OPENPBR_SOCK_THIN_FILM_IOR_ID 35
   /* --------------------------------------------------------------------

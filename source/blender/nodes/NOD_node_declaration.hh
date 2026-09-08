@@ -192,7 +192,6 @@ class SocketDeclaration : public ItemDeclaration {
    */
   bool optional_label = false;
   bool hide_value = false;
-  bool not_implemented = false;
   bool compact = false;
   bool is_multi_input = false;
   bool no_mute_links = false;
@@ -309,8 +308,6 @@ class BaseSocketDeclarationBuilder {
   BaseSocketDeclarationBuilder &optional_label(bool value = true);
 
   BaseSocketDeclarationBuilder &hide_value(bool value = true);
-
-  BaseSocketDeclarationBuilder &not_implemented();
 
   BaseSocketDeclarationBuilder &multi_input(bool value = true);
 

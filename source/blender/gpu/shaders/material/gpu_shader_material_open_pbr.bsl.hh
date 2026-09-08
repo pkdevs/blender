@@ -124,7 +124,7 @@ void node_bsdf_open_pbr(const float float_weight,                             //
                         const float /*thin_film_thickness*/,                  // #34
                         const float /*thin_film_ior*/,                        // #35
                         float geometry_opacity,                               // #36
-                        const float geometry_thin_walled,                     // #37
+                        const bool geometry_thin_walled,                      // #37
                         const float3 geometry_normal,                         // #38
                         const float3 geometry_tangent,                        // #39
                         const float3 geometry_coat_normal,                    // #40
@@ -201,7 +201,6 @@ void node_bsdf_open_pbr(const float float_weight,                             //
   geometry_opacity = saturate(geometry_opacity);
   const float3 N = normalize_fallback(geometry_normal, g_data.N);
   [[maybe_unused]] float3 T = geometry_tangent;
-  const bool thin_walled = (geometry_thin_walled != 0.0f);
 
   /* Adjust parameters. */
   const float3 weighted_base_color = base_weight * base_color.rgb;
@@ -221,9 +220,9 @@ void node_bsdf_open_pbr(const float float_weight,                             //
   weight = openpbr_eval_metal(
       weight, weighted_base_color, specular, base_metalness, NV, multiggx, reflection_data);
   weight = openpbr_eval_translucent(
-      weight, specular, transmission, N, NV, thin_walled, reflection_data);
+      weight, specular, transmission, N, NV, geometry_thin_walled, reflection_data);
   weight = openpbr_eval_gloss(weight, specular, N, NV, reflection_data);
-  weight = openpbr_eval_subsurface(weight, subsurface, thin_walled, N, diffuse_data);
+  weight = openpbr_eval_subsurface(weight, subsurface, geometry_thin_walled, N, diffuse_data);
   openpbr_eval_diffuse(weight, weighted_base_color, N, diffuse_data);
 
   /* TODO(fclem): EEVEE implementation leaking. */

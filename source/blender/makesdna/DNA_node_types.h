@@ -164,8 +164,6 @@ enum eNodeSocketFlag : short {
   SOCK_HIDE_IN_MODIFIER = (1 << 13),
   /** The panel containing the socket is collapsed. */
   SOCK_PANEL_COLLAPSED = (1 << 14),
-  /* HACK: Gray out unimplemented sockets for OpenPBR. */
-  SOCK_NOT_IMPLEMENTED = (1 << 5),
 };
 ENUM_OPERATORS(eNodeSocketFlag)
 

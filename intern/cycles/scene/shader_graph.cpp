@@ -1202,9 +1202,18 @@ int ShaderGraph::get_num_closures()
     else if (CLOSURE_IS_BSDF_MULTISCATTER(closure_type)) {
       num_closures += 2;
     }
-    else if (closure_type == CLOSURE_BSDF_PRINCIPLED_ID ||
-             closure_type == CLOSURE_BSDF_OPEN_PBR_ID)
-    {
+    else if (closure_type == CLOSURE_BSDF_PRINCIPLED_ID) {
+      num_closures += 12;
+    }
+    else if (closure_type == CLOSURE_BSDF_OPEN_PBR_ID) {
+      /* Transparent: 1 (for Opacity)
+       * Fuzz: 1
+       * Coat: 1
+       * Metal: 2
+       * Transmission: 2
+       * Specular: 2
+       * Subsurface: 2
+       * Diffuse: 1. */
       num_closures += 12;
     }
     else if (CLOSURE_IS_VOLUME(closure_type)) {
