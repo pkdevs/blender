@@ -702,7 +702,7 @@ void extract_data_vert_mesh(const OffsetIndices<int> faces,
   PRF_scope(ProfileCategory::Draw);
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
-  VBOType *data = vbo.data<VBOType>().data() + scratch_range.first();
+  VBOType *data = vbo.data<VBOType>().data() + scratch_range.start();
   VBOType *data_start = data;
   for (const int face : face_indices) {
     for (const int vert : corner_verts.slice(faces[face])) {
@@ -725,7 +725,7 @@ void extract_data_face_mesh(const OffsetIndices<int> faces,
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
 
-  VBOType *data = vbo.data<VBOType>().data() + scratch_range.first();
+  VBOType *data = vbo.data<VBOType>().data() + scratch_range.start();
   VBOType *data_start = data;
   for (const int face : face_indices) {
     const int face_size = faces[face].size();
@@ -747,7 +747,7 @@ void extract_data_corner_mesh(const OffsetIndices<int> faces,
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
 
-  VBOType *data = vbo.data<VBOType>().data() + scratch_range.first();
+  VBOType *data = vbo.data<VBOType>().data() + scratch_range.start();
   VBOType *data_start = data;
   for (const int face : face_indices) {
     for (const int corner : faces[face]) {
@@ -783,7 +783,7 @@ void extract_data_vert_bmesh(const Set<BMFace *, 0> &faces,
   PRF_scope(ProfileCategory::Draw);
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
-  VBOType *data = vbo.data<VBOType>().data() + scratch_range.first();
+  VBOType *data = vbo.data<VBOType>().data() + scratch_range.start();
   VBOType *data_start = data;
 
   for (const BMFace *face : faces) {
@@ -811,7 +811,7 @@ void extract_data_face_bmesh(const Set<BMFace *, 0> &faces,
   PRF_scope(ProfileCategory::Draw);
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
-  VBOType *data = vbo.data<VBOType>().data() + scratch_range.first();
+  VBOType *data = vbo.data<VBOType>().data() + scratch_range.start();
   VBOType *data_start = data;
 
   for (const BMFace *face : faces) {
@@ -834,7 +834,7 @@ void extract_data_corner_bmesh(const Set<BMFace *, 0> &faces,
   PRF_scope(ProfileCategory::Draw);
   using Converter = AttributeConverter<T>;
   using VBOType = typename Converter::VBOType;
-  VBOType *data = vbo.data<VBOType>().data() + scratch_range.first();
+  VBOType *data = vbo.data<VBOType>().data() + scratch_range.start();
   VBOType *data_start = data;
 
   for (const BMFace *face : faces) {
