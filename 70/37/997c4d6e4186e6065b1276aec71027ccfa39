@@ -3,3 +3,4 @@ Referenced by commit 3d827fc97a713e3aba750d4c2179e207773f9da2, Fix: Remove duplc
 Referenced by pull request #163508, Fix: Outliner object data filter also hides materials and instances
 Referenced by pull request #163560, Fix: Outliner content filters have no effect with All View Layers on
 Referenced by commit b7b90053d8cfa1524a29fe558c896bdd0c30e7ed, Fix: Outliner content filters have no effect with All View Layers on
+Referenced by commit 4554f9e8b0f70796d59a6ba9af122447a9de4b0e, Fix: Outliner object data filter also hides materials and instances
