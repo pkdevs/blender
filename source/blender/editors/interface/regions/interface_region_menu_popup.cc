@@ -575,6 +575,8 @@ void popup_menu_reports(bContext *C, ReportList *reports)
       SNPRINTF_UTF8(title, "%s: %s", RPT_("Report"), report.typestr);
       /* popup_menu stuff does just what we need (but pass meaningful block name) */
       pup = popup_menu_begin_ex(C, title, __func__, ICON_NONE);
+      /* There is nothing to navigate, dismiss the popup on any key press. */
+      pup->block->flag |= BLOCK_CLOSE_ON_KEY;
       layout = popup_menu_layout(pup);
     }
     else {

@@ -12137,6 +12137,12 @@ static int handle_menu_event(bContext *C,
         /* Escape cancels this and all preceding menus. */
         menu->menuretval = RETURN_CANCEL;
       }
+      else if ((block->flag & BLOCK_CLOSE_ON_KEY) && event->val == KM_PRESS &&
+               ISKEYBOARD(event->type))
+      {
+        /* Dismiss informational popups (e.g. the reports popup) on any key press. */
+        menu->menuretval = RETURN_CANCEL;
+      }
       else if (ELEM(event->type, EVT_RETKEY, EVT_PADENTER) && event->val == KM_PRESS) {
         Button *but_default = region_find_first_but_test_flag(
             region, BUT_ACTIVE_DEFAULT, UI_HIDDEN);

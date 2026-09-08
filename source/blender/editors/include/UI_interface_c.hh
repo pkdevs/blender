@@ -322,6 +322,13 @@ enum {
    * and inherited by sub-menus from their parent.
    */
   BLOCK_NO_ACCELERATOR_KEYS = 1 << 27,
+  /**
+   * Close the popup on any key press.
+   *
+   * Dismisses the popup as soon as any keyboard key is pressed, used by informational popups
+   * such as the reports popup where there is nothing to navigate or select.
+   */
+  BLOCK_CLOSE_ON_KEY = 1 << 28,
 };
 
 /** #PopupBlockHandle.menuretval */
