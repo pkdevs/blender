@@ -804,7 +804,7 @@ void MetalDeviceQueue::prepare_resources()
     }
     else if (it.second->mtlTexture) {
       /* METAL_WIP - use array version (i.e. useResources) */
-      [mtlComputeEncoder_ useResource:it.second->mtlTexture usage:usage | MTLResourceUsageSample];
+      [mtlComputeEncoder_ useResource:it.second->mtlTexture usage:usage];
     }
   }
 
