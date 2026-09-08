@@ -65,9 +65,16 @@ int CUDADeviceQueue::num_concurrent_busy_states(const size_t /*state_size*/) con
   return 4 * max_num_threads;
 }
 
-int CUDADeviceQueue::num_sort_partitions(int max_num_paths, uint /*max_scene_shaders*/) const
+int CUDADeviceQueue::num_sort_partitions(int max_num_paths, uint max_scene_shaders) const
 {
-  return max(max_num_paths / 65536, 1);
+  /* Sort partitioning becomes less effective when more shaders are in the wavefront. Also need to
+   * ensure the amount of shared memory required is within the limit. */
+  if (max_scene_shaders < min(300, cuda_device_->max_shared_mem_bytes / (int)sizeof(int))) {
+    return max(max_num_paths / 65536, 1);
+  }
+  else {
+    return 1;
+  }
 }
 
 bool CUDADeviceQueue::supports_local_atomic_sort() const

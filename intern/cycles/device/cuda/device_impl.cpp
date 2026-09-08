@@ -99,6 +99,9 @@ CUDADevice::CUDADevice(const DeviceInfo &info, Stats &stats, Profiler &profiler,
   cuda_assert(cuDeviceGetAttribute(
       &pitch_alignment, CU_DEVICE_ATTRIBUTE_TEXTURE_PITCH_ALIGNMENT, cuDevice));
 
+  cuda_assert(cuDeviceGetAttribute(
+      &max_shared_mem_bytes, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK, cuDevice));
+
   if (can_map_host) {
     init_host_memory();
   }
