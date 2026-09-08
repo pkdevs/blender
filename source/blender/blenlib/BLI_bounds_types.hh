@@ -17,8 +17,10 @@ template<typename T> struct Bounds {
   explicit Bounds(const T &value) : min(value), max(value) {}
   Bounds(const T &min, const T &max) : Bounds(Bounds<T>::from_closed(min, max)) {}
 
-  static Bounds<T> from_closed();
-  static Bounds<T> from_open();
+  static Bounds<T> from_closed(const T &min, const T &max);
+  static Bounds<T> from_open(const T &min, const T &max);
+  static Bounds<T> from_closed_open(const T &min, const T &max);
+  static Bounds<T> from_open_closed(const T &min, const T &max);
 
   /**
    * Returns true when the size of the bounds is zero (or negative).
