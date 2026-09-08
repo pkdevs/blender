@@ -74,7 +74,7 @@ enum ImageFormatType {
   IMAGE_FORMAT_EQUIANGULAR,
 };
 
-/* Extension types for image.
+/* Extension types for images.
  *
  * Defines how the image is extrapolated past its original bounds. */
 enum ExtensionType {
