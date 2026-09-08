@@ -607,7 +607,7 @@ static wmOperatorStatus view3d_flip_view_exec(bContext *C, wmOperator *op)
 void VIEW3D_OT_view_flip(wmOperatorType *ot)
 {
   ot->name = "Flip View";
-  ot->description = "Flip the view when in a camera";
+  ot->description = "Flip the view when in camera view";
   ot->idname = "VIEW3D_OT_view_flip";
 
   ot->exec = view3d_flip_view_exec;
