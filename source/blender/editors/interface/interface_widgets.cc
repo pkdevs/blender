@@ -2400,13 +2400,13 @@ static void widget_draw_textbox(const uiFontStyle *fstyle,
                                              caret_width);
 
       const float y = rect.ymax - (line_height * (line_cursor - scroll));
-      text_button_update_cursor_pos(textbox,
-                                    rctf{
-                                        .xmin = float(rect.xmin) + t,
-                                        .xmax = float(rect.xmin) + t + caret_width,
-                                        .ymin = y - line_height,
-                                        .ymax = y,
-                                    });
+      const rctf cursor_rect = {
+          .xmin = float(rect.xmin) + t,
+          .xmax = float(rect.xmin) + t + caret_width,
+          .ymin = y - line_height,
+          .ymax = y,
+      };
+      text_button_update_cursor_pos(textbox, cursor_rect);
 #ifdef WITH_INPUT_IME
       /* IME candidate window uses cursor position. */
       if (!ime_reposition_window) {
@@ -2680,14 +2680,13 @@ static void widget_draw_text(const uiFontStyle *fstyle,
                                        but_pos_ofs - but->ofs,
                                        max_ii(1, int(U.pixelsize * 2)));
 
-      text_button_update_cursor_pos(
-          but,
-          rctf{
-              .xmin = float(rect->xmin + t + align_x_ofs),
-              .xmax = float(rect->xmin + t + align_x_ofs + int(2.0f * U.pixelsize)),
-              .ymin = float(rect->ymin + U.pixelsize),
-              .ymax = float(rect->ymax - U.pixelsize),
-          });
+      rctf cursor_rect = {
+          .xmin = float(rect->xmin + t + align_x_ofs),
+          .xmax = float(rect->xmin + t + align_x_ofs + int(2.0f * U.pixelsize)),
+          .ymin = float(rect->ymin + U.pixelsize),
+          .ymax = float(rect->ymax - U.pixelsize),
+      };
+      text_button_update_cursor_pos(but, cursor_rect);
 
 #ifdef WITH_INPUT_IME
       /* IME candidate window uses cursor position. */

@@ -4411,6 +4411,37 @@ void ED_region_header_init(ARegion *region)
   region->flag |= RGN_FLAG_INDICATE_OVERFLOW;
 }
 
+void ED_region_ensure_blink_cursor_overlay(const bContext *C,
+                                           const ARegion *region,
+                                           bool text_input_enabled)
+{
+  wmWindow *win = CTX_wm_window(C);
+  wmWindowManager *wm = CTX_wm_manager(C);
+  if (text_input_enabled) {
+    if (!region->runtime->text_cursor_overlay) {
+      region->runtime->text_cursor_overlay = bke::TextCursorOverlay{};
+    }
+    if (region->runtime->draw_flag & bke::ARegionRuntimeDrawFlag::TopmostActive && win->active) {
+      if (!region->runtime->text_cursor_overlay->timer) {
+        /* Ensure timer is set when this region is the topmost active region. */
+        region->runtime->text_cursor_overlay->timer = WM_event_timer_add(
+            CTX_wm_manager(C), win, TIMER, bke::TEXT_EDIT_CURSOR_BLINK_INTERVAL);
+      }
+    }
+    else if (region->runtime->text_cursor_overlay->timer) {
+      /* Remove timer if this region is not the topmost active region. */
+      WM_event_timer_remove(wm, win, region->runtime->text_cursor_overlay->timer);
+      region->runtime->text_cursor_overlay->timer = nullptr;
+    }
+  }
+  else if (region->runtime->text_cursor_overlay) {
+    if (region->runtime->text_cursor_overlay->timer) {
+      WM_event_timer_remove(wm, win, region->runtime->text_cursor_overlay->timer);
+    }
+    region->runtime->text_cursor_overlay = std::nullopt;
+  }
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

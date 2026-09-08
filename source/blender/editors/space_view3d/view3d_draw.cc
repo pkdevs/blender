@@ -1625,18 +1625,7 @@ void view3d_main_region_draw(const bContext *C, ARegion *region)
   Main *bmain = CTX_data_main(C);
   View3D *v3d = CTX_wm_view3d(C);
   const Object *object = CTX_data_edit_object(C);
-  if (object && object->type == ObjectType::OB_FONT) {
-    if (!region->runtime->text_cursor_overlay) {
-      region->runtime->text_cursor_overlay = bke::TextCursorOverlay{};
-      WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
-    }
-  }
-  else if (region->runtime->text_cursor_overlay) {
-    WM_event_timer_remove(
-        CTX_wm_manager(C), CTX_wm_window(C), region->runtime->text_cursor_overlay->timer);
-    region->runtime->text_cursor_overlay = std::nullopt;
-  }
-
+  ED_region_ensure_blink_cursor_overlay(C, region, object && object->type == ObjectType::OB_FONT);
   view3d_update_viewer_path(C);
   view3d_draw_view(C, region);
 

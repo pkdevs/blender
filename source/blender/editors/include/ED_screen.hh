@@ -149,6 +149,13 @@ void ED_region_header_init(ARegion *region);
 void ED_region_header(const bContext *C, ARegion *region);
 void ED_region_header_layout(const bContext *C, ARegion *region);
 void ED_region_header_draw(const bContext *C, ARegion *region);
+/**
+ * Ensures ARegion::ARegionRuntime::blink_cursor_overlay is enabled when the region is handling
+ * text editing.
+ */
+void ED_region_ensure_blink_cursor_overlay(const bContext *C,
+                                           const ARegion *region,
+                                           bool text_input_enabled);
 
 /** Version of #ED_region_header() that draws with button sections. */
 void ED_region_header_with_button_sections(const bContext *C,

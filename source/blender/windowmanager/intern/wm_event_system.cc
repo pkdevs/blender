@@ -761,8 +761,6 @@ void wm_event_do_notifiers(bContext *C)
       bScreen *screen = WM_window_get_active_screen(&win);
       WorkSpace *workspace = WM_window_get_active_workspace(&win);
 
-      const ARegion *active_region = bke::screen_topmost_active_region(screen);
-
       /* Filter out notifiers. */
       if (note->category == NC_SCREEN && note->reference && note->reference != screen &&
           note->reference != workspace && note->reference != WM_window_get_active_layout(&win))

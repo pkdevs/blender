@@ -130,9 +130,7 @@ static void info_main_region_draw(const bContext *C, ARegion *region)
 
   /* Works best with no view2d matrix set. */
   ui::view2d_view_ortho(v2d);
-  if (!region->runtime->text_cursor_overlay) {
-    region->runtime->text_cursor_overlay = bke::TextCursorOverlay{};
-  }
+  ED_region_ensure_blink_cursor_overlay(C, region, true);
   info_textview_main(sinfo, region, CTX_wm_reports(C));
   /* reset view matrix */
   ui::view2d_view_restore(C);

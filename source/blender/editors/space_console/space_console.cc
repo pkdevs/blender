@@ -283,9 +283,7 @@ static void console_main_region_draw(const bContext *C, ARegion *region)
   ui::view2d_view_ortho(v2d);
 
   /* data... */
-  if (!region->runtime->text_cursor_overlay) {
-    region->runtime->text_cursor_overlay = bke::TextCursorOverlay{};
-  }
+  ED_region_ensure_blink_cursor_overlay(C, region, true);
   console_history_verify(C); /* make sure we have some command line */
   console_textview_main(sc, region);
 

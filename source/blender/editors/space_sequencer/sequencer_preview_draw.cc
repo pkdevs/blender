@@ -1225,11 +1225,6 @@ static void text_edit_draw_cursor(const bContext *C, const Strip *strip)
     ui::view2d_view_to_region_fl(
         &region->v2d, cursor_quad[i].x, cursor_quad[i].y, &cursor_quad[i].x, &cursor_quad[i].y);
   }
-
-  if (!region->runtime->text_cursor_overlay) {
-    region->runtime->text_cursor_overlay = bke::TextCursorOverlay{};
-    WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
-  }
   ui::theme::get_color_4fv(TH_SEQ_TEXT_CURSOR, region->runtime->text_cursor_overlay->color);
   region->runtime->text_cursor_overlay->rect = cursor_quad;
 }
@@ -1237,22 +1232,17 @@ static void text_edit_draw_cursor(const bContext *C, const Strip *strip)
 static void text_edit_draw(const bContext *C)
 {
   ARegion *region = CTX_wm_region(C);
-  if (region->runtime->text_cursor_overlay) {
-    region->runtime->text_cursor_overlay->rect = {};
-  }
-
   if (!sequencer_text_editing_active_poll(const_cast<bContext *>(C))) {
-    if (region->runtime->text_cursor_overlay && region->runtime->text_cursor_overlay->timer) {
-      WM_event_timer_remove(
-          CTX_wm_manager(C), CTX_wm_window(C), region->runtime->text_cursor_overlay->timer);
-      region->runtime->text_cursor_overlay = std::nullopt;
-    }
+    ED_region_ensure_blink_cursor_overlay(C, region, false);
     return;
   }
   const Strip *strip = seq::select_active_get(CTX_data_sequencer_scene(C));
   if (!seq::effects_can_render_text(strip)) {
+    ED_region_ensure_blink_cursor_overlay(C, region, false);
     return;
   }
+
+  ED_region_ensure_blink_cursor_overlay(C, region, true);
 
   GPUVertFormat *format = immVertexFormat();
   const uint pos = GPU_vertformat_attr_add(format, "pos", gpu::VertAttrType::SFLOAT_32_32);
@@ -1424,14 +1414,17 @@ static void preview_draw_all_image_overlays(const bContext *C,
   SpaceSeq *sseq = CTX_wm_space_seq(C);
   const ARegion *region = CTX_wm_region(C);
   if (region->regiontype == RGN_TYPE_PREVIEW && !sequencer_view_preview_only_poll(C)) {
+    ED_region_ensure_blink_cursor_overlay(C, region, false);
     return;
   }
   if (ED_screen_animation_no_scrub(CTX_wm_manager(C))) {
+    ED_region_ensure_blink_cursor_overlay(C, region, false);
     return;
   }
   if ((sseq->flag & SEQ_SHOW_OVERLAY) == 0 ||
       (sseq->preview_overlay.flag & SEQ_PREVIEW_SHOW_OUTLINE_SELECTED) == 0)
   {
+    ED_region_ensure_blink_cursor_overlay(C, region, false);
     return;
   }
   if (ELEM(sseq->mainb,
@@ -1440,6 +1433,7 @@ static void preview_draw_all_image_overlays(const bContext *C,
            SEQ_DRAW_IMG_VECTORSCOPE,
            SEQ_DRAW_IMG_HISTOGRAM))
   {
+    ED_region_ensure_blink_cursor_overlay(C, region, false);
     return;
   }
 
@@ -1804,6 +1798,9 @@ static void sequencer_preview_draw_overlays(const bContext *C,
     if ((space_sequencer.preview_overlay.flag & SEQ_PREVIEW_SHOW_GPENCIL) && space_sequencer.gpd) {
       sequencer_draw_gpencil_overlay(C);
     }
+  }
+  else {
+    ED_region_ensure_blink_cursor_overlay(C, &region, false);
   }
 
   draw_registered_callbacks(C, region);
