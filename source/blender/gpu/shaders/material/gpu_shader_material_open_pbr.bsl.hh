@@ -2,7 +2,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "gpu_shader_material_open_pbr_util.glsl"
+#pragma once
+
+#include "gpu_shader_material_open_pbr_util.bsl.hh"
 #include "gpu_shader_math_vector_safe_lib.glsl"
 #include "gpu_shader_utildefines_lib.glsl"
 
@@ -25,12 +27,12 @@ float openpbr_specular_ior(const Specular specular, const Coat coat)
 }
 
 float3 openpbr_eval_translucent(float3 weight,
-                                const Specular specular,
-                                const Transmission transmission,
-                                const float3 N,
-                                const float NV,
-                                const bool thin_walled,
-                                ClosureReflection &reflection_data)
+                                [[maybe_unused]] const Specular specular,
+                                [[maybe_unused]] const Transmission transmission,
+                                [[maybe_unused]] const float3 N,
+                                [[maybe_unused]] const float NV,
+                                [[maybe_unused]] const bool thin_walled,
+                                [[maybe_unused]] ClosureReflection &reflection_data)
 {
 #ifdef MAT_REFRACTION
   if (transmission.weight == 0.0f) {
@@ -85,48 +87,48 @@ float3 openpbr_eval_gloss(const float3 weight,
 }
 
 [[node]]
-void node_bsdf_open_pbr(const float float_weight,                         // #0
-                        float base_weight,                                // #1
-                        float4 base_color,                                // #2
-                        float base_metalness,                             // #3
-                        float base_diffuse_roughness,                     // #4
-                        const float specular_weight,                      // #5
-                        const float4 specular_color,                      // #6
-                        const float specular_roughness,                   // #7
-                        const float specular_roughness_anisotropy,        // #8
-                        const float specular_ior,                         // #9
-                        const float transmission_weight,                  // #10
-                        const float4 transmission_color,                  // #11
-                        const float transmission_depth,                   // #12
-                        const float4 transmission_scatter,                // #13
-                        const float transmission_scatter_anisotropy,      // #14
-                        const float transmission_dispersion_scale,        // #15
-                        const float transmission_dispersion_abbe_number,  // #16
-                        const float subsurface_weight,                    // #17
-                        const float4 subsurface_color,                    // #18
-                        const float subsurface_radius,                    // #19
-                        const float4 subsurface_radius_scale,             // #20
-                        const float subsurface_scatter_anisotropy,        // #21
-                        const float coat_weight,                          // #22
-                        const float4 coat_color,                          // #23
-                        const float coat_roughness,                       // #24
-                        const float coat_roughness_anisotropy,            // #25
-                        const float coat_ior,                             // #26
-                        const float coat_darkening,                       // #27
-                        const float fuzz_weight,                          // #28
-                        const float4 fuzz_color,                          // #29
-                        const float fuzz_roughness,                       // #30
-                        float emission_luminance,                         // #31
-                        float4 emission_color,                            // #32
-                        const float thin_film_weight,                     // #33
-                        const float thin_film_thickness,                  // #34
-                        const float thin_film_ior,                        // #35
-                        float geometry_opacity,                           // #36
-                        const float geometry_thin_walled,                 // #37
-                        const float3 geometry_normal,                     // #38
-                        const float3 geometry_tangent,                    // #39
-                        const float3 geometry_coat_normal,                // #40
-                        const float3 geometry_coat_tangent,               // #41
+void node_bsdf_open_pbr(const float float_weight,                             // #0
+                        float base_weight,                                    // #1
+                        float4 base_color,                                    // #2
+                        float base_metalness,                                 // #3
+                        float base_diffuse_roughness,                         // #4
+                        const float specular_weight,                          // #5
+                        const float4 specular_color,                          // #6
+                        const float specular_roughness,                       // #7
+                        const float /*specular_roughness_anisotropy*/,        // #8
+                        const float specular_ior,                             // #9
+                        const float transmission_weight,                      // #10
+                        const float4 transmission_color,                      // #11
+                        const float /*transmission_depth*/,                   // #12
+                        const float4 /*transmission_scatter*/,                // #13
+                        const float /*transmission_scatter_anisotropy*/,      // #14
+                        const float /*transmission_dispersion_scale*/,        // #15
+                        const float /*transmission_dispersion_abbe_number*/,  // #16
+                        const float subsurface_weight,                        // #17
+                        const float4 subsurface_color,                        // #18
+                        const float subsurface_radius,                        // #19
+                        const float4 subsurface_radius_scale,                 // #20
+                        const float subsurface_scatter_anisotropy,            // #21
+                        const float coat_weight,                              // #22
+                        const float4 coat_color,                              // #23
+                        const float coat_roughness,                           // #24
+                        const float /*coat_roughness_anisotropy*/,            // #25
+                        const float coat_ior,                                 // #26
+                        const float /*coat_darkening*/,                       // #27
+                        const float fuzz_weight,                              // #28
+                        const float4 fuzz_color,                              // #29
+                        const float fuzz_roughness,                           // #30
+                        float emission_luminance,                             // #31
+                        float4 emission_color,                                // #32
+                        const float /*thin_film_weight*/,                     // #33
+                        const float /*thin_film_thickness*/,                  // #34
+                        const float /*thin_film_ior*/,                        // #35
+                        float geometry_opacity,                               // #36
+                        const float geometry_thin_walled,                     // #37
+                        const float3 geometry_normal,                         // #38
+                        const float3 geometry_tangent,                        // #39
+                        const float3 geometry_coat_normal,                    // #40
+                        const float3 /*geometry_coat_tangent*/,               // #41
                         Closure &result)
 {
   /* Clamp parameters. OpenPBR Surface Specification, Section 5. */
@@ -224,5 +226,6 @@ void node_bsdf_open_pbr(const float float_weight,                         // #0
   weight = openpbr_eval_subsurface(weight, subsurface, thin_walled, N, diffuse_data);
   openpbr_eval_diffuse(weight, weighted_base_color, N, diffuse_data);
 
-  result = Closure(0);
+  /* TODO(fclem): EEVEE implementation leaking. */
+  result = CLOSURE_DEFAULT;
 }
