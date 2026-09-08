@@ -273,7 +273,7 @@ struct StripTransform {
    * Either call #image_transform_origin_get, or convert to absolute view-space pixel offset from
    * the preview center with #image_transform_origin_preview_offset_get.
    */
-  float origin[2] = {};
+  float origin[2] = {0.5, 0.5};
   eStripTransformFilter filter = SEQ_TRANSFORM_FILTER_AUTO;
 };
 
@@ -839,8 +839,11 @@ struct TextVars {
   float text_size = 0;
   float space_line = 1.0f;
   float abs_space_line = 1.0f;
-  float color[4] = {}, shadow_color[4] = {}, box_color[4] = {}, outline_color[4] = {};
-  float loc[2] = {};
+  float color[4] = {1.0, 1.0, 1.0, 1.0};
+  float shadow_color[4] = {0.0, 0.0, 0.0, 0.7};
+  float box_color[4] = {0.2, 0.2, 0.2, 0.7};
+  float outline_color[4] = {0.0, 0.0, 0.0, 0.7};
+  float loc[2] = {0.5, 0.5};
   float wrap_width = 0;
   float box_margin = 0;
   float box_roundness = 0;

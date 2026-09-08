@@ -4023,6 +4023,7 @@ static void rna_def_text(StructRNA *srna)
   RNA_def_property_ui_text(prop, "Size", "Size of the text");
   RNA_def_property_range(prop, 0.0, 2000);
   RNA_def_property_ui_range(prop, 0.0f, 2000, 10.0f, 1);
+  RNA_def_property_float_default(prop, 60.0f);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Strip_invalidate_raw_update");
 
   prop = RNA_def_property(srna, "space_line", PROP_FLOAT, PROP_UNSIGNED);
@@ -4073,6 +4074,7 @@ static void rna_def_text(StructRNA *srna)
   RNA_def_property_float_default(prop, 0.04f);
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_range(prop, 0.0f, 1.0f, 1.0f, 2);
+  RNA_def_property_float_default(prop, 0.04f);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Strip_invalidate_raw_update");
 
   prop = RNA_def_property(srna, "shadow_blur", PROP_FLOAT, PROP_UNSIGNED);
@@ -4081,6 +4083,7 @@ static void rna_def_text(StructRNA *srna)
   RNA_def_property_float_default(prop, 0.0f);
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_range(prop, 0.0f, 1.0f, 1.0f, 2);
+  RNA_def_property_float_default(prop, 0.0f);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Strip_invalidate_raw_update");
 
   prop = RNA_def_property(srna, "outline_color", PROP_FLOAT, PROP_COLOR_GAMMA);
@@ -4094,6 +4097,7 @@ static void rna_def_text(StructRNA *srna)
   RNA_def_property_float_default(prop, 0.05f);
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_range(prop, 0.0f, 1.0f, 1.0f, 2);
+  RNA_def_property_float_default(prop, 0.05f);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Strip_invalidate_raw_update");
 
   prop = RNA_def_property(srna, "box_color", PROP_FLOAT, PROP_COLOR_GAMMA);
@@ -4113,6 +4117,7 @@ static void rna_def_text(StructRNA *srna)
   RNA_def_property_ui_text(prop, "Wrap Width", "Word wrap width as factor, zero disables");
   RNA_def_property_range(prop, 0, FLT_MAX);
   RNA_def_property_ui_range(prop, 0.0, 1.0, 1, -1);
+  RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Strip_invalidate_raw_update");
 
   prop = RNA_def_property(srna, "box_margin", PROP_FLOAT, PROP_NONE);
@@ -4127,6 +4132,7 @@ static void rna_def_text(StructRNA *srna)
   RNA_def_property_float_sdna(prop, nullptr, "box_roundness");
   RNA_def_property_ui_text(prop, "Box Roundness", "Box corner radius as a factor of box height");
   RNA_def_property_range(prop, 0, 1.0);
+  RNA_def_property_float_default(prop, 0.0f);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Strip_invalidate_raw_update");
 
   prop = RNA_def_property(srna, "alignment_x", PROP_ENUM, PROP_NONE);
