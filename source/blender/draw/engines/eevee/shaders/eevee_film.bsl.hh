@@ -257,20 +257,21 @@ struct Film {
     return render_uv;
   }
 
-  FilmSample panoramic_sample_get(int2 texel_film, ePanoramicFace view_id)
+  FilmSample panoramic_sample_get(int sample_n, int2 texel_film, ePanoramicFace view_id)
   {
     FilmSample film_sample;
     film_sample.texel = int2(0);
     film_sample.weight = 0.0f;
     film_sample.weight_sum_inv = 0.0f;
 
-    const float2 render_uv = panoramic_render_uv_get(texel_film, view_id);
+    const FilmSample cpu_sample = uniforms.uniform_buf.film.samples[sample_n];
+    const float2 render_uv = panoramic_render_uv_get(texel_film + cpu_sample.texel, view_id);
     if (any(lessThan(render_uv, float2(0.0f)))) {
       return film_sample;
     }
 
     film_sample.texel = int2(render_uv * float2(textureSize(depth_tx, 0).xy));
-    film_sample.weight = 1.0f;
+    film_sample.weight = cpu_sample.weight;
     return film_sample;
   }
 
@@ -319,20 +320,10 @@ struct Film {
     return film_sample;
   }
 
-  FilmSample sample_get(int sample_n, int2 texel_film, ePanoramicFace view_id)
-  {
-
-    if (is_panoramic(uniforms.uniform_buf.camera.type)) {
-      return panoramic_sample_get(texel_film, view_id);
-    }
-
-    return sample_get(sample_n, texel_film);
-  }
-
-  FilmSample sample_get(int sample_n, int2 texel_film, FilmSample panoramic_sample)
+  FilmSample sample_get(int sample_n, int2 texel_film, ePanoramicFace panoramic_view_id)
   {
     if (constants.use_panoramic) [[static_branch]] {
-      return panoramic_sample;
+      return panoramic_sample_get(sample_n, texel_film, panoramic_view_id);
     }
     else {
       return sample_get(sample_n, texel_film);
@@ -351,6 +342,15 @@ struct Film {
       return weight;
     }
     return uniforms.uniform_buf.film.samples_weight_total;
+  }
+
+  float weight_accumulation(int2 texel_film, ePanoramicFace panoramic_view_id)
+  {
+    float weight = 0.0f;
+    for (int i = 0; i < samples_len; i++) {
+      weight += sample_get(i, texel_film, panoramic_view_id).weight;
+    }
+    return weight;
   }
 
   void sample_accum(FilmSample samp, int pass_id, int layer, sampler2DArray tex, float4 &accum)
@@ -427,7 +427,7 @@ struct Film {
 
   void cryptomatte_layer_accum_and_store(FilmSample dst,
                                          int2 texel_film,
-                                         FilmSample panoramic_sample,
+                                         ePanoramicFace panoramic_view_id,
                                          int pass_id,
                                          int layer_component,
                                          float4 &out_color)
@@ -439,7 +439,7 @@ struct Film {
     /* x = hash, y = accumulated weight. Only keep track of 4 highest weighted samples. */
     float2 crypto_samples[4] = {float2(0.0f), float2(0.0f), float2(0.0f), float2(0.0f)};
     for (int i = 0; i < samples_len; i++) {
-      FilmSample src = sample_get(i, texel_film, panoramic_sample);
+      FilmSample src = sample_get(i, texel_film, panoramic_view_id);
       sample_cryptomatte_accum(src, layer_component, cryptomatte_tx, crypto_samples);
     }
     float4 display_color = float4(0.0f);
@@ -1015,21 +1015,18 @@ struct Film {
     out_color = float4(0.0f);
     out_depth = 0.0f;
 
-    FilmSample panoramic_sample;
-    panoramic_sample.texel = int2(0);
-    panoramic_sample.weight = 0.0f;
-    panoramic_sample.weight_sum_inv = 0.0f;
+    ePanoramicFace panoramic_view_id = PANORAMIC_FACE_NEG_Z;
 
     if (constants.use_panoramic) [[static_branch]] {
-      /* Panoramic views use a single owning cubemap face per film texel. */
-      panoramic_sample = sample_get(0, texel_film, panoramic_view_id_get());
-      if (panoramic_sample.weight == 0.0f) {
-        if (is_zero(panoramic_direction_get(texel_film))) {
-          /* No sub-view owns this texel under the current projection at all (e.g. outside the
-           * fisheye lens). Clear it instead of copying stale data. */
-          clear_history(texel_film, out_color, out_depth);
-          return;
-        }
+      panoramic_view_id = panoramic_view_id_get();
+      const float3 camera_direction = panoramic_direction_get(texel_film);
+      if (is_zero(camera_direction)) {
+        /* No sub-view owns this texel under the current projection at all (e.g. outside the
+         * fisheye lens). Clear it instead of copying stale data. */
+        clear_history(texel_film, out_color, out_depth);
+        return;
+      }
+      if (!panoramic_texel_is_owned_by_view(camera_direction, int(panoramic_view_id))) {
         /* TODO: Have a stencil mask of each sub-view to avoid computing weights for the whole
          * screen for each. Using a mesh to draw the region is not recommended due to quad
          * over-shading and the amount of tessellation needed. Using a mesh to mark the stencil
@@ -1041,7 +1038,7 @@ struct Film {
 
     float weight_accum;
     if (constants.use_panoramic) [[static_branch]] {
-      weight_accum = panoramic_sample.weight;
+      weight_accum = weight_accumulation(texel_film, panoramic_view_id);
     }
     else {
       weight_accum = weight_accumulation(texel_film);
@@ -1065,7 +1062,7 @@ struct Film {
 
       FilmSample src;
       for (int i = samples_len - 1; i >= 0; i--) {
-        src = sample_get(i, texel_film, panoramic_sample);
+        src = sample_get(i, texel_film, panoramic_view_id);
         sample_accum_combined(src, combined_accum, weight_accum);
       }
       /* NOTE: src.texel is center texel in incoming data buffer. */
@@ -1076,7 +1073,7 @@ struct Film {
       float film_distance = distance_load(texel_film);
 
       /* Get sample closest to target texel. It is always sample 0. */
-      FilmSample film_sample = sample_get(0, texel_film, panoramic_sample);
+      FilmSample film_sample = sample_get(0, texel_film, panoramic_view_id);
 
       /* Using film weight as distance to the pixel. So the check is inverted. */
       if (film_sample.weight > film_distance) {
@@ -1120,7 +1117,7 @@ struct Film {
       float4 specular_light_accum = float4(0.0f);
 
       for (int i = 0; i < samples_len; i++) {
-        FilmSample src = sample_get(i, texel_film, panoramic_sample);
+        FilmSample src = sample_get(i, texel_film, panoramic_view_id);
         sample_accum(src,
                      uni.film.diffuse_color_id,
                      uni.render_pass.diffuse_color_id,
@@ -1166,7 +1163,7 @@ struct Film {
       float ao_accum = 0.0f;
 
       for (int i = 0; i < samples_len; i++) {
-        FilmSample src = sample_get(i, texel_film, panoramic_sample);
+        FilmSample src = sample_get(i, texel_film, panoramic_view_id);
         sample_accum(src,
                      uni.film.volume_light_id,
                      uni.render_pass.volume_light_id,
@@ -1204,7 +1201,7 @@ struct Film {
       float4 transparent_accum = float4(0.0f);
 
       for (int i = 0; i < samples_len; i++) {
-        FilmSample src = sample_get(i, texel_film, panoramic_sample);
+        FilmSample src = sample_get(i, texel_film, panoramic_view_id);
         sample_accum(src,
                      uni.film.transparent_id,
                      uni.render_pass.transparent_id,
@@ -1275,7 +1272,7 @@ struct Film {
         float4 aov_accum = float4(0.0f);
 
         for (int i = 0; i < samples_len; i++) {
-          FilmSample src = sample_get(i, texel_film, panoramic_sample);
+          FilmSample src = sample_get(i, texel_film, panoramic_view_id);
           sample_accum(src, 0, uni.render_pass.color_len + aov, rp_color_tx, aov_accum);
         }
         store_color(dst, uni.film.aov_color_id + aov, aov_accum, out_color, false);
@@ -1285,7 +1282,7 @@ struct Film {
         float aov_accum = 0.0f;
 
         for (int i = 0; i < samples_len; i++) {
-          FilmSample src = sample_get(i, texel_film, panoramic_sample);
+          FilmSample src = sample_get(i, texel_film, panoramic_view_id);
           sample_accum(src, 0, uni.render_pass.value_len + aov, rp_value_tx, aov_accum);
         }
         store_value(dst, uni.film.aov_value_id + aov, aov_accum, out_color);
@@ -1301,11 +1298,11 @@ struct Film {
         }
 
         cryptomatte_layer_accum_and_store(
-            dst, texel_film, panoramic_sample, uni.film.cryptomatte_object_id, 0, out_color);
+            dst, texel_film, panoramic_view_id, uni.film.cryptomatte_object_id, 0, out_color);
         cryptomatte_layer_accum_and_store(
-            dst, texel_film, panoramic_sample, uni.film.cryptomatte_asset_id, 1, out_color);
+            dst, texel_film, panoramic_view_id, uni.film.cryptomatte_asset_id, 1, out_color);
         cryptomatte_layer_accum_and_store(
-            dst, texel_film, panoramic_sample, uni.film.cryptomatte_material_id, 2, out_color);
+            dst, texel_film, panoramic_view_id, uni.film.cryptomatte_material_id, 2, out_color);
       }
     }
   }

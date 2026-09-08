@@ -814,9 +814,7 @@ void Film::update_sample_table()
   }
 
   data_.samples_len = 0;
-  if (inst_.camera.is_panoramic()) {
-    /* TODO(fclem): Proper filtering instead of a single nearest sample. A 3x3 or plus-shape
-     * 5-sample kernel would reduce aliasing quite a lot. */
+  if (inst_.camera.is_panoramic() && data_.scaling_factor > 1) {
     data_.samples[0].texel = int2(0, 0);
     data_.samples[0].weight = 1.0f;
     data_.samples_weight_total = 1.0f;
