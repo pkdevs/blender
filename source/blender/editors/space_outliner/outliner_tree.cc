@@ -1002,7 +1002,9 @@ static int outliner_filter_subtree(SpaceOutliner *space_outliner,
       continue;
     }
 
-    if (!outliner_filter_has_name(te, search_string, space_outliner->search_flags) || te->flag & TE_CHILD_NOT_IN_COLLECTION) {
+    if (!outliner_filter_has_name(te, search_string, space_outliner->search_flags) ||
+        te->flag & TE_CHILD_NOT_IN_COLLECTION)
+    {
       /* item isn't something we're looking for, but...
        * - if the subtree is expanded, check if there are any matches that can be easily found
        *     so that searching for "cu" in the default scene will still match the Cube
