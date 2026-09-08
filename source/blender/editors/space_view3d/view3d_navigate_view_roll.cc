@@ -65,6 +65,10 @@ static void viewroll_apply(ViewOpsData *vod, int x, int y)
   const float current_position[2] = {float(x), float(y)};
   float angle = BLI_dial_angle(vod->init.dial, current_position);
 
+  if ((vod->rv3d->persp == RV3D_CAMOB && (vod->rv3d->rflag & RV3D_FLIP_X) != 0)) {
+    angle = -angle;
+  }
+
   if (angle != 0.0f) {
     view_roll_angle(
         vod->region, vod->rv3d->viewquat, vod->init.quat, vod->init.mousevec, angle, false);
@@ -73,12 +77,7 @@ static void viewroll_apply(ViewOpsData *vod, int x, int y)
       const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
       if (!is_camera_lock) {
         /* Wrap to prevent poor precision at large values. */
-        if ((vod->rv3d->rflag & RV3D_FLIP_X) != 0) {
-          vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll + angle);
-        }
-        else {
-          vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll - angle);
-        }
+        vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll - angle);
       }
     }
   }
@@ -217,6 +216,10 @@ static wmOperatorStatus viewroll_exec(bContext *C, wmOperator *op)
     angle = -angle;
   }
 
+  if ((vod->rv3d->persp == RV3D_CAMOB && (vod->rv3d->rflag & RV3D_FLIP_X) != 0)) {
+    angle = -angle;
+  }
+
   normalize_v3_v3(mousevec, vod->rv3d->viewinv[2]);
   negate_v3(mousevec);
   view_roll_angle(vod->region, quat_new, vod->rv3d->viewquat, mousevec, angle, true);
@@ -225,12 +228,8 @@ static wmOperatorStatus viewroll_exec(bContext *C, wmOperator *op)
     const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
     if (!is_camera_lock) {
       /* Wrap to prevent poor precision at large values. */
-      if ((vod->rv3d->rflag & RV3D_FLIP_X) != 0) {
-        vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll + angle);
-      }
-      else {
-        vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll - angle);
-      }
+
+      vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll - angle);
     }
   }
 
