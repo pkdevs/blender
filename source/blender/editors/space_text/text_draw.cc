@@ -1313,7 +1313,7 @@ static void draw_text_decoration(SpaceText *st, ARegion *region)
       GPU_blend(GPU_BLEND_NONE);
     }
   }
-  region->runtime->text_cursor_overlay->rect = rctf{};
+  region->runtime->text_cursor_overlay->rect = {};
   ui::theme::get_color_4fv(TH_HILITE, region->runtime->text_cursor_overlay->color);
   if (!hidden) {
     int x = TXT_BODY_LEFT(st) + (vselc * st->runtime->char_width_px);
@@ -1346,7 +1346,7 @@ static void draw_text_decoration(SpaceText *st, ARegion *region)
     }
   }
   else {
-    region->runtime->text_cursor_overlay->rect = rctf{};
+    region->runtime->text_cursor_overlay->rect = {};
   }
 
   immUnbindProgram();

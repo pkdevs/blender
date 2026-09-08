@@ -420,11 +420,15 @@ static void wm_region_draw_overlay(bContext *C, const ScrArea *area, ARegion *re
   wmWindowViewport(win);
 }
 
-static void wm_region_draw_cursor_overlay(bContext *C, ARegion &region, bool active)
+static void wm_region_draw_cursor_overlay(bContext *C, ARegion &region, bool is_topmost_active)
 {
-  if (!(region.runtime->text_cursor_overlay.has_value() &&
-        (region.runtime->text_cursor_overlay->is_blink() || !active)))
-  {
+  if (!region.runtime->text_cursor_overlay.has_value()) {
+    return;
+  }
+  if (std::holds_alternative<std::monostate>(region.runtime->text_cursor_overlay->rect)) {
+    return;
+  }
+  if (region.runtime->text_cursor_overlay->is_blink()) {
     return;
   }
   const wmWindow *win = CTX_wm_window(C);
@@ -436,7 +440,7 @@ static void wm_region_draw_cursor_overlay(bContext *C, ARegion &region, bool act
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   float4 color = region.runtime->text_cursor_overlay->color;
 
-  if (!active) {
+  if (!is_topmost_active) {
     color[3] *= 0.5f;
   }
   immUniformColor4fv(color);

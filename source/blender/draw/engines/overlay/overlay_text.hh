@@ -95,7 +95,7 @@ class Text : Overlay {
         ui::theme::get_color_4fv(TH_WIDGET_TEXT_CURSOR, color);
         if (state.region->runtime->draw_flag & bke::ARegionRuntimeDrawFlag::TopmostActive) {
           if (state.region->runtime->text_cursor_overlay &&
-              !state.region->runtime->text_cursor_overlay->is_blink())
+              state.region->runtime->text_cursor_overlay->is_blink())
           {
             color[3] = 0.0f;
           }

@@ -1761,9 +1761,9 @@ const ARegion *screen_topmost_active_region(const bScreen *screen)
 
 bool TextCursorOverlay::is_blink() const
 {
-  return this->timer && !bool(int(std::round(float(this->timer->time_duration * 10.0)) /
-                                  int(TEXT_EDIT_CURSOR_BLINK_INTERVAL * 10)) %
-                              2);
+  return this->timer && bool(int(std::round(float(this->timer->time_duration * 10.0)) /
+                                 int(TEXT_EDIT_CURSOR_BLINK_INTERVAL * 10)) %
+                             2);
 }
 
 }  // namespace bke

@@ -583,8 +583,15 @@ ENUM_OPERATORS(ARegionRuntimeDrawFlag)
 
 static constexpr double TEXT_EDIT_CURSOR_BLINK_INTERVAL = 0.6f;
 
+/**
+ * Region text-edit cursor overlay.
+ */
 struct TextCursorOverlay {
-  std::variant<rctf, std::array<float2, 4>> rect = rctf{};
+  /**
+   * Text cursor draw rectangle in screen coordinates, this can be unset if the cursor is not
+   * visible or if the region draws its own overlay.
+   */
+  std::variant<std::monostate, rctf, std::array<float2, 4>> rect = {};
   wmTimer *timer = nullptr;
   float color[4];
 
