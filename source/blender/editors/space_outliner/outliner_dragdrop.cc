@@ -7,6 +7,7 @@
  */
 
 #include <cstring>
+#include <optional>
 
 #include "MEM_guardedalloc.h"
 
@@ -16,6 +17,7 @@
 #include "DNA_space_types.h"
 
 #include "BLI_listbase.hh"
+#include "BLI_multi_value_map.hh"
 
 #include "BLT_translation.hh"
 
@@ -1339,15 +1341,35 @@ static std::string collection_drop_tooltip(bContext *C,
   return {};
 }
 
-static void find_child_objects_recursive(bContext *C, Object *ob, Vector<Object *> &child_objects)
+/** Map every object in the view layer to the objects directly parented to it. */
+static MultiValueMap<const Object *, Object *> build_child_object_map(const Main &bmain,
+                                                                      const Scene *scene,
+                                                                      ViewLayer *view_layer)
 {
-  CTX_DATA_BEGIN (C, Base *, base, selectable_bases) {
-    if (base->object->parent == ob) {
-      child_objects.append(base->object);
-      find_child_objects_recursive(C, base->object, child_objects);
+  MultiValueMap<const Object *, Object *> children;
+
+  BKE_view_layer_synced_ensure(bmain, scene, view_layer);
+  for (Base &base : *BKE_view_layer_object_bases_get(view_layer)) {
+    if (base.object->parent) {
+      children.add(base.object->parent, base.object);
     }
   }
-  CTX_DATA_END;
+
+  return children;
+}
+
+/**
+ * Collect the objects parented to \a ob, directly or indirectly. All objects are considered, so
+ * that hidden or unselectable children are not left behind by their parent.
+ */
+static void find_child_objects_recursive(const MultiValueMap<const Object *, Object *> &children,
+                                         const Object *ob,
+                                         Vector<Object *> &child_objects)
+{
+  for (Object *child : children.lookup(ob)) {
+    child_objects.append(child);
+    find_child_objects_recursive(children, child, child_objects);
+  }
 }
 
 static wmOperatorStatus collection_drop_invoke(bContext *C,
@@ -1396,6 +1418,12 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
     BLI_listbase_reverse(&drag->ids);
   }
 
+  /* Built once, since every dragged object walks the same hierarchy. */
+  std::optional<MultiValueMap<const Object *, Object *>> child_object_map;
+  if ((event->modifier & (KM_CTRL | KM_SHIFT)) == 0) {
+    child_object_map = build_child_object_map(*bmain, scene, CTX_data_view_layer(C));
+  }
+
   for (wmDragID &drag_id : drag->ids) {
     /* Ctrl enables linking, so we don't need a from collection then. */
     Collection *from = (event->modifier == KM_CTRL) ?
@@ -1410,7 +1438,7 @@ static wmOperatorStatus collection_drop_invoke(bContext *C,
         BKE_collection_object_move(bmain, scene, data.to, from, object);
         if ((event->modifier & (KM_CTRL | KM_SHIFT)) == 0) {
           Vector<Object *> child_objects;
-          find_child_objects_recursive(C, object, child_objects);
+          find_child_objects_recursive(*child_object_map, object, child_objects);
           for (Object *child_ob : child_objects) {
             BKE_collection_object_move(bmain, scene, data.to, from, child_ob);
           }
