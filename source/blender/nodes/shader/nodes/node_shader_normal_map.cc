@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup shdnodes
+ */
+
 #include "DNA_node_types.h"
 #include "node_shader_util.hh"
 #include "node_util.hh"
@@ -81,7 +85,7 @@ static int gpu_shader_normal_map(GPUMaterial *mat,
     strength = in[0].link;
   }
   else {
-    strength = GPU_uniform(in[0].vec);
+    strength = GPU_uniform(in[0]);
   }
 
   GPUNodeLink *newnormal;
@@ -89,7 +93,7 @@ static int gpu_shader_normal_map(GPUMaterial *mat,
     newnormal = in[1].link;
   }
   else {
-    newnormal = GPU_uniform(in[1].vec);
+    newnormal = GPU_uniform(in[1]);
   }
 
   const char *color_to_normal_fnc_name = "color_to_normal_new_shading";
