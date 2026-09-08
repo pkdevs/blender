@@ -393,6 +393,10 @@ void ViewOpsData::init_navigation(bContext *C,
     this->reverse = -1.0f;
   }
 
+  if ((rv3d->persp == RV3D_CAMOB && (rv3d->rflag & RV3D_FLIP_X) != 0)) {
+    this->reverse *= -1.0f;
+  }
+
   this->viewops_flag = viewops_flag;
 
   /* Default. */
