@@ -6,7 +6,6 @@
 
 #include "gpu_shader_compat.hh"
 
-#include "gpu_shader_math_base_lib.glsl"
 #include "gpu_shader_math_safe_lib.glsl"
 
 [[node]]
