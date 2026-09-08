@@ -867,6 +867,11 @@ static bool outliner_element_visible_get(const Main &bmain,
       if (exclude_filter & SO_FILTER_NO_CHILDREN) {
         return false;
       }
+      if (exclude_filter & SO_FILTER_NO_INDIRECT_OBJECT_CHILDREN) {
+        if (te->flag & TE_CHILD_NOT_IN_COLLECTION) {
+          return false;
+        }
+      }
     }
   }
   else if ((te->idcode == ID_MA) && (exclude_filter & SO_FILTER_NO_OB_MATERIAL)) {

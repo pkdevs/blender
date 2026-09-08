@@ -572,7 +572,10 @@ class OUTLINER_PT_options_filter(Panel):
         row = sub.row()
         row.label(icon='BLANK1')
         row.prop(space, "use_filter_children", text="Object Children")
-
+        row = sub.row()
+        row.active = space.use_filter_children
+        row.label(icon='BLANK1')
+        row.prop(space, "use_object_in_different_collection", text="Indirect Children")
 
 class OUTLINER_PT_options_object_data(Panel):
     bl_space_type = 'OUTLINER'

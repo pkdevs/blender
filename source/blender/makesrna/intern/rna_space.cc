@@ -4828,6 +4828,11 @@ static void rna_def_space_outliner(BlenderRNA *brna)
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "filter", SO_FILTER_NO_POSE_BONES);
   RNA_def_property_ui_text(prop, "Show Pose Bones", "Show pose bones of armatures");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
+
+  prop = RNA_def_property(srna, "use_object_in_different_collection", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(prop, nullptr, "filter", SO_FILTER_NO_INDIRECT_OBJECT_CHILDREN);
+  RNA_def_property_ui_text(prop, "Show Indirect Objects", "Show children objects that are in different collection");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
 }
 
 static void rna_def_space_view3d_shading(BlenderRNA *brna)
