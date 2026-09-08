@@ -1,3 +1,4 @@
 Referenced by issue #137983, Release note tools: List of bug fixes per release override
 Referenced by issue #163378, EEVEE AOV of type float render nothing when placed before an AOV of type Color
 Referenced by pull request #163515, Fix #163378: EEVEE: AOV missing hashes.
+Referenced by commit 381a97af31700c21c9bb628adb9860e2d82882ef, Fix #163378: EEVEE: AOV missing hashes.
