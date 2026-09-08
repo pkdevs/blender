@@ -22,7 +22,6 @@
 #include "RNA_prototypes.hh"
 
 #include "ED_node_c.hh"
-// #include "ED_render.hh"
 #include "ED_screen.hh"
 
 #include "SEQ_modifier.hh"
@@ -72,20 +71,6 @@ static std::function<void(bContext &)> tree_path_handle_func(int i)
   };
 }
 
-static bNode *find_group_node_in_tree(bNodeTree *tree, bNodeTree *group_tree)
-{
-  if (!tree || !group_tree) {
-    return nullptr;
-  }
-
-  for (bNode *node : tree->all_nodes()) {
-    if (node->id == reinterpret_cast<ID *>(group_tree)) {
-      return node;
-    }
-  }
-  return nullptr;
-}
-
 static void activate_and_push_node_tree(ARegion *region,
                                         SpaceNode *snode,
                                         bNodeTree *group_tree,
@@ -94,30 +79,6 @@ static void activate_and_push_node_tree(ARegion *region,
   bke::node_set_active(*snode->edittree, *group_node);
   bke::node_set_selected(*group_node, true);
   ED_node_tree_push(region, snode, group_tree, group_node);
-}
-
-static bool navigate_through_history_path(ARegion *region,
-                                          SpaceNode *snode,
-                                          Span<bNodeTree *> history_path,
-                                          bNodeTree *target_tree = nullptr)
-{
-  for (bNodeTree *history_tree : history_path) {
-    if (!snode->edittree) {
-      return false;
-    }
-
-    bNode *group_node = find_group_node_in_tree(snode->edittree, history_tree);
-    if (group_node == nullptr) {
-      return false;
-    }
-
-    activate_and_push_node_tree(region, snode, history_tree, group_node);
-
-    if (target_tree && snode->edittree == target_tree) {
-      return true;
-    }
-  }
-  return true;
 }
 
 static bool node_tree_has_group_node(const bNodeTree *ntree)
@@ -169,33 +130,22 @@ static void navigate_menu_draw_fn(bContext *C, ui::Layout *layout, void *arg)
 
       if (snode->edittree != clicked_tree) {
         bool is_parent = false;
-        int index = 0;
         for (bNodeTreePath &path_item : snode->treepath) {
           if (path_item.nodetree == clicked_tree) {
             is_parent = true;
             break;
           }
-          index++;
+        }
+        if (!is_parent) {
+          return;
         }
 
-        if (is_parent) {
-          while (snode->edittree != clicked_tree) {
-            ED_node_tree_pop(region, snode);
-          }
-        }
-        else {
-          Vector<bNodeTree *> &history_path_trees = snode->runtime->navigate_history_path;
-          if (history_path_trees.is_empty()) {
-            return;
-          }
-          Span<bNodeTree *> history_tail_path = history_path_trees.as_span().drop_front(index);
-          navigate_through_history_path(region, snode, history_tail_path, clicked_tree);
+        while (snode->edittree != clicked_tree) {
+          ED_node_tree_pop(region, snode);
         }
       }
       if (snode->edittree == clicked_tree) {
         activate_and_push_node_tree(region, snode, group, node);
-        // WM_event_add_notifier(&C, NC_SCENE | ND_NODES, nullptr);
-        // WM_event_add_notifier(&C, NC_NODE | ND_NODE_GIZMO, nullptr);
       }
     };
 
@@ -379,74 +329,6 @@ static void get_context_path_node_geometry(const bContext &C,
   }
 }
 
-static std::function<void(bContext &)> tree_path_navigate_history(Span<bNodeTree *> history_path)
-{
-  return [history_path](bContext &C) {
-    SpaceNode *snode = CTX_wm_space_node(&C);
-    ARegion *region = CTX_wm_region(&C);
-    // ED_preview_kill_jobs(CTX_wm_manager(&C), CTX_data_main(&C));
-    navigate_through_history_path(region, snode, history_path);
-    // WM_event_add_notifier(&C, NC_SCENE | ND_NODES, nullptr);
-    // WM_event_add_notifier(&C, NC_NODE | ND_NODE_GIZMO, nullptr);
-  };
-}
-
-static void context_path_add_history_trees(SpaceNode &snode, Vector<ui::ContextPathItem> &path)
-{
-  if (snode.runtime == nullptr) {
-    return;
-  }
-  Vector<bNodeTree *> active_path_trees;
-  for (const bNodeTreePath &path_item : snode.treepath) {
-    if (path_item.nodetree) {
-      active_path_trees.append(path_item.nodetree);
-    }
-  }
-  Vector<bNodeTree *> &history_path_trees = snode.runtime->navigate_history_path;
-  if (active_path_trees.is_empty()) {
-    history_path_trees.clear();
-    return;
-  }
-
-  bool valid_history = false;
-  if (active_path_trees.size() < history_path_trees.size()) {
-    valid_history = true;
-    for (const int i : active_path_trees.index_range()) {
-      if (active_path_trees[i] != history_path_trees[i]) {
-        valid_history = false;
-        history_path_trees.clear();
-        break;
-      }
-    }
-  }
-
-  if (valid_history) {
-    Span<bNodeTree *> history_tail_path = history_path_trees.as_span().drop_front(
-        active_path_trees.size());
-    bNodeTree *parent_tree = active_path_trees.last();
-    for (const int i : history_tail_path.index_range()) {
-      bNodeTree *history_tree = history_tail_path[i];
-      if (!find_group_node_in_tree(parent_tree, history_tree)) {
-        history_path_trees.resize(active_path_trees.size() + i);
-        break;
-      }
-      parent_tree = history_tree;
-
-      const bool has_group = node_tree_has_group_node(history_tree);
-      ui::context_path_add_generic(path,
-                                   *RNA_NodeTree,
-                                   history_tree,
-                                   ICON_NODETREE,
-                                   tree_path_navigate_history(history_tail_path.take_front(i + 1)),
-                                   has_group ? navigate_menu_draw_fn : nullptr,
-                                   true);
-    }
-  }
-  else {
-    history_path_trees = active_path_trees;
-  }
-}
-
 Vector<ui::ContextPathItem> context_path_for_space_node(const bContext &C)
 {
   SpaceNode *snode = CTX_wm_space_node(&C);
@@ -465,7 +347,6 @@ Vector<ui::ContextPathItem> context_path_for_space_node(const bContext &C)
   else if (ED_node_is_compositor(snode)) {
     get_context_path_node_compositor(C, *snode, context_path);
   }
-  context_path_add_history_trees(*snode, context_path);
 
   return context_path;
 }

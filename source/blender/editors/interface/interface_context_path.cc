@@ -24,8 +24,7 @@ void context_path_add_generic(Vector<ContextPathItem> &path,
                               void *ptr,
                               const BIFIconID icon_override,
                               std::function<void(bContext &)> handle_func,
-                              MenuCreateFunc draw_fn,
-                              const bool is_history)
+                              MenuCreateFunc draw_fn)
 {
   /* Add the null check here to make calling functions less verbose. */
   if (!ptr) {
@@ -42,10 +41,10 @@ void context_path_add_generic(Vector<ContextPathItem> &path,
 
   if (&rna_type == RNA_NodeTree) {
     ID *id = static_cast<ID *>(ptr);
-    path.append({name, icon, ID_REAL_USERS(id), handle_func, draw_fn, is_history, ptr});
+    path.append({name, icon, ID_REAL_USERS(id), handle_func, draw_fn, ptr});
   }
   else {
-    path.append({name, icon, 1, handle_func, draw_fn, is_history, ptr});
+    path.append({name, icon, 1, handle_func, draw_fn, ptr});
   }
   if (name != name_buf) {
     MEM_delete(name);
@@ -83,11 +82,6 @@ void template_breadcrumbs(Layout &layout, Span<ContextPathItem> context_path)
     }
     else if (i < context_path.size() - 1) {
       sub_row.label("", ICON_RIGHTARROW_THIN);
-    }
-
-    if (context_path[i].is_history) {
-      // sub_row.active_set(false);
-      button_flag_enable(but, BUT_INACTIVE);
     }
   }
 }

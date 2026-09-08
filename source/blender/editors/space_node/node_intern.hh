@@ -315,9 +315,6 @@ struct SpaceNode_Runtime {
    * is reset when something changes that may affect what nodes need to be synced.
    */
   Map<int, bool> node_can_sync_states;
-
-  /** Stores the history path to allow re-entering child trees. */
-  Vector<bNodeTree *> navigate_history_path;
 };
 
 enum NodeResizeDirection {
