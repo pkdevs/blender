@@ -138,6 +138,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       .usage_by_menu("Boundary"_ustr, int(Boundary::Mixed));
 }
 
+#ifdef WITH_OPENVDB
+
 struct DirichletBoundaryOp {
   const openvdb::FloatGrid::ConstAccessor value_accessor_;
   const float voxel_volume_;
@@ -225,6 +227,8 @@ static openvdb::MaskTree::Ptr get_boundary_mask(const openvdb::FloatTree &tree)
   boundary_mask->topologyDifference(*interior_mask);
   return boundary_mask;
 }
+
+#endif
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
