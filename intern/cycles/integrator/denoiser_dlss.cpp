@@ -12,128 +12,15 @@
 
 #  include "util/path.h"
 
+#  define NVSDK_NGX_HEADER_ONLY
 #  include <nvsdk_ngx.h>
+#  include <nvsdk_ngx_defs.h>
 #  include <nvsdk_ngx_defs_dlssd.h>
-
-#  ifdef _WIN32
-#    include "util/windows.h"
-
-#    define dynamic_library_open(path) LoadLibraryW(path)
-#    define dynamic_library_close(lib) FreeLibrary(static_cast<HMODULE>(lib))
-#    define dynamic_library_find(lib, symbol) \
-      reinterpret_cast<t##symbol>(GetProcAddress(static_cast<HMODULE>(lib), #symbol))
-#  else
-#    include <dlfcn.h>
-
-#    define dynamic_library_open(path) dlopen(path, RTLD_NOW)
-#    define dynamic_library_close(lib) dlclose(lib)
-#    define dynamic_library_find(lib, symbol) reinterpret_cast<t##symbol>(dlsym(lib, #symbol))
-#  endif
-
-struct NGXDriver {
-  using tNVSDK_NGX_CUDA_Init_Ext1 = NVSDK_NGX_Result (*)(unsigned long long,
-                                                         const wchar_t *,
-                                                         NVSDK_NGX_CUDADevice *,
-                                                         NVSDK_NGX_Version,
-                                                         const NVSDK_NGX_FeatureCommonInfo *);
-  using tNVSDK_NGX_CUDA_Shutdown1 = NVSDK_NGX_Result (*)(NVSDK_NGX_CUDADevice *, unsigned int &);
-  using tNVSDK_NGX_CUDA_GetFeatureRequirements = decltype(&NVSDK_NGX_CUDA_GetFeatureRequirements);
-  using tNVSDK_NGX_CUDA_CreateFeature1 = decltype(&NVSDK_NGX_CUDA_CreateFeature1);
-  using tNVSDK_NGX_CUDA_EvaluateFeature = decltype(&NVSDK_NGX_CUDA_EvaluateFeature);
-  using tNVSDK_NGX_CUDA_ReleaseFeature = decltype(&NVSDK_NGX_CUDA_ReleaseFeature);
-  using tNVSDK_NGX_CUDA_AllocateParameters = decltype(&NVSDK_NGX_CUDA_AllocateParameters);
-  using tNVSDK_NGX_CUDA_DestroyParameters = decltype(&NVSDK_NGX_CUDA_DestroyParameters);
-
-  tNVSDK_NGX_CUDA_Init_Ext1 Init_Ext1 = nullptr;
-  tNVSDK_NGX_CUDA_Shutdown1 Shutdown1 = nullptr;
-  tNVSDK_NGX_CUDA_GetFeatureRequirements GetFeatureRequirements = nullptr;
-  tNVSDK_NGX_CUDA_CreateFeature1 CreateFeature1 = nullptr;
-  tNVSDK_NGX_CUDA_EvaluateFeature EvaluateFeature = nullptr;
-  tNVSDK_NGX_CUDA_ReleaseFeature ReleaseFeature = nullptr;
-  tNVSDK_NGX_CUDA_AllocateParameters AllocateParameters = nullptr;
-  tNVSDK_NGX_CUDA_DestroyParameters DestroyParameters = nullptr;
-
-  explicit operator bool() const
-  {
-    return Init_Ext1 != nullptr && Shutdown1 != nullptr && CreateFeature1 != nullptr &&
-           EvaluateFeature != nullptr && ReleaseFeature != nullptr &&
-           AllocateParameters != nullptr && DestroyParameters != nullptr;
-  }
-
-  bool init()
-  {
-    if (*this) {
-      return true;
-    }
-
-#  ifdef _WIN32
-    WCHAR ngx_path[MAX_PATH] = L"";
-    {
-      HKEY ngx_key = nullptr;
-      LSTATUS result = RegOpenKeyExW(
-          HKEY_LOCAL_MACHINE,
-          L"System\\CurrentControlSet\\Services\\nvlddmkm\\Parameters\\NGXCore",
-          0,
-          KEY_READ,
-          &ngx_key);
-      if (result != ERROR_SUCCESS) {
-        result = RegOpenKeyExW(HKEY_LOCAL_MACHINE,
-                               L"System\\CurrentControlSet\\Services\\nvlddmkm\\NGXCore",
-                               0,
-                               KEY_READ,
-                               &ngx_key);
-      }
-      if (result == ERROR_SUCCESS) {
-        DWORD ngx_path_size = ARRAYSIZE(ngx_path);
-        result = RegQueryValueExW(
-            ngx_key, L"NGXPath", 0, nullptr, reinterpret_cast<LPBYTE>(ngx_path), &ngx_path_size);
-        RegCloseKey(ngx_key);
-      }
-      if (result != ERROR_SUCCESS) {
-        return false;
-      }
-
-#    ifdef _M_ARM64
-      wcscat_s(ngx_path, L"\\_arm64_nvngx.dll");
-#    else
-      wcscat_s(ngx_path, L"\\_nvngx.dll");
-#    endif
-    }
-#  else
-    const char *const ngx_path = "libnvidia-ngx.so.1";
-#  endif
-
-    void *const ngx_module = dynamic_library_open(ngx_path);
-    if (ngx_module == nullptr) {
-      return false;
-    }
-
-    Init_Ext1 = dynamic_library_find(ngx_module, NVSDK_NGX_CUDA_Init_Ext1);
-    Shutdown1 = dynamic_library_find(ngx_module, NVSDK_NGX_CUDA_Shutdown1);
-    GetFeatureRequirements = dynamic_library_find(ngx_module,
-                                                  NVSDK_NGX_CUDA_GetFeatureRequirements);
-    CreateFeature1 = dynamic_library_find(ngx_module, NVSDK_NGX_CUDA_CreateFeature1);
-    EvaluateFeature = dynamic_library_find(ngx_module, NVSDK_NGX_CUDA_EvaluateFeature);
-    ReleaseFeature = dynamic_library_find(ngx_module, NVSDK_NGX_CUDA_ReleaseFeature);
-    AllocateParameters = dynamic_library_find(ngx_module, NVSDK_NGX_CUDA_AllocateParameters);
-    DestroyParameters = dynamic_library_find(ngx_module, NVSDK_NGX_CUDA_DestroyParameters);
-
-    if (*this) {
-      return true;
-    }
-    else {
-      dynamic_library_close(ngx_module);
-      return false;
-    }
-  }
-} NVSDK_NGX_CUDA;
 
 CCL_NAMESPACE_BEGIN
 
 /* Application ID for Blender from NVIDIA. */
 static const int NGX_APPLICATION_ID = 100334311;
-
-static thread_mutex ngx_mutex;
 
 void DLSSDenoiser::CUDATexture::init(Device *device, int width, int height, int num_components)
 {
@@ -176,13 +63,6 @@ DLSSDenoiser::DLSSDenoiser(Device *denoiser_device, const DenoiseParams &params)
   CUDADevice *const cuda_device = static_cast<CUDADevice *>(denoiser_device_);
   const CUDAContextScope scope(cuda_device);
 
-  const thread_scoped_lock ngx_lock(ngx_mutex);
-
-  if (!NVSDK_NGX_CUDA.init()) {
-    set_error("Failed to load NGX driver");
-    return;
-  }
-
   const wstring app_path = string_to_wstring(path_get());
   const wstring app_data_path = string_to_wstring(path_cache_get());
 
@@ -211,13 +91,15 @@ DLSSDenoiser::DLSSDenoiser(Device *denoiser_device, const DenoiseParams &params)
   ngx_device_ = new NVSDK_NGX_CUDADevice{
       cuda_device->cuContext, static_cast<CUDADeviceQueue *>(denoiser_queue_.get())->stream()};
 
-  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA.Init_Ext1(NGX_APPLICATION_ID,
-                                                           app_data_path.c_str(),
-                                                           ngx_device_,
-                                                           NVSDK_NGX_Version_API,
-                                                           &feature_info);
+  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA_Init1(
+      NGX_APPLICATION_ID, app_data_path.c_str(), ngx_device_, &feature_info);
 
-  if (NVSDK_NGX_FAILED(result)) {
+  if (result == NVSDK_NGX_Result_FAIL_FeatureNotSupported) {
+    delete ngx_device_;
+    ngx_device_ = nullptr;
+    set_error("Failed to load NGX driver");
+  }
+  else if (NVSDK_NGX_FAILED(result)) {
     set_error("Failed to initialize NGX driver");
   }
 }
@@ -236,18 +118,15 @@ DLSSDenoiser::~DLSSDenoiser()
   tex_specular_motion_.destroy();
   tex_output_.destroy();
 
-  const thread_scoped_lock ngx_lock(ngx_mutex);
-
-  if (!NVSDK_NGX_CUDA) {
+  if (ngx_device_ == nullptr) {
     return;
   }
 
   if (handle_ != nullptr) {
-    NVSDK_NGX_CUDA.ReleaseFeature(handle_);
+    NVSDK_NGX_CUDA_ReleaseFeature(handle_);
   }
 
-  unsigned int n = 0;
-  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA.Shutdown1(ngx_device_, n);
+  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA_Shutdown1(ngx_device_);
 
   if (NVSDK_NGX_FAILED(result)) {
     set_error("Failed to shutdown NGX driver");
@@ -269,13 +148,6 @@ bool DLSSDenoiser::is_device_supported(const DeviceInfo &device)
     return it->second == NVSDK_NGX_FeatureSupportResult_Supported;
   }
 
-  const thread_scoped_lock ngx_lock(ngx_mutex);
-
-  if (!NVSDK_NGX_CUDA.init() || NVSDK_NGX_CUDA.GetFeatureRequirements == nullptr) {
-    /* NVIDIA driver is too old (requires 590+). */
-    return false;
-  }
-
   const wstring app_data_path = string_to_wstring(path_cache_get());
 
   CUdevice cuDevice = 0;
@@ -290,7 +162,7 @@ bool DLSSDenoiser::is_device_supported(const DeviceInfo &device)
 
   NVSDK_NGX_FeatureRequirement requirement = {NVSDK_NGX_FeatureSupportResult_Supported};
 
-  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA.GetFeatureRequirements(
+  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA_GetFeatureRequirements(
       cuDevice, &discovery_info, &requirement);
 
   if (NVSDK_NGX_SUCCEED(result)) {
@@ -317,7 +189,7 @@ bool DLSSDenoiser::denoise_create_if_needed(DenoiseContext &context)
   if (handle_ != nullptr) {
     denoiser_queue_->synchronize();
 
-    NVSDK_NGX_CUDA.ReleaseFeature(handle_);
+    NVSDK_NGX_CUDA_ReleaseFeature(handle_);
     handle_ = nullptr;
   }
 
@@ -339,7 +211,7 @@ bool DLSSDenoiser::denoise_create_if_needed(DenoiseContext &context)
   }
 
   NVSDK_NGX_Parameter *params = nullptr;
-  if (NVSDK_NGX_FAILED(NVSDK_NGX_CUDA.AllocateParameters(&params))) {
+  if (NVSDK_NGX_FAILED(NVSDK_NGX_CUDA_AllocateParameters(&params))) {
     return false;
   }
 
@@ -375,10 +247,10 @@ bool DLSSDenoiser::denoise_create_if_needed(DenoiseContext &context)
   params->Set(NVSDK_NGX_Parameter_Use_HW_Depth, NVSDK_NGX_DLSS_Depth_Type_Linear);
   params->Set(NVSDK_NGX_Parameter_DLSS_Roughness_Mode, NVSDK_NGX_DLSS_Roughness_Mode_Packed);
 
-  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA.CreateFeature1(
+  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA_CreateFeature1(
       ngx_device_, NVSDK_NGX_Feature_RayReconstruction, params, &handle_);
 
-  NVSDK_NGX_CUDA.DestroyParameters(params);
+  NVSDK_NGX_CUDA_DestroyParameters(params);
 
   if (NVSDK_NGX_FAILED(result)) {
     set_error("Failed to create DLSS instance");
@@ -523,7 +395,7 @@ bool DLSSDenoiser::denoise_run(const DenoiseContext &context, const DenoisePass 
   }
 
   NVSDK_NGX_Parameter *params = nullptr;
-  if (NVSDK_NGX_FAILED(NVSDK_NGX_CUDA.AllocateParameters(&params))) {
+  if (NVSDK_NGX_FAILED(NVSDK_NGX_CUDA_AllocateParameters(&params))) {
     return false;
   }
 
@@ -552,9 +424,9 @@ bool DLSSDenoiser::denoise_run(const DenoiseContext &context, const DenoisePass 
 
   params->Set(NVSDK_NGX_Parameter_DLSS_Indicator_Invert_Y_Axis, 1);
 
-  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA.EvaluateFeature(handle_, params, nullptr);
+  const NVSDK_NGX_Result result = NVSDK_NGX_CUDA_EvaluateFeature(handle_, params, nullptr);
 
-  NVSDK_NGX_CUDA.DestroyParameters(params);
+  NVSDK_NGX_CUDA_DestroyParameters(params);
 
   return NVSDK_NGX_SUCCEED(result);
 }
