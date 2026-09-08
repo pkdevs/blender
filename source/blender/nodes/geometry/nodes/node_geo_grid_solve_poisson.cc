@@ -80,7 +80,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .hide_value()
       .structure_type(StructureType::Grid)
       .description("Right-hand side of the Poisson equation");
-  b.add_input<decl::Int>("Iterations"_ustr)
+  b.add_input<decl::Int>("Max Iterations"_ustr)
       .default_value(100)
       .min(1)
       .max(10000)
@@ -236,7 +236,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     return;
   }
 
-  const int max_iterations = params.extract_input<int>("Iterations"_ustr);
+  const int max_iterations = params.extract_input<int>("Max Iterations"_ustr);
   const ThresholdMode threshold_mode = params.extract_input<ThresholdMode>("Threshold Mode"_ustr);
   const float error_threshold = params.extract_input<float>("Error Threshold"_ustr);
   const Boundary boundary = params.extract_input<Boundary>("Boundary"_ustr);
