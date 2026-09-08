@@ -921,7 +921,8 @@ void ObjectManager::device_update(Device *device,
 
   device_free(device, dscene, false);
 
-  /* A scene without a background light must not reuse an object index. */
+  /* Reset before the empty-scene early return so an absent background
+   * cannot retain its initial zero or a stale object index. */
   dscene->data.background.object_index = OBJECT_NONE;
 
   if (scene->objects.empty()) {
