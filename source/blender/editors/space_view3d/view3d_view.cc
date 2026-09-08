@@ -79,6 +79,7 @@ static wmOperatorStatus view3d_camera_to_view_exec(bContext *C, wmOperator * /*o
 
   ED_view3d_to_object(depsgraph, v3d->camera, rv3d->ofs, rv3d->viewquat, rv3d->dist, 0.0f);
   rv3d->camroll = 0.0f;
+  rv3d->rflag &= ~RV3D_FLIP_X;
 
   BKE_object_tfm_protected_restore(v3d->camera, &obtfm, v3d->camera->protectflag);
 
