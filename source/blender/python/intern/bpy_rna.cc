@@ -1478,7 +1478,13 @@ static PyObject *pyrna_enum_to_py(PointerRNA *ptr, PropertyRNA *prop, int val)
       /* Static, no need to free. */
       const EnumPropertyItem *enum_item;
       bool free_dummy;
-      RNA_property_enum_items_ex(nullptr, ptr, prop, true, &enum_item, nullptr, &free_dummy);
+      PropertyRNA *enum_prop = prop;
+      if (ptr->type == RNA_EnumProperty && STREQ(RNA_property_identifier(prop), "default")) {
+        /* Default introspection uses the underlying enum's static items, not those of the
+         * generic EnumProperty.default definition. */
+        enum_prop = static_cast<PropertyRNA *>(ptr->data);
+      }
+      RNA_property_enum_items_ex(nullptr, ptr, enum_prop, true, &enum_item, nullptr, &free_dummy);
       BLI_assert(!free_dummy);
 
       /* Do not print warning in case of #rna_enum_dummy_NULL_items,

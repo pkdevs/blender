@@ -20,6 +20,8 @@ from bpy.props import (
 
 import unittest
 import functools
+import subprocess
+import textwrap
 
 id_inst = bpy.context.scene
 id_type = bpy.types.Scene
@@ -34,6 +36,44 @@ class TestPropertyGroup(bpy.types.PropertyGroup):
 
 # -----------------------------------------------------------------------------
 # Tests
+
+class TestEnumDefaultWarnings(unittest.TestCase):
+    def run_script(self, script):
+        # RNA warnings are written by C code, so capture them in a separate process.
+        result = subprocess.run(
+            [bpy.app.binary_path, "--background", "--factory-startup", "--python-exit-code", "1",
+             "--python-expr", "import bpy\n" + textwrap.dedent(script)],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        return result.stdout
+
+    def test_menu_default(self):
+        output = self.run_script('''
+            tree = bpy.data.node_groups.new("Test", "GeometryNodeTree")
+            node = tree.nodes.new("GeometryNodeMenuSwitch")
+            socket = tree.interface.new_socket(name="Menu", socket_type="NodeSocketMenu")
+            for item in (node.inputs["Menu"], socket):
+                assert item.bl_rna.properties["default_value"].default == ""
+        ''')
+        self.assertNotIn("matches no enum", output)
+
+    def test_static_default(self):
+        output = self.run_script('''
+            bpy.types.Scene.test_enum = bpy.props.EnumProperty(
+                items=[("A", "A", "", 0), ("B", "B", "", 1)], default="B")
+            assert bpy.types.Scene.bl_rna.properties["test_enum"].default == "B"
+        ''')
+        self.assertNotIn("matches no enum", output)
+
+    def test_invalid_value(self):
+        output = self.run_script('''
+            bpy.types.Scene.test_enum = bpy.props.EnumProperty(
+                items=[("A", "A", "", 0)], get=lambda self: 99)
+            assert bpy.context.scene.test_enum == ""
+        ''')
+        self.assertIn("matches no enum", output)
+
 
 class TestPropNumerical(unittest.TestCase):
     default_value = 0
