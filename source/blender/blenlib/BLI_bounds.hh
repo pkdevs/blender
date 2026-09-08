@@ -433,7 +433,7 @@ template<typename T, int Size>
 
 template<typename T> inline bool Bounds<T>::is_empty() const
 {
-  return bounds::detail::any_less_or_equal_than(this->max, this->min);
+  return bounds::detail::any_less_than(this->max, this->min);
 }
 
 template<typename T> inline T Bounds<T>::center() const

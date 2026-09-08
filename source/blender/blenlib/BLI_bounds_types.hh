@@ -15,11 +15,13 @@ template<typename T> struct Bounds {
   T max;
   Bounds() = default;
   explicit Bounds(const T &value) : min(value), max(value) {}
-  Bounds(const T &min, const T &max) : min(min), max(max) {}
+  Bounds(const T &min, const T &max) : Bounds(Bounds<T>::from_closed(min, max)) {}
+
+  static Bounds<T> from_closed();
+  static Bounds<T> from_open();
 
   /**
    * Returns true when the size of the bounds is zero (or negative).
-   * This matches the behavior of #BLI_rcti_is_empty/#BLI_rctf_is_empty.
    */
   bool is_empty() const;
   /**
@@ -65,7 +67,6 @@ template<typename T> struct Bounds {
 
   /**
    * Returns true if \a point is inside the bounds.
-   * This matches the behavior of #BLI_rctf_isect_pt/#BLI_rcti_isect_pt.
    */
   bool contains(const T &point) const;
 
