@@ -10,7 +10,7 @@ FRAGMENT_SHADER_CREATE_INFO(gpencil_geometry)
 #include "draw_grease_pencil_lib.glsl"
 #include "gpu_shader_common_color_utils.bsl.hh"
 #include "gpu_shader_common_hash.bsl.hh"
-#include "gpu_shader_math_vector_lib.glsl"
+#include "gpu_shader_math_vector.bsl.hh"
 
 float3 gpencil_lighting()
 {
