@@ -6,6 +6,7 @@
 
 #if !defined(__KERNEL_GPU__)
 #  include <OSL/oslversion.h>
+#  include <OpenImageIO/oiioversion.h>
 #endif
 
 #include "kernel/types.h"
@@ -146,6 +147,11 @@ struct OSLNoiseOptions {};
 
 /* This is copied out of OSL's TextureOpt struct, and it differs between versions.
  * Currently only missingcolor, sblur and tblur are used in Cycles code. */
+
+#ifndef OIIO_VERSION
+#  error "OIIO_VERSION must be defined to select the matching OSL TextureOpt layout"
+#endif
+
 #if OIIO_VERSION >= 30000
 struct OSLTextureOptions {
   int firstchannel = 0;
