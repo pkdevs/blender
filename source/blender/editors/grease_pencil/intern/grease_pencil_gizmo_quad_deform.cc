@@ -73,9 +73,9 @@ struct QuadWidgetGroup2 {
 };
 
 static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
-    const RegionView3D &rv3d,
+    const RegionView3D & /*rv3d*/,
     Object &object,
-    const int layer_index,
+    const int /*layer_index*/,
     const IndexMask selection,
     const bke::greasepencil::Drawing &drawing,
     const FunctionRef<float2(const float3 &position)> project_to_screen)
@@ -86,10 +86,10 @@ static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
   std::optional<Bounds<float2>> drawing_bounds = std::nullopt;
 
   BLI_assert(object.type == OB_GREASE_PENCIL);
-  GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
+  // GreasePencil &grease_pencil = *id_cast<GreasePencil *>(object.data);
 
-  const Layer &layer = *grease_pencil.layers()[layer_index];
-  const float4x4 layer_to_world = layer.to_world_space(object);
+  // const Layer &layer = *grease_pencil.layers()[layer_index];
+  // const float4x4 layer_to_world = layer.to_world_space(object);
   const VArray<float> radii = drawing.radii();
   const bke::CurvesGeometry &strokes = drawing.strokes();
   const Span<float3> positions = strokes.positions();
@@ -101,7 +101,7 @@ static std::optional<Bounds<float2>> compute_screen_space_drawing_bounds(
         // const float2 screen_co = this->project_to_screen(layer_to_world, positions[point_i]);
 
         if (screen_co.x != V2D_IS_CLIPPED) {
-          const float3 world_pos = math::transform_point(layer_to_world, positions[point_i]);
+          // const float3 world_pos = math::transform_point(layer_to_world, positions[point_i]);
           // const float pixels = radii[point_i] / ED_view3d_pixel_size(&rv3d, world_pos);
           const float pixels = radii[point_i];
 
@@ -272,9 +272,9 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
   update_things(C, gzgroup);
 }
 
-static void gizmo_node_box_mask_prop_matrix_get(const wmGizmo *gz,
+static void gizmo_node_box_mask_prop_matrix_get(const wmGizmo * /*gz*/,
                                                 wmGizmoProperty *gz_prop,
-                                                void *value_p)
+                                                void * /*value_p*/)
 {
   // float (*matrix)[4] = static_cast<float (*)[4]>(value_p);
   BLI_assert(gz_prop->type->array_length == 16);
@@ -415,7 +415,7 @@ static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
 
 static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 {
-  Main *bmain = CTX_data_main(C);
+  // Main *bmain = CTX_data_main(C);
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
   wmGizmo *gz = mask_group->border;
 
@@ -484,7 +484,7 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   // BKE_image_release_ibuf(ima, ibuf, lock);
 }
 
-void bbox_draw_prepare_space_image(const bContext *C, wmGizmoGroup *gzgroup)
+static void bbox_draw_prepare_space_image(const bContext * /*C*/, wmGizmoGroup * /*gzgroup*/)
 {
   // update_things(C, gzgroup);
 }
