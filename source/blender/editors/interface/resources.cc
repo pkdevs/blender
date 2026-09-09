@@ -77,9 +77,9 @@ namespace theme {
 /** \name Themes
  * \{ */
 
-const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
+const uchar *get_color_ptr(const bTheme *btheme, int spacetype, int colorid)
 {
-  ThemeSpace *ts = nullptr;
+  const ThemeSpace *ts = nullptr;
   static uchar error[4] = {240, 0, 240, 255};
   static uchar back[4] = {0, 0, 0, 255};
   static uchar none[4] = {0, 0, 0, 0};
@@ -1094,7 +1094,7 @@ const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
     }
   }
 
-  return static_cast<const uchar *>(cp);
+  return cp;
 }
 
 void init_default()
@@ -1122,27 +1122,27 @@ void theme_set(int spacetype, int regionid)
 {
   if (spacetype) {
     /* later on, a local theme can be found too */
-    g_theme_state.theme = static_cast<bTheme *>(U.themes.first);
+    g_theme_state.theme = U.themes.first();
     g_theme_state.spacetype = spacetype;
     g_theme_state.regionid = regionid;
   }
   else if (regionid) {
     /* popups */
-    g_theme_state.theme = static_cast<bTheme *>(U.themes.first);
+    g_theme_state.theme = U.themes.first();
     g_theme_state.spacetype = SPACE_PROPERTIES;
     g_theme_state.regionid = regionid;
   }
   else {
     /* for safety, when theme was deleted */
-    g_theme_state.theme = static_cast<bTheme *>(U.themes.first);
+    g_theme_state.theme = U.themes.first();
     g_theme_state.spacetype = SPACE_VIEW3D;
     g_theme_state.regionid = RGN_TYPE_WINDOW;
   }
 }
 
-bTheme *theme_get()
+const bTheme *theme_get()
 {
-  return static_cast<bTheme *>(U.themes.first);
+  return U.themes.first();
 }
 
 void theme_store(bThemeState *theme_state)

@@ -136,7 +136,7 @@ def draw_property(layout, key, value, rna_properties, rna_item, context_member):
     elif to_list:
         value = to_list()
 
-    split = layout.split(factor=0.4, align=True)
+    split = layout.split(factor=layout.property_split_factor, align=True)
     label_row = split.row()
     label_row.alignment = 'RIGHT'
     label_row.label(text=key, translate=False)
