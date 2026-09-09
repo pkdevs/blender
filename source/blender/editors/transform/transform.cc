@@ -702,6 +702,9 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
       if (t->flag & T_NO_CONSTRAINT) {
         return false;
       }
+      if (transform_convert_sequencer_is_axis_locked(t)) {
+        return false;
+      }
       break;
     case TFM_MODAL_CONS_OFF: {
       if ((t->con.mode & CON_APPLY) == 0) {

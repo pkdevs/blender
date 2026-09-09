@@ -135,14 +135,15 @@ static void seq_slide_status(TransInfo *t)
   status.opmodal(
       IFACE_("Snap Invert"), op->type, TFM_MODAL_SNAP_INV_ON, t->modifiers & MOD_SNAP_INVERT);
   status.opmodal(IFACE_("Precision"), op->type, TFM_MODAL_PRECISION, t->modifiers & MOD_PRECISION);
-  const bool x_locked = ts->offset_clamp.xmin == 0 && ts->offset_clamp.xmax == 0;
-  const bool y_locked = ts->offset_clamp.ymin == 0 && ts->offset_clamp.ymax == 0;
+
   const bool has_constraint = (t->con.mode & CON_APPLY) != 0;
-  if (!(x_locked || y_locked)) {
+  if (!transform_convert_sequencer_is_axis_locked(t)) {
     status.opmodal({}, op->type, TFM_MODAL_AXIS_X, has_constraint && (t->con.mode & CON_AXIS0));
     status.opmodal(
         IFACE_("Axis"), op->type, TFM_MODAL_AXIS_Y, has_constraint && (t->con.mode & CON_AXIS1));
   }
+
+  const bool y_locked = ts->offset_clamp.ymin == 0 && ts->offset_clamp.ymax == 0;
   const bool handles_selected = y_locked && t->data_type == &TransConvertType_Sequencer;
   if (has_constraint) {
     status.opmodal(IFACE_("Clear Constraints"), op->type, TFM_MODAL_CONS_OFF);

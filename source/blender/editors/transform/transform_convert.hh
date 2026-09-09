@@ -163,6 +163,8 @@ void transform_convert_mesh_customdatacorrect_init(TransInfo *t);
 /* `transform_convert_sequencer.cc` */
 
 bool transform_convert_sequencer_clamp(const TransInfo *t, float r_val[2]);
+/** Return whether both x and y axis constraints should be disabled.  */
+bool transform_convert_sequencer_is_axis_locked(const TransInfo *t);
 
 /********************* intern **********************/
 
