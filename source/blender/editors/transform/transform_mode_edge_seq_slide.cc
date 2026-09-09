@@ -115,7 +115,10 @@ static void applySeqSlide(TransInfo *t)
   recalc_data(t);
 
   ED_area_status_text(t->area, str);
+}
 
+static void seq_slide_status(TransInfo *t)
+{
   SeqSlideParams *ssp = static_cast<SeqSlideParams *>(t->custom.mode.data);
   wmOperator *op = ssp->op;
   if (!op || t->data_container_len == 0) {
@@ -202,7 +205,7 @@ TransModeInfo TransMode_seqslide = {
     /*snap_distance_fn*/ nullptr,
     /*snap_apply_fn*/ snap_sequencer_apply_seqslide,
     /*draw_fn*/ nullptr,
-    /*status_fn*/ nullptr,
+    /*status_fn*/ seq_slide_status,
 };
 
 }  // namespace blender::ed::transform
