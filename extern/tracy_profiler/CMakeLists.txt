@@ -5,6 +5,7 @@
 include(ExternalProject)
 
 set(TRACY_INSTALL_DIR ${CMAKE_BINARY_DIR})
+# NOTE: Keep version in sync with the tracy client dependency in build_files/build_environment/cmake/versions.cmake.
 set(TRACY_GIT_TAG a64b9a20294d59421a2f57aeca3c6383d8c48169)
 
 # NOTE: Exceptionally, use tracy_profiler instead of `extern_tracy_profiler` as target name
@@ -16,8 +17,6 @@ function(add_tracy_profiler target_name use_legacy_x11_backend)
       GIT_REPOSITORY https://github.com/wolfpld/tracy.git
       GIT_TAG ${TRACY_GIT_TAG}
 
-      # NOTE: Keep version in sync with the tracy client dependency in:
-      # `build_files/build_environment/cmake/versions.cmake`
       PREFIX ${CMAKE_BINARY_DIR}/${target_name}
       SOURCE_SUBDIR profiler
       EXCLUDE_FROM_ALL TRUE
