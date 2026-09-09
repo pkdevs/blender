@@ -1507,8 +1507,7 @@ void blo_do_versions_userdef(UserDef *userdef)
   if (!USER_VERSION_ATLEAST(402, 36)) {
     /* Reset repositories. */
     while (!userdef->extension_repos.is_empty()) {
-      BKE_preferences_extension_repo_remove(
-          userdef, static_cast<bUserExtensionRepo *>(userdef->extension_repos.first));
+      BKE_preferences_extension_repo_remove(userdef, userdef->extension_repos.first());
     }
 
     BKE_preferences_extension_repo_add_default_remote(userdef);
@@ -1790,6 +1789,15 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->asset_flag |= USER_ASSETS_USE_ONLINE_ESSENTIALS;
   }
 
+  /* Make Vulkan default on Linux/Windows x64. Keep existing option for Apple and Windows on ARM.*/
+#ifdef __APPLE__
+#elif defined(WIN32) && (defined(_M_ARM64) || defined(__aarch64__))
+#else
+  if (!USER_VERSION_ATLEAST(503, 10)) {
+    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
+  }
+#endif
+
   if (!USER_VERSION_ATLEAST(503, 18)) {
     const char *remapped_paths[][2] = {
         {"Camera & Lens Effects", "Compositing/Camera & Lens Effects"},
@@ -1807,17 +1815,10 @@ void blo_do_versions_userdef(UserDef *userdef)
     }
   }
 
-  /* Make Vulkan default on Linux/Windows x64. Keep existing option for Apple and Windows on ARM.*/
-#ifdef __APPLE__
-#elif defined(WIN32) && (defined(_M_ARM64) || defined(__aarch64__))
-#else
-  if (!USER_VERSION_ATLEAST(503, 10)) {
-    userdef->gpu_backend = USER_GPU_BACKEND_DEFAULT;
-  }
-#endif
-
-  if (!USER_VERSION_ATLEAST(503, 18)) {
-    userdef->sequencer_default_strip_length = 1.0f;
+  if (!USER_VERSION_ATLEAST(503, 21)) {
+    if (userdef->sequencer_default_strip_length == 0.0f) {
+      userdef->sequencer_default_strip_length = 1.0f;
+    }
   }
 
   /**
