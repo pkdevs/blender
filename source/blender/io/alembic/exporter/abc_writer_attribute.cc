@@ -214,7 +214,7 @@ static void create_geom_param_for_attribute(const Alembic::Abc::OCompoundPropert
                                             const StringRefNull name,
                                             const GeometryScope scope,
                                             const int timesample_index,
-                                            const OffsetIndices<int> corner_indices,
+                                            const OffsetIndices<int> faces,
                                             const StringRefNull object_name,
                                             const size_t num_geom_samples)
 {
@@ -235,10 +235,10 @@ static void create_geom_param_for_attribute(const Alembic::Abc::OCompoundPropert
     AlembicType *values_ptr = values.data();
     if (scope == kFacevaryingScope) {
       /* NOTE: data needs to be written in the reverse order. */
-      for (const int i : corner_indices.index_range()) {
-        const IndexRange corners = corner_indices[i];
-        for (int j = corners.size() - 1; j >= 0; j--) {
-          const int blender_index = corners[j];
+      for (const int i : faces.index_range()) {
+        const IndexRange face = faces[i];
+        for (int j = face.size() - 1; j >= 0; j--) {
+          const int blender_index = face[j];
           *values_ptr++ = TypeConverter::convert(buffer[blender_index]);
         }
       }
@@ -276,7 +276,7 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                      AttributeParamMaps &param_maps,
                                      const bke::AttributeIter &attr,
                                      const int timesample_index,
-                                     const OffsetIndices<int> corner_indices,
+                                     const OffsetIndices<int> faces,
                                      const StringRefNull object_name,
                                      const size_t num_geom_samples)
 {
@@ -302,7 +302,7 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                     attr.name,
                                     scope,
                                     timesample_index,
-                                    corner_indices,
+                                    faces,
                                     object_name,
                                     num_geom_samples);
     return;
@@ -316,7 +316,7 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       attr.name,
                                       scope,
                                       timesample_index,
-                                      corner_indices,
+                                      faces,
                                       object_name,
                                       num_geom_samples);
     }
