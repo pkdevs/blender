@@ -116,32 +116,47 @@ void ED_region_do_listen(wmRegionListenerParams *params)
       ED_region_tag_redraw(region);
       break;
     case NC_UI:
-      if (notifier->data == ND_UI_FONT) {
-        ui::invalidate_text_wrap_cache(*region);
-        ED_region_tag_redraw(region);
-      }
-      else if (notifier->data == ND_UI_TEXT_BLINK_TIMER_PAUSE &&
-               params->window == notifier->reference)
-      {
-        if (region->runtime->text_cursor_overlay && region->runtime->text_cursor_overlay->timer) {
-          WM_event_timer_remove(
-              params->wm, params->window, region->runtime->text_cursor_overlay->timer);
+      switch (notifier->data) {
+        case ND_UI_FONT: {
+          ui::invalidate_text_wrap_cache(*region);
+          ED_region_tag_redraw(region);
+          break;
+        }
+        case ND_UI_TEXT_BLINK_TIMER_PAUSE: {
+          if (params->window != notifier->reference) {
+            break;
+          }
+          if (region->runtime->text_cursor_overlay && region->runtime->text_cursor_overlay->timer)
+          {
+            WM_event_timer_remove(
+                params->wm, params->window, region->runtime->text_cursor_overlay->timer);
+            region->runtime->text_cursor_overlay->timer = nullptr;
+            region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
+          }
+          break;
+        }
+        case ND_UI_TEXT_BLINK_TIMER_RESTART: {
+          if (params->window != notifier->reference) {
+            break;
+          }
+          if (!region->runtime->text_cursor_overlay) {
+            break;
+          }
+          if (bke::screen_topmost_active_region(params->screen) != region) {
+            BLI_assert(!region->runtime->text_cursor_overlay->timer);
+            break;
+          }
+          if (region->runtime->text_cursor_overlay->timer) {
+            WM_event_timer_remove(
+                params->wm, params->window, region->runtime->text_cursor_overlay->timer);
+          }
+          region->runtime->text_cursor_overlay->timer = WM_event_timer_add(
+              params->wm, params->window, TIMER, bke::TEXT_EDIT_CURSOR_BLINK_INTERVAL);
           region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
-          region->runtime->text_cursor_overlay->timer = nullptr;
+          break;
         }
-      }
-      else if (notifier->data == ND_UI_TEXT_BLINK_TIMER_RESTART &&
-               notifier->reference == params->window && region->runtime->text_cursor_overlay &&
-               bke::screen_topmost_active_region(params->screen) == region)
-      {
-        if (region->runtime->text_cursor_overlay->timer) {
-          WM_event_timer_remove(
-              params->wm, params->window, region->runtime->text_cursor_overlay->timer);
-        }
-        region->runtime->text_cursor_overlay->timer = WM_event_timer_add(
-            params->wm, params->window, TIMER, bke::TEXT_EDIT_CURSOR_BLINK_INTERVAL);
-
-        region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
+        default:
+          break;
       }
       break;
   }
@@ -4439,10 +4454,12 @@ void ED_region_ensure_blink_cursor_overlay(const bContext *C,
       WM_event_timer_remove(wm, win, region->runtime->text_cursor_overlay->timer);
       region->runtime->text_cursor_overlay->timer = nullptr;
     }
+    region->runtime->text_cursor_overlay->rect = {};
   }
   else if (region->runtime->text_cursor_overlay) {
     if (region->runtime->text_cursor_overlay->timer) {
       WM_event_timer_remove(wm, win, region->runtime->text_cursor_overlay->timer);
+      region->runtime->text_cursor_overlay->timer = nullptr;
     }
     region->runtime->text_cursor_overlay = std::nullopt;
   }

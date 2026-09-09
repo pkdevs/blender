@@ -3791,9 +3791,10 @@ static void textedit_begin(bContext *C, Button *but, HandleButtonData *data)
   TextEdit &text_edit = data->text_edit;
   wmWindow *win = data->window;
 
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_PAUSE, win);
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, win);
+
   if (data->region->runtime->type->regionid != RGN_TYPE_TEMPORARY) {
-    WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_PAUSE, win);
-    WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, win);
     /* Ensure active region is updated when activating button with operators. */
     CTX_wm_screen(C)->active_region = data->region;
   }
@@ -3948,9 +3949,8 @@ static void textedit_begin(bContext *C, Button *but, HandleButtonData *data)
     textedit_ime_begin(win, but);
   }
 #endif
-  data->region->runtime->text_cursor_overlay = {
-      .rect = rctf{},
-  };
+  data->region->runtime->text_cursor_overlay = bke::TextCursorOverlay{};
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_PAUSE, CTX_wm_window(C));
   WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
   theme::get_color_4fv(TH_WIDGET_TEXT_CURSOR, data->region->runtime->text_cursor_overlay->color);
 }
