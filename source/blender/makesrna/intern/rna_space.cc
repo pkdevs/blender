@@ -3423,20 +3423,7 @@ static int rna_FileAssetSelectParams_asset_library_get(PointerRNA *ptr)
 static void rna_FileAssetSelectParams_asset_library_set(PointerRNA *ptr, int value)
 {
   FileAssetSelectParams *params = static_cast<FileAssetSelectParams *>(ptr->data);
-  const bool library_changed = (ed::asset::library_reference_to_enum_value(
-                                    &params->asset_library_ref) != value);
-  if (!library_changed) {
-    return;
-  }
   params->asset_library_ref = ed::asset::library_reference_from_enum_value(value);
-
-  /* Keep the `Unassigned` catalog if it was selected. Otherwise, default to `All` and let
-   * #file_listener() select a catalog with the same #last_selected_catalog_path if it exists
-   * in the new library when it loads. */
-  if (params->asset_catalog_visibility != FILE_SHOW_ASSETS_WITHOUT_CATALOG) {
-    params->catalog_id = BLI_uuid_nil();
-    params->asset_catalog_visibility = FILE_SHOW_ASSETS_ALL_CATALOGS;
-  }
 }
 
 static PointerRNA rna_FileAssetSelectParams_filter_id_get(PointerRNA *ptr)

@@ -8,12 +8,11 @@
 
 #pragma once
 
-#include "AS_asset_catalog_path.hh"
-
 #include "DNA_space_types.h"
 
 #include "BKE_report.hh"
 
+#include "ED_asset_library.hh"
 #include "ED_fileselect.hh"
 
 namespace blender {
@@ -203,6 +202,11 @@ struct BannersState {
   bool any_visible;
 };
 
+struct LastSelectedAssetCatalog {
+  eFileSel_Params_AssetCatalogVisibility visibility;
+  bUUID catalog_id;
+};
+
 using onReloadFnData = void *;
 using onReloadFn = void (*)(SpaceFile *space_data, onReloadFnData custom_data);
 struct SpaceFile_Runtime {
@@ -219,8 +223,8 @@ struct SpaceFile_Runtime {
 
   BannersState banners_state;
 
-  /** Path of the most recently selected catalog, used to restore selections across libraries. */
-  asset_system::AssetCatalogPath last_selected_catalog_path;
+  /** Most recently selected catalog per library, used to restore selections across libraries. */
+  Map<AssetLibraryReference, LastSelectedAssetCatalog> last_selected_catalogs;
 };
 
 /**

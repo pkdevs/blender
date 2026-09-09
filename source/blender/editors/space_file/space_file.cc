@@ -390,9 +390,12 @@ static void file_restore_last_selected_asset_catalog(FileList *files,
     return;
   }
 
-  const asset_system::AssetCatalogPath &path = runtime->last_selected_catalog_path;
+  const LastSelectedAssetCatalog *catalog = runtime->last_selected_catalogs.lookup_ptr(
+      asset_params->asset_library_ref);
 
-  if (!path || !filelist_is_ready(files)) {
+  if (!catalog || !filelist_is_ready(files)) {
+    asset_params->asset_catalog_visibility = FILE_SHOW_ASSETS_ALL_CATALOGS;
+    asset_params->catalog_id = BLI_uuid_nil();
     return;
   }
 
@@ -401,19 +404,18 @@ static void file_restore_last_selected_asset_catalog(FileList *files,
     return;
   }
 
-  const asset_system::AssetCatalogTreeItem *catalog =
-      library->catalog_service().catalog_tree()->find_item(path);
-
-  if (!catalog) {
-    return;
+  if (catalog->visibility == FILE_SHOW_ASSETS_FROM_CATALOG) {
+    if (!library->catalog_service().find_catalog(catalog->catalog_id)) {
+      /* The library reference can become invalid when an asset library is removed,
+       * since custom asset libraries are identified by their index. */
+      asset_params->asset_catalog_visibility = FILE_SHOW_ASSETS_ALL_CATALOGS;
+      asset_params->catalog_id = BLI_uuid_nil();
+      return;
+    }
+    asset_params->catalog_id = catalog->catalog_id;
   }
 
-  if (asset_params->catalog_id == catalog->get_catalog_id()) {
-    return;
-  }
-
-  asset_params->catalog_id = catalog->get_catalog_id();
-  asset_params->asset_catalog_visibility = FILE_SHOW_ASSETS_FROM_CATALOG;
+  asset_params->asset_catalog_visibility = catalog->visibility;
 }
 
 static void file_listener(const wmSpaceTypeListenerParams *listener_params)

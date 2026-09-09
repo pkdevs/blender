@@ -245,7 +245,8 @@ AssetCatalogTreeViewAllItem &AssetCatalogTreeView::add_all_item()
       [params, space_file](bContext & /*C*/, ui::BasicTreeViewItem & /*item*/) {
         params->asset_catalog_visibility = FILE_SHOW_ASSETS_ALL_CATALOGS;
         if (space_file->runtime) {
-          space_file->runtime->last_selected_catalog_path = {};
+          space_file->runtime->last_selected_catalogs.add_overwrite(
+              params->asset_library_ref, {FILE_SHOW_ASSETS_ALL_CATALOGS, {}});
         }
         WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
       });
@@ -266,7 +267,8 @@ void AssetCatalogTreeView::add_unassigned_item()
       [params, space_file](bContext & /*C*/, ui::BasicTreeViewItem & /*item*/) {
         params->asset_catalog_visibility = FILE_SHOW_ASSETS_WITHOUT_CATALOG;
         if (space_file->runtime) {
-          space_file->runtime->last_selected_catalog_path = {};
+          space_file->runtime->last_selected_catalogs.add_overwrite(
+              params->asset_library_ref, {FILE_SHOW_ASSETS_WITHOUT_CATALOG, {}});
         }
         WM_main_add_notifier(NC_SPACE | ND_SPACE_ASSET_PARAMS, nullptr);
       });
@@ -276,10 +278,9 @@ void AssetCatalogTreeView::add_unassigned_item()
 
 void AssetCatalogTreeView::activate_catalog_by_id(CatalogID catalog_id)
 {
-  if (asset_library_ && space_file_.runtime) {
-    if (const AssetCatalog *catalog = asset_library_->catalog_service().find_catalog(catalog_id)) {
-      space_file_.runtime->last_selected_catalog_path = catalog->path;
-    }
+  if (space_file_.runtime) {
+    space_file_.runtime->last_selected_catalogs.add_overwrite(
+        params_->asset_library_ref, {FILE_SHOW_ASSETS_FROM_CATALOG, catalog_id});
   }
 
   params_->asset_catalog_visibility = FILE_SHOW_ASSETS_FROM_CATALOG;
