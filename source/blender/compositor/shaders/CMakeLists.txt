@@ -10,6 +10,8 @@ set(INC_GLSL
   ../../gpu/intern
   ../../gpu/shaders
   ../../gpu/shaders/common
+  ../../gpu/shaders/nodes
+  ../../gpu/shaders/compat
   ../../gpu/shaders/infos
 )
 

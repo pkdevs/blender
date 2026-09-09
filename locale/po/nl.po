@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'09417042a1fa')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'f5df8c32f99b')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 07:38+0000\n"
+"POT-Creation-Date: 2026-09-07 07:47+0000\n"
 "PO-Revision-Date: 2026-07-08 11:12+0000\n"
 "Last-Translator: Timo Hoetmer <timo@timohoetmer.nl>\n"
 "Language-Team: Dutch <https://translate.blender.org/projects/blender-ui/ui/nl/>\n"
@@ -2756,10 +2756,6 @@ msgstr "Blendbestand Importeer Context Bibliotheken"
 
 msgid "Collection of source libraries, i.e. blendfile paths"
 msgstr "Collectie van bron bibliotheken, d.w.z. blendbestand paden"
-
-
-msgid "Blendfile Import Context Library"
-msgstr "Blendbestand Importeer Context Bibliotheek"
 
 
 msgid "Blender RNA"
@@ -5768,48 +5764,32 @@ msgid "Import"
 msgstr "Importeren"
 
 
-msgid "Mirror"
-msgstr "Spiegel"
-
-
-msgid "Local View"
-msgstr "Lokale Scherm"
-
-
-msgid "Navigation"
-msgstr "Navigatie"
+msgid "Select Linked"
+msgstr "Selecteer Aaneengesloten"
 
 
 msgid "Select Similar"
 msgstr "Selecteer Vergelijkbaar"
 
 
-msgid "Select Linked"
-msgstr "Selecteer Aaneengesloten"
+msgid "Navigation"
+msgstr "Navigatie"
 
 
-msgid "Light"
-msgstr "Licht"
+msgid "Local View"
+msgstr "Lokale Scherm"
 
 
-msgid "Add Image"
-msgstr "Voeg Afbeelding Toe"
-
-
-msgid "Relations"
-msgstr "Relaties"
-
-
-msgid "Rigid Body"
-msgstr "Star Lichaam"
-
-
-msgid "Quick Effects"
-msgstr "Snelle Effecten"
+msgid "Mirror"
+msgstr "Spiegel"
 
 
 msgid "Show/Hide"
 msgstr "Toon/Verberg"
+
+
+msgid "Names"
+msgstr "Namen"
 
 
 msgid "Linked"
@@ -5820,20 +5800,36 @@ msgid "Layout"
 msgstr "Indeling"
 
 
-msgid "Convert"
-msgstr "Converteer"
+msgid "Clear Transform"
+msgstr "Maak Transformatie Leeg"
 
 
 msgid "Hooks"
 msgstr "Haken"
 
 
-msgid "Clear Transform"
-msgstr "Maak Transformatie Leeg"
+msgid "Convert"
+msgstr "Converteer"
 
 
-msgid "Names"
-msgstr "Namen"
+msgid "Quick Effects"
+msgstr "Snelle Effecten"
+
+
+msgid "Rigid Body"
+msgstr "Star Lichaam"
+
+
+msgid "Add Image"
+msgstr "Voeg Afbeelding Toe"
+
+
+msgid "Relations"
+msgstr "Relaties"
+
+
+msgid "Light"
+msgstr "Licht"
 
 
 msgctxt "MovieClip"
@@ -6782,8 +6778,8 @@ msgstr "Keer Richting Om"
 
 
 msgctxt "Operator"
-msgid "Accept"
-msgstr "Accepteer"
+msgid "Select Directory"
+msgstr "Selecteer Map"
 
 
 msgctxt "Operator"
@@ -7186,11 +7182,6 @@ msgstr "Hernoem Bestand of Map"
 msgctxt "Operator"
 msgid "(De)select All Files"
 msgstr "(De)selecteer Alle Bestanden"
-
-
-msgctxt "Operator"
-msgid "Select Directory"
-msgstr "Selecteer Map"
 
 
 msgid "Previous Line"
@@ -11101,6 +11092,11 @@ msgstr "Ververs Alles"
 
 
 msgctxt "Operator"
+msgid "Text"
+msgstr "Tekst"
+
+
+msgctxt "Operator"
 msgid "Fade"
 msgstr "Vervagen"
 
@@ -11143,11 +11139,6 @@ msgstr "Beide Zijden"
 msgctxt "Operator"
 msgid "Color"
 msgstr "Kleur"
-
-
-msgctxt "Operator"
-msgid "Text"
-msgstr "Tekst"
 
 
 msgctxt "Operator"
