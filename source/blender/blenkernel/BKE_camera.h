@@ -113,6 +113,10 @@ void BKE_camera_params_compute_viewplane(
  */
 void BKE_camera_params_crop_viewplane(rctf *viewplane, int winx, int winy, const rcti *region);
 /**
+ * Apply the camera view roll and flip to the camera view offset.
+ */
+float2 BKE_camera_viewplane_offset_transform(float roll, bool is_flipped_x, float2 offset);
+/**
  * View-plane is assumed to be already computed.
  */
 void BKE_camera_params_compute_matrix(CameraParams *params);
