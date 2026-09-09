@@ -406,7 +406,7 @@ void ED_undosys_type_grease_pencil(UndoType *ut)
 {
   using namespace blender::ed;
 
-  ut->name = "Edit GreasePencil";
+  ut->identifier = "EDIT_GREASEPENCIL";
   ut->poll = greasepencil::grease_pencil_edit_poll;
   ut->step_encode = greasepencil::undo::step_encode;
   ut->step_decode = greasepencil::undo::step_decode;
@@ -414,7 +414,7 @@ void ED_undosys_type_grease_pencil(UndoType *ut)
 
   ut->step_foreach_ID_ref = greasepencil::undo::foreach_ID_ref;
 
-  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE;
+  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE | UNDOTYPE_FLAG_ENCODE_PRE_MEMFILE_SUPPORTED;
 
   ut->step_size = sizeof(greasepencil::undo::GreasePencilUndoStep);
 }

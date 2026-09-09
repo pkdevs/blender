@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup draw_engine
+ */
+
 #include "../eevee/eevee_lut.hh" /* TODO: find somewhere to share blue noise Table. */
 
 #include "BKE_studiolight.h"
@@ -121,7 +125,10 @@ void SceneResources::init(const SceneState &scene_state, const DRWContext *ctx)
   world_buf.matcap_orientation = (shading.flag & V3D_SHADING_MATCAP_FLIP_X) != 0;
 
   StudioLight *studio_light = nullptr;
-  if (U.edit_studio_light) {
+  if (U.edit_studio_light && shading.light == V3D_LIGHTING_STUDIO) {
+    /* Do not use this for MATCAP.
+     * matcap is also stored as StudioLight data but it needs its selected matcap texture loaded
+     * through the normal matcap path. */
     studio_light = BKE_studiolight_studio_edit_get();
   }
   else {

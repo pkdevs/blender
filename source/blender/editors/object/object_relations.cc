@@ -64,6 +64,7 @@
 #include "BKE_node_tree_interface.hh"
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
+#include "BKE_paint.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 
@@ -170,7 +171,7 @@ static wmOperatorStatus vertex_parent_set_exec(bContext *C, wmOperator *op)
   else if (ELEM(obedit->type, OB_SURF, OB_CURVES_LEGACY)) {
     ListBaseT<Nurb> *editnurb = object_editcurve_get(obedit);
     int curr_index = 0;
-    for (Nurb *nu = static_cast<Nurb *>(editnurb->first); nu != nullptr; nu = nu->next) {
+    for (Nurb *nu = editnurb->first(); nu != nullptr; nu = nu->next) {
       if (nu->type == CU_BEZIER) {
         BezTriple *bezt = nu->bezt;
         for (int nurb_index = 0; nurb_index < nu->pntsu; nurb_index++, bezt++, curr_index++) {
@@ -339,7 +340,7 @@ static void object_remove_parent_deform_modifiers(Object *ob, const Object *par)
     ModifierData *md, *mdn;
 
     /* assume that we only need to remove the first instance of matching deform modifier here */
-    for (md = static_cast<ModifierData *>(ob->modifiers.first); md; md = mdn) {
+    for (md = ob->modifiers.first(); md; md = mdn) {
       bool free = false;
 
       mdn = md->next;
@@ -556,7 +557,7 @@ static bool parent_set_with_depsgraph(ReportList *reports,
         FCurve *fcu = animrig::action_fcurve_ensure_ex(bmain, act, &id_ptr, {"eval_time", 0});
 
         /* setup dummy 'generator' modifier here to get 1-1 correspondence still working */
-        if (!fcu->bezt && !fcu->fpt && !fcu->modifiers.first) {
+        if (!fcu->bezt && !fcu->fpt && !fcu->modifiers.first_) {
           add_fmodifier(&fcu->modifiers, FMODIFIER_TYPE_GENERATOR, fcu);
         }
       }
@@ -1237,7 +1238,7 @@ static wmOperatorStatus object_track_clear_exec(bContext *C, wmOperator *op)
     DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
 
     /* also remove all tracking constraints */
-    for (con = static_cast<bConstraint *>(ob->constraints.last); con; con = pcon) {
+    for (con = ob->constraints.last(); con; con = pcon) {
       pcon = con->prev;
       if (ELEM(con->type,
                CONSTRAINT_TYPE_TRACKTO,
@@ -1538,7 +1539,7 @@ static bool allow_make_links_data(const int type, Object *ob_src, Object *ob_dst
     case MAKE_LINKS_GROUP:
       return true;
     case MAKE_LINKS_MODIFIERS:
-      if (!ELEM(OB_EMPTY, ob_src->type, ob_dst->type)) {
+      if (BKE_object_supports_modifiers(ob_src) && BKE_object_supports_modifiers(ob_dst)) {
         return true;
       }
       break;
@@ -1598,6 +1599,7 @@ static wmOperatorStatus make_links_data_exec(bContext *C, wmOperator *op)
             id_us_plus(obdata_id);
             ob_dst->data = obdata_id;
 
+            BKE_sculptsession_free_pbvh(*ob_dst);
             /* if amount of material indices changed: */
             BKE_object_materials_sync_length(bmain, ob_dst, ob_dst->data);
 
@@ -1805,7 +1807,9 @@ void OBJECT_OT_make_links_data(wmOperatorType *ot)
 
   /* API callbacks. */
   ot->exec = make_links_data_exec;
-  ot->poll = ED_operator_object_active;
+  /* The object must not be in edit-mode because multiple objects in edit-mode
+   * sharing data is an invalid state which can cause crashes. See: #160956. */
+  ot->poll = ED_operator_object_active_objectmode;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -1836,10 +1840,7 @@ static void libblock_relink_collection(Main *bmain,
     BKE_libblock_relink_to_newid(bmain, &collection->id, 0);
   }
 
-  for (CollectionObject *cob = static_cast<CollectionObject *>(collection->gobject.first);
-       cob != nullptr;
-       cob = cob->next)
-  {
+  for (CollectionObject *cob = collection->gobject.first(); cob != nullptr; cob = cob->next) {
     BKE_libblock_relink_to_newid(bmain, &cob->ob->id, 0);
   }
 
@@ -1881,8 +1882,8 @@ static Collection *single_object_users_collection(Main *bmain,
   /* Since master collection has already be duplicated as part of scene copy,    * we do not
    * duplicate it here. However, this means its children need to be re-added manually here,    *
    * otherwise their parent lists are empty (which will lead to crashes, see #63101). */
-  CollectionChild *child_next, *child = static_cast<CollectionChild *>(collection->children.first);
-  CollectionChild *orig_child_last = static_cast<CollectionChild *>(collection->children.last);
+  CollectionChild *child_next, *child = collection->children.first();
+  CollectionChild *orig_child_last = collection->children.last();
   for (; child != nullptr; child = child_next) {
     child_next = child->next;
     Collection *collection_child_new = single_object_users_collection(
@@ -2080,7 +2081,7 @@ static void single_obdata_users(
   }
   FOREACH_OBJECT_FLAG_END;
 
-  Mesh *mesh = static_cast<Mesh *>(bmain->meshes.first);
+  Mesh *mesh = bmain->meshes.first();
   while (mesh) {
     ID_NEW_REMAP(mesh->texcomesh);
     mesh = static_cast<Mesh *>(mesh->id.next);
@@ -2149,13 +2150,19 @@ static void single_mat_users(
 
   FOREACH_OBJECT_FLAG_BEGIN (bmain, scene, view_layer, v3d, flag, ob) {
     if (BKE_id_is_editable(bmain, &ob->id)) {
+      const bool is_obdata_editable = ob->data ? BKE_id_is_editable(bmain, ob->data) : false;
       for (a = 1; a <= ob->totcol; a++) {
+        if (!ob->matbits[a - 1] && !is_obdata_editable) {
+          /* Cannot edit material usage of obdata if it's not editable (e.g. local object using a
+           * linked mesh). See also #161211. */
+          continue;
+        }
         ma = BKE_object_material_get(ob, short(a));
         if (single_data_needs_duplication(&ma->id)) {
           man = id_cast<Material *>(
               BKE_id_copy_ex(bmain, &ma->id, nullptr, LIB_ID_COPY_DEFAULT | LIB_ID_COPY_ACTIONS));
           man->id.us = 0;
-          BKE_object_material_assign(bmain, ob, man, short(a), BKE_MAT_ASSIGN_USERPREF);
+          BKE_object_material_assign(bmain, ob, man, short(a), BKE_MAT_ASSIGN_EXISTING);
         }
       }
     }
@@ -2212,7 +2219,7 @@ static void tag_localizable_objects(bContext *C, const int mode)
    * FIXME This is ignoring all other linked ID types potentially using the selected tagged
    * objects! Probably works fine in most 'usual' cases though.
    */
-  for (Object *object = static_cast<Object *>(bmain->objects.first); object;
+  for (Object *object = bmain->objects.first(); object;
        object = static_cast<Object *>(object->id.next))
   {
     if ((object->id.tag & ID_TAG_DOIT) == 0 && ID_IS_LINKED(object)) {
@@ -2243,9 +2250,7 @@ static bool make_local_all__instance_indirect_unused(Main *bmain,
   Object *ob;
   bool changed = false;
 
-  for (ob = static_cast<Object *>(bmain->objects.first); ob;
-       ob = static_cast<Object *>(ob->id.next))
-  {
+  for (ob = bmain->objects.first(); ob; ob = static_cast<Object *>(ob->id.next)) {
     if (ID_IS_LINKED(ob) && (ob->id.us == 0)) {
       Base *base;
 
@@ -3186,7 +3191,7 @@ static wmOperatorStatus drop_geometry_nodes_invoke(bContext *C,
 
   nmd->node_group = node_tree;
   id_us_plus(&node_tree->id);
-  MOD_nodes_update_interface(ob, nmd);
+  MOD_nodes_update_interface(*bmain, ob, nmd);
 
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, nullptr);

@@ -312,7 +312,7 @@ static void armature_undosys_foreach_ID_ref(UndoStep *us_p,
 
 void ED_armature_undosys_type(UndoType *ut)
 {
-  ut->name = "Edit Armature";
+  ut->identifier = "EDIT_ARMATURE";
   ut->poll = armature_undosys_poll;
   ut->step_encode = armature_undosys_step_encode;
   ut->step_decode = armature_undosys_step_decode;
@@ -320,7 +320,7 @@ void ED_armature_undosys_type(UndoType *ut)
 
   ut->step_foreach_ID_ref = armature_undosys_foreach_ID_ref;
 
-  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE;
+  ut->flags = UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE | UNDOTYPE_FLAG_ENCODE_PRE_MEMFILE_SUPPORTED;
 
   ut->step_size = sizeof(ArmatureUndoStep);
 }

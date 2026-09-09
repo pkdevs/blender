@@ -20,7 +20,7 @@
 #include "DNA_screen_types.h"
 
 #include "BKE_anim_data.hh"
-#include "BKE_animsys.h"
+#include "BKE_animsys.hh"
 #include "BKE_brush.hh"
 #include "BKE_context.hh"
 #include "BKE_fcurve_driver.h"
@@ -261,7 +261,7 @@ static wmOperatorStatus gpencil_layer_remove_exec(bContext *C, wmOperator *op)
   WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_SELECTED, nullptr);
 
   /* Free Grease Pencil data block when last annotation layer is removed, see: #112683. */
-  if (gpd->layers.first == nullptr) {
+  if (gpd->layers.first_ == nullptr) {
     BKE_gpencil_free_data(gpd, true);
 
     bGPdata **gpd_ptr = ED_annotation_data_get_pointers(C, nullptr);

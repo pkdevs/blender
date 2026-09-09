@@ -26,6 +26,7 @@
 #include "BKE_object_types.hh"
 #include "BKE_paint.hh"
 #include "BKE_paint_bvh.hh"
+#include "BKE_paint_types.hh"
 
 #include "IMB_colormanagement.hh"
 
@@ -372,9 +373,15 @@ static void do_paint_brush_task(const Depsgraph &depsgraph,
 
   tls.distances.resize(verts.size());
   const MutableSpan<float> distances = tls.distances;
-  if (brush.tip_roundness < 1.0f) {
+  if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     tls.positions.resize(verts.size());
-    calc_local_positions(vert_positions, verts, mat, tls.positions);
+    calc_local_positions(vert_positions,
+                         verts,
+                         mat,
+                         cache.location_symm,
+                         cache.view_normal_symm,
+                         eBrushFalloffShape(brush.falloff_shape),
+                         tls.positions);
     calc_brush_cube_distances<float3>(brush, tls.positions, distances);
     radius = 1.0f;
   }
@@ -550,16 +557,10 @@ static void do_sample_wet_paint_task(const Depsgraph &depsgraph,
 }
 
 void do_paint_brush(const Depsgraph &depsgraph,
-                    PaintModeSettings &paint_mode_settings,
                     const Sculpt &sd,
                     Object &ob,
-                    const IndexMask &node_mask,
-                    const IndexMask &texnode_mask)
+                    const IndexMask &node_mask)
 {
-  if (SCULPT_use_image_paint_brush(paint_mode_settings, ob)) {
-    SCULPT_do_paint_brush_image(depsgraph, sd, ob, texnode_mask);
-    return;
-  }
   PRF_scope(ProfileCategory::Editor);
 
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
@@ -579,7 +580,7 @@ void do_paint_brush(const Depsgraph &depsgraph,
 
   /* If the brush is round the tip does not need to be aligned to the surface, so this saves a
    * whole iteration over the affected nodes. */
-  if (brush.tip_roundness < 1.0f) {
+  if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
     cube_tip_init(sd, ob, brush, mat.ptr());
 
     if (is_zero_m4(mat.ptr())) {

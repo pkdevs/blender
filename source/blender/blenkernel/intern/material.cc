@@ -63,6 +63,7 @@
 #include "BKE_node.hh"
 #include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
+#include "BKE_node_tree_update.hh"
 #include "BKE_object.hh"
 #include "BKE_object_types.hh"
 #include "BKE_pointcloud.hh"
@@ -986,12 +987,10 @@ MaterialGPencilStyle *BKE_gpencil_material_settings(Object *ob, short act)
  * When materials are assigned, the active material must be in the range of `1..totcol`.
  * see #139182 for details.
  */
-static void object_material_active_index_sanitize(Object *ob)
+void BKE_object_material_active_index_sanitize(Object *ob)
 {
-  if (ob->totcol && ob->actcol == 0) {
-    ob->actcol = 1;
-  }
-  ob->actcol = std::min(ob->actcol, ob->totcol);
+  const int min_index = (ob->totcol) ? 1 : 0;
+  ob->actcol = std::clamp(ob->actcol, min_index, ob->totcol);
 }
 
 void BKE_object_material_resize(Main *bmain, Object *ob, const short totcol, bool do_id_user)
@@ -1056,7 +1055,7 @@ void BKE_object_materials_sync_length(Main *bmain, Object *ob, ID *id)
   else {
     /* Normal case: the use the obdata amount of materials slots to update the object's one. */
     BKE_object_material_resize(bmain, ob, *totcol, false);
-    object_material_active_index_sanitize(ob);
+    BKE_object_material_active_index_sanitize(ob);
   }
 }
 
@@ -1071,12 +1070,10 @@ void BKE_objects_materials_sync_length_all(Main *bmain, ID *id)
 
   BKE_main_lock(bmain);
   int processed_objects = 0;
-  for (ob = static_cast<Object *>(bmain->objects.first); ob;
-       ob = static_cast<Object *>(ob->id.next))
-  {
+  for (ob = bmain->objects.first(); ob; ob = static_cast<Object *>(ob->id.next)) {
     if (ob->data == id) {
       BKE_object_material_resize(bmain, ob, *totcol, false);
-      object_material_active_index_sanitize(ob);
+      BKE_object_material_active_index_sanitize(ob);
       processed_objects++;
       BLI_assert(processed_objects <= id->us && processed_objects > 0);
       if (processed_objects == id->us) {
@@ -1487,7 +1484,7 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
   }
 
   /* can happen on face selection in editmode */
-  object_material_active_index_sanitize(ob);
+  BKE_object_material_active_index_sanitize(ob);
 
   /* we delete the actcol */
   mao = (*matarar)[ob->actcol - 1];
@@ -1507,9 +1504,7 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
 
   const int actcol = ob->actcol;
 
-  for (Object *obt = static_cast<Object *>(bmain->objects.first); obt;
-       obt = static_cast<Object *>(obt->id.next))
-  {
+  for (Object *obt = bmain->objects.first(); obt; obt = static_cast<Object *>(obt->id.next)) {
     if (obt->data == ob->data) {
       /* Can happen when object material lists are used, see: #52953 */
       if (actcol > obt->totcol) {
@@ -1526,7 +1521,7 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
         obt->matbits[a - 1] = obt->matbits[a];
       }
       obt->totcol--;
-      object_material_active_index_sanitize(ob);
+      BKE_object_material_active_index_sanitize(ob);
 
       if (obt->totcol == 0) {
         MEM_delete(obt->mat);
@@ -1546,6 +1541,59 @@ bool BKE_object_material_slot_remove(Main *bmain, Object *ob)
   }
 
   return true;
+}
+
+int BKE_object_material_remove_unused(Main *bmain, Object *ob)
+{
+  int actcol = ob->actcol;
+  int removed = 0;
+
+  for (int slot = 1; slot <= ob->totcol; slot++) {
+    while (slot <= ob->totcol && !BKE_object_material_slot_used(ob, slot)) {
+      ob->actcol = slot;
+
+      if (!BKE_object_material_slot_remove(bmain, ob)) {
+        break;
+      }
+
+      if (actcol >= slot) {
+        actcol--;
+      }
+
+      removed++;
+    }
+  }
+
+  ob->actcol = actcol;
+  BKE_object_material_active_index_sanitize(ob);
+
+  return removed;
+}
+
+int BKE_object_material_remove_all(Main *bmain, Object *ob)
+{
+  int actcol = ob->actcol;
+  int removed = 0;
+
+  for (int slot = 1; slot <= ob->totcol; slot++) {
+    while (slot <= ob->totcol) {
+      ob->actcol = slot;
+
+      if (!BKE_object_material_slot_remove(bmain, ob)) {
+        break;
+      }
+
+      if (actcol >= slot) {
+        actcol--;
+      }
+
+      removed++;
+    }
+  }
+  ob->actcol = actcol;
+  BKE_object_material_active_index_sanitize(ob);
+
+  return removed;
 }
 
 static bNode *nodetree_uv_node_recursive(bNode *node)
@@ -1704,23 +1752,13 @@ static void fill_texpaint_slots_recursive(bNodeTree *nodetree,
   ntree_foreach_texnode_recursive(nodetree, fill_texpaint_slots_cb, &fill_data, slot_filter);
 }
 
-/** Check which type of paint slots should be filled for the given object. */
-static ePaintSlotFilter material_paint_slot_filter(const Object *ob)
-{
-  ePaintSlotFilter slot_filter = PAINT_SLOT_IMAGE;
-  if (ob->mode == OB_MODE_SCULPT && USER_EXPERIMENTAL_TEST(&U, use_sculpt_texture_paint)) {
-    slot_filter |= PAINT_SLOT_COLOR_ATTRIBUTE;
-  }
-  return slot_filter;
-}
-
 void BKE_texpaint_slot_refresh_cache(Scene *scene, Material *ma, const Object *ob)
 {
   if (!ma) {
     return;
   }
 
-  const ePaintSlotFilter slot_filter = material_paint_slot_filter(ob);
+  const ePaintSlotFilter slot_filter = PAINT_SLOT_IMAGE;
 
   const TexPaintSlot *prev_texpaintslot = ma->texpaintslot;
   const int prev_paint_active_slot = ma->paint_active_slot;
@@ -2150,6 +2188,7 @@ static void material_default_surface_init(Material **ma_p)
   output->location[1] = 100.0f;
 
   bke::node_set_active(*ntree, *output);
+  BKE_ntree_update_without_main(*ntree);
 }
 
 static void material_default_volume_init(Material **ma_p)
@@ -2172,6 +2211,7 @@ static void material_default_volume_init(Material **ma_p)
   output->location[1] = 100.0f;
 
   bke::node_set_active(*ntree, *output);
+  BKE_ntree_update_without_main(*ntree);
 }
 
 static void material_default_holdout_init(Material **ma_p)
@@ -2194,6 +2234,7 @@ static void material_default_holdout_init(Material **ma_p)
   output->location[1] = 300.0f;
 
   bke::node_set_active(*ntree, *output);
+  BKE_ntree_update_without_main(*ntree);
 }
 
 Material *BKE_material_default_empty()
@@ -2225,7 +2266,7 @@ void BKE_material_defaults_free_gpu()
 {
   for (int i = 0; default_materials[i]; i++) {
     Material *ma = *default_materials[i];
-    if (ma && ma->gpumaterial.first) {
+    if (ma && ma->gpumaterial.first()) {
       GPU_material_free(&ma->gpumaterial);
     }
   }

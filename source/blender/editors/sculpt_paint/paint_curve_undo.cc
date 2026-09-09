@@ -144,7 +144,7 @@ static void paintcurve_undosys_foreach_ID_ref(UndoStep *us_p,
 
 void ED_paintcurve_undosys_type(UndoType *ut)
 {
-  ut->name = "Paint Curve";
+  ut->identifier = "PAINT_CURVE";
   ut->poll = paintcurve_undosys_poll;
   ut->step_encode_init = paintcurve_undosys_step_encode_init;
   ut->step_encode = paintcurve_undosys_step_encode;
@@ -174,7 +174,7 @@ void ED_paintcurve_undo_push_begin(const char *name)
 void ED_paintcurve_undo_push_end(bContext *C)
 {
   UndoStack *ustack = ED_undo_stack_get();
-  BKE_undosys_step_push(ustack, C, nullptr);
+  BKE_undosys_step_push(ustack, C, nullptr, UndoEncodeHints::None);
   BKE_undosys_stack_limit_steps_and_memory_defaults(ustack);
   WM_file_tag_modified();
 }
