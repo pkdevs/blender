@@ -24,6 +24,13 @@ from modules.test_helpers import set_view3d_context_override, generate_stroke
 args = None
 
 
+def delete_attribute_from_all_drawings(grease_pencil, attribute_name):
+    for layer in grease_pencil.layers:
+        for frame in layer.frames:
+            if frame.drawing.attributes.find(attribute_name) >= 0:
+                attr = frame.drawing.attributes[attribute_name]
+                frame.drawing.attributes.remove(attr)
+
 
 class GreasePencilPaintTests(unittest.TestCase):
     """
@@ -36,8 +43,8 @@ class GreasePencilPaintTests(unittest.TestCase):
 
 
     def prepare(self):
-        data = bpy.data.grease_pencils.new("empty_test")
-        obj = bpy.data.objects.new("empty_test", data)
+        data = bpy.data.grease_pencils.new("test")
+        obj = bpy.data.objects.new("test", data)
         bpy.context.collection.objects.link(obj)
         layer = data.layers.new("layer")
         frame = layer.frames.new(0)
@@ -55,14 +62,23 @@ class GreasePencilPaintTests(unittest.TestCase):
         set_view3d_context_override(context_override)
         with bpy.context.temp_override(**context_override):
             bpy.ops.grease_pencil.brush_stroke(stroke=generate_stroke(context_override))
+
+        #bpy.ops.wm.save_mainfile()
+
+        # Remove the 'init_time' attribute before comparing, because it will differ by definition
+        delete_attribute_from_all_drawings(bpy.data.grease_pencils['expected'], "init_time")
+        delete_attribute_from_all_drawings(bpy.data.grease_pencils['test'], "init_time")
+        # Remove hte ".selection" attribute, because it the domain it exists on depends on the last mode
+        # the gp object was in
+        delete_attribute_from_all_drawings(bpy.data.grease_pencils['expected'], ".selection")
+        delete_attribute_from_all_drawings(bpy.data.grease_pencils['test'], ".selection")
+        comparison = bpy.data.grease_pencils['expected'].unit_test_compare(grease_pencil=bpy.data.grease_pencils['test'], threshold=0.001)
+
+
+
         #compare with expected
-        self.assertTrue(True, "Drawing doesn't match")
+        self.assertTrue(comparison == 'Same', comparison)
         self.cleanup()
-
-        #self._activate_brush("Add Weight")
-        #self._check_stroke()
-
-
 
 
 
