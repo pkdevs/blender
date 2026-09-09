@@ -7,6 +7,7 @@
 #include "GPU_shader_shared.hh"
 #include "gpu_shader_common_color_utils.glsl"
 #include "gpu_shader_fullscreen_lib.glsl"
+#include "gpu_shader_utildefines_lib.glsl"
 
 namespace sequencer::scope {
 
@@ -130,12 +131,12 @@ struct ScopeRaster {
 
   /* Calculate point position based on scope mode; possibly adjust color too. */
   float2 pos = float2(0.0);
-  if (bool(srt.scope_mode & SEQ_DRAW_IMG_WAVEFORM)) {
+  if (flag_test(srt.scope_mode, SEQ_DRAW_IMG_WAVEFORM)) {
     /* Waveform: pixel height based on luminance. */
     pos.x = texel.x - srt.image_width / 2;
     pos.y = (get_luminance(position, srt.scope_luma_coeffs) - 0.5f) * srt.image_height;
   }
-  else if (bool(srt.scope_mode & SEQ_DRAW_IMG_RGBPARADE)) {
+  else if (flag_test(srt.scope_mode, SEQ_DRAW_IMG_RGBPARADE)) {
     /* RGB parade: similar to waveform, except three different "bands"
      * for each R/G/B intensity. */
     int channel = texel.x % 3;
@@ -160,7 +161,7 @@ struct ScopeRaster {
       color.rgb = mix(color.rgb, float3(other_channels, other_channels, 1), factor);
     }
   }
-  else if (bool(srt.scope_mode & SEQ_DRAW_IMG_VECTORSCOPE)) {
+  else if (flag_test(srt.scope_mode, SEQ_DRAW_IMG_VECTORSCOPE)) {
     /* Vectorscope: pixel position is based on U,V of the color. */
     float3 yuv = srt.scope_yuv_matrix * position;
     float vec_size = min(srt.image_width, srt.image_height);
@@ -173,7 +174,7 @@ struct ScopeRaster {
    * and use full brightness. */
   float4 hsv;
   rgb_to_hsv(color, hsv);
-  if (!bool(srt.scope_mode & SEQ_DRAW_IMG_RGBPARADE)) {
+  if (!flag_test(srt.scope_mode, SEQ_DRAW_IMG_RGBPARADE)) {
     /* Saturation adjustments for parade mode are already done above. */
     hsv.y *= 0.5f;
   }
