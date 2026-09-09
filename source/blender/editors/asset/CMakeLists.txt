@@ -56,7 +56,6 @@ set(SRC
   intern/asset_index.hh
   intern/asset_indexer_remote_file_status.hh
   intern/asset_indexer_remote_listing.hh
-  intern/asset_library_reference.hh
   intern/asset_shelf.hh
 )
 

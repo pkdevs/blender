@@ -39,11 +39,10 @@
 #include "../space_file/filelist.hh"
 
 #include "ED_asset_indexer.hh"
+#include "ED_asset_library.hh"
 #include "ED_asset_list.hh"
 #include "ED_fileselect.hh"
 #include "ED_screen.hh"
-
-#include "asset_library_reference.hh"
 
 /* TODO somehow update online asset status after downloaded by subscribing to
  * #WM_MSG_TYPE_REMOTE_DOWNLOADER messages. */
