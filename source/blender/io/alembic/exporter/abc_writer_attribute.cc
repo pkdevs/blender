@@ -11,6 +11,7 @@
 #include "BLI_math_vector_types.hh"
 
 #include "BKE_attribute.hh"
+#include "BKE_attribute_math.hh"
 
 #include "intern/abc_axis_conversion.h"
 #include "intern/abc_util.h"
@@ -293,118 +294,33 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
 
   const GVArray attribute = *attr.get();
 
-  switch (attr.data_type) {
-    case bke::AttrType::Bool:
+  /* #bke::attribute_math::to_static_type does not yet support strings. */
+  if (attr.data_type == bke::AttrType::String) {
+    create_geom_param_for_attribute(prop,
+                                    param_maps,
+                                    attribute.typed<MStringProperty>(),
+                                    attr.name,
+                                    scope,
+                                    timesample_index,
+                                    corner_indices,
+                                    object_name,
+                                    num_geom_samples);
+    return;
+  }
+
+  bke::attribute_math::to_static_type(attr.data_type, [&]<typename BlenderT>() {
+    if constexpr (!std::is_same_v<BlenderT, float4>) {
       create_geom_param_for_attribute(prop,
                                       param_maps,
-                                      attribute.typed<bool>(),
+                                      attribute.typed<BlenderT>(),
                                       attr.name,
                                       scope,
                                       timesample_index,
                                       corner_indices,
                                       object_name,
                                       num_geom_samples);
-      break;
-    case bke::AttrType::Int8:
-      create_geom_param_for_attribute(prop,
-                                      param_maps,
-                                      attribute.typed<int8_t>(),
-                                      attr.name,
-                                      scope,
-                                      timesample_index,
-                                      corner_indices,
-                                      object_name,
-                                      num_geom_samples);
-      break;
-    case bke::AttrType::Int16_2D:
-      create_geom_param_for_attribute(prop,
-                                      param_maps,
-                                      attribute.typed<short2>(),
-                                      attr.name,
-                                      scope,
-                                      timesample_index,
-                                      corner_indices,
-                                      object_name,
-                                      num_geom_samples);
-      break;
-    case bke::AttrType::Int32:
-      create_geom_param_for_attribute(prop,
-                                      param_maps,
-                                      attribute.typed<int>(),
-                                      attr.name,
-                                      scope,
-                                      timesample_index,
-                                      corner_indices,
-                                      object_name,
-                                      num_geom_samples);
-      break;
-    case bke::AttrType::Int32_2D:
-      create_geom_param_for_attribute(prop,
-                                      param_maps,
-                                      attribute.typed<int2>(),
-                                      attr.name,
-                                      scope,
-                                      timesample_index,
-                                      corner_indices,
-                                      object_name,
-                                      num_geom_samples);
-      break;
-    case bke::AttrType::ColorByte:
-      create_geom_param_for_attribute(prop,
-                                      param_maps,
-                                      attribute.typed<ColorGeometry4b>(),
-                                      attr.name,
-                                      scope,
-                                      timesample_index,
-                                      corner_indices,
-                                      object_name,
-                                      num_geom_samples);
-      break;
-    case bke::AttrType::ColorFloat:
-      create_geom_param_for_attribute(prop,
-                                      param_maps,
-                                      attribute.typed<ColorGeometry4f>(),
-                                      attr.name,
-                                      scope,
-                                      timesample_index,
-                                      corner_indices,
-                                      object_name,
-                                      num_geom_samples);
-      break;
-    case bke::AttrType::Float:
-      create_geom_param_for_attribute(prop,
-                                      param_maps,
-                                      attribute.typed<float>(),
-                                      attr.name,
-                                      scope,
-                                      timesample_index,
-                                      corner_indices,
-                                      object_name,
-                                      num_geom_samples);
-      break;
-    case bke::AttrType::Float2:
-      create_geom_param_for_attribute(prop,
-                                      param_maps,
-                                      attribute.typed<float2>(),
-                                      attr.name,
-                                      scope,
-                                      timesample_index,
-                                      corner_indices,
-                                      object_name,
-                                      num_geom_samples);
-      break;
-    case bke::AttrType::Float3:
-      create_geom_param_for_attribute(prop,
-                                      param_maps,
-                                      attribute.typed<float3>(),
-                                      attr.name,
-                                      scope,
-                                      timesample_index,
-                                      corner_indices,
-                                      object_name,
-                                      num_geom_samples);
-      break;
-    case bke::AttrType::Float4:
+    }
+    else {
       /* Alembic does not have an equivalent to float4. If needed we could either flatten it to a
        * float, export it as a float2 with an array extent of 2, or even export as quaternion or
        * box2. */
@@ -413,43 +329,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                 object_name.c_str(),
                 attr.name.c_str(),
                 int(attr.data_type));
-      break;
-    case bke::AttrType::Quaternion:
-      create_geom_param_for_attribute(prop,
-                                      param_maps,
-                                      attribute.typed<math::Quaternion>(),
-                                      attr.name,
-                                      scope,
-                                      timesample_index,
-                                      corner_indices,
-                                      object_name,
-                                      num_geom_samples);
-      break;
-    case bke::AttrType::Float4x4:
-      create_geom_param_for_attribute(prop,
-                                      param_maps,
-                                      attribute.typed<float4x4>(),
-                                      attr.name,
-                                      scope,
-                                      timesample_index,
-                                      corner_indices,
-                                      object_name,
-                                      num_geom_samples);
-      break;
-    case bke::AttrType::String:
-      create_geom_param_for_attribute(prop,
-                                      param_maps,
-                                      attribute.typed<MStringProperty>(),
-                                      attr.name,
-                                      scope,
-                                      timesample_index,
-                                      corner_indices,
-                                      object_name,
-                                      num_geom_samples);
-      break;
-    default:
-      break;
-  }
+    }
+  });
 }
 
 }  // namespace blender::io::alembic
