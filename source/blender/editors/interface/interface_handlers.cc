@@ -13217,10 +13217,19 @@ void region_handlers_add(ListBaseT<wmEventHandler> *handlers)
 
 static int region_cursor_handler(bContext *C, const wmEvent *event, void *)
 {
-  return region_cursor_handler(CTX_wm_region(C), event);
+  ARegion *region = CTX_wm_region(C);
+  if (region_cursor_handler(region, event) == WM_UI_HANDLER_BREAK) {
+    /* View3d do its own cursor drawing, tag to redraw overlays. */
+    if (region->regiontype == RGN_TYPE_WINDOW && CTX_wm_view3d(C)) {
+      ED_region_tag_redraw_editor_overlays(region);
+    }
+    return WM_UI_HANDLER_BREAK;
+  }
+  return WM_UI_HANDLER_CONTINUE;
 }
 
 static void region_cursor_handler_remove(bContext * /*C*/, void *) {}
+
 void region_cursor_timers_add(ListBaseT<wmEventHandler> *handlers)
 {
   WM_event_remove_ui_handler(

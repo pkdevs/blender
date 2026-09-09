@@ -1059,6 +1059,10 @@ static void wm_draw_area_offscreen(bContext *C, wmWindow *win, ScrArea *area, bo
 
   /* Then do actual drawing of regions. */
   for (ARegion &region : area->regionbase) {
+    /* Don't do redraw when its only tagget for text cursor blink. */
+    if (region.runtime->do_draw == RGN_DRAW_TEXT_CURSOR) {
+      continue;
+    }
     if (!region.runtime->visible || !region.runtime->do_draw) {
       continue;
     }
