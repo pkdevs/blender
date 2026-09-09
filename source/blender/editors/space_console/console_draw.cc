@@ -210,12 +210,15 @@ static void console_textview_draw_cursor(const ARegion *region,
     MEM_delete(offsets_buf);
   }
 
-  region->runtime->text_cursor_overlay->rect = rctf{
+  rctf rect = {
       .xmin = float(pen[0] - U.pixelsize),
       .xmax = float(pen[0] + U.pixelsize),
       .ymin = float(pen[1]),
       .ymax = float(pen[1] + tvc->line_height),
   };
+  ui::view2d_view_to_region_fl(&region->v2d, rect.xmin, rect.ymin, &rect.xmin, &rect.ymin);
+  ui::view2d_view_to_region_fl(&region->v2d, rect.xmax, rect.ymax, &rect.xmax, &rect.ymax);
+  region->runtime->text_cursor_overlay->rect = rect;
   ui::theme::get_color_4fv(TH_CONSOLE_CURSOR, region->runtime->text_cursor_overlay->color);
 }
 
