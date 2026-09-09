@@ -33,6 +33,23 @@ int CUDADeviceQueue::num_concurrent_states(const size_t state_size) const
                               cuda_device_->get_max_num_threads_per_multiprocessor();
   int num_states = max(max_num_threads, 65536) * 16;
 
+  size_t total_memory = 0;
+  size_t free_memory = 0;
+  cuda_device_->get_device_memory_info(total_memory, free_memory);
+
+  size_t grow_percent = 50;
+  if (auto *str = getenv("CYCLES_CUDA_GROW_PERCENT")) {
+    grow_percent = atoi(str);
+  }
+
+  const int max_safe_num_states = (free_memory * grow_percent) / 100 / state_size;
+
+  /* Higher number of concurrent states reduces the number of iterations to go through, which
+   * reduces the total overhead. The benefit of this stops being measurable at around 160 states
+   * per available thread. Try to scale up to that based on available memory, but also keep the
+   * baseline at 16 states per thread. */
+  num_states = min(num_states * 10, max(max_safe_num_states, num_states));
+
   const char *factor_str = getenv("CYCLES_CONCURRENT_STATES_FACTOR");
   if (factor_str) {
     const float factor = (float)atof(factor_str);
@@ -42,25 +59,6 @@ int CUDADeviceQueue::num_concurrent_states(const size_t state_size) const
     else {
       LOG_TRACE << "CYCLES_CONCURRENT_STATES_FACTOR evaluated to 0";
     }
-  }
-  else {
-    size_t total = 0;
-    size_t free = 0;
-    cuda_device_->get_device_memory_info(total, free);
-
-    size_t grow_percent = 50;
-    if (auto *str = getenv("CYCLES_CUDA_GROW_PERCENT")) {
-      grow_percent = atoi(str);
-    }
-
-    int num_states_safe = ((free / state_size) * grow_percent) / 100;
-    /* Always keep a minimum state count regardless of available memory. */
-    num_states_safe = max(num_states_safe, num_states);
-
-    /* Higher number of concurrent states reduces the number of iterations to go through, which
-     * reduces the total overhead. The benefit of this stops being measurable at around 160 states
-     * per available thread. */
-    num_states = min(num_states * 10, num_states_safe);
   }
 
   LOG_TRACE << "GPU queue concurrent states: " << num_states << ", using up to "
