@@ -282,6 +282,18 @@ float compute_luminance(KernelGlobals kg, const ccl_private BsdfEval &radiance)
   return dot(spectrum_to_rgb(radiance.sum), float4_to_float3(kernel_data.film.rgb_to_y));
 }
 
+/* current->sd is already reconstructed via shader_data_setup_from_restir()
+ * by the time this runs, so we compute the motion vector directly instead
+ * of reading PASS_MOTION.
+ *
+ * .xy is (previous raster pos, current raster pos). */
+ccl_device_inline float2 restir_temporal_motion_vector(KernelGlobals kg,
+                                                        const ccl_private ShaderData *sd)
+{
+  const float4 motion = primitive_motion_vector(kg, sd);
+  return make_float2(motion.x, motion.y);
+}
+
 /* Unpack the canonical (this-pixel, non-neighbor) DI reservoir. Shared by
  * streaming_di_samples() and integrator_restir_temporal() — both need the
  * same "read whatever initial candidates or prior-stage result currently
@@ -450,6 +462,13 @@ ccl_device_inline bool streaming_di_samples(KernelGlobals kg,
   return reservoir_finalize(&current->reservoir, true); // !!!: require_valid_reference
 }
 
+/* TODO(Tri): Falcor does this for frame-reuse
+  1. A motion vector to find where this pixel's surface point was last frame.
+  2. A lightweight previous-frame G-buffer (position/normal, not the full reservoir) 
+    to test whether that reprojection is actually trustworthy.
+  3. An isValidPixel + normal/depth reprojection test that rejects the history instead 
+    of silently reusing garbage.
+*/
 /* Temporal counterpart of streaming_di_samples()'s per-neighbor step.
  * v1: identity reprojection only (same pixel, same render sample count as previous). 
  * Real motion-vector reprojection for animated/interactive cases is deferred. */
@@ -511,11 +530,183 @@ ccl_debug_printf("\n--- streaming_temporal_sample(), returned true! total_weight
   return true;
 }
 
+// TODO(Tri): Merge with above so that: Reprojected + same-pixel static-scene
+ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
+                                                 IntegratorState state,
+                                                 const ccl_private TemporalReprojection *reprojection,
+                                                 ccl_private SpatialReservoir *current,
+                                                 const ccl_private RNGState *rng_state,
+                                                 const bool visibility,
+                                                 ccl_global float *ccl_restrict render_buffer,
+                                                 const int x,
+                                                 const int y,
+                                                 const int scheduled_sample)
+{
+  const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
+
+  /* --- back-project --- */
+  // TODO: implement accessor
+  // const float2 motion = film_read_pass_motion_vector(kg, render_pixel_index, render_buffer); // !!!: source TBD, see note below
+  /* --- back-project using this sample's own motion vector --- */
+  const float2 motion = restir_temporal_motion_vector(kg, &current->sd);
+
+  // const int x = tile_pixel_x_from(kg, state); // whatever accessor we have in integrator_restir()
+  // const int y = tile_pixel_y_from(kg, state);
+
+  const uint3 prev_pixel = reprojection->get_previous_pixel(x, y, motion);
+
+
+ccl_debug_printf(
+    "TEMPORAL_FRAME pixel=(%d,%d) motion=(%f,%f) prev=(%d,%d,%u)\n",
+    x, y, (double)motion.x, (double)motion.y,
+    prev_pixel.x, prev_pixel.y, prev_pixel.z);
+
+  if (prev_pixel.z == (uint)-1) {
+  ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=OFFSCREEN\n", x, y);
+    return false; /* Off-screen last frame: no history to reuse. */
+  }
+
+  // /* Reprojection validity, geometry-based.
+  //  * Needs the lightweight ReprojectionSurface G-buffer, since motion vectors
+  //  * alone don't catch disocclusion/silhouette reveals. */
+  // ccl_global const float *reproj_buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
+  //                                         kernel_data.film.pass_restir_reprojection_surface;
+
+  // const float depth = len(current->sd.P - camera_ray_origin(kg, state)); // !!!: adapt to the camera-distance helper
+
+  ReprojectionSurface curr_surf;
+  curr_surf.N = current->sd.N;
+  // curr_surf.depth = depth;
+  curr_surf.depth = camera_z_depth(kg, current->sd.P); // Existing depth pass
+  curr_surf.is_valid = true;
+
+  ccl_global const float *prev_reproj_buffer = pixel_render_buffer(kg, prev_pixel.z, render_buffer) +
+                                               kernel_data.film.pass_restir_previous_reprojection_surface;
+  const ReprojectionSurface prev_surf = reprojection_surface_unpack(prev_reproj_buffer);
+
+
+const float normal_dot = dot(curr_surf.N, prev_surf.N); // TODO(Tri): Remove
+const float depth_diff = fabsf(curr_surf.depth - prev_surf.depth);
+const float depth_limit = kernel_data.integrator.restir_temporal_depth_threshold *
+    fmaxf(curr_surf.depth, 1e-4f);
+
+ccl_debug_printf(
+    "TEMPORAL_FRAME SURFACE pixel=(%d,%d) normal_dot=%f depth_curr=%f depth_prev=%f depth_diff=%f depth_limit=%f valid=%d\n",
+    x, y, (double)normal_dot,
+    (double)curr_surf.depth, (double)prev_surf.depth,
+    (double)depth_diff, (double)depth_limit,
+    (int)prev_surf.is_valid);
+
+
+  // if (!TemporalReprojection::is_valid_reprojection( // TODO(Tri): Uncomment
+  //       &curr_surf,
+  //       &prev_surf,
+  //       kernel_data.integrator.restir_temporal_normal_threshold,
+  //       kernel_data.integrator.restir_temporal_depth_threshold))
+  // {
+  //   return false; /* Reprojection miss: disocclusion, silhouette edge, etc. */
+  // }
+
+  if (!prev_surf.is_valid) {
+    ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=NO_PREV_SURFACE\n", x, y);
+    return false;
+  }
+
+  if (normal_dot < kernel_data.integrator.restir_temporal_normal_threshold) {
+    ccl_debug_printf(
+        "TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=NORMAL_MISMATCH dot=%f threshold=%f\n",
+        x, y, (double)normal_dot,
+        (double)kernel_data.integrator.restir_temporal_normal_threshold);
+    return false;
+  }
+
+  if (depth_diff > depth_limit) {
+    ccl_debug_printf(
+        "TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=DEPTH_MISMATCH diff=%f limit=%f\n",
+        x, y, (double)depth_diff, (double)depth_limit);
+    return false;
+  }
+
+
+  /* reading from prev_pixel.z instead of render_pixel_index. */
+  Reservoir history;
+  reservoir_init(kg, &history);
+
+  ccl_global const float *buffer = pixel_render_buffer(kg, prev_pixel.z, render_buffer) +
+                                   kernel_data.film.pass_restir_temporal_history_reservoir;
+
+  // if (!restir_unpack_reservoir(kg, &history, buffer)) { // TODO(Tri): Uncomment
+  //   return false;
+  // }
+
+  const bool history_ok = restir_unpack_reservoir(kg, &history, buffer);
+
+ccl_debug_printf(
+    "TEMPORAL_FRAME HISTORY pixel=(%d,%d) prev=%u ok=%d M=%f W=%f L=%f\n",
+    x,
+    y,
+    prev_pixel.z,
+    (int)history_ok,
+    history_ok ? (double)history.M : 0.0,
+    history_ok ? (double)history.total_weight : 0.0,
+    history_ok ? (double)history.luminance : 0.0);
+
+  if (!history_ok) {
+    ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=NO_HISTORY\n", x, y);
+    return false;
+  }  
+
+
+  history.M = min(
+      history.M, current->reservoir.M * kernel_data.integrator.restir_temporal_sample_count);
+
+  light_sample_from_reference(kg,
+                              &history.reference,
+                              current->sd.P,
+                              current->sd.N,
+                              current->sd.time,
+                              current->sd.shader,
+                              current->path_flag,
+                              &history.light);
+
+  radiance_eval(kg, state, &current->sd, &history.light, &history.radiance, nullptr, visibility);
+  const float history_at_current = compute_luminance(kg, history.radiance);
+
+
+const float old_M = current->reservoir.M; // TODO(Tri): Remove
+const float history_M = history.M;
+
+
+  history.total_weight *= mis_weight_pairwise(history.luminance, history_at_current, (float)history.M);
+
+  const float rand = path_state_rng_1D(kg, rng_state, PRNG_TEMPORAL_RESAMPLING);
+  spatial_reservoir_add_reservoir(current, history, rand, true);
+
+  current->reservoir.M += history.M;
+
+
+ccl_debug_printf(
+    "TEMPORAL_FRAME ACCEPT pixel=(%d,%d) M=%f->%f history_M=%f W=%f L=%f\n",
+    x, y,
+    (double)old_M,
+    (double)current->reservoir.M,
+    (double)history_M,
+    (double)history.total_weight,
+    (double)history_at_current);
+
+
+  return true;
+}
+
 /* Standalone temporal-resampling pass, dispatched once per sample before
  * spatial resampling begins. */
 ccl_device bool integrator_restir_temporal(KernelGlobals kg,
                                            IntegratorState state,
-                                           ccl_global float *ccl_restrict render_buffer)
+                                           ccl_global const KernelWorkTile *ccl_restrict tile,
+                                           ccl_global float *ccl_restrict render_buffer,
+                                           const int x,
+                                           const int y,
+                                           const int scheduled_sample)
 {
   PROFILING_INIT(kg, PROFILING_RESTIR_SPATIAL_RESAMPLING);
 
@@ -528,6 +719,13 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
     return false;
   }
 
+// // >>> New
+// // TODO(Tri): write the reprojection buff for this frame (so next frame's reproj has something to read):
+//   const float *reproj_buff = pixel_render_buffer(kg, render_pixel_index, render_buffer) + 
+//       kernel_data.film.pass_restir_reprojection_surface;
+//   reprojection_surface_pack(&current.sd, depth, reproj_buff); // error: use of undeclared identifier 'depth'
+// // <<<
+
   shader_data_setup_from_restir(kg, state, &current, render_buffer);
 
   RNGState rng_state;
@@ -537,11 +735,30 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
 
   current.reservoir = restir_unpack_canonical_reservoir(kg, state, &current, render_buffer, false);
 
-  streaming_temporal_sample(kg, state, &current, &rng_state, visibility, render_buffer);
+
+  const bool use_temporal_samples = kernel_data.integrator.use_temporal_samples;
+  const bool use_temporal_frames  = kernel_data.integrator.use_temporal_frames;
+
+
+ccl_debug_printf("integrator_restir_temporal(): use_temporal_samples=%d, use_temporal_frames=%d",
+                 use_temporal_samples, use_temporal_frames);
+
+  if (use_temporal_samples) {
+    streaming_temporal_sample(kg, state, &current, &rng_state, visibility, render_buffer);
+  }
+
+  if (use_temporal_frames) { // !!!(Tri): Doesn't reach execution...
+    // TODO(Tri): new cross-frame streaming_temporal_sample()
+    TemporalReprojection reprojection(tile);
+    streaming_temporal_sample(
+        kg, state, &reprojection, &current, &rng_state, visibility, render_buffer, x, y, scheduled_sample);
+  }
 
   film_write_pass_reservoir(kg, state, &current.reservoir, render_buffer, /*write_prev=*/false);
 
-  const bool use_spatial = kernel_data.integrator.restir_spatial_radius > 0 &&
+// !!!(Tri): Not enough to determine if spatial is off... It could be switched off!
+  const bool use_spatial = kernel_data.integrator.use_spatial_resampling &&
+                           kernel_data.integrator.restir_spatial_radius > 0 &&
                            kernel_data.integrator.restir_spatial_neighbors > 0 &&
                            kernel_data.integrator.restir_spatial_iterations > 0;
   if (!use_spatial) {

@@ -65,6 +65,8 @@ const char *device_kernel_as_string(DeviceKernel kernel)
       return "integrator_intersect_dedicated_light";
     case DEVICE_KERNEL_INTEGRATOR_RESTIR:
       return "integrator_restir";
+    case DEVICE_KERNEL_INTEGRATOR_RESTIR_TEMPORAL:
+      return "integrator_restir_temporal";
     case DEVICE_KERNEL_INTEGRATOR_INTERSECT_MNEE:
       return "integrator_intersect_mnee";
     case DEVICE_KERNEL_INTEGRATOR_SHADOW_PATH_MNEE_PENDING:
@@ -117,8 +119,6 @@ const char *device_kernel_as_string(DeviceKernel kernel)
       return "integrator_reset";
     case DEVICE_KERNEL_INTEGRATOR_SHADOW_CATCHER_COUNT_POSSIBLE_SPLITS:
       return "integrator_shadow_catcher_count_possible_splits";
-    case DEVICE_KERNEL_INTEGRATOR_RESTIR_TEMPORAL:
-      return "integrator_restir_temporal";
     case DEVICE_KERNEL_INTEGRATOR_FINAL_EVALUATION:
       return "integrator_evaluate_final_samples";
     case DEVICE_KERNEL_INTEGRATOR_RESTIR_PT_EVALUATION:

@@ -349,7 +349,7 @@ void PathTraceWorkCPU::render_samples_temporal_resampling(ThreadKernelGlobalsCPU
     return;
   }
 
-  kernels_.integrator_restir_temporal(kernel_globals, state, render_buffer);
+  kernels_.integrator_restir_temporal(kernel_globals, state, &sample_work_tile, render_buffer);
 }
 
 void PathTraceWorkCPU::render_samples_direct_illumination(ThreadKernelGlobalsCPU *kernel_globals,
