@@ -67,7 +67,7 @@ class AttributeParamMaps {
 };
 
 /* Create a TypedGeomParam for the given AttributeIter.
- * `corner_indices` are used to correct polygon winding for corner attributes.
+ * `corner_indices` are used to correct polygon winding for corner attributes.
  * `object_name` is to give useful error messages
  * `num_geom_samples` is to ensure that the attribute has the same number of samples as the
  * underlying geometry. */
