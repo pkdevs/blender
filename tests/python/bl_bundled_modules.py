@@ -32,11 +32,12 @@ import docutils
 # Dynamically loaded modules, to ensure they have satisfactory dependencies.
 import _blake2
 
-# VFX platform modules.
+# Python bindings modules from dependencies (VFX platform, etc...).
 from pxr import Usd
 import MaterialX
 import OpenImageIO
 import PyOpenColorIO
+import opentimelineio
 
 # Test both old and new names, remove when all 4.4 libs have landed.
 try:

@@ -477,9 +477,6 @@ option(WITH_IO_FBX "Enable FBX 3D file format support (*.fbx)" ON)
 option(WITH_IO_GREASE_PENCIL "Enable Grease Pencil file format IO (*.svg, *.pdf)" ON)
 option(WITH_IO_SPZ "Enable SPZ compressed 3D gaussian splats file format support (*.spz)" ON)
 
-# Video editing format support
-option(WITH_IO_OTIO "Enable OpenTimelineIO editing file format support (*.otio)" ON)
-
 # Sound output
 option(WITH_SDL_AUDIO "Enable SDL audio support" OFF)
 option(WITH_OPENAL "Enable OpenAL Support (http://www.openal.org)" ON)
@@ -531,6 +528,9 @@ mark_as_advanced(WITH_SYSTEM_GLOG)
 
 # Freestyle
 option(WITH_FREESTYLE "Enable Freestyle (advanced edges rendering)" ON)
+
+# OpenTimelineIO
+option(WITH_OPENTIMELINEIO "Enable Video Sequencer OpenTimelineIO support" ON)
 
 # Libraries.
 if(UNIX AND NOT APPLE)
@@ -2564,6 +2564,7 @@ if(FIRST_RUN)
   info_cfg_option(WITH_MANIFOLD)
   info_cfg_option(WITH_OPENIMAGEDENOISE)
   info_cfg_option(WITH_OPENSUBDIV)
+  info_cfg_option(WITH_OPENTIMELINEIO)
   info_cfg_option(WITH_OPENVDB)
   info_cfg_option(WITH_POTRACE)
   info_cfg_option(WITH_PUGIXML)
