@@ -174,13 +174,16 @@ static GeometryScope get_scope_for_attribute_domain(bke::AttrDomain domain)
 
 void AttributeParamMaps::write_empty_samples(const size_t num_geom_samples)
 {
-  for (auto &iter : this->float_params) {
-    for (size_t i = iter.second.getNumSamples(); i < num_geom_samples; i++) {
-      OFloatGeomParam::Sample sample;
-      sample.setVals({});
-      iter.second.set(sample);
-    }
+#define WRITE_EMPTY_SAMPLE(abc_type, map_name) \
+  for (auto &iter : this->map_name) { \
+    for (size_t i = iter.second.getNumSamples(); i < num_geom_samples; i++) { \
+      abc_type::Sample sample; \
+      sample.setVals({}); \
+      iter.second.set(sample); \
+    } \
   }
+  ENUMERATE_EXPORTED_TYPES(WRITE_EMPTY_SAMPLE)
+#undef WRITE_EMPTY_SAMPLE
 }
 
 template<typename BlenderDataType>
