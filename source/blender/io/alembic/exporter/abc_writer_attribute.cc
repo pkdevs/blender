@@ -120,11 +120,16 @@ template<> struct TypeTraitConverter<ColorGeometry4f> {
 };
 
 template<> struct TypeTraitConverter<ColorGeometry4b> {
-  using AbcTraitType = Alembic::Abc::C4cTPTraits;
+  /* TODO(kevindietrich) : the importer only cares about float colors. */
+  using AbcTraitType = Alembic::Abc::C4fTPTraits;
 
-  static Imath::C4c convert(ColorGeometry4b v)
+  static Imath::C4f convert(ColorGeometry4b v)
   {
-    return {v.r, v.g, v.b, v.a};
+    static constexpr float float_scale = 1.0f / 255.0f;
+    return {float(v.r) * float_scale,
+            float(v.g) * float_scale,
+            float(v.b) * float_scale,
+            float(v.a) * float_scale};
   }
 };
 
