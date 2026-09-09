@@ -35,6 +35,7 @@
 #include "tree/tree_display.hh"
 #include "tree/tree_element.hh"
 #include "tree/tree_element_id.hh"
+#include "tree/tree_element_id_object.hh"
 
 #ifdef WIN32
 #  include "BLI_math_base_c.hh" /* M_PI */
@@ -773,7 +774,7 @@ static bool outliner_element_visible_get(const Main &bmain,
     }
 
     Object *ob = id_cast<Object *>(tselem->id);
-    Base *base = static_cast<Base *>(te->abstract_element->data());
+    Base *base = tree_element_cast<TreeElementIDObject>(te)->data();
     BLI_assert((base == nullptr) || (base->object == ob));
 
     if (exclude_filter & SO_FILTER_OB_TYPE) {

@@ -19,23 +19,23 @@ namespace ed::outliner {
 
 class TreeElementIDObject final : public TreeElementID {
   Object &object_;
+  Base *base_;
 
  public:
   TreeElementIDObject(TreeElement &legacy_te, Object &object);
 
   void expand(SpaceOutliner & /*soops*/) const override;
 
-  void *data() const override
+  Base *data() const
   {
     return base_;
   }
-  void set_data(void *data) override
+  void set_data(Base *base)
   {
-    base_ = static_cast<Base *>(data);
+    base_ = base;
   }
 
  private:
-  Base *base_;
   void expand_data() const;
   void expand_pose() const;
   void expand_materials() const;

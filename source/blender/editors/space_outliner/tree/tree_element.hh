@@ -74,8 +74,6 @@ class AbstractTreeElement {
    * All elements should be ported to use this over #tree_element_get_icon().
    */
   virtual std::optional<BIFIconID> get_icon() const;
-  virtual void *data() const;
-  virtual void set_data(void *data);
 
   /**
    * Debugging helper: Print effective path of this tree element, constructed out of the

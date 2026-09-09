@@ -41,7 +41,7 @@ class TreeElementNLA final : public AbstractTreeElement {
     return ICON_NLA;
   }
 
-  void *data() const override
+  AnimData *data() const
   {
     return &anim_data_;
   }

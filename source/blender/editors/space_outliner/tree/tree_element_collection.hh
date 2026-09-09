@@ -32,7 +32,7 @@ class TreeElementCollectionBase final : public AbstractTreeElement {
    */
   static ID *owner_id(Scene &scene);
 
-  void *data() const override
+  Collection *data() const
   {
     return scene_.master_collection;
   }

@@ -58,7 +58,7 @@ class TreeElementGPencilEffect final : public AbstractTreeElement {
     return ICON_SHADERFX;
   }
 
-  void *data() const override
+  ShaderFxData *data() const
   {
     return &fx_;
   }

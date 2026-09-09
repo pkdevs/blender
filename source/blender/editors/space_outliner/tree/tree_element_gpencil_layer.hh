@@ -28,7 +28,7 @@ class TreeElementGPencilLayer final : public AbstractTreeElement {
     return ICON_OUTLINER_DATA_GP_LAYER;
   }
 
-  void *data() const override
+  bGPDlayer *data() const
   {
     return &gplayer_;
   }

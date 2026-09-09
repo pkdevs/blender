@@ -57,7 +57,7 @@ class TreeElementDeformGroup final : public AbstractTreeElement {
     return ICON_GROUP_VERTEX;
   }
 
-  void *data() const override
+  bDeformGroup *data() const
   {
     return &defgroup_;
   }

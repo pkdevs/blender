@@ -38,7 +38,7 @@ class TreeElementParticleSystem final : public AbstractTreeElement {
     return ICON_PARTICLES;
   }
 
-  void *data() const override
+  ParticleSystem *data() const
   {
     return &psys_;
   }

@@ -32,7 +32,7 @@ class TreeElementActionSlot final : public AbstractTreeElement {
     return ICON_ACTION_SLOT;
   }
 
-  void *data() const override
+  animrig::Slot *data() const
   {
     return slot_;
   }

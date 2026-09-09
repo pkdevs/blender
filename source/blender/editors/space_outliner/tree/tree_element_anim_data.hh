@@ -37,7 +37,7 @@ class TreeElementAnimData final : public AbstractTreeElement {
 
   animrig::slot_handle_t get_slot_handle() const;
 
-  void *data() const override
+  AnimData *data() const
   {
     return &anim_data_;
   }

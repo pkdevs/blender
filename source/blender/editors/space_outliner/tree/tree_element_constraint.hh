@@ -54,7 +54,7 @@ class TreeElementConstraint final : public AbstractTreeElement {
 
   std::optional<BIFIconID> get_icon() const override;
 
-  void *data() const override
+  bConstraint *data() const
   {
     return &con_;
   }

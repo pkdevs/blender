@@ -69,14 +69,13 @@ class TreeElementModifier final : public AbstractTreeElement {
 
   std::optional<BIFIconID> get_icon() const override;
 
-  void *data() const override
+  ModifierData *data() const
   {
+    /* Legacy GP modifier isn't used anymore, could be removed. */
     if (md_.type == MODIFIER_TYPE) {
       return md_.md;
     }
-    if (md_.type == GPENCIL_MODIFIER_TYPE) {
-      return md_.gp_md;
-    }
+
     return nullptr;
   }
 

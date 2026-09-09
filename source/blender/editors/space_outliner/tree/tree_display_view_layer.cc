@@ -22,6 +22,7 @@
 #include "../outliner_intern.hh"
 #include "common.hh"
 #include "tree_display.hh"
+#include "tree_element_id_object.hh"
 #include "tree_element_layer_collection.hh"
 #include "tree_element_view_collection.hh"
 #include "tree_element_view_layer.hh"
@@ -98,7 +99,7 @@ ListBaseT<TreeElement> TreeDisplayViewLayer::build_tree(const TreeSourceData &so
       }
 
       te_view_layer.name = view_layer->name;
-      te_view_layer.abstract_element->set_data(view_layer);
+      tree_element_cast<TreeElementViewLayer>(&te_view_layer)->set_data(view_layer);
 
       add_view_layer(*scene, te_view_layer.subtree, &te_view_layer);
     }
@@ -119,7 +120,8 @@ void TreeDisplayViewLayer::add_view_layer(Scene &scene,
     for (Base &base : *BKE_view_layer_object_bases_get(view_layer_)) {
       TreeElement *te_object = add_id_element({.lb = &tree, .parent = parent},
                                               reinterpret_cast<ID *>(base.object));
-      te_object->abstract_element->set_data(&base);
+
+      tree_element_cast<TreeElementIDObject>(te_object)->set_data(&base);
     }
 
     if (show_children) {
@@ -187,7 +189,7 @@ void TreeDisplayViewLayer::add_layer_collection_objects(ListBaseT<TreeElement> &
     Base *base = BKE_view_layer_base_find(view_layer_, cob.ob);
     TreeElement *te_object = add_id_element({.lb = &tree, .parent = &ten},
                                             reinterpret_cast<ID *>(base->object));
-    te_object->abstract_element->set_data(base);
+    tree_element_cast<TreeElementIDObject>(te_object)->set_data(base);
   }
 }
 

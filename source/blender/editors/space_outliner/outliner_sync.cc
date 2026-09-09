@@ -34,6 +34,9 @@
 
 #include "ANIM_armature.hh"
 
+#include "tree/tree_element_edit_bone.hh"
+#include "tree/tree_element_id_object.hh"
+#include "tree/tree_element_pose.hh"
 #include "tree/tree_element_seq.hh"
 
 #include "outliner_intern.hh"
@@ -183,8 +186,10 @@ static void outliner_select_sync_to_object(ViewLayer *view_layer,
                                            Set<Base *> &selected_objects)
 {
   Object *ob = id_cast<Object *>(tselem->id);
-  Base *base = (te->abstract_element->data()) ? static_cast<Base *>(te->abstract_element->data()) :
-                                                BKE_view_layer_base_find(view_layer, ob);
+  Base *base = tree_element_cast<TreeElementIDObject>(te)->data();
+  if (!base) {
+    base = BKE_view_layer_base_find(view_layer, ob);
+  }
 
   if (base && (base->flag & BASE_SELECTABLE)) {
     if (tselem->flag & TSE_SELECTED) {
@@ -205,7 +210,7 @@ static void outliner_select_sync_to_edit_bone(const Main &bmain,
                                               Set<EditBone *> &selected_ebones)
 {
   bArmature *arm = id_cast<bArmature *>(tselem->id);
-  EditBone *ebone = static_cast<EditBone *>(te->abstract_element->data());
+  EditBone *ebone = tree_element_cast<TreeElementEditBone>(te)->data();
 
   short bone_flag = ebone->flag;
 
@@ -238,7 +243,7 @@ static void outliner_select_sync_to_pose_bone(TreeElement *te,
   Object *ob = id_cast<Object *>(tselem->id);
   BKE_pose_ensure_bone_indices(*ob);
   bArmature *arm = id_cast<bArmature *>(ob->data);
-  bPoseChannel *pchan = static_cast<bPoseChannel *>(te->abstract_element->data());
+  bPoseChannel *pchan = tree_element_cast<TreeElementPoseChannel>(te)->data();
 
   short bone_flag = pchan->flag;
 
@@ -384,8 +389,10 @@ static void outliner_select_sync_from_object(const Main &bmain,
 {
   Object *ob = id_cast<Object *>(tselem->id);
   BKE_view_layer_synced_ensure(bmain, scene, view_layer);
-  Base *base = (te->abstract_element->data()) ? static_cast<Base *>(te->abstract_element->data()) :
-                                                BKE_view_layer_base_find(view_layer, ob);
+  Base *base = tree_element_cast<TreeElementIDObject>(te)->data();
+  if (!base) {
+    base = BKE_view_layer_base_find(view_layer, ob);
+  }
   const bool is_selected = (base != nullptr) && ((base->flag & BASE_SELECTED) != 0);
 
   if (base && (ob == obact)) {
@@ -407,7 +414,7 @@ static void outliner_select_sync_from_edit_bone(EditBone *ebone_active,
                                                 TreeElement *te,
                                                 TreeStoreElem *tselem)
 {
-  EditBone *ebone = static_cast<EditBone *>(te->abstract_element->data());
+  EditBone *ebone = tree_element_cast<TreeElementEditBone>(te)->data();
 
   if (ebone == ebone_active) {
     tselem->flag |= TSE_ACTIVE;
@@ -428,7 +435,7 @@ static void outliner_select_sync_from_pose_bone(bPoseChannel *pchan_active,
                                                 TreeElement *te,
                                                 TreeStoreElem *tselem)
 {
-  bPoseChannel *pchan = static_cast<bPoseChannel *>(te->abstract_element->data());
+  bPoseChannel *pchan = tree_element_cast<TreeElementPoseChannel>(te)->data();
 
   if (pchan == pchan_active) {
     tselem->flag |= TSE_ACTIVE;

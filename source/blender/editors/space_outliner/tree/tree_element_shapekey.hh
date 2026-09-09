@@ -52,7 +52,7 @@ class TreeElementShapeKey final : public AbstractTreeElement {
     return ICON_SHAPEKEY_DATA;
   }
 
-  void *data() const override
+  KeyBlock *data() const
   {
     return &keyblock_;
   }

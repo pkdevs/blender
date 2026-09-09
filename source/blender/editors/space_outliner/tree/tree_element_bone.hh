@@ -41,7 +41,7 @@ class TreeElementBone final : public AbstractTreeElement {
     return ICON_BONE_DATA;
   }
 
-  void *data() const override
+  Bone *data() const
   {
     return &bone_;
   }

@@ -40,7 +40,7 @@ class TreeElementEditBone final : public AbstractTreeElement {
   {
     return ICON_BONE_DATA;
   }
-  void *data() const override
+  EditBone *data() const
   {
     return &ebone_;
   }

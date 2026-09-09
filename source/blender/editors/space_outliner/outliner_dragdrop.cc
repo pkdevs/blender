@@ -46,6 +46,10 @@
 
 #include "outliner_intern.hh"
 
+#include "tree/tree_element_constraint.hh"
+#include "tree/tree_element_gpencil_effect.hh"
+#include "tree/tree_element_modifier.hh"
+#include "tree/tree_element_pose.hh"
 namespace blender::ed::outliner {
 
 static Collection *collection_parent_from_ID(ID *id);
@@ -271,7 +275,7 @@ static TreeElement *outliner_drop_insert_collection_find(bContext *C,
   return collection_te;
 }
 
-template<typename T>
+template<class TreeElementT, typename T>
 static int outliner_get_insert_index(TreeElement *drag_te,
                                      TreeElement *drop_te,
                                      TreeElementInsertType insert_type,
@@ -293,7 +297,7 @@ static int outliner_get_insert_index(TreeElement *drag_te,
     return 0;
   }
 
-  return BLI_findindex(listbase, drop_te->abstract_element->data());
+  return BLI_findindex(listbase, tree_element_cast<TreeElementT>(drop_te)->data());
 }
 
 /** \} */
@@ -731,7 +735,7 @@ struct StackDropData {
   Object *ob_parent;
   bPoseChannel *pchan_parent;
   TreeStoreElem *drag_tselem;
-  void *drag_directdata;
+  TreeElement *drag_te;
   int drag_index;
 
   eDataStackDropAction drop_action;
@@ -739,19 +743,15 @@ struct StackDropData {
   TreeElementInsertType insert_type;
 };
 
-static void datastack_drop_data_init(wmDrag *drag,
-                                     Object *ob,
-                                     bPoseChannel *pchan,
-                                     TreeElement *te,
-                                     TreeStoreElem *tselem,
-                                     void *directdata)
+static void datastack_drop_data_init(
+    wmDrag *drag, Object *ob, bPoseChannel *pchan, TreeElement *te, TreeStoreElem *tselem)
 {
   StackDropData *drop_data = MEM_new_zeroed<StackDropData>("datastack drop data");
 
   drop_data->ob_parent = ob;
   drop_data->pchan_parent = pchan;
   drop_data->drag_tselem = tselem;
-  drop_data->drag_directdata = directdata;
+  drop_data->drag_te = te;
   drop_data->drag_index = te->index;
 
   drag->poin = drop_data;
@@ -791,7 +791,7 @@ static bool datastack_drop_init(bContext *C, const wmEvent *event, StackDropData
   bPoseChannel *pchan = nullptr;
   TreeElement *pchan_te = outliner_data_from_tree_element_and_parents(is_pchan_element, te_target);
   if (pchan_te) {
-    pchan = static_cast<bPoseChannel *>(pchan_te->abstract_element->data());
+    pchan = tree_element_cast<TreeElementPoseChannel>(pchan_te)->data();
   }
   if (pchan) {
     ob = nullptr;
@@ -979,8 +979,8 @@ static void datastack_drop_link(bContext *C, StackDropData *drop_data)
 
       ListBaseT<bConstraint> *dst;
       if (tselem->type == TSE_POSE_CHANNEL) {
-        bPoseChannel *pchan = static_cast<bPoseChannel *>(
-            drop_data->drop_te->abstract_element->data());
+        bPoseChannel *pchan =
+            tree_element_cast<TreeElementPoseChannel>(drop_data->drop_te)->data();
         dst = &pchan->constraints;
       }
       else {
@@ -1015,7 +1015,7 @@ static void datastack_drop_copy(bContext *C, StackDropData *drop_data)
           bmain,
           CTX_data_scene(C),
           drop_data->ob_parent,
-          static_cast<const ModifierData *>(drop_data->drag_directdata),
+          tree_element_cast<TreeElementModifier>(drop_data->drag_te)->data(),
           ob_dst,
           CTX_wm_reports(C));
       BKE_object_modifier_set_active(ob_dst, md_dst);
@@ -1026,12 +1026,12 @@ static void datastack_drop_copy(bContext *C, StackDropData *drop_data)
         object::constraint_copy_for_pose(
             bmain,
             ob_dst,
-            static_cast<bPoseChannel *>(drop_data->drop_te->abstract_element->data()),
-            static_cast<bConstraint *>(drop_data->drag_directdata));
+            tree_element_cast<TreeElementPoseChannel>(drop_data->drop_te)->data(),
+            tree_element_cast<TreeElementConstraint>(drop_data->drag_te)->data());
       }
       else {
         object::constraint_copy_for_object(
-            bmain, ob_dst, static_cast<bConstraint *>(drop_data->drag_directdata));
+            bmain, ob_dst, tree_element_cast<TreeElementConstraint>(drop_data->drag_te)->data());
       }
       break;
     case TSE_GPENCIL_EFFECT: {
@@ -1039,7 +1039,8 @@ static void datastack_drop_copy(bContext *C, StackDropData *drop_data)
         return;
       }
 
-      object::shaderfx_copy(ob_dst, static_cast<ShaderFxData *>(drop_data->drag_directdata));
+      object::shaderfx_copy(
+          ob_dst, tree_element_cast<TreeElementGPencilEffect>(drop_data->drag_te)->data());
       break;
     }
     default:
@@ -1065,30 +1066,37 @@ static void datastack_drop_reorder(bContext *C, ReportList *reports, StackDropDa
   int index = 0;
   switch (drop_data->drag_tselem->type) {
     case TSE_MODIFIER:
-      index = outliner_get_insert_index(drag_te, drop_te, insert_type, &ob->modifiers);
-      object::modifier_move_to_index(reports,
-                                     RPT_WARNING,
-                                     ob,
-                                     static_cast<ModifierData *>(drop_data->drag_directdata),
-                                     index,
-                                     true);
+      index = outliner_get_insert_index<TreeElementModifier>(
+          drag_te, drop_te, insert_type, &ob->modifiers);
+      object::modifier_move_to_index(
+          reports,
+          RPT_WARNING,
+          ob,
+          tree_element_cast<TreeElementModifier>(drop_data->drag_te)->data(),
+          index,
+          true);
       break;
     case TSE_CONSTRAINT:
       if (drop_data->pchan_parent) {
-        index = outliner_get_insert_index(
+        index = outliner_get_insert_index<TreeElementConstraint>(
             drag_te, drop_te, insert_type, &drop_data->pchan_parent->constraints);
       }
       else {
-        index = outliner_get_insert_index(drag_te, drop_te, insert_type, &ob->constraints);
+        index = outliner_get_insert_index<TreeElementGPencilEffect>(
+            drag_te, drop_te, insert_type, &ob->constraints);
       }
       object::constraint_move_to_index(
-          ob, static_cast<bConstraint *>(drop_data->drag_directdata), index);
+          ob, tree_element_cast<TreeElementConstraint>(drop_data->drag_te)->data(), index);
 
       break;
     case TSE_GPENCIL_EFFECT:
-      index = outliner_get_insert_index(drag_te, drop_te, insert_type, &ob->shader_fx);
+      index = outliner_get_insert_index<TreeElementGPencilEffect>(
+          drag_te, drop_te, insert_type, &ob->shader_fx);
       object::shaderfx_move_to_index(
-          reports, ob, static_cast<ShaderFxData *>(drop_data->drag_directdata), index);
+          reports,
+          ob,
+          tree_element_cast<TreeElementGPencilEffect>(drop_data->drag_te)->data(),
+          index);
       break;
     default:
       break;
@@ -1537,8 +1545,7 @@ static wmOperatorStatus outliner_item_drag_drop_invoke(bContext *C,
   if (use_datastack_drag) {
     TreeElement *te_bone = nullptr;
     bPoseChannel *pchan = outliner_find_parent_bone(te, &te_bone);
-    datastack_drop_data_init(
-        drag, id_cast<Object *>(tselem->id), pchan, te, tselem, te->abstract_element->data());
+    datastack_drop_data_init(drag, id_cast<Object *>(tselem->id), pchan, te, tselem);
   }
   else if (ELEM(GS(data.drag_id->name), ID_OB, ID_GR)) {
     /* For collections and objects we cheat and drag all selected. */

@@ -69,7 +69,7 @@ void TreeElementPoseBase::expand(SpaceOutliner & /*space_outliner*/) const
       TreeElement *nten = ten->next, *par;
       TreeStoreElem *tselem = TREESTORE(ten);
       if (tselem->type == TSE_POSE_CHANNEL) {
-        bPoseChannel *pchan = static_cast<bPoseChannel *>(ten->abstract_element->data());
+        bPoseChannel *pchan = tree_element_cast<TreeElementPoseChannel>(ten)->data();
         if (pchan->parent) {
           BLI_remlink(&legacy_te_.subtree, ten);
           par = static_cast<TreeElement *>(pchan->parent->temp);

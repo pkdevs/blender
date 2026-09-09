@@ -58,14 +58,14 @@ class TreeElementViewLayer final : public AbstractTreeElement {
     return ICON_RENDER_RESULT;
   }
 
-  void *data() const override
+  ViewLayer *data() const
   {
     return &view_layer_;
   }
 
-  void set_data(void *data) override
+  void set_data(ViewLayer *view_layer)
   {
-    view_layer_ = *static_cast<ViewLayer *>(data);
+    view_layer_ = *view_layer;
   }
 };
 

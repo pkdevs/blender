@@ -44,6 +44,7 @@
 
 #include "outliner_intern.hh" /* own include */
 
+#include "tree/tree_element_layer_collection.hh"
 #include "tree/tree_iterator.hh"
 
 namespace blender {
@@ -83,7 +84,7 @@ Collection *outliner_collection_from_tree_element(const TreeElement *te)
   }
 
   if (tselem->type == TSE_LAYER_COLLECTION) {
-    LayerCollection *lc = static_cast<LayerCollection *>(te->abstract_element->data());
+    LayerCollection *lc = tree_element_cast<TreeElementLayerCollection>(te)->data();
     return lc->collection;
   }
   if (ELEM(tselem->type, TSE_SCENE_COLLECTION_BASE, TSE_VIEW_COLLECTION_BASE)) {
@@ -492,7 +493,7 @@ static TreeTraversalAction outliner_find_first_selected_layer_collection(TreeEle
 
   switch (tselem->type) {
     case TSE_LAYER_COLLECTION:
-      data->layer_collection = static_cast<LayerCollection *>(te->abstract_element->data());
+      data->layer_collection = tree_element_cast<TreeElementLayerCollection>(te)->data();
       return TRAVERSE_BREAK;
     case TSE_R_LAYER:
     case TSE_SCENE_COLLECTION_BASE:
@@ -541,8 +542,8 @@ static wmOperatorStatus collection_objects_select_exec(bContext *C, wmOperator *
   for (LinkData &link : selected_collections.selected_array) {
     TreeElement *te = static_cast<TreeElement *>(link.data);
     if (te->store_elem->type == TSE_LAYER_COLLECTION) {
-      LayerCollection *layer_collection = static_cast<LayerCollection *>(
-          te->abstract_element->data());
+      LayerCollection *layer_collection =
+          tree_element_cast<TreeElementLayerCollection>(te)->data();
       BKE_layer_collection_objects_select(*bmain, scene, view_layer, layer_collection, deselect);
     }
   }
@@ -888,7 +889,7 @@ static TreeTraversalAction layer_collection_collect_data_to_edit(TreeElement *te
     return TRAVERSE_CONTINUE;
   }
 
-  LayerCollection *lc = static_cast<LayerCollection *>(te->abstract_element->data());
+  LayerCollection *lc = tree_element_cast<TreeElementLayerCollection>(te)->data();
 
   if (lc->collection->flag & COLLECTION_IS_MASTER) {
     /* skip - showing warning/error message might be misleading
@@ -1500,7 +1501,7 @@ static TreeTraversalAction outliner_hide_collect_data_to_edit(TreeElement *te, v
   }
 
   if (tselem->type == TSE_LAYER_COLLECTION) {
-    LayerCollection *lc = static_cast<LayerCollection *>(te->abstract_element->data());
+    LayerCollection *lc = tree_element_cast<TreeElementLayerCollection>(te)->data();
 
     if (lc->collection->flag & COLLECTION_IS_MASTER) {
       /* Skip - showing warning/error message might be misleading

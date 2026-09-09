@@ -29,8 +29,7 @@ class TreeElementLayerCollection final : public AbstractTreeElement {
   /** The ID identifying this element in the tree-store, see #AbstractTreeDisplay::add_element().
    */
   static ID *owner_id(LayerCollection &lc);
-
-  void *data() const override
+  LayerCollection *data() const
   {
     return &lc_;
   }

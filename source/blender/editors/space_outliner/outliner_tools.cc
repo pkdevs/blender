@@ -97,8 +97,14 @@
 
 #include "outliner_intern.hh"
 #include "tree/tree_element.hh"
+#include "tree/tree_element_bone.hh"
+#include "tree/tree_element_constraint.hh"
+#include "tree/tree_element_edit_bone.hh"
+#include "tree/tree_element_gpencil_layer.hh"
 #include "tree/tree_element_grease_pencil_node.hh"
+#include "tree/tree_element_modifier.hh"
 #include "tree/tree_element_overrides.hh"
+#include "tree/tree_element_pose.hh"
 #include "tree/tree_element_rna.hh"
 #include "tree/tree_element_seq.hh"
 #include "tree/tree_iterator.hh"
@@ -2385,7 +2391,7 @@ enum eOutliner_PropModifierOps {
 
 static void pchan_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, void * /*arg*/)
 {
-  bPoseChannel *pchan = static_cast<bPoseChannel *>(te->abstract_element->data());
+  bPoseChannel *pchan = tree_element_cast<TreeElementPoseChannel>(te)->data();
 
   if (event == OL_DOP_SELECT) {
     animrig::bone_select(pchan);
@@ -2404,7 +2410,7 @@ static void pchan_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, voi
 
 static void bone_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, void * /*arg*/)
 {
-  Bone *bone = static_cast<Bone *>(te->abstract_element->data());
+  Bone *bone = tree_element_cast<TreeElementBone>(te)->data();
 
   if (event == OL_DOP_SELECT) {
     bone->flag |= BONE_SELECTED;
@@ -2423,7 +2429,7 @@ static void bone_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, void
 
 static void ebone_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, void * /*arg*/)
 {
-  EditBone *ebone = static_cast<EditBone *>(te->abstract_element->data());
+  EditBone *ebone = tree_element_cast<TreeElementEditBone>(te)->data();
 
   if (event == OL_DOP_SELECT) {
     ebone->flag |= BONE_SELECTED;
@@ -2473,7 +2479,7 @@ static void gpencil_layer_fn(int event,
                              TreeStoreElem * /*tselem*/,
                              void * /*arg*/)
 {
-  bGPDlayer *gpl = static_cast<bGPDlayer *>(te->abstract_element->data());
+  bGPDlayer *gpl = tree_element_cast<TreeElementGPencilLayer>(te)->data();
 
   if (event == OL_DOP_SELECT) {
     gpl->flag |= GP_LAYER_SELECT;
@@ -2535,7 +2541,7 @@ static void constraint_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/
 {
   bContext *C = static_cast<bContext *>(C_v);
   Main *bmain = CTX_data_main(C);
-  bConstraint *constraint = static_cast<bConstraint *>(te->abstract_element->data());
+  bConstraint *constraint = tree_element_cast<TreeElementConstraint>(te)->data();
   Object *ob = id_cast<Object *>(outliner_search_back(te, ID_OB));
 
   if (event == OL_CONSTRAINTOP_ENABLE) {
@@ -2552,8 +2558,7 @@ static void constraint_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/
     ListBaseT<bConstraint> *lb = nullptr;
 
     if (TREESTORE(te->parent->parent)->type == TSE_POSE_CHANNEL) {
-      lb = &(static_cast<bPoseChannel *>(te->parent->parent->abstract_element->data()))
-                ->constraints;
+      lb = &tree_element_cast<TreeElementPoseChannel>(te)->data()->constraints;
     }
     else {
       lb = &ob->constraints;
@@ -2584,7 +2589,7 @@ static void modifier_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, 
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  ModifierData *md = static_cast<ModifierData *>(te->abstract_element->data());
+  ModifierData *md = tree_element_cast<TreeElementModifier>(te)->data();
   Object *ob = id_cast<Object *>(outliner_search_back(te, ID_OB));
 
   if (event == OL_MODIFIER_OP_TOGVIS) {

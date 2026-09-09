@@ -57,7 +57,7 @@ class TreeElementPoseChannel final : public AbstractTreeElement {
     return ICON_BONE_DATA;
   }
 
-  void *data() const override
+  bPoseChannel *data() const
   {
     return &pchan_;
   }

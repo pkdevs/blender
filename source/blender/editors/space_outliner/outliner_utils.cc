@@ -31,6 +31,10 @@
 
 #include "outliner_intern.hh"
 #include "tree/tree_display.hh"
+#include "tree/tree_element_bone.hh"
+#include "tree/tree_element_edit_bone.hh"
+#include "tree/tree_element_id_object.hh"
+#include "tree/tree_element_pose.hh"
 #include "tree/tree_element_rna.hh"
 
 namespace blender {
@@ -227,16 +231,20 @@ TreeElement *outliner_find_id(SpaceOutliner *space_outliner,
 TreeElement *outliner_find_posechannel(ListBaseT<TreeElement> *lb, const bPoseChannel *pchan)
 {
   for (TreeElement &te : *lb) {
-    if (te.abstract_element->data() == pchan) {
+    TreeStoreElem *tselem = TREESTORE(&te);
+    if (!ELEM(tselem->type, TSE_POSE_BASE, TSE_POSE_CHANNEL)) {
+      continue;
+    }
+
+    if ((tselem->type == TSE_POSE_CHANNEL) &&
+        tree_element_cast<TreeElementPoseChannel>(&te)->data() == pchan)
+    {
       return &te;
     }
 
-    TreeStoreElem *tselem = TREESTORE(&te);
-    if (ELEM(tselem->type, TSE_POSE_BASE, TSE_POSE_CHANNEL)) {
-      TreeElement *tes = outliner_find_posechannel(&te.subtree, pchan);
-      if (tes) {
-        return tes;
-      }
+    TreeElement *tes = outliner_find_posechannel(&te.subtree, pchan);
+    if (tes) {
+      return tes;
     }
   }
   return nullptr;
@@ -245,11 +253,13 @@ TreeElement *outliner_find_posechannel(ListBaseT<TreeElement> *lb, const bPoseCh
 TreeElement *outliner_find_editbone(ListBaseT<TreeElement> *lb, const EditBone *ebone)
 {
   for (TreeElement &te : *lb) {
-    if (te.abstract_element->data() == ebone) {
+    TreeStoreElem *tselem = TREESTORE(&te);
+    if ((tselem->type == TSE_EBONE) &&
+        (tree_element_cast<TreeElementEditBone>(&te)->data() == ebone))
+    {
       return &te;
     }
 
-    TreeStoreElem *tselem = TREESTORE(&te);
     if (ELEM(tselem->type, TSE_SOME_ID, TSE_EBONE)) {
       TreeElement *tes = outliner_find_editbone(&te.subtree, ebone);
       if (tes) {
@@ -499,8 +509,10 @@ Base *ED_outliner_give_base_under_cursor(bContext *C, const int mval[2])
     if ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB)) {
       Object *ob = id_cast<Object *>(tselem->id);
       BKE_view_layer_synced_ensure(*bmain, scene, view_layer);
-      base = (te->abstract_element->data()) ? static_cast<Base *>(te->abstract_element->data()) :
-                                              BKE_view_layer_base_find(view_layer, ob);
+      base = tree_element_cast<TreeElementIDObject>(te)->data();
+      if (!base) {
+        base = BKE_view_layer_base_find(view_layer, ob);
+      }
     }
   }
 
@@ -525,17 +537,17 @@ bool ED_outliner_give_rna_under_cursor(bContext *C, const int mval[2], PointerRN
   TreeStoreElem *tselem = TREESTORE(te);
   switch (tselem->type) {
     case TSE_BONE: {
-      Bone *bone = static_cast<Bone *>(te->abstract_element->data());
+      Bone *bone = tree_element_cast<TreeElementBone>(te)->data();
       *r_ptr = RNA_pointer_create_discrete(tselem->id, RNA_Bone, bone);
       break;
     }
     case TSE_POSE_CHANNEL: {
-      bPoseChannel *pchan = static_cast<bPoseChannel *>(te->abstract_element->data());
+      bPoseChannel *pchan = tree_element_cast<TreeElementPoseChannel>(te)->data();
       *r_ptr = RNA_pointer_create_discrete(tselem->id, RNA_PoseBone, pchan);
       break;
     }
     case TSE_EBONE: {
-      EditBone *bone = static_cast<EditBone *>(te->abstract_element->data());
+      EditBone *bone = tree_element_cast<TreeElementEditBone>(te)->data();
       *r_ptr = RNA_pointer_create_discrete(tselem->id, RNA_EditBone, bone);
       break;
     }
