@@ -1653,13 +1653,6 @@ endif()
 
 
 # -----------------------------------------------------------------------------
-# Configure Jolt
-
-set(JOLT_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/extern/jolt/")
-set(JOLT_LIBRARIES "Jolt")
-
-
-# -----------------------------------------------------------------------------
 # Configure Python
 
 # Not currently supported due to different required Python link flags.
