@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BLI_math_vector.hh"
+
 #include "BKE_volume_grid_process.hh"
 
 #include "UI_interface_layout.hh"
@@ -142,11 +144,11 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 struct DirichletBoundaryOp {
   const openvdb::FloatGrid::ConstAccessor value_accessor_;
-  const float voxel_volume_;
+  const float value_scale_;
 
   DirichletBoundaryOp(const openvdb::FloatGrid &value_grid)
       : value_accessor_(value_grid.getConstAccessor()),
-        voxel_volume_(value_grid.voxelSize().product())
+        value_scale_(math::rcp(math::square(value_grid.voxelSize().x())))
   {
   }
 
@@ -157,17 +159,17 @@ struct DirichletBoundaryOp {
   {
     const float value = value_accessor_.getValue(neighbor);
     diagonal -= 1.0;
-    source += value * voxel_volume_;
+    source += value * value_scale_;
   };
 };
 
 struct NeumannBoundaryOp {
   const openvdb::Vec3SGrid::ConstAccessor gradient_accessor_;
-  const openvdb::math::Vec3s voxel_size_;
+  const float gradient_scale_;
 
   NeumannBoundaryOp(const openvdb::Vec3SGrid &gradient_grid)
       : gradient_accessor_(gradient_grid.getConstAccessor()),
-        voxel_size_(gradient_grid.voxelSize())
+        gradient_scale_(math::rcp(gradient_grid.voxelSize().x()))
   {
   }
 
@@ -178,7 +180,7 @@ struct NeumannBoundaryOp {
   {
     const openvdb::math::Vec3s normal = ijk.asVec3s() - neighbor.asVec3s();
     const openvdb::math::Vec3s gradient = gradient_accessor_.getValue(neighbor);
-    source += (gradient * voxel_size_).dot(normal);
+    source += gradient.dot(normal) * gradient_scale_;
   };
 };
 
@@ -186,8 +188,8 @@ struct MixedBoundaryOp {
   const openvdb::FloatGrid::ConstAccessor value_accessor_;
   const openvdb::Vec3SGrid::ConstAccessor gradient_accessor_;
   const openvdb::FloatGrid::ConstAccessor factor_accessor_;
-  const openvdb::math::Vec3s voxel_size_;
-  const float voxel_volume_;
+  const float value_scale_;
+  const float gradient_scale_;
 
   MixedBoundaryOp(const openvdb::FloatGrid &value_grid,
                   const openvdb::Vec3SGrid &gradient_grid,
@@ -195,8 +197,8 @@ struct MixedBoundaryOp {
       : value_accessor_(value_grid.getConstAccessor()),
         gradient_accessor_(gradient_grid.getConstAccessor()),
         factor_accessor_(factor_grid.getConstAccessor()),
-        voxel_size_(gradient_grid.voxelSize()),
-        voxel_volume_(value_grid.voxelSize().product())
+        value_scale_(math::rcp(math::square(value_grid.voxelSize().x()))),
+        gradient_scale_(math::rcp(gradient_grid.voxelSize().x()))
   {
   }
 
@@ -211,7 +213,7 @@ struct MixedBoundaryOp {
     const float factor = factor_accessor_.getValue(neighbor);
     diagonal -= 1.0 * (1.0f - factor);
     source += math::interpolate(
-        value * voxel_volume_, (gradient * voxel_size_).dot(normal), factor);
+        value * value_scale_, gradient.dot(normal) * gradient_scale_, factor);
   };
 };
 
@@ -229,6 +231,11 @@ static openvdb::MaskTree::Ptr get_boundary_mask(const openvdb::FloatTree &tree)
 }
 
 #endif
+
+static bool is_uniform_scale(const float3 &s, const float epsilon = 1e-5f)
+{
+  return math::abs(s.x - s.y) < epsilon && math::abs(s.x - s.z) < epsilon;
+}
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
@@ -261,6 +268,11 @@ static void node_geo_exec(GeoNodeExecParams params)
   bke::VolumeTreeAccessToken tree_token;
   const openvdb::FloatGrid &source_vdb_grid = source_grid.grid(tree_token);
   const openvdb::math::Transform &grid_transform = source_vdb_grid.transform();
+  const float3 voxel_size = bke::VolumeGridTraits<float3>::to_blender(grid_transform.voxelSize());
+  if (!is_uniform_scale(voxel_size)) {
+    params.error_message_add(NodeWarningType::Warning, "Non-uniform grid scale not supported");
+  }
+  const float voxel_scale = voxel_size.x;
 
   openvdb::math::pcg::State solver_state;
   solver_state.iterations = max_iterations;
@@ -358,6 +370,17 @@ static void node_geo_exec(GeoNodeExecParams params)
       solution_tree = std::make_shared<openvdb::FloatTree>();
       break;
   }
+
+  /* The solver works in index space, where the voxel size is h=1. The Laplace operator applies two
+   * derivative operators div(grad(X)) which both add a voxel scale factor of 1/h in the
+   * "staggered" 1st order version used here. The solver computes the inverse, so the resulting
+   * solution should have a factor of h^2 applied, which we have to do manually to produce the
+   * correct result in grid space. */
+  const float solution_scale = math::square(voxel_scale);
+  openvdb::tools::foreach(solution_tree->beginValueOn(),
+                          [&](const typename openvdb::FloatTree::ValueOnIter &iter) {
+                            iter.setValue(iter.getValue() * solution_scale);
+                          });
 
   openvdb::FloatGrid::Ptr solution_grid = openvdb::FloatGrid::create(std::move(solution_tree));
   solution_grid->setTransform(grid_transform.copy());
