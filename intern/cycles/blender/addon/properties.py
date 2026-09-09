@@ -570,9 +570,15 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         default=True,
     )
 
-    use_temporal_resampling: BoolProperty(
-        name="Temporal Resampling",
-        description="Reuse samples from the previous frame's reservoirs", # !!!: prev frame/sample! 
+    use_temporal_samples: BoolProperty(
+        name="Temporal Samples",
+        description="Reuse from the previous samples' reservoirs",
+        default=True,
+    )
+
+    use_temporal_frames: BoolProperty(
+        name="Temporal Frames",
+        description="Reuse from the previous frames' reservoirs",
         default=True,
     )
 

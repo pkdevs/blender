@@ -17,6 +17,7 @@ struct Reservoir {
   float luminance;
   float total_weight = 0.0f;
 
+  // TODO(Tri): Support restir_temporal_frame_count
   /* Number of samples this reservoir represents. A freshly generated
    * candidate this render sample starts at 1; temporal combination grows
    * it (capped by restir_temporal_sample_count) as history accumulates
@@ -545,6 +546,113 @@ ccl_debug_printf( // Accepted candidates
   // return restir_light_reference_restore_metadata(kg, &reservoir->reference);
 }
 
+
+// MARK: - TemporalReprojection
+
+// TODO(Tri): Move elsewhere...
+/* Minimal per-pixel record kept purely for the reprojection test!
+ * NOT the full reservoir, and NOT reconstructed via re-intersection like
+ * SpatialReservoir::sd is. Written every sample, ping-ponged like the
+ * reservoir buffer. */
+struct ReprojectionSurface {
+  float3 N;     // Shading normal
+  float depth;  // Position or linear depth
+  bool is_valid;
+};
+
+ccl_device_inline void reprojection_surface_pack(const ccl_private ShaderData *sd,
+                                                 const float depth,
+                                                 ccl_global float *buffer)
+{
+  int i = 0;
+  buffer[i++] = sd->N.x;
+  buffer[i++] = sd->N.y;
+  buffer[i++] = sd->N.z;
+  buffer[i++] = depth;
+  buffer[i] = 1.0f; /* is_valid */
+}
+
+ccl_device_inline ReprojectionSurface reprojection_surface_unpack(
+    const ccl_global float *buffer)
+{
+  ReprojectionSurface s;
+  int i = 0;
+  s.N.x = buffer[i++];
+  s.N.y = buffer[i++];
+  s.N.z = buffer[i++];
+  s.depth = buffer[i++];
+  s.is_valid = buffer[i] > 0.0f;
+  return s;
+}
+
+/* Motion-vector back-projection + reprojection-validity test, the temporal
+ * analog of SpatialResampling. 
+ * Falcor's TemporalResampling plays the same role via:
+ * motionVectors + prevSurfaceData + normalThreshold/depthThreshold. */
+struct TemporalReprojection {
+  ccl_global const KernelWorkTile *tile;
+
+  TemporalReprojection(ccl_global const KernelWorkTile *ccl_restrict tile)
+  {
+    this->tile = tile;
+  }
+
+  uint get_render_pixel_index(const int x, const int y) const
+  {
+    return (uint)tile->offset + x + y * tile->stride;
+  }
+
+  /* Falcor's isValidPixel(), against this tile's bounds rather than the
+   * whole frame; matches how SpatialResampling::get_neighbor() already
+   * clamps against tile->min_x/max_x/min_y/max_y. */
+  bool is_valid_pixel(const int x, const int y) const
+  {
+    return x >= tile->min_x && x <= tile->max_x && y >= tile->min_y && y <= tile->max_y;
+  }
+
+  /* !!!(Tri):
+   * Back-project (x, y) using a screen-space motion vector that points
+   * current -> previous frame, in pixels. Sub-pixel jitter (Falcor adds
+   * sampleNext2D(sg)) is deliberately omitted here since without it we'd
+   * be biasing which of 4 neighboring previous pixels we land on. */
+  uint3 get_previous_pixel(const int x, const int y, const float2 motion) const
+  {
+    const int px = (int)floorf((float)x + motion.x + 0.5f);
+    const int py = (int)floorf((float)y + motion.y + 0.5f);
+
+    if (!is_valid_pixel(px, py)) {
+      return make_uint3(px, py, (uint)-1);
+    }
+
+    return make_uint3(px, py, get_render_pixel_index(px, py));
+  }
+
+  /* Reprojection-miss test. Unlike SpatialResampling::is_valid_neighbor()
+   * (same object + same light type), the reprojected pixel is legitimately
+   * a *different* primitive on a continuously-moving surface, so this
+   * compares geometry directly rather than identity. */
+  static bool is_valid_reprojection(const ccl_private ReprojectionSurface *curr,
+                                    const ccl_private ReprojectionSurface *prev,
+                                    const float normal_threshold,
+                                    const float depth_threshold)
+  {
+    if (!prev->is_valid) {
+      /* Disocclusion, off-screen last frame, or history never written
+       * (first sample of the render). */
+      return false;
+    }
+
+    if (dot(curr->N, prev->N) < normal_threshold) {
+      return false;
+    }
+
+    if (fabsf(curr->depth - prev->depth) > depth_threshold * fmaxf(curr->depth, 1e-4f)) {
+      return false;
+    }
+
+    return true;
+  }
+};
 
 
 

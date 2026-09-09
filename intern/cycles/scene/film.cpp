@@ -413,7 +413,6 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
       case PASS_DENOISING_BACKWARD_MOTION:
         kfilm->pass_denoising_backward_motion = kfilm->pass_stride;
         break;
-
       case PASS_SHADOW_CATCHER:
         kfilm->pass_shadow_catcher = kfilm->pass_stride;
         break;
@@ -463,6 +462,12 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
         break;
       case PASS_RESTIR_TEMPORAL_HISTORY_RESERVOIR:
         kfilm->pass_restir_temporal_history_reservoir = kfilm->pass_stride;
+        break;
+      case PASS_RESTIR_REPROJECTION_SURFACE:
+        kfilm->pass_restir_reprojection_surface = kfilm->pass_stride;
+        break;
+      case PASS_RESTIR_PREVIOUS_REPROJECTION_SURFACE:
+        kfilm->pass_restir_previous_reprojection_surface = kfilm->pass_stride;
         break;
       case PASS_RESTIR_PREVIOUS_RESERVOIR:
         kfilm->pass_restir_previous_reservoir = kfilm->pass_stride;
@@ -645,13 +650,19 @@ void Film::update_passes(Scene *scene)
   }
 
   /* Add reservoir pass if spatial resampling is used. */
-  if (integrator->get_use_restir() & 0b11) {
+  if (use_restir & 0b11) {
     add_auto_pass(scene, PASS_RESTIR_PT_PREVIOUS_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_PT_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_TEMPORAL_HISTORY_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_PREVIOUS_RESERVOIR);
     add_auto_pass(scene, PASS_RESTIR_RESERVOIR);
     add_auto_pass(scene, PASS_SURFACE_DATA);
+
+    /* Cross-frame temporal should be independently enabled. */
+    if (use_restir & (1 << 4)) {
+      add_auto_pass(scene, PASS_RESTIR_REPROJECTION_SURFACE);
+      add_auto_pass(scene, PASS_RESTIR_PREVIOUS_REPROJECTION_SURFACE);
+    }
   }
 
   const vector<Pass *> passes_immutable = scene->passes;

@@ -110,6 +110,9 @@ class Integrator : public Node {
   /* ReSTIR. */
   NODE_SOCKET_API(bool, use_restir)
   NODE_SOCKET_API(bool, restir_unbiased)
+  NODE_SOCKET_API(bool, use_spatial_resampling)
+  NODE_SOCKET_API(bool, use_temporal_samples)
+  NODE_SOCKET_API(bool, use_temporal_frames)
   NODE_SOCKET_API(int, restir_light_samples)
   NODE_SOCKET_API(int, restir_spatial_radius)
   NODE_SOCKET_API(int, restir_spatial_neighbors)

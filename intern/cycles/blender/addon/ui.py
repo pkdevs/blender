@@ -615,7 +615,8 @@ class CYCLES_RENDER_PT_sampling_lights_restir_temporal(CyclesButtonsPanel, Panel
         cscene = scene.cycles
 
         self.layout.active = cscene.use_restir
-        self.layout.prop(cscene, "use_temporal_resampling", text="")
+        # self.layout.prop(cscene, "use_temporal_samples", text="")
+        # # TODO(Tri): use_temporal_frames; just a simple header would suffice!
 
     def draw(self, context):
         scene = context.scene
@@ -627,8 +628,10 @@ class CYCLES_RENDER_PT_sampling_lights_restir_temporal(CyclesButtonsPanel, Panel
         layout.active = cscene.use_restir
 
         col = layout.column(align=True)
-        col.active = cscene.use_temporal_resampling
+        col.prop(cscene, "use_temporal_samples", text="Temporal Samples")
         col.prop(cscene, "restir_temporal_sample_count", text="Samples Limit")
+
+        col.prop(cscene, "use_temporal_frames", text="Temporal Frames")
         col.prop(cscene, "restir_temporal_frame_count", text="Frames Limit")
 
 

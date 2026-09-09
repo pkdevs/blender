@@ -100,6 +100,9 @@ NODE_DEFINE(Integrator)
   /* ReSTIR. */
   SOCKET_BOOLEAN(use_restir, "ReSTIR", true);
   SOCKET_BOOLEAN(restir_unbiased, "Unbiased", true);
+  SOCKET_BOOLEAN(use_spatial_resampling, "Spatial Resampling", true);
+  SOCKET_BOOLEAN(use_temporal_samples, "Scene-Static Temporal Resampling", true);
+  SOCKET_BOOLEAN(use_temporal_frames, "Cross Frame Temporal Resampling", true);
   SOCKET_INT(restir_light_samples, "Light", 4);
   SOCKET_INT(restir_spatial_radius, "Radius", 10);
   SOCKET_INT(restir_spatial_neighbors, "Samples", 6);
