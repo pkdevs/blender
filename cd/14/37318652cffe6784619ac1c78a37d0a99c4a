@@ -3,3 +3,4 @@ Referenced by issue #161868, Crash when deleting invalid shapekey on blendfile r
 Referenced by issue #161972, Regression: Texture Paint: Bleed not working
 Referenced by pull request #162010, Fix #161972: Texture Paint bleed does not work
 Referenced by commit 956efd911f297c3d729c309b056a1bbf50080416, Fix #161972: Texture Paint bleed does not work
+Referenced by issue #163660, UI: Show translated labels in tooltips when interface labels are untranslated
