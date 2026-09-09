@@ -108,11 +108,13 @@ static void region_redraw_immediately(bContext *C, ARegion *region)
 
     ED_region_tag_refresh_ui(region);
     CTX_wm_region_popup_set(C, region);
-    region->runtime->type->layout(C, region);
+    if (region->runtime->type->layout) {
+      wmViewport(&region->winrct);
+      region->runtime->type->layout(C, region);
+    }
 
     CTX_wm_region_popup_set(C, old_region);
-
-    ED_region_tag_refresh_ui(region);
+    wmWindowViewport(CTX_wm_window(C));
     return;
   }
   ED_region_do_layout(C, region);
