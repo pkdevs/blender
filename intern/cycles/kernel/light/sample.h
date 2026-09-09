@@ -580,7 +580,9 @@ ccl_device_inline float light_sample_mis_weight_forward_background(
     const uint32_t path_flag)
 {
   /* Check if background light exists or if we should skip PDF. */
-  if (!kernel_data.background.use_mis || (path_flag & PATH_RAY_MIS_SKIP)) {
+  if (kernel_data.background.object_index == OBJECT_NONE || !kernel_data.background.use_mis ||
+      (path_flag & PATH_RAY_MIS_SKIP))
+  {
     return 1.0f;
   }
 
