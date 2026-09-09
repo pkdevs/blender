@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edsculpt
+ */
+
 #include "editors/sculpt_paint/mesh/brushes/brushes.hh"
 
 #include "DNA_brush_types.h"
@@ -187,6 +191,7 @@ void do_draw_brush(const Depsgraph &depsgraph,
                    Object &object,
                    const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   const SculptSession &ss = *object.runtime->sculpt_session;
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
 
@@ -203,6 +208,7 @@ void do_nudge_brush(const Depsgraph &depsgraph,
                     Object &object,
                     const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   const SculptSession &ss = *object.runtime->sculpt_session;
 
   const float3 offset = math::cross(
@@ -217,6 +223,7 @@ void do_gravity_brush(const Depsgraph &depsgraph,
                       Object &object,
                       const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   const SculptSession &ss = *object.runtime->sculpt_session;
 
   const float3 offset = ss.cache->gravity_direction_symm * -ss.cache->radius_squared *

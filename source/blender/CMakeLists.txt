@@ -38,6 +38,7 @@ set(SRC_DNA_INC
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_gpencil_modifier_types.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_gpu_types.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_grease_pencil_types.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_image_enums.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_image_types.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_key_types.h
   ${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_lattice_types.h
@@ -135,6 +136,7 @@ add_subdirectory(simulation)
 add_subdirectory(geometry)
 add_subdirectory(gpu)
 add_subdirectory(gpu/shaders)
+add_subdirectory(gpu/shaders/material)
 add_subdirectory(gpu/tests/shaders)
 add_subdirectory(imbuf)
 add_subdirectory(imbuf/intern/oiio)

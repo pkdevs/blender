@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edsculpt
+ */
+
 #pragma once
 
 #include "BLI_array.hh"
@@ -18,6 +22,8 @@
 #include "BKE_subdiv_ccg.hh"
 
 #include "DNA_brush_enums.h"
+
+#include "PRF_profile.hh"
 
 #include "sculpt_intern.hh"
 
@@ -87,6 +93,7 @@ void translations_from_new_positions(Span<float3> new_positions,
 /** Gather data from an array aligned with all geometry vertices. */
 template<typename T> void gather_data_mesh(Span<T> src, Span<int> indices, MutableSpan<T> dst)
 {
+  PRF_scope(ProfileCategory::Editor);
   /* #exec_mode::serial because this is called from tasks with TLS that don't use isolation. */
   array_utils::gather(src, indices, dst, exec_mode::serial);
 }
@@ -127,6 +134,7 @@ MutableSpan<T> gather_data_bmesh(const Span<T> src, const Set<BMVert *, 0> &vert
 /** Scatter data from an array of the node's data to the referenced geometry vertices. */
 template<typename T> void scatter_data_mesh(Span<T> src, Span<int> indices, MutableSpan<T> dst)
 {
+  PRF_scope(ProfileCategory::Editor);
   /* #exec_mode::serial because this is called from tasks with TLS that don't use isolation. */
   array_utils::scatter(src, indices, dst, exec_mode::serial);
 }
@@ -143,6 +151,7 @@ inline MutableSpan<float3> gather_grids_positions(const SubdivCCG &subdiv_ccg,
                                                   const Span<int> grids,
                                                   Vector<float3> &positions)
 {
+  PRF_scope(ProfileCategory::Editor);
   const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
   positions.resize(key.grid_area * grids.size());
   gather_data_grids(subdiv_ccg, subdiv_ccg.positions.as_span(), grids, positions);
@@ -205,6 +214,26 @@ void calc_factors_common_mesh_indexed(const Depsgraph &depsgraph,
                                       const bke::pbvh::MeshNode &node,
                                       MutableSpan<float> factors,
                                       MutableSpan<float> distances);
+void calc_cube_tip_factors_common_mesh_indexed(const Depsgraph &depsgraph,
+                                               const Brush &brush,
+                                               const Object &object,
+                                               const float4x4 &mat,
+                                               const MeshAttributeData &attribute_data,
+                                               const Span<float3> vert_positions,
+                                               const Span<float3> vert_normals,
+                                               const bke::pbvh::MeshNode &node,
+                                               Vector<float> &r_factors,
+                                               Vector<float> &r_distances);
+void calc_cube_tip_factors_common_mesh_indexed(const Depsgraph &depsgraph,
+                                               const Brush &brush,
+                                               const Object &object,
+                                               const float4x4 &mat,
+                                               const MeshAttributeData &attribute_data,
+                                               Span<float3> vert_positions,
+                                               Span<float3> vert_normals,
+                                               const bke::pbvh::MeshNode &node,
+                                               MutableSpan<float> factors,
+                                               MutableSpan<float> distances);
 void calc_factors_common_grids(const Depsgraph &depsgraph,
                                const Brush &brush,
                                const Object &object,
@@ -219,6 +248,22 @@ void calc_factors_common_bmesh(const Depsgraph &depsgraph,
                                bke::pbvh::BMeshNode &node,
                                Vector<float> &r_factors,
                                Vector<float> &r_distances);
+void calc_cube_tip_factors_common_grids(const Depsgraph &depsgraph,
+                                        const Brush &brush,
+                                        const Object &object,
+                                        const float4x4 &mat,
+                                        Span<float3> positions,
+                                        const bke::pbvh::GridsNode &node,
+                                        Vector<float> &r_factors,
+                                        Vector<float> &r_distances);
+void calc_cube_tip_factors_common_bmesh(const Depsgraph &depsgraph,
+                                        const Brush &brush,
+                                        const Object &object,
+                                        const float4x4 &mat,
+                                        Span<float3> positions,
+                                        bke::pbvh::BMeshNode &node,
+                                        Vector<float> &r_factors,
+                                        Vector<float> &r_distances);
 void calc_factors_common_from_orig_data_mesh(const Depsgraph &depsgraph,
                                              const Brush &brush,
                                              const Object &object,
@@ -524,6 +569,47 @@ void filter_above_plane_factors(Span<float3> vert_positions,
 void filter_above_plane_factors(Span<float3> positions,
                                 const float4 &plane,
                                 MutableSpan<float> factors);
+
+/**
+ * Transforms positions from object space positions to brush-local space. For tube falloff shape,
+ * positions are first projected onto the view plane.
+ */
+void calc_local_positions(Span<float3> vert_positions,
+                          Span<int> verts,
+                          const float4x4 &mat,
+                          const float3 &plane_center,
+                          const float3 &view_normal,
+                          eBrushFalloffShape falloff_shape,
+                          MutableSpan<float3> local_positions);
+
+void calc_local_positions(Span<float3> positions,
+                          const float4x4 &mat,
+                          const float3 &plane_center,
+                          const float3 &view_normal,
+                          eBrushFalloffShape falloff_shape,
+                          MutableSpan<float3> local_positions);
+
+/**
+ * Transforms positions from object space positions to brush-local space and then splits the XY
+ * and Z components. This gives slightly better performance for brushes that only need the XY
+ * components for certain calculations. For tube falloff shape, positions are first projected onto
+ * the view plane.
+ */
+void calc_local_positions(Span<float3> vert_positions,
+                          Span<int> verts,
+                          const float4x4 &mat,
+                          const float3 &plane_center,
+                          const float3 &view_normal,
+                          eBrushFalloffShape falloff_shape,
+                          MutableSpan<float2> xy_positions,
+                          MutableSpan<float> z_positions);
+void calc_local_positions(Span<float3> positions,
+                          const float4x4 &mat,
+                          const float3 &plane_center,
+                          const float3 &view_normal,
+                          eBrushFalloffShape falloff_shape,
+                          MutableSpan<float2> xy_positions,
+                          MutableSpan<float> z_positions);
 
 }  // namespace ed::sculpt_paint
 

@@ -53,24 +53,85 @@ struct WriteData;
 struct FileData;
 enum eReportType : uint16_t;
 
+/**
+ * Allows code using #BlendWriter to customize how a specific struct is written. Often, small
+ * changes to the struct data are done before it is written (e.g. zeroing runtime pointers and
+ * setting generated pointers).
+ */
+class BlendStructWriter {
+ private:
+  WriteData *wd_;
+  int struct_nr_;
+  /** This is a shallow copy of the struct being written. */
+  MutableSpan<char> data_;
+
+ public:
+  BlendStructWriter(WriteData &wd, const int struct_nr, MutableSpan<char> data)
+      : wd_(&wd), struct_nr_(struct_nr), data_(data)
+  {
+  }
+
+  /**
+   * Mark the pointer at the given offset as purely runtime. That means that it will be zeroed.
+   */
+  void runtime_ptr(int64_t offset);
+
+  /**
+   * Tag the pointer at the given offset as "generated". That implies that it may be remapped
+   * to a stable pointer. It's expected that the pointer has been tagged with
+   * #generated_pointer_tag before.
+   */
+  void generated_ptr(int64_t offset);
+};
+
+using BlendStructWriterFn = FunctionRef<void(BlendStructWriter &struct_writer)>;
+
 struct BlendWriter {
   WriteData *wd = nullptr;
 
-  void write_struct_by_name(const char *struct_name, const void *data);
-  void write_struct_by_id(int struct_id, const void *data);
-  void write_struct_at_address_by_id(int struct_id, const void *address, const void *data);
+  /**
+   * Sometimes different data is written depending on whether the file is saved to disk or used for
+   * undo. This function returns true when the current file-writing is done for undo.
+   */
+  bool is_undo() const;
+
+  /**
+   * \note Should not be strictly needed outside of handling external Multires .btx files.
+   */
+  StringRefNull filepath() const;
+
+  void write_struct_by_name(const char *struct_name,
+                            const void *data,
+                            BlendStructWriterFn fn = nullptr);
+  void write_struct_by_id(int struct_id, const void *data, BlendStructWriterFn fn = nullptr);
+  void write_struct_at_address_by_id(int struct_id,
+                                     const void *address,
+                                     const void *data,
+                                     BlendStructWriterFn fn = nullptr);
   void write_struct_at_address_by_id_with_filecode(int filecode,
                                                    int struct_id,
                                                    const void *address,
-                                                   const void *data);
-  void write_struct_array_by_name(const char *struct_name, int64_t array_size, const void *data);
-  void write_struct_array_by_id(int struct_id, int64_t array_size, const void *data);
+                                                   const void *data,
+                                                   BlendStructWriterFn fn = nullptr);
+  void write_struct_array_by_name(const char *struct_name,
+                                  int64_t array_size,
+                                  const void *data,
+                                  BlendStructWriterFn fn = nullptr);
+  void write_struct_array_by_id(int struct_id,
+                                int64_t array_size,
+                                const void *data,
+                                BlendStructWriterFn fn = nullptr);
   void write_struct_array_at_address_by_id(int struct_id,
                                            int64_t array_size,
                                            const void *address,
-                                           const void *data);
-  void write_struct_list_by_name(const char *struct_name, ListBase *list);
-  void write_struct_list_by_id(int struct_id, const ListBase *list);
+                                           const void *data,
+                                           BlendStructWriterFn fn = nullptr);
+  void write_struct_list_by_name(const char *struct_name,
+                                 ListBase *list,
+                                 BlendStructWriterFn fn = nullptr);
+  void write_struct_list_by_id(int struct_id,
+                               const ListBase *list,
+                               BlendStructWriterFn fn = nullptr);
 
   /**
    * Write raw data.
@@ -103,54 +164,96 @@ struct BlendWriter {
   /** Write a null terminated string. */
   void write_string(const char *data);
 
+  /**
+   * Check if the data can be written more efficiently by making use of implicit-sharing. If yes,
+   * the user count of the sharing-info is increased making the data immutable. The provided
+   * callback should serialize the potentially shared data. It is only called when necessary.
+   *
+   * \param approximate_size_in_bytes: Used to be able to approximate how large the undo step is in
+   * total.
+   * \param write_fn: Use the #BlendWrite to serialize the potentially shared data.
+   */
+  void write_shared(const void *data,
+                    size_t approximate_size_in_bytes,
+                    const ImplicitSharingInfo *sharing_info,
+                    FunctionRef<void()> write_fn);
+
   int struct_id_by_name(const char *struct_name) const;
 
-  template<typename T> void write_struct(const T *data)
-  {
-    this->write_struct_by_id(dna::sdna_struct_id_get<T>(), data);
-  }
+  /**
+   * Needs to be called for all pointers that _need_ to be 'stabilized' when writing undo steps,
+   * _before_ any of these pointers are actually written (so typically at the very start of a write
+   * function)..
+   *
+   * Typically required for data dynamically generated as part of the write process, see e.g.
+   * AttributeStorage::dna_attributes.
+   */
+  void generated_pointer_tag(const void *data);
 
-  template<typename T> void write_struct_cast(const void *data)
+  template<typename T> void write_struct(const T *data, const BlendStructWriterFn fn = nullptr)
   {
-    this->write_struct_by_id(dna::sdna_struct_id_get<T>(), data);
-  }
-
-  template<typename T> void write_struct_at_address(const void *address, const T *data)
-  {
-    this->write_struct_at_address_by_id(dna::sdna_struct_id_get<T>(), address, data);
-  }
-
-  template<typename T> void write_struct_at_address_cast(const void *address, const void *data)
-  {
-    this->write_struct_at_address_by_id(dna::sdna_struct_id_get<T>(), address, data);
-  }
-
-  template<typename T> void write_struct_array(const int64_t array_size, const T *data)
-  {
-    this->write_struct_array_by_id(dna::sdna_struct_id_get<T>(), array_size, data);
-  }
-
-  template<typename T> void write_struct_array_cast(const int64_t array_size, const void *data)
-  {
-    this->write_struct_array_by_id(dna::sdna_struct_id_get<T>(), array_size, data);
+    this->write_struct_by_id(dna::sdna_struct_id_get<T>(), data, fn);
   }
 
   template<typename T>
-  void write_struct_array_at_address(const int64_t array_size, const void *address, const T *data)
+  void write_struct_cast(const void *data, const BlendStructWriterFn fn = nullptr)
+  {
+    this->write_struct_by_id(dna::sdna_struct_id_get<T>(), data, fn);
+  }
+
+  template<typename T>
+  void write_struct_at_address(const void *address,
+                               const T *data,
+                               const BlendStructWriterFn fn = nullptr)
+  {
+    this->write_struct_at_address_by_id(dna::sdna_struct_id_get<T>(), address, data, fn);
+  }
+
+  template<typename T>
+  void write_struct_at_address_cast(const void *address,
+                                    const void *data,
+                                    const BlendStructWriterFn fn = nullptr)
+  {
+    this->write_struct_at_address_by_id(dna::sdna_struct_id_get<T>(), address, data, fn);
+  }
+
+  template<typename T>
+  void write_struct_array(const int64_t array_size,
+                          const T *data,
+                          const BlendStructWriterFn fn = nullptr)
+  {
+    this->write_struct_array_by_id(dna::sdna_struct_id_get<T>(), array_size, data, fn);
+  }
+
+  template<typename T>
+  void write_struct_array_cast(const int64_t array_size,
+                               const void *data,
+                               const BlendStructWriterFn fn = nullptr)
+  {
+    this->write_struct_array_by_id(dna::sdna_struct_id_get<T>(), array_size, data, fn);
+  }
+
+  template<typename T>
+  void write_struct_array_at_address(const int64_t array_size,
+                                     const void *address,
+                                     const T *data,
+                                     const BlendStructWriterFn fn = nullptr)
   {
     this->write_struct_array_at_address_by_id(
-        dna::sdna_struct_id_get<T>(), array_size, address, data);
+        dna::sdna_struct_id_get<T>(), array_size, address, data, fn);
   }
 
-  template<typename T> void write_struct_list(const ListBaseT<T> *list)
+  template<typename T>
+  void write_struct_list(const ListBaseT<T> *list, const BlendStructWriterFn fn = nullptr)
   {
-    this->write_struct_list_by_id(dna::sdna_struct_id_get<T>(), list);
+    this->write_struct_list_by_id(dna::sdna_struct_id_get<T>(), list, fn);
   }
 
-  template<typename T> void write_id_struct(const void *id_address, const T *id)
+  template<typename T>
+  void write_id_struct(const void *id_address, const T *id, const BlendStructWriterFn fn = nullptr)
   {
     this->write_struct_at_address_by_id_with_filecode(
-        GS(id_cast<const ID *>(id)->name), dna::sdna_struct_id_get<T>(), id_address, id);
+        GS(id_cast<const ID *>(id)->name), dna::sdna_struct_id_get<T>(), id_address, id, fn);
   }
 };
 
@@ -228,39 +331,6 @@ struct BLO_Write_IDBuffer {
   };
 };
 
-/* Misc. */
-
-/**
- * Check if the data can be written more efficiently by making use of implicit-sharing. If yes, the
- * user count of the sharing-info is increased making the data immutable. The provided callback
- * should serialize the potentially shared data. It is only called when necessary.
- *
- * \param approximate_size_in_bytes: Used to be able to approximate how large the undo step is in
- * total.
- * \param write_fn: Use the #BlendWrite to serialize the potentially shared data.
- */
-void BLO_write_shared(BlendWriter *writer,
-                      const void *data,
-                      size_t approximate_size_in_bytes,
-                      const ImplicitSharingInfo *sharing_info,
-                      FunctionRef<void()> write_fn);
-
-/**
- * Needs to be called for all pointers that _need_ to be 'stabilized' when writing undo steps,
- * _before_ any of these pointers are actually written (so typically at the very start of a write
- * function)..
- *
- * Typically required for data dynamically generated as part of the write process, see e.g.
- * AttributeStorage::dna_attributes.
- */
-void BLO_write_generated_pointer_tag(BlendWriter *writer, const void *data);
-
-/**
- * Sometimes different data is written depending on whether the file is saved to disk or used for
- * undo. This function returns true when the current file-writing is done for undo.
- */
-bool BLO_write_is_undo(BlendWriter *writer);
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -289,39 +359,66 @@ bool BLO_write_is_undo(BlendWriter *writer);
  * }
  * \endcode
  *
- * Avoid using the generic #BLO_read_data_address
- * (and low-level API like #BLO_read_get_new_data_address)
- * when possible, use the typed functions instead.
+ * Avoid using the generic #BLO_read_raw_address when possible, use the typed functions instead.
  * Only data written with #BlendWriter::write_raw should typically be read with
- * #BLO_read_data_address.
+ * #BLO_read_raw_address.
  * \{ */
 
-void *BLO_read_get_new_data_address(BlendDataReader *reader, const void *old_address);
-#define BLO_read_data_address(reader, ptr_p) \
-  *((void **)ptr_p) = BLO_read_get_new_data_address((reader), *(ptr_p))
+void *blo_read_raw_address_impl(BlendDataReader *reader, const void *old_address);
+#define BLO_read_raw_address(reader, ptr_p) \
+  *((void **)ptr_p) = blo_read_raw_address_impl((reader), *(ptr_p))
 
 /**
- * Does not consider the read data as 'used'. It will still be freed by readfile code at the
- * end of the reading process, if no other 'real' usage was detected for it.
+ * Read function for pointers to structs.
+ *
+ * NOTE: Currently the usage of the type info is very minimal/basic, it does a loose check on
+ * the data size and marks the blend file as invalid when it's mismatched.
+ */
+void *blo_read_struct_impl(BlendDataReader *reader, const void *old_address, size_t expected_size);
+#define BLO_read_struct(reader, struct_name, ptr_p) \
+  (*((void **)ptr_p) = blo_read_struct_impl(reader, *((void **)ptr_p), sizeof(struct_name)))
+
+/**
+ * Like #BLO_read_struct, but mark the blend file as invalid (with an error report) when the
+ * pointer was non-null but failed to resolve.
+ */
+void *blo_read_struct_nonnull_impl(BlendDataReader *reader,
+                                   const void *old_address,
+                                   size_t expected_size);
+#define BLO_read_struct_nonnull(reader, struct_name, ptr_p) \
+  (*((void **)ptr_p) = blo_read_struct_nonnull_impl( \
+       reader, *((void **)ptr_p), sizeof(struct_name)))
+
+/**
+ * Like #BLO_read_struct, but does not consider the read data as 'used'. It will still be freed
+ * by readfile code at the end of the reading process, if no other 'real' usage was detected.
  *
  * Typical valid usages include:
  * - Restoring pointers to a specific item in an array or list (usually 'active' item e.g.). The
  *   found item is expected to also be read as part of its array/list storage reading.
  * - Doing temporary access to deprecated data as part of some versioning code.
  */
-void *BLO_read_get_new_data_address_no_us(BlendDataReader *reader,
-                                          const void *old_address,
-                                          size_t expected_size);
+void *blo_read_struct_no_us_impl(BlendDataReader *reader,
+                                 const void *old_address,
+                                 size_t expected_size);
+
+#define BLO_read_struct_no_us(reader, struct_name, ptr_p) \
+  (*((void **)ptr_p) = blo_read_struct_no_us_impl(reader, *((void **)ptr_p), sizeof(struct_name)))
+
+#define BLO_read_struct_array_no_us(reader, struct_name, ptr_p, array_size) \
+  (*((void **)ptr_p) = blo_read_struct_no_us_impl( \
+       reader, *((void **)ptr_p), sizeof(struct_name) * size_t(array_size)))
 
 /**
- * The 'main' read function for non-basic data types.
- *
- * NOTE: Currently the usage of the type info is very minimal/basic, it merely does a lose check on
- * the data size.
+ * Like #BLO_read_struct_no_us, but with the same nonnull semantics as #BLO_read_struct_nonnull.
  */
-void *blo_read_struct_impl(BlendDataReader *reader, const void *old_address, size_t expected_size);
-#define BLO_read_struct(reader, struct_name, ptr_p) \
-  *((void **)ptr_p) = blo_read_struct_impl(reader, *((void **)ptr_p), sizeof(struct_name))
+void *blo_read_struct_no_us_nonnull_impl(BlendDataReader *reader,
+                                         const void *old_address,
+                                         size_t expected_size);
+
+#define BLO_read_struct_no_us_nonnull(reader, struct_name, ptr_p) \
+  (*((void **)ptr_p) = blo_read_struct_no_us_nonnull_impl( \
+       reader, *((void **)ptr_p), sizeof(struct_name)))
 
 /**
  * Similar to #BLO_read_struct, but can use a (DNA) type name instead of the type
@@ -330,7 +427,7 @@ void *blo_read_struct_impl(BlendDataReader *reader, const void *old_address, siz
  * Somewhat mirrors #BlendWriter::write_struct_array_by_name.
  */
 void *BLO_read_struct_by_name_array(BlendDataReader *reader,
-                                    const char *struct_name,
+                                    StringRef struct_name,
                                     int64_t items_num,
                                     const void *old_address);
 

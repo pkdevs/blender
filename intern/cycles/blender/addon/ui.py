@@ -194,17 +194,6 @@ def has_optixdenoiser_gpu_devices(context):
     return context.preferences.addons[__package__].preferences.has_optixdenoiser_gpu_devices()
 
 
-def use_mnee(context):
-    # The MNEE kernel doesn't compile on macOS < 13.
-    if use_metal(context):
-        import platform
-        version, _, _ = platform.mac_ver()
-        major_version = version.split(".")[0]
-        if int(major_version) < 13:
-            return False
-    return True
-
-
 class CYCLES_RENDER_PT_sampling(CyclesButtonsPanel, Panel):
     bl_label = "Sampling"
 
@@ -402,7 +391,7 @@ class CYCLES_RENDER_PT_sampling_path_guiding(CyclesButtonsPanel, Panel):
             render_area = render_size_x * render_size_y
 
             if render_area > tile_area and render_size_x <= 8192 and render_size_y <= 8192:
-                layout.label(text="May work poorly with render tiling", icon='INFO')
+                layout.label(text="May work poorly with render tiling", icon='STATUS_INFO')
 
 
 class CYCLES_RENDER_PT_sampling_path_guiding_debug(CyclesDebugButtonsPanel, Panel):
@@ -907,7 +896,9 @@ class CYCLES_RENDER_PT_performance_texture_cache(CyclesButtonsPanel, Panel):
 
         row = col.split(factor=0.4)
         row.label()
-        row.operator("render.generate_texture_cache", text="Generate All")
+        sub = row.row(align=True)
+        sub.operator("render.generate_texture_cache", text="Generate")
+        sub.operator("render.clear_texture_cache", text="Clear")
 
         prefs = context.preferences
         if prefs.experimental.use_cycles_debug and prefs.view.show_developer_ui:
@@ -1068,7 +1059,20 @@ class CYCLES_RENDER_PT_passes_data(CyclesButtonsPanel, Panel):
         col.prop(view_layer, "use_pass_uv")
         col.prop(view_layer, "use_pass_grease_pencil", text="Grease Pencil")
 
-        col.prop(cycles_view_layer, "denoising_store_passes", text="Denoising Data")
+        prefs = context.preferences
+        use_debug = prefs.experimental.use_cycles_debug and prefs.view.show_developer_ui
+        if use_debug:
+            col = layout.column(heading="Denoising", align=True)
+            col.prop(cycles_view_layer, "denoising_store_passes", text="Data Passes")
+            sub = col.column()
+            sub.active = cycles_view_layer.denoising_store_passes
+            sub.prop(cycles_view_layer, "denoising_pass_follow_reflections", text="Follow Reflections")
+            sub.prop(
+                cycles_view_layer,
+                "denoising_pass_use_albedo_roughness_weighting",
+                text="Albedo Roughness Weighting")
+        else:
+            col.prop(cycles_view_layer, "denoising_store_passes", text="Denoising Data")
 
         col = layout.column(heading="Indexes", align=True)
         col.prop(view_layer, "use_pass_object_index")
@@ -1396,7 +1400,7 @@ class CYCLES_OBJECT_PT_shading_caustics(CyclesButtonsPanel, Panel):
 
     @classmethod
     def poll(cls, context):
-        return CyclesButtonsPanel.poll(context) and use_mnee(context) and context.object.type != 'LIGHT'
+        return CyclesButtonsPanel.poll(context) and context.object.type != 'LIGHT'
 
     def draw(self, context):
         layout = self.layout
@@ -1492,6 +1496,7 @@ class CYCLES_OBJECT_PT_visibility_ray_visibility(CyclesButtonsPanel, Panel):
         if ob.type != 'LIGHT':
             sub = col.column()
             sub.prop(ob, "visible_shadow", text="Shadow")
+            sub.prop(ob, "visible_raycast", text="Raycast")
 
 
 class CYCLES_OBJECT_PT_visibility_culling(CyclesButtonsPanel, Panel):
@@ -1661,8 +1666,7 @@ class CYCLES_LIGHT_PT_settings(CyclesButtonsPanel, Panel):
         sub.active = not (light.type == 'AREA' and clamp.is_portal)
         sub.prop(light, "use_shadow", text="Cast Shadow")
         sub.prop(clamp, "use_multiple_importance_sampling", text="Multiple Importance")
-        if use_mnee(context):
-            sub.prop(clamp, "is_caustics_light", text="Shadow Caustics")
+        sub.prop(clamp, "is_caustics_light", text="Shadow Caustics")
 
         if light.type == 'AREA':
             col.prop(clamp, "is_portal", text="Portal")
@@ -2339,9 +2343,13 @@ class CYCLES_RENDER_PT_simplify_viewport(CyclesButtonsPanel, Panel):
         col = layout.column()
         col.prop(rd, "simplify_subdivision", text="Max Subdivision")
         col.prop(rd, "simplify_child_particles", text="Child Particles")
-        col.prop(cscene, "texture_resolution", text="Texture Resolution")
-        col.prop(rd, "simplify_volumes", text="Volume Resolution")
         col.prop(rd, "use_simplify_normals", text="Normals")
+        col.prop(rd, "simplify_volumes", text="Volume Resolution")
+
+        col.separator()
+
+        col.prop(cscene, "texture_resolution", text="Texture Resolution")
+        col.prop(cscene, "texture_limit", text="Texture Size Limit")
 
 
 class CYCLES_RENDER_PT_simplify_render(CyclesButtonsPanel, Panel):
@@ -2365,7 +2373,11 @@ class CYCLES_RENDER_PT_simplify_render(CyclesButtonsPanel, Panel):
 
         col.prop(rd, "simplify_subdivision_render", text="Max Subdivision")
         col.prop(rd, "simplify_child_particles_render", text="Child Particles")
+
+        col.separator()
+
         col.prop(cscene, "texture_resolution_render", text="Texture Resolution")
+        col.prop(cscene, "texture_limit_render", text="Texture Size Limit")
 
 
 class CYCLES_RENDER_PT_simplify_culling(CyclesButtonsPanel, Panel):
@@ -2514,18 +2526,6 @@ def draw_device(self, context):
             osl_col.prop(cscene, "shading_system")
 
 
-def draw_pause(self, context):
-    layout = self.layout
-    scene = context.scene
-
-    if context.engine == "CYCLES":
-        view = context.space_data
-
-        if view.shading.type == 'RENDERED':
-            cscene = scene.cycles
-            layout.prop(cscene, "preview_pause", icon='PLAY' if cscene.preview_pause else 'PAUSE', text="")
-
-
 def get_panels():
     exclude_panels = {
         'DATA_PT_camera_dof',
@@ -2662,7 +2662,6 @@ def register():
     from bpy.utils import register_class
 
     bpy.types.RENDER_PT_context.append(draw_device)
-    bpy.types.VIEW3D_HT_header.append(draw_pause)
 
     for panel in get_panels():
         panel.COMPAT_ENGINES.add('CYCLES')
@@ -2675,7 +2674,6 @@ def unregister():
     from bpy.utils import unregister_class
 
     bpy.types.RENDER_PT_context.remove(draw_device)
-    bpy.types.VIEW3D_HT_header.remove(draw_pause)
 
     for panel in get_panels():
         if 'CYCLES' in panel.COMPAT_ENGINES:

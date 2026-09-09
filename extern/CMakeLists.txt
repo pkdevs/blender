@@ -6,6 +6,7 @@
 add_subdirectory(curve_fit_nd)
 add_subdirectory(fast_float)
 add_subdirectory(json)
+add_subdirectory(toml11)
 if(WITH_IO_FBX)
   add_subdirectory(ufbx)
 endif()
@@ -53,10 +54,6 @@ if(WITH_BULLET)
   if(NOT WITH_SYSTEM_BULLET)
     add_subdirectory(bullet2)
   endif()
-endif()
-
-if(WITH_DRACO)
-  add_subdirectory(draco)
 endif()
 
 if(WITH_KTX)
@@ -110,6 +107,7 @@ endif()
 
 if(WITH_VULKAN_BACKEND)
   add_subdirectory(vulkan_memory_allocator)
+  add_subdirectory(volk)
 endif()
 
 if(WITH_TRACY)

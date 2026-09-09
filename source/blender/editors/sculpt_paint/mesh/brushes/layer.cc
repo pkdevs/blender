@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edsculpt
+ */
+
 #include "editors/sculpt_paint/mesh/brushes/brushes.hh"
 
 #include "DNA_brush_types.h"
@@ -46,6 +50,7 @@ BLI_NOINLINE static void offset_displacement_factors(const MutableSpan<float> di
                                                      const Span<float> factors,
                                                      const float strength)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : displacement_factors.index_range()) {
     displacement_factors[i] += factors[i] * strength * (1.05f - std::abs(displacement_factors[i]));
   }
@@ -63,6 +68,7 @@ BLI_NOINLINE static void reset_displacement_factors(const MutableSpan<float> dis
                                                     const Span<float> factors,
                                                     const float strength)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : displacement_factors.index_range()) {
     displacement_factors[i] += std::abs(factors[i] * strength * displacement_factors[i]) *
                                (displacement_factors[i] > 0.0f ? -1.0f : 1.0f);
@@ -72,6 +78,7 @@ BLI_NOINLINE static void reset_displacement_factors(const MutableSpan<float> dis
 BLI_NOINLINE static void clamp_displacement_factors(const MutableSpan<float> displacement_factors,
                                                     const Span<float> masks)
 {
+  PRF_scope(ProfileCategory::Editor);
   if (masks.is_empty()) {
     for (const int i : displacement_factors.index_range()) {
       displacement_factors[i] = std::clamp(displacement_factors[i], -1.0f, 1.0f);
@@ -93,6 +100,7 @@ BLI_NOINLINE static void calc_translations(const Span<float3> orig_positions,
                                            const float height,
                                            const MutableSpan<float3> r_translations)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : positions.index_range()) {
     const float3 offset = orig_normals[i] * height * displacement_factors[i];
     const float3 translation = orig_positions[i] + offset - positions[i];
@@ -109,6 +117,7 @@ BLI_NOINLINE static void calc_translations(const Span<float3> base_positions,
                                            const float height,
                                            const MutableSpan<float3> r_translations)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : positions.index_range()) {
     const float3 offset = base_normals[verts[i]] * height * displacement_factors[i];
     const float3 translation = base_positions[verts[i]] + offset - positions[i];
@@ -386,6 +395,7 @@ void do_layer_brush(const Depsgraph &depsgraph,
                     Object &object,
                     const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   SculptSession &ss = *object.runtime->sculpt_session;
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);

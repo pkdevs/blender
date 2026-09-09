@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edsculpt
+ */
+
 #include "editors/sculpt_paint/mesh/brushes/brushes.hh"
 
 #include "DNA_brush_types.h"
@@ -43,6 +47,7 @@ struct LocalData {
 
 BLI_NOINLINE static void clamp_factors(const MutableSpan<float> factors)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (float &factor : factors) {
     factor = std::clamp(factor, 0.0f, 1.0f);
   }
@@ -411,6 +416,7 @@ void do_surface_smooth_brush(const Depsgraph &depsgraph,
                              Object &object,
                              const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   SculptSession &ss = *object.runtime->sculpt_session;
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(object);
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);

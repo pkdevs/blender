@@ -10,11 +10,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_utildefines.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_utildefines.hh"
 
 #include "DNA_armature_types.h"
 #include "DNA_constraint_types.h"
@@ -24,6 +24,7 @@
 #include "BKE_action.hh"
 #include "BKE_anim_path.h"
 #include "BKE_armature.hh"
+#include "BKE_constraint.h"
 #include "BKE_curve.hh"
 #include "BKE_object_types.hh"
 #include "BKE_scene.hh"
@@ -68,7 +69,7 @@ static void splineik_init_tree_from_pchan(Scene * /*scene*/, Object *ob, bPoseCh
   int segcount = 0;
 
   /* Find the SplineIK constraint. */
-  for (con = static_cast<bConstraint *>(pchan_tip->constraints.first); con; con = con->next) {
+  for (con = pchan_tip->constraints.first(); con; con = con->next) {
     if (con->type == CONSTRAINT_TYPE_SPLINEIK) {
       ik_data = static_cast<bSplineIKConstraint *>(con->data);
 
@@ -77,7 +78,7 @@ static void splineik_init_tree_from_pchan(Scene * /*scene*/, Object *ob, bPoseCh
         continue;
       }
       /* Skip if disabled. */
-      if ((con->enforce == 0.0f) || (con->flag & (CONSTRAINT_DISABLE | CONSTRAINT_OFF))) {
+      if (!BKE_constraint_has_influence(con)) {
         continue;
       }
 
@@ -310,7 +311,7 @@ static int position_tail_on_spline(bSplineIKConstraint *ik_data,
    */
   int bp_idx = cur_seg_idx + 1;
 
-  const BevList *bl = static_cast<const BevList *>(cache->bev.first);
+  const BevList *bl = cache->bev.first();
   bool is_cyclic = bl->poly >= 0;
   BevPoint *bp = bl->bevpoints;
   BevPoint *prev_bp;
@@ -339,7 +340,7 @@ static int position_tail_on_spline(bSplineIKConstraint *ik_data,
   /* Calculate the intersection point using the secant root finding method */
   float x0 = 0.0f, x1 = 1.0f;
   float x0_point[3], x1_point[3], start_p[3];
-  float epsilon = max_fff(1.0f, len_v3(head_pos), len_v3(bp->vec)) * FLT_EPSILON;
+  float epsilon = std::max({1.0f, len_v3(head_pos), len_v3(bp->vec)}) * FLT_EPSILON;
 
   if (prev_seg_idx == bp_idx - 1) {
     /* The intersection lies inside the same segment as the last point.
@@ -750,7 +751,7 @@ static void splineik_execute_tree(
   tSplineIK_Tree *tree;
 
   /* for each pose-tree, execute it if it is spline, otherwise just free it */
-  while ((tree = static_cast<tSplineIK_Tree *>(pchan_root->siktree.first)) != nullptr) {
+  while ((tree = pchan_root->siktree.first()) != nullptr) {
     /* Firstly, calculate the bone matrix the standard way,
      * since this is needed for roll control. */
     for (int i = tree->chainlen - 1; i >= 0; i--) {
@@ -796,15 +797,11 @@ void BKE_splineik_execute_tree(
 
 void BKE_pose_pchan_index_rebuild(bPose *pose)
 {
-  MEM_SAFE_DELETE(pose->chan_array);
-  const int num_channels = BLI_listbase_count(&pose->chanbase);
-  pose->chan_array = MEM_new_array_uninitialized<bPoseChannel *>(size_t(num_channels),
-                                                                 "pose->chan_array");
+  const int num_channels = pose->chanbase.count();
+  pose->runtime->chan_array.reinitialize(num_channels);
   int pchan_index = 0;
-  for (bPoseChannel *pchan = static_cast<bPoseChannel *>(pose->chanbase.first); pchan != nullptr;
-       pchan = pchan->next)
-  {
-    pose->chan_array[pchan_index++] = pchan;
+  for (bPoseChannel *pchan = pose->chanbase.first(); pchan != nullptr; pchan = pchan->next) {
+    pose->runtime->chan_array[pchan_index++] = pchan;
   }
 }
 
@@ -812,10 +809,10 @@ BLI_INLINE bPoseChannel *pose_pchan_get_indexed(Object *ob, int pchan_index)
 {
   bPose *pose = ob->pose;
   BLI_assert(pose != nullptr);
-  BLI_assert(pose->chan_array != nullptr);
+  BLI_assert(!pose->runtime->chan_array.is_empty());
   BLI_assert(pchan_index >= 0);
-  BLI_assert(pchan_index < MEM_allocN_len(pose->chan_array) / sizeof(bPoseChannel *));
-  return pose->chan_array[pchan_index];
+  BLI_assert(pchan_index < pose->runtime->chan_array.size());
+  return pose->runtime->chan_array[pchan_index];
 }
 
 void BKE_pose_eval_init(Depsgraph *depsgraph, Scene * /*scene*/, Object *object)
@@ -835,9 +832,7 @@ void BKE_pose_eval_init(Depsgraph *depsgraph, Scene * /*scene*/, Object *object)
   invert_m4_m4(object->runtime->world_to_object.ptr(), object->object_to_world().ptr());
 
   /* clear flags */
-  for (bPoseChannel *pchan = static_cast<bPoseChannel *>(pose->chanbase.first); pchan != nullptr;
-       pchan = pchan->next)
-  {
+  for (bPoseChannel *pchan = pose->chanbase.first(); pchan != nullptr; pchan = pchan->next) {
     pchan->flag &= ~(POSE_DONE | POSE_CHAIN | POSE_IKTREE | POSE_IKSPLINE);
 
     /* Free B-Bone shape data cache if it's not a B-Bone. */
@@ -847,7 +842,7 @@ void BKE_pose_eval_init(Depsgraph *depsgraph, Scene * /*scene*/, Object *object)
     }
   }
 
-  BLI_assert(pose->chan_array != nullptr || BLI_listbase_is_empty(&pose->chanbase));
+  BLI_assert(!pose->runtime->chan_array.is_empty() || pose->chanbase.is_empty());
 }
 
 void BKE_pose_eval_init_ik(Depsgraph *depsgraph, Scene *scene, Object *object)
@@ -888,7 +883,7 @@ void BKE_pose_eval_bone(Depsgraph *depsgraph, Scene *scene, Object *object, int 
   else {
     /* TODO(sergey): Currently if there are constraints full transform is
      * being evaluated in BKE_pose_constraints_evaluate. */
-    if (pchan->constraints.first == nullptr) {
+    if (pchan->constraints.first() == nullptr) {
       if (pchan->flag & POSE_IKTREE || pchan->flag & POSE_IKSPLINE) {
         /* pass */
       }
@@ -1043,7 +1038,7 @@ static void pose_eval_cleanup_common(Object *object)
 {
   bPose *pose = object->pose;
   BLI_assert(pose != nullptr);
-  BLI_assert(pose->chan_array != nullptr || BLI_listbase_is_empty(&pose->chanbase));
+  BLI_assert(!pose->runtime->chan_array.is_empty() || pose->chanbase.is_empty());
   UNUSED_VARS_NDEBUG(pose);
 }
 

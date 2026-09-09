@@ -122,6 +122,8 @@ class NODE_MT_shader_node_input_base(node_add_menu.NodeMenu):
                 "Portal Depth"
             ],
         )
+        self.node_operator(layout, "ShaderNodeLightEvaluation", poll=object_eevee_shader_nodes_poll(context))
+        self.node_operator(layout, "ShaderNodeLightInfo", poll=object_eevee_shader_nodes_poll(context))
         self.node_operator_with_outputs(
             context, layout, "ShaderNodeObjectInfo",
             ["Location", "Color", "Alpha", "Object Index", "Material Index", "Random"],
@@ -138,6 +140,8 @@ class NODE_MT_shader_node_input_base(node_add_menu.NodeMenu):
             poll=object_material_shader_nodes_poll(context)
         )
         self.node_operator(layout, "ShaderNodeRaycast", poll=object_material_shader_nodes_poll(context))
+        self.node_operator_with_outputs(context, layout, "GeometryNodeInputSceneTime", ["Frame", "Seconds"])
+        self.node_operator(layout, "ShaderNodeShadowRaycast", poll=object_eevee_shader_nodes_poll(context))
         self.node_operator(layout, "ShaderNodeTangent")
         self.node_operator_with_outputs(
             context, layout, "ShaderNodeTexCoord",
@@ -168,6 +172,7 @@ class NODE_MT_shader_node_input_constant_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "ShaderNodeRGB")
         self.node_operator(layout, "FunctionNodeInputInt")
         self.node_operator(layout, "FunctionNodeInputMenu")
+        self.node_operator(layout, "FunctionNodeInputString")
         self.node_operator(layout, "ShaderNodeValue")
         self.node_operator(layout, "FunctionNodeInputVector")
 
@@ -263,6 +268,11 @@ class NODE_MT_shader_node_shader_base(node_add_menu.NodeMenu):
             layout,
             "ShaderNodeHoldout",
             poll=object_material_shader_nodes_poll(context),
+        )
+        self.node_operator(
+            layout,
+            "ShaderNodeLightAccumulation",
+            poll=object_eevee_shader_nodes_poll(context)
         )
         self.node_operator(
             layout,
@@ -404,6 +414,7 @@ class NODE_MT_shader_node_vector_base(node_add_menu.NodeMenu):
         layout = self.layout
 
         self.node_operator(layout, "ShaderNodeCombineXYZ")
+        self.node_operator(layout, "FunctionNodeGetVectorComponent")
         props = self.node_operator(layout, "ShaderNodeMapRange")
         ops = props.settings.add()
         ops.name = "data_type"
@@ -451,6 +462,32 @@ class NODE_MT_shader_node_math_base(node_add_menu.NodeMenu):
         self.draw_assets_for_catalog(layout, self.menu_path)
 
 
+class NODE_MT_shader_node_text_base(node_add_menu.NodeMenu):
+    bl_label = "Text"
+    menu_path = "Utilities/Text"
+
+    def draw(self, context):
+        layout = self.layout
+        self.node_operator(layout, "FunctionNodeFormatString")
+        self.node_operator(layout, "FunctionNodeMatchString")
+        self.node_operator(layout, "FunctionNodeReplaceString")
+        self.node_operator(layout, "FunctionNodeReverseString")
+        self.node_operator_with_searchable_enum_socket(
+            context, layout, "FunctionNodeSetStringCase", "Case", ["Uppercase", "Lowercase"],
+        )
+        self.node_operator(layout, "FunctionNodeSliceString")
+        self.node_operator(layout, "FunctionNodeTrimString")
+        layout.separator()
+        self.node_operator(layout, "FunctionNodeFindInString")
+        self.node_operator(layout, "FunctionNodeStringLength")
+        self.node_operator(layout, "FunctionNodeStringToValue")
+        self.node_operator(layout, "FunctionNodeValueToString")
+        layout.separator()
+        self.node_operator(layout, "FunctionNodeInputSpecialCharacters")
+
+        self.draw_assets_for_catalog(layout, self.menu_path)
+
+
 class NODE_MT_shader_node_displacement_base(node_add_menu.NodeMenu):
     bl_label = "Displacement"
 
@@ -476,18 +513,22 @@ class NODE_MT_shader_node_utilities_base(node_add_menu.NodeMenu):
         layout = self.layout
 
         self.draw_menu(layout, "Utilities/Math")
+        self.draw_menu(layout, "Utilities/Text")
         self.draw_menu(layout, "Utilities/Vector")
         layout.separator()
+        self.node_operator(layout, "NodeImplicitConversion")
         self.repeat_zone(layout, label="Repeat")
         layout.separator()
-        self.node_operator(layout, "NodeImplicitConversion")
         self.closure_zone(layout, label="Closure")
         self.node_operator(layout, "NodeEvaluateClosure")
-        self.node_operator(layout, "NodeCombineBundle")
-        self.node_operator(layout, "NodeSeparateBundle")
-        self.node_operator(layout, "NodeJoinBundle")
         layout.separator()
+        self.node_operator(layout, "NodeCombineBundle")
+        self.node_operator(layout, "NodeJoinBundle")
+        self.node_operator(layout, "NodeSeparateBundle")
+        layout.separator()
+        self.node_operator(layout, "GeometryNodeIndexSwitch")
         self.node_operator(layout, "GeometryNodeMenuSwitch")
+        self.node_operator(layout, "GeometryNodeSwitch")
         if cycles_shader_nodes_poll(context):
             layout.separator()
             self.node_operator(layout, "ShaderNodeScript")
@@ -534,6 +575,7 @@ add_menus = {
     "NODE_MT_category_shader_displacement": NODE_MT_shader_node_displacement_base,
     "NODE_MT_category_shader_vector": NODE_MT_shader_node_vector_base,
     "NODE_MT_category_shader_math": NODE_MT_shader_node_math_base,
+    "NODE_MT_category_shader_text": NODE_MT_shader_node_text_base,
     "NODE_MT_category_shader_utilities": NODE_MT_shader_node_utilities_base,
     "NODE_MT_shader_node_add_all": NODE_MT_shader_node_all_base,
 }
@@ -555,6 +597,7 @@ swap_menus = {
     "NODE_MT_shader_node_displacement_swap": NODE_MT_shader_node_displacement_base,
     "NODE_MT_shader_node_vector_swap": NODE_MT_shader_node_vector_base,
     "NODE_MT_shader_node_math_swap": NODE_MT_shader_node_math_base,
+    "NODE_MT_shader_node_text_swap": NODE_MT_shader_node_text_base,
     "NODE_MT_shader_node_utilities_swap": NODE_MT_shader_node_utilities_base,
     "NODE_MT_shader_node_swap_all": NODE_MT_shader_node_all_base,
 }

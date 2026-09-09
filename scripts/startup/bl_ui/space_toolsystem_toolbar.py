@@ -235,7 +235,7 @@ class _defs_annotate:
                 row.ui_units_x = 15
                 row.prop(props, "arrowstyle_start", text="Start")
                 row.separator()
-                row.prop(props, "arrowstyle_end", text="End", translation_context=i18n_contexts.id_curve)
+                row.prop(props, "arrowstyle_end", text="End", text_ctxt=i18n_contexts.id_curve)
             else:
                 col = layout.row().column(align=True)
                 col.prop(props, "arrowstyle_start", text="Style Start")
@@ -512,6 +512,7 @@ class _defs_view3d_add:
         'CUBE': ToolDefaults('EDGE', 'FREE', 'EDGE', 'FREE'),
         'CONE': ToolDefaults('CENTER', 'FIXED', 'EDGE', 'FREE'),
         'CYLINDER': ToolDefaults('CENTER', 'FIXED', 'EDGE', 'FREE'),
+        'SPHERE_QUAD': ToolDefaults('CENTER', 'FIXED', 'CENTER', 'FIXED'),
         'SPHERE_UV': ToolDefaults('CENTER', 'FIXED', 'CENTER', 'FIXED'),
         'SPHERE_ICO': ToolDefaults('CENTER', 'FIXED', 'CENTER', 'FIXED'),
     }
@@ -707,6 +708,34 @@ class _defs_view3d_add:
         )
 
     @ToolDef.from_fn
+    def quad_sphere_add():
+        def draw_settings(context, layout, tool, *, extra=False):
+            show_extra = _defs_view3d_add.draw_settings_interactive_add(layout, context.tool_settings, tool, extra)
+            if extra:
+                return
+
+            props = tool.operator_properties("mesh.primitive_quad_sphere_add")
+            layout.prop(props, "segments")
+            layout.prop(props, "method")
+
+            if show_extra:
+                layout.popover("TOPBAR_PT_tool_settings_extra", text="...")
+
+            _defs_view3d_add.draw_settings_defaults_init(context.mode, tool, 'SPHERE_QUAD')
+
+        return dict(
+            idname="builtin.primitive_quad_sphere_add",
+            label="Add Quad Sphere",
+            icon="ops.mesh.primitive_sphere_add_gizmo",
+            description=lambda *args: _defs_view3d_add.description_interactive_add(
+                *args, prefix=tip_("Add sphere to mesh interactively"),
+            ),
+            widget="VIEW3D_GGT_placement",
+            keymap="3D View Tool: Object, Add Primitive",
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
     def ico_sphere_add():
         def draw_settings(context, layout, tool, *, extra=False):
             show_extra = _defs_view3d_add.draw_settings_interactive_add(layout, context.tool_settings, tool, extra)
@@ -763,7 +792,7 @@ class _defs_edit_armature:
     def bone_size():
         return dict(
             idname="builtin.bone_size",
-            label="Bone Size",
+            label="B-Bone Size",
             icon="ops.transform.bone_size",
             widget="VIEW3D_GGT_tool_generic_handle_free",
             keymap=(),
@@ -1430,7 +1459,7 @@ class _defs_pose:
             label="Breakdowner",
             icon="ops.pose.breakdowner",
             widget=None,
-            keymap=(),
+            keymap="3D View Tool: Breakdowner",
         )
 
     @ToolDef.from_fn
@@ -1440,7 +1469,7 @@ class _defs_pose:
             label="Push",
             icon="ops.pose.push",
             widget=None,
-            keymap=(),
+            keymap="3D View Tool: Push",
         )
 
     @ToolDef.from_fn
@@ -1450,7 +1479,7 @@ class _defs_pose:
             label="Relax",
             icon="ops.pose.relax",
             widget=None,
-            keymap=(),
+            keymap="3D View Tool: Relax",
         )
 
 
@@ -2165,10 +2194,11 @@ class _defs_weight_paint:
     def sample_weight():
         def draw_settings(context, layout, _tool):
             ups = context.tool_settings.weight_paint.unified_paint_settings
-            if ups.use_unified_weight:
+            brush = context.tool_settings.weight_paint.brush
+            if brush.use_unified_weight:
                 weight = ups.weight
-            elif context.tool_settings.weight_paint.brush:
-                weight = context.tool_settings.weight_paint.brush.weight
+            elif brush:
+                weight = brush.weight
             else:
                 return
             layout.label(text=iface_("Weight: {:.3f}").format(weight), translate=False)
@@ -2238,6 +2268,22 @@ class _defs_weight_paint:
 
 
 class _defs_grease_pencil_paint:
+
+    @ToolDef.from_fn
+    def lasso_select():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("view3d.select_lasso")
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(props, "mode", text="", expand=True, icon_only=True)
+        return dict(
+            idname="builtin.select_lasso",
+            label="Select Lasso",
+            icon="ops.generic.select_lasso",
+            # widget="VIEW3D_GGT_grease_pencil_edit",
+            keymap="3D View Tool: Select Lasso",
+            draw_settings=draw_settings,
+        )
 
     @ToolDef.from_fn
     def fill():
@@ -2455,7 +2501,7 @@ class _defs_grease_pencil_paint:
                 row = col.row(align=True)
                 row.template_ID(settings, "palette", new="palette.new")
                 if settings.palette:
-                    col.template_palette(settings, "palette", color=True)
+                    col.template_palette(settings, "palette")
 
         return dict(
             idname="builtin.eyedropper",
@@ -3766,8 +3812,15 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
         _defs_view3d_add.cube_add,
         _defs_view3d_add.cone_add,
         _defs_view3d_add.cylinder_add,
+        _defs_view3d_add.quad_sphere_add,
         _defs_view3d_add.uv_sphere_add,
         _defs_view3d_add.ico_sphere_add,
+    )
+
+    _tools_pose = (
+        _defs_pose.breakdown,
+        _defs_pose.push,
+        _defs_pose.relax,
     )
 
     _tools_default = (
@@ -3793,15 +3846,13 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             *_tools_default,
             None,
             _tools_view3d_add,
+            None,
+            _tools_pose,
         ],
         'POSE': [
             *_tools_default,
             None,
-            (
-                _defs_pose.breakdown,
-                _defs_pose.push,
-                _defs_pose.relax,
-            ),
+            _tools_pose,
         ],
         'EDIT_ARMATURE': [
             *_tools_default,
@@ -4075,6 +4126,7 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             *_tools_annotate,
         ],
         'PAINT_GREASE_PENCIL': [
+            _defs_grease_pencil_paint.lasso_select,
             _defs_view3d_generic.cursor,
             None,
             _draw_tool,

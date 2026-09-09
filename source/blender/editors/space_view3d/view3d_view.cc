@@ -8,12 +8,12 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_linklist.h"
-#include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
-#include "BLI_math_rotation.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_linklist.hh"
+#include "BLI_listbase.hh"
+#include "BLI_math_matrix_c.hh"
+#include "BLI_math_rotation_c.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 
 #include "BKE_action.hh"
 #include "BKE_context.hh"
@@ -77,7 +77,8 @@ static wmOperatorStatus view3d_camera_to_view_exec(bContext *C, wmOperator * /*o
 
   BKE_object_tfm_protected_backup(v3d->camera, &obtfm);
 
-  ED_view3d_to_object(depsgraph, v3d->camera, rv3d->ofs, rv3d->viewquat, rv3d->dist);
+  ED_view3d_to_object(depsgraph, v3d->camera, rv3d->ofs, rv3d->viewquat, rv3d->dist, 0.0f);
+  rv3d->camroll = 0.0f;
 
   BKE_object_tfm_protected_restore(v3d->camera, &obtfm, v3d->camera->protectflag);
 
@@ -193,7 +194,7 @@ static void sync_viewport_camera_smoothview(bContext *C,
           }
           /* Checking the other view is needed to prevent local cameras being modified. */
           if (v3d->scenelock && other_v3d->scenelock) {
-            ListBaseT<ARegion> *lb = (&space_link == area.spacedata.first) ?
+            ListBaseT<ARegion> *lb = (&space_link == area.spacedata.first_) ?
                                          &area.regionbase :
                                          &space_link.regionbase;
             for (ARegion &other_region : *lb) {
@@ -384,6 +385,10 @@ static void obmat_to_viewmat(RegionView3D *rv3d, Object *ob)
   rv3d->view = RV3D_VIEW_USER; /* don't show the grid */
 
   normalize_m4_m4(bmat, ob->object_to_world().ptr());
+  /* Apply roll. */
+  if (rv3d->camroll != 0.0f) {
+    rotate_m4(bmat, 'Z', -rv3d->camroll);
+  }
   invert_m4_m4(rv3d->viewmat, bmat);
 
   /* view quat calculation, needed for add object */
@@ -534,10 +539,9 @@ static std::optional<eV3DSelectObjectFilter> view3d_select_filter_from_mode_lock
     return std::nullopt;
   }
 
-  /* NOTE: don't use #BKE_object_pose_armature_get it doesn't check for weight-paint mode
-   * when dealing using the deforming armature (breaking selection outside weight paint mode). */
-  const Object *obpose = OBPOSE_FROM_OBACT(obact);
-  if (obpose) {
+  /* NOTE: don't use #BKE_object_pose_armature_get as it doesn't check for weight-paint mode
+   * when using the deforming armature (breaking selection outside weight paint mode). */
+  if (const Object *obpose = OBPOSE_FROM_OBACT(obact)) {
     if (obpose->mode == OB_MODE_POSE) {
       /* This check only makes sense in pose-mode,
        * where this "X-ray" options gives pose-bones a priority over other objects.
@@ -550,13 +554,12 @@ static std::optional<eV3DSelectObjectFilter> view3d_select_filter_from_mode_lock
       return VIEW3D_SELECT_FILTER_OBJECT_MODE_LOCK_SAME_TYPE;
     }
   }
-  else {
-    const Object *obweight = OBWEIGHTPAINT_FROM_OBACT(obact);
-    if (obweight) {
-      /* Only use Armature pose selection, when connected armature is in pose mode. */
-      const Object *ob_armature = BKE_modifiers_is_deformed_by_armature(
-          const_cast<Object *>(obweight));
-      if (ob_armature && ob_armature->mode == OB_MODE_POSE) {
+  else if (const Object *obweight = OBWEIGHTPAINT_ALL_FROM_OBACT(obact)) {
+    /* Only use Armature pose selection, when connected armature is in pose mode. */
+    if (const Object *ob_armature = BKE_modifiers_is_deformed_by_armature(
+            const_cast<Object *>(obweight)))
+    {
+      if (ob_armature->mode == OB_MODE_POSE) {
         return VIEW3D_SELECT_FILTER_WPAINT_POSE_MODE_LOCK;
       }
     }
@@ -587,14 +590,14 @@ eV3DSelectObjectFilter ED_view3d_select_filter_from_mode(const Scene *scene,
 static bool drw_select_filter_object_mode_lock(Object *ob, void *user_data)
 {
   const Object *obact = static_cast<const Object *>(user_data);
-  return BKE_object_is_mode_compat(ob, eObjectMode(obact->mode));
+  return BKE_object_is_mode_compat(ob, obact->mode);
 }
 
 /** Implement #VIEW3D_SELECT_FILTER_OBJECT_MODE_LOCK_SAME_TYPE. */
 static bool drw_select_filter_object_mode_lock_same_type(Object *ob, void *user_data)
 {
   const Object *obact = static_cast<const Object *>(user_data);
-  return (obact->type == ob->type) && BKE_object_is_mode_compat(ob, eObjectMode(obact->mode));
+  return (obact->type == ob->type) && BKE_object_is_mode_compat(ob, obact->mode);
 }
 
 /**
@@ -852,7 +855,7 @@ static uint free_localview_bit(Main *bmain)
    * Check all areas: which local-views are in use? */
   for (bScreen &screen : bmain->screens) {
     for (ScrArea &area : screen.areabase) {
-      SpaceLink *sl = static_cast<SpaceLink *>(area.spacedata.first);
+      SpaceLink *sl = area.spacedata.first_as<SpaceLink>();
       for (; sl; sl = sl->next) {
         if (sl->spacetype == SPACE_VIEW3D) {
           View3D *v3d = reinterpret_cast<View3D *>(sl);
@@ -884,7 +887,7 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
                                   const int smooth_viewtx,
                                   ReportList *reports)
 {
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   float3 min, max, box;
   float size = 0.0f;
   uint local_view_bit;
@@ -936,7 +939,7 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
     }
 
     sub_v3_v3v3(box, max, min);
-    size = max_fff(box[0], box[1], box[2]);
+    size = std::max({box[0], box[1], box[2]});
   }
 
   if (changed == false) {
@@ -974,9 +977,14 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
         negate_v3_v3(ofs_new, mid);
 
         if (rv3d->persp == RV3D_CAMOB) {
+          rv3d->persp = RV3D_PERSP;
           camera_old = v3d->camera;
-          const Camera &camera = *id_cast<Camera *>(camera_old->data);
-          rv3d->persp = (camera.type == CAM_ORTHO) ? RV3D_ORTHO : RV3D_PERSP;
+          if (camera_old && camera_old->type == OB_CAMERA) {
+            const Camera &camera = *id_cast<Camera *>(camera_old->data);
+            if (camera.type == CAM_ORTHO) {
+              rv3d->persp = RV3D_ORTHO;
+            }
+          }
         }
 
         if (rv3d->persp == RV3D_ORTHO) {
@@ -1023,7 +1031,7 @@ static bool view3d_localview_exit(const Depsgraph *depsgraph,
                                   const bool frame_selected,
                                   const int smooth_viewtx)
 {
-  View3D *v3d = static_cast<View3D *>(area->spacedata.first);
+  View3D *v3d = area->spacedata.first_as<View3D>();
   bool changed = false;
 
   if (v3d->localvd == nullptr) {
@@ -1404,7 +1412,7 @@ void ED_view3d_local_collections_reset(const bContext *C, const bool reset_all)
 static void view3d_xr_mirror_begin(RegionView3D *rv3d)
 {
   /* If there is no session yet, changes below should not be applied! */
-  BLI_assert(WM_xr_session_exists(&((wmWindowManager *)G_MAIN->wm.first)->xr));
+  BLI_assert(WM_xr_session_exists(&((wmWindowManager *)G_MAIN->wm.first_)->xr));
 
   rv3d->runtime_viewlock |= RV3D_LOCK_ANY_TRANSFORM;
   /* Force perspective view. This isn't reset but that's not really an issue. */

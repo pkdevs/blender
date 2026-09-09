@@ -22,13 +22,13 @@
 #include "DNA_windowmanager_types.h"
 
 #include "BLI_lasso_2d.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_vector.h"
-#include "BLI_rect.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_rect.hh"
 #include "BLI_resource_scope.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
 #include "BKE_idtype.hh"
@@ -91,7 +91,7 @@ static bool has_workbench_in_texture_color(const wmWindowManager *wm,
     const bScreen *screen = BKE_workspace_active_screen_get(win.workspace_hook);
     for (ScrArea &area : screen->areabase) {
       if (area.spacetype == SPACE_VIEW3D) {
-        const View3D *v3d = static_cast<const View3D *>(area.spacedata.first);
+        const View3D *v3d = area.spacedata.first_as<View3D>();
 
         if (ED_view3d_has_workbench_in_texture_color(scene, ob, v3d)) {
           return true;
@@ -875,7 +875,7 @@ static wmOperatorStatus node_box_select_exec(bContext *C, wmOperator *op)
     switch (node->type_legacy) {
       case NODE_FRAME: {
         /* Frame nodes are selectable by their borders (including their whole rect - as for other
-         * nodes - would prevent selection of other nodes inside that frame. */
+         * nodes - would prevent selection of other nodes inside that frame). */
         const rctf frame_inside = node_frame_rect_inside(snode, *node);
         if (BLI_rctf_isect(&rectf, &node->runtime->draw_bounds, nullptr) &&
             !BLI_rctf_inside_rctf(&frame_inside, &rectf))
@@ -980,7 +980,7 @@ static wmOperatorStatus node_circleselect_exec(bContext *C, wmOperator *op)
     switch (node->type_legacy) {
       case NODE_FRAME: {
         /* Frame nodes are selectable by their borders (including their whole rect - as for other
-         * nodes - would prevent selection of _only_ other nodes inside that frame. */
+         * nodes - would prevent selection of _only_ other nodes inside that frame). */
         rctf frame_inside = node_frame_rect_inside(*snode, *node);
         const float radius_adjusted = float(radius) / zoom;
         BLI_rctf_pad(&frame_inside, -2.0f * radius_adjusted, -2.0f * radius_adjusted);
@@ -1072,7 +1072,7 @@ static bool do_lasso_select_node(bContext *C, const Span<int2> mcoords, eSelectO
     switch (node->type_legacy) {
       case NODE_FRAME: {
         /* Frame nodes are selectable by their borders (including their whole rect - as for other
-         * nodes - would prevent selection of other nodes inside that frame. */
+         * nodes - would prevent selection of other nodes inside that frame). */
         rctf rectf;
         BLI_rctf_rcti_copy(&rectf, &rect);
         ui::view2d_region_to_view_rctf(&region->v2d, &rectf, &rectf);
@@ -1427,8 +1427,7 @@ static std::string node_find_create_string_value(const bNode &node, const String
   return fmt::format("{}: \"{}\" ({})", TIP_("String"), str, node.name);
 }
 
-static std::string node_find_create_warning(const bNode &node,
-                                            const nodes::eval_log::NodeWarning warning)
+static std::string node_find_create_warning(const bNode &node, const nodes::NodeWarning warning)
 {
   return fmt::format(
       "{}: \"{}\" ({})", nodes::node_warning_type_name(warning.type), warning.message, node.name);
@@ -1511,8 +1510,8 @@ static void node_find_update_fn(const bContext *C,
       }
     }
     if (nodes::eval_log::NodeTreeLog *tree_log = tree_logs.get_main_tree_log(*node)) {
-      if (nodes::eval_log::NodeLog *node_log = tree_log->nodes.lookup_ptr(node->identifier)) {
-        for (const nodes::eval_log::NodeWarning &warning : node_log->warnings) {
+      if (nodes::eval_log::NodeLog *node_log = tree_log->find_node_log(node->identifier)) {
+        for (const nodes::NodeWarning &warning : node_log->warnings) {
           const StringRef search_str = scope.add_value(node_find_create_warning(*node, warning));
           search.add(search_str, &scope.construct<Item>(Item{node, search_str}));
         }

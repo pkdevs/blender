@@ -22,15 +22,15 @@
 
 #include "BLI_kdtree.hh"
 #include "BLI_lasso_2d.hh"
-#include "BLI_listbase.h"
-#include "BLI_math_geom.h"
-#include "BLI_math_matrix.h"
+#include "BLI_listbase.hh"
+#include "BLI_math_geom_c.hh"
+#include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_rand.h"
-#include "BLI_rect.h"
-#include "BLI_task.h"
-#include "BLI_time.h"
-#include "BLI_utildefines.h"
+#include "BLI_rand_c.hh"
+#include "BLI_rect.hh"
+#include "BLI_task_c.hh"
+#include "BLI_time.hh"
+#include "BLI_utildefines.hh"
 
 #include "BLT_translation.hh"
 
@@ -312,8 +312,8 @@ static PTCacheEdit *pe_get_current(Depsgraph *depsgraph, Scene *scene, Object *o
   BKE_ptcache_ids_from_object(&pidlist, ob, nullptr, 0);
 
   /* in the case of only one editable thing, set pset->edittype accordingly */
-  if (BLI_listbase_is_single(&pidlist)) {
-    pid = static_cast<PTCacheID *>(pidlist.first);
+  if (pidlist.is_single()) {
+    pid = pidlist.first();
     switch (pid->type) {
       case PTCACHE_TYPE_PARTICLES:
         pset->edittype = PE_TYPE_PARTICLES;
@@ -327,7 +327,7 @@ static PTCacheEdit *pe_get_current(Depsgraph *depsgraph, Scene *scene, Object *o
     }
   }
 
-  for (pid = static_cast<PTCacheID *>(pidlist.first); pid; pid = pid->next) {
+  for (pid = pidlist.first(); pid; pid = pid->next) {
     if (pset->edittype == PE_TYPE_PARTICLES && pid->type == PTCACHE_TYPE_PARTICLES) {
       ParticleSystem *psys = static_cast<ParticleSystem *>(pid->calldata);
 
@@ -392,7 +392,7 @@ static PTCacheEdit *pe_get_current(Depsgraph *depsgraph, Scene *scene, Object *o
     }
   }
 
-  BLI_freelistN(&pidlist);
+  pidlist.free_no_destruct();
 
   return edit;
 }
@@ -1681,8 +1681,6 @@ void PE_update_object(Depsgraph *depsgraph, Scene *scene, Object *ob, int usefla
 /* -------------------------------------------------------------------- */
 /** \name Edit Selections
  * \{ */
-
-/*-----selection callbacks-----*/
 
 static void select_key(PEData *data, int point_index, int key_index, bool /*is_inside*/)
 {
@@ -5333,7 +5331,7 @@ void PE_create_particle_edit(
     return;
   }
 
-  if (psys == nullptr && (cache && BLI_listbase_is_empty(&cache->mem_cache))) {
+  if (psys == nullptr && (cache && cache->mem_cache.is_empty())) {
     return;
   }
 
@@ -5346,8 +5344,7 @@ void PE_create_particle_edit(
       psys_copy_particles(psys, psys_eval);
     }
 
-    totpoint = psys ? psys->totpart :
-                      int((static_cast<PTCacheMem *>(cache->mem_cache.first))->totpoint);
+    totpoint = psys ? psys->totpart : int((cache->mem_cache.first())->totpoint);
 
     edit = MEM_new_zeroed<PTCacheEdit>("PE_create_particle_edit");
     edit->points = MEM_new_array_zeroed<PTCacheEditPoint>(totpoint, "PTCacheEditPoints");
@@ -5363,7 +5360,7 @@ void PE_create_particle_edit(
       psys->free_edit = PE_free_ptcache_edit;
 
       edit->pathcache = nullptr;
-      BLI_listbase_clear(&edit->pathcachebufs);
+      edit->pathcachebufs.clear_no_delete();
 
       pa = psys->particles;
       LOOP_POINTS {
@@ -5394,7 +5391,7 @@ void PE_create_particle_edit(
       cache->free_edit = PE_free_ptcache_edit;
       edit->psys = nullptr;
 
-      totframe += BLI_listbase_count(&cache->mem_cache);
+      totframe += cache->mem_cache.count();
 
       for (PTCacheMem &pm : cache->mem_cache) {
         LOOP_POINTS {
@@ -5449,10 +5446,7 @@ static bool particle_edit_toggle_poll(bContext *C)
 
 static void free_all_psys_edit(Object *object)
 {
-  for (ParticleSystem *psys = static_cast<ParticleSystem *>(object->particlesystem.first);
-       psys != nullptr;
-       psys = psys->next)
-  {
+  for (ParticleSystem *psys = object->particlesystem.first(); psys != nullptr; psys = psys->next) {
     if (psys->edit != nullptr) {
       BLI_assert(psys->free_edit != nullptr);
       psys->free_edit(psys->edit);
@@ -5464,7 +5458,7 @@ static void free_all_psys_edit(Object *object)
 
 bool ED_object_particle_edit_mode_supported(const Object *ob)
 {
-  return (ob->particlesystem.first || BKE_modifiers_findby_type(ob, eModifierType_Cloth) ||
+  return (ob->particlesystem.first() || BKE_modifiers_findby_type(ob, eModifierType_Cloth) ||
           BKE_modifiers_findby_type(ob, eModifierType_Softbody));
 }
 
@@ -5576,6 +5570,10 @@ static wmOperatorStatus clear_edited_exec(bContext *C, wmOperator * /*op*/)
 {
   Object *ob = CTX_data_active_object(C);
   ParticleSystem *psys = psys_get_current(ob);
+  /* Additional check as poll doesn't do this exact lookup. */
+  if (psys == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
 
   if (psys->edit) {
     if (/*psys->edit->edited ||*/ true) {

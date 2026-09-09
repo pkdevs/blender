@@ -90,13 +90,13 @@ const EnumPropertyItem rna_enum_keying_flag_api_items[] = {
 
 #  include <algorithm>
 
-#  include "BLI_listbase.h"
-#  include "BLI_math_base.h"
-#  include "BLI_string.h"
-#  include "BLI_string_utf8.h"
+#  include "BLI_listbase.hh"
+#  include "BLI_math_base_c.hh"
+#  include "BLI_string.hh"
+#  include "BLI_string_utf8.hh"
 
 #  include "BKE_anim_data.hh"
-#  include "BKE_animsys.h"
+#  include "BKE_animsys.hh"
 #  include "BKE_context.hh"
 #  include "BKE_fcurve.hh"
 #  include "BKE_lib_id.hh"
@@ -205,7 +205,7 @@ static PointerRNA rna_AnimData_action_get(PointerRNA *ptr)
   ID &animated_id = *ptr->owner_id;
   animrig::Action *action = animrig::get_action(animated_id);
   if (!action) {
-    return PointerRNA_NULL;
+    return {};
   };
   return RNA_id_pointer_create(&action->id);
 }
@@ -330,13 +330,13 @@ PointerRNA rna_generic_action_slot_get(bAction *dna_action,
   using namespace animrig;
 
   if (!dna_action || slot_handle == Slot::unassigned) {
-    return PointerRNA_NULL;
+    return {};
   }
 
   Action &action = dna_action->wrap();
   Slot *slot = action.slot_for_handle(slot_handle);
   if (!slot) {
-    return PointerRNA_NULL;
+    return {};
   }
   return RNA_pointer_create_discrete(&action.id, RNA_ActionSlot, slot);
 }
@@ -725,7 +725,7 @@ static void rna_KeyingSet_name_set(PointerRNA *ptr, const char *value)
   if (!STREQ(ks->name, value)) {
     KS_Path *ksp;
 
-    for (ksp = static_cast<KS_Path *>(ks->paths.first); ksp; ksp = ksp->next) {
+    for (ksp = ks->paths.first(); ksp; ksp = ksp->next) {
       if ((ksp->groupmode == KSP_GROUP_KSNAME) && (ksp->id)) {
         AnimData *adt = BKE_animdata_from_id(ksp->id);
 
@@ -754,7 +754,7 @@ static int rna_KeyingSet_active_ksPath_editable(const PointerRNA *ptr, const cha
   KeyingSet *ks = static_cast<KeyingSet *>(ptr->data);
 
   /* only editable if there are some paths to change to */
-  return (BLI_listbase_is_empty(&ks->paths) == false) ? PROP_EDITABLE : PropertyFlag(0);
+  return (ks->paths.is_empty() == false) ? PROP_EDITABLE : PropertyFlag(0);
 }
 
 static PointerRNA rna_KeyingSet_active_ksPath_get(PointerRNA *ptr)
@@ -791,7 +791,7 @@ static void rna_KeyingSet_active_ksPath_index_range(
   KeyingSet *ks = static_cast<KeyingSet *>(ptr->data);
 
   *min = 0;
-  *max = max_ii(0, BLI_listbase_count(&ks->paths) - 1);
+  *max = max_ii(0, ks->paths.count() - 1);
 }
 
 static PointerRNA rna_KeyingSet_typeinfo_get(PointerRNA *ptr)
@@ -828,7 +828,7 @@ static KS_Path *rna_KeyingSet_paths_add(KeyingSet *keyingset,
   if (keyingset) {
     ksp = BKE_keyingset_add_path(
         keyingset, id, group_name, rna_path, index, flag, eKSP_Grouping(group_method));
-    keyingset->active_path = BLI_listbase_count(&keyingset->paths);
+    keyingset->active_path = keyingset->paths.count();
   }
   else {
     BKE_report(reports, RPT_ERROR, "Keying set path could not be added");
@@ -867,7 +867,7 @@ static void rna_KeyingSet_paths_clear(KeyingSet *keyingset, ReportList *reports)
     KS_Path *ksp, *kspn;
 
     /* free each path as we go to avoid looping twice */
-    for (ksp = static_cast<KS_Path *>(keyingset->paths.first); ksp; ksp = kspn) {
+    for (ksp = keyingset->paths.first(); ksp; ksp = kspn) {
       kspn = ksp->next;
       BKE_keyingset_free_path(keyingset, ksp);
     }
@@ -1104,7 +1104,7 @@ bool rna_NLA_tracks_override_apply(Main *bmain, RNAPropertyOverrideApplyContext 
   }
   /* Otherwise we just insert in first position. */
 #  else
-  nla_track_anchor = static_cast<NlaTrack *>(anim_data_dst->nla_tracks.last);
+  nla_track_anchor = anim_data_dst->nla_tracks.last();
 #  endif
 
   NlaTrack *nla_track_src = nullptr;
@@ -1528,6 +1528,7 @@ static void rna_api_animdata_nla_tracks(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_pointer(func, "prev", "NlaTrack", "", "NLA Track to add the new one after");
   /* return type */
   parm = RNA_def_pointer(func, "track", "NlaTrack", "", "New NLA Track");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_NlaTrack_remove");
@@ -1572,6 +1573,7 @@ static void rna_api_animdata_drivers(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_int(func, "index", 0, 0, INT_MAX, "Index", "Array index", 0, INT_MAX);
   /* return type */
   parm = RNA_def_pointer(func, "driver", "FCurve", "", "Newly Driver F-Curve");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   /* AnimData.drivers.remove(...) */

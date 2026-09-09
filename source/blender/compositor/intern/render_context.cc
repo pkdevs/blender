@@ -5,14 +5,14 @@
 #include <memory>
 #include <string>
 
-#include "BLI_assert.h"
-#include "BLI_listbase.h"
+#include "BLI_assert.hh"
+#include "BLI_listbase.hh"
 #include "BLI_map.hh"
-#include "BLI_math_vector.h"
+#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_string.h"
-#include "BLI_string_utf8.h"
-#include "BLI_utildefines.h"
+#include "BLI_string.hh"
+#include "BLI_string_utf8.hh"
+#include "BLI_utildefines.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -89,11 +89,27 @@ void FileOutput::add_view(const char *view_name, const Result &data)
   BLI_addtail(&render_result_->views, render_view);
   STRNCPY_UTF8(render_view->name, view_name);
 
-  render_view->ibuf = IMB_allocImBuf(
-      UNPACK2(data.domain().data_size), data.channels_count() * 8, 0);
-  IMB_alloc_float_pixels(render_view->ibuf, data.channels_count(), false);
-  std::memcpy(
-      render_view->ibuf->float_data_for_write(), data.cpu_data().data(), data.size_in_bytes());
+  ImColorMode color_mode = ImColorMode::RGBA;
+  if (data.channels_count() == 1) {
+    color_mode = ImColorMode::BW;
+  }
+  else if (data.channels_count() == 3) {
+    color_mode = ImColorMode::RGB;
+  }
+  render_view->ibuf = IMB_allocImBuf(UNPACK2(data.domain().data_size), ImBufFlags::Zero);
+  render_view->ibuf->color_mode = color_mode;
+  if (data.sharing_info()) {
+    render_view->ibuf->channels = data.channels_count();
+    render_view->ibuf->float_buffer = ImBufFloatBuffer{
+        .data = static_cast<const float *>(data.cpu_data().data()),
+        .sharing_info = data.sharing_info(),
+        .colorspace = nullptr};
+  }
+  else if (data.cpu_data().data() != render_view->ibuf->float_data()) {
+    IMB_alloc_float_pixels(render_view->ibuf, data.channels_count(), false);
+    std::memcpy(
+        render_view->ibuf->float_data_for_write(), data.cpu_data().data(), data.size_in_bytes());
+  }
 }
 
 void FileOutput::add_pass(const char *pass_name,
@@ -104,7 +120,7 @@ void FileOutput::add_pass(const char *pass_name,
   /* Passes can only be added for EXR images. */
   BLI_assert(ELEM(format_.imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER));
 
-  RenderLayer *render_layer = static_cast<RenderLayer *>(render_result_->layers.first);
+  RenderLayer *render_layer = render_result_->layers.first();
   RenderPass *render_pass = MEM_new<RenderPass>("Render Pass For File Output.");
   BLI_addtail(&render_layer->passes, render_pass);
   STRNCPY(render_pass->name, pass_name);
@@ -115,11 +131,27 @@ void FileOutput::add_pass(const char *pass_name,
   render_pass->recty = data.domain().data_size.y;
   render_pass->channels = data.channels_count();
 
-  render_pass->ibuf = IMB_allocImBuf(
-      UNPACK2(data.domain().data_size), data.channels_count() * 8, 0);
-  IMB_alloc_float_pixels(render_pass->ibuf, data.channels_count(), false);
-  std::memcpy(
-      render_pass->ibuf->float_data_for_write(), data.cpu_data().data(), data.size_in_bytes());
+  ImColorMode color_mode = ImColorMode::RGBA;
+  if (render_pass->channels == 1) {
+    color_mode = ImColorMode::BW;
+  }
+  else if (render_pass->channels == 3) {
+    color_mode = ImColorMode::RGB;
+  }
+  render_pass->ibuf = IMB_allocImBuf(UNPACK2(data.domain().data_size), ImBufFlags::Zero);
+  render_pass->ibuf->color_mode = color_mode;
+  if (data.sharing_info()) {
+    render_pass->ibuf->channels = data.channels_count();
+    render_pass->ibuf->float_buffer = ImBufFloatBuffer{
+        .data = static_cast<const float *>(data.cpu_data().data()),
+        .sharing_info = data.sharing_info(),
+        .colorspace = nullptr};
+  }
+  else if (data.cpu_data().data() != render_pass->ibuf->float_data()) {
+    IMB_alloc_float_pixels(render_pass->ibuf, data.channels_count(), false);
+    std::memcpy(
+        render_pass->ibuf->float_data_for_write(), data.cpu_data().data(), data.size_in_bytes());
+  }
   copy_v2_v2_db(render_pass->ibuf->ppm, render_result_->ppm);
 }
 

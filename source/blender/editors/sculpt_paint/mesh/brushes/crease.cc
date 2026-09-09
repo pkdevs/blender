@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup edsculpt
+ */
+
 #include "editors/sculpt_paint/mesh/brushes/brushes.hh"
 
 #include "DNA_brush_types.h"
@@ -18,6 +22,8 @@
 
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_task.hh"
+
+#include "PRF_profile.hh"
 
 #include "editors/sculpt_paint/mesh/mesh_brush_common.hh"
 #include "editors/sculpt_paint/mesh/sculpt_automask.hh"
@@ -41,6 +47,7 @@ BLI_NOINLINE static void translations_from_position(const Span<float3> positions
                                                     const float3 &location,
                                                     const MutableSpan<float3> translations)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : verts.index_range()) {
     translations[i] = location - positions_eval[verts[i]];
   }
@@ -50,6 +57,7 @@ BLI_NOINLINE static void translations_from_position(const Span<float3> positions
                                                     const float3 &location,
                                                     const MutableSpan<float3> translations)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : positions.index_range()) {
     translations[i] = location - positions[i];
   }
@@ -59,6 +67,7 @@ BLI_NOINLINE static void add_offset_to_translations(const MutableSpan<float3> tr
                                                     const Span<float> factors,
                                                     const float3 &offset)
 {
+  PRF_scope(ProfileCategory::Editor);
   for (const int i : translations.index_range()) {
     translations[i] += offset * factors[i];
   }
@@ -274,6 +283,7 @@ void do_crease_brush(const Depsgraph &depsgraph,
                      Object &object,
                      const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   do_crease_or_blob_brush(depsgraph, sd, false, object, node_mask);
 }
 
@@ -282,6 +292,7 @@ void do_blob_brush(const Depsgraph &depsgraph,
                    Object &object,
                    const IndexMask &node_mask)
 {
+  PRF_scope(ProfileCategory::Editor);
   do_crease_or_blob_brush(depsgraph, sd, true, object, node_mask);
 }
 
