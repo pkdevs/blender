@@ -78,6 +78,14 @@ PKG_MANIFEST_TYPE_SUPPORTED = {"add-on", "asset-library", "theme"}
 # Authentication methods accepted in the `[asset_library.auth]` sub-table.
 PKG_MANIFEST_ASSET_LIBRARY_AUTH_METHODS = {"TOKEN"}
 
+# Keys accepted in the `[permissions]` table for each extension type.
+# Only add-ons run their own code, asset libraries may include assets which run scripts (drivers for example).
+PKG_MANIFEST_PERMISSIONS_BY_TYPE = {
+    "add-on": {"files", "network", "clipboard", "camera", "microphone"},
+    "asset-library": {"scripts"},
+    "theme": set(),
+}
+
 
 def pkg_manifest_skip_for_future_compat(item: dict[str, Any]) -> bool:
     """
@@ -1634,6 +1642,32 @@ def pkg_manifest_tags_valid_or_error(
 
 
 # -----------------------------------------------------------------------------
+# Manifest Validation (Permissions)
+
+
+def pkg_manifest_permissions_valid_or_error(
+        manifest_type: str,
+        manifest_permissions: dict[str, str],
+) -> str | None:
+    assert PKG_MANIFEST_PERMISSIONS_BY_TYPE.keys() == PKG_MANIFEST_TYPE_SUPPORTED
+
+    valid_permissions = PKG_MANIFEST_PERMISSIONS_BY_TYPE[manifest_type]
+    if not valid_permissions:
+        if manifest_permissions:
+            return "no permissions are supported for type = \"{:s}\"".format(manifest_type)
+        return None
+
+    for permission in manifest_permissions:
+        if permission not in valid_permissions:
+            return "key \"{:s}\" must be one of ({:s}) for type = \"{:s}\"".format(
+                permission,
+                ", ".join(sorted(valid_permissions)),
+                manifest_type,
+            )
+    return None
+
+
+# -----------------------------------------------------------------------------
 # Manifest Validation (Generic Callbacks)
 #
 # NOTE: regarding the `strict` argument, this was added because we may want to tighten
@@ -1878,15 +1912,6 @@ def pkg_manifest_validate_field_permissions(
         ),
         strict: bool,
 ) -> str | None:
-
-    keys_valid = {
-        "files",
-        "network",
-        "clipboard",
-        "camera",
-        "microphone",
-    }
-
     if strict:
         # A list may be passed in when not-strict.
         if not isinstance(value, dict):
@@ -1896,8 +1921,6 @@ def pkg_manifest_validate_field_permissions(
             # Validate the key.
             if not isinstance(item_key, str):
                 return "key \"{:s}\" must be a string not a {:s}".format(str(item_key), str(type(item_key)))
-            if item_key not in keys_valid:
-                return "key \"{:s}\" must be one of {!r}".format(item_key, tuple(keys_valid))
 
             # Validate the value.
             if not isinstance(item_value, str):
@@ -2143,6 +2166,11 @@ def pkg_manifest_is_valid_or_error_impl(
     if error_list:
         assert all_errors
         return error_list
+
+    # The accepted permissions depend on the type.
+    if strict and isinstance(permissions := data.get("permissions"), dict):
+        if (error_msg := pkg_manifest_permissions_valid_or_error(data["type"], permissions)) is not None:
+            return ["key \"permissions\" invalid: {:s}".format(error_msg)]
 
     return None
 

@@ -65,6 +65,9 @@ license = [
 # # * camera (to capture photos and videos)
 # # * microphone (to capture audio)
 # #
+# # Asset libraries only support "scripts" (for assets which run scripts, drivers for example).
+# # Themes don't support any permissions.
+# #
 # # If using network, remember to also check `bpy.app.online_access`
 # # https://docs.blender.org/manual/en/dev/advanced/extensions/addons.html#internet-access
 # #

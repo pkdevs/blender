@@ -1457,7 +1457,7 @@ def extension_draw_item(
             col_b.link(url=value, text=domain_extract_from_url(value))
         del value
 
-        if item.type == "add-on":
+        if item.type in {"add-on", "asset-library"}:
             col_a.label(text="Permissions")
             # WARNING: while this is documented to be a dict, old packages may contain a list of strings.
             # As it happens dictionary keys & list values both iterate over string,
