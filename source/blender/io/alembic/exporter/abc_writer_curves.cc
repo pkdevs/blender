@@ -53,25 +53,23 @@ static inline Imath::V3f to_yup_V3f(float3 v)
  * and should not be exported as generic attributes. */
 static bool is_excluded_attr(StringRefNull name)
 {
-  static const Set<StringRefNull> excluded_attrs = []() {
-    Set<StringRefNull> set;
-    set.add_new("position");
-    set.add_new("radius");
-    set.add_new("resolution");
-    set.add_new("id");
-    set.add_new("cyclic");
-    set.add_new("curve_type");
-    set.add_new("normal_mode");
-    set.add_new("handle_left");
-    set.add_new("handle_right");
-    set.add_new("handle_type_left");
-    set.add_new("handle_type_right");
-    set.add_new("knots_mode");
-    set.add_new("nurbs_order");
-    set.add_new("nurbs_weight");
-    set.add_new("velocity");
-    return set;
-  }();
+  static const Set<StringRefNull> excluded_attrs = {
+      "position",
+      "radius",
+      "resolution",
+      "id",
+      "cyclic",
+      "curve_type",
+      "normal_mode",
+      "handle_left",
+      "handle_right",
+      "handle_type_left",
+      "handle_type_right",
+      "knots_mode",
+      "nurbs_order",
+      "nurbs_weight",
+      "velocity",
+  };
 
   return excluded_attrs.contains(name);
 }
