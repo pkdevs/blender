@@ -15,6 +15,8 @@
 
 #include "GEO_fillet_curves.hh"
 
+#include <cfloat>
+
 namespace blender::geometry {
 
 static void duplicate_fillet_point_data(const OffsetIndices<int> src_points_by_curve,
@@ -253,6 +255,41 @@ static void calculate_fillet_positions(const Span<float3> src_positions,
 }
 
 /**
+ * Keep aligned handles when aligning to the outer vector preserves the circular arc. Comparing
+ * reconstructed positions also detects non-collinear directions caused by nearly coincident
+ * points, which a dot-product sign check alone would miss.
+ */
+static HandleType fillet_handle_type(const float3 &position,
+                                     const float3 &outer_handle,
+                                     const float3 &inner_handle)
+{
+  const float3 inner = inner_handle - position;
+  const float3 outer_direction = math::normalize(outer_handle - position);
+  if (math::is_zero(outer_direction) || math::is_zero(inner)) {
+    return BEZIER_HANDLE_ALIGN;
+  }
+  if (math::dot(inner, outer_direction) >= 0.0f) {
+    return BEZIER_HANDLE_FREE;
+  }
+  const float length = math::length(inner);
+  const float3 aligned_handle = position - outer_direction * length;
+  /* Allow rounding from subtracting positions, computing two lengths, normalizing, and
+   * reconstructing the handle. This is a floating-point error bound, not a scene-space epsilon.
+   * gamma(12) bounds the accumulated relative error of these arithmetic operations. */
+  constexpr double unit_roundoff = FLT_EPSILON / 2.0;
+  constexpr double relative_error = 12 * unit_roundoff / (1 - 12 * unit_roundoff);
+  for (const int axis : IndexRange(3)) {
+    const double error = relative_error * length +
+                         unit_roundoff * (std::abs(double(position[axis])) +
+                                          std::abs(double(inner_handle[axis])));
+    if (std::abs(double(aligned_handle[axis]) - inner_handle[axis]) > error) {
+      return BEZIER_HANDLE_FREE;
+    }
+  }
+  return BEZIER_HANDLE_ALIGN;
+}
+
+/**
  * Set handles for the "Bezier" mode where we rely on setting the inner handles to approximate a
  * circular arc. The outer (previous and next) handles outside the result fillet segment are set
  * to vector handles.
@@ -307,13 +344,15 @@ static void calculate_bezier_handles_bezier_mode(const Span<float3> src_handles_
       dst_types_l[i_dst_a] = BEZIER_HANDLE_VECTOR;
       dst_types_r[i_dst_b] = BEZIER_HANDLE_VECTOR;
 
-      /* The inner handles are aligned with the aligned with the outer vector
-       * handles, but have a specific length to best approximate a circle. */
+      /* Preserve the original corner's arc tangents. Alignment is only valid when the outer
+       * vector handles provide the opposite direction (or no direction for coincident points). */
       const float handle_length = (4.0f / 3.0f) * radius * std::tan(angle / 4.0f);
       dst_handles_r[i_dst_a] = arc_start - prev_dir * handle_length;
       dst_handles_l[i_dst_b] = arc_end - next_dir * handle_length;
-      dst_types_r[i_dst_a] = BEZIER_HANDLE_ALIGN;
-      dst_types_l[i_dst_b] = BEZIER_HANDLE_ALIGN;
+      dst_types_r[i_dst_a] = fillet_handle_type(
+          arc_start, dst_handles_l[i_dst_a], dst_handles_r[i_dst_a]);
+      dst_types_l[i_dst_b] = fillet_handle_type(
+          arc_end, dst_handles_r[i_dst_b], dst_handles_l[i_dst_b]);
     }
   });
 }
