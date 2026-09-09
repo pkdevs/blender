@@ -137,7 +137,7 @@ static void seq_slide_status(TransInfo *t)
   status.opmodal(IFACE_("Precision"), op->type, TFM_MODAL_PRECISION, t->modifiers & MOD_PRECISION);
 
   const bool has_constraint = (t->con.mode & CON_APPLY) != 0;
-  if (!transform_convert_sequencer_is_axis_locked(t)) {
+  if ((t->flag & T_NO_CONSTRAINT) == 0) {
     status.opmodal({}, op->type, TFM_MODAL_AXIS_X, has_constraint && (t->con.mode & CON_AXIS0));
     status.opmodal(
         IFACE_("Axis"), op->type, TFM_MODAL_AXIS_Y, has_constraint && (t->con.mode & CON_AXIS1));

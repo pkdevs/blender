@@ -544,6 +544,14 @@ static void create_trans_seq_clamp_data(TransInfo *t, const Scene *scene)
     ts->offset_clamp.ymin = 0;
     ts->offset_clamp.ymax = 0;
   }
+
+  /* If either axis is locked (min/max offset is zero), then movement is only possible along one
+   * axis, and distinguishing them makes no sense, so just disable both axis constraints. */
+  if ((ts->offset_clamp.xmin == 0 && ts->offset_clamp.xmax == 0) ||
+      (ts->offset_clamp.ymin == 0 && ts->offset_clamp.ymax == 0))
+  {
+    t->flag |= T_NO_CONSTRAINT;
+  }
 }
 
 static void createTransSeqData(bContext *C, TransInfo *t)
@@ -837,24 +845,6 @@ static void special_aftertrans_update__sequencer(bContext *C, TransInfo *t)
           &scene->markers, scene, TFM_TIME_EXTEND, t->values_final[0], t->frame_side);
     }
   }
-}
-
-bool transform_convert_sequencer_is_axis_locked(const TransInfo *t)
-{
-  if (t->data_type != &TransConvertType_Sequencer || t->data_container_len == 0) {
-    return false;
-  }
-
-  const TransSeq *ts = static_cast<TransSeq *>(
-      TRANS_DATA_CONTAINER_FIRST_SINGLE(t)->custom.type.data);
-  if (ts == nullptr) {
-    return false;
-  }
-
-  /* If either axis is locked (min/max offset is zero), then movement is only possible along one
-   * axis, and distinguishing them makes no sense, so just disable both axis constraints. */
-  return (ts->offset_clamp.xmin == 0 && ts->offset_clamp.xmax == 0) ||
-         (ts->offset_clamp.ymin == 0 && ts->offset_clamp.ymax == 0);
 }
 
 bool transform_convert_sequencer_clamp(const TransInfo *t, float r_val[2])
