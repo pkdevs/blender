@@ -284,10 +284,10 @@ Copyright (C) Nathan Moinvaziri https://github.com/zlib-ng/minizip-ng.
 Copyright (C) 1998-2010 Gilles Vollant https://www.winimage.com/zLibDll/minizip.html.
 ]=])
 
-set(LLVM_VERSION 20.1.8)
+set(LLVM_VERSION 22.1.7)
 set(LLVM_NAME LLVM)
 set(LLVM_URI https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/llvm-project-${LLVM_VERSION}.src.tar.xz)
-set(LLVM_HASH 915e251a657450a2ba8e4c106e4f9555)
+set(LLVM_HASH 19edd1ed7dbb9d82e160da434ea8972a)
 set(LLVM_HASH_TYPE MD5)
 set(LLVM_FILE llvm-project-${LLVM_VERSION}.src.tar.xz)
 set(LLVM_CPE "cpe:2.3:a:llvm:compiler:${LLVM_VERSION}:*:*:*:*:*:*:*")
@@ -295,10 +295,10 @@ set(LLVM_HOMEPAGE https://github.com/llvm/llvm-project/)
 set(LLVM_LICENSE SPDX:Apache-2.0 WITH LLVM-exception)
 set(LLVM_COPYRIGHT "Copyright (c) 2003-2019 University of Illinois at Urbana-Champaign. All rights reserved.")
 
-set(OPENIMAGEIO_VERSION v3.1.13.1)
+set(OPENIMAGEIO_VERSION v3.1.16.0)
 set(OPENIMAGEIO_NAME OpenImageIO)
 set(OPENIMAGEIO_URI https://github.com/AcademySoftwareFoundation/OpenImageIO/archive/refs/tags/${OPENIMAGEIO_VERSION}.tar.gz)
-set(OPENIMAGEIO_HASH 9f6f083900680b79ca4a136270103844)
+set(OPENIMAGEIO_HASH 34e4f68d174c6768ce1d035d6f2f072f)
 set(OPENIMAGEIO_HASH_TYPE MD5)
 set(OPENIMAGEIO_FILE OpenImageIO-${OPENIMAGEIO_VERSION}.tar.gz)
 set(OPENIMAGEIO_CPE "cpe:2.3:a:openimageio:openimageio:${OPENIMAGEIO_VERSION}:*:*:*:*:*:*:*")
@@ -341,10 +341,13 @@ Copyright © 1988-1997 Sam Leffler.
 Copyright © 1991-1997 Silicon Graphics, Inc.
 ]=])
 
-set(OSL_VERSION 1.15.3.0)
+# TODO: the URI has been changed to use the github generated releases, change this back to 
+# https://github.com/AcademySoftwareFoundation/OpenShadingLanguage/releases/download/v${OSL_VERSION}/OSL-${OSL_VERSION}.tar.gz
+# once stable release tarballs become available again upstream
+set(OSL_VERSION 1.15.6.0)
 set(OSL_NAME "Open Shading Language")
-set(OSL_URI https://github.com/AcademySoftwareFoundation/OpenShadingLanguage/releases/download/v${OSL_VERSION}/OSL-${OSL_VERSION}.tar.gz)
-set(OSL_HASH 560232b3298e33f3bf45c6f21f20b484f5acc260f6d4035db0f76f22994d679a)
+set(OSL_URI https://github.com/AcademySoftwareFoundation/OpenShadingLanguage/archive/refs/tags/v${OSL_VERSION}.tar.gz)
+set(OSL_HASH 85b71407ad28c464a7ec5c9dcb33ac67f9e98b92495568549d4b9c138c91a579)
 set(OSL_HASH_TYPE SHA256)
 set(OSL_FILE OpenShadingLanguage-${OSL_VERSION}.tar.gz)
 set(OSL_HOMEPAGE https://github.com/AcademySoftwareFoundation/OpenShadingLanguage/)
@@ -439,10 +442,9 @@ set(OPENVDB_COPYRIGHT "Copyright Contributors to the OpenVDB Project")
 
 # ------------------------------------------------------------------------------
 # Python Modules
-# cattrs + fastjson schema + deps as requested by #141945
-set(ATTRS_VERSION 25.3.0)
+# cattrs (and required dependencies) as requested by #141945.
 set(CATTRS_VERSION 25.1.1)
-set(FASTJSONSCHEMA_VERSION 2.21.1)
+set(ATTRS_VERSION 25.3.0)
 set(TYPING_EXTENSIONS_VERSION 4.14.1)
 
 # Needed by: `requests` module (so the version doesn't change on rebuild).
@@ -1507,3 +1509,31 @@ set(TRACY_FILE tracy-${TRACY_VERSION}.tar.gz)
 set(TRACY_HOMEPAGE https://github.com/wolfpld/tracy)
 set(TRACY_LICENSE SPDX:BSD-3-Clause)
 set(TRACY_COPYRIGHT "Copyright (c) 2017-2026, Bartosz Taudul <wolf@nereid.pl>")
+
+set(JOLT_VERSION 5.6.0)
+set(JOLT_URI https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v${JOLT_VERSION}.tar.gz)
+set(JOLT_HASH 6e069ee0172478cc78182047aac87e5310ba14a67a53348ae14cc37801fd3f8e)
+set(JOLT_HASH_TYPE SHA256)
+set(JOLT_FILE jolt-${JOLT_VERSION}.tar.gz)
+set(JOLT_HOMEPAGE https://github.com/jrouwe/JoltPhysics)
+set(JOLT_LICENSE SPDX:MIT)
+set(JOLT_COPYRIGHT "Copyright 2021 Jorrit Rouwe")
+
+# Using the same RapidJSON git commit revision as the OpenTimelineIO submodule (src/deps/rapidjson in the repo). Keep in sync.
+set(RAPIDJSON_VERSION 24b5e7a8b27f42fa16b96fc70aade9106cf7102f)  # Latest master on 2026-09-08
+set(RAPIDJSON_URI https://github.com/Tencent/rapidjson/archive/${RAPIDJSON_VERSION}.tar.gz)
+set(RAPIDJSON_HASH 2d2601a82d2d3b7e143a3c8d43ef616671391034bc46891a9816b79cf2d3e7a8)
+set(RAPIDJSON_HASH_TYPE SHA256)
+set(RAPIDJSON_FILE rapidjson-${RAPIDJSON_VERSION}.tar.gz)
+set(RAPIDJSON_HOMEPAGE http://rapidjson.org)
+set(RAPIDJSON_LICENSE SPDX:MIT)
+set(RAPIDJSON_COPYRIGHT "Copyright (C) 2015 THL A29 Limited, a Tencent company, and Milo Yip. All rights reserved.")
+
+set(OPENTIMELINEIO_VERSION 0.18.1)
+set(OPENTIMELINEIO_URI https://github.com/AcademySoftwareFoundation/OpenTimelineIO/archive/refs/tags/v${OPENTIMELINEIO_VERSION}.tar.gz)
+set(OPENTIMELINEIO_HASH bcb516a43a962dac0cde3e1f9da634c1fd409915d499ff8f3ce6f738a4637d72)
+set(OPENTIMELINEIO_HASH_TYPE SHA256)
+set(OPENTIMELINEIO_FILE OpenTimelineIO-${OPENTIMELINEIO_VERSION}.tar.gz)
+set(OPENTIMELINEIO_HOMEPAGE https://github.com/AcademySoftwareFoundation/OpenTimelineIO)
+set(OPENTIMELINEIO_LICENSE SPDX:Apache-2.0)
+set(OPENTIMELINEIO_COPYRIGHT "Copyright Contributors to the OpenTimelineIO project.")

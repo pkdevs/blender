@@ -614,6 +614,18 @@ if(WIN32)
       CONFIGURATIONS Debug
     )
   endif()
+  if(EXISTS ${LIBDIR}/jolt/bin/jolt.dll) # 5.3+
+    windows_install_shared_manifest(
+      FILES
+        ${LIBDIR}/jolt/bin/jolt.dll
+      RELEASE
+    )
+    windows_install_shared_manifest(
+      FILES
+        ${LIBDIR}/jolt/bin/jolt_d.dll
+      DEBUG
+    )
+  endif()  
   if(EXISTS ${LIBDIR}/ceres/bin/ceres.dll) # 5.1+
     windows_install_shared_manifest(
       FILES
@@ -1481,6 +1493,28 @@ elseif(WIN32)
       if(EXISTS ${LIBDIR}/materialx/python/Debug/MaterialX)
         install(
           DIRECTORY ${LIBDIR}/materialx/python/Debug/MaterialX
+          DESTINATION ${TARGETDIR_SITE_PACKAGES}/
+          CONFIGURATIONS Debug
+          PATTERN "__pycache__" EXCLUDE           # * any cache *
+          PATTERN "*.pyc" EXCLUDE                 # * any cache *
+          PATTERN "*.pyo" EXCLUDE                 # * any cache *
+        )
+      endif()
+      # OpenEXR python bindings.
+      # Check they exist so building against non `LIBDIR` Python works as expected.
+      if(EXISTS ${LIBDIR}/openexr/python/Release/OpenEXR)
+        install(
+          DIRECTORY ${LIBDIR}/openexr/python/Release/OpenEXR
+          DESTINATION ${TARGETDIR_SITE_PACKAGES}/
+          CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+          PATTERN "__pycache__" EXCLUDE           # * any cache *
+          PATTERN "*.pyc" EXCLUDE                 # * any cache *
+          PATTERN "*.pyo" EXCLUDE                 # * any cache *
+        )
+      endif()
+      if(EXISTS ${LIBDIR}/openexr/python/Debug/OpenEXR)
+        install(
+          DIRECTORY ${LIBDIR}/openexr/python/Debug/OpenEXR
           DESTINATION ${TARGETDIR_SITE_PACKAGES}/
           CONFIGURATIONS Debug
           PATTERN "__pycache__" EXCLUDE           # * any cache *
