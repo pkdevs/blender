@@ -68,13 +68,16 @@ class AttributeParamMaps {
 
 /* Create a TypedGeomParam for the given AttributeIter.
  * `corner_indices` are used to correct polygon winding for corner attributes.
- * `object_name` is to give useful error messages. */
+ * `object_name` is to give useful error messages
+ * `num_geom_samples` is to ensure that the attribute has the same number of samples as the
+ * underlying geometry. */
 void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop,
                                      AttributeParamMaps &param_maps,
                                      const bke::AttributeIter &attr,
                                      const int timesample_index,
                                      const OffsetIndices<int> corner_indices,
-                                     const StringRefNull object_name);
+                                     const StringRefNull object_name,
+                                     const size_t num_geom_samples);
 
 }  // namespace io::alembic
 }  // namespace blender

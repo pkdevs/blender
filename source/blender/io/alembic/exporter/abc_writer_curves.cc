@@ -299,12 +299,6 @@ void ABCCurveWriter::write_arb_geo_params(const bke::CurvesGeometry &curves,
 
   const bke::AttributeAccessor attributes = curves.attributes();
 
-  if (attribute_maps_) {
-    /* Write empty samples for attributes up until this frame, so everything lines up. */
-    BLI_assert(num_geom_samples >= 1);
-    attribute_maps_->write_empty_samples(num_geom_samples - 1);
-  }
-
   attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
     /* Skip "internal" Blender properties and attributes dealt with elsewhere. */
     if (iter.name[0] == '.' || bke::attribute_name_is_anonymous(iter.name) ||
@@ -314,13 +308,21 @@ void ABCCurveWriter::write_arb_geo_params(const bke::CurvesGeometry &curves,
     }
 
     AttributeParamMaps &param_maps = get_attribute_param_maps();
-    create_geom_param_for_attribute(
-        arb_geom_params, param_maps, iter, timesample_index(), {}, BKE_id_name(object->id));
+    /* Pass num_geom_samples - 1 so we write empty samples up until this frame. */
+    BLI_assert(num_geom_samples >= 1);
+    create_geom_param_for_attribute(arb_geom_params,
+                                    param_maps,
+                                    iter,
+                                    timesample_index(),
+                                    {},
+                                    BKE_id_name(object->id),
+                                    num_geom_samples - 1);
   });
 
   if (attribute_maps_) {
-    /* If an attribute was missing this frame, or this is the first time we write it, write empty
-     * samples for it. */
+    /* If an attribute was missing this frame, write empty samples for it.
+     * This is mostly to ensure that attributes have the same number of samples as the geometry
+     * data if some disappear midway in the animation and never come back. */
     attribute_maps_->write_empty_samples(num_geom_samples);
   }
 }

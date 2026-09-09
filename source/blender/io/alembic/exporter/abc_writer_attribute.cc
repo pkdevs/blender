@@ -172,14 +172,29 @@ static GeometryScope get_scope_for_attribute_domain(bke::AttrDomain domain)
   return kUnknownScope;
 }
 
+template<typename GeomParamType>
+static void write_empty_samples(GeomParamType &param, const size_t num_geom_samples)
+{
+  /* If we were to write the empty sample as a default constructed TypedArray, Alembic would
+   * duplicate the last known sample. This could pose problem if, for example, the number of points
+   * changes but the attribute is missing on the same frame (it would get a number of points which
+   * might be bigger or smaller). Therefore, we need to write an array of size 0, but which still
+   * has a valid (non-null) address, as a zero-size array should be understood by everyone as "the
+   * attribute is missing". */
+  for (size_t i = param.getNumSamples(); i < num_geom_samples; i++) {
+    typename GeomParamType::Sample sample;
+    static typename GeomParamType::value_type address_for_array{};
+    sample.setVals({&address_for_array, 0ul});
+    param.set(sample);
+  }
+}
+
 void AttributeParamMaps::write_empty_samples(const size_t num_geom_samples)
 {
 #define WRITE_EMPTY_SAMPLE(abc_type, map_name) \
   for (auto &iter : this->map_name) { \
     for (size_t i = iter.second.getNumSamples(); i < num_geom_samples; i++) { \
-      abc_type::Sample sample; \
-      sample.setVals({}); \
-      iter.second.set(sample); \
+      io::alembic::write_empty_samples(iter.second, num_geom_samples); \
     } \
   }
   ENUMERATE_EXPORTED_TYPES(WRITE_EMPTY_SAMPLE)
@@ -194,7 +209,8 @@ static void create_geom_param_for_attribute(const Alembic::Abc::OCompoundPropert
                                             const GeometryScope scope,
                                             const int timesample_index,
                                             const OffsetIndices<int> corner_indices,
-                                            const StringRefNull object_name)
+                                            const StringRefNull object_name,
+                                            const size_t num_geom_samples)
 {
   using TypeConverter = TypeTraitConverter<BlenderDataType>;
   using AlembicTraitType = typename TypeConverter::AbcTraitType;
@@ -236,6 +252,8 @@ static void create_geom_param_for_attribute(const Alembic::Abc::OCompoundPropert
     param_maps.ensure_param(prop, param, name, corrected_scope);
     param.setTimeSampling(timesample_index);
 
+    write_empty_samples(param, num_geom_samples);
+
     SampleType sample(values, corrected_scope);
     param.set(sample);
   }
@@ -253,7 +271,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                      const bke::AttributeIter &attr,
                                      const int timesample_index,
                                      const OffsetIndices<int> corner_indices,
-                                     const StringRefNull object_name)
+                                     const StringRefNull object_name,
+                                     const size_t num_geom_samples)
 {
   const GeometryScope scope = get_scope_for_attribute_domain(attr.domain);
   if (scope == kUnknownScope) {
@@ -278,7 +297,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       scope,
                                       timesample_index,
                                       corner_indices,
-                                      object_name);
+                                      object_name,
+                                      num_geom_samples);
       break;
     case bke::AttrType::Int8:
       create_geom_param_for_attribute(prop,
@@ -288,7 +308,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       scope,
                                       timesample_index,
                                       corner_indices,
-                                      object_name);
+                                      object_name,
+                                      num_geom_samples);
       break;
     case bke::AttrType::Int16_2D:
       create_geom_param_for_attribute(prop,
@@ -298,7 +319,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       scope,
                                       timesample_index,
                                       corner_indices,
-                                      object_name);
+                                      object_name,
+                                      num_geom_samples);
       break;
     case bke::AttrType::Int32:
       create_geom_param_for_attribute(prop,
@@ -308,7 +330,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       scope,
                                       timesample_index,
                                       corner_indices,
-                                      object_name);
+                                      object_name,
+                                      num_geom_samples);
       break;
     case bke::AttrType::Int32_2D:
       create_geom_param_for_attribute(prop,
@@ -318,7 +341,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       scope,
                                       timesample_index,
                                       corner_indices,
-                                      object_name);
+                                      object_name,
+                                      num_geom_samples);
       break;
     case bke::AttrType::ColorByte:
       create_geom_param_for_attribute(prop,
@@ -328,7 +352,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       scope,
                                       timesample_index,
                                       corner_indices,
-                                      object_name);
+                                      object_name,
+                                      num_geom_samples);
       break;
     case bke::AttrType::ColorFloat:
       create_geom_param_for_attribute(prop,
@@ -338,7 +363,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       scope,
                                       timesample_index,
                                       corner_indices,
-                                      object_name);
+                                      object_name,
+                                      num_geom_samples);
       break;
     case bke::AttrType::Float:
       create_geom_param_for_attribute(prop,
@@ -348,7 +374,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       scope,
                                       timesample_index,
                                       corner_indices,
-                                      object_name);
+                                      object_name,
+                                      num_geom_samples);
       break;
     case bke::AttrType::Float2:
       create_geom_param_for_attribute(prop,
@@ -358,7 +385,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       scope,
                                       timesample_index,
                                       corner_indices,
-                                      object_name);
+                                      object_name,
+                                      num_geom_samples);
       break;
     case bke::AttrType::Float3:
       create_geom_param_for_attribute(prop,
@@ -368,7 +396,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       scope,
                                       timesample_index,
                                       corner_indices,
-                                      object_name);
+                                      object_name,
+                                      num_geom_samples);
       break;
     case bke::AttrType::Float4:
       /* Alembic does not have an equivalent to float4. If needed we could either flatten it to a
@@ -388,7 +417,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       scope,
                                       timesample_index,
                                       corner_indices,
-                                      object_name);
+                                      object_name,
+                                      num_geom_samples);
       break;
     case bke::AttrType::Float4x4:
       create_geom_param_for_attribute(prop,
@@ -398,7 +428,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       scope,
                                       timesample_index,
                                       corner_indices,
-                                      object_name);
+                                      object_name,
+                                      num_geom_samples);
       break;
     case bke::AttrType::String:
       create_geom_param_for_attribute(prop,
@@ -408,7 +439,8 @@ void create_geom_param_for_attribute(const Alembic::Abc::OCompoundProperty &prop
                                       scope,
                                       timesample_index,
                                       corner_indices,
-                                      object_name);
+                                      object_name,
+                                      num_geom_samples);
       break;
     default:
       break;
