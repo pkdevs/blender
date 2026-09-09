@@ -138,6 +138,8 @@ bool DenoiserGPU::denoise_filter_guiding_preprocess(DenoiseContext &context)
 {
   const BufferParams &buffer_params = context.buffer_params;
 
+  /* Delay the allocation of the guiding buffer to first use, in case it's not actually needed
+   * (e.g. with the DLSS denoiser, which overrides this implementation). */
   if (context.use_guiding_passes && !context.guiding_params.device_pointer) {
     context.guiding_buffer.alloc_to_device(buffer_params.width * buffer_params.height *
                                            context.guiding_params.pass_stride);

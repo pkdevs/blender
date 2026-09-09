@@ -63,7 +63,9 @@ DLSSDenoiser::DLSSDenoiser(Device *denoiser_device, const DenoiseParams &params)
   CUDADevice *const cuda_device = static_cast<CUDADevice *>(denoiser_device_);
   const CUDAContextScope scope(cuda_device);
 
+  /* Path to optionally search for features, in addition to the executable directory and driver. */
   const wstring app_path = string_to_wstring(path_get());
+  /* Path to write NGX logs to. */
   const wstring app_data_path = string_to_wstring(path_cache_get());
 
   const wchar_t *const app_paths[] = {app_path.c_str()};
@@ -88,6 +90,8 @@ DLSSDenoiser::DLSSDenoiser(Device *denoiser_device, const DenoiseParams &params)
       };
   feature_info.LoggingInfo.MinimumLoggingLevel = NVSDK_NGX_LOGGING_LEVEL_ON;
 
+  /* Create a fixed handle for this particular CUDA context and queue combination, since NGX uses
+   * it for lookup internally. */
   ngx_device_ = new NVSDK_NGX_CUDADevice{
       cuda_device->cuContext, static_cast<CUDADeviceQueue *>(denoiser_queue_.get())->stream()};
 
@@ -148,11 +152,13 @@ bool DLSSDenoiser::is_device_supported(const DeviceInfo &device)
     return it->second == NVSDK_NGX_FeatureSupportResult_Supported;
   }
 
+  /* Path to write NGX logs to. */
   const wstring app_data_path = string_to_wstring(path_cache_get());
 
   CUdevice cuDevice = 0;
   cuDeviceGet(&cuDevice, device.num);
 
+  /* Query driver whether the DLSS-RR feature is supported on this particular device. */
   NVSDK_NGX_FeatureDiscoveryInfo discovery_info = {};
   discovery_info.SDKVersion = NVSDK_NGX_Version_API;
   discovery_info.FeatureID = NVSDK_NGX_Feature_RayReconstruction;
@@ -215,11 +221,17 @@ bool DLSSDenoiser::denoise_create_if_needed(DenoiseContext &context)
     return false;
   }
 
+  /* Input params (with resolution divider applied). */
   params->Set(NVSDK_NGX_Parameter_Width, context.buffer_params.width);
   params->Set(NVSDK_NGX_Parameter_Height, context.buffer_params.height);
+  /* Output params. */
   params->Set(NVSDK_NGX_Parameter_OutWidth, context.denoised_buffer_params.width);
   params->Set(NVSDK_NGX_Parameter_OutHeight, context.denoised_buffer_params.height);
 
+  /* Usually the DLSS quality mode is set first and then DLSS should be queried for the optimal
+   * upscale factor to go along with it. In Cycles the upscale factor is already determined before
+   * the denoiser is initialized though, so we do it backwards and instead try to find a
+   * reasonable quality mode to match the denoiser settings here. */
   NVSDK_NGX_PerfQuality_Value perf_quality_value = NVSDK_NGX_PerfQuality_Value_DLAA;
   if (context.denoise_params.upscale_factor > 1) {
     switch (context.denoise_params.quality) {
@@ -245,6 +257,7 @@ bool DLSSDenoiser::denoise_create_if_needed(DenoiseContext &context)
               NVSDK_NGX_DLSS_Feature_Flags_IsHDR | NVSDK_NGX_DLSS_Feature_Flags_MVLowRes);
   params->Set(NVSDK_NGX_Parameter_DLSS_Enable_Output_Subrects, 0);
   params->Set(NVSDK_NGX_Parameter_Use_HW_Depth, NVSDK_NGX_DLSS_Depth_Type_Linear);
+  /* Normals and roughness are packed into one texture in 'denoise_filter_guiding_preprocess'. */
   params->Set(NVSDK_NGX_Parameter_DLSS_Roughness_Mode, NVSDK_NGX_DLSS_Roughness_Mode_Packed);
 
   const NVSDK_NGX_Result result = NVSDK_NGX_CUDA_CreateFeature1(
@@ -257,6 +270,10 @@ bool DLSSDenoiser::denoise_create_if_needed(DenoiseContext &context)
     return false;
   }
 
+  /* DLSS requires inputs and outputs in separate CUDA textures/surfaces, while Cycles stores them
+   * in an interleaved buffer, so need to create these temporary textures and convert between the
+   * two storage variants (in 'denoise_filter_color_preprocess',
+   * 'denoise_filter_guiding_preprocess' and 'denoise_filter_color_postprocess'). */
   tex_color_.init(cuda_device, context.buffer_params.width, context.buffer_params.height, 4);
   tex_depth_.init(cuda_device, context.buffer_params.width, context.buffer_params.height, 1);
   tex_diffuse_albedo_.init(
