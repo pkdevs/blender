@@ -85,6 +85,27 @@ static void draw_effect_extra_menu(bContext *C, ui::Layout *layout, void *effect
   layout->prop(&effect_ptr, "show_node_group_selector", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
+static Vector<nodes::NodeWarning> get_effect_warnings(const SceneCompositorEffect &effect)
+{
+  Vector<nodes::NodeWarning> warnings;
+
+  if (!effect.node_group || ID_MISSING(effect.node_group)) {
+    return warnings;
+  }
+
+  effect.node_group->ensure_interface_cache();
+
+  if (effect.node_group->interface_inputs().is_empty() &&
+      effect.node_group->interface_outputs().is_empty())
+  {
+    // todo(habib): placeholder warning, criteria to be defined.
+    warnings.append(nodes::NodeWarning(nodes::NodeWarningType::Warning,
+                                       RPT_("Node group has no inputs and no outputs")));
+  }
+
+  return warnings;
+}
+
 static void draw_effect_panel_header(const bContext * /*C*/, Panel *panel)
 {
   ui::Layout &layout = *panel->layout;
@@ -95,7 +116,9 @@ static void draw_effect_panel_header(const bContext * /*C*/, Panel *panel)
 
   ui::Layout &icon_row = layout.row(true);
   icon_row.emboss_set(ui::EmbossType::None);
-  if (!effect->node_group || ID_MISSING(effect->node_group)) {
+  if (!effect->node_group || ID_MISSING(effect->node_group) ||
+      !get_effect_warnings(*effect).is_empty())
+  {
     icon_row.red_alert_set(true);
   }
   PointerRNA set_active_operator_ptr = icon_row.op(
@@ -328,19 +351,30 @@ static void draw_warnings(const bContext *C, ui::Layout &layout, PointerRNA &eff
   using namespace nodes::eval_log;
   Scene &scene = *id_cast<Scene *>(effect_ptr.owner_id);
   SceneCompositorEffect &effect = *effect_ptr.data_as<SceneCompositorEffect>();
-  NodeTreeLog *tree_log = get_root_tree_log(scene, effect);
-  if (!tree_log) {
-    return;
+
+  Vector<nodes::NodeWarning> effect_warnings = get_effect_warnings(effect);
+
+  /* Node group warnings are combined with effects warnings in UI. */
+  Vector<const nodes::NodeWarning *> warnings;
+  for (const nodes::NodeWarning &warning : effect_warnings) {
+    warnings.append(&warning);
   }
 
-  tree_log->ensure_node_warnings(*CTX_data_main(C));
-  if (tree_log->all_warnings.is_empty()) {
+  NodeTreeLog *tree_log = get_root_tree_log(scene, effect);
+  if (tree_log) {
+    tree_log->ensure_node_warnings(*CTX_data_main(C));
+    for (const nodes::NodeWarning &warning : tree_log->all_warnings) {
+      warnings.append(&warning);
+    }
+  }
+
+  if (warnings.is_empty()) {
     return;
   }
 
   Map<nodes::NodeWarningType, int> count_by_type;
-  for (const nodes::NodeWarning &warning : tree_log->all_warnings) {
-    count_by_type.lookup_or_add(warning.type, 0)++;
+  for (const nodes::NodeWarning *warning : warnings) {
+    count_by_type.lookup_or_add(warning->type, 0)++;
   }
   const int num_errors = count_by_type.lookup_default(nodes::NodeWarningType::Error, 0);
   const int num_warnings = count_by_type.lookup_default(nodes::NodeWarningType::Warning, 0);
@@ -351,10 +385,6 @@ static void draw_warnings(const bContext *C, ui::Layout &layout, PointerRNA &eff
     return;
   }
 
-  Vector<const nodes::NodeWarning *> warnings(tree_log->all_warnings.size());
-  for (const int i : warnings.index_range()) {
-    warnings[i] = &tree_log->all_warnings[i];
-  }
   std::ranges::sort(warnings, [](const nodes::NodeWarning *a, const nodes::NodeWarning *b) {
     const int severity_a = node_warning_type_severity(a->type);
     const int severity_b = node_warning_type_severity(b->type);
