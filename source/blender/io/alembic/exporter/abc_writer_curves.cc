@@ -286,11 +286,11 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
   sample.setSelfBounds(bounding_box_);
   abc_curve_schema_.set(sample);
 
-  write_arb_geo_params(curves, context.object, abc_curve_schema_.getNumSamples());
+  write_arb_geo_params(curves, *context.object, abc_curve_schema_.getNumSamples());
 }
 
 void ABCCurveWriter::write_arb_geo_params(const bke::CurvesGeometry &curves,
-                                          const Object *object,
+                                          const Object &object,
                                           const size_t num_geom_samples)
 {
   Alembic::Abc::OCompoundProperty arb_geom_params = abc_curve_schema_.getArbGeomParams();
@@ -313,7 +313,7 @@ void ABCCurveWriter::write_arb_geo_params(const bke::CurvesGeometry &curves,
                                     iter,
                                     timesample_index(),
                                     {},
-                                    BKE_id_name(object->id),
+                                    BKE_id_name(object.id),
                                     num_geom_samples - 1);
   });
 

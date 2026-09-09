@@ -37,7 +37,7 @@ class ABCCurveWriter : public ABCAbstractWriter {
 
  private:
   void write_arb_geo_params(const bke::CurvesGeometry &curves,
-                            const Object *object,
+                            const Object &object,
                             const size_t num_geom_samples);
 
   AttributeParamMaps &get_attribute_param_maps();

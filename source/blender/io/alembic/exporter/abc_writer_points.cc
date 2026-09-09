@@ -207,11 +207,11 @@ void ABCPointCloudWriter::do_write(HierarchyContext &context)
   sample.setSelfBounds(bounding_box_);
   abc_points_schema_.set(sample);
 
-  write_arb_geo_params(pointcloud, context.object, abc_points_schema_.getNumSamples());
+  write_arb_geo_params(pointcloud, *context.object, abc_points_schema_.getNumSamples());
 }
 
 void ABCPointCloudWriter::write_arb_geo_params(const PointCloud *pointcloud,
-                                               const Object *object,
+                                               const Object &object,
                                                const size_t num_geom_samples)
 {
   Alembic::Abc::OCompoundProperty arb_geom_params = abc_points_schema_.getArbGeomParams();
@@ -234,7 +234,7 @@ void ABCPointCloudWriter::write_arb_geo_params(const PointCloud *pointcloud,
                                     iter,
                                     timesample_index(),
                                     {},
-                                    BKE_id_name(object->id),
+                                    BKE_id_name(object.id),
                                     num_geom_samples - 1);
   });
 

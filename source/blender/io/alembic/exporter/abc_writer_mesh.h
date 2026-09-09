@@ -65,7 +65,7 @@ class ABCGenericMeshWriter : public ABCAbstractWriter {
   void write_subd(HierarchyContext &context, Mesh *mesh);
   template<typename Schema> void write_face_sets(Object *object, Mesh *mesh, Schema &schema);
 
-  void write_arb_geo_params(Mesh *mesh, const Object *object, const size_t num_geom_samples);
+  void write_arb_geo_params(Mesh *mesh, const Object &object, const size_t num_geom_samples);
   void get_geo_groups(Object *object,
                       Mesh *mesh,
                       std::map<std::string, std::vector<int32_t>> &geo_groups);

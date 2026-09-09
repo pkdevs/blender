@@ -309,7 +309,7 @@ void ABCGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
 
   abc_poly_mesh_schema_.set(mesh_sample);
 
-  write_arb_geo_params(mesh, context.object, abc_poly_mesh_schema_.getNumSamples());
+  write_arb_geo_params(mesh, *context.object, abc_poly_mesh_schema_.getNumSamples());
 }
 
 void ABCGenericMeshWriter::write_subd(HierarchyContext &context, Mesh *mesh)
@@ -414,7 +414,7 @@ void ABCGenericMeshWriter::write_subd(HierarchyContext &context, Mesh *mesh)
   subdiv_sample.setSelfBounds(bounding_box_);
   abc_subdiv_schema_.set(subdiv_sample);
 
-  write_arb_geo_params(mesh, context.object, abc_subdiv_schema_.getNumSamples());
+  write_arb_geo_params(mesh, *context.object, abc_subdiv_schema_.getNumSamples());
 }
 
 template<typename Schema>
@@ -433,7 +433,7 @@ void ABCGenericMeshWriter::write_face_sets(Object *object, Mesh *mesh, Schema &s
 }
 
 void ABCGenericMeshWriter::write_arb_geo_params(Mesh *mesh,
-                                                const Object *object,
+                                                const Object &object,
                                                 const size_t num_geom_samples)
 {
   OCompoundProperty arb_geom_params;
@@ -491,7 +491,7 @@ void ABCGenericMeshWriter::write_arb_geo_params(Mesh *mesh,
                                     iter,
                                     timesample_index(),
                                     mesh->faces(),
-                                    BKE_id_name(object->id),
+                                    BKE_id_name(object.id),
                                     num_geom_samples - 1);
   });
 
