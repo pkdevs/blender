@@ -412,7 +412,7 @@ class TOPBAR_MT_file_import(Menu):
             self.layout.operator(
                 "wm.fbx_import", text=FileHandler.label_with_extensions("IO_FH_fbx"))
 
-        if bpy.app.build_options.otio:
+        if bpy.app.build_options.opentimelineio:
             self.layout.operator("wm.otio_import", text="OpenTimelineIO (.otio)")
 
 
