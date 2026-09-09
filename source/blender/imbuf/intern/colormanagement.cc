@@ -1280,14 +1280,7 @@ const ColorSpace *IMB_colormanagement_space_from_cicp(const int cicp[4],
     interop_id = "blender:g24_rec2020_display";
   }
   else if (cicp[0] == CICP_PRI_REC709 && cicp[1] == CICP_TRC_BT709) {
-    if (output == ColorManagedFileOutput::Video) {
-      /* Arguably this should be g24_rec709_display, but we write sRGB like this.
-       * So there is an exception for now. */
-      interop_id = "srgb_rec709_display";
-    }
-    else {
-      interop_id = "g24_rec709_display";
-    }
+    interop_id = "g24_rec709_display";
   }
   else if (cicp[0] == CICP_PRI_P3D65 && ELEM(cicp[1], CICP_TRC_SRGB, CICP_TRC_BT709)) {
     interop_id = "srgb_p3d65_display";
