@@ -9,7 +9,7 @@
 #include "BKE_context.hh"
 
 #include "BLI_listbase_iterator.hh"
-#include "BLI_string.h"
+#include "BLI_string.hh"
 
 #include "CLG_log.h"
 #include "DNA_listBase.h"
@@ -97,9 +97,7 @@ static bool validate_transitions(ReportList *reports, ListBaseT<Strip> *seqbase)
                  strip.input1->name + 2,
                  strip.input2->name + 2,
                  strip.name + 2);
-      BKE_report(reports,
-                 RPT_ERROR,
-                 "Transition and input strips must be on the same channel");
+      BKE_report(reports, RPT_ERROR, "Transition and input strips must be on the same channel");
       return false;
     }
   }
