@@ -1036,7 +1036,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   auto vertex_inputs = info.vertex_inputs_;
   info.vertex_inputs_.clear();
 
-  /** IMPORTANT: All additional_info containing resources should go before
+  /* IMPORTANT: All additional_info containing resources should go before
    * add_pipeline_create_info. This ensure all resource slot are correctly reserved inside the
    * SlotAllocator. */
 
@@ -1340,6 +1340,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   generated_resource_header += "\n";
 
   info.generated_sources.append({"eevee_nodetree_type_lib.glsl", {}, generated_resource_header});
+  info.generated_sources.append({"gpu_shader_material_interface.bsl.hh", {}, ""});
 
   {
     const bool use_vertex_displacement = !codegen.displacement.empty() &&

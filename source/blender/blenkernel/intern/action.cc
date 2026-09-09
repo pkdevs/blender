@@ -755,6 +755,7 @@ IDTypeInfo IDType_ID_AC = {
     .foreach_cache = nullptr,
     .foreach_path = nullptr,
     .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = bke::action_blend_write,
@@ -835,7 +836,7 @@ void action_group_colors_set(bActionGroup *grp, const BoneColor *color)
 
 /* -------------------------------------------------------------------- */
 /** \name bPoseChannel member functions
- */
+ * \{ */
 
 const Bone *bPoseChannel::bone_get(const bArmature &armature) const
 {
@@ -877,6 +878,8 @@ Bone *bPoseChannel::bone_get(Object &owner)
   const Bone *const_bone = const_this->bone_get(owner);
   return const_cast<Bone *>(const_bone);
 }
+
+/** \} */
 
 void BKE_pose_channel_session_uid_generate(bPoseChannel *pchan)
 {
