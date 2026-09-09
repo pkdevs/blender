@@ -10,7 +10,7 @@
 #include "eevee_shadow.bsl.hh"
 #include "eevee_shadow_tracing.bsl.hh"
 #include "eevee_thickness_lib.bsl.hh"
-#include "gpu_shader_utildefines_lib.glsl"
+#include "gpu_shader_utildefines.bsl.hh"
 
 #if !defined(SRT_CONSTANT_light_closure_eval_count_reflect)
 #  define SRT_CONSTANT_light_closure_eval_count_reflect 0
@@ -57,17 +57,6 @@ template<> struct ClosureStack<true> {
   ClosureLight cl[LIGHT_STACK_SIZE_TRANSMIT];
 };
 
-float power_get(LightData light, LightingType type)
-{
-  /* Mask anything above 3. See LIGHT_TRANSLUCENT_WITH_THICKNESS. */
-  return light.power[type & 3u];
-}
-
-bool light_linking_affects_receiver(uint2 light_set_membership, uchar receiver_light_set)
-{
-  return bitmask64_test(light_set_membership, receiver_light_set);
-}
-
 void eval_single_closure(sampler2DArray util_tx,
                          LightData light,
                          LightVector lv,
@@ -81,7 +70,14 @@ void eval_single_closure(sampler2DArray util_tx,
   if (attenuation < 1e-30f) {
     return;
   }
-  float ltc_result = light_ltc(util_tx, light, cl.N, V, lv, cl.ltc_mat, vertices);
+
+  /* TODO(not_mark): remove, and update tests as this causes precision change. */
+  /* Load LTC matrix and rotate into orthonormal basis around N. */
+  LTCData ltc_data = LTCData::unpack_from(cl);
+  float3x3 T = from_incident_vector(cl.N, V);
+  ltc_data.Minv = ltc_data.Minv * transpose(T);
+  float ltc_result = light_ltc(util_tx, light, ltc_data, lv, vertices);
+
   float3 out_radiance = light.color * ltc_result;
   float visibility = shadow * attenuation;
   cl.light_shadowed += visibility * out_radiance;
@@ -152,16 +148,9 @@ template<bool is_transmission> struct EvalCtx {
                            stack.cl[0].N,
                            terminator_normal_offset,
                            terminator_geometry_offset,
+                           1.0f,
                            ray_count,
                            ray_step_count);
-    }
-
-    if (is_translucent_with_thickness) {
-      /* This makes the LTC compute the solid angle of the light (still with the cosine term
-       * applied but that still works great enough in practice). */
-      stack.cl[0].N = lv.L;
-      /* Adjust power because of the second lambertian distribution. */
-      attenuation *= M_1_PI;
     }
 
     LightVertices light_shape_vertices = light_shape_corners(light, lv);

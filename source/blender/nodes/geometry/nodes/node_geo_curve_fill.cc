@@ -103,7 +103,7 @@ static meshintersect::CDT_result<double> do_cdt(const bke::CurvesGeometry &curve
   input.vert = positions_2d;
   input.face_offsets = points_by_curve;
   input.face_vert_indices = face_vert_indices;
-  input.need_ids = false;
+  input.needed_ids = CDT_NO_ORIG_IDS;
   return delaunay_2d_calc(input, output_type);
 }
 
@@ -138,7 +138,7 @@ static meshintersect::CDT_result<double> do_cdt_with_mask(const bke::CurvesGeome
   input.vert = positions_2d;
   input.face_offsets = points_by_curve_masked;
   input.face_vert_indices = face_vert_indices;
-  input.need_ids = false;
+  input.needed_ids = CDT_NO_ORIG_IDS;
 
   return delaunay_2d_calc(input, output_type);
 }
@@ -241,8 +241,7 @@ static Mesh *cdts_to_mesh(const Span<meshintersect::CDT_result<double>> results)
 
       MutableSpan<int2> edges = all_edges.slice(edges_range);
       for (const int i : result.edge.index_range()) {
-        edges[i] = int2(result.edge[i].first + verts_range.start(),
-                        result.edge[i].second + verts_range.start());
+        edges[i] = result.edge[i] + int(verts_range.start());
       }
 
       MutableSpan<int> face_offsets = all_face_offsets.slice(faces_range);

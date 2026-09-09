@@ -2,6 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+/** \file
+ * \ingroup editorui
+ */
+
 #pragma once
 
 #include <functional>
@@ -113,6 +117,9 @@ enum class EnumTabExpand {
 };
 
 struct Layout : public Item, NonCopyable, NonMovable {
+
+  static constexpr float PROPERTY_SPLIT_FACTOR = 0.4f;
+
  protected:
   LayoutRoot *root_ = nullptr;
   bContextStore *context_ = nullptr;
@@ -403,6 +410,14 @@ struct Layout : public Item, NonCopyable, NonMovable {
 
   /** Adds a label item that will display text and/or icon in the layout. */
   void label(StringRef name, int icon);
+  /**
+   * Adds a multi-line label that will display wrapped text and/or icon in the layout.
+   * \param max_lines: Number of maximum lines to display in the layout, 0 means all.
+   */
+  void label_multiline(StringRefNull label,
+                       int icon,
+                       FontStyleAlign align = UI_STYLE_TEXT_LEFT,
+                       int max_lines = 0);
 
   /**
    * Adds link item, displays a url that can be clicked in the layout.
@@ -463,8 +478,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
    * Adds a operator item, places a button in the layout to call the operator.
    * \param opname: Operator id name.
    * \param name: Text to show in the layout.
-   * \returns Operator pointer to write properties, might be #PointerRNA_NULL if operator does not
-   * exists.
+   * \returns Operator pointer to write properties, might be null if operator does not exists.
    */
   PointerRNA op(StringRefNull opname, std::optional<StringRef> name, int icon);
 
@@ -473,8 +487,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
    * \param opname: Operator id name.
    * \param name: Text to show in the layout.
    * \param context: Operator call context for #WM_operator_name_call.
-   * \returns Operator pointer to write properties, might be #PointerRNA_NULL if operator does not
-   * exists.
+   * \returns Operator pointer to write properties, might be null if operator does not exists.
    */
   PointerRNA op(StringRefNull opname,
                 std::optional<StringRef> name,
@@ -519,7 +532,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
   /**
    * Adds a #op_enum menu.
    * \returns Operator pointer to write extra properties to set when menu buttons are
-   * displayed, might be #PointerRNA_NULL if operator does not exist.
+   * displayed, might be null if operator does not exist.
    */
   PointerRNA op_menu_enum(const bContext *C,
                           wmOperatorType *ot,
@@ -529,7 +542,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
   /**
    * Adds a #op_enum menu.
    * \returns Operator pointer to write extra properties to set when menu buttons are
-   * displayed, might be #PointerRNA_NULL if operator does not exist.
+   * displayed, might be null if operator does not exist.
    */
   PointerRNA op_menu_enum(const bContext *C,
                           StringRefNull opname,
@@ -543,8 +556,7 @@ struct Layout : public Item, NonCopyable, NonMovable {
    * \param name: Text to show in the layout.
    * \param context: Operator call context for #WM_operator_name_call.
    * \param menu_id: menu to show on held down.
-   * \returns Operator pointer to write properties, might be #PointerRNA_NULL if operator does not
-   * exists.
+   * \returns Operator pointer to write properties, might be null if operator does not exists.
    */
   PointerRNA op_menu_hold(wmOperatorType *ot,
                           std::optional<StringRef> name,
@@ -739,6 +751,11 @@ struct Layout : public Item, NonCopyable, NonMovable {
   virtual void estimate_impl();
   void resolve();
   virtual void resolve_impl();
+  /**
+   * Resolve layouts containing items whose heights depends on their resolved width.
+   * Currently only for layouts containing multi-line labels.
+   */
+  virtual void resolve_dynamic_height();
 };
 
 inline bool Layout::active() const

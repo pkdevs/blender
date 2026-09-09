@@ -13,14 +13,11 @@
 #include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
-FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree)
-FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info)
-
 #include "draw_curves_lib.glsl" /* IWYU pragma: export. For nodetree functions. */
 #include "eevee_lightprobe_shared.hh"
 #include "eevee_nodetree_frag_lib.glsl"
 #include "eevee_surf_common.bsl.hh"
-#include "gpu_shader_math_vector_lib.glsl"
+#include "gpu_shader_math_vector.bsl.hh"
 
 float4 closure_to_rgba_capture(Closure /*cl*/)
 {

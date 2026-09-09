@@ -15,9 +15,6 @@
 #include "infos/eevee_geom_infos.hh"
 #include "infos/eevee_nodetree_infos.hh"
 
-FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree)
-FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info)
-
 #include "draw_curves_lib.glsl" /* IWYU pragma: export. For nodetree functions. */
 #include "eevee_forward_lib.bsl.hh"
 #include "eevee_gbuffer_write.bsl.hh"
@@ -25,11 +22,11 @@ FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info)
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
 
-/* Global thickness because it is needed for closure_to_rgba. */
-Thickness g_thickness;
-
 float4 closure_to_rgba_hybrid(Closure /*cl*/)
 {
+  /* Workaround for gl_FragCoord. */
+  FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree);
+
   [[resource_table]] const draw::View &views = resource_table_get(draw::View);
   [[resource_table]] const eevee::Sampling &sampling = resource_table_get(eevee::Sampling);
   [[resource_table]] const UtilityTexture &util_tx = resource_table_get(UtilityTexture);
@@ -194,6 +191,60 @@ void surf_hybrid([[resource_table]] PipelineConstants &pipe,
     cryptomatte.store(out_texel, nt.crypto_hash, resource_id);
     render_passes.store_color(
         out_texel, uni.uniform_buf.render_pass.emission_id, float4(g_emission, 1.0f));
+  }
+
+  if (pipe.use_lighting_nodes) [[static_branch]] {
+    float light_sample_rcp = safe_rcp(float(g_light_accumulation_count));
+    g_diffuse_color *= light_sample_rcp;
+    g_diffuse_light *= alpha_rcp;
+    g_glossy_color *= light_sample_rcp;
+    g_glossy_light *= alpha_rcp;
+    g_transmission_color *= light_sample_rcp;
+    g_transmission_light *= alpha_rcp;
+
+    if (uni.uniform_buf.render_pass.diffuse_light_id >= 0 &&
+        uni.uniform_buf.render_pass.diffuse_color_id >= 0)
+    {
+      render_passes.store_color(
+          out_texel, uni.uniform_buf.render_pass.diffuse_light_id, float4(g_diffuse_light, 1.0f));
+      render_passes.store_color(
+          out_texel, uni.uniform_buf.render_pass.diffuse_color_id, float4(g_diffuse_color, 1.0f));
+    }
+    else {
+      g_emission += g_diffuse_light;
+    }
+
+    if (uni.uniform_buf.render_pass.specular_light_id >= 0 &&
+        uni.uniform_buf.render_pass.specular_color_id >= 0)
+    {
+      render_passes.store_color(out_texel,
+                                uni.uniform_buf.render_pass.specular_light_id,
+                                float4(g_glossy_light + g_transmission_light, 1.0f));
+      /* TODO(fclem): Adding color passes together is wrong. Split the passes. */
+      render_passes.store_color(out_texel,
+                                uni.uniform_buf.render_pass.specular_color_id,
+                                float4(g_glossy_color + g_transmission_color, 1.0f));
+    }
+    else {
+      g_emission += g_glossy_light;
+      g_emission += g_transmission_light;
+    }
+
+#if 0 /* TODO Transmission pass */
+    if (uni.uniform_buf.render_pass.transmission_light_id >= 0 &&
+        uni.uniform_buf.render_pass.transmission_color_id >= 0)
+    {
+      render_passes.store_color(out_texel,
+                                uni.uniform_buf.render_pass.transmission_light_id,
+                                float4(g_transmission_light, 1.0f));
+      render_passes.store_color(out_texel,
+                                uni.uniform_buf.render_pass.transmission_color_id,
+                                float4(g_transmission_color, 1.0f));
+    }
+    else {
+      g_emission += g_transmission_light;
+    }
+#endif
   }
 
   /* ----- GBuffer output ----- */

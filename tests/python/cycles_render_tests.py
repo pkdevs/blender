@@ -20,6 +20,8 @@ BLOCKLIST_ALL = [
     "hair_instancer_uv.blend",
     "principled_hair_directcoloring.blend",
     "visibility_particles.blend",
+    # High noise variance between platforms
+    "many_lights.blend",
     # Tests for EEVEE-only setting (duplicates from the Cycles perspective)
     "raytrace_backface_on.blend",
     "raytrace_backface_off.blend",
@@ -99,16 +101,6 @@ BLOCKLIST_METAL_RT = [
     # https://projects.blender.org/blender/blender/issues/146072#issuecomment-1699788
     'hair_linear_close_up.blend',
 ]
-
-if platform.system() == "Darwin":
-    version, _, _ = platform.mac_ver()
-    major_version = version.split(".")[0]
-    if int(major_version) < 13:
-        BLOCKLIST_METAL += [
-            # MNEE only works on Metal with macOS >= 13
-            "underwater_caustics.blend",
-        ]
-
 
 BLOCKLIST_HIPRT = [
     # Light leaking fireflies due to HIP-RT intersection precision issue.
