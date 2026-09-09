@@ -13,6 +13,7 @@ from ..com.extras import set_extras
 from ..com.gltf2_blender_utils import fast_structured_np_unique
 from .material import BlenderMaterial
 from .draco_compression_extension import decode_primitive
+from .gsplat import convert_sh_d1_batch, convert_sh_d2_batch, convert_sh_d3_batch
 
 
 class BlenderMesh():
@@ -173,7 +174,40 @@ def do_primitives_pointcloud(gltf, mesh_idx, pointcloud):
 
     # Special cases (for example, _RADIUS will be imported as 'radius'))
     specials = {
-        '_RADIUS': 'radius'}
+        '_RADIUS': 'radius',
+        'KHR_gaussian_splatting:ROTATION': 'rotation',
+        'KHR_gaussian_splatting:SCALE': 'scale',
+    }
+
+    # Manage SH attribute names
+    degree = 0
+    coeff = 0
+    index = 0
+    while True:
+        sh_attr = f'KHR_gaussian_splatting:SH_DEGREE_{degree}_COEF_{coeff}'
+        if sh_attr in attributes:
+            if degree == 0 and coeff == 0:
+                specials[sh_attr] = 'radiance:base'
+            else:
+                specials[sh_attr] = f'radiance:sh_{index}'
+            index += 1
+            if coeff == degree * 2:
+                degree += 1
+                coeff = 0
+            else:
+                coeff += 1
+        else:
+            break
+
+    # SH conversion from Yup to Zup
+    sh_degree = degree - 1  # The last degree that was found
+    sh_prefix = 'KHR_gaussian_splatting:SH_DEGREE_'
+    if sh_degree >= 1:
+        convert_sh_d1_batch(*(attributes[f'{sh_prefix}1_COEF_{n}'] for n in range(3)))
+    if sh_degree >= 2:
+        convert_sh_d2_batch(*(attributes[f'{sh_prefix}2_COEF_{n}'] for n in range(5)))
+    if sh_degree >= 3:
+        convert_sh_d3_batch(*(attributes[f'{sh_prefix}3_COEF_{n}'] for n in range(7)))
 
     for attr in attributes:
         blender_attribute_data_type = attribute_data_type[attr]
@@ -181,17 +215,48 @@ def do_primitives_pointcloud(gltf, mesh_idx, pointcloud):
         if blender_attribute_data_type is None:
             continue
 
+        if attr == "KHR_gaussian_splatting:OPACITY":
+            # Ignore this attribute, but the data will be merged with the
+            # KHR_gaussian_splatting:SH_DEGREE_0_COEF_0 attribute later
+            continue
+
+        # Special cases for glTF official extensions (for example Gaussian Splatting)
+        if attr == "KHR_gaussian_splatting:ROTATION":
+            blender_attribute_data_type = "QUATERNION"
+        elif attr == "KHR_gaussian_splatting:SH_DEGREE_0_COEF_0":
+            blender_attribute_data_type = "FLOAT_COLOR"
+
         blender_attribute = pointcloud.attributes.new(specials.get(attr, attr), blender_attribute_data_type, 'POINT')
+
+        # Special cases for glTF official extensions (for example Gaussian Splatting)
+        # where you know the content of the attribute, and you need to convert (for example, rotation)
+        if attr == "KHR_gaussian_splatting:ROTATION":
+            # Convert quaternions from glTF to Blender
+            gltf.quats_batch_gltf_to_blender(attributes[attr])
+        elif attr == "KHR_gaussian_splatting:SCALE":
+            # Convert scale from glTF to Blender
+            gltf.locs_batch_gltf_to_blender(attributes[attr])
+        elif attr == "KHR_gaussian_splatting:SH_DEGREE_0_COEF_0" and "KHR_gaussian_splatting:OPACITY" in attributes:
+            # We need to merge concatenate the data with the opacity
+            # going from VEC3 + SCALAR to VEC4
+            attributes[attr] = np.concatenate(
+                [attributes[attr], attributes["KHR_gaussian_splatting:OPACITY"].reshape(-1, 1)], axis=1)
+
         if DataType.num_elements(attribute_type[attr]) == 1:
             blender_attribute.data.foreach_set('value', attributes[attr].flatten())
         elif DataType.num_elements(gltf.data.accessors[prim.attributes[attr]].type) > 1:
             if blender_attribute_data_type in ["BYTE_COLOR", "FLOAT_COLOR"]:
                 blender_attribute.data.foreach_set('color', attributes[attr].flatten())
+            elif blender_attribute_data_type == "QUATERNION":
+                blender_attribute.data.foreach_set('value', attributes[attr].flatten())
             else:
                 blender_attribute.data.foreach_set('vector', attributes[attr].flatten())
 
     # Manage materials
-    manage_materials(gltf, pypc, pointcloud, num_points, on='POINT')
+    is_gaussian_splatting = any(attr.startswith("KHR_gaussian_splatting:")
+                                for attr in pypc.primitives[0].attributes)
+    if not is_gaussian_splatting:
+        manage_materials(gltf, pypc, pointcloud, num_points, on='POINT')
 
 
 def do_primitives(gltf, mesh_idx, skin_idx, mesh, ob):
