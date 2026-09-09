@@ -386,23 +386,17 @@ static void file_restore_last_selected_asset_catalog(FileList *files,
                                                      SpaceFile_Runtime *runtime,
                                                      FileAssetSelectParams *asset_params)
 {
-  if (!files || !runtime || !asset_params) {
-    return;
-  }
 
   const LastSelectedAssetCatalog *catalog = runtime->last_selected_catalogs.lookup_ptr(
       asset_params->asset_library_ref);
 
-  if (!catalog || !filelist_is_ready(files)) {
+  if (!catalog) {
     asset_params->asset_catalog_visibility = FILE_SHOW_ASSETS_ALL_CATALOGS;
     asset_params->catalog_id = BLI_uuid_nil();
     return;
   }
 
   asset_system::AssetLibrary *library = filelist_asset_library(files);
-  if (!library) {
-    return;
-  }
 
   if (catalog->visibility == FILE_SHOW_ASSETS_FROM_CATALOG) {
     if (!library->catalog_service().find_catalog(catalog->catalog_id)) {
