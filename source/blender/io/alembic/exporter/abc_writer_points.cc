@@ -207,14 +207,22 @@ void ABCPointCloudWriter::do_write(HierarchyContext &context)
   sample.setSelfBounds(bounding_box_);
   abc_points_schema_.set(sample);
 
-  write_arb_geo_params(pointcloud, context.object);
+  write_arb_geo_params(pointcloud, context.object, abc_points_schema_.getNumSamples());
 }
 
-void ABCPointCloudWriter::write_arb_geo_params(const PointCloud *pointcloud, const Object *object)
+void ABCPointCloudWriter::write_arb_geo_params(const PointCloud *pointcloud,
+                                               const Object *object,
+                                               const size_t num_geom_samples)
 {
   Alembic::Abc::OCompoundProperty arb_geom_params = abc_points_schema_.getArbGeomParams();
 
   const bke::AttributeAccessor attributes = pointcloud->attributes();
+
+  if (attribute_maps_) {
+    /* Write empty samples for attributes up until this frame, so everything lines up. */
+    BLI_assert(num_geom_samples >= 1);
+    attribute_maps_->write_empty_samples(num_geom_samples - 1);
+  }
 
   attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
     /* Skip "internal" Blender properties and attributes dealt with elsewhere. */
@@ -228,6 +236,12 @@ void ABCPointCloudWriter::write_arb_geo_params(const PointCloud *pointcloud, con
     create_geom_param_for_attribute(
         arb_geom_params, param_maps, iter, timesample_index(), {}, BKE_id_name(object->id));
   });
+
+  if (attribute_maps_) {
+    /* If an attribute was missing this frame, or this is the first time we write it, write empty
+     * samples for it. */
+    attribute_maps_->write_empty_samples(num_geom_samples);
+  }
 }
 
 AttributeParamMaps &ABCPointCloudWriter::get_attribute_param_maps()

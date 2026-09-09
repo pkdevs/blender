@@ -288,14 +288,22 @@ void ABCCurveWriter::do_write(HierarchyContext &context)
   sample.setSelfBounds(bounding_box_);
   abc_curve_schema_.set(sample);
 
-  write_arb_geo_params(curves, context.object);
+  write_arb_geo_params(curves, context.object, abc_curve_schema_.getNumSamples());
 }
 
-void ABCCurveWriter::write_arb_geo_params(const bke::CurvesGeometry &curves, const Object *object)
+void ABCCurveWriter::write_arb_geo_params(const bke::CurvesGeometry &curves,
+                                          const Object *object,
+                                          const size_t num_geom_samples)
 {
   Alembic::Abc::OCompoundProperty arb_geom_params = abc_curve_schema_.getArbGeomParams();
 
   const bke::AttributeAccessor attributes = curves.attributes();
+
+  if (attribute_maps_) {
+    /* Write empty samples for attributes up until this frame, so everything lines up. */
+    BLI_assert(num_geom_samples >= 1);
+    attribute_maps_->write_empty_samples(num_geom_samples - 1);
+  }
 
   attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
     /* Skip "internal" Blender properties and attributes dealt with elsewhere. */
@@ -309,6 +317,12 @@ void ABCCurveWriter::write_arb_geo_params(const bke::CurvesGeometry &curves, con
     create_geom_param_for_attribute(
         arb_geom_params, param_maps, iter, timesample_index(), {}, BKE_id_name(object->id));
   });
+
+  if (attribute_maps_) {
+    /* If an attribute was missing this frame, or this is the first time we write it, write empty
+     * samples for it. */
+    attribute_maps_->write_empty_samples(num_geom_samples);
+  }
 }
 
 AttributeParamMaps &ABCCurveWriter::get_attribute_param_maps()

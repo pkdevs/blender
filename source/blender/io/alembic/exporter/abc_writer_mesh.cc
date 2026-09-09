@@ -493,7 +493,8 @@ void ABCGenericMeshWriter::write_arb_geo_params(Mesh *mesh,
   });
 
   if (attribute_maps_) {
-    /* If an attribute was missing this frame, write an empty sample for it. */
+    /* If an attribute was missing this frame, or this is the first time we write it, write empty
+     * samples for it. */
     attribute_maps_->write_empty_samples(num_geom_samples);
   }
 }
