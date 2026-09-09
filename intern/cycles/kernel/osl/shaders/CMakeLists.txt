@@ -24,6 +24,7 @@ set(SRC_OSL
   node_convert_from_normal.osl
   node_convert_from_point.osl
   node_convert_from_vector.osl
+  node_diffraction_bsdf.osl
   node_diffuse_bsdf.osl
   node_displacement.osl
   node_vector_displacement.osl

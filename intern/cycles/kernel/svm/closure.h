@@ -693,30 +693,39 @@ ccl_device
         break;
       }
 
+      ccl_private DiffractionExtraY *extra_y = (ccl_private DiffractionExtraY *)
+          closure_alloc_extra(sd, sizeof(DiffractionExtraY));
+
+      if (!extra_y) {
+        break;
+      }
+
+      const float3 pitch = stack_load(stack, bsdf_data.pitch);
+      const float3 groove_depth = stack_load(stack, bsdf_data.groove_depth);
+      const float3 duty_cycle = stack_load(stack, bsdf_data.duty_cycle);
+      const float3 rotation = stack_load(stack, bsdf_data.rotation);
+
+      bsdf->extra_y = extra_y;
       bsdf->N = maybe_ensure_valid_specular_reflection(sd, N);
       bsdf->roughness = stack_load(stack, bsdf_data.roughness);
-      bsdf->period_um = stack_load(stack, bsdf_data.period);
-      bsdf->groove_depth_nm = stack_load(stack, bsdf_data.groove_depth);
-      bsdf->duty_cycle = stack_load(stack, bsdf_data.duty_cycle);
+      bsdf->pitch_um = pitch.x;
+      bsdf->groove_depth_nm = groove_depth.x;
+      bsdf->duty_cycle = duty_cycle.x;
       bsdf->profile = (int)bsdf_data.profile;
 
+      extra_y->pitch_um = pitch.y;
+      extra_y->groove_depth_nm = groove_depth.y;
+      extra_y->duty_cycle = duty_cycle.y;
+      extra_y->grating_type = (int)bsdf_data.grating_type;
+      extra_y->rotation_x = rotation.x;
+      extra_y->rotation_y = rotation.y;
+
+
       if (!stack_valid(bsdf_data.tangent_offset)) {
-        /* No tangent socket link and no generated UV attribute to fall back to
-         * either (e.g. a mesh with no UVs at all): same degenerate case as
-         * isotropic Glossy, handled by bsdf_diffraction_eval()/_sample() picking an
-         * arbitrary but consistent basis instead. Normally the Tangent socket's
-         * default link already supplies the generated UV tangent here, which on a
-         * disc with radial UVs runs circumferentially, giving the concentric groove
-         * pattern for free without any texture input. */
         bsdf->T = zero_float3();
       }
       else {
         bsdf->T = stack_load_float3(stack, bsdf_data.tangent_offset);
-
-        const float rotation = stack_load(stack, bsdf_data.rotation);
-        if (rotation != 0.0f) {
-          bsdf->T = rotate_around_axis(bsdf->T, bsdf->N, rotation * M_2PI_F);
-        }
       }
 
       sd->runtime_flag |= bsdf_diffraction_setup(sd, bsdf);

@@ -4658,6 +4658,20 @@ static const EnumPropertyItem node_diffraction_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+static const EnumPropertyItem node_diffraction_grating_items[] = {
+    {SHD_DIFFRACTION_GRATING_1D,
+     "GRATING_1D",
+     0,
+     "1D",
+     "A single periodic direction, set by the surface tangent (a CD/DVD track)"},
+    {SHD_DIFFRACTION_GRATING_2D,
+     "GRATING_2D",
+     0,
+     "2D",
+     "Two independent periodic directions at once (a crossed/rectangular pit lattice)"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static const EnumPropertyItem node_glass_items[] = {
     {SHD_GLOSSY_BECKMANN, "BECKMANN", 0, "Beckmann", ""},
     {SHD_GLOSSY_GGX, "GGX", 0, "GGX", ""},
@@ -6244,6 +6258,13 @@ static void def_diffraction(BlenderRNA * /*brna*/, StructRNA *srna)
   RNA_def_property_enum_sdna(prop, nullptr, "custom1");
   RNA_def_property_enum_items(prop, node_diffraction_items);
   RNA_def_property_ui_text(prop, "Profile", "Cross-section shape of the diffraction grooves");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "grating_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "custom2");
+  RNA_def_property_enum_items(prop, node_diffraction_grating_items);
+  RNA_def_property_ui_text(
+      prop, "Grating Type", "Whether the grating repeats along one axis or two");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 

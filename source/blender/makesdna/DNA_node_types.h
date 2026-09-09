@@ -476,6 +476,12 @@ enum eNodeDiffraction_Profile : short {
   SHD_DIFFRACTION_RECTANGULAR = 1,
 };
 
+/* Diffraction grating dimensionality (Diffraction BSDF node). */
+enum eNodeDiffraction_Grating : short {
+  SHD_DIFFRACTION_GRATING_1D = 0,
+  SHD_DIFFRACTION_GRATING_2D = 1,
+};
+
 /* glossy distributions */
 enum eNodeGlossy_Dist : short {
   SHD_GLOSSY_BECKMANN = 0,

@@ -651,6 +651,52 @@ ccl_device void osl_closure_microfacet_setup(KernelGlobals kg,
   }
 }
 
+/* Diffraction grating. Same setup as the SVM path (kernel/svm/closure.h), allocate the
+ * X-axis DiffractionBsdf and Y-axis DiffractionExtraY, then delegate the actual
+ * physics to bsdf_diffraction_setup(), shared by both backends. */
+ccl_device void osl_closure_diffraction_setup(KernelGlobals kg,
+                                              ccl_private ShaderData *sd,
+                                              const PathRayVisibility path_visibility,
+                                              const uint32_t /*path_flag*/,
+                                              const float3 weight,
+                                              const ccl_private DiffractionClosure *closure,
+                                              float3 * /*layer_albedo*/)
+{
+  if (osl_closure_skip(kg, path_visibility, LABEL_GLOSSY | LABEL_REFLECT)) {
+    return;
+  }
+
+  ccl_private DiffractionBsdf *bsdf = (ccl_private DiffractionBsdf *)bsdf_alloc(
+      sd, sizeof(DiffractionBsdf), rgb_to_spectrum(weight));
+  if (!bsdf) {
+    return;
+  }
+
+  ccl_private DiffractionExtraY *extra_y = (ccl_private DiffractionExtraY *)closure_alloc_extra(
+      sd, sizeof(DiffractionExtraY));
+  if (!extra_y) {
+    return;
+  }
+
+  bsdf->extra_y = extra_y;
+  bsdf->N = maybe_ensure_valid_specular_reflection(sd, safe_normalize_fallback(closure->N, sd->N));
+  bsdf->T = closure->T;
+  bsdf->roughness = closure->roughness;
+  bsdf->pitch_um = closure->pitch_x;
+  bsdf->groove_depth_nm = closure->groove_depth_x;
+  bsdf->duty_cycle = closure->duty_cycle_x;
+  bsdf->profile = closure->profile;
+
+  extra_y->pitch_um = closure->pitch_y;
+  extra_y->groove_depth_nm = closure->groove_depth_y;
+  extra_y->duty_cycle = closure->duty_cycle_y;
+  extra_y->rotation_x = closure->rotation_x;
+  extra_y->rotation_y = closure->rotation_y;
+  extra_y->grating_type = closure->grating_type;
+
+  sd->runtime_flag |= bsdf_diffraction_setup(sd, bsdf);
+}
+
 /* Special-purpose Microfacet closures */
 
 ccl_device void osl_closure_microfacet_f82_tint_setup(

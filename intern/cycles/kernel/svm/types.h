@@ -579,11 +579,18 @@ static_assert(NBUILTIN_CLOSURES < 256, "Too many Closure types (need to change S
 #define CLOSURE_WEIGHT_CUTOFF 1e-5f
 #define THINFILM_THICKNESS_CUTOFF 0.1f
 
-/* Groove cross-section used by the Diffraction BSDF (see bsdf_diffraction.h). Shared
- * between host (node compilation) and device (closure setup) code, like ClosureType. */
+/* Groove cross-section used by the Diffraction BSDF (see bsdf_diffraction.h). */
 enum DiffractionProfile {
   DIFFRACTION_PROFILE_SINUSOIDAL = 0,
   DIFFRACTION_PROFILE_RECTANGULAR = 1,
+};
+
+/* Dimensionality of the Diffraction BSDF's grating: one periodic direction (a
+ * CD/DVD track) or two independent periodic directions at once (a crossed/
+ * rectangular pit lattice). */
+enum DiffractionGrating {
+  DIFFRACTION_GRATING_1D = 0,
+  DIFFRACTION_GRATING_2D = 1,
 };
 
 CCL_NAMESPACE_END

@@ -720,11 +720,12 @@ class DiffractionBsdfNode : public BsdfNode {
 
   NODE_SOCKET_API(float3, tangent)
   NODE_SOCKET_API(float, roughness)
-  NODE_SOCKET_API(float, period)
-  NODE_SOCKET_API(float, groove_depth)
-  NODE_SOCKET_API(float, duty_cycle)
-  NODE_SOCKET_API(float, rotation)
+  NODE_SOCKET_API(float3, pitch)       /* .x = X axis, .y = Y axis (2D only), .z unused. */
+  NODE_SOCKET_API(float3, groove_depth) /* .x = X axis, .y = Y axis (2D only), .z unused. */
+  NODE_SOCKET_API(float3, duty_cycle)   /* .x = X axis, .y = Y axis (2D only), .z unused. */
+  NODE_SOCKET_API(float3, rotation)     /* .x = X axis, .y = Y axis (2D only), .z unused. */
   NODE_SOCKET_API(DiffractionProfile, profile)
+  NODE_SOCKET_API(DiffractionGrating, grating_type)
 
   void attributes(Shader *shader, AttributeRequestSet *attributes) override;
   bool has_attribute_dependency() override

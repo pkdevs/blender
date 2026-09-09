@@ -28,6 +28,20 @@ closure color glossy_toon(normal N, float size, float smooth) BUILTIN;
 closure color ashikhmin_velvet(normal N, float sigma) BUILTIN;
 closure color ambient_occlusion() BUILTIN;
 
+closure color diffraction(normal N,
+                          vector T,
+                          float roughness,
+                          float pitch_x,
+                          float pitch_y,
+                          float groove_depth_x,
+                          float groove_depth_y,
+                          float duty_cycle_x,
+                          float duty_cycle_y,
+                          float rotation_x,
+                          float rotation_y,
+                          int profile,
+                          int grating_type) BUILTIN;
+
 closure color microfacet_f82_tint(
     string distribution, vector N, vector T, float ax, float ay, color f0, color f82) BUILTIN;
 

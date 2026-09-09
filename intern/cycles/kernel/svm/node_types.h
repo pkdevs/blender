@@ -1076,14 +1076,16 @@ static_assert(sizeof(SVMNodeGlossyBsdfData) % sizeof(uint) == 0);
 /* Diffraction BSDF. */
 struct SVMNodeDiffractionBsdfData {
   SVMInputFloat roughness;
-  SVMInputFloat period;       /* Grating period (grating spacing), in micrometers. */
-  SVMInputFloat groove_depth; /* Groove depth, in nanometers. */
-  SVMInputFloat duty_cycle;   /* Pit/land width fraction, used by the rectangular profile only. */
-  SVMInputFloat rotation;
+  /* .x = X axis (pitch/nm etc.), .y = Y axis (2D only); .z unused. */
+  SVMInputFloat3 pitch;
+  SVMInputFloat3 groove_depth;
+  SVMInputFloat3 duty_cycle;
+  /* .x rotates the X lattice vector, .y the Y one (2D only); .z unused. */
+  SVMInputFloat3 rotation;
   SVMStackOffset normal_offset;
   SVMStackOffset tangent_offset;
-  uint8_t profile; /* DiffractionProfile. */
-  uint8_t _pad[1];
+  uint8_t profile;      /* DiffractionProfile. */
+  uint8_t grating_type; /* DiffractionGrating: 1D or 2D. */
 };
 static_assert(alignof(SVMNodeDiffractionBsdfData) <= alignof(uint));
 static_assert(sizeof(SVMNodeDiffractionBsdfData) % sizeof(uint) == 0);

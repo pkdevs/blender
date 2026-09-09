@@ -262,7 +262,7 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
       break;
     case CLOSURE_BSDF_DIFFRACTION_ID:
       label = bsdf_diffraction_sample(
-          kg, sc, Ng, sd->wi, rand, eval, wo, pdf, sampled_roughness, eta);
+          sc, Ng, sd->wi, rand, eval, wo, pdf, sampled_roughness, eta);
       break;
     case CLOSURE_BSDF_ASHIKHMIN_VELVET_ID:
       label = bsdf_ashikhmin_velvet_sample(sc, Ng, sd->wi, rand_xy, eval, wo, pdf);
@@ -633,7 +633,7 @@ ccl_device_inline
       eval = bsdf_ashikhmin_shirley_eval(sc, sd->wi, wo, pdf);
       break;
     case CLOSURE_BSDF_DIFFRACTION_ID:
-      eval = bsdf_diffraction_eval(kg, sc, sd->wi, wo, pdf);
+      eval = bsdf_diffraction_eval(sc, sd->wi, wo, pdf);
       break;
     case CLOSURE_BSDF_ASHIKHMIN_VELVET_ID:
       eval = bsdf_ashikhmin_velvet_eval(sc, sd->wi, wo, pdf);

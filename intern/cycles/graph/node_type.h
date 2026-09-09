@@ -77,8 +77,13 @@ struct SocketType {
     LINK_POSITION = (1 << 10),
     LINK_TANGENT = (1 << 11),
     LINK_OSL_INITIALIZER = (1 << 12),
+    /* Like LINK_TANGENT, but defaults to the UV map's tangent
+     * instead of the generated-coordinates "spherical" tangent
+     * (which rotates around the object's bounding-box center).
+     * Used by the Diffraction BSDF; see ShaderGraph::default_inputs(). */
+    LINK_TANGENT_UV = (1 << 13),
     DEFAULT_LINK_MASK = (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) |
-                        (1 << 10) | (1 << 11) | (1 << 12)
+                        (1 << 10) | (1 << 11) | (1 << 12) | (1 << 13)
   };
 
   ustring name;

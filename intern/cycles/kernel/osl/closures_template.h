@@ -168,6 +168,25 @@ OSL_CLOSURE_STRUCT_BEGIN(MicrofacetMultiGGX, microfacet_multi_ggx_aniso)
   OSL_CLOSURE_STRUCT_MEMBER(MicrofacetMultiGGX, VECTOR, packed_float3, color, nullptr)
 OSL_CLOSURE_STRUCT_END(MicrofacetMultiGGX, microfacet_multi_ggx_aniso)
 
+/* Diffraction grating BSDF. Y-axis parameters only matter when grating_type == 1 (2D);
+ * profile is 0 = rectangular, 1 = sinusoidal (see DiffractionProfile/DiffractionGrating
+ * in kernel/svm/types.h). */
+OSL_CLOSURE_STRUCT_BEGIN(Diffraction, diffraction)
+  OSL_CLOSURE_STRUCT_MEMBER(Diffraction, VECTOR, packed_float3, N, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(Diffraction, VECTOR, packed_float3, T, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(Diffraction, FLOAT, float, roughness, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(Diffraction, FLOAT, float, pitch_x, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(Diffraction, FLOAT, float, pitch_y, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(Diffraction, FLOAT, float, groove_depth_x, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(Diffraction, FLOAT, float, groove_depth_y, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(Diffraction, FLOAT, float, duty_cycle_x, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(Diffraction, FLOAT, float, duty_cycle_y, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(Diffraction, FLOAT, float, rotation_x, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(Diffraction, FLOAT, float, rotation_y, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(Diffraction, INT, int, profile, nullptr)
+  OSL_CLOSURE_STRUCT_MEMBER(Diffraction, INT, int, grating_type, nullptr)
+OSL_CLOSURE_STRUCT_END(Diffraction, diffraction)
+
 OSL_CLOSURE_STRUCT_BEGIN(AshikhminVelvet, ashikhmin_velvet)
   OSL_CLOSURE_STRUCT_MEMBER(AshikhminVelvet, VECTOR, packed_float3, N, nullptr)
   OSL_CLOSURE_STRUCT_MEMBER(AshikhminVelvet, FLOAT, float, sigma, nullptr)

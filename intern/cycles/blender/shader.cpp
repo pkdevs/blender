@@ -675,6 +675,14 @@ static ShaderNode *add_node(Scene *scene,
         diffraction->set_profile(DIFFRACTION_PROFILE_RECTANGULAR);
         break;
     }
+    switch (b_node.custom2) {
+      case blender::SHD_DIFFRACTION_GRATING_1D:
+        diffraction->set_grating_type(DIFFRACTION_GRATING_1D);
+        break;
+      case blender::SHD_DIFFRACTION_GRATING_2D:
+        diffraction->set_grating_type(DIFFRACTION_GRATING_2D);
+        break;
+    }
     node = diffraction;
   }
   else if (b_node.is_type("ShaderNodeBsdfGlass"_ustr)) {

@@ -2415,18 +2415,26 @@ NODE_DEFINE(DiffractionBsdfNode)
   SOCKET_IN_NORMAL(normal, "Normal", zero_float3(), SocketType::LINK_NORMAL);
   SOCKET_IN_FLOAT(surface_mix_weight, "SurfaceMixWeight", 0.0f, SocketType::SVM_INTERNAL);
 
-  SOCKET_IN_VECTOR(tangent, "Tangent", zero_float3(), SocketType::LINK_TANGENT);
+  /* Diffraction BSDF defaults to the UV map's tangent. */
+  SOCKET_IN_VECTOR(tangent, "Tangent", zero_float3(), SocketType::LINK_TANGENT_UV);
 
   SOCKET_IN_FLOAT(roughness, "Roughness", 0.05f);
-  SOCKET_IN_FLOAT(period, "Period", 1.6f);
-  SOCKET_IN_FLOAT(groove_depth, "Groove Depth", 110.0f);
-  SOCKET_IN_FLOAT(duty_cycle, "Duty Cycle", 0.45f);
-  SOCKET_IN_FLOAT(rotation, "Rotation", 0.0f);
+  /* .x = X axis (the only axis read in 1D mode), .y = Y axis (2D only), .z unused. */
+  SOCKET_IN_VECTOR(pitch, "Pitch", make_float3(1.6f, 1.6f, 1.6f));
+  SOCKET_IN_VECTOR(groove_depth, "Groove Depth", make_float3(110.0f, 110.0f, 110.0f));
+  SOCKET_IN_VECTOR(duty_cycle, "Duty Cycle", make_float3(0.45f, 0.45f, 0.45f));
+  /* .x rotates the X lattice vector, .y the Y one (2D only), .z unused. */
+  SOCKET_IN_VECTOR(rotation, "Rotation", make_float3(0.0f, 0.25f, 0.0f));
 
   static NodeEnum profile_enum;
   profile_enum.insert("sinusoidal", DIFFRACTION_PROFILE_SINUSOIDAL);
   profile_enum.insert("rectangular", DIFFRACTION_PROFILE_RECTANGULAR);
   SOCKET_ENUM(profile, "Profile", profile_enum, DIFFRACTION_PROFILE_RECTANGULAR);
+
+  static NodeEnum grating_type_enum;
+  grating_type_enum.insert("1d", DIFFRACTION_GRATING_1D);
+  grating_type_enum.insert("2d", DIFFRACTION_GRATING_2D);
+  SOCKET_ENUM(grating_type, "Grating Type", grating_type_enum, DIFFRACTION_GRATING_1D);
 
   SOCKET_OUT_CLOSURE(BSDF, "BSDF");
 
@@ -2442,10 +2450,10 @@ void DiffractionBsdfNode::attributes(Shader *shader, AttributeRequestSet *attrib
 {
   if (shader->has_surface_link()) {
     if (!input("Tangent")->link) {
-      /* No tangent connected: the generated UV tangent is used instead, so the
-       * grating direction follows the surface's own UV layout (e.g. radial UVs on a
-       * disc give a concentric groove pattern for free, see bsdf_diffraction.h). */
-      attributes->add(ATTR_STD_GENERATED);
+      /* No tangent connected: ShaderGraph::default_inputs() will wire in a
+       * Tangent node in UV Map mode (LINK_TANGENT_UV, see node_type.h). */
+      attributes->add(ATTR_STD_UV);
+      attributes->add(ATTR_STD_UV_TANGENT);
     }
   }
 
@@ -2457,20 +2465,22 @@ void DiffractionBsdfNode::compile(SVMCompiler &compiler)
   BsdfNode::compile(compiler,
                     SVMNodeDiffractionBsdfData{
                         .roughness = compiler.input_float("Roughness"),
-                        .period = compiler.input_float("Period"),
-                        .groove_depth = compiler.input_float("Groove Depth"),
-                        .duty_cycle = compiler.input_float("Duty Cycle"),
-                        .rotation = compiler.input_float("Rotation"),
+                        .pitch = compiler.input_float3("Pitch"),
+                        .groove_depth = compiler.input_float3("Groove Depth"),
+                        .duty_cycle = compiler.input_float3("Duty Cycle"),
+                        .rotation = compiler.input_float3("Rotation"),
                         .normal_offset = compiler.input_link("Normal"),
                         .tangent_offset = compiler.input_link("Tangent"),
                         .profile = (uint8_t)profile,
+                        .grating_type = (uint8_t)grating_type,
                     });
 }
 
-void DiffractionBsdfNode::compile(OSLCompiler & /*compiler*/)
+void DiffractionBsdfNode::compile(OSLCompiler &compiler)
 {
-  /* Not implemented: this closure targets Cycles' GPU (SVM) kernels only. */
-  assert(0);
+  compiler.parameter(this, "profile");
+  compiler.parameter(this, "grating_type");
+  compiler.add(this, "node_diffraction_bsdf");
 }
 
 /* Glass BSDF Closure */
