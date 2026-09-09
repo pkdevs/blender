@@ -6,7 +6,7 @@
  * \ingroup editor/io
  */
 
-#ifdef WITH_IO_OTIO
+#ifdef WITH_OPENTIMELINEIO
 
 #  include <cerrno>
 #  include <cstring>

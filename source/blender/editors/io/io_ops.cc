@@ -22,7 +22,7 @@
 #  include "io_fbx_ops.hh"
 #endif
 
-#ifdef WITH_IO_OTIO
+#ifdef WITH_OPENTIMELINEIO
 #  include "io_otio_ops.hh"
 #endif
 
@@ -94,7 +94,7 @@ void ED_operatortypes_io()
   ed::io::fbx_file_handler_add();
 #endif
 
-#ifdef WITH_IO_OTIO
+#ifdef WITH_OPENTIMELINEIO
   WM_operatortype_append(WM_OT_otio_export);
   ed::io::otio_file_handler_add();
 #endif

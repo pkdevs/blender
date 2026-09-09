@@ -7,7 +7,6 @@ set(INC
   exporter
   ../../editors/include
   ../../makesrna
-  $ENV{HOME}/opentimelineio/include
 )
 
 set(INC_SYS
@@ -32,7 +31,7 @@ set(LIB
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::sequencer
   PRIVATE bf::windowmanager
-  PRIVATE "$ENV{HOME}/opentimelineio/lib/libopentimelineio.a"
+  PRIVATE bf::dependencies::optional::opentimelineio
 )
 
 

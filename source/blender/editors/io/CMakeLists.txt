@@ -16,7 +16,6 @@ set(INC
   ../../io/wavefront_obj
   ../../makesrna
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
-  $ENV{HOME}/opentimelineio/include
 )
 
 set(INC_SYS
@@ -122,11 +121,11 @@ if(WITH_USD)
   add_definitions(-DWITH_USD)
 endif()
 
-if(WITH_IO_OTIO)
+if(WITH_OPENTIMELINEIO)
   list(APPEND LIB
     bf_io_otio
   )
-  add_definitions(-DWITH_IO_OTIO)
+  add_definitions(-DWITH_OPENTIMELINEIO)
 endif()
 
 if(WITH_PUGIXML)
