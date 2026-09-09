@@ -274,8 +274,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
       t->flag |= T_V3D_ALIGN;
     }
 
-    if ((object_mode & OB_MODE_ALL_PAINT))
-    {
+    if ((object_mode & OB_MODE_ALL_PAINT)) {
       Paint *paint = BKE_paint_get_active_from_context(C);
       Brush *brush = (paint) ? BKE_paint_brush(paint) : nullptr;
       if (brush && (brush->stroke_method == BRUSH_STROKE_CURVE)) {
