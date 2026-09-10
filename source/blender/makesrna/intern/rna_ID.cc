@@ -2120,6 +2120,7 @@ static void rna_def_ID_override_library_property_operations(BlenderRNA *brna, Pr
                          "IDOverrideLibraryPropertyOperation",
                          "New Operation",
                          "Created operation");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "remove", "rna_ID_override_library_property_operations_remove");
@@ -2184,6 +2185,7 @@ static void rna_def_ID_override_library_properties(BlenderRNA *brna, PropertyRNA
                          "IDOverrideLibraryProperty",
                          "New Property",
                          "Newly created override property or existing one");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
   parm = RNA_def_string(
       func, "rna_path", nullptr, 256, "RNA Path", "RNA-Path of the property to add");
@@ -2547,12 +2549,13 @@ static void rna_def_ID(BlenderRNA *brna)
   RNA_def_property_override_flag(prop, PROPOVERRIDE_NO_COMPARISON);
   RNA_def_property_ui_text(prop, "Library", "Library file the data-block is linked from");
 
-  prop = RNA_def_pointer(srna,
-                         "library_weak_reference",
-                         "LibraryWeakReference",
-                         "Library Weak Reference",
-                         "Weak reference to a data-block in another library .blend file (used to "
-                         "re-use already appended data instead of appending new copies)");
+  prop = RNA_def_pointer(
+      srna,
+      "library_weak_reference",
+      "LibraryWeakReference",
+      "Library Weak Reference",
+      "Weak reference to the data-block in a library .blend file this "
+      "originated from. For re-use of already appended data and linked editable assets");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_NO_COMPARISON);
 
@@ -2615,6 +2618,7 @@ static void rna_def_ID(BlenderRNA *brna)
       func, "depsgraph", "Depsgraph", "", "Dependency graph to perform lookup in");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
   parm = RNA_def_pointer(func, "id", "ID", "", "New copy of the ID");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "copy", "rna_ID_copy");
@@ -2719,6 +2723,7 @@ static void rna_def_ID(BlenderRNA *brna)
       "Remove potential asset metadata so the newly local data-block is not treated as asset "
       "data-block and won't show up in asset libraries");
   parm = RNA_def_pointer(func, "id", "ID", "", "This ID, or the new ID if it was copied");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
   RNA_def_function_return(func, parm);
 
   func = RNA_def_function(srna, "user_of_id", "BKE_library_ID_use_ID");
