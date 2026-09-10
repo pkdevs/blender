@@ -217,7 +217,7 @@ class Instance : public DrawEngine {
     const bool engine_provides_depth =
         draw_ctx->v3d != nullptr &&
         (ED_view3d_engine_type(draw_ctx->scene, draw_ctx->v3d->shading.type)->flag &
-         RE_USE_ENGINE_VIEWPORT_DEPTH);
+         RE_WRITE_VIEWPORT_DEPTH);
     do_prepass = !engine_provides_depth &&
                  DRW_render_check_grease_pencil(draw_ctx->depsgraph, draw_ctx->v3d);
   }

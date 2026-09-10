@@ -53,9 +53,9 @@ enum RenderEngineTypeFlag {
   RE_USE_CUSTOM_FREESTYLE = (1 << 8),
   RE_USE_NO_IMAGE_SAVE = (1 << 9),
   RE_USE_MATERIALX = (1 << 10),
-  /** Use the depth written to the active viewport framebuffer by the `view_draw` callback
-     instead of doing our own depth pass. */
-  RE_USE_ENGINE_VIEWPORT_DEPTH = (1 << 11),
+  /** The `view_draw` callback writes depth to the active viewport framebuffer.
+     This depth information should be used instead of doing our own depth pass. */
+  RE_WRITE_VIEWPORT_DEPTH = (1 << 11),
 };
 
 /** #RenderEngine.flag */
