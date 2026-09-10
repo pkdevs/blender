@@ -6,6 +6,8 @@
 
 #include <fmt/format.h>
 
+#include "BLT_translation.hh"
+
 #include "IO_validate.hh"
 
 namespace blender::io::spz {
@@ -16,21 +18,21 @@ static std::optional<std::string> check_common_header_for_errors(const Header &h
                                                                  const uint32_t max_version)
 {
   if (header.magic != SPZ_HEADER_MAGIC) {
-    return fmt::format("Unexpected SPZ header magic 0x{:X}", header.magic);
+    return fmt::format(fmt::runtime(RPT_("Unexpected SPZ header magic 0x{:X}")), header.magic);
   }
   if (header.version < min_version || header.version > max_version) {
-    return fmt::format("Unsupported SPZ version {}", header.version);
+    return fmt::format(fmt::runtime(RPT_("Unsupported SPZ version {}")), header.version);
   }
   if (!validate::size_fits_in_int(header.num_points)) {
-    return "Too many points";
+    return RPT_("Too many points");
   }
   /* Blender supports spherical harmonics up to degree 4. */
   if (header.sh_degree > 4) {
-    return fmt::format("Unsupported SH degree {}", header.sh_degree);
+    return fmt::format(fmt::runtime(RPT_("Unsupported SH degree {}")), header.sh_degree);
   }
   /* Match the range supported by the 24-bit fixed-point position decoder. */
   if (header.fractional_bits >= 24) {
-    return fmt::format("Unsupported number of position fractional bits {}",
+    return fmt::format(fmt::runtime(RPT_("Unsupported number of position fractional bits {}")),
                        header.fractional_bits);
   }
   return std::nullopt;
@@ -47,11 +49,11 @@ std::optional<std::string> check_header_for_errors(const NgspFileHeader &header)
     return error;
   }
   if (header.toc_byte_offset < sizeof(NgspFileHeader)) {
-    return "TOC byte offset is less than the size of the header";
+    return RPT_("TOC byte offset is less than the size of the header");
   }
   /* Positions, alphas, colors, scales, rotations, and spherical harmonics. */
   if (header.num_streams < 6) {
-    return "Unexpected number of Zstd streams";
+    return RPT_("Unexpected number of Zstd streams");
   }
   return std::nullopt;
 }
