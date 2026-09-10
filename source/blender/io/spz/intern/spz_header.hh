@@ -46,7 +46,8 @@ static_assert(sizeof(NgspFileHeader) == 32);
 
 /* Return an error message for a header the importer cannot use, or nullopt on success.
  * Only header fields are checked; this does not validate the file's payload or TOC entries. */
-[[nodiscard]] std::optional<std::string> validate_header(const PackedGaussiansHeader &header);
-[[nodiscard]] std::optional<std::string> validate_header(const NgspFileHeader &header);
+[[nodiscard]] std::optional<std::string> check_header_for_errors(
+    const PackedGaussiansHeader &header);
+[[nodiscard]] std::optional<std::string> check_header_for_errors(const NgspFileHeader &header);
 
 }  // namespace blender::io::spz

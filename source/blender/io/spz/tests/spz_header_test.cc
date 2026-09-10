@@ -38,13 +38,13 @@ TYPED_TEST_SUITE(SPZHeaderTest, HeaderTypes);
 
 TYPED_TEST(SPZHeaderTest, Valid)
 {
-  EXPECT_EQ(validate_header(this->header), std::nullopt);
+  EXPECT_EQ(check_header_for_errors(this->header), std::nullopt);
 }
 
 TYPED_TEST(SPZHeaderTest, Magic)
 {
   this->header.magic = 0xDEADBEEF;
-  EXPECT_EQ(validate_header(this->header), "Unexpected SPZ header magic 0xDEADBEEF");
+  EXPECT_EQ(check_header_for_errors(this->header), "Unexpected SPZ header magic 0xDEADBEEF");
 }
 
 TYPED_TEST(SPZHeaderTest, Versions)
@@ -55,7 +55,7 @@ TYPED_TEST(SPZHeaderTest, Versions)
     const bool supported = std::is_same_v<TypeParam, NgspFileHeader> ?
                                version == 4 :
                                version == 2 || version == 3;
-    const std::optional<std::string> error = validate_header(this->header);
+    const std::optional<std::string> error = check_header_for_errors(this->header);
     if (supported) {
       EXPECT_EQ(error, std::nullopt);
     }
@@ -71,10 +71,10 @@ TYPED_TEST(SPZHeaderTest, PointCount)
     SCOPED_TRACE(count);
     this->header.num_points = count;
     if (count <= INT_MAX) {
-      EXPECT_EQ(validate_header(this->header), std::nullopt);
+      EXPECT_EQ(check_header_for_errors(this->header), std::nullopt);
     }
     else {
-      EXPECT_EQ(validate_header(this->header), "Too many points");
+      EXPECT_EQ(check_header_for_errors(this->header), "Too many points");
     }
   }
 }
@@ -85,10 +85,11 @@ TYPED_TEST(SPZHeaderTest, SHDegree)
     SCOPED_TRACE(degree);
     this->header.sh_degree = degree;
     if (degree <= 4) {
-      EXPECT_EQ(validate_header(this->header), std::nullopt);
+      EXPECT_EQ(check_header_for_errors(this->header), std::nullopt);
     }
     else {
-      EXPECT_EQ(validate_header(this->header), "Unsupported SH degree " + std::to_string(degree));
+      EXPECT_EQ(check_header_for_errors(this->header),
+                "Unsupported SH degree " + std::to_string(degree));
     }
   }
 }
@@ -99,10 +100,10 @@ TYPED_TEST(SPZHeaderTest, FractionalBits)
     SCOPED_TRACE(bits);
     this->header.fractional_bits = bits;
     if (bits < 24) {
-      EXPECT_EQ(validate_header(this->header), std::nullopt);
+      EXPECT_EQ(check_header_for_errors(this->header), std::nullopt);
     }
     else {
-      EXPECT_EQ(validate_header(this->header),
+      EXPECT_EQ(check_header_for_errors(this->header),
                 "Unsupported number of position fractional bits " + std::to_string(bits));
     }
   }
@@ -112,7 +113,7 @@ TYPED_TEST(SPZHeaderTest, Flags)
 {
   /* Flags are handled separately by the importer and do not make the header invalid. */
   this->header.flags = SPZ_HEADER_ANTIALIASED | SPZ_HEADER_HAS_EXTENSIONS;
-  EXPECT_EQ(validate_header(this->header), std::nullopt);
+  EXPECT_EQ(check_header_for_errors(this->header), std::nullopt);
 }
 
 using NGSPHeaderTest = SPZHeaderTest<NgspFileHeader>;
@@ -123,10 +124,11 @@ TEST_F(NGSPHeaderTest, TOCOffset)
     SCOPED_TRACE(offset);
     header.toc_byte_offset = offset;
     if (offset < sizeof(NgspFileHeader)) {
-      EXPECT_EQ(validate_header(header), "TOC byte offset is less than the size of the header");
+      EXPECT_EQ(check_header_for_errors(header),
+                "TOC byte offset is less than the size of the header");
     }
     else {
-      EXPECT_EQ(validate_header(header), std::nullopt);
+      EXPECT_EQ(check_header_for_errors(header), std::nullopt);
     }
   }
 }
@@ -137,10 +139,10 @@ TEST_F(NGSPHeaderTest, StreamCount)
     SCOPED_TRACE(count);
     header.num_streams = count;
     if (count < 6) {
-      EXPECT_EQ(validate_header(header), "Unexpected number of Zstd streams");
+      EXPECT_EQ(check_header_for_errors(header), "Unexpected number of Zstd streams");
     }
     else {
-      EXPECT_EQ(validate_header(header), std::nullopt);
+      EXPECT_EQ(check_header_for_errors(header), std::nullopt);
     }
   }
 }

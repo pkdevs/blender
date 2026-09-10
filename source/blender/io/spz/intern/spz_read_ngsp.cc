@@ -302,7 +302,7 @@ PointCloud *read_spz_ngsp_file(FILE *file, ReportList *reports)
   CLOG_DEBUG(&LOG, "SPZ header magic: 0x%X", header.magic);
   CLOG_DEBUG(&LOG, "SPZ header version: %u", header.version);
 
-  if (const std::optional<std::string> error = validate_header(header)) {
+  if (const std::optional<std::string> error = check_header_for_errors(header)) {
     BKE_reportf(reports, RPT_ERROR, "SPZ Read: %s", error->c_str());
     return nullptr;
   }

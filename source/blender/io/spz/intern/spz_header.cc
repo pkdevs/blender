@@ -11,9 +11,9 @@
 namespace blender::io::spz {
 
 template<typename Header>
-static std::optional<std::string> validate_common_header(const Header &header,
-                                                         const uint32_t min_version,
-                                                         const uint32_t max_version)
+static std::optional<std::string> check_common_header_for_errors(const Header &header,
+                                                                 const uint32_t min_version,
+                                                                 const uint32_t max_version)
 {
   if (header.magic != SPZ_HEADER_MAGIC) {
     return fmt::format("Unexpected SPZ header magic 0x{:X}", header.magic);
@@ -36,14 +36,14 @@ static std::optional<std::string> validate_common_header(const Header &header,
   return std::nullopt;
 }
 
-std::optional<std::string> validate_header(const PackedGaussiansHeader &header)
+std::optional<std::string> check_header_for_errors(const PackedGaussiansHeader &header)
 {
-  return validate_common_header(header, 2, 3);
+  return check_common_header_for_errors(header, 2, 3);
 }
 
-std::optional<std::string> validate_header(const NgspFileHeader &header)
+std::optional<std::string> check_header_for_errors(const NgspFileHeader &header)
 {
-  if (const std::optional<std::string> error = validate_common_header(header, 4, 4)) {
+  if (const std::optional<std::string> error = check_common_header_for_errors(header, 4, 4)) {
     return error;
   }
   if (header.toc_byte_offset < sizeof(NgspFileHeader)) {
