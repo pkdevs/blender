@@ -4054,6 +4054,11 @@ static void wm_event_free_and_remove_from_queue_if_valid(wmEvent *event)
  * \{ */
 
 #ifdef WITH_XR_OPENXR
+static bool wm_event_xr_operator_properties_empty(const IDProperty *properties)
+{
+  return properties == nullptr || (properties->type == IDP_GROUP && properties->len == 0);
+}
+
 /**
  * Special handling for XR events.
  *
@@ -4064,23 +4069,23 @@ static void wm_event_free_and_remove_from_queue_if_valid(wmEvent *event)
 static bool wm_event_xr_handler_matches_actiondata(const wmEventHandler_Op *op_handler,
                                                    const wmXrActionData *actiondata)
 {
-  if (op_handler->op == nullptr) {
+  if (op_handler == nullptr || op_handler->op == nullptr || actiondata == nullptr ||
+      actiondata->ot == nullptr)
+  {
     return false;
   }
 
-  const bool handler_op_type_match = (op_handler->op->type == actiondata->ot);
-  const bool handler_is_grease_pencil_xr_stroke = STREQ(
-      op_handler->op->type->idname, "GREASE_PENCIL_XR_OT_brush_stroke");
-  const bool action_is_grease_pencil_xr_stroke =
-      actiondata->ot && STREQ(actiondata->ot->idname, "GREASE_PENCIL_XR_OT_brush_stroke");
-  const bool is_grease_pencil_xr_stroke = handler_is_grease_pencil_xr_stroke &&
-                                          action_is_grease_pencil_xr_stroke;
-  const bool handler_op_properties_match = is_grease_pencil_xr_stroke ||
-                                           IDP_EqualsProperties(op_handler->op->properties,
-                                                               actiondata->op_properties);
+  if (op_handler->op->type != actiondata->ot) {
+    return false;
+  }
 
-  return ((handler_op_type_match || is_grease_pencil_xr_stroke) &&
-          handler_op_properties_match);
+  const IDProperty *handler_properties = op_handler->op->properties;
+  const IDProperty *action_properties = actiondata->op_properties;
+  if (wm_event_xr_operator_properties_empty(handler_properties) && 
+      wm_event_xr_operator_properties_empty(action_properties)) {
+    return true;
+  }
+  return IDP_EqualsProperties(handler_properties, action_properties);
 }
 
 static void wm_event_handle_xrevent(wmWindowManager *wm,

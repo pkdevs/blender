@@ -35,6 +35,38 @@
 
 namespace blender::ed::sculpt_paint::greasepencil {
 
+template<typename T>
+static inline void linear_interpolation(const T &from,
+                                        const T &to,
+                                        MutableSpan<T> dst,
+                                        const bool include_first_point)
+{
+  if (include_first_point) {
+    const float step = math::safe_rcp(float(dst.size() - 1));
+    for (const int i : dst.index_range()) {
+      dst[i] = bke::attribute_math::mix2(float(i) * step, from, to);
+    }
+  }
+  else {
+    const float step = 1.0f / float(dst.size());
+    for (const int i : dst.index_range()) {
+      dst[i] = bke::attribute_math::mix2(float(i + 1) * step, from, to);
+    }
+  }
+}
+
+static float stroke_segment_max_spacing(const Brush &brush,
+                                        const BrushGpencilSettings &settings,
+                                        const RegionView3D *rv3d,
+                                        const ARegion *region,
+                                        const float4x4 &placement_to_world,
+                                        const float3 &position)
+{
+  const float spacing_radius = ed::greasepencil::radius_from_input_sample(
+      rv3d, region, &brush, 1.0f, position, placement_to_world, &settings);
+  return math::max(spacing_radius * (float(brush.spacing) / 100.0f), 1.0e-4f);
+}
+
 class GreasePencilXRPaintOperation : public GreasePencilStrokeOperation {
  private:
   Scene *scene_;
@@ -46,6 +78,7 @@ class GreasePencilXRPaintOperation : public GreasePencilStrokeOperation {
   float4x2 texture_space_ = float4x2::identity();
   ed::greasepencil::DrawingPlacement placement_;
   float accum_distance_ = 0.0f;
+  double delta_time_ = 0.0;
 
   RandomNumberGenerator rng_;
 
@@ -119,11 +152,8 @@ struct XRPaintOperationExecutor {
         start_location,
         self.placement_.to_world_space(),
         settings_);
-    start_radius = ed::greasepencil::randomize_radius(*settings_,
-                                                      self.stroke_random_radius_factor_,
-                                                      0.0f,
-                                                      start_radius,
-                                                      start_sample.pressure);
+    start_radius = ed::greasepencil::randomize_radius(
+        *settings_, self.stroke_random_radius_factor_, 0.0f, start_radius, start_sample.pressure);
 
     float start_opacity = ed::greasepencil::opacity_from_input_sample(
         start_sample.pressure, brush_, settings_);
@@ -265,12 +295,10 @@ static float4x2 calculate_xr_texture_space(const Scene &scene,
                                         start_sample.controller_position);
   switch (scene.toolsettings->gp_sculpt.lock_axis) {
     case GP_LOCKAXIS_VIEW:
-      u_dir = math::normalize(placement.project(float2(region.winx, 0.0f) +
-                                                start_sample.mouse_position) -
-                              origin);
-      v_dir = math::normalize(placement.project(float2(0.0f, region.winy) +
-                                                start_sample.mouse_position) -
-                              origin);
+      u_dir = math::normalize(
+          placement.project(float2(region.winx, 0.0f) + start_sample.mouse_position) - origin);
+      v_dir = math::normalize(
+          placement.project(float2(0.0f, region.winy) + start_sample.mouse_position) - origin);
       break;
     case GP_LOCKAXIS_Y:
       u_dir = float3(1.0f, 0.0f, 0.0f);
@@ -371,8 +399,8 @@ void GreasePencilXRPaintOperation::on_stroke_begin(const bContext &C,
   WM_event_add_notifier(&C, NC_GEOM | ND_DATA, grease_pencil);
 }
 
-void GreasePencilXRPaintOperation::on_stroke_extended(
-    const bContext &C, const InputSample &extension_sample)
+void GreasePencilXRPaintOperation::on_stroke_extended(const bContext &C,
+                                                      const InputSample &extension_sample)
 {
   GreasePencil *grease_pencil = id_cast<GreasePencil *>(object_->data);
   const bool on_back = (scene_->toolsettings->gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK) != 0;
@@ -385,15 +413,18 @@ void GreasePencilXRPaintOperation::on_stroke_extended(
   const IndexRange curve_points = curves.points_by_curve()[active_curve];
   const int last_active_point = curve_points.last();
 
-  const float3 position = math::transform_point(math::invert(placement_.to_world_space()),
+  const float4x4 placement_to_world = placement_.to_world_space();
+  const float3 position = math::transform_point(math::invert(placement_to_world),
                                                 extension_sample.controller_position);
   const float3 prev_position = curves.positions()[last_active_point];
-  float radius = ed::greasepencil::radius_from_input_sample(CTX_wm_region_view3d(&C),
-                                                            CTX_wm_region(&C),
+  const RegionView3D *rv3d = CTX_wm_region_view3d(&C);
+  const ARegion *region = CTX_wm_region(&C);
+  float radius = ed::greasepencil::radius_from_input_sample(rv3d,
+                                                            region,
                                                             executor.brush_,
                                                             extension_sample.pressure,
                                                             position,
-                                                            placement_.to_world_space(),
+                                                            placement_to_world,
                                                             settings);
   float opacity = ed::greasepencil::opacity_from_input_sample(
       extension_sample.pressure, executor.brush_, settings);
@@ -414,6 +445,7 @@ void GreasePencilXRPaintOperation::on_stroke_extended(
   const float distance = math::distance(position, prev_position);
   constexpr float point_override_threshold = 1.0e-5f;
   if (distance < point_override_threshold) {
+    accum_distance_ += distance;
     if (curve_points.size() > 1) {
       curves.positions_for_write()[last_active_point] = position;
     }
@@ -439,7 +471,9 @@ void GreasePencilXRPaintOperation::on_stroke_extended(
     return;
   }
 
-  const int new_points_num = 1;
+  const float max_spacing = stroke_segment_max_spacing(
+      *executor.brush_, *settings, rv3d, region, placement_to_world, position);
+  const int new_points_num = math::max(int(math::floor(distance / max_spacing)), 1);
   ed::greasepencil::resize_single_curve(
       curves, on_back == false, curve_points.size() + new_points_num);
 
@@ -449,50 +483,72 @@ void GreasePencilXRPaintOperation::on_stroke_extended(
   MutableSpan<float> new_radii = drawing_->radii_for_write().slice(new_points);
   MutableSpan<float> new_opacities = drawing_->opacities_for_write().slice(new_points);
 
-  new_positions[0] = position;
-  new_radii[0] = radius;
-  new_opacities[0] = opacity;
+  linear_interpolation<float3>(prev_position, position, new_positions, false);
+  linear_interpolation<float>(prev_radius, radius, new_radii, false);
+  linear_interpolation<float>(prev_opacity, opacity, new_opacities, false);
   point_attributes_to_skip.add_multiple({"position", "radius", "opacity"});
 
   if (executor.use_settings_random_ && settings->draw_random_press > 0.0f) {
-    new_radii[0] = ed::greasepencil::randomize_radius(*settings,
-                                                      stroke_random_radius_factor_,
-                                                      accum_distance_,
-                                                      new_radii[0],
-                                                      extension_sample.pressure);
+    for (const int i : IndexRange(new_points_num)) {
+      new_radii[i] = ed::greasepencil::randomize_radius(*settings,
+                                                        stroke_random_radius_factor_,
+                                                        accum_distance_ + max_spacing * i,
+                                                        new_radii[i],
+                                                        extension_sample.pressure);
+    }
   }
   if (executor.use_settings_random_ && settings->draw_random_strength > 0.0f) {
-    new_opacities[0] = ed::greasepencil::randomize_opacity(*settings,
-                                                           stroke_random_opacity_factor_,
-                                                           accum_distance_,
-                                                           new_opacities[0],
-                                                           extension_sample.pressure);
+    for (const int i : IndexRange(new_points_num)) {
+      new_opacities[i] = ed::greasepencil::randomize_opacity(*settings,
+                                                             stroke_random_opacity_factor_,
+                                                             accum_distance_ + max_spacing * i,
+                                                             new_opacities[i],
+                                                             extension_sample.pressure);
+    }
   }
-  if (executor.use_settings_random_ && (settings->uv_random > 0.0f ||
-                                        attributes.contains("rotation")))
+  if (executor.use_settings_random_ &&
+      (settings->uv_random > 0.0f || attributes.contains("rotation")))
   {
     bke::SpanAttributeWriter<float> rotations = attributes.convert_or_add_for_write_span<float>(
         "rotation", bke::AttrDomain::Point);
-    rotations.span.slice(new_points)[0] = ed::greasepencil::randomize_rotation(
-        *settings, rng_, stroke_random_rotation_factor_, extension_sample.pressure);
+    MutableSpan<float> new_rotations = rotations.span.slice(new_points);
+    for (const int i : IndexRange(new_points_num)) {
+      new_rotations[i] = ed::greasepencil::randomize_rotation(
+          *settings, rng_, stroke_random_rotation_factor_, extension_sample.pressure);
+    }
     point_attributes_to_skip.add("rotation");
     rotations.finish();
   }
   if (executor.use_vertex_color_ || attributes.contains("vertex_color")) {
-    MutableSpan<ColorGeometry4f> new_vertex_colors =
-        drawing_->vertex_colors_for_write().slice(new_points);
-    new_vertex_colors[0] = vertex_color;
+    MutableSpan<ColorGeometry4f> new_vertex_colors = drawing_->vertex_colors_for_write().slice(
+        new_points);
+    linear_interpolation<ColorGeometry4f>(
+        drawing_->vertex_colors()[last_active_point], vertex_color, new_vertex_colors, false);
+    if (executor.use_settings_random_ || attributes.contains("vertex_color")) {
+      for (const int i : IndexRange(new_points_num)) {
+        new_vertex_colors[i] = ed::greasepencil::randomize_color(*settings,
+                                                                 executor.jitter_settings_,
+                                                                 stroke_random_hue_factor_,
+                                                                 stroke_random_sat_factor_,
+                                                                 stroke_random_val_factor_,
+                                                                 accum_distance_ + max_spacing * i,
+                                                                 new_vertex_colors[i],
+                                                                 extension_sample.pressure);
+      }
+    }
     point_attributes_to_skip.add("vertex_color");
   }
 
   const double new_delta_time = BLI_time_now_seconds() - start_time_;
   bke::SpanAttributeWriter<float> delta_times = attributes.convert_or_add_for_write_span<float>(
       "delta_time", bke::AttrDomain::Point);
-  delta_times.span.slice(new_points)[0] = float(new_delta_time);
+  linear_interpolation<float>(
+      float(delta_time_), float(new_delta_time), delta_times.span.slice(new_points), false);
   point_attributes_to_skip.add("delta_time");
   delta_times.finish();
 
   accum_distance_ += distance;
+  delta_time_ = new_delta_time;
 
   bke::fill_attribute_range_default(attributes,
                                     bke::AttrDomain::Point,
