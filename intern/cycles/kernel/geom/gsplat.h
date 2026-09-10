@@ -66,7 +66,7 @@ ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private Sha
 
   /* Map to linear color space, add 1/2 offset to mirror [3dgs2023]. */
   const float3 color_rec709 = color_srgb_to_linear_v3(color_srgb + 0.5f);
-  return rec709_to_rgb(kg, make_float3(color_rec709));
+  return rec709_to_rgb(kg, color_rec709);
 }
 
 /* Get Gaussian splat normal in the object space. */
