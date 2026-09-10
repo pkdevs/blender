@@ -295,10 +295,19 @@ static void node_geo_exec(GeoNodeExecParams params)
   SocketValueVariant debug_boundary_gradient = SocketValueVariant::from(float3(0.0f));
   SocketValueVariant debug_boundary_factor = SocketValueVariant::from(0.0f);
   switch (boundary) {
-    case Boundary::Background:
-      solution_tree = openvdb::tools::poisson::solve(
-          source_vdb_grid.tree(), solver_state, staggered);
+    case Boundary::Background: {
+      bke::VolumeGrid<float> background_grid(
+          openvdb::FloatGrid::create(source_vdb_grid.background()));
+      bke::VolumeTreeAccessToken grid_token;
+
+      DirichletBoundaryOp boundary_op(background_grid.grid(grid_token));
+      solution_tree = openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<
+          PreconditionerType>(
+          source_vdb_grid.tree(), boundary_op, solver_state, interrupter, staggered);
+
+      debug_boundary_value = SocketValueVariant::from(background_grid);
       break;
+    }
 
     case Boundary::Fixed: {
       const Field<float> boundary_value_field = params.extract_input<Field<float>>(
