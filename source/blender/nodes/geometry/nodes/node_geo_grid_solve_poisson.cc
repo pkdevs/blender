@@ -78,6 +78,16 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
 
+  b.add_output<decl::Float>("Solution"_ustr)
+      .structure_type(StructureType::Grid)
+      .description("Solution to the Poisson equation");
+  b.add_output<decl::Bool>("Success"_ustr).description("If the solver converged successfully");
+  b.add_output<decl::Int>("Iterations"_ustr).description("Number of iterations performed");
+  b.add_output<decl::Float>("Absolute Error"_ustr)
+      .description("Final absolute error of the solution");
+  b.add_output<decl::Float>("Relative Error"_ustr)
+      .description("Final relative error of the solution");
+
   b.add_input<decl::Float>("Grid"_ustr)
       .hide_value()
       .structure_type(StructureType::Grid)
@@ -117,16 +127,6 @@ static void node_declare(NodeDeclarationBuilder &b)
       .structure_type(StructureType::Field)
       .usage_by_menu("Boundary"_ustr, int(Boundary::Mixed))
       .description("Mix factor between boundary conditions (0=value, 1=gradient)");
-
-  b.add_output<decl::Float>("Solution"_ustr)
-      .structure_type(StructureType::Grid)
-      .description("Solution to the Poisson equation");
-  b.add_output<decl::Bool>("Success"_ustr).description("If the solver converged successfully");
-  b.add_output<decl::Int>("Iterations"_ustr).description("Number of iterations performed");
-  b.add_output<decl::Float>("Absolute Error"_ustr)
-      .description("Final absolute error of the solution");
-  b.add_output<decl::Float>("Relative Error"_ustr)
-      .description("Final relative error of the solution");
 
   PanelDeclarationBuilder &p = b.add_panel("Debug"_ustr).default_closed(true);
   p.add_output<decl::Float>("Debug Boundary Value"_ustr)
