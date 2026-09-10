@@ -740,8 +740,8 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
   const bool use_temporal_frames  = kernel_data.integrator.use_temporal_frames;
 
 
-ccl_debug_printf("integrator_restir_temporal(): use_temporal_samples=%d, use_temporal_frames=%d",
-                 use_temporal_samples, use_temporal_frames);
+ccl_debug_printf("integrator_restir_temporal(): use_temporal_samples=%d, use_temporal_frames=%d visibility=%d\n",
+                 use_temporal_samples, use_temporal_frames, visibility);
 
   if (use_temporal_samples) {
     streaming_temporal_sample(kg, state, &current, &rng_state, visibility, render_buffer);
@@ -756,7 +756,6 @@ ccl_debug_printf("integrator_restir_temporal(): use_temporal_samples=%d, use_tem
 
   film_write_pass_reservoir(kg, state, &current.reservoir, render_buffer, /*write_prev=*/false);
 
-// !!!(Tri): Not enough to determine if spatial is off... It could be switched off!
   const bool use_spatial = kernel_data.integrator.use_spatial_resampling &&
                            kernel_data.integrator.restir_spatial_radius > 0 &&
                            kernel_data.integrator.restir_spatial_neighbors > 0 &&

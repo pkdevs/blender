@@ -464,6 +464,9 @@ void BlenderSync::sync_integrator(blender::ViewLayer &b_view_layer,
   integrator->set_use_restir(use_initial_resampling + (use_spatial_resampling << 1) +
                              (pairwise_mis << 2) + (use_temporal_samples << 3) +
                              (use_temporal_frames << 4));
+  integrator->set_use_temporal_samples(use_temporal_samples);
+  integrator->set_use_temporal_frames(use_temporal_frames);
+  integrator->set_use_spatial_resampling(use_spatial_resampling);
   integrator->set_restir_unbiased(restir_unbiased);
   integrator->set_restir_light_samples(light_samples);
   integrator->set_restir_spatial_radius(get_int(cscene, "restir_spatial_radius"));

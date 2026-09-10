@@ -417,6 +417,9 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 
   /* ReSTIR. */
   kintegrator->use_restir = use_restir & 0b11;
+  kintegrator->use_temporal_samples = use_temporal_samples;
+  kintegrator->use_temporal_frames = use_temporal_frames;
+  kintegrator->use_spatial_resampling = use_spatial_resampling;
   kintegrator->restir_unbiased = restir_unbiased;
   kintegrator->restir_light_samples = restir_light_samples;
   kintegrator->restir_spatial_radius = restir_spatial_radius;
