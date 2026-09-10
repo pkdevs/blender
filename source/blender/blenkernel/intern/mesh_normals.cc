@@ -1713,7 +1713,8 @@ void mesh_set_custom_normals_from_verts_normalized(Mesh &mesh, MutableSpan<float
 
 namespace mesh {
 
-constexpr AttributeMetaData CORNER_FAN_META_DATA{AttrDomain::Corner, AttrType::Int16_2D};
+constexpr AttributeMetaData CORNER_FAN_META_DATA{
+    AttrDomain::Corner, AttrType::Int16_2D, AttributeMetaData::Backend::DontCare};
 
 bool is_corner_fan_normals(const AttributeMetaData &meta_data)
 {

@@ -81,7 +81,8 @@ static constexpr AttributeAccessorFunctions get_instances_accessor_functions()
     if (!attr) {
       return std::nullopt;
     }
-    return AttributeMetaData{attr->domain(), attr->data_type()};
+    return AttributeMetaData{
+        attr->domain(), attr->data_type(), AttributeMetaData::Backend::AttributeStorage};
   };
   fn.lookup = [](const void *owner, const StringRef name) -> GAttributeReader {
     const Instances &instances = *static_cast<const Instances *>(owner);

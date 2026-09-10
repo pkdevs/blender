@@ -355,7 +355,9 @@ bool dynamicPaint_outputLayerExists(DynamicPaintSurface *surface, Object *ob, in
       Mesh *mesh = id_cast<Mesh *>(ob->data);
       const AttributeAccessor attributes = mesh->attributes();
       const std::optional<AttributeMetaData> meta_data = attributes.lookup_meta_data(name);
-      return meta_data == AttributeMetaData{AttrDomain::Corner, AttrType::ColorByte};
+      return meta_data == AttributeMetaData{AttrDomain::Corner,
+                                            AttrType::ColorByte,
+                                            AttributeMetaData::Backend::DontCare};
     }
     if (surface->type == MOD_DPAINT_SURFACE_T_WEIGHT) {
       return (BKE_object_defgroup_name_index(ob, name) != -1);
@@ -1977,7 +1979,8 @@ static Mesh *dynamicPaint_Modifier_apply(DynamicPaintModifierData *pmd, Object *
             /* paint layer */
             SpanAttributeWriter<ColorGeometry4b> mloopcol;
             if (attributes.lookup_meta_data(surface->output_name) ==
-                AttributeMetaData{AttrDomain::Corner, AttrType::ColorByte})
+                AttributeMetaData{
+                    AttrDomain::Corner, AttrType::ColorByte, AttributeMetaData::Backend::DontCare})
             {
               mloopcol = attributes.lookup_for_write_span<ColorGeometry4b>(surface->output_name);
             }
@@ -1989,7 +1992,8 @@ static Mesh *dynamicPaint_Modifier_apply(DynamicPaintModifierData *pmd, Object *
 
             SpanAttributeWriter<ColorGeometry4b> mloopcol_wet;
             if (attributes.lookup_meta_data(surface->output_name2) ==
-                AttributeMetaData{AttrDomain::Corner, AttrType::ColorByte})
+                AttributeMetaData{
+                    AttrDomain::Corner, AttrType::ColorByte, AttributeMetaData::Backend::DontCare})
             {
               mloopcol_wet = attributes.lookup_for_write_span<ColorGeometry4b>(
                   surface->output_name2);

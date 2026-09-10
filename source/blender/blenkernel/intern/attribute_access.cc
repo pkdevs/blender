@@ -560,10 +560,12 @@ GAttributeWriter MutableAttributeAccessor::convert_or_add_for_write(
 {
   std::optional<AttributeMetaData> meta_data = this->lookup_meta_data(name);
   if (meta_data.has_value()) {
-    if (meta_data->domain == domain && meta_data->data_type == data_type) {
+    if (meta_data->domain == domain && meta_data->data_type == data_type &&
+        meta_data->storage == AttributeMetaData::Backend::AttributeStorage)
+    {
       return this->lookup_for_write(name);
     }
-    /* The attribute already exists, but with the wrong domain or type.
+    /* The attribute already exists, but with the wrong domain or type, or it is a VertexGroup.
      * Convert it. */
     GVArray data_on_domain = *this->lookup(name, domain, data_type);
     const CPPType &type = data_on_domain.type();
@@ -591,10 +593,12 @@ GAttributeWriter MutableAttributeAccessor::convert_or_add_for_write_only(const S
 {
   std::optional<AttributeMetaData> meta_data = this->lookup_meta_data(name);
   if (meta_data.has_value()) {
-    if (meta_data->domain == domain && meta_data->data_type == data_type) {
+    if (meta_data->domain == domain && meta_data->data_type == data_type &&
+        meta_data->storage == AttributeMetaData::Backend::AttributeStorage)
+    {
       return this->lookup_for_write(name);
     }
-    /* The attribute already exists, but with the wrong domain or type.
+    /* The attribute already exists, but with the wrong domain or type, or it is a VertexGroup.
      * Convert it. */
     if (this->add_override(name, domain, data_type, AttributeInitConstruct())) {
       return this->lookup_for_write(name);

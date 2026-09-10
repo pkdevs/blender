@@ -50,9 +50,28 @@ AttrType cpp_type_to_attribute_type(const CPPType &type);
 struct AttributeMetaData {
   AttrDomain domain;
   AttrType data_type;
+  enum class Backend {
+    AttributeStorage,
+    BMesh,
+    DontCare,
+    VertexGroup,
+  };
+  Backend storage;
 
-  friend bool operator==(const AttributeMetaData &a, const AttributeMetaData &b) = default;
+  friend bool operator==(const AttributeMetaData &a, const AttributeMetaData &b);
 };
+
+inline bool operator==(const AttributeMetaData &a, const AttributeMetaData &b)
+{
+  return (a.domain == b.domain) && (a.data_type == b.data_type) &&
+         (a.storage == AttributeMetaData::Backend::DontCare ||
+          b.storage == AttributeMetaData::Backend::DontCare || a.storage == b.storage);
+}
+
+inline bool operator!=(const AttributeMetaData &a, const AttributeMetaData &b)
+{
+  return !(a == b);
+}
 
 struct AttributeDomainAndType {
   AttrDomain domain;

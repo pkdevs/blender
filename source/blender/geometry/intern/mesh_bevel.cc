@@ -751,7 +751,9 @@ void UVMapInfo::init(const Mesh &mesh)
   has_uv_maps = false;
   const bke::AttributeAccessor attrs = mesh.attributes();
   attrs.foreach_attribute([&](const bke::AttributeIter &iter) {
-    if (!bke::mesh::is_uv_map(bke::AttributeMetaData(iter.domain, iter.data_type))) {
+    if (!bke::mesh::is_uv_map(bke::AttributeMetaData(
+            iter.domain, iter.data_type, bke::AttributeMetaData::Backend::DontCare)))
+    {
       return;
     }
     const bke::AttributeReader<float2> uv_reader = iter.get<float2>();
