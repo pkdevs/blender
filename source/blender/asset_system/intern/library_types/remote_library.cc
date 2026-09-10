@@ -718,7 +718,7 @@ static std::optional<std::string> remote_library_request_asset_download_file(
   }
 
   /* Protect against maliciously constructed file paths. This code can just check & reject, as the
-   * actual sanitisation happens when the listing is downloaded (see `listing_downloader.py`). */
+   * actual sanitization happens when the listing is downloaded (see `listing_downloader.py`). */
   if (BLI_path_is_abs_from_cwd(dst_filepath.c_str())) {
     /* Absolute file paths. */
     BKE_reportf(reports,
