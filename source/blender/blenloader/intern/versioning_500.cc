@@ -2603,9 +2603,8 @@ static bool window_has_sequence_editor_open(const wmWindow *win)
 
 /* Merge transform effect properties with strip transform. Because this effect could use modifiers,
  * change its type to gaussian blur with 0 radius. */
-static void sequencer_substitute_transform_effects(Main &bmain, Scene *scene)
+static void sequencer_substitute_transform_effects(Scene *scene, const DriverMap &driver_map)
 {
-  const DriverMap driver_map = BKE_animdata_build_driver_target_map(bmain);
   seq::foreach_strip(&scene->ed->seqbase, [&](Strip *strip) -> bool {
     if (strip->type == STRIP_TYPE_TRANSFORM_LEGACY && strip->effectdata != nullptr) {
       TransformVarsLegacy *tv = static_cast<TransformVarsLegacy *>(strip->effectdata);
@@ -2874,9 +2873,10 @@ void do_versions_after_linking_500(FileData *fd, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 97)) {
+    const DriverMap driver_map = BKE_animdata_build_driver_target_map(*bmain);
     for (Scene &scene : bmain->scenes) {
       if (scene.ed != nullptr) {
-        sequencer_substitute_transform_effects(*bmain, &scene);
+        sequencer_substitute_transform_effects(&scene, driver_map);
       }
     }
   }
