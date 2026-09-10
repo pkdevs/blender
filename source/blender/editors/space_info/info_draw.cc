@@ -194,8 +194,7 @@ static int info_textview_main__internal(const SpaceInfo *sinfo,
   tvc.scroll_ymax = v2d->cur.ymax;
 
   info_textview_draw_rect_calc(region, &tvc.draw_rect, &tvc.draw_rect_outer);
-
-  ret = textview_draw(region, &tvc, do_draw, mval, r_mval_pick_item, r_mval_pick_offset);
+  ret = textview_draw(&tvc, do_draw, mval, r_mval_pick_item, r_mval_pick_offset, nullptr);
 
   return ret;
 }

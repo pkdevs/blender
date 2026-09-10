@@ -299,12 +299,12 @@ static bool textview_draw_string(TextViewDrawState *tds,
   return true;
 }
 
-int textview_draw(const ARegion *region,
-                  TextViewContext *tvc,
+int textview_draw(TextViewContext *tvc,
                   const bool do_draw,
                   const int mval_init[2],
                   void **r_mval_pick_item,
-                  int *r_mval_pick_offset)
+                  int *r_mval_pick_offset,
+                  rctf *r_cursor_rect)
 {
   TextViewDrawState tds = {0};
 
@@ -396,8 +396,8 @@ int textview_draw(const ARegion *region,
 
       if (do_draw) {
         /* We always want the cursor to draw. */
-        if (tvc->draw_cursor && iter_index == 0) {
-          tvc->draw_cursor(region, tvc, tds.char_width, tds.columns);
+        if (tvc->cursor_rect_get && iter_index == 0 && r_cursor_rect) {
+          *r_cursor_rect = tvc->cursor_rect_get(tvc, tds.char_width, tds.columns);
         }
 
         /* When drawing, if we pass v2d->cur.ymax, then quit. */

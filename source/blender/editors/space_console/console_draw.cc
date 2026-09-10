@@ -175,10 +175,7 @@ static int2 console_line_byte_to_xy(const ConsoleDrawLine &line, const int byte_
   return console_line_wrap_offset_to_xy(line, console_line_wrap_offset(line, byte_offset));
 }
 
-static void console_textview_draw_cursor(const ARegion *region,
-                                         TextViewContext *tvc,
-                                         int char_width,
-                                         int columns)
+static rctf console_textview_cursor_rect_get(TextViewContext *tvc, int char_width, int columns)
 {
   int2 pen;
   {
@@ -216,10 +213,7 @@ static void console_textview_draw_cursor(const ARegion *region,
       .ymin = float(pen[1]),
       .ymax = float(pen[1] + tvc->line_height),
   };
-  ui::view2d_view_to_region_fl(&region->v2d, rect.xmin, rect.ymin, &rect.xmin, &rect.ymin);
-  ui::view2d_view_to_region_fl(&region->v2d, rect.xmax, rect.ymax, &rect.xmax, &rect.ymax);
-  region->runtime->text_cursor_overlay->rect = rect;
-  ui::theme::get_color_4fv(TH_CONSOLE_CURSOR, region->runtime->text_cursor_overlay->color);
+  return rect;
 }
 
 static void console_textview_const_colors(TextViewContext * /*tvc*/, uchar bg_sel[4])
@@ -249,7 +243,8 @@ static int console_textview_main__internal(SpaceConsole *sc,
                                            const bool do_draw,
                                            const int mval[2],
                                            void **r_mval_pick_item,
-                                           int *r_mval_pick_offset)
+                                           int *r_mval_pick_offset,
+                                           rctf *r_cursor_rect = nullptr)
 {
   ConsoleLine cl_dummy = {nullptr};
   int ret = 0;
@@ -264,7 +259,7 @@ static int console_textview_main__internal(SpaceConsole *sc,
   tvc.step = console_textview_step;
   tvc.line_get = console_textview_line_get;
   tvc.line_data = console_line_data;
-  tvc.draw_cursor = console_textview_draw_cursor;
+  tvc.cursor_rect_get = console_textview_cursor_rect_get;
   tvc.const_colors = console_textview_const_colors;
 
   tvc.arg1 = sc;
@@ -287,7 +282,7 @@ static int console_textview_main__internal(SpaceConsole *sc,
   }
 
   console_scrollback_prompt_begin(sc, &cl_dummy);
-  ret = textview_draw(region, &tvc, do_draw, m_pos, r_mval_pick_item, r_mval_pick_offset);
+  ret = textview_draw(&tvc, do_draw, m_pos, r_mval_pick_item, r_mval_pick_offset, r_cursor_rect);
   console_scrollback_prompt_end(sc, &cl_dummy);
 
   return ret;
@@ -296,7 +291,17 @@ static int console_textview_main__internal(SpaceConsole *sc,
 void console_textview_main(SpaceConsole *sc, const ARegion *region)
 {
   const int mval[2] = {INT_MAX, INT_MAX};
-  console_textview_main__internal(sc, region, true, mval, nullptr, nullptr);
+
+  rctf cursor_rect;
+
+  console_textview_main__internal(sc, region, true, mval, nullptr, nullptr, &cursor_rect);
+
+  ui::view2d_view_to_region_fl(
+      &region->v2d, cursor_rect.xmin, cursor_rect.ymin, &cursor_rect.xmin, &cursor_rect.ymin);
+  ui::view2d_view_to_region_fl(
+      &region->v2d, cursor_rect.xmax, cursor_rect.ymax, &cursor_rect.xmax, &cursor_rect.ymax);
+  region->runtime->text_cursor_overlay->rect = cursor_rect;
+  ui::theme::get_color_4fv(TH_CONSOLE_CURSOR, region->runtime->text_cursor_overlay->color);
 }
 
 int console_textview_height(SpaceConsole *sc, const ARegion *region)

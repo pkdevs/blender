@@ -12,7 +12,6 @@
 
 #include "BLI_listbase.hh"
 #include "BLI_string_utf8.hh"
-#include "BLI_time.hh"
 #include "BLI_utildefines.hh"
 
 #include "BKE_context.hh"
@@ -130,8 +129,9 @@ static void info_main_region_draw(const bContext *C, ARegion *region)
 
   /* Works best with no view2d matrix set. */
   ui::view2d_view_ortho(v2d);
-  ED_region_ensure_blink_cursor_overlay(C, region, true);
+
   info_textview_main(sinfo, region, CTX_wm_reports(C));
+
   /* reset view matrix */
   ui::view2d_view_restore(C);
 

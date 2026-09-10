@@ -56,7 +56,7 @@ struct TextViewContext {
                                               int *r_icon,
                                               uchar r_icon_fg[4],
                                               uchar r_icon_bg[4]);
-  void (*draw_cursor)(const ARegion *region, TextViewContext *tvc, int char_width, int columns);
+  rctf (*cursor_rect_get)(TextViewContext *tvc, int char_width, int columns);
   /* constant theme colors */
   void (*const_colors)(TextViewContext *tvc, unsigned char bg_sel[4]);
   const void *iter;
@@ -76,12 +76,12 @@ struct TextViewContext {
  * \param r_mval_pick_offset: The offset in bytes of the \a mval_init.
  * Use for selection.
  */
-int textview_draw(const ARegion *region,
-                  TextViewContext *tvc,
+int textview_draw(TextViewContext *tvc,
                   bool do_draw,
                   const int mval_init[2],
                   void **r_mval_pick_item,
-                  int *r_mval_pick_offset);
+                  int *r_mval_pick_offset,
+                  rctf *r_cursor_rect);
 
 /**
  * Return the byte offset each wrapped row starts at, matching the layout #textview_draw uses.
