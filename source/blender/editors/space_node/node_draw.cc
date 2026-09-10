@@ -44,6 +44,7 @@
 #include "BKE_curves.hh"
 #include "BKE_global.hh"
 #include "BKE_idtype.hh"
+#include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
@@ -105,6 +106,7 @@
 #include "node_intern.hh" /* own include */
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <sstream>
 
 namespace blender {
@@ -164,7 +166,7 @@ struct TreeDrawContext {
    */
   Array<Vector<NodeExtraInfoRow>> extra_info_rows_per_node;
 
-  Map<int32_t, VectorSet<std::string>> shader_node_errors;
+  Map<int32_t, VectorSet<nodes::NodeWarning>> shader_node_errors;
 
   ~TreeDrawContext()
   {
@@ -2104,12 +2106,12 @@ static void node_draw_panels(bNodeTree &ntree, const bNode &node, ui::Block &blo
   }
 }
 
-static nodes::NodeWarningType node_error_highest_priority(
-    Span<nodes::eval_log::NodeWarning> warnings)
+template<typename WarningsRange>
+static nodes::NodeWarningType node_error_highest_priority(const WarningsRange &warnings)
 {
   int highest_priority = 0;
   nodes::NodeWarningType highest_priority_type = nodes::NodeWarningType::Info;
-  for (const nodes::eval_log::NodeWarning &warning : warnings) {
+  for (const auto &warning : warnings) {
     const int priority = node_warning_type_severity(warning.type);
     if (priority > highest_priority) {
       highest_priority = priority;
@@ -2119,11 +2121,11 @@ static nodes::NodeWarningType node_error_highest_priority(
   return highest_priority_type;
 }
 
-static std::string node_errors_tooltip_fn(const Span<nodes::eval_log::NodeWarning> warnings)
+static std::string node_errors_tooltip_fn(const Span<nodes::NodeWarning> warnings)
 {
   std::string complete_string;
 
-  for (const nodes::eval_log::NodeWarning &warning : warnings.drop_back(1)) {
+  for (const nodes::NodeWarning &warning : warnings.drop_back(1)) {
     complete_string += warning.message;
     /* Adding the period is not ideal for multi-line messages, but it is consistent
      * with other tooltip implementations in Blender, so it is added here. */
@@ -2182,7 +2184,7 @@ static void node_add_error_message_button(const TreeDrawContext &tree_draw_ctx,
       return tree_draw_ctx.tree_logs.get_main_tree_log(zone);
     }();
 
-    Span<nodes::eval_log::NodeWarning> warnings;
+    Span<nodes::NodeWarning> warnings;
     if (geo_tree_log) {
       nodes::eval_log::NodeLog *node_log = geo_tree_log->find_node_log(node.identifier);
       if (node_log != nullptr) {
@@ -2198,14 +2200,13 @@ static void node_add_error_message_button(const TreeDrawContext &tree_draw_ctx,
     ui::Button *but = add_error_message_button(
         block, rect, nodes::node_warning_type_icon(display_type), icon_offset);
     button_func_quick_tooltip_set(
-        but,
-        [warnings = Array<nodes::eval_log::NodeWarning>(warnings)](const ui::Button * /*but*/) {
+        but, [warnings = Array<nodes::NodeWarning>(warnings)](const ui::Button * /*but*/) {
           return node_errors_tooltip_fn(warnings);
         });
     return;
   }
   if (ntree.type == NTREE_SHADER) {
-    const VectorSet<std::string> *errors = tree_draw_ctx.shader_node_errors.lookup_ptr(
+    const VectorSet<nodes::NodeWarning> *errors = tree_draw_ctx.shader_node_errors.lookup_ptr(
         node.identifier);
     if (!errors) {
       return;
@@ -2213,17 +2214,22 @@ static void node_add_error_message_button(const TreeDrawContext &tree_draw_ctx,
     if (errors->is_empty()) {
       return;
     }
-    ui::Button *but = add_error_message_button(block, rect, ICON_STATUS_ERROR, icon_offset);
+    const nodes::NodeWarningType display_type = node_error_highest_priority(*errors);
+    ui::Button *but = add_error_message_button(
+        block, rect, nodes::node_warning_type_icon(display_type), icon_offset);
     button_func_quick_tooltip_set(but, [errors = *errors](const ui::Button * /*but*/) {
-      std::string tooltip;
-      for (const int i : errors.index_range()) {
-        const StringRefNull error = errors[i];
-        tooltip += error.c_str();
-        if (i + 1 < errors.size()) {
-          tooltip += ".\n";
+      Vector<std::string> tooltip_lines;
+      for (const nodes::NodeWarning &error : errors) {
+        std::string message = error.message;
+        if (message.empty()) {
+          continue;
         }
+        if (!message.ends_with(".")) {
+          message += ".";
+        }
+        tooltip_lines.append(std::move(message));
       }
-      return tooltip;
+      return fmt::format("{}", fmt::join(tooltip_lines, "\n"));
     });
   }
 }
@@ -2511,6 +2517,7 @@ static Vector<NodeExtraInfoRow> node_get_extra_info(const bContext &C,
             NODE_EVALUATE_CLOSURE) ||
        StringRef(node.idname).startswith("GeometryNodeImport") ||
        node.is_type("GeometryNodeClosureToList"_ustr) ||
+       node.is_type("GeometryNodeCombineList"_ustr) ||
        node.is_type("GeometryNodeFilterList"_ustr) ||
        node.is_type("GeometryNodeListGetItem"_ustr) ||
        node.is_type("GeometryNodeFieldToList"_ustr) ||
@@ -3950,7 +3957,7 @@ static void reroute_node_draw_body(const bContext &C,
 {
   BLI_assert(node.is_reroute());
 
-  bNodeSocket &sock = *static_cast<bNodeSocket *>(node.inputs.first);
+  bNodeSocket &sock = *node.inputs.first();
 
   PointerRNA nodeptr = RNA_pointer_create_discrete(
       const_cast<ID *>(&ntree.id), RNA_Node, const_cast<bNode *>(&node));
@@ -4720,6 +4727,7 @@ void node_draw_space(const bContext &C, ARegion &region)
   SpaceNode &snode = *CTX_wm_space_node(&C);
   View2D &v2d = region.v2d;
   Scene &scene = *CTX_data_scene(&C);
+  Main &bmain = *CTX_data_main(&C);
 
   /* Setup off-screen buffers. */
   GPUViewport *viewport = WM_draw_region_get_viewport(&region);
@@ -4753,8 +4761,8 @@ void node_draw_space(const bContext &C, ARegion &region)
   ui::view2d_dot_grid_draw(&v2d, TH_GRID, NODE_GRID_STEP_SIZE, grid_levels);
 
   /* Draw parent node trees. */
-  if (snode.treepath.last) {
-    bNodeTreePath *path = static_cast<bNodeTreePath *>(snode.treepath.last);
+  if (snode.treepath.last()) {
+    bNodeTreePath *path = snode.treepath.last();
 
     /* Update tree path name (drawn in the bottom left). */
     ID *name_id = (path->nodetree && path->nodetree != snode.nodetree) ? &path->nodetree->id :
@@ -4854,16 +4862,48 @@ void node_draw_space(const bContext &C, ARegion &region)
   /* Reset view matrix. */
   ui::view2d_view_restore(&C);
 
+  int text_info_y_offset = 0;
   if (snode.overlay.flag & SN_OVERLAY_SHOW_OVERLAYS) {
-    if (snode.flag & SNODE_SHOW_GPENCIL && snode.treepath.last) {
+    if (snode.flag & SNODE_SHOW_GPENCIL && snode.treepath.last()) {
       /* Draw grease-pencil (screen strokes, and also paint-buffer). */
       ED_annotation_draw_view2d(&C, false);
     }
 
     /* Draw context path. */
     if (snode.overlay.flag & SN_OVERLAY_SHOW_PATH) {
+      text_info_y_offset += UI_UNIT_Y;
       draw_tree_path(C, region);
     }
+  }
+
+  const bool show_text_info = ED_node_is_compositor(&snode) &&
+                              (snode.overlay.flag & SN_OVERLAY_SHOW_OVERLAYS &&
+                               snode.overlay.flag & SN_OVERLAY_SHOW_TEXT_INFO &&
+                               snode.flag & SNODE_BACKDRAW);
+
+  if (show_text_info) {
+    int render_size_x, render_size_y;
+    BKE_render_resolution(&scene.r, true, &render_size_x, &render_size_y);
+
+    /* Use same padding as path tree. */
+    const rcti *rect = ED_region_visible_rect(&region);
+    int xoffset = rect->xmin + 16 * UI_SCALE_FAC;
+    int yoffset = rect->ymax - (0.4f * UI_UNIT_Y) - text_info_y_offset;
+
+    int viewer_size_x = 0;
+    int viewer_size_y = 0;
+    void *lock;
+
+    Image *ima = BKE_image_ensure_viewer(&bmain, IMA_TYPE_COMPOSITE, "Viewer Node");
+    ImBuf *ibuf = BKE_image_acquire_ibuf(ima, nullptr, &lock);
+    if (ibuf) {
+      viewer_size_x = ibuf->x;
+      viewer_size_y = ibuf->y;
+    }
+    BKE_image_release_ibuf(ima, ibuf, lock);
+
+    ED_region_overlay_info_text_draw(
+        render_size_x, render_size_y, viewer_size_x, viewer_size_y, xoffset, yoffset);
   }
 
   /* Scrollers. */
