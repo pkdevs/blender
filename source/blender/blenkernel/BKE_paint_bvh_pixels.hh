@@ -150,6 +150,7 @@ struct PixelNode {
     tiles.clear();
     uv_primitives.tri_indices.reinitialize(0);
     uv_primitives.pixel_to_position.reinitialize(0);
+    uv_primitives.face_indices.reinitialize(0);
   }
 };
 
