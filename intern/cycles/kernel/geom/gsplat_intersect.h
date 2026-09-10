@@ -46,7 +46,7 @@ CCL_NAMESPACE_BEGIN
 struct GSplatIsectParams {
   float3 scale;
   Quaternion rotation;
-  float4 radiance_base;
+  float opacity;
 };
 
 /* Optimized access to Gaussian splat parameters for the intersection purposes.
@@ -63,7 +63,7 @@ ccl_device_forceinline GSplatIsectParams gsplat_intersect_get_params(
   if ((primitive_type & PRIMITIVE_MOTION) == 0) {
     params.scale = kernel_data_fetch(attributes_float3, scale_offset + prim);
     params.rotation = kernel_data_fetch(attributes_quaternion, rotation_offset + prim);
-    params.radiance_base = kernel_data_fetch(attributes_float4, radiance_base_offset + prim);
+    params.opacity = kernel_data_fetch(attributes_float4, radiance_base_offset + prim).w;
     return params;
   }
 
@@ -103,10 +103,10 @@ ccl_device_forceinline GSplatIsectParams gsplat_intersect_get_params(
                                                    radiance_base_offset + offset_for_step);
     const float4 next_radiance_base = kernel_data_fetch(
         attributes_float4, radiance_base_offset + offset_for_next_step);
-    params.radiance_base = mix(radiance_base, next_radiance_base, t);
+    params.opacity = mix(radiance_base.w, next_radiance_base.w, t);
   }
   else {
-    params.radiance_base = kernel_data_fetch(attributes_float4, radiance_base_offset + prim);
+    params.opacity = kernel_data_fetch(attributes_float4, radiance_base_offset + prim).w;
   }
 
   return params;
@@ -199,7 +199,7 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
    * From experimentation it seems there should indeed be this factor, otherwise the bicycle model
    * does not render correctly (parts of the wheel and brakes are missing). */
   const float3 x_minus_mu = x - mu;
-  const float particle_opacity = params.radiance_base.w *
+  const float particle_opacity = params.opacity *
                                  fast_expf(-1.0f / 2.0f * dot(x_minus_mu, Sigma_inv * x_minus_mu));
 
   /* Approach similar to [sun2025] who uses stateless trigonometric hash function as a source of
