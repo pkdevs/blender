@@ -39,11 +39,7 @@ static const EnumPropertyItem prop_interpolation_items[] = {
 
 static const EnumPropertyItem prop_clamp_elevation_items[] = {
     {CURVE_CLAMP_ELEVATION_NONE, "NONE", 0, "None", "No restrictions on vertex movement"},
-    {CURVE_CLAMP_ELEVATION_RAISE,
-     "RAISE",
-     0,
-     "Only Raise",
-     "Only allow extrusions"},
+    {CURVE_CLAMP_ELEVATION_RAISE, "RAISE", 0, "Only Raise", "Only allow extrusions"},
     {CURVE_CLAMP_ELEVATION_LOWER, "LOWER", 0, "Only Lower", "Only allow indentation"},
     {0, nullptr},
 };
@@ -75,20 +71,20 @@ static wmOperatorStatus edbm_curve_edge_loops_between_selected_exec(bContext *C,
 
     has_verts_selected = true;
 
-    if (!EDBM_op_callf(
-            em,
-            op,
-            "curve_edge_loops_between_selected geom=%hv factor=%f clamp_elevation=%i extend_loop=%b regular=%b "
-            "lock_x=%b lock_y=%b lock_z=%b interpolation=%i",
-            BM_ELEM_SELECT,
-            factor,
-            clamp_elevation,
-            extend,
-            regular,
-            lock[0],
-            lock[1],
-            lock[2],
-            interpolation))
+    if (!EDBM_op_callf(em,
+                       op,
+                       "curve_edge_loops_between_selected geom=%hv factor=%f clamp_elevation=%i "
+                       "extend_loop=%b regular=%b "
+                       "lock_x=%b lock_y=%b lock_z=%b interpolation=%i",
+                       BM_ELEM_SELECT,
+                       factor,
+                       clamp_elevation,
+                       extend,
+                       regular,
+                       lock[0],
+                       lock[1],
+                       lock[2],
+                       interpolation))
     {
       continue;
     }
