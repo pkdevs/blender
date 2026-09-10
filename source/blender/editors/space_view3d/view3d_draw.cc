@@ -1201,8 +1201,6 @@ static void draw_viewport_name(ARegion *region, View3D *v3d, int xoffset, int *y
       case eRegionView3D_ViewFlipRoll::ROLL_OTHER:
         name_array.append(IFACE_(" (Rolled)"));
         break;
-      default:
-        break;
     }
   }
 
