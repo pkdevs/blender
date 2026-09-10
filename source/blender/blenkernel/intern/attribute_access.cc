@@ -603,6 +603,9 @@ GAttributeWriter MutableAttributeAccessor::convert_or_add_for_write_only(const S
     if (this->add_override(name, domain, data_type, AttributeInitConstruct())) {
       return this->lookup_for_write(name);
     }
+    /* Transfer failed, convert_or_add_for_write() should not be used for attributes
+     * that can't be converted. */
+    BLI_assert_unreachable();
     return {};
   }
   this->add(name, domain, data_type, AttributeInitConstruct());
