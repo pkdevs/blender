@@ -1093,7 +1093,7 @@ void ObjectManager::device_update_flags(Device * /*unused*/,
 }
 
 /* NOTE: Only use for attributes that are guaranteed to exist.
- * Otherwise it is not possible to encore offset and motion flag. */
+ * Otherwise it is not possible to encode offset and motion flag. */
 static bool update_gsplat_std_point_attribute_offset_and_flag(const DeviceScene &dscene,
                                                               const PointCloud &pointcloud,
                                                               const size_t attr_map_offset,
