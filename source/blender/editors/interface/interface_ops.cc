@@ -2200,24 +2200,26 @@ static wmOperatorStatus editsource_exec(bContext *C, wmOperator *op)
 
   ARegion *region = nullptr;
   Button *but = nullptr;
-  const bContextStore *ctx_store = CTX_store_get(C);
-  const PointerRNA *region_ptr = ctx_store ?
-                                     CTX_store_ptr_lookup(ctx_store, "popup_region", RNA_Region) :
-                                     nullptr;
 
-  if (region_ptr && region_ptr->has_data()) {
-    region = region_ptr->data_as<ARegion>();
-    but = region_find_active_but(region);
-    if (region->regiontype == RGN_TYPE_TEMPORARY && !but->block->handle->can_refresh) {
-      BKE_report(op->reports,
-                 RPT_ERROR,
-                 "Cannot edit source in popup regions that does not support refresh.");
-      return OPERATOR_CANCELLED;
+  {
+    const bContextStore *ctx_store = CTX_store_get(C);
+    const PointerRNA *region_ptr = ctx_store ? CTX_store_ptr_lookup(
+                                                   ctx_store, "popup_region", RNA_Region) :
+                                               nullptr;
+    if (region_ptr && region_ptr->has_data()) {
+      region = region_ptr->data_as<ARegion>();
+      but = region_find_active_but(region);
+      if (region->regiontype == RGN_TYPE_TEMPORARY && !but->block->handle->can_refresh) {
+        BKE_report(op->reports,
+                   RPT_ERROR,
+                   "Cannot edit source in popup regions that does not support refresh.");
+        return OPERATOR_CANCELLED;
+      }
     }
-  }
-  else {
-    but = context_active_but_get(C);
-    region = CTX_wm_region(C);
+    else {
+      but = context_active_but_get(C);
+      region = CTX_wm_region(C);
+    }
   }
 
   if (but) {
