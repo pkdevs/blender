@@ -699,10 +699,6 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
   wmGizmo *gz = mask_group->border;
 
-  if (should_update(C, gzgroup)) {
-    update_things(C, gzgroup);
-  }
-
   // void *lock;
   // Image *ima = BKE_image_ensure_viewer(bmain, IMA_TYPE_COMPOSITE, "Render Result");
   // ImBuf *ibuf = BKE_image_acquire_ibuf(ima, nullptr, &lock);
@@ -744,9 +740,11 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   // BKE_image_release_ibuf(ima, ibuf, lock);
 }
 
-static void bbox_draw_prepare_space_image(const bContext * /*C*/, wmGizmoGroup * /*gzgroup*/)
+static void bbox_draw_prepare_space_image(const bContext *C, wmGizmoGroup *gzgroup)
 {
-  // update_things(C, gzgroup);
+  if (should_update(C, gzgroup)) {
+    update_things(C, gzgroup);
+  }
 }
 
 void VIEW3D_GGT_grease_pencil_quad(wmGizmoGroupType *gzgt)
