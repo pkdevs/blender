@@ -881,6 +881,11 @@ void ED_region_exit(bContext *C, ARegion *region)
   wmWindow *win = CTX_wm_window(C);
   ARegion *prevar = CTX_wm_region(C);
 
+  if (region->runtime->text_cursor_overlay && region->runtime->text_cursor_overlay->timer) {
+    WM_event_timer_remove(wm, win, region->runtime->text_cursor_overlay->timer);
+    region->runtime->text_cursor_overlay = std::nullopt;
+  }
+
   if (region->runtime->type && region->runtime->type->exit) {
     region->runtime->type->exit(wm, region);
   }
