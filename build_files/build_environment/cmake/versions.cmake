@@ -840,10 +840,10 @@ set(EMBREE_HOMEPAGE https://github.com/RenderKit/embree)
 set(EMBREE_LICENSE SPDX:Apache-2.0)
 set(EMBREE_COPYRIGHT "Copyright 2009-2024 Intel Corporation")
 
-set(USD_VERSION 26.03)
+set(USD_VERSION 26.08)
 set(USD_NAME USD)
 set(USD_URI https://github.com/PixarAnimationStudios/OpenUSD/archive/v${USD_VERSION}.tar.gz)
-set(USD_HASH cc6d6bffdcdd038f60e2fe4726b08673)
+set(USD_HASH 333b9530b83bf74036af45d25bdaa4a0)
 set(USD_HASH_TYPE MD5)
 set(USD_FILE usd-v${USD_VERSION}.tar.gz)
 set(USD_CPE "cpe:2.3:a:pixar:openusd:${USD_VERSION}:*:*:*:*:*:*:*")
@@ -1520,7 +1520,7 @@ set(JOLT_LICENSE SPDX:MIT)
 set(JOLT_COPYRIGHT "Copyright 2021 Jorrit Rouwe")
 
 # Using the same RapidJSON git commit revision as the OpenTimelineIO submodule (src/deps/rapidjson in the repo). Keep in sync.
-set(RAPIDJSON_VERSION 24b5e7a8b27f42fa16b96fc70aade9106cf7102f)  # Latest master on 2026-09-08
+set(RAPIDJSON_VERSION 24b5e7a8b27f42fa16b96fc70aade9106cf7102f) # Latest master on 2026-09-08
 set(RAPIDJSON_URI https://github.com/Tencent/rapidjson/archive/${RAPIDJSON_VERSION}.tar.gz)
 set(RAPIDJSON_HASH 2d2601a82d2d3b7e143a3c8d43ef616671391034bc46891a9816b79cf2d3e7a8)
 set(RAPIDJSON_HASH_TYPE SHA256)
@@ -1529,11 +1529,22 @@ set(RAPIDJSON_HOMEPAGE http://rapidjson.org)
 set(RAPIDJSON_LICENSE SPDX:MIT)
 set(RAPIDJSON_COPYRIGHT "Copyright (C) 2015 THL A29 Limited, a Tencent company, and Milo Yip. All rights reserved.")
 
-set(OPENTIMELINEIO_VERSION 0.18.1)
-set(OPENTIMELINEIO_URI https://github.com/AcademySoftwareFoundation/OpenTimelineIO/archive/refs/tags/v${OPENTIMELINEIO_VERSION}.tar.gz)
-set(OPENTIMELINEIO_HASH bcb516a43a962dac0cde3e1f9da634c1fd409915d499ff8f3ce6f738a4637d72)
+# Using the latest main as the current latest stable (v0.18.1) lacks CMake improvements regarding config target files
+# install location and pybind11, can switch back to stable on next upgrade if released.
+set(OPENTIMELINEIO_VERSION 31e3101e750be2aa992274ac02c0679077872e57) # Latest main on 2026-09-09
+set(OPENTIMELINEIO_URI https://github.com/AcademySoftwareFoundation/OpenTimelineIO/archive/${OPENTIMELINEIO_VERSION}.tar.gz)
+set(OPENTIMELINEIO_HASH e24df04cc0b4bc266d3859c212f7d97e5198f99d49ea889d57f8fb21d8e350e1)
 set(OPENTIMELINEIO_HASH_TYPE SHA256)
 set(OPENTIMELINEIO_FILE OpenTimelineIO-${OPENTIMELINEIO_VERSION}.tar.gz)
 set(OPENTIMELINEIO_HOMEPAGE https://github.com/AcademySoftwareFoundation/OpenTimelineIO)
 set(OPENTIMELINEIO_LICENSE SPDX:Apache-2.0)
 set(OPENTIMELINEIO_COPYRIGHT "Copyright Contributors to the OpenTimelineIO project.")
+
+set(KTX_VERSION 4.4.2)
+set(KTX_URI https://github.com/KhronosGroup/KTX-Software/archive/refs/tags/v${KTX_VERSION}.tar.gz)
+set(KTX_HASH 9412cb45045a503005acd47d98f9e8b47154634a50b4df21e17a1dfa8971d323)
+set(KTX_HASH_TYPE SHA256)
+set(KTX_FILE ktx-${KTX_VERSION}.tar.gz)
+set(KTX_HOMEPAGE https://github.com/KhronosGroup/KTX-Software)
+set(KTX_LICENSE SPDX:TODO)
+set(KTX_COPYRIGHT "TODO")

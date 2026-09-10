@@ -133,16 +133,23 @@ else()
   set(FFMPEG_CONFIGURE_COMMAND ${CONFIGURE_ENV_NO_PERL})
 endif()
 
+if(UNIX)
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --x86asmexe=${LIBDIR}/nasm/bin/nasm
+  )
+endif()
+
 if(APPLE)
   set(FFMPEG_EXTRA_FLAGS
     ${FFMPEG_EXTRA_FLAGS}
     --target-os=darwin
-    --x86asmexe=${LIBDIR}/nasm/bin/nasm
+    --enable-videotoolbox
   )
-elseif(UNIX)
+else()
   set(FFMPEG_EXTRA_FLAGS
     ${FFMPEG_EXTRA_FLAGS}
-    --x86asmexe=${LIBDIR}/nasm/bin/nasm
+    --disable-videotoolbox
   )
 endif()
 
@@ -193,7 +200,6 @@ ExternalProject_Add(external_ffmpeg
       --disable-indev=qtkit
       --disable-sdl2
       --disable-gnutls
-      --disable-videotoolbox
       --disable-libxcb
       --disable-xlib
       --disable-audiotoolbox
