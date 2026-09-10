@@ -271,6 +271,7 @@ IDTypeInfo IDType_ID_CA = {
     .foreach_cache = nullptr,
     .foreach_path = camera_foreach_path,
     .foreach_working_space_color = nullptr,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = nullptr,
 
     .blend_write = camera_blend_write,
@@ -1447,7 +1448,7 @@ void BKE_camera_background_image_remove(Camera *cam, CameraBGImage *bgpic)
 
 void BKE_camera_background_image_clear(Camera *cam)
 {
-  CameraBGImage *bgpic = static_cast<CameraBGImage *>(cam->bg_images.first);
+  CameraBGImage *bgpic = cam->bg_images.first();
 
   while (bgpic) {
     CameraBGImage *next_bgpic = bgpic->next;
