@@ -327,21 +327,17 @@ static void gizmo_bisect_prop_translate_get(const wmGizmo * /*gz*/,
   // RNA_property_float_get_array(op->ptr, ggd->data.prop_plane_co, static_cast<float *>(value_p));
 }
 
-static float3x3 compute_homography_matrix(const QuadWidgetGroup2 *mask_group)
+static std::optional<float3x3> compute_homography_matrix(const QuadWidgetGroup2 *mask_group)
 {
   float2 lower_left = mask_group->corner_pin.corner_data[0]->corner_pos + float2(0.5f);
   float2 lower_right = mask_group->corner_pin.corner_data[1]->corner_pos + float2(0.5f);
   float2 upper_right = mask_group->corner_pin.corner_data[2]->corner_pos + float2(0.5f);
   float2 upper_left = mask_group->corner_pin.corner_data[3]->corner_pos + float2(0.5f);
 
-  /* The inputs are invalid because the plane is not convex, fall back to an identity operation
-   * in that case. */
   if (!is_quad_convex_v2(lower_left, lower_right, upper_right, upper_left)) {
-    return float3x3::identity();
+    return std::nullopt;
   }
 
-  /* Compute a 2D projection matrix that projects from the corners of the image in normalized
-   * coordinates into the corners of the input plane. */
   float3x3 homography_matrix;
   float corners[4][2] = {{lower_left.x, lower_left.y},
                          {lower_right.x, lower_right.y},
@@ -384,7 +380,12 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
     const float4x4 mat = float4x4(gz->matrix_space);
     const float4x4 mat_inv = math::invert(mat);
 
-    const float3x3 homography_mat = compute_homography_matrix(mask_group);
+    const std::optional<float3x3> homography_mat = compute_homography_matrix(mask_group);
+
+    /* If the matrix can not be created leave the all points at the last valid position. */
+    if (!homography_mat) {
+      return;
+    }
 
     for (const int drawing_i : drawings.index_range()) {
       const MutableDrawingInfo &info = drawings[drawing_i];
@@ -398,7 +399,7 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
         const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) +
                               float2(0.5f);
 
-        const float3 pos_3d_out = homography_mat * float3(pos_2d, 1.0f);
+        const float3 pos_3d_out = (*homography_mat) * float3(pos_2d, 1.0f);
         const float2 pos_2d_out = float2(pos_3d_out.x, pos_3d_out.y) / pos_3d_out.z;
 
         positions[point_i] = math::transform_point(mat, float3(pos_2d_out - float2(0.5f), 0.0f));
