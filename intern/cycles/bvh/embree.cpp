@@ -806,6 +806,7 @@ void BVHEmbree::refit(Progress &progress)
             set_point_vertex_buffer(geom, pointcloud, true);
           }
           else {
+            assert(pointcloud->primitive_type() & PRIMITIVE_GSPLAT);
             rtcSetGeometryUserData(geom, const_cast<PointCloud *>(pointcloud));
             rtcSetGeometryUserPrimitiveCount(geom, pointcloud->num_points());
             rtcSetGeometryBoundsFunction(geom, gsplat_bounds_func, nullptr);
