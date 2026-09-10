@@ -1187,8 +1187,8 @@ static BMOpDefine bmo_to_annotation_def = {
          BMO_OP_SLOT_INT,
          to_subtype_union(BMO_OP_SLOT_SUBTYPE_INT_ENUM),
          bmo_enum_to_annotation_method},
-        /* Array of annotation strokes to project onto. */
-        {"strokes", BMO_OP_SLOT_PTR},
+        /* Array of annotation strokes to project onto (ignored if None). */
+        {"strokes", BMO_OP_SLOT_PTR, to_subtype_union(BMO_OP_SLOT_SUBTYPE_PTR_STRUCT)},
         /* Lock X axis editing. */
         {"lock_x", BMO_OP_SLOT_BOOL},
         /* Lock Y axis editing. */
