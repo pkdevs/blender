@@ -16,6 +16,8 @@
 #include "BLI_math_base.hh"
 #include "BLI_string.hh"
 
+#include "CLG_log.h"
+
 #include "DNA_curve_enums.h"
 #include "DNA_sequence_types.h"
 #include "DNA_sound_types.h"
@@ -34,6 +36,8 @@
 
 namespace blender::io::otio {
 using namespace opentimelineio::OPENTIMELINEIO_VERSION_NS;
+
+static CLG_LogRef LOG = {"io.otio"};
 
 /**
  * \return `true` if any_cast is successful

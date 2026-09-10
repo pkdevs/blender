@@ -52,6 +52,8 @@
 namespace blender::io::otio {
 using namespace opentimelineio::OPENTIMELINEIO_VERSION_NS;
 
+static CLG_LogRef LOG = {"io.otio"};
+
 /**
  * \brief Copies `filename_prev` to `filename` if missing frame policy is 'hold' or returns true if
  * missing frame policy is 'error'.

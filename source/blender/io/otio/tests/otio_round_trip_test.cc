@@ -478,7 +478,7 @@ TEST_F(OTIORoundTripTest, EmptyTimeline)
   EXPECT_TRUE(BLI_listbase_is_empty(&editing->seqbase));
 
   ASSERT_EQ(BLI_listbase_count(&imported_scene->markers), 2);
-  const TimeMarker *marker = static_cast<const TimeMarker *>(imported_scene->markers.first);
+  const TimeMarker *marker = static_cast<const TimeMarker *>(imported_scene->markers.first());
   ASSERT_NE(marker, nullptr);
   EXPECT_STREQ(marker->name, "Marker 1");
   EXPECT_EQ(marker->frame, 10);
@@ -1014,7 +1014,7 @@ TEST_F(OTIORoundTripTest, MetaStrip)
   for (Strip &strip : imported_editing->seqbase) {
     ASSERT_EQ(strip.type, STRIP_TYPE_META);
     ASSERT_EQ(BLI_listbase_count(&strip.seqbase), 1);
-    Strip *nested_strip = static_cast<Strip *>(strip.seqbase.first);
+    Strip *nested_strip = static_cast<Strip *>(strip.seqbase.first());
     ASSERT_NE(nested_strip, nullptr);
     if (nested_strip->type == STRIP_TYPE_MOVIE) {
       imported_video_meta = &strip;
@@ -1033,8 +1033,8 @@ TEST_F(OTIORoundTripTest, MetaStrip)
   EXPECT_EQ(imported_audio_meta->left_handle(), strip_start);
   EXPECT_EQ(imported_audio_meta->right_handle(imported_scene), strip_end);
 
-  Strip *imported_movie = static_cast<Strip *>(imported_video_meta->seqbase.first);
-  Strip *imported_sound = static_cast<Strip *>(imported_audio_meta->seqbase.first);
+  Strip *imported_movie = static_cast<Strip *>(imported_video_meta->seqbase.first());
+  Strip *imported_sound = static_cast<Strip *>(imported_audio_meta->seqbase.first());
   EXPECT_STREQ(imported_movie->name + 2, movie_name);
   EXPECT_STREQ(imported_sound->name + 2, sound_name);
   EXPECT_EQ(imported_movie->channel, 1);
