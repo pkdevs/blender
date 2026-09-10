@@ -1599,7 +1599,7 @@ void nodes_modifier_data_block_destruct(NodesModifierDataBlock *data_block, cons
  * During evaluation we might have baked geometry that contains references to other data-blocks
  * (such as materials). We need to make sure that those data-blocks stay dependencies of the
  * modifier. Otherwise, the data-block references might not work when the baked data is loaded
- * again. Therefor, the dependencies are written back to the original modifier.
+ * again. Therefore, the dependencies are written back to the original modifier.
  */
 static void add_data_block_items_writeback(const ModifierEvalContext &ctx,
                                            NodesModifierData &nmd_eval,

@@ -236,7 +236,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
        * - GPU subdivision support: Might only need to display and not access tessellated mesh.
        *
        * If we can't delay, we still create the wrapper so external renderers can get the base
-       * mesh. But we tessellate immediately to take advantage of better parallellization
+       * mesh. But we tessellate immediately to take advantage of better parallelization
        * as part of multithreaded depsgraph evaluation. */
       const bool delay = G.background || is_render_mode || has_gpu_subdiv;
       if (!delay) {
