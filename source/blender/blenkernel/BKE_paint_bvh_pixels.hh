@@ -93,8 +93,9 @@ struct PixelNode {
   Vector<UDIMTilePixels, 0> tiles;
 
   struct {
-    /** Corresponding index into triangles */
+    /** Corresponding triangle index for a given primitive. */
     Array<int, 0> tri_indices;
+    /** Corresponding face index for a given primitive. */
     Array<int, 0> face_indices;
 
     /**
