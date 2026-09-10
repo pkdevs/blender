@@ -95,6 +95,7 @@ struct PixelNode {
   struct {
     /** Corresponding index into triangles */
     Array<int, 0> tri_indices;
+    Array<int, 0> face_indices;
 
     /**
      * Per primitive affine map from image pixel coordinate to object space position:
