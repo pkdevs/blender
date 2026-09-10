@@ -651,15 +651,9 @@ static Array<TransformFCurves> build_fcurves_for_paste(
   return fcurve_buffer;
 }
 
-static bAction *read_action_from_clipboard(Main &clipboard_bmain,
-                                           char filepath[FILE_MAX],
-                                           ReportList &reports)
+static bAction *read_action_from_clipboard(Main &clipboard_bmain, ReportList &reports)
 {
   namespace ar = blender::animrig;
-  if (!BKE_copybuffer_read(clipboard_bmain, filepath, &reports, FILTER_ID_AC)) {
-    BKE_report(&reports, RPT_ERROR, "No clipboard to read from");
-    return nullptr;
-  }
 
   if (clipboard_bmain.actions.is_empty()) {
     BKE_report(&reports, RPT_ERROR, "Clipboard data has no animation");
@@ -961,9 +955,13 @@ static wmOperatorStatus world_space_paste_exec(bContext *C, wmOperator *op)
 
   char filepath[FILE_MAX];
   BLI_path_join(filepath, sizeof(filepath), BKE_tempdir_base(), clipboard_name);
-  Main *clipboard_bmain = BKE_main_new();
-  bAction *clipboard_dna_action = read_action_from_clipboard(
-      *clipboard_bmain, filepath, *op->reports);
+  Main *clipboard_bmain = BKE_copybuffer_read(
+      *CTX_data_main(C), filepath, op->reports, FILTER_ID_ALL);
+  if (!clipboard_bmain) {
+    BKE_report(op->reports, RPT_ERROR, "No clipboard to read from");
+    return OPERATOR_CANCELLED;
+  }
+  bAction *clipboard_dna_action = read_action_from_clipboard(*clipboard_bmain, *op->reports);
 
   if (!clipboard_dna_action) {
     BKE_main_free(clipboard_bmain);
