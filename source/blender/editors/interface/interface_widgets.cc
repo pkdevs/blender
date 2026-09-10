@@ -2178,7 +2178,7 @@ static void widget_draw_text_ime_underline(const uiFontStyle *fstyle,
 static void widget_text_selection_color(const uiWidgetColors *wcol, uchar color[4])
 {
   copy_v4_v4_uchar(color, wcol->item);
-  color[3] = 204;
+  color[3] = 51;
 }
 
 static void widget_draw_textbox(const uiFontStyle *fstyle,
