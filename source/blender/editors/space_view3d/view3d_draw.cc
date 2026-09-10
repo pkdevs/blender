@@ -1179,7 +1179,7 @@ static void draw_viewport_name(ARegion *region, View3D *v3d, int xoffset, int *y
 
     switch (flip_roll) {
       case eRegionView3D_ViewFlipRoll::FlipOther:
-        name_array.append(IFACE_(" (Flipped)"));
+        name_array.append(IFACE_(" (Flipped) (Rolled)"));
         break;
       case eRegionView3D_ViewFlipRoll::FlipX:
         name_array.append(IFACE_(" (Flipped X)"));
