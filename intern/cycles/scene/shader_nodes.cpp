@@ -2715,6 +2715,8 @@ NODE_DEFINE(OpenPBRBsdfNode)
   SOCKET_IN_NORMAL(
       geometry_coat_tangent, "Geometry Coat Tangent", zero_float3(), SocketType::LINK_TANGENT);
 
+  SOCKET_IN_FLOAT(surface_mix_weight, "SurfaceMixWeight", 0.0f, SocketType::SVM_INTERNAL);
+
   SOCKET_OUT_CLOSURE(BSDF, "BSDF");
 
   return type;
