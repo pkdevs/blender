@@ -235,6 +235,12 @@ void do_versions_after_linking_503(FileData * /*fd*/, Main *bmain)
     do_versioning_camera_view_zoom(bmain);
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 20)) {
+    /* Shift animation data to accommodate the new anisotropic inputs. */
+    version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfGlass", 5, 3, 7);
+    version_node_socket_index_animdata(bmain, NTREE_SHADER, "ShaderNodeBsdfGlass", 2, 2, 4);
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
@@ -300,8 +306,10 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 6)) {
     for (Brush &brush : bmain->brushes) {
       if (ELEM(brush.ob_mode, OB_MODE_WEIGHT_PAINT, OB_MODE_VERTEX_PAINT)) {
-        brush.mesh_automasking_settings = MEM_new<MeshAutomaskingSettings>(__func__);
-        brush.mesh_automasking_settings->cavity_curve = BKE_sculpt_default_cavity_curve();
+        if (brush.mesh_automasking_settings == nullptr) {
+          brush.mesh_automasking_settings = MEM_new<MeshAutomaskingSettings>(__func__);
+          brush.mesh_automasking_settings->cavity_curve = BKE_sculpt_default_cavity_curve();
+        }
       }
     }
 
@@ -310,9 +318,11 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
         return;
       }
 
-      paint->mesh_automasking_settings = MEM_new<MeshAutomaskingSettings>("blo_do_versions_520");
-      paint->mesh_automasking_settings->cavity_curve = BKE_sculpt_default_cavity_curve();
-      paint->mesh_automasking_settings->cavity_curve_op = BKE_sculpt_default_cavity_curve();
+      if (paint->mesh_automasking_settings == nullptr) {
+        paint->mesh_automasking_settings = MEM_new<MeshAutomaskingSettings>("blo_do_versions_520");
+        paint->mesh_automasking_settings->cavity_curve = BKE_sculpt_default_cavity_curve();
+        paint->mesh_automasking_settings->cavity_curve_op = BKE_sculpt_default_cavity_curve();
+      }
     };
 
     for (Scene &scene : bmain->scenes) {
