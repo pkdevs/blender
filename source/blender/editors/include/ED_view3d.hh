@@ -7,6 +7,7 @@
  */
 
 #pragma once
+#include <array>
 
 #include "BLI_bounds_types.hh"
 #include "BLI_enum_flags.hh"
@@ -844,20 +845,6 @@ bool ED_view3d_viewplane_get(const Depsgraph *depsgraph,
  */
 void ED_view3d_polygon_offset(const RegionView3D *rv3d, float dist);
 
-void ED_view3d_calc_camera_border(const Scene *scene,
-                                  const Depsgraph *depsgraph,
-                                  const ARegion *region,
-                                  const View3D *v3d,
-                                  const RegionView3D *rv3d,
-                                  bool no_shift,
-                                  bool no_roll,
-                                  rctf *r_viewborder);
-void ED_view3d_calc_camera_border_size(const Scene *scene,
-                                       Depsgraph *depsgraph,
-                                       const ARegion *region,
-                                       const View3D *v3d,
-                                       const RegionView3D *rv3d,
-                                       float r_size[2]);
 bool ED_view3d_calc_render_border(
     const Scene *scene, Depsgraph *depsgraph, View3D *v3d, ARegion *region, rcti *r_rect);
 
@@ -1433,6 +1420,8 @@ void ED_view3d_gizmo_ruler_remove_by_gpencil_layer(struct bContext *C, bGPDlayer
 void ED_view3d_buttons_region_layout_ex(const bContext *C,
                                         ARegion *region,
                                         const char *category_override);
+
+std::array<const char *, 4> ED_view3d_buttons_contexts(const bContext *C);
 
 /* `view3d_view.cc` */
 

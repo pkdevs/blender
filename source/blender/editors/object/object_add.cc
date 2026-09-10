@@ -2361,7 +2361,7 @@ static NodesModifierData *add_essential_asset_modifier(bContext &C,
   if (!asset_id) {
     return nullptr;
   }
-  if (GS(asset_id->name) != ID_NT) {
+  if (asset_id->id_type() != ID_NT) {
     return nullptr;
   }
   bNodeTree *node_group = id_cast<bNodeTree *>(asset_id);
@@ -2595,7 +2595,7 @@ static wmOperatorStatus object_delete_exec(bContext *C, wmOperator *op)
   }
   CTX_DATA_END;
 
-  if (has_volume_lightprobe && WM_jobs_test(wm, scene, WM_JOB_TYPE_LIGHT_BAKE)) {
+  if (has_volume_lightprobe && WM_jobs_has_running(wm, scene, WM_JOB_TYPE_LIGHT_BAKE)) {
     WM_jobs_stop_type(wm, scene, WM_JOB_TYPE_LIGHT_BAKE);
     BKE_report(op->reports,
                RPT_WARNING,
@@ -4194,9 +4194,7 @@ static Object *convert_font_to_curve_legacy_generic(Object *ob,
     /* other users */
     Object *ob1 = nullptr;
     if (ID_REAL_USERS(&cu->id) > 1) {
-      for (ob1 = static_cast<Object *>(info.bmain->objects.first); ob1;
-           ob1 = static_cast<Object *>(ob1->id.next))
-      {
+      for (ob1 = info.bmain->objects.first(); ob1; ob1 = static_cast<Object *>(ob1->id.next)) {
         if (ob1->data == ob->data && ob1 != ob) {
           ob1->type = OB_CURVES_LEGACY;
           DEG_id_tag_update(&ob1->id,
