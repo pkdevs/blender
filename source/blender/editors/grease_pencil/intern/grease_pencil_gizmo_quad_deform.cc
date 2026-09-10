@@ -44,11 +44,13 @@ namespace ed::greasepencil {
 enum class DeformMode : int8_t {
   FREE = 0,
   PERSPECTIVE = 1,
+  GRID = 2,
 };
 
 static const EnumPropertyItem prop_deform_modes[] = {
     {int(DeformMode::FREE), "FREE", 0, "Free", "TODO"},
     {int(DeformMode::PERSPECTIVE), "PERSPECTIVE", 0, "Perspective", "TODO"},
+    {int(DeformMode::GRID), "GRID", 0, "Grid", "TODO"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -84,6 +86,7 @@ struct QuadWidgetGroup2 {
   GreasePencil *grease_pencil_src;
 
   IndexMaskMemory memory;
+  DeformMode mode;
 
   struct {
     wmGizmo *gizmos[4];
@@ -159,7 +162,7 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   PointerRNA ptr;
   bToolRef *tref = WM_toolsystem_ref_from_context(const_cast<bContext *>(C));
   WM_toolsystem_ref_properties_ensure_from_gizmo_group(tref, gzgroup->type, &ptr);
-  const DeformMode mode = DeformMode(
+  mask_group->mode = DeformMode(
       RNA_property_enum_get(&ptr, mask_group->update_data.gzgt_mode_prop));
 
   float3 placement_normal_;
@@ -269,7 +272,7 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
       copy_m4_m4(gz2->matrix_space, gz->matrix_space);
     }
 
-    if (mode == DeformMode::FREE) {
+    if (mask_group->mode == DeformMode::FREE) {
       // RNA_float_set_array(gz->ptr, "dimensions", box->size());
       WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
       for (int i = 0; i < 4; i++) {
@@ -277,7 +280,7 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
         WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
       }
     }
-    else if (mode == DeformMode::PERSPECTIVE) {
+    else if (mask_group->mode == DeformMode::PERSPECTIVE || mask_group->mode == DeformMode::GRID) {
       WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
       for (int i = 0; i < 4; i++) {
         wmGizmo *gz2 = mask_group->corner_pin.gizmos[i];
@@ -370,9 +373,9 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
 
   // gizmo_bisect_exec(ggd);
 
-  {
-    QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
+  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
 
+  if (mask_group->mode == DeformMode::PERSPECTIVE) {
     const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
     const Vector<IndexMask> selections = mask_group->selections;
     const Vector<Array<float3>> &src_positions = mask_group->src_positions;
@@ -406,10 +409,46 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
       });
 
       info.drawing.tag_positions_changed();
+    }
 
-      // box = bounds::merge(box,
-      //                     compute_screen_space_drawing_bounds(
-      //                         *rv3d, *object, info.layer_index, selected_points, info.drawing));
+    DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
+    WM_event_add_notifier(mask_group->update_data.context,
+                          NC_GEOM | ND_DATA | NA_EDITED,
+                          mask_group->grease_pencil_src);
+  }
+  else if (mask_group->mode == DeformMode::GRID) {
+    const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
+    const Vector<IndexMask> selections = mask_group->selections;
+    const Vector<Array<float3>> &src_positions = mask_group->src_positions;
+
+    const float4x4 mat = float4x4(gz->matrix_space);
+    const float4x4 mat_inv = math::invert(mat);
+
+    for (const int drawing_i : drawings.index_range()) {
+      const MutableDrawingInfo &info = drawings[drawing_i];
+      const IndexMask &selected_points = selections[drawing_i];
+      const Span<float3> src_positions_i = src_positions[drawing_i];
+
+      bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
+      MutableSpan<float3> positions = strokes.positions_for_write();
+      selected_points.foreach_index([&](const int point_i) {
+        const float2 lower_left = mask_group->corner_pin.corner_data[0]->corner_pos;
+        const float2 lower_right = mask_group->corner_pin.corner_data[1]->corner_pos;
+        const float2 upper_right = mask_group->corner_pin.corner_data[2]->corner_pos;
+        const float2 upper_left = mask_group->corner_pin.corner_data[3]->corner_pos;
+
+        const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) +
+                              float2(0.5f);
+
+        const float2 pos_2d_out = math::interpolate(
+            math::interpolate(lower_left, lower_right, pos_2d.x),
+            math::interpolate(upper_left, upper_right, pos_2d.x),
+            pos_2d.y);
+
+        positions[point_i] = math::transform_point(mat, float3(pos_2d_out, 0.0f));
+      });
+
+      info.drawing.tag_positions_changed();
     }
 
     DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
