@@ -608,7 +608,8 @@ bool BM_face_split_edgenet(
     }
   }
 
-  if (CustomData_has_math(&bm->ldata)) {
+  /* Copy existing corner data even for layers without interpolation support. */
+  if (bm->ldata.totlayer > 0) {
     /* reuse VERT_VISIT here to tag vert's already interpolated */
     BMIter iter;
     BMLoop *l_other;

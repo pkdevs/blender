@@ -9,6 +9,7 @@
 #include "BKE_gtest_base.hh"
 
 #include "bmesh.hh"
+#include "intern/bmesh_polygon_edgenet.hh"
 
 namespace blender {
 
@@ -47,6 +48,49 @@ TEST_F(BMeshCoreTest, BMVertCreate)
   EXPECT_EQ(BM_elem_float_data_get(&bm->vdata, bv3, CD_PROP_FLOAT), 1.5f);
   EXPECT_EQ(BM_mesh_elem_count(bm, BM_VERT), 3);
   BM_mesh_free(bm);
+}
+
+TEST_F(BMeshCoreTest, FaceSplitEdgeNetCornerAttributes)
+{
+  for (const bool add_uv_layer : {false, true}) {
+    BMeshCreateParams params{};
+    BMesh *bm = BM_mesh_create(&bm_mesh_allocsize_default, &params);
+    BM_data_layer_add(bm, &bm->ldata, CD_PROP_FLOAT);
+    if (add_uv_layer) {
+      BM_data_layer_add(bm, &bm->ldata, CD_PROP_FLOAT2);
+    }
+
+    const float coords[5][3] = {{0, 0, 0}, {2, 0, 0}, {2, 2, 0}, {0, 2, 0}, {1, 1, 0}};
+    BMVert *verts[5];
+    for (int i = 0; i < 5; i++) {
+      verts[i] = BM_vert_create(bm, coords[i], nullptr, BM_CREATE_NOP);
+    }
+    BMFace *face = BM_face_create_verts(bm, verts, 4, nullptr, BM_CREATE_NOP, true);
+    BM_face_normal_update(face);
+    BMIter iter;
+    BMLoop *loop;
+    BM_ITER_ELEM (loop, &iter, face, BM_LOOPS_OF_FACE) {
+      BM_elem_float_data_set(
+          &bm->ldata, loop, CD_PROP_FLOAT, 4.0f + loop->v->co[0] + 2.0f * loop->v->co[1]);
+    }
+
+    /* Split across an interior vertex to exercise both copying existing corners and
+     * interpolating new corners. An unrelated UV layer must not affect either operation. */
+    BMEdge *edges[2] = {BM_edge_create(bm, verts[0], verts[4], nullptr, BM_CREATE_NOP),
+                        BM_edge_create(bm, verts[4], verts[2], nullptr, BM_CREATE_NOP)};
+    Vector<BMFace *> faces;
+    EXPECT_TRUE(BM_face_split_edgenet(bm, face, edges, 2, &faces));
+    EXPECT_EQ(faces.size(), 2);
+    EXPECT_EQ(bm->totloop, 8);
+    for (BMFace *result_face : faces) {
+      BM_ITER_ELEM (loop, &iter, result_face, BM_LOOPS_OF_FACE) {
+        EXPECT_NEAR(BM_elem_float_data_get(&bm->ldata, loop, CD_PROP_FLOAT),
+                    4.0f + loop->v->co[0] + 2.0f * loop->v->co[1],
+                    1e-5f);
+      }
+    }
+    BM_mesh_free(bm);
+  }
 }
 
 }  // namespace blender
