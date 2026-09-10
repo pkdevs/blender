@@ -26,10 +26,8 @@ else()
   if(NOT BLENDER_PLATFORM_ARM)
     set(OIDN_EXTRA_ARGS
       ${OIDN_EXTRA_ARGS}
-      -DOIDN_DEVICE_SYCL=ON
-      -DOIDN_DEVICE_SYCL_AOT=OFF
       -DOIDN_DEVICE_CUDA=ON
-      -DOIDN_DEVICE_HIP=ON)
+      -DOIDN_DEVICE_HIP=OFF)
   elseif(UNIX)
     set(OIDN_EXTRA_ARGS
       ${OIDN_EXTRA_ARGS}
@@ -129,7 +127,6 @@ if(NOT (APPLE OR WIN32 OR BLENDER_PLATFORM_ARM))
   add_dependencies(
     external_openimagedenoise
     external_dpcpp
-    external_ocloc
   )
 endif()
 

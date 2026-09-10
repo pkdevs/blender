@@ -20,8 +20,7 @@ set(FFMPEG_CFLAGS "\
 -I${temp_LIBDIR}/vpx/include \
 -I${temp_LIBDIR}/x264/include \
 -I${temp_LIBDIR}/zlib/include \
--I${temp_LIBDIR}/aom/include \
--I${temp_LIBDIR}/x265/include"
+-I${temp_LIBDIR}/aom/include"
 )
 set(FFMPEG_LDFLAGS "\
 ${LIBDIR_FLAG}${temp_LIBDIR}/lame/lib \
@@ -32,7 +31,6 @@ ${LIBDIR_FLAG}${temp_LIBDIR}/theora/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/opus/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/vpx/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/x264/lib \
-${LIBDIR_FLAG}${temp_LIBDIR}/x265/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/zlib/lib \
 ${LIBDIR_FLAG}${temp_LIBDIR}/aom/lib"
 )
@@ -181,7 +179,6 @@ ExternalProject_Add(external_ffmpeg
       --enable-libmp3lame
       --disable-librtmp
       --enable-libx264
-      --enable-libx265
       --enable-libaom
       --disable-libopencore-amrnb
       --disable-libopencore-amrwb
@@ -231,7 +228,6 @@ add_dependencies(
   external_ffmpeg
   external_zlib
   external_x264
-  external_x265
   external_opus
   external_vpx
   external_theora

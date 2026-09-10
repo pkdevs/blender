@@ -12,8 +12,8 @@ set(JOLT_EXTRA_ARGS
 
   # Compute backends.
   -DJPH_USE_DX12=OFF
-  -DJPH_USE_MTL=ON
-  -DJPH_USE_VK=ON
+  -DJPH_USE_MTL=OFF
+  -DJPH_USE_VK=OFF
 
   # Disable unused targets.
   -DTARGET_HELLO_WORLD=OFF

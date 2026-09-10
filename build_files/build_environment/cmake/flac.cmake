@@ -2,32 +2,9 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-if(NOT WIN32)
-  ExternalProject_Add(external_flac
-    URL file://${PACKAGE_DIR}/${FLAC_FILE}
-    DOWNLOAD_DIR ${DOWNLOAD_DIR}
-    URL_HASH ${FLAC_HASH_TYPE}=${FLAC_HASH}
-    PREFIX ${BUILD_DIR}/flac
-
-    CONFIGURE_COMMAND ${CONFIGURE_ENV} &&
-      cd ${BUILD_DIR}/flac/src/external_flac/ &&
-      ${CONFIGURE_COMMAND} --prefix=${LIBDIR}/flac --disable-shared --enable-static
-
-    BUILD_COMMAND ${CONFIGURE_ENV} &&
-      cd ${BUILD_DIR}/flac/src/external_flac/ &&
-      make -j${MAKE_THREADS}
-
-    INSTALL_COMMAND ${CONFIGURE_ENV} &&
-      cd ${BUILD_DIR}/flac/src/external_flac/ &&
-      make install
-
-    INSTALL_DIR ${LIBDIR}/flac
-  )
-
-  harvest(external_flac flac/lib sndfile/lib "libFLAC.a")
-else()
+if(WIN32)
   set(FLAC_CXX_FLAGS "-DFLAC__NO_DLL=ON")
-
+endif()
   set(FLAC_EXTRA_ARGS
     -DCMAKE_POLICY_DEFAULT_CMP0074=NEW
     -DBUILD_PROGRAMS=OFF
@@ -59,4 +36,3 @@ else()
     external_flac
     external_ogg
   )
-endif()
