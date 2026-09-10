@@ -1147,7 +1147,6 @@ Mesh *mesh_create_eval_no_deform_render(Depsgraph *depsgraph,
 const Mesh *editbmesh_get_eval_cage(Depsgraph *depsgraph,
                                     const Scene *scene,
                                     Object *obedit,
-                                    BMEditMesh * /*em*/,
                                     const CustomData_MeshMasks *dataMask)
 {
   CustomData_MeshMasks cddata_masks = *dataMask;
@@ -1177,7 +1176,7 @@ const Mesh *editbmesh_get_eval_cage_from_orig(Depsgraph *depsgraph,
   const Scene *scene_eval = DEG_get_evaluated(depsgraph, scene);
   Object *obedit_eval = DEG_get_evaluated(depsgraph, obedit);
   BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  return editbmesh_get_eval_cage(depsgraph, scene_eval, obedit_eval, em, dataMask);
+  return editbmesh_get_eval_cage(depsgraph, scene_eval, obedit_eval, dataMask);
 }
 
 struct MappedUserData {

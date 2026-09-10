@@ -1317,8 +1317,8 @@ VectorSet<StringRefNull> Mesh::uv_map_names() const
 
 StringRefNull Mesh::active_uv_map_name() const
 {
-  if (BMEditMesh *em = this->runtime->edit_mesh.get()) {
-    const char *name = CustomData_get_active_layer_name(&em->bm->ldata, CD_PROP_FLOAT2);
+  if (const BMesh *bm = BKE_editmesh_bmesh_get(this)) {
+    const char *name = CustomData_get_active_layer_name(&bm->ldata, CD_PROP_FLOAT2);
     return name ? name : "";
   }
   return this->active_uv_map_attribute ? this->active_uv_map_attribute : "";
@@ -1326,8 +1326,8 @@ StringRefNull Mesh::active_uv_map_name() const
 
 StringRefNull Mesh::default_uv_map_name() const
 {
-  if (BMEditMesh *em = this->runtime->edit_mesh.get()) {
-    const char *name = CustomData_get_render_layer_name(&em->bm->ldata, CD_PROP_FLOAT2);
+  if (const BMesh *bm = BKE_editmesh_bmesh_get(this)) {
+    const char *name = CustomData_get_render_layer_name(&bm->ldata, CD_PROP_FLOAT2);
     return name ? name : "";
   }
   return this->default_uv_map_attribute ? this->default_uv_map_attribute : "";
@@ -1348,12 +1348,12 @@ void Mesh::uv_maps_active_set(const StringRef name)
   if (!name.is_empty()) {
     this->active_uv_map_attribute = BLI_strdupn(name.data(), name.size());
   }
-  if (BMEditMesh *em = this->runtime->edit_mesh.get()) {
-    int index = CustomData_get_named_layer_index(&em->bm->ldata, CD_PROP_FLOAT2, name);
+  if (BMesh *bm = BKE_editmesh_bmesh_get(this)) {
+    int index = CustomData_get_named_layer_index(&bm->ldata, CD_PROP_FLOAT2, name);
     if (index == -1) {
-      index = CustomData_get_layer_index(&em->bm->ldata, CD_PROP_FLOAT2);
+      index = CustomData_get_layer_index(&bm->ldata, CD_PROP_FLOAT2);
     }
-    CustomData_set_layer_active_index(&em->bm->ldata, CD_PROP_FLOAT2, index);
+    CustomData_set_layer_active_index(&bm->ldata, CD_PROP_FLOAT2, index);
   }
 }
 
@@ -1363,12 +1363,12 @@ void Mesh::uv_maps_default_set(const StringRef name)
   if (!name.is_empty()) {
     this->default_uv_map_attribute = BLI_strdupn(name.data(), name.size());
   }
-  if (BMEditMesh *em = this->runtime->edit_mesh.get()) {
-    int index = CustomData_get_named_layer_index(&em->bm->ldata, CD_PROP_FLOAT2, name);
+  if (BMesh *bm = BKE_editmesh_bmesh_get(this)) {
+    int index = CustomData_get_named_layer_index(&bm->ldata, CD_PROP_FLOAT2, name);
     if (index == -1) {
-      index = CustomData_get_layer_index(&em->bm->ldata, CD_PROP_FLOAT2);
+      index = CustomData_get_layer_index(&bm->ldata, CD_PROP_FLOAT2);
     }
-    CustomData_set_layer_render_index(&em->bm->ldata, CD_PROP_FLOAT2, index);
+    CustomData_set_layer_render_index(&bm->ldata, CD_PROP_FLOAT2, index);
   }
 }
 
@@ -1869,11 +1869,11 @@ void BKE_mesh_material_remap(Mesh *mesh, const uint *remap, uint remap_len)
   } \
   ((void)0)
 
-  if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
+  if (BMesh *bm = BKE_editmesh_bmesh_get(mesh)) {
     BMIter iter;
     BMFace *efa;
 
-    BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+    BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
       MAT_NR_REMAP(efa->mat_nr);
     }
   }

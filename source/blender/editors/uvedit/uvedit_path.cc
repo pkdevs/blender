@@ -164,8 +164,7 @@ static int mouse_mesh_uv_shortest_path_vert(Scene *scene,
                                             const float aspect_y,
                                             const BMUVOffsets &offsets)
 {
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   int flush = 0;
 
   UserData_UV user_data = {};
@@ -283,8 +282,7 @@ static int mouse_mesh_uv_shortest_path_edge(Scene *scene,
                                             const float aspect_y,
                                             const BMUVOffsets &offsets)
 {
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   int flush = 0;
 
   UserData_UV user_data = {};
@@ -398,8 +396,7 @@ static int mouse_mesh_uv_shortest_path_face(Scene *scene,
                                             const float aspect_y,
                                             const BMUVOffsets &offsets)
 {
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   int flush = 0;
 
   UserData_UV user_data = {};
@@ -612,8 +609,7 @@ static wmOperatorStatus uv_shortest_path_pick_invoke(bContext *C,
   if (hit_found) {
     /* This may not be the active object. */
     Object *obedit = hit.ob;
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
     const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
 
     /* Respond to the hit. */
@@ -722,8 +718,7 @@ static wmOperatorStatus uv_shortest_path_pick_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  BMEditMesh *em = BKE_editmesh_from_object(obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
 
   BMElem *ele_src, *ele_dst;

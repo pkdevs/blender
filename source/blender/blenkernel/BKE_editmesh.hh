@@ -102,6 +102,10 @@ BMEditMesh *BKE_editmesh_copy(BMEditMesh *em);
  * - Null check the result if we want to respect the evaluated result, see: #154739.
  */
 BMEditMesh *BKE_editmesh_from_object(Object *ob);
+const BMesh *BKE_editmesh_bmesh_get(const Object *ob);
+const BMesh *BKE_editmesh_bmesh_get(const Mesh *mesh);
+BMesh *BKE_editmesh_bmesh_get_for_write(Mesh *mesh);
+BMesh *BKE_editmesh_bmesh_get_for_write(Object *ob);
 
 /**
  * Return whether the evaluated mesh is a "descendant" of the original mesh: whether it is a
@@ -119,10 +123,12 @@ Array<float3> BKE_editmesh_vert_coords_alloc(Depsgraph *depsgraph,
                                              BMEditMesh *em,
                                              Scene *scene,
                                              Object *ob);
-Array<float3> BKE_editmesh_vert_coords_alloc_orco(BMEditMesh *em);
-Span<float3> BKE_editmesh_vert_coords_when_deformed(
-    Depsgraph *depsgraph, BMEditMesh *em, Scene *scene, Object *obedit, Array<float3> &r_alloc);
+Array<float3> BKE_editmesh_vert_coords_alloc_orco(BMesh *bm);
+Span<float3> BKE_editmesh_vert_coords_when_deformed(Depsgraph *depsgraph,
+                                                    Scene *scene,
+                                                    Object *obedit,
+                                                    Array<float3> &r_alloc);
 
-void BKE_editmesh_lnorspace_update(BMEditMesh *em);
+void BKE_editmesh_lnorspace_update(BMesh *bm);
 
 }  // namespace blender

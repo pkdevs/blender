@@ -54,10 +54,10 @@ namespace blender {
  * just as the undo stack would.
  * So leaving this as an interface for further work */
 
-BMBackup EDBM_redo_state_store(BMEditMesh *em)
+BMBackup EDBM_redo_state_store(BMesh *bm)
 {
   BMBackup backup;
-  backup.bmcopy = BM_mesh_copy(em->bm);
+  backup.bmcopy = BM_mesh_copy(bm);
   return backup;
 }
 
@@ -99,9 +99,8 @@ void EDBM_redo_state_free(BMBackup *backup)
 /** \name BMesh Operator (BMO) API Wrapper
  * \{ */
 
-bool EDBM_op_init(BMEditMesh *em, BMOperator *bmop, wmOperator *op, const char *fmt, ...)
+bool EDBM_op_init(BMesh *bm, BMOperator *bmop, wmOperator *op, const char *fmt, ...)
 {
-  BMesh *bm = em->bm;
   va_list list;
 
   va_start(list, fmt);
@@ -117,7 +116,7 @@ bool EDBM_op_init(BMEditMesh *em, BMOperator *bmop, wmOperator *op, const char *
   return true;
 }
 
-bool EDBM_op_finish(BMEditMesh *em, BMOperator *bmop, wmOperator *op, const bool do_report)
+bool EDBM_op_finish(BMesh *bm, BMOperator *bmop, wmOperator *op, const bool do_report)
 {
   const char *errmsg;
 
@@ -126,20 +125,20 @@ bool EDBM_op_finish(BMEditMesh *em, BMOperator *bmop, wmOperator *op, const bool
     int verts_len, edges_len, loops_len, faces_len;
   };
   StatePrev em_state_prev = {
-      em->bm->totvert,
-      em->bm->totedge,
-      em->bm->totloop,
-      em->bm->totface,
+      bm->totvert,
+      bm->totedge,
+      bm->totloop,
+      bm->totface,
   };
 #endif
 
-  BMO_op_finish(em->bm, bmop);
+  BMO_op_finish(bm, bmop);
 
   bool changed = false;
   bool changed_was_set = false;
 
   eBMOpErrorLevel level;
-  while (BMO_error_pop(em->bm, &errmsg, nullptr, &level)) {
+  while (BMO_error_pop(bm, &errmsg, nullptr, &level)) {
     eReportType type = RPT_INFO;
     switch (level) {
       case BMO_ERROR_CANCEL: {
@@ -170,19 +169,17 @@ bool EDBM_op_finish(BMEditMesh *em, BMOperator *bmop, wmOperator *op, const bool
 
 #ifndef NDEBUG
   if (changed == false) {
-    BLI_assert((em_state_prev.verts_len == em->bm->totvert) &&
-               (em_state_prev.edges_len == em->bm->totedge) &&
-               (em_state_prev.loops_len == em->bm->totloop) &&
-               (em_state_prev.faces_len == em->bm->totface));
+    BLI_assert(
+        (em_state_prev.verts_len == bm->totvert) && (em_state_prev.edges_len == bm->totedge) &&
+        (em_state_prev.loops_len == bm->totloop) && (em_state_prev.faces_len == bm->totface));
   }
 #endif
 
   return changed;
 }
 
-bool EDBM_op_callf(BMEditMesh *em, wmOperator *op, const char *fmt, ...)
+bool EDBM_op_callf(BMesh *bm, wmOperator *op, const char *fmt, ...)
 {
-  BMesh *bm = em->bm;
   BMOperator bmop;
   va_list list;
 
@@ -197,17 +194,16 @@ bool EDBM_op_callf(BMEditMesh *em, wmOperator *op, const char *fmt, ...)
   BMO_op_exec(bm, &bmop);
 
   va_end(list);
-  return EDBM_op_finish(em, &bmop, op, true);
+  return EDBM_op_finish(bm, &bmop, op, true);
 }
 
-bool EDBM_op_vcall_and_selectf(BMEditMesh *em,
+bool EDBM_op_vcall_and_selectf(BMesh *bm,
                                wmOperator *op,
                                const char *select_slot_out,
                                const bool select_extend,
                                const char *fmt,
                                va_list list)
 {
-  BMesh *bm = em->bm;
   BMOperator bmop;
 
   if (!BMO_op_vinitf(bm, &bmop, BMO_FLAG_DEFAULTS, fmt, list)) {
@@ -222,16 +218,15 @@ bool EDBM_op_vcall_and_selectf(BMEditMesh *em,
   BLI_assert(hflag != 0);
 
   if (select_extend == false) {
-    BM_mesh_elem_hflag_disable_all(em->bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
+    BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_SELECT, false);
   }
 
-  BMO_slot_buffer_hflag_enable(
-      em->bm, bmop.slots_out, select_slot_out, hflag, BM_ELEM_SELECT, true);
+  BMO_slot_buffer_hflag_enable(bm, bmop.slots_out, select_slot_out, hflag, BM_ELEM_SELECT, true);
 
-  return EDBM_op_finish(em, &bmop, op, true);
+  return EDBM_op_finish(bm, &bmop, op, true);
 }
 
-bool EDBM_op_call_and_selectf(BMEditMesh *em,
+bool EDBM_op_call_and_selectf(BMesh *bm,
                               wmOperator *op,
                               const char *select_slot_out,
                               const bool select_extend,
@@ -240,14 +235,13 @@ bool EDBM_op_call_and_selectf(BMEditMesh *em,
 {
   va_list list;
   va_start(list, fmt);
-  const bool result = EDBM_op_vcall_and_selectf(em, op, select_slot_out, select_extend, fmt, list);
+  const bool result = EDBM_op_vcall_and_selectf(bm, op, select_slot_out, select_extend, fmt, list);
   va_end(list);
   return result;
 }
 
-bool EDBM_op_call_silentf(BMEditMesh *em, const char *fmt, ...)
+bool EDBM_op_call_silentf(BMesh *bm, const char *fmt, ...)
 {
-  BMesh *bm = em->bm;
   BMOperator bmop;
   va_list list;
 
@@ -261,7 +255,7 @@ bool EDBM_op_call_silentf(BMEditMesh *em, const char *fmt, ...)
   BMO_op_exec(bm, &bmop);
 
   va_end(list);
-  return EDBM_op_finish(em, &bmop, nullptr, false);
+  return EDBM_op_finish(bm, &bmop, nullptr, false);
 }
 
 /** \} */
@@ -434,7 +428,7 @@ void EDBM_select_more(BMEditMesh *em, const bool use_face_step)
   BMO_op_finish(em->bm, &bmop);
 
   EDBM_selectmode_flush(em);
-  EDBM_uvselect_clear(em);
+  EDBM_uvselect_clear(em->bm);
 }
 
 void EDBM_select_less(BMEditMesh *em, const bool use_face_step)
@@ -457,35 +451,35 @@ void EDBM_select_less(BMEditMesh *em, const bool use_face_step)
   BMO_op_finish(em->bm, &bmop);
 
   EDBM_selectmode_flush(em);
-  EDBM_uvselect_clear(em);
+  EDBM_uvselect_clear(em->bm);
 
   /* only needed for select less, ensure we don't have isolated elements remaining */
   BM_mesh_select_mode_clean(em->bm);
 }
 
-void EDBM_flag_disable_all(BMEditMesh *em, const char hflag)
+void EDBM_flag_disable_all(BMesh *bm, const char hflag)
 {
-  BM_mesh_elem_hflag_disable_all(em->bm, BM_VERT | BM_EDGE | BM_FACE, hflag, false);
+  BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE | BM_FACE, hflag, false);
 
   /* Keep this as there is no need to maintain UV selection when all are disabled. */
   if (hflag & BM_ELEM_SELECT) {
-    EDBM_uvselect_clear(em);
+    EDBM_uvselect_clear(bm);
   }
 }
 
-void EDBM_flag_enable_all(BMEditMesh *em, const char hflag)
+void EDBM_flag_enable_all(BMesh *bm, const char hflag)
 {
-  BM_mesh_elem_hflag_enable_all(em->bm, BM_VERT | BM_EDGE | BM_FACE, hflag, true);
+  BM_mesh_elem_hflag_enable_all(bm, BM_VERT | BM_EDGE | BM_FACE, hflag, true);
 
   /* Keep this as there is no need to maintain UV selection when all are enabled. */
   if (hflag & BM_ELEM_SELECT) {
-    EDBM_uvselect_clear(em);
+    EDBM_uvselect_clear(bm);
   }
 }
 
-bool EDBM_uvselect_clear(BMEditMesh *em)
+bool EDBM_uvselect_clear(BMesh *bm)
 {
-  return BM_mesh_uvselect_clear(em->bm);
+  return BM_mesh_uvselect_clear(bm);
 }
 
 /** \} */
@@ -1616,7 +1610,7 @@ bool EDBM_mesh_hide(BMEditMesh *em, bool swap)
 
   if (changed) {
     EDBM_selectmode_flush(em);
-    EDBM_uvselect_clear(em);
+    EDBM_uvselect_clear(em->bm);
   }
   return changed;
 
@@ -1668,7 +1662,7 @@ bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
   }
 
   /* Reveal everything */
-  EDBM_flag_disable_all(em, BM_ELEM_HIDDEN);
+  EDBM_flag_disable_all(em->bm, BM_ELEM_HIDDEN);
 
   /* Select relevant just-revealed elements */
   for (i = 0; i < 3; i++) {
@@ -1693,7 +1687,7 @@ bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
     const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_PROP_FLOAT2);
     if (cd_loop_uv_offset == -1) {
       /* Not expected but not an error either, clear if the UV's have been removed. */
-      EDBM_uvselect_clear(em);
+      EDBM_uvselect_clear(em->bm);
     }
     else {
       BMIter iter;
@@ -1736,7 +1730,7 @@ bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
   EDBM_selectmode_flush(em);
 
   /* hidden faces can have invalid normals */
-  EDBM_mesh_normals_update(em);
+  EDBM_mesh_normals_update(em->bm);
 
   return true;
 }
@@ -1747,19 +1741,19 @@ bool EDBM_mesh_reveal(BMEditMesh *em, bool select)
 /** \name Update API
  * \{ */
 
-void EDBM_mesh_normals_update_ex(BMEditMesh *em, const BMeshNormalsUpdate_Params *params)
+void EDBM_mesh_normals_update_ex(BMesh *bm, const BMeshNormalsUpdate_Params *params)
 {
-  BM_mesh_normals_update_ex(em->bm, params);
+  BM_mesh_normals_update_ex(bm, params);
 }
 
-void EDBM_mesh_normals_update(BMEditMesh *em)
+void EDBM_mesh_normals_update(BMesh *bm)
 {
   BMeshNormalsUpdate_Params params{};
   params.face_normals = true;
-  EDBM_mesh_normals_update_ex(em, &params);
+  EDBM_mesh_normals_update_ex(bm, &params);
 }
 
-void EDBM_stats_update(BMEditMesh *em)
+void EDBM_stats_update(BMesh *bm)
 {
   const char iter_types[3] = {
       BM_VERTS_OF_MESH,
@@ -1772,14 +1766,14 @@ void EDBM_stats_update(BMEditMesh *em)
   int *tots[3];
   int i;
 
-  tots[0] = &em->bm->totvertsel;
-  tots[1] = &em->bm->totedgesel;
-  tots[2] = &em->bm->totfacesel;
+  tots[0] = &bm->totvertsel;
+  tots[1] = &bm->totedgesel;
+  tots[2] = &bm->totfacesel;
 
-  em->bm->totvertsel = em->bm->totedgesel = em->bm->totfacesel = 0;
+  bm->totvertsel = bm->totedgesel = bm->totfacesel = 0;
 
   for (i = 0; i < 3; i++) {
-    ele = static_cast<BMElem *>(BM_iter_new(&iter, em->bm, iter_types[i], nullptr));
+    ele = static_cast<BMElem *>(BM_iter_new(&iter, bm, iter_types[i], nullptr));
     for (; ele; ele = static_cast<BMElem *>(BM_iter_step(&iter))) {
       if (BM_elem_flag_test(ele, BM_ELEM_SELECT)) {
         (*tots[i])++;
@@ -1791,6 +1785,7 @@ void EDBM_stats_update(BMEditMesh *em)
 void EDBM_update(Mesh *mesh, const EDBMUpdate_Params *params)
 {
   BMEditMesh *em = mesh->runtime->edit_mesh.get();
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
   /* Order of calling isn't important. */
   DEG_id_tag_update(&mesh->id, ID_RECALC_GEOMETRY);
   WM_main_add_notifier(NC_GEOM | ND_DATA, &mesh->id);
@@ -1801,7 +1796,7 @@ void EDBM_update(Mesh *mesh, const EDBMUpdate_Params *params)
   }
   else {
     if (params->calc_normals) {
-      EDBM_mesh_normals_update(em);
+      EDBM_mesh_normals_update(bm);
     }
 
     if (params->calc_looptris) {
@@ -1811,20 +1806,20 @@ void EDBM_update(Mesh *mesh, const EDBMUpdate_Params *params)
 
   if (params->is_destructive) {
     /* TODO(@ideasman42): we may be able to remove this now! */
-    // BM_mesh_elem_table_free(em->bm, BM_ALL_NOLOOP);
+    // BM_mesh_elem_table_free(bm, BM_ALL_NOLOOP);
   }
   else {
     /* in debug mode double check we didn't need to recalculate */
-    BLI_assert(BM_mesh_elem_table_check(em->bm) == true);
+    BLI_assert(BM_mesh_elem_table_check(bm) == true);
   }
-  if (em->bm->spacearr_dirty & BM_SPACEARR_BMO_SET) {
-    BM_lnorspace_invalidate(em->bm, false);
-    em->bm->spacearr_dirty &= ~BM_SPACEARR_BMO_SET;
+  if (bm->spacearr_dirty & BM_SPACEARR_BMO_SET) {
+    BM_lnorspace_invalidate(bm, false);
+    bm->spacearr_dirty &= ~BM_SPACEARR_BMO_SET;
   }
 
 #ifndef NDEBUG
   {
-    for (BMEditSelection &ese : em->bm->selected) {
+    for (BMEditSelection &ese : bm->selected) {
       BLI_assert(BM_elem_flag_test(ese.ele, BM_ELEM_SELECT));
     }
   }
@@ -1875,9 +1870,8 @@ BMElem *EDBM_elem_from_selectmode(BMEditMesh *em, BMVert *eve, BMEdge *eed, BMFa
   return nullptr;
 }
 
-int EDBM_elem_to_index_any(BMEditMesh *em, BMElem *ele)
+int EDBM_elem_to_index_any(BMesh *bm, BMElem *ele)
 {
-  BMesh *bm = em->bm;
   int index = BM_elem_index_get(ele);
 
   if (ele->head.htype == BM_VERT) {
@@ -1898,10 +1892,8 @@ int EDBM_elem_to_index_any(BMEditMesh *em, BMElem *ele)
   return index;
 }
 
-BMElem *EDBM_elem_from_index_any(BMEditMesh *em, uint index)
+BMElem *EDBM_elem_from_index_any(BMesh *bm, uint index)
 {
-  BMesh *bm = em->bm;
-
   if (index < bm->totvert) {
     return reinterpret_cast<BMElem *>(BM_vert_at_index_find_or_table(bm, index));
   }
@@ -2123,7 +2115,7 @@ void EDBM_project_snap_verts(
 
 bool EDBM_smooth_vert(BMEditMesh *em, wmOperator *op)
 {
-  return EDBM_op_callf(em,
+  return EDBM_op_callf(em->bm,
                        op,
                        "smooth_vert verts=%hv factor=%f mirror_clip_x=%b mirror_clip_y=%b "
                        "mirror_clip_z=%b "

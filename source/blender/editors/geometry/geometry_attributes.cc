@@ -379,9 +379,8 @@ static wmOperatorStatus geometry_attribute_add_exec(bContext *C, wmOperator *op)
 
   if (owner.type() == AttributeOwnerType::Mesh) {
     Mesh &mesh = *id_cast<Mesh *>(id);
-    if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
-      CustomDataLayer *layer = BKE_attribute_new(
-          mesh, *em->bm, name, cd_type, domain, op->reports);
+    if (BMesh *bm = BKE_editmesh_bmesh_get(&mesh)) {
+      CustomDataLayer *layer = BKE_attribute_new(mesh, *bm, name, cd_type, domain, op->reports);
       if (layer == nullptr) {
         return OPERATOR_CANCELLED;
       }
@@ -550,8 +549,8 @@ static wmOperatorStatus geometry_color_attribute_add_exec(bContext *C, wmOperato
 
   if (owner.type() == AttributeOwnerType::Mesh) {
     Mesh *mesh = owner.get_mesh();
-    if (BMEditMesh *em = mesh->runtime->edit_mesh.get()) {
-      CustomDataLayer *layer = BKE_attribute_new(*mesh, *em->bm, name, type, domain, op->reports);
+    if (BMesh *bm = BKE_editmesh_bmesh_get(mesh)) {
+      CustomDataLayer *layer = BKE_attribute_new(*mesh, *bm, name, type, domain, op->reports);
       if (layer == nullptr) {
         return OPERATOR_CANCELLED;
       }

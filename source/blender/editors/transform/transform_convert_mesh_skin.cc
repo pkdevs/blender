@@ -70,7 +70,7 @@ static void createTransMeshSkin(bContext * /*C*/, TransInfo *t)
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
     BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
     Mesh *mesh = id_cast<Mesh *>(tc->obedit->data);
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
     BMVert *eve;
     BMIter iter;
     float mtx[3][3], smtx[3][3];
@@ -145,7 +145,7 @@ static void createTransMeshSkin(bContext * /*C*/, TransInfo *t)
       if (is_island_center) {
         dists_index = MEM_new_array_uninitialized<int>(bm->totvert, __func__);
       }
-      transform_convert_mesh_connectivity_distance(em->bm, mtx, dists, dists_index);
+      transform_convert_mesh_connectivity_distance(bm, mtx, dists, dists_index);
     }
 
     /* Create TransDataMirror. */

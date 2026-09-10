@@ -344,12 +344,11 @@ static wmOperatorStatus material_slot_assign_exec(bContext *C, wmOperator * /*op
 
     bool changed = false;
     if (ob->type == OB_MESH) {
-      BMEditMesh *em = BKE_editmesh_from_object(ob);
       BMFace *efa;
       BMIter iter;
 
-      if (em) {
-        BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+      if (BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob)) {
+        BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
           if (BM_elem_flag_test(efa, BM_ELEM_SELECT)) {
             changed = true;
             efa->mat_nr = mat_nr_active;

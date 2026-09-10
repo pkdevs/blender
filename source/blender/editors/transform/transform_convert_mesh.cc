@@ -375,8 +375,7 @@ static void mesh_customdatacorrect_init_container_merge_group(TransDataContainer
 static TransCustomDataLayer *mesh_customdatacorrect_create_impl(TransDataContainer *tc,
                                                                 const bool use_merge_group)
 {
-  BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(tc->obedit);
 
   if (bm->shapenr > 1) {
     /* Don't do this at all for non-basis shape keys, too easy to
@@ -1363,7 +1362,7 @@ void transform_convert_mesh_crazyspace_detect(TransInfo *t,
       const Array<float3> mappedcos = BKE_crazyspace_get_mapped_editverts(t->depsgraph,
                                                                           tc->obedit);
       quats = MEM_new_array_uninitialized<float[4]>(em->bm->totvert, "crazy quats");
-      BKE_crazyspace_set_quats_editmesh(em, defcos, mappedcos, quats, !prop_mode);
+      BKE_crazyspace_set_quats_editmesh(em->bm, defcos, mappedcos, quats, !prop_mode);
     }
   }
   r_crazyspace_data->quats = quats;
@@ -1487,7 +1486,7 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
     TransDataExtension *tx = nullptr;
     BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
     Mesh *mesh = id_cast<Mesh *>(tc->obedit->data);
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
     BMVert *eve;
     BMIter iter;
     float mtx[3][3], smtx[3][3];
@@ -1574,7 +1573,7 @@ static void createTransEditVerts(bContext * /*C*/, TransInfo *t)
       if (is_island_center) {
         dists_index = MEM_new_array_uninitialized<int>(bm->totvert, __func__);
       }
-      transform_convert_mesh_connectivity_distance(em->bm, mtx, dists, dists_index);
+      transform_convert_mesh_connectivity_distance(bm, mtx, dists, dists_index);
     }
 
     /* Create TransDataMirror. */
@@ -1770,8 +1769,9 @@ static BMPartialUpdate *mesh_partial_ensure(TransInfo *t,
   }
 
   BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(tc->obedit);
 
-  BM_mesh_elem_index_ensure(em->bm, BM_VERT);
+  BM_mesh_elem_index_ensure(bm, BM_VERT);
 
   /* Only use `verts_group` or `verts_mask`. */
   Array<int> verts_group;
@@ -1782,7 +1782,7 @@ static BMPartialUpdate *mesh_partial_ensure(TransInfo *t,
 
   if ((partial_type == PARTIAL_TYPE_GROUP) && ((t->flag & T_PROP_EDIT) || tc->use_mirror_axis_any))
   {
-    verts_group = Array<int>(em->bm->totvert, 0);
+    verts_group = Array<int>(bm->totvert, 0);
     int i;
     TransData *td;
     for (i = 0, td = tc->data; i < tc->data_len; i++, td++) {
@@ -1839,7 +1839,7 @@ static BMPartialUpdate *mesh_partial_ensure(TransInfo *t,
   }
   else {
     /* See the body of the comments in the previous block for details. */
-    verts_mask.resize(em->bm->totvert);
+    verts_mask.resize(bm->totvert);
     int i;
     TransData *td;
     for (i = 0, td = tc->data; i < tc->data_len; i++, td++) {
@@ -1875,7 +1875,7 @@ static BMPartialUpdate *mesh_partial_ensure(TransInfo *t,
       params.do_tessellate = true;
       params.do_normals = true;
       pupdate->cache = BM_mesh_partial_create_from_verts(
-          *em->bm, params, verts_mask, verts_mask_count);
+          *bm, params, verts_mask, verts_mask_count);
       break;
     }
     case PARTIAL_TYPE_GROUP: {
@@ -1884,9 +1884,9 @@ static BMPartialUpdate *mesh_partial_ensure(TransInfo *t,
       params.do_normals = true;
       pupdate->cache = (!verts_group.is_empty() ?
                             BM_mesh_partial_create_from_verts_group_multi(
-                                *em->bm, params, verts_group, verts_group_count) :
+                                *bm, params, verts_group, verts_group_count) :
                             BM_mesh_partial_create_from_verts_group_single(
-                                *em->bm, params, verts_mask, verts_mask_count));
+                                *bm, params, verts_mask, verts_mask_count));
       break;
     }
     case PARTIAL_NONE: {
@@ -1972,6 +1972,7 @@ static void mesh_partial_update(TransInfo *t,
                                 const PartialTypeState *partial_state)
 {
   BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(tc->obedit);
 
   TransCustomDataMesh *tcmd = mesh_customdata_ensure(tc);
 
@@ -1986,7 +1987,7 @@ static void mesh_partial_update(TransInfo *t,
                                                          partial_state_prev->for_normals);
 
   if ((partial_for_looptris == PARTIAL_TYPE_ALL) && (partial_for_normals == PARTIAL_TYPE_ALL) &&
-      (em->bm->totvert == em->bm->totvertsel))
+      (bm->totvert == bm->totvertsel))
   {
     /* The additional cost of generating the partial connectivity data isn't justified
      * when all data needs to be updated.
@@ -2012,7 +2013,7 @@ static void mesh_partial_update(TransInfo *t,
                                    (partial_for_normals == PARTIAL_TYPE_GROUP)));
       BMeshNormalsUpdate_Params params{};
       params.face_normals = face_normals;
-      BM_mesh_normals_update_with_partial_ex(em->bm, bmpinfo, &params);
+      BM_mesh_normals_update_with_partial_ex(bm, bmpinfo, &params);
     }
   }
 
@@ -2137,7 +2138,7 @@ static void special_aftertrans_update__mesh(bContext * /*C*/, TransInfo *t)
   if (use_automerge) {
     FOREACH_TRANS_DATA_CONTAINER (t, tc) {
       BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
-      BMesh *bm = em->bm;
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(tc->obedit);
       char hflag;
       bool has_face_sel = (bm->totfacesel != 0);
 
@@ -2312,9 +2313,7 @@ static float3 isect_face_dst(const BMLoop *l)
 Array<TransDataEdgeSlideVert> transform_mesh_edge_slide_data_create(const TransDataContainer *tc,
                                                                     int *r_group_len)
 {
-  BMEditMesh *em = BKE_editmesh_from_object(tc->obedit);
-  BMesh *bm = em->bm;
-
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(tc->obedit);
   int td_selected_len = 0;
 
   /* Ensure valid selection. */

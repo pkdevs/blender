@@ -99,8 +99,8 @@ void BKE_mesh_wrapper_ensure_mdata(Mesh *mesh)
       BLI_assert(mesh->runtime->edit_mesh != nullptr);
       BLI_assert(mesh->runtime->edit_data != nullptr);
 
-      BMEditMesh *em = mesh->runtime->edit_mesh.get();
-      BM_mesh_bm_to_me_for_eval(*em->bm, *mesh, &mesh->runtime->cd_mask_extra);
+      BMesh *bm = BKE_editmesh_bmesh_get(mesh);
+      BM_mesh_bm_to_me_for_eval(*bm, *mesh, &mesh->runtime->cd_mask_extra);
 
       /* Adding original index layers here assumes that all BMesh Mesh wrappers are created from
        * original edit mode meshes (the only case where adding original indices makes sense).

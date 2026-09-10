@@ -541,9 +541,10 @@ static bke::GeometrySet get_original_geometry_eval_copy(Depsgraph &depsgraph,
       Mesh *mesh = id_cast<Mesh *>(object.data);
 
       if (std::shared_ptr<BMEditMesh> &em = mesh->runtime->edit_mesh) {
-        operator_data.active_point_index = BM_mesh_active_vert_index_get(em->bm);
-        operator_data.active_edge_index = BM_mesh_active_edge_index_get(em->bm);
-        operator_data.active_face_index = BM_mesh_active_face_index_get(em->bm, false, true);
+        BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
+        operator_data.active_point_index = BM_mesh_active_vert_index_get(bm);
+        operator_data.active_edge_index = BM_mesh_active_edge_index_get(bm);
+        operator_data.active_face_index = BM_mesh_active_face_index_get(bm, false, true);
         EDBM_mesh_load_ex(DEG_get_bmain(&depsgraph), &object, true);
         EDBM_mesh_free_data(mesh->runtime->edit_mesh.get());
         /* Clear the edit-mesh entirely rather than just freeing its #BMesh. Leaving a #BMEditMesh

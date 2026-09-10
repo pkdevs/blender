@@ -53,8 +53,8 @@ void ED_transverts_update_obedit(TransVertStore *tvs, Object *obedit)
   DEG_id_tag_update(obedit->data, ID_RECALC_GEOMETRY);
 
   if (obedit->type == OB_MESH) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-    BM_mesh_normals_update(em->bm);
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
+    BM_mesh_normals_update(bm);
   }
   else if (ELEM(obedit->type, OB_CURVES_LEGACY, OB_SURF)) {
     Curve *cu = id_cast<Curve *>(obedit->data);
@@ -246,7 +246,7 @@ void ED_transverts_create_from_obedit(TransVertStore *tvs, const Object *obedit,
     const Object *object_orig = DEG_get_original(obedit);
     const Mesh &mesh = *id_cast<Mesh *>(object_orig->data);
     BMEditMesh *em = mesh.runtime->edit_mesh.get();
-    BMesh *bm = em->bm;
+    BMesh *bm = const_cast<BMesh *>(BKE_editmesh_bmesh_get(obedit));
     BMIter iter;
     void *userdata[2] = {em, nullptr};
     // int proptrans = 0; /*UNUSED*/

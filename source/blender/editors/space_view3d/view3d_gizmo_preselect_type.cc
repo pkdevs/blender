@@ -554,8 +554,7 @@ void ED_view3d_gizmo_mesh_preselect_get_active(const bContext *C,
   *r_ele = nullptr;
 
   if (obedit) {
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
     PropertyRNA *prop;
 
     /* Ring select only defines edge, check properties exist first. */

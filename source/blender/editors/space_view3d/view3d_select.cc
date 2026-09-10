@@ -249,7 +249,7 @@ static void editselect_buf_cache_init_with_generic_userdata(wmGenericUserData *w
 static bool edbm_backbuf_check_and_select_verts(EditSelectBuf_Cache *esel,
                                                 Depsgraph *depsgraph,
                                                 Object *ob,
-                                                BMEditMesh *em,
+                                                BMesh *bm,
                                                 UVSyncSelectFromMesh *uv_selctx,
                                                 const eSelectOp sel_op)
 {
@@ -264,13 +264,13 @@ static bool edbm_backbuf_check_and_select_verts(EditSelectBuf_Cache *esel,
   }
 
   index -= 1;
-  BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
+  BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
     if (!BM_elem_flag_test(eve, BM_ELEM_HIDDEN)) {
       const bool is_select = BM_elem_flag_test(eve, BM_ELEM_SELECT);
       const bool is_inside = BLI_BITMAP_TEST_BOOL(select_bitmap, index);
       const int sel_op_result = ED_select_op_action_deselected(sel_op, is_select, is_inside);
       if (sel_op_result != -1) {
-        BM_vert_select_set(em->bm, eve, sel_op_result);
+        BM_vert_select_set(bm, eve, sel_op_result);
         if (uv_selctx) {
           uv_selctx->vert_select_set(eve, sel_op_result);
         }
@@ -286,7 +286,7 @@ static bool edbm_backbuf_check_and_select_verts(EditSelectBuf_Cache *esel,
 static bool edbm_backbuf_check_and_select_edges(EditSelectBuf_Cache *esel,
                                                 Depsgraph *depsgraph,
                                                 Object *ob,
-                                                BMEditMesh *em,
+                                                BMesh *bm,
                                                 UVSyncSelectFromMesh *uv_selctx,
                                                 const eSelectOp sel_op)
 {
@@ -301,13 +301,13 @@ static bool edbm_backbuf_check_and_select_edges(EditSelectBuf_Cache *esel,
   }
 
   index -= 1;
-  BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
+  BM_ITER_MESH (eed, &iter, bm, BM_EDGES_OF_MESH) {
     if (!BM_elem_flag_test(eed, BM_ELEM_HIDDEN)) {
       const bool is_select = BM_elem_flag_test(eed, BM_ELEM_SELECT);
       const bool is_inside = BLI_BITMAP_TEST_BOOL(select_bitmap, index);
       const int sel_op_result = ED_select_op_action_deselected(sel_op, is_select, is_inside);
       if (sel_op_result != -1) {
-        BM_edge_select_set(em->bm, eed, sel_op_result);
+        BM_edge_select_set(bm, eed, sel_op_result);
         changed = true;
 
         if (uv_selctx) {
@@ -323,7 +323,7 @@ static bool edbm_backbuf_check_and_select_edges(EditSelectBuf_Cache *esel,
 static bool edbm_backbuf_check_and_select_faces(EditSelectBuf_Cache *esel,
                                                 Depsgraph *depsgraph,
                                                 Object *ob,
-                                                BMEditMesh *em,
+                                                BMesh *bm,
                                                 UVSyncSelectFromMesh *uv_selctx,
                                                 const eSelectOp sel_op)
 {
@@ -338,13 +338,13 @@ static bool edbm_backbuf_check_and_select_faces(EditSelectBuf_Cache *esel,
   }
 
   index -= 1;
-  BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+  BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
     if (!BM_elem_flag_test(efa, BM_ELEM_HIDDEN)) {
       const bool is_select = BM_elem_flag_test(efa, BM_ELEM_SELECT);
       const bool is_inside = BLI_BITMAP_TEST_BOOL(select_bitmap, index);
       const int sel_op_result = ED_select_op_action_deselected(sel_op, is_select, is_inside);
       if (sel_op_result != -1) {
-        BM_face_select_set(em->bm, efa, sel_op_result);
+        BM_face_select_set(bm, efa, sel_op_result);
         if (uv_selctx) {
           uv_selctx->face_select_set(efa, sel_op_result);
         }

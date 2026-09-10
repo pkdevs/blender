@@ -164,7 +164,7 @@ static wmOperatorStatus mesh_set_attribute_exec(bContext *C, wmOperator *op)
   for (Object *object : objects) {
     Mesh *mesh = id_cast<Mesh *>(object->data);
     BMEditMesh *em = BKE_editmesh_from_object(object);
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
     BMDataLayerLookup attr = BM_data_layer_lookup(*bm, name);
     if (!attr) {
       continue;

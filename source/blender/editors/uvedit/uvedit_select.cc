@@ -3396,10 +3396,10 @@ static void uv_select_all(const Scene *scene, BMEditMesh *em, bool select_all)
     bm->uv_select_sync_valid = false;
 
     if (select_all) {
-      EDBM_flag_enable_all(em, BM_ELEM_SELECT);
+      EDBM_flag_enable_all(bm, BM_ELEM_SELECT);
     }
     else {
-      EDBM_flag_disable_all(em, BM_ELEM_SELECT);
+      EDBM_flag_disable_all(bm, BM_ELEM_SELECT);
     }
     return;
   }
@@ -3439,7 +3439,7 @@ static void uv_select_invert(const Scene *scene, BMEditMesh *em)
     }
     /* If selection wasn't synced, there is no need to sync. */
     if (bm->uv_select_sync_valid == false) {
-      EDBM_select_swap(em);
+      EDBM_select_swap(em, bm);
       EDBM_selectmode_flush(em);
       return;
     }
@@ -3571,13 +3571,14 @@ void ED_uvedit_deselect_all(const Scene *scene, Object *obedit, int action)
 {
   const ToolSettings *ts = scene->toolsettings;
   BMEditMesh *em = BKE_editmesh_from_object(obedit);
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
   /* In the case of where the selection is all or none, there is no need to hold
    * a separate state for UV's and the mesh. */
   if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
-    if (em->bm->uv_select_sync_valid) {
+    if (bm->uv_select_sync_valid) {
       if (ELEM(action, SEL_SELECT, SEL_DESELECT)) {
-        EDBM_uvselect_clear(em);
+        EDBM_uvselect_clear(bm);
       }
     }
   }
@@ -7401,8 +7402,8 @@ static wmOperatorStatus uv_select_tile_exec(bContext *C, wmOperator *op)
   const bool extend = RNA_boolean_get(op->ptr, "extend");
 
   for (Object *ob : objects) {
-    BMEditMesh *em = BKE_editmesh_from_object(ob);
-    const BMUVOffsets offsets = BM_uv_map_offsets_get(em->bm);
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
+    const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
 
     bool changed = false;
     if (!extend) {
@@ -7411,15 +7412,15 @@ static wmOperatorStatus uv_select_tile_exec(bContext *C, wmOperator *op)
     }
 
     if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
-      uvedit_select_prepare_sync_select(scene, em->bm);
+      uvedit_select_prepare_sync_select(scene, bm);
     }
     else {
-      uvedit_select_prepare_custom_data(scene, em->bm);
+      uvedit_select_prepare_custom_data(scene, bm);
     }
 
     BMFace *f;
     BMIter iter;
-    BM_ITER_MESH (f, &iter, em->bm, BM_FACES_OF_MESH) {
+    BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
       if (!uvedit_face_visible_test(scene, f)) {
         continue;
       }
@@ -7429,16 +7430,16 @@ static wmOperatorStatus uv_select_tile_exec(bContext *C, wmOperator *op)
       float2 center;
       BM_face_uv_calc_center_median(f, offsets.uv, center);
       if (BLI_rctf_isect_pt_v(&tile_rect, center)) {
-        uvedit_face_select_set_with_sticky(scene, em->bm, f, true, offsets);
+        uvedit_face_select_set_with_sticky(scene, bm, f, true, offsets);
         changed = true;
       }
     }
     if (changed) {
       if (ts->uv_flag & UV_FLAG_SELECT_SYNC) {
-        ED_uvedit_select_sync_flush(ts, em->bm, true);
+        ED_uvedit_select_sync_flush(ts, bm, true);
       }
       else {
-        ED_uvedit_selectmode_flush(scene, em->bm);
+        ED_uvedit_selectmode_flush(scene, bm);
       }
       uv_select_tag_update_for_object(depsgraph, ts, ob);
     }

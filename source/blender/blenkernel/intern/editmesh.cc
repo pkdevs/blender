@@ -160,7 +160,7 @@ Array<float3> BKE_editmesh_vert_coords_alloc(Depsgraph *depsgraph,
                                              Scene *scene,
                                              Object *ob)
 {
-  const Mesh *cage = bke::editbmesh_get_eval_cage(depsgraph, scene, ob, em, &CD_MASK_BAREMESH);
+  const Mesh *cage = bke::editbmesh_get_eval_cage(depsgraph, scene, ob, &CD_MASK_BAREMESH);
   Array<float3> positions_cage(em->bm->totvert);
 
   /* When initializing cage verts, we only want the first cage coordinate for each vertex,
@@ -179,17 +179,20 @@ Array<float3> BKE_editmesh_vert_coords_alloc(Depsgraph *depsgraph,
   return positions_cage;
 }
 
-Span<float3> BKE_editmesh_vert_coords_when_deformed(
-    Depsgraph *depsgraph, BMEditMesh *em, Scene *scene, Object *ob, Array<float3> &r_alloc)
+Span<float3> BKE_editmesh_vert_coords_when_deformed(Depsgraph *depsgraph,
+                                                    Scene *scene,
+                                                    Object *ob,
+                                                    Array<float3> &r_alloc)
 {
-
+  Object *object_orig = DEG_get_original(ob);
   const Object *object_eval = DEG_get_evaluated(depsgraph, ob);
   const Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(object_eval);
   const Mesh *mesh_cage = BKE_object_get_editmesh_eval_cage(ob);
 
   Span<float3> vert_positions;
   if (mesh_cage && mesh_cage->runtime->deformed_only) {
-    BLI_assert(BKE_mesh_wrapper_vert_len(mesh_cage) == em->bm->totvert);
+    [[maybe_unused]] const BMesh *bm = BKE_editmesh_bmesh_get(ob);
+    BLI_assert(BKE_mesh_wrapper_vert_len(mesh_cage) == bm->totvert);
     /* Deformed, and we have deformed coords already. */
     vert_positions = BKE_mesh_wrapper_vert_coords(mesh_cage);
   }
@@ -210,14 +213,14 @@ Span<float3> BKE_editmesh_vert_coords_when_deformed(
   return vert_positions;
 }
 
-Array<float3> BKE_editmesh_vert_coords_alloc_orco(BMEditMesh *em)
+Array<float3> BKE_editmesh_vert_coords_alloc_orco(BMesh *bm)
 {
-  return BM_mesh_vert_coords_alloc(em->bm);
+  return BM_mesh_vert_coords_alloc(bm);
 }
 
-void BKE_editmesh_lnorspace_update(BMEditMesh *em)
+void BKE_editmesh_lnorspace_update(BMesh *bm)
 {
-  BM_lnorspace_update(em->bm);
+  BM_lnorspace_update(bm);
 }
 
 }  // namespace blender

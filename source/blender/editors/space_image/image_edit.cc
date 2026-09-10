@@ -112,8 +112,7 @@ void ED_space_image_auto_set(const bContext *C, SpaceImage *sima)
     return;
   }
 
-  BMEditMesh *em = BKE_editmesh_from_object(ob);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
   BMFace *efa = BM_mesh_active_face_get(bm, true, false);
   if (efa == nullptr) {
     return;

@@ -107,8 +107,8 @@ BMFace *EDBM_verts_mirror_get_face(BMEditMesh *em, BMFace *f);
 void EDBM_verts_mirror_cache_clear(BMEditMesh *em, BMVert *v);
 void EDBM_verts_mirror_cache_end(BMEditMesh *em);
 
-void EDBM_mesh_normals_update_ex(BMEditMesh *em, const BMeshNormalsUpdate_Params *params);
-void EDBM_mesh_normals_update(BMEditMesh *em);
+void EDBM_mesh_normals_update_ex(BMesh *bm, const BMeshNormalsUpdate_Params *params);
+void EDBM_mesh_normals_update(BMesh *bm);
 
 void EDBM_selectmode_to_scene(bContext *C);
 void EDBM_mesh_make(Object *ob, int select_mode, bool add_key_index);
@@ -211,11 +211,11 @@ UvMapVert *BM_uv_vert_map_at_index(UvVertMap *vmap, unsigned int v);
  */
 UvVertMap *BM_uv_vert_map_create(BMesh *bm, bool use_select, bool respect_hide);
 
-void EDBM_flag_enable_all(BMEditMesh *em, char hflag);
-void EDBM_flag_disable_all(BMEditMesh *em, char hflag);
+void EDBM_flag_enable_all(BMesh *bm, char hflag);
+void EDBM_flag_disable_all(BMesh *bm, char hflag);
 
 /** \copydoc #BM_uvselect_clear */
-bool EDBM_uvselect_clear(BMEditMesh *em);
+bool EDBM_uvselect_clear(BMesh *bm);
 
 bool BMBVH_EdgeVisible(const BMBVHTree *tree,
                        const BMEdge *e,
@@ -246,7 +246,7 @@ void ED_mesh_undosys_type(UndoType *ut);
 /* `editmesh_select.cc` */
 
 void EDBM_select_mirrored(
-    BMEditMesh *em, const Mesh *mesh, int axis, bool extend, int *r_totmirr, int *r_totfail);
+    BMEditMesh *em, Mesh *mesh, int axis, bool extend, int *r_totmirr, int *r_totfail);
 
 #if 0 /* Unused but seems useful to keep. */
 /**
@@ -379,7 +379,7 @@ bool EDBM_deselect_by_material(BMEditMesh *em, short index, bool select);
 
 void EDBM_select_toggle_all(BMEditMesh *em);
 
-void EDBM_select_swap(BMEditMesh *em); /* exported for UV */
+void EDBM_select_swap(BMEditMesh *em, BMesh *bm); /* exported for UV */
 bool EDBM_select_interior_faces(BMEditMesh *em);
 ViewContext em_setup_viewcontext(bContext *C); /* rename? */
 
@@ -433,7 +433,7 @@ eEditMesh_PreSelPreviewAction EDBM_preselect_action_get(EditMesh_PreSelElem *pse
 /**
  * Extrudes individual edges.
  */
-bool EDBM_extrude_edges_indiv(BMEditMesh *em, wmOperator *op, char hflag, bool use_normal_flip);
+bool EDBM_extrude_edges_indiv(BMesh *bm, wmOperator *op, char hflag, bool use_normal_flip);
 bool EDBM_smooth_vert(BMEditMesh *em, wmOperator *op);
 
 /* `mesh_ops.cc` */
@@ -566,7 +566,7 @@ struct BMBackup {
 /**
  * Save a copy of the #BMesh for restoring later.
  */
-BMBackup EDBM_redo_state_store(BMEditMesh *em);
+BMBackup EDBM_redo_state_store(BMesh *bm);
 /**
  * Restore a BMesh from backup.
  */

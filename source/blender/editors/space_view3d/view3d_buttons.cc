@@ -738,8 +738,7 @@ static void v3d_editvertex_buts(
   if (ob->type == OB_MESH) {
     TransformMedian_Mesh *median = &median_basis.mesh;
     Mesh *mesh = id_cast<Mesh *>(ob->data);
-    BMEditMesh *em = mesh->runtime->edit_mesh.get();
-    BMesh *bm = em->bm;
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
     BMVert *eve;
     BMEdge *eed;
     BMIter iter;
@@ -1460,8 +1459,7 @@ static void v3d_editvertex_buts(
     {
       const TransformMedian_Mesh *median = &median_basis.mesh, *ve_median = &ve_median_basis.mesh;
       Mesh *mesh = id_cast<Mesh *>(ob->data);
-      BMEditMesh *em = mesh->runtime->edit_mesh.get();
-      BMesh *bm = em->bm;
+      BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
       BMIter iter;
       BMVert *eve;
       BMEdge *eed;

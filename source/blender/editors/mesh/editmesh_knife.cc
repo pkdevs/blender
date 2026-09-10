@@ -2206,8 +2206,7 @@ static int sort_verts_by_dist_cb(void *co_p, const void *cur_a_p, const void *cu
 static void knife_make_cuts(KnifeTool_OpData *kcd, int ob_index)
 {
   Object *ob = kcd->objects[ob_index];
-  BMEditMesh *em = BKE_editmesh_from_object(ob);
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
   KnifeEdge *kfe;
   KnifeVert *kfv;
   BMEdge *enew;
@@ -2283,7 +2282,7 @@ static void knife_make_cuts(KnifeTool_OpData *kcd, int ob_index)
   }
 
   if (kcd->only_select) {
-    EDBM_flag_disable_all(em, BM_ELEM_SELECT);
+    EDBM_flag_disable_all(bm, BM_ELEM_SELECT);
   }
 
   /* Do cuts for each face. */
@@ -2517,7 +2516,6 @@ static bool knife_ray_intersect_face(KnifeTool_OpData *kcd,
 static void calc_ortho_extent(KnifeTool_OpData *kcd)
 {
   Object *ob;
-  BMEditMesh *em;
   BMIter iter;
   BMVert *v;
   float min[3], max[3];
@@ -2526,18 +2524,18 @@ static void calc_ortho_extent(KnifeTool_OpData *kcd)
 
   for (int ob_index = 0; ob_index < kcd->objects.size(); ob_index++) {
     ob = kcd->objects[ob_index];
-    em = BKE_editmesh_from_object(ob);
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(ob);
 
     const Span<float3> positions_cage = kcd->objects_info[ob_index].positions_cage;
     if (!positions_cage.is_empty()) {
-      for (int i = 0; i < em->bm->totvert; i++) {
+      for (int i = 0; i < bm->totvert; i++) {
         copy_v3_v3(ws, positions_cage[i]);
         mul_m4_v3(ob->object_to_world().ptr(), ws);
         minmax_v3v3_v3(min, max, ws);
       }
     }
     else {
-      BM_ITER_MESH (v, &iter, em->bm, BM_VERTS_OF_MESH) {
+      BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
         copy_v3_v3(ws, v->co);
         mul_m4_v3(ob->object_to_world().ptr(), ws);
         minmax_v3v3_v3(min, max, ws);
