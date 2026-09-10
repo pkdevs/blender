@@ -635,8 +635,8 @@ static void blend_bbone_values(const bPoseChannel &copy_bone,
 
 /**
  * Blend the values of `prop` towards `target` based on the given `factor`. At 1.0, the target
- * values are copied 100%. Properties that cannot be interpolated (boolean for example) will just
- * be copied with a factor > 0.5.
+ * values are copied 100%. Properties that cannot be interpolated (booleans, ID pointers, arrays of
+ * arrays, etc. ) will just be copied when the factor is > 0.5.
  */
 static void blend_id_property(IDProperty &prop, const IDProperty &target, const float factor)
 {
@@ -648,19 +648,19 @@ static void blend_id_property(IDProperty &prop, const IDProperty &target, const 
       const int prop_val = IDP_int_get(&prop);
       const int target_val = IDP_int_get(&target);
       IDP_int_set(&prop, round_fl_to_int(interpf(target_val, prop_val, factor)));
-      break;
+      return;
     }
     case IDP_FLOAT: {
       const float prop_val = IDP_float_get(&prop);
       const float target_val = IDP_float_get(&target);
       IDP_float_set(&prop, interpf(target_val, prop_val, factor));
-      break;
+      return;
     }
     case IDP_DOUBLE: {
       const double prop_val = IDP_double_get(&prop);
       const double target_val = IDP_double_get(&target);
       IDP_double_set(&prop, interpd(target_val, prop_val, factor));
-      break;
+      return;
     }
     case IDP_ARRAY: {
       if (prop.len != target.len) {
@@ -674,7 +674,7 @@ static void blend_id_property(IDProperty &prop, const IDProperty &target, const 
           for (int i = 0; i < prop.len; i++) {
             prop_val[i] = round_fl_to_int(interpf(target_val[i], prop_val[i], factor));
           }
-          break;
+          return;
         }
         case IDP_FLOAT: {
           float *prop_val = IDP_array_float_get(&prop);
@@ -682,7 +682,7 @@ static void blend_id_property(IDProperty &prop, const IDProperty &target, const 
           for (int i = 0; i < prop.len; i++) {
             prop_val[i] = interpf(target_val[i], prop_val[i], factor);
           }
-          break;
+          return;
         }
         case IDP_DOUBLE: {
           double *prop_val = IDP_array_double_get(&prop);
@@ -690,22 +690,37 @@ static void blend_id_property(IDProperty &prop, const IDProperty &target, const 
           for (int i = 0; i < prop.len; i++) {
             prop_val[i] = interpd(target_val[i], prop_val[i], factor);
           }
-          break;
+          return;
         }
         default:
-          if (factor > 0.5) {
-            IDP_CopyPropertyContent(&prop, &target);
-          }
           break;
       }
       break;
     }
     default:
-      if (factor > 0.5) {
-        IDP_CopyPropertyContent(&prop, &target);
-      }
       break;
   }
+
+  /* Default case for properties that can't be interpolated. */
+  if (factor > 0.5) {
+    IDP_CopyPropertyContent(&prop, &target);
+  }
+}
+
+/**
+ * Blend the given `copy_props` towards `paste_props`. At factor 1, paste_props is used 100%.
+ */
+static void blend_properties(IDProperty *copy_props, IDProperty *paste_props, const float factor)
+{
+  IDP_foreach_property(copy_props, 0, [&](IDProperty *copy_prop) {
+    IDProperty *paste_prop = IDP_GetPropertyFromGroup(paste_props, copy_prop->name);
+    if (!paste_prop || copy_prop->type != paste_prop->type ||
+        copy_prop->subtype != paste_prop->subtype)
+    {
+      return;
+    }
+    blend_id_property(*paste_prop, *copy_prop, factor);
+  });
 }
 
 /**
@@ -726,14 +741,15 @@ static bPoseChannel *pose_bone_blend_to(Object &paste_ob,
                                         const float factor,
                                         bool *r_is_found = nullptr)
 {
+  BLI_assert(copy_transformable.type() == ed::AnimTransformable::Type::POSE_BONE);
   char name[MAXBONENAME];
 
   /* Get the name of the bone to paste to - if flipping, we must flip this first. */
   if (flip) {
-    BLI_string_flip_side_name(name, copy_transformable.name().data(), false, sizeof(name));
+    BLI_string_flip_side_name(name, copy_transformable.name().c_str(), false, sizeof(name));
   }
   else {
-    STRNCPY_UTF8(name, copy_transformable.name().data());
+    STRNCPY_UTF8(name, copy_transformable.name().c_str());
   }
 
   bPoseChannel *paste_bone = BKE_pose_channel_find_name(paste_ob.pose, name);
@@ -806,15 +822,7 @@ static bPoseChannel *pose_bone_blend_to(Object &paste_ob,
   /* ID properties. */
   if (copy_bone->prop) {
     if (paste_bone->prop) {
-      IDP_foreach_property(copy_bone->prop, 0, [&](IDProperty *copy_prop) {
-        IDProperty *paste_prop = IDP_GetPropertyFromGroup(paste_bone->prop, copy_prop->name);
-        if (!paste_prop || copy_prop->type != paste_prop->type ||
-            copy_prop->subtype != paste_prop->subtype)
-        {
-          return;
-        }
-        blend_id_property(*paste_prop, *copy_prop, factor);
-      });
+      blend_properties(copy_bone->prop, paste_bone->prop, factor);
     }
     else {
       /* no existing properties, so assume that we want copies too? */
@@ -824,16 +832,7 @@ static bPoseChannel *pose_bone_blend_to(Object &paste_ob,
   if (copy_bone->system_properties) {
     /* Same logic as above for system IDProperties, for now. */
     if (paste_bone->system_properties) {
-      IDP_foreach_property(copy_bone->system_properties, 0, [&](IDProperty *copy_prop) {
-        IDProperty *paste_prop = IDP_GetPropertyFromGroup(paste_bone->system_properties,
-                                                          copy_prop->name);
-        if (!paste_prop || copy_prop->type != paste_prop->type ||
-            copy_prop->subtype != paste_prop->subtype)
-        {
-          return;
-        }
-        blend_id_property(*paste_prop, *copy_prop, factor);
-      });
+      blend_properties(copy_bone->system_properties, paste_bone->system_properties, factor);
     }
     else {
       paste_bone->system_properties = IDP_CopyProperty(copy_bone->system_properties);
