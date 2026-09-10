@@ -110,99 +110,6 @@ Array<float> property_interpolated(const Span<float> a, const Span<float> b, con
   return interpolated;
 }
 
-float4x4 get_world_space(const Depsgraph &depsgraph, const AnimTransformable &transformable)
-{
-  ID *evaluated_id = DEG_get_evaluated_id(&depsgraph, transformable.owner_id());
-  BLI_assert(evaluated_id);
-  switch (transformable.type()) {
-    case AnimTransformable::Type::POSE_BONE: {
-      Object *ob_eval = id_cast<Object *>(evaluated_id);
-      bPoseChannel *pose_bone_eval = BKE_pose_channel_find_name(ob_eval->pose,
-                                                                transformable.name().data());
-      if (!pose_bone_eval) {
-        BLI_assert_unreachable();
-        break;
-      }
-      return ob_eval->object_to_world() * float4x4(pose_bone_eval->pose_mat);
-    }
-    case AnimTransformable::Type::OBJECT: {
-      Object *ob_eval = id_cast<Object *>(evaluated_id);
-      return ob_eval->object_to_world();
-    }
-  }
-
-  BLI_assert_unreachable();
-  return float4x4::identity();
-}
-
-/* Creates a 4x4 matrix out of the object delta values. Maybe this exists already, I couldn't find
- * it though. */
-static float4x4 object_to_delta_matrix(Object &obj)
-{
-  float delta_matrix[4][4];
-  float scale_mat[3][3];
-  float rotation_mat[3][3];
-  size_to_mat3(scale_mat, obj.dscale);
-
-  if (obj.rotmode > 0) {
-    eulO_to_mat3(rotation_mat, obj.drot, obj.rotmode);
-  }
-  else if (obj.rotmode == ROT_MODE_AXISANGLE) {
-    axis_angle_to_mat3(rotation_mat, obj.drotAxis, obj.drotAngle);
-  }
-  else {
-    float tquat[4];
-    normalize_qt_qt(tquat, obj.dquat);
-    quat_to_mat3(rotation_mat, tquat);
-  }
-
-  float mat[3][3];
-  mul_m3_m3m3(mat, rotation_mat, scale_mat);
-  copy_m4_m3(delta_matrix, mat);
-  copy_v3_v3(delta_matrix[3], obj.dloc);
-  return float4x4(delta_matrix);
-}
-
-float4x4 world_to_local(const Depsgraph &depsgraph,
-                        const AnimTransformable &transformable,
-                        const float4x4 &world_matrix)
-{
-  ID *evaluated_id = DEG_get_evaluated_id(&depsgraph, transformable.owner_id());
-  BLI_assert(evaluated_id);
-  switch (transformable.type()) {
-    case AnimTransformable::Type::POSE_BONE: {
-      Object *ob_eval = id_cast<Object *>(evaluated_id);
-      bPoseChannel *pose_bone_eval = BKE_pose_channel_find_name(ob_eval->pose,
-                                                                transformable.name().data());
-      if (!pose_bone_eval) {
-        BLI_assert_unreachable();
-        break;
-      }
-      Bone *bone = pose_bone_eval->bone_get(*ob_eval);
-      float4x4 object_local = ob_eval->world_to_object() * world_matrix;
-      float4x4 bone_local = float4x4::identity();
-      /* The function docstring tells me I cannot use this function the way I am using it here. But
-       * it works. Either I am missing an edge case, or the description is wrong. */
-      BKE_armature_mat_pose_to_bone({pose_bone_eval, bone}, object_local.ptr(), bone_local.ptr());
-      return bone_local;
-    }
-
-    case AnimTransformable::Type::OBJECT: {
-      Object *ob_eval = id_cast<Object *>(evaluated_id);
-      float4x4 parent_matrix = float4x4::identity();
-      if (ob_eval->parent) {
-        parent_matrix = ob_eval->parent->world_to_object();
-      }
-
-      float4x4 delta_matrix = object_to_delta_matrix(*ob_eval);
-      return parent_matrix * math::invert(delta_matrix) * world_matrix;
-    }
-  }
-
-  BLI_assert_unreachable();
-  return float4x4::identity();
-}
-
 Vector<ed::AnimTransformable> selected_transformables_from_context(bContext &C)
 {
   Vector<ed::AnimTransformable> transformables;
@@ -685,6 +592,68 @@ void AnimTransformable::blend_rotation_to(const Rotation &target,
   for (const int i : result.index_range()) {
     *(*rotations_array)[i] = result[i];
   }
+}
+
+float4x4 AnimTransformable::get_world_space(const Depsgraph &depsgraph) const
+{
+  ID *evaluated_id = DEG_get_evaluated_id(&depsgraph, this->owner_id_);
+  BLI_assert(evaluated_id);
+  switch (this->type_) {
+    case AnimTransformable::Type::POSE_BONE: {
+      Object *ob_eval = id_cast<Object *>(evaluated_id);
+      bPoseChannel *pose_bone_eval = BKE_pose_channel_find_name(ob_eval->pose, this->name_.data());
+      if (!pose_bone_eval) {
+        BLI_assert_unreachable();
+        break;
+      }
+      return ob_eval->object_to_world() * float4x4(pose_bone_eval->pose_mat);
+    }
+    case AnimTransformable::Type::OBJECT: {
+      Object *ob_eval = id_cast<Object *>(evaluated_id);
+      return ob_eval->object_to_world();
+    }
+  }
+
+  BLI_assert_unreachable();
+  return float4x4::identity();
+}
+
+float4x4 AnimTransformable::world_to_local(const Depsgraph &depsgraph,
+                                           const float4x4 &world_matrix) const
+{
+  ID *evaluated_id = DEG_get_evaluated_id(&depsgraph, this->owner_id_);
+  BLI_assert(evaluated_id);
+  switch (this->type_) {
+    case AnimTransformable::Type::POSE_BONE: {
+      Object *ob_eval = id_cast<Object *>(evaluated_id);
+      bPoseChannel *pose_bone_eval = BKE_pose_channel_find_name(ob_eval->pose, this->name_.data());
+      if (!pose_bone_eval) {
+        BLI_assert_unreachable();
+        break;
+      }
+      Bone *bone = pose_bone_eval->bone_get(*ob_eval);
+      float4x4 object_local = ob_eval->world_to_object() * world_matrix;
+      float4x4 bone_local = float4x4::identity();
+      /* The function docstring tells me I (Christoph) cannot use this function the way I am using
+       * it here. But it works. Either I am missing an edge case, or the description is wrong. */
+      BKE_armature_mat_pose_to_bone({pose_bone_eval, bone}, object_local.ptr(), bone_local.ptr());
+      return bone_local;
+    }
+
+    case AnimTransformable::Type::OBJECT: {
+      Object *ob_eval = id_cast<Object *>(evaluated_id);
+      float4x4 parent_matrix = float4x4::identity();
+      if (ob_eval->parent) {
+        parent_matrix = ob_eval->parent->world_to_object();
+      }
+
+      float4x4 delta_matrix = BKE_object_delta_matrix_get(*ob_eval);
+      return parent_matrix * math::invert(delta_matrix) * world_matrix;
+    }
+  }
+
+  BLI_assert_unreachable();
+  return float4x4::identity();
 }
 
 }  // namespace blender::ed

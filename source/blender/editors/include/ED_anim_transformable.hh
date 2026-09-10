@@ -217,6 +217,16 @@ class AnimTransformable {
                          float target,
                          float factor,
                          AxisMutable axis_flag);
+
+  /**
+   * Returns the evaluated world space matrix.
+   */
+  float4x4 get_world_space(const Depsgraph &depsgraph) const;
+
+  /**
+   * Converts the given world space matrix into local space using the evaluated depsgraph.
+   */
+  float4x4 world_to_local(const Depsgraph &depsgraph, const float4x4 &world_matrix) const;
 };
 
 /**
@@ -237,18 +247,6 @@ Rotation rotation_interpolated(const Rotation &a, const Rotation &b, float facto
  * spans are the same length. With the factor at `0` the values will match `a`.
  */
 Array<float> property_interpolated(Span<float> a, Span<float> b, float factor);
-
-/**
- * Returns the evaluated world space matrix for the given transformable.
- */
-float4x4 get_world_space(const Depsgraph &depsgraph, const AnimTransformable &transformable);
-
-/**
- * Converts the given world space matrix into local space using the evaluated depsgraph.
- */
-float4x4 world_to_local(const Depsgraph &depsgraph,
-                        const AnimTransformable &transformable,
-                        const float4x4 &world_matrix);
 
 /**
  * Returns all selected transformables based on the current mode.

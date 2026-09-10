@@ -514,7 +514,7 @@ static void copy_world_space(Main &bmain,
         continue;
       }
       const AnimTransformable &transformable = transformables[transformable_index];
-      const float4x4 world_matrix = get_world_space(*depsgraph, transformable);
+      const float4x4 world_matrix = transformable.get_world_space(*depsgraph);
       matrix_to_fcurves(world_matrix, world_space_data[transformable_index], frame, key_index);
     }
   }
@@ -771,7 +771,7 @@ static void paste_world_space(Main &bmain,
       BLI_assert_msg(fcurves != nullptr,
                      "Only transformables with matching matrix data should iterated here");
       const float4x4 world_matrix = fcurves_to_matrix(*fcurves, key_index);
-      const float4x4 local_matrix = world_to_local(*depsgraph, *transformable, world_matrix);
+      const float4x4 local_matrix = transformable->world_to_local(*depsgraph, world_matrix);
       previous_rotation = set_keys_to_transform(
           transform_fcurves, local_matrix, previous_rotation, key_index);
     }
