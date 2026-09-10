@@ -351,7 +351,7 @@ def main():
     # OSL blackbody output is a little different.
     if (test_dir_name in {'colorspace'}):
         report.set_fail_threshold(0.05)
-    # Keeping gaussian splats rendered exactly the same on CPU and GPU is
+    # Keeping Gaussian splats rendered exactly the same on CPU and GPU is
     # tricky due to stochastic nature of the algorithm.
     if (test_dir_name in {'gsplat'}):
         report.set_fail_threshold(0.05)

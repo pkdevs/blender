@@ -50,7 +50,7 @@ BLOCKLIST_HYDRA = [
     "many_lights.blend",
     # The result differs between platforms
     "principled_bsdf_dispersion.blend",
-    # No gaussian splat rendering in hydra.
+    # No Gaussian splat rendering in hydra.
     "gsplat_.*.blend",
 ]
 
@@ -72,7 +72,7 @@ BLOCKLIST_USD = [
     "osl_camera_.*.blend",
     # The result in incorrect
     "principled_bsdf_dispersion.blend",
-    # No gaussian splat rendering in hydra.
+    # No Gaussian splat rendering in hydra.
     "gsplat_.*.blend",
 ]
 
