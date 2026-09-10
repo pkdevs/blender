@@ -2777,6 +2777,162 @@ void SEQUENCER_OT_ripple_delete(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Ripple Trim Strips Operator
+ * \{ */
+
+static wmOperatorStatus sequencer_ripple_trim_exec(bContext *C, wmOperator *op)
+{
+  Scene *scene = CTX_data_sequencer_scene(C);
+  Editing *ed = seq::editing_get(scene);
+  ListBaseT<Strip> *seqbasep = seq::active_seqbase_get(ed);
+  const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
+  const bool all_channels = RNA_boolean_get(op->ptr, "all_channels");
+  const bool ripple_markers = RNA_boolean_get(op->ptr, "markers");
+  const bool trim_left = seq::Side(RNA_enum_get(op->ptr, "side")) == seq::Side::Left;
+  const int timeline_frame = scene->r.cfra;
+
+  if (sequencer_view_has_preview_poll(C) && !sequencer_view_preview_only_poll(C)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  VectorSet<Strip *> selected = selected_strips_from_context(C);
+  if (selected.is_empty()) {
+    /* Fall back to active strip. */
+    Strip *active_strip = seq::select_active_get(scene);
+    if (active_strip == nullptr) {
+      return OPERATOR_CANCELLED;
+    }
+    selected.add(active_strip);
+  }
+  /* Only consider editable strips that the playhead cuts through. */
+  selected.remove_if([&](Strip *strip) {
+    return seq::transform_is_locked(channels, strip) || strip->is_effect_with_inputs() ||
+           strip->left_handle() >= timeline_frame || strip->right_handle(scene) <= timeline_frame;
+  });
+  if (selected.is_empty()) {
+    return OPERATOR_CANCELLED;
+  }
+
+  seq::prefetch_stop(scene);
+
+  /* Step 1: Calculate amount we will ripple everything left by, and the frame we ripple from. */
+  int offset = 0;
+  int ripple_frame = timeline_frame;
+  rcti selection_bounds;
+  BLI_rcti_init_minmax(&selection_bounds);
+  for (Strip *strip : selected) {
+    const rcti strip_bounds = strip_int_bounds_get(scene, strip);
+    BLI_rcti_union(&selection_bounds, &strip_bounds);
+    if (trim_left) {
+      offset = max_ii(offset, timeline_frame - strip->left_handle());
+    }
+    else {
+      offset = max_ii(offset, strip->right_handle(scene) - timeline_frame);
+      ripple_frame = max_ii(ripple_frame, strip->right_handle(scene));
+    }
+  }
+
+  /* Step 2: Trim strips. */
+  for (Strip *strip : selected) {
+    if (trim_left) {
+      strip->left_handle_set(scene, timeline_frame);
+    }
+    else {
+      strip->right_handle_set(scene, timeline_frame);
+    }
+    seq::relations_invalidate_cache(scene, strip);
+  }
+
+  /* Step 3: Offset strips. */
+  Vector<Strip *> offset_strips;
+  for (Strip &strip : *seqbasep) {
+    if (seq::transform_is_locked(channels, &strip)) {
+      continue;
+    }
+    /* Strips trimmed on the right do not ripple, but the ones trimmed on the left do. */
+    if (!trim_left && selected.contains(&strip)) {
+      continue;
+    }
+    if (!all_channels) {
+      const rcti strip_bounds = strip_int_bounds_get(scene, &strip);
+      if (!BLI_rcti_isect_rect_y(&selection_bounds, &strip_bounds, nullptr)) {
+        continue;
+      }
+    }
+    if (strip.left_handle() < ripple_frame) {
+      continue;
+    }
+    seq::transform_translate_strip(scene, &strip, -offset);
+    seq::relations_invalidate_cache(scene, &strip);
+    offset_strips.append(&strip);
+  }
+
+  if (ripple_markers && !scene->toolsettings->lock_markers) {
+    for (TimeMarker &marker : scene->markers) {
+      if (marker.frame >= ripple_frame) {
+        marker.frame -= offset;
+      }
+    }
+  }
+
+  bool has_overlap = false;
+  for (Strip *strip : offset_strips) {
+    if (seq::transform_test_overlap(scene, seqbasep, strip)) {
+      has_overlap = true;
+      break;
+    }
+  }
+  if (has_overlap) {
+    seq::transform_handle_overlap(scene, seqbasep, offset_strips, ripple_markers);
+  }
+
+  if (trim_left) {
+    scene->r.cfra -= offset;
+    DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
+    WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
+  }
+
+  DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
+  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  return OPERATOR_FINISHED;
+}
+
+static wmOperatorStatus sequencer_ripple_trim_invoke(bContext *C,
+                                                     wmOperator *op,
+                                                     const wmEvent * /*event*/)
+{
+  ripple_properties_from_tool_settings(C, op);
+  return sequencer_ripple_trim_exec(C, op);
+}
+
+void SEQUENCER_OT_ripple_trim(wmOperatorType *ot)
+{
+  /* Identifiers. */
+  ot->name = "Ripple Trim Strips";
+  ot->idname = "SEQUENCER_OT_ripple_trim";
+  ot->description = "Trim strips to the current frame and close the gaps left behind";
+
+  /* API callbacks. */
+  ot->invoke = sequencer_ripple_trim_invoke;
+  ot->exec = sequencer_ripple_trim_exec;
+  ot->poll = sequencer_edit_poll;
+
+  /* Flags. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* Properties. */
+  RNA_def_enum(ot->srna,
+               "side",
+               prop_snap_side_types,
+               int(seq::Side::Left),
+               "Side",
+               "The side of the strips to trim to the current frame");
+  operator_properties_ripple(ot);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Clear Strip Offset Operator
  * \{ */
 

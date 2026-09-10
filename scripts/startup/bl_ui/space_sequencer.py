@@ -884,6 +884,8 @@ class SEQUENCER_MT_strip_transform(Menu):
             col.operator("transform.seq_slide", text="Move").view2d_edge_pan = True
             col.operator("transform.transform", text="Move/Extend from Current Frame").mode = 'TIME_EXTEND'
             col.operator("sequencer.slip", text="Slip Strip Contents")
+            col.operator("sequencer.ripple_trim", text="Ripple Trim Start").side = 'LEFT'
+            col.operator("sequencer.ripple_trim", text="Ripple Trim End").side = 'RIGHT'
 
         # TODO (for preview)
         if has_sequencer:
