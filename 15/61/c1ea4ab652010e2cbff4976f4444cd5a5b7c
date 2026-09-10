@@ -35,3 +35,4 @@ Referenced by issue #162064, Regression: Geometry Nodes: "Layer Selection" using
 Referenced by issue #162455, Linked geometry nodes modifiers ignore "Default Attribute"
 Referenced by pull request #163467, Fix #162455: Geometry nodes bool attribute needs correct default input type
 Referenced by commit 5c951f2efee3569dc55fea32146452c9ca299c1d, Fix #162455: Geometry nodes bool attribute needs correct default input type
+Referenced by issue #163740, Geometry Nodes modifier name missing for animated properties in the Graph Editor
