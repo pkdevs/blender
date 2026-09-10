@@ -686,6 +686,15 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
     }
   }
 
+  PointerRNA ptr;
+  bToolRef *tref = WM_toolsystem_ref_from_context(const_cast<bContext *>(C));
+  WM_toolsystem_ref_properties_ensure_from_gizmo_group(tref, gzgroup->type, &ptr);
+  if (mask_group->mode !=
+      DeformMode(RNA_property_enum_get(&ptr, mask_group->update_data.gzgt_mode_prop)))
+  {
+    update = true;
+  }
+
   if (update) {
     update_things(C, gzgroup);
   }
