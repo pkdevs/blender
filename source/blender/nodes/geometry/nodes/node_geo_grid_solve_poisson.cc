@@ -159,7 +159,7 @@ struct DirichletBoundaryOp {
   {
     const float value = value_accessor_.getValue(neighbor);
     diagonal -= 1.0;
-    source += value * value_scale_;
+    source -= value * value_scale_;
   };
 };
 
@@ -178,9 +178,9 @@ struct NeumannBoundaryOp {
                   double &source,
                   double & /*diagonal*/) const
   {
-    const openvdb::math::Vec3s normal = ijk.asVec3s() - neighbor.asVec3s();
+    const openvdb::math::Vec3s normal = neighbor.asVec3s() - ijk.asVec3s();
     const openvdb::math::Vec3s gradient = gradient_accessor_.getValue(neighbor);
-    source += gradient.dot(normal) * gradient_scale_;
+    source -= gradient.dot(normal) * gradient_scale_;
   };
 };
 
@@ -207,12 +207,12 @@ struct MixedBoundaryOp {
                   double &source,
                   double &diagonal) const
   {
-    const openvdb::math::Vec3s normal = ijk.asVec3s() - neighbor.asVec3s();
+    const openvdb::math::Vec3s normal = neighbor.asVec3s() - ijk.asVec3s();
     const float value = value_accessor_.getValue(neighbor);
     const openvdb::math::Vec3s gradient = gradient_accessor_.getValue(neighbor);
     const float factor = factor_accessor_.getValue(neighbor);
     diagonal -= 1.0 * (1.0f - factor);
-    source += math::interpolate(
+    source -= math::interpolate(
         value * value_scale_, gradient.dot(normal) * gradient_scale_, factor);
   };
 };
