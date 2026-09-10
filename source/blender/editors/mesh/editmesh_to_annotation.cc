@@ -84,7 +84,7 @@ static wmOperatorStatus edbm_to_annotation_exec(bContext *C, wmOperator *op)
 
     Vector<Vector<float3>> all_points;
     if (gpf) {
-      for (bGPDstroke *gps = static_cast<bGPDstroke *>(gpf->strokes.first); gps; gps = gps->next) {
+      for (bGPDstroke *gps = gpf->strokes.first(); gps; gps = gps->next) {
         if (gps->totpoints < 2) {
           continue;
         }
@@ -139,7 +139,7 @@ static wmOperatorStatus edbm_to_annotation_exec(bContext *C, wmOperator *op)
   if (changed_multi && delete_strokes && gpf) {
     bool deleted = false;
     bGPDstroke *gps_next;
-    for (bGPDstroke *gps = static_cast<bGPDstroke *>(gpf->strokes.first); gps; gps = gps_next) {
+    for (bGPDstroke *gps = gpf->strokes.first(); gps; gps = gps_next) {
       gps_next = gps->next;
       if (gps->totpoints >= 2 && (gps->flag & GP_STROKE_3DSPACE)) {
         BLI_remlink(&gpf->strokes, gps);
