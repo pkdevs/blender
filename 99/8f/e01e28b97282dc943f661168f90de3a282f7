@@ -1,1 +1,2 @@
 Referenced by commit f71f469a6c15eb84ac17a4b379bbf14eaa86667d, PyAPI: restore names bpy.props._PropertyDeferred.function & keywords
+Referenced by issue #163692, Many context access members are incorrectly listed as `Sequence[Object]` when they are actually `list[Object]`
