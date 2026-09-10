@@ -1,3 +1,4 @@
 Referenced by commit 4481d59ccf4e3ed2b94c823ced1efaa6f61fd25a, Fix #160787: BLI_delaunay_2d crash dissolving degenerate faces
 Referenced by pull request #163295, Fix #163256: error where filling curves with holes only output a hole
 Referenced by commit 490e0b283c992cf3f8db2e11b825a59fa287d5d0, Fix #163256: error where filling curves with holes only output a hole
+Referenced by pull request #163719, Fix #163256: error where filling curves with holes only output a hole
