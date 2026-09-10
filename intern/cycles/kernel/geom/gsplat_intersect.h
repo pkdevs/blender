@@ -81,7 +81,7 @@ ccl_device_forceinline GSplatIsectParams gsplat_intersect_get_params(
     const float3 scale = kernel_data_fetch(attributes_float3, scale_offset + offset_for_step);
     const float3 next_scale = kernel_data_fetch(attributes_float3,
                                                 scale_offset + offset_for_next_step);
-    params.scale = (1.0f - t) * scale + t * next_scale;
+    params.scale = mix(scale, next_scale, t);
   }
   else {
     params.scale = kernel_data_fetch(attributes_float3, scale_offset + prim);
@@ -103,7 +103,7 @@ ccl_device_forceinline GSplatIsectParams gsplat_intersect_get_params(
                                                    radiance_base_offset + offset_for_step);
     const float4 next_radiance_base = kernel_data_fetch(
         attributes_float4, radiance_base_offset + offset_for_next_step);
-    params.radiance_base = (1.0f - t) * radiance_base + t * next_radiance_base;
+    params.radiance_base = mix(radiance_base, next_radiance_base, t);
   }
   else {
     params.radiance_base = kernel_data_fetch(attributes_float4, radiance_base_offset + prim);

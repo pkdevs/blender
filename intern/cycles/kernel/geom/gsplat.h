@@ -119,7 +119,7 @@ ccl_device_inline float3 gsplat_normal(
       scale = kernel_data_fetch(attributes_float3, scale_offset + offset_for_step);
       const float3 next_scale = kernel_data_fetch(attributes_float3,
                                                   scale_offset + offset_for_next_step);
-      scale = (1.0f - t) * scale + t * next_scale;
+      scale = mix(scale, next_scale, t);
     }
     else {
       scale = kernel_data_fetch(attributes_float3, scale_offset + prim);

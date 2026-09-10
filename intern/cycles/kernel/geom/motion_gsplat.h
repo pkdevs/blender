@@ -170,7 +170,7 @@ ccl_device_inline float4 motion_gsplat_radiance_base(KernelGlobals kg,
       kg, offset, num_verts, num_steps, step + 1, prim);
 
   /* Interpolate between steps. */
-  return (1.0f - t) * radiance_base + t * next_radiance_base;
+  return mix(radiance_base, next_radiance_base, t);
 }
 
 ccl_device_inline float3 motion_gsplat_scale_for_step(KernelGlobals kg,
@@ -206,7 +206,7 @@ ccl_device_inline float3 motion_gsplat_scale(KernelGlobals kg,
       kg, offset, num_verts, num_steps, step + 1, prim);
 
   /* Interpolate between steps. */
-  return (1.0f - t) * scale + t * next_scale;
+  return mix(scale, next_scale, t);
 }
 
 #endif /* __GSPLATS__ */
