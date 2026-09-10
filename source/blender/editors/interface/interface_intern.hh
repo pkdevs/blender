@@ -11,12 +11,10 @@
 #include <functional>
 #include <optional>
 #include <ranges>
-#include <variant>
 
 #include "BLI_compiler_attrs.hh"
 #include "BLI_enum_flags.hh"
 #include "BLI_math_vector_types.hh"
-#include "BLI_resource_scope.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 
@@ -29,6 +27,9 @@
 #include "UI_interface.hh"
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
+
+#include "buttons/interface_label_markdown.hh"
+
 struct IconTextOverlay;
 namespace blender {
 
@@ -377,76 +378,6 @@ struct TextWrapCache {
   float aspect = 0.0f;
   std::string text;
   Vector<StringRef> wrapped_lines;
-};
-
-struct MarkdownItemText {
-  enum class CodeContext {
-    None,
-    CodeSpan,
-    CodeBlock,
-  };
-
-  /**
-   * Baseline position of the text in pixels.
-   */
-  float x = 0.0f;
-  float y = 0.0f;
-  float size_px = 0.0f;
-  int fontid = 0;
-  int weight = 400;
-  bool italic = false;
-  bool is_in_quote = false;
-  CodeContext code_context = CodeContext::None;
-  StringRef text;
-  std::optional<StringRef> url;
-};
-
-struct MarkdownItemHorizontalRule {
-  /** Vertical center of the line in pixels. */
-  float y = 0.0f;
-};
-
-struct MarkdownItemQuoteLine {
-  /** Top position of the bar in pixels. */
-  float x = 0.0f;
-  float y = 0.0f;
-  /** Length of the bar extending downward. */
-  float height = 0.0f;
-};
-
-struct MarkdownItemCodeBox {
-  enum class Kind {
-    Block,
-    Inline,
-  };
-
-  rctf rect = {};
-  Kind kind = Kind::Block;
-};
-
-using MarkdownItem = std::variant<MarkdownItemText,
-                                  MarkdownItemHorizontalRule,
-                                  MarkdownItemQuoteLine,
-                                  MarkdownItemCodeBox>;
-
-struct MarkdownLayoutCacheKey {
-  StringRef text;
-  int wrap_width_px = 0;
-  float pixels_per_point = 0.0f;
-  int markdown_layout_generation = 0;
-
-  bool operator==(const MarkdownLayoutCacheKey &other) const = default;
-};
-struct MarkdownLayout {
-  Vector<MarkdownItem> items;
-  /** Height of laid-out content in pixels. */
-  float content_height = 0.0f;
-};
-
-struct MarkdownLayoutCache {
-  ResourceScope scope;
-  MarkdownLayoutCacheKey key;
-  MarkdownLayout md_layout;
 };
 
 /** Derived struct for #ButtonType::Text */
