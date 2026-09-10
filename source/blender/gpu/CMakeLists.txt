@@ -326,7 +326,6 @@ set(VULKAN_SRC
   vulkan/vk_shader_log.cc
   vulkan/vk_shader_module.cc
   vulkan/vk_staging_buffer.cc
-  vulkan/vk_state_manager.cc
   vulkan/vk_storage_buffer.cc
   vulkan/vk_streaming_buffer.cc
   vulkan/vk_texture.cc
@@ -409,7 +408,6 @@ set(VULKAN_SRC
   vulkan/vk_shader_log.hh
   vulkan/vk_shader_module.hh
   vulkan/vk_staging_buffer.hh
-  vulkan/vk_state_manager.hh
   vulkan/vk_storage_buffer.hh
   vulkan/vk_streaming_buffer.hh
   vulkan/vk_texture.hh

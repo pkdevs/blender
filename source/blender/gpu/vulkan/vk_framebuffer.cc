@@ -9,7 +9,7 @@
 #include "vk_framebuffer.hh"
 #include "vk_backend.hh"
 #include "vk_context.hh"
-#include "vk_state_manager.hh"
+#include "vk_pipeline.hh"
 #include "vk_texture.hh"
 
 namespace blender::gpu {
@@ -325,7 +325,7 @@ void VKFrameBuffer::subpass_transition_impl(const GPUAttachmentState depth_attac
       if (color_attachment_states[index] == GPU_ATTACHMENT_READ) {
         VKTexture *texture = unwrap(unwrap(color_tex(index)));
         if (texture) {
-          context.state_manager_get().image_bind(texture, index);
+          vk_pipeline_get()->image_bind(texture, index);
         }
       }
     }
@@ -339,7 +339,7 @@ void VKFrameBuffer::subpass_transition_impl(const GPUAttachmentState depth_attac
       if (color_attachment_states[index] == GPU_ATTACHMENT_READ) {
         VKTexture *texture = unwrap(unwrap(color_tex(index)));
         if (texture) {
-          context.state_manager_get().texture_bind(
+          vk_pipeline_get()->texture_bind(
               texture, GPUSamplerState::default_sampler(), index);
         }
       }

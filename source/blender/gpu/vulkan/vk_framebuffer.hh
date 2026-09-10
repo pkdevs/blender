@@ -107,7 +107,7 @@ class VKFrameBuffer : public FrameBuffer {
 
   /**
    * Ensure that the framebuffer is ready to be rendered on and that its state is up to date with
-   * the latest changes that can happen between drawing commands inside `VKStateManager`.
+   * the latest changes that can happen between drawing commands inside `VKPipeline`.
    */
   void rendering_ensure(VKContext &context);
   void rendering_ensure_dynamic_rendering(VKContext &context, const VKExtensions &extensions);

@@ -12,7 +12,7 @@
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
 #include "vk_staging_buffer.hh"
-#include "vk_state_manager.hh"
+#include "vk_pipeline.hh"
 
 #include "CLG_log.h"
 
@@ -80,7 +80,7 @@ void VKIndexBuffer::bind_as_ssbo(uint binding)
     return;
   }
 
-  VKContext::get()->state_manager_get().storage_buffer_bind(
+  vk_pipeline_get()->storage_buffer_bind(
       BindSpaceStorageBuffers::Type::IndexBuffer, this, binding);
 }
 

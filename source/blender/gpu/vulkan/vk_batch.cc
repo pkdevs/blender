@@ -12,7 +12,7 @@
 #include "vk_framebuffer.hh"
 #include "vk_index_buffer.hh"
 #include "vk_shader.hh"
-#include "vk_state_manager.hh"
+#include "vk_pipeline.hh"
 #include "vk_storage_buffer.hh"
 #include "vk_vertex_attribute_object.hh"
 

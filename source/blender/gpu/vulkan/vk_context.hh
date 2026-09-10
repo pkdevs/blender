@@ -25,7 +25,7 @@
 namespace blender::gpu {
 class VKFrameBuffer;
 class VKBatch;
-class VKStateManager;
+class VKPipeline;
 class VKShader;
 class VKThreadData;
 class VKDevice;
@@ -152,7 +152,6 @@ class VKContext : public Context, NonCopyable {
 
   VKDescriptorPools &descriptor_pools_get();
   VKDescriptorSetTracker &descriptor_set_get();
-  VKStateManager &state_manager_get() const;
 
   static void swap_buffer_draw_callback(const GHOST_VulkanSwapChainData *data,
                                         bool wait_for_submission);

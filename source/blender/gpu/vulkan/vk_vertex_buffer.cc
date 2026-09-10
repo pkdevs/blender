@@ -15,7 +15,7 @@
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
 #include "vk_staging_buffer.hh"
-#include "vk_state_manager.hh"
+#include "vk_pipeline.hh"
 #include "vk_vertex_buffer.hh"
 
 #include "CLG_log.h"
@@ -33,16 +33,12 @@ VKVertexBuffer::~VKVertexBuffer()
 
 void VKVertexBuffer::bind_as_ssbo(uint binding)
 {
-  VKContext &context = *VKContext::get();
-  VKStateManager &state_manager = context.state_manager_get();
-  state_manager.storage_buffer_bind(BindSpaceStorageBuffers::Type::VertexBuffer, this, binding);
+  vk_pipeline_get()->storage_buffer_bind(BindSpaceStorageBuffers::Type::VertexBuffer, this, binding);
 }
 
 void VKVertexBuffer::bind_as_texture(uint binding)
 {
-  VKContext &context = *VKContext::get();
-  VKStateManager &state_manager = context.state_manager_get();
-  state_manager.texel_buffer_bind(*this, binding);
+  vk_pipeline_get()->texel_buffer_bind(*this, binding);
 }
 
 void VKVertexBuffer::ensure_updated()

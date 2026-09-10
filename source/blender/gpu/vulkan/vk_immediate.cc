@@ -16,7 +16,7 @@
 #include "vk_framebuffer.hh"
 #include "vk_immediate.hh"
 #include "vk_memory_layout.hh"
-#include "vk_state_manager.hh"
+#include "vk_pipeline.hh"
 
 #include "CLG_log.h"
 
@@ -60,17 +60,17 @@ void VKImmediate::end()
   Shader &shader = *this->shader;
   if (shader.is_polyline) {
     VKBuffer &buffer = active_buffer_.value();
-    VKStateManager &state_manager = context.state_manager_get();
-    state_manager.storage_buffer_bind(BindSpaceStorageBuffers::Type::Buffer,
-                                      &buffer,
-                                      GPU_SSBO_POLYLINE_POS_BUF_SLOT,
-                                      buffer_offset_);
-    state_manager.storage_buffer_bind(BindSpaceStorageBuffers::Type::Buffer,
-                                      &buffer,
-                                      GPU_SSBO_POLYLINE_COL_BUF_SLOT,
-                                      buffer_offset_);
+    VKPipeline *pipeline = vk_pipeline_get();
+    pipeline->storage_buffer_bind(BindSpaceStorageBuffers::Type::Buffer,
+                                  &buffer,
+                                  GPU_SSBO_POLYLINE_POS_BUF_SLOT,
+                                  buffer_offset_);
+    pipeline->storage_buffer_bind(BindSpaceStorageBuffers::Type::Buffer,
+                                  &buffer,
+                                  GPU_SSBO_POLYLINE_COL_BUF_SLOT,
+                                  buffer_offset_);
     /* Not used. Satisfy the binding. */
-    state_manager.storage_buffer_bind(
+    pipeline->storage_buffer_bind(
         BindSpaceStorageBuffers::Type::Buffer, &buffer, GPU_SSBO_INDEX_BUF_SLOT, buffer_offset_);
     this->polyline_draw_workaround(0);
   }

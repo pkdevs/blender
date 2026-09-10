@@ -9,7 +9,7 @@
 #include "vk_shader_interface.hh"
 #include "vk_backend.hh"
 #include "vk_context.hh"
-#include "vk_state_manager.hh"
+#include "vk_pipeline.hh"
 
 namespace blender::gpu {
 

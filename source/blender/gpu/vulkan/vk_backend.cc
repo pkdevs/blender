@@ -30,7 +30,7 @@
 #include "vk_query.hh"
 #include "vk_ray_tracing.hh"
 #include "vk_shader.hh"
-#include "vk_state_manager.hh"
+#include "vk_pipeline.hh"
 #include "vk_storage_buffer.hh"
 #include "vk_texture.hh"
 #include "vk_texture_pool.hh"

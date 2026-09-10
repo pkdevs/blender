@@ -11,7 +11,7 @@
 #include "vk_backend.hh"
 #include "vk_context.hh"
 #include "vk_index_buffer.hh"
-#include "vk_state_manager.hh"
+#include "vk_pipeline.hh"
 #include "vk_vertex_buffer.hh"
 
 #include "CLG_log.h"
@@ -319,8 +319,7 @@ void VKTopLevelAS::build()
 
 void VKTopLevelAS::bind(int slot)
 {
-  VKContext &context = *VKContext::get();
-  context.state_manager_get().toplevelas_bind(*this, slot);
+  vk_pipeline_get()->toplevelas_bind(this, slot);
 }
 
 /** \} */

@@ -17,9 +17,9 @@
 #include "vk_debug.hh"
 #include "vk_framebuffer.hh"
 #include "vk_immediate.hh"
+#include "vk_pipeline.hh"
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
-#include "vk_state_manager.hh"
 #include "vk_texture.hh"
 #include "vk_vertex_attribute_object.hh"
 
@@ -39,7 +39,6 @@ VKContext::VKContext(GHOST_IWindow *ghost_window, GHOST_IContext *ghost_context)
   ghost_window_ = ghost_window;
   ghost_context_ = ghost_context;
 
-  state_manager = new VKStateManager();
   imm = new VKImmediate();
 
   back_left = new VKFrameBuffer("back_left");
@@ -235,19 +234,14 @@ VKDescriptorSetTracker &VKContext::descriptor_set_get()
   return thread_data_.value().get().descriptor_set;
 }
 
-VKStateManager &VKContext::state_manager_get() const
-{
-  return *static_cast<VKStateManager *>(state_manager);
-}
-
 void VKContext::debug_unbind_all_ubo()
 {
-  state_manager_get().uniform_buffer_unbind_all();
+  vk_pipeline_get()->uniform_buffer_unbind_all();
 };
 
 void VKContext::debug_unbind_all_ssbo()
 {
-  state_manager_get().storage_buffer_unbind_all();
+  vk_pipeline_get()->storage_buffer_unbind_all();
 };
 
 /** \} */
@@ -311,8 +305,7 @@ void VKContext::update_pipeline_data(const VKFrameBuffer &framebuffer,
   VKShader &vk_shader = unwrap(*shader);
 
   /* Resolve first (for legacy/no-pipeline paths) and read fixed-function state
-   * directly from the pipeline — the single source of truth. No longer
-   * mirrored into `VKStateManager`. */
+   * directly from the pipeline — the single source of truth. */
   Pipeline *pl = pipeline_get();
   pl->prepare_draw(primitive, vertex_input_key);
   GPUState state = pl->state_get();
@@ -471,9 +464,9 @@ void VKContext::swap_buffer_draw_handler(const GHOST_VulkanSwapChainData &swap_c
     Shader *shader = device.vk_backbuffer_blit_sh_get();
     GPU_shader_bind(shader);
     GPU_shader_uniform_1f(shader, "sdr_scale", swap_chain_data.sdr_scale);
-    VKStateManager &state_manager = state_manager_get();
-    state_manager.image_bind(color_attachment, 0);
-    state_manager.image_bind(&swap_chain_texture, 1);
+    VKPipeline *pipeline = vk_pipeline_get();
+    pipeline->image_bind(color_attachment, 0);
+    pipeline->image_bind(&swap_chain_texture, 1);
     int2 dispatch_size = math::divide_ceil(
         int2(swap_chain_data.extent.width, swap_chain_data.extent.height), int2(16));
     VKBackend::get().compute_dispatch(UNPACK2(dispatch_size), 1);

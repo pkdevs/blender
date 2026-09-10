@@ -15,7 +15,7 @@
 #include "vk_backend.hh"
 #include "vk_context.hh"
 #include "vk_device.hh"
-#include "vk_state_manager.hh"
+#include "vk_pipeline.hh"
 #include "vk_storage_buffer.hh"
 #include "vk_texture.hh"
 #include "vk_vertex_buffer.hh"

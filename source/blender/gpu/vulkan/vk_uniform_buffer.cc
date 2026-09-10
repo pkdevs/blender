@@ -11,7 +11,7 @@
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
 #include "vk_staging_buffer.hh"
-#include "vk_state_manager.hh"
+#include "vk_pipeline.hh"
 
 #include "CLG_log.h"
 
@@ -88,25 +88,18 @@ void VKUniformBuffer::ensure_updated()
 
 void VKUniformBuffer::bind(int slot)
 {
-  VKContext &context = *VKContext::get();
-  context.state_manager_get().uniform_buffer_bind(this, slot);
+  vk_pipeline_get()->uniform_buffer_bind(this, slot);
 }
 
 void VKUniformBuffer::bind_as_ssbo(int slot)
 {
-  VKContext &context = *VKContext::get();
-  context.state_manager_get().storage_buffer_bind(
-      BindSpaceStorageBuffers::Type::UniformBuffer, this, slot);
+  vk_pipeline_get()->storage_buffer_bind(BindSpaceStorageBuffers::Type::UniformBuffer, this, slot);
 }
 
 void VKUniformBuffer::unbind()
 {
-  const VKContext *context = VKContext::get();
-  if (context != nullptr) {
-    VKStateManager &state_manager = context->state_manager_get();
-    state_manager.uniform_buffer_unbind(this);
-    state_manager.storage_buffer_unbind(this);
-  }
+  vk_pipeline_get()->uniform_buffer_unbind(this);
+  vk_pipeline_get()->storage_buffer_unbind(this);
 }
 
 }  // namespace gpu

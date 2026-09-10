@@ -8,7 +8,7 @@
 #include "vk_shader.hh"
 #include "vk_shader_interface.hh"
 #include "vk_staging_buffer.hh"
-#include "vk_state_manager.hh"
+#include "vk_pipeline.hh"
 #include "vk_vertex_buffer.hh"
 
 #include "vk_storage_buffer.hh"
@@ -94,17 +94,12 @@ void VKStorageBuffer::allocate()
 
 void VKStorageBuffer::bind(int slot)
 {
-  VKContext &context = *VKContext::get();
-  context.state_manager_get().storage_buffer_bind(
-      BindSpaceStorageBuffers::Type::StorageBuffer, this, slot, offset_);
+  vk_pipeline_get()->storage_buffer_bind(BindSpaceStorageBuffers::Type::StorageBuffer, this, slot, offset_);
 }
 
 void VKStorageBuffer::unbind()
 {
-  VKContext *context = VKContext::get();
-  if (context) {
-    context->state_manager_get().storage_buffer_unbind(this);
-  }
+  vk_pipeline_get()->storage_buffer_unbind(this);
 }
 
 void VKStorageBuffer::clear(uint32_t clear_value)

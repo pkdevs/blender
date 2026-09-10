@@ -22,7 +22,7 @@
 #include "vk_framebuffer.hh"
 #include "vk_memory_layout.hh"
 #include "vk_pixel_buffer.hh"
-#include "vk_state_manager.hh"
+#include "vk_pipeline.hh"
 #include "vk_vertex_buffer.hh"
 
 #include "BKE_global.hh"
