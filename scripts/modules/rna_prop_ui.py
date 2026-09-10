@@ -95,8 +95,6 @@ def rna_idprop_ui_create(
 
     # Assign the value
     item[prop] = default
-    idprop_group = item.id_properties_ensure()
-    idprop_group.active_index = len(item.items()) - 1
 
     rna_idprop_ui_prop_update(item, prop)
     ui_data = item.id_properties_ui(prop)
@@ -184,11 +182,10 @@ def draw(layout, context, context_member, property_type, *, use_edit=True):
     col = row.column(align=True)
     col.operator("wm.properties_add", text="", icon='ADD').data_path = context_member
 
-    if len(items) <= 0:
+    key = rna_item.id_properties_active_get(context)
+    if key is None:
         return
-
-    idprop_group = rna_item.id_properties_ensure()
-    key, value = items[idprop_group.active_index]
+    value = rna_item[key]
 
     props = col.operator("wm.properties_remove", text="", icon='REMOVE')
     props.data_path = context_member
@@ -201,7 +198,7 @@ def draw(layout, context, context_member, property_type, *, use_edit=True):
         ui_data = rna_item.id_properties_ui(key)
     except Exception:
         # To draw enum button for changing the idproperty type
-        layout.draw_id_properties_value(rna_item)
+        layout.draw_id_properties_value(rna_item, key)
         return
 
     if not rna_item.id_properties_ui(key).exists():
@@ -209,7 +206,7 @@ def draw(layout, context, context_member, property_type, *, use_edit=True):
         prop.rna_path = context_member
         prop.property_name = key
     else:
-        layout.draw_id_properties_value(rna_item)
+        layout.draw_id_properties_value(rna_item, key)
 
 
 class PropertyPanel:

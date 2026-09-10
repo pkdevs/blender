@@ -2824,8 +2824,13 @@ void template_collection_importer(Layout *layout, bContext *C);
 void template_collection_exporters(Layout *layout, bContext *C);
 
 namespace id_properties {
+/**
+ * The identifier of the tree #template_tree draws for \a type, to find its state in the region.
+ * One per type, as the custom properties panels draw one tree per type of data.
+ */
+std::string template_tree_idname(const StructRNA *type);
 void template_tree(ui::Layout *layout, bContext *C, PointerRNA *dataptr, const char *data_path);
-void draw_id_properties_value(ui::Layout *layout, PointerRNA *dataptr);
+void draw_id_properties_value(ui::Layout *layout, PointerRNA *dataptr, const char *property_name);
 }  // namespace id_properties
 }  // namespace ui
 

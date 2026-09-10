@@ -2217,6 +2217,9 @@ class WM_OT_properties_add(Operator):
 
         rna_idprop_ui_create(item, prop, default=1.0)
 
+        # Make the new property active in the tree this was run from.
+        item.id_properties_active_set(context, prop)
+
         return {'FINISHED'}
 
 
@@ -2258,9 +2261,15 @@ class WM_OT_properties_remove(Operator):
 
         name = self.property_name
         rna_idprop_ui_prop_update(item, name)
+
+        # Removing the active property activates the previous one, as other remove operators do.
+        if item.id_properties_active_get(context) == name:
+            keys = list(item.keys())
+            index = keys.index(name)
+            if index > 0:
+                item.id_properties_active_set(context, keys[index - 1])
+
         del item[name]
-        idprop_group = item.id_properties_ensure()
-        idprop_group.active_index = max(0, idprop_group.active_index - 1)
         return {'FINISHED'}
 
 

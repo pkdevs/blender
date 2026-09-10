@@ -14,6 +14,7 @@
 
 #include <Python.h>
 
+#include <algorithm>
 #include <cfloat> /* FLT_MIN/MAX */
 #include <cstddef>
 #include <optional>
@@ -62,9 +63,14 @@
 #include "BKE_idtype.hh"
 #include "BKE_main.hh"
 #include "BKE_report.hh"
+#include "BKE_screen.hh"
 
 /* Only for types. */
 #include "BKE_node.hh"
+
+#include "ED_screen.hh"
+
+#include "UI_interface_c.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -4822,6 +4828,128 @@ static PyObject *pyrna_struct_id_properties_ui(BPy_StructRNA *self, PyObject *ar
   return reinterpret_cast<PyObject *>(ui_manager);
 }
 
+/**
+ * The region the custom properties of a struct are drawn in, see
+ * #blender::ui::id_properties::template_tree. Popups first, as when drawing.
+ */
+static ARegion *pyrna_struct_id_properties_region(const bContext *C)
+{
+  if (ARegion *region = CTX_wm_region_popup(C)) {
+    return region;
+  }
+  return CTX_wm_region(C);
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
+    pyrna_struct_id_properties_active_get_doc,
+    ".. method:: id_properties_active_get(context, /)\n"
+    "\n"
+    "   The active custom property in the custom properties panel of the region in ``context``,\n"
+    "   the region stores it (see :meth:`bpy.types.Region.active_item_index_get`).\n"
+    "\n"
+    "   :param context: The context the panel is drawn in.\n"
+    "   :type context: :class:`bpy.types.Context`\n"
+    "   :return: The name of the active property, None when there are no properties or the\n"
+    "      context has no region.\n"
+    "   :rtype: str | None\n");
+static PyObject *pyrna_struct_id_properties_active_get(BPy_StructRNA *self, PyObject *args)
+{
+  PYRNA_STRUCT_CHECK_OBJ(self);
+
+  if (RNA_struct_idprops_check(self->ptr->type) == 0) {
+    PyErr_SetString(PyExc_TypeError, "This type doesn't support IDProperties");
+    return nullptr;
+  }
+
+  BPy_StructRNA_Parse context_parse{RNA_Context, nullptr};
+  if (!PyArg_ParseTuple(args,
+                        "O&" /* `context` */
+                        ":id_properties_active_get",
+                        pyrna_struct_as_ptr_parse,
+                        &context_parse))
+  {
+    return nullptr;
+  }
+  const bContext *C = static_cast<const bContext *>(context_parse.ptr->data);
+
+  const IDProperty *group = RNA_struct_idprops(&self->ptr.value(), false);
+  if (group == nullptr || BLI_listbase_is_empty(&group->data.group)) {
+    Py_RETURN_NONE;
+  }
+  const ARegion *region = pyrna_struct_id_properties_region(C);
+  if (region == nullptr) {
+    Py_RETURN_NONE;
+  }
+  /* Match the tree: it only stores the resolved index once drawn (after the panel reading this),
+   * so the stored index alone is missing on the first draw & stale after removing the last
+   * property. */
+  const uiActiveItemState *state = BKE_region_active_item_state_find(
+      region, blender::ui::id_properties::template_tree_idname(self->ptr->type));
+  const int index = state ? std::clamp(state->active_index,
+                                       0,
+                                       BLI_listbase_count(&group->data.group) - 1) :
+                            0;
+  const IDProperty *prop = static_cast<const IDProperty *>(
+      BLI_findlink(&group->data.group, index));
+  return PyUnicode_FromString(prop->name);
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
+    pyrna_struct_id_properties_active_set_doc,
+    ".. method:: id_properties_active_set(context, key, /)\n"
+    "\n"
+    "   Make a custom property active in the custom properties panel of the region in\n"
+    "   ``context``, see :meth:`bpy.types.bpy_struct.id_properties_active_get`.\n"
+    "   Does nothing when the context has no region.\n"
+    "\n"
+    "   :param context: The context the panel is drawn in.\n"
+    "   :type context: :class:`bpy.types.Context`\n"
+    "   :param key: The name of the property.\n"
+    "   :type key: str\n");
+static PyObject *pyrna_struct_id_properties_active_set(BPy_StructRNA *self, PyObject *args)
+{
+  PYRNA_STRUCT_CHECK_OBJ(self);
+
+  if (RNA_struct_idprops_check(self->ptr->type) == 0) {
+    PyErr_SetString(PyExc_TypeError, "This type doesn't support IDProperties");
+    return nullptr;
+  }
+
+  BPy_StructRNA_Parse context_parse{RNA_Context, nullptr};
+  const char *key;
+  if (!PyArg_ParseTuple(args,
+                        "O&" /* `context` */
+                        "s"  /* `key` */
+                        ":id_properties_active_set",
+                        pyrna_struct_as_ptr_parse,
+                        &context_parse,
+                        &key))
+  {
+    return nullptr;
+  }
+  const bContext *C = static_cast<const bContext *>(context_parse.ptr->data);
+
+  const IDProperty *group = RNA_struct_idprops(&self->ptr.value(), false);
+  const IDProperty *prop = group ? IDP_GetPropertyFromGroup(group, key) : nullptr;
+  if (prop == nullptr) {
+    PyErr_SetString(PyExc_KeyError, "Property not found in IDProperty group");
+    return nullptr;
+  }
+
+  ARegion *region = pyrna_struct_id_properties_region(C);
+  if (region == nullptr) {
+    Py_RETURN_NONE;
+  }
+  uiActiveItemState *state = BKE_region_active_item_state_ensure(
+      region, blender::ui::id_properties::template_tree_idname(self->ptr->type));
+  state->active_index = BLI_findindex(&group->data.group, prop);
+  ED_region_tag_redraw(region);
+
+  Py_RETURN_NONE;
+}
+
 PyDoc_STRVAR(
     /* Wrap. */
     pyrna_struct_id_properties_clear_doc,
@@ -6711,6 +6839,14 @@ static PyMethodDef pyrna_struct_methods[] = {
      reinterpret_cast<PyCFunction>(pyrna_struct_id_properties_ui),
      METH_VARARGS,
      pyrna_struct_id_properties_ui_doc},
+    {"id_properties_active_get",
+     reinterpret_cast<PyCFunction>(pyrna_struct_id_properties_active_get),
+     METH_VARARGS,
+     pyrna_struct_id_properties_active_get_doc},
+    {"id_properties_active_set",
+     reinterpret_cast<PyCFunction>(pyrna_struct_id_properties_active_set),
+     METH_VARARGS,
+     pyrna_struct_id_properties_active_set_doc},
 
 /* experimental */
 /* unused for now */

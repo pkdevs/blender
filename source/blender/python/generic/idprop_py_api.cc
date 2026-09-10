@@ -14,7 +14,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_listbase.hh"
 #include "BLI_utildefines.hh"
 
 #include "idprop_py_api.hh"
@@ -295,23 +294,6 @@ static int BPy_IDGroup_SetName(BPy_IDProperty *self, PyObject *value, void * /*c
   return 0;
 }
 
-static PyObject *BPy_IDProperty_GetActiveIndex(BPy_IDProperty *self, void * /*closure*/)
-{
-  return PyLong_FromLong(self->prop->get_active_index());
-}
-
-static int BPy_IDProperty_SetActiveIndex(BPy_IDProperty *self, PyObject *value, void * /*closure*/)
-{
-  int index = PyLong_AsLong(value);
-
-  if (index < 0 || index > BLI_listbase_count(&self->prop->data.group)) {
-    PyErr_SetString(PyExc_IndexError, "active index out of range");
-    return -1;
-  }
-  self->prop->set_active_index(index);
-  return 0;
-}
-
 #if 0
 static PyObject *BPy_IDGroup_GetType(BPy_IDProperty *self)
 {
@@ -324,11 +306,6 @@ static PyGetSetDef BPy_IDGroup_getseters[] = {
      reinterpret_cast<getter>(BPy_IDGroup_GetName),
      reinterpret_cast<setter>(BPy_IDGroup_SetName),
      BPy_IDGroup_GetName_doc,
-     nullptr},
-    {"active_index",
-     reinterpret_cast<getter>(BPy_IDProperty_GetActiveIndex),
-     reinterpret_cast<setter>(BPy_IDProperty_SetActiveIndex),
-     "The active index of properties inside this group.\n:type: int",
      nullptr},
     {nullptr, nullptr, nullptr, nullptr, nullptr},
 };

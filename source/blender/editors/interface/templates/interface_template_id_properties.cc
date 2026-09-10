@@ -39,6 +39,11 @@ class IDPropertyView : public AbstractTreeView {
     user_properties_ = RNA_struct_idprops(dataptr_, false);
   }
 
+  bool use_persistent_active_item() const override
+  {
+    return true;
+  }
+
   void build_tree() override;
 
  private:
@@ -149,10 +154,8 @@ class IDPropertyDropTarget : public ui::TreeViewItemDropTarget {
         break;
     }
 
-    /* Change active index after drop. */
-    drag_data->user_properties_->set_active_index(BLI_findindex(&idprop_list, drag_idprop));
     WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, nullptr);
-    ED_undo_push(C, "Drop Active IDProperty");
+    ED_undo_push(C, "Reorder ID Property");
     return true;
   }
 };
@@ -162,11 +165,9 @@ class IDPropertyItem : public AbstractTreeViewItem {
   PointerRNA *dataptr_;
   IDProperty *user_properties_;
   IDProperty *idprop_;
-  int index_;
 
  public:
-  IDPropertyItem(PointerRNA *dataptr, IDProperty *idprop, int index)
-      : dataptr_(dataptr), idprop_(idprop), index_(index)
+  IDPropertyItem(PointerRNA *dataptr, IDProperty *idprop) : dataptr_(dataptr), idprop_(idprop)
   {
     label_ = idprop_->name;
     user_properties_ = RNA_struct_idprops(dataptr_, false);
@@ -229,17 +230,6 @@ class IDPropertyItem : public AbstractTreeViewItem {
     }
   }
 
-  std::optional<bool> should_be_active() const override
-  {
-    return user_properties_->get_active_index() == index_;
-  }
-
-  void on_activate(bContext &C) override
-  {
-    user_properties_->set_active_index(index_);
-    ED_undo_push(&C, "Set Active IDProperty");
-  }
-
   std::unique_ptr<ui::AbstractViewItemDragController> create_drag_controller() const override
   {
     return std::make_unique<IDPropertyDragController>(
@@ -259,11 +249,15 @@ void IDPropertyView::build_tree()
     return;
   }
 
-  int index = 0;
   for (IDProperty &idprop : user_properties_->data.group) {
-    this->add_tree_item<IDPropertyItem>(dataptr_, &idprop, index);
-    index++;
+    this->add_tree_item<IDPropertyItem>(dataptr_, &idprop);
   }
+}
+
+std::string template_tree_idname(const StructRNA *type)
+{
+  /* The RNA name of the template (see `rna_ui_api.cc`), scripts & files rely on it. */
+  return list_idname_compose("template_id_properties_tree", RNA_struct_identifier(type));
 }
 
 void template_tree(ui::Layout *layout, bContext *C, PointerRNA *dataptr, const char *data_path)
@@ -275,7 +269,9 @@ void template_tree(ui::Layout *layout, bContext *C, PointerRNA *dataptr, const c
   Block *block = layout->block();
 
   ui::AbstractTreeView *tree_view = block_add_view(
-      *block, "IDProperty Tree View", std::make_unique<IDPropertyView>(dataptr, data_path));
+      *block,
+      template_tree_idname(dataptr->type),
+      std::make_unique<IDPropertyView>(dataptr, data_path));
   tree_view->set_context_menu_title("ID Property");
   tree_view->set_default_rows(4);
 
@@ -285,45 +281,45 @@ void template_tree(ui::Layout *layout, bContext *C, PointerRNA *dataptr, const c
 /* Callback to reset object pointer when ID data type is changed. */
 static void idproperty_id_type_set_fn(bContext * /*C*/, void *but_arg1, void * /*arg2*/)
 {
-  const IDProperty *user_properties = static_cast<IDProperty *>(but_arg1);
-
-  IDProperty *active_prop = static_cast<IDProperty *>(
-      BLI_findlink(&user_properties->data.group, user_properties->get_active_index()));
-  active_prop->data.pointer = nullptr;
+  IDProperty *prop = static_cast<IDProperty *>(but_arg1);
+  prop->data.pointer = nullptr;
 }
 
 /* Callback to convert property to python type when type changed to unsupported. */
-static void idproperty_python_prop_add_fn(bContext * /*C*/, void *but_arg1, void * /*arg2*/)
+static void idproperty_python_prop_add_fn(bContext * /*C*/, void *but_arg1, void *arg2)
 {
-  IDProperty *user_properties = static_cast<IDProperty *>(but_arg1);
-  IDProperty *active_prop = static_cast<IDProperty *>(
-      BLI_findlink(&user_properties->data.group, user_properties->get_active_index()));
+  IDProperty *prop = static_cast<IDProperty *>(but_arg1);
+  IDProperty *user_properties = static_cast<IDProperty *>(arg2);
 
-  if (IDP_ui_data_supported(active_prop)) {
+  if (IDP_ui_data_supported(prop)) {
     return;
   }
 
   IDPropertyTemplate prop_template{0};
   /* Remove existing property to add a new idprop of python type. */
-  IDProperty *python_prop = IDP_New(IDP_GROUP, &prop_template, active_prop->name);
-  IDP_ReplaceInGroup_ex(user_properties, python_prop, active_prop, 0);
+  IDProperty *python_prop = IDP_New(IDP_GROUP, &prop_template, prop->name);
+  IDP_ReplaceInGroup_ex(user_properties, python_prop, prop, 0);
 }
 
-void draw_id_properties_value(ui::Layout *layout, PointerRNA *dataptr)
+void draw_id_properties_value(ui::Layout *layout, PointerRNA *dataptr, const char *property_name)
 {
+  IDProperty *user_properties = RNA_struct_idprops(dataptr, false);
+  if (user_properties == nullptr) {
+    return;
+  }
+  IDProperty *active_prop = IDP_GetPropertyFromGroup(user_properties, property_name);
+  if (active_prop == nullptr) {
+    return;
+  }
+
   ID *id = dataptr->owner_id;
   layout->use_property_split_set(true);
   layout->use_property_decorate_set(false);
 
-  IDProperty *user_properties = RNA_struct_idprops(dataptr, false);
-
-  IDProperty *active_prop = static_cast<IDProperty *>(
-      BLI_findlink(&user_properties->data.group, user_properties->get_active_index()));
-
   PointerRNA prop_ptr = RNA_pointer_create_discrete(id, RNA_IDProperty, active_prop);
   layout->prop(&prop_ptr, "type", UI_ITEM_NONE, "Type", ICON_NONE);
   Button *but = button_last(layout->block());
-  button_func_set(but, idproperty_python_prop_add_fn, user_properties, nullptr);
+  button_func_set(but, idproperty_python_prop_add_fn, active_prop, user_properties);
 
   if (active_prop->ui_data == nullptr) {
     return;
@@ -393,7 +389,7 @@ void draw_id_properties_value(ui::Layout *layout, PointerRNA *dataptr)
   if (srna == RNA_IDPropertyUIDataID) {
     layout->prop(&propui_ptr, "id_type", UI_ITEM_NONE, "Data-Block type", ICON_NONE);
     Button *but = button_last(layout->block());
-    button_func_set(but, idproperty_id_type_set_fn, user_properties, nullptr);
+    button_func_set(but, idproperty_id_type_set_fn, active_prop, nullptr);
   }
 
   layout->prop(&propui_ptr, "description", UI_ITEM_NONE, "Description", ICON_NONE);

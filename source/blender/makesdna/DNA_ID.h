@@ -141,10 +141,7 @@ struct IDPropertyData {
    * group is empty. The order may not be exactly the same as in #group.
    */
   bke::idprop::IDPropertyGroupChildrenSet *children_map = nullptr;
-  /**
-   * NOTE: a `double` is written into two 32bit integers.
-   * For user_properties group, `val` stores active index (see getter/setters in #IDProperty).
-   */
+  /** NOTE: a `double` is written into two 32bit integers. */
   int val = 0, val2 = 0;
 };
 
@@ -177,17 +174,6 @@ struct IDProperty {
   int totallen = 0;
 
   IDPropertyUIData *ui_data = nullptr;
-
-#ifdef __cplusplus
-  const int get_active_index() const
-  {
-    return data.val;
-  }
-  void set_active_index(int index)
-  {
-    data.val = index;
-  }
-#endif
 };
 
 #define MAX_IDPROP_NAME 64
