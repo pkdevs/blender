@@ -60,7 +60,7 @@ size_t malloc_usable_size(void *ptr);
 
 #  include <malloc.h>
 #else
-/* Apple's malloc is 16-byte aligned, and does not have `malloc.h`, so include `stdilb` instead. */
+/* Apple's malloc is 16-byte aligned, and does not have `malloc.h`, so include `stdlib` instead. */
 #  include <stdlib.h>
 #endif
 
