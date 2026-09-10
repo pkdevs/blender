@@ -56,7 +56,7 @@ void Pipeline::shader_set(Shader *shader)
   }
   shader_ = shader;
   shader_interface_id_ = (shader != nullptr && shader->interface != nullptr) ?
-                                 shader->interface->id :
+                                 shader->interface->uid :
                                  0;
   mark_dirty(GPU_PIPELINE_DIRTY_PIPELINE | GPU_PIPELINE_DIRTY_DESCRIPTOR);
 }
