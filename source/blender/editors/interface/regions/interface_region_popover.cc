@@ -181,7 +181,7 @@ static Block *block_func_POPOVER(bContext *C, PopupBlockHandle *handle, void *ar
     if (!slideout) {
       ARegion *region = CTX_wm_region(C);
 
-      if (region && region->panels.first && (direction & UI_DIR_DOWN)) {
+      if (region && region->panels.first() && (direction & UI_DIR_DOWN)) {
         /* For regions with panels, prefer to open to top so we can
          * see the values of the buttons below changing. */
         block_direction_set(block, UI_DIR_UP | UI_DIR_CENTER_X);
@@ -350,8 +350,7 @@ wmOperatorStatus popover_panel_invoke(
     ED_region_tag_refresh_ui(handle->region);
   }
   else {
-    Popover *pup = popover_begin(C, U.widget_unit * pt->ui_units_x, false);
-    pup->use_numselect = use_numselect;
+    Popover *pup = popover_begin(C, U.widget_unit * pt->ui_units_x, false, use_numselect);
     layout = popover_layout(pup);
     ui::UI_paneltype_draw(C, pt, layout);
     ui::popover_end(C, pup, nullptr);
@@ -371,13 +370,14 @@ wmOperatorStatus popover_panel_invoke(
 /** \name Popup Menu API with begin & end
  * \{ */
 
-Popover *popover_begin(bContext *C, int ui_menu_width, bool from_active_button)
+Popover *popover_begin(bContext *C, int ui_menu_width, bool from_active_button, bool use_numselect)
 {
   Popover *pup = MEM_new<Popover>(__func__);
   if (ui_menu_width == 0) {
     ui_menu_width = U.widget_unit * UI_POPOVER_WIDTH_UNITS;
   }
   pup->ui_size_x = ui_menu_width;
+  pup->use_numselect = use_numselect;
 
   ARegion *butregion = nullptr;
   Button *but = nullptr;
