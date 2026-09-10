@@ -660,13 +660,9 @@ static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
   // gizmo_node_bbox_update(mask_group);
 }
 
-static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
+static bool should_update(const bContext *C, wmGizmoGroup *gzgroup)
 {
-  // Main *bmain = CTX_data_main(C);
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
-  wmGizmo *gz = mask_group->border;
-
-  bool update = false;
 
   const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
   const Vector<IndexMask> selections = mask_group->selections;
@@ -682,7 +678,7 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
     const IndexMask selected_points_2 = selections[drawing_i];
 
     if (selected_points_1 != selected_points_2) {
-      update = true;
+      return true;
     }
   }
 
@@ -692,10 +688,18 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   if (mask_group->mode !=
       DeformMode(RNA_property_enum_get(&ptr, mask_group->update_data.gzgt_mode_prop)))
   {
-    update = true;
+    return true;
   }
 
-  if (update) {
+  return false;
+}
+
+static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
+{
+  QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
+  wmGizmo *gz = mask_group->border;
+
+  if (should_update(C, gzgroup)) {
     update_things(C, gzgroup);
   }
 
