@@ -2180,9 +2180,6 @@ def pycontext_members2sphinx(ident: str, fw: WriteFn, written_props: set[str]) -
                 if member_type.isidentifier():
                     class_str = ":class:`{:s}`".format(member_type)
                     if is_seq:
-                        # Context data collections are exposed to Python as built-in `list` objects
-                        # (see `ContextDataType::Collection` -> `PyList_New` in bpy_rna.cc), so
-                        # annotate them as `list[T]` rather than the broader `Sequence[T]`.
                         type_strs.append("list[{:s}]".format(class_str))
                     else:
                         type_strs.append(class_str)
