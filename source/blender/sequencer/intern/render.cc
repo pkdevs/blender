@@ -1915,7 +1915,7 @@ bool render_strip_full(Main *bmain,
   }
 
   /* Prevents crash. */
-  BLI_addtail(&bmain_temp->wm, bmain->wm.first);
+  BLI_addtail(&bmain_temp->wm, bmain->wm.first());
 
   Scene *scene_temp = BKE_scene_add(bmain_temp, "Strip Render Temporary Scene");
   if (!scene_temp) {
