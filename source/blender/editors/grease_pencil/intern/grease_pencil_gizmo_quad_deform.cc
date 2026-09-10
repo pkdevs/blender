@@ -351,6 +351,121 @@ static std::optional<float3x3> compute_homography_matrix(const QuadWidgetGroup2 
   return homography_matrix;
 }
 
+static void update_positions_transform(QuadWidgetGroup2 *mask_group, const float4x4 &mat)
+{
+  const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
+  const Vector<IndexMask> selections = mask_group->selections;
+  const Vector<Array<float3>> &src_positions = mask_group->src_positions;
+
+  const float4x4 transform = float4x4(mask_group->border->matrix_space) * mat *
+                             math::invert(float4x4(mask_group->border->matrix_space));
+
+  for (const int drawing_i : drawings.index_range()) {
+    const MutableDrawingInfo &info = drawings[drawing_i];
+    const IndexMask &selected_points = selections[drawing_i];
+    const Span<float3> src_positions_i = src_positions[drawing_i];
+
+    bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
+    MutableSpan<float3> positions = strokes.positions_for_write();
+
+    selected_points.foreach_index([&](const int point_i) {
+      positions[point_i] = math::transform_point(transform, src_positions_i[point_i]);
+    });
+
+    info.drawing.tag_positions_changed();
+  }
+
+  DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(mask_group->update_data.context,
+                        NC_GEOM | ND_DATA | NA_EDITED,
+                        mask_group->grease_pencil_src);
+}
+
+static void update_positions_prespective(QuadWidgetGroup2 *mask_group)
+{
+  const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
+  const Vector<IndexMask> selections = mask_group->selections;
+  const Vector<Array<float3>> &src_positions = mask_group->src_positions;
+
+  const float4x4 mat = float4x4(mask_group->border->matrix_space);
+  const float4x4 mat_inv = math::invert(mat);
+
+  const std::optional<float3x3> homography_mat = compute_homography_matrix(mask_group);
+
+  /* If the matrix can not be created leave the all points at the last valid position. */
+  if (!homography_mat) {
+    return;
+  }
+
+  for (const int drawing_i : drawings.index_range()) {
+    const MutableDrawingInfo &info = drawings[drawing_i];
+    const IndexMask &selected_points = selections[drawing_i];
+    const Span<float3> src_positions_i = src_positions[drawing_i];
+
+    bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
+    MutableSpan<float3> positions = strokes.positions_for_write();
+
+    selected_points.foreach_index([&](const int point_i) {
+      const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) +
+                            float2(0.5f);
+
+      const float3 pos_3d_out = (*homography_mat) * float3(pos_2d, 1.0f);
+      const float2 pos_2d_out = float2(pos_3d_out.x, pos_3d_out.y) / pos_3d_out.z;
+
+      positions[point_i] = math::transform_point(mat, float3(pos_2d_out - float2(0.5f), 0.0f));
+    });
+
+    info.drawing.tag_positions_changed();
+  }
+
+  DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(mask_group->update_data.context,
+                        NC_GEOM | ND_DATA | NA_EDITED,
+                        mask_group->grease_pencil_src);
+}
+
+static void update_positions_grid(QuadWidgetGroup2 *mask_group)
+{
+  const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
+  const Vector<IndexMask> selections = mask_group->selections;
+  const Vector<Array<float3>> &src_positions = mask_group->src_positions;
+
+  const float4x4 mat = float4x4(mask_group->border->matrix_space);
+  const float4x4 mat_inv = math::invert(mat);
+
+  for (const int drawing_i : drawings.index_range()) {
+    const MutableDrawingInfo &info = drawings[drawing_i];
+    const IndexMask &selected_points = selections[drawing_i];
+    const Span<float3> src_positions_i = src_positions[drawing_i];
+
+    bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
+    MutableSpan<float3> positions = strokes.positions_for_write();
+    selected_points.foreach_index([&](const int point_i) {
+      const float2 lower_left = mask_group->corner_pin.corner_data[0]->corner_pos;
+      const float2 lower_right = mask_group->corner_pin.corner_data[1]->corner_pos;
+      const float2 upper_right = mask_group->corner_pin.corner_data[2]->corner_pos;
+      const float2 upper_left = mask_group->corner_pin.corner_data[3]->corner_pos;
+
+      const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) +
+                            float2(0.5f);
+
+      const float2 pos_2d_out = math::interpolate(
+          math::interpolate(lower_left, lower_right, pos_2d.x),
+          math::interpolate(upper_left, upper_right, pos_2d.x),
+          pos_2d.y);
+
+      positions[point_i] = math::transform_point(mat, float3(pos_2d_out, 0.0f));
+    });
+
+    info.drawing.tag_positions_changed();
+  }
+
+  DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(mask_group->update_data.context,
+                        NC_GEOM | ND_DATA | NA_EDITED,
+                        mask_group->grease_pencil_src);
+}
+
 static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
                                             wmGizmoProperty *gz_prop,
                                             const void *value_p)
@@ -376,85 +491,10 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
 
   if (mask_group->mode == DeformMode::PERSPECTIVE) {
-    const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
-    const Vector<IndexMask> selections = mask_group->selections;
-    const Vector<Array<float3>> &src_positions = mask_group->src_positions;
-
-    const float4x4 mat = float4x4(gz->matrix_space);
-    const float4x4 mat_inv = math::invert(mat);
-
-    const std::optional<float3x3> homography_mat = compute_homography_matrix(mask_group);
-
-    /* If the matrix can not be created leave the all points at the last valid position. */
-    if (!homography_mat) {
-      return;
-    }
-
-    for (const int drawing_i : drawings.index_range()) {
-      const MutableDrawingInfo &info = drawings[drawing_i];
-      const IndexMask &selected_points = selections[drawing_i];
-      const Span<float3> src_positions_i = src_positions[drawing_i];
-
-      bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
-      MutableSpan<float3> positions = strokes.positions_for_write();
-
-      selected_points.foreach_index([&](const int point_i) {
-        const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) +
-                              float2(0.5f);
-
-        const float3 pos_3d_out = (*homography_mat) * float3(pos_2d, 1.0f);
-        const float2 pos_2d_out = float2(pos_3d_out.x, pos_3d_out.y) / pos_3d_out.z;
-
-        positions[point_i] = math::transform_point(mat, float3(pos_2d_out - float2(0.5f), 0.0f));
-      });
-
-      info.drawing.tag_positions_changed();
-    }
-
-    DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
-    WM_event_add_notifier(mask_group->update_data.context,
-                          NC_GEOM | ND_DATA | NA_EDITED,
-                          mask_group->grease_pencil_src);
+    update_positions_prespective(mask_group);
   }
   else if (mask_group->mode == DeformMode::GRID) {
-    const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
-    const Vector<IndexMask> selections = mask_group->selections;
-    const Vector<Array<float3>> &src_positions = mask_group->src_positions;
-
-    const float4x4 mat = float4x4(gz->matrix_space);
-    const float4x4 mat_inv = math::invert(mat);
-
-    for (const int drawing_i : drawings.index_range()) {
-      const MutableDrawingInfo &info = drawings[drawing_i];
-      const IndexMask &selected_points = selections[drawing_i];
-      const Span<float3> src_positions_i = src_positions[drawing_i];
-
-      bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
-      MutableSpan<float3> positions = strokes.positions_for_write();
-      selected_points.foreach_index([&](const int point_i) {
-        const float2 lower_left = mask_group->corner_pin.corner_data[0]->corner_pos;
-        const float2 lower_right = mask_group->corner_pin.corner_data[1]->corner_pos;
-        const float2 upper_right = mask_group->corner_pin.corner_data[2]->corner_pos;
-        const float2 upper_left = mask_group->corner_pin.corner_data[3]->corner_pos;
-
-        const float2 pos_2d = float2(math::transform_point(mat_inv, src_positions_i[point_i])) +
-                              float2(0.5f);
-
-        const float2 pos_2d_out = math::interpolate(
-            math::interpolate(lower_left, lower_right, pos_2d.x),
-            math::interpolate(upper_left, upper_right, pos_2d.x),
-            pos_2d.y);
-
-        positions[point_i] = math::transform_point(mat, float3(pos_2d_out, 0.0f));
-      });
-
-      info.drawing.tag_positions_changed();
-    }
-
-    DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
-    WM_event_add_notifier(mask_group->update_data.context,
-                          NC_GEOM | ND_DATA | NA_EDITED,
-                          mask_group->grease_pencil_src);
+    update_positions_grid(mask_group);
   }
 }
 
@@ -568,50 +608,12 @@ static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
                                                 const void *value_p)
 {
   const float (*matrix)[4] = static_cast<const float (*)[4]>(value_p);
-  float4x4 mat = float4x4(matrix);
+  const float4x4 mat = float4x4(matrix);
   BLI_assert(gz_prop->type->array_length == 16);
-
-  printf("gizmo_node_box_mask_prop_matrix_set\n");
 
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gz->parent_gzgroup->customdata);
 
-  const Vector<MutableDrawingInfo> drawings = mask_group->drawings;
-  const Vector<IndexMask> selections = mask_group->selections;
-  const Vector<Array<float3>> &src_positions = mask_group->src_positions;
-
-  const float4x4 transform = float4x4(gz->matrix_space) * mat *
-                             math::invert(float4x4(gz->matrix_space));
-
-  printf("transform: \n");
-  printf("%f %f %f %f\n", transform[0][0], transform[1][0], transform[2][0], transform[3][0]);
-  printf("%f %f %f %f\n", transform[0][1], transform[1][1], transform[2][1], transform[3][1]);
-  printf("%f %f %f %f\n", transform[0][2], transform[1][2], transform[2][2], transform[3][2]);
-  printf("%f %f %f %f\n", transform[0][3], transform[1][3], transform[2][3], transform[3][3]);
-  printf("\n");
-
-  for (const int drawing_i : drawings.index_range()) {
-    const MutableDrawingInfo &info = drawings[drawing_i];
-    const IndexMask &selected_points = selections[drawing_i];
-    const Span<float3> src_positions_i = src_positions[drawing_i];
-
-    bke::CurvesGeometry &strokes = info.drawing.strokes_for_write();
-    MutableSpan<float3> positions = strokes.positions_for_write();
-
-    selected_points.foreach_index([&](const int point_i) {
-      positions[point_i] = math::transform_point(transform, src_positions_i[point_i]);
-    });
-
-    info.drawing.tag_positions_changed();
-
-    // box = bounds::merge(box,
-    //                     compute_screen_space_drawing_bounds(
-    //                         *rv3d, *object, info.layer_index, selected_points, info.drawing));
-  }
-
-  DEG_id_tag_update(&mask_group->grease_pencil_src->id, ID_RECALC_GEOMETRY);
-  WM_event_add_notifier(mask_group->update_data.context,
-                        NC_GEOM | ND_DATA | NA_EDITED,
-                        mask_group->grease_pencil_src);
+  update_positions_transform(mask_group, mat);
 
   // const float2 dims = mask_group->state.dims;
   // const float2 offset = mask_group->state.offset;
