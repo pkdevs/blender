@@ -65,7 +65,7 @@ static void viewroll_apply(ViewOpsData *vod, int x, int y)
   const float current_position[2] = {float(x), float(y)};
   float angle = BLI_dial_angle(vod->init.dial, current_position);
 
-  if ((vod->rv3d->persp == RV3D_CAMOB && (vod->rv3d->rflag & RV3D_FLIP_X) != 0)) {
+  if (vod->rv3d->persp == RV3D_CAMOB && (vod->rv3d->rflag & RV3D_FLIP_X) != 0) {
     angle = -angle;
   }
 
@@ -216,7 +216,7 @@ static wmOperatorStatus viewroll_exec(bContext *C, wmOperator *op)
     angle = -angle;
   }
 
-  if ((vod->rv3d->persp == RV3D_CAMOB && (vod->rv3d->rflag & RV3D_FLIP_X) != 0)) {
+  if (vod->rv3d->persp == RV3D_CAMOB && (vod->rv3d->rflag & RV3D_FLIP_X) != 0) {
     angle = -angle;
   }
 

@@ -1100,7 +1100,7 @@ static int walkApply(bContext *C, WalkInfo *walk, bool is_confirm)
     moffset[1] = -moffset[1];
   }
 
-  if ((walk->rv3d->persp == RV3D_CAMOB && (walk->rv3d->rflag & RV3D_FLIP_X) != 0)) {
+  if (walk->rv3d->persp == RV3D_CAMOB && (walk->rv3d->rflag & RV3D_FLIP_X) != 0) {
     moffset[0] = -moffset[0];
     moffset[1] = -moffset[1];
   }
