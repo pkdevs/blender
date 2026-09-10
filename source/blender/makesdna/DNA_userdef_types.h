@@ -700,6 +700,10 @@ struct bUserAssetLibrary {
   char _pad0[4] = {};
 
 #ifdef __cplusplus
+  /**
+   * The setting the user controls. Use #BKE_preferences_asset_library_is_enabled to check if the
+   * library is used, it also accounts for the repository of extension defined libraries.
+   */
   bool is_enabled() const
   {
     return (this->flag & ASSET_LIBRARY_DISABLED) == 0;

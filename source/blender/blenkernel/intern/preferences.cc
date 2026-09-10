@@ -160,12 +160,32 @@ int BKE_preferences_asset_library_get_index(const UserDef *userdef,
   return BLI_findindex(&userdef->asset_libraries, library);
 }
 
+bool BKE_preferences_asset_library_is_enabled(const UserDef *userdef,
+                                              const bUserAssetLibrary *library)
+{
+  if (library->flag & ASSET_LIBRARY_DISABLED) {
+    return false;
+  }
+  if (library->extension_id[0]) {
+    const bUserExtensionRepo *repo = BKE_preferences_extension_asset_library_repo_get(userdef,
+                                                                                      library);
+    /* The libraries of a removed repository are removed too, any that remain are unusable. */
+    if (repo == nullptr) {
+      return false;
+    }
+    if (repo->flag & USER_EXTENSION_REPO_FLAG_DISABLED) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool BKE_preferences_asset_library_is_valid(const UserDef *userdef,
                                             const bUserAssetLibrary *library,
                                             const bool check_directory_exists)
 {
   /* Check disabled libraries. */
-  if (library->flag & ASSET_LIBRARY_DISABLED) {
+  if (!BKE_preferences_asset_library_is_enabled(userdef, library)) {
     return false;
   }
 

@@ -147,6 +147,17 @@ int BKE_preferences_asset_library_get_index(const struct UserDef *userdef,
     ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
 /**
+ * Check if \a library is used, an extension defined library is only used while the repository
+ * defining it is enabled.
+ *
+ * \note #bUserAssetLibrary::is_enabled is only the setting the user controls, disabling a
+ * repository never changes it so the setting is kept for when the repository is enabled again.
+ */
+bool BKE_preferences_asset_library_is_enabled(const struct UserDef *userdef,
+                                              const struct bUserAssetLibrary *library)
+    ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+
+/**
  * Check if the asset library defined in \a library has enough data to be loadable.
  * \param check_directory_exists: When true, a library is required to point to a valid path on disk
  * as its root, otherwise the library is considered invalid.

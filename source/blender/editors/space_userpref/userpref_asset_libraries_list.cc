@@ -128,6 +128,13 @@ void ED_userpref_asset_library_active_set(const bUserAssetLibrary &asset_library
   }
 }
 
+/** Extension libraries are only used while the repository defining them is enabled. */
+static bool asset_library_repo_is_disabled(const AnyAssetLibraryDefinition &library)
+{
+  return library.extension_repo &&
+         (library.extension_repo->flag & USER_EXTENSION_REPO_FLAG_DISABLED);
+}
+
 struct AssetLibraryListItem : public AssetLibraryListItemCommon {
 
   /* Use the constructor from AssetLibraryListItemCommon. */
@@ -139,6 +146,11 @@ struct AssetLibraryListItem : public AssetLibraryListItemCommon {
                                    (library.user_library->flag & ASSET_LIBRARY_USE_REMOTE_URL);
     const bool project_library = library.user_library &&
                                  (library.user_library->flag & ASSET_LIBRARY_PROJECT_DEFINED);
+
+    /* Draw grayed out, the "enabled" setting stays editable, it just has no effect. */
+    if (asset_library_repo_is_disabled(library)) {
+      row.active_set(false);
+    }
 
     if (library.user_library) {
       int icon = is_remote_library ? ICON_INTERNET : ICON_DISK_DRIVE;
@@ -202,6 +214,14 @@ struct AssetLibraryRepoItem : public AssetLibraryListItem {
   void build_row(ui::Layout &row) override
   {
     row.label(label_, ICON_NONE);
+
+    if (asset_library_repo_is_disabled(library)) {
+      row.active_set(false);
+      ui::Layout &sub = row.row(true);
+      /* Draw text grayed out. */
+      sub.alignment_set(ui::LayoutAlign::Right);
+      sub.label(IFACE_("Disabled"), ICON_NONE);
+    }
   }
 
   bool matches_single(const ui::AbstractTreeViewItem &other) const override

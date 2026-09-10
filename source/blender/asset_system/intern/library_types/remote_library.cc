@@ -23,6 +23,7 @@
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_idprop.hh"
+#include "BKE_preferences.h"
 #include "BKE_report.hh"
 
 #ifdef WITH_PYTHON
@@ -162,7 +163,7 @@ bool PreferencesRemoteAssetLibrary::is_enabled() const
     return false;
   }
 
-  return (library_definition->flag & ASSET_LIBRARY_DISABLED) == 0;
+  return BKE_preferences_asset_library_is_enabled(&U, library_definition);
 }
 
 std::optional<StringRefNull> PreferencesRemoteAssetLibrary::auth_token() const
