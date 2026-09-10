@@ -1809,6 +1809,15 @@ void interface_tag_script_reload_queries();
 
 void block_free_views(Block *block);
 void block_views_end(ARegion *region, const Block *block);
+/**
+ * Resolve the active item of a view that persists it (#AbstractView::use_persistent_active_item)
+ * against the index stored in the region & store the result. Called by the view builders after
+ * #AbstractView::change_state_delayed & before sorting, so the index is in the order items were
+ * added.
+ */
+void block_view_persistent_active_item_apply(const bContext &C,
+                                             const Block &block,
+                                             AbstractView &view);
 void block_view_persistent_state_restore(const ARegion &region,
                                          const Block &block,
                                          AbstractView &view);

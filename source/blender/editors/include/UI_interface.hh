@@ -10,6 +10,7 @@
 
 #include <functional>
 #include <memory>
+#include <string>
 
 #include "BLI_function_ref.hh"
 #include "BLI_string_ref.hh"
@@ -274,9 +275,21 @@ void uilist_filter_and_sort_items(uiList *ui_list,
                                   uiListItemGetNameFn get_name_fn = nullptr);
 
 /**
+ * Compose the identifier of a list widget (a view or #uiList) from the identifier of its type &
+ * the list identifier chosen by the caller (which may be empty, see `list_id` of
+ * `UILayout.template_list`), the identifier its state is stored under.
+ *
+ * \note This matches #WM_uilisttype_to_full_list_id so both kinds of widget share one name-space.
+ */
+std::string list_idname_compose(StringRef type_idname, StringRef list_id);
+
+/**
  * Override this for all available view types.
  * \param idname: Used for restoring persistent state of this view, potentially written to files.
  * Must not be longer than #BKE_ST_MAXNAME (including 0 terminator).
+ * Compose this from an identifier for the view type & a list identifier using
+ * #list_idname_compose, so the view can be identified by scripts (see
+ * `Region.active_item_index_get`).
  */
 AbstractGridView *block_add_view(Block &block,
                                  StringRef idname,

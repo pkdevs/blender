@@ -622,6 +622,7 @@ void GridViewBuilder::build_grid_view(const bContext &C,
   grid_view.build_items();
   grid_view.update_from_old(block);
   grid_view.change_state_delayed();
+  block_view_persistent_active_item_apply(C, block, grid_view);
   grid_view.filter(search_string);
 
   /* Ensure the given layout is actually active. */

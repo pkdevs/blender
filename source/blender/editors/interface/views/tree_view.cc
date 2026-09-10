@@ -1280,6 +1280,7 @@ void TreeViewBuilder::build_tree_view(const bContext &C,
   tree_view.build_tree();
   tree_view.update_from_old(block);
   tree_view.change_state_delayed();
+  block_view_persistent_active_item_apply(C, block, tree_view);
 
   if (*tree_view.sort_alpha_) {
     tree_view.sort_alpha();

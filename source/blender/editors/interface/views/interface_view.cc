@@ -19,6 +19,8 @@
 
 #include <memory>
 
+#include <fmt/format.h>
+
 #include "DNA_screen_types.h"
 
 #include "BKE_screen.hh"
@@ -47,8 +49,29 @@ struct ViewLink : public Link {
   std::string idname;
   std::unique_ptr<AbstractView> view;
 
+  /**
+   * What this block wrote to the region, unset when nothing was written. Compared against the
+   * region on the next redraw to detect a change made by a script.
+   */
+  std::optional<int> active_index_stored;
+
   static void views_bounds_calc(const Block &block);
 };
+
+static ViewLink *block_view_link_find_matching_in_old_block(const Block &new_block,
+                                                            const ViewLink &link)
+{
+  const Block *old_block = new_block.oldblock;
+  if (!old_block) {
+    return nullptr;
+  }
+  for (ViewLink &old_link : old_block->views) {
+    if (old_link.idname == link.idname) {
+      return &old_link;
+    }
+  }
+  return nullptr;
+}
 
 template<class T>
 static T *block_add_view_impl(Block &block, StringRef idname, std::unique_ptr<AbstractView> view)
@@ -76,6 +99,17 @@ AbstractTreeView *block_add_view(Block &block,
                                  std::unique_ptr<AbstractTreeView> tree_view)
 {
   return block_add_view_impl<AbstractTreeView>(block, idname, std::move(tree_view));
+}
+
+std::string list_idname_compose(const StringRef type_idname, const StringRef list_id)
+{
+  /* Truncate here so every lookup & store agrees on the name, including the `Region` API which
+   * composes the identifier from script arguments. Identifiers sharing their first 63 bytes share
+   * state (#uiList has the same limitation at 255 bytes), in practice identifiers are far
+   * shorter. */
+  char idname[sizeof(uiViewStateLink::idname)];
+  StringRef(fmt::format("{}_{}", type_idname, list_id)).copy_utf8_truncated(idname);
+  return idname;
 }
 
 void block_free_views(Block *block)
@@ -148,6 +182,71 @@ void block_view_persistent_state_restore(const ARegion &region,
       view.persistent_state_apply(stored_state.state);
     }
   }
+}
+
+void block_view_persistent_active_item_apply(const bContext &C,
+                                             const Block &block,
+                                             AbstractView &view)
+{
+  if (!view.use_persistent_active_item()) {
+    return;
+  }
+  ViewLink *link = nullptr;
+  for (ViewLink &link_iter : block.views) {
+    if (link_iter.view.get() == &view) {
+      link = &link_iter;
+      break;
+    }
+  }
+  ARegion *region = CTX_wm_region_popup(&C) ? CTX_wm_region_popup(&C) : CTX_wm_region(&C);
+  if (link == nullptr || region == nullptr) {
+    return;
+  }
+  /* Mark the state as used even for an empty view, so it isn't removed while shown. */
+  uiActiveItemState *state = BKE_region_active_item_state_ensure(region, link->idname);
+
+  /* Before sorting, so the index is in the order the items were added. */
+  int tot_items = 0;
+  std::optional<int> active_index;
+  view.foreach_view_item([&](AbstractViewItem &item) {
+    BLI_assert_msg(!item.should_be_active().has_value(),
+                   "Views that persist their active item must not have an active item in the "
+                   "data they display");
+    if (item.is_active()) {
+      active_index = tot_items;
+    }
+    tot_items++;
+  });
+
+  /* Only a script changes the stored index between redraws (`Region.active_item_index_set`),
+   * otherwise the run-time state wins. Clamping makes the item that took the place of a removed
+   * item active & a new state starts at the first item as with #uiList. */
+  const ViewLink *old_link = block_view_link_find_matching_in_old_block(block, *link);
+  const std::optional<int> last_stored = old_link ? old_link->active_index_stored : std::nullopt;
+  const bool changed_externally = last_stored.has_value() && (state->active_index != *last_stored);
+
+  if ((changed_externally || !active_index.has_value()) && (tot_items > 0)) {
+    const int index_to_apply = std::clamp(state->active_index, 0, tot_items - 1);
+    AbstractViewItem *item_to_apply = nullptr;
+    int index = 0;
+    view.foreach_view_item([&](AbstractViewItem &item) {
+      if (index++ == index_to_apply) {
+        item_to_apply = &item;
+      }
+    });
+    /* Not #activate, this restores state rather than handling a click. */
+    if (item_to_apply->set_state_active() || item_to_apply->is_active()) {
+      active_index = index_to_apply;
+    }
+    if (changed_externally) {
+      view.scroll_active_into_view(const_cast<bContext *>(&C));
+    }
+  }
+
+  if (active_index) {
+    state->active_index = *active_index;
+  }
+  link->active_index_stored = active_index;
 }
 
 static uiViewStateLink *ensure_view_state(ARegion &region, const ViewLink &link)
