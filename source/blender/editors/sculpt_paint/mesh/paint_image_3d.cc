@@ -483,25 +483,22 @@ static void mark_seam_tiles_modified(MutableSpan<uint8_t> mask,
   }
 }
 
-static void do_paint_pixels(const Depsgraph &depsgraph,
-                            Object &object,
-                            const Paint &paint,
+static void do_paint_pixels(const Paint &paint,
                             const Brush &brush,
+                            Object &object,
+                            Span<float3> positions_eval,
+                            Span<int> corner_verts,
+                            Span<int3> corner_tris,
                             ImageData &image_data,
                             bke::pbvh::Node & /*node*/,
                             PixelNode &pixel_node)
 {
   PRF_scope(ProfileCategory::Editor);
+  const Mesh &mesh = *id_cast<const Mesh *>(object.data);
   SculptSession &ss = *object.runtime->sculpt_session;
   const StrokeCache &cache = *ss.cache;
-  const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, object);
-
-  const Mesh &mesh = *id_cast<const Mesh *>(object.data);
-  const Span<int> corner_verts = mesh.corner_verts();
-  const Span<int3> corner_tris = mesh.corner_tris();
-
   BitVector<> brush_test = init_uv_primitives_brush_test(
-      ss, corner_verts, corner_tris, pixel_node.uv_primitives.tri_indices, positions);
+      ss, corner_verts, corner_tris, pixel_node.uv_primitives.tri_indices, positions_eval);
 
   const bool use_face_sel = (mesh.editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
   if (use_face_sel) {
@@ -794,9 +791,23 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
     modified.as_mutable_span().fill(0);
   }
 
+  const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, ob);
+
+  const Mesh &mesh = *id_cast<const Mesh *>(ob.data);
+  const Span<int> corner_verts = mesh.corner_verts();
+  const Span<int3> corner_tris = mesh.corner_tris();
+
   node_mask.foreach_index(
       [&](const int i) {
-        do_paint_pixels(depsgraph, ob, paint, brush, image_data, nodes[i], pixel_nodes[i]);
+        do_paint_pixels(paint,
+                        brush,
+                        ob,
+                        positions,
+                        corner_verts,
+                        corner_tris,
+                        image_data,
+                        nodes[i],
+                        pixel_nodes[i]);
       },
       exec_mode::grain_size(1));
 
