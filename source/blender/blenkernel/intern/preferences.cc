@@ -64,6 +64,395 @@ bool exists()
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Key Map Labels \{ */
+
+bUserKeymapLabel *BKE_preferences_keymap_label_find(const UserDef *userdef, const char *name)
+{
+  for (bUserKeymapLabel &label : const_cast<UserDef *>(userdef)->keymap_labels) {
+    if (STREQ(label.name, name)) {
+      return &label;
+    }
+  }
+  return nullptr;
+}
+
+bUserKeymapLabel *BKE_preferences_keymap_label_ensure(UserDef *userdef, const char *name)
+{
+  if (name[0] == '\0') {
+    return nullptr;
+  }
+  bUserKeymapLabel *label = BKE_preferences_keymap_label_find(userdef, name);
+  if (label == nullptr) {
+    label = MEM_new<bUserKeymapLabel>(__func__);
+    STRNCPY_UTF8(label->name, name);
+    BLI_addtail(&userdef->keymap_labels, label);
+  }
+  return label;
+}
+
+static bUserKeymapLabelItem *preferences_keymap_label_item_find(const UserDef *userdef,
+                                                                const char *label,
+                                                                const char *keymap_idname,
+                                                                const int spaceid,
+                                                                const int regionid,
+                                                                const int item_id)
+{
+  for (bUserKeymapLabelItem &item : const_cast<UserDef *>(userdef)->keymap_label_items) {
+    if ((item.item_id == item_id) && (item.spaceid == spaceid) && (item.regionid == regionid) &&
+        STREQ(item.label, label) && STREQ(item.keymap_idname, keymap_idname))
+    {
+      return &item;
+    }
+  }
+  return nullptr;
+}
+
+void BKE_preferences_keymap_label_remove(UserDef *userdef, bUserKeymapLabel *label)
+{
+  for (bUserKeymapLabelItem &item : userdef->keymap_label_items.items_mutable()) {
+    if (STREQ(item.label, label->name)) {
+      BLI_freelinkN(&userdef->keymap_label_items, &item);
+    }
+  }
+  BLI_freelinkN(&userdef->keymap_labels, label);
+}
+
+bool BKE_preferences_keymap_label_item_has(const UserDef *userdef,
+                                           const char *label,
+                                           const char *keymap_idname,
+                                           const int spaceid,
+                                           const int regionid,
+                                           const int item_id)
+{
+  return preferences_keymap_label_item_find(
+             userdef, label, keymap_idname, spaceid, regionid, item_id) != nullptr;
+}
+
+bool BKE_preferences_keymap_label_item_set(UserDef *userdef,
+                                           const char *label,
+                                           const char *keymap_idname,
+                                           const int spaceid,
+                                           const int regionid,
+                                           const int item_id,
+                                           const bool value)
+{
+  bUserKeymapLabelItem *item = preferences_keymap_label_item_find(
+      userdef, label, keymap_idname, spaceid, regionid, item_id);
+  if (value == (item != nullptr)) {
+    return false;
+  }
+  if (item) {
+    BLI_freelinkN(&userdef->keymap_label_items, item);
+    return true;
+  }
+  if (BKE_preferences_keymap_label_ensure(userdef, label) == nullptr) {
+    return false;
+  }
+  item = MEM_new<bUserKeymapLabelItem>(__func__);
+  STRNCPY_UTF8(item->keymap_idname, keymap_idname);
+  item->spaceid = spaceid;
+  item->regionid = regionid;
+  item->item_id = item_id;
+  STRNCPY_UTF8(item->label, label);
+  BLI_addtail(&userdef->keymap_label_items, item);
+  return true;
+}
+
+bool BKE_preferences_keymap_label_items_clear(UserDef *userdef,
+                                              const char *keymap_idname,
+                                              const int spaceid,
+                                              const int regionid,
+                                              const int item_id)
+{
+  bool changed = false;
+  for (bUserKeymapLabelItem &item : userdef->keymap_label_items.items_mutable()) {
+    if ((item.item_id == item_id) && (item.spaceid == spaceid) && (item.regionid == regionid) &&
+        STREQ(item.keymap_idname, keymap_idname))
+    {
+      BLI_freelinkN(&userdef->keymap_label_items, &item);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+void BKE_preferences_keymap_labels_clear(UserDef *userdef)
+{
+  userdef->keymap_labels.free_no_destruct();
+  userdef->keymap_label_items.free_no_destruct();
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Key Map Item Names \{ */
+
+static bUserKeymapName *preferences_keymap_name_find(const UserDef *userdef,
+                                                     const char *keymap_idname,
+                                                     const int spaceid,
+                                                     const int regionid,
+                                                     const int item_id)
+{
+  for (bUserKeymapName &named : const_cast<UserDef *>(userdef)->keymap_names) {
+    if ((named.item_id == item_id) && (named.spaceid == spaceid) &&
+        (named.regionid == regionid) && STREQ(named.keymap_idname, keymap_idname))
+    {
+      return &named;
+    }
+  }
+  return nullptr;
+}
+
+const char *BKE_preferences_keymap_name_get(const UserDef *userdef,
+                                            const char *keymap_idname,
+                                            const int spaceid,
+                                            const int regionid,
+                                            const int item_id)
+{
+  const bUserKeymapName *named = preferences_keymap_name_find(
+      userdef, keymap_idname, spaceid, regionid, item_id);
+  return named ? named->name : nullptr;
+}
+
+bool BKE_preferences_keymap_name_set(UserDef *userdef,
+                                     const char *keymap_idname,
+                                     const int spaceid,
+                                     const int regionid,
+                                     const int item_id,
+                                     const char *name)
+{
+  const bool clearing = (name == nullptr) || (name[0] == '\0');
+  bUserKeymapName *named = preferences_keymap_name_find(
+      userdef, keymap_idname, spaceid, regionid, item_id);
+
+  if (named) {
+    if (clearing) {
+      BLI_freelinkN(&userdef->keymap_names, named);
+      return true;
+    }
+    if (STREQ(named->name, name)) {
+      return false;
+    }
+    STRNCPY_UTF8(named->name, name);
+    return true;
+  }
+  if (clearing) {
+    return false;
+  }
+
+  named = MEM_new<bUserKeymapName>(__func__);
+  STRNCPY_UTF8(named->keymap_idname, keymap_idname);
+  named->spaceid = spaceid;
+  named->regionid = regionid;
+  named->item_id = item_id;
+  STRNCPY_UTF8(named->name, name);
+  BLI_addtail(&userdef->keymap_names, named);
+  return true;
+}
+
+void BKE_preferences_keymap_names_clear(UserDef *userdef)
+{
+  userdef->keymap_names.free_no_destruct();
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Usage History Hidden Items \{ */
+
+/** Entries with an operator `idname` hide an operator, others hide a key map item. */
+static bool preferences_hidden_is_operation(const bUserKeymapHidden &hidden)
+{
+  return hidden.idname[0] != '\0';
+}
+
+bool BKE_preferences_keymap_is_hidden(const UserDef *userdef,
+                                      const char *keymap_idname,
+                                      const int spaceid,
+                                      const int regionid,
+                                      const int item_id)
+{
+  for (bUserKeymapHidden &hidden : const_cast<UserDef *>(userdef)->keymap_hidden) {
+    if (preferences_hidden_is_operation(hidden)) {
+      continue;
+    }
+    if ((hidden.item_id == item_id) && (hidden.spaceid == spaceid) &&
+        (hidden.regionid == regionid) && STREQ(hidden.keymap_idname, keymap_idname))
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool BKE_preferences_keymap_hidden_set(UserDef *userdef,
+                                       const char *keymap_idname,
+                                       const int spaceid,
+                                       const int regionid,
+                                       const int item_id,
+                                       const bool value)
+{
+  for (bUserKeymapHidden &hidden : userdef->keymap_hidden) {
+    if (preferences_hidden_is_operation(hidden)) {
+      continue;
+    }
+    if ((hidden.item_id == item_id) && (hidden.spaceid == spaceid) &&
+        (hidden.regionid == regionid) && STREQ(hidden.keymap_idname, keymap_idname))
+    {
+      if (value) {
+        return false;
+      }
+      BLI_freelinkN(&userdef->keymap_hidden, &hidden);
+      return true;
+    }
+  }
+  if (!value) {
+    return false;
+  }
+
+  bUserKeymapHidden *hidden = MEM_new<bUserKeymapHidden>(__func__);
+  STRNCPY_UTF8(hidden->keymap_idname, keymap_idname);
+  hidden->spaceid = spaceid;
+  hidden->regionid = regionid;
+  hidden->item_id = item_id;
+  BLI_addtail(&userdef->keymap_hidden, hidden);
+  return true;
+}
+
+bool BKE_preferences_operator_is_hidden(const UserDef *userdef,
+                                        const char *idname,
+                                        const char *variant)
+{
+  if (variant == nullptr) {
+    variant = "";
+  }
+  for (bUserKeymapHidden &hidden : const_cast<UserDef *>(userdef)->keymap_hidden) {
+    if (preferences_hidden_is_operation(hidden) && STREQ(hidden.idname, idname) &&
+        STREQ(hidden.variant, variant))
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool BKE_preferences_operator_hidden_set(UserDef *userdef,
+                                         const char *idname,
+                                         const char *variant,
+                                         const bool value)
+{
+  if (variant == nullptr) {
+    variant = "";
+  }
+  for (bUserKeymapHidden &hidden : userdef->keymap_hidden) {
+    if (preferences_hidden_is_operation(hidden) && STREQ(hidden.idname, idname) &&
+        STREQ(hidden.variant, variant))
+    {
+      if (value) {
+        return false;
+      }
+      BLI_freelinkN(&userdef->keymap_hidden, &hidden);
+      return true;
+    }
+  }
+  if (!value) {
+    return false;
+  }
+
+  bUserKeymapHidden *hidden = MEM_new<bUserKeymapHidden>(__func__);
+  STRNCPY_UTF8(hidden->idname, idname);
+  STRNCPY_UTF8(hidden->variant, variant);
+  BLI_addtail(&userdef->keymap_hidden, hidden);
+  return true;
+}
+
+void BKE_preferences_hidden_clear(UserDef *userdef)
+{
+  userdef->keymap_hidden.free_no_destruct();
+}
+
+void BKE_preferences_hidden_defaults_add(UserDef *userdef)
+{
+  struct HiddenDefault {
+    const char *idname;
+    const char *variant;
+  };
+
+  static const HiddenDefault defaults[] = {
+      /* Timers (run without user input, `animation_step` fires every playback frame). */
+      {"file.smoothscroll", ""},
+      {"info.reports_display_update", ""},
+      {"screen.animation_step", ""},
+      {"screen.region_blend", ""},
+      {"view2d.smoothview", ""},
+      {"view3d.smoothview", ""},
+      /* View navigation. */
+      {"view2d.pan", ""},
+      {"view2d.scroll_up", ""},
+      {"view2d.scroll_down", ""},
+      /* The key map editor's own operators. */
+      {"preferences.keyitem_add", ""},
+      {"preferences.keyitem_add_for_operator", ""},
+      {"preferences.keyitem_copy", ""},
+      {"preferences.keyitem_expand", ""},
+      {"preferences.keyitem_flash_conflict", ""},
+      {"preferences.keyitem_paste", ""},
+      {"preferences.keyitem_remove", ""},
+      {"preferences.keyitem_restore", ""},
+      {"preferences.keyitem_reveal", ""},
+      {"preferences.keyitem_select", ""},
+      {"preferences.keyitem_unshadow", ""},
+      {"preferences.keymap_activity_clear", ""},
+      {"preferences.keymap_activity_find", ""},
+      {"preferences.keymap_activity_reveal", ""},
+      {"preferences.keymap_conflicts_check", ""},
+      {"preferences.keymap_filter_refresh", ""},
+      {"preferences.keymap_hide_item", ""},
+      {"preferences.keymap_hide_operator", ""},
+      {"preferences.keymap_isolate", ""},
+      {"preferences.keymap_label_assign", ""},
+      {"preferences.keymap_label_new", ""},
+      {"preferences.keymap_label_remove", ""},
+      {"preferences.keymap_redo", ""},
+      {"preferences.keymap_restore", ""},
+      {"preferences.keymap_select_all", ""},
+      {"preferences.keymap_undo", ""},
+      {"preferences.keymap_view_back", ""},
+      {"wm.context_toggle", "space_data.use_filter_addon"},
+      {"wm.context_toggle", "space_data.use_filter_conflicts"},
+      {"wm.context_toggle", "space_data.use_filter_user_modified"},
+      {"wm.context_set_enum", "space_data.filter_type=KEY"},
+      {"wm.context_set_enum", "space_data.filter_type=NAME"},
+  };
+
+  for (const HiddenDefault &hidden : defaults) {
+    BKE_preferences_operator_hidden_set(userdef, hidden.idname, hidden.variant, true);
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Key Map Item Removal \{ */
+
+bool BKE_preferences_keymap_item_forget(UserDef *userdef,
+                                        const char *keymap_idname,
+                                        const int spaceid,
+                                        const int regionid,
+                                        const int item_id)
+{
+  bool changed = BKE_preferences_keymap_name_set(
+      userdef, keymap_idname, spaceid, regionid, item_id, nullptr);
+  changed |= BKE_preferences_keymap_label_items_clear(
+      userdef, keymap_idname, spaceid, regionid, item_id);
+  changed |= BKE_preferences_keymap_hidden_set(
+      userdef, keymap_idname, spaceid, regionid, item_id, false);
+  return changed;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Asset Libraries
  * \{ */
 

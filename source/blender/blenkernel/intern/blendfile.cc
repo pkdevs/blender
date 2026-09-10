@@ -1579,6 +1579,8 @@ UserDef *BKE_blendfile_userdef_from_defaults()
 
   BKE_preferences_extension_repo_add_defaults_all(userdef);
 
+  BKE_preferences_hidden_defaults_add(userdef);
+
   {
     BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
         userdef, "VIEW3D_AST_brush_sculpt", "Brushes/Mesh Sculpt/General");

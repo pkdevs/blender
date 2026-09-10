@@ -437,6 +437,105 @@ static void rna_userdef_translation_update(Main *bmain, Scene * /*scene*/, Point
   USERDEF_TAG_DIRTY;
 }
 
+static bUserKeymapLabel *rna_PreferencesKeymap_label_add(UserDef *userdef, const char *name)
+{
+  const bool existed = BKE_preferences_keymap_label_find(userdef, name) != nullptr;
+  bUserKeymapLabel *label = BKE_preferences_keymap_label_ensure(userdef, name);
+  if (label && !existed) {
+    USERDEF_TAG_DIRTY;
+    WM_main_add_notifier(NC_WINDOW, nullptr);
+  }
+  return label;
+}
+
+static bool rna_PreferencesKeymap_label_remove(UserDef *userdef, const char *name)
+{
+  bUserKeymapLabel *label = BKE_preferences_keymap_label_find(userdef, name);
+  if (label == nullptr) {
+    return false;
+  }
+  BKE_preferences_keymap_label_remove(userdef, label);
+  USERDEF_TAG_DIRTY;
+  WM_main_add_notifier(NC_WINDOW, nullptr);
+  return true;
+}
+
+static bool rna_PreferencesKeymap_label_item_set(UserDef *userdef,
+                                                 const char *label,
+                                                 wmKeyMap *keymap,
+                                                 wmKeyMapItem *kmi,
+                                                 const bool value)
+{
+  const bool changed = BKE_preferences_keymap_label_item_set(
+      userdef, label, keymap->idname, keymap->spaceid, keymap->regionid, kmi->id, value);
+  if (changed) {
+    USERDEF_TAG_DIRTY;
+    WM_main_add_notifier(NC_WINDOW, nullptr);
+  }
+  return changed;
+}
+
+static void rna_PreferencesKeymap_labels_clear(UserDef *userdef)
+{
+  BKE_preferences_keymap_labels_clear(userdef);
+  USERDEF_TAG_DIRTY;
+  WM_main_add_notifier(NC_WINDOW, nullptr);
+}
+
+static void rna_PreferencesKeymap_custom_names_clear(UserDef *userdef)
+{
+  BKE_preferences_keymap_names_clear(userdef);
+  USERDEF_TAG_DIRTY;
+  WM_main_add_notifier(NC_WINDOW, nullptr);
+}
+
+static bool rna_PreferencesKeymap_item_forget(UserDef *userdef,
+                                              wmKeyMap *keymap,
+                                              wmKeyMapItem *kmi)
+{
+  const bool changed = BKE_preferences_keymap_item_forget(
+      userdef, keymap->idname, keymap->spaceid, keymap->regionid, kmi->id);
+  if (changed) {
+    USERDEF_TAG_DIRTY;
+    WM_main_add_notifier(NC_WINDOW, nullptr);
+  }
+  return changed;
+}
+
+static bool rna_PreferencesKeymap_hidden_set(UserDef *userdef,
+                                             wmKeyMap *keymap,
+                                             wmKeyMapItem *kmi,
+                                             const bool value)
+{
+  const bool changed = BKE_preferences_keymap_hidden_set(
+      userdef, keymap->idname, keymap->spaceid, keymap->regionid, kmi->id, value);
+  if (changed) {
+    USERDEF_TAG_DIRTY;
+    WM_main_add_notifier(NC_WINDOW, nullptr);
+  }
+  return changed;
+}
+
+static bool rna_PreferencesKeymap_operator_hidden_set(UserDef *userdef,
+                                                      const char *idname,
+                                                      const char *variant,
+                                                      const bool value)
+{
+  const bool changed = BKE_preferences_operator_hidden_set(userdef, idname, variant, value);
+  if (changed) {
+    USERDEF_TAG_DIRTY;
+    WM_main_add_notifier(NC_WINDOW, nullptr);
+  }
+  return changed;
+}
+
+static void rna_PreferencesKeymap_hidden_clear(UserDef *userdef)
+{
+  BKE_preferences_hidden_clear(userdef);
+  USERDEF_TAG_DIRTY;
+  WM_main_add_notifier(NC_WINDOW, nullptr);
+}
+
 static void rna_userdef_asset_library_name_set(PointerRNA *ptr, const char *value)
 {
   bUserAssetLibrary *library = static_cast<bUserAssetLibrary *>(ptr->data);
@@ -7045,9 +7144,141 @@ static void rna_def_userdef_input(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Touchpad Scroll Direction", "Scroll direction (Wayland only)");
 }
 
+static void rna_def_userdef_keymap_label(BlenderRNA *brna)
+{
+  PropertyRNA *prop;
+  StructRNA *srna;
+
+  srna = RNA_def_struct(brna, "KeyMapLabel", nullptr);
+  RNA_def_struct_sdna(srna, "bUserKeymapLabel");
+  RNA_def_struct_ui_text(
+      srna, "Key Map Label", "A user defined group of key map items, see PreferencesKeymap.labels");
+
+  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Name", "");
+  RNA_def_struct_name_property(srna, prop);
+
+  prop = RNA_def_property(srna, "use_filter", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", USER_KEYMAP_LABEL_FILTER);
+  RNA_def_property_ui_text(
+      prop, "Filter", "Only list key map items carrying this label (or another filtered label)");
+  RNA_def_property_update(prop, NC_WINDOW, nullptr);
+
+  srna = RNA_def_struct(brna, "KeyMapLabelItem", nullptr);
+  RNA_def_struct_sdna(srna, "bUserKeymapLabelItem");
+  RNA_def_struct_ui_text(srna, "Key Map Label Item", "A key map item carrying a label");
+
+  prop = RNA_def_property(srna, "label", PROP_STRING, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Label", "Name of the label, see PreferencesKeymap.labels");
+
+  prop = RNA_def_property(srna, "keymap_name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "keymap_idname");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Key Map", "Name of the key map holding the item");
+
+  prop = RNA_def_property(srna, "space_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "spaceid");
+  RNA_def_property_enum_items(prop, rna_enum_space_type_items);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Space Type", "");
+
+  prop = RNA_def_property(srna, "region_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "regionid");
+  RNA_def_property_enum_items(prop, rna_enum_region_type_items);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Region Type", "");
+
+  prop = RNA_def_property(srna, "item_id", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, nullptr, "item_id");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Item Identifier", "Identifier of the key map item within its key map");
+}
+
+static void rna_def_userdef_keymap_hidden(BlenderRNA *brna)
+{
+  PropertyRNA *prop;
+  StructRNA *srna;
+
+  srna = RNA_def_struct(brna, "KeyMapName", nullptr);
+  RNA_def_struct_sdna(srna, "bUserKeymapName");
+  RNA_def_struct_ui_text(
+      srna, "Key Map Item Name", "A name the user gave a shortcut, in place of the operator's");
+
+  prop = RNA_def_property(srna, "keymap_name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "keymap_idname");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Key Map", "Name of the key map holding the item");
+
+  prop = RNA_def_property(srna, "space_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "spaceid");
+  RNA_def_property_enum_items(prop, rna_enum_space_type_items);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Space Type", "");
+
+  prop = RNA_def_property(srna, "region_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "regionid");
+  RNA_def_property_enum_items(prop, rna_enum_region_type_items);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Region Type", "");
+
+  prop = RNA_def_property(srna, "item_id", PROP_INT, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Item Identifier", "Identifier of the item within its key map");
+
+  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Name", "What the user calls this shortcut");
+
+  srna = RNA_def_struct(brna, "KeyMapHidden", nullptr);
+  RNA_def_struct_sdna(srna, "bUserKeymapHidden");
+  RNA_def_struct_ui_text(srna,
+                         "Hidden Entry",
+                         "A key map item or an operator hidden from the usage history (an "
+                         "operator when idname is set)");
+
+  prop = RNA_def_property(srna, "keymap_name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "keymap_idname");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Key Map", "Name of the key map holding the item");
+
+  prop = RNA_def_property(srna, "space_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "spaceid");
+  RNA_def_property_enum_items(prop, rna_enum_space_type_items);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Space Type", "");
+
+  prop = RNA_def_property(srna, "region_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "regionid");
+  RNA_def_property_enum_items(prop, rna_enum_region_type_items);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Region Type", "");
+
+  prop = RNA_def_property(srna, "item_id", PROP_INT, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Item Identifier", "Identifier of the item within its key map");
+
+  prop = RNA_def_property(srna, "idname", PROP_STRING, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop,
+                           "Operator",
+                           "Identifier of the hidden operator, empty when this entry hides a key "
+                           "map item");
+
+  prop = RNA_def_property(srna, "variant", PROP_STRING, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Variant", "Which use of the operator is hidden, see WM_operator_usage_variant");
+}
+
 static void rna_def_userdef_keymap(BlenderRNA *brna)
 {
   PropertyRNA *prop;
+
+  rna_def_userdef_keymap_label(brna);
+  rna_def_userdef_keymap_hidden(brna);
 
   StructRNA *srna = RNA_def_struct(brna, "PreferencesKeymap", nullptr);
   RNA_def_struct_sdna(srna, "UserDef");
@@ -7062,6 +7293,109 @@ static void rna_def_userdef_keymap(BlenderRNA *brna)
   prop = RNA_def_property(srna, "active_keyconfig", PROP_STRING, PROP_DIRPATH);
   RNA_def_property_string_sdna(prop, nullptr, "keyconfigstr");
   RNA_def_property_ui_text(prop, "Key Config", "The name of the active key configuration");
+
+  prop = RNA_def_property(srna, "labels", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, nullptr, "keymap_labels", nullptr);
+  RNA_def_property_struct_type(prop, "KeyMapLabel");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Labels", "User defined groups of key map items, change with label_add/label_remove");
+
+  prop = RNA_def_property(srna, "label_items", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, nullptr, "keymap_label_items", nullptr);
+  RNA_def_property_struct_type(prop, "KeyMapLabelItem");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Label Items", "Key map items carrying a label, change with label_item_set");
+
+  FunctionRNA *func = RNA_def_function(srna, "label_add", "rna_PreferencesKeymap_label_add");
+  RNA_def_function_ui_description(func, "Add a label, or return the existing one with that name");
+  PropertyRNA *parm = RNA_def_string(func, "name", nullptr, MAX_NAME, "Name", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_pointer(func, "label", "KeyMapLabel", "Label", "The label, None for an empty name");
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "label_remove", "rna_PreferencesKeymap_label_remove");
+  RNA_def_function_ui_description(func, "Remove a label and take it off every key map item");
+  parm = RNA_def_string(func, "name", nullptr, MAX_NAME, "Name", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_boolean(func, "changed", false, "Changed", "Whether the label existed");
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "label_item_set", "rna_PreferencesKeymap_label_item_set");
+  RNA_def_function_ui_description(func, "Add or remove a label on a key map item");
+  parm = RNA_def_string(func, "label", nullptr, MAX_NAME, "Label", "Label name, added if new");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_pointer(func, "keymap", "KeyMap", "Key Map", "Key map holding the item");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+  parm = RNA_def_pointer(func, "item", "KeyMapItem", "Item", "Item to label");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+  parm = RNA_def_boolean(func, "value", true, "Value", "Whether the item should carry the label");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_boolean(func, "changed", false, "Changed", "Whether the list was changed");
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "labels_clear", "rna_PreferencesKeymap_labels_clear");
+  RNA_def_function_ui_description(func, "Remove every label");
+
+  prop = RNA_def_property(srna, "custom_names", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, nullptr, "keymap_names", nullptr);
+  RNA_def_property_struct_type(prop, "KeyMapName");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop,
+                           "Custom Names",
+                           "Names the user gave key map items, set through KeyMapItem.custom_name");
+
+  func = RNA_def_function(
+      srna, "custom_names_clear", "rna_PreferencesKeymap_custom_names_clear");
+  RNA_def_function_ui_description(func, "Remove every custom name");
+
+  prop = RNA_def_property(srna, "hidden", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, nullptr, "keymap_hidden", nullptr);
+  RNA_def_property_struct_type(prop, "KeyMapHidden");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop,
+                           "Hidden",
+                           "Key map items and operators hidden from the usage history");
+
+  func = RNA_def_function(srna, "hidden_set", "rna_PreferencesKeymap_hidden_set");
+  RNA_def_function_ui_description(func, "Hide or unhide a key map item");
+  parm = RNA_def_pointer(func, "keymap", "KeyMap", "Key Map", "Key map holding the item");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+  parm = RNA_def_pointer(func, "item", "KeyMapItem", "Item", "Item to hide");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+  parm = RNA_def_boolean(func, "value", true, "Value", "Whether the item should be hidden");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_boolean(func, "changed", false, "Changed", "Whether the list was changed");
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(
+      srna, "operator_hidden_set", "rna_PreferencesKeymap_operator_hidden_set");
+  RNA_def_function_ui_description(func, "Hide or unhide an operation");
+  parm = RNA_def_string(func, "idname", nullptr, 0, "Operator", "Identifier of the operation");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(
+      func, "variant", nullptr, 0, "Variant", "Which use of the operator, if it has several");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_boolean(func, "value", true, "Value", "Whether it should be hidden");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_boolean(func, "changed", false, "Changed", "Whether the list was changed");
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "hidden_clear", "rna_PreferencesKeymap_hidden_clear");
+  RNA_def_function_ui_description(func, "Unhide everything");
+
+  func = RNA_def_function(srna, "item_forget", "rna_PreferencesKeymap_item_forget");
+  RNA_def_function_ui_description(
+      func,
+      "Remove the name, labels and hidden entry of a key map item the user is deleting");
+  parm = RNA_def_pointer(func, "keymap", "KeyMap", "Key Map", "Key map holding the item");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+  parm = RNA_def_pointer(func, "item", "KeyMapItem", "Item", "Item being deleted");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+  parm = RNA_def_boolean(
+      func, "changed", false, "Changed", "Whether the item was carrying anything");
+  RNA_def_function_return(func, parm);
 }
 
 static void rna_def_userdef_filepaths_asset_library(BlenderRNA *brna)

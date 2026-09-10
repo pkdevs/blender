@@ -60,6 +60,8 @@ struct wmTimer;
 
 #define OP_MAX_TYPENAME 64
 #define KMAP_MAX_NAME 64
+/** Maximum length of an operator usage variant, see #WM_operator_usage_variant. */
+#define OP_MAX_USAGE_VARIANT 128
 
 /* Timer custom-data to control reports display. */
 /* These two lines with # tell `makesdna` this struct can be excluded. */
@@ -308,6 +310,10 @@ enum eKMI_Flag : uint8_t {
    * as mouse, 3d-mouse, timer... etc never repeat.
    */
   KMI_REPEAT_IGNORE = (1 << 4),
+  /** Added by an add-on, see #wmKeyMapItem::owner_id. */
+  KMI_FROM_ADDON = (1 << 5),
+  /** User added duplicate of an existing item. */
+  KMI_USER_DUPLICATE = (1 << 6),
 };
 ENUM_OPERATORS(eKMI_Flag)
 
@@ -348,6 +354,8 @@ struct wmKeyMapItem {
   /* operator */
   /** Used to retrieve operator type pointer. */
   char idname[64] = "";
+  /** The add-on that registered this item, empty otherwise. */
+  char owner_id[128] = "";
   /** Operator properties, assigned to ptr->data and can be written to a file. */
   IDProperty *properties = nullptr;
 

@@ -1469,6 +1469,12 @@ static Button *uiItemFullO_ptr_ex(Layout *layout,
   if (layout->red_alert()) {
     button_flag_enable(but, BUT_REDALERT);
   }
+  if (layout->warning_alert()) {
+    button_flag_enable(but, BUT_WARNALERT);
+  }
+  if (layout->info_alert()) {
+    button_flag_enable(but, BUT_INFOALERT);
+  }
 
   if (layout->active_default()) {
     button_flag_enable(but, BUT_ACTIVE_DEFAULT);
@@ -2324,6 +2330,12 @@ void Layout::prop(PointerRNA *ptr,
     if (layout->red_alert()) {
       button_flag_enable(but, BUT_REDALERT);
     }
+    if (layout->warning_alert()) {
+      button_flag_enable(but, BUT_WARNALERT);
+    }
+    if (layout->info_alert()) {
+      button_flag_enable(but, BUT_INFOALERT);
+    }
 
     if (layout->activate_init()) {
       button_flag_enable(but, BUT_ACTIVATE_ON_INIT);
@@ -2352,6 +2364,12 @@ void Layout::prop(PointerRNA *ptr,
 
     if (layout->red_alert()) {
       button_flag_enable(but, BUT_REDALERT);
+    }
+    if (layout->warning_alert()) {
+      button_flag_enable(but, BUT_WARNALERT);
+    }
+    if (layout->info_alert()) {
+      button_flag_enable(but, BUT_INFOALERT);
     }
 
     if (layout->activate_init()) {
@@ -3328,6 +3346,12 @@ static Button *uiItem_simple(Layout *layout,
 
   if (layout->red_alert()) {
     button_flag_enable(but, BUT_REDALERT);
+  }
+  if (layout->warning_alert()) {
+    button_flag_enable(but, BUT_WARNALERT);
+  }
+  if (layout->info_alert()) {
+    button_flag_enable(but, BUT_INFOALERT);
   }
 
   return but;
@@ -5069,6 +5093,8 @@ void LayoutInternal::init_from_parent(Layout *litem, Layout *layout, int align)
   litem->enabled_ = true;
   litem->context_ = layout->context_;
   litem->redalert_ = layout->redalert_;
+  litem->warning_alert_ = layout->warning_alert_;
+  litem->info_alert_ = layout->info_alert_;
   litem->w_ = layout->w_;
   litem->emboss_ = layout->emboss_;
   litem->flag_ = (layout->flag_ & (ItemInternalFlag::PropSep | ItemInternalFlag::PropDecorate |

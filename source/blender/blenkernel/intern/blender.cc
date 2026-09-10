@@ -374,6 +374,10 @@ void BKE_blender_userdef_data_free(UserDef *userdef, bool clear_fonts)
   for (bUserAssetLibrary &library_ref : userdef->asset_libraries.items_mutable()) {
     BKE_preferences_asset_library_remove(userdef, &library_ref);
   }
+  userdef->keymap_labels.free_no_destruct();
+  userdef->keymap_label_items.free_no_destruct();
+  userdef->keymap_hidden.free_no_destruct();
+  userdef->keymap_names.free_no_destruct();
 
   for (bUserExtensionRepo &repo_ref : userdef->extension_repos.items_mutable()) {
     MEM_SAFE_DELETE(repo_ref.access_token);

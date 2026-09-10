@@ -26,6 +26,7 @@
 #include "wm_event_types.hh"
 
 #include "WM_api.hh"
+#include "WM_keymap.hh"
 #include "WM_types.hh"
 
 #include "rna_internal.hh" /* own include */
@@ -1050,6 +1051,9 @@ void RNA_api_wm(StructRNA *srna)
 {
   FunctionRNA *func;
   PropertyRNA *parm;
+
+  func = RNA_def_function(srna, "keymap_activity_clear", "WM_keymap_activity_clear");
+  RNA_def_function_ui_description(func, "Clear the list of recently used key-map items");
 
   func = RNA_def_function(srna, "fileselect_add", "WM_event_add_fileselect");
   /* Note that a full description is located at:
