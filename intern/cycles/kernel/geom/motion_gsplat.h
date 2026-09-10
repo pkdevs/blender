@@ -209,6 +209,78 @@ ccl_device_inline float3 motion_gsplat_scale(KernelGlobals kg,
   return mix(scale, next_scale, t);
 }
 
+struct GSplatMotionInfo {
+  int offset_for_step;
+  int offset_for_next_step;
+  float t;
+};
+
+ccl_device_forceinline GSplatMotionInfo motion_gsplat_compute_motion_info(KernelGlobals kg,
+                                                                          const int object,
+                                                                          const float time)
+{
+  GSplatMotionInfo prim_motion_info;
+
+  const int num_verts = kernel_data_fetch(objects, object).numverts;
+  int step, num_steps;
+  motion_gsplat_compute_info(kg, object, time, &num_steps, &step, &prim_motion_info.t);
+
+  prim_motion_info.offset_for_step = motion_point_offset_for_step(num_verts, num_steps, step);
+  prim_motion_info.offset_for_next_step = motion_point_offset_for_step(
+      num_verts, num_steps, step + 1);
+
+  return prim_motion_info;
+}
+
+ccl_device_forceinline float3 motion_gsplat_scale(KernelGlobals kg,
+                                                  ccl_private const GSplatMotionInfo &motion_info,
+                                                  const int object,
+                                                  const int prim)
+{
+  const int offset = gsplat_attr_scale_offset(kg, object) + prim;
+  if (gsplat_attr_rotation_has_motion(kg, object)) {
+    const float3 scale = kernel_data_fetch(attributes_float3,
+                                           motion_info.offset_for_step + offset);
+    const float3 next_scale = kernel_data_fetch(attributes_float3,
+                                                motion_info.offset_for_next_step + offset);
+    return mix(scale, next_scale, motion_info.t);
+  }
+  return kernel_data_fetch(attributes_float3, offset);
+}
+
+ccl_device_forceinline Quaternion
+motion_gsplat_rotation(KernelGlobals kg,
+                       ccl_private const GSplatMotionInfo &motion_info,
+                       const int object,
+                       const int prim)
+{
+  const int offset = gsplat_attr_rotation_offset(kg, object) + prim;
+  if (gsplat_attr_rotation_has_motion(kg, object)) {
+    const Quaternion rotation = kernel_data_fetch(attributes_quaternion,
+                                                  motion_info.offset_for_step + offset);
+    const Quaternion next_rotation = kernel_data_fetch(attributes_quaternion,
+                                                       motion_info.offset_for_next_step + offset);
+    return motion_gsplat_rotation_interpolate(rotation, next_rotation, motion_info.t);
+  }
+  return kernel_data_fetch(attributes_quaternion, offset);
+}
+
+ccl_device_forceinline float motion_gsplat_opacity(KernelGlobals kg,
+                                                   ccl_private const GSplatMotionInfo &motion_info,
+                                                   const int object,
+                                                   const int prim)
+{
+  const int offset = gsplat_attr_radiance_base_offset(kg, object) + prim;
+  if (gsplat_attr_rotation_has_motion(kg, object)) {
+    const float opacity =
+        kernel_data_fetch(attributes_float4, motion_info.offset_for_step + offset).w;
+    const float next_opacity =
+        kernel_data_fetch(attributes_float4, motion_info.offset_for_next_step + offset).w;
+    return mix(opacity, next_opacity, motion_info.t);
+  }
+  return kernel_data_fetch(attributes_float4, offset).w;
+}
+
 #endif /* __GSPLATS__ */
 
 CCL_NAMESPACE_END
