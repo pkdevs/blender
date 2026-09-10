@@ -806,7 +806,20 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
     def poll(cls, context):
         return context.scene is not None
 
+    def create_packed_effect_group(self, node_type):
+        # todo(habib): don't hard code, create as part of the build process
+        filepath = "/Users/habib/blender-git/files/dev/builtin-nodes-ng.blend"
+
+        with bpy.data.libraries.load(filepath, link=True, pack=True) as (data_from, data_to):
+            data_to.node_groups.append(node_type)
+
+        for group in data_to.node_groups:
+            if group.name == node_type:
+                return group
+        return None
+
     def create_effect_group(self, node_type):
+        # todo(habib): remove
         """Create a node group which wraps the given node, so that it can be used as an effect."""
 
         # Create temporary node group
@@ -820,7 +833,7 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
             return None
 
         # So that the created group doesn't show up in Unassigned.
-        group.allow_usage_in_scene_compositor_effect = False
+        group.allow_usage_in_scene_compositor_effect = True
 
         return group
 
@@ -828,7 +841,7 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
         if not self.properties.is_property_set("type"):
             return {'CANCELLED'}
 
-        group = self.create_effect_group(self.type)
+        group = self.create_packed_effect_group(self.type)
         if group is None:
             return {'CANCELLED'}
 
