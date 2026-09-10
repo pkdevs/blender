@@ -23,7 +23,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       .optional_label()
       .description("Path to a PLY file");
 
-  /* TODO(sergey): Remove the Mesh identifier in the next major Blender version. */
+  /* The socket used to be called mesh, so keep "Mesh" as identifier to support forward and
+   * backward compatibility. */
   b.add_output<decl::Geometry>("Geometry"_ustr, "Mesh"_ustr);
 }
 
