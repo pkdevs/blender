@@ -2127,22 +2127,22 @@ void apply_eval_grease_pencil_data(const GreasePencil &eval_grease_pencil,
   }
 
   /* Convert the layer map into an index mapping. */
-  Array<int> orig_to_eval_layer_indices_map(orig_grease_pencil.layers().size(), -1);
+  Array<int> eval_to_orig_layer_indices_map(orig_grease_pencil.layers().size(), -1);
   for (const int layer_eval_i : merged_layers_grease_pencil.layers().index_range()) {
     const Layer *layer_eval = &merged_layers_grease_pencil.layer(layer_eval_i);
     if (eval_to_orig_layer_map.contains(layer_eval)) {
       const Layer *layer_orig = eval_to_orig_layer_map.lookup(layer_eval);
       const int layer_orig_index = *orig_grease_pencil.get_layer_index(*layer_orig);
-      if (orig_to_eval_layer_indices_map[layer_orig_index] == -1) {
+      if (eval_to_orig_layer_indices_map[layer_orig_index] == -1) {
         /* Multiple evaluated layers can map to the same original layer. */
-        orig_to_eval_layer_indices_map[layer_orig_index] = layer_eval_i;
+        eval_to_orig_layer_indices_map[layer_orig_index] = layer_eval_i;
       }
     }
   }
 
   IndexMaskMemory memory;
   const IndexMask mapped_orig_layers = array_utils::indices_non_negative(
-      orig_to_eval_layer_indices_map.index_range(), orig_to_eval_layer_indices_map, memory);
+      eval_to_orig_layer_indices_map.index_range(), eval_to_orig_layer_indices_map, memory);
 
   AttributeAccessor src_attributes = merged_layers_grease_pencil.attributes();
   MutableAttributeAccessor dst_attributes = orig_grease_pencil.attributes_for_write();
@@ -2157,7 +2157,7 @@ void apply_eval_grease_pencil_data(const GreasePencil &eval_grease_pencil,
       return;
     }
     attribute_math::gather(
-        src.varray, orig_to_eval_layer_indices_map, mapped_orig_layers, dst.span);
+        src.varray, eval_to_orig_layer_indices_map, mapped_orig_layers, dst.span);
     dst.finish();
   });
 
