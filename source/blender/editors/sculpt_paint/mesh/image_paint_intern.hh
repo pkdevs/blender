@@ -10,6 +10,7 @@
 
 #include "BKE_image_wrappers.hh"
 #include "BKE_paint.hh"
+#include "BLI_kdtree_types.hh"
 
 #include "IMB_colormanagement.hh"
 
@@ -54,11 +55,19 @@ struct ImageData : NonCopyable {
   }
 };
 
+KDTree<float3>* build_kd_tree(Object &ob);
+
 void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                              const Paint &paint,
                              const Brush &brush,
                              Object &ob,
                              ImageData &image_data,
                              const IndexMask &node_mask);
+void do_3d_image_blur_brush(const Depsgraph &depsgraph,
+                            const Paint &paint,
+                            const Brush &brush,
+                            Object &ob,
+                            ImageData &image_data,
+                            const IndexMask &node_mask);
 /** \} */
 }  // namespace blender::ed::sculpt_paint::image

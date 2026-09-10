@@ -15,6 +15,14 @@
 
 namespace blender {
 
+namespace detail {
+/**
+ * When set we know all values are unbalanced,
+ * otherwise clear them when re-balancing: see #62210.
+ */
+constexpr uint kd_node_root_is_init = (uint(-2));
+}
+
 template<typename CoordT> struct KDTreeCoordTraits {
   static constexpr int DimsNum = CoordT::type_length;
   using ValueType = typename CoordT::base_type;
@@ -62,6 +70,24 @@ template<typename CoordT> struct KDTree {
   bool is_balanced;            /* ensure we call balance first */
   uint32_t nodes_len_capacity; /* max size of the tree */
 #endif
+
+  KDTree(uint32_t capacity)
+  {
+    this->nodes = MEM_new_array_uninitialized<KDTreeNode<CoordT>>(capacity, "KDTreeNode<>");
+    this->nodes_len = 0;
+    this->root = detail::kd_node_root_is_init;
+    this->max_node_index = -1;
+
+#ifndef NDEBUG
+    this->is_balanced = false;
+    this->nodes_len_capacity = capacity;
+#endif
+  }
+
+  ~KDTree()
+  {
+    MEM_delete(this->nodes);
+  }
 };
 
 template<typename CoordT> struct KDTreeNearest {

@@ -40,6 +40,7 @@
 #include "BKE_object_types.hh"
 #include "BKE_paint_bvh.hh"
 #include "BKE_paint_bvh_pixels.hh"
+#include "BLI_kdtree.hh"
 
 #include "image_paint_intern.hh"
 #include "mesh_brush_common.hh"
@@ -748,6 +749,77 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                              Object &ob,
                              ImageData &image_data,
                              const IndexMask &node_mask)
+{
+  PRF_scope(ProfileCategory::Editor);
+
+  bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
+  MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
+  PixelData &pixel_data = *pbvh.pixels_;
+  MutableSpan<PixelNode> pixel_nodes = pixel_data.nodes;
+
+  node_mask.foreach_index(
+      [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i]); });
+
+  for (Array<uint8_t> &modified : image_data.seam_tile_modified.values()) {
+    modified.as_mutable_span().fill(0);
+  }
+
+  node_mask.foreach_index(
+      [&](const int i) {
+        do_paint_pixels(depsgraph, ob, paint, brush, image_data, nodes[i], pixel_nodes[i]);
+      },
+      exec_mode::grain_size(1));
+
+  fix_non_manifold_seam_bleeding(ob, image_data, nodes, pixel_nodes, node_mask);
+
+  node_mask.foreach_index([&](const int i) {
+    bke::pbvh::pixels::mark_image_dirty(
+        nodes[i], pixel_nodes[i], *image_data.image, image_data.image_buffers);
+  });
+}
+
+KDTree<float3>* build_kd_tree(Object &ob, const ImageData &data, image::TileNumber tile_number)
+{
+  const ImBuf* tile_buffer = data.image_buffers.lookup_default(tile_number, nullptr);
+  if (tile_buffer == nullptr) {
+    BLI_assert(0);
+    return nullptr;
+  }
+  const uint32_t pixels = IMB_get_pixel_count(tile_buffer);
+  KDTree<float3>* tree = MEM_new<KDTree<float3>>(__func__, pixels);
+  bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
+  MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
+  PixelData &pixel_data = *pbvh.pixels_;
+  Span<PixelNode> pixel_nodes = pixel_data.nodes;
+  for (const PixelNode &node : pixel_nodes) {
+    for (const UDIMTilePixels &tile : node.tiles) {
+      if (tile.tile_number != tile_number) {
+        continue;
+      }
+      Span<int> tri_indices = node.uv_primitives.tri_indices;
+      Span<float3x3> pixel_to_position = node.uv_primitives.pixel_to_position;
+      uint64_t sum = 0;
+      for (const int i : tile.pixel_rows.index_range()) {
+        sum += tile.pixel_rows[i].num_pixels;
+      }
+      printf("Total pixels inserted: %lld\n", sum);
+    }
+  }
+  /* Do we want the extended borders?
+     * No? May weigh data confusingly at seams
+  /* For each of the PixelNodes */
+  /* For a given tile */
+  /* Loop over the rows, getting the object-space position and the image data offset, inserting
+   * into the KDTree */
+  return tree;
+}
+
+void do_3d_image_blur_brush(const Depsgraph &depsgraph,
+                            const Paint &paint,
+                            const Brush &brush,
+                            Object &ob,
+                            ImageData &image_data,
+                            const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Editor);
 

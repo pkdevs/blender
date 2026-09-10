@@ -32,11 +32,6 @@ constexpr int kd_found_alloc_inc = 50; /* alloc increment for collecting nearest
 
 constexpr uint kd_node_unset = (uint(-1));
 
-/**
- * When set we know all values are unbalanced,
- * otherwise clear them when re-balancing: see #62210.
- */
-constexpr uint kd_node_root_is_init = (uint(-2));
 
 template<typename CoordT>
 inline typename KDTreeCoordTraits<CoordT>::ValueType axis_get(const CoordT &co, uint axis)
@@ -64,27 +59,12 @@ template<> inline float distance_squared<float>(const float &a, const float &b)
  */
 template<typename CoordT> inline KDTree<CoordT> *kdtree_new(uint nodes_len_capacity)
 {
-  KDTree<CoordT> *tree;
-
-  tree = MEM_new_zeroed<KDTree<CoordT>>("KDTree");
-  tree->nodes = MEM_new_array_uninitialized<KDTreeNode<CoordT>>(nodes_len_capacity,
-                                                                "KDTreeNode<>");
-  tree->nodes_len = 0;
-  tree->root = detail::kd_node_root_is_init;
-  tree->max_node_index = -1;
-
-#ifndef NDEBUG
-  tree->is_balanced = false;
-  tree->nodes_len_capacity = nodes_len_capacity;
-#endif
-
-  return tree;
+  return MEM_new<KDTree<CoordT>>("KDTree", nodes_len_capacity);
 }
 
 template<typename CoordT> inline void kdtree_free(KDTree<CoordT> *tree)
 {
   if (tree) {
-    MEM_delete(tree->nodes);
     MEM_delete(tree);
   }
 }

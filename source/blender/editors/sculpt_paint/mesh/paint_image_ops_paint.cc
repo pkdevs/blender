@@ -463,6 +463,15 @@ bool TexturePaintStroke::test_start(wmOperator *op, const float2 mouse)
 
 struct TexturePaintData : public PaintModeData {
   std::unique_ptr<ImageData> image_data;
+  /**
+   * For blur, smear, sharpen
+   */
+  KDTree<float3> *pixel_tree = nullptr;
+
+  ~TexturePaintData()
+  {
+    MEM_delete(pixel_tree);
+  }
 };
 
 struct ExperimentalTexturePaintStroke final : public PaintStroke {
@@ -624,8 +633,13 @@ static void do_brush_action(const Depsgraph &depsgraph,
   SculptSession &ss = *ob.runtime->sculpt_session;
   IndexMaskMemory memory;
 
+  /* TODO: Move this to test_start? */
   bke::pbvh::build_pixels(
       depsgraph, ob, *mode_data->image_data->image, mode_data->image_data->image_user_get());
+  const bool needs_kd_tree = brush.image_brush_type == IMAGE_PAINT_BRUSH_TYPE_SOFTEN;
+  if (needs_kd_tree && mode_data->pixel_tree == nullptr) {
+    mode_data->pixel_tree = build_kd_tree(ob);
+  }
 
   const IndexMask node_mask = gather_brush_nodes(ob, brush, memory, node_fully_masked_or_hidden);
 
@@ -654,6 +668,8 @@ static void do_brush_action(const Depsgraph &depsgraph,
       do_3d_image_paint_brush(
           depsgraph, image_paint_settings.paint, brush, ob, *mode_data->image_data, node_mask);
       break;
+    case IMAGE_PAINT_BRUSH_TYPE_SOFTEN:
+      do_3d_image_blur_brush(depsgraph, image_paint_settings.paint, brush, ob, *mode_data->image_data, node_mask);
     default:
       /* TODO: Implement the rest of them... */
       BLI_assert(0);
