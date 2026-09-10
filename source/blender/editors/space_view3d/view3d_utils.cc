@@ -1628,7 +1628,7 @@ bool ED_view3d_lock(RegionView3D *rv3d)
 
 constexpr float angle_threshold = 0.02f;
 
-eRegionView3D_ViewFlipRoll ED_view3d_effective_flip_axis(RegionView3D *rv3d)
+eRegionView3D_ViewFlipRoll ED_view3d_effective_flip_axis(const RegionView3D *rv3d)
 {
   if ((rv3d->rflag & RV3D_FLIP_X) != 0) {
     if (math::abs(rv3d->camroll) < angle_threshold) {
