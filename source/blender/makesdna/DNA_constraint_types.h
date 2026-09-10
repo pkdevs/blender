@@ -1083,7 +1083,7 @@ struct bLocLimitConstraint {
   float ymin = 0, ymax = 0;
   float zmin = 0, zmax = 0;
   eTransformLimits_Flags flag = {};
-  eTransformLimits_Flags2 flag2 = {};
+  eTransformLimits_Flags2 flag2 = LIMIT_TRANSFORM;
 };
 
 /* Limit Rotation Constraint */
@@ -1092,7 +1092,7 @@ struct bRotLimitConstraint {
   float ymin = 0, ymax = 0;
   float zmin = 0, zmax = 0;
   eRotLimit_Flags flag = {};
-  eTransformLimits_Flags2 flag2 = {};
+  eTransformLimits_Flags2 flag2 = LIMIT_TRANSFORM;
   eConstraint_EulerOrder euler_order = CONSTRAINT_EULER_AUTO;
   char _pad[3] = {};
 };
@@ -1103,7 +1103,7 @@ struct bSizeLimitConstraint {
   float ymin = 0, ymax = 0;
   float zmin = 0, zmax = 0;
   eTransformLimits_Flags flag = {};
-  eTransformLimits_Flags2 flag2 = {};
+  eTransformLimits_Flags2 flag2 = LIMIT_TRANSFORM;
 };
 
 /* Limit Distance Constraint */
@@ -1117,7 +1117,7 @@ struct bDistLimitConstraint {
   float soft = 0;
 
   /** Settings. */
-  eDistLimit_Flag flag = {};
+  eDistLimit_Flag flag = LIMITDIST_TRANSFORM;
   /** How to limit in relation to clamping sphere. */
   eDistLimit_Modes mode = LIMITDIST_INSIDE;
   char _pad[4] = {};

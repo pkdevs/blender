@@ -1666,6 +1666,14 @@ static bConstraintTypeInfo CTI_FOLLOWPATH = {
     /*evaluate_constraint*/ followpath_evaluate,
 };
 
+/* --------- Limit Constraint New Data --------- */
+
+static void limitconstraint_new_data(void *cdata)
+{
+  bLocLimitConstraint *data = static_cast<bLocLimitConstraint *>(cdata);
+  data->flag2 = LIMIT_TRANSFORM;
+}
+
 /* --------- Limit Location --------- */
 
 static void loclimit_evaluate(bConstraint *con,
@@ -1702,7 +1710,7 @@ static bConstraintTypeInfo CTI_LOCLIMIT = {
     /*free_data*/ nullptr,
     /*id_looper*/ nullptr,
     /*copy_data*/ nullptr,
-    /*new_data*/ nullptr,
+    /*new_data*/ limitconstraint_new_data,
     /*get_constraint_targets*/ nullptr,
     /*flush_constraint_targets*/ nullptr,
     /*get_target_matrix*/ nullptr,
@@ -1851,7 +1859,7 @@ static bConstraintTypeInfo CTI_ROTLIMIT = {
     /*free_data*/ nullptr,
     /*id_looper*/ nullptr,
     /*copy_data*/ nullptr,
-    /*new_data*/ nullptr,
+    /*new_data*/ limitconstraint_new_data,
     /*get_constraint_targets*/ nullptr,
     /*flush_constraint_targets*/ nullptr,
     /*get_target_matrix*/ nullptr,
@@ -1909,7 +1917,7 @@ static bConstraintTypeInfo CTI_SIZELIMIT = {
     /*free_data*/ nullptr,
     /*id_looper*/ nullptr,
     /*copy_data*/ nullptr,
-    /*new_data*/ nullptr,
+    /*new_data*/ limitconstraint_new_data,
     /*get_constraint_targets*/ nullptr,
     /*flush_constraint_targets*/ nullptr,
     /*get_target_matrix*/ nullptr,
@@ -3349,6 +3357,7 @@ static void distlimit_new_data(void *cdata)
   bDistLimitConstraint *data = static_cast<bDistLimitConstraint *>(cdata);
 
   data->dist = 0.0f;
+  data->flag = LIMITDIST_TRANSFORM;
 }
 
 static void distlimit_id_looper(bConstraint *con, ConstraintIDFunc func, void *userdata)
