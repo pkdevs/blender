@@ -11,6 +11,8 @@
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 
+#include "NOD_geo_tag_filter.hh"
+
 #include "node_geometry_util.hh"
 
 #include "GEO_jolt.hh"
@@ -32,6 +34,9 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(0)
       .default_value(1 / 25.0f)
       .subtype(PROP_TIME_ABSOLUTE);
+  b.add_input<decl::String>("Filter"_ustr)
+      .optional_label()
+      .description("Filters the geometry sets to process based on their tags");
   b.add_input<decl::Matrix>("Simulation to World"_ustr);
   {
     auto &solver_panel = b.add_panel("Solver"_ustr).default_closed(true);
@@ -161,6 +166,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   const float delta_time = params.extract_input<float>("Delta Time"_ustr);
   const int substeps = params.extract_input<int>("Substeps"_ustr);
+  const std::string geometry_tag_filter = params.extract_input<std::string>("Filter"_ustr);
 
   BroadPhaseLayerInterfaceImpl broad_phase_layer_interface;
   ObjectVsBroadPhaseLayerFilterImpl object_vs_broad_phase_layer_filter;
