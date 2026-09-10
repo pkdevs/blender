@@ -615,6 +615,8 @@ void BVHEmbree::set_point_vertex_buffer(RTCGeometry geom_id,
 
 void BVHEmbree::add_points(const Object *ob, const PointCloud *pointcloud, const int i)
 {
+  assert(pointcloud->primitive_type() & PRIMITIVE_POINT);
+
   size_t num_motion_steps = 1;
   if (pointcloud->has_motion_blur()) {
     const Attribute *attr_P = pointcloud->attributes.find(ATTR_STD_POSITION);
@@ -671,6 +673,8 @@ static void gsplat_bounds_func(const RTCBoundsFunctionArguments *args)
 
 void BVHEmbree::add_gsplats(const Object *ob, const PointCloud *pointcloud, const int i)
 {
+  assert(pointcloud->primitive_type() & PRIMITIVE_GSPLAT);
+
   size_t num_motion_steps = 1;
   if (pointcloud->has_motion_blur()) {
     const Attribute *attr_P = pointcloud->attributes.find(ATTR_STD_POSITION);
