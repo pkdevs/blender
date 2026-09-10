@@ -309,6 +309,11 @@ add_blender_test(
 )
 
 add_blender_test(
+  script_pyapi_region_active_item_index
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_pyapi_region_active_item_index.py
+)
+
+add_blender_test(
   script_pyapi_mathutils
   --python ${CMAKE_CURRENT_LIST_DIR}/bl_pyapi_mathutils.py
 )
