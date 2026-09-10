@@ -114,6 +114,15 @@ Utilities
      Example
         make icons_geom BLENDER_BIN=/path/to/blender
 
+   * nodes_as_node_groups:
+     Generate node groups from built-in nodes to be used in Compositor Effects.
+
+     Forwards to the CMake target of the same name,
+     so the build directory must already be configured.
+
+     Example
+        make nodes_as_node_groups
+
    * source_archive:
      Create a compressed archive of the source code.
 
@@ -632,6 +641,9 @@ source_archive_complete: .FORCE
 icons_geom: .FORCE
 	@BLENDER_BIN=$(BLENDER_BIN) \
 	    "$(BLENDER_DIR)/release/datafiles/blender_icons_geom_update.py"
+
+nodes_as_node_groups: .FORCE
+	@$(BUILD_COMMAND) -C "$(BUILD_DIR)" -j $(NPROCS) nodes_as_node_groups
 
 update: .FORCE
 	@$(PYTHON) ./build_files/utils/make_update.py

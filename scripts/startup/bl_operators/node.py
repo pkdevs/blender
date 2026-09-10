@@ -807,8 +807,13 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
         return context.scene is not None
 
     def create_packed_effect_group(self, node_type):
-        # todo(habib): don't hard code, create as part of the build process
-        filepath = "/Users/habib/blender-git/files/dev/builtin-nodes-ng.blend"
+        import os
+
+        filepath = os.path.join(
+            bpy.utils.system_resource('DATAFILES'),
+            "nodes",
+            "nodes_as_node_groups.blend",
+        )
 
         with bpy.data.libraries.load(filepath, link=True, pack=True) as (data_from, data_to):
             data_to.node_groups.append(node_type)

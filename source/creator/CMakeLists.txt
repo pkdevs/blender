@@ -1983,6 +1983,35 @@ endif()
 
 
 # -----------------------------------------------------------------------------
+# Compositor node groups for built-in nodes, used by Scene Effects
+
+set(_nodes_as_node_groups_blend
+  ${CMAKE_BINARY_DIR}/release/datafiles/nodes_as_node_groups.blend
+)
+add_custom_command(
+  OUTPUT ${_nodes_as_node_groups_blend}
+  COMMAND
+    $<TARGET_FILE:blender>
+    --background
+    --factory-startup
+    --python-exit-code 1
+    --env-system-scripts ${CMAKE_SOURCE_DIR}/scripts
+    --python ${CMAKE_SOURCE_DIR}/release/datafiles/nodes_as_node_groups.py
+    -- --output ${_nodes_as_node_groups_blend}
+  DEPENDS
+    blender
+    ${CMAKE_SOURCE_DIR}/release/datafiles/nodes_as_node_groups.py
+  COMMENT "Generate a blend file containing all compositor nodes, each wrapped in a node group"
+)
+add_custom_target(nodes_as_node_groups ALL DEPENDS ${_nodes_as_node_groups_blend})
+
+install(
+  FILES ${_nodes_as_node_groups_blend}
+  DESTINATION ${TARGETDIR_VER}/datafiles/nodes
+)
+
+
+# -----------------------------------------------------------------------------
 # Setup link libraries
 
 add_dependencies(blender makesdna)
