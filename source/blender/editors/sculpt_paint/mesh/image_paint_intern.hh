@@ -55,7 +55,7 @@ struct ImageData : NonCopyable {
   }
 };
 
-KDTree<float3>* build_kd_tree(Object &ob);
+KDTree<float3>* build_kd_tree(Object &ob, const ImageData &data, bke::image::TileNumber tile_number);
 
 void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                              const Paint &paint,

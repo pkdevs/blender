@@ -637,8 +637,11 @@ static void do_brush_action(const Depsgraph &depsgraph,
   bke::pbvh::build_pixels(
       depsgraph, ob, *mode_data->image_data->image, mode_data->image_data->image_user_get());
   const bool needs_kd_tree = brush.image_brush_type == IMAGE_PAINT_BRUSH_TYPE_SOFTEN;
+
+  /* TODO: This may need to be scoped per-tile, but we should keep the data alive outside of a
+   * stroke. */
   if (needs_kd_tree && mode_data->pixel_tree == nullptr) {
-    mode_data->pixel_tree = build_kd_tree(ob);
+    mode_data->pixel_tree = build_kd_tree(ob, *mode_data->image_data, 0);
   }
 
   const IndexMask node_mask = gather_brush_nodes(ob, brush, memory, node_fully_masked_or_hidden);
@@ -670,6 +673,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
       break;
     case IMAGE_PAINT_BRUSH_TYPE_SOFTEN:
       do_3d_image_blur_brush(depsgraph, image_paint_settings.paint, brush, ob, *mode_data->image_data, node_mask);
+      break;
     default:
       /* TODO: Implement the rest of them... */
       BLI_assert(0);

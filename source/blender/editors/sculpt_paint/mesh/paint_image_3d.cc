@@ -778,7 +778,7 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
   });
 }
 
-KDTree<float3>* build_kd_tree(Object &ob, const ImageData &data, image::TileNumber tile_number)
+KDTree<float3>* build_kd_tree(Object &ob, const ImageData &data, const image::TileNumber tile_number)
 {
   const ImBuf* tile_buffer = data.image_buffers.lookup_default(tile_number, nullptr);
   if (tile_buffer == nullptr) {
@@ -786,21 +786,52 @@ KDTree<float3>* build_kd_tree(Object &ob, const ImageData &data, image::TileNumb
     return nullptr;
   }
   const uint32_t pixels = IMB_get_pixel_count(tile_buffer);
+  const uint32_t height = tile_buffer->y;
   KDTree<float3>* tree = MEM_new<KDTree<float3>>(__func__, pixels);
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
-  MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
   PixelData &pixel_data = *pbvh.pixels_;
   Span<PixelNode> pixel_nodes = pixel_data.nodes;
-  for (const PixelNode &node : pixel_nodes) {
-    for (const UDIMTilePixels &tile : node.tiles) {
-      if (tile.tile_number != tile_number) {
+  for (const PixelNode &pixel_node : pixel_nodes) {
+    for (const UDIMTilePixels &tile_data : pixel_node.tiles) {
+      if (tile_data.tile_number != tile_number) {
         continue;
       }
-      Span<int> tri_indices = node.uv_primitives.tri_indices;
-      Span<float3x3> pixel_to_position = node.uv_primitives.pixel_to_position;
+
       uint64_t sum = 0;
-      for (const int i : tile.pixel_rows.index_range()) {
-        sum += tile.pixel_rows[i].num_pixels;
+      for (const int run_i : tile_data.pixel_row_run_starts.index_range()) {
+        const int run_begin = tile_data.pixel_row_run_starts[run_i];
+        const int run_end = tile_data.pixel_row_run_starts[run_i + 1];
+
+        /* Compute run position and size. */
+        const int run_x = int(tile_data.pixel_row_run_start_coords[run_i].x);
+        const int run_y = int(tile_data.pixel_row_run_start_coords[run_i].y);
+        int run_size = 0;
+        for (int k = run_begin; k < run_end; k++) {
+          run_size += int(tile_data.pixel_rows[k].num_pixels);
+        }
+
+        int tri_row_offset = 0;
+
+        for (int k = run_begin; k < run_end; k++) {
+          const PackedPixelRow &tri_row = tile_data.pixel_rows[k];
+          const int tri_row_size = int(tri_row.num_pixels);
+
+          const int tri_row_x = run_x + tri_row_offset;
+          const int uv_prim = tri_row.uv_primitive_index;
+          const float3x3 &pixel_to_position = pixel_node.uv_primitives.pixel_to_position[uv_prim];
+          const float3 P_delta = pixel_to_position[0];
+          const float3 P_start = P_delta * tri_row_x + pixel_to_position[1] * run_y +
+                                 pixel_to_position[2];
+
+          for (const int pixel_i : IndexRange(tri_row_size)) {
+            int pixel = run_y * height + tri_row_x + pixel_i;
+            const float3 position = P_start + P_delta * pixel_i;
+            printf("Inserting %d at (%f %f %f)\n", pixel, position.x, position.y, position.z);
+            kdtree_insert(tree, pixel, position);
+          }
+
+          tri_row_offset += tri_row_size;
+        }
       }
       printf("Total pixels inserted: %lld\n", sum);
     }
