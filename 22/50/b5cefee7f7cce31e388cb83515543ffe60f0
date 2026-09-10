@@ -6,4 +6,4 @@ Referenced by issue #84233, Node editor: Creating new/copy of datablock disabled
 Referenced by issue #84101, Shader editor: duplicating material do not work there
 Referenced by issue #79959, Data-block Selector Design Changes
 Referenced by issue #78012, UI: Search Menu Design for Linked Data-blocks
-Referenced by issue #163622, Asset loses Fake User and asset user after Shift+Unlink
+Referenced by issue #163622, ID loses Fake User after Shift+Unlink in the ID template
