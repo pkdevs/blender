@@ -388,7 +388,7 @@ static void update_window_matrix(const wmWindow *window, const ARegion *region, 
 
 void region_winrct_get_no_margin(const ARegion *region, rcti *r_rect)
 {
-  Block *block = static_cast<Block *>(region->runtime->uiblocks.first);
+  Block *block = region->runtime->uiblocks.first();
   if (block && (block->flag & BLOCK_LOOP) && (block->flag & BLOCK_PIE_MENU) == 0) {
     BLI_rcti_rctf_copy_floor(r_rect, &block->rect);
     BLI_rcti_translate(r_rect, region->winrct.xmin, region->winrct.ymin);
@@ -2202,7 +2202,7 @@ void block_end_ex(const bContext *C,
   }
 
   /* handle pending stuff */
-  if (block->layouts.first) {
+  if (block->layouts.first_) {
     block_layout_resolve(block);
   }
   block_align_calc(block, region);
@@ -2835,11 +2835,6 @@ bool button_is_compatible(const Button *but_a, const Button *but_b)
   }
 
   if (but_a->rnaprop) {
-    /* skip 'rnapoin.data', 'rnapoin.owner_id'
-     * allow different data to have the same props edited at once */
-    if (but_a->rnapoin.type != but_b->rnapoin.type) {
-      return false;
-    }
     if (RNA_property_type(but_a->rnaprop) != RNA_property_type(but_b->rnaprop)) {
       return false;
     }
@@ -5766,7 +5761,7 @@ int blocklist_min_y_get(ListBaseT<Block> *lb)
   int min = 0;
 
   for (Block &block : *lb) {
-    if (&block == lb->first || block.rect.ymin < min) {
+    if (&block == lb->first_ || block.rect.ymin < min) {
       min = block.rect.ymin;
     }
   }
@@ -6892,7 +6887,7 @@ void update_text_styles()
     return;
   }
 
-  uiStyle *style = static_cast<uiStyle *>(U.uistyles.first);
+  uiStyle *style = U.uistyles.first();
   const int weight = BLF_default_weight(0);
   style->paneltitle.character_weight = weight;
   style->grouplabel.character_weight = weight;

@@ -740,6 +740,11 @@ add_blender_test(
 )
 
 add_blender_test(
+  bl_animation_context_markers
+  --python ${TEST_PYTHON_DIR}/bl_animation_context_markers.py
+)
+
+add_blender_test(
   bl_animation_rename
   --python ${CMAKE_CURRENT_LIST_DIR}/bl_animation_rename.py
 )
@@ -1843,6 +1848,15 @@ if(WITH_UI_TESTS)
     )
   endforeach()
   unset(_ui_tests)
+
+  # test_open_editor_types opens many areas, each needing its own GLContext.
+  # The number of available context is limit by driver and not queryable.
+  if(WITH_OPENGL_BACKEND)
+    set_tests_properties(
+      ui_opengl_test_editor_types.test_open_editor_types
+      PROPERTIES DISABLED TRUE
+    )
+  endif()
 endif()
 
 
