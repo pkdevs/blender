@@ -352,11 +352,19 @@ static wmOperatorStatus text_new_exec(bContext *C, wmOperator * /*op*/)
 {
   SpaceText *st = CTX_wm_space_text(C);
   Main *bmain = CTX_data_main(C);
-  Text *text;
   PointerRNA ptr;
   PropertyRNA *prop;
 
-  text = BKE_text_add(bmain, DATA_("Text"));
+  Text *text = CTX_data_edit_text(C);
+
+  /* Add or copy text. */
+  if (text) {
+    Text *new_text = id_cast<Text *>(BKE_id_copy(bmain, &text->id));
+    text = new_text;
+  }
+  else {
+    text = BKE_text_add(bmain, DATA_("Text"));
+  }
 
   /* Hook into UI. */
   ui::context_active_but_prop_get_templateID(C, &ptr, &prop);
