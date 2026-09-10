@@ -1313,7 +1313,7 @@ void ObjectManager::apply_static_transforms(DeviceScene *dscene, Scene *scene, P
     }
 
     /* Applying transform on Gaussian splats is not trivial as in general case it requires
-     * non-trivval math for rotating spherical harmonics. */
+     * non-trivial math for rotating spherical harmonics. */
     if (geom->is_pointcloud()) {
       const PointCloud *pointcloud = static_cast<const PointCloud *>(geom);
       apply = apply && ((pointcloud->primitive_type() & PRIMITIVE_GSPLAT) == 0);
