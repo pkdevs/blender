@@ -84,7 +84,9 @@ ${temp_LIBDIR}/theora/lib/pkgconfig:\
 ${temp_LIBDIR}/openjpeg/lib/pkgconfig:\
 ${temp_LIBDIR}/opus/lib/pkgconfig:\
 ${temp_LIBDIR}/aom/lib/pkgconfig:\
-${temp_LIBDIR}/x265/lib/pkgconfig:"
+${temp_LIBDIR}/x265/lib/pkgconfig:\
+${temp_LIBDIR}/libdrm/lib/pkgconfig:\
+${temp_LIBDIR}/libva/lib/pkgconfig:"
   )
 endif()
 
@@ -155,6 +157,18 @@ else()
   )
 endif()
 
+if(UNIX AND NOT APPLE)
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --enable-vaapi
+  )
+else()
+  set(FFMPEG_EXTRA_FLAGS
+    ${FFMPEG_EXTRA_FLAGS}
+    --disable-vaapi
+  )
+endif()
+
 ExternalProject_Add(external_ffmpeg
   URL file://${PACKAGE_DIR}/${FFMPEG_FILE}
   DOWNLOAD_DIR ${DOWNLOAD_DIR}
@@ -182,7 +196,6 @@ ExternalProject_Add(external_ffmpeg
       --enable-zlib
       --enable-stripping
       --enable-runtime-cpudetect
-      --disable-vaapi
       --disable-nonfree
       --enable-gpl
       --enable-libmp3lame
@@ -267,6 +280,13 @@ if(UNIX)
     external_ffmpeg
     external_nasm
     external_openjpeg
+  )
+endif()
+if(UNIX AND NOT APPLE)
+  add_dependencies(
+    external_ffmpeg
+    external_libdrm
+    external_libva
   )
 endif()
 

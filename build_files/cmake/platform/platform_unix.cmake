@@ -324,6 +324,9 @@ if(WITH_CODEC_FFMPEG)
     if(EXISTS ${LIBDIR}/ffmpeg/lib/libxvidcore.a)
       list(APPEND FFMPEG_FIND_COMPONENTS xvidcore)
     endif()
+    if(EXISTS ${LIBDIR}/ffmpeg/lib/libva.so)
+      list(APPEND FFMPEG_FIND_COMPONENTS va-drm va drm)
+    endif()
   elseif(FFMPEG)
     # Old cache variable used for root dir, convert to new standard.
     set(FFMPEG_ROOT_DIR ${FFMPEG})
@@ -332,6 +335,7 @@ if(WITH_CODEC_FFMPEG)
 
   set_and_warn_library_found("FFmpeg" FFMPEG_FOUND WITH_CODEC_FFMPEG)
 endif()
+add_bundled_libraries(ffmpeg/lib)
 
 if(WITH_FFTW3)
   find_package_wrapper(Fftw3)

@@ -655,6 +655,30 @@ set(FFMPEG_HOMEPAGE https://ffmpeg.org/)
 set(FFMPEG_LICENSE SPDX:LGPL-2.1-or-later)
 set(FFMPEG_COPYRIGHT "Copyright (c) 2000-2017 the FFMPEG developers")
 
+set(LIBDRM_VERSION 2.4.134)
+set(LIBDRM_URI https://dri.freedesktop.org/libdrm/libdrm-${LIBDRM_VERSION}.tar.xz)
+set(LIBDRM_HASH ac5e74d157830eb8bee44c6a6bf3ad49774ef0dd2a72bdad74a8f20308b52a95)
+set(LIBDRM_HASH_TYPE SHA256)
+set(LIBDRM_FILE libdrm-${LIBDRM_VERSION}.tar.xz)
+set(LIBDRM_NAME libdrm)
+set(LIBDRM_HOMEPAGE https://gitlab.freedesktop.org/mesa/libdrm)
+set(LIBDRM_LICENSE SPDX:MIT)
+set(LIBDRM_COPYRIGHT [=[
+Copyright (c) 1999, 2000 Precision Insight, Inc., Cedar Park, Texas.
+Copyright (c) 2007-2008 Tungsten Graphics, Inc., Cedar Park, Texas.
+Copyright (c) 2000 VA Linux Systems, Inc., Sunnyvale, California.
+]=])
+
+set(LIBVA_VERSION 2.24.1)
+set(LIBVA_URI https://github.com/intel/libva/archive/refs/tags/${LIBVA_VERSION}.tar.gz)
+set(LIBVA_HASH 0b4a3649ee8d683b9cce2ef094df4fb039d276c0cef7e49337c43d3b297b9f42)
+set(LIBVA_HASH_TYPE SHA256)
+set(LIBVA_FILE libva-${LIBVA_VERSION}.tar.gz)
+set(LIBVA_NAME libva)
+set(LIBVA_HOMEPAGE https://github.com/intel/libva)
+set(LIBVA_LICENSE SPDX:MIT)
+set(LIBVA_COPYRIGHT "Copyright (c) 2007 Intel Corporation")
+
 set(FFTW_VERSION 3.3.10)
 set(FFTW_NAME FFTW)
 set(FFTW_URI http://www.fftw.org/fftw-${FFTW_VERSION}.tar.gz)
