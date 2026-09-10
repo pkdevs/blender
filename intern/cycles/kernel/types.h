@@ -1471,7 +1471,7 @@ struct KernelObject {
       int normal_offset;
     } mesh_volume;
 
-    /* Information about gaussian splat objects. */
+    /* Information about Gaussian splat objects. */
     struct {
       /* Offset for the attributes.
        * The least significant bit denotes whether the attribute has motion. */

@@ -300,7 +300,7 @@ void PointCloud::pack(Scene *scene, uint *packed_shader)
 
 void PointCloud::update_gsplat_radii()
 {
-  /* Calculate radius attribute to bound the gaussian splats based on the splat scale, allowing
+  /* Calculate radius attribute to bound the Gaussian splats based on the splat scale, allowing
    * splats to be added to BVH as point primitives.
    *
    * Calculation is based on
@@ -328,7 +328,7 @@ void PointCloud::update_gsplat_radii()
   float *radius_data = get_radius_for_write();
 
   auto estimate_gsplat_radius = [](const float opacity, const float3 scale) -> float {
-    /* Minimum response of the gaussian splat which must be captures.
+    /* Minimum response of the Gaussian splat which must be captures.
      * The value comes from the paper. */
     constexpr float ALPHA_MIN = 0.01f;
 
@@ -339,7 +339,7 @@ void PointCloud::update_gsplat_radii()
     return reduce_max(fabs(factor * scale));
   };
 
-  /* Calculate bounding radius for the center step or gaussian splats without motion blur. */
+  /* Calculate bounding radius for the center step or Gaussian splats without motion blur. */
   parallel_for(blocked_range<size_t>(0, num_points(), 32), [&](const blocked_range<size_t> &r) {
     for (size_t i = r.begin(); i != r.end(); i++) {
       radius_data[i] = estimate_gsplat_radius(radiance_base_data[i].w, scale_data[i]);

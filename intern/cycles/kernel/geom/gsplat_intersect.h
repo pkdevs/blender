@@ -42,14 +42,14 @@ CCL_NAMESPACE_BEGIN
 
 #  if defined(__GSPLATS__)
 
-/* Parameters of the gaussian splat that are needed for intersection. */
+/* Parameters of the Gaussian splat that are needed for intersection. */
 struct GSplatIsectParams {
   float3 scale;
   Quaternion rotation;
   float4 radiance_base;
 };
 
-/* Optimized access to gaussian splat parameters for the intersection purposes.
+/* Optimized access to Gaussian splat parameters for the intersection purposes.
  * Reuses steps calculation to access multiple motion attributes. */
 ccl_device_forceinline GSplatIsectParams gsplat_intersect_get_params(
     KernelGlobals kg, const int object, const int prim, const float time, const int primitive_type)
@@ -112,7 +112,7 @@ ccl_device_forceinline GSplatIsectParams gsplat_intersect_get_params(
   return params;
 }
 
-/* Intersect ray against gaussian splat.
+/* Intersect ray against Gaussian splat.
  * Performs stochastic alpha test described in [sun2025]. */
 ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
                                                   const float3 ray_P,
@@ -168,7 +168,7 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
   const float3 d_g = S_inv_x_R_T * ray_D;
   const float t = -dot(o_g, d_g) / dot(d_g, d_g); /* tau_max in [3dgrt2024] */
 
-  /* Check the intersection with the gaussian splat is within the valid ray range.
+  /* Check the intersection with the Gaussian splat is within the valid ray range.
    * The previous checks are based on the bounding sphere distance.
    *
    * The t might be lower than the ray_tmin when the ray origin is within the bounding sphere but
@@ -195,7 +195,7 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
 
   /* Particle response. [3dgrt2024] Eq. (1).
    * The 1/2 factor in the power follows the [sun2025] Eq. (1) and [chen2024pgsr] equation in the
-   * "Preliminary of 3D gaussian splatting" section.
+   * "Preliminary of 3D Gaussian Splatting" section.
    * From experimentation it seems there should indeed be this factor, otherwise the bicycle model
    * does not render correctly (parts of the wheel and brakes are missing). */
   const float3 x_minus_mu = x - mu;

@@ -841,7 +841,7 @@ void ShaderManager::add_default(Scene *scene)
     shader->tag_update(scene);
   }
 
-  /* Default gaussian splat. */
+  /* Default Gaussian splat. */
   {
     unique_ptr<ShaderGraph> graph = make_unique<ShaderGraph>();
 

@@ -69,13 +69,13 @@ ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private Sha
   return rec709_to_rgb(kg, make_float3(color_rec709));
 }
 
-/* Get gaussian splat normal in the object space. */
+/* Get Gaussian splat normal in the object space. */
 ccl_device_inline float3 gsplat_normal(
     KernelGlobals kg, const int object, const int prim, const float time, const int primitive_type)
 {
   /* Follows the "Flattening 3D Gaussian" section of [chen2024pgsr].
    *
-   * The intuitive way to think about it is that gsplat is a pancake, so its normal in the gaussian
+   * The intuitive way to think about it is that gsplat is a pancake, so its normal in the Gaussian
    * splat space points in the direction of the smallest scale. This means, for example, that if
    * the scale's z component is the smallest then the normal in the splat space is (0, 0, 1).
    *
@@ -83,12 +83,12 @@ ccl_device_inline float3 gsplat_normal(
    *
    *   N_{object_space} = R * N_{splat_space}
    *
-   * where R is a transformation matrix constructed from the gaussian splat rotation:
+   * where R is a transformation matrix constructed from the Gaussian splat rotation:
    *
    *  R = quaternion_to_rotation(rotation_quat)
    *
    * We can avoid the matrix multiplication by utilizing the knowledge that the normal is the
-   * gaussian splat space has only one component set to 1 and the rest are set to 0: the result
+   * Gaussian splat space has only one component set to 1 and the rest are set to 0: the result
    * is the column of the matrix R with the same index as the component of the local normal that is
    * set to 1. */
 

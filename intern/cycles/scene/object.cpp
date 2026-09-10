@@ -1312,7 +1312,7 @@ void ObjectManager::apply_static_transforms(DeviceScene *dscene, Scene *scene, P
       apply = apply && transform_uniform_scale(object->tfm, scale);
     }
 
-    /* Applying transform on gaussian splats is not trivial as in general case it requires
+    /* Applying transform on Gaussian splats is not trivial as in general case it requires
      * non-trivval math for rotating spherical harmonics. */
     if (geom->is_pointcloud()) {
       const PointCloud *pointcloud = static_cast<const PointCloud *>(geom);

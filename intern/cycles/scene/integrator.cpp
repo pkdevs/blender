@@ -266,7 +266,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
     }
   }
 
-  /* TODO(sergey): Treat gaussian splats as semi-transparent objects. */
+  /* TODO(sergey): Treat Gaussian splats as semi-transparent objects. */
   /* It will allow accumulation of transparency in the intersect_shadows_all(). */
 
   kintegrator->volume_ray_marching = volume_ray_marching;

@@ -380,7 +380,7 @@ ccl_device_forceinline void kernel_embree_custom_occluded_local_func_impl(
   kernel_assert(args->N == 1);
 
   /* Ignore intersections with custom primitives.
-   * Currently the only custom primitive is the gaussian splat, which requires extra design work
+   * Currently the only custom primitive is the Gaussian splat, which requires extra design work
    * to integrate into local intersection test. */
   args->valid[0] = 0;
 }
@@ -391,7 +391,7 @@ ccl_device_forceinline void kernel_embree_custom_occluded_volume_func_impl(
   kernel_assert(args->N == 1);
 
   /* Ignore intersections with custom primitives.
-   * Currently the only custom primitive is the gaussian splat, which does not support volume
+   * Currently the only custom primitive is the Gaussian splat, which does not support volume
    * shaders. */
   args->valid[0] = 0;
 }
