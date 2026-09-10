@@ -398,6 +398,10 @@ void DEG_iterator_ids_end(BLI_Iterator *iter);
 using DEGForeachIDCallback = FunctionRef<void(ID *id)>;
 using DEGForeachIDComponentCallback =
     FunctionRef<void(ID *id, eDepsObjectComponentType component)>;
+/**
+ * Callback function where the return value indicates if traversal should continue into dependents
+ * of the component. See DEG_foreach_dependent_component.
+ */
 using DEGForeachNamedIDComponentCallback =
     FunctionRef<bool(ID *id, eDepsObjectComponentType component, StringRef component_name)>;
 /**
