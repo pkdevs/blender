@@ -29,6 +29,17 @@ int OneapiDeviceQueue::num_concurrent_states(const size_t state_size) const
 {
   int num_states = 4 * num_concurrent_busy_states(state_size);
 
+  const char *factor_str = getenv("CYCLES_CONCURRENT_STATES_FACTOR");
+  if (factor_str) {
+    const float factor = (float)atof(factor_str);
+    if (factor != 0.0f) {
+      num_states = max((int)(num_states * factor), 1024);
+    }
+    else {
+      LOG_TRACE << "CYCLES_CONCURRENT_STATES_FACTOR evaluated to 0";
+    }
+  }
+
   LOG_TRACE << "GPU queue concurrent states: " << num_states << ", using up to "
             << string_human_readable_size(num_states * state_size);
 
