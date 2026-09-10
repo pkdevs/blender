@@ -64,7 +64,7 @@ ccl_device_inline float3 gsplat_radiance(KernelGlobals kg, const ccl_private Sha
     color_srgb += spherical_harmonics_evaluate_rest(packed_spherical_harmonics_rest, direction);
   }
 
-  /* Map to linear color space, add 1/2 offset to mirror [3dgs2023]. */
+  /* Map to linear color space, add 1/2 offset to mirror source code of [3dgs2023]. */
   const float3 color_rec709 = color_srgb_to_linear_v3(color_srgb + 0.5f);
   return rec709_to_rgb(kg, color_rec709);
 }
