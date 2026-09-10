@@ -4904,6 +4904,8 @@ void static area_docking_apply(bContext *C, wmOperator *op)
        * at incorrect regions and will cause errors in uiTemplateInputStatus. */
       WM_window_get_active_screen(jd->win1)->active_region = nullptr;
       WM_window_get_active_screen(jd->win2)->active_region = nullptr;
+      WM_window_topmost_active_region_tag_refresh(jd->win1);
+      WM_window_topmost_active_region_tag_refresh(jd->win2);
     }
     else {
       float inner[4] = {0.0f, 0.0f, 0.0f, 0.7f};
@@ -5952,6 +5954,7 @@ static wmOperatorStatus region_quadview_exec(bContext *C, wmOperator *op)
         ED_region_remove(C, area, &region_iter);
         if (&region_iter == screen->active_region) {
           screen->active_region = nullptr;
+          WM_window_topmost_active_region_tag_refresh(CTX_wm_window(C));
         }
       }
     }

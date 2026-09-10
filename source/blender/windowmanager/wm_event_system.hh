@@ -107,6 +107,7 @@ struct wmEventHandler_UI {
      */
     ARegion *region_popup;
   } context;
+  const ARegion *owning_region;
 };
 
 /** #WM_HANDLER_TYPE_OP. */

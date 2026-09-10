@@ -3636,6 +3636,12 @@ std::optional<IndexRange> WM_window_IME_composite_select_range(const wmIMEData *
 }
 #endif /* WITH_INPUT_IME */
 
+void WM_window_topmost_active_region_tag_refresh(const wmWindow *win)
+{
+  win->runtime->topmost_active_region_refresh = true;
+  win->runtime->topmost_active_region = nullptr;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

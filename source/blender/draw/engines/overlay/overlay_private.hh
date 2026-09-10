@@ -132,6 +132,7 @@ struct State {
   const View3D *v3d = nullptr;
   const SpaceLink *space_data = nullptr;
   const ARegion *region = nullptr;
+  bool is_region_topmost_active = false;
   const RegionView3D *rv3d = nullptr;
   const bToolRef *active_tool = nullptr;
   DRWTextStore *dt = nullptr;

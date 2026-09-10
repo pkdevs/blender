@@ -132,6 +132,9 @@ void ED_region_do_listen(wmRegionListenerParams *params)
                 params->wm, params->window, region->runtime->text_cursor_overlay->timer);
             region->runtime->text_cursor_overlay->timer = nullptr;
             region->runtime->do_draw |= RGN_DRAW_TEXT_CURSOR;
+            if (region->regiontype == RGN_TYPE_WINDOW && params->area->spacetype == SPACE_VIEW3D) {
+              region->runtime->do_draw |= RGN_DRAW_EDITOR_OVERLAYS;
+            }
           }
           break;
         }
@@ -142,13 +145,17 @@ void ED_region_do_listen(wmRegionListenerParams *params)
           if (!region->runtime->text_cursor_overlay) {
             break;
           }
-          if (bke::screen_topmost_active_region(params->screen) != region) {
+          if (params->window->runtime->topmost_active_region != region) {
             BLI_assert(!region->runtime->text_cursor_overlay->timer);
             break;
           }
           if (region->runtime->text_cursor_overlay->timer) {
             WM_event_timer_remove(
                 params->wm, params->window, region->runtime->text_cursor_overlay->timer);
+          }
+          if (region->regiontype == RGN_TYPE_WINDOW && params->area->spacetype == SPACE_VIEW3D) {
+            region->runtime->do_draw |= RGN_DRAW_EDITOR_OVERLAYS;
+            printf("gool\n");
           }
           region->runtime->text_cursor_overlay->timer = WM_event_timer_add(
               params->wm, params->window, TIMER, bke::TEXT_EDIT_CURSOR_BLINK_INTERVAL);
@@ -2944,6 +2951,7 @@ void ED_area_swapspace(bContext *C, ScrArea *sa1, ScrArea *sa2)
   for (wmWindow &win : wm->windows) {
     if (bScreen *screen = WM_window_get_active_screen(&win)) {
       screen->active_region = nullptr;
+      WM_window_topmost_active_region_tag_refresh(&win);
     }
   }
 
@@ -4442,7 +4450,7 @@ void ED_region_ensure_blink_cursor_overlay(const bContext *C,
     if (!region->runtime->text_cursor_overlay) {
       region->runtime->text_cursor_overlay = bke::TextCursorOverlay{};
     }
-    if (region->runtime->draw_flag & bke::ARegionRuntimeDrawFlag::TopmostActive && win->active) {
+    if (region == win->runtime->topmost_active_region && win->active) {
       if (!region->runtime->text_cursor_overlay->timer) {
         /* Ensure timer is set when this region is the topmost active region. */
         region->runtime->text_cursor_overlay->timer = WM_event_timer_add(

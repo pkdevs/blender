@@ -992,7 +992,6 @@ static ARegion *searchbox_create_generic_ex(bContext *C,
 
   /* create area region */
   ARegion *region = region_temp_add(CTX_wm_screen(C));
-  region->runtime->flag |= bke::ARegionRuntimeFlag::SearchSubRegion;
   static ARegionType type;
   memset(&type, 0, sizeof(ARegionType));
   type.layout = searchbox_region_layout_fn;

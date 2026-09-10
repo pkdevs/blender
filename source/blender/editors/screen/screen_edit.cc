@@ -550,6 +550,7 @@ static bool screen_area_join_ex(bContext *C,
     /* Active area has changed so active region could be invalid. It is
      * safe to set null and let it be set later by mouse position. #131751. */
     screen->active_region = nullptr;
+    WM_window_topmost_active_region_tag_refresh(CTX_wm_window(C));
   }
 
   BKE_icon_changed(screen->id.icon_id);
@@ -890,6 +891,8 @@ void ED_region_exit(bContext *C, ARegion *region)
     region->runtime->type->exit(wm, region);
   }
 
+  WM_window_topmost_active_region_tag_refresh(win);
+
   CTX_wm_region_set(C, region);
 
   WM_event_remove_handlers(C, &region->runtime->handlers);
@@ -986,6 +989,10 @@ void ED_screen_exit(bContext *C, wmWindow *window, bScreen *screen)
     /* none otherwise */
     CTX_wm_window_set(C, nullptr);
   }
+  if (prevwin) {
+    WM_window_topmost_active_region_tag_refresh(prevwin);
+  }
+  WM_window_topmost_active_region_tag_refresh(window);
 }
 
 StringRefNull ED_area_name(const ScrArea *area)
@@ -1106,6 +1113,7 @@ void ED_screen_set_active_region(bContext *C, wmWindow *win, const int xy[2])
           WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, win);
         }
         screen->active_region = &region;
+        WM_window_topmost_active_region_tag_refresh(win);
         break;
       }
     }
@@ -1113,6 +1121,7 @@ void ED_screen_set_active_region(bContext *C, wmWindow *win, const int xy[2])
   else {
     WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_PAUSE, win);
     screen->active_region = nullptr;
+    WM_window_topmost_active_region_tag_refresh(win);
   }
 
   if (region_prev != screen->active_region || !screen->active_region) {

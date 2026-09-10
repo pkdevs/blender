@@ -139,6 +139,11 @@ DRWContext::DRWContext(Mode mode_,
   this->evil_C = C;
 
   this->region = (region) ? region : ((C) ? CTX_wm_region(C) : nullptr);
+  {
+    wmWindow *win = C ? CTX_wm_window(C) : nullptr;
+    this->is_region_topmost_active = win && win->runtime->topmost_active_region == this->region;
+  }
+
   this->space_data = (C) ? CTX_wm_space_data(C) : nullptr;
   this->v3d = (v3d) ? v3d : ((C) ? CTX_wm_view3d(C) : nullptr);
   if (this->v3d != nullptr && this->region != nullptr) {

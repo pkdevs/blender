@@ -93,7 +93,7 @@ class Text : Overlay {
         sub.shader_set(res.shaders->uniform_color.get());
         sub.state_set(default_state, state.clipping_plane_count);
         ui::theme::get_color_4fv(TH_WIDGET_TEXT_CURSOR, color);
-        if (state.region->runtime->draw_flag & bke::ARegionRuntimeDrawFlag::TopmostActive) {
+        if (state.is_region_topmost_active) {
           if (state.region->runtime->text_cursor_overlay &&
               state.region->runtime->text_cursor_overlay->is_blink())
           {

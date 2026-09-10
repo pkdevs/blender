@@ -1023,8 +1023,6 @@ static void wm_draw_area_offscreen(bContext *C, wmWindow *win, ScrArea *area, bo
 
   CTX_wm_area_set(C, area);
   GPU_debug_group_begin(wm_area_name(area));
-  const ARegion *active_region = bke::screen_topmost_active_region(
-      WM_window_get_active_screen(win));
 
   /* Compute UI layouts for dynamically size regions. */
   for (ARegion &region : area->regionbase) {
@@ -1065,9 +1063,6 @@ static void wm_draw_area_offscreen(bContext *C, wmWindow *win, ScrArea *area, bo
     }
     if (!region.runtime->visible || !region.runtime->do_draw) {
       continue;
-    }
-    if (&region == active_region) {
-      region.runtime->draw_flag |= bke::ARegionRuntimeDrawFlag::TopmostActive;
     }
     CTX_wm_region_set(C, &region);
     bool use_viewport = WM_region_use_viewport(area, &region);
@@ -1114,7 +1109,6 @@ static void wm_draw_area_offscreen(bContext *C, wmWindow *win, ScrArea *area, bo
 
     /* Clear temporary update flag. */
     region.flag &= ~RGN_FLAG_SEARCH_FILTER_UPDATE;
-    region.runtime->draw_flag &= ~bke::ARegionRuntimeDrawFlag::TopmostActive;
 
     CTX_wm_region_set(C, nullptr);
   }
@@ -1141,14 +1135,10 @@ static void wm_draw_window_offscreen(bContext *C, wmWindow *win, bool stereo)
       wm_draw_area_offscreen(C, win, area, stereo);
     }
   }
-  const ARegion *active_region = bke::screen_topmost_active_region(screen);
   /* Draw menus into their own frame-buffer. */
   for (ARegion &region : screen->regionbase) {
     if (!region.runtime->visible) {
       continue;
-    }
-    if (&region == active_region) {
-      region.runtime->draw_flag |= bke::ARegionRuntimeDrawFlag::TopmostActive;
     }
     CTX_wm_region_popup_set(C, &region);
 
@@ -1171,7 +1161,6 @@ static void wm_draw_window_offscreen(bContext *C, wmWindow *win, bool stereo)
     GPU_debug_group_end();
 
     region.runtime->do_draw = 0;
-    region.runtime->draw_flag &= ~bke::ARegionRuntimeDrawFlag::TopmostActive;
     CTX_wm_region_popup_set(C, nullptr);
   }
 }
@@ -1202,7 +1191,7 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
 #if 0
   GPU_clear_color(0, 0, 0, 0);
 #endif
-  const ARegion *active_region = bke::screen_topmost_active_region(screen);
+  const ARegion *active_region = win->runtime->topmost_active_region;
 
   /* Blit non-overlapping area regions. */
   ED_screen_areas_iter (win, screen, area) {
@@ -1239,6 +1228,7 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
       if (do_paint_cursor) {
         wm_paintcursor_draw(C, area, &region);
       }
+      wm_region_draw_cursor_overlay(C, region, active_region == &region);
       CTX_wm_region_set(C, nullptr);
       CTX_wm_area_set(C, nullptr);
     }
@@ -1251,14 +1241,9 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
       if (!region.runtime->visible) {
         continue;
       }
-      if (&region == active_region) {
-        region.runtime->draw_flag |= bke::ARegionRuntimeDrawFlag::TopmostActive;
-      }
       if (region.overlap) {
         wm_draw_region_blend(&region, 0, true);
       }
-      wm_region_draw_cursor_overlay(C, region, active_region == &region);
-      region.runtime->draw_flag &= ~bke::ARegionRuntimeDrawFlag::TopmostActive;
     }
   }
 
@@ -1277,12 +1262,8 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
     if (!region.runtime->visible) {
       continue;
     }
-    if (&region == active_region) {
-      region.runtime->draw_flag |= bke::ARegionRuntimeDrawFlag::TopmostActive;
-    }
     wm_draw_region_blend(&region, 0, true);
     wm_region_draw_cursor_overlay(C, region, active_region == &region);
-    region.runtime->draw_flag &= ~bke::ARegionRuntimeDrawFlag::TopmostActive;
   }
 
   /* Always draw, not only when screen tagged. */

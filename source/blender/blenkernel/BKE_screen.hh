@@ -572,14 +572,8 @@ enum class ARegionQuadviewIndex : uint8_t {
 enum ARegionRuntimeFlag : uint8_t {
   /** Move redo panel in +Y direction to avoid overlapping with other UI elements, see: #62258 */
   HUD_PADDING = (1 << 0),
-  SearchSubRegion = (1 << 1),
-  TooltipRegion = (1 << 2),
 };
 ENUM_OPERATORS(ARegionRuntimeFlag)
-enum ARegionRuntimeDrawFlag : uint8_t {
-  TopmostActive = (1 << 0),
-};
-ENUM_OPERATORS(ARegionRuntimeDrawFlag)
 
 static constexpr double TEXT_EDIT_CURSOR_BLINK_INTERVAL = 0.6f;
 
@@ -663,7 +657,6 @@ struct ARegionRuntime {
   /** Dummy panel used in popups so they can support layout panels. */
   Panel *popup_block_panel = nullptr;
   ARegionRuntimeFlag flag = {};
-  ARegionRuntimeDrawFlag draw_flag = {};
 
   std::string search_filter;
   Set<std::string> categories_search_match;
@@ -1085,13 +1078,5 @@ void BKE_screen_area_blend_read_after_liblink(BlendLibReader *reader,
  * Cannot use #IDTypeInfo callback yet, because of the return value.
  */
 bool BKE_screen_blend_read_data(BlendDataReader *reader, bScreen *screen);
-
-namespace bke {
-/**
- * Returns the topmost active region, which can be the last invoked temporal region or the last
- * focused editor region on the screen.
- */
-const ARegion *screen_topmost_active_region(const bScreen *screen);
-}  // namespace bke
 
 }  // namespace blender

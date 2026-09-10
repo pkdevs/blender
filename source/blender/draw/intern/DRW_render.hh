@@ -323,6 +323,7 @@ struct DRWContext {
   const bContext *evil_C = nullptr;
   /** Can be nullptr depending on context. */
   ARegion *region = nullptr;
+  bool is_region_topmost_active = false;
   /** Can be nullptr depending on context. */
   SpaceLink *space_data = nullptr;
   /** Can be nullptr depending on context. */

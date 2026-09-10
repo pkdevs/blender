@@ -2222,8 +2222,9 @@ static bool but_drag_init(bContext *C, Button *but, HandleButtonData *data, cons
                               handler_region_drag_toggle,
                               handler_region_drag_toggle_remove,
                               drag_info,
-                              WM_HANDLER_BLOCKING);
-
+                              WM_HANDLER_BLOCKING,
+                              data->region);
+      WM_window_topmost_active_region_tag_refresh(data->window);
       CTX_wm_region_set(C, region_prev);
 
       /* Initialize alignment for single row/column regions,
@@ -3796,7 +3797,7 @@ static void textedit_begin(bContext *C, Button *but, HandleButtonData *data)
 
   if (data->region->runtime->type->regionid != RGN_TYPE_TEMPORARY) {
     /* Ensure active region is updated when activating button with operators. */
-    CTX_wm_screen(C)->active_region = data->region;
+    WM_window_topmost_active_region_tag_refresh(win);
   }
 
   const bool is_num_but = ELEM(but->type, ButtonType::Num, ButtonType::NumSlider);
@@ -4025,6 +4026,7 @@ static void textedit_end(bContext *C, Button *but, HandleButtonData *data)
 #endif
   WM_event_timer_remove(data->wm, win, data->region->runtime->text_cursor_overlay->timer);
   data->region->runtime->text_cursor_overlay = std::nullopt;
+  WM_window_topmost_active_region_tag_refresh(win);
 }
 
 static void textedit_next_but(Block *block, Button *actbut, HandleButtonData *data)
@@ -9628,7 +9630,9 @@ static void button_activate_state(bContext *C, Button *but, HandleButtonState st
                                 handler_region_menu,
                                 nullptr,
                                 data,
-                                eWM_EventHandlerFlag(0));
+                                eWM_EventHandlerFlag(0),
+                                data->region);
+        WM_window_topmost_active_region_tag_refresh(data->window);
       }
     }
     else {
@@ -9636,6 +9640,7 @@ static void button_activate_state(bContext *C, Button *but, HandleButtonState st
         /* true = postpone free */
         WM_event_remove_ui_handler(
             &data->window->runtime->modalhandlers, handler_region_menu, nullptr, data, true);
+        WM_window_topmost_active_region_tag_refresh(data->window);
       }
     }
   }
@@ -13258,8 +13263,16 @@ void popup_handlers_add(bContext *C,
   }
 #endif
 
-  WM_event_add_ui_handler(
-      C, handlers, popup_handler, popup_handler_remove, popup, eWM_EventHandlerFlag(flag));
+  WM_event_add_ui_handler(C,
+                          handlers,
+                          popup_handler,
+                          popup_handler_remove,
+                          popup,
+                          eWM_EventHandlerFlag(flag),
+                          popup->region);
+  if (wmWindow *win = CTX_wm_window(C)) {
+    WM_window_topmost_active_region_tag_refresh(win);
+  }
 }
 
 void popup_handlers_remove(ListBaseT<wmEventHandler> *handlers, PopupBlockHandle *popup)
@@ -13293,6 +13306,7 @@ void popup_handlers_remove(ListBaseT<wmEventHandler> *handlers, PopupBlockHandle
 void popup_handlers_remove_all(bContext *C, ListBaseT<wmEventHandler> *handlers)
 {
   WM_event_free_ui_handler_all(C, handlers, popup_handler, popup_handler_remove);
+  WM_window_topmost_active_region_tag_refresh(CTX_wm_window(C));
 }
 
 /**
@@ -13830,9 +13844,17 @@ std::optional<int2> try_activate_rna_button(bContext *C,
   ED_screen_set_active_region(C, CTX_wm_window(C), xy);
   ScrArea *current_screen = CTX_wm_area(C);
   ARegion *current_region = CTX_wm_region(C);
+  ARegion *current_popup_region = CTX_wm_region_popup(C);
+
+  BLI_SCOPED_DEFER([&]() {
+    CTX_wm_area_set(C, current_screen);
+    CTX_wm_region_set(C, current_region);
+    CTX_wm_region_popup_set(C, current_popup_region);
+  });
 
   CTX_wm_area_set(C, area);
   CTX_wm_region_set(C, region);
+  CTX_wm_region_popup_set(C, nullptr);
   /* Init button active data with state as #BUTTON_STATE_HIGHLIGHT */
   handle_button_activate(C, region, button, BUTTON_ACTIVATE);
 
@@ -13888,8 +13910,6 @@ std::optional<int2> try_activate_rna_button(bContext *C,
     button_activate_state(C, button, BUTTON_STATE_WAIT_KEY_EVENT);
   }
 
-  CTX_wm_area_set(C, current_screen);
-  CTX_wm_region_set(C, current_region);
   /* Restore button position. */
   button->rect = button_rect;
 

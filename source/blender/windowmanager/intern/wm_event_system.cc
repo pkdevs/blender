@@ -2061,7 +2061,7 @@ static void ui_handler_wait_for_input_remove(bContext *C, void *userdata)
   else {
     ED_workspace_status_text(C, nullptr);
   }
-
+  WM_window_topmost_active_region_tag_refresh(CTX_wm_window(C));
   MEM_delete(opwait);
 }
 
@@ -3690,6 +3690,7 @@ static eHandlerActionFlag wm_handlers_do_intern(bContext *C,
       /* Modal UI handler can be tagged to be freed. */
       if (handler_base->flag & WM_HANDLER_DO_FREE) {
         BLI_remlink(handlers, handler_base);
+        WM_window_topmost_active_region_tag_refresh(win);
         wm_event_free_handler(handler_base);
       }
     }
@@ -4254,6 +4255,23 @@ void wm_event_do_handlers(bContext *C)
     if (wm->runtime->break_events_handling) {
       break;
     }
+
+    BLI_SCOPED_DEFER([&win]() {
+      if (win.runtime->topmost_active_region_refresh) {
+        win.runtime->topmost_active_region = [](const wmWindow &win) -> const ARegion * {
+          for (wmEventHandler &handler_base : win.runtime->modalhandlers) {
+            if (handler_base.type == eWM_EventHandlerType::WM_HANDLER_TYPE_UI) {
+              const auto &handler = reinterpret_cast<const wmEventHandler_UI &>(handler_base);
+              if (handler.owning_region) {
+                return handler.owning_region;
+              }
+            }
+          }
+          return WM_window_get_active_screen(&win)->active_region;
+        }(win);
+        win.runtime->topmost_active_region_refresh = false;
+      }
+    });
 
     bScreen *screen = WM_window_get_active_screen(&win);
 
@@ -5208,7 +5226,8 @@ wmEventHandler_UI *WM_event_add_ui_handler(const bContext *C,
                                            wmUIHandlerFunc handle_fn,
                                            wmUIHandlerRemoveFunc remove_fn,
                                            void *user_data,
-                                           const eWM_EventHandlerFlag flag)
+                                           const eWM_EventHandlerFlag flag,
+                                           const ARegion *owning_region)
 {
   wmEventHandler_UI *handler = MEM_new_zeroed<wmEventHandler_UI>(__func__);
   handler->head.type = WM_HANDLER_TYPE_UI;
@@ -5225,6 +5244,7 @@ wmEventHandler_UI *WM_event_add_ui_handler(const bContext *C,
     handler->context.region = nullptr;
     handler->context.region_popup = nullptr;
   }
+  handler->owning_region = owning_region;
 
   BLI_assert((flag & WM_HANDLER_DO_FREE) == 0);
   handler->head.flag = flag;

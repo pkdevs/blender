@@ -961,6 +961,8 @@ PopupBlockHandle *popup_block_create(bContext *C,
   ARegion *region = region_temp_add(CTX_wm_screen(C));
   handle->region = region;
 
+  WM_window_topmost_active_region_tag_refresh(window);
+
   static ARegionType type;
   memset(&type, 0, sizeof(ARegionType));
   type.draw = block_region_draw;
@@ -1053,6 +1055,8 @@ void popup_block_free(bContext *C, PopupBlockHandle *handle)
 #ifdef WITH_INPUT_IME
   WM_window_IME_region_refresh(CTX_wm_window(C), CTX_wm_area(C), CTX_wm_region(C));
 #endif
+  WM_main_add_notifier(NC_UI | ND_UI_TEXT_BLINK_TIMER_RESTART, CTX_wm_window(C));
+  WM_window_topmost_active_region_tag_refresh(CTX_wm_window(C));
 }
 
 struct AlertData {

@@ -415,6 +415,8 @@ const wmIMEData *WM_window_IME_data_get(const wmWindow *win, const ARegion *regi
 std::optional<IndexRange> WM_window_IME_composite_select_range(const wmIMEData *ime_data);
 #endif
 
+void WM_window_topmost_active_region_tag_refresh(const wmWindow *win);
+
 /**
  * Support for wide gamut and HDR colors.
  */
@@ -814,7 +816,8 @@ wmEventHandler_UI *WM_event_add_ui_handler(const bContext *C,
                                            wmUIHandlerFunc handle_fn,
                                            wmUIHandlerRemoveFunc remove_fn,
                                            void *user_data,
-                                           eWM_EventHandlerFlag flag);
+                                           eWM_EventHandlerFlag flag,
+                                           const ARegion *owning_region = nullptr);
 
 /**
  * Return the first modal operator of type \a ot or NULL.

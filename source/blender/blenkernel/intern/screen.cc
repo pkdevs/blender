@@ -43,6 +43,7 @@
 #include "BKE_lib_query.hh"
 #include "BKE_preview_image.hh"
 #include "BKE_screen.hh"
+#include "wm_event_system.hh"
 
 #include "BLO_read_write.hh"
 
@@ -1742,22 +1743,6 @@ void BKE_screen_area_blend_read_after_liblink(BlendLibReader *reader, ID *parent
 /** \} */
 
 namespace bke {
-const ARegion *screen_topmost_active_region(const bScreen *screen)
-{
-  /* Multiple popups can be shown at the same time, and all they can have a text input active,
-   * select the last added one as active. */
-  for (const ARegion &region : screen->regionbase.items_reversed()) {
-    if (region.runtime->flag &
-        (bke::ARegionRuntimeFlag::SearchSubRegion | bke::ARegionRuntimeFlag::TooltipRegion))
-    {
-      /* Search menu buttons shows their content in a sub-region, skip this region since it's just
-       * used by its owning button to for drawing. Also skip tooltip buttons. */
-      continue;
-    }
-    return &region;
-  }
-  return screen->active_region;
-}
 
 bool TextCursorOverlay::is_blink() const
 {

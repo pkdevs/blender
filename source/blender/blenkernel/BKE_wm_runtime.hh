@@ -241,6 +241,11 @@ struct WindowRuntime {
   /** Private runtime info to show text in the status bar. */
   void *cursor_keymap_status = nullptr;
 
+  /** Topmost active region in the screen that is most likely to consume key events, this includes
+   * popup regions.*/
+  const ARegion *topmost_active_region = nullptr;
+  bool topmost_active_region_refresh = false;
+
   WindowRuntime() = default;
   ~WindowRuntime();
 };
