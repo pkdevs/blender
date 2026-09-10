@@ -70,6 +70,7 @@ const EnumPropertyItem rna_enum_region_panel_category_items[] = {
 #  include "ED_node.hh"
 #  include "ED_screen.hh"
 
+#  include "UI_interface.hh"
 #  include "UI_view2d.hh"
 
 #  include "BLT_translation.hh"
@@ -414,6 +415,26 @@ static void rna_Region_tag_refresh_ui(ARegion *region, ReportList *reports)
   ED_region_tag_refresh_ui(region);
 }
 
+static int rna_Region_active_item_index_get(ARegion *region,
+                                            const char *listtype_name,
+                                            const char *list_id)
+{
+  const std::string full_idname = ui::list_idname_compose(listtype_name, list_id);
+  const uiActiveItemState *state = BKE_region_active_item_state_find(region, full_idname);
+  return state ? state->active_index : 0;
+}
+
+static void rna_Region_active_item_index_set(ARegion *region,
+                                             const char *listtype_name,
+                                             const char *list_id,
+                                             const int index)
+{
+  const std::string full_idname = ui::list_idname_compose(listtype_name, list_id);
+  uiActiveItemState *state = BKE_region_active_item_state_ensure(region, full_idname);
+  state->active_index = index;
+  ED_region_tag_redraw(region);
+}
+
 static void rna_Region_search_filter_get(PointerRNA *ptr, char *value)
 {
   ARegion *region = static_cast<ARegion *>(ptr->data);
@@ -634,13 +655,68 @@ static void rna_def_view2d(BlenderRNA *brna)
 static void rna_def_region_api(StructRNA *srna)
 {
   FunctionRNA *func;
-  // PropertyRNA *parm;
+  PropertyRNA *parm;
 
   RNA_def_function(srna, "tag_redraw", "ED_region_tag_redraw");
 
   /* Wrap #ED_region_tag_refresh_ui (with some additional checks). */
   func = RNA_def_function(srna, "tag_refresh_ui", "rna_Region_tag_refresh_ui");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
+
+  func = RNA_def_function(srna, "active_item_index_get", "rna_Region_active_item_index_get");
+  RNA_def_function_ui_description(
+      func,
+      "Get the active item of a list drawn in this region, for lists that store their active "
+      "item in the region instead of the data they display (template_list without an active "
+      "property & tree views)");
+  parm = RNA_def_string(func,
+                        "listtype_name",
+                        nullptr,
+                        0,
+                        "",
+                        "Identifier of the list type: the UIList subclass, or the name of the "
+                        "template function for tree views (for custom properties use "
+                        "bpy_struct.id_properties_active_get instead)");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(
+      func, "list_id", nullptr, 0, "", "Identifier of the list, the list_id of template_list");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_int(func,
+                     "index",
+                     0,
+                     0,
+                     INT_MAX,
+                     "",
+                     "Index of the active item in the order of the data the list displays, "
+                     "the first item when none is stored. "
+                     "Callers must check the index is within the range of the data",
+                     0,
+                     INT_MAX);
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "active_item_index_set", "rna_Region_active_item_index_set");
+  RNA_def_function_ui_description(
+      func, "Set the active item of a list drawn in this region, see active_item_index_get");
+  parm = RNA_def_string(func,
+                        "listtype_name",
+                        nullptr,
+                        0,
+                        "",
+                        "Identifier of the list type, see active_item_index_get");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_string(
+      func, "list_id", nullptr, 0, "", "Identifier of the list, see active_item_index_get");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  parm = RNA_def_int(func,
+                     "index",
+                     0,
+                     0,
+                     INT_MAX,
+                     "",
+                     "Index of the active item in the order of the data the list displays",
+                     0,
+                     INT_MAX);
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 }
 
 static void rna_def_region(BlenderRNA *brna)
