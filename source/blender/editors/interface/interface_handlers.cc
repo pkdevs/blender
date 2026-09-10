@@ -10777,8 +10777,9 @@ static int handle_uilist_event(bContext *C, const wmEvent *event, ARegion *regio
          (event->modifier == 0)) ||
         (ELEM(type, WHEELUPMOUSE, WHEELDOWNMOUSE) && (event->modifier == KM_CTRL)))
     {
-      const int value_orig = RNA_property_int_get(&listbox->rnapoin, listbox->rnaprop);
-      int value, min, max;
+      /* Via the button, as the list box may bind to the stored index instead of a property. */
+      const int value_orig = int(button_value_get(listbox));
+      int value;
 
       value = value_orig;
       const int inc = uilist_get_increment(ui_list, type);
@@ -10822,16 +10823,21 @@ static int handle_uilist_event(bContext *C, const wmEvent *event, ARegion *regio
 
       CLAMP(value, 0, dyn_data->items_len - 1);
 
-      RNA_property_int_range(&listbox->rnapoin, listbox->rnaprop, &min, &max);
-      CLAMP(value, min, max);
+      if (listbox->rnaprop) {
+        int min, max;
+        RNA_property_int_range(&listbox->rnapoin, listbox->rnaprop, &min, &max);
+        CLAMP(value, min, max);
+      }
 
       if (value != value_orig) {
-        RNA_property_int_set(&listbox->rnapoin, listbox->rnaprop, value);
-        RNA_property_update(C, &listbox->rnapoin, listbox->rnaprop);
+        button_value_set(listbox, value);
+        if (listbox->rnaprop) {
+          RNA_property_update(C, &listbox->rnapoin, listbox->rnaprop);
 
-        Button *but = button_first(listbox->block);
-        if (but && but->type == ButtonType::ListRow) {
-          apply_but_undo(but, true);
+          Button *but = button_first(listbox->block);
+          if (but && but->type == ButtonType::ListRow) {
+            apply_but_undo(but, true);
+          }
         }
 
         ui_list->flag |= UILST_SCROLL_TO_ACTIVE_ITEM;
