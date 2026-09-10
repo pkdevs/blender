@@ -95,7 +95,21 @@ static bool node_tree_has_group_node(const bNodeTree *ntree)
   return false;
 }
 
-static void navigate_menu_draw_fn(bContext *C, ui::Layout *layout, void *arg)
+static BIFIconID node_tree_icon(const ID &tree_id)
+{
+  if (ID_IS_PACKED(&tree_id)) {
+    return ICON_PACKAGE;
+  }
+  if (ID_IS_LINKED(&tree_id)) {
+    return ICON_LINKED;
+  }
+  if (ID_IS_ASSET(&tree_id)) {
+    return ICON_ASSET_MANAGER;
+  }
+  return ICON_NODETREE;
+}
+
+static void navigate_menu_draw(bContext *C, ui::Layout *layout, void *arg)
 {
   if (arg == nullptr) {
     return;
@@ -107,7 +121,7 @@ static void navigate_menu_draw_fn(bContext *C, ui::Layout *layout, void *arg)
   }
   else {
     SpaceNode *snode = CTX_wm_space_node(C);
-    clicked_tree = snode->edittree;
+    clicked_tree = snode->nodetree;
   }
   if (!clicked_tree) {
     return;
@@ -149,7 +163,7 @@ static void navigate_menu_draw_fn(bContext *C, ui::Layout *layout, void *arg)
       }
     };
 
-    layout->button(node->id->name + 2, ICON_NODETREE, enter_group_func);
+    layout->button(node->id->name + 2, node_tree_icon(*node->id), enter_group_func);
   }
 }
 
@@ -159,13 +173,13 @@ static void context_path_add_top_level_shader_node_tree(const SpaceNode &snode,
                                                         void *ptr)
 {
   const bool in_root_tree = (snode.nodetree != snode.edittree);
-  const bool has_group = node_tree_has_group_node(snode.edittree);
+  const bool has_group = node_tree_has_group_node(snode.nodetree);
   ui::context_path_add_generic(path,
                                rna_type,
                                ptr,
                                ICON_NONE,
                                in_root_tree ? tree_path_handle_func(0) : nullptr,
-                               has_group ? navigate_menu_draw_fn : nullptr);
+                               has_group ? navigate_menu_draw : nullptr);
 }
 
 static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
@@ -181,16 +195,7 @@ static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
       continue;
     }
 
-    int icon = ICON_NODETREE;
-    if (ID_IS_PACKED(&path_item.nodetree->id)) {
-      icon = ICON_PACKAGE;
-    }
-    else if (ID_IS_LINKED(&path_item.nodetree->id)) {
-      icon = ICON_LINKED;
-    }
-    else if (ID_IS_ASSET(&path_item.nodetree->id)) {
-      icon = ICON_ASSET_MANAGER;
-    }
+    const BIFIconID icon = node_tree_icon(path_item.nodetree->id);
 
     /* We don't need to add handle function to last node-tree. */
     const bool is_last_item = (&path_item == snode.treepath.last);
@@ -200,7 +205,7 @@ static void context_path_add_node_tree_and_node_groups(const SpaceNode &snode,
                                  path_item.nodetree,
                                  icon,
                                  is_last_item ? nullptr : tree_path_handle_func(i),
-                                 has_group ? navigate_menu_draw_fn : nullptr);
+                                 has_group ? navigate_menu_draw : nullptr);
   }
 }
 

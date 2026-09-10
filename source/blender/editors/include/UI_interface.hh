@@ -76,7 +76,7 @@ struct ContextPathItem {
   int icon_indicator_number;
 
   std::function<void(bContext &)> handle_func;
-  MenuCreateFunc draw_fn;
+  MenuCreateFunc menu_func;
   /* Pointer to the item's corresponding data. */
   void *ptr;
 };
@@ -86,7 +86,7 @@ void context_path_add_generic(Vector<ContextPathItem> &path,
                               void *ptr,
                               const BIFIconID icon_override = ICON_NONE,
                               std::function<void(bContext &)> handle_func = nullptr,
-                              MenuCreateFunc draw_fn = nullptr);
+                              MenuCreateFunc menu_func = nullptr);
 
 void template_breadcrumbs(Layout &layout, Span<ContextPathItem> context_path);
 
