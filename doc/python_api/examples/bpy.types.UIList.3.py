@@ -69,8 +69,10 @@ class SCENE_PT_timeline_markers_example(bpy.types.Panel):
         markers = scene.timeline_markers
         if not markers:
             return
-        # Clamped to the collection when the list was drawn above, so it can be used directly.
+        # Clamped to the collection when the list was drawn above, None when no item is active.
         index = context.region.active_item_index_get(LISTTYPE_NAME, LIST_ID)
+        if index is None:
+            return
         marker = markers[index]
 
         layout.use_property_split = True

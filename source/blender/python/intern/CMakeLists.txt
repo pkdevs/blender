@@ -61,6 +61,7 @@ set(SRC
   bpy_rna_gizmo.cc
   bpy_rna_id_collection.cc
   bpy_rna_operator.cc
+  bpy_rna_region.cc
   bpy_rna_text.cc
   bpy_rna_types_capi.cc
   bpy_rna_ui.cc
@@ -109,6 +110,7 @@ set(SRC
   bpy_rna_gizmo.hh
   bpy_rna_id_collection.hh
   bpy_rna_operator.hh
+  bpy_rna_region.hh
   bpy_rna_text.hh
   bpy_rna_types_capi.hh
   bpy_rna_ui.hh

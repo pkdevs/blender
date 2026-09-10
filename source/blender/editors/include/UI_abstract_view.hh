@@ -142,7 +142,8 @@ class AbstractView {
    * The active item is identified by its position in the order items were added, so items must
    * be added in the order of the data they display (nested items aren't supported). The first
    * item is active until one is activated & removing the active item activates the item that
-   * takes its place.
+   * takes its place. A script can clear the active item (-1, see
+   * #uiActiveItemState::active_index), then no item is active until one is activated.
    *
    * Return false if there's no active item to preserve (default implementation).
    */

@@ -432,7 +432,7 @@ static bool template_uilist_data_retrieve(const StringRef listtype_name,
 /**
  * Take the active item from the region. The stored index is clamped to the collection so the
  * buttons (which bind to it) agree with the items drawn & removing the active item makes the
- * item that took its place active.
+ * item that took its place active. A stored -1 (no active item) is kept.
  */
 static void template_uilist_active_item_state_retrieve(const bContext *C,
                                                        const uiListType *ui_list_type,
@@ -450,7 +450,7 @@ static void template_uilist_active_item_state_retrieve(const bContext *C,
   if (input_data->dataptr && input_data->prop) {
     const int items_len = RNA_property_collection_length(&input_data->dataptr, input_data->prop);
     if (items_len > 0) {
-      CLAMP(state->active_index, 0, items_len - 1);
+      CLAMP(state->active_index, -1, items_len - 1);
     }
   }
   input_data->active_item_idx = state->active_index;
@@ -925,7 +925,7 @@ static void template_uilist_layout_draw(const bContext *C,
                         UI_UNIT_X * 5,
                         UI_UNIT_Y,
                         &input_data->active_item_state->active_index,
-                        0,
+                        -1,
                         std::max(dyn_data->items_len - 1, 0),
                         "");
         button_flag_disable(but, BUT_UNDO);

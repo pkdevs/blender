@@ -501,7 +501,10 @@ struct uiActiveItemState {
   struct uiActiveItemState *next = nullptr, *prev = nullptr;
   /** Identifier of the list, allocated. */
   char *idname = nullptr;
-  /** The active item in the order of the data the widget displays. */
+  /**
+   * The active item in the order of the data the widget displays, -1 when there is no active
+   * item (as with RNA "active_index" properties). New states start at the first item.
+   */
   int active_index = 0;
   /** See #LayoutPanelState::last_used. */
   uint32_t last_used = 0;

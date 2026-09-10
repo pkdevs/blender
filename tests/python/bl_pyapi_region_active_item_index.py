@@ -118,6 +118,11 @@ class TestRegionActiveUIIndex(unittest.TestCase):
             self.assertEqual(ob.id_properties_active_get(context), "a")
             ob.id_properties_active_set(context, "b")
             self.assertEqual(ob.id_properties_active_get(context), "b")
+            # None clears the active property.
+            ob.id_properties_active_set(context, None)
+            self.assertIsNone(ob.id_properties_active_get(context))
+            ob.id_properties_active_set(context, "b")
+            self.assertEqual(ob.id_properties_active_get(context), "b")
             # Stored per type of data, the mesh doesn't share the index of the object.
             ob.data["c"] = 3
             ob.data["d"] = 4
@@ -131,6 +136,19 @@ class TestRegionActiveUIIndex(unittest.TestCase):
             self.assertEqual(ob.id_properties_active_get(context), "a")
             del ob["a"]
             self.assertIsNone(ob.id_properties_active_get(context))
+
+    def test_none(self):
+        # None is "no active item" (-1 in `uiActiveItemState::active_index`).
+        self.region.active_item_index_set(LISTTYPE_NAME, "object", None)
+        self.assertIsNone(self.region.active_item_index_get(LISTTYPE_NAME, "object"))
+        self.region.active_item_index_set(LISTTYPE_NAME, "object", 1)
+        self.assertEqual(self.region.active_item_index_get(LISTTYPE_NAME, "object"), 1)
+
+    def test_invalid(self):
+        with self.assertRaises(OverflowError):
+            self.region.active_item_index_set(LISTTYPE_NAME, "object", -1)
+        with self.assertRaises(TypeError):
+            self.region.active_item_index_set(LISTTYPE_NAME, "object", "0")
 
     def test_list_id_empty(self):
         self.region.active_item_index_set(LISTTYPE_NAME, "", 2)

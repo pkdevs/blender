@@ -207,6 +207,7 @@ void block_view_persistent_active_item_apply(const bContext &C,
 
   /* Before sorting, so the index is in the order the items were added. */
   int tot_items = 0;
+  /* The index of the active item, -1 when none, unset until resolved. */
   std::optional<int> active_index;
   view.foreach_view_item([&](AbstractViewItem &item) {
     BLI_assert_msg(!item.should_be_active().has_value(),
@@ -220,26 +221,33 @@ void block_view_persistent_active_item_apply(const bContext &C,
 
   /* Only a script changes the stored index between redraws (`Region.active_item_index_set`),
    * otherwise the run-time state wins. Clamping makes the item that took the place of a removed
-   * item active & a new state starts at the first item as with #uiList. */
+   * item active & a new state starts at the first item as with #uiList. A stored -1 (no active
+   * item, see #uiActiveItemState::active_index) deactivates all items. */
   const ViewLink *old_link = block_view_link_find_matching_in_old_block(block, *link);
   const std::optional<int> last_stored = old_link ? old_link->active_index_stored : std::nullopt;
   const bool changed_externally = last_stored.has_value() && (state->active_index != *last_stored);
 
   if ((changed_externally || !active_index.has_value()) && (tot_items > 0)) {
-    const int index_to_apply = std::clamp(state->active_index, 0, tot_items - 1);
-    AbstractViewItem *item_to_apply = nullptr;
-    int index = 0;
-    view.foreach_view_item([&](AbstractViewItem &item) {
-      if (index++ == index_to_apply) {
-        item_to_apply = &item;
-      }
-    });
-    /* Not #activate, this restores state rather than handling a click. */
-    if (item_to_apply->set_state_active() || item_to_apply->is_active()) {
-      active_index = index_to_apply;
+    const int index_to_apply = std::clamp(state->active_index, -1, tot_items - 1);
+    if (index_to_apply == -1) {
+      view.foreach_view_item([](AbstractViewItem &item) { item.deactivate(); });
+      active_index = -1;
     }
-    if (changed_externally) {
-      view.scroll_active_into_view(const_cast<bContext *>(&C));
+    else {
+      AbstractViewItem *item_to_apply = nullptr;
+      int index = 0;
+      view.foreach_view_item([&](AbstractViewItem &item) {
+        if (index++ == index_to_apply) {
+          item_to_apply = &item;
+        }
+      });
+      /* Not #activate, this restores state rather than handling a click. */
+      if (item_to_apply->set_state_active() || item_to_apply->is_active()) {
+        active_index = index_to_apply;
+      }
+      if (changed_externally) {
+        view.scroll_active_into_view(const_cast<bContext *>(&C));
+      }
     }
   }
 

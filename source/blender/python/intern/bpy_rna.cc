@@ -4850,8 +4850,8 @@ PyDoc_STRVAR(
     "\n"
     "   :param context: The context the panel is drawn in.\n"
     "   :type context: :class:`bpy.types.Context`\n"
-    "   :return: The name of the active property, None when there are no properties or the\n"
-    "      context has no region.\n"
+    "   :return: The name of the active property, None when there are no properties, no\n"
+    "      property is active or the context has no region.\n"
     "   :rtype: str | None\n");
 static PyObject *pyrna_struct_id_properties_active_get(BPy_StructRNA *self, PyObject *args)
 {
@@ -4886,6 +4886,10 @@ static PyObject *pyrna_struct_id_properties_active_get(BPy_StructRNA *self, PyOb
    * property. */
   const uiActiveItemState *state = BKE_region_active_item_state_find(
       region, blender::ui::id_properties::template_tree_idname(self->ptr->type));
+  if (state && state->active_index < 0) {
+    /* No active item, see #uiActiveItemState::active_index. */
+    Py_RETURN_NONE;
+  }
   const int index = state ? std::clamp(state->active_index,
                                        0,
                                        BLI_listbase_count(&group->data.group) - 1) :
@@ -4906,8 +4910,8 @@ PyDoc_STRVAR(
     "\n"
     "   :param context: The context the panel is drawn in.\n"
     "   :type context: :class:`bpy.types.Context`\n"
-    "   :param key: The name of the property.\n"
-    "   :type key: str\n");
+    "   :param key: The name of the property, None for no active property.\n"
+    "   :type key: str | None\n");
 static PyObject *pyrna_struct_id_properties_active_set(BPy_StructRNA *self, PyObject *args)
 {
   PYRNA_STRUCT_CHECK_OBJ(self);
@@ -4921,7 +4925,7 @@ static PyObject *pyrna_struct_id_properties_active_set(BPy_StructRNA *self, PyOb
   const char *key;
   if (!PyArg_ParseTuple(args,
                         "O&" /* `context` */
-                        "s"  /* `key` */
+                        "z"  /* `key` */
                         ":id_properties_active_set",
                         pyrna_struct_as_ptr_parse,
                         &context_parse,
@@ -4932,8 +4936,8 @@ static PyObject *pyrna_struct_id_properties_active_set(BPy_StructRNA *self, PyOb
   const bContext *C = static_cast<const bContext *>(context_parse.ptr->data);
 
   const IDProperty *group = RNA_struct_idprops(&self->ptr.value(), false);
-  const IDProperty *prop = group ? IDP_GetPropertyFromGroup(group, key) : nullptr;
-  if (prop == nullptr) {
+  const IDProperty *prop = (group && key) ? IDP_GetPropertyFromGroup(group, key) : nullptr;
+  if (key && (prop == nullptr)) {
     PyErr_SetString(PyExc_KeyError, "Property not found in IDProperty group");
     return nullptr;
   }
@@ -4944,7 +4948,8 @@ static PyObject *pyrna_struct_id_properties_active_set(BPy_StructRNA *self, PyOb
   }
   uiActiveItemState *state = BKE_region_active_item_state_ensure(
       region, blender::ui::id_properties::template_tree_idname(self->ptr->type));
-  state->active_index = BLI_findindex(&group->data.group, prop);
+  /* -1 for no active item, see #uiActiveItemState::active_index. */
+  state->active_index = prop ? BLI_findindex(&group->data.group, prop) : -1;
   ED_region_tag_redraw(region);
 
   Py_RETURN_NONE;

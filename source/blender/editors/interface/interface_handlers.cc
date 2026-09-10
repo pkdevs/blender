@@ -10807,7 +10807,11 @@ static int handle_uilist_event(bContext *C, const wmEvent *event, ARegion *regio
          * and current_idx either contains the displayed index of active value (positive),
          *                 or its more-nearest one (negated).
          */
-        if (current_idx < 0) {
+        if (value_orig < 0) {
+          /* No active item (see #uiActiveItemState::active_index), start at the first shown. */
+          current_idx = 0;
+        }
+        else if (current_idx < 0) {
           current_idx = (current_idx * -1) + (inc < 0 ? inc : inc - 1);
         }
         else {

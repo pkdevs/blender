@@ -25,6 +25,7 @@
 #include "bpy_rna_context.hh"
 #include "bpy_rna_data.hh"
 #include "bpy_rna_id_collection.hh"
+#include "bpy_rna_region.hh"
 #include "bpy_rna_text.hh"
 #include "bpy_rna_types_capi.hh"
 #include "bpy_rna_ui.hh"
@@ -125,6 +126,18 @@ static PyGetSetDef pyrna_windowmanager_getset[] = {
 
 static PyMethodDef pyrna_window_methods[] = {
     {nullptr, nullptr, 0, nullptr}, /* #BPY_rna_window_screenshot_method_def */
+    {nullptr, nullptr, 0, nullptr},
+};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Region Type
+ * \{ */
+
+static PyMethodDef pyrna_region_methods[] = {
+    {nullptr, nullptr, 0, nullptr}, /* #BPY_rna_region_active_item_index_get_method_def */
+    {nullptr, nullptr, 0, nullptr}, /* #BPY_rna_region_active_item_index_set_method_def */
     {nullptr, nullptr, 0, nullptr},
 };
 
@@ -252,6 +265,13 @@ void BPY_rna_types_extend_capi(PyObject *bpy_types)
   ARRAY_SET_ITEMS(pyrna_window_methods, BPY_rna_window_screenshot_method_def);
   BLI_STATIC_ASSERT(ARRAY_SIZE(pyrna_window_methods) == 2, "Unexpected number of methods")
   pyrna_struct_type_extend_capi(RNA_Window, pyrna_window_methods, nullptr);
+
+  /* Region */
+  ARRAY_SET_ITEMS(pyrna_region_methods,
+                  BPY_rna_region_active_item_index_get_method_def,
+                  BPY_rna_region_active_item_index_set_method_def);
+  BLI_STATIC_ASSERT(ARRAY_SIZE(pyrna_region_methods) == 3, "Unexpected number of methods")
+  pyrna_struct_type_extend_capi(RNA_Region, pyrna_region_methods, nullptr);
 
   /* Context */
   bpy_rna_context_types_init(bpy_types);
