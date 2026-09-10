@@ -1172,14 +1172,14 @@ static BMO_FlagSet bmo_enum_to_annotation_method[] = {
 /*
  * To Annotation.
  *
- * Stretch selected vertices to active stroke.
+ * Stretches selected vertices to the active stroke
  */
 static BMOpDefine bmo_to_annotation_def = {
     /*opname*/ "to_annotation",
     /*slot_types_in*/
     {
         /* Input geometry. */
-        {"geom", BMO_OP_SLOT_ELEMENT_BUF, {BM_VERT | BM_EDGE | BM_FACE}},
+        {"geom", BMO_OP_SLOT_ELEMENT_BUF, {BM_EDGE}},
         /* Influence factor: spans from 0.0 to 1.0. */
         {"factor", BMO_OP_SLOT_FLT},
         /* Method of distributing the vertices over the stroke. */
@@ -1187,8 +1187,8 @@ static BMOpDefine bmo_to_annotation_def = {
          BMO_OP_SLOT_INT,
          to_subtype_union(BMO_OP_SLOT_SUBTYPE_INT_ENUM),
          bmo_enum_to_annotation_method},
-        /* Remove strokes if they have been used. */
-        {"delete_strokes", BMO_OP_SLOT_BOOL},
+        /* Array of annotation strokes to project onto. */
+        {"strokes", BMO_OP_SLOT_PTR},
         /* Lock X axis editing. */
         {"lock_x", BMO_OP_SLOT_BOOL},
         /* Lock Y axis editing. */
