@@ -294,7 +294,7 @@ bke::GeometrySet import_geometry_set(const PLYImportParams &import_params)
     PointCloud *point_cloud = convert_gsplat_ply_to_point_cloud(*data, import_params);
     return bke::GeometrySet::from_pointcloud(point_cloud);
   }
-  Mesh* mesh = convert_ply_to_mesh(*data, import_params);
+  Mesh *mesh = convert_ply_to_mesh(*data, import_params);
   return bke::GeometrySet::from_mesh(mesh);
 }
 
@@ -311,7 +311,7 @@ void importer_main(Main *bmain,
                    ViewLayer *view_layer,
                    const PLYImportParams &import_params)
 {
-  const std::string datablock_name =  get_datablock_name(import_params.filepath);
+  const std::string datablock_name = get_datablock_name(import_params.filepath);
 
   std::unique_ptr<PlyData> data = read_ply_to_data(import_params, datablock_name);
   if (!data) {
