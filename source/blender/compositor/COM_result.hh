@@ -17,10 +17,10 @@
 #include "BLI_generic_span.hh"
 #include "BLI_implicit_sharing_ptr.hh"
 #include "BLI_math_interp.hh"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_quaternion_types.hh"
 #include "BLI_math_vector.hh"
-#include "BLI_math_vector_c.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_memory_utils.hh"
 #include "BLI_string_ref.hh"
@@ -653,23 +653,6 @@ BLI_INLINE_METHOD void Result::store_pixel(const int2 &texel, const T &pixel_val
   this->cpu_data_for_write().typed<T>()[this->get_pixel_index(texel)] = pixel_value;
 }
 
-struct EWASamplingData {
-  const Result &result;
-  const Extension extension_mode_x;
-  const Extension extension_mode_y;
-};
-
-/* Given a result and its extension modes as the userdata argument with the type EWASamplingData,
- * load the pixel at the given texel coordinates with the given extension modes and write the pixel
- * to the result argument. */
-static inline void sample_ewa_read_callback(void *userdata, int x, int y, float result[4])
-{
-  const EWASamplingData *sampling_data = static_cast<const EWASamplingData *>(userdata);
-  const Color sampled_result = sampling_data->result.load_pixel<Color>(
-      int2(x, y), sampling_data->extension_mode_x, sampling_data->extension_mode_y);
-  copy_v4_v4(result, sampled_result);
-}
-
 template<typename T, bool CouldBeSingleValue>
 BLI_INLINE_METHOD T Result::sample(const float2 &coordinates,
                                    const Interpolation &interpolation,
@@ -736,20 +719,15 @@ BLI_INLINE_METHOD T Result::sample(const float2 &coordinates,
       case Interpolation::Anisotropic:
         BLI_assert(type_ == ResultType::Color);
         if (jacobian.has_value()) {
-          EWASamplingData sampling_data = EWASamplingData{
-              *this, extension_mode_x, extension_mode_y};
-          BLI_ewa_filter(size.x,
-                         size.y,
-                         false,
-                         true,
-                         coordinates,
-                         jacobian.value()[0],
-                         jacobian.value()[1],
-                         sample_ewa_read_callback,
-                         &sampling_data,
-                         output,
-                         extension_mode_x == Extension::Clip &&
-                             extension_mode_y == Extension::Clip);
+          math::interpolate_ewa_fl(buffer,
+                                   output,
+                                   size.x,
+                                   size.y,
+                                   sizeof(T) / sizeof(float),
+                                   texel_coordinates - 0.5f,
+                                   math::from_scale<float2x2>(float2(size)) * jacobian.value(),
+                                   wrap_mode_x,
+                                   wrap_mode_y);
         }
         else {
           math::interpolate_bilinear_wrapmode_fl(buffer,

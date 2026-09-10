@@ -495,8 +495,8 @@ void interpolate_cubic_bspline_wrapmode_fl(const float *buffer,
                                            int components,
                                            float u,
                                            float v,
-                                           math::InterpWrapMode wrap_u,
-                                           math::InterpWrapMode wrap_v)
+                                           InterpWrapMode wrap_u,
+                                           InterpWrapMode wrap_v)
 {
   bicubic_interpolation<float, eCubicFilter::BSpline>(
       buffer, output, width, height, components, u, v, wrap_u, wrap_v);
@@ -533,7 +533,25 @@ void interpolate_cubic_mitchell_fl(
                                                        InterpWrapMode::Extend);
 }
 
-}  // namespace math
+/* Some macros so code can work with float4 or __m128
+ * In some examples I got a 17% speed increase, others though had zero increase.
+ * I believe the increase is mostly due to having more registers available.
+ */
+#if BLI_HAVE_SSE2
+#  define F4 __m128
+#  define F4ZERO(c) _mm_setzero_ps()
+#  define F4P(p) _mm_loadu_ps(p)
+#  define F4MADD(a, b, c) _mm_add_ps(_mm_mul_ps(a, _mm_set1_ps(b)), c);
+#  define F4DIV(a, b) _mm_div_ps(a, _mm_set1_ps(b))
+#  define F4V(a) *(float4 *)(&a)
+#else
+#  define F4 float4
+#  define F4ZERO(c) float4(0.0f)
+#  define F4P(p) (*(float4 *)(p))
+#  define F4MADD(a, b, c) ((a) * (b) + (c))
+#  define F4DIV(a, b) ((a) / (b))
+#  define F4V(a) a
+#endif
 
 /**************************************************************************
  * Filtering method based on
@@ -546,7 +564,7 @@ void interpolate_cubic_mitchell_fl(
  * used instead of actual gaussian,
  * otherwise at high texture magnifications circular artifacts are visible. */
 #define EWA_MAXIDX 255
-const float EWA_WTS[EWA_MAXIDX + 1] = {
+static const float EWA_WTS[EWA_MAXIDX + 1] = {
     1.0f,        0.990965f,   0.982f,      0.973105f,   0.96428f,    0.955524f,   0.946836f,
     0.938216f,   0.929664f,   0.921178f,   0.912759f,   0.904405f,   0.896117f,   0.887893f,
     0.879734f,   0.871638f,   0.863605f,   0.855636f,   0.847728f,   0.839883f,   0.832098f,
@@ -597,7 +615,7 @@ static void radangle2imp(float a2, float b2, float th, float *A, float *B, float
   *F = a2 * b2;
 }
 
-void BLI_ewa_imp2radangle(
+static void BLI_ewa_imp2radangle(
     float A, float B, float C, float F, float *a, float *b, float *th, float *ecc)
 {
   /* NOTE: all tests here are done to make sure possible overflows are hopefully minimized. */
@@ -627,23 +645,24 @@ void BLI_ewa_imp2radangle(
   }
 }
 
-void BLI_ewa_filter(const int width,
-                    const int height,
-                    const bool intpol,
-                    const bool use_alpha,
-                    const float uv[2],
-                    const float du[2],
-                    const float dv[2],
-                    ewa_filter_read_pixel_cb read_pixel_cb,
-                    void *userdata,
-                    float result[4],
-                    bool clip)
+void interpolate_ewa_fl(const float *buffer,
+                        float *output,
+                        int width,
+                        int height,
+                        int components,
+                        const float2 &uv,
+                        const float2x2 &jacobian,
+                        InterpWrapMode wrap_u,
+                        InterpWrapMode wrap_v)
 {
   /* Scaling `dxt` / `dyt` by full resolution can cause overflow because of huge A/B/C and esp.
    * F values, scaling by aspect ratio alone does the opposite, so try something in between
    * instead. */
-  const float ff2 = float(width), ff = sqrtf(ff2), q = float(height) / ff;
-  const float Ux = du[0] * ff, Vx = du[1] * q, Uy = dv[0] * ff, Vy = dv[1] * q;
+  const float ff2 = float(width), ff = sqrtf(ff2), df = 1.0f / ff;
+  const float Ux = jacobian[0][0] * df;
+  const float Vx = jacobian[0][1] * df;
+  const float Uy = jacobian[1][0] * df;
+  const float Vy = jacobian[1][1] * df;
   float A = Vx * Vx + Vy * Vy;
   float B = -2.0f * (Ux * Vx + Uy * Vy);
   float C = Ux * Ux + Uy * Uy;
@@ -659,6 +678,7 @@ void BLI_ewa_filter(const int width,
    * just enough to anti-alias when interpolation is off,
    * and slightly larger to make result a bit smoother than bilinear interpolation when
    * interpolation is on (minimum values: `const float rmin = intpol ? 1.0f : 0.5f;`) */
+  const bool intpol = false;
   const float rmin = (intpol ? 1.5625f : 0.765625f) / ff2;
   BLI_ewa_imp2radangle(A, B, C, F, &a, &b, &th, &ecc);
   if ((b2 = b * b) < rmin) {
@@ -681,8 +701,8 @@ void BLI_ewa_filter(const int width,
   B *= d;
   C *= d;
 
-  U0 = uv[0] * float(width);
-  V0 = uv[1] * float(height);
+  U0 = uv[0];
+  V0 = uv[1];
   u1 = int(floorf(U0 - ue));
   u2 = int(ceilf(U0 + ue));
   v1 = int(floorf(V0 - ve));
@@ -706,13 +726,14 @@ void BLI_ewa_filter(const int width,
   }
 
   /* Early output check for cases the whole region is outside of the buffer. */
-  if (clip && ((u2 < 0 || u1 >= width) || (v2 < 0 || v1 >= height))) {
-    zero_v4(result);
+  if ((wrap_u == InterpWrapMode::Border && (u2 < 0 || u1 >= width)) ||
+      (wrap_v == InterpWrapMode::Border && (v2 < 0 || v1 >= height)))
+  {
+    for (int i = 0; i < components; i++)
+      output[i] = 0.0f;
     return;
   }
 
-  U0 -= 0.5f;
-  V0 -= 0.5f;
   DDQ = 2.0f * A;
   U = float(u1) - U0;
   ac1 = A * (2.0f * U + 1.0f);
@@ -720,18 +741,20 @@ void BLI_ewa_filter(const int width,
   BU = B * U;
 
   d = 0.0f;
-  zero_v4(result);
+  F4 result = F4ZERO();
   for (v = v1; v <= v2; v++) {
+    int y = wrap_coord(float(v), height, wrap_v);
     const float V = float(v) - V0;
     float DQ = ac1 + B * V;
     float Q = (C * V + BU) * V + ac2;
     for (u = u1; u <= u2; u++) {
+      int x = wrap_coord(float(u), width, wrap_u);
       if (Q < float(EWA_MAXIDX + 1)) {
-        float tc[4];
         const float wt = EWA_WTS[(Q < 0.0f) ? 0 : uint(Q)];
-        read_pixel_cb(userdata, u, v, tc);
-        madd_v3_v3fl(result, tc, wt);
-        result[3] += use_alpha ? tc[3] * wt : 0.0f;
+        if (x >= 0 && y >= 0) {
+          const float *tc = buffer + (int64_t(y) * width + x) * components;
+          result = F4MADD(F4P(tc), wt, result);
+        }
         d += wt;
       }
       Q += DQ;
@@ -740,10 +763,10 @@ void BLI_ewa_filter(const int width,
   }
 
   /* `d` should hopefully never be zero anymore. */
-  d = 1.0f / d;
-  mul_v3_fl(result, d);
-  /* Clipping can be ignored if alpha used, `texr->trgba[3]` already includes filtered edge. */
-  result[3] = use_alpha ? result[3] * d : 1.0f;
+  result = F4DIV(result, d);
+  memcpy(output, &result, unsigned(components) * sizeof(float));
 }
+
+}  // namespace math
 
 }  // namespace blender

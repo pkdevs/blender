@@ -24,12 +24,11 @@
 
 #include "BLI_math_base.hh"
 #include "BLI_math_base_c.hh"
+#include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_simd.hh"
 
-namespace blender {
-
-namespace math {
+namespace blender::math {
 
 /**
  * Texture coordinate wrapping mode.
@@ -483,33 +482,17 @@ void interpolate_cubic_bspline_wrapmode_fl(const float *buffer,
 void interpolate_cubic_mitchell_fl(
     const float *buffer, float *output, int width, int height, int components, float u, float v);
 
-}  // namespace math
-
 /* -------------------------------------------------------------------- */
 /* EWA sampling. */
 
-#define EWA_MAXIDX 255
-extern const float EWA_WTS[EWA_MAXIDX + 1];
+void interpolate_ewa_fl(const float *buffer,
+                        float *output,
+                        int width,
+                        int height,
+                        int components,
+                        const float2 &uv,
+                        const float2x2 &jacobian,
+                        InterpWrapMode wrap_u,
+                        InterpWrapMode wrap_v);
 
-using ewa_filter_read_pixel_cb = void (*)(void *userdata, int x, int y, float result[4]);
-
-void BLI_ewa_imp2radangle(
-    float A, float B, float C, float F, float *a, float *b, float *th, float *ecc);
-
-/**
- * TODO(sergey): Consider making this function inlined, so the pixel read callback
- * could also be inlined in order to avoid per-pixel function calls.
- */
-void BLI_ewa_filter(int width,
-                    int height,
-                    bool intpol,
-                    bool use_alpha,
-                    const float uv[2],
-                    const float du[2],
-                    const float dv[2],
-                    ewa_filter_read_pixel_cb read_pixel_cb,
-                    void *userdata,
-                    float result[4],
-                    bool clip = true);
-
-}  // namespace blender
+}  // namespace blender::math
