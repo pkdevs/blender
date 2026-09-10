@@ -39,32 +39,25 @@ static const EnumPropertyItem threshold_mode_items[] = {
 };
 
 enum class Boundary {
-  /** Dirichlet boundary condition, using the background value for all exterior boundary voxels. */
-  Background,
   /** Dirichlet boundary condition, specify the solution value for all exterior boundary voxels. */
   Fixed,
-  /** Neumann boundary condition, specify normal derivative for all exterior boundary voxels. */
-  Normal,
+  /** Neumann boundary condition, specify gradient for all exterior boundary voxels. */
+  Gradient,
   /** Select between \a Fixed and \a Normal boundary condition. */
   Mixed,
 };
 
 static const EnumPropertyItem boundary_items[] = {
-    {int(Boundary::Background),
-     "BACKGROUND",
-     0,
-     "Background",
-     "Dirichlet boundary condition, using the background value for all exterior boundary voxels"},
     {int(Boundary::Fixed),
      "FIXED",
      0,
      "Fixed",
      "Dirichlet boundary condition, specify the solution value for all exterior boundary voxels"},
-    {int(Boundary::Normal),
-     "NORMAL",
+    {int(Boundary::Gradient),
+     "GRADIENT",
      0,
-     "Normal",
-     "Neumann boundary condition, specify normal derivative for all exterior boundary voxels"},
+     "Gradient",
+     "Neumann boundary condition, specify gradient for all exterior boundary voxels"},
     {int(Boundary::Mixed),
      "MIXED",
      0,
@@ -110,7 +103,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
   b.add_input<decl::Menu>("Boundary"_ustr)
       .static_items(boundary_items)
-      .default_value(Boundary::Background)
+      .default_value(Boundary::Fixed)
       .description("Boundary conditions for the solution between active and inactive voxels");
   b.add_input<decl::Float>("Boundary Value"_ustr)
       .structure_type(StructureType::Field)
@@ -119,7 +112,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Vector>("Boundary Gradient"_ustr)
       .structure_type(StructureType::Field)
       .hide_value()
-      .usage_by_menu("Boundary"_ustr, {int(Boundary::Normal), int(Boundary::Mixed)});
+      .usage_by_menu("Boundary"_ustr, {int(Boundary::Gradient), int(Boundary::Mixed)});
   b.add_input<decl::Float>("Boundary Factor"_ustr)
       .subtype(PROP_FACTOR)
       .min(0.0f)
@@ -134,7 +127,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .usage_by_menu("Boundary"_ustr, {int(Boundary::Fixed), int(Boundary::Mixed)});
   p.add_output<decl::Vector>("Debug Boundary Gradient"_ustr)
       .structure_type(StructureType::Grid)
-      .usage_by_menu("Boundary"_ustr, {int(Boundary::Normal), int(Boundary::Mixed)});
+      .usage_by_menu("Boundary"_ustr, {int(Boundary::Gradient), int(Boundary::Mixed)});
   p.add_output<decl::Float>("Debug Boundary Factor"_ustr)
       .structure_type(StructureType::Grid)
       .usage_by_menu("Boundary"_ustr, int(Boundary::Mixed));
@@ -295,29 +288,24 @@ static void node_geo_exec(GeoNodeExecParams params)
   SocketValueVariant debug_boundary_gradient = SocketValueVariant::from(float3(0.0f));
   SocketValueVariant debug_boundary_factor = SocketValueVariant::from(0.0f);
   switch (boundary) {
-    case Boundary::Background: {
-      bke::VolumeGrid<float> background_grid(
-          openvdb::FloatGrid::create(source_vdb_grid.background()));
-      bke::VolumeTreeAccessToken grid_token;
-
-      DirichletBoundaryOp boundary_op(background_grid.grid(grid_token));
-      solution_tree = openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<
-          PreconditionerType>(
-          source_vdb_grid.tree(), boundary_op, solver_state, interrupter, staggered);
-
-      debug_boundary_value = SocketValueVariant::from(background_grid);
-      break;
-    }
-
     case Boundary::Fixed: {
       const Field<float> boundary_value_field = params.extract_input<Field<float>>(
           "Boundary Value"_ustr);
-      const openvdb::MaskTree::Ptr mask_tree = get_boundary_mask(source_vdb_grid.tree());
-      Vector<bke::GVolumeGrid> grids(1);
-      bke::volume_grid::evaluate_fields_to_grid(
-          *mask_tree, grid_transform, {boundary_value_field}, grids);
 
+      Vector<bke::GVolumeGrid> grids(1);
       bke::VolumeTreeAccessToken grid_token;
+      if (boundary_value_field.depends_on_input()) {
+        const openvdb::MaskTree::Ptr mask_tree = get_boundary_mask(source_vdb_grid.tree());
+        bke::volume_grid::evaluate_fields_to_grid(
+            *mask_tree, grid_transform, {boundary_value_field}, grids);
+      }
+      else {
+        const float boundary_value = fn::evaluate_constant_field(boundary_value_field);
+        openvdb::FloatGrid::Ptr vdb_grid = openvdb::FloatGrid::create(boundary_value);
+        vdb_grid->setTransform(source_vdb_grid.constTransformPtr()->copy());
+        grids[0] = bke::VolumeGrid<float>(std::move(vdb_grid));
+      }
+
       DirichletBoundaryOp boundary_op(grids[0].typed<float>().grid(grid_token));
       solution_tree = openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<
           PreconditionerType>(
@@ -327,15 +315,25 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
     }
 
-    case Boundary::Normal: {
+    case Boundary::Gradient: {
       const Field<float3> boundary_gradient_field = params.extract_input<Field<float3>>(
           "Boundary Gradient"_ustr);
-      const openvdb::MaskTree::Ptr mask_tree = get_boundary_mask(source_vdb_grid.tree());
-      Vector<bke::GVolumeGrid> grids(1);
-      bke::volume_grid::evaluate_fields_to_grid(
-          *mask_tree, grid_transform, {boundary_gradient_field}, grids);
 
+      Vector<bke::GVolumeGrid> grids(1);
       bke::VolumeTreeAccessToken grid_token;
+      if (boundary_gradient_field.depends_on_input()) {
+        const openvdb::MaskTree::Ptr mask_tree = get_boundary_mask(source_vdb_grid.tree());
+        bke::volume_grid::evaluate_fields_to_grid(
+            *mask_tree, grid_transform, {boundary_gradient_field}, grids);
+      }
+      else {
+        const float3 boundary_gradient = fn::evaluate_constant_field(boundary_gradient_field);
+        openvdb::Vec3SGrid::Ptr vdb_grid = openvdb::Vec3SGrid::create(
+            bke::VolumeGridTraits<float3>::to_openvdb(boundary_gradient));
+        vdb_grid->setTransform(source_vdb_grid.constTransformPtr()->copy());
+        grids[0] = bke::VolumeGrid<float3>(std::move(vdb_grid));
+      }
+
       NeumannBoundaryOp boundary_op(grids[0].typed<float3>().grid(grid_token));
       solution_tree = openvdb::tools::poisson::solveWithBoundaryConditionsAndPreconditioner<
           PreconditionerType>(
@@ -353,14 +351,36 @@ static void node_geo_exec(GeoNodeExecParams params)
       const Field<float> boundary_factor_field = params.extract_input<Field<float>>(
           "Boundary Factor"_ustr);
       const openvdb::MaskTree::Ptr mask_tree = get_boundary_mask(source_vdb_grid.tree());
-      Vector<bke::GVolumeGrid> grids(3);
-      bke::volume_grid::evaluate_fields_to_grid(
-          *mask_tree,
-          grid_transform,
-          {boundary_value_field, boundary_gradient_field, boundary_factor_field},
-          grids);
 
+      Vector<bke::GVolumeGrid> grids(3);
       bke::VolumeTreeAccessToken grid_tokens[3];
+
+      if (boundary_value_field.depends_on_input() || boundary_gradient_field.depends_on_input() ||
+          boundary_factor_field.depends_on_input())
+      {
+        bke::volume_grid::evaluate_fields_to_grid(
+            *mask_tree,
+            grid_transform,
+            {boundary_value_field, boundary_gradient_field, boundary_factor_field},
+            grids);
+      }
+      else {
+        const float boundary_value = fn::evaluate_constant_field(boundary_value_field);
+        const float3 boundary_gradient = fn::evaluate_constant_field(boundary_gradient_field);
+        const float boundary_factor = fn::evaluate_constant_field(boundary_factor_field);
+        openvdb::FloatGrid::Ptr vdb_value_grid = openvdb::FloatGrid::create(boundary_value);
+        openvdb::Vec3SGrid::Ptr vdb_gradient_grid = openvdb::Vec3SGrid::create(
+            bke::VolumeGridTraits<float3>::to_openvdb(boundary_gradient));
+        openvdb::FloatGrid::Ptr vdb_factor_grid = openvdb::FloatGrid::create(boundary_factor);
+        openvdb::math::Transform::Ptr vdb_transform = source_vdb_grid.constTransformPtr()->copy();
+        vdb_value_grid->setTransform(vdb_transform);
+        vdb_gradient_grid->setTransform(vdb_transform);
+        vdb_factor_grid->setTransform(vdb_transform);
+        grids[0] = bke::VolumeGrid<float>(std::move(vdb_value_grid));
+        grids[1] = bke::VolumeGrid<float3>(std::move(vdb_gradient_grid));
+        grids[2] = bke::VolumeGrid<float>(std::move(vdb_factor_grid));
+      }
+
       MixedBoundaryOp boundary_op(grids[0].typed<float>().grid(grid_tokens[0]),
                                   grids[1].typed<float3>().grid(grid_tokens[1]),
                                   grids[2].typed<float>().grid(grid_tokens[2]));
