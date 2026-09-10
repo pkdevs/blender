@@ -1102,7 +1102,7 @@ static bool update_gsplat_std_point_attribute_offset_and_flag(const DeviceScene 
 {
   const Attribute *attribute = pointcloud.attributes.find(std);
   const int offset =
-      find_attribute(dscene.attributes_map.data(), attr_map_offset, PRIMITIVE_POINT, std).offset;
+      find_attribute(dscene.attributes_map.data(), attr_map_offset, PRIMITIVE_GSPLAT, std).offset;
 
   /* The function is only working correctly for attributes that are required.
    * Also check that the most significant bit is not set, as it will be lost during encoding. */
@@ -1124,7 +1124,7 @@ static bool update_gsplat_std_point_attribute_offset(const DeviceScene &dscene,
                                                      int &kobject_offset)
 {
   const int offset =
-      find_attribute(dscene.attributes_map.data(), attr_map_offset, PRIMITIVE_POINT, std).offset;
+      find_attribute(dscene.attributes_map.data(), attr_map_offset, PRIMITIVE_GSPLAT, std).offset;
   if (kobject_offset == offset) {
     return false;
   }
