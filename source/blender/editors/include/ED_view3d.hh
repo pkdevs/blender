@@ -1193,7 +1193,7 @@ enum class eRegionView3D_ViewFlipRoll : int8_t {
   FLIP_OTHER,
 };
 
-eRegionView3D_ViewFlipRoll view3d_effective_flip_axis(RegionView3D *rv3d);
+eRegionView3D_ViewFlipRoll ED_view3d_effective_flip_axis(RegionView3D *rv3d);
 
 void ED_view3d_datamask(const Main &bmain,
                         const Scene *scene,

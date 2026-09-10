@@ -1175,7 +1175,7 @@ static void draw_viewport_name(ARegion *region, View3D *v3d, int xoffset, int *y
 
   /* Indicate that the view is flipped. */
   if (rv3d->persp == RV3D_CAMOB) {
-    const eRegionView3D_ViewFlipRoll flip_roll = view3d_effective_flip_axis(rv3d);
+    const eRegionView3D_ViewFlipRoll flip_roll = ED_view3d_effective_flip_axis(rv3d);
 
     switch (flip_roll) {
       case eRegionView3D_ViewFlipRoll::FLIP_OTHER:
