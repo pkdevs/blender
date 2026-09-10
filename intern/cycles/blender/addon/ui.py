@@ -482,7 +482,7 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
             preview_scrambling_row.prop(cscene, "preview_scrambling_distance", text="Viewport")
             # Disable preview scrambling if DLSS denoising is used.
             # Preview scrambling and DLSS are generally incompatible with each other,
-            # so preview scrambling is internally disabled when using DLSS,
+            # so preview scrambling is internally disabled when using DLSS.
             preview_scrambling_row.active = not (
                 cscene.use_preview_denoising and cscene.preview_denoiser == 'DLSS' and has_dlss_gpu_devices(context))
             heading.prop(cscene, "scrambling_distance", text="Multiplier")
