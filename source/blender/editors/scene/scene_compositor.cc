@@ -172,9 +172,9 @@ static void SCENE_OT_remove_compositor_effect(wmOperatorType *ot)
 {
   PropertyRNA *prop;
 
-  ot->name = "Remove Scene Compositor Effect";
+  ot->name = "Remove Scene Effect";
   ot->idname = "SCENE_OT_remove_compositor_effect";
-  ot->description = "Remove a scene compositor effect from the scene";
+  ot->description = "Remove a scene effect from the scene";
 
   ot->invoke = remove_compositor_effect_invoke;
   ot->exec = remove_compositor_effect_exec;
@@ -236,9 +236,9 @@ static wmOperatorStatus duplicate_compositor_effect_invoke(bContext *C,
 
 static void SCENE_OT_duplicate_compositor_effect(wmOperatorType *ot)
 {
-  ot->name = "Duplicate Scene Compositor Effect";
+  ot->name = "Duplicate Scene Effect";
   ot->idname = "SCENE_OT_duplicate_compositor_effect";
-  ot->description = "Duplicate the active or the given scene compositor effect";
+  ot->description = "Duplicate the active or the given scene effect";
 
   ot->invoke = duplicate_compositor_effect_invoke;
   ot->exec = duplicate_compositor_effect_exec;
@@ -295,10 +295,10 @@ static wmOperatorStatus move_compositor_effect_to_index_invoke(bContext *C,
 
 static void SCENE_OT_move_compositor_effect_to_index(wmOperatorType *ot)
 {
-  ot->name = "Move Active Scene Compositor Effect to Index";
+  ot->name = "Move Active Scene Effect to Index";
   ot->description =
-      "Change the scene compositor effect's index in the stack so it evaluates after the set "
-      "number of others";
+      "Change the scene effect's index in the stack so it evaluates after the set number of "
+      "others";
   ot->idname = "SCENE_OT_move_compositor_effect_to_index";
 
   ot->invoke = move_compositor_effect_to_index_invoke;
@@ -349,8 +349,8 @@ static wmOperatorStatus set_active_compositor_effect_invoke(bContext *C,
 
 static void SCENE_OT_set_active_compositor_effect(wmOperatorType *ot)
 {
-  ot->name = "Set Active Scene Compositor Effect";
-  ot->description = "Set the given scene compositor effect as the active one";
+  ot->name = "Set Active Scene Effect";
+  ot->description = "Set the given scene effect as the active one";
   ot->idname = "SCENE_OT_set_active_compositor_effect";
 
   ot->invoke = set_active_compositor_effect_invoke;
@@ -402,10 +402,9 @@ static wmOperatorStatus new_compositor_effect_node_group_exec(bContext *C, wmOpe
 
 static void SCENE_OT_new_compositor_effect_node_group(wmOperatorType *ot)
 {
-  ot->name = "New Scene Compositor Effect Node Group";
+  ot->name = "New Scene Effect Node Group";
   ot->idname = "SCENE_OT_new_compositor_effect_node_group";
-  ot->description =
-      "Create a new compositor node group and assign it to the active scene compositor effect";
+  ot->description = "Create a new compositor node group and assign it to the active scene effect";
 
   ot->exec = new_compositor_effect_node_group_exec;
 
@@ -452,11 +451,10 @@ static wmOperatorStatus duplicate_compositor_effect_node_group_exec(bContext *C,
 
 static void SCENE_OT_duplicate_compositor_effect_node_group(wmOperatorType *ot)
 {
-  ot->name = "Duplicate Compositor Effect Node Group";
+  ot->name = "Duplicate Scene Effect Node Group";
   ot->idname = "SCENE_OT_duplicate_compositor_effect_node_group";
   ot->description =
-      "Duplicate the active scene compositor effect node group and assign the new node group to "
-      "the effect";
+      "Duplicate the active scene effect node group and assign the new node group to the effect";
 
   ot->exec = duplicate_compositor_effect_node_group_exec;
 
@@ -548,8 +546,8 @@ static std::string add_compositor_effect_node_group_asset_get_description(
 
 static void SCENE_OT_add_compositor_effect_node_group_asset(wmOperatorType *ot)
 {
-  ot->name = "Add Scene Compositor Effect Node Group Asset";
-  ot->description = "Add a scene compositor effect to the scene with a node group asset";
+  ot->name = "Add Scene Effect Node Group Asset";
+  ot->description = "Add a scene effect with a node group asset";
   ot->idname = "SCENE_OT_add_compositor_effect_node_group_asset";
 
   ot->exec = add_compositor_effect_node_group_asset_exec;
