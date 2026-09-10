@@ -228,7 +228,6 @@ static wmOperatorStatus viewroll_exec(bContext *C, wmOperator *op)
     const bool is_camera_lock = ED_view3d_camera_lock_check(vod->v3d, vod->rv3d);
     if (!is_camera_lock) {
       /* Wrap to prevent poor precision at large values. */
-
       vod->rv3d->camroll = angle_wrap_rad(vod->init.camroll - angle);
     }
   }
