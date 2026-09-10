@@ -478,7 +478,13 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         if cscene.sampling_pattern == 'TABULATED_SOBOL':
             heading = layout.column(align=True, heading="Scrambling Distance")
             heading.prop(cscene, "auto_scrambling_distance", text="Automatic")
-            heading.prop(cscene, "preview_scrambling_distance", text="Viewport")
+            preview_scrambling_row = heading.row()
+            preview_scrambling_row.prop(cscene, "preview_scrambling_distance", text="Viewport")
+            # Disable preview scrambling if DLSS denoising is used.
+            # Preview scrambling and DLSS are generally incompatible with each other,
+            # so preview scrambling is internally disabled when using DLSS,
+            preview_scrambling_row.active = not (
+                cscene.use_preview_denoising and cscene.preview_denoiser == 'DLSS' and has_dlss_gpu_devices(context))
             heading.prop(cscene, "scrambling_distance", text="Multiplier")
 
             layout.separator()
