@@ -100,7 +100,7 @@ ccl_device_forceinline Quaternion motion_gsplat_rotation_interpolate(const Quate
                                                                      const Quaternion r2,
                                                                      const float t)
 {
-  /* Use linear interpolation which is cheap and wors good enough. This is also what
+  /* Use linear interpolation which is cheap and works good enough. This is also what
    * quat_interpolate() does for HW-RT.
    * Note that interpolation is supposed to happen on normalized quaternions, and currently no
    * normalization is enforced on the gsplat attributes. */
