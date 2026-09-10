@@ -120,12 +120,12 @@ void deg_foreach_dependent_operation(const ComponentNode &start_component,
                                      void *user_data)
 {
   TraversalQueue queue;
-  Set<OperationNode *> visited;
+  Set<OperationNode *> was_queued;
   /* Since the OperationNodes hold the connections it is the level we need to
    * traverse on. */
   for (OperationNode *op_node : start_component.operations) {
     queue.push_back(op_node);
-    visited.add(op_node);
+    was_queued.add(op_node);
   }
 
   /* Traverse the graph. */
@@ -138,9 +138,9 @@ void deg_foreach_dependent_operation(const ComponentNode &start_component,
     }
     for (const Relation *rel : op_node->outlinks) {
       OperationNode *to_node = static_cast<OperationNode *>(rel->to);
-      if (!visited.contains(to_node)) {
+      if (!was_queued.contains(to_node)) {
         queue.push_back(to_node);
-        visited.add_new(to_node);
+        was_queued.add_new(to_node);
       }
     }
   }
