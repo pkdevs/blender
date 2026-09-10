@@ -37,18 +37,18 @@ static const EnumPropertyItem prop_interpolation_items[] = {
     {0, nullptr},
 };
 
-static const EnumPropertyItem prop_restriction_items[] = {
-    {CURVE_RESTRICT_NONE, "NONE", 0, "None", "No restrictions on vertex movement"},
-    {CURVE_RESTRICT_EXTRUDE,
-     "EXTRUDE",
+static const EnumPropertyItem prop_clamp_elevation_items[] = {
+    {CURVE_CLAMP_ELEVATION_NONE, "NONE", 0, "None", "No restrictions on vertex movement"},
+    {CURVE_CLAMP_ELEVATION_RAISE,
+     "RAISE",
      0,
-     "Extrude Only",
-     "Only allow extrusions (no indentations)"},
-    {CURVE_RESTRICT_INDENT, "INDENT", 0, "Indent Only", "Only allow indentation (no extrusions)"},
+     "Only Raise",
+     "Only allow extrusions"},
+    {CURVE_CLAMP_ELEVATION_LOWER, "LOWER", 0, "Only Lower", "Only allow indentation"},
     {0, nullptr},
 };
 
-static wmOperatorStatus edbm_fit_edge_loops_to_curve_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus edbm_curve_edge_loops_between_selected_exec(bContext *C, wmOperator *op)
 {
   const Main *bmain = CTX_data_main(C);
   const Scene *scene = CTX_data_scene(C);
@@ -57,8 +57,8 @@ static wmOperatorStatus edbm_fit_edge_loops_to_curve_exec(bContext *C, wmOperato
       *bmain, scene, view_layer, CTX_wm_view3d(C));
 
   const float factor = RNA_float_get(op->ptr, "factor");
-  const int restriction = RNA_enum_get(op->ptr, "restriction");
-  const bool extend = RNA_boolean_get(op->ptr, "extend");
+  const int clamp_elevation = RNA_enum_get(op->ptr, "clamp_elevation");
+  const bool extend = RNA_boolean_get(op->ptr, "extend_loop");
   const bool regular = RNA_boolean_get(op->ptr, "regular");
   const int interpolation = RNA_enum_get(op->ptr, "interpolation");
   bool lock[3];
@@ -78,11 +78,11 @@ static wmOperatorStatus edbm_fit_edge_loops_to_curve_exec(bContext *C, wmOperato
     if (!EDBM_op_callf(
             em,
             op,
-            "fit_edge_loops_to_curve geom=%hv factor=%f restriction=%i extend=%b regular=%b "
+            "curve_edge_loops_between_selected geom=%hv factor=%f clamp_elevation=%i extend_loop=%b regular=%b "
             "lock_x=%b lock_y=%b lock_z=%b interpolation=%i",
             BM_ELEM_SELECT,
             factor,
-            restriction,
+            clamp_elevation,
             extend,
             regular,
             lock[0],
@@ -108,15 +108,15 @@ static wmOperatorStatus edbm_fit_edge_loops_to_curve_exec(bContext *C, wmOperato
   return changed_multi ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
-static void edbm_fit_edge_loops_to_curve_ui(bContext * /*C*/, wmOperator *op)
+static void edbm_curve_edge_loops_between_selected_ui(bContext * /*C*/, wmOperator *op)
 {
   /* A custom UI function is needed to draw the axis locks (X/Y/Z) as a row of toggle buttons. */
   ui::Layout &layout = *op->layout;
   layout.use_property_split_set(true);
 
   layout.prop(op->ptr, "factor", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  layout.prop(op->ptr, "restriction", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  layout.prop(op->ptr, "extend", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(op->ptr, "clamp_elevation", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(op->ptr, "extend_loop", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout.prop(op->ptr, "regular", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   ui::Layout &lock_row = layout.row(true, IFACE_("Lock"));
@@ -128,30 +128,30 @@ static void edbm_fit_edge_loops_to_curve_ui(bContext * /*C*/, wmOperator *op)
   layout.prop(op->ptr, "interpolation", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
-void MESH_OT_fit_edge_loops_to_curve(wmOperatorType *ot)
+void MESH_OT_curve_edge_loops_between_selected(wmOperatorType *ot)
 {
-  ot->name = "To Curve";
+  ot->name = "Curve Edge Loops Between Selected";
   ot->description = "Fits the unselected edge loops to a curve defined by the selected vertices";
-  ot->idname = "MESH_OT_fit_edge_loops_to_curve";
+  ot->idname = "MESH_OT_curve_edge_loops_between_selected";
 
-  ot->exec = edbm_fit_edge_loops_to_curve_exec;
+  ot->exec = edbm_curve_edge_loops_between_selected_exec;
   ot->poll = ED_operator_editmesh;
-  ot->ui = edbm_fit_edge_loops_to_curve_ui;
+  ot->ui = edbm_curve_edge_loops_between_selected_ui;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   RNA_def_float_factor(
       ot->srna, "factor", 1.0f, 0.0f, 1.0f, "Factor", "Curving factor", 0.0f, 1.0f);
   RNA_def_enum(ot->srna,
-               "restriction",
-               prop_restriction_items,
-               CURVE_RESTRICT_NONE,
-               "Restriction",
+               "clamp_elevation",
+               prop_clamp_elevation_items,
+               CURVE_CLAMP_ELEVATION_NONE,
+               "Clamp Elevation",
                "Restrictions on how the vertices can be moved");
   RNA_def_boolean(ot->srna,
-                  "extend",
+                  "extend_loop",
                   false,
-                  "Extend",
+                  "Extend Loop",
                   "Extends the tool to work beyond the boundaries of the selected vertices");
   RNA_def_boolean(ot->srna,
                   "regular",

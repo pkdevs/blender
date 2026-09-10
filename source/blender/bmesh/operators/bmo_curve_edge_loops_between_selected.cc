@@ -451,7 +451,7 @@ static void calculate_curve_splines(const Span<float3> knot_positions,
 static void execute_curve_chain(const Span<BMVert *> input_chain,
                                 bool is_closed,
                                 const CurveInterpolation interpolation,
-                                const CurveRestriction restriction,
+                                const CurveClampElevation clamp_elevation,
                                 const bool regular,
                                 const float factor,
                                 const bool lock_x,
@@ -570,17 +570,17 @@ static void execute_curve_chain(const Span<BMVert *> input_chain,
     const float3 old_pos(vert->co);
     const float3 delta = new_pos - old_pos;
 
-    if (restriction != CURVE_RESTRICT_NONE) {
+    if (clamp_elevation != CURVE_CLAMP_ELEVATION_NONE) {
       if (math::length_squared(delta) > math::square(CURVE_EPSILON)) {
         const float3 normal(vert->no);
         const float dot_val = math::dot(delta, normal);
 
-        if (restriction == CURVE_RESTRICT_EXTRUDE) {
+        if (clamp_elevation == CURVE_CLAMP_ELEVATION_RAISE) {
           if (dot_val < -CURVE_EPSILON) {
             continue;
           }
         }
-        else if (restriction == CURVE_RESTRICT_INDENT) {
+        else if (clamp_elevation == CURVE_CLAMP_ELEVATION_LOWER) {
           if (dot_val > CURVE_EPSILON) {
             continue;
           }
@@ -603,12 +603,12 @@ static void execute_curve_chain(const Span<BMVert *> input_chain,
   }
 }
 
-void bmo_fit_edge_loops_to_curve_exec(BMesh *bm, BMOperator *op)
+void bmo_curve_edge_loops_between_selected_exec(BMesh *bm, BMOperator *op)
 {
   const float factor = BMO_slot_float_get(op->slots_in, "factor");
-  const CurveRestriction restriction = static_cast<CurveRestriction>(
-      BMO_slot_int_get(op->slots_in, "restriction"));
-  const bool extend = BMO_slot_bool_get(op->slots_in, "extend");
+  const CurveClampElevation clamp_elevation = static_cast<CurveClampElevation>(
+      BMO_slot_int_get(op->slots_in, "clamp_elevation"));
+  const bool extend_loop = BMO_slot_bool_get(op->slots_in, "extend_loop");
   const bool regular = BMO_slot_bool_get(op->slots_in, "regular");
   const bool lock_x = BMO_slot_bool_get(op->slots_in, "lock_x");
   const bool lock_y = BMO_slot_bool_get(op->slots_in, "lock_y");
@@ -621,7 +621,7 @@ void bmo_fit_edge_loops_to_curve_exec(BMesh *bm, BMOperator *op)
   Vector<CurveChainData> chains;
   calc_curve_input_chains_from_bm(bm, chains);
 
-  if (!extend) {
+  if (!extend_loop) {
     trim_chains_to_boundaries(chains);
   }
 
@@ -629,7 +629,7 @@ void bmo_fit_edge_loops_to_curve_exec(BMesh *bm, BMOperator *op)
     execute_curve_chain(chain.verts,
                         chain.is_closed,
                         interpolation,
-                        restriction,
+                        clamp_elevation,
                         regular,
                         factor,
                         lock_x,

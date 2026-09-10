@@ -781,9 +781,9 @@ static BMOpDefine bmo_create_vert_def = {
 };
 
 static BMO_FlagSet bmo_enum_curve_restriction[] = {
-    {CURVE_RESTRICT_NONE, "NONE"},
-    {CURVE_RESTRICT_EXTRUDE, "EXTRUDE"},
-    {CURVE_RESTRICT_INDENT, "INDENT"},
+    {CURVE_CLAMP_ELEVATION_NONE, "NONE"},
+    {CURVE_CLAMP_ELEVATION_RAISE, "RAISE"},
+    {CURVE_CLAMP_ELEVATION_LOWER, "LOWER"},
     {0, nullptr},
 };
 
@@ -794,12 +794,12 @@ static BMO_FlagSet bmo_enum_curve_interpolation_method[] = {
 };
 
 /*
- * To Curve.
+ * Curve Edge Loops Between Selected.
  *
  * Fits the unselected edge loops to a curve defined by the selected vertices.
  */
-static BMOpDefine bmo_fit_edge_loops_to_curve_def = {
-    /*opname*/ "fit_edge_loops_to_curve",
+static BMOpDefine bmo_curve_edge_loops_between_selected_def = {
+    /*opname*/ "curve_edge_loops_between_selected",
     /*slot_types_in*/
     {
         /* Input geometry. */
@@ -807,12 +807,12 @@ static BMOpDefine bmo_fit_edge_loops_to_curve_def = {
         /* Influence factor: spans from 0.0 to 1.0. */
         {"factor", BMO_OP_SLOT_FLT},
         /* Restrictions on how the vertices can be moved. */
-        {"restriction",
+        {"clamp_elevation",
          BMO_OP_SLOT_INT,
          to_subtype_union(BMO_OP_SLOT_SUBTYPE_INT_ENUM),
          bmo_enum_curve_restriction},
         /* Limits the tool to work within the boundaries of the selected vertices if false. */
-        {"extend", BMO_OP_SLOT_BOOL},
+        {"extend_loop", BMO_OP_SLOT_BOOL},
         /* Distribute vertices at constant distances along the curve. */
         {"regular", BMO_OP_SLOT_BOOL},
         /* Lock X axis editing. */
@@ -831,7 +831,7 @@ static BMOpDefine bmo_fit_edge_loops_to_curve_def = {
     /*slot_types_out*/
     {{{'\0'}}},
     /*init*/ nullptr,
-    /*exec*/ bmo_fit_edge_loops_to_curve_exec,
+    /*exec*/ bmo_curve_edge_loops_between_selected_exec,
     /*type_flag*/
     (BMO_OPTYPE_FLAG_NORMALS_CALC),
 };
@@ -3026,7 +3026,7 @@ const BMOpDefine *bmo_opdefines[] = {
     &bmo_create_monkey_def,
     &bmo_create_uvsphere_def,
     &bmo_create_vert_def,
-    &bmo_fit_edge_loops_to_curve_def,
+    &bmo_curve_edge_loops_between_selected_def,
     &bmo_delete_def,
     &bmo_dissolve_edges_def,
     &bmo_dissolve_faces_def,
