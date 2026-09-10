@@ -6282,6 +6282,7 @@ def km_transform_modal_map(params):
         ("STRIP_OVERLAP_SHUFFLE", {"type": 'S', "value": 'PRESS'}, None),
         ("STRIP_OVERLAP_RIPPLE", {"type": 'R', "value": 'PRESS'}, None),
         ("STRIP_OVERLAP_OVERWRITE", {"type": 'V', "value": 'PRESS'}, None),
+        ("STRIP_RIPPLE_INSERT", {"type": 'I', "value": 'PRESS'}, None),
     ])
 
     if params.use_alt_navigation:

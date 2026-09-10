@@ -8,6 +8,8 @@
  * \ingroup sequencer
  */
 
+#include <optional>
+
 #include "DNA_movieclip_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
@@ -289,6 +291,59 @@ static bool do_ripple_strip(Span<Strip *> source_strips,
   return false;
 }
 
+/* Determine whether we insert #source_strips into others, splitting them at #insert_frame.
+ *
+ * If the "ripple insert" option is disabled by the user, then #r_shuffle_delta will be filled
+ * if the strip would otherwise be in a position to insert. In this case, we need to shuffle our
+ * #source_strips forward to the nearest empty spot before rippling anything else.
+ *
+ * Possible outcomes:
+ * - No insert, no shuffle. Strips stay fixed and ripple others out of the way without splitting.
+ * - Insert, no shuffle. Strips stay fixed and split at `insert_frame` before rippling others.
+ * - No insert, shuffle. Strips must move forward before rippling others.
+ *
+ * We assert that we never insert into other strips and shuffle ourselves at the same time!
+ */
+static bool do_ripple_insert(const Scene *scene,
+                             ListBaseT<Strip> *seqbasep,
+                             Span<Strip *> source_strips,
+                             const int insert_frame,
+                             const eSeqRippleFlag ripple_flag,
+                             std::optional<int> &r_shuffle_delta)
+{
+  bool do_insert = false;
+  int shuffle_delta = 0;
+
+  for (Strip &target : *seqbasep) {
+    if (source_strips.contains(&target)) {
+      continue;
+    }
+    /* The split point does not intersect in time with this strip. */
+    if (target.left_handle() >= insert_frame || target.right_handle(scene) <= insert_frame) {
+      continue;
+    }
+    for (Strip *source : source_strips) {
+      if (target.channel == source->channel) {
+        if (!(ripple_flag & SEQ_RIPPLE_INSERT)) {
+          shuffle_delta = math::max(shuffle_delta, target.right_handle(scene) - insert_frame);
+        }
+        else {
+          do_insert = true;
+        }
+        break;
+      }
+    }
+  }
+
+  BLI_assert(!(do_insert && (shuffle_delta > 0)));
+
+  if (shuffle_delta > 0) {
+    r_shuffle_delta = shuffle_delta;
+  }
+
+  return do_insert;
+}
+
 static bool sources_overlap_target(const Scene *scene, Span<Strip *> source_strips, Strip *target)
 {
   for (Strip *source : source_strips) {
@@ -340,30 +395,22 @@ static void strip_transform_handle_ripple(Scene *scene,
     end_frame = math::max(end_frame, source->right_handle(scene));
   }
 
-  /* Determine whether we insert `source_strips` into others, splitting them at `start_frame`. */
-  bool do_ripple_insert = false;
-  for (Strip &target : *seqbasep) {
-    if (source_strips.contains(&target)) {
-      continue;
+  std::optional<int> shuffle_delta;
+  const bool do_insert = do_ripple_insert(
+      scene, seqbasep, source_strips, start_frame, ripple_flag, shuffle_delta);
+
+  /* Source strips need to be shuffled out of the way before rippling anything else. */
+  if (shuffle_delta.has_value()) {
+    for (Strip *source : extract_standalone_strips(source_strips)) {
+      transform_translate_strip(scene, source, *shuffle_delta);
     }
-    /* The split point does not intersect in time with this strip. */
-    if (target.left_handle() >= start_frame || target.right_handle(scene) <= start_frame) {
-      continue;
-    }
-    for (Strip *source : source_strips) {
-      if (target.channel == source->channel) {
-        do_ripple_insert = true;
-        break;
-      }
-    }
-    if (do_ripple_insert) {
-      break;
-    }
+    start_frame += *shuffle_delta;
+    end_frame += *shuffle_delta;
   }
 
   int delta = 0;
   int ripple_frame = start_frame;
-  if (do_ripple_insert) {
+  if (do_insert) {
     delta = end_frame - start_frame;
 
     /* Split across all channels at `start_frame`.

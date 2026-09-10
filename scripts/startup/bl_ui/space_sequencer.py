@@ -2044,6 +2044,7 @@ class SEQUENCER_PT_edit_mode(Panel):
         col.use_property_split = True
         col.use_property_decorate = False
         col.active = sequencer_tool_settings.overlap_mode == 'RIPPLE'
+        col.prop(sequencer_tool_settings, "ripple_insert")
         col.prop(sequencer_tool_settings, "ripple_all_channels")
         col.prop(sequencer_tool_settings, "ripple_markers")
 

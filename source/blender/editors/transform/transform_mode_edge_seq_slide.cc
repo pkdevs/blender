@@ -138,15 +138,12 @@ static void applySeqSlide(TransInfo *t)
 
 static void seq_slide_status(TransInfo *t)
 {
-  if (t->keymap == nullptr) {
+  if (t->keymap == nullptr || t->data_container_len == 0) {
     return;
   }
+
+  Scene *scene = CTX_data_sequencer_scene(t->context);
   const wmKeyMap &keymap = *t->keymap;
-
-  if (t->data_container_len == 0) {
-    return;
-  }
-
   const TransSeq *ts = static_cast<const TransSeq *>(
       TRANS_DATA_CONTAINER_FIRST_SINGLE(t)->custom.type.data);
 
@@ -178,20 +175,27 @@ static void seq_slide_status(TransInfo *t)
                         t->modifiers & MOD_STRIP_CLAMP_HOLDS);
   }
 
-  const eSeqOverlapMode overlap_mode = seq::tool_settings_overlap_mode_get(
-      CTX_data_sequencer_scene(t->context));
-  status.opmodal(IFACE_("Ripple"),
-                 op->type,
+  const eSeqOverlapMode overlap_mode = seq::tool_settings_overlap_mode_get(scene);
+  status.modal_keymap(IFACE_("Ripple"),
+                 keymap,
                  TFM_MODAL_STRIP_OVERLAP_RIPPLE,
                  overlap_mode == SEQ_OVERLAP_RIPPLE);
-  status.opmodal(IFACE_("Overwrite"),
-                 op->type,
+  status.modal_keymap(IFACE_("Overwrite"),
+                 keymap,
                  TFM_MODAL_STRIP_OVERLAP_OVERWRITE,
                  overlap_mode == SEQ_OVERLAP_OVERWRITE);
-  status.opmodal(IFACE_("Shuffle"),
-                 op->type,
+  status.modal_keymap(IFACE_("Shuffle"),
+                 keymap,
                  TFM_MODAL_STRIP_OVERLAP_SHUFFLE,
                  overlap_mode == SEQ_OVERLAP_SHUFFLE);
+
+  if (overlap_mode == SEQ_OVERLAP_RIPPLE) {
+    const eSeqRippleFlag ripple_flag = seq::tool_settings_ripple_flag_get(scene);
+    status.modal_keymap(IFACE_("Insert"),
+                   keymap,
+                   TFM_MODAL_STRIP_RIPPLE_INSERT,
+                   (ripple_flag & SEQ_RIPPLE_INSERT) != 0);
+  }
 }
 
 static void initSeqSlide(TransInfo *t, wmOperator *op)

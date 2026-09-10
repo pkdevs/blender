@@ -821,7 +821,8 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
       break;
     case TFM_MODAL_STRIP_OVERLAP_SHUFFLE:
     case TFM_MODAL_STRIP_OVERLAP_RIPPLE:
-    case TFM_MODAL_STRIP_OVERLAP_OVERWRITE: {
+    case TFM_MODAL_STRIP_OVERLAP_OVERWRITE:
+    case TFM_MODAL_STRIP_RIPPLE_INSERT: {
       if (t->spacetype != SPACE_SEQ || t->mode != TFM_SEQ_SLIDE ||
           t->data_type != &TransConvertType_Sequencer)
       {
@@ -889,6 +890,7 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
       {TFM_MODAL_STRIP_OVERLAP_SHUFFLE, "STRIP_OVERLAP_SHUFFLE", 0, "Shuffle", ""},
       {TFM_MODAL_STRIP_OVERLAP_RIPPLE, "STRIP_OVERLAP_RIPPLE", 0, "Ripple", ""},
       {TFM_MODAL_STRIP_OVERLAP_OVERWRITE, "STRIP_OVERLAP_OVERWRITE", 0, "Overwrite", ""},
+      {TFM_MODAL_STRIP_RIPPLE_INSERT, "STRIP_RIPPLE_INSERT", 0, "Ripple Insert", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -1458,6 +1460,16 @@ wmOperatorStatus transformEvent(TransInfo *t, wmOperator *op, const wmEvent *eve
           overlap_mode = SEQ_OVERLAP_OVERWRITE;
         }
         seq::tool_settings_overlap_mode_set(CTX_data_sequencer_scene(t->context), overlap_mode);
+        ED_area_tag_redraw(t->area);
+        t->redraw |= TREDRAW_HARD;
+        break;
+      }
+      case TFM_MODAL_STRIP_RIPPLE_INSERT: {
+        Scene *scene = CTX_data_sequencer_scene(t->context);
+        if (scene == nullptr || seq::tool_settings_overlap_mode_get(scene) != SEQ_OVERLAP_RIPPLE) {
+          break;
+        }
+        seq::tool_settings_ensure(scene)->ripple_flag ^= SEQ_RIPPLE_INSERT;
         ED_area_tag_redraw(t->area);
         t->redraw |= TREDRAW_HARD;
         break;

@@ -1819,6 +1819,7 @@ enum eSeqOverlapMode : int {
 enum eSeqRippleFlag : int {
   SEQ_RIPPLE_ALL_CHANNELS = 1 << 0,
   SEQ_RIPPLE_MARKERS = 1 << 1,
+  SEQ_RIPPLE_INSERT = 1 << 2,
 };
 ENUM_OPERATORS(eSeqRippleFlag)
 
