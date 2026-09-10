@@ -3313,6 +3313,15 @@ static void node_draw_collapsed(const bContext &C,
     block_emboss_set(&block, ui::EmbossType::Emboss);
   }
 
+  const rctf header_rct = {
+      rct.xmin,
+      rct.xmax,
+      centy - NODE_DY * 0.5f,
+      centy + NODE_DY * 0.5f,
+  };
+  float iconofs = rct.xmax - 0.35f * U.widget_unit;
+  node_add_error_message_button(tree_draw_ctx, ntree, node, block, header_rct, iconofs);
+
   const std::string showname = bke::node_label(ntree, node);
 
   ui::Button *but = uiDefBut(&block,
@@ -3320,7 +3329,7 @@ static void node_draw_collapsed(const bContext &C,
                              showname,
                              round_fl_to_int(rct.xmin + NODE_MARGIN_X),
                              round_fl_to_int(centy - NODE_DY * 0.5f),
-                             short(BLI_rctf_size_x(&rct) - (2 * U.widget_unit)),
+                             short(iconofs - rct.xmin - NODE_MARGIN_X),
                              NODE_DY,
                              nullptr,
                              0,
