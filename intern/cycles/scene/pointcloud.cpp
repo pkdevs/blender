@@ -160,9 +160,9 @@ void PointCloud::copy_center_to_motion_step(const int motion_step)
   if (Attribute *attr_rotation = attributes.find(ATTR_STD_GSPLAT_ROTATION);
       attr_rotation && attr_rotation->has_motion())
   {
-    std::copy_n(attr_rotation->data<float4>(),
+    std::copy_n(attr_rotation->data<Quaternion>(),
                 numpoints,
-                attr_rotation->data_for_write<float4>(attr_step));
+                attr_rotation->data_for_write<Quaternion>(attr_step));
   }
 }
 
