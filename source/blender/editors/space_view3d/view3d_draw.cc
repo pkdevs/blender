@@ -1178,27 +1178,27 @@ static void draw_viewport_name(ARegion *region, View3D *v3d, int xoffset, int *y
     const eRegionView3D_ViewFlipRoll flip_roll = ED_view3d_effective_flip_axis(rv3d);
 
     switch (flip_roll) {
-      case eRegionView3D_ViewFlipRoll::FLIP_OTHER:
+      case eRegionView3D_ViewFlipRoll::FlipOther:
         name_array.append(IFACE_(" (Flipped)"));
         break;
-      case eRegionView3D_ViewFlipRoll::FLIP_X:
+      case eRegionView3D_ViewFlipRoll::FlipX:
         name_array.append(IFACE_(" (Flipped X)"));
         break;
-      case eRegionView3D_ViewFlipRoll::FLIP_Y:
+      case eRegionView3D_ViewFlipRoll::FlipY:
         name_array.append(IFACE_(" (Flipped Y)"));
         break;
-      case eRegionView3D_ViewFlipRoll::ROLL_0:
+      case eRegionView3D_ViewFlipRoll::Roll0:
         break;
-      case eRegionView3D_ViewFlipRoll::ROLL_90:
+      case eRegionView3D_ViewFlipRoll::Roll90:
         name_array.append(IFACE_(" (90\xC2\xB0)"));
         break;
-      case eRegionView3D_ViewFlipRoll::ROLL_180:
+      case eRegionView3D_ViewFlipRoll::Roll180:
         name_array.append(IFACE_(" (180\xC2\xB0)"));
         break;
-      case eRegionView3D_ViewFlipRoll::ROLL_270:
+      case eRegionView3D_ViewFlipRoll::Roll270:
         name_array.append(IFACE_(" (-90\xC2\xB0)"));
         break;
-      case eRegionView3D_ViewFlipRoll::ROLL_OTHER:
+      case eRegionView3D_ViewFlipRoll::RollOther:
         name_array.append(IFACE_(" (Rolled)"));
         break;
     }

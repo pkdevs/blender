@@ -1632,39 +1632,39 @@ eRegionView3D_ViewFlipRoll ED_view3d_effective_flip_axis(const RegionView3D *rv3
 
   if ((rv3d->rflag & RV3D_FLIP_X) != 0) {
     if (math::abs(rv3d->camroll) < angle_threshold) {
-      return eRegionView3D_ViewFlipRoll::FLIP_X;
+      return eRegionView3D_ViewFlipRoll::FlipX;
     }
 
     if (math::abs(rv3d->camroll - M_PI) < angle_threshold ||
         math::abs(rv3d->camroll + M_PI) < angle_threshold)
     {
-      return eRegionView3D_ViewFlipRoll::FLIP_Y;
+      return eRegionView3D_ViewFlipRoll::FlipY;
     }
 
-    return eRegionView3D_ViewFlipRoll::FLIP_OTHER;
+    return eRegionView3D_ViewFlipRoll::FlipOther;
   }
 
   if (math::abs(rv3d->camroll) < angle_threshold) {
-    return eRegionView3D_ViewFlipRoll::ROLL_0;
+    return eRegionView3D_ViewFlipRoll::Roll0;
   }
 
   if (math::abs(rv3d->camroll - M_PI / 2.0f) < angle_threshold) {
-    return eRegionView3D_ViewFlipRoll::ROLL_90;
+    return eRegionView3D_ViewFlipRoll::Roll90;
   }
 
   if (math::abs(rv3d->camroll - M_PI) < angle_threshold ||
       math::abs(rv3d->camroll + M_PI) < angle_threshold)
   {
-    return eRegionView3D_ViewFlipRoll::ROLL_180;
+    return eRegionView3D_ViewFlipRoll::Roll180;
   }
 
   if (math::abs(rv3d->camroll - M_PI * 3.0f / 2.0f) < angle_threshold ||
       math::abs(rv3d->camroll + M_PI / 2.0f) < angle_threshold)
   {
-    return eRegionView3D_ViewFlipRoll::ROLL_270;
+    return eRegionView3D_ViewFlipRoll::Roll270;
   }
 
-  return eRegionView3D_ViewFlipRoll::ROLL_OTHER;
+  return eRegionView3D_ViewFlipRoll::RollOther;
 }
 
 /** \} */

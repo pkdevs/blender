@@ -1183,14 +1183,14 @@ eRegionView3D_View ED_view3d_axis_view_opposite(eRegionView3D_View view);
 bool ED_view3d_lock(RegionView3D *rv3d);
 
 enum class eRegionView3D_ViewFlipRoll : int8_t {
-  ROLL_0,
-  ROLL_90,
-  ROLL_180,
-  ROLL_270,
-  ROLL_OTHER,
-  FLIP_X,
-  FLIP_Y,
-  FLIP_OTHER,
+  Roll0,
+  Roll90,
+  Roll180,
+  Roll270,
+  RollOther,
+  FlipX,
+  FlipY,
+  FlipOther,
 };
 
 eRegionView3D_ViewFlipRoll ED_view3d_effective_flip_axis(const RegionView3D *rv3d);
