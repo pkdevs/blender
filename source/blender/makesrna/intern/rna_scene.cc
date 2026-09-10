@@ -1288,7 +1288,7 @@ static void rna_Scene_compositing_node_group_set(PointerRNA *scene_ptr,
 
   SceneCompositorEffect *effect = bke::compositor::get_active_effect(*scene);
   if (!effect) {
-    effect = &bke::compositor::new_effect(*scene, "Effect");
+    effect = &bke::compositor::new_effect(*scene, "Scene Effect");
   }
 
   if (effect->node_group) {

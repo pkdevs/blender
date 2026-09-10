@@ -46,7 +46,7 @@ class SCENE_PT_compositor_effects(Panel):
 
 class SCENE_OT_add_compositor_effect_menu(Operator):
     bl_idname = "scene.add_compositor_effect_menu"
-    bl_label = "Add Scene Compositor Effect Menu"
+    bl_label = "Add Compositor Effect Menu"
 
     @classmethod
     def poll(cls, context):

@@ -384,7 +384,7 @@ static wmOperatorStatus new_compositor_effect_node_group_exec(bContext *C, wmOpe
   Scene *scene = CTX_data_scene(C);
   SceneCompositorEffect *active_effect = bke::compositor::get_active_effect(*scene);
   if (!active_effect) {
-    SceneCompositorEffect &effect = bke::compositor::new_effect(*scene, "Effect");
+    SceneCompositorEffect &effect = bke::compositor::new_effect(*scene, "Scene Effect");
     active_effect = &effect;
   }
 
