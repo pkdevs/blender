@@ -274,6 +274,21 @@ static VectorSet<Strip *> extract_standalone_strips(Span<Strip *> transformed_st
   return standalone_strips;
 }
 
+static bool do_ripple_strip(Span<Strip *> source_strips,
+                            const Strip *strip,
+                            const bool all_channels)
+{
+  if (all_channels) {
+    return true;
+  }
+  for (const Strip *source : source_strips) {
+    if (strip->channel == source->channel) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static bool sources_overlap_target(const Scene *scene, Span<Strip *> source_strips, Strip *target)
 {
   for (Strip *source : source_strips) {
@@ -284,6 +299,23 @@ static bool sources_overlap_target(const Scene *scene, Span<Strip *> source_stri
   return false;
 }
 
+/* Right edge of the strip group, as seen by `other`. Only sources sharing its channel count,
+ * unless we ripple all channels, where the group is treated as one block. */
+static int sources_end_frame_get(const Scene *scene,
+                                 Span<Strip *> source_strips,
+                                 const Strip *target,
+                                 const bool all_channels)
+{
+  int end_frame = -MAXFRAME;
+  for (Strip *source : source_strips) {
+    if (!all_channels && source->channel != target->channel) {
+      continue;
+    }
+    end_frame = math::max(end_frame, source->right_handle(scene));
+  }
+  return end_frame;
+}
+
 static void strip_transform_handle_ripple(Scene *scene,
                                           ListBaseT<Strip> *seqbasep,
                                           Span<Strip *> source_strips)
@@ -291,6 +323,9 @@ static void strip_transform_handle_ripple(Scene *scene,
   if (source_strips.is_empty()) {
     return;
   }
+
+  const eSeqRippleFlag ripple_flag = tool_settings_ripple_flag_get(scene);
+  const bool all_channels = (ripple_flag & SEQ_RIPPLE_ALL_CHANNELS) != 0;
 
   int start_frame = MAXFRAME;
   int end_frame = -MAXFRAME;
@@ -341,6 +376,9 @@ static void strip_transform_handle_ripple(Scene *scene,
       if (target.left_handle() >= start_frame || target.right_handle(scene) <= start_frame) {
         continue;
       }
+      if (!do_ripple_strip(source_strips, &target, all_channels)) {
+        continue;
+      }
       strips_to_split.append(&target);
     }
 
@@ -359,7 +397,8 @@ static void strip_transform_handle_ripple(Scene *scene,
       {
         continue;
       }
-      delta = math::max(delta, end_frame - target.left_handle());
+      const int source_end = sources_end_frame_get(scene, source_strips, &target, all_channels);
+      delta = math::max(delta, source_end - target.left_handle());
       ripple_frame = math::min(ripple_frame, target.left_handle());
     }
   }
@@ -376,10 +415,13 @@ static void strip_transform_handle_ripple(Scene *scene,
     if (target.left_handle() < ripple_frame) {
       continue;
     }
+    if (!do_ripple_strip(source_strips, &target, all_channels)) {
+      continue;
+    }
     transform_translate_strip(scene, &target, delta);
   }
 
-  if (!scene->toolsettings->lock_markers) {
+  if ((ripple_flag & SEQ_RIPPLE_MARKERS) != 0 && !scene->toolsettings->lock_markers) {
     for (TimeMarker &marker : scene->markers) {
       if (marker.frame >= ripple_frame) {
         marker.frame += delta;

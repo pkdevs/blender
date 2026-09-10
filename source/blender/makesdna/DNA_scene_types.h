@@ -1815,6 +1815,13 @@ enum eSeqOverlapMode : int {
   SEQ_OVERLAP_SHUFFLE,
 };
 
+/** #SequencerToolSettings::ripple_flag */
+enum eSeqRippleFlag : int {
+  SEQ_RIPPLE_ALL_CHANNELS = 1 << 0,
+  SEQ_RIPPLE_MARKERS = 1 << 1,
+};
+ENUM_OPERATORS(eSeqRippleFlag)
+
 /** #SequencerToolSettings::snap_mode */
 enum eSequencerSnapMode : short {
   SEQ_SNAP_TO_STRIPS = 1 << 0,
@@ -1847,6 +1854,7 @@ struct SequencerToolSettings {
   eSequencerSnapMode snap_mode = {};
   eSequencerSnapFlag snap_flag = {};
   eSeqOverlapMode overlap_mode = SEQ_OVERLAP_RIPPLE;
+  eSeqRippleFlag ripple_flag = SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS;
   /**
    * When there are many snap points,
    * 0-1 range corresponds to resolution from bound-box to all possible snap points.

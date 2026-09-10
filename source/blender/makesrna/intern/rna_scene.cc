@@ -4740,6 +4740,18 @@ static void rna_def_sequencer_tool_settings(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, scale_overlap_modes);
   RNA_def_property_ui_text(prop, "Overlap Mode", "How to resolve overlap after transformation");
 
+  /* Ripple handling. */
+  prop = RNA_def_property(srna, "ripple_all_channels", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "ripple_flag", SEQ_RIPPLE_ALL_CHANNELS);
+  RNA_def_property_ui_text(prop,
+                           "All Channels",
+                           "Ripple strips on any channel. If disabled, only ripple strips "
+                           "currently on the same channel as edited strips");
+
+  prop = RNA_def_property(srna, "ripple_markers", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "ripple_flag", SEQ_RIPPLE_MARKERS);
+  RNA_def_property_ui_text(prop, "Markers", "Ripple markers along with strips");
+
   prop = RNA_def_property(srna, "pivot_point", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, pivot_points);
   RNA_def_property_ui_text(prop, "Pivot Point", "Rotation or scaling pivot point");

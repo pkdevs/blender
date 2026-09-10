@@ -2643,6 +2643,34 @@ void SEQUENCER_OT_delete(wmOperatorType *ot)
 /** \name Ripple Delete Strips Operator
  * \{ */
 
+static void operator_properties_ripple(wmOperatorType *ot)
+{
+  PropertyRNA *prop;
+
+  prop = RNA_def_boolean(ot->srna,
+                         "all_channels",
+                         true,
+                         "All Channels",
+                         "Ripple strips on other channels too, else only strips on the same "
+                         "channels as the edited strips");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+
+  prop = RNA_def_boolean(ot->srna, "markers", true, "Markers", "Ripple markers along with strips");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+}
+
+static void ripple_properties_from_tool_settings(bContext *C, wmOperator *op)
+{
+  Scene *scene = CTX_data_sequencer_scene(C);
+  if (scene == nullptr) {
+    return;
+  }
+
+  const eSeqRippleFlag ripple_flag = seq::tool_settings_ripple_flag_get(scene);
+  RNA_boolean_set(op->ptr, "all_channels", (ripple_flag & SEQ_RIPPLE_ALL_CHANNELS) != 0);
+  RNA_boolean_set(op->ptr, "markers", (ripple_flag & SEQ_RIPPLE_MARKERS) != 0);
+}
+
 static wmOperatorStatus sequencer_ripple_delete_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -2719,6 +2747,14 @@ static wmOperatorStatus sequencer_ripple_delete_exec(bContext *C, wmOperator *op
   return OPERATOR_FINISHED;
 }
 
+static wmOperatorStatus sequencer_ripple_delete_invoke(bContext *C,
+                                                       wmOperator *op,
+                                                       const wmEvent * /*event*/)
+{
+  ripple_properties_from_tool_settings(C, op);
+  return sequencer_ripple_delete_exec(C, op);
+}
+
 void SEQUENCER_OT_ripple_delete(wmOperatorType *ot)
 {
   /* Identifiers. */
@@ -2727,6 +2763,7 @@ void SEQUENCER_OT_ripple_delete(wmOperatorType *ot)
   ot->description = "Delete selected strips and close the gaps left behind";
 
   /* API callbacks. */
+  ot->invoke = sequencer_ripple_delete_invoke;
   ot->exec = sequencer_ripple_delete_exec;
   ot->poll = sequencer_edit_poll;
 
@@ -2734,13 +2771,7 @@ void SEQUENCER_OT_ripple_delete(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* Properties. */
-  RNA_def_boolean(ot->srna,
-                  "all_channels",
-                  true,
-                  "All Channels",
-                  "Ripple strips on other channels too, else only strips on the same channels as "
-                  "the deleted strips");
-  RNA_def_boolean(ot->srna, "markers", true, "Markers", "Ripple markers along with strips");
+  operator_properties_ripple(ot);
 }
 
 /** \} */
