@@ -4117,6 +4117,9 @@ def km_grease_pencil_paint_mode(params):
         ("grease_pencil.paste", {"type": 'V', "value": 'PRESS', "shift": True, "ctrl": True},
          {"properties": [("paste_back", True)]}),
 
+        # Duplicate
+        ("grease_pencil.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+
         # Transform Actions.
         *_template_items_transform_actions(params, use_bend=True, use_mirror=True, use_tosphere=True, use_shear=True),
     ])
