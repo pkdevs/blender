@@ -111,6 +111,10 @@ static void filelist_readjob_update(void *flrjv)
                                    fl_intern->curr_uid);
   }
 
+  if (flrj->catalogs_loaded.exchange(false)) {
+    WM_event_add_notifier_ex(flrj->wm, nullptr, NC_ASSET | ND_ASSET_CATALOGS_LOADED, nullptr);
+  }
+
   if (new_entries_num) {
     /* Do not clear selection cache, we can assume already 'selected' UIDs are still valid! Keep
      * the asset library data we just read. */

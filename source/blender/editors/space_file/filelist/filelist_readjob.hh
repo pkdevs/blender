@@ -82,6 +82,9 @@ struct FileListReadJob {
    * #Main may have received changes of interest (e.g. asset removed or renamed). */
   bool only_main_data = false;
 
+  /** Set once the asset library catalog data has been loaded, so that awaiting code can run
+   * (e.g. restoration of the last selected catalog). */
+  std::atomic<bool> catalogs_loaded = false;
   /** Trigger a call to #AS_asset_library_load() to update asset catalogs (won't reload the actual
    * assets) */
   std::atomic<bool> reload_asset_library = false;

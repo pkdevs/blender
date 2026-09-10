@@ -428,10 +428,6 @@ static void file_listener(const wmSpaceTypeListenerParams *listener_params)
     case NC_SPACE:
       switch (wmn->data) {
         case ND_SPACE_FILE_LIST:
-          if (wmn->action == NA_JOB_FINISHED && sfile->browse_mode == FILE_BROWSE_MODE_ASSETS) {
-            file_restore_last_selected_asset_catalog(
-                sfile->files, sfile->runtime, ED_fileselect_get_asset_params(sfile));
-          }
           ED_area_tag_refresh(area);
           break;
         case ND_SPACE_FILE_PARAMS:
@@ -479,6 +475,15 @@ static void file_listener(const wmSpaceTypeListenerParams *listener_params)
       break;
     }
     case NC_ASSET: {
+      switch (wmn->data) {
+        case ND_ASSET_CATALOGS_LOADED:
+          if (sfile->browse_mode == FILE_BROWSE_MODE_ASSETS) {
+            file_restore_last_selected_asset_catalog(
+                sfile->files, sfile->runtime, ED_fileselect_get_asset_params(sfile));
+          }
+          ED_area_tag_refresh(area);
+          break;
+      }
       switch (wmn->action) {
         case NA_SELECTED:
         case NA_ACTIVATED:

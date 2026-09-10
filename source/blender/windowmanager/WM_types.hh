@@ -588,6 +588,11 @@ struct wmNotifier {
  * That only happens on explicit user action.
  */
 #define ND_ASSET_CATALOGS (4 << 16)
+/**
+ * The asset library catalogs of a file list have finished loading, so any awaiting code (e.g.
+ * restoration of the last selected catalog) can now run.
+ */
+#define ND_ASSET_CATALOGS_LOADED (5 << 16)
 
 /* Changes in theme preferences that affects UI text drawing. */
 #define ND_UI_FONT (1 << 16)

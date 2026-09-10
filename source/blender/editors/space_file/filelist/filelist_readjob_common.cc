@@ -871,6 +871,7 @@ void filelist_readjob_load_asset_library_data(FileListReadJob *job_params, bool 
     filelist->asset_library = AS_asset_library_load(job_params->current_main,
                                                     *job_params->filelist->asset_library_ref);
     job_params->reload_asset_library = false;
+    job_params->catalogs_loaded = true;
     *do_update = true;
   }
 
