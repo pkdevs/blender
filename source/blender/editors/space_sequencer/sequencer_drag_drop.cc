@@ -83,6 +83,7 @@ struct SeqDropCoords {
   bool has_read_mouse_pos = false;
   bool is_intersecting;
   bool use_snapping;
+  bool use_ripple;
   float2 snap_point;
   uint8_t type;
 };
@@ -111,6 +112,7 @@ static bool generic_poll_operations(const bContext *C, const wmEvent *event, uin
   const bool do_invert = event->modifier & KM_CTRL;
   g_drop_coords.use_snapping = do_invert ? (ts->snap_flag_seq & SCE_SNAP) == 0 :
                                            (ts->snap_flag_seq & SCE_SNAP) != 0;
+  g_drop_coords.use_ripple = (event->modifier & KM_SHIFT) != 0;
   return true;
 }
 
@@ -358,6 +360,7 @@ static void sequencer_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
     RNA_int_set(drop->ptr, "frame_start", g_drop_coords.start_frame);
     RNA_int_set(drop->ptr, "channel", g_drop_coords.channel);
     RNA_boolean_set(drop->ptr, "skip_locked_or_muted_channels", false);
+    RNA_boolean_set(drop->ptr, "ripple", g_drop_coords.use_ripple);
   }
   else {
     /* We are dropped inside the preview region. Put the strip on top of the

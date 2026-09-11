@@ -287,6 +287,14 @@ static void sequencer_generic_props__internal(wmOperatorType *ot, int flag)
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
   prop = RNA_def_boolean(ot->srna,
+                         "ripple",
+                         false,
+                         "Ripple",
+                         "Push existing strips further along the timeline to make room, instead "
+                         "of using the overlap mode from the tool settings");
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+
+  prop = RNA_def_boolean(ot->srna,
                          "skip_locked_or_muted_channels",
                          true,
                          "Skip Locked/Muted Channels",
@@ -671,7 +679,7 @@ static bool sequencer_add_generic_exec(
   return true;
 }
 
-static void seq_load_handle_overlap(bContext *C, Span<Strip *> strips)
+static void seq_load_handle_overlap(bContext *C, wmOperator *op, Span<Strip *> strips)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_get(scene);
@@ -679,7 +687,11 @@ static void seq_load_handle_overlap(bContext *C, Span<Strip *> strips)
   ScrArea *area = CTX_wm_area(C);
   const bool use_sync_markers = ((area->spacedata.first_as<SpaceSeq>())->flag &
                                  SEQ_MARKER_TRANS) != 0;
-  seq::transform_handle_overlap(scene, ed->current_strips(), strips, use_sync_markers);
+  const eSeqOverlapMode overlap_mode = RNA_boolean_get(op->ptr, "ripple") ?
+                                           SEQ_OVERLAP_RIPPLE :
+                                           seq::tool_settings_overlap_mode_get(scene);
+  seq::transform_handle_overlap(
+      scene, ed->current_strips(), strips, {}, use_sync_markers, overlap_mode);
 }
 
 static void seq_load_apply_generic_options(bContext *C, wmOperator *op, Strip *strip)
@@ -706,7 +718,7 @@ static void seq_load_apply_generic_options(bContext *C, wmOperator *op, Strip *s
   /* Use set overlap_mode to fix overlaps. */
   VectorSet<Strip *> strip_col;
   strip_col.add(strip);
-  seq_load_handle_overlap(C, strip_col);
+  seq_load_handle_overlap(C, op, strip_col);
 }
 
 /* In this alternative version we only check for overlap, but do not do anything about them. */
@@ -1398,7 +1410,7 @@ static VectorSet<Strip *> sequencer_add_movie_strips(bContext *C,
   }
 
   if (handle_overlap && has_overlap) {
-    seq_load_handle_overlap(C, strips_added);
+    seq_load_handle_overlap(C, op, strips_added);
   }
 
   return strips_added;
@@ -1567,7 +1579,7 @@ static void sequencer_add_sound_multiple_strips(bContext *C,
   RNA_END;
 
   if (handle_overlap && has_overlap) {
-    seq_load_handle_overlap(C, strips_added);
+    seq_load_handle_overlap(C, op, strips_added);
   }
 }
 
@@ -1818,7 +1830,7 @@ static bool sequencer_add_images(bContext *C, wmOperator *op, seq::LoadData &loa
   ranges.free_no_destruct();
 
   if (handle_overlap && has_overlap) {
-    seq_load_handle_overlap(C, strips_added);
+    seq_load_handle_overlap(C, op, strips_added);
   }
 
   return true;

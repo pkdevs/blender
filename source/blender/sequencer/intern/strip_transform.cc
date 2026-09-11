@@ -624,8 +624,21 @@ void transform_handle_overlap(Scene *scene,
                               Span<Strip *> time_dependent_strips,
                               bool use_sync_markers)
 {
-  const eSeqOverlapMode overlap_mode = tool_settings_overlap_mode_get(scene);
+  transform_handle_overlap(scene,
+                           seqbasep,
+                           source_strips,
+                           time_dependent_strips,
+                           use_sync_markers,
+                           tool_settings_overlap_mode_get(scene));
+}
 
+void transform_handle_overlap(Scene *scene,
+                              ListBaseT<Strip> *seqbasep,
+                              Span<Strip *> source_strips,
+                              Span<Strip *> time_dependent_strips,
+                              bool use_sync_markers,
+                              const eSeqOverlapMode overlap_mode)
+{
   switch (overlap_mode) {
     case SEQ_OVERLAP_RIPPLE:
       strip_transform_handle_ripple(scene, seqbasep, source_strips);

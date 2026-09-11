@@ -17,6 +17,8 @@
 
 namespace blender {
 
+enum eSeqOverlapMode : int;
+
 struct Scene;
 struct Strip;
 struct SeqTimelineChannel;
@@ -63,6 +65,15 @@ void transform_handle_overlap(Scene *scene,
                               ListBaseT<Strip> *seqbasep,
                               Span<Strip *> source_strips,
                               bool use_sync_markers);
+/**
+ * As above, but resolve the overlap with \a overlap_mode instead of the tool settings.
+ */
+void transform_handle_overlap(Scene *scene,
+                              ListBaseT<Strip> *seqbasep,
+                              Span<Strip *> source_strips,
+                              Span<Strip *> time_dependent_strips,
+                              bool use_sync_markers,
+                              eSeqOverlapMode overlap_mode);
 /**
  * Move strips and markers (if not locked) that start after \a timeline_frame by \a delta frames.
  */
