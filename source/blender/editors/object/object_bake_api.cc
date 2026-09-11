@@ -494,7 +494,7 @@ static bool bake_object_check(const Main &bmain,
       ED_object_get_active_image(ob, mat_nr, &image, nullptr, &node, &ntree);
 
       /* Don't bake to unselected images. */
-      if (node && !(node->flag & NODE_SELECT)) {
+      if (node && !node->is_selected()) {
         image = nullptr;
       }
 
@@ -742,7 +742,7 @@ static bool bake_targets_init_image_textures(const BakeAPIRender *bkr,
     ED_object_get_active_image(ob, i + 1, &image, nullptr, &node, nullptr);
 
     /* Don't bake to unselected images. */
-    if (node && !(node->flag & NODE_SELECT)) {
+    if (node && !node->is_selected()) {
       image = nullptr;
     }
 
