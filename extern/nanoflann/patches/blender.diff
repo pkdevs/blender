@@ -1,0 +1,114 @@
+diff --git a/extern/nanoflann/include/nanoflann.hpp b/extern/nanoflann/include/nanoflann.hpp
+--- a/extern/nanoflann/include/nanoflann.hpp
++++ b/extern/nanoflann/include/nanoflann.hpp
+@@ -131,6 +131,17 @@
+ #endif
+ 
+ // Memory alignment of KD-tree nodes:
++/** BLENDER: Hook for building subtrees with an existing task scheduler instead of std::async.
++ *  Define it before including this header as a call that runs two nullary callables, possibly in
++ *  parallel, and returns once both are done. Building then uses tasks rather than creating
++ *  threads, so it cooperates with a host application's thread pool and thread count limit.
++ *
++ *  Subtrees smaller than NANOFLANN_PARALLEL_GRAIN_SIZE points are built inline, so the scheduler
++ *  isn't asked to do work that is cheaper to do directly. */
++#ifndef NANOFLANN_PARALLEL_GRAIN_SIZE
++#define NANOFLANN_PARALLEL_GRAIN_SIZE 4096
++#endif
++
+ #ifndef NANOFLANN_NODE_ALIGNMENT
+ #define NANOFLANN_NODE_ALIGNMENT 16
+ #endif
+@@ -1441,11 +1452,25 @@
+         }
+     }
+ 
++    /** BLENDER: Set while several threads build subtrees into the same pool. */
++    std::mutex* pool_mutex_ = nullptr;
++
++    /** BLENDER: The pool is not thread safe, so lock it while a parallel build is running. */
++    NodePtr allocateNode(Derived& obj)
++    {
++        if (pool_mutex_ == nullptr)
++        {
++            return obj.pool_.template allocate<Node>();
++        }
++        const std::lock_guard<std::mutex> lock(*pool_mutex_);
++        return obj.pool_.template allocate<Node>();
++    }
++
+     NodePtr divideTree(Derived& obj, const Offset left, const Offset right, BoundingBox& bbox)
+     {
+         assert(static_cast<Size>(obj.vAcc_.at(left)) < obj.dataset_.kdtree_get_point_count());
+ 
+-        NodePtr      node = obj.pool_.template allocate<Node>();  // allocate memory
++        NodePtr      node = this->allocateNode(obj);  // allocate memory
+         Offset       idx;
+         Dimension    cutfeat;
+         DistanceType cutval;
+@@ -1466,6 +1491,50 @@
+         return node;
+     }
+ 
++#ifdef NANOFLANN_PARALLEL_INVOKE
++    /**
++     * BLENDER: Same as divideTree(), but the two subtrees of a node large enough to be worth it
++     * are built through NANOFLANN_PARALLEL_INVOKE. Unlike divideTreeConcurrent() this creates no
++     * threads of its own, and the resulting tree is identical to the sequential one.
++     */
++    NodePtr divideTreeParallel(
++        Derived& obj, const Offset left, const Offset right, BoundingBox& bbox)
++    {
++        assert(static_cast<Size>(obj.vAcc_.at(left)) < obj.dataset_.kdtree_get_point_count());
++
++        NodePtr      node = this->allocateNode(obj);
++        Offset       idx;
++        Dimension    cutfeat;
++        DistanceType cutval;
++        if (makeNode(obj, node, left, right, bbox, idx, cutfeat, cutval)) return node;
++
++        BoundingBox left_bbox(bbox);
++        left_bbox[cutfeat].high = static_cast<ElementType>(cutval);
++        BoundingBox right_bbox(bbox);
++        right_bbox[cutfeat].low = static_cast<ElementType>(cutval);
++
++        if (right - left <= static_cast<Offset>(NANOFLANN_PARALLEL_GRAIN_SIZE))
++        {
++            node->child1 = this->divideTree(obj, left, left + idx, left_bbox);
++            node->child2 = this->divideTree(obj, left + idx, right, right_bbox);
++        }
++        else
++        {
++            NANOFLANN_PARALLEL_INVOKE(
++                [&]() {
++                    node->child1 = this->divideTreeParallel(obj, left, left + idx, left_bbox);
++                },
++                [&]() {
++                    node->child2 = this->divideTreeParallel(obj, left + idx, right, right_bbox);
++                });
++        }
++
++        finalizeSplitNode(obj, node, cutfeat, left_bbox, right_bbox, bbox);
++
++        return node;
++    }
++#endif /* NANOFLANN_PARALLEL_INVOKE */
++
+     /**
+      * Create a tree node that subdivides the list of vecs from vind[first] to
+      * vind[last] concurrently.  The routine is called recursively on each
+@@ -2042,7 +2111,13 @@
+         }
+         else
+         {
+-#ifndef NANOFLANN_NO_THREADS
++#if defined(NANOFLANN_PARALLEL_INVOKE)
++            /* BLENDER: Build with the host application's task scheduler. */
++            std::mutex mutex;
++            Base::pool_mutex_ = &mutex;
++            Base::root_node_ = this->divideTreeParallel(*this, 0, Base::size_, Base::root_bbox_);
++            Base::pool_mutex_ = nullptr;
++#elif !defined(NANOFLANN_NO_THREADS)
+             std::atomic<unsigned int> thread_count(0u);
+             std::mutex                mutex;
+             Base::root_node_ = this->divideTreeConcurrent(

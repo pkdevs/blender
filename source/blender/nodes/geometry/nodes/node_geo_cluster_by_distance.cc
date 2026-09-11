@@ -5,7 +5,7 @@
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
-#include "BLI_kdtree.hh"
+#include "BLI_kdtree_nanoflann.hh"
 
 #include "BKE_geometry_fields.hh"
 
@@ -108,13 +108,9 @@ class ClusterByDistanceFieldInput final : public bke::GeometryFieldInput {
 
     const int groups_num = group_indices.size();
     if (groups_num == 1) {
-      KDTree<float3> *tree = kdtree_new<float3>(mask_to_cluster.size());
-      mask_to_cluster.foreach_index(
-          [&](const int i) { kdtree_insert<float3>(tree, i, positions[i]); });
-      kdtree_balance<float3>(tree);
       index_mask::masked_fill<int>(cluster_ids, NO_CLUSTER_VALUE, mask_to_cluster);
-      kdtree_calc_duplicates_fast<float3>(tree, distance_, true, cluster_ids.data());
-      kdtree_free<float3>(tree);
+      const KDTreeNanoflann<float3> tree(positions, mask_to_cluster);
+      tree.calc_duplicates(distance_, cluster_ids);
       set_no_cluster_value(cluster_ids, mask_to_cluster);
       return VArray<int>::from_container(std::move(cluster_ids));
     }
@@ -137,25 +133,17 @@ class ClusterByDistanceFieldInput final : public bke::GeometryFieldInput {
         IndexRange(groups_num),
         1024,
         [&](const IndexRange range) {
-          Vector<int, 64> group_cluster_ids;
           for (const int group_i : range) {
             const Span<int> group = indices_by_group[group_i];
-            group_cluster_ids.resize(group.size());
-            group_cluster_ids.fill(NO_CLUSTER_VALUE);
-            KDTree<float3> *tree = kdtree_new<float3>(group.size());
-            for (const int pos : group.index_range()) {
-              kdtree_insert<float3>(tree, pos, positions[group[pos]]);
-            }
-            kdtree_balance<float3>(tree);
-            kdtree_calc_duplicates_fast<float3>(tree, distance_, true, group_cluster_ids.data());
-            kdtree_free<float3>(tree);
-            set_no_cluster_value(group_cluster_ids, group_cluster_ids.index_range());
-            threading::parallel_for(group.index_range(), 4096, [&](const IndexRange range) {
-              for (const int pos : range) {
-                const int i = group[pos];
-                cluster_ids[i] = group[group_cluster_ids[pos]];
+            /* Groups don't share indices, so the shared array can be written to directly. */
+            cluster_ids.as_mutable_span().fill_indices(group, NO_CLUSTER_VALUE);
+            const KDTreeNanoflann<float3> tree(positions, group);
+            tree.calc_duplicates(distance_, cluster_ids);
+            for (const int i : group) {
+              if (cluster_ids[i] == NO_CLUSTER_VALUE) {
+                cluster_ids[i] = i;
               }
-            });
+            }
           }
         },
         threading::accumulated_task_sizes(
