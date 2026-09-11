@@ -611,10 +611,10 @@ static void bbox_draw_prepare_space_image(const bContext *C, wmGizmoGroup *gzgro
   }
 }
 
-void VIEW3D_GGT_grease_pencil_quad(wmGizmoGroupType *gzgt)
+void VIEW3D_GGT_grease_pencil_deform(wmGizmoGroupType *gzgt)
 {
-  gzgt->name = "Quad Deform";
-  gzgt->idname = "VIEW3D_GGT_grease_pencil_quad";
+  gzgt->name = "Deform Gizmo";
+  gzgt->idname = "VIEW3D_GGT_grease_pencil_deform";
 
   // gzgt->flag |= WM_GIZMOGROUPTYPE_3D | WM_GIZMOGROUPTYPE_DRAW_MODAL_EXCLUDE |
   //               WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
