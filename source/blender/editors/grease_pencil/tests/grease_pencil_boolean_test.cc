@@ -28,7 +28,7 @@
 
 namespace blender::ed::greasepencil::tests {
 
-using namespace blender::ed::greasepencil::carver;
+using namespace blender::ed::greasepencil::segment::carver;
 
 static void CSS_setup_style(std::ofstream &f)
 {
@@ -417,13 +417,13 @@ static void expect_boolean_result_coord(const bke::CurvesGeometry &dst_curves,
   }
 }
 
-static bke::CurvesGeometry test_curve_boolean(const ed::greasepencil::carver::Operation opt,
+static bke::CurvesGeometry test_curve_boolean(const Operation opt,
                                               const bke::CurvesGeometry &src_curves,
                                               const Span<int> fill_ids,
                                               const IndexMask &clipping_shapes)
 {
   using namespace bke::greasepencil;
-  carver::CurveBooleanOpParameters op_params;
+  CurveBooleanOpParameters op_params;
   op_params.boolean_mode = opt;
   op_params.keep_caps = true;
   op_params.skip_clipping_attributes = false;

@@ -1374,7 +1374,7 @@ static void trim_stroke_ends(bke::greasepencil::Drawing &drawing,
 
   const IndexRange curve_mask = IndexRange::from_single(0);
   /* Trim the stroke ends by finding self intersections using the screen space positions. */
-  bke::CurvesGeometry stroke_trimmed = ed::greasepencil::trim::trim_curve_segment_ends(
+  bke::CurvesGeometry stroke_trimmed = ed::greasepencil::segment::trim::trim_curve_segment_ends(
       stroke, screen_space_positions, curve_mask, curve_mask, true);
 
   /* No intersection found. */

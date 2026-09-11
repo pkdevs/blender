@@ -66,7 +66,7 @@ static bool execute_trim_on_drawing(const int layer_index,
       obact, drawing, memory);
 
   /* Apply trim. */
-  bke::CurvesGeometry cut_strokes = ed::greasepencil::trim::trim_curve_segments(
+  bke::CurvesGeometry cut_strokes = ed::greasepencil::segment::trim::trim_curve_segments(
       src, screen_space_positions, mcoords, editable_strokes, visible_strokes, keep_caps);
 
   /* Set the new geometry. */

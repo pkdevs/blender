@@ -940,6 +940,189 @@ bool apply_mask_as_segment_selection(bke::CurvesGeometry &curves,
                                      IndexRange tree_data_range,
                                      eSelectOp sel_op);
 
+namespace segment {
+
+enum Side : uint8_t { Start = 0, End = 1 };
+
+/**
+ * Structure describing a curve segment (a point range in a curve) with end intersection points.
+ * A Segment can go past the end of the source curve and loop back to the start.
+ */
+class Segment {
+ public:
+  /* Curve index. */
+  int curve = -1;
+
+  /* The start and end of the original curve is stored, because this segment may go past the end
+   * and have to loop. */
+  IndexRange src_points;
+
+  /* Point range of the segment: Starting point and end point. Matches the point offsets
+   * in a CurvesGeometry. */
+  int points[2] = {-1, -1};
+
+  /* If this segment is a full cyclical segment, note that the segment can start and end at some
+   * intersection point. */
+  bool full_wrap_loop = false;
+
+  /* The normalized distance where the trim segment is intersected by another curve.
+   * For the outer ends of the trim segment the intersection distance is given between:
+   * - [start point] and [start point + 1]
+   * - [end point] and [end point + 1]
+   */
+  float intersection_factor[2] = {0.0f, 0.0f};
+
+  int intersection_index[2] = {-1, -1};
+
+  constexpr Segment() = default;
+
+  bool is_loop() const
+  {
+    return full_wrap_loop;
+  }
+
+  bool has_intersection(const Side side) const
+  {
+    return intersection_index[side] != -1;
+  }
+
+  int2 edge(const Side side) const
+  {
+    return int2(points[side], this->wrap_index(points[side] + 1));
+  }
+
+  int wrap_index(const int i) const
+  {
+    return math::mod_periodic(i - src_points.first(), src_points.size()) + src_points.first();
+  }
+
+  IndexRange point_range() const
+  {
+    if (this->is_loop()) {
+      return src_points;
+    }
+
+    if (!this->has_intersection(Side::Start) && this->has_intersection(Side::End)) {
+      return IndexRange::from_begin_end_inclusive(src_points.first(), points[Side::End]);
+    }
+
+    if (!this->has_intersection(Side::Start) && !this->has_intersection(Side::End)) {
+      return src_points;
+    }
+
+    /* If both intersection points are on the same edge, there's ether no points between or
+     * all of the points are. */
+    if (points[Side::Start] == points[Side::End]) {
+
+      /* If both intersections points are the same, either the segment as nothing or the full
+       * range. */
+      if (intersection_factor[Side::Start] == intersection_factor[Side::End]) {
+        if (this->is_loop()) {
+          return src_points.shift(points[Side::Start] - src_points.first() + 1);
+        }
+        return IndexRange(0);
+      }
+
+      if (intersection_factor[Side::Start] > intersection_factor[Side::End]) {
+        return src_points.shift(points[Side::Start] - src_points.first() + 1);
+      }
+      return IndexRange(0);
+    }
+
+    if (points[Side::Start] > points[Side::End]) {
+      return IndexRange::from_begin_end_inclusive(points[Side::Start] + 1,
+                                                  points[Side::End] + src_points.size());
+    }
+
+    return IndexRange::from_begin_end_inclusive(points[Side::Start] + 1, points[Side::End]);
+  }
+
+  int points_num() const
+  {
+    return this->point_range().size();
+  }
+
+  template<typename Fn> void foreach_point(Fn &&fn) const
+  {
+    const IndexRange point_range = this->point_range();
+
+    for (const int64_t pos : point_range.index_range()) {
+      const int i = this->wrap_index(point_range[pos]);
+
+      if constexpr (std::is_invocable_r_v<void, Fn, int64_t, int64_t>) {
+        fn(i, pos);
+      }
+      else {
+        fn(i);
+      }
+    }
+  }
+
+  constexpr static Segment from_curve(const int curve_i,
+                                      const IndexRange points,
+                                      const bool cyclic)
+  {
+    Segment segment;
+    segment.curve = curve_i;
+    segment.src_points = points;
+
+    segment.points[Side::Start] = points.first();
+    segment.points[Side::End] = points.last();
+
+    segment.intersection_factor[Side::Start] = 0.0f;
+    segment.intersection_factor[Side::End] = cyclic ? 1.0f : 0.0f;
+
+    segment.full_wrap_loop = cyclic;
+
+    return segment;
+  }
+
+  static Segment from_intersections(const int curve_i,
+                                    const IndexRange points,
+                                    const std::optional<int> point_start,
+                                    const std::optional<int> point_end,
+                                    const std::optional<float> factor_start,
+                                    const std::optional<float> factor_end,
+                                    const std::optional<int> inter_index_start,
+                                    const std::optional<int> inter_index_end)
+  {
+    Segment segment;
+    segment.curve = curve_i;
+    segment.src_points = points;
+
+    if (point_start) {
+      segment.points[Side::Start] = *point_start;
+      segment.intersection_factor[Side::Start] = *factor_start;
+    }
+    else {
+      segment.points[Side::Start] = points.first();
+      segment.intersection_factor[Side::Start] = 0.0f;
+    }
+
+    if (inter_index_start) {
+      segment.intersection_index[Side::Start] = *inter_index_start;
+    }
+
+    if (point_end) {
+      segment.points[Side::End] = *point_end;
+      segment.intersection_factor[Side::End] = *factor_end;
+    }
+    else {
+      segment.points[Side::End] = points.last();
+      segment.intersection_factor[Side::End] = 0.0f;
+    }
+
+    if (inter_index_end) {
+      segment.intersection_index[Side::End] = *inter_index_end;
+    }
+
+    BLI_assert(points.contains(segment.points[Side::Start]));
+    BLI_assert(points.contains(segment.points[Side::End]));
+
+    return segment;
+  }
+};
+
 namespace trim {
 
 /**
@@ -998,6 +1181,22 @@ struct CurveBooleanOpParameters {
   bool separate_islands;
 };
 
+void get_inside_states_for_segments(const CurveBooleanOpParameters &op_params,
+                                    const int curve_k,
+                                    const bool is_subj,
+                                    const int subj_shape_i,
+                                    const Span<float2> points,
+                                    const GroupedSpan<int> shapes,
+                                    const OffsetIndices<int> points_by_curve,
+                                    const IndexMask &clipping_shapes,
+                                    const Span<segment::Segment> all_segments,
+                                    const OffsetIndices<int> segments_by_curve,
+                                    const VArray<bool> &is_fill,
+                                    MutableSpan<bool> all_inside_left,
+                                    MutableSpan<bool> all_inside_right);
+
+void separate_fill_islands(bke::CurvesGeometry &dst, const Span<bool> unchanged_curves);
+
 bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
                                   const bke::CurvesGeometry &curves,
                                   GroupedSpan<int> shapes,
@@ -1012,6 +1211,8 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
                                               const ARegion &region);
 
 }  // namespace carver
+
+}  // namespace segment
 
 void merge_layers(const GreasePencil &src_grease_pencil,
                   const Span<Vector<int>> src_layer_indices_by_dst_layer,
