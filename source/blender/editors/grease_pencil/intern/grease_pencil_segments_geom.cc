@@ -1541,8 +1541,13 @@ class WindingState {
   }
 };
 
-constexpr float epms = 0.01f;
-constexpr float epms_factor = 0.05f;
+/* The distance the left and right points will be placed from the segment.
+ * A to much smaller will cause floating point problems, but anything much larger can cause
+ * inaccuracies. */
+constexpr float epsilon_distance = 0.01f;
+/* When the segment is vary small the #epsilon_distance can be to large, instead use a factor of
+ * the segment's length. */
+constexpr float epsilon_factor = 0.05f;
 /* Factor along the segment where the left and right points are placed.
  * A value of 0.5 can cause failure, so instead use a random number between 0.0 and 1.0 */
 constexpr float mid_point_factor = 0.35421f;
@@ -1606,7 +1611,8 @@ static std::pair<WindingState, WindingState> LR_states_from_segment(
 
   const float2 mid_point = math::interpolate(point1, point2, mid_point_factor);
 
-  const float eps_dis = math::min(epms_factor * math::distance(point1, point2), epms);
+  const float eps_dis = math::min(epsilon_factor * math::distance(point1, point2),
+                                  epsilon_distance);
 
   const float2 l_point = mid_point + tan_dir * eps_dis;
   const float2 r_point = mid_point - tan_dir * eps_dis;
