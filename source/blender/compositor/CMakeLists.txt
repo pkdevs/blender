@@ -417,6 +417,7 @@ set(GLSL_INC
   ../gpu/shaders
   ../gpu/shaders/common
   ../gpu/shaders/compat
+  ../gpu/shaders/nodes
 
   shaders
   shaders/infos
