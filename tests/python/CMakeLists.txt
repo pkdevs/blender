@@ -250,6 +250,13 @@ add_blender_test(
   --python ${CMAKE_CURRENT_LIST_DIR}/bl_disk_file_hash_service_test.py
 )
 
+# Runs outside of Blender, Blender is run with different command line arguments.
+add_python_test(
+  script_blend_autoexec_cli
+  ${CMAKE_CURRENT_LIST_DIR}/bl_blend_autoexec_cli.py
+  --blender "${TEST_BLENDER_EXE}"
+)
+
 # test running operators doesn't segfault under various conditions
 if(WITH_TESTS_EXPERIMENTAL)
   add_blender_test(
