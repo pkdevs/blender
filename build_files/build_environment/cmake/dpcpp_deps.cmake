@@ -64,3 +64,13 @@ ExternalProject_Add(external_unifiedmemoryframework
   BUILD_COMMAND echo .
   INSTALL_COMMAND echo .
 )
+
+ExternalProject_Add(external_hwloc
+  URL file://${PACKAGE_DIR}/${HWLOC_FILE}
+  URL_HASH ${HWLOC_HASH_TYPE}=${HWLOC_HASH}
+  DOWNLOAD_DIR ${DOWNLOAD_DIR}
+  PREFIX ${BUILD_DIR}/hwloc
+  CONFIGURE_COMMAND echo .
+  BUILD_COMMAND echo .
+  INSTALL_COMMAND echo .
+)
