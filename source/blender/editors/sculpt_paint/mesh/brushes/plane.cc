@@ -432,17 +432,18 @@ void do_plane_brush(const Depsgraph &depsgraph,
   const float displace = ss.cache->radius * offset * (flip ? -1.0f : 1.0f);
   center += normal * ss.cache->scale * displace;
 
-  float4x4 mat = float4x4::identity();
-  mat.x_axis() = math::cross(normal, ss.cache->grab_delta_symm);
-  mat.y_axis() = math::cross(normal, mat.x_axis());
-  mat.z_axis() = normal;
-  mat.location() = center;
-  mat = math::normalize(mat);
-
-  const float4x4 scale = math::from_scale<float4x4>(float3(ss.cache->radius));
-  float4x4 tmat = mat * scale;
-
-  mat = math::invert(tmat);
+  float4x4 mat;
+  float4x4 mat_inv;
+  const float tip_rotation = bke::brush::supports_rake(brush) ? ss.cache->special_rotation : 0.0f;
+  calc_brush_local_mat(0,
+                       tip_rotation,
+                       *ss.cache->vc,
+                       object,
+                       normal,
+                       center,
+                       ss.cache->radius,
+                       mat.ptr(),
+                       mat_inv.ptr());
 
   float strength = ss.cache->bstrength;
   float height = brush.plane_height;
@@ -584,7 +585,7 @@ CursorSampleResult calc_node_mask(const Depsgraph &depsgraph,
           return node_in_box(
               brush_local_mat, bounds, float3(0.0f), float3(1.0f, 1.0f, 1.0f), false);
         }
-        return node_in_box(brush_local_mat, bounds);
+        return node_in_box(brush_local_mat, node.bounds());
       });
 
   return {plane_mask, plane_center, plane_normal};
