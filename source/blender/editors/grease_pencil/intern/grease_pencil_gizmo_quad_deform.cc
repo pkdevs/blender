@@ -42,13 +42,13 @@ namespace blender {
 namespace ed::greasepencil {
 
 enum class DeformMode : int8_t {
-  FREE = 0,
+  TRANSFORM = 0,
   PERSPECTIVE = 1,
   GRID = 2,
 };
 
 static const EnumPropertyItem prop_deform_modes[] = {
-    {int(DeformMode::FREE), "FREE", 0, "Free", "TODO"},
+    {int(DeformMode::TRANSFORM), "TRANSFORM", 0, "Transform", "TODO"},
     {int(DeformMode::PERSPECTIVE), "PERSPECTIVE", 0, "Perspective", "TODO"},
     {int(DeformMode::GRID), "GRID", 0, "Grid", "TODO"},
     {0, nullptr, 0, nullptr, nullptr},
@@ -262,7 +262,7 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
       copy_m4_m4(gz2->matrix_space, gz->matrix_space);
     }
 
-    if (mask_group->mode == DeformMode::FREE) {
+    if (mask_group->mode == DeformMode::TRANSFORM) {
       // RNA_float_set_array(gz->ptr, "dimensions", box->size());
       WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
       for (int i = 0; i < 4; i++) {
@@ -628,7 +628,7 @@ void VIEW3D_GGT_grease_pencil_quad(wmGizmoGroupType *gzgt)
   // gzgt->message_subscribe = WIDGETGROUP_xform_shear_message_subscribe;
   gzgt->draw_prepare = bbox_draw_prepare_space_image;
 
-  RNA_def_enum(gzgt->srna, "mode", prop_deform_modes, int(DeformMode::FREE), "Mode", "");
+  RNA_def_enum(gzgt->srna, "mode", prop_deform_modes, int(DeformMode::TRANSFORM), "Mode", "");
 }
 
 }  // namespace ed::greasepencil
