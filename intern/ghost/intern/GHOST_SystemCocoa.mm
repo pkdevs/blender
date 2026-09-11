@@ -1297,7 +1297,7 @@ static bool NSImageToBitmap(NSImage *image, GHOST_ImageData::Bitmap &bitmap)
     }
 
     uint8_t *data = MEM_new_array_uninitialized<uint8_t>(
-        uint64_t(imageSize.width) * imageSize.height * 4, "<clipboard>");
+        size_t(imageSize.width) * imageSize.height * 4, "<clipboard>");
     uint8_t *bmp_data = (uint8_t *)bitmapImage.bitmapData;
 
     /* Vertical Flip. */
