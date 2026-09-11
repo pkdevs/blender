@@ -11,16 +11,16 @@ namespace blender::nodes::node_geo_hello_world_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Mesh").supported_type(GeometryComponent::Type::Mesh);
-  b.add_input<decl::Vector>("Offset").default_value({0, 0, 1});
-  b.add_output<decl::Geometry>("Mesh").propagate_all();
+  b.add_input<decl::Geometry>("Mesh"_ustr).supported_type(GeometryComponent::Type::Mesh);
+  b.add_input<decl::Vector>("Offset"_ustr).default_value({0, 0, 1});
+  b.add_output<decl::Geometry>("Mesh"_ustr).propagate_all();
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
   /* Get inputs from sockets. */
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh");
-  const float3 offset = params.extract_input<float3>("Offset");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh"_ustr);
+  const float3 offset = params.extract_input<float3>("Offset"_ustr);
 
   /* Process mesh if available. */
   if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
@@ -32,14 +32,14 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 
   /* Set output socket. */
-  params.set_output("Mesh", std::move(geometry_set));
+  params.set_output("Mesh"_ustr, std::move(geometry_set));
 }
 
 static void node_register()
 {
   static blender::bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeHelloWorld");
+  geo_node_type_base(&ntype, "GeometryNodeHelloWorld"_ustr);
   ntype.ui_name = "Hello World";
   ntype.ui_description = "My first node";
   ntype.nclass = NODE_CLASS_GEOMETRY;
