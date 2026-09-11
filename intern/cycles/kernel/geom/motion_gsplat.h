@@ -238,7 +238,7 @@ ccl_device_forceinline float3 motion_gsplat_scale(KernelGlobals kg,
                                                   const int prim)
 {
   const int offset = gsplat_attr_scale_offset(kg, object) + prim;
-  if (gsplat_attr_rotation_has_motion(kg, object)) {
+  if (gsplat_attr_scale_has_motion(kg, object)) {
     const float3 scale = kernel_data_fetch(attributes_float3,
                                            motion_info.offset_for_step + offset);
     const float3 next_scale = kernel_data_fetch(attributes_float3,
