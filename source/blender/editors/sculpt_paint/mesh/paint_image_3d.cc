@@ -52,7 +52,6 @@
 namespace blender {
 
 namespace ed::sculpt_paint::image {
-
 using namespace blender::bke::pbvh::pixels;
 using namespace blender::bke::image;
 
@@ -67,6 +66,11 @@ ImageData::~ImageData()
     BKE_image_release_ibuf(image, buffer, nullptr);
   }
   image_buffers.clear();
+
+  for (ImBuf *buffer : scratch_image_buffers.values()) {
+    IMB_freeImBuf(buffer);
+  }
+  scratch_image_buffers.clear();
 }
 std::unique_ptr<ImageData> ImageData::init_active_image(Object &ob, ImagePaintSettings &settings)
 {
@@ -159,6 +163,36 @@ static void fetch_image_buffers(ImageData &image_data,
             MutableSpan(reinterpret_cast<uchar4 *>(buffer->byte_data_for_write()),
                         IMB_get_pixel_count(buffer)));
       }
+    }
+  }
+}
+
+static void allocate_scratch_buffers(ImageData &image_data,
+                                     const bke::pbvh::MeshNode & /*node*/,
+                                     const PixelNode &pixel_node)
+{
+  for (const UDIMTilePixels &tile : pixel_node.tiles) {
+    ImBuf *buffer = image_data.image_buffers.lookup_default(tile.tile_number, nullptr);
+
+    if (buffer == nullptr) {
+      continue;
+    }
+
+    ImBuf *scratch_buffer = IMB_allocImBuf(buffer->x, buffer->y, ImBufFlags::Zero);
+    if (buffer->byte_data()) {
+      IMB_alloc_byte_pixels(scratch_buffer);
+      image_data.scratch_data_buffers.add_overwrite(
+          tile.tile_number,
+          MutableSpan(reinterpret_cast<uchar4 *>(buffer->byte_data_for_write()),
+                      IMB_get_pixel_count(buffer)));
+    }
+    else {
+      BLI_assert(ELEM(buffer->channels, 0, 4));
+      IMB_alloc_float_pixels(scratch_buffer, 4);
+      image_data.scratch_data_buffers.add_overwrite(
+          tile.tile_number,
+          MutableSpan(reinterpret_cast<float4 *>(buffer->float_data_for_write()),
+                      IMB_get_pixel_count(buffer)));
     }
   }
 }
@@ -314,6 +348,38 @@ BLI_NOINLINE static void paint_blend_pixels_color_managed(
     for (int i = 0; i < size; i++) {
       rgba_float_to_uchar(image_pixels[img_x + i], scene_linear_pixels[i]);
     }
+  }
+}
+
+/* TODO: Figure out when to skip NN averaging based on related factor */
+template<typename PixelT>
+static void average_pixels(const int size,
+                           const int img_x,
+                           const KDTree<float3> &tree,
+                           const Span<float3> pixel_positions,
+                           const Span<PixelT> image_pixels,
+                           const MutableSpan<PixelT> scratch_pixels)
+{
+  constexpr bool is_float = std::is_same_v<typename PixelT::base_type, float>;
+  if (is_float) {
+    for (int i = 0; i < size; i++) {
+      KDTreeNearest<float3> nearest_pixels[8];
+      const int nearest_count = kdtree_find_nearest_n(
+          &tree, pixel_positions[i], nearest_pixels, 8);
+      int num = 0;
+      PixelT accum(0);
+      for (int k = 0; k < nearest_count; k++) {
+        if (nearest_pixels[k].dist < FLT_EPSILON) {
+          continue;
+        }
+        accum += image_pixels[nearest_pixels[k].index];
+        num++;
+      }
+      scratch_pixels[img_x + i] = accum / float(num);
+    }
+  }
+  else {
+    /* TODO Implement byte handling */
   }
 }
 
@@ -695,6 +761,179 @@ static void do_paint_pixels(const Depsgraph &depsgraph,
   pixel_node.flags.dirty |= pixels_updated;
 }
 
+static void fill_blur_pixels(const Depsgraph &depsgraph,
+                             Object &object,
+                             const Paint &paint,
+                             const Brush &brush,
+                             ImageData &image_data,
+                             const KDTree<float3> &tree,
+                             bke::pbvh::Node & /*node*/,
+                             PixelNode &pixel_node)
+{
+  PRF_scope(ProfileCategory::Editor);
+  SculptSession &ss = *object.runtime->sculpt_session;
+  const StrokeCache &cache = *ss.cache;
+  const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, object);
+
+  const Mesh &mesh = *id_cast<const Mesh *>(object.data);
+  const Span<int> corner_verts = mesh.corner_verts();
+  const Span<int3> corner_tris = mesh.corner_tris();
+  BitVector<> brush_test = init_uv_primitives_brush_test(
+      ss, corner_verts, corner_tris, pixel_node.uv_primitives.tri_indices, positions);
+
+  const PaintBlendSettings blend_settings(paint, brush, ss.cache->toggle_settings.invert);
+
+#ifdef DEBUG_PIXEL_NODES
+  float4 debug_color;
+  uint hash = BLI_hash_int(POINTER_AS_UINT(&node));
+
+  debug_color[0] = float(hash & 255) / 255.0f;
+  debug_color[1] = float((hash >> 8) & 255) / 255.0f;
+  debug_color[2] = float((hash >> 16) & 255) / 255.0f;
+  debug_color[3] = 1.0f;
+#endif
+
+  const float3 location = ss.cache ? ss.cache->location_symm : ss.cursor_location;
+  const float radius = ss.cache ? ss.cache->radius : ss.cursor_radius;
+  const Bounds<float3> brush_bounds(location - radius, location + radius);
+
+  for (UDIMTilePixels &tile_data : pixel_node.tiles) {
+    ImBuf *image_buffer = image_data.image_buffers.lookup_default(tile_data.tile_number, nullptr);
+    if (image_buffer == nullptr) {
+      continue;
+    }
+
+    /* TODO: This should be a non-mutable buffer */
+    BufferType orig_buffer = image_data.data_buffers.lookup_default(tile_data.tile_number,
+                                                                    BufferType{});
+    BufferType mutable_buffer = image_data.scratch_data_buffers.lookup_default(
+        tile_data.tile_number, BufferType{});
+    if (std::holds_alternative<std::monostate>(mutable_buffer)) {
+      BLI_assert_unreachable();
+      continue;
+    }
+
+    threading::EnumerableThreadSpecific<PaintLocalData> all_factor_tls;
+
+    /* Parallelize over contiguous runs containing one or more per-triangle pixel rows. */
+    const int num_runs = tile_data.pixel_row_run_starts.size() - 1;
+    threading::parallel_for(IndexRange(num_runs), 32, [&](const IndexRange task_range) {
+      PaintLocalData &tls = all_factor_tls.local();
+      for (const int run_i : task_range) {
+        const int run_begin = tile_data.pixel_row_run_starts[run_i];
+        const int run_end = tile_data.pixel_row_run_starts[run_i + 1];
+
+        /* Compute run position and size. */
+        const int run_x = int(tile_data.pixel_row_run_start_coords[run_i].x);
+        const int run_y = int(tile_data.pixel_row_run_start_coords[run_i].y);
+        int run_size = 0;
+        for (int k = run_begin; k < run_end; k++) {
+          run_size += int(tile_data.pixel_rows[k].num_pixels);
+        }
+
+        /* Resize temporary data to match run size. */
+        tls.factors.resize(run_size);
+        tls.pixel_positions.resize(run_size);
+        tls.distances.resize(run_size);
+        const MutableSpan<float> factors = tls.factors;
+        const MutableSpan<float3> positions = tls.pixel_positions;
+        const MutableSpan<float> distances = tls.distances;
+
+        /* Tracking for active subset of run with nonzero factors. */
+        int run_active_begin = -1;
+        int run_active_end = -1;
+        int tri_skip_start = -1;
+        int tri_row_offset = 0;
+
+        /* For each triangle pixel row in the run. */
+        for (int k = run_begin; k < run_end; k++) {
+          const PackedPixelRow &tri_row = tile_data.pixel_rows[k];
+          const int tri_row_size = int(tri_row.num_pixels);
+
+          /* Use pixel to position mapping to compute 3D position. */
+          const int tri_row_x = run_x + tri_row_offset;
+          const int uv_prim = tri_row.uv_primitive_index;
+          const float3x3 &pixel_to_position = pixel_node.uv_primitives.pixel_to_position[uv_prim];
+          const float3 P_delta = pixel_to_position[0];
+          const float3 P_start = P_delta * tri_row_x + pixel_to_position[1] * run_y +
+                                 pixel_to_position[2];
+
+          /* Quick bounds check. */
+          if (brush_test[tri_row.uv_primitive_index] &&
+              brush_bounds.intersects_segment(P_start, P_start + P_delta * tri_row_size))
+          {
+            /* Compute brush factors per triangle. */
+            const MutableSpan<float> tri_factors = factors.slice(tri_row_offset, tri_row_size);
+            const MutableSpan<float3> tri_positions = positions.slice(tri_row_offset,
+                                                                      tri_row_size);
+            const MutableSpan<float> tri_distances = distances.slice(tri_row_offset, tri_row_size);
+
+            tri_factors.fill(1.0f);
+            calc_pixel_row_positions(P_start, P_delta, tri_positions, IndexRange(tri_row_size));
+            calc_brush_distances(
+                ss, tri_positions, eBrushFalloffShape(brush.falloff_shape), tri_distances);
+            filter_distances_with_radius(cache.radius, tri_distances, tri_factors);
+            apply_hardness_to_distances(cache, tri_distances);
+            calc_brush_strength_factors(cache, brush, tri_distances, tri_factors);
+            calc_brush_texture_factors(ss, brush, tri_positions, tri_factors);
+            scale_factors(tri_factors, cache.bstrength);
+
+            /* Track which subset of the run has non-zero factors. */
+            int tri_active_begin = -1;
+            int tri_active_end = -1;
+            for (int i = 0; i < tri_row_size; i++) {
+              if (tri_factors[i] != 0.0f) {
+                if (tri_active_begin < 0) {
+                  tri_active_begin = i;
+                }
+                tri_active_end = i;
+              }
+            }
+
+            if (tri_active_begin >= 0) {
+              if (run_active_begin < 0) {
+                run_active_begin = tri_row_offset + tri_active_begin;
+              }
+              else if (tri_skip_start >= 0) {
+                factors.slice(tri_skip_start, tri_row_offset - tri_skip_start).fill(0.0f);
+                tri_skip_start = -1;
+              }
+              run_active_end = tri_row_offset + tri_active_end;
+            }
+          }
+          else {
+            /* No intersection, skip this triangle row. */
+            if (run_active_begin >= 0 && tri_skip_start < 0) {
+              tri_skip_start = tri_row_offset;
+            }
+          }
+          tri_row_offset += tri_row_size;
+        }
+
+        if (run_active_begin < 0) {
+          continue;
+        }
+
+        /* Record modified spans. */
+        const int run_active_size = run_active_end - run_active_begin + 1;
+        const int run_active_x = run_x + run_active_begin;
+
+        /* Blend pixels with computed factors. */
+        if (std::holds_alternative<MutableSpan<float4>>(mutable_buffer)) {
+          average_pixels<float4>(run_active_size,
+                                 run_y * image_buffer->x + run_active_x,
+                                 tree,
+                                 positions,
+                                 std::get<MutableSpan<float4>>(orig_buffer),
+                                 std::get<MutableSpan<float4>>(mutable_buffer));
+        }
+        else {
+        }
+      }
+    });
+  }
+}
+
 /* -------------------------------------------------------------------- */
 /** \name Fix non-manifold edge bleeding.
  * \{ */
@@ -778,16 +1017,22 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
   });
 }
 
-KDTree<float3>* build_kd_tree(Object &ob, const ImageData &data, const image::TileNumber tile_number)
+KDTree<float3> *build_kd_tree(Object &ob,
+                              const ImageData &data,
+                              const image::TileNumber tile_number)
 {
-  const ImBuf* tile_buffer = data.image_buffers.lookup_default(tile_number, nullptr);
+  PRF_scope(ProfileCategory::Editor);
+  ImageUser tile_user = data.image_user_get();
+  tile_user.tile = tile_number;
+
+  const ImBuf *tile_buffer = BKE_image_acquire_ibuf(data.image, &tile_user, nullptr);
   if (tile_buffer == nullptr) {
     BLI_assert(0);
     return nullptr;
   }
   const uint32_t pixels = IMB_get_pixel_count(tile_buffer);
   const uint32_t height = tile_buffer->y;
-  KDTree<float3>* tree = MEM_new<KDTree<float3>>(__func__, pixels);
+  KDTree<float3> *tree = MEM_new<KDTree<float3>>(__func__, pixels);
   bke::pbvh::Tree &pbvh = *bke::object::pbvh_get(ob);
   PixelData &pixel_data = *pbvh.pixels_;
   Span<PixelNode> pixel_nodes = pixel_data.nodes;
@@ -798,7 +1043,8 @@ KDTree<float3>* build_kd_tree(Object &ob, const ImageData &data, const image::Ti
       }
 
       uint64_t sum = 0;
-      for (const int run_i : tile_data.pixel_row_run_starts.index_range()) {
+      const int num_runs = tile_data.pixel_row_run_starts.size() - 1;
+      for (const int run_i : IndexRange(num_runs)) {
         const int run_begin = tile_data.pixel_row_run_starts[run_i];
         const int run_end = tile_data.pixel_row_run_starts[run_i + 1];
 
@@ -826,22 +1072,27 @@ KDTree<float3>* build_kd_tree(Object &ob, const ImageData &data, const image::Ti
           for (const int pixel_i : IndexRange(tri_row_size)) {
             int pixel = run_y * height + tri_row_x + pixel_i;
             const float3 position = P_start + P_delta * pixel_i;
-            printf("Inserting %d at (%f %f %f)\n", pixel, position.x, position.y, position.z);
+#if 0
+            printf("Inserting %d (%d %d %d %d) at (%f %f %f)\n",
+                   pixel,
+                   run_y,
+                   height,
+                   tri_row_x,
+                   pixel_i,
+                   position.x,
+                   position.y,
+                   position.z);
+#endif
             kdtree_insert(tree, pixel, position);
           }
 
           tri_row_offset += tri_row_size;
+          sum += tri_row_size;
         }
       }
-      printf("Total pixels inserted: %lld\n", sum);
+      printf("Total pixels inserted: %lu\n", sum);
     }
   }
-  /* Do we want the extended borders?
-     * No? May weigh data confusingly at seams
-  /* For each of the PixelNodes */
-  /* For a given tile */
-  /* Loop over the rows, getting the object-space position and the image data offset, inserting
-   * into the KDTree */
   return tree;
 }
 
@@ -850,6 +1101,7 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
                             const Brush &brush,
                             Object &ob,
                             ImageData &image_data,
+                            const KDTree<float3> &tree,
                             const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Editor);
@@ -861,10 +1113,21 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
 
   node_mask.foreach_index(
       [&](const int i) { fetch_image_buffers(image_data, nodes[i], pixel_nodes[i]); });
+  node_mask.foreach_index(
+      [&](const int i) { allocate_scratch_buffers(image_data, nodes[i], pixel_nodes[i]); });
 
   for (Array<uint8_t> &modified : image_data.seam_tile_modified.values()) {
     modified.as_mutable_span().fill(0);
   }
+
+  /* TODO: We need to create a separate "blur" image instead of applying this blend incrementally
+   */
+  /* Naive first implementation: Allocate a same sized image and write the blur information there,
+   * use this when determining the actual pixel data. */
+
+  node_mask.foreach_index([&](const int i) {
+    fill_blur_pixels(depsgraph, ob, paint, brush, image_data, tree, nodes[i], pixel_nodes[i]);
+  });
 
   node_mask.foreach_index(
       [&](const int i) {

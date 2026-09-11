@@ -32,7 +32,6 @@ constexpr int kd_found_alloc_inc = 50; /* alloc increment for collecting nearest
 
 constexpr uint kd_node_unset = (uint(-1));
 
-
 template<typename CoordT>
 inline typename KDTreeCoordTraits<CoordT>::ValueType axis_get(const CoordT &co, uint axis)
 {

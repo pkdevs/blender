@@ -641,7 +641,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
   /* TODO: This may need to be scoped per-tile, but we should keep the data alive outside of a
    * stroke. */
   if (needs_kd_tree && mode_data->pixel_tree == nullptr) {
-    mode_data->pixel_tree = build_kd_tree(ob, *mode_data->image_data, 0);
+    mode_data->pixel_tree = build_kd_tree(ob, *mode_data->image_data, 1001);
   }
 
   const IndexMask node_mask = gather_brush_nodes(ob, brush, memory, node_fully_masked_or_hidden);
@@ -672,7 +672,13 @@ static void do_brush_action(const Depsgraph &depsgraph,
           depsgraph, image_paint_settings.paint, brush, ob, *mode_data->image_data, node_mask);
       break;
     case IMAGE_PAINT_BRUSH_TYPE_SOFTEN:
-      do_3d_image_blur_brush(depsgraph, image_paint_settings.paint, brush, ob, *mode_data->image_data, node_mask);
+      do_3d_image_blur_brush(depsgraph,
+                             image_paint_settings.paint,
+                             brush,
+                             ob,
+                             *mode_data->image_data,
+                             *mode_data->pixel_tree,
+                             node_mask);
       break;
     default:
       /* TODO: Implement the rest of them... */

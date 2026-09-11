@@ -21,7 +21,7 @@ namespace detail {
  * otherwise clear them when re-balancing: see #62210.
  */
 constexpr uint kd_node_root_is_init = (uint(-2));
-}
+}  // namespace detail
 
 template<typename CoordT> struct KDTreeCoordTraits {
   static constexpr int DimsNum = CoordT::type_length;

@@ -34,6 +34,11 @@ struct ImageData : NonCopyable {
 
   Map<bke::image::TileNumber, ImBuf *> image_buffers = {};
   Map<bke::image::TileNumber, BufferType> data_buffers = {};
+
+  /* Used for algorithms which need a state prior to the stroke (e.g. Blur) */
+  Map<bke::image::TileNumber, ImBuf *> scratch_image_buffers = {};
+  Map<bke::image::TileNumber, BufferType> scratch_data_buffers = {};
+
   Map<bke::image::TileNumber, TileColorspaceProcessor> processors = {};
 
   /** Per undo tile, to quickly check if it was already pushed. */
@@ -55,7 +60,9 @@ struct ImageData : NonCopyable {
   }
 };
 
-KDTree<float3>* build_kd_tree(Object &ob, const ImageData &data, bke::image::TileNumber tile_number);
+KDTree<float3> *build_kd_tree(Object &ob,
+                              const ImageData &data,
+                              bke::image::TileNumber tile_number);
 
 void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                              const Paint &paint,
@@ -68,6 +75,7 @@ void do_3d_image_blur_brush(const Depsgraph &depsgraph,
                             const Brush &brush,
                             Object &ob,
                             ImageData &image_data,
+                            const KDTree<float3> &tree,
                             const IndexMask &node_mask);
 /** \} */
 }  // namespace blender::ed::sculpt_paint::image
