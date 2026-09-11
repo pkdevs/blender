@@ -76,8 +76,9 @@ ccl_device_inline float3 gsplat_normal(
   /* Follows the "Flattening 3D Gaussian" section of [chen2024pgsr].
    *
    * The intuitive way to think about it is that gsplat is a pancake, so its normal in the Gaussian
-   * splat space points in the direction of the smallest scale. This means, for example, that if
-   * the scale's z component is the smallest then the normal in the splat space is (0, 0, 1).
+   * splat space points in the direction of the smallest scale (orthogonal to two largest scales).
+   * This means, for example, that if the scale's z component is the smallest then the normal in
+   * the splat space is (0, 0, 1).
    *
    * It needs to be converted to the object space. The naive implementation would be is
    *
