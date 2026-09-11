@@ -18,8 +18,6 @@
 
 #include "NOD_rna_define.hh"
 
-#include "GPU_material.hh"
-
 #include "node_function_util.hh"
 #include "node_shader_util.hh"
 
@@ -142,28 +140,27 @@ static void node_eval_inverse_elem(value_elem::InverseElemEvalParams &params)
   }
 }
 
-static const char *gpu_shader_get_name(const NodeBooleanMathOperation operation,
-                                       const bool as_float)
+static const char *gpu_shader_get_name(const NodeBooleanMathOperation operation)
 {
   switch (operation) {
     case NODE_BOOLEAN_MATH_AND:
-      return as_float ? "boolean_math_and_float" : "boolean_math_and";
+      return "boolean_math_and";
     case NODE_BOOLEAN_MATH_OR:
-      return as_float ? "boolean_math_or_float" : "boolean_math_or";
+      return "boolean_math_or";
     case NODE_BOOLEAN_MATH_NOT:
-      return as_float ? "boolean_math_not_float" : "boolean_math_not";
+      return "boolean_math_not";
     case NODE_BOOLEAN_MATH_NAND:
-      return as_float ? "boolean_math_nand_float" : "boolean_math_nand";
+      return "boolean_math_nand";
     case NODE_BOOLEAN_MATH_NOR:
-      return as_float ? "boolean_math_nor_float" : "boolean_math_nor";
+      return "boolean_math_nor";
     case NODE_BOOLEAN_MATH_XNOR:
-      return as_float ? "boolean_math_xnor_float" : "boolean_math_xnor";
+      return "boolean_math_xnor";
     case NODE_BOOLEAN_MATH_XOR:
-      return as_float ? "boolean_math_xor_float" : "boolean_math_xor";
+      return "boolean_math_xor";
     case NODE_BOOLEAN_MATH_IMPLY:
-      return as_float ? "boolean_math_imply_float" : "boolean_math_imply";
+      return "boolean_math_imply";
     case NODE_BOOLEAN_MATH_NIMPLY:
-      return as_float ? "boolean_math_nimply_float" : "boolean_math_nimply";
+      return "boolean_math_nimply";
   }
 
   BLI_assert_unreachable();
@@ -176,9 +173,7 @@ static int node_gpu_material(GPUMaterial *mat,
                              GPUNodeStack *in,
                              GPUNodeStack *out)
 {
-  /* EEVEE represents boolean sockets as floats, while the compositor uses native booleans. */
-  const char *name = gpu_shader_get_name(NodeBooleanMathOperation(node->custom1),
-                                         in[0].type == GPU_FLOAT);
+  const char *name = gpu_shader_get_name(NodeBooleanMathOperation(node->custom1));
 
   if (name == nullptr) {
     return 0;
