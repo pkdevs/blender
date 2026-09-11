@@ -281,7 +281,14 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
     }
   }
 
+  WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
+  for (const int i : mask_group->corner_data.index_range()) {
+    wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
+    WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
+  }
+
   if (box) {
+    // RNA_float_set_array(gz->ptr, "dimensions", box->size());
     mul_v3_fl(gz->matrix_space[0], box->size().x);
     mul_v3_fl(gz->matrix_space[1], box->size().y);
 
@@ -304,27 +311,13 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
     }
 
     if (mask_group->mode == DeformMode::TRANSFORM) {
-      // RNA_float_set_array(gz->ptr, "dimensions", box->size());
       WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
-      for (const int i : mask_group->corner_data.index_range()) {
-        wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
-        WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
-      }
     }
     else if (mask_group->mode == DeformMode::PERSPECTIVE || mask_group->mode == DeformMode::GRID) {
-      WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
       for (const int i : mask_group->corner_data.index_range()) {
         wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
         WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, false);
       }
-    }
-  }
-  else {
-    WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
-
-    for (const int i : mask_group->corner_data.index_range()) {
-      wmGizmo *gz2 = mask_group->corner_data[i].gizmos;
-      WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
     }
   }
 
