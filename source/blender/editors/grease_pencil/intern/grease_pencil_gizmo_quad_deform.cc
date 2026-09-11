@@ -68,6 +68,7 @@ static bool WIDGETGROUP_grease_pencil_quad_poll(const bContext *C, wmGizmoGroupT
 
 struct CornerPinData {
   int index;
+  wmGizmo *gizmos;
   float2 corner_pos;
 };
 
@@ -89,7 +90,6 @@ struct QuadWidgetGroup2 {
   DeformMode mode;
 
   struct {
-    wmGizmo *gizmos[4];
     CornerPinData *corner_data[4];
   } corner_pin;
 
@@ -258,7 +258,7 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
     gz->matrix_space[3][2] = box->center().y;
 
     for (int i = 0; i < 4; i++) {
-      wmGizmo *gz2 = mask_group->corner_pin.gizmos[i];
+      wmGizmo *gz2 = mask_group->corner_pin.corner_data[i]->gizmos;
       copy_m4_m4(gz2->matrix_space, gz->matrix_space);
     }
 
@@ -266,14 +266,14 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
       // RNA_float_set_array(gz->ptr, "dimensions", box->size());
       WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
       for (int i = 0; i < 4; i++) {
-        wmGizmo *gz2 = mask_group->corner_pin.gizmos[i];
+        wmGizmo *gz2 = mask_group->corner_pin.corner_data[i]->gizmos;
         WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
       }
     }
     else if (mask_group->mode == DeformMode::PERSPECTIVE || mask_group->mode == DeformMode::GRID) {
       WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
       for (int i = 0; i < 4; i++) {
-        wmGizmo *gz2 = mask_group->corner_pin.gizmos[i];
+        wmGizmo *gz2 = mask_group->corner_pin.corner_data[i]->gizmos;
         WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, false);
       }
     }
@@ -282,7 +282,7 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
     WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
 
     for (int i = 0; i < 4; i++) {
-      wmGizmo *gz2 = mask_group->corner_pin.gizmos[i];
+      wmGizmo *gz2 = mask_group->corner_pin.corner_data[i]->gizmos;
       WM_gizmo_set_flag(gz2, WM_GIZMO_HIDDEN, true);
     }
   }
@@ -504,18 +504,6 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
                ED_GIZMO_CAGE_DRAW_FLAG_XFORM_CENTER_HANDLE |
                    ED_GIZMO_CAGE_DRAW_FLAG_CORNER_HANDLES);
 
-  for (int i = 0; i < 4; i++) {
-    mask_group->corner_pin.gizmos[i] = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
-    wmGizmo *gz = mask_group->corner_pin.gizmos[i];
-    // RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
-    RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
-
-    WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
-    // WM_gizmo_set_flag(gz2, WM_GIZMO_DRAW_MODAL, true);
-
-    gz->scale_basis = 0.1f;
-  }
-
   gzgroup->customdata = mask_group;
   gzgroup->customdata_free = [](void *customdata) {
     MEM_delete(static_cast<QuadWidgetGroup2 *>(customdata));
@@ -534,9 +522,18 @@ static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
 
   for (int i = 0; i < 4; i++) {
     mask_group->corner_pin.corner_data[i] = MEM_new<CornerPinData>(__func__);
-
-    wmGizmo *gz = mask_group->corner_pin.gizmos[i];
     CornerPinData *corner_pin_data = mask_group->corner_pin.corner_data[i];
+
+    corner_pin_data->gizmos = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
+
+    wmGizmo *gz = corner_pin_data->gizmos;
+    // RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_RING_2D);
+    RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
+
+    WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
+    // WM_gizmo_set_flag(gz2, WM_GIZMO_DRAW_MODAL, true);
+
+    gz->scale_basis = 0.1f;
 
     corner_pin_data->index = i;
     corner_pin_data->corner_pos = corner_positions[i];
