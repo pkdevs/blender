@@ -678,8 +678,12 @@ static WrapperGroup make_wrapper_group(const bContext &C, bNodeTree &ntree, bNod
   params.skip_hidden = false;
   /* Expose all sockets even if unconnected. */
   params.skip_unconnected = false;
-  const NodeTreeInterfaceMapping io_mapping = build_node_declaration_interface(
-      params, src_node, *wrapper_group);
+
+  /* Group interface remains empty for nodes without a declaration, e.g. Frame node. */
+  NodeTreeInterfaceMapping io_mapping;
+  if (src_node.declaration() != nullptr) {
+    io_mapping = build_node_declaration_interface(params, src_node, *wrapper_group);
+  }
 
   const NodeSetCopy copied_nodes = NodeSetCopy::from_nodes(
       bmain, ntree, {&src_node}, *wrapper_group);
@@ -692,16 +696,7 @@ static WrapperGroup make_wrapper_group(const bContext &C, bNodeTree &ntree, bNod
 
 bNodeTree *node_wrapper_group_create(const bContext &C, bNodeTree &ntree, bNode &src_node)
 {
-  if (src_node.declaration()) {
-    return make_wrapper_group(C, ntree, src_node).tree;
-  }
-
-  /* Nodes without a declaration (e.g. frames) have no sockets to expose on the group
-   * interface, move the node into a new group instead. This matches the behavior of the
-   * Make Group operator for such nodes. */
-  bNode *gnode = node_group_make_from_nodes(
-      C, ntree, {&src_node}, ntree.typeinfo->group_idname, ntree.idname);
-  return gnode ? id_cast<bNodeTree *>(gnode->id) : nullptr;
+  return make_wrapper_group(C, ntree, src_node).tree;
 }
 
 static bNode *node_group_make_from_node_declaration(bContext &C,
