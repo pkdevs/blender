@@ -37,9 +37,7 @@ namespace ed::greasepencil {
 /**
  * Apply the stroke carver to a drawing.
  */
-static bool execute_carver_on_drawing(const int /*layer_index*/,
-                                      const int /*frame_number*/,
-                                      const Object &ob_eval,
+static bool execute_carver_on_drawing(const Object &ob_eval,
                                       Object &obact,
                                       const ARegion &region,
                                       const float4x4 &projection,
@@ -265,9 +263,7 @@ static wmOperatorStatus stroke_carver_execute(const bContext *C,
 
     threading::parallel_for_each(drawings, [&](const ed::greasepencil::MutableDrawingInfo &info) {
       bool r_converted = false;
-      if (execute_carver_on_drawing(info.layer_index,
-                                    info.frame_number,
-                                    *ob_eval,
+      if (execute_carver_on_drawing(*ob_eval,
                                     *obact,
                                     *region,
                                     projection,
