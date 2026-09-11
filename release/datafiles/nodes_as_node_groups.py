@@ -34,53 +34,52 @@ COMPOSITOR_NODE_TYPES = (
     and hasattr(bpy.types, node_type)
 )
 
+def file_cleanup():
+    """Cleans up the file for publish by removing all unnecessary data."""
+
+    # Remove all workspaces except the currently in use one.
+    current_ws = bpy.context.window.workspace
+    workspaces = [ws for ws in bpy.data.workspaces if ws != current_ws]
+    bpy.data.batch_remove(ids=workspaces)
+
+    # Create an empty scene to keep, and delete all the other ones.
+    empty_scene = bpy.data.scenes.new("Library")
+    bpy.context.window.scene = empty_scene
+
+    scenes = [sc for sc in bpy.data.scenes if sc is not empty_scene]
+    bpy.data.batch_remove(ids=scenes)
+
+    # Purge all now-unused data.
+    bpy.data.orphans_purge(do_recursive=True)
+
+
 def create_compositor_node_groups():
     compositor_node_group = bpy.data.node_groups.new("Compositor Nodes", "CompositorNodeTree")
+
+    # Create nodes with an offset for easier inspection of the blend file.
     x = 0
     y = 0
 
-    nb_nodes = 0
-    error_nodes = []
     for node_type_name in COMPOSITOR_NODE_TYPES:
         try:
             new_node = compositor_node_group.nodes.new(type=node_type_name)
             new_node.location = (x, y)
             x += new_node.width + 20
-            nb_nodes += 1
         except Exception as e:
-            error_nodes.append(node_type_name)
+            pass
 
-    # todo(habib): remove, no need for reporting
-    print("Couldn't create", len(error_nodes), "nodes")
-    print("Created", nb_nodes, "nodes")
-
-    nb_groups = 0
     for node in compositor_node_group.nodes:
-        # debug
-        print("treating node", node.name, "...")
-
         if node.bl_idname == "CompositorNodeGroup":
             continue
-        if node.bl_idname == "NodeFrame":
-            # todo(habib): fix crash
-            continue
         group = node.group_make()
-        # debug
-        print("Group:\t",group.name, "\tnode", node.bl_idname, "\tAssigning group name...", end="")
 
+        # Using node names is more prune to conflicts, for example when a deprecated node has the same name as its replacement.
         group.name = node.bl_idname
 
-        print("done")
-        # end debug
-
         group.use_fake_user = True
-        allow_usage_in_scene_compositor_effect = True
-        nb_groups += 1
+        group.allow_usage_in_scene_compositor_effect = True
 
     bpy.data.node_groups.remove(compositor_node_group)
-
-    print("Created", nb_groups, "nb_groups")
-
 
 
 def create_argparse():
@@ -111,8 +110,8 @@ def main() -> int:
         os.makedirs(output_dir, exist_ok=True)
 
     create_compositor_node_groups()
+    file_cleanup()
 
-    # todo(habib):  cleanup blend file before saving
     bpy.ops.wm.save_as_mainfile(filepath=output, check_existing=False)
     return 0
 

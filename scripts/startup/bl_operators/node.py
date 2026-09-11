@@ -790,6 +790,15 @@ class NODE_OT_swap_empty_group(NodeSwapOperator, bpy.types.Operator):
         output_node.location.x = 200
         return group
 
+def node_name_from_type(node_type, tree_type):
+    """Utility function to get a node name from its type. The tree_type argument is necessary because the function relies on instantiating a temporary node in a node tree to get its name."""
+    tmp_group = bpy.data.node_groups.new("temp group", tree_type)
+    node = tmp_group.nodes.new(node_type)
+    name = node.name
+    bpy.data.node_groups.remove(tmp_group)
+
+    return name
+
 
 class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Operator):
     """Add a node as a scene compositor effect"""
@@ -823,25 +832,6 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
                 return group
         return None
 
-    def create_effect_group(self, node_type):
-        # todo(habib): remove
-        """Create a node group which wraps the given node, so that it can be used as an effect."""
-
-        # Create temporary node group
-        source_group = bpy.data.node_groups.new(name=".effect_source", type="CompositorNodeTree")
-        node = source_group.nodes.new(type=node_type)
-        self.apply_node_settings(node)
-        group = node.group_make()
-        bpy.data.node_groups.remove(source_group)
-
-        if group is None:
-            return None
-
-        # So that the created group doesn't show up in Unassigned.
-        group.allow_usage_in_scene_compositor_effect = True
-
-        return group
-
     def execute(self, context):
         if not self.properties.is_property_set("type"):
             return {'CANCELLED'}
@@ -850,7 +840,8 @@ class SCENE_OT_add_compositor_effect_node(NodeOperator, SingleNodeOperator, Oper
         if group is None:
             return {'CANCELLED'}
 
-        effect = context.scene.compositor_effects.new(name=group.name)
+        effect_name = node_name_from_type(group.name, "CompositorNodeTree")
+        effect = context.scene.compositor_effects.new(name=effect_name)
         effect.node_group = group
         effect.show_node_group_selector = False
 
