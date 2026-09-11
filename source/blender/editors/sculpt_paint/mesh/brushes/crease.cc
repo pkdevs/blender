@@ -86,7 +86,6 @@ static void calc_faces(const Depsgraph &depsgraph,
                        const Span<float3> vert_normals,
                        const bke::pbvh::MeshNode &node,
                        Object &object,
-                       LocalData &tls,
                        const PositionDeformData &position_data)
 {
   SculptSession &ss = *object.runtime->sculpt_session;
@@ -94,9 +93,10 @@ static void calc_faces(const Depsgraph &depsgraph,
 
   const Span<int> verts = node.verts();
 
+  Array<float, bke::pbvh::MESH_LEAF_LIMIT> factors(verts.size());
+  Array<float, bke::pbvh::MESH_LEAF_LIMIT> distances(verts.size());
   if (BKE_brush_has_cube_tip(&brush, PaintMode::Sculpt)) {
-    tls.local_positions.resize(verts.size());
-    const MutableSpan<float3> local_positions = tls.local_positions;
+    Array<float3, bke::pbvh::MESH_LEAF_LIMIT> local_positions(verts.size());
     calc_cube_tip_factors_common_mesh_indexed(depsgraph,
                                               brush,
                                               object,
@@ -106,8 +106,8 @@ static void calc_faces(const Depsgraph &depsgraph,
                                               vert_normals,
                                               local_positions,
                                               node,
-                                              tls.factors,
-                                              tls.distances);
+                                              factors,
+                                              distances);
   }
   else {
     calc_factors_common_mesh_indexed(depsgraph,
@@ -117,26 +117,25 @@ static void calc_faces(const Depsgraph &depsgraph,
                                      position_data.eval,
                                      vert_normals,
                                      node,
-                                     tls.factors,
-                                     tls.distances);
+                                     factors,
+                                     distances);
   }
 
-  tls.translations.resize(verts.size());
-  const MutableSpan<float3> translations = tls.translations;
+  Array<float3, bke::pbvh::MESH_LEAF_LIMIT> translations(verts.size());
   translations_from_position(position_data.eval, verts, cache.location_symm, translations);
 
   if (brush.falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
     project_translations(translations, cache.view_normal_symm);
   }
 
-  scale_translations(translations, tls.factors);
+  scale_translations(translations, factors);
   scale_translations(translations, strength);
 
   /* The vertices are pinched towards a line instead of a single point. Without this we get a
    * 'flat' surface surrounding the pinch. */
   project_translations(translations, cache.sculpt_normal_symm);
 
-  add_offset_to_translations(translations, tls.factors, offset);
+  add_offset_to_translations(translations, factors, offset);
 
   clip_and_lock_translations(sd, ss, position_data.eval, verts, translations);
   position_data.deform(translations, verts);
@@ -287,7 +286,6 @@ static void do_crease_or_blob_brush(const Depsgraph &depsgraph,
       MutableSpan<bke::pbvh::MeshNode> nodes = pbvh.nodes<bke::pbvh::MeshNode>();
       node_mask.foreach_index(
           [&](const int i) {
-            LocalData &tls = all_tls.local();
             calc_faces(depsgraph,
                        sd,
                        brush,
@@ -298,7 +296,6 @@ static void do_crease_or_blob_brush(const Depsgraph &depsgraph,
                        vert_normals,
                        nodes[i],
                        object,
-                       tls,
                        position_data);
             bke::pbvh::update_node_bounds_mesh(position_data.eval, nodes[i]);
           },

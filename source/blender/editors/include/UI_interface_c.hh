@@ -443,6 +443,7 @@ enum {
 
 #define UI_PANEL_CATEGORY_MARGIN_WIDTH \
   (((U.uiflag2 & USER_UIFLAG2_PANEL_TABS_COMPACT) ? 1.4f : 1.0f) * U.widget_unit)
+#define UI_PANEL_SEARCH_BLOCK_MARGIN_HEIGHT (1.25f * UI_UNIT_Y)
 
 /* Minimum width for a panel showing only category tabs. */
 #define UI_PANEL_CATEGORY_MIN_WIDTH ((U.uiflag2 & USER_UIFLAG2_PANEL_TABS_COMPACT) ? 32.0f : 26.0f)
@@ -966,7 +967,11 @@ wmOperatorStatus popover_panel_invoke(
  * \param from_active_button: Use the active button for positioning,
  * use when the popover is activated from an operator instead of directly from the button.
  */
-Popover *popover_begin(bContext *C, int ui_menu_width, bool from_active_button) ATTR_NONNULL(1);
+/**
+ * \param use_numselect: Assign accelerator keys to buttons.
+ */
+Popover *popover_begin(bContext *C, int ui_menu_width, bool from_active_button, bool use_numselect)
+    ATTR_NONNULL(1);
 /**
  * Set the whole structure to work.
  */
@@ -2284,6 +2289,8 @@ void panel_category_clear_all(ARegion *region);
 void panel_category_tabs_draw_all(const bContext *C,
                                   ARegion *region,
                                   const char *category_id_active);
+/** Scrolls the region's category bar to show the #category. */
+void panel_category_show_tab(const bContext &C, ARegion *region, StringRef category);
 
 void panel_stop_animation(const bContext *C, Panel *panel);
 
@@ -3183,6 +3190,8 @@ AbstractViewItem *region_views_find_item_at(const ARegion &region, const int xy[
 AbstractViewItem *region_views_find_active_item(const ARegion *region, const AbstractView *view);
 Button *region_views_find_active_item_but(const ARegion *region);
 void region_views_clear_search_highlight(const ARegion *region);
+
+bool region_panels_fits_only_categories(const ARegion *region);
 
 void register_scene_compositor_effects_panel(ARegionType *region_type);
 
