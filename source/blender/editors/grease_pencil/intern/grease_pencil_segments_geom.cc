@@ -1543,6 +1543,9 @@ class WindingState {
 
 constexpr float epms = 0.01f;
 constexpr float epms_factor = 0.05f;
+/* Factor along the segment where the left and right points are placed.
+ * A value of 0.5 can cause failure, so instead use a random number between 0.0 and 1.0 */
+constexpr float mid_point_factor = 0.35421f;
 
 /* Calculate the winding states for left and right of the segment. */
 static std::pair<WindingState, WindingState> LR_states_from_segment(
@@ -1601,7 +1604,7 @@ static std::pair<WindingState, WindingState> LR_states_from_segment(
   /* Direction to the left. */
   const float2 tan_dir = float2(-line_dir.y, line_dir.x);
 
-  const float2 mid_point = math::interpolate(point1, point2, 0.35421f);
+  const float2 mid_point = math::interpolate(point1, point2, mid_point_factor);
 
   const float eps_dis = math::min(epms_factor * math::distance(point1, point2), epms);
 
