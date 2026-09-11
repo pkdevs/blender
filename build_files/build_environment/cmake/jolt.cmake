@@ -8,6 +8,7 @@ set(JOLT_EXTRA_ARGS
 
   -DCROSS_PLATFORM_DETERMINISTIC=ON
   -DDEBUG_RENDERER_IN_DEBUG_AND_RELEASE=OFF
+  -DPROFILER_IN_DEBUG_AND_RELEASE=OFF
   # TODO: Confirm DOUBLE_PRECISION ON/OFF value with Nodes & Physics Module developers, set to the default for now.
   -DDOUBLE_PRECISION=OFF
 
@@ -73,6 +74,7 @@ if(WIN32)
   endif()
 else()
   harvest(external_jolt jolt/include jolt/include "*.h")
+  harvest(external_jolt jolt/include jolt/include "*.inl")
   harvest(external_jolt jolt/lib/cmake/Jolt jolt/lib/cmake/Jolt "*.cmake")
   harvest_rpath_lib(external_jolt jolt/lib jolt/lib "*${SHAREDLIBEXT}*")
 endif()
