@@ -59,6 +59,7 @@ VolumeGridData::VolumeGridData(std::shared_ptr<openvdb::GridBase> grid)
   BLI_assert(grid_);
   BLI_assert(grid_.use_count() == 1);
   BLI_assert(grid_->isTreeUnique());
+  BLI_assert(grid_->constTransformPtr().use_count() == 1);
 
   tree_sharing_info_ = OpenvdbTreeSharingInfo::make(grid_->baseTreePtr());
   tree_access_token_ = std::make_shared<AccessToken>(*this);
