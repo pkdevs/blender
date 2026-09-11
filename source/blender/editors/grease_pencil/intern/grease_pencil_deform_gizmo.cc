@@ -257,8 +257,6 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
   }
 
   if (box) {
-    printf("box %f, %f\n", box->size().x, box->size().y);
-
     mul_v3_fl(gz->matrix_space[0], box->size().x);
     mul_v3_fl(gz->matrix_space[1], box->size().y);
 
@@ -484,8 +482,6 @@ static void gizmo_node_box_mask_prop_matrix_get(const wmGizmo * /*gz*/,
 {
   // float (*matrix)[4] = static_cast<float (*)[4]>(value_p);
   BLI_assert(gz_prop->type->array_length == 16);
-
-  printf("gizmo_node_box_mask_prop_matrix_get\n");
 }
 
 static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
