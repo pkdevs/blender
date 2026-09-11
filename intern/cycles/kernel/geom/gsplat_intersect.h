@@ -154,11 +154,8 @@ ccl_device_forceinline bool gsplat_intersect_test(KernelGlobals kg,
    * Since R is an orthonormal rotation matrix: R^{-1} \equiv R^T */
   const float3x3 Sigma_inv = R * float3x3_scale(1.0f / (scale_clamped * scale_clamped)) * R_T;
 
-  /* Particle response. [3dgrt2024] Eq. (1).
-   * The 1/2 factor in the power follows the [sun2025] Eq. (1) and [chen2024pgsr] equation in the
-   * "Preliminary of 3D Gaussian Splatting" section.
-   * From experimentation it seems there should indeed be this factor, otherwise the bicycle model
-   * does not render correctly (parts of the wheel and brakes are missing). */
+  /* Particle response.
+   * [sun2025] Algorithm 1 (line 12). */
   const float3 x_minus_mu = x - mu;
   const float particle_opacity = params.opacity *
                                  fast_expf(-1.0f / 2.0f * dot(x_minus_mu, Sigma_inv * x_minus_mu));
