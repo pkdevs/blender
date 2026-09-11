@@ -463,6 +463,7 @@ bool TexturePaintStroke::test_start(wmOperator *op, const float2 mouse)
 
 struct TexturePaintData : public PaintModeData {
   std::unique_ptr<ImageData> image_data;
+  std::unique_ptr<ImageData> mask_data;
 };
 
 struct ExperimentalTexturePaintStroke final : public PaintStroke {
@@ -532,9 +533,8 @@ bool ExperimentalTexturePaintStroke::test_start(wmOperator *op, float2 mouse)
   cache.accum = true;
 
   std::unique_ptr<TexturePaintData> texture_paint_data = std::make_unique<TexturePaintData>();
-  texture_paint_data->image_data = this->brush->image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK ?
-                                       ImageData::init_mask(*settings_) :
-                                       ImageData::init_active_image(*this->object, *settings_);
+  texture_paint_data->image_data = ImageData::init_active_image(*this->object, *settings_);
+  texture_paint_data->mask_data = ImageData::init_mask(*settings_);
   if (!texture_paint_data->image_data) {
     BLI_assert(0);
     return false;
@@ -626,8 +626,12 @@ static void do_brush_action(const Depsgraph &depsgraph,
   SculptSession &ss = *ob.runtime->sculpt_session;
   IndexMaskMemory memory;
 
-  bke::pbvh::build_pixels(
-      depsgraph, ob, *mode_data->image_data->image, mode_data->image_data->image_user_get());
+  const bool is_mask_brush = brush.image_brush_type == IMAGE_PAINT_BRUSH_TYPE_MASK;
+  Image image = is_mask_brush ? *mode_data->mask_data->image : *mode_data->image_data->image;
+  ImageUser image_user = is_mask_brush ? mode_data->mask_data->image_user_get() :
+                                         mode_data->image_data->image_user_get();
+
+  bke::pbvh::build_pixels(depsgraph, ob, image, image_user);
 
   const IndexMask node_mask = gather_brush_nodes(ob, brush, memory, node_fully_masked_or_hidden);
 
@@ -658,7 +662,7 @@ static void do_brush_action(const Depsgraph &depsgraph,
       break;
     case IMAGE_PAINT_BRUSH_TYPE_MASK:
       do_3d_image_mask_brush(
-          depsgraph, image_paint_settings.paint, brush, ob, *mode_data->image_data, node_mask);
+          depsgraph, image_paint_settings.paint, brush, ob, *mode_data->mask_data, node_mask);
       break;
     default:
       /* TODO: Implement the rest of them... */

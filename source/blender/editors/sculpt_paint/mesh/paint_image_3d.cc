@@ -217,6 +217,7 @@ static BitVector<> init_uv_primitives_brush_test(SculptSession &ss,
 
 /** Cached settings for faster paint blending. */
 struct PaintBlendSettings {
+  PaintBlendSettings() = default;
   PaintBlendSettings(const Paint &paint, const Brush &brush, const bool invert)
   {
     brush_color = float4(invert ? BKE_brush_secondary_color_get(&paint, &brush) :
@@ -225,17 +226,21 @@ struct PaintBlendSettings {
     brush_alpha = brush.alpha;
     blend_mode = IMB_BlendMode(brush.blend);
   }
-  PaintBlendSettings(const Brush &brush, const bool invert)
-  {
-    brush_color = float4(invert ? float3(0.0, 0.0, 0.0) : float3(1.0, 1.0, 1.0), 1.0f);
-    brush_alpha = brush.alpha;
-    blend_mode = IMB_BlendMode(brush.blend);
-  }
 
   float4 brush_color;
   float brush_alpha;
   IMB_BlendMode blend_mode;
 };
+
+static PaintBlendSettings mask_brush_blend_settings(const Brush &brush, const bool invert)
+{
+  PaintBlendSettings settings;
+  settings.brush_color = float4(invert ? float3(0.0f) : float3(1.0f), 1.0f);
+  settings.brush_alpha = brush.alpha;
+  settings.blend_mode = IMB_BlendMode(brush.blend);
+
+  return settings;
+}
 
 /** Blend one pixel with the brush. */
 BLI_INLINE float4 paint_blend_pixel(const float4 &brush_color,
@@ -733,7 +738,8 @@ static void do_mask_pixels(const Depsgraph &depsgraph,
   BitVector<> brush_test = init_uv_primitives_brush_test(
       ss, corner_verts, corner_tris, pixel_node.uv_primitives.tri_indices, positions);
 
-  const PaintBlendSettings blend_settings(brush, ss.cache->toggle_settings.invert);
+  const PaintBlendSettings blend_settings = mask_brush_blend_settings(
+      brush, ss.cache->toggle_settings.invert);
 
 #ifdef DEBUG_PIXEL_NODES
   float4 debug_color;

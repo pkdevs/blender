@@ -216,7 +216,7 @@ def brush_asset_shelf_filter_draw(panel, context):
 def show_experimental_texture_paint(brush):
     if not bpy.context.preferences.experimental.use_3d_texture_paint or not brush:
         return False
-    return brush.image_brush_type in {'DRAW'}
+    return brush.image_brush_type in {'DRAW', 'MASK'}
 
 
 class UnifiedPaintPanel:
@@ -1509,7 +1509,7 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
                 container.prop(brush, "blur_kernel_radius")
             container.prop(brush, "blur_mode")
 
-        elif brush.image_brush_type == 'MASK':
+        elif brush.image_brush_type == 'MASK' and not show_experimental_texture_paint(brush):
             container.prop(brush, "weight", text="Mask Value", slider=True)
 
         elif brush.image_brush_type == 'CLONE':
