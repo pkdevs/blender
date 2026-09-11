@@ -75,6 +75,7 @@ static const EnumPropertyItem image_source_items[] = {
 
 #  include "ED_image.hh"
 #  include "ED_node.hh"
+#  include "ED_paint.hh"
 
 #  include "DNA_space_types.h"
 
@@ -115,6 +116,11 @@ static void rna_Image_source_set(PointerRNA *ptr, int value)
     if (ima->source == IMA_SRC_TILED) {
       BKE_image_signal(G_MAIN, ima, nullptr, IMA_SIGNAL_RELOAD);
     }
+    ImageUser iuser;
+    ImBuf *ibuf = BKE_image_acquire_ibuf(ima, &iuser, nullptr);
+    ED_image_undo_push_begin_with_image("Change Image Source", ima, ibuf, &iuser);
+    ED_image_undo_push_end();
+    BKE_image_release_ibuf(ima, ibuf, nullptr);
 
     DEG_id_tag_update(&ima->id, 0);
     DEG_id_tag_update(&ima->id, ID_RECALC_EDITORS | ID_RECALC_SOURCE);
