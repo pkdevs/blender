@@ -976,151 +976,27 @@ class Segment {
 
   constexpr Segment() = default;
 
-  bool is_loop() const
-  {
-    return full_wrap_loop;
-  }
+  bool is_loop() const;
 
-  bool has_intersection(const Side side) const
-  {
-    return intersection_index[side] != -1;
-  }
+  bool has_intersection(Side side) const;
+  int2 edge(Side side) const;
 
-  int2 edge(const Side side) const
-  {
-    return int2(points[side], this->wrap_index(points[side] + 1));
-  }
+  int wrap_index(int i) const;
 
-  int wrap_index(const int i) const
-  {
-    return math::mod_periodic(i - src_points.first(), src_points.size()) + src_points.first();
-  }
+  IndexRange point_range() const;
+  int points_num() const;
 
-  IndexRange point_range() const
-  {
-    if (this->is_loop()) {
-      return src_points;
-    }
+  template<typename Fn> void foreach_point(Fn &&fn) const;
 
-    if (!this->has_intersection(Side::Start) && this->has_intersection(Side::End)) {
-      return IndexRange::from_begin_end_inclusive(src_points.first(), points[Side::End]);
-    }
-
-    if (!this->has_intersection(Side::Start) && !this->has_intersection(Side::End)) {
-      return src_points;
-    }
-
-    /* If both intersection points are on the same edge, there's ether no points between or
-     * all of the points are. */
-    if (points[Side::Start] == points[Side::End]) {
-
-      /* If both intersections points are the same, either the segment as nothing or the full
-       * range. */
-      if (intersection_factor[Side::Start] == intersection_factor[Side::End]) {
-        if (this->is_loop()) {
-          return src_points.shift(points[Side::Start] - src_points.first() + 1);
-        }
-        return IndexRange(0);
-      }
-
-      if (intersection_factor[Side::Start] > intersection_factor[Side::End]) {
-        return src_points.shift(points[Side::Start] - src_points.first() + 1);
-      }
-      return IndexRange(0);
-    }
-
-    if (points[Side::Start] > points[Side::End]) {
-      return IndexRange::from_begin_end_inclusive(points[Side::Start] + 1,
-                                                  points[Side::End] + src_points.size());
-    }
-
-    return IndexRange::from_begin_end_inclusive(points[Side::Start] + 1, points[Side::End]);
-  }
-
-  int points_num() const
-  {
-    return this->point_range().size();
-  }
-
-  template<typename Fn> void foreach_point(Fn &&fn) const
-  {
-    const IndexRange point_range = this->point_range();
-
-    for (const int64_t pos : point_range.index_range()) {
-      const int i = this->wrap_index(point_range[pos]);
-
-      if constexpr (std::is_invocable_r_v<void, Fn, int64_t, int64_t>) {
-        fn(i, pos);
-      }
-      else {
-        fn(i);
-      }
-    }
-  }
-
-  constexpr static Segment from_curve(const int curve_i,
-                                      const IndexRange points,
-                                      const bool cyclic)
-  {
-    Segment segment;
-    segment.curve = curve_i;
-    segment.src_points = points;
-
-    segment.points[Side::Start] = points.first();
-    segment.points[Side::End] = points.last();
-
-    segment.intersection_factor[Side::Start] = 0.0f;
-    segment.intersection_factor[Side::End] = cyclic ? 1.0f : 0.0f;
-
-    segment.full_wrap_loop = cyclic;
-
-    return segment;
-  }
-
-  static Segment from_intersections(const int curve_i,
-                                    const IndexRange points,
+  static Segment from_curve(int curve_i, IndexRange points, bool cyclic);
+  static Segment from_intersections(int curve_i,
+                                    IndexRange points,
                                     const std::optional<int> point_start,
                                     const std::optional<int> point_end,
                                     const std::optional<float> factor_start,
                                     const std::optional<float> factor_end,
                                     const std::optional<int> inter_index_start,
-                                    const std::optional<int> inter_index_end)
-  {
-    Segment segment;
-    segment.curve = curve_i;
-    segment.src_points = points;
-
-    if (point_start) {
-      segment.points[Side::Start] = *point_start;
-      segment.intersection_factor[Side::Start] = *factor_start;
-    }
-    else {
-      segment.points[Side::Start] = points.first();
-      segment.intersection_factor[Side::Start] = 0.0f;
-    }
-
-    if (inter_index_start) {
-      segment.intersection_index[Side::Start] = *inter_index_start;
-    }
-
-    if (point_end) {
-      segment.points[Side::End] = *point_end;
-      segment.intersection_factor[Side::End] = *factor_end;
-    }
-    else {
-      segment.points[Side::End] = points.last();
-      segment.intersection_factor[Side::End] = 0.0f;
-    }
-
-    if (inter_index_end) {
-      segment.intersection_index[Side::End] = *inter_index_end;
-    }
-
-    BLI_assert(points.contains(segment.points[Side::Start]));
-    BLI_assert(points.contains(segment.points[Side::End]));
-
-    return segment;
-  }
+                                    const std::optional<int> inter_index_end);
 };
 
 namespace trim {
