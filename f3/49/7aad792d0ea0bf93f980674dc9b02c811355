@@ -1,1 +1,2 @@
 Referenced by pull request #161040, Deps: Enable CUDA/OptiX support for Windows ARM64
+Referenced by issue #163783, GPU render fails with "Not found in cuModuleGetFunction" on default cube scene — RTX 2000 Ada Laptop GPU
