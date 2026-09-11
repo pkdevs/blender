@@ -271,7 +271,7 @@ ccl_device_forceinline float motion_gsplat_opacity(KernelGlobals kg,
                                                    const int prim)
 {
   const int offset = gsplat_attr_radiance_base_offset(kg, object) + prim;
-  if (gsplat_attr_rotation_has_motion(kg, object)) {
+  if (gsplat_attr_radiance_base_has_motion(kg, object)) {
     const float opacity =
         kernel_data_fetch(attributes_float4, motion_info.offset_for_step + offset).w;
     const float next_opacity =
