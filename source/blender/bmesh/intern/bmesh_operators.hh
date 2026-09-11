@@ -176,7 +176,7 @@ enum CurveClampElevation {
   CURVE_CLAMP_ELEVATION_NONE = 0,
   CURVE_CLAMP_ELEVATION_RAISE = 1,
   CURVE_CLAMP_ELEVATION_LOWER = 2,
-}
+};
 
 /**
  * Mappings from a location on the surface of a cube onto a sphere,
