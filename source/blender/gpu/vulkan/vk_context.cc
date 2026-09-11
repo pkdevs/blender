@@ -366,7 +366,8 @@ void VKContext::update_pipeline_data(const VKFrameBuffer &framebuffer,
 
   update_pipeline_data(
       vk_shader,
-      vk_shader.resolve_graphics(primitive, vertex_input_key, state, framebuffer),
+      vk_shader.ensure_and_get_graphics_pipeline(
+          primitive, vertex_input_key, state, framebuffer, constants_state_),
       r_pipeline_data.pipeline_data);
 }
 
@@ -528,16 +529,8 @@ void VKContext::swap_buffer_draw_handler(const GHOST_VulkanSwapChainData &swap_c
 void VKContext::specialization_constants_set(
     const shader::SpecializationConstants *constants_state)
 {
-  const shader::SpecializationConstants new_constants =
-      (constants_state != nullptr) ? *constants_state : shader::SpecializationConstants{};
-  /* Compare both `values` and `types`: the pipeline key is built from both, and a
-   * change in either one must invalidate the per-shader pipeline cache. */
-  if (new_constants.values != constants_state_.values ||
-      new_constants.types != constants_state_.types)
-  {
-    constants_state_ = new_constants;
-    spec_generation_++;
-  }
+  constants_state_ = (constants_state != nullptr) ? *constants_state :
+                                                    shader::SpecializationConstants{};
 }
 
 std::unique_ptr<VKStreamingBuffer> &VKContext::get_or_create_streaming_buffer(
