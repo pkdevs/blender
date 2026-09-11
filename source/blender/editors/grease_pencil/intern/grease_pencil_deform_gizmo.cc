@@ -260,8 +260,18 @@ static void update_things(const bContext *C, wmGizmoGroup *gzgroup)
     mul_v3_fl(gz->matrix_space[0], box->size().x);
     mul_v3_fl(gz->matrix_space[1], box->size().y);
 
-    gz->matrix_space[3][0] = box->center().x;
-    gz->matrix_space[3][2] = box->center().y;
+    if (scene.toolsettings->gp_sculpt.lock_axis == GP_LOCKAXIS_Y) {
+      gz->matrix_space[3][0] = box->center().x;
+      gz->matrix_space[3][2] = box->center().y;
+    }
+    else if (scene.toolsettings->gp_sculpt.lock_axis == GP_LOCKAXIS_X) {
+      gz->matrix_space[3][1] = box->center().x;
+      gz->matrix_space[3][2] = box->center().y;
+    }
+    else if (scene.toolsettings->gp_sculpt.lock_axis == GP_LOCKAXIS_Z) {
+      gz->matrix_space[3][0] = box->center().x;
+      gz->matrix_space[3][1] = box->center().y;
+    }
 
     for (int i = 0; i < 4; i++) {
       wmGizmo *gz2 = mask_group->corner_pin.corner_data[i]->gizmos;
