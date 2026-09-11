@@ -2001,7 +2001,6 @@ add_custom_command(
   DEPENDS
     blender
     ${CMAKE_SOURCE_DIR}/release/datafiles/nodes_as_node_groups.py
-  COMMENT "Generate a blend file containing all compositor nodes, each wrapped in a node group"
 )
 add_custom_target(nodes_as_node_groups ALL DEPENDS ${_nodes_as_node_groups_blend})
 
