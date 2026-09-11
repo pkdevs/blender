@@ -210,6 +210,7 @@ class DrawingPlacement {
   float3 try_project_depth(float2 co) const;
 };
 
+
 struct ClosestGreasePencilDrawing {
   const bke::greasepencil::Drawing *drawing = nullptr;
   int active_defgroup_index = -1;
@@ -218,6 +219,19 @@ struct ClosestGreasePencilDrawing {
 };
 
 const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name);
+
+struct ClosestGreasePencilDataBlock {
+    const GreasePencil *greasepencil_id = nullptr;
+    ClosestGreasePencilDrawing drawing;
+};
+
+
+const ClosestGreasePencilDataBlock find_closest_greasepencil_datablock(const Depsgraph &depsgraph,
+                                                const ViewContext &vc,
+                                                const Span<Base *> bases,
+                                                const int2 &mval);
+
+
 
 void set_selected_frames_type(bke::greasepencil::Layer &layer,
                               const eBezTriple_KeyframeType key_type);

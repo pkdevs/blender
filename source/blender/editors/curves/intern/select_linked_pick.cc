@@ -27,6 +27,8 @@ struct ClosestCurveDataBlock {
   Curves *curves_id = nullptr;
   FindClosestData elem;
 };
+//!todo
+
 static ClosestCurveDataBlock find_closest_curve(const Depsgraph &depsgraph,
                                                 const ViewContext &vc,
                                                 const Span<Base *> bases,

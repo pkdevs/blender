@@ -2183,6 +2183,9 @@ bool remove_fill_guides(bke::CurvesGeometry &curves)
 
   return true;
 }
+
+
+
 /* Find the closest drawing to a screen position, if the vertex_group_name is set only consider
  * drawing having that vertex group active (todo, check)*/
 const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(ViewContext const &vc, Object *obj, int2 screen_pos, char const *vertex_group_name) {
@@ -2249,6 +2252,34 @@ const ClosestGreasePencilDrawing find_closest_greasepencil_drawing_screen_space(
 
 
 }
+
+
+const ClosestGreasePencilDataBlock find_closest_greasepencil_datablock(const Depsgraph &depsgraph,
+                                                const ViewContext &vc,
+                                                const Span<Base *> bases,
+                                                const int2 &mval)
+{
+   return threading::parallel_reduce(
+     bases.index_range(),
+     1L,
+     ClosestGreasePencilDataBlock(),
+     [&](const IndexRange range, const ClosestGreasePencilDataBlock &init) {
+        ClosestGreasePencilDataBlock new_closest = init;
+        for (Base *base : bases.slice(range)) {
+          Object &gp_ob = *base->object;
+          GreasePencil &gp_id = *id_cast<GreasePencil *>(gp_ob.data);
+          new_closest.greasepencil_id = &gp_id;
+          new_closest.drawing = find_closest_greasepencil_drawing_screen_space(vc, &gp_ob, mval, nullptr);
+        }
+        return new_closest;
+
+     },
+      [](const ClosestGreasePencilDataBlock &a, const ClosestGreasePencilDataBlock &b) {
+        return (a.drawing.distance_sq < b.drawing.distance_sq) ? a : b;
+      });
+
+}
+
 
 
 
