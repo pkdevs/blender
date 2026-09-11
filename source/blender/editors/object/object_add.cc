@@ -411,15 +411,10 @@ static void view_align_update(Main * /*main*/, Scene * /*scene*/, PointerRNA *pt
   RNA_struct_system_idprops_unset(ptr, "rotation");
 }
 
-void add_unit_props_size_ex(wmOperatorType *ot, float default_value)
+void add_unit_props_size(wmOperatorType *ot, float default_value)
 {
   RNA_def_float_distance(
       ot->srna, "size", default_value, 0.0, OBJECT_ADD_SIZE_MAXF, "Size", "", 0.001, 100.00);
-}
-
-void add_unit_props_size(wmOperatorType *ot)
-{
-  add_unit_props_size_ex(ot, 2.0f);
 }
 
 void add_unit_props_radius_ex(wmOperatorType *ot, float default_value)
@@ -1360,7 +1355,7 @@ void OBJECT_OT_text_add(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
-  add_unit_props_size_ex(ot, 1.0f);
+  add_unit_props_size(ot, 1.0f);
   add_generic_props(ot, true);
 }
 
