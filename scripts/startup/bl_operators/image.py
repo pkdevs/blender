@@ -123,8 +123,6 @@ class ProjectEdit(Operator):
     def execute(self, context):
         import os
 
-        EXT = "png"  # could be made an option but for now ok
-
         for image in bpy.data.images:
             image.tag = True
 
@@ -144,6 +142,11 @@ class ProjectEdit(Operator):
         if not image_new:
             self.report({'ERROR'}, "Could not make new image")
             return {'CANCELLED'}
+
+        if image_new.is_float:
+            file_format, EXT = "OPEN_EXR", "exr"
+        else:
+            file_format, EXT = "PNG", "png"
 
         filepath = os.path.basename(bpy.data.filepath)
         filepath = os.path.splitext(filepath)[0]
@@ -171,7 +174,7 @@ class ProjectEdit(Operator):
         ProjectEdit._proj_hack[0] = image_new.name
 
         image_new.filepath_raw = filepath_final  # TODO, filepath raw is crummy
-        image_new.file_format = 'PNG'
+        image_new.file_format = file_format
         image_new.save()
 
         filepath_final = bpy.path.abspath(filepath_final)
