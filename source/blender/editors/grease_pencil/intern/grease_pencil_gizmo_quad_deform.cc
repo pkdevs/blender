@@ -498,65 +498,6 @@ static void gizmo_bisect_prop_translate_set(const wmGizmo *gz,
   }
 }
 
-static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
-{
-  QuadWidgetGroup2 *mask_group = MEM_new<QuadWidgetGroup2>(__func__);
-  mask_group->border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
-  const wmGizmoType *gzt_move_3d = WM_gizmotype_find("GIZMO_GT_move_3d", false);
-
-  RNA_enum_set(mask_group->border->ptr,
-               "transform",
-               ED_GIZMO_CAGE_XFORM_FLAG_TRANSLATE | ED_GIZMO_CAGE_XFORM_FLAG_ROTATE |
-                   ED_GIZMO_CAGE_XFORM_FLAG_SCALE | ED_GIZMO_CAGE_XFORM_FLAG_SCALE_SIGNED);
-
-  RNA_enum_set(mask_group->border->ptr,
-               "draw_options",
-               ED_GIZMO_CAGE_DRAW_FLAG_XFORM_CENTER_HANDLE |
-                   ED_GIZMO_CAGE_DRAW_FLAG_CORNER_HANDLES);
-
-  for (int i = 0; i < 4; i++) {
-    mask_group->corner_pin.gizmos[i] = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
-    wmGizmo *gz = mask_group->corner_pin.gizmos[i];
-    // RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
-    RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
-
-    WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
-    // WM_gizmo_set_flag(gz2, WM_GIZMO_DRAW_MODAL, true);
-
-    gz->scale_basis = 0.1f;
-  }
-
-  gzgroup->customdata = mask_group;
-  gzgroup->customdata_free = [](void *customdata) {
-    MEM_delete(static_cast<QuadWidgetGroup2 *>(customdata));
-  };
-
-  constexpr std::array<float2, 4> corner_positions(
-      {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}});
-
-  for (int i = 0; i < 4; i++) {
-    mask_group->corner_pin.corner_data[i] = MEM_new<CornerPinData>(__func__);
-
-    wmGizmo *gz = mask_group->corner_pin.gizmos[i];
-    CornerPinData *corner_pin_data = mask_group->corner_pin.corner_data[i];
-
-    corner_pin_data->index = i;
-    corner_pin_data->corner_pos = corner_positions[i];
-
-    wmGizmoPropertyFnParams params{};
-    params.value_get_fn = gizmo_bisect_prop_translate_get;
-    params.value_set_fn = gizmo_bisect_prop_translate_set;
-    params.range_get_fn = nullptr;
-    params.user_data = corner_pin_data;
-    WM_gizmo_target_property_def_func(gz, "offset", &params);
-  }
-
-  mask_group->update_data.gzgt_mode_prop = RNA_struct_type_find_property(gzgroup->type->srna,
-                                                                         "mode");
-
-  update_things(C, gzgroup);
-}
-
 static void gizmo_node_box_mask_prop_matrix_get(const wmGizmo * /*gz*/,
                                                 wmGizmoProperty *gz_prop,
                                                 void * /*value_p*/)
@@ -660,6 +601,73 @@ static void gizmo_node_box_mask_prop_matrix_set(const wmGizmo *gz,
   // gizmo_node_bbox_update(mask_group);
 }
 
+static void box_mask_setup(const bContext *C, wmGizmoGroup *gzgroup)
+{
+  QuadWidgetGroup2 *mask_group = MEM_new<QuadWidgetGroup2>(__func__);
+  mask_group->border = WM_gizmo_new("GIZMO_GT_cage_2d", gzgroup, nullptr);
+  const wmGizmoType *gzt_move_3d = WM_gizmotype_find("GIZMO_GT_move_3d", false);
+
+  RNA_enum_set(mask_group->border->ptr,
+               "transform",
+               ED_GIZMO_CAGE_XFORM_FLAG_TRANSLATE | ED_GIZMO_CAGE_XFORM_FLAG_ROTATE |
+                   ED_GIZMO_CAGE_XFORM_FLAG_SCALE | ED_GIZMO_CAGE_XFORM_FLAG_SCALE_SIGNED);
+
+  RNA_enum_set(mask_group->border->ptr,
+               "draw_options",
+               ED_GIZMO_CAGE_DRAW_FLAG_XFORM_CENTER_HANDLE |
+                   ED_GIZMO_CAGE_DRAW_FLAG_CORNER_HANDLES);
+
+  for (int i = 0; i < 4; i++) {
+    mask_group->corner_pin.gizmos[i] = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
+    wmGizmo *gz = mask_group->corner_pin.gizmos[i];
+    // RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
+    RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_CROSS_2D);
+
+    WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_VALUE, true);
+    // WM_gizmo_set_flag(gz2, WM_GIZMO_DRAW_MODAL, true);
+
+    gz->scale_basis = 0.1f;
+  }
+
+  gzgroup->customdata = mask_group;
+  gzgroup->customdata_free = [](void *customdata) {
+    MEM_delete(static_cast<QuadWidgetGroup2 *>(customdata));
+  };
+
+  wmGizmoPropertyFnParams params{};
+  params.value_get_fn = gizmo_node_box_mask_prop_matrix_get;
+  params.value_set_fn = gizmo_node_box_mask_prop_matrix_set;
+  params.range_get_fn = nullptr;
+  // params.user_data = node;
+  // params.foreach_rna_prop_fn = gizmo_node_box_mask_foreach_rna_prop;
+  WM_gizmo_target_property_def_func(mask_group->border, "matrix", &params);
+
+  constexpr std::array<float2, 4> corner_positions(
+      {{-0.5f, -0.5f}, {0.5f, -0.5f}, {0.5f, 0.5f}, {-0.5f, 0.5f}});
+
+  for (int i = 0; i < 4; i++) {
+    mask_group->corner_pin.corner_data[i] = MEM_new<CornerPinData>(__func__);
+
+    wmGizmo *gz = mask_group->corner_pin.gizmos[i];
+    CornerPinData *corner_pin_data = mask_group->corner_pin.corner_data[i];
+
+    corner_pin_data->index = i;
+    corner_pin_data->corner_pos = corner_positions[i];
+
+    wmGizmoPropertyFnParams params{};
+    params.value_get_fn = gizmo_bisect_prop_translate_get;
+    params.value_set_fn = gizmo_bisect_prop_translate_set;
+    params.range_get_fn = nullptr;
+    params.user_data = corner_pin_data;
+    WM_gizmo_target_property_def_func(gz, "offset", &params);
+  }
+
+  mask_group->update_data.gzgt_mode_prop = RNA_struct_type_find_property(gzgroup->type->srna,
+                                                                         "mode");
+
+  update_things(C, gzgroup);
+}
+
 static bool should_update(const bContext *C, wmGizmoGroup *gzgroup)
 {
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
@@ -697,7 +705,6 @@ static bool should_update(const bContext *C, wmGizmoGroup *gzgroup)
 static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
 {
   QuadWidgetGroup2 *mask_group = static_cast<QuadWidgetGroup2 *>(gzgroup->customdata);
-  wmGizmo *gz = mask_group->border;
 
   // void *lock;
   // Image *ima = BKE_image_ensure_viewer(bmain, IMA_TYPE_COMPOSITE, "Render Result");
@@ -728,14 +735,6 @@ static void box_mask_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   //     reinterpret_cast<ID *>(snode->edittree), RNA_NodeSocket, source_input);
   // mask_group->update_data.prop = RNA_struct_find_property(&mask_group->update_data.ptr,
   // "enabled"); BLI_assert(mask_group->update_data.prop != nullptr);
-
-  wmGizmoPropertyFnParams params{};
-  params.value_get_fn = gizmo_node_box_mask_prop_matrix_get;
-  params.value_set_fn = gizmo_node_box_mask_prop_matrix_set;
-  params.range_get_fn = nullptr;
-  // params.user_data = node;
-  // params.foreach_rna_prop_fn = gizmo_node_box_mask_foreach_rna_prop;
-  WM_gizmo_target_property_def_func(gz, "matrix", &params);
 
   // BKE_image_release_ibuf(ima, ibuf, lock);
 }
