@@ -1265,11 +1265,8 @@ class VIEW3D_MT_editor_menus(Menu):
 
         elif obj:
             if mode_string not in {
-                'PAINT_TEXTURE',
-                'SCULPT_CURVES',
-                'PAINT_GREASE_PENCIL',
-                'SCULPT_GREASE_PENCIL',
-                    'VERTEX_GREASE_PENCIL'}:
+                'PAINT_TEXTURE', 'SCULPT_CURVES', 'PAINT_GREASE_PENCIL', 'SCULPT_GREASE_PENCIL', 'VERTEX_GREASE_PENCIL'
+            }:
                 layout.menu("VIEW3D_MT_" + mode_string.lower())
             if mode_string == 'SCULPT':
                 layout.menu("VIEW3D_MT_mask")
