@@ -243,7 +243,7 @@ class OBJECT_PT_display(ObjectButtonsPanel, Panel):
         is_empty_image = (obj_type == 'EMPTY' and obj.empty_display_type == 'IMAGE')
         is_dupli = (obj.instance_type != 'NONE')
         is_gpencil = (obj_type == 'GREASEPENCIL')
-        print(has_bounds)
+
         col = layout.column(heading="Show")
         col.prop(obj, "show_name", text="Name")
         col.prop(obj, "show_axis", text="Axes")
