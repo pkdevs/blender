@@ -61,6 +61,11 @@ class BlenderCamera {
   float2 offset = zero_float2();
   float zoom = 1.0f;
 
+  /** 3D viewport camera view roll. */
+  float roll = 0.0f;
+  /** 3D viewport camera view horizontal flip. */
+  bool is_flipped_x = false;
+
   float2 pixelaspect = one_float2();
 
   bool use_aspect_override = false;
@@ -222,15 +227,11 @@ static void blender_camera_from_object(BlenderCamera *bcam,
 {
   bcam->motion_steps = object_motion_steps(b_ob, b_ob);
 
-  if (!b_ob.data) {
-    /* A blender local camera can be an Empty even. */
-    return;
-  }
+  /* A blender local camera can be an Empty even, which has no object data. */
+  blender::ID *b_ob_data = static_cast<blender::ID *>(b_ob.data);
 
-  blender::ID &b_ob_data = *static_cast<blender::ID *>(b_ob.data);
-
-  if (b_ob_data.id_type() == blender::ID_CA) {
-    blender::Camera &b_camera = blender::id_cast<blender::Camera &>(b_ob_data);
+  if (b_ob_data && b_ob_data->id_type() == blender::ID_CA) {
+    blender::Camera &b_camera = blender::id_cast<blender::Camera &>(*b_ob_data);
 
     bcam->nearclip = b_camera.clip_start;
     bcam->farclip = b_camera.clip_end;
@@ -357,13 +358,17 @@ static void blender_camera_from_object(BlenderCamera *bcam,
       }
     }
   }
-  else if (b_ob_data.id_type() == blender::ID_LA) {
+  else if (b_ob_data && b_ob_data->id_type() == blender::ID_LA) {
     /* Can also look through spot light. */
-    const blender::Light &b_light = reinterpret_cast<const blender::Light &>(b_ob_data);
+    const blender::Light &b_light = reinterpret_cast<const blender::Light &>(*b_ob_data);
     const float lens = 16.0f / tanf(b_light.spotsize * 0.5f);
     if (lens > 0.0f) {
       bcam->lens = lens;
     }
+  }
+  else {
+    /* Like Blender, fall back to 35mm for other object types. */
+    bcam->lens = 35.0f;
   }
 }
 
@@ -471,10 +476,12 @@ static void blender_camera_viewplane(BlenderCamera *bcam,
   }
   else {
     /* Account for camera shift and 3d camera view offset. */
-    const float2 dv = 2.0f * (aspectratio * bcam->shift + bcam->offset * aspect * 2.0f);
+    const float2 shift = 2.0f * (aspectratio * bcam->shift + bcam->offset * aspect * 2.0f);
+    const blender::float2 dv = blender::BKE_camera_viewplane_offset_transform(
+        bcam->roll, bcam->is_flipped_x, blender::float2(shift.x, shift.y));
 
     /* Set viewplane for perspective or orthographic camera. */
-    viewplane = (BoundBox2D(aspect) * bcam->zoom).offset(dv);
+    viewplane = (BoundBox2D(aspect) * bcam->zoom).offset(make_float2(dv.x, dv.y));
   }
 }
 
@@ -1001,6 +1008,8 @@ static void blender_camera_from_view(BlenderCamera *bcam,
 
         /* offset */
         bcam->offset = make_float2(b_rv3d->camdx, b_rv3d->camdy);
+        bcam->roll = b_rv3d->camroll;
+        bcam->is_flipped_x = (b_rv3d->rflag & blender::RV3D_FLIP_X) != 0;
 
         /* Zoom to fit the camera frame. */
         const float frame_fit = blender_camera_frame_fit(bcam, width, height);
