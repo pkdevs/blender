@@ -131,7 +131,8 @@ static const char *shortcut_get_operator_property(bContext *C, Button *but, IDPr
       return "WM_OT_context_toggle";
     }
     if (rnaprop_type == PROP_ENUM) {
-      /* Enum */
+      /* `is_enum_menu` is true for expanded enum properties. It's to add shortcut to individual
+       * enum item, see: !163600 */
       const bool is_enum_menu = but->type == ButtonType::Menu;
       *r_prop = is_enum_menu ? shortcut_property_from_rna(C, but) :
                                shortcut_property_from_rna_for_enum(C, but, but);
