@@ -372,10 +372,9 @@ static void node_geo_exec(GeoNodeExecParams params)
         openvdb::Vec3SGrid::Ptr vdb_gradient_grid = openvdb::Vec3SGrid::create(
             bke::VolumeGridTraits<float3>::to_openvdb(boundary_gradient));
         openvdb::FloatGrid::Ptr vdb_factor_grid = openvdb::FloatGrid::create(boundary_factor);
-        openvdb::math::Transform::Ptr vdb_transform = source_vdb_grid.constTransformPtr()->copy();
-        vdb_value_grid->setTransform(vdb_transform);
-        vdb_gradient_grid->setTransform(vdb_transform);
-        vdb_factor_grid->setTransform(vdb_transform);
+        vdb_value_grid->setTransform(source_vdb_grid.constTransformPtr()->copy());
+        vdb_gradient_grid->setTransform(source_vdb_grid.constTransformPtr()->copy());
+        vdb_factor_grid->setTransform(source_vdb_grid.constTransformPtr()->copy());
         grids[0] = bke::VolumeGrid<float>(std::move(vdb_value_grid));
         grids[1] = bke::VolumeGrid<float3>(std::move(vdb_gradient_grid));
         grids[2] = bke::VolumeGrid<float>(std::move(vdb_factor_grid));
