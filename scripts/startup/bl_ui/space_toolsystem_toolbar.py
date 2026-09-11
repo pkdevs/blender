@@ -2275,7 +2275,6 @@ class _defs_grease_pencil_paint:
             idname="builtin.select",
             label="Tweak",
             icon="ops.generic.select",
-            # widget="VIEW3D_GGT_grease_pencil_edit",
             keymap="3D View Tool: Tweak",
         )
 
@@ -2290,7 +2289,6 @@ class _defs_grease_pencil_paint:
             idname="builtin.select_box",
             label="Select Box",
             icon="ops.generic.select_box",
-            # widget="VIEW3D_GGT_grease_pencil_edit",
             keymap="3D View Tool: Select Box",
             draw_settings=draw_settings,
         )
@@ -2330,7 +2328,6 @@ class _defs_grease_pencil_paint:
             idname="builtin.select_circle",
             label="Select Circle",
             icon="ops.generic.select_circle",
-            # widget="VIEW3D_GGT_grease_pencil_edit",
             keymap="3D View Tool: Select Circle",
             draw_settings=draw_settings,
             draw_cursor=draw_cursor,
