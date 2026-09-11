@@ -29,9 +29,9 @@ ccl_device int svm_integer_math_gcd(int a, int b)
 }
 
 ccl_device int svm_integer_math(const NodeIntegerMathType type,
-                                 const int a,
-                                 const int b,
-                                 const int c)
+                                const int a,
+                                const int b,
+                                const int c)
 {
   switch (type) {
     case NODE_INTEGER_MATH_ADD:

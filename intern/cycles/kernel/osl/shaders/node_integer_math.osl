@@ -23,11 +23,8 @@ int integer_math_gcd(int a_in, int b_in)
   return a;
 }
 
-shader node_integer_math(string math_type = "add",
-                         int Value1 = 0,
-                         int Value2 = 0,
-                         int Value3 = 0,
-                         output int Value = 0)
+shader node_integer_math(
+    string math_type = "add", int Value1 = 0, int Value2 = 0, int Value3 = 0, output int Value = 0)
 {
   if (math_type == "add")
     Value = Value1 + Value2;
