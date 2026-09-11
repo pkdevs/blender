@@ -26,6 +26,7 @@ SymbolVariable::SymbolVariable(SymbolScope *parent,
           string(decl.identifier().str()), string(decl.identifier().str()), decl.front(), parent),
       type(type),
       array_dimensions(decl.array().dimensions()),
+      is_bitfield(decl.bitfield().is_valid()),
       is_static(decl.type().is_static()),
       is_compilation_const(AttrList(decl.type().prev()).contains_attr("compilation_constant"))
 {
@@ -60,7 +61,14 @@ void SymbolVariable::set_offset(bool is_union, int &offset)
   else {
     this->offset = pad(offset, this->type->align);
     offset = this->offset;
-    offset += this->type->size;
+    int elements = (this->array_dimensions == 0) ? 1 : this->array_elements;
+    if (elements != -1) {
+      offset += this->type->size * elements;
+    }
+    else {
+      /* TODO(fclem): Maybe assert here. There is no reason to allow non-static array size. */
+      offset += this->type->size;
+    }
   }
 }
 

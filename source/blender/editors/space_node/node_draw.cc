@@ -44,6 +44,7 @@
 #include "BKE_curves.hh"
 #include "BKE_global.hh"
 #include "BKE_idtype.hh"
+#include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
@@ -105,6 +106,7 @@
 #include "node_intern.hh" /* own include */
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <sstream>
 
 namespace blender {
@@ -236,11 +238,10 @@ static bool compare_node_depth(const bNode *a, const bNode *b)
     }
   }
 
-  /* One of the nodes is in the background and the other not. */
-  if ((a->flag & NODE_BACKGROUND) && !(b->flag & NODE_BACKGROUND)) {
+  if (a->is_frame() && !b->is_frame()) {
     return true;
   }
-  if ((b->flag & NODE_BACKGROUND) && !(a->flag & NODE_BACKGROUND)) {
+  if (b->is_frame() && !a->is_frame()) {
     return false;
   }
 
@@ -3955,7 +3956,7 @@ static void reroute_node_draw_body(const bContext &C,
 {
   BLI_assert(node.is_reroute());
 
-  bNodeSocket &sock = *static_cast<bNodeSocket *>(node.inputs.first);
+  bNodeSocket &sock = *node.inputs.first();
 
   PointerRNA nodeptr = RNA_pointer_create_discrete(
       const_cast<ID *>(&ntree.id), RNA_Node, const_cast<bNode *>(&node));
@@ -4240,7 +4241,7 @@ static void node_draw_zones_and_frames(const ARegion &region,
     draw_order.append(zones->zones[zone_i]);
   }
   for (const bNode *node : ntree.all_nodes()) {
-    if (node->flag & NODE_BACKGROUND) {
+    if (node->is_frame()) {
       draw_order.append(node);
     }
   }
@@ -4556,8 +4557,8 @@ static void node_draw_nodetree(const bContext &C,
   /* Draw foreground nodes, last nodes in front. */
   for (const int i : nodes.index_range()) {
     bNode &node = *nodes[i];
-    if (node.flag & NODE_BACKGROUND) {
-      /* Background nodes are drawn before mixed with zones already. */
+    if (node.is_frame()) {
+      /* Those nodes are drawn before already. */
       continue;
     }
 
@@ -4725,6 +4726,7 @@ void node_draw_space(const bContext &C, ARegion &region)
   SpaceNode &snode = *CTX_wm_space_node(&C);
   View2D &v2d = region.v2d;
   Scene &scene = *CTX_data_scene(&C);
+  Main &bmain = *CTX_data_main(&C);
 
   /* Setup off-screen buffers. */
   GPUViewport *viewport = WM_draw_region_get_viewport(&region);
@@ -4758,8 +4760,8 @@ void node_draw_space(const bContext &C, ARegion &region)
   ui::view2d_dot_grid_draw(&v2d, TH_GRID, NODE_GRID_STEP_SIZE, grid_levels);
 
   /* Draw parent node trees. */
-  if (snode.treepath.last) {
-    bNodeTreePath *path = static_cast<bNodeTreePath *>(snode.treepath.last);
+  if (snode.treepath.last()) {
+    bNodeTreePath *path = snode.treepath.last();
 
     /* Update tree path name (drawn in the bottom left). */
     ID *name_id = (path->nodetree && path->nodetree != snode.nodetree) ? &path->nodetree->id :
@@ -4859,16 +4861,48 @@ void node_draw_space(const bContext &C, ARegion &region)
   /* Reset view matrix. */
   ui::view2d_view_restore(&C);
 
+  int text_info_y_offset = 0;
   if (snode.overlay.flag & SN_OVERLAY_SHOW_OVERLAYS) {
-    if (snode.flag & SNODE_SHOW_GPENCIL && snode.treepath.last) {
+    if (snode.flag & SNODE_SHOW_GPENCIL && snode.treepath.last()) {
       /* Draw grease-pencil (screen strokes, and also paint-buffer). */
       ED_annotation_draw_view2d(&C, false);
     }
 
     /* Draw context path. */
     if (snode.overlay.flag & SN_OVERLAY_SHOW_PATH) {
+      text_info_y_offset += UI_UNIT_Y;
       draw_tree_path(C, region);
     }
+  }
+
+  const bool show_text_info = ED_node_is_compositor(&snode) &&
+                              (snode.overlay.flag & SN_OVERLAY_SHOW_OVERLAYS &&
+                               snode.overlay.flag & SN_OVERLAY_SHOW_TEXT_INFO &&
+                               snode.flag & SNODE_BACKDRAW);
+
+  if (show_text_info) {
+    int render_size_x, render_size_y;
+    BKE_render_resolution(&scene.r, true, &render_size_x, &render_size_y);
+
+    /* Use same padding as path tree. */
+    const rcti *rect = ED_region_visible_rect(&region);
+    int xoffset = rect->xmin + 16 * UI_SCALE_FAC;
+    int yoffset = rect->ymax - (0.4f * UI_UNIT_Y) - text_info_y_offset;
+
+    int viewer_size_x = 0;
+    int viewer_size_y = 0;
+    void *lock;
+
+    Image *ima = BKE_image_ensure_viewer(&bmain, IMA_TYPE_COMPOSITE, "Viewer Node");
+    ImBuf *ibuf = BKE_image_acquire_ibuf(ima, nullptr, &lock);
+    if (ibuf) {
+      viewer_size_x = ibuf->x;
+      viewer_size_y = ibuf->y;
+    }
+    BKE_image_release_ibuf(ima, ibuf, lock);
+
+    ED_region_overlay_info_text_draw(
+        render_size_x, render_size_y, viewer_size_x, viewer_size_y, xoffset, yoffset);
   }
 
   /* Scrollers. */
