@@ -692,12 +692,12 @@ void NODE_OT_resize(wmOperatorType *ot)
 bool node_has_hidden_sockets(bNode *node)
 {
   for (bNodeSocket &sock : node->inputs) {
-    if (sock.flag & SOCK_HIDDEN) {
+    if (sock.is_user_hidden()) {
       return true;
     }
   }
   for (bNodeSocket &sock : node->outputs) {
-    if (sock.flag & SOCK_HIDDEN) {
+    if (sock.is_user_hidden()) {
       return true;
     }
   }
