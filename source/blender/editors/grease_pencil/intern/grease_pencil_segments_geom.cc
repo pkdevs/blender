@@ -1653,19 +1653,19 @@ static std::pair<WindingState, WindingState> LR_states_from_segment(
 }
 
 /* Check the left and right of a curve `k` */
-static void check_segments(const CurveBooleanOpParameters &op_params,
-                           const int curve_k,
-                           const bool is_subj,
-                           const int subj_shape_i,
-                           const Span<float2> points,
-                           const GroupedSpan<int> shapes,
-                           const OffsetIndices<int> points_by_curve,
-                           const IndexMask &clipping_shapes,
-                           const Span<Segment> all_segments,
-                           const OffsetIndices<int> segments_by_curve,
-                           const VArray<bool> &is_fill,
-                           MutableSpan<bool> all_inside_left,
-                           MutableSpan<bool> all_inside_right)
+static void get_inside_states_for_segments(const CurveBooleanOpParameters &op_params,
+                                           const int curve_k,
+                                           const bool is_subj,
+                                           const int subj_shape_i,
+                                           const Span<float2> points,
+                                           const GroupedSpan<int> shapes,
+                                           const OffsetIndices<int> points_by_curve,
+                                           const IndexMask &clipping_shapes,
+                                           const Span<Segment> all_segments,
+                                           const OffsetIndices<int> segments_by_curve,
+                                           const VArray<bool> &is_fill,
+                                           MutableSpan<bool> all_inside_left,
+                                           MutableSpan<bool> all_inside_right)
 {
   const IndexRange segments = segments_by_curve[curve_k];
 
@@ -1926,36 +1926,36 @@ static BooleanResult execute_single_boolean(const CurveBooleanOpParameters op_pa
   Array<bool> all_inside_right(all_segments.size());
 
   for (const int curve_i : shapes[subj_shape_id]) {
-    check_segments(op_params,
-                   curve_i,
-                   true,
-                   subj_shape_id,
-                   points,
-                   shapes,
-                   points_by_curve,
-                   clipping_shapes,
-                   all_segments,
-                   segments_by_curve,
-                   is_fill,
-                   all_inside_left,
-                   all_inside_right);
+    get_inside_states_for_segments(op_params,
+                                   curve_i,
+                                   true,
+                                   subj_shape_id,
+                                   points,
+                                   shapes,
+                                   points_by_curve,
+                                   clipping_shapes,
+                                   all_segments,
+                                   segments_by_curve,
+                                   is_fill,
+                                   all_inside_left,
+                                   all_inside_right);
   }
   clipping_shapes.foreach_index([&](const int clip_shape_id) {
     const Span<int> curves_j = shapes[clip_shape_id];
     for (const int curve_j : curves_j) {
-      check_segments(op_params,
-                     curve_j,
-                     false,
-                     subj_shape_id,
-                     points,
-                     shapes,
-                     points_by_curve,
-                     clipping_shapes,
-                     all_segments,
-                     segments_by_curve,
-                     is_fill,
-                     all_inside_left,
-                     all_inside_right);
+      get_inside_states_for_segments(op_params,
+                                     curve_j,
+                                     false,
+                                     subj_shape_id,
+                                     points,
+                                     shapes,
+                                     points_by_curve,
+                                     clipping_shapes,
+                                     all_segments,
+                                     segments_by_curve,
+                                     is_fill,
+                                     all_inside_left,
+                                     all_inside_right);
     }
   });
 
