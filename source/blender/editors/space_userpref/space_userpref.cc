@@ -89,6 +89,14 @@ static SpaceLink *userpref_create(const ScrArea *area, const Scene * /*scene*/)
   region->alignment = RGN_ALIGN_BOTTOM | RGN_SPLIT_PREV;
   region->flag |= RGN_FLAG_DYNAMIC_SIZE | RGN_FLAG_NO_USER_RESIZE;
 
+  /* Key map intents column (Keymap section only). Listed before the key map header and usage
+   * regions so it runs the full height next to them. */
+  region = BKE_area_region_new();
+
+  BLI_addtail(&spref->regionbase, region);
+  region->regiontype = RGN_TYPE_CHANNELS;
+  region->alignment = RGN_ALIGN_RIGHT;
+
   region = BKE_area_region_new();
 
   BLI_addtail(&spref->regionbase, region);
@@ -616,6 +624,9 @@ static void userpref_keymap_header_region_layout(const bContext *C, ARegion *reg
 /** Initial height when open: the controls row plus about four rows of history. */
 constexpr int keymap_usage_region_sizey = 20 * 7;
 
+/** Initial width of the intents column: an intent row with its label, key and count. */
+constexpr int keymap_intents_region_sizex = 300;
+
 /** Dragging past the closed height closes the usage region, dragging a closed one up opens it. */
 static void userpref_keymap_usage_region_on_user_resize(const ARegion *region)
 {
@@ -774,6 +785,19 @@ void ED_spacetype_userpref()
   art->init = userpref_keymap_region_init;
   art->layout = userpref_keymap_usage_region_layout;
   art->on_user_resize = userpref_keymap_usage_region_on_user_resize;
+  art->draw = ED_region_panels_draw;
+  art->listener = userpref_keymap_region_listener;
+  art->keymapflag = ED_KEYMAP_UI;
+
+  BLI_addhead(&st->regiontypes, art);
+
+  /* regions: key map intents column (Keymap section only) */
+  art = MEM_new_zeroed<ARegionType>("spacetype userpref region");
+  art->regionid = RGN_TYPE_CHANNELS;
+  art->prefsizex = keymap_intents_region_sizex;
+  art->poll = userpref_keymap_region_poll;
+  art->init = userpref_keymap_region_init;
+  art->layout = ED_region_panels_layout;
   art->draw = ED_region_panels_draw;
   art->listener = userpref_keymap_region_listener;
   art->keymapflag = ED_KEYMAP_UI;

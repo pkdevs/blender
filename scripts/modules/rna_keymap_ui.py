@@ -37,8 +37,10 @@ __all__ = (
     "keymap_filter_refresh",
     "keymap_filtered_collapse",
     "keymap_row_is_drawn",
+    "keymap_intents_region_visible",
     "scroll_to_keymap",
     "set_conflict_flash",
+    "set_intent_reveal_target",
     "set_reveal_target",
 )
 
@@ -88,6 +90,16 @@ _KMI_REVEAL_SECONDS = 1.5
 _kmi_reveal_target = None
 _kmi_reveal_timer_pending = False
 _kmi_reveal_expiry = 0.0
+
+# The same for the intents column: the intent identifier to highlight, its row offsets
+# (recorded as the column draws, in rows from the top) and the pending scroll.
+_intent_reveal_target = None
+_intent_reveal_timer_pending = False
+_intent_reveal_expiry = 0.0
+_intent_row_offsets = {}
+_intent_row_cursor = 0.0
+_intent_scroll_to = None
+_intent_scroll_expiry = 0.0
 
 _KMI_CONFLICT_FLASH_SECONDS = 3.0
 # Row key to flash red (the item another item conflicts with), or None.
@@ -307,6 +319,14 @@ def _kmi_flash_update(wm):
         bpy.app.timers.register(_kmi_flash_redraw, first_interval=_KMI_FLASH_SECONDS + 0.05)
 
 
+def _kmi_row_is_flashing(km, kmi):
+    """Whether the item was used within `_KMI_FLASH_SECONDS`, see `_kmi_flash_update`."""
+    if km.is_modal:
+        return (km.name, kmi.to_string(), kmi.propvalue) in _kmi_flash_modal
+    flash_key = _kmi_flash_map.get((km.name, kmi.idname))
+    return flash_key is not None and flash_key == kmi.to_string()
+
+
 def _kmi_reveal_clear():
     global _kmi_reveal_target, _kmi_reveal_timer_pending
     remaining = _kmi_reveal_expiry - time.monotonic()
@@ -386,27 +406,37 @@ def _kmi_scroll_run():
         return 0.05 if time.monotonic() < _kmi_scroll_expiry else None
     _kmi_scroll_to = None
 
+    _scroll_regions_to_rows('WINDOW', rows)
+    return None
+
+
+def _scroll_regions_to_rows(region_type, rows):
+    """Scroll this region of every preferences editor so the row at `rows` is at the top."""
     context = bpy.context
     row_height = round(20.0 * context.preferences.system.ui_scale)
-    for window, area, region in _preferences_tree_regions():
+    for window, area, region in _preferences_regions(region_type):
         with context.temp_override(window=window, area=area, region=region):
             bpy.ops.view2d.pan('EXEC_DEFAULT', deltax=0, deltay=100000)
             if rows > 0.0:
                 bpy.ops.view2d.pan(
                     'EXEC_DEFAULT', deltax=0, deltay=-round(rows * row_height),
                 )
-    return None
 
 
-def _preferences_tree_regions():
-    """Yield (window, area, region) for every preferences editor's window region."""
+def _preferences_regions(region_type):
+    """Yield (window, area, region) for this region of every preferences editor."""
     for window in bpy.context.window_manager.windows:
         for area in window.screen.areas:
             if area.type != 'PREFERENCES':
                 continue
-            region = next((r for r in area.regions if r.type == 'WINDOW'), None)
+            region = next((r for r in area.regions if r.type == region_type), None)
             if region is not None:
                 yield window, area, region
+
+
+def _preferences_tree_regions():
+    """Yield (window, area, region) for every preferences editor's window region."""
+    yield from _preferences_regions('WINDOW')
 
 
 def _kmi_scroll_offset_get():
@@ -474,6 +504,73 @@ def set_reveal_target(km, kmi):
     if not _kmi_reveal_timer_pending:
         _kmi_reveal_timer_pending = True
         bpy.app.timers.register(_kmi_reveal_clear, first_interval=_KMI_REVEAL_SECONDS)
+
+
+# -----------------------------------------------------------------------------
+# Intents Column: Reveal & Scroll
+#
+# Mirrors the tree's reveal, with the intents region and its own row offsets.
+
+def _intent_rows_reset():
+    global _intent_row_cursor
+    _intent_row_cursor = 0.0
+    _intent_row_offsets.clear()
+
+
+def _intent_row_mark(key):
+    _intent_row_offsets[key] = _intent_row_cursor
+
+
+def _intent_row_advance(rows):
+    global _intent_row_cursor
+    _intent_row_cursor += rows
+
+
+def _intent_scroll_run():
+    """Timer: scroll the intents column to `_intent_scroll_to` once its row offset is known."""
+    global _intent_scroll_to
+    key = _intent_scroll_to
+    if key is None:
+        return None
+    rows = _intent_row_offsets.get(key)
+    if rows is None:
+        return 0.05 if time.monotonic() < _intent_scroll_expiry else None
+    _intent_scroll_to = None
+    _scroll_regions_to_rows('CHANNELS', rows)
+    return None
+
+
+def _intent_reveal_clear():
+    global _intent_reveal_target, _intent_reveal_timer_pending
+    remaining = _intent_reveal_expiry - time.monotonic()
+    if remaining > 0.0:
+        return remaining
+    _intent_reveal_target = None
+    _intent_reveal_timer_pending = False
+    _keymap_redraw()
+    return None
+
+
+def keymap_intents_region_visible(area):
+    """Whether the intents column of this preferences editor is shown (a hidden region has no size)."""
+    region = next((r for r in area.regions if r.type == 'CHANNELS'), None)
+    return region is not None and region.width > 1
+
+
+def set_intent_reveal_target(intent):
+    """Highlight an intent in the intents column and scroll to it."""
+    global _intent_reveal_target, _intent_scroll_to
+    global _intent_reveal_timer_pending, _intent_reveal_expiry, _intent_scroll_expiry
+    _intent_reveal_target = intent.name
+    _intent_reveal_expiry = time.monotonic() + _KMI_REVEAL_SECONDS
+    _intent_scroll_to = intent.name
+    _intent_scroll_expiry = time.monotonic() + _KMI_SCROLL_SECONDS
+    _intent_rows_reset()
+    _keymap_redraw()
+    bpy.app.timers.register(_intent_scroll_run, first_interval=0.05)
+    if not _intent_reveal_timer_pending:
+        _intent_reveal_timer_pending = True
+        bpy.app.timers.register(_intent_reveal_clear, first_interval=_KMI_REVEAL_SECONDS)
 
 
 def _activity_keymap_item(kc, item):
@@ -1641,13 +1738,8 @@ def draw_kmi(display_keymaps, kc, km, kmi, layout, level, use_local_expand=False
 
     col = _indented_layout(layout, level)
 
-    if km.is_modal:
-        if (km.name, kmi.to_string(), kmi.propvalue) in _kmi_flash_modal:
-            col.warning = True
-    else:
-        flash_key = _kmi_flash_map.get((km.name, kmi.idname))
-        if flash_key is not None and flash_key == kmi.to_string():
-            col.warning = True
+    if _kmi_row_is_flashing(km, kmi):
+        col.warning = True
 
     if _kmi_reveal_target == _kmi_row_key_item(km, kmi):
         col.warning = True
@@ -2854,33 +2946,42 @@ def intent_conflicts(kc, intent, served=None):
     return conflicts
 
 
+def _intent_is_flashing(served):
+    """Whether any item bound through the intent was just used, see `_kmi_row_is_flashing`."""
+    return any(_kmi_row_is_flashing(km, kmi) for km, kmi in served)
+
+
 def _draw_intent(kc, intent, layout, served):
+    _intent_row_mark(intent.name)
+    # The expanded body is not measured, only rows below a collapsed intent scroll exactly.
+    _intent_row_advance(1.0)
+
     col = layout.column(align=True)
+    if _intent_is_flashing(served) or _intent_reveal_target == intent.name:
+        col.warning = True
     if intent.show_expanded:
         box = col.box()
     else:
         box = col.column()
 
-    split = box.split(factor=0.4)
+    split = box.split(factor=0.55)
 
     row = split.row(align=True)
     row.prop(intent, "show_expanded", text="", emboss=False)
     row.label(text=intent.label, translate=False)
-
-    row = split.row()
-    sub = row.row(align=True)
-    sub.prop(intent, "map_type", text="")
-    if intent.map_type in {'KEYBOARD', 'MOUSE', 'NDOF'}:
-        sub.prop(intent, "type", text="", full_event=True)
-    else:
-        sub.prop(intent, "type", text="")
-
     contexts = len(served)
-    sub = row.row()
+    sub = row.row(align=True)
     sub.alignment = 'RIGHT'
-    sub.label(text=iface_("{:d} contexts").format(contexts), translate=False)
+    sub.active = False
+    sub.label(text=str(contexts), translate=False)
     # Not used by any key map of the active configuration.
     col.active = contexts > 0
+
+    row = split.row(align=True)
+    if intent.map_type in {'KEYBOARD', 'MOUSE', 'NDOF'}:
+        row.prop(intent, "type", text="", full_event=True)
+    else:
+        row.prop(intent, "type", text="")
 
     if intent.is_user_modified:
         row.operator("preferences.keyintent_restore", text="", icon='BACK').intent = intent.name
@@ -2920,6 +3021,7 @@ def _draw_intent(kc, intent, layout, served):
 
         sub = box.column()
         subrow = sub.row(align=True)
+        subrow.prop(intent, "map_type", text="")
         if intent.map_type == 'KEYBOARD':
             subrow.prop(intent, "type", text="", event=True)
             subrow.prop(intent, "value", text="")
@@ -2949,41 +3051,49 @@ def _draw_intent(kc, intent, layout, served):
         subrow.prop(intent, "key_modifier", text="", event=True)
 
     # The contexts: key map & the operator it runs there, in the order of the key map hierarchy.
+    # Each is a button that shows the item in the key map tree.
     if served:
         col = box.column(align=True)
         col.label(text="Contexts")
         for km, kmi in sorted(served, key=lambda pair: _keymap_order(pair[0])):
             row = col.row()
             row.active = kmi.active
-            row.label(text=iface_(km.name, i18n_contexts.id_windowmanager), icon=_keymap_icon(km), translate=False)
+            if _kmi_row_is_flashing(km, kmi):
+                row.warning = True
+            sub = row.row()
+            sub.alignment = 'LEFT'
+            props = sub.operator(
+                "preferences.keyitem_reveal",
+                text=iface_(km.name, i18n_contexts.id_windowmanager),
+                icon=_keymap_icon(km),
+                translate=False,
+                emboss=False,
+            )
+            props.keymap_name = km.name
+            props.item_id = kmi.id
             row.label(text=kmi.name or kmi.idname, translate=False)
     else:
         box.label(text="No key map items are bound through this intent")
 
 
 def draw_intents(context, layout, kc):
-    """The intents of the user key configuration, above the key map hierarchy."""
-    if not kc.intents:
-        return
+    """The intents of the user key configuration, drawn in the intents column of the editor."""
+    wm = context.window_manager
+    _kmi_flash_update(wm)
+    _intent_rows_reset()
 
-    keymappref = context.preferences.keymap
-    show_ui_intents = keymappref.show_ui_intents
-
-    box = layout.box()
-    row = box.row(align=True)
-    row.prop(
-        keymappref,
-        "show_ui_intents",
-        text="",
-        icon='DISCLOSURE_TRI_DOWN' if show_ui_intents else 'DISCLOSURE_TRI_RIGHT',
-        emboss=False,
-    )
+    col = layout.column()
+    row = col.row(align=True)
     row.label(text=iface_("Intents ({:d})").format(len(kc.intents)), translate=False)
-    if not show_ui_intents:
-        return
+    sub = col.column()
+    sub.active = False
+    sub.label(text="A shortcut with a meaning, shared by the key maps bound through it")
+    _intent_row_advance(2.0 + _KMI_ROW_SEPARATOR)
+    col.separator()
 
-    col = box.column()
-    col.label(text="A shortcut with a meaning, shared by the key maps bound through it")
+    if not kc.intents:
+        col.label(text="The active key configuration defines no intents")
+        return
 
     served_all = _intents_served_items_all(kc)
 
@@ -2998,6 +3108,10 @@ def draw_intents(context, layout, kc):
             continue
         expanded = intents[0].show_category_expanded
         row = col.row(align=True)
+        if not expanded:
+            # As the key map headers in the tree: a collapsed group glows for its intents.
+            if any(_intent_is_flashing(served_all.get(intent.name, ())) for intent in intents):
+                row.warning = True
         row.operator(
             "preferences.keyintent_category_toggle",
             text="",
@@ -3005,15 +3119,18 @@ def draw_intents(context, layout, kc):
             emboss=False,
         ).category = category
         row.label(text=iface_("{:s} ({:d})").format(iface_(category), len(intents)), translate=False)
+        _intent_row_advance(1.0)
         if expanded:
             sub = col.column()
             for intent in intents:
                 _draw_intent(kc, intent, sub, served_all.get(intent.name, ()))
             col.separator()
+            _intent_row_advance(_KMI_ROW_SEPARATOR)
 
     if uncategorized := categories.get(""):
         if len(categories) > 1:
             col.label(text=iface_("Other ({:d})").format(len(uncategorized)), translate=False)
+            _intent_row_advance(1.0)
         for intent in uncategorized:
             _draw_intent(kc, intent, col, served_all.get(intent.name, ()))
 
@@ -3056,6 +3173,14 @@ def draw_keymaps_header(context, layout):
     rowsub = split.row(align=True)
     rowsub.operator("preferences.keyconfig_import", text="Import...", icon='IMPORT')
     rowsub.operator("preferences.keyconfig_export", text="Export...", icon='EXPORT')
+    # The intents column, beside the tree.
+    rowsub.separator()
+    rowsub.operator(
+        "screen.region_toggle",
+        text="",
+        icon='LINKED',
+        depress=keymap_intents_region_visible(context.area),
+    ).region_type = 'CHANNELS'
 
     filter_text = spref.filter_text.strip()
 

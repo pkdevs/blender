@@ -890,8 +890,6 @@ enum eUserPref_SpaceData_Flag : char {
   /** Hide/expand key-map preferences. */
   USER_SPACEDATA_INPUT_HIDE_UI_KEYCONFIG = (1 << 0),
   USER_SPACEDATA_ADDONS_SHOW_ONLY_ENABLED = (1 << 1),
-  /** Hide/expand the key map intents list. */
-  USER_SPACEDATA_INPUT_HIDE_UI_INTENTS = (1 << 2),
 };
 ENUM_OPERATORS(eUserPref_SpaceData_Flag)
 

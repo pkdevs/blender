@@ -2567,6 +2567,17 @@ class USERPREF_PT_keymap_usage(KeymapPanel, Panel):
         draw_keymaps_usage(context, self.layout)
 
 
+class USERPREF_PT_keymap_intents(KeymapPanel, Panel):
+    bl_label = "Keymap Intents"
+    bl_region_type = 'CHANNELS'
+    bl_options = {'HIDE_HEADER'}
+
+    def draw(self, context):
+        from rna_keymap_ui import draw_intents
+
+        draw_intents(context, self.layout, context.window_manager.keyconfigs.user)
+
+
 class USERPREF_PT_keymap(KeymapPanel, Panel):
     bl_label = "Keymap"
     bl_options = {'HIDE_HEADER'}
@@ -3647,6 +3658,7 @@ classes = (
     USERPREF_MT_keymap_label_remove,
     USERPREF_MT_keymap_labels,
     USERPREF_PT_keymap,
+    USERPREF_PT_keymap_intents,
     USERPREF_UL_keymap_activity,
     USERPREF_UL_keymap_hidden,
     USERPREF_PT_keymap_usage,

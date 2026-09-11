@@ -526,6 +526,46 @@ class PREFERENCES_OT_keyintent_restore(Operator):
         return {'FINISHED'}
 
 
+class PREFERENCES_OT_keyintent_reveal(Operator):
+    """Show this intent in the intents column"""
+    bl_idname = "preferences.keyintent_reveal"
+    bl_label = "Show Intent"
+    bl_options = {'INTERNAL'}
+
+    intent: StringProperty(
+        name="Intent",
+        description="Identifier of the intent to show",
+    )
+
+    @classmethod
+    def description(cls, context, props):
+        intent = context.window_manager.keyconfigs.user.intents.get(props.intent)
+        if intent is None:
+            return None
+        return rpt_("Show \"{:s}\" in the intents column").format(intent.label)
+
+    def execute(self, context):
+        import rna_keymap_ui
+        kc = context.window_manager.keyconfigs.user
+        intent = kc.intents.get(self.intent)
+        if intent is None:
+            return {'CANCELLED'}
+
+        # The column may be hidden, and the intent inside a collapsed category.
+        area = context.area
+        if area is not None and area.type == 'PREFERENCES':
+            if not rna_keymap_ui.keymap_intents_region_visible(area):
+                with context.temp_override(area=area):
+                    bpy.ops.screen.region_toggle(region_type='CHANNELS')
+        if intent.category and not intent.show_category_expanded:
+            for other in kc.intents:
+                if other.category == intent.category:
+                    other.show_category_expanded = True
+
+        rna_keymap_ui.set_intent_reveal_target(intent)
+        return {'FINISHED'}
+
+
 class PREFERENCES_OT_keyitem_add(Operator):
     """Add key map item"""
     bl_idname = "preferences.keyitem_add"
