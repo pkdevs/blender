@@ -621,9 +621,12 @@ def _draw_intent(kc, intent, layout):
     else:
         sub.prop(intent, "type", text="")
 
+    contexts = intent.contexts
     sub = row.row()
     sub.alignment = 'RIGHT'
-    sub.label(text=iface_("{:d} contexts").format(intent.contexts), translate=False)
+    sub.label(text=iface_("{:d} contexts").format(contexts), translate=False)
+    # Not used by any key map of the active configuration.
+    col.active = contexts > 0
 
     if intent.is_user_modified:
         row.operator("preferences.keyintent_restore", text="", icon='BACK').intent = intent.name
@@ -728,8 +731,36 @@ def draw_intents(context, layout, kc):
 
     col = box.column()
     col.label(text="A shortcut with a meaning, shared by the key maps bound through it")
+
+    # Group by category, in the order of the key configuration's table.
+    categories = {}
     for intent in kc.intents:
-        _draw_intent(kc, intent, col)
+        categories.setdefault(intent.category, []).append(intent)
+
+    for category, intents in categories.items():
+        if not category:
+            # Uncategorized intents (add-ons, user defined) are listed after the groups.
+            continue
+        expanded = intents[0].show_category_expanded
+        row = col.row(align=True)
+        row.operator(
+            "preferences.keyintent_category_toggle",
+            text="",
+            icon='DISCLOSURE_TRI_DOWN' if expanded else 'DISCLOSURE_TRI_RIGHT',
+            emboss=False,
+        ).category = category
+        row.label(text=iface_("{:s} ({:d})").format(iface_(category), len(intents)), translate=False)
+        if expanded:
+            sub = col.column()
+            for intent in intents:
+                _draw_intent(kc, intent, sub)
+            col.separator()
+
+    if uncategorized := categories.get(""):
+        if len(categories) > 1:
+            col.label(text=iface_("Other ({:d})").format(len(uncategorized)), translate=False)
+        for intent in uncategorized:
+            _draw_intent(kc, intent, col)
 
 
 def draw_keymaps(context, layout):

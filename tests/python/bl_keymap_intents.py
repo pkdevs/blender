@@ -78,7 +78,11 @@ class TestKeyMapIntents(unittest.TestCase):
     def test_default_intents(self):
         intent = self.kc_user.intents[INTENT]
         self.assertEqual(intent.label, "Move")
+        self.assertEqual(intent.category, "Transform")
         self.assertEqual(intent.value, 'PRESS')
+        # Every intent of the preset is categorized.
+        for intent in self.kc_active.intents:
+            self.assertTrue(intent.category, intent.name)
         self.assertFalse(intent.is_user_modified)
         self.assertFalse(intent.is_user_defined)
         # The preset defines the same intents.
@@ -221,6 +225,7 @@ class TestKeyMapIntents(unittest.TestCase):
             self.assertIn(INTENT, kc.intents)
             intent = kc.intents[INTENT]
             self.assertEqual(intent.label, "Move")
+            self.assertEqual(intent.category, "Transform")
             self.assertEqual(intent.type, INTENT_KEY_NEW)
             served = items_with_intent(kc, INTENT)
             self.assertEqual(sorted((km.name, kmi.idname) for km, kmi in served), served_before)

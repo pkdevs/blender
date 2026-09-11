@@ -65,6 +65,7 @@ wmKeyIntent *WM_keyconfig_intent_find(wmKeyConfig *keyconf, const char *idname);
 wmKeyIntent *WM_keyconfig_intent_ensure(wmKeyConfig *keyconf,
                                         const char *idname,
                                         const char *label,
+                                        const char *category,
                                         const struct KeyMapItem_Params *params);
 void WM_keyconfig_intent_remove(wmKeyConfig *keyconf, wmKeyIntent *ki);
 /**

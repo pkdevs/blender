@@ -446,6 +446,30 @@ class PREFERENCES_OT_keyitem_intent_detach(Operator):
         return {'FINISHED'}
 
 
+class PREFERENCES_OT_keyintent_category_toggle(Operator):
+    """Show or hide the intents of this category"""
+    bl_idname = "preferences.keyintent_category_toggle"
+    bl_label = "Toggle Intent Category"
+    bl_options = {'INTERNAL'}
+
+    category: StringProperty(
+        name="Category",
+        description="Category of intents to show or hide",
+    )
+
+    def execute(self, context):
+        intents = [
+            intent for intent in context.window_manager.keyconfigs.user.intents
+            if intent.category == self.category
+        ]
+        if not intents:
+            return {'CANCELLED'}
+        expanded = not intents[0].show_category_expanded
+        for intent in intents:
+            intent.show_category_expanded = expanded
+        return {'FINISHED'}
+
+
 class PREFERENCES_OT_keyintent_restore(Operator):
     """Restore the key of the intent to the key configuration preset"""
     bl_idname = "preferences.keyintent_restore"
@@ -1404,6 +1428,7 @@ classes = (
     PREFERENCES_OT_keyitem_intent_detach,
     PREFERENCES_OT_keyitem_remove,
     PREFERENCES_OT_keyitem_restore,
+    PREFERENCES_OT_keyintent_category_toggle,
     PREFERENCES_OT_keyintent_restore,
     PREFERENCES_OT_keymap_restore,
     PREFERENCES_OT_theme_install,

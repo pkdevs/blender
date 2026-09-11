@@ -623,7 +623,8 @@ static wmKeyIntent *rna_KeyIntents_new(wmKeyConfig *keyconf,
                                        int oskey,
                                        int hyper,
                                        int keymodifier,
-                                       int direction)
+                                       int direction,
+                                       const char *category)
 {
   if (idname[0] == '\0') {
     BKE_report(reports, RPT_ERROR, "Intent identifier must not be empty");
@@ -637,7 +638,7 @@ static wmKeyIntent *rna_KeyIntents_new(wmKeyConfig *keyconf,
   params.keymodifier = keymodifier;
   params.direction = direction;
 
-  return WM_keyconfig_intent_ensure(keyconf, idname, label, &params);
+  return WM_keyconfig_intent_ensure(keyconf, idname, label, category, &params);
 }
 
 static void rna_KeyIntents_remove(wmKeyConfig *keyconf, ReportList *reports, PointerRNA *ki_ptr)
@@ -1756,6 +1757,8 @@ void RNA_api_keyintents(StructRNA *srna)
   RNA_def_int(func, "hyper", KM_NOTHING, KM_ANY, KM_MOD_HELD, "Hyper", "", KM_ANY, KM_MOD_HELD);
   RNA_def_enum(func, "key_modifier", rna_enum_event_type_items, 0, "Key Modifier", "");
   RNA_def_enum(func, "direction", rna_enum_event_direction_items, KM_ANY, "Direction", "");
+  RNA_def_string(
+      func, "category", nullptr, 0, "Category", "Groups the intent in the interface, may be empty");
   parm = RNA_def_pointer(func, "intent", "KeyIntent", "Intent", "Added intent");
   RNA_def_function_return(func, parm);
 

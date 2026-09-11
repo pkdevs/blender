@@ -3612,6 +3612,12 @@ static void rna_def_keyconfig(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Label", "The meaning of the shortcut, shown in the interface");
   RNA_def_property_update(prop, 0, "rna_KeyIntent_update");
 
+  prop = RNA_def_property(srna, "category", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "category");
+  RNA_def_property_ui_text(
+      prop, "Category", "Groups the intent with others in the interface, may be empty");
+  RNA_def_property_update(prop, 0, "rna_KeyIntent_update");
+
   prop = RNA_def_property(srna, "map_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, map_type_items);
   RNA_def_property_enum_funcs(
@@ -3720,6 +3726,14 @@ static void rna_def_keyconfig(BlenderRNA *brna)
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", KEYINTENT_EXPANDED);
   RNA_def_property_ui_text(prop, "Expanded", "Show the key maps bound through this intent");
   RNA_def_property_ui_icon(prop, ICON_RIGHTARROW, 1);
+
+  prop = RNA_def_property(srna, "show_category_expanded", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", KEYINTENT_CATEGORY_EXPANDED);
+  RNA_def_property_ui_text(prop,
+                           "Category Expanded",
+                           "Show the intents of this category in the key map editor, "
+                           "kept the same for every intent of the category");
 
   prop = RNA_def_property(srna, "is_user_modified", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", KEYINTENT_USER_MODIFIED);

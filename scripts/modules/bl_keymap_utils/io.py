@@ -185,7 +185,10 @@ def keyconfig_export_as_data(wm, kc, filepath, *, all_keymaps=False):
         # Intents (shared shortcuts), items reference them by identifier.
         fw("keyconfig_intents = \\\n{")
         for intent in wm.keyconfigs.user.intents:
-            fw(f"\n{indent(1)}\"{intent.name:s}\": (\"{intent.label:s}\", {intent_args_as_data(intent):s}),")
+            fw(f"\n{indent(1)}\"{intent.name:s}\": (\"{intent.label:s}\", {intent_args_as_data(intent):s}")
+            if intent.category:
+                fw(f", \"{intent.category:s}\"")
+            fw("),")
         fw("\n}\n" if len(wm.keyconfigs.user.intents) else "}\n")
 
         fw("keyconfig_data = \\\n[")
@@ -333,8 +336,11 @@ def keymap_init_from_data(km, km_items, is_modal=False, intents=None):
 
 
 def keyconfig_intents_init_from_data(kc, intents):
-    for idname, (label, intent_args) in intents.items():
-        kc.intents.new(idname, label, **intent_args)
+    # Each entry is `(label, event_args)` or `(label, event_args, category)`.
+    for idname, intent_data in intents.items():
+        label, intent_args = intent_data[0], intent_data[1]
+        category = intent_data[2] if len(intent_data) > 2 else ""
+        kc.intents.new(idname, label, category=category, **intent_args)
 
 
 def keyconfig_init_from_data(kc, keyconfig_data, *, intents=None):
@@ -342,8 +348,8 @@ def keyconfig_init_from_data(kc, keyconfig_data, *, intents=None):
     #
     # Runs at load time, keep this fast!
     #
-    # `intents` is a table of shared shortcuts: `{"move": ("Move", {"type": 'G', "value": 'PRESS'})}`,
-    # items may reference them as `{"intent": "move"}` in place of their event arguments.
+    # `intents` is a table of shared shortcuts: `{"move": ("Move", {"type": 'G', "value": 'PRESS'}, "Transform")}`
+    # (the category is optional), items may reference them as `{"intent": "move"}` in place of their event arguments.
     if intents:
         keyconfig_intents_init_from_data(kc, intents)
     for (km_name, km_args, km_content) in keyconfig_data:

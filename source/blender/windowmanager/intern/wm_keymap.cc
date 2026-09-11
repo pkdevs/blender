@@ -690,6 +690,7 @@ wmKeyIntent *WM_keyconfig_intent_find(wmKeyConfig *keyconf, const char *idname)
 wmKeyIntent *WM_keyconfig_intent_ensure(wmKeyConfig *keyconf,
                                         const char *idname,
                                         const char *label,
+                                        const char *category,
                                         const KeyMapItem_Params *params)
 {
   wmKeyIntent *ki = WM_keyconfig_intent_find(keyconf, idname);
@@ -699,6 +700,7 @@ wmKeyIntent *WM_keyconfig_intent_ensure(wmKeyConfig *keyconf,
     BLI_addtail(&keyconf->intents, ki);
   }
   STRNCPY_UTF8(ki->label, label);
+  STRNCPY_UTF8(ki->category, category ? category : "");
   keymap_event_set(ki, params);
 
   WM_keyconfig_intent_update_tag(keyconf);
@@ -819,6 +821,7 @@ static void wm_keyintents_patch_update(wmWindowManager *wm, ListBaseT<wmKeyInten
       ki->flag = eKeyIntent_Flag{};
     }
     STRNCPY_UTF8(ki->label, ki_src->label);
+    STRNCPY_UTF8(ki->category, ki_src->category);
     wm_keyintent_event_copy(ki, ki_src);
     BLI_addtail(&result, ki);
     return ki;

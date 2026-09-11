@@ -419,6 +419,8 @@ enum eKeyIntent_Flag : short {
   KEYINTENT_USER_DEFINED = (1 << 1),
   /** Show the served key maps in the key map editor. */
   KEYINTENT_EXPANDED = (1 << 2),
+  /** Show the intents of this category in the key map editor (kept in sync per category). */
+  KEYINTENT_CATEGORY_EXPANDED = (1 << 3),
 };
 ENUM_OPERATORS(eKeyIntent_Flag)
 
@@ -436,6 +438,8 @@ struct wmKeyIntent {
   char idname[64] = "";
   /** Human meaning shown in the interface, e.g. "Move". */
   char label[64] = "";
+  /** Groups intents in the interface, e.g. "Transform", may be empty. */
+  char category[64] = "";
 
   /* Event, see #wmKeyMapItem for the meaning of each field. */
   short type = 0;
