@@ -4157,15 +4157,12 @@ static void node_draw(const bContext &C,
                       bNode &node,
                       ui::Block &block)
 {
-  if (node.is_frame()) {
+  if (node.is_frame() || node.is_type("NodeComment"_ustr)) {
     /* Should have been drawn before already. */
     BLI_assert_unreachable();
   }
   else if (node.is_reroute()) {
     reroute_node_draw(C, tree_draw_ctx, region, snode, ntree, node, block);
-  }
-  else if (node.is_type("NodeComment"_ustr)) {
-    node_draw_comment(C, tree_draw_ctx, region, snode, ntree, node, block);
   }
   else {
     const View2D &v2d = region.v2d;
@@ -4428,6 +4425,18 @@ static void node_draw_zones_and_frames(const ARegion &region,
   GPU_blend(GPU_BLEND_NONE);
 }
 
+static void draw_comments(const bContext &C,
+                          TreeDrawContext &tree_draw_ctx,
+                          ARegion &region,
+                          const SpaceNode &snode,
+                          bNodeTree &ntree,
+                          Span<ui::Block *> blocks)
+{
+  for (bNode *node : ntree.nodes_by_type("NodeComment"_ustr)) {
+    node_draw_comment(C, tree_draw_ctx, region, snode, ntree, *node, *blocks[node->index()]);
+  }
+}
+
 static void draw_frame_overlays(const bContext &C,
                                 TreeDrawContext &tree_draw_ctx,
                                 const ARegion &region,
@@ -4652,6 +4661,10 @@ static void node_draw_nodetree(const bContext &C,
       /* Background nodes are drawn before mixed with zones already. */
       continue;
     }
+    if (node.is_type("NodeComment"_ustr)) {
+      /* Comments are drawn before links and nodes already. */
+      continue;
+    }
 
     node_draw(C, tree_draw_ctx, region, snode, ntree, node, *blocks[node.index()]);
   }
@@ -4801,6 +4814,7 @@ static void draw_nodetree(const bContext &C, ARegion &region, bNodeTree &ntree)
 
   node_update_nodetree(C, tree_draw_ctx, ntree, nodes, blocks);
   node_draw_zones_and_frames(region, *snode, ntree);
+  draw_comments(C, tree_draw_ctx, region, *snode, ntree, blocks);
   node_draw_nodetree(C, tree_draw_ctx, region, *snode, ntree, nodes, blocks);
 }
 
