@@ -1549,6 +1549,17 @@ class MathNode : public ShaderNode {
   NODE_SOCKET_API(bool, use_clamp)
 };
 
+class IntegerMathNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(IntegerMathNode)
+  void constant_fold(const ConstantFolder &folder) override;
+
+  NODE_SOCKET_API(int, value1)
+  NODE_SOCKET_API(int, value2)
+  NODE_SOCKET_API(int, value3)
+  NODE_SOCKET_API(NodeIntegerMathType, math_type)
+};
+
 class NormalNode : public ShaderNode {
  public:
   SHADER_NODE_CLASS(NormalNode)
