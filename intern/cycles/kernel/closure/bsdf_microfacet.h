@@ -516,16 +516,26 @@ ccl_device_forceinline FresnelCoeff microfacet_fresnel(KernelGlobals kg,
       coeff.transmittance = zero_spectrum();
     }
   }
+  else if (bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) {
+    Spectrum F;
+    ccl_private FresnelDielectricTint *fresnel = (ccl_private FresnelDielectricTint *)
+                                                     bsdf->fresnel;
+    if (fresnel->thin_film.thickness > THINFILM_THICKNESS_CUTOFF) {
+      FOREACH_SPECTRUM_CHANNEL (i) {
+        GET_SPECTRUM_CHANNEL(F, i) = fresnel_iridescence_channel<false>(
+            kg, i, 1.0f, fresnel->thin_film, bsdf->ior, 0.0f, -1.0f, cos_theta_i, r_cos_theta_t);
+      }
+    }
+    else {
+      F = make_spectrum(fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t));
+    }
+    coeff *= F;
+    coeff *= ((ccl_private FresnelDielectricTint *)bsdf->fresnel)->tint;
+  }
   else {
     /* Transmissive dielectric. */
     coeff *= fresnel_dielectric(cos_theta_i, bsdf->ior, r_cos_theta_t);
-
-    if (bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) {
-      coeff *= ((ccl_private FresnelDielectricTint *)bsdf->fresnel)->tint;
-    }
-    else {
-      kernel_assert(bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC);
-    }
+    kernel_assert(bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC);
   }
 
   return coeff;
@@ -673,6 +683,13 @@ ccl_device Spectrum bsdf_microfacet_estimate_albedo(KernelGlobals kg,
       const Spectrum reflectance = mix(fresnel->f0, one_spectrum(), s) * float(eval_reflection);
       return reflectance;
     }
+  }
+  if (bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT &&
+      ((ccl_private FresnelDielectricTint *)bsdf->fresnel)->thin_film.thickness >
+          THINFILM_THICKNESS_CUTOFF)
+  {
+    /* Precomputing LUTs for thin-film iridescence isn't viable, so fall back to the specular
+     * reflection approximation from the microfacet_fresnel call above in that case. */
   }
   else if ((bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC ||
             bsdf->fresnel_type == MicrofacetFresnel::DIELECTRIC_TINT) &&
@@ -870,15 +887,15 @@ ccl_device Spectrum bsdf_microfacet_eval(KernelGlobals kg,
   float lambdaI;
   float lambdaO;
 
-  /* NOTE: we could add support for anisotropic transmission, although it will make dispersion
-   * harder to compute. */
-  if (alpha_x == alpha_y || is_transmission) { /* Isotropic. */
+  if (alpha_x == alpha_y) {
+    /* Isotropic. */
     const float alpha2 = alpha_x * alpha_y;
     D = bsdf_D<m_type>(alpha2, cos_NH);
     lambdaI = bsdf_lambda<m_type>(alpha2, cos_NI);
     lambdaO = bsdf_lambda<m_type>(alpha2, cos_NO);
   }
-  else { /* Anisotropic. */
+  else {
+    /* Anisotropic. */
     float3 X;
     float3 Y;
     make_orthonormals_tangent(N, bsdf->T, &X, &Y);
@@ -935,14 +952,11 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
   /* Half vector. */
   float3 H;
   /* Needed for anisotropic microfacets later. */
-  float3 local_H;
-  float3 local_I;
+  float3 local_H, local_I, X, Y;
   if (m_singular) {
     H = N;
   }
   else {
-    float3 X;
-    float3 Y;
     if (alpha_x == alpha_y) {
       make_orthonormals(N, &X, &Y);
     }
@@ -1014,8 +1028,8 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
     float lambdaI;
     float lambdaO;
 
-    /* TODO: add support for anisotropic transmission. */
-    if (alpha_x == alpha_y || do_refract) { /* Isotropic. */
+    if (alpha_x == alpha_y) {
+      /* Isotropic. */
       const float alpha2 = alpha_x * alpha_y;
       const float cos_NH = local_H.z;
       const float cos_NO = dot(N, *wo);
@@ -1024,8 +1038,9 @@ ccl_device int bsdf_microfacet_sample(KernelGlobals kg,
       lambdaO = bsdf_lambda<m_type>(alpha2, cos_NO);
       lambdaI = bsdf_lambda<m_type>(alpha2, cos_NI);
     }
-    else { /* Anisotropic. */
-      const float3 local_O = 2.0f * cos_HI * local_H - local_I;
+    else {
+      /* Anisotropic. */
+      const float3 local_O = make_float3(dot(X, *wo), dot(Y, *wo), cos_NO);
 
       D = bsdf_aniso_D<m_type>(alpha_x, alpha_y, local_H);
 
@@ -1161,9 +1176,7 @@ ccl_device void bsdf_microfacet_setup_fresnel_dielectric(KernelGlobals kg,
  *
  * Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs
  * E. Heitz, Research Report 2014
- *
- * Anisotropy is only supported for reflection currently, but adding it for
- * transmission is just a matter of copying code from reflection if needed. */
+ */
 
 ccl_device int bsdf_microfacet_ggx_setup(ccl_private MicrofacetBsdf *bsdf)
 {
@@ -1180,7 +1193,7 @@ ccl_device int bsdf_microfacet_ggx_setup(ccl_private MicrofacetBsdf *bsdf)
 ccl_device int bsdf_microfacet_ggx_refraction_setup(ccl_private MicrofacetBsdf *bsdf)
 {
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
-  bsdf->alpha_y = bsdf->alpha_x;
+  bsdf->alpha_y = saturatef(bsdf->alpha_y);
 
   bsdf->fresnel_type = MicrofacetFresnel::NONE;
   bsdf->energy_scale = 1.0f;
@@ -1192,7 +1205,7 @@ ccl_device int bsdf_microfacet_ggx_refraction_setup(ccl_private MicrofacetBsdf *
 ccl_device int bsdf_microfacet_ggx_glass_setup(ccl_private MicrofacetBsdf *bsdf)
 {
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
-  bsdf->alpha_y = bsdf->alpha_x;
+  bsdf->alpha_y = saturatef(bsdf->alpha_y);
 
   bsdf->fresnel_type = MicrofacetFresnel::DIELECTRIC;
   bsdf->energy_scale = 1.0f;
@@ -1255,7 +1268,7 @@ ccl_device int bsdf_microfacet_beckmann_setup(ccl_private MicrofacetBsdf *bsdf)
 ccl_device int bsdf_microfacet_beckmann_refraction_setup(ccl_private MicrofacetBsdf *bsdf)
 {
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
-  bsdf->alpha_y = bsdf->alpha_x;
+  bsdf->alpha_y = saturatef(bsdf->alpha_y);
 
   bsdf->fresnel_type = MicrofacetFresnel::NONE;
   bsdf->type = CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID;
@@ -1266,7 +1279,7 @@ ccl_device int bsdf_microfacet_beckmann_refraction_setup(ccl_private MicrofacetB
 ccl_device int bsdf_microfacet_beckmann_glass_setup(ccl_private MicrofacetBsdf *bsdf)
 {
   bsdf->alpha_x = saturatef(bsdf->alpha_x);
-  bsdf->alpha_y = bsdf->alpha_x;
+  bsdf->alpha_y = saturatef(bsdf->alpha_y);
 
   bsdf->fresnel_type = MicrofacetFresnel::DIELECTRIC;
   bsdf->type = CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID;
