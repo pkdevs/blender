@@ -31,6 +31,8 @@ except ImportError:
 BLOCKLIST = [
     # Blocked due to point cloud volume differences between platforms (to be fixed).
     "points_volume.blend",
+    # Shadow caustics are Cycles-only, these scenes only have Cycles references.
+    "mnee_.*.blend",
     # Blocked due to GBuffer encoding of small IOR difference between platforms (to be fixed).
     "principled_bsdf_thinfilm_transmission.blend",
     "ray_offset.blend",

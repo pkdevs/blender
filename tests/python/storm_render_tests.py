@@ -28,6 +28,8 @@ BLOCKLIST = [
     # Currently, image_mipmap tests are not enabled for storm-usd
     "image_cache_evict.blend",
     "image_mipmap_.*.blend",
+    # Shadow caustics are Cycles-only, these scenes only have Cycles references.
+    "mnee_.*.blend",
 ]
 
 # Unsupported or broken scenarios for the Storm render engine
@@ -85,6 +87,7 @@ BLOCKLIST_METAL = [
     "transparent_shadow_hair_blur.blend",
     "transparent_shadow_hair_colored.blend",
     "shadow_all_max_bounces.blend",
+    "underwater_caustics.blend",
     "shadow_link_transparency.blend",
     "principled_bsdf_transmission.blend",
     "light_path_is_shadow_ray.blend",
