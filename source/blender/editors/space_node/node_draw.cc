@@ -3596,14 +3596,38 @@ static void reroute_node_prepare_for_draw(bNode &node)
   node.runtime->draw_bounds.ymin = loc.y - radius;
 }
 
-static void comment_node_prepare_for_draw(bNode &node)
+static void comment_node_prepare_for_draw(const bContext &C,
+                                          TreeDrawContext &tree_draw_ctx,
+                                          bNodeTree &ntree,
+                                          bNode &node,
+                                          ui::Block &block)
 {
+  const NodeComment &storage = *static_cast<const NodeComment *>(node.storage);
+
   const float2 loc = node_to_view(node.location);
-  const float width = node.width;
-  const float height = 100;
+  /* Different paddings are used here to compensate for padding applied elsewhere. */
+  const int pad_left = 0.2 * UI_UNIT_X;
+  const int pad_right = 0.25 * UI_UNIT_X;
+  const int pad_top = 0.15 * UI_UNIT_Y;
+  const int pad_bottom = 0.2 * UI_UNIT_Y;
+
+  ui::Layout &layout = ui::block_layout(&block,
+                                        ui::LayoutDirection::Vertical,
+                                        ui::LayoutType::Panel,
+                                        loc.x + pad_left,
+                                        loc.y - pad_top,
+                                        node.width - pad_left - pad_right,
+                                        0,
+                                        0,
+                                        ui::style_get_dpi());
+  layout.label_markdown(storage.text);
+
+  block_align_end(&block);
+  const float bottom_y = ui::block_layout_resolve(&block).y;
+
   node.runtime->draw_bounds.xmin = loc.x;
-  node.runtime->draw_bounds.xmax = loc.x + width;
-  node.runtime->draw_bounds.ymin = loc.y - height;
+  node.runtime->draw_bounds.xmax = loc.x + node.width;
+  node.runtime->draw_bounds.ymin = bottom_y - pad_bottom;
   node.runtime->draw_bounds.ymax = loc.y;
 }
 
@@ -3630,7 +3654,7 @@ static void node_update_nodetree(const bContext &C,
       reroute_node_prepare_for_draw(node);
     }
     else if (node.is_type("NodeComment"_ustr)) {
-      comment_node_prepare_for_draw(node);
+      comment_node_prepare_for_draw(C, tree_draw_ctx, ntree, node, block);
     }
     else {
       if (node.flag & NODE_COLLAPSED) {
@@ -4104,6 +4128,15 @@ static void node_draw_comment(const bContext &C,
   ui::draw_roundbox_corner_set(ui::CNR_ALL);
   ui::draw_roundbox_4fv(&rct, true, BASIS_RAD, float4(0.0f, 0.0f, 0.0f, 1.0f));
 
+  block_end_ex(&C,
+               tree_draw_ctx.bmain,
+               tree_draw_ctx.window,
+               tree_draw_ctx.scene,
+               tree_draw_ctx.region,
+               tree_draw_ctx.depsgraph,
+               &block);
+  block_draw(&C, &block);
+
   if (node.flag & SELECT) {
     ColorTheme4f outline_color;
     if (node.flag & NODE_ACTIVE) {
@@ -4114,15 +4147,6 @@ static void node_draw_comment(const bContext &C,
     }
     ui::draw_roundbox_4fv(&rct, false, BASIS_RAD, outline_color);
   }
-
-  block_end_ex(&C,
-               tree_draw_ctx.bmain,
-               tree_draw_ctx.window,
-               tree_draw_ctx.scene,
-               tree_draw_ctx.region,
-               tree_draw_ctx.depsgraph,
-               &block);
-  block_draw(&C, &block);
 }
 
 static void node_draw(const bContext &C,
