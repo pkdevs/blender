@@ -218,7 +218,7 @@ static openvdb::MaskTree::Ptr get_boundary_mask(const openvdb::FloatTree &tree)
   typename MaskTreeT::Ptr boundary_mask(new MaskTreeT(tree, false, openvdb::TopologyCopy()));
 
   openvdb::tools::dilateActiveValues(
-      *boundary_mask, /*iterations=*/1, openvdb::tools::NN_FACE, openvdb::tools::IGNORE_TILES);
+      *boundary_mask, /*iterations=*/1, openvdb::tools::NN_FACE, openvdb::tools::PRESERVE_TILES);
   boundary_mask->topologyDifference(*interior_mask);
   return boundary_mask;
 }
