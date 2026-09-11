@@ -1006,7 +1006,7 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
 bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_params,
                                               const bke::CurvesGeometry &curves,
                                               const GroupedSpan<int> shapes,
-                                              Span<float4> normal_planes,
+                                              Span<float4> curve_planes,
                                               const IndexMask &clipping_shapes,
                                               const float4x4 &layer_to_world,
                                               const ARegion &region);

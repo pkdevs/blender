@@ -2514,7 +2514,7 @@ bke::CurvesGeometry curve_boolean(const CurveBooleanOpParameters op_params,
 bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_params,
                                               const bke::CurvesGeometry &curves,
                                               const GroupedSpan<int> shapes,
-                                              const Span<float4> normal_planes,
+                                              const Span<float4> curve_planes,
                                               const IndexMask &clipping_shapes,
                                               const float4x4 &layer_to_world,
                                               const ARegion &region)
@@ -2598,7 +2598,7 @@ bke::CurvesGeometry curve_boolean_with_planes(const CurveBooleanOpParameters op_
   const float4x4 world_to_layer = math::invert(layer_to_world);
   for (const int curve_i : dst_curves.curves_range()) {
     const int src_curve = dst_to_src_curves[curve_i];
-    const float4 &plane = transform_plane(layer_to_world, normal_planes[src_curve]);
+    const float4 &plane = transform_plane(layer_to_world, curve_planes[src_curve]);
     const IndexRange points = points_by_curve[curve_i];
 
     for (const int point_i : points) {

@@ -66,13 +66,13 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
 
   const Span<float3> normals = drawing.curve_plane_normals();
 
-  Array<float4> normal_planes(src.curves_num());
+  Array<float4> curve_planes(src.curves_num());
   threading::parallel_for(src.curves_range(), 4096, [&](const IndexRange src_curves) {
     for (const int src_curve : src_curves) {
       const float3 &normal = normals[src_curve];
       const IndexRange points = src_points_by_curve[src_curve];
       const float3 &point = deformation.positions[points.first()];
-      normal_planes[src_curve] = float4(normal, -math::dot(point, normal));
+      curve_planes[src_curve] = float4(normal, -math::dot(point, normal));
     }
   });
 
@@ -190,7 +190,7 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
   const IndexRange clipping_shapes = IndexRange::from_single(shapes.size() - 1);
 
   bke::CurvesGeometry carved_strokes = carver::curve_boolean_with_planes(
-      op_params, input_curves, shapes, normal_planes, clipping_shapes, layer_to_world, region);
+      op_params, input_curves, shapes, curve_planes, clipping_shapes, layer_to_world, region);
 
   carved_strokes.attributes_for_write().remove(".positions_2d");
 
