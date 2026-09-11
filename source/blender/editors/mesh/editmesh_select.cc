@@ -142,7 +142,6 @@ void EDBM_select_mirrored(
     BMEditMesh *em, Mesh *mesh, const int axis, const bool extend, int *r_totmirr, int *r_totfail)
 {
   BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
-  BMesh *bm = em->bm;
   BMIter iter;
   int totmirr = 0;
   int totfail = 0;
@@ -173,7 +172,7 @@ void EDBM_select_mirrored(
   EDBM_verts_mirror_cache_begin(em, axis, true, true, false, use_topology);
 
   if (!extend) {
-    EDBM_flag_disable_all(em, BM_ELEM_SELECT);
+    EDBM_flag_disable_all(bm, BM_ELEM_SELECT);
   }
 
   if (bm->selectmode & SCE_SELECT_VERTEX) {
@@ -242,7 +241,7 @@ void EDBM_select_mirrored(
 
 static bool UNUSED_FUNCTION(EDBM_select_mirrored_extend_all)(Object *obedit, BMEditMesh *em)
 {
-  BMesh *bm = em->bm;
+  BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
   int selectmode = em->selectmode;
   bool changed = false;
 
@@ -351,15 +350,15 @@ static BMElem *edbm_select_id_bm_elem_get(const Span<Base *> bases,
 
   if (success) {
     Object *obedit = bases[r_base_index]->object;
-    BMEditMesh *em = BKE_editmesh_from_object(obedit);
+    BMesh *bm = BKE_editmesh_bmesh_get_for_write(obedit);
 
     switch (elem_type) {
       case SCE_SELECT_FACE:
-        return reinterpret_cast<BMElem *>(BM_face_at_index_find_or_table(em->bm, elem_id));
+        return reinterpret_cast<BMElem *>(BM_face_at_index_find_or_table(bm, elem_id));
       case SCE_SELECT_EDGE:
-        return reinterpret_cast<BMElem *>(BM_edge_at_index_find_or_table(em->bm, elem_id));
+        return reinterpret_cast<BMElem *>(BM_edge_at_index_find_or_table(bm, elem_id));
       case SCE_SELECT_VERTEX:
-        return reinterpret_cast<BMElem *>(BM_vert_at_index_find_or_table(em->bm, elem_id));
+        return reinterpret_cast<BMElem *>(BM_vert_at_index_find_or_table(bm, elem_id));
       default:
         BLI_assert(0);
         return nullptr;
