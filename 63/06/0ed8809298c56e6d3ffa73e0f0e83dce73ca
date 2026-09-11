@@ -1,1 +1,2 @@
 Referenced by issue #163493, Ambient Occlusion Pass seems to cause crash or freeze only when rendering shadow caustics
+Referenced by issue #163810, Regression: EEVEE benchmark performance drop for T98989
