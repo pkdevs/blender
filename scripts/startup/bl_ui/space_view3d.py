@@ -2376,7 +2376,6 @@ class VIEW3D_MT_paint_grease_pencil_stroke(Menu):
 
         layout.separator()
 
-        layout.operator_menu_enum("grease_pencil.separate", "mode", text="Separate")
         layout.operator("grease_pencil.outline", text="Outline")
 
         layout.separator()
