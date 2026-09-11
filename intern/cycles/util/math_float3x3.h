@@ -10,34 +10,24 @@ CCL_NAMESPACE_BEGIN
 
 ccl_device_inline float3x3 operator*(const float a, const float3x3 m)
 {
-#if defined(__KERNEL_METAL__)
-  return a * m.m;
-#else
   float3x3 t;
   t.x = a * m.x;
   t.y = a * m.y;
   t.z = a * m.z;
   return t;
-#endif
 }
 ccl_device_inline float3x3 operator*(const float3x3 m, const float a)
 {
-#if defined(__KERNEL_METAL__)
-  return m.m * a;
-#else
   float3x3 t;
   t.x = m.x * a;
   t.y = m.y * a;
   t.z = m.z * a;
   return t;
-#endif
 }
 
 ccl_device_inline float3x3 operator*(const float3x3 a, const float3x3 b)
 {
-#if defined(__KERNEL_METAL__)
-  return b.m * a.m;
-#elif defined(__KERNEL_SSE__)
+#if defined(__KERNEL_SSE__)
   auto multiply_row = [](const float3 &a_row, const float3x3 &b) -> float3 {
     const float4 ax = shuffle<0, 0, 0, 0>(float4(a_row));
     const float4 ay = shuffle<1, 1, 1, 1>(float4(a_row));
@@ -71,29 +61,21 @@ ccl_device_inline float3x3 operator*(const float3x3 a, const float3x3 b)
  * The result is a 3-component column vector. */
 ccl_device_inline float3 operator*(const float3x3 m, const float3 v)
 {
-#if defined(__KERNEL_METAL__)
-  return (v * m.m).xyz;
-#else
   float3 r;
   r.x = dot(m.x, v);
   r.y = dot(m.y, v);
   r.z = dot(m.z, v);
   return r;
-#endif
 }
 
 ccl_device_inline float3x3 operator/(const float3x3 m, const float a)
 {
-#if defined(__KERNEL_METAL__)
-  return m.m / a;
-#else
   const float inv_a = 1.0f / a;
   float3x3 t;
   t.x = m.x * inv_a;
   t.y = m.y * inv_a;
   t.z = m.z * inv_a;
   return t;
-#endif
 }
 
 /* Construct 3x3 scale matrix:
@@ -108,23 +90,15 @@ ccl_device_inline float3x3 float3x3_scale(const float3 s)
 
 ccl_device_inline float3x3 transposed(const float3x3 m)
 {
-#if defined(__KERNEL_METAL__)
-  return metal::transpose(m.m);
-#else
   return make_float3x3(make_float3(m.x.x, m.y.x, m.z.x),
                        make_float3(m.x.y, m.y.y, m.z.y),
                        make_float3(m.x.z, m.y.z, m.z.z));
-#endif
 }
 
 ccl_device_inline float determinant(const float3x3 m)
 {
-#if defined(__KERNEL_METAL__)
-  return metal::determinant(m.m);
-#else
   return (m.x.x * (m.y.y * m.z.z - m.z.y * m.y.z) - m.x.y * (m.y.x * m.z.z - m.z.x * m.y.z) +
           m.x.z * (m.y.x * m.z.y - m.z.x * m.y.y));
-#endif
 }
 
 /* The adjugate or classical adjoint adj(m) */
@@ -156,8 +130,6 @@ ccl_device_inline float3x3 inverted(const float3x3 m)
 
 /* Convert quaternion to a 3x3 scaled rotation matrix.
  *
- * The quaternion is denoted by a 4-element vector (w, i, j, k).
- *
  * The choice of rotation is such that the quaternion [1 0 0 0] goes to an identity matrix and for
  * small a, b, c the quaternion [1 a b c] goes to the matrix
  *
@@ -173,14 +145,13 @@ ccl_device_inline float3x3 inverted(const float3x3 m)
  * matrix such that det(Q) = 1 and Q*Q' = I.
  *
  * Adopted from Ceres-solver. */
-ccl_device_inline float3x3 quaternion_to_scaled_rotation(const float4 q)
+ccl_device_inline float3x3 quaternion_to_scaled_rotation(const Quaternion q)
 {
-  /* Make convenient names for elements of q.
-   * Note: quaternion (w, x, y, z) is stored as float4(w, x, y, z). */
-  const float a = q.x;  // w
-  const float b = q.y;  // x
-  const float c = q.z;  // y
-  const float d = q.w;  // z
+  /* Make convenient names for elements of q. */
+  const float a = q.w;
+  const float b = q.x;
+  const float c = q.y;
+  const float d = q.z;
 
   /* Define common terms. */
   const float aa = a * a;
@@ -205,10 +176,9 @@ ccl_device_inline float3x3 quaternion_to_scaled_rotation(const float4 q)
  * so that R * R' = I (and det(R) = 1).
  *
  * Adopted from Ceres-solver. */
-ccl_device_inline float3x3 quaternion_to_rotation(const float4 q)
+ccl_device_inline float3x3 quaternion_to_rotation(const Quaternion q)
 {
-  /* Note: quaternion (w, x, y, z) is stored as float4(w, x, y, z). */
-  const float normalizer = 1.0f / (q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+  const float normalizer = 1.0f / (q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
   return quaternion_to_scaled_rotation(q) * normalizer;
 }
 

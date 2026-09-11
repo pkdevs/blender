@@ -116,7 +116,7 @@ void BlenderSync::sync_recalc(blender::Depsgraph &b_depsgraph,
   blender::Object *b_dicing_camera_object = get_dicing_camera_object(b_v3d, b_rv3d);
   bool dicing_camera_updated = false;
 
-  /* Iterate over all blender::IDs in this depsgraph. */
+  /* Iterate over all IDs in this depsgraph. */
   blender::DEGIDIterData deg_iter_data{};
   deg_iter_data.graph = &b_depsgraph;
   deg_iter_data.only_updated = true;
@@ -129,8 +129,8 @@ void BlenderSync::sync_recalc(blender::Depsgraph &b_depsgraph,
   {
     /* TODO(sergey): Can do more selective filter here. For example, ignore changes made to
      * screen data-block. Note that sync_data() needs to be called after object deletion, and
-     * currently this is ensured by the scene blender::ID tagged for update, which sets the
-     * `has_updates_` flag. */
+     * currently this is ensured by the scene ID tagged for update, which sets the `has_updates_`
+     * flag. */
     has_updates_ = true;
 
     const bool updated_shading = ((b_id->recalc & (blender::ID_RECALC_SHADING |
@@ -302,7 +302,6 @@ void BlenderSync::sync_data(blender::RenderData &b_render,
                             blender::RegionView3D *b_rv3d,
                             const int width,
                             const int height,
-                            void **python_thread_state,
                             const DeviceInfo &denoise_device_info)
 {
   /* For auto refresh images. */
@@ -337,8 +336,7 @@ void BlenderSync::sync_data(blender::RenderData &b_render,
 
   geometry_synced.clear(); /* use for objects and motion sync */
 
-  sync_objects_and_motion(
-      b_render, b_depsgraph, b_screen, b_v3d, b_rv3d, width, height, python_thread_state);
+  sync_objects_and_motion(b_render, b_depsgraph, b_screen, b_v3d, b_rv3d, width, height);
 
   geometry_synced.clear();
 
@@ -837,7 +835,7 @@ void BlenderSync::sync_render_passes(blender::RenderLayer &b_rlay,
   /* Always add combined pass. */
   pass_add(scene, PASS_COMBINED, "Combined");
 
-  /* Cryptomatte stores two blender::ID/weight pairs per RGBA layer.
+  /* Cryptomatte stores two ID/weight pairs per RGBA layer.
    * User facing parameter is the number of pairs. */
   const int crypto_depth = divide_up(min(16, b_view_layer.cryptomatte_levels), 2);
   scene->film->set_cryptomatte_depth(crypto_depth);
@@ -1150,6 +1148,16 @@ DenoiseParams BlenderSync::get_denoise_params(blender::Scene &b_scene,
     DENOISER_INPUT_NUM,
   };
 
+  enum DenoiserUpscaleQuality {
+    DENOISER_UPSCALE_NONE = 0,
+    DENOISER_UPSCALE_QUALITY = 1,
+    DENOISER_UPSCALE_BALANCED = 2,
+    DENOISER_UPSCALE_PERFORMANCE = 3,
+    DENOISER_UPSCALE_ULTRA_PERFORMANCE = 4,
+
+    DENOISER_UPSCALE_NUM,
+  };
+
   DenoiseParams denoising;
   blender::PointerRNA scene_rna_ptr = RNA_id_pointer_create(&b_scene.id);
   blender::PointerRNA cscene = RNA_pointer_get(&scene_rna_ptr, "cycles");
@@ -1199,6 +1207,48 @@ DenoiseParams BlenderSync::get_denoise_params(blender::Scene &b_scene,
       if (denoising.type == DENOISER_NONE) {
         denoising.use = false;
       }
+    }
+
+    if (denoising.type == DENOISER_DLSS) {
+      /* Disable denoising when DLSS is not supported. */
+      if (!Denoiser::is_device_supported(denoising.type, denoise_device_info)) {
+        denoising.use = false;
+      }
+
+      denoising.start_sample = 0;
+
+      switch ((DenoiserUpscaleQuality)get_enum(cscene,
+                                               "preview_denoising_upscale_quality",
+                                               DENOISER_UPSCALE_NUM,
+                                               DENOISER_UPSCALE_BALANCED))
+      {
+        case DENOISER_UPSCALE_NONE:
+          denoising.quality = DENOISER_QUALITY_HIGH;
+          denoising.upscale_factor = 1.0f;
+          break;
+        case DENOISER_UPSCALE_QUALITY:
+          denoising.quality = DENOISER_QUALITY_HIGH;
+          denoising.upscale_factor = 1.0f / 0.66666667f;
+          break;
+        default:
+        case DENOISER_UPSCALE_BALANCED:
+          denoising.quality = DENOISER_QUALITY_BALANCED;
+          denoising.upscale_factor = 1.0f / 0.58f;
+          break;
+        case DENOISER_UPSCALE_PERFORMANCE:
+          denoising.quality = DENOISER_QUALITY_FAST;
+          denoising.upscale_factor = 2.0f;
+          break;
+        case DENOISER_UPSCALE_ULTRA_PERFORMANCE:
+          denoising.quality = DENOISER_QUALITY_FAST;
+          denoising.upscale_factor = 3.0f;
+          break;
+      }
+
+      denoising.passes = DENOISER_PASS_ALBEDO | DENOISER_PASS_SPECULAR_ALBEDO |
+                         DENOISER_PASS_NORMAL | DENOISER_PASS_ROUGHNESS | DENOISER_PASS_DEPTH |
+                         DENOISER_PASS_MOTION | DENOISER_PASS_SPECULAR_MOTION;
+      return denoising;
     }
   }
 

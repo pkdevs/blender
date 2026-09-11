@@ -197,7 +197,7 @@ struct Brush {
   /** Blend mode. */
   short blend = 0;
   /** #eObjectMode: to see if the brush is compatible, use for display only. */
-  short ob_mode = OB_MODE_ALL_PAINT;
+  short ob_mode = OB_MODE_ALL_PAINT_MESH;
   /** Brush weight. */
   float weight = 1.0f; /* weight of brush 0 - 1.0 */
   /** Brush diameter. */
@@ -453,8 +453,7 @@ struct Brush {
   DNA_DEPRECATED struct CurveMapping *automasking_cavity_curve = nullptr;
   struct MeshAutomaskingSettings *mesh_automasking_settings = nullptr;
   eBrushUnifiedPaintFlags unified_paint_flags = BRUSH_USE_UNIFIED_PAINT_SIZE |
-                                                BRUSH_USE_UNIFIED_PAINT_COLOR |
-                                                BRUSH_USE_UNIFIED_PAINT_WEIGHT;
+                                                BRUSH_USE_UNIFIED_PAINT_COLOR;
   char _pad3[4] = {};
 };
 
