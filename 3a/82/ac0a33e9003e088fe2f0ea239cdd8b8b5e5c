@@ -6,3 +6,4 @@ Referenced by commit 85b410220c37d93e148a112a17bc7ecaf3bc7e3a, Fix #151029: Merg
 Referenced by issue #155985, 5.1 breaks legacy hair simulation grooms when object has "Mirror" modifier and hair uses "Use Modifier Stack"
 Referenced by pull request #156529, Fix #155985: Mesh merge doesn't propagate legacy particle system data
 Referenced by commit 47b975422d0939490dd3e70ddae4b2ca4956510c, Fix #155985: Mesh merge doesn't propagate legacy particle system data
+Referenced by pull request #163825, Fix #163762: Mesh merge doesn't propagate multires data
