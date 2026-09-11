@@ -8,6 +8,7 @@ __all__ = (
     "draw_kmi",
     "draw_filtered",
     "draw_hierarchy",
+    "draw_intents",
     "draw_keymaps",
 )
 
@@ -159,21 +160,35 @@ def draw_kmi(display_keymaps, kc, km, kmi, layout, level):
             row.label(text=rpt_("{:s} (unavailable)").format(kmi.idname), icon='STATUS_WARNING', translate=False)
 
     row = split.row()
-    row.prop(kmi, "map_type", text="")
+    key_row = row
+    if kmi.intent:
+        # Bound through an intent: the key comes from the intent, editing it here detaches the item.
+        intent = kc.intents.get(kmi.intent)
+        subrow = row.row(align=True)
+        subrow.operator(
+            "preferences.keyitem_intent_detach",
+            text="",
+            icon='LINKED',
+            emboss=False,
+        ).item_id = kmi.id
+        subrow.label(text=iface_(intent.label) if intent else kmi.intent, translate=False)
+        key_row = row.row()
+        key_row.active = False
+    key_row.prop(kmi, "map_type", text="")
     if map_type == 'KEYBOARD':
-        row.prop(kmi, "type", text="", full_event=True)
+        key_row.prop(kmi, "type", text="", full_event=True)
     elif map_type == 'MOUSE':
-        row.prop(kmi, "type", text="", full_event=True)
+        key_row.prop(kmi, "type", text="", full_event=True)
     elif map_type == 'NDOF':
-        row.prop(kmi, "type", text="", full_event=True)
+        key_row.prop(kmi, "type", text="", full_event=True)
     elif map_type == 'TWEAK':
-        subrow = row.row()
+        subrow = key_row.row()
         subrow.prop(kmi, "type", text="")
         subrow.prop(kmi, "value", text="")
     elif map_type == 'TIMER':
-        row.prop(kmi, "type", text="")
+        key_row.prop(kmi, "type", text="")
     else:
-        row.label()
+        key_row.label()
 
     if (not kmi.is_user_defined) and kmi.is_user_modified:
         row.operator("preferences.keyitem_restore", text="", icon='BACK').item_id = kmi.id
@@ -251,6 +266,10 @@ def draw_kmi(display_keymaps, kc, km, kmi, layout, level):
                 subrow.prop(kmi, "hyper_ui", text="Hyper", toggle=True)
 
             subrow.prop(kmi, "key_modifier", text="", event=True)
+
+        if not km.is_modal:
+            subrow = box.row()
+            subrow.prop_search(kmi, "intent", kc, "intents", text="Intent", icon='LINKED')
 
         # Operator properties
         box.template_keymap_item_properties(kmi)
@@ -535,6 +554,184 @@ def draw_hierarchy(display_keymaps, layout):
         draw_entry(display_keymaps, entry, layout)
 
 
+# -----------------------------------------------------------------------------
+# Intents
+
+def _intent_event_matches(kmi, intent):
+    """True when the item's event is triggered by the same input as the intent."""
+    if kmi.type != intent.type:
+        return False
+    if kmi.value != intent.value and 'ANY' not in {kmi.value, intent.value}:
+        return False
+    for attr in ("shift", "ctrl", "alt", "oskey", "hyper"):
+        a, b = getattr(kmi, attr), getattr(intent, attr)
+        if a != b and -1 not in {a, b}:
+            return False
+    if kmi.key_modifier != intent.key_modifier:
+        return False
+    return True
+
+
+def intent_served_items(kc, intent):
+    """The (key map, item) pairs bound through the intent."""
+    idname = intent.name
+    return [
+        (km, kmi)
+        for km in kc.keymaps
+        for kmi in km.keymap_items
+        if kmi.intent == idname
+    ]
+
+
+def intent_conflicts(kc, intent, served=None):
+    """
+    Items in the key maps served by the intent which use its key without being bound through it,
+    as (key map, item) pairs. Used before committing a re-bind to show what the new key collides with.
+    """
+    if served is None:
+        served = intent_served_items(kc, intent)
+    conflicts = []
+    for km in {km.name: km for km, _ in served}.values():
+        for kmi in km.keymap_items:
+            if kmi.intent or not kmi.active or not kmi.idname:
+                continue
+            if _intent_event_matches(kmi, intent):
+                conflicts.append((km, kmi))
+    return conflicts
+
+
+def _draw_intent(kc, intent, layout):
+    col = layout.column(align=True)
+    if intent.show_expanded:
+        box = col.box()
+    else:
+        box = col.column()
+
+    split = box.split(factor=0.4)
+
+    row = split.row(align=True)
+    row.prop(intent, "show_expanded", text="", emboss=False)
+    row.label(text=intent.label, translate=False)
+
+    row = split.row()
+    sub = row.row(align=True)
+    sub.prop(intent, "map_type", text="")
+    if intent.map_type in {'KEYBOARD', 'MOUSE', 'NDOF'}:
+        sub.prop(intent, "type", text="", full_event=True)
+    else:
+        sub.prop(intent, "type", text="")
+
+    sub = row.row()
+    sub.alignment = 'RIGHT'
+    sub.label(text=iface_("{:d} contexts").format(intent.contexts), translate=False)
+
+    if intent.is_user_modified:
+        row.operator("preferences.keyintent_restore", text="", icon='BACK').intent = intent.name
+    else:
+        row.label(text="", icon='BLANK1')
+    row.separator(factor=0.25 if intent.show_expanded else 1.0)
+
+    if not (intent.show_expanded or intent.is_user_modified):
+        return
+
+    served = intent_served_items(kc, intent)
+    conflicts = intent_conflicts(kc, intent, served)
+    if conflicts:
+        # The key is already taken in some of the contexts served by the intent.
+        km, kmi = conflicts[0]
+        row = box.row()
+        row.alert = True
+        row.label(
+            text=iface_("{:s} is already {:s} in {:d} of these key maps").format(
+                intent.type if intent.map_type != 'KEYBOARD' else kmi.to_string(),
+                kmi.name or kmi.idname,
+                len({km.name for km, _ in conflicts}),
+            ),
+            icon='ERROR',
+            translate=False,
+        )
+
+    if not intent.show_expanded:
+        return
+
+    box = col.box()
+
+    # Event settings, matching `draw_kmi`.
+    if intent.map_type not in {'TEXTINPUT', 'TIMER'}:
+        from _bpy import _wm_capabilities
+        capabilities = _wm_capabilities()
+        from sys import platform
+
+        sub = box.column()
+        subrow = sub.row(align=True)
+        if intent.map_type == 'KEYBOARD':
+            subrow.prop(intent, "type", text="", event=True)
+            subrow.prop(intent, "value", text="")
+        else:
+            subrow.prop(intent, "type", text="")
+            subrow.prop(intent, "value", text="")
+        if intent.map_type in {'KEYBOARD', 'MOUSE'} and intent.value == 'CLICK_DRAG':
+            subrow = sub.row()
+            subrow.prop(intent, "direction")
+
+        subrow = sub.row()
+        subrow.scale_x = 0.75
+        subrow.prop(intent, "any", toggle=True)
+        match platform:
+            case "darwin":
+                oskey_label = "Cmd"
+            case "win32":
+                oskey_label = "Win"
+            case _:
+                oskey_label = "OS"
+        subrow.prop(intent, "shift_ui", toggle=True)
+        subrow.prop(intent, "ctrl_ui", toggle=True)
+        subrow.prop(intent, "alt_ui", toggle=True)
+        subrow.prop(intent, "oskey_ui", text=oskey_label, toggle=True)
+        if capabilities['KEYBOARD_HYPER_KEY'] or intent.hyper == 1:
+            subrow.prop(intent, "hyper_ui", text="Hyper", toggle=True)
+        subrow.prop(intent, "key_modifier", text="", event=True)
+
+    # The contexts: key map & the operator it runs there.
+    if served:
+        col = box.column(align=True)
+        col.label(text="Contexts")
+        for km, kmi in served:
+            row = col.row()
+            row.active = kmi.active
+            row.label(text=iface_(km.name, i18n_contexts.id_windowmanager), translate=False)
+            row.label(text=kmi.name or kmi.idname, translate=False)
+    else:
+        box.label(text="No key map items are bound through this intent")
+
+
+def draw_intents(context, layout, kc):
+    """The intents of the user key configuration, above the key map hierarchy."""
+    if not kc.intents:
+        return
+
+    keymappref = context.preferences.keymap
+    show_ui_intents = keymappref.show_ui_intents
+
+    box = layout.box()
+    row = box.row(align=True)
+    row.prop(
+        keymappref,
+        "show_ui_intents",
+        text="",
+        icon='DISCLOSURE_TRI_DOWN' if show_ui_intents else 'DISCLOSURE_TRI_RIGHT',
+        emboss=False,
+    )
+    row.label(text=iface_("Intents ({:d})").format(len(kc.intents)), translate=False)
+    if not show_ui_intents:
+        return
+
+    col = box.column()
+    col.label(text="A shortcut with a meaning, shared by the key maps bound through it")
+    for intent in kc.intents:
+        _draw_intent(kc, intent, col)
+
+
 def draw_keymaps(context, layout):
     from bl_keymap_utils.io import keyconfig_merge
 
@@ -578,6 +775,7 @@ def draw_keymaps(context, layout):
         filter_text = filter_text.lower()
         ok = draw_filtered(display_keymaps, filter_type, filter_text, layout)
     else:
+        draw_intents(context, layout, kc_user)
         draw_hierarchy(display_keymaps, layout)
         ok = True
 

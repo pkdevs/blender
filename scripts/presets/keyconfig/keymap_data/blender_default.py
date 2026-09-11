@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __all__ = (
+    "generate_intents",
     "generate_keymaps",
     "Params",
 )
@@ -321,6 +322,36 @@ def op_tool_optional(op_args, tool_pair, params):
 
 
 # ------------------------------------------------------------------------------
+# Intents
+#
+# An intent is a shortcut with a meaning ("G" is "Move"), shared by items across key maps.
+# An item using `{"intent": "move"}` as its event arguments takes its key from the intent,
+# so changing the key of the intent changes every key map bound through it at once.
+# Only bindings with the same meaning in every context should reference an intent,
+# the long tail of one-off bindings keeps its own key.
+#
+# See `KeyConfig.intents` & `KeyMapItem.intent`.
+
+def generate_intents(params=None):
+    if params is None:
+        params = Params()
+    return {
+        "move": ("Move", {"type": 'G', "value": 'PRESS'}),
+        "rotate": ("Rotate", {"type": 'R', "value": 'PRESS'}),
+        "scale": ("Scale", {"type": 'S', "value": 'PRESS'}),
+        "delete": ("Delete", {"type": 'X', "value": 'PRESS'}),
+        "delete_key": ("Delete (Delete Key)", {"type": 'DEL', "value": 'PRESS'}),
+        "select_all": ("Select All", {"type": 'A', "value": 'PRESS'}),
+        "deselect_all": ("Deselect All", {"type": 'A', "value": 'PRESS', "alt": True}),
+        "invert_selection": ("Invert Selection", {"type": 'I', "value": 'PRESS', "ctrl": True}),
+        "hide": ("Hide", {"type": 'H', "value": 'PRESS'}),
+        "hide_unselected": ("Hide Unselected", {"type": 'H', "value": 'PRESS', "shift": True}),
+        "reveal": ("Reveal Hidden", {"type": 'H', "value": 'PRESS', "alt": True}),
+        "duplicate": ("Duplicate", {"type": 'D', "value": 'PRESS', "shift": True}),
+    }
+
+
+# ------------------------------------------------------------------------------
 # Keymap Templates
 
 def _template_items_context_menu(menu, key_args_primary):
@@ -381,13 +412,13 @@ def _template_items_transform_actions(
 ):
     items = [
         op_tool_optional(
-            ("transform.translate", {"type": 'G', "value": 'PRESS'}, None),
+            ("transform.translate", {"intent": "move"}, None),
             (op_tool_cycle, "builtin.move"), params),
         op_tool_optional(
-            ("transform.rotate", {"type": 'R', "value": 'PRESS'}, None),
+            ("transform.rotate", {"intent": "rotate"}, None),
             (op_tool_cycle, "builtin.rotate"), params),
         op_tool_optional(
-            ("transform.resize", {"type": 'S', "value": 'PRESS'}, None),
+            ("transform.resize", {"intent": "scale"}, None),
             (op_tool_cycle, "builtin.scale"), params),
 
         ("transform.translate", {"type": params.select_mouse, "value": 'CLICK_DRAG'}, None),
@@ -420,22 +451,22 @@ def _template_items_transform_actions(
 def _template_items_select_actions(params, operator):
     if not params.use_select_all_toggle:
         return [
-            (operator, {"type": 'A', "value": 'PRESS'}, {"properties": [("action", 'SELECT')]}),
-            (operator, {"type": 'A', "value": 'PRESS', "alt": True}, {"properties": [("action", 'DESELECT')]}),
-            (operator, {"type": 'I', "value": 'PRESS', "ctrl": True}, {"properties": [("action", 'INVERT')]}),
+            (operator, {"intent": "select_all"}, {"properties": [("action", 'SELECT')]}),
+            (operator, {"intent": "deselect_all"}, {"properties": [("action", 'DESELECT')]}),
+            (operator, {"intent": "invert_selection"}, {"properties": [("action", 'INVERT')]}),
             (operator, {"type": 'A', "value": 'DOUBLE_CLICK'}, {"properties": [("action", 'DESELECT')]}),
         ]
     elif params.legacy:
         # Alt+A is for playback in legacy keymap.
         return [
-            (operator, {"type": 'A', "value": 'PRESS'}, {"properties": [("action", 'TOGGLE')]}),
-            (operator, {"type": 'I', "value": 'PRESS', "ctrl": True}, {"properties": [("action", 'INVERT')]}),
+            (operator, {"intent": "select_all"}, {"properties": [("action", 'TOGGLE')]}),
+            (operator, {"intent": "invert_selection"}, {"properties": [("action", 'INVERT')]}),
         ]
     else:
         return [
-            (operator, {"type": 'A', "value": 'PRESS'}, {"properties": [("action", 'TOGGLE')]}),
-            (operator, {"type": 'A', "value": 'PRESS', "alt": True}, {"properties": [("action", 'DESELECT')]}),
-            (operator, {"type": 'I', "value": 'PRESS', "ctrl": True}, {"properties": [("action", 'INVERT')]}),
+            (operator, {"intent": "select_all"}, {"properties": [("action", 'TOGGLE')]}),
+            (operator, {"intent": "deselect_all"}, {"properties": [("action", 'DESELECT')]}),
+            (operator, {"intent": "invert_selection"}, {"properties": [("action", 'INVERT')]}),
         ]
 
 
@@ -460,9 +491,9 @@ def _template_items_select_lasso(params, operator):
 
 def _template_items_hide_reveal_actions(op_hide, op_reveal):
     return [
-        (op_reveal, {"type": 'H', "value": 'PRESS', "alt": True}, None),
-        (op_hide, {"type": 'H', "value": 'PRESS'}, {"properties": [("unselected", False)]}),
-        (op_hide, {"type": 'H', "value": 'PRESS', "shift": True}, {"properties": [("unselected", True)]}),
+        (op_reveal, {"intent": "reveal"}, None),
+        (op_hide, {"intent": "hide"}, {"properties": [("unselected", False)]}),
+        (op_hide, {"intent": "hide_unselected"}, {"properties": [("unselected", True)]}),
     ]
 
 
@@ -1072,8 +1103,8 @@ def km_user_interface(_params):
         ("ui.view_item_select", {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True},
          {"properties": [("range_select", True)]}),
         ("ui.view_item_rename", {"type": 'F2', "value": 'PRESS'}, None),
-        ("ui.view_item_delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("ui.view_item_delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("ui.view_item_delete", {"intent": "delete"}, None),
+        ("ui.view_item_delete", {"intent": "delete_key"}, None),
         ("ui.view_item_navigate", {"type": 'UP_ARROW', "value": 'PRESS', "repeat": True},
          {"properties": [("direction", 'UP')]}),
         ("ui.view_item_navigate", {"type": 'DOWN_ARROW', "value": 'PRESS', "repeat": True},
@@ -1125,8 +1156,8 @@ def km_mask_editing(params):
             params, connected=False, toggle_data_path="tool_settings.use_proportional_edit_mask"),
         ("mask.add_vertex_slide", {"type": 'LEFTMOUSE', "value": 'PRESS', "ctrl": True}, None),
         ("mask.add_feather_vertex_slide", {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True, "ctrl": True}, None),
-        ("mask.delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("mask.delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("mask.delete", {"intent": "delete"}, None),
+        ("mask.delete", {"intent": "delete_key"}, None),
         ("mask.select", {"type": params.select_mouse, "value": 'PRESS', "shift": True},
          {"properties": [("toggle", True)]}),
         *_template_items_select_actions(params, "mask.select_all"),
@@ -1156,14 +1187,14 @@ def km_mask_editing(params):
         ("mask.parent_clear", {"type": 'P', "value": 'PRESS', "alt": True}, None),
         ("mask.shape_key_insert", {"type": 'I', "value": 'PRESS'}, None),
         ("mask.shape_key_clear", {"type": 'I', "value": 'PRESS', "alt": True}, None),
-        ("mask.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("mask.duplicate_move", {"intent": "duplicate"}, None),
         ("mask.copy_splines", {"type": 'C', "value": 'PRESS', "ctrl": True}, None),
         ("mask.paste_splines", {"type": 'V', "value": 'PRESS', "ctrl": True}, None),
         ("mask.move_to_layer", {"type": 'M', "value": 'PRESS'}, None),
-        ("transform.translate", {"type": 'G', "value": 'PRESS'}, None),
+        ("transform.translate", {"intent": "move"}, None),
         ("transform.translate", {"type": params.select_mouse, "value": 'CLICK_DRAG'}, None),
-        ("transform.rotate", {"type": 'R', "value": 'PRESS'}, None),
-        ("transform.resize", {"type": 'S', "value": 'PRESS'}, None),
+        ("transform.rotate", {"intent": "rotate"}, None),
+        ("transform.resize", {"intent": "scale"}, None),
         ("transform.tosphere", {"type": 'S', "value": 'PRESS', "shift": True, "alt": True}, None),
         ("transform.shear", {"type": 'S', "value": 'PRESS', "shift": True, "ctrl": True, "alt": True}, None),
         ("transform.transform", {"type": 'S', "value": 'PRESS', "alt": True},
@@ -1197,7 +1228,7 @@ def km_markers(params):
         ("marker.add", {"type": 'M', "value": 'PRESS'}, None),
         ("marker.move", {"type": params.select_mouse, "value": 'CLICK_DRAG'},
          {"properties": [("tweak", True)]}),
-        ("marker.duplicate", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("marker.duplicate", {"intent": "duplicate"}, None),
         ("marker.select", {"type": params.select_mouse, "value": 'PRESS'}, None),
         ("marker.select", {"type": params.select_mouse, "value": 'PRESS', "shift": True},
          {"properties": [("extend", True)]}),
@@ -1223,11 +1254,11 @@ def km_markers(params):
          {"properties": [("tweak", True), ("mode", 'SUB')]}),
         ("marker.select_box", {"type": 'B', "value": 'PRESS'}, None),
         *_template_items_select_actions(params, "marker.select_all"),
-        ("marker.delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("marker.delete", {"type": 'DEL', "value": 'PRESS'}, {"properties": [("confirm", False)]}),
+        ("marker.delete", {"intent": "delete"}, None),
+        ("marker.delete", {"intent": "delete_key"}, {"properties": [("confirm", False)]}),
         op_panel("TOPBAR_PT_name_marker", {"type": 'F2', "value": 'PRESS'}, [("keep_open", False)]),
         op_panel("TOPBAR_PT_name_marker", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK'}, [("keep_open", False)]),
-        ("marker.move", {"type": 'G', "value": 'PRESS'}, None),
+        ("marker.move", {"intent": "move"}, None),
         ("marker.camera_bind", {"type": 'B', "value": 'PRESS', "ctrl": True}, None),
     ])
 
@@ -1285,29 +1316,29 @@ def km_property_editor(_params):
         ("buttons.clear_filter", {"type": 'F', "value": 'PRESS', "alt": True}, None),
         # Modifier panels
         ("object.modifier_set_active", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
-        ("object.modifier_remove", {"type": 'X', "value": 'PRESS'}, {"properties": [("report", True)]}),
-        ("object.modifier_remove", {"type": 'DEL', "value": 'PRESS'}, {"properties": [("report", True)]}),
+        ("object.modifier_remove", {"intent": "delete"}, {"properties": [("report", True)]}),
+        ("object.modifier_remove", {"intent": "delete_key"}, {"properties": [("report", True)]}),
         ("object.modifier_copy", {"type": 'D', "value": 'PRESS', "shift": True}, None),
         ("object.add_modifier_menu", {"type": 'A', "value": 'PRESS', "shift": True}, None),
         ("object.modifier_apply", {"type": 'A', "value": 'PRESS', "ctrl": True}, {"properties": [("report", True)]}),
         # ShaderFX panels
-        ("object.shaderfx_remove", {"type": 'X', "value": 'PRESS'}, {"properties": [("report", True)]}),
-        ("object.shaderfx_remove", {"type": 'DEL', "value": 'PRESS'}, {"properties": [("report", True)]}),
+        ("object.shaderfx_remove", {"intent": "delete"}, {"properties": [("report", True)]}),
+        ("object.shaderfx_remove", {"intent": "delete_key"}, {"properties": [("report", True)]}),
         ("object.shaderfx_copy", {"type": 'D', "value": 'PRESS', "shift": True}, None),
         # Constraint panels
-        ("constraint.delete", {"type": 'X', "value": 'PRESS'}, {"properties": [("report", True)]}),
-        ("constraint.delete", {"type": 'DEL', "value": 'PRESS'}, {"properties": [("report", True)]}),
+        ("constraint.delete", {"intent": "delete"}, {"properties": [("report", True)]}),
+        ("constraint.delete", {"intent": "delete_key"}, {"properties": [("report", True)]}),
         ("constraint.copy", {"type": 'D', "value": 'PRESS', "shift": True}, None),
         ("constraint.apply", {"type": 'A', "value": 'PRESS', "ctrl": True}, {"properties": [("report", True)]}),
         # Strip modifiers
-        ("sequencer.strip_modifier_duplicate", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("sequencer.strip_modifier_duplicate", {"intent": "duplicate"}, None),
         ("sequencer.add_strip_modifier_menu", {"type": 'A', "value": 'PRESS', "shift": True}, None),
         ("sequencer.strip_modifier_set_active", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
         # Scene Compositor Effects
         ("scene.set_active_compositor_effect", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
-        ("scene.remove_compositor_effect", {"type": 'X', "value": 'PRESS'}, None),
-        ("scene.remove_compositor_effect", {"type": 'DEL', "value": 'PRESS'}, None),
-        ("scene.duplicate_compositor_effect", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("scene.remove_compositor_effect", {"intent": "delete"}, None),
+        ("scene.remove_compositor_effect", {"intent": "delete_key"}, None),
+        ("scene.duplicate_compositor_effect", {"intent": "duplicate"}, None),
         ("scene.add_compositor_effect_menu", {"type": 'A', "value": 'PRESS', "shift": True}, None),
     ])
 
@@ -1433,16 +1464,16 @@ def km_outliner(params):
         ("outliner.drivers_add_selected", {"type": 'D', "value": 'PRESS', "ctrl": True}, None),
         ("outliner.drivers_delete_selected", {"type": 'D', "value": 'PRESS', "ctrl": True, "alt": True}, None),
         ("outliner.collection_new", {"type": 'C', "value": 'PRESS'}, None),
-        ("outliner.delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("outliner.delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("outliner.delete", {"intent": "delete"}, None),
+        ("outliner.delete", {"intent": "delete_key"}, None),
         op_menu("OBJECT_MT_move_to_collection", {"type": 'M', "value": 'PRESS'}),
         op_menu("OBJECT_MT_link_to_collection", {"type": 'M', "value": 'PRESS', "shift": True}),
         ("outliner.collection_exclude_set", {"type": 'E', "value": 'PRESS'}, None),
         ("outliner.collection_exclude_clear", {"type": 'E', "value": 'PRESS', "alt": True}, None),
-        ("outliner.hide", {"type": 'H', "value": 'PRESS'}, None),
-        ("outliner.hide", {"type": 'H', "value": 'PRESS', "shift": True},
+        ("outliner.hide", {"intent": "hide"}, None),
+        ("outliner.hide", {"intent": "hide_unselected"},
          {"properties": [("unselected", True)]}),
-        ("outliner.unhide_all", {"type": 'H', "value": 'PRESS', "alt": True}, None),
+        ("outliner.unhide_all", {"intent": "reveal"}, None),
         ("outliner.start_filter", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
         ("outliner.clear_filter", {"type": 'F', "value": 'PRESS', "alt": True}, None),
         # Copy/paste.
@@ -2080,9 +2111,9 @@ def km_graph_editor(params):
         ("graph.smooth", {"type": 'O', "value": 'PRESS', "alt": True}, None),
         ("graph.bake_keys", {"type": 'O', "value": 'PRESS', "shift": True, "alt": True}, None),
         ("graph.keys_to_samples", {"type": 'C', "value": 'PRESS', "alt": True}, None),
-        op_menu("GRAPH_MT_delete", {"type": 'X', "value": 'PRESS'}),
-        ("graph.delete", {"type": 'DEL', "value": 'PRESS'}, {"properties": [("confirm", False)]}),
-        ("graph.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        op_menu("GRAPH_MT_delete", {"intent": "delete"}),
+        ("graph.delete", {"intent": "delete_key"}, {"properties": [("confirm", False)]}),
+        ("graph.duplicate_move", {"intent": "duplicate"}, None),
         ("graph.keyframe_insert", {"type": 'I', "value": 'PRESS'}, None),
         ("graph.click_insert", {"type": params.action_mouse, "value": 'CLICK', "ctrl": True}, None),
         ("graph.click_insert", {"type": params.action_mouse, "value": 'CLICK', "shift": True, "ctrl": True},
@@ -2101,12 +2132,12 @@ def km_graph_editor(params):
         ("graph.view_frame", {"type": 'NUMPAD_0', "value": 'PRESS'}, None),
         op_menu_pie("GRAPH_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
         ("anim.channels_editable_toggle", {"type": 'TAB', "value": 'PRESS'}, None),
-        ("transform.translate", {"type": 'G', "value": 'PRESS'}, None),
+        ("transform.translate", {"intent": "move"}, None),
         ("transform.translate", {"type": params.select_mouse, "value": 'CLICK_DRAG'}, None),
         ("transform.transform", {"type": 'E', "value": 'PRESS'},
          {"properties": [("mode", 'TIME_EXTEND')]}),
-        ("transform.rotate", {"type": 'R', "value": 'PRESS'}, None),
-        ("transform.resize", {"type": 'S', "value": 'PRESS'}, None),
+        ("transform.rotate", {"intent": "rotate"}, None),
+        ("transform.resize", {"intent": "scale"}, None),
         *_template_items_proportional_editing(
             params, connected=False, toggle_data_path="tool_settings.use_proportional_fcurve"),
         ("marker.add", {"type": 'M', "value": 'PRESS'}, None),
@@ -2363,7 +2394,7 @@ def km_node_editor(params):
         ("node.join_nodes", {"type": 'J', "value": 'PRESS', "ctrl": True}, None),
         op_menu("NODE_MT_add", {"type": 'A', "value": 'PRESS', "shift": True}),
         op_menu("NODE_MT_swap", {"type": 'S', "value": 'PRESS', "shift": True}),
-        ("node.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True},
+        ("node.duplicate_move", {"intent": "duplicate"},
          {"properties": [("NODE_OT_translate_attach", [("TRANSFORM_OT_translate", [("view2d_edge_pan", True)])])]}),
         ("node.duplicate_move_linked", {"type": 'D', "value": 'PRESS', "alt": True},
          {"properties": [("NODE_OT_translate_attach", [("TRANSFORM_OT_translate", [("view2d_edge_pan", True)])])]}),
@@ -2381,8 +2412,8 @@ def km_node_editor(params):
         ("node.view_selected", {"type": 'NUMPAD_PERIOD', "value": 'PRESS'}, None),
         ("node.view_selected", {"type": 'BUTTON4MOUSE', "value": 'PRESS'}, None),
         op_menu_pie("NODE_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
-        ("node.delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("node.delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("node.delete", {"intent": "delete"}, None),
+        ("node.delete", {"intent": "delete_key"}, None),
         ("node.delete_reconnect", {"type": 'X', "value": 'PRESS', "shift": True}, None),
         ("node.delete_reconnect", {"type": 'DEL', "value": 'PRESS', "ctrl": True}, None),
         *_template_items_select_actions(params, "node.select_all"),
@@ -2410,7 +2441,7 @@ def km_node_editor(params):
         ("node.clipboard_paste", {"type": 'V', "value": 'PRESS', "ctrl": True}, None),
         ("node.delete_copy_reconnect", {"type": 'X', "value": 'PRESS', "ctrl": True}, None),
         ("node.translate_attach",
-         {"type": 'G', "value": 'PRESS'},
+         {"intent": "move"},
          {"properties": [("TRANSFORM_OT_translate", [("view2d_edge_pan", True)])]}),
         ("node.translate_attach",
          {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG'},
@@ -2420,7 +2451,7 @@ def km_node_editor(params):
             ("node.translate_attach", {"type": params.select_mouse, "value": 'CLICK_DRAG'},
              {"properties": [("TRANSFORM_OT_translate", [("view2d_edge_pan", True)])]}),
         )),
-        ("transform.translate", {"type": 'G', "value": 'PRESS'}, {"properties": [("view2d_edge_pan", True)]}),
+        ("transform.translate", {"intent": "move"}, {"properties": [("view2d_edge_pan", True)]}),
         ("transform.translate", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG'},
          {"properties": [("release_confirm", True), ("view2d_edge_pan", True)]}),
         # Avoid duplicating the previous item.
@@ -2428,8 +2459,8 @@ def km_node_editor(params):
             ("transform.translate", {"type": params.select_mouse, "value": 'CLICK_DRAG'},
              {"properties": [("release_confirm", True), ("view2d_edge_pan", True)]}),
         )),
-        ("transform.rotate", {"type": 'R', "value": 'PRESS'}, None),
-        ("transform.resize", {"type": 'S', "value": 'PRESS'}, None),
+        ("transform.rotate", {"intent": "rotate"}, None),
+        ("transform.resize", {"intent": "scale"}, None),
         ("node.move_detach_links_release",
          {"type": params.action_mouse, "value": 'CLICK_DRAG', "alt": True},
          {"properties": [("NODE_OT_translate_attach", [("TRANSFORM_OT_translate", [("view2d_edge_pan", True)])])]}),
@@ -2477,8 +2508,8 @@ def km_info(params):
         *_template_items_select_actions(params, "info.select_all"),
         ("info.select_box", {"type": 'B', "value": 'PRESS'}, None),
         ("info.report_replay", {"type": 'R', "value": 'PRESS'}, None),
-        ("info.report_delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("info.report_delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("info.report_delete", {"intent": "delete"}, None),
+        ("info.report_delete", {"intent": "delete_key"}, None),
         ("info.report_copy", {"type": 'C', "value": 'PRESS', "ctrl": True}, None),
         *_template_items_context_menu("INFO_MT_context_menu", params.context_menu_event),
     ])
@@ -2535,8 +2566,8 @@ def km_file_browser(params):
         ("file.directory_new", {"type": 'N', "value": 'PRESS', "ctrl": True, "shift": True},
          {"properties": [("confirm", False)]}),
         ("file.rename", {"type": 'F2', "value": 'PRESS'}, None),
-        ("file.delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("file.delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("file.delete", {"intent": "delete"}, None),
+        ("file.delete", {"intent": "delete_key"}, None),
         ("file.smoothscroll", {"type": 'TIMER1', "value": 'ANY', "any": True}, None),
         ("file.bookmark_add", {"type": 'B', "value": 'PRESS', "ctrl": True}, None),
         ("file.start_filter", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
@@ -2760,9 +2791,9 @@ def km_dopesheet(params):
         ("action.keyframe_type", {"type": 'R', "value": 'PRESS'}, None),
         ("action.bake_keys", {"type": 'O', "value": 'PRESS', "shift": True, "alt": True}, None),
         ("grease_pencil.layer_isolate", {"type": 'NUMPAD_ASTERIX', "value": 'PRESS'}, None),
-        op_menu("DOPESHEET_MT_delete", {"type": 'X', "value": 'PRESS'}),
-        ("action.delete", {"type": 'DEL', "value": 'PRESS'}, {"properties": [("confirm", False)]}),
-        ("action.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        op_menu("DOPESHEET_MT_delete", {"intent": "delete"}),
+        ("action.delete", {"intent": "delete_key"}, {"properties": [("confirm", False)]}),
+        ("action.duplicate_move", {"intent": "duplicate"}, None),
         ("action.keyframe_insert", {"type": 'I', "value": 'PRESS'}, None),
         ("action.copy", {"type": 'C', "value": 'PRESS', "ctrl": True}, None),
         ("action.paste", {"type": 'V', "value": 'PRESS', "ctrl": True}, None),
@@ -2777,13 +2808,13 @@ def km_dopesheet(params):
         op_menu_pie("DOPESHEET_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
         ("anim.channels_editable_toggle", {"type": 'TAB', "value": 'PRESS'}, None),
         ("anim.channels_select_filter", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
-        ("transform.transform", {"type": 'G', "value": 'PRESS'},
+        ("transform.transform", {"intent": "move"},
          {"properties": [("mode", 'TIME_TRANSLATE')]}),
         ("transform.transform", {"type": params.select_mouse, "value": 'CLICK_DRAG'},
          {"properties": [("mode", 'TIME_TRANSLATE')]}),
         ("transform.transform", {"type": 'E', "value": 'PRESS'},
          {"properties": [("mode", 'TIME_EXTEND')]}),
-        ("transform.transform", {"type": 'S', "value": 'PRESS'},
+        ("transform.transform", {"intent": "scale"},
          {"properties": [("mode", 'TIME_SCALE')]}),
         ("transform.transform", {"type": 'T', "value": 'PRESS', "shift": True},
          {"properties": [("mode", 'TIME_SLIDE')]}),
@@ -2845,8 +2876,8 @@ def km_nla_tracks(params):
          {"properties": [("above_selected", False)]}),
         ("nla.tracks_add", {"type": 'A', "value": 'PRESS', "shift": True, "ctrl": True},
          {"properties": [("above_selected", True)]}),
-        ("nla.tracks_delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("nla.tracks_delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("nla.tracks_delete", {"intent": "delete"}, None),
+        ("nla.tracks_delete", {"intent": "delete_key"}, None),
         *_template_items_context_menu("NLA_MT_channel_context_menu", params.context_menu_event),
     ])
 
@@ -2899,11 +2930,11 @@ def km_nla_editor(params):
         ("nla.soundclip_add", {"type": 'K', "value": 'PRESS', "shift": True}, None),
         ("nla.meta_add", {"type": 'G', "value": 'PRESS', "ctrl": True}, None),
         ("nla.meta_remove", {"type": 'G', "value": 'PRESS', "ctrl": True, "alt": True}, None),
-        ("nla.duplicate_linked_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("nla.duplicate_linked_move", {"intent": "duplicate"}, None),
         ("nla.duplicate_move", {"type": 'D', "value": 'PRESS', "alt": True}, None),
         ("nla.make_single_user", {"type": 'U', "value": 'PRESS'}, None),
-        ("nla.delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("nla.delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("nla.delete", {"intent": "delete"}, None),
+        ("nla.delete", {"intent": "delete_key"}, None),
         ("nla.split", {"type": 'Y', "value": 'PRESS'}, None),
         ("nla.mute_toggle", {"type": 'H', "value": 'PRESS'}, None),
         ("nla.swap", {"type": 'F', "value": 'PRESS', "alt": True}, None),
@@ -2917,13 +2948,13 @@ def km_nla_editor(params):
             ("nla.snap", {"type": 'S', "value": 'PRESS', "shift": True}, None)
         ),
         ("nla.fmodifier_add", {"type": 'M', "value": 'PRESS', "shift": True, "ctrl": True}, None),
-        ("transform.transform", {"type": 'G', "value": 'PRESS'},
+        ("transform.transform", {"intent": "move"},
          {"properties": [("mode", 'TRANSLATION')]}),
         ("transform.transform", {"type": params.select_mouse, "value": 'CLICK_DRAG'},
          {"properties": [("mode", 'TRANSLATION')]}),
         ("transform.transform", {"type": 'E', "value": 'PRESS'},
          {"properties": [("mode", 'TIME_EXTEND')]}),
-        ("transform.transform", {"type": 'S', "value": 'PRESS'},
+        ("transform.transform", {"intent": "scale"},
          {"properties": [("mode", 'TIME_SCALE')]}),
         ("marker.add", {"type": 'M', "value": 'PRESS'}, None),
         *_template_items_context_menu("NLA_MT_context_menu", params.context_menu_event),
@@ -3195,11 +3226,11 @@ def km_sequencer(params):
          {"properties": [("type", 'SOFT')]}),
         ("sequencer.split", {"type": 'K', "value": 'PRESS', "shift": True},
          {"properties": [("type", 'HARD')]}),
-        ("sequencer.mute", {"type": 'H', "value": 'PRESS'},
+        ("sequencer.mute", {"intent": "hide"},
          {"properties": [("unselected", False)]}),
-        ("sequencer.mute", {"type": 'H', "value": 'PRESS', "shift": True},
+        ("sequencer.mute", {"intent": "hide_unselected"},
          {"properties": [("unselected", True)]}),
-        ("sequencer.unmute", {"type": 'H', "value": 'PRESS', "alt": True},
+        ("sequencer.unmute", {"intent": "reveal"},
          {"properties": [("unselected", False)]}),
         ("sequencer.unmute", {"type": 'H', "value": 'PRESS', "shift": True, "alt": True},
          {"properties": [("unselected", True)]}),
@@ -3212,12 +3243,12 @@ def km_sequencer(params):
         ("sequencer.reload", {"type": 'R', "value": 'PRESS', "shift": True, "alt": True},
          {"properties": [("adjust_length", True)]}),
         ("sequencer.offset_clear", {"type": 'O', "value": 'PRESS', "alt": True}, None),
-        ("sequencer.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("sequencer.duplicate_move", {"intent": "duplicate"}, None),
         ("sequencer.duplicate_move_linked", {"type": 'D', "value": 'PRESS', "alt": True}, None),
-        ("sequencer.retiming_key_delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("sequencer.retiming_key_delete", {"type": 'DEL', "value": 'PRESS'}, None),
-        ("sequencer.delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("sequencer.delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("sequencer.retiming_key_delete", {"intent": "delete"}, None),
+        ("sequencer.retiming_key_delete", {"intent": "delete_key"}, None),
+        ("sequencer.delete", {"intent": "delete"}, None),
+        ("sequencer.delete", {"intent": "delete_key"}, None),
         ("sequencer.ripple_delete", {"type": 'X', "value": 'PRESS', "shift": True}, None),
         ("sequencer.ripple_delete", {"type": 'DEL', "value": 'PRESS', "shift": True}, None),
         ("sequencer.copy", {"type": 'C', "value": 'PRESS', "ctrl": True}, None),
@@ -3265,7 +3296,7 @@ def km_sequencer(params):
         ("sequencer.slip", {"type": 'S', "value": 'PRESS'}, {"properties": [("use_cursor_position", False)]}),
         ("wm.context_set_int", {"type": 'O', "value": 'PRESS'},
          {"properties": [("data_path", "scene.sequence_editor.overlay_frame"), ("value", 0)]}),
-        ("transform.seq_slide", {"type": 'G', "value": 'PRESS'},
+        ("transform.seq_slide", {"intent": "move"},
          {"properties": [("view2d_edge_pan", True)]}),
         ("transform.seq_slide", {"type": params.select_mouse, "value": 'CLICK_DRAG'},
          {"properties": [("view2d_edge_pan", True), ("use_restore_handle_selection", True)]}),
@@ -3388,16 +3419,16 @@ def km_sequencer_preview(params):
         ("sequencer.strip_transform_clear", {"type": 'R', "alt": True, "value": 'PRESS'},
          {"properties": [("property", 'ROTATION')]}),
 
-        ("sequencer.preview_duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("sequencer.preview_duplicate_move", {"intent": "duplicate"}, None),
         ("sequencer.preview_duplicate_move_linked", {"type": 'D', "value": 'PRESS', "alt": True}, None),
-        ("sequencer.mute", {"type": 'H', "value": 'PRESS'},
+        ("sequencer.mute", {"intent": "hide"},
          {"properties": [("unselected", False)]}),
-        ("sequencer.mute", {"type": 'H', "value": 'PRESS', "shift": True},
+        ("sequencer.mute", {"intent": "hide_unselected"},
          {"properties": [("unselected", True)]}),
-        ("sequencer.unmute", {"type": 'H', "value": 'PRESS', "alt": True},
+        ("sequencer.unmute", {"intent": "reveal"},
          {"properties": [("unselected", False)]}),
-        ("sequencer.delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("sequencer.delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("sequencer.delete", {"intent": "delete"}, None),
+        ("sequencer.delete", {"intent": "delete_key"}, None),
         ("sequencer.select_lasso", {"type": params.action_mouse, "value": 'CLICK_DRAG', "ctrl": True},
          {"properties": [("mode", 'ADD')]}),
         ("sequencer.select_lasso", {"type": params.action_mouse, "value": 'CLICK_DRAG', "shift": True, "ctrl": True},
@@ -3650,8 +3681,8 @@ def km_clip_editor(params):
         ("clip.slide_marker", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
         ("clip.disable_markers", {"type": 'D', "value": 'PRESS', "shift": True},
          {"properties": [("action", 'TOGGLE')]}),
-        ("clip.delete_track", {"type": 'X', "value": 'PRESS'}, None),
-        ("clip.delete_track", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("clip.delete_track", {"intent": "delete"}, None),
+        ("clip.delete_track", {"intent": "delete_key"}, None),
         ("clip.lock_tracks", {"type": 'L', "value": 'PRESS', "ctrl": True},
          {"properties": [("action", 'LOCK')]}),
         ("clip.lock_tracks", {"type": 'L', "value": 'PRESS', "alt": True},
@@ -3668,10 +3699,10 @@ def km_clip_editor(params):
          {"properties": [("data_path", "space_data.show_marker_search")]}),
         ("wm.context_toggle", {"type": 'H', "value": 'PRESS', "ctrl": True},
          {"properties": [("data_path", "space_data.use_mute_footage")]}),
-        ("transform.translate", {"type": 'G', "value": 'PRESS'}, None),
+        ("transform.translate", {"intent": "move"}, None),
         ("transform.translate", {"type": params.select_mouse, "value": 'CLICK_DRAG'}, None),
-        ("transform.resize", {"type": 'S', "value": 'PRESS'}, None),
-        ("transform.rotate", {"type": 'R', "value": 'PRESS'}, None),
+        ("transform.resize", {"intent": "scale"}, None),
+        ("transform.rotate", {"intent": "rotate"}, None),
         ("clip.clear_track_path", {"type": 'T', "value": 'PRESS', "alt": True},
          {"properties": [("action", 'REMAINED'), ("clear_active", False)]}),
         ("clip.clear_track_path", {"type": 'T', "value": 'PRESS', "shift": True},
@@ -3722,8 +3753,8 @@ def km_clip_graph_editor(params):
          {"properties": [("extend", True)]}),
         *_template_items_select_actions(params, "clip.graph_select_all_markers"),
         ("clip.graph_select_box", {"type": 'B', "value": 'PRESS'}, None),
-        ("clip.graph_delete_curve", {"type": 'X', "value": 'PRESS'}, None),
-        ("clip.graph_delete_curve", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("clip.graph_delete_curve", {"intent": "delete"}, None),
+        ("clip.graph_delete_curve", {"intent": "delete_key"}, None),
         ("clip.graph_delete_knot", {"type": 'X', "value": 'PRESS', "shift": True}, None),
         ("clip.graph_delete_knot", {"type": 'DEL', "value": 'PRESS', "shift": True}, None),
         ("clip.graph_view_all", {"type": 'HOME', "value": 'PRESS'}, None),
@@ -3739,10 +3770,10 @@ def km_clip_graph_editor(params):
          {"properties": [("action", 'ALL'), ("clear_active", True)]}),
         ("clip.graph_disable_markers", {"type": 'D', "value": 'PRESS', "shift": True},
          {"properties": [("action", 'TOGGLE')]}),
-        ("transform.translate", {"type": 'G', "value": 'PRESS'}, None),
+        ("transform.translate", {"intent": "move"}, None),
         ("transform.translate", {"type": params.select_mouse, "value": 'CLICK_DRAG'}, None),
-        ("transform.resize", {"type": 'S', "value": 'PRESS'}, None),
-        ("transform.rotate", {"type": 'R', "value": 'PRESS'}, None),
+        ("transform.resize", {"intent": "scale"}, None),
+        ("transform.rotate", {"intent": "rotate"}, None),
     ])
 
     if params.select_mouse == 'LEFTMOUSE' and not params.legacy:
@@ -3770,7 +3801,7 @@ def km_clip_dopesheet_editor(_params):
          {"properties": [("extend", True)]}),
         ("clip.dopesheet_view_all", {"type": 'HOME', "value": 'PRESS'}, None),
         ("clip.dopesheet_view_all", {"type": 'NDOF_BUTTON_FIT', "value": 'PRESS'}, None),
-        ("clip.delete_track", {"type": 'X', "value": 'PRESS'}, None),
+        ("clip.delete_track", {"intent": "delete"}, None),
     ])
 
     return keymap
@@ -3939,8 +3970,8 @@ def km_animation_channels(params):
         ("anim.channels_select_box", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG', "ctrl": True},
          {"properties": [("deselect", True)]}),
         # Delete.
-        ("anim.channels_delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("anim.channels_delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("anim.channels_delete", {"intent": "delete"}, None),
+        ("anim.channels_delete", {"intent": "delete_key"}, None),
         # Settings.
         ("anim.channels_setting_toggle", {"type": 'W', "value": 'PRESS', "shift": True}, None),
         ("anim.channels_setting_enable", {"type": 'W', "value": 'PRESS', "shift": True, "ctrl": True}, None),
@@ -4154,8 +4185,8 @@ def km_grease_pencil_edit_mode(params):
 
     items.extend([
         # Delete menu
-        op_menu("VIEW3D_MT_edit_greasepencil_delete", {"type": 'X', "value": 'PRESS'}),
-        op_menu("VIEW3D_MT_edit_greasepencil_delete", {"type": 'DEL', "value": 'PRESS'}),
+        op_menu("VIEW3D_MT_edit_greasepencil_delete", {"intent": "delete"}),
+        op_menu("VIEW3D_MT_edit_greasepencil_delete", {"intent": "delete_key"}),
         # Dissolve
         ("grease_pencil.dissolve", {"type": 'X', "value": 'PRESS', "ctrl": True}, None),
         ("grease_pencil.dissolve", {"type": 'DEL', "value": 'PRESS', "ctrl": True}, None),
@@ -4206,7 +4237,7 @@ def km_grease_pencil_edit_mode(params):
         ("grease_pencil.join_selection", {"type": 'J', "value": 'PRESS', "shift": True, "ctrl": True},
          {"properties": [("type", 'SPLITCOPY')]}),
 
-        ("grease_pencil.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("grease_pencil.duplicate_move", {"intent": "duplicate"}, None),
 
         # Split Stroke
         ("grease_pencil.stroke_split", {"type": 'V', "value": 'PRESS', "shift": True}, None),
@@ -4594,18 +4625,18 @@ def km_object_mode(params):
          {"properties": [("clear_delta", False)]}),
         ("object.scale_clear", {"type": 'S', "value": 'PRESS', "alt": True},
          {"properties": [("clear_delta", False)]}),
-        ("object.delete", {"type": 'X', "value": 'PRESS'},
+        ("object.delete", {"intent": "delete"},
          {"properties": [("use_global", False)]}),
         ("object.delete", {"type": 'X', "value": 'PRESS', "shift": True},
          {"properties": [("use_global", True)]}),
-        ("object.delete", {"type": 'DEL', "value": 'PRESS'},
+        ("object.delete", {"intent": "delete_key"},
          {"properties": [("use_global", False), ("confirm", False)]}),
         ("object.delete", {"type": 'DEL', "value": 'PRESS', "shift": True},
          {"properties": [("use_global", True), ("confirm", False)]}),
         op_menu("VIEW3D_MT_add", {"type": 'A', "value": 'PRESS', "shift": True}),
         op_menu("VIEW3D_MT_object_apply", {"type": 'A', "value": 'PRESS', "ctrl": True}),
         op_menu("VIEW3D_MT_make_links", {"type": 'L', "value": 'PRESS', "ctrl": True}),
-        ("object.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("object.duplicate_move", {"intent": "duplicate"}, None),
         ("object.duplicate_move_linked", {"type": 'D', "value": 'PRESS', "alt": True}, None),
         ("object.join", {"type": 'J', "value": 'PRESS', "ctrl": True}, None),
         ("wm.context_toggle", {"type": 'PERIOD', "value": 'PRESS', "ctrl": True},
@@ -4805,14 +4836,14 @@ def km_paint_curve(params):
         ("paintcurve.select", {"type": 'A', "value": 'PRESS'},
          {"properties": [("toggle", True)]}),
         ("paintcurve.cursor", {"type": params.action_mouse, "value": 'PRESS', "shift": True, "ctrl": True}, None),
-        ("paintcurve.delete_point", {"type": 'X', "value": 'PRESS'}, None),
-        ("paintcurve.delete_point", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("paintcurve.delete_point", {"intent": "delete"}, None),
+        ("paintcurve.delete_point", {"intent": "delete_key"}, None),
         ("paintcurve.draw", {"type": 'RET', "value": 'PRESS'}, None),
         ("paintcurve.draw", {"type": 'NUMPAD_ENTER', "value": 'PRESS'}, None),
-        ("transform.translate", {"type": 'G', "value": 'PRESS'}, None),
+        ("transform.translate", {"intent": "move"}, None),
         ("transform.translate", {"type": params.select_mouse, "value": 'CLICK_DRAG'}, None),
-        ("transform.rotate", {"type": 'R', "value": 'PRESS'}, None),
-        ("transform.resize", {"type": 'S', "value": 'PRESS'}, None),
+        ("transform.rotate", {"intent": "rotate"}, None),
+        ("transform.resize", {"intent": "scale"}, None),
     ])
 
     return keymap
@@ -5177,7 +5208,7 @@ def km_vertex_paint(params):
          {"properties": [("data_path", "tool_settings.vertex_paint.brush.use_smooth_stroke")]}),
         ("wm.context_menu_enum", {"type": 'E', "value": 'PRESS', "alt": True},
          {"properties": [("data_path", "tool_settings.vertex_paint.brush.stroke_method")]}),
-        ("paint.face_vert_reveal", {"type": 'H', "value": 'PRESS', "alt": True}, None),
+        ("paint.face_vert_reveal", {"intent": "reveal"}, None),
         # Pie Menu
         op_menu_pie("VIEW3D_MT_mesh_paint_automasking_pie", {"type": 'A', "alt": True, "value": 'PRESS'}),
         *_template_items_context_panel("VIEW3D_PT_paint_vertex_context_menu", params.context_menu_event),
@@ -5383,9 +5414,9 @@ def km_sculpt(params):
         # Match keys from: `_template_items_hide_reveal_actions`, cannot use because arguments aren't compatible.
         ("sculpt.face_set_change_visibility", {"type": 'H', "value": 'PRESS', "shift": True},
          {"properties": [("mode", 'TOGGLE')]}),
-        ("sculpt.face_set_change_visibility", {"type": 'H', "value": 'PRESS'},
+        ("sculpt.face_set_change_visibility", {"intent": "hide"},
          {"properties": [("mode", 'HIDE_ACTIVE')]}),
-        ("paint.hide_show_all", {"type": 'H', "value": 'PRESS', "alt": True},
+        ("paint.hide_show_all", {"intent": "reveal"},
          {"properties": [("action", "SHOW")]}),
         ("paint.visibility_filter", {"type": 'PAGE_UP', "value": 'PRESS', "repeat": True},
          {"properties": [("action", 'GROW')]}),
@@ -5668,7 +5699,7 @@ def km_edit_mesh(params):
         op_menu("VIEW3D_MT_edit_mesh_merge", {"type": 'M', "value": 'PRESS'}),
         op_menu("VIEW3D_MT_edit_mesh_split", {"type": 'M', "value": 'PRESS', "alt": True}),
         ("mesh.edge_face_add", {"type": 'F', "value": 'PRESS', "repeat": True}, None),
-        ("mesh.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("mesh.duplicate_move", {"intent": "duplicate"}, None),
         op_menu("VIEW3D_MT_mesh_add", {"type": 'A', "value": 'PRESS', "shift": True}),
         ("mesh.separate", {"type": 'P', "value": 'PRESS'}, None),
         ("mesh.split", {"type": 'Y', "value": 'PRESS'}, None),
@@ -5681,8 +5712,8 @@ def km_edit_mesh(params):
          {"properties": [("rotate_source", True)]}),
         ("mesh.dupli_extrude_cursor", {"type": params.action_mouse, "value": 'CLICK', "shift": True, "ctrl": True},
          {"properties": [("rotate_source", False)]}),
-        op_menu("VIEW3D_MT_edit_mesh_delete", {"type": 'X', "value": 'PRESS'}),
-        op_menu("VIEW3D_MT_edit_mesh_delete", {"type": 'DEL', "value": 'PRESS'}),
+        op_menu("VIEW3D_MT_edit_mesh_delete", {"intent": "delete"}),
+        op_menu("VIEW3D_MT_edit_mesh_delete", {"intent": "delete_key"}),
         ("mesh.dissolve_mode", {"type": 'X', "value": 'PRESS', "ctrl": True}, None),
         ("mesh.dissolve_mode", {"type": 'DEL', "value": 'PRESS', "ctrl": True}, None),
         op_tool_optional(
@@ -5783,9 +5814,9 @@ def km_edit_armature(params):
         ("armature.shortest_path_pick",
          {"type": params.select_mouse, "value": params.select_mouse_value_fallback, "ctrl": True}, None),
         # Editing.
-        op_menu("VIEW3D_MT_edit_armature_delete", {"type": 'X', "value": 'PRESS'}),
-        op_menu("VIEW3D_MT_edit_armature_delete", {"type": 'DEL', "value": 'PRESS'}),
-        ("armature.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        op_menu("VIEW3D_MT_edit_armature_delete", {"intent": "delete"}),
+        op_menu("VIEW3D_MT_edit_armature_delete", {"intent": "delete_key"}),
+        ("armature.duplicate_move", {"intent": "duplicate"}, None),
         ("armature.dissolve", {"type": 'X', "value": 'PRESS', "ctrl": True}, None),
         ("armature.dissolve", {"type": 'DEL', "value": 'PRESS', "ctrl": True}, None),
         op_tool_optional(
@@ -5837,9 +5868,9 @@ def km_edit_metaball(params):
 
         ("object.metaball_add", {"type": 'A', "value": 'PRESS', "shift": True}, None),
         *_template_items_hide_reveal_actions("mball.hide_metaelems", "mball.reveal_metaelems"),
-        ("mball.delete_metaelems", {"type": 'X', "value": 'PRESS'}, None),
-        ("mball.delete_metaelems", {"type": 'DEL', "value": 'PRESS'}, None),
-        ("mball.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("mball.delete_metaelems", {"intent": "delete"}, None),
+        ("mball.delete_metaelems", {"intent": "delete_key"}, None),
+        ("mball.duplicate_move", {"intent": "duplicate"}, None),
         *_template_items_select_actions(params, "mball.select_all"),
         ("mball.select_similar", {"type": 'G', "value": 'PRESS', "shift": True}, None),
         *_template_items_proportional_editing(
@@ -5895,8 +5926,8 @@ def km_edit_particle(params):
         ("particle.select_linked_pick", {"type": 'L', "value": 'PRESS', "shift": True},
          {"properties": [("deselect", True)]}),
         ("particle.select_linked", {"type": 'L', "value": 'PRESS', "ctrl": True}, None),
-        ("particle.delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("particle.delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("particle.delete", {"intent": "delete"}, None),
+        ("particle.delete", {"intent": "delete_key"}, None),
         *_template_items_hide_reveal_actions("particle.hide", "particle.reveal"),
         ("particle.brush_edit", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
         ("particle.brush_edit", {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True}, None),
@@ -6056,11 +6087,11 @@ def km_edit_curve_legacy(params):
         op_tool_optional(
             ("curve.extrude_move", {"type": 'E', "value": 'PRESS'}, None),
             (op_tool_cycle, "builtin.extrude"), params),
-        ("curve.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("curve.duplicate_move", {"intent": "duplicate"}, None),
         ("curve.make_segment", {"type": 'F', "value": 'PRESS'}, None),
         ("curve.cyclic_toggle", {"type": 'C', "value": 'PRESS', "alt": True}, None),
-        op_menu("VIEW3D_MT_edit_curve_delete", {"type": 'X', "value": 'PRESS'}),
-        op_menu("VIEW3D_MT_edit_curve_delete", {"type": 'DEL', "value": 'PRESS'}),
+        op_menu("VIEW3D_MT_edit_curve_delete", {"intent": "delete"}),
+        op_menu("VIEW3D_MT_edit_curve_delete", {"intent": "delete_key"}),
         ("curve.dissolve_verts", {"type": 'X', "value": 'PRESS', "ctrl": True}, None),
         ("curve.dissolve_verts", {"type": 'DEL', "value": 'PRESS', "ctrl": True}, None),
         ("curve.tilt_clear", {"type": 'T', "value": 'PRESS', "alt": True}, None),
@@ -6097,15 +6128,15 @@ def km_edit_curves(params):
 
         ("curves.set_selection_domain", {"type": 'ONE', "value": 'PRESS'}, {"properties": [("domain", 'POINT')]}),
         ("curves.set_selection_domain", {"type": 'TWO', "value": 'PRESS'}, {"properties": [("domain", 'CURVE')]}),
-        ("curves.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("curves.duplicate_move", {"intent": "duplicate"}, None),
         *_template_items_select_actions(params, "curves.select_all"),
         ("curves.extrude_move", {"type": 'E', "value": 'PRESS'}, None),
         ("curves.select_linked", {"type": 'L', "value": 'PRESS', "ctrl": True}, None),
         ("curves.select_linked_pick", {"type": 'L', "value": 'PRESS'}, {"properties": [("deselect", False)]}),
         ("curves.select_linked_pick", {"type": 'L', "value": 'PRESS',
          "shift": True}, {"properties": [("deselect", True)]}),
-        ("curves.delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("curves.delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("curves.delete", {"intent": "delete"}, None),
+        ("curves.delete", {"intent": "delete_key"}, None),
         ("curves.separate", {"type": 'P', "value": 'PRESS'}, None),
         ("curves.select_more", {"type": 'NUMPAD_PLUS', "value": 'PRESS', "ctrl": True, "repeat": True}, None),
         ("curves.select_less", {"type": 'NUMPAD_MINUS', "value": 'PRESS', "ctrl": True, "repeat": True}, None),
@@ -6140,10 +6171,10 @@ def km_edit_pointcloud(params):
         # Transform Actions.
         *_template_items_transform_actions(params, use_bend=True, use_mirror=True),
 
-        ("pointcloud.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
+        ("pointcloud.duplicate_move", {"intent": "duplicate"}, None),
         *_template_items_select_actions(params, "pointcloud.select_all"),
-        ("pointcloud.delete", {"type": 'X', "value": 'PRESS'}, None),
-        ("pointcloud.delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        ("pointcloud.delete", {"intent": "delete"}, None),
+        ("pointcloud.delete", {"intent": "delete_key"}, None),
         ("pointcloud.separate", {"type": 'P', "value": 'PRESS'}, None),
         ("transform.transform", {"type": 'S', "value": 'PRESS', "alt": True},
          {"properties": [("mode", 'CURVE_SHRINKFATTEN')]}),

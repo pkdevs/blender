@@ -3906,8 +3906,9 @@ def keymap_transform_tool_mmb(keymap):
             km_items = km_content["items"]
             km_items_new = []
             for kmi in km_items:
-                ty = kmi[1]["type"]
-                value = kmi[1]["value"]
+                # Items bound through an intent have no key of their own.
+                ty = kmi[1].get("type")
+                value = kmi[1].get("value")
                 if km_name.endswith(" (fallback)"):
                     if ty == 'RIGHTMOUSE':
                         kmi = (kmi[0], kmi[1].copy(), kmi[2])
@@ -3930,6 +3931,17 @@ def keymap_transform_tool_mmb(keymap):
                             kmi[1]["value"] = 'PRESS'
                             km_items_new.append(kmi)
             km_items.extend(km_items_new)
+
+
+def generate_intents(params=None):
+    # The key maps taken from the default key configuration (see `generate_keymaps`)
+    # reference its intents, so they are used as is for now.
+    import os
+    from bpy.utils import execfile
+    blender_default_mod = execfile(
+        os.path.join(os.path.dirname(__file__), "blender_default.py"),
+    )
+    return blender_default_mod.generate_intents()
 
 
 def generate_keymaps(params=None):

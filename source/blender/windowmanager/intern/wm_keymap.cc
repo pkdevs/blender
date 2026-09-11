@@ -204,7 +204,8 @@ static bool wm_keymap_item_equals(const wmKeyMapItem *a, const wmKeyMapItem *b)
           a->hyper == b->hyper && a->keymodifier == b->keymodifier && a->maptype == b->maptype &&
           ((a->val != KM_PRESS_DRAG) || (a->direction == b->direction)) &&
           ((ISKEYBOARD(a->type) == 0) ||
-           (a->flag & KMI_REPEAT_IGNORE) == (b->flag & KMI_REPEAT_IGNORE)));
+           (a->flag & KMI_REPEAT_IGNORE) == (b->flag & KMI_REPEAT_IGNORE)) &&
+          STREQ(a->intent, b->intent));
 }
 
 void WM_keymap_item_properties_reset(wmKeyMapItem *kmi, IDProperty *properties)
@@ -224,27 +225,32 @@ void WM_keymap_item_properties_reset(wmKeyMapItem *kmi, IDProperty *properties)
   wm_keymap_item_properties_set(kmi);
 }
 
-int WM_keymap_item_map_type_get(const wmKeyMapItem *kmi)
+int WM_key_event_map_type_get(const short type)
 {
-  if (ISTIMER(kmi->type)) {
+  if (ISTIMER(type)) {
     return KMI_TYPE_TIMER;
   }
-  if (ISKEYBOARD(kmi->type)) {
+  if (ISKEYBOARD(type)) {
     return KMI_TYPE_KEYBOARD;
   }
-  if (ISMOUSE(kmi->type)) {
+  if (ISMOUSE(type)) {
     return KMI_TYPE_MOUSE;
   }
-  if (ISNDOF(kmi->type)) {
+  if (ISNDOF(type)) {
     return KMI_TYPE_NDOF;
   }
-  if (kmi->type == KM_TEXTINPUT) {
+  if (type == KM_TEXTINPUT) {
     return KMI_TYPE_TEXTINPUT;
   }
-  if (ELEM(kmi->type, TABLET_STYLUS, TABLET_ERASER)) {
+  if (ELEM(type, TABLET_STYLUS, TABLET_ERASER)) {
     return KMI_TYPE_MOUSE;
   }
   return KMI_TYPE_KEYBOARD;
+}
+
+int WM_keymap_item_map_type_get(const wmKeyMapItem *kmi)
+{
+  return WM_key_event_map_type_get(kmi->type);
 }
 
 /** \} */
@@ -318,6 +324,7 @@ wmKeyConfig *WM_keyconfig_ensure(wmWindowManager *wm, const char *idname, bool u
       for (wmKeyMap &km : keyconf->keymaps) {
         WM_keymap_clear(&km);
       }
+      BLI_freelistN(&keyconf->intents);
     }
     else {
       /* For user defined key configuration, clear all keymaps. */
@@ -360,6 +367,8 @@ void WM_keyconfig_clear(wmKeyConfig *keyconf)
   }
 
   keyconf->keymaps.clear_no_delete();
+
+  BLI_freelistN(&keyconf->intents);
 }
 
 void WM_keyconfig_free(wmKeyConfig *keyconf)
@@ -524,7 +533,8 @@ static bool wm_keymap_is_match(const wmKeyMap *km_a, const wmKeyMap *km_b)
           STREQ(km_a->idname, km_b->idname));
 }
 
-static void keymap_event_set(wmKeyMapItem *kmi, const KeyMapItem_Params *params)
+/** Shared by #wmKeyMapItem & #wmKeyIntent which store the event in the same fields. */
+template<typename T> static void keymap_event_set(T *kmi, const KeyMapItem_Params *params)
 {
   kmi->type = params->type;
   kmi->val = params->value;
@@ -605,6 +615,322 @@ void WM_keymap_remove_item(wmKeyMap *keymap, wmKeyMapItem *kmi)
   BLI_freelinkN(&keymap->items, kmi);
 
   WM_keyconfig_update_tag(keymap, nullptr);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Key Intent
+ *
+ * A shortcut with a human meaning ("G" is "Move"), shared by items across key maps.
+ * Items that reference an intent take their event from it when the final (user) key
+ * configuration is built, see #wm_keymap_intents_resolve. Event handling never looks at intents.
+ *
+ * The user configuration holds the final list: the active preset's intents (falling back to the
+ * default configuration), add-on intents, and the user's changes from #UserDef::user_keyintents.
+ * \{ */
+
+static void wm_keyintent_event_copy(wmKeyIntent *dst, const wmKeyIntent *src)
+{
+  dst->type = src->type;
+  dst->val = src->val;
+  dst->direction = src->direction;
+  dst->shift = src->shift;
+  dst->ctrl = src->ctrl;
+  dst->alt = src->alt;
+  dst->oskey = src->oskey;
+  dst->hyper = src->hyper;
+  dst->keymodifier = src->keymodifier;
+}
+
+static bool wm_keyintent_event_equals(const wmKeyIntent *a, const wmKeyIntent *b)
+{
+  return (a->type == b->type && a->val == b->val && a->shift == b->shift && a->ctrl == b->ctrl &&
+          a->alt == b->alt && a->oskey == b->oskey && a->hyper == b->hyper &&
+          a->keymodifier == b->keymodifier &&
+          ((a->val != KM_PRESS_DRAG) || (a->direction == b->direction)));
+}
+
+static bool wm_keymap_item_intent_event_matches(const wmKeyMapItem *kmi, const wmKeyIntent *ki)
+{
+  return (kmi->type == ki->type && kmi->val == ki->val && kmi->shift == ki->shift &&
+          kmi->ctrl == ki->ctrl && kmi->alt == ki->alt && kmi->oskey == ki->oskey &&
+          kmi->hyper == ki->hyper && kmi->keymodifier == ki->keymodifier &&
+          ((kmi->val != KM_PRESS_DRAG) || (kmi->direction == ki->direction)));
+}
+
+static void wm_keymap_item_intent_apply(wmKeyMapItem *kmi, const wmKeyIntent *ki)
+{
+  kmi->type = ki->type;
+  kmi->val = ki->val;
+  kmi->direction = ki->direction;
+  kmi->shift = ki->shift;
+  kmi->ctrl = ki->ctrl;
+  kmi->alt = ki->alt;
+  kmi->oskey = ki->oskey;
+  kmi->hyper = ki->hyper;
+  kmi->keymodifier = ki->keymodifier;
+}
+
+wmKeyIntent *WM_keyintent_list_find(ListBaseT<wmKeyIntent> *lb, const char *idname)
+{
+  for (wmKeyIntent &ki : *lb) {
+    if (STREQ(ki.idname, idname)) {
+      return &ki;
+    }
+  }
+  return nullptr;
+}
+
+wmKeyIntent *WM_keyconfig_intent_find(wmKeyConfig *keyconf, const char *idname)
+{
+  return WM_keyintent_list_find(&keyconf->intents, idname);
+}
+
+wmKeyIntent *WM_keyconfig_intent_ensure(wmKeyConfig *keyconf,
+                                        const char *idname,
+                                        const char *label,
+                                        const KeyMapItem_Params *params)
+{
+  wmKeyIntent *ki = WM_keyconfig_intent_find(keyconf, idname);
+  if (ki == nullptr) {
+    ki = MEM_new<wmKeyIntent>("wmKeyIntent");
+    STRNCPY_UTF8(ki->idname, idname);
+    BLI_addtail(&keyconf->intents, ki);
+  }
+  STRNCPY_UTF8(ki->label, label);
+  keymap_event_set(ki, params);
+
+  WM_keyconfig_intent_update_tag(keyconf);
+  return ki;
+}
+
+void WM_keyconfig_intent_remove(wmKeyConfig *keyconf, wmKeyIntent *ki)
+{
+  BLI_assert(BLI_findindex(&keyconf->intents, ki) != -1);
+  BLI_freelinkN(&keyconf->intents, ki);
+
+  WM_keyconfig_intent_update_tag(keyconf);
+}
+
+/**
+ * Write the event of every referenced intent into the items of `km`.
+ * Items referencing an unknown intent keep the event they have.
+ */
+static void wm_keymap_intents_resolve(wmKeyMap *km, ListBaseT<wmKeyIntent> *intents)
+{
+  if (km->flag & KEYMAP_MODAL) {
+    return;
+  }
+  if (BLI_listbase_is_empty(intents)) {
+    return;
+  }
+  for (wmKeyMapItem &kmi : km->items) {
+    if (kmi.intent[0] == '\0') {
+      continue;
+    }
+    const wmKeyIntent *ki = WM_keyintent_list_find(intents, kmi.intent);
+    if (ki) {
+      wm_keymap_item_intent_apply(&kmi, ki);
+    }
+  }
+}
+
+static wmKeyIntent *wm_keyintent_copy(const wmKeyIntent *ki)
+{
+  wmKeyIntent *ki_copy = MEM_dupalloc(ki);
+  ki_copy->next = ki_copy->prev = nullptr;
+  return ki_copy;
+}
+
+static void wm_keyintents_list_add_missing(ListBaseT<wmKeyIntent> *lb,
+                                           const ListBaseT<wmKeyIntent> *src)
+{
+  for (const wmKeyIntent &ki : *src) {
+    if (WM_keyintent_list_find(lb, ki.idname) == nullptr) {
+      BLI_addtail(lb, wm_keyintent_copy(&ki));
+    }
+  }
+}
+
+/**
+ * The intents a user configuration is built from (before user changes):
+ * the active preset, falling back to the default configuration, then add-ons.
+ * This mirrors how #wm_keymap_preset resolves key maps. Free the result with #BLI_freelistN.
+ */
+static void wm_keyintents_base_build(wmWindowManager *wm,
+                                     wmKeyConfig *kc_active,
+                                     ListBaseT<wmKeyIntent> *r_base)
+{
+  BLI_listbase_clear(r_base);
+  wm_keyintents_list_add_missing(r_base, &kc_active->intents);
+  if (wm->runtime->defaultconf && kc_active != wm->runtime->defaultconf) {
+    wm_keyintents_list_add_missing(r_base, &wm->runtime->defaultconf->intents);
+  }
+  if (wm->runtime->addonconf) {
+    wm_keyintents_list_add_missing(r_base, &wm->runtime->addonconf->intents);
+  }
+}
+
+/**
+ * Store the differences between the user configuration's intents and the base in
+ * `U.user_keyintents`, the counterpart of #wm_keymap_diff_update for intents.
+ */
+static void wm_keyintents_diff_update(wmWindowManager *wm, ListBaseT<wmKeyIntent> *base)
+{
+  BLI_freelistN(&U.user_keyintents);
+
+  for (wmKeyIntent &ki : wm->runtime->userconf->intents) {
+    const wmKeyIntent *ki_base = WM_keyintent_list_find(base, ki.idname);
+    eKeyIntent_Flag flag;
+    if (ki_base == nullptr) {
+      flag = KEYINTENT_USER_DEFINED;
+    }
+    else if (!wm_keyintent_event_equals(&ki, ki_base)) {
+      flag = KEYINTENT_USER_MODIFIED;
+    }
+    else {
+      continue;
+    }
+    wmKeyIntent *ki_user = wm_keyintent_copy(&ki);
+    ki_user->flag = flag;
+    BLI_addtail(&U.user_keyintents, ki_user);
+  }
+}
+
+/**
+ * Rebuild the user configuration's intents from the base and `U.user_keyintents`,
+ * the counterpart of #wm_keymap_patch_update for intents.
+ * Existing intents are updated in place so pointers held by the UI stay valid.
+ */
+static void wm_keyintents_patch_update(wmWindowManager *wm, ListBaseT<wmKeyIntent> *base)
+{
+  ListBaseT<wmKeyIntent> *intents = &wm->runtime->userconf->intents;
+  ListBaseT<wmKeyIntent> result = {nullptr, nullptr};
+
+  auto take_or_create = [&](const wmKeyIntent *ki_src) -> wmKeyIntent * {
+    wmKeyIntent *ki = WM_keyintent_list_find(intents, ki_src->idname);
+    if (ki) {
+      BLI_remlink(intents, ki);
+      ki->flag &= ~(KEYINTENT_USER_MODIFIED | KEYINTENT_USER_DEFINED);
+    }
+    else {
+      ki = wm_keyintent_copy(ki_src);
+      ki->flag = eKeyIntent_Flag{};
+    }
+    STRNCPY_UTF8(ki->label, ki_src->label);
+    wm_keyintent_event_copy(ki, ki_src);
+    BLI_addtail(&result, ki);
+    return ki;
+  };
+
+  for (const wmKeyIntent &ki_base : *base) {
+    wmKeyIntent *ki = take_or_create(&ki_base);
+    const wmKeyIntent *ki_user = WM_keyintent_list_find(&U.user_keyintents, ki_base.idname);
+    if (ki_user && (ki_user->flag & KEYINTENT_USER_MODIFIED)) {
+      wm_keyintent_event_copy(ki, ki_user);
+      ki->flag |= KEYINTENT_USER_MODIFIED;
+    }
+  }
+
+  /* Intents added by the user which no preset defines. */
+  for (const wmKeyIntent &ki_user : U.user_keyintents) {
+    if ((ki_user.flag & KEYINTENT_USER_DEFINED) == 0) {
+      continue;
+    }
+    if (WM_keyintent_list_find(&result, ki_user.idname)) {
+      continue;
+    }
+    wmKeyIntent *ki = take_or_create(&ki_user);
+    ki->flag |= KEYINTENT_USER_DEFINED;
+  }
+
+  /* Whatever is left was removed from the presets. */
+  BLI_freelistN(intents);
+  *intents = result;
+}
+
+/**
+ * The user preferences store item diffs with the keys the items had at the time,
+ * keep the items bound through intents in sync so the diffs still apply after a re-bind.
+ */
+static void wm_user_keymaps_intents_resolve(ListBaseT<wmKeyIntent> *intents)
+{
+  if (BLI_listbase_is_empty(intents)) {
+    return;
+  }
+  for (wmKeyMap &km : U.user_keymaps) {
+    if (km.flag & KEYMAP_MODAL) {
+      continue;
+    }
+    for (wmKeyMapDiffItem &kmdi : km.diff_items) {
+      for (wmKeyMapItem *kmi : {kmdi.remove_item, kmdi.add_item}) {
+        if (kmi == nullptr || kmi->intent[0] == '\0') {
+          continue;
+        }
+        const wmKeyIntent *ki = WM_keyintent_list_find(intents, kmi->intent);
+        if (ki) {
+          wm_keymap_item_intent_apply(kmi, ki);
+        }
+      }
+    }
+    /* Old non-diff key maps. */
+    wm_keymap_intents_resolve(&km, intents);
+  }
+}
+
+void WM_keymap_item_intent_set(wmKeyMapItem *kmi, const char *idname)
+{
+  /* The key is written when the configuration is rebuilt, see #wm_keymap_intents_resolve,
+   * the item may belong to any key configuration (a preset being loaded, an add-on). */
+  STRNCPY_UTF8(kmi->intent, idname);
+}
+
+void WM_keymap_item_intent_detach_if_changed(wmWindowManager *wm, wmKeyMapItem *kmi)
+{
+  if (kmi->intent[0] == '\0') {
+    return;
+  }
+  if (wm == nullptr || wm->runtime->userconf == nullptr) {
+    return;
+  }
+  const wmKeyIntent *ki = WM_keyconfig_intent_find(wm->runtime->userconf, kmi->intent);
+  if (ki && !wm_keymap_item_intent_event_matches(kmi, ki)) {
+    kmi->intent[0] = '\0';
+  }
+}
+
+int WM_keyintent_contexts_count(wmWindowManager *wm, const wmKeyIntent *ki)
+{
+  /* Find the configuration owning this intent, count the items referencing it. */
+  for (wmKeyConfig &kc : wm->runtime->keyconfigs) {
+    if (BLI_findindex(&kc.intents, ki) == -1) {
+      continue;
+    }
+    int count = 0;
+    for (wmKeyMap &km : kc.keymaps) {
+      for (wmKeyMapItem &kmi : km.items) {
+        if (STREQ(kmi.intent, ki->idname)) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+  return 0;
+}
+
+std::optional<std::string> WM_keyintent_to_string(const wmKeyIntent *ki, const bool compact)
+{
+  return WM_keymap_item_raw_to_string(ki->shift,
+                                      ki->ctrl,
+                                      ki->alt,
+                                      ki->oskey,
+                                      ki->hyper,
+                                      ki->keymodifier,
+                                      ki->val,
+                                      ki->type,
+                                      compact);
 }
 
 /** \} */
@@ -760,7 +1086,8 @@ static void wm_keymap_patch(wmKeyMap *km, wmKeyMap *diff_km)
 static wmKeyMap *wm_keymap_patch_update(ListBaseT<wmKeyMap> *lb,
                                         wmKeyMap *defaultmap,
                                         wmKeyMap *addonmap,
-                                        wmKeyMap *usermap)
+                                        wmKeyMap *usermap,
+                                        ListBaseT<wmKeyIntent> *intents)
 {
   eKeyMap_Flag expanded = eKeyMap_Flag{};
   Vector<short> expanded_item_ids;
@@ -814,6 +1141,9 @@ static wmKeyMap *wm_keymap_patch_update(ListBaseT<wmKeyMap> *lb,
     wm_keymap_addon_add(km, addonmap);
   }
 
+  /* Intents first, so the stored user diffs compare against the final keys. */
+  wm_keymap_intents_resolve(km, intents);
+
   /* Tag as being user edited. */
   if (usermap) {
     km->flag |= KEYMAP_USER_MODIFIED;
@@ -823,6 +1153,8 @@ static wmKeyMap *wm_keymap_patch_update(ListBaseT<wmKeyMap> *lb,
   /* Apply user changes of diff keymap. */
   if (usermap && (usermap->flag & KEYMAP_DIFF)) {
     wm_keymap_patch(km, usermap);
+    /* Items added or linked to an intent by the user. */
+    wm_keymap_intents_resolve(km, intents);
   }
 
   /* Rebuilding the keymap loses the expanded flag from items which aren't being edited,
@@ -848,15 +1180,19 @@ static wmKeyMap *wm_keymap_patch_update(ListBaseT<wmKeyMap> *lb,
 static void wm_keymap_diff_update(ListBaseT<wmKeyMap> *lb,
                                   wmKeyMap *defaultmap,
                                   wmKeyMap *addonmap,
-                                  wmKeyMap *km)
+                                  wmKeyMap *km,
+                                  ListBaseT<wmKeyIntent> *intents)
 {
-  /* Create temporary default + addon keymap for diff. */
+  /* Create temporary default + addon keymap for diff, with intents resolved on both sides
+   * so only real differences are stored (the preset itself is left untouched). */
   wmKeyMap *origmap = defaultmap;
 
+  defaultmap = wm_keymap_copy(defaultmap);
   if (addonmap) {
-    defaultmap = wm_keymap_copy(defaultmap);
     wm_keymap_addon_add(defaultmap, addonmap);
   }
+  wm_keymap_intents_resolve(defaultmap, intents);
+  wm_keymap_intents_resolve(km, intents);
 
   /* Remove previous diff keymap in list, we will replace it. */
   wmKeyMap *prevmap = WM_keymap_list_find(lb, km->idname, km->spaceid, km->regionid);
@@ -883,10 +1219,8 @@ static void wm_keymap_diff_update(ListBaseT<wmKeyMap> *lb,
   }
 
   /* Free temporary default map. */
-  if (addonmap) {
-    WM_keymap_clear(defaultmap);
-    MEM_delete(defaultmap);
-  }
+  WM_keymap_clear(defaultmap);
+  MEM_delete(defaultmap);
 }
 
 /** \} */
@@ -1821,6 +2155,9 @@ enum {
   WM_KEYMAP_UPDATE_OPERATORTYPE = (1 << 1),
 
   WM_KEYMAP_UPDATE_POSTPONE = (1 << 2),
+
+  /* The user configuration's intents were edited, store the changes in #UserDef. */
+  WM_KEYMAP_UPDATE_INTENTS = (1 << 3),
 };
 
 static char wm_keymap_update_flag = 0;
@@ -1846,6 +2183,32 @@ void WM_keyconfig_update_tag(wmKeyMap *keymap, wmKeyMapItem *kmi)
 void WM_keyconfig_update_operatortype_tag()
 {
   wm_keymap_update_flag |= WM_KEYMAP_UPDATE_OPERATORTYPE;
+}
+
+void WM_keyconfig_intent_update_tag(wmKeyConfig *keyconf)
+{
+  wm_keymap_update_flag |= WM_KEYMAP_UPDATE_RECONFIGURE;
+
+  /* Only edits to the final configuration are user changes worth storing. */
+  wmWindowManager *wm = G_MAIN->wm.first();
+  if (wm && keyconf && keyconf == wm->runtime->userconf) {
+    wm_keymap_update_flag |= WM_KEYMAP_UPDATE_INTENTS;
+  }
+}
+
+void WM_keyintent_update_tag(wmKeyIntent *ki)
+{
+  wmWindowManager *wm = G_MAIN->wm.first();
+  wmKeyConfig *keyconf = nullptr;
+  if (wm) {
+    for (wmKeyConfig &kc : wm->runtime->keyconfigs) {
+      if (BLI_findindex(&kc.intents, ki) != -1) {
+        keyconf = &kc;
+        break;
+      }
+    }
+  }
+  WM_keyconfig_intent_update_tag(keyconf);
 }
 
 /* NOTE(@ideasman42): regarding suppressing updates.
@@ -1980,6 +2343,18 @@ void WM_keyconfig_update_ex(wmWindowManager *wm, bool keep_properties)
       }
     }
 
+    /* Intents come first: key maps are compared with their final keys. */
+    ListBaseT<wmKeyIntent> intents_base = {nullptr, nullptr};
+    wm_keyintents_base_build(wm, kc_active, &intents_base);
+    if (wm_keymap_update_flag & WM_KEYMAP_UPDATE_INTENTS) {
+      wm_keyintents_diff_update(wm, &intents_base);
+      wm_keymap_update_flag &= ~WM_KEYMAP_UPDATE_INTENTS;
+    }
+    wm_keyintents_patch_update(wm, &intents_base);
+    BLI_freelistN(&intents_base);
+    ListBaseT<wmKeyIntent> *intents = &wm->runtime->userconf->intents;
+    wm_user_keymaps_intents_resolve(intents);
+
     /* Update `U.user_keymaps` with user key configuration changes. */
     for (wmKeyMap &km : wm->runtime->userconf->keymaps) {
       /* Only diff if the user keymap was modified. */
@@ -1991,7 +2366,7 @@ void WM_keyconfig_update_ex(wmWindowManager *wm, bool keep_properties)
 
         /* Diff. */
         if (defaultmap) {
-          wm_keymap_diff_update(&U.user_keymaps, defaultmap, addonmap, &km);
+          wm_keymap_diff_update(&U.user_keymaps, defaultmap, addonmap, &km, intents);
         }
       }
     }
@@ -2010,7 +2385,7 @@ void WM_keyconfig_update_ex(wmWindowManager *wm, bool keep_properties)
 
       /* Add. */
       wmKeyMap *kmn = wm_keymap_patch_update(
-          &wm->runtime->userconf->keymaps, defaultmap, addonmap, usermap);
+          &wm->runtime->userconf->keymaps, defaultmap, addonmap, usermap, intents);
 
       if (kmn) {
         kmn->modal_items = km.modal_items;
@@ -2148,6 +2523,8 @@ void WM_keymap_item_restore_to_default(wmWindowManager *wm, wmKeyMap *keymap, wm
     kmi->maptype = orig->maptype;
     kmi->flag = (kmi->flag & ~(KMI_REPEAT_IGNORE | KMI_INACTIVE)) |
                 (orig->flag & (KMI_REPEAT_IGNORE | KMI_INACTIVE));
+    /* The final key comes from the intent, see #WM_keyconfig_update. */
+    WM_keymap_item_intent_set(kmi, orig->intent);
 
     WM_keyconfig_update_tag(keymap, kmi);
   }
@@ -2157,6 +2534,23 @@ void WM_keymap_item_restore_to_default(wmWindowManager *wm, wmKeyMap *keymap, wm
     WM_keymap_clear(defaultmap);
     MEM_delete(defaultmap);
   }
+}
+
+void WM_keyintent_restore_to_default(wmWindowManager *wm, wmKeyIntent *ki)
+{
+  if (BLI_findindex(&wm->runtime->userconf->intents, ki) == -1) {
+    return;
+  }
+
+  ListBaseT<wmKeyIntent> base = {nullptr, nullptr};
+  wm_keyintents_base_build(wm, WM_keyconfig_active(wm), &base);
+  const wmKeyIntent *ki_base = WM_keyintent_list_find(&base, ki->idname);
+  if (ki_base) {
+    wm_keyintent_event_copy(ki, ki_base);
+    ki->flag &= ~KEYINTENT_USER_MODIFIED;
+    WM_keyconfig_intent_update_tag(wm->runtime->userconf);
+  }
+  BLI_freelistN(&base);
 }
 
 void WM_keymap_restore_to_default(wmKeyMap *keymap, wmWindowManager *wm)

@@ -7059,6 +7059,11 @@ static void rna_def_userdef_keymap(BlenderRNA *brna)
       prop, nullptr, "space_data.flag", USER_SPACEDATA_INPUT_HIDE_UI_KEYCONFIG);
   RNA_def_property_ui_text(prop, "Show UI Key-Config", "");
 
+  prop = RNA_def_property(srna, "show_ui_intents", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(
+      prop, nullptr, "space_data.flag", USER_SPACEDATA_INPUT_HIDE_UI_INTENTS);
+  RNA_def_property_ui_text(prop, "Show Intents", "Show the list of key intents");
+
   prop = RNA_def_property(srna, "active_keyconfig", PROP_STRING, PROP_DIRPATH);
   RNA_def_property_string_sdna(prop, nullptr, "keyconfigstr");
   RNA_def_property_ui_text(prop, "Key Config", "The name of the active key configuration");

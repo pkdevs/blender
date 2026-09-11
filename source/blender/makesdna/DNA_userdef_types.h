@@ -826,6 +826,8 @@ enum eUserPref_SpaceData_Flag : char {
   /** Hide/expand key-map preferences. */
   USER_SPACEDATA_INPUT_HIDE_UI_KEYCONFIG = (1 << 0),
   USER_SPACEDATA_ADDONS_SHOW_ONLY_ENABLED = (1 << 1),
+  /** Hide/expand the key map intents list. */
+  USER_SPACEDATA_INPUT_HIDE_UI_INTENTS = (1 << 2),
 };
 ENUM_OPERATORS(eUserPref_SpaceData_Flag)
 
@@ -1076,6 +1078,8 @@ struct UserDef {
   ListBaseT<uiFont> uifonts = {nullptr, nullptr};
   ListBaseT<uiStyle> uistyles = {nullptr, nullptr};
   ListBaseT<struct wmKeyMap> user_keymaps = {nullptr, nullptr};
+  /** User changed #wmKeyIntent's (keys only), applied on top of the active key configuration. */
+  ListBaseT<struct wmKeyIntent> user_keyintents = {nullptr, nullptr};
   ListBaseT<struct wmKeyConfigPref> user_keyconfig_prefs = {nullptr, nullptr};
   ListBaseT<bAddon> addons = {nullptr, nullptr};
   ListBaseT<bPathCompare> autoexec_paths = {nullptr, nullptr};

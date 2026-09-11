@@ -770,6 +770,7 @@ static bool rna_is_userdef(PointerRNA *ptr, PropertyRNA *prop)
   if (ELEM(base,
            RNA_AddonPreferences,
            RNA_KeyConfigPreferences,
+           RNA_KeyIntent,
            RNA_KeyMapItem,
            RNA_UserAssetLibrary))
   {

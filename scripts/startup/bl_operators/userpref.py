@@ -403,6 +403,69 @@ class PREFERENCES_OT_keyitem_restore(Operator):
         return {'FINISHED'}
 
 
+class PREFERENCES_OT_keyitem_intent_detach(Operator):
+    """Detach the key map item from its intent, so it keeps a key of its own"""
+    bl_idname = "preferences.keyitem_intent_detach"
+    bl_label = "Detach from Intent"
+
+    item_id: IntProperty(
+        name="Item Identifier",
+        description="Identifier of the item to detach",
+    )
+
+    @classmethod
+    def poll(cls, context):
+        keymap = getattr(context, "keymap", None)
+        return keymap
+
+    def invoke(self, context, event):
+        km = context.keymap
+        kmi = km.keymap_items.from_id(self.item_id)
+        if kmi is None or not kmi.intent:
+            return {'CANCELLED'}
+        intent = context.window_manager.keyconfigs.user.intents.get(kmi.intent)
+        label = intent.label if intent else kmi.intent
+        return context.window_manager.invoke_confirm(
+            self,
+            event,
+            title=self.bl_label,
+            message=rpt_("Detach \"{:s}\" from intent \"{:s}\"? "
+                         "The item keeps its current key but no longer follows the intent.").format(
+                kmi.name or kmi.idname, label),
+            confirm_text="Detach",
+            translate=False,
+        )
+
+    def execute(self, context):
+        km = context.keymap
+        kmi = km.keymap_items.from_id(self.item_id)
+        if kmi is None:
+            return {'CANCELLED'}
+        kmi.intent = ""
+        context.preferences.is_dirty = True
+        return {'FINISHED'}
+
+
+class PREFERENCES_OT_keyintent_restore(Operator):
+    """Restore the key of the intent to the key configuration preset"""
+    bl_idname = "preferences.keyintent_restore"
+    bl_label = "Restore Intent"
+
+    intent: StringProperty(
+        name="Intent",
+        description="Identifier of the intent to restore",
+    )
+
+    def execute(self, context):
+        intent = context.window_manager.keyconfigs.user.intents.get(self.intent)
+        if intent is None:
+            return {'CANCELLED'}
+        if intent.is_user_modified:
+            intent.restore_to_default()
+            context.preferences.is_dirty = True
+        return {'FINISHED'}
+
+
 class PREFERENCES_OT_keyitem_add(Operator):
     """Add key map item"""
     bl_idname = "preferences.keyitem_add"
@@ -1338,8 +1401,10 @@ classes = (
     PREFERENCES_OT_keyconfig_remove,
     PREFERENCES_OT_keyconfig_test,
     PREFERENCES_OT_keyitem_add,
+    PREFERENCES_OT_keyitem_intent_detach,
     PREFERENCES_OT_keyitem_remove,
     PREFERENCES_OT_keyitem_restore,
+    PREFERENCES_OT_keyintent_restore,
     PREFERENCES_OT_keymap_restore,
     PREFERENCES_OT_theme_install,
     PREFERENCES_OT_studiolight_install,
