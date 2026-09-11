@@ -9696,6 +9696,7 @@ void GHOST_SystemWayland::getClipboardImage(std::function<void(GHOST_ImageData)>
         GHOST_ImageData image_data{
             .data = GHOST_ImageData::MemFile{.size = data_len, .buffer = (const uint8_t *)data}};
         load_fn(image_data);
+        free(data);
       }
     }
     else if (data_offer->types.contains(ghost_wl_mime_text_uri_list)) {
