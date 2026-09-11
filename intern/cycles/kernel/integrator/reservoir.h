@@ -555,22 +555,11 @@ ccl_debug_printf( // Accepted candidates
  * SpatialReservoir::sd is. Written every sample, ping-ponged like the
  * reservoir buffer. */
 struct ReprojectionSurface {
-  float3 N;     // Shading normal
-  float depth;  // Position or linear depth
+  float3 N;       // Shading normal
+  float depth;    // Position or linear depth
+  float2 motion;  // raster-space displacement toward the previous frame
   bool is_valid;
 };
-
-ccl_device_inline void reprojection_surface_pack(const ccl_private ShaderData *sd,
-                                                 const float depth,
-                                                 ccl_global float *buffer)
-{
-  int i = 0;
-  buffer[i++] = sd->N.x;
-  buffer[i++] = sd->N.y;
-  buffer[i++] = sd->N.z;
-  buffer[i++] = depth;
-  buffer[i] = 1.0f; /* is_valid */
-}
 
 ccl_device_inline ReprojectionSurface reprojection_surface_unpack(
     const ccl_global float *buffer)
@@ -581,6 +570,8 @@ ccl_device_inline ReprojectionSurface reprojection_surface_unpack(
   s.N.y = buffer[i++];
   s.N.z = buffer[i++];
   s.depth = buffer[i++];
+  s.motion.x = buffer[i++];
+  s.motion.y = buffer[i++];
   s.is_valid = buffer[i] > 0.0f;
   return s;
 }

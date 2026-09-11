@@ -407,7 +407,7 @@ void Scene::device_update(Device *device_, Progress &progress)
 
   device->optimize_for_scene(this);
 
-  if (need_motion() == MOTION_PASS_INTERACTIVE) {
+  if (need_motion() == MOTION_PASS_INTERACTIVE) { // !!!(Tri): Opt into MOTION_PASS_INTERACTIVE for temporal
     /* Swap current camera/object/vertex positions to previous positions for next frame. */
     camera->update_interactive_motion();
     object_manager->update_interactive_motion(this);
@@ -431,14 +431,28 @@ Scene::MotionType Scene::need_motion() const
   if (integrator->get_motion_blur()) {
     return MOTION_BLUR;
   }
+
   const bool denoiser_motion = integrator->get_use_denoise() &&
                                (integrator->get_denoiser_passes() &
-                                (DENOISER_PASS_MOTION | DENOISER_PASS_BACKWARD_MOTION)) != 0;
-  if (denoiser_motion || (Pass::contains(passes, PASS_MOTION) ||
-                          Pass::contains(passes, PASS_DENOISING_BACKWARD_MOTION)))
+                               (DENOISER_PASS_MOTION | DENOISER_PASS_BACKWARD_MOTION)) != 0;
+
+  // const bool restir_temporal = (integrator->get_use_restir() & (1 << 4)) != 0;
+  const bool restir_temporal = integrator->get_use_temporal_frames();
+
+
+ccl_debug_printf(
+    "Scene::need_motion(): restir=%d background=%d result candidate\n",
+    int(restir_temporal),
+    int(params.background));
+
+  if (denoiser_motion ||
+      restir_temporal ||
+      Pass::contains(passes, PASS_MOTION) ||
+      Pass::contains(passes, PASS_DENOISING_BACKWARD_MOTION))
   {
     return params.background ? MOTION_PASS : MOTION_PASS_INTERACTIVE;
   }
+
   return MOTION_NONE;
 }
 
@@ -546,7 +560,9 @@ void Scene::update_kernel_features()
    * so could be done selective magic for the viewport as well. */
   uint kernel_features = shader_manager->get_kernel_features(this);
 
-  const bool use_motion = need_motion() == Scene::MotionType::MOTION_BLUR;
+  // const bool use_motion = need_motion() == Scene::MotionType::MOTION_BLUR;
+  const bool use_motion = need_motion() != Scene::MotionType::MOTION_NONE; // TODO(Tri): Wrong! Revert
+
   kernel_features |= KERNEL_FEATURE_PATH_TRACING;
 
   /* Track the max prim count in case the backend needs to rebuild BVHs or

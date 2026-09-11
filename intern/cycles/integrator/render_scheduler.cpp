@@ -291,7 +291,7 @@ bool RenderScheduler::done() const
   return get_num_rendered_samples() >= num_samples_;
 }
 
-RenderWork RenderScheduler::get_render_work()
+RenderWork RenderScheduler::get_render_work() // !!!: Frame-to-frame persistence: Cycles might not have a generic “copy curr render buffer to prev-frame buffer” mechanism.
 {
   check_time_limit_reached();
 
@@ -350,7 +350,9 @@ RenderWork RenderScheduler::get_render_work()
   render_work.path_trace.num_samples = get_num_samples_to_path_trace();
   render_work.path_trace.sample_offset = get_sample_offset();
 
-  render_work.init_render_buffers = (render_work.path_trace.start_sample == get_sample_offset());
+// TODO(Tri): Modify for temporal-history frame advancement.
+// !!!: Wrong trying to teach RenderScheduler to detect frame boundaries..
+  render_work.init_render_buffers = (render_work.path_trace.start_sample == get_sample_offset()); // !!!: Frame-to-frame persistence
 
   /* NOTE: Rebalance scheduler requires current number of samples to not be advanced forward. */
   render_work.rebalance = work_need_rebalance();

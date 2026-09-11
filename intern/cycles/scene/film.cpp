@@ -721,7 +721,12 @@ void Film::update_passes(Scene *scene)
   /* Flush scene updates. */
   const bool have_uv_pass = Pass::contains(scene->passes, PASS_UV);
   const bool have_motion_pass = Pass::contains(scene->passes, PASS_MOTION) ||
-                                Pass::contains(scene->passes, PASS_DENOISING_BACKWARD_MOTION);
+                                Pass::contains(scene->passes, PASS_DENOISING_BACKWARD_MOTION) ||
+                                // (integrator->get_use_restir() & (1 << 4)); // New
+                                integrator->get_use_temporal_frames();
+
+ccl_debug_printf("update_passes(): have_motion_pass=%d\n", have_motion_pass);
+
   const bool have_ao_pass = Pass::contains(scene->passes, PASS_AO);
 
   if (have_uv_pass != prev_have_uv_pass) {
@@ -732,6 +737,7 @@ void Film::update_passes(Scene *scene)
   }
   if (have_motion_pass != prev_have_motion_pass) {
     scene->geometry_manager->tag_update(scene, GeometryManager::MOTION_PASS_NEEDED);
+    // scene->object_manager->tag_update(scene, ObjectManager::MOTION_BLUR_MODIFIED); // !!!(Tri): Remove?
   }
   if (have_ao_pass != prev_have_ao_pass) {
     scene->integrator->tag_update(scene, Integrator::AO_PASS_MODIFIED);

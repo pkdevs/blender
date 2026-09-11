@@ -282,17 +282,27 @@ float compute_luminance(KernelGlobals kg, const ccl_private BsdfEval &radiance)
   return dot(spectrum_to_rgb(radiance.sum), float4_to_float3(kernel_data.film.rgb_to_y));
 }
 
+// TODO(Tri): Remove
 /* current->sd is already reconstructed via shader_data_setup_from_restir()
  * by the time this runs, so we compute the motion vector directly instead
  * of reading PASS_MOTION.
  *
  * .xy is (previous raster pos, current raster pos). */
-ccl_device_inline float2 restir_temporal_motion_vector(KernelGlobals kg,
-                                                        const ccl_private ShaderData *sd)
-{
-  const float4 motion = primitive_motion_vector(kg, sd);
-  return make_float2(motion.x, motion.y);
-}
+// ccl_device_inline float2 restir_temporal_motion_vector(KernelGlobals kg,
+//                                                        const ccl_private ShaderData *sd)
+// {
+// ccl_debug_printf(
+//     "restir_temporal_motion_vector sd: object=%d prim=%d type=%d shader=%d P=(%f, %f, %f)\n",
+//     sd->object, sd->prim, sd->type, sd->shader,
+//     (double)sd->P.x, (double)sd->P.y, (double)sd->P.z);
+
+//   const float4 motion = primitive_motion_vector(kg, sd);
+
+// ccl_debug_printf("restir_temporal_motion_vector(), motion=(%f, %f, %f, %f)\n",
+//                   (double)motion.x, (double)motion.y, (double)motion.z, (double)motion.w);
+
+//   return make_float2(motion.x, motion.y);
+// }
 
 /* Unpack the canonical (this-pixel, non-neighbor) DI reservoir. Shared by
  * streaming_di_samples() and integrator_restir_temporal() — both need the
@@ -544,51 +554,76 @@ ccl_device_inline bool streaming_temporal_sample(KernelGlobals kg,
 {
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
 
+ccl_debug_printf("TEMPORAL_FRAME, before restir_temporal_motion_vector()\n");
+
   /* --- back-project --- */
   // TODO: implement accessor
   // const float2 motion = film_read_pass_motion_vector(kg, render_pixel_index, render_buffer); // !!!: source TBD, see note below
   /* --- back-project using this sample's own motion vector --- */
-  const float2 motion = restir_temporal_motion_vector(kg, &current->sd);
-
-  // const int x = tile_pixel_x_from(kg, state); // whatever accessor we have in integrator_restir()
-  // const int y = tile_pixel_y_from(kg, state);
-
-  const uint3 prev_pixel = reprojection->get_previous_pixel(x, y, motion);
+  // const float2 motion = restir_temporal_motion_vector(kg, &current->sd); // !!!: Crash site
 
 
-ccl_debug_printf(
-    "TEMPORAL_FRAME pixel=(%d,%d) motion=(%f,%f) prev=(%d,%d,%u)\n",
-    x, y, (double)motion.x, (double)motion.y,
-    prev_pixel.x, prev_pixel.y, prev_pixel.z);
+// ccl_debug_printf(
+//     "TEMPORAL_FRAME pixel=(%d,%d) motion=(%f,%f) prev=(%d,%d,%u)\n",
+//     x, y, (double)motion.x, (double)motion.y,
+//     prev_pixel.x, prev_pixel.y, prev_pixel.z);
 
-  if (prev_pixel.z == (uint)-1) {
-  ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=OFFSCREEN\n", x, y);
-    return false; /* Off-screen last frame: no history to reuse. */
+//   if (prev_pixel.z == (uint)-1) {
+//   ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=OFFSCREEN\n", x, y);
+//     return false; /* Off-screen last frame: no history to reuse. */
+//   }
+
+
+  /* --- back-project using THIS frame's pre-written motion vector, not a
+   *     live primitive_motion_vector() call (see film_write_data_passes()) --- */
+  ccl_global const float *reproj_buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
+                                          kernel_data.film.pass_restir_reprojection_surface;
+  const ReprojectionSurface curr_surf = reprojection_surface_unpack(reproj_buffer);
+
+
+  if (!curr_surf.is_valid) {
+    /* use_temporal_frames was just enabled mid-session, or this is the very
+     * first frame rendered — no reprojection ground truth exists yet. */
+    ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=NO_CURRENT_SURFACE\n", x, y);
+    return false;
   }
 
-  // /* Reprojection validity, geometry-based.
-  //  * Needs the lightweight ReprojectionSurface G-buffer, since motion vectors
-  //  * alone don't catch disocclusion/silhouette reveals. */
-  // ccl_global const float *reproj_buffer = pixel_render_buffer(kg, render_pixel_index, render_buffer) +
-  //                                         kernel_data.film.pass_restir_reprojection_surface;
+  const uint3 prev_pixel = reprojection->get_previous_pixel(x, y, curr_surf.motion);
+  if (prev_pixel.z == (uint)-1) {
+    ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=OFFSCREEN\n", x, y);
+    return false;
+  }
 
-  // const float depth = len(current->sd.P - camera_ray_origin(kg, state)); // !!!: adapt to the camera-distance helper
 
-  ReprojectionSurface curr_surf;
-  curr_surf.N = current->sd.N;
-  // curr_surf.depth = depth;
-  curr_surf.depth = camera_z_depth(kg, current->sd.P); // Existing depth pass
-  curr_surf.is_valid = true;
-
+  /* --- reprojection validity: current frame's surface (just unpacked above)
+   *     vs. previous frame's surface at the reprojected pixel --- */
   ccl_global const float *prev_reproj_buffer = pixel_render_buffer(kg, prev_pixel.z, render_buffer) +
                                                kernel_data.film.pass_restir_previous_reprojection_surface;
   const ReprojectionSurface prev_surf = reprojection_surface_unpack(prev_reproj_buffer);
 
+  if (!prev_surf.is_valid) {
+    ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=NO_PREV_SURFACE\n", x, y);
+    return false;
+  }
+  
 
-const float normal_dot = dot(curr_surf.N, prev_surf.N); // TODO(Tri): Remove
-const float depth_diff = fabsf(curr_surf.depth - prev_surf.depth);
-const float depth_limit = kernel_data.integrator.restir_temporal_depth_threshold *
-    fmaxf(curr_surf.depth, 1e-4f);
+
+  const float normal_dot = dot(curr_surf.N, prev_surf.N);
+  if (normal_dot < kernel_data.integrator.restir_temporal_normal_threshold) {
+    ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=NORMAL_MISMATCH dot=%f\n",
+                     x, y, (double)normal_dot);
+    return false;
+  }
+
+  const float depth_diff = fabsf(curr_surf.depth - prev_surf.depth);
+  const float depth_limit = kernel_data.integrator.restir_temporal_depth_threshold *
+                            fmaxf(curr_surf.depth, 1e-4f);
+  if (depth_diff > depth_limit) {
+    ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=DEPTH_MISMATCH diff=%f limit=%f\n",
+                     x, y, (double)depth_diff, (double)depth_limit);
+    return false;
+  }
+
 
 ccl_debug_printf(
     "TEMPORAL_FRAME SURFACE pixel=(%d,%d) normal_dot=%f depth_curr=%f depth_prev=%f depth_diff=%f depth_limit=%f valid=%d\n",
@@ -607,10 +642,6 @@ ccl_debug_printf(
   //   return false; /* Reprojection miss: disocclusion, silhouette edge, etc. */
   // }
 
-  if (!prev_surf.is_valid) {
-    ccl_debug_printf("TEMPORAL_FRAME REJECT pixel=(%d,%d) reason=NO_PREV_SURFACE\n", x, y);
-    return false;
-  }
 
   if (normal_dot < kernel_data.integrator.restir_temporal_normal_threshold) {
     ccl_debug_printf(
@@ -726,7 +757,9 @@ ccl_device bool integrator_restir_temporal(KernelGlobals kg,
 //   reprojection_surface_pack(&current.sd, depth, reproj_buff); // error: use of undeclared identifier 'depth'
 // // <<<
 
-  shader_data_setup_from_restir(kg, state, &current, render_buffer);
+  shader_data_setup_from_restir(kg, state, &current, render_buffer); // !!!: SD is initialized here
+
+ccl_debug_printf("\n-- integrator_restir_temporal(): sd.object=%d --\n\n\n", current.sd.object); // Then compare with a kernel where primitive_motion_vector() works.
 
   RNGState rng_state;
   path_state_rng_load(state, &rng_state);

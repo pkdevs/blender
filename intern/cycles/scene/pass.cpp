@@ -410,10 +410,10 @@ PassInfo Pass::get_info(const PassType type,
       pass_info.num_components = 9;
       break;
     case PASS_RESTIR_REPROJECTION_SURFACE:
-      pass_info.num_components = 5;
+      pass_info.num_components = 7;
       break;
     case PASS_RESTIR_PREVIOUS_REPROJECTION_SURFACE:
-      pass_info.num_components = 5; // !!!(Tri): Probably will increase
+      pass_info.num_components = 7;
       break;
     case PASS_RESTIR_PT_PREVIOUS_RESERVOIR:
       pass_info.num_components = 6;

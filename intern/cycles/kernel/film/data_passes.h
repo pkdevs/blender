@@ -24,6 +24,50 @@ ccl_device_inline size_t film_write_cryptomatte_pass(ccl_global float *ccl_restr
   return depth * 4;
 }
 
+/* primitive_motion_vector() dereferences object/geometry motion-transform
+ * arrays that Cycles only uploads when KERNEL_FEATURE_OBJECT_MOTION is
+ * requested. Calling it when the feature isn't present reads an unbound
+ * array descriptor (width=0, data=nullptr) and aborts. Until temporal-frame
+ * reuse requests this feature itself (see below), fail safe: no motion
+ * data means no reprojection this pixel, not a crash. */
+ccl_device_inline bool restir_has_motion_data(KernelGlobals kg) // !!!: Not sufficient
+{
+  return (kernel_data.kernel_features & KERNEL_FEATURE_OBJECT_MOTION) != 0;
+}
+// TODO(Tri): Add a film_read_motion_vector() or sth... helper for temporal reprojection... Done
+
+/* Write ReSTIR temporal-reprojection ground truth for this pixel: the raster
+ * motion vector toward the previous frame, plus enough surface data (N, depth)
+ * to validate that reprojection next frame. */
+ccl_device_inline void film_write_restir_reprojection_surface_pass(
+    KernelGlobals kg,
+    const ccl_private ShaderData *sd,
+    ccl_global float *ccl_restrict buffer)
+{
+  // const float4 motion = primitive_motion_vector(kg, sd); // !!!: Why does it crash in full pipeline path?
+  float2 motion = zero_float2();
+  if (restir_has_motion_data(kg)) {
+    const float4 mv = primitive_motion_vector(kg, sd);
+    motion = make_float2(mv.x, mv.y);
+  }
+
+  // float2 motion = zero_float2();
+  // const float4 mv = primitive_motion_vector(kg, sd);
+  // motion = make_float2(mv.x, mv.y);
+  
+  const float depth = camera_z_depth(kg, sd->P);
+
+  ccl_global float *ptr = buffer + kernel_data.film.pass_restir_reprojection_surface;
+
+  film_overwrite_pass_float(ptr++, sd->N.x);
+  film_overwrite_pass_float(ptr++, sd->N.y);
+  film_overwrite_pass_float(ptr++, sd->N.z);
+  film_overwrite_pass_float(ptr++, depth);
+  film_overwrite_pass_float(ptr++, motion.x);
+  film_overwrite_pass_float(ptr++, motion.y);
+  film_overwrite_pass_float(ptr,   1.0f); /* is_valid */
+}
+
 ccl_device_inline void film_write_data_passes(KernelGlobals kg,
                                               IntegratorState state,
                                               const ccl_private ShaderData *sd,
@@ -68,6 +112,9 @@ ccl_device_inline void film_write_data_passes(KernelGlobals kg,
         const float3 position = sd->P;
         film_overwrite_pass_float3(buffer + kernel_data.film.pass_position, position);
       }
+      if (kernel_data.integrator.use_temporal_frames) {
+        film_write_restir_reprojection_surface_pass(kg, sd, buffer);
+      }
     }
 
     // !!!: Store first-hit receiver data for later ReSTIR surface reconstruction. 
@@ -100,7 +147,8 @@ ccl_device_inline void film_write_data_passes(KernelGlobals kg,
         film_write_pass_float3(buffer + kernel_data.film.pass_uv, uv);
       }
       if (flag & PASSMASK(MOTION)) {
-        const float4 speed = primitive_motion_vector(kg, sd);
+// !!!: For temporal, we need the motion vector corresponding to the current frame's pixel and then use the prev-frame render-buffer/history slot.
+        const float4 speed = primitive_motion_vector(kg, sd); // !!!: written as part of current render sample
         film_write_pass_float4(buffer + kernel_data.film.pass_motion, speed);
         film_write_pass_float(buffer + kernel_data.film.pass_motion_weight, 1.0f);
       }
