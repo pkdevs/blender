@@ -333,19 +333,16 @@ def main():
 
     # Increase threshold for motion blur, see #78777.
     #
-    # underwater_caustics.blend gives quite different results on Linux and Intel macOS compared to
-    # Windows and Arm macOS.
+    # Shadow caustics (underwater_caustics.blend and the other files in the caustics directory)
+    # give quite different results on Linux and Intel macOS compared to Windows and Arm macOS.
     #
     # OSL tests:
     # Blackbody is slightly different between SVM and OSL.
     # Microfacet hair renders slightly differently, and fails on Windows and Linux with OSL
     #
     # both_displacement.blend has slight differences between Linux and other platforms.
-    #
-    # caustics tests use the same manifold walk as underwater_caustics.blend and
-    # get the same tolerance.
 
-    if (test_dir_name in {'motion_blur', 'integrator', 'caustics', "displacement"}) or \
+    if (test_dir_name in {'motion_blur', 'caustics', "displacement"}) or \
        ((args.osl == 'all') and (test_dir_name in {'shader', 'hair'})):
         report.set_fail_threshold(0.032)
 
