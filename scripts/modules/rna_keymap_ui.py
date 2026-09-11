@@ -583,6 +583,111 @@ def intent_served_items(kc, intent):
     ]
 
 
+def _intents_served_items_all(kc):
+    """The (key map, item) pairs bound through each intent, one pass over the key maps."""
+    served = {}
+    for km in kc.keymaps:
+        for kmi in km.keymap_items:
+            if intent := kmi.intent:
+                served.setdefault(intent, []).append((km, kmi))
+    return served
+
+
+# Icons for the context of a key map: the editor (space type) or, for the mode key maps
+# which have no space type, the mode. Anything else falls back to the editor it is listed under.
+_KEYMAP_ICONS = {
+    "Window": 'WINDOW',
+    "Screen": 'WORKSPACE',
+    "Screen Editing": 'WORKSPACE',
+    "Region Context Menu": 'MENU_PANEL',
+    "View2D": 'VIEW_PAN',
+    "View2D Buttons List": 'VIEW_PAN',
+    "User Interface": 'WINDOW',
+    "Toolbar Popup": 'TOOL_SETTINGS',
+    "Object Mode": 'OBJECT_DATAMODE',
+    "Mesh": 'EDITMODE_HLT',
+    "Curve": 'CURVE_DATA',
+    "Curves": 'CURVES_DATA',
+    "Armature": 'ARMATURE_DATA',
+    "Metaball": 'META_DATA',
+    "Lattice": 'LATTICE_DATA',
+    "Font": 'FONT_DATA',
+    "Point Cloud": 'POINTCLOUD_DATA',
+    "Pose": 'POSE_HLT',
+    "Vertex Paint": 'VPAINT_HLT',
+    "Weight Paint": 'WPAINT_HLT',
+    "Image Paint": 'TPAINT_HLT',
+    "Sculpt": 'SCULPTMODE_HLT',
+    "Sculpt Curves": 'SCULPTMODE_HLT',
+    "Particle": 'PARTICLEMODE',
+    "Paint Curve": 'CURVE_BEZCURVE',
+    "Paint Vertex Selection (Weight, Vertex)": 'VERTEXSEL',
+    "Paint Face Mask (Weight, Vertex, Texture)": 'FACESEL',
+    "Mask Editing": 'MOD_MASK',
+    "Markers": 'MARKER_HLT',
+    "Animation": 'ANIM',
+    "Animation Channels": 'ANIM_DATA',
+    "Frames": 'TIME',
+}
+_KEYMAP_ICONS_PREFIX = (
+    ("Grease Pencil", 'OUTLINER_DATA_GREASEPENCIL'),
+)
+_keymap_icon_cache = None
+
+
+def _keymap_order(km):
+    """Position of the key map in the key map hierarchy, for a stable display order."""
+    _keymap_icon(km)
+    return _keymap_icon_cache[4].get(km.name, len(_keymap_icon_cache[4]))
+
+
+def _keymap_icon(km):
+    global _keymap_icon_cache
+    if _keymap_icon_cache is None:
+        icons_all = {item.identifier for item in bpy.types.UILayout.bl_rna.functions["label"].parameters["icon"].enum_items}
+        space_items = bpy.types.KeyMap.bl_rna.properties["space_type"].enum_items
+        space_icons = {item.identifier: item.icon for item in space_items}
+
+        # Editor of every key map in the hierarchy, from the nearest ancestor with a space type,
+        # and the position of the key map in the hierarchy (used to order the contexts).
+        from bl_keymap_utils import keymap_hierarchy
+        fallback = {}
+        order = {}
+
+        def walk(entries, space_parent):
+            for name, space, _region, children in entries:
+                space_here = space if space != 'EMPTY' else space_parent
+                fallback.setdefault(name, space_here)
+                order.setdefault(name, len(order))
+                walk(children, space_here)
+        walk(keymap_hierarchy.generate(), 'EMPTY')
+
+        cache = {}
+        for name, icon in _KEYMAP_ICONS.items():
+            if icon in icons_all:
+                cache[name] = icon
+        _keymap_icon_cache = (cache, icons_all, space_icons, fallback, order)
+
+    cache, icons_all, space_icons, fallback, _order = _keymap_icon_cache
+    if (icon := cache.get(km.name)) is not None:
+        return icon
+    icon = 'DOT'
+    space = km.space_type
+    if space == 'EMPTY':
+        for prefix, prefix_icon in _KEYMAP_ICONS_PREFIX:
+            if km.name.startswith(prefix):
+                icon = prefix_icon
+                break
+        else:
+            space = fallback.get(km.name, 'EMPTY')
+    if icon == 'DOT' and space != 'EMPTY':
+        icon = space_icons.get(space, 'DOT')
+    if icon not in icons_all:
+        icon = 'DOT'
+    cache[km.name] = icon
+    return icon
+
+
 def intent_conflicts(kc, intent, served=None):
     """
     Items in the key maps served by the intent which use its key without being bound through it,
@@ -600,7 +705,7 @@ def intent_conflicts(kc, intent, served=None):
     return conflicts
 
 
-def _draw_intent(kc, intent, layout):
+def _draw_intent(kc, intent, layout, served):
     col = layout.column(align=True)
     if intent.show_expanded:
         box = col.box()
@@ -621,7 +726,7 @@ def _draw_intent(kc, intent, layout):
     else:
         sub.prop(intent, "type", text="")
 
-    contexts = intent.contexts
+    contexts = len(served)
     sub = row.row()
     sub.alignment = 'RIGHT'
     sub.label(text=iface_("{:d} contexts").format(contexts), translate=False)
@@ -637,7 +742,6 @@ def _draw_intent(kc, intent, layout):
     if not (intent.show_expanded or intent.is_user_modified):
         return
 
-    served = intent_served_items(kc, intent)
     conflicts = intent_conflicts(kc, intent, served)
     if conflicts:
         # The key is already taken in some of the contexts served by the intent.
@@ -695,14 +799,14 @@ def _draw_intent(kc, intent, layout):
             subrow.prop(intent, "hyper_ui", text="Hyper", toggle=True)
         subrow.prop(intent, "key_modifier", text="", event=True)
 
-    # The contexts: key map & the operator it runs there.
+    # The contexts: key map & the operator it runs there, in the order of the key map hierarchy.
     if served:
         col = box.column(align=True)
         col.label(text="Contexts")
-        for km, kmi in served:
+        for km, kmi in sorted(served, key=lambda pair: _keymap_order(pair[0])):
             row = col.row()
             row.active = kmi.active
-            row.label(text=iface_(km.name, i18n_contexts.id_windowmanager), translate=False)
+            row.label(text=iface_(km.name, i18n_contexts.id_windowmanager), icon=_keymap_icon(km), translate=False)
             row.label(text=kmi.name or kmi.idname, translate=False)
     else:
         box.label(text="No key map items are bound through this intent")
@@ -732,6 +836,8 @@ def draw_intents(context, layout, kc):
     col = box.column()
     col.label(text="A shortcut with a meaning, shared by the key maps bound through it")
 
+    served_all = _intents_served_items_all(kc)
+
     # Group by category, in the order of the key configuration's table.
     categories = {}
     for intent in kc.intents:
@@ -753,14 +859,14 @@ def draw_intents(context, layout, kc):
         if expanded:
             sub = col.column()
             for intent in intents:
-                _draw_intent(kc, intent, sub)
+                _draw_intent(kc, intent, sub, served_all.get(intent.name, ()))
             col.separator()
 
     if uncategorized := categories.get(""):
         if len(categories) > 1:
             col.label(text=iface_("Other ({:d})").format(len(uncategorized)), translate=False)
         for intent in uncategorized:
-            _draw_intent(kc, intent, col)
+            _draw_intent(kc, intent, col, served_all.get(intent.name, ()))
 
 
 def draw_keymaps(context, layout):
