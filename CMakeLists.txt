@@ -311,6 +311,8 @@ option(WITH_MANIFOLD "Enable features depending on Manifold (Fast Robust Boolean
 
 option(WITH_OPENIMAGEDENOISE "Enable the OpenImageDenoise compositing node" ON)
 
+option(WITH_DLSS "Enable NVIDIA DLSS Ray Reconstruction support" OFF)
+
 option(WITH_OPENSUBDIV "Enable OpenSubdiv for surface subdivision" ON)
 
 option(WITH_POTRACE "Enable features relying on Potrace" ON)
@@ -1373,8 +1375,10 @@ if(UNIX AND NOT (APPLE OR HAIKU))
   set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_WAYLAND OFF)
   set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_X11 OFF)
   # Only the WAYLAND back-end currently reads desktop settings over DBUS.
-  set_and_warn_dependency(WITH_GHOST_WAYLAND WITH_GHOST_DBUS OFF)
-  set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_DBUS OFF)
+  if (DEFINED WITH_GHOST_DBUS)
+    set_and_warn_dependency(WITH_GHOST_WAYLAND WITH_GHOST_DBUS OFF)
+    set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_DBUS OFF)
+  endif()
 endif()
 set_and_warn_incompatible(WITH_HEADLESS WITH_GHOST_SDL OFF)
 

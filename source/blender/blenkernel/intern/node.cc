@@ -2533,6 +2533,7 @@ IDTypeInfo IDType_ID_NT = {
     .foreach_cache = nullptr,
     .foreach_path = bke::node_foreach_path,
     .foreach_working_space_color = bke::node_foreach_working_space_color,
+    .foreach_asset_weak_reference = nullptr,
     .owner_pointer_get = bke::node_owner_pointer_get,
 
     .blend_write = bke::ntree_blend_write,
@@ -4708,7 +4709,7 @@ static bool check_link_selected_backward(const bNodeLink &link, Set<const bNode 
   if (!node) {
     return false;
   }
-  if ((node->flag & NODE_SELECT)) {
+  if (node->is_selected()) {
     return true;
   }
   if (!node->is_reroute()) {
@@ -4735,7 +4736,7 @@ static bool check_link_selected_forward(const bNodeLink &link, Set<const bNode *
   if (!node) {
     return false;
   }
-  if ((node->flag & NODE_SELECT)) {
+  if (node->is_selected()) {
     return true;
   }
   if (!node->is_reroute()) {
@@ -4758,7 +4759,7 @@ static bool check_link_selected_forward(const bNodeLink &link, Set<const bNode *
 
 bool node_link_is_selected(const bNodeLink &link)
 {
-  if ((link.fromnode->flag & NODE_SELECT) || (link.tonode->flag & NODE_SELECT)) {
+  if (link.fromnode->is_selected() || link.tonode->is_selected()) {
     return true;
   }
   if (!link.fromnode->is_reroute() && !link.tonode->is_reroute()) {
@@ -5443,7 +5444,7 @@ bNode *node_get_active(bNodeTree &ntree)
 bool node_set_selected(bNode &node, const bool select)
 {
   bool changed = false;
-  if (select != ((node.flag & NODE_SELECT) != 0)) {
+  if (select != node.is_selected()) {
     changed = true;
     SET_FLAG_FROM_TEST(node.flag, select, NODE_SELECT);
   }
