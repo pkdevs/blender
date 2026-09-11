@@ -204,10 +204,14 @@ static bool execute_carver_on_drawing(const Object &ob_eval,
 /**
  * Apply the stroke carver to all layers.
  */
-static wmOperatorStatus stroke_carver_execute(const bContext *C,
-                                              wmOperator *op,
-                                              const Span<int2> mcoords)
+static wmOperatorStatus grease_pencil_stroke_carver_exec(bContext *C, wmOperator *op)
 {
+  const Array<int2> mcoords = WM_gesture_lasso_path_to_array(C, op);
+
+  if (mcoords.is_empty()) {
+    return OPERATOR_PASS_THROUGH;
+  }
+
   const Scene *scene = CTX_data_scene(C);
   const ARegion *region = CTX_wm_region(C);
   const RegionView3D *rv3d = CTX_wm_region_view3d(C);
@@ -296,9 +300,7 @@ static wmOperatorStatus stroke_carver_execute(const bContext *C,
           *scene, *region, *view3d, *ob_eval, &layer);
 
       bool r_converted = false;
-      if (execute_carver_on_drawing(info.layer_index,
-                                    info.frame_number,
-                                    *ob_eval,
+      if (execute_carver_on_drawing(*ob_eval,
                                     *obact,
                                     *region,
                                     projection,
@@ -328,17 +330,6 @@ static wmOperatorStatus stroke_carver_execute(const bContext *C,
   }
 
   return OPERATOR_FINISHED;
-}
-
-static wmOperatorStatus grease_pencil_stroke_carver_exec(bContext *C, wmOperator *op)
-{
-  const Array<int2> mcoords = WM_gesture_lasso_path_to_array(C, op);
-
-  if (mcoords.is_empty()) {
-    return OPERATOR_PASS_THROUGH;
-  }
-
-  return stroke_carver_execute(C, op, mcoords);
 }
 
 }  // namespace ed::greasepencil
