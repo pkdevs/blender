@@ -2576,7 +2576,6 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 | [JSON](https://github.com/nlohmann/json/) | 3.11.3 | `Copyright (c) 2013-2021 Niels Lohmann` |
 | [libffi](https://github.com/libffi/libffi/) | 3.5.2 | `Copyright (c) 1996-2025  Anthony Green, Red Hat, Inc and others.` |
 | [libxml2](https://gitlab.gnome.org/GNOME/libxml2) | 2.14.6 | `Copyright (C) 1998-2012 Daniel Veillard. All Rights Reserved.` |
-| [MD4C](https://github.com/mity/md4c) | 0.5.3 (472c | `Copyright (c) 2016-2024 Martin Mitáš` |
 | [Meshoptimizer](https://meshoptimizer.org) | 1.1 | `Copyright (c) 2016-2026 Arseny Kapoulkine` |
 | [Ocloc](https://github.com/intel/compute-runtime) | 25.31.34666 | `Copyright (C) 2018-2023 Intel Corporation` |
 | [oneAPI Level Zero](https://github.com/oneapi-src/level-zero) | 35c037cdf4a | `Copyright (C) 2019-2024 Intel Corporation` |
@@ -2587,7 +2586,6 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 | [sse2neon](https://github.com/DLTcollab/sse2neon) | 227cc413fb2 | `Copyright sse2neon contributors` |
 | [Thorvg](https://www.thorvg.org/) | v1.0.3 | `Copyright (c) 2020 - 2026 ThorVG Project` |
 | [TinyGLTF](https://github.com/syoyo/tinygltf) | 2.8.21, 4bf | `Copyright (c) 2017 Syoyo Fujita, Aurélien Chatelain and many contributors` |
-| [toml11](https://github.com/ToruNiina/toml11) | b32a2fff0d2 | `Copyright (c) 2017 Toru Niina` |
 | [ufbx - Single source file FBX loader](https://github.com/ufbx/ufbx) | v0.20.0 (a6 | `Copyright (c) 2020 Samuli Raivio` |
 | [VC Intrinsics](https://github.com/intel/vc-intrinsics) | 0.25.0 | `Copyright (C) 2020-2021 Intel Corporation` |
 | [Vcintrinsics](https://github.com/intel/vc-intrinsics) | 60cea7590bd | `Copyright (c) 2019-2024 Intel Corporation` |
