@@ -64,6 +64,20 @@ static void node_declare(NodeDeclarationBuilder &b)
       .min(1.0f)
       .max(1000.0f)
       .description("Index of refraction (IOR) of the thin film");
+
+  PanelDeclarationBuilder &dispersion = b.add_panel("Dispersion"_ustr).default_closed(true);
+  dispersion.add_input<decl::Float>("Dispersion Scale"_ustr)
+      .default_value(0.0f)
+      .min(0.0f)
+      .max(1.0f)
+      .subtype(PROP_FACTOR)
+      .description("Linearly scales the amount of dispersion");
+  dispersion.add_input<decl::Float>("Dispersion Abbe Number"_ustr)
+      .default_value(20.0f)
+      .min(9.0f)
+      .max(91.0f)
+      .description(
+          "Abbe number of the base dielectric medium. Smaller number gives stronger dispersion");
 }
 
 static void node_shader_buts_glass(ui::Layout &layout, bContext * /*C*/, PointerRNA *ptr)

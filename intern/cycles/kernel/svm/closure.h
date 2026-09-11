@@ -774,6 +774,11 @@ ccl_device
         const float ior = fmaxf(stack_load(stack, bsdf_data.ior), 1e-5f);
         bsdf->ior = (sd->runtime_flag & SR_BACKFACING) ? 1.0f / ior : ior;
 
+        const float dispersion_scale = saturatef(stack_load(stack, bsdf_data.dispersion_scale));
+        const float abbe_number = fmaxf(stack_load(stack, bsdf_data.dispersion_abbe_number), 0.0f);
+        const float inv_abbe = safe_divide(dispersion_scale, abbe_number);
+        bsdf->ior = bsdf_glass_ior(sd, bsdf->ior, inv_abbe);
+
         fresnel->f0 = make_float3(F0_from_ior(ior));
         fresnel->f90 = white;
         fresnel->exponent = -ior;

@@ -2485,6 +2485,9 @@ NODE_DEFINE(GlassBsdfNode)
   SOCKET_IN_FLOAT(rotation, "Rotation", 0.0f);
   SOCKET_IN_FLOAT(IOR, "IOR", 1.5f);
 
+  SOCKET_IN_FLOAT(dispersion_scale, "Dispersion Scale", 0.0f);
+  SOCKET_IN_FLOAT(dispersion_abbe_number, "Dispersion Abbe Number", 20.0f);
+
   SOCKET_IN_FLOAT(thin_film_thickness, "Thin Film Thickness", 0.0f);
   SOCKET_IN_FLOAT(thin_film_ior, "Thin Film IOR", 1.33f);
 
@@ -2502,6 +2505,11 @@ bool GlassBsdfNode::is_isotropic()
 {
   /* Keep in sync with the thresholds in OSL's node_glass_bsdf and SVM's svm_node_closure_bsdf. */
   return (!input("Anisotropy")->link && fabsf(anisotropy) <= 1e-4f);
+}
+
+bool GlassBsdfNode::has_dispersion()
+{
+  return is_possibly_nonnegligible("Dispersion Scale") && is_possibly_nonnegligible("Color");
 }
 
 void GlassBsdfNode::attributes(Shader *shader, AttributeRequestSet *attributes)
@@ -2533,6 +2541,8 @@ void GlassBsdfNode::compile(SVMCompiler &compiler)
                         .anisotropy = compiler.input_float("Anisotropy"),
                         .rotation = compiler.input_float("Rotation"),
                         .ior = compiler.input_float("IOR"),
+                        .dispersion_scale = compiler.input_float("Dispersion Scale"),
+                        .dispersion_abbe_number = compiler.input_float("Dispersion Abbe Number"),
                         .thin_film_thickness = compiler.input_float("Thin Film Thickness"),
                         .thin_film_ior = compiler.input_float("Thin Film IOR"),
                         .normal_offset = compiler.input_link("Normal"),
@@ -2891,6 +2901,10 @@ bool PrincipledBsdfNode::has_surface_bssrdf()
 
 bool PrincipledBsdfNode::has_dispersion()
 {
+  if (is_thin_wall()) {
+    return false;
+  }
+
   return is_possibly_nonnegligible("Transmission Dispersion Scale") &&
          is_possibly_nonnegligible("Transmission Weight");
 }

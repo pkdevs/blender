@@ -14,6 +14,8 @@ shader node_glass_bsdf(color Color = 0.8,
                        float IOR = 1.45,
                        float ThinFilmThickness = 0.0,
                        float ThinFilmIOR = 1.33,
+                       float DispersionScale = 0.0,
+                       float DispersionAbbeNumber = 20.0,
                        normal Normal = N,
                        normal Tangent = 0.0,
                        output closure color BSDF = 0)
@@ -48,6 +50,10 @@ shader node_glass_bsdf(color Color = 0.8,
     }
   }
 
+  float dispersion_scale = clamp(DispersionScale, 0.0, 1.0);
+  float abbe_number = max(DispersionAbbeNumber, 0.0);
+  float inv_abbe = safe_divide(dispersion_scale, abbe_number);
+
   BSDF = generalized_schlick_bsdf(Normal,
                                   T,
                                   base_color,
@@ -61,5 +67,7 @@ shader node_glass_bsdf(color Color = 0.8,
                                   "thinfilm_thickness",
                                   ThinFilmThickness,
                                   "thinfilm_ior",
-                                  ThinFilmIOR);
+                                  ThinFilmIOR,
+                                  "inv_abbe",
+                                  inv_abbe);
 }

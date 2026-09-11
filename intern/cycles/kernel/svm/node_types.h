@@ -1121,6 +1121,8 @@ struct SVMNodeGlassBsdfData {
   SVMInputFloat anisotropy;
   SVMInputFloat rotation;
   SVMInputFloat ior;
+  SVMInputFloat dispersion_scale;
+  SVMInputFloat dispersion_abbe_number;
   SVMInputFloat thin_film_thickness;
   SVMInputFloat thin_film_ior;
   SVMStackOffset normal_offset;

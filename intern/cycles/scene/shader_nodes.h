@@ -723,6 +723,8 @@ class GlassBsdfNode : public BsdfNode {
   NODE_SOCKET_API(float, anisotropy)
   NODE_SOCKET_API(float, rotation)
   NODE_SOCKET_API(float, IOR)
+  NODE_SOCKET_API(float, dispersion_scale)
+  NODE_SOCKET_API(float, dispersion_abbe_number)
   NODE_SOCKET_API(float, thin_film_thickness)
   NODE_SOCKET_API(float, thin_film_ior)
   NODE_SOCKET_API(ClosureType, distribution)
@@ -734,6 +736,7 @@ class GlassBsdfNode : public BsdfNode {
   }
 
   bool is_isotropic();
+  bool has_dispersion() override;
 };
 
 class RefractionBsdfNode : public BsdfNode {
