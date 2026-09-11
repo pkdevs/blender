@@ -230,21 +230,24 @@ static void export_pointcloud_motion_gsplat_attributes(
   float4 *motion_radiance_base = attr_radiance_base->data_for_write<float4>(attr_step);
   packed_float3 *motion_scale = attr_scale->data_for_write<packed_float3>(attr_step);
   Quaternion *motion_rotation = attr_rotation->data_for_write<Quaternion>(attr_step);
-  for (int i = 0; i < std::min<int>(num_points, b_positions.size()); i++) {
-    motion_radiance_base[i] = b_radiance_base.is_empty() ? zero_float4() :
-                                                           make_float4(b_radiance_base[i][0],
-                                                                       b_radiance_base[i][1],
-                                                                       b_radiance_base[i][2],
-                                                                       b_radiance_base[i][3]);
-    motion_scale[i] = b_scale.is_empty() ?
-                          zero_float3() :
-                          make_float3(b_scale[i][0], b_scale[i][1], b_scale[i][2]);
-    motion_rotation[i] = b_rotation.is_empty() ? identity_quaternion() :
-                                                 make_quaternion(b_rotation[i][0],
-                                                                 b_rotation[i][1],
-                                                                 b_rotation[i][2],
-                                                                 b_rotation[i][3]);
-  }
+
+  parallel_for(blocked_range<size_t>(0, num_points, 32), [&](const blocked_range<size_t> &r) {
+    for (size_t i = r.begin(); i != r.end(); i++) {
+      motion_radiance_base[i] = b_radiance_base.is_empty() ? zero_float4() :
+                                                             make_float4(b_radiance_base[i][0],
+                                                                         b_radiance_base[i][1],
+                                                                         b_radiance_base[i][2],
+                                                                         b_radiance_base[i][3]);
+      motion_scale[i] = b_scale.is_empty() ?
+                            zero_float3() :
+                            make_float3(b_scale[i][0], b_scale[i][1], b_scale[i][2]);
+      motion_rotation[i] = b_rotation.is_empty() ? identity_quaternion() :
+                                                   make_quaternion(b_rotation[i][0],
+                                                                   b_rotation[i][1],
+                                                                   b_rotation[i][2],
+                                                                   b_rotation[i][3]);
+    }
+  });
 }
 
 static void export_pointcloud(Scene *scene,
