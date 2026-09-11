@@ -182,7 +182,8 @@ class RuntimeToBakeValue {
         }
         std::string attribute_name = this->get_next_bake_attribute_name();
         bool any_success = false;
-        for (const GeometryComponent::Type type : {
+        for (const GeometryComponent::Type type :
+             {
                  GeometryComponent::Type::Mesh,
                  GeometryComponent::Type::PointCloud,
                  GeometryComponent::Type::GreasePencil,
@@ -269,7 +270,9 @@ class RuntimeToBakeValue {
     }
     if (list_cpp_type.is<nodes::BundlePtr>()) {
       list.typed<nodes::BundlePtr>().foreach_for_write([&](nodes::BundlePtr &bundle_ptr) {
-        this->runtime_to_bake__Bundle(bundle_ptr.ensure_mutable_inplace());
+        if (bundle_ptr) {
+          this->runtime_to_bake__Bundle(bundle_ptr.ensure_mutable_inplace());
+        }
       });
       return true;
     }
@@ -619,7 +622,9 @@ class BakeToRuntimeValue {
     }
     else if (list_cpp_type.is<nodes::BundlePtr>()) {
       list.typed<nodes::BundlePtr>().foreach_for_write([&](nodes::BundlePtr &bundle_ptr) {
-        this->bake_to_runtime__Bundle(bundle_ptr.ensure_mutable_inplace());
+        if (bundle_ptr) {
+          this->bake_to_runtime__Bundle(bundle_ptr.ensure_mutable_inplace());
+        }
       });
     }
   }
