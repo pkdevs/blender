@@ -498,6 +498,7 @@ static void do_paint_pixels(const Paint &paint,
       ss, corner_verts, corner_tris, pixel_node.uv_primitives.tri_indices, positions_eval);
 
   if (!select_poly.is_empty()) {
+    BLI_assert(!corner_tri_faces.is_empty());
     apply_selection_filter(
         corner_tri_faces, pixel_node.uv_primitives.tri_indices, select_poly, brush_test);
   }
@@ -786,13 +787,14 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
   const Mesh &mesh = *id_cast<const Mesh *>(ob.data);
   const Span<int> corner_verts = mesh.corner_verts();
   const Span<int3> corner_tris = mesh.corner_tris();
-  const Span<int> corner_tri_faces = mesh.corner_tri_faces();
 
   const bool use_face_sel = (mesh.editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
   VArraySpan<bool> select_poly;
+  Span<int> corner_tri_faces;
   if (use_face_sel) {
     const bke::AttributeAccessor attributes = mesh.attributes();
     select_poly = *attributes.lookup<bool>(".select_poly", bke::AttrDomain::Face);
+    corner_tri_faces = mesh.corner_tri_faces();
   }
 
   node_mask.foreach_index(
