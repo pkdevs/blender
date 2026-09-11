@@ -16,11 +16,11 @@
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_uniform.bsl.hh"
 #include "eevee_velocity.bsl.hh"
-#include "gpu_shader_fullscreen_lib.glsl"
-#include "gpu_shader_math_safe_lib.glsl"
-#include "gpu_shader_math_vector_compare_lib.glsl"
-#include "gpu_shader_math_vector_lib.glsl"
-#include "gpu_shader_math_vector_safe_lib.glsl"
+#include "gpu_shader_fullscreen.bsl.hh"
+#include "gpu_shader_math_safe.bsl.hh"
+#include "gpu_shader_math_vector.bsl.hh"
+#include "gpu_shader_math_vector_compare.bsl.hh"
+#include "gpu_shader_math_vector_safe.bsl.hh"
 
 namespace eevee::film {
 
@@ -532,7 +532,7 @@ struct Film {
   }
 
   /* Same as `copy_history()` but resets to background instead of copying. Used for
-   * panoramic texels that no subview owns at all (e.g. outside the fisheye lens), so that they
+   * panoramic texels that no sub-view owns at all (e.g. outside the fisheye lens), so that they
    * do not keep displaying stale data. */
   void clear_history(int2 texel_film, float4 &out_color, float &out_depth)
   {
@@ -1048,14 +1048,14 @@ struct Film {
       panoramic_sample = sample_get(0, texel_film, panoramic_view_id_get());
       if (panoramic_sample.weight == 0.0f) {
         if (is_zero(panoramic_direction_get(texel_film))) {
-          /* No subview owns this texel under the current projection at all (e.g. outside the
+          /* No sub-view owns this texel under the current projection at all (e.g. outside the
            * fisheye lens). Clear it instead of copying stale data. */
           clear_history(texel_film, out_color, out_depth);
           return;
         }
-        /* TODO: Have a stencil mask of each subview to avoid computing weights for the whole
+        /* TODO: Have a stencil mask of each sub-view to avoid computing weights for the whole
          * screen for each. Using a mesh to draw the region is not recommended due to quad
-         * over-shading and the amount of tesselation needed. Using a mesh to mark the stencil
+         * over-shading and the amount of tessellation needed. Using a mesh to mark the stencil
          * might be beneficial (passthrough fragment shader). */
         copy_history(texel_film, out_color, out_depth);
         return;
