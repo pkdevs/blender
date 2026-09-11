@@ -266,12 +266,10 @@ static void do_encode_pixels(const uv_islands::MeshData &mesh_data,
 
   Vector<int> tri_indices;
   Vector<float3x3> pixel_to_position;
-  Vector<int> face_indices;
 
   /* Assuming a quad mesh, we'll have at least 2 * faces entries. */
   tri_indices.reserve(node.faces().size() * 2);
   pixel_to_position.reserve(node.faces().size() * 2);
-  face_indices.reserve(node.faces().size() * 2);
 
   /* For multiple UDIM tiles, compute which ones this node overlaps with. */
   const bool multi_tile = BLI_listbase_count(&image.tiles) > 1;
@@ -354,7 +352,6 @@ static void do_encode_pixels(const uv_islands::MeshData &mesh_data,
               if (build_rows.size() == build_rows_num) {
                 return;
               }
-              face_indices.append(face);
               tri_indices.append(tri);
               pixel_to_position.append(
                   calc_pixel_to_position_map(mesh_data, tri, uvs, inv_w, inv_h));
@@ -370,7 +367,6 @@ static void do_encode_pixels(const uv_islands::MeshData &mesh_data,
     build_pixel_row_runs(build_rows, tile_data);
 
     BLI_assert(pixel_to_position.size() == tri_indices.size());
-    BLI_assert(face_indices.size() == tri_indices.size());
 
     pixel_node.tiles.append(tile_data);
   }
@@ -378,7 +374,6 @@ static void do_encode_pixels(const uv_islands::MeshData &mesh_data,
   /* Assign to Array, to avoid wasting reserved space. */
   pixel_node.uv_primitives.tri_indices = tri_indices.as_span();
   pixel_node.uv_primitives.pixel_to_position = pixel_to_position.as_span();
-  pixel_node.uv_primitives.face_indices = face_indices.as_span();
 }
 
 /**

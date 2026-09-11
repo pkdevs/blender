@@ -93,10 +93,8 @@ struct PixelNode {
   Vector<UDIMTilePixels, 0> tiles;
 
   struct {
-    /** Corresponding triangle index for a given primitive. */
+    /** Corresponding index into triangles */
     Array<int, 0> tri_indices;
-    /** Corresponding face index for a given primitive. */
-    Array<int, 0> face_indices;
 
     /**
      * Per primitive affine map from image pixel coordinate to object space position:
@@ -149,7 +147,6 @@ struct PixelNode {
   {
     tiles.clear();
     uv_primitives.tri_indices.reinitialize(0);
-    uv_primitives.face_indices.reinitialize(0);
     uv_primitives.pixel_to_position.reinitialize(0);
   }
 };
